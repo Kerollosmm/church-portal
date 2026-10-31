@@ -64,7 +64,7 @@ class EducationPage extends ConsumerWidget {
             }
             final other = sorted.where((m) => !stageOrder.contains(m.stage)).toList();
             if (other.isNotEmpty) {
-              children.add(SectionTitle(context.tr('activities'), icon: Icons.event_note));
+              children.add(SectionTitle(context.tr('otherStages'), icon: Icons.event_note));
               for (var i = 0; i < other.length; i++) {
                 children.add(_TimelineItem(meeting: other[i], isLast: i == other.length - 1));
               }

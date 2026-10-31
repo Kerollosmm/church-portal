@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 
 import '../domain/models.dart';
 import 'seed_data.dart';
@@ -14,6 +15,10 @@ class ContactUnavailableException implements Exception {
 abstract class ContentRepository {
   /// True when content comes from Firestore (false = bundled seed data).
   bool get isLive;
+
+  /// True while any visible content is being served from the bundled seed
+  /// (no Firebase, database not seeded yet, or a query fell back).
+  ValueListenable<bool> get servingSeed;
 
   Stream<ChurchSettings> settings();
   Stream<List<Alert>> alerts();
@@ -38,6 +43,9 @@ class SeedRepository implements ContentRepository {
 
   @override
   bool get isLive => false;
+
+  @override
+  final ValueListenable<bool> servingSeed = ValueNotifier<bool>(true);
 
   Stream<T> _once<T>(T v) => Stream<T>.value(v);
 
@@ -93,31 +101,59 @@ class FirestoreRepository implements ContentRepository {
   @override
   bool get isLive => true;
 
-  Future<bool>? _seededFuture;
-  Future<bool> get _seeded => _seededFuture ??= db
-      .doc('settings/church')
-      .get()
-      .timeout(const Duration(seconds: 8))
-      .then((d) => d.exists)
-      .catchError((_) => false);
+  final ValueNotifier<bool> _servingSeed = ValueNotifier<bool>(false);
+  final Set<String> _fallbackStreams = {};
 
-  Stream<T> _guard<T>(Stream<T> Function() live, T fallback) async* {
+  @override
+  ValueListenable<bool> get servingSeed => _servingSeed;
+
+  void _markFallback(String key, bool onSeed) {
+    if (onSeed) {
+      _fallbackStreams.add(key);
+    } else {
+      _fallbackStreams.remove(key);
+    }
+    _servingSeed.value = _fallbackStreams.isNotEmpty;
+  }
+
+  /// Whether `settings/church` exists. A successful answer is cached; a failed
+  /// or timed-out read is not, so the next subscription retries.
+  Future<bool>? _seededFuture;
+  Future<bool> get _seeded async {
+    try {
+      return await (_seededFuture ??= db
+          .doc('settings/church')
+          .get()
+          .timeout(const Duration(seconds: 8))
+          .then((d) => d.exists));
+    } catch (e) {
+      debugPrint('settings/church check failed, serving seed: $e');
+      _seededFuture = null;
+      return false;
+    }
+  }
+
+  Stream<T> _guard<T>(String key, Stream<T> Function() live, T fallback) async* {
     if (!await _seeded) {
+      _markFallback(key, true);
       yield fallback;
       return;
     }
     try {
       await for (final v in live()) {
+        _markFallback(key, false);
         yield v;
       }
-    } catch (_) {
+    } catch (e) {
+      debugPrint('Firestore stream $key failed, serving seed: $e');
+      _markFallback(key, true);
       yield fallback;
     }
   }
 
   Stream<List<T>> _col<T>(String name, T Function(String, Map<String, dynamic>) f, List<T> fallback,
           {int Function(T a, T b)? sort}) =>
-      _guard(() {
+      _guard(name, () {
         return db.collection(name).snapshots().map((snap) {
           final list = snap.docs.map((d) => f(d.id, normalizeDoc(d.data()))).toList();
           if (sort != null) list.sort(sort);
@@ -127,6 +163,7 @@ class FirestoreRepository implements ContentRepository {
 
   @override
   Stream<ChurchSettings> settings() => _guard(
+        'settings',
         () => db.doc('settings/church').snapshots().map((d) => d.exists ? ChurchSettings.fromMap(normalizeDoc(d.data())) : seed.settings),
         seed.settings,
       );

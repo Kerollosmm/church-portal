@@ -80,7 +80,9 @@ String? normalizeEgyptianPhone(String raw) {
     s = '0${s.substring(3)}';
   } else if (s.startsWith('0020')) {
     s = '0${s.substring(4)}';
-  } else if (s.startsWith('20') && s.length == 12) {
+  } else if (s.startsWith('20') && s.length >= 10 && s.length <= 12) {
+    // Bare country code without '+': 20 + mobile (12) / Cairo landline (11) /
+    // Alexandria & other landlines (10-11).
     s = '0${s.substring(2)}';
   }
   if (RegExp(r'^01[0125]\d{8}$').hasMatch(s)) return s; // mobile
@@ -92,6 +94,12 @@ String? normalizeEgyptianPhone(String raw) {
 }
 
 bool isValidEgyptianPhone(String raw) => normalizeEgyptianPhone(raw) != null;
+
+/// True for Egyptian mobile numbers (the only ones that can have WhatsApp).
+bool isEgyptianMobile(String raw) {
+  final n = normalizeEgyptianPhone(raw);
+  return n != null && RegExp(r'^01[0125]\d{8}$').hasMatch(n);
+}
 
 /// International digits for wa.me / tel links (Egypt default +20).
 String toInternationalDigits(String raw) {

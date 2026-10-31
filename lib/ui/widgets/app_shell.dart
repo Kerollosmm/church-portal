@@ -35,7 +35,10 @@ class AppShell extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final wide = MediaQuery.sizeOf(context).width >= 1024;
+    // Large system text makes the full link bar overflow: compare the width
+    // in "unscaled text" units so big text switches to the compact bar.
+    final textScale = MediaQuery.textScalerOf(context).scale(16) / 16;
+    final wide = MediaQuery.sizeOf(context).width / textScale.clamp(1.0, 3.0) >= 1024;
     final showAsk = ref.watch(assistantVisibleProvider);
     final settings = ref.watch(settingsProvider).value;
     final title = settings == null ? context.tr('appShort') : context.pick(settings.nameAr, settings.nameEn);
@@ -91,6 +94,7 @@ class AppShell extends ConsumerWidget {
           if (!wide)
             Builder(
               builder: (ctx) => IconButton(
+                tooltip: context.tr('menu'),
                 icon: const Icon(Icons.menu_rounded),
                 onPressed: () => Scaffold.of(ctx).openEndDrawer(),
               ),

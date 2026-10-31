@@ -99,11 +99,13 @@ If Firestore is reachable but `settings/church` does not exist (DB not seeded ye
    `asafra-church-portal.web.app`, `asafra-church-portal.firebaseapp.com`, `localhost`).
 2. Put the **site key** in `AppConfig.recaptchaV3SiteKey` or build with
    `flutter build web --release --dart-define=RECAPTCHA_SITE_KEY=6Lc...`.
-3. **Debug provider** (local dev / CI previews): debug builds automatically use the debug provider
+3. **Debug provider** (local dev): debug builds automatically use the debug provider
    (`WebDebugProvider` / `AndroidDebugProvider`). The SDK prints a debug token in the browser console
    (or logcat) — add it under App Check → Apps → ⋮ → **Manage debug tokens**. You can pin one with
    `--dart-define=APPCHECK_DEBUG_TOKEN=<uuid>`; `--dart-define=APPCHECK_DEBUG=true` forces the debug
-   provider in a release build (e.g. preview channels). Never ship a debug token in production.
+   provider in a release build. Never ship a debug token in a public build.
+   **PR preview channels** are built *without* the reCAPTCHA key (preview hostnames are not registered
+   for it), so App Check is off there and the App Check‑enforced assistant is hidden; everything else works.
 4. Android release uses Play Integrity (register the app's SHA‑256 in Project settings first).
 5. Do **not** enforce App Check on Firestore until the reCAPTCHA key is live, or public reads will fail.
 
@@ -161,11 +163,16 @@ HTML/JS (Flutter bundles are not content‑hashed) and longer caching for fonts/
 
 ## 6. GitHub Actions & secrets
 
-- `.github/workflows/ci.yml` — every push & PR: Flutter stable → `pub get` → `analyze` → `test` → `build web`.
-- `.github/workflows/deploy.yml`
-  - push to `main`: build → **Firebase Hosting live channel** (`FirebaseExtended/action-hosting-deploy`,
-    `channelId: live`) + **Firestore rules & indexes** (`firebase-tools` with `GOOGLE_APPLICATION_CREDENTIALS`).
-  - pull requests (same repo): build → **preview channel** (URL posted on the PR, expires after 7 days).
+- `.github/workflows/ci.yml` — every push & PR: Flutter stable → `pub get` → `analyze` → `test` → `build web`
+  → seed JSON parses and matches `tool/gen_seed.py`.
+- `.github/workflows/deploy.yml` (all deploys use the `firebase-tools` CLI with `GOOGLE_APPLICATION_CREDENTIALS`)
+  - push to `main`: build → **Firebase Hosting live** (`firebase deploy --only hosting`) + **Firestore rules & indexes**.
+  - pull requests (same repo): build → **preview channel `pr-<number>`** (`hosting:channel:deploy --expires 7d`);
+    the URL is posted/updated in one PR comment.
+- `.github/workflows/seed.yml` — manual Firestore seed; runs in the `production` environment.
+- `.github/actions/firebase-credentials` — writes the service-account secret to a temp file (mode 600). It keeps
+  only the first JSON object, so stray characters pasted after the key (e.g. a trailing note or a second copy)
+  no longer break deploys; a warning is printed and the key itself is never echoed.
 
 ### Required secret: `FIREBASE_SERVICE_ACCOUNT_ASAFRA_CHURCH_PORTAL`
 
@@ -180,15 +187,17 @@ Manual:
 4. GitHub repo → Settings → Secrets and variables → Actions → **New repository secret**
    name `FIREBASE_SERVICE_ACCOUNT_ASAFRA_CHURCH_PORTAL`, value = the JSON. Delete the local key file.
 
-Optional repository **variable** `RECAPTCHA_SITE_KEY` (Settings → Variables) is passed to `flutter build web`.
-Optional: create a `production` environment (Settings → Environments) to require approval before live deploys.
+Optional repository **variable** `RECAPTCHA_SITE_KEY` (Settings → Variables) is passed to the live `flutter build web`.
+Recommended: add **required reviewers** to the `production` environment (Settings → Environments) so live deploys
+and the Seed workflow (which can overwrite production data with `force`) need approval.
 
 ---
 
 ## Business rules (implemented in `lib/domain`, covered by `test/domain_test.dart`)
 
-- **Next liturgy**: now in Africa/Cairo; active seasons (`active && startsAt <= day <= endsAt`) **replace** the regular
-  liturgies on the days they have services; shows "happening now" (incl. services crossing midnight), then the next
+- **Next liturgy**: now in Africa/Cairo; an active season's services (those starting inside its exact
+  `[startsAt, endsAt]` window) **replace** the regular liturgies that start inside that window on the days the season
+  has services (regular services before a mid-day season start are kept); shows "happening now" (incl. services crossing midnight), then the next
   start today, else tomorrow's first (looks up to 7 days ahead).
 - **Alerts**: banner only when `active` and now within `[startsAt, endsAt]`, highest `priority` first.
 - **Clinics**: specialty filter, `available today` by Cairo weekday, `tel:` + `https://wa.me/20…`.

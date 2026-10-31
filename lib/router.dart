@@ -4,6 +4,7 @@ import 'package:material_ui/material_ui.dart';
 
 import 'config/app_config.dart';
 import 'core/l10n.dart';
+import 'state/providers.dart';
 import 'ui/admin/admin_page.dart';
 import 'ui/pages/about_page.dart';
 import 'ui/pages/activities_page.dart';
@@ -19,9 +20,31 @@ import 'ui/widgets/common.dart';
 
 NoTransitionPage<void> _page(GoRouterState s, Widget child) => NoTransitionPage(key: s.pageKey, child: child);
 
+/// Keeps `?lang=en` in the URL in sync with the selected language, so links
+/// copied from the address bar, reloads and in-app navigation keep English.
+String? _syncLangQuery(Uri uri, bool english) {
+  final hasEn = uri.queryParameters['lang'] == 'en';
+  if (english == hasEn) return null;
+  final qp = Map<String, String>.from(uri.queryParameters);
+  if (english) {
+    qp['lang'] = 'en';
+  } else {
+    qp.remove('lang');
+  }
+  return Uri(path: uri.path.isEmpty ? '/' : uri.path, queryParameters: qp.isEmpty ? null : qp).toString();
+}
+
 final routerProvider = Provider<GoRouter>((ref) {
+  // Re-run redirects (URL lang sync) when the language is toggled, without
+  // rebuilding the router itself.
+  final localeChanges = ValueNotifier<int>(0);
+  ref.listen(localeProvider, (_, _) => localeChanges.value++);
+  ref.onDispose(localeChanges.dispose);
   return GoRouter(
     initialLocation: '/',
+    refreshListenable: localeChanges,
+    redirect: (context, state) =>
+        _syncLangQuery(state.uri, ref.read(localeProvider).languageCode == 'en'),
     routes: [
       ShellRoute(
         builder: (context, state, child) => AppShell(location: state.uri.path, child: child),

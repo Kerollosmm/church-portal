@@ -114,6 +114,40 @@ void main() {
       expect(r.activeSeasons, isEmpty);
     });
 
+    test('a season starting mid-day keeps the regular services before it', () {
+      // Wed 13 Jan 2027: season from 18:00, seasonal service 19:00.
+      final evening = Season(
+        id: 'rev',
+        key: 'revival_maximus',
+        nameAr: '',
+        nameEn: '',
+        startsAt: cairo(2027, 1, 13, 18),
+        endsAt: cairo(2027, 1, 14, 23, 59),
+      );
+      final ls = [...regular, lit('revEve', 3, '19:00', '20:30', type: 'mass', season: 'revival_maximus')];
+      final morning = computeNextMass(liturgies: ls, seasons: [evening], now: cairo(2027, 1, 13, 5));
+      expect(morning.next?.liturgy.id, 'wed1'); // regular 07:00 is before the season starts
+      final afternoon = computeNextMass(liturgies: ls, seasons: [evening], now: cairo(2027, 1, 13, 12));
+      expect(afternoon.next?.liturgy.id, 'revEve');
+      // Thursday is fully inside the season but has no seasonal service -> regular.
+      final thu = computeNextMass(liturgies: ls, seasons: [evening], now: cairo(2027, 1, 14, 5));
+      expect(thu.next?.liturgy.id, 'thu1');
+    });
+
+    test('a seasonal service before its season starts is not used', () {
+      final late = Season(
+        id: 'n2',
+        key: 'nativity',
+        nameAr: '',
+        nameEn: '',
+        startsAt: cairo(2027, 1, 6, 21),
+        endsAt: cairo(2027, 1, 7, 23, 59),
+      );
+      // natEve (20:00) starts before the 21:00 season start -> regular wed1 stays.
+      final r = computeNextMass(liturgies: all, seasons: [late], now: cairo(2027, 1, 6, 5));
+      expect(r.next?.liturgy.id, 'wed1');
+    });
+
     test('regular days outside the season are unaffected', () {
       final r = computeNextMass(liturgies: all, seasons: [nativity], now: cairo(2027, 1, 9, 5)); // Saturday
       expect(r.next?.liturgy.id, 'sat1');
@@ -186,6 +220,16 @@ void main() {
       expect(isValidEgyptianPhone('0131234567'), isFalse);
       expect(isValidEgyptianPhone('12345'), isTrue); // hotline
       expect(isValidEgyptianPhone('abc'), isFalse);
+      // Bare 20 country prefix (no +) for landlines and mobiles.
+      expect(normalizeEgyptianPhone('2035551234'), '035551234');
+      expect(normalizeEgyptianPhone('20225551234'), '0225551234');
+      expect(normalizeEgyptianPhone('201012345678'), '01012345678');
+    });
+    test('mobile vs landline', () {
+      expect(isEgyptianMobile('0101 234 5678'), isTrue);
+      expect(isEgyptianMobile('+201012345678'), isTrue);
+      expect(isEgyptianMobile('03 555 1234'), isFalse);
+      expect(isEgyptianMobile(''), isFalse);
     });
     test('errors', () {
       final v = validateContactForm(const ContactFormInput(name: 'M', message: 'hey'));

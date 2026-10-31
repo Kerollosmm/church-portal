@@ -31,15 +31,31 @@
   </style>
 </head>
 <body>
-  <div id="splash" aria-live="polite">
+  <div id="splash" aria-live="polite" style="text-align:center">
     <div class="ring"></div>
-    <div>كنيسة العصافرة — جارٍ التحميل…</div>
+    <div id="splash-text">كنيسة العصافرة — جارٍ التحميل…</div>
   </div>
   <script>
+    var appStarted = false;
     window.addEventListener('flutter-first-frame', function () {
+      appStarted = true;
       var s = document.getElementById('splash'); if (s) s.remove();
     });
+    // Failure path: replace the spinner with a message + reload link if the
+    // bootstrap script fails to load or Flutter never renders a frame.
+    function splashFailed() {
+      if (appStarted) return;
+      var s = document.getElementById('splash'); if (!s) return;
+      var ring = s.querySelector('.ring'); if (ring) ring.remove();
+      var t = document.getElementById('splash-text');
+      if (t) t.innerHTML = 'تعذّر تحميل الموقع. <a href="" onclick="location.reload();return false;">أعد المحاولة</a>' +
+        '<br><span lang="en" dir="ltr">Could not load the site. <a href="" onclick="location.reload();return false;">Reload</a></span>';
+    }
+    window.addEventListener('error', function (e) {
+      if (e && e.target && e.target.tagName === 'SCRIPT') splashFailed();
+    }, true);
+    setTimeout(splashFailed, 30000);
   </script>
-  <script src="flutter_bootstrap.js" async></script>
+  <script src="flutter_bootstrap.js" async onerror="splashFailed()"></script>
 </body>
 </html>

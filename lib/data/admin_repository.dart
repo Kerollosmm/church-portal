@@ -23,13 +23,14 @@ class AdminRepository {
 
   Future<void> signOut() => auth.signOut();
 
+  /// Whether admins/{uid} exists. Network/permission errors propagate so the
+  /// UI can offer a retry instead of a misleading "not admin" screen.
   Future<bool> isAdmin(String uid) async {
-    try {
-      final d = await db.doc('admins/$uid').get(const GetOptions(source: Source.server));
-      return d.exists;
-    } catch (_) {
-      return false;
-    }
+    final d = await db
+        .doc('admins/$uid')
+        .get(const GetOptions(source: Source.server))
+        .timeout(const Duration(seconds: 15));
+    return d.exists;
   }
 
   Stream<List<AdminDoc>> watch(String collection) => db.collection(collection).snapshots().map(

@@ -186,18 +186,28 @@ class NextMassCard extends ConsumerWidget {
 }
 
 /// Urgent alert banner — renders nothing unless an alert is visible now.
-class AlertBanner extends ConsumerWidget {
+/// Shows the two highest-priority alerts, with a toggle for the rest.
+class AlertBanner extends ConsumerStatefulWidget {
   const AlertBanner({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<AlertBanner> createState() => _AlertBannerState();
+}
+
+class _AlertBannerState extends ConsumerState<AlertBanner> {
+  static const _collapsedCount = 2;
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
     final alerts = ref.watch(alertsProvider).value;
     final now = ref.watch(nowProvider).value ?? DateTime.now();
     if (alerts == null) return const SizedBox.shrink();
     final visible = visibleAlerts(alerts, now);
     if (visible.isEmpty) return const SizedBox.shrink();
+    final hidden = visible.length - _collapsedCount;
     return Column(children: [
-      for (final a in visible.take(2))
+      for (final a in _expanded ? visible : visible.take(_collapsedCount))
         Container(
           width: double.infinity,
           margin: const EdgeInsets.only(bottom: 10),
@@ -223,10 +233,25 @@ class AlertBanner extends ConsumerWidget {
             ),
             if (a.link != null && a.link!.isNotEmpty)
               TextButton(
-                onPressed: () => a.link!.startsWith('/') ? context.go(a.link!) : openUrl(a.link!),
+                // In-app routes start with a single '/'; '//host/...' is an
+                // external protocol-relative link.
+                onPressed: () => a.link!.startsWith('/') && !a.link!.startsWith('//')
+                    ? context.go(a.link!)
+                    : openUrl(a.link!),
                 child: Text(context.tr('learnMore')),
               ),
           ]),
+        ),
+      if (hidden > 0)
+        Align(
+          alignment: AlignmentDirectional.centerEnd,
+          child: TextButton.icon(
+            onPressed: () => setState(() => _expanded = !_expanded),
+            icon: Icon(_expanded ? Icons.expand_less : Icons.expand_more),
+            label: Text(_expanded
+                ? context.tr('showFewerAlerts')
+                : context.tr('showAllAlerts', {'n': localDigits(context, '${visible.length}')})),
+          ),
         ),
     ]);
   }

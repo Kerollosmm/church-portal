@@ -41,28 +41,72 @@ class AdminPage extends ConsumerWidget {
                 }
                 final user = snap.data;
                 if (user == null) return _LoginForm(repo: repo);
-                return FutureBuilder<bool>(
+                return _AdminCheck(
                   key: ValueKey(user.uid),
-                  future: repo.isAdmin(user.uid),
-                  builder: (context, adm) {
-                    if (!adm.hasData) return const Center(child: CircularProgressIndicator());
-                    if (adm.data != true) {
-                      return Center(
-                        child: Column(mainAxisSize: MainAxisSize.min, children: [
-                          const Icon(Icons.lock_outline, size: 48, color: AppColors.alert),
-                          const SizedBox(height: 8),
-                          Text(context.tr('notAdmin')),
-                          Text(user.email ?? '', style: const TextStyle(color: AppColors.muted)),
-                          const SizedBox(height: 12),
-                          OutlinedButton(onPressed: repo.signOut, child: Text(context.tr('signOut'))),
-                        ]),
-                      );
-                    }
-                    return _Dashboard(repo: repo, user: user);
-                  },
+                  repo: repo,
+                  user: user,
                 );
               },
             ),
+    );
+  }
+}
+
+/// Checks admins/{uid}; a failed lookup shows a retry action instead of the
+/// "not admin" screen.
+class _AdminCheck extends StatefulWidget {
+  final AdminRepository repo;
+  final User user;
+  const _AdminCheck({super.key, required this.repo, required this.user});
+
+  @override
+  State<_AdminCheck> createState() => _AdminCheckState();
+}
+
+class _AdminCheckState extends State<_AdminCheck> {
+  late Future<bool> _future = widget.repo.isAdmin(widget.user.uid);
+
+  @override
+  Widget build(BuildContext context) {
+    final repo = widget.repo;
+    final user = widget.user;
+    return FutureBuilder<bool>(
+      future: _future,
+      builder: (context, adm) {
+        if (adm.connectionState != ConnectionState.done) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (adm.hasError) {
+          return Center(
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              const Icon(Icons.cloud_off_rounded, size: 48, color: AppColors.alert),
+              const SizedBox(height: 8),
+              Text(context.tr('adminCheckFailed'), textAlign: TextAlign.center),
+              const SizedBox(height: 12),
+              Wrap(spacing: 8, children: [
+                FilledButton(
+                  onPressed: () => setState(() => _future = repo.isAdmin(user.uid)),
+                  child: Text(context.tr('retry')),
+                ),
+                OutlinedButton(onPressed: repo.signOut, child: Text(context.tr('signOut'))),
+              ]),
+            ]),
+          );
+        }
+        if (adm.data != true) {
+          return Center(
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              const Icon(Icons.lock_outline, size: 48, color: AppColors.alert),
+              const SizedBox(height: 8),
+              Text(context.tr('notAdmin')),
+              Text(user.email ?? '', style: const TextStyle(color: AppColors.muted)),
+              const SizedBox(height: 12),
+              OutlinedButton(onPressed: repo.signOut, child: Text(context.tr('signOut'))),
+            ]),
+          );
+        }
+        return _Dashboard(repo: repo, user: user);
+      },
     );
   }
 }
@@ -89,6 +133,7 @@ class _LoginFormState extends State<_LoginForm> {
   }
 
   Future<void> _signIn() async {
+    if (_busy) return; // Enter pressed while a sign-in is pending
     final failed = context.tr('signInFailed');
     setState(() {
       _busy = true;
@@ -273,7 +318,14 @@ class _CollectionList extends StatelessWidget {
         ],
       ),
     );
-    if (ok == true) await repo.delete(def.name, d.id);
+    if (ok != true || !context.mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    final failedMsg = context.tr('deleteFailed', {'e': '{e}'});
+    try {
+      await repo.delete(def.name, d.id);
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text(failedMsg.replaceAll('{e}', '$e'))));
+    }
   }
 
   void _openEditor(BuildContext context, AdminDoc? d) {
@@ -331,14 +383,14 @@ class _DocEditorState extends State<DocEditor> {
         case FieldType.date:
           _text[f.key] = TextEditingController(text: v is DateTime ? _fmtDate(v) : '');
         case FieldType.boolean:
-          _values[f.key] = v is bool ? v : (widget.doc == null);
+          _values[f.key] = v is bool ? v : (widget.doc == null ? true : f.missingBool);
         case FieldType.weekday:
           _values[f.key] = v is int ? v : null;
         case FieldType.weekdays:
           _values[f.key] = <int>{...((v as List?) ?? const []).whereType<int>()};
         case FieldType.choice:
           _values[f.key] = (v == null || v.toString().isEmpty)
-              ? (f.nullableChoice ? null : (f.options.isNotEmpty ? f.options.first : null))
+              ? (f.nullableChoice ? null : (f.defaultOption ?? (f.options.isNotEmpty ? f.options.first : null)))
               : v.toString();
       }
     }
@@ -362,11 +414,30 @@ class _DocEditorState extends State<DocEditor> {
     final ok = switch (f.type) {
       FieldType.time => _timeRe.hasMatch(v),
       FieldType.integer => int.tryParse(v) != null,
-      FieldType.dateTime => _dateTimeRe.hasMatch(v),
-      FieldType.date => _dateRe.hasMatch(v),
+      FieldType.dateTime => _validDateTime(v),
+      FieldType.date => _validDate(v),
       _ => true,
     };
     return ok ? null : context.tr('invalid');
+  }
+
+  /// Real calendar date (rejects e.g. 2027-02-30, which would otherwise roll over).
+  static bool _isCalendarDate(int y, int m, int d) {
+    if (m < 1 || m > 12 || d < 1) return false;
+    final dt = DateTime.utc(y, m, d);
+    return dt.year == y && dt.month == m && dt.day == d;
+  }
+
+  static bool _validDate(String v) {
+    final m = _dateRe.firstMatch(v);
+    return m != null && _isCalendarDate(int.parse(m[1]!), int.parse(m[2]!), int.parse(m[3]!));
+  }
+
+  static bool _validDateTime(String v) {
+    final m = _dateTimeRe.firstMatch(v);
+    if (m == null) return false;
+    final h = int.parse(m[4]!), min = int.parse(m[5]!);
+    return h <= 23 && min <= 59 && _isCalendarDate(int.parse(m[1]!), int.parse(m[2]!), int.parse(m[3]!));
   }
 
   Map<String, dynamic> _collect() {
@@ -378,7 +449,8 @@ class _DocEditorState extends State<DocEditor> {
         case FieldType.time:
           out[f.key] = _text[f.key]!.text.trim();
         case FieldType.integer:
-          out[f.key] = int.tryParse(_text[f.key]!.text.trim()) ?? 0;
+          // Blank = null (e.g. `order` then falls back to weekday sorting).
+          out[f.key] = int.tryParse(_text[f.key]!.text.trim());
         case FieldType.dateTime:
           final m = _dateTimeRe.firstMatch(_text[f.key]!.text.trim());
           out[f.key] = m == null
@@ -400,15 +472,24 @@ class _DocEditorState extends State<DocEditor> {
   }
 
   Future<void> _save() async {
-    if (!_formKey.currentState!.validate()) return;
-    final savedMsg = context.tr('saved');
+    if (_saving || !_formKey.currentState!.validate()) return;
+    final data = _collect();
     final messenger = ScaffoldMessenger.of(context);
+    final anyOf = widget.def.requireAnyOf;
+    if (anyOf.isNotEmpty && anyOf.every((k) => data[k] == null || data[k] == '')) {
+      messenger.showSnackBar(SnackBar(content: Text(context.tr('needWeekdayOrDate'))));
+      return;
+    }
+    final savedMsg = context.tr('saved');
     final nav = Navigator.of(context);
+    final route = ModalRoute.of(context);
     setState(() => _saving = true);
     try {
-      await widget.repo.save(widget.def.name, widget.doc?.id, _collect());
+      await widget.repo.save(widget.def.name, widget.doc?.id, data);
       messenger.showSnackBar(SnackBar(content: Text(savedMsg)));
-      nav.pop();
+      // The admin may have closed the editor while the write was pending:
+      // only pop if this editor is still the top route.
+      if (mounted && (route?.isCurrent ?? false)) nav.pop();
     } catch (e) {
       if (mounted) {
         messenger.showSnackBar(SnackBar(content: Text(context.tr('saveFailed', {'e': '$e'}))));

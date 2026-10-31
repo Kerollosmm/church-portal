@@ -53,18 +53,8 @@
             "value": "public, max-age=604800"
           }
         ]
-      },
-      {
-        "source": "assets/**",
-        "headers": [
-          {
-            "key": "Cache-Control",
-            "value": "public, max-age=3600"
-          }
-        ]
       }
-    ],
-    "_comment": "JS bundles (main.dart.js, flutter_bootstrap.js) are not content-hashed by Flutter, so they are served no-cache (ETag revalidation) to make deploys visible immediately."
+    ]
   },
   "firestore": {
     "rules": "firestore.rules",

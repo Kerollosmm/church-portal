@@ -3,6 +3,8 @@
 Values marked "sample": true are plausible placeholders that must be
 replaced with the church's real data (phones, doctor names, links...)."""
 import json, os
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 MAPS_QUERY = "كنيسة القديسين مكسيموس ودوماديوس والأنبا موسى الأسود، شارع 45 العصافرة بحري الإسكندرية"
 STREET_QUERY = "شارع 45 العصافرة بحري الإسكندرية"
@@ -31,6 +33,7 @@ settings = {
     "verseAr": "كُنْ أَمِينًا إِلَى الْمَوْتِ فَسَأُعْطِيكَ إِكْلِيلَ الْحَيَاةِ",
     "verseEn": "Be faithful until death, and I will give you the crown of life.",
     "verseRef": "Rev 2:10",
+    "verseRefAr": "رؤيا ٢: ١٠",
     "heroImageUrl": "",
     "historyAr": "بدأت الخدمة في منطقة العصافرة بحري بشارع 45 كمذبح صغير يخدم الأسر المقيمة والمصطافين، ومع نمو الشعب تحوّلت إلى كنيسة كاملة على اسم القديسين مكسيموس ودوماديوس (أولاد الملك) والقديس الأنبا موسى الأسود. نمت الكنيسة بخدماتها التعليمية والاجتماعية والطبية لتصبح مركزًا روحيًا لأهل المنطقة وزوارها في الصيف، ونالت بركة تدشين مذابحها وزيارة قداسة البابا تواضروس الثاني.",
     "historyEn": "Service in El-Asafra Bahary began on Street 45 as a small altar serving resident families and summer visitors. As the congregation grew it became a full church named after Saints Maximus and Domadius (the Roman princes) and Saint Moses the Black. Its education, social and medical services made it a spiritual centre for the neighbourhood and its summer guests, blessed by the consecration of its altars and a visit from H.H. Pope Tawadros II.",
@@ -45,8 +48,15 @@ settings = {
   }
 }
 
-def T(d, hm="00:00", off="+02:00"):
-    return f"{d}T{hm}:00{off}"
+CAIRO = ZoneInfo("Africa/Cairo")
+
+def T(d, hm="00:00", off=None):
+    """ISO instant for a Cairo wall-clock time. The UTC offset is taken from
+    the tz database (Egypt DST: last Friday of April .. last Thursday of
+    October), so pre-/post-DST dates never land on the previous Cairo day.
+    `off` is accepted for backwards compatibility and ignored."""
+    dt = datetime.fromisoformat(f"{d}T{hm}:00").replace(tzinfo=CAIRO)
+    return dt.isoformat()
 
 alerts = {
   "school-blessing-2026": {"titleAr": "قداس بركة بداية العام الدراسي", "titleEn": "Back-to-school blessing liturgy",
@@ -57,7 +67,7 @@ alerts = {
     "active": True, "startsAt": T("2026-11-25"), "endsAt": T("2027-01-08", "23:59"), "priority": 5, "link": "/mass-schedule", "sample": True},
   "holy-week-2027": {"titleAr": "مواعيد صلوات أسبوع الآلام وعيد القيامة", "titleEn": "Holy Week & Easter service times",
     "bodyAr": "صلوات البصخة يوميًا 9 ص و6 م، الجمعة العظيمة من 8 ص، وقداس العيد مساء السبت 1 مايو 9 م.", "bodyEn": "Pascha prayers daily 9 AM & 6 PM, Good Friday from 8 AM, Easter liturgy Saturday 1 May at 9 PM.",
-    "active": True, "startsAt": T("2027-04-20"), "endsAt": T("2027-05-03", "23:59", "+03:00"), "priority": 10, "link": "/mass-schedule"},
+    "active": True, "startsAt": T("2027-04-20"), "endsAt": T("2027-05-03", "23:59", "+03:00"), "priority": 10, "link": "/mass-schedule", "sample": True},
   "summer-2027": {"titleAr": "مواعيد الصيف للمصطافين", "titleEn": "Summer times for vacationers",
     "bodyAr": "قداس إضافي مساء الأحد 7 م طوال الصيف بالكنيسة الأرضي.", "bodyEn": "Extra Sunday evening liturgy at 7 PM all summer in the ground-floor church.",
     "active": True, "startsAt": T("2027-06-15", "00:00", "+03:00"), "endsAt": T("2027-09-15", "23:59", "+03:00"), "priority": 3, "link": "/mass-schedule", "sample": True}

@@ -135,6 +135,14 @@ const Map<String, List<String>> _strings = {
   'dir_about': ['التاريخ والمذابح والآباء الكهنة', 'History, altars and priests'],
   'dir_contact': ['التليفونات والخريطة والمواصلات', 'Phones, map and directions'],
   'dir_ask': ['مساعد ذكي يجيب عن أسئلتك', 'Smart assistant for your questions'],
+  'menu': ['القائمة', 'Menu'],
+  'otherStages': ['مراحل واجتماعات أخرى', 'Other stages & meetings'],
+  'deleteFailed': ['تعذّر الحذف: {e}', 'Delete failed: {e}'],
+  'needWeekdayOrDate': ['اختر يوم الأسبوع أو تاريخًا محددًا.', 'Choose a weekday or a one-off date.'],
+  'adminCheckFailed': ['تعذّر التحقق من الصلاحيات. تأكد من الاتصال.', 'Could not verify permissions. Check your connection.'],
+  'showAllAlerts': ['عرض كل التنويهات ({n})', 'Show all notices ({n})'],
+  'showFewerAlerts': ['عرض أقل', 'Show fewer'],
+  'unscheduled': ['بدون موعد ثابت', 'No fixed day'],
 };
 
 extension L10nX on BuildContext {

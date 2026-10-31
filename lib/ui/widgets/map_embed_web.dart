@@ -3,12 +3,20 @@ import 'dart:ui_web' as ui_web;
 import 'package:material_ui/material_ui.dart';
 import 'package:web/web.dart' as web;
 
-final Set<String> _registered = {};
+/// One registered view type per distinct embed URL (collision-free: the
+/// type is derived from a counter, not the URL's hash).
+final Map<String, String> _viewTypes = {};
 
-/// Web: keyless Google Maps iframe embed.
+/// Web: keyless Google Maps iframe embed. The location card ([fallback]) is
+/// painted underneath, so it shows while the iframe loads and whenever the
+/// iframe stays blank (e.g. blocked by a content blocker).
 Widget buildMapView(BuildContext context, String embedUrl, Widget fallback) {
-  final viewType = 'church-map-${embedUrl.hashCode}';
-  if (_registered.add(viewType)) {
+  var isNew = false;
+  final viewType = _viewTypes.putIfAbsent(embedUrl, () {
+    isNew = true;
+    return 'church-map-${_viewTypes.length}';
+  });
+  if (isNew) {
     ui_web.platformViewRegistry.registerViewFactory(viewType, (int id) {
       final iframe = web.HTMLIFrameElement()
         ..src = embedUrl
@@ -28,5 +36,8 @@ Widget buildMapView(BuildContext context, String embedUrl, Widget fallback) {
       return iframe;
     });
   }
-  return HtmlElementView(viewType: viewType);
+  return Stack(fit: StackFit.expand, children: [
+    fallback,
+    HtmlElementView(viewType: viewType),
+  ]);
 }

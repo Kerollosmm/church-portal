@@ -1,3 +1,4 @@
+import 'cairo_time.dart';
 import 'models.dart';
 import 'schedule.dart';
 import 'time_format.dart';
@@ -21,8 +22,8 @@ String buildAssistantInstruction({
         'and suggest calling the church. Never invent times, names or phone numbers.')
     ..writeln('Reply in the language of the question (Egyptian-friendly Modern Standard Arabic or English). '
         'Keep answers short (max ~6 lines), use bullet points for lists, and give times like 06:30 AM.')
-    ..writeln('All times are Africa/Cairo local time. Current Cairo time: ${now.toIso8601String()} '
-        '(${weekdayNamesEn[now.weekday]}).')
+    ..writeln('All times are Africa/Cairo local time. Today in Cairo: ${_ymd(now)} '
+        '(${weekdayNamesEn[now.weekday]}). Each question starts with the exact current Cairo time.')
     ..writeln('Do not give medical, legal or spiritual-direction advice beyond pointing to the right clinic, '
         'meeting or priest. Do not collect personal data.')
     ..writeln()
@@ -50,6 +51,19 @@ String buildAssistantInstruction({
         '${formatRangeLatin(l.start, l.end)} at ${l.placeEn}${l.audienceEn.isNotEmpty ? ' - ${l.audienceEn}' : ''}');
   }
 
+  // One-off services that belong to no season (date only).
+  final oneOff = liturgies.where((l) => l.seasonKey == null && l.weekday == null && l.date != null).toList()
+    ..sort((a, b) => a.date!.compareTo(b.date!));
+  if (oneOff.isNotEmpty) {
+    b
+      ..writeln()
+      ..writeln('## Special one-off services');
+    for (final l in oneOff) {
+      b.writeln('- ${_ymd(l.date!)}: ${l.nameEn} (${l.nameAr}) [${l.type}] '
+          '${formatRangeLatin(l.start, l.end)} at ${l.placeEn}${l.audienceEn.isNotEmpty ? ' - ${l.audienceEn}' : ''}');
+    }
+  }
+
   final seasonal = seasonalSchedule(seasons, liturgies);
   if (seasonal.isNotEmpty) {
     b
@@ -60,9 +74,7 @@ String buildAssistantInstruction({
       b.writeln('### ${s.nameEn} (${s.nameAr}) ${s.startsAt?.toIso8601String() ?? ''} -> ${s.endsAt?.toIso8601String() ?? ''}'
           '${isSeasonActiveAt(s, now) ? ' [ACTIVE NOW]' : ''}');
       for (final l in e.value) {
-        final when = l.date != null
-            ? l.date!.toIso8601String().substring(0, 10)
-            : weekdayNamesEn[l.weekday ?? 0];
+        final when = l.date != null ? _ymd(l.date!) : (l.weekday != null ? weekdayNamesEn[l.weekday!] : 'every day');
         b.writeln('- $when: ${l.nameEn} ${formatRangeLatin(l.start, l.end)} at ${l.placeEn}');
       }
     }
@@ -80,7 +92,8 @@ String buildAssistantInstruction({
     ..writeln()
     ..writeln('## Sunday school & meetings');
   for (final m in meetings) {
-    b.writeln('- ${m.nameEn} (${m.nameAr}) [${m.stage}]: ${weekdayNamesEn[m.weekday ?? 0]} '
+    final day = m.weekday != null ? weekdayNamesEn[m.weekday!] : 'no fixed day (ask the church)';
+    b.writeln('- ${m.nameEn} (${m.nameAr}) [${m.stage}]: $day '
         '${formatRangeLatin(m.start, m.end)} at ${m.hallEn}; Facebook ${m.facebookUrl}; WhatsApp ${m.whatsappUrl}');
   }
 
@@ -96,7 +109,16 @@ String buildAssistantInstruction({
     ..writeln()
     ..writeln('## Public services');
   for (final f in facilities) {
-    b.writeln('- ${f.nameEn} (${f.nameAr}): ${f.descEn} Hours: ${f.hoursEn}.${f.phone.isNotEmpty ? ' Phone ${f.phone}.' : ''}');
+    final hours = f.hoursEn.isNotEmpty ? f.hoursEn : f.hoursAr;
+    b.writeln('- ${f.nameEn} (${f.nameAr}): ${f.descEn.isNotEmpty ? f.descEn : f.descAr}'
+        '${hours.isNotEmpty ? ' Hours: $hours.' : ''}${f.phone.isNotEmpty ? ' Phone ${f.phone}.' : ''}');
   }
   return b.toString();
+}
+
+/// Cairo calendar date as YYYY-MM-DD (UTC instants are converted first).
+String _ymd(DateTime d) {
+  final c = CairoTime.calendarDate(d);
+  String two(int n) => n.toString().padLeft(2, '0');
+  return '${c.year}-${two(c.month)}-${two(c.day)}';
 }

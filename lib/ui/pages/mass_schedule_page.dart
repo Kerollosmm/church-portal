@@ -59,14 +59,18 @@ class _MassSchedulePageState extends ConsumerState<MassSchedulePage> {
         Card(
           child: SwitchListTile(
             value: _seasons,
-            onChanged: (v) => setState(() => _seasons = v),
+            onChanged: (v) => setState(() {
+              _seasons = v;
+              // The visitor chose: never override it with the season default.
+              _seasonDefaultApplied = true;
+            }),
             activeThumbColor: AppColors.gold,
             secondary: const Icon(Icons.auto_awesome_rounded, color: AppColors.burgundy),
             title: Text(context.tr('holySeasons'), style: const TextStyle(fontWeight: FontWeight.w800)),
             subtitle: Text(context.tr('holySeasonsHint')),
           ),
         ),
-        if (lits.isLoading || seasons.isLoading)
+        if (lits.isLoading || (_seasons && seasons.isLoading))
           const Padding(padding: EdgeInsets.only(top: 16), child: SkeletonList(count: 4))
         else if (lits.hasError && !lits.hasValue)
           ErrorState(onRetry: () => ref.invalidate(liturgiesProvider))
@@ -113,7 +117,7 @@ class _MassSchedulePageState extends ConsumerState<MassSchedulePage> {
         const EmptyState()
       else
         ResponsiveGrid(minItemWidth: 340, children: [
-          for (final l in vespers) LiturgyCard(liturgy: l, showWeekday: true),
+          for (final l in vespers) LiturgyCard(liturgy: l, showWeekday: true, showDate: true),
         ]),
     ];
   }

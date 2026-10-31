@@ -171,6 +171,7 @@ class _ContactFormState extends ConsumerState<ContactForm> {
   }
 
   Future<void> _submit() async {
+    if (_sending) return; // a submission is already in flight
     FocusScope.of(context).unfocus();
     final v = validateContactForm(ContactFormInput(
       name: _name.text,

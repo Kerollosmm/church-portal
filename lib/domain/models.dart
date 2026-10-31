@@ -74,7 +74,7 @@ class ChurchSettings {
   final String mapsUrl, mapsQuery;
   final List<PhoneEntry> phones;
   final String whatsapp, whatsappChannel, facebook, youtube;
-  final String verseAr, verseEn, verseRef;
+  final String verseAr, verseEn, verseRef, verseRefAr;
   final String heroImageUrl;
   final String historyAr, historyEn;
   final List<Altar> altars;
@@ -100,6 +100,7 @@ class ChurchSettings {
     this.verseAr = '',
     this.verseEn = '',
     this.verseRef = '',
+    this.verseRefAr = '',
     this.heroImageUrl = '',
     this.historyAr = '',
     this.historyEn = '',
@@ -130,6 +131,7 @@ class ChurchSettings {
         verseAr: _s(m['verseAr']),
         verseEn: _s(m['verseEn']),
         verseRef: _s(m['verseRef']),
+        verseRefAr: _s(m['verseRefAr']),
         heroImageUrl: _s(m['heroImageUrl']),
         historyAr: _s(m['historyAr']),
         historyEn: _s(m['historyEn']),

@@ -26,7 +26,7 @@ service cloud.firestore {
     }
 
     match /admins/{uid} {
-      allow read: if request.auth != null && (request.auth.uid == uid || isAdmin());
+      allow read: if request.auth != null && request.auth.uid == uid;
       allow write: if false; // manage from the Firebase console / Admin SDK
     }
 
@@ -51,7 +51,9 @@ service cloud.firestore {
       return d.keys().hasOnly(['name', 'phone', 'email', 'message', 'lang', 'status', 'createdAt'])
         && d.keys().hasAll(['name', 'message', 'status', 'createdAt'])
         && d.name is string && d.name.size() >= 2 && d.name.size() <= 80
+        && d.name.matches('[\\s\\S]*\\S[\\s\\S]*') // not whitespace-only
         && d.message is string && d.message.size() >= 5 && d.message.size() <= 1000
+        && d.message.matches('[\\s\\S]*\\S[\\s\\S]*')
         && (!('phone' in d) || (d.phone is string && (d.phone == '' || d.phone.matches('^[0-9+]{5,15}$'))))
         && (!('email' in d) || (d.email is string && d.email.size() <= 254
               && (d.email == '' || d.email.matches('^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$'))))

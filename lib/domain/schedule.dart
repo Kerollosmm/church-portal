@@ -91,6 +91,24 @@ List<Liturgy> effectiveLiturgiesForDay({
   return chosen;
 }
 
+LiturgyOccurrence? _occurrence(Liturgy l, tz.TZDateTime day, int dayOffset) {
+  final s = l.startMinutes;
+  if (s == null) return null;
+  var e = l.endMinutes ?? (s + 120);
+  if (e <= s) e += 24 * 60; // crosses midnight (e.g. Easter night liturgy)
+  return LiturgyOccurrence(
+    l,
+    CairoTime.at(day.year, day.month, day.day, s),
+    CairoTime.at(day.year, day.month, day.day, e),
+    dayOffset,
+  );
+}
+
+/// Concrete occurrences for a Cairo day, honouring each season's exact time
+/// window: a seasonal service counts only if it starts inside its season's
+/// [startsAt, endsAt], and it replaces only the regular services that start
+/// inside that window (so e.g. morning masses before a season starting at
+/// 18:00 keep the regular schedule). Sorted by start time then order.
 List<LiturgyOccurrence> occurrencesForDay({
   required Iterable<Liturgy> liturgies,
   required Iterable<Season> seasons,
@@ -98,19 +116,36 @@ List<LiturgyOccurrence> occurrencesForDay({
   required int dayOffset,
   Set<String>? types,
 }) {
-  final result = <LiturgyOccurrence>[];
-  for (final l in effectiveLiturgiesForDay(liturgies: liturgies, seasons: seasons, day: day, types: types)) {
-    final s = l.startMinutes;
-    if (s == null) continue;
-    var e = l.endMinutes ?? (s + 120);
-    if (e <= s) e += 24 * 60; // crosses midnight (e.g. Easter night liturgy)
-    result.add(LiturgyOccurrence(
-      l,
-      CairoTime.at(day.year, day.month, day.day, s),
-      CairoTime.at(day.year, day.month, day.day, e),
-      dayOffset,
-    ));
+  final dayStart = CairoTime.startOfDay(day);
+  final active = seasons.where((s) => isSeasonActiveOnDay(s, dayStart)).toList();
+  bool typeOk(Liturgy l) => types == null || types.contains(l.type);
+
+  final seasonal = <LiturgyOccurrence>[];
+  final replacing = <Season>{};
+  for (final l in liturgies) {
+    if (l.seasonKey == null || !_matchesDay(l, dayStart)) continue;
+    final o = _occurrence(l, dayStart, dayOffset);
+    if (o == null) continue;
+    final windows = active.where((s) => s.key == l.seasonKey && isSeasonActiveAt(s, o.start)).toList();
+    if (windows.isEmpty) continue;
+    seasonal.add(o);
+    // Replacement is decided on ALL seasonal services (so e.g. Holy Week
+    // Pascha hours also suspend the regular weekday masses), then filtered.
+    replacing.addAll(windows);
   }
+
+  final result = <LiturgyOccurrence>[
+    for (final o in seasonal)
+      if (typeOk(o.liturgy)) o,
+    for (final l in liturgies)
+      if (l.seasonKey == null && _matchesDay(l, dayStart) && typeOk(l))
+        if (_occurrence(l, dayStart, dayOffset) case final o?)
+          if (!replacing.any((s) => isSeasonActiveAt(s, o.start))) o,
+  ];
+  result.sort((a, b) {
+    final c = a.start.compareTo(b.start);
+    return c != 0 ? c : a.liturgy.order.compareTo(b.liturgy.order);
+  });
   return result;
 }
 

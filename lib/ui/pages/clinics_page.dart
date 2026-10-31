@@ -25,6 +25,13 @@ class _ClinicsPageState extends ConsumerState<ClinicsPage> {
   bool _todayOnly = false;
 
   @override
+  void didUpdateWidget(covariant ClinicsPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // go_router keeps this State when only ?specialty= changes.
+    if (widget.initialSpecialty != oldWidget.initialSpecialty) _specialty = widget.initialSpecialty;
+  }
+
+  @override
   Widget build(BuildContext context) {
     final now = ref.watch(nowProvider).value ?? DateTime.now();
     return PageBody(
@@ -103,9 +110,8 @@ class ClinicCard extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
+          Wrap(spacing: 8, runSpacing: 6, children: [
             Pill(context.pick(c.specialtyAr, c.specialtyEn), color: AppColors.burgundy, icon: Icons.medical_services),
-            const Spacer(),
             if (availableToday) Pill(context.tr('availableToday'), icon: Icons.check_circle),
           ]),
           const SizedBox(height: 10),

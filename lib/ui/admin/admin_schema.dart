@@ -9,8 +9,20 @@ class FieldDef {
   final bool required;
   final List<String> options; // for choice
   final bool nullableChoice;
+
+  /// Choice value used when the stored document has none (match the
+  /// reader's default in models.dart; null = first option).
+  final String? defaultOption;
+
+  /// Boolean value assumed when an EXISTING document lacks the field (match
+  /// the reader's default in models.dart). New documents start as true.
+  final bool missingBool;
   const FieldDef(this.key, this.labelAr, this.labelEn, this.type,
-      {this.required = false, this.options = const [], this.nullableChoice = false});
+      {this.required = false,
+      this.options = const [],
+      this.nullableChoice = false,
+      this.defaultOption,
+      this.missingBool = false});
 }
 
 class CollectionDef {
@@ -19,7 +31,10 @@ class CollectionDef {
   final String labelEn;
   final List<FieldDef> fields;
   final List<String> titleKeys;
-  const CollectionDef(this.name, this.labelAr, this.labelEn, this.fields, this.titleKeys);
+
+  /// At least one of these fields must be set (e.g. weekday or one-off date).
+  final List<String> requireAnyOf;
+  const CollectionDef(this.name, this.labelAr, this.labelEn, this.fields, this.titleKeys, {this.requireAnyOf = const []});
 }
 
 const _seasonKeys = ['holy_week', 'pascha', 'nativity', 'revival_maximus', 'revival_moses', 'summer'];
@@ -68,6 +83,9 @@ const adminCollections = <CollectionDef>[
   ], [
     'nameAr',
     'start'
+  ], requireAnyOf: [
+    'weekday',
+    'date'
   ]),
   CollectionDef('meetings', 'الاجتماعات', 'Meetings', [
     FieldDef('stage', 'المرحلة', 'Stage', FieldType.choice, required: true, options: [
@@ -99,7 +117,7 @@ const adminCollections = <CollectionDef>[
     FieldDef('end', 'إلى (HH:mm)', 'To (HH:mm)', FieldType.time),
     FieldDef('bookingPhone', 'تليفون الحجز', 'Booking phone', FieldType.text),
     FieldDef('whatsapp', 'واتساب', 'WhatsApp', FieldType.text),
-    FieldDef('active', 'مُفعّلة', 'Active', FieldType.boolean),
+    FieldDef('active', 'مُفعّلة', 'Active', FieldType.boolean, missingBool: true), // Clinic.fromMap: absent = active
   ], [
     'doctorName',
     'specialtyAr'
@@ -108,7 +126,7 @@ const adminCollections = <CollectionDef>[
     FieldDef('name', 'الاسم (عربي)', 'Name (Arabic)', FieldType.text, required: true),
     FieldDef('nameEn', 'الاسم (إنجليزي)', 'Name (English)', FieldType.text),
     FieldDef('photoUrl', 'رابط الصورة', 'Photo URL', FieldType.text),
-    FieldDef('rank', 'الرتبة', 'Rank', FieldType.choice, options: ['hegumen', 'priest']),
+    FieldDef('rank', 'الرتبة', 'Rank', FieldType.choice, options: ['hegumen', 'priest'], defaultOption: 'priest'),
     FieldDef('ordinationDate', 'تاريخ الرسامة (YYYY-MM-DD)', 'Ordination date (YYYY-MM-DD)', FieldType.text),
     FieldDef('hegumenDate', 'تاريخ القمصية (YYYY-MM-DD)', 'Hegumen date (YYYY-MM-DD)', FieldType.text),
     FieldDef('status', 'الحالة', 'Status', FieldType.choice, options: ['serving', 'departed']),

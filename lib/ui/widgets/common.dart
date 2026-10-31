@@ -357,7 +357,7 @@ class Footer extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final s = ref.watch(settingsProvider).value;
-    final live = ref.watch(repositoryProvider).isLive;
+    final servingSeed = ref.watch(repositoryProvider).servingSeed;
     final year = DateTime.now().year;
     final links = <(String, String)>[
       ('massSchedule', '/mass-schedule'),
@@ -400,11 +400,16 @@ class Footer extends ConsumerWidget {
             const SizedBox(height: 6),
             Text('© ${localDigits(context, '$year')} — ${context.tr('rights')}',
                 style: const TextStyle(color: Colors.white54, fontSize: 12)),
-            if (!live)
-              Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: Text(context.tr('offlineData'), style: const TextStyle(color: Colors.white38, fontSize: 11)),
-              ),
+            ValueListenableBuilder<bool>(
+              valueListenable: servingSeed,
+              builder: (context, onSeed, _) => onSeed
+                  ? Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text(context.tr('offlineData'),
+                          style: const TextStyle(color: Colors.white38, fontSize: 11)),
+                    )
+                  : const SizedBox.shrink(),
+            ),
           ]),
         ),
       ),

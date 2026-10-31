@@ -7,6 +7,7 @@ import '../../core/l10n.dart';
 import '../../core/theme.dart';
 import '../../domain/assistant_context.dart';
 import '../../domain/cairo_time.dart';
+import '../../domain/time_format.dart';
 import '../../state/providers.dart';
 import '../widgets/common.dart';
 
@@ -32,7 +33,14 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
   final _scroll = ScrollController();
   final List<_Msg> _messages = [];
   ChatSession? _chat;
+  String? _chatInstruction;
   bool _busy = false;
+
+  /// Successful turns (user + model), replayed when the session is rebuilt
+  /// after a failure or a content/date change. Capped so request size and
+  /// cost stay bounded; the oldest turns drop off first.
+  final List<Content> _history = [];
+  static const _maxHistoryContents = 20; // 10 question/answer turns
 
   @override
   void dispose() {
@@ -41,24 +49,53 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
     super.dispose();
   }
 
+  /// Waits (briefly) for every content stream the instruction is built from,
+  /// so the first question is not answered from a partial context.
+  Future<void> _awaitContent() async {
+    try {
+      await Future.wait<Object?>([
+        ref.read(settingsProvider.future),
+        ref.read(liturgiesProvider.future),
+        ref.read(seasonsProvider.future),
+        ref.read(clinicsProvider.future),
+        ref.read(meetingsProvider.future),
+        ref.read(activitiesProvider.future),
+        ref.read(facilitiesProvider.future),
+      ]).timeout(const Duration(seconds: 10));
+    } catch (e) {
+      debugPrint('Assistant: content not fully loaded: $e');
+    }
+  }
+
+  String _buildInstruction() => buildAssistantInstruction(
+        settings: ref.read(settingsProvider).requireValue,
+        liturgies: ref.read(liturgiesProvider).value ?? const [],
+        seasons: ref.read(seasonsProvider).value ?? const [],
+        clinics: ref.read(clinicsProvider).value ?? const [],
+        meetings: ref.read(meetingsProvider).value ?? const [],
+        activities: ref.read(activitiesProvider).value ?? const [],
+        facilities: ref.read(facilitiesProvider).value ?? const [],
+        now: CairoTime.now(),
+      );
+
+  /// Reuses the chat while the grounding (church data + Cairo date) is
+  /// unchanged; otherwise starts a new one that carries the earlier turns.
   ChatSession _session() {
-    if (_chat != null) return _chat!;
-    final instruction = buildAssistantInstruction(
-      settings: ref.read(settingsProvider).requireValue,
-      liturgies: ref.read(liturgiesProvider).value ?? const [],
-      seasons: ref.read(seasonsProvider).value ?? const [],
-      clinics: ref.read(clinicsProvider).value ?? const [],
-      meetings: ref.read(meetingsProvider).value ?? const [],
-      activities: ref.read(activitiesProvider).value ?? const [],
-      facilities: ref.read(facilitiesProvider).value ?? const [],
-      now: CairoTime.now(),
-    );
+    final instruction = _buildInstruction();
+    if (_chat != null && instruction == _chatInstruction) return _chat!;
     final model = FirebaseAI.googleAI().generativeModel(
       model: AppConfig.geminiModel,
       systemInstruction: Content.system(instruction),
       generationConfig: GenerationConfig(temperature: 0.2, maxOutputTokens: 800),
     );
-    return _chat = model.startChat();
+    _chatInstruction = instruction;
+    return _chat = model.startChat(history: List.of(_history));
+  }
+
+  static String _cairoStamp() {
+    final n = CairoTime.now();
+    String two(int v) => v.toString().padLeft(2, '0');
+    return '${n.year}-${two(n.month)}-${two(n.day)} ${two(n.hour)}:${two(n.minute)} (${weekdayNamesEn[n.weekday]})';
   }
 
   Future<void> _send([String? preset]) async {
@@ -73,16 +110,33 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
     });
     _scrollDown();
     try {
-      final r = await _session().sendMessage(Content.text(q)).timeout(const Duration(seconds: 45));
+      await _awaitContent();
+      if (!mounted) return;
+      final prompt = Content.text('[Current Cairo time: ${_cairoStamp()}]\n$q');
+      final r = await _session().sendMessage(prompt).timeout(const Duration(seconds: 45));
       final text = r.text?.trim();
-      setState(() => _messages.add(_Msg(false, (text == null || text.isEmpty) ? errorText : text)));
+      final ok = text != null && text.isNotEmpty;
+      if (ok) {
+        _history
+          ..add(prompt)
+          ..add(Content.model([TextPart(text)]));
+        if (_history.length > _maxHistoryContents) {
+          _history.removeRange(0, _history.length - _maxHistoryContents);
+          _chat = null; // rebuild with the trimmed history on the next question
+        }
+      }
+      if (!mounted) return;
+      setState(() => _messages.add(_Msg(false, ok ? text : errorText, error: !ok)));
     } catch (e) {
       debugPrint('Assistant error: $e');
-      _chat = null; // rebuild the session on next try
+      _chat = null; // rebuild the session (with the kept history) on next try
+      if (!mounted) return;
       setState(() => _messages.add(_Msg(false, errorText, error: true)));
     } finally {
-      if (mounted) setState(() => _busy = false);
-      _scrollDown();
+      if (mounted) {
+        setState(() => _busy = false);
+        _scrollDown();
+      }
     }
   }
 

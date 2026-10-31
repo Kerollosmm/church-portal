@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter/services.dart' show rootBundle;
 
 import '../domain/models.dart';
@@ -13,7 +14,8 @@ class SeedData {
     try {
       final text = await rootBundle.loadString('assets/seed/seed.json');
       return SeedData(jsonDecode(text) as Map<String, dynamic>);
-    } catch (_) {
+    } catch (e, st) {
+      debugPrint('Bundled seed data could not be loaded: $e\n$st');
       return SeedData(const {});
     }
   }

@@ -5,6 +5,7 @@ import '../../core/l10n.dart';
 import '../../core/launch.dart';
 import '../../core/theme.dart';
 import '../../domain/models.dart';
+import '../../domain/rules.dart';
 import '../../state/providers.dart';
 import '../widgets/cards.dart';
 import '../widgets/common.dart';
@@ -85,11 +86,12 @@ class _ActivityCard extends StatelessWidget {
             Wrap(spacing: 8, children: [
               ActionChipButton(
                   icon: Icons.call, label: context.tr('call'), color: AppColors.burgundy, onTap: () => callPhone(a.contactPhone)),
-              ActionChipButton(
-                  icon: Icons.chat_rounded,
-                  label: context.tr('whatsapp'),
-                  color: whatsappGreen,
-                  onTap: () => openWhatsApp(a.contactPhone)),
+              if (isEgyptianMobile(a.contactPhone))
+                ActionChipButton(
+                    icon: Icons.chat_rounded,
+                    label: context.tr('whatsapp'),
+                    color: whatsappGreen,
+                    onTap: () => openWhatsApp(a.contactPhone)),
             ]),
           ],
         ]),

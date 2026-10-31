@@ -5,8 +5,15 @@ import '../domain/rules.dart';
 
 Future<void> openUrl(String url) async {
   if (url.isEmpty) return;
-  final uri = Uri.tryParse(url);
+  var uri = Uri.tryParse(url.trim());
   if (uri == null) return;
+  // Scheme-less links (e.g. "facebook.com/church" or "//example.org") would be
+  // resolved relative to the portal on web; treat them as https.
+  if (!uri.hasScheme) {
+    final t = url.trim();
+    uri = Uri.tryParse(t.startsWith('//') ? 'https:$t' : 'https://$t');
+    if (uri == null) return;
+  }
   final external = uri.scheme == 'http' || uri.scheme == 'https';
   await launchUrl(uri, mode: external ? LaunchMode.externalApplication : LaunchMode.platformDefault, webOnlyWindowName: external ? '_blank' : '_self');
 }

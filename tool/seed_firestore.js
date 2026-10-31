@@ -62,25 +62,51 @@ async function main() {
   admin.initializeApp({ credential: admin.credential.applicationDefault(), projectId });
   const db = admin.firestore();
 
+  // Validate and convert every document before the first write, so an
+  // invalid date can never leave a partially written database.
+  // `settings` goes last: settings/church marks the database as seeded (the
+  // app then stops falling back to the bundled seed), so an interrupted
+  // upload must not create it before the other collections exist.
+  const plan = Object.entries(seed)
+    .filter(([collection]) => !only || only.includes(collection))
+    .sort(([a], [b]) => (a === 'settings') - (b === 'settings'))
+    .map(([collection, docs]) => [collection, Object.entries(docs).map(([id, data]) => [id, convert(data)])]);
+
+  const ALREADY_EXISTS = 6; // gRPC status code
   let written = 0, skipped = 0;
-  for (const [collection, docs] of Object.entries(seed)) {
-    if (only && !only.includes(collection)) continue;
-    const entries = Object.entries(docs);
-    for (let i = 0; i < entries.length; i += 400) {
-      const batch = db.batch();
-      let n = 0;
-      for (const [id, data] of entries.slice(i, i + 400)) {
-        const ref = db.collection(collection).doc(id);
-        if (!force && !dryRun) {
-          const snap = await ref.get();
-          if (snap.exists) { skipped++; continue; }
+  for (const [collection, entries] of plan) {
+    if (force) {
+      // --force: overwrite in batches.
+      for (let i = 0; i < entries.length; i += 400) {
+        const chunk = entries.slice(i, i + 400);
+        if (dryRun) {
+          for (const [id] of chunk) console.log(`[dry-run] ${collection}/${id} (overwrite)`);
+        } else {
+          const batch = db.batch();
+          for (const [id, data] of chunk) batch.set(db.collection(collection).doc(id), data);
+          await batch.commit();
         }
-        if (dryRun) console.log(`[dry-run] ${collection}/${id}`);
-        else batch.set(ref, convert(data));
-        n++;
+        written += chunk.length;
       }
-      if (!dryRun && n) await batch.commit();
-      written += n;
+    } else {
+      // Default: create only, per document, so a document created (e.g. in
+      // /admin) after we looked is never overwritten.
+      for (const [id, data] of entries) {
+        const ref = db.collection(collection).doc(id);
+        if (dryRun) {
+          if ((await ref.get()).exists) { skipped++; continue; }
+          console.log(`[dry-run] ${collection}/${id}`);
+          written++;
+          continue;
+        }
+        try {
+          await ref.create(data);
+          written++;
+        } catch (e) {
+          if (e.code === ALREADY_EXISTS) { skipped++; continue; }
+          throw e;
+        }
+      }
     }
     console.log(`${collection}: ${entries.length} docs processed`);
   }

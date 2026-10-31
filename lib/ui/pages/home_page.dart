@@ -6,6 +6,7 @@ import '../../core/l10n.dart';
 import '../../core/launch.dart';
 import '../../core/theme.dart';
 import '../../domain/models.dart';
+import '../../domain/rules.dart';
 import '../../state/providers.dart';
 import '../widgets/cards.dart';
 import '../widgets/common.dart';
@@ -161,8 +162,8 @@ class _Hero extends StatelessWidget {
                     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                       Text('« ${context.pick(s.verseAr, s.verseEn)} »',
                           style: t.titleMedium?.copyWith(color: Colors.white, fontWeight: FontWeight.w700, height: 1.7)),
-                      if (s.verseRef.isNotEmpty)
-                        Text(context.isAr ? '(رؤيا ٢: ١٠)' : '(${s.verseRef})',
+                      if (s.verseRef.isNotEmpty || s.verseRefAr.isNotEmpty)
+                        Text('(${context.isAr ? (s.verseRefAr.isNotEmpty ? s.verseRefAr : toArabicDigits(s.verseRef)) : (s.verseRef.isNotEmpty ? s.verseRef : s.verseRefAr)})',
                             style: const TextStyle(color: AppColors.goldLight)),
                     ]),
                   ),
