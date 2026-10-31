@@ -8,6 +8,10 @@ on:
         description: "Optional first admin as UID:email (creates admins/{uid})"
         required: false
         default: ""
+      admin_email:
+        description: "Optional admin email: finds/creates the Auth user, makes it owner, and emails a set-password link"
+        required: false
+        default: ""
       force:
         description: "Overwrite existing documents"
         type: boolean
@@ -34,6 +38,16 @@ jobs:
           ARGS="--project asafra-church-portal"
           if [ "${{ inputs.force }}" = "true" ]; then ARGS="$ARGS --force"; fi
           if [ -n "${{ inputs.admin }}" ]; then ARGS="$ARGS --admin ${{ inputs.admin }}"; fi
+          if [ -n "${{ inputs.admin_email }}" ]; then ARGS="$ARGS --admin-email ${{ inputs.admin_email }}"; fi
           node tool/seed_firestore.js $ARGS
+      - name: Email set-password link to admin
+        if: inputs.admin_email != ''
+        env:
+          ADMIN_EMAIL: ${{ inputs.admin_email }}
+        run: |
+          # Public web API key (same as in lib/firebase_options.dart); Firebase emails the reset link, nothing secret is logged.
+          curl -sf -X POST "https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=AIzaSyBEHiTY84sHSgLeV_cZ8p-kiKX-IWivByU" \
+            -H 'Content-Type: application/json' \
+            -d "{\"requestType\":\"PASSWORD_RESET\",\"email\":\"$ADMIN_EMAIL\"}" > /dev/null && echo "Set-password email sent"
       - if: always()
         run: rm -f "$RUNNER_TEMP/sa.json"

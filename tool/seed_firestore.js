@@ -13,6 +13,7 @@
  *   --force          Overwrite existing documents (default: skip docs that already exist,
  *                    so edits made in /admin are never clobbered)
  *   --admin <uid>[:email]  Also create admins/{uid} (role owner)
+ *   --admin-email <email>  Find or create the Firebase Auth user with this email and make it owner
  *
  * Fields named startsAt / endsAt / date / createdAt are converted to Timestamps.
  */
@@ -32,6 +33,7 @@ const only = opt('--only') ? opt('--only').split(',').map((s) => s.trim()) : nul
 const dryRun = flag('--dry-run');
 const force = flag('--force');
 const adminArg = opt('--admin');
+const adminEmail = opt('--admin-email');
 
 const DATE_FIELDS = new Set(['startsAt', 'endsAt', 'date', 'createdAt']);
 
@@ -87,6 +89,19 @@ async function main() {
     const [uid, email] = adminArg.split(':');
     if (!dryRun) await db.doc(`admins/${uid}`).set({ email: email || '', role: 'owner' }, { merge: true });
     console.log(`admins/${uid} ${dryRun ? '(dry-run)' : 'created'}`);
+  }
+  if (adminEmail) {
+    let user;
+    try {
+      user = await admin.auth().getUserByEmail(adminEmail);
+    } catch (e) {
+      if (e.code !== 'auth/user-not-found') throw e;
+      if (!dryRun) user = await admin.auth().createUser({ email: adminEmail });
+    }
+    if (user && !dryRun) {
+      await db.doc(`admins/${user.uid}`).set({ email: adminEmail, role: 'owner' }, { merge: true });
+    }
+    console.log(`admin owner ${adminEmail} -> uid ${user ? user.uid : '(dry-run)'}`);
   }
   console.log(`Done. project=${projectId} written=${written} skipped(existing)=${skipped}${dryRun ? ' (dry run)' : ''}`);
 }
