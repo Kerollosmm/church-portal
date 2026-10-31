@@ -123,11 +123,13 @@ async function main() {
       if (only && !only.includes(collection)) continue;
       for (const id of ids) {
         if (seed[collection] && seed[collection][id]) continue; // still part of the seed
+        const ref = db.collection(collection).doc(id);
+        if (!(await ref.get()).exists) continue; // already gone (e.g. a repeated --force run)
         if (dryRun) {
-          console.log(`[dry-run] delete ${collection}/${id}`);
-        } else {
-          await db.collection(collection).doc(id).delete();
+          console.log(`[dry-run] would delete ${collection}/${id}`);
+          continue;
         }
+        await ref.delete();
         deleted++;
       }
     }

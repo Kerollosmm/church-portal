@@ -93,8 +93,8 @@ const Map<String, List<String>> _strings = {
   'sampleData': ['بيانات تجريبية', 'Sample data'],
   'timesPending': ['مواعيد تقريبية — في انتظار تأكيد الكنيسة', 'Times pending church confirmation'],
   'timesPendingHint': [
-    'المواعيد المعروضة هنا مؤقتة ولم تعلنها الكنيسة بعد. تابع قناة الكنيسة على واتساب أو صفحتها على فيسبوك، أو اتصل بالكنيسة للتأكد.',
-    'The times shown here are provisional and have not been published by the church yet. Follow the church\'s WhatsApp channel or Facebook page, or call the church to confirm.'
+    'بعض البيانات المعروضة هنا (مثل المواعيد) لم تؤكدها الكنيسة بعد، والعناصر غير المؤكدة عليها علامة «بيانات تجريبية». تابع قناة الكنيسة على واتساب أو صفحتها على فيسبوك، أو اتصل بالكنيسة للتأكد.',
+    'Some information shown here (such as times) has not been confirmed by the church yet; unconfirmed items carry a "Sample data" tag. Follow the church\'s WhatsApp channel or Facebook page, or call the church to confirm.'
   ],
   'openPage': ['افتح الصفحة', 'Open page'],
   'instagram': ['إنستغرام', 'Instagram'],

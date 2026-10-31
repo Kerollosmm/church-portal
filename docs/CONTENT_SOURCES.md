@@ -89,8 +89,8 @@ Status: **needs church confirmation**, including whether the church runs clinics
 |---|---|---|---|
 | deacons-choir (خورس الشمامسة) | none | C; K; K2 | verified |
 | avamose-choir (كورال أفا موسى) | https://www.facebook.com/100069922352210 | FB "Following" | verified |
-| davids-tones (كورال نغمات داود) | https://www.facebook.com/n8amatdawoudchoire | FB "Following" (may be a partner choir rather than the church's own) | verified as followed by the church |
-| hymns-school (مدرسة المرتل إسحاق إبراهيم) | https://www.facebook.com/Esshaqibrahi | FB "Following" (may be a partner school) | verified as followed by the church |
+| davids-tones (كورال نغمات داود) | https://www.facebook.com/n8amatdawoudchoire | FB "Following"; the card text labels it a partner choir, not confirmed as a church ministry | verified as followed by the church |
+| hymns-school (مدرسة المرتل إسحاق إبراهيم) | https://www.facebook.com/Esshaqibrahi | FB "Following"; the card text labels it a partner school, not confirmed as a church ministry | verified as followed by the church |
 | maximous-youth | https://www.facebook.com/MaximousYouth | FB "Following" | verified |
 | prep-boys (خدمة إعدادي بنين) | none (URL truncated in capture) | FB "Following" | verified |
 | antibiotic-mime | https://www.facebook.com/AntibioticMimeTeam | FB "Following" | verified |
@@ -113,12 +113,10 @@ Status: **needs church confirmation**, including whether the church runs clinics
 | loukas | القس لوكاس رفاعي | — | K2 (Jul 2022); YT sermon 2025 | verified, current |
 | saleeb | القس صليب سمير | — | K; K2 (2022 only) | **needs church confirmation** |
 | barnaba | القس برنابا أمير | — | YT sermon 2025 (single source) | **needs church confirmation** |
-| yassa | القس يسى إبراهيم | — | FB post comments, 31 Oct 2026 (priestly-calling congratulation) | **needs church confirmation** |
-| philemon | القس فيليمون فوزي | — | FB post comments, 31 Oct 2026 (wording suggests ordination may still be upcoming) | **needs church confirmation** |
 | tadros (departed) | المتنيح القمص تادرس لبيب يوسف | ord. 1980-08-01, hegumen 2012-09-27, departed 2022-02-10 | P1; J | verified |
 | maximus (departed) | المتنيح القس مكسيموس فؤاد أندراوس | ord. 2009-03-08, departed 2021-02-04 (had moved to St Mary, El-Maamoura) | P6 (single) | **needs church confirmation** |
 
-Not seeded: "القمص اسحق" (FB post credit "برسوم القمص اسحق" is ambiguous) and "ابونا مكسيموس" (a congratulation comment with no surname). No priest photos are verified; `photoUrl` is empty for all.
+Not seeded until the church confirms them: القس يسى إبراهيم and القس فيليمون فوزي (named in priestly-calling congratulations in FB post comments on 31 Oct 2026; the wording suggests the ordination may still be upcoming). Also not seeded: "القمص اسحق" (FB post credit "برسوم القمص اسحق" is ambiguous) and "ابونا مكسيموس" (a congratulation comment with no surname). No priest photos are verified; `photoUrl` is empty for all.
 
 ## saints
 
@@ -132,6 +130,6 @@ Not seeded: "القمص اسحق" (FB post credit "برسوم القمص اسح�
 2. Sunday school and meeting days, times and halls.
 3. Whether the church runs clinics or a dispensary; specialties, doctors, days and booking phone.
 4. Nursery, employment office, halls and library: confirm or remove.
-5. Current priest roster (confirm Bigol, Saleeb, Barnaba, Yassa, Philemon), with photos.
+5. Current priest roster (confirm Bigol, Saleeb and Barnaba; ordination and assignment of Yassa Ibrahim and Philemon Fawzy), with photos.
 6. Founding / consecration year and altar names (Hegumen Bemwa Ghaly's history talk on 25 Jun 2025 is the lead).
 7. Photos of the church building (the Facebook cover album a.217655827254851 has a bell-tower photo).

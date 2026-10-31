@@ -63,7 +63,7 @@ String buildAssistantInstruction({
       ..writeln()
       ..writeln('## Special one-off services');
     for (final l in oneOff) {
-      b.writeln('- ${_ymd(l.date!)}: ${l.nameEn} (${l.nameAr}) [${l.type}] '
+      b.writeln('- ${l.sample ? '[UNCONFIRMED] ' : ''}${_ymd(l.date!)}: ${l.nameEn} (${l.nameAr}) [${l.type}] '
           '${formatRangeLatin(l.start, l.end)} at ${l.placeEn}${l.audienceEn.isNotEmpty ? ' - ${l.audienceEn}' : ''}');
     }
   }

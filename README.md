@@ -1,7 +1,7 @@
-# Church Portal — كنيسة القديسين مكسيموس ودوماديوس والأنبا موسى الأسود
+# Church Portal — كنيسة القديسين مكسيموس ودوماديوس والقوي الأنبا موسى الأسود
 
-Public digital portal for the Coptic Orthodox Church of Saints Maximus & Domadius and Anba Moussa the Black,
-**Street 45, El‑Asafra Bahary, Alexandria** (شارع 45، العصافرة بحري، الإسكندرية).
+Public digital portal for the Coptic Orthodox Church of Saints Maximus & Domadius and the Strong Anba Moussa the Black,
+**end of Street 45, El‑Asafra Qebly, Montaza, Alexandria** (آخر شارع 45، العصافرة قبلي، قطاع المنتزه، الإسكندرية).
 
 Flutter (web + Android, iOS‑ready) + Firebase (Firestore, Hosting, Auth for admins, App Check, Firebase AI Logic).
 Arabic‑first (RTL) with an English toggle, mobile‑first, works offline on bundled seed data if Firebase is unreachable.
