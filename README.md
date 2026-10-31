@@ -173,6 +173,8 @@ HTML/JS (Flutter bundles are not content‑hashed) and longer caching for fonts/
 - `.github/actions/firebase-credentials` — writes the service-account secret to a temp file (mode 600). It keeps
   only the first JSON object, so stray characters pasted after the key (e.g. a trailing note or a second copy)
   no longer break deploys; a warning is printed and the key itself is never echoed.
+  It also primes firebase-tools' API-enablement cache for Hosting/Firestore/Rules, because the deploy service account
+  has no `serviceusage.services.get` permission (alternatively grant it **Service Usage Consumer**).
 
 ### Required secret: `FIREBASE_SERVICE_ACCOUNT_ASAFRA_CHURCH_PORTAL`
 

@@ -8,6 +8,10 @@ inputs:
   service-account:
     description: Service-account JSON (pass a secret)
     required: true
+  project-id:
+    description: Firebase project whose APIs are known to be enabled
+    required: false
+    default: asafra-church-portal
 runs:
   using: composite
   steps:
@@ -43,3 +47,30 @@ runs:
         print(f"Service-account key OK (project {obj.get('project_id', '?')})")
         PY
         echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/sa.json" >> "$GITHUB_ENV"
+    - name: Skip firebase-tools API-enablement probe
+      # firebase-tools checks every API through serviceusage.services.get,
+      # which the deploy service account is not granted (403 "Permission
+      # denied to get service [firebasehosting.googleapis.com]"). These APIs
+      # are already enabled on the project, so pre-seed firebase-tools' own
+      # enablement cache (configstore) instead of widening the key's IAM roles.
+      shell: bash
+      env:
+        PROJECT_ID: ${{ inputs.project-id }}
+      run: |
+        set -euo pipefail
+        python3 - <<'PY'
+        import json, os
+        base = os.environ.get("XDG_CONFIG_HOME") or os.path.join(os.path.expanduser("~"), ".config")
+        path = os.path.join(base, "configstore", "firebase-tools.json")
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        try:
+            cfg = json.load(open(path))
+        except Exception:
+            cfg = {}
+        cache = cfg.setdefault("apiEnablementCache", {}).setdefault(os.environ["PROJECT_ID"], {})
+        for api in ("firebasehosting.googleapis.com", "firestore.googleapis.com",
+                    "firebaserules.googleapis.com", "identitytoolkit.googleapis.com"):
+            cache[api] = True
+        json.dump(cfg, open(path, "w"))
+        print("firebase-tools API cache primed:", ", ".join(sorted(cache)))
+        PY
