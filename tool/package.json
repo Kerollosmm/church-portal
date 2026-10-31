@@ -1,0 +1,12 @@
+{
+  "name": "church-portal-tools",
+  "private": true,
+  "description": "Seeding / admin scripts for the church portal Firestore",
+  "scripts": {
+    "seed": "node seed_firestore.js",
+    "seed:dry": "node seed_firestore.js --dry-run"
+  },
+  "dependencies": {
+    "firebase-admin": "^13.0.0"
+  }
+}

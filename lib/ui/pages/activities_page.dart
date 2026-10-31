@@ -1,0 +1,101 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:material_ui/material_ui.dart';
+
+import '../../core/l10n.dart';
+import '../../core/launch.dart';
+import '../../core/theme.dart';
+import '../../domain/models.dart';
+import '../../domain/rules.dart';
+import '../../state/providers.dart';
+import '../widgets/cards.dart';
+import '../widgets/common.dart';
+
+const _categoryOrder = ['scouts', 'deacons', 'hymns', 'bible', 'summer', 'sports', 'exhibitions'];
+
+IconData activityIcon(String c) => switch (c) {
+      'scouts' => Icons.hiking_rounded,
+      'deacons' => Icons.menu_book_rounded,
+      'hymns' => Icons.music_note_rounded,
+      'bible' => Icons.auto_stories_rounded,
+      'summer' => Icons.wb_sunny_rounded,
+      'sports' => Icons.sports_soccer_rounded,
+      'exhibitions' => Icons.storefront_rounded,
+      _ => Icons.event_rounded,
+    };
+
+class ActivitiesPage extends ConsumerWidget {
+  const ActivitiesPage({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return PageBody(
+      header: PageHeader(title: context.tr('activities'), subtitle: context.tr('dir_act'), icon: Icons.groups_rounded),
+      children: [
+        AsyncSection<List<Activity>>(
+          provider: activitiesProvider,
+          retry: activitiesProvider,
+          isEmpty: (d) => d.isEmpty,
+          builder: (context, items) {
+            final sorted = [...items]..sort((a, b) {
+                int idx(String c) {
+                  final i = _categoryOrder.indexOf(c);
+                  return i < 0 ? 99 : i;
+                }
+
+                return idx(a.category).compareTo(idx(b.category));
+              });
+            return ResponsiveGrid(minItemWidth: 340, children: [for (final a in sorted) _ActivityCard(a)]);
+          },
+        ),
+      ],
+    );
+  }
+}
+
+class _ActivityCard extends StatelessWidget {
+  final Activity a;
+  const _ActivityCard(this.a);
+
+  @override
+  Widget build(BuildContext context) {
+    final schedule = context.pick(a.scheduleAr, a.scheduleEn);
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(color: AppColors.parchment, borderRadius: BorderRadius.circular(12)),
+              child: Icon(activityIcon(a.category), color: AppColors.burgundy),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(context.pick(a.titleAr, a.titleEn),
+                  style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16, height: 1.4)),
+            ),
+            if (a.sample) const SampleBadge(),
+          ]),
+          const SizedBox(height: 10),
+          Text(context.pick(a.descAr, a.descEn), style: const TextStyle(height: 1.7)),
+          const SizedBox(height: 8),
+          IconLine(Icons.schedule_rounded, schedule.isEmpty ? '' : '${context.tr('schedule')}: $schedule'),
+          IconLine(Icons.cake_outlined, a.ageRange.isEmpty ? '' : '${context.tr('ages')}: ${localDigits(context, a.ageRange)}'),
+          if (a.contactPhone.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Wrap(spacing: 8, children: [
+              ActionChipButton(
+                  icon: Icons.call, label: context.tr('call'), color: AppColors.burgundy, onTap: () => callPhone(a.contactPhone)),
+              if (isEgyptianMobile(a.contactPhone))
+                ActionChipButton(
+                    icon: Icons.chat_rounded,
+                    label: context.tr('whatsapp'),
+                    color: whatsappGreen,
+                    onTap: () => openWhatsApp(a.contactPhone)),
+            ]),
+          ],
+        ]),
+      ),
+    );
+  }
+}

@@ -1,0 +1,67 @@
+rules_version = '2';
+
+// Church portal — Firestore security rules.
+// * Public content: anyone can read; only admins (admins/{uid} exists) write.
+// * contact_messages: public create-only with strict validation; nobody can
+//   read/update/delete from the client (read them in the Firebase console or
+//   with the Admin SDK).
+// * admins: a signed-in user may read only their own admin doc (used by the
+//   app to show the editor); admin docs are managed from the console.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAdmin() {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    function isPublicContent(col) {
+      return col in ['settings', 'alerts', 'seasons', 'liturgies', 'meetings', 'activities',
+                     'clinics', 'facilities', 'priests', 'milestones', 'saints'];
+    }
+
+    match /{col}/{docId} {
+      allow read: if isPublicContent(col);
+      allow write: if isPublicContent(col) && isAdmin();
+    }
+
+    match /admins/{uid} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow write: if false; // manage from the Firebase console / Admin SDK
+    }
+
+    // Server-side abuse control: every contact message must be written in the
+    // same batch as meta/contact_rate.lastAt = request.time, and that doc may
+    // only advance once every 20 seconds (global throttle, no auth needed).
+    match /meta/contact_rate {
+      allow read: if false;
+      allow create, update: if request.resource.data.keys().hasOnly(['lastAt'])
+        && request.resource.data.lastAt == request.time
+        && (resource == null || request.time > resource.data.lastAt + duration.value(20, 's'));
+      allow delete: if false;
+    }
+
+    match /contact_messages/{id} {
+      allow read, update, delete: if false;
+      allow create: if validContactMessage(request.resource.data)
+        && getAfter(/databases/$(database)/documents/meta/contact_rate).data.lastAt == request.time;
+    }
+
+    function validContactMessage(d) {
+      return d.keys().hasOnly(['name', 'phone', 'email', 'message', 'lang', 'status', 'createdAt'])
+        && d.keys().hasAll(['name', 'message', 'status', 'createdAt'])
+        && d.name is string && d.name.size() >= 2 && d.name.size() <= 80
+        && d.name.matches('[\\s\\S]*\\S[\\s\\S]*') // not whitespace-only
+        && d.message is string && d.message.size() >= 5 && d.message.size() <= 1000
+        && d.message.matches('[\\s\\S]*\\S[\\s\\S]*')
+        && (!('phone' in d) || (d.phone is string && (d.phone == '' || d.phone.matches('^[0-9+]{5,15}$'))))
+        && (!('email' in d) || (d.email is string && d.email.size() <= 254
+              && (d.email == '' || d.email.matches('^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$'))))
+        // at least one way to reach the sender
+        && ((('phone' in d) && d.phone != '') || (('email' in d) && d.email != ''))
+        && (!('lang' in d) || d.lang in ['ar', 'en'])
+        && d.status == 'new'
+        && d.createdAt == request.time;
+    }
+  }
+}
