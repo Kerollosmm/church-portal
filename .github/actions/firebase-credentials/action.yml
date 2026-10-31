@@ -1,0 +1,45 @@
+name: Firebase service-account credentials
+description: >
+  Writes the Firebase service-account secret to $RUNNER_TEMP/sa.json (chmod 600)
+  and exports GOOGLE_APPLICATION_CREDENTIALS. Tolerates stray characters around
+  the JSON (e.g. a trailing newline or text pasted after the closing brace):
+  only the first JSON object is kept. The key is never printed.
+inputs:
+  service-account:
+    description: Service-account JSON (pass a secret)
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Normalise service-account JSON
+      shell: bash
+      env:
+        SA_JSON: ${{ inputs.service-account }}
+      run: |
+        set -euo pipefail
+        umask 077
+        raw="$RUNNER_TEMP/sa.raw"
+        trap 'rm -f "$raw"' EXIT
+        printf '%s' "$SA_JSON" > "$raw"
+        python3 - "$raw" "$RUNNER_TEMP/sa.json" <<'PY'
+        import json, os, sys
+        src, dst = sys.argv[1], sys.argv[2]
+        s = open(src, encoding="utf-8-sig").read().strip()
+        if not s:
+            sys.exit("Service-account secret is empty")
+        try:
+            obj, end = json.JSONDecoder().raw_decode(s)
+        except json.JSONDecodeError as e:
+            sys.exit(f"Service-account secret is not valid JSON (line {e.lineno} col {e.colno})")
+        if not isinstance(obj, dict) or obj.get("type") != "service_account" \
+                or not obj.get("private_key") or not obj.get("client_email"):
+            sys.exit("Secret is JSON but not a service-account key")
+        extra = len(s) - end
+        if extra:
+            print(f"::warning::Ignored {extra} extra character(s) after the service-account JSON; consider re-saving the secret.")
+        with open(dst, "w", encoding="utf-8") as f:
+            json.dump(obj, f)
+        os.chmod(dst, 0o600)
+        print(f"Service-account key OK (project {obj.get('project_id', '?')})")
+        PY
+        echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/sa.json" >> "$GITHUB_ENV"

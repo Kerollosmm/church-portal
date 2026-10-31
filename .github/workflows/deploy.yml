@@ -1,7 +1,7 @@
 name: Deploy to Firebase
 
 # push to main -> live Hosting + Firestore rules/indexes
-# pull request -> Hosting preview channel (URL commented on the PR, expires in 7 days)
+# pull request -> Hosting preview channel pr-<number> (URL commented on the PR, expires in 7 days)
 on:
   push:
     branches: [main]
@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
@@ -25,8 +25,18 @@ jobs:
       - run: flutter pub get
       - run: flutter test
       - name: Build web (release)
-        run: flutter build web --release --dart-define=RECAPTCHA_SITE_KEY=${{ vars.RECAPTCHA_SITE_KEY || 'PLACEHOLDER_RECAPTCHA_V3_SITE_KEY' }}
-      - uses: actions/upload-artifact@v4
+        env:
+          # The reCAPTCHA v3 key is registered for the live domains only, so
+          # preview builds are made without it: App Check stays off there and
+          # the App Check-enforced assistant is hidden instead of failing.
+          RECAPTCHA_SITE_KEY: ${{ github.event_name == 'push' && vars.RECAPTCHA_SITE_KEY || '' }}
+        run: |
+          if [ -n "$RECAPTCHA_SITE_KEY" ]; then
+            flutter build web --release --dart-define=RECAPTCHA_SITE_KEY="$RECAPTCHA_SITE_KEY"
+          else
+            flutter build web --release
+          fi
+      - uses: actions/upload-artifact@v5
         with:
           name: web-build
           path: build/web
@@ -40,32 +50,34 @@ jobs:
       name: production
       url: https://asafra-church-portal.web.app
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v5
         with:
           name: web-build
           path: build/web
-      - uses: FirebaseExtended/action-hosting-deploy@v0
+      - uses: actions/setup-node@v5
         with:
-          repoToken: ${{ secrets.GITHUB_TOKEN }}
-          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_ASAFRA_CHURCH_PORTAL }}
-          projectId: ${{ env.FIREBASE_PROJECT_ID }}
-          channelId: live
+          node-version: 22
+      - uses: ./.github/actions/firebase-credentials
+        with:
+          service-account: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_ASAFRA_CHURCH_PORTAL }}
+      - name: Deploy Hosting (live)
+        run: npx --yes firebase-tools@latest deploy --only hosting --project "$FIREBASE_PROJECT_ID" --non-interactive
+      - name: Remove key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/sa.json"
 
   deploy-rules:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
-          node-version: 20
-      - name: Write service account key
-        env:
-          SA_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_ASAFRA_CHURCH_PORTAL }}
-        run: |
-          printf '%s' "$SA_JSON" > "$RUNNER_TEMP/sa.json"
-          echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/sa.json" >> "$GITHUB_ENV"
+          node-version: 22
+      - uses: ./.github/actions/firebase-credentials
+        with:
+          service-account: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_ASAFRA_CHURCH_PORTAL }}
       - name: Deploy Firestore rules & indexes
         run: npx --yes firebase-tools@latest deploy --only firestore:rules,firestore:indexes --project "$FIREBASE_PROJECT_ID" --non-interactive
       - name: Remove key
@@ -79,16 +91,69 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
-      checks: write
+      issues: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v5
         with:
           name: web-build
           path: build/web
-      - uses: FirebaseExtended/action-hosting-deploy@v0
+      - uses: actions/setup-node@v5
         with:
-          repoToken: ${{ secrets.GITHUB_TOKEN }}
-          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_ASAFRA_CHURCH_PORTAL }}
-          projectId: ${{ env.FIREBASE_PROJECT_ID }}
-          expires: 7d
+          node-version: 22
+      - uses: ./.github/actions/firebase-credentials
+        with:
+          service-account: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_ASAFRA_CHURCH_PORTAL }}
+      - name: Deploy preview channel
+        id: deploy
+        env:
+          CHANNEL: pr-${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@latest hosting:channel:deploy "$CHANNEL" \
+            --expires 7d --project "$FIREBASE_PROJECT_ID" --non-interactive --json > "$RUNNER_TEMP/deploy.json" \
+            || { cat "$RUNNER_TEMP/deploy.json"; exit 1; }
+          python3 - "$RUNNER_TEMP/deploy.json" <<'PY'
+          import json, os, sys
+          text = open(sys.argv[1], encoding="utf-8").read()
+          # Keep only the JSON document (skip any non-JSON lines npx may print).
+          data = json.JSONDecoder().raw_decode(text[text.index("{"):])[0]
+          if data.get("status") != "success":
+              sys.exit(f"Preview deploy failed: {data.get('error') or data}")
+          sites = data.get("result") or {}
+          urls = [v.get("url") for v in sites.values() if isinstance(v, dict) and v.get("url")]
+          expires = next((v.get("expireTime") for v in sites.values() if isinstance(v, dict) and v.get("expireTime")), "")
+          if not urls:
+              sys.exit("Preview deploy returned no URL")
+          with open(os.environ["GITHUB_OUTPUT"], "a") as out:
+              out.write(f"url={urls[0]}\nexpires={expires}\n")
+          print(f"Preview URL: {urls[0]}")
+          PY
+      - name: Remove key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/sa.json"
+      - name: Comment preview URL on the PR
+        uses: actions/github-script@v8
+        env:
+          PREVIEW_URL: ${{ steps.deploy.outputs.url }}
+          PREVIEW_EXPIRES: ${{ steps.deploy.outputs.expires }}
+        with:
+          script: |
+            const marker = '<!-- firebase-hosting-preview -->';
+            const body = [
+              marker,
+              `**Firebase Hosting preview** for ${context.payload.pull_request.head.sha.slice(0, 7)}`,
+              '',
+              `🔗 ${process.env.PREVIEW_URL}`,
+              '',
+              `Expires: ${process.env.PREVIEW_EXPIRES || 'in 7 days'}`,
+            ].join('\n');
+            const { owner, repo } = context.repo;
+            const issue_number = context.payload.pull_request.number;
+            const comments = await github.paginate(github.rest.issues.listComments, { owner, repo, issue_number, per_page: 100 });
+            const existing = comments.find(c => c.user?.type === 'Bot' && c.body?.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body });
+            }

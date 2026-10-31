@@ -20,17 +20,17 @@ on:
 jobs:
   seed:
     runs-on: ubuntu-latest
+    # Writes to the production database: gate it behind the `production`
+    # environment (add required reviewers in Settings -> Environments).
+    environment: production
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
-          node-version: 20
-      - name: Write service account key
-        env:
-          SA_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_ASAFRA_CHURCH_PORTAL }}
-        run: |
-          printf '%s' "$SA_JSON" > "$RUNNER_TEMP/sa.json"
-          echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/sa.json" >> "$GITHUB_ENV"
+          node-version: 22
+      - uses: ./.github/actions/firebase-credentials
+        with:
+          service-account: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_ASAFRA_CHURCH_PORTAL }}
       - run: npm install
         working-directory: tool
       - name: Seed
