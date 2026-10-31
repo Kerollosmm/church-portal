@@ -42,4 +42,4 @@ jobs:
       - name: Seed JSON matches its generator
         run: |
           python3 tool/gen_seed.py
-          git diff --exit-code -- assets/seed/seed.json
+          git diff --exit-code -- assets/seed/seed.json tool/retired_seed_ids.json

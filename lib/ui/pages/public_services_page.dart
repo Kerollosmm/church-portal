@@ -14,6 +14,7 @@ IconData facilityIcon(String t) => switch (t) {
       'nursery' => Icons.child_friendly_rounded,
       'employment' => Icons.work_rounded,
       'halls' => Icons.meeting_room_rounded,
+      'service' => Icons.volunteer_activism_rounded,
       _ => Icons.domain_rounded,
     };
 

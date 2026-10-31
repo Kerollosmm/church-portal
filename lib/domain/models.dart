@@ -73,7 +73,7 @@ class ChurchSettings {
   final double? lat, lng;
   final String mapsUrl, mapsQuery;
   final List<PhoneEntry> phones;
-  final String whatsapp, whatsappChannel, facebook, youtube;
+  final String whatsapp, whatsappChannel, facebook, youtube, instagram;
   final String verseAr, verseEn, verseRef, verseRefAr;
   final String heroImageUrl;
   final String historyAr, historyEn;
@@ -97,6 +97,7 @@ class ChurchSettings {
     this.whatsappChannel = '',
     this.facebook = '',
     this.youtube = '',
+    this.instagram = '',
     this.verseAr = '',
     this.verseEn = '',
     this.verseRef = '',
@@ -128,6 +129,7 @@ class ChurchSettings {
         whatsappChannel: _s(m['whatsappChannel']),
         facebook: _s(m['facebook']),
         youtube: _s(m['youtube']),
+        instagram: _s(m['instagram']),
         verseAr: _s(m['verseAr']),
         verseEn: _s(m['verseEn']),
         verseRef: _s(m['verseRef']),
@@ -213,6 +215,9 @@ class Liturgy {
   final String placeAr, placeEn, audienceAr, audienceEn;
   final String? seasonKey;
   final int order;
+
+  /// Placeholder time not yet confirmed by the church.
+  final bool sample;
   const Liturgy({
     required this.id,
     required this.type,
@@ -228,6 +233,7 @@ class Liturgy {
     this.audienceEn = '',
     this.seasonKey,
     this.order = 0,
+    this.sample = false,
   });
   factory Liturgy.fromMap(String id, Map<String, dynamic> m) => Liturgy(
         id: id,
@@ -244,6 +250,7 @@ class Liturgy {
         audienceEn: _s(m['audienceEn']),
         seasonKey: _ns(m['seasonKey']),
         order: _ni(m['order']) ?? 0,
+        sample: _b(m['sample']),
       );
   int? get startMinutes => parseHm(start);
   int? get endMinutes => parseHm(end);
@@ -289,6 +296,9 @@ class Meeting {
 
 class Activity {
   final String id, category, titleAr, titleEn, descAr, descEn, scheduleAr, scheduleEn, ageRange, contactPhone;
+
+  /// Optional external page (Facebook page, YouTube playlist...).
+  final String link;
   final bool sample;
   const Activity({
     required this.id,
@@ -301,6 +311,7 @@ class Activity {
     this.scheduleEn = '',
     this.ageRange = '',
     this.contactPhone = '',
+    this.link = '',
     this.sample = false,
   });
   factory Activity.fromMap(String id, Map<String, dynamic> m) => Activity(
@@ -314,6 +325,7 @@ class Activity {
         scheduleEn: _s(m['scheduleEn']),
         ageRange: _s(m['ageRange']),
         contactPhone: _s(m['contactPhone']),
+        link: _s(m['link']),
         sample: _b(m['sample']),
       );
 }

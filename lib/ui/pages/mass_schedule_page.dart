@@ -54,6 +54,7 @@ class _MassSchedulePageState extends ConsumerState<MassSchedulePage> {
           title: context.tr('massSchedule'), subtitle: context.tr('dir_mass'), icon: Icons.access_time_filled_rounded),
       children: [
         const AlertBanner(),
+        if ((lits.value ?? const <Liturgy>[]).any((l) => l.sample)) const PendingConfirmationNote(),
         const NextMassCard(),
         const SizedBox(height: 16),
         Card(

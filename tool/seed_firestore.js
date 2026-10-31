@@ -11,7 +11,8 @@
  *   --only a,b       Only these collections (e.g. --only liturgies,clinics)
  *   --dry-run        Print what would be written
  *   --force          Overwrite existing documents (default: skip docs that already exist,
- *                    so edits made in /admin are never clobbered)
+ *                    so edits made in /admin are never clobbered) and delete the
+ *                    retired sample documents listed in tool/retired_seed_ids.json
  *   --admin <uid>[:email]  Also create admins/{uid} (role owner)
  *   --admin-email <email>  Find or create the Firebase Auth user with this email and make it owner
  *
@@ -111,6 +112,29 @@ async function main() {
     console.log(`${collection}: ${entries.length} docs processed`);
   }
 
+  // --force also removes sample documents that earlier seeds created and the
+  // current seed replaced (only the ids listed in retired_seed_ids.json, so
+  // documents added in /admin are never touched).
+  let deleted = 0;
+  if (force) {
+    const retiredPath = path.join(__dirname, 'retired_seed_ids.json');
+    const retired = fs.existsSync(retiredPath) ? JSON.parse(fs.readFileSync(retiredPath, 'utf8')) : {};
+    for (const [collection, ids] of Object.entries(retired)) {
+      if (only && !only.includes(collection)) continue;
+      for (const id of ids) {
+        if (seed[collection] && seed[collection][id]) continue; // still part of the seed
+        const ref = db.collection(collection).doc(id);
+        if (!(await ref.get()).exists) continue; // already gone (e.g. a repeated --force run)
+        if (dryRun) {
+          console.log(`[dry-run] would delete ${collection}/${id}`);
+          continue;
+        }
+        await ref.delete();
+        deleted++;
+      }
+    }
+  }
+
   if (adminArg) {
     const [uid, email] = adminArg.split(':');
     if (!dryRun) await db.doc(`admins/${uid}`).set({ email: email || '', role: 'owner' }, { merge: true });
@@ -129,7 +153,7 @@ async function main() {
     }
     console.log(`admin owner ${adminEmail} -> uid ${user ? user.uid : '(dry-run)'}`);
   }
-  console.log(`Done. project=${projectId} written=${written} skipped(existing)=${skipped}${dryRun ? ' (dry run)' : ''}`);
+  console.log(`Done. project=${projectId} written=${written} skipped(existing)=${skipped} deleted(retired)=${deleted}${dryRun ? ' (dry run)' : ''}`);
 }
 
 main().catch((e) => {

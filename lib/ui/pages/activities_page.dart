@@ -10,7 +10,10 @@ import '../../state/providers.dart';
 import '../widgets/cards.dart';
 import '../widgets/common.dart';
 
-const _categoryOrder = ['scouts', 'deacons', 'hymns', 'bible', 'summer', 'sports', 'exhibitions'];
+const _categoryOrder = [
+  'service', 'choir', 'hymns', 'youth', 'servants', 'media', 'drama', //
+  'scouts', 'deacons', 'bible', 'summer', 'sports', 'exhibitions',
+];
 
 IconData activityIcon(String c) => switch (c) {
       'scouts' => Icons.hiking_rounded,
@@ -20,6 +23,12 @@ IconData activityIcon(String c) => switch (c) {
       'summer' => Icons.wb_sunny_rounded,
       'sports' => Icons.sports_soccer_rounded,
       'exhibitions' => Icons.storefront_rounded,
+      'service' => Icons.volunteer_activism_rounded,
+      'choir' => Icons.queue_music_rounded,
+      'youth' => Icons.groups_2_rounded,
+      'servants' => Icons.school_rounded,
+      'media' => Icons.smart_display_rounded,
+      'drama' => Icons.theater_comedy_rounded,
       _ => Icons.event_rounded,
     };
 
@@ -81,6 +90,14 @@ class _ActivityCard extends StatelessWidget {
           const SizedBox(height: 8),
           IconLine(Icons.schedule_rounded, schedule.isEmpty ? '' : '${context.tr('schedule')}: $schedule'),
           IconLine(Icons.cake_outlined, a.ageRange.isEmpty ? '' : '${context.tr('ages')}: ${localDigits(context, a.ageRange)}'),
+          if (a.link.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            ActionChipButton(
+                icon: _linkIcon(a.link),
+                label: context.tr('openPage'),
+                color: _linkColor(a.link),
+                onTap: () => openUrl(a.link)),
+          ],
           if (a.contactPhone.isNotEmpty) ...[
             const SizedBox(height: 8),
             Wrap(spacing: 8, children: [
@@ -99,3 +116,15 @@ class _ActivityCard extends StatelessWidget {
     );
   }
 }
+
+IconData _linkIcon(String url) => url.contains('youtube.com')
+    ? Icons.smart_display_rounded
+    : url.contains('facebook.com')
+        ? Icons.facebook
+        : Icons.open_in_new_rounded;
+
+Color _linkColor(String url) => url.contains('youtube.com')
+    ? youtubeRed
+    : url.contains('facebook.com')
+        ? facebookBlue
+        : AppColors.burgundy;

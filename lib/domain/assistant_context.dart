@@ -37,6 +37,10 @@ String buildAssistantInstruction({
   if (settings.whatsapp.isNotEmpty) b.writeln('WhatsApp: ${settings.whatsapp}');
   if (settings.facebook.isNotEmpty) b.writeln('Facebook: ${settings.facebook}');
   if (settings.youtube.isNotEmpty) b.writeln('YouTube (live): ${settings.youtube}');
+  if (settings.whatsappChannel.isNotEmpty) b.writeln('WhatsApp channel (announcements): ${settings.whatsappChannel}');
+  if (settings.instagram.isNotEmpty) b.writeln('Instagram: ${settings.instagram}');
+  b.writeln('Items marked [UNCONFIRMED] are provisional placeholders the church has not published yet: '
+      'say so clearly and ask the visitor to confirm with the church (phone or the WhatsApp channel).');
 
   b
     ..writeln()
@@ -47,7 +51,7 @@ String buildAssistantInstruction({
       return w != 0 ? w : (a.startMinutes ?? 0).compareTo(b.startMinutes ?? 0);
     });
   for (final l in regular) {
-    b.writeln('- ${weekdayNamesEn[l.weekday!]}: ${l.nameEn} (${l.nameAr}) [${l.type}] '
+    b.writeln('- ${l.sample ? '[UNCONFIRMED] ' : ''}${weekdayNamesEn[l.weekday!]}: ${l.nameEn} (${l.nameAr}) [${l.type}] '
         '${formatRangeLatin(l.start, l.end)} at ${l.placeEn}${l.audienceEn.isNotEmpty ? ' - ${l.audienceEn}' : ''}');
   }
 
@@ -59,7 +63,7 @@ String buildAssistantInstruction({
       ..writeln()
       ..writeln('## Special one-off services');
     for (final l in oneOff) {
-      b.writeln('- ${_ymd(l.date!)}: ${l.nameEn} (${l.nameAr}) [${l.type}] '
+      b.writeln('- ${l.sample ? '[UNCONFIRMED] ' : ''}${_ymd(l.date!)}: ${l.nameEn} (${l.nameAr}) [${l.type}] '
           '${formatRangeLatin(l.start, l.end)} at ${l.placeEn}${l.audienceEn.isNotEmpty ? ' - ${l.audienceEn}' : ''}');
     }
   }
@@ -75,7 +79,7 @@ String buildAssistantInstruction({
           '${isSeasonActiveAt(s, now) ? ' [ACTIVE NOW]' : ''}');
       for (final l in e.value) {
         final when = l.date != null ? _ymd(l.date!) : (l.weekday != null ? weekdayNamesEn[l.weekday!] : 'every day');
-        b.writeln('- $when: ${l.nameEn} ${formatRangeLatin(l.start, l.end)} at ${l.placeEn}');
+        b.writeln('- ${l.sample ? '[UNCONFIRMED] ' : ''}$when: ${l.nameEn} ${formatRangeLatin(l.start, l.end)} at ${l.placeEn}');
       }
     }
   }
@@ -84,8 +88,10 @@ String buildAssistantInstruction({
     ..writeln()
     ..writeln('## Clinics (book by phone or WhatsApp)');
   for (final c in clinics.where((c) => c.active)) {
-    b.writeln('- ${c.specialtyEn} (${c.specialtyAr}): ${c.doctorName}, ${c.degreeAr}; '
-        '${c.days.map((d) => weekdayNamesEn[d]).join(', ')} ${formatRangeLatin(c.start, c.end)}; booking ${c.bookingPhone}');
+    b.writeln('- ${c.sample ? '[UNCONFIRMED] ' : ''}${c.specialtyEn} (${c.specialtyAr}): ${c.doctorName}'
+        '${c.degreeAr.isNotEmpty ? ', ${c.degreeAr}' : ''}; '
+        '${c.days.map((d) => weekdayNamesEn[d]).join(', ')} ${formatRangeLatin(c.start, c.end)}'
+        '${c.bookingPhone.isNotEmpty ? '; booking ${c.bookingPhone}' : ''}');
   }
 
   b
@@ -93,16 +99,21 @@ String buildAssistantInstruction({
     ..writeln('## Sunday school & meetings');
   for (final m in meetings) {
     final day = m.weekday != null ? weekdayNamesEn[m.weekday!] : 'no fixed day (ask the church)';
-    b.writeln('- ${m.nameEn} (${m.nameAr}) [${m.stage}]: $day '
-        '${formatRangeLatin(m.start, m.end)} at ${m.hallEn}; Facebook ${m.facebookUrl}; WhatsApp ${m.whatsappUrl}');
+    b.writeln('- ${m.sample ? '[UNCONFIRMED] ' : ''}${m.nameEn} (${m.nameAr}) [${m.stage}]: $day '
+        '${formatRangeLatin(m.start, m.end)} at ${m.hallEn}'
+        '${m.facebookUrl.isNotEmpty ? '; Facebook ${m.facebookUrl}' : ''}'
+        '${m.whatsappUrl.isNotEmpty ? '; WhatsApp ${m.whatsappUrl}' : ''}');
   }
 
   b
     ..writeln()
     ..writeln('## Activities');
   for (final a in activities) {
-    b.writeln('- ${a.titleEn} (${a.titleAr}): ${a.descEn} Schedule: ${a.scheduleEn}. Ages: ${a.ageRange}.'
-        '${a.contactPhone.isNotEmpty ? ' Contact ${a.contactPhone}.' : ''}');
+    b.writeln('- ${a.sample ? '[UNCONFIRMED] ' : ''}${a.titleEn} (${a.titleAr}): ${a.descEn}'
+        '${a.scheduleEn.isNotEmpty ? ' Schedule: ${a.scheduleEn}.' : ''}'
+        '${a.ageRange.isNotEmpty ? ' Ages: ${a.ageRange}.' : ''}'
+        '${a.contactPhone.isNotEmpty ? ' Contact ${a.contactPhone}.' : ''}'
+        '${a.link.isNotEmpty ? ' Link: ${a.link}' : ''}');
   }
 
   b
@@ -110,7 +121,7 @@ String buildAssistantInstruction({
     ..writeln('## Public services');
   for (final f in facilities) {
     final hours = f.hoursEn.isNotEmpty ? f.hoursEn : f.hoursAr;
-    b.writeln('- ${f.nameEn} (${f.nameAr}): ${f.descEn.isNotEmpty ? f.descEn : f.descAr}'
+    b.writeln('- ${f.sample ? '[UNCONFIRMED] ' : ''}${f.nameEn} (${f.nameAr}): ${f.descEn.isNotEmpty ? f.descEn : f.descAr}'
         '${hours.isNotEmpty ? ' Hours: $hours.' : ''}${f.phone.isNotEmpty ? ' Phone ${f.phone}.' : ''}');
   }
   return b.toString();

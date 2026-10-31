@@ -19,8 +19,52 @@ void main() {
       expect(seed.collection(c), isNotEmpty, reason: c);
     }
     expect(seed.settings.addressAr, contains('شارع 45'));
-    expect(seed.settings.mapsQuery, 'شارع 45 العصافرة بحري الإسكندرية');
-    expect(seed.milestones.first.titleAr, contains('45'));
+    expect(seed.settings.mapsQuery, '31.260138,30.01129');
+    expect(seed.milestones.first.year, 1980);
+  });
+
+  test('verified church data is real and marked as such', () {
+    final s = seed.settings;
+    expect(s.sample, isFalse);
+    expect(s.nameAr, 'كنيسة القديسين مكسيموس ودوماديوس والقوي الأنبا موسى الأسود');
+    expect(s.addressAr, contains('العصافرة قبلي'));
+    expect(s.lat, closeTo(31.260138, 1e-6));
+    expect(s.lng, closeTo(30.01129, 1e-6));
+    expect(s.phones.map((p) => p.number), ['035368888']);
+    expect(s.facebook, contains('100070313048338'));
+    expect(s.youtube, contains('UCJiZ4u0IiUbSvBnTrJnRZBA'));
+    expect(s.instagram, contains('maximos_coptic_church'));
+    expect(s.whatsappChannel, contains('0029Vb6Kmbs2UPBMUcrlVB0g'));
+    // No leftover placeholder links anywhere in the seed.
+    expect(File('assets/seed/seed.json').readAsStringSync(), isNot(contains('SAMPLE')));
+    expect(seed.alerts.any((a) => a.link == s.whatsappChannel), isTrue);
+  });
+
+  test('unpublished schedules stay flagged as pending confirmation', () {
+    expect(seed.liturgies.every((l) => l.sample), isTrue);
+    expect(seed.meetings.every((m) => m.sample), isTrue);
+    expect(seed.clinics.every((c) => c.sample), isTrue);
+    // Never invent doctor names: only generic "to be announced" placeholders.
+    expect(seed.clinics.every((c) => c.doctorName.contains('يُعلن لاحقًا')), isTrue);
+  });
+
+  test('priests: departed fathers are not listed as serving', () {
+    final tadros = seed.priests.firstWhere((p) => p.id == 'tadros');
+    expect(tadros.departed, isTrue);
+    expect(tadros.departedDate, '2022-02-10');
+    final bemwa = seed.priests.firstWhere((p) => p.id == 'bemwa');
+    expect(bemwa.rank, 'hegumen');
+    expect(bemwa.sample, isFalse);
+    expect(seed.priests.firstWhere((p) => p.id == 'saleeb').sample, isTrue);
+  });
+
+  test('retired seed ids are not part of the current seed', () {
+    final retired = jsonDecode(File('tool/retired_seed_ids.json').readAsStringSync()) as Map<String, dynamic>;
+    for (final e in retired.entries) {
+      for (final id in (e.value as List)) {
+        expect(seed.collection(e.key).containsKey(id), isFalse, reason: '${e.key}/$id');
+      }
+    }
   });
 
   test('every liturgy has valid times and a weekday or date', () {
