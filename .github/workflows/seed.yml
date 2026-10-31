@@ -34,18 +34,24 @@ jobs:
       - run: npm install
         working-directory: tool
       - name: Seed
+        env:
+          IN_FORCE: ${{ inputs.force }}
+          IN_ADMIN: ${{ inputs.admin }}
+          IN_ADMIN_EMAIL: ${{ inputs.admin_email }}
         run: |
-          ARGS="--project asafra-church-portal"
-          if [ "${{ inputs.force }}" = "true" ]; then ARGS="$ARGS --force"; fi
-          if [ -n "${{ inputs.admin }}" ]; then ARGS="$ARGS --admin ${{ inputs.admin }}"; fi
-          if [ -n "${{ inputs.admin_email }}" ]; then ARGS="$ARGS --admin-email ${{ inputs.admin_email }}"; fi
-          node tool/seed_firestore.js $ARGS
+          # Inputs are passed via env and quoted (no shell interpolation of user input).
+          set -- --project asafra-church-portal
+          if [ "$IN_FORCE" = "true" ]; then set -- "$@" --force; fi
+          if [ -n "$IN_ADMIN" ]; then set -- "$@" --admin "$IN_ADMIN"; fi
+          if [ -n "$IN_ADMIN_EMAIL" ]; then set -- "$@" --admin-email "$IN_ADMIN_EMAIL"; fi
+          node tool/seed_firestore.js "$@"
       - name: Email set-password link to admin
         if: inputs.admin_email != ''
         env:
           ADMIN_EMAIL: ${{ inputs.admin_email }}
         run: |
           # Public web API key (same as in lib/firebase_options.dart); Firebase emails the reset link, nothing secret is logged.
+          case "$ADMIN_EMAIL" in *[!A-Za-z0-9@._+-]*) echo "invalid email"; exit 1;; esac
           curl -sf -X POST "https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=AIzaSyBEHiTY84sHSgLeV_cZ8p-kiKX-IWivByU" \
             -H 'Content-Type: application/json' \
             -d "{\"requestType\":\"PASSWORD_RESET\",\"email\":\"$ADMIN_EMAIL\"}" > /dev/null && echo "Set-password email sent"

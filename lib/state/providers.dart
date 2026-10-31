@@ -35,7 +35,9 @@ final nowProvider = StreamProvider<DateTime>((ref) async* {
 final assistantVisibleProvider = Provider<bool>((ref) {
   final fb = ref.watch(firebaseStatusProvider);
   final s = ref.watch(settingsProvider).value;
-  return fb.available && (s?.assistantEnabled ?? false);
+  // Firebase AI Logic is App Check-enforced: without an active App Check
+  // provider (e.g. no reCAPTCHA site key) requests would fail, so hide it.
+  return fb.available && fb.appCheckActive && (s?.assistantEnabled ?? false);
 });
 
 class LocaleNotifier extends Notifier<Locale> {

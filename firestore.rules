@@ -30,9 +30,21 @@ service cloud.firestore {
       allow write: if false; // manage from the Firebase console / Admin SDK
     }
 
+    // Server-side abuse control: every contact message must be written in the
+    // same batch as meta/contact_rate.lastAt = request.time, and that doc may
+    // only advance once every 20 seconds (global throttle, no auth needed).
+    match /meta/contact_rate {
+      allow read: if false;
+      allow create, update: if request.resource.data.keys().hasOnly(['lastAt'])
+        && request.resource.data.lastAt == request.time
+        && (resource == null || request.time > resource.data.lastAt + duration.value(20, 's'));
+      allow delete: if false;
+    }
+
     match /contact_messages/{id} {
       allow read, update, delete: if false;
-      allow create: if validContactMessage(request.resource.data);
+      allow create: if validContactMessage(request.resource.data)
+        && getAfter(/databases/$(database)/documents/meta/contact_rate).data.lastAt == request.time;
     }
 
     function validContactMessage(d) {

@@ -155,7 +155,10 @@ class FirestoreRepository implements ContentRepository {
 
   @override
   Future<void> submitContact(Map<String, dynamic> payload, {required String lang}) async {
-    await db.collection('contact_messages').add({
+    // Batched with a global throttle doc so the rules can rate-limit public
+    // submissions on the server (see firestore.rules: meta/contact_rate).
+    final batch = db.batch();
+    batch.set(db.collection('contact_messages').doc(), {
       'name': payload['name'],
       'phone': payload['phone'] ?? '',
       'email': payload['email'] ?? '',
@@ -163,6 +166,8 @@ class FirestoreRepository implements ContentRepository {
       'lang': lang,
       'status': 'new',
       'createdAt': FieldValue.serverTimestamp(),
-    }).timeout(const Duration(seconds: 15));
+    });
+    batch.set(db.doc('meta/contact_rate'), {'lastAt': FieldValue.serverTimestamp()});
+    await batch.commit().timeout(const Duration(seconds: 15));
   }
 }
