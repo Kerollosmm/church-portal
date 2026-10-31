@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<!-- Do not set dir="rtl" here: it breaks Flutter platform-view (map iframe) positioning. Flutter handles RTL itself. -->
+<html lang="ar">
+<head>
+  <base href="$FLUTTER_BASE_HREF">
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="كنيسة القديسين مكسيموس ودوماديوس والأنبا موسى الأسود — شارع 45 العصافرة بحري، الإسكندرية. مواعيد القداسات، العيادات، مدارس الأحد، وأرقام التواصل والخريطة.">
+  <meta name="theme-color" content="#6B1426">
+  <meta property="og:title" content="كنيسة القديسين مكسيموس ودوماديوس والأنبا موسى الأسود — العصافرة">
+  <meta property="og:description" content="مواعيد القداسات والعيادات والاجتماعات وطرق التواصل">
+  <meta property="og:type" content="website">
+
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="كنيسة العصافرة">
+  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+  <link rel="icon" type="image/png" href="favicon.png"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+  <title>كنيسة القديسين مكسيموس ودوماديوس والأنبا موسى الأسود — العصافرة</title>
+  <link rel="manifest" href="manifest.json">
+  <style>
+    html, body { margin: 0; height: 100%; background: #FBF6EC; }
+    #splash { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center;
+      justify-content: center; gap: 14px; font-family: system-ui, "Segoe UI", Tahoma, sans-serif; color: #6B1426; }
+    #splash .ring { width: 44px; height: 44px; border-radius: 50%; border: 4px solid #E8D28A;
+      border-top-color: #6B1426; animation: spin 0.9s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div id="splash" aria-live="polite">
+    <div class="ring"></div>
+    <div>كنيسة العصافرة — جارٍ التحميل…</div>
+  </div>
+  <script>
+    window.addEventListener('flutter-first-frame', function () {
+      var s = document.getElementById('splash'); if (s) s.remove();
+    });
+  </script>
+  <script src="flutter_bootstrap.js" async></script>
+</body>
+</html>

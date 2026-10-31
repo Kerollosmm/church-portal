@@ -1,0 +1,39 @@
+name: Seed Firestore
+
+# Manual: Actions -> Seed Firestore -> Run workflow
+on:
+  workflow_dispatch:
+    inputs:
+      admin:
+        description: "Optional first admin as UID:email (creates admins/{uid})"
+        required: false
+        default: ""
+      force:
+        description: "Overwrite existing documents"
+        type: boolean
+        default: false
+
+jobs:
+  seed:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Write service account key
+        env:
+          SA_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_ASAFRA_CHURCH_PORTAL }}
+        run: |
+          printf '%s' "$SA_JSON" > "$RUNNER_TEMP/sa.json"
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/sa.json" >> "$GITHUB_ENV"
+      - run: npm install
+        working-directory: tool
+      - name: Seed
+        run: |
+          ARGS="--project asafra-church-portal"
+          if [ "${{ inputs.force }}" = "true" ]; then ARGS="$ARGS --force"; fi
+          if [ -n "${{ inputs.admin }}" ]; then ARGS="$ARGS --admin ${{ inputs.admin }}"; fi
+          node tool/seed_firestore.js $ARGS
+      - if: always()
+        run: rm -f "$RUNNER_TEMP/sa.json"
