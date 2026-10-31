@@ -383,7 +383,7 @@ class _DocEditorState extends State<DocEditor> {
         case FieldType.date:
           _text[f.key] = TextEditingController(text: v is DateTime ? _fmtDate(v) : '');
         case FieldType.boolean:
-          _values[f.key] = v is bool ? v : (widget.doc == null ? true : f.missingBool);
+          _values[f.key] = v is bool ? v : (widget.doc == null ? f.newBool : f.missingBool);
         case FieldType.weekday:
           _values[f.key] = v is int ? v : null;
         case FieldType.weekdays:

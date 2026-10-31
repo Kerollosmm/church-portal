@@ -105,6 +105,12 @@ class _InfoColumn extends StatelessWidget {
                     label: context.tr('youtube'),
                     color: youtubeRed,
                     onTap: () => openUrl(s.youtube)),
+              if (s.instagram.isNotEmpty)
+                ActionChipButton(
+                    icon: Icons.photo_camera_rounded,
+                    label: context.tr('instagram'),
+                    color: instagramPink,
+                    onTap: () => openUrl(s.instagram)),
             ]),
           ]),
         ),

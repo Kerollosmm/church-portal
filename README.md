@@ -119,11 +119,14 @@ If Firestore is reachable but `settings/church` does not exist (DB not seeded ye
 
 ## 3. Seed Firestore
 
-`assets/seed/seed.json` covers every collection. Values with `"sample": true` are **plausible placeholders**
-(phone numbers, doctor names, serving priests' names, social/WhatsApp links, exact schedule times) and must be
-replaced with real data — via `/admin`, the Firebase console, or by editing `tool/gen_seed.py` and running
-`python3 tool/gen_seed.py`. Coordinates are approximate; maps use the query
-`شارع 45 العصافرة بحري الإسكندرية`.
+`assets/seed/seed.json` covers every collection. Church identity, address, coordinates (31.260138, 30.01129),
+landline, social links, history, saints, priests, activities and alerts are **real, sourced data**; see
+[docs/CONTENT_SOURCES.md](docs/CONTENT_SOURCES.md) for each field's source and status. Values with
+`"sample": true` are **placeholders awaiting the church's confirmation** (every liturgy and meeting time, clinics,
+some facilities and priests). The app shows a badge on them and a «مواعيد تقريبية — في انتظار تأكيد الكنيسة» notice
+on the schedule, meetings and clinics pages. Once an item is confirmed, untick "Unconfirmed" in `/admin` (liturgies,
+meetings, clinics, priests), or edit `tool/gen_seed.py` and run `python3 tool/gen_seed.py`.
+`--force` also deletes the retired sample documents listed in `tool/retired_seed_ids.json`.
 
 ```bash
 cd tool && npm install

@@ -1,0 +1,37 @@
+{
+ "alerts": [
+  "school-blessing-2026",
+  "holy-week-2027",
+  "summer-2027"
+ ],
+ "seasons": [
+  "summer-2027"
+ ],
+ "liturgies": [
+  "sum-sun-1",
+  "sum-sun-2",
+  "sum-sun-eve",
+  "sum-fri-1",
+  "sum-fri-2",
+  "sum-fri-3"
+ ],
+ "activities": [
+  "scouts",
+  "deacons",
+  "hymns",
+  "bible",
+  "summer",
+  "sports",
+  "exhibitions"
+ ],
+ "priests": [
+  "p1",
+  "p2",
+  "p3"
+ ],
+ "milestones": [
+  "founding",
+  "pastoral",
+  "consecration"
+ ]
+}

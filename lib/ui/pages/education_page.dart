@@ -53,7 +53,9 @@ class EducationPage extends ConsumerWidget {
                 final ia = stageOrder.indexOf(a.stage), ib = stageOrder.indexOf(b.stage);
                 return ia != ib ? ia.compareTo(ib) : a.start.compareTo(b.start);
               });
-            final children = <Widget>[];
+            final children = <Widget>[
+              if (meetings.any((m) => m.sample)) const PendingConfirmationNote(),
+            ];
             for (final g in _groups) {
               final items = sorted.where((m) => g.$1.contains(m.stage)).toList();
               if (items.isEmpty) continue;

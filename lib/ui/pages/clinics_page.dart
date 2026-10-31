@@ -48,6 +48,7 @@ class _ClinicsPageState extends ConsumerState<ClinicsPage> {
             var list = filterClinics(clinics, specialty: _specialty, now: now);
             if (_todayOnly) list = list.where((c) => isClinicAvailableToday(c, now)).toList();
             return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              if (clinics.any((c) => c.active && c.sample)) const PendingConfirmationNote(),
               Text(context.tr('specialtyFilter'), style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.muted)),
               const SizedBox(height: 8),
               Wrap(spacing: 8, runSpacing: 8, children: [

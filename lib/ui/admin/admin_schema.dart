@@ -15,14 +15,18 @@ class FieldDef {
   final String? defaultOption;
 
   /// Boolean value assumed when an EXISTING document lacks the field (match
-  /// the reader's default in models.dart). New documents start as true.
+  /// the reader's default in models.dart).
   final bool missingBool;
+
+  /// Boolean value a NEW document starts with.
+  final bool newBool;
   const FieldDef(this.key, this.labelAr, this.labelEn, this.type,
       {this.required = false,
       this.options = const [],
       this.nullableChoice = false,
       this.defaultOption,
-      this.missingBool = false});
+      this.missingBool = false,
+      this.newBool = true});
 }
 
 class CollectionDef {
@@ -38,6 +42,12 @@ class CollectionDef {
 }
 
 const _seasonKeys = ['holy_week', 'pascha', 'nativity', 'revival_maximus', 'revival_moses', 'summer'];
+
+/// "Unconfirmed" flag: untick once the church has confirmed the entry, so
+/// the public pages stop showing the pending-confirmation notice.
+const _sampleField = FieldDef('sample', 'غير مؤكد (في انتظار تأكيد الكنيسة)', 'Unconfirmed (pending church confirmation)',
+    FieldType.boolean,
+    newBool: false);
 
 const adminCollections = <CollectionDef>[
   CollectionDef('alerts', 'التنويهات', 'Alerts', [
@@ -80,6 +90,7 @@ const adminCollections = <CollectionDef>[
     FieldDef('seasonKey', 'الموسم (فارغ = الجدول العادي)', 'Season (empty = regular)', FieldType.choice,
         options: _seasonKeys, nullableChoice: true),
     FieldDef('order', 'الترتيب', 'Order', FieldType.integer),
+    _sampleField,
   ], [
     'nameAr',
     'start'
@@ -102,6 +113,7 @@ const adminCollections = <CollectionDef>[
     FieldDef('facebookUrl', 'رابط فيسبوك', 'Facebook URL', FieldType.text),
     FieldDef('whatsappUrl', 'رابط واتساب', 'WhatsApp URL', FieldType.text),
     FieldDef('notes', 'ملاحظات', 'Notes', FieldType.text),
+    _sampleField,
   ], [
     'nameAr',
     'stage'
@@ -118,6 +130,7 @@ const adminCollections = <CollectionDef>[
     FieldDef('bookingPhone', 'تليفون الحجز', 'Booking phone', FieldType.text),
     FieldDef('whatsapp', 'واتساب', 'WhatsApp', FieldType.text),
     FieldDef('active', 'مُفعّلة', 'Active', FieldType.boolean, missingBool: true), // Clinic.fromMap: absent = active
+    _sampleField,
   ], [
     'doctorName',
     'specialtyAr'
@@ -133,6 +146,7 @@ const adminCollections = <CollectionDef>[
     FieldDef('bioAr', 'نبذة (عربي)', 'Bio (Arabic)', FieldType.multiline),
     FieldDef('bioEn', 'نبذة (إنجليزي)', 'Bio (English)', FieldType.multiline),
     FieldDef('order', 'الترتيب', 'Order', FieldType.integer),
+    _sampleField,
   ], [
     'name'
   ]),

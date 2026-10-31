@@ -29,8 +29,8 @@ class AboutPage extends ConsumerWidget {
                 child: Text(context.pick(s.historyAr, s.historyEn), style: const TextStyle(height: 1.9, fontSize: 15)),
               ),
             ),
-            SectionTitle(context.tr('altars'), icon: Icons.local_fire_department_rounded),
-            ResponsiveGrid(minItemWidth: 260, children: [
+            if (s.altars.isNotEmpty) SectionTitle(context.tr('altars'), icon: Icons.local_fire_department_rounded),
+            if (s.altars.isNotEmpty) ResponsiveGrid(minItemWidth: 260, children: [
               for (final a in s.altars)
                 Card(
                   child: Padding(

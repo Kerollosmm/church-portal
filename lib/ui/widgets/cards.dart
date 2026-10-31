@@ -49,8 +49,13 @@ class LiturgyCard extends StatelessWidget {
               if (dayText.isNotEmpty)
                 Text(dayText,
                     style: const TextStyle(color: AppColors.gold, fontWeight: FontWeight.w800, fontSize: 12)),
-              Text(context.pick(l.nameAr, l.nameEn),
-                  style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+              Row(children: [
+                Expanded(
+                  child: Text(context.pick(l.nameAr, l.nameEn),
+                      style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+                ),
+                if (l.sample) const SampleBadge(),
+              ]),
               const SizedBox(height: 6),
               TimeRangeText(l.start, l.end),
               const SizedBox(height: 6),
@@ -180,6 +185,13 @@ class NextMassCard extends ConsumerWidget {
       children.add(const SizedBox(height: 6));
       children.add(IconLine(Icons.place_outlined, context.pick(n.liturgy.placeAr, n.liturgy.placeEn)));
       children.add(IconLine(Icons.people_outline, context.pick(n.liturgy.audienceAr, n.liturgy.audienceEn)));
+      if (n.liturgy.sample) {
+        children.add(Padding(
+          padding: const EdgeInsets.only(top: 6),
+          child: Text(context.tr('timesPending'),
+              style: const TextStyle(color: Color(0xFF7A5B00), fontWeight: FontWeight.w700, fontSize: 12)),
+        ));
+      }
     }
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: children);
   }
@@ -331,3 +343,4 @@ class ActionChipButton extends StatelessWidget {
 const whatsappGreen = Color(0xFF1FA855);
 const facebookBlue = Color(0xFF1877F2);
 const youtubeRed = Color(0xFFD32F2F);
+const instagramPink = Color(0xFFC13584);

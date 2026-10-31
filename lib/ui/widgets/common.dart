@@ -267,6 +267,35 @@ class AsyncSection<T> extends ConsumerWidget {
   }
 }
 
+/// Page-level notice shown above schedules whose entries are still
+/// placeholders (sample: true) awaiting the church's confirmation.
+class PendingConfirmationNote extends StatelessWidget {
+  const PendingConfirmationNote({super.key});
+  @override
+  Widget build(BuildContext context) => Container(
+        width: double.infinity,
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFFF3CD),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color(0xFFE0C36A)),
+        ),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Icon(Icons.info_outline_rounded, color: Color(0xFF7A5B00)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(context.tr('timesPending'),
+                  style: const TextStyle(fontWeight: FontWeight.w800, color: Color(0xFF7A5B00))),
+              const SizedBox(height: 2),
+              Text(context.tr('timesPendingHint'), style: const TextStyle(height: 1.5, fontSize: 13)),
+            ]),
+          ),
+        ]),
+      );
+}
+
 class SampleBadge extends StatelessWidget {
   const SampleBadge({super.key});
   @override
