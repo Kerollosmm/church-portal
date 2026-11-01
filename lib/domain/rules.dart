@@ -129,14 +129,21 @@ final _emailRe = RegExp(r"^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-
 
 bool isValidEmail(String s) => s.length <= 254 && _emailRe.hasMatch(s.trim());
 
-enum ContactField { name, phone, email, contact, message }
+enum ContactField { name, phone, email, contact, message, consent }
 
 /// Error codes (localised by the UI).
-enum ContactError { nameLength, phoneInvalid, emailInvalid, phoneOrEmailRequired, messageLength }
+enum ContactError { nameLength, phoneInvalid, emailInvalid, phoneOrEmailRequired, messageLength, consentRequired }
 
 class ContactFormInput {
   final String name, phone, email, message;
-  const ContactFormInput({required this.name, this.phone = '', this.email = '', required this.message});
+
+  /// The visitor accepted the privacy notice (Egyptian PDPL, FR-CT-06). The
+  /// contact form's checkbox starts unchecked and must be ticked; the default
+  /// keeps non-UI callers unchanged. Not stored: the Firestore payload keeps
+  /// its exact key set.
+  final bool consented;
+  const ContactFormInput(
+      {required this.name, this.phone = '', this.email = '', required this.message, this.consented = true});
 }
 
 class ContactValidation {
@@ -175,6 +182,7 @@ ContactValidation validateContactForm(ContactFormInput input) {
   if (message.length < contactMessageMin || message.length > contactMessageMax) {
     errors[ContactField.message] = ContactError.messageLength;
   }
+  if (!input.consented) errors[ContactField.consent] = ContactError.consentRequired;
   if (errors.isNotEmpty) return ContactValidation(errors, null);
   return ContactValidation(const {}, {
     'name': name,

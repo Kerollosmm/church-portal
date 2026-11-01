@@ -132,9 +132,25 @@ supersede them.
   by `tool/gen_branding.sh` (maroon `#470812` sampled from the seal for maskable/adaptive backgrounds and the PWA
   `theme_color`; manifest `background_color` stays cream `#FBF6EC` to match the HTML splash). No static
   `<link rel=canonical>` in the SPA shell (it would point every route at `/`); `og:url` is the home page.
+  *Superseded for the canonical by ADR-019 (PR 3 of the review plan).*
 - **Consequences:** Auth authorized domains include the new domains (needed for admin sign-in); a future reCAPTCHA
   key must list the new domain; `authDomain` stays on `asafra-church-portal.firebaseapp.com` (email/password only).
   Firestore `settings/church.nameAr/nameEn` remain the admin-editable source for the full name once loaded.
+
+## ADR-019 — Review plan PR 3: PDPL consent, static canonical + JSON-LD, deferred routes, saved language
+- **Context:** the review plan's PR 3 (`feat/phase3-compliance-seo-perf`), followed exactly at the owner's request.
+- **Decision:** (1) the contact form shows a PDPL privacy notice and requires an unticked consent checkbox
+  (`ContactField.consent`); consent is validated client-side only and not stored, so `firestore.rules` and the
+  message shape are unchanged. (2) `web/index.html` gets a static `<link rel="canonical"
+  href="https://maximos-domadios-church.web.app/">` and a verified `Church` JSON-LD block. This reverses ADR-018's
+  "no static canonical": the owner chose the plan's static tag knowing it points every SPA route at `/`
+  (per-route canonical stays an open task). (3) `/admin` and `/ask` are `deferred as` imports wrapped in
+  `DeferredLoader`, so the public bundle no longer carries the dashboard or the AI SDK. (4) The language choice is
+  saved in `localStorage` (`church_portal_lang`) through a conditional import on the existing `package:web` (no new
+  dependency); startup precedence `?lang=` → saved → Arabic; only `toggle()`/`set()` save, URL-driven changes do not.
+- **Consequences:** JSON-LD duplicates `settings/church` facts and must be edited by hand when they change (a test
+  pins it to the seed). Deferred chunks add one extra request on the first `/admin` / `/ask` visit. Native apps
+  don't remember the language yet.
 
 ## Timeline
 
@@ -148,6 +164,7 @@ supersede them.
 | 1 Nov 2026 | **PR #5** — "Optional images (Spark-friendly inline media)" | Optional `image` on priests/departed fathers, saints, milestones, activities, alerts, seasons; admin upload (client resize/compress → `media/{id}`), https URL or remove, alt text, preview; `ItemImage` (lazy, cached, fade-in, placeholder, tap to enlarge); `media` section toggle; `MediaRepository` + Storage stub + draft `storage.rules`; rules + emulator tests; ADR-017. |
 | 1 Nov 2026 | **PR #6** — "Rebrand: church title, parish seal logo, new domain" | Full church title + short name everywhere (web title/OG/manifest/app/l10n/Android label), parish seal as logo/splash/favicons/PWA/Android icons (`tool/gen_branding.sh`), new Hosting site `maximos-domadios-church` as the live app with a 301 redirect from `asafra-church-portal.web.app`, OG/robots/sitemap on the new domain; ADR-018. |
 | 1 Nov 2026 | **PR #7** `6a30772` — "PR 1: domain, AI grounding, resilience & security rules" | Review plan PR 1: `Season.replacesRegular`, upcoming special services, seasonal tie-breaks, assistant grounding, seed-fallback recovery, contact timeout UX, rules SEC-01–SEC-05, clinics section off in the seed. |
-| 1 Nov 2026 | **PR #8** — "PR 2: UX, WCAG 2.2 AA, navigation, admin & docs" (`fix/phase2-ux-a11y-admin`) | Review plan PR 2: `AppColors.goldText`, darker WhatsApp/Facebook fills, footer `white70`, theme presets everywhere (`primaryDarkOf`); 320 px / 200 % text fixes (`Pill`, `TitleWithBadge`, timeline `Wrap`, app-bar collapse, alert/next-mass headers); Back-to-Home arrow, 48 dp targets; two-way `?lang=` sync (BUG-07); `departedDate` (BUG-08), alert link gating (BUG-09), BiDi secondary times (BUG-10), "Today" badge (FR-E-03), map `hl` (BUG-16), `runSpacing` (BUG-15); live regions, labelled buttons/switch, reduced-motion skeleton, Move up/down (2.5.7); admin: no scroll reset on save (BUG-12), departed order base 1000 + keep media on timeout (BUG-13), re-subscribe on backend change (BUG-18), Open on site; `test/accessibility_test.dart`. |
+| 1 Nov 2026 | **PR #8** `bc934d3` — "PR 2: UX, WCAG 2.2 AA, navigation, admin & docs" (`fix/phase2-ux-a11y-admin`) | Review plan PR 2: `AppColors.goldText`, darker WhatsApp/Facebook fills, footer `white70`, theme presets everywhere (`primaryDarkOf`); 320 px / 200 % text fixes (`Pill`, `TitleWithBadge`, timeline `Wrap`, app-bar collapse, alert/next-mass headers); Back-to-Home arrow, 48 dp targets; two-way `?lang=` sync (BUG-07); `departedDate` (BUG-08), alert link gating (BUG-09), BiDi secondary times (BUG-10), "Today" badge (FR-E-03), map `hl` (BUG-16), `runSpacing` (BUG-15); live regions, labelled buttons/switch, reduced-motion skeleton, Move up/down (2.5.7); admin: no scroll reset on save (BUG-12), departed order base 1000 + keep media on timeout (BUG-13), re-subscribe on backend change (BUG-18), Open on site; `test/accessibility_test.dart`. |
+| 2 Nov 2026 | **PR #9** — "PR 3: compliance, SEO, deferred bundles & locale storage" (`feat/phase3-compliance-seo-perf`) | Review plan PR 3: PDPL privacy notice + required consent checkbox (`ContactField.consent`, FR-CT-06); static canonical + verified `Church` JSON-LD in `web/index.html` (ADR-019); `/admin` and `/ask` as deferred chunks via `DeferredLoader`; language choice saved in `localStorage` (`LanguageStore`, `?lang=` → saved → Arabic); `test/phase3_test.dart`. |
 
 Append new PRs to this table.

@@ -55,17 +55,20 @@ Status as of 1 Nov 2026 (after PR #7 and PR 2 of the review plan).
 
 ## Product gaps vs. requirements (see `02-business-case.md`)
 
-- [ ] Privacy notice + **consent checkbox** on the contact form; retention clean-up (12 months; TTL needs Blaze);
-      legal check on PDPL / cross-border transfer.
+- [ ] Retention clean-up of contact messages (12 months; TTL needs Blaze); legal check on PDPL / cross-border
+      transfer and on the privacy-notice wording. (Notice + consent checkbox done in PR 3 of the review plan.)
 - [ ] **Analytics** (Firebase Analytics or similar) with the KPI events (`answer_visible`, `clinic_call`,
       `clinic_whatsapp`, `call_church`, `open_maps`, `whatsapp_channel`, `contact_submit_success`, `lang_switch`).
-- [ ] SEO/static shell: JSON-LD `Church`, `noindex` meta for `/admin`; optional pre-rendered "today's masses"
-      snapshot. (`web/robots.txt` disallowing `/admin`, `web/sitemap.xml` and the Open Graph image
+- [ ] SEO/static shell: `noindex` meta for `/admin`; per-route canonical (the static canonical added in PR 3 of the
+      review plan points every SPA route at `/`); optional pre-rendered "today's masses" snapshot. (`Church` JSON-LD
+      done in PR 3; keep it in sync with `settings/church`.) (`web/robots.txt` disallowing `/admin`, `web/sitemap.xml` and the Open Graph image
       `web/og-image.jpg` shipped in PR #6.)
-- [ ] Performance budget (Lighthouse in CI), font subset/bundling (fonts are fetched at runtime now), deferred imports
-      for `/admin` and the assistant.
+- [ ] Performance budget (Lighthouse in CI), font subset/bundling (fonts are fetched at runtime now). (Deferred
+      `/admin` and `/ask` chunks done in PR 3 of the review plan; verify lazy loading in the Network tab on the
+      preview.)
 - [ ] Footer: phones, socials, "last updated".
-- [ ] Persist language choice on the device (currently only `?lang=en`).
+- [ ] Persist the language choice on Android/iOS too (web uses `localStorage` since PR 3 of the review plan; native is
+      a no-op to avoid a new dependency).
 - [ ] Clinics/meetings freshness view in admin (FR-AD-06); "simulate now" next-mass preview for editors (FR-AD-03).
       (Meetings "today" badge FR-E-03 and admin "Open on site" via `CollectionDef.publicPath` done in PR 2 of the
       review plan.)

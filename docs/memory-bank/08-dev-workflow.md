@@ -26,7 +26,7 @@ flutter build web --release  # -> build/web (what Hosting serves)
 | Task | Command |
 |---|---|
 | Static analysis | `flutter analyze` (lints: `package:flutter_lints/flutter.yaml`; excludes build/android/ios/web) |
-| Unit + widget tests | `flutter test` (`test/domain_test.dart`, `features_test.dart`, `feature_gate_test.dart`, `admin_test.dart`, `seed_test.dart`, `media_test.dart`, `accessibility_test.dart` — WCAG contrast maths, 320 px × 200 % overflow sweep of every public route (ar + en), theme-preset propagation, semantics, `?lang=` sync, admin fixes). In a proxied sandbox set `NO_PROXY=127.0.0.1,localhost` or the test runner cannot reach its local websocket. |
+| Unit + widget tests | `flutter test` (`test/domain_test.dart`, `features_test.dart`, `feature_gate_test.dart`, `admin_test.dart`, `seed_test.dart`, `media_test.dart`, `accessibility_test.dart` — WCAG contrast maths, 320 px × 200 % overflow sweep of every public route (ar + en), theme-preset propagation, semantics, `?lang=` sync, admin fixes; `phase3_test.dart` — PDPL consent, canonical + JSON-LD vs seed, `DeferredLoader` + deferred `/admin`/`/ask`, saved-language precedence/persistence via a fake `LanguageStore`). In a proxied sandbox set `NO_PROXY=127.0.0.1,localhost` or the test runner cannot reach its local websocket. |
 | Regenerate seed | `python3 tool/gen_seed.py` → writes `assets/seed/seed.json`, `tool/known_seed_ids.json`, `tool/retired_seed_ids.json` (commit all three) |
 | Rules tests (emulator, Java 11+) | `cd tool/rules_test && npm ci && npm test` (runs `firebase emulators:exec --only firestore --project demo-church-portal`) |
 | Seed preview | `cd tool && npm install && node seed_firestore.js --dry-run` |
