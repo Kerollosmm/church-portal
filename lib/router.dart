@@ -20,6 +20,7 @@ import 'ui/pages/home_page.dart';
 import 'ui/pages/mass_schedule_page.dart';
 import 'ui/pages/public_services_page.dart';
 import 'ui/widgets/app_shell.dart';
+import 'ui/widgets/assistant_gate.dart';
 import 'ui/widgets/common.dart';
 import 'ui/widgets/deferred_loader.dart';
 import 'ui/widgets/feature_gate.dart';
@@ -149,9 +150,12 @@ final routerProvider = Provider<GoRouter>((ref) {
             path: '/ask',
             pageBuilder: (c, s) => _page(
                 s,
-                DeferredLoader(
-                  loadLibrary: assistant_page.loadLibrary,
-                  builder: (_) => assistant_page.AssistantPage(),
+                // The chunk is fetched only when the assistant is actually on.
+                AssistantGate(
+                  builder: (_) => DeferredLoader(
+                    loadLibrary: assistant_page.loadLibrary,
+                    builder: (_) => assistant_page.AssistantPage(),
+                  ),
                 )),
           ),
         ],

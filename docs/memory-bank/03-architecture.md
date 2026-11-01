@@ -58,7 +58,7 @@ lib/
                             ActionChipButton), common (PageBody, PageHeader, SectionTitle, ResponsiveGrid,
                             Skeleton*, EmptyState, ErrorState, AsyncSection, PendingConfirmationNote,
                             SampleBadge, Pill, IconLine, TimeRangeText, Footer), feature_gate, map_embed*,
-                            deferred_loader (DeferredLoader: spinner → page, retry on chunk failure),
+                            deferred_loader (DeferredLoader: spinner → page, retry on chunk failure), assistant_gate,
                             coptic_cross
   ui/admin/                 admin_page (sign-in, role check, dashboard shell), admin_schema (FieldDef,
                             CollectionDef, adminCollections, churchInfoDoc), doc_editor (generic form),
@@ -179,7 +179,7 @@ flowchart LR
 | `/clinics` (`?specialty=<key>`) | `ClinicsPage(initialSpecialty)` | clinics |
 | `/public-services` | `PublicServicesPage` | services |
 | `/contact` | `ContactPage` | any of contactInfo, socials, contactForm |
-| `/ask` | `assistant_page.AssistantPage` (deferred) | assistant (+ the page itself checks `assistantVisibleProvider`) |
+| `/ask` | `AssistantGate` → `assistant_page.AssistantPage` (deferred) | assistant (+ the page itself checks `assistantVisibleProvider`) |
 | `/admin` (`AppConfig.adminPath`) | `admin_page.AdminPage` (deferred, `fullScreen` placeholder) | outside the shell, not gated, not linked anywhere public |
 | anything else | `errorBuilder` → `AppShell` + "Page not found" + Back home | — |
 
@@ -190,8 +190,10 @@ flowchart LR
 and `ui/pages/assistant_page.dart deferred as assistant_page`; the routes build
 `DeferredLoader(loadLibrary: x.loadLibrary, builder: (_) => x.Page())`, so dart2js emits them as separate
 `main.dart.js_*.part.js` chunks fetched only on the first visit to `/admin` or `/ask` (the AI SDK `firebase_ai` is
-imported only by `assistant_page.dart`). `DeferredLoader` shows a spinner (live region «جارٍ تحميل الصفحة…») and an
-`ErrorState` with Retry if the chunk download fails. Only the page code is deferred: anything also imported eagerly
+imported only by `assistant_page.dart`). `/ask` is wrapped in `AssistantGate` (`ui/widgets/assistant_gate.dart`,
+eager): it waits for `settings/church`, shows «المساعد غير متاح حاليًا» **without** fetching the chunk when
+`assistantVisibleProvider` is false, and only then builds the `DeferredLoader` (CodeRabbit review). `DeferredLoader` shows a spinner (live region «جارٍ تحميل الصفحة…») and an
+`ErrorState` with Retry if the chunk download fails (a retry in flight shows the spinner again). Only the page code is deferred: anything also imported eagerly
 (e.g. `data/admin_repository.dart`, used by `providers.dart`/`main.dart`, and shared widgets) stays in the main
 bundle. Never import `admin_page.dart` / `assistant_page.dart` (or a library only they need) eagerly elsewhere in
 `lib/`, or the split silently disappears; tests may import them directly. Path URL strategy is unaffected (the

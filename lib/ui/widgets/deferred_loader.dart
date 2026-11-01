@@ -41,7 +41,10 @@ class _DeferredLoaderState extends State<DeferredLoader> {
         future: _future,
         builder: (context, snap) {
           if (snap.connectionState == ConnectionState.done && !snap.hasError) return widget.builder(context);
-          final Widget placeholder = snap.hasError
+          // A retry in flight keeps the previous error in the snapshot: show
+          // the spinner until it completes, not a second Retry button.
+          final failed = snap.connectionState == ConnectionState.done && snap.hasError;
+          final Widget placeholder = failed
               ? Center(child: ErrorState(onRetry: _retry))
               : Center(
                   child: Padding(

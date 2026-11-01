@@ -214,7 +214,8 @@ digits, Cairo `02` + 8, Alexandria `03` + 7, other governorates `0[4-9]` + 7–8
   delivery is never promised); unavailable (seed mode); failed.
 - **Privacy notice + consent** (PR 3 of the review plan, FR-CT-06, Egyptian PDPL Law 151/2020): under the message
   field a notice (`privacyNotice`: name, contact details and message are read only by the church's authorized clergy
-  and secretariat, solely to reply, never shared outside) and an **unticked** `CheckboxListTile` (`consentLabel`).
+  and secretariat, solely to reply, never shared with anyone else; stored on Google Firebase, whose servers may be
+  outside Egypt — disclosed after Codex review) and an **unticked** `CheckboxListTile` (`consentLabel`).
   `ContactFormInput.consented` (default `true` for non-UI callers; the form passes the box) → `ContactField.consent` /
   `ContactError.consentRequired` («برجاء الموافقة على إشعار الخصوصية لإرسال الرسالة») blocks sending and keeps the
   typed text. Consent is **not** written to Firestore (payload keys unchanged, rules untouched); the box is cleared

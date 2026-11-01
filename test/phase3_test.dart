@@ -9,6 +9,8 @@ import 'package:church_portal/domain/cairo_time.dart';
 import 'package:church_portal/domain/rules.dart';
 import 'package:church_portal/router.dart';
 import 'package:church_portal/state/providers.dart';
+import 'package:church_portal/ui/admin/admin_page.dart';
+import 'package:church_portal/ui/pages/assistant_page.dart';
 import 'package:church_portal/ui/pages/contact_page.dart';
 import 'package:church_portal/ui/widgets/deferred_loader.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -39,7 +41,7 @@ Map<String, dynamic> _seedChurch() =>
     (jsonDecode(File('assets/seed/seed.json').readAsStringSync()) as Map<String, dynamic>)['settings']['church']
         as Map<String, dynamic>;
 
-Future<(ProviderContainer, _MemoryStore)> _pumpApp(WidgetTester tester, {String? saved}) async {
+Future<(ProviderContainer, _MemoryStore)> _pumpApp(WidgetTester tester, {String? saved, bool? assistantVisible}) async {
   tester.view.physicalSize = const Size(1200, 3000);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
@@ -48,6 +50,7 @@ Future<(ProviderContainer, _MemoryStore)> _pumpApp(WidgetTester tester, {String?
     repositoryProvider.overrideWithValue(SeedRepository(_seed())),
     nowProvider.overrideWith((ref) => Stream.value(CairoTime.at(2026, 11, 1, 12 * 60).toUtc())),
     languageStoreProvider.overrideWithValue(store),
+    if (assistantVisible != null) assistantVisibleProvider.overrideWithValue(assistantVisible),
   ]);
   addTearDown(container.dispose);
   final router = container.read(routerProvider);
@@ -66,6 +69,9 @@ Future<(ProviderContainer, _MemoryStore)> _pumpApp(WidgetTester tester, {String?
   await tester.pumpAndSettle();
   return (container, store);
 }
+
+/// The English display title (`appName` in l10n.dart, ADR-018).
+const kAppNameEn = 'St. Maximus & Domadius and St. Moses the Black Church';
 
 void main() {
   setUpAll(CairoTime.ensureInitialized);
@@ -125,7 +131,11 @@ void main() {
       expect(ld['@context'], 'https://schema.org');
       expect(ld['@type'], 'Church');
       expect(ld['name'], church['nameAr']);
-      expect(ld['alternateName'], contains(church['nameEn']));
+      expect(ld['alternateName'], [kAppNameEn, church['nameEn']]);
+      expect(File('lib/core/l10n.dart').readAsStringSync(), contains(kAppNameEn));
+      expect((ld['address'] as Map)['streetAddress'], startsWith('آخر شارع 45، العصافرة قبلي'));
+      expect(church['addressAr'], startsWith((ld['address'] as Map)['streetAddress'] as String));
+      expect(ld['url'], 'https://maximos-domadios-church.web.app/');
       expect(ld['telephone'], '+2035368888');
       expect((ld['geo'] as Map)['latitude'], church['lat']);
       expect((ld['geo'] as Map)['longitude'], church['lng']);
@@ -161,25 +171,49 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byIcon(Icons.refresh), findsOneWidget);
       await tester.tap(find.byIcon(Icons.refresh));
+      await tester.pump();
+      // While the retry is in flight: spinner, no second Retry button.
+      expect(find.byIcon(Icons.refresh), findsNothing);
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
       await tester.pumpAndSettle();
       expect(calls, 2);
       expect(find.text('loaded'), findsOneWidget);
     });
 
-    testWidgets('/admin and /ask still open through their deferred chunks', (tester) async {
-      final (container, _) = await _pumpApp(tester);
+    // One test: on the Dart VM, loadLibrary() futures are cached per isolate,
+    // so a chunk first requested under another test's fake clock never
+    // completes in a later test (not a production concern on the web).
+    testWidgets('/admin and /ask (assistant on) open through their deferred chunks', (tester) async {
+      final (container, _) = await _pumpApp(tester, assistantVisible: true);
       final router = container.read(routerProvider);
       router.go('/admin');
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
       expect(router.routerDelegate.currentConfiguration.uri.path, '/admin');
       expect(find.byType(DeferredLoader), findsOneWidget);
+      expect(find.byType(AdminPage), findsOneWidget);
       expect(find.byType(CircularProgressIndicator), findsNothing);
       router.go('/ask');
-      await tester.pumpAndSettle();
+      // The chat page keeps a ticker running (focused field), so pumpAndSettle
+      // never settles: pump until the chunk has loaded.
+      for (var i = 0; i < 50 && find.byType(AssistantPage).evaluate().isEmpty; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      await tester.pump(const Duration(seconds: 1)); // /admin's page transition ends
       expect(tester.takeException(), isNull);
       expect(router.routerDelegate.currentConfiguration.uri.path, '/ask');
+      expect(find.byType(DeferredLoader), findsOneWidget);
       expect(find.byType(CircularProgressIndicator), findsNothing);
+      expect(find.byType(AssistantPage), findsOneWidget);
+    });
+
+    testWidgets('/ask with the assistant off says so without fetching the chunk', (tester) async {
+      final (container, _) = await _pumpApp(tester, assistantVisible: false);
+      container.read(routerProvider).go('/ask');
+      await tester.pumpAndSettle();
+      expect(find.byType(DeferredLoader), findsNothing);
+      expect(find.byType(AssistantPage), findsNothing);
+      expect(find.text('المساعد غير متاح حاليًا.'), findsOneWidget);
     });
   });
 

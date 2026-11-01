@@ -18,6 +18,7 @@ supersede them.
 - **Decision:** default locale `ar`; English via toggle; `?lang=en` read at startup and kept in sync by the router
   redirect; `<html lang>` synced; no `dir="rtl"` in `index.html` (breaks the map iframe platform view).
 - **Consequences:** language is not stored on the device (only in the URL).
+  *Superseded for web language storage by ADR-019 (`localStorage`); still true for the native apps.*
 
 ## ADR-004 — All schedule logic in Africa/Cairo via the IANA database
 - **Decision:** `CairoTime` (package `timezone`) for every "now"/weekday/date; seed instants generated with
@@ -145,7 +146,8 @@ supersede them.
   href="https://maximos-domadios-church.web.app/">` and a verified `Church` JSON-LD block. This reverses ADR-018's
   "no static canonical": the owner chose the plan's static tag knowing it points every SPA route at `/`
   (per-route canonical stays an open task). (3) `/admin` and `/ask` are `deferred as` imports wrapped in
-  `DeferredLoader`, so the public bundle no longer carries the dashboard or the AI SDK. (4) The language choice is
+  `DeferredLoader`, so the public bundle no longer carries the dashboard or the AI SDK; `/ask` downloads its chunk
+  only once settings say the assistant is on (`AssistantGate`). (4) The language choice is
   saved in `localStorage` (`church_portal_lang`) through a conditional import on the existing `package:web` (no new
   dependency); startup precedence `?lang=` → saved → Arabic; only `toggle()`/`set()` save, URL-driven changes do not.
 - **Consequences:** JSON-LD duplicates `settings/church` facts and must be edited by hand when they change (a test
@@ -165,6 +167,6 @@ supersede them.
 | 1 Nov 2026 | **PR #6** — "Rebrand: church title, parish seal logo, new domain" | Full church title + short name everywhere (web title/OG/manifest/app/l10n/Android label), parish seal as logo/splash/favicons/PWA/Android icons (`tool/gen_branding.sh`), new Hosting site `maximos-domadios-church` as the live app with a 301 redirect from `asafra-church-portal.web.app`, OG/robots/sitemap on the new domain; ADR-018. |
 | 1 Nov 2026 | **PR #7** `6a30772` — "PR 1: domain, AI grounding, resilience & security rules" | Review plan PR 1: `Season.replacesRegular`, upcoming special services, seasonal tie-breaks, assistant grounding, seed-fallback recovery, contact timeout UX, rules SEC-01–SEC-05, clinics section off in the seed. |
 | 1 Nov 2026 | **PR #8** `bc934d3` — "PR 2: UX, WCAG 2.2 AA, navigation, admin & docs" (`fix/phase2-ux-a11y-admin`) | Review plan PR 2: `AppColors.goldText`, darker WhatsApp/Facebook fills, footer `white70`, theme presets everywhere (`primaryDarkOf`); 320 px / 200 % text fixes (`Pill`, `TitleWithBadge`, timeline `Wrap`, app-bar collapse, alert/next-mass headers); Back-to-Home arrow, 48 dp targets; two-way `?lang=` sync (BUG-07); `departedDate` (BUG-08), alert link gating (BUG-09), BiDi secondary times (BUG-10), "Today" badge (FR-E-03), map `hl` (BUG-16), `runSpacing` (BUG-15); live regions, labelled buttons/switch, reduced-motion skeleton, Move up/down (2.5.7); admin: no scroll reset on save (BUG-12), departed order base 1000 + keep media on timeout (BUG-13), re-subscribe on backend change (BUG-18), Open on site; `test/accessibility_test.dart`. |
-| 2 Nov 2026 | **PR #9** — "PR 3: compliance, SEO, deferred bundles & locale storage" (`feat/phase3-compliance-seo-perf`) | Review plan PR 3: PDPL privacy notice + required consent checkbox (`ContactField.consent`, FR-CT-06); static canonical + verified `Church` JSON-LD in `web/index.html` (ADR-019); `/admin` and `/ask` as deferred chunks via `DeferredLoader`; language choice saved in `localStorage` (`LanguageStore`, `?lang=` → saved → Arabic); `test/phase3_test.dart`. |
+| 2 Nov 2026 | **PR #9** — "PR 3: compliance, SEO, deferred bundles & locale storage" (`feat/phase3-compliance-seo-perf`) | Review plan PR 3: PDPL privacy notice + required consent checkbox (`ContactField.consent`, FR-CT-06); static canonical + verified `Church` JSON-LD in `web/index.html` (ADR-019); `/admin` and `/ask` as deferred chunks via `DeferredLoader` (`/ask` fetched only when the assistant is on — `AssistantGate`); language choice saved in `localStorage` (`LanguageStore`, `?lang=` → saved → Arabic); `test/phase3_test.dart`. |
 
 Append new PRs to this table.

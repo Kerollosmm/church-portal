@@ -74,7 +74,7 @@ Pages
 | FR-C-01..05 | Specialty chips, doctor card, call/WhatsApp, today-first sort, facilities | ✅ (sort = open today → admin `order` → specialty → doctor) |
 | FR-C-06 | "Schedules may change, call to confirm" | ✅ `clinicsIntro` subtitle |
 | FR-CT-01..05 | Phones, socials, address+transport, map+GPS, contact form | ✅ |
-| FR-CT-06 | Privacy notice + consent checkbox | ✅ notice (read only by authorized clergy/secretariat, only to reply, never shared) + unticked `CheckboxListTile` that must be ticked (`ContactField.consent`); consent is not stored |
+| FR-CT-06 | Privacy notice + consent checkbox | ✅ notice (read only by authorized clergy/secretariat, only to reply, never shared; stored on Google Firebase, possibly outside Egypt) + unticked `CheckboxListTile` that must be ticked (`ContactField.consent`); consent is not stored |
 
 Admin
 | ID | Requirement | Status |
