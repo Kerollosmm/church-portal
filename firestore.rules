@@ -31,6 +31,10 @@ service cloud.firestore {
     function optString(d, k, max) {
       return !(k in d) || d[k] == null || (d[k] is string && d[k].size() <= max);
     }
+    // Cheaper variant for docs with many text fields (absent = ''; null rejected).
+    function str(d, k, max) {
+      return d.get(k, '') is string && d.get(k, '').size() <= max;
+    }
     function reqString(d, k, max) {
       return k in d && d[k] is string && d[k].size() >= 1 && d[k].size() <= max;
     }
@@ -76,7 +80,9 @@ service cloud.firestore {
 
     // ------------------------------- content -------------------------------
     function validContent(col, d) {
-      return common(d) && (
+      return col in ['alerts', 'seasons', 'liturgies', 'meetings', 'activities', 'clinics', 'facilities',
+                     'priests', 'milestones', 'saints']
+        && common(d) && (
         (col == 'alerts' && validAlert(d))
         || (col == 'seasons' && validSeason(d))
         || (col == 'liturgies' && validLiturgy(d))
@@ -199,21 +205,21 @@ service cloud.firestore {
                           'facebook', 'youtube', 'instagram', 'verseAr', 'verseEn', 'verseRef', 'verseRefAr',
                           'heroImageUrl', 'historyAr', 'historyEn', 'bishopAr', 'bishopEn', 'altars',
                           'assistantEnabled', 'sample', 'updatedAt', 'updatedBy'])
-        && d.keys().size() <= 60
-        && reqString(d, 'nameAr', 300) && optString(d, 'nameEn', 300)
-        && optString(d, 'addressAr', 300) && optString(d, 'addressEn', 300)
-        && optString(d, 'transportAr', 2000) && optString(d, 'transportEn', 2000)
+        && reqString(d, 'nameAr', 300) && str(d, 'nameEn', 300)
+        && str(d, 'addressAr', 300) && str(d, 'addressEn', 300)
+        && str(d, 'transportAr', 2000) && str(d, 'transportEn', 2000)
         && optNumber(d, 'lat', -90, 90) && optNumber(d, 'lng', -180, 180)
-        && optString(d, 'mapsUrl', 500) && optString(d, 'mapsQuery', 200)
-        && optList(d, 'phones', 20) && optList(d, 'altars', 20)
-        && optString(d, 'whatsapp', 20) && optString(d, 'whatsappChannel', 500) && optString(d, 'facebook', 500)
-        && optString(d, 'youtube', 500) && optString(d, 'instagram', 500)
-        && optString(d, 'verseAr', 300) && optString(d, 'verseEn', 300)
-        && optString(d, 'verseRef', 60) && optString(d, 'verseRefAr', 60) && optString(d, 'heroImageUrl', 500)
-        && optString(d, 'historyAr', 8000) && optString(d, 'historyEn', 8000)
-        && optString(d, 'bishopAr', 300) && optString(d, 'bishopEn', 300)
-        && optBool(d, 'assistantEnabled') && optBool(d, 'sample')
-        && optTimestamp(d, 'updatedAt') && optString(d, 'updatedBy', 254);
+        && str(d, 'mapsUrl', 500) && str(d, 'mapsQuery', 200)
+        && d.get('phones', []) is list && d.get('phones', []).size() <= 20
+        && d.get('altars', []) is list && d.get('altars', []).size() <= 20
+        && str(d, 'whatsapp', 20) && str(d, 'whatsappChannel', 500) && str(d, 'facebook', 500)
+        && str(d, 'youtube', 500) && str(d, 'instagram', 500)
+        && str(d, 'verseAr', 300) && str(d, 'verseEn', 300)
+        && str(d, 'verseRef', 60) && str(d, 'verseRefAr', 60) && str(d, 'heroImageUrl', 500)
+        && str(d, 'historyAr', 8000) && str(d, 'historyEn', 8000)
+        && str(d, 'bishopAr', 300) && str(d, 'bishopEn', 300)
+        && d.get('assistantEnabled', false) is bool && d.get('sample', false) is bool
+        && optTimestamp(d, 'updatedAt') && str(d, 'updatedBy', 254);
     }
 
     function sectionKeys() {
@@ -221,12 +227,9 @@ service cloud.firestore {
               'departedPriests', 'activities', 'alerts', 'contactInfo', 'socials', 'contactForm', 'assistant'];
     }
 
+    // Known section keys only, and every value a bool.
     function validSections(s) {
-      return s is map && s.keys().hasOnly(sectionKeys())
-        && optBool(s, 'schedule') && optBool(s, 'meetings') && optBool(s, 'clinics') && optBool(s, 'services')
-        && optBool(s, 'history') && optBool(s, 'milestones') && optBool(s, 'saints') && optBool(s, 'priests')
-        && optBool(s, 'departedPriests') && optBool(s, 'activities') && optBool(s, 'alerts')
-        && optBool(s, 'contactInfo') && optBool(s, 'socials') && optBool(s, 'contactForm') && optBool(s, 'assistant');
+      return s is map && s.keys().hasOnly(sectionKeys()) && s.values().hasOnly([true, false]);
     }
 
     function validFeatures(d) {
@@ -238,12 +241,12 @@ service cloud.firestore {
               && d.homeOrder.hasOnly(['banner', 'alerts', 'nextMass', 'quickContacts', 'milestones', 'directory', 'map'])))
         && (!('homeHidden' in d) || (d.homeHidden is list && d.homeHidden.size() <= 7
               && d.homeHidden.hasOnly(['banner', 'alerts', 'nextMass', 'quickContacts', 'milestones', 'directory', 'map'])))
-        && optString(d, 'heroTitleAr', 200) && optString(d, 'heroTitleEn', 200)
-        && optString(d, 'heroSubtitleAr', 300) && optString(d, 'heroSubtitleEn', 300)
-        && optBool(d, 'bannerEnabled') && optString(d, 'bannerAr', 500) && optString(d, 'bannerEn', 500)
-        && optString(d, 'bannerLink', 500)
-        && optIn(d, 'theme', ['burgundy', 'navy', 'green', 'brown', 'purple'])
-        && optTimestamp(d, 'updatedAt') && optString(d, 'updatedBy', 254);
+        && str(d, 'heroTitleAr', 200) && str(d, 'heroTitleEn', 200)
+        && str(d, 'heroSubtitleAr', 300) && str(d, 'heroSubtitleEn', 300)
+        && d.get('bannerEnabled', false) is bool && str(d, 'bannerAr', 500) && str(d, 'bannerEn', 500)
+        && str(d, 'bannerLink', 500)
+        && d.get('theme', 'burgundy') in ['burgundy', 'navy', 'green', 'brown', 'purple']
+        && optTimestamp(d, 'updatedAt') && str(d, 'updatedBy', 254);
     }
 
     // -------------------------------- admins --------------------------------

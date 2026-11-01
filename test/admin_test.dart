@@ -161,8 +161,9 @@ void main() {
       for (final k in FeatureSettings.defaults.toMap().keys) {
         expect(featuresBlock, contains("'$k'"), reason: 'settings/features.$k');
       }
+      final sectionKeys = rules.substring(rules.indexOf('function sectionKeys()'), rules.indexOf('function validSections('));
       for (final s in Sections.all) {
-        expect(rules, contains("optBool(s, '$s')"), reason: 'section $s');
+        expect(sectionKeys, contains("'$s'"), reason: 'section $s');
       }
       for (final t in ThemePresets.all.keys) {
         expect(featuresBlock, contains("'$t'"), reason: 'theme $t');
