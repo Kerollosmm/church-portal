@@ -9,6 +9,7 @@ import '../../domain/time_format.dart';
 import '../../state/providers.dart';
 import '../widgets/common.dart';
 import '../widgets/coptic_cross.dart';
+import '../widgets/item_image.dart';
 
 class AboutPage extends ConsumerWidget {
   const AboutPage({super.key});
@@ -74,8 +75,20 @@ class AboutPage extends ConsumerWidget {
                 child: Padding(
                   padding: const EdgeInsets.all(16),
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text(context.pick(s.nameAr, s.nameEn),
-                        style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: AppColors.burgundy)),
+                    Row(children: [
+                      // No image: nothing here, the card keeps its text-only look.
+                      ItemImage(
+                        image: s.image,
+                        size: 64,
+                        label: context.pick(s.nameAr, s.nameEn),
+                        placeholder: const SizedBox.shrink(),
+                      ),
+                      if (s.image != null && f.showImages) const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(context.pick(s.nameAr, s.nameEn),
+                            style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: AppColors.burgundy)),
+                      ),
+                    ]),
                     const SizedBox(height: 6),
                     Wrap(spacing: 6, runSpacing: 6, children: [
                       Pill('${context.tr('feast')}: ${context.pick(s.feastCopticAr, s.feastCopticEn)}',
@@ -130,11 +143,15 @@ class PriestCard extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.all(14),
         child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          CircleAvatar(
-            radius: 34,
-            backgroundColor: AppColors.parchment,
-            foregroundImage: p.photoUrl.isNotEmpty ? NetworkImage(p.photoUrl) : null,
-            child: const Icon(Icons.person, size: 36, color: AppColors.burgundy),
+          ItemImage(
+            image: p.displayImage,
+            size: 68,
+            label: name,
+            placeholder: const CircleAvatar(
+              radius: 34,
+              backgroundColor: AppColors.parchment,
+              child: Icon(Icons.person, size: 36, color: AppColors.burgundy),
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(

@@ -3,6 +3,9 @@
 // values (Timestamp -> DateTime) before calling the `fromMap` factories.
 
 import 'features.dart';
+import 'media.dart';
+
+export 'media.dart' show MediaImage;
 
 DateTime? parseDate(Object? v) {
   if (v == null) return null;
@@ -166,6 +169,9 @@ class Alert implements Hideable {
   final DateTime? startsAt, endsAt;
   final int priority;
   final String? link;
+
+  /// Optional picture (null = keep the icon / initials placeholder).
+  final MediaImage? image;
   const Alert({
     this.visible = true,
     this.order = 0,
@@ -179,6 +185,7 @@ class Alert implements Hideable {
     this.endsAt,
     this.priority = 0,
     this.link,
+    this.image,
   });
   factory Alert.fromMap(String id, Map<String, dynamic> m) => Alert(
         visible: m['visible'] is bool ? m['visible'] as bool : true,
@@ -193,6 +200,7 @@ class Alert implements Hideable {
         endsAt: parseDate(m['endsAt']),
         priority: _ni(m['priority']) ?? 0,
         link: _ns(m['link']),
+        image: MediaImage.fromMap(m['image']),
       );
 }
 
@@ -202,6 +210,9 @@ class Season {
   final String nameAr, nameEn;
   final DateTime? startsAt, endsAt;
   final bool active;
+
+  /// Optional picture (null = keep the icon / initials placeholder).
+  final MediaImage? image;
   const Season({
     required this.id,
     required this.key,
@@ -210,6 +221,7 @@ class Season {
     this.startsAt,
     this.endsAt,
     this.active = true,
+    this.image,
   });
   factory Season.fromMap(String id, Map<String, dynamic> m) => Season(
         id: id,
@@ -219,6 +231,7 @@ class Season {
         startsAt: parseDate(m['startsAt']),
         endsAt: parseDate(m['endsAt']),
         active: _b(m['active']),
+        image: MediaImage.fromMap(m['image']),
       );
 }
 
@@ -340,6 +353,9 @@ class Activity implements Hideable {
   /// Optional external page (Facebook page, YouTube playlist...).
   final String link;
   final bool sample;
+
+  /// Optional picture (null = keep the icon / initials placeholder).
+  final MediaImage? image;
   const Activity({
     this.visible = true,
     this.order = 0,
@@ -354,6 +370,7 @@ class Activity implements Hideable {
     this.ageRange = '',
     this.contactPhone = '',
     this.link = '',
+    this.image,
     this.sample = false,
   });
   factory Activity.fromMap(String id, Map<String, dynamic> m) => Activity(
@@ -370,6 +387,7 @@ class Activity implements Hideable {
         ageRange: _s(m['ageRange']),
         contactPhone: _s(m['contactPhone']),
         link: _s(m['link']),
+        image: MediaImage.fromMap(m['image']),
         sample: _b(m['sample']),
       );
 }
@@ -473,6 +491,9 @@ class Priest implements Hideable {
   @override
   final int order;
   final bool sample;
+
+  /// Optional picture (null = keep the icon / initials placeholder).
+  final MediaImage? image;
   const Priest({
     this.visible = true,
     required this.id,
@@ -488,6 +509,7 @@ class Priest implements Hideable {
     this.bioEn = '',
     this.order = 0,
     this.sample = false,
+    this.image,
   });
   factory Priest.fromMap(String id, Map<String, dynamic> m) => Priest(
         visible: m['visible'] is bool ? m['visible'] as bool : true,
@@ -504,8 +526,12 @@ class Priest implements Hideable {
         bioEn: _s(m['bioEn']),
         order: _ni(m['order']) ?? 0,
         sample: _b(m['sample']),
+        image: MediaImage.fromMap(m['image']),
       );
   bool get departed => status == 'departed';
+
+  /// [image], else the legacy `photoUrl` when it is an https URL.
+  MediaImage? get displayImage => image ?? (isValidImageUrl(photoUrl) ? MediaImage.url(photoUrl) : null);
 }
 
 class Milestone implements Hideable {
@@ -517,6 +543,9 @@ class Milestone implements Hideable {
   final int? year;
   @override
   final int order;
+
+  /// Optional picture (null = keep the icon / initials placeholder).
+  final MediaImage? image;
   const Milestone({
     this.visible = true,
     required this.id,
@@ -527,6 +556,7 @@ class Milestone implements Hideable {
     this.year,
     this.icon = '',
     this.order = 0,
+    this.image,
   });
   factory Milestone.fromMap(String id, Map<String, dynamic> m) => Milestone(
         visible: m['visible'] is bool ? m['visible'] as bool : true,
@@ -538,6 +568,7 @@ class Milestone implements Hideable {
         year: _ni(m['year']),
         icon: _s(m['icon']),
         order: _ni(m['order']) ?? 0,
+        image: MediaImage.fromMap(m['image']),
       );
 }
 
@@ -549,6 +580,9 @@ class Saint implements Hideable {
   final String id, nameAr, nameEn, bioAr, bioEn, feastCopticAr, feastCopticEn, feastGregorian, feastGregorianAr;
   @override
   final int order;
+
+  /// Optional picture (null = keep the icon / initials placeholder).
+  final MediaImage? image;
   const Saint({
     this.visible = true,
     required this.id,
@@ -561,6 +595,7 @@ class Saint implements Hideable {
     this.feastGregorian = '',
     this.feastGregorianAr = '',
     this.order = 0,
+    this.image,
   });
   factory Saint.fromMap(String id, Map<String, dynamic> m) => Saint(
         visible: m['visible'] is bool ? m['visible'] as bool : true,
@@ -574,5 +609,6 @@ class Saint implements Hideable {
         feastGregorian: _s(m['feastGregorian']),
         feastGregorianAr: _s(m['feastGregorianAr']),
         order: _ni(m['order']) ?? 0,
+        image: MediaImage.fromMap(m['image']),
       );
 }

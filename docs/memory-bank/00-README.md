@@ -20,7 +20,7 @@ safely**. Every statement here was checked against the code on `main` at commit 
 | [07-admin-dashboard.md](07-admin-dashboard.md) | The hidden `/admin` dashboard: sign-in, roles, every screen, CRUD/reorder/hide, toggles editor, inbox |
 | [08-dev-workflow.md](08-dev-workflow.md) | Local setup, commands, tests, seeding (and its dangers), CI/CD, PR process, conventions, "add a new section" checklist |
 | [09-content-status.md](09-content-status.md) | What content is verified vs. pending the church, sources, questions for the church office |
-| [10-decisions-and-history.md](10-decisions-and-history.md) | ADR-style key decisions and the PR #1–#3 timeline |
+| [10-decisions-and-history.md](10-decisions-and-history.md) | ADR-style key decisions and the PR timeline |
 | [11-open-tasks.md](11-open-tasks.md) | Remaining work (infra, security, content, product gaps vs. the requirements) |
 | [12-glossary.md](12-glossary.md) | Coptic/church Arabic terms ↔ the English words and keys used in code |
 

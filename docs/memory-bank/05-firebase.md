@@ -10,7 +10,7 @@
 |---|---|
 | Project id | **`asafra-church-portal`** (`.firebaserc` default, `FIREBASE_PROJECT_ID` in `deploy.yml`) |
 | Project number / sender id | `724175543696` |
-| Plan | **Spark** (no-cost) — per project setup, not visible in the repo. Business case recommends Blaze + $5 budget alert (see `11-open-tasks.md`). |
+| Plan | **Spark** (no-cost) — per project setup, not visible in the repo. Business case recommends Blaze + $5 budget alert (see `11-open-tasks.md`). **Cloud Storage for Firebase is not available on Spark** (since Oct 2024 a default bucket needs Blaze; Spark projects cannot provision or access buckets — <https://firebase.google.com/docs/storage/faqs-storage-changes-announced-sept-2024>), so uploaded images live in Firestore `media/` (ADR-017). |
 | Firestore | Default database, location **`europe-west1`**, created in production mode (README) |
 | Hosting | `https://asafra-church-portal.web.app` (+ `.firebaseapp.com`) |
 | Web app id | `1:724175543696:web:8c75dcd193c3dc5106a715` |
@@ -41,7 +41,13 @@ Helpers:
   `optIn(values)`.
 - `stampOk(d)` — `updatedAt` absent, `== request.time`, or unchanged; `updatedBy` absent, equal to the caller's token
   email (or uid), or unchanged. Prevents forging edit history.
-- `common(d)` — ≤ 60 keys, `visible`/`sample` bool, `order` int ±100000, `stampOk`.
+- `common(d)` — ≤ 60 keys, `visible`/`sample` bool, `order` int ±100000, `image` null/absent or `validImage`,
+  `stampOk`. Putting the image check here (once) instead of in each `validX` keeps the expression count low; only
+  collections whose allow-list contains `'image'` (alerts, seasons, activities, priests, milestones, saints) can
+  actually store one.
+- `validImage(i)` — map with keys ⊆ `source,url,mediaId,alt,w,h`; `source` ∈ url/inline/storage; inline →
+  `mediaId` `^[A-Za-z0-9_-]{1,128}$`, otherwise `url` ≤ 500 matching `^https://[^/\s]+[.][^/\s]+([/?#][^\s]*)?$`;
+  `alt` ≤ 300; `w`/`h` int 1–10000.
 - `keysAllowed(allowed)` — **create**: all keys ∈ allowed; **update**: only *changed* keys ∈ allowed
   (`diff().affectedKeys()`), so legacy fields already in a doc never block an edit.
 
@@ -51,6 +57,7 @@ Match blocks:
 |---|---|---|---|
 | `/{col}/{docId}` for `alerts, seasons, liturgies, meetings, activities, clinics, facilities, priests, milestones, saints` | **public** | `isAdmin() && validContent(col, data)` → `common` + per-collection `validAlert/validSeason/validLiturgy/validMeeting/validActivity/validClinic/validFacility/validPriest/validMilestone/validSaint` (allow-list + types/sizes; see `04-data-model.md`) | `isAdmin()` |
 | `/settings/{docId}` | **public** | `isAdmin()` and (`church` → `validChurch`, `features` → `validFeatures`); any other doc id denied | **never** |
+| `/media/{mediaId}` | **public** | `isAdmin() && validMedia(data)`: keys ⊆ `dataBase64, contentType, w, h, bytes, createdAt, createdBy, refs`; required `dataBase64` (4–950,000 chars), `contentType` ∈ jpeg/webp/png, `createdAt` (== `request.time`, or unchanged), `createdBy` (token email/uid, or unchanged); `bytes` ≤ 700,000; `w/h` 1–10000; `refs` list ≤ 20 | `isAdmin()` |
 | `/admins/{uid}` | own doc, or any doc if `isOwner()` | `isOwner()` **and** `uid != caller` (cannot change yourself → an owner always remains); keys ⊆ `email, role, updatedAt, updatedBy`; email required ≤254; role ∈ owner/editor | `isOwner() && uid != caller` |
 | `/meta/contact_rate` | never | keys ⊆ `lastAt`; `lastAt == request.time`; and (new doc or `request.time > lastAt + 20 s`) | never |
 | `/contact_messages/{id}` | `isAdmin()` | **create (public, no auth)**: `validContactMessage` **and** `getAfter(meta/contact_rate).lastAt == request.time` (same batch). **update**: `isAdmin()`, only `status/updatedAt/updatedBy` change, status ∈ new/handled, `stampOk` | `isAdmin()` |
@@ -61,7 +68,8 @@ Notable details:
 - `validSeason` requires `key` in the 6 season keys; `validLiturgy` requires the `start` key and `seasonKey` ∈ keys.
 - `validClinic`: `days` list ≤ 7 and ⊆ [1..7].
 - `validPriest`: `rank` ∈ hegumen/priest, `status` ∈ serving/departed, dates ≤ 10 chars.
-- `validFeatures`: exact key allow-list (also on update — `d.keys().hasOnly`), `sections` keys ⊆ the 15 section keys
+- `validFeatures`: exact key allow-list (also on update — `d.keys().hasOnly`), `sections` keys ⊆ the 16 section keys
+  (incl. `media`)
   and values bool, `homeOrder`/`homeHidden` ⊆ the 7 block keys (≤ 7), `bannerLink` regex
   `^$|^/([^/ ][^ ]*)?$|^https?://[^/ ]+[.][^/ ]+([/?#][^ ]*)?$`, `theme` ∈ 5 presets.
 - `validChurch`: phones/altars lists ≤ 20; `nameAr` required.
@@ -69,7 +77,21 @@ Notable details:
 - Tests: `tool/rules_test/rules.test.mjs` (Node test runner + `@firebase/rules-unit-testing` in the Firestore
   emulator, project `demo-church-portal`): public read/no write, non-admin denied, contact create + throttle,
   every seed doc valid, clinic create/hide/reorder/delete, unknown keys/bad types/bad times rejected, stamps,
-  legacy fields, church coordinates, feature toggles shapes, inbox, owner/editor admin management.
+  legacy fields, church coordinates, feature toggles shapes, inbox, owner/editor admin management, **optional
+  images** (valid url/inline/null images, malformed maps, image on a collection without it, `media/` public read,
+  admin-only writes, type/size/stamp checks, the 950,000-char cap).
+- **Expression budget:** rules are limited to 1000 expressions per request (PR #3 hit it on `validChurch`). Keep new
+  checks in shared helpers (`common`, `validImage`) and prefer `str()`/`get()` forms on big docs.
+
+## Cloud Storage (not used — Spark)
+
+- `storage.rules` in the repo root is a **draft, not deployed** (`firebase.json` has no `storage` entry): public read
+  of `media/*`, admin-only writes (cross-service `firestore.exists(admins/uid)`), ≤ 700 KB, jpeg/webp/png.
+- The app's `StorageMediaRepository` (`lib/data/media_repository.dart`) is a stub selected by
+  `--dart-define=MEDIA_BACKEND=storage`; switch steps are in ADR-017 (`10-decisions-and-history.md`).
+- Spark quota note: each inline image costs **one Firestore document read** per visitor session (cached in memory and
+  by Firestore persistence), counted in the 50K reads/day. Keep images optional and few; the admin can switch them all
+  off (section `media`).
 
 ## Indexes
 

@@ -3,6 +3,7 @@ import 'package:material_ui/material_ui.dart';
 import '../../core/l10n.dart';
 import '../../core/theme.dart';
 import '../../data/admin_repository.dart';
+import '../../domain/media.dart';
 import '../../domain/time_format.dart';
 import '../../domain/cairo_time.dart';
 import 'admin_schema.dart';
@@ -287,6 +288,11 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     final failedMsg = context.tr('deleteFailed', {'e': '{e}'});
     try {
       await widget.repo.delete(def.name, d.id);
+      // Best effort: the deleted item's inline image is no longer referenced.
+      final media = widget.repo.media;
+      for (final id in orphanedMediaIds(d.data['image'], null)) {
+        media?.delete(id).catchError((Object _) {});
+      }
       messenger.showSnackBar(SnackBar(content: Text(deleted)));
     } catch (e) {
       messenger.showSnackBar(SnackBar(content: Text(failedMsg.replaceAll('{e}', '$e'))));
@@ -305,6 +311,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
         docId: d?.id,
         newDefaults: def.newDefaults,
         onSave: (data) => widget.repo.save(def.name, d?.id, data),
+        media: widget.repo.media,
       ),
     ));
   }

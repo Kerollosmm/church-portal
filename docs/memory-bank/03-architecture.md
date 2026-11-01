@@ -36,17 +36,23 @@ lib/
     cairo_time.dart         CairoTime (fromInstant, at, startOfDay, calendarDate)
     time_format.dart        formatTimeLatin/Arabic, ranges, weekday names, formatDate, formatLooseDate
     assistant_context.dart  buildAssistantInstruction (Gemini grounding prompt)
+    media.dart              MediaImage (optional `image` map), MediaLimits, isValidImageUrl, fitWithin,
+                            orphanedMediaIds
   data/
     firebase_bootstrap.dart bootstrapFirebase() -> FirebaseStatus{available, appCheckActive}; App Check
     content_repository.dart ContentRepository (interface), SeedRepository, FirestoreRepository,
                             normalizeFirestoreValue/normalizeDoc
     seed_data.dart          SeedData: typed view over assets/seed/seed.json
-    admin_repository.dart   AdminBackend (interface), AdminRepository (Firestore+Auth), AdminDoc, AdminRoles
+    admin_repository.dart   AdminBackend (interface; `media`), AdminRepository (Firestore+Auth), AdminDoc, AdminRoles
+    media_repository.dart   MediaRepository, FirestoreMediaRepository (media/{id} base64), StorageMediaRepository
+                            (Blaze stub), MediaCache (in-memory LRU), EncodedImage
+    image_processing.dart   prepareUpload/compressDecoded; codecs image_codec/image_codec_web.dart (canvas, WebP)
+                            and image_codec_io.dart (`image` package, JPEG) via conditional import
   state/providers.dart      all Riverpod providers (see below)
   core/                     theme.dart (AppColors, buildTheme), l10n.dart (_strings, tr/pick/isAr),
                             launch.dart (openUrl, callPhone, openWhatsApp, maps URLs), document_lang*.dart
   ui/pages/                 one file per public route
-  ui/widgets/               app_shell, cards (LiturgyCard, NextMassCard, AlertBanner, DirectoryCard,
+  ui/widgets/               item_image (ItemImage, MediaImageView, showImageViewer), app_shell, cards (LiturgyCard, NextMassCard, AlertBanner, DirectoryCard,
                             ActionChipButton), common (PageBody, PageHeader, SectionTitle, ResponsiveGrid,
                             Skeleton*, EmptyState, ErrorState, AsyncSection, PendingConfirmationNote,
                             SampleBadge, Pill, IconLine, TimeRangeText, Footer), feature_gate, map_embed*,
@@ -117,6 +123,7 @@ flowchart LR
 | `firebaseStatusProvider` | `Provider<FirebaseStatus>` | overridden in `main` |
 | `repositoryProvider` | `Provider<ContentRepository>` | overridden in `main` (throws if not) |
 | `adminRepositoryProvider` | `Provider<AdminRepository?>` | null when Firebase unavailable |
+| `mediaRepositoryProvider` | `Provider<MediaRepository?>` | overridden in `main` with `admin.media`; null → inline images show placeholders |
 | `settingsProvider` | `StreamProvider<ChurchSettings>` | `settings/church` |
 | `featuresStreamProvider` | `StreamProvider<FeatureSettings>` | `settings/features` |
 | `featuresProvider` | `Provider<FeatureSettings>` | value or `FeatureSettings.defaults` (all on) |

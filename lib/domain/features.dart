@@ -19,10 +19,11 @@ class Sections {
   static const socials = 'socials'; // WhatsApp / Facebook / YouTube / Instagram links
   static const contactForm = 'contactForm';
   static const assistant = 'assistant'; // "Ask the church"
+  static const media = 'media'; // optional images on cards (priests, saints, milestones, activities, alerts, seasons)
 
   static const all = [
     schedule, meetings, clinics, services, history, milestones, saints, priests, departedPriests, //
-    activities, alerts, contactInfo, socials, contactForm, assistant,
+    activities, alerts, contactInfo, socials, contactForm, assistant, media,
   ];
 
   /// [ar, en] labels used in the admin toggles screen.
@@ -42,6 +43,7 @@ class Sections {
     socials: ['روابط التواصل الاجتماعي', 'Social links'],
     contactForm: ['نموذج المراسلة', 'Contact form'],
     assistant: ['اسأل الكنيسة (المساعد الذكي)', 'Ask the church (AI assistant)'],
+    media: ['الصور (إظهار صور الآباء والشفعاء والأنشطة…)', 'Images (show photos on priests, saints, activities…)'],
   };
 }
 
@@ -210,6 +212,9 @@ class FeatureSettings {
       );
 
   bool enabled(String section) => sections[section] ?? true;
+
+  /// Optional item images are shown (admin switch `media`, default on).
+  bool get showImages => enabled(Sections.media);
 
   /// Whether a home block is shown (not hidden, its section on, and for the
   /// banner: switched on with some text).

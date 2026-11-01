@@ -11,6 +11,7 @@ import '../../domain/rules.dart';
 import '../../state/providers.dart';
 import '../widgets/cards.dart';
 import '../widgets/common.dart';
+import '../widgets/item_image.dart';
 import '../widgets/coptic_cross.dart';
 import '../widgets/map_embed.dart';
 
@@ -360,9 +361,14 @@ class _MilestoneCard extends StatelessWidget {
           padding: const EdgeInsets.all(16),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(children: [
-              CircleAvatar(
-                backgroundColor: AppColors.gold.withValues(alpha: 0.18),
-                child: Icon(_icon, color: AppColors.burgundy),
+              ItemImage(
+                image: m.image,
+                size: 48,
+                label: context.pick(m.titleAr, m.titleEn),
+                placeholder: CircleAvatar(
+                  backgroundColor: AppColors.gold.withValues(alpha: 0.18),
+                  child: Icon(_icon, color: AppColors.burgundy),
+                ),
               ),
               const Spacer(),
               if (m.year != null)

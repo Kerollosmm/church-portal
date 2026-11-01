@@ -27,13 +27,15 @@ App Check, Firebase AI Logic/Gemini). Live: <https://asafra-church-portal.web.ap
 7. **Security**: never commit secrets (service-account JSON, keys). Never run `seed_firestore.js --force` / the Seed
    workflow with `force` on production without explicit approval — it overwrites admin edits.
 8. Keep `flutter analyze` clean and all tests green; PRs are squash-merged after CI passes.
+9. **Images are optional** everywhere (`image` map, `media/{id}` inline bytes on the Spark plan — ADR-017). A card
+   without an image must look exactly as before; never make an image required or seed one.
 
 ## Commands
 
 ```bash
 flutter pub get
 flutter analyze
-flutter test
+flutter test                                # sandbox/proxy: NO_PROXY=127.0.0.1,localhost flutter test
 flutter run -d chrome                       # runs on bundled seed data if Firebase is unreachable
 flutter build web --release                 # [--dart-define=RECAPTCHA_SITE_KEY=...]
 python3 tool/gen_seed.py                    # regenerate seed (CI fails if out of date)

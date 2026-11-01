@@ -78,6 +78,21 @@ Chat UI with intro bubble, 3 suggestion chips, 500-char input, disclaimer «إج
 
 ### `/admin` — see `07-admin-dashboard.md`.
 
+### Optional images (PR #5) — `ItemImage` / `MediaImageView` (`lib/ui/widgets/item_image.dart`)
+- Where: priest + departed-father avatars (`PriestCard`, `/about`; legacy https `photoUrl` as fallback), patron
+  saints (avatar beside the name), milestone avatars ("Our story" on `/`), activity thumbnails
+  (`/church-activities`, replaces the category icon), alert thumbnails (`AlertBanner`, replaces the megaphone icon),
+  season / revival picture beside the date range (seasonal view of `/mass-schedule`).
+- **No image ⇒ the exact current look** (`ItemImage` returns its placeholder: person icon, category icon, milestone
+  icon, megaphone, or nothing for saints/seasons). Same when the admin switches **Images** (`Sections.media`) off —
+  `FeatureSettings.showImages`; nothing is fetched then.
+- `url`/`storage` images: `Image.network` with `webHtmlElementStrategy: fallback` (hosts without CORS still show on
+  the web). `inline` images: `MediaRepository.load(mediaId)` → `media/{id}` read lazily per card, cached in
+  `MediaCache.instance` (in-memory LRU, 60 entries, failures retried). Fade-in (300 ms), placeholder while loading and
+  on any error, semantic label = `alt` or the item's name, fixed square / circle sizes (no layout shift).
+- Tap an image ⇒ `showImageViewer` dialog (pinch/scroll zoom, close button).
+- The assistant never sees image data.
+
 ### Shared UI behaviours
 - `SampleBadge` («بيانات تجريبية / Sample data») on any `sample: true` item; `PendingConfirmationNote`
   («مواعيد تقريبية — في انتظار تأكيد الكنيسة») on schedule, meetings and clinics pages.
@@ -87,7 +102,8 @@ Chat UI with intro bubble, 3 suggestion chips, 500-char input, disclaimer «إج
 
 ## Feature toggles (`settings/features`, `lib/domain/features.dart`)
 
-- 15 sections (`Sections.all`); **missing key = on**; before the doc loads and when it does not exist, everything is on.
+- 16 sections (`Sections.all`; the 16th, `media`, is not a page — it shows/hides all optional item images);
+  **missing key = on**; before the doc loads and when it does not exist, everything is on.
 - A switched-off section disappears from: home blocks/CTAs/directory, app-bar links, Services menu, drawer, footer
   links, cross-links (e.g. clinics ↔ public services), and the **assistant's grounding**. Its route renders
   `SectionUnavailable` («هذا القسم غير متاح حاليًا» + Back to home).

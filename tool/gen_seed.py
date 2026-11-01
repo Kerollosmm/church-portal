@@ -60,7 +60,7 @@ settings = {
   "features": {
     "sections": {k: True for k in [
       "schedule", "meetings", "clinics", "services", "history", "milestones", "saints", "priests",
-      "departedPriests", "activities", "alerts", "contactInfo", "socials", "contactForm", "assistant",
+      "departedPriests", "activities", "alerts", "contactInfo", "socials", "contactForm", "assistant", "media",
     ]},
     "homeOrder": ["banner", "alerts", "nextMass", "quickContacts", "milestones", "directory", "map"],
     "homeHidden": [],

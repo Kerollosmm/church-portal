@@ -16,7 +16,8 @@ flutter build web --release  # -> build/web (what Hosting serves)
   `npm install` in `tool/`. Ports 8080 (web-server), 4000 (Emulator UI), 8085, 9099.
 - Without network/Firebase the app runs on `assets/seed/seed.json` (nothing to configure for UI work).
 - Useful `--dart-define`s: `RECAPTCHA_SITE_KEY=…`, `GEMINI_MODEL=…`, `APPCHECK_DEBUG=true`,
-  `APPCHECK_DEBUG_TOKEN=<uuid>` (debug builds use the App Check debug provider automatically).
+  `APPCHECK_DEBUG_TOKEN=<uuid>` (debug builds use the App Check debug provider automatically),
+  `MEDIA_BACKEND=firestore|storage` (where uploaded images go; `storage` needs Blaze + the steps in ADR-017).
 - Android: `flutter run -d <device>`; release builds are still **signed with the debug key**
   (`android/app/build.gradle.kts`) — not Play-Store ready.
 
@@ -25,7 +26,7 @@ flutter build web --release  # -> build/web (what Hosting serves)
 | Task | Command |
 |---|---|
 | Static analysis | `flutter analyze` (lints: `package:flutter_lints/flutter.yaml`; excludes build/android/ios/web) |
-| Unit + widget tests | `flutter test` (`test/domain_test.dart`, `features_test.dart`, `feature_gate_test.dart`, `admin_test.dart`, `seed_test.dart`) |
+| Unit + widget tests | `flutter test` (`test/domain_test.dart`, `features_test.dart`, `feature_gate_test.dart`, `admin_test.dart`, `seed_test.dart`, `media_test.dart`). In a proxied sandbox set `NO_PROXY=127.0.0.1,localhost` or the test runner cannot reach its local websocket. |
 | Regenerate seed | `python3 tool/gen_seed.py` → writes `assets/seed/seed.json`, `tool/known_seed_ids.json`, `tool/retired_seed_ids.json` (commit all three) |
 | Rules tests (emulator, Java 11+) | `cd tool/rules_test && npm ci && npm test` (runs `firebase emulators:exec --only firestore --project demo-church-portal`) |
 | Seed preview | `cd tool && npm install && node seed_firestore.js --dry-run` |
@@ -116,6 +117,9 @@ Normalises the service-account secret (first JSON object only, validates, `$RUNN
 - Seed changes only in `tool/gen_seed.py`; removing a seeded id ⇒ add it to `retired`.
 - Line length ~120 (devcontainer ruler). Keep `flutter analyze` clean.
 - Never commit credentials (`.gitignore` blocks service-account JSON files).
+- **Adding an image to another collection:** add `'image'` to its rules allow-list (the `common()` check validates
+  it), `_imageField` to its `CollectionDef`, `final MediaImage? image` + `MediaImage.fromMap(m['image'])` to the
+  model, and wrap its card's icon in `ItemImage(placeholder: <current icon>)`; add it to `imageCollections`.
 
 ## Checklist — add a new section / collection end-to-end
 

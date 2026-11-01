@@ -10,6 +10,7 @@ import '../../domain/time_format.dart';
 import '../../state/providers.dart';
 import '../widgets/cards.dart';
 import '../widgets/common.dart';
+import '../widgets/item_image.dart';
 
 class MassSchedulePage extends ConsumerStatefulWidget {
   const MassSchedulePage({super.key});
@@ -125,6 +126,7 @@ class _MassSchedulePageState extends ConsumerState<MassSchedulePage> {
 
   List<Widget> _seasonal(BuildContext context, List<Season> seasons, List<Liturgy> all, DateTime now) {
     final grouped = seasonalSchedule(seasons, all);
+    final showImages = ref.watch(featuresProvider.select((f) => f.showImages));
     if (grouped.isEmpty) return [const EmptyState(icon: Icons.event_busy)];
     final out = <Widget>[];
     for (final e in grouped.entries) {
@@ -139,10 +141,22 @@ class _MassSchedulePageState extends ConsumerState<MassSchedulePage> {
         icon: Icons.auto_awesome_rounded,
         trailing: active ? Pill(context.tr('activeNow'), icon: Icons.circle) : null,
       ));
-      if (range.isNotEmpty) {
+      final hasImage = s.image != null && showImages;
+      if (range.isNotEmpty || hasImage) {
         out.add(Padding(
           padding: const EdgeInsets.only(bottom: 10),
-          child: IconLine(Icons.date_range_rounded, range),
+          child: Row(children: [
+            // Optional season / revival picture; nothing when there is none.
+            ItemImage(
+              image: s.image,
+              size: 72,
+              circle: false,
+              label: context.pick(s.nameAr, s.nameEn),
+              placeholder: const SizedBox.shrink(),
+            ),
+            if (hasImage) const SizedBox(width: 12),
+            if (range.isNotEmpty) Expanded(child: IconLine(Icons.date_range_rounded, range)),
+          ]),
         ));
       }
       out.add(ResponsiveGrid(minItemWidth: 340, children: [

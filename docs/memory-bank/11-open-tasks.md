@@ -16,7 +16,8 @@ Status as of 1 Nov 2026 (after PR #3).
 - [ ] **`production` environment required reviewers** (Settings → Environments) so live deploys and the Seed workflow
       (`force` can overwrite production data) need approval. Consider gating `deploy-rules` with the same environment.
 - [ ] **iOS**: register the iOS app (bundle `com.asafrachurch.churchPortal`), `flutterfire configure`, replace the
-      placeholders in `lib/firebase_options.dart`; App Attest for App Check.
+      placeholders in `lib/firebase_options.dart`; App Attest for App Check. (`Info.plist` already has
+      `NSPhotoLibraryUsageDescription` for the admin image picker.)
 - [ ] **Android release signing**: add an upload keystore + `signingConfigs.release` (currently signs release with the
       debug key in `android/app/build.gradle.kts`); register SHA-256 for Play Integrity; consider replacing the
       browser API key with the Android `current_key`; app label is "Church Portal" (consider the Arabic name);
@@ -26,11 +27,17 @@ Status as of 1 Nov 2026 (after PR #3).
 - [ ] Bootstrap at least **two owners** in `admins` (avoid single-person dependency); Firebase project ownership by a
       church Google account with 2-step verification.
 - [ ] Firestore backups/exports schedule (needs Blaze) before any `--force` seeding.
+- [ ] **Optional: move uploaded images to Cloud Storage** once on Blaze — implement `StorageMediaRepository`, deploy
+      `storage.rules`, build with `MEDIA_BACKEND=storage` (steps in ADR-017). Until then images are inline in
+      Firestore `media/` (fine at parish scale; watch the 50K reads/day).
+- [ ] **Orphaned `media` docs:** deletes are best effort; add a small owner-only "clean up unused images" action or a
+      script (list `media` ids not referenced by any `image.mediaId`) if they accumulate.
 
 ## Content (owner: church office — see `09-content-status.md`)
 
 - [ ] Real liturgy/vespers/praise timetable (47 placeholders), meetings (11), clinics (11 — or remove the section),
-      facilities (4), priest roster confirmations, altars, photos (hero + priests), founding year.
+      facilities (4), priest roster confirmations, altars, photos (hero; priests/saints/activities can now be added
+      in /admin — optional, only with the church's permission), founding year.
 - [ ] Re-date seasons/alerts every year (2027 Nativity, revivals, Holy Week/Pascha seeded; 2028 not yet).
 - [ ] Mirror confirmed content into `tool/gen_seed.py` + `docs/CONTENT_SOURCES.md`.
 
