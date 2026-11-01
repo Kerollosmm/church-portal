@@ -69,7 +69,7 @@ class _MassSchedulePageState extends ConsumerState<MassSchedulePage> {
               _seasonDefaultApplied = true;
             }),
             activeThumbColor: AppColors.gold,
-            secondary: const Icon(Icons.auto_awesome_rounded, color: AppColors.burgundy),
+            secondary: Icon(Icons.auto_awesome_rounded, color: Theme.of(context).colorScheme.primary),
             title: Text(context.tr('holySeasons'), style: const TextStyle(fontWeight: FontWeight.w800)),
             subtitle: Text(context.tr('holySeasonsHint')),
           ),
@@ -125,7 +125,7 @@ class _MassSchedulePageState extends ConsumerState<MassSchedulePage> {
                 selected: _tab == t,
                 showCheckmark: false,
                 labelStyle: TextStyle(
-                    color: _tab == t ? Colors.white : AppColors.burgundy, fontWeight: FontWeight.w700),
+                    color: _tab == t ? Colors.white : Theme.of(context).colorScheme.primary, fontWeight: FontWeight.w700),
                 onSelected: (_) => setState(() => _tab = t),
               ),
             ),

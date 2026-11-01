@@ -37,8 +37,9 @@ String mapsDirectionsUrl(ChurchSettings s) {
   return 'https://www.google.com/maps/dir/?api=1&destination=${Uri.encodeComponent(dest)}&travelmode=driving';
 }
 
-/// Keyless embeddable map URL (iframe).
-String mapsEmbedUrl(ChurchSettings s) {
+/// Keyless embeddable map URL (iframe); [lang] sets the map labels' language
+/// (`hl`), so English visitors get English labels.
+String mapsEmbedUrl(ChurchSettings s, {String lang = 'ar'}) {
   final q = s.mapsQuery.isNotEmpty ? s.mapsQuery : s.addressAr;
-  return 'https://maps.google.com/maps?q=${Uri.encodeComponent(q)}&z=16&output=embed&hl=ar';
+  return 'https://maps.google.com/maps?q=${Uri.encodeComponent(q)}&z=16&output=embed&hl=${Uri.encodeComponent(lang)}';
 }

@@ -4,6 +4,7 @@ import 'package:material_ui/material_ui.dart';
 import '../../core/l10n.dart';
 import '../../core/launch.dart';
 import '../../core/theme.dart';
+import '../../domain/cairo_time.dart';
 import '../../domain/models.dart';
 import '../../state/providers.dart';
 import '../widgets/cards.dart';
@@ -40,6 +41,9 @@ class EducationPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final now = ref.watch(nowProvider).value ?? DateTime.now();
+    // FR-E-03: meetings held today (Cairo calendar) get a "Today" badge.
+    final todayWeekday = CairoTime.fromInstant(now).weekday;
     return PageBody(
       header: PageHeader(title: context.tr('education'), subtitle: context.tr('dir_edu'), icon: Icons.school_rounded),
       children: [
@@ -63,14 +67,14 @@ class EducationPage extends ConsumerWidget {
               if (items.isEmpty) continue;
               children.add(SectionTitle(context.pick(g.$2, g.$3), icon: g.$4));
               for (var i = 0; i < items.length; i++) {
-                children.add(_TimelineItem(meeting: items[i], isLast: i == items.length - 1));
+                children.add(_TimelineItem(meeting: items[i], isLast: i == items.length - 1, todayWeekday: todayWeekday));
               }
             }
             final other = sorted.where((m) => !stageOrder.contains(m.stage)).toList();
             if (other.isNotEmpty) {
               children.add(SectionTitle(context.tr('otherStages'), icon: Icons.event_note));
               for (var i = 0; i < other.length; i++) {
-                children.add(_TimelineItem(meeting: other[i], isLast: i == other.length - 1));
+                children.add(_TimelineItem(meeting: other[i], isLast: i == other.length - 1, todayWeekday: todayWeekday));
               }
             }
             return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: children);
@@ -84,7 +88,10 @@ class EducationPage extends ConsumerWidget {
 class _TimelineItem extends StatelessWidget {
   final Meeting meeting;
   final bool isLast;
-  const _TimelineItem({required this.meeting, required this.isLast});
+
+  /// ISO weekday (1-7) of "today" in Cairo.
+  final int todayWeekday;
+  const _TimelineItem({required this.meeting, required this.isLast, required this.todayWeekday});
 
   @override
   Widget build(BuildContext context) {
@@ -102,7 +109,7 @@ class _TimelineItem extends StatelessWidget {
               decoration: BoxDecoration(
                 color: AppColors.gold,
                 shape: BoxShape.circle,
-                border: Border.all(color: AppColors.burgundy, width: 2),
+                border: Border.all(color: Theme.of(context).colorScheme.primary, width: 2),
               ),
             ),
             if (!isLast) Expanded(child: Container(width: 2, color: AppColors.gold.withValues(alpha: 0.5))),
@@ -116,16 +123,18 @@ class _TimelineItem extends StatelessWidget {
               child: Padding(
                 padding: const EdgeInsets.all(14),
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Row(children: [
-                    if (label != null) Pill(context.pick(label[0], label[1]), color: AppColors.burgundy),
-                    const Spacer(),
+                  // Wrap (not Row + Spacer): long stage names and the badges move
+                  // to the next line on narrow screens instead of overflowing.
+                  Wrap(spacing: 8, runSpacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: [
+                    if (label != null) Pill(context.pick(label[0], label[1]), color: Theme.of(context).colorScheme.primary),
+                    if (m.weekday == todayWeekday) Pill(context.tr('today'), icon: Icons.today_rounded),
                     if (m.sample) const SampleBadge(),
                   ]),
                   const SizedBox(height: 6),
                   Text(context.pick(m.nameAr, m.nameEn), style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
                   const SizedBox(height: 6),
                   Text(weekdayLabel(context, m.weekday),
-                      style: const TextStyle(color: AppColors.gold, fontWeight: FontWeight.w800)),
+                      style: const TextStyle(color: AppColors.goldText, fontWeight: FontWeight.w800)),
                   TimeRangeText(m.start, m.end),
                   const SizedBox(height: 4),
                   IconLine(Icons.meeting_room_outlined, context.pick(m.hallAr, m.hallEn)),
@@ -137,12 +146,14 @@ class _TimelineItem extends StatelessWidget {
                         ActionChipButton(
                             icon: Icons.facebook,
                             label: context.tr('facebook'),
+                            semanticLabel: actionSemanticLabel(context.tr('facebook'), context.pick(m.nameAr, m.nameEn)),
                             color: facebookBlue,
                             onTap: () => openUrl(m.facebookUrl)),
                       if (m.whatsappUrl.isNotEmpty)
                         ActionChipButton(
                             icon: Icons.chat_rounded,
                             label: context.tr('whatsapp'),
+                            semanticLabel: actionSemanticLabel(context.tr('whatsapp'), context.pick(m.nameAr, m.nameEn)),
                             color: whatsappGreen,
                             onTap: () => openUrl(m.whatsappUrl)),
                     ]),

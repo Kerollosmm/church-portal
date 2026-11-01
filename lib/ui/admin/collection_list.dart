@@ -1,6 +1,9 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../../core/l10n.dart';
+import '../../core/launch.dart';
 import '../../core/theme.dart';
 import '../../data/admin_repository.dart';
 import '../../domain/media.dart';
@@ -134,7 +137,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
                           padding: const EdgeInsets.fromLTRB(12, 4, 12, 90),
                           itemCount: docs.length,
                           onReorderItem: (from, to) => _reorder(context, docs, from, to),
-                          itemBuilder: (context, i) => _tile(context, docs[i], dragIndex: i),
+                          itemBuilder: (context, i) => _tile(context, docs[i], dragIndex: i, docs: docs),
                         )
                       : ListView.builder(
                           padding: const EdgeInsets.fromLTRB(12, 4, 12, 90),
@@ -152,22 +155,34 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        TextField(
-          key: const Key('admin-search'),
-          controller: _search,
-          onChanged: (_) => setState(() {}),
-          decoration: InputDecoration(
-            isDense: true,
-            prefixIcon: const Icon(Icons.search),
-            hintText: context.tr('searchHint'),
-            suffixIcon: _search.text.isEmpty
-                ? null
-                : IconButton(
-                    icon: const Icon(Icons.clear),
-                    onPressed: () => setState(_search.clear),
-                  ),
+        Row(children: [
+          Expanded(
+            child: TextField(
+              key: const Key('admin-search'),
+              controller: _search,
+              onChanged: (_) => setState(() {}),
+              decoration: InputDecoration(
+                isDense: true,
+                prefixIcon: const Icon(Icons.search),
+                hintText: context.tr('searchHint'),
+                suffixIcon: _search.text.isEmpty
+                    ? null
+                    : IconButton(
+                        icon: const Icon(Icons.clear),
+                        onPressed: () => setState(_search.clear),
+                      ),
+              ),
+            ),
           ),
-        ),
+          const SizedBox(width: 4),
+          // The public page that shows this collection (CollectionDef.publicPath).
+          IconButton(
+            key: const Key('admin-openOnSite'),
+            tooltip: context.tr('openOnSite'),
+            icon: const Icon(Icons.open_in_new_rounded),
+            onPressed: () => _openOnSite(context),
+          ),
+        ]),
         const SizedBox(height: 8),
         Wrap(spacing: 6, runSpacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: [
           for (final f in ListFilter.values)
@@ -189,7 +204,18 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     );
   }
 
-  Widget _tile(BuildContext context, AdminDoc d, {int? dragIndex}) {
+  /// Opens [CollectionDef.publicPath] in a new tab on web (the dashboard stays
+  /// open); elsewhere navigates to it in the app.
+  void _openOnSite(BuildContext context) {
+    final path = def.publicPath.isEmpty ? '/' : def.publicPath;
+    if (kIsWeb) {
+      openUrl(Uri.base.resolve(path).toString());
+    } else {
+      context.go(path);
+    }
+  }
+
+  Widget _tile(BuildContext context, AdminDoc d, {int? dragIndex, List<AdminDoc>? docs}) {
     final hidden = d.data['visible'] == false;
     final unconfirmed = d.data['sample'] == true;
     final sub = _subtitle(context, d);
@@ -210,7 +236,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
                     fontWeight: FontWeight.w700, color: hidden ? AppColors.muted : AppColors.ink)),
           ),
           if (hidden) _Tag(context.tr('hidden'), AppColors.muted),
-          if (unconfirmed) _Tag(context.tr('unconfirmed'), AppColors.gold),
+          if (unconfirmed) _Tag(context.tr('unconfirmed'), AppColors.goldText),
         ]),
         subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           if (sub.isNotEmpty) Text(sub),
@@ -222,6 +248,22 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
         ]),
         onTap: () => _openEditor(context, d),
         trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+          // Single-tap alternative to dragging (WCAG 2.5.7).
+          if (dragIndex != null && docs != null) ...[
+            IconButton(
+              key: ValueKey('moveUp-${d.id}'),
+              tooltip: context.tr('moveUp'),
+              icon: const Icon(Icons.arrow_upward),
+              onPressed: dragIndex == 0 ? null : () => _reorder(context, docs, dragIndex, dragIndex - 1),
+            ),
+            IconButton(
+              key: ValueKey('moveDown-${d.id}'),
+              tooltip: context.tr('moveDown'),
+              icon: const Icon(Icons.arrow_downward),
+              onPressed:
+                  dragIndex == docs.length - 1 ? null : () => _reorder(context, docs, dragIndex, dragIndex + 1),
+            ),
+          ],
           if (def.hasVisible)
             IconButton(
               tooltip: context.tr(hidden ? 'show' : 'hide'),
@@ -259,7 +301,9 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     final ok = context.tr('orderSaved');
     final failed = context.tr('saveFailed', {'e': '{e}'});
     try {
-      await widget.repo.reorder(def.name, ids);
+      // Serving and departed priests share the `priests` collection: departed
+      // fathers are numbered from 1000 so the two lists never collide.
+      await widget.repo.reorder(def.name, ids, base: reorderBase(def));
       messenger.showSnackBar(SnackBar(content: Text(ok), duration: const Duration(seconds: 2)));
     } catch (e) {
       messenger.showSnackBar(SnackBar(content: Text(failed.replaceAll('{e}', '$e'))));
@@ -316,6 +360,9 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     ));
   }
 }
+
+/// First `order` value minus 10 for [def]'s reorder (BUG-13).
+int reorderBase(CollectionDef def) => def.id == 'departedPriests' ? 1000 : 0;
 
 class _Tag extends StatelessWidget {
   final String text;

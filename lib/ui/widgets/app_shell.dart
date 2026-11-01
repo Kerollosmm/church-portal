@@ -39,11 +39,20 @@ class AppShell extends ConsumerWidget {
     // Large system text makes the full link bar overflow: compare the width
     // in "unscaled text" units so big text switches to the compact bar.
     final textScale = MediaQuery.textScalerOf(context).scale(16) / 16;
-    final wide = MediaQuery.sizeOf(context).width / textScale.clamp(1.0, 3.0) >= 1024;
+    final width = MediaQuery.sizeOf(context).width;
+    final wide = width / textScale.clamp(1.0, 3.0) >= 1024;
+    // Ultra-narrow phones (< 360 px) or very large text: the highlighted
+    // Mass/Clinics buttons move to the drawer (they are already listed
+    // there) so the church title never overflows or clips.
+    final collapseHighlights = !wide && (width < 360 || textScale >= 1.5);
+    // Subpages on phones get a 1-tap Back-to-Home arrow: every in-app link is
+    // a sibling route (context.go), so there is nothing to pop, and installed
+    // PWAs have no browser back button.
+    final showBack = !wide && location != '/';
     final showAsk = ref.watch(assistantVisibleProvider);
     final features = ref.watch(featuresProvider);
-    final showMass = features.routeEnabled('/mass-schedule');
-    final showClinics = features.routeEnabled('/clinics');
+    final showMass = !collapseHighlights && features.routeEnabled('/mass-schedule');
+    final showClinics = !collapseHighlights && features.routeEnabled('/clinics');
     final settings = ref.watch(settingsProvider).value;
     // Full church name (admin-editable in settings); bundled l10n name until settings load.
     final fullName = settings == null ? context.tr('appName') : context.pick(settings.nameAr, settings.nameEn);
@@ -52,6 +61,16 @@ class AppShell extends ConsumerWidget {
       appBar: AppBar(
         toolbarHeight: 64,
         titleSpacing: wide ? 16 : 0,
+        leadingWidth: showBack ? 48 : null,
+        leading: showBack
+            ? IconButton(
+                key: const Key('backHome'),
+                tooltip: context.tr('backHome'),
+                // Mirrored automatically in RTL (matchTextDirection).
+                icon: const Icon(Icons.arrow_back_rounded),
+                onPressed: () => context.go('/'),
+              )
+            : null,
         title: InkWell(
           onTap: () => context.go('/'),
           child: Row(mainAxisSize: MainAxisSize.min, children: [
@@ -157,7 +176,7 @@ class _ServicesMenu extends ConsumerWidget {
           PopupMenuItem(
             value: i.path,
             child: Row(children: [
-              Icon(i.icon, color: AppColors.burgundy, size: 20),
+              Icon(i.icon, color: Theme.of(context).colorScheme.primary, size: 20),
               const SizedBox(width: 10),
               Text(context.tr(i.key)),
             ]),
@@ -186,19 +205,15 @@ class _HighlightButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bg = gold ? AppColors.gold : Colors.white;
-    final fg = gold ? AppColors.ink : AppColors.burgundy;
+    final fg = gold ? AppColors.ink : Theme.of(context).colorScheme.primary;
     if (compact) {
-      return Tooltip(
-        message: label,
-        child: Material(
-          color: bg,
-          shape: const CircleBorder(),
-          child: InkWell(
-            customBorder: const CircleBorder(),
-            onTap: onTap,
-            child: Padding(padding: const EdgeInsets.all(8), child: Icon(icon, color: fg, size: 20)),
-          ),
-        ),
+      // 48x48 dp minimum touch target (WCAG 2.5.8 / Material guideline).
+      return IconButton(
+        tooltip: label,
+        onPressed: onTap,
+        constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+        style: IconButton.styleFrom(backgroundColor: bg, foregroundColor: fg),
+        icon: Icon(icon, size: 20),
       );
     }
     return FilledButton.icon(

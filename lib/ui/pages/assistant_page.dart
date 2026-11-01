@@ -193,18 +193,23 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
                     for (final s in suggestions)
                       ActionChip(
                         label: Text(s),
-                        avatar: const Icon(Icons.lightbulb_outline, size: 18, color: AppColors.gold),
+                        avatar: const Icon(Icons.lightbulb_outline, size: 18, color: AppColors.goldText),
                         onPressed: () => _send(s),
                       ),
                   ]),
                 ),
               for (final m in _messages) _bubble(m),
               if (_busy)
-                const Padding(
-                  padding: EdgeInsets.all(12),
-                  child: Align(
-                    alignment: AlignmentDirectional.centerStart,
-                    child: SizedBox.square(dimension: 22, child: CircularProgressIndicator(strokeWidth: 2.4)),
+                // Announced by screen readers while the answer is on its way.
+                Semantics(
+                  liveRegion: true,
+                  label: context.tr('sending'),
+                  child: const Padding(
+                    padding: EdgeInsets.all(12),
+                    child: Align(
+                      alignment: AlignmentDirectional.centerStart,
+                      child: SizedBox.square(dimension: 22, child: CircularProgressIndicator(strokeWidth: 2.4)),
+                    ),
                   ),
                 ),
             ]),
@@ -236,6 +241,7 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
                 ),
                 const SizedBox(width: 8),
                 IconButton.filled(
+                  tooltip: context.tr('send'),
                   onPressed: _busy ? null : _send,
                   icon: const Icon(Icons.send_rounded),
                 ),
@@ -256,7 +262,7 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
           color: m.user
-              ? AppColors.burgundy
+              ? Theme.of(context).colorScheme.primary
               : m.error
                   ? const Color(0xFFFDECEA)
                   : Colors.white,

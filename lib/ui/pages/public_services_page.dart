@@ -32,7 +32,7 @@ class PublicServicesPage extends ConsumerWidget {
         Card(
           color: AppColors.parchment,
           child: ListTile(
-            leading: const Icon(Icons.local_hospital_rounded, color: AppColors.burgundy),
+            leading: Icon(Icons.local_hospital_rounded, color: Theme.of(context).colorScheme.primary),
             title: Text(context.tr('charityClinics'), style: const TextStyle(fontWeight: FontWeight.w800)),
             subtitle: Text(context.tr('dir_clinics')),
             trailing: const Icon(Icons.chevron_right),
@@ -55,14 +55,13 @@ class PublicServicesPage extends ConsumerWidget {
                         padding: const EdgeInsets.all(10),
                         decoration:
                             BoxDecoration(color: AppColors.parchment, borderRadius: BorderRadius.circular(12)),
-                        child: Icon(facilityIcon(f.type), color: AppColors.burgundy),
+                        child: Icon(facilityIcon(f.type), color: Theme.of(context).colorScheme.primary),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
-                        child: Text(context.pick(f.nameAr, f.nameEn),
-                            style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+                        child: TitleWithBadge(context.pick(f.nameAr, f.nameEn),
+                            sample: f.sample, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
                       ),
-                      if (f.sample) const SampleBadge(),
                     ]),
                     const SizedBox(height: 10),
                     Text(context.pick(f.descAr, f.descEn), style: const TextStyle(height: 1.7)),
@@ -73,7 +72,9 @@ class PublicServicesPage extends ConsumerWidget {
                       ActionChipButton(
                           icon: Icons.call,
                           label: '${context.tr('call')} ${f.phone}',
-                          color: AppColors.burgundy,
+                          semanticLabel:
+                              actionSemanticLabel('${context.tr('call')} ${f.phone}', context.pick(f.nameAr, f.nameEn)),
+                          color: Theme.of(context).colorScheme.primary,
                           onTap: () => callPhone(f.phone)),
                     ],
                   ]),

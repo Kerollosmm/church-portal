@@ -260,8 +260,10 @@ class DocEditorState extends State<DocEditor> {
       return true;
     } catch (e) {
       // The document was not saved: remove the images uploaded for it and
-      // keep the picked files so the admin can retry.
-      _deleteMedia(uploaded);
+      // keep the picked files so the admin can retry. A timeout is different:
+      // Firestore keeps the write queued (offline) and may still commit it,
+      // pointing at those images, so they are kept (BUG-13).
+      if (e is! TimeoutException) _deleteMedia(uploaded);
       _pending
         ..clear()
         ..addAll(pendingBefore);

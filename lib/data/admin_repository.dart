@@ -44,8 +44,8 @@ abstract class AdminBackend {
   Future<void> update(String collection, String id, Map<String, dynamic> data);
   Future<void> delete(String collection, String id);
 
-  /// Writes `order` = 10, 20, 30… following [ids].
-  Future<void> reorder(String collection, List<String> ids);
+  /// Writes `order` = [base] + 10, 20, 30… following [ids].
+  Future<void> reorder(String collection, List<String> ids, {int base = 0});
 
   /// admins/{uid}: owners only (enforced by firestore.rules).
   Future<void> setAdmin(String uid, {required String email, required String role});
@@ -152,10 +152,10 @@ class AdminRepository implements AdminBackend {
   Future<void> delete(String collection, String id) => db.collection(collection).doc(id).delete();
 
   @override
-  Future<void> reorder(String collection, List<String> ids) async {
+  Future<void> reorder(String collection, List<String> ids, {int base = 0}) async {
     final batch = db.batch();
     for (var i = 0; i < ids.length; i++) {
-      batch.update(db.collection(collection).doc(ids[i]), _stamp({'order': (i + 1) * 10}));
+      batch.update(db.collection(collection).doc(ids[i]), _stamp({'order': base + (i + 1) * 10}));
     }
     await batch.commit();
   }

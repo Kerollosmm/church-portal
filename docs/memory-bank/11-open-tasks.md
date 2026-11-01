@@ -1,7 +1,7 @@
 # 11 — Open tasks
 
 Tick items off (or delete them) in the PR that completes them, and add new ones as you discover them.
-Status as of 1 Nov 2026 (after PR #6).
+Status as of 1 Nov 2026 (after PR #7 and PR 2 of the review plan).
 
 ## Infrastructure & security (owner: developer)
 
@@ -57,14 +57,20 @@ Status as of 1 Nov 2026 (after PR #6).
       legal check on PDPL / cross-border transfer.
 - [ ] **Analytics** (Firebase Analytics or similar) with the KPI events (`answer_visible`, `clinic_call`,
       `clinic_whatsapp`, `call_church`, `open_maps`, `whatsapp_channel`, `contact_submit_success`, `lang_switch`).
-- [ ] SEO/static shell: JSON-LD `Church`, `sitemap.xml`, `robots.txt` (disallow `/admin`, `noindex`), Open Graph
-      image; optional pre-rendered "today's masses" snapshot.
+- [ ] SEO/static shell: JSON-LD `Church`, `noindex` meta for `/admin`; optional pre-rendered "today's masses"
+      snapshot. (`web/robots.txt` disallowing `/admin`, `web/sitemap.xml` and the Open Graph image
+      `web/og-image.jpg` shipped in PR #6.)
 - [ ] Performance budget (Lighthouse in CI), font subset/bundling (fonts are fetched at runtime now), deferred imports
       for `/admin` and the assistant.
 - [ ] Footer: phones, socials, "last updated".
 - [ ] Persist language choice on the device (currently only `?lang=en`).
-- [ ] Meetings "today" badge (FR-E-03); clinics/meetings freshness view in admin (FR-AD-06); "simulate now" next-mass
-      preview for editors (FR-AD-03); "open on site" links using `CollectionDef.publicPath` (unused).
+- [ ] Clinics/meetings freshness view in admin (FR-AD-06); "simulate now" next-mass preview for editors (FR-AD-03).
+      (Meetings "today" badge FR-E-03 and admin "Open on site" via `CollectionDef.publicPath` done in PR 2 of the
+      review plan.)
+- [ ] Manual accessibility pass with TalkBack / VoiceOver on a real phone (automated checks live in
+      `test/accessibility_test.dart`); the admin dashboard still uses fixed burgundy instead of the theme preset.
+- [ ] `FeaturesScreen` keeps a `late final` stream: give it the same `didUpdateWidget` re-subscribe as
+      Overview/Church info if the admin backend can ever change without a remount (not in BUG-18's scope).
 - [ ] PWA install prompt, floating *Live now* / *Doctors' times* buttons (v1.1).
 - [ ] v2 ideas: FCM push alerts, daily synaxarium line, `.ics` export, live-stream embed.
 - [ ] Consider an inbox "spam" status (business case) and owner-only settings (ADR-011) if the church asks.

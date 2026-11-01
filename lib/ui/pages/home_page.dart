@@ -176,7 +176,7 @@ class _Hero extends StatelessWidget {
     final hasImage = s != null && s.heroImageUrl.isNotEmpty;
     final f = features;
     final primary = Theme.of(context).colorScheme.primary;
-    final dark = Color.lerp(primary, Colors.black, 0.3)!;
+    final dark = primaryDarkOf(context);
     final title = s == null ? '' : context.pick(f.heroTitleAr, f.heroTitleEn);
     final subtitle = s == null ? '' : context.pick(f.heroSubtitleAr, f.heroSubtitleEn);
     return Container(
@@ -286,11 +286,12 @@ class _QuickContacts extends ConsumerWidget {
           padding: const EdgeInsets.all(16),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(children: [
-              const Icon(Icons.call_rounded, color: AppColors.burgundy),
+              Icon(Icons.call_rounded, color: Theme.of(context).colorScheme.primary),
               const SizedBox(width: 8),
-              Text(context.tr('phones'),
-                  style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 17, color: AppColors.burgundy)),
-              const Spacer(),
+              Expanded(
+                child: Text(context.tr('phones'),
+                    style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17, color: Theme.of(context).colorScheme.primary)),
+              ),
               if (s.sample) const SampleBadge(),
             ]),
             const SizedBox(height: 8),
@@ -311,10 +312,15 @@ class _QuickContacts extends ConsumerWidget {
 /// Phone line with call (+ WhatsApp for mobiles) buttons.
 class PhoneRow extends StatelessWidget {
   final PhoneEntry phone;
-  const PhoneRow({super.key, required this.phone});
+
+  /// Names the line in the buttons' tooltips / screen-reader labels
+  /// ("Call — Church office 0100…"); defaults to the phone's label + number.
+  final String? semanticLabel;
+  const PhoneRow({super.key, required this.phone, this.semanticLabel});
 
   @override
   Widget build(BuildContext context) {
+    final target = semanticLabel ?? '${context.pick(phone.labelAr, phone.labelEn)} ${phone.number}'.trim();
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(children: [
@@ -328,13 +334,13 @@ class PhoneRow extends StatelessWidget {
           ]),
         ),
         IconButton.filledTonal(
-          tooltip: context.tr('call'),
+          tooltip: actionSemanticLabel(context.tr('call'), target),
           onPressed: () => callPhone(phone.number),
-          icon: const Icon(Icons.call, color: AppColors.burgundy),
+          icon: Icon(Icons.call, color: Theme.of(context).colorScheme.primary),
         ),
         if (phone.isMobile)
           IconButton.filledTonal(
-            tooltip: context.tr('whatsapp'),
+            tooltip: actionSemanticLabel(context.tr('whatsapp'), target),
             onPressed: () => openWhatsApp(phone.number),
             icon: const Icon(Icons.chat_rounded, color: whatsappGreen),
           ),
@@ -367,13 +373,13 @@ class _MilestoneCard extends StatelessWidget {
                 label: context.pick(m.titleAr, m.titleEn),
                 placeholder: CircleAvatar(
                   backgroundColor: AppColors.gold.withValues(alpha: 0.18),
-                  child: Icon(_icon, color: AppColors.burgundy),
+                  child: Icon(_icon, color: Theme.of(context).colorScheme.primary),
                 ),
               ),
               const Spacer(),
               if (m.year != null)
                 Text(localDigits(context, '${m.year}'),
-                    style: const TextStyle(color: AppColors.gold, fontWeight: FontWeight.w800)),
+                    style: const TextStyle(color: AppColors.goldText, fontWeight: FontWeight.w800)),
             ]),
             const SizedBox(height: 10),
             Text(context.pick(m.titleAr, m.titleEn), style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),

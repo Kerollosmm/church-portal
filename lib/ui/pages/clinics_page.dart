@@ -69,15 +69,19 @@ class _ClinicsPageState extends ConsumerState<ClinicsPage> {
                   _chip(context.pick(e.value[0], e.value[1]), _specialty == e.key, () => setState(() => _specialty = e.key)),
               ]),
               const SizedBox(height: 8),
-              Row(children: [
-                Switch(
+              // One labelled control (>= 48 dp): tapping the text toggles it
+              // and screen readers announce the switch with its label.
+              MergeSemantics(
+                child: SwitchListTile(
+                  key: const Key('availableTodaySwitch'),
                   value: _todayOnly,
                   activeThumbColor: AppColors.success,
+                  contentPadding: EdgeInsets.zero,
+                  controlAffinity: ListTileControlAffinity.leading,
+                  title: Text(context.tr('availableToday'), style: const TextStyle(fontWeight: FontWeight.w700)),
                   onChanged: (v) => setState(() => _todayOnly = v),
                 ),
-                const SizedBox(width: 6),
-                Text(context.tr('availableToday'), style: const TextStyle(fontWeight: FontWeight.w700)),
-              ]),
+              ),
               const SizedBox(height: 12),
               if (list.isEmpty)
                 const EmptyState(icon: Icons.medical_services_outlined)
@@ -111,7 +115,7 @@ class _ClinicsPageState extends ConsumerState<ClinicsPage> {
         label: Text(label),
         selected: selected,
         showCheckmark: false,
-        labelStyle: TextStyle(color: selected ? Colors.white : AppColors.burgundy, fontWeight: FontWeight.w700),
+        labelStyle: TextStyle(color: selected ? Colors.white : Theme.of(context).colorScheme.primary, fontWeight: FontWeight.w700),
         onSelected: (_) => onTap(),
       );
 }
@@ -137,22 +141,18 @@ class ClinicCard extends StatelessWidget {
         ? context.tr('doctorTba', {'s': c.specialtyEn.isNotEmpty ? c.specialtyEn : c.specialtyAr})
         : c.doctorName;
     final office = fallbackOfficePhone;
+    final clinicName = context.pick(c.specialtyAr, c.specialtyEn);
     final days = c.days.map((d) => weekdayLabel(context, d)).join(context.isAr ? '، ' : ', ');
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Wrap(spacing: 8, runSpacing: 6, children: [
-            Pill(context.pick(c.specialtyAr, c.specialtyEn), color: AppColors.burgundy, icon: Icons.medical_services),
+            Pill(context.pick(c.specialtyAr, c.specialtyEn), color: Theme.of(context).colorScheme.primary, icon: Icons.medical_services),
             if (availableToday) Pill(context.tr('availableToday'), icon: Icons.check_circle),
           ]),
           const SizedBox(height: 10),
-          Row(children: [
-            Expanded(
-              child: Text(doctor, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
-            ),
-            if (c.sample) const SampleBadge(),
-          ]),
+          TitleWithBadge(doctor, sample: c.sample, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
           if (context.pick(c.degreeAr, c.degreeEn).isNotEmpty)
             Text(context.pick(c.degreeAr, c.degreeEn), style: const TextStyle(color: AppColors.muted, fontSize: 13)),
           const SizedBox(height: 8),
@@ -166,12 +166,14 @@ class ClinicCard extends StatelessWidget {
                   key: const Key('bookClinic'),
                   icon: Icons.call,
                   label: '${context.tr('call')} • ${context.tr('book')}',
-                  color: AppColors.burgundy,
+                  semanticLabel: actionSemanticLabel('${context.tr('call')} • ${context.tr('book')}', clinicName),
+                  color: Theme.of(context).colorScheme.primary,
                   onTap: () => callPhone(c.bookingPhone)),
             if (c.whatsapp.isNotEmpty)
               ActionChipButton(
                 icon: Icons.chat_rounded,
                 label: context.tr('whatsapp'),
+                semanticLabel: actionSemanticLabel(context.tr('whatsapp'), clinicName),
                 color: whatsappGreen,
                 onTap: () => openWhatsApp(c.whatsapp,
                     text: context.isAr
@@ -183,7 +185,8 @@ class ClinicCard extends StatelessWidget {
                   key: const Key('callChurchOffice'),
                   icon: Icons.call,
                   label: context.tr('callChurchOffice'),
-                  color: AppColors.burgundy,
+                  semanticLabel: actionSemanticLabel(context.tr('callChurchOffice'), clinicName),
+                  color: Theme.of(context).colorScheme.primary,
                   onTap: () => callPhone(office)),
           ]),
         ]),
