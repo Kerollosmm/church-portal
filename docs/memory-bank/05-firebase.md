@@ -126,6 +126,19 @@ App target settings:
 
 - `public: build/web` (output of `flutter build web --release`); ignores `firebase.json`, dotfiles, `node_modules`.
 - `cleanUrls: true`, `trailingSlash: false`, **rewrite `**` → `/index.html`** (SPA + path URL strategy).
+- SEO in `web/index.html` (PR 3 of the review plan): a **static** `<link rel="canonical"
+  href="https://maximos-domadios-church.web.app/">` — because every route is served from the same `index.html`, every
+  SPA route (`/mass-schedule`, `/clinics`…) declares `/` as its canonical, so search engines may fold subpages into the
+  home page (known caveat, accepted by the owner who chose to follow the plan; a per-route canonical needs a static
+  shell or JS that rewrites the tag). Plus a `<script type="application/ld+json">` **`Church`** block with only
+  verified facts mirrored from `settings/church` / `docs/CONTENT_SOURCES.md` and the display title: Arabic name
+  (`nameAr`), `alternateName` = the English display title "St. Maximus & Domadius and St. Moses the Black Church"
+  (`appName` in `l10n.dart`, ADR-018) and the full `nameEn`, `PostalAddress` (آخر شارع 45، العصافرة قبلي، قطاع المنتزه، الإسكندرية, EG), `GeoCoordinates`
+  31.260138, 30.01129, `telephone` +2035368888, `sameAs` Facebook/YouTube/Instagram/WhatsApp channel.
+  `test/phase3_test.dart` parses it and compares `name`, both `alternateName`s (`appName` / `nameEn`), the
+  `streetAddress` prefix of `addressAr`, `geo` and `sameAs` with the seed / l10n; `telephone`, the address type,
+  `addressCountry` and `url` are hard-coded in the test; `image` is not checked. If the church's facts change, update
+  the seed, `web/index.html` and the hard-coded test values together.
 - Headers: `**` → `Cache-Control: no-cache` (Flutter bundles are not content-hashed, so HTML/JS must revalidate),
   `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `X-Frame-Options: SAMEORIGIN`,
   `Strict-Transport-Security: max-age=31536000; includeSubDomains`, `Permissions-Policy: camera=(), microphone=(),

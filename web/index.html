@@ -22,6 +22,45 @@
   <meta name="twitter:title" content="كنيسة القديسين مكسيموس ودوماديوس والقوي الأنبا موسى الأسود">
   <meta name="twitter:image" content="https://maximos-domadios-church.web.app/og-image.jpg">
 
+  <!-- SEO (plan PR 3, 3.2). Static canonical: every SPA route (served via the
+       "**" -> index.html rewrite) declares "/" as canonical — known caveat, see
+       docs/memory-bank/05-firebase.md. JSON-LD: verified facts only
+       (docs/CONTENT_SOURCES.md, settings/church). -->
+  <link rel="canonical" href="https://maximos-domadios-church.web.app/">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Church",
+    "@id": "https://maximos-domadios-church.web.app/#church",
+    "name": "كنيسة القديسين مكسيموس ودوماديوس والقوي الأنبا موسى الأسود",
+    "alternateName": [
+      "St. Maximus & Domadius and St. Moses the Black Church",
+      "Church of Saints Maximus & Domadius and the Strong Anba Moussa the Black"
+    ],
+    "url": "https://maximos-domadios-church.web.app/",
+    "image": "https://maximos-domadios-church.web.app/og-image.jpg",
+    "telephone": "+2035368888",
+    "address": {
+      "@type": "PostalAddress",
+      "streetAddress": "آخر شارع 45، العصافرة قبلي، قطاع المنتزه",
+      "addressLocality": "الإسكندرية",
+      "addressRegion": "الإسكندرية",
+      "addressCountry": "EG"
+    },
+    "geo": {
+      "@type": "GeoCoordinates",
+      "latitude": 31.260138,
+      "longitude": 30.01129
+    },
+    "sameAs": [
+      "https://www.facebook.com/100070313048338",
+      "https://www.youtube.com/channel/UCJiZ4u0IiUbSvBnTrJnRZBA",
+      "https://www.instagram.com/maximos_coptic_church",
+      "https://whatsapp.com/channel/0029Vb6Kmbs2UPBMUcrlVB0g"
+    ]
+  }
+  </script>
+
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
   <meta name="apple-mobile-web-app-title" content="كنيسة مكسيموس ودوماديوس">
