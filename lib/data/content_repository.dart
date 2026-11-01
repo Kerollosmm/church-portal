@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 
+import '../domain/features.dart';
 import '../domain/models.dart';
 import 'seed_data.dart';
 
@@ -21,6 +22,9 @@ abstract class ContentRepository {
   ValueListenable<bool> get servingSeed;
 
   Stream<ChurchSettings> settings();
+
+  /// Section toggles + home layout (`settings/features`; defaults = all on).
+  Stream<FeatureSettings> features();
   Stream<List<Alert>> alerts();
   Stream<List<Season>> seasons();
   Stream<List<Liturgy>> liturgies();
@@ -51,6 +55,8 @@ class SeedRepository implements ContentRepository {
 
   @override
   Stream<ChurchSettings> settings() => _once(seed.settings);
+  @override
+  Stream<FeatureSettings> features() => _once(seed.features);
   @override
   Stream<List<Alert>> alerts() => _once(seed.alerts);
   @override
@@ -166,6 +172,15 @@ class FirestoreRepository implements ContentRepository {
         'settings',
         () => db.doc('settings/church').snapshots().map((d) => d.exists ? ChurchSettings.fromMap(normalizeDoc(d.data())) : seed.settings),
         seed.settings,
+      );
+  @override
+  Stream<FeatureSettings> features() => _guard(
+        'features',
+        () => db
+            .doc('settings/features')
+            .snapshots()
+            .map((d) => d.exists ? FeatureSettings.fromMap(normalizeDoc(d.data())) : seed.features),
+        seed.features,
       );
   @override
   Stream<List<Alert>> alerts() => _col('alerts', Alert.fromMap, seed.alerts);

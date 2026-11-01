@@ -4,6 +4,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../../core/l10n.dart';
 import '../../core/theme.dart';
+import '../../domain/features.dart';
 import '../../state/providers.dart';
 import 'coptic_cross.dart';
 
@@ -40,6 +41,9 @@ class AppShell extends ConsumerWidget {
     final textScale = MediaQuery.textScalerOf(context).scale(16) / 16;
     final wide = MediaQuery.sizeOf(context).width / textScale.clamp(1.0, 3.0) >= 1024;
     final showAsk = ref.watch(assistantVisibleProvider);
+    final features = ref.watch(featuresProvider);
+    final showMass = features.routeEnabled('/mass-schedule');
+    final showClinics = features.routeEnabled('/clinics');
     final settings = ref.watch(settingsProvider).value;
     final title = settings == null ? context.tr('appShort') : context.pick(settings.nameAr, settings.nameEn);
 
@@ -66,25 +70,28 @@ class AppShell extends ConsumerWidget {
         actions: [
           if (wide) ...[
             _navText(context, 'home', '/'),
-            _navText(context, 'about', '/about'),
-            _navText(context, 'education', '/church-education'),
+            if (features.routeEnabled('/about')) _navText(context, 'about', '/about'),
+            if (features.routeEnabled('/church-education')) _navText(context, 'education', '/church-education'),
             _ServicesMenu(showAsk: showAsk),
             const SizedBox(width: 8),
           ],
-          _HighlightButton(
-            label: context.tr('massSchedule'),
-            icon: Icons.access_time_filled_rounded,
-            onTap: () => context.go('/mass-schedule'),
-            compact: !wide,
-            gold: true,
-          ),
-          const SizedBox(width: 6),
-          _HighlightButton(
-            label: context.tr('clinics'),
-            icon: Icons.local_hospital_rounded,
-            onTap: () => context.go('/clinics'),
-            compact: !wide,
-          ),
+          if (showMass) ...[
+            _HighlightButton(
+              label: context.tr('massSchedule'),
+              icon: Icons.access_time_filled_rounded,
+              onTap: () => context.go('/mass-schedule'),
+              compact: !wide,
+              gold: true,
+            ),
+            const SizedBox(width: 6),
+          ],
+          if (showClinics)
+            _HighlightButton(
+              label: context.tr('clinics'),
+              icon: Icons.local_hospital_rounded,
+              onTap: () => context.go('/clinics'),
+              compact: !wide,
+            ),
           IconButton(
             tooltip: context.tr('language'),
             onPressed: () => ref.read(localeProvider.notifier).toggle(),
@@ -117,18 +124,24 @@ class AppShell extends ConsumerWidget {
   }
 }
 
-class _ServicesMenu extends StatelessWidget {
+/// Nav items whose section is switched on (the assistant also needs
+/// [showAsk]: App Check + `assistantEnabled`).
+List<NavItem> visibleNavItems(FeatureSettings f, {required bool showAsk}) =>
+    [for (final i in navItems) if (f.routeEnabled(i.path)) i, if (showAsk) askNavItem];
+
+class _ServicesMenu extends ConsumerWidget {
   final bool showAsk;
   const _ServicesMenu({required this.showAsk});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final f = ref.watch(featuresProvider);
     final items = [
-      navItems[4], // activities
-      navItems[5], // public services
-      navItems[7], // contact
+      for (final i in [navItems[4], navItems[5], navItems[7]]) // activities, public services, contact
+        if (f.routeEnabled(i.path)) i,
       if (showAsk) askNavItem,
     ];
+    if (items.isEmpty) return const SizedBox.shrink();
     return PopupMenuButton<String>(
       tooltip: context.tr('services'),
       onSelected: (p) => context.go(p),
@@ -194,14 +207,14 @@ class _HighlightButton extends StatelessWidget {
   }
 }
 
-class _AppDrawer extends StatelessWidget {
+class _AppDrawer extends ConsumerWidget {
   final String location;
   final bool showAsk;
   const _AppDrawer({required this.location, required this.showAsk});
 
   @override
-  Widget build(BuildContext context) {
-    final items = [...navItems, if (showAsk) askNavItem];
+  Widget build(BuildContext context, WidgetRef ref) {
+    final items = visibleNavItems(ref.watch(featuresProvider), showAsk: showAsk);
     return Drawer(
       backgroundColor: AppColors.cream,
       child: SafeArea(

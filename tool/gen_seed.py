@@ -48,9 +48,25 @@ settings = {
     "heroImageUrl": "",
     "historyAr": "كنيسة قبطية أرثوذكسية في آخر شارع 45 بالعصافرة قبلي، تتبع قطاع كنائس المنتزه بإيبارشية الإسكندرية تحت رعاية نيافة الأنبا بافلي أسقف قطاع المنتزه، وتحمل اسم القديسين مكسيموس ودوماديوس والقوي الأنبا موسى الأسود. تخدم الكنيسة الشعب منذ عام 1980 على الأقل، حين رُسم القمص تادرس لبيب كاهنًا لها، وهي اليوم من أكبر كنائس الإسكندرية إذ تخدم أكثر من 12 ألف أسرة. في 30 يونيو 2022 رسم نيافة الأنبا بافلي 200 شماس بالكنيسة، وفي 10 نوفمبر 2022 رقّى قداسة البابا تواضروس الثاني ثلاثة من آبائها إلى رتبة القمصية. وفي 25 يونيو 2025 نالت الكنيسة بركة أول زيارة رعوية لقداسة البابا، فألقى عظته الأسبوعية من السرادق المقام بالأرض المجاورة للكنيسة وصلى العشية مع الآباء والشعب. تقيم الكنيسة كل عام نهضة القديسين مكسيموس ودوماديوس في يناير ونهضة الأنبا موسى الأسود في نهاية يونيو، ومن أبرز خدماتها مشروع تطوير خدمة الأنبا أبرآم لرعاية الأسر المحتاجة.",
     "historyEn": "A Coptic Orthodox church at the end of Street 45 in El-Asafra Qebly, part of the Montaza sector of the Alexandria diocese under H.G. Anba Pavly, Bishop of the Montaza sector, dedicated to Saints Maximus and Domadius and the Strong Saint Moses the Black. The parish has served since at least 1980, when Fr Tadros Labib was ordained for it, and today it is one of Alexandria's largest churches, serving more than 12,000 families. On 30 June 2022 Anba Pavly ordained 200 deacons here, and on 10 November 2022 H.H. Pope Tawadros II raised three of its priests to the rank of hegumen. On 25 June 2025 the church received the Pope's first pastoral visit: he gave his weekly Wednesday sermon from the tent on the land next to the church and prayed Vespers with the clergy and congregation. Each year the church holds a revival for Saints Maximus and Domadius in January and one for Saint Moses the Black at the end of June; among its leading services is the Anba Abraam project caring for families in need.",
+    "bishopAr": "نيافة الأنبا بافلي أسقف قطاع المنتزه",
+    "bishopEn": "H.G. Anba Pavly, Bishop of the Montaza sector",
     "altars": [],
     "assistantEnabled": True,
     "sample": False
+  },
+  # Feature toggles + home layout (admin: "Sections & home page"). Every
+  # section starts switched on; clinics stay on with their items flagged
+  # as unconfirmed until the church publishes them.
+  "features": {
+    "sections": {k: True for k in [
+      "schedule", "meetings", "clinics", "services", "history", "milestones", "saints", "priests",
+      "departedPriests", "activities", "alerts", "contactInfo", "socials", "contactForm", "assistant",
+    ]},
+    "homeOrder": ["banner", "alerts", "nextMass", "quickContacts", "milestones", "directory", "map"],
+    "homeHidden": [],
+    "heroTitleAr": "", "heroTitleEn": "", "heroSubtitleAr": "", "heroSubtitleEn": "",
+    "bannerEnabled": False, "bannerAr": "", "bannerEn": "", "bannerLink": "",
+    "theme": "burgundy"
   }
 }
 
@@ -309,6 +325,20 @@ print("wrote", out, {k: len(v) for k, v in seed.items()})
 for col, ids in retired.items():
     clash = set(ids) & set(seed[col])
     assert not clash, f"retired ids still in seed: {col} {clash}"
+# Every id any seed has ever written (grows only). A document id dropped from
+# the seed must be listed in `retired`, so `--force` cleans it up; the seed
+# test checks known - current <= retired.
+kpath = os.path.join(os.path.dirname(__file__), "known_seed_ids.json")
+known = json.load(open(kpath, encoding="utf-8")) if os.path.exists(kpath) else {}
+for col, docs in seed.items():
+    known[col] = sorted(set(known.get(col, [])) | set(docs))
+for col in list(known):
+    gone = set(known[col]) - set(seed.get(col, {})) - set(retired.get(col, []))
+    assert not gone, f"ids removed from the seed but not retired: {col} {sorted(gone)}"
+with open(kpath, "w", encoding="utf-8") as f:
+    json.dump(dict(sorted(known.items())), f, ensure_ascii=False, indent=1)
+    f.write("\n")
+print("wrote", kpath)
 rout = os.path.join(os.path.dirname(__file__), "retired_seed_ids.json")
 with open(rout, "w", encoding="utf-8") as f:
     json.dump(retired, f, ensure_ascii=False, indent=1)

@@ -42,4 +42,25 @@ jobs:
       - name: Seed JSON matches its generator
         run: |
           python3 tool/gen_seed.py
-          git diff --exit-code -- assets/seed/seed.json tool/retired_seed_ids.json
+          git diff --exit-code -- assets/seed/seed.json tool/retired_seed_ids.json tool/known_seed_ids.json
+
+  firestore-rules:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: tool/rules_test/package-lock.json
+      - name: Install
+        working-directory: tool/rules_test
+        run: npm ci --no-audit --no-fund
+      - name: Firestore rules tests (emulator)
+        working-directory: tool/rules_test
+        run: npm test

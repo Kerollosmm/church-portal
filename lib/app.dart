@@ -3,6 +3,7 @@ import 'package:material_ui/material_ui.dart';
 
 import 'core/document_lang.dart';
 import 'core/theme.dart';
+import 'domain/features.dart';
 import 'router.dart';
 import 'state/providers.dart';
 
@@ -13,6 +14,8 @@ class ChurchPortalApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final locale = ref.watch(localeProvider);
     final router = ref.watch(routerProvider);
+    final themeKey = ref.watch(featuresProvider.select((f) => f.theme));
+    final primary = Color(ThemePresets.all[themeKey] ?? ThemePresets.all[ThemePresets.burgundy]!);
     setDocumentLanguage(locale.languageCode);
     return MaterialApp.router(
       title: locale.languageCode == 'ar' ? 'كنيسة القديسين مكسيموس ودوماديوس — العصافرة' : 'Asafra Church Portal',
@@ -20,7 +23,7 @@ class ChurchPortalApp extends ConsumerWidget {
       locale: locale,
       supportedLocales: const [Locale('ar'), Locale('en')],
       localizationsDelegates: GlobalMaterialLocalizations.delegates,
-      theme: buildTheme(locale),
+      theme: buildTheme(locale, primary: primary),
       routerConfig: router,
     );
   }

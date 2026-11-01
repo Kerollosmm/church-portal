@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter/services.dart' show rootBundle;
 
+import '../domain/features.dart';
 import '../domain/models.dart';
 
 /// Typed view over assets/seed/seed.json (bundled fallback content).
@@ -30,6 +31,7 @@ class SeedData {
       collection(name).entries.map((e) => f(e.key, e.value)).toList();
 
   ChurchSettings get settings => ChurchSettings.fromMap(collection('settings')['church'] ?? const {});
+  FeatureSettings get features => FeatureSettings.fromMap(collection('settings')['features']);
   List<Alert> get alerts => _list('alerts', Alert.fromMap);
   List<Season> get seasons => _list('seasons', Season.fromMap);
   List<Liturgy> get liturgies => _list('liturgies', Liturgy.fromMap);

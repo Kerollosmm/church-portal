@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:church_portal/data/seed_data.dart';
 import 'package:church_portal/domain/assistant_context.dart';
 import 'package:church_portal/domain/cairo_time.dart';
+import 'package:church_portal/domain/models.dart';
 import 'package:church_portal/domain/schedule.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -52,6 +53,9 @@ void main() {
     final tadros = seed.priests.firstWhere((p) => p.id == 'tadros');
     expect(tadros.departed, isTrue);
     expect(tadros.departedDate, '2022-02-10');
+    final maximus = seed.priests.firstWhere((p) => p.id == 'maximus');
+    expect(maximus.departed, isTrue);
+    expect(maximus.departedDate, '2021-02-04');
     final bemwa = seed.priests.firstWhere((p) => p.id == 'bemwa');
     expect(bemwa.rank, 'hegumen');
     expect(bemwa.sample, isFalse);
@@ -65,6 +69,36 @@ void main() {
         expect(seed.collection(e.key).containsKey(id), isFalse, reason: '${e.key}/$id');
       }
     }
+  });
+
+  test('every id ever seeded is either still seeded or retired (exhaustive)', () {
+    final known = jsonDecode(File('tool/known_seed_ids.json').readAsStringSync()) as Map<String, dynamic>;
+    final retired = jsonDecode(File('tool/retired_seed_ids.json').readAsStringSync()) as Map<String, dynamic>;
+    for (final c in seed.raw.keys) {
+      expect(known.containsKey(c), isTrue, reason: c);
+      expect((known[c] as List).toSet(), containsAll(seed.collection(c).keys), reason: c);
+    }
+    for (final e in known.entries) {
+      final gone = (e.value as List).toSet().difference(seed.collection(e.key).keys.toSet());
+      expect(((retired[e.key] as List?) ?? const []).toSet(), containsAll(gone), reason: e.key);
+    }
+  });
+
+  test('unconfirmed one-off services are tagged for the assistant', () {
+    final oneOff = Liturgy(
+        id: 'x', type: 'mass', nameAr: 'قداس خاص', nameEn: 'Special liturgy', start: '08:00', end: '10:00',
+        date: DateTime.utc(2027, 3, 1), sample: true);
+    final text = buildAssistantInstruction(
+      settings: seed.settings,
+      liturgies: [oneOff],
+      seasons: const [],
+      clinics: const [],
+      meetings: const [],
+      activities: const [],
+      facilities: const [],
+      now: CairoTime.at(2026, 11, 1, 600),
+    );
+    expect(text, contains('[UNCONFIRMED] 2027-03-01: Special liturgy'));
   });
 
   test('every liturgy has valid times and a weekday or date', () {

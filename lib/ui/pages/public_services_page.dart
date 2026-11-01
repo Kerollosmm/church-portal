@@ -23,10 +23,12 @@ class PublicServicesPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final showClinics = ref.watch(featuresProvider).routeEnabled('/clinics');
     return PageBody(
       header: PageHeader(
           title: context.tr('publicServices'), subtitle: context.tr('dir_services'), icon: Icons.volunteer_activism_rounded),
       children: [
+        if (showClinics)
         Card(
           color: AppColors.parchment,
           child: ListTile(

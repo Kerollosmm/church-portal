@@ -51,7 +51,9 @@ class EducationPage extends ConsumerWidget {
           builder: (context, meetings) {
             final sorted = [...meetings]..sort((a, b) {
                 final ia = stageOrder.indexOf(a.stage), ib = stageOrder.indexOf(b.stage);
-                return ia != ib ? ia.compareTo(ib) : a.start.compareTo(b.start);
+                if (ia != ib) return ia.compareTo(ib);
+                final o = a.order.compareTo(b.order);
+                return o != 0 ? o : a.start.compareTo(b.start);
               });
             final children = <Widget>[
               if (meetings.any((m) => m.sample)) const PendingConfirmationNote(),

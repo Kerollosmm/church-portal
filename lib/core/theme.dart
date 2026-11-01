@@ -16,10 +16,11 @@ class AppColors {
   static const alert = Color(0xFFB3261E);
 }
 
-ThemeData buildTheme(Locale locale) {
+/// [primary] is the admin-selected accent preset (settings/features.theme).
+ThemeData buildTheme(Locale locale, {Color primary = AppColors.burgundy}) {
   final scheme = ColorScheme.fromSeed(
-    seedColor: AppColors.burgundy,
-    primary: AppColors.burgundy,
+    seedColor: primary,
+    primary: primary,
     onPrimary: Colors.white,
     secondary: AppColors.gold,
     onSecondary: AppColors.ink,
@@ -32,7 +33,7 @@ ThemeData buildTheme(Locale locale) {
   return base.copyWith(
     textTheme: text,
     appBarTheme: AppBarTheme(
-      backgroundColor: AppColors.burgundy,
+      backgroundColor: primary,
       foregroundColor: Colors.white,
       elevation: 0,
       centerTitle: false,
@@ -49,7 +50,7 @@ ThemeData buildTheme(Locale locale) {
     ),
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
-        backgroundColor: AppColors.burgundy,
+        backgroundColor: primary,
         foregroundColor: Colors.white,
         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
         textStyle: GoogleFonts.cairo(fontWeight: FontWeight.w700, fontSize: 15),
@@ -58,15 +59,15 @@ ThemeData buildTheme(Locale locale) {
     ),
     outlinedButtonTheme: OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(
-        foregroundColor: AppColors.burgundy,
-        side: const BorderSide(color: AppColors.burgundy),
+        foregroundColor: primary,
+        side: BorderSide(color: primary),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         textStyle: GoogleFonts.cairo(fontWeight: FontWeight.w600),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
     ),
     chipTheme: base.chipTheme.copyWith(
-      selectedColor: AppColors.burgundy,
+      selectedColor: primary,
       backgroundColor: Colors.white,
       labelStyle: GoogleFonts.cairo(fontWeight: FontWeight.w600),
       side: BorderSide(color: AppColors.gold.withValues(alpha: 0.5)),
@@ -81,7 +82,7 @@ ThemeData buildTheme(Locale locale) {
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: AppColors.burgundy, width: 1.6),
+        borderSide: BorderSide(color: primary, width: 1.6),
       ),
     ),
     dividerTheme: DividerThemeData(color: AppColors.gold.withValues(alpha: 0.3)),

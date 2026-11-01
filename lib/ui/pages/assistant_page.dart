@@ -76,6 +76,7 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
         activities: ref.read(activitiesProvider).value ?? const [],
         facilities: ref.read(facilitiesProvider).value ?? const [],
         now: CairoTime.now(),
+        features: ref.read(featuresProvider),
       );
 
   /// Reuses the chat while the grounding (church data + Cairo date) is

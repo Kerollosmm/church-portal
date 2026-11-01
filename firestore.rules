@@ -1,33 +1,261 @@
 rules_version = '2';
 
 // Church portal — Firestore security rules.
-// * Public content: anyone can read; only admins (admins/{uid} exists) write.
-// * contact_messages: public create-only with strict validation; nobody can
-//   read/update/delete from the client (read them in the Firebase console or
-//   with the Admin SDK).
-// * admins: a signed-in user may read only their own admin doc (used by the
-//   app to show the editor); admin docs are managed from the console.
+// * Public content (incl. settings/church and settings/features): anyone can
+//   read; only admins (admins/{uid} exists) write. Every write is validated:
+//   a per-collection key allow-list (creates may use only these keys; updates
+//   may only change these keys, so legacy fields never block an edit) plus
+//   type/size checks on the stored document.
+// * contact_messages: public create-only with strict validation; admins can
+//   read them, mark them handled and delete them.
+// * admins: a signed-in user reads their own doc; owners read all and add,
+//   re-role or remove OTHER admins (never themselves, so an owner always
+//   remains). Roles: 'owner' | 'editor' (missing role = editor).
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    function isAdmin() {
-      return request.auth != null
-        && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    function signedIn() {
+      return request.auth != null;
     }
 
-    function isPublicContent(col) {
-      return col in ['settings', 'alerts', 'seasons', 'liturgies', 'meetings', 'activities',
-                     'clinics', 'facilities', 'priests', 'milestones', 'saints'];
+    function isAdmin() {
+      return signedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    function isOwner() {
+      return isAdmin()
+        && get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.get('role', '') == 'owner';
+    }
+
+    // ---- field helpers (absent or null is accepted for optional fields) ----
+    function optString(d, k, max) {
+      return !(k in d) || d[k] == null || (d[k] is string && d[k].size() <= max);
+    }
+    function reqString(d, k, max) {
+      return k in d && d[k] is string && d[k].size() >= 1 && d[k].size() <= max;
+    }
+    function optBool(d, k) {
+      return !(k in d) || d[k] is bool;
+    }
+    function optInt(d, k, lo, hi) {
+      return !(k in d) || d[k] == null || (d[k] is int && d[k] >= lo && d[k] <= hi);
+    }
+    function optNumber(d, k, lo, hi) {
+      return !(k in d) || d[k] == null || (d[k] is number && d[k] >= lo && d[k] <= hi);
+    }
+    function optTimestamp(d, k) {
+      return !(k in d) || d[k] == null || d[k] is timestamp;
+    }
+    function optTime(d, k) {
+      return !(k in d) || d[k] == null || d[k] == '' || (d[k] is string && d[k].matches('^([01][0-9]|2[0-3]):[0-5][0-9]$'));
+    }
+    function optList(d, k, max) {
+      return !(k in d) || d[k] == null || (d[k] is list && d[k].size() <= max);
+    }
+    function optIn(d, k, values) {
+      return !(k in d) || d[k] == null || d[k] in values;
+    }
+
+    // Shared by every content document.
+    function common(d) {
+      return d.keys().size() <= 60
+        && optBool(d, 'visible') && optBool(d, 'sample')
+        && optInt(d, 'order', -100000, 100000)
+        && optTimestamp(d, 'updatedAt') && optString(d, 'updatedBy', 254);
+    }
+    function meta() {
+      return ['visible', 'sample', 'order', 'updatedAt', 'updatedBy'];
+    }
+
+    // Creates may use only [allowed]; updates may only change [allowed].
+    function keysAllowed(allowed) {
+      return resource == null
+        ? request.resource.data.keys().hasOnly(allowed)
+        : request.resource.data.diff(resource.data).affectedKeys().hasOnly(allowed);
+    }
+
+    // ------------------------------- content -------------------------------
+    function validContent(col, d) {
+      return common(d) && (
+        (col == 'alerts' && validAlert(d))
+        || (col == 'seasons' && validSeason(d))
+        || (col == 'liturgies' && validLiturgy(d))
+        || (col == 'meetings' && validMeeting(d))
+        || (col == 'activities' && validActivity(d))
+        || (col == 'clinics' && validClinic(d))
+        || (col == 'facilities' && validFacility(d))
+        || (col == 'priests' && validPriest(d))
+        || (col == 'milestones' && validMilestone(d))
+        || (col == 'saints' && validSaint(d))
+      );
+    }
+
+    function validAlert(d) {
+      return keysAllowed(['titleAr', 'titleEn', 'bodyAr', 'bodyEn', 'active', 'startsAt', 'endsAt', 'priority', 'link'].concat(meta()))
+        && reqString(d, 'titleAr', 300) && optString(d, 'titleEn', 300)
+        && optString(d, 'bodyAr', 2000) && optString(d, 'bodyEn', 2000)
+        && optBool(d, 'active') && optTimestamp(d, 'startsAt') && optTimestamp(d, 'endsAt')
+        && optInt(d, 'priority', 0, 1000) && optString(d, 'link', 500);
+    }
+
+    function validSeason(d) {
+      return keysAllowed(['key', 'nameAr', 'nameEn', 'startsAt', 'endsAt', 'active'].concat(meta()))
+        && d.key in ['holy_week', 'pascha', 'nativity', 'revival_maximus', 'revival_moses', 'summer']
+        && reqString(d, 'nameAr', 300) && optString(d, 'nameEn', 300)
+        && optTimestamp(d, 'startsAt') && optTimestamp(d, 'endsAt') && optBool(d, 'active');
+    }
+
+    function validLiturgy(d) {
+      return keysAllowed(['type', 'nameAr', 'nameEn', 'weekday', 'date', 'start', 'end', 'placeAr', 'placeEn',
+                          'audienceAr', 'audienceEn', 'seasonKey'].concat(meta()))
+        && optIn(d, 'type', ['mass', 'vespers', 'praise', 'other'])
+        && reqString(d, 'nameAr', 300) && optString(d, 'nameEn', 300)
+        && optInt(d, 'weekday', 1, 7) && optTimestamp(d, 'date')
+        && 'start' in d && d.start is string && optTime(d, 'start') && optTime(d, 'end')
+        && optString(d, 'placeAr', 300) && optString(d, 'placeEn', 300)
+        && optString(d, 'audienceAr', 300) && optString(d, 'audienceEn', 300)
+        && optIn(d, 'seasonKey', ['holy_week', 'pascha', 'nativity', 'revival_maximus', 'revival_moses', 'summer']);
+    }
+
+    function validMeeting(d) {
+      return keysAllowed(['stage', 'nameAr', 'nameEn', 'weekday', 'start', 'end', 'hallAr', 'hallEn',
+                          'facebookUrl', 'whatsappUrl', 'notes'].concat(meta()))
+        && reqString(d, 'stage', 40) && reqString(d, 'nameAr', 300) && optString(d, 'nameEn', 300)
+        && optInt(d, 'weekday', 1, 7) && optTime(d, 'start') && optTime(d, 'end')
+        && optString(d, 'hallAr', 300) && optString(d, 'hallEn', 300)
+        && optString(d, 'facebookUrl', 500) && optString(d, 'whatsappUrl', 500) && optString(d, 'notes', 300);
+    }
+
+    function validActivity(d) {
+      return keysAllowed(['category', 'titleAr', 'titleEn', 'descAr', 'descEn', 'scheduleAr', 'scheduleEn',
+                          'ageRange', 'contactPhone', 'link'].concat(meta()))
+        && optString(d, 'category', 40) && reqString(d, 'titleAr', 300) && optString(d, 'titleEn', 300)
+        && optString(d, 'descAr', 2000) && optString(d, 'descEn', 2000)
+        && optString(d, 'scheduleAr', 300) && optString(d, 'scheduleEn', 300)
+        && optString(d, 'ageRange', 60) && optString(d, 'contactPhone', 20) && optString(d, 'link', 500);
+    }
+
+    function validClinic(d) {
+      return keysAllowed(['specialty', 'specialtyAr', 'specialtyEn', 'doctorName', 'degreeAr', 'degreeEn', 'days',
+                          'start', 'end', 'bookingPhone', 'whatsapp', 'active'].concat(meta()))
+        && reqString(d, 'specialty', 40) && reqString(d, 'specialtyAr', 300) && optString(d, 'specialtyEn', 300)
+        && reqString(d, 'doctorName', 300) && optString(d, 'degreeAr', 300) && optString(d, 'degreeEn', 300)
+        && optList(d, 'days', 7) && optTime(d, 'start') && optTime(d, 'end')
+        && optString(d, 'bookingPhone', 20) && optString(d, 'whatsapp', 20) && optBool(d, 'active');
+    }
+
+    function validFacility(d) {
+      return keysAllowed(['type', 'nameAr', 'nameEn', 'descAr', 'descEn', 'phone', 'hoursAr', 'hoursEn'].concat(meta()))
+        && optString(d, 'type', 40) && reqString(d, 'nameAr', 300) && optString(d, 'nameEn', 300)
+        && optString(d, 'descAr', 2000) && optString(d, 'descEn', 2000) && optString(d, 'phone', 20)
+        && optString(d, 'hoursAr', 300) && optString(d, 'hoursEn', 300);
+    }
+
+    function validPriest(d) {
+      return keysAllowed(['name', 'nameEn', 'photoUrl', 'rank', 'ordinationDate', 'hegumenDate', 'departedDate',
+                          'status', 'bioAr', 'bioEn'].concat(meta()))
+        && reqString(d, 'name', 300) && optString(d, 'nameEn', 300) && optString(d, 'photoUrl', 500)
+        && optIn(d, 'rank', ['hegumen', 'priest']) && optIn(d, 'status', ['serving', 'departed'])
+        && optString(d, 'ordinationDate', 10) && optString(d, 'hegumenDate', 10) && optString(d, 'departedDate', 10)
+        && optString(d, 'bioAr', 5000) && optString(d, 'bioEn', 5000);
+    }
+
+    function validMilestone(d) {
+      return keysAllowed(['titleAr', 'titleEn', 'descAr', 'descEn', 'year', 'icon'].concat(meta()))
+        && reqString(d, 'titleAr', 300) && optString(d, 'titleEn', 300)
+        && optString(d, 'descAr', 2000) && optString(d, 'descEn', 2000)
+        && optInt(d, 'year', 1, 2200) && optString(d, 'icon', 40);
+    }
+
+    function validSaint(d) {
+      return keysAllowed(['nameAr', 'nameEn', 'bioAr', 'bioEn', 'feastCopticAr', 'feastCopticEn', 'feastGregorian',
+                          'feastGregorianAr'].concat(meta()))
+        && reqString(d, 'nameAr', 300) && optString(d, 'nameEn', 300)
+        && optString(d, 'bioAr', 5000) && optString(d, 'bioEn', 5000)
+        && optString(d, 'feastCopticAr', 300) && optString(d, 'feastCopticEn', 300)
+        && optString(d, 'feastGregorian', 300) && optString(d, 'feastGregorianAr', 300);
     }
 
     match /{col}/{docId} {
-      allow read: if isPublicContent(col);
-      allow write: if isPublicContent(col) && isAdmin();
+      allow read: if col in ['alerts', 'seasons', 'liturgies', 'meetings', 'activities',
+                             'clinics', 'facilities', 'priests', 'milestones', 'saints'];
+      allow create, update: if isAdmin() && validContent(col, request.resource.data);
+      allow delete: if isAdmin() && col in ['alerts', 'seasons', 'liturgies', 'meetings', 'activities',
+                                            'clinics', 'facilities', 'priests', 'milestones', 'saints'];
     }
 
+    // ------------------------------- settings -------------------------------
+    match /settings/{docId} {
+      allow read: if true;
+      allow create, update: if isAdmin()
+        && ((docId == 'church' && validChurch(request.resource.data))
+            || (docId == 'features' && validFeatures(request.resource.data)));
+      allow delete: if false;
+    }
+
+    function validChurch(d) {
+      return keysAllowed(['nameAr', 'nameEn', 'addressAr', 'addressEn', 'transportAr', 'transportEn', 'lat', 'lng',
+                          'coordinatesApproximate', 'mapsUrl', 'mapsQuery', 'phones', 'whatsapp', 'whatsappChannel',
+                          'facebook', 'youtube', 'instagram', 'verseAr', 'verseEn', 'verseRef', 'verseRefAr',
+                          'heroImageUrl', 'historyAr', 'historyEn', 'bishopAr', 'bishopEn', 'altars',
+                          'assistantEnabled', 'sample', 'updatedAt', 'updatedBy'])
+        && d.keys().size() <= 60
+        && reqString(d, 'nameAr', 300) && optString(d, 'nameEn', 300)
+        && optString(d, 'addressAr', 300) && optString(d, 'addressEn', 300)
+        && optString(d, 'transportAr', 2000) && optString(d, 'transportEn', 2000)
+        && optNumber(d, 'lat', -90, 90) && optNumber(d, 'lng', -180, 180)
+        && optString(d, 'mapsUrl', 500) && optString(d, 'mapsQuery', 200)
+        && optList(d, 'phones', 20) && optList(d, 'altars', 20)
+        && optString(d, 'whatsapp', 20) && optString(d, 'whatsappChannel', 500) && optString(d, 'facebook', 500)
+        && optString(d, 'youtube', 500) && optString(d, 'instagram', 500)
+        && optString(d, 'verseAr', 300) && optString(d, 'verseEn', 300)
+        && optString(d, 'verseRef', 60) && optString(d, 'verseRefAr', 60) && optString(d, 'heroImageUrl', 500)
+        && optString(d, 'historyAr', 8000) && optString(d, 'historyEn', 8000)
+        && optString(d, 'bishopAr', 300) && optString(d, 'bishopEn', 300)
+        && optBool(d, 'assistantEnabled') && optBool(d, 'sample')
+        && optTimestamp(d, 'updatedAt') && optString(d, 'updatedBy', 254);
+    }
+
+    function sectionKeys() {
+      return ['schedule', 'meetings', 'clinics', 'services', 'history', 'milestones', 'saints', 'priests',
+              'departedPriests', 'activities', 'alerts', 'contactInfo', 'socials', 'contactForm', 'assistant'];
+    }
+
+    function validSections(s) {
+      return s is map && s.keys().hasOnly(sectionKeys())
+        && optBool(s, 'schedule') && optBool(s, 'meetings') && optBool(s, 'clinics') && optBool(s, 'services')
+        && optBool(s, 'history') && optBool(s, 'milestones') && optBool(s, 'saints') && optBool(s, 'priests')
+        && optBool(s, 'departedPriests') && optBool(s, 'activities') && optBool(s, 'alerts')
+        && optBool(s, 'contactInfo') && optBool(s, 'socials') && optBool(s, 'contactForm') && optBool(s, 'assistant');
+    }
+
+    function validFeatures(d) {
+      return d.keys().hasOnly(['sections', 'homeOrder', 'homeHidden', 'heroTitleAr', 'heroTitleEn', 'heroSubtitleAr',
+                               'heroSubtitleEn', 'bannerEnabled', 'bannerAr', 'bannerEn', 'bannerLink', 'theme',
+                               'updatedAt', 'updatedBy'])
+        && (!('sections' in d) || validSections(d.sections))
+        && (!('homeOrder' in d) || (d.homeOrder is list && d.homeOrder.size() <= 7
+              && d.homeOrder.hasOnly(['banner', 'alerts', 'nextMass', 'quickContacts', 'milestones', 'directory', 'map'])))
+        && (!('homeHidden' in d) || (d.homeHidden is list && d.homeHidden.size() <= 7
+              && d.homeHidden.hasOnly(['banner', 'alerts', 'nextMass', 'quickContacts', 'milestones', 'directory', 'map'])))
+        && optString(d, 'heroTitleAr', 200) && optString(d, 'heroTitleEn', 200)
+        && optString(d, 'heroSubtitleAr', 300) && optString(d, 'heroSubtitleEn', 300)
+        && optBool(d, 'bannerEnabled') && optString(d, 'bannerAr', 500) && optString(d, 'bannerEn', 500)
+        && optString(d, 'bannerLink', 500)
+        && optIn(d, 'theme', ['burgundy', 'navy', 'green', 'brown', 'purple'])
+        && optTimestamp(d, 'updatedAt') && optString(d, 'updatedBy', 254);
+    }
+
+    // -------------------------------- admins --------------------------------
     match /admins/{uid} {
-      allow read: if request.auth != null && request.auth.uid == uid;
-      allow write: if false; // manage from the Firebase console / Admin SDK
+      allow read: if signedIn() && (request.auth.uid == uid || isOwner());
+      // Owners manage OTHER admins only: an owner can never demote or remove
+      // themselves, so the project always keeps at least one owner.
+      allow create, update: if isOwner() && request.auth.uid != uid
+        && request.resource.data.keys().hasOnly(['email', 'role', 'updatedAt', 'updatedBy'])
+        && reqString(request.resource.data, 'email', 254)
+        && request.resource.data.role in ['owner', 'editor'];
+      allow delete: if isOwner() && request.auth.uid != uid;
     }
 
     // Server-side abuse control: every contact message must be written in the
@@ -42,7 +270,12 @@ service cloud.firestore {
     }
 
     match /contact_messages/{id} {
-      allow read, update, delete: if false;
+      allow read, delete: if isAdmin();
+      // Admins only toggle the status (new <-> handled).
+      allow update: if isAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt', 'updatedBy'])
+        && request.resource.data.status in ['new', 'handled']
+        && optTimestamp(request.resource.data, 'updatedAt') && optString(request.resource.data, 'updatedBy', 254);
       allow create: if validContactMessage(request.resource.data)
         && getAfter(/databases/$(database)/documents/meta/contact_rate).data.lastAt == request.time;
     }

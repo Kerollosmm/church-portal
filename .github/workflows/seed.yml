@@ -12,8 +12,16 @@ on:
         description: "Optional admin email: finds/creates the Auth user, makes it owner, and emails a set-password link"
         required: false
         default: ""
+      only:
+        description: "Optional comma-separated collections (e.g. settings or clinics,meetings). Empty = all"
+        required: false
+        default: ""
+      fill_missing:
+        description: "Existing docs: add only the fields they lack (never changes existing values)"
+        type: boolean
+        default: false
       force:
-        description: "Overwrite existing documents"
+        description: "Overwrite existing documents (DANGER: replaces edits made in /admin)"
         type: boolean
         default: false
 
@@ -36,12 +44,19 @@ jobs:
       - name: Seed
         env:
           IN_FORCE: ${{ inputs.force }}
+          IN_FILL: ${{ inputs.fill_missing }}
+          IN_ONLY: ${{ inputs.only }}
           IN_ADMIN: ${{ inputs.admin }}
           IN_ADMIN_EMAIL: ${{ inputs.admin_email }}
         run: |
           # Inputs are passed via env and quoted (no shell interpolation of user input).
           set -- --project asafra-church-portal
           if [ "$IN_FORCE" = "true" ]; then set -- "$@" --force; fi
+          if [ "$IN_FILL" = "true" ]; then set -- "$@" --fill-missing; fi
+          if [ -n "$IN_ONLY" ]; then
+            case "$IN_ONLY" in *[!a-z_,]*) echo "invalid 'only' value"; exit 1;; esac
+            set -- "$@" --only "$IN_ONLY"
+          fi
           if [ -n "$IN_ADMIN" ]; then set -- "$@" --admin "$IN_ADMIN"; fi
           if [ -n "$IN_ADMIN_EMAIL" ]; then set -- "$@" --admin-email "$IN_ADMIN_EMAIL"; fi
           node tool/seed_firestore.js "$@"
