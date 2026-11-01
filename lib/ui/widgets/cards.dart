@@ -139,6 +139,7 @@ class NextMassCard extends ConsumerWidget {
         padding: const EdgeInsets.only(bottom: 8),
         child: Pill(
           context.tr('seasonActive', {'s': r.activeSeasons.map((s) => context.pick(s.nameAr, s.nameEn)).join('، ')}),
+          maxLines: null, // every active season name must stay readable
           color: Theme.of(context).colorScheme.primary,
           icon: Icons.auto_awesome,
         ),

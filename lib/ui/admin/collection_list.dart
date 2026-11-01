@@ -205,9 +205,9 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
   }
 
   /// Opens [CollectionDef.publicPath] in a new tab on web (the dashboard stays
-  /// open); elsewhere navigates to it in the app.
+  /// open), in the dashboard's language; elsewhere navigates to it in the app.
   void _openOnSite(BuildContext context) {
-    final path = def.publicPath.isEmpty ? '/' : def.publicPath;
+    final path = publicPathFor(def, english: !context.isAr);
     if (kIsWeb) {
       openUrl(Uri.base.resolve(path).toString());
     } else {
@@ -220,6 +220,24 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     final unconfirmed = d.data['sample'] == true;
     final sub = _subtitle(context, d);
     final updated = d.updatedAt;
+    final narrow = MediaQuery.sizeOf(context).width < 600;
+    // Single-tap alternative to dragging (WCAG 2.5.7).
+    final moves = <Widget>[
+      if (dragIndex != null && docs != null) ...[
+        IconButton(
+          key: ValueKey('moveUp-${d.id}'),
+          tooltip: context.tr('moveUp'),
+          icon: const Icon(Icons.arrow_upward),
+          onPressed: dragIndex == 0 ? null : () => _reorder(context, docs, dragIndex, dragIndex - 1),
+        ),
+        IconButton(
+          key: ValueKey('moveDown-${d.id}'),
+          tooltip: context.tr('moveDown'),
+          icon: const Icon(Icons.arrow_downward),
+          onPressed: dragIndex == docs.length - 1 ? null : () => _reorder(context, docs, dragIndex, dragIndex + 1),
+        ),
+      ],
+    ];
     return Card(
       key: ValueKey(d.id),
       margin: const EdgeInsets.only(bottom: 8),
@@ -245,25 +263,12 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
               context.tr('updatedBy', {'t': fmtDateTime(updated), 'u': d.updatedBy.isEmpty ? '—' : d.updatedBy}),
               style: const TextStyle(fontSize: 11, color: AppColors.muted),
             ),
+          // Phones: the move buttons get their own row so the title keeps its width.
+          if (narrow && moves.isNotEmpty) Row(mainAxisSize: MainAxisSize.min, children: moves),
         ]),
         onTap: () => _openEditor(context, d),
         trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-          // Single-tap alternative to dragging (WCAG 2.5.7).
-          if (dragIndex != null && docs != null) ...[
-            IconButton(
-              key: ValueKey('moveUp-${d.id}'),
-              tooltip: context.tr('moveUp'),
-              icon: const Icon(Icons.arrow_upward),
-              onPressed: dragIndex == 0 ? null : () => _reorder(context, docs, dragIndex, dragIndex - 1),
-            ),
-            IconButton(
-              key: ValueKey('moveDown-${d.id}'),
-              tooltip: context.tr('moveDown'),
-              icon: const Icon(Icons.arrow_downward),
-              onPressed:
-                  dragIndex == docs.length - 1 ? null : () => _reorder(context, docs, dragIndex, dragIndex + 1),
-            ),
-          ],
+          if (!narrow) ...moves,
           if (def.hasVisible)
             IconButton(
               tooltip: context.tr(hidden ? 'show' : 'hide'),
@@ -359,6 +364,12 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
       ),
     ));
   }
+}
+
+/// [def]'s public page, with `?lang=en` when the dashboard is in English.
+String publicPathFor(CollectionDef def, {required bool english}) {
+  final path = def.publicPath.isEmpty ? '/' : def.publicPath;
+  return english ? Uri.parse(path).replace(queryParameters: {'lang': 'en'}).toString() : path;
 }
 
 /// First `order` value minus 10 for [def]'s reorder (BUG-13).

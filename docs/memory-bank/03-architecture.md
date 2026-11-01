@@ -190,8 +190,9 @@ flowchart LR
   (home/about/education), a **Services** popup (activities, public services, contact, ask), gold **Mass times** and
   white **Clinics** highlight buttons, language toggle (`EN` / `ع`).
 - Narrow: compact 48×48 dp Mass/Clinics `IconButton`s (`_HighlightButton`), language toggle, ☰ opens an **end
-  drawer** (`_AppDrawer`). Below **360 px** or at **≥ 150 % text** the highlight buttons are dropped from the bar
-  (they are in the drawer) so the title never clips. Phone subpages (`location != '/'`) get a leading
+  drawer** (`_AppDrawer`). Below **360 px**, at **≥ 150 % text**, or on a subpage below **400 px** (the Back arrow
+  takes another 48 dp) the highlight buttons are dropped from the bar (they are in the drawer) so the title keeps a
+  readable width. Phone subpages (`location != '/'`) get a leading
   **Back-to-Home** arrow (`Key('backHome')`, `Icons.arrow_back_rounded`, mirrored in RTL) — every in-app link is a
   sibling `context.go`, so there is nothing to pop, and installed PWAs have no browser back button.
 - `PageBody` (common.dart) = width-capped (`kMaxContentWidth = 1100`) scroll view + `Footer`.
@@ -224,7 +225,8 @@ flowchart LR
   green, brown, purple; `ChurchPortalApp` watches `featuresProvider.select((f) => f.theme)`.
 - Brand colours for social buttons in `cards.dart`: `whatsappGreen` `#157338`, `facebookBlue` `#145DBF` (darkened
   so white button text is ≥ 4.5:1), `youtubeRed`, `instagramPink`.
-- Accessibility helpers: `TitleWithBadge` (title + `SampleBadge` in a `Wrap`), `Pill` text wraps/ellipsizes,
+- Accessibility helpers: `TitleWithBadge` (title + `SampleBadge` in a `Wrap`), `Pill` text wraps (2 lines + ellipsis
+  by default; `maxLines: null` for the next-mass season list, which must stay complete),
   `ActionChipButton.semanticLabel` / `actionSemanticLabel(action, target)` ("Call — Dental clinic"),
   `SkeletonBox` is static under `MediaQuery.disableAnimationsOf`.
 - `CopticCross` widget is the logo (custom painter).
@@ -243,7 +245,7 @@ flowchart LR
 | Where | Breakpoint |
 |---|---|
 | App bar full links | `width / textScale ≥ 1024` |
-| App bar highlight buttons moved to the drawer | `width < 360` or text scale ≥ 1.5 |
+| App bar highlight buttons moved to the drawer | `width < 360`, text scale ≥ 1.5, or subpage and `width < 400` |
 | Alert "Learn more" under the text instead of beside it | `width < 600` or text scale ≥ 1.5 |
 | Home: Next-mass + phones side by side, Contact: info + form side by side | `width ≥ 900` |
 | Hero compact | `width < 600` |

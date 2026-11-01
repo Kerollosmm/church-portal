@@ -37,8 +37,10 @@ Status as of 1 Nov 2026 (after PR #7 and PR 2 of the review plan).
 - [ ] **Custom domain (optional)**: if the church buys a domain, add it to Hosting site `maximos-domadios-church`
       (console → Hosting → Add custom domain), add it to Auth authorized domains, and update OG/robots/
       sitemap URLs and the redirect destination in `firebase.json` (ADR-018).
-- [ ] Home page overflows by ~8 px at **320 px** width (pre-existing, also on `main` before PR #6; 360 px+ is fine and
-      covered by `feature_gate_test.dart`).
+- [x] ~~Home page overflows by ~8 px at **320 px** width~~ — the app bar was the culprit (BUG-11 #1); below 360 px
+      the highlight buttons now move to the drawer, and `test/accessibility_test.dart` renders every public route at
+      320 px × 200 % text without overflow (Flutter test font). Still worth one look on a real 320 px phone with the
+      Cairo font.
 - [ ] Ask the church office to update the admin-editable English name (`settings/church.nameEn`, currently "Church of
       Saints Maximus & Domadius and the Strong Anba Moussa the Black") if they prefer "St. Maximus & Domadius and
       St. Moses the Black Church" — not changed by the seed to avoid overwriting admin edits.

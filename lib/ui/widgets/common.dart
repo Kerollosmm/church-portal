@@ -356,7 +356,11 @@ class Pill extends StatelessWidget {
   final String text;
   final Color color;
   final IconData? icon;
-  const Pill(this.text, {super.key, this.color = AppColors.success, this.icon});
+
+  /// Lines before the label is ellipsized (null = wrap freely, for labels
+  /// that list content shown nowhere else, e.g. the active seasons).
+  final int? maxLines;
+  const Pill(this.text, {super.key, this.color = AppColors.success, this.icon, this.maxLines = 2});
 
   @override
   Widget build(BuildContext context) => Container(
@@ -368,8 +372,8 @@ class Pill extends StatelessWidget {
           // of overflowing narrow cards.
           Flexible(
             child: Text(text,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
+                maxLines: maxLines,
+                overflow: maxLines == null ? null : TextOverflow.ellipsis,
                 style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: 12)),
           ),
         ]),

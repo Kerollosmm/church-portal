@@ -41,14 +41,15 @@ class AppShell extends ConsumerWidget {
     final textScale = MediaQuery.textScalerOf(context).scale(16) / 16;
     final width = MediaQuery.sizeOf(context).width;
     final wide = width / textScale.clamp(1.0, 3.0) >= 1024;
-    // Ultra-narrow phones (< 360 px) or very large text: the highlighted
-    // Mass/Clinics buttons move to the drawer (they are already listed
-    // there) so the church title never overflows or clips.
-    final collapseHighlights = !wide && (width < 360 || textScale >= 1.5);
     // Subpages on phones get a 1-tap Back-to-Home arrow: every in-app link is
     // a sibling route (context.go), so there is nothing to pop, and installed
     // PWAs have no browser back button.
     final showBack = !wide && location != '/';
+    // Ultra-narrow phones (< 360 px), very large text, or a subpage below
+    // 400 px (the Back arrow takes another 48 dp): the highlighted Mass/Clinics
+    // buttons move to the drawer (they are already listed there) so the church
+    // title keeps a readable width.
+    final collapseHighlights = !wide && (width < 360 || textScale >= 1.5 || (showBack && width < 400));
     final showAsk = ref.watch(assistantVisibleProvider);
     final features = ref.watch(featuresProvider);
     final showMass = !collapseHighlights && features.routeEnabled('/mass-schedule');

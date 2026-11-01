@@ -44,7 +44,7 @@ answered by phone calls, Facebook comments and stale WhatsApp forwards.
 Global
 | ID | Requirement | Status |
 |---|---|---|
-| FR-G-01 | Navbar with highlighted "Mass times" + "Clinics" | ✅ `AppShell._HighlightButton` (48×48 dp compact buttons on phones; below 360 px or at ≥ 150 % text they move to the drawer) |
+| FR-G-01 | Navbar with highlighted "Mass times" + "Clinics" | ✅ `AppShell._HighlightButton` (48×48 dp compact buttons on phones; below 360 px, at ≥ 150 % text, or on a subpage below 400 px they move to the drawer) |
 | FR-G-02 | AR⇄EN toggle, remembered | ⚠️ toggle ✅, `?lang=` synced both ways by the router (deep links / Back-Forward switch the language, the toggle rewrites the URL); not persisted in local storage |
 | FR-G-03 | Times in Arabic-Indic **and** Latin digits | ✅ `TimeRangeText`, `formatRangeArabic/Latin` |
 | FR-G-04 | Footer: address, phones, socials, quick links, last updated | ⚠️ `Footer` has name, address, quick links, ©, "Showing bundled content" note; no phones/socials/last-updated |
@@ -91,7 +91,7 @@ Admin
 | NFR | Requirement | Status |
 |---|---|---|
 | Performance | Time-to-answer < 3 s p75, LCP < 2.5/3 s, ≤ 2 MB first visit, ≤ 60 reads/session | Not measured. Splash in `web/index.html`; Firestore cache; `no-cache` HTML/JS (Flutter bundles not content-hashed) |
-| Accessibility | WCAG 2.2 AA intent, 200% text, 48 dp targets | Mostly (PR 2 of the review plan): text colours ≥ 4.5:1 (`AppColors.goldText`, darker WhatsApp/Facebook fills, footer `white70`), every public route renders at 320 px × 200 % text without overflow, 48 dp app-bar targets, live regions (contact status, assistant spinner), labelled send/switch/action buttons, Move up/down next to drag handles (2.5.7), reduced-motion skeletons — all covered by `test/accessibility_test.dart`. No manual screen-reader audit yet |
+| Accessibility | WCAG 2.2 AA intent, 200% text, 48 dp targets | Mostly (PR 2 of the review plan): text colours ≥ 4.5:1 (`AppColors.goldText`, darker WhatsApp/Facebook fills, footer `white70`), every public route renders at 320 px × 200 % text without overflow in widget tests (Flutter test font; confirm once on a phone with Cairo), 48 dp app-bar targets, live regions (contact status, assistant spinner), labelled send/switch/action buttons, Move up/down next to drag handles (2.5.7), reduced-motion skeletons — all covered by `test/accessibility_test.dart`. No manual screen-reader audit yet |
 | RTL/bilingual | Arabic default, Cairo font, Ar/En field pairs with fallback | ✅ `context.pick(ar, en)` falls back to the non-empty one |
 | Offline | Persistence + app shell cache | ✅ Firestore persistence (40 MB cache); no custom service-worker strategy |
 | Security | Public read only on content; admin writes; contact create-only; App Check | ✅ rules; App Check only for AI Logic (reCAPTCHA key pending) |

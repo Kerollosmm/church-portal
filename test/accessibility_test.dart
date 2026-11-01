@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:church_portal/app.dart';
 import 'package:church_portal/core/launch.dart';
 import 'package:church_portal/core/theme.dart';
 import 'package:church_portal/data/admin_repository.dart';
@@ -17,8 +18,11 @@ import 'package:church_portal/ui/admin/admin_validators.dart';
 import 'package:church_portal/ui/admin/collection_list.dart';
 import 'package:church_portal/ui/admin/doc_editor.dart';
 import 'package:church_portal/ui/admin/features_editor.dart';
+import 'package:church_portal/ui/pages/assistant_page.dart';
+import 'package:church_portal/ui/pages/contact_page.dart';
 import 'package:church_portal/ui/widgets/cards.dart';
 import 'package:church_portal/ui/widgets/common.dart';
+import 'package:church_portal/ui/widgets/map_embed.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -83,6 +87,15 @@ SeedData _seed({Map<String, bool> sections = const {}, String theme = 'burgundy'
       'status': 'departed',
       'departedDate': '1990-05-01',
       'order': 1010,
+    };
+    // A serving priest with a stale repose date (status changed in /admin).
+    (raw['priests'] as Map<String, dynamic>)['test-serving'] = {
+      'name': 'القس تجربة',
+      'nameEn': 'Fr. Serving',
+      'rank': 'priest',
+      'status': 'serving',
+      'departedDate': '1991-02-02',
+      'order': 990,
     };
   }
   return SeedData(raw);
@@ -309,6 +322,27 @@ void main() {
       final footer = find.descendant(of: find.byType(Footer), matching: find.byType(Container)).first;
       expect(tester.widget<Container>(footer).color, Color.lerp(navy, Colors.black, 0.30));
     });
+
+    testWidgets('ChurchPortalApp maps settings/features.theme to the theme', (tester) async {
+      tester.view.physicalSize = const Size(1200, 3000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final navy = Color(ThemePresets.all['navy']!);
+      final container = ProviderContainer(overrides: [
+        repositoryProvider.overrideWithValue(SeedRepository(_seed(theme: 'navy'))),
+        nowProvider.overrideWith((ref) => Stream.value(_now)),
+      ]);
+      addTearDown(container.dispose);
+      await tester.pumpWidget(UncontrolledProviderScope(container: container, child: const ChurchPortalApp()));
+      await tester.pumpAndSettle();
+      container.read(routerProvider).go('/about');
+      await tester.pumpAndSettle();
+      final title = find.descendant(of: find.byType(SectionTitle), matching: find.byType(Text)).first;
+      expect(Theme.of(tester.element(title)).colorScheme.primary, navy);
+      expect(tester.widget<Text>(title).style?.color, navy);
+      final footer = find.descendant(of: find.byType(Footer), matching: find.byType(Container)).first;
+      expect(tester.widget<Container>(footer).color, Color.lerp(navy, Colors.black, 0.30));
+    });
   });
 
   group('screen-reader semantics & touch targets', () {
@@ -331,6 +365,16 @@ void main() {
         expect(size.width, greaterThanOrEqualTo(48), reason: label);
         expect(size.height, greaterThanOrEqualTo(48), reason: label);
       }
+    });
+
+    testWidgets('subpage at 360 px / 149 % text: Back arrow and a readable title', (tester) async {
+      final (router, _) = await _pumpApp(tester, size: const Size(360, 800), textScale: 1.49);
+      router.go('/about');
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('backHome')), findsOneWidget);
+      expect(find.byTooltip('Mass times'), findsNothing); // moved to the drawer
+      final title = find.descendant(of: find.byType(AppBar), matching: find.text('St. Maximus & Domadius Church'));
+      expect(tester.getSize(title).width, greaterThanOrEqualTo(100));
     });
 
     testWidgets('below 360 px the highlight buttons move to the drawer', (tester) async {
@@ -362,12 +406,54 @@ void main() {
       expect(find.byTooltip(RegExp('^Call — .+')), findsWidgets);
     });
 
-    test('contact status and assistant spinner are live regions; send button is labelled', () {
-      final contact = File('lib/ui/pages/contact_page.dart').readAsStringSync();
-      final assistant = File('lib/ui/pages/assistant_page.dart').readAsStringSync();
-      expect(contact, contains('liveRegion: true'));
-      expect(assistant, contains('liveRegion: true'));
-      expect(assistant, contains("tooltip: context.tr('send')"));
+    bool isLiveRegion(Widget w) => w is Semantics && w.properties.liveRegion == true;
+
+    testWidgets('the contact form status is a live region', (tester) async {
+      final (router, _) = await _pumpApp(tester, size: const Size(1200, 4000));
+      router.go('/contact');
+      await tester.pumpAndSettle();
+      final form = find.byType(ContactForm);
+      final fields = find.descendant(of: form, matching: find.byType(TextField));
+      await tester.enterText(fields.at(0), 'Mina Adel');
+      await tester.enterText(fields.at(1), '01012345678');
+      await tester.enterText(fields.at(3), 'When is the next youth meeting?');
+      await tester.tap(find.descendant(of: form, matching: find.byIcon(Icons.send_rounded)));
+      await tester.pumpAndSettle();
+      // The bundled-data repository cannot send: an error status appears.
+      final status = find.descendant(of: form, matching: find.byIcon(Icons.error_outline));
+      expect(status, findsOneWidget);
+      expect(find.ancestor(of: status, matching: find.byWidgetPredicate(isLiveRegion)), findsOneWidget);
+    });
+
+    testWidgets('assistant: labelled send button and a live-region spinner while busy', (tester) async {
+      tester.view.physicalSize = const Size(900, 1600);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(ProviderScope(
+        overrides: [
+          repositoryProvider.overrideWithValue(SeedRepository(_seed())),
+          nowProvider.overrideWith((ref) => Stream.value(_now)),
+          assistantVisibleProvider.overrideWithValue(true),
+        ],
+        child: MaterialApp(
+          locale: const Locale('en'),
+          supportedLocales: const [Locale('ar'), Locale('en')],
+          localizationsDelegates: GlobalMaterialLocalizations.delegates,
+          home: const Scaffold(body: AssistantPage()),
+        ),
+      ));
+      await tester.pumpAndSettle();
+      final send = find.byTooltip('Send');
+      expect(send, findsOneWidget);
+      await tester.enterText(find.byType(TextField), 'When is the next liturgy?');
+      await tester.tap(send);
+      await tester.pump();
+      final spinner = find.byType(CircularProgressIndicator);
+      expect(spinner, findsOneWidget);
+      final live = find.ancestor(of: spinner, matching: find.byWidgetPredicate(isLiveRegion));
+      expect(live, findsOneWidget);
+      expect(tester.widget<Semantics>(live).properties.label, 'Sending…');
+      await tester.pumpAndSettle(); // no Firebase here: the turn ends with an error message
     });
 
     testWidgets('ActionChipButton exposes its semantic label as a button', (tester) async {
@@ -404,6 +490,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.textContaining('Departed: '), findsWidgets);
       expect(find.textContaining(RegExp('Departed: .*1990')), findsOneWidget);
+      expect(find.textContaining(RegExp('Departed: .*1991')), findsNothing); // serving: no repose date
     });
 
     testWidgets('alert links to a switched-off section are hidden (BUG-09)', (tester) async {
@@ -440,10 +527,37 @@ void main() {
       expect(find.widgetWithText(Pill, 'Today'), findsNWidgets(today));
     });
 
-    test('map embed follows the language (BUG-16)', () {
+    testWidgets('ChurchMap passes the UI language to the map (BUG-16)', (tester) async {
       final s = SeedData(_raw()).settings;
       expect(mapsEmbedUrl(s), contains('hl=ar'));
-      expect(mapsEmbedUrl(s, lang: 'en'), contains('hl=en'));
+      for (final lang in ['ar', 'en']) {
+        String? url;
+        await tester.pumpWidget(MaterialApp(
+          locale: Locale(lang),
+          supportedLocales: const [Locale('ar'), Locale('en')],
+          localizationsDelegates: GlobalMaterialLocalizations.delegates,
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: ChurchMap(settings: s, mapView: (context, embedUrl, fallback) {
+                url = embedUrl;
+                return fallback;
+              }),
+            ),
+          ),
+        ));
+        expect(url, contains('hl=$lang'));
+      }
+    });
+
+    testWidgets('the next-mass season pill lists every active season (no 2-line cut)', (tester) async {
+      final source = File('lib/ui/widgets/cards.dart').readAsStringSync();
+      expect(source, contains('maxLines: null, // every active season name must stay readable'));
+      await tester.pumpWidget(const MaterialApp(
+        home: Scaffold(body: SizedBox(width: 120, child: Pill('a b c d e f g h i j k l m n o p', maxLines: null))),
+      ));
+      final text = tester.widget<Text>(find.byType(Text));
+      expect(text.maxLines, isNull);
+      expect(text.overflow, isNull);
     });
   });
 
@@ -586,6 +700,34 @@ void main() {
       await tester.pumpWidget(_adminApp(ChurchInfoScreen(repo: d)));
       await tester.pump();
       expect(d.watched, contains('settings/church'));
+    });
+
+    test('open on site keeps the dashboard language', () {
+      final def = collectionById('clinics')!;
+      expect(publicPathFor(def, english: false), '/clinics');
+      expect(publicPathFor(def, english: true), '/clinics?lang=en');
+    });
+
+    testWidgets('collection list at 320 px: move buttons on their own row, title keeps its width', (tester) async {
+      tester.view.physicalSize = const Size(320, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final repo = _ListBackend([
+        AdminDoc('a', {'name': 'Fr. Abraam Example', 'status': 'serving', 'order': 10, 'visible': true}),
+        AdminDoc('b', {'name': 'Fr. Bishoy Example', 'status': 'serving', 'order': 20, 'visible': true}),
+      ]);
+      await tester.pumpWidget(_adminApp(CollectionListScreen(repo: repo, def: collectionById('priests')!)));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      final title = find.text('Fr. Abraam Example');
+      // Same room as before the move buttons existed (only hide + delete trail).
+      expect(tester.getSize(title).width, greaterThanOrEqualTo(100));
+      final up = find.byKey(const ValueKey('moveDown-a'));
+      expect(tester.getTopLeft(up).dy, greaterThanOrEqualTo(tester.getBottomLeft(title).dy));
+      await tester.tap(up);
+      await tester.pumpAndSettle();
+      expect(repo.reordered, ['b', 'a']);
+      expect(repo.reorderedBase, 0);
     });
 
     testWidgets('collection list: move up/down buttons and "open on site"', (tester) async {

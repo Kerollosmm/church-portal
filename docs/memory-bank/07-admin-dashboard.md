@@ -92,20 +92,23 @@ For each `CollectionDef`:
 - Live list (`repo.watch(collection)`) filtered by the screen filter (`def.matches`), sorted by `sortAdminDocs`
   (orderable: by `order`; others by `order`/weekday, then start, then id).
 - **Search** (all string values + id) and filter chips **all / visible / hidden / unconfirmed**; "showing N of M".
-- **Open on site** (`Key('admin-openOnSite')`, «عرض بالموقع»): opens `CollectionDef.publicPath` (e.g. `/clinics`) in a
-  new tab on web (`Uri.base.resolve`), or navigates there on mobile.
+- **Open on site** (`Key('admin-openOnSite')`, «عرض بالموقع»): opens `CollectionDef.publicPath` (e.g. `/clinics`,
+  `+ ?lang=en` when the dashboard is in English — `publicPathFor`) in a new tab on web (`Uri.base.resolve`), or
+  navigates there on mobile.
 - Tile: title (`titleKeys`), subtitle (weekday, date, time range, season/stage/category/type/specialty labels,
   ⛔ inactive, start/end), tags *Hidden* / *Unconfirmed*, "updated by … at …".
 - 👁 **hide/show** (`update(visible)`) — only when the collection has a `visible` field (not seasons).
-- **Drag to reorder** — or tap **Move up / Move down** on each tile (`ValueKey('moveUp-<id>')`, WCAG 2.5.7) —
+- **Drag to reorder** — or tap **Move up / Move down** on each tile (`ValueKey('moveUp-<id>')`, WCAG 2.5.7; under
+  600 px they sit in their own row under the subtitle so the title keeps its width) —
   (`reorder(collection, ids, base:)` → `order` = base + 10, 20, 30… in one batch) for orderable collections — clinics,
   facilities, activities, priests, departed fathers, saints, milestones — and only when search is empty, filter = all
   and > 1 item. **Departed fathers use base 1000** (`reorderBase(def)`: 1010, 1020…) because they share the
   `priests` collection with serving priests, so the two lists never get colliding `order` values (BUG-13).
   Liturgies and meetings use the numeric **Order** field instead.
-- `DocEditor.save`: on a **`TimeoutException`** (15 s, offline) the images uploaded for the document are **kept** —
-  Firestore keeps the write queued and may still commit it pointing at them; other errors still delete them
-  (BUG-13).
+- `DocEditor.save`: when `onSave` fails with a **`TimeoutException`** the images uploaded for the document are
+  **kept** — Firestore may still commit the queued write pointing at them; any other error deletes them (BUG-13).
+  Note: `AdminRepository.save`/`saveDoc` set no timeout of their own today (the only 15 s timeout is the role read
+  in `adminRole`), so this path applies to a timeout raised by a caller/backend wrapper.
 - **Add** (FAB) / tap to **edit** → full-screen `DocEditor`; **delete** with confirmation dialog.
 
 | Screen id | Collection | Orderable | Has visible | Has sample | Notes |
@@ -147,8 +150,8 @@ Image (optional)»** with a 96 px preview and:
   (JPEG where WebP is unsupported), Android uses the Dart `image` package (JPEG). Files > 25 MB are refused before
   decoding; results still > **700 KB** are refused («الصورة كبيرة جدًا…»). The preview says "uploaded when you
   save" — the `media/{id}` doc is written **only when you press Save**, then the item gets
-  `image = {source: inline, mediaId, alt, w, h}`. If the save fails, the uploaded media doc is deleted again and the
-  picked image stays so you can retry.
+  `image = {source: inline, mediaId, alt, w, h}`. If the save fails, the uploaded media doc is deleted again (except
+  on a `TimeoutException`, see above) and the picked image stays so you can retry.
 - **Image link** (رابط صورة): paste an **https://** image URL (validated: https, host, no spaces, ≤ 500) →
   `{source: url, url}`.
 - **Remove image** (إزالة الصورة): saves `image: null`; the card goes back to its icon.

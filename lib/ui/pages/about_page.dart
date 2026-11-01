@@ -171,7 +171,7 @@ class PriestCard extends StatelessWidget {
               if (p.hegumenDate.isNotEmpty)
                 IconLine(Icons.workspace_premium_outlined,
                     '${context.tr('hegumenSince')}: ${formatLooseDate(p.hegumenDate, arabic: context.isAr)}'),
-              if (p.departedDate.isNotEmpty)
+              if (p.departed && p.departedDate.isNotEmpty)
                 IconLine(Icons.local_florist_outlined,
                     '${context.tr('departedOn')}: ${formatLooseDate(p.departedDate, arabic: context.isAr)}'),
               if (context.pick(p.bioAr, p.bioEn).isNotEmpty)
