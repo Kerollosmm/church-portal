@@ -133,7 +133,10 @@ Deployed with the rules on every push to `main`.
   with the kept history (max 20 contents = 10 turns). If the set of enabled sections changes, history is cleared.
 - Before the first question `_awaitContent()` waits (≤ 10 s) for settings, features, liturgies, seasons, clinics,
   meetings, activities, facilities.
-- Kill switches: section toggle `assistant` in /admin, `settings/church.assistantEnabled`, or no reCAPTCHA key.
+- Kill switches (all platforms): section toggle `assistant` in /admin, `settings/church.assistantEnabled`, or App Check
+  failing to activate. **Web release builds only:** a missing/placeholder reCAPTCHA key also hides it (App Check is
+  skipped). Android/iOS release builds activate Play Integrity / App Attest without the key, so the assistant can
+  still show there when the other conditions hold.
   Cost cap (Gemini quota) is a console task — not configured in code.
 
 ## Service account (CI/CD)
