@@ -7,29 +7,68 @@ import '../../domain/features.dart';
 import 'admin_validators.dart';
 
 /// Section on/off switches + home layout (settings/features).
-class FeaturesScreen extends StatelessWidget {
+class FeaturesScreen extends StatefulWidget {
   final AdminBackend repo;
   const FeaturesScreen({super.key, required this.repo});
 
   @override
+  State<FeaturesScreen> createState() => _FeaturesScreenState();
+}
+
+class _FeaturesScreenState extends State<FeaturesScreen> {
+  late final Stream<AdminDoc?> _stream = widget.repo.watchDoc('settings/features');
+  /// A fresh key per shown version rebuilds the editor from that version.
+  GlobalKey<FeaturesEditorState> _editorKey = GlobalKey<FeaturesEditorState>();
+
+  /// The stored version the editor shows; a newer one replaces it only when
+  /// there are no unsaved local edits (otherwise a banner offers a reload).
+  AdminDoc? _shown;
+  bool _loaded = false;
+
+  @override
   Widget build(BuildContext context) {
     return StreamBuilder<AdminDoc?>(
-      stream: repo.watchDoc('settings/features'),
+      stream: _stream,
       builder: (context, snap) {
         if (snap.hasError) return Center(child: Text('${snap.error}'));
         if (snap.connectionState == ConnectionState.waiting && !snap.hasData) {
           return const Center(child: CircularProgressIndicator());
         }
-        final doc = snap.data;
-        return FeaturesEditor(
-          // New key when the stored doc changes elsewhere (e.g. another admin).
-          key: ValueKey(doc?.updatedAt?.millisecondsSinceEpoch ?? 0),
-          initial: FeatureSettings.fromMap(doc?.data),
-          exists: doc != null,
-          updatedAt: doc?.updatedAt,
-          updatedBy: doc?.updatedBy ?? '',
-          onSave: (f) => repo.saveDoc('settings/features', f.toMap()),
-        );
+        final latest = snap.data;
+        final changed = !_loaded || latest?.updatedAt != _shown?.updatedAt || (latest == null) != (_shown == null);
+        final dirty = _editorKey.currentState?.dirty ?? false;
+        if (changed && !dirty) {
+          if (_loaded) _editorKey = GlobalKey<FeaturesEditorState>();
+          _shown = latest;
+          _loaded = true;
+        }
+        final stale = changed && dirty;
+        final doc = _shown;
+        return Column(children: [
+          if (stale)
+            MaterialBanner(
+              content: Text(context.tr('updatedElsewhere')),
+              actions: [
+                TextButton(
+                  onPressed: () => setState(() {
+                    _shown = latest;
+                    _editorKey = GlobalKey<FeaturesEditorState>();
+                  }),
+                  child: Text(context.tr('reload')),
+                ),
+              ],
+            ),
+          Expanded(
+            child: FeaturesEditor(
+              key: _editorKey,
+              initial: FeatureSettings.fromMap(doc?.data),
+              exists: doc != null,
+              updatedAt: doc?.updatedAt,
+              updatedBy: doc?.updatedBy ?? '',
+              onSave: (f) => widget.repo.saveDoc('settings/features', f.toMap()),
+            ),
+          ),
+        ]);
       },
     );
   }
@@ -68,6 +107,9 @@ class FeaturesEditorState extends State<FeaturesEditor> {
   final _formKey = GlobalKey<FormState>();
   bool _dirty = false;
   bool _saving = false;
+
+  /// Unsaved local edits (a save in flight counts as saved).
+  bool get dirty => _dirty && !_saving;
 
   @override
   void dispose() {

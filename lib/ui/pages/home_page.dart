@@ -135,7 +135,10 @@ class _AnnouncementBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final text = context.pick(features.bannerAr, features.bannerEn);
-    final link = features.bannerLink.trim();
+    var link = features.bannerLink.trim();
+    final internal = link.startsWith('/') && !link.startsWith('//');
+    // A link to a switched-off section would only open "not available".
+    if (internal && !features.routeEnabled(Uri.tryParse(link)?.path ?? link)) link = '';
     final primary = Theme.of(context).colorScheme.primary;
     return Container(
       margin: const EdgeInsets.only(bottom: 12),

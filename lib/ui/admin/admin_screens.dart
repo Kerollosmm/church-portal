@@ -28,6 +28,7 @@ class _OverviewScreenState extends State<OverviewScreen> {
   final Map<String, List<AdminDoc>?> _docs = {};
   final Set<String> _failed = {};
   AdminDoc? _features;
+  bool _featuresLoaded = false;
   final List<StreamSubscription<Object?>> _subs = [];
 
   @override
@@ -40,7 +41,13 @@ class _OverviewScreenState extends State<OverviewScreen> {
             onError: (_) => setState(() => _failed.add(n)),
           ));
     }
-    _subs.add(widget.repo.watchDoc('settings/features').listen((d) => setState(() => _features = d), onError: (_) {}));
+    _subs.add(widget.repo.watchDoc('settings/features').listen(
+          (d) => setState(() {
+            _features = d;
+            _featuresLoaded = true;
+          }),
+          onError: (_) => setState(() => _failed.add('settings/features')),
+        ));
   }
 
   @override
@@ -82,7 +89,9 @@ class _OverviewScreenState extends State<OverviewScreen> {
           _StatCard(
             icon: Icons.toggle_on_outlined,
             label: context.tr('sectionsOn'),
-            value: '${Sections.all.length - f.disabledCount}/${Sections.all.length}',
+            value: _failed.contains('settings/features')
+                ? '—'
+                : (_featuresLoaded ? '${Sections.all.length - f.disabledCount}/${Sections.all.length}' : '…'),
             onTap: () => onOpen('features'),
           ),
           for (final c in adminCollections) _countCard(context, c),
@@ -216,22 +225,56 @@ IconData adminIcon(String name) => switch (name) {
       _ => Icons.list_alt,
     };
 
-/// settings/church as a form.
-class ChurchInfoScreen extends StatelessWidget {
+/// settings/church as a form. A newer stored version replaces the form only
+/// when it has no unsaved edits; otherwise a banner offers a reload.
+class ChurchInfoScreen extends StatefulWidget {
   final AdminBackend repo;
   const ChurchInfoScreen({super.key, required this.repo});
 
   @override
+  State<ChurchInfoScreen> createState() => _ChurchInfoScreenState();
+}
+
+class _ChurchInfoScreenState extends State<ChurchInfoScreen> {
+  late final Stream<AdminDoc?> _stream = widget.repo.watchDoc(churchInfoDoc.path);
+  GlobalKey<DocEditorState> _editorKey = GlobalKey<DocEditorState>();
+  AdminDoc? _shown;
+  bool _loaded = false;
+
+  @override
   Widget build(BuildContext context) {
     return StreamBuilder<AdminDoc?>(
-      stream: repo.watchDoc(churchInfoDoc.path),
+      stream: _stream,
       builder: (context, snap) {
         if (snap.hasError) return Center(child: Text('${snap.error}'));
         if (!snap.hasData && snap.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
-        final doc = snap.data;
+        final latest = snap.data;
+        final changed = !_loaded || latest?.updatedAt != _shown?.updatedAt || (latest == null) != (_shown == null);
+        final editor = _editorKey.currentState;
+        final dirty = editor != null && editor.dirty && !editor.saving;
+        if (changed && !dirty) {
+          if (_loaded) _editorKey = GlobalKey<DocEditorState>();
+          _shown = latest;
+          _loaded = true;
+        }
+        final stale = changed && dirty;
+        final doc = _shown;
         return Column(children: [
+          if (stale)
+            MaterialBanner(
+              content: Text(context.tr('updatedElsewhere')),
+              actions: [
+                TextButton(
+                  onPressed: () => setState(() {
+                    _shown = latest;
+                    _editorKey = GlobalKey<DocEditorState>();
+                  }),
+                  child: Text(context.tr('reload')),
+                ),
+              ],
+            ),
           if (doc?.updatedAt != null)
             Container(
               width: double.infinity,
@@ -242,12 +285,12 @@ class ChurchInfoScreen extends StatelessWidget {
             ),
           Expanded(
             child: DocEditor(
-              key: ValueKey(doc?.updatedAt?.millisecondsSinceEpoch ?? 0),
+              key: _editorKey,
               title: context.pick(churchInfoDoc.labelAr, churchInfoDoc.labelEn),
               fields: churchInfoDoc.fields,
               data: doc?.data ?? const {},
               popOnSave: false,
-              onSave: (data) => repo.saveDoc(churchInfoDoc.path, data),
+              onSave: (data) => widget.repo.saveDoc(churchInfoDoc.path, data),
             ),
           ),
         ]);

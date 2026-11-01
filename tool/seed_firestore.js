@@ -37,6 +37,12 @@ const only = opt('--only') ? opt('--only').split(',').map((s) => s.trim()) : nul
 const dryRun = flag('--dry-run');
 const force = flag('--force');
 const fillMissing = flag('--fill-missing');
+if (force && fillMissing) {
+  // --force overwrites whole documents, which breaks --fill-missing's promise
+  // to never change existing values: refuse before any write.
+  console.error('--force and --fill-missing cannot be combined.');
+  process.exit(2);
+}
 const adminArg = opt('--admin');
 const adminEmail = opt('--admin-email');
 
@@ -81,21 +87,19 @@ async function main() {
   let written = 0, skipped = 0, filled = 0;
 
   // --fill-missing: add only absent top-level fields to an existing doc.
+  // Runs in a transaction so a field an admin writes meanwhile is never replaced.
   async function fill(ref, data, label) {
-    const snap = await ref.get();
-    if (!snap.exists) return false;
-    const current = snap.data() || {};
-    const missing = Object.fromEntries(Object.entries(data).filter(([k]) => !(k in current)));
-    const keys = Object.keys(missing);
-    if (!keys.length) return true;
-    if (dryRun) {
-      console.log(`[dry-run] ${label}: would add ${keys.join(', ')}`);
-    } else {
-      await ref.update(missing);
-      console.log(`${label}: added ${keys.join(', ')}`);
-    }
+    const keys = await db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) return null;
+      const current = snap.data() || {};
+      const missing = Object.fromEntries(Object.entries(data).filter(([k]) => !(k in current)));
+      if (Object.keys(missing).length && !dryRun) tx.update(ref, missing);
+      return Object.keys(missing);
+    });
+    if (!keys || !keys.length) return;
+    console.log(`${dryRun ? '[dry-run] ' : ''}${label}: ${dryRun ? 'would add' : 'added'} ${keys.join(', ')}`);
     filled++;
-    return true;
   }
   for (const [collection, entries] of plan) {
     if (force) {

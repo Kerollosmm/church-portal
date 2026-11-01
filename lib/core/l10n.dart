@@ -241,6 +241,10 @@ const Map<String, List<String>> _strings = {
   ],
   'forgotPassword': ['نسيت كلمة المرور؟', 'Forgot password?'],
   'enterEmailFirst': ['اكتب بريدك الإلكتروني أولًا', 'Enter your email first'],
+  'resetFailed': ['تعذّر إرسال بريد إعادة التعيين الآن. حاول مرة أخرى بعد قليل.', 'Could not send the reset email right now. Please try again shortly.'],
+  'noChanges': ['لا توجد تغييرات للحفظ', 'No changes to save'],
+  'updatedElsewhere': ['عدّل مشرف آخر هذه البيانات. أعد التحميل لرؤية آخر نسخة (ستُفقد تعديلاتك غير المحفوظة).', 'Another admin changed this. Reload to see the latest version (your unsaved edits will be lost).'],
+  'reload': ['إعادة التحميل', 'Reload'],
   'resetSent': ['إن كان الحساب موجودًا فسيصلك بريد لإعادة تعيين كلمة المرور.', 'If the account exists, a password-reset email is on its way.'],
   // Option labels (stored keys -> readable)
   'opt_mass': ['قداس', 'Liturgy'],

@@ -62,7 +62,18 @@ class AdminRepository implements AdminBackend {
 
   Future<void> signOut() => auth.signOut();
 
-  Future<void> sendPasswordReset(String email) => auth.sendPasswordResetEmail(email: email.trim());
+  /// Sends a reset email. Returns false only for errors that do not reveal
+  /// whether the account exists (network, rate limit, invalid email...).
+  Future<bool> sendPasswordReset(String email) async {
+    try {
+      await auth.sendPasswordResetEmail(email: email.trim());
+      return true;
+    } on FirebaseAuthException catch (e) {
+      // Same answer as success: never reveal whether an account exists.
+      if (e.code == 'user-not-found') return true;
+      return false;
+    }
+  }
 
   @override
   String get actor => auth.currentUser?.email ?? auth.currentUser?.uid ?? '';
@@ -79,6 +90,14 @@ class AdminRepository implements AdminBackend {
     final role = d.data()?['role'];
     return role == AdminRoles.owner ? AdminRoles.owner : AdminRoles.editor;
   }
+
+  /// Live role of [uid] (null = not an admin). Cache-only "missing" snapshots
+  /// are skipped so a cold cache never flashes "not admin".
+  Stream<String?> roleChanges(String uid) => db
+      .doc('admins/$uid')
+      .snapshots()
+      .where((d) => d.exists || !d.metadata.isFromCache)
+      .map((d) => !d.exists ? null : (d.data()?['role'] == AdminRoles.owner ? AdminRoles.owner : AdminRoles.editor));
 
   @override
   Stream<List<AdminDoc>> watch(String collection) => db.collection(collection).snapshots().map(

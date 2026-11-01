@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:church_portal/data/content_repository.dart';
 import 'package:church_portal/data/seed_data.dart';
 import 'package:church_portal/domain/cairo_time.dart';
+import 'package:church_portal/domain/features.dart';
 import 'package:church_portal/router.dart';
 import 'package:church_portal/state/providers.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -21,12 +23,21 @@ SeedData _seedWith(Map<String, bool> sections, {Map<String, Object?> extra = con
   return SeedData(raw);
 }
 
-Future<GoRouter> _pump(WidgetTester tester, SeedData seed, {Size size = const Size(1400, 2400)}) async {
+/// settings/features never arrives (slow network): pages must wait.
+class _PendingFeaturesRepository extends SeedRepository {
+  _PendingFeaturesRepository(super.seed);
+  final _never = StreamController<FeatureSettings>();
+  @override
+  Stream<FeatureSettings> features() => _never.stream;
+}
+
+Future<GoRouter> _pump(WidgetTester tester, SeedData seed,
+    {Size size = const Size(1400, 2400), ContentRepository? repo, bool settle = true}) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
   final container = ProviderContainer(overrides: [
-    repositoryProvider.overrideWithValue(SeedRepository(seed)),
+    repositoryProvider.overrideWithValue(repo ?? SeedRepository(seed)),
     nowProvider.overrideWith((ref) => Stream.value(CairoTime.at(2026, 11, 1, 12 * 60).toUtc())),
     localeProvider.overrideWith(_EnglishLocale.new),
   ]);
@@ -41,7 +52,12 @@ Future<GoRouter> _pump(WidgetTester tester, SeedData seed, {Size size = const Si
       routerConfig: router,
     ),
   ));
-  await tester.pumpAndSettle();
+  if (settle) {
+    await tester.pumpAndSettle();
+  } else {
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+  }
   return router;
 }
 
@@ -117,5 +133,26 @@ void main() {
     expect(find.text('Nativity schedule published'), findsOneWidget);
     expect(find.text('Welcome to our parish'), findsOneWidget);
     expect(find.text('Our story'), findsNothing);
+  });
+
+  testWidgets('first frame: gated pages wait for settings/features instead of flashing content', (tester) async {
+    final seed = _seedWith(const {});
+    await _pump(tester, seed, repo: _PendingFeaturesRepository(seed), settle: false);
+    expect(find.byKey(const Key('featuresLoading')), findsOneWidget);
+    expect(find.text('Next liturgy'), findsNothing);
+    expect(find.byKey(const Key('sectionUnavailable')), findsNothing);
+  });
+
+  testWidgets('banner link to a switched-off section is not offered', (tester) async {
+    await _pump(
+        tester,
+        _seedWith(const {'clinics': false}, extra: {
+          'bannerEnabled': true,
+          'bannerEn': 'New clinic hours',
+          'bannerLink': '/clinics',
+        }));
+    expect(find.text('New clinic hours'), findsOneWidget);
+    final banner = find.ancestor(of: find.text('New clinic hours'), matching: find.byType(Row)).first;
+    expect(find.descendant(of: banner, matching: find.text('Learn more')), findsNothing);
   });
 }

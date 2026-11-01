@@ -20,8 +20,8 @@ String buildAssistantInstruction({
   final f = features;
   final b = StringBuffer()
     ..writeln(
-      'You are the friendly information desk of ${settings.nameEn} (${settings.nameAr}), '
-      'a Coptic Orthodox church at ${settings.addressEn} (${settings.addressAr}).',
+      'You are the friendly information desk of ${settings.nameEn} (${settings.nameAr}), a Coptic Orthodox church'
+      '${f.enabled(Sections.contactInfo) ? ' at ${settings.addressEn} (${settings.addressAr})' : ''}.',
     )
     ..writeln(
       'Answer ONLY from the church data below. If the answer is not in the data, say you do not know '

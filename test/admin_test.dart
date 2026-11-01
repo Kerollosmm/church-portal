@@ -74,6 +74,8 @@ void main() {
       expect(validateFieldValue(_f(FieldType.phone), '٠١٠١٢٣٤٥٦٧٨'), isNull);
       expect(parseFieldValue(_f(FieldType.phone), '+20 100-123 4567'), '+201001234567');
       expect(validateFieldValue(_f(FieldType.phone), 'call me'), 'invalidPhone');
+      // Length is measured on the stored (normalized) digits, not the separators.
+      expect(validateFieldValue(_f(FieldType.phone), '+20 (100) 123-4567-89'), isNull);
     });
 
     test('cross-field document checks', () {
@@ -87,6 +89,20 @@ void main() {
       expect(
           validateDocument(alert, {'startsAt': DateTime.utc(2027, 1, 2), 'endsAt': DateTime.utc(2027, 1, 1)}),
           'endBeforeStart');
+    });
+  });
+
+  group('changed fields', () {
+    test('only differing keys are written (deep compare)', () {
+      final initial = {
+        'name': 'a', 'days': [1, 2], 'visible': true, 'when': DateTime.utc(2027), //
+        'phones': [{'number': '1'}],
+      };
+      expect(changedFields(initial, {...initial}), isEmpty);
+      expect(changedFields(initial, {...initial, 'days': [1, 2, 3]}), {'days': [1, 2, 3]});
+      expect(changedFields(initial, {...initial, 'phones': [{'number': '2'}]}).keys, ['phones']);
+      expect(changedFields(initial, {...initial, 'when': DateTime.utc(2028)}).keys, ['when']);
+      expect(sameValue([{'a': 1}], [{'a': 1}]), isTrue);
     });
   });
 
@@ -240,6 +256,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(saved, isNotNull);
       expect(saved!['doctorName'], 'د. مينا');
+      expect(saved!.keys, containsAll(def.fields.map((f) => f.key))); // new doc: every field
       expect(saved!['bookingPhone'], '01012345678');
       expect(saved!['order'], 30);
       expect(saved!['visible'], isTrue); // new items start visible
@@ -279,6 +296,34 @@ void main() {
       await tester.pumpAndSettle();
       expect(saved!['phones'], hasLength(2));
       expect((saved!['phones'] as List).last['number'], '01012345678');
+      expect(saved!.keys, ['phones']); // existing doc: only what changed
+    });
+  });
+
+  group('DocEditor edits', () {
+    testWidgets('saving an existing doc writes only the edited field', (tester) async {
+      tester.view.physicalSize = const Size(1200, 3000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      Map<String, dynamic>? saved;
+      final def = collectionById('milestones')!;
+      await tester.pumpWidget(_app(DocEditor(
+        title: 'Edit',
+        fields: def.fields,
+        def: def,
+        data: const {'titleAr': 'قديم', 'year': 1980, 'visible': false, 'order': 1},
+        docId: 'm1',
+        popOnSave: false,
+        onSave: (d) async => saved = d,
+      )));
+      await tester.tap(find.byKey(const Key('editor-save')));
+      await tester.pumpAndSettle();
+      expect(saved, isNull);
+      expect(find.text('No changes to save'), findsOneWidget);
+      await tester.enterText(find.byKey(const ValueKey('field-titleAr')), 'جديد');
+      await tester.tap(find.byKey(const Key('editor-save')));
+      await tester.pumpAndSettle();
+      expect(saved, {'titleAr': 'جديد'}); // visible:false is not written back
     });
   });
 

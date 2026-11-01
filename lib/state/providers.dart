@@ -24,6 +24,13 @@ final featuresStreamProvider = StreamProvider<FeatureSettings>((ref) => ref.watc
 final featuresProvider = Provider<FeatureSettings>(
     (ref) => ref.watch(featuresStreamProvider).value ?? FeatureSettings.defaults);
 
+/// False until `settings/features` (or its seed fallback) has arrived, so
+/// gated pages wait one cached read instead of flashing switched-off content.
+final featuresReadyProvider = Provider<bool>((ref) {
+  final f = ref.watch(featuresStreamProvider);
+  return f.hasValue || f.hasError;
+});
+
 /// Public lists: items an admin hid are dropped, the rest sorted by `order`.
 Stream<List<T>> _public<T extends Hideable>(Stream<List<T>> s) => s.map(publicItems);
 

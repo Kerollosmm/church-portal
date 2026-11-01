@@ -5,6 +5,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../../core/l10n.dart';
 import '../../core/theme.dart';
+import '../../domain/features.dart';
 import '../../domain/rules.dart';
 import '../../domain/time_format.dart';
 import '../../state/providers.dart';
@@ -367,7 +368,10 @@ class TimeRangeText extends StatelessWidget {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
       Text(primary,
           style: TextStyle(
-              fontWeight: FontWeight.w800, fontSize: large ? 22 : 16, color: AppColors.burgundy, height: 1.3)),
+              fontWeight: FontWeight.w800,
+              fontSize: large ? 22 : 16,
+              color: Theme.of(context).colorScheme.primary,
+              height: 1.3)),
       Directionality(
         textDirection: TextDirection.ltr,
         child: Text(secondary, style: TextStyle(fontSize: large ? 14 : 12, color: AppColors.muted)),
@@ -414,7 +418,7 @@ class Footer extends ConsumerWidget {
                     style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
               ),
             ]),
-            if (s != null)
+            if (s != null && features.enabled(Sections.contactInfo))
               Padding(
                 padding: const EdgeInsets.only(top: 6),
                 child: Text(context.pick(s.addressAr, s.addressEn),

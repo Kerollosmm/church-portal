@@ -56,7 +56,9 @@ bool isValidPhone(String v) => _phoneRe.hasMatch(normalizePhoneInput(v));
 String? validateFieldValue(FieldDef f, String? raw) {
   final v = (raw ?? '').trim();
   if (v.isEmpty) return f.required ? 'required' : null;
-  if (v.length > f.effectiveMaxLength) return 'tooLong';
+  // Phones are stored without separators: measure what will be stored.
+  final stored = f.type == FieldType.phone ? normalizePhoneInput(v) : v;
+  if (stored.length > f.effectiveMaxLength) return 'tooLong';
   switch (f.type) {
     case FieldType.time:
       return timeRe.hasMatch(v) ? null : 'invalidTime';
@@ -135,6 +137,32 @@ String? validateDocument(CollectionDef? def, Map<String, dynamic> data) {
   if (s is DateTime && e is DateTime && !e.isAfter(s)) return 'endBeforeStart';
   return null;
 }
+
+/// Deep equality for collected form values (lists, maps, DateTime, scalars).
+bool sameValue(Object? a, Object? b) {
+  if (a is List && b is List) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (!sameValue(a[i], b[i])) return false;
+    }
+    return true;
+  }
+  if (a is Map && b is Map) {
+    if (a.length != b.length) return false;
+    for (final k in a.keys) {
+      if (!b.containsKey(k) || !sameValue(a[k], b[k])) return false;
+    }
+    return true;
+  }
+  return a == b;
+}
+
+/// Only the keys whose value differs from [initial]: an edit never writes
+/// back stale values of fields another admin changed meanwhile.
+Map<String, dynamic> changedFields(Map<String, dynamic> initial, Map<String, dynamic> current) => {
+      for (final e in current.entries)
+        if (!initial.containsKey(e.key) || !sameValue(initial[e.key], e.value)) e.key: e.value,
+    };
 
 /// Lower-cased text used by the admin list search.
 String searchableText(Map<String, dynamic> data) =>

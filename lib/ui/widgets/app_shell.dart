@@ -221,7 +221,7 @@ class _AppDrawer extends ConsumerWidget {
         child: ListView(children: [
           Container(
             padding: const EdgeInsets.all(20),
-            color: AppColors.burgundy,
+            color: Theme.of(context).colorScheme.primary,
             child: Row(children: [
               const CopticCross(size: 40),
               const SizedBox(width: 12),
@@ -233,7 +233,7 @@ class _AppDrawer extends ConsumerWidget {
           ),
           for (final i in items)
             ListTile(
-              leading: Icon(i.icon, color: AppColors.burgundy),
+              leading: Icon(i.icon, color: Theme.of(context).colorScheme.primary),
               title: Text(context.tr(i.key), style: const TextStyle(fontWeight: FontWeight.w600)),
               selected: location == i.path,
               selectedTileColor: AppColors.gold.withValues(alpha: 0.15),

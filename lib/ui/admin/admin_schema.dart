@@ -58,6 +58,9 @@ class FieldDef {
   /// Optional helper text under the field.
   final String hintAr, hintEn;
 
+  /// Max rows for [FieldType.objectList] (matches firestore.rules).
+  final int maxRows;
+
   const FieldDef(this.key, this.labelAr, this.labelEn, this.type,
       {this.required = false,
       this.options = const [],
@@ -71,7 +74,8 @@ class FieldDef {
       this.allowPath = false,
       this.subFields = const [],
       this.hintAr = '',
-      this.hintEn = ''});
+      this.hintEn = '',
+      this.maxRows = 20});
 
   int get effectiveMaxLength => maxLength > 0
       ? maxLength

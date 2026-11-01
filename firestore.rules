@@ -60,12 +60,21 @@ service cloud.firestore {
       return !(k in d) || d[k] == null || d[k] in values;
     }
 
+    // updatedAt / updatedBy (shown in the dashboard) are either untouched or
+    // stamped now by the signed-in admin (email, or uid when there is none).
+    function stampOk(d) {
+      return (!('updatedAt' in d) || d.updatedAt == request.time
+              || (resource != null && resource.data.get('updatedAt', null) == d.updatedAt))
+        && (!('updatedBy' in d) || d.updatedBy == request.auth.token.get('email', request.auth.uid)
+              || (resource != null && resource.data.get('updatedBy', null) == d.updatedBy));
+    }
+
     // Shared by every content document.
     function common(d) {
       return d.keys().size() <= 60
         && optBool(d, 'visible') && optBool(d, 'sample')
         && optInt(d, 'order', -100000, 100000)
-        && optTimestamp(d, 'updatedAt') && optString(d, 'updatedBy', 254);
+        && stampOk(d);
     }
     function meta() {
       return ['visible', 'sample', 'order', 'updatedAt', 'updatedBy'];
@@ -146,7 +155,8 @@ service cloud.firestore {
                           'start', 'end', 'bookingPhone', 'whatsapp', 'active'].concat(meta()))
         && reqString(d, 'specialty', 40) && reqString(d, 'specialtyAr', 300) && optString(d, 'specialtyEn', 300)
         && reqString(d, 'doctorName', 300) && optString(d, 'degreeAr', 300) && optString(d, 'degreeEn', 300)
-        && optList(d, 'days', 7) && optTime(d, 'start') && optTime(d, 'end')
+        && optList(d, 'days', 7) && d.get('days', []).hasOnly([1, 2, 3, 4, 5, 6, 7])
+        && optTime(d, 'start') && optTime(d, 'end')
         && optString(d, 'bookingPhone', 20) && optString(d, 'whatsapp', 20) && optBool(d, 'active');
     }
 
@@ -219,7 +229,7 @@ service cloud.firestore {
         && str(d, 'historyAr', 8000) && str(d, 'historyEn', 8000)
         && str(d, 'bishopAr', 300) && str(d, 'bishopEn', 300)
         && d.get('assistantEnabled', false) is bool && d.get('sample', false) is bool
-        && optTimestamp(d, 'updatedAt') && str(d, 'updatedBy', 254);
+        && stampOk(d);
     }
 
     function sectionKeys() {
@@ -245,8 +255,10 @@ service cloud.firestore {
         && str(d, 'heroSubtitleAr', 300) && str(d, 'heroSubtitleEn', 300)
         && d.get('bannerEnabled', false) is bool && str(d, 'bannerAr', 500) && str(d, 'bannerEn', 500)
         && str(d, 'bannerLink', 500)
+        // Same as the client: empty, an in-app path, or an http(s) URL with a host.
+        && d.get('bannerLink', '').matches('^$|^/([^/ ][^ ]*)?$|^https?://[^/ ]+[.][^/ ]+([/?#][^ ]*)?$')
         && d.get('theme', 'burgundy') in ['burgundy', 'navy', 'green', 'brown', 'purple']
-        && optTimestamp(d, 'updatedAt') && str(d, 'updatedBy', 254);
+        && stampOk(d);
     }
 
     // -------------------------------- admins --------------------------------
@@ -278,7 +290,7 @@ service cloud.firestore {
       allow update: if isAdmin()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt', 'updatedBy'])
         && request.resource.data.status in ['new', 'handled']
-        && optTimestamp(request.resource.data, 'updatedAt') && optString(request.resource.data, 'updatedBy', 254);
+        && stampOk(request.resource.data);
       allow create: if validContactMessage(request.resource.data)
         && getAfter(/databases/$(database)/documents/meta/contact_rate).data.lastAt == request.time;
     }

@@ -59,11 +59,13 @@ class LanguageToggle extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) => IconButton(
-        tooltip: context.tr('language'),
-        onPressed: () => ref.read(localeProvider.notifier).toggle(),
-        icon: Text(context.isAr ? 'EN' : 'ع',
-            style: const TextStyle(fontWeight: FontWeight.w800, color: AppColors.goldLight)),
-      );
+    tooltip: context.tr('language'),
+    onPressed: () => ref.read(localeProvider.notifier).toggle(),
+    icon: Text(
+      context.isAr ? 'EN' : 'ع',
+      style: const TextStyle(fontWeight: FontWeight.w800, color: AppColors.goldLight),
+    ),
+  );
 }
 
 /// Checks admins/{uid}; a failed lookup shows a retry action instead of the
@@ -79,6 +81,7 @@ class _AdminCheck extends StatefulWidget {
 
 class _AdminCheckState extends State<_AdminCheck> {
   late Future<String?> _future = widget.repo.adminRole(widget.user.uid);
+  late final Stream<String?> _roleStream = widget.repo.roleChanges(widget.user.uid);
 
   @override
   Widget build(BuildContext context) {
@@ -91,37 +94,67 @@ class _AdminCheckState extends State<_AdminCheck> {
           return const _AdminFrame(child: Center(child: CircularProgressIndicator()));
         }
         if (adm.hasError) {
-          return _AdminFrame(child: Center(
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              const Icon(Icons.cloud_off_rounded, size: 48, color: AppColors.alert),
-              const SizedBox(height: 8),
-              Text(context.tr('adminCheckFailed'), textAlign: TextAlign.center),
-              const SizedBox(height: 12),
-              Wrap(spacing: 8, children: [
-                FilledButton(
-                  onPressed: () => setState(() => _future = repo.adminRole(user.uid)),
-                  child: Text(context.tr('retry')),
-                ),
-                OutlinedButton(onPressed: repo.signOut, child: Text(context.tr('signOut'))),
-              ]),
-            ]),
-          ));
+          return _AdminFrame(
+            child: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.cloud_off_rounded, size: 48, color: AppColors.alert),
+                  const SizedBox(height: 8),
+                  Text(context.tr('adminCheckFailed'), textAlign: TextAlign.center),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    children: [
+                      FilledButton(
+                        onPressed: () => setState(() => _future = repo.adminRole(user.uid)),
+                        child: Text(context.tr('retry')),
+                      ),
+                      OutlinedButton(onPressed: repo.signOut, child: Text(context.tr('signOut'))),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          );
         }
-        final role = adm.data;
-        if (role == null) {
-          return _AdminFrame(child: Center(
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
+        // Live role after the authoritative server check: a demoted or
+        // removed admin loses the owner screens (or the dashboard) at once.
+        return StreamBuilder<String?>(
+          stream: _roleStream,
+          initialData: adm.data,
+          builder: (context, live) => _forRole(context, live.hasError ? adm.data : live.data),
+        );
+      },
+    );
+  }
+
+  Widget _forRole(BuildContext context, String? role) {
+    final repo = widget.repo;
+    final user = widget.user;
+    if (role == null) {
+      return _AdminFrame(
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
               const Icon(Icons.lock_outline, size: 48, color: AppColors.alert),
               const SizedBox(height: 8),
               Text(context.tr('notAdmin')),
               Text(user.email ?? '', style: const TextStyle(color: AppColors.muted)),
               const SizedBox(height: 12),
               OutlinedButton(onPressed: repo.signOut, child: Text(context.tr('signOut'))),
-            ]),
-          ));
-        }
-        return AdminDashboard(repo: repo, uid: user.uid, email: user.email ?? user.uid, role: role, onSignOut: repo.signOut);
-      },
+            ],
+          ),
+        ),
+      );
+    }
+    return AdminDashboard(
+      repo: repo,
+      uid: user.uid,
+      email: user.email ?? user.uid,
+      role: role,
+      onSignOut: repo.signOut,
     );
   }
 }
@@ -167,17 +200,19 @@ class _LoginFormState extends State<_LoginForm> {
     final messenger = ScaffoldMessenger.of(context);
     final need = context.tr('enterEmailFirst');
     final sent = context.tr('resetSent');
+    final failed = context.tr('resetFailed');
     final email = _email.text.trim();
     if (!email.contains('@')) {
       setState(() => _error = need);
       return;
     }
+    var ok = false;
     try {
-      await widget.repo.sendPasswordReset(email);
+      ok = await widget.repo.sendPasswordReset(email);
     } catch (_) {
-      // Same message either way: never reveal whether an account exists.
+      ok = false;
     }
-    messenger.showSnackBar(SnackBar(content: Text(sent)));
+    messenger.showSnackBar(SnackBar(content: Text(ok ? sent : failed)));
   }
 
   @override
@@ -190,43 +225,53 @@ class _LoginFormState extends State<_LoginForm> {
           child: Padding(
             padding: const EdgeInsets.all(20),
             child: AutofillGroup(
-              child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                Text(context.tr('signIn'),
-                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.burgundy)),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: _email,
-                  keyboardType: TextInputType.emailAddress,
-                  textDirection: TextDirection.ltr,
-                  autofillHints: const [AutofillHints.email],
-                  decoration: const InputDecoration(labelText: 'Email', prefixIcon: Icon(Icons.email_outlined)),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _password,
-                  obscureText: true,
-                  textDirection: TextDirection.ltr,
-                  autofillHints: const [AutofillHints.password],
-                  onSubmitted: (_) => _signIn(),
-                  decoration:
-                      InputDecoration(labelText: context.tr('password'), prefixIcon: const Icon(Icons.lock_outline)),
-                ),
-                if (_error != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 10),
-                    child: Text(_error!, style: const TextStyle(color: AppColors.alert)),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    context.tr('signIn'),
+                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.burgundy),
                   ),
-                const SizedBox(height: 16),
-                FilledButton(
-                  onPressed: _busy ? null : _signIn,
-                  child: _busy
-                      ? const SizedBox.square(
-                          dimension: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                      : Text(context.tr('signIn')),
-                ),
-                const SizedBox(height: 6),
-                TextButton(onPressed: _busy ? null : _resetPassword, child: Text(context.tr('forgotPassword'))),
-              ]),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: _email,
+                    keyboardType: TextInputType.emailAddress,
+                    textDirection: TextDirection.ltr,
+                    autofillHints: const [AutofillHints.email],
+                    decoration: const InputDecoration(labelText: 'Email', prefixIcon: Icon(Icons.email_outlined)),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _password,
+                    obscureText: true,
+                    textDirection: TextDirection.ltr,
+                    autofillHints: const [AutofillHints.password],
+                    onSubmitted: (_) => _signIn(),
+                    decoration: InputDecoration(
+                      labelText: context.tr('password'),
+                      prefixIcon: const Icon(Icons.lock_outline),
+                    ),
+                  ),
+                  if (_error != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 10),
+                      child: Text(_error!, style: const TextStyle(color: AppColors.alert)),
+                    ),
+                  const SizedBox(height: 16),
+                  FilledButton(
+                    onPressed: _busy ? null : _signIn,
+                    child: _busy
+                        ? const SizedBox.square(
+                            dimension: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          )
+                        : Text(context.tr('signIn')),
+                  ),
+                  const SizedBox(height: 6),
+                  TextButton(onPressed: _busy ? null : _resetPassword, child: Text(context.tr('forgotPassword'))),
+                ],
+              ),
             ),
           ),
         ),
@@ -234,7 +279,6 @@ class _LoginFormState extends State<_LoginForm> {
     );
   }
 }
-
 
 /// One admin destination (sidebar / drawer entry).
 class AdminDest {
@@ -246,13 +290,13 @@ class AdminDest {
 
 /// Destinations shown to [role] (owners also get "Admins").
 List<AdminDest> adminDestinations(String role) => [
-      const AdminDest('overview', Icons.dashboard_outlined, 'نظرة عامة', 'Overview'),
-      const AdminDest('features', Icons.toggle_on_outlined, 'الأقسام والصفحة الرئيسية', 'Sections & home page'),
-      const AdminDest('church', Icons.church_outlined, 'بيانات الكنيسة', 'Church info'),
-      for (final c in adminCollections) AdminDest(c.id, adminIcon(c.icon), c.labelAr, c.labelEn),
-      const AdminDest('messages', Icons.mail_outline, 'رسائل الزوار', 'Contact messages'),
-      if (role == AdminRoles.owner) const AdminDest('admins', Icons.admin_panel_settings_outlined, 'المشرفون', 'Admins'),
-    ];
+  const AdminDest('overview', Icons.dashboard_outlined, 'نظرة عامة', 'Overview'),
+  const AdminDest('features', Icons.toggle_on_outlined, 'الأقسام والصفحة الرئيسية', 'Sections & home page'),
+  const AdminDest('church', Icons.church_outlined, 'بيانات الكنيسة', 'Church info'),
+  for (final c in adminCollections) AdminDest(c.id, adminIcon(c.icon), c.labelAr, c.labelEn),
+  const AdminDest('messages', Icons.mail_outline, 'رسائل الزوار', 'Contact messages'),
+  if (role == AdminRoles.owner) const AdminDest('admins', Icons.admin_panel_settings_outlined, 'المشرفون', 'Admins'),
+];
 
 /// Responsive dashboard: sidebar on desktop, drawer on mobile.
 class AdminDashboard extends StatefulWidget {
@@ -305,42 +349,57 @@ class _AdminDashboardState extends State<AdminDashboard> {
     return Container(
       color: AppColors.parchment,
       child: SafeArea(
-        child: ListView(padding: const EdgeInsets.symmetric(vertical: 8), children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-            child: Row(children: [
-              const Icon(Icons.verified_user, color: AppColors.success, size: 18),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(widget.email, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700)),
-                  Text(context.tr('role_${widget.role}'), style: const TextStyle(color: AppColors.muted, fontSize: 12)),
-                ]),
+        child: ListView(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+              child: Row(
+                children: [
+                  const Icon(Icons.verified_user, color: AppColors.success, size: 18),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          widget.email,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                        Text(
+                          context.tr('role_${widget.role}'),
+                          style: const TextStyle(color: AppColors.muted, fontSize: 12),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
-            ]),
-          ),
-          const Divider(),
-          for (final d in dests)
-            ListTile(
-              key: ValueKey('nav-${d.id}'),
-              dense: true,
-              leading: Icon(d.icon, color: AppColors.burgundy),
-              title: Text(context.pick(d.labelAr, d.labelEn), style: const TextStyle(fontWeight: FontWeight.w600)),
-              selected: _current == d.id,
-              selectedTileColor: AppColors.gold.withValues(alpha: 0.22),
-              onTap: () {
-                if (inDrawer) Navigator.of(context).pop();
-                _open(d.id);
-              },
             ),
-          const Divider(),
-          ListTile(
-            dense: true,
-            leading: const Icon(Icons.logout, color: AppColors.alert),
-            title: Text(context.tr('signOut')),
-            onTap: widget.onSignOut,
-          ),
-        ]),
+            const Divider(),
+            for (final d in dests)
+              ListTile(
+                key: ValueKey('nav-${d.id}'),
+                dense: true,
+                leading: Icon(d.icon, color: AppColors.burgundy),
+                title: Text(context.pick(d.labelAr, d.labelEn), style: const TextStyle(fontWeight: FontWeight.w600)),
+                selected: _current == d.id,
+                selectedTileColor: AppColors.gold.withValues(alpha: 0.22),
+                onTap: () {
+                  if (inDrawer) Navigator.of(context).pop();
+                  _open(d.id);
+                },
+              ),
+            const Divider(),
+            ListTile(
+              dense: true,
+              leading: const Icon(Icons.logout, color: AppColors.alert),
+              title: Text(context.tr('signOut')),
+              onTap: widget.onSignOut,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -348,34 +407,36 @@ class _AdminDashboardState extends State<AdminDashboard> {
   @override
   Widget build(BuildContext context) {
     final wide = MediaQuery.sizeOf(context).width >= 1000;
-    final dest = adminDestinations(widget.role).firstWhere((d) => d.id == _current,
-        orElse: () => adminDestinations(widget.role).first);
+    final dest = adminDestinations(widget.role)
+        .firstWhere((d) => d.id == _current, orElse: () => adminDestinations(widget.role).first);
     return Scaffold(
       appBar: AppBar(
-        title: Row(children: [
-          const CopticCross(size: 24),
-          const SizedBox(width: 8),
-          Flexible(
-            child: Text('${context.tr('admin')} — ${context.pick(dest.labelAr, dest.labelEn)}',
-                overflow: TextOverflow.ellipsis),
-          ),
-        ]),
+        title: Row(
+          children: [
+            const CopticCross(size: 24),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Text(
+                '${context.tr('admin')} — ${context.pick(dest.labelAr, dest.labelEn)}',
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
         actions: [
-          IconButton(
-            tooltip: context.tr('openSite'),
-            icon: const Icon(Icons.public),
-            onPressed: () => context.go('/'),
-          ),
+          IconButton(tooltip: context.tr('openSite'), icon: const Icon(Icons.public), onPressed: () => context.go('/')),
           const LanguageToggle(),
         ],
       ),
       drawer: wide ? null : Drawer(child: _nav(context, inDrawer: true)),
       body: wide
-          ? Row(children: [
-              SizedBox(width: 270, child: _nav(context, inDrawer: false)),
-              const VerticalDivider(width: 1),
-              Expanded(child: _screen()),
-            ])
+          ? Row(
+              children: [
+                SizedBox(width: 270, child: _nav(context, inDrawer: false)),
+                const VerticalDivider(width: 1),
+                Expanded(child: _screen()),
+              ],
+            )
           : _screen(),
     );
   }

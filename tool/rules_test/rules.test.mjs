@@ -108,9 +108,9 @@ describe('admin content', () => {
     await assertSucceeds(setDoc(ref, {
       specialty: 'dental', specialtyAr: 'الأسنان', specialtyEn: 'Dental', doctorName: 'د. مينا', days: [1, 3],
       start: '16:00', end: '20:00', bookingPhone: '01012345678', whatsapp: '', active: true, sample: false,
-      visible: true, order: 10, updatedAt: serverTimestamp(), updatedBy: 'editor@x.test',
+      visible: true, order: 10, updatedAt: serverTimestamp(), updatedBy: `${EDITOR}@x.test`,
     }));
-    await assertSucceeds(updateDoc(ref, { visible: false, updatedAt: serverTimestamp(), updatedBy: 'e' }));
+    await assertSucceeds(updateDoc(ref, { visible: false, updatedAt: serverTimestamp(), updatedBy: `${EDITOR}@x.test` }));
     await assertSucceeds(updateDoc(ref, { order: 20 }));
     await assertSucceeds(deleteDoc(ref));
   });
@@ -124,6 +124,18 @@ describe('admin content', () => {
     await assertFails(updateDoc(doc(ed, 'clinics', 'c1'), { doctorName: '' }));
     await assertFails(setDoc(doc(ed, 'priests', 'p'), { name: 'x', status: 'retired' }));
     await assertFails(setDoc(doc(ed, 'unknowncol', 'x'), { a: 1 }));
+    await assertFails(updateDoc(doc(ed, 'clinics', 'c1'), { days: ['Monday'] }));
+    await assertFails(updateDoc(doc(ed, 'clinics', 'c1'), { days: [99] }));
+    await assertSucceeds(updateDoc(doc(ed, 'clinics', 'c1'), { days: [1, 7] }));
+  });
+
+  test('edit stamps must be now and by the signed-in admin', async () => {
+    const ed = db(EDITOR);
+    await assertFails(updateDoc(doc(ed, 'clinics', 'c1'), { visible: false, updatedBy: 'owner@x.test' }));
+    await assertFails(updateDoc(doc(ed, 'clinics', 'c1'), { visible: false, updatedAt: Timestamp.fromDate(new Date('2020-01-01')) }));
+    await assertSucceeds(updateDoc(doc(ed, 'clinics', 'c1'), { visible: false, updatedAt: serverTimestamp(), updatedBy: `${EDITOR}@x.test` }));
+    // A later edit that leaves the stamp untouched is fine too.
+    await assertSucceeds(updateDoc(doc(ed, 'clinics', 'c1'), { order: 5 }));
   });
 
   test('legacy fields do not block an edit', async () => {
@@ -134,7 +146,7 @@ describe('admin content', () => {
     const ed = db(EDITOR);
     await assertSucceeds(updateDoc(doc(ed, 'settings', 'church'), {
       bishopAr: 'نيافة الأنبا بافلي', instagram: 'https://www.instagram.com/x', updatedAt: serverTimestamp(),
-      updatedBy: 'editor@x.test',
+      updatedBy: `${EDITOR}@x.test`,
     }));
     await assertFails(updateDoc(doc(ed, 'settings', 'church'), { lat: 200 }));
     await assertFails(updateDoc(doc(ed, 'settings', 'church'), { nameAr: '' }));
@@ -153,7 +165,9 @@ describe('feature toggles', () => {
   };
 
   test('admins save valid settings', async () => {
-    await assertSucceeds(setDoc(doc(db(EDITOR), 'settings', 'features'), { ...valid, updatedAt: serverTimestamp(), updatedBy: 'e' }));
+    await assertSucceeds(setDoc(doc(db(EDITOR), 'settings', 'features'), { ...valid, updatedAt: serverTimestamp(), updatedBy: `${EDITOR}@x.test` }));
+    await assertSucceeds(setDoc(doc(db(EDITOR), 'settings', 'features'), { ...valid, bannerLink: 'https://www.facebook.com/x?y=1' }));
+    await assertSucceeds(setDoc(doc(db(EDITOR), 'settings', 'features'), { ...valid, bannerLink: '' }));
     await assertSucceeds(setDoc(doc(db(OWNER), 'settings', 'features'), valid));
   });
 
@@ -166,6 +180,9 @@ describe('feature toggles', () => {
     await assertFails(setDoc(ref, { ...valid, homeOrder: ['hero'] }));
     await assertFails(setDoc(ref, { ...valid, extra: 1 }));
     await assertFails(setDoc(ref, { ...valid, bannerAr: 'x'.repeat(501) }));
+    await assertFails(setDoc(ref, { ...valid, bannerLink: 'not a link' }));
+    await assertFails(setDoc(ref, { ...valid, bannerLink: 'javascript:alert(1)' }));
+    await assertFails(setDoc(ref, { ...valid, bannerLink: '//evil.example' }));
   });
 });
 
@@ -173,7 +190,7 @@ describe('contact inbox', () => {
   test('admins read, mark handled and delete', async () => {
     const ed = db(EDITOR);
     await assertSucceeds(getDocs(collection(ed, 'contact_messages')));
-    await assertSucceeds(updateDoc(doc(ed, 'contact_messages', 'm1'), { status: 'handled', updatedAt: serverTimestamp(), updatedBy: 'e' }));
+    await assertSucceeds(updateDoc(doc(ed, 'contact_messages', 'm1'), { status: 'handled', updatedAt: serverTimestamp(), updatedBy: `${EDITOR}@x.test` }));
     await assertFails(updateDoc(doc(ed, 'contact_messages', 'm1'), { message: 'edited' }));
     await assertFails(updateDoc(doc(ed, 'contact_messages', 'm1'), { status: 'spam' }));
     await assertSucceeds(deleteDoc(doc(ed, 'contact_messages', 'm1')));

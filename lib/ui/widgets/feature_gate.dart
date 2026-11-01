@@ -16,6 +16,12 @@ class FeatureGate extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    if (!ref.watch(featuresReadyProvider)) {
+      return const PageBody(children: [
+        SizedBox(height: 60),
+        Center(child: CircularProgressIndicator(key: Key('featuresLoading'))),
+      ]);
+    }
     final enabled = ref.watch(featuresProvider.select((f) => f.routeEnabled(path)));
     return enabled ? child : const SectionUnavailable();
   }

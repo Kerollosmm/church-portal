@@ -54,7 +54,14 @@ class DocEditorState extends State<DocEditor> {
   bool _saving = false;
   bool _dirty = false;
 
+  /// Values as loaded: only fields that differ from these are saved.
+  late Map<String, dynamic> _initialValues;
+
   bool get isNew => widget.data == null;
+
+  /// Unsaved local edits (the church-info screen asks before reloading).
+  bool get dirty => _dirty;
+  bool get saving => _saving;
 
   @override
   void initState() {
@@ -64,6 +71,7 @@ class DocEditorState extends State<DocEditor> {
     for (final f in widget.fields) {
       _init(f, data[f.key]);
     }
+    _initialValues = collect();
   }
 
   void _init(FieldDef f, Object? v) {
@@ -161,9 +169,18 @@ class DocEditorState extends State<DocEditor> {
     final savedMsg = context.tr('saved');
     final nav = Navigator.of(context);
     final route = ModalRoute.of(context);
+    // Existing docs: write only what changed (merge), never stale values.
+    final payload = isNew ? data : changedFields(_initialValues, data);
+    if (payload.isEmpty) {
+      messenger?.showSnackBar(SnackBar(content: Text(context.tr('noChanges'))));
+      setState(() => _dirty = false);
+      if (widget.popOnSave && (route?.isCurrent ?? false)) nav.pop();
+      return true;
+    }
     setState(() => _saving = true);
     try {
-      await widget.onSave(data);
+      await widget.onSave(payload);
+      _initialValues = data;
       messenger?.showSnackBar(SnackBar(content: Text(savedMsg)));
       if (!mounted) return true;
       setState(() {
@@ -384,10 +401,12 @@ class DocEditorState extends State<DocEditor> {
         Align(
           alignment: AlignmentDirectional.centerStart,
           child: OutlinedButton.icon(
-            onPressed: () => setState(() {
-              rows.add(_Row.from(f.subFields, const {}, _markDirty, isNew: true));
-              _dirty = true;
-            }),
+            onPressed: rows.length >= f.maxRows
+                ? null
+                : () => setState(() {
+                      rows.add(_Row.from(f.subFields, const {}, _markDirty, isNew: true));
+                      _dirty = true;
+                    }),
             icon: const Icon(Icons.add),
             label: Text(context.tr('addRow')),
           ),
