@@ -8,6 +8,9 @@ Arabic‑first (RTL) with an English toggle, mobile‑first, works offline on bu
 
 Firebase project: **`asafra-church-portal`** (Firestore in `europe-west1`, production mode).
 
+> **Coding agents / new contributors:** start with [AGENTS.md](AGENTS.md) and the memory bank in
+> [docs/memory-bank/](docs/memory-bank/00-README.md).
+
 ---
 
 ## Features
