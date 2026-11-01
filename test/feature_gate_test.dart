@@ -208,6 +208,8 @@ void main() {
         days: [5],
         bookingPhone: '01012345678'));
     expect(find.byKey(const Key('callChurchOffice')), findsNothing);
+    expect(find.byKey(const Key('bookClinic')), findsOneWidget);
+    expect(find.text('Call • Book'), findsOneWidget);
     expect(find.text('Dr Mina'), findsOneWidget);
   });
 }

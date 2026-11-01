@@ -71,8 +71,8 @@ jobs:
 
   deploy-rules:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    # Production rules deploys go through the `production` environment, so
-    # its protection rules (required reviewers) gate them.
+    # Rules deploys use the `production` environment. Its required reviewers
+    # gate them only once they are configured on that environment.
     environment: production
     runs-on: ubuntu-latest
     steps:

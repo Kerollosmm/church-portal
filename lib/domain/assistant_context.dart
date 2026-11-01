@@ -199,14 +199,15 @@ String buildAssistantInstruction({
   }
 
   if (f.enabled(Sections.history)) {
-    final history = settings.historyEn.isNotEmpty ? settings.historyEn : settings.historyAr;
+    // Each language is clipped on its own so both fit.
+    final history = _bi(_clip(settings.historyAr, 700), _clip(settings.historyEn, 700));
     final bishop = _bi(settings.bishopAr, settings.bishopEn);
     if (history.isNotEmpty || bishop.isNotEmpty) {
       b
         ..writeln()
         ..writeln('## About the church');
       if (bishop.isNotEmpty) b.writeln('Bishop: $bishop');
-      if (history.isNotEmpty) b.writeln('History (summary): ${_clip(history, 700)}');
+      if (history.isNotEmpty) b.writeln('History (summary): $history');
     }
   }
 
@@ -241,10 +242,10 @@ String buildAssistantInstruction({
         _bi(s.feastCopticAr, s.feastCopticEn),
         _bi(s.feastGregorianAr, s.feastGregorian),
       ].where((x) => x.isNotEmpty).join(' / ');
-      final bio = _bi(s.bioAr, s.bioEn);
+      final bio = _bi(_clip(s.bioAr, 400), _clip(s.bioEn, 400));
       b.writeln(
         '- ${_bi(s.nameAr, s.nameEn)}${feast.isNotEmpty ? '; feast: $feast' : ''}'
-        '${bio.isNotEmpty ? '. ${_clip(s.bioEn.isNotEmpty ? s.bioEn : s.bioAr, 400)}' : ''}',
+        '${bio.isNotEmpty ? '. $bio' : ''}',
       );
     }
   }
@@ -270,7 +271,7 @@ String _priestLine(Priest p) =>
     '${_bi(p.name, p.nameEn)} (${p.rank})'
     '${p.ordinationDate.isNotEmpty ? '; ordained ${p.ordinationDate}' : ''}'
     '${p.hegumenDate.isNotEmpty ? '; hegumen since ${p.hegumenDate}' : ''}'
-    '${_bi(p.bioAr, p.bioEn).isNotEmpty ? '. ${_clip(p.bioEn.isNotEmpty ? p.bioEn : p.bioAr, 300)}' : ''}';
+    '${_bi(p.bioAr, p.bioEn).isNotEmpty ? '. ${_bi(_clip(p.bioAr, 300), _clip(p.bioEn, 300))}' : ''}';
 
 /// Cairo calendar date as YYYY-MM-DD (UTC instants are converted first).
 String _ymd(DateTime d) {

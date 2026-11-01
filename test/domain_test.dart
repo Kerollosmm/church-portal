@@ -272,6 +272,23 @@ void main() {
       expect(vespersAndPraise(ls).map((l) => l.id), containsAll(['oldVespers', 'nextVespers', 'satVespers']));
     });
 
+    test('a one-off service running past midnight stays listed until it ends', () {
+      final ls = [
+        lit('nyeVespers', null, '22:00', '01:00', type: 'praise', date: DateTime(2026, 12, 31)),
+        lit('nyeMass', null, '23:00', '02:00', date: DateTime(2026, 12, 31)),
+        lit('noEnd', null, '23:30', '', type: 'vespers', date: DateTime(2026, 12, 31)), // default 2 h
+      ];
+      final at0030 = cairo(2027, 1, 1, 0, 30);
+      expect(vespersAndPraise(ls, now: at0030).map((l) => l.id), ['nyeVespers', 'noEnd']);
+      expect(upcomingSpecialLiturgies(ls, at0030).map((l) => l.id), ['nyeMass']);
+      final at0115 = cairo(2027, 1, 1, 1, 15); // nyeVespers ended at 01:00, noEnd runs to 01:30
+      expect(vespersAndPraise(ls, now: at0115).map((l) => l.id), ['noEnd']);
+      expect(upcomingSpecialLiturgies(ls, at0115).map((l) => l.id), ['nyeMass']);
+      final at0300 = cairo(2027, 1, 1, 3);
+      expect(vespersAndPraise(ls, now: at0300), isEmpty);
+      expect(upcomingSpecialLiturgies(ls, at0300), isEmpty);
+    });
+
     test('seasonalSchedule skips inactive seasons', () {
       final off = Season(
           id: 'nat', key: 'nativity', nameAr: '', nameEn: '', startsAt: nativity.startsAt, endsAt: nativity.endsAt, active: false);
@@ -396,6 +413,25 @@ void main() {
       expect(t, contains('St Moses the Black (الأنبا موسى الأسود); feast: 1 July'));
       expect(t, contains('Bishop: الأنبا بافلي'));
       expect(t, contains('History (summary): تاريخ الكنيسة'));
+    });
+
+    test('history and bios carry both languages when both are filled', () {
+      final t = buildAssistantInstruction(
+        settings: const ChurchSettings(
+            nameAr: 'كنيسة', nameEn: 'Church', addressAr: '', addressEn: '', historyAr: 'تاريخ', historyEn: 'History text'),
+        liturgies: const [],
+        seasons: const [],
+        clinics: const [],
+        meetings: const [],
+        activities: const [],
+        facilities: const [],
+        now: now,
+        priests: const [Priest(id: 'p', name: 'أبونا', nameEn: 'Fr X', bioAr: 'سيرة', bioEn: 'Bio')],
+        saints: const [Saint(id: 's', nameAr: 'قديس', nameEn: 'Saint', bioAr: 'سيرة القديس', bioEn: 'Saint bio')],
+      );
+      expect(t, contains('History (summary): History text (تاريخ)'));
+      expect(t, contains('Fr X (أبونا) (priest). Bio (سيرة)'));
+      expect(t, contains('. Saint bio (سيرة القديس)'));
     });
 
     test('switched-off sections are not grounded', () {

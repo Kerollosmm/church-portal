@@ -64,17 +64,19 @@ service cloud.firestore {
       return !(k in d) || d[k] == null || d[k] in values;
     }
     // Links: absent / null / '' or an http(s) URL with a host (never
-    // javascript:, data:, ...). Same pattern as settings/features.bannerLink.
+    // javascript:, data:, ...). Same pattern as settings/features.bannerLink,
+    // but the scheme is case-insensitive like the admin form (Dart's Uri
+    // lower-cases it), so e.g. HTTPS://… never blocks an unrelated edit.
     function optHttpUrl(d, k, max) {
       return !(k in d) || d[k] == null
         || (d[k] is string && d[k].size() <= max
-            && d[k].matches('^$|^https?://[^/ ]+[.][^/ ]+([/?#][^ ]*)?$'));
+            && d[k].matches('^$|^[Hh][Tt][Tt][Pp][Ss]?://[^/ ]+[.][^/ ]+([/?#][^ ]*)?$'));
     }
     // As optHttpUrl, or an in-app path such as /mass-schedule.
     function optUrlOrPath(d, k, max) {
       return !(k in d) || d[k] == null
         || (d[k] is string && d[k].size() <= max
-            && d[k].matches('^$|^/([^/ ][^ ]*)?$|^https?://[^/ ]+[.][^/ ]+([/?#][^ ]*)?$'));
+            && d[k].matches('^$|^/([^/ ][^ ]*)?$|^[Hh][Tt][Tt][Pp][Ss]?://[^/ ]+[.][^/ ]+([/?#][^ ]*)?$'));
     }
 
     // updatedAt / updatedBy (shown in the dashboard) are either untouched or

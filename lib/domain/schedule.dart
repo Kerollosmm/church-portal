@@ -244,15 +244,14 @@ List<Liturgy> regularLiturgiesForTab(Iterable<Liturgy> all, ScheduleTab tab) {
 }
 
 /// Regular vespers & praise services. Weekly ones (no date) are always
-/// listed; with [now], one-off dated ones before the Cairo day of [now] are
-/// dropped.
+/// listed; with [now], a one-off dated one is listed from its Cairo day on
+/// and, after that day, only while it is still running past midnight.
 List<Liturgy> vespersAndPraise(Iterable<Liturgy> all, {DateTime? now}) {
-  final today = now == null ? null : _cairoToday(now);
   final list = all
       .where((l) =>
           l.seasonKey == null &&
           (l.type == 'vespers' || l.type == 'praise') &&
-          (today == null || l.date == null || !CairoTime.calendarDate(l.date!).isBefore(today)))
+          (now == null || l.date == null || _datedStillListed(l, now)))
       .toList();
   list.sort((a, b) {
     final w = (a.weekday ?? 0).compareTo(b.weekday ?? 0);
@@ -268,19 +267,29 @@ DateTime _cairoToday(DateTime now) {
   return DateTime(t.year, t.month, t.day);
 }
 
+/// Is the dated one-off [l] still listed at [now]? From its Cairo day on;
+/// before that day only while its occurrence (which may cross midnight, see
+/// [_occurrence]) has not ended yet.
+bool _datedStillListed(Liturgy l, DateTime now) {
+  final d = CairoTime.calendarDate(l.date!);
+  if (!d.isBefore(_cairoToday(now))) return true;
+  final o = _occurrence(l, CairoTime.at(d.year, d.month, d.day), 0);
+  return o != null && o.end.isAfter(now);
+}
+
 /// Standalone one-off services (a dated liturgy that belongs to no season,
 /// e.g. New Year's Eve or a feast), excluding vespers / praise which have
-/// their own section, from the Cairo day of [now] on. Sorted by date, start
-/// time, then order.
+/// their own section, from the Cairo day of [now] on (and a previous-day one
+/// while it is still running past midnight). Sorted by date, start time,
+/// then order.
 List<Liturgy> upcomingSpecialLiturgies(Iterable<Liturgy> all, DateTime now) {
-  final today = _cairoToday(now);
   final list = all
       .where((l) =>
           l.seasonKey == null &&
           l.date != null &&
           l.type != 'vespers' &&
           l.type != 'praise' &&
-          !CairoTime.calendarDate(l.date!).isBefore(today))
+          _datedStillListed(l, now))
       .toList();
   list.sort((a, b) {
     final d = CairoTime.calendarDate(a.date!).compareTo(CairoTime.calendarDate(b.date!));

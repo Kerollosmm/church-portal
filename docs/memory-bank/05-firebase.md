@@ -67,7 +67,8 @@ Anything not matched (e.g. a new collection) is **denied** by default — new co
 Notable details:
 - `validSeason` requires `key` in the 6 season keys, `replacesRegular` optional bool (PR 1); `validLiturgy` requires
   the `start` key and `seasonKey` ∈ keys.
-- Links (PR 1, SEC-04): `optHttpUrl` (`''` or `^https?://[^/ ]+[.][^/ ]+([/?#][^ ]*)?$`) on `activities.link`,
+- Links (PR 1, SEC-04): `optHttpUrl` (`''` or `^[Hh][Tt][Tt][Pp][Ss]?://[^/ ]+[.][^/ ]+([/?#][^ ]*)?$` — scheme
+  case-insensitive like the admin form) on `activities.link`,
   `meetings.facebookUrl/whatsappUrl` and `settings/church` `facebook/youtube/instagram/whatsappChannel`;
   `optUrlOrPath` (also an in-app path `/…`) on `alerts.link`. Rejects `javascript:`, `data:`, `//host`, etc.
   `mapsUrl`/`heroImageUrl` keep length-only checks.
@@ -86,7 +87,7 @@ Notable details:
   images** (valid url/inline/null images, malformed maps, image on a collection without it, `media/` public read,
   admin-only writes, type/size/stamp checks, the 950,000-char cap), and PR 1's **SEC-01–SEC-04** (standalone
   `contact_rate` pings and mismatched `lastMsgId` rejected, 10 s throttle, `media` list admin-only, admin stamps,
-  `Season.replacesRegular`, `coordinatesApproximate`, safe links). 30 tests.
+  `Season.replacesRegular`, `coordinatesApproximate`, safe links incl. upper-case schemes, replaying an existing message, a 5 s resend). 32 tests.
 - **Expression budget:** rules are limited to 1000 expressions per request (PR #3 hit it on `validChurch`). Keep new
   checks in shared helpers (`common`, `validImage`) and prefer `str()`/`get()` forms on big docs.
 
@@ -174,7 +175,8 @@ App target settings:
      special one-off services, Holy seasons (active seasons only, each labelled `[REPLACES regular schedule]` or
      `[ADDITIVE — regular morning masses continue]` from `replacesRegular`, plus `[ACTIVE NOW]`) (schedule); current
      announcements (alerts: `visibleAlerts`); clinics (active only, incl. WhatsApp); meetings (incl. notes);
-     activities; public services (facilities); About the church (history: bishop + history summary ≤ 700 chars);
+     activities; public services (facilities); About the church (history: bishop + history summary, each language
+     clipped to 700 chars);
      serving priests (priests) and departed priests with repose date (departedPriests); patron saints (saints).
      Every bilingual field goes through `_bi(ar, en)` → `"English (Arabic)"` or whichever one is filled, so
      Arabic-only admin entries never produce blank names/places (PR 1, BUG-04).

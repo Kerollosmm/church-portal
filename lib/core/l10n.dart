@@ -67,6 +67,7 @@ const Map<String, List<String>> _strings = {
   'whatsappChannel': ['قناة واتساب', 'WhatsApp channel'],
   'call': ['اتصال', 'Call'],
   'callChurchOffice': ['الاتصال بمكتب الكنيسة', 'Call church office'],
+  'doctorTba': ['طبيب {s} — يُعلن لاحقًا', '{s} doctor — to be announced'],
   'book': ['احجز', 'Book'],
   'allSpecialties': ['كل التخصصات', 'All specialties'],
   'availableToday': ['متاح اليوم', 'Available today'],
@@ -87,8 +88,8 @@ const Map<String, List<String>> _strings = {
   'sending': ['جارٍ الإرسال…', 'Sending…'],
   'sent': ['تم إرسال رسالتك. شكرًا لك، سنتواصل معك قريبًا.', 'Message sent. Thank you — we will get back to you soon.'],
   'sendTimeoutRetry': [
-    'لم نتمكن من تأكيد الإرسال بسبب ضعف الاتصال. رسالتك ما زالت في النموذج — حاول الإرسال مرة أخرى بعد قليل أو اتصل بنا.',
-    'We could not confirm your message was sent (weak connection). It is still in the form — please try again shortly or call us.'
+    'لم نتمكن من تأكيد وصول رسالتك بسبب ضعف الاتصال، وقد تصل لاحقًا. لا تُعِد إرسالها (رسالتك ما زالت في النموذج)، واتصل بمكتب الكنيسة للتأكد من وصولها.',
+    'We could not confirm that your message arrived (weak connection); it may still arrive. Please do not send it again (it is still in the form) — call the church office to check.'
   ],
   'sendFailed': ['تعذّر الإرسال. حاول لاحقًا أو اتصل بنا.', 'Could not send. Please try later or call us.'],
   'contactUnavailable': ['النموذج غير متاح حاليًا — برجاء الاتصال بنا هاتفيًا.', 'The form is unavailable right now — please call us.'],

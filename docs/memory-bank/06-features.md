@@ -39,10 +39,15 @@ render with `PageBody` (+ `Footer`). Content comes from Riverpod providers (hidd
   `scheduleTabWeekdays`: other = Mon/Tue/Thu); today's Cairo weekday tab is preselected.
   `regularLiturgiesForTab` = regular (no `seasonKey`, no `date`), weekday in tab, **excluding vespers/praise**;
   then a separate **Vespers & praise** section (`vespersAndPraise(all, now: now)`: weekly ones always, one-off dated
-  ones only from today's Cairo date on).
+  ones from today's Cairo date on, or until their end when they run past midnight).
+- **Active additive seasons** (PR 1): while an additive season (revival) is in effect, the weekly view opens and
+  lists that season's services (evening services, feast liturgy) at the top, with an "Active now" pill. The weekly
+  tabs remain the recurring timetable; the next-liturgy card applies the day's actual overrides (e.g. the feast
+  liturgy instead of Thursday's mass on 1 July).
 - **Upcoming special services** («صلوات ومناسبات خاصة قادمة», `specialServices`, PR 1): above the weekly tabs whenever
   `upcomingSpecialLiturgies(all, now)` is non-empty — dated liturgies with no `seasonKey`, not vespers/praise, from
-  today's Cairo date on, sorted by date, start, order (e.g. New Year's Eve, a 40th-day memorial). Before PR 1 such
+  today's Cairo date on (a previous-day one stays while it is still running past midnight), sorted by date, start,
+  order (e.g. New Year's Eve, a 40th-day memorial). Before PR 1 such
   services reached `NextMassCard` and the assistant but never `/mass-schedule` (BUG-02).
 - Seasonal view: `seasonalSchedule(seasons, liturgies)` → **active seasons only** (`s.active`), each with the liturgies
   of its key; a dated liturgy is attached only when its Cairo day overlaps the season's `[startsAt, endsAt]` (so 2027
@@ -72,7 +77,7 @@ render with `PageBody` (+ `Footer`). Content comes from Riverpod providers (hidd
   When a clinic has **neither** booking phone nor WhatsApp, a **«الاتصال بمكتب الكنيسة / Call church office»**
   button calls the first church phone (`settings/church.phones`), only while section `contactInfo` is on (PR 1, J2).
   In English, a placeholder (`sample`) doctor name «… — يُعلن لاحقًا» is shown as "<specialtyEn> doctor — to be
-  announced" (`ClinicCard.displayDoctorName`); the stored Arabic name is unchanged (BUG-17).
+  announced" (`ClinicCard.isPlaceholderDoctor` + l10n `doctorTba`); the stored Arabic name is unchanged (BUG-17).
 - The seed ships section `clinics` **off** (PR 1): enable it in /admin → Sections only once the church office
   confirms the clinics.
 - Subtitle `clinicsIntro` asks visitors to confirm with the church; `PendingConfirmationNote` if any clinic is sample.

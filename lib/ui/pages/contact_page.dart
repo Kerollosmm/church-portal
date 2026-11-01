@@ -236,10 +236,11 @@ class _ContactFormState extends ConsumerState<ContactForm> {
       _rateLimiter.recordSubmission(now);
       _done(msgs.sent, true);
     } on TimeoutException {
-      // Not confirmed in time. Firestore may still deliver the queued batch,
-      // but the server rate limit can reject it, so never promise delivery:
-      // keep the visitor's text in the form so it is not lost, and throttle
-      // an immediate resend.
+      // Not confirmed in time. Firestore may still deliver the queued batch
+      // (a resend would duplicate it) or the server throttle may reject it,
+      // so never promise delivery and never invite a resend: keep the
+      // visitor's text in the form so it is not lost, point them to the
+      // church office, and throttle an immediate resend.
       _rateLimiter.recordSubmission(now);
       _done(msgs.timeoutRetry, false);
     } on ContactUnavailableException {

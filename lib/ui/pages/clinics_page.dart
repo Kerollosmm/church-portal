@@ -126,19 +126,16 @@ class ClinicCard extends StatelessWidget {
   const ClinicCard({super.key, required this.clinic, required this.availableToday, this.fallbackOfficePhone});
 
   /// Seeded placeholder doctor names are Arabic only ("… — يُعلن لاحقًا"):
-  /// in English show "`specialty` doctor — to be announced" instead. The
+  /// in English they are shown with the `doctorTba` string instead. The
   /// stored name is left untouched.
-  static String displayDoctorName(Clinic c, {required bool arabic}) {
-    if (!arabic && c.sample && c.doctorName.contains('يُعلن لاحقًا')) {
-      return '${c.specialtyEn.isNotEmpty ? c.specialtyEn : c.specialtyAr} doctor — to be announced';
-    }
-    return c.doctorName;
-  }
+  static bool isPlaceholderDoctor(Clinic c) => c.sample && c.doctorName.contains('يُعلن لاحقًا');
 
   @override
   Widget build(BuildContext context) {
     final c = clinic;
-    final doctor = displayDoctorName(c, arabic: context.isAr);
+    final doctor = !context.isAr && isPlaceholderDoctor(c)
+        ? context.tr('doctorTba', {'s': c.specialtyEn.isNotEmpty ? c.specialtyEn : c.specialtyAr})
+        : c.doctorName;
     final office = fallbackOfficePhone;
     final days = c.days.map((d) => weekdayLabel(context, d)).join(context.isAr ? '، ' : ', ');
     return Card(
@@ -166,6 +163,7 @@ class ClinicCard extends StatelessWidget {
           Wrap(spacing: 8, runSpacing: 8, children: [
             if (c.bookingPhone.isNotEmpty)
               ActionChipButton(
+                  key: const Key('bookClinic'),
                   icon: Icons.call,
                   label: '${context.tr('call')} • ${context.tr('book')}',
                   color: AppColors.burgundy,

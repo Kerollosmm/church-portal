@@ -340,6 +340,28 @@ describe('SEC-01: contact throttle cannot be pinged on its own', () => {
     await assertFails(contactBatch(pub).commit());
   });
 
+  test('a submission 5 s after the last one is still throttled', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'meta', 'contact_rate'), {
+        lastAt: Timestamp.fromMillis(Date.now() - 5000), lastMsgId: 'OldMessageId00000000',
+      });
+    });
+    await assertFails(contactBatch(db(null)).commit());
+  });
+
+  test('a standalone rate write cannot replay an existing message', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const f = ctx.firestore();
+      await setDoc(doc(f, 'contact_messages', 'ExistingMsg0000001'), { ...message(), createdAt: Timestamp.now() });
+      await setDoc(doc(f, 'meta', 'contact_rate'), {
+        lastAt: Timestamp.fromMillis(Date.now() - 11000), lastMsgId: 'OldMessageId00000000',
+      });
+    });
+    await assertFails(setDoc(doc(db(null), 'meta', 'contact_rate'), {
+      lastAt: serverTimestamp(), lastMsgId: 'ExistingMsg0000001',
+    }));
+  });
+
   test('the throttle opens again after 10 s', async () => {
     await env.withSecurityRulesDisabled(async (ctx) => {
       await setDoc(doc(ctx.firestore(), 'meta', 'contact_rate'), {
@@ -401,6 +423,7 @@ describe('SEC-04: season flag, coordinates flag and safe links', () => {
     await assertSucceeds(updateDoc(ref, { facebook: '' }));
     for (const k of ['facebook', 'youtube', 'instagram', 'whatsappChannel']) {
       await assertSucceeds(updateDoc(ref, { [k]: 'https://example.org/page' }));
+      await assertSucceeds(updateDoc(ref, { [k]: 'HTTPS://Example.org/Page' })); // scheme case-insensitive
       await assertFails(updateDoc(ref, { [k]: 'javascript:alert(1)' }), k);
       await assertFails(updateDoc(ref, { [k]: '/relative' }), k);
     }
@@ -412,6 +435,7 @@ describe('SEC-04: season flag, coordinates flag and safe links', () => {
     await assertSucceeds(setDoc(doc(ed, 'alerts', 'a1'), { ...alert, link: '/mass-schedule' }));
     await assertSucceeds(setDoc(doc(ed, 'alerts', 'a2'), { ...alert, link: 'https://www.facebook.com/x' }));
     await assertSucceeds(setDoc(doc(ed, 'alerts', 'a3'), { ...alert, link: '' }));
+    await assertSucceeds(setDoc(doc(ed, 'alerts', 'a4'), { ...alert, link: 'Http://example.org/x' }));
     for (const link of ['javascript:alert(1)', 'data:text/html,x', '//evil.example', 'not a link']) {
       await assertFails(setDoc(doc(ed, 'alerts', 'bad'), { ...alert, link }), link);
     }
