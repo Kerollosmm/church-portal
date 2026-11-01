@@ -16,7 +16,8 @@ Status as of 1 Nov 2026 (after PR #3).
 - [ ] **`production` environment required reviewers** (Settings → Environments) so live deploys and the Seed workflow
       (`force` can overwrite production data) need approval. Consider gating `deploy-rules` with the same environment.
 - [ ] **iOS**: register the iOS app (bundle `com.asafrachurch.churchPortal`), `flutterfire configure`, replace the
-      placeholders in `lib/firebase_options.dart`; App Attest for App Check.
+      placeholders in `lib/firebase_options.dart`; App Attest for App Check. (`Info.plist` already has
+      `NSPhotoLibraryUsageDescription` for the admin image picker.)
 - [ ] **Android release signing**: add an upload keystore + `signingConfigs.release` (currently signs release with the
       debug key in `android/app/build.gradle.kts`); register SHA-256 for Play Integrity; consider replacing the
       browser API key with the Android `current_key`; app label is "Church Portal" (consider the Arabic name);
