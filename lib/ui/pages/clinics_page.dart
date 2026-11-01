@@ -74,6 +74,7 @@ class _ClinicsPageState extends ConsumerState<ClinicsPage> {
                   for (final c in list) ClinicCard(clinic: c, availableToday: isClinicAvailableToday(c, now)),
                 ]),
               const SizedBox(height: 16),
+              if (ref.watch(featuresProvider).routeEnabled('/public-services'))
               Align(
                 alignment: AlignmentDirectional.centerStart,
                 child: OutlinedButton.icon(

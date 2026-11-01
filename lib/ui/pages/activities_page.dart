@@ -45,14 +45,19 @@ class ActivitiesPage extends ConsumerWidget {
           retry: activitiesProvider,
           isEmpty: (d) => d.isEmpty,
           builder: (context, items) {
-            final sorted = [...items]..sort((a, b) {
-                int idx(String c) {
-                  final i = _categoryOrder.indexOf(c);
-                  return i < 0 ? 99 : i;
-                }
+            int idx(String c) {
+              final i = _categoryOrder.indexOf(c);
+              return i < 0 ? 99 : i;
+            }
 
-                return idx(a.category).compareTo(idx(b.category));
+            // Stable: within a category the admin's order (already applied
+            // by the provider) is kept.
+            final indexed = items.asMap().entries.toList()
+              ..sort((a, b) {
+                final c = idx(a.value.category).compareTo(idx(b.value.category));
+                return c != 0 ? c : a.key.compareTo(b.key);
               });
+            final sorted = [for (final e in indexed) e.value];
             return ResponsiveGrid(minItemWidth: 340, children: [for (final a in sorted) _ActivityCard(a)]);
           },
         ),

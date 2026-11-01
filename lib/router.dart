@@ -17,8 +17,12 @@ import 'ui/pages/mass_schedule_page.dart';
 import 'ui/pages/public_services_page.dart';
 import 'ui/widgets/app_shell.dart';
 import 'ui/widgets/common.dart';
+import 'ui/widgets/feature_gate.dart';
 
-NoTransitionPage<void> _page(GoRouterState s, Widget child) => NoTransitionPage(key: s.pageKey, child: child);
+/// Every public page is wrapped in a [FeatureGate]: a section switched off in
+/// `settings/features` shows "not available" instead of its content.
+NoTransitionPage<void> _page(GoRouterState s, Widget child) =>
+    NoTransitionPage(key: s.pageKey, child: FeatureGate(path: s.uri.path, child: child));
 
 /// Keeps `?lang=en` in the URL in sync with the selected language, so links
 /// copied from the address bar, reloads and in-app navigation keep English.

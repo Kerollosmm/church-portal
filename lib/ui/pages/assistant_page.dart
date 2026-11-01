@@ -7,6 +7,7 @@ import '../../core/l10n.dart';
 import '../../core/theme.dart';
 import '../../domain/assistant_context.dart';
 import '../../domain/cairo_time.dart';
+import '../../domain/features.dart';
 import '../../domain/time_format.dart';
 import '../../state/providers.dart';
 import '../widgets/common.dart';
@@ -34,6 +35,10 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
   final List<_Msg> _messages = [];
   ChatSession? _chat;
   String? _chatInstruction;
+
+  /// Enabled sections the history was built under: when they change, earlier
+  /// turns (possibly about a section now switched off) are not replayed.
+  String? _historySections;
   bool _busy = false;
 
   /// Successful turns (user + model), replayed when the session is rebuilt
@@ -55,6 +60,7 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
     try {
       await Future.wait<Object?>([
         ref.read(settingsProvider.future),
+        ref.read(featuresStreamProvider.future),
         ref.read(liturgiesProvider.future),
         ref.read(seasonsProvider.future),
         ref.read(clinicsProvider.future),
@@ -76,6 +82,7 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
         activities: ref.read(activitiesProvider).value ?? const [],
         facilities: ref.read(facilitiesProvider).value ?? const [],
         now: CairoTime.now(),
+        features: ref.read(featuresProvider),
       );
 
   /// Reuses the chat while the grounding (church data + Cairo date) is
@@ -83,6 +90,10 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
   ChatSession _session() {
     final instruction = _buildInstruction();
     if (_chat != null && instruction == _chatInstruction) return _chat!;
+    final f = ref.read(featuresProvider);
+    final sections = [for (final s in Sections.all) if (f.enabled(s)) s].join(',');
+    if (_historySections != null && _historySections != sections) _history.clear();
+    _historySections = sections;
     final model = FirebaseAI.googleAI().generativeModel(
       model: AppConfig.geminiModel,
       systemInstruction: Content.system(instruction),

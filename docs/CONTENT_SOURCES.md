@@ -39,6 +39,7 @@ Source abbreviations
 | instagram | https://www.instagram.com/maximos_coptic_church | FB post | verified |
 | transportAr/En | "end of Street 45, the main road linking the desert road to the Corniche" + GPS button | K (single, 2022) + address | verified (general wording only) |
 | historyAr/En | built only from the facts in this table (bishop, 1980, 12,000+ families, 2022 deacons/hegumens, 2025 papal visit, revivals, Anba Abraam) | see rows below | verified |
+| bishopAr/En | نيافة الأنبا بافلي أسقف قطاع المنتزه / H.G. Anba Pavly, Bishop of the Montaza sector | FB post 27 Sep 2026; C; D (same as "Supervising bishop" below) | verified |
 | altars | removed (no source lists the altars) | none | needs church confirmation |
 | heroImageUrl | empty: no hotlinkable photo without a Facebook login | none | needs church photos |
 

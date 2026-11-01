@@ -3,6 +3,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../../core/l10n.dart';
 import '../../core/theme.dart';
+import '../../domain/features.dart';
 import '../../domain/models.dart';
 import '../../domain/time_format.dart';
 import '../../state/providers.dart';
@@ -14,9 +15,13 @@ class AboutPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final f = ref.watch(featuresProvider);
+    final showServing = f.enabled(Sections.priests);
+    final showDeparted = f.enabled(Sections.departedPriests);
     return PageBody(
       header: PageHeader(title: context.tr('about'), subtitle: context.tr('dir_about'), icon: Icons.church_rounded),
       children: [
+        if (f.enabled(Sections.history)) ...[
         SectionTitle(context.tr('history'), icon: Icons.history_edu_rounded),
         AsyncSection<ChurchSettings>(
           provider: settingsProvider,
@@ -26,7 +31,14 @@ class AboutPage extends ConsumerWidget {
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(18),
-                child: Text(context.pick(s.historyAr, s.historyEn), style: const TextStyle(height: 1.9, fontSize: 15)),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  if (context.pick(s.bishopAr, s.bishopEn).isNotEmpty) ...[
+                    IconLine(Icons.workspace_premium_rounded, '${context.tr('bishop')}: ${context.pick(s.bishopAr, s.bishopEn)}',
+                        style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.burgundy)),
+                    const SizedBox(height: 8),
+                  ],
+                  Text(context.pick(s.historyAr, s.historyEn), style: const TextStyle(height: 1.9, fontSize: 15)),
+                ]),
               ),
             ),
             if (s.altars.isNotEmpty) SectionTitle(context.tr('altars'), icon: Icons.local_fire_department_rounded),
@@ -49,6 +61,8 @@ class AboutPage extends ConsumerWidget {
             ]),
           ]),
         ),
+        ],
+        if (f.enabled(Sections.saints)) ...[
         SectionTitle(context.tr('patronSaints'), icon: Icons.auto_awesome_rounded),
         AsyncSection<List<Saint>>(
           provider: saintsProvider,
@@ -76,18 +90,22 @@ class AboutPage extends ConsumerWidget {
               ),
           ]),
         ),
+        ],
+        if (showServing || showDeparted)
         AsyncSection<List<Priest>>(
           provider: priestsProvider,
           retry: priestsProvider,
           builder: (context, priests) {
-            final serving = priests.where((p) => !p.departed).toList();
-            final departed = priests.where((p) => p.departed).toList();
+            final serving = showServing ? priests.where((p) => !p.departed).toList() : <Priest>[];
+            final departed = showDeparted ? priests.where((p) => p.departed).toList() : <Priest>[];
             return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              SectionTitle(context.tr('priests'), icon: Icons.person_rounded),
-              if (serving.isEmpty)
-                const EmptyState()
-              else
-                ResponsiveGrid(minItemWidth: 300, children: [for (final p in serving) PriestCard(p)]),
+              if (showServing) ...[
+                SectionTitle(context.tr('priests'), icon: Icons.person_rounded),
+                if (serving.isEmpty)
+                  const EmptyState()
+                else
+                  ResponsiveGrid(minItemWidth: 300, children: [for (final p in serving) PriestCard(p)]),
+              ],
               if (departed.isNotEmpty) ...[
                 SectionTitle(context.tr('departedPriests'), icon: Icons.local_florist_rounded),
                 ResponsiveGrid(minItemWidth: 300, children: [for (final p in departed) PriestCard(p)]),

@@ -195,6 +195,13 @@ void main() {
       expect(filterClinics(clinics, now: friday).map((c) => c.id), ['p1', 'd1', 'p2']);
       expect(filterClinics(clinics, specialty: 'pediatrics', now: friday).map((c) => c.id), ['p1', 'p2']);
       expect(filterClinics(clinics, specialty: 'dental', now: friday).map((c) => c.id), ['d1']);
+      // The admin's drag order wins after "open today".
+      final ordered = [
+        const Clinic(id: 'a', specialty: 'dental', specialtyAr: '', specialtyEn: '', doctorName: 'A', days: [5], order: 20),
+        const Clinic(id: 'b', specialty: 'pediatrics', specialtyAr: '', specialtyEn: '', doctorName: 'B', days: [5], order: 10),
+        const Clinic(id: 'c', specialty: 'ent', specialtyAr: '', specialtyEn: '', doctorName: 'C', days: [1], order: 5),
+      ];
+      expect(filterClinics(ordered, now: friday).map((c) => c.id), ['b', 'a', 'c']);
       expect(clinicSpecialties(clinics).keys, ['dental', 'pediatrics']);
     });
     test('links', () {

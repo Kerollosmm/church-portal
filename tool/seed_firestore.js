@@ -13,6 +13,9 @@
  *   --force          Overwrite existing documents (default: skip docs that already exist,
  *                    so edits made in /admin are never clobbered) and delete the
  *                    retired sample documents listed in tool/retired_seed_ids.json
+ *   --fill-missing   For documents that already exist, add only the top-level fields they
+ *                    lack (e.g. a field introduced by a newer seed). Existing values,
+ *                    including edits made in /admin, are never changed.
  *   --admin <uid>[:email]  Also create admins/{uid} (role owner)
  *   --admin-email <email>  Find or create the Firebase Auth user with this email and make it owner
  *
@@ -33,6 +36,13 @@ const projectId = opt('--project') || process.env.GCLOUD_PROJECT || 'asafra-chur
 const only = opt('--only') ? opt('--only').split(',').map((s) => s.trim()) : null;
 const dryRun = flag('--dry-run');
 const force = flag('--force');
+const fillMissing = flag('--fill-missing');
+if (force && fillMissing) {
+  // --force overwrites whole documents, which breaks --fill-missing's promise
+  // to never change existing values: refuse before any write.
+  console.error('--force and --fill-missing cannot be combined.');
+  process.exit(2);
+}
 const adminArg = opt('--admin');
 const adminEmail = opt('--admin-email');
 
@@ -74,7 +84,23 @@ async function main() {
     .map(([collection, docs]) => [collection, Object.entries(docs).map(([id, data]) => [id, convert(data)])]);
 
   const ALREADY_EXISTS = 6; // gRPC status code
-  let written = 0, skipped = 0;
+  let written = 0, skipped = 0, filled = 0;
+
+  // --fill-missing: add only absent top-level fields to an existing doc.
+  // Runs in a transaction so a field an admin writes meanwhile is never replaced.
+  async function fill(ref, data, label) {
+    const keys = await db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) return null;
+      const current = snap.data() || {};
+      const missing = Object.fromEntries(Object.entries(data).filter(([k]) => !(k in current)));
+      if (Object.keys(missing).length && !dryRun) tx.update(ref, missing);
+      return Object.keys(missing);
+    });
+    if (!keys || !keys.length) return;
+    console.log(`${dryRun ? '[dry-run] ' : ''}${label}: ${dryRun ? 'would add' : 'added'} ${keys.join(', ')}`);
+    filled++;
+  }
   for (const [collection, entries] of plan) {
     if (force) {
       // --force: overwrite in batches.
@@ -95,7 +121,11 @@ async function main() {
       for (const [id, data] of entries) {
         const ref = db.collection(collection).doc(id);
         if (dryRun) {
-          if ((await ref.get()).exists) { skipped++; continue; }
+          if ((await ref.get()).exists) {
+            skipped++;
+            if (fillMissing) await fill(ref, data, `${collection}/${id}`);
+            continue;
+          }
           console.log(`[dry-run] ${collection}/${id}`);
           written++;
           continue;
@@ -104,8 +134,9 @@ async function main() {
           await ref.create(data);
           written++;
         } catch (e) {
-          if (e.code === ALREADY_EXISTS) { skipped++; continue; }
-          throw e;
+          if (e.code !== ALREADY_EXISTS) throw e;
+          skipped++;
+          if (fillMissing) await fill(ref, data, `${collection}/${id}`);
         }
       }
     }
@@ -124,7 +155,15 @@ async function main() {
       for (const id of ids) {
         if (seed[collection] && seed[collection][id]) continue; // still part of the seed
         const ref = db.collection(collection).doc(id);
-        if (!(await ref.get()).exists) continue; // already gone (e.g. a repeated --force run)
+        const snap = await ref.get();
+        if (!snap.exists) continue; // already gone (e.g. a repeated --force run)
+        // Provenance: /admin stamps every save with updatedAt/updatedBy, so a
+        // retired id that an admin has since edited (or re-created) is kept.
+        const data = snap.data() || {};
+        if ('updatedAt' in data || 'updatedBy' in data) {
+          console.log(`kept ${collection}/${id} (edited in /admin)`);
+          continue;
+        }
         if (dryRun) {
           console.log(`[dry-run] would delete ${collection}/${id}`);
           continue;
@@ -153,7 +192,7 @@ async function main() {
     }
     console.log(`admin owner ${adminEmail} -> uid ${user ? user.uid : '(dry-run)'}`);
   }
-  console.log(`Done. project=${projectId} written=${written} skipped(existing)=${skipped} deleted(retired)=${deleted}${dryRun ? ' (dry run)' : ''}`);
+  console.log(`Done. project=${projectId} written=${written} skipped(existing)=${skipped} filled(missing fields)=${filled} deleted(retired)=${deleted}${dryRun ? ' (dry run)' : ''}`);
 }
 
 main().catch((e) => {

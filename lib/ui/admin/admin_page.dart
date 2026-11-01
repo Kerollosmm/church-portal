@@ -6,50 +6,66 @@ import 'package:material_ui/material_ui.dart';
 import '../../core/l10n.dart';
 import '../../core/theme.dart';
 import '../../data/admin_repository.dart';
-import '../../domain/cairo_time.dart';
-import '../../domain/time_format.dart';
 import '../../state/providers.dart';
 import '../widgets/coptic_cross.dart';
 import 'admin_schema.dart';
+import 'admin_screens.dart';
+import 'collection_list.dart';
+import 'features_editor.dart';
 
-/// Hidden /admin area: email/password sign-in, then CRUD editors.
+/// Hidden /admin area: email/password sign-in, role check (admins/{uid}),
+/// then the dashboard.
 class AdminPage extends ConsumerWidget {
   const AdminPage({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final repo = ref.watch(adminRepositoryProvider);
+    if (repo == null) return _AdminFrame(child: Center(child: Text(context.tr('adminUnavailable'))));
+    return StreamBuilder<User?>(
+      stream: repo.authChanges(),
+      builder: (context, snap) {
+        if (snap.connectionState == ConnectionState.waiting) {
+          return const _AdminFrame(child: Center(child: CircularProgressIndicator()));
+        }
+        final user = snap.data;
+        if (user == null) return _AdminFrame(child: _LoginForm(repo: repo));
+        return _AdminCheck(key: ValueKey(user.uid), repo: repo, user: user);
+      },
+    );
+  }
+}
+
+/// Plain admin chrome for the sign-in / permission states.
+class _AdminFrame extends ConsumerWidget {
+  final Widget child;
+  const _AdminFrame({required this.child});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
       appBar: AppBar(
         title: Row(children: [const CopticCross(size: 26), const SizedBox(width: 8), Text(context.tr('admin'))]),
         leading: IconButton(icon: const Icon(Icons.home_rounded), onPressed: () => context.go('/')),
-        actions: [
-          IconButton(
-            onPressed: () => ref.read(localeProvider.notifier).toggle(),
-            icon: Text(context.isAr ? 'EN' : 'ع',
-                style: const TextStyle(fontWeight: FontWeight.w800, color: AppColors.goldLight)),
-          ),
-        ],
+        actions: [const LanguageToggle()],
       ),
-      body: repo == null
-          ? Center(child: Text(context.tr('adminUnavailable')))
-          : StreamBuilder<User?>(
-              stream: repo.authChanges(),
-              builder: (context, snap) {
-                if (snap.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                final user = snap.data;
-                if (user == null) return _LoginForm(repo: repo);
-                return _AdminCheck(
-                  key: ValueKey(user.uid),
-                  repo: repo,
-                  user: user,
-                );
-              },
-            ),
+      body: child,
     );
   }
+}
+
+class LanguageToggle extends ConsumerWidget {
+  const LanguageToggle({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) => IconButton(
+    tooltip: context.tr('language'),
+    onPressed: () => ref.read(localeProvider.notifier).toggle(),
+    icon: Text(
+      context.isAr ? 'EN' : 'ع',
+      style: const TextStyle(fontWeight: FontWeight.w800, color: AppColors.goldLight),
+    ),
+  );
 }
 
 /// Checks admins/{uid}; a failed lookup shows a retry action instead of the
@@ -64,49 +80,81 @@ class _AdminCheck extends StatefulWidget {
 }
 
 class _AdminCheckState extends State<_AdminCheck> {
-  late Future<bool> _future = widget.repo.isAdmin(widget.user.uid);
+  late Future<String?> _future = widget.repo.adminRole(widget.user.uid);
+  late final Stream<String?> _roleStream = widget.repo.roleChanges(widget.user.uid);
 
   @override
   Widget build(BuildContext context) {
     final repo = widget.repo;
     final user = widget.user;
-    return FutureBuilder<bool>(
+    return FutureBuilder<String?>(
       future: _future,
       builder: (context, adm) {
         if (adm.connectionState != ConnectionState.done) {
-          return const Center(child: CircularProgressIndicator());
+          return const _AdminFrame(child: Center(child: CircularProgressIndicator()));
         }
         if (adm.hasError) {
-          return Center(
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              const Icon(Icons.cloud_off_rounded, size: 48, color: AppColors.alert),
-              const SizedBox(height: 8),
-              Text(context.tr('adminCheckFailed'), textAlign: TextAlign.center),
-              const SizedBox(height: 12),
-              Wrap(spacing: 8, children: [
-                FilledButton(
-                  onPressed: () => setState(() => _future = repo.isAdmin(user.uid)),
-                  child: Text(context.tr('retry')),
-                ),
-                OutlinedButton(onPressed: repo.signOut, child: Text(context.tr('signOut'))),
-              ]),
-            ]),
+          return _AdminFrame(
+            child: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.cloud_off_rounded, size: 48, color: AppColors.alert),
+                  const SizedBox(height: 8),
+                  Text(context.tr('adminCheckFailed'), textAlign: TextAlign.center),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    children: [
+                      FilledButton(
+                        onPressed: () => setState(() => _future = repo.adminRole(user.uid)),
+                        child: Text(context.tr('retry')),
+                      ),
+                      OutlinedButton(onPressed: repo.signOut, child: Text(context.tr('signOut'))),
+                    ],
+                  ),
+                ],
+              ),
+            ),
           );
         }
-        if (adm.data != true) {
-          return Center(
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
+        // Live role after the authoritative server check: a demoted or
+        // removed admin loses the owner screens (or the dashboard) at once.
+        return StreamBuilder<String?>(
+          stream: _roleStream,
+          initialData: adm.data,
+          builder: (context, live) => _forRole(context, live.hasError ? adm.data : live.data),
+        );
+      },
+    );
+  }
+
+  Widget _forRole(BuildContext context, String? role) {
+    final repo = widget.repo;
+    final user = widget.user;
+    if (role == null) {
+      return _AdminFrame(
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
               const Icon(Icons.lock_outline, size: 48, color: AppColors.alert),
               const SizedBox(height: 8),
               Text(context.tr('notAdmin')),
               Text(user.email ?? '', style: const TextStyle(color: AppColors.muted)),
               const SizedBox(height: 12),
               OutlinedButton(onPressed: repo.signOut, child: Text(context.tr('signOut'))),
-            ]),
-          );
-        }
-        return _Dashboard(repo: repo, user: user);
-      },
+            ],
+          ),
+        ),
+      );
+    }
+    return AdminDashboard(
+      repo: repo,
+      uid: user.uid,
+      email: user.email ?? user.uid,
+      role: role,
+      onSignOut: repo.signOut,
     );
   }
 }
@@ -148,6 +196,25 @@ class _LoginFormState extends State<_LoginForm> {
     }
   }
 
+  Future<void> _resetPassword() async {
+    final messenger = ScaffoldMessenger.of(context);
+    final need = context.tr('enterEmailFirst');
+    final sent = context.tr('resetSent');
+    final failed = context.tr('resetFailed');
+    final email = _email.text.trim();
+    if (!email.contains('@')) {
+      setState(() => _error = need);
+      return;
+    }
+    var ok = false;
+    try {
+      ok = await widget.repo.sendPasswordReset(email);
+    } catch (_) {
+      ok = false;
+    }
+    messenger.showSnackBar(SnackBar(content: Text(ok ? sent : failed)));
+  }
+
   @override
   Widget build(BuildContext context) {
     return Center(
@@ -158,41 +225,53 @@ class _LoginFormState extends State<_LoginForm> {
           child: Padding(
             padding: const EdgeInsets.all(20),
             child: AutofillGroup(
-              child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                Text(context.tr('signIn'),
-                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.burgundy)),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: _email,
-                  keyboardType: TextInputType.emailAddress,
-                  textDirection: TextDirection.ltr,
-                  autofillHints: const [AutofillHints.email],
-                  decoration: const InputDecoration(labelText: 'Email', prefixIcon: Icon(Icons.email_outlined)),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _password,
-                  obscureText: true,
-                  textDirection: TextDirection.ltr,
-                  autofillHints: const [AutofillHints.password],
-                  onSubmitted: (_) => _signIn(),
-                  decoration:
-                      InputDecoration(labelText: context.tr('password'), prefixIcon: const Icon(Icons.lock_outline)),
-                ),
-                if (_error != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 10),
-                    child: Text(_error!, style: const TextStyle(color: AppColors.alert)),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    context.tr('signIn'),
+                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.burgundy),
                   ),
-                const SizedBox(height: 16),
-                FilledButton(
-                  onPressed: _busy ? null : _signIn,
-                  child: _busy
-                      ? const SizedBox.square(
-                          dimension: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                      : Text(context.tr('signIn')),
-                ),
-              ]),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: _email,
+                    keyboardType: TextInputType.emailAddress,
+                    textDirection: TextDirection.ltr,
+                    autofillHints: const [AutofillHints.email],
+                    decoration: const InputDecoration(labelText: 'Email', prefixIcon: Icon(Icons.email_outlined)),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _password,
+                    obscureText: true,
+                    textDirection: TextDirection.ltr,
+                    autofillHints: const [AutofillHints.password],
+                    onSubmitted: (_) => _signIn(),
+                    decoration: InputDecoration(
+                      labelText: context.tr('password'),
+                      prefixIcon: const Icon(Icons.lock_outline),
+                    ),
+                  ),
+                  if (_error != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 10),
+                      child: Text(_error!, style: const TextStyle(color: AppColors.alert)),
+                    ),
+                  const SizedBox(height: 16),
+                  FilledButton(
+                    onPressed: _busy ? null : _signIn,
+                    child: _busy
+                        ? const SizedBox.square(
+                            dimension: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          )
+                        : Text(context.tr('signIn')),
+                  ),
+                  const SizedBox(height: 6),
+                  TextButton(onPressed: _busy ? null : _resetPassword, child: Text(context.tr('forgotPassword'))),
+                ],
+              ),
             ),
           ),
         ),
@@ -201,412 +280,164 @@ class _LoginFormState extends State<_LoginForm> {
   }
 }
 
-class _Dashboard extends StatelessWidget {
-  final AdminRepository repo;
-  final User user;
-  const _Dashboard({required this.repo, required this.user});
-
-  @override
-  Widget build(BuildContext context) {
-    return DefaultTabController(
-      length: adminCollections.length,
-      child: Column(children: [
-        Container(
-          color: AppColors.parchment,
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          child: Row(children: [
-            const Icon(Icons.verified_user, color: AppColors.success, size: 18),
-            const SizedBox(width: 6),
-            Expanded(child: Text(user.email ?? user.uid, overflow: TextOverflow.ellipsis)),
-            TextButton.icon(onPressed: repo.signOut, icon: const Icon(Icons.logout), label: Text(context.tr('signOut'))),
-          ]),
-        ),
-        TabBar(
-          isScrollable: true,
-          labelColor: AppColors.burgundy,
-          indicatorColor: AppColors.gold,
-          tabs: [for (final c in adminCollections) Tab(text: context.pick(c.labelAr, c.labelEn))],
-        ),
-        Expanded(
-          child: TabBarView(children: [for (final c in adminCollections) _CollectionList(repo: repo, def: c)]),
-        ),
-      ]),
-    );
-  }
+/// One admin destination (sidebar / drawer entry).
+class AdminDest {
+  final String id;
+  final IconData icon;
+  final String labelAr, labelEn;
+  const AdminDest(this.id, this.icon, this.labelAr, this.labelEn);
 }
 
-class _CollectionList extends StatelessWidget {
-  final AdminRepository repo;
-  final CollectionDef def;
-  const _CollectionList({required this.repo, required this.def});
+/// Destinations shown to [role] (owners also get "Admins").
+List<AdminDest> adminDestinations(String role) => [
+  const AdminDest('overview', Icons.dashboard_outlined, 'نظرة عامة', 'Overview'),
+  const AdminDest('features', Icons.toggle_on_outlined, 'الأقسام والصفحة الرئيسية', 'Sections & home page'),
+  const AdminDest('church', Icons.church_outlined, 'بيانات الكنيسة', 'Church info'),
+  for (final c in adminCollections) AdminDest(c.id, adminIcon(c.icon), c.labelAr, c.labelEn),
+  const AdminDest('messages', Icons.mail_outline, 'رسائل الزوار', 'Contact messages'),
+  if (role == AdminRoles.owner) const AdminDest('admins', Icons.admin_panel_settings_outlined, 'المشرفون', 'Admins'),
+];
 
-  String _title(AdminDoc d) {
-    for (final k in def.titleKeys) {
-      final v = d.data[k];
-      if (v != null && v.toString().isNotEmpty) return v.toString();
-    }
-    return d.id;
-  }
-
-  String _subtitle(BuildContext context, AdminDoc d) {
-    final parts = <String>[];
-    final wd = d.data['weekday'];
-    if (wd is int) parts.add(weekdayName(wd, arabic: context.isAr));
-    final date = d.data['date'];
-    if (date is DateTime) parts.add(formatDate(CairoTime.calendarDate(date), arabic: context.isAr));
-    if (d.data['start'] != null && d.data['start'].toString().isNotEmpty) {
-      parts.add(formatRangeLatin(d.data['start'].toString(), (d.data['end'] ?? '').toString()));
-    }
-    if (d.data['seasonKey'] != null) parts.add('${d.data['seasonKey']}');
-    if (d.data['active'] == false) parts.add('⛔');
-    for (final k in ['startsAt', 'endsAt']) {
-      final v = d.data[k];
-      if (v is DateTime) parts.add(_fmtDateTime(v));
-    }
-    return parts.join(' • ');
-  }
+/// Responsive dashboard: sidebar on desktop, drawer on mobile.
+class AdminDashboard extends StatefulWidget {
+  final AdminBackend repo;
+  final String uid, email, role;
+  final VoidCallback onSignOut;
+  final String initial;
+  const AdminDashboard({
+    super.key,
+    required this.repo,
+    required this.uid,
+    required this.email,
+    required this.role,
+    required this.onSignOut,
+    this.initial = 'overview',
+  });
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.cream,
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _openEditor(context, null),
-        icon: const Icon(Icons.add),
-        label: Text(context.tr('add')),
-      ),
-      body: StreamBuilder<List<AdminDoc>>(
-        stream: repo.watch(def.name),
-        builder: (context, snap) {
-          if (snap.hasError) return Center(child: Text('${snap.error}'));
-          if (!snap.hasData) return const Center(child: CircularProgressIndicator());
-          final docs = snap.data!;
-          if (docs.isEmpty) return Center(child: Text(context.tr('noItems')));
-          return ListView.separated(
-            padding: const EdgeInsets.fromLTRB(12, 12, 12, 90),
-            itemCount: docs.length,
-            separatorBuilder: (_, _) => const SizedBox(height: 8),
-            itemBuilder: (context, i) {
-              final d = docs[i];
-              return Card(
-                child: ListTile(
-                  title: Text(_title(d), style: const TextStyle(fontWeight: FontWeight.w700)),
-                  subtitle: Text(_subtitle(context, d)),
-                  onTap: () => _openEditor(context, d),
-                  trailing: IconButton(
-                    tooltip: context.tr('delete'),
-                    icon: const Icon(Icons.delete_outline, color: AppColors.alert),
-                    onPressed: () => _confirmDelete(context, d),
+  State<AdminDashboard> createState() => _AdminDashboardState();
+}
+
+class _AdminDashboardState extends State<AdminDashboard> {
+  late String _current = widget.initial;
+
+  void _open(String id) => setState(() => _current = id);
+
+  Widget _screen() {
+    final repo = widget.repo;
+    switch (_current) {
+      case 'overview':
+        return OverviewScreen(repo: repo, role: widget.role, onOpen: _open);
+      case 'features':
+        return FeaturesScreen(repo: repo);
+      case 'church':
+        return ChurchInfoScreen(repo: repo);
+      case 'messages':
+        return MessagesScreen(repo: repo);
+      case 'admins':
+        return widget.role == AdminRoles.owner
+            ? AdminsScreen(repo: repo, selfUid: widget.uid)
+            : Center(child: Text(context.tr('ownerOnly')));
+    }
+    final def = collectionById(_current);
+    if (def == null) return OverviewScreen(repo: repo, role: widget.role, onOpen: _open);
+    return CollectionListScreen(key: ValueKey(def.id), repo: repo, def: def);
+  }
+
+  Widget _nav(BuildContext context, {required bool inDrawer}) {
+    final dests = adminDestinations(widget.role);
+    return Container(
+      color: AppColors.parchment,
+      child: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+              child: Row(
+                children: [
+                  const Icon(Icons.verified_user, color: AppColors.success, size: 18),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          widget.email,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                        Text(
+                          context.tr('role_${widget.role}'),
+                          style: const TextStyle(color: AppColors.muted, fontSize: 12),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              );
-            },
-          );
-        },
-      ),
-    );
-  }
-
-  Future<void> _confirmDelete(BuildContext context, AdminDoc d) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        content: Text(context.tr('confirmDelete')),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(context.tr('cancel'))),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(context.tr('delete'))),
-        ],
-      ),
-    );
-    if (ok != true || !context.mounted) return;
-    final messenger = ScaffoldMessenger.of(context);
-    final failedMsg = context.tr('deleteFailed', {'e': '{e}'});
-    try {
-      await repo.delete(def.name, d.id);
-    } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text(failedMsg.replaceAll('{e}', '$e'))));
-    }
-  }
-
-  void _openEditor(BuildContext context, AdminDoc? d) {
-    Navigator.of(context).push(MaterialPageRoute(
-      fullscreenDialog: true,
-      builder: (_) => DocEditor(repo: repo, def: def, doc: d),
-    ));
-  }
-}
-
-String _fmtDateTime(DateTime v) {
-  final c = CairoTime.fromInstant(v);
-  String two(int n) => n.toString().padLeft(2, '0');
-  return '${c.year}-${two(c.month)}-${two(c.day)} ${two(c.hour)}:${two(c.minute)}';
-}
-
-String _fmtDate(DateTime v) {
-  final c = CairoTime.calendarDate(v);
-  String two(int n) => n.toString().padLeft(2, '0');
-  return '${c.year}-${two(c.month)}-${two(c.day)}';
-}
-
-/// Generic form editor driven by [CollectionDef].
-class DocEditor extends StatefulWidget {
-  final AdminRepository repo;
-  final CollectionDef def;
-  final AdminDoc? doc;
-  const DocEditor({super.key, required this.repo, required this.def, this.doc});
-
-  @override
-  State<DocEditor> createState() => _DocEditorState();
-}
-
-class _DocEditorState extends State<DocEditor> {
-  final _formKey = GlobalKey<FormState>();
-  final Map<String, TextEditingController> _text = {};
-  final Map<String, dynamic> _values = {};
-  bool _saving = false;
-
-  @override
-  void initState() {
-    super.initState();
-    final data = widget.doc?.data ?? const <String, dynamic>{};
-    for (final f in widget.def.fields) {
-      final v = data[f.key];
-      switch (f.type) {
-        case FieldType.text:
-        case FieldType.multiline:
-        case FieldType.time:
-          _text[f.key] = TextEditingController(text: v?.toString() ?? '');
-        case FieldType.integer:
-          _text[f.key] = TextEditingController(text: v?.toString() ?? '');
-        case FieldType.dateTime:
-          _text[f.key] = TextEditingController(text: v is DateTime ? _fmtDateTime(v) : '');
-        case FieldType.date:
-          _text[f.key] = TextEditingController(text: v is DateTime ? _fmtDate(v) : '');
-        case FieldType.boolean:
-          _values[f.key] = v is bool ? v : (widget.doc == null ? f.newBool : f.missingBool);
-        case FieldType.weekday:
-          _values[f.key] = v is int ? v : null;
-        case FieldType.weekdays:
-          _values[f.key] = <int>{...((v as List?) ?? const []).whereType<int>()};
-        case FieldType.choice:
-          _values[f.key] = (v == null || v.toString().isEmpty)
-              ? (f.nullableChoice ? null : (f.defaultOption ?? (f.options.isNotEmpty ? f.options.first : null)))
-              : v.toString();
-      }
-    }
-  }
-
-  @override
-  void dispose() {
-    for (final c in _text.values) {
-      c.dispose();
-    }
-    super.dispose();
-  }
-
-  static final _timeRe = RegExp(r'^([01]\d|2[0-3]):[0-5]\d$');
-  static final _dateTimeRe = RegExp(r'^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})$');
-  static final _dateRe = RegExp(r'^(\d{4})-(\d{2})-(\d{2})$');
-
-  String? _validate(FieldDef f, String? raw) {
-    final v = (raw ?? '').trim();
-    if (v.isEmpty) return f.required ? context.tr('required') : null;
-    final ok = switch (f.type) {
-      FieldType.time => _timeRe.hasMatch(v),
-      FieldType.integer => int.tryParse(v) != null,
-      FieldType.dateTime => _validDateTime(v),
-      FieldType.date => _validDate(v),
-      _ => true,
-    };
-    return ok ? null : context.tr('invalid');
-  }
-
-  /// Real calendar date (rejects e.g. 2027-02-30, which would otherwise roll over).
-  static bool _isCalendarDate(int y, int m, int d) {
-    if (m < 1 || m > 12 || d < 1) return false;
-    final dt = DateTime.utc(y, m, d);
-    return dt.year == y && dt.month == m && dt.day == d;
-  }
-
-  static bool _validDate(String v) {
-    final m = _dateRe.firstMatch(v);
-    return m != null && _isCalendarDate(int.parse(m[1]!), int.parse(m[2]!), int.parse(m[3]!));
-  }
-
-  static bool _validDateTime(String v) {
-    final m = _dateTimeRe.firstMatch(v);
-    if (m == null) return false;
-    final h = int.parse(m[4]!), min = int.parse(m[5]!);
-    return h <= 23 && min <= 59 && _isCalendarDate(int.parse(m[1]!), int.parse(m[2]!), int.parse(m[3]!));
-  }
-
-  Map<String, dynamic> _collect() {
-    final out = <String, dynamic>{};
-    for (final f in widget.def.fields) {
-      switch (f.type) {
-        case FieldType.text:
-        case FieldType.multiline:
-        case FieldType.time:
-          out[f.key] = _text[f.key]!.text.trim();
-        case FieldType.integer:
-          // Blank = null (e.g. `order` then falls back to weekday sorting).
-          out[f.key] = int.tryParse(_text[f.key]!.text.trim());
-        case FieldType.dateTime:
-          final m = _dateTimeRe.firstMatch(_text[f.key]!.text.trim());
-          out[f.key] = m == null
-              ? null
-              : CairoTime.at(int.parse(m[1]!), int.parse(m[2]!), int.parse(m[3]!), int.parse(m[4]!) * 60 + int.parse(m[5]!))
-                  .toUtc();
-        case FieldType.date:
-          final m = _dateRe.firstMatch(_text[f.key]!.text.trim());
-          out[f.key] = m == null ? null : CairoTime.at(int.parse(m[1]!), int.parse(m[2]!), int.parse(m[3]!)).toUtc();
-        case FieldType.boolean:
-        case FieldType.weekday:
-        case FieldType.choice:
-          out[f.key] = _values[f.key];
-        case FieldType.weekdays:
-          out[f.key] = (_values[f.key] as Set<int>).toList()..sort();
-      }
-    }
-    return out;
-  }
-
-  Future<void> _save() async {
-    if (_saving || !_formKey.currentState!.validate()) return;
-    final data = _collect();
-    final messenger = ScaffoldMessenger.of(context);
-    final anyOf = widget.def.requireAnyOf;
-    if (anyOf.isNotEmpty && anyOf.every((k) => data[k] == null || data[k] == '')) {
-      messenger.showSnackBar(SnackBar(content: Text(context.tr('needWeekdayOrDate'))));
-      return;
-    }
-    final savedMsg = context.tr('saved');
-    final nav = Navigator.of(context);
-    final route = ModalRoute.of(context);
-    setState(() => _saving = true);
-    try {
-      await widget.repo.save(widget.def.name, widget.doc?.id, data);
-      messenger.showSnackBar(SnackBar(content: Text(savedMsg)));
-      // The admin may have closed the editor while the write was pending:
-      // only pop if this editor is still the top route.
-      if (mounted && (route?.isCurrent ?? false)) nav.pop();
-    } catch (e) {
-      if (mounted) {
-        messenger.showSnackBar(SnackBar(content: Text(context.tr('saveFailed', {'e': '$e'}))));
-        setState(() => _saving = false);
-      }
-    }
-  }
-
-  Widget _field(FieldDef f) {
-    final label = context.pick(f.labelAr, f.labelEn) + (f.required ? ' *' : '');
-    switch (f.type) {
-      case FieldType.text:
-      case FieldType.multiline:
-      case FieldType.time:
-      case FieldType.integer:
-      case FieldType.dateTime:
-      case FieldType.date:
-        final ltr = f.type != FieldType.text && f.type != FieldType.multiline;
-        return TextFormField(
-          controller: _text[f.key],
-          minLines: f.type == FieldType.multiline ? 3 : 1,
-          maxLines: f.type == FieldType.multiline ? 8 : 1,
-          textDirection: ltr ? TextDirection.ltr : null,
-          keyboardType: f.type == FieldType.integer ? TextInputType.number : null,
-          validator: (v) => _validate(f, v),
-          decoration: InputDecoration(
-            labelText: label,
-            hintText: switch (f.type) {
-              FieldType.time => '06:30',
-              FieldType.dateTime => '2027-01-06 20:00',
-              FieldType.date => '2027-01-06',
-              _ => null,
-            },
-          ),
-        );
-      case FieldType.boolean:
-        return SwitchListTile(
-          title: Text(label),
-          value: _values[f.key] as bool,
-          onChanged: (v) => setState(() => _values[f.key] = v),
-        );
-      case FieldType.weekday:
-        return DropdownButtonFormField<int?>(
-          initialValue: _values[f.key] as int?,
-          decoration: InputDecoration(labelText: label),
-          items: [
-            const DropdownMenuItem<int?>(value: null, child: Text('—')),
-            for (var d = 1; d <= 7; d++)
-              DropdownMenuItem<int?>(value: d, child: Text(weekdayName(d, arabic: context.isAr))),
-          ],
-          onChanged: (v) => setState(() => _values[f.key] = v),
-        );
-      case FieldType.weekdays:
-        final set = _values[f.key] as Set<int>;
-        return InputDecorator(
-          decoration: InputDecoration(labelText: label),
-          child: Wrap(spacing: 6, runSpacing: 6, children: [
-            for (var d = 1; d <= 7; d++)
-              FilterChip(
-                label: Text(weekdayName(d, arabic: context.isAr)),
-                selected: set.contains(d),
-                onSelected: (sel) => setState(() => sel ? set.add(d) : set.remove(d)),
+                ],
               ),
-          ]),
-        );
-      case FieldType.choice:
-        return DropdownButtonFormField<String?>(
-          initialValue: _values[f.key] as String?,
-          decoration: InputDecoration(labelText: label),
-          validator: (v) => f.required && (v == null || v.isEmpty) ? context.tr('required') : null,
-          items: [
-            if (f.nullableChoice) const DropdownMenuItem<String?>(value: null, child: Text('—')),
-            for (final o in f.options) DropdownMenuItem<String?>(value: o, child: Text(o)),
+            ),
+            const Divider(),
+            for (final d in dests)
+              ListTile(
+                key: ValueKey('nav-${d.id}'),
+                dense: true,
+                leading: Icon(d.icon, color: AppColors.burgundy),
+                title: Text(context.pick(d.labelAr, d.labelEn), style: const TextStyle(fontWeight: FontWeight.w600)),
+                selected: _current == d.id,
+                selectedTileColor: AppColors.gold.withValues(alpha: 0.22),
+                onTap: () {
+                  if (inDrawer) Navigator.of(context).pop();
+                  _open(d.id);
+                },
+              ),
+            const Divider(),
+            ListTile(
+              dense: true,
+              leading: const Icon(Icons.logout, color: AppColors.alert),
+              title: Text(context.tr('signOut')),
+              onTap: widget.onSignOut,
+            ),
           ],
-          onChanged: (v) => setState(() => _values[f.key] = v),
-        );
-    }
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    final wide = MediaQuery.sizeOf(context).width >= 1000;
+    final dest = adminDestinations(widget.role)
+        .firstWhere((d) => d.id == _current, orElse: () => adminDestinations(widget.role).first);
     return Scaffold(
       appBar: AppBar(
-        title: Text('${context.tr(widget.doc == null ? 'add' : 'edit')} — ${context.pick(widget.def.labelAr, widget.def.labelEn)}'),
+        title: Row(
+          children: [
+            const CopticCross(size: 24),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Text(
+                '${context.tr('admin')} — ${context.pick(dest.labelAr, dest.labelEn)}',
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
         actions: [
-          TextButton(
-            onPressed: _saving ? null : _save,
-            child: Text(context.tr('save'), style: const TextStyle(color: AppColors.goldLight, fontWeight: FontWeight.w800)),
-          ),
+          IconButton(tooltip: context.tr('openSite'), icon: const Icon(Icons.public), onPressed: () => context.go('/')),
+          const LanguageToggle(),
         ],
       ),
-      body: Form(
-        key: _formKey,
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 700),
-            child: ListView(
-              padding: const EdgeInsets.all(16),
+      drawer: wide ? null : Drawer(child: _nav(context, inDrawer: true)),
+      body: wide
+          ? Row(
               children: [
-                if (widget.doc != null)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: Text('ID: ${widget.doc!.id}', style: const TextStyle(color: AppColors.muted)),
-                  ),
-                for (final f in widget.def.fields) Padding(padding: const EdgeInsets.only(bottom: 12), child: _field(f)),
-                const SizedBox(height: 8),
-                FilledButton.icon(
-                  onPressed: _saving ? null : _save,
-                  icon: const Icon(Icons.save),
-                  label: Text(context.tr('save')),
-                ),
+                SizedBox(width: 270, child: _nav(context, inDrawer: false)),
+                const VerticalDivider(width: 1),
+                Expanded(child: _screen()),
               ],
-            ),
-          ),
-        ),
-      ),
+            )
+          : _screen(),
     );
   }
 }
-

@@ -6,6 +6,7 @@ import '../../core/l10n.dart';
 import '../../core/launch.dart';
 import '../../core/theme.dart';
 import '../../domain/cairo_time.dart';
+import '../../domain/features.dart';
 import '../../domain/models.dart';
 import '../../domain/rules.dart';
 import '../../domain/schedule.dart';
@@ -212,6 +213,7 @@ class _AlertBannerState extends ConsumerState<AlertBanner> {
 
   @override
   Widget build(BuildContext context) {
+    if (!ref.watch(featuresProvider).enabled(Sections.alerts)) return const SizedBox.shrink();
     final alerts = ref.watch(alertsProvider).value;
     final now = ref.watch(nowProvider).value ?? DateTime.now();
     if (alerts == null) return const SizedBox.shrink();

@@ -2,6 +2,8 @@
 // business logic stays unit-testable. The data layer normalises Firestore
 // values (Timestamp -> DateTime) before calling the `fromMap` factories.
 
+import 'features.dart';
+
 DateTime? parseDate(Object? v) {
   if (v == null) return null;
   if (v is DateTime) return v;
@@ -77,6 +79,7 @@ class ChurchSettings {
   final String verseAr, verseEn, verseRef, verseRefAr;
   final String heroImageUrl;
   final String historyAr, historyEn;
+  final String bishopAr, bishopEn;
   final List<Altar> altars;
   final bool assistantEnabled;
   final bool sample;
@@ -105,6 +108,8 @@ class ChurchSettings {
     this.heroImageUrl = '',
     this.historyAr = '',
     this.historyEn = '',
+    this.bishopAr = '',
+    this.bishopEn = '',
     this.altars = const [],
     this.assistantEnabled = false,
     this.sample = false,
@@ -137,6 +142,8 @@ class ChurchSettings {
         heroImageUrl: _s(m['heroImageUrl']),
         historyAr: _s(m['historyAr']),
         historyEn: _s(m['historyEn']),
+        bishopAr: _s(m['bishopAr']),
+        bishopEn: _s(m['bishopEn']),
         altars: ((m['altars'] as List?) ?? const [])
             .whereType<Map>()
             .map((e) => Altar.fromMap(Map<String, dynamic>.from(e)))
@@ -146,7 +153,13 @@ class ChurchSettings {
       );
 }
 
-class Alert {
+class Alert implements Hideable {
+
+  /// Shown on the public site (false = hidden by an admin, not deleted).
+  @override
+  final bool visible;
+  @override
+  final int order;
   final String id;
   final String titleAr, titleEn, bodyAr, bodyEn;
   final bool active;
@@ -154,6 +167,8 @@ class Alert {
   final int priority;
   final String? link;
   const Alert({
+    this.visible = true,
+    this.order = 0,
     required this.id,
     required this.titleAr,
     required this.titleEn,
@@ -166,6 +181,8 @@ class Alert {
     this.link,
   });
   factory Alert.fromMap(String id, Map<String, dynamic> m) => Alert(
+        visible: m['visible'] is bool ? m['visible'] as bool : true,
+        order: _ni(m['order']) ?? 0,
         id: id,
         titleAr: _s(m['titleAr']),
         titleEn: _s(m['titleEn']),
@@ -205,7 +222,11 @@ class Season {
       );
 }
 
-class Liturgy {
+class Liturgy implements Hideable {
+
+  /// Shown on the public site (false = hidden by an admin, not deleted).
+  @override
+  final bool visible;
   final String id;
   final String type; // mass | vespers | praise | other
   final String nameAr, nameEn;
@@ -214,11 +235,13 @@ class Liturgy {
   final String start, end; // HH:mm
   final String placeAr, placeEn, audienceAr, audienceEn;
   final String? seasonKey;
+  @override
   final int order;
 
   /// Placeholder time not yet confirmed by the church.
   final bool sample;
   const Liturgy({
+    this.visible = true,
     required this.id,
     required this.type,
     required this.nameAr,
@@ -236,6 +259,7 @@ class Liturgy {
     this.sample = false,
   });
   factory Liturgy.fromMap(String id, Map<String, dynamic> m) => Liturgy(
+        visible: m['visible'] is bool ? m['visible'] as bool : true,
         id: id,
         type: _s(m['type']).isEmpty ? 'mass' : _s(m['type']),
         nameAr: _s(m['nameAr']),
@@ -256,13 +280,21 @@ class Liturgy {
   int? get endMinutes => parseHm(end);
 }
 
-class Meeting {
+class Meeting implements Hideable {
+
+  /// Shown on the public site (false = hidden by an admin, not deleted).
+  @override
+  final bool visible;
+  @override
+  final int order;
   final String id, stage, nameAr, nameEn;
   final int? weekday;
   final String start, end, hallAr, hallEn;
   final String facebookUrl, whatsappUrl, notes;
   final bool sample;
   const Meeting({
+    this.visible = true,
+    this.order = 0,
     required this.id,
     required this.stage,
     required this.nameAr,
@@ -278,6 +310,8 @@ class Meeting {
     this.sample = false,
   });
   factory Meeting.fromMap(String id, Map<String, dynamic> m) => Meeting(
+        visible: m['visible'] is bool ? m['visible'] as bool : true,
+        order: _ni(m['order']) ?? 0,
         id: id,
         stage: _s(m['stage']),
         nameAr: _s(m['nameAr']),
@@ -294,13 +328,21 @@ class Meeting {
       );
 }
 
-class Activity {
+class Activity implements Hideable {
+
+  /// Shown on the public site (false = hidden by an admin, not deleted).
+  @override
+  final bool visible;
+  @override
+  final int order;
   final String id, category, titleAr, titleEn, descAr, descEn, scheduleAr, scheduleEn, ageRange, contactPhone;
 
   /// Optional external page (Facebook page, YouTube playlist...).
   final String link;
   final bool sample;
   const Activity({
+    this.visible = true,
+    this.order = 0,
     required this.id,
     required this.category,
     required this.titleAr,
@@ -315,6 +357,8 @@ class Activity {
     this.sample = false,
   });
   factory Activity.fromMap(String id, Map<String, dynamic> m) => Activity(
+        visible: m['visible'] is bool ? m['visible'] as bool : true,
+        order: _ni(m['order']) ?? 0,
         id: id,
         category: _s(m['category']),
         titleAr: _s(m['titleAr']),
@@ -330,13 +374,21 @@ class Activity {
       );
 }
 
-class Clinic {
+class Clinic implements Hideable {
+
+  /// Shown on the public site (false = hidden by an admin, not deleted).
+  @override
+  final bool visible;
+  @override
+  final int order;
   final String id, specialty, specialtyAr, specialtyEn, doctorName, degreeAr, degreeEn;
   final List<int> days;
   final String start, end, bookingPhone, whatsapp;
   final bool active;
   final bool sample;
   const Clinic({
+    this.visible = true,
+    this.order = 0,
     required this.id,
     required this.specialty,
     required this.specialtyAr,
@@ -353,6 +405,8 @@ class Clinic {
     this.sample = false,
   });
   factory Clinic.fromMap(String id, Map<String, dynamic> m) => Clinic(
+        visible: m['visible'] is bool ? m['visible'] as bool : true,
+        order: _ni(m['order']) ?? 0,
         id: id,
         specialty: _s(m['specialty']),
         specialtyAr: _s(m['specialtyAr']),
@@ -370,10 +424,18 @@ class Clinic {
       );
 }
 
-class Facility {
+class Facility implements Hideable {
+
+  /// Shown on the public site (false = hidden by an admin, not deleted).
+  @override
+  final bool visible;
+  @override
+  final int order;
   final String id, type, nameAr, nameEn, descAr, descEn, phone, hoursAr, hoursEn;
   final bool sample;
   const Facility({
+    this.visible = true,
+    this.order = 0,
     required this.id,
     required this.type,
     required this.nameAr,
@@ -386,6 +448,8 @@ class Facility {
     this.sample = false,
   });
   factory Facility.fromMap(String id, Map<String, dynamic> m) => Facility(
+        visible: m['visible'] is bool ? m['visible'] as bool : true,
+        order: _ni(m['order']) ?? 0,
         id: id,
         type: _s(m['type']),
         nameAr: _s(m['nameAr']),
@@ -399,12 +463,18 @@ class Facility {
       );
 }
 
-class Priest {
+class Priest implements Hideable {
+
+  /// Shown on the public site (false = hidden by an admin, not deleted).
+  @override
+  final bool visible;
   final String id, name, nameEn, photoUrl, rank, status, bioAr, bioEn;
   final String ordinationDate, hegumenDate, departedDate;
+  @override
   final int order;
   final bool sample;
   const Priest({
+    this.visible = true,
     required this.id,
     required this.name,
     this.nameEn = '',
@@ -420,6 +490,7 @@ class Priest {
     this.sample = false,
   });
   factory Priest.fromMap(String id, Map<String, dynamic> m) => Priest(
+        visible: m['visible'] is bool ? m['visible'] as bool : true,
         id: id,
         name: _s(m['name']),
         nameEn: _s(m['nameEn']),
@@ -437,11 +508,17 @@ class Priest {
   bool get departed => status == 'departed';
 }
 
-class Milestone {
+class Milestone implements Hideable {
+
+  /// Shown on the public site (false = hidden by an admin, not deleted).
+  @override
+  final bool visible;
   final String id, titleAr, titleEn, descAr, descEn, icon;
   final int? year;
+  @override
   final int order;
   const Milestone({
+    this.visible = true,
     required this.id,
     required this.titleAr,
     required this.titleEn,
@@ -452,6 +529,7 @@ class Milestone {
     this.order = 0,
   });
   factory Milestone.fromMap(String id, Map<String, dynamic> m) => Milestone(
+        visible: m['visible'] is bool ? m['visible'] as bool : true,
         id: id,
         titleAr: _s(m['titleAr']),
         titleEn: _s(m['titleEn']),
@@ -463,10 +541,16 @@ class Milestone {
       );
 }
 
-class Saint {
+class Saint implements Hideable {
+
+  /// Shown on the public site (false = hidden by an admin, not deleted).
+  @override
+  final bool visible;
   final String id, nameAr, nameEn, bioAr, bioEn, feastCopticAr, feastCopticEn, feastGregorian, feastGregorianAr;
+  @override
   final int order;
   const Saint({
+    this.visible = true,
     required this.id,
     required this.nameAr,
     required this.nameEn,
@@ -479,6 +563,7 @@ class Saint {
     this.order = 0,
   });
   factory Saint.fromMap(String id, Map<String, dynamic> m) => Saint(
+        visible: m['visible'] is bool ? m['visible'] as bool : true,
         id: id,
         nameAr: _s(m['nameAr']),
         nameEn: _s(m['nameEn']),

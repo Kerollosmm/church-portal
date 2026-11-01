@@ -5,6 +5,7 @@ import 'package:material_ui/material_ui.dart';
 import '../../core/l10n.dart';
 import '../../core/launch.dart';
 import '../../core/theme.dart';
+import '../../domain/features.dart';
 import '../../domain/models.dart';
 import '../../domain/rules.dart';
 import '../../state/providers.dart';
@@ -19,89 +20,152 @@ class HomePage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final settings = ref.watch(settingsProvider);
-    final showAsk = ref.watch(assistantVisibleProvider);
+    final features = ref.watch(featuresProvider);
     final wide = MediaQuery.sizeOf(context).width >= 900;
+    final blocks = features.visibleHomeBlocks;
+
+    final children = <Widget>[];
+    for (var i = 0; i < blocks.length; i++) {
+      final b = blocks[i];
+      final next = i + 1 < blocks.length ? blocks[i + 1] : null;
+      // On wide screens the next-liturgy card and the phones card share a row
+      // when they are adjacent.
+      if (wide &&
+          ((b == HomeBlocks.nextMass && next == HomeBlocks.quickContacts) ||
+              (b == HomeBlocks.quickContacts && next == HomeBlocks.nextMass))) {
+        final first = b == HomeBlocks.nextMass;
+        children.add(Padding(
+          key: const ValueKey('home-nextMass+quickContacts'),
+          padding: const EdgeInsets.only(bottom: 12),
+          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Expanded(flex: first ? 3 : 2, child: first ? const NextMassCard() : const _QuickContacts()),
+            const SizedBox(width: 16),
+            Expanded(flex: first ? 2 : 3, child: first ? const _QuickContacts() : const NextMassCard()),
+          ]),
+        ));
+        i++;
+        continue;
+      }
+      children.add(KeyedSubtree(key: ValueKey('home-$b'), child: _block(context, ref, b, settings.value, features)));
+    }
 
     return PageBody(
-      header: _Hero(settings: settings.value),
-      children: [
-        const AlertBanner(),
-        if (wide)
-          const Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Expanded(flex: 3, child: NextMassCard()),
-            SizedBox(width: 16),
-            Expanded(flex: 2, child: _QuickContacts()),
-          ])
-        else ...[
-          const NextMassCard(),
-          const SizedBox(height: 12),
-          const _QuickContacts(),
-        ],
-        SectionTitle(context.tr('ourStory'), icon: Icons.history_edu_rounded),
-        AsyncSection<List<Milestone>>(
-          provider: milestonesProvider,
-          retry: milestonesProvider,
-          isEmpty: (d) => d.isEmpty,
-          loading: const SkeletonList(count: 4, itemHeight: 120),
-          builder: (context, items) => ResponsiveGrid(
-            minItemWidth: 240,
-            children: [for (final m in items) _MilestoneCard(m)],
+      header: _Hero(settings: settings.value, features: features),
+      children: children,
+    );
+  }
+
+  Widget _block(BuildContext context, WidgetRef ref, String b, ChurchSettings? s, FeatureSettings f) {
+    switch (b) {
+      case HomeBlocks.banner:
+        return _AnnouncementBanner(features: f);
+      case HomeBlocks.alerts:
+        return const AlertBanner();
+      case HomeBlocks.nextMass:
+        return const Padding(padding: EdgeInsets.only(bottom: 12), child: NextMassCard());
+      case HomeBlocks.quickContacts:
+        return const Padding(padding: EdgeInsets.only(bottom: 12), child: _QuickContacts());
+      case HomeBlocks.milestones:
+        return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          SectionTitle(context.tr('ourStory'), icon: Icons.history_edu_rounded),
+          AsyncSection<List<Milestone>>(
+            provider: milestonesProvider,
+            retry: milestonesProvider,
+            isEmpty: (d) => d.isEmpty,
+            loading: const SkeletonList(count: 4, itemHeight: 120),
+            builder: (context, items) => ResponsiveGrid(
+              minItemWidth: 240,
+              children: [for (final m in items) _MilestoneCard(m)],
+            ),
           ),
-        ),
-        SectionTitle(context.tr('directory'), icon: Icons.grid_view_rounded),
-        ResponsiveGrid(minItemWidth: 320, children: [
-          DirectoryCard(
-              icon: Icons.access_time_filled_rounded,
-              title: context.tr('massSchedule'),
-              subtitle: context.tr('dir_mass'),
-              onTap: () => context.go('/mass-schedule')),
-          DirectoryCard(
-              icon: Icons.local_hospital_rounded,
-              title: context.tr('clinics'),
-              subtitle: context.tr('dir_clinics'),
-              onTap: () => context.go('/clinics')),
-          DirectoryCard(
-              icon: Icons.school_rounded,
-              title: context.tr('education'),
-              subtitle: context.tr('dir_edu'),
-              onTap: () => context.go('/church-education')),
-          DirectoryCard(
-              icon: Icons.groups_rounded,
-              title: context.tr('activities'),
-              subtitle: context.tr('dir_act'),
-              onTap: () => context.go('/church-activities')),
-          DirectoryCard(
-              icon: Icons.volunteer_activism_rounded,
-              title: context.tr('publicServices'),
-              subtitle: context.tr('dir_services'),
-              onTap: () => context.go('/public-services')),
-          DirectoryCard(
-              icon: Icons.church_rounded,
-              title: context.tr('about'),
-              subtitle: context.tr('dir_about'),
-              onTap: () => context.go('/about')),
-          DirectoryCard(
-              icon: Icons.call_rounded,
-              title: context.tr('contact'),
-              subtitle: context.tr('dir_contact'),
-              onTap: () => context.go('/contact')),
+        ]);
+      case HomeBlocks.directory:
+        final showAsk = ref.watch(assistantVisibleProvider);
+        final cards = [
+          for (final d in _directory)
+            if (f.routeEnabled(d.path))
+              DirectoryCard(
+                  icon: d.icon,
+                  title: context.tr(d.title),
+                  subtitle: context.tr(d.subtitle),
+                  onTap: () => context.go(d.path)),
           if (showAsk)
             DirectoryCard(
                 icon: Icons.auto_awesome_rounded,
                 title: context.tr('ask'),
                 subtitle: context.tr('dir_ask'),
                 onTap: () => context.go('/ask')),
-        ]),
-        SectionTitle(context.tr('location'), icon: Icons.location_on_rounded),
-        if (settings.value != null) ChurchMap(settings: settings.value!) else const SkeletonBox(height: 360, radius: 16),
-      ],
+        ];
+        if (cards.isEmpty) return const SizedBox.shrink();
+        return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          SectionTitle(context.tr('directory'), icon: Icons.grid_view_rounded),
+          ResponsiveGrid(minItemWidth: 320, children: cards),
+        ]);
+      case HomeBlocks.map:
+        return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          SectionTitle(context.tr('location'), icon: Icons.location_on_rounded),
+          if (s != null) ChurchMap(settings: s) else const SkeletonBox(height: 360, radius: 16),
+        ]);
+    }
+    return const SizedBox.shrink();
+  }
+}
+
+class _DirEntry {
+  final IconData icon;
+  final String title, subtitle, path;
+  const _DirEntry(this.icon, this.title, this.subtitle, this.path);
+}
+
+const _directory = [
+  _DirEntry(Icons.access_time_filled_rounded, 'massSchedule', 'dir_mass', '/mass-schedule'),
+  _DirEntry(Icons.local_hospital_rounded, 'clinics', 'dir_clinics', '/clinics'),
+  _DirEntry(Icons.school_rounded, 'education', 'dir_edu', '/church-education'),
+  _DirEntry(Icons.groups_rounded, 'activities', 'dir_act', '/church-activities'),
+  _DirEntry(Icons.volunteer_activism_rounded, 'publicServices', 'dir_services', '/public-services'),
+  _DirEntry(Icons.church_rounded, 'about', 'dir_about', '/about'),
+  _DirEntry(Icons.call_rounded, 'contact', 'dir_contact', '/contact'),
+];
+
+/// Admin-written announcement (settings/features banner fields).
+class _AnnouncementBanner extends StatelessWidget {
+  final FeatureSettings features;
+  const _AnnouncementBanner({required this.features});
+
+  @override
+  Widget build(BuildContext context) {
+    final text = context.pick(features.bannerAr, features.bannerEn);
+    var link = features.bannerLink.trim();
+    final internal = link.startsWith('/') && !link.startsWith('//');
+    // A link to a switched-off section would only open "not available".
+    if (internal && !features.routeEnabled(Uri.tryParse(link)?.path ?? link)) link = '';
+    final primary = Theme.of(context).colorScheme.primary;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: AppColors.gold.withValues(alpha: 0.16),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.gold.withValues(alpha: 0.6)),
+      ),
+      child: Row(children: [
+        Icon(Icons.campaign_outlined, color: primary),
+        const SizedBox(width: 10),
+        Expanded(child: Text(text, style: const TextStyle(fontWeight: FontWeight.w700, height: 1.6))),
+        if (link.isNotEmpty)
+          TextButton(
+            onPressed: () => link.startsWith('/') && !link.startsWith('//') ? context.go(link) : openUrl(link),
+            child: Text(context.tr('learnMore')),
+          ),
+      ]),
     );
   }
 }
 
 class _Hero extends StatelessWidget {
   final ChurchSettings? settings;
-  const _Hero({required this.settings});
+  final FeatureSettings features;
+  const _Hero({required this.settings, required this.features});
 
   @override
   Widget build(BuildContext context) {
@@ -109,11 +173,16 @@ class _Hero extends StatelessWidget {
     final narrow = MediaQuery.sizeOf(context).width < 600;
     final t = Theme.of(context).textTheme;
     final hasImage = s != null && s.heroImageUrl.isNotEmpty;
+    final f = features;
+    final primary = Theme.of(context).colorScheme.primary;
+    final dark = Color.lerp(primary, Colors.black, 0.3)!;
+    final title = s == null ? '' : context.pick(f.heroTitleAr, f.heroTitleEn);
+    final subtitle = s == null ? '' : context.pick(f.heroSubtitleAr, f.heroSubtitleEn);
     return Container(
       constraints: BoxConstraints(minHeight: narrow ? 300 : 380),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [AppColors.burgundyDark, AppColors.burgundy, AppColors.burgundyLight],
+        gradient: LinearGradient(
+          colors: [dark, primary, Color.lerp(primary, Colors.white, 0.15)!],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -121,7 +190,7 @@ class _Hero extends StatelessWidget {
             ? DecorationImage(
                 image: NetworkImage(s.heroImageUrl),
                 fit: BoxFit.cover,
-                colorFilter: ColorFilter.mode(AppColors.burgundyDark.withValues(alpha: 0.65), BlendMode.multiply),
+                colorFilter: ColorFilter.mode(dark.withValues(alpha: 0.65), BlendMode.multiply),
               )
             : null,
       ),
@@ -145,11 +214,11 @@ class _Hero extends StatelessWidget {
                   const SizedBox(height: 10),
                   const SkeletonBox(height: 18, width: 200),
                 ] else ...[
-                  Text(context.pick(s.nameAr, s.nameEn),
+                  Text(title.isNotEmpty ? title : context.pick(s.nameAr, s.nameEn),
                       style: (narrow ? t.headlineSmall : t.headlineMedium)
                           ?.copyWith(color: Colors.white, fontWeight: FontWeight.w800, height: 1.35)),
                   const SizedBox(height: 4),
-                  Text(context.pick(s.addressAr, s.addressEn),
+                  Text(subtitle.isNotEmpty ? subtitle : context.pick(s.addressAr, s.addressEn),
                       style: t.bodyLarge?.copyWith(color: AppColors.goldLight)),
                   const SizedBox(height: 18),
                   Container(
@@ -170,18 +239,21 @@ class _Hero extends StatelessWidget {
                 ],
                 const SizedBox(height: 20),
                 Wrap(spacing: 10, runSpacing: 10, children: [
-                  FilledButton.icon(
-                    style: FilledButton.styleFrom(backgroundColor: AppColors.gold, foregroundColor: AppColors.ink),
-                    onPressed: () => context.go('/mass-schedule'),
-                    icon: const Icon(Icons.access_time_filled_rounded),
-                    label: Text(context.tr('massSchedule')),
-                  ),
-                  FilledButton.icon(
-                    style: FilledButton.styleFrom(backgroundColor: Colors.white, foregroundColor: AppColors.burgundy),
-                    onPressed: () => context.go('/clinics'),
-                    icon: const Icon(Icons.local_hospital_rounded),
-                    label: Text(context.tr('clinics')),
-                  ),
+                  if (f.routeEnabled('/mass-schedule'))
+                    FilledButton.icon(
+                      style: FilledButton.styleFrom(backgroundColor: AppColors.gold, foregroundColor: AppColors.ink),
+                      onPressed: () => context.go('/mass-schedule'),
+                      icon: const Icon(Icons.access_time_filled_rounded),
+                      label: Text(context.tr('massSchedule')),
+                    ),
+                  if (f.routeEnabled('/clinics'))
+                    FilledButton.icon(
+                      style: FilledButton.styleFrom(backgroundColor: Colors.white, foregroundColor: primary),
+                      onPressed: () => context.go('/clinics'),
+                      icon: const Icon(Icons.local_hospital_rounded),
+                      label: Text(context.tr('clinics')),
+                    ),
+                  if (f.routeEnabled('/contact'))
                   OutlinedButton.icon(
                     style: OutlinedButton.styleFrom(
                         foregroundColor: Colors.white, side: const BorderSide(color: Colors.white70)),

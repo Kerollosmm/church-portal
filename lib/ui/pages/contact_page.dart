@@ -7,6 +7,7 @@ import '../../core/l10n.dart';
 import '../../core/launch.dart';
 import '../../core/theme.dart';
 import '../../data/content_repository.dart';
+import '../../domain/features.dart';
 import '../../domain/models.dart';
 import '../../domain/rules.dart';
 import '../../state/providers.dart';
@@ -24,6 +25,10 @@ class ContactPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final wide = MediaQuery.sizeOf(context).width >= 900;
+    final f = ref.watch(featuresProvider);
+    final showInfo = f.enabled(Sections.contactInfo);
+    final showSocial = f.enabled(Sections.socials);
+    final showForm = f.enabled(Sections.contactForm);
     return PageBody(
       header: PageHeader(title: context.tr('contact'), subtitle: context.tr('dir_contact'), icon: Icons.call_rounded),
       children: [
@@ -32,19 +37,27 @@ class ContactPage extends ConsumerWidget {
           retry: settingsProvider,
           loading: const SkeletonList(count: 2, itemHeight: 220),
           builder: (context, s) {
-            final info = _InfoColumn(s: s);
+            final hasInfo = showInfo || showSocial;
+            final info = _InfoColumn(s: s, showInfo: showInfo, showSocial: showSocial);
             const form = ContactForm();
-            final top = wide
-                ? Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Expanded(child: info),
-                    const SizedBox(width: 16),
-                    const Expanded(child: form),
-                  ])
-                : Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [info, const SizedBox(height: 16), form]);
+            final Widget top;
+            if (hasInfo && showForm) {
+              top = wide
+                  ? Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Expanded(child: info),
+                      const SizedBox(width: 16),
+                      const Expanded(child: form),
+                    ])
+                  : Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [info, const SizedBox(height: 16), form]);
+            } else {
+              top = hasInfo ? info : (showForm ? form : const SizedBox.shrink());
+            }
             return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
               top,
-              SectionTitle(context.tr('location'), icon: Icons.location_on_rounded),
-              ChurchMap(settings: s, height: 380),
+              if (showInfo) ...[
+                SectionTitle(context.tr('location'), icon: Icons.location_on_rounded),
+                ChurchMap(settings: s, height: 380),
+              ],
             ]);
           },
         ),
@@ -55,11 +68,13 @@ class ContactPage extends ConsumerWidget {
 
 class _InfoColumn extends StatelessWidget {
   final ChurchSettings s;
-  const _InfoColumn({required this.s});
+  final bool showInfo, showSocial;
+  const _InfoColumn({required this.s, this.showInfo = true, this.showSocial = true});
 
   @override
   Widget build(BuildContext context) {
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      if (showInfo) ...[
       Card(
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -76,6 +91,8 @@ class _InfoColumn extends StatelessWidget {
         ),
       ),
       const SizedBox(height: 12),
+      ],
+      if (showSocial) ...[
       Card(
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -116,6 +133,8 @@ class _InfoColumn extends StatelessWidget {
         ),
       ),
       const SizedBox(height: 12),
+      ],
+      if (showInfo)
       Card(
         child: Padding(
           padding: const EdgeInsets.all(16),
