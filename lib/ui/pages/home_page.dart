@@ -208,7 +208,7 @@ class _Hero extends StatelessWidget {
             child: Padding(
               padding: EdgeInsets.symmetric(horizontal: narrow ? 20 : 32, vertical: narrow ? 28 : 48),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                const CopticCross(size: 46),
+                ChurchSeal(size: narrow ? 64 : 84),
                 const SizedBox(height: 14),
                 if (s == null) ...[
                   const SkeletonBox(height: 28, width: 280),

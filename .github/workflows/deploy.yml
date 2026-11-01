@@ -1,7 +1,9 @@
 name: Deploy to Firebase
 
-# push to main -> live Hosting + Firestore rules/indexes
-# pull request -> Hosting preview channel pr-<number> (URL commented on the PR, expires in 7 days)
+# push to main -> live Hosting + Firestore rules/indexes. Hosting has two targets (.firebaserc):
+#   app             -> site maximos-domadios-church (the Flutter web app, https://maximos-domadios-church.web.app)
+#   legacy-redirect -> site asafra-church-portal (old domain: 301 of every path to the new domain)
+# pull request -> preview channel pr-<number> of the app target only (URL commented on the PR, expires in 7 days)
 on:
   push:
     branches: [main]
@@ -48,7 +50,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: production
-      url: https://asafra-church-portal.web.app
+      url: https://maximos-domadios-church.web.app
     steps:
       - uses: actions/checkout@v5
       - uses: actions/download-artifact@v5
@@ -61,8 +63,8 @@ jobs:
       - uses: ./.github/actions/firebase-credentials
         with:
           service-account: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_ASAFRA_CHURCH_PORTAL }}
-      - name: Deploy Hosting (live)
-        run: npx --yes firebase-tools@latest deploy --only hosting --project "$FIREBASE_PROJECT_ID" --non-interactive
+      - name: Deploy Hosting (live app + legacy redirect site)
+        run: npx --yes firebase-tools@latest deploy --only hosting:app,hosting:legacy-redirect --project "$FIREBASE_PROJECT_ID" --non-interactive
       - name: Remove key
         if: always()
         run: rm -f "$RUNNER_TEMP/sa.json"
@@ -110,7 +112,7 @@ jobs:
           CHANNEL: pr-${{ github.event.pull_request.number }}
         run: |
           set -euo pipefail
-          npx --yes firebase-tools@latest hosting:channel:deploy "$CHANNEL" \
+          npx --yes firebase-tools@latest hosting:channel:deploy "$CHANNEL" --only app \
             --expires 7d --project "$FIREBASE_PROJECT_ID" --non-interactive --json > "$RUNNER_TEMP/deploy.json" \
             || { cat "$RUNNER_TEMP/deploy.json"; exit 1; }
           python3 - "$RUNNER_TEMP/deploy.json" <<'PY'

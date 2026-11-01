@@ -1,14 +1,14 @@
 # 11 — Open tasks
 
 Tick items off (or delete them) in the PR that completes them, and add new ones as you discover them.
-Status as of 1 Nov 2026 (after PR #3).
+Status as of 1 Nov 2026 (after PR #6).
 
 ## Infrastructure & security (owner: developer)
 
 - [ ] **Re-save the service-account secret** `FIREBASE_SERVICE_ACCOUNT_ASAFRA_CHURCH_PORTAL` with only the JSON key
       (no trailing characters/second copy). The credentials action tolerates it but prints
       `::warning::Ignored N extra character(s)…`. Delete any local copy of the key afterwards.
-- [ ] **reCAPTCHA v3 site key**: create it (domains `asafra-church-portal.web.app`, `asafra-church-portal.firebaseapp.com`,
+- [ ] **reCAPTCHA v3 site key**: create it (domains `maximos-domadios-church.web.app`, `maximos-domadios-church.firebaseapp.com`,
       `localhost`), register the web app under App Check, set repo **variable** `RECAPTCHA_SITE_KEY`, redeploy `main`.
       Until then App Check is off on the live site and the assistant is hidden.
 - [ ] Enforce App Check for **Firebase AI Logic** (console) once the key works; set a Gemini **request quota** (cost cap).
@@ -20,7 +20,7 @@ Status as of 1 Nov 2026 (after PR #3).
       `NSPhotoLibraryUsageDescription` for the admin image picker.)
 - [ ] **Android release signing**: add an upload keystore + `signingConfigs.release` (currently signs release with the
       debug key in `android/app/build.gradle.kts`); register SHA-256 for Play Integrity; consider replacing the
-      browser API key with the Android `current_key`; app label is "Church Portal" (consider the Arabic name);
+      browser API key with the Android `current_key`; app label is now «كنيسة مكسيموس ودوماديوس» with seal launcher icons (PR #6);
       Play Store listing ($25 account).
 - [ ] Decide **Spark vs Blaze**: business case recommends Blaze + $5/month budget alert (Spark's 360 MB/day Hosting
       and 50K reads/day can be exhausted on busy summer days).
@@ -32,6 +32,15 @@ Status as of 1 Nov 2026 (after PR #3).
       Firestore `media/` (fine at parish scale; watch the 50K reads/day).
 - [ ] **Orphaned `media` docs:** deletes are best effort; add a small owner-only "clean up unused images" action or a
       script (list `media` ids not referenced by any `image.mediaId`) if they accumulate.
+
+- [ ] **Custom domain (optional)**: if the church buys a domain, add it to Hosting site `maximos-domadios-church`
+      (console → Hosting → Add custom domain), add it to Auth authorized domains, and update OG/robots/
+      sitemap URLs and the redirect destination in `firebase.json` (ADR-018).
+- [ ] Home page overflows by ~8 px at **320 px** width (pre-existing, also on `main` before PR #6; 360 px+ is fine and
+      covered by `feature_gate_test.dart`).
+- [ ] Ask the church office to update the admin-editable English name (`settings/church.nameEn`, currently "Church of
+      Saints Maximus & Domadius and the Strong Anba Moussa the Black") if they prefer "St. Maximus & Domadius and
+      St. Moses the Black Church" — not changed by the seed to avoid overwriting admin edits.
 
 ## Content (owner: church office — see `09-content-status.md`)
 

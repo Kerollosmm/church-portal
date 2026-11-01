@@ -3,7 +3,10 @@ import 'package:material_ui/material_ui.dart';
 /// Minimal in-app localisation: Arabic (default, RTL) and English.
 const Map<String, List<String>> _strings = {
   // key: [ar, en]
-  'appShort': ['كنيسة العصافرة', 'Asafra Church'],
+  'appName': ['كنيسة القديسين مكسيموس ودوماديوس والقوي الأنبا موسى الأسود',
+      'St. Maximus & Domadius and St. Moses the Black Church'],
+  'appShort': ['كنيسة مكسيموس ودوماديوس', 'St. Maximus & Domadius Church'],
+  'logoLabel': ['ختم الكنيسة', 'Church seal'],
   'home': ['الرئيسية', 'Home'],
   'about': ['عن الكنيسة', 'About'],
   'massSchedule': ['مواعيد القداسات', 'Mass times'],

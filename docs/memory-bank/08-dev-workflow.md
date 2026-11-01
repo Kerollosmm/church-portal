@@ -74,10 +74,11 @@ Job **firestore-rules** (15 min): Java Temurin 21 + Node 22 → `npm ci` in `too
    with `--dart-define=RECAPTCHA_SITE_KEY` only on push builds when the repo variable is set → artifact `web-build`
    (3 days).
 2. **deploy-live** (push to main, needs build, environment `production`, URL the live site): download artifact →
-   Node 22 → `./.github/actions/firebase-credentials` → `npx firebase-tools@latest deploy --only hosting` → remove key.
+   Node 22 → `./.github/actions/firebase-credentials` → `npx firebase-tools@latest deploy --only hosting:app,hosting:legacy-redirect`
+   (app → `maximos-domadios-church`, 301 redirect config → old site `asafra-church-portal`) → remove key.
 3. **deploy-rules** (push to main, independent of build): credentials → `deploy --only firestore:rules,firestore:indexes`.
    ⚠️ Not gated by the `production` environment.
-4. **preview** (same-repo PRs, needs build): `hosting:channel:deploy pr-<n> --expires 7d --json` → parse URL → upsert
+4. **preview** (same-repo PRs, needs build): `hosting:channel:deploy pr-<n> --only app --expires 7d --json` → parse URL → upsert
    one PR comment "Firebase Hosting preview" (github-script).
 
 ### `.github/actions/firebase-credentials` (composite)
@@ -151,3 +152,12 @@ Example: a new public collection `announcements` shown on `/news`.
 12. **Deploy data** — after merge, Seed workflow `only=<name>` (creates the new docs). No migration is needed for the
     new section key: a missing key means "on", and `--fill-missing` only adds absent **top-level** fields (it will not
     add a key inside the existing `sections` map anyway).
+
+## Branding assets
+
+All logos/icons come from the parish seal: `tool/gen_branding.sh [new-seal-1024.webp|png]` (ImageMagick 7) rewrites
+`assets/branding/seal.png` (in-app `ChurchSeal`), `web/favicon.{ico,png}`, `web/favicon-16.png`,
+`web/icons/Icon-{192,512}.png`, `Icon-maskable-{192,512}.png` (seal at 78% on `#470812`), `apple-touch-icon.png`,
+`web/og-image.jpg` (1200×630) and `android/.../mipmap-*/ic_launcher{,_foreground}.png` (+ adaptive icon XML,
+background `@color/ic_launcher_background`). Commit the regenerated files. `test/branding_test.dart` checks the web
+title/manifest/share tags, the files and the Hosting redirect config.

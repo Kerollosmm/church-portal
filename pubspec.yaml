@@ -76,6 +76,7 @@ flutter:
 
   assets:
     - assets/seed/seed.json
+    - assets/branding/seal.png
 
   # To add assets to your application, add an assets section, like this:
   # assets:

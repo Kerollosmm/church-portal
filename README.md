@@ -6,6 +6,7 @@ Public digital portal for the Coptic Orthodox Church of Saints Maximus & Domadiu
 Flutter (web + Android, iOS‑ready) + Firebase (Firestore, Hosting, Auth for admins, App Check, Firebase AI Logic).
 Arabic‑first (RTL) with an English toggle, mobile‑first, works offline on bundled seed data if Firebase is unreachable.
 
+Live: **<https://maximos-domadios-church.web.app>** (the old `asafra-church-portal.web.app` 301-redirects there).
 Firebase project: **`asafra-church-portal`** (Firestore in `europe-west1`, production mode).
 
 > **Coding agents / new contributors:** start with [AGENTS.md](AGENTS.md) and the memory bank in
@@ -103,7 +104,7 @@ If Firestore is reachable but `settings/church` does not exist (DB not seeded ye
 
 1. Firebase console → **App Check** → Apps → Web app → register with **reCAPTCHA v3**
    (create the key at <https://www.google.com/recaptcha/admin>, type v3, add domains
-   `asafra-church-portal.web.app`, `asafra-church-portal.firebaseapp.com`, `localhost`).
+   `maximos-domadios-church.web.app`, `maximos-domadios-church.firebaseapp.com`, `localhost`).
 2. Put the **site key** in `AppConfig.recaptchaV3SiteKey` or build with
    `flutter build web --release --dart-define=RECAPTCHA_SITE_KEY=6Lc...`.
 3. **Debug provider** (local dev): debug builds automatically use the debug provider
@@ -156,7 +157,7 @@ node seed_firestore.js --admin <UID>:<email> # also create admins/{uid}
 
 ## 4. Admin guide
 
-Open **`https://asafra-church-portal.web.app/admin`** (not linked from the public site) and sign in with your admin
+Open **`https://maximos-domadios-church.web.app/admin`** (not linked from the public site) and sign in with your admin
 email + password ("Forgot password?" emails a reset link). Arabic‑first; the `EN/ع` button switches language.
 Desktop shows a sidebar, phones a ☰ drawer.
 
@@ -195,7 +196,7 @@ types, sizes, HH:mm times, coordinates, the toggles doc shape); `tool/rules_test
 npm install -g firebase-tools
 firebase login
 flutter build web --release --dart-define=RECAPTCHA_SITE_KEY=<site key>
-firebase deploy                     # hosting + firestore rules + indexes (project from .firebaserc)
+firebase deploy                     # hosting (app + legacy-redirect targets) + firestore rules + indexes
 firebase deploy --only hosting
 firebase deploy --only firestore:rules,firestore:indexes
 ```
@@ -252,3 +253,14 @@ and the Seed workflow (which can overwrite production data with `force`) need ap
   doc `settings/features`; missing keys = on; a route stays available while any of its sections is on (`/about` = history,
   saints, priests, departed; `/contact` = contact info, socials, form); hidden items are filtered and the rest sorted by
   `order` (stable).
+
+## Branding & domain
+
+- Logo: the parish's official seal. Source `assets/branding/seal_source.webp`; `tool/gen_branding.sh` regenerates the
+  in-app logo (`assets/branding/seal.png`), web favicons (`favicon.ico`, `favicon.png`, `favicon-16.png`), PWA icons
+  (`web/icons/Icon-*.png`, maskable on maroon `#470812`), `apple-touch-icon.png`, the share image `web/og-image.jpg`
+  (1200×630) and the Android launcher icons (legacy + adaptive). Requires ImageMagick 7 (`magick`).
+- Hosting has two targets (`.firebaserc`): **`app`** → site `maximos-domadios-church` (https://maximos-domadios-church.web.app, the app,
+  live + PR previews) and **`legacy-redirect`** → site `asafra-church-portal` (301 of every path to the new domain,
+  public dir `hosting/legacy_redirect/`). Firebase Auth authorized domains include both `maximos-domadios-church`
+  domains.

@@ -6,7 +6,7 @@ Tests: `test/admin_test.dart`; server rules: `firestore.rules` + `tool/rules_tes
 
 ## How to sign in
 
-1. Open **`https://asafra-church-portal.web.app/admin`** (not linked from the public site; `AppConfig.adminPath`).
+1. Open **`https://maximos-domadios-church.web.app/admin`** (not linked from the public site; `AppConfig.adminPath`).
 2. Email + password (Firebase Auth). "Forgot password?" sends a reset email.
 3. The account must have a document **`admins/{uid}`** (`{email, role}`). Otherwise: «هذا الحساب ليس لديه صلاحية
    التعديل» + Sign out.

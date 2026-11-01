@@ -7,8 +7,9 @@
 Public, Arabic-first (RTL) + English portal for the Coptic Orthodox **Church of Saints Maximus & Domadius and the Strong
 Anba Moussa the Black** (كنيسة القديسين مكسيموس ودوماديوس والقوي الأنبا موسى الأسود), end of Street 45,
 El-Asafra Qebly, Alexandria. Flutter (web + Android, iOS-ready) + Firebase (Firestore, Hosting, Auth for admins only,
-App Check, Firebase AI Logic/Gemini). Live: <https://asafra-church-portal.web.app> · Firebase project
-`asafra-church-portal` · hidden admin at `/admin`. It is a light public directory, **not** a church management system.
+App Check, Firebase AI Logic/Gemini). Live: <https://maximos-domadios-church.web.app> (Hosting site `maximos-domadios-church`; the old
+`asafra-church-portal.web.app` 301-redirects there) · Firebase project `asafra-church-portal` · hidden admin at `/admin`.
+Branding: the parish seal in `assets/branding/` — regenerate every icon with `tool/gen_branding.sh` (ADR-018). It is a light public directory, **not** a church management system.
 
 ## Golden rules
 

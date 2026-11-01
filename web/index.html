@@ -7,24 +7,37 @@
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="كنيسة القديسين مكسيموس ودوماديوس والقوي الأنبا موسى الأسود — آخر شارع 45، العصافرة قبلي، الإسكندرية. مواعيد القداسات، العيادات، مدارس الأحد، وأرقام التواصل والخريطة.">
-  <meta name="theme-color" content="#6B1426">
-  <meta property="og:title" content="كنيسة القديسين مكسيموس ودوماديوس والقوي الأنبا موسى الأسود — العصافرة">
-  <meta property="og:description" content="مواعيد القداسات والعيادات والاجتماعات وطرق التواصل">
+  <meta name="theme-color" content="#470812">
+  <meta property="og:site_name" content="كنيسة القديسين مكسيموس ودوماديوس والقوي الأنبا موسى الأسود">
+  <meta property="og:title" content="كنيسة القديسين مكسيموس ودوماديوس والقوي الأنبا موسى الأسود">
+  <meta property="og:description" content="مواعيد القداسات والعيادات والاجتماعات وطرق التواصل — العصافرة قبلي، الإسكندرية">
   <meta property="og:type" content="website">
+  <meta property="og:url" content="https://maximos-domadios-church.web.app/">
+  <meta property="og:locale" content="ar_EG">
+  <meta property="og:image" content="https://maximos-domadios-church.web.app/og-image.jpg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="ختم كنيسة القديسين مكسيموس ودوماديوس والقوي الأنبا موسى الأسود">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="كنيسة القديسين مكسيموس ودوماديوس والقوي الأنبا موسى الأسود">
+  <meta name="twitter:image" content="https://maximos-domadios-church.web.app/og-image.jpg">
 
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="كنيسة العصافرة">
-  <link rel="apple-touch-icon" href="icons/Icon-192.png">
-  <link rel="icon" type="image/png" href="favicon.png"/>
+  <meta name="apple-mobile-web-app-title" content="كنيسة مكسيموس ودوماديوس">
+  <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">
+  <link rel="icon" href="favicon.ico" sizes="any">
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 
-  <title>كنيسة القديسين مكسيموس ودوماديوس والقوي الأنبا موسى الأسود — العصافرة</title>
+  <title>كنيسة القديسين مكسيموس ودوماديوس والقوي الأنبا موسى الأسود</title>
   <link rel="manifest" href="manifest.json">
   <style>
     html, body { margin: 0; height: 100%; background: #FBF6EC; }
     #splash { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center;
-      justify-content: center; gap: 14px; font-family: system-ui, "Segoe UI", Tahoma, sans-serif; color: #6B1426; }
+      justify-content: center; gap: 14px; padding: 0 20px; font-family: system-ui, "Segoe UI", Tahoma, sans-serif; color: #6B1426; }
+    #splash .seal { width: 120px; height: 120px; border-radius: 50%; }
     #splash .ring { width: 44px; height: 44px; border-radius: 50%; border: 4px solid #E8D28A;
       border-top-color: #6B1426; animation: spin 0.9s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
@@ -32,8 +45,9 @@
 </head>
 <body>
   <div id="splash" aria-live="polite" style="text-align:center">
+    <img class="seal" src="assets/assets/branding/seal.png" alt="" width="120" height="120">
     <div class="ring"></div>
-    <div id="splash-text">كنيسة العصافرة — جارٍ التحميل…</div>
+    <div id="splash-text" dir="rtl">كنيسة القديسين مكسيموس ودوماديوس والقوي الأنبا موسى الأسود<br>جارٍ التحميل…</div>
   </div>
   <script>
     var appStarted = false;

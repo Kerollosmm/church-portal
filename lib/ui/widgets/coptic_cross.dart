@@ -1,7 +1,37 @@
 import 'package:material_ui/material_ui.dart';
 
+import '../../core/l10n.dart';
+
 /// A Coptic cross (equal arms ending in three-point trefoils), drawn so the
 /// app needs no image assets for its logo / hero ornament.
+/// The parish's official round seal (`assets/branding/seal.png`, regenerated
+/// by `tool/gen_branding.sh`). Falls back to the drawn [CopticCross] if the
+/// asset cannot be loaded.
+class ChurchSeal extends StatelessWidget {
+  final double size;
+  const ChurchSeal({super.key, this.size = 40});
+
+  static const asset = 'assets/branding/seal.png';
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+        image: true,
+        label: context.tr('logoLabel'),
+        child: SizedBox.square(
+          dimension: size,
+          child: Image.asset(
+            asset,
+            width: size,
+            height: size,
+            filterQuality: FilterQuality.medium,
+            gaplessPlayback: true,
+            excludeFromSemantics: true,
+            errorBuilder: (_, _, _) => CopticCross(size: size),
+          ),
+        ),
+      );
+}
+
 class CopticCross extends StatelessWidget {
   final double size;
   final Color color;

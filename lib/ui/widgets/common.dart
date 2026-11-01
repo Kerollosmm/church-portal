@@ -410,10 +410,10 @@ class Footer extends ConsumerWidget {
           constraints: const BoxConstraints(maxWidth: kMaxContentWidth),
           child: Column(mainAxisSize: MainAxisSize.min, children: [
             Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-              const CopticCross(size: 26),
+              const ChurchSeal(size: 34),
               const SizedBox(width: 10),
               Flexible(
-                child: Text(s == null ? context.tr('appShort') : context.pick(s.nameAr, s.nameEn),
+                child: Text(s == null ? context.tr('appName') : context.pick(s.nameAr, s.nameEn),
                     textAlign: TextAlign.center,
                     style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
               ),

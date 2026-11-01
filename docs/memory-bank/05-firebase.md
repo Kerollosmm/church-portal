@@ -12,7 +12,7 @@
 | Project number / sender id | `724175543696` |
 | Plan | **Spark** (no-cost) — per project setup, not visible in the repo. Business case recommends Blaze + $5 budget alert (see `11-open-tasks.md`). **Cloud Storage for Firebase is not available on Spark** (since Oct 2024 a default bucket needs Blaze; Spark projects cannot provision or access buckets — <https://firebase.google.com/docs/storage/faqs-storage-changes-announced-sept-2024>), so uploaded images live in Firestore `media/` (ADR-017). |
 | Firestore | Default database, location **`europe-west1`**, created in production mode (README) |
-| Hosting | `https://asafra-church-portal.web.app` (+ `.firebaseapp.com`) |
+| Hosting | Site **`maximos-domadios-church`** → <https://maximos-domadios-church.web.app> (+ `.firebaseapp.com`) serves the app (target `app`); default site `asafra-church-portal` → `https://asafra-church-portal.web.app` only 301-redirects to the new domain (target `legacy-redirect`). Default site ids can't be renamed — ADR-018. |
 | Web app id | `1:724175543696:web:8c75dcd193c3dc5106a715` |
 | Android app id | `1:724175543696:android:93a4afeb7a9c7d9806a715`, package `com.asafrachurch.church_portal` |
 | iOS | **Not registered**: `DefaultFirebaseOptions.ios` has `PLACEHOLDER_IOS_API_KEY` / `PLACEHOLDER_IOS_APP_ID`; bundle id `com.asafrachurch.churchPortal`. `currentPlatformOrNull` returns null → iOS runs on the seed. |
@@ -98,16 +98,31 @@ Notable details:
 `firestore.indexes.json`: `{"indexes": [], "fieldOverrides": []}` — no composite queries (see `04-data-model.md`).
 Deployed with the rules on every push to `main`.
 
-## Hosting (`firebase.json`)
+## Hosting (`firebase.json`, `.firebaserc`)
+
+Two targets (array in `firebase.json`, mapped in `.firebaserc` → `targets.asafra-church-portal.hosting`):
+
+| Target | Site | Serves |
+|---|---|---|
+| `app` | `maximos-domadios-church` (https://maximos-domadios-church.web.app) | The Flutter web app (settings below), live + PR previews |
+| `legacy-redirect` | `asafra-church-portal` (old default site) | `redirects: [{regex: ^/(.*)$, destination: https://maximos-domadios-church.web.app/:1, type: 301}]` — every path keeps its path; public dir `hosting/legacy_redirect/` (meta-refresh fallback page only). `/__/*` reserved URLs still work there. |
+
+Site `maximos-domadios-church` was created 1 Nov 2026 with `firebase hosting:sites:create` run by the deploy service
+account from a throw-away workflow (SA has Hosting Admin). Auth **authorized domains** include
+`maximos-domadios-church.web.app` and `.firebaseapp.com` (added in the console, 1 Nov 2026); both browser API keys
+have no application (referrer) restriction, so no key change was needed. `authDomain` in `firebase_options.dart`
+stays `asafra-church-portal.firebaseapp.com` (admin sign-in is email/password, no redirect/popup flow).
+
+App target settings:
 
 - `public: build/web` (output of `flutter build web --release`); ignores `firebase.json`, dotfiles, `node_modules`.
 - `cleanUrls: true`, `trailingSlash: false`, **rewrite `**` → `/index.html`** (SPA + path URL strategy).
 - Headers: `**` → `Cache-Control: no-cache` (Flutter bundles are not content-hashed, so HTML/JS must revalidate),
   `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `X-Frame-Options: SAMEORIGIN`;
   images/fonts and `canvaskit/**` → `public, max-age=604800` (7 days).
-- **Live** deploy: push to `main` → `deploy.yml` job `deploy-live` (`firebase deploy --only hosting`), environment
-  `production`.
-- **Previews**: every same-repo PR → channel **`pr-<number>`**, `--expires 7d`; the URL is posted/updated in one PR
+- **Live** deploy: push to `main` → `deploy.yml` job `deploy-live` (`firebase deploy --only hosting:app,hosting:legacy-redirect`),
+  environment `production` (URL the new domain).
+- **Previews**: every same-repo PR → channel **`pr-<number>`** of the `app` target only (`--only app`), `--expires 7d`; the URL is posted/updated in one PR
   comment (marker `<!-- firebase-hosting-preview -->`). Previews are built **without** the reCAPTCHA key, so App Check
   is off there and the assistant is hidden; everything else works against the production Firestore (read-only for the
   public, real writes from the contact form and /admin!).
@@ -126,8 +141,8 @@ Deployed with the rules on every push to `main`.
 - **reCAPTCHA v3 site key**: `AppConfig.recaptchaV3SiteKey = String.fromEnvironment('RECAPTCHA_SITE_KEY',
   defaultValue: 'PLACEHOLDER_RECAPTCHA_V3_SITE_KEY')`. CI passes the **repository variable** `RECAPTCHA_SITE_KEY`
   (Settings → Variables, not a secret) only for push builds (`deploy.yml`). Status: **not set yet** → the live
-  assistant is hidden. Register the key at google.com/recaptcha/admin (v3) for `asafra-church-portal.web.app`,
-  `asafra-church-portal.firebaseapp.com`, `localhost`, then in Firebase console → App Check → Web app.
+  assistant is hidden. Register the key at google.com/recaptcha/admin (v3) for `maximos-domadios-church.web.app`,
+  `maximos-domadios-church.firebaseapp.com`, `localhost`, then in Firebase console → App Check → Web app.
 - App Check is **enforced for Firebase AI Logic** only. Do **not** enforce it on Firestore until the key is live, or
   all public reads fail.
 

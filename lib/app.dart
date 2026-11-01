@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 
 import 'core/document_lang.dart';
+import 'core/l10n.dart';
 import 'core/theme.dart';
 import 'domain/features.dart';
 import 'router.dart';
@@ -18,7 +19,7 @@ class ChurchPortalApp extends ConsumerWidget {
     final primary = Color(ThemePresets.all[themeKey] ?? ThemePresets.all[ThemePresets.burgundy]!);
     setDocumentLanguage(locale.languageCode);
     return MaterialApp.router(
-      title: locale.languageCode == 'ar' ? 'كنيسة القديسين مكسيموس ودوماديوس — العصافرة' : 'Asafra Church Portal',
+      onGenerateTitle: (context) => context.tr('appName'),
       debugShowCheckedModeBanner: false,
       locale: locale,
       supportedLocales: const [Locale('ar'), Locale('en')],
