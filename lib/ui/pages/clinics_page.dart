@@ -5,6 +5,7 @@ import 'package:material_ui/material_ui.dart';
 import '../../core/l10n.dart';
 import '../../core/launch.dart';
 import '../../core/theme.dart';
+import '../../domain/features.dart';
 import '../../domain/models.dart';
 import '../../domain/rules.dart';
 import '../../state/providers.dart';
@@ -44,6 +45,17 @@ class _ClinicsPageState extends ConsumerState<ClinicsPage> {
           isEmpty: (d) => d.where((c) => c.active).isEmpty,
           loading: const SkeletonList(count: 6, itemHeight: 150),
           builder: (context, clinics) {
+            // Clinics without a booking number fall back to the church
+            // office (only while the contact details are published).
+            final officePhone = ref.watch(featuresProvider).enabled(Sections.contactInfo)
+                ? ref
+                    .watch(settingsProvider)
+                    .value
+                    ?.phones
+                    .where((p) => p.number.isNotEmpty)
+                    .firstOrNull
+                    ?.number
+                : null;
             final specialties = clinicSpecialties(clinics);
             var list = filterClinics(clinics, specialty: _specialty, now: now);
             if (_todayOnly) list = list.where((c) => isClinicAvailableToday(c, now)).toList();
@@ -71,7 +83,12 @@ class _ClinicsPageState extends ConsumerState<ClinicsPage> {
                 const EmptyState(icon: Icons.medical_services_outlined)
               else
                 ResponsiveGrid(minItemWidth: 340, children: [
-                  for (final c in list) ClinicCard(clinic: c, availableToday: isClinicAvailableToday(c, now)),
+                  for (final c in list)
+                    ClinicCard(
+                      clinic: c,
+                      availableToday: isClinicAvailableToday(c, now),
+                      fallbackOfficePhone: officePhone,
+                    ),
                 ]),
               const SizedBox(height: 16),
               if (ref.watch(featuresProvider).routeEnabled('/public-services'))
@@ -102,11 +119,24 @@ class _ClinicsPageState extends ConsumerState<ClinicsPage> {
 class ClinicCard extends StatelessWidget {
   final Clinic clinic;
   final bool availableToday;
-  const ClinicCard({super.key, required this.clinic, required this.availableToday});
+
+  /// Church office number shown as "Call church office" when the clinic has
+  /// neither a booking phone nor a WhatsApp number (null = no fallback).
+  final String? fallbackOfficePhone;
+  const ClinicCard({super.key, required this.clinic, required this.availableToday, this.fallbackOfficePhone});
+
+  /// Seeded placeholder doctor names are Arabic only ("… — يُعلن لاحقًا"):
+  /// in English they are shown with the `doctorTba` string instead. The
+  /// stored name is left untouched.
+  static bool isPlaceholderDoctor(Clinic c) => c.sample && c.doctorName.contains('يُعلن لاحقًا');
 
   @override
   Widget build(BuildContext context) {
     final c = clinic;
+    final doctor = !context.isAr && isPlaceholderDoctor(c)
+        ? context.tr('doctorTba', {'s': c.specialtyEn.isNotEmpty ? c.specialtyEn : c.specialtyAr})
+        : c.doctorName;
+    final office = fallbackOfficePhone;
     final days = c.days.map((d) => weekdayLabel(context, d)).join(context.isAr ? '، ' : ', ');
     return Card(
       child: Padding(
@@ -119,7 +149,7 @@ class ClinicCard extends StatelessWidget {
           const SizedBox(height: 10),
           Row(children: [
             Expanded(
-              child: Text(c.doctorName, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+              child: Text(doctor, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
             ),
             if (c.sample) const SampleBadge(),
           ]),
@@ -133,6 +163,7 @@ class ClinicCard extends StatelessWidget {
           Wrap(spacing: 8, runSpacing: 8, children: [
             if (c.bookingPhone.isNotEmpty)
               ActionChipButton(
+                  key: const Key('bookClinic'),
                   icon: Icons.call,
                   label: '${context.tr('call')} • ${context.tr('book')}',
                   color: AppColors.burgundy,
@@ -145,8 +176,15 @@ class ClinicCard extends StatelessWidget {
                 onTap: () => openWhatsApp(c.whatsapp,
                     text: context.isAr
                         ? 'أرغب في حجز موعد بعيادة ${c.specialtyAr} (${c.doctorName})'
-                        : 'I would like to book an appointment at the ${c.specialtyEn} clinic (${c.doctorName})'),
+                        : 'I would like to book an appointment at the ${c.specialtyEn} clinic ($doctor)'),
               ),
+            if (c.bookingPhone.isEmpty && c.whatsapp.isEmpty && office != null)
+              ActionChipButton(
+                  key: const Key('callChurchOffice'),
+                  icon: Icons.call,
+                  label: context.tr('callChurchOffice'),
+                  color: AppColors.burgundy,
+                  onTap: () => callPhone(office)),
           ]),
         ]),
       ),

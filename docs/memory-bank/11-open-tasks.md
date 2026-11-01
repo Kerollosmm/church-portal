@@ -13,8 +13,9 @@ Status as of 1 Nov 2026 (after PR #6).
       Until then App Check is off on the live site and the assistant is hidden.
 - [ ] Enforce App Check for **Firebase AI Logic** (console) once the key works; set a Gemini **request quota** (cost cap).
       Do not enforce App Check on Firestore before the key is live.
-- [ ] **`production` environment required reviewers** (Settings → Environments) so live deploys and the Seed workflow
-      (`force` can overwrite production data) need approval. Consider gating `deploy-rules` with the same environment.
+- [ ] **`production` environment required reviewers** (Settings → Environments) so live deploys, rules deploys
+      (`deploy-rules` uses the environment since PR 1) and the Seed workflow (`force` can overwrite production data)
+      need approval.
 - [ ] **iOS**: register the iOS app (bundle `com.asafrachurch.churchPortal`), `flutterfire configure`, replace the
       placeholders in `lib/firebase_options.dart`; App Attest for App Check. (`Info.plist` already has
       `NSPhotoLibraryUsageDescription` for the admin image picker.)

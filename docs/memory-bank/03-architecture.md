@@ -102,16 +102,27 @@ flowchart LR
   start([stream subscribed]) --> q{settings/church exists?<br/>get, 8 s timeout}
   q -- no / error --> seed[yield seed value<br/>_markFallback true]
   q -- yes --> live[Firestore snapshots]
-  live -- value --> ok[_markFallback false]
-  live -- error --> seed
+  seed --> live
+  live -- value, seeding confirmed --> ok[yield live value<br/>_markFallback false]
+  live -- value, not confirmed --> skip[keep the seed]
+  live -- error --> seed2[yield seed value<br/>_markFallback true]
 ```
 
 - `SeedRepository`: every stream emits the bundled value once; `servingSeed` is always true; `submitContact` throws
   `ContactUnavailableException`.
-- `FirestoreRepository._seeded`: one cached `settings/church` existence check (a failed/timed-out read is not cached,
-  so the next subscription retries). If the DB is not seeded, **every** stream serves the seed.
-- `_guard(key, live, fallback)`: per-stream fallback on errors; `servingSeed` (a `ValueNotifier`) is true while any
-  stream is on the seed → the `Footer` shows «تعرض البيانات المحفوظة مع التطبيق / Showing bundled content».
+- `SeedGate` (`FirestoreRepository._gate`): `settings/church` existence check; only a positive answer is cached (a
+  missing doc or a failed/timed-out read is re-checked by the next subscription or live value). If the DB is not
+  seeded, **every** stream serves the seed.
+- `_guard(key, live, fallback, confirms:)` → `guardSeeded` (a `StreamController`, so a cancel takes effect at once;
+  unit-tested in `test/content_guard_test.dart`): per-stream fallback on errors; `servingSeed` (a `ValueNotifier`) is true
+  while any stream is on the seed → the `Footer` shows «تعرض البيانات المحفوظة مع التطبيق / Showing bundled content».
+- **Recovery (PR 1, BUG-05):** when the seeding check fails or times out (cold start, weak signal), the stream yields
+  the seed **and stays subscribed** to the live query. Each live value re-checks seeding; when that check succeeds,
+  or still cannot answer but the value itself proves its own data exists (`confirms`: a non-empty collection, or an
+  existing `settings/church`; it never vouches for other streams), live values replace the seed and
+  `_markFallback(key, false)`. A known-unseeded database
+  (`settings/church` absent) keeps serving the seed until a later check finds the marker. A stream cancelled while on the seed clears its fallback mark
+  (`finally`), so the banner is never stranded.
 - Timestamps are normalised to UTC `DateTime` (`normalizeFirestoreValue`) before `fromMap`.
 - `settings/features` missing → `seed.features` (all sections on).
 - `seed_firestore.js` writes `settings` **last** so an interrupted seed never marks the DB as seeded.

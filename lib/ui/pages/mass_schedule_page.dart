@@ -43,11 +43,13 @@ class _MassSchedulePageState extends ConsumerState<MassSchedulePage> {
     final seasons = ref.watch(seasonsProvider);
     final now = ref.watch(nowProvider).value ?? DateTime.now();
 
-    // Open the seasonal view by default while a season is in effect.
+    // Open the seasonal view by default while a season that REPLACES the
+    // regular schedule is in effect (an additive evening revival keeps the
+    // weekly tabs: its regular morning masses continue).
     final seasonList = seasons.value;
     if (!_seasonDefaultApplied && seasonList != null) {
       _seasonDefaultApplied = true;
-      if (activeSeasonsAt(seasonList, now).isNotEmpty) _seasons = true;
+      if (activeSeasonsAt(seasonList, now).any((s) => s.replacesRegular)) _seasons = true;
     }
 
     return PageBody(
@@ -79,16 +81,38 @@ class _MassSchedulePageState extends ConsumerState<MassSchedulePage> {
         else if (_seasons)
           ..._seasonal(context, seasons.value ?? const [], lits.value ?? const [], now)
         else
-          ..._weekly(context, lits.value ?? const []),
+          ..._weekly(context, lits.value ?? const [], seasons.value ?? const [], now),
       ],
     );
   }
 
-  List<Widget> _weekly(BuildContext context, List<Liturgy> all) {
+  List<Widget> _weekly(BuildContext context, List<Liturgy> all, List<Season> seasons, DateTime now) {
     final list = regularLiturgiesForTab(all, _tab);
-    final vespers = vespersAndPraise(all);
+    final vespers = vespersAndPraise(all, now: now);
+    final special = upcomingSpecialLiturgies(all, now);
+    // Additive seasons in effect now (e.g. an evening revival): the weekly
+    // view stays open, so their services (and feast liturgy) are listed here.
+    final revivals = seasonalSchedule(seasons.where((s) => !s.replacesRegular && isSeasonActiveAt(s, now)), all);
     final showWeekday = _tab == ScheduleTab.other;
     return [
+      for (final e in revivals.entries) ...[
+        SectionTitle(
+          context.pick(e.key.nameAr, e.key.nameEn),
+          icon: Icons.auto_awesome_rounded,
+          trailing: Pill(context.tr('activeNow'), icon: Icons.circle),
+        ),
+        ResponsiveGrid(minItemWidth: 340, children: [
+          for (final l in e.value) LiturgyCard(liturgy: l, showDate: true),
+        ]),
+      ],
+      // One-off dated services outside any season (e.g. a feast or New
+      // Year's Eve), which the weekly tabs cannot show.
+      if (special.isNotEmpty) ...[
+        SectionTitle(context.tr('specialServices'), icon: Icons.event_available_rounded),
+        ResponsiveGrid(minItemWidth: 340, children: [
+          for (final l in special) LiturgyCard(liturgy: l, showDate: true),
+        ]),
+      ],
       SectionTitle(context.tr('regularSchedule'), icon: Icons.calendar_month_rounded),
       SingleChildScrollView(
         scrollDirection: Axis.horizontal,
@@ -128,8 +152,13 @@ class _MassSchedulePageState extends ConsumerState<MassSchedulePage> {
     final grouped = seasonalSchedule(seasons, all);
     final showImages = ref.watch(featuresProvider.select((f) => f.showImages));
     if (grouped.isEmpty) return [const EmptyState(icon: Icons.event_busy)];
+    // Seasons in effect now come first, then the others in date order.
+    final entries = [
+      ...grouped.entries.where((e) => isSeasonActiveAt(e.key, now)),
+      ...grouped.entries.where((e) => !isSeasonActiveAt(e.key, now)),
+    ];
     final out = <Widget>[];
-    for (final e in grouped.entries) {
+    for (final e in entries) {
       final s = e.key;
       final active = isSeasonActiveAt(s, now);
       final range = [

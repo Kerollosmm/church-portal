@@ -23,7 +23,8 @@ service firebase.storage {
       // Same limits as the inline path: ≤ 700 KB, jpeg / webp / png only.
       allow create, update: if isAdmin()
         && request.resource.size <= 700 * 1000
-        && request.resource.contentType.matches('image/(jpeg|webp|png)');
+        // Parameterised headers (e.g. "image/jpeg; charset=utf-8") are accepted.
+        && request.resource.contentType.matches('^image/(jpeg|webp|png)([;].*)?$');
       allow delete: if isAdmin();
     }
 

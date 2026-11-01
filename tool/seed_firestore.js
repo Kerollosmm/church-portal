@@ -13,8 +13,9 @@
  *   --force          Overwrite existing documents (default: skip docs that already exist,
  *                    so edits made in /admin are never clobbered) and delete the
  *                    retired sample documents listed in tool/retired_seed_ids.json
- *   --fill-missing   For documents that already exist, add only the top-level fields they
- *                    lack (e.g. a field introduced by a newer seed). Existing values,
+ *   --fill-missing   For documents that already exist, add only the fields they lack
+ *                    (e.g. a field introduced by a newer seed), recursing into nested
+ *                    maps such as settings/features.sections. Existing values,
  *                    including edits made in /admin, are never changed.
  *   --admin <uid>[:email]  Also create admins/{uid} (role owner)
  *   --admin-email <email>  Find or create the Firebase Auth user with this email and make it owner
@@ -47,6 +48,28 @@ const adminArg = opt('--admin');
 const adminEmail = opt('--admin-email');
 
 const DATE_FIELDS = new Set(['startsAt', 'endsAt', 'date', 'createdAt']);
+
+const isPlainObject = (v) =>
+  v !== null && typeof v === 'object' && !Array.isArray(v) && Object.getPrototypeOf(v) === Object.prototype;
+
+/**
+ * Fields of [data] that [current] lacks, as [pathSegments, value] pairs.
+ * Recurses into nested plain maps present on both sides (e.g.
+ * settings/features.sections), so a new key inside an existing map is
+ * filled without touching its siblings. A key whose current value is not a
+ * map (or any other existing value) is never changed.
+ */
+function missingFields(data, current, prefix = []) {
+  const out = [];
+  for (const [k, v] of Object.entries(data)) {
+    if (!(k in current)) {
+      out.push([[...prefix, k], v]);
+    } else if (isPlainObject(v) && isPlainObject(current[k])) {
+      out.push(...missingFields(v, current[k], [...prefix, k]));
+    }
+  }
+  return out;
+}
 
 function convert(obj) {
   if (Array.isArray(obj)) return obj.map(convert);
@@ -86,19 +109,28 @@ async function main() {
   const ALREADY_EXISTS = 6; // gRPC status code
   let written = 0, skipped = 0, filled = 0;
 
-  // --fill-missing: add only absent top-level fields to an existing doc.
-  // Runs in a transaction so a field an admin writes meanwhile is never replaced.
+  // --fill-missing: add only absent fields (recursing into nested maps) to
+  // an existing doc, as field-path updates so sibling keys are never
+  // replaced. Runs in a transaction so a field an admin writes meanwhile is
+  // never replaced.
   async function fill(ref, data, label) {
-    const keys = await db.runTransaction(async (tx) => {
+    const paths = await db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
       if (!snap.exists) return null;
-      const current = snap.data() || {};
-      const missing = Object.fromEntries(Object.entries(data).filter(([k]) => !(k in current)));
-      if (Object.keys(missing).length && !dryRun) tx.update(ref, missing);
-      return Object.keys(missing);
+      const missing = missingFields(data, snap.data() || {});
+      if (missing.length && !dryRun) {
+        const [[firstPath, firstValue], ...rest] = missing;
+        tx.update(
+          ref,
+          new admin.firestore.FieldPath(...firstPath),
+          firstValue,
+          ...rest.flatMap(([p, v]) => [new admin.firestore.FieldPath(...p), v]),
+        );
+      }
+      return missing.map(([p]) => p.join('.'));
     });
-    if (!keys || !keys.length) return;
-    console.log(`${dryRun ? '[dry-run] ' : ''}${label}: ${dryRun ? 'would add' : 'added'} ${keys.join(', ')}`);
+    if (!paths || !paths.length) return;
+    console.log(`${dryRun ? '[dry-run] ' : ''}${label}: ${dryRun ? 'would add' : 'added'} ${paths.join(', ')}`);
     filled++;
   }
   for (const [collection, entries] of plan) {
@@ -195,7 +227,11 @@ async function main() {
   console.log(`Done. project=${projectId} written=${written} skipped(existing)=${skipped} filled(missing fields)=${filled} deleted(retired)=${deleted}${dryRun ? ' (dry run)' : ''}`);
 }
 
-main().catch((e) => {
-  console.error(e);
-  process.exit(1);
-});
+module.exports = { missingFields };
+
+if (require.main === module) {
+  main().catch((e) => {
+    console.error(e);
+    process.exit(1);
+  });
+}

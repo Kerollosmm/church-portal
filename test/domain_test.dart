@@ -1,4 +1,6 @@
+import 'package:church_portal/domain/assistant_context.dart';
 import 'package:church_portal/domain/cairo_time.dart';
+import 'package:church_portal/domain/features.dart';
 import 'package:church_portal/domain/models.dart';
 import 'package:church_portal/domain/rules.dart';
 import 'package:church_portal/domain/schedule.dart';
@@ -6,7 +8,7 @@ import 'package:church_portal/domain/time_format.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 Liturgy lit(String id, int? weekday, String start, String end,
-        {String type = 'mass', String? season, DateTime? date}) =>
+        {String type = 'mass', String? season, DateTime? date, int order = 0}) =>
     Liturgy(
         id: id,
         type: type,
@@ -16,7 +18,8 @@ Liturgy lit(String id, int? weekday, String start, String end,
         date: date,
         start: start,
         end: end,
-        seasonKey: season);
+        seasonKey: season,
+        order: order);
 
 /// Cairo wall time -> UTC instant (via the tz database).
 DateTime cairo(int y, int mo, int d, int h, [int mi = 0]) => CairoTime.at(y, mo, d, h * 60 + mi).toUtc();
@@ -159,6 +162,286 @@ void main() {
       expect(regularLiturgiesForTab(all, ScheduleTab.saturday).map((l) => l.id), ['sat1']);
       expect(vespersAndPraise(all).map((l) => l.id), ['satVespers']);
       expect(seasonalSchedule([nativity], all)[nativity]!.map((l) => l.id), ['natEve', 'natDay']);
+    });
+  });
+
+  group('additive revival seasons (replacesRegular: false)', () {
+    // St Moses revival: 22 Jun – 1 Jul 2027, evening services every day, the
+    // martyrdom-feast liturgy on Thursday 1 July.
+    Season moses({bool replaces = false}) => Season(
+          id: 'rev-moses',
+          key: 'revival_moses',
+          nameAr: 'نهضة الأنبا موسى',
+          nameEn: 'St Moses revival',
+          startsAt: cairo(2027, 6, 22, 0),
+          endsAt: cairo(2027, 7, 1, 23, 59),
+          replacesRegular: replaces,
+        );
+    final revival = [
+      for (var wd = 1; wd <= 7; wd++) lit('revEve$wd', wd, '18:30', '21:00', type: 'other', season: 'revival_moses'),
+      lit('revFeast', null, '06:30', '10:30', season: 'revival_moses', date: DateTime(2027, 7, 1)),
+    ];
+    final ls = [...regular, ...revival];
+
+    test('regular Friday and Sunday morning masses continue during the revival', () {
+      final fri = computeNextMass(liturgies: ls, seasons: [moses()], now: cairo(2027, 6, 25, 5));
+      expect(fri.next?.liturgy.id, 'fri1');
+      expect(fri.activeSeasons.map((s) => s.key), ['revival_moses']);
+      final sun = computeNextMass(liturgies: ls, seasons: [moses()], now: cairo(2027, 6, 27, 5));
+      expect(sun.next?.liturgy.id, 'sun1');
+      // The first revival days (Tue 22 Jun) still find a mass within the week.
+      expect(computeNextMass(liturgies: ls, seasons: [moses()], now: cairo(2027, 6, 22, 12)).next, isNotNull);
+    });
+
+    test('the feast-day mass supersedes the regular mass of that day', () {
+      final day = CairoTime.at(2027, 7, 1);
+      final ids = occurrencesForDay(liturgies: ls, seasons: [moses()], day: day, dayOffset: 0)
+          .map((o) => o.liturgy.id)
+          .toList();
+      expect(ids, ['revFeast', 'revEve4']);
+      expect(computeNextMass(liturgies: ls, seasons: [moses()], now: cairo(2027, 7, 1, 5)).next?.liturgy.id, 'revFeast');
+    });
+
+    test('overlapping evening vespers give way; the morning mass stays', () {
+      final sat = CairoTime.at(2027, 6, 26);
+      final ids = occurrencesForDay(liturgies: ls, seasons: [moses()], day: sat, dayOffset: 0)
+          .map((o) => o.liturgy.id)
+          .toList();
+      expect(ids, ['sat1', 'revEve6']); // satVespers 18:30 overlaps the revival service
+      // A vespers that does not overlap any revival service is kept.
+      final early = [...ls, lit('satEarlyVespers', 6, '16:00', '17:00', type: 'vespers')];
+      expect(
+          occurrencesForDay(liturgies: early, seasons: [moses()], day: sat, dayOffset: 0).map((o) => o.liturgy.id),
+          ['sat1', 'satEarlyVespers', 'revEve6']);
+    });
+
+    test('a full-override season still replaces the regular schedule', () {
+      final fri = computeNextMass(liturgies: ls, seasons: [moses(replaces: true)], now: cairo(2027, 6, 25, 5));
+      expect(fri.next?.liturgy.id, isNot('fri1'));
+    });
+
+    test('effectiveLiturgiesForDay matches occurrencesForDay', () {
+      for (final season in [moses(), moses(replaces: true), nativity]) {
+        for (final day in [
+          CairoTime.at(2027, 6, 25),
+          CairoTime.at(2027, 6, 26),
+          CairoTime.at(2027, 7, 1),
+          CairoTime.at(2027, 1, 6),
+          CairoTime.at(2027, 1, 7),
+        ]) {
+          final lsAll = [...ls, ...seasonal];
+          expect(
+            effectiveLiturgiesForDay(liturgies: lsAll, seasons: [season], day: day).map((l) => l.id),
+            occurrencesForDay(liturgies: lsAll, seasons: [season], day: day, dayOffset: 0).map((o) => o.liturgy.id),
+            reason: '${season.key} $day',
+          );
+        }
+      }
+    });
+
+    test('Season.replacesRegular defaults to true when absent', () {
+      expect(Season.fromMap('s', {'key': 'nativity'}).replacesRegular, isTrue);
+      expect(Season.fromMap('s', {'key': 'revival_moses', 'replacesRegular': false}).replacesRegular, isFalse);
+      expect(Season.fromMap('s', {'key': 'pascha', 'replacesRegular': 'no'}).replacesRegular, isTrue);
+    });
+  });
+
+  group('mass-schedule page lists', () {
+    final now = cairo(2026, 12, 20, 12); // Sunday 20 Dec 2026
+    test('upcomingSpecialLiturgies: dated, non-seasonal, from today, sorted', () {
+      final ls = [
+        ...regular,
+        lit('past', null, '08:00', '10:00', date: DateTime(2026, 12, 19)),
+        lit('todayLate', null, '18:00', '20:00', date: DateTime(2026, 12, 20)),
+        lit('todayEarlyB', null, '07:00', '09:00', date: DateTime(2026, 12, 20), order: 2),
+        lit('todayEarlyA', null, '07:00', '09:00', date: DateTime(2026, 12, 20), order: 1),
+        lit('newYear', null, '22:00', '01:00', date: DateTime.utc(2026, 12, 31, 10)),
+        lit('datedVespers', null, '18:00', '19:00', type: 'vespers', date: DateTime(2026, 12, 24)),
+        ...seasonal,
+      ];
+      expect(upcomingSpecialLiturgies(ls, now).map((l) => l.id), ['todayEarlyA', 'todayEarlyB', 'todayLate', 'newYear']);
+    });
+
+    test('vespersAndPraise drops past one-off vespers but keeps the weekly ones', () {
+      final ls = [
+        ...regular,
+        lit('oldVespers', null, '18:00', '19:00', type: 'vespers', date: DateTime(2026, 12, 1)),
+        lit('nextVespers', null, '18:00', '19:00', type: 'praise', date: DateTime(2026, 12, 24)),
+      ];
+      expect(vespersAndPraise(ls, now: now).map((l) => l.id), ['nextVespers', 'satVespers']);
+      expect(vespersAndPraise(ls).map((l) => l.id), containsAll(['oldVespers', 'nextVespers', 'satVespers']));
+    });
+
+    test('a one-off service running past midnight stays listed until it ends', () {
+      final ls = [
+        lit('nyeVespers', null, '22:00', '01:00', type: 'praise', date: DateTime(2026, 12, 31)),
+        lit('nyeMass', null, '23:00', '02:00', date: DateTime(2026, 12, 31)),
+        lit('noEnd', null, '23:30', '', type: 'vespers', date: DateTime(2026, 12, 31)), // default 2 h
+      ];
+      final at0030 = cairo(2027, 1, 1, 0, 30);
+      expect(vespersAndPraise(ls, now: at0030).map((l) => l.id), ['nyeVespers', 'noEnd']);
+      expect(upcomingSpecialLiturgies(ls, at0030).map((l) => l.id), ['nyeMass']);
+      final at0115 = cairo(2027, 1, 1, 1, 15); // nyeVespers ended at 01:00, noEnd runs to 01:30
+      expect(vespersAndPraise(ls, now: at0115).map((l) => l.id), ['noEnd']);
+      expect(upcomingSpecialLiturgies(ls, at0115).map((l) => l.id), ['nyeMass']);
+      final at0300 = cairo(2027, 1, 1, 3);
+      expect(vespersAndPraise(ls, now: at0300), isEmpty);
+      expect(upcomingSpecialLiturgies(ls, at0300), isEmpty);
+    });
+
+    test('seasonalSchedule skips inactive seasons', () {
+      final off = Season(
+          id: 'nat', key: 'nativity', nameAr: '', nameEn: '', startsAt: nativity.startsAt, endsAt: nativity.endsAt, active: false);
+      expect(seasonalSchedule([off], all), isEmpty);
+    });
+
+    test('seasonalSchedule scopes dated services to their own year', () {
+      final nat2028 = Season(
+        id: 'nat28',
+        key: 'nativity',
+        nameAr: '',
+        nameEn: '',
+        startsAt: cairo(2028, 1, 6, 0),
+        endsAt: cairo(2028, 1, 7, 23, 59),
+      );
+      final ls = [
+        ...all,
+        lit('natEve28', null, '20:00', '00:30', season: 'nativity', date: DateTime(2028, 1, 6)),
+        lit('natWeekly', 5, '09:00', '10:00', season: 'nativity'), // weekday-based: every matching season
+      ];
+      final grouped = seasonalSchedule([nat2028, nativity], ls);
+      expect(grouped.keys.map((s) => s.id), ['nat', 'nat28']);
+      // Weekday-based services sort ahead of dated ones (unchanged order).
+      expect(grouped[nativity]!.map((l) => l.id), ['natWeekly', 'natEve', 'natDay']);
+      expect(grouped[nat2028]!.map((l) => l.id), ['natWeekly', 'natEve28']);
+    });
+
+    test('seasonalSchedule breaks equal start times by order', () {
+      final ls = [
+        lit('b', null, '08:00', '10:00', season: 'nativity', date: DateTime(2027, 1, 7), order: 2),
+        lit('a', null, '08:00', '10:00', season: 'nativity', date: DateTime(2027, 1, 7), order: 1),
+      ];
+      expect(seasonalSchedule([nativity], ls)[nativity]!.map((l) => l.id), ['a', 'b']);
+    });
+  });
+
+  group('assistant grounding', () {
+    const settings = ChurchSettings(
+      nameAr: 'كنيسة',
+      nameEn: 'Church',
+      addressAr: 'العصافرة',
+      addressEn: '',
+      transportAr: 'آخر شارع 45',
+      historyAr: 'تاريخ الكنيسة',
+      bishopAr: 'الأنبا بافلي',
+    );
+    final now = cairo(2026, 11, 1, 12);
+    String build({FeatureSettings f = FeatureSettings.defaults, List<Season> seasons = const []}) =>
+        buildAssistantInstruction(
+          settings: settings,
+          liturgies: [
+            const Liturgy(id: 'x', type: 'mass', nameAr: 'قداس الجمعة', nameEn: '', weekday: 5, start: '07:00', end: '09:00',
+                placeAr: 'الكنيسة الكبرى', audienceAr: 'للشباب'),
+            const Liturgy(id: 's', type: 'other', nameAr: 'عشية النهضة', nameEn: '', weekday: 5, start: '18:00', end: '20:00',
+                placeAr: 'مذبح الأنبا موسى', seasonKey: 'revival_moses'),
+          ],
+          seasons: seasons,
+          clinics: const [
+            Clinic(id: 'c', specialty: 'dental', specialtyAr: 'الأسنان', specialtyEn: '', doctorName: 'د. مينا', degreeAr: 'ماجستير',
+                days: [5], whatsapp: '01012345678'),
+          ],
+          meetings: const [
+            Meeting(id: 'm', stage: 'youth', nameAr: 'اجتماع الشباب', nameEn: '', start: '19:00', end: '20:00', hallAr: 'قاعة البابا',
+                notes: 'يبدأ بعد العشية'),
+          ],
+          activities: const [
+            Activity(id: 'a', category: 'choir', titleAr: 'الكورال', titleEn: '', descAr: 'خورس الكنيسة', scheduleAr: 'كل جمعة'),
+          ],
+          facilities: const [],
+          now: now,
+          features: f,
+          alerts: [
+            const Alert(id: 'al', titleAr: 'تنويه مهم', titleEn: '', bodyAr: 'تغيير المواعيد', active: true, priority: 1),
+            const Alert(id: 'off', titleAr: 'قديم', titleEn: 'Old', active: false, priority: 9),
+          ],
+          priests: const [
+            Priest(id: 'p', name: 'القمص بموا', nameEn: '', rank: 'hegumen', ordinationDate: '1998-03-21'),
+            Priest(id: 'd', name: 'المتنيح القمص تادرس', nameEn: '', status: 'departed', departedDate: '2022-02-10'),
+          ],
+          saints: const [
+            Saint(id: 'st', nameAr: 'الأنبا موسى الأسود', nameEn: 'St Moses the Black', feastGregorian: '1 July'),
+          ],
+        );
+
+    test('Arabic-only admin entries are never blank', () {
+      final t = build();
+      expect(t, contains('Friday: قداس الجمعة [mass] 07:00 AM – 09:00 AM at الكنيسة الكبرى - للشباب'));
+      expect(t, contains('Directions: آخر شارع 45'));
+      expect(t, contains('الأسنان: د. مينا, ماجستير'));
+      expect(t, contains('WhatsApp 01012345678'));
+      expect(t, contains('اجتماع الشباب [youth]'));
+      expect(t, contains('at قاعة البابا'));
+      expect(t, contains('notes: يبدأ بعد العشية'));
+      expect(t, contains('الكورال: خورس الكنيسة Schedule: كل جمعة.'));
+      expect(t, isNot(contains(' at ;')));
+      expect(t, isNot(contains(':  (')));
+    });
+
+    test('seasons say whether they replace or add to the regular schedule', () {
+      final additive = Season(
+          id: 'rm', key: 'revival_moses', nameAr: 'نهضة الأنبا موسى', nameEn: '', replacesRegular: false,
+          startsAt: cairo(2027, 6, 22, 0), endsAt: cairo(2027, 7, 1, 23, 59));
+      final t = build(seasons: [additive, nativity]);
+      expect(t, contains('### نهضة الأنبا موسى'));
+      expect(t, contains('[ADDITIVE — regular morning masses continue]'));
+      expect(t, contains('- Friday: عشية النهضة [other] 06:00 PM – 08:00 PM at مذبح الأنبا موسى'));
+      final off = build(seasons: [
+        Season(id: 'rm', key: 'revival_moses', nameAr: 'x', nameEn: 'x', active: false, replacesRegular: false),
+      ]);
+      expect(off, isNot(contains('عشية النهضة')));
+    });
+
+    test('alerts, priests, departed priests, saints and history are grounded', () {
+      final t = build();
+      expect(t, contains('## Current announcements'));
+      expect(t, contains('تنويه مهم: تغيير المواعيد'));
+      expect(t, isNot(contains('Old')));
+      expect(t, contains('## Priests serving the church'));
+      expect(t, contains('القمص بموا (hegumen); ordained 1998-03-21'));
+      expect(t, contains('## Departed priests of the church'));
+      expect(t, contains('departed 2022-02-10'));
+      expect(t, contains('St Moses the Black (الأنبا موسى الأسود); feast: 1 July'));
+      expect(t, contains('Bishop: الأنبا بافلي'));
+      expect(t, contains('History (summary): تاريخ الكنيسة'));
+    });
+
+    test('history and bios carry both languages when both are filled', () {
+      final t = buildAssistantInstruction(
+        settings: const ChurchSettings(
+            nameAr: 'كنيسة', nameEn: 'Church', addressAr: '', addressEn: '', historyAr: 'تاريخ', historyEn: 'History text'),
+        liturgies: const [],
+        seasons: const [],
+        clinics: const [],
+        meetings: const [],
+        activities: const [],
+        facilities: const [],
+        now: now,
+        priests: const [Priest(id: 'p', name: 'أبونا', nameEn: 'Fr X', bioAr: 'سيرة', bioEn: 'Bio')],
+        saints: const [Saint(id: 's', nameAr: 'قديس', nameEn: 'Saint', bioAr: 'سيرة القديس', bioEn: 'Saint bio')],
+      );
+      expect(t, contains('History (summary): History text (تاريخ)'));
+      expect(t, contains('Fr X (أبونا) (priest). Bio (سيرة)'));
+      expect(t, contains('. Saint bio (سيرة القديس)'));
+    });
+
+    test('switched-off sections are not grounded', () {
+      final t = build(
+          f: FeatureSettings.fromMap({
+        'sections': {'alerts': false, 'priests': false, 'departedPriests': false, 'saints': false, 'history': false},
+      }));
+      for (final h in ['## Current announcements', '## Priests', '## Departed priests', '## Patron saints', '## About the church']) {
+        expect(t, isNot(contains(h)), reason: h);
+      }
     });
   });
 

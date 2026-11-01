@@ -6,8 +6,10 @@ import 'package:church_portal/data/content_repository.dart';
 import 'package:church_portal/data/seed_data.dart';
 import 'package:church_portal/domain/cairo_time.dart';
 import 'package:church_portal/domain/features.dart';
+import 'package:church_portal/domain/models.dart';
 import 'package:church_portal/router.dart';
 import 'package:church_portal/state/providers.dart';
+import 'package:church_portal/ui/pages/clinics_page.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
@@ -70,7 +72,8 @@ void main() {
   setUpAll(CairoTime.ensureInitialized);
 
   testWidgets('all sections on: clinics page and nav entries are shown', (tester) async {
-    final router = await _pump(tester, _seedWith(const {}));
+    // The seed ships clinics switched off until the church confirms them.
+    final router = await _pump(tester, _seedWith(const {'clinics': true}));
     expect(find.text('Clinics'), findsWidgets); // app bar highlight + hero + directory
     router.go('/clinics');
     await tester.pumpAndSettle();
@@ -162,5 +165,51 @@ void main() {
       expect(tester.takeException(), isNull, reason: 'width $width');
       expect(find.text('St. Maximus & Domadius Church'), findsOneWidget, reason: 'width $width');
     }
+  });
+
+  testWidgets('clinics without booking numbers offer "Call church office"', (tester) async {
+    final router = await _pump(tester, _seedWith(const {'clinics': true}));
+    router.go('/clinics');
+    await tester.pumpAndSettle();
+    // Every seeded clinic is a placeholder with no booking phone / WhatsApp.
+    expect(find.byKey(const Key('callChurchOffice')), findsWidgets);
+    expect(find.text('Call church office'), findsWidgets);
+    // English UI shows a translated placeholder doctor title.
+    expect(find.text('Internal medicine doctor — to be announced'), findsOneWidget);
+    expect(find.textContaining('يُعلن لاحقًا'), findsNothing);
+  });
+
+  testWidgets('no office fallback while contact info is switched off', (tester) async {
+    final router = await _pump(tester, _seedWith(const {'clinics': true, 'contactInfo': false}));
+    router.go('/clinics');
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('callChurchOffice')), findsNothing);
+  });
+
+  testWidgets('ClinicCard: booking numbers win over the office fallback', (tester) async {
+    Future<void> pumpCard(Clinic c) => tester.pumpWidget(MaterialApp(
+          locale: const Locale('en'),
+          supportedLocales: const [Locale('ar'), Locale('en')],
+          localizationsDelegates: GlobalMaterialLocalizations.delegates,
+          home: Scaffold(
+            body: ClinicCard(clinic: c, availableToday: false, fallbackOfficePhone: '035368888'),
+          ),
+        ));
+    const base = Clinic(
+        id: 'c', specialty: 'dental', specialtyAr: 'الأسنان', specialtyEn: 'Dental', doctorName: 'Dr Mina', days: [5]);
+    await pumpCard(base);
+    expect(find.byKey(const Key('callChurchOffice')), findsOneWidget);
+    await pumpCard(const Clinic(
+        id: 'c',
+        specialty: 'dental',
+        specialtyAr: 'الأسنان',
+        specialtyEn: 'Dental',
+        doctorName: 'Dr Mina',
+        days: [5],
+        bookingPhone: '01012345678'));
+    expect(find.byKey(const Key('callChurchOffice')), findsNothing);
+    expect(find.byKey(const Key('bookClinic')), findsOneWidget);
+    expect(find.text('Call • Book'), findsOneWidget);
+    expect(find.text('Dr Mina'), findsOneWidget);
   });
 }

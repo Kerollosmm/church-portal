@@ -55,13 +55,13 @@ settings = {
     "sample": False
   },
   # Feature toggles + home layout (admin: "Sections & home page"). Every
-  # section starts switched on; clinics stay on with their items flagged
-  # as unconfirmed until the church publishes them.
+  # section starts switched on except clinics: it stays off until the church
+  # office confirms the clinics and their booking numbers.
   "features": {
-    "sections": {k: True for k in [
+    "sections": {**{k: True for k in [
       "schedule", "meetings", "clinics", "services", "history", "milestones", "saints", "priests",
       "departedPriests", "activities", "alerts", "contactInfo", "socials", "contactForm", "assistant", "media",
-    ]},
+    ]}, "clinics": False},
     "homeOrder": ["banner", "alerts", "nextMass", "quickContacts", "milestones", "directory", "map"],
     "homeHidden": [],
     "heroTitleAr": "", "heroTitleEn": "", "heroSubtitleAr": "", "heroSubtitleEn": "",
@@ -100,11 +100,11 @@ alerts = {
 }
 
 seasons = {
-  "nativity-2027": {"key": "nativity", "nameAr": "عيد الميلاد المجيد", "nameEn": "Feast of the Nativity", "startsAt": T("2027-01-06"), "endsAt": T("2027-01-07", "23:59"), "active": True},
-  "revival-maximus-2027": {"key": "revival_maximus", "nameAr": "نهضة القديسين مكسيموس ودوماديوس", "nameEn": "Revival of Sts Maximus & Domadius", "startsAt": T("2027-01-21"), "endsAt": T("2027-01-25", "23:59"), "active": True},
-  "holy-week-2027": {"key": "holy_week", "nameAr": "أسبوع الآلام (البصخة المقدسة)", "nameEn": "Holy Week (Pascha)", "startsAt": T("2027-04-25", "00:00", "+03:00"), "endsAt": T("2027-05-01", "18:00", "+03:00"), "active": True},
-  "pascha-2027": {"key": "pascha", "nameAr": "عيد القيامة المجيد", "nameEn": "Feast of the Resurrection", "startsAt": T("2027-05-01", "18:00", "+03:00"), "endsAt": T("2027-05-02", "23:59", "+03:00"), "active": True},
-  "revival-moses-2027": {"key": "revival_moses", "nameAr": "نهضة القوي الأنبا موسى الأسود", "nameEn": "Revival of St Moses the Black", "startsAt": T("2027-06-22"), "endsAt": T("2027-07-01", "23:59"), "active": True},
+  "nativity-2027": {"key": "nativity", "nameAr": "عيد الميلاد المجيد", "nameEn": "Feast of the Nativity", "startsAt": T("2027-01-06"), "endsAt": T("2027-01-07", "23:59"), "active": True, "replacesRegular": True},
+  "revival-maximus-2027": {"key": "revival_maximus", "nameAr": "نهضة القديسين مكسيموس ودوماديوس", "nameEn": "Revival of Sts Maximus & Domadius", "startsAt": T("2027-01-21"), "endsAt": T("2027-01-25", "23:59"), "active": True, "replacesRegular": False},
+  "holy-week-2027": {"key": "holy_week", "nameAr": "أسبوع الآلام (البصخة المقدسة)", "nameEn": "Holy Week (Pascha)", "startsAt": T("2027-04-25", "00:00", "+03:00"), "endsAt": T("2027-05-01", "18:00", "+03:00"), "active": True, "replacesRegular": True},
+  "pascha-2027": {"key": "pascha", "nameAr": "عيد القيامة المجيد", "nameEn": "Feast of the Resurrection", "startsAt": T("2027-05-01", "18:00", "+03:00"), "endsAt": T("2027-05-02", "23:59", "+03:00"), "active": True, "replacesRegular": True},
+  "revival-moses-2027": {"key": "revival_moses", "nameAr": "نهضة القوي الأنبا موسى الأسود", "nameEn": "Revival of St Moses the Black", "startsAt": T("2027-06-22"), "endsAt": T("2027-07-01", "23:59"), "active": True, "replacesRegular": False},
 }
 
 # Places are not published either: every liturgy below is a placeholder.

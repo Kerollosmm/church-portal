@@ -216,6 +216,13 @@ const adminCollections = <CollectionDef>[
     FieldDef('startsAt', 'يبدأ (توقيت القاهرة)', 'Starts (Cairo time)', FieldType.dateTime),
     FieldDef('endsAt', 'ينتهي (توقيت القاهرة)', 'Ends (Cairo time)', FieldType.dateTime),
     FieldDef('active', 'مُفعّل', 'Active', FieldType.boolean),
+    FieldDef(
+      'replacesRegular',
+      'يستبدل الجدول العادي (أوقفها للنهضات المسائية)',
+      'Replaces regular schedule (off for evening revivals)',
+      FieldType.boolean,
+      missingBool: true,
+    ),
     _imageField,
   ], [
     'nameAr',

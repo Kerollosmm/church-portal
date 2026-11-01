@@ -57,36 +57,45 @@ Match blocks:
 |---|---|---|---|
 | `/{col}/{docId}` for `alerts, seasons, liturgies, meetings, activities, clinics, facilities, priests, milestones, saints` | **public** | `isAdmin() && validContent(col, data)` → `common` + per-collection `validAlert/validSeason/validLiturgy/validMeeting/validActivity/validClinic/validFacility/validPriest/validMilestone/validSaint` (allow-list + types/sizes; see `04-data-model.md`) | `isAdmin()` |
 | `/settings/{docId}` | **public** | `isAdmin()` and (`church` → `validChurch`, `features` → `validFeatures`); any other doc id denied | **never** |
-| `/media/{mediaId}` | **public** | `isAdmin() && validMedia(data)`: keys ⊆ `dataBase64, contentType, w, h, bytes, createdAt, createdBy, refs`; required `dataBase64` (4–950,000 chars), `contentType` ∈ jpeg/webp/png, `createdAt` (== `request.time`, or unchanged), `createdBy` (token email/uid, or unchanged); `bytes` ≤ 700,000; `w/h` 1–10000; `refs` list ≤ 20 | `isAdmin()` |
-| `/admins/{uid}` | own doc, or any doc if `isOwner()` | `isOwner()` **and** `uid != caller` (cannot change yourself → an owner always remains); keys ⊆ `email, role, updatedAt, updatedBy`; email required ≤254; role ∈ owner/editor | `isOwner() && uid != caller` |
-| `/meta/contact_rate` | never | keys ⊆ `lastAt`; `lastAt == request.time`; and (new doc or `request.time > lastAt + 20 s`) | never |
-| `/contact_messages/{id}` | `isAdmin()` | **create (public, no auth)**: `validContactMessage` **and** `getAfter(meta/contact_rate).lastAt == request.time` (same batch). **update**: `isAdmin()`, only `status/updatedAt/updatedBy` change, status ∈ new/handled, `stampOk` | `isAdmin()` |
+| `/media/{mediaId}` | **get: public** (by id); **list: `isAdmin()` only** (PR 1, SEC-02) | `isAdmin() && validMedia(data)`: keys ⊆ `dataBase64, contentType, w, h, bytes, createdAt, createdBy, refs`; required `dataBase64` (4–950,000 chars), `contentType` ∈ jpeg/webp/png, `createdAt` (== `request.time`, or unchanged), `createdBy` (token email/uid, or unchanged); `bytes` ≤ 700,000; `w/h` 1–10000; `refs` list ≤ 20 | `isAdmin()` |
+| `/admins/{uid}` | own doc, or any doc if `isOwner()` | `isOwner()` **and** `uid != caller` (cannot change yourself → an owner always remains); keys ⊆ `email, role, updatedAt, updatedBy`; email required ≤254; role ∈ owner/editor; `stampOk` (PR 1, SEC-03) | `isOwner() && uid != caller` |
+| `/meta/contact_rate` | never | keys ⊆ `lastAt, lastMsgId`; `lastAt == request.time`; `lastMsgId` string 10–64 alphanumerics; `!exists(contact_messages/lastMsgId)` **and** `existsAfter(contact_messages/lastMsgId)` (so it is only writable in the same batch as a NEW message — SEC-01); and (new doc or `request.time > lastAt + 10 s`) | never |
+| `/contact_messages/{id}` | `isAdmin()` | **create (public, no auth)**: `validContactMessage` **and** `getAfter(meta/contact_rate).lastAt == request.time` **and** `getAfter(meta/contact_rate).lastMsgId == id` (same batch). **update**: `isAdmin()`, only `status/updatedAt/updatedBy` change, status ∈ new/handled, `stampOk` | `isAdmin()` |
 
 Anything not matched (e.g. a new collection) is **denied** by default — new collections need a rules change.
 
 Notable details:
-- `validSeason` requires `key` in the 6 season keys; `validLiturgy` requires the `start` key and `seasonKey` ∈ keys.
+- `validSeason` requires `key` in the 6 season keys, `replacesRegular` optional bool (PR 1); `validLiturgy` requires
+  the `start` key and `seasonKey` ∈ keys.
+- Links (PR 1, SEC-04): `optHttpUrl` (`''` or `^[Hh][Tt][Tt][Pp][Ss]?://[^/ ]+[.][^/ ]+([/?#][^ ]*)?$` — scheme
+  case-insensitive like the admin form) on `activities.link`,
+  `meetings.facebookUrl/whatsappUrl` and `settings/church` `facebook/youtube/instagram/whatsappChannel`;
+  `optUrlOrPath` (also an in-app path `/…`) on `alerts.link`. Rejects `javascript:`, `data:`, `//host`, etc.
+  `mapsUrl`/`heroImageUrl` keep length-only checks.
 - `validClinic`: `days` list ≤ 7 and ⊆ [1..7].
 - `validPriest`: `rank` ∈ hegumen/priest, `status` ∈ serving/departed, dates ≤ 10 chars.
 - `validFeatures`: exact key allow-list (also on update — `d.keys().hasOnly`), `sections` keys ⊆ the 16 section keys
   (incl. `media`)
   and values bool, `homeOrder`/`homeHidden` ⊆ the 7 block keys (≤ 7), `bannerLink` regex
   `^$|^/([^/ ][^ ]*)?$|^https?://[^/ ]+[.][^/ ]+([/?#][^ ]*)?$`, `theme` ∈ 5 presets.
-- `validChurch`: phones/altars lists ≤ 20; `nameAr` required.
+- `validChurch`: phones/altars lists ≤ 20; `nameAr` required; `coordinatesApproximate` optional bool (PR 1).
 - **Editors and owners have the same content/settings/inbox rights**; only `admins/*` management is owner-only.
 - Tests: `tool/rules_test/rules.test.mjs` (Node test runner + `@firebase/rules-unit-testing` in the Firestore
   emulator, project `demo-church-portal`): public read/no write, non-admin denied, contact create + throttle,
   every seed doc valid, clinic create/hide/reorder/delete, unknown keys/bad types/bad times rejected, stamps,
   legacy fields, church coordinates, feature toggles shapes, inbox, owner/editor admin management, **optional
   images** (valid url/inline/null images, malformed maps, image on a collection without it, `media/` public read,
-  admin-only writes, type/size/stamp checks, the 950,000-char cap).
+  admin-only writes, type/size/stamp checks, the 950,000-char cap), and PR 1's **SEC-01–SEC-04** (standalone
+  `contact_rate` pings and mismatched `lastMsgId` rejected, 10 s throttle, `media` list admin-only, admin stamps,
+  `Season.replacesRegular`, `coordinatesApproximate`, safe links incl. upper-case schemes, replaying an existing message, a 5 s resend). 32 tests.
 - **Expression budget:** rules are limited to 1000 expressions per request (PR #3 hit it on `validChurch`). Keep new
   checks in shared helpers (`common`, `validImage`) and prefer `str()`/`get()` forms on big docs.
 
 ## Cloud Storage (not used — Spark)
 
 - `storage.rules` in the repo root is a **draft, not deployed** (`firebase.json` has no `storage` entry): public read
-  of `media/*`, admin-only writes (cross-service `firestore.exists(admins/uid)`), ≤ 700 KB, jpeg/webp/png.
+  of `media/*`, admin-only writes (cross-service `firestore.exists(admins/uid)`), ≤ 700 KB, jpeg/webp/png
+  (`^image/(jpeg|webp|png)([;].*)?$`, so parameterised headers like `image/jpeg; charset=utf-8` pass — PR 1).
 - The app's `StorageMediaRepository` (`lib/data/media_repository.dart`) is a stub selected by
   `--dart-define=MEDIA_BACKEND=storage`; switch steps are in ADR-017 (`10-decisions-and-history.md`).
 - Spark quota note: each inline image costs **one Firestore document read** per visitor session (cached in memory and
@@ -118,7 +127,9 @@ App target settings:
 - `public: build/web` (output of `flutter build web --release`); ignores `firebase.json`, dotfiles, `node_modules`.
 - `cleanUrls: true`, `trailingSlash: false`, **rewrite `**` → `/index.html`** (SPA + path URL strategy).
 - Headers: `**` → `Cache-Control: no-cache` (Flutter bundles are not content-hashed, so HTML/JS must revalidate),
-  `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `X-Frame-Options: SAMEORIGIN`;
+  `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `X-Frame-Options: SAMEORIGIN`,
+  `Strict-Transport-Security: max-age=31536000; includeSubDomains`, `Permissions-Policy: camera=(), microphone=(),
+  geolocation=()` (PR 1, SEC-05);
   images/fonts and `canvaskit/**` → `public, max-age=604800` (7 days).
 - **Live** deploy: push to `main` → `deploy.yml` job `deploy-live` (`firebase deploy --only hosting:app,hosting:legacy-redirect`),
   environment `production` (URL the new domain).
@@ -161,15 +172,21 @@ App target settings:
      are "not offered".
   2. Sections included **only if switched on** in `settings/features`: Contacts (contactInfo: address, directions,
      maps URL, phones; socials: WhatsApp, Facebook, YouTube, WhatsApp channel, Instagram); weekly liturgy schedule,
-     special one-off services, Holy seasons with `[ACTIVE NOW]` (schedule); clinics (active only); meetings;
-     activities; public services (facilities).
+     special one-off services, Holy seasons (active seasons only, each labelled `[REPLACES regular schedule]` or
+     `[ADDITIVE — regular morning masses continue]` from `replacesRegular`, plus `[ACTIVE NOW]`) (schedule); current
+     announcements (alerts: `visibleAlerts`); clinics (active only, incl. WhatsApp); meetings (incl. notes);
+     activities; public services (facilities); About the church (history: bishop + history summary, each language
+     clipped to 700 chars);
+     serving priests (priests) and departed priests with repose date (departedPriests); patron saints (saints).
+     Every bilingual field goes through `_bi(ar, en)` → `"English (Arabic)"` or whichever one is filled, so
+     Arabic-only admin entries never produce blank names/places (PR 1, BUG-04).
   3. Items with `sample: true` are prefixed **`[UNCONFIRMED]`** and the model is told to say they are provisional.
 - Each user message is prefixed `[Current Cairo time: YYYY-MM-DD HH:mm (Weekday)]`; questions > 500 chars are ignored;
   45 s timeout.
 - The chat is reused while the instruction string is identical; when content/date changes, a new session is started
   with the kept history (max 20 contents = 10 turns). If the set of enabled sections changes, history is cleared.
 - Before the first question `_awaitContent()` waits (≤ 10 s) for settings, features, liturgies, seasons, clinics,
-  meetings, activities, facilities.
+  meetings, activities, facilities, alerts, priests, saints.
 - Kill switches (all platforms): section toggle `assistant` in /admin, `settings/church.assistantEnabled`, or App Check
   failing to activate. **Web release builds only:** a missing/placeholder reCAPTCHA key also hides it (App Check is
   skipped). Android/iOS release builds activate Play Integrity / App Attest without the key, so the assistant can

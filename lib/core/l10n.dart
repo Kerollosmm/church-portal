@@ -45,6 +45,7 @@ const Map<String, List<String>> _strings = {
   'holySeasonsHint': ['عرض مواعيد أسبوع الآلام والأعياد والنهضات', 'Show Holy Week, feasts and revival times'],
   'regularSchedule': ['الجدول الأسبوعي', 'Weekly schedule'],
   'activeNow': ['مُفعّل الآن', 'Active now'],
+  'specialServices': ['صلوات ومناسبات خاصة قادمة', 'Upcoming special services'],
   'place': ['المكان', 'Place'],
   'noItems': ['لا توجد بيانات حاليًا', 'Nothing here yet'],
   'loadError': ['تعذّر تحميل البيانات', 'Could not load data'],
@@ -65,6 +66,8 @@ const Map<String, List<String>> _strings = {
   'youtube': ['يوتيوب (البث المباشر)', 'YouTube (live)'],
   'whatsappChannel': ['قناة واتساب', 'WhatsApp channel'],
   'call': ['اتصال', 'Call'],
+  'callChurchOffice': ['الاتصال بمكتب الكنيسة', 'Call church office'],
+  'doctorTba': ['طبيب {s} — يُعلن لاحقًا', '{s} doctor — to be announced'],
   'book': ['احجز', 'Book'],
   'allSpecialties': ['كل التخصصات', 'All specialties'],
   'availableToday': ['متاح اليوم', 'Available today'],
@@ -84,7 +87,10 @@ const Map<String, List<String>> _strings = {
   'send': ['إرسال', 'Send'],
   'sending': ['جارٍ الإرسال…', 'Sending…'],
   'sent': ['تم إرسال رسالتك. شكرًا لك، سنتواصل معك قريبًا.', 'Message sent. Thank you — we will get back to you soon.'],
-  'queued': ['تم حفظ رسالتك وسترسل تلقائيًا عند عودة الاتصال.', 'Saved — your message will be sent automatically when you are back online.'],
+  'sendTimeoutRetry': [
+    'لم نتمكن من تأكيد وصول رسالتك بسبب ضعف الاتصال، وقد تصل لاحقًا. لا تُعِد إرسالها (رسالتك ما زالت في النموذج)، واتصل بمكتب الكنيسة للتأكد من وصولها.',
+    'We could not confirm that your message arrived (weak connection); it may still arrive. Please do not send it again (it is still in the form) — call the church office to check.'
+  ],
   'sendFailed': ['تعذّر الإرسال. حاول لاحقًا أو اتصل بنا.', 'Could not send. Please try later or call us.'],
   'contactUnavailable': ['النموذج غير متاح حاليًا — برجاء الاتصال بنا هاتفيًا.', 'The form is unavailable right now — please call us.'],
   'rateLimited': ['برجاء الانتظار {t} ثانية قبل إرسال رسالة أخرى.', 'Please wait {t} seconds before sending another message.'],
