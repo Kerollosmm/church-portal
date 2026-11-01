@@ -9,6 +9,7 @@ import '../../domain/rules.dart';
 import '../../state/providers.dart';
 import '../widgets/cards.dart';
 import '../widgets/common.dart';
+import '../widgets/item_image.dart';
 
 const _categoryOrder = [
   'service', 'choir', 'hymns', 'youth', 'servants', 'media', 'drama', //
@@ -78,10 +79,16 @@ class _ActivityCard extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(color: AppColors.parchment, borderRadius: BorderRadius.circular(12)),
-              child: Icon(activityIcon(a.category), color: AppColors.burgundy),
+            ItemImage(
+              image: a.image,
+              size: 56,
+              circle: false,
+              label: context.pick(a.titleAr, a.titleEn),
+              placeholder: Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(color: AppColors.parchment, borderRadius: BorderRadius.circular(12)),
+                child: Icon(activityIcon(a.category), color: AppColors.burgundy),
+              ),
             ),
             const SizedBox(width: 12),
             Expanded(

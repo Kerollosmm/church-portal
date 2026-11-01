@@ -61,12 +61,13 @@ signed-in email + role and Sign out.
 
 ### Overview (`OverviewScreen`, `admin_screens.dart`)
 Live counts per collection (respecting each screen's filter, e.g. serving vs departed priests) with hidden /
-unconfirmed sub-counts, **new messages** (status ≠ handled, red when > 0), **sections on** (`N/15`), quick links
+unconfirmed sub-counts, **new messages** (status ≠ handled, red when > 0), **sections on** (`N/16`), quick links
 (church info, sections & home, alerts, open site) and the **8 latest edits** (title, `updatedAt`, `updatedBy`). A
 failed stream shows "—".
 
 ### Sections & home page (`FeaturesScreen` / `FeaturesEditor`, `features_editor.dart`) → `settings/features`
-- Switch each of the 15 sections on/off (+ "enable all"); labels from `Sections.labels`.
+- Switch each of the 16 sections on/off (+ "enable all"); labels from `Sections.labels`. The 16th, **«الصور» /
+  Images**, hides every optional item image site-wide (default on).
 - **Home layout**: drag to reorder the 7 blocks, show/hide each; a block whose section is off is flagged
   («blockSectionOff»).
 - Hero title/subtitle AR/EN (≤ 200/300), announcement banner (on/off, AR/EN text ≤ 500, link validated by
@@ -112,7 +113,7 @@ For each `CollectionDef`:
 
 ### Generic form (`DocEditor`, `doc_editor.dart`)
 - Field widgets by `FieldType`: text, multiline, integer, decimal, boolean, time (HH:mm), weekday, weekdays (chips),
-  dateTime / date (Cairo), looseDate, choice (labels via `choiceLabel`/`opt_*`), url, phone, objectList.
+  dateTime / date (Cairo), looseDate, choice (labels via `choiceLabel`/`opt_*`), url, phone, objectList, **image**.
 - Validation (`admin_validators.dart` `validateFieldValue`): required, max length (`effectiveMaxLength`), `HH:mm`,
   real calendar dates (rejects 2027-02-30), loose dates, numeric ranges (Arabic digits accepted), URLs (`https://…`
   or in-app path where `allowPath`), phones (`^\+?[0-9]{5,15}$` after normalising). Cross-field
@@ -123,6 +124,27 @@ For each `CollectionDef`:
 - Every save stamps `updatedAt` (server time) and `updatedBy` (email) via `AdminRepository._stamp`.
 - Boolean defaults: `missingBool` (value assumed when an existing doc lacks the field, e.g. `visible` = true,
   clinic `active` = true) vs `newBool` (value for new docs, e.g. `sample` = false).
+
+### Optional image field (`FieldType.image`, PR #5)
+On priests, departed fathers, saints, milestones, activities, alerts and seasons the form has **«الصورة (اختياري) /
+Image (optional)»** with a 96 px preview and:
+- **Upload image** (رفع صورة): opens the device gallery/file picker (`image_picker`). The file is resized and
+  compressed **in the browser/app before anything is stored** (`prepareUpload`, `lib/data/image_processing.dart`):
+  long edge ≤ **800 px** (640 px second pass), quality 0.8 → 0.5 until ≤ **~250 KB**; web encodes WebP via canvas
+  (JPEG where WebP is unsupported), Android uses the Dart `image` package (JPEG). Files > 25 MB are refused before
+  decoding; results still > **700 KB** are refused («الصورة كبيرة جدًا…»). The preview says "uploaded when you
+  save" — the `media/{id}` doc is written **only when you press Save**, then the item gets
+  `image = {source: inline, mediaId, alt, w, h}`. If the save fails, the uploaded media doc is deleted again and the
+  picked image stays so you can retry.
+- **Image link** (رابط صورة): paste an **https://** image URL (validated: https, host, no spaces, ≤ 500) →
+  `{source: url, url}`.
+- **Remove image** (إزالة الصورة): saves `image: null`; the card goes back to its icon.
+- **Image description** (alt, ≤ 300) for screen readers (defaults to the item's name on the site).
+- Replacing or removing an inline image, or deleting the item from the list, deletes the old `media/{id}` doc
+  **best effort** (`orphanedMediaIds`). Orphans can remain if that delete fails or two admins edit at once; clean-up:
+  Firestore console → `media` → delete ids not referenced by any content doc's `image.mediaId` (open task).
+- Upload is disabled when the backend has no `MediaRepository` (URL still works). Switch all images off/on in
+  **Sections & home page → «الصور» / Images**.
 
 ### Contact messages (`MessagesScreen`) → `contact_messages`
 Newest first (`createdAt`), filter chips **new** (default) / handled / all; each card: name, time, message, phone
@@ -141,3 +163,5 @@ role. The Auth user itself must be created in the console (or via the Seed workf
 - Max lengths in `FieldDef` must not exceed the rules limits (e.g. alert body form 1000 vs rule 2000 is fine; the
   reverse would make saves fail with permission-denied).
 - `AdminBackend` is an interface so widget tests use an in-memory fake; keep new admin I/O behind it.
+  `AdminBackend.media` (default null) exposes the `MediaRepository`; `DocEditor` takes `media`, `pickImage` and
+  `prepareImage` so tests inject bytes and a fake store (`test/media_test.dart`).

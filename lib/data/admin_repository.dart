@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import 'content_repository.dart';
+import 'media_repository.dart';
 
 class AdminDoc {
   final String id;
@@ -25,6 +26,9 @@ class AdminRoles {
 abstract class AdminBackend {
   /// Email of the signed-in admin (stored as `updatedBy`).
   String get actor;
+
+  /// Image uploads for the editors (null = only pasted URLs).
+  MediaRepository? get media => null;
 
   Stream<List<AdminDoc>> watch(String collection);
   Stream<AdminDoc?> watchDoc(String path);
@@ -54,6 +58,9 @@ class AdminRepository implements AdminBackend {
   final FirebaseFirestore db;
   final FirebaseAuth auth;
   AdminRepository(this.db, this.auth);
+
+  @override
+  late final MediaRepository media = createMediaRepository(db, () => actor);
 
   Stream<User?> authChanges() => auth.authStateChanges();
 

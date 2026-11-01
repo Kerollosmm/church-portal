@@ -9,6 +9,7 @@ import 'app.dart';
 import 'data/admin_repository.dart';
 import 'data/content_repository.dart';
 import 'data/firebase_bootstrap.dart';
+import 'data/media_repository.dart';
 import 'data/seed_data.dart';
 import 'domain/cairo_time.dart';
 import 'state/providers.dart';
@@ -27,12 +28,14 @@ Future<void> main() async {
       status.available ? FirestoreRepository(FirebaseFirestore.instance, seed) : SeedRepository(seed);
   final AdminRepository? admin =
       status.available ? AdminRepository(FirebaseFirestore.instance, FirebaseAuth.instance) : null;
+  final MediaRepository? media = admin?.media;
 
   runApp(ProviderScope(
     overrides: [
       firebaseStatusProvider.overrideWithValue(status),
       repositoryProvider.overrideWithValue(repo),
       adminRepositoryProvider.overrideWithValue(admin),
+      mediaRepositoryProvider.overrideWithValue(media),
     ],
     child: const ChurchPortalApp(),
   ));

@@ -54,7 +54,8 @@
     "contactInfo": true,
     "socials": true,
     "contactForm": true,
-    "assistant": true
+    "assistant": true,
+    "media": true
    },
    "homeOrder": [
     "banner",

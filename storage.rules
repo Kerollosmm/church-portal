@@ -1,0 +1,34 @@
+rules_version = '2';
+
+// DRAFT — NOT DEPLOYED. Cloud Storage for Firebase needs the Blaze plan
+// (Spark projects cannot provision or access a bucket). The app stores
+// uploaded images inline in Firestore `media/{id}` today (see
+// docs/memory-bank/10-decisions-and-history.md, ADR-017).
+//
+// To use it after upgrading to Blaze: add
+//   "storage": { "rules": "storage.rules" }
+// to firebase.json, deploy with `firebase deploy --only storage`, implement
+// StorageMediaRepository (lib/data/media_repository.dart) and build with
+// --dart-define=MEDIA_BACKEND=storage.
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Admins are the Firestore admins/{uid} docs (cross-service rules).
+    function isAdmin() {
+      return request.auth != null
+        && firestore.exists(/databases/(default)/documents/admins/$(request.auth.uid));
+    }
+
+    match /media/{file} {
+      allow read: if true;
+      // Same limits as the inline path: ≤ 700 KB, jpeg / webp / png only.
+      allow create, update: if isAdmin()
+        && request.resource.size <= 700 * 1000
+        && request.resource.contentType.matches('image/(jpeg|webp|png)');
+      allow delete: if isAdmin();
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

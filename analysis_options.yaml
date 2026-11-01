@@ -15,6 +15,7 @@ analyzer:
     - android/**
     - ios/**
     - web/**
+    - "**/node_modules/**" # firebase-tools ships Dart templates (tool/rules_test)
 
 linter:
   # The lint rules applied to this project can be customized in the

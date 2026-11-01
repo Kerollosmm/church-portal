@@ -6,6 +6,8 @@ rules_version = '2';
 //   a per-collection key allow-list (creates may use only these keys; updates
 //   may only change these keys, so legacy fields never block an edit) plus
 //   type/size checks on the stored document.
+// * media/{mediaId}: optional images stored inline as base64 (Spark plan has
+//   no Cloud Storage). Public read; admins write; size/type validated.
 // * contact_messages: public create-only with strict validation; admins can
 //   read them, mark them handled and delete them.
 // * admins: a signed-in user reads their own doc; owners read all and add,
@@ -74,7 +76,20 @@ service cloud.firestore {
       return d.keys().size() <= 60
         && optBool(d, 'visible') && optBool(d, 'sample')
         && optInt(d, 'order', -100000, 100000)
+        && (d.get('image', null) == null || validImage(d.image))
         && stampOk(d);
+    }
+
+    // Optional `image` map (only collections whose allow-list has 'image').
+    // url/storage: an https URL; inline: a media/{mediaId} document id.
+    function validImage(i) {
+      return i is map && i.keys().hasOnly(['source', 'url', 'mediaId', 'alt', 'w', 'h'])
+        && i.get('source', '') in ['url', 'inline', 'storage']
+        && (i.source == 'inline'
+              ? i.get('mediaId', '') is string && i.get('mediaId', '').matches('^[A-Za-z0-9_-]{1,128}$')
+              : i.get('url', '') is string && i.get('url', '').size() <= 500 && i.get('url', '').matches('^https://[^/\\s]+[.][^/\\s]+([/?#][^\\s]*)?$'))
+        && str(i, 'alt', 300) && str(i, 'mediaId', 128)
+        && optInt(i, 'w', 1, 10000) && optInt(i, 'h', 1, 10000);
     }
     function meta() {
       return ['visible', 'sample', 'order', 'updatedAt', 'updatedBy'];
@@ -106,7 +121,8 @@ service cloud.firestore {
     }
 
     function validAlert(d) {
-      return keysAllowed(['titleAr', 'titleEn', 'bodyAr', 'bodyEn', 'active', 'startsAt', 'endsAt', 'priority', 'link'].concat(meta()))
+      return keysAllowed(['titleAr', 'titleEn', 'bodyAr', 'bodyEn', 'active', 'startsAt', 'endsAt', 'priority', 'link',
+                          'image'].concat(meta()))
         && reqString(d, 'titleAr', 300) && optString(d, 'titleEn', 300)
         && optString(d, 'bodyAr', 2000) && optString(d, 'bodyEn', 2000)
         && optBool(d, 'active') && optTimestamp(d, 'startsAt') && optTimestamp(d, 'endsAt')
@@ -114,7 +130,7 @@ service cloud.firestore {
     }
 
     function validSeason(d) {
-      return keysAllowed(['key', 'nameAr', 'nameEn', 'startsAt', 'endsAt', 'active'].concat(meta()))
+      return keysAllowed(['key', 'nameAr', 'nameEn', 'startsAt', 'endsAt', 'active', 'image'].concat(meta()))
         && d.key in ['holy_week', 'pascha', 'nativity', 'revival_maximus', 'revival_moses', 'summer']
         && reqString(d, 'nameAr', 300) && optString(d, 'nameEn', 300)
         && optTimestamp(d, 'startsAt') && optTimestamp(d, 'endsAt') && optBool(d, 'active');
@@ -143,7 +159,7 @@ service cloud.firestore {
 
     function validActivity(d) {
       return keysAllowed(['category', 'titleAr', 'titleEn', 'descAr', 'descEn', 'scheduleAr', 'scheduleEn',
-                          'ageRange', 'contactPhone', 'link'].concat(meta()))
+                          'ageRange', 'contactPhone', 'link', 'image'].concat(meta()))
         && optString(d, 'category', 40) && reqString(d, 'titleAr', 300) && optString(d, 'titleEn', 300)
         && optString(d, 'descAr', 2000) && optString(d, 'descEn', 2000)
         && optString(d, 'scheduleAr', 300) && optString(d, 'scheduleEn', 300)
@@ -169,7 +185,7 @@ service cloud.firestore {
 
     function validPriest(d) {
       return keysAllowed(['name', 'nameEn', 'photoUrl', 'rank', 'ordinationDate', 'hegumenDate', 'departedDate',
-                          'status', 'bioAr', 'bioEn'].concat(meta()))
+                          'status', 'bioAr', 'bioEn', 'image'].concat(meta()))
         && reqString(d, 'name', 300) && optString(d, 'nameEn', 300) && optString(d, 'photoUrl', 500)
         && optIn(d, 'rank', ['hegumen', 'priest']) && optIn(d, 'status', ['serving', 'departed'])
         && optString(d, 'ordinationDate', 10) && optString(d, 'hegumenDate', 10) && optString(d, 'departedDate', 10)
@@ -177,7 +193,7 @@ service cloud.firestore {
     }
 
     function validMilestone(d) {
-      return keysAllowed(['titleAr', 'titleEn', 'descAr', 'descEn', 'year', 'icon'].concat(meta()))
+      return keysAllowed(['titleAr', 'titleEn', 'descAr', 'descEn', 'year', 'icon', 'image'].concat(meta()))
         && reqString(d, 'titleAr', 300) && optString(d, 'titleEn', 300)
         && optString(d, 'descAr', 2000) && optString(d, 'descEn', 2000)
         && optInt(d, 'year', 1, 2200) && optString(d, 'icon', 40);
@@ -185,7 +201,7 @@ service cloud.firestore {
 
     function validSaint(d) {
       return keysAllowed(['nameAr', 'nameEn', 'bioAr', 'bioEn', 'feastCopticAr', 'feastCopticEn', 'feastGregorian',
-                          'feastGregorianAr'].concat(meta()))
+                          'feastGregorianAr', 'image'].concat(meta()))
         && reqString(d, 'nameAr', 300) && optString(d, 'nameEn', 300)
         && optString(d, 'bioAr', 5000) && optString(d, 'bioEn', 5000)
         && optString(d, 'feastCopticAr', 300) && optString(d, 'feastCopticEn', 300)
@@ -234,7 +250,7 @@ service cloud.firestore {
 
     function sectionKeys() {
       return ['schedule', 'meetings', 'clinics', 'services', 'history', 'milestones', 'saints', 'priests',
-              'departedPriests', 'activities', 'alerts', 'contactInfo', 'socials', 'contactForm', 'assistant'];
+              'departedPriests', 'activities', 'alerts', 'contactInfo', 'socials', 'contactForm', 'assistant', 'media'];
     }
 
     // Known section keys only, and every value a bool.
@@ -259,6 +275,28 @@ service cloud.firestore {
         && d.get('bannerLink', '').matches('^$|^/([^/ ][^ ]*)?$|^https?://[^/ ]+[.][^/ ]+([/?#][^ ]*)?$')
         && d.get('theme', 'burgundy') in ['burgundy', 'navy', 'green', 'brown', 'purple']
         && stampOk(d);
+    }
+
+    // -------------------------------- media ---------------------------------
+    // Inline images (base64) referenced by a content doc's image.mediaId.
+    // Lists never read these; a card fetches its own image lazily.
+    match /media/{mediaId} {
+      allow read: if true;
+      allow create, update: if isAdmin() && validMedia(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    function validMedia(d) {
+      return d.keys().hasOnly(['dataBase64', 'contentType', 'w', 'h', 'bytes', 'createdAt', 'createdBy', 'refs'])
+        && d.keys().hasAll(['dataBase64', 'contentType', 'createdAt', 'createdBy'])
+        && d.dataBase64 is string && d.dataBase64.size() >= 4 && d.dataBase64.size() <= 950000
+        && d.contentType in ['image/jpeg', 'image/webp', 'image/png']
+        && optInt(d, 'w', 1, 10000) && optInt(d, 'h', 1, 10000) && optInt(d, 'bytes', 1, 700000)
+        && optList(d, 'refs', 20)
+        // created now by the signed-in admin, or unchanged on update
+        && (d.createdAt == request.time || (resource != null && resource.data.get('createdAt', null) == d.createdAt))
+        && (d.createdBy == request.auth.token.get('email', request.auth.uid)
+              || (resource != null && resource.data.get('createdBy', null) == d.createdBy));
     }
 
     // -------------------------------- admins --------------------------------

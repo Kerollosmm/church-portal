@@ -13,6 +13,7 @@ import '../../domain/schedule.dart';
 import '../../domain/time_format.dart';
 import '../../state/providers.dart';
 import 'common.dart';
+import 'item_image.dart';
 
 /// Card for one liturgy on the schedule page.
 class LiturgyCard extends StatelessWidget {
@@ -232,7 +233,14 @@ class _AlertBannerState extends ConsumerState<AlertBanner> {
           ),
           padding: const EdgeInsets.all(14),
           child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Icon(Icons.campaign_rounded, color: AppColors.alert),
+            ItemImage(
+              image: a.image,
+              size: 48,
+              circle: false,
+              radius: 10,
+              label: context.pick(a.titleAr, a.titleEn),
+              placeholder: const Icon(Icons.campaign_rounded, color: AppColors.alert),
+            ),
             const SizedBox(width: 10),
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

@@ -34,8 +34,47 @@ Four places must agree for every field — change them together:
 | `updatedAt` | timestamp | — | Stamped by `AdminRepository._stamp` (`FieldValue.serverTimestamp()`); rules require `== request.time` or unchanged |
 | `updatedBy` | string | — | Admin email (or uid); rules require it to equal `request.auth.token.email` (or uid) or be unchanged |
 
-Rules `common(d)`: ≤ 60 keys, `visible`/`sample` bool, `order` int in range, `stampOk`. `meta()` =
-`['visible','sample','order','updatedAt','updatedBy']` is added to every content allow-list.
+Rules `common(d)`: ≤ 60 keys, `visible`/`sample` bool, `order` int in range, `image` (if present and not null)
+passes `validImage`, `stampOk`. `meta()` = `['visible','sample','order','updatedAt','updatedBy']` is added to every
+content allow-list.
+
+### Optional `image` (PR #5) — `MediaImage` (`lib/domain/media.dart`)
+
+Allowed (and shown) on **`priests`** (serving + departed), **`saints`**, **`milestones`**, **`activities`**,
+**`alerts`**, **`seasons`** (`imageCollections` in `admin_schema.dart`). It is **never required**; absent / `null` /
+malformed = no image and the card keeps its icon / initials placeholder. The seed has no images.
+
+| Key | Type | Rule |
+|---|---|---|
+| `source` | `url` \| `inline` \| `storage` | required inside the map |
+| `url` | string ≤ 500 | `url`/`storage`: must match `^https://[^/\s]+[.][^/\s]+([/?#]\S*)?$` (https, host with a dot, no spaces) |
+| `mediaId` | string | `inline`: required, `^[A-Za-z0-9_-]{1,128}$` → the `media/{mediaId}` doc. `storage`: object name |
+| `alt` | string ≤ 300 | accessible description; UI falls back to the item's name |
+| `w`, `h` | int 1–10000 | pixel size after resizing (optional) |
+
+- `MediaImage.fromMap` is tolerant (wrong type / unknown source / http URL / missing id → `null`).
+- **Legacy `priests.photoUrl`** (string ≤ 500, all empty in the seed) is still allowed by the rules and read as a
+  fallback: `Priest.displayImage` = `image` ?? https `photoUrl`. The admin form no longer shows `photoUrl`; setting an
+  image overrides it.
+- Images are ignored by the assistant prompt (`buildAssistantInstruction` only reads text fields; tested).
+
+## `media/{mediaId}` — inline image bytes (PR #5)
+
+Spark plan ⇒ no Cloud Storage, so device uploads are stored **in Firestore**, one doc per image, separate from the
+content docs so **lists never download image bytes** (a card fetches its own image lazily, once per session).
+
+| Field | Type | Rule |
+|---|---|---|
+| `dataBase64` | string | **required**, 4 … **950,000** chars |
+| `contentType` | `image/jpeg` \| `image/webp` \| `image/png` | **required** |
+| `w`, `h` | int 1–10000 | |
+| `bytes` | int 1 … 700,000 | decoded size |
+| `createdAt` | timestamp | **required**, `== request.time` on create (unchanged on update) |
+| `createdBy` | string | **required**, the admin's token email (or uid) on create (unchanged on update) |
+| `refs` | list ≤ 20 | reserved (not written yet) |
+
+Public read; admins create/update/delete (`validMedia`). Written by `FirestoreMediaRepository.upload`; deleted best
+effort when an image is replaced/removed in the editor or its item is deleted (`orphanedMediaIds`). Not seeded.
 
 ## `settings/church` — `ChurchSettings`
 
@@ -68,7 +107,7 @@ Existence of `settings/church` = "database is seeded" (see `03-architecture.md`)
 
 | Field | Type | Default / parsing |
 |---|---|---|
-| `sections` | map `<sectionKey, bool>` | missing key = **on**; non-bool values ignored. Keys = `Sections.all`: `schedule, meetings, clinics, services, history, milestones, saints, priests, departedPriests, activities, alerts, contactInfo, socials, contactForm, assistant` |
+| `sections` | map `<sectionKey, bool>` | missing key = **on**; non-bool values ignored. Keys = `Sections.all`: `schedule, meetings, clinics, services, history, milestones, saints, priests, departedPriests, activities, alerts, contactInfo, socials, contactForm, assistant, media` (`media` = show optional item images; not a page) |
 | `homeOrder` | list of block keys | `normalizeHomeOrder`: unknown/duplicate dropped, missing appended in default order. Blocks (`HomeBlocks.defaultOrder`): `banner, alerts, nextMass, quickContacts, milestones, directory, map` |
 | `homeHidden` | list of block keys | unknown keys dropped |
 | `heroTitleAr/En` | string ≤ 200 | empty → church name |
@@ -80,7 +119,7 @@ Existence of `settings/church` = "database is seeded" (see `03-architecture.md`)
 | `updatedAt`, `updatedBy` | | stampOk |
 
 - `FeatureSettings.defaults` (everything on) is used before the doc loads and when it does not exist.
-- `toMap()` always writes **all** 15 section keys explicitly.
+- `toMap()` always writes **all** 16 section keys explicitly. Live docs saved before PR #5 lack `media` → on.
 - `HomeBlocks.requires`: `alerts→alerts`, `nextMass→schedule`, `quickContacts→contactInfo`,
   `milestones→milestones`, `map→contactInfo` (block disappears when its section is off). `directory` and `banner`
   have no section.
@@ -90,12 +129,13 @@ Existence of `settings/church` = "database is seeded" (see `03-architecture.md`)
 ### `alerts/{id}` — `Alert` (Hideable)
 `titleAr` (**req**, ≤300), `titleEn` (≤300), `bodyAr`/`bodyEn` (≤2000; admin form caps 1000), `active` (bool,
 default false in model), `startsAt`/`endsAt` (timestamp), `priority` (int 0–1000, higher first), `link` (≤500;
-in-app path or URL), + meta. Seed ids: `follow-announcements`, `nativity-fast-2026`, `revival-maximus-2027`,
+in-app path or URL), `image` (optional), + meta. Seed ids: `follow-announcements`, `nativity-fast-2026`, `revival-maximus-2027`,
 `revival-moses-2027`.
 
 ### `seasons/{id}` — `Season` (not Hideable)
 `key` (**required**, one of `holy_week, pascha, nativity, revival_maximus, revival_moses, summer`), `nameAr` (**req**),
-`nameEn`, `startsAt`, `endsAt` (timestamps, exact window), `active` (bool, default false in model). No `visible`/`order`
+`nameEn`, `startsAt`, `endsAt` (timestamps, exact window), `active` (bool, default false in model), `image`
+(optional; shown beside the season's date range — e.g. a revival poster). No `visible`/`order`
 in the admin form (rules would allow `meta()` keys). Seed: `nativity-2027`, `revival-maximus-2027`, `holy-week-2027`,
 `pascha-2027`, `revival-moses-2027`.
 
@@ -124,7 +164,7 @@ stage), all `sample: true`.
 ### `activities/{id}` — `Activity` (Hideable, orderable)
 `category` (≤40; admin choices `service, choir, hymns, youth, servants, media, drama, scouts, deacons, bible, summer,
 sports, exhibitions`, default `service`), `titleAr` (**req**), `titleEn`, `descAr/En` (≤2000), `scheduleAr/En` (≤300),
-`ageRange` (≤60), `contactPhone` (≤20), `link` (≤500), meta. Seed: 11 verified docs (`deacons-choir`, `avamose-choir`,
+`ageRange` (≤60), `contactPhone` (≤20), `link` (≤500), `image` (optional), meta. Seed: 11 verified docs (`deacons-choir`, `avamose-choir`,
 `davids-tones`, `hymns-school`, `maximous-youth`, `prep-boys`, `antibiotic-mime`, `karouz-school`, `servant-care`,
 `media-center`, `kalimtein`).
 
@@ -140,7 +180,8 @@ placeholders («طبيب <التخصص> — يُعلن لاحقًا», no phones
 (sample).
 
 ### `priests/{id}` — `Priest` (Hideable, orderable)
-`name` (Arabic, **req**), `nameEn`, `photoUrl` (≤500, all empty), `rank` (`hegumen\|priest`, default `priest`),
+`name` (Arabic, **req**), `nameEn`, `photoUrl` (≤500, all empty; legacy, not in the admin form), `image` (optional,
+see above), `rank` (`hegumen\|priest`, default `priest`),
 `ordinationDate`, `hegumenDate`, `departedDate` (loose dates ≤10), `status` (`serving\|departed`, **missing =
 serving**), `bioAr/En` (≤5000), meta. Two admin screens over one collection: `priests` (filter `status = serving`) and
 `departedPriests` (filter `status = departed`, new docs default `status: departed`). Seed: 9 serving
@@ -149,11 +190,11 @@ serving**), `bioAr/En` (≤5000), meta. Two admin screens over one collection: `
 
 ### `milestones/{id}` — `Milestone` (Hideable, orderable)
 `titleAr` (**req**), `titleEn`, `descAr/En` (≤2000), `year` (int 1–2200), `icon` (`church, people, altar, pope, star`),
-`order`, `visible` (no `sample` in admin). Seed: `since-1980`, `deacons-2022`, `hegumens-2022`, `pope-visit`.
+`image` (optional), `order`, `visible` (no `sample` in admin). Seed: `since-1980`, `deacons-2022`, `hegumens-2022`, `pope-visit`.
 
 ### `saints/{id}` — `Saint` (Hideable, orderable)
 `nameAr` (**req**), `nameEn`, `bioAr/En` (≤5000), `feastCopticAr/En`, `feastGregorian` (EN), `feastGregorianAr`
-(≤300), `order`, `visible`. Seed: `maximus-domadius`, `moses-black`.
+(≤300), `image` (optional), `order`, `visible`. Seed: `maximus-domadius`, `moses-black`.
 
 ## Non-content collections
 

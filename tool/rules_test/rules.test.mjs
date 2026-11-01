@@ -186,6 +186,77 @@ describe('feature toggles', () => {
   });
 });
 
+describe('optional images', () => {
+  const stamp = () => ({ updatedAt: serverTimestamp(), updatedBy: `${EDITOR}@x.test` });
+  const priest = { name: 'أبونا', status: 'serving', visible: true, order: 10 };
+
+  test('content docs accept an optional url / inline image, or none', async () => {
+    const ed = db(EDITOR);
+    await assertSucceeds(setDoc(doc(ed, 'priests', 'p1'), priest));
+    await assertSucceeds(setDoc(doc(ed, 'priests', 'p2'), {
+      ...priest, image: { source: 'url', url: 'https://img.example.org/p.jpg', alt: 'Fr. X', w: 800, h: 600 },
+    }));
+    await assertSucceeds(updateDoc(doc(ed, 'priests', 'p2'), { image: { source: 'inline', mediaId: 'Ab_12-x', w: 800, h: 600 }, ...stamp() }));
+    await assertSucceeds(updateDoc(doc(ed, 'priests', 'p2'), { image: null })); // removed
+    for (const col of ['saints', 'milestones', 'activities', 'alerts']) {
+      const base = col === 'saints' ? { nameAr: 'x' } : { titleAr: 'x' };
+      await assertSucceeds(setDoc(doc(ed, col, 'img'), { ...base, image: { source: 'inline', mediaId: 'm1' } }));
+    }
+    await assertSucceeds(setDoc(doc(ed, 'seasons', 'img'), { key: 'pascha', nameAr: 'القيامة', image: { source: 'url', url: 'https://x.org/a.webp' } }));
+  });
+
+  test('rejects malformed image maps and images on other collections', async () => {
+    const ed = db(EDITOR);
+    await assertSucceeds(setDoc(doc(ed, 'priests', 'p1'), priest));
+    const bad = [
+      'https://x.org/a.jpg',
+      { source: 'ftp', url: 'https://x.org/a.jpg' },
+      { source: 'url', url: 'http://x.org/a.jpg' },
+      { source: 'url', url: 'https://x.org/a b.jpg' },
+      { source: 'url', url: 'https://localhost/a.jpg' },
+      { source: 'url', url: 'https://x.org/' + 'a'.repeat(500) },
+      { source: 'inline' },
+      { source: 'inline', mediaId: 'a/b' },
+      { source: 'inline', mediaId: 'm1', extra: 1 },
+      { source: 'inline', mediaId: 'm1', w: 0 },
+      { source: 'inline', mediaId: 'm1', alt: 'x'.repeat(301) },
+    ];
+    for (const image of bad) {
+      await assertFails(updateDoc(doc(ed, 'priests', 'p1'), { image }));
+    }
+    await assertFails(updateDoc(doc(ed, 'clinics', 'c1'), { image: { source: 'inline', mediaId: 'm1' } }));
+  });
+
+  test('media: public read, admin-only validated writes', async () => {
+    const ed = db(EDITOR);
+    const media = (extra = {}) => ({
+      dataBase64: 'AAAA', contentType: 'image/webp', w: 800, h: 600, bytes: 3,
+      createdAt: serverTimestamp(), createdBy: `${EDITOR}@x.test`, ...extra,
+    });
+    await assertSucceeds(setDoc(doc(ed, 'media', 'm1'), media()));
+    await assertSucceeds(getDoc(doc(db(null), 'media', 'm1')));
+    await assertFails(setDoc(doc(db(null), 'media', 'm2'), media()));
+    await assertFails(setDoc(doc(db(STRANGER), 'media', 'm2'), media({ createdBy: `${STRANGER}@x.test` })));
+    await assertFails(setDoc(doc(ed, 'media', 'm2'), media({ contentType: 'image/gif' })));
+    await assertFails(setDoc(doc(ed, 'media', 'm2'), media({ contentType: 'text/html' })));
+    await assertFails(setDoc(doc(ed, 'media', 'm2'), media({ dataBase64: 'A'.repeat(950001) })));
+    await assertFails(setDoc(doc(ed, 'media', 'm2'), media({ dataBase64: '' })));
+    await assertFails(setDoc(doc(ed, 'media', 'm2'), media({ bytes: 700001 })));
+    await assertFails(setDoc(doc(ed, 'media', 'm2'), media({ createdBy: 'owner@x.test' })));
+    await assertFails(setDoc(doc(ed, 'media', 'm2'), media({ createdAt: Timestamp.fromDate(new Date('2020-01-01')) })));
+    await assertFails(setDoc(doc(ed, 'media', 'm2'), media({ url: 'https://x.org' })));
+    const { dataBase64, ...noData } = media();
+    await assertFails(setDoc(doc(ed, 'media', 'm2'), noData));
+    await assertSucceeds(setDoc(doc(ed, 'media', 'big'), media({ dataBase64: 'A'.repeat(950000) })));
+    await assertFails(deleteDoc(doc(db(null), 'media', 'm1')));
+    await assertSucceeds(deleteDoc(doc(ed, 'media', 'm1')));
+  });
+
+  test('the images switch is a valid section key', async () => {
+    await assertSucceeds(setDoc(doc(db(EDITOR), 'settings', 'features'), { sections: { media: false } }));
+  });
+});
+
 describe('contact inbox', () => {
   test('admins read, mark handled and delete', async () => {
     const ed = db(EDITOR);

@@ -21,6 +21,10 @@ enum FieldType {
 
   /// List of small maps edited as rows (phones, altars).
   objectList,
+
+  /// Optional picture: `image` map {source, url | mediaId, alt, w, h}
+  /// (upload from the device, paste an https link, or remove).
+  image,
 }
 
 class FieldDef {
@@ -165,10 +169,16 @@ const _visibleField = FieldDef('visible', 'ظاهر في الموقع', 'Visible
 
 const _orderField = FieldDef('order', 'الترتيب', 'Order', FieldType.integer, min: -100000, max: 100000);
 
+/// Optional picture shown as the card image / avatar (never required).
+const _imageField = FieldDef('image', 'الصورة (اختياري)', 'Image (optional)', FieldType.image);
+
+/// Collections whose documents may carry an `image` (see lib/domain/media.dart).
+const imageCollections = ['alerts', 'seasons', 'activities', 'priests', 'milestones', 'saints'];
+
 const _priestFields = [
   FieldDef('name', 'الاسم (عربي)', 'Name (Arabic)', FieldType.text, required: true),
   FieldDef('nameEn', 'الاسم (إنجليزي)', 'Name (English)', FieldType.text),
-  FieldDef('photoUrl', 'رابط الصورة', 'Photo URL', FieldType.url),
+  _imageField, // replaces the legacy photoUrl text field (still read as a fallback)
   FieldDef('rank', 'الرتبة', 'Rank', FieldType.choice, options: ['hegumen', 'priest'], defaultOption: 'priest'),
   FieldDef('ordinationDate', 'تاريخ الرسامة', 'Ordination date', FieldType.looseDate),
   FieldDef('hegumenDate', 'تاريخ القمصية', 'Hegumen date', FieldType.looseDate),
@@ -193,6 +203,7 @@ const adminCollections = <CollectionDef>[
     FieldDef('priority', 'الأولوية (الأعلى يظهر أولًا)', 'Priority (higher shows first)', FieldType.integer,
         min: 0, max: 1000),
     FieldDef('link', 'رابط (مثل /mass-schedule)', 'Link (e.g. /mass-schedule)', FieldType.url, allowPath: true),
+    _imageField,
     _visibleField,
   ], [
     'titleAr',
@@ -205,6 +216,7 @@ const adminCollections = <CollectionDef>[
     FieldDef('startsAt', 'يبدأ (توقيت القاهرة)', 'Starts (Cairo time)', FieldType.dateTime),
     FieldDef('endsAt', 'ينتهي (توقيت القاهرة)', 'Ends (Cairo time)', FieldType.dateTime),
     FieldDef('active', 'مُفعّل', 'Active', FieldType.boolean),
+    _imageField,
   ], [
     'nameAr',
     'key'
@@ -307,6 +319,7 @@ const adminCollections = <CollectionDef>[
     FieldDef('ageRange', 'الأعمار', 'Ages', FieldType.text, maxLength: 60),
     FieldDef('contactPhone', 'تليفون التواصل', 'Contact phone', FieldType.phone),
     FieldDef('link', 'رابط الصفحة (فيسبوك/يوتيوب…)', 'Page link (Facebook/YouTube…)', FieldType.url),
+    _imageField,
     _orderField,
     _visibleField,
     _sampleField,
@@ -332,6 +345,7 @@ const adminCollections = <CollectionDef>[
     FieldDef('feastCopticEn', 'العيد بالتقويم القبطي (إنجليزي)', 'Coptic feast (English)', FieldType.text),
     FieldDef('feastGregorianAr', 'العيد بالتقويم الميلادي (عربي)', 'Gregorian feast (Arabic)', FieldType.text),
     FieldDef('feastGregorian', 'العيد بالتقويم الميلادي (إنجليزي)', 'Gregorian feast (English)', FieldType.text),
+    _imageField,
     _orderField,
     _visibleField,
   ], [
@@ -346,6 +360,7 @@ const adminCollections = <CollectionDef>[
     FieldDef('year', 'السنة', 'Year', FieldType.integer, min: 1, max: 2200),
     FieldDef('icon', 'الأيقونة', 'Icon', FieldType.choice,
         options: ['church', 'people', 'altar', 'pope', 'star'], defaultOption: 'star'),
+    _imageField,
     _orderField,
     _visibleField,
   ], [

@@ -1,10 +1,26 @@
+import 'dart:async';
+import 'dart:typed_data';
+
+import 'package:image_picker/image_picker.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../../core/l10n.dart';
 import '../../core/theme.dart';
+import '../../data/image_processing.dart';
+import '../../data/media_repository.dart';
+import '../../domain/media.dart';
 import '../../domain/time_format.dart';
+import '../widgets/item_image.dart';
 import 'admin_schema.dart';
 import 'admin_validators.dart';
+
+/// Picks an image file and returns its bytes (null = cancelled).
+typedef ImageBytesPicker = Future<Uint8List?> Function();
+
+Future<Uint8List?> pickImageFromDevice() async {
+  final x = await ImagePicker().pickImage(source: ImageSource.gallery, requestFullMetadata: false);
+  return x?.readAsBytes();
+}
 
 /// Generic form editor driven by [FieldDef]s. Used for collection documents
 /// and for the church-info document.
@@ -28,6 +44,15 @@ class DocEditor extends StatefulWidget {
   /// Pop the route after a successful save (false when embedded in a page).
   final bool popOnSave;
 
+  /// Stores uploaded images (null = image fields accept pasted URLs only).
+  final MediaRepository? media;
+
+  /// File picker for image uploads (tests inject bytes).
+  final ImageBytesPicker pickImage;
+
+  /// Resize/compress pipeline for uploads (tests may inject a fake).
+  final Future<EncodedImage> Function(Uint8List bytes) prepareImage;
+
   const DocEditor({
     super.key,
     required this.title,
@@ -38,6 +63,9 @@ class DocEditor extends StatefulWidget {
     this.newDefaults = const {},
     this.def,
     this.popOnSave = true,
+    this.media,
+    this.pickImage = pickImageFromDevice,
+    this.prepareImage = prepareUpload,
   });
 
   @override
@@ -53,6 +81,12 @@ class DocEditorState extends State<DocEditor> {
   final Map<String, List<_Row>> _rows = {};
   bool _saving = false;
   bool _dirty = false;
+
+  /// Image fields with a picked, compressed file waiting to be uploaded on save.
+  final Map<String, EncodedImage> _pending = {};
+
+  /// Image field currently being resized/compressed.
+  String? _processing;
 
   /// Values as loaded: only fields that differ from these are saved.
   late Map<String, dynamic> _initialValues;
@@ -103,6 +137,10 @@ class DocEditorState extends State<DocEditor> {
         _rows[f.key] = [
           for (final r in (v is List ? v : const []).whereType<Map>()) _Row.from(f.subFields, r, _markDirty),
         ];
+      case FieldType.image:
+        final img = MediaImage.fromMap(v);
+        _values[f.key] = img?.toMap();
+        _text[f.key] = _ctrl(img?.alt ?? '');
     }
   }
 
@@ -143,6 +181,8 @@ class DocEditorState extends State<DocEditor> {
           out[f.key] = (_values[f.key] as Set<int>).toList()..sort();
         case FieldType.objectList:
           out[f.key] = [for (final r in _rows[f.key]!) r.collect()];
+        case FieldType.image:
+          out[f.key] = _collectImage(f.key);
         case FieldType.text:
         case FieldType.multiline:
         case FieldType.time:
@@ -156,10 +196,20 @@ class DocEditorState extends State<DocEditor> {
     return out;
   }
 
+  /// The `image` map with the edited alt text (null = no image). A picked file
+  /// that is not uploaded yet is a `pending` marker (replaced on save).
+  Map<String, dynamic>? _collectImage(String key) {
+    final alt = _text[key]!.text.trim();
+    if (_pending.containsKey(key)) return {'source': MediaSource.inline, 'pending': true, if (alt.isNotEmpty) 'alt': alt};
+    return MediaImage.fromMap(_values[key])?.copyWith(alt: alt).toMap();
+  }
+
+  Iterable<FieldDef> get _imageFields => widget.fields.where((f) => f.type == FieldType.image);
+
   /// Validates and saves. Returns true on success (visible for tests).
   Future<bool> save() async {
-    if (_saving || !_formKey.currentState!.validate()) return false;
-    final data = collect();
+    if (_saving || _processing != null || !_formKey.currentState!.validate()) return false;
+    var data = collect();
     final messenger = ScaffoldMessenger.maybeOf(context);
     final docErr = validateDocument(widget.def, data);
     if (docErr != null) {
@@ -170,17 +220,34 @@ class DocEditorState extends State<DocEditor> {
     final nav = Navigator.of(context);
     final route = ModalRoute.of(context);
     // Existing docs: write only what changed (merge), never stale values.
-    final payload = isNew ? data : changedFields(_initialValues, data);
-    if (payload.isEmpty) {
+    var payload = isNew ? data : changedFields(_initialValues, data);
+    if (payload.isEmpty && _pending.isEmpty) {
       messenger?.showSnackBar(SnackBar(content: Text(context.tr('noChanges'))));
       setState(() => _dirty = false);
       if (widget.popOnSave && (route?.isCurrent ?? false)) nav.pop();
       return true;
     }
     setState(() => _saving = true);
+    // Upload picked images first so the document references real media docs.
+    final pendingBefore = Map<String, EncodedImage>.of(_pending);
+    final valuesBefore = {for (final f in _imageFields) f.key: _values[f.key]};
+    final uploaded = <String>[];
     try {
+      for (final e in pendingBefore.entries) {
+        final img = await widget.media!.upload(e.value, alt: _text[e.key]!.text.trim());
+        uploaded.add(img.mediaId);
+        _values[e.key] = img.toMap();
+        _pending.remove(e.key);
+      }
+      if (uploaded.isNotEmpty) {
+        data = collect();
+        payload = isNew ? data : changedFields(_initialValues, data);
+      }
       await widget.onSave(payload);
+      // Best effort: drop inline images this edit replaced or removed.
+      final orphans = [for (final f in _imageFields) ...orphanedMediaIds(_initialValues[f.key], data[f.key])];
       _initialValues = data;
+      _deleteMedia(orphans);
       messenger?.showSnackBar(SnackBar(content: Text(savedMsg)));
       if (!mounted) return true;
       setState(() {
@@ -192,11 +259,26 @@ class DocEditorState extends State<DocEditor> {
       if (widget.popOnSave && (route?.isCurrent ?? false)) nav.pop();
       return true;
     } catch (e) {
+      // The document was not saved: remove the images uploaded for it and
+      // keep the picked files so the admin can retry.
+      _deleteMedia(uploaded);
+      _pending
+        ..clear()
+        ..addAll(pendingBefore);
+      _values.addAll(valuesBefore);
       if (mounted) {
         messenger?.showSnackBar(SnackBar(content: Text(context.tr('saveFailed', {'e': '$e'}))));
         setState(() => _saving = false);
       }
       return false;
+    }
+  }
+
+  void _deleteMedia(List<String> ids) {
+    final media = widget.media;
+    if (media == null) return;
+    for (final id in ids) {
+      unawaited(media.delete(id).catchError((Object _) {})); // orphan clean-up is best effort
     }
   }
 
@@ -318,9 +400,155 @@ class DocEditorState extends State<DocEditor> {
         );
       case FieldType.objectList:
         return _objectList(f);
+      case FieldType.image:
+        return _imageEditor(f);
       default:
         return _textField(f, _text[f.key]!);
     }
+  }
+
+  Future<void> _pickImage(FieldDef f) async {
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    String msg(String k) => context.tr(k);
+    final tooLarge = msg('imageTooLarge'), invalid = msg('imageInvalid'), empty = msg('imageEmpty');
+    final Uint8List? bytes;
+    try {
+      bytes = await widget.pickImage();
+    } catch (e) {
+      messenger?.showSnackBar(SnackBar(content: Text(invalid)));
+      return;
+    }
+    if (bytes == null || !mounted) return;
+    if (bytes.isEmpty) {
+      messenger?.showSnackBar(SnackBar(content: Text(empty)));
+      return;
+    }
+    setState(() => _processing = f.key);
+    try {
+      final enc = await widget.prepareImage(bytes);
+      final err = validateMediaBytes(enc.length);
+      if (err != null) throw const ImageTooLargeException();
+      if (!mounted) return;
+      setState(() {
+        _pending[f.key] = enc;
+        _dirty = true;
+      });
+    } on ImageTooLargeException {
+      messenger?.showSnackBar(SnackBar(content: Text(tooLarge)));
+    } catch (_) {
+      messenger?.showSnackBar(SnackBar(content: Text(invalid)));
+    } finally {
+      if (mounted) setState(() => _processing = null);
+    }
+  }
+
+  Future<void> _askImageUrl(FieldDef f) async {
+    final current = MediaImage.fromMap(_values[f.key]);
+    final url = await showDialog<String>(
+      context: context,
+      builder: (_) => _ImageUrlDialog(initial: current?.source == MediaSource.url ? current!.url : ''),
+    );
+    if (url == null || !mounted) return;
+    setState(() {
+      _pending.remove(f.key);
+      _values[f.key] = MediaImage.url(url).toMap();
+      _dirty = true;
+    });
+  }
+
+  void _removeImage(FieldDef f) => setState(() {
+        _pending.remove(f.key);
+        _values[f.key] = null;
+        _dirty = true;
+      });
+
+  Widget _imageEditor(FieldDef f) {
+    final pending = _pending[f.key];
+    final current = MediaImage.fromMap(_values[f.key]);
+    final busy = _processing == f.key;
+    final hasImage = pending != null || current != null;
+    const placeholder = Icon(Icons.image_outlined, size: 40, color: AppColors.muted);
+    final Widget preview = pending != null
+        ? Image.memory(pending.bytes, key: const Key('imagePreviewPending'), fit: BoxFit.cover)
+        : current != null
+            ? MediaImageView(image: current, loader: widget.media?.load, placeholder: const Center(child: placeholder))
+            : const Center(child: placeholder);
+    final kb = (pending?.length ?? 0) / 1000;
+    final status = busy
+        ? context.tr('imageProcessing')
+        : pending != null
+            ? '${context.tr('imagePending')} • ${context.tr('imageSize', {
+                'w': '${pending.w}',
+                'h': '${pending.h}',
+                'kb': kb.toStringAsFixed(0)
+              })}'
+            : current == null
+                ? context.tr('imageNone')
+                : (current.isRemote ? current.url : 'media/${current.mediaId}');
+    return InputDecorator(
+      key: ValueKey('field-${f.key}'),
+      decoration: InputDecoration(labelText: _label(f), helperText: context.tr('imageHint'), helperMaxLines: 3),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              width: 96,
+              height: 96,
+              color: AppColors.parchment,
+              child: busy ? const Center(child: CircularProgressIndicator(strokeWidth: 2)) : preview,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(status,
+                  key: const Key('imageStatus'),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: AppColors.muted, fontSize: 12)),
+              const SizedBox(height: 8),
+              Wrap(spacing: 8, runSpacing: 8, children: [
+                OutlinedButton.icon(
+                  key: const Key('imageUploadBtn'),
+                  onPressed: widget.media == null || busy || _saving ? null : () => _pickImage(f),
+                  icon: const Icon(Icons.upload_rounded),
+                  label: Text(context.tr('imageUpload')),
+                ),
+                OutlinedButton.icon(
+                  key: const Key('imageUrlBtn'),
+                  onPressed: busy || _saving ? null : () => _askImageUrl(f),
+                  icon: const Icon(Icons.link_rounded),
+                  label: Text(context.tr('imageUseUrl')),
+                ),
+                if (hasImage)
+                  TextButton.icon(
+                    key: const Key('imageRemoveBtn'),
+                    onPressed: busy || _saving ? null : () => _removeImage(f),
+                    icon: const Icon(Icons.delete_outline, color: AppColors.alert),
+                    label: Text(context.tr('imageRemove'), style: const TextStyle(color: AppColors.alert)),
+                  ),
+              ]),
+              if (widget.media == null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(context.tr('imageUploadUnavailable'),
+                      style: const TextStyle(color: AppColors.muted, fontSize: 11)),
+                ),
+            ]),
+          ),
+        ]),
+        if (hasImage) ...[
+          const SizedBox(height: 10),
+          TextField(
+            key: const Key('imageAltInput'),
+            controller: _text[f.key],
+            maxLength: MediaLimits.maxAltLength,
+            decoration: InputDecoration(labelText: context.tr('imageAlt'), counterText: ''),
+          ),
+        ],
+      ]),
+    );
   }
 
   Widget _objectList(FieldDef f) {
@@ -477,6 +705,53 @@ class DocEditorState extends State<DocEditor> {
       ),
     );
   }
+}
+
+/// Asks for an https image link (owns its controller, so it is disposed
+/// only after the dialog's closing animation).
+class _ImageUrlDialog extends StatefulWidget {
+  final String initial;
+  const _ImageUrlDialog({required this.initial});
+
+  @override
+  State<_ImageUrlDialog> createState() => _ImageUrlDialogState();
+}
+
+class _ImageUrlDialogState extends State<_ImageUrlDialog> {
+  late final _ctrl = TextEditingController(text: widget.initial);
+  final _formKey = GlobalKey<FormState>();
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  void _ok() {
+    if (_formKey.currentState!.validate()) Navigator.pop(context, _ctrl.text.trim());
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+        title: Text(context.tr('imageUseUrl')),
+        content: Form(
+          key: _formKey,
+          child: TextFormField(
+            key: const Key('imageUrlInput'),
+            controller: _ctrl,
+            autofocus: true,
+            textDirection: TextDirection.ltr,
+            keyboardType: TextInputType.url,
+            decoration: InputDecoration(labelText: context.tr('imageUrlLabel'), hintText: 'https://…'),
+            validator: (v) => isValidImageUrl(v ?? '') ? null : context.tr('invalidUrl'),
+            onFieldSubmitted: (_) => _ok(),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: Text(context.tr('cancel'))),
+          FilledButton(key: const Key('imageUrlOk'), onPressed: _ok, child: Text(context.tr('ok'))),
+        ],
+      );
 }
 
 class _Row {

@@ -6,6 +6,7 @@ import 'package:material_ui/material_ui.dart';
 import '../data/admin_repository.dart';
 import '../data/content_repository.dart';
 import '../data/firebase_bootstrap.dart';
+import '../data/media_repository.dart';
 import '../domain/features.dart';
 import '../domain/models.dart';
 
@@ -13,6 +14,10 @@ import '../domain/models.dart';
 final firebaseStatusProvider = Provider<FirebaseStatus>((ref) => FirebaseStatus.unavailable);
 final repositoryProvider = Provider<ContentRepository>((ref) => throw UnimplementedError('override in main'));
 final adminRepositoryProvider = Provider<AdminRepository?>((ref) => null);
+
+/// Reads (public) and uploads (admin) optional item images; null when
+/// Firebase is unavailable (inline images then show their placeholder).
+final mediaRepositoryProvider = Provider<MediaRepository?>((ref) => null);
 
 final settingsProvider = StreamProvider<ChurchSettings>((ref) => ref.watch(repositoryProvider).settings());
 

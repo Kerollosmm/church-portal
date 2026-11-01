@@ -163,7 +163,7 @@ Desktop shows a sidebar, phones a ☰ drawer.
 | Screen | What you can do |
 |---|---|
 | **Overview** | Counts per content type (hidden / unconfirmed), new contact messages, sections switched on, quick links, the latest edits (who / when). |
-| **Sections & home page** (`settings/features`) | Switch any section **on/off**: liturgies & seasons, meetings, clinics, public services, history, milestones, saints, priests, departed fathers, activities, urgent notices, phones/address/map, social links, contact form, AI assistant. Reorder / hide home blocks (announcement banner, notices, next‑liturgy card, phones, our story, directory, map), set hero title/subtitle, an announcement banner (text + link) and the site colour (5 presets). Press **Save changes**. |
+| **Sections & home page** (`settings/features`) | Switch any section **on/off**: liturgies & seasons, meetings, clinics, public services, history, milestones, saints, priests, departed fathers, activities, urgent notices, phones/address/map, social links, contact form, AI assistant, images. Reorder / hide home blocks (announcement banner, notices, next‑liturgy card, phones, our story, directory, map), set hero title/subtitle, an announcement banner (text + link) and the site colour (5 presets). Press **Save changes**. |
 | **Church info** (`settings/church`) | Name, bishop, address, directions, coordinates, map link, phone list (with "mobile/WhatsApp"), WhatsApp/Facebook/YouTube/Instagram, verse, hero image, history, altars, assistant switch. |
 | Content lists | Alerts, seasons, liturgies, meetings, clinics, public services, activities, priests, departed fathers, saints, milestones: **search**, filter (all / visible / hidden / unconfirmed), **add / edit / delete** (with confirmation), 👁 **hide/show** without deleting, **drag to reorder** (clinics, services, activities, priests, saints, milestones). Every form validates times (HH:mm), dates, links (https://…), phones and number ranges; "Unconfirmed (pending church confirmation)" stays per item. |
 | **Contact messages** | Read the form submissions, call/email the sender, mark handled / new, delete. |
@@ -173,6 +173,12 @@ A switched‑off section disappears from the home page, menus, footer, search‑
 its URL shows «هذا القسم غير متاح حاليًا» with a "Back to home" button. Hidden items (`visible: false`) stay in the
 database but never reach the public pages. If `settings/features` does not exist yet, everything is on (same as the
 bundled seed, which the offline fallback uses).
+
+**Optional images** — priests, departed fathers, saints, milestones, activities, alerts and seasons have an
+**Image (optional)** field: *Upload image* (resized to ≤ 800 px and compressed to ~250 KB in the browser, max 700 KB;
+stored in Firestore `media/` because the Spark plan has no Cloud Storage), *Image link* (an `https://` URL) or *Remove
+image*, plus an image description. Without an image the card keeps its icon. **Sections & home page → Images** hides
+all images at once.
 
 **Add an admin**
 1. Firebase console → Authentication → Users → **Add user** (email + password). Copy the **UID**.

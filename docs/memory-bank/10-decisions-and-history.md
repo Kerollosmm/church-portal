@@ -91,6 +91,30 @@ supersede them.
 - **Decision:** `usePathUrlStrategy()` for clean URLs; Hosting rewrites `**` → `/index.html`; `no-cache` on HTML/JS
   because Flutter bundles are not content-hashed.
 
+## ADR-017 — Optional images stored inline in Firestore (Spark), Cloud Storage later
+- **Context (PR #5):** the church wanted photos on priests, saints, milestones, activities, alerts and seasons, but
+  **as an optional extra, not a core feature**. The project is on **Spark**; Cloud Storage for Firebase needs
+  **Blaze** (Spark projects cannot provision or access a bucket —
+  <https://firebase.google.com/docs/storage/faqs-storage-changes-announced-sept-2024>).
+- **Decision:** an optional `image` map on each supported content doc (`source: url | inline | storage`). Admins
+  either paste an https URL, or upload from the device: the client resizes (≤ 800 px) and compresses (~250 KB target,
+  700 KB hard cap) and stores base64 in a **separate** `media/{id}` doc so list queries stay light and each card
+  fetches its own bytes lazily (memory-cached). Access goes through `MediaRepository`
+  (`FirestoreMediaRepository` now; `StorageMediaRepository` stub chosen by `--dart-define=MEDIA_BACKEND=storage`).
+  A `media` section toggle hides every image. Rules validate the map in the shared `common()` and cap
+  `dataBase64` at 950,000 chars (Firestore's doc limit is 1 MiB). Web uses canvas (WebP) to avoid shipping a Dart
+  image codec in the web bundle; Android/tests use the `image` package.
+- **Consequences:** works on the free plan; each inline image costs one read per visitor session (counts toward 50K
+  reads/day) and ≤ ~950 KB of Firestore storage (1 GiB free); orphan `media` docs are deleted best effort.
+  Priests' old `photoUrl` stays readable as a fallback.
+- **Switching to Cloud Storage after a Blaze upgrade:** (1) upgrade + budget alert, enable Storage in the console;
+  (2) `flutter pub add firebase_storage` and implement `StorageMediaRepository.upload/delete`
+  (`ref('media/<id>.<ext>').putData(...)` → `getDownloadURL()` → `MediaImage(source: 'storage', url, mediaId)`);
+  (3) add `"storage": {"rules": "storage.rules"}` to `firebase.json`, review the draft `storage.rules`, deploy
+  (`firebase deploy --only storage`; give the deploy SA *Firebase Rules Admin* for Storage too); (4) build with
+  `--dart-define=MEDIA_BACKEND=storage` (CI: add it to `deploy.yml`). Existing inline images keep rendering; migrate
+  them later by re-uploading if wanted, then delete the `media` docs.
+
 ## Timeline
 
 | When | PR / commit | What |
@@ -99,6 +123,7 @@ supersede them.
 | 31 Oct 2026 | **PR #1** `5eb9820` — "Church portal: Flutter + Firebase app, rules, seed, CI/CD" | The whole app: public pages, next-mass/season logic, assistant, contact form, Firestore rules, seed generator + seeder, CI, deploy (live + PR previews), Seed workflow (admin by email + set-password link), Codespaces. Review rounds: server-side contact throttle, hide assistant without App Check, safe workflow inputs, tolerant SA handling, firebase-tools CLI deploy, Node 24 actions, per-occurrence season windows, DST-correct seed instants, admin lookup retry, lang query sync, `<html lang>`, compact app bar for large text, map fallback, splash failure path; CI skip of the serviceusage probe. |
 | 31 Oct 2026 | **PR #2** `c42837a` — "Content: replace sample data with verified church data" | Real name/address (Qebly)/coordinates/landline/socials/bishop/history/milestones, reconciled priests, saints, activities with links, Anba Abraam, real alerts; times stay sample with page notice; no invented doctors/phones; `--force` deletes retired ids; `docs/CONTENT_SOURCES.md`. Review: unconfirmed one-offs in assistant, partner orgs labelled, new unconfirmed priests not seeded. |
 | 1 Nov 2026 | **PR #3** `fc0e0ad` — "Admin dashboard overhaul + per-section feature toggles" | `settings/features` (15 sections, home layout, hero, banner, theme), visible/order on items, responsive dashboard (overview, church info, every collection, search/filters, hide/show, drag reorder, validated forms, inbox, owner-only admins), rules for every write + emulator tests + CI job, seed `--fill-missing`/`--only` + known ids, README admin guide. Review: no flash of disabled content, live role, rules expression budget, stamps bound to request time/admin, clinic days 1–7, bannerLink format, changed-fields-only saves, reload banner. |
-| 1 Nov 2026 | **PR #4** (this) — docs/memory-bank | This memory bank + `AGENTS.md`, `CLAUDE.md`, `.github/copilot-instructions.md`. |
+| 1 Nov 2026 | **PR #4** `6c52698` — docs/memory-bank | This memory bank + `AGENTS.md`, `CLAUDE.md`, `.github/copilot-instructions.md`. |
+| 1 Nov 2026 | **PR #5** — "Optional images (Spark-friendly inline media)" | Optional `image` on priests/departed fathers, saints, milestones, activities, alerts, seasons; admin upload (client resize/compress → `media/{id}`), https URL or remove, alt text, preview; `ItemImage` (lazy, cached, fade-in, placeholder, tap to enlarge); `media` section toggle; `MediaRepository` + Storage stub + draft `storage.rules`; rules + emulator tests; ADR-017. |
 
 Append new PRs to this table.
