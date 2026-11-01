@@ -50,6 +50,7 @@ const Map<String, List<String>> _strings = {
   'noItems': ['لا توجد بيانات حاليًا', 'Nothing here yet'],
   'loadError': ['تعذّر تحميل البيانات', 'Could not load data'],
   'retry': ['إعادة المحاولة', 'Retry'],
+  'loadingPage': ['جارٍ تحميل الصفحة…', 'Loading page…'],
   'history': ['تاريخ الكنيسة', 'History'],
   'altars': ['المذابح', 'Altars'],
   'patronSaints': ['شفعاء الكنيسة', 'Patron saints'],
@@ -100,6 +101,13 @@ const Map<String, List<String>> _strings = {
   'errEmail': ['بريد إلكتروني غير صحيح', 'Invalid email address'],
   'errPhoneOrEmail': ['أدخل رقم الموبايل أو البريد الإلكتروني', 'Enter a mobile number or an email'],
   'errMessage': ['الرسالة من 5 إلى 1000 حرف', 'Message must be 5–1000 characters'],
+  // Egyptian Personal Data Protection Law (Law 151/2020) notice — FR-CT-06.
+  'privacyNotice': [
+    'خصوصيتك: اسمك وبيانات التواصل ورسالتك يطّلع عليها فقط الآباء الكهنة وسكرتارية الكنيسة المفوَّضون، لغرض الرد عليك فقط، ولا تتم مشاركتها مع أي جهة خارجية.',
+    'Your privacy: your name, contact details and message are read only by the church\'s authorized clergy and secretariat, solely to reply to you, and are never shared outside the church.'
+  ],
+  'consentLabel': ['أوافق على استخدام بياناتي للرد على رسالتي', 'I agree to my details being used to reply to my message'],
+  'errConsent': ['برجاء الموافقة على إشعار الخصوصية لإرسال الرسالة', 'Please accept the privacy notice to send your message'],
   'sampleData': ['بيانات تجريبية', 'Sample data'],
   'timesPending': ['مواعيد تقريبية — في انتظار تأكيد الكنيسة', 'Times pending church confirmation'],
   'timesPendingHint': [

@@ -7,10 +7,12 @@ import 'package:material_ui/material_ui.dart';
 import 'config/app_config.dart';
 import 'core/l10n.dart';
 import 'state/providers.dart';
-import 'ui/admin/admin_page.dart';
+// Deferred (plan PR 3, 3.3): separate web chunks, fetched only on /admin and
+// /ask, so the public bundle excludes the admin dashboard and the AI SDK.
+import 'ui/admin/admin_page.dart' deferred as admin_page;
 import 'ui/pages/about_page.dart';
 import 'ui/pages/activities_page.dart';
-import 'ui/pages/assistant_page.dart';
+import 'ui/pages/assistant_page.dart' deferred as assistant_page;
 import 'ui/pages/clinics_page.dart';
 import 'ui/pages/contact_page.dart';
 import 'ui/pages/education_page.dart';
@@ -19,6 +21,7 @@ import 'ui/pages/mass_schedule_page.dart';
 import 'ui/pages/public_services_page.dart';
 import 'ui/widgets/app_shell.dart';
 import 'ui/widgets/common.dart';
+import 'ui/widgets/deferred_loader.dart';
 import 'ui/widgets/feature_gate.dart';
 
 /// Every public page is wrapped in a [FeatureGate]: a section switched off in
@@ -142,10 +145,25 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(path: '/public-services', pageBuilder: (c, s) => _page(s, const PublicServicesPage())),
           GoRoute(path: '/contact', pageBuilder: (c, s) => _page(s, const ContactPage())),
-          GoRoute(path: '/ask', pageBuilder: (c, s) => _page(s, const AssistantPage())),
+          GoRoute(
+            path: '/ask',
+            pageBuilder: (c, s) => _page(
+                s,
+                DeferredLoader(
+                  loadLibrary: assistant_page.loadLibrary,
+                  builder: (_) => assistant_page.AssistantPage(),
+                )),
+          ),
         ],
       ),
-      GoRoute(path: AppConfig.adminPath, builder: (c, s) => const AdminPage()),
+      GoRoute(
+        path: AppConfig.adminPath,
+        builder: (c, s) => DeferredLoader(
+          loadLibrary: admin_page.loadLibrary,
+          builder: (_) => admin_page.AdminPage(),
+          fullScreen: true,
+        ),
+      ),
     ],
     errorBuilder: (context, state) => AppShell(
       location: state.uri.path,

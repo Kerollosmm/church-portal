@@ -212,7 +212,14 @@ digits, Cairo `02` + 8, Alexandria `03` + 7, other governorates `0[4-9]` + 7–8
 - Outcomes: sent; **timeout** (15 s, PR 1 / BUG-06): «لم نتمكن من تأكيد الإرسال…» (`sendTimeoutRetry`), shown as an
   error and the **form keeps the visitor's text** (the queued batch may still be rejected by the server throttle, so
   delivery is never promised); unavailable (seed mode); failed.
-- Not implemented yet: privacy notice + consent checkbox (PDPL), retention clean-up.
+- **Privacy notice + consent** (PR 3 of the review plan, FR-CT-06, Egyptian PDPL Law 151/2020): under the message
+  field a notice (`privacyNotice`: name, contact details and message are read only by the church's authorized clergy
+  and secretariat, solely to reply, never shared outside) and an **unticked** `CheckboxListTile` (`consentLabel`).
+  `ContactFormInput.consented` (default `true` for non-UI callers; the form passes the box) → `ContactField.consent` /
+  `ContactError.consentRequired` («برجاء الموافقة على إشعار الخصوصية لإرسال الرسالة») blocks sending and keeps the
+  typed text. Consent is **not** written to Firestore (payload keys unchanged, rules untouched); the box is cleared
+  after a successful send.
+- Not implemented yet: retention clean-up (12 months).
 
 ### Time formatting (`time_format.dart`)
 `formatTimeLatin("06:30")` → `06:30 AM`; `formatTimeArabic` → `٠٦:٣٠ ص` (ص/م); weekday names AR/EN (ISO index);

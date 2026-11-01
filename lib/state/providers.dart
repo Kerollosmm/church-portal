@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 
+import '../core/locale_storage.dart';
 import '../data/admin_repository.dart';
 import '../data/content_repository.dart';
 import '../data/firebase_bootstrap.dart';
@@ -75,18 +76,27 @@ class LocaleNotifier extends Notifier<Locale> {
   bool _userChange = false;
 
   @override
-  Locale build() {
-    // Shareable English links: ?lang=en
-    final q = Uri.base.queryParameters['lang'];
-    return q == 'en' ? const Locale('en') : const Locale('ar');
+  Locale build() => initialLocale(Uri.base, ref.read(languageStoreProvider).read());
+
+  /// Startup language (plan PR 3, 3.3): an explicit `?lang=` in the URL
+  /// (shareable links) → the visitor's saved choice → Arabic.
+  static Locale initialLocale(Uri uri, String? saved) {
+    final code = switch (uri.queryParameters['lang']) {
+      'en' => 'en',
+      'ar' => 'ar',
+      _ => saved == 'en' ? 'en' : 'ar',
+    };
+    return Locale(code);
   }
 
   void toggle() => set(state.languageCode == 'ar' ? const Locale('en') : const Locale('ar'));
 
+  /// The visitor's choice: rewrites `?lang=` and is remembered for next visit.
   void set(Locale l) {
     if (l == state) return;
     _userChange = true;
     state = l;
+    ref.read(languageStoreProvider).write(l.languageCode);
   }
 
   /// The URL asked for [l]; the URL already says so, nothing to rewrite.
@@ -101,5 +111,8 @@ class LocaleNotifier extends Notifier<Locale> {
     return v;
   }
 }
+
+/// Where the language choice is remembered (overridden in tests).
+final languageStoreProvider = Provider<LanguageStore>((ref) => const PlatformLanguageStore());
 
 final localeProvider = NotifierProvider<LocaleNotifier, Locale>(LocaleNotifier.new);

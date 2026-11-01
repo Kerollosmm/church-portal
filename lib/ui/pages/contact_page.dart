@@ -169,6 +169,7 @@ class _ContactFormState extends ConsumerState<ContactForm> {
   final _honeypot = TextEditingController();
   Map<ContactField, ContactError> _errors = const {};
   bool _sending = false;
+  bool _consented = false;
   String? _status;
   bool _statusOk = false;
 
@@ -189,6 +190,7 @@ class _ContactFormState extends ConsumerState<ContactForm> {
       ContactError.emailInvalid => 'errEmail',
       ContactError.phoneOrEmailRequired => 'errPhoneOrEmail',
       ContactError.messageLength => 'errMessage',
+      ContactError.consentRequired => 'errConsent',
     });
   }
 
@@ -200,6 +202,7 @@ class _ContactFormState extends ConsumerState<ContactForm> {
       phone: _phone.text,
       email: _email.text,
       message: _message.text,
+      consented: _consented,
     ));
     setState(() {
       _errors = v.errors;
@@ -258,6 +261,7 @@ class _ContactFormState extends ConsumerState<ContactForm> {
         _phone.clear();
         _email.clear();
         _message.clear();
+        _consented = false; // each message needs its own consent
       }
     });
   }
@@ -322,6 +326,23 @@ class _ContactFormState extends ConsumerState<ContactForm> {
             ),
             // Honeypot (invisible to humans).
             Offstage(child: TextField(controller: _honeypot)),
+            // Egyptian PDPL privacy notice + explicit consent (FR-CT-06).
+            Text(context.tr('privacyNotice'), style: Theme.of(context).textTheme.bodySmall),
+            CheckboxListTile(
+              value: _consented,
+              onChanged: (v) => setState(() {
+                _consented = v ?? false;
+                if (_consented && _errors.containsKey(ContactField.consent)) {
+                  _errors = Map.of(_errors)..remove(ContactField.consent);
+                }
+              }),
+              controlAffinity: ListTileControlAffinity.leading,
+              contentPadding: EdgeInsets.zero,
+              title: Text(context.tr('consentLabel')),
+              subtitle: _err(ContactField.consent) == null
+                  ? null
+                  : Text(_err(ContactField.consent)!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+            ),
             const SizedBox(height: 8),
             FilledButton.icon(
               onPressed: _sending ? null : _submit,

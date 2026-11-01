@@ -21,7 +21,8 @@
 lib/
   main.dart                 bootstrap: seed + Firebase in parallel (never crashes) -> ProviderScope overrides
   app.dart                  ChurchPortalApp: MaterialApp.router, locale, theme preset, <html lang>
-  router.dart               routerProvider (GoRouter), FeatureGate wrapper, ?lang=en sync, 404
+  router.dart               routerProvider (GoRouter), FeatureGate wrapper, ?lang=en sync, 404; /admin and /ask
+                            are deferred imports (`deferred as`) loaded by DeferredLoader
   firebase_options.dart     DefaultFirebaseOptions (web + android real, iOS PLACEHOLDER)
   config/app_config.dart    AppConfig: geminiModel, recaptchaV3SiteKey, App Check debug flags, adminPath
   domain/                   PURE DART (no Flutter/Firebase imports) — unit-tested business logic
@@ -50,12 +51,14 @@ lib/
                             and image_codec_io.dart (`image` package, JPEG) via conditional import
   state/providers.dart      all Riverpod providers (see below)
   core/                     theme.dart (AppColors, buildTheme), l10n.dart (_strings, tr/pick/isAr),
-                            launch.dart (openUrl, callPhone, openWhatsApp, maps URLs), document_lang*.dart
+                            launch.dart (openUrl, callPhone, openWhatsApp, maps URLs), document_lang*.dart,
+                            locale_storage*.dart (LanguageStore: localStorage on web, no-op elsewhere)
   ui/pages/                 one file per public route
   ui/widgets/               item_image (ItemImage, MediaImageView, showImageViewer), app_shell, cards (LiturgyCard, NextMassCard, AlertBanner, DirectoryCard,
                             ActionChipButton), common (PageBody, PageHeader, SectionTitle, ResponsiveGrid,
                             Skeleton*, EmptyState, ErrorState, AsyncSection, PendingConfirmationNote,
                             SampleBadge, Pill, IconLine, TimeRangeText, Footer), feature_gate, map_embed*,
+                            deferred_loader (DeferredLoader: spinner → page, retry on chunk failure),
                             coptic_cross
   ui/admin/                 admin_page (sign-in, role check, dashboard shell), admin_schema (FieldDef,
                             CollectionDef, adminCollections, churchInfoDoc), doc_editor (generic form),
@@ -143,7 +146,8 @@ flowchart LR
 | `seasonsProvider` | `StreamProvider<List<Season>>` | **not** filtered (seasons have no `visible`/`order`) |
 | `nowProvider` | `StreamProvider<DateTime>` | ticks every 30 s (next mass, "available today", alerts) |
 | `assistantVisibleProvider` | `Provider<bool>` | `features.enabled(assistant) && fb.available && fb.appCheckActive && settings.assistantEnabled` |
-| `localeProvider` | `NotifierProvider<LocaleNotifier, Locale>` | initial from `Uri.base` `?lang=en`, else `ar`; `toggle()`/`set()` = visitor's choice (URL follows), `syncFromUrl()` = the URL asked (no rewrite), `consumeUserChange()` read once by the router |
+| `languageStoreProvider` | `Provider<LanguageStore>` | `PlatformLanguageStore` (`lib/core/locale_storage.dart`): `window.localStorage['church_portal_lang']` on web via `package:web` (conditional import, errors swallowed), no-op on Android/iOS; overridden in tests |
+| `localeProvider` | `NotifierProvider<LocaleNotifier, Locale>` | initial = `LocaleNotifier.initialLocale(Uri.base, saved)`: explicit `?lang=en`/`?lang=ar` → saved choice → `ar`; `toggle()`/`set()` = visitor's choice (URL follows, choice saved in the `LanguageStore`), `syncFromUrl()` = the URL asked (no rewrite, not saved), `consumeUserChange()` read once by the router. A saved English choice on a parameter-free URL makes the first redirect add `?lang=en` |
 | `routerProvider` | `Provider<GoRouter>` (in `router.dart`) | |
 
 ## Routing (`lib/router.dart`)
@@ -175,12 +179,23 @@ flowchart LR
 | `/clinics` (`?specialty=<key>`) | `ClinicsPage(initialSpecialty)` | clinics |
 | `/public-services` | `PublicServicesPage` | services |
 | `/contact` | `ContactPage` | any of contactInfo, socials, contactForm |
-| `/ask` | `AssistantPage` | assistant (+ the page itself checks `assistantVisibleProvider`) |
-| `/admin` (`AppConfig.adminPath`) | `AdminPage` | outside the shell, not gated, not linked anywhere public |
+| `/ask` | `assistant_page.AssistantPage` (deferred) | assistant (+ the page itself checks `assistantVisibleProvider`) |
+| `/admin` (`AppConfig.adminPath`) | `admin_page.AdminPage` (deferred, `fullScreen` placeholder) | outside the shell, not gated, not linked anywhere public |
 | anything else | `errorBuilder` → `AppShell` + "Page not found" + Back home | — |
 
 `FeatureGate` shows a spinner (`Key('featuresLoading')`) until `featuresReadyProvider`, then the page or
 `SectionUnavailable` («هذا القسم غير متاح حاليًا» + Back to home).
+
+**Deferred routes** (PR 3 of the review plan): `router.dart` imports `ui/admin/admin_page.dart deferred as admin_page`
+and `ui/pages/assistant_page.dart deferred as assistant_page`; the routes build
+`DeferredLoader(loadLibrary: x.loadLibrary, builder: (_) => x.Page())`, so dart2js emits them as separate
+`main.dart.js_*.part.js` chunks fetched only on the first visit to `/admin` or `/ask` (the AI SDK `firebase_ai` is
+imported only by `assistant_page.dart`). `DeferredLoader` shows a spinner (live region «جارٍ تحميل الصفحة…») and an
+`ErrorState` with Retry if the chunk download fails. Only the page code is deferred: anything also imported eagerly
+(e.g. `data/admin_repository.dart`, used by `providers.dart`/`main.dart`, and shared widgets) stays in the main
+bundle. Never import `admin_page.dart` / `assistant_page.dart` (or a library only they need) eagerly elsewhere in
+`lib/`, or the split silently disappears; tests may import them directly. Path URL strategy is unaffected (the
+chunks are fetched relative to `<base href>`).
 
 ## App shell & navigation (`lib/ui/widgets/app_shell.dart`)
 

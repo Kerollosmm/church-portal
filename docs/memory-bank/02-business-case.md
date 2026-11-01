@@ -32,7 +32,7 @@ answered by phone calls, Facebook comments and stale WhatsApp forwards.
 | BR-4 | Content editable by church editors without a developer | M | ✅ `/admin` |
 | BR-5 | Seasonal schedules override regular ones automatically | M | ✅ `occurrencesForDay` / `computeNextMass` |
 | BR-6 | Urgent announcements only while valid | M | ✅ `visibleAlerts` |
-| BR-7 | Contact without login; PDPL-minimised personal data | M | ⚠️ form + rules ✅; consent checkbox / privacy notice / retention ❌ |
+| BR-7 | Contact without login; PDPL-minimised personal data | M | ⚠️ form + rules ✅; privacy notice + consent checkbox ✅ (PR 3 of the review plan); retention ❌ |
 | BR-8 | Identity & history presented with dignity | M | ✅ (altars list empty pending church) |
 | BR-9 | Near-zero running cost with spending alerts | M | Infra choice; budget alerts are a console task |
 | BR-10 | Usage measurable | M | ❌ no Analytics |
@@ -45,7 +45,7 @@ Global
 | ID | Requirement | Status |
 |---|---|---|
 | FR-G-01 | Navbar with highlighted "Mass times" + "Clinics" | ✅ `AppShell._HighlightButton` (48×48 dp compact buttons on phones; below 360 px, at ≥ 150 % text, or on a subpage below 400 px they move to the drawer) |
-| FR-G-02 | AR⇄EN toggle, remembered | ⚠️ toggle ✅, `?lang=` synced both ways by the router (deep links / Back-Forward switch the language, the toggle rewrites the URL); not persisted in local storage |
+| FR-G-02 | AR⇄EN toggle, remembered | ✅ toggle; `?lang=` synced both ways by the router (deep links / Back-Forward switch the language, the toggle rewrites the URL); the visitor's choice is saved in `localStorage` (`church_portal_lang`, web only) and restored on the next visit (startup: `?lang=` → saved → Arabic) |
 | FR-G-03 | Times in Arabic-Indic **and** Latin digits | ✅ `TimeRangeText`, `formatRangeArabic/Latin` |
 | FR-G-04 | Footer: address, phones, socials, quick links, last updated | ⚠️ `Footer` has name, address, quick links, ©, "Showing bundled content" note; no phones/socials/last-updated |
 | FR-G-05 | Deep links + friendly 404 | ✅ go_router + `errorBuilder` (`notFound` + Back home); Hosting SPA rewrite; Back-to-Home arrow on phone subpages |
@@ -74,7 +74,7 @@ Pages
 | FR-C-01..05 | Specialty chips, doctor card, call/WhatsApp, today-first sort, facilities | ✅ (sort = open today → admin `order` → specialty → doctor) |
 | FR-C-06 | "Schedules may change, call to confirm" | ✅ `clinicsIntro` subtitle |
 | FR-CT-01..05 | Phones, socials, address+transport, map+GPS, contact form | ✅ |
-| FR-CT-06 | Privacy notice + consent checkbox | ❌ |
+| FR-CT-06 | Privacy notice + consent checkbox | ✅ notice (read only by authorized clergy/secretariat, only to reply, never shared) + unticked `CheckboxListTile` that must be ticked (`ContactField.consent`); consent is not stored |
 
 Admin
 | ID | Requirement | Status |
@@ -95,7 +95,7 @@ Admin
 | RTL/bilingual | Arabic default, Cairo font, Ar/En field pairs with fallback | ✅ `context.pick(ar, en)` falls back to the non-empty one |
 | Offline | Persistence + app shell cache | ✅ Firestore persistence (40 MB cache); no custom service-worker strategy |
 | Security | Public read only on content; admin writes; contact create-only; App Check | ✅ rules; App Check only for AI Logic (reCAPTCHA key pending) |
-| Privacy (PDPL) | Consent, minimisation, 12-month retention, no children's data | ⚠️ minimisation ✅; consent/notice/retention ❌ |
+| Privacy (PDPL) | Consent, minimisation, 12-month retention, no children's data | ⚠️ minimisation ✅; notice + consent checkbox ✅; retention ❌; legal review pending |
 | Maintainability | Content-driven UI, rules tests in emulator, README | ✅ |
 | Cost | Budget alert, Gemini quota | Console tasks (open) |
 
@@ -123,9 +123,10 @@ Pascha 2 May 2027; St Moses revival ~22 Jun – 1 Jul 2027.
 
 ## Risks (top ones)
 
-R1 Flutter web first-load size (mitigation ideas: static HTML shell, font subset, deferred imports — mostly not done);
+R1 Flutter web first-load size (deferred `/admin` + `/ask` chunks done in PR 3 of the review plan; static HTML shell,
+font subset not done);
 R2 weak SEO for canvas rendering (meta tags, Open Graph image, `robots.txt` and `sitemap.xml` exist since PR #6;
-JSON-LD not done);
+static canonical + `Church` JSON-LD since PR 3 of the review plan — the static canonical points every route at `/`);
 R3 content staleness (alerts auto-expire; no freshness view yet); R4 children's privacy; R5 phone-number spam
 (publish only official numbers); R6 contact-form abuse (honeypot + client + server throttle); R7 PDPL compliance
 (legal advice needed; Firestore stores data outside Egypt); R8 time zone/DST (all logic in Africa/Cairo via

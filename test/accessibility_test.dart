@@ -417,6 +417,8 @@ void main() {
       await tester.enterText(fields.at(0), 'Mina Adel');
       await tester.enterText(fields.at(1), '01012345678');
       await tester.enterText(fields.at(3), 'When is the next youth meeting?');
+      await tester.tap(find.descendant(of: form, matching: find.byType(CheckboxListTile))); // PDPL consent
+      await tester.pump();
       await tester.tap(find.descendant(of: form, matching: find.byIcon(Icons.send_rounded)));
       await tester.pumpAndSettle();
       // The bundled-data repository cannot send: an error status appears.

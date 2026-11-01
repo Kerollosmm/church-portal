@@ -126,6 +126,15 @@ App target settings:
 
 - `public: build/web` (output of `flutter build web --release`); ignores `firebase.json`, dotfiles, `node_modules`.
 - `cleanUrls: true`, `trailingSlash: false`, **rewrite `**` → `/index.html`** (SPA + path URL strategy).
+- SEO in `web/index.html` (PR 3 of the review plan): a **static** `<link rel="canonical"
+  href="https://maximos-domadios-church.web.app/">` — because every route is served from the same `index.html`, every
+  SPA route (`/mass-schedule`, `/clinics`…) declares `/` as its canonical, so search engines may fold subpages into the
+  home page (known caveat, accepted by the owner who chose to follow the plan; a per-route canonical needs a static
+  shell or JS that rewrites the tag). Plus a `<script type="application/ld+json">` **`Church`** block with only
+  verified facts mirrored from `settings/church` / `docs/CONTENT_SOURCES.md`: Arabic name, English names
+  (`alternateName`), `PostalAddress` (آخر شارع 45، العصافرة قبلي، قطاع المنتزه، الإسكندرية, EG), `GeoCoordinates`
+  31.260138, 30.01129, `telephone` +2035368888, `sameAs` Facebook/YouTube/Instagram/WhatsApp channel.
+  `test/phase3_test.dart` checks it parses and matches the seed; update both if the church's facts change.
 - Headers: `**` → `Cache-Control: no-cache` (Flutter bundles are not content-hashed, so HTML/JS must revalidate),
   `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `X-Frame-Options: SAMEORIGIN`,
   `Strict-Transport-Security: max-age=31536000; includeSubDomains`, `Permissions-Policy: camera=(), microphone=(),
