@@ -6,7 +6,8 @@ A **light, fast, Arabic-first public portal** (البوابة الرقمية ا�
 **3 seconds**, the next liturgy, the clinic and its booking phone, their age group's meeting, and the church's phones
 and exact map location — **without logging in** and without the church running a management system.
 
-Live: <https://asafra-church-portal.web.app> (Firebase Hosting, deployed from `main`).
+Live: <https://maximos-domadios-church.web.app> (Firebase Hosting site `maximos-domadios-church`, deployed from `main`; the old
+<https://asafra-church-portal.web.app> 301-redirects every path there — ADR-018).
 Repo: `Kerollosmm/church-portal`. Owner/developer: Kerollos Melad (GitHub `Kerollosmm`).
 
 ## The church
@@ -15,7 +16,9 @@ Repo: `Kerollosmm/church-portal`. Owner/developer: Kerollos Melad (GitHub `Kerol
 |---|---|
 | Official name (AR) | **كنيسة القديسين مكسيموس ودوماديوس والقوي الأنبا موسى الأسود** |
 | Official name (EN, as used in the app) | **Church of Saints Maximus & Domadius and the Strong Anba Moussa the Black** |
-| Short name in the UI | «كنيسة العصافرة» / "Asafra Church" (`l10n` key `appShort`) |
+| Display title (web `<title>`, manifest `name`, MaterialApp, drawer/footer fallback) | «كنيسة القديسين مكسيموس ودوماديوس والقوي الأنبا موسى الأسود» / "St. Maximus & Domadius and St. Moses the Black Church" (`l10n` key `appName`; once loaded, headers/footer show the admin-editable `settings/church.nameAr/nameEn`) |
+| Short name in the UI | «كنيسة مكسيموس ودوماديوس» / "St. Maximus & Domadius Church" (`l10n` `appShort`, manifest `short_name`, Android label) — replaced «كنيسة العصافرة» / "Asafra Church" in PR #6 |
+| Logo | The parish's official round seal (maroon/gold) — `assets/branding/seal.png` via `ChurchSeal`, all icons from `tool/gen_branding.sh` |
 | Denomination | Coptic Orthodox |
 | Address (AR) | آخر شارع 45، العصافرة قبلي، قطاع المنتزه، الإسكندرية |
 | Address (EN) | End of Street 45, El-Asafra Qebly, Montaza district, Alexandria, Egypt |

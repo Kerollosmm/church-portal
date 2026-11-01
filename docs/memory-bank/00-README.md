@@ -1,4 +1,4 @@
-# Memory bank — Asafra Church Portal
+# Memory bank — St. Maximus & Domadius Church Portal (Asafra)
 
 This folder is the long-term memory of the project for coding agents (Claude Code, Codex, Cursor, Copilot…) and
 for humans joining later. Code is the source of truth; these files explain **what exists, why, and how to change it

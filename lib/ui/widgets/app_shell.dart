@@ -45,7 +45,8 @@ class AppShell extends ConsumerWidget {
     final showMass = features.routeEnabled('/mass-schedule');
     final showClinics = features.routeEnabled('/clinics');
     final settings = ref.watch(settingsProvider).value;
-    final title = settings == null ? context.tr('appShort') : context.pick(settings.nameAr, settings.nameEn);
+    // Full church name (admin-editable in settings); bundled l10n name until settings load.
+    final fullName = settings == null ? context.tr('appName') : context.pick(settings.nameAr, settings.nameEn);
 
     return Scaffold(
       appBar: AppBar(
@@ -54,13 +55,19 @@ class AppShell extends ConsumerWidget {
         title: InkWell(
           onTap: () => context.go('/'),
           child: Row(mainAxisSize: MainAxisSize.min, children: [
-            const CopticCross(size: 34),
+            ChurchSeal(size: wide ? 46 : 38),
             const SizedBox(width: 10),
+            // The full name is long: on wide screens show it under the short
+            // name; on phones show only the short name (max two lines).
             Flexible(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-                Text(context.tr('appShort'), style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 17)),
+                Text(context.tr('appShort'),
+                    maxLines: wide ? 1 : 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontWeight: FontWeight.w800, fontSize: wide ? 17 : 14, height: 1.25)),
                 if (wide)
-                  Text(title,
+                  Text(fullName,
+                      maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(fontSize: 11, color: AppColors.goldLight, fontWeight: FontWeight.w500)),
               ]),
@@ -215,6 +222,7 @@ class _AppDrawer extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final items = visibleNavItems(ref.watch(featuresProvider), showAsk: showAsk);
+    final settings = ref.watch(settingsProvider).value;
     return Drawer(
       backgroundColor: AppColors.cream,
       child: SafeArea(
@@ -223,11 +231,13 @@ class _AppDrawer extends ConsumerWidget {
             padding: const EdgeInsets.all(20),
             color: Theme.of(context).colorScheme.primary,
             child: Row(children: [
-              const CopticCross(size: 40),
+              const ChurchSeal(size: 52),
               const SizedBox(width: 12),
               Expanded(
-                child: Text(context.tr('appShort'),
-                    style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w800)),
+                child: Text(settings == null ? context.tr('appName') : context.pick(settings.nameAr, settings.nameEn),
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800, height: 1.4)),
               ),
             ]),
           ),

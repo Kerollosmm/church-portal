@@ -1,5 +1,17 @@
 {
   "projects": {
     "default": "asafra-church-portal"
+  },
+  "targets": {
+    "asafra-church-portal": {
+      "hosting": {
+        "app": [
+          "maximos-domadios-church"
+        ],
+        "legacy-redirect": [
+          "asafra-church-portal"
+        ]
+      }
+    }
   }
 }

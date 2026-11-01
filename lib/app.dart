@@ -18,7 +18,9 @@ class ChurchPortalApp extends ConsumerWidget {
     final primary = Color(ThemePresets.all[themeKey] ?? ThemePresets.all[ThemePresets.burgundy]!);
     setDocumentLanguage(locale.languageCode);
     return MaterialApp.router(
-      title: locale.languageCode == 'ar' ? 'كنيسة القديسين مكسيموس ودوماديوس — العصافرة' : 'Asafra Church Portal',
+      title: locale.languageCode == 'ar'
+          ? 'كنيسة القديسين مكسيموس ودوماديوس والقوي الأنبا موسى الأسود'
+          : 'St. Maximus & Domadius and St. Moses the Black Church',
       debugShowCheckedModeBanner: false,
       locale: locale,
       supportedLocales: const [Locale('ar'), Locale('en')],

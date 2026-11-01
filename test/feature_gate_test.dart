@@ -155,4 +155,12 @@ void main() {
     final banner = find.ancestor(of: find.text('New clinic hours'), matching: find.byType(Row)).first;
     expect(find.descendant(of: banner, matching: find.text('Learn more')), findsNothing);
   });
+
+  testWidgets('phone width: header seal + short name fit without overflow', (tester) async {
+    for (final width in [360.0, 1400.0]) {
+      await _pump(tester, _seedWith(const {}), size: Size(width, 2400));
+      expect(tester.takeException(), isNull, reason: 'width $width');
+      expect(find.text('St. Maximus & Domadius Church'), findsOneWidget, reason: 'width $width');
+    }
+  });
 }

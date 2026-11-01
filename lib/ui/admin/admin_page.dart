@@ -45,7 +45,7 @@ class _AdminFrame extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
       appBar: AppBar(
-        title: Row(children: [const CopticCross(size: 26), const SizedBox(width: 8), Text(context.tr('admin'))]),
+        title: Row(children: [const ChurchSeal(size: 30), const SizedBox(width: 8), Text(context.tr('admin'))]),
         leading: IconButton(icon: const Icon(Icons.home_rounded), onPressed: () => context.go('/')),
         actions: [const LanguageToggle()],
       ),
@@ -413,7 +413,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
       appBar: AppBar(
         title: Row(
           children: [
-            const CopticCross(size: 24),
+            const ChurchSeal(size: 28),
             const SizedBox(width: 8),
             Flexible(
               child: Text(
