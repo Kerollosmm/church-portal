@@ -2,7 +2,9 @@
 
 This folder is the long-term memory of the project for coding agents (Claude Code, Codex, Cursor, Copilot…) and
 for humans joining later. Code is the source of truth; these files explain **what exists, why, and how to change it
-safely**. Every statement here was checked against the code on `main` at commit `fc0e0ad` (PR #3, 1 Nov 2026).
+safely**. Every statement here was checked against the code on `main` at commit `6a30772` (PR #7, "PR 1" of the
+review plan, 1 Nov 2026) plus the changes of PR 2 of the plan (`fix/phase2-ux-a11y-admin`: WCAG 2.2 AA contrast and
+theme presets, 320 px / 200 % text layouts, two-way `?lang=` sync, screen-reader semantics, admin fixes).
 
 > **Golden rule:** read this folder before changing anything, and update it in the same PR as every change that
 > alters behaviour, data shape, rules, workflows, content status or open tasks.

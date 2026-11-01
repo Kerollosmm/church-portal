@@ -6,7 +6,13 @@ class AppColors {
   static const burgundy = Color(0xFF6B1426);
   static const burgundyDark = Color(0xFF4A0D1A);
   static const burgundyLight = Color(0xFF8E2A3E);
+  /// Decorative only (borders, dark-background accents): 2.4:1 on white,
+  /// so never use it for text or icons on light surfaces.
   static const gold = Color(0xFFC9A227);
+
+  /// Gold for text and icons on light surfaces (WCAG AA: 6.3:1 on white,
+  /// 5.9:1 on cream).
+  static const goldText = Color(0xFF7A5B00);
   static const goldLight = Color(0xFFE8D28A);
   static const cream = Color(0xFFFBF6EC);
   static const parchment = Color(0xFFF3E9D2);
@@ -15,6 +21,10 @@ class AppColors {
   static const success = Color(0xFF2E7D4F);
   static const alert = Color(0xFFB3261E);
 }
+
+/// Darker shade of the active theme colour (admin-selected preset), used for
+/// the page header, hero and footer gradients so they follow every preset.
+Color primaryDarkOf(BuildContext context) => Color.lerp(Theme.of(context).colorScheme.primary, Colors.black, 0.30)!;
 
 /// [primary] is the admin-selected accent preset (settings/features.theme).
 ThemeData buildTheme(Locale locale, {Color primary = AppColors.burgundy}) {

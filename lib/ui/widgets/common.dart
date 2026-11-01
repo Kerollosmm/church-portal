@@ -57,7 +57,7 @@ class PageHeader extends StatelessWidget {
       width: double.infinity,
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [Color.lerp(primary, Colors.black, 0.3)!, primary],
+          colors: [primaryDarkOf(context), primary],
           begin: AlignmentDirectional.topStart,
           end: AlignmentDirectional.bottomEnd,
         ),
@@ -113,17 +113,17 @@ class SectionTitle extends StatelessWidget {
       padding: const EdgeInsets.only(top: 20, bottom: 12),
       child: Row(
         children: [
-          if (icon != null) ...[Icon(icon, color: AppColors.gold, size: 22), const SizedBox(width: 8)],
+          if (icon != null) ...[Icon(icon, color: AppColors.goldText, size: 22), const SizedBox(width: 8)],
           Flexible(
             child: Text(text,
                 style: Theme.of(context)
                     .textTheme
                     .titleLarge
-                    ?.copyWith(fontWeight: FontWeight.w800, color: AppColors.burgundy)),
+                    ?.copyWith(fontWeight: FontWeight.w800, color: Theme.of(context).colorScheme.primary)),
           ),
           const SizedBox(width: 10),
           Expanded(child: Container(height: 1.2, color: AppColors.gold.withValues(alpha: 0.4))),
-          if (trailing != null) ...[const SizedBox(width: 8), trailing!],
+          if (trailing != null) ...[const SizedBox(width: 8), Flexible(child: trailing!)],
         ],
       ),
     );
@@ -163,8 +163,18 @@ class SkeletonBox extends StatefulWidget {
 }
 
 class _SkeletonBoxState extends State<SkeletonBox> with SingleTickerProviderStateMixin {
-  late final AnimationController _c =
-      AnimationController(vsync: this, duration: const Duration(milliseconds: 900))..repeat(reverse: true);
+  late final AnimationController _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 900));
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Reduced motion (OS setting): no pulsing, a static placeholder instead.
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _c.stop();
+    } else if (!_c.isAnimating) {
+      _c.repeat(reverse: true);
+    }
+  }
 
   @override
   void dispose() {
@@ -174,6 +184,16 @@ class _SkeletonBoxState extends State<SkeletonBox> with SingleTickerProviderStat
 
   @override
   Widget build(BuildContext context) {
+    if (MediaQuery.disableAnimationsOf(context)) {
+      return Container(
+        height: widget.height,
+        width: widget.width,
+        decoration: BoxDecoration(
+          color: const Color(0xFFEDE3CF),
+          borderRadius: BorderRadius.circular(widget.radius),
+        ),
+      );
+    }
     return AnimatedBuilder(
       animation: _c,
       builder: (_, _) => Container(
@@ -284,12 +304,12 @@ class PendingConfirmationNote extends StatelessWidget {
           border: Border.all(color: const Color(0xFFE0C36A)),
         ),
         child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Icon(Icons.info_outline_rounded, color: Color(0xFF7A5B00)),
+          const Icon(Icons.info_outline_rounded, color: AppColors.goldText),
           const SizedBox(width: 10),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(context.tr('timesPending'),
-                  style: const TextStyle(fontWeight: FontWeight.w800, color: Color(0xFF7A5B00))),
+                  style: const TextStyle(fontWeight: FontWeight.w800, color: AppColors.goldText)),
               const SizedBox(height: 2),
               Text(context.tr('timesPendingHint'), style: const TextStyle(height: 1.5, fontSize: 13)),
             ]),
@@ -310,8 +330,25 @@ class SampleBadge extends StatelessWidget {
             borderRadius: BorderRadius.circular(6),
             border: Border.all(color: const Color(0xFFE0C36A)),
           ),
-          child: Text(context.tr('sampleData'), style: const TextStyle(fontSize: 10, color: Color(0xFF7A5B00))),
+          child: Text(context.tr('sampleData'), style: const TextStyle(fontSize: 10, color: AppColors.goldText)),
         ),
+      );
+}
+
+/// A title followed by the "sample data" badge. The badge moves under the
+/// title on narrow screens / large text instead of overflowing (BUG-11).
+class TitleWithBadge extends StatelessWidget {
+  final String text;
+  final TextStyle? style;
+  final bool sample;
+  const TitleWithBadge(this.text, {super.key, this.style, this.sample = false});
+
+  @override
+  Widget build(BuildContext context) => Wrap(
+        spacing: 6,
+        runSpacing: 4,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [Text(text, style: style), if (sample) const SampleBadge()],
       );
 }
 
@@ -319,7 +356,11 @@ class Pill extends StatelessWidget {
   final String text;
   final Color color;
   final IconData? icon;
-  const Pill(this.text, {super.key, this.color = AppColors.success, this.icon});
+
+  /// Lines before the label is ellipsized (null = wrap freely, for labels
+  /// that list content shown nowhere else, e.g. the active seasons).
+  final int? maxLines;
+  const Pill(this.text, {super.key, this.color = AppColors.success, this.icon, this.maxLines = 2});
 
   @override
   Widget build(BuildContext context) => Container(
@@ -327,7 +368,14 @@ class Pill extends StatelessWidget {
         decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(20)),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
           if (icon != null) ...[Icon(icon, size: 14, color: color), const SizedBox(width: 4)],
-          Text(text, style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: 12)),
+          // Long labels (e.g. several active seasons) wrap/ellipsize instead
+          // of overflowing narrow cards.
+          Flexible(
+            child: Text(text,
+                maxLines: maxLines,
+                overflow: maxLines == null ? null : TextOverflow.ellipsis,
+                style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: 12)),
+          ),
         ]),
       );
 }
@@ -372,8 +420,10 @@ class TimeRangeText extends StatelessWidget {
               fontSize: large ? 22 : 16,
               color: Theme.of(context).colorScheme.primary,
               height: 1.3)),
+      // The secondary line is Latin in Arabic mode and Arabic in English mode:
+      // give it its own script's base direction.
       Directionality(
-        textDirection: TextDirection.ltr,
+        textDirection: context.isAr ? TextDirection.ltr : TextDirection.rtl,
         child: Text(secondary, style: TextStyle(fontSize: large ? 14 : 12, color: AppColors.muted)),
       ),
     ]);
@@ -402,7 +452,7 @@ class Footer extends ConsumerWidget {
     ].where((l) => features.routeEnabled(l.$2)).toList();
     return Container(
       width: double.infinity,
-      color: AppColors.burgundyDark,
+      color: primaryDarkOf(context),
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
       child: Center(
         heightFactor: 1,
@@ -441,7 +491,7 @@ class Footer extends ConsumerWidget {
                   ? Padding(
                       padding: const EdgeInsets.only(top: 4),
                       child: Text(context.tr('offlineData'),
-                          style: const TextStyle(color: Colors.white38, fontSize: 11)),
+                          style: const TextStyle(color: Colors.white70, fontSize: 11)),
                     )
                   : const SizedBox.shrink(),
             ),

@@ -34,6 +34,31 @@ class _OverviewScreenState extends State<OverviewScreen> {
   @override
   void initState() {
     super.initState();
+    _subscribe();
+  }
+
+  @override
+  void didUpdateWidget(covariant OverviewScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // A different backend (e.g. after re-sign-in): re-bind every stream.
+    if (widget.repo != oldWidget.repo) {
+      _cancel();
+      _docs.clear();
+      _failed.clear();
+      _features = null;
+      _featuresLoaded = false;
+      _subscribe();
+    }
+  }
+
+  void _cancel() {
+    for (final s in _subs) {
+      s.cancel();
+    }
+    _subs.clear();
+  }
+
+  void _subscribe() {
     final names = {for (final c in adminCollections) c.name, 'contact_messages'};
     for (final n in names) {
       _subs.add(widget.repo.watch(n).listen(
@@ -52,9 +77,7 @@ class _OverviewScreenState extends State<OverviewScreen> {
 
   @override
   void dispose() {
-    for (final s in _subs) {
-      s.cancel();
-    }
+    _cancel();
     super.dispose();
   }
 
@@ -236,7 +259,19 @@ class ChurchInfoScreen extends StatefulWidget {
 }
 
 class _ChurchInfoScreenState extends State<ChurchInfoScreen> {
-  late final Stream<AdminDoc?> _stream = widget.repo.watchDoc(churchInfoDoc.path);
+  late Stream<AdminDoc?> _stream = widget.repo.watchDoc(churchInfoDoc.path);
+
+  @override
+  void didUpdateWidget(covariant ChurchInfoScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // A different backend: re-bind the stream and rebuild the form from it.
+    if (widget.repo != oldWidget.repo) {
+      _stream = widget.repo.watchDoc(churchInfoDoc.path);
+      _shown = null;
+      _loaded = false;
+      _editorKey = GlobalKey<DocEditorState>();
+    }
+  }
   GlobalKey<DocEditorState> _editorKey = GlobalKey<DocEditorState>();
   AdminDoc? _shown;
   bool _loaded = false;
@@ -255,7 +290,11 @@ class _ChurchInfoScreenState extends State<ChurchInfoScreen> {
         final editor = _editorKey.currentState;
         final dirty = editor != null && editor.dirty && !editor.saving;
         if (changed && !dirty) {
-          if (_loaded) _editorKey = GlobalKey<DocEditorState>();
+          // The snapshot of our own save (only metadata or the values the form
+          // already holds changed) keeps the form and its scroll position.
+          final echo =
+              _loaded && editor != null && isEchoOfEditor(_shown?.data ?? const {}, latest?.data, editor.collect());
+          if (_loaded && !echo) _editorKey = GlobalKey<DocEditorState>();
           _shown = latest;
           _loaded = true;
         }

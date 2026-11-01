@@ -36,9 +36,13 @@ class _FeaturesScreenState extends State<FeaturesScreen> {
         }
         final latest = snap.data;
         final changed = !_loaded || latest?.updatedAt != _shown?.updatedAt || (latest == null) != (_shown == null);
-        final dirty = _editorKey.currentState?.dirty ?? false;
+        final editor = _editorKey.currentState;
+        final dirty = editor?.dirty ?? false;
         if (changed && !dirty) {
-          if (_loaded) _editorKey = GlobalKey<FeaturesEditorState>();
+          // The snapshot of our own save keeps the form and its scroll position.
+          final echo =
+              _loaded && editor != null && isEchoOfEditor(_shown?.data ?? const {}, latest?.data, editor.collect().toMap());
+          if (_loaded && !echo) _editorKey = GlobalKey<FeaturesEditorState>();
           _shown = latest;
           _loaded = true;
         }
@@ -253,14 +257,10 @@ class FeaturesEditorState extends State<FeaturesEditor> {
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
                   buildDefaultDragHandles: false,
-                  onReorderItem: (from, to) {
-                    final next = [...order];
-                    next.insert(to, next.removeAt(from));
-                    _set(f.copyWith(homeOrder: normalizeHomeOrder(next)));
-                  },
+                  onReorderItem: (from, to) => _moveBlock(order, from, to),
                   children: [
                     for (var i = 0; i < order.length; i++)
-                      _homeBlockTile(context, order[i], i),
+                      _homeBlockTile(context, order[i], i, order.length),
                   ],
                 ),
               ], hint: context.tr('homeLayoutHint')),
@@ -302,7 +302,14 @@ class FeaturesEditorState extends State<FeaturesEditor> {
     );
   }
 
-  Widget _homeBlockTile(BuildContext context, String b, int i) {
+  /// [to] is the index after removing [from] (onReorderItem semantics).
+  void _moveBlock(List<String> order, int from, int to) {
+    final next = [...order];
+    next.insert(to, next.removeAt(from));
+    _set(f.copyWith(homeOrder: normalizeHomeOrder(next)));
+  }
+
+  Widget _homeBlockTile(BuildContext context, String b, int i, int count) {
     final shown = !f.homeHidden.contains(b);
     final req = HomeBlocks.requires[b];
     final sectionOff = req != null && !f.enabled(req);
@@ -314,10 +321,25 @@ class FeaturesEditorState extends State<FeaturesEditor> {
       subtitle: sectionOff
           ? Text(context.tr('blockSectionOff'), style: const TextStyle(color: AppColors.alert, fontSize: 12))
           : null,
-      trailing: Switch(
-        value: shown,
-        onChanged: (v) => _set(f.copyWith(homeHidden: v ? ({...f.homeHidden}..remove(b)) : {...f.homeHidden, b})),
-      ),
+      trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+        // Single-tap alternative to dragging (WCAG 2.5.7).
+        IconButton(
+          key: ValueKey('home-$b-up'),
+          tooltip: context.tr('moveUp'),
+          icon: const Icon(Icons.arrow_upward),
+          onPressed: i == 0 ? null : () => _moveBlock(f.homeOrder, i, i - 1),
+        ),
+        IconButton(
+          key: ValueKey('home-$b-down'),
+          tooltip: context.tr('moveDown'),
+          icon: const Icon(Icons.arrow_downward),
+          onPressed: i == count - 1 ? null : () => _moveBlock(f.homeOrder, i, i + 1),
+        ),
+        Switch(
+          value: shown,
+          onChanged: (v) => _set(f.copyWith(homeHidden: v ? ({...f.homeHidden}..remove(b)) : {...f.homeHidden, b})),
+        ),
+      ]),
     );
   }
 }

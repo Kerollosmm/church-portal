@@ -143,16 +143,25 @@ flowchart LR
 | `seasonsProvider` | `StreamProvider<List<Season>>` | **not** filtered (seasons have no `visible`/`order`) |
 | `nowProvider` | `StreamProvider<DateTime>` | ticks every 30 s (next mass, "available today", alerts) |
 | `assistantVisibleProvider` | `Provider<bool>` | `features.enabled(assistant) && fb.available && fb.appCheckActive && settings.assistantEnabled` |
-| `localeProvider` | `NotifierProvider<LocaleNotifier, Locale>` | initial from `Uri.base` `?lang=en`, else `ar`; `toggle()`, `set()` |
+| `localeProvider` | `NotifierProvider<LocaleNotifier, Locale>` | initial from `Uri.base` `?lang=en`, else `ar`; `toggle()`/`set()` = visitor's choice (URL follows), `syncFromUrl()` = the URL asked (no rewrite), `consumeUserChange()` read once by the router |
 | `routerProvider` | `Provider<GoRouter>` (in `router.dart`) | |
 
 ## Routing (`lib/router.dart`)
 
 - `GoRouter(initialLocation: '/')`, **path URL strategy** (`/mass-schedule`, not `/#/mass-schedule`). Firebase
   Hosting rewrites `**` → `/index.html` (`firebase.json`), so deep links and reloads work.
-- `redirect: _syncLangQuery` keeps `?lang=en` in the URL in sync with the locale (adds it in English, removes it in
-  Arabic). `refreshListenable` is a `ValueNotifier` bumped by `ref.listen(localeProvider)` so redirects re-run on
-  toggle without rebuilding the router.
+- **Two-way `?lang=` sync** (PR 2 of the review plan, BUG-07) — pure rules in `resolveLangSync(uri, english:,
+  userToggled:, fromPlatform:)`:
+  - EN/ع toggle (`LocaleNotifier.consumeUserChange()`), or a refresh of the same URL (`lastSyncedUri`): the URL
+    follows the language (`_syncLangQuery`: `lang=en` in English, no parameter in Arabic).
+  - explicit `?lang=en` / `?lang=ar` (deep link, shared or in-app link, Back/Forward): the **language follows the
+    URL** (`syncFromUrl`, scheduled in a microtask because the redirect may run during build); `lang=ar` is dropped
+    (Arabic is the canonical, parameter-free URL).
+  - no `lang` while English: a URL reported by the platform (browser Back/Forward, address bar, Android deep link —
+    detected by `_PlatformRouteObserver`, a `WidgetsBindingObserver` registered before go_router's that flags
+    `didPushRouteInformation`) means Arabic; in-app `context.go('/x')` keeps English and adds `lang=en`.
+  `refreshListenable` is a `ValueNotifier` bumped by `ref.listen(localeProvider)` so redirects re-run on a language
+  change without rebuilding the router.
 - A `ShellRoute` wraps all public pages in `AppShell(location, child)`; each page is built by `_page(state, child)` =
   `NoTransitionPage(child: FeatureGate(path: s.uri.path, child: child))`.
 
@@ -180,7 +189,12 @@ flowchart LR
 - Wide layout when `width / textScale ≥ 1024` (large system text forces the compact bar): text links
   (home/about/education), a **Services** popup (activities, public services, contact, ask), gold **Mass times** and
   white **Clinics** highlight buttons, language toggle (`EN` / `ع`).
-- Narrow: compact circular Mass/Clinics buttons, language toggle, ☰ opens an **end drawer** (`_AppDrawer`).
+- Narrow: compact 48×48 dp Mass/Clinics `IconButton`s (`_HighlightButton`), language toggle, ☰ opens an **end
+  drawer** (`_AppDrawer`). Below **360 px**, at **≥ 150 % text**, or on a subpage below **400 px** (the Back arrow
+  takes another 48 dp) the highlight buttons are dropped from the bar (they are in the drawer) so the title keeps a
+  readable width. Phone subpages (`location != '/'`) get a leading
+  **Back-to-Home** arrow (`Key('backHome')`, `Icons.arrow_back_rounded`, mirrored in RTL) — every in-app link is a
+  sibling `context.go`, so there is nothing to pop, and installed PWAs have no browser back button.
 - `PageBody` (common.dart) = width-capped (`kMaxContentWidth = 1100`) scroll view + `Footer`.
 
 ## i18n — Arabic-first RTL + English (`lib/core/l10n.dart`)
@@ -199,19 +213,30 @@ flowchart LR
 
 ## Theming (`lib/core/theme.dart`)
 
-- Coptic palette `AppColors`: burgundy `#6B1426` (+dark/light), gold `#C9A227`, goldLight, cream `#FBF6EC`
-  (scaffold), parchment, ink, muted, success, alert.
+- Coptic palette `AppColors`: burgundy `#6B1426` (+dark/light), gold `#C9A227` (**decorative only**: borders,
+  dark-background accents — 2.4:1 on white), **`goldText` `#7A5B00`** (gold for text/icons on light surfaces: 6.3:1 on
+  white, 5.9:1 on cream), goldLight, cream `#FBF6EC` (scaffold), parchment, ink, muted, success, alert.
+- **Public widgets never use `AppColors.burgundy*` directly** (PR 2 of the review plan): they read
+  `Theme.of(context).colorScheme.primary`, and `primaryDarkOf(context)` (`Color.lerp(primary, black, 0.30)`) for the
+  page header, hero and footer, so all 5 presets recolour the whole site (`test/accessibility_test.dart` fails if a
+  public page paints burgundy under the navy preset). The admin dashboard still uses the fixed burgundy.
 - `buildTheme(locale, primary:)`: `ColorScheme.fromSeed(seedColor: primary)`, Cairo text theme, app bar in primary.
 - The admin picks the **primary** from `ThemePresets.all` (`settings/features.theme`): burgundy (default), navy,
   green, brown, purple; `ChurchPortalApp` watches `featuresProvider.select((f) => f.theme)`.
-- Brand colours for social buttons in `cards.dart`: `whatsappGreen`, `facebookBlue`, `youtubeRed`, `instagramPink`.
+- Brand colours for social buttons in `cards.dart`: `whatsappGreen` `#157338`, `facebookBlue` `#145DBF` (darkened
+  so white button text is ≥ 4.5:1), `youtubeRed`, `instagramPink`.
+- Accessibility helpers: `TitleWithBadge` (title + `SampleBadge` in a `Wrap`), `Pill` text wraps (2 lines + ellipsis
+  by default; `maxLines: null` for the next-mass season list, which must stay complete),
+  `ActionChipButton.semanticLabel` / `actionSemanticLabel(action, target)` ("Call — Dental clinic"),
+  `SkeletonBox` is static under `MediaQuery.disableAnimationsOf`.
 - `CopticCross` widget is the logo (custom painter).
 
 ## Platform-specific bits
 
 - Conditional imports `*_stub.dart` / `*_web.dart` (`if (dart.library.js_interop)`): `document_lang`, `map_embed`
   (iframe `HtmlElementView` on web, tappable static card elsewhere).
-- `ChurchMap` uses keyless Google Maps embed `maps.google.com/maps?q=<mapsQuery>&output=embed&hl=ar`;
+- `ChurchMap` uses keyless Google Maps embed `maps.google.com/maps?q=<mapsQuery>&output=embed&hl=<ar|en>`
+  (`mapsEmbedUrl(settings, lang:)` follows the UI language);
   "Open in Google Maps" (`mapsSearchUrl`) and GPS "Directions" (`mapsDirectionsUrl`, `travelmode=driving`).
 - `openUrl` treats scheme-less links as https, opens http(s) in a new tab/external app.
 
@@ -220,6 +245,8 @@ flowchart LR
 | Where | Breakpoint |
 |---|---|
 | App bar full links | `width / textScale ≥ 1024` |
+| App bar highlight buttons moved to the drawer | `width < 360`, text scale ≥ 1.5, or subpage and `width < 400` |
+| Alert "Learn more" under the text instead of beside it | `width < 600` or text scale ≥ 1.5 |
 | Home: Next-mass + phones side by side, Contact: info + form side by side | `width ≥ 900` |
 | Hero compact | `width < 600` |
 | Admin sidebar vs drawer | `width ≥ 1000` |

@@ -74,6 +74,7 @@ class _ActivityCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final schedule = context.pick(a.scheduleAr, a.scheduleEn);
+    final title = context.pick(a.titleAr, a.titleEn);
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -87,15 +88,14 @@ class _ActivityCard extends StatelessWidget {
               placeholder: Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(color: AppColors.parchment, borderRadius: BorderRadius.circular(12)),
-                child: Icon(activityIcon(a.category), color: AppColors.burgundy),
+                child: Icon(activityIcon(a.category), color: Theme.of(context).colorScheme.primary),
               ),
             ),
             const SizedBox(width: 12),
             Expanded(
-              child: Text(context.pick(a.titleAr, a.titleEn),
-                  style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16, height: 1.4)),
+              child: TitleWithBadge(title,
+                  sample: a.sample, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16, height: 1.4)),
             ),
-            if (a.sample) const SampleBadge(),
           ]),
           const SizedBox(height: 10),
           Text(context.pick(a.descAr, a.descEn), style: const TextStyle(height: 1.7)),
@@ -107,18 +107,24 @@ class _ActivityCard extends StatelessWidget {
             ActionChipButton(
                 icon: _linkIcon(a.link),
                 label: context.tr('openPage'),
-                color: _linkColor(a.link),
+                semanticLabel: actionSemanticLabel(context.tr('openPage'), title),
+                color: _linkColor(context, a.link),
                 onTap: () => openUrl(a.link)),
           ],
           if (a.contactPhone.isNotEmpty) ...[
             const SizedBox(height: 8),
-            Wrap(spacing: 8, children: [
+            Wrap(spacing: 8, runSpacing: 8, children: [
               ActionChipButton(
-                  icon: Icons.call, label: context.tr('call'), color: AppColors.burgundy, onTap: () => callPhone(a.contactPhone)),
+                  icon: Icons.call,
+                  label: context.tr('call'),
+                  semanticLabel: actionSemanticLabel(context.tr('call'), title),
+                  color: Theme.of(context).colorScheme.primary,
+                  onTap: () => callPhone(a.contactPhone)),
               if (isEgyptianMobile(a.contactPhone))
                 ActionChipButton(
                     icon: Icons.chat_rounded,
                     label: context.tr('whatsapp'),
+                    semanticLabel: actionSemanticLabel(context.tr('whatsapp'), title),
                     color: whatsappGreen,
                     onTap: () => openWhatsApp(a.contactPhone)),
             ]),
@@ -135,8 +141,8 @@ IconData _linkIcon(String url) => url.contains('youtube.com')
         ? Icons.facebook
         : Icons.open_in_new_rounded;
 
-Color _linkColor(String url) => url.contains('youtube.com')
+Color _linkColor(BuildContext context, String url) => url.contains('youtube.com')
     ? youtubeRed
     : url.contains('facebook.com')
         ? facebookBlue
-        : AppColors.burgundy;
+        : Theme.of(context).colorScheme.primary;

@@ -2,8 +2,8 @@
 
 Condensed from the original Arabic PRD (`CHURCH_PORTAL_PRD.md`, 3 pages) and
 `Church_Portal_Business_Case_and_Requirements.md` v1.0 (31 Oct 2026). Both live in the project workspace, not in this
-repo. The **"Status"** columns below were checked against the code on `main` (PR #3) — they tell you what is real
-today versus still a requirement.
+repo. The **"Status"** columns below were checked against the code on `main` (PR #7 + PR 2 of the review plan,
+1 Nov 2026) — they tell you what is real today versus still a requirement.
 
 ## Problem
 
@@ -44,11 +44,11 @@ answered by phone calls, Facebook comments and stale WhatsApp forwards.
 Global
 | ID | Requirement | Status |
 |---|---|---|
-| FR-G-01 | Navbar with highlighted "Mass times" + "Clinics" | ✅ `AppShell._HighlightButton` (compact circles on narrow screens) |
-| FR-G-02 | AR⇄EN toggle, remembered | ⚠️ toggle ✅, `?lang=en` kept in URL by the router redirect; not persisted in local storage |
+| FR-G-01 | Navbar with highlighted "Mass times" + "Clinics" | ✅ `AppShell._HighlightButton` (48×48 dp compact buttons on phones; below 360 px, at ≥ 150 % text, or on a subpage below 400 px they move to the drawer) |
+| FR-G-02 | AR⇄EN toggle, remembered | ⚠️ toggle ✅, `?lang=` synced both ways by the router (deep links / Back-Forward switch the language, the toggle rewrites the URL); not persisted in local storage |
 | FR-G-03 | Times in Arabic-Indic **and** Latin digits | ✅ `TimeRangeText`, `formatRangeArabic/Latin` |
 | FR-G-04 | Footer: address, phones, socials, quick links, last updated | ⚠️ `Footer` has name, address, quick links, ©, "Showing bundled content" note; no phones/socials/last-updated |
-| FR-G-05 | Deep links + friendly 404 | ✅ go_router + `errorBuilder` (`notFound` + Back home); Hosting SPA rewrite |
+| FR-G-05 | Deep links + friendly 404 | ✅ go_router + `errorBuilder` (`notFound` + Back home); Hosting SPA rewrite; Back-to-Home arrow on phone subpages |
 | FR-G-06 | Offline cached content with note | ✅ Firestore persistence + seed fallback (`servingSeed`) |
 | FR-G-07 | Analytics events (`answer_visible`, `clinic_call`, …) | ❌ |
 | FR-G-08 | PWA install prompt | ❌ (manifest only) — v1.1 |
@@ -68,7 +68,7 @@ Pages
 | FR-M-01..05 | Day tabs, liturgy cards, vespers & praise, Holy Seasons toggle (auto-on in season), one-off dates | ✅ |
 | FR-M-06 | Add to calendar (.ics) | ❌ v2 |
 | FR-E-01/02 | Age-stage timeline with links | ✅ `EducationPage` (grouped in 3 sections) |
-| FR-E-03 | "Today" badge on meetings | ❌ |
+| FR-E-03 | "Today" badge on meetings | ✅ «اليوم / Today» pill when the meeting's weekday is today in Cairo |
 | FR-E-04 | Children's stages link to official contact/channel, not open groups | Content policy (seed has only Maximous Youth FB link) |
 | FR-AC-01..04 | Activities (scouts, deacons, hymns, Bible, summer…) + contact phone | ✅ generic `activities` with categories; seed holds verified choirs/youth/servant school/media |
 | FR-C-01..05 | Specialty chips, doctor card, call/WhatsApp, today-first sort, facilities | ✅ (sort = open today → admin `order` → specialty → doctor) |
@@ -79,7 +79,7 @@ Pages
 Admin
 | ID | Requirement | Status |
 |---|---|---|
-| FR-AD-01 | Hidden `/admin`, email/password, non-admin sees "no access" | ✅ (no `noindex` meta/robots yet) |
+| FR-AD-01 | Hidden `/admin`, email/password, non-admin sees "no access" | ✅ (`web/robots.txt` disallows `/admin`; no `noindex` meta yet) |
 | FR-AD-02 | CRUD with validation | ✅ `DocEditor` + `admin_validators.dart` + rules |
 | FR-AD-03 | "Simulate now" preview of Next mass | ❌ |
 | FR-AD-04 | Inbox: mark read/done, delete | ✅ new ⇄ handled, delete (no "spam" status) |
@@ -91,7 +91,7 @@ Admin
 | NFR | Requirement | Status |
 |---|---|---|
 | Performance | Time-to-answer < 3 s p75, LCP < 2.5/3 s, ≤ 2 MB first visit, ≤ 60 reads/session | Not measured. Splash in `web/index.html`; Firestore cache; `no-cache` HTML/JS (Flutter bundles not content-hashed) |
-| Accessibility | WCAG 2.2 AA intent, 200% text, 48 dp targets | Partly: app bar switches to compact when text is scaled (`AppShell`); no formal audit |
+| Accessibility | WCAG 2.2 AA intent, 200% text, 48 dp targets | Mostly (PR 2 of the review plan): text colours ≥ 4.5:1 (`AppColors.goldText`, darker WhatsApp/Facebook fills, footer `white70`), every public route renders at 320 px × 200 % text without overflow in widget tests (Flutter test font; confirm once on a phone with Cairo), 48 dp app-bar targets, live regions (contact status, assistant spinner), labelled send/switch/action buttons, Move up/down next to drag handles (2.5.7), reduced-motion skeletons — all covered by `test/accessibility_test.dart`. No manual screen-reader audit yet |
 | RTL/bilingual | Arabic default, Cairo font, Ar/En field pairs with fallback | ✅ `context.pick(ar, en)` falls back to the non-empty one |
 | Offline | Persistence + app shell cache | ✅ Firestore persistence (40 MB cache); no custom service-worker strategy |
 | Security | Public read only on content; admin writes; contact create-only; App Check | ✅ rules; App Check only for AI Logic (reCAPTCHA key pending) |
@@ -124,7 +124,8 @@ Pascha 2 May 2027; St Moses revival ~22 Jun – 1 Jul 2027.
 ## Risks (top ones)
 
 R1 Flutter web first-load size (mitigation ideas: static HTML shell, font subset, deferred imports — mostly not done);
-R2 weak SEO for canvas rendering (meta tags exist in `web/index.html`; JSON-LD/sitemap not done);
+R2 weak SEO for canvas rendering (meta tags, Open Graph image, `robots.txt` and `sitemap.xml` exist since PR #6;
+JSON-LD not done);
 R3 content staleness (alerts auto-expire; no freshness view yet); R4 children's privacy; R5 phone-number spam
 (publish only official numbers); R6 contact-form abuse (honeypot + client + server throttle); R7 PDPL compliance
 (legal advice needed; Firestore stores data outside Egypt); R8 time zone/DST (all logic in Africa/Cairo via

@@ -66,15 +66,40 @@ final assistantVisibleProvider = Provider<bool>((ref) {
   return fb.available && fb.appCheckActive && (s?.assistantEnabled ?? false);
 });
 
+/// Selected language. Two kinds of change, kept apart so the router can sync
+/// `?lang=` in the right direction (see `resolveLangSync` in router.dart):
+/// - [toggle]/[set] are the visitor's choice: the URL is rewritten to match.
+/// - [syncFromUrl] follows the URL (deep link, browser Back/Forward): the URL
+///   is left as it is.
 class LocaleNotifier extends Notifier<Locale> {
+  bool _userChange = false;
+
   @override
   Locale build() {
     // Shareable English links: ?lang=en
     final q = Uri.base.queryParameters['lang'];
     return q == 'en' ? const Locale('en') : const Locale('ar');
   }
-  void toggle() => state = state.languageCode == 'ar' ? const Locale('en') : const Locale('ar');
-  void set(Locale l) => state = l;
+
+  void toggle() => set(state.languageCode == 'ar' ? const Locale('en') : const Locale('ar'));
+
+  void set(Locale l) {
+    if (l == state) return;
+    _userChange = true;
+    state = l;
+  }
+
+  /// The URL asked for [l]; the URL already says so, nothing to rewrite.
+  void syncFromUrl(Locale l) {
+    if (l != state) state = l;
+  }
+
+  /// True once after [toggle]/[set]: the next redirect writes `?lang=`.
+  bool consumeUserChange() {
+    final v = _userChange;
+    _userChange = false;
+    return v;
+  }
 }
 
 final localeProvider = NotifierProvider<LocaleNotifier, Locale>(LocaleNotifier.new);

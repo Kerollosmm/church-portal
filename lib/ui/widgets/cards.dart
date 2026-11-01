@@ -43,21 +43,16 @@ class LiturgyCard extends StatelessWidget {
             width: 44,
             height: 44,
             decoration: BoxDecoration(color: AppColors.parchment, borderRadius: BorderRadius.circular(12)),
-            child: Icon(_icon, color: AppColors.burgundy),
+            child: Icon(_icon, color: Theme.of(context).colorScheme.primary),
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               if (dayText.isNotEmpty)
                 Text(dayText,
-                    style: const TextStyle(color: AppColors.gold, fontWeight: FontWeight.w800, fontSize: 12)),
-              Row(children: [
-                Expanded(
-                  child: Text(context.pick(l.nameAr, l.nameEn),
-                      style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
-                ),
-                if (l.sample) const SampleBadge(),
-              ]),
+                    style: const TextStyle(color: AppColors.goldText, fontWeight: FontWeight.w800, fontSize: 12)),
+              TitleWithBadge(context.pick(l.nameAr, l.nameEn),
+                  sample: l.sample, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
               const SizedBox(height: 6),
               TimeRangeText(l.start, l.end),
               const SizedBox(height: 6),
@@ -107,20 +102,29 @@ class NextMassCard extends ConsumerWidget {
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: AppColors.gold, width: 1.4),
         boxShadow: [
-          BoxShadow(color: AppColors.burgundy.withValues(alpha: 0.12), blurRadius: 24, offset: const Offset(0, 8)),
+          BoxShadow(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.12), blurRadius: 24, offset: const Offset(0, 8)),
         ],
       ),
       padding: const EdgeInsets.all(18),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          const Icon(Icons.access_time_filled_rounded, color: AppColors.burgundy),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(context.tr('nextMass'),
-                style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: AppColors.burgundy)),
-          ),
-          TextButton(onPressed: () => context.go('/mass-schedule'), child: Text(context.tr('fullSchedule'))),
-        ]),
+        // Wrap: on narrow screens / large text "Full schedule" moves under
+        // the title instead of overflowing.
+        Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            Row(mainAxisSize: MainAxisSize.min, children: [
+              Icon(Icons.access_time_filled_rounded, color: Theme.of(context).colorScheme.primary),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(context.tr('nextMass'),
+                    style: TextStyle(
+                        fontWeight: FontWeight.w800, fontSize: 18, color: Theme.of(context).colorScheme.primary)),
+              ),
+            ]),
+            TextButton(onPressed: () => context.go('/mass-schedule'), child: Text(context.tr('fullSchedule'))),
+          ],
+        ),
         const SizedBox(height: 8),
         body,
       ]),
@@ -135,7 +139,8 @@ class NextMassCard extends ConsumerWidget {
         padding: const EdgeInsets.only(bottom: 8),
         child: Pill(
           context.tr('seasonActive', {'s': r.activeSeasons.map((s) => context.pick(s.nameAr, s.nameEn)).join('، ')}),
-          color: AppColors.burgundy,
+          maxLines: null, // every active season name must stay readable
+          color: Theme.of(context).colorScheme.primary,
           icon: Icons.auto_awesome,
         ),
       ));
@@ -176,8 +181,8 @@ class NextMassCard extends ConsumerWidget {
         countdown = context.tr('startsIn', {'t': t});
       }
       children.add(Wrap(spacing: 8, runSpacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: [
-        Pill('$dayLabel • ${weekdayLabel(context, n.start.weekday)}', color: AppColors.burgundy),
-        if (countdown != null) Pill(countdown, color: AppColors.gold.withValues(alpha: 1), icon: Icons.timer_outlined),
+        Pill('$dayLabel • ${weekdayLabel(context, n.start.weekday)}', color: Theme.of(context).colorScheme.primary),
+        if (countdown != null) Pill(countdown, color: AppColors.goldText, icon: Icons.timer_outlined),
       ]));
       children.add(const SizedBox(height: 8));
       children.add(Text(context.pick(n.liturgy.nameAr, n.liturgy.nameEn),
@@ -191,7 +196,7 @@ class NextMassCard extends ConsumerWidget {
         children.add(Padding(
           padding: const EdgeInsets.only(top: 6),
           child: Text(context.tr('timesPending'),
-              style: const TextStyle(color: Color(0xFF7A5B00), fontWeight: FontWeight.w700, fontSize: 12)),
+              style: const TextStyle(color: AppColors.goldText, fontWeight: FontWeight.w700, fontSize: 12)),
         ));
       }
     }
@@ -212,15 +217,35 @@ class _AlertBannerState extends ConsumerState<AlertBanner> {
   static const _collapsedCount = 2;
   bool _expanded = false;
 
+  static bool _isInternal(String link) => link.startsWith('/') && !link.startsWith('//');
+
+  // In-app routes start with a single '/'; '//host/...' is an external
+  // protocol-relative link.
+  Widget _learnMore(BuildContext context, String link) => TextButton(
+        onPressed: () => _isInternal(link) ? context.go(link) : openUrl(link),
+        child: Text(context.tr('learnMore')),
+      );
+
+  /// A link to a switched-off section would only open "not available"
+  /// (golden rule #6): hide the button, like the announcement banner does.
+  static bool _linkShown(String? link, FeatureSettings f) {
+    if (link == null || link.trim().isEmpty) return false;
+    final l = link.trim();
+    return !_isInternal(l) || f.routeEnabled(Uri.tryParse(l)?.path ?? l);
+  }
+
   @override
   Widget build(BuildContext context) {
-    if (!ref.watch(featuresProvider).enabled(Sections.alerts)) return const SizedBox.shrink();
+    final features = ref.watch(featuresProvider);
+    if (!features.enabled(Sections.alerts)) return const SizedBox.shrink();
     final alerts = ref.watch(alertsProvider).value;
     final now = ref.watch(nowProvider).value ?? DateTime.now();
     if (alerts == null) return const SizedBox.shrink();
     final visible = visibleAlerts(alerts, now);
     if (visible.isEmpty) return const SizedBox.shrink();
     final hidden = visible.length - _collapsedCount;
+    final compact =
+        MediaQuery.sizeOf(context).width < 600 || MediaQuery.textScalerOf(context).scale(16) / 16 >= 1.5;
     return Column(children: [
       for (final a in _expanded ? visible : visible.take(_collapsedCount))
         Container(
@@ -251,17 +276,13 @@ class _AlertBannerState extends ConsumerState<AlertBanner> {
                     padding: const EdgeInsets.only(top: 2),
                     child: Text(context.pick(a.bodyAr, a.bodyEn), style: const TextStyle(height: 1.5)),
                   ),
+                // Phones / large text: the button goes under the text so the
+                // row never overflows.
+                if (compact && _linkShown(a.link, features))
+                  Align(alignment: AlignmentDirectional.centerEnd, child: _learnMore(context, a.link!.trim())),
               ]),
             ),
-            if (a.link != null && a.link!.isNotEmpty)
-              TextButton(
-                // In-app routes start with a single '/'; '//host/...' is an
-                // external protocol-relative link.
-                onPressed: () => a.link!.startsWith('/') && !a.link!.startsWith('//')
-                    ? context.go(a.link!)
-                    : openUrl(a.link!),
-                child: Text(context.tr('learnMore')),
-              ),
+            if (!compact && _linkShown(a.link, features)) _learnMore(context, a.link!.trim()),
           ]),
         ),
       if (hidden > 0)
@@ -300,7 +321,10 @@ class DirectoryCard extends StatelessWidget {
               width: 52,
               height: 52,
               decoration: BoxDecoration(
-                gradient: const LinearGradient(colors: [AppColors.burgundy, AppColors.burgundyLight]),
+                gradient: LinearGradient(colors: [
+                  Theme.of(context).colorScheme.primary,
+                  Color.lerp(Theme.of(context).colorScheme.primary, Colors.white, 0.15)!,
+                ]),
                 borderRadius: BorderRadius.circular(14),
               ),
               child: Icon(icon, color: AppColors.goldLight, size: 28),
@@ -314,10 +338,10 @@ class DirectoryCard extends StatelessWidget {
                 const SizedBox(height: 6),
                 Row(children: [
                   Text(context.tr('learnMore'),
-                      style: const TextStyle(color: AppColors.burgundy, fontWeight: FontWeight.w700, fontSize: 13)),
+                      style: TextStyle(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.w700, fontSize: 13)),
                   const SizedBox(width: 4),
                   Icon(Icons.arrow_forward_rounded,
-                      size: 16, color: AppColors.burgundy),
+                      size: 16, color: Theme.of(context).colorScheme.primary),
                 ]),
               ]),
             ),
@@ -334,23 +358,46 @@ class ActionChipButton extends StatelessWidget {
   final String label;
   final Color color;
   final VoidCallback? onTap;
-  const ActionChipButton({super.key, required this.icon, required this.label, required this.color, this.onTap});
+
+  /// What screen readers announce instead of the short [label], naming the
+  /// target (e.g. "Call — Dental clinic"), so repeated "Call" buttons on a
+  /// page can be told apart.
+  final String? semanticLabel;
+  const ActionChipButton(
+      {super.key, required this.icon, required this.label, required this.color, this.onTap, this.semanticLabel});
 
   @override
-  Widget build(BuildContext context) => FilledButton.icon(
-        style: FilledButton.styleFrom(
-          backgroundColor: color,
-          foregroundColor: Colors.white,
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-          textStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
-        ),
-        onPressed: onTap,
-        icon: Icon(icon, size: 18),
-        label: Text(label),
-      );
+  Widget build(BuildContext context) {
+    final button = FilledButton.icon(
+      style: FilledButton.styleFrom(
+        backgroundColor: color,
+        foregroundColor: Colors.white,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        textStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+      ),
+      onPressed: onTap,
+      icon: Icon(icon, size: 18),
+      label: Text(label),
+    );
+    final s = semanticLabel;
+    if (s == null || s.isEmpty) return button;
+    return Semantics(
+      container: true,
+      label: s,
+      button: true,
+      enabled: onTap != null,
+      onTap: onTap,
+      excludeSemantics: true,
+      child: button,
+    );
+  }
 }
 
-const whatsappGreen = Color(0xFF1FA855);
-const facebookBlue = Color(0xFF1877F2);
+/// "Call — Dental clinic": an action label plus the item it acts on.
+String actionSemanticLabel(String action, String target) => target.isEmpty ? action : '$action — $target';
+
+// Darkened brand fills so white button text meets WCAG AA (>= 4.5:1).
+const whatsappGreen = Color(0xFF157338);
+const facebookBlue = Color(0xFF145DBF);
 const youtubeRed = Color(0xFFD32F2F);
 const instagramPink = Color(0xFFC13584);

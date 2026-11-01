@@ -15,7 +15,7 @@ render with `PageBody` (+ `Footer`). Content comes from Riverpod providers (hidd
   | Block | Widget | Needs section |
   |---|---|---|
   | `banner` | `_AnnouncementBanner` (admin text + optional "Learn more"; an in-app link to a switched-off section is dropped) | `bannerEnabled` + text |
-  | `alerts` | `AlertBanner` (2 highest, "show all N" toggle) | alerts |
+  | `alerts` | `AlertBanner` (2 highest, "show all N" toggle; an in-app link to a switched-off section shows no "Learn more", BUG-09) | alerts |
   | `nextMass` | `NextMassCard` | schedule |
   | `quickContacts` | `_QuickContacts` (first 3 phones, call + WhatsApp for mobiles) | contactInfo |
   | `milestones` | "Our story" `_MilestoneCard` grid (icon by `icon`, year in local digits) | milestones |
@@ -27,7 +27,7 @@ render with `PageBody` (+ `Footer`). Content comes from Riverpod providers (hidd
 - History card (bishop line + `historyAr/En`) and **altars** grid (main altar gets a gold cross) — section `history`.
 - Patron saints cards (name, feast pills Coptic + Gregorian, bio) — section `saints`.
 - Priests (`PriestCard`: avatar/photo, name (`nameEn` in English if set), rank «قمص/قس», ordination date, hegumen
-  date, bio, `SampleBadge`) — section `priests` (status ≠ departed); departed fathers on a cream card — section
+  date, repose date «تاريخ النياحة / Departed» (`departedDate`, BUG-08), bio, `SampleBadge`) — section `priests` (status ≠ departed); departed fathers on a cream card — section
   `departedPriests` (shown only if any).
 
 ### `/mass-schedule` — `mass_schedule_page.dart` `MassSchedulePage`
@@ -60,7 +60,9 @@ render with `PageBody` (+ `Footer`). Content comes from Riverpod providers (hidd
 - Meetings sorted by `stageOrder` (angels → elderly), then `order`, then start; grouped into
   **مدارس الأحد** (angels, primary, preparatory, secondary), **الشباب والجامعة والخريجون** (youth, university,
   graduates), **اجتماعات خاصة** (family, men, women, elderly), plus "Other stages" for unknown stage keys.
-- Timeline item: stage pill (`stageLabels`), name, weekday, both-digit time, hall, notes, Facebook/WhatsApp buttons.
+- Timeline item: a `Wrap` of stage pill (`stageLabels`), «اليوم / Today» pill when `m.weekday` is today's Cairo
+  weekday (FR-E-03) and `SampleBadge` (wraps at 320 px instead of overflowing, BUG-11); name, weekday (goldText),
+  both-digit time, hall, notes, Facebook/WhatsApp buttons (screen-reader label names the meeting).
 - `PendingConfirmationNote` when any meeting is `sample`.
 
 ### `/church-activities` — `activities_page.dart` `ActivitiesPage`

@@ -157,6 +157,23 @@ bool sameValue(Object? a, Object? b) {
   return a == b;
 }
 
+/// Metadata stamped on every save; not content.
+const _metadataKeys = {'updatedAt', 'updatedBy'};
+
+/// True when the stored version [next] differs from the version the editor
+/// was built from ([shown]) only in metadata, or in fields whose new value
+/// the editor already holds ([editorValues]) — typically the snapshot of the
+/// editor's own save. The form then stays mounted (no scroll reset, BUG-12)
+/// instead of being rebuilt from [next].
+bool isEchoOfEditor(Map<String, dynamic>? shown, Map<String, dynamic>? next, Map<String, dynamic> editorValues) {
+  if (shown == null || next == null) return false;
+  for (final k in {...shown.keys, ...next.keys}) {
+    if (_metadataKeys.contains(k) || sameValue(shown[k], next[k])) continue;
+    if (!editorValues.containsKey(k) || !sameValue(editorValues[k], next[k])) return false;
+  }
+  return true;
+}
+
 /// Only the keys whose value differs from [initial]: an edit never writes
 /// back stale values of fields another admin changed meanwhile.
 Map<String, dynamic> changedFields(Map<String, dynamic> initial, Map<String, dynamic> current) => {

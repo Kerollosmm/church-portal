@@ -79,12 +79,9 @@ class _InfoColumn extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Row(children: [
-              Text(context.tr('phones'),
-                  style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 17, color: AppColors.burgundy)),
-              const Spacer(),
-              if (s.sample) const SampleBadge(),
-            ]),
+            TitleWithBadge(context.tr('phones'),
+                sample: s.sample,
+                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17, color: Theme.of(context).colorScheme.primary)),
             const SizedBox(height: 6),
             for (final p in s.phones) PhoneRow(phone: p),
           ]),
@@ -98,7 +95,7 @@ class _InfoColumn extends StatelessWidget {
           padding: const EdgeInsets.all(16),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(context.tr('social'),
-                style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 17, color: AppColors.burgundy)),
+                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17, color: Theme.of(context).colorScheme.primary)),
             const SizedBox(height: 10),
             Wrap(spacing: 8, runSpacing: 8, children: [
               if (s.whatsappChannel.isNotEmpty)
@@ -140,7 +137,7 @@ class _InfoColumn extends StatelessWidget {
           padding: const EdgeInsets.all(16),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(context.tr('address'),
-                style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 17, color: AppColors.burgundy)),
+                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17, color: Theme.of(context).colorScheme.primary)),
             const SizedBox(height: 6),
             IconLine(Icons.location_on_outlined, context.pick(s.addressAr, s.addressEn),
                 style: const TextStyle(fontWeight: FontWeight.w700, height: 1.5)),
@@ -274,7 +271,7 @@ class _ContactFormState extends ConsumerState<ContactForm> {
         child: AutofillGroup(
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             Text(context.tr('contactForm'),
-                style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 17, color: AppColors.burgundy)),
+                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17, color: Theme.of(context).colorScheme.primary)),
             const SizedBox(height: 12),
             TextField(
               controller: _name,
@@ -337,18 +334,22 @@ class _ContactFormState extends ConsumerState<ContactForm> {
             if (_status != null)
               Padding(
                 padding: const EdgeInsets.only(top: 12),
-                child: Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: (_statusOk ? AppColors.success : AppColors.alert).withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(10),
+                // Screen readers announce the send result.
+                child: Semantics(
+                  liveRegion: true,
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: (_statusOk ? AppColors.success : AppColors.alert).withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Row(children: [
+                      Icon(_statusOk ? Icons.check_circle : Icons.error_outline,
+                          color: _statusOk ? AppColors.success : AppColors.alert),
+                      const SizedBox(width: 8),
+                      Expanded(child: Text(_status!)),
+                    ]),
                   ),
-                  child: Row(children: [
-                    Icon(_statusOk ? Icons.check_circle : Icons.error_outline,
-                        color: _statusOk ? AppColors.success : AppColors.alert),
-                    const SizedBox(width: 8),
-                    Expanded(child: Text(_status!)),
-                  ]),
                 ),
               ),
           ]),

@@ -63,36 +63,52 @@ signed-in email + role and Sign out.
 Live counts per collection (respecting each screen's filter, e.g. serving vs departed priests) with hidden /
 unconfirmed sub-counts, **new messages** (status ≠ handled, red when > 0), **sections on** (`N/16`), quick links
 (church info, sections & home, alerts, open site) and the **8 latest edits** (title, `updatedAt`, `updatedBy`). A
-failed stream shows "—".
+failed stream shows "—". If the screen is rebuilt with a different backend (`widget.repo`), `didUpdateWidget`
+cancels and re-subscribes every stream (BUG-18; `ChurchInfoScreen` does the same).
 
 ### Sections & home page (`FeaturesScreen` / `FeaturesEditor`, `features_editor.dart`) → `settings/features`
 - Switch each of the 16 sections on/off (+ "enable all"); labels from `Sections.labels`. The 16th, **«الصور» /
   Images**, hides every optional item image site-wide (default on).
-- **Home layout**: drag to reorder the 7 blocks, show/hide each; a block whose section is off is flagged
+- **Home layout**: drag to reorder the 7 blocks — or tap **Move up / Move down** (`ValueKey('home-<block>-up|down')`,
+  WCAG 2.5.7 single-pointer alternative) — show/hide each; a block whose section is off is flagged
   («blockSectionOff»).
 - Hero title/subtitle AR/EN (≤ 200/300), announcement banner (on/off, AR/EN text ≤ 500, link validated by
   `isValidUrl(allowPath: true)`), **site colour** (5 `ThemePresets`).
 - "Save changes" writes `FeatureSettings.toMap()` with `saveDoc` (merge + stamp). If the doc does not exist yet, a
   note says everything is on by default. If someone else saves while you have unsaved edits, a banner offers a reload
-  instead of wiping your edits.
+  instead of wiping your edits. The snapshot of **your own save** no longer remounts the form (BUG-12):
+  `isEchoOfEditor(shown, latest, editorValues)` (`admin_validators.dart`) — if only metadata changed or every changed
+  field already equals what the form holds, the editor key is kept, so the scroll position stays.
 
 ### Church info (`ChurchInfoScreen`) → `settings/church`
 `DocEditor` over `churchInfoDoc` fields: names, bishop, address, transport, lat/lng (ranges), map query, Maps link,
 **phones** (object list: label AR/EN, number, mobile/WhatsApp — ≤ 20 rows), WhatsApp number/channel, Facebook,
 YouTube, Instagram, verse + references, hero image URL, history AR/EN (≤ 8000), **altars** (object list: name AR/EN,
-kind main/second/annex), `assistantEnabled`, `sample`. Same "updated elsewhere → reload" banner.
+kind main/second/annex), `assistantEnabled`, `sample`. Same "updated elsewhere → reload" banner, and the same
+own-save rule (no scroll jump to the top after Save, BUG-12).
 
 ### Content lists (`CollectionListScreen`, `collection_list.dart`)
 For each `CollectionDef`:
 - Live list (`repo.watch(collection)`) filtered by the screen filter (`def.matches`), sorted by `sortAdminDocs`
   (orderable: by `order`; others by `order`/weekday, then start, then id).
 - **Search** (all string values + id) and filter chips **all / visible / hidden / unconfirmed**; "showing N of M".
+- **Open on site** (`Key('admin-openOnSite')`, «عرض بالموقع»): opens `CollectionDef.publicPath` (e.g. `/clinics`,
+  `+ ?lang=en` when the dashboard is in English — `publicPathFor`) in a new tab on web (`Uri.base.resolve`), or
+  navigates there on mobile.
 - Tile: title (`titleKeys`), subtitle (weekday, date, time range, season/stage/category/type/specialty labels,
   ⛔ inactive, start/end), tags *Hidden* / *Unconfirmed*, "updated by … at …".
 - 👁 **hide/show** (`update(visible)`) — only when the collection has a `visible` field (not seasons).
-- **Drag to reorder** (`reorder` → `order` = 10, 20, 30… in one batch) for orderable collections — clinics, facilities,
-  activities, priests, departed fathers, saints, milestones — and only when search is empty, filter = all and > 1 item.
+- **Drag to reorder** — or tap **Move up / Move down** on each tile (`ValueKey('moveUp-<id>')`, WCAG 2.5.7; under
+  600 px they sit in their own row under the subtitle so the title keeps its width) —
+  (`reorder(collection, ids, base:)` → `order` = base + 10, 20, 30… in one batch) for orderable collections — clinics,
+  facilities, activities, priests, departed fathers, saints, milestones — and only when search is empty, filter = all
+  and > 1 item. **Departed fathers use base 1000** (`reorderBase(def)`: 1010, 1020…) because they share the
+  `priests` collection with serving priests, so the two lists never get colliding `order` values (BUG-13).
   Liturgies and meetings use the numeric **Order** field instead.
+- `DocEditor.save`: when `onSave` fails with a **`TimeoutException`** the images uploaded for the document are
+  **kept** — Firestore may still commit the queued write pointing at them; any other error deletes them (BUG-13).
+  Note: `AdminRepository.save`/`saveDoc` set no timeout of their own today (the only 15 s timeout is the role read
+  in `adminRole`), so this path applies to a timeout raised by a caller/backend wrapper.
 - **Add** (FAB) / tap to **edit** → full-screen `DocEditor`; **delete** with confirmation dialog.
 
 | Screen id | Collection | Orderable | Has visible | Has sample | Notes |
@@ -109,7 +125,7 @@ For each `CollectionDef`:
 | saints | saints | ✔ | ✔ | – | |
 | milestones | milestones | ✔ | ✔ | – | icon choice |
 
-`CollectionDef.publicPath` exists in the schema but is not used by any screen yet (no "open on site" link).
+`CollectionDef.publicPath` drives the **Open on site** button.
 
 ### Generic form (`DocEditor`, `doc_editor.dart`)
 - Field widgets by `FieldType`: text, multiline, integer, decimal, boolean, time (HH:mm), weekday, weekdays (chips),
@@ -134,8 +150,8 @@ Image (optional)»** with a 96 px preview and:
   (JPEG where WebP is unsupported), Android uses the Dart `image` package (JPEG). Files > 25 MB are refused before
   decoding; results still > **700 KB** are refused («الصورة كبيرة جدًا…»). The preview says "uploaded when you
   save" — the `media/{id}` doc is written **only when you press Save**, then the item gets
-  `image = {source: inline, mediaId, alt, w, h}`. If the save fails, the uploaded media doc is deleted again and the
-  picked image stays so you can retry.
+  `image = {source: inline, mediaId, alt, w, h}`. If the save fails, the uploaded media doc is deleted again (except
+  on a `TimeoutException`, see above) and the picked image stays so you can retry.
 - **Image link** (رابط صورة): paste an **https://** image URL (validated: https, host, no spaces, ≤ 500) →
   `{source: url, url}`.
 - **Remove image** (إزالة الصورة): saves `image: null`; the card goes back to its icon.

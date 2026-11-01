@@ -35,7 +35,7 @@ class AboutPage extends ConsumerWidget {
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   if (context.pick(s.bishopAr, s.bishopEn).isNotEmpty) ...[
                     IconLine(Icons.workspace_premium_rounded, '${context.tr('bishop')}: ${context.pick(s.bishopAr, s.bishopEn)}',
-                        style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.burgundy)),
+                        style: TextStyle(fontWeight: FontWeight.w700, color: Theme.of(context).colorScheme.primary)),
                     const SizedBox(height: 8),
                   ],
                   Text(context.pick(s.historyAr, s.historyEn), style: const TextStyle(height: 1.9, fontSize: 15)),
@@ -49,7 +49,11 @@ class AboutPage extends ConsumerWidget {
                   child: Padding(
                     padding: const EdgeInsets.all(14),
                     child: Row(children: [
-                      CopticCross(size: 30, color: a.kind == 'main' ? AppColors.gold : AppColors.burgundyLight),
+                      CopticCross(
+                          size: 30,
+                          color: a.kind == 'main'
+                              ? AppColors.gold
+                              : Color.lerp(Theme.of(context).colorScheme.primary, Colors.white, 0.15)!),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(context.pick(a.nameAr, a.nameEn),
@@ -86,13 +90,13 @@ class AboutPage extends ConsumerWidget {
                       if (s.image != null && f.showImages) const SizedBox(width: 12),
                       Expanded(
                         child: Text(context.pick(s.nameAr, s.nameEn),
-                            style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: AppColors.burgundy)),
+                            style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: Theme.of(context).colorScheme.primary)),
                       ),
                     ]),
                     const SizedBox(height: 6),
                     Wrap(spacing: 6, runSpacing: 6, children: [
                       Pill('${context.tr('feast')}: ${context.pick(s.feastCopticAr, s.feastCopticEn)}',
-                          color: AppColors.burgundy, icon: Icons.event),
+                          color: Theme.of(context).colorScheme.primary, icon: Icons.event),
                       if (context.pick(s.feastGregorianAr, s.feastGregorian).isNotEmpty)
                         Pill(context.pick(s.feastGregorianAr, s.feastGregorian), color: AppColors.muted),
                     ]),
@@ -147,21 +151,19 @@ class PriestCard extends StatelessWidget {
             image: p.displayImage,
             size: 68,
             label: name,
-            placeholder: const CircleAvatar(
+            placeholder: CircleAvatar(
               radius: 34,
               backgroundColor: AppColors.parchment,
-              child: Icon(Icons.person, size: 36, color: AppColors.burgundy),
+              child: Icon(Icons.person, size: 36, color: Theme.of(context).colorScheme.primary),
             ),
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Row(children: [
-                Expanded(child: Text(name, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, height: 1.4))),
-                if (p.sample) const SampleBadge(),
-              ]),
+              TitleWithBadge(name,
+                  sample: p.sample, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, height: 1.4)),
               Text(context.tr(p.rank == 'hegumen' ? 'hegumen' : 'priest'),
-                  style: const TextStyle(color: AppColors.gold, fontWeight: FontWeight.w700, fontSize: 12)),
+                  style: const TextStyle(color: AppColors.goldText, fontWeight: FontWeight.w700, fontSize: 12)),
               const SizedBox(height: 4),
               if (p.ordinationDate.isNotEmpty)
                 IconLine(Icons.event_outlined,
@@ -169,6 +171,9 @@ class PriestCard extends StatelessWidget {
               if (p.hegumenDate.isNotEmpty)
                 IconLine(Icons.workspace_premium_outlined,
                     '${context.tr('hegumenSince')}: ${formatLooseDate(p.hegumenDate, arabic: context.isAr)}'),
+              if (p.departed && p.departedDate.isNotEmpty)
+                IconLine(Icons.local_florist_outlined,
+                    '${context.tr('departedOn')}: ${formatLooseDate(p.departedDate, arabic: context.isAr)}'),
               if (context.pick(p.bioAr, p.bioEn).isNotEmpty)
                 Padding(
                   padding: const EdgeInsets.only(top: 4),

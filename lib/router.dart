@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
@@ -24,8 +26,8 @@ import 'ui/widgets/feature_gate.dart';
 NoTransitionPage<void> _page(GoRouterState s, Widget child) =>
     NoTransitionPage(key: s.pageKey, child: FeatureGate(path: s.uri.path, child: child));
 
-/// Keeps `?lang=en` in the URL in sync with the selected language, so links
-/// copied from the address bar, reloads and in-app navigation keep English.
+/// Rewrites `?lang=` to match the selected language (`lang=en` for English,
+/// no parameter for Arabic, the default). Null when the URL already matches.
 String? _syncLangQuery(Uri uri, bool english) {
   final hasEn = uri.queryParameters['lang'] == 'en';
   if (english == hasEn) return null;
@@ -38,17 +40,93 @@ String? _syncLangQuery(Uri uri, bool english) {
   return Uri(path: uri.path.isEmpty ? '/' : uri.path, queryParameters: qp.isEmpty ? null : qp).toString();
 }
 
+/// What the router does about `?lang=` for one navigation.
+class LangSync {
+  /// Location to redirect to (null = keep the URL).
+  final String? redirect;
+
+  /// Language the URL asks for (null = keep the selected language).
+  final bool? english;
+  const LangSync({this.redirect, this.english});
+}
+
+/// Bidirectional `?lang=` sync (BUG-07):
+/// - [userToggled] (EN/ع button): the URL follows the language.
+/// - an explicit `lang=en` / `lang=ar` (deep link, shared or in-app link,
+///   Back/Forward): the language follows the URL.
+/// - no `lang` while English: from the browser history / platform
+///   ([fromPlatform]) it means Arabic; from in-app navigation
+///   (`context.go('/clinics')`) English is kept and `lang=en` added.
+/// Arabic stays the canonical, parameter-free URL.
+LangSync resolveLangSync(Uri uri,
+    {required bool english, bool userToggled = false, bool fromPlatform = false}) {
+  if (userToggled) return LangSync(redirect: _syncLangQuery(uri, english));
+  final q = uri.queryParameters['lang'];
+  if (q == 'en') return LangSync(english: english ? null : true);
+  if (q == 'ar') {
+    // Arabic is the default: drop the explicit parameter (canonical URL).
+    final qp = Map<String, String>.from(uri.queryParameters)..remove('lang');
+    final canonical = Uri(path: uri.path.isEmpty ? '/' : uri.path, queryParameters: qp.isEmpty ? null : qp).toString();
+    return LangSync(english: english ? false : null, redirect: canonical);
+  }
+  if (english && fromPlatform) return const LangSync(english: false);
+  return LangSync(redirect: _syncLangQuery(uri, english));
+}
+
+/// Notes route changes reported by the platform (browser Back/Forward,
+/// address bar, Android deep links) so the redirect can tell them apart from
+/// in-app `context.go` navigation. Registered before go_router's own
+/// observer, so it sees each report first; it never consumes it.
+class _PlatformRouteObserver with WidgetsBindingObserver {
+  bool _pending = false;
+
+  bool consume() {
+    final v = _pending;
+    _pending = false;
+    return v;
+  }
+
+  @override
+  Future<bool> didPushRouteInformation(RouteInformation routeInformation) {
+    _pending = true;
+    return Future<bool>.value(false);
+  }
+}
+
 final routerProvider = Provider<GoRouter>((ref) {
   // Re-run redirects (URL lang sync) when the language is toggled, without
   // rebuilding the router itself.
   final localeChanges = ValueNotifier<int>(0);
   ref.listen(localeProvider, (_, _) => localeChanges.value++);
   ref.onDispose(localeChanges.dispose);
+  final platformNav = _PlatformRouteObserver();
+  WidgetsBinding.instance.addObserver(platformNav);
+  ref.onDispose(() => WidgetsBinding.instance.removeObserver(platformNav));
+  // Last URL the redirect accepted as-is. The same URL again means a refresh
+  // (the language changed, the location did not): the URL follows the
+  // language, like a toggle.
+  Uri? lastSyncedUri;
   return GoRouter(
     initialLocation: '/',
     refreshListenable: localeChanges,
-    redirect: (context, state) =>
-        _syncLangQuery(state.uri, ref.read(localeProvider).languageCode == 'en'),
+    redirect: (context, state) {
+      final notifier = ref.read(localeProvider.notifier);
+      final english = ref.read(localeProvider).languageCode == 'en';
+      final toggled = notifier.consumeUserChange();
+      final r = resolveLangSync(
+        state.uri,
+        english: english,
+        userToggled: toggled || state.uri == lastSyncedUri,
+        fromPlatform: platformNav.consume(),
+      );
+      if (r.english != null) {
+        final target = r.english! ? const Locale('en') : const Locale('ar');
+        // Not during the router's build: change the language right after.
+        scheduleMicrotask(() => notifier.syncFromUrl(target));
+      }
+      if (r.redirect == null) lastSyncedUri = state.uri;
+      return r.redirect;
+    },
     routes: [
       ShellRoute(
         builder: (context, state, child) => AppShell(location: state.uri.path, child: child),
