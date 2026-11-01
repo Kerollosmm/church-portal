@@ -67,6 +67,9 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
         ref.read(meetingsProvider.future),
         ref.read(activitiesProvider.future),
         ref.read(facilitiesProvider.future),
+        ref.read(alertsProvider.future),
+        ref.read(priestsProvider.future),
+        ref.read(saintsProvider.future),
       ]).timeout(const Duration(seconds: 10));
     } catch (e) {
       debugPrint('Assistant: content not fully loaded: $e');
@@ -83,6 +86,9 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
         facilities: ref.read(facilitiesProvider).value ?? const [],
         now: CairoTime.now(),
         features: ref.read(featuresProvider),
+        alerts: ref.read(alertsProvider).value ?? const [],
+        priests: ref.read(priestsProvider).value ?? const [],
+        saints: ref.read(saintsProvider).value ?? const [],
       );
 
   /// Reuses the chat while the grounding (church data + Cairo date) is

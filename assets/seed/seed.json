@@ -42,7 +42,7 @@
    "sections": {
     "schedule": true,
     "meetings": true,
-    "clinics": true,
+    "clinics": false,
     "services": true,
     "history": true,
     "milestones": true,
@@ -131,7 +131,8 @@
    "nameEn": "Feast of the Nativity",
    "startsAt": "2027-01-06T00:00:00+02:00",
    "endsAt": "2027-01-07T23:59:00+02:00",
-   "active": true
+   "active": true,
+   "replacesRegular": true
   },
   "revival-maximus-2027": {
    "key": "revival_maximus",
@@ -139,7 +140,8 @@
    "nameEn": "Revival of Sts Maximus & Domadius",
    "startsAt": "2027-01-21T00:00:00+02:00",
    "endsAt": "2027-01-25T23:59:00+02:00",
-   "active": true
+   "active": true,
+   "replacesRegular": false
   },
   "holy-week-2027": {
    "key": "holy_week",
@@ -147,7 +149,8 @@
    "nameEn": "Holy Week (Pascha)",
    "startsAt": "2027-04-25T00:00:00+02:00",
    "endsAt": "2027-05-01T18:00:00+03:00",
-   "active": true
+   "active": true,
+   "replacesRegular": true
   },
   "pascha-2027": {
    "key": "pascha",
@@ -155,7 +158,8 @@
    "nameEn": "Feast of the Resurrection",
    "startsAt": "2027-05-01T18:00:00+03:00",
    "endsAt": "2027-05-02T23:59:00+03:00",
-   "active": true
+   "active": true,
+   "replacesRegular": true
   },
   "revival-moses-2027": {
    "key": "revival_moses",
@@ -163,7 +167,8 @@
    "nameEn": "Revival of St Moses the Black",
    "startsAt": "2027-06-22T00:00:00+03:00",
    "endsAt": "2027-07-01T23:59:00+03:00",
-   "active": true
+   "active": true,
+   "replacesRegular": false
   }
  },
  "liturgies": {

@@ -76,7 +76,8 @@ Job **firestore-rules** (15 min): Java Temurin 21 + Node 22 → `npm ci` in `too
 2. **deploy-live** (push to main, needs build, environment `production`, URL the live site): download artifact →
    Node 22 → `./.github/actions/firebase-credentials` → `npx firebase-tools@latest deploy --only hosting:app,hosting:legacy-redirect`
    (app → `maximos-domadios-church`, 301 redirect config → old site `asafra-church-portal`) → remove key.
-3. **deploy-rules** (push to main, independent of build): credentials → `deploy --only firestore:rules,firestore:indexes`.
+3. **deploy-rules** (push to main, independent of build; `environment: production` since PR 1, so the environment's
+   protection rules gate rules deploys too): credentials → `deploy --only firestore:rules,firestore:indexes`.
    ⚠️ Not gated by the `production` environment.
 4. **preview** (same-repo PRs, needs build): `hosting:channel:deploy pr-<n> --only app --expires 7d --json` → parse URL → upsert
    one PR comment "Firebase Hosting preview" (github-script).

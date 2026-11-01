@@ -139,21 +139,49 @@ class FirestoreRepository implements ContentRepository {
     }
   }
 
-  Stream<T> _guard<T>(String key, Stream<T> Function() live, T fallback) async* {
-    if (!await _seeded) {
-      _markFallback(key, true);
-      yield fallback;
-      return;
-    }
+  /// Serves [live] once the database is known to be seeded, else the bundled
+  /// [fallback].
+  ///
+  /// A failed or timed-out seeding check (cold start, weak signal, offline)
+  /// no longer ends the stream: the seed is shown first and the live query
+  /// stays subscribed, so live values replace the seed as soon as Firestore
+  /// confirms the database is seeded (a later successful `settings/church`
+  /// check, or — when that check could not answer — a non-empty live value
+  /// per [confirms]). An unseeded database (`settings/church` absent) keeps
+  /// serving the seed.
+  Stream<T> _guard<T>(String key, Stream<T> Function() live, T fallback, {bool Function(T v)? confirms}) async* {
+    var confirmed = await _seeded;
+    var finished = false;
     try {
-      await for (final v in live()) {
-        _markFallback(key, false);
-        yield v;
+      if (!confirmed) {
+        _markFallback(key, true);
+        yield fallback;
       }
-    } catch (e) {
-      debugPrint('Firestore stream $key failed, serving seed: $e');
-      _markFallback(key, true);
-      yield fallback;
+      try {
+        await for (final v in live()) {
+          if (!confirmed) {
+            // Re-check; when the check still cannot answer (_seededFuture is
+            // reset to null on failure) a live value that proves the data
+            // exists is trusted instead.
+            final seeded = await _seeded;
+            confirmed = seeded || (_seededFuture == null && (confirms?.call(v) ?? false));
+            if (!confirmed) continue;
+            _seededFuture = Future.value(true);
+          }
+          _markFallback(key, false);
+          yield v;
+        }
+      } catch (e) {
+        debugPrint('Firestore stream $key failed, serving seed: $e');
+        _markFallback(key, true);
+        yield fallback;
+      }
+      finished = true;
+    } finally {
+      // Cancelled by the listener (e.g. the provider was disposed): this
+      // stream no longer serves anything, so it must not keep the
+      // "serving seed" banner on.
+      if (!finished) _markFallback(key, false);
     }
   }
 
@@ -165,13 +193,16 @@ class FirestoreRepository implements ContentRepository {
           if (sort != null) list.sort(sort);
           return list;
         });
-      }, fallback);
+      }, fallback, confirms: (list) => list.isNotEmpty);
 
   @override
   Stream<ChurchSettings> settings() => _guard(
         'settings',
         () => db.doc('settings/church').snapshots().map((d) => d.exists ? ChurchSettings.fromMap(normalizeDoc(d.data())) : seed.settings),
         seed.settings,
+        // settings/church IS the seeding marker: a live snapshot of it that
+        // differs from the seed proves it exists.
+        confirms: (v) => !identical(v, seed.settings),
       );
   @override
   Stream<FeatureSettings> features() => _guard(
@@ -209,8 +240,11 @@ class FirestoreRepository implements ContentRepository {
   Future<void> submitContact(Map<String, dynamic> payload, {required String lang}) async {
     // Batched with a global throttle doc so the rules can rate-limit public
     // submissions on the server (see firestore.rules: meta/contact_rate).
+    // meta/contact_rate.lastMsgId names the message created in the same
+    // batch, so the rules can reject a standalone write to the throttle doc.
     final batch = db.batch();
-    batch.set(db.collection('contact_messages').doc(), {
+    final msgRef = db.collection('contact_messages').doc();
+    batch.set(msgRef, {
       'name': payload['name'],
       'phone': payload['phone'] ?? '',
       'email': payload['email'] ?? '',
@@ -219,7 +253,10 @@ class FirestoreRepository implements ContentRepository {
       'status': 'new',
       'createdAt': FieldValue.serverTimestamp(),
     });
-    batch.set(db.doc('meta/contact_rate'), {'lastAt': FieldValue.serverTimestamp()});
+    batch.set(db.doc('meta/contact_rate'), {
+      'lastAt': FieldValue.serverTimestamp(),
+      'lastMsgId': msgRef.id,
+    });
     await batch.commit().timeout(const Duration(seconds: 15));
   }
 }

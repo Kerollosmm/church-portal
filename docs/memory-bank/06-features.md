@@ -32,14 +32,23 @@ render with `PageBody` (+ `Footer`). Content comes from Riverpod providers (hidd
 
 ### `/mass-schedule` — `mass_schedule_page.dart` `MassSchedulePage`
 - `AlertBanner`, `PendingConfirmationNote` if any liturgy is `sample`, `NextMassCard`.
-- **Holy Seasons** switch (`holySeasons`): defaults to **on** the first time seasons load while a season is active
-  (`activeSeasonsAt(seasons, now)`); once the visitor flips it, their choice wins.
+- **Holy Seasons** switch (`holySeasons`): defaults to **on** the first time seasons load only while a season that
+  **replaces** the regular schedule is active (`activeSeasonsAt(seasons, now).any((s) => s.replacesRegular)`), so an
+  additive evening revival keeps the weekly tabs; once the visitor flips it, their choice wins.
 - Weekly view: `ChoiceChip` tabs **Friday | Sunday | Wednesday | Saturday | Other days** (`ScheduleTab`,
   `scheduleTabWeekdays`: other = Mon/Tue/Thu); today's Cairo weekday tab is preselected.
   `regularLiturgiesForTab` = regular (no `seasonKey`, no `date`), weekday in tab, **excluding vespers/praise**;
-  then a separate **Vespers & praise** section (`vespersAndPraise`).
-- Seasonal view: `seasonalSchedule(seasons, liturgies)` → per season (sorted by `startsAt`) title + date range +
-  "Active now" pill + `LiturgyCard(showDate: true)`.
+  then a separate **Vespers & praise** section (`vespersAndPraise(all, now: now)`: weekly ones always, one-off dated
+  ones only from today's Cairo date on).
+- **Upcoming special services** («صلوات ومناسبات خاصة قادمة», `specialServices`, PR 1): above the weekly tabs whenever
+  `upcomingSpecialLiturgies(all, now)` is non-empty — dated liturgies with no `seasonKey`, not vespers/praise, from
+  today's Cairo date on, sorted by date, start, order (e.g. New Year's Eve, a 40th-day memorial). Before PR 1 such
+  services reached `NextMassCard` and the assistant but never `/mass-schedule` (BUG-02).
+- Seasonal view: `seasonalSchedule(seasons, liturgies)` → **active seasons only** (`s.active`), each with the liturgies
+  of its key; a dated liturgy is attached only when its Cairo day overlaps the season's `[startsAt, endsAt]` (so 2027
+  and 2028 docs sharing a key never cross-attach); equal start times tie-break by `order` (BUG-03). Seasons in effect
+  now are listed first, then the rest by `startsAt`; title + date range + "Active now" pill +
+  `LiturgyCard(showDate: true)`.
 - `LiturgyCard`: name, both digit systems (`TimeRangeText`), place, audience, weekday/date, `SampleBadge`.
 
 ### `/church-education` — `education_page.dart` `EducationPage`
@@ -60,6 +69,12 @@ render with `PageBody` (+ `Footer`). Content comes from Riverpod providers (hidd
 - `filterClinics`: active only, by specialty; **open today first**, then admin `order`, then specialty, then doctor.
 - `ClinicCard`: specialty pill, "Available today" pill (`isClinicAvailableToday`: Cairo ISO weekday ∈ `days`),
   doctor, degree, days, time, **Call • Book** (`tel:`) and **WhatsApp** (`https://wa.me/20…?text=<booking message>`).
+  When a clinic has **neither** booking phone nor WhatsApp, a **«الاتصال بمكتب الكنيسة / Call church office»**
+  button calls the first church phone (`settings/church.phones`), only while section `contactInfo` is on (PR 1, J2).
+  In English, a placeholder (`sample`) doctor name «… — يُعلن لاحقًا» is shown as "<specialtyEn> doctor — to be
+  announced" (`ClinicCard.displayDoctorName`); the stored Arabic name is unchanged (BUG-17).
+- The seed ships section `clinics` **off** (PR 1): enable it in /admin → Sections only once the church office
+  confirms the clinics.
 - Subtitle `clinicsIntro` asks visitors to confirm with the church; `PendingConfirmationNote` if any clinic is sample.
 - Link to `/public-services` when that section is on.
 
@@ -125,10 +140,19 @@ Chat UI with intro bubble, 3 suggestion chips, 500-char input, disclaimer «إج
    - Occurrence = `start` … `end`; `end ≤ start` ⇒ crosses midnight (+24 h); no end ⇒ start + 120 min.
    - **Season replacement:** a seasonal liturgy (`seasonKey`) counts only if its occurrence **starts inside** an
      active season window with that key (`isSeasonActiveAt`: `active` flag on and instant within
-     `[startsAt, endsAt]`). Regular liturgies are dropped only if they start inside the window of a season that has
-     at least one valid service that day (so morning masses before an 18:00 season start remain).
-     Replacement is decided on **all** seasonal services (e.g. Holy Week Pascha hours suspend weekday masses), then
-     filtered by type.
+     `[startsAt, endsAt]`). Then, by `Season.replacesRegular` (PR 1, BUG-01):
+     - **Full override** (`true`: Holy Week, Pascha, Nativity; also any season doc without the field): regular
+       liturgies are dropped if they start inside the window of a season that has at least one valid service that
+       day (so morning masses before an 18:00 season start remain). Replacement is decided on **all** seasonal
+       services (e.g. Holy Week Pascha hours suspend weekday masses), then filtered by type.
+     - **Additive** (`false`: the Maximus and Moses revivals): the regular schedule stays. A regular `mass` is dropped
+       only when the season also has a `mass` that day and the regular mass starts inside the window (e.g. the
+       1 July feast liturgy `rev-moses-feast` supersedes Thursday's `thu-1`); a regular `vespers`/`praise` is dropped
+       only when it overlaps in time one of the season's services that day (e.g. Saturday vespers 18:30 vs the 18:30
+       revival service). Before PR 1 a revival erased every morning mass for 9 days and the next-mass card showed
+       "no upcoming liturgies".
+   - `effectiveLiturgiesForDay` simply returns `occurrencesForDay(…, dayOffset: 0)`'s liturgies, so the two can never
+     disagree.
 3. Default types `{'mass'}` (vespers/praise/other ignored unless `types` given).
 4. "Happening now": any occurrence of yesterday (past midnight) or today with `start ≤ now < end`.
 5. "Next": first occurrence with `start > now`, today first, then up to **7 days** ahead (`lookAheadDays`).
@@ -138,13 +162,17 @@ Chat UI with intro bubble, 3 suggestion chips, 500-char input, disclaimer «إج
 7. Refreshes every 30 s (`nowProvider`).
 
 Tests: `test/domain_test.dart` "next mass" group (DST, midnight crossing, mid-day season start, inactive season, …),
-`test/seed_test.dart` "next mass always resolves on seed data", "Holy Week 2027 dated services fall on their Cairo day".
+"additive revival seasons" and "mass-schedule page lists" groups; `test/seed_test.dart` "next mass always resolves
+on seed data" (**every day** 1 Nov 2026 → 1 Nov 2027, 366 days), "Holy Week 2027 dated services fall on their Cairo
+day".
 
 ### Seasons (`seasons` collection)
 Keys: `holy_week` (أسبوع الآلام / البصخة), `pascha` (عيد القيامة), `nativity` (عيد الميلاد), `revival_maximus`
 (نهضة القديسين مكسيموس ودوماديوس), `revival_moses` (نهضة الأنبا موسى الأسود), `summer` (allowed key, no season seeded).
 Seeded 2027 windows (Cairo): Nativity 6–7 Jan; revival Maximus 21–25 Jan; Holy Week 25 Apr 00:00 → 1 May 18:00;
 Pascha 1 May 18:00 → 2 May 23:59; revival Moses 22 Jun → 1 Jul. Seasons must be re-dated each year (admin).
+Admin field «يستبدل الجدول العادي» (`replacesRegular`, missing = on): keep it on for feasts/Holy Week, switch it off
+for evening revivals.
 
 ### Coptic feasts used in content
 - Sts Maximus & Domadius: **14 Tuba** (Maximus) and **17 Tuba** (Domadius) = **22 & 25 January** (one day later in a
@@ -171,10 +199,12 @@ digits, Cairo `02` + 8, Alexandria `03` + 7, other governorates `0[4-9]` + 7–8
 - Honeypot `Offstage` field: if filled, pretend success and send nothing.
 - **Client throttle** (`ContactRateLimiter`, shared per session): ≥ 60 s between sends and ≤ 3 per hour → message
   «برجاء الانتظار N ثانية».
-- **Server throttle** (rules): message + `meta/contact_rate.lastAt = serverTimestamp()` in one batch; the rate doc may
-  advance only every **20 s** globally; rules re-validate every field; the public can never read messages.
-- Outcomes: sent; **queued** (15 s timeout → Firestore offline queue, sent when back online); unavailable (seed mode);
-  failed.
+- **Server throttle** (rules): message + `meta/contact_rate {lastAt: serverTimestamp(), lastMsgId: <message id>}` in
+  one batch; the rate doc may advance only every **10 s** globally and only together with a new message (SEC-01);
+  rules re-validate every field; the public can never read messages.
+- Outcomes: sent; **timeout** (15 s, PR 1 / BUG-06): «لم نتمكن من تأكيد الإرسال…» (`sendTimeoutRetry`), shown as an
+  error and the **form keeps the visitor's text** (the queued batch may still be rejected by the server throttle, so
+  delivery is never promised); unavailable (seed mode); failed.
 - Not implemented yet: privacy notice + consent checkbox (PDPL), retention clean-up.
 
 ### Time formatting (`time_format.dart`)

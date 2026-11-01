@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:church_portal/data/seed_data.dart';
 import 'package:church_portal/domain/assistant_context.dart';
 import 'package:church_portal/domain/cairo_time.dart';
+import 'package:church_portal/domain/features.dart';
 import 'package:church_portal/domain/models.dart';
 import 'package:church_portal/domain/schedule.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -39,6 +40,20 @@ void main() {
     // No leftover placeholder links anywhere in the seed.
     expect(File('assets/seed/seed.json').readAsStringSync(), isNot(contains('SAMPLE')));
     expect(seed.alerts.any((a) => a.link == s.whatsappChannel), isTrue);
+  });
+
+  test('clinics ship switched off until the church confirms them', () {
+    expect(seed.features.enabled(Sections.clinics), isFalse);
+    expect(seed.features.enabled(Sections.schedule), isTrue);
+  });
+
+  test('revivals are additive, feasts replace the regular schedule', () {
+    bool replaces(String id) => seed.seasons.firstWhere((s) => s.id == id).replacesRegular;
+    expect(replaces('nativity-2027'), isTrue);
+    expect(replaces('holy-week-2027'), isTrue);
+    expect(replaces('pascha-2027'), isTrue);
+    expect(replaces('revival-maximus-2027'), isFalse);
+    expect(replaces('revival-moses-2027'), isFalse);
   });
 
   test('unpublished schedules stay flagged as pending confirmation', () {
@@ -113,10 +128,14 @@ void main() {
   });
 
   test('next mass always resolves on seed data', () {
-    for (var d = 0; d < 14; d++) {
+    // Every day from 1 Nov 2026 through 1 Nov 2027 (366 days), covering every
+    // seeded season and revival.
+    for (var d = 0; d < 366; d++) {
       final now = CairoTime.at(2026, 11, 1 + d, 12 * 60).toUtc();
-      expect(computeNextMass(liturgies: seed.liturgies, seasons: seed.seasons, now: now).next, isNotNull);
+      final r = computeNextMass(liturgies: seed.liturgies, seasons: seed.seasons, now: now);
+      expect(r.next, isNotNull, reason: '${CairoTime.fromInstant(now)}');
     }
+    expect(CairoTime.at(2026, 11, 1 + 365).day, 1); // the loop ends on 1 Nov 2027
     // Nativity eve 2027 (Wednesday) -> the feast liturgy replaces the regular schedule.
     final r = computeNextMass(
         liturgies: seed.liturgies, seasons: seed.seasons, now: CairoTime.at(2027, 1, 6, 12 * 60).toUtc());

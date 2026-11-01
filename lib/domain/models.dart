@@ -211,6 +211,12 @@ class Season {
   final DateTime? startsAt, endsAt;
   final bool active;
 
+  /// true (Holy Week, Pascha, Nativity): its services REPLACE the regular
+  /// schedule on the days they cover. false (evening revivals): ADDITIVE, the
+  /// regular morning masses continue. Missing in Firestore = true, so older
+  /// documents behave exactly as before.
+  final bool replacesRegular;
+
   /// Optional picture (null = keep the icon / initials placeholder).
   final MediaImage? image;
   const Season({
@@ -221,6 +227,7 @@ class Season {
     this.startsAt,
     this.endsAt,
     this.active = true,
+    this.replacesRegular = true,
     this.image,
   });
   factory Season.fromMap(String id, Map<String, dynamic> m) => Season(
@@ -231,6 +238,7 @@ class Season {
         startsAt: parseDate(m['startsAt']),
         endsAt: parseDate(m['endsAt']),
         active: _b(m['active']),
+        replacesRegular: m['replacesRegular'] is bool ? m['replacesRegular'] as bool : true,
         image: MediaImage.fromMap(m['image']),
       );
 }

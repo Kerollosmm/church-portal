@@ -45,6 +45,7 @@ const Map<String, List<String>> _strings = {
   'holySeasonsHint': ['عرض مواعيد أسبوع الآلام والأعياد والنهضات', 'Show Holy Week, feasts and revival times'],
   'regularSchedule': ['الجدول الأسبوعي', 'Weekly schedule'],
   'activeNow': ['مُفعّل الآن', 'Active now'],
+  'specialServices': ['صلوات ومناسبات خاصة قادمة', 'Upcoming special services'],
   'place': ['المكان', 'Place'],
   'noItems': ['لا توجد بيانات حاليًا', 'Nothing here yet'],
   'loadError': ['تعذّر تحميل البيانات', 'Could not load data'],
@@ -65,6 +66,7 @@ const Map<String, List<String>> _strings = {
   'youtube': ['يوتيوب (البث المباشر)', 'YouTube (live)'],
   'whatsappChannel': ['قناة واتساب', 'WhatsApp channel'],
   'call': ['اتصال', 'Call'],
+  'callChurchOffice': ['الاتصال بمكتب الكنيسة', 'Call church office'],
   'book': ['احجز', 'Book'],
   'allSpecialties': ['كل التخصصات', 'All specialties'],
   'availableToday': ['متاح اليوم', 'Available today'],
@@ -84,7 +86,10 @@ const Map<String, List<String>> _strings = {
   'send': ['إرسال', 'Send'],
   'sending': ['جارٍ الإرسال…', 'Sending…'],
   'sent': ['تم إرسال رسالتك. شكرًا لك، سنتواصل معك قريبًا.', 'Message sent. Thank you — we will get back to you soon.'],
-  'queued': ['تم حفظ رسالتك وسترسل تلقائيًا عند عودة الاتصال.', 'Saved — your message will be sent automatically when you are back online.'],
+  'sendTimeoutRetry': [
+    'لم نتمكن من تأكيد الإرسال بسبب ضعف الاتصال. رسالتك ما زالت في النموذج — حاول الإرسال مرة أخرى بعد قليل أو اتصل بنا.',
+    'We could not confirm your message was sent (weak connection). It is still in the form — please try again shortly or call us.'
+  ],
   'sendFailed': ['تعذّر الإرسال. حاول لاحقًا أو اتصل بنا.', 'Could not send. Please try later or call us.'],
   'contactUnavailable': ['النموذج غير متاح حاليًا — برجاء الاتصال بنا هاتفيًا.', 'The form is unavailable right now — please call us.'],
   'rateLimited': ['برجاء الانتظار {t} ثانية قبل إرسال رسالة أخرى.', 'Please wait {t} seconds before sending another message.'],

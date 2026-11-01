@@ -31,6 +31,20 @@ const STRANGER = 'stranger-uid';
 
 const db = (uid) => (uid ? env.authenticatedContext(uid, { email: `${uid}@x.test` }) : env.unauthenticatedContext()).firestore();
 
+const message = () => ({
+  name: 'Mina', phone: '01012345678', email: '', message: 'Hello there', lang: 'ar', status: 'new',
+  createdAt: serverTimestamp(),
+});
+
+/** A contact message batched with the throttle doc, as the app writes it. */
+function contactBatch(fs, { rate } = {}) {
+  const batch = writeBatch(fs);
+  const msgRef = doc(collection(fs, 'contact_messages'));
+  batch.set(msgRef, message());
+  batch.set(doc(fs, 'meta', 'contact_rate'), rate ?? { lastAt: serverTimestamp(), lastMsgId: msgRef.id });
+  return batch;
+}
+
 before(async () => {
   env = await initializeTestEnvironment({
     projectId: 'demo-church-portal',
@@ -74,13 +88,7 @@ describe('public', () => {
 
   test('contact messages: public create with throttle, no reads', async () => {
     const pub = db(null);
-    const batch = writeBatch(pub);
-    batch.set(doc(collection(pub, 'contact_messages')), {
-      name: 'Mina', phone: '01012345678', email: '', message: 'Hello there', lang: 'ar', status: 'new',
-      createdAt: serverTimestamp(),
-    });
-    batch.set(doc(pub, 'meta', 'contact_rate'), { lastAt: serverTimestamp() });
-    await assertSucceeds(batch.commit());
+    await assertSucceeds(contactBatch(pub).commit());
     await assertFails(getDoc(doc(pub, 'contact_messages', 'm1')));
     await assertFails(getDocs(collection(pub, 'contact_messages')));
   });
@@ -296,5 +304,130 @@ describe('admins', () => {
     await assertFails(getDocs(collection(ed, 'admins')));
     await assertFails(setDoc(doc(ed, 'admins', 'x'), { email: 'x@x.test', role: 'editor' }));
     await assertFails(setDoc(doc(ed, 'admins', EDITOR), { email: 'editor@x.test', role: 'owner' }));
+  });
+});
+
+describe('SEC-01: contact throttle cannot be pinged on its own', () => {
+  test('standalone writes to meta/contact_rate are rejected', async () => {
+    const pub = db(null);
+    const rate = doc(pub, 'meta', 'contact_rate');
+    await assertFails(setDoc(rate, { lastAt: serverTimestamp() }));
+    await assertFails(setDoc(rate, { lastAt: serverTimestamp(), lastMsgId: 'NoSuchMessage1234567' }));
+    // An existing message cannot be reused as the proof.
+    await assertFails(setDoc(rate, { lastAt: serverTimestamp(), lastMsgId: 'm1' }));
+    await assertFails(setDoc(rate, { lastAt: serverTimestamp(), lastMsgId: 'm1m1m1m1m1m1' }));
+    await assertFails(setDoc(rate, { lastAt: serverTimestamp(), lastMsgId: 'x', extra: 1 }));
+  });
+
+  test('a message alone, or naming another message, is rejected', async () => {
+    const pub = db(null);
+    await assertFails(setDoc(doc(collection(pub, 'contact_messages')), message()));
+    await assertFails(contactBatch(pub, { rate: { lastAt: serverTimestamp() } }).commit());
+    await assertFails(contactBatch(pub, { rate: { lastAt: serverTimestamp(), lastMsgId: 'SomeOtherMessageId00' } }).commit());
+    await assertFails(contactBatch(pub, {
+      rate: { lastAt: Timestamp.fromDate(new Date('2020-01-01')), lastMsgId: 'x'.repeat(20) },
+    }).commit());
+    // lastMsgId must look like a document id (10-64 chars).
+    const batch = writeBatch(pub);
+    batch.set(doc(pub, 'contact_messages', 'short'), message());
+    batch.set(doc(pub, 'meta', 'contact_rate'), { lastAt: serverTimestamp(), lastMsgId: 'short' });
+    await assertFails(batch.commit());
+  });
+
+  test('a second submission within 10 s is throttled', async () => {
+    const pub = db(null);
+    await assertSucceeds(contactBatch(pub).commit());
+    await assertFails(contactBatch(pub).commit());
+  });
+
+  test('the throttle opens again after 10 s', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'meta', 'contact_rate'), {
+        lastAt: Timestamp.fromMillis(Date.now() - 11000), lastMsgId: 'OldMessageId00000000',
+      });
+    });
+    await assertSucceeds(contactBatch(db(null)).commit());
+  });
+});
+
+describe('SEC-02: media can be fetched by id but not listed publicly', () => {
+  test('public get, admin-only list', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'media', 'm1'), {
+        dataBase64: 'AAAA', contentType: 'image/webp', createdAt: Timestamp.now(), createdBy: 'x',
+      });
+    });
+    await assertSucceeds(getDoc(doc(db(null), 'media', 'm1')));
+    await assertFails(getDocs(collection(db(null), 'media')));
+    await assertFails(getDocs(collection(db(STRANGER), 'media')));
+    await assertSucceeds(getDocs(collection(db(EDITOR), 'media')));
+  });
+});
+
+describe('SEC-03: admin docs carry valid edit stamps', () => {
+  test('owner writes must stamp now and as themselves', async () => {
+    const own = db(OWNER);
+    await assertSucceeds(setDoc(doc(own, 'admins', 'a1'), {
+      email: 'a1@x.test', role: 'editor', updatedAt: serverTimestamp(), updatedBy: `${OWNER}@x.test`,
+    }));
+    await assertFails(setDoc(doc(own, 'admins', 'a2'), {
+      email: 'a2@x.test', role: 'editor', updatedAt: serverTimestamp(), updatedBy: 'someone@else.test',
+    }));
+    await assertFails(setDoc(doc(own, 'admins', 'a3'), {
+      email: 'a3@x.test', role: 'editor', updatedAt: Timestamp.fromDate(new Date('2020-01-01')),
+    }));
+    await assertFails(setDoc(doc(own, 'admins', 'a4'), { email: 'a4@x.test', role: 'editor', updatedBy: 42 }));
+  });
+});
+
+describe('SEC-04: season flag, coordinates flag and safe links', () => {
+  const stamp = () => ({ updatedAt: serverTimestamp(), updatedBy: `${EDITOR}@x.test` });
+
+  test('Season.replacesRegular is an optional bool', async () => {
+    const ed = db(EDITOR);
+    const season = { key: 'revival_moses', nameAr: 'نهضة', active: true };
+    await assertSucceeds(setDoc(doc(ed, 'seasons', 's1'), season)); // absent = replaces
+    await assertSucceeds(setDoc(doc(ed, 'seasons', 's2'), { ...season, replacesRegular: false }));
+    await assertSucceeds(updateDoc(doc(ed, 'seasons', 's2'), { replacesRegular: true, ...stamp() }));
+    await assertFails(updateDoc(doc(ed, 'seasons', 's2'), { replacesRegular: 'no' }));
+    await assertFails(setDoc(doc(ed, 'seasons', 's3'), { ...season, replacesRegular: 1 }));
+  });
+
+  test('settings/church: coordinatesApproximate is a bool and social links are http(s)', async () => {
+    const ed = db(EDITOR);
+    const ref = doc(ed, 'settings', 'church');
+    await assertSucceeds(updateDoc(ref, { coordinatesApproximate: true }));
+    await assertFails(updateDoc(ref, { coordinatesApproximate: 'yes' }));
+    await assertSucceeds(updateDoc(ref, { facebook: '' }));
+    for (const k of ['facebook', 'youtube', 'instagram', 'whatsappChannel']) {
+      await assertSucceeds(updateDoc(ref, { [k]: 'https://example.org/page' }));
+      await assertFails(updateDoc(ref, { [k]: 'javascript:alert(1)' }), k);
+      await assertFails(updateDoc(ref, { [k]: '/relative' }), k);
+    }
+  });
+
+  test('alert links: http(s) URL or in-app path only', async () => {
+    const ed = db(EDITOR);
+    const alert = { titleAr: 'تنويه', active: true };
+    await assertSucceeds(setDoc(doc(ed, 'alerts', 'a1'), { ...alert, link: '/mass-schedule' }));
+    await assertSucceeds(setDoc(doc(ed, 'alerts', 'a2'), { ...alert, link: 'https://www.facebook.com/x' }));
+    await assertSucceeds(setDoc(doc(ed, 'alerts', 'a3'), { ...alert, link: '' }));
+    for (const link of ['javascript:alert(1)', 'data:text/html,x', '//evil.example', 'not a link']) {
+      await assertFails(setDoc(doc(ed, 'alerts', 'bad'), { ...alert, link }), link);
+    }
+  });
+
+  test('activity and meeting links: http(s) URLs only', async () => {
+    const ed = db(EDITOR);
+    const activity = { titleAr: 'نشاط', category: 'choir' };
+    await assertSucceeds(setDoc(doc(ed, 'activities', 'a1'), { ...activity, link: 'https://www.youtube.com/@x' }));
+    await assertFails(setDoc(doc(ed, 'activities', 'a2'), { ...activity, link: 'javascript:alert(1)' }));
+    await assertFails(setDoc(doc(ed, 'activities', 'a3'), { ...activity, link: '/clinics' }));
+    const meeting = { stage: 'youth', nameAr: 'اجتماع' };
+    await assertSucceeds(setDoc(doc(ed, 'meetings', 'm1'), {
+      ...meeting, facebookUrl: 'https://www.facebook.com/MaximousYouth', whatsappUrl: 'https://chat.whatsapp.com/abc',
+    }));
+    await assertFails(setDoc(doc(ed, 'meetings', 'm2'), { ...meeting, facebookUrl: 'javascript:alert(1)' }));
+    await assertFails(setDoc(doc(ed, 'meetings', 'm3'), { ...meeting, whatsappUrl: 'vbscript:x' }));
   });
 });

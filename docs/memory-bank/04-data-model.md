@@ -85,7 +85,7 @@ effort when an image is replaced/removed in the editor or its item is deleted (`
 | `addressAr`, `addressEn` | string | ≤ 300 | |
 | `transportAr`, `transportEn` | string | ≤ 2000 | "Getting here" |
 | `lat`, `lng` | number | −90…90 / −180…180 | `31.260138`, `30.01129` |
-| `coordinatesApproximate` | bool | allowed key | in seed (`false`), not in Dart model/admin form |
+| `coordinatesApproximate` | bool | allowed key; **bool** (`optBool`, PR 1) | in seed (`false`), not in Dart model/admin form |
 | `mapsQuery` | string | ≤ 200 | used for embed + directions (`"31.260138,30.01129"`) |
 | `mapsUrl` | string | ≤ 500 | "Open in Google Maps" |
 | `phones` | list of `{labelAr, labelEn, number, isMobile}` | list ≤ 20 | `PhoneEntry`; `isMobile` → WhatsApp button. Legacy `label` key read as fallback |
@@ -119,6 +119,8 @@ Existence of `settings/church` = "database is seeded" (see `03-architecture.md`)
 | `updatedAt`, `updatedBy` | | stampOk |
 
 - `FeatureSettings.defaults` (everything on) is used before the doc loads and when it does not exist.
+- **Seed** (`gen_seed.py`): every section on **except `clinics: false`** (PR 1) — `/clinics` stays off until the
+  church office confirms the clinics and their booking numbers. Live docs keep whatever the admin set.
 - `toMap()` always writes **all** 16 section keys explicitly. Live docs saved before PR #5 lack `media` → on.
 - `HomeBlocks.requires`: `alerts→alerts`, `nextMass→schedule`, `quickContacts→contactInfo`,
   `milestones→milestones`, `map→contactInfo` (block disappears when its section is off). `directory` and `banner`
@@ -129,15 +131,17 @@ Existence of `settings/church` = "database is seeded" (see `03-architecture.md`)
 ### `alerts/{id}` — `Alert` (Hideable)
 `titleAr` (**req**, ≤300), `titleEn` (≤300), `bodyAr`/`bodyEn` (≤2000; admin form caps 1000), `active` (bool,
 default false in model), `startsAt`/`endsAt` (timestamp), `priority` (int 0–1000, higher first), `link` (≤500;
-in-app path or URL), `image` (optional), + meta. Seed ids: `follow-announcements`, `nativity-fast-2026`, `revival-maximus-2027`,
+`''`, in-app path `/…` or `http(s)://host.tld…` — rules `optUrlOrPath`), `image` (optional), + meta. Seed ids: `follow-announcements`, `nativity-fast-2026`, `revival-maximus-2027`,
 `revival-moses-2027`.
 
 ### `seasons/{id}` — `Season` (not Hideable)
 `key` (**required**, one of `holy_week, pascha, nativity, revival_maximus, revival_moses, summer`), `nameAr` (**req**),
-`nameEn`, `startsAt`, `endsAt` (timestamps, exact window), `active` (bool, default false in model), `image`
-(optional; shown beside the season's date range — e.g. a revival poster). No `visible`/`order`
-in the admin form (rules would allow `meta()` keys). Seed: `nativity-2027`, `revival-maximus-2027`, `holy-week-2027`,
-`pascha-2027`, `revival-moses-2027`.
+`nameEn`, `startsAt`, `endsAt` (timestamps, exact window), `active` (bool, default false in model),
+`replacesRegular` (bool, **missing = true**, PR 1: `true` = its services REPLACE the regular schedule on the days they
+cover — Holy Week, Pascha, Nativity; `false` = ADDITIVE evening revival, regular morning masses continue — see
+`06-features.md`), `image` (optional; shown beside the season's date range — e.g. a revival poster). No
+`visible`/`order` in the admin form (rules would allow `meta()` keys). Seed: `nativity-2027`, `holy-week-2027`,
+`pascha-2027` (`replacesRegular: true`), `revival-maximus-2027`, `revival-moses-2027` (`replacesRegular: false`).
 
 ### `liturgies/{id}` — `Liturgy` (Hideable)
 | Field | Type | Notes |
@@ -158,13 +162,15 @@ Seed: 47 docs, all `sample: true` (ids like `fri-1`, `sun-youth`, `sat-vespers`,
 ### `meetings/{id}` — `Meeting` (Hideable)
 `stage` (**req** ≤40; admin choices `angels, primary, preparatory, secondary, youth, university, graduates, family,
 men, women, elderly`; others render under "Other stages"), `nameAr` (**req**), `nameEn`, `weekday` (1–7),
-`start`/`end` (HH:mm), `hallAr/En`, `facebookUrl`/`whatsappUrl` (≤500), `notes` (≤300), meta. Seed: 11 docs (id =
+`start`/`end` (HH:mm), `hallAr/En`, `facebookUrl`/`whatsappUrl` (≤500, `''` or `http(s)://host.tld…` — rules
+`optHttpUrl`), `notes` (≤300), meta. Seed: 11 docs (id =
 stage), all `sample: true`.
 
 ### `activities/{id}` — `Activity` (Hideable, orderable)
 `category` (≤40; admin choices `service, choir, hymns, youth, servants, media, drama, scouts, deacons, bible, summer,
 sports, exhibitions`, default `service`), `titleAr` (**req**), `titleEn`, `descAr/En` (≤2000), `scheduleAr/En` (≤300),
-`ageRange` (≤60), `contactPhone` (≤20), `link` (≤500), `image` (optional), meta. Seed: 11 verified docs (`deacons-choir`, `avamose-choir`,
+`ageRange` (≤60), `contactPhone` (≤20), `link` (≤500, `''` or `http(s)://host.tld…` — rules `optHttpUrl`),
+`image` (optional), meta. Seed: 11 verified docs (`deacons-choir`, `avamose-choir`,
 `davids-tones`, `hymns-school`, `maximous-youth`, `prep-boys`, `antibiotic-mime`, `karouz-school`, `servant-care`,
 `media-center`, `kalimtein`).
 
@@ -212,12 +218,16 @@ At least one of phone/email must be non-empty. Written in **one batch** with `me
 Admins add `updatedAt/updatedBy` when changing status.
 
 ### `meta/contact_rate`
-Single doc `{lastAt: timestamp}` — global server-side throttle: every contact create must set
-`lastAt == request.time` in the same batch, and it may only advance when `request.time > lastAt + 20 s`. Nobody can
-read or delete it.
+Single doc `{lastAt: timestamp, lastMsgId: string}` — global server-side throttle: every contact create must set
+`lastAt == request.time` **and** `lastMsgId = <the new message's id>` in the same batch (`submitContact`), and it may
+only advance when `request.time > lastAt + 10 s` (PR 1; was 20 s). The rules require that `lastMsgId` (10–64
+alphanumerics) did not exist before the write and exists after it, and the message create requires
+`getAfter(meta/contact_rate).lastMsgId == its id`, so the throttle can never be bumped on its own (SEC-01). Nobody
+can read or delete it. Older live docs without `lastMsgId` are simply replaced by the next valid submission.
 
 ### `admins/{uid}`
-`{email: string (≤254, required), role: 'owner' | 'editor'}` (+ optional `updatedAt/updatedBy` allowed by rules).
+`{email: string (≤254, required), role: 'owner' | 'editor'}` (+ optional `updatedAt/updatedBy`, checked by
+`stampOk` since PR 1).
 Doc id = Firebase Auth **UID**. Missing/unknown role is treated as **editor** (`AdminRepository.adminRole`,
 `roleChanges`; rules `isOwner` checks `role == 'owner'`). `AdminRoles` in `admin_repository.dart`.
 
@@ -231,6 +241,10 @@ Doc id = Firebase Auth **UID**. Missing/unknown role is treated as **editor** (`
   `activities: scouts, deacons, hymns, bible, summer, sports, exhibitions`; `priests: p1, p2, p3`;
   `milestones: founding, pastoral, consecration`). `seed_firestore.js --force` deletes them **unless** the doc carries
   `updatedAt`/`updatedBy` (edited in /admin).
+- `seed_firestore.js --fill-missing` adds only absent fields to existing docs and **recurses into nested maps**
+  (PR 1, `missingFields`): e.g. a new key inside `settings/features.sections` is added as a field-path update, while
+  every existing value (admin edits included) is left untouched. `--force` overwrites whole docs (never on production
+  without explicit approval).
 - `tool/known_seed_ids.json`: every id any seed ever wrote (grow-only). `gen_seed.py` asserts
   `known − current − retired = ∅`, so removing an id from the seed **requires** adding it to `retired`.
 - Seed counts (current): settings 2, alerts 4, seasons 5, liturgies 47, meetings 11, activities 11, clinics 11,

@@ -1,6 +1,7 @@
 import 'cairo_time.dart';
 import 'features.dart';
 import 'models.dart';
+import 'rules.dart';
 import 'schedule.dart';
 import 'time_format.dart';
 
@@ -16,12 +17,15 @@ String buildAssistantInstruction({
   required List<Facility> facilities,
   required DateTime now,
   FeatureSettings features = FeatureSettings.defaults,
+  List<Alert> alerts = const [],
+  List<Priest> priests = const [],
+  List<Saint> saints = const [],
 }) {
   final f = features;
   final b = StringBuffer()
     ..writeln(
-      'You are the friendly information desk of ${settings.nameEn} (${settings.nameAr}), a Coptic Orthodox church'
-      '${f.enabled(Sections.contactInfo) ? ' at ${settings.addressEn} (${settings.addressAr})' : ''}.',
+      'You are the friendly information desk of ${_bi(settings.nameAr, settings.nameEn)}, a Coptic Orthodox church'
+      '${f.enabled(Sections.contactInfo) ? _at(_bi(settings.addressAr, settings.addressEn)) : ''}.',
     )
     ..writeln(
       'Answer ONLY from the church data below. If the answer is not in the data, say you do not know '
@@ -44,11 +48,11 @@ String buildAssistantInstruction({
     ..writeln('## Contacts');
   if (f.enabled(Sections.contactInfo)) {
     b
-      ..writeln('Address: ${settings.addressEn} / ${settings.addressAr}')
-      ..writeln('Directions: ${settings.transportEn}')
+      ..writeln('Address: ${_bi(settings.addressAr, settings.addressEn)}')
+      ..writeln('Directions: ${_bi(settings.transportAr, settings.transportEn)}')
       ..writeln('Google Maps: ${settings.mapsUrl}');
     for (final p in settings.phones) {
-      b.writeln('Phone - ${p.labelEn} / ${p.labelAr}: ${p.number}');
+      b.writeln('Phone - ${_bi(p.labelAr, p.labelEn)}: ${p.number}');
     }
   }
   if (f.enabled(Sections.socials)) {
@@ -63,6 +67,22 @@ String buildAssistantInstruction({
     'say so clearly and ask the visitor to confirm with the church (phone or the WhatsApp channel).',
   );
 
+  if (f.enabled(Sections.alerts)) {
+    final current = visibleAlerts(alerts, now);
+    if (current.isNotEmpty) {
+      b
+        ..writeln()
+        ..writeln('## Current announcements');
+      for (final a in current) {
+        final body = _bi(a.bodyAr, a.bodyEn);
+        b.writeln(
+          '- ${_bi(a.titleAr, a.titleEn)}${body.isNotEmpty ? ': $body' : ''}'
+          '${(a.link ?? '').isNotEmpty ? ' Link: ${a.link}' : ''}',
+        );
+      }
+    }
+  }
+
   if (f.enabled(Sections.schedule)) {
     b
       ..writeln()
@@ -74,8 +94,7 @@ String buildAssistantInstruction({
       });
     for (final l in regular) {
       b.writeln(
-        '- ${l.sample ? '[UNCONFIRMED] ' : ''}${weekdayNamesEn[l.weekday!]}: ${l.nameEn} (${l.nameAr}) [${l.type}] '
-        '${formatRangeLatin(l.start, l.end)} at ${l.placeEn}${l.audienceEn.isNotEmpty ? ' - ${l.audienceEn}' : ''}',
+        '- ${l.sample ? '[UNCONFIRMED] ' : ''}${weekdayNamesEn[l.weekday!]}: ${_liturgyLine(l)}',
       );
     }
 
@@ -88,8 +107,7 @@ String buildAssistantInstruction({
         ..writeln('## Special one-off services');
       for (final l in oneOff) {
         b.writeln(
-          '- ${l.sample ? '[UNCONFIRMED] ' : ''}${_ymd(l.date!)}: ${l.nameEn} (${l.nameAr}) [${l.type}] '
-          '${formatRangeLatin(l.start, l.end)} at ${l.placeEn}${l.audienceEn.isNotEmpty ? ' - ${l.audienceEn}' : ''}',
+          '- ${l.sample ? '[UNCONFIRMED] ' : ''}${_ymd(l.date!)}: ${_liturgyLine(l)}',
         );
       }
     }
@@ -98,17 +116,23 @@ String buildAssistantInstruction({
     if (seasonal.isNotEmpty) {
       b
         ..writeln()
-        ..writeln('## Holy seasons (these REPLACE the regular schedule on the days they cover)');
+        ..writeln('## Holy seasons')
+        ..writeln(
+          'A season marked [REPLACES regular schedule] replaces the regular services on the days it has services. '
+          'A season marked [ADDITIVE] adds its services: the regular morning masses continue, except a regular mass '
+          'on a day the season has its own mass, and regular vespers/praise overlapping a season service.',
+        );
       for (final e in seasonal.entries) {
         final s = e.key;
         b.writeln(
-          '### ${s.nameEn} (${s.nameAr}) ${s.startsAt?.toIso8601String() ?? ''} -> ${s.endsAt?.toIso8601String() ?? ''}'
+          '### ${_bi(s.nameAr, s.nameEn)} ${s.startsAt?.toIso8601String() ?? ''} -> ${s.endsAt?.toIso8601String() ?? ''}'
+          ' ${s.replacesRegular ? '[REPLACES regular schedule]' : '[ADDITIVE — regular morning masses continue]'}'
           '${isSeasonActiveAt(s, now) ? ' [ACTIVE NOW]' : ''}',
         );
         for (final l in e.value) {
           final when = l.date != null ? _ymd(l.date!) : (l.weekday != null ? weekdayNamesEn[l.weekday!] : 'every day');
           b.writeln(
-            '- ${l.sample ? '[UNCONFIRMED] ' : ''}$when: ${l.nameEn} ${formatRangeLatin(l.start, l.end)} at ${l.placeEn}',
+            '- ${l.sample ? '[UNCONFIRMED] ' : ''}$when: ${_liturgyLine(l)}',
           );
         }
       }
@@ -121,10 +145,11 @@ String buildAssistantInstruction({
       ..writeln('## Clinics (book by phone or WhatsApp)');
     for (final c in clinics.where((c) => c.active)) {
       b.writeln(
-        '- ${c.sample ? '[UNCONFIRMED] ' : ''}${c.specialtyEn} (${c.specialtyAr}): ${c.doctorName}'
-        '${c.degreeAr.isNotEmpty ? ', ${c.degreeAr}' : ''}; '
+        '- ${c.sample ? '[UNCONFIRMED] ' : ''}${_bi(c.specialtyAr, c.specialtyEn)}: ${c.doctorName}'
+        '${_bi(c.degreeAr, c.degreeEn).isNotEmpty ? ', ${_bi(c.degreeAr, c.degreeEn)}' : ''}; '
         '${c.days.map((d) => weekdayNamesEn[d]).join(', ')} ${formatRangeLatin(c.start, c.end)}'
-        '${c.bookingPhone.isNotEmpty ? '; booking ${c.bookingPhone}' : ''}',
+        '${c.bookingPhone.isNotEmpty ? '; booking ${c.bookingPhone}' : ''}'
+        '${c.whatsapp.isNotEmpty ? '; WhatsApp ${c.whatsapp}' : ''}',
       );
     }
   }
@@ -136,8 +161,9 @@ String buildAssistantInstruction({
     for (final m in meetings) {
       final day = m.weekday != null ? weekdayNamesEn[m.weekday!] : 'no fixed day (ask the church)';
       b.writeln(
-        '- ${m.sample ? '[UNCONFIRMED] ' : ''}${m.nameEn} (${m.nameAr}) [${m.stage}]: $day '
-        '${formatRangeLatin(m.start, m.end)} at ${m.hallEn}'
+        '- ${m.sample ? '[UNCONFIRMED] ' : ''}${_bi(m.nameAr, m.nameEn)} [${m.stage}]: $day '
+        '${formatRangeLatin(m.start, m.end)}${_at(_bi(m.hallAr, m.hallEn))}'
+        '${m.notes.isNotEmpty ? '; notes: ${m.notes}' : ''}'
         '${m.facebookUrl.isNotEmpty ? '; Facebook ${m.facebookUrl}' : ''}'
         '${m.whatsappUrl.isNotEmpty ? '; WhatsApp ${m.whatsappUrl}' : ''}',
       );
@@ -150,8 +176,8 @@ String buildAssistantInstruction({
       ..writeln('## Activities');
     for (final a in activities) {
       b.writeln(
-        '- ${a.sample ? '[UNCONFIRMED] ' : ''}${a.titleEn} (${a.titleAr}): ${a.descEn}'
-        '${a.scheduleEn.isNotEmpty ? ' Schedule: ${a.scheduleEn}.' : ''}'
+        '- ${a.sample ? '[UNCONFIRMED] ' : ''}${_bi(a.titleAr, a.titleEn)}: ${_bi(a.descAr, a.descEn)}'
+        '${_bi(a.scheduleAr, a.scheduleEn).isNotEmpty ? ' Schedule: ${_bi(a.scheduleAr, a.scheduleEn)}.' : ''}'
         '${a.ageRange.isNotEmpty ? ' Ages: ${a.ageRange}.' : ''}'
         '${a.contactPhone.isNotEmpty ? ' Contact ${a.contactPhone}.' : ''}'
         '${a.link.isNotEmpty ? ' Link: ${a.link}' : ''}',
@@ -164,16 +190,87 @@ String buildAssistantInstruction({
       ..writeln()
       ..writeln('## Public services');
     for (final f in facilities) {
-      final hours = f.hoursEn.isNotEmpty ? f.hoursEn : f.hoursAr;
+      final hours = _bi(f.hoursAr, f.hoursEn);
       b.writeln(
-        '- ${f.sample ? '[UNCONFIRMED] ' : ''}${f.nameEn} (${f.nameAr}): ${f.descEn.isNotEmpty ? f.descEn : f.descAr}'
+        '- ${f.sample ? '[UNCONFIRMED] ' : ''}${_bi(f.nameAr, f.nameEn)}: ${_bi(f.descAr, f.descEn)}'
         '${hours.isNotEmpty ? ' Hours: $hours.' : ''}${f.phone.isNotEmpty ? ' Phone ${f.phone}.' : ''}',
+      );
+    }
+  }
+
+  if (f.enabled(Sections.history)) {
+    final history = settings.historyEn.isNotEmpty ? settings.historyEn : settings.historyAr;
+    final bishop = _bi(settings.bishopAr, settings.bishopEn);
+    if (history.isNotEmpty || bishop.isNotEmpty) {
+      b
+        ..writeln()
+        ..writeln('## About the church');
+      if (bishop.isNotEmpty) b.writeln('Bishop: $bishop');
+      if (history.isNotEmpty) b.writeln('History (summary): ${_clip(history, 700)}');
+    }
+  }
+
+  final serving = f.enabled(Sections.priests) ? priests.where((p) => !p.departed).toList() : const <Priest>[];
+  if (serving.isNotEmpty) {
+    b
+      ..writeln()
+      ..writeln('## Priests serving the church');
+    for (final p in serving) {
+      b.writeln('- ${p.sample ? '[UNCONFIRMED] ' : ''}${_priestLine(p)}');
+    }
+  }
+  final departed = f.enabled(Sections.departedPriests) ? priests.where((p) => p.departed).toList() : const <Priest>[];
+  if (departed.isNotEmpty) {
+    b
+      ..writeln()
+      ..writeln('## Departed priests of the church');
+    for (final p in departed) {
+      b.writeln(
+        '- ${p.sample ? '[UNCONFIRMED] ' : ''}${_priestLine(p)}'
+        '${p.departedDate.isNotEmpty ? '; departed ${p.departedDate}' : ''}',
+      );
+    }
+  }
+
+  if (f.enabled(Sections.saints) && saints.isNotEmpty) {
+    b
+      ..writeln()
+      ..writeln('## Patron saints');
+    for (final s in saints) {
+      final feast = [
+        _bi(s.feastCopticAr, s.feastCopticEn),
+        _bi(s.feastGregorianAr, s.feastGregorian),
+      ].where((x) => x.isNotEmpty).join(' / ');
+      final bio = _bi(s.bioAr, s.bioEn);
+      b.writeln(
+        '- ${_bi(s.nameAr, s.nameEn)}${feast.isNotEmpty ? '; feast: $feast' : ''}'
+        '${bio.isNotEmpty ? '. ${_clip(s.bioEn.isNotEmpty ? s.bioEn : s.bioAr, 400)}' : ''}',
       );
     }
   }
 
   return b.toString();
 }
+
+/// Bilingual value that never comes out blank when an editor filled only
+/// one language: "English (Arabic)", or whichever one is set.
+String _bi(String ar, String en) => en.isNotEmpty && ar.isNotEmpty ? '$en ($ar)' : (en.isNotEmpty ? en : ar);
+
+String _at(String place) => place.isNotEmpty ? ' at $place' : '';
+
+String _clip(String s, int max) => s.length <= max ? s : '${s.substring(0, max).trimRight()}…';
+
+String _liturgyLine(Liturgy l) {
+  final audience = _bi(l.audienceAr, l.audienceEn);
+  return '${_bi(l.nameAr, l.nameEn)} [${l.type}] ${formatRangeLatin(l.start, l.end)}'
+      '${_at(_bi(l.placeAr, l.placeEn))}${audience.isNotEmpty ? ' - $audience' : ''}';
+}
+
+String _priestLine(Priest p) =>
+    '${_bi(p.name, p.nameEn)} (${p.rank})'
+    '${p.ordinationDate.isNotEmpty ? '; ordained ${p.ordinationDate}' : ''}'
+    '${p.hegumenDate.isNotEmpty ? '; hegumen since ${p.hegumenDate}' : ''}'
+    '${_bi(p.bioAr, p.bioEn).isNotEmpty ? '. ${_clip(p.bioEn.isNotEmpty ? p.bioEn : p.bioAr, 300)}' : ''}';
 
 /// Cairo calendar date as YYYY-MM-DD (UTC instants are converted first).
 String _ymd(DateTime d) {

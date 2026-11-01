@@ -28,7 +28,7 @@ summary agents need before touching content.
 | Activities | All 11 (choirs, hymns school, Maximous Youth, prep boys, Antibiotic Mime, El-Karouz servant school, servant-care course, media centre, «كلمتين في رغيف»); two are labelled partner organisations, not confirmed church ministries |
 | Facilities | Anba Abraam service (phone = church landline) |
 | Alerts | Follow-announcements (WhatsApp channel), Nativity fast 2026, two 2027 revivals (no times, "announced on the channel") |
-| Seasons | 2027 dates from the Coptic calendar and revival patterns |
+| Seasons | 2027 dates from the Coptic calendar and revival patterns; Nativity, Holy Week, Pascha replace the regular schedule, the two revivals are additive (`replacesRegular`) |
 
 ## Pending church confirmation (`sample: true`)
 
@@ -36,7 +36,7 @@ summary agents need before touching content.
 |---|---|---|
 | Liturgies | **all 47** | Typical Alexandrian-parish placeholder times; places reduced to «الكنيسة / Church» |
 | Meetings | **all 11** | Placeholder days/times, no halls; youth meeting links the real Maximous Youth page |
-| Clinics | **all 11** | Generic «طبيب <التخصص> — يُعلن لاحقًا», no phones. Unknown whether the church runs clinics at all |
+| Clinics | **all 11** | Generic «طبيب <التخصص> — يُعلن لاحقًا», no phones (English UI shows "<specialty> doctor — to be announced"; cards offer «Call church office»). Unknown whether the church runs clinics at all, so the seed ships section `clinics` **off** (PR 1); on the live site switch it off in /admin → Sections (an existing `settings/features` doc is not changed by the seed) |
 | Facilities | nursery, employment, halls, library | No source; fake phones/hours removed |
 | Priests | Bigol, Saleeb (last confirmed 2022), Barnaba (single 2025 source), departed Maximus Fouad (single source) | |
 | Altars | none seeded | No source lists the altars (PRD lists main: Sts Maximus & Domadius; second: St Moses; annexes: St Mary, St Mina & St George — unverified) |

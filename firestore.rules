@@ -7,9 +7,11 @@ rules_version = '2';
 //   may only change these keys, so legacy fields never block an edit) plus
 //   type/size checks on the stored document.
 // * media/{mediaId}: optional images stored inline as base64 (Spark plan has
-//   no Cloud Storage). Public read; admins write; size/type validated.
-// * contact_messages: public create-only with strict validation; admins can
-//   read them, mark them handled and delete them.
+//   no Cloud Storage). Public get by id (never list); admins list and write;
+//   size/type validated.
+// * contact_messages: public create-only with strict validation, batched
+//   with the meta/contact_rate throttle (which can never be written on its
+//   own); admins can read them, mark them handled and delete them.
 // * admins: a signed-in user reads their own doc; owners read all and add,
 //   re-role or remove OTHER admins (never themselves, so an owner always
 //   remains). Roles: 'owner' | 'editor' (missing role = editor).
@@ -60,6 +62,19 @@ service cloud.firestore {
     }
     function optIn(d, k, values) {
       return !(k in d) || d[k] == null || d[k] in values;
+    }
+    // Links: absent / null / '' or an http(s) URL with a host (never
+    // javascript:, data:, ...). Same pattern as settings/features.bannerLink.
+    function optHttpUrl(d, k, max) {
+      return !(k in d) || d[k] == null
+        || (d[k] is string && d[k].size() <= max
+            && d[k].matches('^$|^https?://[^/ ]+[.][^/ ]+([/?#][^ ]*)?$'));
+    }
+    // As optHttpUrl, or an in-app path such as /mass-schedule.
+    function optUrlOrPath(d, k, max) {
+      return !(k in d) || d[k] == null
+        || (d[k] is string && d[k].size() <= max
+            && d[k].matches('^$|^/([^/ ][^ ]*)?$|^https?://[^/ ]+[.][^/ ]+([/?#][^ ]*)?$'));
     }
 
     // updatedAt / updatedBy (shown in the dashboard) are either untouched or
@@ -126,14 +141,16 @@ service cloud.firestore {
         && reqString(d, 'titleAr', 300) && optString(d, 'titleEn', 300)
         && optString(d, 'bodyAr', 2000) && optString(d, 'bodyEn', 2000)
         && optBool(d, 'active') && optTimestamp(d, 'startsAt') && optTimestamp(d, 'endsAt')
-        && optInt(d, 'priority', 0, 1000) && optString(d, 'link', 500);
+        && optInt(d, 'priority', 0, 1000) && optUrlOrPath(d, 'link', 500);
     }
 
     function validSeason(d) {
-      return keysAllowed(['key', 'nameAr', 'nameEn', 'startsAt', 'endsAt', 'active', 'image'].concat(meta()))
+      return keysAllowed(['key', 'nameAr', 'nameEn', 'startsAt', 'endsAt', 'active', 'replacesRegular',
+                          'image'].concat(meta()))
         && d.key in ['holy_week', 'pascha', 'nativity', 'revival_maximus', 'revival_moses', 'summer']
         && reqString(d, 'nameAr', 300) && optString(d, 'nameEn', 300)
-        && optTimestamp(d, 'startsAt') && optTimestamp(d, 'endsAt') && optBool(d, 'active');
+        && optTimestamp(d, 'startsAt') && optTimestamp(d, 'endsAt') && optBool(d, 'active')
+        && optBool(d, 'replacesRegular');
     }
 
     function validLiturgy(d) {
@@ -154,7 +171,7 @@ service cloud.firestore {
         && reqString(d, 'stage', 40) && reqString(d, 'nameAr', 300) && optString(d, 'nameEn', 300)
         && optInt(d, 'weekday', 1, 7) && optTime(d, 'start') && optTime(d, 'end')
         && optString(d, 'hallAr', 300) && optString(d, 'hallEn', 300)
-        && optString(d, 'facebookUrl', 500) && optString(d, 'whatsappUrl', 500) && optString(d, 'notes', 300);
+        && optHttpUrl(d, 'facebookUrl', 500) && optHttpUrl(d, 'whatsappUrl', 500) && optString(d, 'notes', 300);
     }
 
     function validActivity(d) {
@@ -163,7 +180,7 @@ service cloud.firestore {
         && optString(d, 'category', 40) && reqString(d, 'titleAr', 300) && optString(d, 'titleEn', 300)
         && optString(d, 'descAr', 2000) && optString(d, 'descEn', 2000)
         && optString(d, 'scheduleAr', 300) && optString(d, 'scheduleEn', 300)
-        && optString(d, 'ageRange', 60) && optString(d, 'contactPhone', 20) && optString(d, 'link', 500);
+        && optString(d, 'ageRange', 60) && optString(d, 'contactPhone', 20) && optHttpUrl(d, 'link', 500);
     }
 
     function validClinic(d) {
@@ -235,11 +252,15 @@ service cloud.firestore {
         && str(d, 'addressAr', 300) && str(d, 'addressEn', 300)
         && str(d, 'transportAr', 2000) && str(d, 'transportEn', 2000)
         && optNumber(d, 'lat', -90, 90) && optNumber(d, 'lng', -180, 180)
+        && optBool(d, 'coordinatesApproximate')
         && str(d, 'mapsUrl', 500) && str(d, 'mapsQuery', 200)
         && d.get('phones', []) is list && d.get('phones', []).size() <= 20
         && d.get('altars', []) is list && d.get('altars', []).size() <= 20
-        && str(d, 'whatsapp', 20) && str(d, 'whatsappChannel', 500) && str(d, 'facebook', 500)
-        && str(d, 'youtube', 500) && str(d, 'instagram', 500)
+        && str(d, 'whatsapp', 20)
+        && str(d, 'whatsappChannel', 500) && optHttpUrl(d, 'whatsappChannel', 500)
+        && str(d, 'facebook', 500) && optHttpUrl(d, 'facebook', 500)
+        && str(d, 'youtube', 500) && optHttpUrl(d, 'youtube', 500)
+        && str(d, 'instagram', 500) && optHttpUrl(d, 'instagram', 500)
         && str(d, 'verseAr', 300) && str(d, 'verseEn', 300)
         && str(d, 'verseRef', 60) && str(d, 'verseRefAr', 60) && str(d, 'heroImageUrl', 500)
         && str(d, 'historyAr', 8000) && str(d, 'historyEn', 8000)
@@ -279,9 +300,11 @@ service cloud.firestore {
 
     // -------------------------------- media ---------------------------------
     // Inline images (base64) referenced by a content doc's image.mediaId.
-    // Lists never read these; a card fetches its own image lazily.
+    // Lists never read these; a card fetches its own image lazily by id, so
+    // the public may get one document but never list (scrape) the collection.
     match /media/{mediaId} {
-      allow read: if true;
+      allow get: if true;
+      allow list: if isAdmin();
       allow create, update: if isAdmin() && validMedia(request.resource.data);
       allow delete: if isAdmin();
     }
@@ -307,18 +330,27 @@ service cloud.firestore {
       allow create, update: if isOwner() && request.auth.uid != uid
         && request.resource.data.keys().hasOnly(['email', 'role', 'updatedAt', 'updatedBy'])
         && reqString(request.resource.data, 'email', 254)
-        && request.resource.data.role in ['owner', 'editor'];
+        && request.resource.data.role in ['owner', 'editor']
+        && stampOk(request.resource.data);
       allow delete: if isOwner() && request.auth.uid != uid;
     }
 
     // Server-side abuse control: every contact message must be written in the
-    // same batch as meta/contact_rate.lastAt = request.time, and that doc may
-    // only advance once every 20 seconds (global throttle, no auth needed).
+    // same batch as meta/contact_rate {lastAt: request.time, lastMsgId: <that
+    // message's id>}, and that doc may only advance once every 10 seconds
+    // (global throttle, no auth needed). lastMsgId must name a message that
+    // did not exist before this write and does exist after it, so the
+    // throttle can never be bumped on its own (no standalone DoS pings).
     match /meta/contact_rate {
       allow read: if false;
-      allow create, update: if request.resource.data.keys().hasOnly(['lastAt'])
+      allow create, update: if request.resource.data.keys().hasOnly(['lastAt', 'lastMsgId'])
         && request.resource.data.lastAt == request.time
-        && (resource == null || request.time > resource.data.lastAt + duration.value(20, 's'));
+        && request.resource.data.lastMsgId is string
+        && request.resource.data.lastMsgId.size() >= 10 && request.resource.data.lastMsgId.size() <= 64
+        && request.resource.data.lastMsgId.matches('^[A-Za-z0-9]+$')
+        && !exists(/databases/$(database)/documents/contact_messages/$(request.resource.data.lastMsgId))
+        && existsAfter(/databases/$(database)/documents/contact_messages/$(request.resource.data.lastMsgId))
+        && (resource == null || request.time > resource.data.lastAt + duration.value(10, 's'));
       allow delete: if false;
     }
 
@@ -330,7 +362,8 @@ service cloud.firestore {
         && request.resource.data.status in ['new', 'handled']
         && stampOk(request.resource.data);
       allow create: if validContactMessage(request.resource.data)
-        && getAfter(/databases/$(database)/documents/meta/contact_rate).data.lastAt == request.time;
+        && getAfter(/databases/$(database)/documents/meta/contact_rate).data.lastAt == request.time
+        && getAfter(/databases/$(database)/documents/meta/contact_rate).data.get('lastMsgId', '') == id;
     }
 
     function validContactMessage(d) {

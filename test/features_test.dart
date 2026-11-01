@@ -124,16 +124,17 @@ void main() {
   group('seed', () {
     final seed = SeedData(jsonDecode(File('assets/seed/seed.json').readAsStringSync()) as Map<String, dynamic>);
 
-    test('ships settings/features with every section on (offline fallback respects defaults)', () {
+    test('ships settings/features with every section on except clinics (offline fallback respects defaults)', () {
       expect(seed.collection('settings').containsKey('features'), isTrue);
       final f = seed.features;
       for (final s in Sections.all) {
-        expect(f.enabled(s), isTrue, reason: s);
+        expect(f.enabled(s), s != Sections.clinics, reason: s);
         expect((seed.raw['settings']['features']['sections'] as Map).containsKey(s), isTrue, reason: s);
       }
       expect(f.homeOrder, HomeBlocks.defaultOrder);
-      // Clinics on, but every clinic stays flagged as unconfirmed.
-      expect(f.enabled(Sections.clinics), isTrue);
+      // Clinics stay off until the church office confirms them; every clinic
+      // stays flagged as unconfirmed.
+      expect(f.enabled(Sections.clinics), isFalse);
       expect(seed.clinics.every((c) => c.sample), isTrue);
     });
 

@@ -56,6 +56,10 @@ supersede them.
   `meta/contact_rate` written in the same batch (rules: `lastAt == request.time`, ≥ 20 s apart) + strict field
   validation; create-only for the public.
 - **Consequences:** two visitors submitting within 20 s → the second is rejected (acceptable at parish scale).
+- **Update (PR 1, SEC-01):** the throttle doc also stores `lastMsgId` = the id of the message created in the same
+  batch; the rules require that message to be new (`!exists` before, `existsAfter`), so the throttle can no longer be
+  pinged on its own to block the form. Cooldown lowered to **10 s**. A client timeout no longer clears the form or
+  promises delivery (BUG-06).
 
 ## ADR-011 — Two admin roles; editors manage settings too
 - **Context:** business case wanted settings, flags and message deletion owner-only.
