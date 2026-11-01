@@ -45,7 +45,11 @@ class _AdminFrame extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
       appBar: AppBar(
-        title: Row(children: [const ChurchSeal(size: 30), const SizedBox(width: 8), Text(context.tr('admin'))]),
+        title: Row(children: [
+          const ChurchSeal(size: 30),
+          const SizedBox(width: 8),
+          Flexible(child: Text(context.tr('admin'), overflow: TextOverflow.ellipsis)),
+        ]),
         leading: IconButton(icon: const Icon(Icons.home_rounded), onPressed: () => context.go('/')),
         actions: [const LanguageToggle()],
       ),

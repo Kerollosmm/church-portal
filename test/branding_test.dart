@@ -17,6 +17,8 @@ void main() {
     final manifest = jsonDecode(File('web/manifest.json').readAsStringSync()) as Map<String, dynamic>;
     expect(manifest['name'], _fullAr);
     expect(manifest['short_name'], 'كنيسة مكسيموس ودوماديوس');
+    // Installed-PWA launch surface matches the HTML splash background.
+    expect(manifest['background_color'], '#FBF6EC');
     for (final f in ['web/favicon.png', 'web/favicon.ico', 'web/og-image.jpg', 'web/icons/apple-touch-icon.png',
         'assets/branding/seal.png']) {
       expect(File(f).existsSync(), isTrue, reason: f);

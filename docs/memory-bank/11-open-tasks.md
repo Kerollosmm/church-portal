@@ -34,7 +34,7 @@ Status as of 1 Nov 2026 (after PR #6).
       script (list `media` ids not referenced by any `image.mediaId`) if they accumulate.
 
 - [ ] **Custom domain (optional)**: if the church buys a domain, add it to Hosting site `maximos-domadios-church`
-      (console → Hosting → Add custom domain), add it to Auth authorized domains, and update canonical/OG/robots/
+      (console → Hosting → Add custom domain), add it to Auth authorized domains, and update OG/robots/
       sitemap URLs and the redirect destination in `firebase.json` (ADR-018).
 - [ ] Home page overflows by ~8 px at **320 px** width (pre-existing, also on `main` before PR #6; 360 px+ is fine and
       covered by `feature_gate_test.dart`).

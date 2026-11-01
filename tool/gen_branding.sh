@@ -7,7 +7,7 @@ SRC="${1:-assets/branding/seal_source.webp}"
 BG="#470812"   # maroon sampled from the seal's background
 B=assets/branding; W=web; R=android/app/src/main/res
 mkdir -p "$B" "$W/icons"
-[ "$SRC" = "$B/seal_source.webp" ] || cp "$SRC" "$B/seal_source.webp"
+[ -e "$B/seal_source.webp" ] && [ "$SRC" -ef "$B/seal_source.webp" ] || cp "$SRC" "$B/seal_source.webp"
 T=$(mktemp -d); trap 'rm -rf "$T"' EXIT
 magick "$B/seal_source.webp" -strip "$T/sq.png"                       # full-bleed square
 # Round seal on transparency (outer gold ring ends ~r=497 of 1024).
