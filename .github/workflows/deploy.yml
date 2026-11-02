@@ -69,9 +69,34 @@ jobs:
         if: always()
         run: rm -f "$RUNNER_TEMP/sa.json"
 
+  # Same Firestore rules emulator tests as ci.yml's firestore-rules job, so a
+  # rules change that fails them can never be deployed (CI is a separate workflow).
+  rules-test:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: tool/rules_test/package-lock.json
+      - name: Install
+        working-directory: tool/rules_test
+        run: npm ci --no-audit --no-fund
+      - name: Firestore rules tests (emulator)
+        working-directory: tool/rules_test
+        run: npm test
+
   deploy-rules:
-    # Rules / indexes deploy only after build (analyze + test + release build) passes.
-    needs: build
+    # Rules / indexes deploy only after build (test + release build) and the
+    # rules emulator tests pass. (flutter analyze runs in ci.yml, not here.)
+    needs: [build, rules-test]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     # Rules deploys use the `production` environment. Its required reviewers
     # gate them only once they are configured on that environment.
