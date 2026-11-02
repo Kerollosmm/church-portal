@@ -22,6 +22,7 @@ String buildAssistantInstruction({
   List<Saint> saints = const [],
 }) {
   final f = features;
+  final cairoNow = CairoTime.fromInstant(now);
   final b = StringBuffer()
     ..writeln(
       'You are the friendly information desk of ${_bi(settings.nameAr, settings.nameEn)}, a Coptic Orthodox church'
@@ -36,8 +37,8 @@ String buildAssistantInstruction({
       'Keep answers short (max ~6 lines), use bullet points for lists, and give times like 06:30 AM.',
     )
     ..writeln(
-      'All times are Africa/Cairo local time. Today in Cairo: ${_ymd(now)} '
-      '(${weekdayNamesEn[now.weekday]}). Each question starts with the exact current Cairo time.',
+      'All times are Africa/Cairo local time. Today in Cairo: ${_ymd(cairoNow)} '
+      '(${weekdayNamesEn[cairoNow.weekday]}). Each question starts with the exact current Cairo time.',
     )
     ..writeln(
       'Do not give medical, legal or spiritual-direction advice beyond pointing to the right clinic, '
@@ -87,10 +88,12 @@ String buildAssistantInstruction({
     b
       ..writeln()
       ..writeln('## Weekly liturgy schedule (regular)');
-    final regular = liturgies.where((l) => l.seasonKey == null && l.weekday != null).toList()
+    final regular = liturgies.where((l) => l.seasonKey == null && l.date == null && l.weekday != null).toList()
       ..sort((a, b) {
         final w = a.weekday!.compareTo(b.weekday!);
-        return w != 0 ? w : (a.startMinutes ?? 0).compareTo(b.startMinutes ?? 0);
+        if (w != 0) return w;
+        final c = (a.startMinutes ?? 0).compareTo(b.startMinutes ?? 0);
+        return c != 0 ? c : a.order.compareTo(b.order);
       });
     for (final l in regular) {
       b.writeln(
@@ -98,9 +101,17 @@ String buildAssistantInstruction({
       );
     }
 
-    // One-off services that belong to no season (date only).
-    final oneOff = liturgies.where((l) => l.seasonKey == null && l.weekday == null && l.date != null).toList()
-      ..sort((a, b) => a.date!.compareTo(b.date!));
+    // One-off services that belong to no season (any dated liturgy, even
+    // with a weekday set), while still current in Cairo.
+    final oneOff = liturgies
+        .where((l) => l.seasonKey == null && l.date != null && isDatedLiturgyCurrent(l, now))
+        .toList()
+      ..sort((a, b) {
+        final d = CairoTime.calendarDate(a.date!).compareTo(CairoTime.calendarDate(b.date!));
+        if (d != 0) return d;
+        final c = (a.startMinutes ?? 0).compareTo(b.startMinutes ?? 0);
+        return c != 0 ? c : a.order.compareTo(b.order);
+      });
     if (oneOff.isNotEmpty) {
       b
         ..writeln()

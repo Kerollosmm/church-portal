@@ -251,7 +251,7 @@ List<Liturgy> vespersAndPraise(Iterable<Liturgy> all, {DateTime? now}) {
       .where((l) =>
           l.seasonKey == null &&
           (l.type == 'vespers' || l.type == 'praise') &&
-          (now == null || l.date == null || _datedStillListed(l, now)))
+          (now == null || l.date == null || isDatedLiturgyCurrent(l, now)))
       .toList();
   list.sort((a, b) {
     final w = (a.weekday ?? 0).compareTo(b.weekday ?? 0);
@@ -270,7 +270,7 @@ DateTime _cairoToday(DateTime now) {
 /// Is the dated one-off [l] still listed at [now]? From its Cairo day on;
 /// before that day only while its occurrence (which may cross midnight, see
 /// [_occurrence]) has not ended yet.
-bool _datedStillListed(Liturgy l, DateTime now) {
+bool isDatedLiturgyCurrent(Liturgy l, DateTime now) {
   final d = CairoTime.calendarDate(l.date!);
   if (!d.isBefore(_cairoToday(now))) return true;
   final o = _occurrence(l, CairoTime.at(d.year, d.month, d.day), 0);
@@ -289,7 +289,7 @@ List<Liturgy> upcomingSpecialLiturgies(Iterable<Liturgy> all, DateTime now) {
           l.date != null &&
           l.type != 'vespers' &&
           l.type != 'praise' &&
-          _datedStillListed(l, now))
+          isDatedLiturgyCurrent(l, now))
       .toList();
   list.sort((a, b) {
     final d = CairoTime.calendarDate(a.date!).compareTo(CairoTime.calendarDate(b.date!));

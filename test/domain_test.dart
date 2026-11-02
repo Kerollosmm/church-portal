@@ -443,6 +443,48 @@ void main() {
         expect(t, isNot(contains(h)), reason: h);
       }
     });
+
+    test('UTC instant near midnight uses Cairo weekday and date in header', () {
+      // Sunday 2026-11-01 22:30 UTC == Monday 2026-11-02 00:30 Africa/Cairo.
+      final utcNow = DateTime.utc(2026, 11, 1, 22, 30);
+      final t = buildAssistantInstruction(
+        settings: settings,
+        liturgies: const [],
+        seasons: const [],
+        clinics: const [],
+        meetings: const [],
+        activities: const [],
+        facilities: const [],
+        now: utcNow,
+      );
+      expect(t, contains('Today in Cairo: 2026-11-02 (Monday).'));
+    });
+
+    test('dated one-off liturgy with weekday set is grounded once as special, and past one-offs drop out', () {
+      final atMidnight30 = cairo(2027, 1, 1, 0, 30);
+      final t = buildAssistantInstruction(
+        settings: settings,
+        liturgies: [
+          const Liturgy(id: 'fri', type: 'mass', nameAr: 'قداس الجمعة', nameEn: 'Friday mass', weekday: 5, start: '07:00', end: '09:00'),
+          Liturgy(id: 'both', type: 'mass', nameAr: 'قداس تذكاري', nameEn: 'Memorial mass', weekday: 5, date: DateTime(2027, 1, 8), start: '08:00', end: '10:00'),
+          Liturgy(id: 'nye', type: 'praise', nameAr: 'سهرة رأس السنة', nameEn: 'NYE vigil', date: DateTime(2026, 12, 31), start: '22:00', end: '01:00'),
+          Liturgy(id: 'expired', type: 'mass', nameAr: 'قداس قديم', nameEn: 'Old mass', date: DateTime(2026, 12, 10), start: '08:00', end: '10:00'),
+        ],
+        seasons: const [],
+        clinics: const [],
+        meetings: const [],
+        activities: const [],
+        facilities: const [],
+        now: atMidnight30,
+      );
+      final weeklyBlock = t.split('## Special one-off services').first;
+      final specialBlock = t.split('## Special one-off services').last;
+      expect(weeklyBlock, contains('Friday mass'));
+      expect(weeklyBlock, isNot(contains('Memorial mass')));
+      expect(specialBlock, contains('2026-12-31: NYE vigil'));
+      expect(specialBlock, contains('2027-01-08: Memorial mass'));
+      expect(t, isNot(contains('Old mass')));
+    });
   });
 
   group('alerts', () {
