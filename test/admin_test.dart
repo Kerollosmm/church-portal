@@ -342,6 +342,9 @@ void main() {
       expect(path('c1', 'clinics', const {}), '/clinics/c1');
       // No detail page (switched off, hidden, or a collection without one): no link.
       expect(path('c1', 'clinics', const {'detailsEnabled': false}), isNull);
+      // Inactive clinics are not listed publicly, so their page is unavailable (CodeRabbit review).
+      expect(path('c1', 'clinics', const {'active': false}), isNull);
+      expect(path('c1', 'clinics', const {'active': true}), '/clinics/c1');
       expect(path('c1', 'clinics', const {'detailsEnabled': true, 'visible': false}), isNull);
       expect(path('l1', 'liturgies', on), isNull);
       expect(path('x/y', 'clinics', on), '/clinics/x%2Fy');

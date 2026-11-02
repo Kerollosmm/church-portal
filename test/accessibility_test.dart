@@ -922,6 +922,19 @@ void main() {
       expect(find.byTooltip('Open detail page on site'), findsNWidgets(2));
     });
 
+    testWidgets('collections without detail pages never show the badge (CodeRabbit review)', (tester) async {
+      tester.view.physicalSize = const Size(1200, 2000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final repo = _ListBackend([
+        AdminDoc('l1', {'nameAr': 'قداس', 'weekday': 7, 'start': '08:00', 'order': 10}),
+      ]);
+      await tester.pumpWidget(_adminApp(CollectionListScreen(repo: repo, def: collectionById('liturgies')!)));
+      await tester.pumpAndSettle();
+      expect(find.text('Detail page'), findsNothing);
+      expect(find.byKey(const ValueKey('openItem-l1')), findsNothing);
+    });
+
     testWidgets('a detail-page row at 320 px x 200% text keeps its open-page button without overflow', (tester) async {
       tester.view.physicalSize = const Size(320, 2000);
       tester.view.devicePixelRatio = 1;

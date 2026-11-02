@@ -503,7 +503,14 @@ void main() {
         await tester.pumpAndSettle();
         final id = e.key == DetailKind.priest ? 'd-priest' : 'd-${e.key.name}';
         expect(find.byKey(ValueKey('detailsLink-$id')), findsNothing, reason: e.value);
-        expect(find.byKey(const Key('itemImageTap')), findsWidgets, reason: '${e.value}: fixture image enlarges');
+        if (e.key == DetailKind.priest || e.key == DetailKind.saint) {
+          // /about shows both a priest and a saint fixture: each card must still enlarge its own image.
+          final card = find.byKey(ValueKey('aboutCard-$id'));
+          expect(find.descendant(of: card, matching: find.byKey(const Key('itemImageTap'))), findsOneWidget,
+              reason: '$id: fixture image enlarges');
+        } else {
+          expect(find.byKey(const Key('itemImageTap')), findsWidgets, reason: '${e.value}: fixture image enlarges');
+        }
       }
     });
 
@@ -741,6 +748,35 @@ void main() {
       }
     });
 
+    testWidgets('no directions when the church has no map destination (CodeRabbit review)', (tester) async {
+      await _pump(tester,
+          seed: _seed(patch: (raw) {
+            final c = raw['settings']['church'] as Map;
+            for (final k in ['mapsQuery', 'mapsUrl', 'addressAr', 'addressEn', 'lat', 'lng']) {
+              c.remove(k);
+            }
+          }),
+          initial: '/church-education/d-meeting');
+      expect(find.byKey(const Key('itemDetailPage')), findsOneWidget);
+      expect(find.byKey(const Key('detailDirections')), findsNothing);
+    });
+
+    testWidgets('share: a refused clipboard shows the link instead of failing silently (CodeRabbit review)',
+        (tester) async {
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+        if (call.method == 'Clipboard.setData') throw PlatformException(code: 'denied');
+        return null;
+      });
+      addTearDown(() => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, null));
+      await _pump(tester, initial: '/church-education/d-meeting');
+      await tester.ensureVisible(find.byKey(const Key('detailShare')));
+      await tester.tap(find.byKey(const Key('detailShare')));
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+      expect(find.text('Link copied'), findsNothing);
+      expect(find.text('Could not copy the link: $kCanonicalOrigin/church-education/d-meeting?lang=en'), findsOneWidget);
+    });
+
     testWidgets('directions follow the contact-info section', (tester) async {
       await _pump(tester, seed: _seed(sections: const {'contactInfo': false}), initial: '/church-education/d-meeting');
       expect(find.byKey(const Key('detailDirections')), findsNothing);
@@ -775,6 +811,24 @@ void main() {
       await tester.pumpAndSettle();
       expect(_path(router), '/church-education/youth');
       expect(find.byKey(const Key('itemDetailPage')), findsOneWidget);
+    });
+
+    testWidgets('related links skip items whose page is off or whose section is off (Codex review)', (tester) async {
+      await _pump(tester,
+          size: const Size(400, 3000),
+          seed: _seed(patch: (raw) => ((raw['meetings'] as Map)['youth'] as Map)['detailsEnabled'] = false),
+          initial: '/church-education/d-meeting');
+      expect(find.byKey(const Key('detailRelated')), findsOneWidget);
+      expect(find.byKey(const ValueKey('relatedLink-youth')), findsNothing, reason: 'its page is switched off');
+      expect(find.byKey(const ValueKey('relatedLink-university')), findsOneWidget);
+    });
+
+    testWidgets('a departed father never suggests serving priests while their section is off', (tester) async {
+      await _pump(tester,
+          size: const Size(400, 3000), seed: _seed(sections: const {'priests': false}), initial: '/about/priests/d-departed');
+      expect(find.byKey(const Key('itemDetailPage')), findsOneWidget);
+      expect(find.byKey(const ValueKey('relatedLink-tadros')), findsOneWidget);
+      expect(find.byKey(const ValueKey('relatedLink-bemwa')), findsNothing, reason: 'serving priests section is off');
     });
 
     testWidgets('320 px at 200% text in Arabic: rich page lays out without overflow', (tester) async {

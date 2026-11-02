@@ -84,7 +84,7 @@ class ItemDetailPage extends ConsumerWidget {
               parent: parent,
               kind: kind,
               id: id,
-              related: _relatedTo(item, list),
+              related: _relatedTo(item, list, features),
             ),
         };
       },
@@ -92,11 +92,17 @@ class ItemDetailPage extends ConsumerWidget {
   }
 }
 
-/// Up to 3 other publicly listed items of the same section, same group first
-/// (read from the list already loaded: no extra Firestore read).
-List<Object> _relatedTo(Object self, List<Object> list) {
+/// Up to 3 other items of the same section whose own detail page is
+/// available (same gating as this page: listed, not switched off, priests'
+/// status section on), same group first. Read from the list already loaded:
+/// no extra Firestore read.
+List<Object> _relatedTo(Object self, List<Object> list, FeatureSettings features) {
   final group = _groupOf(self);
-  return pickRelated(list.where(_publiclyListed).toList(), self,
+  bool opens(Object o) =>
+      detailStateFor(_detailsOf(o),
+          features: features, visible: _publiclyListed(o), priestDeparted: o is Priest ? o.departed : null) ==
+      DetailState.available;
+  return pickRelated([for (final o in list) if (o == self || opens(o)) o], self,
       sameGroup: group == null ? null : (o) => _groupOf(o) == group);
 }
 
@@ -564,7 +570,7 @@ class _DetailView extends ConsumerWidget {
           color: primary,
           onTap: () => openUrl(calendar),
         ),
-      if (e.onSite && settings != null)
+      if (e.onSite && settings != null && _hasDestination(settings))
         ActionChipButton(
           key: const Key('detailDirections'),
           icon: Icons.directions_rounded,
@@ -582,8 +588,14 @@ class _DetailView extends ConsumerWidget {
         onTap: () async {
           final messenger = ScaffoldMessenger.maybeOf(context);
           final copied = context.tr('linkCopied');
-          await Clipboard.setData(ClipboardData(text: url));
-          messenger?.showSnackBar(SnackBar(content: Text(copied)));
+          final failed = context.tr('linkCopyFailed', {'u': url});
+          try {
+            await Clipboard.setData(ClipboardData(text: url));
+            messenger?.showSnackBar(SnackBar(content: Text(copied)));
+          } catch (_) {
+            // Clipboard refused (browser permission): show the link so it can still be copied by hand.
+            messenger?.showSnackBar(SnackBar(content: SelectableText(failed), duration: const Duration(seconds: 8)));
+          }
         },
       ),
     ];
@@ -685,6 +697,11 @@ class _FieldCard extends StatelessWidget {
     );
   }
 }
+
+/// Whether [mapsDirectionsUrl] has a destination (maps query, coordinates or
+/// an address); otherwise the directions action is hidden.
+bool _hasDestination(ChurchSettings s) =>
+    s.mapsQuery.trim().isNotEmpty || (s.lat != null && s.lng != null) || s.addressAr.trim().isNotEmpty;
 
 /// One labelled "Key information" row: icon, small label, value below.
 class _FactRow extends StatelessWidget {

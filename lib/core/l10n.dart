@@ -355,6 +355,7 @@ const Map<String, List<String>> _strings = {
   'addToCalendar': ['أضف إلى التقويم', 'Add to calendar'],
   'shareLink': ['مشاركة الرابط', 'Share link'],
   'linkCopied': ['تم نسخ الرابط', 'Link copied'],
+  'linkCopyFailed': ['تعذّر نسخ الرابط: {u}', 'Could not copy the link: {u}'],
   'relatedItems': ['من نفس القسم', 'More in this section'],
   'whatsappGroup': ['مجموعة واتساب', 'WhatsApp group'],
   'youtubeLink': ['يوتيوب', 'YouTube'],
