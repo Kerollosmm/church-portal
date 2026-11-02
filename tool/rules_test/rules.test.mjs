@@ -803,6 +803,41 @@ describe('PR #12: admin editor save paths', () => {
     }
   });
 
+  // FeaturesScreen saves FeatureSettings.toMap(): every key, all 8 pages.
+  test('features editor: whole-document save at maximum size, then a reset page disappears', async () => {
+    const header = { titleAr: 'ع'.repeat(200), titleEn: 't'.repeat(200), subtitleAr: 'س'.repeat(300), subtitleEn: 's'.repeat(300), introAr: 'م'.repeat(1500), introEn: 'i'.repeat(1500) };
+    const pages = ['about', 'schedule', 'education', 'activities', 'clinics', 'services', 'contact', 'ask'];
+    const sections = Object.fromEntries(['schedule', 'meetings', 'clinics', 'services', 'history', 'milestones', 'saints', 'priests',
+      'departedPriests', 'activities', 'alerts', 'contactInfo', 'socials', 'contactForm', 'assistant', 'media'].map((k) => [k, true]));
+    const full = {
+      sections, homeOrder: ['banner', 'alerts', 'nextMass', 'quickContacts', 'milestones', 'directory', 'map'], homeHidden: ['map'],
+      heroTitleAr: 'ع'.repeat(200), heroTitleEn: 'T', heroSubtitleAr: 'س'.repeat(300), heroSubtitleEn: 'S', bannerEnabled: true,
+      bannerAr: 'ب'.repeat(500), bannerEn: 'B', bannerLink: '/mass-schedule', theme: 'navy',
+      pageHeaders: Object.fromEntries(pages.map((p) => [p, header])),
+      footer: { showPhones: false, showSocials: true, showQuickLinks: false, noteAr: 'م'.repeat(500), noteEn: 'n'.repeat(500) },
+    };
+    const ref = doc(db(EDITOR), 'settings', 'features');
+    // featuresSaveWrites: everything else first, then pageHeaders on its own
+    // (the whole document plus 8 changed pages in one write exceeds the budget).
+    const { pageHeaders, ...base } = full;
+    await assertFails(merge(ref, full));
+    // First save (no document yet), and the first save over the seeded doc.
+    await assertSucceeds(merge(ref, base));
+    await assertSucceeds(merge(ref, { pageHeaders }));
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'settings', 'features'), { ...convert(seed.settings.features), legacyField: 'x' });
+    });
+    await assertSucceeds(merge(ref, base));
+    await assertSucceeds(merge(ref, { pageHeaders }));
+    const { ask, ...rest } = pageHeaders;
+    await assertSucceeds(merge(ref, { ...base, theme: 'green' }));
+    await assertSucceeds(merge(ref, { pageHeaders: rest }));
+    let stored;
+    await env.withSecurityRulesDisabled(async (ctx) => { stored = (await getDoc(doc(ctx.firestore(), 'settings', 'features'))).data(); });
+    if ('ask' in stored.pageHeaders) throw new Error('reset page header was kept (deep merge)');
+    if (stored.legacyField !== 'x') throw new Error('untouched legacy key was dropped');
+  });
+
   test('why the editor splits: both full lists in one write exceed the expression budget', async () => {
     const ref = doc(db(EDITOR), 'saints', 'both');
     await assertSucceeds(setDoc(ref, { ...own.saints, gallery: [], extraFields: [] }));

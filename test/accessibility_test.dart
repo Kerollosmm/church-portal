@@ -201,6 +201,10 @@ class _FakeBackend extends AdminBackend {
     _docs[path]?.add(AdminDoc(path.split('/').last, next));
   }
 
+  /// The stored document at [path] (saveDoc replaces each written top-level
+  /// field, like AdminRepository's mergeFields).
+  Map<String, dynamic>? stored(String path) => _data[path];
+
   @override
   Future<String> save(String collection, String? id, Map<String, dynamic> data) async => id ?? 'new';
   @override
@@ -668,6 +672,33 @@ void main() {
       await tester.tap(find.byKey(const Key('features-save')));
       await tester.pumpAndSettle();
       expect(tester.state<FeaturesEditorState>(find.byType(FeaturesEditor)), same(before));
+    });
+
+    testWidgets('saving page headers and the footer keeps the form mounted; a reset page is removed', (tester) async {
+      tester.view.physicalSize = const Size(1200, 9000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final stored = FeatureSettings.defaults.copyWith(
+        pageHeaders: {'ask': const PageCustom(titleEn: 'Ask us'), 'about': const PageCustom(titleAr: 'عنا')},
+      );
+      final repo = _FakeBackend(docs: {
+        'settings/features': {...stored.toMap(), 'updatedAt': DateTime.utc(2026, 10, 1)},
+      });
+      await tester.pumpWidget(_adminApp(FeaturesScreen(repo: repo)));
+      await tester.pumpAndSettle();
+      final before = tester.state<FeaturesEditorState>(find.byType(FeaturesEditor));
+      await tester.tap(find.byKey(const ValueKey('page-ask')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('pageReset-ask')));
+      await tester.tap(find.byKey(const ValueKey('footer-showQuickLinks')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('features-save')));
+      await tester.pumpAndSettle();
+      expect(tester.state<FeaturesEditorState>(find.byType(FeaturesEditor)), same(before));
+      expect(before.dirty, isFalse);
+      final saved = repo.stored('settings/features')!;
+      expect(saved['pageHeaders'], {'about': const PageCustom(titleAr: 'عنا').toMap()});
+      expect((saved['footer'] as Map)['showQuickLinks'], isFalse);
     });
 
     testWidgets('home blocks can be reordered with single taps', (tester) async {

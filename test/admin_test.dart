@@ -516,6 +516,147 @@ void main() {
     });
   });
 
+  group('PR #12: page headers & footer (FR-G-04) in FeaturesEditor', () {
+    Future<void> tall(WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1200, 9000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+    }
+
+    Finder page(String p, String k) => find.byKey(ValueKey('features-page-$p-$k'));
+
+    testWidgets('edits a page header, resets another and keeps the rest', (tester) async {
+      await tall(tester);
+      FeatureSettings? saved;
+      final initial = FeatureSettings.defaults.copyWith(pageHeaders: {
+        'ask': const PageCustom(titleEn: 'Ask us', introAr: 'مقدمة'),
+        'about': const PageCustom(subtitleAr: 'تاريخنا'),
+      });
+      await tester.pumpWidget(_app(Scaffold(body: FeaturesEditor(initial: initial, onSave: (f) async => saved = f))));
+      await tester.pumpAndSettle();
+      for (final p in CustomizablePages.all) {
+        expect(find.byKey(ValueKey('page-$p')), findsOneWidget, reason: p);
+      }
+      expect(find.byKey(const ValueKey('pageCustomized-ask')), findsOneWidget);
+      expect(find.byKey(const ValueKey('pageCustomized-about')), findsOneWidget);
+      expect(find.byKey(const ValueKey('pageCustomized-clinics')), findsNothing);
+      expect(find.text('Customized'), findsNWidgets(2));
+      // Collapsed rows keep their fields mounted.
+      expect(page('clinics', 'titleEn'), findsNothing);
+      expect(page('clinics', 'titleEn').hitTestable(), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('page-clinics')));
+      await tester.pumpAndSettle();
+      await tester.enterText(page('clinics', 'titleEn'), 'Our clinics');
+      await tester.enterText(page('clinics', 'introAr'), 'الكشف بالحجز المسبق');
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('pageCustomized-clinics')), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('page-ask')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('pageReset-ask')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('pageCustomized-ask')), findsNothing);
+      expect(find.byKey(const ValueKey('pageReset-ask')), findsNothing, reason: 'nothing left to reset');
+      await tester.tap(find.byKey(const Key('features-save')));
+      await tester.pumpAndSettle();
+      expect(saved!.pageHeaders.keys, ['about', 'clinics']);
+      expect(saved!.pageHeader('clinics'), const PageCustom(titleEn: 'Our clinics', introAr: 'الكشف بالحجز المسبق'));
+      expect(saved!.pageHeader('about'), const PageCustom(subtitleAr: 'تاريخنا'));
+      expect(saved!.toMap()['pageHeaders'], {
+        'about': const PageCustom(subtitleAr: 'تاريخنا').toMap(),
+        'clinics': const PageCustom(titleEn: 'Our clinics', introAr: 'الكشف بالحجز المسبق').toMap(),
+      });
+    });
+
+    testWidgets('page header lengths match the rules; an error opens its collapsed page', (tester) async {
+      await tall(tester);
+      FeatureSettings? saved;
+      final initial = FeatureSettings.defaults.copyWith(pageHeaders: {'contact': PageCustom(introEn: 'x' * 1501)});
+      await tester.pumpWidget(_app(Scaffold(body: FeaturesEditor(initial: initial, onSave: (f) async => saved = f))));
+      await tester.pumpAndSettle();
+      expect(page('contact', 'introEn').hitTestable(), findsNothing);
+      await tester.tap(find.byKey(const Key('features-save')));
+      await tester.pumpAndSettle();
+      expect(saved, isNull);
+      expect(page('contact', 'introEn').hitTestable(), findsOneWidget);
+      expect(find.text('Too long'), findsOneWidget);
+      await tester.enterText(page('contact', 'introEn'), 'x' * 1500);
+      await tester.enterText(page('contact', 'titleAr'), 'ع' * 201);
+      await tester.tap(find.byKey(const Key('features-save')));
+      await tester.pumpAndSettle();
+      expect(saved, isNull);
+      await tester.enterText(page('contact', 'titleAr'), 'ع' * 200);
+      await tester.enterText(page('contact', 'subtitleEn'), 's' * 300);
+      await tester.tap(find.byKey(const Key('features-save')));
+      await tester.pumpAndSettle();
+      expect(saved!.pageHeader('contact').introEn.length, 1500);
+    });
+
+    testWidgets('footer switches and notes round-trip', (tester) async {
+      await tall(tester);
+      FeatureSettings? saved;
+      final initial = FeatureSettings.defaults.copyWith(footer: const FooterConfig(showSocials: false, noteEn: 'Old'));
+      await tester.pumpWidget(_app(Scaffold(body: FeaturesEditor(initial: initial, onSave: (f) async => saved = f))));
+      await tester.pumpAndSettle();
+      Switch sw(String k) => tester.widget<Switch>(
+          find.descendant(of: find.byKey(ValueKey('footer-$k')), matching: find.byType(Switch)));
+      expect([sw('showPhones').value, sw('showSocials').value, sw('showQuickLinks').value], [true, false, true]);
+      await tester.tap(find.byKey(const ValueKey('footer-showPhones')));
+      await tester.tap(find.byKey(const ValueKey('footer-showSocials')));
+      await tester.enterText(find.byKey(const ValueKey('footer-noteAr')), 'جميع الخدمات مجانية');
+      await tester.enterText(find.byKey(const ValueKey('footer-noteEn')), 'x' * 501);
+      await tester.tap(find.byKey(const Key('features-save')));
+      await tester.pumpAndSettle();
+      expect(saved, isNull, reason: 'note over 500 chars');
+      await tester.enterText(find.byKey(const ValueKey('footer-noteEn')), '  All services are free  ');
+      await tester.tap(find.byKey(const Key('features-save')));
+      await tester.pumpAndSettle();
+      expect(saved!.footer.toMap(), {
+        'showPhones': false,
+        'showSocials': true,
+        'showQuickLinks': true,
+        'noteAr': 'جميع الخدمات مجانية',
+        'noteEn': 'All services are free',
+      });
+    });
+
+    test('the page headers are saved in their own write, only when they changed', () {
+      const ask = PageCustom(titleEn: 'Ask us');
+      final next = FeatureSettings.defaults.copyWith(pageHeaders: {'ask': ask}, theme: 'navy');
+      final stored = {...FeatureSettings.defaults.toMap(), 'pageHeaders': {'ask': ask.toMap()}};
+      final writes = featuresSaveWrites(next, stored);
+      expect(writes, hasLength(1));
+      expect(writes.single.keys, isNot(contains('pageHeaders')));
+      expect(writes.single['theme'], 'navy');
+      expect(writes.single['footer'], const FooterConfig().toMap());
+      // Changed, missing in the stored doc, or no doc yet: a second write.
+      final changed = featuresSaveWrites(FeatureSettings.defaults, stored);
+      expect(changed.last, {'pageHeaders': <String, dynamic>{}});
+      expect(featuresSaveWrites(next, FeatureSettings.defaults.toMap()..remove('pageHeaders')).last, {
+        'pageHeaders': {'ask': ask.toMap()}
+      });
+      expect(featuresSaveWrites(next, null), hasLength(2));
+      // Blank stored entries read as "not customised".
+      final blank = {...stored, 'pageHeaders': {'ask': ask.toMap(), 'about': PageCustom.empty.toMap()}};
+      expect(featuresSaveWrites(next, blank), hasLength(1));
+    });
+
+    testWidgets('collect() round-trips every stored page header and the footer unchanged', (tester) async {
+      await tall(tester);
+      final initial = FeatureSettings.defaults.copyWith(
+        pageHeaders: {
+          for (final p in CustomizablePages.all)
+            p: PageCustom(titleAr: 'ع $p', titleEn: 'T $p', subtitleAr: 'س', subtitleEn: 'S', introAr: 'م', introEn: 'I'),
+        },
+        footer: const FooterConfig(showPhones: false, showQuickLinks: false, noteAr: 'م', noteEn: 'N'),
+      );
+      await tester.pumpWidget(_app(Scaffold(body: FeaturesEditor(initial: initial, onSave: (f) async {}))));
+      await tester.pumpAndSettle();
+      final state = tester.state<FeaturesEditorState>(find.byType(FeaturesEditor));
+      expect(sameValue(state.collect().toMap(), initial.toMap()), isTrue);
+      expect(state.dirty, isFalse);
+    });
+  });
+
   group('PR #10: selected chip contrast & narrow 200% reflow', () {
     testWidgets('selected theme ChoiceChip and clinic weekday FilterChip use a white label', (tester) async {
       tester.view.physicalSize = const Size(1200, 5000);
@@ -568,6 +709,16 @@ void main() {
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
       expect(saved!.homeOrder.indexOf('banner'), 1);
+      // PR #12: an open page-header row and the footer card reflow too.
+      final pageRow = find.byKey(const ValueKey('page-education'));
+      await tester.scrollUntilVisible(pageRow, 300, scrollable: find.byType(Scrollable).first);
+      await tester.tap(pageRow);
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      await tester.scrollUntilVisible(find.byKey(const ValueKey('footer-noteEn')), 300,
+          scrollable: find.byType(Scrollable).first);
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
     });
 
     testWidgets('DocEditor image field at 320 px x 200% text: no overflow', (tester) async {
