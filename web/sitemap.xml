@@ -5,7 +5,10 @@
   <url><loc>https://maximos-domadios-church.web.app/mass-schedule</loc></url>
   <url><loc>https://maximos-domadios-church.web.app/church-education</loc></url>
   <url><loc>https://maximos-domadios-church.web.app/church-activities</loc></url>
+  <!-- /clinics is omitted while sections.clinics is disabled (assets/seed/seed.json).
+       Uncomment once sections.clinics is enabled in production:
   <url><loc>https://maximos-domadios-church.web.app/clinics</loc></url>
+  -->
   <url><loc>https://maximos-domadios-church.web.app/public-services</loc></url>
   <url><loc>https://maximos-domadios-church.web.app/contact</loc></url>
 </urlset>

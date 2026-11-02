@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
 
+import '../../core/document_lang.dart';
 import '../../core/l10n.dart';
 import '../../core/theme.dart';
 import '../../state/providers.dart';
@@ -17,12 +18,16 @@ class FeatureGate extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     if (!ref.watch(featuresReadyProvider)) {
+      // Initial render: the route's canonical URL until the switches arrive.
+      setDocumentRouteMeta(path: path, indexable: true);
       return const PageBody(children: [
         SizedBox(height: 60),
         Center(child: CircularProgressIndicator(key: Key('featuresLoading'))),
       ]);
     }
     final enabled = ref.watch(featuresProvider.select((f) => f.routeEnabled(path)));
+    // A switched-off section is not indexable (noindex, no canonical link).
+    setDocumentRouteMeta(path: path, indexable: enabled);
     return enabled ? child : const SectionUnavailable();
   }
 }
