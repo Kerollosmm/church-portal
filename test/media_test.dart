@@ -757,7 +757,7 @@ void main() {
       expect(calls[0].keys, isNot(contains('gallery')));
       expect(calls[0].keys, isNot(contains('extraFields')));
       expect(calls[0].keys, containsAll(['detailsEnabled', 'showDetailImages', 'showContacts', 'showSocials']));
-      expect(calls[0]['detailsEnabled'], isFalse);
+      expect(calls[0]['detailsEnabled'], isTrue); // new items get a detail page (PR #14)
       expect(calls[0]['showDetailImages'], isTrue);
       expect(calls[1], {
         'gallery': [

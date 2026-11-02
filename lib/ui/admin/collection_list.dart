@@ -226,7 +226,8 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     final sub = _subtitle(context, d);
     final updated = d.updatedAt;
     final narrow = MediaQuery.sizeOf(context).width < 600;
-    final details = d.data['detailsEnabled'] == true;
+    // Missing = on (PR #14), but only collections with detail routes have pages.
+    final details = detailKindForCollection(def.name) != null && d.data['detailsEnabled'] != false;
     final itemPath = itemPublicPathFor(def, d.id, d.data, english: !context.isAr);
     // Single-tap alternative to dragging (WCAG 2.5.7).
     final moves = <Widget>[
@@ -245,6 +246,16 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
         ),
       ],
     ];
+    // The item's own detail page when it has one (else the toolbar's
+    // "open on site" shows the collection page).
+    final openItem = itemPath == null
+        ? null
+        : IconButton(
+            key: ValueKey('openItem-${d.id}'),
+            tooltip: context.tr('openItemOnSite'),
+            icon: const Icon(Icons.open_in_new_rounded),
+            onPressed: () => _openOnSite(context, itemPath),
+          );
     return Card(
       key: ValueKey(d.id),
       margin: const EdgeInsets.only(bottom: 8),
@@ -276,21 +287,15 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
               context.tr('updatedBy', {'t': fmtDateTime(updated), 'u': d.updatedBy.isEmpty ? '—' : d.updatedBy}),
               style: const TextStyle(fontSize: 11, color: AppColors.muted),
             ),
-          // Phones: the move buttons get their own row so the title keeps its width.
-          if (narrow && moves.isNotEmpty) Row(mainAxisSize: MainAxisSize.min, children: moves),
+          // Phones: the move buttons (and the item's page link, which every
+          // item has since PR #14) get their own row so the title keeps its width.
+          if (narrow && (moves.isNotEmpty || openItem != null))
+            Wrap(children: [...moves, ?openItem]),
         ]),
         onTap: () => _openEditor(context, d),
         trailing: Row(mainAxisSize: MainAxisSize.min, children: [
           if (!narrow) ...moves,
-          // The item's own detail page when it has one (else the toolbar's
-          // "open on site" shows the collection page).
-          if (itemPath != null)
-            IconButton(
-              key: ValueKey('openItem-${d.id}'),
-              tooltip: context.tr('openItemOnSite'),
-              icon: const Icon(Icons.open_in_new_rounded),
-              onPressed: () => _openOnSite(context, itemPath),
-            ),
+          if (!narrow && openItem != null) openItem,
           if (def.hasVisible)
             IconButton(
               tooltip: context.tr(hidden ? 'show' : 'hide'),
@@ -399,11 +404,13 @@ String publicPathFor(CollectionDef def, {required bool english}) {
 }
 
 /// Public detail page of an item (PR #13 routes), or null when the item has
-/// none: its collection has no detail pages, `detailsEnabled` is off, or the
-/// item is hidden. `?lang=en` when the dashboard is in English.
+/// none: its collection has no detail pages, `detailsEnabled` is explicitly
+/// false (missing = on, PR #14), the item is hidden, or it is an inactive clinic
+/// (not listed publicly, so its page shows "not available"). `?lang=en` when the dashboard is in English.
 String? itemPublicPathFor(CollectionDef def, String id, Map<String, dynamic> data, {required bool english}) {
   final kind = detailKindForCollection(def.name);
-  if (kind == null || data['detailsEnabled'] != true || data['visible'] == false) return null;
+  if (kind == null || data['detailsEnabled'] == false || data['visible'] == false) return null;
+  if (kind == DetailKind.clinic && data['active'] == false) return null;
   final path = detailPathFor(kind, id);
   return english ? '$path?lang=en' : path;
 }

@@ -38,6 +38,11 @@ const _groups = <(List<String>, String, String, IconData)>[
   (['family', 'men', 'women', 'elderly'], 'اجتماعات خاصة', 'Special meetings', Icons.diversity_3_rounded),
 ];
 
+/// Index of the stage group (Sunday school / youth / special meetings) a
+/// meeting [stage] belongs to, or -1 for other stages. Detail pages use it
+/// to suggest related meetings from the same group first.
+int meetingGroupOf(String stage) => _groups.indexWhere((g) => g.$1.contains(stage));
+
 class EducationPage extends ConsumerWidget {
   const EducationPage({super.key});
 

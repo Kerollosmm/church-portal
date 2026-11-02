@@ -908,15 +908,31 @@ void main() {
       final repo = _ListBackend([
         AdminDoc('on', {'nameAr': 'St On', 'order': 10, 'detailsEnabled': true}),
         AdminDoc('hidden', {'nameAr': 'St Hidden', 'order': 20, 'detailsEnabled': true, 'visible': false}),
-        AdminDoc('off', {'nameAr': 'St Off', 'order': 30}),
+        AdminDoc('off', {'nameAr': 'St Off', 'order': 30, 'detailsEnabled': false}),
+        // Untouched item (no field): has a page since PR #14 (opt-out).
+        AdminDoc('untouched', {'nameAr': 'St Untouched', 'order': 40}),
       ]);
       await tester.pumpWidget(_adminApp(CollectionListScreen(repo: repo, def: collectionById('saints')!)));
       await tester.pumpAndSettle();
-      expect(find.text('Detail page'), findsNWidgets(2));
+      expect(find.text('Detail page'), findsNWidgets(3));
+      expect(find.byKey(const ValueKey('openItem-untouched')), findsOneWidget);
       expect(find.byKey(const ValueKey('openItem-on')), findsOneWidget);
       expect(find.byKey(const ValueKey('openItem-hidden')), findsNothing, reason: 'hidden items have no public page');
       expect(find.byKey(const ValueKey('openItem-off')), findsNothing);
-      expect(find.byTooltip('Open detail page on site'), findsOneWidget);
+      expect(find.byTooltip('Open detail page on site'), findsNWidgets(2));
+    });
+
+    testWidgets('collections without detail pages never show the badge (CodeRabbit review)', (tester) async {
+      tester.view.physicalSize = const Size(1200, 2000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final repo = _ListBackend([
+        AdminDoc('l1', {'nameAr': 'قداس', 'weekday': 7, 'start': '08:00', 'order': 10}),
+      ]);
+      await tester.pumpWidget(_adminApp(CollectionListScreen(repo: repo, def: collectionById('liturgies')!)));
+      await tester.pumpAndSettle();
+      expect(find.text('Detail page'), findsNothing);
+      expect(find.byKey(const ValueKey('openItem-l1')), findsNothing);
     });
 
     testWidgets('a detail-page row at 320 px x 200% text keeps its open-page button without overflow', (tester) async {

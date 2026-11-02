@@ -4,7 +4,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:church_portal/core/document_lang.dart';
 import 'package:church_portal/data/content_repository.dart';
@@ -19,6 +18,7 @@ import 'package:church_portal/router.dart';
 import 'package:church_portal/state/providers.dart';
 import 'package:church_portal/ui/widgets/app_shell.dart';
 import 'package:church_portal/ui/widgets/common.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
@@ -291,7 +291,7 @@ void main() {
     test('missing, hidden or detailsEnabled off: unavailable', () {
       expect(detailStateFor(null, features: f), DetailState.unavailable);
       expect(detailStateFor(on, features: f, visible: false), DetailState.unavailable);
-      expect(detailStateFor(const ItemDetails(), features: f), DetailState.unavailable);
+      expect(detailStateFor(const ItemDetails(detailsEnabled: false), features: f), DetailState.unavailable);
       expect(detailStateFor(on, features: f), DetailState.available);
     });
 
@@ -495,14 +495,22 @@ void main() {
       'image': {'source': 'inline', 'mediaId': 'c1', 'alt': 'Cover'}
     };
 
-    testWidgets('detailsEnabled off: cards unchanged (no Details link, images still enlarge)', (tester) async {
+    testWidgets('detailsEnabled switched off: that card has no Details link, its image still enlarges', (tester) async {
       final (router, _) =
           await _pump(tester, size: const Size(1400, 6000), seed: _seed(enabled: false, extra: image));
       for (final e in lists.entries) {
         router.go(e.value);
         await tester.pumpAndSettle();
-        expect(find.byKey(const Key('detailsLink')), findsNothing, reason: e.value);
-        expect(find.byKey(const Key('itemImageTap')), findsWidgets, reason: '${e.value}: fixture image enlarges');
+        final id = e.key == DetailKind.priest ? 'd-priest' : 'd-${e.key.name}';
+        expect(find.byKey(ValueKey('detailsLink-$id')), findsNothing, reason: e.value);
+        if (e.key == DetailKind.priest || e.key == DetailKind.saint) {
+          // /about shows both a priest and a saint fixture: each card must still enlarge its own image.
+          final card = find.byKey(ValueKey('aboutCard-$id'));
+          expect(find.descendant(of: card, matching: find.byKey(const Key('itemImageTap'))), findsOneWidget,
+              reason: '$id: fixture image enlarges');
+        } else {
+          expect(find.byKey(const Key('itemImageTap')), findsWidgets, reason: '${e.value}: fixture image enlarges');
+        }
       }
     });
 
@@ -662,6 +670,176 @@ void main() {
       expect(inFooter(find.byKey(const Key('footerPhone-035368888'))), findsNothing);
       expect(inFooter(find.byKey(const Key('footerSocial-facebook'))), findsNothing);
       expect(inFooter(find.byKey(const Key('footerQuickLinks'))), findsOneWidget);
+    });
+  });
+
+  group('PR #14: detail pages on by default + richer page', () {
+    void dropFlag(Map<String, dynamic> raw) => ((raw['meetings'] as Map)['d-meeting'] as Map).remove('detailsEnabled');
+
+    testWidgets('untouched item (no detailsEnabled field): card links, page shows ALL admin details', (tester) async {
+      final (router, _) = await _pump(tester,
+          size: const Size(1400, 6000), seed: _seed(patch: dropFlag), initial: '/church-education');
+      final link = find.byKey(const ValueKey('detailsLink-d-meeting'));
+      expect(link, findsOneWidget);
+      await tester.ensureVisible(link);
+      await tester.tap(link);
+      await tester.pumpAndSettle();
+      expect(_path(router), '/church-education/d-meeting');
+      expect(find.byKey(const Key('itemDetailPage')), findsOneWidget);
+      expect(find.text('Long-form details about this service'), findsOneWidget);
+      expect(find.text('Coordinator'), findsOneWidget);
+      expect(find.text('Mr. Mina'), findsOneWidget);
+      expect(find.byKey(const ValueKey('galleryThumb-0')), findsOneWidget);
+      expect(find.byKey(const ValueKey('galleryThumb-1')), findsOneWidget);
+      expect(find.text('Register after the liturgy'), findsOneWidget);
+    });
+
+    testWidgets('a seeded meeting with no detail fields at all still gets a card link and a page', (tester) async {
+      final (router, _) = await _pump(tester, size: const Size(1400, 6000), initial: '/church-education');
+      final link = find.byKey(const ValueKey('detailsLink-youth'));
+      expect(link, findsOneWidget);
+      await tester.ensureVisible(link);
+      await tester.tap(link);
+      await tester.pumpAndSettle();
+      expect(_path(router), '/church-education/youth');
+      expect(find.byKey(const Key('itemDetailPage')), findsOneWidget);
+      expect(find.byKey(const Key('detailFacts')), findsOneWidget);
+    });
+
+    testWidgets('an explicit detailsEnabled:false still hides the link and the page', (tester) async {
+      final (router, _) =
+          await _pump(tester, size: const Size(1400, 6000), seed: _seed(enabled: false), initial: '/church-education');
+      expect(find.byKey(const ValueKey('detailsLink-d-meeting')), findsNothing);
+      router.go('/church-education/d-meeting');
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('itemUnavailable')), findsOneWidget);
+    });
+
+    testWidgets('key facts are labelled rows (day, time, place)', (tester) async {
+      await _pump(tester, initial: '/church-education/d-meeting');
+      final facts = find.byKey(const Key('detailFacts'));
+      expect(facts, findsOneWidget);
+      for (final t in ['Day', 'Time', 'Place', 'Friday', 'Main hall']) {
+        expect(find.descendant(of: facts, matching: find.text(t)), findsOneWidget, reason: t);
+      }
+    });
+
+    testWidgets('quick actions: calendar for weekly items, directions for on-site items, share everywhere',
+        (tester) async {
+      final (router, _) = await _pump(tester, size: const Size(400, 3000));
+      const calendar = {
+        '/church-education/d-meeting': true, '/clinics/d-clinic': true, '/church-activities/d-activity': false, //
+        '/about/saints/d-saint': false, '/about/milestones/d-milestone': false, '/about/priests/d-priest': false,
+      };
+      const directions = {
+        '/church-education/d-meeting': true, '/clinics/d-clinic': true, '/church-activities/d-activity': true, //
+        '/public-services/d-facility': true, '/about/saints/d-saint': false, '/about/priests/d-priest': false,
+      };
+      for (final e in calendar.entries) {
+        router.go(e.key);
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('detailAddToCalendar')), e.value ? findsOneWidget : findsNothing, reason: e.key);
+        expect(find.byKey(const Key('detailShare')), findsOneWidget, reason: e.key);
+      }
+      for (final e in directions.entries) {
+        router.go(e.key);
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('detailDirections')), e.value ? findsOneWidget : findsNothing, reason: e.key);
+      }
+    });
+
+    testWidgets('no directions when the church has no map destination (CodeRabbit review)', (tester) async {
+      await _pump(tester,
+          seed: _seed(patch: (raw) {
+            final c = raw['settings']['church'] as Map;
+            for (final k in ['mapsQuery', 'mapsUrl', 'addressAr', 'addressEn', 'lat', 'lng']) {
+              c.remove(k);
+            }
+          }),
+          initial: '/church-education/d-meeting');
+      expect(find.byKey(const Key('itemDetailPage')), findsOneWidget);
+      expect(find.byKey(const Key('detailDirections')), findsNothing);
+    });
+
+    testWidgets('share: a refused clipboard shows the link instead of failing silently (CodeRabbit review)',
+        (tester) async {
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+        if (call.method == 'Clipboard.setData') throw PlatformException(code: 'denied');
+        return null;
+      });
+      addTearDown(() => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, null));
+      await _pump(tester, initial: '/church-education/d-meeting');
+      await tester.ensureVisible(find.byKey(const Key('detailShare')));
+      await tester.tap(find.byKey(const Key('detailShare')));
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+      expect(find.text('Link copied'), findsNothing);
+      expect(find.text('Could not copy the link: $kCanonicalOrigin/church-education/d-meeting?lang=en'), findsOneWidget);
+    });
+
+    testWidgets('directions follow the contact-info section', (tester) async {
+      await _pump(tester, seed: _seed(sections: const {'contactInfo': false}), initial: '/church-education/d-meeting');
+      expect(find.byKey(const Key('detailDirections')), findsNothing);
+    });
+
+    testWidgets('share copies the canonical link (with ?lang=en in English) and confirms', (tester) async {
+      final copied = <String>[];
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+        if (call.method == 'Clipboard.setData') copied.add((call.arguments as Map)['text'] as String);
+        return null;
+      });
+      addTearDown(() => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, null));
+      await _pump(tester, initial: '/church-education/d-meeting');
+      await tester.ensureVisible(find.byKey(const Key('detailShare')));
+      await tester.tap(find.byKey(const Key('detailShare')));
+      await tester.pump();
+      expect(copied, ['$kCanonicalOrigin/church-education/d-meeting?lang=en']);
+      expect(find.text('Link copied'), findsOneWidget);
+    });
+
+    testWidgets('"More in this section" links to other items, same stage group first', (tester) async {
+      final (router, _) = await _pump(tester, size: const Size(400, 3000), initial: '/church-education/d-meeting');
+      final related = find.byKey(const Key('detailRelated'));
+      expect(related, findsOneWidget);
+      // d-meeting is a youth meeting: youth / university / graduates come first.
+      final youth = find.byKey(const ValueKey('relatedLink-youth'));
+      expect(youth, findsOneWidget);
+      expect(find.byKey(const ValueKey('relatedLink-d-meeting')), findsNothing);
+      expect(find.byKey(const ValueKey('relatedLink-angels')), findsNothing);
+      await tester.ensureVisible(youth);
+      await tester.tap(youth);
+      await tester.pumpAndSettle();
+      expect(_path(router), '/church-education/youth');
+      expect(find.byKey(const Key('itemDetailPage')), findsOneWidget);
+    });
+
+    testWidgets('related links skip items whose page is off or whose section is off (Codex review)', (tester) async {
+      await _pump(tester,
+          size: const Size(400, 3000),
+          seed: _seed(patch: (raw) => ((raw['meetings'] as Map)['youth'] as Map)['detailsEnabled'] = false),
+          initial: '/church-education/d-meeting');
+      expect(find.byKey(const Key('detailRelated')), findsOneWidget);
+      expect(find.byKey(const ValueKey('relatedLink-youth')), findsNothing, reason: 'its page is switched off');
+      expect(find.byKey(const ValueKey('relatedLink-university')), findsOneWidget);
+    });
+
+    testWidgets('a departed father never suggests serving priests while their section is off', (tester) async {
+      await _pump(tester,
+          size: const Size(400, 3000), seed: _seed(sections: const {'priests': false}), initial: '/about/priests/d-departed');
+      expect(find.byKey(const Key('itemDetailPage')), findsOneWidget);
+      expect(find.byKey(const ValueKey('relatedLink-tadros')), findsOneWidget);
+      expect(find.byKey(const ValueKey('relatedLink-bemwa')), findsNothing, reason: 'serving priests section is off');
+    });
+
+    testWidgets('320 px at 200% text in Arabic: rich page lays out without overflow', (tester) async {
+      await _pump(tester,
+          size: const Size(320, 6000),
+          textScale: 2.0,
+          locale: const Locale('ar'),
+          initial: '/church-education/d-meeting');
+      expect(tester.takeException(), isNull);
+      expect(find.byKey(const Key('detailFacts')), findsOneWidget);
+      expect(find.byKey(const Key('detailShare')), findsOneWidget);
     });
   });
 }

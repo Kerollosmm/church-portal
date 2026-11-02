@@ -79,7 +79,7 @@ class AboutPage extends ConsumerWidget {
           retry: saintsProvider,
           isEmpty: (d) => d.isEmpty,
           builder: (context, saints) => ResponsiveGrid(minItemWidth: 420, children: [
-            for (final s in saints) SaintCard(s),
+            for (final s in saints) SaintCard(s, key: ValueKey('aboutCard-${s.id}')),
           ]),
         ),
         ],
@@ -96,11 +96,11 @@ class AboutPage extends ConsumerWidget {
                 if (serving.isEmpty)
                   const EmptyState()
                 else
-                  ResponsiveGrid(minItemWidth: 300, children: [for (final p in serving) PriestCard(p)]),
+                  ResponsiveGrid(minItemWidth: 300, children: [for (final p in serving) PriestCard(p, key: ValueKey('aboutCard-${p.id}'))]),
               ],
               if (departed.isNotEmpty) ...[
                 SectionTitle(context.tr('departedPriests'), icon: Icons.local_florist_rounded),
-                ResponsiveGrid(minItemWidth: 300, children: [for (final p in departed) PriestCard(p)]),
+                ResponsiveGrid(minItemWidth: 300, children: [for (final p in departed) PriestCard(p, key: ValueKey('aboutCard-${p.id}'))]),
               ],
             ]);
           },

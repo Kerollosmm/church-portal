@@ -337,9 +337,13 @@ class DirectoryCard extends StatelessWidget {
                 const SizedBox(height: 2),
                 Text(subtitle, style: const TextStyle(color: AppColors.muted, fontSize: 13)),
                 const SizedBox(height: 6),
+                // Flexible: "Learn more" wraps instead of overflowing at 320 px / 200% text.
                 Row(children: [
-                  Text(context.tr('learnMore'),
-                      style: TextStyle(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.w700, fontSize: 13)),
+                  Flexible(
+                    child: Text(context.tr('learnMore'),
+                        style: TextStyle(
+                            color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.w700, fontSize: 13)),
+                  ),
                   const SizedBox(width: 4),
                   Icon(Icons.arrow_forward_rounded,
                       size: 16, color: Theme.of(context).colorScheme.primary),
@@ -403,8 +407,9 @@ const facebookBlue = Color(0xFF145DBF);
 const youtubeRed = Color(0xFFD32F2F);
 const instagramPink = Color(0xFFC13584);
 
-/// Detail page of an item card, or null while its `detailsEnabled` is off
-/// (the card then renders exactly as before: no link, no card tap).
+/// Detail page of an item card, or null when an admin switched it off
+/// (explicit `detailsEnabled: false`; missing = on since PR #14). The card
+/// then has no Details link and no card tap.
 String? cardDetailPath(DetailKind kind, String id, ItemDetails details) =>
     details.detailsEnabled ? detailPathFor(kind, id) : null;
 

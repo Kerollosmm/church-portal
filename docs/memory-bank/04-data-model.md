@@ -67,15 +67,17 @@ malformed = no image and the card keeps its icon / initials placeholder. The see
 
 On the **7 detail collections** `meetings`, `activities`, `clinics`, `facilities`, `priests`, `milestones`,
 `saints` (**not** `liturgies`, `seasons`, `alerts`) every model has `details` (`ItemDetails.fromMap(doc)`;
-`ItemDetails.none` for const constructors). All keys are optional and **default to today's behaviour**, so existing
-and seeded documents look and behave exactly as before. The data model, rules and assistant grounding are in place
+`ItemDetails.none` for const constructors). All keys are optional. Except `detailsEnabled`, they default to the
+pre-PR #11 behaviour (images / contacts / socials shown where they already were). `detailsEnabled` is **opt-out
+since PR #14** (ADR-021): a document without it — every seeded and untouched item — has a public detail page and a
+card link; only an explicit `false` removes them. The data model, rules and assistant grounding are in place
 (PR #11); the admin editor since PR #12 (grouped `DocEditor`, `07-admin-dashboard.md`) and the public
 `/<section>/:id` pages since PR #13 (`ItemDetailPage`, `06-features.md`). `showContacts` / `showSocials` also gate
 the buttons already on the item's list card (PR #13).
 
 | Key | Type / cap (rules) | Default | Meaning |
 |---|---|---|---|
-| `detailsEnabled` | bool | **false** | the item gets a public detail page (and its detail text is grounded for the assistant) |
+| `detailsEnabled` | bool | **true** (missing = on, PR #14 / ADR-021) | the item has a public detail page (and its detail text is grounded for the assistant); only an explicit `false` removes it. Rules still only type-check it |
 | `showDetailImages` | bool | true | show cover + gallery on the detail page (also needs `Sections.media`) |
 | `showContacts` / `showSocials` | bool | true | show the item's phones / social links (assistant too; socials also need `Sections.socials`) |
 | `detailsAr` / `detailsEn` | string ≤ 10,000 | `''` | long text |

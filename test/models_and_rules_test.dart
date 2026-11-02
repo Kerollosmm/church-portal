@@ -30,9 +30,9 @@ void main() {
   });
 
   group('ItemDetails', () {
-    test('missing fields keep today\'s behaviour: details off, images/contacts/socials on', () {
+    test('missing fields: detail page on (opt-out, PR #14), images/contacts/socials on', () {
       for (final d in [ItemDetails.fromMap(const {}), const ItemDetails(), ItemDetails.none]) {
-        expect(d.detailsEnabled, isFalse);
+        expect(d.detailsEnabled, isTrue);
         expect(d.showDetailImages, isTrue);
         expect(d.showContacts, isTrue);
         expect(d.showSocials, isTrue);
@@ -52,7 +52,7 @@ void main() {
         'showContacts': null,
         'showSocials': 'no',
       });
-      expect(d.detailsEnabled, isFalse);
+      expect(d.detailsEnabled, isTrue);
       expect(d.showDetailImages, isTrue);
       expect(d.showContacts, isTrue);
       expect(d.showSocials, isTrue);
@@ -144,15 +144,15 @@ void main() {
       };
       for (final e in parsed.entries) {
         final none = e.value(const {});
-        expect(none.detailsEnabled, isFalse, reason: e.key);
+        expect(none.detailsEnabled, isTrue, reason: e.key);
         expect(none.showDetailImages, isTrue, reason: e.key);
         final d = e.value(detail);
         expect(d.detailsEnabled, isTrue, reason: e.key);
         expect(d.detailsAr, 'تفاصيل', reason: e.key);
         expect(d.gallery.single.mediaId, 'm1', reason: e.key);
       }
-      // Const constructors default to "no details".
-      expect(const Meeting(id: 'x', stage: 's', nameAr: 'ا', nameEn: '').details.detailsEnabled, isFalse);
+      // Const constructors default to "page on, nothing extra".
+      expect(const Meeting(id: 'x', stage: 's', nameAr: 'ا', nameEn: '').details.detailsEnabled, isTrue);
       expect(const Saint(id: 'x', nameAr: 'ا', nameEn: '').details, same(ItemDetails.none));
     });
 

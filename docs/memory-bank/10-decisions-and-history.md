@@ -203,6 +203,28 @@ supersede them.
   notes use `context.pick`. The footer renders the FR-G-04 options (phones need `contactInfo`, socials `socials`);
   no site-wide "last updated" date (nothing tracks one).
 
+## ADR-021 — Detail pages are opt-out; the detail page always shows the item's own info (PR #14)
+- **Context:** after PR #13 an admin filled the family meeting's details, extra field, gallery and WhatsApp, but
+  tapping its card did nothing: `detailsEnabled` defaulted to `false` and the editor saves only changed fields, so
+  the switch was never written (live read, 2 Nov 2026). Every card on the site was inert until an admin found a
+  switch in a collapsed group.
+- **Research:** NN/g — a card is a short entry point to further details on a separate page, and the whole card is
+  usually the click target (nngroup.com/articles/cards-component); Material 3 — on compact screens selecting a
+  list item opens a page with the details (m3.material.io/components/lists/guidelines, list-detail canonical
+  layout: one pane below 600 dp); accessible-card patterns — big hit area, chevron/visible link affordance, single
+  labelled link for screen readers, inner buttons stay operable (dap.berkeley.edu accessible card patterns,
+  developer.chrome.com card guidance); Google Calendar template links take `ctz` + `recur=RRULE:…`
+  (interactiondesignfoundation.github.io/add-event-to-calendar-docs).
+- **Decision:** missing `detailsEnabled` = **on** (model, admin `missingBool`/`newBool` true, admin badge/link);
+  only an explicit `false` hides the page and the card link. Firestore rules unchanged (type check only). The page
+  always carries the item's own info as labelled key facts, then summary, long text, custom fields, gallery,
+  contacts, links; quick actions add to calendar (weekly items), directions (on-site items, `contactInfo` on) and
+  share (copy canonical link); "More in this section" from the same list (no extra reads). Cards stay uncluttered —
+  details live on the page.
+- **Consequences:** every visible item is a shareable, indexable page; the assistant grounds detail text for every
+  item that has some unless switched off; existing explicit `false` values keep hiding pages. Admins who saved
+  `showDetailImages: false` keep photos hidden on that page (their choice).
+
 ## Timeline
 
 | When | PR / commit | What |
@@ -224,5 +246,7 @@ supersede them.
 | 2 Nov 2026 | **PR #12** — "Admin customization studio" (`feat/pr12-admin-customization-studio`) | Customization plan PR #12: `FieldGroup` + `FieldType.imageList`; detail / photos / contacts groups on the 7 collections (cover image now on meetings/clinics/facilities, BR-11 warning on meetings' photos); gallery upload / link / alt / reorder / remove (≤ 8) with orphan clean-up; split saves (`splitSavePayload`, `featuresSaveWrites`) and `mergeFields`; Page headers + Footer cards; detail badge and item link on list rows; `ObjectKey(_stream)` on lists, messages, admins; 320 px / 200 % reflow (row actions, messages, admins, dropdowns); emulator tests of the editors' write sequences. Review fixes: extra-field rows accept a title in either language (`rowRequireAnyOf`), orphan clean-up measured from the save's first attempt (`_saveBaseline`). |
 
 | 2 Nov 2026 | **PR #13** — "Public clickable detail pages, custom headers & upgraded footer" (`feat/pr13-public-detail-pages`) | Customization plan PR #13 (final): 7 detail sub-routes + `ItemDetailPage` (lazy zoomable cover/gallery, long text, custom-field cards, contact & social actions, dual priest gating, per-item canonical/noindex); parent-aware phone Back arrow; Details links / card tap on the 7 list cards, item contact/social switches on card buttons, optional images on meeting/clinic/facility cards; `CustomizablePageHeader` + `PageIntro` on the 8 customizable pages; FR-G-04 footer (phones, social icons, quick-link switch, note); `test/detail_pages_test.dart`. |
+
+| 2 Nov 2026 | **PR #14** — "Detail pages that actually open" (`feat/pr14-detail-pages-default-on`) | Opt-out detail pages (missing `detailsEnabled` = on) so every card opens its page; labelled key-facts card, Google Calendar link (weekly RRULE, Cairo zone), directions, copy-link share, "More in this section", hero cover; admin switch on by default with hint, phone rows move the open-page icon under the subtitle; home directory card "Learn more" wraps at 320 px / 200 %; ADR-021; `test/detail_ux_test.dart` + PR #14 group in `test/detail_pages_test.dart`. |
 
 Append new PRs to this table.

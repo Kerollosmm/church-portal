@@ -108,10 +108,12 @@ For each `CollectionDef`:
   `+ ?lang=en` when the dashboard is in English — `publicPathFor`) in a new tab on web (`Uri.base.resolve`), or
   navigates there on mobile.
 - Tile: title (`titleKeys`), subtitle (weekday, date, time range, season/stage/category/type/specialty labels,
-  ⛔ inactive, start/end), tags *Hidden* / *Unconfirmed*, "updated by … at …". Since PR #12 an item with
-  `detailsEnabled` shows a **«صفحة تفاصيل / Detail page»** badge (own line under the title), and when it is also
+  ⛔ inactive, start/end), tags *Hidden* / *Unconfirmed*, "updated by … at …". Since PR #12 an item whose detail page is on (since PR #14: unless
+  `detailsEnabled` is explicitly `false`) shows a **«صفحة تفاصيل / Detail page»** badge (own line under the title), and when it is also
   visible an **Open detail page on site** icon (`ValueKey('openItem-<id>')`, `itemPublicPathFor`: e.g.
-  `/clinics/<id>`, `/about/saints/<id>`; built from `detailPathFor` — the public routes exist since PR #13).
+  `/clinics/<id>`, `/about/saints/<id>`; built from `detailPathFor` — the public routes exist since PR #13). On
+  phones (< 600 px) that icon sits in the row under the subtitle with the move buttons (PR #14), so the title keeps
+  its width now that almost every row has it.
 - The list `StreamBuilder` is keyed by `ObjectKey(_stream)` (also on Messages and Admins, PR #12): after a backend
   switch the old list is never shown while the new one loads.
 - 👁 **hide/show** (`update(visible)`) — only when the collection has a `visible` field (not seasons).
@@ -157,7 +159,7 @@ For each `CollectionDef`:
 - New docs write all collected values (+ `newDefaults`); **existing docs write only changed fields**
   (`changedFields`, deep compare) with merge — never overwriting another admin's concurrent edits to other fields.
 - **Field groups (PR #12):** `FieldDef.group` — `basic` fields stay open at the top; on the 7 detail collections
-  `details` (**«صفحة التفاصيل والحقول الإضافية»**: `detailsEnabled` off by default, details AR/EN ≤ 10,000, up to
+  `details` (**«صفحة التفاصيل والحقول الإضافية»**: «إظهار صفحة التفاصيل / Show the detail page» switch — **on by default** since PR #14 (missing field = on, new items saved with `true`; hint explains that tapping the card opens the full page and that switching it off hides the page and the «التفاصيل» link), details AR/EN ≤ 10,000, up to
   15 *extra fields* rows title AR / title EN ≤ 150 — a title in **either** language is required, checked per row
   by `FieldDef.rowRequireAnyOf` + `validateRowAnyOf` («أدخل عنوانًا بالعربية أو بالإنجليزية», like rules'
   `validExtraField`) — / value AR/EN ≤ 2000), `media` (**«الصور ومعرض
