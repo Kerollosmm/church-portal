@@ -12,6 +12,7 @@ import 'package:church_portal/domain/cairo_time.dart';
 import 'package:church_portal/domain/features.dart';
 import 'package:church_portal/router.dart';
 import 'package:church_portal/state/providers.dart';
+import 'package:church_portal/ui/admin/admin_page.dart';
 import 'package:church_portal/ui/admin/admin_schema.dart';
 import 'package:church_portal/ui/admin/admin_screens.dart';
 import 'package:church_portal/ui/admin/admin_validators.dart';
@@ -748,6 +749,62 @@ void main() {
       await tester.pumpAndSettle();
       expect(repo.reordered, ['b', 'a']);
       expect(repo.reorderedBase, 1000);
+    });
+
+    testWidgets('search clear and admin Home buttons expose tooltips (en + ar)', (tester) async {
+      tester.view.physicalSize = const Size(1200, 2000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final repo = _ListBackend([AdminDoc('a', {'name': 'Fr. A', 'status': 'serving', 'order': 10})]);
+      for (final (locale, clear) in [(const Locale('en'), 'Clear search'), (const Locale('ar'), 'مسح البحث')]) {
+        await tester.pumpWidget(MaterialApp(
+          key: ValueKey(locale),
+          locale: locale,
+          supportedLocales: const [Locale('ar'), Locale('en')],
+          localizationsDelegates: GlobalMaterialLocalizations.delegates,
+          home: Scaffold(body: CollectionListScreen(repo: repo, def: collectionById('priests')!)),
+        ));
+        await tester.pumpAndSettle();
+        await tester.enterText(find.byKey(const Key('admin-search')), 'x');
+        await tester.pumpAndSettle();
+        expect(find.byTooltip(clear), findsOneWidget);
+      }
+
+      await tester.pumpWidget(ProviderScope(
+        overrides: [adminRepositoryProvider.overrideWithValue(null)],
+        child: MaterialApp(
+          locale: const Locale('en'),
+          supportedLocales: const [Locale('ar'), Locale('en')],
+          localizationsDelegates: GlobalMaterialLocalizations.delegates,
+          home: const AdminPage(),
+        ),
+      ));
+      await tester.pumpAndSettle();
+      expect(find.byTooltip('Back to home'), findsOneWidget);
+    });
+
+    testWidgets('features and messages screens re-subscribe when the backend changes', (tester) async {
+      final a = _FakeBackend(), b = _FakeBackend();
+      await tester.pumpWidget(_adminApp(FeaturesScreen(repo: a)));
+      await tester.pump();
+      expect(b.watched, isEmpty);
+      await tester.pumpWidget(_adminApp(FeaturesScreen(repo: b)));
+      await tester.pump();
+      expect(b.watched, contains('settings/features'));
+
+      final c = _FakeBackend(), d = _FakeBackend();
+      await tester.pumpWidget(_adminApp(MessagesScreen(repo: c)));
+      await tester.pump();
+      await tester.pumpWidget(_adminApp(MessagesScreen(repo: d)));
+      await tester.pump();
+      expect(d.watched, contains('contact_messages'));
+
+      final e = _FakeBackend(), g = _FakeBackend();
+      await tester.pumpWidget(_adminApp(AdminsScreen(repo: e, selfUid: 'u')));
+      await tester.pump();
+      await tester.pumpWidget(_adminApp(AdminsScreen(repo: g, selfUid: 'u')));
+      await tester.pump();
+      expect(g.watched, contains('admins'));
     });
   });
 }

@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:church_portal/core/theme.dart';
 import 'package:church_portal/data/admin_repository.dart';
 import 'package:church_portal/domain/cairo_time.dart';
 import 'package:church_portal/domain/features.dart';
@@ -16,6 +17,13 @@ import 'package:material_ui/material_ui.dart';
 
 FieldDef _f(FieldType t, {bool required = false, num? min, num? max, bool allowPath = false, int maxLength = 0}) =>
     FieldDef('k', 'ك', 'k', t, required: required, min: min, max: max, allowPath: allowPath, maxLength: maxLength);
+
+/// WCAG 2.x contrast ratio between two opaque colours.
+double contrastRatio(Color a, Color b) {
+  final la = a.computeLuminance(), lb = b.computeLuminance();
+  final hi = la > lb ? la : lb, lo = la > lb ? lb : la;
+  return (hi + 0.05) / (lo + 0.05);
+}
 
 Widget _app(Widget child, {Locale locale = const Locale('en')}) => MaterialApp(
       locale: locale,
@@ -364,6 +372,80 @@ void main() {
       await tester.tap(find.byKey(const Key('features-save')));
       await tester.pumpAndSettle();
       expect(saved, isNull);
+    });
+  });
+
+  group('PR #10: selected chip contrast & narrow 200% reflow', () {
+    testWidgets('selected theme ChoiceChip and clinic weekday FilterChip use a white label', (tester) async {
+      tester.view.physicalSize = const Size(1200, 5000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(_app(Scaffold(
+        body: FeaturesEditor(initial: FeatureSettings.defaults, onSave: (f) async {}),
+      )));
+      final chip = tester.widget<ChoiceChip>(find.byKey(const ValueKey('theme-burgundy')));
+      expect(chip.selected, isTrue);
+      expect(chip.labelStyle?.color, Colors.white);
+      expect(contrastRatio(Colors.white, AppColors.burgundy), greaterThanOrEqualTo(4.5));
+
+      final def = collectionById('clinics')!;
+      await tester.pumpWidget(_app(DocEditor(
+        title: 'Clinic',
+        fields: def.fields,
+        def: def,
+        data: const {'days': [5]},
+        popOnSave: false,
+        onSave: (d) async {},
+      )));
+      await tester.pumpAndSettle();
+      final friday = tester.widget<FilterChip>(find.widgetWithText(FilterChip, 'Friday'));
+      expect(friday.selected, isTrue);
+      expect(friday.labelStyle?.color, Colors.white);
+      expect(friday.checkmarkColor, Colors.white);
+    });
+
+    testWidgets('FeaturesEditor at 320 px x 200% text: no overflow, move buttons still tappable', (tester) async {
+      tester.view.physicalSize = const Size(320, 4000);
+      tester.view.devicePixelRatio = 1;
+      tester.platformDispatcher.textScaleFactorTestValue = 2.0;
+      addTearDown(tester.view.reset);
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      FeatureSettings? saved;
+      await tester.pumpWidget(_app(Scaffold(
+        body: FeaturesEditor(initial: FeatureSettings.defaults, onSave: (f) async => saved = f),
+      )));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      final down = find.byKey(const ValueKey('home-banner-down'));
+      await tester.scrollUntilVisible(down, 300, scrollable: find.byType(Scrollable).first);
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(find.byKey(const ValueKey('home-banner-up')), findsOneWidget);
+      await tester.tap(down);
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('features-save')));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(saved!.homeOrder.indexOf('banner'), 1);
+    });
+
+    testWidgets('DocEditor image field at 320 px x 200% text: no overflow', (tester) async {
+      tester.view.physicalSize = const Size(320, 6000);
+      tester.view.devicePixelRatio = 1;
+      tester.platformDispatcher.textScaleFactorTestValue = 2.0;
+      addTearDown(tester.view.reset);
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      final def = collectionById('priests')!;
+      await tester.pumpWidget(_app(DocEditor(
+        title: 'Priest',
+        fields: def.fields,
+        def: def,
+        popOnSave: false,
+        onSave: (d) async {},
+      )));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(find.byKey(const Key('imageUploadBtn')), findsOneWidget);
     });
   });
 }

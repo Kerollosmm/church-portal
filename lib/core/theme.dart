@@ -80,6 +80,8 @@ ThemeData buildTheme(Locale locale, {Color primary = AppColors.burgundy}) {
       selectedColor: primary,
       backgroundColor: Colors.white,
       labelStyle: GoogleFonts.cairo(fontWeight: FontWeight.w600),
+      checkmarkColor: Colors.white,
+      secondaryLabelStyle: GoogleFonts.cairo(fontWeight: FontWeight.w700, color: Colors.white),
       side: BorderSide(color: AppColors.gold.withValues(alpha: 0.5)),
     ),
     inputDecorationTheme: InputDecorationTheme(

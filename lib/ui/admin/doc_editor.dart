@@ -377,6 +377,11 @@ class DocEditorState extends State<DocEditor> {
               FilterChip(
                 label: Text(weekdayName(d, arabic: context.isAr)),
                 selected: set.contains(d),
+                checkmarkColor: Colors.white,
+                labelStyle: TextStyle(
+                  color: set.contains(d) ? Colors.white : AppColors.burgundy,
+                  fontWeight: FontWeight.w600,
+                ),
                 onSelected: (sel) => setState(() {
                   sel ? set.add(d) : set.remove(d);
                   _dirty = true;
@@ -487,59 +492,68 @@ class DocEditorState extends State<DocEditor> {
             : current == null
                 ? context.tr('imageNone')
                 : (current.isRemote ? current.url : 'media/${current.mediaId}');
+    // Narrow screens or large text: preview above the status and buttons.
+    final stack = MediaQuery.sizeOf(context).width < 420 || MediaQuery.textScalerOf(context).scale(16) / 16 >= 1.5;
+    final previewBox = ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        width: 96,
+        height: 96,
+        color: AppColors.parchment,
+        child: busy ? const Center(child: CircularProgressIndicator(strokeWidth: 2)) : preview,
+      ),
+    );
+    final controls = Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(status,
+          key: const Key('imageStatus'),
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(color: AppColors.muted, fontSize: 12)),
+      const SizedBox(height: 8),
+      Wrap(spacing: 8, runSpacing: 8, children: [
+        OutlinedButton.icon(
+          key: const Key('imageUploadBtn'),
+          onPressed: widget.media == null || busy || _saving ? null : () => _pickImage(f),
+          icon: const Icon(Icons.upload_rounded),
+          label: Text(context.tr('imageUpload')),
+        ),
+        OutlinedButton.icon(
+          key: const Key('imageUrlBtn'),
+          onPressed: busy || _saving ? null : () => _askImageUrl(f),
+          icon: const Icon(Icons.link_rounded),
+          label: Text(context.tr('imageUseUrl')),
+        ),
+        if (hasImage)
+          TextButton.icon(
+            key: const Key('imageRemoveBtn'),
+            onPressed: busy || _saving ? null : () => _removeImage(f),
+            icon: const Icon(Icons.delete_outline, color: AppColors.alert),
+            label: Text(context.tr('imageRemove'), style: const TextStyle(color: AppColors.alert)),
+          ),
+      ]),
+      if (widget.media == null)
+        Padding(
+          padding: const EdgeInsets.only(top: 4),
+          child: Text(context.tr('imageUploadUnavailable'),
+              style: const TextStyle(color: AppColors.muted, fontSize: 11)),
+        ),
+    ]);
     return InputDecorator(
       key: ValueKey('field-${f.key}'),
       decoration: InputDecoration(labelText: _label(f), helperText: context.tr('imageHint'), helperMaxLines: 3),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: Container(
-              width: 96,
-              height: 96,
-              color: AppColors.parchment,
-              child: busy ? const Center(child: CircularProgressIndicator(strokeWidth: 2)) : preview,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(status,
-                  key: const Key('imageStatus'),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: AppColors.muted, fontSize: 12)),
-              const SizedBox(height: 8),
-              Wrap(spacing: 8, runSpacing: 8, children: [
-                OutlinedButton.icon(
-                  key: const Key('imageUploadBtn'),
-                  onPressed: widget.media == null || busy || _saving ? null : () => _pickImage(f),
-                  icon: const Icon(Icons.upload_rounded),
-                  label: Text(context.tr('imageUpload')),
-                ),
-                OutlinedButton.icon(
-                  key: const Key('imageUrlBtn'),
-                  onPressed: busy || _saving ? null : () => _askImageUrl(f),
-                  icon: const Icon(Icons.link_rounded),
-                  label: Text(context.tr('imageUseUrl')),
-                ),
-                if (hasImage)
-                  TextButton.icon(
-                    key: const Key('imageRemoveBtn'),
-                    onPressed: busy || _saving ? null : () => _removeImage(f),
-                    icon: const Icon(Icons.delete_outline, color: AppColors.alert),
-                    label: Text(context.tr('imageRemove'), style: const TextStyle(color: AppColors.alert)),
-                  ),
-              ]),
-              if (widget.media == null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 4),
-                  child: Text(context.tr('imageUploadUnavailable'),
-                      style: const TextStyle(color: AppColors.muted, fontSize: 11)),
-                ),
-            ]),
-          ),
-        ]),
+        if (stack)
+          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            previewBox,
+            const SizedBox(height: 12),
+            controls,
+          ])
+        else
+          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            previewBox,
+            const SizedBox(width: 12),
+            Expanded(child: controls),
+          ]),
         if (hasImage) ...[
           const SizedBox(height: 10),
           TextField(

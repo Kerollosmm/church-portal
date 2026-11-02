@@ -185,6 +185,7 @@ const Map<String, List<String>> _strings = {
   'noRecentEdits': ['لا توجد تعديلات مسجلة بعد', 'No recorded edits yet'],
   'updatedBy': ['آخر تعديل {t} — {u}', 'Updated {t} — {u}'],
   'searchHint': ['بحث…', 'Search…'],
+  'clearSearch': ['مسح البحث', 'Clear search'],
   'noMatches': ['لا توجد نتائج مطابقة', 'No matching items'],
   'showingCount': ['{n} من {t}', '{n} of {t}'],
   'dragToReorder': ['اسحب لإعادة الترتيب', 'Drag to reorder'],
