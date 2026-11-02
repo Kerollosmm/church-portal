@@ -70,6 +70,7 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
         ref.read(alertsProvider.future),
         ref.read(priestsProvider.future),
         ref.read(saintsProvider.future),
+        ref.read(milestonesProvider.future),
       ]).timeout(const Duration(seconds: 10));
     } catch (e) {
       debugPrint('Assistant: content not fully loaded: $e');
@@ -89,6 +90,7 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
         alerts: ref.read(alertsProvider).value ?? const [],
         priests: ref.read(priestsProvider).value ?? const [],
         saints: ref.read(saintsProvider).value ?? const [],
+        milestones: ref.read(milestonesProvider).value ?? const [],
       );
 
   /// Reuses the chat while the grounding (church data + Cairo date) is

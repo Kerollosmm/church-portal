@@ -20,6 +20,7 @@ String buildAssistantInstruction({
   List<Alert> alerts = const [],
   List<Priest> priests = const [],
   List<Saint> saints = const [],
+  List<Milestone> milestones = const [],
 }) {
   final f = features;
   final cairoNow = CairoTime.fromInstant(now);
@@ -155,12 +156,14 @@ String buildAssistantInstruction({
       ..writeln()
       ..writeln('## Clinics (book by phone or WhatsApp)');
     for (final c in clinics.where((c) => c.active)) {
+      final contacts = c.details.showContacts;
       b.writeln(
         '- ${c.sample ? '[UNCONFIRMED] ' : ''}${_bi(c.specialtyAr, c.specialtyEn)}: ${c.doctorName}'
         '${_bi(c.degreeAr, c.degreeEn).isNotEmpty ? ', ${_bi(c.degreeAr, c.degreeEn)}' : ''}; '
         '${c.days.map((d) => weekdayNamesEn[d]).join(', ')} ${formatRangeLatin(c.start, c.end)}'
-        '${c.bookingPhone.isNotEmpty ? '; booking ${c.bookingPhone}' : ''}'
-        '${c.whatsapp.isNotEmpty ? '; WhatsApp ${c.whatsapp}' : ''}',
+        '${contacts && c.bookingPhone.isNotEmpty ? '; booking ${c.bookingPhone}' : ''}'
+        '${contacts && c.whatsapp.isNotEmpty ? '; WhatsApp ${c.whatsapp}' : ''}'
+        '${_itemDetails(c.details, f, phone: false, whatsapp: false)}',
       );
     }
   }
@@ -171,12 +174,14 @@ String buildAssistantInstruction({
       ..writeln('## Sunday school & meetings');
     for (final m in meetings) {
       final day = m.weekday != null ? weekdayNamesEn[m.weekday!] : 'no fixed day (ask the church)';
+      final links = _showLinks(m.details, f);
       b.writeln(
         '- ${m.sample ? '[UNCONFIRMED] ' : ''}${_bi(m.nameAr, m.nameEn)} [${m.stage}]: $day '
         '${formatRangeLatin(m.start, m.end)}${_at(_bi(m.hallAr, m.hallEn))}'
         '${m.notes.isNotEmpty ? '; notes: ${m.notes}' : ''}'
-        '${m.facebookUrl.isNotEmpty ? '; Facebook ${m.facebookUrl}' : ''}'
-        '${m.whatsappUrl.isNotEmpty ? '; WhatsApp ${m.whatsappUrl}' : ''}',
+        '${links && m.facebookUrl.isNotEmpty ? '; Facebook ${m.facebookUrl}' : ''}'
+        '${links && m.whatsappUrl.isNotEmpty ? '; WhatsApp ${m.whatsappUrl}' : ''}'
+        '${_itemDetails(m.details, f, groupLinks: false)}',
       );
     }
   }
@@ -190,8 +195,9 @@ String buildAssistantInstruction({
         '- ${a.sample ? '[UNCONFIRMED] ' : ''}${_bi(a.titleAr, a.titleEn)}: ${_bi(a.descAr, a.descEn)}'
         '${_bi(a.scheduleAr, a.scheduleEn).isNotEmpty ? ' Schedule: ${_bi(a.scheduleAr, a.scheduleEn)}.' : ''}'
         '${a.ageRange.isNotEmpty ? ' Ages: ${a.ageRange}.' : ''}'
-        '${a.contactPhone.isNotEmpty ? ' Contact ${a.contactPhone}.' : ''}'
-        '${a.link.isNotEmpty ? ' Link: ${a.link}' : ''}',
+        '${a.details.showContacts && a.contactPhone.isNotEmpty ? ' Contact ${a.contactPhone}.' : ''}'
+        '${_showLinks(a.details, f) && a.link.isNotEmpty ? ' Link: ${a.link}' : ''}'
+        '${_itemDetails(a.details, f, phone: false, external: false)}',
       );
     }
   }
@@ -200,11 +206,13 @@ String buildAssistantInstruction({
     b
       ..writeln()
       ..writeln('## Public services');
-    for (final f in facilities) {
-      final hours = _bi(f.hoursAr, f.hoursEn);
+    for (final x in facilities) {
+      final hours = _bi(x.hoursAr, x.hoursEn);
       b.writeln(
-        '- ${f.sample ? '[UNCONFIRMED] ' : ''}${_bi(f.nameAr, f.nameEn)}: ${_bi(f.descAr, f.descEn)}'
-        '${hours.isNotEmpty ? ' Hours: $hours.' : ''}${f.phone.isNotEmpty ? ' Phone ${f.phone}.' : ''}',
+        '- ${x.sample ? '[UNCONFIRMED] ' : ''}${_bi(x.nameAr, x.nameEn)}: ${_bi(x.descAr, x.descEn)}'
+        '${hours.isNotEmpty ? ' Hours: $hours.' : ''}'
+        '${x.details.showContacts && x.phone.isNotEmpty ? ' Phone ${x.phone}.' : ''}'
+        '${_itemDetails(x.details, f, phone: false)}',
       );
     }
   }
@@ -228,7 +236,7 @@ String buildAssistantInstruction({
       ..writeln()
       ..writeln('## Priests serving the church');
     for (final p in serving) {
-      b.writeln('- ${p.sample ? '[UNCONFIRMED] ' : ''}${_priestLine(p)}');
+      b.writeln('- ${p.sample ? '[UNCONFIRMED] ' : ''}${_priestLine(p)}${_itemDetails(p.details, f)}');
     }
   }
   final departed = f.enabled(Sections.departedPriests) ? priests.where((p) => p.departed).toList() : const <Priest>[];
@@ -239,7 +247,7 @@ String buildAssistantInstruction({
     for (final p in departed) {
       b.writeln(
         '- ${p.sample ? '[UNCONFIRMED] ' : ''}${_priestLine(p)}'
-        '${p.departedDate.isNotEmpty ? '; departed ${p.departedDate}' : ''}',
+        '${p.departedDate.isNotEmpty ? '; departed ${p.departedDate}' : ''}${_itemDetails(p.details, f)}',
       );
     }
   }
@@ -256,12 +264,74 @@ String buildAssistantInstruction({
       final bio = _bi(_clip(s.bioAr, 400), _clip(s.bioEn, 400));
       b.writeln(
         '- ${_bi(s.nameAr, s.nameEn)}${feast.isNotEmpty ? '; feast: $feast' : ''}'
-        '${bio.isNotEmpty ? '. $bio' : ''}',
+        '${bio.isNotEmpty ? '. $bio' : ''}${_itemDetails(s.details, f)}',
+      );
+    }
+  }
+
+  if (f.enabled(Sections.milestones) && milestones.isNotEmpty) {
+    b
+      ..writeln()
+      ..writeln('## Our story (milestones)');
+    for (final m in milestones) {
+      final desc = _bi(_clip(m.descAr, 300), _clip(m.descEn, 300));
+      b.writeln(
+        '- ${m.year != null ? '${m.year}: ' : ''}${_bi(m.titleAr, m.titleEn)}${desc.isNotEmpty ? ': $desc' : ''}'
+        '${_itemDetails(m.details, f)}',
       );
     }
   }
 
   return b.toString();
+}
+
+/// Item links (existing or detail-page) are grounded only when the item shows
+/// its social links and the socials section is on.
+bool _showLinks(ItemDetails d, FeatureSettings f) => d.showSocials && f.enabled(Sections.socials);
+
+/// What an enabled detail page adds to an item's line: its long text (each
+/// language clipped to 300 chars), custom fields, contacts (when the item
+/// shows them) and links (when it shows social links and the socials section
+/// is on). Never any image / gallery data. [phone] / [whatsapp] / [groupLinks]
+/// / [external] are false where the line already carries that field.
+String _itemDetails(
+  ItemDetails d,
+  FeatureSettings f, {
+  bool phone = true,
+  bool whatsapp = true,
+  bool groupLinks = true,
+  bool external = true,
+}) {
+  if (!d.detailsEnabled) return '';
+  final out = StringBuffer();
+  final details = _bi(_clip(d.detailsAr.trim(), 300), _clip(d.detailsEn.trim(), 300));
+  if (details.isNotEmpty) out.write(' Details: $details.');
+  final fields = [
+    for (final x in d.extraFields)
+      [_bi(x.titleAr.trim(), x.titleEn.trim()), _bi(x.valueAr.trim(), x.valueEn.trim())].where((v) => v.isNotEmpty).join(': '),
+  ].where((v) => v.isNotEmpty);
+  if (fields.isNotEmpty) out.write(' ${fields.join('; ')}.');
+  if (d.showContacts) {
+    final note = _bi(d.contactNoteAr.trim(), d.contactNoteEn.trim());
+    final contacts = [
+      if (phone && d.contactPhone.isNotEmpty) 'phone ${d.contactPhone}',
+      if (whatsapp && d.whatsapp.isNotEmpty) 'WhatsApp ${d.whatsapp}',
+      if (note.isNotEmpty) note,
+    ];
+    if (contacts.isNotEmpty) out.write(' Contact: ${contacts.join('; ')}.');
+  }
+  if (_showLinks(d, f)) {
+    final label = _bi(d.externalLabelAr.trim(), d.externalLabelEn.trim());
+    final links = [
+      if (groupLinks && d.whatsappUrl.isNotEmpty) 'WhatsApp ${d.whatsappUrl}',
+      if (groupLinks && d.facebookUrl.isNotEmpty) 'Facebook ${d.facebookUrl}',
+      if (d.youtubeUrl.isNotEmpty) 'YouTube ${d.youtubeUrl}',
+      if (d.instagramUrl.isNotEmpty) 'Instagram ${d.instagramUrl}',
+      if (external && d.externalUrl.isNotEmpty) '${label.isNotEmpty ? label : 'Link'}: ${d.externalUrl}',
+    ];
+    if (links.isNotEmpty) out.write(' Links: ${links.join('; ')}');
+  }
+  return out.toString();
 }
 
 /// Bilingual value that never comes out blank when an editor filled only

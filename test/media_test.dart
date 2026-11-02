@@ -334,6 +334,32 @@ void main() {
       expect(text, isNot(contains('ALT-TEXT-123')));
       expect(text, isNot(contains('MEDIA-ID-777')));
     });
+
+    test('gallery URLs, media ids and alt text never reach the assistant prompt', () {
+      final seed = SeedData(jsonDecode(File('assets/seed/seed.json').readAsStringSync()) as Map<String, dynamic>);
+      const gallery = [
+        {'source': 'url', 'url': 'https://img.example.org/gallery-secret.jpg', 'alt': 'GALLERY-ALT-1'},
+        {'source': 'inline', 'mediaId': 'GALLERY-MEDIA-2', 'alt': 'GALLERY-ALT-2'},
+      ];
+      const page = {'detailsEnabled': true, 'detailsEn': 'Visible details', 'gallery': gallery};
+      final text = buildAssistantInstruction(
+        settings: seed.settings,
+        liturgies: const [],
+        seasons: const [],
+        clinics: [Clinic.fromMap('c', {'specialtyAr': 'أسنان', 'doctorName': 'د', ...page})],
+        meetings: [Meeting.fromMap('m', {'stage': 's', 'nameAr': 'اجتماع', ...page})],
+        activities: [Activity.fromMap('a', {'titleAr': 'كورال', ...page})],
+        facilities: [Facility.fromMap('f', {'nameAr': 'حضانة', ...page})],
+        priests: [Priest.fromMap('p', {'name': 'أبونا', ...page})],
+        saints: [Saint.fromMap('s', {'nameAr': 'قديس', ...page})],
+        milestones: [Milestone.fromMap('ms', {'titleAr': 'محطة', ...page})],
+        now: CairoTime.at(2026, 11, 1, 600),
+      );
+      expect(text, contains('Visible details'));
+      for (final s in ['gallery-secret', 'img.example.org', 'GALLERY-MEDIA-2', 'GALLERY-ALT-1', 'GALLERY-ALT-2']) {
+        expect(text, isNot(contains(s)), reason: s);
+      }
+    });
   });
 
   group('public cards', () {
