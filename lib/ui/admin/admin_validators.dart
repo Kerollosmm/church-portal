@@ -124,6 +124,13 @@ String fmtDate(DateTime v) {
 }
 
 /// Cross-field checks for a collected document: error key or null.
+/// Error key (`requiredTitleAnyLang`) when an [list] row (its sub-field
+/// texts in [row]) has none of [FieldDef.rowRequireAnyOf] filled, else null.
+String? validateRowAnyOf(FieldDef list, Map<String, String> row) {
+  if (list.rowRequireAnyOf.isEmpty) return null;
+  return list.rowRequireAnyOf.any((k) => (row[k] ?? '').trim().isNotEmpty) ? null : 'requiredTitleAnyLang';
+}
+
 String? validateDocument(CollectionDef? def, Map<String, dynamic> data) {
   if (def != null && def.requireAnyOf.isNotEmpty && def.requireAnyOf.every((k) => data[k] == null || data[k] == '')) {
     return 'needWeekdayOrDate';

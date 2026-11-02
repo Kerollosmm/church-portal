@@ -147,6 +147,7 @@ const Map<String, List<String>> _strings = {
   'saved': ['تم الحفظ', 'Saved'],
   'saveFailed': ['تعذّر الحفظ: {e}', 'Save failed: {e}'],
   'required': ['مطلوب', 'Required'],
+  'requiredTitleAnyLang': ['أدخل عنوانًا بالعربية أو بالإنجليزية', 'Enter a title in Arabic or English'],
   'invalid': ['قيمة غير صحيحة', 'Invalid value'],
   'notFound': ['الصفحة غير موجودة', 'Page not found'],
   'backHome': ['العودة للرئيسية', 'Back to home'],

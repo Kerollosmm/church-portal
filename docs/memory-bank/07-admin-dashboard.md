@@ -158,7 +158,9 @@ For each `CollectionDef`:
   (`changedFields`, deep compare) with merge — never overwriting another admin's concurrent edits to other fields.
 - **Field groups (PR #12):** `FieldDef.group` — `basic` fields stay open at the top; on the 7 detail collections
   `details` (**«صفحة التفاصيل والحقول الإضافية»**: `detailsEnabled` off by default, details AR/EN ≤ 10,000, up to
-  15 *extra fields* rows title AR (required, ≤ 150) / title EN / value AR/EN ≤ 2000), `media` (**«الصور ومعرض
+  15 *extra fields* rows title AR / title EN ≤ 150 — a title in **either** language is required, checked per row
+  by `FieldDef.rowRequireAnyOf` + `validateRowAnyOf` («أدخل عنوانًا بالعربية أو بالإنجليزية», like rules'
+  `validExtraField`) — / value AR/EN ≤ 2000), `media` (**«الصور ومعرض
   الصور»**: cover `image`, `showDetailImages`, `gallery`) and `contacts` (**«التواصل والروابط»**: `showContacts`,
   `showSocials`, the collection's own phone — `contactPhone`, clinics `bookingPhone`, facilities `phone` — WhatsApp,
   WhatsApp group/channel, Facebook, YouTube, Instagram, the external link — `externalUrl`, activities `link` — its
@@ -170,6 +172,9 @@ For each `CollectionDef`:
   a non-empty `gallery`, then non-empty `extraFields` — one write with both full lists exceeds the rules' 1,000-
   expression cap. If a later write fails, the earlier ones stay saved, the form stays dirty and a retry sends only
   the rest; uploads that no saved write references are deleted (not on a timeout, BUG-13).
+  Orphaned inline images (a replaced/removed cover or gallery photo) are measured from the values before the
+  save's **first** attempt (`_saveBaseline`, cleared on success), so a cover replaced by a partly failed attempt
+  is still deleted after the retry completes.
 - Choice / weekday dropdowns are `isExpanded` (long labels ellipsize at 320 px / 200 %); object-list row actions
   (move up/down, remove) are a `Wrap`.
 - Every save stamps `updatedAt` (server time) and `updatedBy` (email) via `AdminRepository._stamp`.

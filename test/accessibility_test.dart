@@ -919,6 +919,21 @@ void main() {
       expect(find.byTooltip('Open detail page on site'), findsOneWidget);
     });
 
+    testWidgets('a detail-page row at 320 px x 200% text keeps its open-page button without overflow', (tester) async {
+      tester.view.physicalSize = const Size(320, 2000);
+      tester.view.devicePixelRatio = 1;
+      tester.platformDispatcher.textScaleFactorTestValue = 2.0;
+      addTearDown(tester.view.reset);
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      final repo = _ListBackend([
+        AdminDoc('on', {'nameAr': 'St On with a fairly long name', 'order': 10, 'detailsEnabled': true}),
+      ]);
+      await tester.pumpWidget(_adminApp(CollectionListScreen(repo: repo, def: collectionById('saints')!)));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(find.byKey(const ValueKey('openItem-on')), findsOneWidget);
+    });
+
     testWidgets('a new item saved in several writes lands in one document', (tester) async {
       tester.view.physicalSize = const Size(1200, 6000);
       tester.view.devicePixelRatio = 1;

@@ -872,6 +872,70 @@ void main() {
       ]);
     });
 
+    testWidgets('a cover replaced by a partly failed save is deleted once the retry completes', (tester) async {
+      await big(tester);
+      final media = _FakeMedia()..docs['c1'] = _tinyPng;
+      final calls = <Map<String, dynamic>>[];
+      var failGallery = true;
+      await tester.pumpWidget(editor(
+        media: media,
+        data: {
+          'nameAr': 'القديس',
+          'image': {'source': 'inline', 'mediaId': 'c1'},
+        },
+        onSave: (d) async {
+          if (d.containsKey('gallery') && failGallery) throw StateError('permission-denied');
+          calls.add(d);
+        },
+      ));
+      await tester.pumpAndSettle();
+      await expand(tester, 'media');
+      await tester.tap(find.byKey(const Key('imageUploadBtn')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('galleryUploadBtn')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('editor-save')));
+      await tester.pumpAndSettle();
+      // The new cover (m0) is stored by the first write; the gallery write failed.
+      expect(calls.single['image'], containsPair('mediaId', 'm0'));
+      expect(media.deleted, ['m1'], reason: 'only the unsaved gallery upload is rolled back');
+      failGallery = false;
+      await tester.tap(find.byKey(const Key('editor-save')));
+      await tester.pumpAndSettle();
+      expect(calls.last.keys, ['gallery']);
+      expect(media.deleted, ['m1', 'c1'], reason: 'the replaced cover is cleaned up after the retry');
+    });
+
+    testWidgets('an extra-field row with only an English title saves; a row with no title is blocked', (tester) async {
+      await big(tester);
+      final calls = <Map<String, dynamic>>[];
+      await tester.pumpWidget(editor(media: _FakeMedia(), calls: calls, data: {
+        'nameAr': 'القديس',
+        'extraFields': [
+          {'titleAr': '', 'titleEn': 'Feast', 'valueAr': '', 'valueEn': 'June 26'}
+        ],
+      }));
+      await tester.pumpAndSettle();
+      await expand(tester, 'details');
+      await tester.enterText(find.byKey(const ValueKey('field-valueEn')), 'July 3');
+      await tester.tap(find.byKey(const Key('editor-save')));
+      await tester.pumpAndSettle();
+      expect(calls, [
+        {
+          'extraFields': [
+            {'titleAr': '', 'titleEn': 'Feast', 'valueAr': '', 'valueEn': 'July 3'}
+          ]
+        }
+      ]);
+      expect(find.text('Enter a title in Arabic or English'), findsNothing);
+      calls.clear();
+      await tester.enterText(find.byKey(const ValueKey('field-titleEn')), ' ');
+      await tester.tap(find.byKey(const Key('editor-save')));
+      await tester.pumpAndSettle();
+      expect(calls, isEmpty);
+      expect(find.text('Enter a title in Arabic or English'), findsOneWidget);
+    });
+
     testWidgets("BR-11: meetings' image and gallery show the children's-privacy warning", (tester) async {
       await big(tester);
       await tester.pumpWidget(editor(media: _FakeMedia(), def: collectionById('meetings')));

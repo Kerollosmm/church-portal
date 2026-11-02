@@ -91,6 +91,12 @@ class DocEditorState extends State<DocEditor> {
   /// Values as loaded: only fields that differ from these are saved.
   late Map<String, dynamic> _initialValues;
 
+  /// The values before the first attempt of a save that has not completed
+  /// yet. A failed later chunk advances [_initialValues] past a cover the
+  /// first chunk replaced; its media id is still cleaned up from this
+  /// baseline once a retry completes the save.
+  Map<String, dynamic>? _saveBaseline;
+
   /// [FieldType.imageList] fields: photos in display order.
   final Map<String, List<_GalleryEntry>> _gallery = {};
 
@@ -245,6 +251,7 @@ class DocEditorState extends State<DocEditor> {
       final c = _text[f.key];
       if (c != null && f.type != FieldType.image && validateFieldValue(f, c.text) != null) bad.add(f.group);
       for (final r in _rows[f.key] ?? const <_Row>[]) {
+        if (validateRowAnyOf(f, {for (final e in r.text.entries) e.key: e.value.text}) != null) bad.add(f.group);
         for (final sf in f.subFields) {
           final rc = r.text[sf.key];
           if (rc != null && validateFieldValue(sf, rc.text) != null) bad.add(f.group);
@@ -302,6 +309,7 @@ class DocEditorState extends State<DocEditor> {
     final galleryUploads = <_GalleryEntry, EncodedImage>{};
     final uploaded = <String>[];
     final initialBefore = _initialValues;
+    final baseline = _saveBaseline ??= _initialValues;
     try {
       for (final e in pendingBefore.entries) {
         final img = await widget.media!.upload(e.value, alt: _text[e.key]!.text.trim());
@@ -333,7 +341,10 @@ class DocEditorState extends State<DocEditor> {
       _initialValues = data;
       // Best effort: drop inline images this edit replaced or removed (an
       // image moved between the cover and the gallery is still referenced).
-      _deleteMedia(orphanedDocMediaIds(initialBefore, data));
+      // Measured from the first attempt's baseline too, so a cover replaced
+      // by an earlier, partly failed attempt of this save is not left behind.
+      _deleteMedia({...orphanedDocMediaIds(baseline, data), ...orphanedDocMediaIds(initialBefore, data)}.toList());
+      _saveBaseline = null;
       messenger?.showSnackBar(SnackBar(content: Text(savedMsg)));
       if (!mounted) return true;
       setState(() {
@@ -397,7 +408,7 @@ class DocEditorState extends State<DocEditor> {
 
   String _label(FieldDef f) => context.pick(f.labelAr, f.labelEn) + (f.required ? ' *' : '');
 
-  Widget _textField(FieldDef f, TextEditingController c) {
+  Widget _textField(FieldDef f, TextEditingController c, {String? Function()? rowError}) {
     final ltr = switch (f.type) {
       FieldType.text || FieldType.multiline => false,
       _ => true,
@@ -417,7 +428,7 @@ class DocEditorState extends State<DocEditor> {
         FieldType.multiline => TextInputType.multiline,
         _ => null,
       },
-      validator: (v) => _validate(f, v),
+      validator: (v) => _validate(f, v) ?? rowError?.call(),
       autovalidateMode: AutovalidateMode.onUserInteraction,
       decoration: InputDecoration(
         labelText: _label(f),
@@ -938,7 +949,15 @@ class DocEditorState extends State<DocEditor> {
                             _dirty = true;
                           }),
                         ),
-                      _ => _textField(sf, rows[i].text[sf.key]!),
+                      _ => _textField(sf, rows[i].text[sf.key]!,
+                          rowError: f.rowRequireAnyOf.isNotEmpty && f.rowRequireAnyOf.first == sf.key
+                              ? () {
+                                  final err = validateRowAnyOf(f, {
+                                    for (final e in rows[i].text.entries) e.key: e.value.text,
+                                  });
+                                  return err == null ? null : context.tr(err);
+                                }
+                              : null),
                     },
                   ),
                 // Wrap: at 320 px / 200% text the buttons flow onto two lines.

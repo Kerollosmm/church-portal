@@ -231,7 +231,9 @@ void main() {
         expect([extra.group, extra.type, extra.maxRows], [FieldGroup.details, FieldType.objectList, 15], reason: c.id);
         expect(extra.subFields.map((f) => f.key), ['titleAr', 'titleEn', 'valueAr', 'valueEn']);
         expect(extra.subFields.map((f) => f.effectiveMaxLength), [150, 150, 2000, 2000]);
-        expect(extra.subFields.map((f) => f.required), [true, false, false, false]);
+        // A title in either language (validExtraField in firestore.rules).
+        expect(extra.subFields.map((f) => f.required), [false, false, false, false]);
+        expect(extra.rowRequireAnyOf, ['titleAr', 'titleEn'], reason: c.id);
         expect(extra.subFields.skip(2).map((f) => f.type), everyElement(FieldType.multiline));
 
         expect(fd(c, 'image').group, FieldGroup.media, reason: c.id);
@@ -311,6 +313,15 @@ void main() {
       expect(splitSavePayload({'nameAr': 'x', 'gallery': [], 'extraFields': null}), [
         {'nameAr': 'x', 'gallery': [], 'extraFields': null}
       ]);
+    });
+
+    test('an extra-field row needs a title in Arabic or English, not both', () {
+      final extra = collectionById('saints')!.fields.firstWhere((f) => f.key == 'extraFields');
+      expect(validateRowAnyOf(extra, {'titleAr': 'ع', 'titleEn': ''}), isNull);
+      expect(validateRowAnyOf(extra, {'titleAr': '', 'titleEn': 'Feast'}), isNull);
+      expect(validateRowAnyOf(extra, {'titleAr': ' ', 'titleEn': '  ', 'valueAr': 'ق'}), 'requiredTitleAnyLang');
+      expect(validateRowAnyOf(extra, const {}), 'requiredTitleAnyLang');
+      expect(validateRowAnyOf(const FieldDef('phones', 'p', 'p', FieldType.objectList), const {}), isNull);
     });
 
     test('rows with a detail page open the item detail URL', () {

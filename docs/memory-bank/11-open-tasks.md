@@ -59,8 +59,9 @@ Status as of 2 Nov 2026 (after PR #7, PR #8, PR #9 `ad621cf`, PR #10 and PR #11)
 - [ ] Until PR #13 deploys, an item's **detail-page link** in /admin (shown only when `detailsEnabled` is on) opens
       the site's "page not found"; the public detail routes are PR #13.
 - [ ] Media orphans: when a later write of a split save fails, images orphaned by the earlier writes (e.g. a replaced
-      cover) are not deleted (kept on purpose, a retry may still need them) — covered by the existing manual
-      `media` clean-up task.
+      cover) are kept until the save completes — a retry deletes them (`_saveBaseline`, PR #12 review fix). Only if
+      the admin abandons the editor after a failed write do they stay — covered by the existing manual `media`
+      clean-up task.
 - [ ] **PR #13 — public pages:** detail routes, `ItemDetailPage`, card integration, custom page headers/intros,
       footer upgrade (closes FR-G-04), memory-bank sync.
 

@@ -67,6 +67,11 @@ class FieldDef {
   /// Row fields for [FieldType.objectList].
   final List<FieldDef> subFields;
 
+  /// [FieldType.objectList]: each row needs at least one of these sub-field
+  /// keys non-empty (e.g. a title in Arabic OR English; firestore.rules
+  /// validExtraField). The error shows on the first key's field.
+  final List<String> rowRequireAnyOf;
+
   /// Optional helper text under the field.
   final String hintAr, hintEn;
 
@@ -89,6 +94,7 @@ class FieldDef {
       this.max,
       this.allowPath = false,
       this.subFields = const [],
+      this.rowRequireAnyOf = const [],
       this.hintAr = '',
       this.hintEn = '',
       this.maxRows = 20,
@@ -205,8 +211,10 @@ const _detailsGroup = [
   FieldDef('extraFields', 'حقول إضافية (عنوان: قيمة)', 'Extra fields (title: value)', FieldType.objectList,
       maxRows: 15,
       group: FieldGroup.details,
+      // A row needs a title in either language (validExtraField in firestore.rules).
+      rowRequireAnyOf: ['titleAr', 'titleEn'],
       subFields: [
-        FieldDef('titleAr', 'العنوان (عربي)', 'Title (Arabic)', FieldType.text, required: true, maxLength: 150),
+        FieldDef('titleAr', 'العنوان (عربي)', 'Title (Arabic)', FieldType.text, maxLength: 150),
         FieldDef('titleEn', 'العنوان (إنجليزي)', 'Title (English)', FieldType.text, maxLength: 150),
         FieldDef('valueAr', 'القيمة (عربي)', 'Value (Arabic)', FieldType.multiline, maxLength: 2000),
         FieldDef('valueEn', 'القيمة (إنجليزي)', 'Value (English)', FieldType.multiline, maxLength: 2000),
