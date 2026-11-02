@@ -453,6 +453,12 @@ void main() {
           onSave: (d) async => onSaved(d),
         ));
 
+    // The cover image sits in the collapsible "Photos & gallery" group (PR #12).
+    Future<void> openMedia(WidgetTester tester) async {
+      await tester.tap(find.byKey(const ValueKey('group-media')));
+      await tester.pumpAndSettle();
+    }
+
     testWidgets('is optional, uploads a picked image on save', (tester) async {
       tester.view.physicalSize = const Size(1200, 3200);
       tester.view.devicePixelRatio = 1;
@@ -470,6 +476,7 @@ void main() {
       saved = null;
       await tester.pumpWidget(editor(media: media, onSaved: (d) => saved = d));
       await tester.enterText(find.byKey(const ValueKey('field-nameAr')), 'القديس');
+      await openMedia(tester);
       await tester.tap(find.byKey(const Key('imageUploadBtn')));
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('imagePreviewPending')), findsOneWidget);
@@ -496,6 +503,7 @@ void main() {
         onSaved: (d) => saved = d,
       ));
       await tester.pumpAndSettle();
+      await openMedia(tester);
       await tester.tap(find.byKey(const Key('imageUrlBtn')));
       await tester.pumpAndSettle();
       await tester.enterText(find.byKey(const Key('imageUrlInput')), 'http://insecure.example.org/a.jpg');
@@ -528,6 +536,7 @@ void main() {
         onSaved: (d) => saved = d,
       ));
       await tester.pumpAndSettle();
+      await openMedia(tester);
       await tester.tap(find.byKey(const Key('imageRemoveBtn')));
       await tester.pumpAndSettle();
       expect(find.text('No image (optional)'), findsOneWidget);
@@ -550,6 +559,7 @@ void main() {
         onSave: (d) async => throw StateError('permission-denied'),
       )));
       await tester.enterText(find.byKey(const ValueKey('field-nameAr')), 'القديس');
+      await openMedia(tester);
       await tester.tap(find.byKey(const Key('imageUploadBtn')));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('editor-save')));
@@ -572,10 +582,399 @@ void main() {
         prepareImage: (_) async => throw const ImageTooLargeException(),
         onSave: (d) async {},
       )));
+      await openMedia(tester);
       await tester.tap(find.byKey(const Key('imageUploadBtn')));
       await tester.pumpAndSettle();
       expect(find.textContaining('Image too large'), findsOneWidget);
       expect(find.byKey(const Key('imagePreviewPending')), findsNothing);
+    });
+  });
+
+  group('PR #12: admin customization studio (DocEditor)', () {
+    final saints = collectionById('saints')!;
+    final enc = EncodedImage(_tinyPng, 'image/webp', 800, 600);
+
+    Future<void> big(WidgetTester tester, {Size size = const Size(1200, 6000)}) async {
+      tester.view.physicalSize = size;
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+    }
+
+    Widget editor({
+      required _FakeMedia media,
+      CollectionDef? def,
+      Map<String, dynamic>? data,
+      Future<void> Function(Map<String, dynamic>)? onSave,
+      List<Map<String, dynamic>>? calls,
+    }) =>
+        _app(DocEditor(
+          key: UniqueKey(), // every pump is a fresh editor
+          title: 'Edit',
+          fields: (def ?? saints).fields,
+          def: def ?? saints,
+          data: data,
+          docId: data == null ? null : 'd1',
+          popOnSave: false,
+          media: media,
+          pickImage: () async => _tinyPng,
+          prepareImage: (_) async => enc,
+          onSave: onSave ?? (d) async => calls?.add(d),
+        ));
+
+    Future<void> expand(WidgetTester tester, String group) async {
+      await tester.tap(find.byKey(ValueKey('group-$group')));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('basic fields open; details, media and contacts are collapsible cards with live pills', (tester) async {
+      await big(tester);
+      await tester.pumpWidget(editor(media: _FakeMedia(), data: {
+        'nameAr': 'القديس',
+        'detailsEnabled': true,
+        'extraFields': [
+          for (var i = 0; i < 3; i++) {'titleAr': 'عنوان $i', 'titleEn': '', 'valueAr': 'قيمة', 'valueEn': ''},
+        ],
+        'gallery': [
+          for (var i = 0; i < 4; i++) {'source': 'url', 'url': 'https://img.example.org/$i.jpg'},
+        ],
+        'whatsapp': '01012345678',
+      }));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('field-nameAr')), findsOneWidget);
+      for (final g in ['details', 'media', 'contacts']) {
+        expect(find.byKey(ValueKey('group-$g')), findsOneWidget, reason: g);
+      }
+      // Collapsed groups keep their fields mounted (maintainState) but hidden.
+      expect(find.byKey(const ValueKey('field-detailsAr')), findsNothing);
+      expect(find.byKey(const ValueKey('field-detailsAr'), skipOffstage: false), findsOneWidget);
+      expect(find.text('Enabled'), findsOneWidget);
+      expect(find.text('3 fields'), findsOneWidget);
+      expect(find.text('4 photos'), findsOneWidget);
+      expect(find.text('1 filled'), findsOneWidget);
+      await expand(tester, 'details');
+      expect(find.byKey(const ValueKey('field-detailsAr')), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('field-detailsEnabled')));
+      await tester.pumpAndSettle();
+      expect(find.text('Off'), findsOneWidget);
+      await expand(tester, 'contacts');
+      await tester.enterText(find.byKey(const ValueKey('field-youtubeUrl')), 'https://youtube.com/@church');
+      await tester.pumpAndSettle();
+      expect(find.text('2 filled'), findsOneWidget);
+      // Liturgies have no detail page: a flat form, as before.
+      await tester.pumpWidget(editor(media: _FakeMedia(), def: collectionById('liturgies')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('group-details')), findsNothing);
+    });
+
+    testWidgets('an invalid field inside a collapsed group blocks save and opens that group', (tester) async {
+      await big(tester);
+      final calls = <Map<String, dynamic>>[];
+      await tester.pumpWidget(editor(
+        media: _FakeMedia(),
+        data: {'nameAr': 'القديس', 'youtubeUrl': 'not a link'},
+        calls: calls,
+      ));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('field-youtubeUrl')), findsNothing);
+      await tester.tap(find.byKey(const Key('editor-save')));
+      await tester.pumpAndSettle();
+      expect(calls, isEmpty);
+      expect(find.byKey(const ValueKey('field-youtubeUrl')), findsOneWidget);
+      expect(find.text('Invalid link (must start with https://)'), findsOneWidget);
+      expect(find.byKey(const ValueKey('field-detailsAr')), findsNothing, reason: 'valid groups stay closed');
+    });
+
+    testWidgets('gallery: upload, link, alt text, reorder, remove, capped at 8', (tester) async {
+      await big(tester);
+      final media = _FakeMedia();
+      final calls = <Map<String, dynamic>>[];
+      await tester.pumpWidget(editor(media: media, data: {'nameAr': 'القديس'}, calls: calls));
+      await tester.pumpAndSettle();
+      await expand(tester, 'media');
+      expect(find.text('No gallery photos (optional)'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('galleryUploadBtn')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('galleryUrlBtn')));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const Key('imageUrlInput')), 'https://img.example.org/b.jpg');
+      await tester.tap(find.byKey(const Key('imageUrlOk')));
+      await tester.pumpAndSettle();
+      expect(media.docs, isEmpty, reason: 'nothing stored before save');
+      expect(find.text('2 of 8'), findsOneWidget);
+      await tester.enterText(find.byKey(const ValueKey('galleryAlt-0')), 'The altar');
+      await tester.tap(find.byKey(const ValueKey('galleryDown-0')));
+      await tester.pumpAndSettle();
+      expect(tester.widget<IconButton>(find.byKey(const ValueKey('galleryUp-0'))).onPressed, isNull);
+      expect(tester.widget<IconButton>(find.byKey(const ValueKey('galleryDown-1'))).onPressed, isNull);
+      await tester.tap(find.byKey(const Key('editor-save')));
+      await tester.pumpAndSettle();
+      expect(calls, [
+        {
+          'gallery': [
+            {'source': 'url', 'url': 'https://img.example.org/b.jpg'},
+            {'source': 'inline', 'mediaId': 'm0', 'alt': 'The altar', 'w': 800, 'h': 600},
+          ],
+        }
+      ]);
+      expect(media.docs.keys, ['m0']);
+
+      // Remove the URL photo, then fill up to the cap.
+      calls.clear();
+      await tester.tap(find.byKey(const ValueKey('galleryRemove-0')));
+      await tester.pumpAndSettle();
+      for (var i = 0; i < 7; i++) {
+        await tester.tap(find.byKey(const Key('galleryUploadBtn')));
+        await tester.pumpAndSettle();
+      }
+      expect(find.text('8 of 8'), findsOneWidget);
+      expect(tester.widget<OutlinedButton>(find.byKey(const Key('galleryUploadBtn'))).onPressed, isNull);
+      expect(tester.widget<OutlinedButton>(find.byKey(const Key('galleryUrlBtn'))).onPressed, isNull);
+      await tester.tap(find.byKey(const Key('editor-save')));
+      await tester.pumpAndSettle();
+      expect((calls.single['gallery'] as List).length, 8);
+      expect(media.deleted, isEmpty);
+    });
+
+    testWidgets('saves the gallery and the extra fields in separate writes, after the other fields', (tester) async {
+      await big(tester);
+      final media = _FakeMedia();
+      final calls = <Map<String, dynamic>>[];
+      // New document: the first write creates it, the lists follow.
+      await tester.pumpWidget(editor(media: media, calls: calls));
+      await tester.enterText(find.byKey(const ValueKey('field-nameAr')), 'القديس');
+      await expand(tester, 'details');
+      await tester.tap(find.text('Add row'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const ValueKey('field-titleAr')), 'العيد');
+      await tester.enterText(find.byKey(const ValueKey('field-valueAr')), '٢٦ بؤونة');
+      await expand(tester, 'media');
+      await tester.tap(find.byKey(const Key('galleryUploadBtn')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('editor-save')));
+      await tester.pumpAndSettle();
+      expect(calls, hasLength(3));
+      expect(calls[0]['nameAr'], 'القديس');
+      expect(calls[0].keys, isNot(contains('gallery')));
+      expect(calls[0].keys, isNot(contains('extraFields')));
+      expect(calls[0].keys, containsAll(['detailsEnabled', 'showDetailImages', 'showContacts', 'showSocials']));
+      expect(calls[0]['detailsEnabled'], isFalse);
+      expect(calls[0]['showDetailImages'], isTrue);
+      expect(calls[1], {
+        'gallery': [
+          {'source': 'inline', 'mediaId': 'm0', 'w': 800, 'h': 600}
+        ]
+      });
+      expect(calls[2], {
+        'extraFields': [
+          {'titleAr': 'العيد', 'titleEn': '', 'valueAr': '٢٦ بؤونة', 'valueEn': ''}
+        ]
+      });
+
+      // Existing document: only what changed, still one list per write.
+      calls.clear();
+      await tester.pumpWidget(editor(media: media, calls: calls, data: {
+        'nameAr': 'القديس',
+        'detailsAr': 'قديم',
+        'gallery': [
+          {'source': 'inline', 'mediaId': 'g1'}
+        ],
+        'extraFields': [
+          {'titleAr': 'أ', 'titleEn': '', 'valueAr': '', 'valueEn': ''}
+        ],
+      }));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const ValueKey('field-nameEn')), 'St Moses');
+      await expand(tester, 'details');
+      await tester.enterText(find.byKey(const ValueKey('field-detailsAr')), 'جديد');
+      await tester.enterText(find.byKey(const ValueKey('field-titleAr')), 'ب');
+      await expand(tester, 'media');
+      await tester.enterText(find.byKey(const ValueKey('galleryAlt-0')), 'Icon');
+      await tester.tap(find.byKey(const Key('editor-save')));
+      await tester.pumpAndSettle();
+      expect(calls, [
+        {'nameEn': 'St Moses', 'detailsAr': 'جديد'},
+        {
+          'gallery': [
+            {'source': 'inline', 'mediaId': 'g1', 'alt': 'Icon'}
+          ]
+        },
+        {
+          'extraFields': [
+            {'titleAr': 'ب', 'titleEn': '', 'valueAr': '', 'valueEn': ''}
+          ]
+        },
+      ]);
+    });
+
+    testWidgets('removed or replaced gallery photos delete their media docs; a cover moved into the gallery is kept',
+        (tester) async {
+      await big(tester);
+      final media = _FakeMedia()..docs.addAll({'g1': _tinyPng, 'g2': _tinyPng, 'c1': _tinyPng});
+      final calls = <Map<String, dynamic>>[];
+      await tester.pumpWidget(editor(media: media, calls: calls, data: {
+        'nameAr': 'القديس',
+        'image': {'source': 'inline', 'mediaId': 'c1'},
+        'gallery': [
+          {'source': 'inline', 'mediaId': 'g1'},
+          {'source': 'inline', 'mediaId': 'g2'},
+        ],
+      }));
+      await tester.pumpAndSettle();
+      await expand(tester, 'media');
+      await tester.tap(find.byKey(const ValueKey('galleryRemove-0')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('editor-save')));
+      await tester.pumpAndSettle();
+      expect(calls.single, {
+        'gallery': [
+          {'source': 'inline', 'mediaId': 'g2'}
+        ]
+      });
+      expect(media.deleted, ['g1']);
+    });
+
+    testWidgets('a failed gallery write keeps the saved fields, rolls back its uploads and retries only the rest',
+        (tester) async {
+      await big(tester);
+      final media = _FakeMedia();
+      final calls = <Map<String, dynamic>>[];
+      var failGallery = true;
+      await tester.pumpWidget(editor(
+        media: media,
+        data: {'nameAr': 'القديس'},
+        onSave: (d) async {
+          if (d.containsKey('gallery') && failGallery) throw StateError('permission-denied');
+          calls.add(d);
+        },
+      ));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const ValueKey('field-nameEn')), 'St Moses');
+      await expand(tester, 'media');
+      await tester.tap(find.byKey(const Key('galleryUploadBtn')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('editor-save')));
+      await tester.pumpAndSettle();
+      expect(calls, [
+        {'nameEn': 'St Moses'}
+      ]);
+      expect(media.deleted, ['m0']);
+      expect(find.byKey(const Key('galleryPreviewPending')), findsOneWidget, reason: 'can retry');
+      failGallery = false;
+      calls.clear();
+      await tester.tap(find.byKey(const Key('editor-save')));
+      await tester.pumpAndSettle();
+      expect(calls, [
+        {
+          'gallery': [
+            {'source': 'inline', 'mediaId': 'm1', 'w': 800, 'h': 600}
+          ]
+        }
+      ]);
+    });
+
+    testWidgets('a cover replaced by a partly failed save is deleted once the retry completes', (tester) async {
+      await big(tester);
+      final media = _FakeMedia()..docs['c1'] = _tinyPng;
+      final calls = <Map<String, dynamic>>[];
+      var failGallery = true;
+      await tester.pumpWidget(editor(
+        media: media,
+        data: {
+          'nameAr': 'القديس',
+          'image': {'source': 'inline', 'mediaId': 'c1'},
+        },
+        onSave: (d) async {
+          if (d.containsKey('gallery') && failGallery) throw StateError('permission-denied');
+          calls.add(d);
+        },
+      ));
+      await tester.pumpAndSettle();
+      await expand(tester, 'media');
+      await tester.tap(find.byKey(const Key('imageUploadBtn')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('galleryUploadBtn')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('editor-save')));
+      await tester.pumpAndSettle();
+      // The new cover (m0) is stored by the first write; the gallery write failed.
+      expect(calls.single['image'], containsPair('mediaId', 'm0'));
+      expect(media.deleted, ['m1'], reason: 'only the unsaved gallery upload is rolled back');
+      failGallery = false;
+      await tester.tap(find.byKey(const Key('editor-save')));
+      await tester.pumpAndSettle();
+      expect(calls.last.keys, ['gallery']);
+      expect(media.deleted, ['m1', 'c1'], reason: 'the replaced cover is cleaned up after the retry');
+    });
+
+    testWidgets('an extra-field row with only an English title saves; a row with no title is blocked', (tester) async {
+      await big(tester);
+      final calls = <Map<String, dynamic>>[];
+      await tester.pumpWidget(editor(media: _FakeMedia(), calls: calls, data: {
+        'nameAr': 'القديس',
+        'extraFields': [
+          {'titleAr': '', 'titleEn': 'Feast', 'valueAr': '', 'valueEn': 'June 26'}
+        ],
+      }));
+      await tester.pumpAndSettle();
+      await expand(tester, 'details');
+      await tester.enterText(find.byKey(const ValueKey('field-valueEn')), 'July 3');
+      await tester.tap(find.byKey(const Key('editor-save')));
+      await tester.pumpAndSettle();
+      expect(calls, [
+        {
+          'extraFields': [
+            {'titleAr': '', 'titleEn': 'Feast', 'valueAr': '', 'valueEn': 'July 3'}
+          ]
+        }
+      ]);
+      expect(find.text('Enter a title in Arabic or English'), findsNothing);
+      calls.clear();
+      await tester.enterText(find.byKey(const ValueKey('field-titleEn')), ' ');
+      await tester.tap(find.byKey(const Key('editor-save')));
+      await tester.pumpAndSettle();
+      expect(calls, isEmpty);
+      expect(find.text('Enter a title in Arabic or English'), findsOneWidget);
+    });
+
+    testWidgets("BR-11: meetings' image and gallery show the children's-privacy warning", (tester) async {
+      await big(tester);
+      await tester.pumpWidget(editor(media: _FakeMedia(), def: collectionById('meetings')));
+      await tester.pumpAndSettle();
+      await expand(tester, 'media');
+      expect(find.byKey(const ValueKey('fieldHint-image')), findsOneWidget);
+      expect(find.byKey(const ValueKey('fieldHint-gallery')), findsOneWidget);
+      expect(find.textContaining("Children's privacy"), findsNWidgets(2));
+      await tester.pumpWidget(editor(media: _FakeMedia()));
+      await tester.pumpAndSettle();
+      await expand(tester, 'media');
+      expect(find.textContaining("Children's privacy"), findsNothing);
+    });
+
+    testWidgets('320 px x 200% text: every group, the gallery and extra-field rows reflow without overflow',
+        (tester) async {
+      await big(tester, size: const Size(320, 12000));
+      tester.platformDispatcher.textScaleFactorTestValue = 2.0;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      await tester.pumpWidget(editor(media: _FakeMedia(), def: collectionById('meetings'), data: {
+        'stage': 'youth',
+        'nameAr': 'اجتماع الشباب',
+        'gallery': [
+          {'source': 'url', 'url': 'https://img.example.org/a.jpg'},
+          {'source': 'url', 'url': 'https://img.example.org/b.jpg'},
+        ],
+        'extraFields': [
+          {'titleAr': 'الخادم', 'titleEn': 'Servant', 'valueAr': 'أ', 'valueEn': 'A'},
+        ],
+      }));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      for (final g in ['details', 'media', 'contacts']) {
+        await tester.scrollUntilVisible(find.byKey(ValueKey('group-$g')), 300,
+            scrollable: find.byType(Scrollable).first);
+        await expand(tester, g);
+        expect(tester.takeException(), isNull, reason: g);
+      }
+      expect(find.byKey(const ValueKey('galleryRemove-1')), findsOneWidget);
     });
   });
 }

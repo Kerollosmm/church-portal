@@ -201,6 +201,149 @@ void main() {
     });
   });
 
+  group('PR #12: customization schema', () {
+    const detailCols = ['meetings', 'activities', 'clinics', 'facilities', 'priests', 'milestones', 'saints'];
+    FieldDef fd(CollectionDef c, String k) => c.fields.firstWhere((f) => f.key == k, orElse: () => throw k);
+
+    test('imageList type, field groups and the image collections', () {
+      expect(FieldType.values, contains(FieldType.imageList));
+      expect(FieldGroup.values, [FieldGroup.basic, FieldGroup.details, FieldGroup.media, FieldGroup.contacts]);
+      expect(const FieldDef('x', 'x', 'x', FieldType.text).group, FieldGroup.basic);
+      expect(imageCollections,
+          ['alerts', 'seasons', 'meetings', 'activities', 'clinics', 'facilities', 'priests', 'milestones', 'saints']);
+      for (final c in adminCollections) {
+        expect(c.fields.any((f) => f.key == 'image'), imageCollections.contains(c.name), reason: c.id);
+      }
+    });
+
+    test('the 7 detail collections carry grouped details, media and contacts fields', () {
+      for (final c in adminCollections.where((c) => detailCols.contains(c.name))) {
+        final keys = c.fields.map((f) => f.key).toList();
+        expect(keys.toSet().length, keys.length, reason: '${c.id}: duplicate keys');
+        final enabled = fd(c, 'detailsEnabled');
+        expect([enabled.group, enabled.type, enabled.missingBool, enabled.newBool],
+            [FieldGroup.details, FieldType.boolean, false, false], reason: c.id);
+        for (final k in ['detailsAr', 'detailsEn']) {
+          expect([fd(c, k).group, fd(c, k).type, fd(c, k).effectiveMaxLength],
+              [FieldGroup.details, FieldType.multiline, 10000], reason: '${c.id}.$k');
+        }
+        final extra = fd(c, 'extraFields');
+        expect([extra.group, extra.type, extra.maxRows], [FieldGroup.details, FieldType.objectList, 15], reason: c.id);
+        expect(extra.subFields.map((f) => f.key), ['titleAr', 'titleEn', 'valueAr', 'valueEn']);
+        expect(extra.subFields.map((f) => f.effectiveMaxLength), [150, 150, 2000, 2000]);
+        // A title in either language (validExtraField in firestore.rules).
+        expect(extra.subFields.map((f) => f.required), [false, false, false, false]);
+        expect(extra.rowRequireAnyOf, ['titleAr', 'titleEn'], reason: c.id);
+        expect(extra.subFields.skip(2).map((f) => f.type), everyElement(FieldType.multiline));
+
+        expect(fd(c, 'image').group, FieldGroup.media, reason: c.id);
+        final show = fd(c, 'showDetailImages');
+        expect([show.group, show.missingBool, show.newBool], [FieldGroup.media, true, true], reason: c.id);
+        final gallery = fd(c, 'gallery');
+        expect([gallery.group, gallery.type, gallery.maxRows], [FieldGroup.media, FieldType.imageList, 8], reason: c.id);
+
+        for (final k in ['showContacts', 'showSocials']) {
+          expect([fd(c, k).group, fd(c, k).missingBool, fd(c, k).newBool], [FieldGroup.contacts, true, true],
+              reason: '${c.id}.$k');
+        }
+        // One input per stored key: the collection's own phone / link field
+        // doubles as the primary phone / external link (ItemDetails.fromMap).
+        final phone = switch (c.name) { 'clinics' => 'bookingPhone', 'facilities' => 'phone', _ => 'contactPhone' };
+        final link = c.name == 'activities' ? 'link' : 'externalUrl';
+        for (final k in [phone, 'whatsapp', 'whatsappUrl', 'facebookUrl', 'youtubeUrl', 'instagramUrl', link,
+          'externalLabelAr', 'externalLabelEn', 'contactNoteAr', 'contactNoteEn']) {
+          expect(fd(c, k).group, FieldGroup.contacts, reason: '${c.id}.$k');
+        }
+        if (['clinics', 'facilities'].contains(c.name)) expect(keys, isNot(contains('contactPhone')));
+        if (c.name == 'activities') expect(keys, isNot(contains('externalUrl')));
+        for (final k in [phone, 'whatsapp']) {
+          expect(fd(c, k).type, FieldType.phone, reason: '${c.id}.$k');
+        }
+        for (final k in ['whatsappUrl', 'facebookUrl', 'youtubeUrl', 'instagramUrl', link]) {
+          expect(fd(c, k).type, FieldType.url, reason: '${c.id}.$k');
+        }
+        expect([fd(c, 'externalLabelAr').effectiveMaxLength, fd(c, 'contactNoteEn').effectiveMaxLength], [80, 500]);
+        // Everything else stays in the always-open basic group.
+        for (final f in c.fields.where((f) => f.group == FieldGroup.basic)) {
+          expect(f.type, isNot(FieldType.imageList), reason: '${c.id}.${f.key}');
+        }
+      }
+      for (final c in adminCollections.where((c) => !detailCols.contains(c.name))) {
+        expect(c.fields.every((f) => f.group == FieldGroup.basic), isTrue, reason: c.id);
+        expect(c.fields.map((f) => f.key), isNot(contains('detailsEnabled')), reason: c.id);
+      }
+    });
+
+    test("BR-11: meetings' image and gallery warn about children's photos", () {
+      final m = collectionById('meetings')!;
+      for (final k in ['image', 'gallery']) {
+        expect(fd(m, k).hintAr, contains('خصوصية الأطفال'), reason: k);
+        expect(fd(m, k).hintEn, contains("Children's privacy"), reason: k);
+      }
+      expect(fd(collectionById('saints')!, 'gallery').hintEn, isEmpty);
+    });
+
+    test('image lists need no text validation', () {
+      expect(validateFieldValue(const FieldDef('gallery', 'g', 'g', FieldType.imageList), null), isNull);
+    });
+  });
+
+  group('PR #12: save split & detail links', () {
+    final img = {'source': 'inline', 'mediaId': 'g1'};
+    final row = {'titleAr': 'ع', 'titleEn': '', 'valueAr': 'ق', 'valueEn': ''};
+
+    test('gallery and extraFields go in their own writes (rules expression budget)', () {
+      expect(splitSavePayload(const {}), isEmpty);
+      expect(splitSavePayload({'nameAr': 'x'}), [
+        {'nameAr': 'x'}
+      ]);
+      expect(splitSavePayload({'nameAr': 'x', 'gallery': [img], 'extraFields': [row], 'detailsAr': 'd'}), [
+        {'nameAr': 'x', 'detailsAr': 'd'},
+        {'gallery': [img]},
+        {'extraFields': [row]},
+      ]);
+      expect(splitSavePayload({'gallery': [img]}), [
+        {'gallery': [img]}
+      ]);
+      expect(splitSavePayload({'extraFields': [row], 'gallery': [img]}), [
+        {'gallery': [img]},
+        {'extraFields': [row]},
+      ]);
+      // Empty or cleared lists cost almost nothing: they stay in the first write.
+      expect(splitSavePayload({'nameAr': 'x', 'gallery': [], 'extraFields': null}), [
+        {'nameAr': 'x', 'gallery': [], 'extraFields': null}
+      ]);
+    });
+
+    test('an extra-field row needs a title in Arabic or English, not both', () {
+      final extra = collectionById('saints')!.fields.firstWhere((f) => f.key == 'extraFields');
+      expect(validateRowAnyOf(extra, {'titleAr': 'ع', 'titleEn': ''}), isNull);
+      expect(validateRowAnyOf(extra, {'titleAr': '', 'titleEn': 'Feast'}), isNull);
+      expect(validateRowAnyOf(extra, {'titleAr': ' ', 'titleEn': '  ', 'valueAr': 'ق'}), 'requiredTitleAnyLang');
+      expect(validateRowAnyOf(extra, const {}), 'requiredTitleAnyLang');
+      expect(validateRowAnyOf(const FieldDef('phones', 'p', 'p', FieldType.objectList), const {}), isNull);
+    });
+
+    test('rows with a detail page open the item detail URL', () {
+      String? path(String id, String col, Map<String, dynamic> data, {bool english = false}) =>
+          itemPublicPathFor(collectionById(col)!, id, data, english: english);
+      const on = {'detailsEnabled': true};
+      expect(path('m1', 'meetings', on), '/church-education/m1');
+      expect(path('a1', 'activities', on), '/church-activities/a1');
+      expect(path('c1', 'clinics', on, english: true), '/clinics/c1?lang=en');
+      expect(path('f1', 'facilities', on), '/public-services/f1');
+      expect(path('p1', 'priests', on), '/about/priests/p1');
+      expect(path('p2', 'departedPriests', on), '/about/priests/p2');
+      expect(path('s1', 'saints', on), '/about/saints/s1');
+      expect(path('h1', 'milestones', on), '/about/milestones/h1');
+      // No detail page (off, hidden, or a collection without one): no link.
+      expect(path('c1', 'clinics', const {}), isNull);
+      expect(path('c1', 'clinics', const {'detailsEnabled': true, 'visible': false}), isNull);
+      expect(path('l1', 'liturgies', on), isNull);
+      expect(path('x/y', 'clinics', on), '/clinics/x%2Fy');
+    });
+  });
+
   group('admin list helpers', () {
     final def = collectionById('clinics')!;
     final docs = [
@@ -257,6 +400,9 @@ void main() {
       await tester.enterText(find.byKey(const ValueKey('field-specialtyAr')), 'الأسنان');
       await tester.enterText(find.byKey(const ValueKey('field-doctorName')), 'د. مينا');
       await tester.enterText(find.byKey(const ValueKey('field-start')), '9:00'); // invalid
+      // The booking phone sits in the collapsible "Contacts & links" group (PR #12).
+      await tester.tap(find.byKey(const ValueKey('group-contacts')));
+      await tester.pumpAndSettle();
       await tester.enterText(find.byKey(const ValueKey('field-bookingPhone')), '010 1234 5678');
       await tester.tap(find.byKey(const Key('editor-save')));
       await tester.pumpAndSettle();
@@ -381,6 +527,147 @@ void main() {
     });
   });
 
+  group('PR #12: page headers & footer (FR-G-04) in FeaturesEditor', () {
+    Future<void> tall(WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1200, 9000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+    }
+
+    Finder page(String p, String k) => find.byKey(ValueKey('features-page-$p-$k'));
+
+    testWidgets('edits a page header, resets another and keeps the rest', (tester) async {
+      await tall(tester);
+      FeatureSettings? saved;
+      final initial = FeatureSettings.defaults.copyWith(pageHeaders: {
+        'ask': const PageCustom(titleEn: 'Ask us', introAr: 'مقدمة'),
+        'about': const PageCustom(subtitleAr: 'تاريخنا'),
+      });
+      await tester.pumpWidget(_app(Scaffold(body: FeaturesEditor(initial: initial, onSave: (f) async => saved = f))));
+      await tester.pumpAndSettle();
+      for (final p in CustomizablePages.all) {
+        expect(find.byKey(ValueKey('page-$p')), findsOneWidget, reason: p);
+      }
+      expect(find.byKey(const ValueKey('pageCustomized-ask')), findsOneWidget);
+      expect(find.byKey(const ValueKey('pageCustomized-about')), findsOneWidget);
+      expect(find.byKey(const ValueKey('pageCustomized-clinics')), findsNothing);
+      expect(find.text('Customized'), findsNWidgets(2));
+      // Collapsed rows keep their fields mounted.
+      expect(page('clinics', 'titleEn'), findsNothing);
+      expect(page('clinics', 'titleEn').hitTestable(), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('page-clinics')));
+      await tester.pumpAndSettle();
+      await tester.enterText(page('clinics', 'titleEn'), 'Our clinics');
+      await tester.enterText(page('clinics', 'introAr'), 'الكشف بالحجز المسبق');
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('pageCustomized-clinics')), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('page-ask')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('pageReset-ask')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('pageCustomized-ask')), findsNothing);
+      expect(find.byKey(const ValueKey('pageReset-ask')), findsNothing, reason: 'nothing left to reset');
+      await tester.tap(find.byKey(const Key('features-save')));
+      await tester.pumpAndSettle();
+      expect(saved!.pageHeaders.keys, ['about', 'clinics']);
+      expect(saved!.pageHeader('clinics'), const PageCustom(titleEn: 'Our clinics', introAr: 'الكشف بالحجز المسبق'));
+      expect(saved!.pageHeader('about'), const PageCustom(subtitleAr: 'تاريخنا'));
+      expect(saved!.toMap()['pageHeaders'], {
+        'about': const PageCustom(subtitleAr: 'تاريخنا').toMap(),
+        'clinics': const PageCustom(titleEn: 'Our clinics', introAr: 'الكشف بالحجز المسبق').toMap(),
+      });
+    });
+
+    testWidgets('page header lengths match the rules; an error opens its collapsed page', (tester) async {
+      await tall(tester);
+      FeatureSettings? saved;
+      final initial = FeatureSettings.defaults.copyWith(pageHeaders: {'contact': PageCustom(introEn: 'x' * 1501)});
+      await tester.pumpWidget(_app(Scaffold(body: FeaturesEditor(initial: initial, onSave: (f) async => saved = f))));
+      await tester.pumpAndSettle();
+      expect(page('contact', 'introEn').hitTestable(), findsNothing);
+      await tester.tap(find.byKey(const Key('features-save')));
+      await tester.pumpAndSettle();
+      expect(saved, isNull);
+      expect(page('contact', 'introEn').hitTestable(), findsOneWidget);
+      expect(find.text('Too long'), findsOneWidget);
+      await tester.enterText(page('contact', 'introEn'), 'x' * 1500);
+      await tester.enterText(page('contact', 'titleAr'), 'ع' * 201);
+      await tester.tap(find.byKey(const Key('features-save')));
+      await tester.pumpAndSettle();
+      expect(saved, isNull);
+      await tester.enterText(page('contact', 'titleAr'), 'ع' * 200);
+      await tester.enterText(page('contact', 'subtitleEn'), 's' * 300);
+      await tester.tap(find.byKey(const Key('features-save')));
+      await tester.pumpAndSettle();
+      expect(saved!.pageHeader('contact').introEn.length, 1500);
+    });
+
+    testWidgets('footer switches and notes round-trip', (tester) async {
+      await tall(tester);
+      FeatureSettings? saved;
+      final initial = FeatureSettings.defaults.copyWith(footer: const FooterConfig(showSocials: false, noteEn: 'Old'));
+      await tester.pumpWidget(_app(Scaffold(body: FeaturesEditor(initial: initial, onSave: (f) async => saved = f))));
+      await tester.pumpAndSettle();
+      Switch sw(String k) => tester.widget<Switch>(
+          find.descendant(of: find.byKey(ValueKey('footer-$k')), matching: find.byType(Switch)));
+      expect([sw('showPhones').value, sw('showSocials').value, sw('showQuickLinks').value], [true, false, true]);
+      await tester.tap(find.byKey(const ValueKey('footer-showPhones')));
+      await tester.tap(find.byKey(const ValueKey('footer-showSocials')));
+      await tester.enterText(find.byKey(const ValueKey('footer-noteAr')), 'جميع الخدمات مجانية');
+      await tester.enterText(find.byKey(const ValueKey('footer-noteEn')), 'x' * 501);
+      await tester.tap(find.byKey(const Key('features-save')));
+      await tester.pumpAndSettle();
+      expect(saved, isNull, reason: 'note over 500 chars');
+      await tester.enterText(find.byKey(const ValueKey('footer-noteEn')), '  All services are free  ');
+      await tester.tap(find.byKey(const Key('features-save')));
+      await tester.pumpAndSettle();
+      expect(saved!.footer.toMap(), {
+        'showPhones': false,
+        'showSocials': true,
+        'showQuickLinks': true,
+        'noteAr': 'جميع الخدمات مجانية',
+        'noteEn': 'All services are free',
+      });
+    });
+
+    test('the page headers are saved in their own write, only when they changed', () {
+      const ask = PageCustom(titleEn: 'Ask us');
+      final next = FeatureSettings.defaults.copyWith(pageHeaders: {'ask': ask}, theme: 'navy');
+      final stored = {...FeatureSettings.defaults.toMap(), 'pageHeaders': {'ask': ask.toMap()}};
+      final writes = featuresSaveWrites(next, stored);
+      expect(writes, hasLength(1));
+      expect(writes.single.keys, isNot(contains('pageHeaders')));
+      expect(writes.single['theme'], 'navy');
+      expect(writes.single['footer'], const FooterConfig().toMap());
+      // Changed, missing in the stored doc, or no doc yet: a second write.
+      final changed = featuresSaveWrites(FeatureSettings.defaults, stored);
+      expect(changed.last, {'pageHeaders': <String, dynamic>{}});
+      expect(featuresSaveWrites(next, FeatureSettings.defaults.toMap()..remove('pageHeaders')).last, {
+        'pageHeaders': {'ask': ask.toMap()}
+      });
+      expect(featuresSaveWrites(next, null), hasLength(2));
+      // Blank stored entries read as "not customised".
+      final blank = {...stored, 'pageHeaders': {'ask': ask.toMap(), 'about': PageCustom.empty.toMap()}};
+      expect(featuresSaveWrites(next, blank), hasLength(1));
+    });
+
+    testWidgets('collect() round-trips every stored page header and the footer unchanged', (tester) async {
+      await tall(tester);
+      final initial = FeatureSettings.defaults.copyWith(
+        pageHeaders: {
+          for (final p in CustomizablePages.all)
+            p: PageCustom(titleAr: 'ع $p', titleEn: 'T $p', subtitleAr: 'س', subtitleEn: 'S', introAr: 'م', introEn: 'I'),
+        },
+        footer: const FooterConfig(showPhones: false, showQuickLinks: false, noteAr: 'م', noteEn: 'N'),
+      );
+      await tester.pumpWidget(_app(Scaffold(body: FeaturesEditor(initial: initial, onSave: (f) async {}))));
+      await tester.pumpAndSettle();
+      final state = tester.state<FeaturesEditorState>(find.byType(FeaturesEditor));
+      expect(sameValue(state.collect().toMap(), initial.toMap()), isTrue);
+      expect(state.dirty, isFalse);
+    });
+  });
+
   group('PR #10: selected chip contrast & narrow 200% reflow', () {
     testWidgets('selected theme ChoiceChip and clinic weekday FilterChip use a white label', (tester) async {
       tester.view.physicalSize = const Size(1200, 5000);
@@ -433,6 +720,16 @@ void main() {
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
       expect(saved!.homeOrder.indexOf('banner'), 1);
+      // PR #12: an open page-header row and the footer card reflow too.
+      final pageRow = find.byKey(const ValueKey('page-education'));
+      await tester.scrollUntilVisible(pageRow, 300, scrollable: find.byType(Scrollable).first);
+      await tester.tap(pageRow);
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      await tester.scrollUntilVisible(find.byKey(const ValueKey('footer-noteEn')), 300,
+          scrollable: find.byType(Scrollable).first);
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
     });
 
     testWidgets('DocEditor image field at 320 px x 200% text: no overflow', (tester) async {
@@ -449,6 +746,11 @@ void main() {
         popOnSave: false,
         onSave: (d) async {},
       )));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      final media = find.byKey(const ValueKey('group-media'));
+      await tester.scrollUntilVisible(media, 300, scrollable: find.byType(Scrollable).first);
+      await tester.tap(media);
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
       expect(find.byKey(const Key('imageUploadBtn')), findsOneWidget);

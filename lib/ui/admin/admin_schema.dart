@@ -25,7 +25,15 @@ enum FieldType {
   /// Optional picture: `image` map {source, url | mediaId, alt, w, h}
   /// (upload from the device, paste an https link, or remove).
   image,
+
+  /// Ordered list of `image` maps (an item's detail-page `gallery`), at most
+  /// [FieldDef.maxRows] photos.
+  imageList,
 }
+
+/// Where a field sits in the editor: [basic] is always open at the top; the
+/// detail-page groups are collapsible cards below it.
+enum FieldGroup { basic, details, media, contacts }
 
 class FieldDef {
   final String key;
@@ -59,11 +67,20 @@ class FieldDef {
   /// Row fields for [FieldType.objectList].
   final List<FieldDef> subFields;
 
+  /// [FieldType.objectList]: each row needs at least one of these sub-field
+  /// keys non-empty (e.g. a title in Arabic OR English; firestore.rules
+  /// validExtraField). The error shows on the first key's field.
+  final List<String> rowRequireAnyOf;
+
   /// Optional helper text under the field.
   final String hintAr, hintEn;
 
-  /// Max rows for [FieldType.objectList] (matches firestore.rules).
+  /// Max rows for [FieldType.objectList] / photos for [FieldType.imageList]
+  /// (matches firestore.rules).
   final int maxRows;
+
+  /// Editor group (collapsible card) this field belongs to.
+  final FieldGroup group;
 
   const FieldDef(this.key, this.labelAr, this.labelEn, this.type,
       {this.required = false,
@@ -77,9 +94,11 @@ class FieldDef {
       this.max,
       this.allowPath = false,
       this.subFields = const [],
+      this.rowRequireAnyOf = const [],
       this.hintAr = '',
       this.hintEn = '',
-      this.maxRows = 20});
+      this.maxRows = 20,
+      this.group = FieldGroup.basic});
 
   int get effectiveMaxLength => maxLength > 0
       ? maxLength
@@ -173,12 +192,106 @@ const _orderField = FieldDef('order', 'الترتيب', 'Order', FieldType.integ
 const _imageField = FieldDef('image', 'الصورة (اختياري)', 'Image (optional)', FieldType.image);
 
 /// Collections whose documents may carry an `image` (see lib/domain/media.dart).
-const imageCollections = ['alerts', 'seasons', 'activities', 'priests', 'milestones', 'saints'];
+const imageCollections = [
+  'alerts', 'seasons', 'meetings', 'activities', 'clinics', 'facilities', 'priests', 'milestones', 'saints', //
+];
+
+// ---- optional item detail page (meetings, activities, clinics, facilities,
+// priests, milestones, saints; see ItemDetails in lib/domain/models.dart and
+// validDetailCommon in firestore.rules). Every field is optional and starts
+// at the reader's default, so an untouched item looks exactly as before.
+
+const _detailsGroup = [
+  FieldDef('detailsEnabled', 'تفعيل صفحة التفاصيل', 'Enable the detail page', FieldType.boolean,
+      missingBool: false, newBool: false, group: FieldGroup.details),
+  FieldDef('detailsAr', 'التفاصيل (عربي)', 'Details (Arabic)', FieldType.multiline,
+      maxLength: 10000, group: FieldGroup.details),
+  FieldDef('detailsEn', 'التفاصيل (إنجليزي)', 'Details (English)', FieldType.multiline,
+      maxLength: 10000, group: FieldGroup.details),
+  FieldDef('extraFields', 'حقول إضافية (عنوان: قيمة)', 'Extra fields (title: value)', FieldType.objectList,
+      maxRows: 15,
+      group: FieldGroup.details,
+      // A row needs a title in either language (validExtraField in firestore.rules).
+      rowRequireAnyOf: ['titleAr', 'titleEn'],
+      subFields: [
+        FieldDef('titleAr', 'العنوان (عربي)', 'Title (Arabic)', FieldType.text, maxLength: 150),
+        FieldDef('titleEn', 'العنوان (إنجليزي)', 'Title (English)', FieldType.text, maxLength: 150),
+        FieldDef('valueAr', 'القيمة (عربي)', 'Value (Arabic)', FieldType.multiline, maxLength: 2000),
+        FieldDef('valueEn', 'القيمة (إنجليزي)', 'Value (English)', FieldType.multiline, maxLength: 2000),
+      ]),
+];
+
+const _showDetailImagesField = FieldDef(
+    'showDetailImages', 'عرض الصور في صفحة التفاصيل', 'Show photos on the detail page', FieldType.boolean,
+    missingBool: true, newBool: true, group: FieldGroup.media);
+
+const _galleryField = FieldDef('gallery', 'معرض الصور (حتى 8)', 'Photo gallery (up to 8)', FieldType.imageList,
+    maxRows: 8, group: FieldGroup.media);
+
+const _mediaGroup = [
+  FieldDef('image', 'الصورة (اختياري)', 'Image (optional)', FieldType.image, group: FieldGroup.media),
+  _showDetailImagesField,
+  _galleryField,
+];
+
+/// BR-11 / FR-E-04: Sunday-school meetings never show identifiable children.
+const _br11Ar = 'خصوصية الأطفال: يُحظر رفع صور واضحة للأطفال أو القُصَّر في مدارس الأحد';
+const _br11En = "Children's privacy: never upload identifiable photos of minors in Sunday School";
+
+const _meetingMediaGroup = [
+  FieldDef('image', 'الصورة (اختياري)', 'Image (optional)', FieldType.image,
+      group: FieldGroup.media, hintAr: _br11Ar, hintEn: _br11En),
+  _showDetailImagesField,
+  FieldDef('gallery', 'معرض الصور (حتى 8)', 'Photo gallery (up to 8)', FieldType.imageList,
+      maxRows: 8, group: FieldGroup.media, hintAr: _br11Ar, hintEn: _br11En),
+];
+
+const _contactSwitches = [
+  FieldDef('showContacts', 'عرض أرقام التواصل', 'Show contact numbers', FieldType.boolean,
+      missingBool: true, newBool: true, group: FieldGroup.contacts),
+  FieldDef('showSocials', 'عرض روابط التواصل الاجتماعي', 'Show social links', FieldType.boolean,
+      missingBool: true, newBool: true, group: FieldGroup.contacts),
+];
+const _contactPhoneField =
+    FieldDef('contactPhone', 'تليفون التواصل', 'Contact phone', FieldType.phone, group: FieldGroup.contacts);
+const _whatsappField = FieldDef('whatsapp', 'واتساب', 'WhatsApp', FieldType.phone, group: FieldGroup.contacts);
+const _whatsappUrlField = FieldDef('whatsappUrl', 'رابط واتساب (مجموعة/قناة)', 'WhatsApp group / channel link',
+    FieldType.url, group: FieldGroup.contacts);
+const _facebookUrlField =
+    FieldDef('facebookUrl', 'رابط فيسبوك', 'Facebook URL', FieldType.url, group: FieldGroup.contacts);
+const _youtubeUrlField = FieldDef('youtubeUrl', 'رابط يوتيوب', 'YouTube URL', FieldType.url, group: FieldGroup.contacts);
+const _instagramUrlField =
+    FieldDef('instagramUrl', 'رابط إنستغرام', 'Instagram URL', FieldType.url, group: FieldGroup.contacts);
+const _externalUrlField = FieldDef('externalUrl', 'رابط خارجي / تسجيل', 'External / registration link', FieldType.url,
+    group: FieldGroup.contacts);
+const _contactTail = [
+  FieldDef('externalLabelAr', 'نص زر الرابط (عربي)', 'Link button text (Arabic)', FieldType.text,
+      maxLength: 80, group: FieldGroup.contacts),
+  FieldDef('externalLabelEn', 'نص زر الرابط (إنجليزي)', 'Link button text (English)', FieldType.text,
+      maxLength: 80, group: FieldGroup.contacts),
+  FieldDef('contactNoteAr', 'طريقة التواصل / التسجيل (عربي)', 'How to contact / register (Arabic)', FieldType.multiline,
+      maxLength: 500, group: FieldGroup.contacts),
+  FieldDef('contactNoteEn', 'طريقة التواصل / التسجيل (إنجليزي)', 'How to contact / register (English)',
+      FieldType.multiline,
+      maxLength: 500, group: FieldGroup.contacts),
+];
+
+/// Contacts for priests, milestones and saints (no phone / link of their own).
+const _plainContactsGroup = [
+  ..._contactSwitches,
+  _contactPhoneField,
+  _whatsappField,
+  _whatsappUrlField,
+  _facebookUrlField,
+  _youtubeUrlField,
+  _instagramUrlField,
+  _externalUrlField,
+  ..._contactTail,
+];
 
 const _priestFields = [
   FieldDef('name', 'الاسم (عربي)', 'Name (Arabic)', FieldType.text, required: true),
   FieldDef('nameEn', 'الاسم (إنجليزي)', 'Name (English)', FieldType.text),
-  _imageField, // replaces the legacy photoUrl text field (still read as a fallback)
   FieldDef('rank', 'الرتبة', 'Rank', FieldType.choice, options: ['hegumen', 'priest'], defaultOption: 'priest'),
   FieldDef('ordinationDate', 'تاريخ الرسامة', 'Ordination date', FieldType.looseDate),
   FieldDef('hegumenDate', 'تاريخ القمصية', 'Hegumen date', FieldType.looseDate),
@@ -189,6 +302,9 @@ const _priestFields = [
   _orderField,
   _visibleField,
   _sampleField,
+  ..._detailsGroup,
+  ..._mediaGroup, // image replaces the legacy photoUrl text field (still read as a fallback)
+  ..._plainContactsGroup,
 ];
 
 const adminCollections = <CollectionDef>[
@@ -264,12 +380,21 @@ const adminCollections = <CollectionDef>[
     FieldDef('end', 'إلى (HH:mm)', 'To (HH:mm)', FieldType.time),
     FieldDef('hallAr', 'القاعة (عربي)', 'Hall (Arabic)', FieldType.text),
     FieldDef('hallEn', 'القاعة (إنجليزي)', 'Hall (English)', FieldType.text),
-    FieldDef('facebookUrl', 'رابط فيسبوك', 'Facebook URL', FieldType.url),
-    FieldDef('whatsappUrl', 'رابط واتساب', 'WhatsApp URL', FieldType.url),
     FieldDef('notes', 'ملاحظات', 'Notes', FieldType.text),
     _orderField,
     _visibleField,
     _sampleField,
+    ..._detailsGroup,
+    ..._meetingMediaGroup,
+    ..._contactSwitches,
+    _contactPhoneField,
+    _whatsappField,
+    FieldDef('whatsappUrl', 'رابط واتساب', 'WhatsApp URL', FieldType.url, group: FieldGroup.contacts),
+    FieldDef('facebookUrl', 'رابط فيسبوك', 'Facebook URL', FieldType.url, group: FieldGroup.contacts),
+    _youtubeUrlField,
+    _instagramUrlField,
+    _externalUrlField,
+    ..._contactTail,
   ], [
     'nameAr',
     'stage'
@@ -285,12 +410,21 @@ const adminCollections = <CollectionDef>[
     FieldDef('days', 'أيام العيادة', 'Clinic days', FieldType.weekdays),
     FieldDef('start', 'من (HH:mm)', 'From (HH:mm)', FieldType.time),
     FieldDef('end', 'إلى (HH:mm)', 'To (HH:mm)', FieldType.time),
-    FieldDef('bookingPhone', 'تليفون الحجز', 'Booking phone', FieldType.phone),
-    FieldDef('whatsapp', 'واتساب', 'WhatsApp', FieldType.phone),
     FieldDef('active', 'مُفعّلة', 'Active', FieldType.boolean, missingBool: true), // Clinic.fromMap: absent = active
     _orderField,
     _visibleField,
     _sampleField,
+    ..._detailsGroup,
+    ..._mediaGroup,
+    ..._contactSwitches,
+    FieldDef('bookingPhone', 'تليفون الحجز', 'Booking phone', FieldType.phone, group: FieldGroup.contacts),
+    _whatsappField,
+    _whatsappUrlField,
+    _facebookUrlField,
+    _youtubeUrlField,
+    _instagramUrlField,
+    _externalUrlField,
+    ..._contactTail,
   ], [
     'doctorName',
     'specialtyAr'
@@ -302,12 +436,22 @@ const adminCollections = <CollectionDef>[
     FieldDef('nameEn', 'الاسم (إنجليزي)', 'Name (English)', FieldType.text),
     FieldDef('descAr', 'الوصف (عربي)', 'Description (Arabic)', FieldType.multiline, maxLength: 2000),
     FieldDef('descEn', 'الوصف (إنجليزي)', 'Description (English)', FieldType.multiline, maxLength: 2000),
-    FieldDef('phone', 'تليفون', 'Phone', FieldType.phone),
     FieldDef('hoursAr', 'المواعيد (عربي)', 'Hours (Arabic)', FieldType.text),
     FieldDef('hoursEn', 'المواعيد (إنجليزي)', 'Hours (English)', FieldType.text),
     _orderField,
     _visibleField,
     _sampleField,
+    ..._detailsGroup,
+    ..._mediaGroup,
+    ..._contactSwitches,
+    FieldDef('phone', 'تليفون', 'Phone', FieldType.phone, group: FieldGroup.contacts),
+    _whatsappField,
+    _whatsappUrlField,
+    _facebookUrlField,
+    _youtubeUrlField,
+    _instagramUrlField,
+    _externalUrlField,
+    ..._contactTail,
   ], [
     'nameAr',
     'nameEn'
@@ -324,12 +468,21 @@ const adminCollections = <CollectionDef>[
     FieldDef('scheduleAr', 'المواعيد (عربي)', 'Schedule (Arabic)', FieldType.text),
     FieldDef('scheduleEn', 'المواعيد (إنجليزي)', 'Schedule (English)', FieldType.text),
     FieldDef('ageRange', 'الأعمار', 'Ages', FieldType.text, maxLength: 60),
-    FieldDef('contactPhone', 'تليفون التواصل', 'Contact phone', FieldType.phone),
-    FieldDef('link', 'رابط الصفحة (فيسبوك/يوتيوب…)', 'Page link (Facebook/YouTube…)', FieldType.url),
-    _imageField,
     _orderField,
     _visibleField,
     _sampleField,
+    ..._detailsGroup,
+    ..._mediaGroup,
+    ..._contactSwitches,
+    _contactPhoneField,
+    _whatsappField,
+    _whatsappUrlField,
+    _facebookUrlField,
+    _youtubeUrlField,
+    _instagramUrlField,
+    FieldDef('link', 'رابط الصفحة (فيسبوك/يوتيوب…)', 'Page link (Facebook/YouTube…)', FieldType.url,
+        group: FieldGroup.contacts),
+    ..._contactTail,
   ], [
     'titleAr',
     'titleEn'
@@ -352,9 +505,11 @@ const adminCollections = <CollectionDef>[
     FieldDef('feastCopticEn', 'العيد بالتقويم القبطي (إنجليزي)', 'Coptic feast (English)', FieldType.text),
     FieldDef('feastGregorianAr', 'العيد بالتقويم الميلادي (عربي)', 'Gregorian feast (Arabic)', FieldType.text),
     FieldDef('feastGregorian', 'العيد بالتقويم الميلادي (إنجليزي)', 'Gregorian feast (English)', FieldType.text),
-    _imageField,
     _orderField,
     _visibleField,
+    ..._detailsGroup,
+    ..._mediaGroup,
+    ..._plainContactsGroup,
   ], [
     'nameAr',
     'nameEn'
@@ -367,9 +522,11 @@ const adminCollections = <CollectionDef>[
     FieldDef('year', 'السنة', 'Year', FieldType.integer, min: 1, max: 2200),
     FieldDef('icon', 'الأيقونة', 'Icon', FieldType.choice,
         options: ['church', 'people', 'altar', 'pope', 'star'], defaultOption: 'star'),
-    _imageField,
     _orderField,
     _visibleField,
+    ..._detailsGroup,
+    ..._mediaGroup,
+    ..._plainContactsGroup,
   ], [
     'titleAr',
     'titleEn'

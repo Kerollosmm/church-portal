@@ -201,6 +201,10 @@ class _FakeBackend extends AdminBackend {
     _docs[path]?.add(AdminDoc(path.split('/').last, next));
   }
 
+  /// The stored document at [path] (saveDoc replaces each written top-level
+  /// field, like AdminRepository's mergeFields).
+  Map<String, dynamic>? stored(String path) => _data[path];
+
   @override
   Future<String> save(String collection, String? id, Map<String, dynamic> data) async => id ?? 'new';
   @override
@@ -670,6 +674,33 @@ void main() {
       expect(tester.state<FeaturesEditorState>(find.byType(FeaturesEditor)), same(before));
     });
 
+    testWidgets('saving page headers and the footer keeps the form mounted; a reset page is removed', (tester) async {
+      tester.view.physicalSize = const Size(1200, 9000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final stored = FeatureSettings.defaults.copyWith(
+        pageHeaders: {'ask': const PageCustom(titleEn: 'Ask us'), 'about': const PageCustom(titleAr: 'عنا')},
+      );
+      final repo = _FakeBackend(docs: {
+        'settings/features': {...stored.toMap(), 'updatedAt': DateTime.utc(2026, 10, 1)},
+      });
+      await tester.pumpWidget(_adminApp(FeaturesScreen(repo: repo)));
+      await tester.pumpAndSettle();
+      final before = tester.state<FeaturesEditorState>(find.byType(FeaturesEditor));
+      await tester.tap(find.byKey(const ValueKey('page-ask')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('pageReset-ask')));
+      await tester.tap(find.byKey(const ValueKey('footer-showQuickLinks')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('features-save')));
+      await tester.pumpAndSettle();
+      expect(tester.state<FeaturesEditorState>(find.byType(FeaturesEditor)), same(before));
+      expect(before.dirty, isFalse);
+      final saved = repo.stored('settings/features')!;
+      expect(saved['pageHeaders'], {'about': const PageCustom(titleAr: 'عنا').toMap()});
+      expect((saved['footer'] as Map)['showQuickLinks'], isFalse);
+    });
+
     testWidgets('home blocks can be reordered with single taps', (tester) async {
       tester.view.physicalSize = const Size(1200, 5000);
       tester.view.devicePixelRatio = 1;
@@ -868,6 +899,119 @@ void main() {
       expect(find.text('old-admin@x.test'), findsNothing);
     });
   });
+
+  group('PR #12: collection rows, new-doc saves & stream switches', () {
+    testWidgets('rows with a detail page carry a badge and open the item page; others stay as before', (tester) async {
+      tester.view.physicalSize = const Size(1200, 2000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final repo = _ListBackend([
+        AdminDoc('on', {'nameAr': 'St On', 'order': 10, 'detailsEnabled': true}),
+        AdminDoc('hidden', {'nameAr': 'St Hidden', 'order': 20, 'detailsEnabled': true, 'visible': false}),
+        AdminDoc('off', {'nameAr': 'St Off', 'order': 30}),
+      ]);
+      await tester.pumpWidget(_adminApp(CollectionListScreen(repo: repo, def: collectionById('saints')!)));
+      await tester.pumpAndSettle();
+      expect(find.text('Detail page'), findsNWidgets(2));
+      expect(find.byKey(const ValueKey('openItem-on')), findsOneWidget);
+      expect(find.byKey(const ValueKey('openItem-hidden')), findsNothing, reason: 'hidden items have no public page');
+      expect(find.byKey(const ValueKey('openItem-off')), findsNothing);
+      expect(find.byTooltip('Open detail page on site'), findsOneWidget);
+    });
+
+    testWidgets('a detail-page row at 320 px x 200% text keeps its open-page button without overflow', (tester) async {
+      tester.view.physicalSize = const Size(320, 2000);
+      tester.view.devicePixelRatio = 1;
+      tester.platformDispatcher.textScaleFactorTestValue = 2.0;
+      addTearDown(tester.view.reset);
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      final repo = _ListBackend([
+        AdminDoc('on', {'nameAr': 'St On with a fairly long name', 'order': 10, 'detailsEnabled': true}),
+      ]);
+      await tester.pumpWidget(_adminApp(CollectionListScreen(repo: repo, def: collectionById('saints')!)));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(find.byKey(const ValueKey('openItem-on')), findsOneWidget);
+    });
+
+    testWidgets('a new item saved in several writes lands in one document', (tester) async {
+      tester.view.physicalSize = const Size(1200, 6000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final repo = _SaveBackend();
+      await tester.pumpWidget(_adminApp(CollectionListScreen(repo: repo, def: collectionById('saints')!)));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const ValueKey('field-nameAr')), 'القديس');
+      await tester.tap(find.byKey(const ValueKey('group-media')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('galleryUrlBtn')));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const Key('imageUrlInput')), 'https://img.example.org/a.jpg');
+      await tester.tap(find.byKey(const Key('imageUrlOk')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('editor-save')));
+      await tester.pumpAndSettle();
+      expect(repo.saves.map((s) => s.$1), [null, 'new-1']);
+      expect(repo.saves.last.$2.keys, ['gallery']);
+    });
+
+    testWidgets('collection, messages and admins lists drop the old backend while the new one loads', (tester) async {
+      final a = _ListBackend([AdminDoc('a', {'nameAr': 'Old Saint', 'order': 10})]);
+      final b = _PendingBackend();
+      await tester.pumpWidget(_adminApp(CollectionListScreen(repo: a, def: collectionById('saints')!)));
+      await tester.pumpAndSettle();
+      expect(find.text('Old Saint'), findsOneWidget);
+      await tester.pumpWidget(_adminApp(CollectionListScreen(repo: b, def: collectionById('saints')!)));
+      await tester.pump();
+      expect(find.text('Old Saint'), findsNothing);
+
+      final c = _ListBackend([AdminDoc('m1', {'name': 'Old Sender', 'message': 'old', 'status': 'new'})]);
+      await tester.pumpWidget(_adminApp(MessagesScreen(repo: c)));
+      await tester.pumpAndSettle();
+      expect(find.text('Old Sender'), findsOneWidget);
+      await tester.pumpWidget(_adminApp(MessagesScreen(repo: _PendingBackend())));
+      await tester.pump();
+      expect(find.text('Old Sender'), findsNothing);
+
+      final e = _ListBackend([AdminDoc('e1', {'email': 'old-admin@x.test', 'role': 'editor'})]);
+      await tester.pumpWidget(_adminApp(AdminsScreen(repo: e, selfUid: 'u')));
+      await tester.pumpAndSettle();
+      expect(find.text('old-admin@x.test'), findsOneWidget);
+      await tester.pumpWidget(_adminApp(AdminsScreen(repo: _PendingBackend(), selfUid: 'u')));
+      await tester.pump();
+      expect(find.text('old-admin@x.test'), findsNothing);
+    });
+
+    testWidgets('messages and admins at 320 px x 200% text reflow without overflow', (tester) async {
+      tester.view.physicalSize = const Size(320, 3000);
+      tester.view.devicePixelRatio = 1;
+      tester.platformDispatcher.textScaleFactorTestValue = 2.0;
+      addTearDown(tester.view.reset);
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      final msgs = _ListBackend([
+        AdminDoc('m1', {
+          'name': 'A sender with a fairly long name',
+          'message': 'Hello there',
+          'status': 'new',
+          'phone': '01012345678',
+          'createdAt': DateTime.utc(2026, 11, 1, 10),
+        }),
+      ]);
+      await tester.pumpWidget(_adminApp(MessagesScreen(repo: msgs)));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(find.byTooltip('Delete'), findsOneWidget);
+      final admins = _ListBackend([
+        AdminDoc('e1', {'email': 'a.very.long.editor.address@example.org', 'role': 'editor'}),
+      ]);
+      await tester.pumpWidget(_adminApp(AdminsScreen(repo: admins, selfUid: 'u')));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(find.byType(DropdownButton<String>), findsOneWidget);
+    });
+  });
 }
 
 class _ListBackend extends _FakeBackend {
@@ -893,4 +1037,24 @@ class _DeleteOnlyMedia implements MediaRepository {
   Future<void> delete(String mediaId) async => deleted.add(mediaId);
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+/// Records collection saves; a create returns 'new-1'.
+class _SaveBackend extends _ListBackend {
+  final saves = <(String?, Map<String, dynamic>)>[];
+  _SaveBackend() : super(const []);
+  @override
+  Future<String> save(String collection, String? id, Map<String, dynamic> data) async {
+    saves.add((id, data));
+    return id ?? 'new-1';
+  }
+}
+
+/// A backend whose lists never arrive (still loading).
+class _PendingBackend extends _FakeBackend {
+  @override
+  Stream<List<AdminDoc>> watch(String collection) {
+    watched.add(collection);
+    return StreamController<List<AdminDoc>>().stream;
+  }
 }

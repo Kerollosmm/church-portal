@@ -86,13 +86,32 @@ class _FeaturesScreenState extends State<FeaturesScreen> {
               exists: doc != null,
               updatedAt: doc?.updatedAt,
               updatedBy: doc?.updatedBy ?? '',
-              onSave: (f) => widget.repo.saveDoc('settings/features', f.toMap()),
+              onSave: (f) async {
+                for (final w in featuresSaveWrites(f, doc?.data)) {
+                  await widget.repo.saveDoc('settings/features', w);
+                }
+              },
             ),
           ),
         ]);
       },
     );
   }
+}
+
+/// The writes that save [next] over the [stored] settings/features document:
+/// everything else first, then `pageHeaders` on its own when it changed.
+/// Firestore evaluates at most 1,000 rule expressions per request and every
+/// page header that changes is validated (validPageHeaders): the whole
+/// document plus all 8 pages in one write exceeds it (ADR-020).
+List<Map<String, dynamic>> featuresSaveWrites(FeatureSettings next, Map<String, dynamic>? stored) {
+  final base = next.toMap();
+  final headers = base.remove('pageHeaders');
+  final before = FeatureSettings.fromMap(stored).toMap()['pageHeaders'];
+  return [
+    base,
+    if (stored == null || !stored.containsKey('pageHeaders') || !sameValue(headers, before)) {'pageHeaders': headers},
+  ];
 }
 
 class FeaturesEditor extends StatefulWidget {
@@ -124,6 +143,29 @@ class FeaturesEditorState extends State<FeaturesEditor> {
     'bannerAr': TextEditingController(text: f.bannerAr),
     'bannerEn': TextEditingController(text: f.bannerEn),
     'bannerLink': TextEditingController(text: f.bannerLink),
+    'footerNoteAr': TextEditingController(text: f.footer.noteAr),
+    'footerNoteEn': TextEditingController(text: f.footer.noteEn),
+  };
+
+  /// Page header / intro inputs: page key -> field -> controller.
+  late final Map<String, Map<String, TextEditingController>> _pages = {
+    for (final p in CustomizablePages.all)
+      p: {
+        for (final e in f.pageHeader(p).toMap().entries) e.key: TextEditingController(text: e.value as String),
+      },
+  };
+
+  /// Max lengths of the page header fields (validPageHeader in firestore.rules).
+  static const pageFieldMax = {
+    'titleAr': 200, 'titleEn': 200, 'subtitleAr': 300, 'subtitleEn': 300, 'introAr': 1500, 'introEn': 1500, //
+  };
+
+  /// Footer note length (validFooter in firestore.rules).
+  static const footerNoteMax = 500;
+
+  /// One collapsible row per page (opened when it holds an invalid field).
+  final Map<String, ExpansibleController> _pageCtl = {
+    for (final p in CustomizablePages.all) p: ExpansibleController(),
   };
   final _formKey = GlobalKey<FormState>();
   bool _dirty = false;
@@ -134,7 +176,7 @@ class FeaturesEditorState extends State<FeaturesEditor> {
 
   @override
   void dispose() {
-    for (final c in _t.values) {
+    for (final c in [..._t.values, for (final m in _pages.values) ...m.values, ..._pageCtl.values]) {
       c.dispose();
     }
     super.dispose();
@@ -153,10 +195,55 @@ class FeaturesEditorState extends State<FeaturesEditor> {
         bannerAr: _t['bannerAr']!.text.trim(),
         bannerEn: _t['bannerEn']!.text.trim(),
         bannerLink: _t['bannerLink']!.text.trim(),
+        pageHeaders: {
+          for (final p in CustomizablePages.all)
+            if (_pageCustom(p) case final PageCustom c when !c.isEmpty) p: c,
+        },
+        footer: FooterConfig(
+          showPhones: f.footer.showPhones,
+          showSocials: f.footer.showSocials,
+          showQuickLinks: f.footer.showQuickLinks,
+          noteAr: _t['footerNoteAr']!.text.trim(),
+          noteEn: _t['footerNoteEn']!.text.trim(),
+        ),
       );
 
+  PageCustom _pageCustom(String p) {
+    String v(String k) => _pages[p]![k]!.text.trim();
+    return PageCustom(
+      titleAr: v('titleAr'),
+      titleEn: v('titleEn'),
+      subtitleAr: v('subtitleAr'),
+      subtitleEn: v('subtitleEn'),
+      introAr: v('introAr'),
+      introEn: v('introEn'),
+    );
+  }
+
+  /// Opens every collapsed page row holding a too-long field.
+  void _openInvalidPages() {
+    for (final p in CustomizablePages.all) {
+      final bad = _pages[p]!.entries.any((e) => e.value.text.trim().length > pageFieldMax[e.key]!);
+      if (bad && !_pageCtl[p]!.isExpanded) _pageCtl[p]!.expand();
+    }
+  }
+
+  void _setFooter({bool? showPhones, bool? showSocials, bool? showQuickLinks}) => _set(f.copyWith(
+        footer: FooterConfig(
+          showPhones: showPhones ?? f.footer.showPhones,
+          showSocials: showSocials ?? f.footer.showSocials,
+          showQuickLinks: showQuickLinks ?? f.footer.showQuickLinks,
+          noteAr: f.footer.noteAr,
+          noteEn: f.footer.noteEn,
+        ),
+      ));
+
   Future<void> _save() async {
-    if (_saving || !_formKey.currentState!.validate()) return;
+    if (_saving) return;
+    if (!_formKey.currentState!.validate()) {
+      _openInvalidPages();
+      return;
+    }
     final messenger = ScaffoldMessenger.of(context);
     final ok = context.tr('saved');
     final failed = context.tr('saveFailed', {'e': '{e}'});
@@ -196,11 +283,15 @@ class FeaturesEditorState extends State<FeaturesEditor> {
         ),
       );
 
-  Widget _text(String key, String label, {int maxLength = 300, bool url = false}) => Padding(
+  Widget _text(String key, String label,
+          {int maxLength = 300, bool url = false, TextEditingController? controller, Key? fieldKey, int lines = 1}) =>
+      Padding(
         padding: const EdgeInsets.only(bottom: 10),
         child: TextFormField(
-          key: ValueKey('features-$key'),
-          controller: _t[key],
+          key: fieldKey ?? ValueKey('features-$key'),
+          controller: controller ?? _t[key],
+          minLines: lines,
+          maxLines: lines == 1 ? 1 : 8,
           onChanged: (_) => _dirty ? null : setState(() => _dirty = true),
           textDirection: url ? TextDirection.ltr : null,
           autovalidateMode: AutovalidateMode.onUserInteraction,
@@ -287,6 +378,9 @@ class FeaturesEditorState extends State<FeaturesEditor> {
                 _text('heroSubtitleAr', context.tr('heroSubtitleAr'), maxLength: 300),
                 _text('heroSubtitleEn', context.tr('heroSubtitleEn'), maxLength: 300),
               ], hint: context.tr('heroTextsHint')),
+              _card(context.tr('pageHeadersTitle'), Icons.view_headline_rounded, [
+                for (final p in CustomizablePages.all) _pageTile(context, p),
+              ], hint: context.tr('pageHeadersHint')),
               _card(context.tr('announcementBanner'), Icons.campaign_outlined, [
                 SwitchListTile(
                   key: const ValueKey('features-bannerEnabled'),
@@ -299,6 +393,25 @@ class FeaturesEditorState extends State<FeaturesEditor> {
                 _text('bannerEn', context.tr('bannerEn'), maxLength: 500),
                 _text('bannerLink', context.tr('bannerLink'), maxLength: 500, url: true),
               ]),
+              _card(context.tr('footerTitle'), Icons.call_to_action_outlined, [
+                for (final (k, label, v, set) in [
+                  ('showPhones', 'footerShowPhones', f.footer.showPhones, (bool v) => _setFooter(showPhones: v)),
+                  ('showSocials', 'footerShowSocials', f.footer.showSocials, (bool v) => _setFooter(showSocials: v)),
+                  ('showQuickLinks', 'footerShowQuickLinks', f.footer.showQuickLinks,
+                      (bool v) => _setFooter(showQuickLinks: v)),
+                ])
+                  SwitchListTile(
+                    key: ValueKey('footer-$k'),
+                    contentPadding: const EdgeInsetsDirectional.only(start: 4),
+                    title: Text(context.tr(label)),
+                    value: v,
+                    onChanged: set,
+                  ),
+                _text('footerNoteAr', context.tr('footerNoteAr'),
+                    maxLength: footerNoteMax, fieldKey: const ValueKey('footer-noteAr'), lines: 2),
+                _text('footerNoteEn', context.tr('footerNoteEn'),
+                    maxLength: footerNoteMax, fieldKey: const ValueKey('footer-noteEn'), lines: 2),
+              ], hint: context.tr('footerHint')),
               _card(context.tr('themeColor'), Icons.palette_outlined, [
                 Wrap(spacing: 10, runSpacing: 10, children: [
                   for (final e in ThemePresets.all.entries)
@@ -320,6 +433,67 @@ class FeaturesEditorState extends State<FeaturesEditor> {
           ),
         ),
       ),
+    );
+  }
+
+  /// One page's header / intro overrides: a collapsible row with a
+  /// "Customized" badge and a Reset button while any field is filled.
+  Widget _pageTile(BuildContext context, String p) {
+    final ctrls = _pages[p]!;
+    final labels = CustomizablePages.labels[p]!;
+    return ListenableBuilder(
+      listenable: Listenable.merge(ctrls.values.toList()),
+      builder: (context, _) {
+        final customized = ctrls.values.any((c) => c.text.trim().isNotEmpty);
+        return ExpansionTile(
+          key: ValueKey('page-$p'),
+          controller: _pageCtl[p],
+          maintainState: true,
+          tilePadding: const EdgeInsetsDirectional.only(start: 4, end: 8),
+          childrenPadding: const EdgeInsetsDirectional.only(start: 4, end: 4, bottom: 8),
+          expandedCrossAxisAlignment: CrossAxisAlignment.stretch,
+          title: Text(context.pick(labels[0], labels[1]), style: const TextStyle(fontWeight: FontWeight.w700)),
+          subtitle: customized
+              ? Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: Container(
+                    key: ValueKey('pageCustomized-$p'),
+                    margin: const EdgeInsets.only(top: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: AppColors.parchment,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: AppColors.burgundy.withValues(alpha: 0.35)),
+                    ),
+                    child: Text(context.tr('pageCustomized'),
+                        style: const TextStyle(fontSize: 12, color: AppColors.burgundy, fontWeight: FontWeight.w700)),
+                  ),
+                )
+              : null,
+          children: [
+            for (final e in ctrls.entries)
+              _text('page-$p-${e.key}', context.tr('page_${e.key}'),
+                  maxLength: pageFieldMax[e.key]!,
+                  controller: e.value,
+                  lines: e.key.startsWith('intro') ? 3 : 1),
+            if (customized)
+              Align(
+                alignment: AlignmentDirectional.centerEnd,
+                child: TextButton.icon(
+                  key: ValueKey('pageReset-$p'),
+                  onPressed: () => setState(() {
+                    for (final c in ctrls.values) {
+                      c.clear();
+                    }
+                    _dirty = true;
+                  }),
+                  icon: const Icon(Icons.restart_alt_rounded),
+                  label: Text(context.tr('pageReset')),
+                ),
+              ),
+          ],
+        );
+      },
     );
   }
 

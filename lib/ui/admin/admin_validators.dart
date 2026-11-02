@@ -124,6 +124,13 @@ String fmtDate(DateTime v) {
 }
 
 /// Cross-field checks for a collected document: error key or null.
+/// Error key (`requiredTitleAnyLang`) when an [list] row (its sub-field
+/// texts in [row]) has none of [FieldDef.rowRequireAnyOf] filled, else null.
+String? validateRowAnyOf(FieldDef list, Map<String, String> row) {
+  if (list.rowRequireAnyOf.isEmpty) return null;
+  return list.rowRequireAnyOf.any((k) => (row[k] ?? '').trim().isNotEmpty) ? null : 'requiredTitleAnyLang';
+}
+
 String? validateDocument(CollectionDef? def, Map<String, dynamic> data) {
   if (def != null && def.requireAnyOf.isNotEmpty && def.requireAnyOf.every((k) => data[k] == null || data[k] == '')) {
     return 'needWeekdayOrDate';
@@ -184,3 +191,26 @@ Map<String, dynamic> changedFields(Map<String, dynamic> initial, Map<String, dyn
 /// Lower-cased text used by the admin list search.
 String searchableText(Map<String, dynamic> data) =>
     data.values.whereType<String>().join(' ').toLowerCase();
+
+/// Keys saved in a write of their own: Firestore evaluates at most 1,000
+/// rule expressions per request, and a full gallery (8 photos) plus a full
+/// `extraFields` list (15 rows) in one write exceeds it (firestore.rules,
+/// validGallery / validExtraFields; ADR-020).
+const separatelySavedKeys = ['gallery', 'extraFields'];
+
+/// Splits a save [payload] into writes made one after the other: everything
+/// else first (it creates a new document), then a non-empty `gallery`, then
+/// non-empty `extraFields`. Empty or cleared lists cost almost nothing and
+/// stay in the first write. Empty writes are dropped.
+List<Map<String, dynamic>> splitSavePayload(Map<String, dynamic> payload) {
+  bool own(String k) => separatelySavedKeys.contains(k) && payload[k] is List && (payload[k] as List).isNotEmpty;
+  final base = {
+    for (final e in payload.entries)
+      if (!own(e.key)) e.key: e.value,
+  };
+  return [
+    if (base.isNotEmpty) base,
+    for (final k in separatelySavedKeys)
+      if (own(k)) {k: payload[k]},
+  ];
+}

@@ -117,6 +117,9 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
         label: Text(context.tr('add')),
       ),
       body: StreamBuilder<List<AdminDoc>>(
+        // A new stream (another backend) gets a fresh StreamBuilder: a reused
+        // one keeps the old backend's list while the new one loads.
+        key: ObjectKey(_stream),
         stream: _stream,
         builder: (context, snap) {
           if (snap.hasError) {
@@ -207,8 +210,8 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
 
   /// Opens [CollectionDef.publicPath] in a new tab on web (the dashboard stays
   /// open), in the dashboard's language; elsewhere navigates to it in the app.
-  void _openOnSite(BuildContext context) {
-    final path = publicPathFor(def, english: !context.isAr);
+  void _openOnSite(BuildContext context, [String? path]) {
+    path ??= publicPathFor(def, english: !context.isAr);
     if (kIsWeb) {
       openUrl(Uri.base.resolve(path).toString());
     } else {
@@ -222,6 +225,8 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     final sub = _subtitle(context, d);
     final updated = d.updatedAt;
     final narrow = MediaQuery.sizeOf(context).width < 600;
+    final details = d.data['detailsEnabled'] == true;
+    final itemPath = itemPublicPathFor(def, d.id, d.data, english: !context.isAr);
     // Single-tap alternative to dragging (WCAG 2.5.7).
     final moves = <Widget>[
       if (dragIndex != null && docs != null) ...[
@@ -258,6 +263,12 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
           if (unconfirmed) _Tag(context.tr('unconfirmed'), AppColors.goldText),
         ]),
         subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          // Own line: the title row keeps its width on phones.
+          if (details)
+            Padding(
+              padding: const EdgeInsets.only(top: 2, bottom: 2),
+              child: _Tag(context.tr('detailPageBadge'), AppColors.burgundy, margin: EdgeInsetsDirectional.zero),
+            ),
           if (sub.isNotEmpty) Text(sub),
           if (updated != null)
             Text(
@@ -270,6 +281,15 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
         onTap: () => _openEditor(context, d),
         trailing: Row(mainAxisSize: MainAxisSize.min, children: [
           if (!narrow) ...moves,
+          // The item's own detail page when it has one (else the toolbar's
+          // "open on site" shows the collection page).
+          if (itemPath != null)
+            IconButton(
+              key: ValueKey('openItem-${d.id}'),
+              tooltip: context.tr('openItemOnSite'),
+              icon: const Icon(Icons.open_in_new_rounded),
+              onPressed: () => _openOnSite(context, itemPath),
+            ),
           if (def.hasVisible)
             IconButton(
               tooltip: context.tr(hidden ? 'show' : 'hide'),
@@ -352,6 +372,9 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
 
   void _openEditor(BuildContext context, AdminDoc? d) {
     final label = context.pick(def.labelAr, def.labelEn);
+    // The editor may save in several writes (gallery / extraFields go on
+    // their own): the first one creates a new document, the rest merge into it.
+    var id = d?.id;
     Navigator.of(context).push(MaterialPageRoute<void>(
       fullscreenDialog: true,
       builder: (_) => DocEditor(
@@ -361,7 +384,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
         data: d?.data,
         docId: d?.id,
         newDefaults: def.newDefaults,
-        onSave: (data) => widget.repo.save(def.name, d?.id, data),
+        onSave: (data) async => id = await widget.repo.save(def.name, id, data),
         media: widget.repo.media,
       ),
     ));
@@ -374,17 +397,37 @@ String publicPathFor(CollectionDef def, {required bool english}) {
   return english ? Uri.parse(path).replace(queryParameters: {'lang': 'en'}).toString() : path;
 }
 
+/// Public detail page of an item (PR #13 routes), or null when the item has
+/// none: its collection has no detail pages, `detailsEnabled` is off, or the
+/// item is hidden. `?lang=en` when the dashboard is in English.
+String? itemPublicPathFor(CollectionDef def, String id, Map<String, dynamic> data, {required bool english}) {
+  final base = switch (def.name) {
+    'meetings' => '/church-education',
+    'activities' => '/church-activities',
+    'clinics' => '/clinics',
+    'facilities' => '/public-services',
+    'priests' => '/about/priests',
+    'saints' => '/about/saints',
+    'milestones' => '/about/milestones',
+    _ => null,
+  };
+  if (base == null || data['detailsEnabled'] != true || data['visible'] == false) return null;
+  final path = '$base/${Uri.encodeComponent(id)}';
+  return english ? '$path?lang=en' : path;
+}
+
 /// First `order` value minus 10 for [def]'s reorder (BUG-13).
 int reorderBase(CollectionDef def) => def.id == 'departedPriests' ? 1000 : 0;
 
 class _Tag extends StatelessWidget {
   final String text;
   final Color color;
-  const _Tag(this.text, this.color);
+  final EdgeInsetsGeometry margin;
+  const _Tag(this.text, this.color, {this.margin = const EdgeInsetsDirectional.only(start: 6)});
 
   @override
   Widget build(BuildContext context) => Container(
-        margin: const EdgeInsetsDirectional.only(start: 6),
+        margin: margin,
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
         decoration: BoxDecoration(
           color: color.withValues(alpha: 0.14),

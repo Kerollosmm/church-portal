@@ -91,6 +91,25 @@ class DocEditorState extends State<DocEditor> {
   /// Values as loaded: only fields that differ from these are saved.
   late Map<String, dynamic> _initialValues;
 
+  /// The values before the first attempt of a save that has not completed
+  /// yet. A failed later chunk advances [_initialValues] past a cover the
+  /// first chunk replaced; its media id is still cleaned up from this
+  /// baseline once a retry completes the save.
+  Map<String, dynamic>? _saveBaseline;
+
+  /// [FieldType.imageList] fields: photos in display order.
+  final Map<String, List<_GalleryEntry>> _gallery = {};
+
+  /// Collapsible group cards (opened when they hold an invalid field).
+  final Map<FieldGroup, ExpansibleController> _groupCtl = {
+    for (final g in FieldGroup.values)
+      if (g != FieldGroup.basic) g: ExpansibleController(),
+  };
+
+  /// The document exists: an existing one, or a new one whose first write
+  /// succeeded (later writes then send only what changed).
+  late bool _persisted = !isNew;
+
   bool get isNew => widget.data == null;
 
   /// Unsaved local edits (the church-info screen asks before reloading).
@@ -141,6 +160,11 @@ class DocEditorState extends State<DocEditor> {
         final img = MediaImage.fromMap(v);
         _values[f.key] = img?.toMap();
         _text[f.key] = _ctrl(img?.alt ?? '');
+      case FieldType.imageList:
+        _gallery[f.key] = [
+          for (final e in (v is List ? v : const []))
+            if (MediaImage.fromMap(e) case final MediaImage img) _GalleryEntry(img, null, _ctrl(img.alt)),
+        ];
     }
   }
 
@@ -159,6 +183,14 @@ class DocEditorState extends State<DocEditor> {
       for (final r in rows) {
         r.dispose();
       }
+    }
+    for (final list in _gallery.values) {
+      for (final g in list) {
+        g.alt.dispose();
+      }
+    }
+    for (final c in _groupCtl.values) {
+      c.dispose();
     }
     super.dispose();
   }
@@ -183,6 +215,8 @@ class DocEditorState extends State<DocEditor> {
           out[f.key] = [for (final r in _rows[f.key]!) r.collect()];
         case FieldType.image:
           out[f.key] = _collectImage(f.key);
+        case FieldType.imageList:
+          out[f.key] = [for (final g in _gallery[f.key]!) g.collect()];
         case FieldType.text:
         case FieldType.multiline:
         case FieldType.time:
@@ -206,9 +240,50 @@ class DocEditorState extends State<DocEditor> {
 
   Iterable<FieldDef> get _imageFields => widget.fields.where((f) => f.type == FieldType.image);
 
+  bool get _hasPendingUploads => _pending.isNotEmpty || _gallery.values.any((l) => l.any((g) => g.pending != null));
+
+  /// Opens every collapsed group holding an invalid field, so its error is
+  /// never hidden in a closed card. Returns true when one was opened.
+  bool _openInvalidGroups() {
+    final bad = <FieldGroup>{};
+    for (final f in widget.fields) {
+      if (f.group == FieldGroup.basic) continue;
+      final c = _text[f.key];
+      if (c != null && f.type != FieldType.image && validateFieldValue(f, c.text) != null) bad.add(f.group);
+      for (final r in _rows[f.key] ?? const <_Row>[]) {
+        if (validateRowAnyOf(f, {for (final e in r.text.entries) e.key: e.value.text}) != null) bad.add(f.group);
+        for (final sf in f.subFields) {
+          final rc = r.text[sf.key];
+          if (rc != null && validateFieldValue(sf, rc.text) != null) bad.add(f.group);
+        }
+      }
+    }
+    var opened = false;
+    for (final g in bad) {
+      final c = _groupCtl[g]!;
+      if (!c.isExpanded) {
+        c.expand();
+        opened = true;
+      }
+    }
+    return opened;
+  }
+
   /// Validates and saves. Returns true on success (visible for tests).
+  ///
+  /// Writes go one after the other: everything else first (it creates a new
+  /// document), then the `gallery`, then the `extraFields` (see
+  /// [splitSavePayload]: one write with both lists at their maximum exceeds
+  /// the 1,000 expressions Firestore rules evaluate per request). A write
+  /// that fails leaves the earlier ones saved; a retry sends only the rest.
   Future<bool> save() async {
-    if (_saving || _processing != null || !_formKey.currentState!.validate()) return false;
+    if (_saving || _processing != null) return false;
+    if (!_formKey.currentState!.validate()) {
+      if (_openInvalidGroups()) {
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(content: Text(context.tr('checkHighlighted'))));
+      }
+      return false;
+    }
     var data = collect();
     final messenger = ScaffoldMessenger.maybeOf(context);
     final docErr = validateDocument(widget.def, data);
@@ -220,8 +295,8 @@ class DocEditorState extends State<DocEditor> {
     final nav = Navigator.of(context);
     final route = ModalRoute.of(context);
     // Existing docs: write only what changed (merge), never stale values.
-    var payload = isNew ? data : changedFields(_initialValues, data);
-    if (payload.isEmpty && _pending.isEmpty) {
+    var payload = _persisted ? changedFields(_initialValues, data) : data;
+    if (payload.isEmpty && !_hasPendingUploads) {
       messenger?.showSnackBar(SnackBar(content: Text(context.tr('noChanges'))));
       setState(() => _dirty = false);
       if (widget.popOnSave && (route?.isCurrent ?? false)) nav.pop();
@@ -231,7 +306,10 @@ class DocEditorState extends State<DocEditor> {
     // Upload picked images first so the document references real media docs.
     final pendingBefore = Map<String, EncodedImage>.of(_pending);
     final valuesBefore = {for (final f in _imageFields) f.key: _values[f.key]};
+    final galleryUploads = <_GalleryEntry, EncodedImage>{};
     final uploaded = <String>[];
+    final initialBefore = _initialValues;
+    final baseline = _saveBaseline ??= _initialValues;
     try {
       for (final e in pendingBefore.entries) {
         final img = await widget.media!.upload(e.value, alt: _text[e.key]!.text.trim());
@@ -239,15 +317,34 @@ class DocEditorState extends State<DocEditor> {
         _values[e.key] = img.toMap();
         _pending.remove(e.key);
       }
+      for (final list in _gallery.values) {
+        for (final g in list) {
+          final enc = g.pending;
+          if (enc == null) continue;
+          final img = await widget.media!.upload(enc, alt: g.alt.text.trim());
+          uploaded.add(img.mediaId);
+          galleryUploads[g] = enc;
+          g
+            ..image = img
+            ..pending = null;
+        }
+      }
       if (uploaded.isNotEmpty) {
         data = collect();
-        payload = isNew ? data : changedFields(_initialValues, data);
+        payload = _persisted ? changedFields(_initialValues, data) : data;
       }
-      await widget.onSave(payload);
-      // Best effort: drop inline images this edit replaced or removed.
-      final orphans = [for (final f in _imageFields) ...orphanedMediaIds(_initialValues[f.key], data[f.key])];
+      for (final chunk in splitSavePayload(payload)) {
+        await widget.onSave(chunk);
+        _persisted = true;
+        _initialValues = {..._initialValues, ...chunk};
+      }
       _initialValues = data;
-      _deleteMedia(orphans);
+      // Best effort: drop inline images this edit replaced or removed (an
+      // image moved between the cover and the gallery is still referenced).
+      // Measured from the first attempt's baseline too, so a cover replaced
+      // by an earlier, partly failed attempt of this save is not left behind.
+      _deleteMedia({...orphanedDocMediaIds(baseline, data), ...orphanedDocMediaIds(initialBefore, data)}.toList());
+      _saveBaseline = null;
       messenger?.showSnackBar(SnackBar(content: Text(savedMsg)));
       if (!mounted) return true;
       setState(() {
@@ -259,15 +356,25 @@ class DocEditorState extends State<DocEditor> {
       if (widget.popOnSave && (route?.isCurrent ?? false)) nav.pop();
       return true;
     } catch (e) {
-      // The document was not saved: remove the images uploaded for it and
-      // keep the picked files so the admin can retry. A timeout is different:
-      // Firestore keeps the write queued (offline) and may still commit it,
-      // pointing at those images, so they are kept (BUG-13).
-      if (e is! TimeoutException) _deleteMedia(uploaded);
-      _pending
-        ..clear()
-        ..addAll(pendingBefore);
-      _values.addAll(valuesBefore);
+      // The failed write (and those after it) did not save: remove the images
+      // uploaded for them and keep the picked files so the admin can retry.
+      // Images an earlier write of this save already stored stay. A timeout
+      // is different: Firestore keeps the write queued (offline) and may
+      // still commit it, pointing at those images, so they are kept (BUG-13).
+      final stored = extractDocMediaIds(_initialValues);
+      if (e is! TimeoutException) _deleteMedia([for (final id in uploaded) if (!stored.contains(id)) id]);
+      for (final p in pendingBefore.entries) {
+        final id = MediaImage.fromMap(_values[p.key])?.ownedMediaId;
+        if (id != null && uploaded.contains(id) && stored.contains(id)) continue;
+        _pending[p.key] = p.value;
+        _values[p.key] = valuesBefore[p.key];
+      }
+      for (final u in galleryUploads.entries) {
+        if (stored.contains(u.key.image?.mediaId)) continue;
+        u.key
+          ..pending = u.value
+          ..image = null;
+      }
       if (mounted) {
         messenger?.showSnackBar(SnackBar(content: Text(context.tr('saveFailed', {'e': '$e'}))));
         setState(() => _saving = false);
@@ -301,7 +408,7 @@ class DocEditorState extends State<DocEditor> {
 
   String _label(FieldDef f) => context.pick(f.labelAr, f.labelEn) + (f.required ? ' *' : '');
 
-  Widget _textField(FieldDef f, TextEditingController c) {
+  Widget _textField(FieldDef f, TextEditingController c, {String? Function()? rowError}) {
     final ltr = switch (f.type) {
       FieldType.text || FieldType.multiline => false,
       _ => true,
@@ -321,7 +428,7 @@ class DocEditorState extends State<DocEditor> {
         FieldType.multiline => TextInputType.multiline,
         _ => null,
       },
-      validator: (v) => _validate(f, v),
+      validator: (v) => _validate(f, v) ?? rowError?.call(),
       autovalidateMode: AutovalidateMode.onUserInteraction,
       decoration: InputDecoration(
         labelText: _label(f),
@@ -356,6 +463,7 @@ class DocEditorState extends State<DocEditor> {
       case FieldType.weekday:
         return DropdownButtonFormField<int?>(
           key: ValueKey('field-${f.key}'),
+          isExpanded: true, // long labels ellipsize at 320 px / 200% text
           initialValue: _values[f.key] as int?,
           decoration: InputDecoration(labelText: label),
           items: [
@@ -392,6 +500,7 @@ class DocEditorState extends State<DocEditor> {
       case FieldType.choice:
         return DropdownButtonFormField<String?>(
           key: ValueKey('field-${f.key}'),
+          isExpanded: true, // long labels ellipsize at 320 px / 200% text
           initialValue: _values[f.key] as String?,
           decoration: InputDecoration(labelText: label),
           validator: (v) => f.required && (v == null || v.isEmpty) ? context.tr('required') : null,
@@ -409,12 +518,31 @@ class DocEditorState extends State<DocEditor> {
         return _objectList(f);
       case FieldType.image:
         return _imageEditor(f);
+      case FieldType.imageList:
+        return _galleryEditor(f);
       default:
         return _textField(f, _text[f.key]!);
     }
   }
 
-  Future<void> _pickImage(FieldDef f) async {
+  Future<void> _pickImage(FieldDef f) => _pickFromDevice(f.key, (enc) => _pending[f.key] = enc);
+
+  /// Adds a picked photo to the [FieldType.imageList] field [f] (uploaded on save).
+  Future<void> _pickGalleryImage(FieldDef f) =>
+      _pickFromDevice(f.key, (enc) => _gallery[f.key]!.add(_GalleryEntry(null, enc, _ctrl(''))));
+
+  Future<void> _addGalleryUrl(FieldDef f) async {
+    final url = await showDialog<String>(context: context, builder: (_) => const _ImageUrlDialog(initial: ''));
+    if (url == null || !mounted) return;
+    setState(() {
+      _gallery[f.key]!.add(_GalleryEntry(MediaImage.url(url), null, _ctrl('')));
+      _dirty = true;
+    });
+  }
+
+  /// Picks, resizes and compresses an image, then hands it to [onReady]
+  /// (inside setState). [key] marks the field as busy meanwhile.
+  Future<void> _pickFromDevice(String key, void Function(EncodedImage enc) onReady) async {
     final messenger = ScaffoldMessenger.maybeOf(context);
     String msg(String k) => context.tr(k);
     final tooLarge = msg('imageTooLarge'), invalid = msg('imageInvalid'), empty = msg('imageEmpty');
@@ -430,14 +558,14 @@ class DocEditorState extends State<DocEditor> {
       messenger?.showSnackBar(SnackBar(content: Text(empty)));
       return;
     }
-    setState(() => _processing = f.key);
+    setState(() => _processing = key);
     try {
       final enc = await widget.prepareImage(bytes);
       final err = validateMediaBytes(enc.length);
       if (err != null) throw const ImageTooLargeException();
       if (!mounted) return;
       setState(() {
-        _pending[f.key] = enc;
+        onReady(enc);
         _dirty = true;
       });
     } on ImageTooLargeException {
@@ -542,6 +670,7 @@ class DocEditorState extends State<DocEditor> {
       key: ValueKey('field-${f.key}'),
       decoration: InputDecoration(labelText: _label(f), helperText: context.tr('imageHint'), helperMaxLines: 3),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        ?_hintWarning(f),
         if (stack)
           Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             previewBox,
@@ -564,6 +693,220 @@ class DocEditorState extends State<DocEditor> {
           ),
         ],
       ]),
+    );
+  }
+
+  /// A field's own warning (e.g. BR-11 on meetings' photos), shown above
+  /// its image controls; null when the field has none.
+  Widget? _hintWarning(FieldDef f) {
+    final hint = context.pick(f.hintAr, f.hintEn);
+    if (hint.isEmpty) return null;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Icon(Icons.warning_amber_rounded, color: AppColors.alert, size: 20),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text(hint,
+              key: ValueKey('fieldHint-${f.key}'),
+              style: const TextStyle(color: AppColors.alert, fontWeight: FontWeight.w700, fontSize: 12.5)),
+        ),
+      ]),
+    );
+  }
+
+  static const _groupTitles = {
+    FieldGroup.details: 'groupDetails',
+    FieldGroup.media: 'groupMedia',
+    FieldGroup.contacts: 'groupContacts',
+  };
+  static const _groupIcons = {
+    FieldGroup.details: Icons.article_outlined,
+    FieldGroup.media: Icons.photo_library_outlined,
+    FieldGroup.contacts: Icons.contact_phone_outlined,
+  };
+
+  /// A collapsible card for one detail-page group. Collapsed fields stay
+  /// mounted (maintainState) so the form still validates and collects them.
+  Widget _groupCard(FieldGroup g) {
+    final fields = [for (final f in widget.fields) if (f.group == g) f];
+    return Card(
+      key: ValueKey('groupCard-${g.name}'),
+      margin: const EdgeInsets.only(bottom: 12),
+      clipBehavior: Clip.antiAlias,
+      child: ExpansionTile(
+        key: ValueKey('group-${g.name}'),
+        controller: _groupCtl[g],
+        maintainState: true,
+        leading: Icon(_groupIcons[g], color: AppColors.burgundy),
+        title: Text(context.tr(_groupTitles[g]!),
+            style: const TextStyle(fontWeight: FontWeight.w800, color: AppColors.burgundy)),
+        subtitle: _pills(g, fields),
+        childrenPadding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
+        expandedCrossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (final f in fields) Padding(padding: const EdgeInsets.only(bottom: 12), child: _field(f)),
+        ],
+      ),
+    );
+  }
+
+  /// Live status pills under a group title ("Enabled", "3 fields", "4 photos").
+  Widget _pills(FieldGroup g, List<FieldDef> fields) {
+    List<String> labels() {
+      switch (g) {
+        case FieldGroup.details:
+          final rows = [for (final f in fields) if (f.type == FieldType.objectList) ..._rows[f.key]!];
+          return [
+            if (fields.any((f) => f.key == 'detailsEnabled'))
+              context.tr(_values['detailsEnabled'] == true ? 'pillEnabled' : 'pillDisabled'),
+            if (rows.isNotEmpty) context.tr('pillFields', {'n': '${rows.length}'}),
+          ];
+        case FieldGroup.media:
+          final photos = [for (final f in fields) if (f.type == FieldType.imageList) ..._gallery[f.key]!].length;
+          final cover = fields.any(
+              (f) => f.type == FieldType.image && (_pending.containsKey(f.key) || MediaImage.fromMap(_values[f.key]) != null));
+          return [
+            if (photos > 0) context.tr('pillPhotos', {'n': '$photos'}),
+            if (cover) context.tr('pillCover'),
+            if (photos == 0 && !cover) context.tr('pillNoPhotos'),
+          ];
+        case FieldGroup.contacts:
+        case FieldGroup.basic:
+          final n = [
+            for (final f in fields)
+              if (_text[f.key] case final TextEditingController c when c.text.trim().isNotEmpty) f,
+          ].length;
+          return [context.tr(n > 0 ? 'pillFilled' : 'pillEmpty', {'n': '$n'})];
+      }
+    }
+
+    Widget wrap() => Padding(
+          padding: const EdgeInsets.only(top: 4),
+          child: Wrap(spacing: 6, runSpacing: 4, children: [for (final l in labels()) _Pill(l)]),
+        );
+    // Text counts follow typing (the form only rebuilds on its first edit).
+    final controllers = [for (final f in fields) ?_text[f.key]];
+    return g == FieldGroup.contacts
+        ? ListenableBuilder(listenable: Listenable.merge(controllers), builder: (_, _) => wrap())
+        : wrap();
+  }
+
+  Widget _galleryEditor(FieldDef f) {
+    final list = _gallery[f.key]!;
+    final busy = _processing == f.key;
+    final full = list.length >= f.maxRows;
+    final stack = MediaQuery.sizeOf(context).width < 420 || MediaQuery.textScalerOf(context).scale(16) / 16 >= 1.5;
+    return InputDecorator(
+      key: ValueKey('field-${f.key}'),
+      decoration: InputDecoration(
+        labelText: _label(f),
+        helperText: context.tr('galleryHint', {'n': '${f.maxRows}'}),
+        helperMaxLines: 4,
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        ?_hintWarning(f),
+        if (list.isEmpty)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text(context.tr('galleryEmpty'), style: const TextStyle(color: AppColors.muted, fontSize: 12)),
+          ),
+        for (var i = 0; i < list.length; i++) _galleryItem(list, i, stack),
+        Wrap(spacing: 8, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
+          OutlinedButton.icon(
+            key: const Key('galleryUploadBtn'),
+            onPressed: widget.media == null || busy || _saving || full ? null : () => _pickGalleryImage(f),
+            icon: const Icon(Icons.upload_rounded),
+            label: Text(context.tr('galleryUpload')),
+          ),
+          OutlinedButton.icon(
+            key: const Key('galleryUrlBtn'),
+            onPressed: busy || _saving || full ? null : () => _addGalleryUrl(f),
+            icon: const Icon(Icons.link_rounded),
+            label: Text(context.tr('galleryAddUrl')),
+          ),
+          Text(context.tr('galleryCount', {'n': '${list.length}', 'max': '${f.maxRows}'}),
+              key: const Key('galleryCount'), style: const TextStyle(color: AppColors.muted, fontSize: 12)),
+          if (busy) const SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2)),
+        ]),
+        if (widget.media == null)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(context.tr('imageUploadUnavailable'),
+                style: const TextStyle(color: AppColors.muted, fontSize: 11)),
+          ),
+      ]),
+    );
+  }
+
+  Widget _galleryItem(List<_GalleryEntry> list, int i, bool stack) {
+    final g = list[i];
+    const placeholder = Center(child: Icon(Icons.image_outlined, size: 32, color: AppColors.muted));
+    final preview = ClipRRect(
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        width: 72,
+        height: 72,
+        color: AppColors.parchment,
+        child: g.pending != null
+            ? Image.memory(g.pending!.bytes, key: const Key('galleryPreviewPending'), fit: BoxFit.cover)
+            : MediaImageView(image: g.image!, loader: widget.media?.load, placeholder: placeholder),
+      ),
+    );
+    void move(int to) => setState(() {
+          list.insert(to, list.removeAt(i));
+          _dirty = true;
+        });
+    final locked = _saving || _processing != null;
+    final controls = Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(context.tr('galleryPhoto', {'n': '${i + 1}'}), style: const TextStyle(fontWeight: FontWeight.w700)),
+      TextField(
+        key: ValueKey('galleryAlt-$i'),
+        controller: g.alt,
+        maxLength: MediaLimits.maxAltLength,
+        decoration: InputDecoration(labelText: context.tr('imageAlt'), counterText: ''),
+      ),
+      const SizedBox(height: 4),
+      Wrap(spacing: 4, runSpacing: 4, crossAxisAlignment: WrapCrossAlignment.center, children: [
+        IconButton(
+          key: ValueKey('galleryUp-$i'),
+          tooltip: context.tr('moveEarlier'),
+          onPressed: i == 0 || locked ? null : () => move(i - 1),
+          icon: const Icon(Icons.arrow_upward),
+        ),
+        IconButton(
+          key: ValueKey('galleryDown-$i'),
+          tooltip: context.tr('moveLater'),
+          onPressed: i == list.length - 1 || locked ? null : () => move(i + 1),
+          icon: const Icon(Icons.arrow_downward),
+        ),
+        TextButton.icon(
+          key: ValueKey('galleryRemove-$i'),
+          onPressed: locked
+              ? null
+              : () => setState(() {
+                    list.removeAt(i).alt.dispose();
+                    _dirty = true;
+                  }),
+          icon: const Icon(Icons.delete_outline, color: AppColors.alert),
+          label: Text(context.tr('galleryRemove'), style: const TextStyle(color: AppColors.alert)),
+        ),
+      ]),
+    ]);
+    return Card(
+      key: ObjectKey(g),
+      color: AppColors.cream,
+      margin: const EdgeInsets.only(bottom: 8),
+      child: Padding(
+        padding: const EdgeInsets.all(10),
+        child: stack
+            ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [preview, const SizedBox(height: 8), controls])
+            : Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                preview,
+                const SizedBox(width: 12),
+                Expanded(child: controls),
+              ]),
+      ),
     );
   }
 
@@ -594,6 +937,7 @@ class DocEditorState extends State<DocEditor> {
                           }),
                         ),
                       FieldType.choice => DropdownButtonFormField<String>(
+                          isExpanded: true,
                           initialValue: rows[i].values[sf.key] as String?,
                           decoration: InputDecoration(labelText: _label(sf)),
                           items: [
@@ -605,10 +949,23 @@ class DocEditorState extends State<DocEditor> {
                             _dirty = true;
                           }),
                         ),
-                      _ => _textField(sf, rows[i].text[sf.key]!),
+                      _ => _textField(sf, rows[i].text[sf.key]!,
+                          rowError: f.rowRequireAnyOf.isNotEmpty && f.rowRequireAnyOf.first == sf.key
+                              ? () {
+                                  final err = validateRowAnyOf(f, {
+                                    for (final e in rows[i].text.entries) e.key: e.value.text,
+                                  });
+                                  return err == null ? null : context.tr(err);
+                                }
+                              : null),
                     },
                   ),
-                Row(children: [
+                // Wrap: at 320 px / 200% text the buttons flow onto two lines.
+                Wrap(
+                    alignment: WrapAlignment.spaceBetween,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                  Row(mainAxisSize: MainAxisSize.min, children: [
                   IconButton(
                     tooltip: context.tr('moveUp'),
                     onPressed: i == 0
@@ -629,7 +986,7 @@ class DocEditorState extends State<DocEditor> {
                             }),
                     icon: const Icon(Icons.arrow_downward),
                   ),
-                  const Spacer(),
+                  ]),
                   TextButton.icon(
                     onPressed: () => setState(() {
                       rows.removeAt(i).dispose();
@@ -701,7 +1058,10 @@ class DocEditorState extends State<DocEditor> {
                       child: SelectableText('ID: ${widget.docId}', style: const TextStyle(color: AppColors.muted)),
                     ),
                   for (final f in widget.fields)
-                    Padding(padding: const EdgeInsets.only(bottom: 12), child: _field(f)),
+                    if (f.group == FieldGroup.basic)
+                      Padding(padding: const EdgeInsets.only(bottom: 12), child: _field(f)),
+                  for (final g in FieldGroup.values)
+                    if (g != FieldGroup.basic && widget.fields.any((f) => f.group == g)) _groupCard(g),
                   const SizedBox(height: 8),
                   FilledButton.icon(
                     key: const Key('editor-save'),
@@ -767,6 +1127,40 @@ class _ImageUrlDialogState extends State<_ImageUrlDialog> {
           TextButton(onPressed: () => Navigator.pop(context), child: Text(context.tr('cancel'))),
           FilledButton(key: const Key('imageUrlOk'), onPressed: _ok, child: Text(context.tr('ok'))),
         ],
+      );
+}
+
+/// One photo of a [FieldType.imageList] field: a stored image or a picked
+/// file waiting to be uploaded on save, plus its alt text.
+class _GalleryEntry {
+  MediaImage? image;
+  EncodedImage? pending;
+  final TextEditingController alt;
+  _GalleryEntry(this.image, this.pending, this.alt);
+
+  /// The `image` map with the edited alt text; a picked file not uploaded yet
+  /// is a `pending` marker (replaced on save).
+  Map<String, dynamic> collect() {
+    final a = alt.text.trim();
+    if (pending != null) return {'source': MediaSource.inline, 'pending': true, if (a.isNotEmpty) 'alt': a};
+    return image!.copyWith(alt: a).toMap();
+  }
+}
+
+/// A small status label under a group title.
+class _Pill extends StatelessWidget {
+  final String text;
+  const _Pill(this.text);
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+        decoration: BoxDecoration(
+          color: AppColors.parchment,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: AppColors.burgundy.withValues(alpha: 0.35)),
+        ),
+        child: Text(text, style: const TextStyle(fontSize: 12, color: AppColors.burgundy, fontWeight: FontWeight.w700)),
       );
 }
 
