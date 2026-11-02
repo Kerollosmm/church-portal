@@ -84,6 +84,48 @@ void main() {
       expect(c.routeEnabled('/contact'), isFalse);
     });
 
+    test('detail sub-routes are gated by their parent section (prefix-aware)', () {
+      final off = FeatureSettings.fromMap({
+        'sections': {
+          'clinics': false, 'meetings': false, 'activities': false, 'services': false, //
+          'priests': false, 'saints': false, 'milestones': false,
+        },
+      });
+      for (final p in [
+        '/clinics/dental-1', '/clinics/dental-1/', '/church-education/youth', '/church-activities/choir',
+        '/public-services/nursery', '/about/saints/st-moses', '/about/milestones/visit-2025',
+      ]) {
+        expect(off.routeEnabled(p), isFalse, reason: p);
+        expect(FeatureSettings.defaults.routeEnabled(p), isTrue, reason: p);
+      }
+      // Departed fathers keep /about/priests/* alive on their own.
+      expect(off.routeEnabled('/about/priests/fr-x'), isTrue);
+      expect(off.copyWith(sections: {...off.sections, Sections.departedPriests: false}).routeEnabled('/about/priests/fr-x'),
+          isFalse);
+      // /about itself still follows history/saints/priests/departed.
+      expect(off.routeEnabled('/about'), isTrue);
+      // A look-alike prefix is not a sub-route.
+      expect(off.routeEnabled('/clinicsx'), isTrue);
+    });
+
+    test('sectionsForPath maps exact and sub paths', () {
+      expect(sectionsForPath('/clinics'), [Sections.clinics]);
+      expect(sectionsForPath('/clinics/a'), [Sections.clinics]);
+      expect(sectionsForPath('/church-education/a'), [Sections.meetings]);
+      expect(sectionsForPath('/church-activities/a'), [Sections.activities]);
+      expect(sectionsForPath('/public-services/a'), [Sections.services]);
+      expect(sectionsForPath('/about/priests/a'), [Sections.priests, Sections.departedPriests]);
+      expect(sectionsForPath('/about/saints/a'), [Sections.saints]);
+      expect(sectionsForPath('/about/milestones/a'), [Sections.milestones]);
+      expect(sectionsForPath('/about'), routeSections['/about']);
+      expect(sectionsForPath('/mass-schedule'), [Sections.schedule]);
+      expect(sectionsForPath('/contact'), routeSections['/contact']);
+      expect(sectionsForPath('/ask'), [Sections.assistant]);
+      expect(sectionsForPath('/'), isNull);
+      expect(sectionsForPath('/admin'), isNull);
+      expect(sectionsForPath('/admin/clinics'), isNull);
+    });
+
     test('home blocks follow order, hidden set and their sections', () {
       final f = FeatureSettings.fromMap({
         'sections': {'schedule': false, 'milestones': false},
@@ -98,6 +140,83 @@ void main() {
       // Contact info off removes the phones card and the map.
       final g = f.copyWith(sections: {...f.sections, Sections.contactInfo: false});
       expect(g.visibleHomeBlocks, ['directory', 'banner']);
+    });
+  });
+
+  group('page headers (pageHeaders)', () {
+    test('customizable pages are listed with bilingual labels', () {
+      expect(CustomizablePages.all, ['about', 'schedule', 'education', 'activities', 'clinics', 'services', 'contact', 'ask']);
+      for (final k in CustomizablePages.all) {
+        expect(CustomizablePages.labels[k], hasLength(2), reason: k);
+      }
+    });
+
+    test('PageCustom parses, reports emptiness and round-trips', () {
+      expect(PageCustom.empty.isEmpty, isTrue);
+      expect(const PageCustom(introEn: '  ').isEmpty, isTrue);
+      final p = PageCustom.fromMap(const {'titleAr': 'عنوان', 'subtitleEn': 'Sub', 'introAr': 'مقدمة', 'junk': 1});
+      expect(p.isEmpty, isFalse);
+      expect(p.titleAr, 'عنوان');
+      expect(p.titleEn, '');
+      expect(p.subtitleEn, 'Sub');
+      expect(p.introAr, 'مقدمة');
+      expect(PageCustom.fromMap(p.toMap()).toMap(), p.toMap());
+      expect(p.toMap().keys.toSet(), {'titleAr', 'titleEn', 'subtitleAr', 'subtitleEn', 'introAr', 'introEn'});
+    });
+
+    test('defaults: no custom headers; unknown keys and empty entries dropped', () {
+      expect(FeatureSettings.defaults.pageHeaders, isEmpty);
+      expect(FeatureSettings.defaults.pageHeader('clinics'), PageCustom.empty);
+      final f = FeatureSettings.fromMap({
+        'pageHeaders': {
+          'clinics': {'titleAr': 'عياداتنا', 'introEn': 'Book by phone'},
+          'about': {'titleAr': ' '},
+          'bogus': {'titleAr': 'x'},
+          'contact': 'not a map',
+        },
+      });
+      expect(f.pageHeaders.keys, ['clinics']);
+      expect(f.pageHeader('clinics').titleAr, 'عياداتنا');
+      expect(f.pageHeader('clinics').introEn, 'Book by phone');
+      expect(f.pageHeader('about').isEmpty, isTrue);
+      expect(f.toMap()['pageHeaders'], {
+        'clinics': {'titleAr': 'عياداتنا', 'titleEn': '', 'subtitleAr': '', 'subtitleEn': '', 'introAr': '', 'introEn': 'Book by phone'},
+      });
+      expect(FeatureSettings.fromMap(f.toMap()).toMap(), f.toMap());
+      expect(FeatureSettings.fromMap(const {'pageHeaders': 'x'}).pageHeaders, isEmpty);
+      final g = f.copyWith(pageHeaders: {'ask': const PageCustom(titleEn: 'Ask us')});
+      expect(g.pageHeader('ask').titleEn, 'Ask us');
+      expect(g.pageHeader('clinics').isEmpty, isTrue);
+      expect(f.copyWith(theme: 'navy').pageHeader('clinics').titleAr, 'عياداتنا');
+    });
+  });
+
+  group('footer (FR-G-04)', () {
+    test('defaults show phones, socials and quick links with no note', () {
+      for (final c in [FeatureSettings.defaults.footer, const FooterConfig(), FooterConfig.fromMap(null)]) {
+        expect(c.showPhones, isTrue);
+        expect(c.showSocials, isTrue);
+        expect(c.showQuickLinks, isTrue);
+        expect(c.noteAr, '');
+        expect(c.noteEn, '');
+      }
+      expect(FeatureSettings.defaults.toMap()['footer'],
+          {'showPhones': true, 'showSocials': true, 'showQuickLinks': true, 'noteAr': '', 'noteEn': ''});
+    });
+
+    test('parses tolerantly and round-trips', () {
+      final f = FeatureSettings.fromMap({
+        'footer': {'showPhones': false, 'showSocials': 'no', 'showQuickLinks': false, 'noteAr': 'ملاحظة', 'noteEn': 5},
+      });
+      expect(f.footer.showPhones, isFalse);
+      expect(f.footer.showSocials, isTrue); // non-bool -> default
+      expect(f.footer.showQuickLinks, isFalse);
+      expect(f.footer.noteAr, 'ملاحظة');
+      expect(f.footer.noteEn, '');
+      expect(FeatureSettings.fromMap(f.toMap()).toMap(), f.toMap());
+      expect(FeatureSettings.fromMap(const {'footer': 'x'}).footer.showPhones, isTrue);
+      expect(f.copyWith(footer: const FooterConfig(noteEn: 'Hi')).footer.noteEn, 'Hi');
+      expect(f.copyWith(theme: 'navy').footer.showPhones, isFalse);
     });
   });
 

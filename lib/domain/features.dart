@@ -100,8 +100,128 @@ class ThemePresets {
   };
 }
 
+/// Public pages whose header (title / subtitle) and intro note an admin can
+/// customise (`settings/features.pageHeaders.<key>`).
+class CustomizablePages {
+  CustomizablePages._();
+  static const about = 'about';
+  static const schedule = 'schedule';
+  static const education = 'education';
+  static const activities = 'activities';
+  static const clinics = 'clinics';
+  static const services = 'services';
+  static const contact = 'contact';
+  static const ask = 'ask';
+
+  static const all = [about, schedule, education, activities, clinics, services, contact, ask];
+
+  /// [ar, en] labels used in the admin features screen.
+  static const labels = <String, List<String>>{
+    about: ['عن الكنيسة', 'About the church'],
+    schedule: ['مواعيد القداسات', 'Mass schedule'],
+    education: ['التربية الكنسية والاجتماعات', 'Sunday school & meetings'],
+    activities: ['الأنشطة والكورالات', 'Activities & choirs'],
+    clinics: ['العيادات', 'Clinics'],
+    services: ['الخدمات العامة', 'Public services'],
+    contact: ['تواصل معنا', 'Contact us'],
+    ask: ['اسأل الكنيسة', 'Ask the church'],
+  };
+}
+
 bool? _bool(Object? v) => v is bool ? v : null;
 String _str(Object? v) => v is String ? v : '';
+
+/// Admin overrides for one public page: header title / subtitle and an
+/// optional intro note. Empty strings keep the built-in text.
+class PageCustom {
+  final String titleAr, titleEn, subtitleAr, subtitleEn, introAr, introEn;
+
+  const PageCustom({
+    this.titleAr = '',
+    this.titleEn = '',
+    this.subtitleAr = '',
+    this.subtitleEn = '',
+    this.introAr = '',
+    this.introEn = '',
+  });
+
+  static const empty = PageCustom();
+
+  bool get isEmpty => [titleAr, titleEn, subtitleAr, subtitleEn, introAr, introEn].every((v) => v.trim().isEmpty);
+
+  factory PageCustom.fromMap(Map<dynamic, dynamic> m) => PageCustom(
+        titleAr: _str(m['titleAr']),
+        titleEn: _str(m['titleEn']),
+        subtitleAr: _str(m['subtitleAr']),
+        subtitleEn: _str(m['subtitleEn']),
+        introAr: _str(m['introAr']),
+        introEn: _str(m['introEn']),
+      );
+
+  Map<String, dynamic> toMap() => {
+        'titleAr': titleAr,
+        'titleEn': titleEn,
+        'subtitleAr': subtitleAr,
+        'subtitleEn': subtitleEn,
+        'introAr': introAr,
+        'introEn': introEn,
+      };
+
+  @override
+  bool operator ==(Object other) =>
+      other is PageCustom &&
+      other.titleAr == titleAr &&
+      other.titleEn == titleEn &&
+      other.subtitleAr == subtitleAr &&
+      other.subtitleEn == subtitleEn &&
+      other.introAr == introAr &&
+      other.introEn == introEn;
+
+  @override
+  int get hashCode => Object.hash(titleAr, titleEn, subtitleAr, subtitleEn, introAr, introEn);
+}
+
+/// Site footer options (FR-G-04). Defaults keep the footer as it was.
+class FooterConfig {
+  final bool showPhones, showSocials, showQuickLinks;
+  final String noteAr, noteEn;
+
+  const FooterConfig({
+    this.showPhones = true,
+    this.showSocials = true,
+    this.showQuickLinks = true,
+    this.noteAr = '',
+    this.noteEn = '',
+  });
+
+  factory FooterConfig.fromMap(Object? v) {
+    if (v is! Map) return const FooterConfig();
+    return FooterConfig(
+      showPhones: _bool(v['showPhones']) ?? true,
+      showSocials: _bool(v['showSocials']) ?? true,
+      showQuickLinks: _bool(v['showQuickLinks']) ?? true,
+      noteAr: _str(v['noteAr']),
+      noteEn: _str(v['noteEn']),
+    );
+  }
+
+  Map<String, dynamic> toMap() => {
+        'showPhones': showPhones,
+        'showSocials': showSocials,
+        'showQuickLinks': showQuickLinks,
+        'noteAr': noteAr,
+        'noteEn': noteEn,
+      };
+}
+
+/// Known pages only, empty entries dropped, in [CustomizablePages.all] order.
+Map<String, PageCustom> _pageHeaders(Object? v) {
+  if (v is! Map) return const {};
+  return {
+    for (final k in CustomizablePages.all)
+      if (v[k] is Map && !PageCustom.fromMap(v[k] as Map).isEmpty) k: PageCustom.fromMap(v[k] as Map),
+  };
+}
 
 class FeatureSettings {
   /// Per-section enabled flags. Missing keys mean enabled.
@@ -118,6 +238,12 @@ class FeatureSettings {
   final String bannerAr, bannerEn, bannerLink;
   final String theme;
 
+  /// Per-page header / intro overrides (keys: [CustomizablePages.all]).
+  final Map<String, PageCustom> pageHeaders;
+
+  /// Footer options (FR-G-04).
+  final FooterConfig footer;
+
   const FeatureSettings({
     this.sections = const {},
     this.homeOrder = HomeBlocks.defaultOrder,
@@ -131,6 +257,8 @@ class FeatureSettings {
     this.bannerEn = '',
     this.bannerLink = '',
     this.theme = ThemePresets.burgundy,
+    this.pageHeaders = const {},
+    this.footer = const FooterConfig(),
   });
 
   /// Everything on: used before the doc loads and when it does not exist.
@@ -164,6 +292,8 @@ class FeatureSettings {
       bannerEn: _str(m['bannerEn']),
       bannerLink: _str(m['bannerLink']),
       theme: ThemePresets.all.containsKey(theme) ? theme : ThemePresets.burgundy,
+      pageHeaders: _pageHeaders(m['pageHeaders']),
+      footer: FooterConfig.fromMap(m['footer']),
     );
   }
 
@@ -180,6 +310,11 @@ class FeatureSettings {
         'bannerEn': bannerEn,
         'bannerLink': bannerLink,
         'theme': theme,
+        'pageHeaders': {
+          for (final k in CustomizablePages.all)
+            if (pageHeaders[k] != null && !pageHeaders[k]!.isEmpty) k: pageHeaders[k]!.toMap(),
+        },
+        'footer': footer.toMap(),
       };
 
   FeatureSettings copyWith({
@@ -195,6 +330,8 @@ class FeatureSettings {
     String? bannerEn,
     String? bannerLink,
     String? theme,
+    Map<String, PageCustom>? pageHeaders,
+    FooterConfig? footer,
   }) =>
       FeatureSettings(
         sections: sections ?? this.sections,
@@ -209,9 +346,14 @@ class FeatureSettings {
         bannerEn: bannerEn ?? this.bannerEn,
         bannerLink: bannerLink ?? this.bannerLink,
         theme: theme ?? this.theme,
+        pageHeaders: pageHeaders ?? this.pageHeaders,
+        footer: footer ?? this.footer,
       );
 
   bool enabled(String section) => sections[section] ?? true;
+
+  /// Admin overrides for [pageKey] (one of [CustomizablePages.all]).
+  PageCustom pageHeader(String pageKey) => pageHeaders[pageKey] ?? PageCustom.empty;
 
   /// Optional item images are shown (admin switch `media`, default on).
   bool get showImages => enabled(Sections.media);
@@ -229,9 +371,10 @@ class FeatureSettings {
   /// Home blocks to render, in order.
   List<String> get visibleHomeBlocks => homeOrder.where(showHomeBlock).toList();
 
-  /// Whether a public route is available. Unknown routes are always allowed.
+  /// Whether a public route (or one of its detail sub-routes, such as
+  /// `/clinics/<id>`) is available. Unknown routes are always allowed.
   bool routeEnabled(String path) {
-    final sections = routeSections[_normalizePath(path)];
+    final sections = sectionsForPath(path);
     if (sections == null) return true;
     return sections.any(enabled);
   }
@@ -250,6 +393,31 @@ const routeSections = <String, List<String>>{
   '/contact': [Sections.contactInfo, Sections.socials, Sections.contactForm],
   '/ask': [Sections.assistant],
 };
+
+/// Detail sub-routes under `/about` and the sections that keep them alive.
+const aboutSubRouteSections = <String, List<String>>{
+  'priests': [Sections.priests, Sections.departedPriests],
+  'saints': [Sections.saints],
+  'milestones': [Sections.milestones],
+};
+
+/// Sections behind [path] (any one enabled keeps it alive), or null for a
+/// route no section controls. Prefix-aware: `/clinics/<id>` is gated like
+/// `/clinics`, `/about/priests/<id>` by the (serving or departed) priests
+/// sections, `/about/saints/<id>` by saints and `/about/milestones/<id>` by
+/// milestones; any other sub-path follows its top-level page.
+List<String>? sectionsForPath(String path) {
+  final p = _normalizePath(path);
+  final exact = routeSections[p];
+  if (exact != null) return exact;
+  final parts = p.split('/'); // ['', top, sub, ...]
+  if (parts.length < 3 || parts.first.isNotEmpty) return null;
+  if (parts[1] == 'about') {
+    final sub = aboutSubRouteSections[parts[2]];
+    if (sub != null) return sub;
+  }
+  return routeSections['/${parts[1]}'];
+}
 
 String _normalizePath(String p) {
   if (p.length > 1 && p.endsWith('/')) return p.substring(0, p.length - 1);
