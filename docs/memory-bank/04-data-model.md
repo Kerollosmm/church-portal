@@ -75,7 +75,7 @@ the buttons already on the item's list card (PR #13).
 
 | Key | Type / cap (rules) | Default | Meaning |
 |---|---|---|---|
-| `detailsEnabled` | bool | **false** | the item gets a public detail page (and its detail text is grounded for the assistant) |
+| `detailsEnabled` | bool | **true** (missing = on, PR #14 / ADR-021) | the item has a public detail page (and its detail text is grounded for the assistant); only an explicit `false` removes it. Rules still only type-check it |
 | `showDetailImages` | bool | true | show cover + gallery on the detail page (also needs `Sections.media`) |
 | `showContacts` / `showSocials` | bool | true | show the item's phones / social links (assistant too; socials also need `Sections.socials`) |
 | `detailsAr` / `detailsEn` | string ≤ 10,000 | `''` | long text |

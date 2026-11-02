@@ -1,6 +1,7 @@
 // Public item detail pages (ADR-020, PR #13). Pure Dart: routes, parent
 // sections and the gating rules of `ItemDetailPage`, unit-tested.
 
+import 'cairo_time.dart';
 import 'features.dart';
 import 'models.dart';
 
@@ -81,7 +82,8 @@ enum DetailState {
   available,
 
   /// "Not available": no such item, hidden by an admin, or its detail page
-  /// is switched off (`detailsEnabled` false). Not indexable.
+  /// is switched off (an explicit `detailsEnabled: false`; a missing field
+  /// means on, PR #14). Not indexable.
   unavailable,
 
   /// The section the item belongs to is off (a departed father while
@@ -111,3 +113,67 @@ DetailState detailStateFor(
 /// Whether an item's social / external links are shown (its own switch and
 /// the site-wide `socials` section).
 bool itemSocialsShown(ItemDetails d, FeatureSettings f) => d.showSocials && f.enabled(Sections.socials);
+
+/// Absolute, shareable URL of an item's detail page on [origin]
+/// (`?lang=en` when shared from the English site).
+String absoluteDetailUrl(String origin, DetailKind kind, String id, {bool english = false}) =>
+    '$origin${detailPathFor(kind, id)}${english ? '?lang=en' : ''}';
+
+const _rruleDays = ['MO', 'TU', 'WE', 'TH', 'FR', 'SA', 'SU'];
+
+String _calStamp(DateTime d) {
+  String two(int n) => n.toString().padLeft(2, '0');
+  return '${d.year}${two(d.month)}${two(d.day)}T${two(d.hour)}${two(d.minute)}00';
+}
+
+/// Google Calendar "add event" link for an item that repeats every week on
+/// ISO [weekdays] (1 = Monday … 7 = Sunday) from [start] to [end] ("HH:mm",
+/// Cairo wall time). The first event is the next occurrence after [now]
+/// (later today counts); a missing / invalid [end] means one hour, an [end]
+/// before [start] rolls to the next day. Null when there is no usable day or
+/// start time. Times are sent as Cairo local time with `ctz=Africa/Cairo`, so
+/// the visitor's calendar converts them correctly wherever they are.
+String? weeklyCalendarUrl({
+  required String title,
+  required List<int> weekdays,
+  required String start,
+  String end = '',
+  String details = '',
+  String location = '',
+  required DateTime now,
+}) {
+  final days = weekdays.where((d) => d >= 1 && d <= 7).toSet().toList()..sort();
+  final startMin = parseHm(start);
+  if (days.isEmpty || startMin == null) return null;
+  var endMin = parseHm(end) ?? startMin + 60;
+  if (endMin <= startMin) endMin += 24 * 60;
+  final c = CairoTime.fromInstant(now);
+  final nowMin = c.hour * 60 + c.minute;
+  var offset = 0;
+  while (offset < 8) {
+    final day = CairoTime.at(c.year, c.month, c.day + offset);
+    if (days.contains(day.weekday) && (offset > 0 || startMin > nowMin)) break;
+    offset++;
+  }
+  final from = CairoTime.at(c.year, c.month, c.day + offset, startMin);
+  final to = CairoTime.at(c.year, c.month, c.day + offset, endMin);
+  return Uri.https('calendar.google.com', '/calendar/render', {
+    'action': 'TEMPLATE',
+    'text': title,
+    'dates': '${_calStamp(from)}/${_calStamp(to)}',
+    'ctz': 'Africa/Cairo',
+    'recur': 'RRULE:FREQ=WEEKLY;BYDAY=${days.map((d) => _rruleDays[d - 1]).join(',')}',
+    if (details.isNotEmpty) 'details': details,
+    if (location.isNotEmpty) 'location': location,
+  }).toString();
+}
+
+/// Up to [max] other items from [items] for a "More in this section" list:
+/// [self] excluded, items in the same group ([sameGroup]) first, list order
+/// kept otherwise.
+List<T> pickRelated<T>(List<T> items, T self, {bool Function(T)? sameGroup, int max = 3}) {
+  final others = [for (final i in items) if (i != self) i];
+  final g = sameGroup;
+  final ordered = g == null ? others : [...others.where(g), ...others.where((i) => !g(i))];
+  return ordered.take(max).toList();
+}

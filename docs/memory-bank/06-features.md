@@ -101,14 +101,23 @@ Chat UI with intro bubble, 3 suggestion chips, 500-char input, disclaimer «إج
 ### Item detail pages (PR #13, ADR-020) — `item_detail_page.dart` `ItemDetailPage`
 - Routes: `/church-education/:id`, `/church-activities/:id`, `/clinics/:id`, `/public-services/:id`,
   `/about/priests/:id`, `/about/saints/:id`, `/about/milestones/:id` (shareable; `detailPathFor(kind, id)`).
-- Only items with **`detailsEnabled: true`** (default false) have one; otherwise — or hidden / unknown id / inactive
+- **Every visible item has one** (PR #14, ADR-021: opt-out — a missing `detailsEnabled` means on); an explicit
+  `detailsEnabled: false` — or hidden / unknown id / inactive
   clinic — «هذه الصفحة غير متاحة حاليًا» + «العودة إلى …» (noindex). A departed father needs `departedPriests`, a
   serving one `priests` (else `SectionUnavailable`, noindex). Available pages are indexable with their canonical URL.
 - Layout (320 px × 200 % safe, RTL/LTR): «العودة إلى <القسم>» link; `PageHeader` with the item title (clinics:
-  specialty, doctor as subtitle; priests: rank); pills (stage / available today / rank + departed / feast / year) and
-  `SampleBadge` + `PendingConfirmationNote` when `sample`; cover (168 px) and gallery thumbnails (104 px) **only when
-  `showImages && showDetailImages`** — tapping any opens the zoomable `showImageViewer`; facts card (weekday + times
-  + hall, schedule + ages, doctor + degree + days + times, hours, ordination/hegumen/repose dates); summary
+  specialty, doctor as subtitle; priests: rank); pills (stage / available today / rank + departed) and
+  `SampleBadge` + `PendingConfirmationNote` when `sample`; hero cover (column width, 120–320 px, PR #14) and gallery
+  thumbnails (104 px) **only when `showImages && showDetailImages`** — tapping any opens the zoomable
+  `showImageViewer`; **«المعلومات الأساسية / Key information»** card (`Key('detailFacts')`, PR #14: labelled rows —
+  icon, small label, value — Day / Time / Place / Notes for meetings, Schedule / Ages for activities, Doctor /
+  Qualification / Days / Time for clinics, Hours for services, Ordained / Hegumen since / Departed for priests,
+  Feast / Gregorian date for saints, Year for milestones; empty rows dropped); **quick actions** (`detailActions`,
+  PR #14): «أضف إلى التقويم» (`detailAddToCalendar`, meetings with a weekday + start and clinics with days + start:
+  Google Calendar template link, weekly `RRULE`, next occurrence, `ctz=Africa/Cairo`, location = church name +
+  address, details = page URL — `weeklyCalendarUrl`), «الاتجاهات (GPS)» to the church (`detailDirections`, on-site
+  items — meetings, activities, clinics, services — while `contactInfo` is on), «مشاركة الرابط» (`detailShare`,
+  every page: copies `absoluteDetailUrl` — canonical origin, `?lang=en` in English — and shows «تم نسخ الرابط»); summary
   (desc/bio); long text `detailsAr/En` as `SelectableText` (line height 1.8); custom fields (`extraFields`) as cream
   cards in a `ResponsiveGrid` (title primary bold, value body text, `context.pick`).
 - **Contact & registration** (when `showContacts`): Call `<phone>` (primary phone: `contactPhone`, clinics
@@ -121,10 +130,14 @@ Chat UI with intro bubble, 3 suggestion chips, 500-char input, disclaimer «إج
 - No extra Firestore read for the item: it comes from the list stream. Gallery inline bytes (`media/{id}`) load only
   here; an inline cover loads on the listing card too (`CardImageLead` / `ItemImage` → `MediaImageView`) and is
   then served from `MediaCache` here.
+- **«من نفس القسم / More in this section»** (`Key('detailRelated')`, PR #14): up to 3 other publicly listed items of
+  the same collection, same group first (meetings: stage group; activities: category; priests: serving/departed),
+  each a full-width row (`relatedLink-<id>`, ≥ 48 dp, chevron) to its page. Read from the same list stream.
 
 ### Card ↔ detail integration (PR #13)
-- `detailsEnabled` off ⇒ cards are **unchanged** (no link, no card tap, images still enlarge on tap).
-- On ⇒ a «التفاصيل ›» link (`DetailsLink`, `ValueKey('detailsLink-<id>')`, announced «التفاصيل — <title>»), the card
+- Since PR #14 every card has its page by default. `detailsEnabled: false` ⇒ that card has no link and no card
+  tap (images still enlarge on tap).
+- On (default) ⇒ a «التفاصيل ›» link (`DetailsLink`, `ValueKey('detailsLink-<id>')`, announced «التفاصيل — <title>»), the card
   surface opens the page (`DetailTapArea`: pointer-only `GestureDetector`, inner buttons keep their taps, no nested
   screen-reader button), and the small avatar no longer opens the viewer (`enlargeOnTap: false`; zoom lives on the
   detail page). Applies to meetings, activities, clinics, facilities, priests, saints and milestones ("Our story").

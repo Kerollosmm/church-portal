@@ -64,7 +64,11 @@ Status as of 2 Nov 2026 (after PR #7, PR #8, PR #9 `ad621cf`, PR #10 and PR #11)
       footer upgrade (closes FR-G-04), memory-bank sync.
 - [ ] Optional: a site-wide **"last updated"** line in the footer (FR-G-04 wording) — see *Footer* under product
       gaps below.
-- [ ] Optional: add detail URLs to `web/sitemap.xml` once real items get `detailsEnabled` (the sitemap is static).
+- [x] **PR #14 — detail pages on by default:** opt-out `detailsEnabled`, labelled key facts, add-to-calendar,
+      directions, share, related items, admin hint (ADR-021).
+- [ ] Optional: add detail URLs to `web/sitemap.xml` (every visible item has one since PR #14; the sitemap is static,
+      so it needs a build-time generator or a manual list).
+- [ ] Optional: native share sheet (Web Share API) on mobile instead of copy-link (needs a web-only plugin/JS interop).
 
 ## Content (owner: church office — see `09-content-status.md`)
 

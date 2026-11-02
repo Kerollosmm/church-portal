@@ -222,7 +222,9 @@ void main() {
         expect(keys.toSet().length, keys.length, reason: '${c.id}: duplicate keys');
         final enabled = fd(c, 'detailsEnabled');
         expect([enabled.group, enabled.type, enabled.missingBool, enabled.newBool],
-            [FieldGroup.details, FieldType.boolean, false, false], reason: c.id);
+            [FieldGroup.details, FieldType.boolean, true, true], reason: c.id); // opt-out (PR #14)
+        expect(enabled.hintAr, isNotEmpty, reason: c.id);
+        expect(enabled.hintEn, contains('On by default'), reason: c.id);
         for (final k in ['detailsAr', 'detailsEn']) {
           expect([fd(c, k).group, fd(c, k).type, fd(c, k).effectiveMaxLength],
               [FieldGroup.details, FieldType.multiline, 10000], reason: '${c.id}.$k');
@@ -336,8 +338,10 @@ void main() {
       expect(path('p2', 'departedPriests', on), '/about/priests/p2');
       expect(path('s1', 'saints', on), '/about/saints/s1');
       expect(path('h1', 'milestones', on), '/about/milestones/h1');
-      // No detail page (off, hidden, or a collection without one): no link.
-      expect(path('c1', 'clinics', const {}), isNull);
+      // Untouched items (no field) have a page since PR #14.
+      expect(path('c1', 'clinics', const {}), '/clinics/c1');
+      // No detail page (switched off, hidden, or a collection without one): no link.
+      expect(path('c1', 'clinics', const {'detailsEnabled': false}), isNull);
       expect(path('c1', 'clinics', const {'detailsEnabled': true, 'visible': false}), isNull);
       expect(path('l1', 'liturgies', on), isNull);
       expect(path('x/y', 'clinics', on), '/clinics/x%2Fy');

@@ -199,11 +199,17 @@ const imageCollections = [
 // ---- optional item detail page (meetings, activities, clinics, facilities,
 // priests, milestones, saints; see ItemDetails in lib/domain/models.dart and
 // validDetailCommon in firestore.rules). Every field is optional and starts
-// at the reader's default, so an untouched item looks exactly as before.
+// at the reader's default. The page itself is on by default (PR #14).
 
 const _detailsGroup = [
-  FieldDef('detailsEnabled', 'تفعيل صفحة التفاصيل', 'Enable the detail page', FieldType.boolean,
-      missingBool: false, newBool: false, group: FieldGroup.details),
+  // Opt-out since PR #14: every item has a detail page unless switched off.
+  FieldDef('detailsEnabled', 'إظهار صفحة التفاصيل', 'Show the detail page', FieldType.boolean,
+      missingBool: true,
+      newBool: true,
+      group: FieldGroup.details,
+      hintAr: 'مفعّلة تلقائيًا: الضغط على البطاقة يفتح صفحة كاملة بكل بيانات العنصر وما تضيفه هنا. أوقفها لإخفاء الصفحة ورابط «التفاصيل».',
+      hintEn: 'On by default: tapping the card opens a full page with all of the item\'s info plus what you add here. '
+          'Turn it off to hide the page and the "Details" link.'),
   FieldDef('detailsAr', 'التفاصيل (عربي)', 'Details (Arabic)', FieldType.multiline,
       maxLength: 10000, group: FieldGroup.details),
   FieldDef('detailsEn', 'التفاصيل (إنجليزي)', 'Details (English)', FieldType.multiline,

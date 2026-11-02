@@ -244,7 +244,7 @@ App target settings:
      clipped to 700 chars);
      serving priests (priests) and departed priests with repose date (departedPriests); patron saints (saints);
      **Our story** (milestones: year, title, description clipped to 300 — PR #11).
-     PR #11 item detail pages: for an item with `detailsEnabled`, its line adds the detail text (each language
+     PR #11 item detail pages: for an item whose page is on (`detailsEnabled` not `false`; missing = on since PR #14), its line adds the detail text (each language
      clipped to 300 chars), its custom fields (`title: value`; titles clipped to 100, values to 300 chars per
      language), its contacts (new `contactPhone`/`whatsapp`/contact
      note) when `showContacts`, and its links (WhatsApp/Facebook/YouTube/Instagram/external with its label) when

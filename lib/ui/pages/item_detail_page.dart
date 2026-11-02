@@ -1,3 +1,4 @@
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
@@ -19,7 +20,7 @@ import '../widgets/feature_gate.dart';
 import '../widgets/item_image.dart';
 import 'activities_page.dart' show activityIcon;
 import 'clinics_page.dart' show ClinicCard;
-import 'education_page.dart' show stageLabels;
+import 'education_page.dart' show meetingGroupOf, stageLabels;
 import 'public_services_page.dart' show facilityIcon;
 
 /// Public detail page of one item (`/clinics/<id>`, `/about/priests/<id>`…,
@@ -78,11 +79,25 @@ class ItemDetailPage extends ConsumerWidget {
         return switch (state) {
           DetailState.sectionOff => const SectionUnavailable(),
           DetailState.unavailable => _Unavailable(parent: parent),
-          DetailState.available => _DetailView(entry: _Entry.of(context, ref, item!), parent: parent),
+          DetailState.available => _DetailView(
+              entry: _Entry.of(context, ref, item!),
+              parent: parent,
+              kind: kind,
+              id: id,
+              related: _relatedTo(item, list),
+            ),
         };
       },
     );
   }
+}
+
+/// Up to 3 other publicly listed items of the same section, same group first
+/// (read from the list already loaded: no extra Firestore read).
+List<Object> _relatedTo(Object self, List<Object> list) {
+  final group = _groupOf(self);
+  return pickRelated(list.where(_publiclyListed).toList(), self,
+      sameGroup: group == null ? null : (o) => _groupOf(o) == group);
 }
 
 String _idOf(Object o) => switch (o) {
@@ -114,6 +129,21 @@ bool _publiclyListed(Object o) => switch (o) {
       _ => false,
     };
 
+/// One labelled row of the "Key information" card (label above value, so
+/// long Arabic values wrap cleanly at 320 px / 200% text).
+class _Fact {
+  final IconData icon;
+  final String label;
+  final String text;
+
+  /// Rich value (e.g. the bilingual time range) instead of [text].
+  final Widget? child;
+  const _Fact(this.icon, this.label, this.text) : child = null;
+  const _Fact.widget(this.icon, this.label, Widget this.child) : text = '';
+
+  bool get isEmpty => child == null && text.trim().isEmpty;
+}
+
 /// Everything the detail layout needs, read from one item.
 class _Entry {
   final String title;
@@ -123,8 +153,17 @@ class _Entry {
   final MediaImage? cover;
   final ItemDetails details;
   final List<Widget> pills;
-  final List<Widget> facts;
+  final List<_Fact> facts;
   final String summary;
+
+  /// Weekly schedule for "Add to calendar" (ISO weekdays + "HH:mm" times);
+  /// empty = no calendar button.
+  final List<int> calendarDays;
+  final String start, end;
+
+  /// Happens at the church (meetings, activities, clinics, services): the
+  /// page offers directions to the church.
+  final bool onSite;
 
   /// Clinics: the church office phone when the clinic has no phone/WhatsApp.
   final bool officeFallback;
@@ -145,6 +184,10 @@ class _Entry {
     this.pills = const [],
     this.facts = const [],
     this.summary = '',
+    this.calendarDays = const [],
+    this.start = '',
+    this.end = '',
+    this.onSite = false,
     this.officeFallback = false,
     this.whatsappFromPhone = false,
     this.whatsappText,
@@ -164,16 +207,17 @@ class _Entry {
           cover: m.image,
           pills: [if (stage != null) Pill(context.pick(stage[0], stage[1]), color: primary)],
           facts: [
-            if (m.weekday != null)
-              Text(weekdayLabel(context, m.weekday),
-                  style: const TextStyle(color: AppColors.goldText, fontWeight: FontWeight.w800)),
-            if (m.start.isNotEmpty) TimeRangeText(m.start, m.end),
-            IconLine(Icons.meeting_room_outlined, context.pick(m.hallAr, m.hallEn)),
-            IconLine(Icons.info_outline, m.notes),
+            if (m.weekday != null) _Fact(Icons.calendar_today_outlined, context.tr('factDay'), weekdayLabel(context, m.weekday)),
+            if (m.start.isNotEmpty) _Fact.widget(Icons.schedule_rounded, context.tr('factTime'), TimeRangeText(m.start, m.end)),
+            _Fact(Icons.meeting_room_outlined, context.tr('place'), context.pick(m.hallAr, m.hallEn)),
+            _Fact(Icons.info_outline, context.tr('factNotes'), m.notes),
           ],
+          calendarDays: [if (m.weekday != null) m.weekday!],
+          start: m.start,
+          end: m.end,
+          onSite: true,
         );
       case Activity a:
-        final schedule = context.pick(a.scheduleAr, a.scheduleEn);
         return _Entry(
           title: context.pick(a.titleAr, a.titleEn),
           icon: activityIcon(a.category),
@@ -181,11 +225,11 @@ class _Entry {
           sample: a.sample,
           cover: a.image,
           facts: [
-            IconLine(Icons.schedule_rounded, schedule.isEmpty ? '' : '${context.tr('schedule')}: $schedule'),
-            IconLine(Icons.cake_outlined,
-                a.ageRange.isEmpty ? '' : '${context.tr('ages')}: ${localDigits(context, a.ageRange)}'),
+            _Fact(Icons.schedule_rounded, context.tr('schedule'), context.pick(a.scheduleAr, a.scheduleEn)),
+            _Fact(Icons.cake_outlined, context.tr('ages'), a.ageRange.isEmpty ? '' : localDigits(context, a.ageRange)),
           ],
           summary: context.pick(a.descAr, a.descEn),
+          onSite: true,
           whatsappFromPhone: true,
         );
       case Clinic c:
@@ -203,12 +247,15 @@ class _Entry {
           cover: c.image,
           pills: [if (isClinicAvailableToday(c, now)) Pill(context.tr('availableToday'), icon: Icons.check_circle)],
           facts: [
-            Text(doctor, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
-            if (context.pick(c.degreeAr, c.degreeEn).isNotEmpty)
-              Text(context.pick(c.degreeAr, c.degreeEn), style: const TextStyle(color: AppColors.muted, fontSize: 13)),
-            IconLine(Icons.calendar_today_outlined, days),
-            if (c.start.isNotEmpty) TimeRangeText(c.start, c.end),
+            _Fact(Icons.medical_services_outlined, context.tr('factDoctor'), doctor),
+            _Fact(Icons.workspace_premium_outlined, context.tr('factQualification'), context.pick(c.degreeAr, c.degreeEn)),
+            _Fact(Icons.calendar_today_outlined, context.tr('factDays'), days),
+            if (c.start.isNotEmpty) _Fact.widget(Icons.schedule_rounded, context.tr('factTime'), TimeRangeText(c.start, c.end)),
           ],
+          calendarDays: c.days,
+          start: c.start,
+          end: c.end,
+          onSite: true,
           officeFallback: true,
           whatsappText: context.isAr
               ? 'أرغب في حجز موعد بعيادة ${c.specialtyAr} (${c.doctorName})'
@@ -221,8 +268,9 @@ class _Entry {
           details: f.details,
           sample: f.sample,
           cover: f.image,
-          facts: [IconLine(Icons.schedule_rounded, context.pick(f.hoursAr, f.hoursEn))],
+          facts: [_Fact(Icons.schedule_rounded, context.tr('factHours'), context.pick(f.hoursAr, f.hoursEn))],
           summary: context.pick(f.descAr, f.descEn),
+          onSite: true,
         );
       case Priest p:
         final rank = context.tr(p.rank == 'hegumen' ? 'hegumen' : 'priest');
@@ -238,26 +286,23 @@ class _Entry {
             if (p.departed) Pill(context.tr('opt_departed'), color: AppColors.muted, icon: Icons.local_florist_outlined),
           ],
           facts: [
-            if (p.ordinationDate.isNotEmpty)
-              IconLine(Icons.event_outlined, '${context.tr('ordained')}: ${date(p.ordinationDate)}'),
+            if (p.ordinationDate.isNotEmpty) _Fact(Icons.event_outlined, context.tr('ordained'), date(p.ordinationDate)),
             if (p.hegumenDate.isNotEmpty)
-              IconLine(Icons.workspace_premium_outlined, '${context.tr('hegumenSince')}: ${date(p.hegumenDate)}'),
+              _Fact(Icons.workspace_premium_outlined, context.tr('hegumenSince'), date(p.hegumenDate)),
             if (p.departed && p.departedDate.isNotEmpty)
-              IconLine(Icons.local_florist_outlined, '${context.tr('departedOn')}: ${date(p.departedDate)}'),
+              _Fact(Icons.local_florist_outlined, context.tr('departedOn'), date(p.departedDate)),
           ],
           summary: context.pick(p.bioAr, p.bioEn),
         );
       case Saint s:
-        final feast = context.pick(s.feastCopticAr, s.feastCopticEn);
         return _Entry(
           title: context.pick(s.nameAr, s.nameEn),
           icon: Icons.auto_awesome_rounded,
           details: s.details,
           cover: s.image,
-          pills: [
-            if (feast.isNotEmpty) Pill('${context.tr('feast')}: $feast', color: primary, icon: Icons.event),
-            if (context.pick(s.feastGregorianAr, s.feastGregorian).isNotEmpty)
-              Pill(context.pick(s.feastGregorianAr, s.feastGregorian), color: AppColors.muted),
+          facts: [
+            _Fact(Icons.event, context.tr('feast'), context.pick(s.feastCopticAr, s.feastCopticEn)),
+            _Fact(Icons.event_note_outlined, context.tr('factGregorian'), context.pick(s.feastGregorianAr, s.feastGregorian)),
           ],
           summary: context.pick(s.bioAr, s.bioEn),
         );
@@ -267,13 +312,34 @@ class _Entry {
           icon: Icons.history_edu_rounded,
           details: m.details,
           cover: m.image,
-          pills: [if (m.year != null) Pill(localDigits(context, '${m.year}'), color: AppColors.goldText)],
+          facts: [if (m.year != null) _Fact(Icons.history_edu_outlined, context.tr('factYear'), localDigits(context, '${m.year}'))],
           summary: context.pick(m.descAr, m.descEn),
         );
     }
     return _Entry(title: '', icon: Icons.info_outline, details: _detailsOf(item));
   }
 }
+
+/// Card title of a related item (same wording as its detail page title).
+String _titleOf(BuildContext context, Object o) => switch (o) {
+      Meeting m => context.pick(m.nameAr, m.nameEn),
+      Activity a => context.pick(a.titleAr, a.titleEn),
+      Clinic c => context.pick(c.specialtyAr, c.specialtyEn),
+      Facility f => context.pick(f.nameAr, f.nameEn),
+      Priest p => context.isAr ? p.name : (p.nameEn.isNotEmpty ? p.nameEn : p.name),
+      Saint s => context.pick(s.nameAr, s.nameEn),
+      Milestone m => context.pick(m.titleAr, m.titleEn),
+      _ => '',
+    };
+
+/// Grouping used to suggest related items first: meetings by stage group,
+/// activities by category, priests by serving / departed. Null = no grouping.
+Object? _groupOf(Object o) => switch (o) {
+      Meeting m => meetingGroupOf(m.stage),
+      Activity a => a.category,
+      Priest p => p.departed,
+      _ => null,
+    };
 
 /// "Back to …" link at the top of the page body.
 class _BackLink extends StatelessWidget {
@@ -319,7 +385,13 @@ class _Unavailable extends StatelessWidget {
 class _DetailView extends ConsumerWidget {
   final _Entry entry;
   final String parent;
-  const _DetailView({required this.entry, required this.parent});
+  final DetailKind kind;
+  final String id;
+
+  /// Other items of the same section ("More in this section").
+  final List<Object> related;
+  const _DetailView(
+      {required this.entry, required this.parent, required this.kind, required this.id, this.related = const []});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -331,10 +403,11 @@ class _DetailView extends ConsumerWidget {
     final cover = showImages ? e.cover : null;
     final gallery = showImages ? d.gallery : const <MediaImage>[];
     final longText = context.pick(d.detailsAr, d.detailsEn).trim();
-    final facts = e.facts.where((w) => !(w is IconLine && w.text.isEmpty)).toList();
+    final facts = e.facts.where((x) => !x.isEmpty).toList();
     final contacts = d.showContacts ? _contactButtons(context, ref, e) : const <Widget>[];
     final note = d.showContacts ? context.pick(d.contactNoteAr, d.contactNoteEn).trim() : '';
     final links = itemSocialsShown(d, f) ? _linkButtons(context, e) : const <Widget>[];
+    final actions = _quickActions(context, ref, e);
 
     return PageBody(
       key: const Key('itemDetailPage'),
@@ -354,27 +427,40 @@ class _DetailView extends ConsumerWidget {
         if (cover != null)
           Padding(
             padding: const EdgeInsets.only(bottom: 12),
-            child: Align(
-              alignment: AlignmentDirectional.centerStart,
-              child: ItemImage(
-                key: const Key('detailCover'),
-                image: cover,
-                size: 168,
-                circle: false,
-                radius: 16,
-                label: e.title,
-                placeholder: const SizedBox.shrink(),
+            child: LayoutBuilder(
+              builder: (context, c) => Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: ItemImage(
+                  key: const Key('detailCover'),
+                  image: cover,
+                  // Hero picture: as wide as the column allows, up to 320 px.
+                  size: c.maxWidth.isFinite ? c.maxWidth.clamp(120.0, 320.0) : 240,
+                  circle: false,
+                  radius: 16,
+                  label: e.title,
+                  placeholder: const SizedBox.shrink(),
+                ),
               ),
             ),
           ),
         if (facts.isNotEmpty)
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                for (final w in facts) Padding(padding: const EdgeInsets.only(bottom: 4), child: w),
-              ]),
+          Semantics(
+            container: true,
+            label: context.tr('keyFacts'),
+            child: Card(
+              key: const Key('detailFacts'),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                  for (final x in facts) _FactRow(fact: x),
+                ]),
+              ),
             ),
+          ),
+        if (actions.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 12),
+            child: Wrap(key: const Key('detailActions'), spacing: 8, runSpacing: 8, children: actions),
           ),
         if (e.summary.trim().isNotEmpty)
           Padding(
@@ -434,8 +520,73 @@ class _DetailView extends ConsumerWidget {
           SectionTitle(context.tr('itemLinks'), icon: Icons.link_rounded),
           Wrap(spacing: 8, runSpacing: 8, children: links),
         ],
+        if (related.isNotEmpty) ...[
+          SectionTitle(context.tr('relatedItems'), icon: Icons.grid_view_rounded),
+          Column(key: const Key('detailRelated'), crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            for (final o in related) _RelatedLink(kind: kind, id: _idOf(o), title: _titleOf(context, o), icon: e.icon),
+          ]),
+        ],
       ],
     );
+  }
+
+  /// Add to calendar (weekly items), directions to the church (on-site
+  /// items, while the contact-info section is on) and share (every page).
+  List<Widget> _quickActions(BuildContext context, WidgetRef ref, _Entry e) {
+    final primary = Theme.of(context).colorScheme.primary;
+    final features = ref.watch(featuresProvider);
+    final settings = features.enabled(Sections.contactInfo) ? ref.watch(settingsProvider).value : null;
+    final english = !context.isAr;
+    final url = absoluteDetailUrl(kCanonicalOrigin, kind, id, english: english);
+    final now = ref.watch(nowProvider).value ?? DateTime.now();
+    final calendar = e.calendarDays.isEmpty
+        ? null
+        : weeklyCalendarUrl(
+            title: e.title,
+            weekdays: e.calendarDays,
+            start: e.start,
+            end: e.end,
+            details: url,
+            location: settings == null
+                ? ''
+                : [context.pick(settings.nameAr, settings.nameEn), context.pick(settings.addressAr, settings.addressEn)]
+                    .where((x) => x.trim().isNotEmpty)
+                    .join(english ? ', ' : '، '),
+            now: now,
+          );
+    return [
+      if (calendar != null)
+        ActionChipButton(
+          key: const Key('detailAddToCalendar'),
+          icon: Icons.event_available_rounded,
+          label: context.tr('addToCalendar'),
+          semanticLabel: actionSemanticLabel(context.tr('addToCalendar'), e.title),
+          color: primary,
+          onTap: () => openUrl(calendar),
+        ),
+      if (e.onSite && settings != null)
+        ActionChipButton(
+          key: const Key('detailDirections'),
+          icon: Icons.directions_rounded,
+          label: context.tr('directions'),
+          semanticLabel: actionSemanticLabel(context.tr('directions'), e.title),
+          color: AppColors.goldText,
+          onTap: () => openUrl(mapsDirectionsUrl(settings)),
+        ),
+      ActionChipButton(
+        key: const Key('detailShare'),
+        icon: Icons.share_rounded,
+        label: context.tr('shareLink'),
+        semanticLabel: actionSemanticLabel(context.tr('shareLink'), e.title),
+        color: AppColors.muted,
+        onTap: () async {
+          final messenger = ScaffoldMessenger.maybeOf(context);
+          final copied = context.tr('linkCopied');
+          await Clipboard.setData(ClipboardData(text: url));
+          messenger?.showSnackBar(SnackBar(content: Text(copied)));
+        },
+      ),
+    ];
   }
 
   List<Widget> _contactButtons(BuildContext context, WidgetRef ref, _Entry e) {
@@ -531,6 +682,78 @@ class _FieldCard extends StatelessWidget {
         if (title.isNotEmpty && value.isNotEmpty) const SizedBox(height: 4),
         if (value.isNotEmpty) Text(value, style: const TextStyle(height: 1.6, color: AppColors.ink)),
       ]),
+    );
+  }
+}
+
+/// One labelled "Key information" row: icon, small label, value below.
+class _FactRow extends StatelessWidget {
+  final _Fact fact;
+  const _FactRow({required this.fact});
+
+  @override
+  Widget build(BuildContext context) {
+    final primary = Theme.of(context).colorScheme.primary;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Padding(
+          padding: const EdgeInsets.only(top: 2),
+          child: Icon(fact.icon, size: 20, color: primary),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(fact.label, style: const TextStyle(fontSize: 12, color: AppColors.muted, height: 1.4)),
+            fact.child ??
+                Text(fact.text, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, height: 1.5)),
+          ]),
+        ),
+      ]),
+    );
+  }
+}
+
+/// A "More in this section" row: the whole row opens the item's page.
+class _RelatedLink extends StatelessWidget {
+  final DetailKind kind;
+  final String id;
+  final String title;
+  final IconData icon;
+  const _RelatedLink({required this.kind, required this.id, required this.title, required this.icon});
+
+  @override
+  Widget build(BuildContext context) {
+    final primary = Theme.of(context).colorScheme.primary;
+    void open() => context.go(detailPathFor(kind, id));
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: Semantics(
+        container: true,
+        button: true,
+        link: true,
+        label: actionSemanticLabel(context.tr('details'), title),
+        onTap: open,
+        excludeSemantics: true,
+        child: InkWell(
+          key: ValueKey('relatedLink-$id'),
+          borderRadius: BorderRadius.circular(16),
+          onTap: open,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 48),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              child: Row(children: [
+                Icon(icon, color: primary),
+                const SizedBox(width: 12),
+                Expanded(child: Text(title, style: const TextStyle(fontWeight: FontWeight.w700, height: 1.4))),
+                const SizedBox(width: 8),
+                Icon(Icons.chevron_right_rounded, color: primary),
+              ]),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

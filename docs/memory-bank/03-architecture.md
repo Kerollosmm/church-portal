@@ -40,7 +40,8 @@ lib/
     media.dart              MediaImage (optional `image` map), MediaLimits, isValidImageUrl, fitWithin,
                             orphanedMediaIds
     item_detail.dart        DetailKind (basePath/parentPath/collection), detailPathFor, parseDetailPath,
-                            detailStateFor (detail-page gating), itemSocialsShown (PR #13, ADR-020)
+                            detailStateFor (detail-page gating), itemSocialsShown (PR #13, ADR-020),
+                            weeklyCalendarUrl, absoluteDetailUrl, pickRelated (PR #14, ADR-021)
   data/
     firebase_bootstrap.dart bootstrapFirebase() -> FirebaseStatus{available, appCheckActive}; App Check
     content_repository.dart ContentRepository (interface), SeedRepository, FirestoreRepository,
@@ -202,11 +203,12 @@ flowchart LR
 `ItemDetailPage` watches the collection's existing stream provider (`meetingsProvider` … `milestonesProvider`) and
 finds the item by id — **no extra Firestore read**; only inline gallery / cover bytes (`media/{id}`) are fetched,
 through `MediaCache`, when the page mounts. `detailStateFor` (pure, `domain/item_detail.dart`): missing, hidden
-(clinics also inactive) or `detailsEnabled` off → «هذه الصفحة غير متاحة حاليًا» (`Key('itemUnavailable')`) with a
+(clinics also inactive) or `detailsEnabled` explicitly `false` (missing = on since PR #14, ADR-021) → «هذه الصفحة غير متاحة حاليًا» (`Key('itemUnavailable')`) with a
 Back-to-section button, `noindex`; a priest whose status section is off (departed father while `departedPriests`
 is off, serving while `priests` is off) → `SectionUnavailable`, `noindex`; otherwise the page, indexable with its
 canonical URL (`setDocumentRouteMeta(path: detailPathFor(kind, id), …)`, called after `FeatureGate`'s so it wins).
-Detail URLs are not in `sitemap.xml` (no seeded item has a detail page).
+Detail URLs are not in `sitemap.xml` (static file; every visible item has a page since PR #14 — see open tasks).
+"More in this section" (PR #14) is picked from the same already-loaded list (`pickRelated`), so it costs no read either.
 
 **Per-route `<head>` sync** (PR #10, amends ADR-019): `lib/core/document_lang.dart` holds the pure
 `kCanonicalOrigin`, `canonicalUrlForPath(path)` (`''`/`/` → origin + `/`, else origin + path without trailing `/`,

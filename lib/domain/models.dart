@@ -68,8 +68,9 @@ class CustomField {
 
 /// Optional item detail page shared by meetings, activities, clinics,
 /// facilities, priests, milestones and saints (not liturgies, seasons or
-/// alerts). Every field is optional and defaults to today's behaviour: no
-/// detail page (`detailsEnabled` false), and images / contacts / socials
+/// alerts). Every field is optional. Detail pages are opt-OUT (PR #14): a
+/// missing `detailsEnabled` means the page is on; only an explicit `false`
+/// (an admin switching it off) removes it. Images / contacts / socials are
 /// shown wherever the item already shows them.
 class ItemDetails {
   final bool detailsEnabled, showDetailImages, showContacts, showSocials;
@@ -98,7 +99,7 @@ class ItemDetails {
   final String contactNoteAr, contactNoteEn;
 
   const ItemDetails({
-    this.detailsEnabled = false,
+    this.detailsEnabled = true,
     this.showDetailImages = true,
     this.showContacts = true,
     this.showSocials = true,
@@ -119,7 +120,7 @@ class ItemDetails {
     this.contactNoteEn = '',
   });
 
-  /// No detail page, everything else as before.
+  /// No admin-entered details: the page still shows the item's own info.
   static const none = ItemDetails();
 
   /// [phoneKey] / [urlKey] name the document field holding the primary phone
@@ -129,7 +130,7 @@ class ItemDetails {
     final rawFields = m['extraFields'];
     final rawGallery = m['gallery'];
     return ItemDetails(
-      detailsEnabled: _b(m['detailsEnabled']),
+      detailsEnabled: _b(m['detailsEnabled'], true),
       showDetailImages: _b(m['showDetailImages'], true),
       showContacts: _b(m['showContacts'], true),
       showSocials: _b(m['showSocials'], true),
@@ -428,7 +429,7 @@ class Meeting implements Hideable {
   final bool sample;
   /// Optional picture (null = keep the icon / initials placeholder).
   final MediaImage? image;
-  /// Optional detail page (off unless an admin enables it).
+  /// Detail page settings (on unless an admin switches it off).
   final ItemDetails details;
   const Meeting({
     this.visible = true,
@@ -482,7 +483,7 @@ class Activity implements Hideable {
   /// Optional external page (Facebook page, YouTube playlist...).
   final String link;
   final bool sample;
-  /// Optional detail page (off unless an admin enables it).
+  /// Detail page settings (on unless an admin switches it off).
   final ItemDetails details;
 
   /// Optional picture (null = keep the icon / initials placeholder).
@@ -539,7 +540,7 @@ class Clinic implements Hideable {
   final bool sample;
   /// Optional picture (null = keep the icon / initials placeholder).
   final MediaImage? image;
-  /// Optional detail page (off unless an admin enables it).
+  /// Detail page settings (on unless an admin switches it off).
   final ItemDetails details;
   const Clinic({
     this.visible = true,
@@ -594,7 +595,7 @@ class Facility implements Hideable {
   final bool sample;
   /// Optional picture (null = keep the icon / initials placeholder).
   final MediaImage? image;
-  /// Optional detail page (off unless an admin enables it).
+  /// Detail page settings (on unless an admin switches it off).
   final ItemDetails details;
   const Facility({
     this.visible = true,
@@ -643,7 +644,7 @@ class Priest implements Hideable {
 
   /// Optional picture (null = keep the icon / initials placeholder).
   final MediaImage? image;
-  /// Optional detail page (off unless an admin enables it).
+  /// Detail page settings (on unless an admin switches it off).
   final ItemDetails details;
   const Priest({
     this.visible = true,
@@ -699,7 +700,7 @@ class Milestone implements Hideable {
 
   /// Optional picture (null = keep the icon / initials placeholder).
   final MediaImage? image;
-  /// Optional detail page (off unless an admin enables it).
+  /// Detail page settings (on unless an admin switches it off).
   final ItemDetails details;
   const Milestone({
     this.visible = true,
@@ -740,7 +741,7 @@ class Saint implements Hideable {
 
   /// Optional picture (null = keep the icon / initials placeholder).
   final MediaImage? image;
-  /// Optional detail page (off unless an admin enables it).
+  /// Detail page settings (on unless an admin switches it off).
   final ItemDetails details;
   const Saint({
     this.visible = true,
