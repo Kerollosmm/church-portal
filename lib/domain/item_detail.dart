@@ -64,7 +64,13 @@ String detailPathFor(DetailKind kind, String id) => '${kind.basePath}/${Uri.enco
     if (!p.startsWith(prefix)) continue;
     final rest = p.substring(prefix.length);
     if (rest.isEmpty || rest.contains('/')) continue;
-    return (k, Uri.decodeComponent(rest));
+    String id;
+    try {
+      id = Uri.decodeComponent(rest);
+    } catch (_) {
+      id = rest; // malformed %-escape in a hand-typed URL: keep it raw, never throw
+    }
+    return (k, id);
   }
   return null;
 }

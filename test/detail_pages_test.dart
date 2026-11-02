@@ -207,6 +207,17 @@ void main() {
       }
       expect(parseDetailPath('/clinics'), isNull);
       expect(parseDetailPath('/clinics/a/b'), isNull);
+      expect(parseDetailPath('/clinics/%ZZ'), (DetailKind.clinic, '%ZZ')); // malformed escape: no throw
+      expect(parentRouteOf('/clinics/%ZZ'), '/clinics');
+    });
+
+    testWidgets('a malformed or unknown id shows "not available", never a crash', (tester) async {
+      final (router, _) = await _pump(tester, initial: '/clinics/%ZZ');
+      expect(tester.takeException(), isNull);
+      expect(find.byType(AppShell), findsOneWidget);
+      router.go('/about/milestones/does-not-exist');
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('itemUnavailable')), findsOneWidget);
     });
 
     testWidgets('all 7 sub-routes resolve inside the shell (no 404)', (tester) async {
