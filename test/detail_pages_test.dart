@@ -275,4 +275,165 @@ void main() {
       expect(itemSocialsShown(on, const FeatureSettings(sections: {Sections.socials: false})), isFalse);
     });
   });
+
+  group('Task 3.2: ItemDetailPage', () {
+    testWidgets('rich layout: facts, long text, custom fields, contacts, links + indexable SEO', (tester) async {
+      final specs = <DocumentHeadSpec>[];
+      debugOnRouteMeta = specs.add;
+      await _pump(tester, initial: '/clinics/d-clinic');
+      expect(find.byKey(const Key('itemDetailPage')), findsOneWidget);
+      expect(find.text('Dental'), findsWidgets);
+      expect(find.text('د. تجربة'), findsWidgets);
+      expect(find.byKey(const Key('detailBackLink')), findsOneWidget);
+      final text = tester.widget<SelectableText>(find.byKey(const Key('detailText')));
+      expect(text.data, 'Long-form details about this service');
+      expect(text.style?.height, 1.8);
+      expect(find.text('Coordinator'), findsOneWidget);
+      expect(find.text('Mr. Mina'), findsOneWidget);
+      expect(find.byKey(const Key('detailCall')), findsOneWidget);
+      expect(find.text('Register after the liturgy'), findsOneWidget);
+      for (final k in ['detailWhatsappGroup', 'detailFacebook', 'detailYoutube', 'detailInstagram', 'detailExternal']) {
+        expect(find.byKey(Key(k)), findsOneWidget, reason: k);
+      }
+      expect(find.text('Registration form'), findsOneWidget); // custom external label
+      expect(find.bySemanticsLabel('Facebook — Dental'), findsOneWidget);
+      expect(specs.last.canonicalUrl, '$kCanonicalOrigin/clinics/d-clinic');
+      expect(specs.last.noIndex, isFalse);
+    });
+
+    testWidgets('Arabic: content picked in Arabic, external label falls back to "open page"', (tester) async {
+      await _pump(tester,
+          locale: const Locale('ar'),
+          seed: _seed(extra: const {'externalLabelAr': '', 'externalLabelEn': ''}),
+          initial: '/church-education/d-meeting');
+      expect(find.text('اجتماع تجربة'), findsWidgets);
+      expect(find.text('تفاصيل طويلة عن الخدمة'), findsOneWidget);
+      expect(find.text('المسؤول'), findsOneWidget);
+      expect(find.text('افتح الصفحة'), findsOneWidget);
+    });
+
+    testWidgets('details off, hidden or unknown id: "not available", noindex, back to the section', (tester) async {
+      final specs = <DocumentHeadSpec>[];
+      debugOnRouteMeta = specs.add;
+      final (router, _) = await _pump(tester,
+          seed: _seed(enabled: false, patch: (raw) {
+            (raw['saints'] as Map)['hidden'] = {'nameAr': 'مخفي', 'nameEn': 'Hidden', 'visible': false, ..._detailFields()};
+          }),
+          initial: '/clinics/d-clinic');
+      expect(find.byKey(const Key('itemUnavailable')), findsOneWidget);
+      expect(find.byKey(const Key('itemDetailPage')), findsNothing);
+      expect(specs.last.noIndex, isTrue);
+      expect(specs.last.canonicalUrl, isNull);
+      for (final p in ['/about/saints/hidden', '/about/saints/nope']) {
+        router.go(p);
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('itemUnavailable')), findsOneWidget, reason: p);
+        expect(specs.last.noIndex, isTrue, reason: p);
+      }
+      await tester.tap(find.byKey(const Key('unavailableBack')));
+      await tester.pumpAndSettle();
+      expect(_path(router), '/about');
+    });
+
+    testWidgets('dual priest gating: a departed father needs departedPriests', (tester) async {
+      final specs = <DocumentHeadSpec>[];
+      debugOnRouteMeta = specs.add;
+      final (router, _) = await _pump(tester,
+          seed: _seed(sections: const {'departedPriests': false}), initial: '/about/priests/d-departed');
+      expect(find.byKey(const Key('sectionUnavailable')), findsOneWidget);
+      expect(specs.last.noIndex, isTrue);
+      router.go('/about/priests/d-priest'); // serving: still open
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('itemDetailPage')), findsOneWidget);
+      expect(specs.last.noIndex, isFalse);
+    });
+
+    testWidgets('gallery: media fetched only when the detail page opens; thumbnails zoom', (tester) async {
+      final media = _FakeMedia();
+      final (router, _) = await _pump(tester,
+          media: media,
+          seed: _seed(extra: const {
+            'image': {'source': 'inline', 'mediaId': 'c1', 'alt': 'Cover'}
+          }));
+      router.go('/church-activities'); // list page: covers only, never gallery bytes
+      await tester.pumpAndSettle();
+      expect(media.loaded, isNot(contains('g1')));
+      router.go('/church-activities/d-activity');
+      await tester.pumpAndSettle();
+      expect(media.loaded, containsAll(['g1', 'g2']));
+      expect(find.byKey(const Key('detailCover')), findsOneWidget);
+      expect(find.byKey(const ValueKey('galleryThumb-1')), findsOneWidget);
+      await tester.tap(find.descendant(
+          of: find.byKey(const ValueKey('galleryThumb-0')), matching: find.byKey(const Key('itemImageTap'))));
+      await tester.pumpAndSettle();
+      expect(find.byType(InteractiveViewer), findsOneWidget);
+    });
+
+    for (final (name, seed) in [
+      ('showDetailImages off', () => _seed(extra: const {'showDetailImages': false})),
+      ('images section off', () => _seed(sections: const {'media': false})),
+    ]) {
+      testWidgets('no cover / gallery when $name', (tester) async {
+        final media = _FakeMedia();
+        await _pump(tester, media: media, seed: seed(), initial: '/about/saints/d-saint');
+        expect(find.byKey(const Key('itemDetailPage')), findsOneWidget);
+        expect(find.byKey(const ValueKey('galleryThumb-0')), findsNothing);
+        expect(media.loaded, isEmpty);
+      });
+    }
+
+    testWidgets('showContacts off hides calls and the contact note; showSocials off hides links', (tester) async {
+      await _pump(tester,
+          seed: _seed(extra: const {'showContacts': false, 'showSocials': false}),
+          initial: '/church-activities/d-activity');
+      for (final k in ['detailCall', 'detailWhatsapp', 'detailContactNote', 'detailFacebook', 'detailExternal']) {
+        expect(find.byKey(Key(k)), findsNothing, reason: k);
+      }
+      expect(find.byKey(const Key('detailText')), findsOneWidget);
+    });
+
+    testWidgets('socials section off hides every item link', (tester) async {
+      await _pump(tester, seed: _seed(sections: const {'socials': false}), initial: '/public-services/d-facility');
+      expect(find.byKey(const Key('detailCall')), findsOneWidget);
+      for (final k in ['detailWhatsappGroup', 'detailFacebook', 'detailYoutube', 'detailInstagram', 'detailExternal']) {
+        expect(find.byKey(Key(k)), findsNothing, reason: k);
+      }
+    });
+
+    testWidgets('activity mobile phone doubles as WhatsApp; clinic without phones offers the office', (tester) async {
+      final (router, _) = await _pump(tester,
+          seed: _seed(patch: (raw) {
+            final c = (raw['clinics'] as Map)['d-clinic'] as Map;
+            c['bookingPhone'] = '';
+            c['whatsapp'] = '';
+          }),
+          initial: '/church-activities/d-activity');
+      expect(find.byKey(const Key('detailWhatsapp')), findsOneWidget);
+      router.go('/clinics/d-clinic');
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('detailCall')), findsNothing);
+      expect(find.byKey(const Key('detailCallOffice')), findsOneWidget);
+    });
+
+    for (final lang in const ['ar', 'en']) {
+      testWidgets('320 px at 200% text: every detail page lays out without overflow ($lang)', (tester) async {
+        final (router, _) = await _pump(tester,
+            size: const Size(320, 800),
+            textScale: 2.0,
+            locale: Locale(lang),
+            seed: _seed(extra: const {
+              'image': {'source': 'inline', 'mediaId': 'c1'}
+            }));
+        final failures = <String>[];
+        for (final r in _detailRoutes.values) {
+          router.go(r.$1);
+          await tester.pumpAndSettle();
+          final e = tester.takeException();
+          if (e != null) failures.add('${r.$1}: $e');
+          if (find.byKey(const Key('itemDetailPage')).evaluate().isEmpty) failures.add('${r.$1}: no page');
+        }
+        expect(failures, isEmpty);
+      });
+    }
+  });
 }
