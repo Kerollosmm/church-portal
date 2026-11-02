@@ -730,6 +730,86 @@ describe('PR #11: item detail pages', () => {
   });
 });
 
+// PR #12: the admin editors' real write sequence. DocEditor saves an item in
+// up to three writes (splitSavePayload): everything else first (a create
+// carries every field, the empty lists included), then the gallery, then the
+// extraFields; AdminRepository merges updates with mergeFields (written map
+// fields are replaced, not deep-merged).
+describe('PR #12: admin editor save paths', () => {
+  const by = `${EDITOR}@x.test`;
+  const stamp = () => ({ updatedAt: serverTimestamp(), updatedBy: by });
+  const merge = (ref, data) => { const d = { ...data, ...stamp() }; return setDoc(ref, d, { mergeFields: Object.keys(d) }); };
+  const own = {
+    meetings: { stage: 'youth', nameAr: 'اجتماع', nameEn: 'Youth', weekday: 5, start: '19:00', end: '21:00', hallAr: 'ق', hallEn: 'h', notes: 'n' },
+    activities: { category: 'choir', titleAr: 'كورال', titleEn: 'Choir', descAr: 'و'.repeat(2000), descEn: 'd', scheduleAr: 's', scheduleEn: 's', ageRange: '8-12' },
+    clinics: { specialty: 'dental', specialtyAr: 'الأسنان', specialtyEn: 'Dental', doctorName: 'د. مينا', degreeAr: 'أ', degreeEn: 'b', days: [1, 3, 5], start: '16:00', end: '20:00', active: true },
+    facilities: { type: 'nursery', nameAr: 'الحضانة', nameEn: 'Nursery', descAr: 'و'.repeat(2000), descEn: 'd', hoursAr: 'h', hoursEn: 'h' },
+    priests: { name: 'أبونا', nameEn: 'Fr', rank: 'priest', ordinationDate: '2001-03', hegumenDate: '', status: 'serving', departedDate: '', bioAr: 'ن'.repeat(5000), bioEn: 'b' },
+    milestones: { titleAr: 'زيارة', titleEn: 'Visit', descAr: 'و'.repeat(2000), descEn: 'd', year: 1990, icon: 'pope' },
+    saints: { nameAr: 'الأنبا موسى', nameEn: 'St Moses', bioAr: 'س'.repeat(5000), bioEn: 'b', feastCopticAr: 'f', feastCopticEn: 'f', feastGregorianAr: 'g', feastGregorian: 'g' },
+  };
+  // Every detail key the admin schema writes for a new item (DocEditor.collect).
+  const detail = (col) => ({
+    detailsEnabled: true, detailsAr: 'ت'.repeat(10000), detailsEn: 'd'.repeat(10000),
+    image: { source: 'inline', mediaId: 'cover1', alt: 'a'.repeat(300), w: 800, h: 600 }, showDetailImages: true,
+    showContacts: true, showSocials: true,
+    [col === 'clinics' ? 'bookingPhone' : col === 'facilities' ? 'phone' : 'contactPhone']: '01012345678',
+    whatsapp: '01012345678', whatsappUrl: 'https://chat.whatsapp.com/x', facebookUrl: 'https://facebook.com/x',
+    youtubeUrl: 'https://youtube.com/@x', instagramUrl: 'https://instagram.com/x',
+    [col === 'activities' ? 'link' : 'externalUrl']: 'https://forms.example.org/register',
+    externalLabelAr: 'ن'.repeat(80), externalLabelEn: 'e'.repeat(80), contactNoteAr: 'م'.repeat(500), contactNoteEn: 'n'.repeat(500),
+    order: 10, visible: true, ...(['milestones', 'saints'].includes(col) ? {} : { sample: true }),
+  });
+  const gallery = Array.from({ length: 8 }, (_, i) => ({ source: 'inline', mediaId: `g${i}`, alt: 'a'.repeat(300), w: 800, h: 600 }));
+  const extraFields = Array.from({ length: 15 }, () => ({ titleAr: 'ع'.repeat(150), titleEn: 't'.repeat(150), valueAr: 'ق'.repeat(2000), valueEn: 'v'.repeat(2000) }));
+
+  test('new item at maximum size: create, then the gallery, then the extra fields (all 7 collections)', async () => {
+    const ed = db(EDITOR);
+    for (const col of Object.keys(own)) {
+      try {
+        const ref = doc(ed, col, 'new');
+        await assertSucceeds(setDoc(ref, { ...own[col], ...detail(col), gallery: [], extraFields: [], ...stamp() }));
+        await assertSucceeds(merge(ref, { gallery }));
+        await assertSucceeds(merge(ref, { extraFields }));
+      } catch (e) {
+        throw new Error(`${col}: ${e.message}`);
+      }
+    }
+  });
+
+  test('editing every field at once still fits when the lists go in their own writes', async () => {
+    const ed = db(EDITOR);
+    for (const col of Object.keys(own)) {
+      try {
+        const ref = doc(ed, col, 'edit');
+        await env.withSecurityRulesDisabled(async (ctx) => {
+          await setDoc(doc(ctx.firestore(), col, 'edit'), { ...own[col], ...detail(col), gallery, extraFields });
+        });
+        // Base write: every scalar changed, the cover image replaced (a map
+        // field: mergeFields replaces it, so the old mediaId does not linger).
+        // Free-text fields (names, descriptions, labels, notes): last char edited.
+        const text = /(Ar|En|^name|^notes|^doctorName|^ageRange|^feastGregorian)$/;
+        const changed = Object.fromEntries(Object.entries({ ...own[col], ...detail(col) }).map(([k, v]) =>
+          [k, typeof v === 'string' && text.test(k) ? `${v.slice(0, -1)}x` : v]));
+        await assertSucceeds(merge(ref, { ...changed, detailsEnabled: false, showContacts: false, image: { source: 'url', url: 'https://img.example.org/new.jpg' } }));
+        let after;
+        await env.withSecurityRulesDisabled(async (ctx) => { after = (await getDoc(doc(ctx.firestore(), col, 'edit'))).data(); });
+        if ('mediaId' in after.image) throw new Error('image map was deep-merged');
+        await assertSucceeds(merge(ref, { gallery: [...gallery].reverse() }));
+        await assertSucceeds(merge(ref, { extraFields: extraFields.slice(1) }));
+      } catch (e) {
+        throw new Error(`${col}: ${e.message}`);
+      }
+    }
+  });
+
+  test('why the editor splits: both full lists in one write exceed the expression budget', async () => {
+    const ref = doc(db(EDITOR), 'saints', 'both');
+    await assertSucceeds(setDoc(ref, { ...own.saints, gallery: [], extraFields: [] }));
+    await assertFails(merge(ref, { gallery, extraFields }));
+  });
+});
+
 describe('PR #11: page headers & footer (settings/features)', () => {
   const footer = { showPhones: true, showSocials: false, showQuickLinks: true, noteAr: 'م'.repeat(500), noteEn: 'Note' };
   const header = { titleAr: 'ع'.repeat(200), titleEn: 'T', subtitleAr: 'س'.repeat(300), subtitleEn: '', introAr: 'م'.repeat(1500), introEn: 'Intro' };

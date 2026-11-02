@@ -286,6 +286,53 @@ void main() {
     });
   });
 
+  group('PR #12: save split & detail links', () {
+    final img = {'source': 'inline', 'mediaId': 'g1'};
+    final row = {'titleAr': 'ع', 'titleEn': '', 'valueAr': 'ق', 'valueEn': ''};
+
+    test('gallery and extraFields go in their own writes (rules expression budget)', () {
+      expect(splitSavePayload(const {}), isEmpty);
+      expect(splitSavePayload({'nameAr': 'x'}), [
+        {'nameAr': 'x'}
+      ]);
+      expect(splitSavePayload({'nameAr': 'x', 'gallery': [img], 'extraFields': [row], 'detailsAr': 'd'}), [
+        {'nameAr': 'x', 'detailsAr': 'd'},
+        {'gallery': [img]},
+        {'extraFields': [row]},
+      ]);
+      expect(splitSavePayload({'gallery': [img]}), [
+        {'gallery': [img]}
+      ]);
+      expect(splitSavePayload({'extraFields': [row], 'gallery': [img]}), [
+        {'gallery': [img]},
+        {'extraFields': [row]},
+      ]);
+      // Empty or cleared lists cost almost nothing: they stay in the first write.
+      expect(splitSavePayload({'nameAr': 'x', 'gallery': [], 'extraFields': null}), [
+        {'nameAr': 'x', 'gallery': [], 'extraFields': null}
+      ]);
+    });
+
+    test('rows with a detail page open the item detail URL', () {
+      String? path(String id, String col, Map<String, dynamic> data, {bool english = false}) =>
+          itemPublicPathFor(collectionById(col)!, id, data, english: english);
+      const on = {'detailsEnabled': true};
+      expect(path('m1', 'meetings', on), '/church-education/m1');
+      expect(path('a1', 'activities', on), '/church-activities/a1');
+      expect(path('c1', 'clinics', on, english: true), '/clinics/c1?lang=en');
+      expect(path('f1', 'facilities', on), '/public-services/f1');
+      expect(path('p1', 'priests', on), '/about/priests/p1');
+      expect(path('p2', 'departedPriests', on), '/about/priests/p2');
+      expect(path('s1', 'saints', on), '/about/saints/s1');
+      expect(path('h1', 'milestones', on), '/about/milestones/h1');
+      // No detail page (off, hidden, or a collection without one): no link.
+      expect(path('c1', 'clinics', const {}), isNull);
+      expect(path('c1', 'clinics', const {'detailsEnabled': true, 'visible': false}), isNull);
+      expect(path('l1', 'liturgies', on), isNull);
+      expect(path('x/y', 'clinics', on), '/clinics/x%2Fy');
+    });
+  });
+
   group('admin list helpers', () {
     final def = collectionById('clinics')!;
     final docs = [
@@ -342,6 +389,9 @@ void main() {
       await tester.enterText(find.byKey(const ValueKey('field-specialtyAr')), 'الأسنان');
       await tester.enterText(find.byKey(const ValueKey('field-doctorName')), 'د. مينا');
       await tester.enterText(find.byKey(const ValueKey('field-start')), '9:00'); // invalid
+      // The booking phone sits in the collapsible "Contacts & links" group (PR #12).
+      await tester.tap(find.byKey(const ValueKey('group-contacts')));
+      await tester.pumpAndSettle();
       await tester.enterText(find.byKey(const ValueKey('field-bookingPhone')), '010 1234 5678');
       await tester.tap(find.byKey(const Key('editor-save')));
       await tester.pumpAndSettle();
@@ -534,6 +584,11 @@ void main() {
         popOnSave: false,
         onSave: (d) async {},
       )));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      final media = find.byKey(const ValueKey('group-media'));
+      await tester.scrollUntilVisible(media, 300, scrollable: find.byType(Scrollable).first);
+      await tester.tap(media);
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
       expect(find.byKey(const Key('imageUploadBtn')), findsOneWidget);

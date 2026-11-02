@@ -136,13 +136,22 @@ class AdminRepository implements AdminBackend {
       await ref.set(_stamp(data));
       return ref.id;
     }
-    await col.doc(id).set(_stamp(data), SetOptions(merge: true));
+    await _merge(col.doc(id), data);
     return id;
   }
 
   @override
-  Future<void> saveDoc(String path, Map<String, dynamic> data) =>
-      db.doc(path).set(_stamp(data), SetOptions(merge: true));
+  Future<void> saveDoc(String path, Map<String, dynamic> data) => _merge(db.doc(path), data);
+
+  /// Writes [data]'s top-level fields and leaves every other field as it is.
+  /// A written map field is replaced as a whole (`mergeFields`), never
+  /// deep-merged (`merge: true`): a removed page header (settings/features
+  /// pageHeaders) or a cover image switched from inline to a link must not
+  /// keep its old keys.
+  Future<void> _merge(DocumentReference<Map<String, dynamic>> ref, Map<String, dynamic> data) {
+    final stamped = _stamp(data);
+    return ref.set(stamped, SetOptions(mergeFields: stamped.keys.toList()));
+  }
 
   @override
   Future<void> update(String collection, String id, Map<String, dynamic> data) =>

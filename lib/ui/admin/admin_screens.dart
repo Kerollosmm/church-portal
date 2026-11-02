@@ -367,6 +367,9 @@ class _MessagesScreenState extends State<MessagesScreen> {
     return Scaffold(
       backgroundColor: AppColors.cream,
       body: StreamBuilder<List<AdminDoc>>(
+        // A new stream (another backend) gets a fresh StreamBuilder: a reused
+        // one keeps the old backend's list while the new one loads.
+        key: ObjectKey(_stream),
         stream: _stream,
         builder: (context, snap) {
           if (snap.hasError) {
@@ -424,16 +427,24 @@ class _MessagesScreenState extends State<MessagesScreen> {
       child: Padding(
         padding: const EdgeInsets.all(14),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
+          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Icon(handled ? Icons.mark_email_read_outlined : Icons.mark_email_unread_outlined,
                 color: handled ? AppColors.muted : AppColors.burgundy),
             const SizedBox(width: 8),
+            // Name and date wrap onto two lines on phones / large text.
             Expanded(
-              child: Text('${m['name'] ?? ''}',
-                  style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
+              child: Wrap(
+                spacing: 12,
+                runSpacing: 2,
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  Text('${m['name'] ?? ''}', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
+                  if (created is DateTime)
+                    Text(fmtDateTime(created), style: const TextStyle(color: AppColors.muted, fontSize: 12)),
+                ],
+              ),
             ),
-            if (created is DateTime)
-              Text(fmtDateTime(created), style: const TextStyle(color: AppColors.muted, fontSize: 12)),
           ]),
           const SizedBox(height: 6),
           SelectableText('${m['message'] ?? ''}', style: const TextStyle(height: 1.6)),
@@ -454,13 +465,13 @@ class _MessagesScreenState extends State<MessagesScreen> {
             if (m['lang'] != null) Text('(${m['lang']})', style: const TextStyle(color: AppColors.muted)),
           ]),
           const Divider(height: 18),
-          Row(children: [
+          Wrap(alignment: WrapAlignment.spaceBetween, crossAxisAlignment: WrapCrossAlignment.center, children: [
             TextButton.icon(
               onPressed: () => _setStatus(context, d, handled ? 'new' : 'handled'),
               icon: Icon(handled ? Icons.undo : Icons.check_circle_outline),
               label: Text(context.tr(handled ? 'markNew' : 'markHandled')),
             ),
-            const Spacer(),
+            Row(mainAxisSize: MainAxisSize.min, children: [
             IconButton(
               tooltip: context.tr('copy'),
               icon: const Icon(Icons.copy_outlined),
@@ -471,6 +482,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
               icon: const Icon(Icons.delete_outline, color: AppColors.alert),
               onPressed: () => _delete(context, d),
             ),
+            ]),
           ]),
         ]),
       ),
@@ -551,6 +563,9 @@ class _AdminsScreenState extends State<AdminsScreen> {
         label: Text(context.tr('addAdmin')),
       ),
       body: StreamBuilder<List<AdminDoc>>(
+        // A new stream (another backend) gets a fresh StreamBuilder: a reused
+        // one keeps the old backend's list while the new one loads.
+        key: ObjectKey(_stream),
         stream: _stream,
         builder: (context, snap) {
           if (snap.hasError) return Center(child: Text('${snap.error}'));
@@ -581,16 +596,24 @@ class _AdminsScreenState extends State<AdminsScreen> {
         leading: Icon(role == AdminRoles.owner ? Icons.workspace_premium_outlined : Icons.edit_note,
             color: AppColors.burgundy),
         title: Text('${a.data['email'] ?? ''}${self ? ' (${context.tr('you')})' : ''}', textDirection: TextDirection.ltr),
-        subtitle: SelectableText('UID: ${a.id}', style: const TextStyle(fontSize: 11)),
-        trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-          DropdownButton<String>(
+        // The role menu and remove button wrap under the UID (phones / large text).
+        subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          SelectableText('UID: ${a.id}', style: const TextStyle(fontSize: 11)),
+          Wrap(spacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
+          // Long role labels ellipsize instead of overflowing at 320 px / 200%.
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 280),
+            child: DropdownButton<String>(
+            isExpanded: true,
             value: role,
             onChanged: self
                 ? null
                 : (v) => v == null ? null : _guard(context, () => widget.repo.setAdmin(a.id, email: '${a.data['email'] ?? ''}', role: v)),
             items: [
-              for (final r in AdminRoles.all) DropdownMenuItem(value: r, child: Text(context.tr('role_$r'))),
+              for (final r in AdminRoles.all)
+                DropdownMenuItem(value: r, child: Text(context.tr('role_$r'), overflow: TextOverflow.ellipsis)),
             ],
+          ),
           ),
           IconButton(
             tooltip: context.tr('removeAdmin'),
@@ -604,6 +627,7 @@ class _AdminsScreenState extends State<AdminsScreen> {
                     }
                   },
           ),
+          ]),
         ]),
       ),
     );
