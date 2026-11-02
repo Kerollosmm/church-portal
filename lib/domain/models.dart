@@ -48,6 +48,119 @@ int? parseHm(String? hm) {
   return h * 60 + mi;
 }
 
+/// One admin-defined "title: value" row on an item's detail page.
+class CustomField {
+  final String titleAr, titleEn, valueAr, valueEn;
+  const CustomField({this.titleAr = '', this.titleEn = '', this.valueAr = '', this.valueEn = ''});
+
+  bool get isEmpty =>
+      titleAr.trim().isEmpty && titleEn.trim().isEmpty && valueAr.trim().isEmpty && valueEn.trim().isEmpty;
+
+  factory CustomField.fromMap(Map<String, dynamic> m) => CustomField(
+        titleAr: _s(m['titleAr']),
+        titleEn: _s(m['titleEn']),
+        valueAr: _s(m['valueAr']),
+        valueEn: _s(m['valueEn']),
+      );
+
+  Map<String, dynamic> toMap() => {'titleAr': titleAr, 'titleEn': titleEn, 'valueAr': valueAr, 'valueEn': valueEn};
+}
+
+/// Optional item detail page shared by meetings, activities, clinics,
+/// facilities, priests, milestones and saints (not liturgies, seasons or
+/// alerts). Every field is optional and defaults to today's behaviour: no
+/// detail page (`detailsEnabled` false), and images / contacts / socials
+/// shown wherever the item already shows them.
+class ItemDetails {
+  final bool detailsEnabled, showDetailImages, showContacts, showSocials;
+  final String detailsAr, detailsEn;
+
+  /// Non-empty rows only, at most [MediaLimits.maxExtraFields].
+  final List<CustomField> extraFields;
+
+  /// Usable images only, at most [MediaLimits.maxGalleryItems]. Inline bytes
+  /// (`media/{id}`) are fetched only when the detail page opens.
+  final List<MediaImage> gallery;
+
+  /// Primary phone: `contactPhone`, or the collection's existing phone field
+  /// (clinics: `bookingPhone`, facilities: `phone`).
+  final String contactPhone;
+
+  /// WhatsApp number (chat) and WhatsApp group / channel URL.
+  final String whatsapp, whatsappUrl;
+  final String facebookUrl, youtubeUrl, instagramUrl;
+
+  /// External / registration button: `externalUrl` (activities: their
+  /// existing `link`) with an optional custom label.
+  final String externalUrl, externalLabelAr, externalLabelEn;
+
+  /// How to contact / register.
+  final String contactNoteAr, contactNoteEn;
+
+  const ItemDetails({
+    this.detailsEnabled = false,
+    this.showDetailImages = true,
+    this.showContacts = true,
+    this.showSocials = true,
+    this.detailsAr = '',
+    this.detailsEn = '',
+    this.extraFields = const [],
+    this.gallery = const [],
+    this.contactPhone = '',
+    this.whatsapp = '',
+    this.whatsappUrl = '',
+    this.facebookUrl = '',
+    this.youtubeUrl = '',
+    this.instagramUrl = '',
+    this.externalUrl = '',
+    this.externalLabelAr = '',
+    this.externalLabelEn = '',
+    this.contactNoteAr = '',
+    this.contactNoteEn = '',
+  });
+
+  /// No detail page, everything else as before.
+  static const none = ItemDetails();
+
+  /// [phoneKey] / [urlKey] name the document field holding the primary phone
+  /// and the external link (so a collection never gets a duplicate input).
+  factory ItemDetails.fromMap(Map<String, dynamic> m,
+      {String phoneKey = 'contactPhone', String urlKey = 'externalUrl'}) {
+    final rawFields = m['extraFields'];
+    final rawGallery = m['gallery'];
+    return ItemDetails(
+      detailsEnabled: _b(m['detailsEnabled']),
+      showDetailImages: _b(m['showDetailImages'], true),
+      showContacts: _b(m['showContacts'], true),
+      showSocials: _b(m['showSocials'], true),
+      detailsAr: _s(m['detailsAr']),
+      detailsEn: _s(m['detailsEn']),
+      extraFields: rawFields is List
+          ? rawFields
+              .whereType<Map>()
+              .map((e) => CustomField.fromMap(Map<String, dynamic>.from(e)))
+              .where((f) => !f.isEmpty)
+              .take(MediaLimits.maxExtraFields)
+              .toList()
+          : const [],
+      gallery: rawGallery is List
+          ? rawGallery.map(MediaImage.fromMap).whereType<MediaImage>().take(MediaLimits.maxGalleryItems).toList()
+          : const [],
+      contactPhone: _s(m[phoneKey]),
+      whatsapp: _s(m['whatsapp']),
+      whatsappUrl: _s(m['whatsappUrl']),
+      facebookUrl: _s(m['facebookUrl']),
+      youtubeUrl: _s(m['youtubeUrl']),
+      instagramUrl: _s(m['instagramUrl']),
+      externalUrl: _s(m[urlKey]),
+      externalLabelAr: _s(m['externalLabelAr']),
+      externalLabelEn: _s(m['externalLabelEn']),
+      contactNoteAr: _s(m['contactNoteAr']),
+      contactNoteEn: _s(m['contactNoteEn']),
+    );
+  }
+}
+
 class PhoneEntry {
   final String labelAr;
   final String labelEn;
@@ -313,6 +426,10 @@ class Meeting implements Hideable {
   final String start, end, hallAr, hallEn;
   final String facebookUrl, whatsappUrl, notes;
   final bool sample;
+  /// Optional picture (null = keep the icon / initials placeholder).
+  final MediaImage? image;
+  /// Optional detail page (off unless an admin enables it).
+  final ItemDetails details;
   const Meeting({
     this.visible = true,
     this.order = 0,
@@ -329,6 +446,8 @@ class Meeting implements Hideable {
     this.whatsappUrl = '',
     this.notes = '',
     this.sample = false,
+    this.image,
+    this.details = ItemDetails.none,
   });
   factory Meeting.fromMap(String id, Map<String, dynamic> m) => Meeting(
         visible: m['visible'] is bool ? m['visible'] as bool : true,
@@ -346,6 +465,8 @@ class Meeting implements Hideable {
         whatsappUrl: _s(m['whatsappUrl']),
         notes: _s(m['notes']),
         sample: _b(m['sample']),
+        image: MediaImage.fromMap(m['image']),
+        details: ItemDetails.fromMap(m),
       );
 }
 
@@ -361,6 +482,8 @@ class Activity implements Hideable {
   /// Optional external page (Facebook page, YouTube playlist...).
   final String link;
   final bool sample;
+  /// Optional detail page (off unless an admin enables it).
+  final ItemDetails details;
 
   /// Optional picture (null = keep the icon / initials placeholder).
   final MediaImage? image;
@@ -380,6 +503,7 @@ class Activity implements Hideable {
     this.link = '',
     this.image,
     this.sample = false,
+    this.details = ItemDetails.none,
   });
   factory Activity.fromMap(String id, Map<String, dynamic> m) => Activity(
         visible: m['visible'] is bool ? m['visible'] as bool : true,
@@ -397,6 +521,7 @@ class Activity implements Hideable {
         link: _s(m['link']),
         image: MediaImage.fromMap(m['image']),
         sample: _b(m['sample']),
+        details: ItemDetails.fromMap(m, urlKey: 'link'),
       );
 }
 
@@ -412,6 +537,10 @@ class Clinic implements Hideable {
   final String start, end, bookingPhone, whatsapp;
   final bool active;
   final bool sample;
+  /// Optional picture (null = keep the icon / initials placeholder).
+  final MediaImage? image;
+  /// Optional detail page (off unless an admin enables it).
+  final ItemDetails details;
   const Clinic({
     this.visible = true,
     this.order = 0,
@@ -429,6 +558,8 @@ class Clinic implements Hideable {
     this.whatsapp = '',
     this.active = true,
     this.sample = false,
+    this.image,
+    this.details = ItemDetails.none,
   });
   factory Clinic.fromMap(String id, Map<String, dynamic> m) => Clinic(
         visible: m['visible'] is bool ? m['visible'] as bool : true,
@@ -447,6 +578,8 @@ class Clinic implements Hideable {
         whatsapp: _s(m['whatsapp']),
         active: m['active'] is bool ? m['active'] as bool : true,
         sample: _b(m['sample']),
+        image: MediaImage.fromMap(m['image']),
+        details: ItemDetails.fromMap(m, phoneKey: 'bookingPhone'),
       );
 }
 
@@ -459,6 +592,10 @@ class Facility implements Hideable {
   final int order;
   final String id, type, nameAr, nameEn, descAr, descEn, phone, hoursAr, hoursEn;
   final bool sample;
+  /// Optional picture (null = keep the icon / initials placeholder).
+  final MediaImage? image;
+  /// Optional detail page (off unless an admin enables it).
+  final ItemDetails details;
   const Facility({
     this.visible = true,
     this.order = 0,
@@ -472,6 +609,8 @@ class Facility implements Hideable {
     this.hoursAr = '',
     this.hoursEn = '',
     this.sample = false,
+    this.image,
+    this.details = ItemDetails.none,
   });
   factory Facility.fromMap(String id, Map<String, dynamic> m) => Facility(
         visible: m['visible'] is bool ? m['visible'] as bool : true,
@@ -486,6 +625,8 @@ class Facility implements Hideable {
         hoursAr: _s(m['hoursAr']),
         hoursEn: _s(m['hoursEn']),
         sample: _b(m['sample']),
+        image: MediaImage.fromMap(m['image']),
+        details: ItemDetails.fromMap(m, phoneKey: 'phone'),
       );
 }
 
@@ -502,6 +643,8 @@ class Priest implements Hideable {
 
   /// Optional picture (null = keep the icon / initials placeholder).
   final MediaImage? image;
+  /// Optional detail page (off unless an admin enables it).
+  final ItemDetails details;
   const Priest({
     this.visible = true,
     required this.id,
@@ -518,6 +661,7 @@ class Priest implements Hideable {
     this.order = 0,
     this.sample = false,
     this.image,
+    this.details = ItemDetails.none,
   });
   factory Priest.fromMap(String id, Map<String, dynamic> m) => Priest(
         visible: m['visible'] is bool ? m['visible'] as bool : true,
@@ -535,6 +679,7 @@ class Priest implements Hideable {
         order: _ni(m['order']) ?? 0,
         sample: _b(m['sample']),
         image: MediaImage.fromMap(m['image']),
+        details: ItemDetails.fromMap(m),
       );
   bool get departed => status == 'departed';
 
@@ -554,6 +699,8 @@ class Milestone implements Hideable {
 
   /// Optional picture (null = keep the icon / initials placeholder).
   final MediaImage? image;
+  /// Optional detail page (off unless an admin enables it).
+  final ItemDetails details;
   const Milestone({
     this.visible = true,
     required this.id,
@@ -565,6 +712,7 @@ class Milestone implements Hideable {
     this.icon = '',
     this.order = 0,
     this.image,
+    this.details = ItemDetails.none,
   });
   factory Milestone.fromMap(String id, Map<String, dynamic> m) => Milestone(
         visible: m['visible'] is bool ? m['visible'] as bool : true,
@@ -577,6 +725,7 @@ class Milestone implements Hideable {
         icon: _s(m['icon']),
         order: _ni(m['order']) ?? 0,
         image: MediaImage.fromMap(m['image']),
+        details: ItemDetails.fromMap(m),
       );
 }
 
@@ -591,6 +740,8 @@ class Saint implements Hideable {
 
   /// Optional picture (null = keep the icon / initials placeholder).
   final MediaImage? image;
+  /// Optional detail page (off unless an admin enables it).
+  final ItemDetails details;
   const Saint({
     this.visible = true,
     required this.id,
@@ -604,6 +755,7 @@ class Saint implements Hideable {
     this.feastGregorianAr = '',
     this.order = 0,
     this.image,
+    this.details = ItemDetails.none,
   });
   factory Saint.fromMap(String id, Map<String, dynamic> m) => Saint(
         visible: m['visible'] is bool ? m['visible'] as bool : true,
@@ -618,5 +770,6 @@ class Saint implements Hideable {
         feastGregorianAr: _s(m['feastGregorianAr']),
         order: _ni(m['order']) ?? 0,
         image: MediaImage.fromMap(m['image']),
+        details: ItemDetails.fromMap(m),
       );
 }

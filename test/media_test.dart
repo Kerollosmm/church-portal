@@ -185,6 +185,43 @@ void main() {
       expect(orphanedMediaIds(u, null), isEmpty);
       expect(orphanedMediaIds(null, b), isEmpty);
     });
+
+    test('gallery limits are exposed for the client and the rules', () {
+      expect(MediaLimits.maxGalleryItems, 8);
+      expect(MediaLimits.maxExtraFields, 15);
+    });
+
+    test('orphanedMediaIds also accepts a gallery list on either side', () {
+      final a = {'source': 'inline', 'mediaId': 'a'};
+      final b = {'source': 'inline', 'mediaId': 'b'};
+      final c = {'source': 'inline', 'mediaId': 'c'};
+      final u = {'source': 'url', 'url': 'https://x.org/a.jpg'};
+      expect(orphanedMediaIds([a, b, u], [b]), ['a']);
+      expect(orphanedMediaIds([a, b], [b, a]), isEmpty); // reorder only
+      expect(orphanedMediaIds([a, b], null)..sort(), ['a', 'b']);
+      expect(orphanedMediaIds([a, 'junk', 3], const []), ['a']);
+      expect(orphanedMediaIds(a, [a, c]), isEmpty); // single map vs list
+      expect(orphanedMediaIds([a, c], a), ['c']);
+      expect(orphanedMediaIds(null, [a]), isEmpty);
+    });
+
+    test('document-level media ids cover the cover image and the gallery', () {
+      final a = {'source': 'inline', 'mediaId': 'a'};
+      final b = {'source': 'inline', 'mediaId': 'b'};
+      final c = {'source': 'inline', 'mediaId': 'c'};
+      final u = {'source': 'url', 'url': 'https://x.org/a.jpg'};
+      expect(extractDocMediaIds(null), isEmpty);
+      expect(extractDocMediaIds({'titleAr': 'x'}), isEmpty);
+      expect(extractDocMediaIds({'image': a, 'gallery': [b, u, c, 'junk']}), {'a', 'b', 'c'});
+      // Moving an inline image from the cover into the gallery keeps it.
+      expect(orphanedDocMediaIds({'image': a, 'gallery': [b]}, {'image': null, 'gallery': [a, b]}), isEmpty);
+      // ...and from the gallery to the cover.
+      expect(orphanedDocMediaIds({'image': u, 'gallery': [a, b]}, {'image': a, 'gallery': [b]}), isEmpty);
+      // Replaced / removed ones are orphaned.
+      expect(orphanedDocMediaIds({'image': a, 'gallery': [b, c]}, {'image': u, 'gallery': [c]})..sort(), ['a', 'b']);
+      // Deleting the document cleans up both.
+      expect(orphanedDocMediaIds({'image': a, 'gallery': [b]}, null)..sort(), ['a', 'b']);
+    });
   });
 
   group('compression', () {
