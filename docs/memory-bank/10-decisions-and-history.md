@@ -159,6 +159,30 @@ supersede them.
   combining `noindex` with a canonical elsewhere). `web/sitemap.xml` comments out `/clinics` while the clinics
   section is off.
 
+## ADR-020 — Item detail pages & site-wide header/footer customization (PR #11: data, rules, grounding)
+- **Context:** the customization plan (PRs #11–#13) gives admins optional rich detail pages on 7 collections (long
+  text, up to 15 custom fields, up to 8 gallery photos, contacts and social links) plus per-page header/intro overrides
+  and footer options (FR-G-04), with zero change for existing documents. PR #11 lands the domain models
+  (`ItemDetails`, `CustomField`, `PageCustom`, `FooterConfig`, prefix-aware `sectionsForPath`), the rules, the seed
+  maps and the assistant grounding; PR #12 the admin editor, PR #13 the public pages.
+- **Decision:** every new toggle defaults to today's behaviour (`detailsEnabled: false`, images/contacts/socials on);
+  no duplicate inputs (clinics keep `bookingPhone`, facilities `phone`, activities `link`, meetings their
+  Facebook/WhatsApp URLs); the seed adds only `pageHeaders: {}` and the default `footer` map.
+  **Rules within the 1,000-expression cap:** the plan's per-field / per-item checks were measured far over the cap
+  (two gallery images or four page headers already failed), so writes now validate **only the keys they create or
+  change** (a stored value was validated when it was written), and text fields / list items are checked on one
+  U+001F-joined string with regexes. Trade-offs: gallery items' `w`/`h` are not range-checked; extraFields rows must
+  carry their 4 keys (extra keys not rejected) and need a title starting with a non-space (the form trims); page
+  headers carry exactly 6 keys; new detail text keys reject `null` (the form writes `''`); numbers in the collections'
+  optional text fields are tolerated as text. A single write cannot carry both full lists — PR #12 saves the gallery
+  and the custom fields in their own updates.
+  The assistant grounds detail text, custom fields, contacts and links only for `detailsEnabled` items (an unpublished
+  draft never reaches it), respects `showContacts` / `showSocials` (+ the socials section) also for the items' existing
+  phones and links, and never sees image data.
+- **Consequences:** production `settings/features` needs `seed_firestore.js --fill-missing` (or one admin save) to
+  carry the new maps — missing means defaults, so nothing breaks meanwhile. Rules measurements and the margins are in
+  `05-firebase.md`.
+
 ## Timeline
 
 | When | PR / commit | What |
@@ -174,5 +198,7 @@ supersede them.
 | 1 Nov 2026 | **PR #8** `bc934d3` — "PR 2: UX, WCAG 2.2 AA, navigation, admin & docs" (`fix/phase2-ux-a11y-admin`) | Review plan PR 2: `AppColors.goldText`, darker WhatsApp/Facebook fills, footer `white70`, theme presets everywhere (`primaryDarkOf`); 320 px / 200 % text fixes (`Pill`, `TitleWithBadge`, timeline `Wrap`, app-bar collapse, alert/next-mass headers); Back-to-Home arrow, 48 dp targets; two-way `?lang=` sync (BUG-07); `departedDate` (BUG-08), alert link gating (BUG-09), BiDi secondary times (BUG-10), "Today" badge (FR-E-03), map `hl` (BUG-16), `runSpacing` (BUG-15); live regions, labelled buttons/switch, reduced-motion skeleton, Move up/down (2.5.7); admin: no scroll reset on save (BUG-12), departed order base 1000 + keep media on timeout (BUG-13), re-subscribe on backend change (BUG-18), Open on site; `test/accessibility_test.dart`. |
 | 2 Nov 2026 | **PR #9** `ad621cf` — "PR 3: compliance, SEO, deferred bundles & locale storage" (`feat/phase3-compliance-seo-perf`) | Review plan PR 3: PDPL privacy notice + required consent checkbox (`ContactField.consent`, FR-CT-06); static canonical + verified `Church` JSON-LD in `web/index.html` (ADR-019); `/admin` and `/ask` as deferred chunks via `DeferredLoader` (`/ask` fetched only when the assistant is on — `AssistantGate`); language choice saved in `localStorage` (`LanguageStore`, `?lang=` → saved → Arabic); `test/phase3_test.dart`. |
 | 2 Nov 2026 | **PR #10** — "PR #10: post-audit polish" (`fix/pr10-post-audit-polish`) | Assistant header uses the Cairo date/weekday; dated liturgies (even with a weekday) are grounded only as current one-off services (`isDatedLiturgyCurrent`); admin chip contrast, narrow reflow, tooltips, `didUpdateWidget` re-binding on Features/Messages/Admins, stamped `setAdmin`; per-route canonical + `noindex` (`setDocumentRouteMeta`, amends ADR-019), URL fragments kept by `?lang=` sync, `/clinics` commented out of the sitemap; `validFeatures` on `keysAllowed` + `optUrlOrPath`, `storage.rules` contentType guard, `deploy-rules` needs `build`. |
+
+| 2 Nov 2026 | **PR #11** — "Domain models, security rules, seed & AI grounding" (`feat/pr11-domain-rules-seed`) | Customization plan PR #11: `ItemDetails`/`CustomField` on the 7 detail collections, cover `image` on meetings/clinics/facilities, gallery-aware media orphan helpers, prefix-aware `sectionsForPath`/`routeEnabled`, `PageCustom` `pageHeaders` + `FooterConfig` `footer`; budget-aware, change-gated rules (ADR-020) + 14 emulator tests; seed maps; assistant grounding for milestones and detail pages. |
 
 Append new PRs to this table.

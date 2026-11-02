@@ -34,14 +34,17 @@ Four places must agree for every field — change them together:
 | `updatedAt` | timestamp | — | Stamped by `AdminRepository._stamp` (`FieldValue.serverTimestamp()`); rules require `== request.time` or unchanged |
 | `updatedBy` | string | — | Admin email (or uid); rules require it to equal `request.auth.token.email` (or uid) or be unchanged |
 
-Rules `common(d)`: ≤ 60 keys, `visible`/`sample` bool, `order` int in range, `image` (if present and not null)
-passes `validImage`, `stampOk`. `meta()` = `['visible','sample','order','updatedAt','updatedBy']` is added to every
-content allow-list.
+Rules `common(d, changed)`: ≤ 80 keys (60 before PR #11), `visible`/`sample` bool, `order` int in range, `image`
+(if present and not null) passes `validImage`, `stampOk`. `meta()` = `['visible','sample','order','updatedAt','updatedBy']`
+is added to every content allow-list. Since PR #11 every check runs only for the keys the write **creates or
+changes** (`changedKeys`; a create checks all keys) — see `05-firebase.md` (expression budget).
 
 ### Optional `image` (PR #5) — `MediaImage` (`lib/domain/media.dart`)
 
 Allowed (and shown) on **`priests`** (serving + departed), **`saints`**, **`milestones`**, **`activities`**,
-**`alerts`**, **`seasons`** (`imageCollections` in `admin_schema.dart`). It is **never required**; absent / `null` /
+**`alerts`**, **`seasons`** (`imageCollections` in `admin_schema.dart`). Since PR #11 the model (`Meeting.image`,
+`Clinic.image`, `Facility.image`) and the rules also accept it on **`meetings`**, **`clinics`** and **`facilities`**;
+the admin field and the cards follow in PR #12 / #13. It is **never required**; absent / `null` /
 malformed = no image and the card keeps its icon / initials placeholder. The seed has no images.
 
 | Key | Type | Rule |
@@ -56,7 +59,42 @@ malformed = no image and the card keeps its icon / initials placeholder. The see
 - **Legacy `priests.photoUrl`** (string ≤ 500, all empty in the seed) is still allowed by the rules and read as a
   fallback: `Priest.displayImage` = `image` ?? https `photoUrl`. The admin form no longer shows `photoUrl`; setting an
   image overrides it.
-- Images are ignored by the assistant prompt (`buildAssistantInstruction` only reads text fields; tested).
+- Images are ignored by the assistant prompt (`buildAssistantInstruction` only reads text fields; tested — also
+  for `gallery` URLs, media ids and alt text since PR #11).
+
+### Optional item detail page (PR #11) — `ItemDetails` / `CustomField` (`lib/domain/models.dart`)
+
+On the **7 detail collections** `meetings`, `activities`, `clinics`, `facilities`, `priests`, `milestones`,
+`saints` (**not** `liturgies`, `seasons`, `alerts`) every model has `details` (`ItemDetails.fromMap(doc)`;
+`ItemDetails.none` for const constructors). All keys are optional and **default to today's behaviour**, so existing
+and seeded documents look and behave exactly as before. The data model, rules and assistant grounding are in place
+(PR #11); the admin editor is PR #12 and the public `/<section>/:id` pages PR #13.
+
+| Key | Type / cap (rules) | Default | Meaning |
+|---|---|---|---|
+| `detailsEnabled` | bool | **false** | the item gets a public detail page (and its detail text is grounded for the assistant) |
+| `showDetailImages` | bool | true | show cover + gallery on the detail page (also needs `Sections.media`) |
+| `showContacts` / `showSocials` | bool | true | show the item's phones / social links (assistant too; socials also need `Sections.socials`) |
+| `detailsAr` / `detailsEn` | string ≤ 10,000 | `''` | long text |
+| `extraFields` | list ≤ 15 (`MediaLimits.maxExtraFields`) of `{titleAr, titleEn, valueAr, valueEn}` | `[]` | admin-defined rows; all 4 keys written, titles ≤ 150, values ≤ 2000, a title (titleAr, else titleEn) required. The model drops empty rows and caps at 15 |
+| `gallery` | list ≤ 8 (`MediaLimits.maxGalleryItems`) of `image` maps | `[]` | same shape as `image` (rules don't range-check `w`/`h` of gallery items); inline bytes fetched only when the detail page opens. The model keeps usable images, max 8 |
+| `contactPhone` | string ≤ 20 | `''` | primary phone; **clinics read `bookingPhone`, facilities `phone`** (no new key there) |
+| `whatsapp` | string ≤ 20 | `''` | WhatsApp number (clinics already had it) |
+| `whatsappUrl`, `facebookUrl` | `''` / http(s) URL ≤ 500 | `''` | group / page links (meetings already had both) |
+| `youtubeUrl`, `instagramUrl` | `''` / http(s) URL ≤ 500 | `''` | |
+| `externalUrl` | `''` / http(s) URL ≤ 500 | `''` | external / registration button; **activities use their existing `link`** (no `externalUrl` key) |
+| `externalLabelAr` / `externalLabelEn` | string ≤ 80 | `''` | custom button label (UI falls back to `openPage`) |
+| `contactNoteAr` / `contactNoteEn` | string ≤ 500 | `''` | how to contact / register |
+
+- Rules: `detailKeys()` is concatenated to the 7 allow-lists; each also allows `image` and the phone/link keys it
+  lacked (`contactPhone` except clinics/facilities, `externalUrl` except activities). The new text keys must be
+  strings (`''` when cleared; the admin form never writes `null`), the shared phone/link keys keep accepting `null`.
+  `CustomField.isEmpty` = all four blank.
+- Media clean-up: `orphanedMediaIds(before, after)` accepts an `image` map **or** a `gallery` list on either side;
+  `extractDocMediaIds(doc)` / `orphanedDocMediaIds(before, after)` cover `image` + `gallery` together, so an inline
+  image moved between the cover and the gallery in one save is never deleted (used by PR #12's editor).
+- Writes: one request cannot carry a full 8-photo `gallery` **and** a full 15-row `extraFields` (Firestore's
+  1,000-expression cap) — save each list in its own update (PR #12 contract; `05-firebase.md`).
 
 ## `media/{mediaId}` — inline image bytes (PR #5)
 
@@ -116,12 +154,17 @@ Existence of `settings/church` = "database is seeded" (see `03-architecture.md`)
 | `bannerAr`, `bannerEn` | string ≤ 500 | banner shows only if enabled **and** some text |
 | `bannerLink` | string ≤ 500 | `''`, in-app path `/…`, or `http(s)://host.tld…` (rules regex mirrors `isValidUrl(allowPath: true)`) |
 | `theme` | `burgundy\|navy\|green\|brown\|purple` | unknown → burgundy (`ThemePresets.all` ARGB values) |
+| `pageHeaders` | map `<pageKey, PageCustom>` (PR #11) | `{}`. Keys = `CustomizablePages.all`: `about, schedule, education, activities, clinics, services, contact, ask`; each entry `{titleAr, titleEn` ≤ 200, `subtitleAr, subtitleEn` ≤ 300, `introAr, introEn` ≤ 1500`}` (all 6 keys written). Unknown pages / non-maps / empty entries are dropped by `fromMap`; `toMap` writes non-empty entries only. `pageHeader(key)` → `PageCustom.empty` when unset. Rendering: PR #13 |
+| `footer` | map (PR #11, FR-G-04) | `{showPhones: true, showSocials: true, showQuickLinks: true, noteAr: '', noteEn: ''}` (`FooterConfig`); notes ≤ 500. Rendering: PR #13 |
 | `updatedAt`, `updatedBy` | | stampOk |
 
 - `FeatureSettings.defaults` (everything on) is used before the doc loads and when it does not exist.
 - **Seed** (`gen_seed.py`): every section on **except `clinics: false`** (PR 1) — `/clinics` stays off until the
   church office confirms the clinics and their booking numbers. Live docs keep whatever the admin set.
 - `toMap()` always writes **all** 16 section keys explicitly. Live docs saved before PR #5 lack `media` → on.
+- The seed (PR #11) adds `pageHeaders: {}` and the default `footer` map; live docs get them with
+  `node tool/seed_firestore.js --fill-missing` (adds absent fields only) or on the next save in /admin. Missing =
+  defaults, so nothing changes until then.
 - `HomeBlocks.requires`: `alerts→alerts`, `nextMass→schedule`, `quickContacts→contactInfo`,
   `milestones→milestones`, `map→contactInfo` (block disappears when its section is off). `directory` and `banner`
   have no section.
