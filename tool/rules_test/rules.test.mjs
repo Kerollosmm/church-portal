@@ -651,6 +651,45 @@ describe('PR #11: item detail pages', () => {
     await assertFails(updateDoc(ref, { contactNoteAr: ['x'] }));
   });
 
+  // Codex P2 / CodeRabbit (PR #11): the joined-string validators must not turn a number
+  // (or a bool / list) into text, accept the text 'null' for a null field, or
+  // take numbers as strings.
+  test('text fields reject non-strings; weekday, year and image w/h reject strings', async () => {
+    const ed = db(EDITOR);
+    for (const col of COLS) await assertSucceeds(setDoc(doc(ed, col, 't'), base[col]));
+    const bad = {
+      meetings: [{ nameEn: 5 }, { hallAr: true }, { notes: ['x'] }, { start: 700 }, { facebookUrl: 1 }, { weekday: '5' },
+        { weekday: 'null' }, { contactPhone: 123 }, { contactPhone: true }, { whatsappUrl: 'null' }, { facebookUrl: 'null' },
+        { externalUrl: 'null' }, { whatsapp: 123 }],
+      activities: [{ contactPhone: 123 }, { titleEn: 5 }, { descAr: 1 }, { link: 2 }, { category: false }],
+      clinics: [{ bookingPhone: 123 }, { whatsapp: 123 }, { specialtyEn: 5 }, { degreeAr: 1 }],
+      facilities: [{ phone: 123 }, { nameEn: 5 }, { hoursAr: 9 }, { type: 1 }],
+      priests: [{ nameEn: 5 }, { bioAr: 1 }, { ordinationDate: 1990 }, { rank: 'null' }, { status: 'null' }, { status: 5 },
+        { rank: '' }, { externalUrl: 'null' }],
+      milestones: [{ titleEn: 5 }, { year: '2000' }, { year: 'null' }, { icon: 3 }, { contactPhone: 123 }],
+      saints: [{ nameEn: 5 }, { feastGregorian: 7 }, { bioEn: {} }],
+    };
+    for (const [col, list] of Object.entries(bad)) {
+      for (const patch of list) {
+        await assertFails(updateDoc(doc(ed, col, 't'), patch), `${col} ${JSON.stringify(patch)}`);
+        await assertFails(setDoc(doc(ed, col, 'n'), { ...base[col], ...patch }), `create ${col} ${JSON.stringify(patch)}`);
+      }
+    }
+    for (const w of [{ w: '800' }, { h: '600' }, { w: 'null' }]) {
+      await assertFails(updateDoc(doc(ed, 'saints', 't'), { image: { source: 'inline', mediaId: 'm1', ...w } }), JSON.stringify(w));
+    }
+    // The same fields with the right types (or null / absent) still pass.
+    await assertSucceeds(updateDoc(doc(ed, 'meetings', 't'), { nameEn: 'Youth', weekday: 5, start: '19:00', notes: null }));
+    await assertSucceeds(updateDoc(doc(ed, 'meetings', 't'), { weekday: null, hallAr: null }));
+    await assertSucceeds(updateDoc(doc(ed, 'activities', 't'), { contactPhone: '0123', titleEn: null }));
+    await assertSucceeds(updateDoc(doc(ed, 'facilities', 't'), { phone: '0123', hoursAr: '' }));
+    await assertSucceeds(updateDoc(doc(ed, 'clinics', 't'), { bookingPhone: null, whatsapp: '' }));
+    await assertSucceeds(updateDoc(doc(ed, 'priests', 't'), { rank: 'hegumen', status: null, ordinationDate: '1990-01-01' }));
+    await assertSucceeds(updateDoc(doc(ed, 'milestones', 't'), { year: 2000, icon: null }));
+    await assertSucceeds(updateDoc(doc(ed, 'milestones', 't'), { year: null }));
+    await assertSucceeds(updateDoc(doc(ed, 'saints', 't'), { image: { source: 'inline', mediaId: 'm1', w: 800, h: null } }));
+  });
+
   test('no duplicate inputs: clinics/facilities have no contactPhone, activities no externalUrl', async () => {
     const ed = db(EDITOR);
     await assertFails(setDoc(doc(ed, 'clinics', 'x'), { ...base.clinics, contactPhone: '0123' }));

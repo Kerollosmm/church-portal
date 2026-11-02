@@ -338,9 +338,10 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     final failedMsg = context.tr('deleteFailed', {'e': '{e}'});
     try {
       await widget.repo.delete(def.name, d.id);
-      // Best effort: the deleted item's inline image is no longer referenced.
+      // Best effort: the deleted item's inline cover image and gallery photos
+      // are no longer referenced.
       final media = widget.repo.media;
-      for (final id in orphanedMediaIds(d.data['image'], null)) {
+      for (final id in orphanedDocMediaIds(d.data, null)) {
         media?.delete(id).catchError((Object _) {});
       }
       messenger.showSnackBar(SnackBar(content: Text(deleted)));

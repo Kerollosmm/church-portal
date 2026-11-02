@@ -173,8 +173,9 @@ supersede them.
   change** (a stored value was validated when it was written), and text fields / list items are checked on one
   U+001F-joined string with regexes. Trade-offs: gallery items' `w`/`h` are not range-checked; extraFields rows must
   carry their 4 keys (extra keys not rejected) and need a title starting with a non-space (the form trims); page
-  headers carry exactly 6 keys; new detail text keys reject `null` (the form writes `''`); numbers in the collections'
-  optional text fields are tolerated as text. A single write cannot carry both full lists — PR #12 saves the gallery
+  headers carry exactly 6 keys; new detail text keys reject `null` (the form writes `''`). Optional text fields are
+  read inline as `(d.get(k, null) == null ? '' : d.k)` so non-strings are still rejected (review fix; a helper
+  function was measured too expensive). A single write cannot carry both full lists — PR #12 saves the gallery
   and the custom fields in their own updates.
   The assistant grounds detail text, custom fields, contacts and links only for `detailsEnabled` items (an unpublished
   draft never reaches it), respects `showContacts` / `showSocials` (+ the socials section) also for the items' existing

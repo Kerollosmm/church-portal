@@ -43,6 +43,13 @@ service cloud.firestore {
     function str(d, k, max) {
       return d.get(k, '') is string && d.get(k, '').size() <= max;
     }
+    // Optional text fields in the joined-string validators are read as
+    //   (d.get(k, null) == null ? '' : d.k)
+    // so absent or null reads '' and any other value as itself: a non-string
+    // (a number, a bool, a list) makes the string `+` fail and the write is
+    // denied (string() would turn 123 into '123' and let it pass as text).
+    // Written inline: a helper function costs several more of the 1,000
+    // expressions per request on every field.
     function reqString(d, k, max) {
       return k in d && d[k] is string && d[k].size() >= 1 && d[k].size() <= max;
     }
@@ -123,10 +130,13 @@ service cloud.firestore {
     // fields are checked on one joined string (U+001F separator; a non-string
     // makes `+` fail, so the write is denied) to stay within the 1,000
     // expressions Firestore evaluates per request (gallery: up to 8 images).
+    // w / h are read with string() ('null' when absent); a string such as
+    // '800' is rejected first.
     function validImage(i) {
       let s = i.source + '\u001f' + i.get('url', '') + '\u001f' + i.get('mediaId', '') + '\u001f' + i.get('alt', '')
         + '\u001f' + string(i.get('w', null)) + '\u001f' + string(i.get('h', null));
       return i.keys().hasOnly(['source', 'url', 'mediaId', 'alt', 'w', 'h'])
+        && !(i.get('w', null) is string) && !(i.get('h', null) is string)
         && s.matches('(inline\\x1f[^\\x1f]*\\x1f[A-Za-z0-9_-]{1,128}|(url|storage)\\x1fhttps://[^/\\s\\x1f]+[.][^/\\s\\x1f]+([/?#][^\\s\\x1f]*)?\\x1f[^\\x1f]{0,128})\\x1f[^\\x1f]{0,300}\\x1f(null|[1-9][0-9]{0,3}|10000)\\x1f(null|[1-9][0-9]{0,3}|10000)')
         && s.matches('[^\\x1f]*\\x1f[^\\x1f]{0,500}\\x1f[\\s\\S]*');
     }
@@ -176,13 +186,14 @@ service cloud.firestore {
     // Phone / link keys some collections already had (absent or null
     // accepted, as optString / optHttpUrl): contactPhone and whatsapp <= 20
     // chars; whatsappUrl, facebookUrl, externalUrl '' or an http(s) URL
-    // <= 500 chars. string() keeps null tolerated (it reads 'null').
+    // <= 500 chars. Absent / null reads '' (see the field helpers);
+    // non-strings are rejected.
     function validDetailContacts(d) {
-      let c = string(d.get('contactPhone', '')) + '\u001f' + string(d.get('whatsapp', '')) + '\u001f'
-        + string(d.get('whatsappUrl', '')) + '\u001f' + string(d.get('facebookUrl', '')) + '\u001f'
-        + string(d.get('externalUrl', ''));
+      let c = (d.get('contactPhone', null) == null ? '' : d.contactPhone) + '\u001f' + (d.get('whatsapp', null) == null ? '' : d.whatsapp) + '\u001f'
+        + (d.get('whatsappUrl', null) == null ? '' : d.whatsappUrl) + '\u001f' + (d.get('facebookUrl', null) == null ? '' : d.facebookUrl) + '\u001f'
+        + (d.get('externalUrl', null) == null ? '' : d.externalUrl);
       return c.matches('[^\\x1f]{0,20}\\x1f[^\\x1f]{0,20}\\x1f[^\\x1f]{0,500}\\x1f[^\\x1f]{0,500}\\x1f[^\\x1f]{0,500}')
-        && c.matches('[^\\x1f]*\\x1f[^\\x1f]*((\\x1fnull)|\\x1f|\\x1f[Hh][Tt][Tt][Pp][Ss]?://[^/ \\x1f]+[.][^/ \\x1f]+([/?#][^ \\x1f]*)?){3}');
+        && c.matches('[^\\x1f]*\\x1f[^\\x1f]*(\\x1f|\\x1f[Hh][Tt][Tt][Pp][Ss]?://[^/ \\x1f]+[.][^/ \\x1f]+([/?#][^ \\x1f]*)?){3}');
     }
     // Up to 8 images (unrolled: rules have no loops; the checks stop at the
     // list's size).
@@ -348,61 +359,65 @@ service cloud.firestore {
     }
 
     // Each collection's own fields, checked on one joined string (see
-    // validImage). string() keeps an absent / null optional field accepted
-    // (it reads '' / 'null'); required fields must be non-empty strings.
+    // validImage). Optional text fields are read as described with the field
+    // helpers (absent / null reads '', non-strings are rejected); required
+    // fields must be non-empty strings. Phone / link keys shared with
+    // validDetailContacts (meetings' facebookUrl / whatsappUrl, activities'
+    // contactPhone, clinics' whatsapp) are checked there whenever a write
+    // creates or changes them. Numbers (weekday, year) are read with string()
+    // ('null' when absent) after a string such as '5' is rejected.
     function ownMeeting(d) {
-      let o = d.stage + '\u001f' + d.nameAr + '\u001f' + string(d.get('nameEn', ''))
-        + '\u001f' + string(d.get('weekday', null)) + '\u001f' + string(d.get('start', ''))
-        + '\u001f' + string(d.get('end', '')) + '\u001f' + string(d.get('hallAr', ''))
-        + '\u001f' + string(d.get('hallEn', '')) + '\u001f' + string(d.get('facebookUrl', ''))
-        + '\u001f' + string(d.get('whatsappUrl', '')) + '\u001f' + string(d.get('notes', ''));
-      return o.matches('[^\\x1f]{1,40}\\x1f[^\\x1f]{1,300}\\x1f[^\\x1f]{0,300}\\x1f(null|[1-7])\\x1f(null||([01][0-9]|2[0-3]):[0-5][0-9])\\x1f(null||([01][0-9]|2[0-3]):[0-5][0-9])\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{0,300}\\x1f(null||[Hh][Tt][Tt][Pp][Ss]?://[^/ \\x1f]+[.][^/ \\x1f]+([/?#][^ \\x1f]*)?)\\x1f(null||[Hh][Tt][Tt][Pp][Ss]?://[^/ \\x1f]+[.][^/ \\x1f]+([/?#][^ \\x1f]*)?)\\x1f[^\\x1f]{0,300}')
-        && o.matches('[^\\x1f]*\\x1f[^\\x1f]*\\x1f[^\\x1f]*\\x1f[^\\x1f]*\\x1f[^\\x1f]*\\x1f[^\\x1f]*\\x1f[^\\x1f]*\\x1f[^\\x1f]*\\x1f[^\\x1f]{0,500}\\x1f[^\\x1f]{0,500}\\x1f[^\\x1f]*');
+      let o = d.stage + '\u001f' + d.nameAr + '\u001f' + (d.get('nameEn', null) == null ? '' : d.nameEn)
+        + '\u001f' + string(d.get('weekday', null)) + '\u001f' + (d.get('start', null) == null ? '' : d.start)
+        + '\u001f' + (d.get('end', null) == null ? '' : d.end) + '\u001f' + (d.get('hallAr', null) == null ? '' : d.hallAr)
+        + '\u001f' + (d.get('hallEn', null) == null ? '' : d.hallEn) + '\u001f' + (d.get('notes', null) == null ? '' : d.notes);
+      return !(d.get('weekday', null) is string)
+        && o.matches('[^\\x1f]{1,40}\\x1f[^\\x1f]{1,300}\\x1f[^\\x1f]{0,300}\\x1f(null|[1-7])\\x1f(|([01][0-9]|2[0-3]):[0-5][0-9])\\x1f(|([01][0-9]|2[0-3]):[0-5][0-9])\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{0,300}');
     }
     function ownActivity(d) {
-      let o = string(d.get('category', '')) + '\u001f' + d.titleAr
-        + '\u001f' + string(d.get('titleEn', '')) + '\u001f' + string(d.get('descAr', ''))
-        + '\u001f' + string(d.get('descEn', '')) + '\u001f' + string(d.get('scheduleAr', ''))
-        + '\u001f' + string(d.get('scheduleEn', '')) + '\u001f' + string(d.get('ageRange', ''))
-        + '\u001f' + string(d.get('contactPhone', '')) + '\u001f' + string(d.get('link', ''));
-      return o.matches('[^\\x1f]{0,40}\\x1f[^\\x1f]{1,300}\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{0,1000}[^\\x1f]{0,1000}\\x1f[^\\x1f]{0,1000}[^\\x1f]{0,1000}\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{0,60}\\x1f[^\\x1f]{0,20}\\x1f(null||[Hh][Tt][Tt][Pp][Ss]?://[^/ \\x1f]+[.][^/ \\x1f]+([/?#][^ \\x1f]*)?)')
-        && o.matches('[^\\x1f]*\\x1f[^\\x1f]*\\x1f[^\\x1f]*\\x1f[^\\x1f]*\\x1f[^\\x1f]*\\x1f[^\\x1f]*\\x1f[^\\x1f]*\\x1f[^\\x1f]*\\x1f[^\\x1f]*\\x1f[^\\x1f]{0,500}');
+      let o = (d.get('category', null) == null ? '' : d.category) + '\u001f' + d.titleAr
+        + '\u001f' + (d.get('titleEn', null) == null ? '' : d.titleEn) + '\u001f' + (d.get('descAr', null) == null ? '' : d.descAr)
+        + '\u001f' + (d.get('descEn', null) == null ? '' : d.descEn) + '\u001f' + (d.get('scheduleAr', null) == null ? '' : d.scheduleAr)
+        + '\u001f' + (d.get('scheduleEn', null) == null ? '' : d.scheduleEn) + '\u001f' + (d.get('ageRange', null) == null ? '' : d.ageRange)
+        + '\u001f' + (d.get('link', null) == null ? '' : d.link);
+      return o.matches('[^\\x1f]{0,40}\\x1f[^\\x1f]{1,300}\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{0,1000}[^\\x1f]{0,1000}\\x1f[^\\x1f]{0,1000}[^\\x1f]{0,1000}\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{0,60}\\x1f(|[Hh][Tt][Tt][Pp][Ss]?://[^/ \\x1f]+[.][^/ \\x1f]+([/?#][^ \\x1f]*)?)')
+        && o.matches('[^\\x1f]*\\x1f[^\\x1f]*\\x1f[^\\x1f]*\\x1f[^\\x1f]*\\x1f[^\\x1f]*\\x1f[^\\x1f]*\\x1f[^\\x1f]*\\x1f[^\\x1f]*\\x1f[^\\x1f]{0,500}');
     }
     function ownClinic(d) {
-      let o = d.specialty + '\u001f' + d.specialtyAr + '\u001f' + string(d.get('specialtyEn', ''))
-        + '\u001f' + d.doctorName + '\u001f' + string(d.get('degreeAr', ''))
-        + '\u001f' + string(d.get('degreeEn', '')) + '\u001f' + string(d.get('start', ''))
-        + '\u001f' + string(d.get('end', '')) + '\u001f' + string(d.get('bookingPhone', ''))
-        + '\u001f' + string(d.get('whatsapp', ''));
-      return o.matches('[^\\x1f]{1,40}\\x1f[^\\x1f]{1,300}\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{1,300}\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{0,300}\\x1f(null||([01][0-9]|2[0-3]):[0-5][0-9])\\x1f(null||([01][0-9]|2[0-3]):[0-5][0-9])\\x1f[^\\x1f]{0,20}\\x1f[^\\x1f]{0,20}')
+      let o = d.specialty + '\u001f' + d.specialtyAr + '\u001f' + (d.get('specialtyEn', null) == null ? '' : d.specialtyEn)
+        + '\u001f' + d.doctorName + '\u001f' + (d.get('degreeAr', null) == null ? '' : d.degreeAr)
+        + '\u001f' + (d.get('degreeEn', null) == null ? '' : d.degreeEn) + '\u001f' + (d.get('start', null) == null ? '' : d.start)
+        + '\u001f' + (d.get('end', null) == null ? '' : d.end) + '\u001f' + (d.get('bookingPhone', null) == null ? '' : d.bookingPhone);
+      return o.matches('[^\\x1f]{1,40}\\x1f[^\\x1f]{1,300}\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{1,300}\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{0,300}\\x1f(|([01][0-9]|2[0-3]):[0-5][0-9])\\x1f(|([01][0-9]|2[0-3]):[0-5][0-9])\\x1f[^\\x1f]{0,20}')
         && optList(d, 'days', 7) && d.get('days', []).hasOnly([1, 2, 3, 4, 5, 6, 7]) && optBool(d, 'active');
     }
     function ownFacility(d) {
-      let o = string(d.get('type', '')) + '\u001f' + d.nameAr + '\u001f' + string(d.get('nameEn', ''))
-        + '\u001f' + string(d.get('descAr', '')) + '\u001f' + string(d.get('descEn', ''))
-        + '\u001f' + string(d.get('phone', '')) + '\u001f' + string(d.get('hoursAr', ''))
-        + '\u001f' + string(d.get('hoursEn', ''));
+      let o = (d.get('type', null) == null ? '' : d.type) + '\u001f' + d.nameAr + '\u001f' + (d.get('nameEn', null) == null ? '' : d.nameEn)
+        + '\u001f' + (d.get('descAr', null) == null ? '' : d.descAr) + '\u001f' + (d.get('descEn', null) == null ? '' : d.descEn)
+        + '\u001f' + (d.get('phone', null) == null ? '' : d.phone) + '\u001f' + (d.get('hoursAr', null) == null ? '' : d.hoursAr)
+        + '\u001f' + (d.get('hoursEn', null) == null ? '' : d.hoursEn);
       return o.matches('[^\\x1f]{0,40}\\x1f[^\\x1f]{1,300}\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{0,1000}[^\\x1f]{0,1000}\\x1f[^\\x1f]{0,1000}[^\\x1f]{0,1000}\\x1f[^\\x1f]{0,20}\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{0,300}');
     }
     function ownPriest(d) {
-      let o = d.name + '\u001f' + string(d.get('nameEn', '')) + '\u001f' + string(d.get('photoUrl', ''))
-        + '\u001f' + string(d.get('rank', null)) + '\u001f' + string(d.get('status', null))
-        + '\u001f' + string(d.get('ordinationDate', '')) + '\u001f' + string(d.get('hegumenDate', ''))
-        + '\u001f' + string(d.get('departedDate', '')) + '\u001f' + string(d.get('bioAr', ''))
-        + '\u001f' + string(d.get('bioEn', ''));
-      return o.matches('[^\\x1f]{1,300}\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{0,500}\\x1f(null|hegumen|priest)\\x1f(null|serving|departed)\\x1f[^\\x1f]{0,10}\\x1f[^\\x1f]{0,10}\\x1f[^\\x1f]{0,10}\\x1f[^\\x1f]{0,1000}[^\\x1f]{0,1000}[^\\x1f]{0,1000}[^\\x1f]{0,1000}[^\\x1f]{0,1000}\\x1f[^\\x1f]{0,1000}[^\\x1f]{0,1000}[^\\x1f]{0,1000}[^\\x1f]{0,1000}[^\\x1f]{0,1000}');
+      let o = d.name + '\u001f' + (d.get('nameEn', null) == null ? '' : d.nameEn) + '\u001f' + (d.get('photoUrl', null) == null ? '' : d.photoUrl)
+        + '\u001f' + (d.get('ordinationDate', null) == null ? '' : d.ordinationDate) + '\u001f' + (d.get('hegumenDate', null) == null ? '' : d.hegumenDate)
+        + '\u001f' + (d.get('departedDate', null) == null ? '' : d.departedDate) + '\u001f' + (d.get('bioAr', null) == null ? '' : d.bioAr)
+        + '\u001f' + (d.get('bioEn', null) == null ? '' : d.bioEn);
+      return d.get('rank', null) in [null, 'hegumen', 'priest'] && d.get('status', null) in [null, 'serving', 'departed']
+        && o.matches('[^\\x1f]{1,300}\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{0,500}\\x1f[^\\x1f]{0,10}\\x1f[^\\x1f]{0,10}\\x1f[^\\x1f]{0,10}\\x1f[^\\x1f]{0,1000}[^\\x1f]{0,1000}[^\\x1f]{0,1000}[^\\x1f]{0,1000}[^\\x1f]{0,1000}\\x1f[^\\x1f]{0,1000}[^\\x1f]{0,1000}[^\\x1f]{0,1000}[^\\x1f]{0,1000}[^\\x1f]{0,1000}');
     }
     function ownMilestone(d) {
-      let o = d.titleAr + '\u001f' + string(d.get('titleEn', ''))
-        + '\u001f' + string(d.get('descAr', '')) + '\u001f' + string(d.get('descEn', ''))
-        + '\u001f' + string(d.get('year', null)) + '\u001f' + string(d.get('icon', ''));
-      return o.matches('[^\\x1f]{1,300}\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{0,1000}[^\\x1f]{0,1000}\\x1f[^\\x1f]{0,1000}[^\\x1f]{0,1000}\\x1f(null|[1-9][0-9]{0,2}|1[0-9]{3}|2[01][0-9]{2}|2200)\\x1f[^\\x1f]{0,40}');
+      let o = d.titleAr + '\u001f' + (d.get('titleEn', null) == null ? '' : d.titleEn)
+        + '\u001f' + (d.get('descAr', null) == null ? '' : d.descAr) + '\u001f' + (d.get('descEn', null) == null ? '' : d.descEn)
+        + '\u001f' + string(d.get('year', null)) + '\u001f' + (d.get('icon', null) == null ? '' : d.icon);
+      return !(d.get('year', null) is string)
+        && o.matches('[^\\x1f]{1,300}\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{0,1000}[^\\x1f]{0,1000}\\x1f[^\\x1f]{0,1000}[^\\x1f]{0,1000}\\x1f(null|[1-9][0-9]{0,2}|1[0-9]{3}|2[01][0-9]{2}|2200)\\x1f[^\\x1f]{0,40}');
     }
     function ownSaint(d) {
-      let o = d.nameAr + '\u001f' + string(d.get('nameEn', '')) + '\u001f' + string(d.get('bioAr', ''))
-        + '\u001f' + string(d.get('bioEn', '')) + '\u001f' + string(d.get('feastCopticAr', ''))
-        + '\u001f' + string(d.get('feastCopticEn', '')) + '\u001f' + string(d.get('feastGregorian', ''))
-        + '\u001f' + string(d.get('feastGregorianAr', ''));
+      let o = d.nameAr + '\u001f' + (d.get('nameEn', null) == null ? '' : d.nameEn) + '\u001f' + (d.get('bioAr', null) == null ? '' : d.bioAr)
+        + '\u001f' + (d.get('bioEn', null) == null ? '' : d.bioEn) + '\u001f' + (d.get('feastCopticAr', null) == null ? '' : d.feastCopticAr)
+        + '\u001f' + (d.get('feastCopticEn', null) == null ? '' : d.feastCopticEn) + '\u001f' + (d.get('feastGregorian', null) == null ? '' : d.feastGregorian)
+        + '\u001f' + (d.get('feastGregorianAr', null) == null ? '' : d.feastGregorianAr);
       return o.matches('[^\\x1f]{1,300}\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{0,1000}[^\\x1f]{0,1000}[^\\x1f]{0,1000}[^\\x1f]{0,1000}[^\\x1f]{0,1000}\\x1f[^\\x1f]{0,1000}[^\\x1f]{0,1000}[^\\x1f]{0,1000}[^\\x1f]{0,1000}[^\\x1f]{0,1000}\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{0,300}');
     }
 

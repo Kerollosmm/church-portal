@@ -119,7 +119,7 @@ void main() {
         'forms.example.org/register-x', 'fb.example.org/choir',
       ];
       final on = _build(d: _details());
-      for (final l in links.take(5)) {
+      for (final l in links) {
         expect(on, contains(l), reason: l);
       }
       expect(on, contains('Register: https://forms.example.org/register-x'));
@@ -151,6 +151,37 @@ void main() {
       });
       final t = _build(meetings: [m]);
       expect(t, contains('- اجتماع [youth]: no fixed day (ask the church) ; Facebook https://facebook.com/m; WhatsApp https://chat.whatsapp.com/m'));
+    });
+
+    test('custom-field titles and values are clipped per language', () {
+      final d = {
+        ..._details(),
+        'extraFields': [
+          {'titleAr': 'ع' * 150, 'titleEn': 'T' * 150, 'valueAr': 'ق' * 2000, 'valueEn': 'V' * 2000},
+        ],
+      };
+      final t = _build(d: d, clinics: const [], meetings: const [], activities: const []);
+      expect(t, contains('${'T' * 100}…'));
+      expect(t, isNot(contains('T' * 101)));
+      expect(t, contains('${'V' * 300}…'));
+      expect(t, isNot(contains('V' * 301)));
+      expect(t, isNot(contains('ق' * 301)));
+    });
+
+    test('detail signature changes when details, contacts or links are withdrawn', () {
+      String sig(Map<String, dynamic> d, [FeatureSettings f = FeatureSettings.defaults]) => assistantDetailSignature(
+            features: f,
+            meetings: [Meeting.fromMap('m', {'stage': 'youth', 'nameAr': 'اجتماع', ...d})],
+          );
+      final on = sig(_details());
+      expect(sig(_details()), on);
+      expect(sig(_details(enabled: false)), isNot(on));
+      expect(sig(_details(contacts: false)), isNot(on));
+      expect(sig(_details(socials: false)), isNot(on));
+      expect(sig(_details(), FeatureSettings.fromMap({'sections': {'socials': false}})), isNot(on));
+      expect(sig({..._details(), 'detailsEn': 'edited'}), isNot(on));
+      // A disabled page still tracks the contact / link toggles of the item's own fields.
+      expect(sig(_details(enabled: false, contacts: false)), isNot(sig(_details(enabled: false))));
     });
   });
 }

@@ -92,7 +92,8 @@ and seeded documents look and behave exactly as before. The data model, rules an
   `CustomField.isEmpty` = all four blank.
 - Media clean-up: `orphanedMediaIds(before, after)` accepts an `image` map **or** a `gallery` list on either side;
   `extractDocMediaIds(doc)` / `orphanedDocMediaIds(before, after)` cover `image` + `gallery` together, so an inline
-  image moved between the cover and the gallery in one save is never deleted (used by PR #12's editor).
+  image moved between the cover and the gallery in one save is never deleted (used by PR #12's editor, and since PR
+  #11's review fix by the admin list's delete handler, so deleting an item also removes its inline gallery photos).
 - Writes: one request cannot carry a full 8-photo `gallery` **and** a full 15-row `extraFields` (Firestore's
   1,000-expression cap) — save each list in its own update (PR #12 contract; `05-firebase.md`).
 
@@ -112,7 +113,8 @@ content docs so **lists never download image bytes** (a card fetches its own ima
 | `refs` | list ≤ 20 | reserved (not written yet) |
 
 Public read; admins create/update/delete (`validMedia`). Written by `FirestoreMediaRepository.upload`; deleted best
-effort when an image is replaced/removed in the editor or its item is deleted (`orphanedMediaIds`). Not seeded.
+effort when an image is replaced/removed in the editor (`orphanedMediaIds`) or its item is deleted (cover + gallery,
+`orphanedDocMediaIds`). Not seeded.
 
 ## `settings/church` — `ChurchSettings`
 

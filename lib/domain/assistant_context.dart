@@ -285,12 +285,41 @@ String buildAssistantInstruction({
   return b.toString();
 }
 
+/// What the instruction grounds from the items' detail pages and their
+/// contact / link toggles. The assistant page clears its replayed chat history
+/// when this changes, so answers quoting details, phones or links an admin has
+/// since withdrawn (e.g. `detailsEnabled` switched off) are not sent again.
+String assistantDetailSignature({
+  required FeatureSettings features,
+  List<Clinic> clinics = const [],
+  List<Meeting> meetings = const [],
+  List<Activity> activities = const [],
+  List<Facility> facilities = const [],
+  List<Priest> priests = const [],
+  List<Saint> saints = const [],
+  List<Milestone> milestones = const [],
+}) {
+  final all = [
+    for (final x in clinics) x.details,
+    for (final x in meetings) x.details,
+    for (final x in activities) x.details,
+    for (final x in facilities) x.details,
+    for (final x in priests) x.details,
+    for (final x in saints) x.details,
+    for (final x in milestones) x.details,
+  ];
+  return [
+    for (final d in all) '${d.showContacts ? 1 : 0}${_showLinks(d, features) ? 1 : 0}${_itemDetails(d, features)}',
+  ].join('\u0000');
+}
+
 /// Item links (existing or detail-page) are grounded only when the item shows
 /// its social links and the socials section is on.
 bool _showLinks(ItemDetails d, FeatureSettings f) => d.showSocials && f.enabled(Sections.socials);
 
 /// What an enabled detail page adds to an item's line: its long text (each
-/// language clipped to 300 chars), custom fields, contacts (when the item
+/// language clipped to 300 chars), custom fields (titles clipped to 100 and
+/// values to 300 chars per language, at most 15 rows), contacts (when the item
 /// shows them) and links (when it shows social links and the socials section
 /// is on). Never any image / gallery data. [phone] / [whatsapp] / [groupLinks]
 /// / [external] are false where the line already carries that field.
@@ -307,8 +336,11 @@ String _itemDetails(
   final details = _bi(_clip(d.detailsAr.trim(), 300), _clip(d.detailsEn.trim(), 300));
   if (details.isNotEmpty) out.write(' Details: $details.');
   final fields = [
-    for (final x in d.extraFields)
-      [_bi(x.titleAr.trim(), x.titleEn.trim()), _bi(x.valueAr.trim(), x.valueEn.trim())].where((v) => v.isNotEmpty).join(': '),
+    for (final x in d.extraFields.take(15))
+      [
+        _bi(_clip(x.titleAr.trim(), _fieldTitleClip), _clip(x.titleEn.trim(), _fieldTitleClip)),
+        _bi(_clip(x.valueAr.trim(), _fieldValueClip), _clip(x.valueEn.trim(), _fieldValueClip)),
+      ].where((v) => v.isNotEmpty).join(': '),
   ].where((v) => v.isNotEmpty);
   if (fields.isNotEmpty) out.write(' ${fields.join('; ')}.');
   if (d.showContacts) {
@@ -339,6 +371,12 @@ String _itemDetails(
 String _bi(String ar, String en) => en.isNotEmpty && ar.isNotEmpty ? '$en ($ar)' : (en.isNotEmpty ? en : ar);
 
 String _at(String place) => place.isNotEmpty ? ' at $place' : '';
+
+// Custom fields can hold 150-char titles and 2,000-char values per language
+// (15 rows): clipped like the detail text so one item cannot flood the
+// instruction.
+const _fieldTitleClip = 100;
+const _fieldValueClip = 300;
 
 String _clip(String s, int max) => s.length <= max ? s : '${s.substring(0, max).trimRight()}…';
 
