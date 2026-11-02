@@ -13,7 +13,9 @@ stream re-binding, per-route canonical + `noindex` via `setDocumentRouteMeta`, U
 `/clinics` out of the sitemap while off, `validFeatures` on `keysAllowed` + `optUrlOrPath`, `deploy-rules` gated on
 `build`) plus PR #11 of the customization plan (`feat/pr11-domain-rules-seed`: item detail-page models, page
 headers / footer settings, prefix-aware section gating, budget-aware change-gated rules, seed maps and assistant
-grounding — ADR-020; admin studio and public pages follow in PRs #12–#13).
+grounding — ADR-020) plus PR #12 (`feat/pr12-admin-customization-studio`: grouped `DocEditor` with collapsible
+detail / photos / contacts cards, multi-image gallery, split saves within the rules budget, Page headers + Footer
+cards in `FeaturesEditor`, 320 px / 200 % admin polish); public pages follow in PR #13.
 
 > **Golden rule:** read this folder before changing anything, and update it in the same PR as every change that
 > alters behaviour, data shape, rules, workflows, content status or open tasks.

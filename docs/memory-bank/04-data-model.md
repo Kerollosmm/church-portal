@@ -44,7 +44,7 @@ changes** (`changedKeys`; a create checks all keys) — see `05-firebase.md` (ex
 Allowed (and shown) on **`priests`** (serving + departed), **`saints`**, **`milestones`**, **`activities`**,
 **`alerts`**, **`seasons`** (`imageCollections` in `admin_schema.dart`). Since PR #11 the model (`Meeting.image`,
 `Clinic.image`, `Facility.image`) and the rules also accept it on **`meetings`**, **`clinics`** and **`facilities`**;
-the admin field and the cards follow in PR #12 / #13. It is **never required**; absent / `null` /
+since PR #12 the admin form has the field there too (cards follow in PR #13). It is **never required**; absent / `null` /
 malformed = no image and the card keeps its icon / initials placeholder. The seed has no images.
 
 | Key | Type | Rule |
@@ -68,7 +68,8 @@ On the **7 detail collections** `meetings`, `activities`, `clinics`, `facilities
 `saints` (**not** `liturgies`, `seasons`, `alerts`) every model has `details` (`ItemDetails.fromMap(doc)`;
 `ItemDetails.none` for const constructors). All keys are optional and **default to today's behaviour**, so existing
 and seeded documents look and behave exactly as before. The data model, rules and assistant grounding are in place
-(PR #11); the admin editor is PR #12 and the public `/<section>/:id` pages PR #13.
+(PR #11); the admin editor since PR #12 (grouped `DocEditor`, `07-admin-dashboard.md`) and the public
+`/<section>/:id` pages PR #13.
 
 | Key | Type / cap (rules) | Default | Meaning |
 |---|---|---|---|
@@ -95,7 +96,8 @@ and seeded documents look and behave exactly as before. The data model, rules an
   image moved between the cover and the gallery in one save is never deleted (used by PR #12's editor, and since PR
   #11's review fix by the admin list's delete handler, so deleting an item also removes its inline gallery photos).
 - Writes: one request cannot carry a full 8-photo `gallery` **and** a full 15-row `extraFields` (Firestore's
-  1,000-expression cap) — save each list in its own update (PR #12 contract; `05-firebase.md`).
+  1,000-expression cap) — save each list in its own update. Since PR #12 the admin editor does exactly that
+  (`splitSavePayload`: other fields → `gallery` → `extraFields`; `05-firebase.md`).
 
 ## `media/{mediaId}` — inline image bytes (PR #5)
 

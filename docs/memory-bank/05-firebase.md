@@ -113,7 +113,10 @@ Notable details:
   `setAdmin` writes; PR #11's detail pages (worst-case create + 8-photo gallery + 15 rows + list-with-text saves on all
   7 collections, optional/cleared values, cover image on meetings/clinics/facilities, gallery/extraFields shapes,
   `javascript:` links, bools/lengths, no duplicate inputs, no detail keys on liturgies/seasons/alerts, 80-key cap,
-  stored lists re-checked only when changed) and `pageHeaders`/`footer`. 49 tests.
+  stored lists re-checked only when changed) and `pageHeaders`/`footer`. PR #12 adds "admin editor save paths": the
+  real write sequence of `DocEditor` (max-size create, then the 8-photo gallery, then 15 rows, on all 7
+  collections; an every-field edit; both lists in one write denied) and of `FeaturesScreen` (whole document, then
+  `pageHeaders` alone; the combined first save is denied; a reset page is removed). 54 tests.
 - **Expression budget (measured in PR #11):** Firestore evaluates at most **1,000 expressions per request**, shared by
   every `match` block the path hits (that is why `validContent` keeps its `col in [...]` early exit: without it
   `settings/church` writes ran out). Literals, field reads and `+` all count; an unrolled list item costs ~10. The
@@ -122,7 +125,14 @@ Notable details:
   on joined strings. Measured headroom (emulator, docId-length pad; 1 unit ≈ 8.5 expressions): create of a fully
   filled doc 7–17 units (clinics lowest; 18–28 before the PR #11 type fix); update writing the full 8-photo gallery
   19–23; 15 full `extraFields` rows 17–22; a list plus detail text in one save 4–10; an ordinary edit 56–61; **both lists at max in one write: over the cap** (denied, fail-closed) — PR #12
-  saves each list in its own update. Adding checks: measure first; keep per-item work to one regex.
+  saves each list in its own update. **`settings/features`:** the whole document plus all 8 changed page headers in
+  one write is also over the cap, so since PR #12 `FeaturesScreen` writes everything else first and `pageHeaders`
+  on its own, only when it changed (`featuresSaveWrites`). Adding checks: measure first; keep per-item work to one
+  regex.
+- **Merge writes (PR #12):** `AdminRepository.save` (existing docs) and `saveDoc` use
+  `SetOptions(mergeFields: <written keys>)`: untouched fields stay (legacy keys never block an edit), but a written
+  map field is **replaced**, not deep-merged — a page header the admin resets disappears from `pageHeaders`, and a
+  cover image switched from inline to a link loses its old `mediaId`/`w`/`h`.
 
 ## Cloud Storage (not used — Spark)
 

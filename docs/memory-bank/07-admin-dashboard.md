@@ -76,7 +76,17 @@ cancels and re-subscribes every stream (BUG-18; `ChurchInfoScreen` does the same
   trailing (PR #10).
 - Hero title/subtitle AR/EN (≤ 200/300), announcement banner (on/off, AR/EN text ≤ 500, link validated by
   `isValidUrl(allowPath: true)`), **site colour** (5 `ThemePresets`; the selected chip has a white label, PR #10).
-- "Save changes" writes `FeatureSettings.toMap()` with `saveDoc` (merge + stamp). If the doc does not exist yet, a
+- **Page titles, subtitles & intro notes** (PR #12): one collapsible row per customizable page (`about, schedule,
+  education, activities, clinics, services, contact, ask` — `ValueKey('page-<key>')`, `maintainState: true`) with
+  title AR/EN ≤ 200, subtitle AR/EN ≤ 300, intro AR/EN ≤ 1500 (`ValueKey('features-page-<key>-<field>')`); a
+  **«مخصّص / Customized»** badge while any field is filled and **«إعادة للافتراضي / Reset»** to clear the page
+  (empty = the page's built-in text). A too-long field opens its row on Save.
+- **Site footer (FR-G-04)** (PR #12): switches *Show phone numbers / social links / quick links*
+  (`ValueKey('footer-<key>')`) and footer notes AR/EN ≤ 500 (`ValueKey('footer-noteAr|noteEn')`). Rendering is PR #13.
+- "Save changes" writes `FeatureSettings.toMap()` with `saveDoc` (mergeFields + stamp) — since PR #12 in two writes
+  when the page headers changed: everything else, then `{pageHeaders}` (`featuresSaveWrites`; the whole doc plus
+  8 page headers in one write exceeds the rules' expression cap). `collect()` round-trips `pageHeaders`/`footer`, so
+  the echo of your own save keeps the form (BUG-12). If the doc does not exist yet, a
   note says everything is on by default. If someone else saves while you have unsaved edits, a banner offers a reload
   instead of wiping your edits. The snapshot of **your own save** no longer remounts the form (BUG-12):
   `isEchoOfEditor(shown, latest, editorValues)` (`admin_validators.dart`) — if only metadata changed or every changed
@@ -98,7 +108,12 @@ For each `CollectionDef`:
   `+ ?lang=en` when the dashboard is in English — `publicPathFor`) in a new tab on web (`Uri.base.resolve`), or
   navigates there on mobile.
 - Tile: title (`titleKeys`), subtitle (weekday, date, time range, season/stage/category/type/specialty labels,
-  ⛔ inactive, start/end), tags *Hidden* / *Unconfirmed*, "updated by … at …".
+  ⛔ inactive, start/end), tags *Hidden* / *Unconfirmed*, "updated by … at …". Since PR #12 an item with
+  `detailsEnabled` shows a **«صفحة تفاصيل / Detail page»** badge (own line under the title), and when it is also
+  visible an **Open detail page on site** icon (`ValueKey('openItem-<id>')`, `itemPublicPathFor`: e.g.
+  `/clinics/<id>`, `/about/saints/<id>`; the routes arrive in PR #13).
+- The list `StreamBuilder` is keyed by `ObjectKey(_stream)` (also on Messages and Admins, PR #12): after a backend
+  switch the old list is never shown while the new one loads.
 - 👁 **hide/show** (`update(visible)`) — only when the collection has a `visible` field (not seasons).
 - **Drag to reorder** — or tap **Move up / Move down** on each tile (`ValueKey('moveUp-<id>')`, WCAG 2.5.7; under
   600 px they sit in their own row under the subtitle so the title keeps its width) —
@@ -111,7 +126,9 @@ For each `CollectionDef`:
   **kept** — Firestore may still commit the queued write pointing at them; any other error deletes them (BUG-13).
   Note: `AdminRepository.save`/`saveDoc` set no timeout of their own today (the only 15 s timeout is the role read
   in `adminRole`), so this path applies to a timeout raised by a caller/backend wrapper.
-- **Add** (FAB) / tap to **edit** → full-screen `DocEditor`; **delete** with confirmation dialog.
+- **Add** (FAB) / tap to **edit** → full-screen `DocEditor`; **delete** with confirmation dialog (also deletes the
+  item's inline cover and gallery `media` docs, `orphanedDocMediaIds`). A new item saved in several writes keeps the id
+  the first write created (the editor's `onSave` remembers it).
 
 | Screen id | Collection | Orderable | Has visible | Has sample | Notes |
 |---|---|---|---|---|---|
@@ -139,12 +156,29 @@ For each `CollectionDef`:
   `endsAt` after `startsAt`.
 - New docs write all collected values (+ `newDefaults`); **existing docs write only changed fields**
   (`changedFields`, deep compare) with merge — never overwriting another admin's concurrent edits to other fields.
+- **Field groups (PR #12):** `FieldDef.group` — `basic` fields stay open at the top; on the 7 detail collections
+  `details` (**«صفحة التفاصيل والحقول الإضافية»**: `detailsEnabled` off by default, details AR/EN ≤ 10,000, up to
+  15 *extra fields* rows title AR (required, ≤ 150) / title EN / value AR/EN ≤ 2000), `media` (**«الصور ومعرض
+  الصور»**: cover `image`, `showDetailImages`, `gallery`) and `contacts` (**«التواصل والروابط»**: `showContacts`,
+  `showSocials`, the collection's own phone — `contactPhone`, clinics `bookingPhone`, facilities `phone` — WhatsApp,
+  WhatsApp group/channel, Facebook, YouTube, Instagram, the external link — `externalUrl`, activities `link` — its
+  button text AR/EN ≤ 80 and how-to-contact notes AR/EN ≤ 500) are `ExpansionTile` cards (`ValueKey('group-<g>')`,
+  `maintainState: true` so collapsed fields still validate and save) with live pills («مفعّل / Enabled», «3 حقول /
+  3 fields», «4 صور / 4 photos», «2 مُعبّأ / 2 filled»). Save with an invalid field in a closed card opens that card.
+  Liturgies, seasons, alerts and church info stay a flat form.
+- **Split saves (PR #12, `splitSavePayload`):** the editor writes everything else first (it creates a new doc), then
+  a non-empty `gallery`, then non-empty `extraFields` — one write with both full lists exceeds the rules' 1,000-
+  expression cap. If a later write fails, the earlier ones stay saved, the form stays dirty and a retry sends only
+  the rest; uploads that no saved write references are deleted (not on a timeout, BUG-13).
+- Choice / weekday dropdowns are `isExpanded` (long labels ellipsize at 320 px / 200 %); object-list row actions
+  (move up/down, remove) are a `Wrap`.
 - Every save stamps `updatedAt` (server time) and `updatedBy` (email) via `AdminRepository._stamp`.
 - Boolean defaults: `missingBool` (value assumed when an existing doc lacks the field, e.g. `visible` = true,
   clinic `active` = true) vs `newBool` (value for new docs, e.g. `sample` = false).
 
 ### Optional image field (`FieldType.image`, PR #5)
-On priests, departed fathers, saints, milestones, activities, alerts and seasons the form has **«الصورة (اختياري) /
+On priests, departed fathers, saints, milestones, activities, alerts and seasons — and since PR #12 meetings, clinics
+and facilities (in the *Photos & gallery* card on the 7 detail collections) — the form has **«الصورة (اختياري) /
 Image (optional)»** with a 96 px preview and:
 - **Upload image** (رفع صورة): opens the device gallery/file picker (`image_picker`). The file is resized and
   compressed **in the browser/app before anything is stored** (`prepareUpload`, `lib/data/image_processing.dart`):
@@ -163,14 +197,27 @@ Image (optional)»** with a 96 px preview and:
   Firestore console → `media` → delete ids not referenced by any content doc's `image.mediaId` (open task).
 - Upload is disabled when the backend has no `MediaRepository` (URL still works). Switch all images off/on in
   **Sections & home page → «الصور» / Images**.
+- **BR-11 / FR-E-04:** on meetings (Sunday school, `/church-education`) the cover image and the gallery show a red
+  warning «خصوصية الأطفال: يُحظر رفع صور واضحة للأطفال أو القُصَّر في مدارس الأحد» / "Children's privacy: never
+  upload identifiable photos of minors in Sunday School" (`ValueKey('fieldHint-<key>')`).
+
+### Gallery (`FieldType.imageList`, PR #12)
+`gallery` on the 7 detail collections: up to **8** photos, each with a preview, alt text (≤ 300), **Move earlier /
+Move later** and **Remove**; **Upload photo** (same resize/compress pipeline, stored only on Save) and **Add image
+link** (https). "n of 8" counter; both add buttons disable at 8. On Save pending photos are uploaded, the list is
+written in its own update, and removed or replaced inline photos are deleted (`orphanedDocMediaIds`, so a photo moved
+between the cover and the gallery is kept). Photos show on the item's detail page (PR #13) when `showDetailImages`
+and the Images section are on.
 
 ### Contact messages (`MessagesScreen`) → `contact_messages`
+(PR #12: the name/time header and the action row wrap at 320 px / 200 %.)
 Newest first (`createdAt`), filter chips **new** (default) / handled / all; each card: name, time, message, phone
 (call), email (`mailto:`);
 **Mark handled / Mark new** (`update(status)`), copy to clipboard, delete with confirmation.
 
 ### Admins (`AdminsScreen`, owners only) → `admins`
-List with role dropdown (owner/editor) and remove button — disabled for yourself ("(you)"). **Add admin** dialog: UID
+List with role dropdown (owner/editor) and remove button — disabled for yourself ("(you)"); since PR #12 they wrap
+under the UID (the role menu ellipsizes) so nothing overflows at 320 px / 200 %. **Add admin** dialog: UID
 (validated by `isValidAdminUid`: 1–128 chars, no `/`; copy it from Firebase console → Authentication → Users), email,
 role. The Auth user itself must be created in the console (or via the Seed workflow) first. Since PR #10
 `setAdmin` stamps `admins/{uid}` with `updatedAt`/`updatedBy` (`_stamp`), like every other admin write.

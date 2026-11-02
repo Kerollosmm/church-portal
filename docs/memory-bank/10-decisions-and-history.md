@@ -183,6 +183,14 @@ supersede them.
 - **Consequences:** production `settings/features` needs `seed_firestore.js --fill-missing` (or one admin save) to
   carry the new maps — missing means defaults, so nothing breaks meanwhile. Rules measurements and the margins are in
   `05-firebase.md`.
+- **PR #12 (admin studio):** fields carry a `FieldGroup` (`basic` open; `details`, `media`, `contacts` collapsible
+  cards with `maintainState: true`, auto-opened on a validation error); each collection's own phone / link field moves
+  into *Contacts* (no duplicate keys). The editor saves in up to three writes (`splitSavePayload`: other fields →
+  `gallery` → `extraFields`); a failed later write keeps the earlier ones (a retry sends only the rest) and deletes
+  only the uploads nothing saved references. `FeaturesScreen` likewise writes `pageHeaders` on its own
+  (`featuresSaveWrites`) — the whole doc plus 8 page headers in one write was measured over the cap. Writes merge with
+  `mergeFields` (map fields replaced, so a reset page header is removed). Not atomic by design: an interrupted save
+  leaves a valid document with part of the edit, shown as still unsaved in the form.
 
 ## Timeline
 
@@ -201,5 +209,7 @@ supersede them.
 | 2 Nov 2026 | **PR #10** — "PR #10: post-audit polish" (`fix/pr10-post-audit-polish`) | Assistant header uses the Cairo date/weekday; dated liturgies (even with a weekday) are grounded only as current one-off services (`isDatedLiturgyCurrent`); admin chip contrast, narrow reflow, tooltips, `didUpdateWidget` re-binding on Features/Messages/Admins, stamped `setAdmin`; per-route canonical + `noindex` (`setDocumentRouteMeta`, amends ADR-019), URL fragments kept by `?lang=` sync, `/clinics` commented out of the sitemap; `validFeatures` on `keysAllowed` + `optUrlOrPath`, `storage.rules` contentType guard, `deploy-rules` needs `build`. |
 
 | 2 Nov 2026 | **PR #11** — "Domain models, security rules, seed & AI grounding" (`feat/pr11-domain-rules-seed`) | Customization plan PR #11: `ItemDetails`/`CustomField` on the 7 detail collections, cover `image` on meetings/clinics/facilities, gallery-aware media orphan helpers, prefix-aware `sectionsForPath`/`routeEnabled`, `PageCustom` `pageHeaders` + `FooterConfig` `footer`; budget-aware, change-gated rules (ADR-020) + 14 emulator tests; seed maps; assistant grounding for milestones and detail pages. |
+
+| 2 Nov 2026 | **PR #12** — "Admin customization studio" (`feat/pr12-admin-customization-studio`) | Customization plan PR #12: `FieldGroup` + `FieldType.imageList`; detail / photos / contacts groups on the 7 collections (cover image now on meetings/clinics/facilities, BR-11 warning on meetings' photos); gallery upload / link / alt / reorder / remove (≤ 8) with orphan clean-up; split saves (`splitSavePayload`, `featuresSaveWrites`) and `mergeFields`; Page headers + Footer cards; detail badge and item link on list rows; `ObjectKey(_stream)` on lists, messages, admins; 320 px / 200 % reflow (row actions, messages, admins, dropdowns); emulator tests of the editors' write sequences. |
 
 Append new PRs to this table.

@@ -124,6 +124,9 @@ Normalises the service-account secret (first JSON object only, validates, `$RUNN
 - **Adding an image to another collection:** add `'image'` to its rules allow-list (the `common()` check validates
   it), `_imageField` to its `CollectionDef`, `final MediaImage? image` + `MediaImage.fromMap(m['image'])` to the
   model, and wrap its card's icon in `ItemImage(placeholder: <current icon>)`; add it to `imageCollections`.
+- **Admin field groups (PR #12):** a `FieldDef` with `group: FieldGroup.details | media | contacts` renders in that
+  collapsible card of `DocEditor` (default `basic`, always open). A list field that is heavy to validate in the
+  rules (like `gallery` / `extraFields`) must be saved in its own write — add its key to `separatelySavedKeys`.
 
 ## Checklist — add a new section / collection end-to-end
 

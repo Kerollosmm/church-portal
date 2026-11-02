@@ -137,7 +137,7 @@ Chat UI with intro bubble, 3 suggestion chips, 500-char input, disclaimer «إج
   (services), `/about/priests/*` (priests or departedPriests), `/about/saints/*` (saints), `/about/milestones/*`
   (milestones); other sub-paths follow their top-level page. The routes themselves arrive in PR #13.
 - `settings/features` also carries `pageHeaders` (per-page title / subtitle / intro overrides) and `footer`
-  (FR-G-04 options) since PR #11 (model + rules; admin cards PR #12, rendering PR #13).
+  (FR-G-04 options) since PR #11 (model + rules; admin cards since PR #12, rendering PR #13).
 - Per-item visibility: `visible: false` items never reach public pages (`publicItems`).
 - Gated pages wait for the first `settings/features` value (`featuresReadyProvider`) so switched-off content never
   flashes.
