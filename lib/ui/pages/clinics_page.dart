@@ -6,6 +6,7 @@ import '../../core/l10n.dart';
 import '../../core/launch.dart';
 import '../../core/theme.dart';
 import '../../domain/features.dart';
+import '../../domain/item_detail.dart';
 import '../../domain/models.dart';
 import '../../domain/rules.dart';
 import '../../state/providers.dart';
@@ -36,9 +37,12 @@ class _ClinicsPageState extends ConsumerState<ClinicsPage> {
   Widget build(BuildContext context) {
     final now = ref.watch(nowProvider).value ?? DateTime.now();
     return PageBody(
-      header: PageHeader(
+      header: CustomizablePageHeader(
+          pageKey: CustomizablePages.clinics,
+          
           title: context.tr('charityClinics'), subtitle: context.tr('clinicsIntro'), icon: Icons.local_hospital_rounded),
       children: [
+        const PageIntro(pageKey: CustomizablePages.clinics),
         AsyncSection<List<Clinic>>(
           provider: clinicsProvider,
           retry: clinicsProvider,
@@ -143,8 +147,15 @@ class ClinicCard extends StatelessWidget {
     final office = fallbackOfficePhone;
     final clinicName = context.pick(c.specialtyAr, c.specialtyEn);
     final days = c.days.map((d) => weekdayLabel(context, d)).join(context.isAr ? '، ' : ', ');
+    final detail = cardDetailPath(DetailKind.clinic, c.id, c.details);
+    // Turning an item's contacts off hides them everywhere (ADR-020).
+    final contacts = c.details.showContacts;
+    final doctorTitle =
+        TitleWithBadge(doctor, sample: c.sample, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16));
     return Card(
-      child: Padding(
+      child: DetailTapArea(
+        path: detail,
+        child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Wrap(spacing: 8, runSpacing: 6, children: [
@@ -152,7 +163,13 @@ class ClinicCard extends StatelessWidget {
             if (availableToday) Pill(context.tr('availableToday'), icon: Icons.check_circle),
           ]),
           const SizedBox(height: 10),
-          TitleWithBadge(doctor, sample: c.sample, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+          if (c.image == null)
+            doctorTitle
+          else
+            Row(children: [
+              CardImageLead(image: c.image!, label: doctor, enlargeOnTap: detail == null),
+              Expanded(child: doctorTitle),
+            ]),
           if (context.pick(c.degreeAr, c.degreeEn).isNotEmpty)
             Text(context.pick(c.degreeAr, c.degreeEn), style: const TextStyle(color: AppColors.muted, fontSize: 13)),
           const SizedBox(height: 8),
@@ -161,7 +178,7 @@ class ClinicCard extends StatelessWidget {
           TimeRangeText(c.start, c.end),
           const SizedBox(height: 10),
           Wrap(spacing: 8, runSpacing: 8, children: [
-            if (c.bookingPhone.isNotEmpty)
+            if (contacts && c.bookingPhone.isNotEmpty)
               ActionChipButton(
                   key: const Key('bookClinic'),
                   icon: Icons.call,
@@ -169,7 +186,7 @@ class ClinicCard extends StatelessWidget {
                   semanticLabel: actionSemanticLabel('${context.tr('call')} • ${context.tr('book')}', clinicName),
                   color: Theme.of(context).colorScheme.primary,
                   onTap: () => callPhone(c.bookingPhone)),
-            if (c.whatsapp.isNotEmpty)
+            if (contacts && c.whatsapp.isNotEmpty)
               ActionChipButton(
                 icon: Icons.chat_rounded,
                 label: context.tr('whatsapp'),
@@ -180,7 +197,7 @@ class ClinicCard extends StatelessWidget {
                         ? 'أرغب في حجز موعد بعيادة ${c.specialtyAr} (${c.doctorName})'
                         : 'I would like to book an appointment at the ${c.specialtyEn} clinic ($doctor)'),
               ),
-            if (c.bookingPhone.isEmpty && c.whatsapp.isEmpty && office != null)
+            if (contacts && c.bookingPhone.isEmpty && c.whatsapp.isEmpty && office != null)
               ActionChipButton(
                   key: const Key('callChurchOffice'),
                   icon: Icons.call,
@@ -189,7 +206,9 @@ class ClinicCard extends StatelessWidget {
                   color: Theme.of(context).colorScheme.primary,
                   onTap: () => callPhone(office)),
           ]),
+          if (detail != null) DetailsLink(path: detail, title: clinicName, id: c.id),
         ]),
+      ),
       ),
     );
   }

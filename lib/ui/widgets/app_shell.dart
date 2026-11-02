@@ -5,6 +5,7 @@ import 'package:material_ui/material_ui.dart';
 import '../../core/l10n.dart';
 import '../../core/theme.dart';
 import '../../domain/features.dart';
+import '../../domain/item_detail.dart';
 import '../../state/providers.dart';
 import 'coptic_cross.dart';
 
@@ -27,6 +28,25 @@ const navItems = [
 ];
 const askNavItem = NavItem('ask', '/ask', Icons.auto_awesome_rounded);
 
+/// Where the phone Back arrow goes from [location]: an item detail page
+/// (`/clinics/<id>`, `/about/priests/<id>`…) returns to the page listing it
+/// (milestones: Home, where "Our story" lives); every other route goes Home.
+String parentRouteOf(String location) => parseDetailPath(location)?.$1.parentPath ?? '/';
+
+/// l10n key naming the page [parentRoute] (for "Back to …").
+String _parentLabelKey(String parentRoute) => switch (parentRoute) {
+      '/church-education' => 'education',
+      '/church-activities' => 'activities',
+      '/clinics' => 'clinics',
+      '/public-services' => 'publicServices',
+      '/about' => 'about',
+      _ => 'home',
+    };
+
+/// "Back to …" for a detail page's parent ("Back to home" for Home).
+String backToLabel(BuildContext context, String parentRoute) =>
+    parentRoute == '/' ? context.tr('backHome') : context.tr('backTo', {'s': context.tr(_parentLabelKey(parentRoute))});
+
 /// Common chrome for all public pages: app bar (logo, services menu,
 /// highlighted Mass times + Clinics buttons, language toggle) and drawer.
 class AppShell extends ConsumerWidget {
@@ -45,6 +65,9 @@ class AppShell extends ConsumerWidget {
     // a sibling route (context.go), so there is nothing to pop, and installed
     // PWAs have no browser back button.
     final showBack = !wide && location != '/';
+    // Item detail pages go back to the section that lists them, not Home.
+    final parent = parentRouteOf(location);
+    final toParent = parent != '/' || parseDetailPath(location) != null;
     // Ultra-narrow phones (< 360 px), very large text, or a subpage below
     // 400 px (the Back arrow takes another 48 dp): the highlighted Mass/Clinics
     // buttons move to the drawer (they are already listed there) so the church
@@ -65,11 +88,11 @@ class AppShell extends ConsumerWidget {
         leadingWidth: showBack ? 48 : null,
         leading: showBack
             ? IconButton(
-                key: const Key('backHome'),
-                tooltip: context.tr('backHome'),
+                key: Key(toParent ? 'backParent' : 'backHome'),
+                tooltip: toParent ? backToLabel(context, parent) : context.tr('backHome'),
                 // Mirrored automatically in RTL (matchTextDirection).
                 icon: const Icon(Icons.arrow_back_rounded),
-                onPressed: () => context.go('/'),
+                onPressed: () => context.go(parent),
               )
             : null,
         title: InkWell(

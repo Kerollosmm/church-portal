@@ -7,6 +7,7 @@ import '../../core/launch.dart';
 import '../../core/theme.dart';
 import '../../domain/cairo_time.dart';
 import '../../domain/features.dart';
+import '../../domain/item_detail.dart';
 import '../../domain/models.dart';
 import '../../domain/rules.dart';
 import '../../domain/schedule.dart';
@@ -401,3 +402,97 @@ const whatsappGreen = Color(0xFF157338);
 const facebookBlue = Color(0xFF145DBF);
 const youtubeRed = Color(0xFFD32F2F);
 const instagramPink = Color(0xFFC13584);
+
+/// Detail page of an item card, or null while its `detailsEnabled` is off
+/// (the card then renders exactly as before: no link, no card tap).
+String? cardDetailPath(DetailKind kind, String id, ItemDetails details) =>
+    details.detailsEnabled ? detailPathFor(kind, id) : null;
+
+/// Makes a card surface open [path] on tap (null = [child] unchanged).
+/// Pointer-only: inner buttons still win their own taps, and screen readers
+/// use the labelled [DetailsLink] instead of one big nested button.
+class DetailTapArea extends StatelessWidget {
+  final String? path;
+  final Widget child;
+  const DetailTapArea({super.key, required this.path, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    final p = path;
+    if (p == null) return child;
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        excludeFromSemantics: true,
+        onTap: () => context.go(p),
+        child: child,
+      ),
+    );
+  }
+}
+
+/// "التفاصيل / Details ›" link at the end of a card whose detail page is on.
+class DetailsLink extends StatelessWidget {
+  final String path;
+
+  /// Item title, announced with the action ("Details — Dental clinic").
+  final String title;
+
+  /// Item id (key `detailsLink-<id>` for tests / automation).
+  final String id;
+  const DetailsLink({super.key, required this.path, required this.title, required this.id});
+
+  @override
+  Widget build(BuildContext context) {
+    final label = context.tr('details');
+    void open() => context.go(path);
+    return Align(
+      key: const Key('detailsLink'),
+      alignment: AlignmentDirectional.centerEnd,
+      child: Semantics(
+        container: true,
+        button: true,
+        link: true,
+        label: actionSemanticLabel(label, title),
+        onTap: open,
+        excludeSemantics: true,
+        child: TextButton.icon(
+          key: ValueKey('detailsLink-$id'),
+          onPressed: open,
+          iconAlignment: IconAlignment.end,
+          icon: const Icon(Icons.arrow_forward_rounded, size: 18),
+          label: Text(label, style: const TextStyle(fontWeight: FontWeight.w800)),
+        ),
+      ),
+    );
+  }
+}
+
+/// Optional card image leading a title row: nothing at all (no gap) when the
+/// item has no image or images are switched off, so such cards look exactly
+/// as before.
+class CardImageLead extends ConsumerWidget {
+  final MediaImage image;
+  final String label;
+  final bool enlargeOnTap;
+  final double size;
+  const CardImageLead(
+      {super.key, required this.image, required this.label, this.enlargeOnTap = true, this.size = 56});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (!ref.watch(featuresProvider.select((f) => f.showImages))) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsetsDirectional.only(end: 12),
+      child: ItemImage(
+        image: image,
+        size: size,
+        circle: false,
+        label: label,
+        enlargeOnTap: enlargeOnTap,
+        placeholder: SizedBox.square(dimension: size),
+      ),
+    );
+  }
+}

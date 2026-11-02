@@ -3,6 +3,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../../core/l10n.dart';
 import '../../core/theme.dart';
+import '../../domain/features.dart';
 import '../../domain/cairo_time.dart';
 import '../../domain/models.dart';
 import '../../domain/schedule.dart';
@@ -53,9 +54,12 @@ class _MassSchedulePageState extends ConsumerState<MassSchedulePage> {
     }
 
     return PageBody(
-      header: PageHeader(
+      header: CustomizablePageHeader(
+          pageKey: CustomizablePages.schedule,
+          
           title: context.tr('massSchedule'), subtitle: context.tr('dir_mass'), icon: Icons.access_time_filled_rounded),
       children: [
+        const PageIntro(pageKey: CustomizablePages.schedule),
         const AlertBanner(),
         if ((lits.value ?? const <Liturgy>[]).any((l) => l.sample)) const PendingConfirmationNote(),
         const NextMassCard(),

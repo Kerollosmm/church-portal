@@ -159,7 +159,7 @@ supersede them.
   combining `noindex` with a canonical elsewhere). `web/sitemap.xml` comments out `/clinics` while the clinics
   section is off.
 
-## ADR-020 — Item detail pages & site-wide header/footer customization (PR #11: data, rules, grounding)
+## ADR-020 — Item detail pages & site-wide header/footer customization (PR #11 data/rules/grounding, PR #12 admin, PR #13 public UI)
 - **Context:** the customization plan (PRs #11–#13) gives admins optional rich detail pages on 7 collections (long
   text, up to 15 custom fields, up to 8 gallery photos, contacts and social links) plus per-page header/intro overrides
   and footer options (FR-G-04), with zero change for existing documents. PR #11 lands the domain models
@@ -191,6 +191,17 @@ supersede them.
   (`featuresSaveWrites`) — the whole doc plus 8 page headers in one write was measured over the cap. Writes merge with
   `mergeFields` (map fields replaced, so a reset page header is removed). Not atomic by design: an interrupted save
   leaves a valid document with part of the edit, shown as still unsaved in the form.
+- **PR #13 (public pages):** 7 flat detail routes inside the shell (`DetailKind` in `domain/item_detail.dart`);
+  `ItemDetailPage` resolves the item from the list stream (no extra read) and gates it purely (`detailStateFor`:
+  unavailable unless visible + `detailsEnabled`, clinics also active; priests also need their status section),
+  with `setDocumentRouteMeta` (indexable only when available). Cards stay unchanged while `detailsEnabled` is off;
+  when on, a labelled Details link + a pointer-only card tap (`DetailTapArea`, no nested screen-reader button) and
+  no zoom on the small avatar. `showContacts` / `showSocials` (+ socials section) gate the card buttons too, so an
+  item's contact/link switches hide them everywhere (the activity link is now hidden while socials are off).
+  The phone Back arrow is parent-aware (`parentRouteOf`); milestones go back to Home, where their cards are.
+  Page header overrides replace the built-in title/subtitle **only in the language they are written in**; intro
+  notes use `context.pick`. The footer renders the FR-G-04 options (phones need `contactInfo`, socials `socials`);
+  no site-wide "last updated" date (nothing tracks one).
 
 ## Timeline
 
@@ -211,5 +222,7 @@ supersede them.
 | 2 Nov 2026 | **PR #11** — "Domain models, security rules, seed & AI grounding" (`feat/pr11-domain-rules-seed`) | Customization plan PR #11: `ItemDetails`/`CustomField` on the 7 detail collections, cover `image` on meetings/clinics/facilities, gallery-aware media orphan helpers, prefix-aware `sectionsForPath`/`routeEnabled`, `PageCustom` `pageHeaders` + `FooterConfig` `footer`; budget-aware, change-gated rules (ADR-020) + 14 emulator tests; seed maps; assistant grounding for milestones and detail pages. |
 
 | 2 Nov 2026 | **PR #12** — "Admin customization studio" (`feat/pr12-admin-customization-studio`) | Customization plan PR #12: `FieldGroup` + `FieldType.imageList`; detail / photos / contacts groups on the 7 collections (cover image now on meetings/clinics/facilities, BR-11 warning on meetings' photos); gallery upload / link / alt / reorder / remove (≤ 8) with orphan clean-up; split saves (`splitSavePayload`, `featuresSaveWrites`) and `mergeFields`; Page headers + Footer cards; detail badge and item link on list rows; `ObjectKey(_stream)` on lists, messages, admins; 320 px / 200 % reflow (row actions, messages, admins, dropdowns); emulator tests of the editors' write sequences. Review fixes: extra-field rows accept a title in either language (`rowRequireAnyOf`), orphan clean-up measured from the save's first attempt (`_saveBaseline`). |
+
+| 2 Nov 2026 | **PR #13** — "Public clickable detail pages, custom headers & upgraded footer" (`feat/pr13-public-detail-pages`) | Customization plan PR #13 (final): 7 detail sub-routes + `ItemDetailPage` (lazy zoomable cover/gallery, long text, custom-field cards, contact & social actions, dual priest gating, per-item canonical/noindex); parent-aware phone Back arrow; Details links / card tap on the 7 list cards, item contact/social switches on card buttons, optional images on meeting/clinic/facility cards; `CustomizablePageHeader` + `PageIntro` on the 8 customizable pages; FR-G-04 footer (phones, social icons, quick-link switch, note); `test/detail_pages_test.dart`. |
 
 Append new PRs to this table.

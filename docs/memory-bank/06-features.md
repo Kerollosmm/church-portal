@@ -98,6 +98,49 @@ render with `PageBody` (+ `Footer`). Content comes from Riverpod providers (hidd
 Chat UI with intro bubble, 3 suggestion chips, 500-char input, disclaimer «إجابات آلية قد تحتوي أخطاء». Shows
 "assistant not available" when `assistantVisibleProvider` is false. Details in `05-firebase.md`.
 
+### Item detail pages (PR #13, ADR-020) — `item_detail_page.dart` `ItemDetailPage`
+- Routes: `/church-education/:id`, `/church-activities/:id`, `/clinics/:id`, `/public-services/:id`,
+  `/about/priests/:id`, `/about/saints/:id`, `/about/milestones/:id` (shareable; `detailPathFor(kind, id)`).
+- Only items with **`detailsEnabled: true`** (default false) have one; otherwise — or hidden / unknown id / inactive
+  clinic — «هذه الصفحة غير متاحة حاليًا» + «العودة إلى …» (noindex). A departed father needs `departedPriests`, a
+  serving one `priests` (else `SectionUnavailable`, noindex). Available pages are indexable with their canonical URL.
+- Layout (320 px × 200 % safe, RTL/LTR): «العودة إلى <القسم>» link; `PageHeader` with the item title (clinics:
+  specialty, doctor as subtitle; priests: rank); pills (stage / available today / rank + departed / feast / year) and
+  `SampleBadge` + `PendingConfirmationNote` when `sample`; cover (168 px) and gallery thumbnails (104 px) **only when
+  `showImages && showDetailImages`** — tapping any opens the zoomable `showImageViewer`; facts card (weekday + times
+  + hall, schedule + ages, doctor + degree + days + times, hours, ordination/hegumen/repose dates); summary
+  (desc/bio); long text `detailsAr/En` as `SelectableText` (line height 1.8); custom fields (`extraFields`) as cream
+  cards in a `ResponsiveGrid` (title primary bold, value body text, `context.pick`).
+- **Contact & registration** (when `showContacts`): Call `<phone>` (primary phone: `contactPhone`, clinics
+  `bookingPhone`, facilities `phone`), WhatsApp chat (`whatsapp`; activities: also a mobile `contactPhone`, like
+  their card; clinics pre-fill the booking message), clinics with neither fall back to «اتصل بمكتب الكنيسة» while
+  `contactInfo` is on; the `contactNoteAr/En` box.
+- **Links & pages** (when `showSocials && Sections.socials`): WhatsApp group/channel (`whatsappUrl`), Facebook,
+  YouTube, Instagram, external/registration button (`externalUrl`, activities' `link`) labelled
+  `externalLabelAr/En` or «افتح الصفحة». Every action has `actionSemanticLabel(action, itemTitle)`.
+- No extra Firestore read for the item: it comes from the list stream. Gallery inline bytes (`media/{id}`) load only
+  here; an inline cover loads on the listing card too (`CardImageLead` / `ItemImage` → `MediaImageView`) and is
+  then served from `MediaCache` here.
+
+### Card ↔ detail integration (PR #13)
+- `detailsEnabled` off ⇒ cards are **unchanged** (no link, no card tap, images still enlarge on tap).
+- On ⇒ a «التفاصيل ›» link (`DetailsLink`, `ValueKey('detailsLink-<id>')`, announced «التفاصيل — <title>»), the card
+  surface opens the page (`DetailTapArea`: pointer-only `GestureDetector`, inner buttons keep their taps, no nested
+  screen-reader button), and the small avatar no longer opens the viewer (`enlargeOnTap: false`; zoom lives on the
+  detail page). Applies to meetings, activities, clinics, facilities, priests, saints and milestones ("Our story").
+- Card buttons follow the item switches too: clinic call/WhatsApp/office fallback, activity phone and facility phone
+  need `showContacts`; meeting Facebook/WhatsApp and the activity link need `showSocials && Sections.socials`
+  (the activity link was previously shown even with socials off).
+- Optional `image` now also on meeting and clinic cards (beside the title, `CardImageLead`) and facility cards (in
+  place of the type icon); no image ⇒ identical card.
+
+### Custom page headers & intro notes (PR #13)
+- `CustomizablePageHeader(pageKey:)` on about, schedule, education, activities, clinics, services, contact and ask
+  (incl. the "assistant unavailable" view): the admin's title / subtitle **for the current language** replace the
+  built-in ones (an empty or other-language-only override keeps the built-in text). `PageIntro(pageKey:)`
+  (`Key('pageIntro')`) at the top of the page shows `context.pick(introAr, introEn)` in a cream note card; nothing
+  when both are empty.
+
 ### `/admin` — see `07-admin-dashboard.md`.
 
 ### Optional images (PR #5) — `ItemImage` / `MediaImageView` (`lib/ui/widgets/item_image.dart`)
@@ -119,8 +162,13 @@ Chat UI with intro bubble, 3 suggestion chips, 500-char input, disclaimer «إج
 - `SampleBadge` («بيانات تجريبية / Sample data») on any `sample: true` item; `PendingConfirmationNote`
   («مواعيد تقريبية — في انتظار تأكيد الكنيسة») on schedule, meetings and clinics pages.
 - `AsyncSection` handles loading skeletons, empty and error (+ retry by invalidating the provider).
-- Footer: church name, address (if contactInfo on), quick links (mass, clinics, education, contact — enabled ones),
-  ©, and «تعرض البيانات المحفوظة مع التطبيق» while serving the seed.
+- Footer (FR-G-04, PR #13): church name, address (if contactInfo on), clickable church phone numbers
+  (`Key('footerPhone-<number>')`, `footer.showPhones` and contactInfo on), official social icon buttons (48 dp,
+  tooltips; `Key('footerSocial-whatsappChannel|whatsapp|facebook|youtube|instagram')`, `footer.showSocials` and
+  socials on), quick links (mass, clinics, education, contact — enabled ones; `footer.showQuickLinks`), the admin
+  note (`footer.noteAr/En`, `Key('footerNote')`), ©, and «تعرض البيانات المحفوظة مع التطبيق» while serving the seed.
+  Defaults show phones, socials and quick links; phones and social icons wait for `settings/features`
+  (`featuresReadyProvider`) so switched-off ones never flash.
 
 ## Feature toggles (`settings/features`, `lib/domain/features.dart`)
 
@@ -135,13 +183,14 @@ Chat UI with intro bubble, 3 suggestion chips, 500-char input, disclaimer «إج
 - **Prefix-aware (PR #11, `sectionsForPath`)**: detail sub-routes are gated by their parent section —
   `/clinics/*` (clinics), `/church-education/*` (meetings), `/church-activities/*` (activities), `/public-services/*`
   (services), `/about/priests/*` (priests or departedPriests), `/about/saints/*` (saints), `/about/milestones/*`
-  (milestones); other sub-paths follow their top-level page. The routes themselves arrive in PR #13.
+  (milestones); other sub-paths follow their top-level page. The routes exist since PR #13 (`ItemDetailPage`).
 - `settings/features` also carries `pageHeaders` (per-page title / subtitle / intro overrides) and `footer`
-  (FR-G-04 options) since PR #11 (model + rules; admin cards since PR #12, rendering PR #13).
+  (FR-G-04 options) since PR #11 (model + rules; admin cards since PR #12; rendered since PR #13).
 - Per-item visibility: `visible: false` items never reach public pages (`publicItems`).
 - Gated pages wait for the first `settings/features` value (`featuresReadyProvider`) so switched-off content never
   flashes.
-- Tests: `test/features_test.dart`, `test/feature_gate_test.dart`.
+- Tests: `test/features_test.dart`, `test/feature_gate_test.dart`, `test/detail_pages_test.dart` (PR #13: routes,
+  back navigation, detail gating/SEO/gallery/contacts, cards, page headers, footer).
 
 ## Business rules
 

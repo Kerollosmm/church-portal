@@ -6,6 +6,7 @@ import '../../core/l10n.dart';
 import '../../core/launch.dart';
 import '../../core/theme.dart';
 import '../../data/admin_repository.dart';
+import '../../domain/item_detail.dart';
 import '../../domain/media.dart';
 import '../../domain/time_format.dart';
 import '../../domain/cairo_time.dart';
@@ -401,18 +402,9 @@ String publicPathFor(CollectionDef def, {required bool english}) {
 /// none: its collection has no detail pages, `detailsEnabled` is off, or the
 /// item is hidden. `?lang=en` when the dashboard is in English.
 String? itemPublicPathFor(CollectionDef def, String id, Map<String, dynamic> data, {required bool english}) {
-  final base = switch (def.name) {
-    'meetings' => '/church-education',
-    'activities' => '/church-activities',
-    'clinics' => '/clinics',
-    'facilities' => '/public-services',
-    'priests' => '/about/priests',
-    'saints' => '/about/saints',
-    'milestones' => '/about/milestones',
-    _ => null,
-  };
-  if (base == null || data['detailsEnabled'] != true || data['visible'] == false) return null;
-  final path = '$base/${Uri.encodeComponent(id)}';
+  final kind = detailKindForCollection(def.name);
+  if (kind == null || data['detailsEnabled'] != true || data['visible'] == false) return null;
+  final path = detailPathFor(kind, id);
   return english ? '$path?lang=en' : path;
 }
 

@@ -15,7 +15,9 @@ stream re-binding, per-route canonical + `noindex` via `setDocumentRouteMeta`, U
 headers / footer settings, prefix-aware section gating, budget-aware change-gated rules, seed maps and assistant
 grounding — ADR-020) plus PR #12 (`feat/pr12-admin-customization-studio`: grouped `DocEditor` with collapsible
 detail / photos / contacts cards, multi-image gallery, split saves within the rules budget, Page headers + Footer
-cards in `FeaturesEditor`, 320 px / 200 % admin polish); public pages follow in PR #13.
+cards in `FeaturesEditor`, 320 px / 200 % admin polish) plus PR #13 (`feat/pr13-public-detail-pages`: 7 shareable
+item detail routes + `ItemDetailPage` with lazy zoomable gallery, custom fields, contact/social actions and per-item
+SEO, parent-aware phone Back arrow, card Details links, custom page headers / intro notes, FR-G-04 footer).
 
 > **Golden rule:** read this folder before changing anything, and update it in the same PR as every change that
 > alters behaviour, data shape, rules, workflows, content status or open tasks.

@@ -4,6 +4,8 @@ import 'package:material_ui/material_ui.dart';
 import '../../core/l10n.dart';
 import '../../core/launch.dart';
 import '../../core/theme.dart';
+import '../../domain/features.dart';
+import '../../domain/item_detail.dart';
 import '../../domain/models.dart';
 import '../../domain/rules.dart';
 import '../../state/providers.dart';
@@ -39,8 +41,11 @@ class ActivitiesPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return PageBody(
-      header: PageHeader(title: context.tr('activities'), subtitle: context.tr('dir_act'), icon: Icons.groups_rounded),
+      header: CustomizablePageHeader(
+          pageKey: CustomizablePages.activities,
+          title: context.tr('activities'), subtitle: context.tr('dir_act'), icon: Icons.groups_rounded),
       children: [
+        const PageIntro(pageKey: CustomizablePages.activities),
         AsyncSection<List<Activity>>(
           provider: activitiesProvider,
           retry: activitiesProvider,
@@ -67,16 +72,21 @@ class ActivitiesPage extends ConsumerWidget {
   }
 }
 
-class _ActivityCard extends StatelessWidget {
+class _ActivityCard extends ConsumerWidget {
   final Activity a;
   const _ActivityCard(this.a);
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final schedule = context.pick(a.scheduleAr, a.scheduleEn);
     final title = context.pick(a.titleAr, a.titleEn);
+    final detail = cardDetailPath(DetailKind.activity, a.id, a.details);
+    final showLink = a.link.isNotEmpty && itemSocialsShown(a.details, ref.watch(featuresProvider));
+    final showPhone = a.contactPhone.isNotEmpty && a.details.showContacts;
     return Card(
-      child: Padding(
+      child: DetailTapArea(
+        path: detail,
+        child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
@@ -84,7 +94,8 @@ class _ActivityCard extends StatelessWidget {
               image: a.image,
               size: 56,
               circle: false,
-              label: context.pick(a.titleAr, a.titleEn),
+              label: title,
+              enlargeOnTap: detail == null,
               placeholder: Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(color: AppColors.parchment, borderRadius: BorderRadius.circular(12)),
@@ -102,7 +113,7 @@ class _ActivityCard extends StatelessWidget {
           const SizedBox(height: 8),
           IconLine(Icons.schedule_rounded, schedule.isEmpty ? '' : '${context.tr('schedule')}: $schedule'),
           IconLine(Icons.cake_outlined, a.ageRange.isEmpty ? '' : '${context.tr('ages')}: ${localDigits(context, a.ageRange)}'),
-          if (a.link.isNotEmpty) ...[
+          if (showLink) ...[
             const SizedBox(height: 8),
             ActionChipButton(
                 icon: _linkIcon(a.link),
@@ -111,7 +122,7 @@ class _ActivityCard extends StatelessWidget {
                 color: _linkColor(context, a.link),
                 onTap: () => openUrl(a.link)),
           ],
-          if (a.contactPhone.isNotEmpty) ...[
+          if (showPhone) ...[
             const SizedBox(height: 8),
             Wrap(spacing: 8, runSpacing: 8, children: [
               ActionChipButton(
@@ -129,7 +140,9 @@ class _ActivityCard extends StatelessWidget {
                     onTap: () => openWhatsApp(a.contactPhone)),
             ]),
           ],
+          if (detail != null) DetailsLink(path: detail, title: title, id: a.id),
         ]),
+      ),
       ),
     );
   }

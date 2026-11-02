@@ -39,6 +39,8 @@ lib/
     assistant_context.dart  buildAssistantInstruction (Gemini grounding prompt)
     media.dart              MediaImage (optional `image` map), MediaLimits, isValidImageUrl, fitWithin,
                             orphanedMediaIds
+    item_detail.dart        DetailKind (basePath/parentPath/collection), detailPathFor, parseDetailPath,
+                            detailStateFor (detail-page gating), itemSocialsShown (PR #13, ADR-020)
   data/
     firebase_bootstrap.dart bootstrapFirebase() -> FirebaseStatus{available, appCheckActive}; App Check
     content_repository.dart ContentRepository (interface), SeedRepository, FirestoreRepository,
@@ -53,9 +55,11 @@ lib/
   core/                     theme.dart (AppColors, buildTheme), l10n.dart (_strings, tr/pick/isAr),
                             launch.dart (openUrl, callPhone, openWhatsApp, maps URLs), document_lang*.dart,
                             locale_storage*.dart (LanguageStore: localStorage on web, no-op elsewhere)
-  ui/pages/                 one file per public route
+  ui/pages/                 one file per public route; item_detail_page.dart (ItemDetailPage) serves the 7 detail
+                            routes
   ui/widgets/               item_image (ItemImage, MediaImageView, showImageViewer), app_shell, cards (LiturgyCard, NextMassCard, AlertBanner, DirectoryCard,
-                            ActionChipButton), common (PageBody, PageHeader, SectionTitle, ResponsiveGrid,
+                            ActionChipButton, cardDetailPath, DetailTapArea, DetailsLink, CardImageLead), common
+                            (PageBody, PageHeader, CustomizablePageHeader, PageIntro, SectionTitle, ResponsiveGrid,
                             Skeleton*, EmptyState, ErrorState, AsyncSection, PendingConfirmationNote,
                             SampleBadge, Pill, IconLine, TimeRangeText, Footer), feature_gate, map_embed*,
                             deferred_loader (DeferredLoader: spinner → page, retry on chunk failure), assistant_gate,
@@ -180,11 +184,29 @@ flowchart LR
 | `/public-services` | `PublicServicesPage` | services |
 | `/contact` | `ContactPage` | any of contactInfo, socials, contactForm |
 | `/ask` | `AssistantGate` → `assistant_page.AssistantPage` (deferred) | assistant (+ the page itself checks `assistantVisibleProvider`) |
+| `/church-education/:id` | `ItemDetailPage(DetailKind.meeting)` | meetings (prefix-aware `sectionsForPath`) |
+| `/church-activities/:id` | `ItemDetailPage(activity)` | activities |
+| `/clinics/:id` | `ItemDetailPage(clinic)` | clinics |
+| `/public-services/:id` | `ItemDetailPage(facility)` | services |
+| `/about/priests/:id` | `ItemDetailPage(priest)` | any of priests, departedPriests (+ the page checks the section matching the father's status) |
+| `/about/saints/:id` | `ItemDetailPage(saint)` | saints |
+| `/about/milestones/:id` | `ItemDetailPage(milestone)` | milestones |
 | `/admin` (`AppConfig.adminPath`) | `admin_page.AdminPage` (deferred, `fullScreen` placeholder) | outside the shell, not gated, not linked anywhere public |
 | anything else | `errorBuilder` → `AppShell` + "Page not found" + Back home | — |
 
 `FeatureGate` shows a spinner (`Key('featuresLoading')`) until `featuresReadyProvider`, then the page or
 `SectionUnavailable` («هذا القسم غير متاح حاليًا» + Back to home).
+
+**Item detail pages** (PR #13, ADR-020): the 7 routes above are generated from `DetailKind.values`
+(`'${kind.basePath}/:id'`, flat routes inside the `ShellRoute`, so the list page is not built underneath).
+`ItemDetailPage` watches the collection's existing stream provider (`meetingsProvider` … `milestonesProvider`) and
+finds the item by id — **no extra Firestore read**; only inline gallery / cover bytes (`media/{id}`) are fetched,
+through `MediaCache`, when the page mounts. `detailStateFor` (pure, `domain/item_detail.dart`): missing, hidden
+(clinics also inactive) or `detailsEnabled` off → «هذه الصفحة غير متاحة حاليًا» (`Key('itemUnavailable')`) with a
+Back-to-section button, `noindex`; a priest whose status section is off (departed father while `departedPriests`
+is off, serving while `priests` is off) → `SectionUnavailable`, `noindex`; otherwise the page, indexable with its
+canonical URL (`setDocumentRouteMeta(path: detailPathFor(kind, id), …)`, called after `FeatureGate`'s so it wins).
+Detail URLs are not in `sitemap.xml` (no seeded item has a detail page).
 
 **Per-route `<head>` sync** (PR #10, amends ADR-019): `lib/core/document_lang.dart` holds the pure
 `kCanonicalOrigin`, `canonicalUrlForPath(path)` (`''`/`/` → origin + `/`, else origin + path without trailing `/`,
@@ -193,7 +215,7 @@ canonical, no `noindex`; otherwise `noindex` and no canonical, never both) and `
 indexable:)`, which applies the spec through the conditional import (`document_lang_web.dart` creates/updates/removes
 `<link rel="canonical">` and `<meta name="robots" content="noindex">`; the stub is a no-op) and reports it to the
 `@visibleForTesting debugOnRouteMeta` hook. Callers: `FeatureGate` (indexable while features load, then
-`indexable: enabled`), `AssistantGate` (`/ask`, `indexable: visible` once settings resolve), the `/admin` builder and
+`indexable: enabled`), `ItemDetailPage` (`indexable` only when the item's page is available), `AssistantGate` (`/ask`, `indexable: visible` once settings resolve), the `/admin` builder and
 `errorBuilder` (`indexable: false`). `?lang=` sync (`_syncLangQuery`, `resolveLangSync`'s `lang=ar` branch) keeps
 the URL `#fragment`.
 
@@ -222,7 +244,11 @@ chunks are fetched relative to `<base href>`).
   takes another 48 dp) the highlight buttons are dropped from the bar (they are in the drawer) so the title keeps a
   readable width. Phone subpages (`location != '/'`) get a leading
   **Back-to-Home** arrow (`Key('backHome')`, `Icons.arrow_back_rounded`, mirrored in RTL) — every in-app link is a
-  sibling `context.go`, so there is nothing to pop, and installed PWAs have no browser back button.
+  sibling `context.go`, so there is nothing to pop, and installed PWAs have no browser back button. On an item
+  detail page the arrow is parent-aware (PR #13): `parentRouteOf(location)` (pure, `app_shell.dart`) returns
+  `DetailKind.parentPath` — `/church-education`, `/church-activities`, `/clinics`, `/public-services`, `/about`
+  (priests, saints) or `/` (milestones: their cards live on Home) — shown as `Key('backParent')` with the tooltip
+  «العودة إلى …» (`backToLabel`); every other route keeps `Key('backHome')` → `/`.
 - `PageBody` (common.dart) = width-capped (`kMaxContentWidth = 1100`) scroll view + `Footer`.
 
 ## i18n — Arabic-first RTL + English (`lib/core/l10n.dart`)

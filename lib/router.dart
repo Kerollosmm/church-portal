@@ -7,6 +7,7 @@ import 'package:material_ui/material_ui.dart';
 import 'config/app_config.dart';
 import 'core/document_lang.dart';
 import 'core/l10n.dart';
+import 'domain/item_detail.dart';
 import 'state/providers.dart';
 // Deferred (plan PR 3, 3.3): separate web chunks, fetched only on /admin and
 // /ask, so the public bundle excludes the admin dashboard and the AI SDK.
@@ -18,6 +19,7 @@ import 'ui/pages/clinics_page.dart';
 import 'ui/pages/contact_page.dart';
 import 'ui/pages/education_page.dart';
 import 'ui/pages/home_page.dart';
+import 'ui/pages/item_detail_page.dart';
 import 'ui/pages/mass_schedule_page.dart';
 import 'ui/pages/public_services_page.dart';
 import 'ui/widgets/app_shell.dart';
@@ -155,6 +157,15 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(path: '/public-services', pageBuilder: (c, s) => _page(s, const PublicServicesPage())),
           GoRoute(path: '/contact', pageBuilder: (c, s) => _page(s, const ContactPage())),
+          // Shareable item detail pages (ADR-020). FeatureGate gates each like
+          // its section (prefix-aware `routeEnabled`: `/about/priests/<id>`
+          // stays open while either priests section is on; the page itself
+          // then checks the section matching the father's status).
+          for (final kind in DetailKind.values)
+            GoRoute(
+              path: '${kind.basePath}/:id',
+              pageBuilder: (c, s) => _page(s, ItemDetailPage(kind: kind, id: s.pathParameters['id'] ?? '')),
+            ),
           GoRoute(
             path: '/ask',
             pageBuilder: (c, s) => _page(

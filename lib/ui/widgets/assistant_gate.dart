@@ -3,6 +3,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../../core/document_lang.dart';
 import '../../core/l10n.dart';
+import '../../domain/features.dart';
 import '../../state/providers.dart';
 import 'common.dart';
 
@@ -23,8 +24,9 @@ class AssistantGate extends ConsumerWidget {
     setDocumentRouteMeta(path: '/ask', indexable: visible);
     if (!visible) {
       return PageBody(
-        header: PageHeader(title: context.tr('askTitle'), icon: Icons.auto_awesome_rounded),
-        children: [EmptyState(message: context.tr('askUnavailable'), icon: Icons.smart_toy_outlined)],
+        header: CustomizablePageHeader(
+            pageKey: CustomizablePages.ask, title: context.tr('askTitle'), icon: Icons.auto_awesome_rounded),
+        children: [const PageIntro(pageKey: CustomizablePages.ask), EmptyState(message: context.tr('askUnavailable'), icon: Icons.smart_toy_outlined)],
       );
     }
     return builder(context);

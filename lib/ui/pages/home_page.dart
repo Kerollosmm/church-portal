@@ -6,6 +6,7 @@ import '../../core/l10n.dart';
 import '../../core/launch.dart';
 import '../../core/theme.dart';
 import '../../domain/features.dart';
+import '../../domain/item_detail.dart';
 import '../../domain/models.dart';
 import '../../domain/rules.dart';
 import '../../state/providers.dart';
@@ -362,7 +363,12 @@ class _MilestoneCard extends StatelessWidget {
       };
 
   @override
-  Widget build(BuildContext context) => Card(
+  Widget build(BuildContext context) {
+    final title = context.pick(m.titleAr, m.titleEn);
+    final detail = cardDetailPath(DetailKind.milestone, m.id, m.details);
+    return Card(
+      child: DetailTapArea(
+        path: detail,
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -370,7 +376,8 @@ class _MilestoneCard extends StatelessWidget {
               ItemImage(
                 image: m.image,
                 size: 48,
-                label: context.pick(m.titleAr, m.titleEn),
+                label: title,
+                enlargeOnTap: detail == null,
                 placeholder: CircleAvatar(
                   backgroundColor: AppColors.gold.withValues(alpha: 0.18),
                   child: Icon(_icon, color: Theme.of(context).colorScheme.primary),
@@ -382,10 +389,13 @@ class _MilestoneCard extends StatelessWidget {
                     style: const TextStyle(color: AppColors.goldText, fontWeight: FontWeight.w800)),
             ]),
             const SizedBox(height: 10),
-            Text(context.pick(m.titleAr, m.titleEn), style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
+            Text(title, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
             const SizedBox(height: 4),
             Text(context.pick(m.descAr, m.descEn), style: const TextStyle(color: AppColors.muted, height: 1.5, fontSize: 13)),
+            if (detail != null) DetailsLink(path: detail, title: title, id: m.id),
           ]),
         ),
-      );
+      ),
+    );
+  }
 }

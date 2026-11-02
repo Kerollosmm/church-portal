@@ -82,7 +82,7 @@ cancels and re-subscribes every stream (BUG-18; `ChurchInfoScreen` does the same
   **«مخصّص / Customized»** badge while any field is filled and **«إعادة للافتراضي / Reset»** to clear the page
   (empty = the page's built-in text). A too-long field opens its row on Save.
 - **Site footer (FR-G-04)** (PR #12): switches *Show phone numbers / social links / quick links*
-  (`ValueKey('footer-<key>')`) and footer notes AR/EN ≤ 500 (`ValueKey('footer-noteAr|noteEn')`). Rendering is PR #13.
+  (`ValueKey('footer-<key>')`) and footer notes AR/EN ≤ 500 (`ValueKey('footer-noteAr|noteEn')`). Rendered by the public `Footer` since PR #13.
 - "Save changes" writes `FeatureSettings.toMap()` with `saveDoc` (mergeFields + stamp) — since PR #12 in two writes
   when the page headers changed: everything else, then `{pageHeaders}` (`featuresSaveWrites`; the whole doc plus
   8 page headers in one write exceeds the rules' expression cap). `collect()` round-trips `pageHeaders`/`footer`, so
@@ -111,7 +111,7 @@ For each `CollectionDef`:
   ⛔ inactive, start/end), tags *Hidden* / *Unconfirmed*, "updated by … at …". Since PR #12 an item with
   `detailsEnabled` shows a **«صفحة تفاصيل / Detail page»** badge (own line under the title), and when it is also
   visible an **Open detail page on site** icon (`ValueKey('openItem-<id>')`, `itemPublicPathFor`: e.g.
-  `/clinics/<id>`, `/about/saints/<id>`; the routes arrive in PR #13).
+  `/clinics/<id>`, `/about/saints/<id>`; built from `detailPathFor` — the public routes exist since PR #13).
 - The list `StreamBuilder` is keyed by `ObjectKey(_stream)` (also on Messages and Admins, PR #12): after a backend
   switch the old list is never shown while the new one loads.
 - 👁 **hide/show** (`update(visible)`) — only when the collection has a `visible` field (not seasons).
@@ -211,7 +211,7 @@ Image (optional)»** with a 96 px preview and:
 Move later** and **Remove**; **Upload photo** (same resize/compress pipeline, stored only on Save) and **Add image
 link** (https). "n of 8" counter; both add buttons disable at 8. On Save pending photos are uploaded, the list is
 written in its own update, and removed or replaced inline photos are deleted (`orphanedDocMediaIds`, so a photo moved
-between the cover and the gallery is kept). Photos show on the item's detail page (PR #13) when `showDetailImages`
+between the cover and the gallery is kept). Photos show on the item's detail page (since PR #13) when `showDetailImages`
 and the Images section are on.
 
 ### Contact messages (`MessagesScreen`) → `contact_messages`
