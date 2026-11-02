@@ -4,9 +4,11 @@ import 'package:material_ui/material_ui.dart';
 import '../../core/l10n.dart';
 import '../../core/theme.dart';
 import '../../domain/features.dart';
+import '../../domain/item_detail.dart';
 import '../../domain/models.dart';
 import '../../domain/time_format.dart';
 import '../../state/providers.dart';
+import '../widgets/cards.dart';
 import '../widgets/common.dart';
 import '../widgets/coptic_cross.dart';
 import '../widgets/item_image.dart';
@@ -20,8 +22,11 @@ class AboutPage extends ConsumerWidget {
     final showServing = f.enabled(Sections.priests);
     final showDeparted = f.enabled(Sections.departedPriests);
     return PageBody(
-      header: PageHeader(title: context.tr('about'), subtitle: context.tr('dir_about'), icon: Icons.church_rounded),
+      header: CustomizablePageHeader(
+          pageKey: CustomizablePages.about,
+          title: context.tr('about'), subtitle: context.tr('dir_about'), icon: Icons.church_rounded),
       children: [
+        const PageIntro(pageKey: CustomizablePages.about),
         if (f.enabled(Sections.history)) ...[
         SectionTitle(context.tr('history'), icon: Icons.history_edu_rounded),
         AsyncSection<ChurchSettings>(
@@ -74,37 +79,7 @@ class AboutPage extends ConsumerWidget {
           retry: saintsProvider,
           isEmpty: (d) => d.isEmpty,
           builder: (context, saints) => ResponsiveGrid(minItemWidth: 420, children: [
-            for (final s in saints)
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Row(children: [
-                      // No image: nothing here, the card keeps its text-only look.
-                      ItemImage(
-                        image: s.image,
-                        size: 64,
-                        label: context.pick(s.nameAr, s.nameEn),
-                        placeholder: const SizedBox.shrink(),
-                      ),
-                      if (s.image != null && f.showImages) const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(context.pick(s.nameAr, s.nameEn),
-                            style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: Theme.of(context).colorScheme.primary)),
-                      ),
-                    ]),
-                    const SizedBox(height: 6),
-                    Wrap(spacing: 6, runSpacing: 6, children: [
-                      Pill('${context.tr('feast')}: ${context.pick(s.feastCopticAr, s.feastCopticEn)}',
-                          color: Theme.of(context).colorScheme.primary, icon: Icons.event),
-                      if (context.pick(s.feastGregorianAr, s.feastGregorian).isNotEmpty)
-                        Pill(context.pick(s.feastGregorianAr, s.feastGregorian), color: AppColors.muted),
-                    ]),
-                    const SizedBox(height: 10),
-                    Text(context.pick(s.bioAr, s.bioEn), style: const TextStyle(height: 1.8)),
-                  ]),
-                ),
-              ),
+            for (final s in saints) SaintCard(s),
           ]),
         ),
         ],
@@ -142,15 +117,19 @@ class PriestCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final name = context.isAr ? p.name : (p.nameEn.isNotEmpty ? p.nameEn : p.name);
+    final detail = cardDetailPath(DetailKind.priest, p.id, p.details);
     return Card(
       color: p.departed ? const Color(0xFFF7F3EC) : Colors.white,
-      child: Padding(
+      child: DetailTapArea(
+        path: detail,
+        child: Padding(
         padding: const EdgeInsets.all(14),
         child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
           ItemImage(
             image: p.displayImage,
             size: 68,
             label: name,
+            enlargeOnTap: detail == null,
             placeholder: CircleAvatar(
               radius: 34,
               backgroundColor: AppColors.parchment,
@@ -180,9 +159,59 @@ class PriestCard extends StatelessWidget {
                   child: Text(context.pick(p.bioAr, p.bioEn),
                       style: const TextStyle(color: AppColors.muted, fontSize: 13, height: 1.6)),
                 ),
+              if (detail != null) DetailsLink(path: detail, title: name, id: p.id),
             ]),
           ),
         ]),
+      ),
+      ),
+    );
+  }
+}
+
+class SaintCard extends ConsumerWidget {
+  final Saint s;
+  const SaintCard(this.s, {super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final showImages = ref.watch(featuresProvider.select((f) => f.showImages));
+    final name = context.pick(s.nameAr, s.nameEn);
+    final detail = cardDetailPath(DetailKind.saint, s.id, s.details);
+    return Card(
+      child: DetailTapArea(
+        path: detail,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              // No image: nothing here, the card keeps its text-only look.
+              ItemImage(
+                image: s.image,
+                size: 64,
+                label: name,
+                enlargeOnTap: detail == null,
+                placeholder: const SizedBox.shrink(),
+              ),
+              if (s.image != null && showImages) const SizedBox(width: 12),
+              Expanded(
+                child: Text(name,
+                    style: TextStyle(
+                        fontWeight: FontWeight.w800, fontSize: 16, color: Theme.of(context).colorScheme.primary)),
+              ),
+            ]),
+            const SizedBox(height: 6),
+            Wrap(spacing: 6, runSpacing: 6, children: [
+              Pill('${context.tr('feast')}: ${context.pick(s.feastCopticAr, s.feastCopticEn)}',
+                  color: Theme.of(context).colorScheme.primary, icon: Icons.event),
+              if (context.pick(s.feastGregorianAr, s.feastGregorian).isNotEmpty)
+                Pill(context.pick(s.feastGregorianAr, s.feastGregorian), color: AppColors.muted),
+            ]),
+            const SizedBox(height: 10),
+            Text(context.pick(s.bioAr, s.bioEn), style: const TextStyle(height: 1.8)),
+            if (detail != null) DetailsLink(path: detail, title: name, id: s.id),
+          ]),
+        ),
       ),
     );
   }

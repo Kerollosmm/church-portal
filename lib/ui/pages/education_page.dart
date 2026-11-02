@@ -4,7 +4,9 @@ import 'package:material_ui/material_ui.dart';
 import '../../core/l10n.dart';
 import '../../core/launch.dart';
 import '../../core/theme.dart';
+import '../../domain/features.dart';
 import '../../domain/cairo_time.dart';
+import '../../domain/item_detail.dart';
 import '../../domain/models.dart';
 import '../../state/providers.dart';
 import '../widgets/cards.dart';
@@ -45,8 +47,11 @@ class EducationPage extends ConsumerWidget {
     // FR-E-03: meetings held today (Cairo calendar) get a "Today" badge.
     final todayWeekday = CairoTime.fromInstant(now).weekday;
     return PageBody(
-      header: PageHeader(title: context.tr('education'), subtitle: context.tr('dir_edu'), icon: Icons.school_rounded),
+      header: CustomizablePageHeader(
+          pageKey: CustomizablePages.education,
+          title: context.tr('education'), subtitle: context.tr('dir_edu'), icon: Icons.school_rounded),
       children: [
+        const PageIntro(pageKey: CustomizablePages.education),
         AsyncSection<List<Meeting>>(
           provider: meetingsProvider,
           retry: meetingsProvider,
@@ -85,7 +90,7 @@ class EducationPage extends ConsumerWidget {
   }
 }
 
-class _TimelineItem extends StatelessWidget {
+class _TimelineItem extends ConsumerWidget {
   final Meeting meeting;
   final bool isLast;
 
@@ -94,9 +99,13 @@ class _TimelineItem extends StatelessWidget {
   const _TimelineItem({required this.meeting, required this.isLast, required this.todayWeekday});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final m = meeting;
     final label = stageLabels[m.stage];
+    final name = context.pick(m.nameAr, m.nameEn);
+    final detail = cardDetailPath(DetailKind.meeting, m.id, m.details);
+    // The meeting's own Facebook / WhatsApp links are "socials" (ADR-020).
+    final socials = itemSocialsShown(m.details, ref.watch(featuresProvider));
     return IntrinsicHeight(
       child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         SizedBox(
@@ -120,7 +129,9 @@ class _TimelineItem extends StatelessWidget {
           child: Padding(
             padding: const EdgeInsets.only(bottom: 12),
             child: Card(
-              child: Padding(
+              child: DetailTapArea(
+                path: detail,
+                child: Padding(
                 padding: const EdgeInsets.all(14),
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   // Wrap (not Row + Spacer): long stage names and the badges move
@@ -131,7 +142,13 @@ class _TimelineItem extends StatelessWidget {
                     if (m.sample) const SampleBadge(),
                   ]),
                   const SizedBox(height: 6),
-                  Text(context.pick(m.nameAr, m.nameEn), style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+                  if (m.image == null)
+                    Text(name, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16))
+                  else
+                    Row(children: [
+                      CardImageLead(image: m.image!, label: name, enlargeOnTap: detail == null),
+                      Expanded(child: Text(name, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16))),
+                    ]),
                   const SizedBox(height: 6),
                   Text(weekdayLabel(context, m.weekday),
                       style: const TextStyle(color: AppColors.goldText, fontWeight: FontWeight.w800)),
@@ -139,26 +156,28 @@ class _TimelineItem extends StatelessWidget {
                   const SizedBox(height: 4),
                   IconLine(Icons.meeting_room_outlined, context.pick(m.hallAr, m.hallEn)),
                   IconLine(Icons.info_outline, m.notes),
-                  if (m.facebookUrl.isNotEmpty || m.whatsappUrl.isNotEmpty) ...[
+                  if (socials && (m.facebookUrl.isNotEmpty || m.whatsappUrl.isNotEmpty)) ...[
                     const SizedBox(height: 8),
                     Wrap(spacing: 8, runSpacing: 8, children: [
                       if (m.facebookUrl.isNotEmpty)
                         ActionChipButton(
                             icon: Icons.facebook,
                             label: context.tr('facebook'),
-                            semanticLabel: actionSemanticLabel(context.tr('facebook'), context.pick(m.nameAr, m.nameEn)),
+                            semanticLabel: actionSemanticLabel(context.tr('facebook'), name),
                             color: facebookBlue,
                             onTap: () => openUrl(m.facebookUrl)),
                       if (m.whatsappUrl.isNotEmpty)
                         ActionChipButton(
                             icon: Icons.chat_rounded,
                             label: context.tr('whatsapp'),
-                            semanticLabel: actionSemanticLabel(context.tr('whatsapp'), context.pick(m.nameAr, m.nameEn)),
+                            semanticLabel: actionSemanticLabel(context.tr('whatsapp'), name),
                             color: whatsappGreen,
                             onTap: () => openUrl(m.whatsappUrl)),
                     ]),
                   ],
+                  if (detail != null) DetailsLink(path: detail, title: name, id: m.id),
                 ]),
+              ),
               ),
             ),
           ),

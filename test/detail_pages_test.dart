@@ -17,6 +17,7 @@ import 'package:church_portal/domain/models.dart';
 import 'package:church_portal/router.dart';
 import 'package:church_portal/state/providers.dart';
 import 'package:church_portal/ui/widgets/app_shell.dart';
+import 'package:church_portal/ui/widgets/common.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
@@ -94,6 +95,7 @@ SeedData _seed({
   (raw['activities'] as Map)['d-activity'] = {
     'category': 'choir', 'titleAr': 'نشاط تجربة', 'titleEn': 'Test activity', 'descAr': 'وصف', //
     'descEn': 'Description', 'contactPhone': '01001234567', 'order': 999, ...d,
+    'link': 'https://example.org/activity',
   };
   (raw['clinics'] as Map)['d-clinic'] = {
     'specialty': 'dental', 'specialtyAr': 'أسنان', 'specialtyEn': 'Dental', 'doctorName': 'د. تجربة', //
@@ -435,5 +437,182 @@ void main() {
         expect(failures, isEmpty);
       });
     }
+  });
+
+  group('Task 3.3: list cards', () {
+    const lists = {
+      DetailKind.meeting: '/church-education',
+      DetailKind.activity: '/church-activities',
+      DetailKind.clinic: '/clinics',
+      DetailKind.facility: '/public-services',
+      DetailKind.priest: '/about',
+      DetailKind.saint: '/about',
+      DetailKind.milestone: '/',
+    };
+    const image = {
+      'image': {'source': 'inline', 'mediaId': 'c1', 'alt': 'Cover'}
+    };
+
+    testWidgets('detailsEnabled off: cards unchanged (no Details link, images still enlarge)', (tester) async {
+      final (router, _) =
+          await _pump(tester, size: const Size(1400, 6000), seed: _seed(enabled: false, extra: image));
+      for (final e in lists.entries) {
+        router.go(e.value);
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('detailsLink')), findsNothing, reason: e.value);
+        expect(find.byKey(const Key('itemImageTap')), findsWidgets, reason: '${e.value}: fixture image enlarges');
+      }
+    });
+
+    testWidgets('detailsEnabled on: every list card links to its detail page', (tester) async {
+      final (router, _) = await _pump(tester, size: const Size(1400, 6000), seed: _seed(extra: image));
+      for (final e in lists.entries) {
+        router.go(e.value);
+        await tester.pumpAndSettle();
+        final id = e.key == DetailKind.priest ? 'd-priest' : 'd-${e.key.name}';
+        final link = find.byKey(ValueKey('detailsLink-$id'));
+        expect(link, findsOneWidget, reason: e.value);
+        // Full-size zoom lives on the detail page: the small avatar no longer enlarges.
+        expect(find.byKey(const Key('itemImageTap')), findsNothing, reason: e.value);
+        await tester.ensureVisible(link);
+        await tester.tap(link);
+        await tester.pumpAndSettle();
+        expect(_path(router), detailPathFor(e.key, id));
+        expect(find.byKey(const Key('itemDetailPage')), findsOneWidget);
+      }
+    });
+
+    testWidgets('tapping the card surface opens the detail page; Details link is labelled', (tester) async {
+      final (router, _) = await _pump(tester, size: const Size(1400, 6000), initial: '/church-activities');
+      expect(find.bySemanticsLabel('Details — Test activity'), findsOneWidget);
+      final title = find.text('Test activity');
+      await tester.ensureVisible(title);
+      await tester.tap(title);
+      await tester.pumpAndSettle();
+      expect(_path(router), '/church-activities/d-activity');
+    });
+
+    testWidgets('card buttons respect showContacts / showSocials and the socials section', (tester) async {
+      final (router, _) = await _pump(tester, size: const Size(1400, 6000), initial: '/church-activities');
+      expect(find.bySemanticsLabel('Call — Test activity'), findsOneWidget);
+      expect(find.bySemanticsLabel('Open page — Test activity'), findsOneWidget);
+      router.go('/church-education');
+      await tester.pumpAndSettle();
+      expect(find.bySemanticsLabel('Facebook — Test meeting'), findsOneWidget);
+
+      final (router2, _) = await _pump(tester,
+          size: const Size(1400, 6000),
+          seed: _seed(extra: const {'showContacts': false, 'showSocials': false}),
+          initial: '/church-activities');
+      expect(find.bySemanticsLabel('Call — Test activity'), findsNothing);
+      expect(find.bySemanticsLabel('Open page — Test activity'), findsNothing);
+      router2.go('/clinics');
+      await tester.pumpAndSettle();
+      expect(find.bySemanticsLabel(RegExp(r'^Call • Book — Dental$')), findsNothing);
+
+      final (router3, _) = await _pump(tester,
+          size: const Size(1400, 6000), seed: _seed(sections: const {'socials': false}), initial: '/church-education');
+      expect(find.bySemanticsLabel('Facebook — Test meeting'), findsNothing);
+      router3.go('/church-activities');
+      await tester.pumpAndSettle();
+      expect(find.bySemanticsLabel('Open page — Test activity'), findsNothing);
+      expect(find.bySemanticsLabel('Call — Test activity'), findsOneWidget);
+    });
+
+    testWidgets('meeting, clinic and facility cards show an optional image', (tester) async {
+      final (router, _) = await _pump(tester,
+          size: const Size(1400, 6000), media: _FakeMedia(), seed: _seed(enabled: false, extra: image));
+      for (final p in ['/church-education', '/clinics', '/public-services']) {
+        router.go(p);
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('itemImage')), findsOneWidget, reason: p);
+      }
+    });
+  });
+
+  group('Task 3.3: custom page headers & intro notes', () {
+    const pages = {
+      CustomizablePages.about: '/about',
+      CustomizablePages.schedule: '/mass-schedule',
+      CustomizablePages.education: '/church-education',
+      CustomizablePages.activities: '/church-activities',
+      CustomizablePages.clinics: '/clinics',
+      CustomizablePages.services: '/public-services',
+      CustomizablePages.contact: '/contact',
+      CustomizablePages.ask: '/ask',
+    };
+    Map<String, dynamic> header(String k) => {
+          'titleAr': 'عنوان $k', 'titleEn': 'Custom $k', 'subtitleAr': '', 'subtitleEn': 'Sub $k', //
+          'introAr': '', 'introEn': 'Intro $k',
+        };
+
+    testWidgets('every customizable page uses the admin title, subtitle and intro', (tester) async {
+      final (router, _) = await _pump(tester,
+          size: const Size(1400, 4000),
+          seed: _seed(features: {
+            'pageHeaders': {for (final k in pages.keys) k: header(k)}
+          }));
+      for (final e in pages.entries) {
+        router.go(e.value);
+        await tester.pumpAndSettle();
+        expect(find.text('Custom ${e.key}'), findsOneWidget, reason: e.value);
+        expect(find.text('Sub ${e.key}'), findsOneWidget, reason: e.value);
+        expect(find.text('Intro ${e.key}'), findsOneWidget, reason: e.value);
+      }
+    });
+
+    testWidgets('empty overrides keep the built-in header and show no intro', (tester) async {
+      final (router, _) = await _pump(tester,
+          seed: _seed(features: {
+            'pageHeaders': {
+              'clinics': {...header('clinics'), 'titleEn': '', 'subtitleEn': '', 'introEn': ''},
+            }
+          }),
+          initial: '/clinics');
+      expect(find.text('Charity specialty clinics'), findsWidgets);
+      expect(find.byKey(const Key('pageIntro')), findsNothing);
+      // Arabic-only title: English visitors keep the English built-in title.
+      expect(find.text('عنوان clinics'), findsNothing);
+      router.go('/about');
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('pageIntro')), findsNothing);
+    });
+  });
+
+  group('Task 3.3: footer (FR-G-04)', () {
+    Finder inFooter(Finder f) => find.descendant(of: find.byType(Footer), matching: f);
+
+    testWidgets('defaults: phones, socials and quick links; no note', (tester) async {
+      await _pump(tester, size: const Size(1400, 4000));
+      expect(inFooter(find.byKey(const Key('footerPhone-035368888'))), findsOneWidget);
+      for (final s in ['whatsappChannel', 'facebook', 'youtube', 'instagram']) {
+        expect(inFooter(find.byKey(Key('footerSocial-$s'))), findsOneWidget, reason: s);
+      }
+      expect(inFooter(find.byKey(const Key('footerQuickLinks'))), findsOneWidget);
+      expect(inFooter(find.byKey(const Key('footerNote'))), findsNothing);
+    });
+
+    testWidgets('admin switches hide phones, socials and quick links; note shown', (tester) async {
+      await _pump(tester,
+          size: const Size(1400, 4000),
+          seed: _seed(features: {
+            'footer': {
+              'showPhones': false, 'showSocials': false, 'showQuickLinks': false, //
+              'noteAr': 'ملاحظة', 'noteEn': 'Footer note',
+            }
+          }));
+      expect(inFooter(find.byKey(const Key('footerPhone-035368888'))), findsNothing);
+      expect(inFooter(find.byKey(const Key('footerSocial-facebook'))), findsNothing);
+      expect(inFooter(find.byKey(const Key('footerQuickLinks'))), findsNothing);
+      expect(inFooter(find.text('Footer note')), findsOneWidget);
+    });
+
+    testWidgets('sections win: contact info off hides phones, socials off hides icons', (tester) async {
+      await _pump(tester,
+          size: const Size(1400, 4000), seed: _seed(sections: const {'contactInfo': false, 'socials': false}));
+      expect(inFooter(find.byKey(const Key('footerPhone-035368888'))), findsNothing);
+      expect(inFooter(find.byKey(const Key('footerSocial-facebook'))), findsNothing);
+      expect(inFooter(find.byKey(const Key('footerQuickLinks'))), findsOneWidget);
+    });
   });
 }

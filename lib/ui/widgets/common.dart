@@ -4,8 +4,10 @@ import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../../core/l10n.dart';
+import '../../core/launch.dart';
 import '../../core/theme.dart';
 import '../../domain/features.dart';
+import '../../domain/models.dart';
 import '../../domain/rules.dart';
 import '../../domain/time_format.dart';
 import '../../state/providers.dart';
@@ -97,6 +99,60 @@ class PageHeader extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// [PageHeader] of a customizable public page ([CustomizablePages]): the
+/// admin's title / subtitle for the current language
+/// (`settings/features.pageHeaders.<pageKey>`) replace the built-in ones;
+/// an empty override keeps the built-in text.
+class CustomizablePageHeader extends ConsumerWidget {
+  final String pageKey;
+  final String title;
+  final String? subtitle;
+  final IconData? icon;
+  const CustomizablePageHeader(
+      {super.key, required this.pageKey, required this.title, this.subtitle, this.icon});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(featuresProvider.select((f) => f.pageHeader(pageKey)));
+    // Current language only: the built-in title exists in both languages, so
+    // an Arabic-only override never replaces the English title with Arabic.
+    String own(String ar, String en) => (context.isAr ? ar : en).trim();
+    final t = own(c.titleAr, c.titleEn);
+    final st = own(c.subtitleAr, c.subtitleEn);
+    return PageHeader(title: t.isNotEmpty ? t : title, subtitle: st.isNotEmpty ? st : subtitle, icon: icon);
+  }
+}
+
+/// Optional admin intro note at the top of a customizable page (nothing
+/// when `introAr` / `introEn` are empty).
+class PageIntro extends ConsumerWidget {
+  final String pageKey;
+  const PageIntro({super.key, required this.pageKey});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(featuresProvider.select((f) => f.pageHeader(pageKey)));
+    final text = context.pick(c.introAr.trim(), c.introEn.trim());
+    if (text.isEmpty) return const SizedBox.shrink();
+    return Container(
+      key: const Key('pageIntro'),
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.cream,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.gold.withValues(alpha: 0.6)),
+      ),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Icon(Icons.campaign_outlined, color: AppColors.goldText),
+        const SizedBox(width: 10),
+        Expanded(child: Text(text, style: const TextStyle(height: 1.7, color: AppColors.ink))),
+      ]),
     );
   }
 }
@@ -435,6 +491,9 @@ String weekdayLabel(BuildContext context, int? wd) => weekdayName(wd, arabic: co
 /// Localised digits for small numbers in running text.
 String localDigits(BuildContext context, String s) => context.isAr ? toArabicDigits(s) : s;
 
+/// Site footer (FR-G-04): church name and address, quick phone numbers,
+/// official social icons, quick links and an optional admin note, each
+/// switchable in `settings/features.footer` (and hidden with its section).
 class Footer extends ConsumerWidget {
   const Footer({super.key});
 
@@ -444,12 +503,28 @@ class Footer extends ConsumerWidget {
     final servingSeed = ref.watch(repositoryProvider).servingSeed;
     final year = DateTime.now().year;
     final features = ref.watch(featuresProvider);
+    final footer = features.footer;
     final links = <(String, String)>[
       ('massSchedule', '/mass-schedule'),
       ('clinics', '/clinics'),
       ('education', '/church-education'),
       ('contact', '/contact'),
     ].where((l) => features.routeEnabled(l.$2)).toList();
+    final phones = s != null && footer.showPhones && features.enabled(Sections.contactInfo)
+        ? s.phones.where((p) => p.number.trim().isNotEmpty).toList()
+        : const <PhoneEntry>[];
+    final socials = <(String, IconData, String, VoidCallback)>[
+      if (s != null && footer.showSocials && features.enabled(Sections.socials)) ...[
+        if (s.whatsappChannel.isNotEmpty)
+          ('whatsappChannel', Icons.campaign_rounded, context.tr('whatsappChannel'), () => openUrl(s.whatsappChannel)),
+        if (s.whatsapp.isNotEmpty) ('whatsapp', Icons.chat_rounded, context.tr('whatsapp'), () => openWhatsApp(s.whatsapp)),
+        if (s.facebook.isNotEmpty) ('facebook', Icons.facebook, context.tr('facebook'), () => openUrl(s.facebook)),
+        if (s.youtube.isNotEmpty) ('youtube', Icons.live_tv_rounded, context.tr('youtube'), () => openUrl(s.youtube)),
+        if (s.instagram.isNotEmpty)
+          ('instagram', Icons.photo_camera_rounded, context.tr('instagram'), () => openUrl(s.instagram)),
+      ],
+    ];
+    final note = context.pick(footer.noteAr.trim(), footer.noteEn.trim());
     return Container(
       width: double.infinity,
       color: primaryDarkOf(context),
@@ -474,14 +549,61 @@ class Footer extends ConsumerWidget {
                 child: Text(context.pick(s.addressAr, s.addressEn),
                     textAlign: TextAlign.center, style: const TextStyle(color: AppColors.goldLight, fontSize: 13)),
               ),
-            const SizedBox(height: 10),
-            Wrap(alignment: WrapAlignment.center, spacing: 4, children: [
-              for (final l in links)
-                TextButton(
-                  onPressed: () => context.go(l.$2),
-                  child: Text(context.tr(l.$1), style: const TextStyle(color: Colors.white70)),
+            if (phones.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Semantics(
+                  container: true,
+                  label: context.tr('footerPhones'),
+                  child: Wrap(alignment: WrapAlignment.center, spacing: 4, runSpacing: 4, children: [
+                    for (final p in phones)
+                      TextButton.icon(
+                        key: Key('footerPhone-${p.number.trim()}'),
+                        onPressed: () => callPhone(p.number),
+                        icon: const Icon(Icons.call, size: 16, color: AppColors.goldLight),
+                        label: Text(
+                          p.number.trim(),
+                          // Digits read left-to-right in Arabic too.
+                          textDirection: TextDirection.ltr,
+                          semanticsLabel:
+                              '${context.tr('call')} ${context.pick(p.labelAr, p.labelEn)} ${p.number.trim()}'.trim(),
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+                        ),
+                      ),
+                  ]),
                 ),
-            ]),
+              ),
+            if (socials.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Wrap(alignment: WrapAlignment.center, spacing: 4, runSpacing: 4, children: [
+                  for (final x in socials)
+                    IconButton(
+                      key: Key('footerSocial-${x.$1}'),
+                      tooltip: x.$3,
+                      onPressed: x.$4,
+                      constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+                      icon: Icon(x.$2, color: Colors.white),
+                    ),
+                ]),
+              ),
+            const SizedBox(height: 10),
+            if (footer.showQuickLinks && links.isNotEmpty)
+              Wrap(key: const Key('footerQuickLinks'), alignment: WrapAlignment.center, spacing: 4, children: [
+                for (final l in links)
+                  TextButton(
+                    onPressed: () => context.go(l.$2),
+                    child: Text(context.tr(l.$1), style: const TextStyle(color: Colors.white70)),
+                  ),
+              ]),
+            if (note.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text(note,
+                    key: const Key('footerNote'),
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: Colors.white70, fontSize: 13, height: 1.6)),
+              ),
             const SizedBox(height: 6),
             Text('© ${localDigits(context, '$year')} — ${context.tr('rights')}',
                 style: const TextStyle(color: Colors.white54, fontSize: 12)),

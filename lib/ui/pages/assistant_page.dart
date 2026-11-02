@@ -195,18 +195,24 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
     if (settings.isLoading) return const Center(child: CircularProgressIndicator());
     if (!visible) {
       return PageBody(
-        header: PageHeader(title: context.tr('askTitle'), icon: Icons.auto_awesome_rounded),
-        children: [EmptyState(message: context.tr('askUnavailable'), icon: Icons.smart_toy_outlined)],
+        header: CustomizablePageHeader(
+            pageKey: CustomizablePages.ask, title: context.tr('askTitle'), icon: Icons.auto_awesome_rounded),
+        children: [const PageIntro(pageKey: CustomizablePages.ask), EmptyState(message: context.tr('askUnavailable'), icon: Icons.smart_toy_outlined)],
       );
     }
     final suggestions = [context.tr('askSuggest1'), context.tr('askSuggest2'), context.tr('askSuggest3')];
     return Column(children: [
-      PageHeader(title: context.tr('askTitle'), subtitle: context.tr('askDisclaimer'), icon: Icons.auto_awesome_rounded),
+      CustomizablePageHeader(
+          pageKey: CustomizablePages.ask,
+          title: context.tr('askTitle'),
+          subtitle: context.tr('askDisclaimer'),
+          icon: Icons.auto_awesome_rounded),
       Expanded(
         child: Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 800),
             child: ListView(controller: _scroll, padding: const EdgeInsets.all(16), children: [
+              const PageIntro(pageKey: CustomizablePages.ask),
               _bubble(_Msg(false, context.tr('askIntro'))),
               if (_messages.isEmpty)
                 Padding(

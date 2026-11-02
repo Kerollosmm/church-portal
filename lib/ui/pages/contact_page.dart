@@ -30,8 +30,11 @@ class ContactPage extends ConsumerWidget {
     final showSocial = f.enabled(Sections.socials);
     final showForm = f.enabled(Sections.contactForm);
     return PageBody(
-      header: PageHeader(title: context.tr('contact'), subtitle: context.tr('dir_contact'), icon: Icons.call_rounded),
+      header: CustomizablePageHeader(
+          pageKey: CustomizablePages.contact,
+          title: context.tr('contact'), subtitle: context.tr('dir_contact'), icon: Icons.call_rounded),
       children: [
+        const PageIntro(pageKey: CustomizablePages.contact),
         AsyncSection<ChurchSettings>(
           provider: settingsProvider,
           retry: settingsProvider,
