@@ -34,6 +34,11 @@ Status as of 2 Nov 2026 (after PR #7, PR #8, PR #9 `ad621cf` and PR #10).
 - [ ] **Orphaned `media` docs:** deletes are best effort; add a small owner-only "clean up unused images" action or a
       script (list `media` ids not referenced by any `image.mediaId`) if they accumulate.
 
+- [ ] **Browser-target test for `applyDocumentHead`** (`lib/core/document_lang_web.dart`): the Dart VM tests only
+      check the `DocumentHeadSpec` passed to `debugOnRouteMeta`, not the `<link rel="canonical">` /
+      `<meta name="robots">` written to `document.head`. Needs a `@TestOn('browser')` test and a
+      `flutter test --platform chrome` CI job (CodeRabbit nitpick on PR #10, deferred).
+
 - [ ] **Custom domain (optional)**: if the church buys a domain, add it to Hosting site `maximos-domadios-church`
       (console → Hosting → Add custom domain), add it to Auth authorized domains, and update OG/robots/
       sitemap URLs and the redirect destination in `firebase.json` (ADR-018).

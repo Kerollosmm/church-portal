@@ -325,6 +325,8 @@ void main() {
       expect(locs, isNot(contains('https://maximos-domadios-church.web.app/ask')));
       expect(locs, contains('https://maximos-domadios-church.web.app/'));
       expect(locs, contains('https://maximos-domadios-church.web.app/mass-schedule'));
+      expect(locs, contains('https://maximos-domadios-church.web.app/about'));
+      expect(locs, contains('https://maximos-domadios-church.web.app/contact'));
     });
   });
 }

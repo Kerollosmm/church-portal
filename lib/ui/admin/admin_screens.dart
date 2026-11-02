@@ -279,6 +279,10 @@ class _ChurchInfoScreenState extends State<ChurchInfoScreen> {
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<AdminDoc?>(
+      // A new stream (another backend) gets a fresh StreamBuilder: a reused one
+      // keeps the old backend's last snapshot while waiting, and that stale
+      // document would then be marked as loaded.
+      key: ObjectKey(_stream),
       stream: _stream,
       builder: (context, snap) {
         if (snap.hasError) return Center(child: Text('${snap.error}'));

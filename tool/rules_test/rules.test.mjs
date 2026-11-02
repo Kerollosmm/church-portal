@@ -304,7 +304,7 @@ describe('admins', () => {
     await assertSucceeds(deleteDoc(doc(own, 'admins', 'new-uid')));
   });
 
-  test('setAdmin writes are stamped (updatedAt / updatedBy)', async () => {
+  test('admins rule accepts stamped updatedAt and updatedBy fields', async () => {
     const own = db(OWNER);
     await assertSucceeds(setDoc(doc(own, 'admins', 'stamped-uid'), {
       email: 'stamped@x.test', role: 'editor', updatedAt: serverTimestamp(), updatedBy: `${OWNER}@x.test`,

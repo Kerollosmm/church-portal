@@ -460,13 +460,13 @@ void main() {
       expect(t, contains('Today in Cairo: 2026-11-02 (Monday).'));
     });
 
-    test('dated one-off liturgy with weekday set is grounded once as special, and past one-offs drop out', () {
+    test('dated one-off liturgy with a conflicting weekday set is grounded once as special, and past one-offs drop out', () {
       final atMidnight30 = cairo(2027, 1, 1, 0, 30);
       final t = buildAssistantInstruction(
         settings: settings,
         liturgies: [
           const Liturgy(id: 'fri', type: 'mass', nameAr: 'قداس الجمعة', nameEn: 'Friday mass', weekday: 5, start: '07:00', end: '09:00'),
-          Liturgy(id: 'both', type: 'mass', nameAr: 'قداس تذكاري', nameEn: 'Memorial mass', weekday: 5, date: DateTime(2027, 1, 8), start: '08:00', end: '10:00'),
+          Liturgy(id: 'both', type: 'mass', nameAr: 'قداس تذكاري', nameEn: 'Memorial mass', weekday: 2, date: DateTime(2027, 1, 8), start: '08:00', end: '10:00'),
           Liturgy(id: 'nye', type: 'praise', nameAr: 'سهرة رأس السنة', nameEn: 'NYE vigil', date: DateTime(2026, 12, 31), start: '22:00', end: '01:00'),
           Liturgy(id: 'expired', type: 'mass', nameAr: 'قداس قديم', nameEn: 'Old mass', date: DateTime(2026, 12, 10), start: '08:00', end: '10:00'),
         ],
@@ -482,7 +482,7 @@ void main() {
       expect(weeklyBlock, contains('Friday mass'));
       expect(weeklyBlock, isNot(contains('Memorial mass')));
       expect(specialBlock, contains('2026-12-31: NYE vigil'));
-      expect(specialBlock, contains('2027-01-08: Memorial mass'));
+      expect('2027-01-08: Memorial mass'.allMatches(specialBlock).length, 1);
       expect(t, isNot(contains('Old mass')));
     });
   });
