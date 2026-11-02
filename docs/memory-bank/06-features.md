@@ -113,7 +113,7 @@ Chat UI with intro bubble, 3 suggestion chips, 500-char input, disclaimer «إج
   `MediaCache.instance` (in-memory LRU, 60 entries, failures retried). Fade-in (300 ms), placeholder while loading and
   on any error, semantic label = `alt` or the item's name, fixed square / circle sizes (no layout shift).
 - Tap an image ⇒ `showImageViewer` dialog (pinch/scroll zoom, close button).
-- The assistant never sees image data.
+- The assistant never sees image data (cover `image`, `gallery` URLs, media ids or alt text — PR #11 test).
 
 ### Shared UI behaviours
 - `SampleBadge` («بيانات تجريبية / Sample data») on any `sample: true` item; `PendingConfirmationNote`
@@ -132,6 +132,12 @@ Chat UI with intro bubble, 3 suggestion chips, 500-char input, disclaimer «إج
 - Multi-section pages stay up while **any** of their sections is on (`routeSections`): `/about` (history, saints,
   priests, departedPriests) and `/contact` (contactInfo, socials, contactForm); the page hides the switched-off parts.
 - `/` is never gated; unknown paths are always allowed by `routeEnabled`.
+- **Prefix-aware (PR #11, `sectionsForPath`)**: detail sub-routes are gated by their parent section —
+  `/clinics/*` (clinics), `/church-education/*` (meetings), `/church-activities/*` (activities), `/public-services/*`
+  (services), `/about/priests/*` (priests or departedPriests), `/about/saints/*` (saints), `/about/milestones/*`
+  (milestones); other sub-paths follow their top-level page. The routes themselves arrive in PR #13.
+- `settings/features` also carries `pageHeaders` (per-page title / subtitle / intro overrides) and `footer`
+  (FR-G-04 options) since PR #11 (model + rules; admin cards PR #12, rendering PR #13).
 - Per-item visibility: `visible: false` items never reach public pages (`publicItems`).
 - Gated pages wait for the first `settings/features` value (`featuresReadyProvider`) so switched-off content never
   flashes.

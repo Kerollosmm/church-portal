@@ -42,6 +42,12 @@ class MediaLimits {
   /// Max length of a pasted URL (matches the other URL fields and the rules).
   static const maxUrlLength = 500;
   static const maxAltLength = 300;
+
+  /// Photos in an item's detail-page `gallery` (also the rules' list cap).
+  static const maxGalleryItems = 8;
+
+  /// Admin-defined `extraFields` rows on an item (also the rules' list cap).
+  static const maxExtraFields = 15;
 }
 
 class MediaSource {
@@ -161,11 +167,34 @@ int base64Length(int bytes) => ((bytes + 2) ~/ 3) * 4;
   return (w: r(w * scale), h: r(h * scale));
 }
 
-/// Media ids an edit leaves behind (old inline image replaced or removed),
-/// so the caller can delete them best effort.
-List<String> orphanedMediaIds(Object? before, Object? after) {
-  final old = MediaImage.fromMap(before)?.ownedMediaId;
-  if (old == null) return const [];
-  final now = MediaImage.fromMap(after)?.ownedMediaId;
-  return now == old ? const [] : [old];
+/// `media/{id}` docs owned by [v]: a single `image` map or a `gallery` list
+/// of image maps (anything else owns none).
+Set<String> _ownedMediaIds(Object? v) {
+  if (v is List) {
+    return {
+      for (final e in v)
+        if (MediaImage.fromMap(e)?.ownedMediaId case final String id) id,
+    };
+  }
+  final id = MediaImage.fromMap(v)?.ownedMediaId;
+  return id == null ? <String>{} : {id};
 }
+
+/// Media ids an edit leaves behind (old inline image replaced or removed),
+/// so the caller can delete them best effort. [before] / [after] may each be
+/// a single `image` map or a `gallery` list.
+List<String> orphanedMediaIds(Object? before, Object? after) =>
+    _ownedMediaIds(before).difference(_ownedMediaIds(after)).toList();
+
+/// Every inline `media/{id}` a content document references through its cover
+/// `image` and its `gallery`.
+Set<String> extractDocMediaIds(Map<String, dynamic>? data) {
+  if (data == null) return <String>{};
+  return {..._ownedMediaIds(data['image']), ..._ownedMediaIds(data['gallery'])};
+}
+
+/// Media ids a document save (or delete, [after] = null) leaves behind. An
+/// inline image moved between the cover `image` and the `gallery` in the same
+/// save is still referenced, so it is never reported.
+List<String> orphanedDocMediaIds(Map<String, dynamic>? before, Map<String, dynamic>? after) =>
+    extractDocMediaIds(before).difference(extractDocMediaIds(after)).toList();

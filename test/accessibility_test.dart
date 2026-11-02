@@ -7,6 +7,7 @@ import 'package:church_portal/core/launch.dart';
 import 'package:church_portal/core/theme.dart';
 import 'package:church_portal/data/admin_repository.dart';
 import 'package:church_portal/data/content_repository.dart';
+import 'package:church_portal/data/media_repository.dart';
 import 'package:church_portal/data/seed_data.dart';
 import 'package:church_portal/domain/cairo_time.dart';
 import 'package:church_portal/domain/features.dart';
@@ -762,6 +763,33 @@ void main() {
       expect(repo.reorderedBase, 1000);
     });
 
+    testWidgets('deleting an item also deletes its inline cover and gallery media', (tester) async {
+      tester.view.physicalSize = const Size(1200, 2000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final media = _DeleteOnlyMedia();
+      final repo = _ListBackend([
+        AdminDoc('s', {
+          'nameAr': 'St A',
+          'order': 10,
+          'image': {'source': 'inline', 'mediaId': 'cover1'},
+          'gallery': [
+            {'source': 'inline', 'mediaId': 'g1'},
+            {'source': 'url', 'url': 'https://x.org/a.jpg'},
+            {'source': 'inline', 'mediaId': 'g2'},
+          ],
+        }),
+      ], mediaRepo: media);
+      await tester.pumpWidget(_adminApp(CollectionListScreen(repo: repo, def: collectionById('saints')!)));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Delete').first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.descendant(of: find.byType(AlertDialog), matching: find.byType(FilledButton)));
+      await tester.pumpAndSettle();
+      expect(repo.deletedIds, ['saints/s']);
+      expect(media.deleted..sort(), ['cover1', 'g1', 'g2']);
+    });
+
     testWidgets('search clear and admin Home buttons expose tooltips (en + ar)', (tester) async {
       tester.view.physicalSize = const Size(1200, 2000);
       tester.view.devicePixelRatio = 1;
@@ -844,10 +872,25 @@ void main() {
 
 class _ListBackend extends _FakeBackend {
   final List<AdminDoc> docs;
-  _ListBackend(this.docs);
+  final MediaRepository? mediaRepo;
+  final deletedIds = <String>[];
+  _ListBackend(this.docs, {this.mediaRepo});
+  @override
+  MediaRepository? get media => mediaRepo;
+  @override
+  Future<void> delete(String collection, String id) async => deletedIds.add('$collection/$id');
   @override
   Stream<List<AdminDoc>> watch(String collection) {
     watched.add(collection);
     return Stream.value(docs);
   }
+}
+
+/// Records media deletions (the only call the delete handler makes).
+class _DeleteOnlyMedia implements MediaRepository {
+  final deleted = <String>[];
+  @override
+  Future<void> delete(String mediaId) async => deleted.add(mediaId);
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

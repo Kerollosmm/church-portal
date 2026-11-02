@@ -148,9 +148,15 @@ void main() {
         final start = rules.indexOf('function $fn(');
         expect(start, greaterThan(0), reason: fn);
         final body = rules.substring(start, rules.indexOf('}', start));
-        final list = RegExp(r"keysAllowed\(\[([^\]]*)\]").firstMatch(body)!.group(1)!;
+        final list = RegExp(r"(?:keysAllowed\(|changed\.hasOnly\()\[([^\]]*)\]").firstMatch(body)!.group(1)!;
         final keys = RegExp(r"'([A-Za-z]+)'").allMatches(list).map((m) => m.group(1)!).toSet();
         if (body.contains('concat(meta())')) keys.addAll(['visible', 'sample', 'order', 'updatedAt', 'updatedBy']);
+        // PR #11: the 7 detail-page collections also allow the shared detail keys.
+        if (body.contains('concat(detailKeys())')) {
+          final start = rules.indexOf('function detailKeys()');
+          final detail = rules.substring(start, rules.indexOf('}', start));
+          keys.addAll(RegExp(r"'([A-Za-z]+)'").allMatches(detail).map((m) => m.group(1)!));
+        }
         return keys;
       }
 

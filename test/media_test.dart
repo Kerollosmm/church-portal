@@ -185,6 +185,43 @@ void main() {
       expect(orphanedMediaIds(u, null), isEmpty);
       expect(orphanedMediaIds(null, b), isEmpty);
     });
+
+    test('gallery limits are exposed for the client and the rules', () {
+      expect(MediaLimits.maxGalleryItems, 8);
+      expect(MediaLimits.maxExtraFields, 15);
+    });
+
+    test('orphanedMediaIds also accepts a gallery list on either side', () {
+      final a = {'source': 'inline', 'mediaId': 'a'};
+      final b = {'source': 'inline', 'mediaId': 'b'};
+      final c = {'source': 'inline', 'mediaId': 'c'};
+      final u = {'source': 'url', 'url': 'https://x.org/a.jpg'};
+      expect(orphanedMediaIds([a, b, u], [b]), ['a']);
+      expect(orphanedMediaIds([a, b], [b, a]), isEmpty); // reorder only
+      expect(orphanedMediaIds([a, b], null)..sort(), ['a', 'b']);
+      expect(orphanedMediaIds([a, 'junk', 3], const []), ['a']);
+      expect(orphanedMediaIds(a, [a, c]), isEmpty); // single map vs list
+      expect(orphanedMediaIds([a, c], a), ['c']);
+      expect(orphanedMediaIds(null, [a]), isEmpty);
+    });
+
+    test('document-level media ids cover the cover image and the gallery', () {
+      final a = {'source': 'inline', 'mediaId': 'a'};
+      final b = {'source': 'inline', 'mediaId': 'b'};
+      final c = {'source': 'inline', 'mediaId': 'c'};
+      final u = {'source': 'url', 'url': 'https://x.org/a.jpg'};
+      expect(extractDocMediaIds(null), isEmpty);
+      expect(extractDocMediaIds({'titleAr': 'x'}), isEmpty);
+      expect(extractDocMediaIds({'image': a, 'gallery': [b, u, c, 'junk']}), {'a', 'b', 'c'});
+      // Moving an inline image from the cover into the gallery keeps it.
+      expect(orphanedDocMediaIds({'image': a, 'gallery': [b]}, {'image': null, 'gallery': [a, b]}), isEmpty);
+      // ...and from the gallery to the cover.
+      expect(orphanedDocMediaIds({'image': u, 'gallery': [a, b]}, {'image': a, 'gallery': [b]}), isEmpty);
+      // Replaced / removed ones are orphaned.
+      expect(orphanedDocMediaIds({'image': a, 'gallery': [b, c]}, {'image': u, 'gallery': [c]})..sort(), ['a', 'b']);
+      // Deleting the document cleans up both.
+      expect(orphanedDocMediaIds({'image': a, 'gallery': [b]}, null)..sort(), ['a', 'b']);
+    });
   });
 
   group('compression', () {
@@ -296,6 +333,32 @@ void main() {
       expect(text, isNot(contains('secret-photo')));
       expect(text, isNot(contains('ALT-TEXT-123')));
       expect(text, isNot(contains('MEDIA-ID-777')));
+    });
+
+    test('gallery URLs, media ids and alt text never reach the assistant prompt', () {
+      final seed = SeedData(jsonDecode(File('assets/seed/seed.json').readAsStringSync()) as Map<String, dynamic>);
+      const gallery = [
+        {'source': 'url', 'url': 'https://img.example.org/gallery-secret.jpg', 'alt': 'GALLERY-ALT-1'},
+        {'source': 'inline', 'mediaId': 'GALLERY-MEDIA-2', 'alt': 'GALLERY-ALT-2'},
+      ];
+      const page = {'detailsEnabled': true, 'detailsEn': 'Visible details', 'gallery': gallery};
+      final text = buildAssistantInstruction(
+        settings: seed.settings,
+        liturgies: const [],
+        seasons: const [],
+        clinics: [Clinic.fromMap('c', {'specialtyAr': 'أسنان', 'doctorName': 'د', ...page})],
+        meetings: [Meeting.fromMap('m', {'stage': 's', 'nameAr': 'اجتماع', ...page})],
+        activities: [Activity.fromMap('a', {'titleAr': 'كورال', ...page})],
+        facilities: [Facility.fromMap('f', {'nameAr': 'حضانة', ...page})],
+        priests: [Priest.fromMap('p', {'name': 'أبونا', ...page})],
+        saints: [Saint.fromMap('s', {'nameAr': 'قديس', ...page})],
+        milestones: [Milestone.fromMap('ms', {'titleAr': 'محطة', ...page})],
+        now: CairoTime.at(2026, 11, 1, 600),
+      );
+      expect(text, contains('Visible details'));
+      for (final s in ['gallery-secret', 'img.example.org', 'GALLERY-MEDIA-2', 'GALLERY-ALT-1', 'GALLERY-ALT-2']) {
+        expect(text, isNot(contains(s)), reason: s);
+      }
     });
   });
 

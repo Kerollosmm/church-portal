@@ -39,6 +39,11 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
   /// Enabled sections the history was built under: when they change, earlier
   /// turns (possibly about a section now switched off) are not replayed.
   String? _historySections;
+
+  /// Detail-page grounding the history was built under
+  /// ([assistantDetailSignature]): when an admin withdraws details, phones or
+  /// links, earlier answers quoting them are not replayed.
+  String? _historyDetails;
   bool _busy = false;
 
   /// Successful turns (user + model), replayed when the session is rebuilt
@@ -70,6 +75,8 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
         ref.read(alertsProvider.future),
         ref.read(priestsProvider.future),
         ref.read(saintsProvider.future),
+        // Milestones are grounded only while their section is on.
+        if (ref.read(featuresProvider).enabled(Sections.milestones)) ref.read(milestonesProvider.future),
       ]).timeout(const Duration(seconds: 10));
     } catch (e) {
       debugPrint('Assistant: content not fully loaded: $e');
@@ -89,6 +96,7 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
         alerts: ref.read(alertsProvider).value ?? const [],
         priests: ref.read(priestsProvider).value ?? const [],
         saints: ref.read(saintsProvider).value ?? const [],
+        milestones: ref.read(milestonesProvider).value ?? const [],
       );
 
   /// Reuses the chat while the grounding (church data + Cairo date) is
@@ -98,8 +106,22 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
     if (_chat != null && instruction == _chatInstruction) return _chat!;
     final f = ref.read(featuresProvider);
     final sections = [for (final s in Sections.all) if (f.enabled(s)) s].join(',');
-    if (_historySections != null && _historySections != sections) _history.clear();
+    final details = assistantDetailSignature(
+      features: f,
+      clinics: ref.read(clinicsProvider).value ?? const [],
+      meetings: ref.read(meetingsProvider).value ?? const [],
+      activities: ref.read(activitiesProvider).value ?? const [],
+      facilities: ref.read(facilitiesProvider).value ?? const [],
+      priests: ref.read(priestsProvider).value ?? const [],
+      saints: ref.read(saintsProvider).value ?? const [],
+      milestones: ref.read(milestonesProvider).value ?? const [],
+    );
+    if ((_historySections != null && _historySections != sections) ||
+        (_historyDetails != null && _historyDetails != details)) {
+      _history.clear();
+    }
     _historySections = sections;
+    _historyDetails = details;
     final model = FirebaseAI.googleAI().generativeModel(
       model: AppConfig.geminiModel,
       systemInstruction: Content.system(instruction),

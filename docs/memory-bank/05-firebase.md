@@ -41,13 +41,30 @@ Helpers:
   `optIn(values)`.
 - `stampOk(d)` — `updatedAt` absent, `== request.time`, or unchanged; `updatedBy` absent, equal to the caller's token
   email (or uid), or unchanged. Prevents forging edit history.
-- `common(d)` — ≤ 60 keys, `visible`/`sample` bool, `order` int ±100000, `image` null/absent or `validImage`,
-  `stampOk`. Putting the image check here (once) instead of in each `validX` keeps the expression count low; only
-  collections whose allow-list contains `'image'` (alerts, seasons, activities, priests, milestones, saints) can
-  actually store one.
-- `validImage(i)` — map with keys ⊆ `source,url,mediaId,alt,w,h`; `source` ∈ url/inline/storage; inline →
-  `mediaId` `^[A-Za-z0-9_-]{1,128}$`, otherwise `url` ≤ 500 matching `^https://[^/\s]+[.][^/\s]+([/?#][^\s]*)?$`;
-  `alt` ≤ 300; `w`/`h` int 1–10000.
+- `changedKeys(d)` (PR #11) — create: every key; update: `diff().affectedKeys()`. `validContent` computes it once and
+  passes it down; **only changed keys are validated** (a stored value was validated when it was written).
+- `common(d, changed)` — ≤ 80 keys, `visible`/`sample` bool, `order` int ±100000, `image` null/absent or `validImage`,
+  `stampOk` (each only when changed). Only collections whose allow-list contains `'image'` (alerts, seasons and the 7
+  detail collections) can store one.
+- `validImage(i)` — keys ⊆ `source,url,mediaId,alt,w,h`; `source` ∈ url/inline/storage; inline → `mediaId`
+  `^[A-Za-z0-9_-]{1,128}$`, otherwise `url` ≤ 500 matching `https://[^/\s]+[.][^/\s]+([/?#]\S*)?`; `alt` ≤ 300;
+  `w`/`h` absent/null or int 1–10000. Since PR #11 checked on **one joined string** (`source␟url␟mediaId␟alt␟w␟h`,
+  U+001F separator, `string()` for w/h after a string `w`/`h` such as `'800'` is rejected) with two regexes — same
+  rules, a fraction of the expressions.
+- PR #11 detail helpers: `detailKeys()`; `validDetailCommon(d, changed)` → `validGallery` (≤ 8 × `galleryImage` =
+  `validImage` without the w/h range), `validExtraFields` (≤ 15 rows: the 4 keys read directly, lengths + a title via
+  one regex; unknown extra keys in a row are not rejected), `validDetailText` (4 toggles ∈ {true,false}; youtube /
+  instagram http(s) URLs, labels ≤ 80, notes ≤ 500, details ≤ 10,000 on one joined string); `validDetailContacts`
+  (`contactPhone`/`whatsapp` ≤ 20, `whatsappUrl`/`facebookUrl`/`externalUrl` `''`/null/http(s) ≤ 500; it also checks
+  the meetings' Facebook/WhatsApp URLs, the activities' `contactPhone` and the clinics' `whatsapp` whenever a write
+  sets them); `ownFieldsUnchanged(changed)` skips a collection's own-field checks when an update touches only
+  detail / meta keys; `ownMeeting/ownActivity/ownClinic/ownFacility/ownPriest/ownMilestone/ownSaint` check the
+  collection's own fields on one joined string. Optional text fields are read inline as
+  `(d.get(k, null) == null ? '' : d.k)`: absent/null is accepted, a non-string (`phone: 123`, `nameEn: true`) makes
+  the string `+` fail → denied (`string()` would have turned it into text; Codex P2 on PR #11). A helper function
+  for this cost ~2× the expressions, hence inline. `weekday`/`year` are read with `string()` after a string value
+  (`'5'`) is rejected; priest `rank`/`status` use `in [null, …]` (the text `'null'` is rejected); required fields
+  must be non-empty strings.
 - `keysAllowed(allowed)` — **create**: all keys ∈ allowed; **update**: only *changed* keys ∈ allowed
   (`diff().affectedKeys()`), so legacy fields already in a doc never block an edit.
 
@@ -79,7 +96,9 @@ Notable details:
   (incl. `media`)
   and values bool, `homeOrder`/`homeHidden` ⊆ the 7 block keys (≤ 7), `bannerLink` via `optUrlOrPath(d, 'bannerLink',
   500)` (empty, in-app path or http(s) URL with a case-insensitive scheme — same as alert links, PR #10), `theme` ∈ 5
-  presets.
+  presets; PR #11: `footer` (`validFooter`: keys ⊆ 5, three bools, notes ≤ 500) and `pageHeaders` (`validPageHeaders`:
+  pages ⊆ the 8 `CustomizablePages`, each changed entry exactly the 6 keys with 200/300/1500 caps). Every group is
+  checked only when changed (the editor saves the whole doc).
 - `validChurch`: phones/altars lists ≤ 20; `nameAr` required; `coordinatesApproximate` optional bool (PR 1).
 - **Editors and owners have the same content/settings/inbox rights**; only `admins/*` management is owner-only.
 - Tests: `tool/rules_test/rules.test.mjs` (Node test runner + `@firebase/rules-unit-testing` in the Firestore
@@ -91,9 +110,19 @@ Notable details:
   `contact_rate` pings and mismatched `lastMsgId` rejected, 10 s throttle, `media` list admin-only, admin stamps,
   `Season.replacesRegular`, `coordinatesApproximate`, safe links incl. upper-case schemes, replaying an existing message, a 5 s resend),
   and PR #10's upper-case `HTTPS://` `bannerLink`, untouched legacy key on a `settings/features` merge, and stamped
-  `setAdmin` writes. 35 tests.
-- **Expression budget:** rules are limited to 1000 expressions per request (PR #3 hit it on `validChurch`). Keep new
-  checks in shared helpers (`common`, `validImage`) and prefer `str()`/`get()` forms on big docs.
+  `setAdmin` writes; PR #11's detail pages (worst-case create + 8-photo gallery + 15 rows + list-with-text saves on all
+  7 collections, optional/cleared values, cover image on meetings/clinics/facilities, gallery/extraFields shapes,
+  `javascript:` links, bools/lengths, no duplicate inputs, no detail keys on liturgies/seasons/alerts, 80-key cap,
+  stored lists re-checked only when changed) and `pageHeaders`/`footer`. 49 tests.
+- **Expression budget (measured in PR #11):** Firestore evaluates at most **1,000 expressions per request**, shared by
+  every `match` block the path hits (that is why `validContent` keeps its `col in [...]` early exit: without it
+  `settings/church` writes ran out). Literals, field reads and `+` all count; an unrolled list item costs ~10. The
+  PR #11 plan's per-field checks (`optString` per key, `validImage` per gallery item, `str` per page-header field)
+  exceeded it with **2** gallery images or **4** page headers, so PR #11 validates only changed keys and checks text
+  on joined strings. Measured headroom (emulator, docId-length pad; 1 unit ≈ 8.5 expressions): create of a fully
+  filled doc 7–17 units (clinics lowest; 18–28 before the PR #11 type fix); update writing the full 8-photo gallery
+  19–23; 15 full `extraFields` rows 17–22; a list plus detail text in one save 4–10; an ordinary edit 56–61; **both lists at max in one write: over the cap** (denied, fail-closed) — PR #12
+  saves each list in its own update. Adding checks: measure first; keep per-item work to one regex.
 
 ## Cloud Storage (not used — Spark)
 
@@ -199,16 +228,26 @@ App target settings:
      announcements (alerts: `visibleAlerts`); clinics (active only, incl. WhatsApp); meetings (incl. notes);
      activities; public services (facilities); About the church (history: bishop + history summary, each language
      clipped to 700 chars);
-     serving priests (priests) and departed priests with repose date (departedPriests); patron saints (saints).
+     serving priests (priests) and departed priests with repose date (departedPriests); patron saints (saints);
+     **Our story** (milestones: year, title, description clipped to 300 — PR #11).
+     PR #11 item detail pages: for an item with `detailsEnabled`, its line adds the detail text (each language
+     clipped to 300 chars), its custom fields (`title: value`; titles clipped to 100, values to 300 chars per
+     language), its contacts (new `contactPhone`/`whatsapp`/contact
+     note) when `showContacts`, and its links (WhatsApp/Facebook/YouTube/Instagram/external with its label) when
+     `showSocials` **and** the socials section is on. Existing item phones (clinic booking/WhatsApp, activity contact,
+     facility phone) follow `showContacts`; existing item links (meeting Facebook/WhatsApp, activity link) follow
+     `showSocials` + the socials section. Never any image / gallery data.
      Every bilingual field goes through `_bi(ar, en)` → `"English (Arabic)"` or whichever one is filled, so
      Arabic-only admin entries never produce blank names/places (PR 1, BUG-04).
   3. Items with `sample: true` are prefixed **`[UNCONFIRMED]`** and the model is told to say they are provisional.
 - Each user message is prefixed `[Current Cairo time: YYYY-MM-DD HH:mm (Weekday)]`; questions > 500 chars are ignored;
   45 s timeout.
 - The chat is reused while the instruction string is identical; when content/date changes, a new session is started
-  with the kept history (max 20 contents = 10 turns). If the set of enabled sections changes, history is cleared.
+  with the kept history (max 20 contents = 10 turns). If the set of enabled sections changes, history is cleared;
+  so it is when `assistantDetailSignature` (each item's detail grounding + its contact/link toggles) changes, so
+  answers quoting details, phones or links an admin withdrew are not replayed (PR #11).
 - Before the first question `_awaitContent()` waits (≤ 10 s) for settings, features, liturgies, seasons, clinics,
-  meetings, activities, facilities, alerts, priests, saints.
+  meetings, activities, facilities, alerts, priests, saints, and milestones while that section is on (PR #11).
 - Kill switches (all platforms): section toggle `assistant` in /admin, `settings/church.assistantEnabled`, or App Check
   failing to activate. **Web release builds only:** a missing/placeholder reCAPTCHA key also hides it (App Check is
   skipped). Android/iOS release builds activate Play Integrity / App Attest without the key, so the assistant can

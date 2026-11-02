@@ -47,7 +47,7 @@ Global
 | FR-G-01 | Navbar with highlighted "Mass times" + "Clinics" | ✅ `AppShell._HighlightButton` (48×48 dp compact buttons on phones; below 360 px, at ≥ 150 % text, or on a subpage below 400 px they move to the drawer) |
 | FR-G-02 | AR⇄EN toggle, remembered | ✅ toggle; `?lang=` synced both ways by the router (deep links / Back-Forward switch the language, the toggle rewrites the URL); the visitor's choice is saved in `localStorage` (`church_portal_lang`, web only) and restored on the next visit (startup: `?lang=` → saved → Arabic) |
 | FR-G-03 | Times in Arabic-Indic **and** Latin digits | ✅ `TimeRangeText`, `formatRangeArabic/Latin` |
-| FR-G-04 | Footer: address, phones, socials, quick links, last updated | ⚠️ `Footer` has name, address, quick links, ©, "Showing bundled content" note; no phones/socials/last-updated |
+| FR-G-04 | Footer: address, phones, socials, quick links, last updated | ⚠️ `Footer` has name, address, quick links, ©, "Showing bundled content" note; no phones/socials/last-updated. PR #11 adds the `settings/features.footer` options (phones/socials/quick links/note); rendering in PR #13 |
 | FR-G-05 | Deep links + friendly 404 | ✅ go_router + `errorBuilder` (`notFound` + Back home); Hosting SPA rewrite; Back-to-Home arrow on phone subpages |
 | FR-G-06 | Offline cached content with note | ✅ Firestore persistence + seed fallback (`servingSeed`) |
 | FR-G-07 | Analytics events (`answer_visible`, `clinic_call`, …) | ❌ |

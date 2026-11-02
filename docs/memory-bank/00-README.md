@@ -11,7 +11,9 @@ choice remembered in `localStorage`; merged as `ad621cf`, PR #9) plus PR #10 (`f
 2026: Cairo-weekday assistant header and dated one-off grounding, admin chip contrast / narrow reflow / tooltips /
 stream re-binding, per-route canonical + `noindex` via `setDocumentRouteMeta`, URL fragments kept by `?lang=` sync,
 `/clinics` out of the sitemap while off, `validFeatures` on `keysAllowed` + `optUrlOrPath`, `deploy-rules` gated on
-`build`).
+`build`) plus PR #11 of the customization plan (`feat/pr11-domain-rules-seed`: item detail-page models, page
+headers / footer settings, prefix-aware section gating, budget-aware change-gated rules, seed maps and assistant
+grounding — ADR-020; admin studio and public pages follow in PRs #12–#13).
 
 > **Golden rule:** read this folder before changing anything, and update it in the same PR as every change that
 > alters behaviour, data shape, rules, workflows, content status or open tasks.

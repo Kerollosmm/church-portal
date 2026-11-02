@@ -1,7 +1,7 @@
 # 11 — Open tasks
 
 Tick items off (or delete them) in the PR that completes them, and add new ones as you discover them.
-Status as of 2 Nov 2026 (after PR #7, PR #8, PR #9 `ad621cf` and PR #10).
+Status as of 2 Nov 2026 (after PR #7, PR #8, PR #9 `ad621cf`, PR #10 and PR #11).
 
 ## Infrastructure & security (owner: developer)
 
@@ -49,6 +49,19 @@ Status as of 2 Nov 2026 (after PR #7, PR #8, PR #9 `ad621cf` and PR #10).
 - [ ] Ask the church office to update the admin-editable English name (`settings/church.nameEn`, currently "Church of
       Saints Maximus & Domadius and the Strong Anba Moussa the Black") if they prefer "St. Maximus & Domadius and
       St. Moses the Black Church" — not changed by the seed to avoid overwriting admin edits.
+
+## Customization plan (PRs #12–#13, ADR-020)
+
+- [ ] **Run `node tool/seed_firestore.js --fill-missing`** (Seed workflow without `force`, needs approval) after PR #11
+      deploys, so production `settings/features` gets `pageHeaders: {}` and the default `footer` map. Optional: missing
+      = defaults, and the first save in /admin → Sections writes them too.
+- [ ] **PR #12 — admin studio:** detail fields in `admin_schema.dart` (detailKeys + `image` on meetings/clinics/
+      facilities, `BR-11` hint on meetings), `FieldType.imageList` gallery editor with `orphanedDocMediaIds`, and
+      `extractDocMediaIds` in `collection_list.dart` delete; Page Headers + Footer cards in `FeaturesEditor`.
+      **Save `gallery` and `extraFields` each in their own update** (with the stamp): both full lists in one write
+      exceed the rules' 1,000-expression cap (`05-firebase.md`).
+- [ ] **PR #13 — public pages:** detail routes, `ItemDetailPage`, card integration, custom page headers/intros,
+      footer upgrade (closes FR-G-04), memory-bank sync.
 
 ## Content (owner: church office — see `09-content-status.md`)
 
