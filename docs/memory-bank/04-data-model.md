@@ -44,7 +44,8 @@ changes** (`changedKeys`; a create checks all keys) — see `05-firebase.md` (ex
 Allowed (and shown) on **`priests`** (serving + departed), **`saints`**, **`milestones`**, **`activities`**,
 **`alerts`**, **`seasons`** (`imageCollections` in `admin_schema.dart`). Since PR #11 the model (`Meeting.image`,
 `Clinic.image`, `Facility.image`) and the rules also accept it on **`meetings`**, **`clinics`** and **`facilities`**;
-since PR #12 the admin form has the field there too (cards follow in PR #13). It is **never required**; absent / `null` /
+since PR #12 the admin form has the field there too, and since PR #13 their cards show it (meeting / clinic: beside
+the title; facility: in place of the type icon). It is **never required**; absent / `null` /
 malformed = no image and the card keeps its icon / initials placeholder. The seed has no images.
 
 | Key | Type | Rule |
@@ -69,7 +70,8 @@ On the **7 detail collections** `meetings`, `activities`, `clinics`, `facilities
 `ItemDetails.none` for const constructors). All keys are optional and **default to today's behaviour**, so existing
 and seeded documents look and behave exactly as before. The data model, rules and assistant grounding are in place
 (PR #11); the admin editor since PR #12 (grouped `DocEditor`, `07-admin-dashboard.md`) and the public
-`/<section>/:id` pages PR #13.
+`/<section>/:id` pages since PR #13 (`ItemDetailPage`, `06-features.md`). `showContacts` / `showSocials` also gate
+the buttons already on the item's list card (PR #13).
 
 | Key | Type / cap (rules) | Default | Meaning |
 |---|---|---|---|
@@ -158,8 +160,8 @@ Existence of `settings/church` = "database is seeded" (see `03-architecture.md`)
 | `bannerAr`, `bannerEn` | string ≤ 500 | banner shows only if enabled **and** some text |
 | `bannerLink` | string ≤ 500 | `''`, in-app path `/…`, or `http(s)://host.tld…` (rules regex mirrors `isValidUrl(allowPath: true)`) |
 | `theme` | `burgundy\|navy\|green\|brown\|purple` | unknown → burgundy (`ThemePresets.all` ARGB values) |
-| `pageHeaders` | map `<pageKey, PageCustom>` (PR #11) | `{}`. Keys = `CustomizablePages.all`: `about, schedule, education, activities, clinics, services, contact, ask`; each entry `{titleAr, titleEn` ≤ 200, `subtitleAr, subtitleEn` ≤ 300, `introAr, introEn` ≤ 1500`}` (all 6 keys written). Unknown pages / non-maps / empty entries are dropped by `fromMap`; `toMap` writes non-empty entries only. `pageHeader(key)` → `PageCustom.empty` when unset. Rendering: PR #13 |
-| `footer` | map (PR #11, FR-G-04) | `{showPhones: true, showSocials: true, showQuickLinks: true, noteAr: '', noteEn: ''}` (`FooterConfig`); notes ≤ 500. Rendering: PR #13 |
+| `pageHeaders` | map `<pageKey, PageCustom>` (PR #11) | `{}`. Keys = `CustomizablePages.all`: `about, schedule, education, activities, clinics, services, contact, ask`; each entry `{titleAr, titleEn` ≤ 200, `subtitleAr, subtitleEn` ≤ 300, `introAr, introEn` ≤ 1500`}` (all 6 keys written). Unknown pages / non-maps / empty entries are dropped by `fromMap`; `toMap` writes non-empty entries only. `pageHeader(key)` → `PageCustom.empty` when unset. Rendered since PR #13 (`CustomizablePageHeader` / `PageIntro`: title/subtitle override for the current language only; intro via `context.pick`) |
+| `footer` | map (PR #11, FR-G-04) | `{showPhones: true, showSocials: true, showQuickLinks: true, noteAr: '', noteEn: ''}` (`FooterConfig`); notes ≤ 500. Rendered by `Footer` since PR #13 (phones also need `contactInfo`, socials `socials`) |
 | `updatedAt`, `updatedBy` | | stampOk |
 
 - `FeatureSettings.defaults` (everything on) is used before the doc loads and when it does not exist.

@@ -144,7 +144,8 @@ Notable details:
   `--dart-define=MEDIA_BACKEND=storage`; switch steps are in ADR-017 (`10-decisions-and-history.md`).
 - Spark quota note: each inline image costs **one Firestore document read** per visitor session (cached in memory and
   by Firestore persistence), counted in the 50K reads/day. Keep images optional and few; the admin can switch them all
-  off (section `media`).
+  off (section `media`). Gallery photos (PR #13) cost those reads only when a visitor opens that item's detail page
+  (the page reuses the list stream: no extra read for the item itself). PR #13 changes no rules.
 
 ## Indexes
 
@@ -169,12 +170,15 @@ stays `asafra-church-portal.firebaseapp.com` (admin sign-in is email/password, n
 App target settings:
 
 - `public: build/web` (output of `flutter build web --release`); ignores `firebase.json`, dotfiles, `node_modules`.
-- `cleanUrls: true`, `trailingSlash: false`, **rewrite `**` → `/index.html`** (SPA + path URL strategy).
+- `cleanUrls: true`, `trailingSlash: false`, **rewrite `**` → `/index.html`** (SPA + path URL strategy) — this also
+  serves the PR #13 item detail URLs (`/clinics/<id>`, `/about/priests/<id>`…) with HTTP 200; the app decides
+  what they show.
 - SEO in `web/index.html` (PR 3 of the review plan): a **static** `<link rel="canonical"
   href="https://maximos-domadios-church.web.app/">` in the shell. Since PR #10 (amending ADR-019) Flutter rewrites it
   per route with `setDocumentRouteMeta` (`lib/core/document_lang*.dart`): indexable routes get
   `kCanonicalOrigin + path`; `/admin`, the 404 page and switched-off sections (`FeatureGate`, `AssistantGate` for
-  `/ask`) drop the canonical link and add `<meta name="robots" content="noindex">` instead (never both). Crawlers
+  `/ask`) drop the canonical link and add `<meta name="robots" content="noindex">` instead (never both); item
+  detail pages (PR #13) are indexable only while the item's page is available (`ItemDetailPage`). Crawlers
   that do not run JS still see `/` as the canonical. `web/sitemap.xml` keeps `/clinics` commented out while
   `sections.clinics` is off in the seed (uncomment when clinics launch). Plus a `<script type="application/ld+json">` **`Church`** block with only
   verified facts mirrored from `settings/church` / `docs/CONTENT_SOURCES.md` and the display title: Arabic name
