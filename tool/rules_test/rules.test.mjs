@@ -245,7 +245,9 @@ describe('optional images', () => {
     for (const image of bad) {
       await assertFails(updateDoc(doc(ed, 'priests', 'p1'), { image }));
     }
-    await assertFails(updateDoc(doc(ed, 'clinics', 'c1'), { image: { source: 'inline', mediaId: 'm1' } }));
+    // Liturgies never take an image (clinics, meetings and facilities do since PR #11).
+    await assertFails(setDoc(doc(ed, 'liturgies', 'l1'), { nameAr: 'x', start: '07:00', image: { source: 'inline', mediaId: 'm1' } }));
+    await assertSucceeds(updateDoc(doc(ed, 'clinics', 'c1'), { image: { source: 'inline', mediaId: 'm1' } }));
   });
 
   test('media: public read, admin-only validated writes', async () => {
@@ -476,5 +478,271 @@ describe('SEC-04: season flag, coordinates flag and safe links', () => {
     }));
     await assertFails(setDoc(doc(ed, 'meetings', 'm2'), { ...meeting, facebookUrl: 'javascript:alert(1)' }));
     await assertFails(setDoc(doc(ed, 'meetings', 'm3'), { ...meeting, whatsappUrl: 'vbscript:x' }));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// PR #11: optional item detail pages (7 collections) + page headers & footer.
+describe('PR #11: item detail pages', () => {
+  const stamp = () => ({ updatedAt: serverTimestamp(), updatedBy: `${EDITOR}@x.test` });
+  const base = {
+    meetings: { stage: 'youth', nameAr: 'اجتماع', facebookUrl: 'https://facebook.com/m', whatsappUrl: 'https://chat.whatsapp.com/m' },
+    activities: { titleAr: 'كورال', contactPhone: '01012345678', link: 'https://fb.example.org/choir' },
+    clinics: { specialty: 'dental', specialtyAr: 'الأسنان', doctorName: 'د. مينا', bookingPhone: '0123', whatsapp: '010' },
+    facilities: { nameAr: 'الحضانة', phone: '0123' },
+    priests: { name: 'أبونا', status: 'serving' },
+    milestones: { titleAr: 'زيارة' },
+    saints: { nameAr: 'الأنبا موسى' },
+  };
+  const COLS = Object.keys(base);
+  const img = (i) => ({ source: 'inline', mediaId: `m${i}`, alt: 'a'.repeat(300), w: 800, h: 600 });
+  const field = (i) => ({ titleAr: 'ع'.repeat(150), titleEn: 't'.repeat(150), valueAr: 'ق'.repeat(2000), valueEn: `${i}`.repeat(2000).slice(0, 2000) });
+  const row = (r) => ({ titleAr: '', titleEn: '', valueAr: '', valueEn: '', ...r });
+  const common = {
+    detailsEnabled: true, showDetailImages: false, showContacts: true, showSocials: false,
+    detailsAr: 'ت'.repeat(10000), detailsEn: 'd'.repeat(10000),
+    gallery: Array.from({ length: 8 }, (_, i) => img(i)),
+    extraFields: Array.from({ length: 15 }, (_, i) => field(i)),
+    whatsapp: '01012345678', whatsappUrl: 'https://whatsapp.com/channel/x', facebookUrl: 'https://facebook.com/x',
+    youtubeUrl: 'https://youtube.com/@x', instagramUrl: 'https://instagram.com/x',
+    externalLabelAr: 'ن'.repeat(80), externalLabelEn: 'Register', contactNoteAr: 'م'.repeat(500), contactNoteEn: 'Call us',
+  };
+  // Collection-specific keys: the phone / link fields a collection lacks.
+  const extra = (col) => ({
+    ...(['clinics', 'facilities'].includes(col) ? {} : { contactPhone: '01012345678' }),
+    ...(col === 'activities' ? {} : { externalUrl: 'https://forms.example.org/register' }),
+    image: { source: 'url', url: 'https://img.example.org/cover.jpg', alt: 'cover' },
+  });
+
+  // Firestore evaluates at most 1,000 expressions per request. These are the
+  // heaviest writes the admin form makes: a create carrying every field, then
+  // the full gallery and the full extraFields list (each in its own update).
+  test('worst case (max lengths, 8 photos, 15 fields) passes on all 7 collections', async () => {
+    const ed = db(EDITOR);
+    const { gallery, extraFields, ...scalars } = common;
+    for (const col of COLS) {
+      try {
+        const ref = doc(ed, col, 'full');
+        await assertSucceeds(setDoc(ref, {
+          ...base[col], ...scalars, ...extra(col), gallery: [], extraFields: [], visible: true, sample: true, order: 1, ...stamp(),
+        }));
+        await assertSucceeds(updateDoc(ref, { gallery, ...stamp() }));
+        await assertSucceeds(updateDoc(ref, { extraFields, ...stamp() }));
+        // A list saved together with the detail text / toggles.
+        await assertSucceeds(updateDoc(ref, { gallery: gallery.slice(1), detailsEnabled: false, detailsAr: 'ت'.repeat(10000), ...stamp() }));
+        await assertSucceeds(updateDoc(ref, { extraFields: extraFields.slice(1), showContacts: false, contactNoteEn: 'x'.repeat(500), ...stamp() }));
+        // ...and ordinary edits of that worst-case doc.
+        await assertSucceeds(updateDoc(ref, { detailsEn: 'short', youtubeUrl: 'https://youtube.com/@y', ...stamp() }));
+        await assertSucceeds(updateDoc(ref, { visible: false, order: 2, ...stamp() }));
+      } catch (e) {
+        throw new Error(`${col}: ${e.message}`);
+      }
+    }
+  });
+
+  test('every detail field is optional; cleared values are accepted', async () => {
+    const ed = db(EDITOR);
+    for (const col of COLS) {
+      await assertSucceeds(setDoc(doc(ed, col, 'plain'), base[col]));
+      // The admin form writes '' for cleared text and null for a removed image / list.
+      await assertSucceeds(updateDoc(doc(ed, col, 'plain'), {
+        detailsAr: '', detailsEn: '', gallery: null, extraFields: null, image: null, whatsappUrl: '', youtubeUrl: '',
+        instagramUrl: '', facebookUrl: '', externalLabelAr: '', externalLabelEn: '', contactNoteAr: '', contactNoteEn: '',
+        whatsapp: '', ...(col === 'activities' ? {} : { externalUrl: '' }),
+        ...(['clinics', 'facilities'].includes(col) ? {} : { contactPhone: '' }),
+      }));
+      await assertSucceeds(updateDoc(doc(ed, col, 'plain'), { gallery: [], extraFields: [] }));
+      // Shared keys a collection already had keep accepting null (legacy docs).
+      if (col === 'meetings') await assertSucceeds(updateDoc(doc(ed, col, 'plain'), { facebookUrl: null, whatsappUrl: null }));
+      if (col === 'clinics') await assertSucceeds(updateDoc(doc(ed, col, 'plain'), { whatsapp: null }));
+      if (col === 'activities') await assertSucceeds(updateDoc(doc(ed, col, 'plain'), { contactPhone: null }));
+    }
+  });
+
+  test('stored lists are re-validated only when they change (expression budget)', async () => {
+    // A legacy / out-of-band list is not re-checked by an unrelated edit, but
+    // replacing it must be valid.
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'saints', 'old'), { ...base.saints, gallery: [{ source: 'url', url: 'http://x.org/a.jpg' }] });
+    });
+    const ed = db(EDITOR);
+    await assertSucceeds(updateDoc(doc(ed, 'saints', 'old'), { nameEn: 'St Moses', ...stamp() }));
+    await assertFails(updateDoc(doc(ed, 'saints', 'old'), { gallery: [{ source: 'url', url: 'http://x.org/b.jpg' }] }));
+    await assertSucceeds(updateDoc(doc(ed, 'saints', 'old'), { gallery: [img(1)] }));
+  });
+
+  test('cover image: clinics, meetings and facilities now accept image + gallery', async () => {
+    const ed = db(EDITOR);
+    for (const col of ['clinics', 'meetings', 'facilities']) {
+      await assertSucceeds(setDoc(doc(ed, col, 'i'), {
+        ...base[col], image: { source: 'inline', mediaId: 'cover1' }, gallery: [{ source: 'url', url: 'https://x.org/a.jpg' }],
+      }));
+      await assertFails(updateDoc(doc(ed, col, 'i'), { image: { source: 'url', url: 'http://x.org/a.jpg' } }));
+    }
+  });
+
+  test('gallery: list of valid images, at most 8', async () => {
+    const ed = db(EDITOR);
+    await assertSucceeds(setDoc(doc(ed, 'saints', 's'), base.saints));
+    const bad = [
+      'not a list',
+      { a: 1 },
+      Array.from({ length: 9 }, (_, i) => img(i)),
+      [{ source: 'url', url: 'http://x.org/a.jpg' }],
+      [{ source: 'url', url: 'javascript:alert(1)' }],
+      [img(0), { source: 'inline', mediaId: 'bad id!' }],
+      [img(0), img(1), img(2), img(3), img(4), img(5), img(6), { source: 'inline', mediaId: 'a/b' }],
+      [{ source: 'inline', mediaId: 'm1', extra: 1 }],
+      ['https://x.org/a.jpg'],
+    ];
+    for (const gallery of bad) {
+      await assertFails(updateDoc(doc(ed, 'saints', 's'), { gallery }), JSON.stringify(gallery).slice(0, 80));
+    }
+    await assertSucceeds(updateDoc(doc(ed, 'saints', 's'), { gallery: [img(0), { source: 'storage', url: 'https://x.org/b.png' }] }));
+  });
+
+  test('extraFields: up to 15 titled rows with known keys and bounded text', async () => {
+    const ed = db(EDITOR);
+    await assertSucceeds(setDoc(doc(ed, 'meetings', 'm'), base.meetings));
+    const ok = row({ titleAr: 'المكان', valueAr: 'القاعة' });
+    const bad = [
+      'x',
+      [ok, 'row'],
+      Array.from({ length: 16 }, () => ok),
+      [row({ valueAr: 'بدون عنوان' })],
+      [row({ titleAr: '   ', titleEn: '\n', valueAr: 'x' })],
+      [{ titleAr: 'المكان', valueAr: 'القاعة' }], // the form always writes all four keys
+      [row({ titleAr: ' x', valueAr: 'x' })], // titles are trimmed by the form
+      [{ ...ok, valueEn: 'x'.repeat(2001) }],
+      [{ ...ok, titleEn: 'x'.repeat(151) }],
+      [{ ...ok, valueAr: ['x'] }],
+      [...Array.from({ length: 14 }, () => ok), { ...ok, valueAr: 'x'.repeat(2001) }],
+    ];
+    for (const extraFields of bad) {
+      await assertFails(updateDoc(doc(ed, 'meetings', 'm'), { extraFields }), JSON.stringify(extraFields).slice(0, 80));
+    }
+    await assertSucceeds(updateDoc(doc(ed, 'meetings', 'm'), { extraFields: [ok, row({ titleEn: 'Age' })] }));
+    await assertSucceeds(updateDoc(doc(ed, 'meetings', 'm'), { extraFields: Array.from({ length: 15 }, (_, i) => field(i)) }));
+  });
+
+  test('links are http(s) only; toggles are bools; text is bounded', async () => {
+    const ed = db(EDITOR);
+    await assertSucceeds(setDoc(doc(ed, 'priests', 'p'), base.priests));
+    const ref = doc(ed, 'priests', 'p');
+    for (const k of ['youtubeUrl', 'instagramUrl', 'externalUrl', 'facebookUrl', 'whatsappUrl']) {
+      await assertFails(updateDoc(ref, { [k]: 'javascript:alert(1)' }), k);
+      await assertFails(updateDoc(ref, { [k]: 'not a link' }), k);
+      await assertFails(updateDoc(ref, { [k]: `https://x.org/${'a'.repeat(500)}` }), k);
+      await assertSucceeds(updateDoc(ref, { [k]: 'HTTPS://x.org/page' }));
+    }
+    for (const k of ['detailsEnabled', 'showDetailImages', 'showContacts', 'showSocials']) {
+      await assertFails(updateDoc(ref, { [k]: 'yes' }), k);
+      await assertFails(updateDoc(ref, { [k]: null }), k);
+    }
+    const tooLong = {
+      detailsAr: 10001, detailsEn: 10001, whatsapp: 21, contactPhone: 21, externalLabelAr: 81, externalLabelEn: 81,
+      contactNoteAr: 501, contactNoteEn: 501,
+    };
+    for (const [k, n] of Object.entries(tooLong)) {
+      await assertFails(updateDoc(ref, { [k]: 'x'.repeat(n) }), k);
+    }
+    await assertFails(updateDoc(ref, { detailsAr: 5 }));
+    await assertFails(updateDoc(ref, { youtubeUrl: 7 }));
+    await assertFails(updateDoc(ref, { contactNoteAr: ['x'] }));
+  });
+
+  test('no duplicate inputs: clinics/facilities have no contactPhone, activities no externalUrl', async () => {
+    const ed = db(EDITOR);
+    await assertFails(setDoc(doc(ed, 'clinics', 'x'), { ...base.clinics, contactPhone: '0123' }));
+    await assertFails(setDoc(doc(ed, 'facilities', 'x'), { ...base.facilities, contactPhone: '0123' }));
+    await assertFails(setDoc(doc(ed, 'activities', 'x'), { ...base.activities, externalUrl: 'https://x.org' }));
+    await assertFails(setDoc(doc(ed, 'activities', 'x'), { ...base.activities, link: 'javascript:alert(1)' }));
+  });
+
+  test('liturgies, seasons and alerts take no detail fields', async () => {
+    const ed = db(EDITOR);
+    const docs = {
+      liturgies: { nameAr: 'قداس', start: '07:00' },
+      seasons: { key: 'pascha', nameAr: 'القيامة' },
+      alerts: { titleAr: 'تنويه' },
+    };
+    for (const [col, d] of Object.entries(docs)) {
+      await assertSucceeds(setDoc(doc(ed, col, 'ok'), d));
+      for (const k of ['detailsEnabled', 'gallery', 'extraFields', 'youtubeUrl']) {
+        const v = k === 'detailsEnabled' ? true : k === 'youtubeUrl' ? 'https://youtube.com/x' : [];
+        await assertFails(setDoc(doc(ed, col, 'bad'), { ...d, [k]: v }), `${col}.${k}`);
+      }
+    }
+  });
+
+  test('a content doc may carry up to 80 keys (legacy + detail fields)', async () => {
+    const legacy = Object.fromEntries(Array.from({ length: 40 }, (_, i) => [`legacy${i}`, 'x']));
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'priests', 'wide'), { ...base.priests, ...legacy });
+    });
+    const ed = db(EDITOR);
+    // 2 + 40 legacy + 20 detail keys + image + stamps < 80.
+    await assertSucceeds(updateDoc(doc(ed, 'priests', 'wide'), { ...common, gallery: [], extraFields: [], ...extra('priests'), ...stamp() }));
+    const more = Object.fromEntries(Array.from({ length: 30 }, (_, i) => [`more${i}`, 'x']));
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'priests', 'wider'), { ...base.priests, ...legacy, ...more });
+    });
+    await assertFails(updateDoc(doc(ed, 'priests', 'wider'), { ...common, gallery: [], extraFields: [], ...extra('priests') }));
+  });
+});
+
+describe('PR #11: page headers & footer (settings/features)', () => {
+  const footer = { showPhones: true, showSocials: false, showQuickLinks: true, noteAr: 'م'.repeat(500), noteEn: 'Note' };
+  const header = { titleAr: 'ع'.repeat(200), titleEn: 'T', subtitleAr: 'س'.repeat(300), subtitleEn: '', introAr: 'م'.repeat(1500), introEn: 'Intro' };
+  const pages = ['about', 'schedule', 'education', 'activities', 'clinics', 'services', 'contact', 'ask'];
+  const all = Object.fromEntries(pages.map((p) => [p, header]));
+  const empty = { titleAr: '', titleEn: '', subtitleAr: '', subtitleEn: '', introAr: '', introEn: '' };
+
+  test('admins save page headers and footer (worst case: all 8 pages, max lengths)', async () => {
+    const ref = doc(db(EDITOR), 'settings', 'features');
+    await assertSucceeds(setDoc(ref, { theme: 'navy', pageHeaders: {}, footer: { showPhones: true, showSocials: true, showQuickLinks: true, noteAr: '', noteEn: '' } }));
+    await assertSucceeds(setDoc(ref, { sections: { media: true }, pageHeaders: all, footer, updatedAt: serverTimestamp(), updatedBy: `${EDITOR}@x.test` }));
+    await assertSucceeds(setDoc(ref, { pageHeaders: { clinics: { ...empty, titleAr: 'عياداتنا' } }, footer: {} }));
+    // Editing one page (whole-document save, as the admin form does) and removing another.
+    await assertSucceeds(setDoc(ref, { pageHeaders: all, footer }));
+    await assertSucceeds(setDoc(ref, { pageHeaders: { ...all, about: { ...header, titleEn: 'About us' } }, footer }));
+    const { ask, ...withoutAsk } = all;
+    await assertSucceeds(setDoc(ref, { pageHeaders: withoutAsk, footer }));
+  });
+
+  test('rejects invalid footer shapes', async () => {
+    const ref = doc(db(EDITOR), 'settings', 'features');
+    const bad = [
+      'x', [], { ...footer, extra: true }, { showPhones: 'yes' }, { showSocials: null }, { showQuickLinks: 1 },
+      { noteAr: 'x'.repeat(501) }, { noteEn: 5 },
+    ];
+    for (const f of bad) {
+      await assertFails(setDoc(ref, { footer: f }), JSON.stringify(f).slice(0, 60));
+    }
+  });
+
+  test('rejects invalid pageHeaders shapes', async () => {
+    const ref = doc(db(EDITOR), 'settings', 'features');
+    const bad = [
+      'x', ['about'], { home: header }, { about: 'x' }, { about: { ...header, link: 'https://x.org' } },
+      { about: { ...empty, titleEn: 'x'.repeat(201) } }, { schedule: { ...empty, subtitleAr: 'x'.repeat(301) } },
+      { ask: { ...empty, introEn: 'x'.repeat(1501) } }, { contact: { ...empty, titleAr: ['x'] } },
+      { about: { titleAr: 'partial' } }, { ...all, ask: { ...empty, introAr: 'x'.repeat(1501) } },
+    ];
+    for (const h of bad) {
+      await assertFails(setDoc(ref, { pageHeaders: h }), JSON.stringify(h).slice(0, 60));
+    }
+  });
+
+  test('legacy keys still merge; the seed features doc (with the new maps) is valid', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'settings', 'features'), { ...convert(seed.settings.features), legacyField: 'x' });
+    });
+    const ref = doc(db(EDITOR), 'settings', 'features');
+    await assertSucceeds(setDoc(ref, { footer: { ...footer, showPhones: false }, ...{ updatedAt: serverTimestamp(), updatedBy: `${EDITOR}@x.test` } }, { merge: true }));
+    await assertSucceeds(setDoc(ref, { pageHeaders: { about: { ...empty, titleEn: 'About us' } } }, { merge: true }));
+    await assertFails(setDoc(ref, { pageHeaders: { bogus: {} } }, { merge: true }));
+    const f = seed.settings.features;
+    if (!('pageHeaders' in f) || !('footer' in f)) throw new Error('seed settings/features lacks pageHeaders/footer');
   });
 });

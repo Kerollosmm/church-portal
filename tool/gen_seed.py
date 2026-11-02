@@ -66,7 +66,12 @@ settings = {
     "homeHidden": [],
     "heroTitleAr": "", "heroTitleEn": "", "heroSubtitleAr": "", "heroSubtitleEn": "",
     "bannerEnabled": False, "bannerAr": "", "bannerEn": "", "bannerLink": "",
-    "theme": "burgundy"
+    "theme": "burgundy",
+    # PR #11: per-page header / intro overrides (none by default) and the
+    # footer options (FR-G-04), so `seed_firestore.js --fill-missing` adds them
+    # to production without touching admin edits.
+    "pageHeaders": {},
+    "footer": {"showPhones": True, "showSocials": True, "showQuickLinks": True, "noteAr": "", "noteEn": ""}
   }
 }
 

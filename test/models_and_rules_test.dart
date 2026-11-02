@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:church_portal/domain/media.dart';
 import 'package:church_portal/domain/models.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -187,6 +189,51 @@ void main() {
       expect(m.whatsappUrl, m.details.whatsappUrl);
       // Clinics keep their WhatsApp number in the shared `whatsapp` key.
       expect(Clinic.fromMap('x', const {'doctorName': 'د', 'whatsapp': '010'}).details.whatsapp, '010');
+    });
+  });
+
+  group('firestore.rules lockstep (detail keys)', () {
+    final rules = File('firestore.rules').readAsStringSync();
+    Set<String> quoted(String fn) {
+      final start = rules.indexOf('function $fn(');
+      expect(start, greaterThan(0), reason: fn);
+      final body = rules.substring(start, rules.indexOf('}', start));
+      return RegExp(r"'([A-Za-z]+)'").allMatches(body).map((m) => m.group(1)!).toSet();
+    }
+
+    test('the 7 detail collections allow every key ItemDetails reads, and no other collection does', () {
+      const detailKeys = {
+        'detailsEnabled', 'showDetailImages', 'showContacts', 'showSocials', 'detailsAr', 'detailsEn', 'extraFields', //
+        'gallery', 'whatsapp', 'whatsappUrl', 'facebookUrl', 'youtubeUrl', 'instagramUrl', 'externalLabelAr',
+        'externalLabelEn', 'contactNoteAr', 'contactNoteEn',
+      };
+      expect(quoted('detailKeys'), detailKeys);
+      const fns = {
+        'meetings': 'validMeeting', 'activities': 'validActivity', 'clinics': 'validClinic', //
+        'facilities': 'validFacility', 'priests': 'validPriest', 'milestones': 'validMilestone', 'saints': 'validSaint',
+      };
+      for (final e in fns.entries) {
+        final start = rules.indexOf('function ${e.value}(');
+        final body = rules.substring(start, rules.indexOf('}', start));
+        expect(body, contains('concat(detailKeys())'), reason: e.key);
+        expect(body, contains('validDetailCommon(d, changed)'), reason: e.key);
+        final own = quoted(e.value);
+        expect(own, contains('image'), reason: '${e.key}.image');
+        // The primary phone / external link: a new key, or the existing field.
+        expect(own, contains(['clinics', 'facilities'].contains(e.key) ? (e.key == 'clinics' ? 'bookingPhone' : 'phone') : 'contactPhone'),
+            reason: '${e.key} phone');
+        expect(own, contains(e.key == 'activities' ? 'link' : 'externalUrl'), reason: '${e.key} link');
+      }
+      for (final fn in ['validAlert', 'validSeason', 'validLiturgy']) {
+        final start = rules.indexOf('function $fn(');
+        expect(rules.substring(start, rules.indexOf('}', start)), isNot(contains('detailKeys')), reason: fn);
+      }
+    });
+
+    test('rules caps match the client limits', () {
+      expect(rules, contains("optList(d, 'gallery', ${MediaLimits.maxGalleryItems})"));
+      expect(rules, contains("optList(d, 'extraFields', ${MediaLimits.maxExtraFields})"));
+      expect(rules, contains('d.keys().size() <= 80'));
     });
   });
 }

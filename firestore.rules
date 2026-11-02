@@ -5,7 +5,11 @@ rules_version = '2';
 //   read; only admins (admins/{uid} exists) write. Every write is validated:
 //   a per-collection key allow-list (creates may use only these keys; updates
 //   may only change these keys, so legacy fields never block an edit) plus
-//   type/size checks on the stored document.
+//   type/size checks on the stored document. Only the keys a write creates
+//   or changes are checked (a create checks all of them): Firestore evaluates
+//   at most 1,000 expressions per request, which the detail-page fields
+//   (gallery, extraFields) would otherwise exceed. Text fields are checked on
+//   one joined string (U+001F separator) with regexes for the same reason.
 // * media/{mediaId}: optional images stored inline as base64 (Spark plan has
 //   no Cloud Storage). Public get by id (never list); admins list and write;
 //   size/type validated.
@@ -88,28 +92,134 @@ service cloud.firestore {
               || (resource != null && resource.data.get('updatedBy', null) == d.updatedBy));
     }
 
-    // Shared by every content document.
-    function common(d) {
-      return d.keys().size() <= 60
-        && optBool(d, 'visible') && optBool(d, 'sample')
-        && optInt(d, 'order', -100000, 100000)
-        && (d.get('image', null) == null || validImage(d.image))
-        && stampOk(d);
+    // Shared by every content document. [changed]: the keys this write
+    // creates or changes (changedKeys). Only those are validated: a stored
+    // value was validated when it was written, and Firestore evaluates at
+    // most 1,000 expressions per request (an edit of a detail page must not
+    // pay for every field of the document again).
+    function common(d, changed) {
+      return d.keys().size() <= 80
+        && (!changed.hasAny(['visible', 'sample', 'order'])
+            || (optBool(d, 'visible') && optBool(d, 'sample') && optInt(d, 'order', -100000, 100000)))
+        && (!('image' in changed) || d.get('image', null) == null || validImage(d.image))
+        && (!changed.hasAny(['updatedAt', 'updatedBy']) || stampOk(d));
+    }
+
+    // Keys this write creates (all of them) or changes.
+    function changedKeys(d) {
+      return resource == null ? d.keys().toSet() : d.diff(resource.data).affectedKeys();
+    }
+
+    // An update that changes only detail-page / meta keys (each validated on
+    // its own) leaves the collection's own fields as they were validated.
+    function ownFieldsUnchanged(changed) {
+      return resource != null
+        && changed.hasOnly(detailKeys().concat(meta()).concat(['image', 'contactPhone', 'externalUrl']));
     }
 
     // Optional `image` map (only collections whose allow-list has 'image').
-    // url/storage: an https URL; inline: a media/{mediaId} document id.
+    // url/storage: an https URL (<= 500 chars); inline: a media/{mediaId}
+    // document id; alt <= 300 chars; w / h absent, null or 1..10000. The
+    // fields are checked on one joined string (U+001F separator; a non-string
+    // makes `+` fail, so the write is denied) to stay within the 1,000
+    // expressions Firestore evaluates per request (gallery: up to 8 images).
     function validImage(i) {
-      return i is map && i.keys().hasOnly(['source', 'url', 'mediaId', 'alt', 'w', 'h'])
-        && i.get('source', '') in ['url', 'inline', 'storage']
-        && (i.source == 'inline'
-              ? i.get('mediaId', '') is string && i.get('mediaId', '').matches('^[A-Za-z0-9_-]{1,128}$')
-              : i.get('url', '') is string && i.get('url', '').size() <= 500 && i.get('url', '').matches('^https://[^/\\s]+[.][^/\\s]+([/?#][^\\s]*)?$'))
-        && str(i, 'alt', 300) && str(i, 'mediaId', 128)
-        && optInt(i, 'w', 1, 10000) && optInt(i, 'h', 1, 10000);
+      let s = i.source + '\u001f' + i.get('url', '') + '\u001f' + i.get('mediaId', '') + '\u001f' + i.get('alt', '')
+        + '\u001f' + string(i.get('w', null)) + '\u001f' + string(i.get('h', null));
+      return i.keys().hasOnly(['source', 'url', 'mediaId', 'alt', 'w', 'h'])
+        && s.matches('(inline\\x1f[^\\x1f]*\\x1f[A-Za-z0-9_-]{1,128}|(url|storage)\\x1fhttps://[^/\\s\\x1f]+[.][^/\\s\\x1f]+([/?#][^\\s\\x1f]*)?\\x1f[^\\x1f]{0,128})\\x1f[^\\x1f]{0,300}\\x1f(null|[1-9][0-9]{0,3}|10000)\\x1f(null|[1-9][0-9]{0,3}|10000)')
+        && s.matches('[^\\x1f]*\\x1f[^\\x1f]{0,500}\\x1f[\\s\\S]*');
     }
     function meta() {
       return ['visible', 'sample', 'order', 'updatedAt', 'updatedBy'];
+    }
+
+    // ---- optional item detail page (meetings, activities, clinics,
+    // facilities, priests, milestones, saints; never liturgies, seasons or
+    // alerts). detailKeys() are shared by the 7 collections; each collection
+    // also allows the phone / link / image keys it lacks itself (contactPhone,
+    // whatsapp, whatsappUrl, facebookUrl, externalUrl, image).
+    //
+    // Budget: Firestore evaluates at most 1,000 expressions per request.
+    // * Detail fields are validated when they are written (a create, or an
+    //   update that changes them): stored values were validated when they
+    //   were written, so an unrelated edit costs almost nothing.
+    // * Text fields are checked together on one joined string (U+001F
+    //   separator): a non-string value makes `+` fail, so the write is denied.
+    // * List items are checked with one joined string and one regex each, and
+    //   the unrolled checks stop at the list's size.
+    function detailKeys() {
+      return ['detailsEnabled', 'showDetailImages', 'showContacts', 'showSocials', 'detailsAr', 'detailsEn',
+              'extraFields', 'gallery', 'whatsapp', 'whatsappUrl', 'facebookUrl', 'youtubeUrl', 'instagramUrl',
+              'externalLabelAr', 'externalLabelEn', 'contactNoteAr', 'contactNoteEn'];
+    }
+    function validDetailCommon(d, changed) {
+      return (!('gallery' in changed) || validGallery(d))
+        && (!('extraFields' in changed) || validExtraFields(d))
+        && (!changed.hasAny(['detailsEnabled', 'showDetailImages', 'showContacts', 'showSocials', 'detailsAr',
+                             'detailsEn', 'youtubeUrl', 'instagramUrl', 'externalLabelAr', 'externalLabelEn',
+                             'contactNoteAr', 'contactNoteEn']) || validDetailText(d));
+    }
+    function validDetailText(d) {
+      let text = d.get('youtubeUrl', '') + '\u001f' + d.get('instagramUrl', '') + '\u001f'
+        + d.get('externalLabelAr', '') + '\u001f' + d.get('externalLabelEn', '') + '\u001f'
+        + d.get('contactNoteAr', '') + '\u001f' + d.get('contactNoteEn', '') + '\u001f'
+        + d.get('detailsAr', '') + '\u001f' + d.get('detailsEn', '');
+      return [d.get('detailsEnabled', false), d.get('showDetailImages', true), d.get('showContacts', true),
+              d.get('showSocials', true)].hasOnly([true, false])
+        // youtubeUrl, instagramUrl: '' or an http(s) URL (as optHttpUrl);
+        // lengths: urls 500, labels 80, notes 500; details 10,000 (below).
+        && text.matches('(|[Hh][Tt][Tt][Pp][Ss]?://[^/ \\x1f]+[.][^/ \\x1f]+([/?#][^ \\x1f]*)?)\\x1f(|[Hh][Tt][Tt][Pp][Ss]?://[^/ \\x1f]+[.][^/ \\x1f]+([/?#][^ \\x1f]*)?)(\\x1f[^\\x1f]*){6}')
+        && text.matches('[^\\x1f]{0,500}\\x1f[^\\x1f]{0,500}\\x1f[^\\x1f]{0,80}\\x1f[^\\x1f]{0,80}\\x1f[^\\x1f]{0,500}\\x1f[^\\x1f]{0,500}\\x1f[^\\x1f]*\\x1f[^\\x1f]*')
+        && d.get('detailsAr', '').size() <= 10000 && d.get('detailsEn', '').size() <= 10000;
+    }
+    // Phone / link keys some collections already had (absent or null
+    // accepted, as optString / optHttpUrl): contactPhone and whatsapp <= 20
+    // chars; whatsappUrl, facebookUrl, externalUrl '' or an http(s) URL
+    // <= 500 chars. string() keeps null tolerated (it reads 'null').
+    function validDetailContacts(d) {
+      let c = string(d.get('contactPhone', '')) + '\u001f' + string(d.get('whatsapp', '')) + '\u001f'
+        + string(d.get('whatsappUrl', '')) + '\u001f' + string(d.get('facebookUrl', '')) + '\u001f'
+        + string(d.get('externalUrl', ''));
+      return c.matches('[^\\x1f]{0,20}\\x1f[^\\x1f]{0,20}\\x1f[^\\x1f]{0,500}\\x1f[^\\x1f]{0,500}\\x1f[^\\x1f]{0,500}')
+        && c.matches('[^\\x1f]*\\x1f[^\\x1f]*((\\x1fnull)|\\x1f|\\x1f[Hh][Tt][Tt][Pp][Ss]?://[^/ \\x1f]+[.][^/ \\x1f]+([/?#][^ \\x1f]*)?){3}');
+    }
+    // Up to 8 images (unrolled: rules have no loops; the checks stop at the
+    // list's size).
+    function validGallery(d) {
+      return optList(d, 'gallery', 8)
+        && (d.get('gallery', null) == null || galleryItems(d.gallery, d.gallery.size()));
+    }
+    function galleryItems(g, n) {
+      return (n <= 0 || (galleryImage(g[0]) && (n <= 1 || (galleryImage(g[1]) && (n <= 2 || (galleryImage(g[2]) && (n <= 3 || (galleryImage(g[3]) && true))))))))
+        && (n <= 4 || (galleryImage(g[4]) && (n <= 5 || (galleryImage(g[5]) && (n <= 6 || (galleryImage(g[6]) && (n <= 7 || (galleryImage(g[7]) && true))))))));
+    }
+    // A gallery image: as validImage (keys, source, https URL <= 500 chars or
+    // media id, alt <= 300 chars) except w / h, which are not range-checked
+    // here (display hints the client reads tolerantly): 8 full image checks
+    // would not fit in the 1,000-expression budget of one request.
+    function galleryImage(i) {
+      let s = i.source + '\u001f' + i.get('url', '') + '\u001f' + i.get('mediaId', '') + '\u001f' + i.get('alt', '');
+      return i.keys().hasOnly(['source', 'url', 'mediaId', 'alt', 'w', 'h'])
+        && s.matches('(inline\\x1f[^\\x1f]*\\x1f[A-Za-z0-9_-]{1,128}|(url|storage)\\x1fhttps://[^/\\s\\x1f]+[.][^/\\s\\x1f]+([/?#][^\\s\\x1f]*)?\\x1f[^\\x1f]{0,128})\\x1f[^\\x1f]{0,300}')
+        && s.matches('[^\\x1f]*\\x1f[^\\x1f]{0,500}\\x1f[\\s\\S]*');
+    }
+    // Up to 15 admin-defined "title: value" rows.
+    function validExtraFields(d) {
+      return optList(d, 'extraFields', 15)
+        && (d.get('extraFields', null) == null || extraRows(d.extraFields, d.extraFields.size()));
+    }
+    function extraRows(r, n) {
+      return (n <= 0 || (validExtraField(r[0]) && (n <= 1 || (validExtraField(r[1]) && (n <= 2 || (validExtraField(r[2]) && (n <= 3 || (validExtraField(r[3]) && (n <= 4 || (validExtraField(r[4]) && true))))))))))
+        && (n <= 5 || (validExtraField(r[5]) && (n <= 6 || (validExtraField(r[6]) && (n <= 7 || (validExtraField(r[7]) && (n <= 8 || (validExtraField(r[8]) && (n <= 9 || (validExtraField(r[9]) && true))))))))))
+        && (n <= 10 || (validExtraField(r[10]) && (n <= 11 || (validExtraField(r[11]) && (n <= 12 || (validExtraField(r[12]) && (n <= 13 || (validExtraField(r[13]) && (n <= 14 || (validExtraField(r[14]) && true))))))))));
+    }
+    // The 4 keys (the admin form always writes all four; each one is read),
+    // all strings; titles <= 150 and values <= 2000 chars, and a title: the
+    // trimmed titleAr, or else titleEn, must start with a non-space.
+    function validExtraField(f) {
+      return (f.titleAr + '\u001f' + f.titleEn + '\u001f' + f.valueAr + '\u001f' + f.valueEn)
+        .matches('([^\\s\\x1f][^\\x1f]{0,149}\\x1f[^\\x1f]{0,150}|\\x1f[^\\s\\x1f][^\\x1f]{0,149})\\x1f[^\\x1f]{0,1000}[^\\x1f]{0,1000}\\x1f[^\\x1f]{0,1000}[^\\x1f]{0,1000}');
     }
 
     // Creates may use only [allowed]; updates may only change [allowed].
@@ -121,19 +231,23 @@ service cloud.firestore {
 
     // ------------------------------- content -------------------------------
     function validContent(col, d) {
-      return col in ['alerts', 'seasons', 'liturgies', 'meetings', 'activities', 'clinics', 'facilities',
-                     'priests', 'milestones', 'saints']
-        && common(d) && (
-        (col == 'alerts' && validAlert(d))
+      let changed = changedKeys(d);
+      // `col in` stops other paths (settings/..., media/...) early: this match
+      // also sees them and every request shares one expression budget. The
+      // detail-page collections come first (their writes are the heaviest).
+      return col in ['meetings', 'activities', 'clinics', 'facilities', 'priests', 'milestones', 'saints', 'alerts',
+                     'seasons', 'liturgies']
+        && common(d, changed) && (
+        (col == 'meetings' && validMeeting(d, changed))
+        || (col == 'activities' && validActivity(d, changed))
+        || (col == 'clinics' && validClinic(d, changed))
+        || (col == 'facilities' && validFacility(d, changed))
+        || (col == 'priests' && validPriest(d, changed))
+        || (col == 'milestones' && validMilestone(d, changed))
+        || (col == 'saints' && validSaint(d, changed))
+        || (col == 'alerts' && validAlert(d))
         || (col == 'seasons' && validSeason(d))
         || (col == 'liturgies' && validLiturgy(d))
-        || (col == 'meetings' && validMeeting(d))
-        || (col == 'activities' && validActivity(d))
-        || (col == 'clinics' && validClinic(d))
-        || (col == 'facilities' && validFacility(d))
-        || (col == 'priests' && validPriest(d))
-        || (col == 'milestones' && validMilestone(d))
-        || (col == 'saints' && validSaint(d))
       );
     }
 
@@ -167,64 +281,129 @@ service cloud.firestore {
         && optIn(d, 'seasonKey', ['holy_week', 'pascha', 'nativity', 'revival_maximus', 'revival_moses', 'summer']);
     }
 
-    function validMeeting(d) {
-      return keysAllowed(['stage', 'nameAr', 'nameEn', 'weekday', 'start', 'end', 'hallAr', 'hallEn',
-                          'facebookUrl', 'whatsappUrl', 'notes'].concat(meta()))
-        && reqString(d, 'stage', 40) && reqString(d, 'nameAr', 300) && optString(d, 'nameEn', 300)
-        && optInt(d, 'weekday', 1, 7) && optTime(d, 'start') && optTime(d, 'end')
-        && optString(d, 'hallAr', 300) && optString(d, 'hallEn', 300)
-        && optHttpUrl(d, 'facebookUrl', 500) && optHttpUrl(d, 'whatsappUrl', 500) && optString(d, 'notes', 300);
+    function validMeeting(d, changed) {
+      // = keysAllowed(...), reusing the changed keys.
+      return changed.hasOnly(['stage', 'nameAr', 'nameEn', 'weekday', 'start', 'end', 'hallAr', 'hallEn',
+                          'facebookUrl', 'whatsappUrl', 'notes', 'image', 'contactPhone',
+                          'externalUrl'].concat(meta()).concat(detailKeys()))
+        && validDetailCommon(d, changed)
+        && (!changed.hasAny(['contactPhone', 'whatsapp', 'whatsappUrl', 'facebookUrl', 'externalUrl']) || validDetailContacts(d))
+        && (ownFieldsUnchanged(changed) || ownMeeting(d));
     }
 
-    function validActivity(d) {
-      return keysAllowed(['category', 'titleAr', 'titleEn', 'descAr', 'descEn', 'scheduleAr', 'scheduleEn',
-                          'ageRange', 'contactPhone', 'link', 'image'].concat(meta()))
-        && optString(d, 'category', 40) && reqString(d, 'titleAr', 300) && optString(d, 'titleEn', 300)
-        && optString(d, 'descAr', 2000) && optString(d, 'descEn', 2000)
-        && optString(d, 'scheduleAr', 300) && optString(d, 'scheduleEn', 300)
-        && optString(d, 'ageRange', 60) && optString(d, 'contactPhone', 20) && optHttpUrl(d, 'link', 500);
+    function validActivity(d, changed) {
+      // = keysAllowed(...), reusing the changed keys.
+      return changed.hasOnly(['category', 'titleAr', 'titleEn', 'descAr', 'descEn', 'scheduleAr', 'scheduleEn',
+                          'ageRange', 'contactPhone', 'link', 'image'].concat(meta()).concat(detailKeys()))
+        && validDetailCommon(d, changed)
+        && (!changed.hasAny(['contactPhone', 'whatsapp', 'whatsappUrl', 'facebookUrl', 'externalUrl']) || validDetailContacts(d))
+        && (ownFieldsUnchanged(changed) || ownActivity(d));
     }
 
-    function validClinic(d) {
-      return keysAllowed(['specialty', 'specialtyAr', 'specialtyEn', 'doctorName', 'degreeAr', 'degreeEn', 'days',
-                          'start', 'end', 'bookingPhone', 'whatsapp', 'active'].concat(meta()))
-        && reqString(d, 'specialty', 40) && reqString(d, 'specialtyAr', 300) && optString(d, 'specialtyEn', 300)
-        && reqString(d, 'doctorName', 300) && optString(d, 'degreeAr', 300) && optString(d, 'degreeEn', 300)
-        && optList(d, 'days', 7) && d.get('days', []).hasOnly([1, 2, 3, 4, 5, 6, 7])
-        && optTime(d, 'start') && optTime(d, 'end')
-        && optString(d, 'bookingPhone', 20) && optString(d, 'whatsapp', 20) && optBool(d, 'active');
+    function validClinic(d, changed) {
+      // = keysAllowed(...), reusing the changed keys.
+      return changed.hasOnly(['specialty', 'specialtyAr', 'specialtyEn', 'doctorName', 'degreeAr', 'degreeEn', 'days',
+                          'start', 'end', 'bookingPhone', 'whatsapp', 'active', 'image',
+                          'externalUrl'].concat(meta()).concat(detailKeys()))
+        && validDetailCommon(d, changed)
+        && (!changed.hasAny(['contactPhone', 'whatsapp', 'whatsappUrl', 'facebookUrl', 'externalUrl']) || validDetailContacts(d))
+        && (ownFieldsUnchanged(changed) || ownClinic(d));
     }
 
-    function validFacility(d) {
-      return keysAllowed(['type', 'nameAr', 'nameEn', 'descAr', 'descEn', 'phone', 'hoursAr', 'hoursEn'].concat(meta()))
-        && optString(d, 'type', 40) && reqString(d, 'nameAr', 300) && optString(d, 'nameEn', 300)
-        && optString(d, 'descAr', 2000) && optString(d, 'descEn', 2000) && optString(d, 'phone', 20)
-        && optString(d, 'hoursAr', 300) && optString(d, 'hoursEn', 300);
+    function validFacility(d, changed) {
+      // = keysAllowed(...), reusing the changed keys.
+      return changed.hasOnly(['type', 'nameAr', 'nameEn', 'descAr', 'descEn', 'phone', 'hoursAr', 'hoursEn', 'image',
+                          'externalUrl'].concat(meta()).concat(detailKeys()))
+        && validDetailCommon(d, changed)
+        && (!changed.hasAny(['contactPhone', 'whatsapp', 'whatsappUrl', 'facebookUrl', 'externalUrl']) || validDetailContacts(d))
+        && (ownFieldsUnchanged(changed) || ownFacility(d));
     }
 
-    function validPriest(d) {
-      return keysAllowed(['name', 'nameEn', 'photoUrl', 'rank', 'ordinationDate', 'hegumenDate', 'departedDate',
-                          'status', 'bioAr', 'bioEn', 'image'].concat(meta()))
-        && reqString(d, 'name', 300) && optString(d, 'nameEn', 300) && optString(d, 'photoUrl', 500)
-        && optIn(d, 'rank', ['hegumen', 'priest']) && optIn(d, 'status', ['serving', 'departed'])
-        && optString(d, 'ordinationDate', 10) && optString(d, 'hegumenDate', 10) && optString(d, 'departedDate', 10)
-        && optString(d, 'bioAr', 5000) && optString(d, 'bioEn', 5000);
+    function validPriest(d, changed) {
+      // = keysAllowed(...), reusing the changed keys.
+      return changed.hasOnly(['name', 'nameEn', 'photoUrl', 'rank', 'ordinationDate', 'hegumenDate', 'departedDate',
+                          'status', 'bioAr', 'bioEn', 'image', 'contactPhone',
+                          'externalUrl'].concat(meta()).concat(detailKeys()))
+        && validDetailCommon(d, changed)
+        && (!changed.hasAny(['contactPhone', 'whatsapp', 'whatsappUrl', 'facebookUrl', 'externalUrl']) || validDetailContacts(d))
+        && (ownFieldsUnchanged(changed) || ownPriest(d));
     }
 
-    function validMilestone(d) {
-      return keysAllowed(['titleAr', 'titleEn', 'descAr', 'descEn', 'year', 'icon', 'image'].concat(meta()))
-        && reqString(d, 'titleAr', 300) && optString(d, 'titleEn', 300)
-        && optString(d, 'descAr', 2000) && optString(d, 'descEn', 2000)
-        && optInt(d, 'year', 1, 2200) && optString(d, 'icon', 40);
+    function validMilestone(d, changed) {
+      // = keysAllowed(...), reusing the changed keys.
+      return changed.hasOnly(['titleAr', 'titleEn', 'descAr', 'descEn', 'year', 'icon', 'image', 'contactPhone',
+                          'externalUrl'].concat(meta()).concat(detailKeys()))
+        && validDetailCommon(d, changed)
+        && (!changed.hasAny(['contactPhone', 'whatsapp', 'whatsappUrl', 'facebookUrl', 'externalUrl']) || validDetailContacts(d))
+        && (ownFieldsUnchanged(changed) || ownMilestone(d));
     }
 
-    function validSaint(d) {
-      return keysAllowed(['nameAr', 'nameEn', 'bioAr', 'bioEn', 'feastCopticAr', 'feastCopticEn', 'feastGregorian',
-                          'feastGregorianAr', 'image'].concat(meta()))
-        && reqString(d, 'nameAr', 300) && optString(d, 'nameEn', 300)
-        && optString(d, 'bioAr', 5000) && optString(d, 'bioEn', 5000)
-        && optString(d, 'feastCopticAr', 300) && optString(d, 'feastCopticEn', 300)
-        && optString(d, 'feastGregorian', 300) && optString(d, 'feastGregorianAr', 300);
+    function validSaint(d, changed) {
+      // = keysAllowed(...), reusing the changed keys.
+      return changed.hasOnly(['nameAr', 'nameEn', 'bioAr', 'bioEn', 'feastCopticAr', 'feastCopticEn', 'feastGregorian',
+                          'feastGregorianAr', 'image', 'contactPhone', 'externalUrl'].concat(meta()).concat(detailKeys()))
+        && validDetailCommon(d, changed)
+        && (!changed.hasAny(['contactPhone', 'whatsapp', 'whatsappUrl', 'facebookUrl', 'externalUrl']) || validDetailContacts(d))
+        && (ownFieldsUnchanged(changed) || ownSaint(d));
+    }
+
+    // Each collection's own fields, checked on one joined string (see
+    // validImage). string() keeps an absent / null optional field accepted
+    // (it reads '' / 'null'); required fields must be non-empty strings.
+    function ownMeeting(d) {
+      let o = d.stage + '\u001f' + d.nameAr + '\u001f' + string(d.get('nameEn', ''))
+        + '\u001f' + string(d.get('weekday', null)) + '\u001f' + string(d.get('start', ''))
+        + '\u001f' + string(d.get('end', '')) + '\u001f' + string(d.get('hallAr', ''))
+        + '\u001f' + string(d.get('hallEn', '')) + '\u001f' + string(d.get('facebookUrl', ''))
+        + '\u001f' + string(d.get('whatsappUrl', '')) + '\u001f' + string(d.get('notes', ''));
+      return o.matches('[^\\x1f]{1,40}\\x1f[^\\x1f]{1,300}\\x1f[^\\x1f]{0,300}\\x1f(null|[1-7])\\x1f(null||([01][0-9]|2[0-3]):[0-5][0-9])\\x1f(null||([01][0-9]|2[0-3]):[0-5][0-9])\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{0,300}\\x1f(null||[Hh][Tt][Tt][Pp][Ss]?://[^/ \\x1f]+[.][^/ \\x1f]+([/?#][^ \\x1f]*)?)\\x1f(null||[Hh][Tt][Tt][Pp][Ss]?://[^/ \\x1f]+[.][^/ \\x1f]+([/?#][^ \\x1f]*)?)\\x1f[^\\x1f]{0,300}')
+        && o.matches('[^\\x1f]*\\x1f[^\\x1f]*\\x1f[^\\x1f]*\\x1f[^\\x1f]*\\x1f[^\\x1f]*\\x1f[^\\x1f]*\\x1f[^\\x1f]*\\x1f[^\\x1f]*\\x1f[^\\x1f]{0,500}\\x1f[^\\x1f]{0,500}\\x1f[^\\x1f]*');
+    }
+    function ownActivity(d) {
+      let o = string(d.get('category', '')) + '\u001f' + d.titleAr
+        + '\u001f' + string(d.get('titleEn', '')) + '\u001f' + string(d.get('descAr', ''))
+        + '\u001f' + string(d.get('descEn', '')) + '\u001f' + string(d.get('scheduleAr', ''))
+        + '\u001f' + string(d.get('scheduleEn', '')) + '\u001f' + string(d.get('ageRange', ''))
+        + '\u001f' + string(d.get('contactPhone', '')) + '\u001f' + string(d.get('link', ''));
+      return o.matches('[^\\x1f]{0,40}\\x1f[^\\x1f]{1,300}\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{0,1000}[^\\x1f]{0,1000}\\x1f[^\\x1f]{0,1000}[^\\x1f]{0,1000}\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{0,60}\\x1f[^\\x1f]{0,20}\\x1f(null||[Hh][Tt][Tt][Pp][Ss]?://[^/ \\x1f]+[.][^/ \\x1f]+([/?#][^ \\x1f]*)?)')
+        && o.matches('[^\\x1f]*\\x1f[^\\x1f]*\\x1f[^\\x1f]*\\x1f[^\\x1f]*\\x1f[^\\x1f]*\\x1f[^\\x1f]*\\x1f[^\\x1f]*\\x1f[^\\x1f]*\\x1f[^\\x1f]*\\x1f[^\\x1f]{0,500}');
+    }
+    function ownClinic(d) {
+      let o = d.specialty + '\u001f' + d.specialtyAr + '\u001f' + string(d.get('specialtyEn', ''))
+        + '\u001f' + d.doctorName + '\u001f' + string(d.get('degreeAr', ''))
+        + '\u001f' + string(d.get('degreeEn', '')) + '\u001f' + string(d.get('start', ''))
+        + '\u001f' + string(d.get('end', '')) + '\u001f' + string(d.get('bookingPhone', ''))
+        + '\u001f' + string(d.get('whatsapp', ''));
+      return o.matches('[^\\x1f]{1,40}\\x1f[^\\x1f]{1,300}\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{1,300}\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{0,300}\\x1f(null||([01][0-9]|2[0-3]):[0-5][0-9])\\x1f(null||([01][0-9]|2[0-3]):[0-5][0-9])\\x1f[^\\x1f]{0,20}\\x1f[^\\x1f]{0,20}')
+        && optList(d, 'days', 7) && d.get('days', []).hasOnly([1, 2, 3, 4, 5, 6, 7]) && optBool(d, 'active');
+    }
+    function ownFacility(d) {
+      let o = string(d.get('type', '')) + '\u001f' + d.nameAr + '\u001f' + string(d.get('nameEn', ''))
+        + '\u001f' + string(d.get('descAr', '')) + '\u001f' + string(d.get('descEn', ''))
+        + '\u001f' + string(d.get('phone', '')) + '\u001f' + string(d.get('hoursAr', ''))
+        + '\u001f' + string(d.get('hoursEn', ''));
+      return o.matches('[^\\x1f]{0,40}\\x1f[^\\x1f]{1,300}\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{0,1000}[^\\x1f]{0,1000}\\x1f[^\\x1f]{0,1000}[^\\x1f]{0,1000}\\x1f[^\\x1f]{0,20}\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{0,300}');
+    }
+    function ownPriest(d) {
+      let o = d.name + '\u001f' + string(d.get('nameEn', '')) + '\u001f' + string(d.get('photoUrl', ''))
+        + '\u001f' + string(d.get('rank', null)) + '\u001f' + string(d.get('status', null))
+        + '\u001f' + string(d.get('ordinationDate', '')) + '\u001f' + string(d.get('hegumenDate', ''))
+        + '\u001f' + string(d.get('departedDate', '')) + '\u001f' + string(d.get('bioAr', ''))
+        + '\u001f' + string(d.get('bioEn', ''));
+      return o.matches('[^\\x1f]{1,300}\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{0,500}\\x1f(null|hegumen|priest)\\x1f(null|serving|departed)\\x1f[^\\x1f]{0,10}\\x1f[^\\x1f]{0,10}\\x1f[^\\x1f]{0,10}\\x1f[^\\x1f]{0,1000}[^\\x1f]{0,1000}[^\\x1f]{0,1000}[^\\x1f]{0,1000}[^\\x1f]{0,1000}\\x1f[^\\x1f]{0,1000}[^\\x1f]{0,1000}[^\\x1f]{0,1000}[^\\x1f]{0,1000}[^\\x1f]{0,1000}');
+    }
+    function ownMilestone(d) {
+      let o = d.titleAr + '\u001f' + string(d.get('titleEn', ''))
+        + '\u001f' + string(d.get('descAr', '')) + '\u001f' + string(d.get('descEn', ''))
+        + '\u001f' + string(d.get('year', null)) + '\u001f' + string(d.get('icon', ''));
+      return o.matches('[^\\x1f]{1,300}\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{0,1000}[^\\x1f]{0,1000}\\x1f[^\\x1f]{0,1000}[^\\x1f]{0,1000}\\x1f(null|[1-9][0-9]{0,2}|1[0-9]{3}|2[01][0-9]{2}|2200)\\x1f[^\\x1f]{0,40}');
+    }
+    function ownSaint(d) {
+      let o = d.nameAr + '\u001f' + string(d.get('nameEn', '')) + '\u001f' + string(d.get('bioAr', ''))
+        + '\u001f' + string(d.get('bioEn', '')) + '\u001f' + string(d.get('feastCopticAr', ''))
+        + '\u001f' + string(d.get('feastCopticEn', '')) + '\u001f' + string(d.get('feastGregorian', ''))
+        + '\u001f' + string(d.get('feastGregorianAr', ''));
+      return o.matches('[^\\x1f]{1,300}\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{0,1000}[^\\x1f]{0,1000}[^\\x1f]{0,1000}[^\\x1f]{0,1000}[^\\x1f]{0,1000}\\x1f[^\\x1f]{0,1000}[^\\x1f]{0,1000}[^\\x1f]{0,1000}[^\\x1f]{0,1000}[^\\x1f]{0,1000}\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{0,300}');
     }
 
     match /{col}/{docId} {
@@ -283,22 +462,62 @@ service cloud.firestore {
 
     function validFeatures(d) {
       // Like settings/church: an untouched legacy key does not block an edit.
+      // Only the keys this write creates or changes are validated (the admin
+      // saves the whole document; Firestore evaluates at most 1,000
+      // expressions per request).
+      let changed = changedKeys(d);
       return keysAllowed(['sections', 'homeOrder', 'homeHidden', 'heroTitleAr', 'heroTitleEn', 'heroSubtitleAr',
                           'heroSubtitleEn', 'bannerEnabled', 'bannerAr', 'bannerEn', 'bannerLink', 'theme',
-                          'updatedAt', 'updatedBy'])
-        && (!('sections' in d) || validSections(d.sections))
-        && (!('homeOrder' in d) || (d.homeOrder is list && d.homeOrder.size() <= 7
+                          'pageHeaders', 'footer', 'updatedAt', 'updatedBy'])
+        && (!('sections' in changed) || !('sections' in d) || validSections(d.sections))
+        && (!('homeOrder' in changed) || !('homeOrder' in d) || (d.homeOrder is list && d.homeOrder.size() <= 7
               && d.homeOrder.hasOnly(['banner', 'alerts', 'nextMass', 'quickContacts', 'milestones', 'directory', 'map'])))
-        && (!('homeHidden' in d) || (d.homeHidden is list && d.homeHidden.size() <= 7
+        && (!('homeHidden' in changed) || !('homeHidden' in d) || (d.homeHidden is list && d.homeHidden.size() <= 7
               && d.homeHidden.hasOnly(['banner', 'alerts', 'nextMass', 'quickContacts', 'milestones', 'directory', 'map'])))
-        && str(d, 'heroTitleAr', 200) && str(d, 'heroTitleEn', 200)
-        && str(d, 'heroSubtitleAr', 300) && str(d, 'heroSubtitleEn', 300)
-        && d.get('bannerEnabled', false) is bool && str(d, 'bannerAr', 500) && str(d, 'bannerEn', 500)
+        && (!changed.hasAny(['heroTitleAr', 'heroTitleEn', 'heroSubtitleAr', 'heroSubtitleEn', 'bannerEnabled', 'bannerAr',
+                             'bannerEn'])
+            || (str(d, 'heroTitleAr', 200) && str(d, 'heroTitleEn', 200)
+                && str(d, 'heroSubtitleAr', 300) && str(d, 'heroSubtitleEn', 300)
+                && d.get('bannerEnabled', false) is bool && str(d, 'bannerAr', 500) && str(d, 'bannerEn', 500)))
         // Same as the client and alert links: empty, an in-app path, or an
         // http(s) URL with a host (scheme case-insensitive).
-        && optUrlOrPath(d, 'bannerLink', 500)
-        && d.get('theme', 'burgundy') in ['burgundy', 'navy', 'green', 'brown', 'purple']
-        && stampOk(d);
+        && (!('bannerLink' in changed) || optUrlOrPath(d, 'bannerLink', 500))
+        && (!('theme' in changed) || d.get('theme', 'burgundy') in ['burgundy', 'navy', 'green', 'brown', 'purple'])
+        && (!('footer' in changed) || !('footer' in d) || validFooter(d.footer))
+        && (!('pageHeaders' in changed) || !('pageHeaders' in d) || validPageHeaders(d.pageHeaders))
+        && (!changed.hasAny(['updatedAt', 'updatedBy']) || stampOk(d));
+    }
+
+    // Footer options (FR-G-04).
+    function validFooter(f) {
+      return f is map && f.keys().hasOnly(['showPhones', 'showSocials', 'showQuickLinks', 'noteAr', 'noteEn'])
+        && [f.get('showPhones', true), f.get('showSocials', true), f.get('showQuickLinks', true)].hasOnly([true, false])
+        && (f.get('noteAr', '') + '\u001f' + f.get('noteEn', '')).matches('[^\\x1f]{0,500}\\x1f[^\\x1f]{0,500}');
+    }
+
+    // Per-page header / intro overrides; known pages only. Only the pages
+    // this write adds or changes are validated (expression budget).
+    function validPageHeaders(h) {
+      let old = resource == null ? {} : resource.data.get('pageHeaders', {});
+      let changed = old is map ? h.diff(old).affectedKeys() : h.keys().toSet();
+      return h is map
+        && h.keys().hasOnly(['about', 'schedule', 'education', 'activities', 'clinics', 'services', 'contact', 'ask'])
+        && (!changed.hasAny(['about']) || !('about' in h) || validPageHeader(h.about))
+        && (!changed.hasAny(['schedule']) || !('schedule' in h) || validPageHeader(h.schedule))
+        && (!changed.hasAny(['education']) || !('education' in h) || validPageHeader(h.education))
+        && (!changed.hasAny(['activities']) || !('activities' in h) || validPageHeader(h.activities))
+        && (!changed.hasAny(['clinics']) || !('clinics' in h) || validPageHeader(h.clinics))
+        && (!changed.hasAny(['services']) || !('services' in h) || validPageHeader(h.services))
+        && (!changed.hasAny(['contact']) || !('contact' in h) || validPageHeader(h.contact))
+        && (!changed.hasAny(['ask']) || !('ask' in h) || validPageHeader(h.ask));
+    }
+    // Exactly the 6 keys (the admin form always writes all six: size 6 and
+    // each one read), all strings; titles <= 200, subtitles <= 300, intros
+    // <= 1500 chars.
+    function validPageHeader(p) {
+      return p.size() == 6
+        && (p.titleAr + '\u001f' + p.titleEn + '\u001f' + p.subtitleAr + '\u001f' + p.subtitleEn + '\u001f' + p.introAr + '\u001f' + p.introEn)
+          .matches('[^\\x1f]{0,200}\\x1f[^\\x1f]{0,200}\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{0,1000}[^\\x1f]{0,500}\\x1f[^\\x1f]{0,1000}[^\\x1f]{0,500}');
     }
 
     // -------------------------------- media ---------------------------------

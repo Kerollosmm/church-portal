@@ -75,7 +75,15 @@
    "bannerAr": "",
    "bannerEn": "",
    "bannerLink": "",
-   "theme": "burgundy"
+   "theme": "burgundy",
+   "pageHeaders": {},
+   "footer": {
+    "showPhones": true,
+    "showSocials": true,
+    "showQuickLinks": true,
+    "noteAr": "",
+    "noteEn": ""
+   }
   }
  },
  "alerts": {
