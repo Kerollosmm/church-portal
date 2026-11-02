@@ -153,6 +153,11 @@ supersede them.
 - **Consequences:** JSON-LD duplicates `settings/church` facts and must be edited by hand when they change (a test
   pins it to the seed). Deferred chunks add one extra request on the first `/admin` / `/ask` visit. Native apps
   don't remember the language yet.
+- **Amended by PR #10:** the static `/` canonical stays in `web/index.html` as the starting value, but Flutter now
+  rewrites `<link rel="canonical">` per route (`setDocumentRouteMeta`) and swaps it for
+  `<meta name="robots" content="noindex">` on `/admin`, the 404 page and switched-off sections (Google advises against
+  combining `noindex` with a canonical elsewhere). `web/sitemap.xml` comments out `/clinics` while the clinics
+  section is off.
 
 ## Timeline
 
@@ -167,6 +172,7 @@ supersede them.
 | 1 Nov 2026 | **PR #6** — "Rebrand: church title, parish seal logo, new domain" | Full church title + short name everywhere (web title/OG/manifest/app/l10n/Android label), parish seal as logo/splash/favicons/PWA/Android icons (`tool/gen_branding.sh`), new Hosting site `maximos-domadios-church` as the live app with a 301 redirect from `asafra-church-portal.web.app`, OG/robots/sitemap on the new domain; ADR-018. |
 | 1 Nov 2026 | **PR #7** `6a30772` — "PR 1: domain, AI grounding, resilience & security rules" | Review plan PR 1: `Season.replacesRegular`, upcoming special services, seasonal tie-breaks, assistant grounding, seed-fallback recovery, contact timeout UX, rules SEC-01–SEC-05, clinics section off in the seed. |
 | 1 Nov 2026 | **PR #8** `bc934d3` — "PR 2: UX, WCAG 2.2 AA, navigation, admin & docs" (`fix/phase2-ux-a11y-admin`) | Review plan PR 2: `AppColors.goldText`, darker WhatsApp/Facebook fills, footer `white70`, theme presets everywhere (`primaryDarkOf`); 320 px / 200 % text fixes (`Pill`, `TitleWithBadge`, timeline `Wrap`, app-bar collapse, alert/next-mass headers); Back-to-Home arrow, 48 dp targets; two-way `?lang=` sync (BUG-07); `departedDate` (BUG-08), alert link gating (BUG-09), BiDi secondary times (BUG-10), "Today" badge (FR-E-03), map `hl` (BUG-16), `runSpacing` (BUG-15); live regions, labelled buttons/switch, reduced-motion skeleton, Move up/down (2.5.7); admin: no scroll reset on save (BUG-12), departed order base 1000 + keep media on timeout (BUG-13), re-subscribe on backend change (BUG-18), Open on site; `test/accessibility_test.dart`. |
-| 2 Nov 2026 | **PR #9** — "PR 3: compliance, SEO, deferred bundles & locale storage" (`feat/phase3-compliance-seo-perf`) | Review plan PR 3: PDPL privacy notice + required consent checkbox (`ContactField.consent`, FR-CT-06); static canonical + verified `Church` JSON-LD in `web/index.html` (ADR-019); `/admin` and `/ask` as deferred chunks via `DeferredLoader` (`/ask` fetched only when the assistant is on — `AssistantGate`); language choice saved in `localStorage` (`LanguageStore`, `?lang=` → saved → Arabic); `test/phase3_test.dart`. |
+| 2 Nov 2026 | **PR #9** `ad621cf` — "PR 3: compliance, SEO, deferred bundles & locale storage" (`feat/phase3-compliance-seo-perf`) | Review plan PR 3: PDPL privacy notice + required consent checkbox (`ContactField.consent`, FR-CT-06); static canonical + verified `Church` JSON-LD in `web/index.html` (ADR-019); `/admin` and `/ask` as deferred chunks via `DeferredLoader` (`/ask` fetched only when the assistant is on — `AssistantGate`); language choice saved in `localStorage` (`LanguageStore`, `?lang=` → saved → Arabic); `test/phase3_test.dart`. |
+| 2 Nov 2026 | **PR #10** — "PR #10: post-audit polish" (`fix/pr10-post-audit-polish`) | Assistant header uses the Cairo date/weekday; dated liturgies (even with a weekday) are grounded only as current one-off services (`isDatedLiturgyCurrent`); admin chip contrast, narrow reflow, tooltips, `didUpdateWidget` re-binding on Features/Messages/Admins, stamped `setAdmin`; per-route canonical + `noindex` (`setDocumentRouteMeta`, amends ADR-019), URL fragments kept by `?lang=` sync, `/clinics` commented out of the sitemap; `validFeatures` on `keysAllowed` + `optUrlOrPath`, `storage.rules` contentType guard, `deploy-rules` needs `build`. |
 
 Append new PRs to this table.

@@ -7,7 +7,11 @@ review plan, 1 Nov 2026) plus the changes of PR 2 of the plan (`fix/phase2-ux-a1
 theme presets, 320 px / 200 % text layouts, two-way `?lang=` sync, screen-reader semantics, admin fixes; merged as
 `bc934d3`, PR #8) plus PR 3 of the plan (`feat/phase3-compliance-seo-perf`: PDPL privacy notice + consent on the
 contact form, static canonical + `Church` JSON-LD in `web/index.html`, deferred `/admin` and `/ask` chunks, language
-choice remembered in `localStorage`).
+choice remembered in `localStorage`; merged as `ad621cf`, PR #9) plus PR #10 (`fix/pr10-post-audit-polish`, 2 Nov
+2026: Cairo-weekday assistant header and dated one-off grounding, admin chip contrast / narrow reflow / tooltips /
+stream re-binding, per-route canonical + `noindex` via `setDocumentRouteMeta`, URL fragments kept by `?lang=` sync,
+`/clinics` out of the sitemap while off, `validFeatures` on `keysAllowed` + `optUrlOrPath`, `deploy-rules` gated on
+`build`).
 
 > **Golden rule:** read this folder before changing anything, and update it in the same PR as every change that
 > alters behaviour, data shape, rules, workflows, content status or open tasks.

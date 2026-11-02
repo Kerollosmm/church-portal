@@ -64,16 +64,18 @@ Live counts per collection (respecting each screen's filter, e.g. serving vs dep
 unconfirmed sub-counts, **new messages** (status ≠ handled, red when > 0), **sections on** (`N/16`), quick links
 (church info, sections & home, alerts, open site) and the **8 latest edits** (title, `updatedAt`, `updatedBy`). A
 failed stream shows "—". If the screen is rebuilt with a different backend (`widget.repo`), `didUpdateWidget`
-cancels and re-subscribes every stream (BUG-18; `ChurchInfoScreen` does the same).
+cancels and re-subscribes every stream (BUG-18; `ChurchInfoScreen` does the same, and since PR #10 so do
+`FeaturesScreen` — which also resets its shown version and editor key — `MessagesScreen` and `AdminsScreen`).
 
 ### Sections & home page (`FeaturesScreen` / `FeaturesEditor`, `features_editor.dart`) → `settings/features`
 - Switch each of the 16 sections on/off (+ "enable all"); labels from `Sections.labels`. The 16th, **«الصور» /
   Images**, hides every optional item image site-wide (default on).
 - **Home layout**: drag to reorder the 7 blocks — or tap **Move up / Move down** (`ValueKey('home-<block>-up|down')`,
   WCAG 2.5.7 single-pointer alternative) — show/hide each; a block whose section is off is flagged
-  («blockSectionOff»).
+  («blockSectionOff»). Below 600 px the move buttons sit in the tile's subtitle row and only the switch stays
+  trailing (PR #10).
 - Hero title/subtitle AR/EN (≤ 200/300), announcement banner (on/off, AR/EN text ≤ 500, link validated by
-  `isValidUrl(allowPath: true)`), **site colour** (5 `ThemePresets`).
+  `isValidUrl(allowPath: true)`), **site colour** (5 `ThemePresets`; the selected chip has a white label, PR #10).
 - "Save changes" writes `FeatureSettings.toMap()` with `saveDoc` (merge + stamp). If the doc does not exist yet, a
   note says everything is on by default. If someone else saves while you have unsaved edits, a banner offers a reload
   instead of wiping your edits. The snapshot of **your own save** no longer remounts the form (BUG-12):
@@ -170,7 +172,8 @@ Newest first (`createdAt`), filter chips **new** (default) / handled / all; each
 ### Admins (`AdminsScreen`, owners only) → `admins`
 List with role dropdown (owner/editor) and remove button — disabled for yourself ("(you)"). **Add admin** dialog: UID
 (validated by `isValidAdminUid`: 1–128 chars, no `/`; copy it from Firebase console → Authentication → Users), email,
-role. The Auth user itself must be created in the console (or via the Seed workflow) first.
+role. The Auth user itself must be created in the console (or via the Seed workflow) first. Since PR #10
+`setAdmin` stamps `admins/{uid}` with `updatedAt`/`updatedBy` (`_stamp`), like every other admin write.
 
 ## Gotchas for agents
 
@@ -181,3 +184,7 @@ role. The Auth user itself must be created in the console (or via the Seed workf
 - `AdminBackend` is an interface so widget tests use an in-memory fake; keep new admin I/O behind it.
   `AdminBackend.media` (default null) exposes the `MediaRepository`; `DocEditor` takes `media`, `pickImage` and
   `prepareImage` so tests inject bytes and a fake store (`test/media_test.dart`).
+- PR #10 a11y details: selected clinic-day `FilterChip`s and the theme `ChoiceChip`s use a white label/checkmark on the
+  dark fill (`chipTheme` also sets `checkmarkColor` / `secondaryLabelStyle` white); the image field stacks preview
+  above its buttons below 420 px or at ≥ 1.5× text; the search clear button («مسح البحث» / Clear search) and the
+  admin Home button (`backHome`) have tooltips.

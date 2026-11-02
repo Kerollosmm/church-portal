@@ -16,7 +16,20 @@ class FeaturesScreen extends StatefulWidget {
 }
 
 class _FeaturesScreenState extends State<FeaturesScreen> {
-  late final Stream<AdminDoc?> _stream = widget.repo.watchDoc('settings/features');
+  late Stream<AdminDoc?> _stream = widget.repo.watchDoc('settings/features');
+
+  @override
+  void didUpdateWidget(covariant FeaturesScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // A different backend: re-bind the stream and rebuild the form from it.
+    if (widget.repo != oldWidget.repo) {
+      _stream = widget.repo.watchDoc('settings/features');
+      _shown = null;
+      _loaded = false;
+      _editorKey = GlobalKey<FeaturesEditorState>();
+    }
+  }
+
   /// A fresh key per shown version rebuilds the editor from that version.
   GlobalKey<FeaturesEditorState> _editorKey = GlobalKey<FeaturesEditorState>();
 
@@ -28,6 +41,10 @@ class _FeaturesScreenState extends State<FeaturesScreen> {
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<AdminDoc?>(
+      // A new stream (another backend) gets a fresh StreamBuilder: a reused one
+      // keeps the old backend's last snapshot while waiting, and that stale
+      // document would then be marked as loaded.
+      key: ObjectKey(_stream),
       stream: _stream,
       builder: (context, snap) {
         if (snap.hasError) return Center(child: Text('${snap.error}'));
@@ -291,6 +308,10 @@ class FeaturesEditorState extends State<FeaturesEditor> {
                       label: Text(context.pick(ThemePresets.labels[e.key]![0], ThemePresets.labels[e.key]![1])),
                       selected: f.theme == e.key,
                       showCheckmark: false,
+                      labelStyle: TextStyle(
+                        color: f.theme == e.key ? Colors.white : AppColors.burgundy,
+                        fontWeight: FontWeight.w700,
+                      ),
                       onSelected: (_) => _set(f.copyWith(theme: e.key)),
                     ),
                 ]),
@@ -313,33 +334,43 @@ class FeaturesEditorState extends State<FeaturesEditor> {
     final shown = !f.homeHidden.contains(b);
     final req = HomeBlocks.requires[b];
     final sectionOff = req != null && !f.enabled(req);
+    // Single-tap alternative to dragging (WCAG 2.5.7).
+    final moveButtons = [
+      IconButton(
+        key: ValueKey('home-$b-up'),
+        tooltip: context.tr('moveUp'),
+        icon: const Icon(Icons.arrow_upward),
+        onPressed: i == 0 ? null : () => _moveBlock(f.homeOrder, i, i - 1),
+      ),
+      IconButton(
+        key: ValueKey('home-$b-down'),
+        tooltip: context.tr('moveDown'),
+        icon: const Icon(Icons.arrow_downward),
+        onPressed: i == count - 1 ? null : () => _moveBlock(f.homeOrder, i, i + 1),
+      ),
+    ];
+    final offNote = sectionOff
+        ? Text(context.tr('blockSectionOff'), style: const TextStyle(color: AppColors.alert, fontSize: 12))
+        : null;
+    final toggle = Switch(
+      value: shown,
+      onChanged: (v) => _set(f.copyWith(homeHidden: v ? ({...f.homeHidden}..remove(b)) : {...f.homeHidden, b})),
+    );
+    // Narrow screens: the move buttons get their own row under the title so
+    // the title keeps its width (and nothing overflows at 200% text).
+    final narrow = MediaQuery.sizeOf(context).width < 600;
     return ListTile(
       key: ValueKey('home-$b'),
       contentPadding: EdgeInsets.zero,
       leading: ReorderableDragStartListener(index: i, child: const Icon(Icons.drag_indicator)),
       title: Text(context.pick(HomeBlocks.labels[b]![0], HomeBlocks.labels[b]![1])),
-      subtitle: sectionOff
-          ? Text(context.tr('blockSectionOff'), style: const TextStyle(color: AppColors.alert, fontSize: 12))
-          : null,
-      trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-        // Single-tap alternative to dragging (WCAG 2.5.7).
-        IconButton(
-          key: ValueKey('home-$b-up'),
-          tooltip: context.tr('moveUp'),
-          icon: const Icon(Icons.arrow_upward),
-          onPressed: i == 0 ? null : () => _moveBlock(f.homeOrder, i, i - 1),
-        ),
-        IconButton(
-          key: ValueKey('home-$b-down'),
-          tooltip: context.tr('moveDown'),
-          icon: const Icon(Icons.arrow_downward),
-          onPressed: i == count - 1 ? null : () => _moveBlock(f.homeOrder, i, i + 1),
-        ),
-        Switch(
-          value: shown,
-          onChanged: (v) => _set(f.copyWith(homeHidden: v ? ({...f.homeHidden}..remove(b)) : {...f.homeHidden, b})),
-        ),
-      ]),
+      subtitle: narrow
+          ? Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+              ?offNote,
+              Row(mainAxisSize: MainAxisSize.min, children: moveButtons),
+            ])
+          : offNote,
+      trailing: narrow ? toggle : Row(mainAxisSize: MainAxisSize.min, children: [...moveButtons, toggle]),
     );
   }
 }

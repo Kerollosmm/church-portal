@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 
+import '../../core/document_lang.dart';
 import '../../core/l10n.dart';
 import '../../state/providers.dart';
 import 'common.dart';
@@ -18,7 +19,9 @@ class AssistantGate extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final settings = ref.watch(settingsProvider);
     if (settings.isLoading) return const Center(child: CircularProgressIndicator());
-    if (!ref.watch(assistantVisibleProvider)) {
+    final visible = ref.watch(assistantVisibleProvider);
+    setDocumentRouteMeta(path: '/ask', indexable: visible);
+    if (!visible) {
       return PageBody(
         header: PageHeader(title: context.tr('askTitle'), icon: Icons.auto_awesome_rounded),
         children: [EmptyState(message: context.tr('askUnavailable'), icon: Icons.smart_toy_outlined)],

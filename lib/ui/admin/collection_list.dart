@@ -168,6 +168,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
                 suffixIcon: _search.text.isEmpty
                     ? null
                     : IconButton(
+                        tooltip: context.tr('clearSearch'),
                         icon: const Icon(Icons.clear),
                         onPressed: () => setState(_search.clear),
                       ),

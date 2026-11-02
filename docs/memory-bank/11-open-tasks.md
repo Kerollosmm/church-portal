@@ -1,7 +1,7 @@
 # 11 — Open tasks
 
 Tick items off (or delete them) in the PR that completes them, and add new ones as you discover them.
-Status as of 1 Nov 2026 (after PR #7 and PR 2 of the review plan).
+Status as of 2 Nov 2026 (after PR #7, PR #8, PR #9 `ad621cf` and PR #10).
 
 ## Infrastructure & security (owner: developer)
 
@@ -34,6 +34,11 @@ Status as of 1 Nov 2026 (after PR #7 and PR 2 of the review plan).
 - [ ] **Orphaned `media` docs:** deletes are best effort; add a small owner-only "clean up unused images" action or a
       script (list `media` ids not referenced by any `image.mediaId`) if they accumulate.
 
+- [ ] **Browser-target test for `applyDocumentHead`** (`lib/core/document_lang_web.dart`): the Dart VM tests only
+      check the `DocumentHeadSpec` passed to `debugOnRouteMeta`, not the `<link rel="canonical">` /
+      `<meta name="robots">` written to `document.head`. Needs a `@TestOn('browser')` test and a
+      `flutter test --platform chrome` CI job (CodeRabbit nitpick on PR #10, deferred).
+
 - [ ] **Custom domain (optional)**: if the church buys a domain, add it to Hosting site `maximos-domadios-church`
       (console → Hosting → Add custom domain), add it to Auth authorized domains, and update OG/robots/
       sitemap URLs and the redirect destination in `firebase.json` (ADR-018).
@@ -59,10 +64,11 @@ Status as of 1 Nov 2026 (after PR #7 and PR 2 of the review plan).
       transfer and on the privacy-notice wording. (Notice + consent checkbox done in PR 3 of the review plan.)
 - [ ] **Analytics** (Firebase Analytics or similar) with the KPI events (`answer_visible`, `clinic_call`,
       `clinic_whatsapp`, `call_church`, `open_maps`, `whatsapp_channel`, `contact_submit_success`, `lang_switch`).
-- [ ] SEO/static shell: `noindex` meta for `/admin`; per-route canonical (the static canonical added in PR 3 of the
-      review plan points every SPA route at `/`); optional pre-rendered "today's masses" snapshot. (`Church` JSON-LD
-      done in PR 3; keep it in sync with `settings/church`.) (`web/robots.txt` disallowing `/admin`, `web/sitemap.xml` and the Open Graph image
-      `web/og-image.jpg` shipped in PR #6.)
+- [ ] SEO/static shell: optional pre-rendered "today's masses" snapshot. (`Church` JSON-LD done in PR 3; keep it in
+      sync with `settings/church`.) (`web/robots.txt` disallowing `/admin`, `web/sitemap.xml` and the Open Graph image
+      `web/og-image.jpg` shipped in PR #6; per-route canonical + `noindex` on `/admin`, 404 and switched-off sections
+      done in PR #10 — crawlers that do not run JS still see the static `/` canonical.) When clinics go live,
+      uncomment `/clinics` in `web/sitemap.xml`.
 - [ ] Performance budget (Lighthouse in CI), font subset/bundling (fonts are fetched at runtime now). (Deferred
       `/admin` and `/ask` chunks done in PR 3 of the review plan; verify lazy loading in the Network tab on the
       preview.)
@@ -74,8 +80,6 @@ Status as of 1 Nov 2026 (after PR #7 and PR 2 of the review plan).
       review plan.)
 - [ ] Manual accessibility pass with TalkBack / VoiceOver on a real phone (automated checks live in
       `test/accessibility_test.dart`); the admin dashboard still uses fixed burgundy instead of the theme preset.
-- [ ] `FeaturesScreen` keeps a `late final` stream: give it the same `didUpdateWidget` re-subscribe as
-      Overview/Church info if the admin backend can ever change without a remount (not in BUG-18's scope).
 - [ ] PWA install prompt, floating *Live now* / *Doctors' times* buttons (v1.1).
 - [ ] v2 ideas: FCM push alerts, daily synaxarium line, `.ics` export, live-stream embed.
 - [ ] Consider an inbox "spam" status (business case) and owner-only settings (ADR-011) if the church asks.

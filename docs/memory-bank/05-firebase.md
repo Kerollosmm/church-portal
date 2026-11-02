@@ -74,10 +74,12 @@ Notable details:
   `mapsUrl`/`heroImageUrl` keep length-only checks.
 - `validClinic`: `days` list ≤ 7 and ⊆ [1..7].
 - `validPriest`: `rank` ∈ hegumen/priest, `status` ∈ serving/departed, dates ≤ 10 chars.
-- `validFeatures`: exact key allow-list (also on update — `d.keys().hasOnly`), `sections` keys ⊆ the 16 section keys
+- `validFeatures`: key allow-list via `keysAllowed` (create: `keys().hasOnly`; update: only the **changed** keys must
+  be allowed, so an untouched legacy key no longer blocks a merge save — same as `settings/church`, PR #10), `sections` keys ⊆ the 16 section keys
   (incl. `media`)
-  and values bool, `homeOrder`/`homeHidden` ⊆ the 7 block keys (≤ 7), `bannerLink` regex
-  `^$|^/([^/ ][^ ]*)?$|^https?://[^/ ]+[.][^/ ]+([/?#][^ ]*)?$`, `theme` ∈ 5 presets.
+  and values bool, `homeOrder`/`homeHidden` ⊆ the 7 block keys (≤ 7), `bannerLink` via `optUrlOrPath(d, 'bannerLink',
+  500)` (empty, in-app path or http(s) URL with a case-insensitive scheme — same as alert links, PR #10), `theme` ∈ 5
+  presets.
 - `validChurch`: phones/altars lists ≤ 20; `nameAr` required; `coordinatesApproximate` optional bool (PR 1).
 - **Editors and owners have the same content/settings/inbox rights**; only `admins/*` management is owner-only.
 - Tests: `tool/rules_test/rules.test.mjs` (Node test runner + `@firebase/rules-unit-testing` in the Firestore
@@ -87,7 +89,9 @@ Notable details:
   images** (valid url/inline/null images, malformed maps, image on a collection without it, `media/` public read,
   admin-only writes, type/size/stamp checks, the 950,000-char cap), and PR 1's **SEC-01–SEC-04** (standalone
   `contact_rate` pings and mismatched `lastMsgId` rejected, 10 s throttle, `media` list admin-only, admin stamps,
-  `Season.replacesRegular`, `coordinatesApproximate`, safe links incl. upper-case schemes, replaying an existing message, a 5 s resend). 32 tests.
+  `Season.replacesRegular`, `coordinatesApproximate`, safe links incl. upper-case schemes, replaying an existing message, a 5 s resend),
+  and PR #10's upper-case `HTTPS://` `bannerLink`, untouched legacy key on a `settings/features` merge, and stamped
+  `setAdmin` writes. 35 tests.
 - **Expression budget:** rules are limited to 1000 expressions per request (PR #3 hit it on `validChurch`). Keep new
   checks in shared helpers (`common`, `validImage`) and prefer `str()`/`get()` forms on big docs.
 
@@ -95,7 +99,8 @@ Notable details:
 
 - `storage.rules` in the repo root is a **draft, not deployed** (`firebase.json` has no `storage` entry): public read
   of `media/*`, admin-only writes (cross-service `firestore.exists(admins/uid)`), ≤ 700 KB, jpeg/webp/png
-  (`^image/(jpeg|webp|png)([;].*)?$`, so parameterised headers like `image/jpeg; charset=utf-8` pass — PR 1).
+  (`^image/(jpeg|webp|png)([;].*)?$`, so parameterised headers like `image/jpeg; charset=utf-8` pass — PR 1;
+  guarded by `request.resource.contentType is string` before `.matches`, PR #10).
 - The app's `StorageMediaRepository` (`lib/data/media_repository.dart`) is a stub selected by
   `--dart-define=MEDIA_BACKEND=storage`; switch steps are in ADR-017 (`10-decisions-and-history.md`).
 - Spark quota note: each inline image costs **one Firestore document read** per visitor session (cached in memory and
@@ -127,10 +132,12 @@ App target settings:
 - `public: build/web` (output of `flutter build web --release`); ignores `firebase.json`, dotfiles, `node_modules`.
 - `cleanUrls: true`, `trailingSlash: false`, **rewrite `**` → `/index.html`** (SPA + path URL strategy).
 - SEO in `web/index.html` (PR 3 of the review plan): a **static** `<link rel="canonical"
-  href="https://maximos-domadios-church.web.app/">` — because every route is served from the same `index.html`, every
-  SPA route (`/mass-schedule`, `/clinics`…) declares `/` as its canonical, so search engines may fold subpages into the
-  home page (known caveat, accepted by the owner who chose to follow the plan; a per-route canonical needs a static
-  shell or JS that rewrites the tag). Plus a `<script type="application/ld+json">` **`Church`** block with only
+  href="https://maximos-domadios-church.web.app/">` in the shell. Since PR #10 (amending ADR-019) Flutter rewrites it
+  per route with `setDocumentRouteMeta` (`lib/core/document_lang*.dart`): indexable routes get
+  `kCanonicalOrigin + path`; `/admin`, the 404 page and switched-off sections (`FeatureGate`, `AssistantGate` for
+  `/ask`) drop the canonical link and add `<meta name="robots" content="noindex">` instead (never both). Crawlers
+  that do not run JS still see `/` as the canonical. `web/sitemap.xml` keeps `/clinics` commented out while
+  `sections.clinics` is off in the seed (uncomment when clinics launch). Plus a `<script type="application/ld+json">` **`Church`** block with only
   verified facts mirrored from `settings/church` / `docs/CONTENT_SOURCES.md` and the display title: Arabic name
   (`nameAr`), `alternateName` = the English display title "St. Maximus & Domadius and St. Moses the Black Church"
   (`appName` in `l10n.dart`, ADR-018) and the full `nameEn`, `PostalAddress` (آخر شارع 45، العصافرة قبلي، قطاع المنتزه، الإسكندرية, EG), `GeoCoordinates`
@@ -184,8 +191,10 @@ App target settings:
      today's Cairo date; no medical/legal/spiritual-direction advice; collect no personal data; topics with no section
      are "not offered".
   2. Sections included **only if switched on** in `settings/features`: Contacts (contactInfo: address, directions,
-     maps URL, phones; socials: WhatsApp, Facebook, YouTube, WhatsApp channel, Instagram); weekly liturgy schedule,
-     special one-off services, Holy seasons (active seasons only, each labelled `[REPLACES regular schedule]` or
+     maps URL, phones; socials: WhatsApp, Facebook, YouTube, WhatsApp channel, Instagram); weekly liturgy schedule
+     (undated only), special one-off services (every non-seasonal dated liturgy — even with a weekday set — while
+     `isDatedLiturgyCurrent`, i.e. from its Cairo day on, or the day before while it still runs past midnight; PR #10;
+     the header's date and weekday come from `CairoTime.fromInstant(now)`), Holy seasons (active seasons only, each labelled `[REPLACES regular schedule]` or
      `[ADDITIVE — regular morning masses continue]` from `replacesRegular`, plus `[ACTIVE NOW]`) (schedule); current
      announcements (alerts: `visibleAlerts`); clinics (active only, incl. WhatsApp); meetings (incl. notes);
      activities; public services (facilities); About the church (history: bishop + history summary, each language

@@ -162,7 +162,7 @@ class AdminRepository implements AdminBackend {
 
   @override
   Future<void> setAdmin(String uid, {required String email, required String role}) =>
-      db.doc('admins/$uid').set({'email': email.trim(), 'role': role});
+      db.doc('admins/$uid').set(_stamp({'email': email.trim(), 'role': role}));
 
   @override
   Future<void> removeAdmin(String uid) => db.doc('admins/$uid').delete();

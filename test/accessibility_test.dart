@@ -12,6 +12,7 @@ import 'package:church_portal/domain/cairo_time.dart';
 import 'package:church_portal/domain/features.dart';
 import 'package:church_portal/router.dart';
 import 'package:church_portal/state/providers.dart';
+import 'package:church_portal/ui/admin/admin_page.dart';
 import 'package:church_portal/ui/admin/admin_schema.dart';
 import 'package:church_portal/ui/admin/admin_screens.dart';
 import 'package:church_portal/ui/admin/admin_validators.dart';
@@ -696,12 +697,23 @@ void main() {
       await tester.pump();
       expect(b.watched, containsAll(['settings/features', 'contact_messages']));
 
-      final c = _FakeBackend(), d = _FakeBackend();
+      Map<String, Map<String, dynamic>> church(String by) => {
+            'settings/church': {
+              ...Map<String, dynamic>.from(_raw()['settings']['church'] as Map),
+              'updatedAt': DateTime.utc(2026, 10, 1),
+              'updatedBy': by,
+            },
+          };
+      final c = _FakeBackend(docs: church('old-church@x.test')), d = _FakeBackend(docs: church('new-church@x.test'));
       await tester.pumpWidget(_adminApp(ChurchInfoScreen(repo: c)));
-      await tester.pump();
+      await tester.pumpAndSettle();
+      expect(find.textContaining('old-church@x.test'), findsOneWidget);
       await tester.pumpWidget(_adminApp(ChurchInfoScreen(repo: d)));
-      await tester.pump();
+      await tester.pumpAndSettle();
       expect(d.watched, contains('settings/church'));
+      // The new backend's document is rendered, not the old backend's last snapshot.
+      expect(find.textContaining('new-church@x.test'), findsOneWidget);
+      expect(find.textContaining('old-church@x.test'), findsNothing);
     });
 
     test('open on site keeps the dashboard language', () {
@@ -749,6 +761,84 @@ void main() {
       expect(repo.reordered, ['b', 'a']);
       expect(repo.reorderedBase, 1000);
     });
+
+    testWidgets('search clear and admin Home buttons expose tooltips (en + ar)', (tester) async {
+      tester.view.physicalSize = const Size(1200, 2000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final repo = _ListBackend([AdminDoc('a', {'name': 'Fr. A', 'status': 'serving', 'order': 10})]);
+      for (final (locale, clear) in [(const Locale('en'), 'Clear search'), (const Locale('ar'), 'مسح البحث')]) {
+        await tester.pumpWidget(MaterialApp(
+          key: ValueKey(locale),
+          locale: locale,
+          supportedLocales: const [Locale('ar'), Locale('en')],
+          localizationsDelegates: GlobalMaterialLocalizations.delegates,
+          home: Scaffold(body: CollectionListScreen(repo: repo, def: collectionById('priests')!)),
+        ));
+        await tester.pumpAndSettle();
+        await tester.enterText(find.byKey(const Key('admin-search')), 'x');
+        await tester.pumpAndSettle();
+        expect(find.byTooltip(clear), findsOneWidget);
+      }
+
+      await tester.pumpWidget(ProviderScope(
+        overrides: [adminRepositoryProvider.overrideWithValue(null)],
+        child: MaterialApp(
+          locale: const Locale('en'),
+          supportedLocales: const [Locale('ar'), Locale('en')],
+          localizationsDelegates: GlobalMaterialLocalizations.delegates,
+          home: const AdminPage(),
+        ),
+      ));
+      await tester.pumpAndSettle();
+      expect(find.byTooltip('Back to home'), findsOneWidget);
+    });
+
+    testWidgets('features and messages screens re-subscribe when the backend changes', (tester) async {
+      tester.view.physicalSize = const Size(1200, 3000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      Map<String, Map<String, dynamic>> features(String by) => {
+            'settings/features': {
+              ...FeatureSettings.defaults.toMap(),
+              'updatedAt': DateTime.utc(2026, 10, 1),
+              'updatedBy': by,
+            },
+          };
+      final a = _FakeBackend(docs: features('old-features@x.test')), b = _FakeBackend(docs: features('new-features@x.test'));
+      await tester.pumpWidget(_adminApp(FeaturesScreen(repo: a)));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('old-features@x.test'), findsOneWidget);
+      expect(b.watched, isEmpty);
+      await tester.pumpWidget(_adminApp(FeaturesScreen(repo: b)));
+      await tester.pumpAndSettle();
+      expect(b.watched, contains('settings/features'));
+      // The new backend's document is what is rendered, not the old stream's.
+      expect(find.textContaining('new-features@x.test'), findsOneWidget);
+      expect(find.textContaining('old-features@x.test'), findsNothing);
+
+      final c = _ListBackend([AdminDoc('m1', {'name': 'Old Sender', 'message': 'old', 'status': 'new'})]);
+      final d = _ListBackend([AdminDoc('m2', {'name': 'New Sender', 'message': 'new', 'status': 'new'})]);
+      await tester.pumpWidget(_adminApp(MessagesScreen(repo: c)));
+      await tester.pumpAndSettle();
+      expect(find.text('Old Sender'), findsOneWidget);
+      await tester.pumpWidget(_adminApp(MessagesScreen(repo: d)));
+      await tester.pumpAndSettle();
+      expect(d.watched, contains('contact_messages'));
+      expect(find.text('New Sender'), findsOneWidget);
+      expect(find.text('Old Sender'), findsNothing);
+
+      final e = _ListBackend([AdminDoc('e1', {'email': 'old-admin@x.test', 'role': 'editor'})]);
+      final g = _ListBackend([AdminDoc('g1', {'email': 'new-admin@x.test', 'role': 'editor'})]);
+      await tester.pumpWidget(_adminApp(AdminsScreen(repo: e, selfUid: 'u')));
+      await tester.pumpAndSettle();
+      expect(find.text('old-admin@x.test'), findsOneWidget);
+      await tester.pumpWidget(_adminApp(AdminsScreen(repo: g, selfUid: 'u')));
+      await tester.pumpAndSettle();
+      expect(g.watched, contains('admins'));
+      expect(find.text('new-admin@x.test'), findsOneWidget);
+      expect(find.text('old-admin@x.test'), findsNothing);
+    });
   });
 }
 
@@ -756,5 +846,8 @@ class _ListBackend extends _FakeBackend {
   final List<AdminDoc> docs;
   _ListBackend(this.docs);
   @override
-  Stream<List<AdminDoc>> watch(String collection) => Stream.value(docs);
+  Stream<List<AdminDoc>> watch(String collection) {
+    watched.add(collection);
+    return Stream.value(docs);
+  }
 }

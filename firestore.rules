@@ -282,9 +282,10 @@ service cloud.firestore {
     }
 
     function validFeatures(d) {
-      return d.keys().hasOnly(['sections', 'homeOrder', 'homeHidden', 'heroTitleAr', 'heroTitleEn', 'heroSubtitleAr',
-                               'heroSubtitleEn', 'bannerEnabled', 'bannerAr', 'bannerEn', 'bannerLink', 'theme',
-                               'updatedAt', 'updatedBy'])
+      // Like settings/church: an untouched legacy key does not block an edit.
+      return keysAllowed(['sections', 'homeOrder', 'homeHidden', 'heroTitleAr', 'heroTitleEn', 'heroSubtitleAr',
+                          'heroSubtitleEn', 'bannerEnabled', 'bannerAr', 'bannerEn', 'bannerLink', 'theme',
+                          'updatedAt', 'updatedBy'])
         && (!('sections' in d) || validSections(d.sections))
         && (!('homeOrder' in d) || (d.homeOrder is list && d.homeOrder.size() <= 7
               && d.homeOrder.hasOnly(['banner', 'alerts', 'nextMass', 'quickContacts', 'milestones', 'directory', 'map'])))
@@ -293,9 +294,9 @@ service cloud.firestore {
         && str(d, 'heroTitleAr', 200) && str(d, 'heroTitleEn', 200)
         && str(d, 'heroSubtitleAr', 300) && str(d, 'heroSubtitleEn', 300)
         && d.get('bannerEnabled', false) is bool && str(d, 'bannerAr', 500) && str(d, 'bannerEn', 500)
-        && str(d, 'bannerLink', 500)
-        // Same as the client: empty, an in-app path, or an http(s) URL with a host.
-        && d.get('bannerLink', '').matches('^$|^/([^/ ][^ ]*)?$|^https?://[^/ ]+[.][^/ ]+([/?#][^ ]*)?$')
+        // Same as the client and alert links: empty, an in-app path, or an
+        // http(s) URL with a host (scheme case-insensitive).
+        && optUrlOrPath(d, 'bannerLink', 500)
         && d.get('theme', 'burgundy') in ['burgundy', 'navy', 'green', 'brown', 'purple']
         && stampOk(d);
     }

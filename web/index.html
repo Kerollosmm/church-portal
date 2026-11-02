@@ -22,10 +22,12 @@
   <meta name="twitter:title" content="كنيسة القديسين مكسيموس ودوماديوس والقوي الأنبا موسى الأسود">
   <meta name="twitter:image" content="https://maximos-domadios-church.web.app/og-image.jpg">
 
-  <!-- SEO (plan PR 3, 3.2). Static canonical: every SPA route (served via the
-       "**" -> index.html rewrite) declares "/" as canonical — known caveat, see
-       docs/memory-bank/05-firebase.md. JSON-LD: verified facts only
-       (docs/CONTENT_SOURCES.md, settings/church). -->
+  <!-- SEO (plan PR 3, 3.2; PR #10). The static HTML starts with "/" as
+       canonical; once Flutter starts, setDocumentRouteMeta
+       (lib/core/document_lang.dart) updates <link rel="canonical"> per route,
+       and on /admin, 404 and switched-off sections removes it and adds
+       <meta name="robots" content="noindex"> instead (docs/memory-bank/05-firebase.md).
+       JSON-LD: verified facts only (docs/CONTENT_SOURCES.md, settings/church). -->
   <link rel="canonical" href="https://maximos-domadios-church.web.app/">
   <script type="application/ld+json">
   {

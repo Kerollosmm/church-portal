@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
 
 import 'config/app_config.dart';
+import 'core/document_lang.dart';
 import 'core/l10n.dart';
 import 'state/providers.dart';
 // Deferred (plan PR 3, 3.3): separate web chunks, fetched only on /admin and
@@ -41,7 +42,11 @@ String? _syncLangQuery(Uri uri, bool english) {
   } else {
     qp.remove('lang');
   }
-  return Uri(path: uri.path.isEmpty ? '/' : uri.path, queryParameters: qp.isEmpty ? null : qp).toString();
+  return Uri(
+    path: uri.path.isEmpty ? '/' : uri.path,
+    queryParameters: qp.isEmpty ? null : qp,
+    fragment: uri.hasFragment ? uri.fragment : null,
+  ).toString();
 }
 
 /// What the router does about `?lang=` for one navigation.
@@ -70,7 +75,11 @@ LangSync resolveLangSync(Uri uri,
   if (q == 'ar') {
     // Arabic is the default: drop the explicit parameter (canonical URL).
     final qp = Map<String, String>.from(uri.queryParameters)..remove('lang');
-    final canonical = Uri(path: uri.path.isEmpty ? '/' : uri.path, queryParameters: qp.isEmpty ? null : qp).toString();
+    final canonical = Uri(
+      path: uri.path.isEmpty ? '/' : uri.path,
+      queryParameters: qp.isEmpty ? null : qp,
+      fragment: uri.hasFragment ? uri.fragment : null,
+    ).toString();
     return LangSync(english: english ? false : null, redirect: canonical);
   }
   if (english && fromPlatform) return const LangSync(english: false);
@@ -162,23 +171,29 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: AppConfig.adminPath,
-        builder: (c, s) => DeferredLoader(
-          loadLibrary: admin_page.loadLibrary,
-          builder: (_) => admin_page.AdminPage(),
-          fullScreen: true,
-        ),
+        builder: (c, s) {
+          setDocumentRouteMeta(path: s.uri.path, indexable: false);
+          return DeferredLoader(
+            loadLibrary: admin_page.loadLibrary,
+            builder: (_) => admin_page.AdminPage(),
+            fullScreen: true,
+          );
+        },
       ),
     ],
-    errorBuilder: (context, state) => AppShell(
-      location: state.uri.path,
-      child: PageBody(children: [
-        const SizedBox(height: 40),
-        const Icon(Icons.explore_off_rounded, size: 64),
-        const SizedBox(height: 12),
-        Text(context.tr('notFound'), textAlign: TextAlign.center, style: Theme.of(context).textTheme.titleLarge),
-        const SizedBox(height: 12),
-        Center(child: FilledButton(onPressed: () => context.go('/'), child: Text(context.tr('backHome')))),
-      ]),
-    ),
+    errorBuilder: (context, state) {
+      setDocumentRouteMeta(path: state.uri.path, indexable: false);
+      return AppShell(
+        location: state.uri.path,
+        child: PageBody(children: [
+          const SizedBox(height: 40),
+          const Icon(Icons.explore_off_rounded, size: 64),
+          const SizedBox(height: 12),
+          Text(context.tr('notFound'), textAlign: TextAlign.center, style: Theme.of(context).textTheme.titleLarge),
+          const SizedBox(height: 12),
+          Center(child: FilledButton(onPressed: () => context.go('/'), child: Text(context.tr('backHome')))),
+        ]),
+      );
+    },
   );
 });

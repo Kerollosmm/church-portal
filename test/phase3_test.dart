@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:church_portal/core/document_lang.dart';
 import 'package:church_portal/core/locale_storage.dart';
 import 'package:church_portal/data/content_repository.dart';
 import 'package:church_portal/data/seed_data.dart';
@@ -254,6 +255,78 @@ void main() {
       n.syncFromUrl(const Locale('en'));
       await tester.pumpAndSettle();
       expect(store.writes, ['en', 'ar']);
+    });
+  });
+
+  group('PR #10: per-route canonical / noindex, URL fragments, sitemap', () {
+    test('canonicalUrlForPath', () {
+      expect(canonicalUrlForPath('/'), 'https://maximos-domadios-church.web.app/');
+      expect(canonicalUrlForPath(''), 'https://maximos-domadios-church.web.app/');
+      expect(canonicalUrlForPath('/mass-schedule'), 'https://maximos-domadios-church.web.app/mass-schedule');
+      expect(canonicalUrlForPath('/about/?lang=en#altars'), 'https://maximos-domadios-church.web.app/about');
+    });
+
+    test('routeHeadSpec never combines noindex with a canonical URL', () {
+      final about = routeHeadSpec(path: '/about', indexable: true);
+      expect(about.canonicalUrl, 'https://maximos-domadios-church.web.app/about');
+      expect(about.noIndex, isFalse);
+      final admin = routeHeadSpec(path: '/admin', indexable: false);
+      expect(admin.canonicalUrl, isNull);
+      expect(admin.noIndex, isTrue);
+    });
+
+    testWidgets('navigating updates the head spec: indexable pages, disabled section, 404, back', (tester) async {
+      final applied = <DocumentHeadSpec>[];
+      debugOnRouteMeta = applied.add;
+      addTearDown(() => debugOnRouteMeta = null);
+      final (container, _) = await _pumpApp(tester);
+      final router = container.read(routerProvider);
+      expect(applied.last.canonicalUrl, 'https://maximos-domadios-church.web.app/');
+      expect(applied.last.noIndex, isFalse);
+
+      router.go('/about');
+      await tester.pumpAndSettle();
+      expect(applied.last.canonicalUrl, 'https://maximos-domadios-church.web.app/about');
+      expect(applied.last.noIndex, isFalse);
+
+      router.go('/clinics'); // clinics: false in the seed
+      await tester.pumpAndSettle();
+      expect(applied.last.noIndex, isTrue);
+      expect(applied.last.canonicalUrl, isNull);
+
+      router.go('/unknown-404');
+      await tester.pumpAndSettle();
+      expect(applied.last.noIndex, isTrue);
+      expect(applied.last.canonicalUrl, isNull);
+
+      router.go('/mass-schedule');
+      await tester.pumpAndSettle();
+      expect(applied.last.canonicalUrl, 'https://maximos-domadios-church.web.app/mass-schedule');
+      expect(applied.last.noIndex, isFalse);
+    });
+
+    test('resolveLangSync keeps the URL fragment', () {
+      expect(resolveLangSync(Uri.parse('/about?lang=ar#altars'), english: true).redirect, '/about#altars');
+      expect(resolveLangSync(Uri.parse('/about#altars'), english: true).redirect, '/about?lang=en#altars');
+    });
+
+    test('sitemap.xml lists only active public routes', () {
+      // Commented-out entries (<!-- ... -->) are not listed.
+      final xml = File('web/sitemap.xml').readAsStringSync().replaceAll(RegExp(r'<!--[\s\S]*?-->'), '');
+      final locs = RegExp(r'^\s*<url><loc>([^<]+)</loc></url>', multiLine: true)
+          .allMatches(xml)
+          .map((m) => m.group(1)!)
+          .toList();
+      final sections = (jsonDecode(File('assets/seed/seed.json').readAsStringSync()) as Map<String, dynamic>)['settings']
+          ['features']['sections'] as Map<String, dynamic>;
+      expect(sections['clinics'], isFalse);
+      expect(locs, isNot(contains('https://maximos-domadios-church.web.app/clinics')));
+      expect(locs, isNot(contains('https://maximos-domadios-church.web.app/admin')));
+      expect(locs, isNot(contains('https://maximos-domadios-church.web.app/ask')));
+      expect(locs, contains('https://maximos-domadios-church.web.app/'));
+      expect(locs, contains('https://maximos-domadios-church.web.app/mass-schedule'));
+      expect(locs, contains('https://maximos-domadios-church.web.app/about'));
+      expect(locs, contains('https://maximos-domadios-church.web.app/contact'));
     });
   });
 }

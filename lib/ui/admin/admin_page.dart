@@ -50,7 +50,11 @@ class _AdminFrame extends ConsumerWidget {
           const SizedBox(width: 8),
           Flexible(child: Text(context.tr('admin'), overflow: TextOverflow.ellipsis)),
         ]),
-        leading: IconButton(icon: const Icon(Icons.home_rounded), onPressed: () => context.go('/')),
+        leading: IconButton(
+          tooltip: context.tr('backHome'),
+          icon: const Icon(Icons.home_rounded),
+          onPressed: () => context.go('/'),
+        ),
         actions: [const LanguageToggle()],
       ),
       body: child,

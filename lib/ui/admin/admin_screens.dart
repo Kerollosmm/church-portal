@@ -279,6 +279,10 @@ class _ChurchInfoScreenState extends State<ChurchInfoScreen> {
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<AdminDoc?>(
+      // A new stream (another backend) gets a fresh StreamBuilder: a reused one
+      // keeps the old backend's last snapshot while waiting, and that stale
+      // document would then be marked as loaded.
+      key: ObjectKey(_stream),
       stream: _stream,
       builder: (context, snap) {
         if (snap.hasError) return Center(child: Text('${snap.error}'));
@@ -349,7 +353,14 @@ class MessagesScreen extends StatefulWidget {
 
 class _MessagesScreenState extends State<MessagesScreen> {
   String _filter = 'new';
-  late final Stream<List<AdminDoc>> _stream = widget.repo.watch('contact_messages');
+  late Stream<List<AdminDoc>> _stream = widget.repo.watch('contact_messages');
+
+  @override
+  void didUpdateWidget(covariant MessagesScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // A different backend: re-bind the stream.
+    if (widget.repo != oldWidget.repo) _stream = widget.repo.watch('contact_messages');
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -520,7 +531,14 @@ class AdminsScreen extends StatefulWidget {
 }
 
 class _AdminsScreenState extends State<AdminsScreen> {
-  late final Stream<List<AdminDoc>> _stream = widget.repo.watch('admins');
+  late Stream<List<AdminDoc>> _stream = widget.repo.watch('admins');
+
+  @override
+  void didUpdateWidget(covariant AdminsScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // A different backend: re-bind the stream.
+    if (widget.repo != oldWidget.repo) _stream = widget.repo.watch('admins');
+  }
 
   @override
   Widget build(BuildContext context) {
