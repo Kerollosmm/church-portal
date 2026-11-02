@@ -55,7 +55,11 @@ class ItemDetailPage extends ConsumerWidget {
         SizedBox(height: 12),
         SkeletonBox(height: 160, radius: 16),
       ]),
-      error: (_, _) => PageBody(children: [ErrorState(onRetry: () => ref.invalidate(provider))]),
+      error: (_, _) {
+        // Nothing to show: never let an error page be indexed under the item's URL.
+        setDocumentRouteMeta(path: path, indexable: false);
+        return PageBody(children: [ErrorState(onRetry: () => ref.invalidate(provider))]);
+      },
       data: (list) {
         Object? item;
         for (final o in list) {

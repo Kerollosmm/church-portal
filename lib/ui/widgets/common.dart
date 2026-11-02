@@ -503,6 +503,9 @@ class Footer extends ConsumerWidget {
     final servingSeed = ref.watch(repositoryProvider).servingSeed;
     final year = DateTime.now().year;
     final features = ref.watch(featuresProvider);
+    // Until settings/features arrives the defaults are "everything on": wait
+    // before showing phones / social links an admin may have switched off.
+    final ready = ref.watch(featuresReadyProvider);
     final footer = features.footer;
     final links = <(String, String)>[
       ('massSchedule', '/mass-schedule'),
@@ -510,11 +513,11 @@ class Footer extends ConsumerWidget {
       ('education', '/church-education'),
       ('contact', '/contact'),
     ].where((l) => features.routeEnabled(l.$2)).toList();
-    final phones = s != null && footer.showPhones && features.enabled(Sections.contactInfo)
+    final phones = ready && s != null && footer.showPhones && features.enabled(Sections.contactInfo)
         ? s.phones.where((p) => p.number.trim().isNotEmpty).toList()
         : const <PhoneEntry>[];
     final socials = <(String, IconData, String, VoidCallback)>[
-      if (s != null && footer.showSocials && features.enabled(Sections.socials)) ...[
+      if (ready && s != null && footer.showSocials && features.enabled(Sections.socials)) ...[
         if (s.whatsappChannel.isNotEmpty)
           ('whatsappChannel', Icons.campaign_rounded, context.tr('whatsappChannel'), () => openUrl(s.whatsappChannel)),
         if (s.whatsapp.isNotEmpty) ('whatsapp', Icons.chat_rounded, context.tr('whatsapp'), () => openWhatsApp(s.whatsapp)),

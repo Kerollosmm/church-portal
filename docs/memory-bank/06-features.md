@@ -118,7 +118,9 @@ Chat UI with intro bubble, 3 suggestion chips, 500-char input, disclaimer «إج
 - **Links & pages** (when `showSocials && Sections.socials`): WhatsApp group/channel (`whatsappUrl`), Facebook,
   YouTube, Instagram, external/registration button (`externalUrl`, activities' `link`) labelled
   `externalLabelAr/En` or «افتح الصفحة». Every action has `actionSemanticLabel(action, itemTitle)`.
-- No extra Firestore reads: the item comes from the list stream; gallery/cover inline bytes load only here.
+- No extra Firestore read for the item: it comes from the list stream. Gallery inline bytes (`media/{id}`) load only
+  here; an inline cover loads on the listing card too (`CardImageLead` / `ItemImage` → `MediaImageView`) and is
+  then served from `MediaCache` here.
 
 ### Card ↔ detail integration (PR #13)
 - `detailsEnabled` off ⇒ cards are **unchanged** (no link, no card tap, images still enlarge on tap).
@@ -165,7 +167,8 @@ Chat UI with intro bubble, 3 suggestion chips, 500-char input, disclaimer «إج
   tooltips; `Key('footerSocial-whatsappChannel|whatsapp|facebook|youtube|instagram')`, `footer.showSocials` and
   socials on), quick links (mass, clinics, education, contact — enabled ones; `footer.showQuickLinks`), the admin
   note (`footer.noteAr/En`, `Key('footerNote')`), ©, and «تعرض البيانات المحفوظة مع التطبيق» while serving the seed.
-  Defaults show phones, socials and quick links.
+  Defaults show phones, socials and quick links; phones and social icons wait for `settings/features`
+  (`featuresReadyProvider`) so switched-off ones never flash.
 
 ## Feature toggles (`settings/features`, `lib/domain/features.dart`)
 

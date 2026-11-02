@@ -62,8 +62,8 @@ Status as of 2 Nov 2026 (after PR #7, PR #8, PR #9 `ad621cf`, PR #10 and PR #11)
       clean-up task.
 - [x] **PR #13 — public pages:** detail routes, `ItemDetailPage`, card integration, custom page headers/intros,
       footer upgrade (closes FR-G-04), memory-bank sync.
-- [ ] Optional: a site-wide **"last updated"** line in the footer (FR-G-04 wording) — needs a tracked timestamp
-      (e.g. the newest `updatedAt` across `settings/*`), not built.
+- [ ] Optional: a site-wide **"last updated"** line in the footer (FR-G-04 wording) — see *Footer* under product
+      gaps below.
 - [ ] Optional: add detail URLs to `web/sitemap.xml` once real items get `detailsEnabled` (the sitemap is static).
 
 ## Content (owner: church office — see `09-content-status.md`)
@@ -88,7 +88,7 @@ Status as of 2 Nov 2026 (after PR #7, PR #8, PR #9 `ad621cf`, PR #10 and PR #11)
 - [ ] Performance budget (Lighthouse in CI), font subset/bundling (fonts are fetched at runtime now). (Deferred
       `/admin` and `/ask` chunks done in PR 3 of the review plan; verify lazy loading in the Network tab on the
       preview.)
-- [ ] Footer: phones, socials, "last updated".
+- [ ] Footer: "last updated" (optional; needs a tracked timestamp — phones and socials done in PR #13).
 - [ ] Persist the language choice on Android/iOS too (web uses `localStorage` since PR 3 of the review plan; native is
       a no-op to avoid a new dependency).
 - [ ] Clinics/meetings freshness view in admin (FR-AD-06); "simulate now" next-mass preview for editors (FR-AD-03).

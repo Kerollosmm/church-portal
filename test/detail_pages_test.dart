@@ -1,6 +1,7 @@
 // PR #13: public item detail pages, parent-aware back navigation, card
 // integration, custom page headers / intro notes and the upgraded footer.
 
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
@@ -41,6 +42,20 @@ class _FakeMedia implements MediaRepository {
   Future<MediaImage> upload(EncodedImage img, {String alt = ''}) => throw UnimplementedError();
   @override
   Future<void> delete(String mediaId) async {}
+}
+
+/// An item stream that fails, and `settings/features` that never arrives.
+class _ErrorRepository extends SeedRepository {
+  _ErrorRepository(super.seed);
+  @override
+  Stream<List<Clinic>> clinics() => Stream.error(StateError('offline'));
+}
+
+class _PendingFeaturesRepository extends SeedRepository {
+  _PendingFeaturesRepository(super.seed);
+  final _never = StreamController<FeatureSettings>();
+  @override
+  Stream<FeatureSettings> features() => _never.stream;
 }
 
 class _FixedLocale extends LocaleNotifier {
@@ -135,6 +150,8 @@ Future<(GoRouter, ProviderContainer)> _pump(
   Locale locale = const Locale('en'),
   MediaRepository? media,
   String initial = '/',
+  ContentRepository? repo,
+  bool settle = true,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -143,7 +160,7 @@ Future<(GoRouter, ProviderContainer)> _pump(
   addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
   MediaCache.instance.clear();
   final container = ProviderContainer(overrides: [
-    repositoryProvider.overrideWithValue(SeedRepository(seed ?? _seed())),
+    repositoryProvider.overrideWithValue(repo ?? SeedRepository(seed ?? _seed())),
     nowProvider.overrideWith((ref) => Stream.value(_now)),
     localeProvider.overrideWith(() => _FixedLocale(locale)),
     mediaRepositoryProvider.overrideWithValue(media ?? _FakeMedia()),
@@ -159,6 +176,11 @@ Future<(GoRouter, ProviderContainer)> _pump(
       routerConfig: router,
     ),
   ));
+  if (!settle) {
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    return (router, container);
+  }
   await tester.pumpAndSettle();
   if (initial != '/') {
     router.go(initial);
@@ -346,6 +368,15 @@ void main() {
       await tester.tap(find.byKey(const Key('unavailableBack')));
       await tester.pumpAndSettle();
       expect(_path(router), '/about');
+    });
+
+    testWidgets('a failed item stream shows the error state and is not indexable', (tester) async {
+      final specs = <DocumentHeadSpec>[];
+      debugOnRouteMeta = specs.add;
+      await _pump(tester, repo: _ErrorRepository(_seed()), initial: '/clinics/d-clinic');
+      expect(find.text('Could not load data'), findsOneWidget);
+      expect(specs.last.noIndex, isTrue);
+      expect(specs.last.canonicalUrl, isNull);
     });
 
     testWidgets('dual priest gating: a departed father needs departedPriests', (tester) async {
@@ -616,6 +647,13 @@ void main() {
       expect(inFooter(find.byKey(const Key('footerSocial-facebook'))), findsNothing);
       expect(inFooter(find.byKey(const Key('footerQuickLinks'))), findsNothing);
       expect(inFooter(find.text('Footer note')), findsOneWidget);
+    });
+
+    testWidgets('no phones or social icons until settings/features has arrived', (tester) async {
+      await _pump(tester, size: const Size(1400, 4000), repo: _PendingFeaturesRepository(_seed()), settle: false);
+      expect(find.byType(Footer), findsWidgets);
+      expect(inFooter(find.byKey(const Key('footerPhone-035368888'))), findsNothing);
+      expect(inFooter(find.byKey(const Key('footerSocial-facebook'))), findsNothing);
     });
 
     testWidgets('sections win: contact info off hides phones, socials off hides icons', (tester) async {
