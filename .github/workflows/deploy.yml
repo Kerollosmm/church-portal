@@ -70,6 +70,8 @@ jobs:
         run: rm -f "$RUNNER_TEMP/sa.json"
 
   deploy-rules:
+    # Rules / indexes deploy only after build (analyze + test + release build) passes.
+    needs: build
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     # Rules deploys use the `production` environment. Its required reviewers
     # gate them only once they are configured on that environment.

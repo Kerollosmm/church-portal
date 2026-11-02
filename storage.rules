@@ -24,7 +24,7 @@ service firebase.storage {
       allow create, update: if isAdmin()
         && request.resource.size <= 700 * 1000
         // Parameterised headers (e.g. "image/jpeg; charset=utf-8") are accepted.
-        && request.resource.contentType.matches('^image/(jpeg|webp|png)([;].*)?$');
+        && request.resource.contentType is string && request.resource.contentType.matches('^image/(jpeg|webp|png)([;].*)?$');
       allow delete: if isAdmin();
     }
 

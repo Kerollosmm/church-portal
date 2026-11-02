@@ -2,8 +2,8 @@
 
 Condensed from the original Arabic PRD (`CHURCH_PORTAL_PRD.md`, 3 pages) and
 `Church_Portal_Business_Case_and_Requirements.md` v1.0 (31 Oct 2026). Both live in the project workspace, not in this
-repo. The **"Status"** columns below were checked against the code on `main` (PR #7 + PR 2 of the review plan,
-1 Nov 2026) — they tell you what is real today versus still a requirement.
+repo. The **"Status"** columns below were checked against the code on `main` (PR #7, PR #8, PR #9 `ad621cf` and
+PR #10, 2 Nov 2026) — they tell you what is real today versus still a requirement.
 
 ## Problem
 
@@ -79,7 +79,7 @@ Pages
 Admin
 | ID | Requirement | Status |
 |---|---|---|
-| FR-AD-01 | Hidden `/admin`, email/password, non-admin sees "no access" | ✅ (`web/robots.txt` disallows `/admin`; no `noindex` meta yet) |
+| FR-AD-01 | Hidden `/admin`, email/password, non-admin sees "no access" | ✅ (`web/robots.txt` disallows `/admin`; `<meta name="robots" content="noindex">` on `/admin` via `setDocumentRouteMeta`, PR #10) |
 | FR-AD-02 | CRUD with validation | ✅ `DocEditor` + `admin_validators.dart` + rules |
 | FR-AD-03 | "Simulate now" preview of Next mass | ❌ |
 | FR-AD-04 | Inbox: mark read/done, delete | ✅ new ⇄ handled, delete (no "spam" status) |

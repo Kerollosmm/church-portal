@@ -186,6 +186,17 @@ flowchart LR
 `FeatureGate` shows a spinner (`Key('featuresLoading')`) until `featuresReadyProvider`, then the page or
 `SectionUnavailable` («هذا القسم غير متاح حاليًا» + Back to home).
 
+**Per-route `<head>` sync** (PR #10, amends ADR-019): `lib/core/document_lang.dart` holds the pure
+`kCanonicalOrigin`, `canonicalUrlForPath(path)` (`''`/`/` → origin + `/`, else origin + path without trailing `/`,
+query or fragment), `DocumentHeadSpec {canonicalUrl, noIndex}`, `routeHeadSpec(path:, indexable:)` (indexable →
+canonical, no `noindex`; otherwise `noindex` and no canonical, never both) and `setDocumentRouteMeta(path:,
+indexable:)`, which applies the spec through the conditional import (`document_lang_web.dart` creates/updates/removes
+`<link rel="canonical">` and `<meta name="robots" content="noindex">`; the stub is a no-op) and reports it to the
+`@visibleForTesting debugOnRouteMeta` hook. Callers: `FeatureGate` (indexable while features load, then
+`indexable: enabled`), `AssistantGate` (`/ask`, `indexable: visible` once settings resolve), the `/admin` builder and
+`errorBuilder` (`indexable: false`). `?lang=` sync (`_syncLangQuery`, `resolveLangSync`'s `lang=ar` branch) keeps
+the URL `#fragment`.
+
 **Deferred routes** (PR 3 of the review plan): `router.dart` imports `ui/admin/admin_page.dart deferred as admin_page`
 and `ui/pages/assistant_page.dart deferred as assistant_page`; the routes build
 `DeferredLoader(loadLibrary: x.loadLibrary, builder: (_) => x.Page())`, so dart2js emits them as separate

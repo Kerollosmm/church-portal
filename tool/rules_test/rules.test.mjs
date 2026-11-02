@@ -192,6 +192,19 @@ describe('feature toggles', () => {
     await assertFails(setDoc(ref, { ...valid, bannerLink: 'javascript:alert(1)' }));
     await assertFails(setDoc(ref, { ...valid, bannerLink: '//evil.example' }));
   });
+
+  test('uppercase scheme bannerLink is accepted (same as alert links)', async () => {
+    await assertSucceeds(setDoc(doc(db(EDITOR), 'settings', 'features'), { ...valid, bannerLink: 'HTTPS://example.org/post' }));
+  });
+
+  test('an untouched legacy key does not block a merge update', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'settings', 'features'), { ...valid, legacyField: 'x' });
+    });
+    await assertSucceeds(setDoc(doc(db(EDITOR), 'settings', 'features'),
+      { theme: 'green', updatedAt: serverTimestamp(), updatedBy: `${EDITOR}@x.test` }, { merge: true }));
+    await assertFails(setDoc(doc(db(EDITOR), 'settings', 'features'), { extra: 1 }, { merge: true }));
+  });
 });
 
 describe('optional images', () => {
@@ -289,6 +302,16 @@ describe('admins', () => {
     await assertSucceeds(setDoc(doc(own, 'admins', EDITOR), { email: 'editor@x.test', role: 'owner' }));
     await assertFails(setDoc(doc(own, 'admins', 'bad'), { email: 'n@x.test', role: 'god' }));
     await assertSucceeds(deleteDoc(doc(own, 'admins', 'new-uid')));
+  });
+
+  test('setAdmin writes are stamped (updatedAt / updatedBy)', async () => {
+    const own = db(OWNER);
+    await assertSucceeds(setDoc(doc(own, 'admins', 'stamped-uid'), {
+      email: 'stamped@x.test', role: 'editor', updatedAt: serverTimestamp(), updatedBy: `${OWNER}@x.test`,
+    }));
+    let snap;
+    await env.withSecurityRulesDisabled(async (ctx) => { snap = await getDoc(doc(ctx.firestore(), 'admins', 'stamped-uid')); });
+    if (snap.get('updatedBy') !== `${OWNER}@x.test` || !snap.get('updatedAt')) throw new Error('admin doc not stamped');
   });
 
   test('owner cannot change or remove themselves', async () => {
