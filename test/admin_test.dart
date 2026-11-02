@@ -201,6 +201,91 @@ void main() {
     });
   });
 
+  group('PR #12: customization schema', () {
+    const detailCols = ['meetings', 'activities', 'clinics', 'facilities', 'priests', 'milestones', 'saints'];
+    FieldDef fd(CollectionDef c, String k) => c.fields.firstWhere((f) => f.key == k, orElse: () => throw k);
+
+    test('imageList type, field groups and the image collections', () {
+      expect(FieldType.values, contains(FieldType.imageList));
+      expect(FieldGroup.values, [FieldGroup.basic, FieldGroup.details, FieldGroup.media, FieldGroup.contacts]);
+      expect(const FieldDef('x', 'x', 'x', FieldType.text).group, FieldGroup.basic);
+      expect(imageCollections,
+          ['alerts', 'seasons', 'meetings', 'activities', 'clinics', 'facilities', 'priests', 'milestones', 'saints']);
+      for (final c in adminCollections) {
+        expect(c.fields.any((f) => f.key == 'image'), imageCollections.contains(c.name), reason: c.id);
+      }
+    });
+
+    test('the 7 detail collections carry grouped details, media and contacts fields', () {
+      for (final c in adminCollections.where((c) => detailCols.contains(c.name))) {
+        final keys = c.fields.map((f) => f.key).toList();
+        expect(keys.toSet().length, keys.length, reason: '${c.id}: duplicate keys');
+        final enabled = fd(c, 'detailsEnabled');
+        expect([enabled.group, enabled.type, enabled.missingBool, enabled.newBool],
+            [FieldGroup.details, FieldType.boolean, false, false], reason: c.id);
+        for (final k in ['detailsAr', 'detailsEn']) {
+          expect([fd(c, k).group, fd(c, k).type, fd(c, k).effectiveMaxLength],
+              [FieldGroup.details, FieldType.multiline, 10000], reason: '${c.id}.$k');
+        }
+        final extra = fd(c, 'extraFields');
+        expect([extra.group, extra.type, extra.maxRows], [FieldGroup.details, FieldType.objectList, 15], reason: c.id);
+        expect(extra.subFields.map((f) => f.key), ['titleAr', 'titleEn', 'valueAr', 'valueEn']);
+        expect(extra.subFields.map((f) => f.effectiveMaxLength), [150, 150, 2000, 2000]);
+        expect(extra.subFields.map((f) => f.required), [true, false, false, false]);
+        expect(extra.subFields.skip(2).map((f) => f.type), everyElement(FieldType.multiline));
+
+        expect(fd(c, 'image').group, FieldGroup.media, reason: c.id);
+        final show = fd(c, 'showDetailImages');
+        expect([show.group, show.missingBool, show.newBool], [FieldGroup.media, true, true], reason: c.id);
+        final gallery = fd(c, 'gallery');
+        expect([gallery.group, gallery.type, gallery.maxRows], [FieldGroup.media, FieldType.imageList, 8], reason: c.id);
+
+        for (final k in ['showContacts', 'showSocials']) {
+          expect([fd(c, k).group, fd(c, k).missingBool, fd(c, k).newBool], [FieldGroup.contacts, true, true],
+              reason: '${c.id}.$k');
+        }
+        // One input per stored key: the collection's own phone / link field
+        // doubles as the primary phone / external link (ItemDetails.fromMap).
+        final phone = switch (c.name) { 'clinics' => 'bookingPhone', 'facilities' => 'phone', _ => 'contactPhone' };
+        final link = c.name == 'activities' ? 'link' : 'externalUrl';
+        for (final k in [phone, 'whatsapp', 'whatsappUrl', 'facebookUrl', 'youtubeUrl', 'instagramUrl', link,
+          'externalLabelAr', 'externalLabelEn', 'contactNoteAr', 'contactNoteEn']) {
+          expect(fd(c, k).group, FieldGroup.contacts, reason: '${c.id}.$k');
+        }
+        if (['clinics', 'facilities'].contains(c.name)) expect(keys, isNot(contains('contactPhone')));
+        if (c.name == 'activities') expect(keys, isNot(contains('externalUrl')));
+        for (final k in [phone, 'whatsapp']) {
+          expect(fd(c, k).type, FieldType.phone, reason: '${c.id}.$k');
+        }
+        for (final k in ['whatsappUrl', 'facebookUrl', 'youtubeUrl', 'instagramUrl', link]) {
+          expect(fd(c, k).type, FieldType.url, reason: '${c.id}.$k');
+        }
+        expect([fd(c, 'externalLabelAr').effectiveMaxLength, fd(c, 'contactNoteEn').effectiveMaxLength], [80, 500]);
+        // Everything else stays in the always-open basic group.
+        for (final f in c.fields.where((f) => f.group == FieldGroup.basic)) {
+          expect(f.type, isNot(FieldType.imageList), reason: '${c.id}.${f.key}');
+        }
+      }
+      for (final c in adminCollections.where((c) => !detailCols.contains(c.name))) {
+        expect(c.fields.every((f) => f.group == FieldGroup.basic), isTrue, reason: c.id);
+        expect(c.fields.map((f) => f.key), isNot(contains('detailsEnabled')), reason: c.id);
+      }
+    });
+
+    test("BR-11: meetings' image and gallery warn about children's photos", () {
+      final m = collectionById('meetings')!;
+      for (final k in ['image', 'gallery']) {
+        expect(fd(m, k).hintAr, contains('خصوصية الأطفال'), reason: k);
+        expect(fd(m, k).hintEn, contains("Children's privacy"), reason: k);
+      }
+      expect(fd(collectionById('saints')!, 'gallery').hintEn, isEmpty);
+    });
+
+    test('image lists need no text validation', () {
+      expect(validateFieldValue(const FieldDef('gallery', 'g', 'g', FieldType.imageList), null), isNull);
+    });
+  });
+
   group('admin list helpers', () {
     final def = collectionById('clinics')!;
     final docs = [

@@ -141,6 +141,10 @@ class DocEditorState extends State<DocEditor> {
         final img = MediaImage.fromMap(v);
         _values[f.key] = img?.toMap();
         _text[f.key] = _ctrl(img?.alt ?? '');
+      case FieldType.imageList:
+        _values[f.key] = [
+          for (final e in (v is List ? v : const [])) ?MediaImage.fromMap(e)?.toMap(),
+        ];
     }
   }
 
@@ -183,6 +187,8 @@ class DocEditorState extends State<DocEditor> {
           out[f.key] = [for (final r in _rows[f.key]!) r.collect()];
         case FieldType.image:
           out[f.key] = _collectImage(f.key);
+        case FieldType.imageList:
+          out[f.key] = [...(_values[f.key] as List)];
         case FieldType.text:
         case FieldType.multiline:
         case FieldType.time:
@@ -409,6 +415,8 @@ class DocEditorState extends State<DocEditor> {
         return _objectList(f);
       case FieldType.image:
         return _imageEditor(f);
+      case FieldType.imageList:
+        return const SizedBox.shrink();
       default:
         return _textField(f, _text[f.key]!);
     }
