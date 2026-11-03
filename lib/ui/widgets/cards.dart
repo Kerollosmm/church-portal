@@ -43,7 +43,7 @@ class LiturgyCard extends StatelessWidget {
           Container(
             width: 44,
             height: 44,
-            decoration: BoxDecoration(color: AppColors.parchment, borderRadius: BorderRadius.circular(12)),
+            decoration: BoxDecoration(color: AppColors.parchment, borderRadius: BorderRadius.circular(4)),
             child: Icon(_icon, color: Theme.of(context).colorScheme.primary),
           ),
           const SizedBox(width: 12),
@@ -93,41 +93,43 @@ class NextMassCard extends ConsumerWidget {
       body = _content(context, r, now);
     }
 
+    final primary = Theme.of(context).colorScheme.primary;
+    // "Register" panel: a primary band naming the block, then the liturgy on
+    // vellum. Flat pigment, hairline frame, no shadow.
     return Container(
+      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Colors.white, Color(0xFFFFFAF0)],
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-        ),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.gold, width: 1.4),
-        boxShadow: [
-          BoxShadow(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.12), blurRadius: 24, offset: const Offset(0, 8)),
-        ],
+        color: AppColors.vellum,
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: AppColors.hairline),
       ),
-      padding: const EdgeInsets.all(18),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        // Wrap: on narrow screens / large text "Full schedule" moves under
-        // the title instead of overflowing.
-        Wrap(
-          alignment: WrapAlignment.spaceBetween,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            Row(mainAxisSize: MainAxisSize.min, children: [
-              Icon(Icons.access_time_filled_rounded, color: Theme.of(context).colorScheme.primary),
-              const SizedBox(width: 8),
-              Flexible(
-                child: Text(context.tr('nextMass'),
-                    style: TextStyle(
-                        fontWeight: FontWeight.w800, fontSize: 18, color: Theme.of(context).colorScheme.primary)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Container(
+          color: primary,
+          padding: const EdgeInsetsDirectional.fromSTEB(16, 6, 6, 6),
+          // Wrap: on narrow screens / large text "Full schedule" moves under
+          // the title instead of overflowing.
+          child: Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              Row(mainAxisSize: MainAxisSize.min, children: [
+                const Icon(Icons.access_time_filled_rounded, color: AppColors.goldLight, size: 20),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(context.tr('nextMass'),
+                      style: displayStyle(context, size: 18, color: Colors.white, height: 1.4)),
+                ),
+              ]),
+              TextButton(
+                onPressed: () => context.go('/mass-schedule'),
+                style: TextButton.styleFrom(foregroundColor: AppColors.goldLight),
+                child: Text(context.tr('fullSchedule')),
               ),
-            ]),
-            TextButton(onPressed: () => context.go('/mass-schedule'), child: Text(context.tr('fullSchedule'))),
-          ],
+            ],
+          ),
         ),
-        const SizedBox(height: 8),
-        body,
+        Padding(padding: const EdgeInsets.fromLTRB(18, 14, 18, 16), child: body),
       ]),
     );
   }
@@ -153,7 +155,7 @@ class NextMassCard extends ConsumerWidget {
         margin: const EdgeInsets.only(bottom: 10),
         decoration: BoxDecoration(
           color: AppColors.success.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(4),
         ),
         child: Row(children: [
           Pill(context.tr('happeningNow'), icon: Icons.circle, color: AppColors.success),
@@ -254,7 +256,7 @@ class _AlertBannerState extends ConsumerState<AlertBanner> {
           margin: const EdgeInsets.only(bottom: 10),
           decoration: BoxDecoration(
             color: const Color(0xFFFFF4E0),
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(4),
             border: const BorderDirectional(start: BorderSide(color: AppColors.alert, width: 5)),
           ),
           padding: const EdgeInsets.all(14),
@@ -311,31 +313,31 @@ class DirectoryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final primary = Theme.of(context).colorScheme.primary;
     return Card(
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
-        child: Padding(
+        child: EdgeAccent(
+          child: Padding(
           padding: const EdgeInsets.all(16),
-          child: Row(children: [
+          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Container(
-              width: 52,
-              height: 52,
+              width: 44,
+              height: 44,
               decoration: BoxDecoration(
-                gradient: LinearGradient(colors: [
-                  Theme.of(context).colorScheme.primary,
-                  Color.lerp(Theme.of(context).colorScheme.primary, Colors.white, 0.15)!,
-                ]),
-                borderRadius: BorderRadius.circular(14),
+                color: AppColors.parchment,
+                borderRadius: BorderRadius.circular(4),
+                border: Border.all(color: AppColors.hairline),
               ),
-              child: Icon(icon, color: AppColors.goldLight, size: 28),
+              child: Icon(icon, color: primary, size: 24),
             ),
             const SizedBox(width: 14),
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(title, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+                Text(title, style: displayStyle(context, size: 18, color: AppColors.ink, height: 1.4)),
                 const SizedBox(height: 2),
-                Text(subtitle, style: const TextStyle(color: AppColors.muted, fontSize: 13)),
+                Text(subtitle, style: const TextStyle(color: AppColors.muted, fontSize: 13.5, height: 1.55)),
                 const SizedBox(height: 6),
                 // Flexible: "Learn more" wraps instead of overflowing at 320 px / 200% text.
                 Row(children: [
@@ -351,6 +353,7 @@ class DirectoryCard extends StatelessWidget {
               ]),
             ),
           ]),
+        ),
         ),
       ),
     );
@@ -500,4 +503,20 @@ class CardImageLead extends ConsumerWidget {
       ),
     );
   }
+}
+
+/// Start-edge accent bar (3 px, primary) for listing cards: the UX standard's
+/// "accent edge", drawn inside the card's clip so the card keeps its radius.
+class EdgeAccent extends StatelessWidget {
+  final Widget child;
+  final Color? color;
+  const EdgeAccent({super.key, required this.child, this.color});
+
+  @override
+  Widget build(BuildContext context) => DecoratedBox(
+        decoration: BoxDecoration(
+          border: BorderDirectional(start: BorderSide(color: color ?? Theme.of(context).colorScheme.primary, width: 3)),
+        ),
+        child: child,
+      );
 }

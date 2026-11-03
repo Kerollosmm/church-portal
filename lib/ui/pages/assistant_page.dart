@@ -294,7 +294,7 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
               : m.error
                   ? const Color(0xFFFDECEA)
                   : Colors.white,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(4),
           border: m.user ? null : Border.all(color: AppColors.gold.withValues(alpha: 0.4)),
         ),
         child: SelectableText(m.text, style: TextStyle(color: m.user ? Colors.white : AppColors.ink, height: 1.6)),

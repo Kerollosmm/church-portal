@@ -11,7 +11,7 @@
 | Routing | `go_router ^18.1.2` (`lib/router.dart`), **path URL strategy** (`usePathUrlStrategy()` in `main.dart`) |
 | Backend | Firebase: `cloud_firestore`, `firebase_auth` (admins only), `firebase_app_check`, `firebase_ai` (Gemini), `firebase_core` |
 | Time | `timezone ^0.11.2` (IANA `Africa/Cairo`, `lib/domain/cairo_time.dart`) |
-| Fonts | `google_fonts` Cairo (`GoogleFonts.cairoTextTheme`), runtime fetching allowed (`GoogleFonts.config.allowRuntimeFetching = true`) |
+| Fonts | Bundled + subset (SIL OFL 1.1, `assets/fonts/`, licences registered in `main.dart`): **IBM Plex Sans Arabic** (body/UI, family `Plex`), **Noto Naskh Arabic** (Arabic headings, `Naskh`), **Marcellus** (English headings). No `google_fonts`, no runtime fetch (ADR-022 draft, branch `design/coptic-identity`) |
 | Links | `url_launcher` (`lib/core/launch.dart`) |
 | Web interop | `web` package (`<html lang>` sync, map iframe) |
 
@@ -267,18 +267,26 @@ chunks are fetched relative to `<base href>`).
 - Choice labels for stored keys (`opt_<key>`, e.g. `opt_holy_week`) via `choiceLabel` in `doc_editor.dart`.
 - Admin labels live inline in `admin_schema.dart` (`labelAr`, `labelEn`).
 
-## Theming (`lib/core/theme.dart`)
+## Theming (`lib/core/theme.dart`) — "Iconostasis" identity (branch `design/coptic-identity`, ADR-022 draft)
 
-- Coptic palette `AppColors`: burgundy `#6B1426` (+dark/light), gold `#C9A227` (**decorative only**: borders,
-  dark-background accents — 2.4:1 on white), **`goldText` `#7A5B00`** (gold for text/icons on light surfaces: 6.3:1 on
-  white, 5.9:1 on cream), goldLight, cream `#FBF6EC` (scaffold), parchment, ink, muted, success, alert.
-- **Public widgets never use `AppColors.burgundy*` directly** (PR 2 of the review plan): they read
-  `Theme.of(context).colorScheme.primary`, and `primaryDarkOf(context)` (`Color.lerp(primary, black, 0.30)`) for the
-  page header, hero and footer, so all 5 presets recolour the whole site (`test/accessibility_test.dart` fails if a
-  public page paints burgundy under the navy preset). The admin dashboard still uses the fixed burgundy.
-- `buildTheme(locale, primary:)`: `ColorScheme.fromSeed(seedColor: primary)`, Cairo text theme, app bar in primary.
-- The admin picks the **primary** from `ThemePresets.all` (`settings/features.theme`): burgundy (default), navy,
-  green, brown, purple; `ChurchPortalApp` watches `featuresProvider.select((f) => f.theme)`.
+- Palette from the parish's own icons (`work/design/direction.md`): `AppColors.burgundy` = icon **oxblood** `#7B2216`
+  (default preset), `gold` = gold leaf `#B8862B` (**decorative only**), **`goldText` `#7A5400`** (gold for text on
+  light, 5.9:1 on parchment), `goldLight` = halo `#E3C578` (gold text on dark), `cream` = page ground parchment
+  `#F5EEDF`, `parchment` = plaster band `#ECE2CC`, `vellum` `#FFFCF5` (cards, app bar), `hairline` `#D9C8A4`
+  (borders), `ink` `#1F1611`, `muted` umber `#5E4A3A` (7.2:1), `night` `#1C140E` (footer), `cinnabar` `#B0402A`
+  ("today"), `lapis` `#1F3B6E` (rare 2nd accent).
+- **Public widgets never use `AppColors.burgundy*` directly**: they read `Theme.of(context).colorScheme.primary`
+  (5 presets; `test/accessibility_test.dart` fails if a public page paints burgundy under navy). The footer is the
+  fixed `night` ground for every preset; `primaryDarkOf` remains for accents.
+- `buildTheme(locale, primary:)`: body font `Plex`; display/headline/titleLarge in `AppFonts.display(locale)`
+  (Naskh for Arabic, Marcellus + Naskh fallback for English); 4 px radii everywhere (stone-cut, no pills), no
+  elevation/shadows, vellum cards with a hairline border, 46–48 px buttons, vellum app bar with ink text.
+- Ornaments (`lib/ui/widgets/ornaments.dart`, all CustomPainter, no images/emoji): `InterlaceBand` (gold guilloche
+  under the app bar and page headers, top of the footer), `ArchFrame` (round-topped gold-leaf frame clipping an icon
+  or photo), `ArchWatermark` (page-header end edge), `ArchCrossFill` (empty arch), refined `CopticCross` painter
+  (trefoil arms, hollow centre ring) used as the `SectionTitle` medallion.
+- The admin picks the **primary** from `ThemePresets.all` (`settings/features.theme`): burgundy (default, now
+  `#7B2216`), navy, green, brown, purple; `ChurchPortalApp` watches `featuresProvider.select((f) => f.theme)`.
 - Brand colours for social buttons in `cards.dart`: `whatsappGreen` `#157338`, `facebookBlue` `#145DBF` (darkened
   so white button text is ≥ 4.5:1), `youtubeRed`, `instagramPink`.
 - Accessibility helpers: `TitleWithBadge` (title + `SampleBadge` in a `Wrap`), `Pill` text wraps (2 lines + ellipsis

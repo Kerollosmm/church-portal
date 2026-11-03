@@ -70,17 +70,19 @@
   <link rel="icon" href="favicon.ico" sizes="any">
   <link rel="icon" type="image/png" sizes="32x32" href="favicon.png">
   <link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <!-- Bundled fonts (no Google Fonts fetch): preload the two faces the first frame uses. -->
+  <link rel="preload" href="assets/assets/fonts/IBMPlexSansArabic-Regular.ttf" as="font" type="font/ttf" crossorigin>
+  <link rel="preload" href="assets/assets/fonts/NotoNaskhArabic-Bold.ttf" as="font" type="font/ttf" crossorigin>
 
   <title>كنيسة القديسين مكسيموس ودوماديوس والقوي الأنبا موسى الأسود</title>
   <link rel="manifest" href="manifest.json">
   <style>
-    html, body { margin: 0; height: 100%; background: #FBF6EC; }
+    html, body { margin: 0; height: 100%; background: #F5EEDF; }
     #splash { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center;
-      justify-content: center; gap: 14px; padding: 0 20px; font-family: system-ui, "Segoe UI", Tahoma, sans-serif; color: #6B1426; }
+      justify-content: center; gap: 14px; padding: 0 20px; font-family: system-ui, "Segoe UI", Tahoma, sans-serif; color: #7B2216; }
     #splash .seal { width: 120px; height: 120px; border-radius: 50%; }
-    #splash .ring { width: 44px; height: 44px; border-radius: 50%; border: 4px solid #E8D28A;
-      border-top-color: #6B1426; animation: spin 0.9s linear infinite; }
+    #splash .ring { width: 44px; height: 44px; border-radius: 50%; border: 4px solid #D9C8A4;
+      border-top-color: #7B2216; animation: spin 0.9s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
   </style>
 </head>

@@ -7,10 +7,15 @@ render with `PageBody` (+ `Footer`). Content comes from Riverpod providers (hidd
 ## Public pages
 
 ### `/` Home — `home_page.dart` `HomePage`
-- **Hero** (`_Hero`, always first): gradient in the theme colour (or `heroImageUrl` with a dark overlay), Coptic cross,
-  title = `heroTitleAr/En` from `settings/features` or the church name, subtitle = `heroSubtitleAr/En` or the address,
-  verse card («كن أمينًا إلى الموت فسأعطيك إكليل الحياة», Rev 2:10, `verseRefAr` or Arabic digits), CTA buttons
-  Mass schedule (gold) / Clinics / Contact — each only if its route is enabled.
+- **Hero** (`_Hero`, always first, branch `design/coptic-identity`): parchment ground; start column = kicker
+  «كنيسة قبطية أرثوذكسية», title (`heroTitleAr/En` or the church name, display face), place line (`heroSubtitleAr/En`
+  or the address), verse with a gold start rule, CTAs **Mass times** (primary) + **About the church** (outlined; Contact
+  if About is off) — each only if its route is enabled. End column = the **arcade**: the first two `saints` in
+  gold-leaf `ArchFrame`s (the admin `heroImageUrl` takes the large arch), tapping opens the saint page; no image /
+  saints or images off → arches hold the drawn Coptic cross. A plaster "ledge" closes the hero.
+- **Patrons teaser** (`_PatronsTeaser`, key `home-patrons`): placed before the first of milestones/directory/map
+  (not yet an admin-orderable block: that needs a `settings/features` rules change, PR-18 of the UX plan). Two saint
+  cards (small arch, name, 3 lines of the life, «التفاصيل»), hidden when `saints` or `/about` is off.
 - Then the **home blocks** in `features.visibleHomeBlocks` order (admin-reorderable/hideable):
   | Block | Widget | Needs section |
   |---|---|---|

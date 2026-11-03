@@ -85,7 +85,7 @@ class ThemePresets {
   ThemePresets._();
   static const burgundy = 'burgundy';
   static const all = <String, int>{
-    'burgundy': 0xFF6B1426,
+    'burgundy': 0xFF7B2216, // icon oxblood (was wine 0xFF6B1426 before the Coptic identity)
     'navy': 0xFF1F3A5F,
     'green': 0xFF1E5631,
     'brown': 0xFF5D3A1A,

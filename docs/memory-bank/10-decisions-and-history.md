@@ -225,6 +225,19 @@ supersede them.
   item that has some unless switched off; existing explicit `false` values keep hiding pages. Admins who saved
   `showDetailImages: false` keep photos hidden on that page (their choice).
 
+## ADR-022 (draft, preview only) — "Iconostasis" visual identity (branch `design/coptic-identity`, not merged)
+
+- **Context:** the team found the UI generic ("AI-slop": gradients, rounded white cards, pills, centred everything)
+  and not business-ready; IA should follow the UX standard (stathanasius-elseyouf.com, `work/ux-ref/`) while the
+  **visual language is our own**.
+- **Decision (proposed):** colours sampled from the parish icons (oxblood, gold leaf, umber, plaster, cinnabar);
+  bundled OFL fonts (Plex body, Naskh / Marcellus headings, 453 KB subset) replacing runtime Google Fonts; drawn
+  ornaments (interlace band, gold arches, Coptic cross); flat surfaces, 4 px radii, no shadows/gradients; grouped
+  nav (Home · About · Church services ▾ · Ask · Contact + one "Mass times" CTA), grouped drawer with close button,
+  fixed night footer in 3 columns; hero arcade of the patron icons + patrons teaser.
+- **Status:** design board `work/design/png/`, draft PR "Design preview: Coptic identity (do not merge)" with a
+  Firebase preview channel. Needs the team's approval before merge; the burgundy preset value changes to `#7B2216`.
+
 ## Timeline
 
 | When | PR / commit | What |

@@ -496,7 +496,7 @@ class _DetailView extends ConsumerWidget {
                 placeholder: Container(
                   width: 104,
                   height: 104,
-                  decoration: BoxDecoration(color: AppColors.parchment, borderRadius: BorderRadius.circular(12)),
+                  decoration: BoxDecoration(color: AppColors.parchment, borderRadius: BorderRadius.circular(4)),
                   child: Icon(Icons.image_outlined, color: primary),
                 ),
               ),
@@ -512,7 +512,7 @@ class _DetailView extends ConsumerWidget {
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
                 color: AppColors.cream,
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(4),
                 border: Border.all(color: AppColors.gold.withValues(alpha: 0.5)),
               ),
               child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -684,7 +684,7 @@ class _FieldCard extends StatelessWidget {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: AppColors.cream,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(4),
         border: Border.all(color: AppColors.gold.withValues(alpha: 0.45)),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -754,7 +754,7 @@ class _RelatedLink extends StatelessWidget {
         excludeSemantics: true,
         child: InkWell(
           key: ValueKey('relatedLink-$id'),
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(4),
           onTap: open,
           child: ConstrainedBox(
             constraints: const BoxConstraints(minHeight: 48),

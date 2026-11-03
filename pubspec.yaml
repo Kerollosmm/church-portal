@@ -41,7 +41,6 @@ dependencies:
   firebase_ai: ^5.1.0
   firebase_app_check: ^0.5.1
   url_launcher: ^6.3.3
-  google_fonts: ^9.0.0
   intl: ^0.20.3
   flutter_riverpod: ^3.4.3
   timezone: ^0.11.2
@@ -77,6 +76,26 @@ flutter:
   assets:
     - assets/seed/seed.json
     - assets/branding/seal.png
+    - assets/fonts/IBMPlexSansArabic-OFL.txt
+    - assets/fonts/NotoNaskhArabic-OFL.txt
+    - assets/fonts/Marcellus-OFL.txt
+
+  # Bundled, subset fonts (SIL OFL 1.1; licences above, registered in main.dart).
+  # Display: Noto Naskh Arabic (ar) / Marcellus (en). Body/UI: IBM Plex Sans Arabic.
+  fonts:
+    - family: Plex
+      fonts:
+        - asset: assets/fonts/IBMPlexSansArabic-Regular.ttf
+        - asset: assets/fonts/IBMPlexSansArabic-Bold.ttf
+          weight: 700
+    - family: Naskh
+      fonts:
+        - asset: assets/fonts/NotoNaskhArabic-Regular.ttf
+        - asset: assets/fonts/NotoNaskhArabic-Bold.ttf
+          weight: 700
+    - family: Marcellus
+      fonts:
+        - asset: assets/fonts/Marcellus-Regular.ttf
 
   # To add assets to your application, add an assets section, like this:
   # assets:

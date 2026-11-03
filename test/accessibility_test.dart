@@ -272,6 +272,23 @@ void main() {
         expect(contrast(AppColors.goldLight, dark), greaterThanOrEqualTo(4.5), reason: 'address ${e.key}');
       }
     });
+
+    test('Coptic identity: footer night ground and its text colours', () {
+      const night = AppColors.night;
+      for (final c in const [Color(0xFFE9DFC9), Color(0xFFD9CCB2), Color(0xFFBFB096), AppColors.goldLight, Colors.white]) {
+        expect(contrast(c, night), greaterThanOrEqualTo(4.5), reason: '$c on night');
+      }
+      // Page ground, cards and plaster bands keep body / muted / gold text AA.
+      for (final bg in const [AppColors.cream, AppColors.vellum, AppColors.parchment]) {
+        expect(contrast(AppColors.ink, bg), greaterThanOrEqualTo(4.5));
+        expect(contrast(AppColors.muted, bg), greaterThanOrEqualTo(4.5));
+        expect(contrast(AppColors.goldText, bg), greaterThanOrEqualTo(4.5));
+        expect(contrast(AppColors.cinnabar, bg), greaterThanOrEqualTo(4.5));
+        for (final p in ThemePresets.all.values) {
+          expect(contrast(Color(p), bg), greaterThanOrEqualTo(4.5), reason: 'preset $p on $bg');
+        }
+      }
+    });
   });
 
   group('320 px at 200% text: no RenderFlex overflow on any public route', () {
@@ -324,13 +341,15 @@ void main() {
           }
         }
       }
-      // Footer and page header use the darker shade of the preset.
+      // Coptic identity: the footer is the fixed umber "night" ground for every
+      // preset (gold and parchment text on it are contrast-checked below).
       final footer = find.descendant(of: find.byType(Footer), matching: find.byType(Container)).first;
-      expect(tester.widget<Container>(footer).color, Color.lerp(navy, Colors.black, 0.30));
+      expect(tester.widget<Container>(footer).color, AppColors.night);
     });
 
     testWidgets('ChurchPortalApp maps settings/features.theme to the theme', (tester) async {
-      tester.view.physicalSize = const Size(1200, 3000);
+      // Tall enough to build the footer below the (taller) Coptic-identity sections.
+      tester.view.physicalSize = const Size(1200, 5000);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.reset);
       final navy = Color(ThemePresets.all['navy']!);
@@ -347,7 +366,7 @@ void main() {
       expect(Theme.of(tester.element(title)).colorScheme.primary, navy);
       expect(tester.widget<Text>(title).style?.color, navy);
       final footer = find.descendant(of: find.byType(Footer), matching: find.byType(Container)).first;
-      expect(tester.widget<Container>(footer).color, Color.lerp(navy, Colors.black, 0.30));
+      expect(tester.widget<Container>(footer).color, AppColors.night);
     });
   });
 

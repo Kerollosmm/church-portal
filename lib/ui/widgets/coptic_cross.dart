@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:material_ui/material_ui.dart';
 
 import '../../core/l10n.dart';
@@ -35,7 +37,7 @@ class ChurchSeal extends StatelessWidget {
 class CopticCross extends StatelessWidget {
   final double size;
   final Color color;
-  const CopticCross({super.key, this.size = 32, this.color = const Color(0xFFC9A227)});
+  const CopticCross({super.key, this.size = 32, this.color = const Color(0xFFB8862B)});
 
   @override
   Widget build(BuildContext context) =>
@@ -46,34 +48,30 @@ class _CrossPainter extends CustomPainter {
   final Color color;
   _CrossPainter(this.color);
 
+  // Geometry on a 100-unit grid (same drawing as the design board): four
+  // straight arms, each ending in a trefoil of three balls, and a centre ring.
   @override
   void paint(Canvas canvas, Size size) {
-    final s = size.shortestSide;
+    final k = size.shortestSide / 100;
     final c = Offset(size.width / 2, size.height / 2);
     final p = Paint()..color = color;
-    final arm = s * 0.16; // half-width of an arm
-    final len = s * 0.34; // centre -> trefoil
-    final r = s * 0.075; // trefoil circle radius
     for (var i = 0; i < 4; i++) {
       canvas.save();
       canvas.translate(c.dx, c.dy);
-      canvas.rotate(i * 3.14159265 / 2);
-      // arm (slightly flared)
-      final path = Path()
-        ..moveTo(-arm * 0.7, 0)
-        ..lineTo(-arm, -len)
-        ..lineTo(arm, -len)
-        ..lineTo(arm * 0.7, 0)
-        ..close();
-      canvas.drawPath(path, p);
-      // three balls
-      canvas.drawCircle(Offset(0, -len - r * 0.9), r, p);
-      canvas.drawCircle(Offset(-arm, -len), r, p);
-      canvas.drawCircle(Offset(arm, -len), r, p);
+      canvas.rotate(i * math.pi / 2);
+      canvas.scale(k);
+      canvas.drawRect(const Rect.fromLTRB(-7, -30, 7, -8), p);
+      canvas.drawCircle(const Offset(0, -40), 6.5, p);
+      canvas.drawCircle(const Offset(-11, -31), 5.5, p);
+      canvas.drawCircle(const Offset(11, -31), 5.5, p);
       canvas.restore();
     }
-    canvas.drawCircle(c, arm * 0.9, p);
-    canvas.drawCircle(c, arm * 0.45, Paint()..color = Colors.white.withValues(alpha: 0.85));
+    // Centre ring (hollow, so it reads on any ground).
+    final ring = Path()
+      ..fillType = PathFillType.evenOdd
+      ..addOval(Rect.fromCircle(center: c, radius: 15 * k))
+      ..addOval(Rect.fromCircle(center: c, radius: 7.5 * k));
+    canvas.drawPath(ring, p);
   }
 
   @override
