@@ -1,4 +1,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Release builds need network for Firestore, App Check (Play Integrity) and Firebase AI Logic
+         (debug/profile manifests add it automatically, release does not). -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <application
         android:label="كنيسة مكسيموس ودوماديوس"
         android:name="${applicationName}"

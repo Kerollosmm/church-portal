@@ -127,6 +127,29 @@ const Map<String, List<String>> _strings = {
   ],
   'askDisclaimer': ['إجابات آلية قد تحتوي أخطاء — تأكد بالاتصال بالكنيسة.', 'Automated answers may contain mistakes — confirm by calling the church.'],
   'askError': ['تعذّر الحصول على إجابة الآن. حاول مرة أخرى.', 'Could not get an answer right now. Please try again.'],
+  'askSlowDown': [
+    'أرسلت أسئلة كثيرة في وقت قصير. انتظر دقيقة ثم حاول مرة أخرى.',
+    'You sent several questions in a short time. Please wait a minute and try again.'
+  ],
+  'askSessionLimit': [
+    'وصلت للحد الأقصى من الأسئلة في هذه الزيارة. للمزيد اتصل بمكتب الكنيسة.',
+    'You have reached the question limit for this visit. For more, please call the church office.'
+  ],
+  'askTooLong': ['السؤال طويل جدًا (الحد الأقصى {n} حرفًا).', 'The question is too long (at most {n} characters).'],
+  'assistantSectionSwitch': ['قسم «اسأل الكنيسة» ظاهر', '"Ask the church" section shown'],
+  'assistantSectionSwitchHint': [
+    'نفس مفتاح القسم في «الأقسام والصفحة الرئيسية».',
+    'The same switch as in "Sections & home page".'
+  ],
+  'assistantEnabledSwitch': ['تفعيل المساعد الذكي', 'Enable the AI assistant'],
+  'assistantEnabledSwitchHint': [
+    'نفس الخيار في «بيانات الكنيسة». يظهر المساعد للزوار عند تشغيل المفتاحين معًا.',
+    'The same option as in "Church info". Visitors see the assistant when both switches are on.'
+  ],
+  'assistantStatusNote': [
+    'يحتاج المساعد أيضًا إلى App Check (مفتاح reCAPTCHA Enterprise على الويب، Play Integrity على أندرويد). النموذج الافتراضي: {m}. يجيب فقط عن الكنيسة وخدماتها من بيانات الموقع، ويعتذر عن أي سؤال آخر.',
+    'The assistant also needs App Check (reCAPTCHA Enterprise key on the web, Play Integrity on Android). Default model: {m}. It answers only about the church and its services, from the site data, and politely declines anything else.'
+  ],
   'askUnavailable': ['المساعد غير متاح حاليًا.', 'The assistant is not available right now.'],
   'askSuggest1': ['متى القداس القادم؟', 'When is the next liturgy?'],
   'askSuggest2': ['ما مواعيد عيادة الأطفال؟', 'When is the pediatrics clinic?'],

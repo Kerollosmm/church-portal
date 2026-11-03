@@ -314,7 +314,8 @@ tolerantly). Types: `heading`, `paragraph` (texts ≤ 4000), `image` (`url` = ht
 At least one of phone/email must be non-empty. Written in **one batch** with `meta/contact_rate` (see below).
 Admins add `updatedAt/updatedBy` when changing status.
 
-PR #18 (ADR-028) adds: `category` (slot `c1…c12` of `settings/contact`, must be on), `kind`
+PR #18 (ADR-028) adds: `category` (the id of a `settings/contact` category — `c1…c4` defaults or, since PR #19, a
+stable random id `c[0-9a-z]{1,15}`; must exist and be on), `kind`
 (`general|booking|complaint|suggestion`, must match the slot), bookings: `bookingType` (subtype key
 `[a-z0-9_-]{1,30}`) + `preferredDate` (`YYYY-MM-DD`, required) + a non-empty `phone`; `anonymous: true` (complaint /
 suggestion slots that allow it) — then the doc has **only** `category, kind, anonymous, message, lang, status,
@@ -322,11 +323,32 @@ createdAt` (no name / phone / email at all). Admin-only: `status` also `contacte
 `adminNotes` (≤ 2000). Messages without `category` (older ones) are general inquiries in the inbox.
 
 ### `settings/contact` — `ContactSettings` (`lib/domain/contact_categories.dart`, PR #18, ADR-028)
-`categories: {c1…c12: string}`; each slot one string `kind␟on␟anon␟order␟labelAr␟labelEn␟subtypes` (on / anon
+`categories: {<id>: string}`, 1–12 entries. **Ids are stable and never reused (PR #19):** the defaults are
+`c1…c4`, every type an admin adds gets `newContactCategoryId` = `c` + 10 random lower-case letters / digits (never
+digits only, never an id removed in the editor), so deleting a type never re-labels its old messages (they show
+under "Other / deleted type"). Legacy slot ids `c5…c12` stay valid. Each entry is one string `kind␟on␟anon␟order␟labelAr␟labelEn␟subtypes` (on / anon
 `1`/`0`; anon only for complaint / suggestion; `labelAr` 1–80 not blank, `labelEn` ≤ 80; up to 8 subtypes
 `key|labelAr|labelEn` joined by U+001E, Arabic label 1–60). **Missing doc = code defaults**
 (`ContactSettings.defaults` = rules `defaultContactCats()`): c1 general inquiry, c2 hall booking (wedding فرح /
 condolence عزاء), c3 complaint (anonymous allowed), c4 suggestion (anonymous allowed). Not seeded.
+
+### `settings/assistant` — `AssistantSettings` (`lib/domain/assistant_settings.dart`, PR #19, ADR-029)
+Public read, admin write (`validAssistant`). **Missing doc / blank text / null number = code default**; not seeded.
+
+| Field | Type / limit | Default (code) |
+|---|---|---|
+| `model` | `''` or `gemini-[a-z0-9][a-z0-9.-]{0,52}` (≤ 60) | `AppConfig.geminiModel` = `gemini-3.1-flash-lite`; 1.x/2.x ids ignored, a rejected model falls back |
+| `instructions` | string ≤ 4000 | `defaultInstructions` (persona / tone; the scope + grounding rules are always added) |
+| `topics` | string ≤ 2000, one topic per line (`-`/`*`/`•` bullets stripped) | `defaultTopics` (times, meetings, clinics, activities, priests, saints, history, announcements, contact, bookings, donations, custom sections / pages) |
+| `refusalAr`, `refusalEn` | string ≤ 500 | `defaultRefusalAr/En` |
+| `welcomeAr`, `welcomeEn` | string ≤ 500 | l10n `askIntro` |
+| `suggestionsAr`, `suggestionsEn` | string ≤ 300, one question per line, first 3 used | l10n `askSuggest1…3` |
+| `maxChars` | null or int 50–1000 | 500 |
+| `perMinute` | null or int 1–20 | 4 |
+| `perSession` | null or int 1–200 | 30 |
+| `updatedAt`, `updatedBy` | stamps (`stampOk`) | |
+
+Out-of-range stored numbers are clamped when read.
 
 ### `meta/contact_rate`
 Single doc `{lastAt: timestamp, lastMsgId: string}` — global server-side throttle: every contact create must set

@@ -29,7 +29,11 @@ Cairo-date scheduling and Coptic Easter, contrast-checked palettes and admin col
 library; the verse of the day moved into the hero; ADR-025, ADR-026, ADR-024 amendment; merged as `55e2a92`) plus
 PR #18 (`feat/categories-pages-contact`: admin-defined categories with items and `/section/<slug>` pages, custom
 pages with blocks and donation info linked from notices, contact types with hall booking and anonymous complaints /
-suggestions, inbox boxes / booking status / notes; ADR-027, ADR-028).
+suggestions, inbox boxes / booking status / notes; ADR-027, ADR-028; merged as `37a58d5`) plus PR #19
+(`feat/assistant-ai-logic`: the "Ask the church" assistant on web + Android — reCAPTCHA Enterprise / Play Integrity
+App Check, default model `gemini-3.1-flash-lite`, church-only scope with an admin refusal message, grounding of
+contact types and custom sections / pages, per-visit limits, `/admin` → AI assistant settings; stable contact
+category ids; ADR-029).
 
 > **Golden rule:** read this folder before changing anything, and update it in the same PR as every change that
 > alters behaviour, data shape, rules, workflows, content status or open tasks.

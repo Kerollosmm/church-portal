@@ -10,6 +10,7 @@ import '../../state/providers.dart';
 import '../widgets/coptic_cross.dart';
 import 'admin_schema.dart';
 import 'admin_screens.dart';
+import 'assistant_admin.dart';
 import 'contact_admin.dart';
 import 'collection_list.dart';
 import 'features_editor.dart';
@@ -302,6 +303,7 @@ List<AdminDest> adminDestinations(String role) => [
   const AdminDest('overview', Icons.dashboard_outlined, 'نظرة عامة', 'Overview'),
   const AdminDest('features', Icons.toggle_on_outlined, 'الأقسام والصفحة الرئيسية', 'Sections & home page'),
   const AdminDest('church', Icons.church_outlined, 'بيانات الكنيسة', 'Church info'),
+  const AdminDest('assistant', Icons.auto_awesome_outlined, 'المساعد الذكي', 'AI assistant'),
   for (final c in adminCollections) AdminDest(c.id, adminIcon(c.icon), c.labelAr, c.labelEn),
   const AdminDest('messages', Icons.mail_outline, 'رسائل الزوار', 'Contact messages'),
   const AdminDest('contactCats', Icons.forum_outlined, 'أنواع رسائل التواصل', 'Contact form types'),
@@ -342,6 +344,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
         return FeaturesScreen(repo: repo);
       case 'church':
         return ChurchInfoScreen(repo: repo);
+      case 'assistant':
+        return AssistantAdminScreen(repo: repo);
       case 'messages':
         return MessagesScreen(repo: repo);
       case 'contactCats':

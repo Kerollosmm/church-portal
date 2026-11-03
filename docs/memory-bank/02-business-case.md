@@ -119,7 +119,7 @@ Pascha 2 May 2027; St Moses revival ~22 Jun – 1 Jul 2027.
 - Business case **recommends Blaze with a $5/month budget alert** and a hard Gemini quota; expected bill a few dollars
   a month (≈ $20–40 at 50,000 visitors/month incl. assistant). The project currently runs on **Spark** (per project
   setup; not visible in code) — see `11-open-tasks.md`.
-- Gemini: 2.5 Flash-Lite is closed to new projects; the app uses `gemini-2.5-flash` (`AppConfig.geminiModel`).
+- Gemini: the app uses `gemini-3.1-flash-lite` (`AppConfig.geminiModel`, Developer API free tier on Spark; admin-editable in `/admin` → AI assistant — ADR-029). Gemma is not offered by the Firebase AI Logic cloud API; Gemini 2.x is closed to new projects / shutting down.
 
 ## Risks (top ones)
 

@@ -253,25 +253,30 @@ IconData adminIcon(String name) => switch (name) {
       _ => Icons.list_alt,
     };
 
-/// settings/church as a form. A newer stored version replaces the form only
+/// A settings document as a form: settings/church by default, also
+/// settings/assistant (ADR-029). A newer stored version replaces the form only
 /// when it has no unsaved edits; otherwise a banner offers a reload.
 class ChurchInfoScreen extends StatefulWidget {
   final AdminBackend repo;
-  const ChurchInfoScreen({super.key, required this.repo});
+  final DocDef doc;
+
+  /// Optional widget above the form (e.g. the assistant's status card).
+  final Widget? header;
+  const ChurchInfoScreen({super.key, required this.repo, this.doc = churchInfoDoc, this.header});
 
   @override
   State<ChurchInfoScreen> createState() => _ChurchInfoScreenState();
 }
 
 class _ChurchInfoScreenState extends State<ChurchInfoScreen> {
-  late Stream<AdminDoc?> _stream = widget.repo.watchDoc(churchInfoDoc.path);
+  late Stream<AdminDoc?> _stream = widget.repo.watchDoc(widget.doc.path);
 
   @override
   void didUpdateWidget(covariant ChurchInfoScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
     // A different backend: re-bind the stream and rebuild the form from it.
-    if (widget.repo != oldWidget.repo) {
-      _stream = widget.repo.watchDoc(churchInfoDoc.path);
+    if (widget.repo != oldWidget.repo || widget.doc.path != oldWidget.doc.path) {
+      _stream = widget.repo.watchDoc(widget.doc.path);
       _shown = null;
       _loaded = false;
       _editorKey = GlobalKey<DocEditorState>();
@@ -310,6 +315,7 @@ class _ChurchInfoScreenState extends State<ChurchInfoScreen> {
         final stale = changed && dirty;
         final doc = _shown;
         return Column(children: [
+          ?widget.header,
           if (stale)
             MaterialBanner(
               content: Text(context.tr('updatedElsewhere')),
@@ -334,11 +340,11 @@ class _ChurchInfoScreenState extends State<ChurchInfoScreen> {
           Expanded(
             child: DocEditor(
               key: _editorKey,
-              title: context.pick(churchInfoDoc.labelAr, churchInfoDoc.labelEn),
-              fields: churchInfoDoc.fields,
+              title: context.pick(widget.doc.labelAr, widget.doc.labelEn),
+              fields: widget.doc.fields,
               data: doc?.data ?? const {},
               popOnSave: false,
-              onSave: (data) => widget.repo.saveDoc(churchInfoDoc.path, data),
+              onSave: (data) => widget.repo.saveDoc(widget.doc.path, data),
             ),
           ),
         ]);

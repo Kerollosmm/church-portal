@@ -1,5 +1,9 @@
-// Contact-form categories (ADR-028): `settings/contact.categories`, slots
-// c1…c12, each with a behaviour [ContactKinds]. Each slot is stored as ONE
+import 'dart:math';
+
+// Contact-form categories (ADR-028): `settings/contact.categories`, keyed by
+// a stable id that is never reused (PR #19: the defaults keep c1…c4, every
+// added category gets a fresh random id — [newContactCategoryId]), at most
+// [contactMaxCategories], each with a behaviour [ContactKinds]. Each slot is stored as ONE
 // string (see [ContactCategory.encode]) so a full first save of 12 types
 // with 8 occasions each stays within the 1,000 rule expressions of a write. Missing doc = [ContactSettings.defaults]
 // (code defaults; firestore.rules mirrors them in defaultContactCats()).
@@ -37,8 +41,32 @@ class MessageStatus {
   static const plain = [newMsg, handled];
 }
 
-/// Category slots (one map per slot; rules validate them one by one).
+/// The ids of the original slots (the code defaults use c1…c4; messages
+/// sent before PR #19 may name any of them).
 const contactSlots = ['c1', 'c2', 'c3', 'c4', 'c5', 'c6', 'c7', 'c8', 'c9', 'c10', 'c11', 'c12'];
+
+/// At most this many categories (firestore.rules validContactSettings).
+const contactMaxCategories = 12;
+
+/// A category id: 'c' + 1…15 lower-case letters / digits (firestore.rules
+/// contactIdOk). Covers the legacy slots and the random ids.
+final contactIdRe = RegExp(r'^c[0-9a-z]{1,15}$');
+bool isContactId(Object? v) => v is String && contactIdRe.hasMatch(v);
+
+const _idChars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+
+/// A fresh, stable id for a category an admin adds: 'c' + 10 random
+/// letters / digits, never one of [taken] and never a legacy slot id
+/// (`c` + digits only), so a deleted category's id — and with it the label
+/// of its old messages — is never handed to a new one.
+String newContactCategoryId(Iterable<String> taken, {Random? random}) {
+  final r = random ?? Random.secure();
+  final t = taken.toSet();
+  while (true) {
+    final id = 'c${List.generate(10, (_) => _idChars[r.nextInt(_idChars.length)]).join()}';
+    if (!t.contains(id) && !RegExp(r'^c[0-9]+$').hasMatch(id)) return id;
+  }
+}
 const contactMaxSubtypes = 8;
 const contactLabelMax = 80, subtypeLabelMax = 60, adminNotesMax = 2000;
 const _fieldSep = '\u001f', _subSep = '\u001e';
@@ -122,7 +150,7 @@ class ContactCategory {
   }
 
   static ContactCategory? fromMap(String slot, Object? v) {
-    if (v is! Map || !contactSlots.contains(slot)) return null;
+    if (v is! Map || !isContactId(slot)) return null;
     final kind = _s(v['kind']);
     final subs = v['subtypes'];
     return ContactCategory(
@@ -204,7 +232,8 @@ class ContactSettings {
     if (m == null || m['categories'] is! Map) return defaults;
     final raw = m['categories'] as Map;
     final list = <ContactCategory>[
-      for (final slot in contactSlots) ?ContactCategory.fromStored(slot, raw[slot]),
+      for (final e in raw.entries)
+        if (e.key is String) ?ContactCategory.fromStored(e.key as String, e.value),
     ];
     return ContactSettings(sortCategories(list));
   }
@@ -220,13 +249,13 @@ class ContactSettings {
     return null;
   }
 
-  /// The next free slot (null when all 12 are used).
-  String? get nextSlot {
-    final used = {for (final c in categories) c.slot};
-    for (final s in contactSlots) {
-      if (!used.contains(s)) return s;
-    }
-    return null;
+  /// A fresh id for a new category (null when [contactMaxCategories] are
+  /// used). [retired] = ids that must never come back (e.g. categories
+  /// deleted in the editor before saving); random ids make a clash with
+  /// any earlier id practically impossible anyway.
+  String? newId({Iterable<String> retired = const [], Random? random}) {
+    if (categories.length >= contactMaxCategories) return null;
+    return newContactCategoryId([for (final c in categories) c.slot, ...retired], random: random);
   }
 
   Map<String, dynamic> toMap() => {
@@ -237,9 +266,15 @@ class ContactSettings {
 List<ContactCategory> sortCategories(List<ContactCategory> list) {
   final out = [...list]..sort((a, b) {
       final o = a.order.compareTo(b.order);
-      return o != 0 ? o : contactSlots.indexOf(a.slot).compareTo(contactSlots.indexOf(b.slot));
+      return o != 0 ? o : _slotRank(a.slot).compareTo(_slotRank(b.slot));
     });
   return out;
+}
+
+/// Legacy slots in their numeric order, then other ids alphabetically.
+String _slotRank(String id) {
+  final i = contactSlots.indexOf(id);
+  return i >= 0 ? '0${i.toString().padLeft(2, '0')}' : '1$id';
 }
 
 /// The inbox box a message belongs to: 'anonymous' for anonymous messages,

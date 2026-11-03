@@ -61,6 +61,7 @@ String? validateFieldValue(FieldDef f, String? raw) {
   final stored = f.type == FieldType.phone ? normalizePhoneInput(v) : v;
   if (stored.length > f.effectiveMaxLength) return 'tooLong';
   if (f.slug && !isValidSlug(v)) return 'invalidSlug';
+  if (f.pattern.isNotEmpty && !RegExp('^(?:${f.pattern})\$').hasMatch(v)) return 'invalid';
   switch (f.type) {
     case FieldType.time:
       return timeRe.hasMatch(v) ? null : 'invalidTime';
