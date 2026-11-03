@@ -10,6 +10,7 @@ import 'package:church_portal/domain/features.dart';
 import 'package:church_portal/router.dart';
 import 'package:church_portal/state/providers.dart';
 import 'package:church_portal/ui/admin/features_editor.dart';
+import 'package:church_portal/ui/pages/home_page.dart' show HaloText;
 import 'package:church_portal/ui/widgets/golden.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -231,12 +232,12 @@ void main() {
       for (final w in tester.widgetList<Container>(find.descendant(of: verse, matching: find.byType(Container)))) {
         expect(w.decoration, isNull, reason: 'no box behind the verse');
       }
-      final text = tester.widget<Text>(find.byKey(const Key('dailyVerseText')));
+      final text = tester.widget<HaloText>(find.byKey(const Key('dailyVerseText')));
       expect(text.textAlign, TextAlign.center);
-      expect(text.style!.fontSize, 24); // Ruqaa 24 / 20 on phones, height 1.8 (pre-PR #17)
-      expect(text.style!.height, 1.8);
-      final ref = tester.widget<Text>(find.byKey(const Key('dailyVerseRef')));
-      expect([ref.style!.fontSize, ref.style!.fontWeight], [13, FontWeight.w700]);
+      expect(text.style.fontSize, 24); // Ruqaa 24 / 20 on phones, height 1.8 (pre-PR #17)
+      expect(text.style.height, 1.8);
+      final ref = tester.widget<HaloText>(find.byKey(const Key('dailyVerseRef')));
+      expect([ref.style.fontSize, ref.style.fontWeight], [13, FontWeight.w700]);
     });
 
     testWidgets('no address ribbon in the hero by default; the admin switch brings it back', (tester) async {
@@ -254,6 +255,12 @@ void main() {
 
       // An admin hero subtitle always shows (switch or not).
       await _pumpHome(tester, now: DateTime.utc(2026, 5, 5, 9), features: const {'heroSubtitleAr': 'أهلًا بكم'});
+      expect(find.descendant(of: hero, matching: find.text('أهلًا بكم')), findsOneWidget);
+      expect(find.descendant(of: hero, matching: find.text(address)), findsNothing);
+
+      // The subtitle also wins with the address switch on.
+      await _pumpHome(tester,
+          now: DateTime.utc(2026, 5, 5, 9), features: const {'heroSubtitleAr': 'أهلًا بكم', 'heroShowAddress': true});
       expect(find.descendant(of: hero, matching: find.text('أهلًا بكم')), findsOneWidget);
       expect(find.descendant(of: hero, matching: find.text(address)), findsNothing);
     });

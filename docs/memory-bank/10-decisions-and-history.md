@@ -538,7 +538,11 @@ supersede them.
   already stored, like `heroMotion`). The address stays on `/contact`, in the footer and on the map. `HeroVerse` drops
   the `WarmPanel` and sits on a radial `TextScrim` at `verseScrimAlpha = 0.88`; `ThemePalette.verseGrounds` (that scrim
   over black and white frames) joins the palette checks for `ink` and `goldText` at 4.5:1, so every preset (incl. dark
-  Holy Week) passes and admin colours are auto-corrected. Daily rotation and the fixed-verse mode are unchanged.
+  Holy Week) passes and admin colours are auto-corrected. Because a radial glow fades towards the ends of a wide line
+  (Codex review), each verse line is a `HaloText`: a 2.5 px outline of the scene colour under the glyphs plus soft
+  shadows, so the ground beside every stroke is the scene colour itself; a pixel test renders it over black and white
+  frames for every preset. A blurred solid core under the glow was tried and rejected: it reads as a pale band, i.e.
+  the panel the church asked to remove. Daily rotation and the fixed-verse mode are unchanged.
 
 ## Timeline
 

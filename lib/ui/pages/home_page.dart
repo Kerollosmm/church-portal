@@ -566,11 +566,61 @@ class _MilestoneCard extends StatelessWidget {
 /// "Verse of the day" (settings/features.dailyVerse, ADR-024) in the hero,
 /// set straight on the hero like the title (no panel): Ruqaa verse in ink
 /// between « », reference in gold (the fixed settings verse's typography
-/// before PR #17), on a soft text scrim ([ThemePalette.verseScrimAlpha])
-/// that keeps both ≥ 4.5:1 on every theme. Today's Cairo verse or the
+/// before PR #17), on the title's kind of soft radial glow plus a halo of
+/// the scene colour around every glyph ([HaloText], like the title's halo) —
+/// no box. Both colours are checked ≥ 4.5:1 on every theme (`verseGrounds`). Today's Cairo verse or the
 /// admin's fixed one. Nothing while the section ([Sections.dailyVerse]) is
 /// off, before settings/features arrives (no flash) or while the bundled
 /// list loads.
+/// Text with a halo of the scene colour [ground] hugging every glyph: a solid
+/// outline ([outline] px each side, painted under the text by an unlabelled
+/// copy) that fades out through soft shadows — like the hero title's halo, no
+/// box. The hero verse's colours are checked on the scene colour at
+/// [ThemePalette.verseScrimAlpha] (`verseGrounds`); the halo keeps at least
+/// that ground beside every stroke even where the radial glow fades (tested
+/// over black and white frames in `test/golden_hour_test.dart`).
+class HaloText extends StatelessWidget {
+  final String text;
+  final TextStyle style;
+  final Color ground;
+  final double outline;
+  final TextAlign? textAlign;
+  final TextDirection? textDirection;
+  const HaloText(this.text,
+      {super.key, required this.style, required this.ground, this.outline = 2.5, this.textAlign, this.textDirection});
+
+  @override
+  Widget build(BuildContext context) {
+    final base = DefaultTextStyle.of(context).style.merge(style);
+    final halo = base.copyWith(
+      color: null,
+      foreground: Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = outline * 2
+        ..strokeJoin = StrokeJoin.round
+        ..color = ground,
+      shadows: [
+        Shadow(color: ground.withValues(alpha: 0.9), blurRadius: 8),
+        Shadow(color: ground.withValues(alpha: 0.7), blurRadius: 18),
+      ],
+    );
+    final dir = textDirection ?? Directionality.of(context);
+    return Stack(children: [
+      Positioned.fill(
+        child: ExcludeSemantics(
+          child: RichText(
+            text: TextSpan(text: text, style: halo),
+            textAlign: textAlign ?? TextAlign.start,
+            textDirection: dir,
+            textScaler: MediaQuery.textScalerOf(context),
+          ),
+        ),
+      ),
+      Text(text, style: style, textAlign: textAlign, textDirection: dir),
+    ]);
+  }
+}
+
 class HeroVerse extends ConsumerWidget {
   const HeroVerse({super.key});
 
@@ -585,26 +635,29 @@ class HeroVerse extends ConsumerWidget {
     if (verse == null) return const SizedBox.shrink();
     final narrow = MediaQuery.sizeOf(context).width < 600;
     final reference = context.isAr || verse.refEn.isEmpty ? verse.refAr : verse.refEn;
+    final ground = context.pal.background;
     return ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: 640),
       child: TextScrim(
         key: const Key('heroVerse'),
         opacity: ThemePalette.verseScrimAlpha,
-        bleed: const EdgeInsets.symmetric(horizontal: 64, vertical: 36),
+        bleed: const EdgeInsets.symmetric(horizontal: 64, vertical: 40),
         child: Padding(
           padding: EdgeInsets.symmetric(horizontal: narrow ? 8 : 26, vertical: 6),
           child: Semantics(
             container: true,
             label: context.tr('dailyVerse'),
             child: Column(children: [
-              Text('« ${verse.textAr} »',
+              HaloText('« ${verse.textAr} »',
                   key: const Key('dailyVerseText'),
+                  ground: ground,
                   textAlign: TextAlign.center,
                   textDirection: TextDirection.rtl,
                   style: AppFonts.script(size: narrow ? 20 : 24, color: context.pal.ink, height: 1.8)),
               if (reference.isNotEmpty)
-                Text(reference,
+                HaloText(reference,
                     key: const Key('dailyVerseRef'),
+                    ground: ground,
                     textDirection: verse.refEn.isNotEmpty && !context.isAr ? TextDirection.ltr : TextDirection.rtl,
                     style: TextStyle(color: context.pal.goldText, fontSize: 13, fontWeight: FontWeight.w700)),
             ]),

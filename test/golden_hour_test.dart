@@ -3,17 +3,21 @@
 // motion gating (reduced motion, admin switch) and art assets.
 import 'dart:convert';
 import 'dart:io';
+import 'dart:ui' as ui;
 
 import 'package:church_portal/core/theme.dart';
 import 'package:church_portal/data/content_repository.dart';
 import 'package:church_portal/data/seed_data.dart';
 import 'package:church_portal/domain/cairo_time.dart';
 import 'package:church_portal/domain/features.dart';
+import 'package:church_portal/domain/occasion_theme.dart';
 import 'package:church_portal/router.dart';
 import 'package:church_portal/state/providers.dart';
 import 'package:church_portal/ui/admin/features_editor.dart';
+import 'package:church_portal/ui/pages/home_page.dart' show HaloText;
 import 'package:church_portal/ui/widgets/common.dart';
 import 'package:church_portal/ui/widgets/golden.dart';
+import 'package:flutter/rendering.dart' show RenderRepaintBoundary;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
@@ -133,6 +137,76 @@ void main() {
     final rules = File('firestore.rules').readAsStringSync();
     expect(rules.substring(rules.indexOf('function validFeatures(')), contains("'heroShowAddress'"));
     expect(rules, contains("d.get('heroShowAddress', false) is bool"));
+  });
+
+  // The hero verse's colours are checked on the scene colour at verseScrimAlpha
+  // (verseGrounds). The radial glow fades towards wide line ends, so the glyph
+  // halo must give that ground next to every stroke on its own — over the
+  // darkest and the lightest frame, for every theme.
+  testWidgets('hero verse halo: the ground beside every stroke keeps ink and gold >= 4.5:1', (tester) async {
+    final failures = <String>[];
+    for (final entry in ThemePresets.palettes.entries) {
+      final p = entry.value;
+      for (final frame in const [Color(0xFF000000), Color(0xFFFFFFFF)]) {
+        for (final fg in [p.ink, p.goldText]) {
+          final key = GlobalKey();
+          await tester.pumpWidget(Directionality(
+            textDirection: TextDirection.ltr,
+            child: Align(
+              alignment: Alignment.topLeft,
+              child: RepaintBoundary(
+                key: key,
+                child: ColoredBox(
+                  color: frame,
+                  child: Padding(
+                    padding: const EdgeInsets.all(30),
+                    child: HaloText('x x',
+                        ground: Color(p.background), style: TextStyle(fontSize: 13, color: Color(fg))),
+                  ),
+                ),
+              ),
+            ),
+          ));
+          final ro = key.currentContext!.findRenderObject()! as RenderRepaintBoundary;
+          final w = ro.size.width.toInt(), h = ro.size.height.toInt();
+          final bytes = (await tester.runAsync(() async {
+            final img = await ro.toImage();
+            return img.toByteData(format: ui.ImageByteFormat.rawRgba);
+          }))!;
+          int px(int x, int y) {
+            final i = (y * w + x) * 4;
+            return 0xFF000000 | bytes.getUint8(i) << 16 | bytes.getUint8(i + 1) << 8 | bytes.getUint8(i + 2);
+          }
+
+          // Glyph = exactly the text colour; ground = the pixels 2 px off a glyph
+          // pixel that are not glyph and not anti-aliased (no glyph within 1 px).
+          bool glyph(int x, int y) => x >= 0 && y >= 0 && x < w && y < h && px(x, y) == (fg | 0xFF000000);
+          var worst = 99.0, grounds = 0;
+          for (var y = 2; y < h - 2; y++) {
+            for (var x = 2; x < w - 2; x++) {
+              if (glyph(x, y)) continue;
+              var near = false, touching = false;
+              for (var dy = -2; dy <= 2; dy++) {
+                for (var dx = -2; dx <= 2; dx++) {
+                  if (!glyph(x + dx, y + dy)) continue;
+                  if (dx.abs() <= 1 && dy.abs() <= 1) touching = true;
+                  near = true;
+                }
+              }
+              if (!near || touching) continue;
+              grounds++;
+              final r = contrastRatio(fg, px(x, y));
+              if (r < worst) worst = r;
+            }
+          }
+          if (grounds == 0) failures.add('${entry.key}: no glyph found');
+          if (worst < 4.5) {
+            failures.add('${entry.key} ${colorToHex(fg)} over ${colorToHex(frame.toARGB32())}: ${worst.toStringAsFixed(2)}');
+          }
+        }
+      }
+    }
+    expect(failures, isEmpty);
   });
 
   testWidgets('desktop: Church services menu groups the enabled services only', (tester) async {
