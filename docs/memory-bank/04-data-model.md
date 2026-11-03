@@ -343,10 +343,15 @@ Public read, admin write (`validAssistant`). **Missing doc / blank text / null n
 | `topics` | string ≤ 2000, one topic per line (`-`/`*`/`•` bullets stripped) | `defaultTopics` (times, meetings, clinics, activities, priests, saints, history, announcements, contact, bookings, donations, custom sections / pages) |
 | `refusalAr`, `refusalEn` | string ≤ 500 | `defaultRefusalAr/En` |
 | `welcomeAr`, `welcomeEn` | string ≤ 500 | l10n `askIntro` |
-| `suggestionsAr`, `suggestionsEn` | string ≤ 300, one question per line, first 3 used | l10n `askSuggest1…3` |
+| `showSuggestions` | bool (PR #21) | `false` — no chips on /ask; when on, only the admin questions below (no built-in fallbacks) |
+| `suggestionsAr`, `suggestionsEn` | string ≤ 300, one question per line, first 3 used | none |
+| `sourceDomains` | string ≤ 300, `[a-z0-9., -]*`, comma separated (PR #21, ADR-031) | `st-takla.org` — the only source for faith questions outside the data (search link) |
+| `faithReplyAr`, `faithReplyEn` | string ≤ 300 (PR #21, ADR-031) | `defaultFaithReplyAr/En` — shown before the source-search and `/contact` links |
+| `mentionUnconfirmed` | bool (PR #21, ADR-030) | `false` — off: `[UNCONFIRMED]` markers are stripped from the prompt and the model never mentions them |
 | `maxChars` | null or int 50–1000 | 500 |
 | `perMinute` | null or int 1–20 | 4 |
-| `perSession` | null or int 1–200 | 30 |
+| `perDay` | null or int 1–100 (PR #21, ADR-031) | 3 questions per device per Cairo day |
+| `perSession` | legacy, null or int 1–200 — still accepted by the rules, **ignored** since PR #21 | — |
 | `updatedAt`, `updatedBy` | stamps (`stampOk`) | |
 
 Out-of-range stored numbers are clamped when read.

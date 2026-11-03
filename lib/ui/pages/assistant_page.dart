@@ -5,8 +5,10 @@ import '../../config/app_config.dart';
 import '../../core/l10n.dart';
 import '../../core/theme.dart';
 import '../../data/assistant_model.dart';
+import '../../data/assistant_usage_store.dart';
 import '../../domain/assistant_context.dart';
 import '../../domain/assistant_conversation.dart';
+import '../../domain/assistant_quota.dart';
 import '../../domain/assistant_settings.dart';
 import '../../domain/contact_categories.dart';
 import '../../domain/custom_content.dart';
@@ -15,6 +17,7 @@ import '../../domain/features.dart';
 import '../../domain/time_format.dart';
 import '../../state/providers.dart';
 import '../widgets/common.dart';
+import '../widgets/safe_markdown.dart';
 
 class _Msg {
   final bool user;
@@ -27,6 +30,10 @@ class _Msg {
 /// with a fake. Declared here, in the deferred /ask chunk, so `firebase_ai`
 /// stays out of the main bundle.
 final assistantModelProvider = Provider<AssistantModel>((ref) => const FirebaseAssistantModel());
+
+/// This device's daily question counter (ADR-031): shared_preferences
+/// (localStorage on web). Overridden in tests with a [MemoryUsageStore].
+final assistantUsageStoreProvider = FutureProvider<AssistantUsageStore>((ref) => PrefsUsageStore.load());
 
 /// "Ask the church" assistant — Gemini via Firebase AI Logic (ADR-014,
 /// ADR-029), grounded on the live portal content through the system
@@ -50,6 +57,10 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
   @override
   void initState() {
     super.initState();
+    ref.read(assistantUsageStoreProvider.future).then(
+          (u) => _conversation.limiter.usage ??= u,
+          onError: (Object _) => _conversation.limiter.usage ??= MemoryUsageStore(),
+        );
     // Mint the App Check token while the visitor reads the welcome, so the
     // first question does not race it (the model also retries once).
     if (ref.read(firebaseStatusProvider).appCheckActive) {
@@ -216,8 +227,18 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
     final q = (preset ?? _input.text).trim();
     if (q.isEmpty || _busy) return;
     final s = _settings;
+    // The device's daily counter (preloaded in initState; memory-only if
+    // storage fails).
+    if (_conversation.limiter.usage == null) {
+      try {
+        _conversation.limiter.usage ??= await ref.read(assistantUsageStoreProvider.future);
+      } catch (_) {
+        _conversation.limiter.usage ??= MemoryUsageStore();
+      }
+      if (!mounted) return;
+    }
     // Checked before anything is shown or sent (length, per-minute and
-    // per-visit limits).
+    // per-device daily limits).
     final blocked = _conversation.precheck(q, s, DateTime.now());
     if (blocked != null) {
       setState(() => _messages.add(_Msg(false, _blockedText(blocked, s), error: true)));
@@ -245,6 +266,7 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
       if (!mounted) return;
       setState(() => _messages.add(switch (r.outcome) {
             AssistantOutcome.answer || AssistantOutcome.refused => _Msg(false, r.text),
+            AssistantOutcome.sourceSearch => _Msg(false, _sourceSearchText(q, s)),
             AssistantOutcome.error => _Msg(false, errorText, error: true),
             final o => _Msg(false, _blockedText(o, s), error: true),
           }));
@@ -262,10 +284,22 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
 
   String _blockedText(AssistantOutcome o, AssistantSettings s) => switch (o) {
         AssistantOutcome.rateLimitedMinute => context.tr('askSlowDown'),
-        AssistantOutcome.rateLimitedSession => context.tr('askSessionLimit'),
+        AssistantOutcome.rateLimitedDay => context.tr('askDayLimit', {'n': '${s.perDay}'}),
         AssistantOutcome.invalid => context.tr('askTooLong', {'n': '${s.maxChars}'}),
         _ => context.tr('askError'),
       };
+
+  /// Faith / church question not in the data (ADR-031): the admin's faith
+  /// reply, a search restricted to the source domains, and the contact page.
+  String _sourceSearchText(String question, AssistantSettings s) {
+    final ar = looksArabic(question);
+    final domains = s.effectiveSourceDomains;
+    final searchLabel = ar ? 'ابحث في ${domains.join('، ')}' : 'Search ${domains.join(', ')}';
+    final contactLabel = ar ? 'صفحة تواصل معنا' : 'Contact page';
+    return '${s.faithReply(ar)}\n'
+        '- [$searchLabel](${sourceSearchUrl(domains, question)})\n'
+        '- [$contactLabel](/contact)';
+  }
 
   void _scrollDown() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -290,9 +324,9 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
       );
     }
     final cfg = ref.watch(assistantSettingsProvider).value ?? AssistantSettings.defaults;
-    final custom = cfg.suggestions(context.isAr);
-    final suggestions =
-        custom.isNotEmpty ? custom : [context.tr('askSuggest1'), context.tr('askSuggest2'), context.tr('askSuggest3')];
+    // No chips unless the admin turned "Show suggested questions" on; no
+    // built-in fallbacks.
+    final suggestions = cfg.visibleSuggestions(context.isAr);
     final welcome = cfg.welcome(context.isAr);
     return Column(children: [
       CustomizablePageHeader(
@@ -307,7 +341,7 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
             child: ListView(controller: _scroll, padding: const EdgeInsets.all(16), children: [
               const PageIntro(pageKey: CustomizablePages.ask),
               _bubble(_Msg(false, welcome.isNotEmpty ? welcome : context.tr('askIntro'))),
-              if (_messages.isEmpty)
+              if (_messages.isEmpty && suggestions.isNotEmpty)
                 Padding(
                   padding: const EdgeInsets.only(top: 8),
                   child: Wrap(spacing: 8, runSpacing: 8, children: [
@@ -391,8 +425,11 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
           borderRadius: BorderRadius.circular(4),
           border: m.user ? null : Border.all(color: AppColors.gold.withValues(alpha: 0.4)),
         ),
-        child: SelectableText(m.text, style: TextStyle(
-                color: m.user ? context.pal.onPrimary : (m.error ? AppColors.ink : context.pal.ink), height: 1.6)),
+        child: m.user
+            ? SelectableText(m.text, style: TextStyle(color: context.pal.onPrimary, height: 1.6))
+            // Replies and notices are Markdown: render the safe subset (ADR-030).
+            : SafeMarkdown(m.text,
+                style: TextStyle(color: m.error ? AppColors.ink : context.pal.ink, height: 1.6)),
       ),
     );
   }

@@ -3,6 +3,8 @@
 // default below, so nothing has to be seeded. firestore.rules validAssistant
 // mirrors the limits. Pure Dart.
 
+import 'assistant_quota.dart' show parseSourceDomains;
+
 String _s(Object? v) => v is String ? v.trim() : '';
 int? _i(Object? v) => v is int ? v : (v is num && v == v.roundToDouble() ? v.toInt() : null);
 
@@ -14,6 +16,8 @@ class AssistantLimits {
   static const topicsMax = 2000;
   static const textMax = 500; // refusal / welcome per language
   static const suggestionsMax = 300; // per language, one suggestion per line
+  static const faithReplyMax = 300; // reply for faith questions not in the data, per language
+  static const sourceDomainsMax = 300;
   static const maxSuggestions = 3;
 
   /// Message length bounds (characters).
@@ -22,8 +26,9 @@ class AssistantLimits {
   /// Questions per rolling minute.
   static const perMinuteMin = 1, perMinuteMax = 20, perMinuteDefault = 4;
 
-  /// Questions per visit (page session).
-  static const perSessionMin = 1, perSessionMax = 200, perSessionDefault = 30;
+  /// Questions per device per Cairo day (ADR-031; replaced the per-visit
+  /// limit — a legacy `perSession` value is ignored).
+  static const perDayMin = 1, perDayMax = 100, perDayDefault = 3;
 }
 
 /// Model names the admin may enter: a Gemini model id (lower-case letters,
@@ -39,6 +44,11 @@ bool isUsableModelName(String m) => modelNameRe.hasMatch(m) && !_retiredModelRe.
 /// for the admin's refusal message in the visitor's language.
 const outOfScopeToken = '[[OUT_OF_SCOPE]]';
 
+/// The reply the model gives for a faith / church question the church data
+/// does not answer (ADR-031): the app swaps it for the admin's faith reply
+/// plus a search link restricted to the source domains and the contact page.
+const sourceSearchToken = '[[SOURCE_SEARCH]]';
+
 class AssistantSettings {
   /// Admin-chosen model ('' = [defaultModel]).
   final String model;
@@ -53,12 +63,30 @@ class AssistantSettings {
   final String refusalAr, refusalEn;
   final String welcomeAr, welcomeEn;
 
-  /// Suggested questions, one per line ('' = built-in suggestions).
+  /// Suggested questions, one per line. Shown only when [showSuggestions]
+  /// is on; there are no built-in fallbacks.
   final String suggestionsAr, suggestionsEn;
 
+  /// "Show suggested questions" (default off).
+  final bool showSuggestions;
+
+  /// Shown (before the search and contact links) for faith / church questions
+  /// the church data does not answer — '' = [defaultFaithReplyAr] / [defaultFaithReplyEn].
+  final String faithReplyAr, faithReplyEn;
+
+  /// The only sources for faith questions outside the church data (comma or
+  /// newline separated; '' = [defaultSourceDomains]).
+  final String sourceDomains;
+
+  /// "Mention unconfirmed flags" (default off): when off, the `sample` items
+  /// reach the model without the [UNCONFIRMED] marker and it never adds an
+  /// "unconfirmed" disclaimer; when on, it may say so once, briefly, only
+  /// when asked about that specific flagged item.
+  final bool mentionUnconfirmed;
+
   /// Stored limits (null = default); read the clamped [maxChars],
-  /// [perMinute] and [perSession].
-  final int? rawMaxChars, rawPerMinute, rawPerSession;
+  /// [perMinute] and [perDay].
+  final int? rawMaxChars, rawPerMinute, rawPerDay;
 
   const AssistantSettings({
     this.model = '',
@@ -70,9 +98,14 @@ class AssistantSettings {
     this.welcomeEn = '',
     this.suggestionsAr = '',
     this.suggestionsEn = '',
+    this.showSuggestions = false,
+    this.faithReplyAr = '',
+    this.faithReplyEn = '',
+    this.sourceDomains = '',
+    this.mentionUnconfirmed = false,
     this.rawMaxChars,
     this.rawPerMinute,
-    this.rawPerSession,
+    this.rawPerDay,
   });
 
   static const defaults = AssistantSettings();
@@ -89,9 +122,14 @@ class AssistantSettings {
       welcomeEn: _s(m['welcomeEn']),
       suggestionsAr: _s(m['suggestionsAr']),
       suggestionsEn: _s(m['suggestionsEn']),
+      showSuggestions: m['showSuggestions'] == true,
+      faithReplyAr: _s(m['faithReplyAr']),
+      faithReplyEn: _s(m['faithReplyEn']),
+      sourceDomains: _s(m['sourceDomains']),
+      mentionUnconfirmed: m['mentionUnconfirmed'] == true,
       rawMaxChars: _i(m['maxChars']),
       rawPerMinute: _i(m['perMinute']),
-      rawPerSession: _i(m['perSession']),
+      rawPerDay: _i(m['perDay']),
     );
   }
 
@@ -114,10 +152,22 @@ class AssistantSettings {
       ? (refusalAr.isNotEmpty ? refusalAr : defaultRefusalAr)
       : (refusalEn.isNotEmpty ? refusalEn : defaultRefusalEn);
 
+  /// The faith-question reply in each language (admin text or default).
+  String faithReply(bool arabic) => arabic
+      ? (faithReplyAr.isNotEmpty ? faithReplyAr : defaultFaithReplyAr)
+      : (faithReplyEn.isNotEmpty ? faithReplyEn : defaultFaithReplyEn);
+
+  /// Allowed source domains (validated; default st-takla.org).
+  List<String> get effectiveSourceDomains =>
+      parseSourceDomains(sourceDomains, fallback: const [defaultSourceDomains]);
+
   /// '' = the app's built-in welcome text.
   String welcome(bool arabic) => arabic ? welcomeAr : welcomeEn;
 
-  /// Up to three suggested questions for [arabic] (empty = built-ins).
+  /// The chips the page shows: none unless [showSuggestions] is on.
+  List<String> visibleSuggestions(bool arabic) => showSuggestions ? suggestions(arabic) : const [];
+
+  /// Up to three suggested questions for [arabic] (admin text only).
   List<String> suggestions(bool arabic) => [
         for (final l in (arabic ? suggestionsAr : suggestionsEn).split('\n'))
           if (l.trim().isNotEmpty) l.trim(),
@@ -127,8 +177,8 @@ class AssistantSettings {
       AssistantLimits.maxCharsDefault);
   int get perMinute => _clamp(rawPerMinute, AssistantLimits.perMinuteMin, AssistantLimits.perMinuteMax,
       AssistantLimits.perMinuteDefault);
-  int get perSession => _clamp(rawPerSession, AssistantLimits.perSessionMin, AssistantLimits.perSessionMax,
-      AssistantLimits.perSessionDefault);
+  int get perDay =>
+      _clamp(rawPerDay, AssistantLimits.perDayMin, AssistantLimits.perDayMax, AssistantLimits.perDayDefault);
 
   static int _clamp(int? v, int lo, int hi, int def) => v == null ? def : (v < lo ? lo : (v > hi ? hi : v));
 
@@ -149,6 +199,12 @@ class AssistantSettings {
       'Hall bookings and the contact form\n'
       'Donations page\n'
       'The custom sections and pages of this website';
+
+  static const defaultSourceDomains = 'st-takla.org';
+  static const defaultFaithReplyAr =
+      'لم أجد إجابة هذا السؤال في بيانات موقع الكنيسة. يمكنك البحث في موقع الأنبا تكلا هيمانوت أو التواصل معنا:';
+  static const defaultFaithReplyEn =
+      "I couldn't find this in the church's website data. You can search St-Takla.org or contact us:";
 
   static const defaultRefusalAr =
       'عذرًا، أنا مساعد الكنيسة وأجيب فقط عن أسئلة الكنيسة وخدماتها: مواعيد القداسات والاجتماعات والعيادات والأنشطة والآباء الكهنة والقديسين والتواصل والعنوان والحجوزات والتبرعات. كيف أساعدك في شيء من ذلك؟';

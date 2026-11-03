@@ -554,13 +554,18 @@ service cloud.firestore {
     // Gemini id (gemini-…, lower-case letters, digits, dots, hyphens).
     function validAssistant(d) {
       return keysAllowed(['model', 'instructions', 'topics', 'refusalAr', 'refusalEn', 'welcomeAr', 'welcomeEn',
-                          'suggestionsAr', 'suggestionsEn', 'maxChars', 'perMinute', 'perSession',
-                          'updatedAt', 'updatedBy'])
+                          'suggestionsAr', 'suggestionsEn', 'showSuggestions', 'faithReplyAr', 'faithReplyEn',
+                          'sourceDomains', 'mentionUnconfirmed', 'maxChars', 'perMinute', 'perDay',
+                          'perSession', 'updatedAt', 'updatedBy'])
         && str(d, 'model', 60) && d.get('model', '').matches('(gemini-[a-z0-9][a-z0-9.-]{0,52})?')
         && str(d, 'instructions', 4000) && str(d, 'topics', 2000)
         && str(d, 'refusalAr', 500) && str(d, 'refusalEn', 500)
         && str(d, 'welcomeAr', 500) && str(d, 'welcomeEn', 500)
         && str(d, 'suggestionsAr', 300) && str(d, 'suggestionsEn', 300)
+        && str(d, 'faithReplyAr', 300) && str(d, 'faithReplyEn', 300) && optBool(d, 'mentionUnconfirmed')
+        && optBool(d, 'showSuggestions')
+        && str(d, 'sourceDomains', 300) && d.get('sourceDomains', '').matches('[a-z0-9., -]*')
+        && optInt(d, 'perDay', 1, 100)
         && optInt(d, 'maxChars', 50, 1000) && optInt(d, 'perMinute', 1, 20) && optInt(d, 'perSession', 1, 200)
         && stampOk(d);
     }

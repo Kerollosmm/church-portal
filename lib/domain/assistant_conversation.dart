@@ -3,6 +3,7 @@
 // replayed history (capped, cleared when the grounding's sections / detail
 // signature change), the out-of-scope refusal swap and the model fallback.
 
+import 'assistant_quota.dart';
 import 'assistant_settings.dart';
 
 /// One past turn sent back to the model.
@@ -43,8 +44,12 @@ enum AssistantOutcome {
   /// Too many questions this minute; nothing was sent.
   rateLimitedMinute,
 
-  /// The per-visit question limit is used up; nothing was sent.
-  rateLimitedSession,
+  /// This device used up today's questions (Cairo day); nothing was sent.
+  rateLimitedDay,
+
+  /// The model flagged a faith / church question the data does not answer
+  /// ([sourceSearchToken]): the app shows the faith reply + search links.
+  sourceSearch,
 
   /// The model call failed or returned nothing.
   error,
@@ -54,7 +59,10 @@ class AssistantReply {
   final AssistantOutcome outcome;
   final String text;
   const AssistantReply(this.outcome, [this.text = '']);
-  bool get ok => outcome == AssistantOutcome.answer || outcome == AssistantOutcome.refused;
+  bool get ok =>
+      outcome == AssistantOutcome.answer ||
+      outcome == AssistantOutcome.refused ||
+      outcome == AssistantOutcome.sourceSearch;
 }
 
 /// Arabic letters anywhere in the question → reply in Arabic. Letters only:
@@ -63,16 +71,22 @@ final _arabicLetter = RegExp('[\u0621-\u063A\u0641-\u064A\u0671-\u06D3\u06D5\u06
     '\u0750-\u077F\u08A0-\u08C9]');
 bool looksArabic(String s) => _arabicLetter.hasMatch(s);
 
-/// Client-side limits per page session: [perMinute] questions in any rolling
-/// 60 s and [perSession] in total. Only questions actually sent count.
+/// Client-side limits: [perMinute] questions in any rolling 60 s (this page
+/// session) and [perDay] per device per Cairo day (when a [usage] store is
+/// set — ADR-031). Only questions actually sent count.
 class AssistantRateLimiter {
   final List<DateTime> _sent = [];
   int _total = 0;
 
+  /// The device's daily counter (null = no daily limit, e.g. before the
+  /// store has loaded in tests).
+  AssistantUsageStore? usage;
+
   int get total => _total;
 
   AssistantOutcome? check(DateTime now, AssistantSettings s) {
-    if (_total >= s.perSession) return AssistantOutcome.rateLimitedSession;
+    final u = usage;
+    if (u != null && u.read().reached(cairoDayKey(now), s.perDay)) return AssistantOutcome.rateLimitedDay;
     _sent.removeWhere((t) => now.difference(t) >= const Duration(minutes: 1));
     if (_sent.length >= s.perMinute) return AssistantOutcome.rateLimitedMinute;
     return null;
@@ -81,6 +95,8 @@ class AssistantRateLimiter {
   void record(DateTime now) {
     _sent.add(now);
     _total++;
+    final u = usage;
+    if (u != null) u.write(u.read().recorded(cairoDayKey(now)));
   }
 }
 
@@ -190,6 +206,10 @@ class AssistantConversation {
       }
     }
     if (text.isEmpty) return const AssistantReply(AssistantOutcome.error);
+    if (text.contains(sourceSearchToken)) {
+      // Not replayed either; the page builds the reply (search + contact).
+      return const AssistantReply(AssistantOutcome.sourceSearch);
+    }
     if (isOutOfScopeReply(text)) {
       // Refusals are not replayed: they add nothing for later questions.
       return AssistantReply(AssistantOutcome.refused, settings.refusal(arabic));

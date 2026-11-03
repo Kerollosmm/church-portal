@@ -137,12 +137,19 @@ notices («اعرف المزيد»), buttons or links, and appear in the menu on
 church" drawer group. `NavItem.labelAr/labelEn` carry their own labels.
 
 ### `/ask` — `assistant_page.dart` `AssistantPage`
-Chat UI with a welcome bubble (admin `welcomeAr/En`, else `askIntro`), up to 3 suggestion chips (admin
-`suggestionsAr/En`, else the built-ins), an input capped at `maxChars` (default 500), disclaimer «إجابات آلية قد
+Chat UI with a welcome bubble (admin `welcomeAr/En`, else `askIntro`), **no suggestion chips by default** (PR #21:
+only when admin `showSuggestions` is on, then only `suggestionsAr/En`, no built-ins), an input capped at `maxChars` (default 500), disclaimer «إجابات آلية قد
 تحتوي أخطاء». Answers only about the church and its services (ADR-029): off-topic questions get the admin refusal
-message in the visitor's language; per-visit limits (questions per minute / per visit) show `askSlowDown` /
-`askSessionLimit` without calling the model. Shows "assistant not available" when `assistantVisibleProvider` is
-false. Works on web (reCAPTCHA Enterprise) and Android (Play Integrity, once registered). Details in `05-firebase.md`.
+message in the visitor's language; limits (questions per minute per visit, and **per device per Cairo day**,
+default 3 — ADR-031, counter in shared_preferences / localStorage under a random device id, resets at Cairo
+midnight) show `askSlowDown` / `askDayLimit` (with a `/contact` link) without calling the model. Faith questions
+the data does not answer get the faith reply + a `site:st-takla.org` search link + `/contact` (ADR-031). Shows "assistant not available" when `assistantVisibleProvider` is
+false. **Replies render as safe Markdown** (PR #21, ADR-030: `lib/domain/simple_markdown.dart` parser +
+`lib/ui/widgets/safe_markdown.dart` `SafeMarkdown`): bold, italics, bullet / numbered lists, links — only http(s),
+`tel:` and internal `/routes` are tappable (internal via go_router), no HTML / images, unpaired `*` dropped so a
+literal asterisk never shows; direction from the reply's first strong character (Arabic RTL even in the English UI);
+links keep the body colour + underline (same contrast as the text on every theme); one `SelectionArea` per bubble
+keeps select / copy. Works on web (reCAPTCHA Enterprise) and Android (Play Integrity, once registered). Details in `05-firebase.md`.
 
 ### Item detail pages (PR #13, ADR-020) — `item_detail_page.dart` `ItemDetailPage`
 - Routes: `/church-education/:id`, `/church-activities/:id`, `/clinics/:id`, `/public-services/:id`,

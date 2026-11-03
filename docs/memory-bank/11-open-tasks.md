@@ -162,3 +162,9 @@ Status as of 3 Nov 2026 (after PR #19; earlier: PR #7–#18).
 ## Docs
 
 - [ ] Keep this memory bank current with every PR (see `00-README.md`).
+
+## Assistant follow-ups (PR #21, ADR-031)
+- [ ] Optional: on the Blaze plan, enable Grounding with Google Search restricted to `sourceDomains` (filter
+      citations by `web.title`, show source links + the required Search-suggestions widget) instead of the search link.
+- [ ] Optional: set the Firebase AI Logic per-user rate limit in the console (server-side; the daily device limit is
+      client-side only and resets when site data is cleared).
