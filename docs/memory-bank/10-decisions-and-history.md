@@ -525,6 +525,25 @@ supersede them.
   or a Cloud Function proxy later.
 - **Chips:** no suggested questions by default; admin `showSuggestions` (default off) shows only the admin's list.
 
+## ADR-032 (PR #22) — Hero: no address ribbon by default, the verse without a panel
+
+- **Context:** the church asked to remove the brown address pill from the home hero and to show the verse of the day
+  without the cream card. Git history: the address was a plain gold line under the title from PR #1 (as the
+  fallback of an empty hero subtitle) and became the `TitleRibbon` pill in PR #15 (`a97987c`); the hero verse sat in a
+  translucent 8 % white box on the dark maroon hero up to PR #14 and in the cream `WarmPanel` from PR #15 through PR #17
+  (`55e2a92`). The typography kept is the fixed verse's from before PR #17 (Ruqaa 20/24 px, height 1.8, centred
+  `« »`, reference in `goldText` 13 px bold).
+- **Decision:** the hero ribbon shows only the admin's subtitle, or the address when the new
+  `settings/features.heroShowAddress` switch is on (default off; rules accept only a bool; saved only once on or
+  already stored, like `heroMotion`). The address stays on `/contact`, in the footer and on the map. `HeroVerse` drops
+  the `WarmPanel` and sits on a radial `TextScrim` at `verseScrimAlpha = 0.88`; `ThemePalette.verseGrounds` (that scrim
+  over black and white frames) joins the palette checks for `ink` and `goldText` at 4.5:1, so every preset (incl. dark
+  Holy Week) passes and admin colours are auto-corrected. Because a radial glow fades towards the ends of a wide line
+  (Codex review), each verse line is a `HaloText`: a 2.5 px outline of the scene colour under the glyphs plus soft
+  shadows, so the ground beside every stroke is the scene colour itself; a pixel test renders it over black and white
+  frames for every preset. A blurred solid core under the glow was tried and rejected: it reads as a pale band, i.e.
+  the panel the church asked to remove. Daily rotation and the fixed-verse mode are unchanged.
+
 ## Timeline
 
 | When | PR / commit | What |
@@ -557,5 +576,6 @@ supersede them.
 | 3 Nov 2026 | **PR #19** — "Assistant on web + Android: reCAPTCHA Enterprise / Play Integrity App Check, Gemini 3.1 Flash-Lite, church-only scope, admin settings" (`feat/assistant-ai-logic`; PR #18 was squash-merged as `37a58d5`) | ADR-029: `selectAppCheckPlan` (Enterprise on web, Play Integrity on Android, debug providers in debug), `INTERNET` permission for release APKs, default model `gemini-3.1-flash-lite` (Gemma not offered by AI Logic cloud), admin-editable model with fallback, fixed scope + `[[OUT_OF_SCOPE]]` refusal swap, grounding of contact types / custom sections / custom pages, per-visit limits, `/admin` → AI assistant (`settings/assistant`, rules `validAssistant`); contact categories get stable never-reused ids (ADR-028 caveat fixed); `test/assistant_test.dart` + emulator groups. |
 | 3 Nov 2026 | **PR #20** — "Assistant: ground the first question on live data (mass times & all sections), App Check warm-up, one retry" (`fix/assistant-grounding-load`; PR #19 was squash-merged as `d2d1ee2`) | Root cause: Riverpod 3 pauses unlistened providers, and `/ask` only `ref.read` the content providers, so on a direct visit the content never arrived and the prompt had empty sections. Fix: `_watchGrounding()` watches every grounding provider (section-gated for milestones / contact / custom); `AssistantModel.warmUp()` pre-mints the App Check token; one automatic retry of a failed / empty model call, not for quota / rate-limit / bad-request errors (`isRetryableAssistantError`, CodeRabbit). Widget tests assert the first prompt holds the mass schedule, meetings, activities, services, priests, saints, milestones, contacts, clinics, custom sections and custom pages (donations), plus the contact form heading; the individual contact types are asserted by the prompt-builder unit tests. |
 | 3 Nov 2026 | **PR #21** — "Assistant: safe Markdown, confident data answers, St-Takla-only faith source, 3 questions / device / day, no default chips" (`fix/assistant-markdown`; PR #20 was squash-merged as `8dd2680`) | ADR-030/031: `SafeMarkdown` renderer (no literal asterisks, safe links only, RTL by content, selection kept); prompt rewrite (no disclaimers on data answers, `mentionUnconfirmed` switch default off, faith questions outside the data → `[[SOURCE_SEARCH]]` → faith reply + `site:st-takla.org` search + `/contact`, "not listed → /contact", simple Markdown only); `perDay` device limit (shared_preferences), `showSuggestions` default off, `sourceDomains`, `faithReplyAr/En`; `validAssistant` + emulator cases; `test/safe_markdown_test.dart`, `test/assistant_test.dart`. |
+| 3 Nov 2026 | **PR #22** — "Hero: no address pill by default, verse of the day without the panel" (`fix/hero-verse-address`; PR #21 was squash-merged as `79c7d9c`) | ADR-032: hero ribbon = admin subtitle, or the address only with the new `heroShowAddress` admin switch (default off; rules + emulator test); `HeroVerse` without `WarmPanel`, old fixed-verse typography on a 0.88 text scrim; `verseGrounds` in the palette contrast checks for every preset incl. Holy Week; widget tests (no panel, no address by default, switch on, subtitle wins). |
 
 Append new PRs to this table.

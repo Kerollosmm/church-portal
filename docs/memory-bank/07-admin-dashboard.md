@@ -109,6 +109,10 @@ cancels and re-subscribes every stream (BUG-18; `ChurchInfoScreen` does the same
   `isEchoOfEditor(shown, latest, editorValues)` (`admin_validators.dart`) — if only metadata changed or every changed
   field already equals what the form holds, the editor key is kept, so the scroll position stays.
 
+- **Hero texts** card (PR #22, ADR-032): besides title / subtitle AR/EN and *Hero motion & video*, a
+  **"Show address in hero"** switch (`ValueKey('features-heroShowAddress')`, `heroShowAddress`, default off): the
+  address ribbon under the hero title when no subtitle is set.
+
 - **Verse of the day** card (PR #16, ADR-024; since PR #17 it controls the **hero** verse): "Show the verse of the day" switch (same flag as the
   `dailyVerse` section toggle), mode chips "A different verse
   every day" / "A fixed verse I choose"; fixed mode shows the Arabic text (required, ≤500) and reference (≤60) fields →

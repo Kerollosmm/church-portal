@@ -3,17 +3,21 @@
 // motion gating (reduced motion, admin switch) and art assets.
 import 'dart:convert';
 import 'dart:io';
+import 'dart:ui' as ui;
 
 import 'package:church_portal/core/theme.dart';
 import 'package:church_portal/data/content_repository.dart';
 import 'package:church_portal/data/seed_data.dart';
 import 'package:church_portal/domain/cairo_time.dart';
 import 'package:church_portal/domain/features.dart';
+import 'package:church_portal/domain/occasion_theme.dart';
 import 'package:church_portal/router.dart';
 import 'package:church_portal/state/providers.dart';
 import 'package:church_portal/ui/admin/features_editor.dart';
+import 'package:church_portal/ui/pages/home_page.dart' show HaloText;
 import 'package:church_portal/ui/widgets/common.dart';
 import 'package:church_portal/ui/widgets/golden.dart';
+import 'package:flutter/rendering.dart' show RenderRepaintBoundary;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
@@ -118,6 +122,91 @@ void main() {
     expect(off['heroMotion'], isFalse);
     final back = featuresSaveWrites(const FeatureSettings(), const {'heroMotion': false}).first;
     expect(back['heroMotion'], isTrue);
+  });
+
+  test('heroShowAddress: default off, parsed, saved only when on or already stored; rules allow a bool', () {
+    expect(FeatureSettings.defaults.heroShowAddress, isFalse);
+    expect(FeatureSettings.fromMap(const {'heroShowAddress': true}).heroShowAddress, isTrue);
+    expect(FeatureSettings.fromMap(const {'heroShowAddress': 'yes'}).heroShowAddress, isFalse);
+    final off = featuresSaveWrites(const FeatureSettings(), const {'theme': 'burgundy'}).first;
+    expect(off.containsKey('heroShowAddress'), isFalse, reason: 'rules that predate the key keep accepting saves');
+    final on = featuresSaveWrites(const FeatureSettings(heroShowAddress: true), const {}).first;
+    expect(on['heroShowAddress'], isTrue);
+    final back = featuresSaveWrites(const FeatureSettings(), const {'heroShowAddress': true}).first;
+    expect(back['heroShowAddress'], isFalse);
+    final rules = File('firestore.rules').readAsStringSync();
+    expect(rules.substring(rules.indexOf('function validFeatures(')), contains("'heroShowAddress'"));
+    expect(rules, contains("d.get('heroShowAddress', false) is bool"));
+  });
+
+  // The hero verse's colours are checked on the scene colour at verseScrimAlpha
+  // (verseGrounds). The radial glow fades towards wide line ends, so the glyph
+  // halo must give that ground next to every stroke on its own — over the
+  // darkest and the lightest frame, for every theme.
+  testWidgets('hero verse halo: the ground beside every stroke keeps ink and gold >= 4.5:1', (tester) async {
+    final failures = <String>[];
+    for (final entry in ThemePresets.palettes.entries) {
+      final p = entry.value;
+      for (final frame in const [Color(0xFF000000), Color(0xFFFFFFFF)]) {
+        for (final fg in [p.ink, p.goldText]) {
+          final key = GlobalKey();
+          await tester.pumpWidget(Directionality(
+            textDirection: TextDirection.ltr,
+            child: Align(
+              alignment: Alignment.topLeft,
+              child: RepaintBoundary(
+                key: key,
+                child: ColoredBox(
+                  color: frame,
+                  child: Padding(
+                    padding: const EdgeInsets.all(30),
+                    child: HaloText('x x',
+                        ground: Color(p.background), style: TextStyle(fontSize: 13, color: Color(fg))),
+                  ),
+                ),
+              ),
+            ),
+          ));
+          final ro = key.currentContext!.findRenderObject()! as RenderRepaintBoundary;
+          final w = ro.size.width.toInt(), h = ro.size.height.toInt();
+          final bytes = (await tester.runAsync(() async {
+            final img = await ro.toImage();
+            return img.toByteData(format: ui.ImageByteFormat.rawRgba);
+          }))!;
+          int px(int x, int y) {
+            final i = (y * w + x) * 4;
+            return 0xFF000000 | bytes.getUint8(i) << 16 | bytes.getUint8(i + 1) << 8 | bytes.getUint8(i + 2);
+          }
+
+          // Glyph = exactly the text colour; ground = the pixels 2 px off a glyph
+          // pixel that are not glyph and not anti-aliased (no glyph within 1 px).
+          bool glyph(int x, int y) => x >= 0 && y >= 0 && x < w && y < h && px(x, y) == (fg | 0xFF000000);
+          var worst = 99.0, grounds = 0;
+          for (var y = 2; y < h - 2; y++) {
+            for (var x = 2; x < w - 2; x++) {
+              if (glyph(x, y)) continue;
+              var near = false, touching = false;
+              for (var dy = -2; dy <= 2; dy++) {
+                for (var dx = -2; dx <= 2; dx++) {
+                  if (!glyph(x + dx, y + dy)) continue;
+                  if (dx.abs() <= 1 && dy.abs() <= 1) touching = true;
+                  near = true;
+                }
+              }
+              if (!near || touching) continue;
+              grounds++;
+              final r = contrastRatio(fg, px(x, y));
+              if (r < worst) worst = r;
+            }
+          }
+          if (grounds == 0) failures.add('${entry.key}: no glyph found');
+          if (worst < 4.5) {
+            failures.add('${entry.key} ${colorToHex(fg)} over ${colorToHex(frame.toARGB32())}: ${worst.toStringAsFixed(2)}');
+          }
+        }
+      }
+    }
+    expect(failures, isEmpty);
   });
 
   testWidgets('desktop: Church services menu groups the enabled services only', (tester) async {
@@ -274,12 +363,21 @@ void main() {
     }
     expect(tester.getRect(find.descendant(of: stage, matching: find.byKey(const Key('heroStill')))), heroRect);
     // The title glow is a radial bleed bigger than the text, not a box.
-    final scrim = find.descendant(of: hero, matching: find.byType(TextScrim));
+    final scrim = find.ancestor(
+        of: find.descendant(of: hero, matching: find.byKey(const Key('heroTitle'))), matching: find.byType(TextScrim));
     final glow = tester.getRect(find.descendant(of: scrim, matching: find.byKey(const Key('textScrimGlow'))));
     final text = tester.getRect(find.descendant(of: scrim, matching: find.byKey(const Key('heroTitle'))));
     expect(glow.left, lessThan(text.left - 40));
     expect(glow.top, lessThan(text.top - 30));
     expect(glow.bottom, greaterThan(text.bottom + 30));
+    // The verse of the day sits on the same kind of soft glow (no panel).
+    final verse = find.descendant(of: hero, matching: find.byKey(const Key('heroVerse')));
+    if (verse.evaluate().isNotEmpty) {
+      final vGlow = tester.getRect(find.descendant(of: verse, matching: find.byKey(const Key('textScrimGlow'))));
+      final vText = tester.getRect(find.descendant(of: verse, matching: find.byKey(const Key('dailyVerseText'))));
+      expect(vGlow.left, lessThan(vText.left - 40));
+      expect(vGlow.top, lessThan(vText.top - 20));
+    }
   });
 
   testWidgets('hero video on phones too: portrait crop + its own poster; painting fallback stays', (tester) async {

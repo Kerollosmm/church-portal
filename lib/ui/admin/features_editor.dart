@@ -129,6 +129,10 @@ List<Map<String, dynamic>> featuresSaveWrites(FeatureSettings next, Map<String, 
   // heroMotion (ADR-022) is written only once it differs from the default or
   // is already stored, so saves keep working against rules that predate it.
   if (next.heroMotion && (stored == null || !stored.containsKey('heroMotion'))) base.remove('heroMotion');
+  // Same for heroShowAddress (default off).
+  if (!next.heroShowAddress && (stored == null || !stored.containsKey('heroShowAddress'))) {
+    base.remove('heroShowAddress');
+  }
   // Same for imageStyles (ADR-023): nothing to write until a default is set.
   if ((base['imageStyles'] as Map).isEmpty && (stored == null || !stored.containsKey('imageStyles'))) {
     base.remove('imageStyles');
@@ -428,6 +432,14 @@ class FeaturesEditorState extends State<FeaturesEditor> {
                   subtitle: Text(context.tr('heroMotionHint')),
                   value: f.heroMotion,
                   onChanged: (v) => _set(f.copyWith(heroMotion: v)),
+                ),
+                SwitchListTile(
+                  key: const ValueKey('features-heroShowAddress'),
+                  contentPadding: const EdgeInsetsDirectional.only(start: 4),
+                  title: Text(context.tr('heroShowAddress')),
+                  subtitle: Text(context.tr('heroShowAddressHint')),
+                  value: f.heroShowAddress,
+                  onChanged: (v) => _set(f.copyWith(heroShowAddress: v)),
                 ),
               ], hint: context.tr('heroTextsHint')),
               _card(context.tr('dailyVerseTitle'), Icons.menu_book_rounded, [

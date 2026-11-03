@@ -242,6 +242,11 @@ class FeatureSettings {
   /// visitors' reduced-motion and save-data settings still win.
   final bool heroMotion;
 
+  /// The church address as a ribbon under the hero title (default off: the
+  /// address lives on the contact page, the footer and the map). A hero
+  /// subtitle the admin typed always shows instead.
+  final bool heroShowAddress;
+
   /// Per-collection default image display style (ADR-023; keys:
   /// [ImageStyles.collections], values: [ImageStyles.all]). Missing = built-in default.
   final Map<String, String> imageStyles;
@@ -273,6 +278,7 @@ class FeatureSettings {
     this.pageHeaders = const {},
     this.footer = const FooterConfig(),
     this.heroMotion = true,
+    this.heroShowAddress = false,
     this.imageStyles = const {},
     this.dailyVerse = DailyVerseConfig.defaults,
     this.occasions = OccasionConfig.defaults,
@@ -314,6 +320,7 @@ class FeatureSettings {
       pageHeaders: _pageHeaders(m['pageHeaders']),
       footer: FooterConfig.fromMap(m['footer']),
       heroMotion: _bool(m['heroMotion']) ?? true,
+      heroShowAddress: _bool(m['heroShowAddress']) ?? false,
       imageStyles: parseImageStyles(m['imageStyles']),
       dailyVerse: DailyVerseConfig.fromMap(m['dailyVerse']),
       occasions: OccasionConfig.fromMap(m['occasions'], m['themeColors']),
@@ -340,6 +347,7 @@ class FeatureSettings {
         },
         'footer': footer.toMap(),
         'heroMotion': heroMotion,
+        'heroShowAddress': heroShowAddress,
         'imageStyles': {for (final c in ImageStyles.collections) if (imageStyles[c] != null) c: imageStyles[c]},
         'dailyVerse': dailyVerse.toMap(),
         'occasions': occasions.toMap(),
@@ -363,6 +371,7 @@ class FeatureSettings {
     Map<String, PageCustom>? pageHeaders,
     FooterConfig? footer,
     bool? heroMotion,
+    bool? heroShowAddress,
     Map<String, String>? imageStyles,
     DailyVerseConfig? dailyVerse,
     OccasionConfig? occasions,
@@ -384,6 +393,7 @@ class FeatureSettings {
         pageHeaders: pageHeaders ?? this.pageHeaders,
         footer: footer ?? this.footer,
         heroMotion: heroMotion ?? this.heroMotion,
+        heroShowAddress: heroShowAddress ?? this.heroShowAddress,
         imageStyles: imageStyles ?? this.imageStyles,
         dailyVerse: dailyVerse ?? this.dailyVerse,
         occasions: occasions ?? this.occasions,
