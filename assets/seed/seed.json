@@ -86,7 +86,8 @@
     "showQuickLinks": true,
     "noteAr": "",
     "noteEn": ""
-   }
+   },
+   "errorReporting": true
   }
  },
  "alerts": {

@@ -44,6 +44,32 @@ final featuresReadyProvider = Provider<bool>((ref) {
   return f.hasValue || f.hasError;
 });
 
+/// The admin's error-report switch (ADR-034): null until `settings/features`
+/// (or its seed fallback) has arrived; a failed stream means the default (on).
+///
+/// On Firestore, the bundled seed's copy (served while the seeding check cannot
+/// answer, or when the doc is missing) does not count: the switch stays
+/// unknown, so early events wait for the stored value (or the gate's
+/// patience) instead of being let through by the seed's default (CodeRabbit).
+final errorReportingSwitchProvider = Provider<bool?>((ref) {
+  final repo = ref.watch(repositoryProvider);
+  return errorReportingSwitch(ref.watch(featuresStreamProvider),
+      seedCopy: repo is FirestoreRepository ? repo.seed.features : null);
+});
+
+/// [errorReportingSwitchProvider]'s rule: the stored value, null while loading
+/// or while [f] is only the bundled [seedCopy], true (default) on error.
+@visibleForTesting
+bool? errorReportingSwitch(AsyncValue<FeatureSettings> f, {FeatureSettings? seedCopy}) {
+  if (f.hasValue) {
+    final v = f.value!;
+    if (seedCopy != null && identical(v, seedCopy)) return null;
+    return v.errorReporting;
+  }
+  if (f.hasError) return true;
+  return null;
+}
+
 /// Public lists: items an admin hid are dropped, the rest sorted by `order`.
 Stream<List<T>> _public<T extends Hideable>(Stream<List<T>> s) => s.map(publicItems);
 

@@ -262,6 +262,10 @@ class FeatureSettings {
   /// Hero video library (YouTube links, ADR-026). Missing = the bundled clip.
   final HeroVideoLibrary heroVideos;
 
+  /// Error reports to Sentry (ADR-034). Default on; off = nothing is sent
+  /// from the web or Android app (no personal data is sent either way).
+  final bool errorReporting;
+
   const FeatureSettings({
     this.sections = const {},
     this.homeOrder = HomeBlocks.defaultOrder,
@@ -283,6 +287,7 @@ class FeatureSettings {
     this.dailyVerse = DailyVerseConfig.defaults,
     this.occasions = OccasionConfig.defaults,
     this.heroVideos = HeroVideoLibrary.defaults,
+    this.errorReporting = true,
   });
 
   /// Everything on: used before the doc loads and when it does not exist.
@@ -325,6 +330,7 @@ class FeatureSettings {
       dailyVerse: DailyVerseConfig.fromMap(m['dailyVerse']),
       occasions: OccasionConfig.fromMap(m['occasions'], m['themeColors']),
       heroVideos: HeroVideoLibrary.fromMap(m['heroVideos']),
+      errorReporting: _bool(m['errorReporting']) ?? true,
     );
   }
 
@@ -353,6 +359,7 @@ class FeatureSettings {
         'occasions': occasions.toMap(),
         'themeColors': occasions.colorsToMap(),
         'heroVideos': heroVideos.toMap(),
+        'errorReporting': errorReporting,
       };
 
   FeatureSettings copyWith({
@@ -376,6 +383,7 @@ class FeatureSettings {
     DailyVerseConfig? dailyVerse,
     OccasionConfig? occasions,
     HeroVideoLibrary? heroVideos,
+    bool? errorReporting,
   }) =>
       FeatureSettings(
         sections: sections ?? this.sections,
@@ -398,6 +406,7 @@ class FeatureSettings {
         dailyVerse: dailyVerse ?? this.dailyVerse,
         occasions: occasions ?? this.occasions,
         heroVideos: heroVideos ?? this.heroVideos,
+        errorReporting: errorReporting ?? this.errorReporting,
       );
 
   bool enabled(String section) => sections[section] ?? true;

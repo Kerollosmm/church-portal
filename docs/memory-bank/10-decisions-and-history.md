@@ -570,6 +570,43 @@ supersede them.
   distinct icon per entry. No rules, model or seed change.
 - **Not changed:** the built-in sections keep emitting cache readings at once (they have a bundled copy and the
   seed fallback); App Check activation is unchanged (it is not enforced on Firestore).
+## ADR-034 (PR #24) — Error tracking with Sentry, privacy first and switchable in /admin
+
+- **Context:** crashes and failed loads on the live site / Android app were invisible (only `debugPrint`). The owner
+  created a Sentry project (org `kerollos-0e`, project `church-portal`, **EU** region) and asked for error tracking
+  that respects the PDPL on a public church site and, like everything else, can be switched off in `/admin`.
+- **Decision:** `sentry_flutter` **10.3.0** (latest on pub.dev, needs Flutter ≥ 3.44 / Dart ≥ 3.12; repo on 3.47.9 /
+  3.13.7). `main()` = `ErrorReporting.run(_start)` → `SentryFlutter.init` wrapping the whole start-up.
+  - **DSN:** `--dart-define=SENTRY_DSN` wins (empty = off); release builds otherwise use the public project DSN
+    constant (`AppConfig.sentryDefaultDsn`) — the agent's GitHub API has **no Actions-variables endpoint**, so a repo
+    variable could not be created; a DSN is public by design. Debug / profile builds and tests without the define:
+    **off**. CI passes `SENTRY_DSN` only when the repo variable exists.
+  - **environment:** `production` (main deploy), `preview` (PR preview builds — kept on so previews are testable),
+    `ci` (the CI build, never served), `debug` (local). **release:** `church-portal@<pubspec version>+<sha7>`.
+  - **Privacy:** `sendDefaultPii: false`; `beforeSend` removes the user, server name, cookies, request body, headers
+    but User-Agent, `extra`, custom contexts, query strings (request URL, `route` tag, http / navigation
+    breadcrumbs) and scrubs e-mails / 7+ digit runs from messages, exception values and log breadcrumbs; tap
+    (`ui.*`) breadcrumbs dropped; tags limited to `route`, `section`, `source`, `test`. Assistant errors are reported
+    as `AssistantFailure` with the question redacted; quota / rate-limit / billing / safety rejections are not
+    reported. Contact submit errors are reported as type + scrubbed message, never the form; `permission-denied`
+    (usually the server throttle, but also any rules rejection) is tagged `source: permission-denied` (review). **No** Session Replay, screenshots, view hierarchy, release-health
+    sessions, client reports, tracing (`tracesSampleRate` null — errors only, keeps us inside the free quota) or
+    profiling.
+  - **Admin switch:** `settings/features.errorReporting` (bool, default on; rules: bool only; seeded `true`; written
+    only once off or stored; never taken from the bundled seed copy on Firestore). `deploy-live` now waits for
+    `deploy-rules`, so the rules accept the new field before the app can write it (CodeRabbit). `beforeSend` awaits the switch (≤ 10 s, then the default) and drops everything while
+    it is off; switching off also closes the SDK; switching back on applies from the next visit / app start. The
+    web Sentry **JS** SDK (loaded by `sentry_flutter` from `browser.sentry-cdn.com`, reports window errors itself)
+    gets the same switch + scrubbing via its client `beforeSend` (`sentry_js_gate_web.dart`): a Promise that awaits
+    the switch and returns the event rebuilt from its JSON by `scrubEventJson`, fail closed (review: Codex / Seer).
+  - Owner-only **Send test error** button in `/admin` (Sections & home page → Error reports).
+- **Not done (open tasks):** web source maps and Android obfuscation symbols need a Sentry auth token; Sentry
+  project privacy settings (IP storage off, server-side scrubbers) are set in the Sentry UI. No CSP exists in
+  `firebase.json`; one added later must allow the Sentry CDN and `*.ingest.de.sentry.io`.
+- **Consequence:** native Android crashes go through the Sentry Android SDK (its own handlers, `sendDefaultPii`
+  false); a native crash cached on disk may be sent at the next start before the switch is known — acceptable,
+  documented.
+
 ## Timeline
 
 | When | PR / commit | What |
@@ -604,5 +641,7 @@ supersede them.
 | 3 Nov 2026 | **PR #21** — "Assistant: safe Markdown, confident data answers, St-Takla-only faith source, 3 questions / device / day, no default chips" (`fix/assistant-markdown`; PR #20 was squash-merged as `8dd2680`) | ADR-030/031: `SafeMarkdown` renderer (no literal asterisks, safe links only, RTL by content, selection kept); prompt rewrite (no disclaimers on data answers, `mentionUnconfirmed` switch default off, faith questions outside the data → `[[SOURCE_SEARCH]]` → faith reply + `site:st-takla.org` search + `/contact`, "not listed → /contact", simple Markdown only); `perDay` device limit (shared_preferences), `showSuggestions` default off, `sourceDomains`, `faithReplyAr/En`; `validAssistant` + emulator cases; `test/safe_markdown_test.dart`, `test/assistant_test.dart`. |
 | 3 Nov 2026 | **PR #22** — "Hero: no address pill by default, verse of the day without the panel" (`fix/hero-verse-address`; PR #21 was squash-merged as `79c7d9c`) | ADR-032: hero ribbon = admin subtitle, or the address only with the new `heroShowAddress` admin switch (default off; rules + emulator test); `HeroVerse` without `WarmPanel`, old fixed-verse typography on a 0.88 text scrim; `verseGrounds` in the palette contrast checks for every preset incl. Holy Week; widget tests (no panel, no address by default, switch on, subtitle wins). |
 | 3 Nov 2026 | **PR #23** — "Custom sections, cold deep links and contact types: wait for live data; admin menu icons" (`fix/custom-content-loading`; PR #22 was squash-merged as `a29beaa`) | ADR-033: `settleFirst` + `fallbackDelay` for categories / entries / pages (no premature «غير متاحة», no endless placeholders), `confirms` for the settings docs (admin contact types reach `/contact`), re-keyed contact dropdown, fingerprinted icon fonts (`tool/fingerprint_icon_fonts.py` in ci/deploy), admin nav `Material` + consistent selected colours, assistant icon `smart_toy_outlined`; `test/live_loading_test.dart`. |
+
+| 3 Nov 2026 | **PR #24** — "Sentry error tracking (web + Android), privacy first, admin switch" (`feat/sentry-error-tracking`; PR #23 was squash-merged as `93db6c7`) | ADR-034: `sentry_flutter` 10.3.0, `ErrorReporting.run` around start-up, DSN define / public default, environments `production` / `preview` / `ci` / `debug`, release `church-portal@version+sha7`, `scrubEvent` / `scrubBreadcrumb` / JS gate, captures in `guardSeeded`, assistant (`AssistantFailure`, redacted) and contact submit, `settings/features.errorReporting` switch (rules + emulator test + seed), owner-only Send test error; `test/error_reporting_test.dart`. |
 
 Append new PRs to this table.

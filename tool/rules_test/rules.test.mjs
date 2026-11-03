@@ -932,6 +932,23 @@ describe('Hero address ribbon switch (settings/features.heroShowAddress)', () =>
   });
 });
 
+describe('ADR-034: error reporting switch (settings/features.errorReporting)', () => {
+  test('admins switch error reports on and off; only a bool is accepted', async () => {
+    const ref = doc(db(EDITOR), 'settings', 'features');
+    await assertSucceeds(setDoc(ref, { theme: 'burgundy', errorReporting: false }));
+    await assertSucceeds(setDoc(ref, { theme: 'burgundy', errorReporting: true }));
+    await assertSucceeds(updateDoc(ref, { errorReporting: false }));
+    for (const v of ['off', 0, null, { on: true }, [true]]) {
+      await assertFails(setDoc(ref, { errorReporting: v }), JSON.stringify(v));
+    }
+  });
+
+  test('visitors cannot change it', async () => {
+    await assertFails(setDoc(doc(db(null), 'settings', 'features'), { errorReporting: false }));
+    await assertFails(updateDoc(doc(db(null), 'settings', 'features'), { errorReporting: false }));
+  });
+});
+
 describe('Verse of the day (settings/features.dailyVerse + sections.dailyVerse)', () => {
   test('admins switch it via its section, pick daily / fixed, and enter a fixed verse', async () => {
     const ref = doc(db(EDITOR), 'settings', 'features');

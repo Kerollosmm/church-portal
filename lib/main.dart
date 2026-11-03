@@ -9,13 +9,19 @@ import 'package:material_ui/material_ui.dart';
 import 'app.dart';
 import 'data/admin_repository.dart';
 import 'data/content_repository.dart';
+import 'data/error_reporting.dart';
 import 'data/firebase_bootstrap.dart';
 import 'data/media_repository.dart';
 import 'data/seed_data.dart';
 import 'domain/cairo_time.dart';
 import 'state/providers.dart';
 
-Future<void> main() async {
+/// Sentry error tracking (ADR-034) wraps the whole start-up when a DSN is
+/// configured (release builds, or `--dart-define=SENTRY_DSN=…`); otherwise
+/// the app simply starts.
+Future<void> main() => ErrorReporting.run(_start);
+
+Future<void> _start() async {
   WidgetsFlutterBinding.ensureInitialized();
   usePathUrlStrategy(); // clean URLs (/mass-schedule) — Hosting rewrites to index.html
   // Fonts are bundled (assets/fonts, SIL OFL 1.1): no runtime font fetch.

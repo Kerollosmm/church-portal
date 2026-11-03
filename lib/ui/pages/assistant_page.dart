@@ -6,6 +6,7 @@ import '../../core/l10n.dart';
 import '../../core/theme.dart';
 import '../../data/assistant_model.dart';
 import '../../data/assistant_usage_store.dart';
+import '../../data/error_reporting.dart';
 import '../../domain/assistant_context.dart';
 import '../../domain/assistant_conversation.dart';
 import '../../domain/assistant_quota.dart';
@@ -13,6 +14,7 @@ import '../../domain/assistant_settings.dart';
 import '../../domain/contact_categories.dart';
 import '../../domain/custom_content.dart';
 import '../../domain/cairo_time.dart';
+import '../../domain/error_privacy.dart';
 import '../../domain/features.dart';
 import '../../domain/time_format.dart';
 import '../../state/providers.dart';
@@ -51,7 +53,9 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
   final _scroll = ScrollController();
   final List<_Msg> _messages = [];
   late final AssistantConversation _conversation =
-      AssistantConversation(ref.read(assistantModelProvider), defaultModel: AppConfig.geminiModel);
+      AssistantConversation(ref.read(assistantModelProvider),
+          defaultModel: AppConfig.geminiModel,
+          onError: (failure, st) => ErrorReporting.capture(failure, st, section: 'assistant'));
   bool _busy = false;
 
   @override
@@ -270,8 +274,11 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
             AssistantOutcome.error => _Msg(false, errorText, error: true),
             final o => _Msg(false, _blockedText(o, s), error: true),
           }));
-    } catch (e) {
-      debugPrint('Assistant error: $e');
+    } catch (e, st) {
+      debugPrint('Assistant error: ${e.runtimeType}');
+      if (!isUserFacingAssistantError(e)) {
+        ErrorReporting.capture(AssistantFailure.from(e, [q]), st, section: 'assistant');
+      }
       if (!mounted) return;
       setState(() => _messages.add(_Msg(false, errorText, error: true)));
     } finally {

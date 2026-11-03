@@ -169,6 +169,27 @@ Status as of 3 Nov 2026 (after PR #19; earlier: PR #7–#18).
 - [ ] Optional: set the Firebase AI Logic per-user rate limit in the console (server-side; the daily device limit is
       client-side only and resets when site data is cleared).
 
+## Error tracking — Sentry (PR #24, ADR-034)
+- [ ] **Web source maps**: upload `build/web/*.js.map` (dart2js `--source-maps`) to Sentry for readable stack traces —
+      needs a Sentry auth token (repo **secret** `SENTRY_AUTH_TOKEN`, org `kerollos-0e`, project `church-portal`) and a
+      `sentry-cli sourcemaps upload --release church-portal@<version>+<sha7>` step in `deploy.yml` (main only); never
+      deploy the `.map` files to Hosting.
+- [ ] **Android symbols**: release APKs are not obfuscated yet; when `--obfuscate --split-debug-info` (and R8 /
+      ProGuard mappings) are turned on, upload the Dart symbols + mapping with `sentry_dart_plugin` / `sentry-cli`
+      (same auth token). There is no Android CI build yet: build with
+      `flutter build apk --release --dart-define=SENTRY_ENVIRONMENT=production --dart-define=GIT_SHA=$(git rev-parse HEAD) --dart-define=APP_VERSION=1.0.0+1`.
+- [ ] **DSN as a repo variable**: the agent's GitHub API has no Actions-variables endpoint, so release builds use the
+      public DSN constant in `AppConfig.sentryDefaultDsn`. Optional: add the repository variable `SENTRY_DSN`
+      (Settings → Secrets and variables → Actions → Variables); `ci.yml` / `deploy.yml` already pass it when set.
+- [ ] **Sentry project settings** (sentry.io → church-portal → Settings → Security & Privacy): turn on *Prevent
+      Storing of IP Addresses* and *Data Scrubber* + *Use Default Scrubbers* (server-side belt to the client
+      scrubbing); set an alert rule (e-mail on new issues) and, if wanted, inbound filters for `preview` / `ci`.
+- [ ] Optional (CodeRabbit nitpick): a `@TestOn('browser')` test of the JS glue in `sentry_js_gate_web.dart` (fake
+      `window.Sentry` client, assert the registered `beforeSend` Promise) + a `flutter test --platform chrome` CI
+      step. The scrubbing itself is pure Dart (`scrubEventJson`) and covered by `test/error_reporting_test.dart`.
+- [ ] Verify a first event from production: an owner presses **Send test error** in `/admin` and checks the issue in
+      Sentry (environment `production`, tags `section: admin`, `test: true`).
+
 ## Live data follow-ups (PR #23, ADR-033)
 - [ ] The footer note «تعرض البيانات المحفوظة مع التطبيق» (bundled content) shows on the live site even when Firestore
       works: some stream still serves the bundled seed (`servingSeed` stays on). Find which `_fallbackStreams` key

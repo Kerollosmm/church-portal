@@ -8,6 +8,7 @@ import '../domain/contact_categories.dart';
 import '../domain/custom_content.dart';
 import '../domain/features.dart';
 import '../domain/models.dart';
+import 'error_reporting.dart';
 import 'seed_data.dart';
 
 class ContactUnavailableException implements Exception {
@@ -248,8 +249,9 @@ Stream<T> guardSeeded<T>({
         }
         emit(v, seed: false);
       });
-      s.onError((Object e) {
+      s.onError((Object e, StackTrace st) {
         debugPrint('Firestore stream $label failed, serving seed: $e');
+        ErrorReporting.capture(e, st, section: 'content:$label');
         emit(fallback, seed: true);
         done = true; // keeps showing the seed: the "bundled content" mark stays
         s.cancel();

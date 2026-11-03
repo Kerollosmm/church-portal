@@ -12,7 +12,11 @@ import 'occasion_editor.dart';
 /// Section on/off switches + home layout (settings/features).
 class FeaturesScreen extends StatefulWidget {
   final AdminBackend repo;
-  const FeaturesScreen({super.key, required this.repo});
+
+  /// Owner only (ADR-034): sends one harmless test error to Sentry; returns
+  /// false when reporting is not active in this build. Null hides the button.
+  final Future<bool> Function()? onSendTestError;
+  const FeaturesScreen({super.key, required this.repo, this.onSendTestError});
 
   @override
   State<FeaturesScreen> createState() => _FeaturesScreenState();
@@ -89,6 +93,7 @@ class _FeaturesScreenState extends State<FeaturesScreen> {
               exists: doc != null,
               updatedAt: doc?.updatedAt,
               updatedBy: doc?.updatedBy ?? '',
+              onSendTestError: widget.onSendTestError,
               onSave: (f) async {
                 for (final w in featuresSaveWrites(f, doc?.data)) {
                   await widget.repo.saveDoc('settings/features', w);
@@ -133,6 +138,10 @@ List<Map<String, dynamic>> featuresSaveWrites(FeatureSettings next, Map<String, 
   if (!next.heroShowAddress && (stored == null || !stored.containsKey('heroShowAddress'))) {
     base.remove('heroShowAddress');
   }
+  // Same for errorReporting (ADR-034, default on).
+  if (next.errorReporting && (stored == null || !stored.containsKey('errorReporting'))) {
+    base.remove('errorReporting');
+  }
   // Same for imageStyles (ADR-023): nothing to write until a default is set.
   if ((base['imageStyles'] as Map).isEmpty && (stored == null || !stored.containsKey('imageStyles'))) {
     base.remove('imageStyles');
@@ -155,10 +164,14 @@ class FeaturesEditor extends StatefulWidget {
   final DateTime? updatedAt;
   final String updatedBy;
   final Future<void> Function(FeatureSettings) onSave;
+
+  /// See [FeaturesScreen.onSendTestError].
+  final Future<bool> Function()? onSendTestError;
   const FeaturesEditor({
     super.key,
     required this.initial,
     required this.onSave,
+    this.onSendTestError,
     this.exists = true,
     this.updatedAt,
     this.updatedBy = '',
@@ -299,6 +312,23 @@ class FeaturesEditorState extends State<FeaturesEditor> {
     } finally {
       if (mounted) setState(() => _saving = false);
     }
+  }
+
+  Future<void> _sendTestError() async {
+    final send = widget.onSendTestError;
+    if (send == null) return;
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    final sentText = context.tr('testErrorSent');
+    final offText = context.tr('testErrorInactive');
+    bool ok;
+    try {
+      ok = await send();
+    } catch (_) {
+      ok = false;
+    }
+    messenger
+      ?..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(ok ? sentText : offText)));
   }
 
   Widget _card(String title, IconData icon, List<Widget> children, {String? hint}) => Card(
@@ -532,6 +562,26 @@ class FeaturesEditorState extends State<FeaturesEditor> {
               _card(context.tr('heroVideosTitle'), Icons.smart_display_outlined, [
                 HeroVideoEditor(value: f, onChanged: (edit) => _set(edit(f))),
               ], hint: context.tr('heroVideosHint')),
+              _card(context.tr('errorReportingTitle'), Icons.bug_report_outlined, [
+                SwitchListTile(
+                  key: const ValueKey('features-errorReporting'),
+                  contentPadding: const EdgeInsetsDirectional.only(start: 4),
+                  title: Text(context.tr('errorReporting')),
+                  subtitle: Text(context.tr('errorReportingHint')),
+                  value: f.errorReporting,
+                  onChanged: (v) => _set(f.copyWith(errorReporting: v)),
+                ),
+                if (widget.onSendTestError != null)
+                  Align(
+                    alignment: AlignmentDirectional.centerStart,
+                    child: OutlinedButton.icon(
+                      key: const ValueKey('features-sendTestError'),
+                      icon: const Icon(Icons.send_outlined),
+                      label: Text(context.tr('sendTestError')),
+                      onPressed: _sendTestError,
+                    ),
+                  ),
+              ]),
             ]),
           ),
         ),

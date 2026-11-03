@@ -8,6 +8,7 @@ import 'config/app_config.dart';
 import 'core/theme.dart';
 import 'core/document_lang.dart';
 import 'core/l10n.dart';
+import 'data/error_reporting.dart';
 import 'domain/item_detail.dart';
 import 'state/providers.dart';
 // Deferred (plan PR 3, 3.3): separate web chunks, fetched only on /admin and
@@ -131,6 +132,8 @@ final routerProvider = Provider<GoRouter>((ref) {
       final notifier = ref.read(localeProvider.notifier);
       final english = ref.read(localeProvider).languageCode == 'en';
       final toggled = notifier.consumeUserChange();
+      // The page an error report is tagged with (path only, ADR-034).
+      ErrorReporting.route = state.uri.path;
       final r = resolveLangSync(
         state.uri,
         english: english,

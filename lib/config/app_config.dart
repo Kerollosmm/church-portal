@@ -1,3 +1,7 @@
+import 'package:flutter/foundation.dart' show kReleaseMode;
+
+import '../domain/error_privacy.dart';
+
 /// App-wide configuration constants.
 ///
 /// Values can be overridden at build time, e.g.
@@ -43,6 +47,27 @@ class AppConfig {
   /// in `media/{id}`, works on the Spark plan) or `storage` (Cloud Storage for
   /// Firebase, needs the Blaze plan; see StorageMediaRepository).
   static const String mediaBackend = String.fromEnvironment('MEDIA_BACKEND', defaultValue: 'firestore');
+
+  /// Sentry error tracking (ADR-034). `--dart-define=SENTRY_DSN=…` overrides
+  /// the DSN (an empty value switches reporting off); without it release
+  /// builds use [sentryDefaultDsn] and debug / profile builds report nothing.
+  /// A DSN is public by design (it only lets clients send events).
+  static const String sentryDefaultDsn =
+      'https://36d587001696d31ad588ebd080dec610@o4512369647812608.ingest.de.sentry.io/4512369961205840';
+  static const bool hasSentryDsnDefine = bool.hasEnvironment('SENTRY_DSN');
+  static const String sentryDsnDefine = String.fromEnvironment('SENTRY_DSN');
+  static String? get sentryDsn => resolveSentryDsn(
+      hasDefine: hasSentryDsnDefine, define: sentryDsnDefine, release: kReleaseMode, fallback: sentryDefaultDsn);
+
+  /// `production` (main deploy), `preview` (PR previews), `debug` locally.
+  static const String sentryEnvironmentDefine = String.fromEnvironment('SENTRY_ENVIRONMENT');
+  static String get sentryEnvironment => resolveSentryEnvironment(define: sentryEnvironmentDefine, release: kReleaseMode);
+
+  /// `church-portal@<APP_VERSION>+<GIT_SHA short>` (CI passes both); null →
+  /// the SDK's own `name@version+build`.
+  static const String appVersion = String.fromEnvironment('APP_VERSION');
+  static const String gitSha = String.fromEnvironment('GIT_SHA');
+  static String? get sentryRelease => buildSentryRelease(appVersion, gitSha);
 
   /// Hidden admin route.
   static const String adminPath = '/admin';

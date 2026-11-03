@@ -590,7 +590,7 @@ service cloud.firestore {
       return keysAllowed(['sections', 'homeOrder', 'homeHidden', 'heroTitleAr', 'heroTitleEn', 'heroSubtitleAr',
                           'heroSubtitleEn', 'bannerEnabled', 'bannerAr', 'bannerEn', 'bannerLink', 'theme',
                           'pageHeaders', 'footer', 'heroMotion', 'heroShowAddress', 'imageStyles', 'dailyVerse', 'occasions', 'themeColors',
-                          'heroVideos', 'updatedAt', 'updatedBy'])
+                          'heroVideos', 'errorReporting', 'updatedAt', 'updatedBy'])
         && (!('sections' in changed) || !('sections' in d) || validSections(d.sections))
         && (!('homeOrder' in changed) || !('homeOrder' in d) || (d.homeOrder is list && d.homeOrder.size() <= 7
               && d.homeOrder.hasOnly(['banner', 'alerts', 'nextMass', 'quickContacts', 'milestones', 'directory', 'map'])))
@@ -614,6 +614,8 @@ service cloud.firestore {
         && (!('heroMotion' in changed) || d.get('heroMotion', true) is bool)
         // Address ribbon in the hero: a bool, default off.
         && (!('heroShowAddress' in changed) || d.get('heroShowAddress', false) is bool)
+        // Error reports to Sentry (ADR-034): a bool, default on.
+        && (!('errorReporting' in changed) || d.get('errorReporting', true) is bool)
         // Per-section default image display style (ADR-023).
         && (!('imageStyles' in changed) || !('imageStyles' in d) || (d.imageStyles is map
               && d.imageStyles.keys().hasOnly(['priests', 'saints', 'activities', 'milestones', 'meetings', 'alerts',

@@ -103,6 +103,10 @@ flowchart TD
 
 ## Startup (`lib/main.dart`)
 
+0. `main()` = `ErrorReporting.run(_start)` (PR #24, ADR-034): with a Sentry DSN (release builds, or
+   `--dart-define=SENTRY_DSN=…`) `SentryFlutter.init` wraps the whole start-up (it installs `FlutterError.onError`,
+   `PlatformDispatcher.onError` on Android, `runZonedGuarded` on web, and the Sentry JS / Android SDKs); without
+   one `_start()` simply runs. Never throws because of Sentry.
 1. `WidgetsFlutterBinding.ensureInitialized()`, `usePathUrlStrategy()`, `CairoTime.ensureInitialized()`.
 2. `Future.wait([SeedData.load(), bootstrapFirebase()])` — both never throw.
    - `SeedData.load()` reads `assets/seed/seed.json` (on error → empty `SeedData`).
@@ -112,6 +116,39 @@ flowchart TD
 3. Repository choice: `status.available ? FirestoreRepository(db, seed) : SeedRepository(seed)`; `AdminRepository`
    only when Firebase is available (otherwise `/admin` shows `adminUnavailable`).
 4. `ProviderScope(overrides: [firebaseStatusProvider, repositoryProvider, adminRepositoryProvider])`.
+
+## Error reporting — Sentry (`lib/data/error_reporting.dart`, PR #24, ADR-034)
+
+- **DSN** (`AppConfig.sentryDsn` → `resolveSentryDsn` in `lib/domain/error_privacy.dart`): `--dart-define=SENTRY_DSN`
+  wins (empty value = off); otherwise **release** builds use the public project DSN `AppConfig.sentryDefaultDsn`
+  (org `kerollos-0e`, project `church-portal`, EU region `ingest.de.sentry.io`); debug / profile builds and tests
+  without the define report nothing. **environment** `SENTRY_ENVIRONMENT` define → `production` (main deploy),
+  `preview` (PR previews), `ci` (CI build), else `production` (release) / `debug`. **release**
+  `church-portal@<APP_VERSION>+<GIT_SHA[0:7]>` (CI passes both; otherwise the SDK's `church_portal@1.0.0+1`).
+- **Admin switch** `settings/features.errorReporting` (default on) → `errorReportingSwitchProvider` → watched in
+  `ChurchPortalApp.build` → `ErrorReporting.gate.update(...)`. On Firestore the bundled seed's copy of
+  `settings/features` (seeding check unanswered, or no doc) does not set it (`errorReportingSwitch`), so early events
+  wait for the stored value or the gate's patience. `beforeSend` **awaits** the switch (≤ 10 s, then the
+  default) and returns null while it is off; turning it off also calls `Sentry.close()` (stops the JS / native
+  handlers); turning it back on applies from the next visit / app start.
+- **Privacy** (`scrubEvent` / `scrubBreadcrumb`): `sendDefaultPii: false`; user, server name, cookies, request body,
+  headers (except User-Agent), `extra` and custom contexts removed; URLs and the `route` tag lose their query string;
+  exception values / messages / log breadcrumbs pass `scrubText` (e-mails → `[email]`, 7+ digit runs incl.
+  Arabic-Indic → `[number]`); `ui.*` (tap) breadcrumbs and user-interaction breadcrumbs off; only the tags `route`,
+  `section`, `source`, `test` are kept. No Session Replay, screenshots, view hierarchy, release-health sessions,
+  client reports, tracing or profiling. On web the Sentry **JS** SDK (loaded by `sentry_flutter` from
+  `browser.sentry-cdn.com`) also reports window errors: `installSentryJsGate` (`sentry_js_gate_web.dart`) sets its
+  `beforeSend` to a Promise that **awaits the same switch** (`gate.allowed`) and rebuilds the event from its JSON
+  with `scrubEventJson` (same rules as `scrubEvent`); any failure drops the event (fail closed).
+- **What is captured**: uncaught Flutter / platform / zone errors (SDK), Firestore stream failures in `guardSeeded`
+  (`section: content:<stream>`), assistant failures (`AssistantConversation.onError` and the page's catch → an
+  `AssistantFailure` with the visitor's question `redact`ed; quota / rate-limit / billing / safety rejections are not
+  reported — `isUserFacingAssistantError`), contact-form submit failures as a `ContactSubmitFailure` (type + scrubbed message, never the form;
+  `permission-denied` — usually the server throttle, but also any rules rejection — is tagged
+  `source: permission-denied` so it can be filtered). Every capture goes through
+  `ErrorReporting.capture(error, stack, section: …)`, which adds the current `route` (set in the router's redirect).
+- Owners get **"Send test error"** in `/admin` → Sections & home page → Error reports (`ErrorReporting.sendTestEvent`,
+  tag `test: true`).
 
 ## Offline / seed fallback (`lib/data/content_repository.dart`)
 
