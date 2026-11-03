@@ -1,5 +1,8 @@
 import 'cairo_time.dart';
 import 'models.dart';
+import 'contact_categories.dart';
+
+export 'contact_categories.dart' show ContactCategory, ContactKinds, ContactSettings, ContactSubtype;
 
 // ---------------------------------------------------------------- Alerts
 
@@ -129,10 +132,26 @@ final _emailRe = RegExp(r"^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-
 
 bool isValidEmail(String s) => s.length <= 254 && _emailRe.hasMatch(s.trim());
 
-enum ContactField { name, phone, email, contact, message, consent }
+enum ContactField { name, phone, email, contact, message, consent, subtype, date }
 
 /// Error codes (localised by the UI).
-enum ContactError { nameLength, phoneInvalid, emailInvalid, phoneOrEmailRequired, messageLength, consentRequired }
+enum ContactError {
+  nameLength,
+  phoneInvalid,
+  emailInvalid,
+  phoneOrEmailRequired,
+  messageLength,
+  consentRequired,
+
+  /// Booking: a phone number is required (the office calls back).
+  phoneRequired,
+
+  /// Booking: pick a type (wedding / condolence…).
+  subtypeRequired,
+
+  /// Booking: a preferred date, today or later.
+  dateInvalid,
+}
 
 class ContactFormInput {
   final String name, phone, email, message;
@@ -142,8 +161,33 @@ class ContactFormInput {
   /// keeps non-UI callers unchanged. Not stored: the Firestore payload keeps
   /// its exact key set.
   final bool consented;
-  const ContactFormInput(
-      {required this.name, this.phone = '', this.email = '', required this.message, this.consented = true});
+
+  /// The chosen category (ADR-028); null = a legacy message (no category).
+  final ContactCategory? category;
+
+  /// Send without any identity (only when [category] allows it): name,
+  /// phone and email are ignored and never stored.
+  final bool anonymous;
+
+  /// Booking only: subtype key and preferred date (YYYY-MM-DD).
+  final String bookingType, preferredDate;
+
+  /// Cairo calendar date (YYYY-MM-DD) a preferred date may not precede;
+  /// '' = not checked.
+  final String today;
+
+  const ContactFormInput({
+    required this.name,
+    this.phone = '',
+    this.email = '',
+    required this.message,
+    this.consented = true,
+    this.category,
+    this.anonymous = false,
+    this.bookingType = '',
+    this.preferredDate = '',
+    this.today = '',
+  });
 }
 
 class ContactValidation {
@@ -154,17 +198,40 @@ class ContactValidation {
 }
 
 const contactNameMin = 2, contactNameMax = 80, contactMessageMin = 5, contactMessageMax = 1000;
+final _isoDate = RegExp(r'^(20[0-9]{2})-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$');
+
+/// A real calendar date in 2000–2099 written as YYYY-MM-DD.
+bool isValidIsoDate(String s) {
+  final m = _isoDate.firstMatch(s);
+  if (m == null) return false;
+  final y = int.parse(m.group(1)!), mo = int.parse(m.group(2)!), d = int.parse(m.group(3)!);
+  final dt = DateTime.utc(y, mo, d);
+  return dt.year == y && dt.month == mo && dt.day == d;
+}
 
 /// Validates the contact form. On success returns the sanitised payload
-/// (without createdAt/status, which the data layer adds) matching the
-/// Firestore rule in firestore.rules.
+/// (without lang/createdAt/status, which the data layer adds) matching the
+/// Firestore rule in firestore.rules (validContactMessage). An anonymous
+/// payload carries no name, phone or email key at all.
 ContactValidation validateContactForm(ContactFormInput input) {
   final errors = <ContactField, ContactError>{};
+  final cat = input.category;
+  final anonymous = input.anonymous && (cat?.allowsAnonymous ?? false);
+  final booking = cat?.isBooking ?? false;
+  final message = input.message.trim();
+  if (message.length < contactMessageMin || message.length > contactMessageMax) {
+    errors[ContactField.message] = ContactError.messageLength;
+  }
+  if (!input.consented) errors[ContactField.consent] = ContactError.consentRequired;
+  final tag = <String, dynamic>{if (cat != null) 'category': cat.slot, if (cat != null) 'kind': cat.kind};
+  if (anonymous) {
+    if (errors.isNotEmpty) return ContactValidation(errors, null);
+    return ContactValidation(const {}, {...tag, 'anonymous': true, 'message': message});
+  }
+
   final name = input.name.trim().replaceAll(RegExp(r'\s+'), ' ');
   final phoneRaw = input.phone.trim();
   final email = input.email.trim();
-  final message = input.message.trim();
-
   if (name.length < contactNameMin || name.length > contactNameMax) {
     errors[ContactField.name] = ContactError.nameLength;
   }
@@ -176,19 +243,36 @@ ContactValidation validateContactForm(ContactFormInput input) {
   if (email.isNotEmpty && !isValidEmail(email)) {
     errors[ContactField.email] = ContactError.emailInvalid;
   }
-  if (phoneRaw.isEmpty && email.isEmpty) {
+  if (booking && phoneRaw.isEmpty) {
+    errors[ContactField.phone] = ContactError.phoneRequired;
+  } else if (phoneRaw.isEmpty && email.isEmpty) {
     errors[ContactField.contact] = ContactError.phoneOrEmailRequired;
   }
-  if (message.length < contactMessageMin || message.length > contactMessageMax) {
-    errors[ContactField.message] = ContactError.messageLength;
+  final extra = <String, dynamic>{};
+  if (booking) {
+    final subtypes = cat!.subtypes;
+    if (subtypes.isNotEmpty) {
+      if (cat.subtype(input.bookingType) == null) {
+        errors[ContactField.subtype] = ContactError.subtypeRequired;
+      } else {
+        extra['bookingType'] = input.bookingType;
+      }
+    }
+    final d = input.preferredDate.trim();
+    if (!isValidIsoDate(d) || (input.today.isNotEmpty && d.compareTo(input.today) < 0)) {
+      errors[ContactField.date] = ContactError.dateInvalid;
+    } else {
+      extra['preferredDate'] = d;
+    }
   }
-  if (!input.consented) errors[ContactField.consent] = ContactError.consentRequired;
   if (errors.isNotEmpty) return ContactValidation(errors, null);
   return ContactValidation(const {}, {
+    ...tag,
     'name': name,
     'phone': phone ?? '',
     'email': email,
     'message': message,
+    ...extra,
   });
 }
 

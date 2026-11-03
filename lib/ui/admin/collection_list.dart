@@ -10,6 +10,7 @@ import '../../domain/item_detail.dart';
 import '../../domain/media.dart';
 import '../../domain/time_format.dart';
 import '../../domain/cairo_time.dart';
+import '../../domain/custom_content.dart';
 import 'admin_schema.dart';
 import 'admin_validators.dart';
 import 'doc_editor.dart';
@@ -61,6 +62,9 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
   final _search = TextEditingController();
   ListFilter _filter = ListFilter.all;
   late Stream<List<AdminDoc>> _stream = widget.repo.watch(widget.def.name);
+
+  /// The list as last shown (slug uniqueness checks in the editor).
+  List<AdminDoc> _lastDocs = const [];
 
   @override
   void didUpdateWidget(covariant CollectionListScreen old) {
@@ -128,6 +132,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
           }
           if (!snap.hasData) return const Center(child: CircularProgressIndicator());
           final all = sortAdminDocs(def, snap.data!.where((d) => def.matches(d.data)).toList());
+          _lastDocs = all;
           final docs = filterAdminDocs(def, all, query: _search.text, filter: _filter);
           final canReorder = def.orderable && _search.text.trim().isEmpty && _filter == ListFilter.all && docs.length > 1;
           return Column(children: [
@@ -159,6 +164,12 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        if (def.noteAr.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text(context.pick(def.noteAr, def.noteEn),
+                key: const Key('admin-collectionNote'), style: const TextStyle(color: AppColors.muted, height: 1.5)),
+          ),
         Row(children: [
           Expanded(
             child: TextField(
@@ -343,6 +354,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
   }
 
   Future<void> _confirmDelete(BuildContext context, AdminDoc d) async {
+    if (def.name == 'categories') return _deleteCategory(context, d);
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -376,7 +388,90 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     }
   }
 
-  void _openEditor(BuildContext context, AdminDoc? d) {
+  /// Deleting a custom category hides its items (visible: false) first and
+  /// never deletes them (ADR-027); they can be moved to another category.
+  Future<void> _deleteCategory(BuildContext context, AdminDoc d) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final failedMsg = context.tr('deleteFailed', {'e': '{e}'});
+    final deletedMsg = context.tr('catDeleted');
+    List<AdminDoc> entries;
+    try {
+      entries = await widget.repo.watch('entries').first.timeout(const Duration(seconds: 15));
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text(failedMsg.replaceAll('{e}', '$e'))));
+      return;
+    }
+    final inCat = entries.where((e) => e.data['categoryId'] == d.id).length;
+    if (!context.mounted) return;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        key: const Key('deleteCategoryDialog'),
+        title: Text(_title(d)),
+        content: Text(context.tr('catDeleteConfirm', {'n': _title(d), 'c': '$inCat'})),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(context.tr('cancel'))),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppColors.alert),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(context.tr('delete')),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      for (final id in entryIdsToHide(d.id, [for (final e in entries) (id: e.id, data: e.data)])) {
+        await widget.repo.update('entries', id, {'visible': false});
+      }
+      await widget.repo.delete(def.name, d.id);
+      messenger.showSnackBar(SnackBar(content: Text(deletedMsg)));
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text(failedMsg.replaceAll('{e}', '$e'))));
+    }
+  }
+
+  /// Categories and custom pages for the editor's run-time choices and link
+  /// picker (best effort: an unreadable list just offers fewer choices).
+  Future<List<AdminDoc>> _read(String collection) async {
+    try {
+      return await widget.repo.watch(collection).first.timeout(const Duration(seconds: 10));
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  Future<void> _openEditor(BuildContext context, AdminDoc? d) async {
+    bool usesLinks(List<FieldDef> fs) => fs.any((f) => f.linkPicker || usesLinks(f.subFields));
+    final needsCats = def.fields.any((f) => f.dynamicOptions == 'categories');
+    final needsLinks = usesLinks(def.fields);
+    final cats = needsCats || needsLinks ? await _read('categories') : const <AdminDoc>[];
+    final pages = needsLinks ? await _read('pages') : const <AdminDoc>[];
+    if (!context.mounted) return;
+    String name(AdminDoc x, String ar, String en) {
+      final v = context.pick('${x.data[ar] ?? ''}', '${x.data[en] ?? ''}');
+      return x.data['visible'] == false ? '$v ${context.tr('hiddenTag')}' : v;
+    }
+
+    final catChoices = [for (final c in sortAdminDocs(def, cats)) (c.id, name(c, 'nameAr', 'nameEn'))];
+    final targets = [
+      for (final t in linkTargets(
+        pages: [for (final p in pages) (slug: '${p.data['slug'] ?? ''}', titleAr: name(p, 'titleAr', 'titleEn'), titleEn: name(p, 'titleAr', 'titleEn'))],
+        categories: [for (final c in cats) (slug: '${c.data['slug'] ?? ''}', titleAr: name(c, 'nameAr', 'nameEn'), titleEn: name(c, 'nameAr', 'nameEn'))],
+      ))
+        (t.path, context.pick(t.labelAr, t.labelEn)),
+    ];
+    final taken = {
+      for (final x in _lastDocs)
+        if (x.id != d?.id && x.data['slug'] is String) x.data['slug'] as String,
+    };
+    _pushEditor(context, d, dynamicChoices: {'categories': catChoices}, linkTargets: needsLinks ? targets : const [], takenSlugs: taken);
+  }
+
+  void _pushEditor(BuildContext context, AdminDoc? d,
+      {Map<String, List<(String, String)>> dynamicChoices = const {},
+      List<(String, String)> linkTargets = const [],
+      Set<String> takenSlugs = const {}}) {
     final label = context.pick(def.labelAr, def.labelEn);
     // The editor may save in several writes (gallery / extraFields go on
     // their own): the first one creates a new document, the rest merge into it.
@@ -392,6 +487,9 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
         newDefaults: def.newDefaults,
         onSave: (data) async => id = await widget.repo.save(def.name, id, data),
         media: widget.repo.media,
+        dynamicChoices: dynamicChoices,
+        linkTargets: linkTargets,
+        takenSlugs: takenSlugs,
       ),
     ));
   }
@@ -408,6 +506,13 @@ String publicPathFor(CollectionDef def, {required bool english}) {
 /// false (missing = on, PR #14), the item is hidden, or it is an inactive clinic
 /// (not listed publicly, so its page shows "not available"). `?lang=en` when the dashboard is in English.
 String? itemPublicPathFor(CollectionDef def, String id, Map<String, dynamic> data, {required bool english}) {
+  // Custom categories / pages (ADR-027): their own page by slug.
+  if (def.name == 'categories' || def.name == 'pages') {
+    final slug = '${data['slug'] ?? ''}';
+    if (!isValidSlug(slug) || data['visible'] == false) return null;
+    final path = def.name == 'pages' ? customPagePath(slug) : categoryPath(slug);
+    return english ? '$path?lang=en' : path;
+  }
   final kind = detailKindForCollection(def.name);
   if (kind == null || data['detailsEnabled'] == false || data['visible'] == false) return null;
   if (kind == DetailKind.clinic && data['active'] == false) return null;

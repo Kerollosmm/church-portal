@@ -39,6 +39,11 @@ lib/
     assistant_context.dart  buildAssistantInstruction (Gemini grounding prompt)
     media.dart              MediaImage (optional `image` map), MediaLimits, isValidImageUrl, fitWithin,
                             orphanedMediaIds
+    custom_content.dart     CustomCategory, CategoryEntry, CustomPage, PageBlock (encode/fromStored), BlockTypes,
+                            isValidSlug, publicCategories/publicPages, entriesOf, entryIdsToHide, linkTargets
+                            (PR #18, ADR-027)
+    contact_categories.dart ContactSettings (defaults), ContactCategory (encode/fromStored), ContactKinds,
+                            MessageStatus, inboxBoxOf, messageIsOpen (PR #18, ADR-028)
     item_detail.dart        DetailKind (basePath/parentPath/collection), detailPathFor, parseDetailPath,
                             detailStateFor (detail-page gating), itemSocialsShown (PR #13, ADR-020),
                             weeklyCalendarUrl, absoluteDetailUrl, pickRelated (PR #14, ADR-021)
@@ -148,6 +153,9 @@ flowchart LR
 | `featuresProvider` | `Provider<FeatureSettings>` | value or `FeatureSettings.defaults` (all on) |
 | `featuresReadyProvider` | `Provider<bool>` | true once the features stream has a value or error; `FeatureGate` waits on it |
 | `alertsProvider`, `liturgiesProvider`, `meetingsProvider`, `activitiesProvider`, `clinicsProvider`, `facilitiesProvider`, `priestsProvider`, `milestonesProvider`, `saintsProvider` | `StreamProvider<List<T>>` | wrapped by `_public` → `publicItems` (drops `visible == false`, stable sort by `order`) |
+| `categoriesProvider`, `customPagesProvider` | `StreamProvider<List<…>>` | PR #18: `categories` / `pages` through `publicCategories` / `publicPages` (visible, valid slug, unique, by `order`); empty when the collections do not exist |
+| `entriesProvider` | `StreamProvider<List<CategoryEntry>>` | every entry; pages filter with `entriesOf` |
+| `contactSettingsProvider` | `StreamProvider<ContactSettings>` | `settings/contact`, code defaults when missing (and in seed mode) |
 | `seasonsProvider` | `StreamProvider<List<Season>>` | **not** filtered (seasons have no `visible`/`order`) |
 | `nowProvider` | `StreamProvider<DateTime>` | ticks every 30 s (next mass, "available today", alerts) |
 | `assistantVisibleProvider` | `Provider<bool>` | `features.enabled(assistant) && fb.available && fb.appCheckActive && settings.assistantEnabled` |
@@ -192,6 +200,8 @@ flowchart LR
 | `/about/priests/:id` | `ItemDetailPage(priest)` | any of priests, departedPriests (+ the page checks the section matching the father's status) |
 | `/about/saints/:id` | `ItemDetailPage(saint)` | saints |
 | `/about/milestones/:id` | `ItemDetailPage(milestone)` | milestones |
+| `/section/:slug` | `CategoryPage` (PR #18) | none (the category's own `visible`) |
+| `/page/:slug` | `CustomPageView` (PR #18) | none (the page's own `visible`) |
 | `/admin` (`AppConfig.adminPath`) | `admin_page.AdminPage` (deferred, `fullScreen` placeholder) | outside the shell, not gated, not linked anywhere public |
 | anything else | `errorBuilder` → `AppShell` + "Page not found" + Back home | — |
 

@@ -53,7 +53,9 @@ wanted settings and message deletion owner-only; the implementation deliberately
 ## Navigation (`adminDestinations(role)`)
 
 `overview` → `features` → `church` → one entry per `adminCollections` item (alerts, seasons, liturgies, meetings,
-clinics, facilities, activities, priests, departedPriests, saints, milestones) → `messages` → `admins` (owners only).
+clinics, facilities, activities, priests, departedPriests, saints, milestones, **categories** (Custom sections),
+**entries** (Section items), **pages** (Custom pages) — PR #18) → `messages` → `contactCats` (Contact form types,
+PR #18) → `admins` (owners only).
 The app bar shows "Admin — <screen>", a 🌐 button to the public site and the language toggle; the nav shows the
 signed-in email + role and Sign out.
 
@@ -242,9 +244,32 @@ and the Images section are on.
 
 ### Contact messages (`MessagesScreen`) → `contact_messages`
 (PR #12: the name/time header and the action row wrap at 320 px / 200 %.)
-Newest first (`createdAt`), filter chips **new** (default) / handled / all; each card: name, time, message, phone
-(call), email (`mailto:`);
-**Mark handled / Mark new** (`update(status)`), copy to clipboard, delete with confirmation.
+Newest first (`createdAt`). PR #18 (ADR-028): **box chips** (`box-<id>`) — All, one per contact type of
+`settings/contact` (code defaults when missing; open count in brackets), **Anonymous box** (`inboxBoxOf`:
+`anonymous: true`), and "Other / deleted type" when a message's slot no longer exists; messages without a category
+are general inquiries (c1). Status chips **open** (default, `status == new`) / done / all. Each card: name (or
+«مُرسِل مجهول»), time, type / occasion / 📅 date chips, message, phone (call), email (`mailto:`), internal notes.
+Bookings get a **status dropdown** new → contacted → confirmed / declined (`bookingStatus-<id>`); other messages
+**Mark handled / Mark new**. **Notes** (`notes-<id>`, `_NotesDialog`, ≤ 2000 → `adminNotes`), copy, delete with
+confirmation. The overview's "new messages" counts `status == new`.
+
+### Contact form types (`ContactCategoriesScreen`, `contact_admin.dart`) → `settings/contact` (PR #18)
+Cards per type (code defaults until saved): Arabic / English name, behaviour (general / booking / complaint /
+suggestion), shown on the form, allow anonymous (complaint / suggestion only), booking occasions (Arabic /
+English rows, ≤ 8, keys kept stable — `newSubtypeKey`), move up / down, remove (at least one stays), **Add a
+message type** (next free slot, ≤ 12). **Save** writes the whole `categories` map (`saveDoc`, one string per slot,
+`order` renumbered 10, 20…).
+
+### Custom sections, items and pages (PR #18, ADR-027)
+Generic `CollectionListScreen`s for `categories` (note above the list: built-ins are switched in Sections & home
+page and renamed in Page headers), `entries` and `pages`. Editor helpers (`DocEditor`): `FieldDef.slug`
+(`invalidSlug`, and `slugTaken` against the other docs of the list), `FieldDef.dynamicOptions: 'categories'` (the
+entry's section dropdown, loaded when the editor opens; a deleted category shows «قسم محذوف أو غير محدد»),
+`FieldDef.linkPicker` («اختيار صفحة…» on alert / entry / block links: custom pages, custom categories, built-in
+routes; hidden ones tagged), page `blocks` as an `objectList` with `encodedRows` (one string per row) and
+`showWhen` (only the fields of the row's block type). `validateDocument` rejects an image block without an https
+link. **Deleting a category** (`_deleteCategory`): confirmation naming how many items it holds → `visible: false`
+on each visible entry → delete the category. "Open on site" for a category / page row opens its slug route.
 
 ### Admins (`AdminsScreen`, owners only) → `admins`
 List with role dropdown (owner/editor) and remove button — disabled for yourself ("(you)"); since PR #12 they wrap

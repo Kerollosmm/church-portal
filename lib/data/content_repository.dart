@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 
+import '../domain/contact_categories.dart';
+import '../domain/custom_content.dart';
 import '../domain/features.dart';
 import '../domain/models.dart';
 import 'seed_data.dart';
@@ -35,6 +37,15 @@ abstract class ContentRepository {
   Stream<List<Priest>> priests();
   Stream<List<Milestone>> milestones();
   Stream<List<Saint>> saints();
+
+  /// Admin-defined categories, their items and custom pages (ADR-027). Not
+  /// in the bundled seed: empty until an admin creates some.
+  Stream<List<CustomCategory>> categories();
+  Stream<List<CategoryEntry>> entries();
+  Stream<List<CustomPage>> pages();
+
+  /// Contact-form categories (`settings/contact`; missing = code defaults, ADR-028).
+  Stream<ContactSettings> contactSettings();
 
   /// Writes a validated contact message (payload from validateContactForm).
   Future<void> submitContact(Map<String, dynamic> payload, {required String lang});
@@ -77,6 +88,14 @@ class SeedRepository implements ContentRepository {
   Stream<List<Milestone>> milestones() => _once(seed.milestones);
   @override
   Stream<List<Saint>> saints() => _once(seed.saints);
+  @override
+  Stream<List<CustomCategory>> categories() => _once(const []);
+  @override
+  Stream<List<CategoryEntry>> entries() => _once(const []);
+  @override
+  Stream<List<CustomPage>> pages() => _once(const []);
+  @override
+  Stream<ContactSettings> contactSettings() => _once(ContactSettings.defaults);
 
   @override
   Future<void> submitContact(Map<String, dynamic> payload, {required String lang}) async =>
@@ -302,6 +321,21 @@ class FirestoreRepository implements ContentRepository {
       _col('milestones', Milestone.fromMap, seed.milestones, sort: (a, b) => a.order.compareTo(b.order));
   @override
   Stream<List<Saint>> saints() => _col('saints', Saint.fromMap, seed.saints, sort: (a, b) => a.order.compareTo(b.order));
+  @override
+  Stream<List<CustomCategory>> categories() => _col('categories', CustomCategory.fromMap, const []);
+  @override
+  Stream<List<CategoryEntry>> entries() => _col('entries', CategoryEntry.fromMap, const []);
+  @override
+  Stream<List<CustomPage>> pages() => _col('pages', CustomPage.fromMap, const []);
+  @override
+  Stream<ContactSettings> contactSettings() => _guard(
+        'contact',
+        () => db
+            .doc('settings/contact')
+            .snapshots()
+            .map((d) => d.exists ? ContactSettings.fromMap(normalizeDoc(d.data())) : ContactSettings.defaults),
+        ContactSettings.defaults,
+      );
 
   @override
   Future<void> submitContact(Map<String, dynamic> payload, {required String lang}) async {
@@ -311,11 +345,10 @@ class FirestoreRepository implements ContentRepository {
     // batch, so the rules can reject a standalone write to the throttle doc.
     final batch = db.batch();
     final msgRef = db.collection('contact_messages').doc();
+    // The payload's own keys only: an anonymous message (ADR-028) has no
+    // name / phone / email key at all.
     batch.set(msgRef, {
-      'name': payload['name'],
-      'phone': payload['phone'] ?? '',
-      'email': payload['email'] ?? '',
-      'message': payload['message'],
+      ...payload,
       'lang': lang,
       'status': 'new',
       'createdAt': FieldValue.serverTimestamp(),

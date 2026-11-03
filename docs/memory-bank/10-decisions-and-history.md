@@ -375,7 +375,71 @@ supersede them.
   `heroMotion`). Dark themes dim it with a CSS filter. Playback cannot be verified in headless tests (MotionEnv.isTest
   disables video); parsing, library logic, provider choice and rules are tested.
 
-## Timeline## Timeline
+## ADR-027 (PR #18) — Admin-defined categories and custom pages coexist with the built-in sections
+
+- **Context:** the church must be able to add, rename, reorder, hide or delete public categories (e.g. drop
+  "Clinics", add "Youth trips"), assign items to them, and build generic pages (e.g. donations for the new church
+  building) — everything from `/admin`, nothing locked. The built-in sections (liturgies, meetings, activities,
+  clinics, facilities, priests, saints, milestones) each have specialised fields, schedule logic, detail routes
+  (ADR-020/021), assistant grounding and seed ids.
+- **Options:** (a) migrate the built-ins into one generic "category + item" model; (b) let them coexist with a new
+  generic model. (a) would rewrite every list/detail page, the next-mass logic, the assistant grounding, the seed
+  and the rules, and needs a live data migration (risk of data loss, Spark plan: no Functions to run it).
+- **Decision: (b) coexist, no migration, no data touched.**
+  - Built-in sections stay as they are: hidden / "removed" with their `settings/features.sections` switch,
+    renamed with `pageHeaders` (both already existed), item order with `order`. The Custom sections admin list
+    says so in a note (`CollectionDef.noteAr/noteEn`).
+  - New collections: `categories/{auto-id}` (slug, names, intros, icon, default image style, `showInNav`,
+    `visible`, `order`), `entries/{auto-id}` (an item with `categoryId`, title, description, optional image +
+    `imageStyle`, phone, link + label, `visible`/`order`/`sample`) and `pages/{auto-id}` (slug, title, subtitle,
+    hero `image`, up to 20 `blocks`, `showInNav` off by default, `visible`/`order`). Public routes
+    `/section/<slug>` (`CategoryPage`, same `Card` / `ResponsiveGrid` / `CardCover` / `CardLead` image styles as
+    ADR-023, item style else the category's) and `/page/<slug>` (`CustomPageView`); hidden / unknown slugs show
+    "not available" with `noindex`. Categories with `showInNav` join the "Church services" menu and drawer group;
+    pages with `showInNav` join the desktop bar and the "The church" drawer group, after the built-ins.
+  - Deleting a category asks for confirmation and first sets `visible: false` on each of its visible items, then
+    deletes the category doc; items are never deleted. An item whose category no longer exists is never shown
+    publicly (its page is gone) and can be reassigned (the editor shows «قسم محذوف أو غير محدد»).
+  - Missing collections = empty (not in the seed; the seed is not run): the public site looks exactly as before
+    until an admin creates something.
+- **Page blocks:** heading, paragraph, image (https link + caption), button and text link (in-app path or URL,
+  with the admin's link picker), donation info (bank account, InstaPay, wallet, notes; display only, copy buttons,
+  "no payment is made on this site"). Each block is stored as **one string** (7 fields joined by U+001F,
+  `PageBlock.encode`): one regex per block keeps a full first save of 20 blocks within Firestore's 1,000 rule
+  expressions per write (maps cost ~2× and failed in the emulator); blocks are saved in their own write
+  (`separatelySavedKeys`). The admin edits them as rows (`FieldDef.encodedRows`, fields per type via `showWhen`).
+- **Notices → pages:** the alert `link` (and items' links) keep their format (`optUrlOrPath`); the admin field gets
+  a "Pick a page…" list (`FieldDef.linkPicker`): custom pages first, then custom categories, then the built-in
+  routes (`linkTargets`), or a typed external URL. The banner "Learn more" (`AlertBanner`) already opens in-app
+  paths with `context.go`.
+- **Not done:** built-ins are not reorderable among custom categories in the menu (built-ins first); custom items
+  have no detail page of their own (the card shows the full description); `sitemap.xml` is static and does not
+  list custom sections/pages.
+
+## ADR-028 (PR #18) — Contact categories, bookings and anonymous complaints / suggestions
+
+- **Decision:** `settings/contact.categories` holds up to 12 slots `c1…c12`, each **one string**
+  `kind␟on␟anon␟order␟labelAr␟labelEn␟subtypes` (`ContactCategory.encode`; maps with 8 subtypes each exceeded the
+  rules budget for a 12-slot save). Kinds: `general`, `booking` (subtypes such as فرح / عزاء, a preferred date
+  and a phone are required), `complaint`, `suggestion`. Missing doc = code defaults (`ContactSettings.defaults`,
+  mirrored by `defaultContactCats()` in the rules): general inquiry, hall booking (wedding / condolence),
+  complaint and suggestion (both anonymous-capable). Nothing is seeded.
+- **Messages:** `category` (slot) + `kind`; bookings add `bookingType` + `preferredDate` (YYYY-MM-DD, client
+  checks today or later on the Cairo calendar). The rules require the slot to exist and be on, and `kind` to match
+  it. Messages without a category (the pre-PR shape) stay valid.
+- **Anonymous:** only for a category whose kind is complaint / suggestion and whose admin switch allows it. The
+  form hides name / phone / email, says "your name, phone and email are not stored at all, so we cannot reply",
+  and swaps the PDPL notice and consent for anonymous wording (only the message text is stored). The payload and
+  the rules carry **no** `name`/`phone`/`email`/booking key at all (`anonymous: true`).
+- **Spam:** unchanged server throttle (one message per 10 s globally via `meta/contact_rate`, ADR-010) + client
+  limiter + honeypot; size limits unchanged (message 5–1000).
+- **Inbox:** a box per category (+ "Other / deleted type" and a separate anonymous box), open / done / all
+  filters, booking status new → contacted → confirmed / declined, internal `adminNotes` (≤ 2000). Admins may only
+  change `status` and `adminNotes`.
+- **Caveat:** deleting a type frees its slot; a later new type may reuse it, and older messages of the deleted
+  type then appear under the new one (they keep their own `kind`, and bookings keep their date / subtype).
+
+## Timeline
 
 | When | PR / commit | What |
 |---|---|---|
@@ -402,5 +466,7 @@ supersede them.
 | 3 Nov 2026 | **PR #16** — "Daily Bible verse on the home screen" (`feat/daily-verse`) | 366 public-domain Arabic Van Dyck verses bundled from eBible.org (`tool/gen_daily_verses.py`, SHA-pinned), rotation by the Africa/Cairo day of year (changes at Cairo midnight), golden-hour `DailyVerseCard` under the hero with «reference», admin on/off (`sections.dailyVerse`) + daily/fixed verse (`settings/features.dailyVerse`), rules + emulator tests, seed regenerated, ADR-024, `test/daily_verse_test.dart`. |
 
 | 3 Nov 2026 | **PR #17** — "Occasion themes, YouTube hero video library, verse of the day in the hero" (`feat/occasion-themes`; PR #16 was squash-merged as `6759f0d`) | ADR-025/026 + ADR-024 amendment: full-palette themes (Golden hour default, dark Holy Week, festive Resurrection, Nativity, Epiphany, fasts, Marian, 4 accent presets), `context.pal` everywhere public, contrast model + auto-correction + rendered-text contrast walk, Cairo-date schedule + Coptic Easter, admin theme / colour / video editors, YouTube hero (IFrame player on web, `youtube_player_iframe` on mobile) with clip fallback, hero shows the verse of the day (card removed), rules + emulator groups. |
+
+| 3 Nov 2026 | **PR #18** — "Custom categories & pages, contact categories with bookings and anonymous messages" (`feat/categories-pages-contact`; PR #17 was squash-merged as `55e2a92`) | ADR-027/028: `categories` / `entries` / `pages` collections with `/section/<slug>` and `/page/<slug>`, menu entries, block editor (heading, paragraph, image, button, link, donation info), link picker for notices; `settings/contact` types (general, hall booking with occasions + date + phone, complaint, suggestion) with anonymous sending; inbox boxes, booking status and notes; rules + emulator groups; contrast walk over the new pages on every preset. |
 
 Append new PRs to this table.

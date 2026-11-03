@@ -7,6 +7,7 @@ import '../../core/l10n.dart';
 import '../../core/launch.dart';
 import '../../core/theme.dart';
 import '../../data/admin_repository.dart';
+import '../../domain/contact_categories.dart';
 import '../../domain/features.dart';
 import 'admin_schema.dart';
 import 'admin_validators.dart';
@@ -85,7 +86,7 @@ class _OverviewScreenState extends State<OverviewScreen> {
   Widget build(BuildContext context) {
     final onOpen = widget.onOpen;
     final messages = _docs['contact_messages'];
-    final newMessages = messages?.where((d) => d.data['status'] != 'handled').length ?? 0;
+    final newMessages = messages?.where((d) => messageIsOpen(d.data)).length ?? 0;
     final f = FeatureSettings.fromMap(_features?.data);
     final edited = <(String, AdminDoc)>[
       for (final e in _docs.entries)
@@ -245,6 +246,10 @@ IconData adminIcon(String name) => switch (name) {
       'departed' => Icons.local_florist_outlined,
       'saints' => Icons.auto_awesome_outlined,
       'milestones' => Icons.history_edu_outlined,
+      'categories' => Icons.category_outlined,
+      'entries' => Icons.view_list_outlined,
+      'pages' => Icons.article_outlined,
+      'contactCats' => Icons.forum_outlined,
       _ => Icons.list_alt,
     };
 
@@ -343,6 +348,10 @@ class _ChurchInfoScreenState extends State<ChurchInfoScreen> {
 }
 
 /// contact_messages inbox: read, mark handled, delete.
+/// Contact inbox (ADR-028): one box per contact category (plus "Other" for
+/// messages of a deleted type and the separate anonymous box), open / done
+/// filters, booking status (new → contacted → confirmed / declined) and
+/// internal notes.
 class MessagesScreen extends StatefulWidget {
   final AdminBackend repo;
   const MessagesScreen({super.key, required this.repo});
@@ -353,83 +362,139 @@ class MessagesScreen extends StatefulWidget {
 
 class _MessagesScreenState extends State<MessagesScreen> {
   String _filter = 'new';
+  String _box = 'all';
   late Stream<List<AdminDoc>> _stream = widget.repo.watch('contact_messages');
+  late Stream<AdminDoc?> _config = widget.repo.watchDoc('settings/contact');
 
   @override
   void didUpdateWidget(covariant MessagesScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // A different backend: re-bind the stream.
-    if (widget.repo != oldWidget.repo) _stream = widget.repo.watch('contact_messages');
+    // A different backend: re-bind the streams.
+    if (widget.repo != oldWidget.repo) {
+      _stream = widget.repo.watch('contact_messages');
+      _config = widget.repo.watchDoc('settings/contact');
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.cream,
-      body: StreamBuilder<List<AdminDoc>>(
-        // A new stream (another backend) gets a fresh StreamBuilder: a reused
-        // one keeps the old backend's list while the new one loads.
-        key: ObjectKey(_stream),
-        stream: _stream,
-        builder: (context, snap) {
-          if (snap.hasError) {
-            return Center(child: Padding(padding: const EdgeInsets.all(24), child: Text('${snap.error}')));
-          }
-          if (!snap.hasData) return const Center(child: CircularProgressIndicator());
-          final all = [...snap.data!]..sort((a, b) {
-              final ta = a.data['createdAt'], tb = b.data['createdAt'];
-              if (ta is DateTime && tb is DateTime) return tb.compareTo(ta);
-              return ta is DateTime ? -1 : (tb is DateTime ? 1 : 0);
-            });
-          final list = all.where((d) {
-            final handled = d.data['status'] == 'handled';
-            return _filter == 'all' || (_filter == 'new' ? !handled : handled);
-          }).toList();
-          return Column(children: [
-            Padding(
-              padding: const EdgeInsets.all(12),
-              child: Wrap(spacing: 6, children: [
-                for (final f in ['new', 'handled', 'all'])
-                  ChoiceChip(
-                    label: Text(context.tr('msg_$f')),
-                    selected: _filter == f,
-                    showCheckmark: false,
-                    labelStyle: TextStyle(color: _filter == f ? Colors.white : AppColors.burgundy),
-                    onSelected: (_) => setState(() => _filter = f),
-                  ),
-              ]),
-            ),
-            Expanded(
-              child: list.isEmpty
-                  ? Center(child: Text(context.tr('noMessages')))
-                  : ListView.builder(
-                      padding: const EdgeInsets.fromLTRB(12, 0, 12, 40),
-                      itemCount: list.length,
-                      itemBuilder: (context, i) => _message(context, list[i]),
-                    ),
-            ),
-          ]);
+      body: StreamBuilder<AdminDoc?>(
+        key: ObjectKey(_config),
+        stream: _config,
+        builder: (context, cfgSnap) {
+          // Missing doc, still loading or unreadable: the code defaults.
+          final cfg = ContactSettings.fromMap(cfgSnap.data?.data);
+          return StreamBuilder<List<AdminDoc>>(
+            // A new stream (another backend) gets a fresh StreamBuilder: a reused
+            // one keeps the old backend's list while the new one loads.
+            key: ObjectKey(_stream),
+            stream: _stream,
+            builder: (context, snap) {
+              if (snap.hasError) {
+                return Center(child: Padding(padding: const EdgeInsets.all(24), child: Text('${snap.error}')));
+              }
+              if (!snap.hasData) return const Center(child: CircularProgressIndicator());
+              return _body(context, cfg, snap.data!);
+            },
+          );
         },
       ),
     );
   }
 
-  Widget _message(BuildContext context, AdminDoc d) {
+  Widget _body(BuildContext context, ContactSettings cfg, List<AdminDoc> docs) {
+    final all = [...docs]..sort((a, b) {
+        final ta = a.data['createdAt'], tb = b.data['createdAt'];
+        if (ta is DateTime && tb is DateTime) return tb.compareTo(ta);
+        return ta is DateTime ? -1 : (tb is DateTime ? 1 : 0);
+      });
+    final slots = {for (final c in cfg.categories) c.slot};
+    String boxOf(AdminDoc d) {
+      final b = inboxBoxOf(d.data);
+      return b == 'anonymous' || slots.contains(b) ? b : 'other';
+    }
+
+    int open(String box) => all.where((d) => (box == 'all' || boxOf(d) == box) && messageIsOpen(d.data)).length;
+    final boxes = <(String, String)>[
+      ('all', context.tr('msg_all')),
+      for (final c in cfg.categories) (c.slot, context.pick(c.labelAr, c.labelEn)),
+      ('anonymous', context.tr('inboxAnonymous')),
+      if (all.any((d) => boxOf(d) == 'other')) ('other', context.tr('otherCategory')),
+    ];
+    final box = boxes.any((b) => b.$1 == _box) ? _box : 'all';
+    final list = all.where((d) {
+      if (box != 'all' && boxOf(d) != box) return false;
+      final isOpen = messageIsOpen(d.data);
+      return _filter == 'all' || (_filter == 'new' ? isOpen : !isOpen);
+    }).toList();
+    Widget chip(String id, String label, bool selected, VoidCallback onTap, {Key? key}) => ChoiceChip(
+          key: key,
+          label: Text(label),
+          selected: selected,
+          showCheckmark: false,
+          labelStyle: TextStyle(color: selected ? Colors.white : AppColors.burgundy),
+          onSelected: (_) => onTap(),
+        );
+    return Column(children: [
+      Padding(
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+        child: Wrap(spacing: 6, runSpacing: 6, children: [
+          for (final b in boxes)
+            chip(b.$1, open(b.$1) > 0 ? '${b.$2} (${open(b.$1)})' : b.$2, box == b.$1, () => setState(() => _box = b.$1),
+                key: ValueKey('box-${b.$1}')),
+        ]),
+      ),
+      Padding(
+        padding: const EdgeInsets.all(12),
+        child: Wrap(spacing: 6, children: [
+          for (final f in ['new', 'handled', 'all'])
+            chip(f, context.tr('msg_$f'), _filter == f, () => setState(() => _filter = f), key: ValueKey('filter-$f')),
+        ]),
+      ),
+      Expanded(
+        child: list.isEmpty
+            ? Center(child: Text(context.tr('noMessages')))
+            : ListView.builder(
+                padding: const EdgeInsets.fromLTRB(12, 0, 12, 40),
+                itemCount: list.length,
+                itemBuilder: (context, i) => _message(context, cfg, list[i]),
+              ),
+      ),
+    ]);
+  }
+
+  Widget _message(BuildContext context, ContactSettings cfg, AdminDoc d) {
     final m = d.data;
-    final handled = m['status'] == 'handled';
+    final anonymous = m['anonymous'] == true;
+    final status = (m['status'] ?? MessageStatus.newMsg).toString();
+    final open = messageIsOpen(m);
     final created = m['createdAt'];
     final phone = (m['phone'] ?? '').toString();
     final email = (m['email'] ?? '').toString();
+    final notes = (m['adminNotes'] ?? '').toString();
+    final cat = cfg.bySlot(m['category'] is String ? m['category'] as String : 'c1');
+    final booking = m['kind'] == ContactKinds.booking || (m['kind'] == null && (cat?.isBooking ?? false) && m['preferredDate'] != null);
+    final sub = cat?.subtype('${m['bookingType'] ?? ''}');
+    final subLabel = sub == null ? '${m['bookingType'] ?? ''}' : context.pick(sub.labelAr, sub.labelEn);
+    final date = '${m['preferredDate'] ?? ''}';
+    final catLabel = m['category'] == null
+        ? null
+        : (cat == null ? context.tr('otherCategory') : context.pick(cat.labelAr, cat.labelEn));
     return Card(
       key: ValueKey(d.id),
       margin: const EdgeInsets.only(bottom: 8),
-      color: handled ? const Color(0xFFF4F1EA) : Colors.white,
+      color: open ? Colors.white : const Color(0xFFF4F1EA),
       child: Padding(
         padding: const EdgeInsets.all(14),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Icon(handled ? Icons.mark_email_read_outlined : Icons.mark_email_unread_outlined,
-                color: handled ? AppColors.muted : AppColors.burgundy),
+            Icon(
+                anonymous
+                    ? Icons.privacy_tip_outlined
+                    : (open ? Icons.mark_email_unread_outlined : Icons.mark_email_read_outlined),
+                color: open ? AppColors.burgundy : AppColors.muted),
             const SizedBox(width: 8),
             // Name and date wrap onto two lines on phones / large text.
             Expanded(
@@ -439,13 +504,22 @@ class _MessagesScreenState extends State<MessagesScreen> {
                 alignment: WrapAlignment.spaceBetween,
                 crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
-                  Text('${m['name'] ?? ''}', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
+                  Text(anonymous ? context.tr('anonymousSender') : '${m['name'] ?? ''}',
+                      style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
                   if (created is DateTime)
                     Text(fmtDateTime(created), style: const TextStyle(color: AppColors.muted, fontSize: 12)),
                 ],
               ),
             ),
           ]),
+          if (catLabel != null || booking) ...[
+            const SizedBox(height: 6),
+            Wrap(spacing: 6, runSpacing: 4, children: [
+              if (catLabel != null) _InfoChip(catLabel),
+              if (booking && subLabel.isNotEmpty) _InfoChip(subLabel),
+              if (booking && date.isNotEmpty) _InfoChip('📅 $date'),
+            ]),
+          ],
           const SizedBox(height: 6),
           SelectableText('${m['message'] ?? ''}', style: const TextStyle(height: 1.6)),
           const SizedBox(height: 8),
@@ -464,24 +538,54 @@ class _MessagesScreenState extends State<MessagesScreen> {
               ),
             if (m['lang'] != null) Text('(${m['lang']})', style: const TextStyle(color: AppColors.muted)),
           ]),
+          if (notes.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(color: AppColors.parchment, borderRadius: BorderRadius.circular(8)),
+              child: Text('${context.tr('adminNotes')}: $notes', style: const TextStyle(height: 1.5)),
+            ),
+          ],
           const Divider(height: 18),
           Wrap(alignment: WrapAlignment.spaceBetween, crossAxisAlignment: WrapCrossAlignment.center, children: [
-            TextButton.icon(
-              onPressed: () => _setStatus(context, d, handled ? 'new' : 'handled'),
-              icon: Icon(handled ? Icons.undo : Icons.check_circle_outline),
-              label: Text(context.tr(handled ? 'markNew' : 'markHandled')),
-            ),
+            if (booking)
+              Row(mainAxisSize: MainAxisSize.min, children: [
+                Text('${context.tr('bookingStatus')}: '),
+                DropdownButton<String>(
+                  key: ValueKey('bookingStatus-${d.id}'),
+                  value: MessageStatus.booking.contains(status) ? status : MessageStatus.newMsg,
+                  items: [
+                    for (final s in MessageStatus.booking)
+                      DropdownMenuItem(value: s, child: Text(context.tr('status_$s'))),
+                  ],
+                  onChanged: (v) => v == null ? null : _update(context, d, {'status': v}),
+                ),
+              ])
+            else
+              TextButton.icon(
+                onPressed: () => _update(context, d, {'status': open ? MessageStatus.handled : MessageStatus.newMsg}),
+                icon: Icon(open ? Icons.check_circle_outline : Icons.undo),
+                label: Text(context.tr(open ? 'markHandled' : 'markNew')),
+              ),
             Row(mainAxisSize: MainAxisSize.min, children: [
-            IconButton(
-              tooltip: context.tr('copy'),
-              icon: const Icon(Icons.copy_outlined),
-              onPressed: () => Clipboard.setData(ClipboardData(text: '${m['name']}\n$phone $email\n${m['message']}')),
-            ),
-            IconButton(
-              tooltip: context.tr('delete'),
-              icon: const Icon(Icons.delete_outline, color: AppColors.alert),
-              onPressed: () => _delete(context, d),
-            ),
+              IconButton(
+                key: ValueKey('notes-${d.id}'),
+                tooltip: context.tr('editNotes'),
+                icon: const Icon(Icons.sticky_note_2_outlined),
+                onPressed: () => _editNotes(context, d, notes),
+              ),
+              IconButton(
+                tooltip: context.tr('copy'),
+                icon: const Icon(Icons.copy_outlined),
+                onPressed: () => Clipboard.setData(ClipboardData(
+                    text: anonymous ? '${m['message']}' : '${m['name']}\n$phone $email\n${m['message']}')),
+              ),
+              IconButton(
+                tooltip: context.tr('delete'),
+                icon: const Icon(Icons.delete_outline, color: AppColors.alert),
+                onPressed: () => _delete(context, d),
+              ),
             ]),
           ]),
         ]),
@@ -489,11 +593,17 @@ class _MessagesScreenState extends State<MessagesScreen> {
     );
   }
 
-  Future<void> _setStatus(BuildContext context, AdminDoc d, String status) async {
+  Future<void> _editNotes(BuildContext context, AdminDoc d, String current) async {
+    final text = await showDialog<String>(context: context, builder: (_) => _NotesDialog(initial: current));
+    if (text == null || text == current || !context.mounted) return;
+    await _update(context, d, {'adminNotes': text});
+  }
+
+  Future<void> _update(BuildContext context, AdminDoc d, Map<String, dynamic> data) async {
     final messenger = ScaffoldMessenger.of(context);
     final failed = context.tr('saveFailed', {'e': '{e}'});
     try {
-      await widget.repo.update('contact_messages', d.id, {'status': status});
+      await widget.repo.update('contact_messages', d.id, data);
     } catch (e) {
       messenger.showSnackBar(SnackBar(content: Text(failed.replaceAll('{e}', '$e'))));
     }
@@ -512,6 +622,58 @@ class _MessagesScreenState extends State<MessagesScreen> {
       messenger.showSnackBar(SnackBar(content: Text(failed.replaceAll('{e}', '$e'))));
     }
   }
+}
+
+/// Internal notes editor (owns its controller, so it outlives the closing
+/// animation).
+class _NotesDialog extends StatefulWidget {
+  final String initial;
+  const _NotesDialog({required this.initial});
+
+  @override
+  State<_NotesDialog> createState() => _NotesDialogState();
+}
+
+class _NotesDialogState extends State<_NotesDialog> {
+  late final _ctl = TextEditingController(text: widget.initial);
+
+  @override
+  void dispose() {
+    _ctl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+        title: Text(context.tr('adminNotes')),
+        content: TextField(
+          key: const Key('adminNotesField'),
+          controller: _ctl,
+          minLines: 3,
+          maxLines: 8,
+          maxLength: adminNotesMax,
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: Text(context.tr('cancel'))),
+          FilledButton(onPressed: () => Navigator.pop(context, _ctl.text.trim()), child: Text(context.tr('save'))),
+        ],
+      );
+}
+
+class _InfoChip extends StatelessWidget {
+  final String text;
+  const _InfoChip(this.text);
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+        decoration: BoxDecoration(
+          color: AppColors.parchment,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: AppColors.burgundy.withValues(alpha: 0.35)),
+        ),
+        child: Text(text, style: const TextStyle(fontSize: 12.5, color: AppColors.burgundy, fontWeight: FontWeight.w700)),
+      );
 }
 
 Future<bool> confirmDialog(BuildContext context, String text, {String? action}) async {

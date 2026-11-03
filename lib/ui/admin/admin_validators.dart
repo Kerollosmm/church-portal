@@ -1,5 +1,6 @@
 // Pure validation / conversion for the admin forms (unit-tested).
 import '../../domain/cairo_time.dart';
+import '../../domain/custom_content.dart' show BlockTypes, PageBlock, isValidSlug;
 import '../../domain/rules.dart' show normalizeDigits;
 import 'admin_schema.dart';
 
@@ -59,6 +60,7 @@ String? validateFieldValue(FieldDef f, String? raw) {
   // Phones are stored without separators: measure what will be stored.
   final stored = f.type == FieldType.phone ? normalizePhoneInput(v) : v;
   if (stored.length > f.effectiveMaxLength) return 'tooLong';
+  if (f.slug && !isValidSlug(v)) return 'invalidSlug';
   switch (f.type) {
     case FieldType.time:
       return timeRe.hasMatch(v) ? null : 'invalidTime';
@@ -142,6 +144,15 @@ String? validateDocument(CollectionDef? def, Map<String, dynamic> data) {
   }
   final s = data['startsAt'], e = data['endsAt'];
   if (s is DateTime && e is DateTime && !e.isAfter(s)) return 'endBeforeStart';
+  // Custom page blocks (firestore.rules validPageBlock): an image needs an
+  // https picture link.
+  final blocks = data['blocks'];
+  if (blocks is List) {
+    for (final raw in blocks) {
+      final b = PageBlock.fromStored(raw);
+      if (b != null && b.type == BlockTypes.image && !b.url.startsWith('https://')) return 'blockImageUrl';
+    }
+  }
   return null;
 }
 
@@ -196,7 +207,7 @@ String searchableText(Map<String, dynamic> data) =>
 /// rule expressions per request, and a full gallery (8 photos) plus a full
 /// `extraFields` list (15 rows) in one write exceeds it (firestore.rules,
 /// validGallery / validExtraFields; ADR-020).
-const separatelySavedKeys = ['gallery', 'extraFields'];
+const separatelySavedKeys = ['gallery', 'extraFields', 'blocks'];
 
 /// Splits a save [payload] into writes made one after the other: everything
 /// else first (it creates a new document), then a non-empty `gallery`, then

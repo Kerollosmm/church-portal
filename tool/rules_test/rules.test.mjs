@@ -1088,3 +1088,231 @@ describe('ADR-023: image display style (imageStyle / settings/features.imageStyl
     await assertFails(updateDoc(doc(db(null), 'priests', 'x'), { imageStyle: 'card' }));
   });
 });
+
+describe('ADR-027: custom categories, their items and custom pages', () => {
+  const cat = (extra = {}) => ({
+    slug: 'youth-trips', nameAr: 'رحلات الشباب', nameEn: 'Youth trips', introAr: 'مقدمة', introEn: '', icon: 'people',
+    showInNav: true, visible: true, order: 10, ...extra,
+  });
+  const entry = (extra = {}) => ({
+    categoryId: 'k1', titleAr: 'رحلة الإسكندرية', titleEn: '', descAr: 'وصف', descEn: '', contactPhone: '01012345678',
+    externalUrl: '/page/donate', externalLabelAr: 'سجّل', externalLabelEn: '', visible: true, order: 10, sample: false, ...extra,
+  });
+  // A block is one string: the 7 fields joined by U+001F (PageBlock.encode).
+  const block = (extra = {}) => {
+    const b = { type: 'paragraph', textAr: 'نص', textEn: '', url: '', account: '', instapay: '', wallet: '', ...extra };
+    return [b.type, b.textAr, b.textEn, b.url, b.account, b.instapay, b.wallet].join('\u001f');
+  };
+  const page = (extra = {}) => ({
+    slug: 'new-building-donations', titleAr: 'التبرع لمبنى الخدمات', titleEn: 'Donations', subtitleAr: '', subtitleEn: '',
+    showInNav: false, visible: true, order: 10, ...extra,
+  });
+
+  test('everyone reads; admins create, edit, hide and delete', async () => {
+    const ed = db(EDITOR);
+    await assertSucceeds(setDoc(doc(ed, 'categories', 'k1'), cat()));
+    await assertSucceeds(updateDoc(doc(ed, 'categories', 'k1'), { nameAr: 'رحلات', visible: false, imageStyle: 'banner' }));
+    await assertSucceeds(setDoc(doc(ed, 'entries', 'e1'), entry({ image: { source: 'url', url: 'https://example.org/a.jpg', alt: '' } })));
+    await assertSucceeds(updateDoc(doc(ed, 'entries', 'e1'), { visible: false }));
+    await assertSucceeds(updateDoc(doc(ed, 'entries', 'e1'), { categoryId: 'other-cat' }));
+    await assertSucceeds(setDoc(doc(ed, 'pages', 'p1'), page({ image: { source: 'url', url: 'https://example.org/hero.jpg' } })));
+    const pub = db(null);
+    await assertSucceeds(getDocs(collection(pub, 'categories')));
+    await assertSucceeds(getDocs(collection(pub, 'entries')));
+    await assertSucceeds(getDocs(collection(pub, 'pages')));
+    await assertFails(setDoc(doc(pub, 'categories', 'k2'), cat()));
+    await assertFails(setDoc(doc(db(STRANGER), 'pages', 'p2'), page()));
+    await assertFails(deleteDoc(doc(pub, 'entries', 'e1')));
+    await assertSucceeds(deleteDoc(doc(ed, 'categories', 'k1')));
+    await assertSucceeds(deleteDoc(doc(ed, 'pages', 'p1')));
+  });
+
+  test('categories: slug, name, icon and sizes are validated', async () => {
+    const ed = db(EDITOR);
+    for (const bad of [
+      { slug: 'Youth' }, { slug: 'a b' }, { slug: '-x' }, { slug: 'x--y' }, { slug: 'a'.repeat(61) }, { slug: 5 },
+      { nameAr: '' }, { nameAr: '   ' }, { nameAr: 'x'.repeat(121) }, { introAr: 'x'.repeat(1501) }, { icon: 'rocket' },
+      { showInNav: 'yes' }, { imageStyle: 'huge' }, { extra: 1 }, { nameEn: null },
+    ]) {
+      await assertFails(setDoc(doc(ed, 'categories', 'kx'), cat(bad)), JSON.stringify(bad).slice(0, 60));
+    }
+    const noSlug = cat();
+    delete noSlug.slug;
+    await assertFails(setDoc(doc(ed, 'categories', 'kx'), noSlug));
+  });
+
+  test('items: category id, title, phone, link and sizes are validated', async () => {
+    const ed = db(EDITOR);
+    await assertSucceeds(setDoc(doc(ed, 'entries', 'ok1'), entry({ externalUrl: 'https://example.org/x?y=1' })));
+    await assertSucceeds(setDoc(doc(ed, 'entries', 'ok2'), entry({ externalUrl: '', contactPhone: '' })));
+    for (const bad of [
+      { categoryId: '' }, { categoryId: 'a/b' }, { categoryId: 3 }, { titleAr: '' }, { titleAr: 'x'.repeat(301) },
+      { descAr: 'x'.repeat(2001) }, { contactPhone: 'call me' }, { externalUrl: 'javascript:alert(1)' },
+      { externalUrl: '//evil.com' }, { externalUrl: 'https://' + 'a'.repeat(500) + '.com' }, { externalLabelAr: 'x'.repeat(81) },
+      { stage: 'youth' },
+    ]) {
+      await assertFails(setDoc(doc(ed, 'entries', 'bad'), entry(bad)), JSON.stringify(bad).slice(0, 60));
+    }
+  });
+
+  test('pages: 20 blocks of every type fit in one write; header and blocks are validated', async () => {
+    const ed = db(EDITOR);
+    const types = ['heading', 'paragraph', 'image', 'button', 'link', 'donation'];
+    const full = Array.from({ length: 20 }, (_, i) => block({
+      type: types[i % 6],
+      textAr: 'ن'.repeat(4000),
+      textEn: 'e'.repeat(4000),
+      url: types[i % 6] === 'image' ? 'https://example.org/' + 'p'.repeat(470) : (i % 2 ? '/page/x' : 'https://example.org/give'),
+      account: 'a'.repeat(120), instapay: 'i'.repeat(80), wallet: '0'.repeat(30),
+    }));
+    // Header and blocks in one create (the admin saves blocks on their own write).
+    await assertSucceeds(setDoc(doc(ed, 'pages', 'big'), page({ blocks: full })));
+    await assertSucceeds(updateDoc(doc(ed, 'pages', 'big'), { blocks: [block({ type: 'donation', account: 'CIB 100', instapay: 'church@instapay', wallet: '01012345678' })] }));
+    await assertSucceeds(updateDoc(doc(ed, 'pages', 'big'), { showInNav: true }));
+    await assertSucceeds(updateDoc(doc(ed, 'pages', 'big'), { blocks: [] }));
+    for (const bad of [
+      { slug: 'Bad Slug' }, { titleAr: '' }, { titleAr: 'x'.repeat(201) }, { subtitleAr: 'x'.repeat(301) }, { showInNav: 1 },
+      { blocks: Array.from({ length: 21 }, () => block()) },
+      { blocks: [block({ type: 'video' })] },
+      { blocks: [{ type: 'paragraph', textAr: 'x' }] },
+      { blocks: ['paragraph\u001fx'] },
+      { blocks: [block() + '\u001fextra'] },
+      { blocks: [block({ textAr: 'x'.repeat(4001) })] },
+      { blocks: [block({ type: 'image', url: 'http://example.org/a.jpg' })] },
+      { blocks: [block({ type: 'image', url: '/local.jpg' })] },
+      { blocks: [block({ type: 'button', url: 'javascript:alert(1)' })] },
+      { blocks: [block({ type: 'link', url: 'https://example.org/a b' })] },
+      { blocks: [block({ type: 'donation', wallet: '0'.repeat(31) })] },
+      { blocks: [5] },
+      { other: 1 },
+    ]) {
+      await assertFails(setDoc(doc(ed, 'pages', 'bad'), page(bad)), JSON.stringify(bad).slice(0, 80));
+    }
+    await assertFails(updateDoc(doc(ed, 'pages', 'big'), { slug: 'UPPER' }));
+    await assertFails(updateDoc(doc(ed, 'pages', 'big'), { blocks: [block({ type: 'nope' })] }));
+  });
+
+  test('alerts link to a custom page, a section, a route or an external URL', async () => {
+    const ed = db(EDITOR);
+    for (const link of ['/page/new-building-donations', '/section/youth-trips', '/mass-schedule', 'https://example.org/x', '']) {
+      await assertSucceeds(setDoc(doc(ed, 'alerts', `a-${link.length}`), { titleAr: 'تنويه', link, active: true }), link);
+    }
+    await assertFails(setDoc(doc(ed, 'alerts', 'a-bad'), { titleAr: 'تنويه', link: 'javascript:alert(1)' }));
+  });
+});
+
+describe('ADR-028: contact categories, bookings and anonymous messages', () => {
+  const send = (fs, msg) => {
+    const batch = writeBatch(fs);
+    const ref = doc(collection(fs, 'contact_messages'));
+    batch.set(ref, { lang: 'ar', status: 'new', createdAt: serverTimestamp(), ...msg });
+    batch.set(doc(fs, 'meta', 'contact_rate'), { lastAt: serverTimestamp(), lastMsgId: ref.id });
+    return batch.commit();
+  };
+  const general = { category: 'c1', kind: 'general', name: 'Mina', phone: '01012345678', email: '', message: 'Hello there' };
+  const booking = {
+    category: 'c2', kind: 'booking', name: 'Mina', phone: '01012345678', email: '', message: 'نريد حجز القاعة',
+    bookingType: 'wedding', preferredDate: '2027-02-14',
+  };
+  const anon = { category: 'c3', kind: 'complaint', anonymous: true, message: 'شكوى بدون اسم' };
+  const reset = () => env.withSecurityRulesDisabled(async (ctx) => deleteDoc(doc(ctx.firestore(), 'meta', 'contact_rate')));
+  // One string per slot (ContactCategory.encode): kind␟on␟anon␟order␟labelAr␟labelEn␟subtypes(␞-joined).
+  const enc = (c) => [c.kind, c.on ? '1' : '0', c.anon ? '1' : '0', String(c.order), c.labelAr, c.labelEn,
+    c.subtypes.join('\u001e')].join('\u001f');
+  const raw = {
+    c1: { labelAr: 'استفسار', labelEn: 'Inquiry', kind: 'general', on: true, anon: false, order: 10, subtypes: [] },
+    c2: { labelAr: 'حجز قاعة', labelEn: '', kind: 'booking', on: true, anon: false, order: 20, subtypes: ['wedding|فرح|Wedding', 'condolence|عزاء|'] },
+    c3: { labelAr: 'شكوى', labelEn: '', kind: 'complaint', on: true, anon: true, order: 30, subtypes: [] },
+    c4: { labelAr: 'اقتراح', labelEn: '', kind: 'suggestion', on: false, anon: true, order: 40, subtypes: [] },
+  };
+  const cats = Object.fromEntries(Object.entries(raw).map(([k, v]) => [k, enc(v)]));
+
+  test('code defaults (no settings/contact): general, booking and anonymous complaint go through', async () => {
+    const pub = db(null);
+    await assertSucceeds(send(pub, general));
+    await reset();
+    await assertSucceeds(send(pub, booking));
+    await reset();
+    await assertSucceeds(send(pub, anon));
+    await reset();
+    await assertSucceeds(send(pub, { ...anon, category: 'c4', kind: 'suggestion' }));
+    await reset();
+    // The legacy shape (no category) still works.
+    await assertSucceeds(send(pub, { name: 'Mina', phone: '01012345678', email: '', message: 'Hello there' }));
+  });
+
+  test('anonymous messages never carry identity fields and only for anonymous-capable categories', async () => {
+    const pub = db(null);
+    for (const bad of [
+      { ...anon, name: 'Mina' }, { ...anon, phone: '01012345678' }, { ...anon, email: '' }, { ...anon, phone: '' },
+      { ...anon, category: 'c1', kind: 'general' }, { ...anon, category: 'c2', kind: 'booking' },
+      { ...anon, kind: 'suggestion' }, { ...anon, anonymous: 'yes' }, { ...anon, preferredDate: '2027-01-01' },
+      { message: 'no category', anonymous: true },
+    ]) {
+      await assertFails(send(pub, bad), JSON.stringify(bad).slice(0, 80));
+    }
+  });
+
+  test('category values, bookings and sizes are validated', async () => {
+    const pub = db(null);
+    for (const bad of [
+      { ...general, category: 'c13' }, { ...general, category: 'c9' }, { ...general, kind: 'booking' },
+      { ...general, category: 1 }, { ...general, kind: undefined }, { ...general, preferredDate: '2027-01-01' },
+      { ...booking, phone: '' }, { ...booking, phone: undefined, email: 'a@b.co' }, { ...booking, preferredDate: '14/02/2027' },
+      { ...booking, preferredDate: undefined }, { ...booking, bookingType: 'Wedding Party' },
+      { ...general, message: 'x'.repeat(1001) }, { ...general, name: 'x' }, { ...general, extra: 1 },
+      { kind: 'general', name: 'Mina', phone: '01012345678', message: 'Hello there' },
+    ]) {
+      const m = Object.fromEntries(Object.entries(bad).filter(([, v]) => v !== undefined));
+      await assertFails(send(pub, m), JSON.stringify(m).slice(0, 80));
+    }
+  });
+
+  test('stored categories replace the defaults: switched-off and missing slots are refused', async () => {
+    await assertSucceeds(setDoc(doc(db(EDITOR), 'settings', 'contact'), { categories: cats }));
+    const pub = db(null);
+    await assertSucceeds(send(pub, booking));
+    await reset();
+    await assertFails(send(pub, { ...anon, category: 'c4', kind: 'suggestion' }), 'c4 is switched off');
+    await assertFails(send(pub, { ...general, category: 'c5' }), 'c5 does not exist');
+    await assertSucceeds(send(pub, anon));
+  });
+
+  test('admins edit settings/contact; shapes are validated; 12 full categories fit in one write', async () => {
+    const ref = doc(db(EDITOR), 'settings', 'contact');
+    const many = Object.fromEntries(Array.from({ length: 12 }, (_, i) => [`c${i + 1}`, enc({
+      labelAr: 'ن'.repeat(80), labelEn: 'e'.repeat(80), kind: 'booking', on: true, anon: false, order: i,
+      subtypes: Array.from({ length: 8 }, (_, j) => `type${j}|${'ع'.repeat(60)}|${'e'.repeat(60)}`),
+    })]));
+    await assertSucceeds(setDoc(ref, { categories: many }));
+    await assertSucceeds(setDoc(ref, { categories: cats }));
+    for (const bad of [
+      {}, { c13: cats.c1 }, { c1: enc({ ...raw.c1, kind: 'spam' }) }, { c1: enc({ ...raw.c1, anon: true }) },
+      { c1: enc({ ...raw.c1, labelAr: '' }) }, { c1: enc({ ...raw.c1, labelAr: ' ' }) }, { c1: enc({ ...raw.c1, labelAr: 'x'.repeat(81) }) },
+      { c1: raw.c1 }, { c1: cats.c1 + '\u001fextra' }, { c1: enc({ ...raw.c1, order: 'x' }) },
+      { c2: enc({ ...raw.c2, subtypes: ['Wedding|فرح|Wedding'] }) }, { c2: enc({ ...raw.c2, subtypes: ['wedding||Wedding'] }) },
+      { c2: enc({ ...raw.c2, subtypes: ['wedding| |Wedding'] }) },
+      { c2: enc({ ...raw.c2, subtypes: ['wedding|' + 'x'.repeat(61) + '|'] }) },
+      { c2: enc({ ...raw.c2, subtypes: Array.from({ length: 9 }, (_, j) => `t${j}|x|`) }) },
+    ]) {
+      await assertFails(setDoc(ref, { categories: bad }), JSON.stringify(bad).slice(0, 80));
+    }
+    await assertFails(setDoc(ref, { categories: cats, other: 1 }));
+    await assertFails(setDoc(doc(db(null), 'settings', 'contact'), { categories: cats }));
+    await assertSucceeds(getDoc(doc(db(null), 'settings', 'contact')));
+  });
+
+  test('admins set booking status and internal notes only', async () => {
+    const ed = db(EDITOR);
+    const stamp = { updatedAt: serverTimestamp(), updatedBy: `${EDITOR}@x.test` };
+    for (const status of ['contacted', 'confirmed', 'declined', 'handled', 'new']) {
+      await assertSucceeds(updateDoc(doc(ed, 'contact_messages', 'm1'), { status, ...stamp }), status);
+    }
+    await assertSucceeds(updateDoc(doc(ed, 'contact_messages', 'm1'), { adminNotes: 'اتصلنا به', ...stamp }));
+    await assertFails(updateDoc(doc(ed, 'contact_messages', 'm1'), { adminNotes: 'x'.repeat(2001) }));
+    await assertFails(updateDoc(doc(ed, 'contact_messages', 'm1'), { adminNotes: 5 }));
+    await assertFails(updateDoc(doc(ed, 'contact_messages', 'm1'), { status: 'archived' }));
+    await assertFails(updateDoc(doc(ed, 'contact_messages', 'm1'), { category: 'c2' }));
+    await assertFails(updateDoc(doc(db(STRANGER), 'contact_messages', 'm1'), { adminNotes: 'x' }));
+  });
+});

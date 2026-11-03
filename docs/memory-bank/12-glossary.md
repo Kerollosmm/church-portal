@@ -94,3 +94,8 @@ Season labels for admins: `opt_holy_week` … `opt_summer` in `lib/core/l10n.dar
 | عيد الميلاد / عيد الغطاس | Nativity / Epiphany (Theophany) | themes `nativity`, `epiphany` |
 | الأصوام | The fasts (Great Lent, the Nativity fast…) | theme `fasting` |
 | أعياد السيدة العذراء | Feasts of the Virgin Mary (Theotokos) | theme `marian` |
+| فرح / عزاء | Wedding / condolence (hall booking occasions) | contact booking subtypes `wedding`, `condolence` (`ContactSettings.defaults`) |
+| حجز قاعة | Hall booking | contact kind `booking` |
+| شكوى / اقتراح | Complaint / suggestion (may be sent anonymously) | contact kinds `complaint`, `suggestion`, `anonymous: true` |
+| التبرع / إنستاباي / محفظة | Donation / InstaPay / mobile wallet | page block `donation` (`account`, `instapay`, `wallet`) |
+| اعرف المزيد | Learn more (a notice's link) | alert `link` (`learnMore`) |
