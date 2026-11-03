@@ -314,7 +314,8 @@ console.
 - **PR #20 (first-call error):** `AssistantModel.warmUp()` mints the App Check token in `initState` (when
   `firebaseStatus.appCheckActive`; `FirebaseAppCheck.getToken`, 15 s, errors swallowed), and
   `AssistantConversation.ask` retries a failed or empty call **once** after `retryDelay` (700 ms) — still one
-  question for the limits; the model-unavailable fallback is unchanged. The one-off "تعذّر الحصول على إجابة الآن" on
+  question for the limits; quota / rate-limit / bad-request / safety errors are not retried
+  (`isRetryableAssistantError`); the model-unavailable fallback is unchanged. The one-off "تعذّر الحصول على إجابة الآن" on
   the first question was most likely the first reCAPTCHA Enterprise token racing the call (no client logs to prove it).
 - **Admin-editable** (`settings/assistant`, `/admin` → AI assistant): model, persona instructions, allowed topics,
   refusal (ar/en), welcome text (ar/en; else `askIntro`), suggested questions (ar/en, ≤ 3 lines; else the built-in

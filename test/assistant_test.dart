@@ -1,6 +1,7 @@
 // PR #19 (ADR-029): the assistant on web + Android — prompt building and
 // scope, refusal / limits / model fallback with a fake model, App Check
 // provider selection, assistant settings, and stable contact category ids.
+import 'dart:async';
 import 'dart:math';
 
 import 'package:church_portal/data/app_check_providers.dart';
@@ -340,6 +341,14 @@ void main() {
       final r = await _ask(f, 'q');
       expect((r.outcome, r.text), (AssistantOutcome.answer, 'At 7 AM.'));
       expect(f.limiter.total, 1);
+      // Quota / bad-request errors are not retried.
+      final quota = _FakeModel(errorFor: {'d': Exception('429 RESOURCE_EXHAUSTED: quota exceeded')});
+      final q = AssistantConversation(quota, defaultModel: 'd', retryDelay: Duration.zero);
+      expect((await _ask(q, 'q')).outcome, AssistantOutcome.error);
+      expect(quota.calls, hasLength(1));
+      expect(isRetryableAssistantError(Exception('403 App Check token is invalid')), isTrue);
+      expect(isRetryableAssistantError(TimeoutException('45 s')), isTrue);
+      expect(isRetryableAssistantError(Exception('400 INVALID_ARGUMENT')), isFalse);
     });
   });
 
