@@ -577,6 +577,9 @@ class DailyVerseCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Wait for the first settings/features value so a switched-off card never
+    // flashes (the offline seed fallback counts, by design: ADR-007).
+    if (!ref.watch(featuresReadyProvider)) return const SizedBox.shrink();
     final features = ref.watch(featuresProvider);
     if (!features.enabled(Sections.dailyVerse)) return const SizedBox.shrink();
     final config = features.dailyVerse;

@@ -32,7 +32,7 @@ render with `PageBody` (+ `Footer`). Content comes from Riverpod providers (hidd
   WarmPanel with «كلمة الله» accent, "آية اليوم / Verse of the day" title, the Arabic verse and «reference». Daily
   mode = entry (Cairo day of year − 1) of `assets/verses/daily_verses.json` (366 Van Dyck verses, public domain),
   changing at Cairo midnight; fixed mode = the admin's verse. Hidden when its section `Sections.dailyVerse` is off
-  or while the asset loads.
+  until the first `settings/features` value arrives (`featuresReadyProvider`), or while the asset loads.
 
 ### `/about` — `about_page.dart` `AboutPage`
 - History card (bishop line + `historyAr/En`) and **altars** grid (main altar gets a gold cross) — section `history`.

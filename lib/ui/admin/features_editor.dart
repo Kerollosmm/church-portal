@@ -219,10 +219,11 @@ class FeaturesEditorState extends State<FeaturesEditor> {
           noteAr: _t['footerNoteAr']!.text.trim(),
           noteEn: _t['footerNoteEn']!.text.trim(),
         ),
-        dailyVerse: f.dailyVerse.copyWith(
-          textAr: _t['verseTextAr']!.text.trim(),
-          refAr: _t['verseRefAr']!.text.trim(),
-        ),
+        // Daily mode hides (and so does not validate) the fixed-verse fields:
+        // save them cleared so an over-long hidden draft cannot fail the save.
+        dailyVerse: f.dailyVerse.mode == DailyVerseConfig.fixed
+            ? f.dailyVerse.copyWith(textAr: _t['verseTextAr']!.text.trim(), refAr: _t['verseRefAr']!.text.trim())
+            : const DailyVerseConfig(),
       );
 
   PageCustom _pageCustom(String p) {

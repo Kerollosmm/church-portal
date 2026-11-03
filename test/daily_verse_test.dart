@@ -69,7 +69,18 @@ void main() {
       }
       final john = _verses.firstWhere((v) => v.refEn == 'John 3:16');
       expect(john.refAr, 'يوحنا ٣: ١٦');
-      expect(File('pubspec.yaml').readAsStringSync(), contains(dailyVersesAsset));
+      expect(File('pubspec.yaml').readAsStringSync(),
+          matches(RegExp(r'^\s+- assets/verses/daily_verses\.json$', multiLine: true)), reason: 'active asset entry');
+      // The asset was generated from the SHA-pinned archive the generator checks.
+      final gen = File('tool/gen_daily_verses.py').readAsStringSync();
+      expect(gen, contains("SRC_SHA256 = '${meta['sourceSha256']}'"));
+    });
+
+    test('the real provider loads the bundled asset (no override)', () async {
+      TestWidgetsFlutterBinding.ensureInitialized();
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      expect(await container.read(dailyVersesProvider.future), hasLength(366));
     });
 
     test('malformed input parses to an empty / filtered list', () {
@@ -165,6 +176,32 @@ void main() {
           dailyVerse: {'mode': 'fixed', 'textAr': 'نص الآية الثابتة', 'refAr': 'مزمور ٢٣: ١'});
       expect(find.text('نص الآية الثابتة'), findsOneWidget);
       expect(find.text('« مزمور ٢٣: ١ »'), findsOneWidget);
+    });
+
+    testWidgets('admin: daily mode saves the hidden fixed-verse fields cleared', (tester) async {
+      FeatureSettings? saved;
+      tester.view.physicalSize = const Size(1200, 6000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(MaterialApp(
+        locale: const Locale('en'),
+        supportedLocales: const [Locale('ar'), Locale('en')],
+        localizationsDelegates: GlobalMaterialLocalizations.delegates,
+        home: Scaffold(
+          body: FeaturesEditor(
+            initial: FeatureSettings(dailyVerse: DailyVerseConfig(mode: 'fixed', textAr: 'x' * 600, refAr: 'مرجع')),
+            onSave: (f) async => saved = f,
+          ),
+        ),
+      ));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('dailyVerse-mode-daily')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('features-verseTextAr')), findsNothing);
+      await tester.tap(find.byKey(const Key('features-save')));
+      await tester.pumpAndSettle();
+      expect(saved, isNotNull, reason: 'the hidden over-long draft does not block the save');
+      expect(saved!.dailyVerse, DailyVerseConfig.defaults);
     });
 
     testWidgets('section switched off: no card', (tester) async {
