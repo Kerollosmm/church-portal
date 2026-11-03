@@ -85,6 +85,8 @@ Status as of 2 Nov 2026 (after PR #7, PR #8, PR #9 `ad621cf`, PR #10 and PR #11)
 - [x] 366 Van Dyck verses bundled (eBible.org, public domain, SHA-pinned), Cairo-day rotation, admin on/off + fixed verse.
 - [ ] Optional: let the church office review / reorder the 366 references (`tool/daily_verse_refs.txt`, then
       `python3 tool/gen_daily_verses.py`), e.g. to follow the Coptic calendar or feasts.
+- [ ] Optional: CI source-fidelity step (download the SHA-pinned eBible zip, run `tool/gen_daily_verses.py`, fail on
+      a diff). Skipped in PR #16 to keep CI free of a network dependency; a test checks the asset's `sourceSha256`.
 - [ ] Optional: an English verse alongside (a public-domain English translation such as KJV/WEB would need its own
       verified source); today the English UI shows the Arabic verse with an English reference.
 
