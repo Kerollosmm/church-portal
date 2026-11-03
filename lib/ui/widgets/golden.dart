@@ -2,11 +2,14 @@ import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:material_ui/material_ui.dart';
-import 'package:video_player/video_player.dart';
 
 import '../../core/motion_env.dart';
 import '../../core/theme.dart';
 import 'coptic_cross.dart';
+import 'hero_feather.dart';
+import 'hero_video.dart';
+
+export 'hero_feather.dart' show BottomFeather;
 
 /// "Golden hour" building blocks (docs/design/direction.md, ADR-022): the
 /// warm backdrop, translucent panels, the hanging seal tab, poster headings,
@@ -24,7 +27,13 @@ class ArtAssets {
   static const clouds = 'assets/art/clouds.webp'; // gold haze texture (backdrop, drift)
   static const saintMoses = 'assets/art/saint_moses.webp'; // painted St Moses the Black
   static const saintMaximusDomadius = 'assets/art/saint_md.webp'; // painted Sts Maximus & Domadius
-  static const heroVideo = 'assets/video/hero_clouds.mp4'; // 10 s muted 720p loop (219 KB)
+  // Muted loops cut from seconds 3-10 of the Gemini clip, cross-faded at the
+  // seam (6 s, no audio): 1280x720 for tablets / desktops, a 404x720 centre
+  // crop on the church for phones. Posters are their first frames.
+  static const heroVideo = 'assets/video/hero_clouds.mp4';
+  static const heroVideoTall = 'assets/video/hero_clouds_tall.mp4';
+  static const heroPoster = 'assets/art/hero_poster.webp';
+  static const heroPosterTall = 'assets/art/hero_poster_tall.webp';
 
   /// Painted art for a patron saint id (decorative fallback when the saint
   /// has no uploaded icon), or null.
@@ -135,13 +144,19 @@ class SealTab extends StatelessWidget {
       child: Container(
         width: seal,
         height: seal,
-        padding: const EdgeInsets.all(2.5),
-        decoration: BoxDecoration(
+        // White seal on maroon: a thin gold ring and a soft shadow lift it.
+        padding: const EdgeInsets.all(1.5),
+        decoration: const BoxDecoration(
           shape: BoxShape.circle,
-          color: AppColors.cream,
-          border: Border.all(color: AppColors.goldLight.withValues(alpha: 0.7)),
+          gradient: SweepGradient(colors: [AppColors.goldLight, AppColors.gold, AppColors.goldLight, AppColors.gold, AppColors.goldLight]),
+          boxShadow: [BoxShadow(color: Color(0x73200000), blurRadius: 8, offset: Offset(0, 2))],
         ),
-        child: ClipOval(child: Image.asset('assets/branding/seal.png', fit: BoxFit.cover, semanticLabel: '')),
+        child: ClipOval(
+          child: ColoredBox(
+            color: Colors.white,
+            child: Image.asset(ChurchSeal.asset, fit: BoxFit.cover, filterQuality: FilterQuality.medium, semanticLabel: ''),
+          ),
+        ),
       ),
     );
   }
@@ -299,6 +314,8 @@ class LightRaysPainter extends CustomPainter {
         ..lineTo(origin.dx + math.cos(a2) * reach, origin.dy + math.sin(a2) * reach)
         ..close();
       final paint = Paint()
+        // Feathered sides: a ray is a soft beam, never a hard-edged wedge.
+        ..maskFilter = MaskFilter.blur(BlurStyle.normal, math.max(4, size.width * 0.012))
         ..shader = RadialGradient(
           center: Alignment.topCenter,
           radius: 1.0,
@@ -440,18 +457,27 @@ class _LazyArtState extends State<LazyArt> with ViewportVisibility<LazyArt> {
 }
 
 /// The animated golden-hour stage behind a hero or page header: the painting
-/// (slow Ken Burns), a drifting gold-cloud layer, shimmering light rays and,
-/// when [video] is allowed, a muted looping video that fades in over the
-/// painting (its poster frame). Everything holds still under reduced motion,
+/// (slow Ken Burns), a drifting gold-cloud haze, shimmering light rays and,
+/// when [video] is allowed, a muted looping video that crossfades in over its
+/// own first frame ([poster]). Everything holds still under reduced motion,
 /// when [motion] is off (admin switch), off-screen, and in tests.
+///
+/// Seamless by construction (PR #15): every layer covers the whole stage;
+/// the haze is a mirrored strip (no tile seam) feathered top-to-bottom; the
+/// rays are blurred; and the stage dissolves to transparent at the bottom
+/// ([BottomFeather]) so the page backdrop shows through — no box edges.
 class HeroStage extends StatefulWidget {
   final String image;
   final Alignment alignment;
   final bool motion;
   final String? video;
+
+  /// First frame of [video] (shown, precached, until the video plays and
+  /// whenever it cannot). Without it the painting [image] is the poster.
+  final String? poster;
   final double rays;
 
-  /// Fade into the page wash at the bottom edge.
+  /// Dissolve into the page at the bottom edge.
   final bool fadeBottom;
   const HeroStage({
     super.key,
@@ -459,6 +485,7 @@ class HeroStage extends StatefulWidget {
     this.alignment = Alignment.center,
     this.motion = true,
     this.video,
+    this.poster,
     this.rays = 1,
     this.fadeBottom = true,
   });
@@ -472,29 +499,32 @@ class _HeroStageState extends State<HeroStage> with SingleTickerProviderStateMix
   late final AnimationController _clock = AnimationController(vsync: this, duration: const Duration(seconds: 60));
   bool _ambient = false;
   bool _videoOn = false;
-  VideoPlayerController? _video;
-  bool _videoReady = false;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     _ambient = ambientMotionOn(context, adminOn: widget.motion);
-    final wantVideo = widget.video != null && heroVideoAllowed(context, adminOn: widget.motion);
-    if (wantVideo != _videoOn) {
-      _videoOn = wantVideo;
-      wantVideo ? _startVideo() : _stopVideo();
-    }
+    _videoOn = widget.video != null && heroVideoAllowed(context, adminOn: widget.motion);
+    // Decode the still before it is needed (no pop-in, no flash on swaps).
+    precacheImage(AssetImage(_still), context).ignore();
     _sync();
   }
+
+  String get _still => _videoOn ? (widget.poster ?? widget.image) : widget.image;
 
   @override
   void didUpdateWidget(covariant HeroStage old) {
     super.didUpdateWidget(old);
-    if (old.motion != widget.motion || old.video != widget.video) didChangeDependencies();
+    if (old.motion != widget.motion || old.video != widget.video || old.image != widget.image) {
+      didChangeDependencies();
+    }
   }
 
   @override
-  void onViewportVisibility(bool visible) => _sync();
+  void onViewportVisibility(bool visible) {
+    _sync();
+    if (_videoOn && mounted) setState(() {}); // pause / resume the video
+  }
 
   void _sync() {
     final run = _ambient && visibleInViewport;
@@ -503,137 +533,182 @@ class _HeroStageState extends State<HeroStage> with SingleTickerProviderStateMix
     } else if (!run && _clock.isAnimating) {
       _clock.stop();
     }
-    final v = _video;
-    if (v != null && _videoReady) {
-      run ? v.play() : v.pause();
-    }
-  }
-
-  Future<void> _startVideo() async {
-    final v = VideoPlayerController.asset(widget.video!, videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true));
-    _video = v;
-    try {
-      await v.initialize();
-      await v.setVolume(0); // muted: required for autoplay on the web
-      await v.setLooping(true);
-      if (!mounted || _video != v) return;
-      setState(() => _videoReady = true);
-      _sync();
-    } catch (_) {
-      // Unsupported codec / blocked autoplay: the painting stays.
-      if (_video == v) _stopVideo();
-    }
-  }
-
-  void _stopVideo() {
-    final v = _video;
-    _video = null;
-    _videoReady = false;
-    v?.dispose();
-    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
     _clock.dispose();
-    _video?.dispose();
     super.dispose();
   }
 
+  Widget _feather(Widget child) => widget.fadeBottom ? BottomFeather(child: child) : child;
+
   @override
   Widget build(BuildContext context) {
-    final v = _video;
+    final still = Image.asset(
+      _still,
+      key: const Key('heroStill'),
+      fit: BoxFit.cover,
+      alignment: widget.alignment,
+      gaplessPlayback: true,
+      // First paint: fade in from the backdrop instead of popping in.
+      frameBuilder: (context, child, frame, sync) => sync
+          ? child
+          : AnimatedOpacity(
+              opacity: frame == null ? 0 : 1,
+              duration: const Duration(milliseconds: 500),
+              curve: Curves.easeOut,
+              child: child,
+            ),
+    );
+    // Ken Burns only on the painting: the video carries its own motion and
+    // must stay registered with its poster.
+    final kenBurns = _ambient && !_videoOn;
     return ExcludeSemantics(
       child: ClipRect(
-        child: RepaintBoundary(
-          child: AnimatedBuilder(
-            animation: _clock,
-            builder: (context, _) {
-              final t = _clock.value;
-              // Ken Burns: 1.00 -> 1.06 and back over the minute.
-              final zoom = 1 + 0.06 * (0.5 - 0.5 * math.cos(t * 2 * math.pi));
-              return Stack(fit: StackFit.expand, children: [
-                Transform.scale(
-                  scale: _ambient ? zoom : 1,
-                  child: Image.asset(widget.image, fit: BoxFit.cover, alignment: widget.alignment, gaplessPlayback: true),
-                ),
-                if (v != null)
-                  AnimatedOpacity(
-                    opacity: _videoReady ? 1 : 0,
-                    duration: const Duration(milliseconds: 1400),
-                    child: _videoReady
-                        ? FittedBox(
-                            fit: BoxFit.cover,
-                            clipBehavior: Clip.hardEdge,
-                            child: SizedBox(
-                              width: v.value.size.width,
-                              height: v.value.size.height,
-                              child: VideoPlayer(v),
-                            ),
-                          )
-                        : const SizedBox.shrink(),
-                  ),
-                // Drifting gold haze (two tiles side by side, sliding across).
-                if (_ambient)
-                  Opacity(
-                    opacity: 0.32,
-                    child: LayoutBuilder(builder: (context, c) {
-                      final w = c.maxWidth;
-                      final dx = -w * t;
-                      return Stack(children: [
-                        for (final k in const [0.0, 1.0])
-                          Positioned(
-                            left: dx + k * w,
-                            top: 0,
-                            width: w,
-                            height: c.maxHeight * 0.7,
-                            child: Image.asset(ArtAssets.clouds, fit: BoxFit.cover, gaplessPlayback: true),
-                          ),
-                      ]);
-                    }),
-                  ),
-                if (widget.rays > 0)
-                  CustomPaint(painter: LightRaysPainter(shimmer: _ambient ? t * 8 % 1 : 0.25, strength: widget.rays)),
-                if (widget.fadeBottom)
-                  const DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [Color(0x00FBF3E4), Color(0x00FBF3E4), Color(0xF2FBF3E4)],
-                        stops: [0, 0.68, 1],
-                      ),
+        child: Stack(fit: StackFit.expand, children: [
+          RepaintBoundary(
+            child: _feather(kenBurns
+                ? AnimatedBuilder(
+                    animation: _clock,
+                    child: still,
+                    builder: (context, child) => Transform.scale(
+                      scale: 1 + 0.06 * (0.5 - 0.5 * math.cos(_clock.value * 2 * math.pi)),
+                      child: child,
                     ),
-                  ),
-              ]);
-            },
+                  )
+                : still),
           ),
-        ),
+          if (_videoOn)
+            HeroVideo(
+              key: ValueKey(widget.video),
+              asset: widget.video!,
+              alignment: widget.alignment,
+              play: visibleInViewport,
+            ),
+          if (_ambient) RepaintBoundary(child: _feather(_HazeDrift(clock: _clock))),
+          if (widget.rays > 0)
+            RepaintBoundary(
+              child: _feather(AnimatedBuilder(
+                animation: _clock,
+                builder: (context, _) => CustomPaint(
+                  painter: LightRaysPainter(shimmer: _ambient ? _clock.value * 8 % 1 : 0.25, strength: widget.rays),
+                ),
+              )),
+            ),
+        ]),
       ),
     );
   }
 }
 
-/// Soft radial cream scrim placed behind hero / header text so it keeps
-/// AA contrast over any part of the painting.
+/// Gold haze drifting sideways across the whole stage. The strip is the
+/// cloud texture, its mirror image, then the texture again, so neighbours
+/// meet edge-to-edge without a seam and the loop restarts on an identical
+/// frame; a vertical alpha ramp keeps it a soft veil with no box edge.
+class _HazeDrift extends StatelessWidget {
+  final Animation<double> clock;
+  const _HazeDrift({required this.clock});
+
+  static Shader _veil(Rect r) => const LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [Color(0x5C000000), Color(0x47000000), Color(0x1F000000), Color(0x00000000)],
+        stops: [0, 0.35, 0.62, 0.9],
+      ).createShader(r);
+
+  @override
+  Widget build(BuildContext context) => ShaderMask(
+        key: const Key('heroHaze'),
+        blendMode: BlendMode.dstIn,
+        shaderCallback: _veil,
+        child: LayoutBuilder(builder: (context, c) {
+          final w = c.maxWidth, h = c.maxHeight;
+          Widget tile(bool mirror) {
+            final img = Image.asset(ArtAssets.clouds, fit: BoxFit.cover, gaplessPlayback: true);
+            return SizedBox(width: w, height: h, child: mirror ? Transform.flip(flipX: true, child: img) : img);
+          }
+
+          return AnimatedBuilder(
+            animation: clock,
+            child: OverflowBox(
+              // Physical left (not start): in RTL a start-aligned strip would
+              // hang off the right edge and leave an empty band (a hard edge).
+              alignment: Alignment.topLeft,
+              minWidth: w * 3,
+              maxWidth: w * 3,
+              child: Row(textDirection: TextDirection.ltr, children: [tile(false), tile(true), tile(false)]),
+            ),
+            builder: (context, child) => Transform.translate(
+              offset: Offset(-2 * w * clock.value, 0),
+              child: child,
+            ),
+          );
+        }),
+      );
+}
+
+/// Soft cream glow behind hero / header text so it keeps AA contrast over any
+/// part of the painting. An elliptical radial glow that bleeds past the text
+/// box and fades to nothing well inside the bleed — never a visible box.
 class TextScrim extends StatelessWidget {
   final Widget child;
   final double opacity;
-  const TextScrim({super.key, required this.child, this.opacity = 0.86});
+
+  /// How far the glow spreads beyond the text box on each side.
+  final EdgeInsets bleed;
+  const TextScrim({
+    super.key,
+    required this.child,
+    this.opacity = 0.86,
+    this.bleed = const EdgeInsets.symmetric(horizontal: 56, vertical: 40),
+  });
 
   @override
-  Widget build(BuildContext context) => DecoratedBox(
-        decoration: BoxDecoration(
-          gradient: RadialGradient(
-            radius: 0.75,
-            colors: [
-              AppColors.cream.withValues(alpha: opacity),
-              AppColors.cream.withValues(alpha: opacity * 0.7),
-              AppColors.cream.withValues(alpha: 0),
-            ],
-            stops: const [0, 0.6, 1],
+  Widget build(BuildContext context) => Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned(
+            left: -bleed.left,
+            right: -bleed.right,
+            top: -bleed.top,
+            bottom: -bleed.bottom,
+            child: IgnorePointer(
+              child: CustomPaint(key: const Key('textScrimGlow'), painter: _GlowPainter(AppColors.cream, opacity)),
+            ),
           ),
-        ),
-        child: child,
+          child,
+        ],
       );
+}
+
+/// An ellipse-shaped radial glow filling its box and reaching zero alpha
+/// exactly at the box's inscribed ellipse (so nothing is left at the edges).
+class _GlowPainter extends CustomPainter {
+  final Color color;
+  final double opacity;
+  _GlowPainter(this.color, this.opacity);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (size.isEmpty) return;
+    final rx = size.width / 2, ry = size.height / 2;
+    canvas.save();
+    canvas.translate(rx, ry);
+    canvas.scale(1, ry / rx);
+    final r = Rect.fromCircle(center: Offset.zero, radius: rx);
+    // Eased falloff: a plateau behind the words, then a long soft tail.
+    final paint = Paint()
+      ..shader = RadialGradient(
+        colors: [
+          for (final a in const [1.0, 0.9, 0.62, 0.3, 0.1, 0.0]) color.withValues(alpha: opacity * a),
+        ],
+        stops: const [0, 0.38, 0.6, 0.78, 0.9, 1],
+      ).createShader(r);
+    canvas.drawCircle(Offset.zero, rx, paint);
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(_GlowPainter old) => old.color != color || old.opacity != opacity;
 }

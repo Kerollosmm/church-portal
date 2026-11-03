@@ -414,9 +414,13 @@ class _AppDrawer extends ConsumerWidget {
               ),
               child: Row(children: [
                 Container(
-                  padding: const EdgeInsets.all(2),
-                  decoration: const BoxDecoration(color: AppColors.cream, shape: BoxShape.circle),
-                  child: const ChurchSeal(size: 50),
+                  padding: const EdgeInsets.all(1.5),
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: AppColors.goldLight,
+                    boxShadow: [BoxShadow(color: Color(0x73200000), blurRadius: 8, offset: Offset(0, 2))],
+                  ),
+                  child: const ChurchSeal(size: 52),
                 ),
                 const SizedBox(width: 12),
                 Expanded(

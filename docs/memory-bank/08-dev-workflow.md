@@ -161,9 +161,13 @@ Example: a new public collection `announcements` shown on `/news`.
 
 ## Branding assets
 
-All logos/icons come from the parish seal: `tool/gen_branding.sh [new-seal-1024.webp|png]` (ImageMagick 7) rewrites
-`assets/branding/seal.png` (in-app `ChurchSeal`), `web/favicon.{ico,png}`, `web/favicon-16.png`,
-`web/icons/Icon-{192,512}.png`, `Icon-maskable-{192,512}.png` (seal at 78% on `#470812`), `apple-touch-icon.png`,
-`web/og-image.jpg` (1200×630) and `android/.../mipmap-*/ic_launcher{,_foreground}.png` (+ adaptive icon XML,
-background `@color/ic_launcher_background`). Commit the regenerated files. `test/branding_test.dart` checks the web
+All logos/icons come from the parish seal (new seal since PR #15). The master `assets/branding/seal_source.webp` is
+the **round seal on a transparent background**, square, ≥ 1024 px, lossless. To change the logo, crop the artwork to
+its outer ring (transparent outside), then `tool/gen_branding.sh [round-seal.(webp|png)]` (ImageMagick 7) rewrites
+`assets/branding/seal.png` (384 px; in-app `ChurchSeal`, seal tab, drawer, footer, admin, and the web splash in
+`web/index.html`), `web/favicon.{ico,png}`, `web/favicon-16.png` (light unsharp, no blur),
+`web/icons/Icon-{192,512}.png` (round, transparent), `Icon-maskable-{192,512}.png` (seal at 78% on `#470812`),
+`apple-touch-icon.png` (on white), `web/og-image.jpg` (1200×630, seal on maroon; also the JSON-LD `image`) and
+`android/.../mipmap-*/ic_launcher{,_foreground}.png` (+ adaptive icon XML, background
+`@color/ic_launcher_background`) and `mipmap-*/launch_image.png` (Android launch screen, 128 dp). Commit the regenerated files. `test/branding_test.dart` checks the web
 title/manifest/share tags, the files and the Hosting redirect config.

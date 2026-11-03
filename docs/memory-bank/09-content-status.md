@@ -41,6 +41,7 @@ summary agents need before touching content.
 | Priests | Bigol, Saleeb (last confirmed 2022), Barnaba (single 2025 source), departed Maximus Fouad (single source) | |
 | Altars | none seeded | No source lists the altars (PRD lists main: Sts Maximus & Domadius; second: St Moses; annexes: St Mary, St Mina & St George — unverified) |
 | Hero / priest photos | none | No hotlinkable verified photos (`heroImageUrl`, `photoUrl` empty) |
+| Saint images (live data) | AI paintings, set by the site owner | 3 Nov 2026 (PR #15): the owner asked to use the Gemini-painted icons as the main image of `saints/moses-black` and `saints/maximus-domadius` (`image.url` = `https://maximos-domadios-church.web.app/art/saint-moses-black.webp` / `.../art/saints-maximus-domadius.webp`, served from `web/art/`). Decorative paintings, not historical icons; replace with real icons when the church provides them |
 
 Deliberately **not seeded**: Fr Yassa Ibrahim and Fr Philemon Fawzy (named in priestly-calling congratulations on
 31 Oct 2026 — ordination may be upcoming), "القمص اسحق" and "ابونا مكسيموس" (ambiguous mentions).

@@ -39,8 +39,8 @@ panels over the painting, and the patron saints standing in **gold halos** over 
 - **IBM Plex Sans Arabic** (`AppFonts.body`) — body and UI.
 
 ## 5. Components
-- **Hero:** the church in clouds (wide/tall art by aspect), slow drift + light rays, optional muted video loop
-  (`video_player`, web only when allowed). Admin switch `settings/features.heroMotion` (default on); visitors'
+- **Hero:** the church in clouds (wide/tall art by aspect), slow drift + light rays, muted video loop (seconds 3–10 of the
+  Gemini clip, crossfaded loop; portrait crop on phones; native `<video>` on web, `video_player` on Android/iOS). Admin switch `settings/features.heroMotion` (default on); visitors'
   reduced-motion and save-data always win.
 - **Inner page header:** same painting with a cream scrim, accent word, maroon title, subtitle ribbon. Saint pages:
   the saint in a gold halo over the Nile.

@@ -173,8 +173,8 @@ class _AnnouncementBanner extends StatelessWidget {
 
 /// The golden-hour hero (the posters' first panel): the painting of the
 /// church in the heavenly clouds — slow Ken Burns, drifting gold haze,
-/// shimmering sun rays and, on tablets / desktops, the muted cloud loop
-/// fading in over it — with the red calligraphic welcome, the heavy maroon
+/// shimmering sun rays and the muted cloud loop (a portrait crop on phones)
+/// crossfading in over its poster frame — with the red calligraphic welcome, the heavy maroon
 /// name on a cream scrim, the address ribbon, the verse panel and the CTAs.
 class _Hero extends ConsumerWidget {
   final ChurchSettings? settings;
@@ -265,9 +265,9 @@ class _Hero extends ConsumerWidget {
             image: narrow ? ArtAssets.heroTall : ArtAssets.heroWide,
             alignment: Alignment.bottomCenter,
             motion: f.heroMotion,
-            // The 16:9 loop crops badly to a portrait phone and costs data:
-            // tablets and desktops only.
-            video: narrow ? null : ArtAssets.heroVideo,
+            // Phones get the portrait centre crop (the church stays centred).
+            video: narrow ? ArtAssets.heroVideoTall : ArtAssets.heroVideo,
+            poster: narrow ? ArtAssets.heroPosterTall : ArtAssets.heroPoster,
           ),
         ),
         Center(
@@ -385,10 +385,12 @@ class _PatronsTeaser extends ConsumerWidget {
             ),
           ],
           Padding(
-            padding: EdgeInsets.fromLTRB(wide ? 190 : (narrow ? 12 : 24), 8, wide ? 190 : (narrow ? 12 : 24), 28),
+            // Top room so the title glow fades out before the band's edge.
+            padding: EdgeInsets.fromLTRB(wide ? 190 : (narrow ? 12 : 24), 36, wide ? 190 : (narrow ? 12 : 24), 28),
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
               TextScrim(
                 opacity: 0.8,
+                bleed: const EdgeInsets.symmetric(horizontal: 56, vertical: 28),
                 child: SectionTitle(
                   context.tr('patronsOfOurChurch'),
                   accent: context.tr('accentPatrons'),

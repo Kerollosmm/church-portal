@@ -18,7 +18,7 @@ Repo: `Kerollosmm/church-portal`. Owner/developer: Kerollos Melad (GitHub `Kerol
 | Official name (EN, as used in the app) | **Church of Saints Maximus & Domadius and the Strong Anba Moussa the Black** |
 | Display title (web `<title>`, manifest `name`, MaterialApp, drawer/footer fallback) | «كنيسة القديسين مكسيموس ودوماديوس والقوي الأنبا موسى الأسود» / "St. Maximus & Domadius and St. Moses the Black Church" (`l10n` key `appName`; once loaded, headers/footer show the admin-editable `settings/church.nameAr/nameEn`) |
 | Short name in the UI | «كنيسة مكسيموس ودوماديوس» / "St. Maximus & Domadius Church" (`l10n` `appShort`, manifest `short_name`, Android label) — replaced «كنيسة العصافرة» / "Asafra Church" in PR #6 |
-| Logo | The parish's official round seal (maroon/gold) — `assets/branding/seal.png` via `ChurchSeal`, all icons from `tool/gen_branding.sh` |
+| Logo | The parish's official round seal (white disc, gold double ring; new seal since PR #15) — `assets/branding/seal.png` via `ChurchSeal`, all icons from `tool/gen_branding.sh` |
 | Denomination | Coptic Orthodox |
 | Address (AR) | آخر شارع 45، العصافرة قبلي، قطاع المنتزه، الإسكندرية |
 | Address (EN) | End of Street 45, El-Asafra Qebly, Montaza district, Alexandria, Egypt |

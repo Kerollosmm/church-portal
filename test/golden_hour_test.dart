@@ -95,9 +95,15 @@ void main() {
       total += f.lengthSync();
     }
     expect(total, lessThan(400 * 1024), reason: 'decorative art budget');
-    final video = File(ArtAssets.heroVideo);
-    expect(video.existsSync(), isTrue);
-    expect(video.lengthSync(), lessThan(1024 * 1024), reason: 'hero loop under 1 MB');
+    for (final v in const [ArtAssets.heroVideo, ArtAssets.heroVideoTall]) {
+      final video = File(v);
+      expect(video.existsSync(), isTrue, reason: v);
+      expect(video.lengthSync(), lessThan(1024 * 1024), reason: 'hero loop under 1 MB');
+    }
+    for (final p in const [ArtAssets.heroPoster, ArtAssets.heroPosterTall]) {
+      final head = File(p).readAsBytesSync().sublist(0, 12);
+      expect(String.fromCharCodes(head.sublist(8, 12)), 'WEBP', reason: p);
+    }
     expect(ArtAssets.paintingForSaint('moses-black'), ArtAssets.saintMoses);
     expect(ArtAssets.paintingForSaint('unknown'), isNull);
   });
@@ -236,5 +242,66 @@ void main() {
         find.descendant(of: find.byType(Reveal), matching: find.byType(Opacity)))) {
       expect(o.opacity, 1);
     }
+  });
+
+  test('bottom feather: opaque at the top, fully transparent at the bottom edge (CSS mask matches)', () {
+    expect(BottomFeather.alphas.first, 1);
+    expect(BottomFeather.alphas.last, 0);
+    expect(BottomFeather.stops.last, 1);
+    expect(BottomFeather.stops.length, BottomFeather.alphas.length);
+    for (var i = 1; i < BottomFeather.alphas.length; i++) {
+      expect(BottomFeather.alphas[i], lessThanOrEqualTo(BottomFeather.alphas[i - 1]), reason: 'monotonic');
+      expect(BottomFeather.stops[i], greaterThan(BottomFeather.stops[i - 1]));
+    }
+    // Smooth start: the first step of the ramp is tiny (no visible line).
+    expect(1 - BottomFeather.alphas[2], lessThan(0.05));
+    expect(BottomFeather.cssMask, startsWith('linear-gradient(to bottom, rgba(0,0,0,1.0) 0.0%, '));
+    expect(BottomFeather.cssMask, endsWith('rgba(0,0,0,0.0) 100.0%)'));
+  });
+
+  testWidgets('hero seams: every stage layer is full-bleed (not capped at 1200), feathered, scrims bleed', (tester) async {
+    await _pump(tester, _seedWith(const {}), size: const Size(1600, 5000));
+    final hero = find.byKey(const Key('homeHero'));
+    final heroRect = tester.getRect(hero);
+    expect(heroRect.width, 1600, reason: 'full width, outside the content cap');
+    final stage = find.descendant(of: hero, matching: find.byType(HeroStage));
+    expect(tester.getRect(stage), heroRect);
+    // Still + rays dissolve into the page (no line where the hero ends).
+    final feathers = find.descendant(of: stage, matching: find.byKey(const Key('heroFeather')));
+    expect(feathers, findsAtLeastNWidgets(2));
+    for (final e in feathers.evaluate()) {
+      expect(tester.getRect(find.byWidget(e.widget)), heroRect);
+    }
+    expect(tester.getRect(find.descendant(of: stage, matching: find.byKey(const Key('heroStill')))), heroRect);
+    // The title glow is a radial bleed bigger than the text, not a box.
+    final scrim = find.descendant(of: hero, matching: find.byType(TextScrim));
+    final glow = tester.getRect(find.descendant(of: scrim, matching: find.byKey(const Key('textScrimGlow'))));
+    final text = tester.getRect(find.descendant(of: scrim, matching: find.byKey(const Key('heroTitle'))));
+    expect(glow.left, lessThan(text.left - 40));
+    expect(glow.top, lessThan(text.top - 30));
+    expect(glow.bottom, greaterThan(text.bottom + 30));
+  });
+
+  testWidgets('hero video on phones too: portrait crop + its own poster; painting fallback stays', (tester) async {
+    await _pump(tester, _seedWith(const {}), size: const Size(390, 3000));
+    final stage = tester.widget<HeroStage>(
+        find.descendant(of: find.byKey(const Key('homeHero')), matching: find.byType(HeroStage)));
+    expect(stage.video, ArtAssets.heroVideoTall);
+    expect(stage.poster, ArtAssets.heroPosterTall);
+    expect(stage.image, ArtAssets.heroTall);
+    expect(stage.motion, isTrue, reason: 'heroMotion defaults on');
+  });
+
+  testWidgets('seal tab: new seal on a gold ring with a soft shadow', (tester) async {
+    await tester.pumpWidget(const MaterialApp(home: Scaffold(body: Center(child: SealTab()))));
+    final img = tester.widget<Image>(find.descendant(of: find.byType(SealTab), matching: find.byType(Image)));
+    expect((img.image as AssetImage).assetName, 'assets/branding/seal.png');
+    final ring = tester
+        .widgetList<Container>(find.descendant(of: find.byType(SealTab), matching: find.byType(Container)))
+        .map((c) => c.decoration)
+        .whereType<BoxDecoration>()
+        .firstWhere((d) => d.shape == BoxShape.circle);
+    expect(ring.gradient, isA<SweepGradient>());
+    expect(ring.boxShadow, isNotEmpty);
   });
 }

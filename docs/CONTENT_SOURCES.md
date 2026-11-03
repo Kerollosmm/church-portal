@@ -134,3 +134,9 @@ Not seeded until the church confirms them: القس يسى إبراهيم and ا
 5. Current priest roster (confirm Bigol, Saleeb and Barnaba; ordination and assignment of Yassa Ibrahim and Philemon Fawzy), with photos.
 6. Founding / consecration year and altar names (Hegumen Bemwa Ghaly's history talk on 25 Jun 2025 is the lead).
 7. Photos of the church building (the Facebook cover album a.217655827254851 has a bell-tower photo).
+
+## Saint images (3 Nov 2026)
+
+The main images of the two patron saints in live data are AI paintings (Google Gemini, Nov 2026) chosen by the
+site owner, served from Hosting: `/art/saint-moses-black.webp` and `/art/saints-maximus-domadius.webp`
+(`web/art/`, 806×1000). Decorative, not historical icons; swap for the church's own icons when available.

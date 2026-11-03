@@ -19,7 +19,9 @@ cards in `FeaturesEditor`, 320 px / 200 % admin polish) plus PR #13 (`feat/pr13-
 item detail routes + `ItemDetailPage` with lazy zoomable gallery, custom fields, contact/social actions and per-item
 SEO, parent-aware phone Back arrow, card Details links, custom page headers / intro notes, FR-G-04 footer) plus
 PR #14 (`feat/pr14-detail-pages-default-on`: detail pages on by default — opt-out `detailsEnabled` — with labelled
-key facts, add-to-calendar, directions, share link and "More in this section"; ADR-021).
+key facts, add-to-calendar, directions, share link and "More in this section"; ADR-021) plus PR #15
+(`design/coptic-identity`: "Golden hour" poster identity, image display styles, seamless hero with a trimmed looping
+video on every screen size, new parish seal and regenerated icons; ADR-022 revised, ADR-023, ADR-018 amendment).
 
 > **Golden rule:** read this folder before changing anything, and update it in the same PR as every change that
 > alters behaviour, data shape, rules, workflows, content status or open tasks.

@@ -283,9 +283,14 @@ chunks are fetched relative to `<base href>`).
   `kMaxContentWidth` 1200 (`common.dart`); `ResponsiveGrid` + `gridColumns(width)` = 1/2/3 columns at < 560 / < 900 /
   ≥ 900 px of grid width (`maxColumns` cap, `minItemWidth` only lowers the count); the grid takes the full width so
   rows start at the reading edge in RTL; cards keep their own height.
-- Art & motion (`lib/ui/widgets/golden.dart`): `ArtAssets` (hero wide/tall, Nile, clouds, painted patrons),
-  `HaloPortrait` (gold halo ring), `HaloCrossFill`, `LightRaysPainter`, hero drift + `video_player` loop gated by
-  `settings/features.heroMotion` and the visitor's reduced-motion / save-data (`lib/core/motion_env*.dart`).
+- Art & motion (`lib/ui/widgets/golden.dart`): `ArtAssets` (hero wide/tall, Nile, clouds, painted patrons, hero
+  video wide/tall + posters), `HaloPortrait` (gold halo ring), `HaloCrossFill`, `LightRaysPainter` (blurred rays),
+  `HeroStage` (full-bleed layers: still/poster with Ken Burns, `HeroVideo`, mirrored haze strip, rays; each feathered
+  by `BottomFeather` in `hero_feather.dart` so the hero dissolves into the page — no box edges), `TextScrim`
+  (elliptical radial glow bleeding past the text). `HeroVideo` (`hero_video.dart`, conditional export): web =
+  native `<video muted playsinline loop>` via `HtmlElementView.fromTagName` with a CSS mask + fade-in on `playing`
+  (`hero_video_web.dart`); Android/iOS = `video_player` (`hero_video_io.dart`). Gated by `settings/features.heroMotion`
+  and the visitor's reduced-motion / save-data (`lib/core/motion_env*.dart`); phones get the portrait crop.
 - **Image display styles (ADR-023):** `lib/ui/widgets/styled_image.dart` — `CardCover` (top of a card for
   `card`/`banner`), `CardLead` (title-row lead: halo avatar for `avatar`, the section icon when there is no image),
   `HaloAvatar`, `FittedCover` (whole picture, `contain` over a blurred sepia copy, clipped), `DetailCover`;
