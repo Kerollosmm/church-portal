@@ -271,7 +271,8 @@ only when the doc does not exist) and **Enable the AI assistant**
 both are on (and App Check is active); a note names the default model. Below it the generic settings form
 (`ChurchInfoScreen` with `doc: assistantSettingsDoc`, same reload banner / own-save rules): Model (text,
 `FieldDef.pattern` = the rules' model regex → `invalid`), Persona & style instructions, Allowed topics (one per
-line), Refusal message ar/en, Welcome text ar/en, Suggested questions ar/en (one per line, up to 3), Max question
+line), Refusal message ar/en, Welcome text ar/en, Suggested questions ar/en (one per line, up to 3), **"More info"
+line ar/en** and **Mention unconfirmed flags** switch (default off, `newBool: false`) (PR #21, ADR-030), Max question
 length (50–1000), Max questions per minute (1–20), per visit (1–200). Blank = default (hints say which).
 
 ### Custom sections, items and pages (PR #18, ADR-027)

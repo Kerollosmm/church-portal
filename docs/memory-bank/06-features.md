@@ -142,7 +142,12 @@ Chat UI with a welcome bubble (admin `welcomeAr/En`, else `askIntro`), up to 3 s
 تحتوي أخطاء». Answers only about the church and its services (ADR-029): off-topic questions get the admin refusal
 message in the visitor's language; per-visit limits (questions per minute / per visit) show `askSlowDown` /
 `askSessionLimit` without calling the model. Shows "assistant not available" when `assistantVisibleProvider` is
-false. Works on web (reCAPTCHA Enterprise) and Android (Play Integrity, once registered). Details in `05-firebase.md`.
+false. **Replies render as safe Markdown** (PR #21, ADR-030: `lib/domain/simple_markdown.dart` parser +
+`lib/ui/widgets/safe_markdown.dart` `SafeMarkdown`): bold, italics, bullet / numbered lists, links — only http(s),
+`tel:` and internal `/routes` are tappable (internal via go_router), no HTML / images, unpaired `*` dropped so a
+literal asterisk never shows; direction from the reply's first strong character (Arabic RTL even in the English UI);
+links keep the body colour + underline (same contrast as the text on every theme); one `SelectionArea` per bubble
+keeps select / copy. Works on web (reCAPTCHA Enterprise) and Android (Play Integrity, once registered). Details in `05-firebase.md`.
 
 ### Item detail pages (PR #13, ADR-020) — `item_detail_page.dart` `ItemDetailPage`
 - Routes: `/church-education/:id`, `/church-activities/:id`, `/clinics/:id`, `/public-services/:id`,

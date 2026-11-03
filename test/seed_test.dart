@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:church_portal/data/seed_data.dart';
 import 'package:church_portal/domain/assistant_context.dart';
+import 'package:church_portal/domain/assistant_settings.dart';
 import 'package:church_portal/domain/cairo_time.dart';
 import 'package:church_portal/domain/features.dart';
 import 'package:church_portal/domain/models.dart';
@@ -99,11 +100,12 @@ void main() {
     }
   });
 
-  test('unconfirmed one-off services are tagged for the assistant', () {
+  test('unconfirmed one-off services are tagged for the assistant only with "Mention unconfirmed flags" on', () {
     final oneOff = Liturgy(
         id: 'x', type: 'mass', nameAr: 'قداس خاص', nameEn: 'Special liturgy', start: '08:00', end: '10:00',
         date: DateTime.utc(2027, 3, 1), sample: true);
-    final text = buildAssistantInstruction(
+    String build(AssistantSettings a) => buildAssistantInstruction(
+      assistant: a,
       settings: seed.settings,
       liturgies: [oneOff],
       seasons: const [],
@@ -113,7 +115,11 @@ void main() {
       facilities: const [],
       now: CairoTime.at(2026, 11, 1, 600),
     );
-    expect(text, contains('[UNCONFIRMED] 2027-03-01: Special liturgy'));
+    expect(build(AssistantSettings.fromMap({'mentionUnconfirmed': true})),
+        contains('[UNCONFIRMED] 2027-03-01: Special liturgy'));
+    final off = build(AssistantSettings.defaults);
+    expect(off, contains('- 2027-03-01: Special liturgy'));
+    expect(off, isNot(contains('[UNCONFIRMED]')));
   });
 
   test('every liturgy has valid times and a weekday or date', () {

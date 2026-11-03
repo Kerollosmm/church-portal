@@ -15,6 +15,7 @@ import '../../domain/features.dart';
 import '../../domain/time_format.dart';
 import '../../state/providers.dart';
 import '../widgets/common.dart';
+import '../widgets/safe_markdown.dart';
 
 class _Msg {
   final bool user;
@@ -391,8 +392,11 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
           borderRadius: BorderRadius.circular(4),
           border: m.user ? null : Border.all(color: AppColors.gold.withValues(alpha: 0.4)),
         ),
-        child: SelectableText(m.text, style: TextStyle(
-                color: m.user ? context.pal.onPrimary : (m.error ? AppColors.ink : context.pal.ink), height: 1.6)),
+        child: m.user || m.error
+            ? SelectableText(m.text, style: TextStyle(
+                color: m.user ? context.pal.onPrimary : AppColors.ink, height: 1.6))
+            // Model replies are Markdown: render the safe subset (ADR-030).
+            : SafeMarkdown(m.text, style: TextStyle(color: context.pal.ink, height: 1.6)),
       ),
     );
   }

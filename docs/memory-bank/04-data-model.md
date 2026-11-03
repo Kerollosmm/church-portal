@@ -344,6 +344,8 @@ Public read, admin write (`validAssistant`). **Missing doc / blank text / null n
 | `refusalAr`, `refusalEn` | string ≤ 500 | `defaultRefusalAr/En` |
 | `welcomeAr`, `welcomeEn` | string ≤ 500 | l10n `askIntro` |
 | `suggestionsAr`, `suggestionsEn` | string ≤ 300, one question per line, first 3 used | l10n `askSuggest1…3` |
+| `moreInfoAr`, `moreInfoEn` | string ≤ 300 (PR #21, ADR-030) | `defaultMoreInfoAr/En` — closing line for general-faith answers only, links to `/contact` |
+| `mentionUnconfirmed` | bool (PR #21, ADR-030) | `false` — off: `[UNCONFIRMED]` markers are stripped from the prompt and the model never mentions them |
 | `maxChars` | null or int 50–1000 | 500 |
 | `perMinute` | null or int 1–20 | 4 |
 | `perSession` | null or int 1–200 | 30 |

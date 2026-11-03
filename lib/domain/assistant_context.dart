@@ -34,6 +34,9 @@ String buildAssistantInstruction({
   final office = f.enabled(Sections.contactInfo) && settings.phones.isNotEmpty
       ? ' (church office: ${settings.phones.first.number})'
       : '';
+  final hasContactPage = f.enabled(Sections.contactInfo) || f.enabled(Sections.contactForm);
+  final pointToContact =
+      hasContactPage ? 'point to the contact page (/contact)$office' : 'suggest asking the church office$office';
   final b = StringBuffer()
     ..writeln(
       'Church: ${_bi(settings.nameAr, settings.nameEn)}, a Coptic Orthodox church'
@@ -46,15 +49,18 @@ String buildAssistantInstruction({
     ..writeln()
     // Fixed guardrails: always present whatever the admin wrote above.
     ..writeln('## Scope (always applies)')
-    ..writeln('You ONLY answer questions about this church, its services and this website. Allowed topics:');
+    ..writeln('You ONLY answer questions about this church, its services, this website and the Coptic Orthodox faith. '
+        'Allowed topics:');
   for (final t in assistant.effectiveTopics) {
     b.writeln('- $t');
   }
   b
+    ..writeln('- The Coptic Orthodox faith: saints, rites and sacraments, feasts and fasts, hymns, the Bible, '
+        'the church calendar and church history')
     ..writeln(
-      'If a question is about anything else (general knowledge, news, politics, other churches or organisations, '
-      'jokes, stories, poems, homework, maths, translation, coding, technology, or anything not in the church data '
-      'below), reply with exactly $outOfScopeToken and nothing else. Greetings and thanks are fine: answer briefly '
+      'If a question is about anything else (general knowledge, news, politics, sports, other organisations, '
+      'jokes, stories, poems, homework, maths, translation, coding, technology, or anything unrelated to this '
+      'church or the Coptic Orthodox faith), reply with exactly $outOfScopeToken and nothing else. Greetings and thanks are fine: answer briefly '
       'and offer help about the church.',
     )
     ..writeln(
@@ -63,14 +69,38 @@ String buildAssistantInstruction({
     )
     ..writeln()
     ..writeln('## Grounding (always applies)')
+    // 1. Data answers: direct and confident, no disclaimers.
     ..writeln(
-      'Answer ONLY from the church data below. If the answer is not in the data, say you do not know '
-      'and suggest calling the church office$office. Never invent times, dates, names, phone numbers, prices, fees, '
-      'amounts or links.',
+      'Questions answered by the church data below (times, meetings, clinics, priests, saints, activities, '
+      'contacts and so on): answer directly and confidently from the data. Do NOT add disclaimers such as '
+      '"unconfirmed", "may change", "please verify" or "call/ask the church" to these answers.',
+    )
+    ..writeln(
+      assistant.mentionUnconfirmed
+          ? 'Items marked [UNCONFIRMED] are not yet confirmed by the church. Mention it at most once, briefly, and '
+              'only when the visitor asks about that specific item; never for other items or in general.'
+          : 'Never say that any information is unconfirmed, provisional or a sample.',
+    )
+    // 2. Church / faith questions outside the data: general knowledge + one closing line.
+    ..writeln(
+      'Questions about the church or the Coptic Orthodox faith (saints, rites, sacraments, feasts, fasts, hymns, '
+      'the Bible, church history) that the data does not cover: answer normally and briefly from general Coptic '
+      'Orthodox knowledge, then end with exactly one closing line, in the language of the question - Arabic: '
+      '"${assistant.moreInfo(true)}" / English: "${assistant.moreInfo(false)}". Use this closing line ONLY for '
+      'such general-knowledge answers, never for answers from the data.',
+    )
+    // 3. Never invent church specifics.
+    ..writeln(
+      'Never invent specific times, dates, names, phone numbers, prices, fees, amounts or links of this church '
+      'that are not in the data: for those, say briefly that it is not listed and $pointToContact.',
     )
     ..writeln(
       'Reply in the language of the question (Egyptian-friendly Modern Standard Arabic or English). '
       'Keep answers short (max ~6 lines), use bullet points for lists, and give times like 06:30 AM.',
+    )
+    ..writeln(
+      'Formatting: use only simple Markdown — **bold**, *italic*, "- " bullet lists, "1. " numbered lists and '
+      '[text](https://…) or [text](tel:…) links. No headings, tables, code, HTML or images.',
     )
     ..writeln(
       'All times are Africa/Cairo local time. Today in Cairo: ${_ymd(cairoNow)} '
@@ -323,7 +353,9 @@ String buildAssistantInstruction({
   _contactForm(b, f, contact);
   _customContent(b, f, categories, entries, pages);
 
-  return b.toString();
+  final out = b.toString();
+  // "Mention unconfirmed flags" off: the model never sees the marker.
+  return assistant.mentionUnconfirmed ? out : out.replaceAll('[UNCONFIRMED] ', '');
 }
 
 /// What the instruction grounds from the contact form types and the custom

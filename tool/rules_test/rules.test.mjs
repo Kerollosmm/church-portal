@@ -1381,6 +1381,7 @@ describe('ADR-029: assistant settings (settings/assistant)', () => {
     refusalAr: 'ع'.repeat(500), refusalEn: 'r'.repeat(500),
     welcomeAr: 'أ'.repeat(500), welcomeEn: 'w'.repeat(500),
     suggestionsAr: 'س'.repeat(300), suggestionsEn: 's'.repeat(300),
+    moreInfoAr: 'م'.repeat(300), moreInfoEn: 'm'.repeat(300), mentionUnconfirmed: true,
     maxChars: 1000, perMinute: 20, perSession: 200,
   };
 
@@ -1400,6 +1401,7 @@ describe('ADR-029: assistant settings (settings/assistant)', () => {
       { model: 'gemini-' + 'a'.repeat(60) }, { model: 3 }, { model: null },
       { instructions: 'x'.repeat(4001) }, { topics: 'x'.repeat(2001) }, { refusalAr: 'x'.repeat(501) },
       { welcomeEn: 'x'.repeat(501) }, { suggestionsEn: 'x'.repeat(301) }, { refusalEn: 5 },
+      { moreInfoAr: 'x'.repeat(301) }, { moreInfoEn: 7 }, { mentionUnconfirmed: 'yes' },
       { maxChars: 49 }, { maxChars: 1001 }, { maxChars: 300.5 }, { perMinute: 0 }, { perMinute: 21 },
       { perSession: 201 }, { perSession: '5' }, { enabled: true }, { updatedBy: 'someone@else.test' },
     ]) {

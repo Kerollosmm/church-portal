@@ -554,13 +554,14 @@ service cloud.firestore {
     // Gemini id (gemini-…, lower-case letters, digits, dots, hyphens).
     function validAssistant(d) {
       return keysAllowed(['model', 'instructions', 'topics', 'refusalAr', 'refusalEn', 'welcomeAr', 'welcomeEn',
-                          'suggestionsAr', 'suggestionsEn', 'maxChars', 'perMinute', 'perSession',
-                          'updatedAt', 'updatedBy'])
+                          'suggestionsAr', 'suggestionsEn', 'moreInfoAr', 'moreInfoEn', 'mentionUnconfirmed',
+                          'maxChars', 'perMinute', 'perSession', 'updatedAt', 'updatedBy'])
         && str(d, 'model', 60) && d.get('model', '').matches('(gemini-[a-z0-9][a-z0-9.-]{0,52})?')
         && str(d, 'instructions', 4000) && str(d, 'topics', 2000)
         && str(d, 'refusalAr', 500) && str(d, 'refusalEn', 500)
         && str(d, 'welcomeAr', 500) && str(d, 'welcomeEn', 500)
         && str(d, 'suggestionsAr', 300) && str(d, 'suggestionsEn', 300)
+        && str(d, 'moreInfoAr', 300) && str(d, 'moreInfoEn', 300) && optBool(d, 'mentionUnconfirmed')
         && optInt(d, 'maxChars', 50, 1000) && optInt(d, 'perMinute', 1, 20) && optInt(d, 'perSession', 1, 200)
         && stampOk(d);
     }

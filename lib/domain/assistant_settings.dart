@@ -14,6 +14,7 @@ class AssistantLimits {
   static const topicsMax = 2000;
   static const textMax = 500; // refusal / welcome per language
   static const suggestionsMax = 300; // per language, one suggestion per line
+  static const moreInfoMax = 300; // "more info" closing line, per language
   static const maxSuggestions = 3;
 
   /// Message length bounds (characters).
@@ -56,6 +57,16 @@ class AssistantSettings {
   /// Suggested questions, one per line ('' = built-in suggestions).
   final String suggestionsAr, suggestionsEn;
 
+  /// Closing line for answers from general Coptic Orthodox knowledge (not the
+  /// church data) — '' = [defaultMoreInfoAr] / [defaultMoreInfoEn].
+  final String moreInfoAr, moreInfoEn;
+
+  /// "Mention unconfirmed flags" (default off): when off, the `sample` items
+  /// reach the model without the [UNCONFIRMED] marker and it never adds an
+  /// "unconfirmed" disclaimer; when on, it may say so once, briefly, only
+  /// when asked about that specific flagged item.
+  final bool mentionUnconfirmed;
+
   /// Stored limits (null = default); read the clamped [maxChars],
   /// [perMinute] and [perSession].
   final int? rawMaxChars, rawPerMinute, rawPerSession;
@@ -70,6 +81,9 @@ class AssistantSettings {
     this.welcomeEn = '',
     this.suggestionsAr = '',
     this.suggestionsEn = '',
+    this.moreInfoAr = '',
+    this.moreInfoEn = '',
+    this.mentionUnconfirmed = false,
     this.rawMaxChars,
     this.rawPerMinute,
     this.rawPerSession,
@@ -89,6 +103,9 @@ class AssistantSettings {
       welcomeEn: _s(m['welcomeEn']),
       suggestionsAr: _s(m['suggestionsAr']),
       suggestionsEn: _s(m['suggestionsEn']),
+      moreInfoAr: _s(m['moreInfoAr']),
+      moreInfoEn: _s(m['moreInfoEn']),
+      mentionUnconfirmed: m['mentionUnconfirmed'] == true,
       rawMaxChars: _i(m['maxChars']),
       rawPerMinute: _i(m['perMinute']),
       rawPerSession: _i(m['perSession']),
@@ -113,6 +130,11 @@ class AssistantSettings {
   String refusal(bool arabic) => arabic
       ? (refusalAr.isNotEmpty ? refusalAr : defaultRefusalAr)
       : (refusalEn.isNotEmpty ? refusalEn : defaultRefusalEn);
+
+  /// The "more info" closing line in each language (admin text or default).
+  String moreInfo(bool arabic) => arabic
+      ? (moreInfoAr.isNotEmpty ? moreInfoAr : defaultMoreInfoAr)
+      : (moreInfoEn.isNotEmpty ? moreInfoEn : defaultMoreInfoEn);
 
   /// '' = the app's built-in welcome text.
   String welcome(bool arabic) => arabic ? welcomeAr : welcomeEn;
@@ -149,6 +171,9 @@ class AssistantSettings {
       'Hall bookings and the contact form\n'
       'Donations page\n'
       'The custom sections and pages of this website';
+
+  static const defaultMoreInfoAr = 'للمزيد تواصل مع مكتب الكنيسة أو صفحة [تواصل معنا](/contact).';
+  static const defaultMoreInfoEn = 'For more, contact the church office or the [contact page](/contact).';
 
   static const defaultRefusalAr =
       'عذرًا، أنا مساعد الكنيسة وأجيب فقط عن أسئلة الكنيسة وخدماتها: مواعيد القداسات والاجتماعات والعيادات والأنشطة والآباء الكهنة والقديسين والتواصل والعنوان والحجوزات والتبرعات. كيف أساعدك في شيء من ذلك؟';
