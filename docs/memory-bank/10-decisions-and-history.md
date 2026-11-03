@@ -225,18 +225,43 @@ supersede them.
   item that has some unless switched off; existing explicit `false` values keep hiding pages. Admins who saved
   `showDetailImages: false` keep photos hidden on that page (their choice).
 
-## ADR-022 (draft, preview only) — "Iconostasis" visual identity (branch `design/coptic-identity`, not merged)
+## ADR-022 (revised 3 Nov 2026; draft, preview only) — "Golden hour" visual identity (branch `design/coptic-identity`, PR #15, not merged)
 
-- **Context:** the team found the UI generic ("AI-slop": gradients, rounded white cards, pills, centred everything)
-  and not business-ready; IA should follow the UX standard (stathanasius-elseyouf.com, `work/ux-ref/`) while the
-  **visual language is our own**.
-- **Decision (proposed):** colours sampled from the parish icons (oxblood, gold leaf, umber, plaster, cinnabar);
-  bundled OFL fonts (Plex body, Naskh / Marcellus headings, 453 KB subset) replacing runtime Google Fonts; drawn
-  ornaments (interlace band, gold arches, Coptic cross); flat surfaces, 4 px radii, no shadows/gradients; grouped
-  nav (Home · About · Church services ▾ · Ask · Contact + one "Mass times" CTA), grouped drawer with close button,
-  fixed night footer in 3 columns; hero arcade of the patron icons + patrons teaser.
-- **Status:** design board `work/design/png/`, draft PR "Design preview: Coptic identity (do not merge)" with a
-  Firebase preview channel. Needs the team's approval before merge; the burgundy preset value changes to `#7B2216`.
+- **Context:** the team found the UI generic ("AI-slop") and not business-ready. A first draft ("Iconostasis": flat
+  plaster wall, Naskh/Marcellus, 4 px radii, oxblood `#7B2216`) was reviewed and **replaced**: the team wanted the site
+  to look like the parish's own posters (`work/design/poster_refs/`).
+- **Decision (proposed):** poster identity — church in golden-hour clouds (Gemini-painted art, decorative only),
+  heavy maroon **Lalezar** titles with a small red **Aref Ruqaa** accent word, subtitle ribbons, translucent warm
+  panels (20 px radius, soft shadow), saints in gold halos over the Nile, IBM Plex Sans Arabic body; default primary
+  preset `burgundy` = poster maroon `#6E1C1C`; grouped nav (Home · About · Church services ▾ · Ask · Contact + "Mass
+  times" CTA). Hero motion (drift, light rays) and a muted clouds video loop (`video_player`) behind the admin switch
+  **`settings/features.heroMotion`** (bool, default on; rules accept only a bool); visitors' reduced-motion and
+  save-data settings always win. Fonts and art are bundled assets (no runtime fetch).
+- **Layout pass (3 Nov 2026):** `ResponsiveGrid` is 1/2/3 columns (phone/tablet/desktop) on its own width, full width
+  and start-aligned in RTL; content max width 1200; `Space` tokens; cards size to their content and optional fields
+  collapse with their gaps (`TimeRangeText` renders nothing without a time). Tests at 320/390/1440 px × 1×/2× text.
+- **Status:** draft PR #15 with preview channel `pr-15`; direction doc `docs/design/direction.md`; board
+  `work/design/poster/`. Needs the team's approval before merge (the burgundy preset value changes to `#6E1C1C`).
+
+## ADR-023 (draft, PR #15) — Image display styles: avatar / card / banner
+
+- **Context:** one small thumbnail for every picture made people's photos, event pictures and saint icons look the
+  same and cropped them; admins asked to show a whole picture or a portrait.
+- **Decision:** three styles (`lib/domain/image_style.dart`, `ImageStyles`): `avatar` (round, gold halo ring, leads the
+  title row), `card` (large cover on top of the card, whole picture visible — `BoxFit.contain` over a blurred sepia
+  copy; portrait 4:5 for saints, 4:3 otherwise, height capped), `banner` (full card width, 16:7, edge to edge).
+  Resolution: the item's own **`imageStyle`** → the admin's section default **`settings/features.imageStyles[collection]`**
+  → built-in default (priests & departed, clinics → `avatar`; saints → portrait `card`; activities, milestones,
+  meetings, alerts, seasons, facilities → `card`). Missing/invalid value = the next level. Shared widgets
+  `lib/ui/widgets/styled_image.dart` (`CardCover`, `CardLead`, `HaloAvatar`, `FittedCover`, `DetailCover`) on every
+  card and detail page (saint detail keeps its header halo unless the style is `banner`).
+- **Data/rules:** `imageStyle` allowed on the 9 image collections (`null`/absent, `avatar`, `card`, `banner`);
+  `imageStyles` on `settings/features` (map, known collections only, known styles only); new documents do not write
+  an unset style and the features save omits an empty map, so saves keep working against rules that predate them.
+  Emulator tests in `tool/rules_test/rules.test.mjs` (ADR-023 group). Not seeded (missing = default).
+- **Admin:** item form "Image display (— = section default)" next to the image; Settings → "Image display" card with
+  one default per section.
+- **Invariant:** no image or images switched off → the card is exactly as before (golden rule #9).
 
 ## Timeline
 
@@ -261,5 +286,6 @@ supersede them.
 | 2 Nov 2026 | **PR #13** — "Public clickable detail pages, custom headers & upgraded footer" (`feat/pr13-public-detail-pages`) | Customization plan PR #13 (final): 7 detail sub-routes + `ItemDetailPage` (lazy zoomable cover/gallery, long text, custom-field cards, contact & social actions, dual priest gating, per-item canonical/noindex); parent-aware phone Back arrow; Details links / card tap on the 7 list cards, item contact/social switches on card buttons, optional images on meeting/clinic/facility cards; `CustomizablePageHeader` + `PageIntro` on the 8 customizable pages; FR-G-04 footer (phones, social icons, quick-link switch, note); `test/detail_pages_test.dart`. |
 
 | 2 Nov 2026 | **PR #14** — "Detail pages that actually open" (`feat/pr14-detail-pages-default-on`) | Opt-out detail pages (missing `detailsEnabled` = on) so every card opens its page; labelled key-facts card, Google Calendar link (weekly RRULE, Cairo zone), directions, copy-link share, "More in this section", hero cover; admin switch on by default with hint, phone rows move the open-page icon under the subtitle; home directory card "Learn more" wraps at 320 px / 200 %; ADR-021; `test/detail_ux_test.dart` + PR #14 group in `test/detail_pages_test.dart`. |
+| 3 Nov 2026 | **PR #15 (draft)** — "Design preview: Golden hour identity" (`design/coptic-identity`) | Poster identity (ADR-022 revised): Lalezar + Aref Ruqaa, maroon `#6E1C1C`, ribbons, halos, Gemini art, hero motion + video behind `heroMotion`; image display styles avatar/card/banner (ADR-023) with rules + emulator tests; layout pass (1/2/3-column grid, 1200 max width, `Space` tokens, collapsing optional fields); `test/golden_hour_test.dart`, `test/image_style_layout_test.dart`. Not merged. |
 
 Append new PRs to this table.

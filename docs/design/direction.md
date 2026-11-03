@@ -1,102 +1,75 @@
-# Design direction — "Iconostasis" (Coptic identity for the Church Portal)
+# Design direction — "Golden hour" (Coptic identity for the Church Portal)
 
-Branch: `design/coptic-identity` · Date: 3 Nov 2026 · Status: preview only (not for merge)
+Branch: `design/coptic-identity` · Draft PR #15 · Updated: 3 Nov 2026 · Status: preview only (not for merge)
+Decisions: ADR-022 (identity, revised) and ADR-023 (image display styles) in `docs/memory-bank/10-decisions-and-history.md`.
+
+> Supersedes the first draft "Iconostasis" (flat plaster wall, Naskh/Marcellus, 4 px radii, oxblood `#7B2216`). The
+> team preferred the parish's own posters, so the identity now follows them.
 
 ## 1. The idea in one line
-The site is built the way an Coptic **iconostasis** (حامل الأيقونات) is built: a calm plaster/parchment wall, **gold-leaf
-arches** that hold the holy images, **horizontal tiers** (registers) that order everything, and a thin **interlace
-border** that binds the parts. Colour comes from the pigments of *our* icons — Sts Maximus & Domadius and St Moses the
-Black — not from a UI kit.
+The site looks like the parish's own **posters**: a church floating in **golden-hour clouds**, a heavy **maroon**
+display title with a small **calligraphic accent word** above it, the subtitle on a **ribbon**, warm translucent
+panels over the painting, and the patron saints standing in **gold halos** over the Nile at sunset.
 
-## 2. Source: what the actual icons are made of
-Sampled (median-cut, 8 colours) from `work/real-data/photos/saints/*.jpg`:
+## 2. Sources
+- Parish posters (WhatsApp, Nov 2026): `work/design/poster_refs/` — maroon tabs and titles, Ruqaa accent words,
+  gold halos, sepia story boxes.
+- Painted art (Gemini drop, `work/design/gemini/`): hero church in clouds (16:9 and 9:16), Nile at sunset, gold-cloud
+  texture, St Moses the Black and Sts Maximus & Domadius (4:5), a 6-second clouds loop. Built into
+  `assets/art/*.webp` and `assets/video/hero_clouds.mp4` by `work/design/poster/make_assets.py`. The art is
+  **decorative** (`ExcludeSemantics`) and never stands in for real church photos (golden rule #1).
 
-| Icon | Dominant pigments |
-|---|---|
-| Maximus & Domadius (Mina Anton) | ochre gold `#A77333`, halo gold `#DBBE5E`, umber `#483226`, monastic black `#1A1310`, raw sienna `#8E5A32` |
-| Macarius with Maximus & Domadius (Gerges Samir) | lime-white `#F2F3CB`, oxblood `#7C2B1B`, sienna `#AC6943`, warm grey `#C3B8A9` |
-| Moses the Black (01) | cinnabar `#C2593E`, vermilion `#AD3934`, bone `#C9B59F`, charcoal `#343333` |
-| Moses & Isidore | wall-plaster ochres `#C4A97C`, `#D3BB8C`, olive umber `#5F5C4B` |
+## 3. Palette (`lib/core/theme.dart`, WCAG checked in `test/golden_hour_test.dart`)
 
-These are **earth pigments on gold**: no purple, no teal, no saturated blue. Lapis is kept as a *rare* second accent
-(the traditional colour of the Theotokos/Pantocrator mantle), never as a gradient.
+| Token | Hex | Use |
+|---|---|---|
+| `burgundy` (primary preset) | `#6E1C1C` | poster maroon: titles, tabs, buttons |
+| `script` | `#9A2A1E` | calligraphic accent word (7.0:1 on cream) |
+| `gold` | `#C9963F` | halo rings, rules, glows — **never text** |
+| `goldText` | `#7A5410` | gold text/icons on light (6.1:1 on cream) |
+| `goldLight` | `#E7C27A` | gold text on maroon/dark |
+| `amber` | `#E8B65C` | sun disc, light rays (decorative) |
+| `cream` / `parchment` / `vellum` | `#FBF3E4` / `#F4E6CC` / `#FFF9EE` | page wash / sand chips / opaque panels |
+| `panel` | `#FBF3E4` @ 88 % | translucent panels over the art (text checked against `panelOverDark`) |
+| `ink` / `muted` | `#3A2416` / `#6A4A2E` | body / secondary text |
 
-## 3. Palette (tokens, WCAG checked)
+## 4. Type (bundled, SIL OFL, no runtime fetch)
+- **Lalezar** (`AppFonts.display`) — heavy rounded poster titles, Arabic + Latin.
+- **Aref Ruqaa** (`AppFonts.accent`) — the small accent word above titles («تعرّف على», «أهلاً بكم في») and verses.
+- **IBM Plex Sans Arabic** (`AppFonts.body`) — body and UI.
 
-| Token | Hex | Use | Contrast |
-|---|---|---|---|
-| `ink` (umber black) | `#1F1611` | body text | 15.4:1 on parchment, 17.4:1 on vellum |
-| `umber` | `#5E4A3A` | secondary text, meta | 7.2:1 parchment · 8.1:1 vellum · 6.5:1 plaster |
-| `parchment` | `#F5EEDF` | page ground | — |
-| `vellum` | `#FFFCF5` | cards, header bar | — |
-| `plaster` | `#ECE2CC` | bands, register strips | — |
-| `hairline` | `#D9C8A4` | borders (decorative, 1.6:1 — never meaning-bearing alone) | — |
-| `goldLeaf` | `#B8862B` | ornaments, rules, arch frames (decorative only on light) | 2.8:1 parchment ✗text · 5.6:1 on night ✓ |
-| `goldInk` | `#7A5400` | gold *text/icons* on light | 5.9:1 parchment · 6.6:1 vellum |
-| `halo` | `#E3C578` | gold text on dark grounds | 10.8:1 on night · 8.4:1 on oxblood-deep |
-| `oxblood` (default primary) | `#7B2216` | primary buttons, titles, active nav | 8.7:1 parchment · white on it 10.1:1 |
-| `oxbloodDeep` | `#561409` | pressed, dark bands | — |
-| `cinnabar` | `#B0402A` | "today / now" accent, small badges | 5.0:1 parchment · 5.7:1 vellum |
-| `lapis` | `#1F3B6E` | rare 2nd accent (links in long text, info) | 9.5:1 parchment · white on it 11.0:1 |
-| `night` | `#1C140E` | hero + footer ground (candle-lit nave) | parchment on it 15.7:1 |
+## 5. Components
+- **Hero:** the church in clouds (wide/tall art by aspect), slow drift + light rays, optional muted video loop
+  (`video_player`, web only when allowed). Admin switch `settings/features.heroMotion` (default on); visitors'
+  reduced-motion and save-data always win.
+- **Inner page header:** same painting with a cream scrim, accent word, maroon title, subtitle ribbon. Saint pages:
+  the saint in a gold halo over the Nile.
+- **Panels:** soft 20 px radius, warm shadow, hairline gold border; maroon title band on the next-liturgy card.
+- **Patrons band:** both patron saints in halos with two lines of their life and a link.
+- **Footer:** warm panels over the cloud art (not the dark night footer of the first draft).
 
-Admin theme presets keep working: `primary` is still the admin preset. The `burgundy` preset value moves from the
-wine-red `#6B1426` to the icon oxblood `#7B2216` (same key, same label). Every other preset only swaps `primary`;
-parchment, gold, ink and night stay.
+## 6. Layout system (redesign pass 2, 3 Nov 2026)
+- **Grid:** `ResponsiveGrid` — 1 column on phones (< 560 px of grid width), 2 on tablets (< 900), 3 on desktop;
+  `maxColumns` caps it (saints 2). Content max width **1200 px** (`kMaxContentWidth`), centred.
+- **Cards size to their content.** No `Expanded`/fixed heights reserving vertical space; rows in the grid keep each
+  card's own height and start at the reading edge (right in Arabic).
+- **Optional fields collapse with their gaps:** description/bio, feast pills, time (`TimeRangeText` renders nothing
+  without a start), weekday, degree, contact buttons, image.
+- **Spacing tokens:** `Space.xs 4 · s 8 · m 12 · l 16 · xl 24 · xxl 32`, `Space.grid 16`, `Space.card 16`.
+- **Must hold at 320 px and at 200 % text** (`test/image_style_layout_test.dart`, `test/accessibility_test.dart`).
 
-## 4. Typography (all OFL 1.1, bundled locally, subset)
+## 7. Image display styles (ADR-023)
+Every optional item image is shown in one of three styles, chosen per section by the admin and overridable per item:
 
-| Role | Arabic | English | Why |
-|---|---|---|---|
-| Display / headings | **Noto Naskh Arabic** Bold (static instance) | **Marcellus** (inscriptional Roman, Trajan-like) | Naskh is the hand of liturgical books (الخولاجي، الأجبية); Marcellus echoes Greek/Coptic uncial inscriptions on icons. |
-| Verse / quotes | Noto Naskh Arabic Regular | Noto Naskh (Latin) Regular | Book-like. |
-| Body / UI | **IBM Plex Sans Arabic** Regular + Bold | (same family's Latin) | Sober, tabular-friendly, very readable at 14–16 px; less "landing-page" than Cairo/Tajawal. |
+| Style | Look | Default for |
+|---|---|---|
+| `avatar` | round photo in a gold halo ring, leading the title row | priests & departed fathers, clinics (doctor) |
+| `card` | large cover on top of the card, rounded 14 px, **whole picture visible** (contain over a blurred sepia copy) — portrait 4:5 for saints, 4:3 otherwise | saints, activities, milestones, meetings, notices, seasons, public services |
+| `banner` | full card width, edge to edge, 16:7 | — (admin choice) |
 
-Subset to Basic Latin + Latin-1 + Arabic (+ Supplement) + punctuation, hinting dropped: 5 files, **453 KB total**
-(replacing the runtime Google Fonts fetch of Cairo, which also blocked first paint).
-Licences: `work/design/fonts/*-OFL.txt` (copied into `assets/fonts/` in the app).
+No image (or images switched off) → the card is exactly as before (golden rule #9).
 
-Scale (phone → desktop): Display 30→44 / H1 26→34 / H2 21→26 / H3 17→19 / Body 15→16 (line-height 1.7 Arabic) /
-Small 13 / Kicker 12 tracking +0.5 (gold-ink). Headings never centred by default: Arabic reads from the start edge.
-
-## 5. Shapes & ornaments (drawn, never emoji)
-- **Arch frame** (`ArchFrame`): round-topped (semicircle) frame with a 2 px gold-leaf line + inner hairline, used for
-  saint icons, priest photos and the hero image. The arch is the single signature shape.
-- **Coptic cross** (existing `CopticCross` painter, refined: trefoil ends, hollow centre) as bullets for section
-  titles, list markers, and the empty-image fallback.
-- **Interlace band** (`InterlaceBand` painter): a running two-strand guilloche in gold-leaf, 10–14 px high, on the
-  header's lower edge and the footer's top edge. Static (no animation).
-- **Register rule**: section titles sit on a tier line — kicker + title, then a thin gold rule with a small cross
-  medallion at the start.
-- Cards: vellum, **4 px radius**, 1 px hairline, **no drop shadows**; listing cards carry a 3 px start-edge in
-  primary (the IA standard's "accent edge"), hover = border to gold-leaf.
-- Buttons: 4 px radius (stone-cut, not pill), 48 px min height. Primary = oxblood fill; secondary = umber outline;
-  on dark grounds = gold-leaf fill with night text.
-- Chips: 4 px radius, plaster fill; selected = oxblood with white text.
-
-## 6. Motion
-Only: 150 ms colour/border transitions on hover/focus, the existing skeleton pulse (static under reduced motion).
-No parallax, no scroll-reveal, no animated gradients.
-
-## 7. Layout & IA (taken from the team's UX standard, visual language our own)
-- **Header**: vellum bar, seal + church short name in Naskh, grouped nav: الرئيسية · عن الكنيسة · خدمات الكنيسة ▾
-  (القداسات، التربية الكنسية، الأنشطة، الخدمات العامة، العيادات) · اسأل الكنيسة · تواصل معنا, and one primary CTA
-  «مواعيد القداسات». Interlace band under it.
-- **Phone drawer**: seal + name header with ✕, two labelled groups (الكنيسة / خدمات الكنيسة) with an icon per row,
-  48 dp rows, language toggle at the bottom.
-- **Home order**: hero (name, locality, verse, CTAs «تعرّف على الكنيسة» + «مواعيد القداسات», patron icon in an arch) →
-  admin blocks (next liturgy + phones first, i.e. the business tasks) → about/patrons teaser → story → services
-  directory → map → footer.
-- **Page header** (every inner page): plaster band, kicker = church short name, Naskh title, subtitle, arch outline
-  watermark at the end edge, interlace band at the bottom. Admin title/subtitle overrides kept.
-- **Footer**: night ground, interlace top, 3 columns ≥ 900 px (identity · contact · quick links), stacked on phone.
-
-## 8. What we deliberately avoid (the "AI slop" list)
-Purple/teal gradients · glassmorphism/blur · emoji as icons · rounded-xl white cards with soft shadows in uniform
-grids · blob/mesh hero backgrounds · everything centred · gradient text · pill buttons everywhere · generic stock
-church photos. Gradients in the old hero/page header are removed: flat pigment grounds only.
-
-## 9. Business-readiness checklist
-Next liturgy + phone numbers are on the first phone screen after the hero; "call" is one tap; times show Arabic and
-Latin digits; every page has the same header anatomy; contrast ≥ 4.5:1 for all text tokens; 48 dp targets; works at
-320 px and 200 % text.
+## 8. Board and screenshots
+- Board: `work/design/poster/board/` (`gen.py` → HTML, `render.py` → `../png/*.png`, `overview.py` → `overview.png`).
+- Card comparisons: `work/design/poster/png/cards/compare_*.png`.
+- Deployed preview overview: `work/design/poster/png/preview_overview.png`.

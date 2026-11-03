@@ -176,6 +176,22 @@ Chat UI with intro bubble, 3 suggestion chips, 500-char input, disclaimer «إج
 - Tap an image ⇒ `showImageViewer` dialog (pinch/scroll zoom, close button).
 - The assistant never sees image data (cover `image`, `gallery` URLs, media ids or alt text — PR #11 test).
 
+### Image display styles (PR #15, ADR-023) — `lib/ui/widgets/styled_image.dart`
+
+- Every card with an optional image shows it as `avatar` (round, gold halo, leads the title row), `card` (large cover
+  on top, whole picture visible over a blurred sepia fill; portrait for saints) or `banner` (full width, edge to edge).
+  Item `imageStyle` → admin section default → built-in default (priests/departed & clinics `avatar`, the rest `card`).
+- Applied to priests, saints, activities, milestones (home), meetings (timeline), alerts (banner block), seasons
+  (schedule), public services, clinics, and the detail page cover (`DetailCover`; saint detail keeps its header halo
+  unless the style is `banner`). With `card`/`banner` the section icon is dropped from the title row.
+- No image / images off → identical to the image-less card (golden rule #9).
+
+### Layout rules (PR #15)
+
+- Grids are 1/2/3 columns (phone/tablet/desktop), content ≤ 1200 px, start-aligned in RTL; cards size to their
+  content; optional fields (description, bio, feast pills, time, weekday, degree, contact buttons) collapse with their
+  spacing. Checked at 320/390/1440 px and 200 % text in `test/image_style_layout_test.dart`.
+
 ### Shared UI behaviours
 - `SampleBadge` («بيانات تجريبية / Sample data») on any `sample: true` item; `PendingConfirmationNote`
   («مواعيد تقريبية — في انتظار تأكيد الكنيسة») on schedule, meetings and clinics pages.

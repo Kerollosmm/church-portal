@@ -200,7 +200,8 @@ class FittedCover extends ConsumerWidget {
         ]),
       ),
     );
-    final clipped = radius == 0 ? framed : ClipRRect(borderRadius: BorderRadius.circular(radius), child: framed);
+    // Always clipped: the blurred backdrop would otherwise bleed past the frame.
+    final clipped = radius == 0 ? ClipRect(child: framed) : ClipRRect(borderRadius: BorderRadius.circular(radius), child: framed);
     return _enlargeable(context, image, loader, alt, enlargeOnTap, clipped, radius: radius);
   }
 }

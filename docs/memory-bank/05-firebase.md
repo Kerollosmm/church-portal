@@ -91,6 +91,10 @@ Notable details:
   `mapsUrl`/`heroImageUrl` keep length-only checks.
 - `validClinic`: `days` list ≤ 7 and ⊆ [1..7].
 - `validPriest`: `rank` ∈ hegumen/priest, `status` ∈ serving/departed, dates ≤ 10 chars.
+- **Image display styles (PR #15, ADR-023):** `common()` accepts `imageStyle` only as absent/`null`/`avatar`/`card`/
+  `banner` when it changes; it is on the allow-list of the 9 image collections (and `ownFieldsUnchanged`), never on
+  `liturgies`. `validFeatures` accepts `imageStyles` as a map whose keys are the 9 collections and values the 3 styles.
+  Emulator tests: "ADR-023" group in `tool/rules_test/rules.test.mjs`.
 - `validFeatures`: key allow-list via `keysAllowed` (create: `keys().hasOnly`; update: only the **changed** keys must
   be allowed, so an untouched legacy key no longer blocks a merge save — same as `settings/church`, PR #10), `sections` keys ⊆ the 16 section keys
   (incl. `media`)

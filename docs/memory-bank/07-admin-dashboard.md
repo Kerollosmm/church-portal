@@ -92,6 +92,11 @@ cancels and re-subscribes every stream (BUG-18; `ChurchInfoScreen` does the same
   `isEchoOfEditor(shown, latest, editorValues)` (`admin_validators.dart`) — if only metadata changed or every changed
   field already equals what the form holds, the editor key is kept, so the scroll position stays.
 
+- **Image display** card (PR #15, ADR-023): one dropdown per image collection (avatar / card / banner) →
+  `settings/features.imageStyles`; the dropdown shows the built-in default until changed.
+- Item forms on image collections have **"Image display (— = section default)"** under the image (`imageStyle`,
+  nullable choice); a new document does not write it while unset.
+
 ### Church info (`ChurchInfoScreen`) → `settings/church`
 `DocEditor` over `churchInfoDoc` fields: names, bishop, address, transport, lat/lng (ranges), map query, Maps link,
 **phones** (object list: label AR/EN, number, mobile/WhatsApp — ≤ 20 rows), WhatsApp number/channel, Facebook,

@@ -11,7 +11,7 @@
 | Routing | `go_router ^18.1.2` (`lib/router.dart`), **path URL strategy** (`usePathUrlStrategy()` in `main.dart`) |
 | Backend | Firebase: `cloud_firestore`, `firebase_auth` (admins only), `firebase_app_check`, `firebase_ai` (Gemini), `firebase_core` |
 | Time | `timezone ^0.11.2` (IANA `Africa/Cairo`, `lib/domain/cairo_time.dart`) |
-| Fonts | Bundled + subset (SIL OFL 1.1, `assets/fonts/`, licences registered in `main.dart`): **IBM Plex Sans Arabic** (body/UI, family `Plex`), **Noto Naskh Arabic** (Arabic headings, `Naskh`), **Marcellus** (English headings). No `google_fonts`, no runtime fetch (ADR-022 draft, branch `design/coptic-identity`) |
+| Fonts | Bundled (SIL OFL 1.1, `assets/fonts/`, licences registered in `main.dart`): **IBM Plex Sans Arabic** (body/UI, family `Plex`), **Lalezar** (poster display titles, `Lalezar`), **Aref Ruqaa** (calligraphic accent word, `Ruqaa`). No `google_fonts`, no runtime fetch (ADR-022 revised, branch `design/coptic-identity`) |
 | Links | `url_launcher` (`lib/core/launch.dart`) |
 | Web interop | `web` package (`<html lang>` sync, map iframe) |
 
@@ -267,26 +267,31 @@ chunks are fetched relative to `<base href>`).
 - Choice labels for stored keys (`opt_<key>`, e.g. `opt_holy_week`) via `choiceLabel` in `doc_editor.dart`.
 - Admin labels live inline in `admin_schema.dart` (`labelAr`, `labelEn`).
 
-## Theming (`lib/core/theme.dart`) — "Iconostasis" identity (branch `design/coptic-identity`, ADR-022 draft)
+## Theming (`lib/core/theme.dart`) — "Golden hour" identity (branch `design/coptic-identity`, ADR-022 revised)
 
-- Palette from the parish's own icons (`work/design/direction.md`): `AppColors.burgundy` = icon **oxblood** `#7B2216`
-  (default preset), `gold` = gold leaf `#B8862B` (**decorative only**), **`goldText` `#7A5400`** (gold for text on
-  light, 5.9:1 on parchment), `goldLight` = halo `#E3C578` (gold text on dark), `cream` = page ground parchment
-  `#F5EEDF`, `parchment` = plaster band `#ECE2CC`, `vellum` `#FFFCF5` (cards, app bar), `hairline` `#D9C8A4`
-  (borders), `ink` `#1F1611`, `muted` umber `#5E4A3A` (7.2:1), `night` `#1C140E` (footer), `cinnabar` `#B0402A`
-  ("today"), `lapis` `#1F3B6E` (rare 2nd accent).
+- Palette from the parish posters (`docs/design/direction.md`): `AppColors.burgundy` = poster maroon `#6E1C1C`
+  (default preset), `script` `#9A2A1E` (accent word), `gold` `#C9963F` (**decorative only**), `goldText` `#7A5410`
+  (gold text on light), `goldLight` `#E7C27A` (gold text on maroon), `amber` (sun/rays), `cream` `#FBF3E4` (page
+  wash), `parchment` `#F4E6CC`, `vellum` `#FFF9EE`, translucent `panel` (checked against `panelOverDark`), `ink`
+  `#3A2416`, `muted` `#6A4A2E`. Contrast is asserted in `test/golden_hour_test.dart`.
 - **Public widgets never use `AppColors.burgundy*` directly**: they read `Theme.of(context).colorScheme.primary`
-  (5 presets; `test/accessibility_test.dart` fails if a public page paints burgundy under navy). The footer is the
-  fixed `night` ground for every preset; `primaryDarkOf` remains for accents.
-- `buildTheme(locale, primary:)`: body font `Plex`; display/headline/titleLarge in `AppFonts.display(locale)`
-  (Naskh for Arabic, Marcellus + Naskh fallback for English); 4 px radii everywhere (stone-cut, no pills), no
-  elevation/shadows, vellum cards with a hairline border, 46–48 px buttons, vellum app bar with ink text.
-- Ornaments (`lib/ui/widgets/ornaments.dart`, all CustomPainter, no images/emoji): `InterlaceBand` (gold guilloche
-  under the app bar and page headers, top of the footer), `ArchFrame` (round-topped gold-leaf frame clipping an icon
-  or photo), `ArchWatermark` (page-header end edge), `ArchCrossFill` (empty arch), refined `CopticCross` painter
-  (trefoil arms, hollow centre ring) used as the `SectionTitle` medallion.
+  (5 presets; `test/accessibility_test.dart`); `primaryDarkOf` for tab gradients.
+- `buildTheme(locale, primary:)`: body `Plex`; headings `AppFonts.heading` (Lalezar); `displayStyle(context, …)` for
+  poster titles; `kPanelRadius` 20, `kPanelShadow` soft warm shadow; cards are translucent cream with a hairline gold
+  border.
+- **Layout tokens:** `Space` (`xs 4 · s 8 · m 12 · l 16 · xl 24 · xxl 32`, `grid 16`, `card 16`);
+  `kMaxContentWidth` 1200 (`common.dart`); `ResponsiveGrid` + `gridColumns(width)` = 1/2/3 columns at < 560 / < 900 /
+  ≥ 900 px of grid width (`maxColumns` cap, `minItemWidth` only lowers the count); the grid takes the full width so
+  rows start at the reading edge in RTL; cards keep their own height.
+- Art & motion (`lib/ui/widgets/golden.dart`): `ArtAssets` (hero wide/tall, Nile, clouds, painted patrons),
+  `HaloPortrait` (gold halo ring), `HaloCrossFill`, `LightRaysPainter`, hero drift + `video_player` loop gated by
+  `settings/features.heroMotion` and the visitor's reduced-motion / save-data (`lib/core/motion_env*.dart`).
+- **Image display styles (ADR-023):** `lib/ui/widgets/styled_image.dart` — `CardCover` (top of a card for
+  `card`/`banner`), `CardLead` (title-row lead: halo avatar for `avatar`, the section icon when there is no image),
+  `HaloAvatar`, `FittedCover` (whole picture, `contain` over a blurred sepia copy, clipped), `DetailCover`;
+  resolution via `FeatureSettings.imageStyleFor(collection, item.imageStyle)`.
 - The admin picks the **primary** from `ThemePresets.all` (`settings/features.theme`): burgundy (default, now
-  `#7B2216`), navy, green, brown, purple; `ChurchPortalApp` watches `featuresProvider.select((f) => f.theme)`.
+  `#6E1C1C`), navy, green, brown, purple; `ChurchPortalApp` watches `featuresProvider.select((f) => f.theme)`.
 - Brand colours for social buttons in `cards.dart`: `whatsappGreen` `#157338`, `facebookBlue` `#145DBF` (darkened
   so white button text is ≥ 4.5:1), `youtubeRed`, `instagramPink`.
 - Accessibility helpers: `TitleWithBadge` (title + `SampleBadge` in a `Wrap`), `Pill` text wraps (2 lines + ellipsis
