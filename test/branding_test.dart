@@ -25,6 +25,20 @@ void main() {
     }
   });
 
+  test('every preloaded / linked local asset in web/index.html exists (no 404s on first load)', () {
+    final html = File('web/index.html').readAsStringSync();
+    final hrefs = RegExp(r'(?:href|src)="([^"#?:]+)"').allMatches(html).map((m) => m.group(1)!).toList();
+    expect(hrefs, isNotEmpty);
+    for (final h in hrefs) {
+      // Build placeholders / generated files.
+      if (h.isEmpty || h.startsWith(r'$') || h.endsWith('.js')) continue;
+      // Flutter serves `assets/<path>` from the project's `<path>`.
+      final f = h.startsWith('assets/assets/') ? h.substring('assets/'.length) : 'web/$h';
+      expect(File(f).existsSync(), isTrue, reason: h);
+    }
+    expect(html, contains('assets/assets/fonts/Lalezar-Regular.ttf'), reason: 'display face preloaded');
+  });
+
   test('old Hosting site 301-redirects every path to the new domain', () {
     final cfg = jsonDecode(File('firebase.json').readAsStringSync()) as Map<String, dynamic>;
     final sites = (cfg['hosting'] as List).cast<Map<String, dynamic>>();
