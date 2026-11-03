@@ -183,6 +183,25 @@ void main() {
     });
   });
 
+  test('custom signature changes when a contact type, custom item or page changes (history is then cleared)', () {
+    final base = assistantCustomSignature(features: FeatureSettings.defaults);
+    final cats = [...ContactSettings.defaults.categories]..removeWhere((c) => c.slot == 'c2');
+    expect(assistantCustomSignature(features: FeatureSettings.defaults, contact: ContactSettings(cats)), isNot(base));
+    final page = CustomPage.fromMap('p', {
+      'slug': 'donate',
+      'titleAr': 'التبرعات',
+      'visible': true,
+      'blocks': [PageBlock(type: BlockTypes.paragraph, textAr: 'نص').encode()],
+    });
+    final withPage = assistantCustomSignature(features: FeatureSettings.defaults, pages: [page]);
+    expect(withPage, isNot(base));
+    expect(withPage, contains('/page/donate'));
+    // A switched-off section does not count.
+    expect(
+        assistantCustomSignature(features: _features({'customPages': false, 'contactForm': false}), pages: [page]),
+        isEmpty);
+  });
+
   group('conversation with a fake model', () {
     test('an on-topic answer is returned and replayed as history', () async {
       final m = _FakeModel();

@@ -481,7 +481,8 @@ supersede them.
 - **Limits (client side, per visit):** max question length (default 500), questions per rolling minute (default
   4) and per visit (default 30), all editable; refusals are not replayed in the history.
 - **Structure:** `AssistantConversation` (pure Dart, `lib/domain/assistant_conversation.dart`) owns the limits,
-  history (≤ 20 contents, cleared when the enabled sections or detail signature change), refusal swap and
+  history (≤ 20 contents, cleared when the enabled sections, the detail signature or the contact / custom content
+  signature change), refusal swap and
   fallback; `FirebaseAssistantModel` (`lib/data/assistant_model.dart`) is a stateless `generateContent` call
   (system instruction + history + question), injected through `assistantModelProvider` (declared in the deferred
   `/ask` chunk) so tests use a fake model.

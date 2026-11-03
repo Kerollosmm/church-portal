@@ -295,7 +295,8 @@ console.
   `[Current Cairo time: YYYY-MM-DD HH:mm (Weekday)]`; a reply that is (or starts / ends with) `[[OUT_OF_SCOPE]]`
   becomes the admin refusal (`refusalAr` / `refusalEn`, else the built-in ones) in the question's language
   (Arabic letters → Arabic) and is **not** kept in the history; answers are kept (max 20 contents = 10 turns);
-  the history is cleared when the enabled sections or `assistantDetailSignature` change. The model is injected
+  the history is cleared when the enabled sections, `assistantDetailSignature` or `assistantCustomSignature`
+  (contact types, custom sections / items / pages grounding — Codex review on PR #19) change. The model is injected
   through `assistantModelProvider` (declared in the deferred `assistant_page.dart`, so `firebase_ai` stays out of
   the main bundle); tests use a fake.
 - Before the first question `_awaitContent()` waits (≤ 10 s) for settings, features, assistant settings, the content

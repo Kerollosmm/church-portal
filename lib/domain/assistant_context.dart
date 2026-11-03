@@ -326,6 +326,23 @@ String buildAssistantInstruction({
   return b.toString();
 }
 
+/// What the instruction grounds from the contact form types and the custom
+/// sections / pages (ADR-029). The assistant page clears its replayed history
+/// when this changes too, so an answer quoting a type, item or page an admin
+/// has since edited or removed is not sent again (Codex review, PR #19).
+String assistantCustomSignature({
+  required FeatureSettings features,
+  ContactSettings contact = ContactSettings.defaults,
+  List<CustomCategory> categories = const [],
+  List<CategoryEntry> entries = const [],
+  List<CustomPage> pages = const [],
+}) {
+  final b = StringBuffer();
+  _contactForm(b, features, contact);
+  _customContent(b, features, categories, entries, pages);
+  return b.toString();
+}
+
 /// Contact form types (ADR-028): hall bookings, complaints, suggestions…
 /// sent from the /contact page, while the contact form section is on.
 void _contactForm(StringBuffer b, FeatureSettings f, ContactSettings contact) {

@@ -106,8 +106,9 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
         contact: ref.read(contactSettingsProvider).value ?? ContactSettings.defaults,
       );
 
-  /// Enabled sections + detail grounding: when either changes, earlier turns
-  /// (possibly quoting content an admin withdrew) are not replayed.
+  /// Enabled sections + detail grounding + contact types / custom sections /
+  /// pages grounding: when any of them changes, earlier turns (possibly
+  /// quoting content an admin withdrew) are not replayed.
   String _historyKey() {
     final f = ref.read(featuresProvider);
     final sections = [for (final s in Sections.all) if (f.enabled(s)) s].join(',');
@@ -121,7 +122,14 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
       saints: ref.read(saintsProvider).value ?? const [],
       milestones: ref.read(milestonesProvider).value ?? const [],
     );
-    return '$sections\u0000$details';
+    final custom = assistantCustomSignature(
+      features: f,
+      contact: ref.read(contactSettingsProvider).value ?? ContactSettings.defaults,
+      categories: ref.read(categoriesProvider).value ?? const [],
+      entries: ref.read(entriesProvider).value ?? const [],
+      pages: ref.read(customPagesProvider).value ?? const [],
+    );
+    return '$sections\u0000$details\u0000$custom';
   }
 
   static String _cairoStamp() {
