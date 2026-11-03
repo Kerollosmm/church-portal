@@ -50,6 +50,7 @@ dependencies:
     sdk: flutter
   image_picker: ^1.2.4
   image: ^4.12.0
+  video_player: ^2.14.1
 
 dev_dependencies:
   flutter_test:
@@ -76,26 +77,28 @@ flutter:
   assets:
     - assets/seed/seed.json
     - assets/branding/seal.png
+    - assets/art/
+    - assets/video/
     - assets/fonts/IBMPlexSansArabic-OFL.txt
-    - assets/fonts/NotoNaskhArabic-OFL.txt
-    - assets/fonts/Marcellus-OFL.txt
+    - assets/fonts/Lalezar-OFL.txt
+    - assets/fonts/ArefRuqaa-OFL.txt
 
   # Bundled, subset fonts (SIL OFL 1.1; licences above, registered in main.dart).
-  # Display: Noto Naskh Arabic (ar) / Marcellus (en). Body/UI: IBM Plex Sans Arabic.
+  # "Golden hour" (ADR-022): Lalezar = heavy poster display (ar + en),
+  # Aref Ruqaa = calligraphic accent word / verses, IBM Plex Sans Arabic = body/UI.
   fonts:
     - family: Plex
       fonts:
         - asset: assets/fonts/IBMPlexSansArabic-Regular.ttf
         - asset: assets/fonts/IBMPlexSansArabic-Bold.ttf
           weight: 700
-    - family: Naskh
+    - family: Lalezar
       fonts:
-        - asset: assets/fonts/NotoNaskhArabic-Regular.ttf
-        - asset: assets/fonts/NotoNaskhArabic-Bold.ttf
+        - asset: assets/fonts/Lalezar-Regular.ttf
+    - family: Ruqaa
+      fonts:
+        - asset: assets/fonts/ArefRuqaa-Bold.ttf
           weight: 700
-    - family: Marcellus
-      fonts:
-        - asset: assets/fonts/Marcellus-Regular.ttf
 
   # To add assets to your application, add an assets section, like this:
   # assets:

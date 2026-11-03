@@ -407,6 +407,30 @@ const Map<String, List<String>> _strings = {
   'opt_revival_maximus': ['نهضة مكسيموس ودوماديوس', 'Maximus & Domadius revival'],
   'opt_revival_moses': ['نهضة الأنبا موسى', 'St Moses revival'],
   'opt_summer': ['الصيف', 'Summer'],
+  // "Golden hour" identity (ADR-022): calligraphic accent words above titles.
+  'heroAccent': ['أهلاً بكم في', 'Welcome to'],
+  'accent_about': ['تعرّف على', 'Discover'],
+  'accent_schedule': ['تعالوا نصلّي', 'Come, let us pray'],
+  'accent_education': ['نتعلّم معًا', 'Learning together'],
+  'accent_activities': ['نخدم معًا', 'Serving together'],
+  'accent_clinics': ['لخدمتكم', 'At your service'],
+  'accent_services': ['لخدمتكم', 'At your service'],
+  'accent_contact': ['يسعدنا تواصلكم', 'We would love to hear from you'],
+  'accent_ask': ['اسألنا', 'Ask us'],
+  'accent_saint': ['من سير القديسين', 'Lives of the saints'],
+  'accent_priest': ['آباؤنا', 'Our fathers'],
+  'accent_milestone': ['قصتنا', 'Our story'],
+  'accent_item': ['كنيستنا', 'Our church'],
+  'accentPatrons': ['شفعاء', 'The patrons of'],
+  'patronsOfOurChurch': ['كنيستنا', 'our church'],
+  'accentStory': ['محطات', 'Milestones'],
+  'accentServices': ['كل ما تحتاجه', 'Everything you need'],
+  'accentLocation': ['تعالوا زورونا', 'Come and visit'],
+  'footerSignature': ['كنيسة مكسيموس ودوماديوس والقوي الأنبا موسى الأسود - العصافرة ٤٥',
+      'Church of Sts Maximus & Domadius and the Strong Anba Moussa the Black – El-Asafra 45'],
+  'heroMotion': ['حركة الواجهة والفيديو', 'Hero motion & video'],
+  'heroMotionHint': ['سحب متحركة وأشعة ضوء وفيديو قصير في الواجهة. لا يعمل أبدًا لمن فعّل «تقليل الحركة» أو «توفير البيانات».',
+      'Drifting clouds, light rays and a short looping video in the hero. Never plays for visitors with reduced motion or data saver on.'],
 };
 
 extension L10nX on BuildContext {
@@ -419,6 +443,9 @@ extension L10nX on BuildContext {
     args.forEach((k, v) => s = s.replaceAll('{$k}', v));
     return s;
   }
+
+  /// Translated UI string, or null when [key] has no entry.
+  String? trOrNull(String key) => _strings.containsKey(key) ? tr(key) : null;
 
   /// Picks the Arabic or English variant of a bilingual content field,
   /// falling back to whichever is non-empty.

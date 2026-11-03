@@ -22,8 +22,8 @@ Future<void> main() async {
   LicenseRegistry.addLicense(() async* {
     for (final (name, file) in const [
       ('IBM Plex Sans Arabic', 'IBMPlexSansArabic'),
-      ('Noto Naskh Arabic', 'NotoNaskhArabic'),
-      ('Marcellus', 'Marcellus'),
+      ('Lalezar', 'Lalezar'),
+      ('Aref Ruqaa', 'ArefRuqaa'),
     ]) {
       yield LicenseEntryWithLineBreaks([name], await rootBundle.loadString('assets/fonts/$file-OFL.txt'));
     }

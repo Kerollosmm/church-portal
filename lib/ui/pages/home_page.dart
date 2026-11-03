@@ -14,7 +14,7 @@ import '../widgets/cards.dart';
 import '../widgets/common.dart';
 import '../widgets/item_image.dart';
 import '../widgets/map_embed.dart';
-import '../widgets/ornaments.dart';
+import '../widgets/golden.dart';
 
 class HomePage extends ConsumerWidget {
   const HomePage({super.key});
@@ -77,7 +77,7 @@ class HomePage extends ConsumerWidget {
         return const Padding(padding: EdgeInsets.only(bottom: 12), child: _QuickContacts());
       case HomeBlocks.milestones:
         return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          SectionTitle(context.tr('ourStory'), icon: Icons.history_edu_rounded),
+          SectionTitle(context.tr('ourStory'), accent: context.tr('accentStory')),
           AsyncSection<List<Milestone>>(
             provider: milestonesProvider,
             retry: milestonesProvider,
@@ -108,12 +108,12 @@ class HomePage extends ConsumerWidget {
         ];
         if (cards.isEmpty) return const SizedBox.shrink();
         return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          SectionTitle(context.tr('directory'), icon: Icons.grid_view_rounded),
+          SectionTitle(context.tr('directory'), accent: context.tr('accentServices')),
           ResponsiveGrid(minItemWidth: 320, children: cards),
         ]);
       case HomeBlocks.map:
         return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          SectionTitle(context.tr('location'), icon: Icons.location_on_rounded),
+          SectionTitle(context.tr('location'), accent: context.tr('accentLocation')),
           if (s != null) ChurchMap(settings: s) else const SkeletonBox(height: 360, radius: 16),
         ]);
     }
@@ -155,7 +155,7 @@ class _AnnouncementBanner extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
         color: AppColors.gold.withValues(alpha: 0.16),
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: AppColors.gold.withValues(alpha: 0.6)),
       ),
       child: Row(children: [
@@ -172,6 +172,11 @@ class _AnnouncementBanner extends StatelessWidget {
   }
 }
 
+/// The golden-hour hero (the posters' first panel): the painting of the
+/// church in the heavenly clouds — slow Ken Burns, drifting gold haze,
+/// shimmering sun rays and, on tablets / desktops, the muted cloud loop
+/// fading in over it — with the red calligraphic welcome, the heavy maroon
+/// name on a cream scrim, the address ribbon, the verse panel and the CTAs.
 class _Hero extends ConsumerWidget {
   final ChurchSettings? settings;
   final FeatureSettings features;
@@ -188,51 +193,48 @@ class _Hero extends ConsumerWidget {
     final subtitle = s == null ? '' : context.pick(f.heroSubtitleAr, f.heroSubtitleEn);
     final pad = narrow ? 16.0 : (wide ? 40.0 : 24.0);
 
-    final text = Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-      Text(context.tr('heroKicker'),
-          style: const TextStyle(color: AppColors.goldText, fontWeight: FontWeight.w700, fontSize: 13, letterSpacing: 0.3)),
-      const SizedBox(height: 6),
+    final text = Column(crossAxisAlignment: CrossAxisAlignment.center, mainAxisSize: MainAxisSize.min, children: [
       if (s == null) ...[
-        const SkeletonBox(height: 28, width: 280),
-        const SizedBox(height: 10),
-        const SkeletonBox(height: 18, width: 200),
+        const SkeletonBox(height: 34, width: 300),
+        const SizedBox(height: 12),
+        const SkeletonBox(height: 20, width: 220),
       ] else ...[
-        Semantics(
-          header: true,
-          child: Text(title.isNotEmpty ? title : context.pick(s.nameAr, s.nameEn),
-              style: displayStyle(context, size: wide ? 42 : (narrow ? 26 : 32), color: AppColors.ink, height: 1.4)),
+        TextScrim(
+          opacity: 0.84,
+          child: Padding(
+            padding: EdgeInsets.symmetric(horizontal: narrow ? 8 : 36, vertical: 12),
+            child: PosterHeading(
+              title.isNotEmpty ? title : context.pick(s.nameAr, s.nameEn),
+              key: const Key('heroTitle'),
+              accent: context.tr('heroAccent'),
+              size: wide ? 56 : (narrow ? 34 : 44),
+              glow: true,
+            ),
+          ),
         ),
-        const SizedBox(height: 6),
-        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Padding(
-              padding: EdgeInsets.only(top: 3), child: Icon(Icons.place_outlined, size: 18, color: AppColors.goldText)),
-          const SizedBox(width: 6),
-          Flexible(
-            child: Text(subtitle.isNotEmpty ? subtitle : context.pick(s.addressAr, s.addressEn),
-                style: const TextStyle(color: AppColors.muted, height: 1.6)),
-          ),
-        ]),
+        const SizedBox(height: 8),
+        TitleRibbon(subtitle.isNotEmpty ? subtitle : context.pick(s.addressAr, s.addressEn), icon: Icons.place_outlined),
         const SizedBox(height: 18),
-        Container(
-          padding: const EdgeInsetsDirectional.only(start: 16),
-          decoration: const BoxDecoration(
-            border: BorderDirectional(start: BorderSide(color: AppColors.gold, width: 3)),
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 640),
+          child: WarmPanel(
+            padding: EdgeInsets.symmetric(horizontal: narrow ? 16 : 26, vertical: 14),
+            child: Column(children: [
+              Text('« ${context.pick(s.verseAr, s.verseEn)} »',
+                  textAlign: TextAlign.center,
+                  style: AppFonts.script(size: narrow ? 20 : 24, color: AppColors.ink, height: 1.8)),
+              if (s.verseRef.isNotEmpty || s.verseRefAr.isNotEmpty)
+                Text(
+                    context.isAr
+                        ? (s.verseRefAr.isNotEmpty ? s.verseRefAr : toArabicDigits(s.verseRef))
+                        : (s.verseRef.isNotEmpty ? s.verseRef : s.verseRefAr),
+                    style: const TextStyle(color: AppColors.goldText, fontSize: 13, fontWeight: FontWeight.w700)),
+            ]),
           ),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('« ${context.pick(s.verseAr, s.verseEn)} »',
-                style: const TextStyle(
-                    fontFamily: AppFonts.naskh, fontSize: 19, height: 1.8, color: AppColors.ink, fontWeight: FontWeight.w400)),
-            if (s.verseRef.isNotEmpty || s.verseRefAr.isNotEmpty)
-              Text(
-                  context.isAr
-                      ? (s.verseRefAr.isNotEmpty ? s.verseRefAr : toArabicDigits(s.verseRef))
-                      : (s.verseRef.isNotEmpty ? s.verseRef : s.verseRefAr),
-                  style: const TextStyle(color: AppColors.goldText, fontSize: 13)),
-          ]),
         ),
       ],
-      const SizedBox(height: 22),
-      Wrap(spacing: 10, runSpacing: 10, children: [
+      const SizedBox(height: 20),
+      Wrap(alignment: WrapAlignment.center, spacing: 12, runSpacing: 10, children: [
         if (f.routeEnabled('/mass-schedule'))
           FilledButton.icon(
             onPressed: () => context.go('/mass-schedule'),
@@ -254,113 +256,40 @@ class _Hero extends ConsumerWidget {
       ]),
     ]);
 
-    final arcade = _Arcade(heroImageUrl: s?.heroImageUrl ?? '', wide: wide, narrow: narrow, features: f);
-
-    return Container(
-      color: AppColors.cream,
-      child: Column(children: [
+    return ConstrainedBox(
+      key: const Key('homeHero'),
+      // Room under the content for the church rising from the mist.
+      constraints: BoxConstraints(minHeight: wide ? 780 : (narrow ? 700 : 760)),
+      child: Stack(children: [
+        Positioned.fill(
+          child: HeroStage(
+            image: narrow ? ArtAssets.heroTall : ArtAssets.heroWide,
+            alignment: Alignment.bottomCenter,
+            motion: f.heroMotion,
+            // The 16:9 loop crops badly to a portrait phone and costs data:
+            // tablets and desktops only.
+            video: narrow ? null : ArtAssets.heroVideo,
+          ),
+        ),
         Center(
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: kMaxContentWidth),
+            constraints: const BoxConstraints(maxWidth: 960),
             child: Padding(
-              padding: EdgeInsets.fromLTRB(pad, wide ? 48 : 18, pad, 0),
-              child: wide
-                  ? Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                      Expanded(flex: 23, child: Padding(padding: const EdgeInsets.only(bottom: 36), child: text)),
-                      const SizedBox(width: 32),
-                      Expanded(flex: 20, child: Align(alignment: AlignmentDirectional.bottomEnd, child: arcade)),
-                    ])
-                  : Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                      Center(child: arcade),
-                      const SizedBox(height: 18),
-                      text,
-                      const SizedBox(height: 26),
-                    ]),
+              padding: EdgeInsets.fromLTRB(pad, wide ? 56 : 52, pad, wide ? 260 : 220),
+              child: SizedBox(width: double.infinity, child: text),
             ),
           ),
         ),
-        // The ledge the arches stand on.
-        Container(
-          height: 14,
-          decoration: const BoxDecoration(
-            color: AppColors.parchment,
-            border: Border(top: BorderSide(color: AppColors.gold, width: 2), bottom: BorderSide(color: AppColors.hairline)),
-          ),
-        ),
       ]),
     );
   }
 }
 
-/// The hero "iconostasis": the patron saints' icons in gold-leaf arches (the
-/// admin hero image takes the large arch when set). Without images, or with
-/// images / saints switched off, the arches hold a drawn Coptic cross.
-class _Arcade extends ConsumerWidget {
-  final String heroImageUrl;
-  final bool wide, narrow;
-  final FeatureSettings features;
-  const _Arcade({required this.heroImageUrl, required this.wide, required this.narrow, required this.features});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final saints = features.enabled(Sections.saints) ? (ref.watch(saintsProvider).value ?? const <Saint>[]) : const <Saint>[];
-    final big = wide ? const Size(232, 310) : (narrow ? const Size(144, 186) : const Size(176, 230));
-    final small = wide ? const Size(150, 214) : (narrow ? const Size(96, 136) : const Size(116, 166));
-    Widget arch(Size size, Saint? saint, {String? url}) {
-      final name = saint == null ? '' : context.pick(saint.nameAr, saint.nameEn);
-      final MediaImage? img = url != null && url.isNotEmpty ? MediaImage.url(url) : saint?.image;
-      final frame = ArchFrame(
-        width: size.width,
-        height: size.height,
-        child: ItemImage(
-          image: img,
-          size: size.width,
-          circle: false,
-          radius: 0,
-          label: name,
-          enlargeOnTap: false,
-          placeholder: const ArchCrossFill(),
-        ),
-      );
-      final path = saint == null ? null : cardDetailPath(DetailKind.saint, saint.id, saint.details);
-      final caption = name.isEmpty
-          ? const SizedBox.shrink()
-          : Padding(
-              padding: const EdgeInsets.only(top: 6),
-              child: SizedBox(
-                width: size.width + 24,
-                child: Text(name,
-                    textAlign: TextAlign.center,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 12, color: AppColors.muted, height: 1.4)),
-              ),
-            );
-      final col = Column(mainAxisSize: MainAxisSize.min, children: [frame, if (wide || !narrow) caption]);
-      if (path == null || !features.routeEnabled('/about')) return col;
-      return Semantics(
-        link: true,
-        label: name,
-        excludeSemantics: true,
-        child: InkWell(onTap: () => context.go(path), child: col),
-      );
-    }
-
-    final first = saints.isNotEmpty ? saints.first : null;
-    final second = saints.length > 1 ? saints[1] : null;
-    return ExcludeSemantics(
-      excluding: first == null,
-      child: Row(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.end, children: [
-        arch(small, second),
-        SizedBox(width: wide ? 16 : 12),
-        arch(big, first, url: heroImageUrl),
-      ]),
-    );
-  }
-}
-
-/// Patron saints teaser (UX standard: "who the church is" before "what it
-/// offers"): small arches, name, two lines of the life, link to the saint.
+/// Patron saints (UX standard: "who the church is" before "what it offers"),
+/// as a poster card: the Nile at sunset with the painted patrons on either
+/// side (decoration), «شفعاء كنيستنا», and one panel per saint with the
+/// saint's own icon (when uploaded) in a gold halo, two lines of the life and
+/// a link to the saint's page.
 class _PatronsTeaser extends ConsumerWidget {
   const _PatronsTeaser();
 
@@ -370,55 +299,130 @@ class _PatronsTeaser extends ConsumerWidget {
     if (!f.enabled(Sections.saints) || !f.routeEnabled('/about')) return const SizedBox.shrink();
     final saints = ref.watch(saintsProvider).value ?? const <Saint>[];
     if (saints.isEmpty) return const SizedBox.shrink();
-    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      SectionTitle(
-        context.tr('patronSaints'),
-        trailing: TextButton(onPressed: () => context.go('/about'), child: Text(context.tr('aboutChurchCta'))),
-      ),
-      ResponsiveGrid(minItemWidth: 420, children: [
-        for (final saint in saints.take(2))
-          Card(
-            key: ValueKey('homePatron-${saint.id}'),
-            child: DetailTapArea(
-              path: cardDetailPath(DetailKind.saint, saint.id, saint.details),
-              child: Padding(
-                padding: const EdgeInsets.all(14),
-                child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  ArchFrame(
-                    width: 76,
-                    height: 96,
-                    inset: 3,
-                    child: ItemImage(
-                      image: saint.image,
-                      size: 76,
-                      circle: false,
-                      radius: 0,
-                      enlargeOnTap: false,
-                      label: context.pick(saint.nameAr, saint.nameEn),
-                      placeholder: const ArchCrossFill(),
-                    ),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Text(context.pick(saint.nameAr, saint.nameEn),
-                          style: displayStyle(context, size: 18, color: AppColors.ink, height: 1.4)),
-                      const SizedBox(height: 2),
-                      Text(context.pick(saint.bioAr, saint.bioEn),
-                          maxLines: 3,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(color: AppColors.muted, fontSize: 13.5, height: 1.6)),
-                      if (cardDetailPath(DetailKind.saint, saint.id, saint.details) case final path?)
-                        DetailsLink(path: path, title: context.pick(saint.nameAr, saint.nameEn), id: saint.id),
-                    ]),
-                  ),
+    final w = MediaQuery.sizeOf(context).width;
+    final wide = w >= 1000;
+    final narrow = w < 600;
+    final halo = narrow ? 92.0 : 128.0;
+
+    Widget saintPanel(Saint saint) {
+      final name = context.pick(saint.nameAr, saint.nameEn);
+      final path = cardDetailPath(DetailKind.saint, saint.id, saint.details);
+      final painting = ArtAssets.paintingForSaint(saint.id);
+      return WarmPanel(
+        key: ValueKey('homePatron-${saint.id}'),
+        padding: EdgeInsets.zero,
+        child: DetailTapArea(
+          path: path,
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+              HaloPortrait(
+                size: halo,
+                child: ItemImage(
+                  image: f.showImages ? saint.image : null,
+                  size: halo,
+                  circle: true,
+                  enlargeOnTap: false,
+                  label: name,
+                  // No uploaded icon: the painted patron (decorative) or a cross.
+                  placeholder: painting == null
+                      ? const HaloCrossFill()
+                      : Image.asset(painting, fit: BoxFit.cover, alignment: const Alignment(0, -0.6)),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(name, style: displayStyle(context, size: narrow ? 20 : 24, color: Theme.of(context).colorScheme.primary)),
+                  const SizedBox(height: 2),
+                  Text(context.pick(saint.bioAr, saint.bioEn),
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: AppColors.ink, fontSize: 14, height: 1.7)),
+                  if (path != null) DetailsLink(path: path, title: name, id: saint.id),
                 ]),
+              ),
+            ]),
+          ),
+        ),
+      );
+    }
+
+    final panels = ResponsiveGrid(minItemWidth: 400, spacing: 18, children: [for (final s in saints.take(2)) saintPanel(s)]);
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 28),
+      child: ClipRRect(
+        key: const Key('patronsBand'),
+        borderRadius: BorderRadius.circular(28),
+        child: Stack(children: [
+          // Lazy: the band is below the fold on every screen.
+          Positioned.fill(
+            child: LazyArt(
+              placeholder: const ColoredBox(color: AppColors.parchment),
+              builder: (_) => ExcludeSemantics(
+                child: Image.asset(ArtAssets.nile, fit: BoxFit.cover, alignment: const Alignment(0, 0.2)),
               ),
             ),
           ),
-      ]),
-    ]);
+          if (wide) ...[
+            PositionedDirectional(
+              start: -10,
+              bottom: 0,
+              width: 230,
+              child: LazyArt(
+                placeholder: const SizedBox(height: 280),
+                builder: (_) => _PaintedPatron(ArtAssets.saintMoses),
+              ),
+            ),
+            PositionedDirectional(
+              end: -10,
+              bottom: 0,
+              width: 230,
+              child: LazyArt(
+                placeholder: const SizedBox(height: 280),
+                builder: (_) => _PaintedPatron(ArtAssets.saintMaximusDomadius),
+              ),
+            ),
+          ],
+          Padding(
+            padding: EdgeInsets.fromLTRB(wide ? 190 : (narrow ? 12 : 24), 8, wide ? 190 : (narrow ? 12 : 24), 28),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              TextScrim(
+                opacity: 0.8,
+                child: SectionTitle(
+                  context.tr('patronsOfOurChurch'),
+                  accent: context.tr('accentPatrons'),
+                  trailing: TextButton(onPressed: () => context.go('/about'), child: Text(context.tr('aboutChurchCta'))),
+                ),
+              ),
+              panels,
+            ]),
+          ),
+        ]),
+      ),
+    );
   }
+}
+
+/// A painted patron at the side of the patrons band, its edges dissolving
+/// into the scene. Decorative (AI painting, not a real icon).
+class _PaintedPatron extends StatelessWidget {
+  final String asset;
+  const _PaintedPatron(this.asset);
+
+  @override
+  Widget build(BuildContext context) => ExcludeSemantics(
+        child: ShaderMask(
+          blendMode: BlendMode.dstIn,
+          shaderCallback: (r) => const RadialGradient(
+            radius: 0.62,
+            colors: [Color(0xFF000000), Color(0xFF000000), Color(0x00000000)],
+            stops: [0, 0.6, 1],
+          ).createShader(r),
+          child: AspectRatio(aspectRatio: 4 / 5, child: Image.asset(asset, fit: BoxFit.cover)),
+        ),
+      );
 }
 
 class _QuickContacts extends ConsumerWidget {

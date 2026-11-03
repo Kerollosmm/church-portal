@@ -1,54 +1,72 @@
 import 'package:material_ui/material_ui.dart';
 
-/// "Iconostasis" visual identity (docs/design/direction.md): the earth pigments
-/// of the parish's own icons (Sts Maximus & Domadius, St Moses the Black) on
-/// parchment, gold leaf for ornament, a candle-lit umber "night" for the footer.
+/// "Golden hour" visual identity (docs/design/direction.md, ADR-022): the
+/// soul of the parish's own Facebook / WhatsApp posters — luminous
+/// golden-hour painting (clouds, sun rays, the church, the Nile), warm amber /
+/// gold / cream / sepia haze, heavy maroon Arabic display titles with a red
+/// calligraphic accent word, content on translucent warm panels with soft
+/// rounded corners, pill title ribbons and maroon "tabs" holding the seal.
 ///
-/// Older token names are kept so every widget moves to the new palette:
-/// `cream` is the page ground (parchment), `parchment` is the deeper plaster
-/// band, `gold` is gold leaf, `goldLight` is the halo gold used on dark grounds.
+/// Token names from earlier identities are kept so every widget moves to the
+/// new palette: `cream` is the page wash, `parchment` the sand band, `vellum`
+/// the panel surface, `gold` is decorative gold, `goldLight` the halo gold
+/// used on maroon / dark grounds.
 class AppColors {
-  /// Icon oxblood: default primary (the `burgundy` preset).
-  static const burgundy = Color(0xFF7B2216);
-  static const burgundyDark = Color(0xFF561409);
-  static const burgundyLight = Color(0xFF9A3524);
+  /// Poster maroon: default primary (the `burgundy` preset), sampled from the
+  /// posters' heavy titles and seal tabs (#4F0201–#7A1F1F range).
+  static const burgundy = Color(0xFF6E1C1C);
+  static const burgundyDark = Color(0xFF4F1010);
+  static const burgundyLight = Color(0xFF8E2A24);
 
-  /// Gold leaf. Decorative only (rules, arch frames, ornaments): 2.8:1 on
-  /// parchment, so never use it for text or icons on light surfaces.
-  static const gold = Color(0xFFB8862B);
+  /// Red of the calligraphic accent word above titles («سلسلة»): 7.0:1 on cream.
+  static const script = Color(0xFF9A2A1E);
 
-  /// Gold for text and icons on light surfaces (WCAG AA: 6.6:1 on vellum,
-  /// 5.9:1 on parchment).
-  static const goldText = Color(0xFF7A5400);
+  /// Decorative gold (halo rings, rules, glows). 2.3:1 on cream: never text.
+  static const gold = Color(0xFFC9963F);
 
-  /// Halo gold for text on dark grounds (10.8:1 on [night]).
-  static const goldLight = Color(0xFFE3C578);
+  /// Gold for text and icons on light surfaces (6.1:1 on cream).
+  static const goldText = Color(0xFF7A5410);
 
-  /// Page ground (parchment).
-  static const cream = Color(0xFFF5EEDF);
+  /// Halo gold for text on maroon / dark grounds (6.7:1 on [burgundy]).
+  static const goldLight = Color(0xFFE7C27A);
 
-  /// Deeper plaster band (page headers, icon tiles, chips).
-  static const parchment = Color(0xFFECE2CC);
+  /// Amber glow of the sun disc and light rays (decorative).
+  static const amber = Color(0xFFE8B65C);
 
-  /// Card / app-bar surface.
-  static const vellum = Color(0xFFFFFCF5);
+  /// Page wash (cream haze over the gold-cloud texture).
+  static const cream = Color(0xFFFBF3E4);
 
-  /// Hairline borders (decorative, 1.6:1: never the only cue).
-  static const hairline = Color(0xFFD9C8A4);
+  /// Sand band (chips, icon tiles, skeletons).
+  static const parchment = Color(0xFFF4E6CC);
 
-  /// Umber black body text (15.4:1 on parchment).
-  static const ink = Color(0xFF1F1611);
+  /// Opaque panel surface (inputs, popup menus, app bar).
+  static const vellum = Color(0xFFFFF9EE);
 
-  /// Umber secondary text (7.2:1 on parchment, 8.1:1 on vellum).
-  static const muted = Color(0xFF5E4A3A);
+  /// Translucent warm panel over imagery. Its worst case (over the darkest
+  /// sepia of the art, #4B2E17) is [panelOverDark]; every text token is
+  /// checked against that in the contrast test.
+  static const panel = Color(0xE0FBF3E4);
+  static const panelOverDark = Color(0xFFE2D7C7);
 
-  /// Candle-lit nave: footer ground.
-  static const night = Color(0xFF1C140E);
+  /// Sepia panel (the posters' story box) — 55 % sand-brown over cream.
+  static const sepia = Color(0x8CC8A069);
 
-  /// Cinnabar (St Moses' robe): "today / now" accents (5.0:1 on parchment).
-  static const cinnabar = Color(0xFFB0402A);
+  /// Hairline borders (decorative only).
+  static const hairline = Color(0xFFE2C99A);
 
-  /// Lapis: rare second accent (9.5:1 on parchment).
+  /// Sepia ink body text (13.2:1 on cream).
+  static const ink = Color(0xFF3A2416);
+
+  /// Sepia secondary text (7.2:1 on cream, 5.6:1 on [panelOverDark]).
+  static const muted = Color(0xFF6A4A2E);
+
+  /// Deep sepia night: video letterbox / dark scrims / footer legal strip.
+  static const night = Color(0xFF2B1A10);
+
+  /// "Today / now" accent (kept name; = [script]).
+  static const cinnabar = script;
+
+  /// Rare cool accent (kept for long-text links / info).
   static const lapis = Color(0xFF1F3B6E);
 
   static const success = Color(0xFF2E6B45);
@@ -58,30 +76,48 @@ class AppColors {
 /// Bundled font families (pubspec `fonts:`; SIL OFL 1.1).
 class AppFonts {
   static const body = 'Plex'; // IBM Plex Sans Arabic
-  static const naskh = 'Naskh'; // Noto Naskh Arabic
-  static const latinDisplay = 'Marcellus';
+  static const display = 'Lalezar'; // heavy rounded poster display (Arabic + Latin)
+  static const accent = 'Ruqaa'; // Aref Ruqaa: calligraphic accent word, verses
 
-  /// Heading face for [locale]: Naskh for Arabic, Marcellus (with Naskh for
-  /// any Arabic inside English pages) for English.
-  static TextStyle display(Locale locale, {double? size, Color? color, double? height}) => locale.languageCode == 'ar'
-      ? TextStyle(fontFamily: naskh, fontWeight: FontWeight.w700, fontSize: size, color: color, height: height ?? 1.45)
-      : TextStyle(
-          fontFamily: latinDisplay,
-          fontFamilyFallback: const [naskh],
-          fontWeight: FontWeight.w400,
-          fontSize: size,
-          color: color,
-          height: height ?? 1.3,
-          letterSpacing: 0.2);
+  /// Heavy poster heading face (same family in both languages; Lalezar has a
+  /// matching Latin).
+  static TextStyle heading({double? size, Color? color, double? height}) => TextStyle(
+        fontFamily: display,
+        fontFamilyFallback: const [body],
+        fontWeight: FontWeight.w400,
+        fontSize: size,
+        color: color,
+        height: height ?? 1.3,
+      );
+
+  /// Calligraphic accent (Ruqaa) — a word above a title, or a verse.
+  static TextStyle script({double? size, Color? color, double? height}) => TextStyle(
+        fontFamily: accent,
+        fontFamilyFallback: const [body],
+        fontWeight: FontWeight.w700,
+        fontSize: size,
+        color: color ?? AppColors.script,
+        height: height ?? 1.25,
+      );
+
 }
 
+/// Panel / card radius (soft rounded, like the posters' boxes).
+const double kPanelRadius = 20;
+
 /// Darker shade of the active theme colour (admin-selected preset), used for
-/// pressed states and the page-header watermark so they follow every preset.
+/// tab gradients and pressed states so they follow every preset.
 Color primaryDarkOf(BuildContext context) => Color.lerp(Theme.of(context).colorScheme.primary, Colors.black, 0.30)!;
 
-/// Heading style in the current language's display face.
+/// Heading style in the poster display face.
 TextStyle displayStyle(BuildContext context, {double? size, Color? color, double? height}) =>
-    AppFonts.display(Localizations.localeOf(context), size: size, color: color, height: height);
+    AppFonts.heading(size: size, color: color, height: height);
+
+/// Soft warm shadow under floating panels.
+const List<BoxShadow> kPanelShadow = [
+  BoxShadow(color: Color(0x40603208), blurRadius: 28, offset: Offset(0, 10), spreadRadius: -12),
+  BoxShadow(color: Color(0x14603208), blurRadius: 6, offset: Offset(0, 2)),
+];
 
 /// [primary] is the admin-selected accent preset (settings/features.theme).
 ThemeData buildTheme(Locale locale, {Color primary = AppColors.burgundy}) {
@@ -102,14 +138,16 @@ ThemeData buildTheme(Locale locale, {Color primary = AppColors.burgundy}) {
     outline: AppColors.muted,
     outlineVariant: AppColors.hairline,
   );
-  const radius = BorderRadius.all(Radius.circular(4));
+  const radius = BorderRadius.all(Radius.circular(kPanelRadius));
+  const small = BorderRadius.all(Radius.circular(12));
+  const stadium = StadiumBorder();
   final base = ThemeData(
     colorScheme: scheme,
     useMaterial3: true,
     fontFamily: AppFonts.body,
     scaffoldBackgroundColor: AppColors.cream,
   );
-  TextStyle? head(TextStyle? s) => s?.merge(AppFonts.display(locale, color: AppColors.ink));
+  TextStyle? head(TextStyle? s) => s?.merge(AppFonts.heading(color: AppColors.ink));
   final t = base.textTheme.apply(bodyColor: AppColors.ink, displayColor: AppColors.ink);
   final text = t.copyWith(
     displayLarge: head(t.displayLarge),
@@ -119,14 +157,14 @@ ThemeData buildTheme(Locale locale, {Color primary = AppColors.burgundy}) {
     headlineMedium: head(t.headlineMedium),
     headlineSmall: head(t.headlineSmall),
     titleLarge: head(t.titleLarge),
-    bodyLarge: t.bodyLarge?.copyWith(height: 1.7),
-    bodyMedium: t.bodyMedium?.copyWith(height: 1.65),
+    bodyLarge: t.bodyLarge?.copyWith(height: 1.75),
+    bodyMedium: t.bodyMedium?.copyWith(height: 1.7),
   );
   const buttonText = TextStyle(fontFamily: AppFonts.body, fontWeight: FontWeight.w700, fontSize: 15);
   return base.copyWith(
     textTheme: text,
     appBarTheme: const AppBarTheme(
-      backgroundColor: AppColors.vellum,
+      backgroundColor: Color(0xEBFBF3E4),
       foregroundColor: AppColors.ink,
       surfaceTintColor: Colors.transparent,
       elevation: 0,
@@ -135,70 +173,70 @@ ThemeData buildTheme(Locale locale, {Color primary = AppColors.burgundy}) {
       titleTextStyle: TextStyle(fontFamily: AppFonts.body, fontSize: 17, fontWeight: FontWeight.w700, color: AppColors.ink),
     ),
     cardTheme: const CardThemeData(
-      color: AppColors.vellum,
+      color: Color(0xF2FBF3E4),
       surfaceTintColor: Colors.transparent,
-      elevation: 0,
+      shadowColor: Color(0x66603208),
+      elevation: 3,
       margin: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(borderRadius: radius, side: BorderSide(color: AppColors.hairline)),
+      shape: RoundedRectangleBorder(borderRadius: radius, side: BorderSide(color: Color(0x66C9963F))),
     ),
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
         backgroundColor: primary,
         foregroundColor: Colors.white,
-        minimumSize: const Size(48, 46),
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+        minimumSize: const Size(48, 48),
+        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
         textStyle: buttonText,
-        shape: const RoundedRectangleBorder(borderRadius: radius),
+        elevation: 2,
+        shadowColor: const Color(0x99401010),
+        shape: stadium,
       ),
     ),
     outlinedButtonTheme: OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(
-        foregroundColor: AppColors.ink,
-        side: const BorderSide(color: AppColors.muted),
-        minimumSize: const Size(48, 46),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        foregroundColor: primary,
+        backgroundColor: const Color(0xE6FBF3E4),
+        side: BorderSide(color: primary.withValues(alpha: 0.55), width: 1.5),
+        minimumSize: const Size(48, 48),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
         textStyle: buttonText,
-        shape: const RoundedRectangleBorder(borderRadius: radius),
+        shape: stadium,
       ),
     ),
     textButtonTheme: TextButtonThemeData(
       style: TextButton.styleFrom(
         foregroundColor: primary,
         textStyle: const TextStyle(fontFamily: AppFonts.body, fontWeight: FontWeight.w700),
-        shape: const RoundedRectangleBorder(borderRadius: radius),
+        shape: stadium,
       ),
     ),
-    iconButtonTheme: IconButtonThemeData(
-      style: IconButton.styleFrom(shape: const RoundedRectangleBorder(borderRadius: radius)),
-    ),
+    iconButtonTheme: IconButtonThemeData(style: IconButton.styleFrom(shape: const CircleBorder())),
     chipTheme: base.chipTheme.copyWith(
       selectedColor: primary,
-      backgroundColor: AppColors.parchment,
+      backgroundColor: const Color(0xEBFBF3E4),
       labelStyle: const TextStyle(fontFamily: AppFonts.body, fontWeight: FontWeight.w700, color: AppColors.ink),
       checkmarkColor: Colors.white,
       secondaryLabelStyle: const TextStyle(fontFamily: AppFonts.body, fontWeight: FontWeight.w700, color: Colors.white),
       side: const BorderSide(color: AppColors.hairline),
-      shape: const RoundedRectangleBorder(borderRadius: radius),
+      shape: stadium,
     ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
       fillColor: AppColors.vellum,
-      border: const OutlineInputBorder(borderRadius: radius),
-      enabledBorder: const OutlineInputBorder(borderRadius: radius, borderSide: BorderSide(color: AppColors.hairline)),
-      focusedBorder: OutlineInputBorder(borderRadius: radius, borderSide: BorderSide(color: primary, width: 1.6)),
+      border: const OutlineInputBorder(borderRadius: small),
+      enabledBorder: const OutlineInputBorder(borderRadius: small, borderSide: BorderSide(color: AppColors.hairline)),
+      focusedBorder: OutlineInputBorder(borderRadius: small, borderSide: BorderSide(color: primary, width: 1.6)),
     ),
     dividerTheme: const DividerThemeData(color: AppColors.hairline),
     drawerTheme: const DrawerThemeData(
       backgroundColor: AppColors.cream,
       surfaceTintColor: Colors.transparent,
-      shape: RoundedRectangleBorder(),
-      endShape: RoundedRectangleBorder(),
     ),
     popupMenuTheme: const PopupMenuThemeData(
       color: AppColors.vellum,
       surfaceTintColor: Colors.transparent,
-      shape: RoundedRectangleBorder(borderRadius: radius, side: BorderSide(color: AppColors.hairline)),
+      shape: RoundedRectangleBorder(borderRadius: small, side: BorderSide(color: AppColors.hairline)),
     ),
-    listTileTheme: const ListTileThemeData(shape: RoundedRectangleBorder(borderRadius: radius)),
+    listTileTheme: const ListTileThemeData(shape: stadium),
   );
 }

@@ -244,6 +244,10 @@ class FeatureSettings {
   /// Footer options (FR-G-04).
   final FooterConfig footer;
 
+  /// Ambient hero motion and the looping hero video (ADR-022). Default on;
+  /// visitors' reduced-motion and save-data settings still win.
+  final bool heroMotion;
+
   const FeatureSettings({
     this.sections = const {},
     this.homeOrder = HomeBlocks.defaultOrder,
@@ -259,6 +263,7 @@ class FeatureSettings {
     this.theme = ThemePresets.burgundy,
     this.pageHeaders = const {},
     this.footer = const FooterConfig(),
+    this.heroMotion = true,
   });
 
   /// Everything on: used before the doc loads and when it does not exist.
@@ -294,6 +299,7 @@ class FeatureSettings {
       theme: ThemePresets.all.containsKey(theme) ? theme : ThemePresets.burgundy,
       pageHeaders: _pageHeaders(m['pageHeaders']),
       footer: FooterConfig.fromMap(m['footer']),
+      heroMotion: _bool(m['heroMotion']) ?? true,
     );
   }
 
@@ -315,6 +321,7 @@ class FeatureSettings {
             if (pageHeaders[k] != null && !pageHeaders[k]!.isEmpty) k: pageHeaders[k]!.toMap(),
         },
         'footer': footer.toMap(),
+        'heroMotion': heroMotion,
       };
 
   FeatureSettings copyWith({
@@ -332,6 +339,7 @@ class FeatureSettings {
     String? theme,
     Map<String, PageCustom>? pageHeaders,
     FooterConfig? footer,
+    bool? heroMotion,
   }) =>
       FeatureSettings(
         sections: sections ?? this.sections,
@@ -348,6 +356,7 @@ class FeatureSettings {
         theme: theme ?? this.theme,
         pageHeaders: pageHeaders ?? this.pageHeaders,
         footer: footer ?? this.footer,
+        heroMotion: heroMotion ?? this.heroMotion,
       );
 
   bool enabled(String section) => sections[section] ?? true;

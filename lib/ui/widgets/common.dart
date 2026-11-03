@@ -12,11 +12,13 @@ import '../../domain/rules.dart';
 import '../../domain/time_format.dart';
 import '../../state/providers.dart';
 import 'coptic_cross.dart';
-import 'ornaments.dart';
+import 'golden.dart';
 
 const double kMaxContentWidth = 1100;
 
-/// Scrollable page body: centred, width-capped content + footer.
+/// Scrollable page body: centred, width-capped content + footer. Each
+/// section fades and rises in the first time it scrolls into view (static
+/// under reduced motion).
 class PageBody extends StatelessWidget {
   final List<Widget> children;
   final Widget? header;
@@ -34,7 +36,10 @@ class PageBody extends StatelessWidget {
               constraints: const BoxConstraints(maxWidth: kMaxContentWidth),
               child: Padding(
                 padding: EdgeInsets.fromLTRB(pad, 20, pad, 32),
-                child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: children),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [for (final c in children) Reveal(child: c)],
+                ),
               ),
             ),
           ),
@@ -48,86 +53,80 @@ class PageBody extends StatelessWidget {
   }
 }
 
-/// Standard inner-page header ("Iconostasis"): a plaster band with the church
-/// short name as a kicker, the title in the display face (primary colour),
-/// the subtitle, a faint arch watermark at the end edge and the interlace
-/// band underneath. Same anatomy on every inner page.
-class PageHeader extends StatelessWidget {
+/// Standard inner-page header ("Golden hour"): the golden-hour painting of
+/// the church in the clouds (slow drift + light rays, still under reduced
+/// motion), a cream scrim, the calligraphic accent word above the heavy
+/// maroon title, and the subtitle on a pill ribbon. Same anatomy on every
+/// inner page. [portrait] (a saint's icon in a halo) and [backdrop] (e.g. the
+/// Nile for saints) let detail pages vary it.
+class PageHeader extends ConsumerWidget {
   final String title;
   final String? subtitle;
+  final String? accent;
 
-  /// Kept for API compatibility; the header no longer shows a section icon
-  /// (the arch watermark and kicker carry the identity).
+  /// Kept for API compatibility (section icons are not shown in the header).
   final IconData? icon;
-  const PageHeader({super.key, required this.title, this.subtitle, this.icon});
+  final Widget? portrait;
+  final String backdrop;
+  const PageHeader({
+    super.key,
+    required this.title,
+    this.subtitle,
+    this.icon,
+    this.accent,
+    this.portrait,
+    this.backdrop = ArtAssets.heroWide,
+  });
 
   @override
-  Widget build(BuildContext context) {
-    final primary = Theme.of(context).colorScheme.primary;
+  Widget build(BuildContext context, WidgetRef ref) {
     final w = MediaQuery.sizeOf(context).width;
     final wide = w >= 900;
-    final pad = w < 600 ? 16.0 : (wide ? 40.0 : 24.0);
-    return Column(
-      mainAxisSize: MainAxisSize.min,
+    final phone = w < 600;
+    final pad = phone ? 16.0 : (wide ? 40.0 : 24.0);
+    final motion = ref.watch(featuresProvider.select((f) => f.heroMotion));
+    final sub = subtitle?.trim() ?? '';
+    return Stack(
       children: [
-        Container(
-          width: double.infinity,
-          color: AppColors.parchment,
-          child: Stack(
-            clipBehavior: Clip.hardEdge,
-            children: [
-              PositionedDirectional(
-                end: wide ? 60 : 16,
-                bottom: wide ? -40 : -36,
-                child: ArchWatermark(width: wide ? 200 : 120, height: wide ? 240 : 150),
-              ),
-              Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: kMaxContentWidth),
-                  child: Padding(
-                    padding: EdgeInsets.fromLTRB(pad, wide ? 36 : 20, pad, wide ? 32 : 20),
-                    child: SizedBox(
-                      width: double.infinity,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          ExcludeSemantics(
-                            child: Text(
-                              context.tr('appShort'),
-                              style: const TextStyle(
-                                color: AppColors.goldText,
-                                fontWeight: FontWeight.w700,
-                                fontSize: 12.5,
-                                letterSpacing: 0.3,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Semantics(
-                            header: true,
-                            child: Text(
-                              title,
-                              style: displayStyle(context, size: wide ? 34 : 26, color: primary),
-                            ),
-                          ),
-                          if (subtitle != null && subtitle!.isNotEmpty)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 4),
-                              child: ConstrainedBox(
-                                constraints: const BoxConstraints(maxWidth: 680),
-                                child: Text(subtitle!, style: const TextStyle(color: AppColors.muted, height: 1.65)),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
+        Positioned.fill(
+          child: HeroStage(
+            image: backdrop == ArtAssets.heroWide && phone ? ArtAssets.heroWideSmall : backdrop,
+            alignment: backdrop == ArtAssets.heroWide ? const Alignment(0, -0.35) : Alignment.center,
+            motion: motion,
+            rays: backdrop == ArtAssets.heroWide ? 1 : 0.6,
           ),
         ),
-        const InterlaceBand(),
+        Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: kMaxContentWidth),
+            child: Padding(
+              // Top room for the seal tab hanging from the app bar.
+              padding: EdgeInsets.fromLTRB(pad, wide ? 44 : 40, pad, wide ? 52 : 36),
+              child: SizedBox(
+                width: double.infinity,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (portrait != null) ...[portrait!, const SizedBox(height: 14)],
+                    TextScrim(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 10),
+                        child: PosterHeading(title, accent: accent, size: wide ? 54 : (phone ? 34 : 44), glow: true),
+                      ),
+                    ),
+                    if (sub.isNotEmpty) ...[
+                      const SizedBox(height: 10),
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 720),
+                        child: TitleRibbon(sub),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
       ],
     );
   }
@@ -136,7 +135,8 @@ class PageHeader extends StatelessWidget {
 /// [PageHeader] of a customizable public page ([CustomizablePages]): the
 /// admin's title / subtitle for the current language
 /// (`settings/features.pageHeaders.<pageKey>`) replace the built-in ones;
-/// an empty override keeps the built-in text.
+/// an empty override keeps the built-in text. The calligraphic accent word
+/// is the page's own (`accent_<pageKey>`).
 class CustomizablePageHeader extends ConsumerWidget {
   final String pageKey;
   final String title;
@@ -152,7 +152,12 @@ class CustomizablePageHeader extends ConsumerWidget {
     String own(String ar, String en) => (context.isAr ? ar : en).trim();
     final t = own(c.titleAr, c.titleEn);
     final st = own(c.subtitleAr, c.subtitleEn);
-    return PageHeader(title: t.isNotEmpty ? t : title, subtitle: st.isNotEmpty ? st : subtitle, icon: icon);
+    return PageHeader(
+      title: t.isNotEmpty ? t : title,
+      subtitle: st.isNotEmpty ? st : subtitle,
+      icon: icon,
+      accent: context.trOrNull('accent_$pageKey'),
+    );
   }
 }
 
@@ -167,65 +172,69 @@ class PageIntro extends ConsumerWidget {
     final c = ref.watch(featuresProvider.select((f) => f.pageHeader(pageKey)));
     final text = context.pick(c.introAr.trim(), c.introEn.trim());
     if (text.isEmpty) return const SizedBox.shrink();
-    return Container(
+    return Padding(
       key: const Key('pageIntro'),
-      width: double.infinity,
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppColors.cream,
-        borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: AppColors.gold.withValues(alpha: 0.6)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Icon(Icons.campaign_outlined, color: AppColors.goldText),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(text, style: const TextStyle(height: 1.7, color: AppColors.ink)),
-          ),
-        ],
+      padding: const EdgeInsets.only(bottom: 12),
+      child: WarmPanel(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(Icons.campaign_outlined, color: AppColors.goldText),
+            const SizedBox(width: 10),
+            Expanded(child: Text(text, style: const TextStyle(height: 1.75, color: AppColors.ink))),
+          ],
+        ),
       ),
     );
   }
 }
 
-/// Section title on a "register" line: Coptic-cross medallion, the title in
-/// the display face (primary colour), then a gold-leaf rule to the end edge.
+/// Poster-style section title: optional calligraphic [accent] word above the
+/// heavy title (primary colour), a soft sepia rule, then [trailing] (e.g. a
+/// "see all" link) underneath. Centred like the posters.
 class SectionTitle extends StatelessWidget {
   final String text;
 
-  /// Kept for API compatibility: the medallion cross replaces section icons.
+  /// Kept for API compatibility (no section icons in the poster style).
   final IconData? icon;
   final Widget? trailing;
-  const SectionTitle(this.text, {super.key, this.icon, this.trailing});
+  final String? accent;
+  const SectionTitle(this.text, {super.key, this.icon, this.trailing, this.accent});
 
   @override
   Widget build(BuildContext context) {
-    final primary = Theme.of(context).colorScheme.primary;
     final wide = MediaQuery.sizeOf(context).width >= 900;
+    final primary = Theme.of(context).colorScheme.primary;
     return Padding(
-      padding: EdgeInsets.only(top: wide ? 32 : 24, bottom: 14),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
+      padding: EdgeInsets.only(top: wide ? 44 : 30, bottom: 16),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          ExcludeSemantics(
-            child: CopticCross(size: wide ? 24 : 20, color: primary),
+          if (accent != null)
+            ExcludeSemantics(
+              child: Text(accent!, textAlign: TextAlign.center, style: AppFonts.script(size: wide ? 30 : 24, height: 1.1)),
+            ),
+          Semantics(
+            header: true,
+            child: Text(
+              text,
+              textAlign: TextAlign.center,
+              style: displayStyle(context, size: wide ? 38 : 28, color: primary, height: 1.3),
+            ),
           ),
-          const SizedBox(width: 8),
-          Flexible(
-            child: Semantics(
-              header: true,
-              child: Text(
-                text,
-                style: displayStyle(context, size: wide ? 26 : 21, color: primary, height: 1.35),
+          const SizedBox(height: 6),
+          ExcludeSemantics(
+            child: Container(
+              width: 170,
+              height: 8,
+              decoration: const BoxDecoration(
+                borderRadius: BorderRadius.all(Radius.circular(99)),
+                gradient: LinearGradient(colors: [Color(0x007A4530), Color(0xB37A4530), Color(0x007A4530)]),
               ),
             ),
           ),
-          const SizedBox(width: 12),
-          Expanded(child: Container(height: 1, color: AppColors.gold)),
-          if (trailing != null) ...[const SizedBox(width: 8), Flexible(child: trailing!)],
+          if (trailing != null) Padding(padding: const EdgeInsets.only(top: 4), child: trailing!),
         ],
       ),
     );
@@ -403,7 +412,7 @@ class PendingConfirmationNote extends StatelessWidget {
     padding: const EdgeInsets.all(14),
     decoration: BoxDecoration(
       color: const Color(0xFFFFF3CD),
-      borderRadius: BorderRadius.circular(4),
+      borderRadius: BorderRadius.circular(16),
       border: Border.all(color: const Color(0xFFE0C36A)),
     ),
     child: Row(
@@ -479,7 +488,7 @@ class Pill extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-    decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(3)),
+    decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(99)),
     child: Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -546,12 +555,7 @@ class TimeRangeText extends StatelessWidget {
       children: [
         Text(
           primary,
-          style: TextStyle(
-            fontWeight: FontWeight.w800,
-            fontSize: large ? 22 : 16,
-            color: Theme.of(context).colorScheme.primary,
-            height: 1.3,
-          ),
+          style: displayStyle(context, size: large ? 28 : 21, color: Theme.of(context).colorScheme.primary, height: 1.3),
         ),
         // The secondary line is Latin in Arabic mode and Arabic in English mode:
         // give it its own script's base direction.
@@ -575,6 +579,8 @@ String localDigits(BuildContext context, String s) => context.isAr ? toArabicDig
 /// Site footer (FR-G-04): church name and address, quick phone numbers,
 /// official social icons, quick links and an optional admin note, each
 /// switchable in `settings/features.footer` (and hidden with its section).
+/// "Golden hour": a warm panel over the church in the mist, then the
+/// posters' signature line with the Facebook / WhatsApp icons.
 class Footer extends ConsumerWidget {
   const Footer({super.key});
 
@@ -588,6 +594,7 @@ class Footer extends ConsumerWidget {
     // before showing phones / social links an admin may have switched off.
     final ready = ref.watch(featuresReadyProvider);
     final footer = features.footer;
+    final primary = Theme.of(context).colorScheme.primary;
     final links = <(String, String)>[
       ('massSchedule', '/mass-schedule'),
       ('clinics', '/clinics'),
@@ -597,8 +604,9 @@ class Footer extends ConsumerWidget {
     final phones = ready && s != null && footer.showPhones && features.enabled(Sections.contactInfo)
         ? s.phones.where((p) => p.number.trim().isNotEmpty).toList()
         : const <PhoneEntry>[];
+    final socialsOn = ready && s != null && footer.showSocials && features.enabled(Sections.socials);
     final socials = <(String, IconData, String, VoidCallback)>[
-      if (ready && s != null && footer.showSocials && features.enabled(Sections.socials)) ...[
+      if (socialsOn) ...[
         if (s.whatsappChannel.isNotEmpty)
           ('whatsappChannel', Icons.campaign_rounded, context.tr('whatsappChannel'), () => openUrl(s.whatsappChannel)),
         if (s.whatsapp.isNotEmpty)
@@ -609,17 +617,22 @@ class Footer extends ConsumerWidget {
           ('instagram', Icons.photo_camera_rounded, context.tr('instagram'), () => openUrl(s.instagram)),
       ],
     ];
+    // The signature line carries Facebook and WhatsApp (as on the posters).
+    final sigIcons = <(String, IconData, String, VoidCallback)>[
+      if (socialsOn) ...[
+        if (s.facebook.isNotEmpty) ('facebook', Icons.facebook, context.tr('facebook'), () => openUrl(s.facebook)),
+        if (s.whatsappChannel.isNotEmpty)
+          ('whatsapp', Icons.chat_rounded, context.tr('whatsappChannel'), () => openUrl(s.whatsappChannel))
+        else if (s.whatsapp.isNotEmpty)
+          ('whatsapp', Icons.chat_rounded, context.tr('whatsapp'), () => openWhatsApp(s.whatsapp)),
+      ],
+    ];
     final note = context.pick(footer.noteAr.trim(), footer.noteEn.trim());
     final screen = MediaQuery.sizeOf(context).width;
     final side = screen > kMaxContentWidth ? (screen - kMaxContentWidth) / 2 : 0.0;
     final wide = screen >= 900;
-    final pad = MediaQuery.sizeOf(context).width < 600 ? 16.0 : (wide ? 40.0 : 24.0);
-    const heading = TextStyle(
-      fontFamily: AppFonts.naskh,
-      fontWeight: FontWeight.w700,
-      fontSize: 16,
-      color: AppColors.goldLight,
-    );
+    final pad = screen < 600 ? 16.0 : (wide ? 40.0 : 24.0);
+    final heading = displayStyle(context, size: 19, color: primary, height: 1.4);
     final name = s == null ? context.tr('appName') : context.pick(s.nameAr, s.nameEn);
 
     final identity = Column(
@@ -629,29 +642,20 @@ class Footer extends ConsumerWidget {
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const ChurchSeal(size: 52),
+            const ChurchSeal(size: 56),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    name,
-                    style: const TextStyle(
-                      fontFamily: AppFonts.naskh,
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 16,
-                      height: 1.6,
-                    ),
-                  ),
-                  Text(context.tr('denomination'), style: const TextStyle(color: AppColors.goldLight, fontSize: 13)),
+                  Text(name, style: displayStyle(context, size: 18, color: primary, height: 1.45)),
+                  Text(context.tr('denomination'), style: const TextStyle(color: AppColors.goldText, fontSize: 13)),
                   if (s != null && features.enabled(Sections.contactInfo))
                     Padding(
                       padding: const EdgeInsets.only(top: 2),
                       child: Text(
                         context.pick(s.addressAr, s.addressEn),
-                        style: const TextStyle(color: Color(0xFFD9CCB2), fontSize: 13, height: 1.6),
+                        style: const TextStyle(color: AppColors.muted, fontSize: 13, height: 1.6),
                       ),
                     ),
                 ],
@@ -678,8 +682,7 @@ class Footer extends ConsumerWidget {
                       style: IconButton.styleFrom(
                         minimumSize: const Size(48, 48),
                         tapTargetSize: MaterialTapTargetSize.padded,
-                        side: const BorderSide(color: Color(0xFF5A4630)),
-                        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(4))),
+                        backgroundColor: primary,
                       ),
                       icon: Icon(x.$2, color: AppColors.goldLight, size: 20),
                     ),
@@ -712,7 +715,7 @@ class Footer extends ConsumerWidget {
                           key: Key('footerPhone-${p.number.trim()}'),
                           onPressed: () => callPhone(p.number),
                           style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 4)),
-                          icon: const Icon(Icons.call, size: 18, color: AppColors.goldLight),
+                          icon: Icon(Icons.call, size: 18, color: primary),
                           label: Text(
                             p.number.trim(),
                             // Digits read left-to-right in Arabic too.
@@ -720,7 +723,7 @@ class Footer extends ConsumerWidget {
                             semanticsLabel:
                                 '${context.tr('call')} ${context.pick(p.labelAr, p.labelEn)} ${p.number.trim()}'.trim(),
                             style: const TextStyle(
-                              color: Colors.white,
+                              color: AppColors.ink,
                               fontWeight: FontWeight.w700,
                               fontSize: 16,
                               letterSpacing: 0.4,
@@ -753,7 +756,7 @@ class Footer extends ConsumerWidget {
                           style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 4)),
                           child: Text(
                             context.tr(l.$1),
-                            style: const TextStyle(color: Color(0xFFE9DFC9), fontWeight: FontWeight.w400),
+                            style: const TextStyle(color: AppColors.ink, fontWeight: FontWeight.w400),
                           ),
                         ),
                       ),
@@ -773,73 +776,151 @@ class Footer extends ConsumerWidget {
           );
 
     final columns = <Widget>[identity, ?contact, ?quick];
-    return Container(
-      width: double.infinity,
-      color: AppColors.night,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const InterlaceBand.dark(),
-          // Centred by padding, not ConstrainedBox(maxWidth): the footer sits in
-          // SliverFillRemaining, which sizes it from its intrinsic height, and
-          // ConstrainedBox would measure that at the full (wider) width.
-          Padding(
-            padding: EdgeInsets.symmetric(horizontal: side),
-            child: Padding(
-              padding: EdgeInsets.fromLTRB(pad, wide ? 40 : 28, pad, 18),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (wide)
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        for (var i = 0; i < columns.length; i++) ...[
-                          if (i > 0) const SizedBox(width: 32),
-                          Expanded(flex: i == 0 ? 13 : 10, child: columns[i]),
-                        ],
-                      ],
-                    )
-                  else
-                    for (var i = 0; i < columns.length; i++) ...[if (i > 0) const SizedBox(height: 20), columns[i]],
-                  if (note.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 16),
-                      child: Text(
-                        note,
-                        key: const Key('footerNote'),
-                        style: const TextStyle(color: Color(0xFFD9CCB2), fontSize: 13, height: 1.6),
-                      ),
-                    ),
-                  const SizedBox(height: 16),
-                  const SizedBox(height: 1, child: ColoredBox(color: Color(0xFF3A2A1C))),
-                  const SizedBox(height: 10),
-                  Wrap(
-                    spacing: 16,
-                    runSpacing: 4,
+    final signature = Text(
+      context.tr('footerSignature'),
+      key: const Key('footerSignature'),
+      textAlign: TextAlign.center,
+      style: displayStyle(context, size: wide ? 20 : 17, color: primaryDarkOf(context), height: 1.5),
+    );
+    final sigButtons = [
+      for (final x in sigIcons)
+        SizedBox.square(
+          dimension: 48,
+          child: IconButton(
+            key: Key('footerSig-${x.$1}'),
+            tooltip: x.$3,
+            onPressed: x.$4,
+            style: IconButton.styleFrom(
+              minimumSize: const Size(48, 48),
+              tapTargetSize: MaterialTapTargetSize.padded,
+              backgroundColor: primary,
+            ),
+            icon: Icon(x.$2, color: Colors.white, size: 18),
+          ),
+        ),
+    ];
+
+    return Stack(
+      key: const Key('footerStage'),
+      children: [
+        // The church in the mist behind the footer (decorative, positioned:
+        // ignored by the intrinsic height SliverFillRemaining measures).
+        Positioned.fill(
+          child: ExcludeSemantics(
+            child: ShaderMask(
+              blendMode: BlendMode.dstIn,
+              shaderCallback: (r) => const LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [Color(0x00000000), Color(0xFF000000)],
+                stops: [0.05, 0.5],
+              ).createShader(r),
+              child: Image.asset(
+                wide ? ArtAssets.heroWide : ArtAssets.heroWideSmall,
+                fit: BoxFit.cover,
+                alignment: const Alignment(0, 0.75),
+              ),
+            ),
+          ),
+        ),
+        // Centred by padding, not ConstrainedBox(maxWidth): the footer sits in
+        // SliverFillRemaining, which sizes it from its intrinsic height, and
+        // ConstrainedBox would measure that at the full (wider) width.
+        Padding(
+          padding: EdgeInsets.symmetric(horizontal: side),
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(pad, wide ? 80 : 56, pad, 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  key: const Key('footerPanel'),
+                  padding: EdgeInsets.all(wide ? 28 : 18),
+                  decoration: BoxDecoration(
+                    color: AppColors.panel,
+                    borderRadius: BorderRadius.circular(kPanelRadius),
+                    border: Border.all(color: const Color(0x61C9963F)),
+                    boxShadow: kPanelShadow,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    mainAxisSize: MainAxisSize.min,
                     children: [
+                      if (wide)
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            for (var i = 0; i < columns.length; i++) ...[
+                              if (i > 0) const SizedBox(width: 32),
+                              Expanded(flex: i == 0 ? 13 : 10, child: columns[i]),
+                            ],
+                          ],
+                        )
+                      else
+                        for (var i = 0; i < columns.length; i++) ...[if (i > 0) const SizedBox(height: 18), columns[i]],
+                      if (note.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 14),
+                          child: Text(
+                            note,
+                            key: const Key('footerNote'),
+                            style: const TextStyle(color: AppColors.muted, fontSize: 13, height: 1.6),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 14),
+                // The posters' signature line and the legal line, on a soft
+                // cream band (text never sits on the bare painting).
+                Container(
+                  key: const Key('footerSignatureBand'),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: AppColors.cream.withValues(alpha: 0.9),
+                    borderRadius: BorderRadius.circular(24),
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (wide)
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            ...sigButtons,
+                            if (sigButtons.isNotEmpty) const SizedBox(width: 8),
+                            Flexible(child: signature),
+                          ],
+                        )
+                      else ...[
+                        if (sigButtons.isNotEmpty) Row(mainAxisAlignment: MainAxisAlignment.center, children: sigButtons),
+                        signature,
+                      ],
+                      const SizedBox(height: 2),
                       Text(
                         '© ${localDigits(context, '$year')} — ${context.tr('rights')}',
-                        style: const TextStyle(color: Color(0xFFBFB096), fontSize: 12),
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(color: AppColors.muted, fontSize: 12.5),
                       ),
                       ValueListenableBuilder<bool>(
                         valueListenable: servingSeed,
                         builder: (context, onSeed, _) => onSeed
                             ? Text(
                                 context.tr('offlineData'),
-                                style: const TextStyle(color: Color(0xFFBFB096), fontSize: 12),
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(color: AppColors.muted, fontSize: 12),
                               )
                             : const SizedBox.shrink(),
                       ),
                     ],
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }

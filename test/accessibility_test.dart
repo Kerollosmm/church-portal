@@ -24,6 +24,7 @@ import 'package:church_portal/ui/pages/assistant_page.dart';
 import 'package:church_portal/ui/pages/contact_page.dart';
 import 'package:church_portal/ui/widgets/cards.dart';
 import 'package:church_portal/ui/widgets/common.dart';
+import 'package:church_portal/ui/widgets/golden.dart';
 import 'package:church_portal/ui/widgets/map_embed.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -273,20 +274,37 @@ void main() {
       }
     });
 
-    test('Coptic identity: footer night ground and its text colours', () {
-      const night = AppColors.night;
-      for (final c in const [Color(0xFFE9DFC9), Color(0xFFD9CCB2), Color(0xFFBFB096), AppColors.goldLight, Colors.white]) {
-        expect(contrast(c, night), greaterThanOrEqualTo(4.5), reason: '$c on night');
-      }
-      // Page ground, cards and plaster bands keep body / muted / gold text AA.
-      for (final bg in const [AppColors.cream, AppColors.vellum, AppColors.parchment]) {
-        expect(contrast(AppColors.ink, bg), greaterThanOrEqualTo(4.5));
-        expect(contrast(AppColors.muted, bg), greaterThanOrEqualTo(4.5));
-        expect(contrast(AppColors.goldText, bg), greaterThanOrEqualTo(4.5));
-        expect(contrast(AppColors.cinnabar, bg), greaterThanOrEqualTo(4.5));
+    test('Golden hour: text over imagery sits on panels / scrims that keep AA', () {
+      // Translucent panel worst case: composited over the darkest sepia of the art.
+      const darkestArt = Color(0xFF4B2E17);
+      final panelOverArt = over(AppColors.panel, darkestArt);
+      expect(contrast(panelOverArt, AppColors.panelOverDark), lessThan(1.1), reason: 'documented token is accurate');
+      for (final bg in [AppColors.cream, AppColors.vellum, AppColors.parchment, panelOverArt]) {
+        expect(contrast(AppColors.ink, bg), greaterThanOrEqualTo(4.5), reason: 'ink on $bg');
+        expect(contrast(AppColors.muted, bg), greaterThanOrEqualTo(4.5), reason: 'muted on $bg');
+        expect(contrast(AppColors.goldText, bg), greaterThanOrEqualTo(4.5), reason: 'goldText on $bg');
+        expect(contrast(AppColors.script, bg), greaterThanOrEqualTo(4.5), reason: 'script on $bg');
         for (final p in ThemePresets.all.values) {
           expect(contrast(Color(p), bg), greaterThanOrEqualTo(4.5), reason: 'preset $p on $bg');
         }
+      }
+      // Sepia story panel (lighter end of its gradient is the worst case for light text; ink is dark).
+      for (final bg in const [Color(0xFFE6CFA9), Color(0xFFDDC197)]) {
+        expect(contrast(AppColors.ink, bg), greaterThanOrEqualTo(4.5));
+      }
+      // Title ribbon: cream text on its solid middle.
+      expect(contrast(TitleRibbon.textColor, TitleRibbon.fill), greaterThanOrEqualTo(4.5));
+      // Hero / header scrim: the centre (0.84 cream) over the darkest art.
+      final scrim = over(AppColors.cream.withValues(alpha: 0.84), darkestArt);
+      for (final p in ThemePresets.all.values) {
+        expect(contrast(Color(p), scrim), greaterThanOrEqualTo(4.5), reason: 'title $p on hero scrim');
+      }
+      expect(contrast(AppColors.script, scrim), greaterThanOrEqualTo(4.5), reason: 'accent on hero scrim');
+      // Seal tab / drawer header / badges: light text and icons on every preset.
+      for (final p in ThemePresets.all.values) {
+        final dark = Color.lerp(Color(p), Colors.black, 0.30)!;
+        expect(contrast(const Color(0xFFFFF1D6), Color(p)), greaterThanOrEqualTo(4.5));
+        expect(contrast(AppColors.goldLight, dark), greaterThanOrEqualTo(4.5));
       }
     });
   });
@@ -341,10 +359,9 @@ void main() {
           }
         }
       }
-      // Coptic identity: the footer is the fixed umber "night" ground for every
-      // preset (gold and parchment text on it are contrast-checked below).
-      final footer = find.descendant(of: find.byType(Footer), matching: find.byType(Container)).first;
-      expect(tester.widget<Container>(footer).color, AppColors.night);
+      // Golden hour: the footer is a warm panel (preset-independent ground).
+      final panel = tester.widget<Container>(find.byKey(const Key('footerPanel')));
+      expect((panel.decoration as BoxDecoration).color, AppColors.panel);
     });
 
     testWidgets('ChurchPortalApp maps settings/features.theme to the theme', (tester) async {
@@ -365,8 +382,8 @@ void main() {
       final title = find.descendant(of: find.byType(SectionTitle), matching: find.byType(Text)).first;
       expect(Theme.of(tester.element(title)).colorScheme.primary, navy);
       expect(tester.widget<Text>(title).style?.color, navy);
-      final footer = find.descendant(of: find.byType(Footer), matching: find.byType(Container)).first;
-      expect(tester.widget<Container>(footer).color, AppColors.night);
+      final panel = tester.widget<Container>(find.byKey(const Key('footerPanel')));
+      expect((panel.decoration as BoxDecoration).color, AppColors.panel);
     });
   });
 

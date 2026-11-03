@@ -900,3 +900,18 @@ describe('PR #11: page headers & footer (settings/features)', () => {
     if (!('pageHeaders' in f) || !('footer' in f)) throw new Error('seed settings/features lacks pageHeaders/footer');
   });
 });
+
+describe('ADR-022: hero motion & video switch (settings/features.heroMotion)', () => {
+  test('admins switch hero motion off and on; only a bool is accepted', async () => {
+    const ref = doc(db(EDITOR), 'settings', 'features');
+    await assertSucceeds(setDoc(ref, { theme: 'burgundy', heroMotion: false }));
+    await assertSucceeds(setDoc(ref, { theme: 'burgundy', heroMotion: true }));
+    for (const v of ['off', 0, null, { on: true }]) {
+      await assertFails(setDoc(ref, { heroMotion: v }), JSON.stringify(v));
+    }
+  });
+
+  test('visitors cannot change it', async () => {
+    await assertFails(setDoc(doc(db(null), 'settings', 'features'), { heroMotion: false }));
+  });
+});

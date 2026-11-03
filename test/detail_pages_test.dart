@@ -633,7 +633,7 @@ void main() {
     Finder inFooter(Finder f) => find.descendant(of: find.byType(Footer), matching: f);
 
     testWidgets('defaults: phones, socials and quick links; no note', (tester) async {
-      await _pump(tester, size: const Size(1400, 4000));
+      await _pump(tester, size: const Size(1400, 6500));
       expect(inFooter(find.byKey(const Key('footerPhone-035368888'))), findsOneWidget);
       for (final s in ['whatsappChannel', 'facebook', 'youtube', 'instagram']) {
         expect(inFooter(find.byKey(Key('footerSocial-$s'))), findsOneWidget, reason: s);
@@ -644,7 +644,7 @@ void main() {
 
     testWidgets('admin switches hide phones, socials and quick links; note shown', (tester) async {
       await _pump(tester,
-          size: const Size(1400, 4000),
+          size: const Size(1400, 6500),
           seed: _seed(features: {
             'footer': {
               'showPhones': false, 'showSocials': false, 'showQuickLinks': false, //
@@ -658,7 +658,7 @@ void main() {
     });
 
     testWidgets('no phones or social icons until settings/features has arrived', (tester) async {
-      await _pump(tester, size: const Size(1400, 4000), repo: _PendingFeaturesRepository(_seed()), settle: false);
+      await _pump(tester, size: const Size(1400, 6500), repo: _PendingFeaturesRepository(_seed()), settle: false);
       expect(find.byType(Footer), findsWidgets);
       expect(inFooter(find.byKey(const Key('footerPhone-035368888'))), findsNothing);
       expect(inFooter(find.byKey(const Key('footerSocial-facebook'))), findsNothing);
@@ -666,7 +666,7 @@ void main() {
 
     testWidgets('sections win: contact info off hides phones, socials off hides icons', (tester) async {
       await _pump(tester,
-          size: const Size(1400, 4000), seed: _seed(sections: const {'contactInfo': false, 'socials': false}));
+          size: const Size(1400, 6500), seed: _seed(sections: const {'contactInfo': false, 'socials': false}));
       expect(inFooter(find.byKey(const Key('footerPhone-035368888'))), findsNothing);
       expect(inFooter(find.byKey(const Key('footerSocial-facebook'))), findsNothing);
       expect(inFooter(find.byKey(const Key('footerQuickLinks'))), findsOneWidget);

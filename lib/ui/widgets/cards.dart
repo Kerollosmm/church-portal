@@ -41,10 +41,17 @@ class LiturgyCard extends StatelessWidget {
         padding: const EdgeInsets.all(14),
         child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(color: AppColors.parchment, borderRadius: BorderRadius.circular(4)),
-            child: Icon(_icon, color: Theme.of(context).colorScheme.primary),
+            width: 46,
+            height: 46,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [Theme.of(context).colorScheme.primary, primaryDarkOf(context)],
+              ),
+            ),
+            child: Icon(_icon, color: AppColors.goldLight, size: 22),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -94,18 +101,20 @@ class NextMassCard extends ConsumerWidget {
     }
 
     final primary = Theme.of(context).colorScheme.primary;
-    // "Register" panel: a primary band naming the block, then the liturgy on
-    // vellum. Flat pigment, hairline frame, no shadow.
+    // Warm panel with a maroon title band (the posters' tab colour).
     return Container(
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        color: AppColors.vellum,
-        borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: AppColors.hairline),
+        color: AppColors.panel,
+        borderRadius: BorderRadius.circular(kPanelRadius),
+        border: Border.all(color: const Color(0x61C9963F)),
+        boxShadow: kPanelShadow,
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Container(
-          color: primary,
+          decoration: BoxDecoration(
+            gradient: LinearGradient(colors: [primary, primaryDarkOf(context)]),
+          ),
           padding: const EdgeInsetsDirectional.fromSTEB(16, 6, 6, 6),
           // Wrap: on narrow screens / large text "Full schedule" moves under
           // the title instead of overflowing.
@@ -155,7 +164,7 @@ class NextMassCard extends ConsumerWidget {
         margin: const EdgeInsets.only(bottom: 10),
         decoration: BoxDecoration(
           color: AppColors.success.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(4),
+          borderRadius: BorderRadius.circular(14),
         ),
         child: Row(children: [
           Pill(context.tr('happeningNow'), icon: Icons.circle, color: AppColors.success),
@@ -256,7 +265,7 @@ class _AlertBannerState extends ConsumerState<AlertBanner> {
           margin: const EdgeInsets.only(bottom: 10),
           decoration: BoxDecoration(
             color: const Color(0xFFFFF4E0),
-            borderRadius: BorderRadius.circular(4),
+            borderRadius: BorderRadius.circular(14),
             border: const BorderDirectional(start: BorderSide(color: AppColors.alert, width: 5)),
           ),
           padding: const EdgeInsets.all(14),
@@ -322,20 +331,24 @@ class DirectoryCard extends StatelessWidget {
           child: Padding(
           padding: const EdgeInsets.all(16),
           child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            // Maroon badge (follows the admin colour preset).
             Container(
-              width: 44,
-              height: 44,
+              width: 52,
+              height: 52,
               decoration: BoxDecoration(
-                color: AppColors.parchment,
-                borderRadius: BorderRadius.circular(4),
-                border: Border.all(color: AppColors.hairline),
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [primary, primaryDarkOf(context)],
+                ),
+                borderRadius: BorderRadius.circular(16),
               ),
-              child: Icon(icon, color: primary, size: 24),
+              child: Icon(icon, color: AppColors.goldLight, size: 24),
             ),
             const SizedBox(width: 14),
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(title, style: displayStyle(context, size: 18, color: AppColors.ink, height: 1.4)),
+                Text(title, style: displayStyle(context, size: 21, color: primary, height: 1.35)),
                 const SizedBox(height: 2),
                 Text(subtitle, style: const TextStyle(color: AppColors.muted, fontSize: 13.5, height: 1.55)),
                 const SizedBox(height: 6),

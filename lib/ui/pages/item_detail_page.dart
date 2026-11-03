@@ -17,6 +17,7 @@ import '../widgets/app_shell.dart';
 import '../widgets/cards.dart';
 import '../widgets/common.dart';
 import '../widgets/feature_gate.dart';
+import '../widgets/golden.dart';
 import '../widgets/item_image.dart';
 import 'activities_page.dart' show activityIcon;
 import 'clinics_page.dart' show ClinicCard;
@@ -399,6 +400,46 @@ class _DetailView extends ConsumerWidget {
   const _DetailView(
       {required this.entry, required this.parent, required this.kind, required this.id, this.related = const []});
 
+  /// Poster header: the kind's calligraphic accent above the title. Saints
+  /// stand in a gold halo over the Nile at sunset (the posters' composition):
+  /// their own icon when one is uploaded, otherwise the painted patron
+  /// (decorative) or a drawn cross.
+  Widget _header(BuildContext context, _Entry e, MediaImage? cover) {
+    final accent = context.tr(switch (kind) {
+      DetailKind.saint => 'accent_saint',
+      DetailKind.priest => 'accent_priest',
+      DetailKind.milestone => 'accent_milestone',
+      DetailKind.meeting => 'accent_education',
+      DetailKind.activity => 'accent_activities',
+      DetailKind.clinic => 'accent_clinics',
+      DetailKind.facility => 'accent_services',
+    });
+    if (kind != DetailKind.saint) return PageHeader(title: e.title, subtitle: e.subtitle, icon: e.icon, accent: accent);
+    final size = MediaQuery.sizeOf(context).width < 600 ? 200.0 : 270.0;
+    final painting = ArtAssets.paintingForSaint(id);
+    return PageHeader(
+      title: e.title,
+      subtitle: e.subtitle,
+      icon: e.icon,
+      accent: accent,
+      backdrop: ArtAssets.nile,
+      portrait: HaloPortrait(
+        key: const Key('saintHalo'),
+        size: size,
+        child: ItemImage(
+          key: cover == null ? null : const Key('detailCover'),
+          image: cover,
+          size: size,
+          circle: true,
+          label: e.title,
+          placeholder: painting == null
+              ? const HaloCrossFill()
+              : ExcludeSemantics(child: Image.asset(painting, fit: BoxFit.cover, alignment: const Alignment(0, -0.6))),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final e = entry;
@@ -417,7 +458,7 @@ class _DetailView extends ConsumerWidget {
 
     return PageBody(
       key: const Key('itemDetailPage'),
-      header: PageHeader(title: e.title, subtitle: e.subtitle, icon: e.icon),
+      header: _header(context, e, cover),
       children: [
         _BackLink(parent: parent),
         const SizedBox(height: 4),
@@ -430,7 +471,8 @@ class _DetailView extends ConsumerWidget {
               if (e.sample) const SampleBadge(),
             ]),
           ),
-        if (cover != null)
+        // Saints show their icon in the header's halo instead.
+        if (cover != null && kind != DetailKind.saint)
           Padding(
             padding: const EdgeInsets.only(bottom: 12),
             child: LayoutBuilder(

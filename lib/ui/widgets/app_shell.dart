@@ -8,7 +8,7 @@ import '../../domain/features.dart';
 import '../../domain/item_detail.dart';
 import '../../state/providers.dart';
 import 'coptic_cross.dart';
-import 'ornaments.dart';
+import 'golden.dart';
 
 class NavItem {
   final String key;
@@ -52,17 +52,27 @@ String backToLabel(BuildContext context, String parentRoute) =>
 /// drawer group); the rest sit under «الكنيسة / The church».
 const serviceNavPaths = ['/mass-schedule', '/church-education', '/church-activities', '/public-services', '/clinics'];
 
-/// Common chrome for all public pages ("Iconostasis"): a vellum app bar with
-/// the seal and church name, the grouped menu (Home · About · Church
-/// services ▾ · Ask · Contact) and one primary "Mass times" action on wide
-/// screens, the interlace band underneath, and the grouped end drawer on phones.
-class AppShell extends ConsumerWidget {
+/// Common chrome for all public pages ("Golden hour"): a translucent cream
+/// app bar with the church name, the maroon seal tab hanging from its start
+/// corner (as on the posters), the grouped menu (Home · About · Church
+/// services ▾ · Ask · Contact) and one primary "Mass times" pill on wide
+/// screens, the grouped end drawer on phones, and the fixed warm backdrop.
+class AppShell extends ConsumerStatefulWidget {
   final Widget child;
   final String location;
   const AppShell({super.key, required this.child, required this.location});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<AppShell> createState() => _AppShellState();
+}
+
+class _AppShellState extends ConsumerState<AppShell> {
+  bool _drawerOpen = false;
+
+  String get location => widget.location;
+
+  @override
+  Widget build(BuildContext context) {
     // Large system text makes the full link bar overflow: compare the width
     // in "unscaled text" units so big text switches to the compact bar.
     final textScale = MediaQuery.textScalerOf(context).scale(16) / 16;
@@ -91,13 +101,19 @@ class AppShell extends ConsumerWidget {
     // Full church name (admin-editable in settings); bundled l10n name until settings load.
     final fullName = settings == null ? context.tr('appName') : context.pick(settings.nameAr, settings.nameEn);
     final primary = Theme.of(context).colorScheme.primary;
+    // The hanging seal tab (start corner, after the Back arrow on phones).
+    final tabW = wide ? 88.0 : 64.0;
+    final tabH = wide ? 108.0 : 80.0;
+    final tabStart = (showBack ? 48.0 : 0.0) + (wide ? 24.0 : 6.0);
+    final tabSpace = tabW + (wide ? 12.0 : 8.0) - (wide ? 0 : (showBack ? 0 : 6));
 
-    return Scaffold(
+    final scaffold = Scaffold(
+      onEndDrawerChanged: (open) => setState(() => _drawerOpen = open),
       appBar: AppBar(
         toolbarHeight: wide ? 76 : 64,
-        titleSpacing: wide ? 24 : (showBack ? 0 : 12),
+        titleSpacing: wide ? 24 : (showBack ? 0 : 6),
         leadingWidth: showBack ? 48 : null,
-        bottom: const PreferredSize(preferredSize: Size.fromHeight(12), child: InterlaceBand()),
+        shape: const Border(bottom: BorderSide(color: Color(0x59C9963F))),
         leading: showBack
             ? IconButton(
                 key: Key(toParent ? 'backParent' : 'backHome'),
@@ -110,18 +126,12 @@ class AppShell extends ConsumerWidget {
         title: InkWell(
           onTap: () => context.go('/'),
           child: LayoutBuilder(builder: (context, c) {
-            // Wide bars with many menu entries (or very large text) leave the
-            // title little room: fall back to the seal alone, never overflow.
-            final seal = wide ? 48.0 : 38.0;
-            if (c.maxWidth < seal + 70) {
-              return Align(
-                alignment: AlignmentDirectional.centerStart,
-                child: ChurchSeal(size: c.maxWidth < seal ? c.maxWidth : seal),
-              );
-            }
+            // The seal hangs in the tab at the start corner: the title keeps
+            // its room. Wide bars with many entries (or very large text)
+            // leave little width: the name then disappears, never overflows.
+            if (c.maxWidth < tabSpace + 70) return SizedBox(width: c.maxWidth.clamp(0, tabSpace));
             return Row(mainAxisSize: MainAxisSize.min, children: [
-              ChurchSeal(size: seal),
-              const SizedBox(width: 10),
+              SizedBox(width: tabSpace),
               // The full name is long: on wide screens show it under the short
               // name; on phones show only the short name (max two lines).
               Flexible(
@@ -129,7 +139,7 @@ class AppShell extends ConsumerWidget {
                   Text(context.tr('appShort'),
                       maxLines: wide ? 1 : 2,
                       overflow: TextOverflow.ellipsis,
-                      style: displayStyle(context, size: wide ? 18 : 15, color: AppColors.ink, height: 1.3)),
+                      style: displayStyle(context, size: wide ? 23 : 17, color: primary, height: 1.25)),
                   if (wide)
                     Text(fullName,
                         maxLines: 1,
@@ -162,7 +172,8 @@ class AppShell extends ConsumerWidget {
           IconButton(
             tooltip: context.tr('language'),
             onPressed: () => ref.read(localeProvider.notifier).toggle(),
-            style: IconButton.styleFrom(side: const BorderSide(color: AppColors.hairline)),
+            style: IconButton.styleFrom(
+                backgroundColor: AppColors.vellum, side: const BorderSide(color: AppColors.hairline, width: 1.5)),
             icon: Text(context.isAr ? 'EN' : 'ع',
                 style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.goldText, fontSize: 15)),
           ),
@@ -198,11 +209,30 @@ class AppShell extends ConsumerWidget {
         ],
       ),
       endDrawer: wide ? null : _AppDrawer(location: location, showAsk: showAsk),
-      body: child,
+      body: Stack(children: [const Positioned.fill(child: WarmBackdrop()), widget.child]),
     );
+    return Stack(children: [
+      scaffold,
+      if (!_drawerOpen)
+        PositionedDirectional(
+          start: tabStart,
+          top: MediaQuery.paddingOf(context).top,
+          child: Semantics(
+            link: true,
+            label: '${context.tr('logoLabel')} — ${context.tr('home')}',
+            excludeSemantics: true,
+            child: GestureDetector(
+              key: const Key('sealTabHome'),
+              onTap: () => context.go('/'),
+              child: MouseRegion(cursor: SystemMouseCursors.click, child: SealTab(width: tabW, height: tabH)),
+            ),
+          ),
+        ),
+    ]);
   }
 
   Widget _navText(BuildContext context, String key, String path) {
+    final location = widget.location;
     final selected = location == path;
     final primary = Theme.of(context).colorScheme.primary;
     return _NavLabel(
@@ -214,7 +244,7 @@ class AppShell extends ConsumerWidget {
   }
 }
 
-/// Desktop nav entry: ink label, primary + gold underline when current.
+/// Desktop nav entry: ink label; the current page sits on a soft primary pill.
 class _NavLabel extends StatelessWidget {
   final String label;
   final bool selected;
@@ -230,9 +260,10 @@ class _NavLabel extends StatelessWidget {
       if (caret) const Icon(Icons.expand_more_rounded, size: 18, color: AppColors.goldText),
     ]);
     final decorated = Container(
-      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: selected ? AppColors.gold : Colors.transparent, width: 2)),
+        color: selected ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.10) : null,
+        borderRadius: BorderRadius.circular(999),
       ),
       child: text,
     );
@@ -340,7 +371,7 @@ class _AppDrawer extends ConsumerWidget {
 
     Widget group(String title, List<NavItem> list) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           Padding(
-            padding: const EdgeInsetsDirectional.fromSTEB(20, 14, 20, 4),
+            padding: const EdgeInsetsDirectional.fromSTEB(24, 14, 20, 4),
             child: Semantics(
               header: true,
               child: Text(title,
@@ -349,14 +380,14 @@ class _AppDrawer extends ConsumerWidget {
           ),
           for (final i in list)
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 1),
               child: ListTile(
                 minTileHeight: 48,
-                leading: Icon(i.icon, color: primary, size: 22),
+                leading: Icon(i.icon, color: location == i.path ? AppColors.goldLight : primary, size: 22),
                 title: Text(context.tr(i.key), style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
                 selected: location == i.path,
-                selectedColor: AppColors.ink,
-                selectedTileColor: AppColors.parchment,
+                selectedColor: Colors.white,
+                selectedTileColor: primary,
                 onTap: () {
                   Navigator.of(context).pop();
                   context.go(i.path);
@@ -366,33 +397,50 @@ class _AppDrawer extends ConsumerWidget {
         ]);
 
     return Drawer(
-      child: SafeArea(
-        child: ListView(padding: EdgeInsets.zero, children: [
-          Container(
-            padding: const EdgeInsetsDirectional.fromSTEB(16, 14, 8, 14),
-            color: AppColors.vellum,
-            child: Row(children: [
-              const ChurchSeal(size: 48),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(settings == null ? context.tr('appName') : context.pick(settings.nameAr, settings.nameEn),
-                    maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
-                    style: displayStyle(context, size: 15, color: AppColors.ink, height: 1.5)),
+      child: Stack(children: [
+        const Positioned.fill(child: WarmBackdrop()),
+        SafeArea(
+          child: ListView(padding: EdgeInsets.zero, children: [
+            // Maroon header with the seal (the posters' tab, laid flat).
+            Container(
+              padding: const EdgeInsetsDirectional.fromSTEB(16, 18, 8, 20),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [primary, primaryDarkOf(context)],
+                ),
+                borderRadius: const BorderRadius.vertical(bottom: Radius.circular(28)),
               ),
-              IconButton(
-                tooltip: context.tr('close'),
-                icon: const Icon(Icons.close_rounded),
-                onPressed: () => Navigator.of(context).pop(),
-              ),
-            ]),
-          ),
-          const InterlaceBand(),
-          if (church.isNotEmpty) group(context.tr('navChurch'), church),
-          if (services.isNotEmpty) group(context.tr('churchServices'), services),
-          const SizedBox(height: 16),
-        ]),
-      ),
+              child: Row(children: [
+                Container(
+                  padding: const EdgeInsets.all(2),
+                  decoration: const BoxDecoration(color: AppColors.cream, shape: BoxShape.circle),
+                  child: const ChurchSeal(size: 50),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(settings == null ? context.tr('appName') : context.pick(settings.nameAr, settings.nameEn),
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: displayStyle(context, size: 17, color: const Color(0xFFFFF1D6), height: 1.4)),
+                ),
+                IconButton(
+                  tooltip: context.tr('close'),
+                  color: const Color(0xFFFFF1D6),
+                  style: IconButton.styleFrom(backgroundColor: const Color(0x24FFF1D6)),
+                  icon: const Icon(Icons.close_rounded),
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+              ]),
+            ),
+            const SizedBox(height: 6),
+            if (church.isNotEmpty) group(context.tr('navChurch'), church),
+            if (services.isNotEmpty) group(context.tr('churchServices'), services),
+            const SizedBox(height: 16),
+          ]),
+        ),
+      ]),
     );
   }
 }

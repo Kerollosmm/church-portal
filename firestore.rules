@@ -483,7 +483,7 @@ service cloud.firestore {
       let changed = changedKeys(d);
       return keysAllowed(['sections', 'homeOrder', 'homeHidden', 'heroTitleAr', 'heroTitleEn', 'heroSubtitleAr',
                           'heroSubtitleEn', 'bannerEnabled', 'bannerAr', 'bannerEn', 'bannerLink', 'theme',
-                          'pageHeaders', 'footer', 'updatedAt', 'updatedBy'])
+                          'pageHeaders', 'footer', 'heroMotion', 'updatedAt', 'updatedBy'])
         && (!('sections' in changed) || !('sections' in d) || validSections(d.sections))
         && (!('homeOrder' in changed) || !('homeOrder' in d) || (d.homeOrder is list && d.homeOrder.size() <= 7
               && d.homeOrder.hasOnly(['banner', 'alerts', 'nextMass', 'quickContacts', 'milestones', 'directory', 'map'])))
@@ -499,6 +499,8 @@ service cloud.firestore {
         && (!('bannerLink' in changed) || optUrlOrPath(d, 'bannerLink', 500))
         && (!('theme' in changed) || d.get('theme', 'burgundy') in ['burgundy', 'navy', 'green', 'brown', 'purple'])
         && (!('footer' in changed) || !('footer' in d) || validFooter(d.footer))
+        // Hero motion & video switch (ADR-022): a bool, default on.
+        && (!('heroMotion' in changed) || d.get('heroMotion', true) is bool)
         && (!('pageHeaders' in changed) || !('pageHeaders' in d) || validPageHeaders(d.pageHeaders))
         && (!changed.hasAny(['updatedAt', 'updatedBy']) || stampOk(d));
     }

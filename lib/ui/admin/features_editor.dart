@@ -107,6 +107,9 @@ class _FeaturesScreenState extends State<FeaturesScreen> {
 List<Map<String, dynamic>> featuresSaveWrites(FeatureSettings next, Map<String, dynamic>? stored) {
   final base = next.toMap();
   final headers = base.remove('pageHeaders');
+  // heroMotion (ADR-022) is written only once it differs from the default or
+  // is already stored, so saves keep working against rules that predate it.
+  if (next.heroMotion && (stored == null || !stored.containsKey('heroMotion'))) base.remove('heroMotion');
   final before = FeatureSettings.fromMap(stored).toMap()['pageHeaders'];
   return [
     base,
@@ -377,6 +380,14 @@ class FeaturesEditorState extends State<FeaturesEditor> {
                 _text('heroTitleEn', context.tr('heroTitleEn'), maxLength: 200),
                 _text('heroSubtitleAr', context.tr('heroSubtitleAr'), maxLength: 300),
                 _text('heroSubtitleEn', context.tr('heroSubtitleEn'), maxLength: 300),
+                SwitchListTile(
+                  key: const ValueKey('features-heroMotion'),
+                  contentPadding: const EdgeInsetsDirectional.only(start: 4),
+                  title: Text(context.tr('heroMotion')),
+                  subtitle: Text(context.tr('heroMotionHint')),
+                  value: f.heroMotion,
+                  onChanged: (v) => _set(f.copyWith(heroMotion: v)),
+                ),
               ], hint: context.tr('heroTextsHint')),
               _card(context.tr('pageHeadersTitle'), Icons.view_headline_rounded, [
                 for (final p in CustomizablePages.all) _pageTile(context, p),
