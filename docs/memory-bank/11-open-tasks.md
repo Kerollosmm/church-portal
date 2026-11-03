@@ -168,3 +168,11 @@ Status as of 3 Nov 2026 (after PR #19; earlier: PR #7–#18).
       citations by `web.title`, show source links + the required Search-suggestions widget) instead of the search link.
 - [ ] Optional: set the Firebase AI Logic per-user rate limit in the console (server-side; the daily device limit is
       client-side only and resets when site data is cleared).
+
+## Live data follow-ups (PR #23, ADR-033)
+- [ ] The footer note «تعرض البيانات المحفوظة مع التطبيق» (bundled content) shows on the live site even when Firestore
+      works: some stream still serves the bundled seed (`servingSeed` stays on). Find which `_fallbackStreams` key
+      stays marked (e.g. log it on the preview channel) and fix that stream; do not hide the note.
+- [ ] The live `clinics` collection is empty (its documents were deleted by the owner on 3 Nov 2026). Decide with the
+      church office: re-add the verified clinics in the admin, or turn the clinics section off. Never re-seed (or
+      `--force`) to restore them.

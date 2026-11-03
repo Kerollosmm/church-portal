@@ -36,6 +36,9 @@ jobs:
       - name: Build web (release)
         run: flutter build web --release
 
+      - name: Fingerprint icon fonts (cache busting, PR #23)
+        run: python3 tool/fingerprint_icon_fonts.py build/web
+
       - name: Validate seed JSON
         run: node -e "JSON.parse(require('fs').readFileSync('assets/seed/seed.json','utf8')); console.log('seed.json OK')"
 

@@ -544,6 +544,32 @@ supersede them.
   frames for every preset. A blurred solid core under the glow was tried and rejected: it reads as a pale band, i.e.
   the panel the church asked to remove. Daily rotation and the fixed-verse mode are unchanged.
 
+## ADR-033 (PR #23) — Pages trust only loaded data; settings docs prove themselves; fingerprinted icon fonts
+
+- **Context (live admin test, 3 Nov 2026):** (1) a custom category's items stayed on 3 skeleton cards; (2) a cold
+  link to `/section/<slug>` or `/page/<slug>` first said «هذه الصفحة غير متاحة حاليًا» and only a reload showed it;
+  (3) contact types added in the admin never reached the `/contact` picker (4 defaults only); (4) the PR #18 admin
+  menu entries had no icons and the selected entry showed only a tinted label. A diagnostics build on the PR preview
+  showed every Firestore listener answering from the local cache first (`fromCache: true`, the custom collections
+  empty) and from the server ~1.3 s later; in the test browser the live site also showed the "bundled content" mark,
+  i.e. the `settings/church` seeding check had failed there.
+- **Root causes:** (1)+(2) `categories`/`entries`/`pages` went through the generic `_col`: every snapshot was
+  emitted, so the first, cache-only reading (empty or stale) was taken as the answer, and an unanswered seeding
+  check emitted the empty fallback at once → "not available"; nothing bounded the wait for a first reading of a
+  query with no cached results, so a stalled server sync left the items list loading forever (the exact stall was
+  not reproducible after the test data was deleted). (3) `settings/contact` had no `confirms`: while the seeding
+  check could not answer, the guard kept `ContactSettings.defaults` and dropped the live stored list (the rules were
+  fine; the emulator tests already cover random ids). (4) Hosting caches fonts 7 days and `flutter build web` writes
+  the tree-shaken `MaterialIcons-Regular.otf` under the same name every build, so phones kept an older subset
+  without the new glyphs (the live font has them); the nav's coloured `Container` hid the `ListTile` highlight.
+- **Decision:** `settleFirst` (hold cache-only readings until the server answers, at most 8 s, then the held reading
+  or a cache read; afterwards forward real changes only) + `guardSeeded(fallbackDelay: 13 s)` (deferred while a re-check is in flight) for the three custom
+  collections; `confirms: !identical(v, default)` for `settings/features`, `settings/contact`, `settings/assistant`;
+  the contact dropdown is re-keyed by its ids; `tool/fingerprint_icon_fonts.py` in CI and deploy; the admin nav is a
+  `Material` with one colour scheme (burgundy icons, ink labels, burgundy + gold highlight when selected) and a
+  distinct icon per entry. No rules, model or seed change.
+- **Not changed:** the built-in sections keep emitting cache readings at once (they have a bundled copy and the
+  seed fallback); App Check activation is unchanged (it is not enforced on Firestore).
 ## Timeline
 
 | When | PR / commit | What |
@@ -577,5 +603,6 @@ supersede them.
 | 3 Nov 2026 | **PR #20** — "Assistant: ground the first question on live data (mass times & all sections), App Check warm-up, one retry" (`fix/assistant-grounding-load`; PR #19 was squash-merged as `d2d1ee2`) | Root cause: Riverpod 3 pauses unlistened providers, and `/ask` only `ref.read` the content providers, so on a direct visit the content never arrived and the prompt had empty sections. Fix: `_watchGrounding()` watches every grounding provider (section-gated for milestones / contact / custom); `AssistantModel.warmUp()` pre-mints the App Check token; one automatic retry of a failed / empty model call, not for quota / rate-limit / bad-request errors (`isRetryableAssistantError`, CodeRabbit). Widget tests assert the first prompt holds the mass schedule, meetings, activities, services, priests, saints, milestones, contacts, clinics, custom sections and custom pages (donations), plus the contact form heading; the individual contact types are asserted by the prompt-builder unit tests. |
 | 3 Nov 2026 | **PR #21** — "Assistant: safe Markdown, confident data answers, St-Takla-only faith source, 3 questions / device / day, no default chips" (`fix/assistant-markdown`; PR #20 was squash-merged as `8dd2680`) | ADR-030/031: `SafeMarkdown` renderer (no literal asterisks, safe links only, RTL by content, selection kept); prompt rewrite (no disclaimers on data answers, `mentionUnconfirmed` switch default off, faith questions outside the data → `[[SOURCE_SEARCH]]` → faith reply + `site:st-takla.org` search + `/contact`, "not listed → /contact", simple Markdown only); `perDay` device limit (shared_preferences), `showSuggestions` default off, `sourceDomains`, `faithReplyAr/En`; `validAssistant` + emulator cases; `test/safe_markdown_test.dart`, `test/assistant_test.dart`. |
 | 3 Nov 2026 | **PR #22** — "Hero: no address pill by default, verse of the day without the panel" (`fix/hero-verse-address`; PR #21 was squash-merged as `79c7d9c`) | ADR-032: hero ribbon = admin subtitle, or the address only with the new `heroShowAddress` admin switch (default off; rules + emulator test); `HeroVerse` without `WarmPanel`, old fixed-verse typography on a 0.88 text scrim; `verseGrounds` in the palette contrast checks for every preset incl. Holy Week; widget tests (no panel, no address by default, switch on, subtitle wins). |
+| 3 Nov 2026 | **PR #23** — "Custom sections, cold deep links and contact types: wait for live data; admin menu icons" (`fix/custom-content-loading`; PR #22 was squash-merged as `a29beaa`) | ADR-033: `settleFirst` + `fallbackDelay` for categories / entries / pages (no premature «غير متاحة», no endless placeholders), `confirms` for the settings docs (admin contact types reach `/contact`), re-keyed contact dropdown, fingerprinted icon fonts (`tool/fingerprint_icon_fonts.py` in ci/deploy), admin nav `Material` + consistent selected colours, assistant icon `smart_toy_outlined`; `test/live_loading_test.dart`. |
 
 Append new PRs to this table.

@@ -173,6 +173,7 @@ Stream<T> guardSeeded<T>({
   required T fallback,
   required void Function(bool onSeed) onSeed,
   bool Function(T v)? confirms,
+  Duration? fallbackDelay,
   String label = '',
 }) {
   // A plain controller (not an async* generator) so cancelling takes effect
@@ -182,9 +183,22 @@ Stream<T> guardSeeded<T>({
   var onSeedNow = false;
   var cancelled = false;
   var done = false;
+  var emitted = false;
+  // A live value is waiting for its seeding re-check: the delayed fallback
+  // must not overtake it ([fallbackDue] then fires once the re-check fails).
+  var rechecking = false;
+  var fallbackDue = false;
+  Timer? fallbackTimer;
   void mark(bool v) {
     onSeedNow = v;
     onSeed(v);
+  }
+
+  void emit(T v, {required bool seed}) {
+    fallbackTimer?.cancel();
+    emitted = true;
+    mark(seed);
+    out.add(v);
   }
 
   out = StreamController<T>(
@@ -192,43 +206,154 @@ Stream<T> guardSeeded<T>({
       var confirmed = await gate.check();
       if (cancelled) return;
       if (!confirmed) {
-        mark(true);
-        out.add(fallback);
+        if (fallbackDelay == null) {
+          emit(fallback, seed: true);
+        } else {
+          // No bundled copy worth showing (custom content): give the live
+          // query [fallbackDelay] to answer before settling on the fallback,
+          // so a page never says "not available" while its data is on its way.
+          // A live value still on its re-check defers the fallback until the
+          // re-check has answered (it may confirm the value instead).
+          fallbackTimer = Timer(fallbackDelay, () {
+            if (cancelled || emitted) return;
+            if (rechecking) {
+              fallbackDue = true;
+            } else {
+              emit(fallback, seed: true);
+            }
+          });
+        }
       }
       final s = live().listen(null);
       sub = s;
       s.onData((v) async {
         if (!confirmed) {
           s.pause(); // keep values in order while re-checking
+          rechecking = true;
           try {
             final seeded = await gate.check();
             confirmed = seeded || (!gate.markerAbsent && (confirms?.call(v) ?? false));
           } finally {
+            rechecking = false;
             if (!cancelled) s.resume();
           }
-          if (!confirmed || cancelled) return;
+          if (cancelled) return;
+          if (!confirmed) {
+            if (fallbackDue && !emitted) {
+              fallbackDue = false;
+              emit(fallback, seed: true);
+            }
+            return;
+          }
         }
-        mark(false);
-        out.add(v);
+        emit(v, seed: false);
       });
       s.onError((Object e) {
         debugPrint('Firestore stream $label failed, serving seed: $e');
-        mark(true);
-        out.add(fallback);
+        emit(fallback, seed: true);
         done = true; // keeps showing the seed: the "bundled content" mark stays
         s.cancel();
         out.close();
       });
       s.onDone(() {
+        fallbackTimer?.cancel();
         done = true;
         out.close();
       });
     },
     onCancel: () async {
       cancelled = true;
+      fallbackTimer?.cancel();
       // Cancelled by the listener while on the seed: this stream no longer
       // serves anything, so it must not keep the banner on.
       if (!done && onSeedNow) onSeed(false);
+      await sub?.cancel();
+    },
+  );
+  return out.stream;
+}
+
+/// One live reading of a query: its [value], whether it is only
+/// [provisional] (served from the local cache, not yet confirmed by the
+/// server) and whether it [changed] anything compared with the previous
+/// reading (false for a metadata-only event such as "now in sync").
+typedef LiveReading<T> = ({T value, bool provisional, bool changed});
+
+/// The first value of [source] that a page may trust (PR #23).
+///
+/// Before anything is emitted, provisional readings (cache only) are held
+/// back: the first server-confirmed reading is emitted at once; when none
+/// arrives within [patience] (offline, slow or stalled connection) the last
+/// held reading is emitted instead, or, when the listener has said nothing
+/// at all, the value of [onTimeout] (a cache read). So a page shows its
+/// loading state until its data has actually loaded, never a provisional
+/// "not available" / "empty", and never stays loading forever. After the
+/// first emission every reading that [changed] something is forwarded.
+@visibleForTesting
+Stream<T> settleFirst<T>({
+  required Stream<LiveReading<T>> source,
+  required Duration patience,
+  Future<T?> Function()? onTimeout,
+}) {
+  late final StreamController<T> out;
+  StreamSubscription<LiveReading<T>>? sub;
+  Timer? timer;
+  var emitted = false;
+  var closed = false;
+  LiveReading<T>? held;
+  void emit(T v) {
+    if (closed) return;
+    timer?.cancel();
+    emitted = true;
+    out.add(v);
+  }
+
+  Future<void> onPatience() async {
+    if (emitted || closed) return;
+    final h = held;
+    if (h != null) {
+      emit(h.value);
+      return;
+    }
+    T? v;
+    try {
+      v = await onTimeout?.call();
+    } catch (e) {
+      debugPrint('settleFirst: cache read failed: $e');
+    }
+    if (!emitted && v != null) emit(v);
+  }
+
+  out = StreamController<T>(
+    onListen: () {
+      timer = Timer(patience, onPatience);
+      sub = source.listen(
+        (r) {
+          if (emitted) {
+            if (r.changed) emit(r.value);
+          } else if (r.provisional) {
+            held = r;
+          } else {
+            emit(r.value);
+          }
+        },
+        onError: (Object e, StackTrace st) {
+          if (!closed) out.addError(e, st);
+        },
+        onDone: () {
+          timer?.cancel();
+          final h = held;
+          if (!emitted && h != null) emit(h.value);
+          closed = true;
+          out.close();
+        },
+      );
+    },
+    onPause: () => sub?.pause(),
+    onResume: () => sub?.resume(),
+    onCancel: () async {
+      closed = true;
+      timer?.cancel();
       await sub?.cancel();
     },
   );
@@ -267,14 +392,57 @@ class FirestoreRepository implements ContentRepository {
   late final SeedGate _gate = SeedGate(
       () => db.doc('settings/church').get().timeout(const Duration(seconds: 8)).then((d) => d.exists));
 
-  Stream<T> _guard<T>(String key, Stream<T> Function() live, T fallback, {bool Function(T v)? confirms}) =>
+  Stream<T> _guard<T>(String key, Stream<T> Function() live, T fallback,
+          {bool Function(T v)? confirms, Duration? fallbackDelay}) =>
       guardSeeded(
         gate: _gate,
         live: live,
         fallback: fallback,
         confirms: confirms,
+        fallbackDelay: fallbackDelay,
         onSeed: (onSeed) => _markFallback(key, onSeed),
         label: key,
+      );
+
+  /// How long custom content (no bundled copy) waits for the server before
+  /// settling on the held / cached reading ([settleFirst] patience).
+  static const customPatience = Duration(seconds: 8);
+
+  /// Timeout of the `Source.cache` read [settleFirst] falls back to.
+  static const customCacheRead = Duration(seconds: 4);
+
+  /// How long the seeding fallback (the empty list) waits when the seeding
+  /// check cannot answer. Longer than [customPatience] + [customCacheRead]
+  /// (+1 s margin), so the cached list [settleFirst] emits at its patience
+  /// always reaches the guard first and "not available" never wins the race.
+  static const customFallbackDelay = Duration(seconds: 13);
+
+  List<T> _docs<T>(QuerySnapshot<Map<String, dynamic>> snap, T Function(String, Map<String, dynamic>) f) =>
+      snap.docs.map((d) => f(d.id, normalizeDoc(d.data()))).toList();
+
+  /// Admin-defined collections (categories, entries, pages; ADR-027): there
+  /// is no bundled copy, so a cache-only or fallback empty list must not be
+  /// shown as "this does not exist" (PR #23). The live query reports cache
+  /// readings as provisional ([settleFirst]) and the seeding fallback waits
+  /// [customFallbackDelay] ([guardSeeded] `fallbackDelay`).
+  Stream<List<T>> _custom<T>(String name, T Function(String, Map<String, dynamic>) f) => _guard(
+        name,
+        () {
+          final col = db.collection(name);
+          return settleFirst<List<T>>(
+            source: col.snapshots(includeMetadataChanges: true).map((snap) => (
+                  value: _docs(snap, f),
+                  provisional: snap.metadata.isFromCache,
+                  changed: snap.docChanges.isNotEmpty,
+                )),
+            patience: customPatience,
+            onTimeout: () async =>
+                _docs(await col.get(const GetOptions(source: Source.cache)).timeout(customCacheRead), f),
+          );
+        },
+        <T>[],
+        confirms: (list) => list.isNotEmpty,
+        fallbackDelay: customFallbackDelay,
       );
 
   Stream<List<T>> _col<T>(String name, T Function(String, Map<String, dynamic>) f, List<T> fallback,
@@ -304,6 +472,8 @@ class FirestoreRepository implements ContentRepository {
             .snapshots()
             .map((d) => d.exists ? FeatureSettings.fromMap(normalizeDoc(d.data())) : seed.features),
         seed.features,
+        // A stored settings/features proves itself too (PR #23).
+        confirms: (v) => !identical(v, seed.features),
       );
   @override
   Stream<List<Alert>> alerts() => _col('alerts', Alert.fromMap, seed.alerts);
@@ -328,11 +498,11 @@ class FirestoreRepository implements ContentRepository {
   @override
   Stream<List<Saint>> saints() => _col('saints', Saint.fromMap, seed.saints, sort: (a, b) => a.order.compareTo(b.order));
   @override
-  Stream<List<CustomCategory>> categories() => _col('categories', CustomCategory.fromMap, const []);
+  Stream<List<CustomCategory>> categories() => _custom('categories', CustomCategory.fromMap);
   @override
-  Stream<List<CategoryEntry>> entries() => _col('entries', CategoryEntry.fromMap, const []);
+  Stream<List<CategoryEntry>> entries() => _custom('entries', CategoryEntry.fromMap);
   @override
-  Stream<List<CustomPage>> pages() => _col('pages', CustomPage.fromMap, const []);
+  Stream<List<CustomPage>> pages() => _custom('pages', CustomPage.fromMap);
   @override
   Stream<ContactSettings> contactSettings() => _guard(
         'contact',
@@ -341,6 +511,10 @@ class FirestoreRepository implements ContentRepository {
             .snapshots()
             .map((d) => d.exists ? ContactSettings.fromMap(normalizeDoc(d.data())) : ContactSettings.defaults),
         ContactSettings.defaults,
+        // A stored settings/contact (the admin's own list of types) proves
+        // itself: it replaces the code defaults even while the seeding check
+        // cannot answer (PR #23 — the public picker kept the 4 defaults).
+        confirms: (v) => !identical(v, ContactSettings.defaults),
       );
   @override
   Stream<AssistantSettings> assistantSettings() => _guard(
@@ -350,6 +524,7 @@ class FirestoreRepository implements ContentRepository {
             .snapshots()
             .map((d) => d.exists ? AssistantSettings.fromMap(normalizeDoc(d.data())) : AssistantSettings.defaults),
         AssistantSettings.defaults,
+        confirms: (v) => !identical(v, AssistantSettings.defaults),
       );
 
   @override

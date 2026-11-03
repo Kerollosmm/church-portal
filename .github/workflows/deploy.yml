@@ -43,6 +43,10 @@ jobs:
             fi
             flutter build web --release
           fi
+      - name: Fingerprint icon fonts (cache busting, PR #23)
+        # The tree-shaken icon fonts keep one file name per build but Hosting
+        # caches fonts for 7 days: a hashed name makes a new subset a new URL.
+        run: python3 tool/fingerprint_icon_fonts.py build/web
       - uses: actions/upload-artifact@v5
         with:
           name: web-build
