@@ -184,6 +184,9 @@ Status as of 3 Nov 2026 (after PR #19; earlier: PR #7–#18).
 - [ ] **Sentry project settings** (sentry.io → church-portal → Settings → Security & Privacy): turn on *Prevent
       Storing of IP Addresses* and *Data Scrubber* + *Use Default Scrubbers* (server-side belt to the client
       scrubbing); set an alert rule (e-mail on new issues) and, if wanted, inbound filters for `preview` / `ci`.
+- [ ] Optional (CodeRabbit nitpick): a `@TestOn('browser')` test of the JS glue in `sentry_js_gate_web.dart` (fake
+      `window.Sentry` client, assert the registered `beforeSend` Promise) + a `flutter test --platform chrome` CI
+      step. The scrubbing itself is pure Dart (`scrubEventJson`) and covered by `test/error_reporting_test.dart`.
 - [ ] Verify a first event from production: an owner presses **Send test error** in `/admin` and checks the issue in
       Sentry (environment `production`, tags `section: admin`, `test: true`).
 
