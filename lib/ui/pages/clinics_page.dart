@@ -65,7 +65,7 @@ class _ClinicsPageState extends ConsumerState<ClinicsPage> {
             if (_todayOnly) list = list.where((c) => isClinicAvailableToday(c, now)).toList();
             return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
               if (clinics.any((c) => c.active && c.sample)) const PendingConfirmationNote(),
-              Text(context.tr('specialtyFilter'), style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.muted)),
+              Text(context.tr('specialtyFilter'), style: TextStyle(fontWeight: FontWeight.w700, color: context.pal.muted)),
               const SizedBox(height: 8),
               Wrap(spacing: 8, runSpacing: 8, children: [
                 _chip(context.tr('allSpecialties'), _specialty == null, () => setState(() => _specialty = null)),
@@ -119,7 +119,7 @@ class _ClinicsPageState extends ConsumerState<ClinicsPage> {
         label: Text(label),
         selected: selected,
         showCheckmark: false,
-        labelStyle: TextStyle(color: selected ? Colors.white : Theme.of(context).colorScheme.primary, fontWeight: FontWeight.w700),
+        labelStyle: TextStyle(color: selected ? context.pal.onPrimary : Theme.of(context).colorScheme.primary, fontWeight: FontWeight.w700),
         onSelected: (_) => onTap(),
       );
 }
@@ -177,7 +177,7 @@ class ClinicCard extends StatelessWidget {
                   collection: 'clinics', itemStyle: c.imageStyle, image: c.image, label: doctor, enlargeOnTap: detail == null),
               Expanded(child: doctorTitle),
             ]),
-          if (degree.isNotEmpty) Text(degree, style: const TextStyle(color: AppColors.muted, fontSize: 13)),
+          if (degree.isNotEmpty) Text(degree, style: TextStyle(color: context.pal.muted, fontSize: 13)),
           if (days.isNotEmpty || c.start.isNotEmpty) const SizedBox(height: Space.s),
           IconLine(Icons.calendar_today_outlined, days),
           TimeRangeText(c.start, c.end),

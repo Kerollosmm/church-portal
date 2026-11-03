@@ -61,7 +61,7 @@ class ChurchMap extends StatelessWidget {
   Widget _fallback(BuildContext context) => InkWell(
         onTap: () => openUrl(mapsSearchUrl(settings)),
         child: Container(
-          color: AppColors.parchment,
+          color: context.pal.surfaceAlt,
           child: Center(
             child: Column(mainAxisSize: MainAxisSize.min, children: [
               Icon(Icons.map_rounded, size: 56, color: Theme.of(context).colorScheme.primary),

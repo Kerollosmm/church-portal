@@ -944,6 +944,109 @@ describe('Verse of the day (settings/features.dailyVerse + sections.dailyVerse)'
   });
 });
 
+describe('ADR-025: occasion themes (settings/features.theme + occasions)', () => {
+  const ref = () => doc(db(EDITOR), 'settings', 'features');
+  // primary|onPrimary|onPrimaryAccent|background|surface|surfaceAlt|ink|muted|goldText|script
+  const fullCustom = '#C9C1B6|#15110F|#6E1C1C|#0D0B0A|#1B1816|#27221F|#EEE7DD|#BDB2A5|#D6B98C|#E88B7E';
+
+  test('every preset is accepted; legacy burgundy still saves; unknown keys are not', async () => {
+    for (const t of ['goldenHour', 'holyWeek', 'resurrection', 'nativity', 'epiphany', 'fasting', 'marian', 'navy',
+      'green', 'brown', 'purple', 'burgundy']) {
+      await assertSucceeds(setDoc(ref(), { theme: t }), t);
+    }
+    for (const t of ['neon', '', 5, null]) await assertFails(setDoc(ref(), { theme: t }), String(t));
+  });
+
+  test('automatic switching, Easter, schedule slots and colour edits', async () => {
+    await assertSucceeds(setDoc(ref(), {
+      theme: 'goldenHour',
+      occasions: {
+        auto: true, easter: true, resurrectionDays: 50,
+        schedule: Object.fromEntries(Array.from({ length: 12 }, (_, i) =>
+          [`r${i + 1}`, 'nativity|2026-12-25|2027-01-08'])),
+      },
+    }));
+    await assertSucceeds(setDoc(ref(), {
+      themeColors: Object.fromEntries(['goldenHour', 'holyWeek', 'resurrection', 'nativity', 'epiphany', 'fasting',
+        'marian', 'navy', 'green', 'brown', 'purple'].map((k) => [k, fullCustom])),
+    }), 'every preset edited in one write');
+    await assertSucceeds(setDoc(ref(), { themeColors: { goldenHour: '#123456|||||||||', marian: '|||||||||' } }));
+    await assertSucceeds(setDoc(ref(), { occasions: {} }), 'missing keys = defaults');
+    await assertSucceeds(setDoc(ref(), { occasions: { auto: false, schedule: { r1: 'holyWeek|2027-04-25|2027-04-25' } } }));
+    await assertSucceeds(setDoc(ref(), { theme: 'navy' }), 'doc without occasions still saves');
+  });
+
+  test('rejects bad switches, ranges, slots, presets and colours', async () => {
+    const range = 'holyWeek|2027-04-25|2027-05-01';
+    for (const o of [
+      'auto', { auto: 'yes' }, { easter: 1 }, { resurrectionDays: 0 }, { resurrectionDays: 51 }, { resurrectionDays: 7.5 },
+      { extra: true }, { schedule: [] }, { schedule: { r13: range } }, { schedule: { r1: 'neon|2027-04-25|2027-05-01' } },
+      { schedule: { r1: 'holyWeek|2027-5-1|2027-05-01' } }, { schedule: { r1: 'holyWeek|2027-04-25|2027-04-24' } },
+      { schedule: { r1: `${range}|x` } }, { schedule: { r1: 'holyWeek|2027-04-25' } },
+      { schedule: { r1: 'holyWeek|2027-13-01|2027-05-01' } },
+      { schedule: { r1: { theme: 'holyWeek', start: '2027-04-25', end: '2027-05-01' } } },
+      { schedule: { r1: 20270501 } }, { custom: {} },
+    ]) {
+      await assertFails(setDoc(ref(), { occasions: o }), JSON.stringify(o).slice(0, 90));
+    }
+    for (const c of [
+      [], { neon: '|||||||||' }, { holyWeek: 'red|||||||||' }, { holyWeek: '#12345|||||||||' },
+      { holyWeek: '#1234567|||||||||' }, { holyWeek: '#123456||||||||' }, { holyWeek: '#123456||||||||||' },
+      { holyWeek: { primary: '#123456' } }, { holyWeek: 5 },
+    ]) {
+      await assertFails(setDoc(ref(), { themeColors: c }), JSON.stringify(c).slice(0, 90));
+    }
+  });
+
+  test('visitors cannot change it', async () => {
+    await assertFails(setDoc(doc(db(null), 'settings', 'features'), { occasions: { auto: true } }));
+    await assertFails(setDoc(doc(db(null), 'settings', 'features'), { themeColors: {} }));
+  });
+});
+
+describe('ADR-026: hero video library (settings/features.heroVideos)', () => {
+  const ref = () => doc(db(EDITOR), 'settings', 'features');
+  const item = (id) => ({ name: 'غيوم', url: `https://www.youtube.com/watch?v=${id}` });
+
+  test('admins add links, pick the active one, attach one per theme; nothing else is required', async () => {
+    await assertSucceeds(setDoc(ref(), {
+      heroVideos: {
+        items: Object.fromEntries(Array.from({ length: 12 }, (_, i) => [`v${i + 1}`, item(`abcdefghij${String.fromCharCode(65 + i)}`)])),
+        active: 'v2',
+        byTheme: { holyWeek: 'v3', resurrection: 'v1' },
+      },
+    }));
+    await assertSucceeds(setDoc(ref(), { heroVideos: { items: { v1: { name: 'x', url: 'https://youtu.be/dQw4w9WgXcQ' } }, active: '' } }));
+    await assertSucceeds(setDoc(ref(), { heroVideos: { items: { v1: { name: 'ن'.repeat(80), url: 'https://youtu.be/a_b-c_d-e_f' } } } }));
+    await assertSucceeds(setDoc(ref(), { heroVideos: {} }));
+    await assertSucceeds(setDoc(ref(), { theme: 'navy' }), 'doc without heroVideos still saves');
+  });
+
+  test('only youtube.com / youtu.be video ids; known slots, themes and shapes', async () => {
+    for (const v of [
+      [], { items: [] }, { items: { v13: item('dQw4w9WgXcQ') } }, { items: { v1: { ...item('dQw4w9WgXcQ'), extra: 1 } } },
+      { items: { v1: { name: '', url: 'https://youtu.be/dQw4w9WgXcQ' } } },
+      { items: { v1: { name: 'x'.repeat(81), url: 'https://youtu.be/dQw4w9WgXcQ' } } },
+      { items: { v1: { name: 'x', url: 'https://vimeo.com/123456789' } } },
+      { items: { v1: { name: 'x', url: 'http://youtu.be/dQw4w9WgXcQ' } } },
+      { items: { v1: { name: 'x', url: 'https://youtu.be/dQw4w9WgXc' } } },
+      { items: { v1: { name: 'x', url: 'https://youtu.be/dQw4w9WgXcQ?t=5' } } },
+      { items: { v1: { name: 'x', url: 'https://www.youtube.com.evil.com/watch?v=dQw4w9WgXcQ' } } },
+      { items: { v1: { name: 'x', url: 'https://evil.com/?u=https://youtu.be/dQw4w9WgXcQ' } } },
+      { items: { v1: { name: 'x', url: 'javascript:alert(1)' } } },
+      { items: { v1: { name: 'a\u001fb', url: 'https://youtu.be/dQw4w9WgXcQ' } } },
+      { items: { v1: { name: 'x', url: 5 } } },
+      { active: 'v13' }, { active: 1 }, { byTheme: { neon: 'v1' } }, { byTheme: { holyWeek: 'v99' } }, { other: 1 },
+    ]) {
+      await assertFails(setDoc(ref(), { heroVideos: v }), JSON.stringify(v).slice(0, 90));
+    }
+  });
+
+  test('visitors cannot change it', async () => {
+    await assertFails(setDoc(doc(db(null), 'settings', 'features'), { heroVideos: { active: '' } }));
+  });
+});
+
 describe('ADR-023: image display style (imageStyle / settings/features.imageStyles)', () => {
   const stamp = () => ({ updatedAt: serverTimestamp(), updatedBy: `${EDITOR}@x.test` });
   const priest = { name: 'أبونا', status: 'serving', visible: true, order: 10 };

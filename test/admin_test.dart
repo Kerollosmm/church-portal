@@ -686,7 +686,7 @@ void main() {
       await tester.pumpWidget(_app(Scaffold(
         body: FeaturesEditor(initial: FeatureSettings.defaults, onSave: (f) async {}),
       )));
-      final chip = tester.widget<ChoiceChip>(find.byKey(const ValueKey('theme-burgundy')));
+      final chip = tester.widget<ChoiceChip>(find.byKey(const ValueKey('theme-goldenHour')));
       expect(chip.selected, isTrue);
       expect(chip.labelStyle?.color, Colors.white);
       expect(contrastRatio(Colors.white, AppColors.burgundy), greaterThanOrEqualTo(4.5));

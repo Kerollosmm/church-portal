@@ -45,6 +45,14 @@ double contrast(Color a, Color b) {
 /// [fg] with its alpha composited over the opaque [bg].
 Color over(Color fg, Color bg) => Color.alphaBlend(fg, bg);
 
+/// Primaries of the presets on the Golden hour scene (the accent-only
+/// presets). Occasion presets with their own scene (Holy Week, the
+/// Resurrection…) are covered by test/occasion_theme_test.dart.
+final _goldenScene = [
+  for (final p in ThemePresets.palettes.values)
+    if (p.background == ThemePresets.goldenHourPalette.background) p.primary,
+];
+
 const _publicRoutes = [
   '/',
   '/about',
@@ -260,7 +268,7 @@ void main() {
     });
 
     test('every theme preset: primary text on light, white/goldLight on primary, footer text', () {
-      for (final e in ThemePresets.all.entries) {
+      for (final e in ThemePresets.all.entries.where((e) => _goldenScene.contains(e.value))) {
         final primary = Color(e.value);
         final dark = Color.lerp(primary, Colors.black, 0.30)!;
         expect(contrast(primary, white), greaterThanOrEqualTo(4.5), reason: '${e.key} on white');
@@ -284,7 +292,7 @@ void main() {
         expect(contrast(AppColors.muted, bg), greaterThanOrEqualTo(4.5), reason: 'muted on $bg');
         expect(contrast(AppColors.goldText, bg), greaterThanOrEqualTo(4.5), reason: 'goldText on $bg');
         expect(contrast(AppColors.script, bg), greaterThanOrEqualTo(4.5), reason: 'script on $bg');
-        for (final p in ThemePresets.all.values) {
+        for (final p in _goldenScene) {
           expect(contrast(Color(p), bg), greaterThanOrEqualTo(4.5), reason: 'preset $p on $bg');
         }
       }
@@ -296,12 +304,12 @@ void main() {
       expect(contrast(TitleRibbon.textColor, TitleRibbon.fill), greaterThanOrEqualTo(4.5));
       // Hero / header scrim: the centre (0.84 cream) over the darkest art.
       final scrim = over(AppColors.cream.withValues(alpha: 0.84), darkestArt);
-      for (final p in ThemePresets.all.values) {
+      for (final p in _goldenScene) {
         expect(contrast(Color(p), scrim), greaterThanOrEqualTo(4.5), reason: 'title $p on hero scrim');
       }
       expect(contrast(AppColors.script, scrim), greaterThanOrEqualTo(4.5), reason: 'accent on hero scrim');
       // Seal tab / drawer header / badges: light text and icons on every preset.
-      for (final p in ThemePresets.all.values) {
+      for (final p in _goldenScene) {
         final dark = Color.lerp(Color(p), Colors.black, 0.30)!;
         expect(contrast(const Color(0xFFFFF1D6), Color(p)), greaterThanOrEqualTo(4.5));
         expect(contrast(AppColors.goldLight, dark), greaterThanOrEqualTo(4.5));
@@ -361,7 +369,7 @@ void main() {
       }
       // Golden hour: the footer is a warm panel (preset-independent ground).
       final panel = tester.widget<Container>(find.byKey(const Key('footerPanel')));
-      expect((panel.decoration as BoxDecoration).color, AppColors.panel);
+      expect((panel.decoration as BoxDecoration).color, OccasionColors.golden.panel);
     });
 
     testWidgets('ChurchPortalApp maps settings/features.theme to the theme', (tester) async {
@@ -383,7 +391,7 @@ void main() {
       expect(Theme.of(tester.element(title)).colorScheme.primary, navy);
       expect(tester.widget<Text>(title).style?.color, navy);
       final panel = tester.widget<Container>(find.byKey(const Key('footerPanel')));
-      expect((panel.decoration as BoxDecoration).color, AppColors.panel);
+      expect((panel.decoration as BoxDecoration).color, OccasionColors.golden.panel);
     });
   });
 

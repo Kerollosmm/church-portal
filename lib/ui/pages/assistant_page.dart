@@ -221,7 +221,7 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
                     for (final s in suggestions)
                       ActionChip(
                         label: Text(s),
-                        avatar: const Icon(Icons.lightbulb_outline, size: 18, color: AppColors.goldText),
+                        avatar: Icon(Icons.lightbulb_outline, size: 18, color: context.pal.goldText),
                         onPressed: () => _send(s),
                       ),
                   ]),
@@ -248,7 +248,7 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
         top: false,
         child: Container(
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: context.pal.surface,
             border: Border(top: BorderSide(color: AppColors.gold.withValues(alpha: 0.4))),
           ),
           padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
@@ -293,11 +293,12 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
               ? Theme.of(context).colorScheme.primary
               : m.error
                   ? const Color(0xFFFDECEA)
-                  : Colors.white,
+                  : context.pal.surface,
           borderRadius: BorderRadius.circular(4),
           border: m.user ? null : Border.all(color: AppColors.gold.withValues(alpha: 0.4)),
         ),
-        child: SelectableText(m.text, style: TextStyle(color: m.user ? Colors.white : AppColors.ink, height: 1.6)),
+        child: SelectableText(m.text, style: TextStyle(
+                color: m.user ? context.pal.onPrimary : (m.error ? AppColors.ink : context.pal.ink), height: 1.6)),
       ),
     );
   }

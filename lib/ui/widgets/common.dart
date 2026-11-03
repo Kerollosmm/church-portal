@@ -181,9 +181,9 @@ class PageIntro extends ConsumerWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Icon(Icons.campaign_outlined, color: AppColors.goldText),
+            Icon(Icons.campaign_outlined, color: context.pal.goldText),
             const SizedBox(width: 10),
-            Expanded(child: Text(text, style: const TextStyle(height: 1.75, color: AppColors.ink))),
+            Expanded(child: Text(text, style: TextStyle(height: 1.75, color: context.pal.ink))),
           ],
         ),
       ),
@@ -214,7 +214,7 @@ class SectionTitle extends StatelessWidget {
         children: [
           if (accent != null)
             ExcludeSemantics(
-              child: Text(accent!, textAlign: TextAlign.center, style: AppFonts.script(size: wide ? 30 : 24, height: 1.1)),
+              child: Text(accent!, textAlign: TextAlign.center, style: AppFonts.script(size: wide ? 30 : 24, height: 1.1, color: context.pal.script)),
             ),
           Semantics(
             header: true,
@@ -231,7 +231,7 @@ class SectionTitle extends StatelessWidget {
               height: 8,
               decoration: const BoxDecoration(
                 borderRadius: BorderRadius.all(Radius.circular(99)),
-                gradient: LinearGradient(colors: [Color(0x007A4530), Color(0xB37A4530), Color(0x007A4530)]),
+                gradient: LinearGradient(colors: [Color(0x007A4530), Color(0xB37A4530), Color(0x007A4530)]), // decorative
               ),
             ),
           ),
@@ -331,7 +331,7 @@ class _SkeletonBoxState extends State<SkeletonBox> with SingleTickerProviderStat
       return Container(
         height: widget.height,
         width: widget.width,
-        decoration: BoxDecoration(color: const Color(0xFFEDE3CF), borderRadius: BorderRadius.circular(widget.radius)),
+        decoration: BoxDecoration(color: context.pal.surfaceAlt, borderRadius: BorderRadius.circular(widget.radius)),
       );
     }
     return AnimatedBuilder(
@@ -340,7 +340,7 @@ class _SkeletonBoxState extends State<SkeletonBox> with SingleTickerProviderStat
         height: widget.height,
         width: widget.width,
         decoration: BoxDecoration(
-          color: Color.lerp(const Color(0xFFEDE3CF), const Color(0xFFF7F0E1), _c.value),
+          color: Color.lerp(context.pal.surfaceAlt, context.pal.surface, _c.value),
           borderRadius: BorderRadius.circular(widget.radius),
         ),
       ),
@@ -369,12 +369,12 @@ class EmptyState extends StatelessWidget {
     padding: const EdgeInsets.symmetric(vertical: 28),
     child: Column(
       children: [
-        Icon(icon, size: 44, color: AppColors.muted.withValues(alpha: 0.6)),
+        Icon(icon, size: 44, color: context.pal.muted.withValues(alpha: 0.6)),
         const SizedBox(height: 8),
         Text(
           message ?? context.tr('noItems'),
           textAlign: TextAlign.center,
-          style: const TextStyle(color: AppColors.muted),
+          style: TextStyle(color: context.pal.muted),
         ),
       ],
     ),
@@ -448,7 +448,7 @@ class PendingConfirmationNote extends StatelessWidget {
     child: Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Icon(Icons.info_outline_rounded, color: AppColors.goldText),
+        Icon(Icons.info_outline_rounded, color: AppColors.goldText),
         const SizedBox(width: 10),
         Expanded(
           child: Column(
@@ -456,10 +456,10 @@ class PendingConfirmationNote extends StatelessWidget {
             children: [
               Text(
                 context.tr('timesPending'),
-                style: const TextStyle(fontWeight: FontWeight.w800, color: AppColors.goldText),
+                style: TextStyle(fontWeight: FontWeight.w800, color: AppColors.goldText),
               ),
               const SizedBox(height: 2),
-              Text(context.tr('timesPendingHint'), style: const TextStyle(height: 1.5, fontSize: 13)),
+              Text(context.tr('timesPendingHint'), style: const TextStyle(height: 1.5, fontSize: 13, color: AppColors.ink)),
             ],
           ),
         ),
@@ -480,7 +480,7 @@ class SampleBadge extends StatelessWidget {
         borderRadius: BorderRadius.circular(6),
         border: Border.all(color: const Color(0xFFE0C36A)),
       ),
-      child: Text(context.tr('sampleData'), style: const TextStyle(fontSize: 10, color: AppColors.goldText)),
+      child: Text(context.tr('sampleData'), style: TextStyle(fontSize: 10, color: AppColors.goldText)),
     ),
   );
 }
@@ -516,13 +516,21 @@ class Pill extends StatelessWidget {
   const Pill(this.text, {super.key, this.color = AppColors.success, this.icon, this.maxLines = 2});
 
   @override
-  Widget build(BuildContext context) => Container(
+  Widget build(BuildContext context) {
+    // The tint sits on a panel or on the page: the label keeps 4.5:1 on both
+    // (a status green is lightened on a dark theme).
+    final pal = context.pal;
+    final fg = readableOn(color, [
+      Color.alphaBlend(color.withValues(alpha: 0.12), pal.surface),
+      Color.alphaBlend(color.withValues(alpha: 0.12), pal.background),
+    ]);
+    return Container(
     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
     decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(99)),
     child: Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        if (icon != null) ...[Icon(icon, size: 14, color: color), const SizedBox(width: 4)],
+        if (icon != null) ...[Icon(icon, size: 14, color: fg), const SizedBox(width: 4)],
         // Long labels (e.g. several active seasons) wrap/ellipsize instead
         // of overflowing narrow cards.
         Flexible(
@@ -530,12 +538,13 @@ class Pill extends StatelessWidget {
             text,
             maxLines: maxLines,
             overflow: maxLines == null ? null : TextOverflow.ellipsis,
-            style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: 12),
+            style: TextStyle(color: fg, fontWeight: FontWeight.w700, fontSize: 12),
           ),
         ),
       ],
     ),
   );
+  }
 }
 
 class IconLine extends StatelessWidget {
@@ -554,11 +563,11 @@ class IconLine extends StatelessWidget {
         children: [
           Padding(
             padding: const EdgeInsets.only(top: 3),
-            child: Icon(icon, size: 16, color: AppColors.muted),
+            child: Icon(icon, size: 16, color: context.pal.muted),
           ),
           const SizedBox(width: 6),
           Expanded(
-            child: Text(text, style: style ?? const TextStyle(color: AppColors.ink, height: 1.4)),
+            child: Text(text, style: style ?? TextStyle(color: context.pal.ink, height: 1.4)),
           ),
         ],
       ),
@@ -595,7 +604,7 @@ class TimeRangeText extends StatelessWidget {
           textDirection: context.isAr ? TextDirection.ltr : TextDirection.rtl,
           child: Text(
             secondary,
-            style: TextStyle(fontSize: large ? 14 : 12, color: AppColors.muted),
+            style: TextStyle(fontSize: large ? 14 : 12, color: context.pal.muted),
           ),
         ),
       ],
@@ -681,13 +690,13 @@ class Footer extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(name, style: displayStyle(context, size: 18, color: primary, height: 1.45)),
-                  Text(context.tr('denomination'), style: const TextStyle(color: AppColors.goldText, fontSize: 13)),
+                  Text(context.tr('denomination'), style: TextStyle(color: context.pal.goldText, fontSize: 13)),
                   if (s != null && features.enabled(Sections.contactInfo))
                     Padding(
                       padding: const EdgeInsets.only(top: 2),
                       child: Text(
                         context.pick(s.addressAr, s.addressEn),
-                        style: const TextStyle(color: AppColors.muted, fontSize: 13, height: 1.6),
+                        style: TextStyle(color: context.pal.muted, fontSize: 13, height: 1.6),
                       ),
                     ),
                 ],
@@ -716,7 +725,7 @@ class Footer extends ConsumerWidget {
                         tapTargetSize: MaterialTapTargetSize.padded,
                         backgroundColor: primary,
                       ),
-                      icon: Icon(x.$2, color: AppColors.goldLight, size: 20),
+                      icon: Icon(x.$2, color: context.pal.onPrimaryAccent, size: 20),
                     ),
                   ),
               ],
@@ -754,8 +763,8 @@ class Footer extends ConsumerWidget {
                             textDirection: TextDirection.ltr,
                             semanticsLabel:
                                 '${context.tr('call')} ${context.pick(p.labelAr, p.labelEn)} ${p.number.trim()}'.trim(),
-                            style: const TextStyle(
-                              color: AppColors.ink,
+                            style: TextStyle(
+                              color: context.pal.ink,
                               fontWeight: FontWeight.w700,
                               fontSize: 16,
                               letterSpacing: 0.4,
@@ -788,7 +797,7 @@ class Footer extends ConsumerWidget {
                           style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 4)),
                           child: Text(
                             context.tr(l.$1),
-                            style: const TextStyle(color: AppColors.ink, fontWeight: FontWeight.w400),
+                            style: TextStyle(color: context.pal.ink, fontWeight: FontWeight.w400),
                           ),
                         ),
                       ),
@@ -827,7 +836,7 @@ class Footer extends ConsumerWidget {
               tapTargetSize: MaterialTapTargetSize.padded,
               backgroundColor: primary,
             ),
-            icon: Icon(x.$2, color: Colors.white, size: 18),
+            icon: Icon(x.$2, color: context.pal.onPrimary, size: 18),
           ),
         ),
     ];
@@ -847,10 +856,13 @@ class Footer extends ConsumerWidget {
                 colors: [Color(0x00000000), Color(0xFF000000)],
                 stops: [0.05, 0.5],
               ).createShader(r),
-              child: Image.asset(
-                wide ? ArtAssets.heroWide : ArtAssets.heroWideSmall,
-                fit: BoxFit.cover,
-                alignment: const Alignment(0, 0.75),
+              child: sceneArt(
+                context,
+                Image.asset(
+                  wide ? ArtAssets.heroWide : ArtAssets.heroWideSmall,
+                  fit: BoxFit.cover,
+                  alignment: const Alignment(0, 0.75),
+                ),
               ),
             ),
           ),
@@ -870,7 +882,7 @@ class Footer extends ConsumerWidget {
                   key: const Key('footerPanel'),
                   padding: EdgeInsets.all(wide ? 28 : 18),
                   decoration: BoxDecoration(
-                    color: AppColors.panel,
+                    color: context.pal.panel,
                     borderRadius: BorderRadius.circular(kPanelRadius),
                     border: Border.all(color: const Color(0x61C9963F)),
                     boxShadow: kPanelShadow,
@@ -897,7 +909,7 @@ class Footer extends ConsumerWidget {
                           child: Text(
                             note,
                             key: const Key('footerNote'),
-                            style: const TextStyle(color: AppColors.muted, fontSize: 13, height: 1.6),
+                            style: TextStyle(color: context.pal.muted, fontSize: 13, height: 1.6),
                           ),
                         ),
                     ],
@@ -910,7 +922,7 @@ class Footer extends ConsumerWidget {
                   key: const Key('footerSignatureBand'),
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   decoration: BoxDecoration(
-                    color: AppColors.cream.withValues(alpha: 0.9),
+                    color: context.pal.background.withValues(alpha: 0.9),
                     borderRadius: BorderRadius.circular(24),
                   ),
                   child: Column(
@@ -933,7 +945,7 @@ class Footer extends ConsumerWidget {
                       Text(
                         '© ${localDigits(context, '$year')} — ${context.tr('rights')}',
                         textAlign: TextAlign.center,
-                        style: const TextStyle(color: AppColors.muted, fontSize: 12.5),
+                        style: TextStyle(color: context.pal.muted, fontSize: 12.5),
                       ),
                       ValueListenableBuilder<bool>(
                         valueListenable: servingSeed,
@@ -941,7 +953,7 @@ class Footer extends ConsumerWidget {
                             ? Text(
                                 context.tr('offlineData'),
                                 textAlign: TextAlign.center,
-                                style: const TextStyle(color: AppColors.muted, fontSize: 12),
+                                style: TextStyle(color: context.pal.muted, fontSize: 12),
                               )
                             : const SizedBox.shrink(),
                       ),

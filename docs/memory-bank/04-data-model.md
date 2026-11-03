@@ -144,7 +144,7 @@ effort when an image is replaced/removed in the editor (`orphanedMediaIds`) or i
 | `phones` | list of `{labelAr, labelEn, number, isMobile}` | list ≤ 20 | `PhoneEntry`; `isMobile` → WhatsApp button. Legacy `label` key read as fallback |
 | `whatsapp` | string | ≤ 20 | chat number (empty — church publishes none) |
 | `whatsappChannel`, `facebook`, `youtube`, `instagram` | string (URL) | ≤ 500 | |
-| `verseAr`, `verseEn` | string | ≤ 300 | Rev 2:10 |
+| `verseAr`, `verseEn` | string | ≤ 300 | Rev 2:10 — **not shown publicly since PR #17** (the hero shows the verse of the day); kept for the admin form and assistant grounding |
 | `verseRef`, `verseRefAr` | string | ≤ 60 | `"Rev 2:10"`, `"رؤيا ٢: ١٠"` |
 | `heroImageUrl` | string | ≤ 500 | empty → gradient hero |
 | `historyAr`, `historyEn` | string | ≤ 8000 | |
@@ -168,7 +168,10 @@ Existence of `settings/church` = "database is seeded" (see `03-architecture.md`)
 | `bannerEnabled` | bool | false |
 | `bannerAr`, `bannerEn` | string ≤ 500 | banner shows only if enabled **and** some text |
 | `bannerLink` | string ≤ 500 | `''`, in-app path `/…`, or `http(s)://host.tld…` (rules regex mirrors `isValidUrl(allowPath: true)`) |
-| `theme` | `burgundy\|navy\|green\|brown\|purple` | unknown → burgundy (`ThemePresets.all` ARGB values) |
+| `theme` | `goldenHour\|holyWeek\|resurrection\|nativity\|epiphany\|fasting\|marian\|navy\|green\|brown\|purple` (PR #17) | missing, legacy `burgundy` and unknown → `goldenHour`. With `occasions.auto` off this theme always applies (manual override); on, it is the fallback |
+| `occasions` | map (PR #17, ADR-025) | `{auto: bool (false), easter: bool (true), resurrectionDays: int 1–50 (7), schedule: {r1…r12: 'theme\|YYYY-MM-DD\|YYYY-MM-DD'}}` (`OccasionConfig`). Inclusive Cairo dates; invalid / reversed ranges dropped when read; first matching range wins, then the Easter ranges, else `theme`. Missing = manual |
+| `themeColors` | map (PR #17) | per preset key a string of the 10 palette colours in `ThemePalette.keys` order (`primary\|onPrimary\|onPrimaryAccent\|background\|surface\|surfaceAlt\|ink\|muted\|goldText\|script`), each `#RRGGBB` or empty (= the preset's). Saved auto-corrected for contrast and re-corrected when rendered. Its own field (and write) for the rules budget. Missing = presets as built |
+| `heroVideos` | map (PR #17, ADR-026) | `{items: {v1…v12: {name ≤ 80, url: 'https://www.youtube.com/watch?v=<11-char id>'}}, active: '' \| slot, byTheme: {<preset>: slot}}` (`HeroVideoLibrary`). `''` = the bundled clip. Invalid items, unknown slots / presets and references to missing slots are dropped when read. Missing = bundled clip |
 | `pageHeaders` | map `<pageKey, PageCustom>` (PR #11) | `{}`. Keys = `CustomizablePages.all`: `about, schedule, education, activities, clinics, services, contact, ask`; each entry `{titleAr, titleEn` ≤ 200, `subtitleAr, subtitleEn` ≤ 300, `introAr, introEn` ≤ 1500`}` (all 6 keys written). Unknown pages / non-maps / empty entries are dropped by `fromMap`; `toMap` writes non-empty entries only. `pageHeader(key)` → `PageCustom.empty` when unset. Rendered since PR #13 (`CustomizablePageHeader` / `PageIntro`: title/subtitle override for the current language only; intro via `context.pick`) |
 | `footer` | map (PR #11, FR-G-04) | `{showPhones: true, showSocials: true, showQuickLinks: true, noteAr: '', noteEn: ''}` (`FooterConfig`); notes ≤ 500. Rendered by `Footer` since PR #13 (phones also need `contactInfo`, socials `socials`) |
 | `updatedAt`, `updatedBy` | | stampOk |
@@ -188,7 +191,11 @@ Existence of `settings/church` = "database is seeded" (see `03-architecture.md`)
 - `dailyVerse` (PR #16, ADR-024): map `{mode: 'daily'|'fixed' (default daily), textAr: string ≤500, refAr: string ≤60}`;
   missing map or keys = daily rotation; a fixed verse with empty text falls back to daily. On/off is the section
   **`sections.dailyVerse`** (missing = on; seeded `true`). The map is written only once it differs from the default or
-  is already stored. Verse list: bundled asset `assets/verses/daily_verses.json` (not Firestore).
+  is already stored. Verse list: bundled asset `assets/verses/daily_verses.json` (not Firestore). Since PR #17 the
+  verse is shown **in the hero** (`HeroVerse`), not in a separate card.
+- `occasions`, `themeColors`, `heroVideos` (PR #17): not seeded (missing = current behaviour); each is written only once
+  it differs from the default or is already stored, in its own write (`featuresSaveWrites`). The seed keeps
+  `theme: burgundy` on purpose (it exercises the legacy mapping).
 - `imageStyles` (PR #15, ADR-023): map `collection → avatar|card|banner`, keys limited to the 9 image collections;
   missing key = built-in default. Written only once an admin sets one (saves keep working against older rules).
 

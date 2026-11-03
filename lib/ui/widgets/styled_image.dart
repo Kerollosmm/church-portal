@@ -170,7 +170,7 @@ class FittedCover extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final loader = ref.watch(mediaRepositoryProvider)?.load;
     final alt = image.alt.isNotEmpty ? image.alt : label;
-    const fill = ColoredBox(color: AppColors.parchment);
+    final fill = ColoredBox(color: context.pal.surfaceAlt);
     // AspectRatio (not LayoutBuilder) so the cover also works inside
     // IntrinsicHeight (the meetings timeline): height = width / ratio, capped
     // at maxHeight (contain keeps the whole picture visible either way).

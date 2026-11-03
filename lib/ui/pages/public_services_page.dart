@@ -35,7 +35,7 @@ class PublicServicesPage extends ConsumerWidget {
         const PageIntro(pageKey: CustomizablePages.services),
         if (showClinics)
         Card(
-          color: AppColors.parchment,
+          color: context.pal.surfaceAlt,
           child: ListTile(
             leading: Icon(Icons.local_hospital_rounded, color: Theme.of(context).colorScheme.primary),
             title: Text(context.tr('charityClinics'), style: const TextStyle(fontWeight: FontWeight.w800)),
@@ -86,7 +86,7 @@ class _FacilityCard extends StatelessWidget {
                 enlargeOnTap: detail == null,
                 placeholder: Container(
                   padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(color: AppColors.parchment, borderRadius: BorderRadius.circular(4)),
+                  decoration: BoxDecoration(color: context.pal.surfaceAlt, borderRadius: BorderRadius.circular(4)),
                   child: Icon(facilityIcon(f.type), color: Theme.of(context).colorScheme.primary),
                 ),
               ),

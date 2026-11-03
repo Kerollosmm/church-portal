@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
 
 import 'config/app_config.dart';
+import 'core/theme.dart';
 import 'core/document_lang.dart';
 import 'core/l10n.dart';
 import 'domain/item_detail.dart';
@@ -184,10 +185,15 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: AppConfig.adminPath,
         builder: (c, s) {
           setDocumentRouteMeta(path: s.uri.path, indexable: false);
-          return DeferredLoader(
-            loadLibrary: admin_page.loadLibrary,
-            builder: (_) => admin_page.AdminPage(),
-            fullScreen: true,
+          // The dashboard keeps the Golden hour palette whatever occasion
+          // theme the public site is in (its widgets use fixed light tokens).
+          return Theme(
+            data: buildTheme(Localizations.localeOf(c)),
+            child: DeferredLoader(
+              loadLibrary: admin_page.loadLibrary,
+              builder: (_) => admin_page.AdminPage(),
+              fullScreen: true,
+            ),
           );
         },
       ),

@@ -159,7 +159,7 @@ class _TimelineItem extends ConsumerWidget {
                   if (m.weekday != null || m.start.isNotEmpty) const SizedBox(height: Space.s),
                   if (m.weekday != null)
                     Text(weekdayLabel(context, m.weekday),
-                        style: const TextStyle(color: AppColors.goldText, fontWeight: FontWeight.w800)),
+                        style: TextStyle(color: context.pal.goldText, fontWeight: FontWeight.w800)),
                   TimeRangeText(m.start, m.end),
                   const SizedBox(height: Space.xs),
                   IconLine(Icons.meeting_room_outlined, context.pick(m.hallAr, m.hallEn)),

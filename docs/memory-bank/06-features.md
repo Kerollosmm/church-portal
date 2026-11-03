@@ -28,11 +28,21 @@ render with `PageBody` (+ `Footer`). Content comes from Riverpod providers (hidd
   | `map` | `ChurchMap` (iframe + Open in Maps + Directions) | contactInfo |
   On wide screens (≥ 900 px) adjacent `nextMass` + `quickContacts` share a row.
 
-- **Verse of the day (PR #16, ADR-024):** `DailyVerseCard` (`home_page.dart`) is the first block under the hero: a
-  WarmPanel with «كلمة الله» accent, "آية اليوم / Verse of the day" title, the Arabic verse and «reference». Daily
-  mode = entry (Cairo day of year − 1) of `assets/verses/daily_verses.json` (366 Van Dyck verses, public domain),
-  changing at Cairo midnight; fixed mode = the admin's verse. Hidden when its section `Sections.dailyVerse` is off
-  until the first `settings/features` value arrives (`featuresReadyProvider`), or while the asset loads.
+- **Verse of the day (PR #16, ADR-024; moved into the hero in PR #17):** `HeroVerse` (`home_page.dart`) is the hero's
+  verse panel (same design as the old fixed settings verse: WarmPanel, `« verse »` in Ruqaa 20/24 px on `ink`,
+  reference in `goldText` 13 px bold; keys `heroVerse`, `dailyVerseText`, `dailyVerseRef`). Daily mode = entry
+  (Cairo day of year − 1) of `assets/verses/daily_verses.json` (366 Van Dyck verses, public domain), changing at Cairo
+  midnight; fixed mode = the admin's verse. Hidden when `Sections.dailyVerse` is off, until the first
+  `settings/features` value arrives (`featuresReadyProvider`), or while the asset loads. The separate card under the
+  hero is gone (the verse is shown once); `settings/church.verseAr/En` are no longer shown publicly.
+- **Occasion themes (PR #17, ADR-025):** the whole site (scene, panels, cards, text, buttons, tabs, titles, the
+  next-mass bar and chips, footer) follows the theme in force — see `03-architecture.md` → Theming. Holy Week is a
+  dark scene (black wash, dark panels, light text, ashen-silver accent with dark text, crimson accent word, art in
+  dim greyscale); the Resurrection is festive (Easter red, bright gold, luminous ivory).
+- **Hero video library (PR #17, ADR-026):** the home hero plays the YouTube link of the theme in force
+  (`heroVideos.byTheme[theme]`, else `heroVideos.active`) muted, looping, without controls; else the bundled cloud
+  clip. The poster shows until the video plays; a YouTube error / blocked autoplay / nothing within 12 s → the
+  bundled clip (or the poster). Never for reduced motion, data saver, `heroMotion` off or under `flutter test`.
 
 ### `/about` — `about_page.dart` `AboutPage`
 - History card (bishop line + `historyAr/En`) and **altars** grid (main altar gets a gold cross) — section `history`.

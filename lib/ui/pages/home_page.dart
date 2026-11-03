@@ -9,7 +9,6 @@ import '../../domain/daily_verse.dart';
 import '../../domain/features.dart';
 import '../../domain/item_detail.dart';
 import '../../domain/models.dart';
-import '../../domain/rules.dart';
 import '../../state/providers.dart';
 import '../widgets/cards.dart';
 import '../widgets/common.dart';
@@ -27,11 +26,8 @@ class HomePage extends ConsumerWidget {
     final wide = MediaQuery.sizeOf(context).width >= 900;
     final blocks = features.visibleHomeBlocks;
 
-    final children = <Widget>[
-      // Verse of the day: right under the hero (admin switch, not an
-      // orderable home block).
-      const KeyedSubtree(key: ValueKey('home-dailyVerse'), child: DailyVerseCard()),
-    ];
+    // The verse of the day lives in the hero ([HeroVerse]).
+    final children = <Widget>[];
     // The patrons teaser (not admin-orderable yet: a new home block needs a
     // settings/features rules change) sits before the first "discover" block.
     var patronsPlaced = false;
@@ -219,23 +215,10 @@ class _Hero extends ConsumerWidget {
         const SizedBox(height: 8),
         TitleRibbon(subtitle.isNotEmpty ? subtitle : context.pick(s.addressAr, s.addressEn), icon: Icons.place_outlined),
         const SizedBox(height: 18),
-        ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 640),
-          child: WarmPanel(
-            padding: EdgeInsets.symmetric(horizontal: narrow ? 16 : 26, vertical: 14),
-            child: Column(children: [
-              Text('« ${context.pick(s.verseAr, s.verseEn)} »',
-                  textAlign: TextAlign.center,
-                  style: AppFonts.script(size: narrow ? 20 : 24, color: AppColors.ink, height: 1.8)),
-              if (s.verseRef.isNotEmpty || s.verseRefAr.isNotEmpty)
-                Text(
-                    context.isAr
-                        ? (s.verseRefAr.isNotEmpty ? s.verseRefAr : toArabicDigits(s.verseRef))
-                        : (s.verseRef.isNotEmpty ? s.verseRef : s.verseRefAr),
-                    style: const TextStyle(color: AppColors.goldText, fontSize: 13, fontWeight: FontWeight.w700)),
-            ]),
-          ),
-        ),
+        // Verse of the day (settings/features.dailyVerse, ADR-024): daily
+        // rotation or the admin's fixed verse, in the hero's own verse
+        // panel; sections.dailyVerse shows / hides it.
+        const HeroVerse(),
       ],
       const SizedBox(height: 20),
       Wrap(alignment: WrapAlignment.center, spacing: 12, runSpacing: 10, children: [
@@ -272,6 +255,9 @@ class _Hero extends ConsumerWidget {
             motion: f.heroMotion,
             // Phones get the portrait centre crop (the church stays centred).
             video: narrow ? ArtAssets.heroVideoTall : ArtAssets.heroVideo,
+            // The library's YouTube link for the theme in force (ADR-026);
+            // null = the bundled clip, which is also the fallback.
+            youtubeId: ref.watch(activeThemeProvider.select((t) => t.video?.youtubeId)),
             poster: narrow ? ArtAssets.heroPosterTall : ArtAssets.heroPoster,
           ),
         ),
@@ -342,7 +328,7 @@ class _PatronsTeaser extends ConsumerWidget {
                   Text(context.pick(saint.bioAr, saint.bioEn),
                       maxLines: 3,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(color: AppColors.ink, fontSize: 14, height: 1.7)),
+                      style: TextStyle(color: context.pal.ink, fontSize: 14, height: 1.7)),
                   if (path != null) DetailsLink(path: path, title: name, id: saint.id),
                 ]),
               ),
@@ -363,9 +349,10 @@ class _PatronsTeaser extends ConsumerWidget {
           // Lazy: the band is below the fold on every screen.
           Positioned.fill(
             child: LazyArt(
-              placeholder: const ColoredBox(color: AppColors.parchment),
+              placeholder: ColoredBox(color: context.pal.surfaceAlt),
               builder: (_) => ExcludeSemantics(
-                child: Image.asset(ArtAssets.nile, fit: BoxFit.cover, alignment: const Alignment(0, 0.2)),
+                child: sceneArt(
+                    context, Image.asset(ArtAssets.nile, fit: BoxFit.cover, alignment: const Alignment(0, 0.2))),
               ),
             ),
           ),
@@ -485,7 +472,7 @@ class PhoneRow extends StatelessWidget {
       child: Row(children: [
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(context.pick(phone.labelAr, phone.labelEn), style: const TextStyle(color: AppColors.muted, fontSize: 12)),
+            Text(context.pick(phone.labelAr, phone.labelEn), style: TextStyle(color: context.pal.muted, fontSize: 12)),
             Directionality(
               textDirection: TextDirection.ltr,
               child: Text(phone.number, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16, letterSpacing: 0.5)),
@@ -550,14 +537,14 @@ class _MilestoneCard extends StatelessWidget {
               if (m.year != null)
                 Flexible(
                   child: Text(localDigits(context, '${m.year}'),
-                      style: displayStyle(context, size: 22, color: AppColors.goldText)),
+                      style: displayStyle(context, size: 22, color: context.pal.goldText)),
                 ),
             ]),
             const SizedBox(height: Space.s),
             Text(title, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
             if (desc.isNotEmpty) ...[
               const SizedBox(height: Space.xs),
-              Text(desc, style: const TextStyle(color: AppColors.muted, height: 1.5, fontSize: 13)),
+              Text(desc, style: TextStyle(color: context.pal.muted, height: 1.5, fontSize: 13)),
             ],
             if (detail != null) DetailsLink(path: detail, title: title, id: m.id),
           ]),
@@ -568,67 +555,45 @@ class _MilestoneCard extends StatelessWidget {
   }
 }
 
-/// "Verse of the day" (settings/features.dailyVerse): a warm golden-hour
-/// panel with the Arabic verse in the calligraphic face and its reference
-/// in «». Rotates by the Cairo calendar day; hidden when its section
-/// ([Sections.dailyVerse]) is off or while the bundled list loads.
-class DailyVerseCard extends ConsumerWidget {
-  const DailyVerseCard({super.key});
+/// "Verse of the day" (settings/features.dailyVerse, ADR-024) in the hero's
+/// verse panel (the design the fixed settings verse had: Ruqaa verse in ink
+/// between « », reference in gold): today's Cairo verse or the admin's fixed
+/// one. Nothing while the section ([Sections.dailyVerse]) is off, before
+/// settings/features arrives (no flash) or while the bundled list loads.
+class HeroVerse extends ConsumerWidget {
+  const HeroVerse({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Wait for the first settings/features value so a switched-off card never
-    // flashes (the offline seed fallback counts, by design: ADR-007).
     if (!ref.watch(featuresReadyProvider)) return const SizedBox.shrink();
     final features = ref.watch(featuresProvider);
     if (!features.enabled(Sections.dailyVerse)) return const SizedBox.shrink();
-    final config = features.dailyVerse;
     final verses = ref.watch(dailyVersesProvider).value ?? const <Verse>[];
     final now = ref.watch(nowProvider).value ?? DateTime.now();
-    final verse = resolveDailyVerse(config, verses, now);
+    final verse = resolveDailyVerse(features.dailyVerse, verses, now);
     if (verse == null) return const SizedBox.shrink();
     final narrow = MediaQuery.sizeOf(context).width < 600;
-    final ref0 = context.isAr || verse.refEn.isEmpty ? verse.refAr : verse.refEn;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 760),
-          child: Reveal(
-            child: WarmPanel(
-              key: const Key('dailyVerseCard'),
-              padding: EdgeInsets.symmetric(horizontal: narrow ? 18 : 32, vertical: 18),
-              child: Semantics(
-                container: true,
-                child: Column(children: [
-                  Text(context.tr('accentDailyVerse'),
-                      style: AppFonts.script(size: narrow ? 16 : 18, color: AppColors.script)),
-                  Semantics(
-                    header: true,
-                    child: Text(context.tr('dailyVerse'),
-                        style: AppFonts.heading(size: narrow ? 22 : 26, color: Theme.of(context).colorScheme.primary)),
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    verse.textAr,
-                    key: const Key('dailyVerseText'),
-                    textAlign: TextAlign.center,
-                    textDirection: TextDirection.rtl,
-                    style: TextStyle(fontSize: narrow ? 19 : 22, height: 1.9, color: AppColors.ink, fontWeight: FontWeight.w700),
-                  ),
-                  if (ref0.isNotEmpty) ...[
-                    const SizedBox(height: 6),
-                    Text(
-                      '« $ref0 »',
-                      key: const Key('dailyVerseRef'),
-                      textDirection: verse.refEn.isNotEmpty && !context.isAr ? TextDirection.ltr : TextDirection.rtl,
-                      style: const TextStyle(color: AppColors.goldText, fontSize: 15, fontWeight: FontWeight.w700),
-                    ),
-                  ],
-                ]),
-              ),
-            ),
-          ),
+    final reference = context.isAr || verse.refEn.isEmpty ? verse.refAr : verse.refEn;
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 640),
+      child: WarmPanel(
+        key: const Key('heroVerse'),
+        padding: EdgeInsets.symmetric(horizontal: narrow ? 16 : 26, vertical: 14),
+        child: Semantics(
+          container: true,
+          label: context.tr('dailyVerse'),
+          child: Column(children: [
+            Text('« ${verse.textAr} »',
+                key: const Key('dailyVerseText'),
+                textAlign: TextAlign.center,
+                textDirection: TextDirection.rtl,
+                style: AppFonts.script(size: narrow ? 20 : 24, color: context.pal.ink, height: 1.8)),
+            if (reference.isNotEmpty)
+              Text(reference,
+                  key: const Key('dailyVerseRef'),
+                  textDirection: verse.refEn.isNotEmpty && !context.isAr ? TextDirection.ltr : TextDirection.rtl,
+                  style: TextStyle(color: context.pal.goldText, fontSize: 13, fontWeight: FontWeight.w700)),
+          ]),
         ),
       ),
     );

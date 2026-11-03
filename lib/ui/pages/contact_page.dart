@@ -350,8 +350,8 @@ class _ContactFormState extends ConsumerState<ContactForm> {
             FilledButton.icon(
               onPressed: _sending ? null : _submit,
               icon: _sending
-                  ? const SizedBox.square(
-                      dimension: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  ? SizedBox.square(
+                      dimension: 18, child: CircularProgressIndicator(strokeWidth: 2, color: context.pal.onPrimary))
                   : const Icon(Icons.send_rounded),
               label: Text(context.tr(_sending ? 'sending' : 'send')),
             ),

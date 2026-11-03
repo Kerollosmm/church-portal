@@ -486,7 +486,8 @@ service cloud.firestore {
       let changed = changedKeys(d);
       return keysAllowed(['sections', 'homeOrder', 'homeHidden', 'heroTitleAr', 'heroTitleEn', 'heroSubtitleAr',
                           'heroSubtitleEn', 'bannerEnabled', 'bannerAr', 'bannerEn', 'bannerLink', 'theme',
-                          'pageHeaders', 'footer', 'heroMotion', 'imageStyles', 'dailyVerse', 'updatedAt', 'updatedBy'])
+                          'pageHeaders', 'footer', 'heroMotion', 'imageStyles', 'dailyVerse', 'occasions', 'themeColors',
+                          'heroVideos', 'updatedAt', 'updatedBy'])
         && (!('sections' in changed) || !('sections' in d) || validSections(d.sections))
         && (!('homeOrder' in changed) || !('homeOrder' in d) || (d.homeOrder is list && d.homeOrder.size() <= 7
               && d.homeOrder.hasOnly(['banner', 'alerts', 'nextMass', 'quickContacts', 'milestones', 'directory', 'map'])))
@@ -500,7 +501,11 @@ service cloud.firestore {
         // Same as the client and alert links: empty, an in-app path, or an
         // http(s) URL with a host (scheme case-insensitive).
         && (!('bannerLink' in changed) || optUrlOrPath(d, 'bannerLink', 500))
-        && (!('theme' in changed) || d.get('theme', 'burgundy') in ['burgundy', 'navy', 'green', 'brown', 'purple'])
+        // Theme presets (ADR-025); `burgundy` = the pre-ADR-025 default, read as goldenHour.
+        && (!('theme' in changed) || d.get('theme', 'goldenHour') in themeKeys().concat(['burgundy']))
+        && (!('occasions' in changed) || !('occasions' in d) || validOccasions(d.occasions))
+        && (!('themeColors' in changed) || !('themeColors' in d) || validThemeColors(d.themeColors))
+        && (!('heroVideos' in changed) || !('heroVideos' in d) || validHeroVideos(d.heroVideos))
         && (!('footer' in changed) || !('footer' in d) || validFooter(d.footer))
         // Hero motion & video switch (ADR-022): a bool, default on.
         && (!('heroMotion' in changed) || d.get('heroMotion', true) is bool)
@@ -513,6 +518,123 @@ service cloud.firestore {
         // Verse of the day mode / fixed verse (missing = daily rotation).
         && (!('dailyVerse' in changed) || !('dailyVerse' in d) || validDailyVerse(d.dailyVerse))
         && (!changed.hasAny(['updatedAt', 'updatedBy']) || stampOk(d));
+    }
+
+    // ------------------- occasion themes & hero videos -----------------------
+    function themeKeys() {
+      return ['goldenHour', 'holyWeek', 'resurrection', 'nativity', 'epiphany', 'fasting', 'marian', 'navy', 'green',
+              'brown', 'purple'];
+    }
+
+    // Occasion themes (ADR-025): automatic switching, Easter and schedule
+    // slots r1…r12 ('theme|start|end', Cairo dates, start <= end). Colour
+    // edits are a separate field, themeColors (one string per preset), so
+    // each has its own write and expression budget. Only changed slots /
+    // presets are validated. Contrast is enforced by the app, which also
+    // re-corrects any stored palette when it renders.
+    function validOccasions(o) {
+      let old = resource == null ? {} : resource.data.get('occasions', {});
+      return o is map && o.keys().hasOnly(['auto', 'easter', 'resurrectionDays', 'schedule'])
+        && [o.get('auto', false), o.get('easter', true)].hasOnly([true, false])
+        && o.get('resurrectionDays', 7) is int
+        && o.get('resurrectionDays', 7) >= 1 && o.get('resurrectionDays', 7) <= 50
+        && o.get('schedule', {}) is map
+        && o.get('schedule', {}).keys().hasOnly(['r1', 'r2', 'r3', 'r4', 'r5', 'r6', 'r7', 'r8', 'r9', 'r10', 'r11', 'r12'])
+        && validRanges(o.get('schedule', {}),
+             o.get('schedule', {}).diff(old is map && old.get('schedule', {}) is map ? old.get('schedule', {}) : {})
+               .affectedKeys());
+    }
+
+    // [ch]: the slots this write adds or changes (computed once by the caller).
+    function validRanges(s, ch) {
+      return (!ch.hasAny(['r1']) || !('r1' in s) || validRange(s.r1))
+        && (!ch.hasAny(['r2']) || !('r2' in s) || validRange(s.r2))
+        && (!ch.hasAny(['r3']) || !('r3' in s) || validRange(s.r3))
+        && (!ch.hasAny(['r4']) || !('r4' in s) || validRange(s.r4))
+        && (!ch.hasAny(['r5']) || !('r5' in s) || validRange(s.r5))
+        && (!ch.hasAny(['r6']) || !('r6' in s) || validRange(s.r6))
+        && (!ch.hasAny(['r7']) || !('r7' in s) || validRange(s.r7))
+        && (!ch.hasAny(['r8']) || !('r8' in s) || validRange(s.r8))
+        && (!ch.hasAny(['r9']) || !('r9' in s) || validRange(s.r9))
+        && (!ch.hasAny(['r10']) || !('r10' in s) || validRange(s.r10))
+        && (!ch.hasAny(['r11']) || !('r11' in s) || validRange(s.r11))
+        && (!ch.hasAny(['r12']) || !('r12' in s) || validRange(s.r12));
+    }
+
+    // 'theme|YYYY-MM-DD|YYYY-MM-DD': a known preset, two dates (2000–2099),
+    // start <= end. One string per slot keeps twelve slots within budget.
+    function validRange(r) {
+      return r is string && r.matches(
+             '(goldenHour|holyWeek|resurrection|nativity|epiphany|fasting|marian|navy|green|brown|purple)'
+             + '[|]20[0-9]{2}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])[|]20[0-9]{2}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])')
+        && r.split('[|]')[1] <= r.split('[|]')[2];
+    }
+
+    // Admin colour edits per preset (settings/features.themeColors).
+    function validThemeColors(c) {
+      let old = resource == null ? {} : resource.data.get('themeColors', {});
+      return c is map && c.keys().hasOnly(themeKeys())
+        && validCustom(c, c.diff(old is map ? old : {}).affectedKeys());
+    }
+
+    function validCustom(c, ch) {
+      return (!ch.hasAny(['goldenHour']) || !('goldenHour' in c) || validPalette(c.goldenHour))
+        && (!ch.hasAny(['holyWeek']) || !('holyWeek' in c) || validPalette(c.holyWeek))
+        && (!ch.hasAny(['resurrection']) || !('resurrection' in c) || validPalette(c.resurrection))
+        && (!ch.hasAny(['nativity']) || !('nativity' in c) || validPalette(c.nativity))
+        && (!ch.hasAny(['epiphany']) || !('epiphany' in c) || validPalette(c.epiphany))
+        && (!ch.hasAny(['fasting']) || !('fasting' in c) || validPalette(c.fasting))
+        && (!ch.hasAny(['marian']) || !('marian' in c) || validPalette(c.marian))
+        && (!ch.hasAny(['navy']) || !('navy' in c) || validPalette(c.navy))
+        && (!ch.hasAny(['green']) || !('green' in c) || validPalette(c.green))
+        && (!ch.hasAny(['brown']) || !('brown' in c) || validPalette(c.brown))
+        && (!ch.hasAny(['purple']) || !('purple' in c) || validPalette(c.purple));
+    }
+
+    // The ten palette colours in a fixed order (primary, onPrimary,
+    // onPrimaryAccent, background, surface, surfaceAlt, ink, muted, goldText,
+    // script), '|'-separated; each an opaque #RRGGBB or empty (= the preset's).
+    function validPalette(p) {
+      return p is string && p.matches('((#[0-9A-Fa-f]{6})?[|]){9}(#[0-9A-Fa-f]{6})?');
+    }
+
+    function videoSlots() {
+      return ['v1', 'v2', 'v3', 'v4', 'v5', 'v6', 'v7', 'v8', 'v9', 'v10', 'v11', 'v12'];
+    }
+
+    // Hero video library (ADR-026): slots v1…v12 {name <= 80, url = a
+    // youtube.com/watch?v= or youtu.be/ link with an 11-character id}, the
+    // active slot ('' = the bundled clip) and an optional slot per preset.
+    function validHeroVideos(v) {
+      let old = resource == null ? {} : resource.data.get('heroVideos', {});
+      let oldItems = old is map && old.get('items', {}) is map ? old.get('items', {}) : {};
+      return v is map && v.keys().hasOnly(['items', 'active', 'byTheme'])
+        && v.get('items', {}) is map && v.get('items', {}).keys().hasOnly(videoSlots())
+        && v.get('active', '') in [''].concat(videoSlots())
+        && v.get('byTheme', {}) is map && v.get('byTheme', {}).keys().hasOnly(themeKeys())
+        && v.get('byTheme', {}).values().hasOnly(videoSlots())
+        && validVideoSlots(v.get('items', {}), v.get('items', {}).diff(oldItems).affectedKeys());
+    }
+
+    function validVideoSlots(s, ch) {
+      return (!ch.hasAny(['v1']) || !('v1' in s) || validVideo(s.v1))
+        && (!ch.hasAny(['v2']) || !('v2' in s) || validVideo(s.v2))
+        && (!ch.hasAny(['v3']) || !('v3' in s) || validVideo(s.v3))
+        && (!ch.hasAny(['v4']) || !('v4' in s) || validVideo(s.v4))
+        && (!ch.hasAny(['v5']) || !('v5' in s) || validVideo(s.v5))
+        && (!ch.hasAny(['v6']) || !('v6' in s) || validVideo(s.v6))
+        && (!ch.hasAny(['v7']) || !('v7' in s) || validVideo(s.v7))
+        && (!ch.hasAny(['v8']) || !('v8' in s) || validVideo(s.v8))
+        && (!ch.hasAny(['v9']) || !('v9' in s) || validVideo(s.v9))
+        && (!ch.hasAny(['v10']) || !('v10' in s) || validVideo(s.v10))
+        && (!ch.hasAny(['v11']) || !('v11' in s) || validVideo(s.v11))
+        && (!ch.hasAny(['v12']) || !('v12' in s) || validVideo(s.v12));
+    }
+
+    function validVideo(e) {
+      return e is map && e.size() == 2
+        && (e.name + '\u001f' + e.url).matches(
+             '[^\\x1f]{1,80}\\x1fhttps://(www[.]youtube[.]com/watch[?]v=|youtu[.]be/)[A-Za-z0-9_-]{11}');
     }
 
     // Verse of the day: daily rotation or a fixed admin-entered verse (Arabic

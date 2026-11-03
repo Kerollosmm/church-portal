@@ -129,7 +129,7 @@ class _MassSchedulePageState extends ConsumerState<MassSchedulePage> {
                 selected: _tab == t,
                 showCheckmark: false,
                 labelStyle: TextStyle(
-                    color: _tab == t ? Colors.white : Theme.of(context).colorScheme.primary, fontWeight: FontWeight.w700),
+                    color: _tab == t ? context.pal.onPrimary : Theme.of(context).colorScheme.primary, fontWeight: FontWeight.w700),
                 onSelected: (_) => setState(() => _tab = t),
               ),
             ),

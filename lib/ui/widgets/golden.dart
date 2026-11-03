@@ -8,6 +8,7 @@ import '../../core/theme.dart';
 import 'coptic_cross.dart';
 import 'hero_feather.dart';
 import 'hero_video.dart';
+import 'hero_youtube.dart';
 
 export 'hero_feather.dart' show BottomFeather;
 
@@ -64,18 +65,20 @@ class WarmBackdrop extends StatelessWidget {
   const WarmBackdrop({super.key});
 
   @override
-  Widget build(BuildContext context) => const ExcludeSemantics(
+  Widget build(BuildContext context) => ExcludeSemantics(
         child: DecoratedBox(
-          key: Key('warmBackdrop'),
+          key: const Key('warmBackdrop'),
           decoration: BoxDecoration(
-            color: AppColors.cream,
+            color: context.pal.background,
             image: DecorationImage(
-              image: AssetImage(ArtAssets.clouds),
+              image: const AssetImage(ArtAssets.clouds),
               fit: BoxFit.cover,
-              opacity: 0.28,
+              // Fainter (and greyed) on a dark scene (ADR-025).
+              opacity: context.pal.textureOpacity,
+              colorFilter: context.pal.artFilter,
             ),
           ),
-          child: SizedBox.expand(),
+          child: const SizedBox.expand(),
         ),
       );
 }
@@ -99,7 +102,7 @@ class WarmPanel extends StatelessWidget {
   Widget build(BuildContext context) => Container(
         padding: padding,
         decoration: BoxDecoration(
-          color: sepia ? null : AppColors.panel,
+          color: sepia ? null : context.pal.panel,
           gradient: sepia
               ? const LinearGradient(
                   begin: Alignment.topCenter,
@@ -146,10 +149,13 @@ class SealTab extends StatelessWidget {
         height: seal,
         // White seal on maroon: a thin gold ring and a soft shadow lift it.
         padding: const EdgeInsets.all(1.5),
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           shape: BoxShape.circle,
-          gradient: SweepGradient(colors: [AppColors.goldLight, AppColors.gold, AppColors.goldLight, AppColors.gold, AppColors.goldLight]),
-          boxShadow: [BoxShadow(color: Color(0x73200000), blurRadius: 8, offset: Offset(0, 2))],
+          gradient: SweepGradient(colors: [
+            context.pal.onPrimaryAccent, AppColors.gold, context.pal.onPrimaryAccent, AppColors.gold, //
+            context.pal.onPrimaryAccent,
+          ]),
+          boxShadow: const [BoxShadow(color: Color(0x73200000), blurRadius: 8, offset: Offset(0, 2))],
         ),
         child: ClipOval(
           child: ColoredBox(
@@ -183,8 +189,10 @@ class PosterHeading extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final primary = Theme.of(context).colorScheme.primary;
+    // The glow is the scene colour (cream, or black on a dark theme).
+    final halo = context.pal.dark ? context.pal.background : const Color(0xFFFFF0D2);
     final shadows = glow
-        ? const [Shadow(color: Color(0xF2FFF0D2), blurRadius: 18), Shadow(color: Color(0xE6FFF0D2), blurRadius: 4)]
+        ? [Shadow(color: halo.withValues(alpha: 0.95), blurRadius: 18), Shadow(color: halo.withValues(alpha: 0.9), blurRadius: 4)]
         : null;
     final cross = align == TextAlign.center ? CrossAxisAlignment.center : CrossAxisAlignment.start;
     return Column(
@@ -196,7 +204,7 @@ class PosterHeading extends StatelessWidget {
             child: Text(
               accent!,
               textAlign: align,
-              style: AppFonts.script(size: size * 0.74, height: 1.1).copyWith(shadows: shadows),
+              style: AppFonts.script(size: size * 0.74, height: 1.1, color: context.pal.script).copyWith(shadows: shadows),
             ),
           ),
         Semantics(
@@ -279,7 +287,7 @@ class HaloCrossFill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ColoredBox(
-        color: AppColors.cream,
+        color: context.pal.background,
         child: Center(
           child: FractionallySizedBox(
             widthFactor: 0.46,
@@ -479,6 +487,11 @@ class HeroStage extends StatefulWidget {
 
   /// Dissolve into the page at the bottom edge.
   final bool fadeBottom;
+
+  /// A YouTube video id (the hero video library, ADR-026). It plays instead
+  /// of [video]; when it fails (error, autoplay refused, nothing within the
+  /// timeout) [video] — the bundled clip — takes over, else the poster stays.
+  final String? youtubeId;
   const HeroStage({
     super.key,
     required this.image,
@@ -488,6 +501,7 @@ class HeroStage extends StatefulWidget {
     this.poster,
     this.rays = 1,
     this.fadeBottom = true,
+    this.youtubeId,
   });
 
   @override
@@ -499,12 +513,15 @@ class _HeroStageState extends State<HeroStage> with SingleTickerProviderStateMix
   late final AnimationController _clock = AnimationController(vsync: this, duration: const Duration(seconds: 60));
   bool _ambient = false;
   bool _videoOn = false;
+  bool _youtubeFailed = false;
+
+  bool get _youtubeOn => _videoOn && widget.youtubeId != null && !_youtubeFailed;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     _ambient = ambientMotionOn(context, adminOn: widget.motion);
-    _videoOn = widget.video != null && heroVideoAllowed(context, adminOn: widget.motion);
+    _videoOn = (widget.video != null || widget.youtubeId != null) && heroVideoAllowed(context, adminOn: widget.motion);
     // Decode the still before it is needed (no pop-in, no flash on swaps).
     precacheImage(AssetImage(_still), context).ignore();
     _sync();
@@ -515,7 +532,11 @@ class _HeroStageState extends State<HeroStage> with SingleTickerProviderStateMix
   @override
   void didUpdateWidget(covariant HeroStage old) {
     super.didUpdateWidget(old);
-    if (old.motion != widget.motion || old.video != widget.video || old.image != widget.image) {
+    if (old.youtubeId != widget.youtubeId) _youtubeFailed = false;
+    if (old.motion != widget.motion ||
+        old.video != widget.video ||
+        old.image != widget.image ||
+        old.youtubeId != widget.youtubeId) {
       didChangeDependencies();
     }
   }
@@ -564,37 +585,54 @@ class _HeroStageState extends State<HeroStage> with SingleTickerProviderStateMix
     // Ken Burns only on the painting: the video carries its own motion and
     // must stay registered with its poster.
     final kenBurns = _ambient && !_videoOn;
+    final art = context.pal;
     return ExcludeSemantics(
       child: ClipRect(
         child: Stack(fit: StackFit.expand, children: [
           RepaintBoundary(
-            child: _feather(kenBurns
-                ? AnimatedBuilder(
-                    animation: _clock,
-                    child: still,
-                    builder: (context, child) => Transform.scale(
-                      scale: 1 + 0.06 * (0.5 - 0.5 * math.cos(_clock.value * 2 * math.pi)),
-                      child: child,
-                    ),
-                  )
-                : still),
+            child: sceneArt(
+                context,
+                _feather(kenBurns
+                    ? AnimatedBuilder(
+                        animation: _clock,
+                        child: still,
+                        builder: (context, child) => Transform.scale(
+                          scale: 1 + 0.06 * (0.5 - 0.5 * math.cos(_clock.value * 2 * math.pi)),
+                          child: child,
+                        ),
+                      )
+                    : still)),
           ),
-          if (_videoOn)
+          if (_youtubeOn)
+            HeroYouTube(
+              key: ValueKey('yt-${widget.youtubeId}'),
+              videoId: widget.youtubeId!,
+              alignment: widget.alignment,
+              play: visibleInViewport,
+              cssFilter: art.artCssFilter,
+              onFailed: () {
+                if (mounted) setState(() => _youtubeFailed = true);
+              },
+            )
+          else if (_videoOn && widget.video != null)
             HeroVideo(
               key: ValueKey(widget.video),
               asset: widget.video!,
               alignment: widget.alignment,
               play: visibleInViewport,
+              cssFilter: art.artCssFilter,
             ),
-          if (_ambient) RepaintBoundary(child: _feather(_HazeDrift(clock: _clock))),
+          if (_ambient) RepaintBoundary(child: sceneArt(context, _feather(_HazeDrift(clock: _clock)))),
           if (widget.rays > 0)
             RepaintBoundary(
-              child: _feather(AnimatedBuilder(
-                animation: _clock,
-                builder: (context, _) => CustomPaint(
-                  painter: LightRaysPainter(shimmer: _ambient ? _clock.value * 8 % 1 : 0.25, strength: widget.rays),
-                ),
-              )),
+              child: sceneArt(
+                  context,
+                  _feather(AnimatedBuilder(
+                    animation: _clock,
+                    builder: (context, _) => CustomPaint(
+                      painter: LightRaysPainter(shimmer: _ambient ? _clock.value * 8 % 1 : 0.25, strength: widget.rays),
+                    ),
+                  ))),
             ),
         ]),
       ),
@@ -674,7 +712,7 @@ class TextScrim extends StatelessWidget {
             top: -bleed.top,
             bottom: -bleed.bottom,
             child: IgnorePointer(
-              child: CustomPaint(key: const Key('textScrimGlow'), painter: _GlowPainter(AppColors.cream, opacity)),
+              child: CustomPaint(key: Key('textScrimGlow'), painter: _GlowPainter(context.pal.background, opacity)),
             ),
           ),
           child,
