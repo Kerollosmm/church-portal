@@ -10,6 +10,7 @@ import 'package:church_portal/domain/features.dart';
 import 'package:church_portal/router.dart';
 import 'package:church_portal/state/providers.dart';
 import 'package:church_portal/ui/admin/features_editor.dart';
+import 'package:church_portal/ui/widgets/golden.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
@@ -25,7 +26,10 @@ double _contrast(Color a, Color b) {
 }
 
 Future<void> _pumpHome(WidgetTester tester,
-    {Map<String, dynamic>? dailyVerse, Map<String, bool> sections = const {}, required DateTime now}) async {
+    {Map<String, dynamic>? dailyVerse,
+    Map<String, bool> sections = const {},
+    Map<String, dynamic> features = const {},
+    required DateTime now}) async {
   tester.view.physicalSize = const Size(1200, 4000);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
@@ -33,6 +37,7 @@ Future<void> _pumpHome(WidgetTester tester,
   final f = raw['settings']['features'] as Map;
   if (dailyVerse != null) f['dailyVerse'] = dailyVerse;
   (f['sections'] as Map).addAll(sections);
+  f.addAll(features);
   final container = ProviderContainer(overrides: [
     repositoryProvider.overrideWithValue(SeedRepository(SeedData(raw))),
     nowProvider.overrideWith((ref) => Stream.value(now)),
@@ -214,6 +219,43 @@ void main() {
       await tester.pumpAndSettle();
       expect(saved, isNotNull, reason: 'the hidden over-long draft does not block the save');
       expect(saved!.dailyVerse, DailyVerseConfig.defaults);
+    });
+
+    testWidgets('set straight on the hero (no panel), old fixed-verse typography', (tester) async {
+      await _pumpHome(tester, now: DateTime.utc(2026, 1, 1, 23, 30));
+      final verse = find.byKey(const Key('heroVerse'));
+      // The soft text scrim like the title's, not a cream/white card.
+      expect(tester.widget(verse), isA<TextScrim>());
+      expect(find.ancestor(of: verse, matching: find.byType(WarmPanel)), findsNothing);
+      expect(find.descendant(of: verse, matching: find.byType(WarmPanel)), findsNothing);
+      for (final w in tester.widgetList<Container>(find.descendant(of: verse, matching: find.byType(Container)))) {
+        expect(w.decoration, isNull, reason: 'no box behind the verse');
+      }
+      final text = tester.widget<Text>(find.byKey(const Key('dailyVerseText')));
+      expect(text.textAlign, TextAlign.center);
+      expect(text.style!.fontSize, 24); // Ruqaa 24 / 20 on phones, height 1.8 (pre-PR #17)
+      expect(text.style!.height, 1.8);
+      final ref = tester.widget<Text>(find.byKey(const Key('dailyVerseRef')));
+      expect([ref.style!.fontSize, ref.style!.fontWeight], [13, FontWeight.w700]);
+    });
+
+    testWidgets('no address ribbon in the hero by default; the admin switch brings it back', (tester) async {
+      final raw = jsonDecode(File('assets/seed/seed.json').readAsStringSync()) as Map<String, dynamic>;
+      final address = raw['settings']['church']['addressAr'] as String;
+      await _pumpHome(tester, now: DateTime.utc(2026, 5, 5, 9));
+      final hero = find.byKey(const Key('homeHero'));
+      expect(find.descendant(of: hero, matching: find.byType(TitleRibbon)), findsNothing);
+      expect(find.descendant(of: hero, matching: find.text(address)), findsNothing);
+      expect(find.text(address), findsWidgets, reason: 'still in the footer');
+
+      await _pumpHome(tester, now: DateTime.utc(2026, 5, 5, 9), features: const {'heroShowAddress': true});
+      expect(find.descendant(of: hero, matching: find.byKey(const Key('heroRibbon'))), findsOneWidget);
+      expect(find.descendant(of: hero, matching: find.text(address)), findsOneWidget);
+
+      // An admin hero subtitle always shows (switch or not).
+      await _pumpHome(tester, now: DateTime.utc(2026, 5, 5, 9), features: const {'heroSubtitleAr': 'أهلًا بكم'});
+      expect(find.descendant(of: hero, matching: find.text('أهلًا بكم')), findsOneWidget);
+      expect(find.descendant(of: hero, matching: find.text(address)), findsNothing);
     });
 
     testWidgets('section switched off: no hero verse', (tester) async {

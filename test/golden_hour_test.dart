@@ -120,6 +120,21 @@ void main() {
     expect(back['heroMotion'], isTrue);
   });
 
+  test('heroShowAddress: default off, parsed, saved only when on or already stored; rules allow a bool', () {
+    expect(FeatureSettings.defaults.heroShowAddress, isFalse);
+    expect(FeatureSettings.fromMap(const {'heroShowAddress': true}).heroShowAddress, isTrue);
+    expect(FeatureSettings.fromMap(const {'heroShowAddress': 'yes'}).heroShowAddress, isFalse);
+    final off = featuresSaveWrites(const FeatureSettings(), const {'theme': 'burgundy'}).first;
+    expect(off.containsKey('heroShowAddress'), isFalse, reason: 'rules that predate the key keep accepting saves');
+    final on = featuresSaveWrites(const FeatureSettings(heroShowAddress: true), const {}).first;
+    expect(on['heroShowAddress'], isTrue);
+    final back = featuresSaveWrites(const FeatureSettings(), const {'heroShowAddress': true}).first;
+    expect(back['heroShowAddress'], isFalse);
+    final rules = File('firestore.rules').readAsStringSync();
+    expect(rules.substring(rules.indexOf('function validFeatures(')), contains("'heroShowAddress'"));
+    expect(rules, contains("d.get('heroShowAddress', false) is bool"));
+  });
+
   testWidgets('desktop: Church services menu groups the enabled services only', (tester) async {
     final router = await _pump(tester, _seedWith(const {'clinics': false}));
     await tester.tap(find.byTooltip('Church services'));
@@ -274,12 +289,21 @@ void main() {
     }
     expect(tester.getRect(find.descendant(of: stage, matching: find.byKey(const Key('heroStill')))), heroRect);
     // The title glow is a radial bleed bigger than the text, not a box.
-    final scrim = find.descendant(of: hero, matching: find.byType(TextScrim));
+    final scrim = find.ancestor(
+        of: find.descendant(of: hero, matching: find.byKey(const Key('heroTitle'))), matching: find.byType(TextScrim));
     final glow = tester.getRect(find.descendant(of: scrim, matching: find.byKey(const Key('textScrimGlow'))));
     final text = tester.getRect(find.descendant(of: scrim, matching: find.byKey(const Key('heroTitle'))));
     expect(glow.left, lessThan(text.left - 40));
     expect(glow.top, lessThan(text.top - 30));
     expect(glow.bottom, greaterThan(text.bottom + 30));
+    // The verse of the day sits on the same kind of soft glow (no panel).
+    final verse = find.descendant(of: hero, matching: find.byKey(const Key('heroVerse')));
+    if (verse.evaluate().isNotEmpty) {
+      final vGlow = tester.getRect(find.descendant(of: verse, matching: find.byKey(const Key('textScrimGlow'))));
+      final vText = tester.getRect(find.descendant(of: verse, matching: find.byKey(const Key('dailyVerseText'))));
+      expect(vGlow.left, lessThan(vText.left - 40));
+      expect(vGlow.top, lessThan(vText.top - 20));
+    }
   });
 
   testWidgets('hero video on phones too: portrait crop + its own poster; painting fallback stays', (tester) async {

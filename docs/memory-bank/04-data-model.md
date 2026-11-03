@@ -164,7 +164,8 @@ Existence of `settings/church` = "database is seeded" (see `03-architecture.md`)
 | `homeOrder` | list of block keys | `normalizeHomeOrder`: unknown/duplicate dropped, missing appended in default order. Blocks (`HomeBlocks.defaultOrder`): `banner, alerts, nextMass, quickContacts, milestones, directory, map` |
 | `homeHidden` | list of block keys | unknown keys dropped |
 | `heroTitleAr/En` | string ≤ 200 | empty → church name |
-| `heroSubtitleAr/En` | string ≤ 300 | empty → address |
+| `heroSubtitleAr/En` | string ≤ 300 | empty → no ribbon (or the address when `heroShowAddress`) |
+| `heroShowAddress` | bool, default false (PR #22) | address ribbon in the hero when no subtitle; written only once on or already stored |
 | `bannerEnabled` | bool | false |
 | `bannerAr`, `bannerEn` | string ≤ 500 | banner shows only if enabled **and** some text |
 | `bannerLink` | string ≤ 500 | `''`, in-app path `/…`, or `http(s)://host.tld…` (rules regex mirrors `isValidUrl(allowPath: true)`) |

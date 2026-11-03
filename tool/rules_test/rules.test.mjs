@@ -917,6 +917,21 @@ describe('ADR-022: hero motion & video switch (settings/features.heroMotion)', (
   });
 });
 
+describe('Hero address ribbon switch (settings/features.heroShowAddress)', () => {
+  test('admins switch the address ribbon on and off; only a bool is accepted', async () => {
+    const ref = doc(db(EDITOR), 'settings', 'features');
+    await assertSucceeds(setDoc(ref, { theme: 'burgundy', heroShowAddress: true }));
+    await assertSucceeds(setDoc(ref, { theme: 'burgundy', heroShowAddress: false }));
+    for (const v of ['on', 1, null, { on: true }]) {
+      await assertFails(setDoc(ref, { heroShowAddress: v }), JSON.stringify(v));
+    }
+  });
+
+  test('visitors cannot change it', async () => {
+    await assertFails(setDoc(doc(db(null), 'settings', 'features'), { heroShowAddress: true }));
+  });
+});
+
 describe('Verse of the day (settings/features.dailyVerse + sections.dailyVerse)', () => {
   test('admins switch it via its section, pick daily / fixed, and enter a fixed verse', async () => {
     const ref = doc(db(EDITOR), 'settings', 'features');

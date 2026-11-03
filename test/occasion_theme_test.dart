@@ -192,7 +192,35 @@ void main() {
       expect(contrastRatio(hw.onPrimaryAccent, hw.primaryDeep), greaterThanOrEqualTo(4.5));
     });
 
-    test('hero verse (Ruqaa verse in ink, reference in gold, on the hero panel) on every theme', () {
+    test('hero verse (Ruqaa verse in ink, reference in gold, no panel: on the hero verse scrim) on every theme', () {
+      expect(ThemePresets.palettes.keys, contains(ThemePresets.holyWeek));
+      for (final e in ThemePresets.palettes.entries) {
+        final p = e.value;
+        // The verse scrim over the darkest and the lightest video frame.
+        expect(p.verseGrounds, hasLength(2));
+        for (final g in p.verseGrounds) {
+          expect(contrastRatio(p.ink, g), greaterThanOrEqualTo(4.5), reason: '${e.key} verse on scrim ${colorToHex(g)}');
+          expect(contrastRatio(p.goldText, g), greaterThanOrEqualTo(4.5),
+              reason: '${e.key} reference on scrim ${colorToHex(g)}');
+        }
+        // Part of the palette's own checks, so admin colours are corrected too.
+        expect(p.checks.where((c) => c.ground.startsWith('verse')), hasLength(4), reason: e.key);
+      }
+    });
+
+    test('custom colours: normalising keeps the hero verse readable on its scrim', () {
+      final base = ThemePresets.palettes[ThemePresets.goldenHour]!;
+      final hw = ThemePresets.palettes[ThemePresets.holyWeek]!;
+      for (final bad in [base.withColor('goldText', 0xFFD8B070), hw.withColor('goldText', 0xFF6A5A30)]) {
+        final n = bad.normalized();
+        for (final g in n.verseGrounds) {
+          expect(contrastRatio(n.ink, g), greaterThanOrEqualTo(4.5));
+          expect(contrastRatio(n.goldText, g), greaterThanOrEqualTo(4.5));
+        }
+      }
+    });
+
+    test('hero verse colours also hold on panels (fixed-verse previews) on every theme', () {
       for (final e in ThemePresets.palettes.entries) {
         final p = e.value;
         for (final g in p.panelGrounds) {

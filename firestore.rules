@@ -589,7 +589,7 @@ service cloud.firestore {
       let changed = changedKeys(d);
       return keysAllowed(['sections', 'homeOrder', 'homeHidden', 'heroTitleAr', 'heroTitleEn', 'heroSubtitleAr',
                           'heroSubtitleEn', 'bannerEnabled', 'bannerAr', 'bannerEn', 'bannerLink', 'theme',
-                          'pageHeaders', 'footer', 'heroMotion', 'imageStyles', 'dailyVerse', 'occasions', 'themeColors',
+                          'pageHeaders', 'footer', 'heroMotion', 'heroShowAddress', 'imageStyles', 'dailyVerse', 'occasions', 'themeColors',
                           'heroVideos', 'updatedAt', 'updatedBy'])
         && (!('sections' in changed) || !('sections' in d) || validSections(d.sections))
         && (!('homeOrder' in changed) || !('homeOrder' in d) || (d.homeOrder is list && d.homeOrder.size() <= 7
@@ -612,6 +612,8 @@ service cloud.firestore {
         && (!('footer' in changed) || !('footer' in d) || validFooter(d.footer))
         // Hero motion & video switch (ADR-022): a bool, default on.
         && (!('heroMotion' in changed) || d.get('heroMotion', true) is bool)
+        // Address ribbon in the hero: a bool, default off.
+        && (!('heroShowAddress' in changed) || d.get('heroShowAddress', false) is bool)
         // Per-section default image display style (ADR-023).
         && (!('imageStyles' in changed) || !('imageStyles' in d) || (d.imageStyles is map
               && d.imageStyles.keys().hasOnly(['priests', 'saints', 'activities', 'milestones', 'meetings', 'alerts',

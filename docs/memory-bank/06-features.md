@@ -28,9 +28,14 @@ render with `PageBody` (+ `Footer`). Content comes from Riverpod providers (hidd
   | `map` | `ChurchMap` (iframe + Open in Maps + Directions) | contactInfo |
   On wide screens (≥ 900 px) adjacent `nextMass` + `quickContacts` share a row.
 
+- **Hero ribbon (PR #22, ADR-032):** under the hero title, a `TitleRibbon` (key `heroRibbon`) shows the admin's
+  `heroSubtitleAr/En` when set; otherwise the church address only when `settings/features.heroShowAddress` is on
+  (default **off**). The address always shows on `/contact`, in the footer and on the map.
 - **Verse of the day (PR #16, ADR-024; moved into the hero in PR #17):** `HeroVerse` (`home_page.dart`) is the hero's
-  verse panel (same design as the old fixed settings verse: WarmPanel, `« verse »` in Ruqaa 20/24 px on `ink`,
-  reference in `goldText` 13 px bold; keys `heroVerse`, `dailyVerseText`, `dailyVerseRef`). Daily mode = entry
+  verse, set straight on the hero with **no panel** since PR #22 (ADR-032): `« verse »` in Ruqaa 20/24 px on `ink`,
+  centred, line height 1.8, reference in `goldText` 13 px bold (the old fixed-verse typography), on a soft radial
+  `TextScrim` at `ThemePalette.verseScrimAlpha` (0.88) like the title's glow; keys `heroVerse` (the scrim),
+  `dailyVerseText`, `dailyVerseRef`). Daily mode = entry
   (Cairo day of year − 1) of `assets/verses/daily_verses.json` (366 Van Dyck verses, public domain), changing at Cairo
   midnight; fixed mode = the admin's verse. Hidden when `Sections.dailyVerse` is off, until the first
   `settings/features` value arrives (`featuresReadyProvider`), or while the asset loads. The separate card under the

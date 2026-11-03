@@ -188,6 +188,7 @@ class ThemePalette {
   static const double panelAlpha = 0.92;
   static const double cardAlpha = 0.95;
   static const double heroScrimAlpha = 0.80; // the lightest TextScrim used (patrons band)
+  static const double verseScrimAlpha = 0.88; // the hero verse's TextScrim (no panel behind it)
   static const double textureAlphaLight = 0.28;
   static const double textureAlphaDark = 0.12;
 
@@ -228,6 +229,14 @@ class ThemePalette {
         blendOver(background, heroScrimAlpha, kWhite),
       ];
 
+  /// Grounds of the hero verse (body-size Ruqaa verse and its reference set
+  /// straight on the hero, no panel): its text scrim (the background at
+  /// [verseScrimAlpha]) over any picture or video frame.
+  List<int> get verseGrounds => [
+        blendOver(background, verseScrimAlpha, kBlack),
+        blendOver(background, verseScrimAlpha, kWhite),
+      ];
+
   /// Grounds of text on the primary bars.
   List<int> get barGrounds => [primary, primaryDeep];
 
@@ -249,6 +258,9 @@ class ThemePalette {
     // Headings are large, but a text button ("About the church") also sits on the scrim.
     add('primary', heroGrounds, kBodyContrast, 'hero');
     add('script', heroGrounds, kLargeContrast, 'hero');
+    // The hero verse: verse in ink, reference in gold, on the verse scrim.
+    add('ink', verseGrounds, kBodyContrast, 'verse');
+    add('goldText', verseGrounds, kBodyContrast, 'verse');
     add('onPrimary', barGrounds, kBodyContrast, 'bar');
     add('onPrimaryAccent', barGrounds, kBodyContrast, 'bar');
     return out;
@@ -287,6 +299,7 @@ class ThemePalette {
       p = p.withColor(k, _fix(p[k], [
         for (final g in [...p.panelGrounds, ...p.sceneGrounds]) (g, kBodyContrast),
         if (k == 'script') for (final g in p.heroGrounds) (g, kLargeContrast),
+        if (k == 'ink' || k == 'goldText') for (final g in p.verseGrounds) (g, kBodyContrast),
       ]));
     }
     return p;
