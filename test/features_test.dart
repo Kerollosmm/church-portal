@@ -18,7 +18,7 @@ void main() {
           expect(f.enabled(s), isTrue, reason: s);
         }
         expect(f.homeOrder, HomeBlocks.defaultOrder);
-        expect(f.theme, 'burgundy');
+        expect(f.theme, 'goldenHour'); // `burgundy` (legacy) and missing read as Golden hour
         expect(f.disabledCount, 0);
         // Banner is opt-in: off until enabled with text.
         expect(f.visibleHomeBlocks, isNot(contains(HomeBlocks.banner)));
@@ -38,7 +38,7 @@ void main() {
       expect(f.homeOrder.toSet(), HomeBlocks.defaultOrder.toSet());
       expect(f.homeOrder.length, HomeBlocks.defaultOrder.length);
       expect(f.homeHidden, {'milestones'});
-      expect(f.theme, 'burgundy');
+      expect(f.theme, 'goldenHour'); // `burgundy` (legacy) and missing read as Golden hour
     });
 
     test('round-trips through toMap', () {

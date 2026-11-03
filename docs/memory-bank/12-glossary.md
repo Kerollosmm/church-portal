@@ -88,3 +88,9 @@ Season labels for admins: `opt_holy_week` … `opt_summer` in `lib/core/l10n.dar
 | لوحة التحكم / المشرفون / مالك / محرر | Dashboard / Admins / Owner / Editor | `/admin`, `admins`, `AdminRoles` |
 | العصافرة قبلي، شارع 45 | El-Asafra Qebly, Street 45 | address (PRD said «بحري»; research says قبلي) |
 | قطاع المنتزه | Montaza sector/district | diocese sector + address |
+| أسبوع الآلام (البصخة المقدسة) | Holy Week (Pascha week) | theme `holyWeek`, `OccasionConfig.easterRanges` |
+| عيد القيامة / الخماسين المقدسة | Resurrection (Easter) / the Holy Fifty Days | theme `resurrection`, `resurrectionDays` (≤ 50) |
+| أحد الشعانين | Palm Sunday | start of `holyWeek` range |
+| عيد الميلاد / عيد الغطاس | Nativity / Epiphany (Theophany) | themes `nativity`, `epiphany` |
+| الأصوام | The fasts (Great Lent, the Nativity fast…) | theme `fasting` |
+| أعياد السيدة العذراء | Feasts of the Virgin Mary (Theotokos) | theme `marian` |

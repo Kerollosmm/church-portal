@@ -103,7 +103,7 @@ class _ActivityCard extends ConsumerWidget {
               enlargeOnTap: detail == null,
               placeholder: Container(
                 padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(color: AppColors.parchment, borderRadius: BorderRadius.circular(4)),
+                decoration: BoxDecoration(color: context.pal.surfaceAlt, borderRadius: BorderRadius.circular(4)),
                 child: Icon(activityIcon(a.category), color: Theme.of(context).colorScheme.primary),
               ),
             ),

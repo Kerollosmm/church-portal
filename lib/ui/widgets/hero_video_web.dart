@@ -13,7 +13,12 @@ class HeroVideo extends StatefulWidget {
   final String asset;
   final Alignment alignment;
   final bool play;
-  const HeroVideo({super.key, required this.asset, required this.alignment, required this.play});
+
+  /// CSS filter of the frame on the web ('none', or a dark theme's sombre
+  /// filter); on Android / iOS the caller's [ColorFiltered] applies.
+  final String cssFilter;
+  const HeroVideo(
+      {super.key, required this.asset, required this.alignment, required this.play, this.cssFilter = 'none'});
 
   @override
   State<HeroVideo> createState() => _HeroVideoState();
@@ -43,7 +48,7 @@ class _HeroVideoState extends State<HeroVideo> {
       ..setAttribute('aria-hidden', 'true')
       ..setAttribute('tabindex', '-1')
       ..style.cssText = 'width:100%;height:100%;display:block;object-fit:cover;object-position:$x% $y%;'
-          'pointer-events:none;background:transparent;opacity:0;transition:opacity 1.2s ease-out;'
+          'pointer-events:none;background:transparent;opacity:0;transition:opacity 1.2s ease-out;filter:${widget.cssFilter};'
           '-webkit-mask-image:$mask;mask-image:$mask;';
     v.addEventListener(
         'playing',
@@ -69,6 +74,7 @@ class _HeroVideoState extends State<HeroVideo> {
   void didUpdateWidget(covariant HeroVideo old) {
     super.didUpdateWidget(old);
     if (old.play != widget.play) _sync();
+    if (old.cssFilter != widget.cssFilter) _el?.style.filter = widget.cssFilter;
   }
 
   @override

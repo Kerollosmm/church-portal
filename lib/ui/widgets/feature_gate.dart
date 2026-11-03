@@ -39,7 +39,7 @@ class SectionUnavailable extends StatelessWidget {
   Widget build(BuildContext context) {
     return PageBody(children: [
       const SizedBox(height: 40),
-      const Icon(Icons.visibility_off_rounded, size: 64, color: AppColors.muted),
+      Icon(Icons.visibility_off_rounded, size: 64, color: context.pal.muted),
       const SizedBox(height: 12),
       Text(context.tr('sectionUnavailable'),
           key: const Key('sectionUnavailable'),
@@ -47,7 +47,7 @@ class SectionUnavailable extends StatelessWidget {
           style: Theme.of(context).textTheme.titleLarge),
       const SizedBox(height: 6),
       Text(context.tr('sectionUnavailableHint'),
-          textAlign: TextAlign.center, style: const TextStyle(color: AppColors.muted)),
+          textAlign: TextAlign.center, style: TextStyle(color: context.pal.muted)),
       const SizedBox(height: 16),
       Center(child: FilledButton(onPressed: () => context.go('/'), child: Text(context.tr('backHome')))),
     ]);

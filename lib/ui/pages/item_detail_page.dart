@@ -300,8 +300,8 @@ class _Entry {
           cover: p.displayImage,
           imageStyle: features.imageStyleFor('priests', p.imageStyle),
           pills: [
-            Pill(rank, color: AppColors.goldText),
-            if (p.departed) Pill(context.tr('opt_departed'), color: AppColors.muted, icon: Icons.local_florist_outlined),
+            Pill(rank, color: context.pal.goldText),
+            if (p.departed) Pill(context.tr('opt_departed'), color: context.pal.muted, icon: Icons.local_florist_outlined),
           ],
           facts: [
             if (p.ordinationDate.isNotEmpty) _Fact(Icons.event_outlined, context.tr('ordained'), date(p.ordinationDate)),
@@ -385,12 +385,12 @@ class _Unavailable extends StatelessWidget {
   @override
   Widget build(BuildContext context) => PageBody(key: const Key('itemUnavailable'), children: [
         const SizedBox(height: 40),
-        const Icon(Icons.visibility_off_rounded, size: 64, color: AppColors.muted),
+        Icon(Icons.visibility_off_rounded, size: 64, color: context.pal.muted),
         const SizedBox(height: 12),
         Text(context.tr('itemUnavailable'), textAlign: TextAlign.center, style: Theme.of(context).textTheme.titleLarge),
         const SizedBox(height: 6),
         Text(context.tr('itemUnavailableHint'),
-            textAlign: TextAlign.center, style: const TextStyle(color: AppColors.muted)),
+            textAlign: TextAlign.center, style: TextStyle(color: context.pal.muted)),
         const SizedBox(height: 16),
         Center(
           child: FilledButton(
@@ -524,7 +524,7 @@ class _DetailView extends ConsumerWidget {
           Padding(
             padding: const EdgeInsets.only(top: 12),
             child: SelectableText(longText,
-                key: const Key('detailText'), style: const TextStyle(height: 1.8, fontSize: 15, color: AppColors.ink)),
+                key: const Key('detailText'), style: TextStyle(height: 1.8, fontSize: 15, color: context.pal.ink)),
           ),
         if (d.extraFields.isNotEmpty) ...[
           SectionTitle(context.tr('moreInfo'), icon: Icons.list_alt_rounded),
@@ -543,7 +543,7 @@ class _DetailView extends ConsumerWidget {
                 placeholder: Container(
                   width: 104,
                   height: 104,
-                  decoration: BoxDecoration(color: AppColors.parchment, borderRadius: BorderRadius.circular(4)),
+                  decoration: BoxDecoration(color: context.pal.surfaceAlt, borderRadius: BorderRadius.circular(4)),
                   child: Icon(Icons.image_outlined, color: primary),
                 ),
               ),
@@ -558,14 +558,14 @@ class _DetailView extends ConsumerWidget {
               margin: const EdgeInsets.only(top: 10),
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: AppColors.cream,
+                color: context.pal.background,
                 borderRadius: BorderRadius.circular(4),
                 border: Border.all(color: AppColors.gold.withValues(alpha: 0.5)),
               ),
               child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                const Icon(Icons.info_outline_rounded, color: AppColors.goldText),
+                Icon(Icons.info_outline_rounded, color: context.pal.goldText),
                 const SizedBox(width: 10),
-                Expanded(child: Text(note, style: const TextStyle(height: 1.6, color: AppColors.ink))),
+                Expanded(child: Text(note, style: TextStyle(height: 1.6, color: context.pal.ink))),
               ]),
             ),
         ],
@@ -623,7 +623,7 @@ class _DetailView extends ConsumerWidget {
           icon: Icons.directions_rounded,
           label: context.tr('directions'),
           semanticLabel: actionSemanticLabel(context.tr('directions'), e.title),
-          color: AppColors.goldText,
+          color: context.pal.goldText,
           onTap: () => openUrl(mapsDirectionsUrl(settings)),
         ),
       ActionChipButton(
@@ -631,7 +631,7 @@ class _DetailView extends ConsumerWidget {
         icon: Icons.share_rounded,
         label: context.tr('shareLink'),
         semanticLabel: actionSemanticLabel(context.tr('shareLink'), e.title),
-        color: AppColors.muted,
+        color: context.pal.muted,
         onTap: () async {
           final messenger = ScaffoldMessenger.maybeOf(context);
           final copied = context.tr('linkCopied');
@@ -730,7 +730,7 @@ class _FieldCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: AppColors.cream,
+        color: context.pal.background,
         borderRadius: BorderRadius.circular(4),
         border: Border.all(color: AppColors.gold.withValues(alpha: 0.45)),
       ),
@@ -739,7 +739,7 @@ class _FieldCard extends StatelessWidget {
           Text(title,
               style: TextStyle(fontWeight: FontWeight.w800, color: Theme.of(context).colorScheme.primary, height: 1.4)),
         if (title.isNotEmpty && value.isNotEmpty) const SizedBox(height: 4),
-        if (value.isNotEmpty) Text(value, style: const TextStyle(height: 1.6, color: AppColors.ink)),
+        if (value.isNotEmpty) Text(value, style: TextStyle(height: 1.6, color: context.pal.ink)),
       ]),
     );
   }
@@ -768,7 +768,7 @@ class _FactRow extends StatelessWidget {
         const SizedBox(width: 10),
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(fact.label, style: const TextStyle(fontSize: 12, color: AppColors.muted, height: 1.4)),
+            Text(fact.label, style: TextStyle(fontSize: 12, color: context.pal.muted, height: 1.4)),
             fact.child ??
                 Text(fact.text, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, height: 1.5)),
           ]),

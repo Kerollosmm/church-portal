@@ -90,6 +90,19 @@ Status as of 2 Nov 2026 (after PR #7, PR #8, PR #9 `ad621cf`, PR #10 and PR #11)
 - [ ] Optional: an English verse alongside (a public-domain English translation such as KJV/WEB would need its own
       verified source); today the English UI shows the Arabic verse with an English reference.
 
+## Occasion themes & hero videos (PR #17, ADR-025/026)
+
+- [x] Theme presets, Cairo-date schedule, Coptic Easter, admin colour edits with contrast auto-correction, YouTube
+      hero video library with bundled-clip fallback, verse of the day in the hero.
+- [ ] Church office: confirm the Holy Week / Resurrection looks and the default Resurrection length (7 days), and
+      add the Nativity / fasts / Marian ranges each year (or ask for fixed-date presets such as 7 Jan / 19 Jan /
+      the Marian feasts to be computed like Easter).
+- [ ] Manually check YouTube playback on a real phone browser and the Android app (autoplay policies; headless tests
+      cannot play it).
+- [ ] Optional: `settings/church.verseAr/En` are no longer shown publicly — retire them from the admin form or reuse
+      them (e.g. a parish motto).
+- [ ] Optional: a dark theme for the admin dashboard (it keeps Golden hour).
+
 ## Content (owner: church office — see `09-content-status.md`)
 
 - [ ] Real liturgy/vespers/praise timetable (47 placeholders), meetings (11), clinics (11 — or remove the section),

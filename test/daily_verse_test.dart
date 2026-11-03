@@ -52,6 +52,13 @@ Future<void> _pumpHome(WidgetTester tester,
   await tester.pumpAndSettle();
 }
 
+/// Primaries of the presets on the Golden hour scene (occasion presets with
+/// their own scene are covered by test/occasion_theme_test.dart).
+final goldenSceneAccents = [
+  for (final p in ThemePresets.palettes.values)
+    if (p.background == ThemePresets.goldenHourPalette.background) p.primary,
+];
+
 void main() {
   group('bundled verses', () {
     test('366 public-domain Van Dyck verses with source, licence and Arabic references', () {
@@ -161,21 +168,26 @@ void main() {
     });
   });
 
-  group('home card', () {
+  group('hero verse (the hero panel shows the verse of the day)', () {
     testWidgets('shows today\'s Cairo verse with its reference in «»', (tester) async {
       // 23:30 UTC Jan 1 = 01:30 Jan 2 in Cairo -> entry 1.
       await _pumpHome(tester, now: DateTime.utc(2026, 1, 1, 23, 30));
-      expect(find.byKey(const Key('dailyVerseCard')), findsOneWidget);
-      expect(find.text(_verses[1].textAr), findsOneWidget);
-      expect(find.text('« ${_verses[1].refAr} »'), findsOneWidget);
+      expect(find.byKey(const Key('heroVerse')), findsOneWidget);
+      expect(find.descendant(of: find.byKey(const Key('homeHero')), matching: find.byKey(const Key('heroVerse'))),
+          findsOneWidget);
+      expect(find.text('« ${_verses[1].textAr} »'), findsOneWidget);
+      expect(find.text(_verses[1].refAr), findsOneWidget); // Arabic UI: the Arabic reference
+      // Shown once: the separate card under the hero is gone.
+      expect(find.byKey(const Key('dailyVerseCard')), findsNothing);
+      expect(find.byKey(const Key('dailyVerseText')), findsOneWidget);
     });
 
     testWidgets('fixed admin verse replaces the rotation', (tester) async {
       await _pumpHome(tester,
           now: DateTime.utc(2026, 5, 5, 9),
           dailyVerse: {'mode': 'fixed', 'textAr': 'نص الآية الثابتة', 'refAr': 'مزمور ٢٣: ١'});
-      expect(find.text('نص الآية الثابتة'), findsOneWidget);
-      expect(find.text('« مزمور ٢٣: ١ »'), findsOneWidget);
+      expect(find.text('« نص الآية الثابتة »'), findsOneWidget);
+      expect(find.text('مزمور ٢٣: ١'), findsOneWidget);
     });
 
     testWidgets('admin: daily mode saves the hidden fixed-verse fields cleared', (tester) async {
@@ -204,15 +216,16 @@ void main() {
       expect(saved!.dailyVerse, DailyVerseConfig.defaults);
     });
 
-    testWidgets('section switched off: no card', (tester) async {
+    testWidgets('section switched off: no hero verse', (tester) async {
       await _pumpHome(tester, now: DateTime.utc(2026, 5, 5, 9), sections: {'dailyVerse': false});
-      expect(find.byKey(const Key('dailyVerseCard')), findsNothing);
+      expect(find.byKey(const Key('heroVerse')), findsNothing);
+      expect(find.byKey(const Key('dailyVerseText')), findsNothing);
     });
 
     test('text colours (incl. every theme preset title) keep >= 4.5:1 on the panel, even over the gold backdrop', () {
       for (final under in const [AppColors.cream, AppColors.parchment, AppColors.gold]) {
         final bg = Color.alphaBlend(AppColors.panel, under);
-        for (final fg in [AppColors.ink, AppColors.goldText, AppColors.script, for (final c in ThemePresets.all.values) Color(c)]) {
+        for (final fg in [AppColors.ink, AppColors.goldText, AppColors.script, for (final c in goldenSceneAccents) Color(c)]) {
           expect(_contrast(fg, bg), greaterThanOrEqualTo(4.5), reason: '$fg on $bg');
         }
       }

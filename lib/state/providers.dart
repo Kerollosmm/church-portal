@@ -10,6 +10,7 @@ import '../data/admin_repository.dart';
 import '../data/content_repository.dart';
 import '../data/firebase_bootstrap.dart';
 import '../data/media_repository.dart';
+import '../domain/cairo_time.dart';
 import '../domain/daily_verse.dart';
 import '../domain/features.dart';
 import '../domain/models.dart';
@@ -127,3 +128,36 @@ class LocaleNotifier extends Notifier<Locale> {
 final languageStoreProvider = Provider<LanguageStore>((ref) => const PlatformLanguageStore());
 
 final localeProvider = NotifierProvider<LocaleNotifier, Locale>(LocaleNotifier.new);
+
+/// The theme in force (ADR-025) and the hero video it plays (ADR-026).
+@immutable
+class ActiveTheme {
+  final String key;
+  final ThemeSource source;
+  final ThemePalette palette;
+
+  /// The YouTube link for the hero (the theme's own, else the active one), or
+  /// null for the bundled clip.
+  final HeroVideo? video;
+  const ActiveTheme(this.key, this.source, this.palette, this.video);
+
+  @override
+  bool operator ==(Object other) =>
+      other is ActiveTheme && other.key == key && other.source == source && other.palette == palette && other.video == video;
+
+  @override
+  int get hashCode => Object.hash(key, source, palette, video);
+}
+
+/// Resolves `settings/features` (selected theme, automatic schedule / Coptic
+/// Easter on the Cairo calendar day, colour edits, video library) into the
+/// theme in force. Equal values do not notify, so the app rebuilds its theme
+/// only when the theme (or its video) actually changes — at Cairo midnight
+/// at the latest.
+final activeThemeProvider = Provider<ActiveTheme>((ref) {
+  final f = ref.watch(featuresProvider);
+  final now = ref.watch(nowProvider).value ?? DateTime.now();
+  final c = CairoTime.fromInstant(now);
+  final r = f.themeOn(DateTime.utc(c.year, c.month, c.day));
+  return ActiveTheme(r.theme, r.source, f.occasions.paletteFor(r.theme), f.heroVideos.videoFor(r.theme));
+});

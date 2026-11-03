@@ -23,7 +23,10 @@ key facts, add-to-calendar, directions, share link and "More in this section"; A
 (`design/coptic-identity`: "Golden hour" poster identity, image display styles, seamless hero with a trimmed looping
 video on every screen size, new parish seal and regenerated icons; ADR-022 revised, ADR-023, ADR-018 amendment) plus PR #16
 (`feat/daily-verse`: verse of the day on the home page — 366 public-domain Arabic Van Dyck verses, rotating at Cairo
-midnight, admin on/off and fixed verse; ADR-024).
+midnight, admin on/off and fixed verse; ADR-024; merged as `6759f0d`) plus PR #17 (`feat/occasion-themes`: occasion
+themes — Golden hour default, dark Holy Week, festive Resurrection, Nativity, Epiphany, fasts, Marian feasts — with
+Cairo-date scheduling and Coptic Easter, contrast-checked palettes and admin colour edits; a YouTube hero video
+library; the verse of the day moved into the hero; ADR-025, ADR-026, ADR-024 amendment).
 
 > **Golden rule:** read this folder before changing anything, and update it in the same PR as every change that
 > alters behaviour, data shape, rules, workflows, content status or open tasks.

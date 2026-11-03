@@ -119,7 +119,7 @@ class PriestCard extends StatelessWidget {
     final detail = cardDetailPath(DetailKind.priest, p.id, p.details);
     return Card(
       clipBehavior: Clip.antiAlias,
-      color: p.departed ? const Color(0xFFF7F3EC) : Colors.white,
+      color: p.departed ? context.pal.surfaceAlt : context.pal.surface,
       child: DetailTapArea(
         path: detail,
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -137,7 +137,7 @@ class PriestCard extends StatelessWidget {
             enlargeOnTap: detail == null,
             placeholder: CircleAvatar(
               radius: 34,
-              backgroundColor: AppColors.parchment,
+              backgroundColor: context.pal.surfaceAlt,
               child: Icon(Icons.person, size: 36, color: Theme.of(context).colorScheme.primary),
             ),
           ),
@@ -146,7 +146,7 @@ class PriestCard extends StatelessWidget {
               TitleWithBadge(name,
                   sample: p.sample, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, height: 1.4)),
               Text(context.tr(p.rank == 'hegumen' ? 'hegumen' : 'priest'),
-                  style: const TextStyle(color: AppColors.goldText, fontWeight: FontWeight.w700, fontSize: 12)),
+                  style: TextStyle(color: context.pal.goldText, fontWeight: FontWeight.w700, fontSize: 12)),
               if (p.ordinationDate.isNotEmpty || p.hegumenDate.isNotEmpty || (p.departed && p.departedDate.isNotEmpty))
                 const SizedBox(height: Space.xs),
               if (p.ordinationDate.isNotEmpty)
@@ -162,7 +162,7 @@ class PriestCard extends StatelessWidget {
                 Padding(
                   padding: const EdgeInsets.only(top: 4),
                   child: Text(context.pick(p.bioAr, p.bioEn),
-                      style: const TextStyle(color: AppColors.muted, fontSize: 13, height: 1.6)),
+                      style: TextStyle(color: context.pal.muted, fontSize: 13, height: 1.6)),
                 ),
               if (detail != null) DetailsLink(path: detail, title: name, id: p.id),
             ]),
@@ -216,7 +216,7 @@ class SaintCard extends ConsumerWidget {
               Wrap(spacing: 6, runSpacing: 6, children: [
                 if (feast.isNotEmpty)
                   Pill('${context.tr('feast')}: $feast', color: Theme.of(context).colorScheme.primary, icon: Icons.event),
-                if (gregorian.isNotEmpty) Pill(gregorian, color: AppColors.muted),
+                if (gregorian.isNotEmpty) Pill(gregorian, color: context.pal.muted),
               ]),
             ],
             if (bio.isNotEmpty) ...[

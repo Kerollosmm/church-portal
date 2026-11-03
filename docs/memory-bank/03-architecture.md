@@ -274,8 +274,22 @@ chunks are fetched relative to `<base href>`).
   (gold text on light), `goldLight` `#E7C27A` (gold text on maroon), `amber` (sun/rays), `cream` `#FBF3E4` (page
   wash), `parchment` `#F4E6CC`, `vellum` `#FFF9EE`, translucent `panel` (checked against `panelOverDark`), `ink`
   `#3A2416`, `muted` `#6A4A2E`. Contrast is asserted in `test/golden_hour_test.dart`.
+- **Occasion themes (PR #17, ADR-025):** every public colour comes from the active theme's palette, the
+  `OccasionColors` `ThemeExtension` built by `buildTheme(locale, palette:, key:)` and read with **`context.pal`**
+  (`.primary, .onPrimary, .onPrimaryAccent, .background, .surface, .surfaceAlt, .ink, .muted, .goldText, .script,
+  .panel, .card, .hairline, .dark, .artFilter, .artCssFilter, .textureOpacity`). Public widgets never use the fixed
+  `AppColors.ink/muted/goldText/cream/parchment/vellum/panel/goldLight` tokens any more; `AppColors` stays for the
+  admin dashboard (which `router.dart` wraps in a Golden hour `Theme`) and for the few fixed light boxes (sample
+  badge, "times pending" note, alert box) that keep dark text. `primaryDarkOf` = `palette.primaryDeep` (darker for a
+  dark primary, lighter for Holy Week's silver). Dark scenes pass the art through `sceneArt()` (greyscale, 42 %
+  brightness; CSS `filter` on the web video / YouTube frame). `readableOn(color, grounds)` lifts status colours
+  (success green) on dark panels (`Pill`).
+- Palettes, contrast maths and auto-correction are pure Dart in `lib/domain/occasion_theme.dart`
+  (`ThemePalette.checks/failures/normalized`, `ensureContrast`); the theme in force is `activeThemeProvider`
+  (`state/providers.dart`: `settings/features` + `nowProvider` → Cairo day → `ActiveTheme(key, source, palette,
+  video)`; `ChurchPortalApp` watches it with `select`, so the 30 s clock does not rebuild the theme).
 - **Public widgets never use `AppColors.burgundy*` directly**: they read `Theme.of(context).colorScheme.primary`
-  (5 presets; `test/accessibility_test.dart`); `primaryDarkOf` for tab gradients.
+  (`test/accessibility_test.dart`); `primaryDarkOf` for tab gradients.
 - `buildTheme(locale, primary:)`: body `Plex`; headings `AppFonts.heading` (Lalezar); `displayStyle(context, …)` for
   poster titles; `kPanelRadius` 20, `kPanelShadow` soft warm shadow; cards are translucent cream with a hairline gold
   border.
@@ -289,14 +303,21 @@ chunks are fetched relative to `<base href>`).
   by `BottomFeather` in `hero_feather.dart` so the hero dissolves into the page — no box edges), `TextScrim`
   (elliptical radial glow bleeding past the text). `HeroVideo` (`hero_video.dart`, conditional export): web =
   native `<video muted playsinline loop>` via `HtmlElementView.fromTagName` with a CSS mask + fade-in on `playing`
-  (`hero_video_web.dart`); Android/iOS = `video_player` (`hero_video_io.dart`). Gated by `settings/features.heroMotion`
+  (`hero_video_web.dart`); Android/iOS = `video_player` (`hero_video_io.dart`). PR #17 (ADR-026): `HeroStage(youtubeId:)`
+  plays the hero video library's YouTube link instead (`hero_youtube.dart`, conditional export: web =
+  `hero_youtube_web.dart`, a youtube-nocookie IFrame-player `<iframe>` driven over the IFrame API postMessage channel,
+  CSS-masked and cover-sized by `youtubeCover`; Android/iOS = `youtube_player_iframe` in `hero_youtube_io.dart`), and
+  falls back to the bundled clip on error / blocked autoplay / no "playing" within 12 s. Gated by `settings/features.heroMotion`
   and the visitor's reduced-motion / save-data (`lib/core/motion_env*.dart`); phones get the portrait crop.
 - **Image display styles (ADR-023):** `lib/ui/widgets/styled_image.dart` — `CardCover` (top of a card for
   `card`/`banner`), `CardLead` (title-row lead: halo avatar for `avatar`, the section icon when there is no image),
   `HaloAvatar`, `FittedCover` (whole picture, `contain` over a blurred sepia copy, clipped), `DetailCover`;
   resolution via `FeatureSettings.imageStyleFor(collection, item.imageStyle)`.
-- The admin picks the **primary** from `ThemePresets.all` (`settings/features.theme`): burgundy (default, now
-  `#6E1C1C`), navy, green, brown, purple; `ChurchPortalApp` watches `featuresProvider.select((f) => f.theme)`.
+- The admin picks the **theme** from `ThemePresets` (`settings/features.theme`, `lib/domain/occasion_theme.dart`):
+  `goldenHour` (default, maroon `#6E1C1C`), `holyWeek`, `resurrection`, `nativity`, `epiphany`, `fasting`, `marian`,
+  and the accent-only `navy`, `green`, `brown`, `purple`. The stored legacy key `burgundy` (and anything unknown)
+  reads as `goldenHour` (`ThemePresets.normalize`). Before PR #17 the app mapped `burgundy` to the old oxblood
+  `#7B2216`; it now renders the documented `#6E1C1C`.
 - Brand colours for social buttons in `cards.dart`: `whatsappGreen` `#157338`, `facebookBlue` `#145DBF` (darkened
   so white button text is ≥ 4.5:1), `youtubeRed`, `instagramPink`.
 - Accessibility helpers: `TitleWithBadge` (title + `SampleBadge` in a `Wrap`), `Pill` text wraps (2 lines + ellipsis

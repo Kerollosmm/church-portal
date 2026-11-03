@@ -98,6 +98,16 @@ Notable details:
 - **Verse of the day (PR #16, ADR-024):** `validFeatures` allows `dailyVerse`; `validDailyVerse` (only when it changes):
   map with keys ⊆ mode/textAr/refAr, `mode` ∈ daily/fixed, strings with text ≤500 and ref ≤60
   (joined + regex). Emulator tests: "Verse of the day" group in `tool/rules_test/rules.test.mjs`.
+- **Occasion themes & hero videos (PR #17, ADR-025/026):** `validFeatures` allows `occasions`, `themeColors`,
+  `heroVideos`; `theme` ∈ `themeKeys()` + legacy `burgundy`. `validOccasions`: keys ⊆ auto/easter/resurrectionDays/
+  schedule, bools, int 1–50, schedule keys ⊆ r1…r12, each changed slot a string matching
+  `preset|YYYY-MM-DD|YYYY-MM-DD` (2000–2099) with start ≤ end (`split`). `validThemeColors`: keys ⊆ presets, each
+  changed preset a string of ten `|`-separated optional `#RRGGBB`. `validHeroVideos`: keys ⊆ items/active/byTheme,
+  slots v1…v12, `active` ∈ '' + slots, `byTheme` keys ⊆ presets and values ⊆ slots; each changed item exactly
+  `{name, url}` with name 1–80 chars and url `https://www.youtube.com/watch?v=<id>` or `https://youtu.be/<id>`
+  (`[A-Za-z0-9_-]{11}`, nothing after). Strings (not maps) and caller-computed changed-key sets keep a full first save
+  of 12 ranges, 11 palettes or 12 videos under the 1,000-expression cap (maps of maps did not). Contrast is not
+  checkable in rules: the app corrects on save and again on render. Emulator groups "ADR-025" and "ADR-026".
 - `validFeatures`: key allow-list via `keysAllowed` (create: `keys().hasOnly`; update: only the **changed** keys must
   be allowed, so an untouched legacy key no longer blocks a merge save — same as `settings/church`, PR #10), `sections` keys ⊆ the 17 section keys (PR #16 added `dailyVerse`)
   (incl. `media`)

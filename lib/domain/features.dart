@@ -2,7 +2,12 @@
 // Pure Dart: no Flutter / Firebase imports, so the logic is unit-tested.
 
 import 'daily_verse.dart';
+import 'hero_video.dart';
 import 'image_style.dart';
+import 'occasion_theme.dart';
+
+export 'hero_video.dart' show HeroVideo, HeroVideoLibrary;
+export 'occasion_theme.dart' show OccasionConfig, ThemePalette, ThemePresets, ThemeRange, ThemeResolution, ThemeSource;
 
 /// Public sections an admin can switch on or off.
 class Sections {
@@ -82,26 +87,6 @@ class HomeBlocks {
     quickContacts: Sections.contactInfo,
     milestones: Sections.milestones,
     map: Sections.contactInfo,
-  };
-}
-
-/// Accent theme presets (primary colour of the design system).
-class ThemePresets {
-  ThemePresets._();
-  static const burgundy = 'burgundy';
-  static const all = <String, int>{
-    'burgundy': 0xFF7B2216, // icon oxblood (was wine 0xFF6B1426 before the Coptic identity)
-    'navy': 0xFF1F3A5F,
-    'green': 0xFF1E5631,
-    'brown': 0xFF5D3A1A,
-    'purple': 0xFF4A235A,
-  };
-  static const labels = <String, List<String>>{
-    'burgundy': ['عنابي (الافتراضي)', 'Burgundy (default)'],
-    'navy': ['كحلي', 'Navy'],
-    'green': ['أخضر', 'Green'],
-    'brown': ['بني', 'Brown'],
-    'purple': ['بنفسجي', 'Purple'],
   };
 }
 
@@ -261,6 +246,13 @@ class FeatureSettings {
   /// Missing = daily rotation.
   final DailyVerseConfig dailyVerse;
 
+  /// Occasion themes: automatic switching, schedule, Easter, colour edits
+  /// (ADR-025). Missing = manual ([theme] always applies).
+  final OccasionConfig occasions;
+
+  /// Hero video library (YouTube links, ADR-026). Missing = the bundled clip.
+  final HeroVideoLibrary heroVideos;
+
   const FeatureSettings({
     this.sections = const {},
     this.homeOrder = HomeBlocks.defaultOrder,
@@ -273,12 +265,14 @@ class FeatureSettings {
     this.bannerAr = '',
     this.bannerEn = '',
     this.bannerLink = '',
-    this.theme = ThemePresets.burgundy,
+    this.theme = ThemePresets.goldenHour,
     this.pageHeaders = const {},
     this.footer = const FooterConfig(),
     this.heroMotion = true,
     this.imageStyles = const {},
     this.dailyVerse = DailyVerseConfig.defaults,
+    this.occasions = OccasionConfig.defaults,
+    this.heroVideos = HeroVideoLibrary.defaults,
   });
 
   /// Everything on: used before the doc loads and when it does not exist.
@@ -311,12 +305,15 @@ class FeatureSettings {
       bannerAr: _str(m['bannerAr']),
       bannerEn: _str(m['bannerEn']),
       bannerLink: _str(m['bannerLink']),
-      theme: ThemePresets.all.containsKey(theme) ? theme : ThemePresets.burgundy,
+      // `burgundy` (the default before ADR-025) and unknown keys read as Golden hour.
+      theme: ThemePresets.normalize(theme),
       pageHeaders: _pageHeaders(m['pageHeaders']),
       footer: FooterConfig.fromMap(m['footer']),
       heroMotion: _bool(m['heroMotion']) ?? true,
       imageStyles: parseImageStyles(m['imageStyles']),
       dailyVerse: DailyVerseConfig.fromMap(m['dailyVerse']),
+      occasions: OccasionConfig.fromMap(m['occasions'], m['themeColors']),
+      heroVideos: HeroVideoLibrary.fromMap(m['heroVideos']),
     );
   }
 
@@ -341,6 +338,9 @@ class FeatureSettings {
         'heroMotion': heroMotion,
         'imageStyles': {for (final c in ImageStyles.collections) if (imageStyles[c] != null) c: imageStyles[c]},
         'dailyVerse': dailyVerse.toMap(),
+        'occasions': occasions.toMap(),
+        'themeColors': occasions.colorsToMap(),
+        'heroVideos': heroVideos.toMap(),
       };
 
   FeatureSettings copyWith({
@@ -361,6 +361,8 @@ class FeatureSettings {
     bool? heroMotion,
     Map<String, String>? imageStyles,
     DailyVerseConfig? dailyVerse,
+    OccasionConfig? occasions,
+    HeroVideoLibrary? heroVideos,
   }) =>
       FeatureSettings(
         sections: sections ?? this.sections,
@@ -380,6 +382,8 @@ class FeatureSettings {
         heroMotion: heroMotion ?? this.heroMotion,
         imageStyles: imageStyles ?? this.imageStyles,
         dailyVerse: dailyVerse ?? this.dailyVerse,
+        occasions: occasions ?? this.occasions,
+        heroVideos: heroVideos ?? this.heroVideos,
       );
 
   bool enabled(String section) => sections[section] ?? true;
@@ -415,6 +419,9 @@ class FeatureSettings {
   /// wins over the section default).
   String imageStyleFor(String collection, String itemStyle) =>
       ImageStyles.resolve(collection, itemStyle: itemStyle, sectionStyle: imageStyles[collection]);
+
+  /// The theme in force on the Cairo calendar day [cairoDay].
+  ThemeResolution themeOn(DateTime cairoDay) => occasions.resolve(theme, cairoDay);
 
   int get disabledCount => Sections.all.where((s) => !enabled(s)).length;
 }

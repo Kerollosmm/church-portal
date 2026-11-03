@@ -325,7 +325,57 @@ supersede them.
   `goldText` inside «». All text ≥ 4.5:1 on the panel even over the gold backdrop (test). The English UI shows the
   English reference; the verse stays Arabic.
 
-## Timeline
+### ADR-024 amendment (PR #17) — the verse of the day lives in the hero
+
+- The hero's fixed verse (`settings/church.verseAr/En/verseRef*`) is replaced by the verse of the day (daily rotation
+  or the admin's fixed verse) in the same panel and typography (`HeroVerse`); the separate `DailyVerseCard` under the
+  hero is removed so the verse appears once. `sections.dailyVerse` shows / hides the hero verse. The church verse
+  fields stay in the model and admin form (and the assistant grounding) but are no longer rendered publicly.
+
+## ADR-025 (PR #17) — Occasion themes
+
+- **Context:** the church wanted the site to follow the church year — sombre black for Holy Week (أسبوع الآلام),
+  festive for the Resurrection (القيامة), and presets for the Nativity, fasts and Marian feasts — with the Golden hour
+  maroon `#6E1C1C` staying the default, and everything editable from /admin. Text had to stay readable everywhere.
+- **Decision:** a theme is a full **palette** (`ThemePalette`, 10 colours: primary, onPrimary, onPrimaryAccent,
+  background, surface, surfaceAlt, ink, muted, goldText, script), not just an accent. Presets: `goldenHour`
+  (default), `holyWeek` (dark), `resurrection`, `nativity`, `epiphany`, `fasting`, `marian`, plus the accent-only
+  `navy/green/brown/purple` kept from before. `burgundy` (stored in live data and the seed) reads as `goldenHour`.
+  Golden hour's `goldText` was deepened `#7A5410 → #6F4C0E` to reach 4.5:1 on the darkest cloud-texture pixel.
+- **Readability model:** `ThemePalette.checks` lists every text role on every ground the widgets paint: panels and
+  cards (surface at 92 % over black and over white, surfaceAlt), the scene (background + the cloud texture's darkest /
+  lightest pixel at 28 %, 12 % on dark scenes), the hero / header scrim (background at 80 % over black and white — any
+  picture or YouTube frame), and the primary bars (primary and its deep end). Body text needs 4.5:1, large headings
+  on the scrim 3:1 (primary is held to 4.5 there too because a text button sits on it). `normalized()` pushes
+  surfaces out of the mid-grey band and nudges each text colour toward black or white just enough; it runs on admin
+  save and again at render, so even a hand-edited document stays readable. Tests: every preset passes untouched; 400
+  random palettes pass after normalisation; a widget walk measures every rendered paragraph against its painted
+  ground on the public pages for every preset (all routes for Holy Week and the Resurrection).
+- **Scheduling:** `occasions.auto` off = the selected theme always applies (manual override). On: first admin range
+  covering the **Cairo** date, then (with `easter`) Holy Week = Palm Sunday → Holy Saturday and the Resurrection =
+  Easter Sunday + `resurrectionDays` − 1 (default 7, up to the 50 days), else the selected theme. Coptic Easter =
+  Meeus' Julian computus + the Julian–Gregorian gap (`orthodoxEaster`), tested against 2001–2030 and for 1900–2099
+  (always a Sunday, 4 Apr–8 May). The switch happens at Cairo midnight (tested in EET and EEST).
+- **Rules budget:** ranges and colours are stored as strings (one regex each) in slot maps; colours in their own
+  field `themeColors`. A first save with maps-of-maps exceeded the 1,000-expression cap in the emulator.
+- **Admin dashboard** keeps the Golden hour palette (wrapped in its own `Theme`).
+
+## ADR-026 (PR #17) — Hero video library from YouTube links
+
+- **Context:** the church wanted to choose hero videos without uploads (Spark plan: no Storage, no video bytes in
+  Firestore).
+- **Decision:** `settings/features.heroVideos` holds up to 12 named YouTube links (slots `v1…v12`), the active slot
+  (`''` = the bundled `hero_clouds*.mp4`, kept as default and fallback, ~110 KB phone loop) and an optional slot per
+  theme. Links are validated in the app (`youtubeVideoId`: youtube.com watch/embed/shorts/live, youtu.be,
+  youtube-nocookie embed; 11-char id) and stored canonical; rules accept only the canonical shapes.
+- **Playback:** web = a youtube-nocookie IFrame-player `<iframe>` (autoplay, mute, loop + playlist, controls 0,
+  playsinline) in a CSS-masked platform view, events via the IFrame API postMessage channel ("listening" handshake;
+  `onStateChange`/`infoDelivery` playing → fade in; `onError`/`onAutoplayBlocked`/12 s timeout → fallback); mobile =
+  `youtube_player_iframe` ^6.0.2 (maintained; WebView). Same gating as the clip (reduced motion, data saver,
+  `heroMotion`). Dark themes dim it with a CSS filter. Playback cannot be verified in headless tests (MotionEnv.isTest
+  disables video); parsing, library logic, provider choice and rules are tested.
+
+## Timeline## Timeline
 
 | When | PR / commit | What |
 |---|---|---|
@@ -350,5 +400,7 @@ supersede them.
 | 2 Nov 2026 | **PR #14** — "Detail pages that actually open" (`feat/pr14-detail-pages-default-on`) | Opt-out detail pages (missing `detailsEnabled` = on) so every card opens its page; labelled key-facts card, Google Calendar link (weekly RRULE, Cairo zone), directions, copy-link share, "More in this section", hero cover; admin switch on by default with hint, phone rows move the open-page icon under the subtitle; home directory card "Learn more" wraps at 320 px / 200 %; ADR-021; `test/detail_ux_test.dart` + PR #14 group in `test/detail_pages_test.dart`. |
 | 3 Nov 2026 | **PR #15** — "Golden hour identity, image display styles, seamless hero video, new parish seal" (`design/coptic-identity`, squash-merged as `a97987c`) | Poster identity (ADR-022 revised): Lalezar + Aref Ruqaa, maroon `#6E1C1C`, ribbons, halos, Gemini art, hero motion + video behind `heroMotion`; image display styles avatar/card/banner (ADR-023) with rules + emulator tests; layout pass (1/2/3-column grid, 1200 max width, `Space` tokens, collapsing optional fields). Final round: seamless hero (full-bleed feathered layers, mirrored haze strip, radial title glow, transparent bottom dissolve), hero video trimmed to 3–10 s with a crossfaded loop, portrait crop on phones, poster crossfade (native `<video>` on web); new parish seal + regenerated icons/splash (ADR-018 amendment); painted saints served at `/art/*.webp`; `test/golden_hour_test.dart`, `test/image_style_layout_test.dart`. |
 | 3 Nov 2026 | **PR #16** — "Daily Bible verse on the home screen" (`feat/daily-verse`) | 366 public-domain Arabic Van Dyck verses bundled from eBible.org (`tool/gen_daily_verses.py`, SHA-pinned), rotation by the Africa/Cairo day of year (changes at Cairo midnight), golden-hour `DailyVerseCard` under the hero with «reference», admin on/off (`sections.dailyVerse`) + daily/fixed verse (`settings/features.dailyVerse`), rules + emulator tests, seed regenerated, ADR-024, `test/daily_verse_test.dart`. |
+
+| 3 Nov 2026 | **PR #17** — "Occasion themes, YouTube hero video library, verse of the day in the hero" (`feat/occasion-themes`; PR #16 was squash-merged as `6759f0d`) | ADR-025/026 + ADR-024 amendment: full-palette themes (Golden hour default, dark Holy Week, festive Resurrection, Nativity, Epiphany, fasts, Marian, 4 accent presets), `context.pal` everywhere public, contrast model + auto-correction + rendered-text contrast walk, Cairo-date schedule + Coptic Easter, admin theme / colour / video editors, YouTube hero (IFrame player on web, `youtube_player_iframe` on mobile) with clip fallback, hero shows the verse of the day (card removed), rules + emulator groups. |
 
 Append new PRs to this table.

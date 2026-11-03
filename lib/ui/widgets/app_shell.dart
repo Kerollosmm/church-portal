@@ -144,7 +144,7 @@ class _AppShellState extends ConsumerState<AppShell> {
                     Text(fullName,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 11.5, color: AppColors.muted, fontWeight: FontWeight.w400)),
+                        style: TextStyle(fontSize: 11.5, color: context.pal.muted, fontWeight: FontWeight.w400)),
                 ]),
               ),
             ]);
@@ -173,9 +173,9 @@ class _AppShellState extends ConsumerState<AppShell> {
             tooltip: context.tr('language'),
             onPressed: () => ref.read(localeProvider.notifier).toggle(),
             style: IconButton.styleFrom(
-                backgroundColor: AppColors.vellum, side: const BorderSide(color: AppColors.hairline, width: 1.5)),
+                backgroundColor: context.pal.surface, side: BorderSide(color: context.pal.hairline, width: 1.5)),
             icon: Text(context.isAr ? 'EN' : 'ع',
-                style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.goldText, fontSize: 15)),
+                style: TextStyle(fontWeight: FontWeight.w700, color: context.pal.goldText, fontSize: 15)),
           ),
           const SizedBox(width: 6),
           if (showMass) ...[
@@ -238,7 +238,7 @@ class _AppShellState extends ConsumerState<AppShell> {
     return _NavLabel(
       label: context.tr(key),
       selected: selected,
-      color: selected ? primary : AppColors.ink,
+      color: selected ? primary : context.pal.ink,
       onTap: () => context.go(path),
     );
   }
@@ -257,7 +257,7 @@ class _NavLabel extends StatelessWidget {
   Widget build(BuildContext context) {
     final text = Row(mainAxisSize: MainAxisSize.min, children: [
       Text(label, style: TextStyle(fontWeight: FontWeight.w700, color: color, fontSize: 14.5)),
-      if (caret) const Icon(Icons.expand_more_rounded, size: 18, color: AppColors.goldText),
+      if (caret) Icon(Icons.expand_more_rounded, size: 18, color: context.pal.goldText),
     ]);
     final decorated = Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -313,7 +313,7 @@ class _ServicesMenu extends ConsumerWidget {
         child: _NavLabel(
           label: context.tr('churchServices'),
           selected: selected,
-          color: selected ? primary : AppColors.ink,
+          color: selected ? primary : context.pal.ink,
           caret: true,
         ),
       ),
@@ -341,8 +341,8 @@ class _HighlightButton extends StatelessWidget {
         constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
         style: IconButton.styleFrom(
           backgroundColor: filled ? primary : Colors.transparent,
-          foregroundColor: filled ? Colors.white : primary,
-          side: filled ? null : const BorderSide(color: AppColors.hairline),
+          foregroundColor: filled ? context.pal.onPrimary : primary,
+          side: filled ? null : BorderSide(color: context.pal.hairline),
         ),
         icon: Icon(icon, size: 20),
       );
@@ -375,7 +375,7 @@ class _AppDrawer extends ConsumerWidget {
             child: Semantics(
               header: true,
               child: Text(title,
-                  style: const TextStyle(color: AppColors.goldText, fontWeight: FontWeight.w700, fontSize: 12.5)),
+                  style: TextStyle(color: context.pal.goldText, fontWeight: FontWeight.w700, fontSize: 12.5)),
             ),
           ),
           for (final i in list)
@@ -383,10 +383,10 @@ class _AppDrawer extends ConsumerWidget {
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 1),
               child: ListTile(
                 minTileHeight: 48,
-                leading: Icon(i.icon, color: location == i.path ? AppColors.goldLight : primary, size: 22),
+                leading: Icon(i.icon, color: location == i.path ? context.pal.onPrimaryAccent : primary, size: 22),
                 title: Text(context.tr(i.key), style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
                 selected: location == i.path,
-                selectedColor: Colors.white,
+                selectedColor: context.pal.onPrimary,
                 selectedTileColor: primary,
                 onTap: () {
                   Navigator.of(context).pop();
@@ -415,10 +415,10 @@ class _AppDrawer extends ConsumerWidget {
               child: Row(children: [
                 Container(
                   padding: const EdgeInsets.all(1.5),
-                  decoration: const BoxDecoration(
+                  decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: AppColors.goldLight,
-                    boxShadow: [BoxShadow(color: Color(0x73200000), blurRadius: 8, offset: Offset(0, 2))],
+                    color: context.pal.onPrimaryAccent,
+                    boxShadow: const [BoxShadow(color: Color(0x73200000), blurRadius: 8, offset: Offset(0, 2))],
                   ),
                   child: const ChurchSeal(size: 52),
                 ),
@@ -427,12 +427,12 @@ class _AppDrawer extends ConsumerWidget {
                   child: Text(settings == null ? context.tr('appName') : context.pick(settings.nameAr, settings.nameEn),
                       maxLines: 3,
                       overflow: TextOverflow.ellipsis,
-                      style: displayStyle(context, size: 17, color: const Color(0xFFFFF1D6), height: 1.4)),
+                      style: displayStyle(context, size: 17, color: context.pal.onPrimary, height: 1.4)),
                 ),
                 IconButton(
                   tooltip: context.tr('close'),
-                  color: const Color(0xFFFFF1D6),
-                  style: IconButton.styleFrom(backgroundColor: const Color(0x24FFF1D6)),
+                  color: context.pal.onPrimary,
+                  style: IconButton.styleFrom(backgroundColor: context.pal.onPrimary.withValues(alpha: 0.14)),
                   icon: const Icon(Icons.close_rounded),
                   onPressed: () => Navigator.of(context).pop(),
                 ),

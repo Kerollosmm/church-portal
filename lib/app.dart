@@ -4,7 +4,6 @@ import 'package:material_ui/material_ui.dart';
 import 'core/document_lang.dart';
 import 'core/l10n.dart';
 import 'core/theme.dart';
-import 'domain/features.dart';
 import 'router.dart';
 import 'state/providers.dart';
 
@@ -15,8 +14,9 @@ class ChurchPortalApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final locale = ref.watch(localeProvider);
     final router = ref.watch(routerProvider);
-    final themeKey = ref.watch(featuresProvider.select((f) => f.theme));
-    final primary = Color(ThemePresets.all[themeKey] ?? ThemePresets.all[ThemePresets.burgundy]!);
+    // The occasion theme in force (manual pick, schedule or Coptic Easter);
+    // `select` keeps the 30 s clock from rebuilding the theme for nothing.
+    final active = ref.watch(activeThemeProvider.select((t) => (t.key, t.palette)));
     setDocumentLanguage(locale.languageCode);
     return MaterialApp.router(
       onGenerateTitle: (context) => context.tr('appName'),
@@ -24,7 +24,7 @@ class ChurchPortalApp extends ConsumerWidget {
       locale: locale,
       supportedLocales: const [Locale('ar'), Locale('en')],
       localizationsDelegates: GlobalMaterialLocalizations.delegates,
-      theme: buildTheme(locale, primary: primary),
+      theme: buildTheme(locale, palette: active.$2, key: active.$1),
       routerConfig: router,
     );
   }

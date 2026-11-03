@@ -54,14 +54,14 @@ class LiturgyCard extends StatelessWidget {
                 colors: [Theme.of(context).colorScheme.primary, primaryDarkOf(context)],
               ),
             ),
-            child: Icon(_icon, color: AppColors.goldLight, size: 22),
+            child: Icon(_icon, color: context.pal.onPrimaryAccent, size: 22),
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               if (dayText.isNotEmpty)
                 Text(dayText,
-                    style: const TextStyle(color: AppColors.goldText, fontWeight: FontWeight.w800, fontSize: 12)),
+                    style: TextStyle(color: context.pal.goldText, fontWeight: FontWeight.w800, fontSize: 12)),
               TitleWithBadge(context.pick(l.nameAr, l.nameEn),
                   sample: l.sample, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
               const SizedBox(height: 6),
@@ -108,7 +108,7 @@ class NextMassCard extends ConsumerWidget {
     return Container(
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        color: AppColors.panel,
+        color: context.pal.panel,
         borderRadius: BorderRadius.circular(kPanelRadius),
         border: Border.all(color: const Color(0x61C9963F)),
         boxShadow: kPanelShadow,
@@ -126,16 +126,16 @@ class NextMassCard extends ConsumerWidget {
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               Row(mainAxisSize: MainAxisSize.min, children: [
-                const Icon(Icons.access_time_filled_rounded, color: AppColors.goldLight, size: 20),
+                Icon(Icons.access_time_filled_rounded, color: context.pal.onPrimaryAccent, size: 20),
                 const SizedBox(width: 8),
                 Flexible(
                   child: Text(context.tr('nextMass'),
-                      style: displayStyle(context, size: 18, color: Colors.white, height: 1.4)),
+                      style: displayStyle(context, size: 18, color: context.pal.onPrimary, height: 1.4)),
                 ),
               ]),
               TextButton(
                 onPressed: () => context.go('/mass-schedule'),
-                style: TextButton.styleFrom(foregroundColor: AppColors.goldLight),
+                style: TextButton.styleFrom(foregroundColor: context.pal.onPrimaryAccent),
                 child: Text(context.tr('fullSchedule')),
               ),
             ],
@@ -197,7 +197,7 @@ class NextMassCard extends ConsumerWidget {
       }
       children.add(Wrap(spacing: 8, runSpacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: [
         Pill('$dayLabel • ${weekdayLabel(context, n.start.weekday)}', color: Theme.of(context).colorScheme.primary),
-        if (countdown != null) Pill(countdown, color: AppColors.goldText, icon: Icons.timer_outlined),
+        if (countdown != null) Pill(countdown, color: context.pal.goldText, icon: Icons.timer_outlined),
       ]));
       children.add(const SizedBox(height: 8));
       children.add(Text(context.pick(n.liturgy.nameAr, n.liturgy.nameEn),
@@ -211,7 +211,7 @@ class NextMassCard extends ConsumerWidget {
         children.add(Padding(
           padding: const EdgeInsets.only(top: 6),
           child: Text(context.tr('timesPending'),
-              style: const TextStyle(color: AppColors.goldText, fontWeight: FontWeight.w700, fontSize: 12)),
+              style: TextStyle(color: context.pal.goldText, fontWeight: FontWeight.w700, fontSize: 12)),
         ));
       }
     }
@@ -238,6 +238,9 @@ class _AlertBannerState extends ConsumerState<AlertBanner> {
   // protocol-relative link.
   Widget _learnMore(BuildContext context, String link) => TextButton(
         onPressed: () => _isInternal(link) ? context.go(link) : openUrl(link),
+        // The notice box stays light on every theme: a light (dark-theme)
+        // primary would vanish on it.
+        style: context.pal.dark ? TextButton.styleFrom(foregroundColor: AppColors.alert) : null,
         child: Text(context.tr('learnMore')),
       );
 
@@ -297,7 +300,8 @@ class _AlertBannerState extends ConsumerState<AlertBanner> {
                 if (context.pick(a.bodyAr, a.bodyEn).isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.only(top: 2),
-                    child: Text(context.pick(a.bodyAr, a.bodyEn), style: const TextStyle(height: 1.5)),
+                    child: Text(context.pick(a.bodyAr, a.bodyEn),
+                        style: const TextStyle(height: 1.5, color: AppColors.ink)),
                   ),
                 // Phones / large text: the button goes under the text so the
                 // row never overflows.
@@ -356,14 +360,14 @@ class DirectoryCard extends StatelessWidget {
                 ),
                 borderRadius: BorderRadius.circular(16),
               ),
-              child: Icon(icon, color: AppColors.goldLight, size: 24),
+              child: Icon(icon, color: context.pal.onPrimaryAccent, size: 24),
             ),
             const SizedBox(width: 14),
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text(title, style: displayStyle(context, size: 21, color: primary, height: 1.35)),
                 const SizedBox(height: 2),
-                Text(subtitle, style: const TextStyle(color: AppColors.muted, fontSize: 13.5, height: 1.55)),
+                Text(subtitle, style: TextStyle(color: context.pal.muted, fontSize: 13.5, height: 1.55)),
                 const SizedBox(height: 6),
                 // Flexible: "Learn more" wraps instead of overflowing at 320 px / 200% text.
                 Row(children: [
@@ -405,7 +409,9 @@ class ActionChipButton extends StatelessWidget {
     final button = FilledButton.icon(
       style: FilledButton.styleFrom(
         backgroundColor: color,
-        foregroundColor: Colors.white,
+        // Brand fills are dark (white text); a light fill (Holy Week's
+        // silver primary) gets dark text.
+        foregroundColor: color.computeLuminance() > 0.25 ? const Color(0xFF15110F) : Colors.white,
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         textStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
       ),
