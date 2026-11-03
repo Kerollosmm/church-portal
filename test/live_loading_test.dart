@@ -274,6 +274,121 @@ void main() {
       });
     });
 
+    // CodeRabbit (PR #23): the delayed fallback must not overtake a live value
+    // whose seeding re-check is still in flight.
+    SeedGate slowRecheck(Future<bool> Function() second) {
+      var calls = 0;
+      return SeedGate(() {
+        calls++;
+        if (calls == 1) return Future<bool>.error(TimeoutException('cold start'));
+        return second();
+      });
+    }
+
+    test('fallbackDelay: deferred while a live value is being re-checked; the confirmed value wins', () {
+      fakeAsync((async) {
+        final live = StreamController<List<int>>();
+        final got = <List<int>>[];
+        guardSeeded<List<int>>(
+          gate: slowRecheck(() => Future<bool>.delayed(const Duration(seconds: 10), () => throw TimeoutException('slow'))),
+          live: () => live.stream,
+          fallback: const [],
+          confirms: (v) => v.isNotEmpty,
+          fallbackDelay: const Duration(seconds: 8),
+          onSeed: (_) {},
+        ).listen(got.add);
+        async.elapse(const Duration(seconds: 7));
+        live.add([5]); // arrives at 7 s; its re-check answers at 17 s
+        async.elapse(const Duration(seconds: 5)); // 12 s: past the fallback delay
+        expect(got, isEmpty, reason: 'the fallback waits for the re-check in flight');
+        async.elapse(const Duration(seconds: 6)); // 18 s: re-check failed, confirms([5])
+        expect(got, [
+          [5]
+        ]);
+        live.close();
+      });
+    });
+
+    test('fallbackDelay: a deferred fallback goes out once the re-check rejects the value', () {
+      fakeAsync((async) {
+        final live = StreamController<List<int>>();
+        final got = <List<int>>[];
+        guardSeeded<List<int>>(
+          // the re-check finds no settings/church: known unseeded, [5] proves nothing
+          gate: slowRecheck(() => Future<bool>.delayed(const Duration(seconds: 10), () => false)),
+          live: () => live.stream,
+          fallback: const [],
+          confirms: (v) => v.isNotEmpty,
+          fallbackDelay: const Duration(seconds: 8),
+          onSeed: (_) {},
+        ).listen(got.add);
+        async.elapse(const Duration(seconds: 7));
+        live.add([5]);
+        async.elapse(const Duration(seconds: 5));
+        expect(got, isEmpty);
+        async.elapse(const Duration(seconds: 6));
+        expect(got, [<int>[]], reason: 'the fallback fires once, after the re-check');
+        async.elapse(const Duration(seconds: 30));
+        expect(got, hasLength(1));
+        live.close();
+      });
+    });
+
+    test('custom delays: the guard outlasts settleFirst patience + its cache read', () {
+      expect(FirestoreRepository.customFallbackDelay,
+          greaterThan(FirestoreRepository.customPatience + FirestoreRepository.customCacheRead));
+    });
+
+    test('custom stack: a held cache list reaches the page before "unavailable" (offline, seeding check fails)', () {
+      fakeAsync((async) {
+        final source = StreamController<LiveReading<List<int>>>();
+        final got = <List<int>>[];
+        guardSeeded<List<int>>(
+          // every check fails (offline); the re-check of the held list takes 3 s
+          gate: slowRecheck(() => Future<bool>.delayed(const Duration(seconds: 3), () => throw TimeoutException('offline'))),
+          live: () => settleFirst<List<int>>(
+            source: source.stream,
+            patience: FirestoreRepository.customPatience,
+          ),
+          fallback: const [],
+          confirms: (v) => v.isNotEmpty,
+          fallbackDelay: FirestoreRepository.customFallbackDelay,
+          onSeed: (_) {},
+        ).listen(got.add);
+        async.flushMicrotasks();
+        source.add((value: [5], provisional: true, changed: true)); // cache only
+        async.elapse(const Duration(seconds: 30));
+        expect(got.first, [5], reason: 'never "unavailable" first');
+        expect(got, hasLength(1));
+        source.close();
+      });
+    });
+
+    test('custom stack: the cache read at patience also beats the fallback', () {
+      fakeAsync((async) {
+        final source = StreamController<LiveReading<List<int>>>();
+        final got = <List<int>>[];
+        guardSeeded<List<int>>(
+          gate: slowRecheck(() => Future<bool>.error(TimeoutException('offline'))),
+          live: () => settleFirst<List<int>>(
+            source: source.stream, // the listener never answers
+            patience: FirestoreRepository.customPatience,
+            onTimeout: () => Future<List<int>?>.delayed(
+                FirestoreRepository.customCacheRead - const Duration(milliseconds: 500), () => [7]),
+          ),
+          fallback: const [],
+          confirms: (v) => v.isNotEmpty,
+          fallbackDelay: FirestoreRepository.customFallbackDelay,
+          onSeed: (_) {},
+        ).listen(got.add);
+        async.elapse(const Duration(seconds: 30));
+        expect(got, [
+          [7]
+        ]);
+        source.close();
+      });
+    });
+
     test('a stored settings doc replaces the code defaults even when the seeding check cannot answer (bug 3)', () async {
       final live = StreamController<ContactSettings>();
       final got = <ContactSettings>[];

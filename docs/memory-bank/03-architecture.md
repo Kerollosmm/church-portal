@@ -149,8 +149,10 @@ flowchart LR
   (`LiveReading {value, provisional: isFromCache, changed: docChanges.isNotEmpty}`): cache-only readings are held
   back until the server answers, or for at most `customPatience` (8 s; then the held cache reading, or a
   `Source.cache` read when the listener said nothing), after which only readings that changed something pass;
-  and (b) calls `guardSeeded(..., fallbackDelay: customPatience)`, so an unanswered seeding check no longer emits the
-  empty fallback at once. Result: `/section/<slug>` and `/page/<slug>` stay on their loading skeleton until the data
+  and (b) calls `guardSeeded(..., fallbackDelay: customFallbackDelay)` (13 s: longer than the 8 s patience + the 4 s
+  `customCacheRead`, so the held / cached list always reaches the guard first), so an unanswered seeding check no
+  longer emits the empty fallback at once; the delayed fallback is also deferred while a live value's seeding
+  re-check is in flight, and goes out only if that re-check rejects the value. Result: `/section/<slug>` and `/page/<slug>` stay on their loading skeleton until the data
   has loaded (never a premature «هذه الصفحة غير متاحة حاليًا»), and an items list can no longer stay on its
   placeholders forever. Unit tests: `test/live_loading_test.dart`.
 - Timestamps are normalised to UTC `DateTime` (`normalizeFirestoreValue`) before `fromMap`.

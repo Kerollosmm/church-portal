@@ -129,7 +129,7 @@ item's `imageStyle` else the category's), description, call / WhatsApp, and a li
 `context.go`, else `openUrl`). Hidden / unknown slug → `ContentUnavailable` (`Key('categoryUnavailable')`,
 `noindex`); no items → «لا توجد عناصر في هذا القسم بعد». Gated by `Sections.customSections` (all categories and
 their menu entries) plus each category's own `visible`. **PR #23:** the page (and its items list) stays on the
-loading skeleton until the categories / items have actually loaded from the server — a cold deep link no longer
+loading skeleton until the categories / items have loaded from the server, or 8 s pass without an answer — a cold deep link no longer
 flashes «غير متاحة» from a stale cache, and the items can no longer stay on placeholders forever (`settleFirst`,
 8 s patience then the cache; see 03-architecture).
 

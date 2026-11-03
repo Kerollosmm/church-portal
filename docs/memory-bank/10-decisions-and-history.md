@@ -563,7 +563,7 @@ supersede them.
   the tree-shaken `MaterialIcons-Regular.otf` under the same name every build, so phones kept an older subset
   without the new glyphs (the live font has them); the nav's coloured `Container` hid the `ListTile` highlight.
 - **Decision:** `settleFirst` (hold cache-only readings until the server answers, at most 8 s, then the held reading
-  or a cache read; afterwards forward real changes only) + `guardSeeded(fallbackDelay:)` for the three custom
+  or a cache read; afterwards forward real changes only) + `guardSeeded(fallbackDelay: 13 s)` (deferred while a re-check is in flight) for the three custom
   collections; `confirms: !identical(v, default)` for `settings/features`, `settings/contact`, `settings/assistant`;
   the contact dropdown is re-keyed by its ids; `tool/fingerprint_icon_fonts.py` in CI and deploy; the admin nav is a
   `Material` with one colour scheme (burgundy icons, ink labels, burgundy + gold highlight when selected) and a

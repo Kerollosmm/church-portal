@@ -184,6 +184,10 @@ Stream<T> guardSeeded<T>({
   var cancelled = false;
   var done = false;
   var emitted = false;
+  // A live value is waiting for its seeding re-check: the delayed fallback
+  // must not overtake it ([fallbackDue] then fires once the re-check fails).
+  var rechecking = false;
+  var fallbackDue = false;
   Timer? fallbackTimer;
   void mark(bool v) {
     onSeedNow = v;
@@ -208,8 +212,15 @@ Stream<T> guardSeeded<T>({
           // No bundled copy worth showing (custom content): give the live
           // query [fallbackDelay] to answer before settling on the fallback,
           // so a page never says "not available" while its data is on its way.
+          // A live value still on its re-check defers the fallback until the
+          // re-check has answered (it may confirm the value instead).
           fallbackTimer = Timer(fallbackDelay, () {
-            if (!cancelled && !emitted) emit(fallback, seed: true);
+            if (cancelled || emitted) return;
+            if (rechecking) {
+              fallbackDue = true;
+            } else {
+              emit(fallback, seed: true);
+            }
           });
         }
       }
@@ -218,13 +229,22 @@ Stream<T> guardSeeded<T>({
       s.onData((v) async {
         if (!confirmed) {
           s.pause(); // keep values in order while re-checking
+          rechecking = true;
           try {
             final seeded = await gate.check();
             confirmed = seeded || (!gate.markerAbsent && (confirms?.call(v) ?? false));
           } finally {
+            rechecking = false;
             if (!cancelled) s.resume();
           }
-          if (!confirmed || cancelled) return;
+          if (cancelled) return;
+          if (!confirmed) {
+            if (fallbackDue && !emitted) {
+              fallbackDue = false;
+              emit(fallback, seed: true);
+            }
+            return;
+          }
         }
         emit(v, seed: false);
       });
@@ -385,8 +405,17 @@ class FirestoreRepository implements ContentRepository {
       );
 
   /// How long custom content (no bundled copy) waits for the server before
-  /// settling on the cache / the empty fallback.
+  /// settling on the held / cached reading ([settleFirst] patience).
   static const customPatience = Duration(seconds: 8);
+
+  /// Timeout of the `Source.cache` read [settleFirst] falls back to.
+  static const customCacheRead = Duration(seconds: 4);
+
+  /// How long the seeding fallback (the empty list) waits when the seeding
+  /// check cannot answer. Longer than [customPatience] + [customCacheRead]
+  /// (+1 s margin), so the cached list [settleFirst] emits at its patience
+  /// always reaches the guard first and "not available" never wins the race.
+  static const customFallbackDelay = Duration(seconds: 13);
 
   List<T> _docs<T>(QuerySnapshot<Map<String, dynamic>> snap, T Function(String, Map<String, dynamic>) f) =>
       snap.docs.map((d) => f(d.id, normalizeDoc(d.data()))).toList();
@@ -395,7 +424,7 @@ class FirestoreRepository implements ContentRepository {
   /// is no bundled copy, so a cache-only or fallback empty list must not be
   /// shown as "this does not exist" (PR #23). The live query reports cache
   /// readings as provisional ([settleFirst]) and the seeding fallback waits
-  /// [customPatience] ([guardSeeded] `fallbackDelay`).
+  /// [customFallbackDelay] ([guardSeeded] `fallbackDelay`).
   Stream<List<T>> _custom<T>(String name, T Function(String, Map<String, dynamic>) f) => _guard(
         name,
         () {
@@ -408,12 +437,12 @@ class FirestoreRepository implements ContentRepository {
                 )),
             patience: customPatience,
             onTimeout: () async =>
-                _docs(await col.get(const GetOptions(source: Source.cache)).timeout(const Duration(seconds: 4)), f),
+                _docs(await col.get(const GetOptions(source: Source.cache)).timeout(customCacheRead), f),
           );
         },
         <T>[],
         confirms: (list) => list.isNotEmpty,
-        fallbackDelay: customPatience,
+        fallbackDelay: customFallbackDelay,
       );
 
   Stream<List<T>> _col<T>(String name, T Function(String, Map<String, dynamic>) f, List<T> fallback,
