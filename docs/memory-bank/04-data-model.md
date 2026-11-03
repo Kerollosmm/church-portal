@@ -326,7 +326,8 @@ createdAt` (no name / phone / email at all). Admin-only: `status` also `contacte
 `categories: {<id>: string}`, 1–12 entries. **Ids are stable and never reused (PR #19):** the defaults are
 `c1…c4`, every type an admin adds gets `newContactCategoryId` = `c` + 10 random lower-case letters / digits (never
 digits only, never an id removed in the editor), so deleting a type never re-labels its old messages (they show
-under "Other / deleted type"). Legacy slot ids `c5…c12` stay valid. Each entry is one string `kind␟on␟anon␟order␟labelAr␟labelEn␟subtypes` (on / anon
+under "Other / deleted type"). The rules check only the id format (`c[0-9a-z]{1,15}`); non-reuse is guaranteed by
+the editor (random ids), not by the rules. Legacy slot ids `c5…c12` stay valid. Each entry is one string `kind␟on␟anon␟order␟labelAr␟labelEn␟subtypes` (on / anon
 `1`/`0`; anon only for complaint / suggestion; `labelAr` 1–80 not blank, `labelEn` ≤ 80; up to 8 subtypes
 `key|labelAr|labelEn` joined by U+001E, Arabic label 1–60). **Missing doc = code defaults**
 (`ContactSettings.defaults` = rules `defaultContactCats()`): c1 general inquiry, c2 hall booking (wedding فرح /

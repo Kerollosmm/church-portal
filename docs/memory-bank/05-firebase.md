@@ -285,8 +285,8 @@ console.
      `showContacts`, links when `showSocials` **and** the socials section is on. **PR #19:** **Contact form and
      bookings** (contactForm: every visible contact type with its behaviour — booking needs mobile + date, its
      occasions, "can be sent anonymously"); **custom sections** (customSections: each public category with its
-     path `/section/<slug>`, intro clipped to 300, up to 30 visible items with description clipped to 300, phone
-     and link); **custom pages** (customPages: each public page with its path `/page/<slug>`, subtitle, headings,
+     path `/section/<slug>`, at most 20 sections, intro clipped to 300, up to 30 visible items with description clipped to 300, phone
+     and link); **custom pages** (customPages: at most 20 public pages, each with its path `/page/<slug>`, subtitle, headings,
      paragraphs clipped to 400, buttons / links, donation account / InstaPay / wallet; ≤ 2,500 chars per page — a
      block that does not fit is skipped and later shorter ones still go in).
      Never any image / gallery data. Every bilingual field goes through `_bi(ar, en)`.

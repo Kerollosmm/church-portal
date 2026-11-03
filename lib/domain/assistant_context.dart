@@ -380,7 +380,7 @@ void _customContent(
   List<CustomPage> pages,
 ) {
   if (f.enabled(Sections.customSections)) {
-    for (final c in publicCategories(categories)) {
+    for (final c in publicCategories(categories).take(_maxCustomCategories)) {
       final items = entriesOf(c.id, entries);
       final intro = _bi(_clip(c.introAr, 300), _clip(c.introEn, 300));
       b
@@ -399,7 +399,7 @@ void _customContent(
     }
   }
   if (f.enabled(Sections.customPages)) {
-    for (final p in publicPages(pages)) {
+    for (final p in publicPages(pages).take(_maxCustomPages)) {
       final sub = _bi(p.subtitleAr, p.subtitleEn);
       b
         ..writeln()
@@ -432,6 +432,8 @@ void _customContent(
 
 // One admin section / page cannot flood the instruction.
 const _maxCustomItems = 30;
+const _maxCustomCategories = 20;
+const _maxCustomPages = 20;
 const _pageTextBudget = 2500;
 
 /// What the instruction grounds from the items' detail pages and their

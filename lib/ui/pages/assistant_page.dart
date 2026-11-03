@@ -9,6 +9,7 @@ import '../../domain/assistant_context.dart';
 import '../../domain/assistant_conversation.dart';
 import '../../domain/assistant_settings.dart';
 import '../../domain/contact_categories.dart';
+import '../../domain/custom_content.dart';
 import '../../domain/cairo_time.dart';
 import '../../domain/features.dart';
 import '../../domain/time_format.dart';
@@ -103,26 +104,42 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
 
   AssistantSettings get _settings => ref.read(assistantSettingsProvider).value ?? AssistantSettings.defaults;
 
-  String _buildInstruction() => buildAssistantInstruction(
-        settings: ref.read(settingsProvider).requireValue,
-        liturgies: ref.read(liturgiesProvider).value ?? const [],
-        seasons: ref.read(seasonsProvider).value ?? const [],
-        clinics: ref.read(clinicsProvider).value ?? const [],
-        meetings: ref.read(meetingsProvider).value ?? const [],
-        activities: ref.read(activitiesProvider).value ?? const [],
-        facilities: ref.read(facilitiesProvider).value ?? const [],
-        now: CairoTime.now(),
-        features: ref.read(featuresProvider),
-        alerts: ref.read(alertsProvider).value ?? const [],
-        priests: ref.read(priestsProvider).value ?? const [],
-        saints: ref.read(saintsProvider).value ?? const [],
-        milestones: ref.read(milestonesProvider).value ?? const [],
-        assistant: _settings,
-        categories: ref.read(categoriesProvider).value ?? const [],
-        entries: ref.read(entriesProvider).value ?? const [],
-        pages: ref.read(customPagesProvider).value ?? const [],
-        contact: ref.read(contactSettingsProvider).value ?? ContactSettings.defaults,
-      );
+  /// Contact types / custom sections / custom pages, read only while their
+  /// section is on (a switched-off section's provider is never subscribed).
+  ({ContactSettings contact, List<CustomCategory> categories, List<CategoryEntry> entries, List<CustomPage> pages})
+      _customInputs(FeatureSettings f) => (
+            contact: f.enabled(Sections.contactForm)
+                ? (ref.read(contactSettingsProvider).value ?? ContactSettings.defaults)
+                : ContactSettings.defaults,
+            categories: f.enabled(Sections.customSections) ? (ref.read(categoriesProvider).value ?? const []) : const [],
+            entries: f.enabled(Sections.customSections) ? (ref.read(entriesProvider).value ?? const []) : const [],
+            pages: f.enabled(Sections.customPages) ? (ref.read(customPagesProvider).value ?? const []) : const [],
+          );
+
+  String _buildInstruction() {
+    final f = ref.read(featuresProvider);
+    final c = _customInputs(f);
+    return buildAssistantInstruction(
+      settings: ref.read(settingsProvider).requireValue,
+      liturgies: ref.read(liturgiesProvider).value ?? const [],
+      seasons: ref.read(seasonsProvider).value ?? const [],
+      clinics: ref.read(clinicsProvider).value ?? const [],
+      meetings: ref.read(meetingsProvider).value ?? const [],
+      activities: ref.read(activitiesProvider).value ?? const [],
+      facilities: ref.read(facilitiesProvider).value ?? const [],
+      now: CairoTime.now(),
+      features: f,
+      alerts: ref.read(alertsProvider).value ?? const [],
+      priests: ref.read(priestsProvider).value ?? const [],
+      saints: ref.read(saintsProvider).value ?? const [],
+      milestones: ref.read(milestonesProvider).value ?? const [],
+      assistant: _settings,
+      categories: c.categories,
+      entries: c.entries,
+      pages: c.pages,
+      contact: c.contact,
+    );
+  }
 
   /// Enabled sections + detail grounding + contact types / custom sections /
   /// pages grounding: when any of them changes, earlier turns (possibly
@@ -140,13 +157,9 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
       saints: ref.read(saintsProvider).value ?? const [],
       milestones: ref.read(milestonesProvider).value ?? const [],
     );
+    final c = _customInputs(f);
     final custom = assistantCustomSignature(
-      features: f,
-      contact: ref.read(contactSettingsProvider).value ?? ContactSettings.defaults,
-      categories: ref.read(categoriesProvider).value ?? const [],
-      entries: ref.read(entriesProvider).value ?? const [],
-      pages: ref.read(customPagesProvider).value ?? const [],
-    );
+        features: f, contact: c.contact, categories: c.categories, entries: c.entries, pages: c.pages);
     // The allowed topics too: answers about a topic an admin removed are not
     // replayed.
     final topics = _settings.effectiveTopics.join('\n');

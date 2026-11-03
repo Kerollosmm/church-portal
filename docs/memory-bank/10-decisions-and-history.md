@@ -446,7 +446,8 @@ supersede them.
   messages. Since PR #19 categories have **stable ids that are never reused**: the defaults keep `c1…c4`, every new
   type gets `newContactCategoryId` = `c` + 10 random lower-case letters / digits (never digits only, never an id
   removed in the editor). Messages of a deleted type stay under "Other / deleted type". Rules accept any id matching
-  `c[0-9a-z]{1,15}` (1–12 entries, keys read by position — `contactCatAt`).
+  `c[0-9a-z]{1,15}` (1–12 entries, keys read by position — `contactCatAt`); they check the format only — non-reuse
+  is the editor's guarantee (no record of retired ids; only admins write).
 
 ## ADR-029 (PR #19) — The assistant on web + Android: App Check, a free model, scope and admin settings
 

@@ -848,10 +848,12 @@ service cloud.firestore {
     }
 
     // ------------------- contact categories (ADR-028) -------------------
-    // Category ids are stable and never reused (PR #19): the four defaults
-    // keep c1…c4 and every category an admin adds gets a fresh random id
-    // ('c' + 10 lower-case letters / digits), so deleting a type and adding
-    // another never re-labels the messages of the deleted one. The legacy
+    // Category ids are stable (PR #19): the four defaults keep c1…c4 and the
+    // admin editor gives every new category a fresh random id ('c' + 10
+    // lower-case letters / digits, never one it removed), so deleting a type
+    // and adding another does not re-label the deleted one's messages. The
+    // rules only check the id FORMAT (there is no record of retired ids, and
+    // only admins can write); non-reuse is the client's guarantee. The legacy
     // slots c5…c12 still match.
     function contactIdOk(k) {
       return k is string && k.matches('c[0-9a-z]{1,15}');
