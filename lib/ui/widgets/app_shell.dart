@@ -27,8 +27,10 @@ class NavItem {
 /// Menu entries of admin-defined categories ("Church services" group) and
 /// of custom pages switched into the menu ("The church" group).
 ({List<NavItem> categories, List<NavItem> pages}) customNavItems(WidgetRef ref) {
-  final cats = ref.watch(categoriesProvider).value ?? const [];
-  final pages = ref.watch(customPagesProvider).value ?? const [];
+  final f = ref.watch(featuresProvider);
+  // Each list follows its section switch (Sections.customSections / customPages).
+  final cats = f.enabled(Sections.customSections) ? ref.watch(categoriesProvider).value ?? const [] : const [];
+  final pages = f.enabled(Sections.customPages) ? ref.watch(customPagesProvider).value ?? const [] : const [];
   return (
     categories: [
       for (final c in cats)

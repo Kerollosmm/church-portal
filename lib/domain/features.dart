@@ -29,10 +29,12 @@ class Sections {
   static const assistant = 'assistant'; // "Ask the church"
   static const media = 'media'; // optional images on cards (priests, saints, milestones, activities, alerts, seasons)
   static const dailyVerse = 'dailyVerse'; // home "verse of the day" card (ADR-024)
+  static const customSections = 'customSections'; // admin-defined categories at /section/<slug> (ADR-027)
+  static const customPages = 'customPages'; // admin-built pages at /page/<slug> (ADR-027)
 
   static const all = [
     schedule, meetings, clinics, services, history, milestones, saints, priests, departedPriests, //
-    activities, alerts, contactInfo, socials, contactForm, assistant, media, dailyVerse,
+    activities, alerts, contactInfo, socials, contactForm, assistant, media, dailyVerse, customSections, customPages,
   ];
 
   /// [ar, en] labels used in the admin toggles screen.
@@ -54,6 +56,8 @@ class Sections {
     assistant: ['اسأل الكنيسة (المساعد الذكي)', 'Ask the church (AI assistant)'],
     media: ['الصور (إظهار صور الآباء والشفعاء والأنشطة…)', 'Images (show photos on priests, saints, activities…)'],
     dailyVerse: ['آية اليوم في الصفحة الرئيسية', 'Verse of the day on the home page'],
+    customSections: ['الأقسام المخصصة (وصفحاتها وروابطها في القائمة)', 'Custom sections (their pages and menu entries)'],
+    customPages: ['الصفحات المخصصة (مثل صفحة التبرعات)', 'Custom pages (e.g. a donations page)'],
   };
 }
 
@@ -436,6 +440,10 @@ const routeSections = <String, List<String>>{
   '/about': [Sections.history, Sections.saints, Sections.priests, Sections.departedPriests],
   '/contact': [Sections.contactInfo, Sections.socials, Sections.contactForm],
   '/ask': [Sections.assistant],
+  // Admin-defined content (ADR-027): `/section/<slug>` and `/page/<slug>`
+  // follow their top-level entry (prefix-aware `sectionsForPath`).
+  '/section': [Sections.customSections],
+  '/page': [Sections.customPages],
 };
 
 /// Detail sub-routes under `/about` and the sections that keep them alive.

@@ -120,14 +120,16 @@ An admin-defined category: poster header with its name, optional intro panel, th
 (`entriesOf`) as `EntryCard`s in the `ResponsiveGrid` with `CardCover` / `CardLead` (collection `entries`, the
 item's `imageStyle` else the category's), description, call / WhatsApp, and a link button (in-app path via
 `context.go`, else `openUrl`). Hidden / unknown slug → `ContentUnavailable` (`Key('categoryUnavailable')`,
-`noindex`); no items → «لا توجد عناصر في هذا القسم بعد». Not behind a section switch (each category has `visible`).
+`noindex`); no items → «لا توجد عناصر في هذا القسم بعد». Gated by `Sections.customSections` (all categories and
+their menu entries) plus each category's own `visible`.
 
 ### `/page/<slug>` — `custom_page.dart` `CustomPageView` (PR #18, ADR-027)
 Header (title + subtitle), optional hero `FittedCover`, then the blocks (`PageBlockView`): heading (semantic
 header), paragraph (selectable), image (https link + caption), button (`FilledButton`), text link, donation info
 (`DonationInfoCard`: bank account / InstaPay / wallet with copy buttons, notes, «للعلم فقط: لا يتم أي دفع عبر
 الموقع»). Empty blocks are skipped. Hidden / unknown → `Key('pageUnavailable')`, `noindex`. Pages are reached from
-notices («اعرف المزيد»), buttons or links, and appear in the menu only with `showInNav`.
+notices («اعرف المزيد»), buttons or links, and appear in the menu only with `showInNav`. Gated by
+`Sections.customPages` plus each page's `visible`.
 
 ### Menu entries for custom content (PR #18)
 `customNavItems(ref)` (`app_shell.dart`): categories with `showInNav` are appended to the "Church services" popup

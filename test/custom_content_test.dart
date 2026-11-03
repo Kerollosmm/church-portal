@@ -12,6 +12,7 @@ import 'package:church_portal/data/seed_data.dart';
 import 'package:church_portal/domain/cairo_time.dart';
 import 'package:church_portal/domain/contact_categories.dart';
 import 'package:church_portal/domain/custom_content.dart';
+import 'package:church_portal/domain/features.dart' show Sections;
 import 'package:church_portal/domain/rules.dart';
 import 'package:church_portal/router.dart';
 import 'package:church_portal/state/providers.dart';
@@ -21,12 +22,18 @@ import 'package:church_portal/ui/admin/admin_validators.dart';
 import 'package:church_portal/ui/admin/collection_list.dart';
 import 'package:church_portal/ui/admin/contact_admin.dart';
 import 'package:church_portal/ui/admin/doc_editor.dart';
+import 'package:church_portal/ui/widgets/feature_gate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
 
-SeedData _seed() => SeedData(jsonDecode(File('assets/seed/seed.json').readAsStringSync()) as Map<String, dynamic>);
+SeedData _seed([Map<String, bool> sections = const {}]) {
+  final raw = jsonDecode(File('assets/seed/seed.json').readAsStringSync()) as Map<String, dynamic>;
+  final f = raw['settings']['features'] as Map;
+  f['sections'] = {...(f['sections'] as Map), ...sections};
+  return SeedData(raw);
+}
 
 const _cats = [
   CustomCategory(id: 'k1', slug: 'youth-trips', nameAr: 'رحلات الشباب', nameEn: 'Youth trips', introEn: 'Trips intro', order: 20),
@@ -55,7 +62,7 @@ const _pages = [
 
 /// Seed data plus custom categories / pages; records contact submissions.
 class _Repo extends SeedRepository {
-  _Repo() : super(_seed());
+  _Repo([Map<String, bool> sections = const {}]) : super(_seed(sections));
   final sent = <Map<String, dynamic>>[];
   @override
   Stream<List<CustomCategory>> categories() => Stream.value(_cats);
@@ -379,6 +386,19 @@ void main() {
       expect(find.text('Library'), findsNothing, reason: 'showInNav off');
       expect(find.text('Hidden'), findsNothing);
       expect(find.text('Building donations'), findsOneWidget);
+    });
+
+    testWidgets('section switches: custom sections / pages off → not available and out of the menu', (tester) async {
+      final (router, _) = await _pump(tester, '/section/youth-trips',
+          repo: _Repo({Sections.customSections: false, Sections.customPages: false}));
+      expect(find.byType(SectionUnavailable), findsOneWidget);
+      router.go('/page/donate');
+      await tester.pumpAndSettle();
+      expect(find.byType(SectionUnavailable), findsOneWidget);
+      await tester.tap(find.byTooltip('Menu'));
+      await tester.pumpAndSettle();
+      expect(find.text('Youth trips'), findsNothing);
+      expect(find.text('Building donations'), findsNothing);
     });
 
     testWidgets('contact form: choose a type; anonymous hides identity fields and says so', (tester) async {

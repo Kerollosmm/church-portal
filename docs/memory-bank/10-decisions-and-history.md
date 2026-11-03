@@ -400,6 +400,10 @@ supersede them.
   - Deleting a category asks for confirmation and first sets `visible: false` on each of its visible items, then
     deletes the category doc; items are never deleted. An item whose category no longer exists is never shown
     publicly (its page is gone) and can be reassigned (the editor shows «قسم محذوف أو غير محدد»).
+  - Two section switches (Codex review): `Sections.customSections` gates `/section/*` and the category menu
+    entries, `Sections.customPages` gates `/page/*` and the page menu entries (`routeSections['/section' | '/page']`,
+    prefix-aware), so all custom content can be switched off at once (rule 6 of `AGENTS.md`). Seed and rules
+    `sectionKeys()` list them (on).
   - Missing collections = empty (not in the seed; the seed is not run): the public site looks exactly as before
     until an admin creates something.
 - **Page blocks:** heading, paragraph, image (https link + caption), button and text link (in-app path or URL,

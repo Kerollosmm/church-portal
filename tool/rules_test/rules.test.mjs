@@ -1192,6 +1192,10 @@ describe('ADR-027: custom categories, their items and custom pages', () => {
     await assertFails(updateDoc(doc(ed, 'pages', 'big'), { blocks: [block({ type: 'nope' })] }));
   });
 
+  test('the two custom-content section switches are known keys', async () => {
+    await assertSucceeds(setDoc(doc(db(EDITOR), 'settings', 'features'), { sections: { customSections: false, customPages: true } }));
+  });
+
   test('alerts link to a custom page, a section, a route or an external URL', async () => {
     const ed = db(EDITOR);
     for (const link of ['/page/new-building-donations', '/section/youth-trips', '/mass-schedule', 'https://example.org/x', '']) {
@@ -1233,6 +1237,8 @@ describe('ADR-028: contact categories, bookings and anonymous messages', () => {
     await reset();
     await assertSucceeds(send(pub, booking));
     await reset();
+    await assertSucceeds(send(pub, { ...booking, preferredDate: '2028-02-29' }), 'leap day');
+    await reset();
     await assertSucceeds(send(pub, anon));
     await reset();
     await assertSucceeds(send(pub, { ...anon, category: 'c4', kind: 'suggestion' }));
@@ -1260,6 +1266,8 @@ describe('ADR-028: contact categories, bookings and anonymous messages', () => {
       { ...general, category: 1 }, { ...general, kind: undefined }, { ...general, preferredDate: '2027-01-01' },
       { ...booking, phone: '' }, { ...booking, phone: undefined, email: 'a@b.co' }, { ...booking, preferredDate: '14/02/2027' },
       { ...booking, preferredDate: undefined }, { ...booking, bookingType: 'Wedding Party' },
+      { ...booking, preferredDate: '2027-02-31' }, { ...booking, preferredDate: '2027-04-31' },
+      { ...booking, preferredDate: '2027-02-29' }, { ...booking, preferredDate: '1999-12-01' },
       { ...general, message: 'x'.repeat(1001) }, { ...general, name: 'x' }, { ...general, extra: 1 },
       { kind: 'general', name: 'Mina', phone: '01012345678', message: 'Hello there' },
     ]) {

@@ -200,8 +200,8 @@ flowchart LR
 | `/about/priests/:id` | `ItemDetailPage(priest)` | any of priests, departedPriests (+ the page checks the section matching the father's status) |
 | `/about/saints/:id` | `ItemDetailPage(saint)` | saints |
 | `/about/milestones/:id` | `ItemDetailPage(milestone)` | milestones |
-| `/section/:slug` | `CategoryPage` (PR #18) | none (the category's own `visible`) |
-| `/page/:slug` | `CustomPageView` (PR #18) | none (the page's own `visible`) |
+| `/section/:slug` | `CategoryPage` (PR #18) | customSections (+ the category's own `visible`) |
+| `/page/:slug` | `CustomPageView` (PR #18) | customPages (+ the page's own `visible`) |
 | `/admin` (`AppConfig.adminPath`) | `admin_page.AdminPage` (deferred, `fullScreen` placeholder) | outside the shell, not gated, not linked anywhere public |
 | anything else | `errorBuilder` → `AppShell` + "Page not found" + Back home | — |
 

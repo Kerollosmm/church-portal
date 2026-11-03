@@ -549,7 +549,7 @@ service cloud.firestore {
     function sectionKeys() {
       return ['schedule', 'meetings', 'clinics', 'services', 'history', 'milestones', 'saints', 'priests',
               'departedPriests', 'activities', 'alerts', 'contactInfo', 'socials', 'contactForm', 'assistant', 'media',
-              'dailyVerse'];
+              'dailyVerse', 'customSections', 'customPages'];
     }
 
     // Known section keys only, and every value a bool.
@@ -928,7 +928,8 @@ service cloud.firestore {
         && (d.get('kind', 'general') == 'booking'
               ? (('phone' in d) && d.phone != ''
                  && d.get('preferredDate', '') is string
-                 && d.get('preferredDate', '').matches('20[0-9]{2}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])')
+                 // A real calendar date in 2000–2099 (days per month; 29 Feb only in leap years).
+                 && d.get('preferredDate', '').matches('20[0-9]{2}-((0[13578]|1[02])-(0[1-9]|[12][0-9]|3[01])|(0[469]|11)-(0[1-9]|[12][0-9]|30)|02-(0[1-9]|1[0-9]|2[0-8]))|20(0[048]|[2468][048]|[13579][26])-02-29')
                  && (!('bookingType' in d) || (d.bookingType is string && d.bookingType.matches('[a-z0-9_-]{1,30}'))))
               : !d.keys().hasAny(['bookingType', 'preferredDate']));
     }
