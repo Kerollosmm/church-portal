@@ -303,7 +303,7 @@ List<AdminDest> adminDestinations(String role) => [
   const AdminDest('overview', Icons.dashboard_outlined, 'نظرة عامة', 'Overview'),
   const AdminDest('features', Icons.toggle_on_outlined, 'الأقسام والصفحة الرئيسية', 'Sections & home page'),
   const AdminDest('church', Icons.church_outlined, 'بيانات الكنيسة', 'Church info'),
-  const AdminDest('assistant', Icons.auto_awesome_outlined, 'المساعد الذكي', 'AI assistant'),
+  const AdminDest('assistant', Icons.smart_toy_outlined, 'المساعد الذكي', 'AI assistant'),
   for (final c in adminCollections) AdminDest(c.id, adminIcon(c.icon), c.labelAr, c.labelEn),
   const AdminDest('messages', Icons.mail_outline, 'رسائل الزوار', 'Contact messages'),
   const AdminDest('contactCats', Icons.forum_outlined, 'أنواع رسائل التواصل', 'Contact form types'),
@@ -362,7 +362,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
   Widget _nav(BuildContext context, {required bool inDrawer}) {
     final dests = adminDestinations(widget.role);
-    return Container(
+    // A Material (not a coloured Container) so the selected tile's highlight
+    // is painted where it can be seen (PR #23: it was hidden under the
+    // Container colour, leaving only the text tinted).
+    return Material(
       color: AppColors.parchment,
       child: SafeArea(
         child: ListView(
@@ -398,10 +401,17 @@ class _AdminDashboardState extends State<AdminDashboard> {
               ListTile(
                 key: ValueKey('nav-${d.id}'),
                 dense: true,
-                leading: Icon(d.icon, color: AppColors.burgundy),
+                leading: Icon(d.icon),
                 title: Text(context.pick(d.labelAr, d.labelEn), style: const TextStyle(fontWeight: FontWeight.w600)),
                 selected: _current == d.id,
+                // Same colours for every entry: burgundy icons, ink labels;
+                // the selected one gets a gold highlight and a burgundy
+                // label (icon and text alike).
+                iconColor: AppColors.burgundy,
+                textColor: AppColors.ink,
+                selectedColor: AppColors.burgundy,
                 selectedTileColor: AppColors.gold.withValues(alpha: 0.22),
+                shape: const RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(10))),
                 onTap: () {
                   if (inDrawer) Navigator.of(context).pop();
                   _open(d.id);

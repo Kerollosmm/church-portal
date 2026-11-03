@@ -56,6 +56,12 @@ wanted settings and message deletion owner-only; the implementation deliberately
 clinics, facilities, activities, priests, departedPriests, saints, milestones, **categories** (Custom sections),
 **entries** (Section items), **pages** (Custom pages) — PR #18) → `messages` → `contactCats` (Contact form types,
 PR #18) → `admins` (owners only).
+Every entry has its own icon (`adminIcon`; the assistant uses `smart_toy_outlined` since PR #23 so it no longer
+shares saints' `auto_awesome_outlined`). The nav is a `Material` (not a coloured `Container`, which hid the tiles'
+ink), so the selected entry shows the gold highlight; icons are burgundy, labels ink, and the selected entry's icon
+and label are both burgundy (`ListTile.iconColor/textColor/selectedColor`, PR #23). The PR #18 entries (custom
+sections, section items, custom pages, contact form types) drew without icons on phones that had cached an older
+tree-shaken icon font for 7 days — fixed by fingerprinting the icon fonts (05-firebase, Hosting headers).
 The app bar shows "Admin — <screen>", a 🌐 button to the public site and the language toggle; the nav shows the
 signed-in email + role and Sign out.
 

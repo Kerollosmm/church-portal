@@ -128,7 +128,10 @@ An admin-defined category: poster header with its name, optional intro panel, th
 item's `imageStyle` else the category's), description, call / WhatsApp, and a link button (in-app path via
 `context.go`, else `openUrl`). Hidden / unknown slug → `ContentUnavailable` (`Key('categoryUnavailable')`,
 `noindex`); no items → «لا توجد عناصر في هذا القسم بعد». Gated by `Sections.customSections` (all categories and
-their menu entries) plus each category's own `visible`.
+their menu entries) plus each category's own `visible`. **PR #23:** the page (and its items list) stays on the
+loading skeleton until the categories / items have actually loaded from the server — a cold deep link no longer
+flashes «غير متاحة» from a stale cache, and the items can no longer stay on placeholders forever (`settleFirst`,
+8 s patience then the cache; see 03-architecture).
 
 ### `/page/<slug>` — `custom_page.dart` `CustomPageView` (PR #18, ADR-027)
 Header (title + subtitle), optional hero `FittedCover`, then the blocks (`PageBlockView`): heading (semantic
@@ -136,7 +139,7 @@ header), paragraph (selectable), image (https link + caption), button (`FilledBu
 (`DonationInfoCard`: bank account / InstaPay / wallet with copy buttons, notes, «للعلم فقط: لا يتم أي دفع عبر
 الموقع»). Empty blocks are skipped. Hidden / unknown → `Key('pageUnavailable')`, `noindex`. Pages are reached from
 notices («اعرف المزيد»), buttons or links, and appear in the menu only with `showInNav`. Gated by
-`Sections.customPages` plus each page's `visible`.
+`Sections.customPages` plus each page's `visible`. Loading follows the same rule as `/section/<slug>` (PR #23).
 
 ### Menu entries for custom content (PR #18)
 `customNavItems(ref)` (`app_shell.dart`): categories with `showInNav` are appended to the "Church services" popup
@@ -366,7 +369,9 @@ digits, Cairo `02` + 8, Alexandria `03` + 7, other governorates `0[4-9]` + 7–8
   typed text. Consent is **not** written to Firestore (payload keys unchanged, rules untouched); the box is cleared
   after a successful send.
 - **Categories (PR #18, ADR-028):** a «نوع الرسالة» dropdown (`Key('contactCategory')`, shown when more than one
-  type is on) from `contactSettingsProvider` (`settings/contact`, else code defaults). **Hall booking**: occasion
+  type is on) from `contactSettingsProvider` (`settings/contact`, else code defaults). The admin's stored list
+  always wins over the defaults once it is read, even when the seeding check cannot answer, and the dropdown is
+  re-keyed by the list of ids so a newly arrived list replaces the defaults in place (PR #23). **Hall booking**: occasion
   chips (`subtype-<key>`), a preferred date (`Key('preferredDate')`, date picker from today; `ContactError.dateInvalid`
   for a past / malformed date on the Cairo calendar), phone required (`ContactError.phoneRequired`), occasion
   required when the type has some (`subtypeRequired`). **Complaint / suggestion** with anonymous allowed: «إرسال دون

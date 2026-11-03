@@ -12,7 +12,6 @@ import 'data/content_repository.dart';
 import 'data/firebase_bootstrap.dart';
 import 'data/media_repository.dart';
 import 'data/seed_data.dart';
-import 'diag_tmp.dart';
 import 'domain/cairo_time.dart';
 import 'state/providers.dart';
 
@@ -30,12 +29,6 @@ Future<void> main() async {
     }
   });
   CairoTime.ensureInitialized();
-  if (kIsWeb && Uri.base.queryParameters['diag'] == '1') {
-    final sw = Stopwatch()..start();
-    final st = await bootstrapFirebase();
-    runApp(DiagApp(boot: 'available=${st.available} appCheck=${st.appCheckActive} err=${st.error} in ${sw.elapsedMilliseconds} ms'));
-    return;
-  }
 
   final results = await Future.wait([SeedData.load(), bootstrapFirebase()]);
   final seed = results[0] as SeedData;

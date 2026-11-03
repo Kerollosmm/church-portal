@@ -9,6 +9,7 @@ flutter analyze
 flutter test
 flutter run -d chrome        # or: flutter run -d web-server --web-port 8080 --web-hostname 0.0.0.0
 flutter build web --release  # -> build/web (what Hosting serves)
+python3 tool/fingerprint_icon_fonts.py build/web   # content-hashed icon font names (PR #23; CI does it)
 ```
 
 - **Codespaces / devcontainer** (`.devcontainer/`): Ubuntu 24.04 + Node 20 + gh; `post-create.sh` clones Flutter
@@ -30,7 +31,7 @@ flutter build web --release  # -> build/web (what Hosting serves)
 | Regenerate seed | `python3 tool/gen_seed.py` → writes `assets/seed/seed.json`, `tool/known_seed_ids.json`, `tool/retired_seed_ids.json` (commit all three) |
 | Rules tests (emulator, Java 11+) | `cd tool/rules_test && npm ci && npm test` (runs `firebase emulators:exec --only firestore --project demo-church-portal`) |
 | Seed preview | `cd tool && npm install && node seed_firestore.js --dry-run` |
-| Deploy (manual) | `flutter build web --release [--dart-define=RECAPTCHA_SITE_KEY=…] && firebase deploy` (or `--only hosting`, `--only firestore:rules,firestore:indexes`) |
+| Deploy (manual) | `flutter build web --release [--dart-define=RECAPTCHA_SITE_KEY=…] && python3 tool/fingerprint_icon_fonts.py build/web && firebase deploy` (or `--only hosting`, `--only firestore:rules,firestore:indexes`) |
 
 ## Seeding Firestore (`tool/seed_firestore.js`)
 
@@ -65,13 +66,14 @@ Runs in the **`production` environment** with the service-account secret. Inputs
 ### `ci.yml` — every push (all branches) and PR; concurrency `ci-<ref>`, cancel in progress
 Job **analyze-test-build** (ubuntu, 30 min): checkout → `subosito/flutter-action@v2` (stable, cached) →
 `flutter --version` → `flutter pub get` → `flutter analyze` → `flutter test` → `flutter build web --release` →
-validate `seed.json` parses (node) → **`python3 tool/gen_seed.py` and `git diff --exit-code`** on `seed.json`,
+`python3 tool/fingerprint_icon_fonts.py build/web` → validate `seed.json` parses (node) → **`python3 tool/gen_seed.py` and `git diff --exit-code`** on `seed.json`,
 `retired_seed_ids.json`, `known_seed_ids.json` (fails if you hand-edited the JSON or forgot to regenerate).
 Job **firestore-rules** (15 min): Java Temurin 21 + Node 22 → `npm ci` in `tool/rules_test` → `npm test` (emulator).
 
 ### `deploy.yml` — push to `main` and PRs (`FIREBASE_PROJECT_ID=asafra-church-portal`)
 1. **build** (skipped for fork PRs): Flutter stable → `pub get` → `flutter test` → `flutter build web --release`,
-   with `--dart-define=RECAPTCHA_SITE_KEY` only on push builds when the repo variable is set → artifact `web-build`
+   with `--dart-define=RECAPTCHA_SITE_KEY` only on push builds when the repo variable is set →
+   `tool/fingerprint_icon_fonts.py` → artifact `web-build`
    (3 days).
 2. **deploy-live** (push to main, needs build, environment `production`, URL the live site): download artifact →
    Node 22 → `./.github/actions/firebase-credentials` → `npx firebase-tools@latest deploy --only hosting:app,hosting:legacy-redirect`

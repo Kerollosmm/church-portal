@@ -211,6 +211,11 @@ App target settings:
   `Strict-Transport-Security: max-age=31536000; includeSubDomains`, `Permissions-Policy: camera=(), microphone=(),
   geolocation=()` (PR 1, SEC-05);
   images/fonts and `canvaskit/**` → `public, max-age=604800` (7 days).
+  **Icon fonts are fingerprinted (PR #23):** `flutter build web` tree-shakes `MaterialIcons-Regular.otf` /
+  `CupertinoIcons.ttf` to the icons in use but keeps one file name, so the 7-day font cache kept an old subset and
+  icons added later (the PR #18 admin menu entries) drew as blank space. `tool/fingerprint_icon_fonts.py` (run by
+  `ci.yml` and `deploy.yml` right after the build) renames them `<name>.<sha256[:12]>.<ext>` and rewrites
+  `assets/FontManifest.json` (no-cache), so a new subset is a new URL. Manual deploys must run it too.
 - **Live** deploy: push to `main` → `deploy.yml` job `deploy-live` (`firebase deploy --only hosting:app,hosting:legacy-redirect`),
   environment `production` (URL the new domain).
 - **Previews**: every same-repo PR → channel **`pr-<number>`** of the `app` target only (`--only app`), `--expires 7d`; the URL is posted/updated in one PR

@@ -141,6 +141,18 @@ flowchart LR
   `_markFallback(key, false)`. A known-unseeded database
   (`settings/church` absent) keeps serving the seed until a later check finds the marker. A stream cancelled while on the seed clears its fallback mark
   (`finally`), so the banner is never stranded.
+- **Settings docs prove themselves (PR #23):** `settings/features`, `settings/contact` and `settings/assistant`
+  have `confirms: !identical(v, <code default>)` like `settings/church`: a stored doc replaces the default even while
+  the seeding check cannot answer (before, `/contact` kept the four default types in that case).
+- **Custom content waits for loaded data (PR #23, ADR-033):** `categories`, `entries` and `pages` have no bundled
+  copy, so `FirestoreRepository._custom` (a) listens with `includeMetadataChanges: true` through `settleFirst`
+  (`LiveReading {value, provisional: isFromCache, changed: docChanges.isNotEmpty}`): cache-only readings are held
+  back until the server answers, or for at most `customPatience` (8 s; then the held cache reading, or a
+  `Source.cache` read when the listener said nothing), after which only readings that changed something pass;
+  and (b) calls `guardSeeded(..., fallbackDelay: customPatience)`, so an unanswered seeding check no longer emits the
+  empty fallback at once. Result: `/section/<slug>` and `/page/<slug>` stay on their loading skeleton until the data
+  has loaded (never a premature «هذه الصفحة غير متاحة حاليًا»), and an items list can no longer stay on its
+  placeholders forever. Unit tests: `test/live_loading_test.dart`.
 - Timestamps are normalised to UTC `DateTime` (`normalizeFirestoreValue`) before `fromMap`.
 - `settings/features` missing → `seed.features` (all sections on).
 - `seed_firestore.js` writes `settings` **last** so an interrupted seed never marks the DB as seeded.

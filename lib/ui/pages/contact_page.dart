@@ -338,19 +338,25 @@ class _ContactFormState extends ConsumerState<ContactForm> {
                 style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17, color: Theme.of(context).colorScheme.primary)),
             const SizedBox(height: 12),
             if (cats.length > 1) ...[
-              DropdownButtonFormField<String>(
-                key: const Key('contactCategory'),
-                isExpanded: true,
-                initialValue: cat?.slot,
-                decoration: InputDecoration(labelText: context.tr('contactCategory'), prefixIcon: const Icon(Icons.forum_outlined)),
-                items: [
-                  for (final c in cats) DropdownMenuItem(value: c.slot, child: Text(context.pick(c.labelAr, c.labelEn))),
-                ],
-                onChanged: (v) => setState(() {
-                  _slot = v;
-                  _bookingType = '';
-                  _errors = const {};
-                }),
+              // Rebuilt when the admin-managed list (settings/contact,
+              // ADR-028) arrives or changes: a form field keeps its first
+              // value, so a default type must not stay selected (PR #23).
+              KeyedSubtree(
+                key: ValueKey('contactCats-${[for (final c in cats) c.slot].join(',')}'),
+                child: DropdownButtonFormField<String>(
+                  key: const Key('contactCategory'),
+                  isExpanded: true,
+                  initialValue: cat?.slot,
+                  decoration: InputDecoration(labelText: context.tr('contactCategory'), prefixIcon: const Icon(Icons.forum_outlined)),
+                  items: [
+                    for (final c in cats) DropdownMenuItem(value: c.slot, child: Text(context.pick(c.labelAr, c.labelEn))),
+                  ],
+                  onChanged: (v) => setState(() {
+                    _slot = v;
+                    _bookingType = '';
+                    _errors = const {};
+                  }),
+                ),
               ),
               const SizedBox(height: 8),
             ],
