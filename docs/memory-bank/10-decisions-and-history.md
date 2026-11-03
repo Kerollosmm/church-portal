@@ -593,7 +593,8 @@ supersede them.
     sessions, client reports, tracing (`tracesSampleRate` null — errors only, keeps us inside the free quota) or
     profiling.
   - **Admin switch:** `settings/features.errorReporting` (bool, default on; rules: bool only; seeded `true`; written
-    only once off or stored). `beforeSend` awaits the switch (≤ 10 s, then the default) and drops everything while
+    only once off or stored; never taken from the bundled seed copy on Firestore). `deploy-live` now waits for
+    `deploy-rules`, so the rules accept the new field before the app can write it (CodeRabbit). `beforeSend` awaits the switch (≤ 10 s, then the default) and drops everything while
     it is off; switching off also closes the SDK; switching back on applies from the next visit / app start. The
     web Sentry **JS** SDK (loaded by `sentry_flutter` from `browser.sentry-cdn.com`, reports window errors itself)
     gets the same switch + scrubbing via its client `beforeSend` (`sentry_js_gate_web.dart`): a Promise that awaits

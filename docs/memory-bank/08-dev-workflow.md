@@ -81,7 +81,8 @@ Job **firestore-rules** (15 min): Java Temurin 21 + Node 22 → `npm ci` in `too
    with `--dart-define=RECAPTCHA_SITE_KEY` only on push builds when the repo variable is set →
    `tool/fingerprint_icon_fonts.py` → artifact `web-build`
    (3 days).
-2. **deploy-live** (push to main, needs build, environment `production`, URL the live site): download artifact →
+2. **deploy-live** (push to main, needs build **and deploy-rules** since PR #24 — a new app may write fields the
+   old rules reject, so the rules go live first; environment `production`, URL the live site): download artifact →
    Node 22 → `./.github/actions/firebase-credentials` → `npx firebase-tools@latest deploy --only hosting:app,hosting:legacy-redirect`
    (app → `maximos-domadios-church`, 301 redirect config → old site `asafra-church-portal`) → remove key.
 3. **deploy-rules** (push to main, `needs: [build, rules-test]` since PR #10 so rules/indexes deploy only after

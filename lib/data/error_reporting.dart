@@ -251,7 +251,8 @@ class ErrorReporting {
   /// Returns false when reporting is not active.
   static Future<bool> sendTestEvent() async {
     if (!_active || !gate.enabled) return false;
-    await Sentry.captureException(
+    // A drop in beforeSend (switch turned off meanwhile) returns the empty id.
+    final id = await Sentry.captureException(
       StateError('Test error from /admin (ignore)'),
       stackTrace: StackTrace.current,
       withScope: (s) {
@@ -259,6 +260,6 @@ class ErrorReporting {
         s.setTag('test', 'true');
       },
     );
-    return true;
+    return id != const SentryId.empty();
   }
 }

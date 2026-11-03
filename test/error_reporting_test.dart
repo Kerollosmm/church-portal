@@ -10,7 +10,9 @@ import 'package:church_portal/domain/assistant_settings.dart';
 import 'package:church_portal/domain/cairo_time.dart';
 import 'package:church_portal/domain/error_privacy.dart';
 import 'package:church_portal/domain/features.dart';
+import 'package:church_portal/state/providers.dart';
 import 'package:church_portal/ui/admin/features_editor.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
@@ -266,6 +268,17 @@ void main() {
       expect(await pending, isNull);
     });
 
+    test('the switch comes from the stored doc only, never from the bundled seed copy', () {
+      const seedCopy = FeatureSettings(errorReporting: true);
+      const stored = FeatureSettings(errorReporting: false);
+      expect(errorReportingSwitch(const AsyncValue<FeatureSettings>.loading()), isNull);
+      expect(errorReportingSwitch(const AsyncValue.data(seedCopy), seedCopy: seedCopy), isNull);
+      expect(errorReportingSwitch(const AsyncValue.data(stored), seedCopy: seedCopy), isFalse);
+      // Offline build on bundled data (SeedRepository): the seed is the truth.
+      expect(errorReportingSwitch(const AsyncValue.data(seedCopy)), isTrue);
+      expect(errorReportingSwitch(AsyncValue<FeatureSettings>.error(StateError('x'), StackTrace.empty)), isTrue);
+    });
+
     test('unknown for too long (offline) → the default (on) applies', () async {
       final g = ErrorReportingGate(patience: const Duration(milliseconds: 10));
       expect(await g.allowed(), isTrue);
@@ -372,6 +385,12 @@ void main() {
         expect(reported, isEmpty, reason: '$e');
         expect(isUserFacingAssistantError(e), isTrue);
       }
+    });
+
+    test('assistant: a network "blocked by client" error is still reported (only model blocks are expected)', () {
+      expect(isUserFacingAssistantError(Exception('net::ERR_BLOCKED_BY_CLIENT')), isFalse);
+      expect(isUserFacingAssistantError(Exception('Response was blocked due to SAFETY')), isTrue);
+      expect(isUserFacingAssistantError(Exception('Prompt was blocked: blockReason OTHER')), isTrue);
     });
 
     test('content: a failing Firestore stream is reported with its section, then serves the seed', () async {

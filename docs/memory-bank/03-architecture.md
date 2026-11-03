@@ -126,7 +126,9 @@ flowchart TD
   `preview` (PR previews), `ci` (CI build), else `production` (release) / `debug`. **release**
   `church-portal@<APP_VERSION>+<GIT_SHA[0:7]>` (CI passes both; otherwise the SDK's `church_portal@1.0.0+1`).
 - **Admin switch** `settings/features.errorReporting` (default on) → `errorReportingSwitchProvider` → watched in
-  `ChurchPortalApp.build` → `ErrorReporting.gate.update(...)`. `beforeSend` **awaits** the switch (≤ 10 s, then the
+  `ChurchPortalApp.build` → `ErrorReporting.gate.update(...)`. On Firestore the bundled seed's copy of
+  `settings/features` (seeding check unanswered, or no doc) does not set it (`errorReportingSwitch`), so early events
+  wait for the stored value or the gate's patience. `beforeSend` **awaits** the switch (≤ 10 s, then the
   default) and returns null while it is off; turning it off also calls `Sentry.close()` (stops the JS / native
   handlers); turning it back on applies from the next visit / app start.
 - **Privacy** (`scrubEvent` / `scrubBreadcrumb`): `sendDefaultPii: false`; user, server name, cookies, request body,

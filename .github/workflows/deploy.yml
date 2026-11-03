@@ -65,7 +65,9 @@ jobs:
 
   deploy-live:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: build
+    # After the rules (PR #24, CodeRabbit): a new app may write a field the
+    # old rules reject (e.g. settings/features.errorReporting).
+    needs: [build, deploy-rules]
     runs-on: ubuntu-latest
     environment:
       name: production

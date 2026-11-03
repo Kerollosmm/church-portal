@@ -56,7 +56,13 @@ bool isUserFacingAssistantError(Object e) {
     'too many requests',
     'billing',
     'safety',
-    'blocked',
+    // Model safety / prompt blocks only (not "blocked by the client" network errors).
+    'blockreason',
+    'block_reason',
+    'blocked due to',
+    'prompt was blocked',
+    'response was blocked',
+    'candidate was blocked',
   ];
   return expected.any(t.contains);
 }
