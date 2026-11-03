@@ -36,7 +36,7 @@ lib/
   main.dart                 bootstrap: seed + Firebase (never crashes if Firebase fails) -> ProviderScope
   app.dart, router.dart     MaterialApp.router, go_router routes (path URL strategy)
   firebase_options.dart     Firebase config (web + android real, iOS placeholder)
-  config/app_config.dart    Gemini model name, reCAPTCHA v3 site key, App Check debug token
+  config/app_config.dart    default Gemini model, reCAPTCHA Enterprise site key, App Check debug token
   domain/                   PURE DART business logic (unit-tested)
     models.dart             data model + tolerant fromMap
     cairo_time.dart         Africa/Cairo via `timezone` (EET UTC+2 / EEST UTC+3 DST)
@@ -86,7 +86,8 @@ Still to do:
 |---|---|---|
 | iOS app | `lib/firebase_options.dart` → `ios` (`PLACEHOLDER_IOS_API_KEY`, `PLACEHOLDER_IOS_APP_ID`) | **Placeholder.** Register an iOS app (bundle id `com.asafrachurch.churchPortal`) then run `flutterfire configure --project=asafra-church-portal` (regenerates the whole file) or paste the values. Until then iOS runs on seed data. |
 | Android API key | `lib/firebase_options.dart` → `android.apiKey` | Uses the browser key. If Android calls are rejected, replace with `current_key` from `google-services.json`. |
-| reCAPTCHA v3 site key (App Check, web) | `lib/config/app_config.dart` (`PLACEHOLDER_RECAPTCHA_V3_SITE_KEY`) or `--dart-define=RECAPTCHA_SITE_KEY=...` / repo variable `RECAPTCHA_SITE_KEY` | **Placeholder.** Required for the assistant on the live site. |
+| reCAPTCHA **Enterprise** site key (App Check, web) | repo variable `RECAPTCHA_SITE_KEY` → `--dart-define=RECAPTCHA_SITE_KEY=...` (`deploy.yml`, live builds only); code default `PLACEHOLDER_RECAPTCHA_SITE_KEY` | **Set** (key "church-portal-web", Nov 2026). Required for the assistant on the live site. |
+| Android App Check (Play Integrity) | Firebase console → App Check → Android app | **To do**: needs a release signing key, then register its SHA-256 (see below). |
 
 Regenerating with FlutterFire (optional):
 
@@ -100,31 +101,48 @@ flutterfire configure --project=asafra-church-portal --platforms=web,android,ios
 If Firebase is unconfigured or unreachable, the app **does not crash**: it serves `assets/seed/seed.json`.
 If Firestore is reachable but `settings/church` does not exist (DB not seeded yet), it also serves the seed.
 
-### App Check (enforced for Firebase AI Logic)
+### App Check (enforced for Firebase AI Logic — required since 2 Nov 2026)
 
-1. Firebase console → **App Check** → Apps → Web app → register with **reCAPTCHA v3**
-   (create the key at <https://www.google.com/recaptcha/admin>, type v3, add domains
-   `maximos-domadios-church.web.app`, `maximos-domadios-church.firebaseapp.com`, `localhost`).
-2. Put the **site key** in `AppConfig.recaptchaV3SiteKey` or build with
-   `flutter build web --release --dart-define=RECAPTCHA_SITE_KEY=6Lc...`.
-3. **Debug provider** (local dev): debug builds automatically use the debug provider
-   (`WebDebugProvider` / `AndroidDebugProvider`). The SDK prints a debug token in the browser console
-   (or logcat) — add it under App Check → Apps → ⋮ → **Manage debug tokens**. You can pin one with
-   `--dart-define=APPCHECK_DEBUG_TOKEN=<uuid>`; `--dart-define=APPCHECK_DEBUG=true` forces the debug
-   provider in a release build. Never ship a debug token in a public build.
-   **PR preview channels** are built *without* the reCAPTCHA key (preview hostnames are not registered
-   for it), so App Check is off there and the App Check‑enforced assistant is hidden; everything else works.
-4. Android release uses Play Integrity (register the app's SHA‑256 in Project settings first).
-5. Do **not** enforce App Check on Firestore until the reCAPTCHA key is live, or public reads will fail.
+Providers are picked by `selectAppCheckPlan` (`lib/data/app_check_providers.dart`, ADR-029):
+
+| Build | Provider |
+|---|---|
+| Web release with `RECAPTCHA_SITE_KEY` | `ReCaptchaEnterpriseProvider(siteKey)` — the key is a **reCAPTCHA Enterprise** key, so the v3 provider would be rejected |
+| Web release without the key (PR previews) | not activated → assistant hidden |
+| Debug builds / `--dart-define=APPCHECK_DEBUG=true` | `WebDebugProvider` / `AndroidDebugProvider` / `AppleDebugProvider` |
+| Android release | `AndroidPlayIntegrityProvider` |
+| iOS release | `AppleAppAttestWithDeviceCheckFallbackProvider` |
+
+1. **Web (done, Nov 2026):** reCAPTCHA Enterprise key "church-portal-web" (domains `maximos-domadios-church.web.app`,
+   `maximos-domadios-church.firebaseapp.com`, `localhost`), registered under App Check → Apps → Web with the
+   reCAPTCHA Enterprise provider; repo variable `RECAPTCHA_SITE_KEY` holds the site key and `deploy.yml` passes it
+   as a dart-define for live builds. Local release build: `flutter build web --release --dart-define=RECAPTCHA_SITE_KEY=<key>`.
+2. **Android (manual):** create a release signing key (`keytool -genkey -v -keystore upload-keystore.jks -keyalg RSA
+   -keysize 2048 -validity 10000 -alias upload`), configure `android/app/build.gradle.kts` `signingConfigs.release`
+   (today release builds are signed with the debug key), get its SHA-256 (`keytool -list -v -keystore
+   upload-keystore.jks -alias upload`, or Play Console → App integrity → App signing key certificate when Play signs
+   the app), add it in Firebase console → Project settings → Android app `com.asafrachurch.church_portal` →
+   SHA certificate fingerprints, then App Check → Apps → Android → **Play Integrity** → Register (and link the
+   Google Cloud project in Play Console → App integrity). Until then the release APK's assistant requests are refused.
+3. **Debug tokens:** debug builds print a token in the browser console / logcat ("Enter this debug secret into the
+   allow list…"); add it under App Check → Apps → ⋮ → **Manage debug tokens**, or pin one with
+   `--dart-define=APPCHECK_DEBUG_TOKEN=<uuid>` (`APPCHECK_DEBUG=true` forces the debug provider in a release
+   build). Never ship a debug token in a public build; delete tokens you no longer use.
+4. Do **not** enforce App Check on Firestore yet (Android release builds would lose public reads until Play
+   Integrity is registered).
 
 ### Assistant (Firebase AI Logic)
 
-- Gemini Developer API, model `gemini-2.5-flash` (`AppConfig.geminiModel`, override with
-  `--dart-define=GEMINI_MODEL=...`). 2.5 Flash‑Lite is closed to new projects.
-- The system instruction is built from the live content (schedule, seasons, clinics, meetings, activities,
-  services, contacts) — see `lib/domain/assistant_context.dart`.
-- Turn it off in `/admin` → **Sections & home page** → "Ask the church", or with
-  `settings/church.assistantEnabled = false` (hides the menu item, card and `/ask`).
+- Gemini Developer API (free tier, Spark plan). Default model **`gemini-3.1-flash-lite`** (`AppConfig.geminiModel`,
+  build override `--dart-define=GEMINI_MODEL=...`), changeable at run time in `/admin` → **AI assistant** → Model;
+  an unknown / retired model falls back to the default automatically. Gemma models are not offered by the
+  Firebase AI Logic cloud API (only in hybrid / on-device setups); Gemini 2.x is shut down or closed to new projects.
+- It answers **only** about this church and its services, from the live site data (settings, every enabled
+  section, contact form types, custom sections and pages); anything else gets the admin's refusal message in
+  the visitor's language. It never invents times, phones or prices — unknown → "call the church office".
+- `/admin` → **AI assistant**: the two on/off switches (the "Ask the church" section switch and
+  `settings/church.assistantEnabled`), model, persona instructions, allowed topics, refusal and welcome texts
+  (ar/en), suggested questions, max question length, questions per minute and per visit (`settings/assistant`).
 - Switched‑off sections are left out of the assistant's grounding, so it never answers about them.
 
 ## 3. Seed Firestore

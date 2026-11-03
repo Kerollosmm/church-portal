@@ -137,8 +137,12 @@ notices («اعرف المزيد»), buttons or links, and appear in the menu on
 church" drawer group. `NavItem.labelAr/labelEn` carry their own labels.
 
 ### `/ask` — `assistant_page.dart` `AssistantPage`
-Chat UI with intro bubble, 3 suggestion chips, 500-char input, disclaimer «إجابات آلية قد تحتوي أخطاء». Shows
-"assistant not available" when `assistantVisibleProvider` is false. Details in `05-firebase.md`.
+Chat UI with a welcome bubble (admin `welcomeAr/En`, else `askIntro`), up to 3 suggestion chips (admin
+`suggestionsAr/En`, else the built-ins), an input capped at `maxChars` (default 500), disclaimer «إجابات آلية قد
+تحتوي أخطاء». Answers only about the church and its services (ADR-029): off-topic questions get the admin refusal
+message in the visitor's language; per-visit limits (questions per minute / per visit) show `askSlowDown` /
+`askSessionLimit` without calling the model. Shows "assistant not available" when `assistantVisibleProvider` is
+false. Works on web (reCAPTCHA Enterprise) and Android (Play Integrity, once registered). Details in `05-firebase.md`.
 
 ### Item detail pages (PR #13, ADR-020) — `item_detail_page.dart` `ItemDetailPage`
 - Routes: `/church-education/:id`, `/church-activities/:id`, `/clinics/:id`, `/public-services/:id`,

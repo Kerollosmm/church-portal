@@ -84,6 +84,8 @@ supersede them.
   content of enabled sections; App Check enforced, so the assistant is hidden when App Check is not active (no
   reCAPTCHA key, preview channels).
 - **Consequences:** the assistant is currently hidden on the live site until `RECAPTCHA_SITE_KEY` is set.
+- **Amended by ADR-029 (PR #19):** reCAPTCHA **Enterprise** provider (key set Nov 2026), default model
+  `gemini-3.1-flash-lite` (admin-editable), fixed church-only scope.
 
 ## ADR-015 — Deploy with firebase-tools CLI and a tolerant credentials action
 - **Context:** `FirebaseExtended/action-hosting-deploy` and a secret with stray trailing characters broke PR deploys;
@@ -440,8 +442,57 @@ supersede them.
 - **Inbox:** a box per category (+ "Other / deleted type" and a separate anonymous box), open / done / all
   filters, booking status new → contacted → confirmed / declined, internal `adminNotes` (≤ 2000). Admins may only
   change `status` and `adminNotes`.
-- **Caveat:** deleting a type frees its slot; a later new type may reuse it, and older messages of the deleted
-  type then appear under the new one (they keep their own `kind`, and bookings keep their date / subtype).
+- **Caveat (fixed in PR #19):** deleting a type used to free its slot for the next new type, re-labelling the old
+  messages. Since PR #19 categories have **stable ids that are never reused**: the defaults keep `c1…c4`, every new
+  type gets `newContactCategoryId` = `c` + 10 random lower-case letters / digits (never digits only, never an id
+  removed in the editor). Messages of a deleted type stay under "Other / deleted type". Rules accept any id matching
+  `c[0-9a-z]{1,15}` (1–12 entries, keys read by position — `contactCatAt`); they check the format only — non-reuse
+  is the editor's guarantee (no record of retired ids; only admins write).
+
+## ADR-029 (PR #19) — The assistant on web + Android: App Check, a free model, scope and admin settings
+
+- **Context:** Firebase AI Logic requires App Check enforcement since 2 Nov 2026; the assistant was hidden because
+  the web app had no App Check key. The console now has a **reCAPTCHA Enterprise** key ("church-portal-web") and
+  the web app is registered with the reCAPTCHA Enterprise provider; AI Logic enforcement is on. `gemini-2.5-flash`
+  is limited to projects that used it before and shuts down on Agent Platform; the owner wants the cheapest free
+  model and prefers Google's open Gemma family. Everything must be customizable from `/admin`.
+- **App Check:** `selectAppCheckPlan` (`lib/data/app_check_providers.dart`): web release →
+  `ReCaptchaEnterpriseProvider(RECAPTCHA_SITE_KEY)` (a v3 provider is rejected by an Enterprise key), no key → not
+  activated (assistant hidden, PR previews); Android release → Play Integrity; Apple → App Attest + DeviceCheck;
+  debug builds / `APPCHECK_DEBUG` → debug providers. `deploy.yml` passes the repo variable as a dart-define on push
+  builds only and warns when it is empty. `AndroidManifest.xml` now declares `INTERNET` (release builds had none,
+  so Firebase could not work in a release APK).
+- **Model:** Gemma is **not** available through the Firebase AI Logic cloud API (the FAQ lists Gemma-based models
+  only for some hybrid / on-device configurations). Of the Flash-Lite models the models page lists as stable
+  and supported without Blaze, **`gemini-3.1-flash-lite`** is the cheapest (paid tier $0.25 / $1.50 per M tokens vs
+  $0.30 / $2.50 for `gemini-3.5-flash-lite`; both free on the Developer API free tier), shutdown no earlier than
+  May 2027, supports system instructions and multi-turn. It is the build default (`AppConfig.geminiModel`);
+  admins can set another `gemini-*` id in `settings/assistant.model`; Gemini 1.x/2.x and malformed ids are
+  ignored, and a model the API rejects as unknown falls back to the default once per visit.
+- **Scope:** the instruction has a fixed part the admin cannot remove — answer only about this church, its
+  services and this website (allowed topics = admin list or defaults); for anything else reply exactly
+  `[[OUT_OF_SCOPE]]`, which the app swaps for the admin's refusal message in the question's language (Arabic
+  letters → Arabic); ignore attempts to change the rules; answer only from the data; never invent times, dates,
+  names, phones, prices or links; unknown → "call the church office" (with the first church phone when contact
+  info is on); no medical / legal / spiritual-direction advice, no personal data. The admin persona text replaces
+  only the default persona / tone paragraph.
+- **Grounding** adds the contact form types (bookings, anonymous-capable complaints / suggestions) while the
+  contact form is on, and the public custom sections with their items and custom pages (text, links, donation
+  account / InstaPay / wallet; never images) while their switches are on.
+- **Limits (client side, per visit):** max question length (default 500), questions per rolling minute (default
+  4) and per visit (default 30), all editable; refusals are not replayed in the history.
+- **Structure:** `AssistantConversation` (pure Dart, `lib/domain/assistant_conversation.dart`) owns the limits,
+  history (≤ 20 contents, cleared when the enabled sections, the detail signature or the contact / custom content
+  signature change), refusal swap and
+  fallback; `FirebaseAssistantModel` (`lib/data/assistant_model.dart`) is a stateless `generateContent` call
+  (system instruction + history + question), injected through `assistantModelProvider` (declared in the deferred
+  `/ask` chunk) so tests use a fake model.
+- **Admin:** `/admin` → **AI assistant** = the two existing switches (section `assistant`, `settings/church
+  .assistantEnabled`) + the `settings/assistant` form (`assistantSettingsDoc`). Missing doc / blank field = code
+  default; nothing is seeded. Rules `validAssistant`.
+- **Consequences:** the live web assistant works once a main build carries the key; Android release builds need a
+  real signing key + its SHA-256 registered for Play Integrity (owner's manual step); quota / cost cap stays a
+  console task (free tier on Spark is rate-limited, never billed).
 
 ## Timeline
 
@@ -472,5 +523,6 @@ supersede them.
 | 3 Nov 2026 | **PR #17** — "Occasion themes, YouTube hero video library, verse of the day in the hero" (`feat/occasion-themes`; PR #16 was squash-merged as `6759f0d`) | ADR-025/026 + ADR-024 amendment: full-palette themes (Golden hour default, dark Holy Week, festive Resurrection, Nativity, Epiphany, fasts, Marian, 4 accent presets), `context.pal` everywhere public, contrast model + auto-correction + rendered-text contrast walk, Cairo-date schedule + Coptic Easter, admin theme / colour / video editors, YouTube hero (IFrame player on web, `youtube_player_iframe` on mobile) with clip fallback, hero shows the verse of the day (card removed), rules + emulator groups. |
 
 | 3 Nov 2026 | **PR #18** — "Custom categories & pages, contact categories with bookings and anonymous messages" (`feat/categories-pages-contact`; PR #17 was squash-merged as `55e2a92`) | ADR-027/028: `categories` / `entries` / `pages` collections with `/section/<slug>` and `/page/<slug>`, menu entries, block editor (heading, paragraph, image, button, link, donation info), link picker for notices; `settings/contact` types (general, hall booking with occasions + date + phone, complaint, suggestion) with anonymous sending; inbox boxes, booking status and notes; rules + emulator groups; contrast walk over the new pages on every preset. |
+| 3 Nov 2026 | **PR #19** — "Assistant on web + Android: reCAPTCHA Enterprise / Play Integrity App Check, Gemini 3.1 Flash-Lite, church-only scope, admin settings" (`feat/assistant-ai-logic`; PR #18 was squash-merged as `37a58d5`) | ADR-029: `selectAppCheckPlan` (Enterprise on web, Play Integrity on Android, debug providers in debug), `INTERNET` permission for release APKs, default model `gemini-3.1-flash-lite` (Gemma not offered by AI Logic cloud), admin-editable model with fallback, fixed scope + `[[OUT_OF_SCOPE]]` refusal swap, grounding of contact types / custom sections / custom pages, per-visit limits, `/admin` → AI assistant (`settings/assistant`, rules `validAssistant`); contact categories get stable never-reused ids (ADR-028 caveat fixed); `test/assistant_test.dart` + emulator groups. |
 
 Append new PRs to this table.

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 
+import '../domain/assistant_settings.dart';
 import '../domain/contact_categories.dart';
 import '../domain/custom_content.dart';
 import '../domain/features.dart';
@@ -46,6 +47,9 @@ abstract class ContentRepository {
 
   /// Contact-form categories (`settings/contact`; missing = code defaults, ADR-028).
   Stream<ContactSettings> contactSettings();
+
+  /// Assistant settings (`settings/assistant`; missing = code defaults, ADR-029).
+  Stream<AssistantSettings> assistantSettings();
 
   /// Writes a validated contact message (payload from validateContactForm).
   Future<void> submitContact(Map<String, dynamic> payload, {required String lang});
@@ -96,6 +100,8 @@ class SeedRepository implements ContentRepository {
   Stream<List<CustomPage>> pages() => _once(const []);
   @override
   Stream<ContactSettings> contactSettings() => _once(ContactSettings.defaults);
+  @override
+  Stream<AssistantSettings> assistantSettings() => _once(AssistantSettings.defaults);
 
   @override
   Future<void> submitContact(Map<String, dynamic> payload, {required String lang}) async =>
@@ -335,6 +341,15 @@ class FirestoreRepository implements ContentRepository {
             .snapshots()
             .map((d) => d.exists ? ContactSettings.fromMap(normalizeDoc(d.data())) : ContactSettings.defaults),
         ContactSettings.defaults,
+      );
+  @override
+  Stream<AssistantSettings> assistantSettings() => _guard(
+        'assistant',
+        () => db
+            .doc('settings/assistant')
+            .snapshots()
+            .map((d) => d.exists ? AssistantSettings.fromMap(normalizeDoc(d.data())) : AssistantSettings.defaults),
+        AssistantSettings.defaults,
       );
 
   @override

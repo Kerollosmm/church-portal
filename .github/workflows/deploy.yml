@@ -28,14 +28,19 @@ jobs:
       - run: flutter test
       - name: Build web (release)
         env:
-          # The reCAPTCHA v3 key is registered for the live domains only, so
-          # preview builds are made without it: App Check stays off there and
-          # the App Check-enforced assistant is hidden instead of failing.
+          # The reCAPTCHA Enterprise site key (repo variable, public value) is
+          # registered for the live domains only, so preview builds are made
+          # without it: App Check stays off there and the App Check-enforced
+          # assistant is hidden instead of failing (ADR-014 / ADR-029).
           RECAPTCHA_SITE_KEY: ${{ github.event_name == 'push' && vars.RECAPTCHA_SITE_KEY || '' }}
         run: |
           if [ -n "$RECAPTCHA_SITE_KEY" ]; then
+            echo "::notice::App Check: building with RECAPTCHA_SITE_KEY (reCAPTCHA Enterprise)"
             flutter build web --release --dart-define=RECAPTCHA_SITE_KEY="$RECAPTCHA_SITE_KEY"
           else
+            if [ "${{ github.event_name }}" = "push" ]; then
+              echo "::warning::RECAPTCHA_SITE_KEY repository variable is empty: App Check is off and the assistant is hidden on the live site"
+            fi
             flutter build web --release
           fi
       - uses: actions/upload-artifact@v5

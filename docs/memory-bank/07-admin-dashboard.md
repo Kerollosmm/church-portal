@@ -119,6 +119,8 @@ cancels and re-subscribes every stream (BUG-18; `ChurchInfoScreen` does the same
   nullable choice); a new document does not write it while unset.
 
 ### Church info (`ChurchInfoScreen`) → `settings/church`
+(`ChurchInfoScreen` takes a `DocDef doc` — default `churchInfoDoc` — and an optional `header`; PR #19 reuses it for
+`settings/assistant`.)
 `DocEditor` over `churchInfoDoc` fields: names, bishop, address, transport, lat/lng (ranges), map query, Maps link,
 **phones** (object list: label AR/EN, number, mobile/WhatsApp — ≤ 20 rows), WhatsApp number/channel, Facebook,
 YouTube, Instagram, verse + references, hero image URL, history AR/EN (≤ 8000), **altars** (object list: name AR/EN,
@@ -257,8 +259,20 @@ confirmation. The overview's "new messages" counts `status == new`.
 Cards per type (code defaults until saved): Arabic / English name, behaviour (general / booking / complaint /
 suggestion), shown on the form, allow anonymous (complaint / suggestion only), booking occasions (Arabic /
 English rows, ≤ 8, keys kept stable — `newSubtypeKey`), move up / down, remove (at least one stays), **Add a
-message type** (next free slot, ≤ 12). **Save** writes the whole `categories` map (`saveDoc`, one string per slot,
-`order` renumbered 10, 20…).
+message type** (≤ 12; since PR #19 a fresh stable id from `ContactSettings.newId`, never an id removed in the
+editor — `_retired` — so old messages of a deleted type are never re-labelled). **Save** writes the whole
+`categories` map (`saveDoc`, one string per id, `order` renumbered 10, 20…).
+
+### AI assistant (`AssistantAdminScreen`, `assistant_admin.dart`) → `settings/assistant` (PR #19, ADR-029)
+Top card `AssistantSwitches`: **"Ask the church" section shown** (`assistantSectionSwitch`, a field-path `update` of
+`settings/features` `sections.assistant` only — a stale map never reverts another admin's section change; `saveDoc`
+only when the doc does not exist) and **Enable the AI assistant**
+(`assistantEnabledSwitch`, writes `settings/church.assistantEnabled` alone); visitors see the assistant only when
+both are on (and App Check is active); a note names the default model. Below it the generic settings form
+(`ChurchInfoScreen` with `doc: assistantSettingsDoc`, same reload banner / own-save rules): Model (text,
+`FieldDef.pattern` = the rules' model regex → `invalid`), Persona & style instructions, Allowed topics (one per
+line), Refusal message ar/en, Welcome text ar/en, Suggested questions ar/en (one per line, up to 3), Max question
+length (50–1000), Max questions per minute (1–20), per visit (1–200). Blank = default (hints say which).
 
 ### Custom sections, items and pages (PR #18, ADR-027)
 Generic `CollectionListScreen`s for `categories` (note above the list: built-ins are switched in Sections & home

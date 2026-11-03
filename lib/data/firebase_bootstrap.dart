@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 
 import '../config/app_config.dart';
 import '../firebase_options.dart';
+import 'app_check_providers.dart';
 
 class FirebaseStatus {
   final bool available;
@@ -44,35 +45,30 @@ Future<FirebaseStatus> bootstrapFirebase() async {
   return FirebaseStatus(available: true, appCheckActive: appCheck);
 }
 
-/// App Check (enforced for Firebase AI Logic).
-///  * Web release: reCAPTCHA v3 with AppConfig.recaptchaV3SiteKey.
-///  * Debug builds / APPCHECK_DEBUG=true: debug provider (register the token
-///    printed in the console under App Check > Manage debug tokens).
-///  * Android release: Play Integrity. iOS: App Attest w/ DeviceCheck fallback.
-/// Skipped on web release while the site key is still a placeholder.
+/// App Check (enforced for Firebase AI Logic; ADR-029). Providers are chosen
+/// by [selectAppCheckPlan]: reCAPTCHA Enterprise on web release builds
+/// (skipped while RECAPTCHA_SITE_KEY is missing), Play Integrity on Android
+/// release, App Attest on Apple release, debug providers in debug builds or
+/// with APPCHECK_DEBUG=true.
 Future<bool> _activateAppCheck() async {
-  final debug = kDebugMode || AppConfig.forceAppCheckDebug;
-  final token = AppConfig.appCheckDebugToken.isEmpty ? null : AppConfig.appCheckDebugToken;
-  WebProvider? web;
-  if (kIsWeb) {
-    if (debug) {
-      web = WebDebugProvider(debugToken: token);
-    } else if (AppConfig.hasRecaptchaKey) {
-      web = ReCaptchaV3Provider(AppConfig.recaptchaV3SiteKey);
-    } else {
-      debugPrint('App Check not activated: set RECAPTCHA_SITE_KEY (see README).');
-      return false;
-    }
+  final plan = selectAppCheckPlan(
+    isWeb: kIsWeb,
+    debug: kDebugMode || AppConfig.forceAppCheckDebug,
+    siteKey: AppConfig.recaptchaSiteKey,
+    debugToken: AppConfig.appCheckDebugToken,
+  );
+  if (!plan.activate) {
+    debugPrint('App Check not activated (${plan.label}): set RECAPTCHA_SITE_KEY (see README).');
+    return false;
   }
   try {
     await FirebaseAppCheck.instance
-        .activate(
-          providerWeb: web,
-          providerAndroid: debug ? AndroidDebugProvider(debugToken: token) : const AndroidPlayIntegrityProvider(),
-          providerApple: debug ? AppleDebugProvider(debugToken: token) : const AppleAppAttestWithDeviceCheckFallbackProvider(),
-        )
+        .activate(providerWeb: plan.web, providerAndroid: plan.android, providerApple: plan.apple)
         .timeout(const Duration(seconds: 8));
     return true;
+  } on TimeoutException catch (e) {
+    debugPrint('App Check activation timed out: $e');
+    return false;
   } catch (e) {
     debugPrint('App Check activation failed: $e');
     return false;

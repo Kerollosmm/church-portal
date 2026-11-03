@@ -10,6 +10,7 @@ import '../data/admin_repository.dart';
 import '../data/content_repository.dart';
 import '../data/firebase_bootstrap.dart';
 import '../data/media_repository.dart';
+import '../domain/assistant_settings.dart';
 import '../domain/cairo_time.dart';
 import '../domain/contact_categories.dart';
 import '../domain/custom_content.dart';
@@ -72,6 +73,10 @@ final customPagesProvider =
 /// Contact-form categories (ADR-028); code defaults until / unless stored.
 final contactSettingsProvider =
     StreamProvider<ContactSettings>((ref) => ref.watch(repositoryProvider).contactSettings());
+
+/// Assistant settings (ADR-029); code defaults until / unless stored.
+final assistantSettingsProvider =
+    StreamProvider<AssistantSettings>((ref) => ref.watch(repositoryProvider).assistantSettings());
 
 /// The bundled verse-of-the-day list (assets/verses/daily_verses.json).
 /// Read as bytes and decoded here (no `compute` isolate) so it also works in

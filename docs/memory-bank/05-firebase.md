@@ -73,11 +73,11 @@ Match blocks:
 | Path | read | create / update | delete |
 |---|---|---|---|
 | `/{col}/{docId}` for `alerts, seasons, liturgies, meetings, activities, clinics, facilities, priests, milestones, saints, categories, entries, pages` | **public** | `isAdmin() && validContent(col, data)` → `common` + per-collection `validAlert/validSeason/validLiturgy/validMeeting/validActivity/validClinic/validFacility/validPriest/validMilestone/validSaint/validCategory/validEntry/validPage` (allow-list + types/sizes; see `04-data-model.md`). PR #18 (ADR-027): `slugOk` (`[a-z0-9]+(-[a-z0-9]+)*` ≤ 60), category icon list, entry `categoryId` id-shaped (existence not required), page header checked on create / header change, `validBlocks` (≤ 20, unrolled) → `validPageBlock` = **one regex on one string** per block | `isAdmin()` |
-| `/settings/{docId}` | **public** | `isAdmin()` and (`church` → `validChurch`, `features` → `validFeatures`, `contact` → `validContactSettings`: `categories` map of slots `c1…c12` (≥ 1), each changed slot one string checked by two regexes in `validContactCat` — ADR-028); any other doc id denied | **never** |
+| `/settings/{docId}` | **public** | `isAdmin()` and (`church` → `validChurch`, `features` → `validFeatures`, `contact` → `validContactSettings`: `categories` map of 1–12 entries keyed by a stable id `c[0-9a-z]{1,15}` (`contactIdOk`; PR #19 — keys read by position in `contactCatAt`, each added / changed entry one string checked by two regexes in `validContactCat` — ADR-028), `assistant` → `validAssistant` (PR #19, ADR-029: keys ⊆ model, instructions, topics, refusalAr/En, welcomeAr/En, suggestionsAr/En, maxChars, perMinute, perSession + stamps; `model` '' or `gemini-[a-z0-9][a-z0-9.-]{0,52}` ≤ 60; texts 4000 / 2000 / 500 / 300; null or int 50–1000 / 1–20 / 1–200; `stampOk`)); any other doc id denied | **never** |
 | `/media/{mediaId}` | **get: public** (by id); **list: `isAdmin()` only** (PR 1, SEC-02) | `isAdmin() && validMedia(data)`: keys ⊆ `dataBase64, contentType, w, h, bytes, createdAt, createdBy, refs`; required `dataBase64` (4–950,000 chars), `contentType` ∈ jpeg/webp/png, `createdAt` (== `request.time`, or unchanged), `createdBy` (token email/uid, or unchanged); `bytes` ≤ 700,000; `w/h` 1–10000; `refs` list ≤ 20 | `isAdmin()` |
 | `/admins/{uid}` | own doc, or any doc if `isOwner()` | `isOwner()` **and** `uid != caller` (cannot change yourself → an owner always remains); keys ⊆ `email, role, updatedAt, updatedBy`; email required ≤254; role ∈ owner/editor; `stampOk` (PR 1, SEC-03) | `isOwner() && uid != caller` |
 | `/meta/contact_rate` | never | keys ⊆ `lastAt, lastMsgId`; `lastAt == request.time`; `lastMsgId` string 10–64 alphanumerics; `!exists(contact_messages/lastMsgId)` **and** `existsAfter(contact_messages/lastMsgId)` (so it is only writable in the same batch as a NEW message — SEC-01); and (new doc or `request.time > lastAt + 10 s`) | never |
-| `/contact_messages/{id}` | `isAdmin()` | **create (public, no auth)**: `validContactMessage` **and** `getAfter(meta/contact_rate).lastAt == request.time` **and** `getAfter(meta/contact_rate).lastMsgId == id` (same batch). **update**: `isAdmin()`, only `status/adminNotes/updatedAt/updatedBy` change, status ∈ new/handled/contacted/confirmed/declined, `adminNotes` string ≤ 2000, `stampOk`. PR #18 (ADR-028): `validContactMessage` reads the category with `contactCat(slot)` (`settings/contact` if it exists — one `exists` + one `get` — else `defaultContactCats()`); a message with `category` needs that slot switched on and a matching `kind`; bookings need a phone + `preferredDate` (YYYY-MM-DD) and an optional `bookingType` key; `anonymous: true` only for an anon-allowed complaint / suggestion slot and then **no** `name/phone/email/bookingType/preferredDate` key; messages without `category` keep the original checks (`validIdentifiedMessage`) | `isAdmin()` |
+| `/contact_messages/{id}` | `isAdmin()` | **create (public, no auth)**: `validContactMessage` **and** `getAfter(meta/contact_rate).lastAt == request.time` **and** `getAfter(meta/contact_rate).lastMsgId == id` (same batch). **update**: `isAdmin()`, only `status/adminNotes/updatedAt/updatedBy` change, status ∈ new/handled/contacted/confirmed/declined, `adminNotes` string ≤ 2000, `stampOk`. PR #18 (ADR-028): `validContactMessage` reads the category with `contactCat(id)` (id must pass `contactIdOk` since PR #19) (`settings/contact` if it exists — one `exists` + one `get` — else `defaultContactCats()`); a message with `category` needs that slot switched on and a matching `kind`; bookings need a phone + `preferredDate` (YYYY-MM-DD) and an optional `bookingType` key; `anonymous: true` only for an anon-allowed complaint / suggestion slot and then **no** `name/phone/email/bookingType/preferredDate` key; messages without `category` keep the original checks (`validIdentifiedMessage`) | `isAdmin()` |
 
 Anything not matched (e.g. a new collection) is **denied** by default — new collections need a rules change.
 
@@ -219,71 +219,100 @@ App target settings:
   public, real writes from the contact form and /admin!).
 - Rollback: Firebase console → Hosting → release history → roll back.
 
-## App Check (`lib/data/firebase_bootstrap.dart` `_activateAppCheck`)
+## App Check (`lib/data/app_check_providers.dart` `selectAppCheckPlan`, activated in `firebase_bootstrap.dart`)
+
+ADR-029 (PR #19). Firebase AI Logic **requires** App Check enforcement since 2 Nov 2026; it is **Enforced** in the
+console.
 
 | Build | Provider |
 |---|---|
-| Web release with key | `ReCaptchaV3Provider(AppConfig.recaptchaV3SiteKey)` |
-| Web release without key (`PLACEHOLDER…` or empty) | **not activated** → `appCheckActive = false` → assistant hidden |
+| Web release with key | `ReCaptchaEnterpriseProvider(AppConfig.recaptchaSiteKey)` — the key is a **reCAPTCHA Enterprise** key ("church-portal-web", site key `6LdJhw4uAAAAAI7yuMKtTRMVc_r9LdX1qPBqHMW3`, a public value); a `ReCaptchaV3Provider` would be rejected |
+| Web release without key (`PLACEHOLDER…`, empty — PR previews) | **not activated** → `appCheckActive = false` → assistant hidden |
 | Debug builds or `--dart-define=APPCHECK_DEBUG=true` | `WebDebugProvider` / `AndroidDebugProvider` / `AppleDebugProvider` (token from `APPCHECK_DEBUG_TOKEN` or SDK-generated and printed in console/logcat — register it under App Check → Manage debug tokens) |
-| Android release | `AndroidPlayIntegrityProvider` (register the app's SHA-256 first) |
+| Android release | `AndroidPlayIntegrityProvider` (needs the release key's SHA-256 registered — **not done yet**, no release signing key) |
 | iOS release | `AppleAppAttestWithDeviceCheckFallbackProvider` |
 
-- **reCAPTCHA v3 site key**: `AppConfig.recaptchaV3SiteKey = String.fromEnvironment('RECAPTCHA_SITE_KEY',
-  defaultValue: 'PLACEHOLDER_RECAPTCHA_V3_SITE_KEY')`. CI passes the **repository variable** `RECAPTCHA_SITE_KEY`
-  (Settings → Variables, not a secret) only for push builds (`deploy.yml`). Status: **not set yet** → the live
-  assistant is hidden. Register the key at google.com/recaptcha/admin (v3) for `maximos-domadios-church.web.app`,
-  `maximos-domadios-church.firebaseapp.com`, `localhost`, then in Firebase console → App Check → Web app.
-- App Check is **enforced for Firebase AI Logic** only. Do **not** enforce it on Firestore until the key is live, or
-  all public reads fail.
+- **Site key**: `AppConfig.recaptchaSiteKey = String.fromEnvironment('RECAPTCHA_SITE_KEY', defaultValue:
+  'PLACEHOLDER_RECAPTCHA_SITE_KEY')`. CI passes the **repository variable** `RECAPTCHA_SITE_KEY` (Settings →
+  Variables, not a secret; **set** Nov 2026) only for push builds (`deploy.yml`, which prints a `::notice::` when it
+  builds with it and a `::warning::` on a push build without it). The key is registered for
+  `maximos-domadios-church.web.app`, `maximos-domadios-church.firebaseapp.com`, `localhost`; the web app is
+  registered in App Check with the reCAPTCHA Enterprise provider.
+- **Android**: `AndroidManifest.xml` declares `android.permission.INTERNET` since PR #19 (the release manifest had
+  none). Manual steps (owner, `11-open-tasks.md`): release keystore + `signingConfigs.release`, add its SHA-256 in
+  Project settings → Android app, register Play Integrity under App Check → Apps → Android (and link the Cloud
+  project in Play Console → App integrity). Debug APKs: register the logcat debug token.
+- App Check is enforced for **Firebase AI Logic** only. Do **not** enforce it on Firestore while Android release
+  builds have no Play Integrity registration, or their public reads fail.
 
-## Firebase AI Logic — "Ask the church" assistant
+## Firebase AI Logic — "Ask the church" assistant (ADR-014, ADR-029)
 
-- `firebase_ai`: `FirebaseAI.googleAI().generativeModel(model: AppConfig.geminiModel, systemInstruction:
-  Content.system(instruction), generationConfig: GenerationConfig(temperature: 0.2, maxOutputTokens: 800))`
-  (`lib/ui/pages/assistant_page.dart` `_session()`). **Gemini Developer API** backend.
-- Model `gemini-2.5-flash` (override with `--dart-define=GEMINI_MODEL=...`; 2.5 Flash-Lite is closed to new projects).
-- Visible only when `assistantVisibleProvider` is true: section `assistant` on **and** Firebase available **and**
+- **Backend:** Gemini Developer API (`FirebaseAI.googleAI()`), free tier on Spark. `FirebaseAssistantModel`
+  (`lib/data/assistant_model.dart`) makes one stateless `generateContent` call per question: `systemInstruction`
+  = the grounding prompt, contents = kept history + the question, `GenerationConfig(temperature: 0.2,
+  maxOutputTokens: 1024)`, 45 s timeout. The SDK attaches the App Check token itself (`app.getService<FirebaseAppCheck>()`).
+- **Model:** default **`gemini-3.1-flash-lite`** (`AppConfig.geminiModel`, build override `GEMINI_MODEL`):
+  the cheapest stable Flash-Lite on <https://firebase.google.com/docs/ai-logic/models> that needs no Blaze
+  (checked 3 Nov 2026; `gemini-3.5-flash-lite` is the newer, pricier one). Gemma is **not** supported by the AI
+  Logic cloud API (FAQ: only in some hybrid / on-device configurations). Admins can set `settings/assistant.model`
+  (`gemini-[a-z0-9][a-z0-9.-]{0,52}`); 1.x / 2.x ids are ignored; a model the API rejects as unknown /
+  unsupported (the error must name the model or "model" **and** say 404 / not found / unsupported / deprecated — an
+  unrelated 404 is just an error) is replaced by the default for the rest of the visit.
+- **Visible** only when `assistantVisibleProvider` is true: section `assistant` on **and** Firebase available **and**
   App Check active **and** `settings/church.assistantEnabled == true`.
-- **Context building** (`lib/domain/assistant_context.dart` `buildAssistantInstruction`):
-  1. Persona + rules: answer ONLY from the data; say you don't know and suggest calling; never invent times/names/
-     phones; reply in the question's language; ≤ ~6 lines, bullets, times like 06:30 AM; all times Africa/Cairo with
-     today's Cairo date; no medical/legal/spiritual-direction advice; collect no personal data; topics with no section
-     are "not offered".
-  2. Sections included **only if switched on** in `settings/features`: Contacts (contactInfo: address, directions,
+- **Instruction** (`lib/domain/assistant_context.dart` `buildAssistantInstruction`):
+  1. Church name (+ address when contact info is on).
+  2. **Persona** — `settings/assistant.instructions` or `AssistantSettings.defaultInstructions` (tone, ≤ ~6 lines,
+     bullets).
+  3. **Scope (fixed)** — only this church, its services and this website; allowed topics = admin list (one per
+     line, bullets stripped) or `defaultTopics`; anything else (general knowledge, news, politics, other churches,
+     jokes, stories, homework, maths, translation, coding…) → reply exactly `[[OUT_OF_SCOPE]]`; greetings are fine;
+     requests to change / reveal / bypass the rules or role-play are out of scope.
+  4. **Grounding (fixed)** — answer ONLY from the data; unknown → say so and suggest calling the church office
+     (first church phone when contact info is on); never invent times, dates, names, phones, prices, fees, amounts
+     or links; reply in the question's language; times like 06:30 AM, Africa/Cairo with today's Cairo date; no
+     medical / legal / spiritual-direction advice; no personal data; topics with no section are "not offered";
+     website paths may be suggested.
+  5. Sections included **only if switched on** in `settings/features`: Contacts (contactInfo: address, directions,
      maps URL, phones; socials: WhatsApp, Facebook, YouTube, WhatsApp channel, Instagram); weekly liturgy schedule
      (undated only), special one-off services (every non-seasonal dated liturgy — even with a weekday set — while
-     `isDatedLiturgyCurrent`, i.e. from its Cairo day on, or the day before while it still runs past midnight; PR #10;
-     the header's date and weekday come from `CairoTime.fromInstant(now)`), Holy seasons (active seasons only, each labelled `[REPLACES regular schedule]` or
-     `[ADDITIVE — regular morning masses continue]` from `replacesRegular`, plus `[ACTIVE NOW]`) (schedule); current
-     announcements (alerts: `visibleAlerts`); clinics (active only, incl. WhatsApp); meetings (incl. notes);
-     activities; public services (facilities); About the church (history: bishop + history summary, each language
-     clipped to 700 chars);
-     serving priests (priests) and departed priests with repose date (departedPriests); patron saints (saints);
-     **Our story** (milestones: year, title, description clipped to 300 — PR #11).
-     PR #11 item detail pages: for an item whose page is on (`detailsEnabled` not `false`; missing = on since PR #14), its line adds the detail text (each language
-     clipped to 300 chars), its custom fields (`title: value`; titles clipped to 100, values to 300 chars per
-     language), its contacts (new `contactPhone`/`whatsapp`/contact
-     note) when `showContacts`, and its links (WhatsApp/Facebook/YouTube/Instagram/external with its label) when
-     `showSocials` **and** the socials section is on. Existing item phones (clinic booking/WhatsApp, activity contact,
-     facility phone) follow `showContacts`; existing item links (meeting Facebook/WhatsApp, activity link) follow
-     `showSocials` + the socials section. Never any image / gallery data.
-     Every bilingual field goes through `_bi(ar, en)` → `"English (Arabic)"` or whichever one is filled, so
-     Arabic-only admin entries never produce blank names/places (PR 1, BUG-04).
-  3. Items with `sample: true` are prefixed **`[UNCONFIRMED]`** and the model is told to say they are provisional.
-- Each user message is prefixed `[Current Cairo time: YYYY-MM-DD HH:mm (Weekday)]`; questions > 500 chars are ignored;
-  45 s timeout.
-- The chat is reused while the instruction string is identical; when content/date changes, a new session is started
-  with the kept history (max 20 contents = 10 turns). If the set of enabled sections changes, history is cleared;
-  so it is when `assistantDetailSignature` (each item's detail grounding + its contact/link toggles) changes, so
-  answers quoting details, phones or links an admin withdrew are not replayed (PR #11).
-- Before the first question `_awaitContent()` waits (≤ 10 s) for settings, features, liturgies, seasons, clinics,
-  meetings, activities, facilities, alerts, priests, saints, and milestones while that section is on (PR #11).
-- Kill switches (all platforms): section toggle `assistant` in /admin, `settings/church.assistantEnabled`, or App Check
-  failing to activate. **Web release builds only:** a missing/placeholder reCAPTCHA key also hides it (App Check is
-  skipped). Android/iOS release builds activate Play Integrity / App Attest without the key, so the assistant can
-  still show there when the other conditions hold.
-  Cost cap (Gemini quota) is a console task — not configured in code.
+     `isDatedLiturgyCurrent`), Holy seasons (active seasons only, `[REPLACES regular schedule]` / `[ADDITIVE …]`,
+     `[ACTIVE NOW]`) (schedule); current announcements (alerts: `visibleAlerts`); clinics (active only, incl.
+     WhatsApp); meetings (incl. notes); activities; public services (facilities); About the church (history: bishop
+     + history summary, each language clipped to 700); serving priests and departed priests with repose date;
+     patron saints; **Our story** (milestones, description clipped to 300). Item detail pages (`detailsEnabled`
+     not `false`): detail text (300 per language), custom fields (titles 100 / values 300), contacts when
+     `showContacts`, links when `showSocials` **and** the socials section is on. **PR #19:** **Contact form and
+     bookings** (contactForm: every visible contact type with its behaviour — booking needs mobile + date, its
+     occasions, "can be sent anonymously"); **custom sections** (customSections: each public category with its
+     path `/section/<slug>`, at most 20 sections, intro clipped to 300, up to 30 visible items with description clipped to 300, phone
+     and link); **custom pages** (customPages: at most 20 public pages, each with its path `/page/<slug>`, subtitle, headings,
+     paragraphs clipped to 400, buttons / links, donation account / InstaPay / wallet; ≤ 2,500 chars per page — a
+     block that does not fit is skipped and later shorter ones still go in).
+     Never any image / gallery data. Every bilingual field goes through `_bi(ar, en)`.
+  6. Items with `sample: true` are prefixed **`[UNCONFIRMED]`** and the model is told to say they are provisional.
+- **Conversation** (`AssistantConversation`, pure Dart): checks length (`maxChars`, default 500; the text field
+  also caps it), per-rolling-minute (`perMinute`, default 4) and per-visit (`perSession`, default 30) limits
+  **before** anything is sent (blocked questions show `askTooLong` / `askSlowDown` / `askSessionLimit`); prefixes
+  `[Current Cairo time: YYYY-MM-DD HH:mm (Weekday)]`; a reply that contains `[[OUT_OF_SCOPE]]` anywhere
+  becomes the admin refusal (`refusalAr` / `refusalEn`, else the built-in ones) in the question's language
+  (Arabic **letters** → Arabic; Arabic-Indic digits / tatweel do not count) and is **not** kept in the history; answers are kept (max 20 contents = 10 turns);
+  the history is cleared when the enabled sections, `assistantDetailSignature` or `assistantCustomSignature`
+  (contact types, custom sections / items / pages grounding — Codex review on PR #19) or the allowed topics change. The model is injected
+  through `assistantModelProvider` (declared in the deferred `assistant_page.dart`, so `firebase_ai` stays out of
+  the main bundle); tests use a fake.
+- Before the first question `_awaitContent()` waits (≤ 10 s) for settings, features, assistant settings, the content
+  lists, and — while their section is on — milestones, contact settings, categories + entries, custom pages; the
+  section flags are re-read after each round so a section switched on meanwhile is awaited too (CodeRabbit).
+- **Admin-editable** (`settings/assistant`, `/admin` → AI assistant): model, persona instructions, allowed topics,
+  refusal (ar/en), welcome text (ar/en; else `askIntro`), suggested questions (ar/en, ≤ 3 lines; else the built-in
+  three), `maxChars`, `perMinute`, `perSession`. The switches stay the section `assistant` and
+  `settings/church.assistantEnabled` (both shown on that screen).
+- Kill switches (all platforms): section toggle `assistant`, `settings/church.assistantEnabled`, or App Check
+  failing to activate. **Web release builds only:** a missing/placeholder reCAPTCHA key also hides it. Android/iOS
+  release builds activate Play Integrity / App Attest without the key, so the assistant shows there when the
+  other conditions hold (requests then need the Play Integrity registration). Cost cap / quota is a console task;
+  on Spark the Developer API free tier is rate-limited, never billed.
 
 ## Service account (CI/CD)
 

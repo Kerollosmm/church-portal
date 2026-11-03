@@ -515,7 +515,8 @@ service cloud.firestore {
       allow create, update: if isAdmin()
         && ((docId == 'church' && validChurch(request.resource.data))
             || (docId == 'features' && validFeatures(request.resource.data))
-            || (docId == 'contact' && validContactSettings(request.resource.data)));
+            || (docId == 'contact' && validContactSettings(request.resource.data))
+            || (docId == 'assistant' && validAssistant(request.resource.data)));
       allow delete: if false;
     }
 
@@ -543,6 +544,24 @@ service cloud.firestore {
         && str(d, 'historyAr', 8000) && str(d, 'historyEn', 8000)
         && str(d, 'bishopAr', 300) && str(d, 'bishopEn', 300)
         && d.get('assistantEnabled', false) is bool && d.get('sample', false) is bool
+        && stampOk(d);
+    }
+
+    // settings/assistant (ADR-029): the "Ask the church" assistant's model,
+    // persona, topics, refusal / welcome texts, suggestions and client-side
+    // limits (= AssistantLimits in lib/domain/assistant_settings.dart).
+    // Blank text / null number = the code default. The model is '' or a
+    // Gemini id (gemini-…, lower-case letters, digits, dots, hyphens).
+    function validAssistant(d) {
+      return keysAllowed(['model', 'instructions', 'topics', 'refusalAr', 'refusalEn', 'welcomeAr', 'welcomeEn',
+                          'suggestionsAr', 'suggestionsEn', 'maxChars', 'perMinute', 'perSession',
+                          'updatedAt', 'updatedBy'])
+        && str(d, 'model', 60) && d.get('model', '').matches('(gemini-[a-z0-9][a-z0-9.-]{0,52})?')
+        && str(d, 'instructions', 4000) && str(d, 'topics', 2000)
+        && str(d, 'refusalAr', 500) && str(d, 'refusalEn', 500)
+        && str(d, 'welcomeAr', 500) && str(d, 'welcomeEn', 500)
+        && str(d, 'suggestionsAr', 300) && str(d, 'suggestionsEn', 300)
+        && optInt(d, 'maxChars', 50, 1000) && optInt(d, 'perMinute', 1, 20) && optInt(d, 'perSession', 1, 200)
         && stampOk(d);
     }
 
@@ -829,8 +848,15 @@ service cloud.firestore {
     }
 
     // ------------------- contact categories (ADR-028) -------------------
-    function contactSlots() {
-      return ['c1', 'c2', 'c3', 'c4', 'c5', 'c6', 'c7', 'c8', 'c9', 'c10', 'c11', 'c12'];
+    // Category ids are stable (PR #19): the four defaults keep c1…c4 and the
+    // admin editor gives every new category a fresh random id ('c' + 10
+    // lower-case letters / digits, never one it removed), so deleting a type
+    // and adding another does not re-label the deleted one's messages. The
+    // rules only check the id FORMAT (there is no record of retired ids, and
+    // only admins can write); non-reuse is the client's guarantee. The legacy
+    // slots c5…c12 still match.
+    function contactIdOk(k) {
+      return k is string && k.matches('c[0-9a-z]{1,15}');
     }
 
     // Used while settings/contact does not exist (= ContactSettings.defaults
@@ -844,36 +870,36 @@ service cloud.firestore {
       };
     }
 
-    // The category string stored in slot [slot] (null = none).
-    function contactCat(slot) {
+    // The category string stored under id [id] (null = none).
+    function contactCat(id) {
       return exists(/databases/$(database)/documents/settings/contact)
-        ? get(/databases/$(database)/documents/settings/contact).data.get('categories', {}).get(slot, null)
-        : defaultContactCats().get(slot, null);
+        ? get(/databases/$(database)/documents/settings/contact).data.get('categories', {}).get(id, null)
+        : defaultContactCats().get(id, null);
     }
 
-    // settings/contact: categories {c1…c12: one string each}; at least one.
-    // Only the slots a write adds or changes are validated.
+    // settings/contact: categories {<id>: one string each}; 1…12 entries.
+    // Keys are read by position (rules have no loops); only entries a write
+    // adds or changes are validated (an unchanged one was checked when it
+    // was written).
     function validContactSettings(d) {
       let old = resource == null ? {} : resource.data.get('categories', {});
       return keysAllowed(['categories', 'updatedAt', 'updatedBy'])
-        && d.categories is map && d.categories.size() >= 1 && d.categories.keys().hasOnly(contactSlots())
-        && validContactCats(d.categories, d.categories.diff(old is map ? old : {}).affectedKeys())
+        && d.categories is map && d.categories.size() >= 1 && d.categories.size() <= 12
+        && validContactCats(d.categories, d.categories.keys(), old is map ? old : {})
         && stampOk(d);
     }
 
-    function validContactCats(c, ch) {
-      return (!ch.hasAny(['c1']) || !('c1' in c) || validContactCat(c.c1))
-        && (!ch.hasAny(['c2']) || !('c2' in c) || validContactCat(c.c2))
-        && (!ch.hasAny(['c3']) || !('c3' in c) || validContactCat(c.c3))
-        && (!ch.hasAny(['c4']) || !('c4' in c) || validContactCat(c.c4))
-        && (!ch.hasAny(['c5']) || !('c5' in c) || validContactCat(c.c5))
-        && (!ch.hasAny(['c6']) || !('c6' in c) || validContactCat(c.c6))
-        && (!ch.hasAny(['c7']) || !('c7' in c) || validContactCat(c.c7))
-        && (!ch.hasAny(['c8']) || !('c8' in c) || validContactCat(c.c8))
-        && (!ch.hasAny(['c9']) || !('c9' in c) || validContactCat(c.c9))
-        && (!ch.hasAny(['c10']) || !('c10' in c) || validContactCat(c.c10))
-        && (!ch.hasAny(['c11']) || !('c11' in c) || validContactCat(c.c11))
-        && (!ch.hasAny(['c12']) || !('c12' in c) || validContactCat(c.c12));
+    function validContactCats(c, k, old) {
+      return contactCatAt(c, k, old, 0) && contactCatAt(c, k, old, 1) && contactCatAt(c, k, old, 2)
+        && contactCatAt(c, k, old, 3) && contactCatAt(c, k, old, 4) && contactCatAt(c, k, old, 5)
+        && contactCatAt(c, k, old, 6) && contactCatAt(c, k, old, 7) && contactCatAt(c, k, old, 8)
+        && contactCatAt(c, k, old, 9) && contactCatAt(c, k, old, 10) && contactCatAt(c, k, old, 11);
+    }
+
+    function contactCatAt(c, k, old, i) {
+      return k.size() <= i
+        || (k[i] in old && old[k[i]] == c[k[i]])
+        || (contactIdOk(k[i]) && validContactCat(c[k[i]]));
     }
 
     // One category, ONE string (ContactCategory.encode):
@@ -896,7 +922,7 @@ service cloud.firestore {
     // message (only for a category that allows it, complaint / suggestion)
     // carries NO name, phone or email key at all.
     function validContactMessage(d) {
-      let cat = ('category' in d && d.category is string && d.category in contactSlots()) ? contactCat(d.category) : null;
+      let cat = ('category' in d && contactIdOk(d.category)) ? contactCat(d.category) : null;
       return d.keys().hasOnly(['name', 'phone', 'email', 'message', 'lang', 'status', 'createdAt', 'category', 'kind',
                                'anonymous', 'bookingType', 'preferredDate'])
         && d.keys().hasAll(['message', 'status', 'createdAt'])

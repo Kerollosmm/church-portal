@@ -24,7 +24,7 @@ lib/
   router.dart               routerProvider (GoRouter), FeatureGate wrapper, ?lang=en sync, 404; /admin and /ask
                             are deferred imports (`deferred as`) loaded by DeferredLoader
   firebase_options.dart     DefaultFirebaseOptions (web + android real, iOS PLACEHOLDER)
-  config/app_config.dart    AppConfig: geminiModel, recaptchaV3SiteKey, App Check debug flags, adminPath
+  config/app_config.dart    AppConfig: geminiModel (default model), recaptchaSiteKey (reCAPTCHA Enterprise), App Check debug flags, adminPath
   domain/                   PURE DART (no Flutter/Firebase imports) — unit-tested business logic
     models.dart             ChurchSettings, PhoneEntry, Altar, Alert, Season, Liturgy, Meeting, Activity,
                             Clinic, Facility, Priest, Milestone, Saint (+ tolerant fromMap, parseHm, parseDate)
@@ -36,19 +36,24 @@ lib/
                             ContactRateLimiter
     cairo_time.dart         CairoTime (fromInstant, at, startOfDay, calendarDate)
     time_format.dart        formatTimeLatin/Arabic, ranges, weekday names, formatDate, formatLooseDate
-    assistant_context.dart  buildAssistantInstruction (Gemini grounding prompt)
+    assistant_context.dart  buildAssistantInstruction (Gemini grounding prompt: persona + fixed scope/grounding + data)
+    assistant_settings.dart AssistantSettings (settings/assistant, defaults, limits, model-name check) — PR #19
+    assistant_conversation.dart AssistantConversation / AssistantModel / rate limiter / [[OUT_OF_SCOPE]] swap — PR #19
     media.dart              MediaImage (optional `image` map), MediaLimits, isValidImageUrl, fitWithin,
                             orphanedMediaIds
     custom_content.dart     CustomCategory, CategoryEntry, CustomPage, PageBlock (encode/fromStored), BlockTypes,
                             isValidSlug, publicCategories/publicPages, entriesOf, entryIdsToHide, linkTargets
                             (PR #18, ADR-027)
     contact_categories.dart ContactSettings (defaults), ContactCategory (encode/fromStored), ContactKinds,
-                            MessageStatus, inboxBoxOf, messageIsOpen (PR #18, ADR-028)
+                            MessageStatus, inboxBoxOf, messageIsOpen (PR #18, ADR-028); stable random ids
+                            newContactCategoryId / ContactSettings.newId (PR #19)
     item_detail.dart        DetailKind (basePath/parentPath/collection), detailPathFor, parseDetailPath,
                             detailStateFor (detail-page gating), itemSocialsShown (PR #13, ADR-020),
                             weeklyCalendarUrl, absoluteDetailUrl, pickRelated (PR #14, ADR-021)
   data/
     firebase_bootstrap.dart bootstrapFirebase() -> FirebaseStatus{available, appCheckActive}; App Check
+    app_check_providers.dart selectAppCheckPlan (reCAPTCHA Enterprise web / Play Integrity / App Attest / debug) — PR #19
+    assistant_model.dart    FirebaseAssistantModel (AssistantModel on Firebase AI Logic, imported only by /ask) — PR #19
     content_repository.dart ContentRepository (interface), SeedRepository, FirestoreRepository,
                             normalizeFirestoreValue/normalizeDoc
     seed_data.dart          SeedData: typed view over assets/seed/seed.json
@@ -92,8 +97,8 @@ flowchart TD
   R -->|fallback| SEED[[assets/seed/seed.json]]
   AR --> FS
   AR --> AUTH[Firebase Auth]
-  P -->|/ask| AI[Firebase AI Logic<br/>Gemini 2.5 Flash]
-  AI -.App Check.-> AC[reCAPTCHA v3 / Play Integrity]
+  P -->|/ask| AI[Firebase AI Logic<br/>Gemini 3.1 Flash-Lite<br/>(admin-editable model)]
+  AI -.App Check.-> AC[reCAPTCHA Enterprise / Play Integrity]
 ```
 
 ## Startup (`lib/main.dart`)
@@ -156,6 +161,8 @@ flowchart LR
 | `categoriesProvider`, `customPagesProvider` | `StreamProvider<List<…>>` | PR #18: `categories` / `pages` through `publicCategories` / `publicPages` (visible, valid slug, unique, by `order`); empty when the collections do not exist |
 | `entriesProvider` | `StreamProvider<List<CategoryEntry>>` | every entry; pages filter with `entriesOf` |
 | `contactSettingsProvider` | `StreamProvider<ContactSettings>` | `settings/contact`, code defaults when missing (and in seed mode) |
+| `assistantSettingsProvider` | `StreamProvider<AssistantSettings>` | `settings/assistant`, code defaults when missing (and in seed mode) — PR #19 |
+| `assistantModelProvider` | `Provider<AssistantModel>` (in `ui/pages/assistant_page.dart`, deferred chunk) | `FirebaseAssistantModel`; overridden with a fake in tests — PR #19 |
 | `seasonsProvider` | `StreamProvider<List<Season>>` | **not** filtered (seasons have no `visible`/`order`) |
 | `nowProvider` | `StreamProvider<DateTime>` | ticks every 30 s (next mass, "available today", alerts) |
 | `assistantVisibleProvider` | `Provider<bool>` | `features.enabled(assistant) && fb.available && fb.appCheckActive && settings.assistantEnabled` |

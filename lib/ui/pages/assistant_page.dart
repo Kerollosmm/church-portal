@@ -1,11 +1,15 @@
-import 'package:firebase_ai/firebase_ai.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../../config/app_config.dart';
 import '../../core/l10n.dart';
 import '../../core/theme.dart';
+import '../../data/assistant_model.dart';
 import '../../domain/assistant_context.dart';
+import '../../domain/assistant_conversation.dart';
+import '../../domain/assistant_settings.dart';
+import '../../domain/contact_categories.dart';
+import '../../domain/custom_content.dart';
 import '../../domain/cairo_time.dart';
 import '../../domain/features.dart';
 import '../../domain/time_format.dart';
@@ -19,9 +23,15 @@ class _Msg {
   const _Msg(this.user, this.text, {this.error = false});
 }
 
-/// "Ask the church" assistant — Gemini via Firebase AI Logic, grounded on
-/// the portal content (schedule, clinics, meetings, contacts) through the
-/// system instruction. Hidden when settings/church.assistantEnabled=false.
+/// The model behind the assistant (Firebase AI Logic). Overridden in tests
+/// with a fake. Declared here, in the deferred /ask chunk, so `firebase_ai`
+/// stays out of the main bundle.
+final assistantModelProvider = Provider<AssistantModel>((ref) => const FirebaseAssistantModel());
+
+/// "Ask the church" assistant — Gemini via Firebase AI Logic (ADR-014,
+/// ADR-029), grounded on the live portal content through the system
+/// instruction, limited to church topics (out-of-scope questions get the
+/// admin's refusal message) and rate-limited per visit.
 class AssistantPage extends ConsumerStatefulWidget {
   const AssistantPage({super.key});
 
@@ -33,24 +43,9 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
   final _input = TextEditingController();
   final _scroll = ScrollController();
   final List<_Msg> _messages = [];
-  ChatSession? _chat;
-  String? _chatInstruction;
-
-  /// Enabled sections the history was built under: when they change, earlier
-  /// turns (possibly about a section now switched off) are not replayed.
-  String? _historySections;
-
-  /// Detail-page grounding the history was built under
-  /// ([assistantDetailSignature]): when an admin withdraws details, phones or
-  /// links, earlier answers quoting them are not replayed.
-  String? _historyDetails;
+  late final AssistantConversation _conversation =
+      AssistantConversation(ref.read(assistantModelProvider), defaultModel: AppConfig.geminiModel);
   bool _busy = false;
-
-  /// Successful turns (user + model), replayed when the session is rebuilt
-  /// after a failure or a content/date change. Capped so request size and
-  /// cost stay bounded; the oldest turns drop off first.
-  final List<Content> _history = [];
-  static const _maxHistoryContents = 20; // 10 question/answer turns
 
   @override
   void dispose() {
@@ -60,12 +55,17 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
   }
 
   /// Waits (briefly) for every content stream the instruction is built from,
-  /// so the first question is not answered from a partial context.
+  /// so the first question is not answered from a partial context. Sections
+  /// switched on while waiting are picked up: the section flags are re-read
+  /// after each round until they stop changing (within the 10 s budget).
   Future<void> _awaitContent() async {
+    final deadline = DateTime.now().add(const Duration(seconds: 10));
+    final done = <String>{};
     try {
       await Future.wait<Object?>([
         ref.read(settingsProvider.future),
         ref.read(featuresStreamProvider.future),
+        ref.read(assistantSettingsProvider.future),
         ref.read(liturgiesProvider.future),
         ref.read(seasonsProvider.future),
         ref.read(clinicsProvider.future),
@@ -75,35 +75,76 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
         ref.read(alertsProvider.future),
         ref.read(priestsProvider.future),
         ref.read(saintsProvider.future),
-        // Milestones are grounded only while their section is on.
-        if (ref.read(featuresProvider).enabled(Sections.milestones)) ref.read(milestonesProvider.future),
-      ]).timeout(const Duration(seconds: 10));
+      ]).timeout(deadline.difference(DateTime.now()));
+      while (true) {
+        final f = ref.read(featuresProvider);
+        // Grounded only while their section is on.
+        final pending = {
+          if (f.enabled(Sections.milestones)) Sections.milestones,
+          if (f.enabled(Sections.contactForm)) Sections.contactForm,
+          if (f.enabled(Sections.customSections)) Sections.customSections,
+          if (f.enabled(Sections.customPages)) Sections.customPages,
+        }.difference(done);
+        if (pending.isEmpty) break;
+        final left = deadline.difference(DateTime.now());
+        if (left <= Duration.zero) break;
+        await Future.wait<Object?>([
+          if (pending.contains(Sections.milestones)) ref.read(milestonesProvider.future),
+          if (pending.contains(Sections.contactForm)) ref.read(contactSettingsProvider.future),
+          if (pending.contains(Sections.customSections)) ref.read(categoriesProvider.future),
+          if (pending.contains(Sections.customSections)) ref.read(entriesProvider.future),
+          if (pending.contains(Sections.customPages)) ref.read(customPagesProvider.future),
+        ]).timeout(left);
+        done.addAll(pending);
+      }
     } catch (e) {
       debugPrint('Assistant: content not fully loaded: $e');
     }
   }
 
-  String _buildInstruction() => buildAssistantInstruction(
-        settings: ref.read(settingsProvider).requireValue,
-        liturgies: ref.read(liturgiesProvider).value ?? const [],
-        seasons: ref.read(seasonsProvider).value ?? const [],
-        clinics: ref.read(clinicsProvider).value ?? const [],
-        meetings: ref.read(meetingsProvider).value ?? const [],
-        activities: ref.read(activitiesProvider).value ?? const [],
-        facilities: ref.read(facilitiesProvider).value ?? const [],
-        now: CairoTime.now(),
-        features: ref.read(featuresProvider),
-        alerts: ref.read(alertsProvider).value ?? const [],
-        priests: ref.read(priestsProvider).value ?? const [],
-        saints: ref.read(saintsProvider).value ?? const [],
-        milestones: ref.read(milestonesProvider).value ?? const [],
-      );
+  AssistantSettings get _settings => ref.read(assistantSettingsProvider).value ?? AssistantSettings.defaults;
 
-  /// Reuses the chat while the grounding (church data + Cairo date) is
-  /// unchanged; otherwise starts a new one that carries the earlier turns.
-  ChatSession _session() {
-    final instruction = _buildInstruction();
-    if (_chat != null && instruction == _chatInstruction) return _chat!;
+  /// Contact types / custom sections / custom pages, read only while their
+  /// section is on (a switched-off section's provider is never subscribed).
+  ({ContactSettings contact, List<CustomCategory> categories, List<CategoryEntry> entries, List<CustomPage> pages})
+      _customInputs(FeatureSettings f) => (
+            contact: f.enabled(Sections.contactForm)
+                ? (ref.read(contactSettingsProvider).value ?? ContactSettings.defaults)
+                : ContactSettings.defaults,
+            categories: f.enabled(Sections.customSections) ? (ref.read(categoriesProvider).value ?? const []) : const [],
+            entries: f.enabled(Sections.customSections) ? (ref.read(entriesProvider).value ?? const []) : const [],
+            pages: f.enabled(Sections.customPages) ? (ref.read(customPagesProvider).value ?? const []) : const [],
+          );
+
+  String _buildInstruction() {
+    final f = ref.read(featuresProvider);
+    final c = _customInputs(f);
+    return buildAssistantInstruction(
+      settings: ref.read(settingsProvider).requireValue,
+      liturgies: ref.read(liturgiesProvider).value ?? const [],
+      seasons: ref.read(seasonsProvider).value ?? const [],
+      clinics: ref.read(clinicsProvider).value ?? const [],
+      meetings: ref.read(meetingsProvider).value ?? const [],
+      activities: ref.read(activitiesProvider).value ?? const [],
+      facilities: ref.read(facilitiesProvider).value ?? const [],
+      now: CairoTime.now(),
+      features: f,
+      alerts: ref.read(alertsProvider).value ?? const [],
+      priests: ref.read(priestsProvider).value ?? const [],
+      saints: ref.read(saintsProvider).value ?? const [],
+      milestones: ref.read(milestonesProvider).value ?? const [],
+      assistant: _settings,
+      categories: c.categories,
+      entries: c.entries,
+      pages: c.pages,
+      contact: c.contact,
+    );
+  }
+
+  /// Enabled sections + detail grounding + contact types / custom sections /
+  /// pages grounding: when any of them changes, earlier turns (possibly
+  /// quoting content an admin withdrew) are not replayed.
+  String _historyKey() {
     final f = ref.read(featuresProvider);
     final sections = [for (final s in Sections.all) if (f.enabled(s)) s].join(',');
     final details = assistantDetailSignature(
@@ -116,19 +157,13 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
       saints: ref.read(saintsProvider).value ?? const [],
       milestones: ref.read(milestonesProvider).value ?? const [],
     );
-    if ((_historySections != null && _historySections != sections) ||
-        (_historyDetails != null && _historyDetails != details)) {
-      _history.clear();
-    }
-    _historySections = sections;
-    _historyDetails = details;
-    final model = FirebaseAI.googleAI().generativeModel(
-      model: AppConfig.geminiModel,
-      systemInstruction: Content.system(instruction),
-      generationConfig: GenerationConfig(temperature: 0.2, maxOutputTokens: 800),
-    );
-    _chatInstruction = instruction;
-    return _chat = model.startChat(history: List.of(_history));
+    final c = _customInputs(f);
+    final custom = assistantCustomSignature(
+        features: f, contact: c.contact, categories: c.categories, entries: c.entries, pages: c.pages);
+    // The allowed topics too: answers about a topic an admin removed are not
+    // replayed.
+    final topics = _settings.effectiveTopics.join('\n');
+    return '$sections\u0000$details\u0000$custom\u0000$topics';
   }
 
   static String _cairoStamp() {
@@ -140,7 +175,15 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
   Future<void> _send([String? preset]) async {
     final q = (preset ?? _input.text).trim();
     if (q.isEmpty || _busy) return;
-    if (q.length > 500) return;
+    final s = _settings;
+    // Checked before anything is shown or sent (length, per-minute and
+    // per-visit limits).
+    final blocked = _conversation.precheck(q, s, DateTime.now());
+    if (blocked != null) {
+      setState(() => _messages.add(_Msg(false, _blockedText(blocked, s), error: true)));
+      _scrollDown();
+      return;
+    }
     final errorText = context.tr('askError');
     setState(() {
       _messages.add(_Msg(true, q));
@@ -151,24 +194,22 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
     try {
       await _awaitContent();
       if (!mounted) return;
-      final prompt = Content.text('[Current Cairo time: ${_cairoStamp()}]\n$q');
-      final r = await _session().sendMessage(prompt).timeout(const Duration(seconds: 45));
-      final text = r.text?.trim();
-      final ok = text != null && text.isNotEmpty;
-      if (ok) {
-        _history
-          ..add(prompt)
-          ..add(Content.model([TextPart(text)]));
-        if (_history.length > _maxHistoryContents) {
-          _history.removeRange(0, _history.length - _maxHistoryContents);
-          _chat = null; // rebuild with the trimmed history on the next question
-        }
-      }
+      final r = await _conversation.ask(
+        q,
+        settings: _settings,
+        instruction: _buildInstruction(),
+        historyKey: _historyKey(),
+        now: DateTime.now(),
+        stamp: '[Current Cairo time: ${_cairoStamp()}]',
+      );
       if (!mounted) return;
-      setState(() => _messages.add(_Msg(false, ok ? text : errorText, error: !ok)));
+      setState(() => _messages.add(switch (r.outcome) {
+            AssistantOutcome.answer || AssistantOutcome.refused => _Msg(false, r.text),
+            AssistantOutcome.error => _Msg(false, errorText, error: true),
+            final o => _Msg(false, _blockedText(o, s), error: true),
+          }));
     } catch (e) {
       debugPrint('Assistant error: $e');
-      _chat = null; // rebuild the session (with the kept history) on next try
       if (!mounted) return;
       setState(() => _messages.add(_Msg(false, errorText, error: true)));
     } finally {
@@ -178,6 +219,13 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
       }
     }
   }
+
+  String _blockedText(AssistantOutcome o, AssistantSettings s) => switch (o) {
+        AssistantOutcome.rateLimitedMinute => context.tr('askSlowDown'),
+        AssistantOutcome.rateLimitedSession => context.tr('askSessionLimit'),
+        AssistantOutcome.invalid => context.tr('askTooLong', {'n': '${s.maxChars}'}),
+        _ => context.tr('askError'),
+      };
 
   void _scrollDown() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -200,7 +248,11 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
         children: [const PageIntro(pageKey: CustomizablePages.ask), EmptyState(message: context.tr('askUnavailable'), icon: Icons.smart_toy_outlined)],
       );
     }
-    final suggestions = [context.tr('askSuggest1'), context.tr('askSuggest2'), context.tr('askSuggest3')];
+    final cfg = ref.watch(assistantSettingsProvider).value ?? AssistantSettings.defaults;
+    final custom = cfg.suggestions(context.isAr);
+    final suggestions =
+        custom.isNotEmpty ? custom : [context.tr('askSuggest1'), context.tr('askSuggest2'), context.tr('askSuggest3')];
+    final welcome = cfg.welcome(context.isAr);
     return Column(children: [
       CustomizablePageHeader(
           pageKey: CustomizablePages.ask,
@@ -213,7 +265,7 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
             constraints: const BoxConstraints(maxWidth: 800),
             child: ListView(controller: _scroll, padding: const EdgeInsets.all(16), children: [
               const PageIntro(pageKey: CustomizablePages.ask),
-              _bubble(_Msg(false, context.tr('askIntro'))),
+              _bubble(_Msg(false, welcome.isNotEmpty ? welcome : context.tr('askIntro'))),
               if (_messages.isEmpty)
                 Padding(
                   padding: const EdgeInsets.only(top: 8),
@@ -259,7 +311,8 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
                 Expanded(
                   child: TextField(
                     controller: _input,
-                    maxLength: 500,
+                    key: const Key('askInput'),
+                    maxLength: cfg.maxChars,
                     minLines: 1,
                     maxLines: 4,
                     textInputAction: TextInputAction.send,

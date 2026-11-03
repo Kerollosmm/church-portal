@@ -261,7 +261,8 @@ void main() {
       expect(d.bySlot('c2')!.subtypes.map((s) => s.key), ['wedding', 'condolence']);
       expect(d.bySlot('c2')!.subtypes.map((s) => s.labelAr), ['فرح', 'عزاء']);
       expect(ContactSettings.fromMap(null), same(ContactSettings.defaults));
-      expect(d.nextSlot, 'c5');
+      // New categories get a fresh random id, never a legacy slot (PR #19).
+      expect(d.newId(), matches(RegExp(r'^c[0-9a-z]{10}$')));
     });
 
     test('round trip, sorting, hidden ones and anonymous only for complaints / suggestions', () {
@@ -274,8 +275,9 @@ void main() {
           'c99': {'labelAr': 'x'},
         }
       });
-      expect(s.categories.map((c) => c.slot), ['c2', 'c3', 'c1']);
-      expect(s.visible.map((c) => c.slot), ['c3', 'c1']);
+      // Any well-formed id is a category since PR #19 (stable random ids).
+      expect(s.categories.map((c) => c.slot), ['c99', 'c2', 'c3', 'c1']);
+      expect(s.visible.map((c) => c.slot), ['c99', 'c3', 'c1']);
       expect(s.bySlot('c3')!.allowsAnonymous, isTrue);
       expect(s.bySlot('c2')!.allowsAnonymous, isFalse, reason: 'general never anonymous');
       expect(s.bySlot('c2')!.encode(), 'general\u001f0\u001f0\u001f5\u001fب\u001f\u001f');
@@ -507,17 +509,29 @@ void main() {
       }
       expect(find.byKey(const ValueKey('catAnon-c3')), findsOneWidget);
       expect(find.byKey(const ValueKey('catAnon-c1')), findsNothing);
-      await tester.tap(find.byKey(const Key('addContactCat')));
-      await tester.pumpAndSettle();
-      await tester.enterText(find.byKey(const ValueKey('catLabelAr-c5-1')), 'شكر');
+      // Delete "Suggestion" (c4) first, then add a type: it gets a fresh
+      // random id, never c4 again (PR #19), so c4's old messages are not
+      // re-labelled.
       await tester.tap(find.byKey(const ValueKey('removeCat-c4')));
       await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('addContactCat')));
+      await tester.pumpAndSettle();
+      final labelKeys = find.byWidgetPredicate((w) {
+        final k = w.key;
+        return k is ValueKey<String> && RegExp(r'^catLabelAr-c[0-9a-z]{10}-1$').hasMatch(k.value);
+      });
+      expect(labelKeys, findsOneWidget);
+      final newId = (tester.widget(labelKeys).key! as ValueKey<String>).value.split('-')[1];
+      expect(newId, isNot('c4'));
+      expect(newId, isNot('c5'));
+      await tester.enterText(labelKeys, 'شكر');
       await tester.tap(find.byKey(const Key('saveContactCats')));
       await tester.pumpAndSettle();
       final cats = b.savedDocs['settings/contact']!['categories'] as Map;
-      expect(cats.keys, ['c1', 'c2', 'c3', 'c5']);
+      expect(cats.keys, ['c1', 'c2', 'c3', newId]);
       final saved = ContactSettings.fromMap({'categories': cats});
-      expect(saved.bySlot('c5')!.labelAr, 'شكر');
+      expect(saved.bySlot(newId)!.labelAr, 'شكر');
+      expect(saved.bySlot('c4'), isNull);
       expect(cats['c2'], 'booking\u001f1\u001f0\u001f20\u001fحجز قاعة\u001fHall booking\u001fwedding|فرح|Wedding\u001econdolence|عزاء|Condolence');
     });
 

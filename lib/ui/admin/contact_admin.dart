@@ -21,6 +21,10 @@ class ContactCategoriesScreen extends StatefulWidget {
 class _ContactCategoriesScreenState extends State<ContactCategoriesScreen> {
   late Stream<AdminDoc?> _stream = widget.repo.watchDoc('settings/contact');
   List<ContactCategory>? _cats;
+
+  /// Ids removed in this editor: a category added afterwards never reuses
+  /// one (its old messages keep their own label / "Other" box).
+  final Set<String> _retired = {};
   bool _dirty = false;
   bool _saving = false;
   final _form = GlobalKey<FormState>();
@@ -110,7 +114,7 @@ class _ContactCategoriesScreenState extends State<ContactCategoriesScreen> {
 
   Widget _editor(BuildContext context) {
     final cats = _cats!;
-    final next = ContactSettings(cats).nextSlot;
+    final full = cats.length >= contactMaxCategories;
     return Form(
       key: _form,
       child: ListView(padding: const EdgeInsets.fromLTRB(12, 12, 12, 96), children: [
@@ -121,10 +125,12 @@ class _ContactCategoriesScreenState extends State<ContactCategoriesScreen> {
           alignment: AlignmentDirectional.centerStart,
           child: OutlinedButton.icon(
             key: const Key('addContactCat'),
-            onPressed: next == null
+            onPressed: full
                 ? null
                 : () => setState(() {
-                      cats.add(ContactCategory(slot: next, labelAr: '', order: (cats.length + 1) * 10));
+                      // A fresh stable id, never one removed in this editor.
+                      final id = ContactSettings(cats).newId(retired: _retired)!;
+                      cats.add(ContactCategory(slot: id, labelAr: '', order: (cats.length + 1) * 10));
                       _dirty = true;
                     }),
             icon: const Icon(Icons.add),
@@ -279,7 +285,7 @@ class _ContactCategoriesScreenState extends State<ContactCategoriesScreen> {
               onPressed: cats.length <= 1
                   ? null
                   : () => setState(() {
-                        cats.removeAt(i);
+                        _retired.add(cats.removeAt(i).slot);
                         _dirty = true;
                       }),
               icon: const Icon(Icons.delete_outline, color: AppColors.alert),

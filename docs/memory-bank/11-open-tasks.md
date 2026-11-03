@@ -1,18 +1,28 @@
 # 11 — Open tasks
 
 Tick items off (or delete them) in the PR that completes them, and add new ones as you discover them.
-Status as of 2 Nov 2026 (after PR #7, PR #8, PR #9 `ad621cf`, PR #10 and PR #11).
+Status as of 3 Nov 2026 (after PR #19; earlier: PR #7–#18).
 
 ## Infrastructure & security (owner: developer)
 
 - [ ] **Re-save the service-account secret** `FIREBASE_SERVICE_ACCOUNT_ASAFRA_CHURCH_PORTAL` with only the JSON key
       (no trailing characters/second copy). The credentials action tolerates it but prints
       `::warning::Ignored N extra character(s)…`. Delete any local copy of the key afterwards.
-- [ ] **reCAPTCHA v3 site key**: create it (domains `maximos-domadios-church.web.app`, `maximos-domadios-church.firebaseapp.com`,
-      `localhost`), register the web app under App Check, set repo **variable** `RECAPTCHA_SITE_KEY`, redeploy `main`.
-      Until then App Check is off on the live site and the assistant is hidden.
-- [ ] Enforce App Check for **Firebase AI Logic** (console) once the key works; set a Gemini **request quota** (cost cap).
-      Do not enforce App Check on Firestore before the key is live.
+- [x] **reCAPTCHA Enterprise site key** "church-portal-web" created, web app registered under App Check (reCAPTCHA
+      Enterprise provider), repo variable `RECAPTCHA_SITE_KEY` set, AI Logic App Check **Enforced** (Nov 2026);
+      the app uses `ReCaptchaEnterpriseProvider` since PR #19.
+- [ ] Optional: set a Gemini **request quota** for Firebase AI Logic (console). On Spark the Developer API free tier
+      is rate-limited and never billed. Do not enforce App Check on Firestore while Android release has no Play
+      Integrity registration.
+- [ ] **Android App Check (owner, manual — PR #19):** (1) create a release signing key (`keytool -genkey -v -keystore
+      upload-keystore.jks -keyalg RSA -keysize 2048 -validity 10000 -alias upload`) and wire `signingConfigs.release`
+      in `android/app/build.gradle.kts` (keystore + passwords outside git); (2) copy its **SHA-256** (`keytool -list -v
+      -keystore upload-keystore.jks -alias upload`; with Play App Signing use the *app signing key* SHA-256 from Play
+      Console → App integrity); (3) Firebase console → Project settings → Android app `com.asafrachurch.church_portal`
+      → Add fingerprint; (4) App Check → Apps → Android → **Play Integrity** → Register (link the Cloud project in
+      Play Console → App integrity). **Debug APKs:** run once, copy the debug token from logcat ("Enter this debug
+      secret into the allow list…") into App Check → Apps → ⋮ → Manage debug tokens (or build with
+      `--dart-define=APPCHECK_DEBUG_TOKEN=<uuid>` registered there). Until then Android assistant requests are refused.
 - [ ] **`production` environment required reviewers** (Settings → Environments) so live deploys, rules deploys
       (`deploy-rules` uses the environment since PR 1) and the Seed workflow (`force` can overwrite production data)
       need approval.
@@ -112,8 +122,8 @@ Status as of 2 Nov 2026 (after PR #7, PR #8, PR #9 `ad621cf`, PR #10 and PR #11)
       confirm the contact types and booking occasions.
 - [ ] Optional: let built-in sections and custom categories share one menu order (built-ins come first today).
 - [ ] Optional: detail pages for custom items (cards show the full description today).
-- [ ] Optional: add custom sections / pages to `web/sitemap.xml` (static file) and to the assistant grounding.
-- [ ] Optional: never reuse a deleted contact-type slot (older messages of that type would show under the new one).
+- [ ] Optional: add custom sections / pages to `web/sitemap.xml` (static file). (Assistant grounding done in PR #19.)
+- [x] Never reuse a deleted contact-type id (PR #19: stable random ids).
 
 ## Content (owner: church office — see `09-content-status.md`)
 

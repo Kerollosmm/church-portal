@@ -1295,7 +1295,9 @@ describe('ADR-028: contact categories, bookings and anonymous messages', () => {
     await assertSucceeds(setDoc(ref, { categories: many }));
     await assertSucceeds(setDoc(ref, { categories: cats }));
     for (const bad of [
-      {}, { c13: cats.c1 }, { c1: enc({ ...raw.c1, kind: 'spam' }) }, { c1: enc({ ...raw.c1, anon: true }) },
+      {}, { 'Bad-Id': cats.c1 }, { c_1: cats.c1 }, { ['c' + 'x'.repeat(16)]: cats.c1 },
+      Object.fromEntries(Array.from({ length: 13 }, (_, i) => [`c${i + 1}`, cats.c1])),
+      { c1: enc({ ...raw.c1, kind: 'spam' }) }, { c1: enc({ ...raw.c1, anon: true }) },
       { c1: enc({ ...raw.c1, labelAr: '' }) }, { c1: enc({ ...raw.c1, labelAr: ' ' }) }, { c1: enc({ ...raw.c1, labelAr: 'x'.repeat(81) }) },
       { c1: raw.c1 }, { c1: cats.c1 + '\u001fextra' }, { c1: enc({ ...raw.c1, order: 'x' }) },
       { c2: enc({ ...raw.c2, subtypes: ['Wedding|فرح|Wedding'] }) }, { c2: enc({ ...raw.c2, subtypes: ['wedding||Wedding'] }) },
@@ -1322,5 +1324,105 @@ describe('ADR-028: contact categories, bookings and anonymous messages', () => {
     await assertFails(updateDoc(doc(ed, 'contact_messages', 'm1'), { status: 'archived' }));
     await assertFails(updateDoc(doc(ed, 'contact_messages', 'm1'), { category: 'c2' }));
     await assertFails(updateDoc(doc(db(STRANGER), 'contact_messages', 'm1'), { adminNotes: 'x' }));
+  });
+});
+
+describe('PR #19: stable contact category ids (never re-label old messages)', () => {
+  const enc = (c) => [c.kind, c.on ? '1' : '0', c.anon ? '1' : '0', String(c.order), c.labelAr, c.labelEn,
+    (c.subtypes || []).join('\u001e')].join('\u001f');
+  const send = (fs, msg) => {
+    const batch = writeBatch(fs);
+    const ref = doc(collection(fs, 'contact_messages'));
+    batch.set(ref, { lang: 'ar', status: 'new', createdAt: serverTimestamp(), ...msg });
+    batch.set(doc(fs, 'meta', 'contact_rate'), { lastAt: serverTimestamp(), lastMsgId: ref.id });
+    return batch.commit();
+  };
+  const reset = () => env.withSecurityRulesDisabled(async (ctx) => deleteDoc(doc(ctx.firestore(), 'meta', 'contact_rate')));
+  const general = (category) => ({ category, kind: 'general', name: 'Mina', phone: '01012345678', email: '', message: 'Hello there' });
+  const c1 = enc({ kind: 'general', on: true, anon: false, order: 10, labelAr: 'استفسار', labelEn: '' });
+  const visit = enc({ kind: 'general', on: true, anon: false, order: 20, labelAr: 'زيارة منزلية', labelEn: 'Home visit' });
+  const prayer = enc({ kind: 'general', on: true, anon: false, order: 30, labelAr: 'طلب صلاة', labelEn: 'Prayer request' });
+
+  test('random ids save and receive messages; a deleted id is refused, its replacement has a new id', async () => {
+    const ref = doc(db(EDITOR), 'settings', 'contact');
+    await assertSucceeds(setDoc(ref, { categories: { c1, ck3j9x2ab7q: visit } }));
+    const pub = db(null);
+    await assertSucceeds(send(pub, general('ck3j9x2ab7q')));
+    await reset();
+    // The admin deletes "Home visit" and adds "Prayer request": a fresh id.
+    await assertSucceeds(setDoc(ref, { categories: { c1, cz81mq0w4re: prayer } }));
+    await assertFails(send(pub, general('ck3j9x2ab7q')), 'the deleted category is gone');
+    await assertSucceeds(send(pub, general('cz81mq0w4re')));
+    await reset();
+    await assertFails(send(pub, general('C1')), 'malformed id');
+    await assertFails(send(pub, general('c' + 'a'.repeat(16))), 'too long');
+  });
+
+  test('12 full categories with random ids fit in one write; an edit validates only what changed', async () => {
+    const ref = doc(db(EDITOR), 'settings', 'contact');
+    const full = (i) => enc({
+      labelAr: 'ن'.repeat(80), labelEn: 'e'.repeat(80), kind: 'booking', on: true, anon: false, order: i,
+      subtypes: Array.from({ length: 8 }, (_, j) => `type${j}|${'ع'.repeat(60)}|${'e'.repeat(60)}`),
+    });
+    const ids = Array.from({ length: 12 }, (_, i) => `c${(1e9 + i * 7919).toString(36)}x${i}`);
+    const many = Object.fromEntries(ids.map((id, i) => [id, full(i)]));
+    await assertSucceeds(setDoc(ref, { categories: many }));
+    await assertSucceeds(setDoc(ref, { categories: { ...many, [ids[3]]: visit } }));
+    await assertFails(setDoc(ref, { categories: { ...many, [ids[3]]: 'nonsense' } }));
+    await assertFails(setDoc(ref, { categories: { ...many, cextra13: visit } }), '13 categories');
+  });
+});
+
+describe('ADR-029: assistant settings (settings/assistant)', () => {
+  const full = {
+    model: 'gemini-3.1-flash-lite',
+    instructions: 'i'.repeat(4000),
+    topics: 't'.repeat(2000),
+    refusalAr: 'ع'.repeat(500), refusalEn: 'r'.repeat(500),
+    welcomeAr: 'أ'.repeat(500), welcomeEn: 'w'.repeat(500),
+    suggestionsAr: 'س'.repeat(300), suggestionsEn: 's'.repeat(300),
+    maxChars: 1000, perMinute: 20, perSession: 200,
+  };
+
+  test('everyone reads; admins save every field at its maximum, blanks and nulls (= defaults)', async () => {
+    const ref = doc(db(EDITOR), 'settings', 'assistant');
+    await assertSucceeds(setDoc(ref, full));
+    await assertSucceeds(getDoc(doc(db(null), 'settings', 'assistant')));
+    await assertSucceeds(setDoc(ref, { model: '', instructions: '', topics: '', maxChars: null, perMinute: null, perSession: null }));
+    await assertSucceeds(setDoc(ref, { model: 'gemini-3.5-flash-lite', updatedAt: serverTimestamp(), updatedBy: `${EDITOR}@x.test` }, { merge: true }));
+    await assertSucceeds(updateDoc(ref, { maxChars: 50, perMinute: 1, perSession: 1 }));
+  });
+
+  test('model ids, lengths, number ranges and unknown keys are validated', async () => {
+    const ref = doc(db(EDITOR), 'settings', 'assistant');
+    for (const bad of [
+      { model: 'gpt-4o' }, { model: 'Gemini-3' }, { model: 'gemini 3' }, { model: 'gemini-' }, { model: 'gemma-3-27b' },
+      { model: 'gemini-' + 'a'.repeat(60) }, { model: 3 }, { model: null },
+      { instructions: 'x'.repeat(4001) }, { topics: 'x'.repeat(2001) }, { refusalAr: 'x'.repeat(501) },
+      { welcomeEn: 'x'.repeat(501) }, { suggestionsEn: 'x'.repeat(301) }, { refusalEn: 5 },
+      { maxChars: 49 }, { maxChars: 1001 }, { maxChars: 300.5 }, { perMinute: 0 }, { perMinute: 21 },
+      { perSession: 201 }, { perSession: '5' }, { enabled: true }, { updatedBy: 'someone@else.test' },
+    ]) {
+      await assertFails(setDoc(ref, bad), JSON.stringify(bad).slice(0, 80));
+    }
+  });
+
+  test('the admin switches: sections.assistant (field-path update) and church assistantEnabled', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) =>
+      setDoc(doc(ctx.firestore(), 'settings', 'features'), convert(seed.settings.features)));
+    const ed = db(EDITOR);
+    const stamp = { updatedAt: serverTimestamp(), updatedBy: `${EDITOR}@x.test` };
+    await assertSucceeds(updateDoc(doc(ed, 'settings', 'features'), { 'sections.assistant': false, ...stamp }));
+    await assertSucceeds(updateDoc(doc(ed, 'settings', 'features'), { 'sections.assistant': true, ...stamp }));
+    await assertFails(updateDoc(doc(ed, 'settings', 'features'), { 'sections.assistant': 'yes', ...stamp }));
+    await assertSucceeds(setDoc(doc(ed, 'settings', 'church'), { assistantEnabled: true, ...stamp }, { merge: true }));
+    await assertFails(updateDoc(doc(db(null), 'settings', 'features'), { 'sections.assistant': false }));
+  });
+
+  test('visitors and non-admins cannot change it; it can never be deleted', async () => {
+    await assertFails(setDoc(doc(db(null), 'settings', 'assistant'), { model: 'gemini-3.1-flash-lite' }));
+    await assertFails(setDoc(doc(db(STRANGER), 'settings', 'assistant'), { model: 'gemini-3.1-flash-lite' }));
+    await assertSucceeds(setDoc(doc(db(EDITOR), 'settings', 'assistant'), { model: '' }));
+    await assertFails(deleteDoc(doc(db(OWNER), 'settings', 'assistant')));
   });
 });

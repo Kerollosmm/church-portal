@@ -1,6 +1,7 @@
 /// Field schemas for the admin editors (collections + the church-info doc).
 library;
 
+import '../../domain/assistant_settings.dart';
 import '../../domain/custom_content.dart';
 import '../../domain/image_style.dart';
 
@@ -105,6 +106,10 @@ class FieldDef {
   /// sub-field values in order joined by U+001F (page blocks, ADR-027).
   final bool encodedRows;
 
+  /// Text fields: the whole (trimmed) value must match this regular
+  /// expression when not blank (e.g. the assistant's model name).
+  final String pattern;
+
   const FieldDef(this.key, this.labelAr, this.labelEn, this.type,
       {this.required = false,
       this.options = const [],
@@ -126,7 +131,8 @@ class FieldDef {
       this.showWhen,
       this.dynamicOptions = '',
       this.linkPicker = false,
-      this.encodedRows = false});
+      this.encodedRows = false,
+      this.pattern = ''});
 
   int get effectiveMaxLength => maxLength > 0
       ? maxLength
@@ -736,6 +742,49 @@ const churchInfoDoc = DocDef('settings/church', 'بيانات الكنيسة', '
       FieldType.boolean,
       newBool: false),
   FieldDef('sample', 'بيانات غير مؤكدة', 'Unconfirmed data', FieldType.boolean, newBool: false),
+]);
+
+/// settings/assistant (ADR-029): model, persona, topics, refusal / welcome
+/// texts, suggestions and the client-side limits. Blank = code default
+/// (AssistantSettings). On / off stays with the "Ask the church" section
+/// switch and Church info → "Enable the AI assistant".
+const assistantSettingsDoc = DocDef('settings/assistant', 'المساعد الذكي', 'AI assistant', [
+  FieldDef('model', 'النموذج (اتركه فارغًا للافتراضي)', 'Model (blank = default)', FieldType.text,
+      maxLength: AssistantLimits.modelMax,
+      pattern: r'gemini-[a-z0-9][a-z0-9.\-]{0,52}',
+      hintAr: 'اسم نموذج Gemini مدعوم في Firebase AI Logic، مثل gemini-3.1-flash-lite (الافتراضي، مجاني). إذا رُفض الاسم يُستخدم الافتراضي تلقائيًا.',
+      hintEn: 'A Gemini model id supported by Firebase AI Logic, e.g. gemini-3.1-flash-lite (the default, free tier). If it is rejected, the default is used automatically.'),
+  FieldDef('instructions', 'تعليمات الشخصية والأسلوب', 'Persona & style instructions', FieldType.multiline,
+      maxLength: AssistantLimits.instructionsMax,
+      hintAr: 'اتركه فارغًا للنص الافتراضي. قواعد النطاق وعدم اختلاق المواعيد والأرقام تُضاف دائمًا ولا يمكن حذفها.',
+      hintEn: 'Blank = the default text. The scope rules and "never invent times or numbers" are always added and cannot be removed.'),
+  FieldDef('topics', 'الموضوعات المسموح بها (موضوع في كل سطر)', 'Allowed topics (one per line)', FieldType.multiline,
+      maxLength: AssistantLimits.topicsMax,
+      hintAr: 'اتركه فارغًا للقائمة الافتراضية (المواعيد، الاجتماعات، العيادات، الأنشطة، الآباء، القديسون، التواصل، الحجز، التبرعات، الأقسام والصفحات المخصصة).',
+      hintEn: 'Blank = the default list (times, meetings, clinics, activities, priests, saints, contact, bookings, donations, custom sections and pages).'),
+  FieldDef('refusalAr', 'رسالة الاعتذار عن الأسئلة الأخرى (عربي)', 'Refusal message (Arabic)', FieldType.multiline,
+      maxLength: AssistantLimits.textMax),
+  FieldDef('refusalEn', 'رسالة الاعتذار عن الأسئلة الأخرى (إنجليزي)', 'Refusal message (English)', FieldType.multiline,
+      maxLength: AssistantLimits.textMax),
+  FieldDef('welcomeAr', 'رسالة الترحيب (عربي)', 'Welcome text (Arabic)', FieldType.multiline,
+      maxLength: AssistantLimits.textMax),
+  FieldDef('welcomeEn', 'رسالة الترحيب (إنجليزي)', 'Welcome text (English)', FieldType.multiline,
+      maxLength: AssistantLimits.textMax),
+  FieldDef('suggestionsAr', 'أسئلة مقترحة (عربي، سؤال في كل سطر، حتى 3)', 'Suggested questions (Arabic, one per line, up to 3)',
+      FieldType.multiline,
+      maxLength: AssistantLimits.suggestionsMax),
+  FieldDef('suggestionsEn', 'أسئلة مقترحة (إنجليزي، سؤال في كل سطر، حتى 3)', 'Suggested questions (English, one per line, up to 3)',
+      FieldType.multiline,
+      maxLength: AssistantLimits.suggestionsMax),
+  FieldDef('maxChars', 'أقصى طول للسؤال (حروف)', 'Max question length (characters)', FieldType.integer,
+      min: AssistantLimits.maxCharsMin, max: AssistantLimits.maxCharsMax,
+      hintAr: 'الافتراضي ${AssistantLimits.maxCharsDefault}', hintEn: 'Default ${AssistantLimits.maxCharsDefault}'),
+  FieldDef('perMinute', 'أقصى عدد أسئلة في الدقيقة', 'Max questions per minute', FieldType.integer,
+      min: AssistantLimits.perMinuteMin, max: AssistantLimits.perMinuteMax,
+      hintAr: 'الافتراضي ${AssistantLimits.perMinuteDefault}', hintEn: 'Default ${AssistantLimits.perMinuteDefault}'),
+  FieldDef('perSession', 'أقصى عدد أسئلة في الزيارة الواحدة', 'Max questions per visit', FieldType.integer,
+      min: AssistantLimits.perSessionMin, max: AssistantLimits.perSessionMax,
+      hintAr: 'الافتراضي ${AssistantLimits.perSessionDefault}', hintEn: 'Default ${AssistantLimits.perSessionDefault}'),
 ]);
 
 CollectionDef? collectionById(String id) {
