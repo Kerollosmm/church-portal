@@ -414,8 +414,8 @@ class FeaturesEditorState extends State<FeaturesEditor> {
                   key: const ValueKey('features-dailyVerse-enabled'),
                   contentPadding: const EdgeInsetsDirectional.only(start: 4),
                   title: Text(context.tr('dailyVerseShow')),
-                  value: f.dailyVerse.enabled,
-                  onChanged: (v) => _set(f.copyWith(dailyVerse: f.dailyVerse.copyWith(enabled: v))),
+                  value: f.enabled(Sections.dailyVerse),
+                  onChanged: (v) => _set(f.copyWith(sections: {...f.sections, Sections.dailyVerse: v})),
                 ),
                 Wrap(spacing: 10, runSpacing: 10, children: [
                   for (final m in DailyVerseConfig.modes)

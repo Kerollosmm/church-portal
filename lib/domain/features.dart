@@ -23,10 +23,11 @@ class Sections {
   static const contactForm = 'contactForm';
   static const assistant = 'assistant'; // "Ask the church"
   static const media = 'media'; // optional images on cards (priests, saints, milestones, activities, alerts, seasons)
+  static const dailyVerse = 'dailyVerse'; // home "verse of the day" card (ADR-024)
 
   static const all = [
     schedule, meetings, clinics, services, history, milestones, saints, priests, departedPriests, //
-    activities, alerts, contactInfo, socials, contactForm, assistant, media,
+    activities, alerts, contactInfo, socials, contactForm, assistant, media, dailyVerse,
   ];
 
   /// [ar, en] labels used in the admin toggles screen.
@@ -47,6 +48,7 @@ class Sections {
     contactForm: ['نموذج المراسلة', 'Contact form'],
     assistant: ['اسأل الكنيسة (المساعد الذكي)', 'Ask the church (AI assistant)'],
     media: ['الصور (إظهار صور الآباء والشفعاء والأنشطة…)', 'Images (show photos on priests, saints, activities…)'],
+    dailyVerse: ['آية اليوم في الصفحة الرئيسية', 'Verse of the day on the home page'],
   };
 }
 
@@ -255,7 +257,8 @@ class FeatureSettings {
   /// [ImageStyles.collections], values: [ImageStyles.all]). Missing = built-in default.
   final Map<String, String> imageStyles;
 
-  /// Home "verse of the day" options. Missing = on, daily rotation.
+  /// Home "verse of the day" mode / fixed verse (on/off is [Sections.dailyVerse]).
+  /// Missing = daily rotation.
   final DailyVerseConfig dailyVerse;
 
   const FeatureSettings({

@@ -469,7 +469,8 @@ service cloud.firestore {
 
     function sectionKeys() {
       return ['schedule', 'meetings', 'clinics', 'services', 'history', 'milestones', 'saints', 'priests',
-              'departedPriests', 'activities', 'alerts', 'contactInfo', 'socials', 'contactForm', 'assistant', 'media'];
+              'departedPriests', 'activities', 'alerts', 'contactInfo', 'socials', 'contactForm', 'assistant', 'media',
+              'dailyVerse'];
     }
 
     // Known section keys only, and every value a bool.
@@ -509,17 +510,15 @@ service cloud.firestore {
                                                'seasons', 'facilities', 'clinics'])
               && d.imageStyles.values().hasOnly(['avatar', 'card', 'banner'])))
         && (!('pageHeaders' in changed) || !('pageHeaders' in d) || validPageHeaders(d.pageHeaders))
-        // Verse of the day (missing = on, daily rotation).
+        // Verse of the day mode / fixed verse (missing = daily rotation).
         && (!('dailyVerse' in changed) || !('dailyVerse' in d) || validDailyVerse(d.dailyVerse))
         && (!changed.hasAny(['updatedAt', 'updatedBy']) || stampOk(d));
     }
 
-    // Verse of the day: on/off, daily rotation or a fixed admin-entered verse
-    // (Arabic text <= 500 chars, reference <= 60). Strings only: concatenating
-    // a non-string errors, which denies the write.
+    // Verse of the day: daily rotation or a fixed admin-entered verse (Arabic
+    // text <= 500 chars, reference <= 60). On/off is sections.dailyVerse.
     function validDailyVerse(v) {
-      return v is map && v.keys().hasOnly(['enabled', 'mode', 'textAr', 'refAr'])
-        && v.get('enabled', true) is bool
+      return v is map && v.keys().hasOnly(['mode', 'textAr', 'refAr'])
         && v.get('mode', 'daily') in ['daily', 'fixed']
         && v.get('textAr', '') is string && v.get('refAr', '') is string
         && (v.get('textAr', '') + '\u001f' + v.get('refAr', '')).matches('[^\\x1f]{0,500}\\x1f[^\\x1f]{0,60}');

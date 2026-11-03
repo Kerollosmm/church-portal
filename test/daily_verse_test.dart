@@ -24,12 +24,15 @@ double _contrast(Color a, Color b) {
   return ((la > lb ? la : lb) + 0.05) / ((la > lb ? lb : la) + 0.05);
 }
 
-Future<void> _pumpHome(WidgetTester tester, {Map<String, dynamic>? dailyVerse, required DateTime now}) async {
+Future<void> _pumpHome(WidgetTester tester,
+    {Map<String, dynamic>? dailyVerse, Map<String, bool> sections = const {}, required DateTime now}) async {
   tester.view.physicalSize = const Size(1200, 4000);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
   final raw = jsonDecode(File('assets/seed/seed.json').readAsStringSync()) as Map<String, dynamic>;
-  if (dailyVerse != null) (raw['settings']['features'] as Map)['dailyVerse'] = dailyVerse;
+  final f = raw['settings']['features'] as Map;
+  if (dailyVerse != null) f['dailyVerse'] = dailyVerse;
+  (f['sections'] as Map).addAll(sections);
   final container = ProviderContainer(overrides: [
     repositoryProvider.overrideWithValue(SeedRepository(SeedData(raw))),
     nowProvider.overrideWith((ref) => Stream.value(now)),
@@ -108,20 +111,20 @@ void main() {
   group('admin options', () {
     test('missing fields default to on + daily; bad values fall back', () {
       expect(FeatureSettings.defaults.dailyVerse, DailyVerseConfig.defaults);
-      expect(FeatureSettings.fromMap(const {'theme': 'navy'}).dailyVerse.enabled, isTrue);
       expect(FeatureSettings.fromMap(const {'dailyVerse': {}}).dailyVerse.mode, DailyVerseConfig.daily);
-      final bad = DailyVerseConfig.fromMap(const {'enabled': 'no', 'mode': 'weekly', 'textAr': 3});
+      expect(FeatureSettings.defaults.enabled(Sections.dailyVerse), isTrue, reason: 'missing section = on');
+      expect(FeatureSettings.fromMap(const {'sections': {'dailyVerse': false}}).enabled(Sections.dailyVerse), isFalse);
+      final bad = DailyVerseConfig.fromMap(const {'mode': 'weekly', 'textAr': 3});
       expect(bad, DailyVerseConfig.defaults);
       final fixed = FeatureSettings.fromMap(const {
-        'dailyVerse': {'enabled': false, 'mode': 'fixed', 'textAr': 'نص', 'refAr': 'مرجع'}
+        'dailyVerse': {'mode': 'fixed', 'textAr': 'نص', 'refAr': 'مرجع'}
       }).dailyVerse;
-      expect([fixed.enabled, fixed.mode, fixed.textAr, fixed.refAr], [false, 'fixed', 'نص', 'مرجع']);
+      expect([fixed.mode, fixed.textAr, fixed.refAr], ['fixed', 'نص', 'مرجع']);
       expect(FeatureSettings(dailyVerse: fixed).toMap()['dailyVerse'], fixed.toMap());
     });
 
-    test('resolve: off -> nothing; fixed -> admin verse; empty fixed -> daily', () {
+    test('resolve: fixed -> admin verse; empty fixed -> daily', () {
       final t = DateTime.utc(2026, 3, 1, 12);
-      expect(resolveDailyVerse(const DailyVerseConfig(enabled: false), _verses, t), isNull);
       final f = resolveDailyVerse(const DailyVerseConfig(mode: 'fixed', textAr: ' نص ', refAr: ' مرجع '), _verses, t)!;
       expect([f.textAr, f.refAr, f.refEn], ['نص', 'مرجع', '']);
       expect(resolveDailyVerse(const DailyVerseConfig(mode: 'fixed'), _verses, t), same(verseForDay(_verses, t)));
@@ -129,9 +132,9 @@ void main() {
 
     test('saved only once it differs from the default or is already stored', () {
       expect(featuresSaveWrites(const FeatureSettings(), const {}).first.containsKey('dailyVerse'), isFalse);
-      const off = FeatureSettings(dailyVerse: DailyVerseConfig(enabled: false));
-      expect(featuresSaveWrites(off, const {}).first['dailyVerse'], off.dailyVerse.toMap());
-      final back = featuresSaveWrites(const FeatureSettings(), const {'dailyVerse': {'enabled': false}}).first;
+      const fixed = FeatureSettings(dailyVerse: DailyVerseConfig(mode: 'fixed', textAr: 'نص'));
+      expect(featuresSaveWrites(fixed, const {}).first['dailyVerse'], fixed.dailyVerse.toMap());
+      final back = featuresSaveWrites(const FeatureSettings(), const {'dailyVerse': {'mode': 'fixed'}}).first;
       expect(back['dailyVerse'], DailyVerseConfig.defaults.toMap());
     });
 
@@ -140,6 +143,7 @@ void main() {
       final block = rules.substring(rules.indexOf('function validFeatures('));
       expect(block, contains("'dailyVerse'"));
       expect(rules, contains('function validDailyVerse('));
+      expect(rules.substring(rules.indexOf('function sectionKeys()')), contains("'dailyVerse'"));
       for (final k in DailyVerseConfig.defaults.toMap().keys) {
         expect(rules.substring(rules.indexOf('function validDailyVerse(')), contains("'$k'"));
       }
@@ -158,13 +162,13 @@ void main() {
     testWidgets('fixed admin verse replaces the rotation', (tester) async {
       await _pumpHome(tester,
           now: DateTime.utc(2026, 5, 5, 9),
-          dailyVerse: {'enabled': true, 'mode': 'fixed', 'textAr': 'نص الآية الثابتة', 'refAr': 'مزمور ٢٣: ١'});
+          dailyVerse: {'mode': 'fixed', 'textAr': 'نص الآية الثابتة', 'refAr': 'مزمور ٢٣: ١'});
       expect(find.text('نص الآية الثابتة'), findsOneWidget);
       expect(find.text('« مزمور ٢٣: ١ »'), findsOneWidget);
     });
 
-    testWidgets('switched off: no card', (tester) async {
-      await _pumpHome(tester, now: DateTime.utc(2026, 5, 5, 9), dailyVerse: {'enabled': false});
+    testWidgets('section switched off: no card', (tester) async {
+      await _pumpHome(tester, now: DateTime.utc(2026, 5, 5, 9), sections: {'dailyVerse': false});
       expect(find.byKey(const Key('dailyVerseCard')), findsNothing);
     });
 

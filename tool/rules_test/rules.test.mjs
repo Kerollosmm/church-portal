@@ -808,13 +808,14 @@ describe('PR #12: admin editor save paths', () => {
     const header = { titleAr: 'ع'.repeat(200), titleEn: 't'.repeat(200), subtitleAr: 'س'.repeat(300), subtitleEn: 's'.repeat(300), introAr: 'م'.repeat(1500), introEn: 'i'.repeat(1500) };
     const pages = ['about', 'schedule', 'education', 'activities', 'clinics', 'services', 'contact', 'ask'];
     const sections = Object.fromEntries(['schedule', 'meetings', 'clinics', 'services', 'history', 'milestones', 'saints', 'priests',
-      'departedPriests', 'activities', 'alerts', 'contactInfo', 'socials', 'contactForm', 'assistant', 'media'].map((k) => [k, true]));
+      'departedPriests', 'activities', 'alerts', 'contactInfo', 'socials', 'contactForm', 'assistant', 'media', 'dailyVerse'].map((k) => [k, true]));
     const full = {
       sections, homeOrder: ['banner', 'alerts', 'nextMass', 'quickContacts', 'milestones', 'directory', 'map'], homeHidden: ['map'],
       heroTitleAr: 'ع'.repeat(200), heroTitleEn: 'T', heroSubtitleAr: 'س'.repeat(300), heroSubtitleEn: 'S', bannerEnabled: true,
       bannerAr: 'ب'.repeat(500), bannerEn: 'B', bannerLink: '/mass-schedule', theme: 'navy',
       pageHeaders: Object.fromEntries(pages.map((p) => [p, header])),
       footer: { showPhones: false, showSocials: true, showQuickLinks: false, noteAr: 'م'.repeat(500), noteEn: 'n'.repeat(500) },
+      dailyVerse: { mode: 'fixed', textAr: 'ع'.repeat(500), refAr: 'ي'.repeat(60) },
     };
     const ref = doc(db(EDITOR), 'settings', 'features');
     // featuresSaveWrites: everything else first, then pageHeaders on its own
@@ -916,29 +917,30 @@ describe('ADR-022: hero motion & video switch (settings/features.heroMotion)', (
   });
 });
 
-describe('Verse of the day (settings/features.dailyVerse)', () => {
-  test('admins switch it, pick daily / fixed, and enter a fixed verse', async () => {
+describe('Verse of the day (settings/features.dailyVerse + sections.dailyVerse)', () => {
+  test('admins switch it via its section, pick daily / fixed, and enter a fixed verse', async () => {
     const ref = doc(db(EDITOR), 'settings', 'features');
-    await assertSucceeds(setDoc(ref, { theme: 'burgundy', dailyVerse: { enabled: false, mode: 'daily', textAr: '', refAr: '' } }));
-    await assertSucceeds(setDoc(ref, { dailyVerse: { enabled: true, mode: 'fixed', textAr: 'آية '.repeat(100).trim(), refAr: 'يوحنا ٣: ١٦' } }));
+    await assertSucceeds(setDoc(ref, { theme: 'burgundy', sections: { dailyVerse: false }, dailyVerse: { mode: 'daily', textAr: '', refAr: '' } }));
+    await assertSucceeds(setDoc(ref, { dailyVerse: { mode: 'fixed', textAr: 'ع'.repeat(500), refAr: 'ي'.repeat(60) } }));
     await assertSucceeds(setDoc(ref, { dailyVerse: {} }), 'missing keys = defaults');
     await assertSucceeds(setDoc(ref, { theme: 'navy' }), 'doc without dailyVerse still saves');
   });
 
   test('rejects bad shapes, modes, types and lengths', async () => {
     const ref = doc(db(EDITOR), 'settings', 'features');
-    const ok = { enabled: true, mode: 'daily', textAr: '', refAr: '' };
+    const ok = { mode: 'daily', textAr: '', refAr: '' };
     for (const v of [
-      'daily', null, { ...ok, mode: 'weekly' }, { ...ok, enabled: 'yes' }, { ...ok, textAr: 5 }, { ...ok, refAr: null },
+      'daily', null, { ...ok, mode: 'weekly' }, { ...ok, enabled: true }, { ...ok, textAr: 5 }, { ...ok, refAr: null },
       { ...ok, textAr: 'x'.repeat(501) }, { ...ok, refAr: 'x'.repeat(61) }, { ...ok, textEn: 'hi' },
       { ...ok, textAr: 'a\u001fb' },
     ]) {
       await assertFails(setDoc(ref, { dailyVerse: v }), JSON.stringify(v).slice(0, 80));
     }
+    await assertFails(setDoc(ref, { sections: { dailyVerse: 'on' } }));
   });
 
   test('visitors cannot change it', async () => {
-    await assertFails(setDoc(doc(db(null), 'settings', 'features'), { dailyVerse: { enabled: false } }));
+    await assertFails(setDoc(doc(db(null), 'settings', 'features'), { dailyVerse: { mode: 'fixed' } }));
   });
 });
 

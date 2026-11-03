@@ -570,15 +570,16 @@ class _MilestoneCard extends StatelessWidget {
 
 /// "Verse of the day" (settings/features.dailyVerse): a warm golden-hour
 /// panel with the Arabic verse in the calligraphic face and its reference
-/// in «». Rotates by the Cairo calendar day; hidden when switched off or
-/// while the bundled list loads.
+/// in «». Rotates by the Cairo calendar day; hidden when its section
+/// ([Sections.dailyVerse]) is off or while the bundled list loads.
 class DailyVerseCard extends ConsumerWidget {
   const DailyVerseCard({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final config = ref.watch(featuresProvider.select((f) => f.dailyVerse));
-    if (!config.enabled) return const SizedBox.shrink();
+    final features = ref.watch(featuresProvider);
+    if (!features.enabled(Sections.dailyVerse)) return const SizedBox.shrink();
+    final config = features.dailyVerse;
     final verses = ref.watch(dailyVersesProvider).value ?? const <Verse>[];
     final now = ref.watch(nowProvider).value ?? DateTime.now();
     final verse = resolveDailyVerse(config, verses, now);

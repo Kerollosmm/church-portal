@@ -96,10 +96,10 @@ Notable details:
   `liturgies`. `validFeatures` accepts `imageStyles` as a map whose keys are the 9 collections and values the 3 styles.
   Emulator tests: "ADR-023" group in `tool/rules_test/rules.test.mjs`.
 - **Verse of the day (PR #16, ADR-024):** `validFeatures` allows `dailyVerse`; `validDailyVerse` (only when it changes):
-  map with keys ⊆ enabled/mode/textAr/refAr, `enabled` bool, `mode` ∈ daily/fixed, strings with text ≤500 and ref ≤60
+  map with keys ⊆ mode/textAr/refAr, `mode` ∈ daily/fixed, strings with text ≤500 and ref ≤60
   (joined + regex). Emulator tests: "Verse of the day" group in `tool/rules_test/rules.test.mjs`.
 - `validFeatures`: key allow-list via `keysAllowed` (create: `keys().hasOnly`; update: only the **changed** keys must
-  be allowed, so an untouched legacy key no longer blocks a merge save — same as `settings/church`, PR #10), `sections` keys ⊆ the 16 section keys
+  be allowed, so an untouched legacy key no longer blocks a merge save — same as `settings/church`, PR #10), `sections` keys ⊆ the 17 section keys (PR #16 added `dailyVerse`)
   (incl. `media`)
   and values bool, `homeOrder`/`homeHidden` ⊆ the 7 block keys (≤ 7), `bannerLink` via `optUrlOrPath(d, 'bannerLink',
   500)` (empty, in-app path or http(s) URL with a case-insensitive scheme — same as alert links, PR #10), `theme` ∈ 5

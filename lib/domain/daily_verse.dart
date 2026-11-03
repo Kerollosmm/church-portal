@@ -49,7 +49,9 @@ int cairoDayOfYear(DateTime instant) {
 Verse? verseForDay(List<Verse> verses, DateTime instant) =>
     verses.isEmpty ? null : verses[(cairoDayOfYear(instant) - 1) % verses.length];
 
-/// Admin options (settings/features.dailyVerse). Missing = on, daily rotation.
+/// Admin options (settings/features.dailyVerse). Missing = daily rotation.
+/// On/off is the public section `Sections.dailyVerse` (missing = on), so the
+/// card follows the section toggles like every public feature.
 class DailyVerseConfig {
   static const daily = 'daily';
   static const fixed = 'fixed';
@@ -57,13 +59,12 @@ class DailyVerseConfig {
   static const maxText = 500;
   static const maxRef = 60;
 
-  final bool enabled;
   final String mode;
 
   /// The admin-entered verse, used when [mode] is [fixed].
   final String textAr, refAr;
 
-  const DailyVerseConfig({this.enabled = true, this.mode = daily, this.textAr = '', this.refAr = ''});
+  const DailyVerseConfig({this.mode = daily, this.textAr = '', this.refAr = ''});
 
   static const defaults = DailyVerseConfig();
 
@@ -71,19 +72,17 @@ class DailyVerseConfig {
     if (v is! Map) return defaults;
     final mode = v['mode'];
     return DailyVerseConfig(
-      enabled: v['enabled'] is bool ? v['enabled'] as bool : true,
       mode: modes.contains(mode) ? mode as String : daily,
       textAr: v['textAr'] is String ? v['textAr'] as String : '',
       refAr: v['refAr'] is String ? v['refAr'] as String : '',
     );
   }
 
-  Map<String, dynamic> toMap() => {'enabled': enabled, 'mode': mode, 'textAr': textAr, 'refAr': refAr};
+  Map<String, dynamic> toMap() => {'mode': mode, 'textAr': textAr, 'refAr': refAr};
 
-  bool get isDefault => enabled && mode == daily && textAr.isEmpty && refAr.isEmpty;
+  bool get isDefault => mode == daily && textAr.isEmpty && refAr.isEmpty;
 
-  DailyVerseConfig copyWith({bool? enabled, String? mode, String? textAr, String? refAr}) => DailyVerseConfig(
-        enabled: enabled ?? this.enabled,
+  DailyVerseConfig copyWith({String? mode, String? textAr, String? refAr}) => DailyVerseConfig(
         mode: mode ?? this.mode,
         textAr: textAr ?? this.textAr,
         refAr: refAr ?? this.refAr,
@@ -92,20 +91,17 @@ class DailyVerseConfig {
   @override
   bool operator ==(Object other) =>
       other is DailyVerseConfig &&
-      other.enabled == enabled &&
       other.mode == mode &&
       other.textAr == textAr &&
       other.refAr == refAr;
 
   @override
-  int get hashCode => Object.hash(enabled, mode, textAr, refAr);
+  int get hashCode => Object.hash(mode, textAr, refAr);
 }
 
-/// The verse the home page shows at [instant], or null when the card is off
-/// (or nothing is available). A fixed verse with no text falls back to the
-/// daily rotation.
+/// The verse the home page shows at [instant] (null when nothing is
+/// available). A fixed verse with no text falls back to the daily rotation.
 Verse? resolveDailyVerse(DailyVerseConfig config, List<Verse> verses, DateTime instant) {
-  if (!config.enabled) return null;
   final text = config.textAr.trim();
   if (config.mode == DailyVerseConfig.fixed && text.isNotEmpty) {
     return Verse(textAr: text, refAr: config.refAr.trim());

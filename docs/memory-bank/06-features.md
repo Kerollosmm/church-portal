@@ -31,7 +31,7 @@ render with `PageBody` (+ `Footer`). Content comes from Riverpod providers (hidd
 - **Verse of the day (PR #16, ADR-024):** `DailyVerseCard` (`home_page.dart`) is the first block under the hero: a
   WarmPanel with «كلمة الله» accent, "آية اليوم / Verse of the day" title, the Arabic verse and «reference». Daily
   mode = entry (Cairo day of year − 1) of `assets/verses/daily_verses.json` (366 Van Dyck verses, public domain),
-  changing at Cairo midnight; fixed mode = the admin's verse. Hidden when switched off (`settings/features.dailyVerse.enabled`)
+  changing at Cairo midnight; fixed mode = the admin's verse. Hidden when its section `Sections.dailyVerse` is off
   or while the asset loads.
 
 ### `/about` — `about_page.dart` `AboutPage`
@@ -212,7 +212,8 @@ Chat UI with intro bubble, 3 suggestion chips, 500-char input, disclaimer «إج
 
 ## Feature toggles (`settings/features`, `lib/domain/features.dart`)
 
-- 16 sections (`Sections.all`; the 16th, `media`, is not a page — it shows/hides all optional item images);
+- 17 sections (`Sections.all`; `media` is not a page — it shows/hides all optional item images; `dailyVerse` (PR #16)
+  is the home verse-of-the-day card);
   **missing key = on**; before the doc loads and when it does not exist, everything is on.
 - A switched-off section disappears from: home blocks/CTAs/directory, app-bar links, Services menu, drawer, footer
   links, cross-links (e.g. clinics ↔ public services), and the **assistant's grounding**. Its route renders
