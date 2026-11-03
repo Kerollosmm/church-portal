@@ -90,7 +90,7 @@ class _ClinicsPageState extends ConsumerState<ClinicsPage> {
               if (list.isEmpty)
                 const EmptyState(icon: Icons.medical_services_outlined)
               else
-                ResponsiveGrid(minItemWidth: 340, children: [
+                ResponsiveGrid(children: [
                   for (final c in list)
                     ClinicCard(
                       clinic: c,
@@ -149,35 +149,53 @@ class ClinicCard extends StatelessWidget {
     final days = c.days.map((d) => weekdayLabel(context, d)).join(context.isAr ? '، ' : ', ');
     final detail = cardDetailPath(DetailKind.clinic, c.id, c.details);
     // Turning an item's contacts off hides them everywhere (ADR-020).
-    final contacts = c.details.showContacts;
+    final actions = _actions(context, c, doctor, clinicName, office);
     final doctorTitle =
         TitleWithBadge(doctor, sample: c.sample, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16));
+    final degree = context.pick(c.degreeAr, c.degreeEn);
     return Card(
+      clipBehavior: Clip.antiAlias,
       child: DetailTapArea(
         path: detail,
-        child: Padding(
-        padding: const EdgeInsets.all(16),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          // No image: the card is exactly as before (and needs no providers).
+          if (c.image != null)
+            CardCover(collection: 'clinics', itemStyle: c.imageStyle, image: c.image, label: doctor, enlargeOnTap: detail == null),
+          Padding(
+        padding: const EdgeInsets.all(Space.card),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Wrap(spacing: 8, runSpacing: 6, children: [
             Pill(context.pick(c.specialtyAr, c.specialtyEn), color: Theme.of(context).colorScheme.primary, icon: Icons.medical_services),
             if (availableToday) Pill(context.tr('availableToday'), icon: Icons.check_circle),
           ]),
-          const SizedBox(height: 10),
+          const SizedBox(height: Space.m),
           if (c.image == null)
             doctorTitle
           else
             Row(children: [
-              CardImageLead(image: c.image!, label: doctor, enlargeOnTap: detail == null),
+              CardLead(
+                  collection: 'clinics', itemStyle: c.imageStyle, image: c.image, label: doctor, enlargeOnTap: detail == null),
               Expanded(child: doctorTitle),
             ]),
-          if (context.pick(c.degreeAr, c.degreeEn).isNotEmpty)
-            Text(context.pick(c.degreeAr, c.degreeEn), style: const TextStyle(color: AppColors.muted, fontSize: 13)),
-          const SizedBox(height: 8),
+          if (degree.isNotEmpty) Text(degree, style: const TextStyle(color: AppColors.muted, fontSize: 13)),
+          if (days.isNotEmpty || c.start.isNotEmpty) const SizedBox(height: Space.s),
           IconLine(Icons.calendar_today_outlined, days),
-          const SizedBox(height: 2),
           TimeRangeText(c.start, c.end),
-          const SizedBox(height: 10),
-          Wrap(spacing: 8, runSpacing: 8, children: [
+          if (actions.isNotEmpty) ...[
+          const SizedBox(height: Space.m),
+          Wrap(spacing: 8, runSpacing: 8, children: actions),
+          ],
+          if (detail != null) DetailsLink(path: detail, title: clinicName, id: c.id),
+        ]),
+      ),
+        ]),
+      ),
+    );
+  }
+
+  List<Widget> _actions(BuildContext context, Clinic c, String doctor, String clinicName, String? office) {
+    final contacts = c.details.showContacts;
+    return [
             if (contacts && c.bookingPhone.isNotEmpty)
               ActionChipButton(
                   key: const Key('bookClinic'),
@@ -205,11 +223,6 @@ class ClinicCard extends StatelessWidget {
                   semanticLabel: actionSemanticLabel(context.tr('callChurchOffice'), clinicName),
                   color: Theme.of(context).colorScheme.primary,
                   onTap: () => callPhone(office)),
-          ]),
-          if (detail != null) DetailsLink(path: detail, title: clinicName, id: c.id),
-        ]),
-      ),
-      ),
-    );
+    ];
   }
 }

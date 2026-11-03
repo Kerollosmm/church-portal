@@ -11,7 +11,6 @@ import '../../domain/rules.dart';
 import '../../state/providers.dart';
 import '../widgets/cards.dart';
 import '../widgets/common.dart';
-import '../widgets/item_image.dart';
 
 const _categoryOrder = [
   'service', 'choir', 'hymns', 'youth', 'servants', 'media', 'drama', //
@@ -64,7 +63,7 @@ class ActivitiesPage extends ConsumerWidget {
                 return c != 0 ? c : a.key.compareTo(b.key);
               });
             final sorted = [for (final e in indexed) e.value];
-            return ResponsiveGrid(minItemWidth: 340, children: [for (final a in sorted) _ActivityCard(a)]);
+            return ResponsiveGrid(children: [for (final a in sorted) _ActivityCard(a)]);
           },
         ),
       ],
@@ -83,34 +82,41 @@ class _ActivityCard extends ConsumerWidget {
     final detail = cardDetailPath(DetailKind.activity, a.id, a.details);
     final showLink = a.link.isNotEmpty && itemSocialsShown(a.details, ref.watch(featuresProvider));
     final showPhone = a.contactPhone.isNotEmpty && a.details.showContacts;
+    final desc = context.pick(a.descAr, a.descEn);
     return Card(
+      clipBehavior: Clip.antiAlias,
       child: DetailTapArea(
         path: detail,
-        child: Padding(
-        padding: const EdgeInsets.all(16),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          CardCover(
+              collection: 'activities', itemStyle: a.imageStyle, image: a.image, label: title, enlargeOnTap: detail == null),
+          Padding(
+        padding: const EdgeInsets.all(Space.card),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
-            ItemImage(
+            CardLead(
+              collection: 'activities',
+              itemStyle: a.imageStyle,
               image: a.image,
               size: 56,
-              circle: false,
               label: title,
               enlargeOnTap: detail == null,
               placeholder: Container(
                 padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(color: AppColors.parchment, borderRadius: BorderRadius.circular(12)),
+                decoration: BoxDecoration(color: AppColors.parchment, borderRadius: BorderRadius.circular(4)),
                 child: Icon(activityIcon(a.category), color: Theme.of(context).colorScheme.primary),
               ),
             ),
-            const SizedBox(width: 12),
             Expanded(
               child: TitleWithBadge(title,
                   sample: a.sample, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16, height: 1.4)),
             ),
           ]),
-          const SizedBox(height: 10),
-          Text(context.pick(a.descAr, a.descEn), style: const TextStyle(height: 1.7)),
-          const SizedBox(height: 8),
+          if (desc.isNotEmpty) ...[
+            const SizedBox(height: Space.s),
+            Text(desc, style: const TextStyle(height: 1.7)),
+          ],
+          if (schedule.isNotEmpty || a.ageRange.isNotEmpty) const SizedBox(height: Space.s),
           IconLine(Icons.schedule_rounded, schedule.isEmpty ? '' : '${context.tr('schedule')}: $schedule'),
           IconLine(Icons.cake_outlined, a.ageRange.isEmpty ? '' : '${context.tr('ages')}: ${localDigits(context, a.ageRange)}'),
           if (showLink) ...[
@@ -143,6 +149,7 @@ class _ActivityCard extends ConsumerWidget {
           if (detail != null) DetailsLink(path: detail, title: title, id: a.id),
         ]),
       ),
+        ]),
       ),
     );
   }

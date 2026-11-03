@@ -365,7 +365,7 @@ class _ContactFormState extends ConsumerState<ContactForm> {
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
                       color: (_statusOk ? AppColors.success : AppColors.alert).withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(10),
+                      borderRadius: BorderRadius.circular(4),
                     ),
                     child: Row(children: [
                       Icon(_statusOk ? Icons.check_circle : Icons.error_outline,

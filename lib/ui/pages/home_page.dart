@@ -13,8 +13,8 @@ import '../../state/providers.dart';
 import '../widgets/cards.dart';
 import '../widgets/common.dart';
 import '../widgets/item_image.dart';
-import '../widgets/coptic_cross.dart';
 import '../widgets/map_embed.dart';
+import '../widgets/golden.dart';
 
 class HomePage extends ConsumerWidget {
   const HomePage({super.key});
@@ -27,8 +27,15 @@ class HomePage extends ConsumerWidget {
     final blocks = features.visibleHomeBlocks;
 
     final children = <Widget>[];
+    // The patrons teaser (not admin-orderable yet: a new home block needs a
+    // settings/features rules change) sits before the first "discover" block.
+    var patronsPlaced = false;
     for (var i = 0; i < blocks.length; i++) {
       final b = blocks[i];
+      if (!patronsPlaced && (b == HomeBlocks.milestones || b == HomeBlocks.directory || b == HomeBlocks.map)) {
+        children.add(const KeyedSubtree(key: ValueKey('home-patrons'), child: _PatronsTeaser()));
+        patronsPlaced = true;
+      }
       final next = i + 1 < blocks.length ? blocks[i + 1] : null;
       // On wide screens the next-liturgy card and the phones card share a row
       // when they are adjacent.
@@ -51,6 +58,7 @@ class HomePage extends ConsumerWidget {
       children.add(KeyedSubtree(key: ValueKey('home-$b'), child: _block(context, ref, b, settings.value, features)));
     }
 
+    if (!patronsPlaced) children.add(const KeyedSubtree(key: ValueKey('home-patrons'), child: _PatronsTeaser()));
     return PageBody(
       header: _Hero(settings: settings.value, features: features),
       children: children,
@@ -69,14 +77,13 @@ class HomePage extends ConsumerWidget {
         return const Padding(padding: EdgeInsets.only(bottom: 12), child: _QuickContacts());
       case HomeBlocks.milestones:
         return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          SectionTitle(context.tr('ourStory'), icon: Icons.history_edu_rounded),
+          SectionTitle(context.tr('ourStory'), accent: context.tr('accentStory')),
           AsyncSection<List<Milestone>>(
             provider: milestonesProvider,
             retry: milestonesProvider,
             isEmpty: (d) => d.isEmpty,
             loading: const SkeletonList(count: 4, itemHeight: 120),
             builder: (context, items) => ResponsiveGrid(
-              minItemWidth: 240,
               children: [for (final m in items) _MilestoneCard(m)],
             ),
           ),
@@ -100,12 +107,12 @@ class HomePage extends ConsumerWidget {
         ];
         if (cards.isEmpty) return const SizedBox.shrink();
         return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          SectionTitle(context.tr('directory'), icon: Icons.grid_view_rounded),
-          ResponsiveGrid(minItemWidth: 320, children: cards),
+          SectionTitle(context.tr('directory'), accent: context.tr('accentServices')),
+          ResponsiveGrid(children: cards),
         ]);
       case HomeBlocks.map:
         return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          SectionTitle(context.tr('location'), icon: Icons.location_on_rounded),
+          SectionTitle(context.tr('location'), accent: context.tr('accentLocation')),
           if (s != null) ChurchMap(settings: s) else const SkeletonBox(height: 360, radius: 16),
         ]);
     }
@@ -147,7 +154,7 @@ class _AnnouncementBanner extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
         color: AppColors.gold.withValues(alpha: 0.16),
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: AppColors.gold.withValues(alpha: 0.6)),
       ),
       child: Row(children: [
@@ -164,113 +171,259 @@ class _AnnouncementBanner extends StatelessWidget {
   }
 }
 
-class _Hero extends StatelessWidget {
+/// The golden-hour hero (the posters' first panel): the painting of the
+/// church in the heavenly clouds — slow Ken Burns, drifting gold haze,
+/// shimmering sun rays and the muted cloud loop (a portrait crop on phones)
+/// crossfading in over its poster frame — with the red calligraphic welcome, the heavy maroon
+/// name on a cream scrim, the address ribbon, the verse panel and the CTAs.
+class _Hero extends ConsumerWidget {
   final ChurchSettings? settings;
   final FeatureSettings features;
   const _Hero({required this.settings, required this.features});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final s = settings;
-    final narrow = MediaQuery.sizeOf(context).width < 600;
-    final t = Theme.of(context).textTheme;
-    final hasImage = s != null && s.heroImageUrl.isNotEmpty;
+    final w = MediaQuery.sizeOf(context).width;
+    final wide = w >= 900;
+    final narrow = w < 600;
     final f = features;
-    final primary = Theme.of(context).colorScheme.primary;
-    final dark = primaryDarkOf(context);
     final title = s == null ? '' : context.pick(f.heroTitleAr, f.heroTitleEn);
     final subtitle = s == null ? '' : context.pick(f.heroSubtitleAr, f.heroSubtitleEn);
-    return Container(
-      constraints: BoxConstraints(minHeight: narrow ? 300 : 380),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [dark, primary, Color.lerp(primary, Colors.white, 0.15)!],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        image: hasImage
-            ? DecorationImage(
-                image: NetworkImage(s.heroImageUrl),
-                fit: BoxFit.cover,
-                colorFilter: ColorFilter.mode(dark.withValues(alpha: 0.65), BlendMode.multiply),
-              )
-            : null,
-      ),
-      child: Stack(children: [
-        if (!hasImage)
-          PositionedDirectional(
-            end: -40,
-            top: -30,
-            child: Opacity(opacity: 0.08, child: CopticCross(size: narrow ? 260 : 380, color: Colors.white)),
+    final pad = narrow ? 16.0 : (wide ? 40.0 : 24.0);
+
+    final text = Column(crossAxisAlignment: CrossAxisAlignment.center, mainAxisSize: MainAxisSize.min, children: [
+      if (s == null) ...[
+        const SkeletonBox(height: 34, width: 300),
+        const SizedBox(height: 12),
+        const SkeletonBox(height: 20, width: 220),
+      ] else ...[
+        TextScrim(
+          opacity: 0.84,
+          child: Padding(
+            padding: EdgeInsets.symmetric(horizontal: narrow ? 8 : 36, vertical: 12),
+            child: PosterHeading(
+              title.isNotEmpty ? title : context.pick(s.nameAr, s.nameEn),
+              key: const Key('heroTitle'),
+              accent: context.tr('heroAccent'),
+              size: wide ? 56 : (narrow ? 34 : 44),
+              glow: true,
+            ),
           ),
+        ),
+        const SizedBox(height: 8),
+        TitleRibbon(subtitle.isNotEmpty ? subtitle : context.pick(s.addressAr, s.addressEn), icon: Icons.place_outlined),
+        const SizedBox(height: 18),
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 640),
+          child: WarmPanel(
+            padding: EdgeInsets.symmetric(horizontal: narrow ? 16 : 26, vertical: 14),
+            child: Column(children: [
+              Text('« ${context.pick(s.verseAr, s.verseEn)} »',
+                  textAlign: TextAlign.center,
+                  style: AppFonts.script(size: narrow ? 20 : 24, color: AppColors.ink, height: 1.8)),
+              if (s.verseRef.isNotEmpty || s.verseRefAr.isNotEmpty)
+                Text(
+                    context.isAr
+                        ? (s.verseRefAr.isNotEmpty ? s.verseRefAr : toArabicDigits(s.verseRef))
+                        : (s.verseRef.isNotEmpty ? s.verseRef : s.verseRefAr),
+                    style: const TextStyle(color: AppColors.goldText, fontSize: 13, fontWeight: FontWeight.w700)),
+            ]),
+          ),
+        ),
+      ],
+      const SizedBox(height: 20),
+      Wrap(alignment: WrapAlignment.center, spacing: 12, runSpacing: 10, children: [
+        if (f.routeEnabled('/mass-schedule'))
+          FilledButton.icon(
+            onPressed: () => context.go('/mass-schedule'),
+            icon: const Icon(Icons.access_time_filled_rounded, size: 20),
+            label: Text(context.tr('massSchedule')),
+          ),
+        if (f.routeEnabled('/about'))
+          OutlinedButton.icon(
+            onPressed: () => context.go('/about'),
+            icon: const Icon(Icons.church_outlined, size: 20),
+            label: Text(context.tr('aboutChurchCta')),
+          )
+        else if (f.routeEnabled('/contact'))
+          OutlinedButton.icon(
+            onPressed: () => context.go('/contact'),
+            icon: const Icon(Icons.call_rounded, size: 20),
+            label: Text(context.tr('contact')),
+          ),
+      ]),
+    ]);
+
+    return ConstrainedBox(
+      key: const Key('homeHero'),
+      // Room under the content for the church rising from the mist.
+      constraints: BoxConstraints(minHeight: wide ? 780 : (narrow ? 700 : 760)),
+      child: Stack(children: [
+        Positioned.fill(
+          child: HeroStage(
+            image: narrow ? ArtAssets.heroTall : ArtAssets.heroWide,
+            alignment: Alignment.bottomCenter,
+            motion: f.heroMotion,
+            // Phones get the portrait centre crop (the church stays centred).
+            video: narrow ? ArtAssets.heroVideoTall : ArtAssets.heroVideo,
+            poster: narrow ? ArtAssets.heroPosterTall : ArtAssets.heroPoster,
+          ),
+        ),
         Center(
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: kMaxContentWidth),
+            constraints: const BoxConstraints(maxWidth: 960),
             child: Padding(
-              padding: EdgeInsets.symmetric(horizontal: narrow ? 20 : 32, vertical: narrow ? 28 : 48),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                ChurchSeal(size: narrow ? 64 : 84),
-                const SizedBox(height: 14),
-                if (s == null) ...[
-                  const SkeletonBox(height: 28, width: 280),
-                  const SizedBox(height: 10),
-                  const SkeletonBox(height: 18, width: 200),
-                ] else ...[
-                  Text(title.isNotEmpty ? title : context.pick(s.nameAr, s.nameEn),
-                      style: (narrow ? t.headlineSmall : t.headlineMedium)
-                          ?.copyWith(color: Colors.white, fontWeight: FontWeight.w800, height: 1.35)),
-                  const SizedBox(height: 4),
-                  Text(subtitle.isNotEmpty ? subtitle : context.pick(s.addressAr, s.addressEn),
-                      style: t.bodyLarge?.copyWith(color: AppColors.goldLight)),
-                  const SizedBox(height: 18),
-                  Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: AppColors.gold.withValues(alpha: 0.5)),
-                    ),
-                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Text('« ${context.pick(s.verseAr, s.verseEn)} »',
-                          style: t.titleMedium?.copyWith(color: Colors.white, fontWeight: FontWeight.w700, height: 1.7)),
-                      if (s.verseRef.isNotEmpty || s.verseRefAr.isNotEmpty)
-                        Text('(${context.isAr ? (s.verseRefAr.isNotEmpty ? s.verseRefAr : toArabicDigits(s.verseRef)) : (s.verseRef.isNotEmpty ? s.verseRef : s.verseRefAr)})',
-                            style: const TextStyle(color: AppColors.goldLight)),
-                    ]),
-                  ),
-                ],
-                const SizedBox(height: 20),
-                Wrap(spacing: 10, runSpacing: 10, children: [
-                  if (f.routeEnabled('/mass-schedule'))
-                    FilledButton.icon(
-                      style: FilledButton.styleFrom(backgroundColor: AppColors.gold, foregroundColor: AppColors.ink),
-                      onPressed: () => context.go('/mass-schedule'),
-                      icon: const Icon(Icons.access_time_filled_rounded),
-                      label: Text(context.tr('massSchedule')),
-                    ),
-                  if (f.routeEnabled('/clinics'))
-                    FilledButton.icon(
-                      style: FilledButton.styleFrom(backgroundColor: Colors.white, foregroundColor: primary),
-                      onPressed: () => context.go('/clinics'),
-                      icon: const Icon(Icons.local_hospital_rounded),
-                      label: Text(context.tr('clinics')),
-                    ),
-                  if (f.routeEnabled('/contact'))
-                  OutlinedButton.icon(
-                    style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.white, side: const BorderSide(color: Colors.white70)),
-                    onPressed: () => context.go('/contact'),
-                    icon: const Icon(Icons.call_rounded),
-                    label: Text(context.tr('contact')),
-                  ),
-                ]),
-              ]),
+              padding: EdgeInsets.fromLTRB(pad, wide ? 56 : 52, pad, wide ? 260 : 220),
+              child: SizedBox(width: double.infinity, child: text),
             ),
           ),
         ),
       ]),
     );
   }
+}
+
+/// Patron saints (UX standard: "who the church is" before "what it offers"),
+/// as a poster card: the Nile at sunset with the painted patrons on either
+/// side (decoration), «شفعاء كنيستنا», and one panel per saint with the
+/// saint's own icon (when uploaded) in a gold halo, two lines of the life and
+/// a link to the saint's page.
+class _PatronsTeaser extends ConsumerWidget {
+  const _PatronsTeaser();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final f = ref.watch(featuresProvider);
+    if (!f.enabled(Sections.saints) || !f.routeEnabled('/about')) return const SizedBox.shrink();
+    final saints = ref.watch(saintsProvider).value ?? const <Saint>[];
+    if (saints.isEmpty) return const SizedBox.shrink();
+    final w = MediaQuery.sizeOf(context).width;
+    final wide = w >= 1000;
+    final narrow = w < 600;
+    final halo = narrow ? 92.0 : 128.0;
+
+    Widget saintPanel(Saint saint) {
+      final name = context.pick(saint.nameAr, saint.nameEn);
+      final path = cardDetailPath(DetailKind.saint, saint.id, saint.details);
+      final painting = ArtAssets.paintingForSaint(saint.id);
+      return WarmPanel(
+        key: ValueKey('homePatron-${saint.id}'),
+        padding: EdgeInsets.zero,
+        child: DetailTapArea(
+          path: path,
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+              HaloPortrait(
+                size: halo,
+                child: ItemImage(
+                  image: f.showImages ? saint.image : null,
+                  size: halo,
+                  circle: true,
+                  enlargeOnTap: false,
+                  label: name,
+                  // No uploaded icon: the painted patron (decorative) or a cross.
+                  placeholder: painting == null
+                      ? const HaloCrossFill()
+                      : Image.asset(painting, fit: BoxFit.cover, alignment: const Alignment(0, -0.6)),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(name, style: displayStyle(context, size: narrow ? 20 : 24, color: Theme.of(context).colorScheme.primary)),
+                  const SizedBox(height: 2),
+                  Text(context.pick(saint.bioAr, saint.bioEn),
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: AppColors.ink, fontSize: 14, height: 1.7)),
+                  if (path != null) DetailsLink(path: path, title: name, id: saint.id),
+                ]),
+              ),
+            ]),
+          ),
+        ),
+      );
+    }
+
+    final panels = ResponsiveGrid(maxColumns: 2, minItemWidth: 380, spacing: 18, children: [for (final s in saints.take(2)) saintPanel(s)]);
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 28),
+      child: ClipRRect(
+        key: const Key('patronsBand'),
+        borderRadius: BorderRadius.circular(28),
+        child: Stack(children: [
+          // Lazy: the band is below the fold on every screen.
+          Positioned.fill(
+            child: LazyArt(
+              placeholder: const ColoredBox(color: AppColors.parchment),
+              builder: (_) => ExcludeSemantics(
+                child: Image.asset(ArtAssets.nile, fit: BoxFit.cover, alignment: const Alignment(0, 0.2)),
+              ),
+            ),
+          ),
+          if (wide) ...[
+            PositionedDirectional(
+              start: -10,
+              bottom: 0,
+              width: 230,
+              child: LazyArt(
+                placeholder: const SizedBox(height: 280),
+                builder: (_) => _PaintedPatron(ArtAssets.saintMoses),
+              ),
+            ),
+            PositionedDirectional(
+              end: -10,
+              bottom: 0,
+              width: 230,
+              child: LazyArt(
+                placeholder: const SizedBox(height: 280),
+                builder: (_) => _PaintedPatron(ArtAssets.saintMaximusDomadius),
+              ),
+            ),
+          ],
+          Padding(
+            // Top room so the title glow fades out before the band's edge.
+            padding: EdgeInsets.fromLTRB(wide ? 190 : (narrow ? 12 : 24), 36, wide ? 190 : (narrow ? 12 : 24), 28),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              TextScrim(
+                opacity: 0.8,
+                bleed: const EdgeInsets.symmetric(horizontal: 56, vertical: 28),
+                child: SectionTitle(
+                  context.tr('patronsOfOurChurch'),
+                  accent: context.tr('accentPatrons'),
+                  trailing: TextButton(onPressed: () => context.go('/about'), child: Text(context.tr('aboutChurchCta'))),
+                ),
+              ),
+              panels,
+            ]),
+          ),
+        ]),
+      ),
+    );
+  }
+}
+
+/// A painted patron at the side of the patrons band, its edges dissolving
+/// into the scene. Decorative (AI painting, not a real icon).
+class _PaintedPatron extends StatelessWidget {
+  final String asset;
+  const _PaintedPatron(this.asset);
+
+  @override
+  Widget build(BuildContext context) => ExcludeSemantics(
+        child: ShaderMask(
+          blendMode: BlendMode.dstIn,
+          shaderCallback: (r) => const RadialGradient(
+            radius: 0.62,
+            colors: [Color(0xFF000000), Color(0xFF000000), Color(0x00000000)],
+            stops: [0, 0.6, 1],
+          ).createShader(r),
+          child: AspectRatio(aspectRatio: 4 / 5, child: Image.asset(asset, fit: BoxFit.cover)),
+        ),
+      );
 }
 
 class _QuickContacts extends ConsumerWidget {
@@ -366,16 +519,22 @@ class _MilestoneCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final title = context.pick(m.titleAr, m.titleEn);
     final detail = cardDetailPath(DetailKind.milestone, m.id, m.details);
+    final desc = context.pick(m.descAr, m.descEn);
     return Card(
+      clipBehavior: Clip.antiAlias,
       child: DetailTapArea(
         path: detail,
-        child: Padding(
-          padding: const EdgeInsets.all(16),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          CardCover(collection: 'milestones', itemStyle: m.imageStyle, image: m.image, label: title, enlargeOnTap: detail == null),
+          Padding(
+          padding: const EdgeInsets.all(Space.card),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(children: [
-              ItemImage(
+              CardLead(
+                collection: 'milestones',
+                itemStyle: m.imageStyle,
                 image: m.image,
-                size: 48,
+                size: 56,
                 label: title,
                 enlargeOnTap: detail == null,
                 placeholder: CircleAvatar(
@@ -383,18 +542,22 @@ class _MilestoneCard extends StatelessWidget {
                   child: Icon(_icon, color: Theme.of(context).colorScheme.primary),
                 ),
               ),
-              const Spacer(),
               if (m.year != null)
-                Text(localDigits(context, '${m.year}'),
-                    style: const TextStyle(color: AppColors.goldText, fontWeight: FontWeight.w800)),
+                Flexible(
+                  child: Text(localDigits(context, '${m.year}'),
+                      style: displayStyle(context, size: 22, color: AppColors.goldText)),
+                ),
             ]),
-            const SizedBox(height: 10),
+            const SizedBox(height: Space.s),
             Text(title, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
-            const SizedBox(height: 4),
-            Text(context.pick(m.descAr, m.descEn), style: const TextStyle(color: AppColors.muted, height: 1.5, fontSize: 13)),
+            if (desc.isNotEmpty) ...[
+              const SizedBox(height: Space.xs),
+              Text(desc, style: const TextStyle(color: AppColors.muted, height: 1.5, fontSize: 13)),
+            ],
             if (detail != null) DetailsLink(path: detail, title: title, id: m.id),
           ]),
         ),
+        ]),
       ),
     );
   }

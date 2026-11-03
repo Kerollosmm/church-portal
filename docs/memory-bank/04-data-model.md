@@ -63,6 +63,13 @@ malformed = no image and the card keeps its icon / initials placeholder. The see
 - Images are ignored by the assistant prompt (`buildAssistantInstruction` only reads text fields; tested — also
   for `gallery` URLs, media ids and alt text since PR #11).
 
+### Optional `imageStyle` (PR #15, ADR-023)
+
+On the 9 image collections (`alerts`, `seasons`, `meetings`, `activities`, `clinics`, `facilities`, `priests`,
+`milestones`, `saints`): `imageStyle` string, one of `avatar` · `card` · `banner`; absent / `null` / anything else =
+the section default (`settings/features.imageStyles[collection]`), then the built-in default (priests & clinics →
+`avatar`, everything else → `card`; saints use a portrait card). Not seeded; new documents do not write it unset.
+
 ### Optional item detail page (PR #11) — `ItemDetails` / `CustomField` (`lib/domain/models.dart`)
 
 On the **7 detail collections** `meetings`, `activities`, `clinics`, `facilities`, `priests`, `milestones`,
@@ -176,6 +183,9 @@ Existence of `settings/church` = "database is seeded" (see `03-architecture.md`)
 - `HomeBlocks.requires`: `alerts→alerts`, `nextMass→schedule`, `quickContacts→contactInfo`,
   `milestones→milestones`, `map→contactInfo` (block disappears when its section is off). `directory` and `banner`
   have no section.
+
+- `imageStyles` (PR #15, ADR-023): map `collection → avatar|card|banner`, keys limited to the 9 image collections;
+  missing key = built-in default. Written only once an admin sets one (saves keep working against older rules).
 
 ## Content collections
 

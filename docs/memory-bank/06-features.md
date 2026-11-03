@@ -7,10 +7,15 @@ render with `PageBody` (+ `Footer`). Content comes from Riverpod providers (hidd
 ## Public pages
 
 ### `/` Home — `home_page.dart` `HomePage`
-- **Hero** (`_Hero`, always first): gradient in the theme colour (or `heroImageUrl` with a dark overlay), Coptic cross,
-  title = `heroTitleAr/En` from `settings/features` or the church name, subtitle = `heroSubtitleAr/En` or the address,
-  verse card («كن أمينًا إلى الموت فسأعطيك إكليل الحياة», Rev 2:10, `verseRefAr` or Arabic digits), CTA buttons
-  Mass schedule (gold) / Clinics / Contact — each only if its route is enabled.
+- **Hero** (`_Hero`, always first, branch `design/coptic-identity`): parchment ground; start column = kicker
+  «كنيسة قبطية أرثوذكسية», title (`heroTitleAr/En` or the church name, display face), place line (`heroSubtitleAr/En`
+  or the address), verse with a gold start rule, CTAs **Mass times** (primary) + **About the church** (outlined; Contact
+  if About is off) — each only if its route is enabled. End column = the **arcade**: the first two `saints` in
+  gold-leaf `ArchFrame`s (the admin `heroImageUrl` takes the large arch), tapping opens the saint page; no image /
+  saints or images off → arches hold the drawn Coptic cross. A plaster "ledge" closes the hero.
+- **Patrons teaser** (`_PatronsTeaser`, key `home-patrons`): placed before the first of milestones/directory/map
+  (not yet an admin-orderable block: that needs a `settings/features` rules change, PR-18 of the UX plan). Two saint
+  cards (small arch, name, 3 lines of the life, «التفاصيل»), hidden when `saints` or `/about` is off.
 - Then the **home blocks** in `features.visibleHomeBlocks` order (admin-reorderable/hideable):
   | Block | Widget | Needs section |
   |---|---|---|
@@ -170,6 +175,22 @@ Chat UI with intro bubble, 3 suggestion chips, 500-char input, disclaimer «إج
   on any error, semantic label = `alt` or the item's name, fixed square / circle sizes (no layout shift).
 - Tap an image ⇒ `showImageViewer` dialog (pinch/scroll zoom, close button).
 - The assistant never sees image data (cover `image`, `gallery` URLs, media ids or alt text — PR #11 test).
+
+### Image display styles (PR #15, ADR-023) — `lib/ui/widgets/styled_image.dart`
+
+- Every card with an optional image shows it as `avatar` (round, gold halo, leads the title row), `card` (large cover
+  on top, whole picture visible over a blurred sepia fill; portrait for saints) or `banner` (full width, edge to edge).
+  Item `imageStyle` → admin section default → built-in default (priests/departed & clinics `avatar`, the rest `card`).
+- Applied to priests, saints, activities, milestones (home), meetings (timeline), alerts (banner block), seasons
+  (schedule), public services, clinics, and the detail page cover (`DetailCover`; saint detail keeps its header halo
+  unless the style is `banner`). With `card`/`banner` the section icon is dropped from the title row.
+- No image / images off → identical to the image-less card (golden rule #9).
+
+### Layout rules (PR #15)
+
+- Grids are 1/2/3 columns (phone/tablet/desktop), content ≤ 1200 px, start-aligned in RTL; cards size to their
+  content; optional fields (description, bio, feast pills, time, weekday, degree, contact buttons) collapse with their
+  spacing. Checked at 320/390/1440 px and 200 % text in `test/image_style_layout_test.dart`.
 
 ### Shared UI behaviours
 - `SampleBadge` («بيانات تجريبية / Sample data») on any `sample: true` item; `PendingConfirmationNote`

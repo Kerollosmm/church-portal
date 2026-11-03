@@ -109,6 +109,8 @@ service cloud.firestore {
         && (!changed.hasAny(['visible', 'sample', 'order'])
             || (optBool(d, 'visible') && optBool(d, 'sample') && optInt(d, 'order', -100000, 100000)))
         && (!('image' in changed) || d.get('image', null) == null || validImage(d.image))
+        // Image display style (ADR-023): absent / null = the section default.
+        && (!('imageStyle' in changed) || d.get('imageStyle', null) in [null, 'avatar', 'card', 'banner'])
         && (!changed.hasAny(['updatedAt', 'updatedBy']) || stampOk(d));
     }
 
@@ -121,7 +123,7 @@ service cloud.firestore {
     // its own) leaves the collection's own fields as they were validated.
     function ownFieldsUnchanged(changed) {
       return resource != null
-        && changed.hasOnly(detailKeys().concat(meta()).concat(['image', 'contactPhone', 'externalUrl']));
+        && changed.hasOnly(detailKeys().concat(meta()).concat(['image', 'imageStyle', 'contactPhone', 'externalUrl']));
     }
 
     // Optional `image` map (only collections whose allow-list has 'image').
@@ -264,7 +266,7 @@ service cloud.firestore {
 
     function validAlert(d) {
       return keysAllowed(['titleAr', 'titleEn', 'bodyAr', 'bodyEn', 'active', 'startsAt', 'endsAt', 'priority', 'link',
-                          'image'].concat(meta()))
+                          'image', 'imageStyle'].concat(meta()))
         && reqString(d, 'titleAr', 300) && optString(d, 'titleEn', 300)
         && optString(d, 'bodyAr', 2000) && optString(d, 'bodyEn', 2000)
         && optBool(d, 'active') && optTimestamp(d, 'startsAt') && optTimestamp(d, 'endsAt')
@@ -273,7 +275,7 @@ service cloud.firestore {
 
     function validSeason(d) {
       return keysAllowed(['key', 'nameAr', 'nameEn', 'startsAt', 'endsAt', 'active', 'replacesRegular',
-                          'image'].concat(meta()))
+                          'image', 'imageStyle'].concat(meta()))
         && d.key in ['holy_week', 'pascha', 'nativity', 'revival_maximus', 'revival_moses', 'summer']
         && reqString(d, 'nameAr', 300) && optString(d, 'nameEn', 300)
         && optTimestamp(d, 'startsAt') && optTimestamp(d, 'endsAt') && optBool(d, 'active')
@@ -295,7 +297,7 @@ service cloud.firestore {
     function validMeeting(d, changed) {
       // = keysAllowed(...), reusing the changed keys.
       return changed.hasOnly(['stage', 'nameAr', 'nameEn', 'weekday', 'start', 'end', 'hallAr', 'hallEn',
-                          'facebookUrl', 'whatsappUrl', 'notes', 'image', 'contactPhone',
+                          'facebookUrl', 'whatsappUrl', 'notes', 'image', 'imageStyle', 'contactPhone',
                           'externalUrl'].concat(meta()).concat(detailKeys()))
         && validDetailCommon(d, changed)
         && (!changed.hasAny(['contactPhone', 'whatsapp', 'whatsappUrl', 'facebookUrl', 'externalUrl']) || validDetailContacts(d))
@@ -305,7 +307,7 @@ service cloud.firestore {
     function validActivity(d, changed) {
       // = keysAllowed(...), reusing the changed keys.
       return changed.hasOnly(['category', 'titleAr', 'titleEn', 'descAr', 'descEn', 'scheduleAr', 'scheduleEn',
-                          'ageRange', 'contactPhone', 'link', 'image'].concat(meta()).concat(detailKeys()))
+                          'ageRange', 'contactPhone', 'link', 'image', 'imageStyle'].concat(meta()).concat(detailKeys()))
         && validDetailCommon(d, changed)
         && (!changed.hasAny(['contactPhone', 'whatsapp', 'whatsappUrl', 'facebookUrl', 'externalUrl']) || validDetailContacts(d))
         && (ownFieldsUnchanged(changed) || ownActivity(d));
@@ -314,7 +316,7 @@ service cloud.firestore {
     function validClinic(d, changed) {
       // = keysAllowed(...), reusing the changed keys.
       return changed.hasOnly(['specialty', 'specialtyAr', 'specialtyEn', 'doctorName', 'degreeAr', 'degreeEn', 'days',
-                          'start', 'end', 'bookingPhone', 'whatsapp', 'active', 'image',
+                          'start', 'end', 'bookingPhone', 'whatsapp', 'active', 'image', 'imageStyle',
                           'externalUrl'].concat(meta()).concat(detailKeys()))
         && validDetailCommon(d, changed)
         && (!changed.hasAny(['contactPhone', 'whatsapp', 'whatsappUrl', 'facebookUrl', 'externalUrl']) || validDetailContacts(d))
@@ -323,7 +325,7 @@ service cloud.firestore {
 
     function validFacility(d, changed) {
       // = keysAllowed(...), reusing the changed keys.
-      return changed.hasOnly(['type', 'nameAr', 'nameEn', 'descAr', 'descEn', 'phone', 'hoursAr', 'hoursEn', 'image',
+      return changed.hasOnly(['type', 'nameAr', 'nameEn', 'descAr', 'descEn', 'phone', 'hoursAr', 'hoursEn', 'image', 'imageStyle',
                           'externalUrl'].concat(meta()).concat(detailKeys()))
         && validDetailCommon(d, changed)
         && (!changed.hasAny(['contactPhone', 'whatsapp', 'whatsappUrl', 'facebookUrl', 'externalUrl']) || validDetailContacts(d))
@@ -333,7 +335,7 @@ service cloud.firestore {
     function validPriest(d, changed) {
       // = keysAllowed(...), reusing the changed keys.
       return changed.hasOnly(['name', 'nameEn', 'photoUrl', 'rank', 'ordinationDate', 'hegumenDate', 'departedDate',
-                          'status', 'bioAr', 'bioEn', 'image', 'contactPhone',
+                          'status', 'bioAr', 'bioEn', 'image', 'imageStyle', 'contactPhone',
                           'externalUrl'].concat(meta()).concat(detailKeys()))
         && validDetailCommon(d, changed)
         && (!changed.hasAny(['contactPhone', 'whatsapp', 'whatsappUrl', 'facebookUrl', 'externalUrl']) || validDetailContacts(d))
@@ -342,7 +344,7 @@ service cloud.firestore {
 
     function validMilestone(d, changed) {
       // = keysAllowed(...), reusing the changed keys.
-      return changed.hasOnly(['titleAr', 'titleEn', 'descAr', 'descEn', 'year', 'icon', 'image', 'contactPhone',
+      return changed.hasOnly(['titleAr', 'titleEn', 'descAr', 'descEn', 'year', 'icon', 'image', 'imageStyle', 'contactPhone',
                           'externalUrl'].concat(meta()).concat(detailKeys()))
         && validDetailCommon(d, changed)
         && (!changed.hasAny(['contactPhone', 'whatsapp', 'whatsappUrl', 'facebookUrl', 'externalUrl']) || validDetailContacts(d))
@@ -352,7 +354,7 @@ service cloud.firestore {
     function validSaint(d, changed) {
       // = keysAllowed(...), reusing the changed keys.
       return changed.hasOnly(['nameAr', 'nameEn', 'bioAr', 'bioEn', 'feastCopticAr', 'feastCopticEn', 'feastGregorian',
-                          'feastGregorianAr', 'image', 'contactPhone', 'externalUrl'].concat(meta()).concat(detailKeys()))
+                          'feastGregorianAr', 'image', 'imageStyle', 'contactPhone', 'externalUrl'].concat(meta()).concat(detailKeys()))
         && validDetailCommon(d, changed)
         && (!changed.hasAny(['contactPhone', 'whatsapp', 'whatsappUrl', 'facebookUrl', 'externalUrl']) || validDetailContacts(d))
         && (ownFieldsUnchanged(changed) || ownSaint(d));
@@ -483,7 +485,7 @@ service cloud.firestore {
       let changed = changedKeys(d);
       return keysAllowed(['sections', 'homeOrder', 'homeHidden', 'heroTitleAr', 'heroTitleEn', 'heroSubtitleAr',
                           'heroSubtitleEn', 'bannerEnabled', 'bannerAr', 'bannerEn', 'bannerLink', 'theme',
-                          'pageHeaders', 'footer', 'updatedAt', 'updatedBy'])
+                          'pageHeaders', 'footer', 'heroMotion', 'imageStyles', 'updatedAt', 'updatedBy'])
         && (!('sections' in changed) || !('sections' in d) || validSections(d.sections))
         && (!('homeOrder' in changed) || !('homeOrder' in d) || (d.homeOrder is list && d.homeOrder.size() <= 7
               && d.homeOrder.hasOnly(['banner', 'alerts', 'nextMass', 'quickContacts', 'milestones', 'directory', 'map'])))
@@ -499,6 +501,13 @@ service cloud.firestore {
         && (!('bannerLink' in changed) || optUrlOrPath(d, 'bannerLink', 500))
         && (!('theme' in changed) || d.get('theme', 'burgundy') in ['burgundy', 'navy', 'green', 'brown', 'purple'])
         && (!('footer' in changed) || !('footer' in d) || validFooter(d.footer))
+        // Hero motion & video switch (ADR-022): a bool, default on.
+        && (!('heroMotion' in changed) || d.get('heroMotion', true) is bool)
+        // Per-section default image display style (ADR-023).
+        && (!('imageStyles' in changed) || !('imageStyles' in d) || (d.imageStyles is map
+              && d.imageStyles.keys().hasOnly(['priests', 'saints', 'activities', 'milestones', 'meetings', 'alerts',
+                                               'seasons', 'facilities', 'clinics'])
+              && d.imageStyles.values().hasOnly(['avatar', 'card', 'banner'])))
         && (!('pageHeaders' in changed) || !('pageHeaders' in d) || validPageHeaders(d.pageHeaders))
         && (!changed.hasAny(['updatedAt', 'updatedBy']) || stampOk(d));
     }

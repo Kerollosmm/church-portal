@@ -153,6 +153,15 @@ const Map<String, List<String>> _strings = {
   'backHome': ['العودة للرئيسية', 'Back to home'],
   'rights': ['جميع الحقوق محفوظة', 'All rights reserved'],
   'quickLinks': ['روابط سريعة', 'Quick links'],
+  // Coptic identity (design/coptic-identity)
+  'denomination': ['الكنيسة القبطية الأرثوذكسية', 'Coptic Orthodox Church'],
+  'heroKicker': ['كنيسة قبطية أرثوذكسية', 'A Coptic Orthodox church'],
+  'churchServices': ['خدمات الكنيسة', 'Church services'],
+  'navChurch': ['الكنيسة', 'The church'],
+  'aboutChurchCta': ['تعرّف على الكنيسة', 'About the church'],
+  'getInTouch': ['تواصل', 'Get in touch'],
+  'readLife': ['السيرة', 'Read the life'],
+  'allContactWays': ['كل وسائل التواصل', 'All the ways to reach us'],
   'dir_mass': ['جدول القداسات والعشيات والمواسم', 'Liturgies, vespers and seasons'],
   'dir_edu': ['مدارس الأحد واجتماعات كل المراحل', 'Sunday school and meetings for every age'],
   'dir_act': ['الكورالات والألحان والشباب وإعداد الخدام', 'Choirs, hymns, youth and servant training'],
@@ -398,6 +407,36 @@ const Map<String, List<String>> _strings = {
   'opt_revival_maximus': ['نهضة مكسيموس ودوماديوس', 'Maximus & Domadius revival'],
   'opt_revival_moses': ['نهضة الأنبا موسى', 'St Moses revival'],
   'opt_summer': ['الصيف', 'Summer'],
+  'opt_avatar': ['دائرة (صورة شخص)', 'Avatar (round, a person)'],
+  'opt_card': ['بطاقة (الصورة كاملة)', 'Card (whole picture)'],
+  'opt_banner': ['شريط عريض', 'Banner (full width)'],
+  'imageDisplay': ['طريقة عرض الصور', 'Image display'],
+  'imageDisplayHint': ['الافتراضي لكل قسم. يمكن تغييره لكل عنصر من «الصورة» في نموذج العنصر.',
+      'Default per section. Each item can override it under its image in the item form.'],
+  // "Golden hour" identity (ADR-022): calligraphic accent words above titles.
+  'heroAccent': ['أهلاً بكم في', 'Welcome to'],
+  'accent_about': ['تعرّف على', 'Discover'],
+  'accent_schedule': ['تعالوا نصلّي', 'Come, let us pray'],
+  'accent_education': ['نتعلّم معًا', 'Learning together'],
+  'accent_activities': ['نخدم معًا', 'Serving together'],
+  'accent_clinics': ['لخدمتكم', 'At your service'],
+  'accent_services': ['لخدمتكم', 'At your service'],
+  'accent_contact': ['يسعدنا تواصلكم', 'We would love to hear from you'],
+  'accent_ask': ['اسألنا', 'Ask us'],
+  'accent_saint': ['من سير القديسين', 'Lives of the saints'],
+  'accent_priest': ['آباؤنا', 'Our fathers'],
+  'accent_milestone': ['قصتنا', 'Our story'],
+  'accent_item': ['كنيستنا', 'Our church'],
+  'accentPatrons': ['شفعاء', 'The patrons of'],
+  'patronsOfOurChurch': ['كنيستنا', 'our church'],
+  'accentStory': ['محطات', 'Milestones'],
+  'accentServices': ['كل ما تحتاجه', 'Everything you need'],
+  'accentLocation': ['تعالوا زورونا', 'Come and visit'],
+  'footerSignature': ['كنيسة مكسيموس ودوماديوس والقوي الأنبا موسى الأسود - العصافرة ٤٥',
+      'Church of Sts Maximus & Domadius and the Strong Anba Moussa the Black – El-Asafra 45'],
+  'heroMotion': ['حركة الواجهة والفيديو', 'Hero motion & video'],
+  'heroMotionHint': ['سحب متحركة وأشعة ضوء وفيديو قصير في الواجهة. لا يعمل أبدًا لمن فعّل «تقليل الحركة» أو «توفير البيانات».',
+      'Drifting clouds, light rays and a short looping video in the hero. Never plays for visitors with reduced motion or data saver on.'],
 };
 
 extension L10nX on BuildContext {
@@ -410,6 +449,9 @@ extension L10nX on BuildContext {
     args.forEach((k, v) => s = s.replaceAll('{$k}', v));
     return s;
   }
+
+  /// Translated UI string, or null when [key] has no entry.
+  String? trOrNull(String key) => _strings.containsKey(key) ? tr(key) : null;
 
   /// Picks the Arabic or English variant of a bilingual content field,
   /// falling back to whichever is non-empty.

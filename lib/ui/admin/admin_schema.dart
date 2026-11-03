@@ -1,6 +1,8 @@
 /// Field schemas for the admin editors (collections + the church-info doc).
 library;
 
+import '../../domain/image_style.dart';
+
 enum FieldType {
   text,
   multiline,
@@ -191,6 +193,15 @@ const _orderField = FieldDef('order', 'الترتيب', 'Order', FieldType.integ
 /// Optional picture shown as the card image / avatar (never required).
 const _imageField = FieldDef('image', 'الصورة (اختياري)', 'Image (optional)', FieldType.image);
 
+/// Per-item image display override (ADR-023): avatar / card / banner;
+/// empty (—) = the section default chosen in Settings → Image display.
+const _imageStyleField = FieldDef('imageStyle', 'طريقة عرض الصورة (— = الافتراضي للقسم)',
+    'Image display (— = section default)', FieldType.choice,
+    options: ImageStyles.all, nullableChoice: true, group: FieldGroup.media);
+const _imageStyleFieldFlat = FieldDef('imageStyle', 'طريقة عرض الصورة (— = الافتراضي للقسم)',
+    'Image display (— = section default)', FieldType.choice,
+    options: ImageStyles.all, nullableChoice: true);
+
 /// Collections whose documents may carry an `image` (see lib/domain/media.dart).
 const imageCollections = [
   'alerts', 'seasons', 'meetings', 'activities', 'clinics', 'facilities', 'priests', 'milestones', 'saints', //
@@ -236,6 +247,7 @@ const _galleryField = FieldDef('gallery', 'معرض الصور (حتى 8)', 'Pho
 
 const _mediaGroup = [
   FieldDef('image', 'الصورة (اختياري)', 'Image (optional)', FieldType.image, group: FieldGroup.media),
+  _imageStyleField,
   _showDetailImagesField,
   _galleryField,
 ];
@@ -247,6 +259,7 @@ const _br11En = "Children's privacy: never upload identifiable photos of minors 
 const _meetingMediaGroup = [
   FieldDef('image', 'الصورة (اختياري)', 'Image (optional)', FieldType.image,
       group: FieldGroup.media, hintAr: _br11Ar, hintEn: _br11En),
+  _imageStyleField,
   _showDetailImagesField,
   FieldDef('gallery', 'معرض الصور (حتى 8)', 'Photo gallery (up to 8)', FieldType.imageList,
       maxRows: 8, group: FieldGroup.media, hintAr: _br11Ar, hintEn: _br11En),
@@ -326,6 +339,7 @@ const adminCollections = <CollectionDef>[
         min: 0, max: 1000),
     FieldDef('link', 'رابط (مثل /mass-schedule)', 'Link (e.g. /mass-schedule)', FieldType.url, allowPath: true),
     _imageField,
+    _imageStyleFieldFlat,
     _visibleField,
   ], [
     'titleAr',
@@ -346,6 +360,7 @@ const adminCollections = <CollectionDef>[
       missingBool: true,
     ),
     _imageField,
+    _imageStyleFieldFlat,
   ], [
     'nameAr',
     'key'

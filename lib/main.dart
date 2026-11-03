@@ -2,7 +2,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 
 import 'app.dart';
@@ -17,7 +18,16 @@ import 'state/providers.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   usePathUrlStrategy(); // clean URLs (/mass-schedule) — Hosting rewrites to index.html
-  GoogleFonts.config.allowRuntimeFetching = true;
+  // Fonts are bundled (assets/fonts, SIL OFL 1.1): no runtime font fetch.
+  LicenseRegistry.addLicense(() async* {
+    for (final (name, file) in const [
+      ('IBM Plex Sans Arabic', 'IBMPlexSansArabic'),
+      ('Lalezar', 'Lalezar'),
+      ('Aref Ruqaa', 'ArefRuqaa'),
+    ]) {
+      yield LicenseEntryWithLineBreaks([name], await rootBundle.loadString('assets/fonts/$file-OFL.txt'));
+    }
+  });
   CairoTime.ensureInitialized();
 
   final results = await Future.wait([SeedData.load(), bootstrapFirebase()]);

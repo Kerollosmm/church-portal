@@ -18,11 +18,25 @@ void main() {
     expect(manifest['name'], _fullAr);
     expect(manifest['short_name'], 'كنيسة مكسيموس ودوماديوس');
     // Installed-PWA launch surface matches the HTML splash background.
-    expect(manifest['background_color'], '#FBF6EC');
+    expect(manifest['background_color'], '#F5EEDF');
     for (final f in ['web/favicon.png', 'web/favicon.ico', 'web/og-image.jpg', 'web/icons/apple-touch-icon.png',
         'assets/branding/seal.png']) {
       expect(File(f).existsSync(), isTrue, reason: f);
     }
+  });
+
+  test('every preloaded / linked local asset in web/index.html exists (no 404s on first load)', () {
+    final html = File('web/index.html').readAsStringSync();
+    final hrefs = RegExp(r'(?:href|src)="([^"#?:]+)"').allMatches(html).map((m) => m.group(1)!).toList();
+    expect(hrefs, isNotEmpty);
+    for (final h in hrefs) {
+      // Build placeholders / generated files.
+      if (h.isEmpty || h.startsWith(r'$') || h.endsWith('.js')) continue;
+      // Flutter serves `assets/<path>` from the project's `<path>`.
+      final f = h.startsWith('assets/assets/') ? h.substring('assets/'.length) : 'web/$h';
+      expect(File(f).existsSync(), isTrue, reason: h);
+    }
+    expect(html, contains('assets/assets/fonts/Lalezar-Regular.ttf'), reason: 'display face preloaded');
   });
 
   test('old Hosting site 301-redirects every path to the new domain', () {

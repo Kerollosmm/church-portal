@@ -134,10 +134,14 @@ class _TimelineItem extends ConsumerWidget {
           child: Padding(
             padding: const EdgeInsets.only(bottom: 12),
             child: Card(
+              clipBehavior: Clip.antiAlias,
               child: DetailTapArea(
                 path: detail,
-                child: Padding(
-                padding: const EdgeInsets.all(14),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                  CardCover(
+                      collection: 'meetings', itemStyle: m.imageStyle, image: m.image, label: name, enlargeOnTap: detail == null),
+                  Padding(
+                padding: const EdgeInsets.all(Space.card),
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   // Wrap (not Row + Spacer): long stage names and the badges move
                   // to the next line on narrow screens instead of overflowing.
@@ -146,19 +150,18 @@ class _TimelineItem extends ConsumerWidget {
                     if (m.weekday == todayWeekday) Pill(context.tr('today'), icon: Icons.today_rounded),
                     if (m.sample) const SampleBadge(),
                   ]),
-                  const SizedBox(height: 6),
-                  if (m.image == null)
-                    Text(name, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16))
-                  else
-                    Row(children: [
-                      CardImageLead(image: m.image!, label: name, enlargeOnTap: detail == null),
-                      Expanded(child: Text(name, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16))),
-                    ]),
-                  const SizedBox(height: 6),
-                  Text(weekdayLabel(context, m.weekday),
-                      style: const TextStyle(color: AppColors.goldText, fontWeight: FontWeight.w800)),
+                  const SizedBox(height: Space.s),
+                  Row(children: [
+                    CardLead(
+                        collection: 'meetings', itemStyle: m.imageStyle, image: m.image, label: name, enlargeOnTap: detail == null),
+                    Expanded(child: Text(name, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16))),
+                  ]),
+                  if (m.weekday != null || m.start.isNotEmpty) const SizedBox(height: Space.s),
+                  if (m.weekday != null)
+                    Text(weekdayLabel(context, m.weekday),
+                        style: const TextStyle(color: AppColors.goldText, fontWeight: FontWeight.w800)),
                   TimeRangeText(m.start, m.end),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: Space.xs),
                   IconLine(Icons.meeting_room_outlined, context.pick(m.hallAr, m.hallEn)),
                   IconLine(Icons.info_outline, m.notes),
                   if (socials && (m.facebookUrl.isNotEmpty || m.whatsappUrl.isNotEmpty)) ...[
@@ -183,6 +186,7 @@ class _TimelineItem extends ConsumerWidget {
                   if (detail != null) DetailsLink(path: detail, title: name, id: m.id),
                 ]),
               ),
+                ]),
               ),
             ),
           ),

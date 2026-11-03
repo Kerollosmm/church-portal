@@ -225,6 +225,80 @@ supersede them.
   item that has some unless switched off; existing explicit `false` values keep hiding pages. Admins who saved
   `showDetailImages: false` keep photos hidden on that page (their choice).
 
+## ADR-022 (revised 3 Nov 2026; accepted, merged with PR #15) — "Golden hour" visual identity (branch `design/coptic-identity`)
+
+- **Context:** the team found the UI generic ("AI-slop") and not business-ready. A first draft ("Iconostasis": flat
+  plaster wall, Naskh/Marcellus, 4 px radii, oxblood `#7B2216`) was reviewed and **replaced**: the team wanted the site
+  to look like the parish's own posters (`work/design/poster_refs/`).
+- **Decision (proposed):** poster identity — church in golden-hour clouds (Gemini-painted art, decorative only),
+  heavy maroon **Lalezar** titles with a small red **Aref Ruqaa** accent word, subtitle ribbons, translucent warm
+  panels (20 px radius, soft shadow), saints in gold halos over the Nile, IBM Plex Sans Arabic body; default primary
+  preset `burgundy` = poster maroon `#6E1C1C`; grouped nav (Home · About · Church services ▾ · Ask · Contact + "Mass
+  times" CTA). Hero motion (drift, light rays) and a muted clouds video loop (`video_player`) behind the admin switch
+  **`settings/features.heroMotion`** (bool, default on; rules accept only a bool); visitors' reduced-motion and
+  save-data settings always win. Fonts and art are bundled assets (no runtime fetch).
+- **Layout pass (3 Nov 2026):** `ResponsiveGrid` is 1/2/3 columns (phone/tablet/desktop) on its own width, full width
+  and start-aligned in RTL; content max width 1200; `Space` tokens; cards size to their content and optional fields
+  collapse with their gaps (`TimeRangeText` renders nothing without a time). Tests at 320/390/1440 px × 1×/2× text.
+- **Status:** approved by the team on 3 Nov 2026 ("The UI looks amazing") and squash-merged as PR #15; direction
+  doc `docs/design/direction.md`.
+- **Seamless hero (PR #15 final round):** phone screenshots showed hard rectangular edges in the hero (a vertical
+  line on the right, a horizontal line near the buttons, a lighter box behind the title, a line where the hero ends).
+  Causes: the gold haze was two non-tileable texture tiles side by side at 70 % height (moving vertical seam +
+  horizontal bottom edge); `TextScrim` was a circular `RadialGradient` clipped to its rectangular text box (still
+  ~45 % alpha at the box's top/bottom edge); the bottom fade ended at 95 % cream on a textured backdrop. Fix: every
+  stage layer is `StackFit.expand` over the whole hero (outside the 1200 px cap); the haze is a mirrored strip
+  (A · mirror(A) · A, drift 2 widths per minute — seamless and loop-exact) under a vertical alpha ramp; rays have a
+  blur mask; `TextScrim` paints an elliptical radial glow that bleeds 56/40 px past the text and reaches 0 alpha
+  inside its own bounds; the stage dissolves to **transparent** at the bottom (`BottomFeather`, `ShaderMask` dstIn: a
+  smoothstep ramp from 62 % to 100 % of the height — a linear ramp's slope break reads as a line — and the last 2 px
+  trimmed, because on the web the partially covered last device row escaped the mask as a thin dark line) so the
+  page backdrop shows through. The haze strip is aligned to the physical left (`Alignment.topLeft`): start-aligned in
+  RTL it hung off the right edge and left an empty band (a moving vertical edge). Same widgets serve inner page headers
+  and the patrons band (band title padding raised so its glow ends before the band edge).
+- **Hero video (PR #15 final round):** source `A_clouds_church_loop.mp4` trimmed to seconds 3–10 (the first 3 s
+  morph the church) with ffmpeg, then a 1 s frame-matched crossfade folded into the end so the loop restarts on the
+  next frame of the clip (6 s, muted, no audio track): `assets/video/hero_clouds.mp4` 1280×720 (~310 KB) for
+  tablets/desktops and `hero_clouds_tall.mp4` 404×720 centre crop on the church (~110 KB) for phones; posters are
+  their first frames (`assets/art/hero_poster{,_tall}.webp`), precached and shown until the video plays. On the web
+  the loop is a native `<video muted playsinline loop>` (`HtmlElementView.fromTagName`, `hero_video_web.dart`) so
+  phones autoplay it and its bottom can take the same feather as a CSS mask (a platform view cannot be masked by a
+  `ShaderMask`); it fades in (CSS transition) on the `playing` event, so there is no black frame or jump. Android/iOS
+  use `video_player` (`hero_video_io.dart`). Ken Burns runs only on the still painting (the video keeps registered
+  with its poster). Still gated by `heroMotion` (default on), reduced motion and save-data; paused off-screen.
+
+## ADR-018 amendment (3 Nov 2026, PR #15) — new parish seal
+
+- The church supplied a new seal (white disc, gold double ring, Coptic lettering, the church with two towers,
+  «بطريركية الأقباط الأرثوذكس بالإسكندرية», the church name, «العصافرة قبلي ش ٤٥»). The master
+  `assets/branding/seal_source.webp` is now the **round seal on transparency** (1024 px, lossless; cropped to the
+  outer ring from the 1792×2400 original). `tool/gen_branding.sh` was rewritten for a transparent round master:
+  in-app `seal.png` 384 px, favicons with a light unsharp (crisp, small lettering not legible at 16–48 px by nature),
+  PWA "any" icons round on transparency, Apple touch icon on white, maskable 192/512 at 78 % on maroon `#470812`,
+  OG card 1200×630 (seal on maroon; also the JSON-LD `image`), Android legacy + adaptive foreground (59 %), and a new
+  Android launch-screen seal (`mipmap-*/launch_image.png`, 128 dp, wired in `launch_background.xml`). On the maroon
+  seal tab and drawer header the white seal sits in a thin gold ring with a soft shadow.
+
+## ADR-023 (draft, PR #15) — Image display styles: avatar / card / banner
+
+- **Context:** one small thumbnail for every picture made people's photos, event pictures and saint icons look the
+  same and cropped them; admins asked to show a whole picture or a portrait.
+- **Decision:** three styles (`lib/domain/image_style.dart`, `ImageStyles`): `avatar` (round, gold halo ring, leads the
+  title row), `card` (large cover on top of the card, whole picture visible — `BoxFit.contain` over a blurred sepia
+  copy; portrait 4:5 for saints, 4:3 otherwise, height capped), `banner` (full card width, 16:7, edge to edge).
+  Resolution: the item's own **`imageStyle`** → the admin's section default **`settings/features.imageStyles[collection]`**
+  → built-in default (priests & departed, clinics → `avatar`; saints → portrait `card`; activities, milestones,
+  meetings, alerts, seasons, facilities → `card`). Missing/invalid value = the next level. Shared widgets
+  `lib/ui/widgets/styled_image.dart` (`CardCover`, `CardLead`, `HaloAvatar`, `FittedCover`, `DetailCover`) on every
+  card and detail page (saint detail keeps its header halo unless the style is `banner`).
+- **Data/rules:** `imageStyle` allowed on the 9 image collections (`null`/absent, `avatar`, `card`, `banner`);
+  `imageStyles` on `settings/features` (map, known collections only, known styles only); new documents do not write
+  an unset style and the features save omits an empty map, so saves keep working against rules that predate them.
+  Emulator tests in `tool/rules_test/rules.test.mjs` (ADR-023 group). Not seeded (missing = default).
+- **Admin:** item form "Image display (— = section default)" next to the image; Settings → "Image display" card with
+  one default per section.
+- **Invariant:** no image or images switched off → the card is exactly as before (golden rule #9).
+
 ## Timeline
 
 | When | PR / commit | What |
@@ -248,5 +322,6 @@ supersede them.
 | 2 Nov 2026 | **PR #13** — "Public clickable detail pages, custom headers & upgraded footer" (`feat/pr13-public-detail-pages`) | Customization plan PR #13 (final): 7 detail sub-routes + `ItemDetailPage` (lazy zoomable cover/gallery, long text, custom-field cards, contact & social actions, dual priest gating, per-item canonical/noindex); parent-aware phone Back arrow; Details links / card tap on the 7 list cards, item contact/social switches on card buttons, optional images on meeting/clinic/facility cards; `CustomizablePageHeader` + `PageIntro` on the 8 customizable pages; FR-G-04 footer (phones, social icons, quick-link switch, note); `test/detail_pages_test.dart`. |
 
 | 2 Nov 2026 | **PR #14** — "Detail pages that actually open" (`feat/pr14-detail-pages-default-on`) | Opt-out detail pages (missing `detailsEnabled` = on) so every card opens its page; labelled key-facts card, Google Calendar link (weekly RRULE, Cairo zone), directions, copy-link share, "More in this section", hero cover; admin switch on by default with hint, phone rows move the open-page icon under the subtitle; home directory card "Learn more" wraps at 320 px / 200 %; ADR-021; `test/detail_ux_test.dart` + PR #14 group in `test/detail_pages_test.dart`. |
+| 3 Nov 2026 | **PR #15** — "Golden hour identity, image display styles, seamless hero video, new parish seal" (`design/coptic-identity`, squash-merged) | Poster identity (ADR-022 revised): Lalezar + Aref Ruqaa, maroon `#6E1C1C`, ribbons, halos, Gemini art, hero motion + video behind `heroMotion`; image display styles avatar/card/banner (ADR-023) with rules + emulator tests; layout pass (1/2/3-column grid, 1200 max width, `Space` tokens, collapsing optional fields). Final round: seamless hero (full-bleed feathered layers, mirrored haze strip, radial title glow, transparent bottom dissolve), hero video trimmed to 3–10 s with a crossfaded loop, portrait crop on phones, poster crossfade (native `<video>` on web); new parish seal + regenerated icons/splash (ADR-018 amendment); painted saints served at `/art/*.webp`; `test/golden_hour_test.dart`, `test/image_style_layout_test.dart`. |
 
 Append new PRs to this table.

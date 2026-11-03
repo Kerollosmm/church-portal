@@ -8,6 +8,7 @@ import '../../core/l10n.dart';
 import '../../core/launch.dart';
 import '../../core/theme.dart';
 import '../../domain/features.dart';
+import '../../domain/image_style.dart';
 import '../../domain/item_detail.dart';
 import '../../domain/models.dart';
 import '../../domain/rules.dart';
@@ -17,6 +18,7 @@ import '../widgets/app_shell.dart';
 import '../widgets/cards.dart';
 import '../widgets/common.dart';
 import '../widgets/feature_gate.dart';
+import '../widgets/golden.dart';
 import '../widgets/item_image.dart';
 import 'activities_page.dart' show activityIcon;
 import 'clinics_page.dart' show ClinicCard;
@@ -157,6 +159,9 @@ class _Entry {
   final IconData icon;
   final bool sample;
   final MediaImage? cover;
+
+  /// Resolved display style of [cover] (ADR-023).
+  final String imageStyle;
   final ItemDetails details;
   final List<Widget> pills;
   final List<_Fact> facts;
@@ -187,6 +192,7 @@ class _Entry {
     this.subtitle = '',
     this.sample = false,
     this.cover,
+    this.imageStyle = ImageStyles.card,
     this.pills = const [],
     this.facts = const [],
     this.summary = '',
@@ -202,6 +208,7 @@ class _Entry {
   static _Entry of(BuildContext context, WidgetRef ref, Object item) {
     final primary = Theme.of(context).colorScheme.primary;
     String date(String s) => formatLooseDate(s, arabic: context.isAr);
+    final features = ref.watch(featuresProvider);
     switch (item) {
       case Meeting m:
         final stage = stageLabels[m.stage];
@@ -211,6 +218,7 @@ class _Entry {
           details: m.details,
           sample: m.sample,
           cover: m.image,
+          imageStyle: features.imageStyleFor('meetings', m.imageStyle),
           pills: [if (stage != null) Pill(context.pick(stage[0], stage[1]), color: primary)],
           facts: [
             if (m.weekday != null) _Fact(Icons.calendar_today_outlined, context.tr('factDay'), weekdayLabel(context, m.weekday)),
@@ -230,6 +238,7 @@ class _Entry {
           details: a.details,
           sample: a.sample,
           cover: a.image,
+          imageStyle: features.imageStyleFor('activities', a.imageStyle),
           facts: [
             _Fact(Icons.schedule_rounded, context.tr('schedule'), context.pick(a.scheduleAr, a.scheduleEn)),
             _Fact(Icons.cake_outlined, context.tr('ages'), a.ageRange.isEmpty ? '' : localDigits(context, a.ageRange)),
@@ -251,6 +260,7 @@ class _Entry {
           details: c.details,
           sample: c.sample,
           cover: c.image,
+          imageStyle: features.imageStyleFor('clinics', c.imageStyle),
           pills: [if (isClinicAvailableToday(c, now)) Pill(context.tr('availableToday'), icon: Icons.check_circle)],
           facts: [
             _Fact(Icons.medical_services_outlined, context.tr('factDoctor'), doctor),
@@ -274,6 +284,7 @@ class _Entry {
           details: f.details,
           sample: f.sample,
           cover: f.image,
+          imageStyle: features.imageStyleFor('facilities', f.imageStyle),
           facts: [_Fact(Icons.schedule_rounded, context.tr('factHours'), context.pick(f.hoursAr, f.hoursEn))],
           summary: context.pick(f.descAr, f.descEn),
           onSite: true,
@@ -287,6 +298,7 @@ class _Entry {
           details: p.details,
           sample: p.sample,
           cover: p.displayImage,
+          imageStyle: features.imageStyleFor('priests', p.imageStyle),
           pills: [
             Pill(rank, color: AppColors.goldText),
             if (p.departed) Pill(context.tr('opt_departed'), color: AppColors.muted, icon: Icons.local_florist_outlined),
@@ -306,6 +318,7 @@ class _Entry {
           icon: Icons.auto_awesome_rounded,
           details: s.details,
           cover: s.image,
+          imageStyle: features.imageStyleFor('saints', s.imageStyle),
           facts: [
             _Fact(Icons.event, context.tr('feast'), context.pick(s.feastCopticAr, s.feastCopticEn)),
             _Fact(Icons.event_note_outlined, context.tr('factGregorian'), context.pick(s.feastGregorianAr, s.feastGregorian)),
@@ -318,6 +331,7 @@ class _Entry {
           icon: Icons.history_edu_rounded,
           details: m.details,
           cover: m.image,
+          imageStyle: features.imageStyleFor('milestones', m.imageStyle),
           facts: [if (m.year != null) _Fact(Icons.history_edu_outlined, context.tr('factYear'), localDigits(context, '${m.year}'))],
           summary: context.pick(m.descAr, m.descEn),
         );
@@ -399,6 +413,46 @@ class _DetailView extends ConsumerWidget {
   const _DetailView(
       {required this.entry, required this.parent, required this.kind, required this.id, this.related = const []});
 
+  /// Poster header: the kind's calligraphic accent above the title. Saints
+  /// stand in a gold halo over the Nile at sunset (the posters' composition):
+  /// their own icon when one is uploaded, otherwise the painted patron
+  /// (decorative) or a drawn cross.
+  Widget _header(BuildContext context, _Entry e, MediaImage? cover) {
+    final accent = context.tr(switch (kind) {
+      DetailKind.saint => 'accent_saint',
+      DetailKind.priest => 'accent_priest',
+      DetailKind.milestone => 'accent_milestone',
+      DetailKind.meeting => 'accent_education',
+      DetailKind.activity => 'accent_activities',
+      DetailKind.clinic => 'accent_clinics',
+      DetailKind.facility => 'accent_services',
+    });
+    if (kind != DetailKind.saint) return PageHeader(title: e.title, subtitle: e.subtitle, icon: e.icon, accent: accent);
+    final size = MediaQuery.sizeOf(context).width < 600 ? 200.0 : 270.0;
+    final painting = ArtAssets.paintingForSaint(id);
+    return PageHeader(
+      title: e.title,
+      subtitle: e.subtitle,
+      icon: e.icon,
+      accent: accent,
+      backdrop: ArtAssets.nile,
+      portrait: HaloPortrait(
+        key: const Key('saintHalo'),
+        size: size,
+        child: ItemImage(
+          key: cover == null ? null : const Key('detailCover'),
+          image: cover,
+          size: size,
+          circle: true,
+          label: e.title,
+          placeholder: painting == null
+              ? const HaloCrossFill()
+              : ExcludeSemantics(child: Image.asset(painting, fit: BoxFit.cover, alignment: const Alignment(0, -0.6))),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final e = entry;
@@ -417,7 +471,7 @@ class _DetailView extends ConsumerWidget {
 
     return PageBody(
       key: const Key('itemDetailPage'),
-      header: PageHeader(title: e.title, subtitle: e.subtitle, icon: e.icon),
+      header: _header(context, e, cover),
       children: [
         _BackLink(parent: parent),
         const SizedBox(height: 4),
@@ -430,22 +484,15 @@ class _DetailView extends ConsumerWidget {
               if (e.sample) const SampleBadge(),
             ]),
           ),
-        if (cover != null)
+        // Saints show their icon in the header's halo instead (unless an
+        // admin chose the banner style for them).
+        if (cover != null && (kind != DetailKind.saint || e.imageStyle == ImageStyles.banner))
           Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: LayoutBuilder(
-              builder: (context, c) => Align(
-                alignment: AlignmentDirectional.centerStart,
-                child: ItemImage(
-                  key: const Key('detailCover'),
-                  image: cover,
-                  // Hero picture: as wide as the column allows, up to 320 px.
-                  size: c.maxWidth.isFinite ? c.maxWidth.clamp(120.0, 320.0) : 240,
-                  circle: false,
-                  radius: 16,
-                  label: e.title,
-                  placeholder: const SizedBox.shrink(),
-                ),
+            padding: const EdgeInsets.only(bottom: Space.m),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: e.imageStyle == ImageStyles.banner ? double.infinity : 640),
+                child: DetailCover(key: const Key('detailCover'), style: e.imageStyle, image: cover, label: e.title),
               ),
             ),
           ),
@@ -496,7 +543,7 @@ class _DetailView extends ConsumerWidget {
                 placeholder: Container(
                   width: 104,
                   height: 104,
-                  decoration: BoxDecoration(color: AppColors.parchment, borderRadius: BorderRadius.circular(12)),
+                  decoration: BoxDecoration(color: AppColors.parchment, borderRadius: BorderRadius.circular(4)),
                   child: Icon(Icons.image_outlined, color: primary),
                 ),
               ),
@@ -512,7 +559,7 @@ class _DetailView extends ConsumerWidget {
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
                 color: AppColors.cream,
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(4),
                 border: Border.all(color: AppColors.gold.withValues(alpha: 0.5)),
               ),
               child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -684,7 +731,7 @@ class _FieldCard extends StatelessWidget {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: AppColors.cream,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(4),
         border: Border.all(color: AppColors.gold.withValues(alpha: 0.45)),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -754,7 +801,7 @@ class _RelatedLink extends StatelessWidget {
         excludeSemantics: true,
         child: InkWell(
           key: ValueKey('relatedLink-$id'),
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(4),
           onTap: open,
           child: ConstrainedBox(
             constraints: const BoxConstraints(minHeight: 48),

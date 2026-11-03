@@ -12,10 +12,14 @@ import '../../domain/rules.dart';
 import '../../domain/time_format.dart';
 import '../../state/providers.dart';
 import 'coptic_cross.dart';
+import 'golden.dart';
 
-const double kMaxContentWidth = 1100;
+/// Max width of page content (cards grid, text); wider screens centre it.
+const double kMaxContentWidth = 1200;
 
-/// Scrollable page body: centred, width-capped content + footer.
+/// Scrollable page body: centred, width-capped content + footer. Each
+/// section fades and rises in the first time it scrolls into view (static
+/// under reduced motion).
 class PageBody extends StatelessWidget {
   final List<Widget> children;
   final Widget? header;
@@ -33,72 +37,98 @@ class PageBody extends StatelessWidget {
               constraints: const BoxConstraints(maxWidth: kMaxContentWidth),
               child: Padding(
                 padding: EdgeInsets.fromLTRB(pad, 20, pad, 32),
-                child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: children),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [for (final c in children) Reveal(child: c)],
+                ),
               ),
             ),
           ),
         ),
-        const SliverFillRemaining(hasScrollBody: false, child: Align(alignment: Alignment.bottomCenter, child: Footer())),
+        const SliverFillRemaining(
+          hasScrollBody: false,
+          child: Align(alignment: Alignment.bottomCenter, child: Footer()),
+        ),
       ],
     );
   }
 }
 
-/// Burgundy page banner with title + subtitle.
-class PageHeader extends StatelessWidget {
+/// Standard inner-page header ("Golden hour"): the golden-hour painting of
+/// the church in the clouds (slow drift + light rays, still under reduced
+/// motion), a cream scrim, the calligraphic accent word above the heavy
+/// maroon title, and the subtitle on a pill ribbon. Same anatomy on every
+/// inner page. [portrait] (a saint's icon in a halo) and [backdrop] (e.g. the
+/// Nile for saints) let detail pages vary it.
+class PageHeader extends ConsumerWidget {
   final String title;
   final String? subtitle;
+  final String? accent;
+
+  /// Kept for API compatibility (section icons are not shown in the header).
   final IconData? icon;
-  const PageHeader({super.key, required this.title, this.subtitle, this.icon});
+  final Widget? portrait;
+  final String backdrop;
+  const PageHeader({
+    super.key,
+    required this.title,
+    this.subtitle,
+    this.icon,
+    this.accent,
+    this.portrait,
+    this.backdrop = ArtAssets.heroWide,
+  });
 
   @override
-  Widget build(BuildContext context) {
-    final t = Theme.of(context).textTheme;
-    final primary = Theme.of(context).colorScheme.primary;
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [primaryDarkOf(context), primary],
-          begin: AlignmentDirectional.topStart,
-          end: AlignmentDirectional.bottomEnd,
+  Widget build(BuildContext context, WidgetRef ref) {
+    final w = MediaQuery.sizeOf(context).width;
+    final wide = w >= 900;
+    final phone = w < 600;
+    final pad = phone ? 16.0 : (wide ? 40.0 : 24.0);
+    final motion = ref.watch(featuresProvider.select((f) => f.heroMotion));
+    final sub = subtitle?.trim() ?? '';
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: HeroStage(
+            image: backdrop == ArtAssets.heroWide && phone ? ArtAssets.heroWideSmall : backdrop,
+            alignment: backdrop == ArtAssets.heroWide ? const Alignment(0, -0.35) : Alignment.center,
+            motion: motion,
+            rays: backdrop == ArtAssets.heroWide ? 1 : 0.6,
+          ),
         ),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 26),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: kMaxContentWidth),
-          child: Row(
-            children: [
-              if (icon != null) ...[
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: AppColors.gold.withValues(alpha: 0.18),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: Icon(icon, color: AppColors.goldLight, size: 28),
-                ),
-                const SizedBox(width: 14),
-              ],
-              Expanded(
+        Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: kMaxContentWidth),
+            child: Padding(
+              // Top room for the seal tab hanging from the app bar.
+              padding: EdgeInsets.fromLTRB(pad, wide ? 44 : 40, pad, wide ? 52 : 36),
+              child: SizedBox(
+                width: double.infinity,
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(title,
-                        style: t.headlineSmall?.copyWith(color: Colors.white, fontWeight: FontWeight.w800)),
-                    if (subtitle != null && subtitle!.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 4),
-                        child: Text(subtitle!, style: t.bodyMedium?.copyWith(color: AppColors.goldLight)),
+                    if (portrait != null) ...[portrait!, const SizedBox(height: 14)],
+                    TextScrim(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 10),
+                        child: PosterHeading(title, accent: accent, size: wide ? 54 : (phone ? 34 : 44), glow: true),
                       ),
+                    ),
+                    if (sub.isNotEmpty) ...[
+                      const SizedBox(height: 10),
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 720),
+                        child: TitleRibbon(sub),
+                      ),
+                    ],
                   ],
                 ),
               ),
-            ],
+            ),
           ),
         ),
-      ),
+      ],
     );
   }
 }
@@ -106,14 +136,14 @@ class PageHeader extends StatelessWidget {
 /// [PageHeader] of a customizable public page ([CustomizablePages]): the
 /// admin's title / subtitle for the current language
 /// (`settings/features.pageHeaders.<pageKey>`) replace the built-in ones;
-/// an empty override keeps the built-in text.
+/// an empty override keeps the built-in text. The calligraphic accent word
+/// is the page's own (`accent_<pageKey>`).
 class CustomizablePageHeader extends ConsumerWidget {
   final String pageKey;
   final String title;
   final String? subtitle;
   final IconData? icon;
-  const CustomizablePageHeader(
-      {super.key, required this.pageKey, required this.title, this.subtitle, this.icon});
+  const CustomizablePageHeader({super.key, required this.pageKey, required this.title, this.subtitle, this.icon});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -123,7 +153,12 @@ class CustomizablePageHeader extends ConsumerWidget {
     String own(String ar, String en) => (context.isAr ? ar : en).trim();
     final t = own(c.titleAr, c.titleEn);
     final st = own(c.subtitleAr, c.subtitleEn);
-    return PageHeader(title: t.isNotEmpty ? t : title, subtitle: st.isNotEmpty ? st : subtitle, icon: icon);
+    return PageHeader(
+      title: t.isNotEmpty ? t : title,
+      subtitle: st.isNotEmpty ? st : subtitle,
+      icon: icon,
+      accent: context.trOrNull('accent_$pageKey'),
+    );
   }
 }
 
@@ -138,72 +173,124 @@ class PageIntro extends ConsumerWidget {
     final c = ref.watch(featuresProvider.select((f) => f.pageHeader(pageKey)));
     final text = context.pick(c.introAr.trim(), c.introEn.trim());
     if (text.isEmpty) return const SizedBox.shrink();
-    return Container(
+    return Padding(
       key: const Key('pageIntro'),
-      width: double.infinity,
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppColors.cream,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.gold.withValues(alpha: 0.6)),
+      padding: const EdgeInsets.only(bottom: 12),
+      child: WarmPanel(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(Icons.campaign_outlined, color: AppColors.goldText),
+            const SizedBox(width: 10),
+            Expanded(child: Text(text, style: const TextStyle(height: 1.75, color: AppColors.ink))),
+          ],
+        ),
       ),
-      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Icon(Icons.campaign_outlined, color: AppColors.goldText),
-        const SizedBox(width: 10),
-        Expanded(child: Text(text, style: const TextStyle(height: 1.7, color: AppColors.ink))),
-      ]),
     );
   }
 }
 
+/// Poster-style section title: optional calligraphic [accent] word above the
+/// heavy title (primary colour), a soft sepia rule, then [trailing] (e.g. a
+/// "see all" link) underneath. Centred like the posters.
 class SectionTitle extends StatelessWidget {
   final String text;
+
+  /// Kept for API compatibility (no section icons in the poster style).
   final IconData? icon;
   final Widget? trailing;
-  const SectionTitle(this.text, {super.key, this.icon, this.trailing});
+  final String? accent;
+  const SectionTitle(this.text, {super.key, this.icon, this.trailing, this.accent});
 
   @override
   Widget build(BuildContext context) {
+    final wide = MediaQuery.sizeOf(context).width >= 900;
+    final primary = Theme.of(context).colorScheme.primary;
     return Padding(
-      padding: const EdgeInsets.only(top: 20, bottom: 12),
-      child: Row(
+      padding: EdgeInsets.only(top: wide ? 44 : 30, bottom: 16),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          if (icon != null) ...[Icon(icon, color: AppColors.goldText, size: 22), const SizedBox(width: 8)],
-          Flexible(
-            child: Text(text,
-                style: Theme.of(context)
-                    .textTheme
-                    .titleLarge
-                    ?.copyWith(fontWeight: FontWeight.w800, color: Theme.of(context).colorScheme.primary)),
+          if (accent != null)
+            ExcludeSemantics(
+              child: Text(accent!, textAlign: TextAlign.center, style: AppFonts.script(size: wide ? 30 : 24, height: 1.1)),
+            ),
+          Semantics(
+            header: true,
+            child: Text(
+              text,
+              textAlign: TextAlign.center,
+              style: displayStyle(context, size: wide ? 38 : 28, color: primary, height: 1.3),
+            ),
           ),
-          const SizedBox(width: 10),
-          Expanded(child: Container(height: 1.2, color: AppColors.gold.withValues(alpha: 0.4))),
-          if (trailing != null) ...[const SizedBox(width: 8), Flexible(child: trailing!)],
+          const SizedBox(height: 6),
+          ExcludeSemantics(
+            child: Container(
+              width: 170,
+              height: 8,
+              decoration: const BoxDecoration(
+                borderRadius: BorderRadius.all(Radius.circular(99)),
+                gradient: LinearGradient(colors: [Color(0x007A4530), Color(0xB37A4530), Color(0x007A4530)]),
+              ),
+            ),
+          ),
+          if (trailing != null) Padding(padding: const EdgeInsets.only(top: 4), child: trailing!),
         ],
       ),
     );
   }
 }
 
-/// Responsive grid of cards (1 column on phones, 2-3 on wider screens).
+/// Columns for a grid [width] wide: phone 1, tablet 2, desktop 3 (the
+/// breakpoints are on the grid's own width, so a grid inside a narrower
+/// panel follows its panel), capped at [maxColumns].
+int gridColumns(double width, {int maxColumns = 3}) {
+  final cols = width < 560 ? 1 : (width < 900 ? 2 : 3);
+  return cols.clamp(1, maxColumns);
+}
+
+/// Responsive grid of cards: 1 column on phones, 2 on tablets, 3 on desktop
+/// (see [gridColumns]). Cards keep their own height (they size to their
+/// content: nothing is stretched to fill a row) and start at the reading
+/// edge (right in Arabic). [minItemWidth] only lowers the column count when
+/// cards would get narrower than it (e.g. wide saint panels).
 class ResponsiveGrid extends StatelessWidget {
   final List<Widget> children;
   final double minItemWidth;
   final double spacing;
-  const ResponsiveGrid({super.key, required this.children, this.minItemWidth = 300, this.spacing = 12});
+  final int maxColumns;
+  const ResponsiveGrid({
+    super.key,
+    required this.children,
+    this.minItemWidth = 260,
+    this.spacing = Space.grid,
+    this.maxColumns = 3,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(builder: (context, c) {
-      final cols = (c.maxWidth / minItemWidth).floor().clamp(1, 4);
-      final w = (c.maxWidth - spacing * (cols - 1)) / cols;
-      return Wrap(
-        spacing: spacing,
-        runSpacing: spacing,
-        children: [for (final ch in children) SizedBox(width: w, child: ch)],
-      );
-    });
+    return LayoutBuilder(
+      builder: (context, c) {
+        var cols = gridColumns(c.maxWidth, maxColumns: maxColumns);
+        while (cols > 1 && (c.maxWidth - spacing * (cols - 1)) / cols < minItemWidth) {
+          cols--;
+        }
+        final w = ((c.maxWidth - spacing * (cols - 1)) / cols).floorToDouble();
+        // Full width even under loose constraints, so runs start at the
+        // reading edge (right in Arabic) instead of shrink-wrapping left.
+        return SizedBox(
+          width: c.maxWidth.isFinite ? c.maxWidth : null,
+          child: Wrap(
+            spacing: spacing,
+            runSpacing: spacing,
+            alignment: WrapAlignment.start,
+            crossAxisAlignment: WrapCrossAlignment.start,
+            children: [for (final ch in children) SizedBox(width: w, child: ch)],
+          ),
+        );
+      },
+    );
   }
 }
 
@@ -244,10 +331,7 @@ class _SkeletonBoxState extends State<SkeletonBox> with SingleTickerProviderStat
       return Container(
         height: widget.height,
         width: widget.width,
-        decoration: BoxDecoration(
-          color: const Color(0xFFEDE3CF),
-          borderRadius: BorderRadius.circular(widget.radius),
-        ),
+        decoration: BoxDecoration(color: const Color(0xFFEDE3CF), borderRadius: BorderRadius.circular(widget.radius)),
       );
     }
     return AnimatedBuilder(
@@ -271,9 +355,8 @@ class SkeletonList extends StatelessWidget {
   const SkeletonList({super.key, this.count = 3, this.itemHeight = 96});
 
   @override
-  Widget build(BuildContext context) => ResponsiveGrid(
-        children: List.generate(count, (_) => SkeletonBox(height: itemHeight, radius: 16)),
-      );
+  Widget build(BuildContext context) =>
+      ResponsiveGrid(children: List.generate(count, (_) => SkeletonBox(height: itemHeight, radius: 16)));
 }
 
 class EmptyState extends StatelessWidget {
@@ -283,16 +366,19 @@ class EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 28),
-        child: Column(
-          children: [
-            Icon(icon, size: 44, color: AppColors.muted.withValues(alpha: 0.6)),
-            const SizedBox(height: 8),
-            Text(message ?? context.tr('noItems'),
-                textAlign: TextAlign.center, style: const TextStyle(color: AppColors.muted)),
-          ],
+    padding: const EdgeInsets.symmetric(vertical: 28),
+    child: Column(
+      children: [
+        Icon(icon, size: 44, color: AppColors.muted.withValues(alpha: 0.6)),
+        const SizedBox(height: 8),
+        Text(
+          message ?? context.tr('noItems'),
+          textAlign: TextAlign.center,
+          style: const TextStyle(color: AppColors.muted),
         ),
-      );
+      ],
+    ),
+  );
 }
 
 class ErrorState extends StatelessWidget {
@@ -301,17 +387,17 @@ class ErrorState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 28),
-        child: Column(
-          children: [
-            const Icon(Icons.cloud_off_rounded, size: 44, color: AppColors.alert),
-            const SizedBox(height: 8),
-            Text(context.tr('loadError'), style: const TextStyle(color: AppColors.alert)),
-            if (onRetry != null)
-              TextButton.icon(onPressed: onRetry, icon: const Icon(Icons.refresh), label: Text(context.tr('retry'))),
-          ],
-        ),
-      );
+    padding: const EdgeInsets.symmetric(vertical: 28),
+    child: Column(
+      children: [
+        const Icon(Icons.cloud_off_rounded, size: 44, color: AppColors.alert),
+        const SizedBox(height: 8),
+        Text(context.tr('loadError'), style: const TextStyle(color: AppColors.alert)),
+        if (onRetry != null)
+          TextButton.icon(onPressed: onRetry, icon: const Icon(Icons.refresh), label: Text(context.tr('retry'))),
+      ],
+    ),
+  );
 }
 
 /// Renders an AsyncValue with skeleton / error / empty states.
@@ -351,44 +437,52 @@ class PendingConfirmationNote extends StatelessWidget {
   const PendingConfirmationNote({super.key});
   @override
   Widget build(BuildContext context) => Container(
-        width: double.infinity,
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: const Color(0xFFFFF3CD),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: const Color(0xFFE0C36A)),
-        ),
-        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Icon(Icons.info_outline_rounded, color: AppColors.goldText),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(context.tr('timesPending'),
-                  style: const TextStyle(fontWeight: FontWeight.w800, color: AppColors.goldText)),
+    width: double.infinity,
+    margin: const EdgeInsets.only(bottom: 12),
+    padding: const EdgeInsets.all(14),
+    decoration: BoxDecoration(
+      color: const Color(0xFFFFF3CD),
+      borderRadius: BorderRadius.circular(16),
+      border: Border.all(color: const Color(0xFFE0C36A)),
+    ),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Icon(Icons.info_outline_rounded, color: AppColors.goldText),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                context.tr('timesPending'),
+                style: const TextStyle(fontWeight: FontWeight.w800, color: AppColors.goldText),
+              ),
               const SizedBox(height: 2),
               Text(context.tr('timesPendingHint'), style: const TextStyle(height: 1.5, fontSize: 13)),
-            ]),
+            ],
           ),
-        ]),
-      );
+        ),
+      ],
+    ),
+  );
 }
 
 class SampleBadge extends StatelessWidget {
   const SampleBadge({super.key});
   @override
   Widget build(BuildContext context) => Tooltip(
-        message: context.tr('sampleData'),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-          decoration: BoxDecoration(
-            color: const Color(0xFFFFF3CD),
-            borderRadius: BorderRadius.circular(6),
-            border: Border.all(color: const Color(0xFFE0C36A)),
-          ),
-          child: Text(context.tr('sampleData'), style: const TextStyle(fontSize: 10, color: AppColors.goldText)),
-        ),
-      );
+    message: context.tr('sampleData'),
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF3CD),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: const Color(0xFFE0C36A)),
+      ),
+      child: Text(context.tr('sampleData'), style: const TextStyle(fontSize: 10, color: AppColors.goldText)),
+    ),
+  );
 }
 
 /// A title followed by the "sample data" badge. The badge moves under the
@@ -401,11 +495,14 @@ class TitleWithBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Wrap(
-        spacing: 6,
-        runSpacing: 4,
-        crossAxisAlignment: WrapCrossAlignment.center,
-        children: [Text(text, style: style), if (sample) const SampleBadge()],
-      );
+    spacing: 6,
+    runSpacing: 4,
+    crossAxisAlignment: WrapCrossAlignment.center,
+    children: [
+      Text(text, style: style),
+      if (sample) const SampleBadge(),
+    ],
+  );
 }
 
 class Pill extends StatelessWidget {
@@ -420,20 +517,25 @@ class Pill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-        decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(20)),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [
-          if (icon != null) ...[Icon(icon, size: 14, color: color), const SizedBox(width: 4)],
-          // Long labels (e.g. several active seasons) wrap/ellipsize instead
-          // of overflowing narrow cards.
-          Flexible(
-            child: Text(text,
-                maxLines: maxLines,
-                overflow: maxLines == null ? null : TextOverflow.ellipsis,
-                style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: 12)),
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+    decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(99)),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (icon != null) ...[Icon(icon, size: 14, color: color), const SizedBox(width: 4)],
+        // Long labels (e.g. several active seasons) wrap/ellipsize instead
+        // of overflowing narrow cards.
+        Flexible(
+          child: Text(
+            text,
+            maxLines: maxLines,
+            overflow: maxLines == null ? null : TextOverflow.ellipsis,
+            style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: 12),
           ),
-        ]),
-      );
+        ),
+      ],
+    ),
+  );
 }
 
 class IconLine extends StatelessWidget {
@@ -447,11 +549,19 @@ class IconLine extends StatelessWidget {
     if (text.isEmpty) return const SizedBox.shrink();
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
-      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Padding(padding: const EdgeInsets.only(top: 3), child: Icon(icon, size: 16, color: AppColors.muted)),
-        const SizedBox(width: 6),
-        Expanded(child: Text(text, style: style ?? const TextStyle(color: AppColors.ink, height: 1.4))),
-      ]),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(top: 3),
+            child: Icon(icon, size: 16, color: AppColors.muted),
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(text, style: style ?? const TextStyle(color: AppColors.ink, height: 1.4)),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -465,24 +575,31 @@ class TimeRangeText extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // No time set: nothing (no empty line reserving space).
+    if (start.trim().isEmpty) return const SizedBox.shrink();
     final latin = formatRangeLatin(start, end);
     final arabic = formatRangeArabic(start, end);
     final primary = context.isAr ? arabic : latin;
     final secondary = context.isAr ? latin : arabic;
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-      Text(primary,
-          style: TextStyle(
-              fontWeight: FontWeight.w800,
-              fontSize: large ? 22 : 16,
-              color: Theme.of(context).colorScheme.primary,
-              height: 1.3)),
-      // The secondary line is Latin in Arabic mode and Arabic in English mode:
-      // give it its own script's base direction.
-      Directionality(
-        textDirection: context.isAr ? TextDirection.ltr : TextDirection.rtl,
-        child: Text(secondary, style: TextStyle(fontSize: large ? 14 : 12, color: AppColors.muted)),
-      ),
-    ]);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          primary,
+          style: displayStyle(context, size: large ? 28 : 21, color: Theme.of(context).colorScheme.primary, height: 1.3),
+        ),
+        // The secondary line is Latin in Arabic mode and Arabic in English mode:
+        // give it its own script's base direction.
+        Directionality(
+          textDirection: context.isAr ? TextDirection.ltr : TextDirection.rtl,
+          child: Text(
+            secondary,
+            style: TextStyle(fontSize: large ? 14 : 12, color: AppColors.muted),
+          ),
+        ),
+      ],
+    );
   }
 }
 
@@ -494,6 +611,8 @@ String localDigits(BuildContext context, String s) => context.isAr ? toArabicDig
 /// Site footer (FR-G-04): church name and address, quick phone numbers,
 /// official social icons, quick links and an optional admin note, each
 /// switchable in `settings/features.footer` (and hidden with its section).
+/// "Golden hour": a warm panel over the church in the mist, then the
+/// posters' signature line with the Facebook / WhatsApp icons.
 class Footer extends ConsumerWidget {
   const Footer({super.key});
 
@@ -507,6 +626,7 @@ class Footer extends ConsumerWidget {
     // before showing phones / social links an admin may have switched off.
     final ready = ref.watch(featuresReadyProvider);
     final footer = features.footer;
+    final primary = Theme.of(context).colorScheme.primary;
     final links = <(String, String)>[
       ('massSchedule', '/mass-schedule'),
       ('clinics', '/clinics'),
@@ -516,113 +636,323 @@ class Footer extends ConsumerWidget {
     final phones = ready && s != null && footer.showPhones && features.enabled(Sections.contactInfo)
         ? s.phones.where((p) => p.number.trim().isNotEmpty).toList()
         : const <PhoneEntry>[];
+    final socialsOn = ready && s != null && footer.showSocials && features.enabled(Sections.socials);
     final socials = <(String, IconData, String, VoidCallback)>[
-      if (ready && s != null && footer.showSocials && features.enabled(Sections.socials)) ...[
+      if (socialsOn) ...[
         if (s.whatsappChannel.isNotEmpty)
           ('whatsappChannel', Icons.campaign_rounded, context.tr('whatsappChannel'), () => openUrl(s.whatsappChannel)),
-        if (s.whatsapp.isNotEmpty) ('whatsapp', Icons.chat_rounded, context.tr('whatsapp'), () => openWhatsApp(s.whatsapp)),
+        if (s.whatsapp.isNotEmpty)
+          ('whatsapp', Icons.chat_rounded, context.tr('whatsapp'), () => openWhatsApp(s.whatsapp)),
         if (s.facebook.isNotEmpty) ('facebook', Icons.facebook, context.tr('facebook'), () => openUrl(s.facebook)),
         if (s.youtube.isNotEmpty) ('youtube', Icons.live_tv_rounded, context.tr('youtube'), () => openUrl(s.youtube)),
         if (s.instagram.isNotEmpty)
           ('instagram', Icons.photo_camera_rounded, context.tr('instagram'), () => openUrl(s.instagram)),
       ],
     ];
+    // The signature line carries Facebook and WhatsApp (as on the posters).
+    final sigIcons = <(String, IconData, String, VoidCallback)>[
+      if (socialsOn) ...[
+        if (s.facebook.isNotEmpty) ('facebook', Icons.facebook, context.tr('facebook'), () => openUrl(s.facebook)),
+        if (s.whatsappChannel.isNotEmpty)
+          ('whatsapp', Icons.chat_rounded, context.tr('whatsappChannel'), () => openUrl(s.whatsappChannel))
+        else if (s.whatsapp.isNotEmpty)
+          ('whatsapp', Icons.chat_rounded, context.tr('whatsapp'), () => openWhatsApp(s.whatsapp)),
+      ],
+    ];
     final note = context.pick(footer.noteAr.trim(), footer.noteEn.trim());
-    return Container(
-      width: double.infinity,
-      color: primaryDarkOf(context),
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-      child: Center(
-        heightFactor: 1,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: kMaxContentWidth),
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-              const ChurchSeal(size: 34),
-              const SizedBox(width: 10),
-              Flexible(
-                child: Text(s == null ? context.tr('appName') : context.pick(s.nameAr, s.nameEn),
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
-              ),
-            ]),
-            if (s != null && features.enabled(Sections.contactInfo))
-              Padding(
-                padding: const EdgeInsets.only(top: 6),
-                child: Text(context.pick(s.addressAr, s.addressEn),
-                    textAlign: TextAlign.center, style: const TextStyle(color: AppColors.goldLight, fontSize: 13)),
-              ),
-            if (phones.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Semantics(
-                  container: true,
-                  label: context.tr('footerPhones'),
-                  child: Wrap(alignment: WrapAlignment.center, spacing: 4, runSpacing: 4, children: [
-                    for (final p in phones)
-                      TextButton.icon(
-                        key: Key('footerPhone-${p.number.trim()}'),
-                        onPressed: () => callPhone(p.number),
-                        icon: const Icon(Icons.call, size: 16, color: AppColors.goldLight),
-                        label: Text(
-                          p.number.trim(),
-                          // Digits read left-to-right in Arabic too.
-                          textDirection: TextDirection.ltr,
-                          semanticsLabel:
-                              '${context.tr('call')} ${context.pick(p.labelAr, p.labelEn)} ${p.number.trim()}'.trim(),
-                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
-                        ),
+    final screen = MediaQuery.sizeOf(context).width;
+    final side = screen > kMaxContentWidth ? (screen - kMaxContentWidth) / 2 : 0.0;
+    final wide = screen >= 900;
+    final pad = screen < 600 ? 16.0 : (wide ? 40.0 : 24.0);
+    final heading = displayStyle(context, size: 19, color: primary, height: 1.4);
+    final name = s == null ? context.tr('appName') : context.pick(s.nameAr, s.nameEn);
+
+    final identity = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const ChurchSeal(size: 56),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(name, style: displayStyle(context, size: 18, color: primary, height: 1.45)),
+                  Text(context.tr('denomination'), style: const TextStyle(color: AppColors.goldText, fontSize: 13)),
+                  if (s != null && features.enabled(Sections.contactInfo))
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Text(
+                        context.pick(s.addressAr, s.addressEn),
+                        style: const TextStyle(color: AppColors.muted, fontSize: 13, height: 1.6),
                       ),
-                  ]),
-                ),
+                    ),
+                ],
               ),
-            if (socials.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(top: 6),
-                child: Wrap(alignment: WrapAlignment.center, spacing: 4, runSpacing: 4, children: [
-                  for (final x in socials)
-                    IconButton(
+            ),
+          ],
+        ),
+        if (socials.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 12),
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final x in socials)
+                  SizedBox.square(
+                    dimension: 48,
+                    child: IconButton(
                       key: Key('footerSocial-${x.$1}'),
                       tooltip: x.$3,
                       onPressed: x.$4,
-                      constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
-                      icon: Icon(x.$2, color: Colors.white),
+                      // minimumSize (not `constraints`): keeps the intrinsic height
+                      // equal to the laid-out 48 dp inside SliverFillRemaining.
+                      style: IconButton.styleFrom(
+                        minimumSize: const Size(48, 48),
+                        tapTargetSize: MaterialTapTargetSize.padded,
+                        backgroundColor: primary,
+                      ),
+                      icon: Icon(x.$2, color: AppColors.goldLight, size: 20),
                     ),
-                ]),
-              ),
-            const SizedBox(height: 10),
-            if (footer.showQuickLinks && links.isNotEmpty)
-              Wrap(key: const Key('footerQuickLinks'), alignment: WrapAlignment.center, spacing: 4, children: [
-                for (final l in links)
-                  TextButton(
-                    onPressed: () => context.go(l.$2),
-                    child: Text(context.tr(l.$1), style: const TextStyle(color: Colors.white70)),
                   ),
-              ]),
-            if (note.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(top: 6),
-                child: Text(note,
-                    key: const Key('footerNote'),
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(color: Colors.white70, fontSize: 13, height: 1.6)),
-              ),
-            const SizedBox(height: 6),
-            Text('© ${localDigits(context, '$year')} — ${context.tr('rights')}',
-                style: const TextStyle(color: Colors.white54, fontSize: 12)),
-            ValueListenableBuilder<bool>(
-              valueListenable: servingSeed,
-              builder: (context, onSeed, _) => onSeed
-                  ? Padding(
-                      padding: const EdgeInsets.only(top: 4),
-                      child: Text(context.tr('offlineData'),
-                          style: const TextStyle(color: Colors.white70, fontSize: 11)),
-                    )
-                  : const SizedBox.shrink(),
+              ],
             ),
-          ]),
+          ),
+      ],
+    );
+
+    final contact = phones.isEmpty
+        ? null
+        : Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(context.tr('getInTouch'), style: heading),
+              const SizedBox(height: 4),
+              Semantics(
+                container: true,
+                label: context.tr('footerPhones'),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    for (final p in phones)
+                      // Fixed 48 dp rows: exact intrinsic height inside SliverFillRemaining.
+                      SizedBox(
+                        height: 48,
+                        child: TextButton.icon(
+                          key: Key('footerPhone-${p.number.trim()}'),
+                          onPressed: () => callPhone(p.number),
+                          style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 4)),
+                          icon: Icon(Icons.call, size: 18, color: primary),
+                          label: Text(
+                            p.number.trim(),
+                            // Digits read left-to-right in Arabic too.
+                            textDirection: TextDirection.ltr,
+                            semanticsLabel:
+                                '${context.tr('call')} ${context.pick(p.labelAr, p.labelEn)} ${p.number.trim()}'.trim(),
+                            style: const TextStyle(
+                              color: AppColors.ink,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 16,
+                              letterSpacing: 0.4,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          );
+
+    final quick = !(footer.showQuickLinks && links.isNotEmpty)
+        ? null
+        : Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(context.tr('quickLinks'), style: heading),
+              const SizedBox(height: 4),
+              Builder(
+                builder: (context) {
+                  final buttons = [
+                    for (final l in links)
+                      SizedBox(
+                        height: 48,
+                        child: TextButton(
+                          onPressed: () => context.go(l.$2),
+                          style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 4)),
+                          child: Text(
+                            context.tr(l.$1),
+                            style: const TextStyle(color: AppColors.ink, fontWeight: FontWeight.w400),
+                          ),
+                        ),
+                      ),
+                  ];
+                  // A Column on wide screens (Wrap's vertical intrinsic height is
+                  // unreliable inside SliverFillRemaining), a Wrap on phones.
+                  return wide
+                      ? Column(
+                          key: const Key('footerQuickLinks'),
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: buttons,
+                        )
+                      : Wrap(key: const Key('footerQuickLinks'), spacing: 4, children: buttons);
+                },
+              ),
+            ],
+          );
+
+    final columns = <Widget>[identity, ?contact, ?quick];
+    final signature = Text(
+      context.tr('footerSignature'),
+      key: const Key('footerSignature'),
+      textAlign: TextAlign.center,
+      style: displayStyle(context, size: wide ? 20 : 17, color: primaryDarkOf(context), height: 1.5),
+    );
+    final sigButtons = [
+      for (final x in sigIcons)
+        SizedBox.square(
+          dimension: 48,
+          child: IconButton(
+            key: Key('footerSig-${x.$1}'),
+            tooltip: x.$3,
+            onPressed: x.$4,
+            style: IconButton.styleFrom(
+              minimumSize: const Size(48, 48),
+              tapTargetSize: MaterialTapTargetSize.padded,
+              backgroundColor: primary,
+            ),
+            icon: Icon(x.$2, color: Colors.white, size: 18),
+          ),
         ),
-      ),
+    ];
+
+    return Stack(
+      key: const Key('footerStage'),
+      children: [
+        // The church in the mist behind the footer (decorative, positioned:
+        // ignored by the intrinsic height SliverFillRemaining measures).
+        Positioned.fill(
+          child: ExcludeSemantics(
+            child: ShaderMask(
+              blendMode: BlendMode.dstIn,
+              shaderCallback: (r) => const LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [Color(0x00000000), Color(0xFF000000)],
+                stops: [0.05, 0.5],
+              ).createShader(r),
+              child: Image.asset(
+                wide ? ArtAssets.heroWide : ArtAssets.heroWideSmall,
+                fit: BoxFit.cover,
+                alignment: const Alignment(0, 0.75),
+              ),
+            ),
+          ),
+        ),
+        // Centred by padding, not ConstrainedBox(maxWidth): the footer sits in
+        // SliverFillRemaining, which sizes it from its intrinsic height, and
+        // ConstrainedBox would measure that at the full (wider) width.
+        Padding(
+          padding: EdgeInsets.symmetric(horizontal: side),
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(pad, wide ? 80 : 56, pad, 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  key: const Key('footerPanel'),
+                  padding: EdgeInsets.all(wide ? 28 : 18),
+                  decoration: BoxDecoration(
+                    color: AppColors.panel,
+                    borderRadius: BorderRadius.circular(kPanelRadius),
+                    border: Border.all(color: const Color(0x61C9963F)),
+                    boxShadow: kPanelShadow,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (wide)
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            for (var i = 0; i < columns.length; i++) ...[
+                              if (i > 0) const SizedBox(width: 32),
+                              Expanded(flex: i == 0 ? 13 : 10, child: columns[i]),
+                            ],
+                          ],
+                        )
+                      else
+                        for (var i = 0; i < columns.length; i++) ...[if (i > 0) const SizedBox(height: 18), columns[i]],
+                      if (note.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 14),
+                          child: Text(
+                            note,
+                            key: const Key('footerNote'),
+                            style: const TextStyle(color: AppColors.muted, fontSize: 13, height: 1.6),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 14),
+                // The posters' signature line and the legal line, on a soft
+                // cream band (text never sits on the bare painting).
+                Container(
+                  key: const Key('footerSignatureBand'),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: AppColors.cream.withValues(alpha: 0.9),
+                    borderRadius: BorderRadius.circular(24),
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (wide)
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            ...sigButtons,
+                            if (sigButtons.isNotEmpty) const SizedBox(width: 8),
+                            Flexible(child: signature),
+                          ],
+                        )
+                      else ...[
+                        if (sigButtons.isNotEmpty) Row(mainAxisAlignment: MainAxisAlignment.center, children: sigButtons),
+                        signature,
+                      ],
+                      const SizedBox(height: 2),
+                      Text(
+                        '© ${localDigits(context, '$year')} — ${context.tr('rights')}',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(color: AppColors.muted, fontSize: 12.5),
+                      ),
+                      ValueListenableBuilder<bool>(
+                        valueListenable: servingSeed,
+                        builder: (context, onSeed, _) => onSeed
+                            ? Text(
+                                context.tr('offlineData'),
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(color: AppColors.muted, fontSize: 12),
+                              )
+                            : const SizedBox.shrink(),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

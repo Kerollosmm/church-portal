@@ -70,6 +70,16 @@ Status as of 2 Nov 2026 (after PR #7, PR #8, PR #9 `ad621cf`, PR #10 and PR #11)
       so it needs a build-time generator or a manual list).
 - [ ] Optional: native share sheet (Web Share API) on mobile instead of copy-link (needs a web-only plugin/JS interop).
 
+## "Golden hour" identity (PR #15, merged 3 Nov 2026; ADR-022 revised / ADR-023)
+
+- [x] Team approval of the "Golden hour" identity (approved 3 Nov 2026; burgundy preset is `#6E1C1C`).
+- [x] Hero video loop on by default (`heroMotion`), phones included (portrait crop, ~110 KB); save-data and reduced
+      motion still turn it off.
+- [ ] Confirm the image style defaults (priests & clinics avatar; saints portrait card; the rest card).
+- [ ] The Gemini art is decorative AI-painted imagery; confirm the church is happy to publish it (it never replaces
+      real photos).
+- [ ] Masonry vs equal-height rows in the grid (now: each card keeps its own height, rows top-aligned).
+
 ## Content (owner: church office — see `09-content-status.md`)
 
 - [ ] Real liturgy/vespers/praise timetable (47 placeholders), meetings (11), clinics (11 — or remove the section),

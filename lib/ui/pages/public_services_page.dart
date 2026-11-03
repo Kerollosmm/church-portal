@@ -11,7 +11,6 @@ import '../../domain/models.dart';
 import '../../state/providers.dart';
 import '../widgets/cards.dart';
 import '../widgets/common.dart';
-import '../widgets/item_image.dart';
 
 IconData facilityIcon(String t) => switch (t) {
       'nursery' => Icons.child_friendly_rounded,
@@ -50,7 +49,7 @@ class PublicServicesPage extends ConsumerWidget {
           provider: facilitiesProvider,
           retry: facilitiesProvider,
           isEmpty: (d) => d.isEmpty,
-          builder: (context, items) => ResponsiveGrid(minItemWidth: 340, children: [
+          builder: (context, items) => ResponsiveGrid(children: [
             for (final f in items) _FacilityCard(f),
           ]),
         ),
@@ -67,34 +66,40 @@ class _FacilityCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final name = context.pick(f.nameAr, f.nameEn);
     final detail = cardDetailPath(DetailKind.facility, f.id, f.details);
+    final desc = context.pick(f.descAr, f.descEn);
     return Card(
+      clipBehavior: Clip.antiAlias,
       child: DetailTapArea(
         path: detail,
-        child: Padding(
-          padding: const EdgeInsets.all(16),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          CardCover(collection: 'facilities', itemStyle: f.imageStyle, image: f.image, label: name, enlargeOnTap: detail == null),
+          Padding(
+          padding: const EdgeInsets.all(Space.card),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(children: [
-              ItemImage(
+              CardLead(
+                collection: 'facilities',
+                itemStyle: f.imageStyle,
                 image: f.image,
-                size: 48,
-                circle: false,
+                size: 56,
                 label: name,
                 enlargeOnTap: detail == null,
                 placeholder: Container(
                   padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(color: AppColors.parchment, borderRadius: BorderRadius.circular(12)),
+                  decoration: BoxDecoration(color: AppColors.parchment, borderRadius: BorderRadius.circular(4)),
                   child: Icon(facilityIcon(f.type), color: Theme.of(context).colorScheme.primary),
                 ),
               ),
-              const SizedBox(width: 12),
               Expanded(
                 child: TitleWithBadge(name,
                     sample: f.sample, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
               ),
             ]),
-            const SizedBox(height: 10),
-            Text(context.pick(f.descAr, f.descEn), style: const TextStyle(height: 1.7)),
-            const SizedBox(height: 6),
+            if (desc.isNotEmpty) ...[
+              const SizedBox(height: Space.s),
+              Text(desc, style: const TextStyle(height: 1.7)),
+            ],
+            if (context.pick(f.hoursAr, f.hoursEn).isNotEmpty) const SizedBox(height: Space.xs),
             IconLine(Icons.schedule_rounded, context.pick(f.hoursAr, f.hoursEn)),
             if (f.phone.isNotEmpty && f.details.showContacts) ...[
               const SizedBox(height: 8),
@@ -108,6 +113,7 @@ class _FacilityCard extends StatelessWidget {
             if (detail != null) DetailsLink(path: detail, title: name, id: f.id),
           ]),
         ),
+        ]),
       ),
     );
   }
