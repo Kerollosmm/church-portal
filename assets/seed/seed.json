@@ -55,7 +55,8 @@
     "socials": true,
     "contactForm": true,
     "assistant": true,
-    "media": true
+    "media": true,
+    "dailyVerse": true
    },
    "homeOrder": [
     "banner",

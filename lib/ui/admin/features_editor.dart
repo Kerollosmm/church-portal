@@ -3,6 +3,7 @@ import 'package:material_ui/material_ui.dart';
 import '../../core/l10n.dart';
 import '../../core/theme.dart';
 import '../../data/admin_repository.dart';
+import '../../domain/daily_verse.dart';
 import '../../domain/features.dart';
 import '../../domain/image_style.dart';
 import 'admin_validators.dart';
@@ -115,6 +116,8 @@ List<Map<String, dynamic>> featuresSaveWrites(FeatureSettings next, Map<String, 
   if ((base['imageStyles'] as Map).isEmpty && (stored == null || !stored.containsKey('imageStyles'))) {
     base.remove('imageStyles');
   }
+  // Same for dailyVerse: on + daily rotation is the default when missing.
+  if (next.dailyVerse.isDefault && (stored == null || !stored.containsKey('dailyVerse'))) base.remove('dailyVerse');
   final before = FeatureSettings.fromMap(stored).toMap()['pageHeaders'];
   return [
     base,
@@ -153,6 +156,8 @@ class FeaturesEditorState extends State<FeaturesEditor> {
     'bannerLink': TextEditingController(text: f.bannerLink),
     'footerNoteAr': TextEditingController(text: f.footer.noteAr),
     'footerNoteEn': TextEditingController(text: f.footer.noteEn),
+    'verseTextAr': TextEditingController(text: f.dailyVerse.textAr),
+    'verseRefAr': TextEditingController(text: f.dailyVerse.refAr),
   };
 
   /// Page header / intro inputs: page key -> field -> controller.
@@ -214,6 +219,11 @@ class FeaturesEditorState extends State<FeaturesEditor> {
           noteAr: _t['footerNoteAr']!.text.trim(),
           noteEn: _t['footerNoteEn']!.text.trim(),
         ),
+        // Daily mode hides (and so does not validate) the fixed-verse fields:
+        // save them cleared so an over-long hidden draft cannot fail the save.
+        dailyVerse: f.dailyVerse.mode == DailyVerseConfig.fixed
+            ? f.dailyVerse.copyWith(textAr: _t['verseTextAr']!.text.trim(), refAr: _t['verseRefAr']!.text.trim())
+            : const DailyVerseConfig(),
       );
 
   PageCustom _pageCustom(String p) {
@@ -292,7 +302,12 @@ class FeaturesEditorState extends State<FeaturesEditor> {
       );
 
   Widget _text(String key, String label,
-          {int maxLength = 300, bool url = false, TextEditingController? controller, Key? fieldKey, int lines = 1}) =>
+          {int maxLength = 300,
+          bool url = false,
+          TextEditingController? controller,
+          Key? fieldKey,
+          int lines = 1,
+          bool required = false}) =>
       Padding(
         padding: const EdgeInsets.only(bottom: 10),
         child: TextFormField(
@@ -305,6 +320,7 @@ class FeaturesEditorState extends State<FeaturesEditor> {
           autovalidateMode: AutovalidateMode.onUserInteraction,
           validator: (v) {
             final s = (v ?? '').trim();
+            if (required && s.isEmpty) return context.tr('required');
             if (s.length > maxLength) return context.tr('tooLong');
             if (url && s.isNotEmpty && !isValidUrl(s, allowPath: true)) return context.tr('invalidUrl');
             return null;
@@ -394,6 +410,30 @@ class FeaturesEditorState extends State<FeaturesEditor> {
                   onChanged: (v) => _set(f.copyWith(heroMotion: v)),
                 ),
               ], hint: context.tr('heroTextsHint')),
+              _card(context.tr('dailyVerseTitle'), Icons.menu_book_rounded, [
+                SwitchListTile(
+                  key: const ValueKey('features-dailyVerse-enabled'),
+                  contentPadding: const EdgeInsetsDirectional.only(start: 4),
+                  title: Text(context.tr('dailyVerseShow')),
+                  value: f.enabled(Sections.dailyVerse),
+                  onChanged: (v) => _set(f.copyWith(sections: {...f.sections, Sections.dailyVerse: v})),
+                ),
+                Wrap(spacing: 10, runSpacing: 10, children: [
+                  for (final m in DailyVerseConfig.modes)
+                    ChoiceChip(
+                      key: ValueKey('dailyVerse-mode-$m'),
+                      label: Text(context.tr(m == DailyVerseConfig.daily ? 'dailyVerseModeDaily' : 'dailyVerseModeFixed')),
+                      selected: f.dailyVerse.mode == m,
+                      onSelected: (_) => _set(f.copyWith(dailyVerse: f.dailyVerse.copyWith(mode: m))),
+                    ),
+                ]),
+                if (f.dailyVerse.mode == DailyVerseConfig.fixed) ...[
+                  const SizedBox(height: 12),
+                  _text('verseTextAr', context.tr('dailyVerseText'),
+                      maxLength: DailyVerseConfig.maxText, lines: 3, required: true),
+                  _text('verseRefAr', context.tr('dailyVerseRef'), maxLength: DailyVerseConfig.maxRef),
+                ],
+              ], hint: context.tr('dailyVerseHint')),
               _card(context.tr('pageHeadersTitle'), Icons.view_headline_rounded, [
                 for (final p in CustomizablePages.all) _pageTile(context, p),
               ], hint: context.tr('pageHeadersHint')),

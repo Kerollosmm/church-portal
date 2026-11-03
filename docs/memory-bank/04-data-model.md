@@ -176,7 +176,8 @@ Existence of `settings/church` = "database is seeded" (see `03-architecture.md`)
 - `FeatureSettings.defaults` (everything on) is used before the doc loads and when it does not exist.
 - **Seed** (`gen_seed.py`): every section on **except `clinics: false`** (PR 1) — `/clinics` stays off until the
   church office confirms the clinics and their booking numbers. Live docs keep whatever the admin set.
-- `toMap()` always writes **all** 16 section keys explicitly. Live docs saved before PR #5 lack `media` → on.
+- `toMap()` always writes **all** 17 section keys explicitly. Live docs saved before PR #5 lack `media` → on; before
+  PR #16 lack `dailyVerse` → on.
 - The seed (PR #11) adds `pageHeaders: {}` and the default `footer` map; live docs get them with
   `node tool/seed_firestore.js --fill-missing` (adds absent fields only) or on the next save in /admin. Missing =
   defaults, so nothing changes until then.
@@ -184,6 +185,10 @@ Existence of `settings/church` = "database is seeded" (see `03-architecture.md`)
   `milestones→milestones`, `map→contactInfo` (block disappears when its section is off). `directory` and `banner`
   have no section.
 
+- `dailyVerse` (PR #16, ADR-024): map `{mode: 'daily'|'fixed' (default daily), textAr: string ≤500, refAr: string ≤60}`;
+  missing map or keys = daily rotation; a fixed verse with empty text falls back to daily. On/off is the section
+  **`sections.dailyVerse`** (missing = on; seeded `true`). The map is written only once it differs from the default or
+  is already stored. Verse list: bundled asset `assets/verses/daily_verses.json` (not Firestore).
 - `imageStyles` (PR #15, ADR-023): map `collection → avatar|card|banner`, keys limited to the 9 image collections;
   missing key = built-in default. Written only once an admin sets one (saves keep working against older rules).
 

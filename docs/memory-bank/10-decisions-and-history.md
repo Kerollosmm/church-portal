@@ -299,6 +299,32 @@ supersede them.
   one default per section.
 - **Invariant:** no image or images switched off → the card is exactly as before (golden rule #9).
 
+## ADR-024 (PR #16) — Verse of the day on the home page
+
+- **Context:** the church wanted a short daily scripture on the home page. Golden rule #1 forbids invented content, so
+  verse text must never be typed from memory.
+- **Decision:** bundle `assets/verses/daily_verses.json`: **366** verses of the public-domain Arabic **Van Dyck
+  (Smith-Van Dyke, 1865)** Bible, copied byte-for-byte by `tool/gen_daily_verses.py` from eBible.org's
+  `https://ebible.org/Scriptures/arb-vd_vpl.zip` ("Public Domain", Syrian Mission / American Bible Society), zip
+  pinned by SHA-256 `070404da…cd68a`. References are picked in `tool/daily_verse_refs.txt` (well-known verses; texts
+  over 420 characters skipped; first 366 kept, then a fixed shuffle so books mix through the year). Each entry has
+  `textAr`, `refAr` (Arabic book name + Arabic-Indic digits, «يوحنا ٣: ١٦»), `refEn` ("John 3:16") and `ref` (source code).
+- **Rotation:** `cairoDayOfYear(now)` (pure Dart, `lib/domain/daily_verse.dart`) = day of the year of the
+  **Africa/Cairo** calendar date (via `CairoTime`), so the verse changes at Cairo midnight (22:00 UTC in winter,
+  21:00 UTC in summer), never at UTC or device midnight. Day N shows entry N−1 (wraps if the list is shorter; day 366
+  only in leap years).
+- **Admin:** on/off is a public section, **`sections.dailyVerse`** (golden rule #6; Codex review on PR #16 — a
+  separate `enabled` flag would not follow the section toggles), missing = on, seeded `true`. Mode and fixed verse:
+  `settings/features.dailyVerse` map `{mode: 'daily'|'fixed', textAr ≤500, refAr ≤60}`; missing map/keys = daily. A fixed verse with empty text falls back to the rotation (the admin form also
+  requires text in fixed mode). Written only once it differs from the default or is already stored (saves keep
+  working against older rules, like `heroMotion`). The map is not seeded (missing = default).
+- **Rules:** `sectionKeys()` gains `dailyVerse`; `validFeatures` allows `dailyVerse`, validated by `validDailyVerse` only when it changes (known keys only,
+  bool, mode in the two values, strings joined + regex for lengths). Emulator group "Verse of the day".
+- **UI:** `DailyVerseCard` right under the hero (not an orderable home block: that would change `homeOrder` rules);
+  WarmPanel, Ruqaa accent «كلمة الله», Lalezar title in the theme primary, verse in Plex bold on ink, reference in
+  `goldText` inside «». All text ≥ 4.5:1 on the panel even over the gold backdrop (test). The English UI shows the
+  English reference; the verse stays Arabic.
+
 ## Timeline
 
 | When | PR / commit | What |
@@ -322,6 +348,7 @@ supersede them.
 | 2 Nov 2026 | **PR #13** — "Public clickable detail pages, custom headers & upgraded footer" (`feat/pr13-public-detail-pages`) | Customization plan PR #13 (final): 7 detail sub-routes + `ItemDetailPage` (lazy zoomable cover/gallery, long text, custom-field cards, contact & social actions, dual priest gating, per-item canonical/noindex); parent-aware phone Back arrow; Details links / card tap on the 7 list cards, item contact/social switches on card buttons, optional images on meeting/clinic/facility cards; `CustomizablePageHeader` + `PageIntro` on the 8 customizable pages; FR-G-04 footer (phones, social icons, quick-link switch, note); `test/detail_pages_test.dart`. |
 
 | 2 Nov 2026 | **PR #14** — "Detail pages that actually open" (`feat/pr14-detail-pages-default-on`) | Opt-out detail pages (missing `detailsEnabled` = on) so every card opens its page; labelled key-facts card, Google Calendar link (weekly RRULE, Cairo zone), directions, copy-link share, "More in this section", hero cover; admin switch on by default with hint, phone rows move the open-page icon under the subtitle; home directory card "Learn more" wraps at 320 px / 200 %; ADR-021; `test/detail_ux_test.dart` + PR #14 group in `test/detail_pages_test.dart`. |
-| 3 Nov 2026 | **PR #15** — "Golden hour identity, image display styles, seamless hero video, new parish seal" (`design/coptic-identity`, squash-merged) | Poster identity (ADR-022 revised): Lalezar + Aref Ruqaa, maroon `#6E1C1C`, ribbons, halos, Gemini art, hero motion + video behind `heroMotion`; image display styles avatar/card/banner (ADR-023) with rules + emulator tests; layout pass (1/2/3-column grid, 1200 max width, `Space` tokens, collapsing optional fields). Final round: seamless hero (full-bleed feathered layers, mirrored haze strip, radial title glow, transparent bottom dissolve), hero video trimmed to 3–10 s with a crossfaded loop, portrait crop on phones, poster crossfade (native `<video>` on web); new parish seal + regenerated icons/splash (ADR-018 amendment); painted saints served at `/art/*.webp`; `test/golden_hour_test.dart`, `test/image_style_layout_test.dart`. |
+| 3 Nov 2026 | **PR #15** — "Golden hour identity, image display styles, seamless hero video, new parish seal" (`design/coptic-identity`, squash-merged as `a97987c`) | Poster identity (ADR-022 revised): Lalezar + Aref Ruqaa, maroon `#6E1C1C`, ribbons, halos, Gemini art, hero motion + video behind `heroMotion`; image display styles avatar/card/banner (ADR-023) with rules + emulator tests; layout pass (1/2/3-column grid, 1200 max width, `Space` tokens, collapsing optional fields). Final round: seamless hero (full-bleed feathered layers, mirrored haze strip, radial title glow, transparent bottom dissolve), hero video trimmed to 3–10 s with a crossfaded loop, portrait crop on phones, poster crossfade (native `<video>` on web); new parish seal + regenerated icons/splash (ADR-018 amendment); painted saints served at `/art/*.webp`; `test/golden_hour_test.dart`, `test/image_style_layout_test.dart`. |
+| 3 Nov 2026 | **PR #16** — "Daily Bible verse on the home screen" (`feat/daily-verse`) | 366 public-domain Arabic Van Dyck verses bundled from eBible.org (`tool/gen_daily_verses.py`, SHA-pinned), rotation by the Africa/Cairo day of year (changes at Cairo midnight), golden-hour `DailyVerseCard` under the hero with «reference», admin on/off (`sections.dailyVerse`) + daily/fixed verse (`settings/features.dailyVerse`), rules + emulator tests, seed regenerated, ADR-024, `test/daily_verse_test.dart`. |
 
 Append new PRs to this table.

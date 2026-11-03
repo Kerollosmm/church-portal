@@ -68,7 +68,7 @@ cancels and re-subscribes every stream (BUG-18; `ChurchInfoScreen` does the same
 `FeaturesScreen` — which also resets its shown version and editor key — `MessagesScreen` and `AdminsScreen`).
 
 ### Sections & home page (`FeaturesScreen` / `FeaturesEditor`, `features_editor.dart`) → `settings/features`
-- Switch each of the 16 sections on/off (+ "enable all"); labels from `Sections.labels`. The 16th, **«الصور» /
+- Switch each of the 17 sections on/off (PR #16 added «آية اليوم» / Verse of the day) (+ "enable all"); labels from `Sections.labels`. The 16th, **«الصور» /
   Images**, hides every optional item image site-wide (default on).
 - **Home layout**: drag to reorder the 7 blocks — or tap **Move up / Move down** (`ValueKey('home-<block>-up|down')`,
   WCAG 2.5.7 single-pointer alternative) — show/hide each; a block whose section is off is flagged
@@ -92,6 +92,10 @@ cancels and re-subscribes every stream (BUG-18; `ChurchInfoScreen` does the same
   `isEchoOfEditor(shown, latest, editorValues)` (`admin_validators.dart`) — if only metadata changed or every changed
   field already equals what the form holds, the editor key is kept, so the scroll position stays.
 
+- **Verse of the day** card (PR #16, ADR-024): "Show the verse of the day" switch (same flag as the
+  `dailyVerse` section toggle), mode chips "A different verse
+  every day" / "A fixed verse I choose"; fixed mode shows the Arabic text (required, ≤500) and reference (≤60) fields →
+  `settings/features.dailyVerse`. Saving in daily mode clears the (hidden, unvalidated) fixed-verse fields.
 - **Image display** card (PR #15, ADR-023): one dropdown per image collection (avatar / card / banner) →
   `settings/features.imageStyles`; the dropdown shows the built-in default until changed.
 - Item forms on image collections have **"Image display (— = section default)"** under the image (`imageStyle`,

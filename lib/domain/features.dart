@@ -1,6 +1,7 @@
 // Feature toggles and home-page layout (Firestore doc `settings/features`).
 // Pure Dart: no Flutter / Firebase imports, so the logic is unit-tested.
 
+import 'daily_verse.dart';
 import 'image_style.dart';
 
 /// Public sections an admin can switch on or off.
@@ -22,10 +23,11 @@ class Sections {
   static const contactForm = 'contactForm';
   static const assistant = 'assistant'; // "Ask the church"
   static const media = 'media'; // optional images on cards (priests, saints, milestones, activities, alerts, seasons)
+  static const dailyVerse = 'dailyVerse'; // home "verse of the day" card (ADR-024)
 
   static const all = [
     schedule, meetings, clinics, services, history, milestones, saints, priests, departedPriests, //
-    activities, alerts, contactInfo, socials, contactForm, assistant, media,
+    activities, alerts, contactInfo, socials, contactForm, assistant, media, dailyVerse,
   ];
 
   /// [ar, en] labels used in the admin toggles screen.
@@ -46,6 +48,7 @@ class Sections {
     contactForm: ['نموذج المراسلة', 'Contact form'],
     assistant: ['اسأل الكنيسة (المساعد الذكي)', 'Ask the church (AI assistant)'],
     media: ['الصور (إظهار صور الآباء والشفعاء والأنشطة…)', 'Images (show photos on priests, saints, activities…)'],
+    dailyVerse: ['آية اليوم في الصفحة الرئيسية', 'Verse of the day on the home page'],
   };
 }
 
@@ -254,6 +257,10 @@ class FeatureSettings {
   /// [ImageStyles.collections], values: [ImageStyles.all]). Missing = built-in default.
   final Map<String, String> imageStyles;
 
+  /// Home "verse of the day" mode / fixed verse (on/off is [Sections.dailyVerse]).
+  /// Missing = daily rotation.
+  final DailyVerseConfig dailyVerse;
+
   const FeatureSettings({
     this.sections = const {},
     this.homeOrder = HomeBlocks.defaultOrder,
@@ -271,6 +278,7 @@ class FeatureSettings {
     this.footer = const FooterConfig(),
     this.heroMotion = true,
     this.imageStyles = const {},
+    this.dailyVerse = DailyVerseConfig.defaults,
   });
 
   /// Everything on: used before the doc loads and when it does not exist.
@@ -308,6 +316,7 @@ class FeatureSettings {
       footer: FooterConfig.fromMap(m['footer']),
       heroMotion: _bool(m['heroMotion']) ?? true,
       imageStyles: parseImageStyles(m['imageStyles']),
+      dailyVerse: DailyVerseConfig.fromMap(m['dailyVerse']),
     );
   }
 
@@ -331,6 +340,7 @@ class FeatureSettings {
         'footer': footer.toMap(),
         'heroMotion': heroMotion,
         'imageStyles': {for (final c in ImageStyles.collections) if (imageStyles[c] != null) c: imageStyles[c]},
+        'dailyVerse': dailyVerse.toMap(),
       };
 
   FeatureSettings copyWith({
@@ -350,6 +360,7 @@ class FeatureSettings {
     FooterConfig? footer,
     bool? heroMotion,
     Map<String, String>? imageStyles,
+    DailyVerseConfig? dailyVerse,
   }) =>
       FeatureSettings(
         sections: sections ?? this.sections,
@@ -368,6 +379,7 @@ class FeatureSettings {
         footer: footer ?? this.footer,
         heroMotion: heroMotion ?? this.heroMotion,
         imageStyles: imageStyles ?? this.imageStyles,
+        dailyVerse: dailyVerse ?? this.dailyVerse,
       );
 
   bool enabled(String section) => sections[section] ?? true;
