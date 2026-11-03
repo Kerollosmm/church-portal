@@ -485,7 +485,7 @@ service cloud.firestore {
       let changed = changedKeys(d);
       return keysAllowed(['sections', 'homeOrder', 'homeHidden', 'heroTitleAr', 'heroTitleEn', 'heroSubtitleAr',
                           'heroSubtitleEn', 'bannerEnabled', 'bannerAr', 'bannerEn', 'bannerLink', 'theme',
-                          'pageHeaders', 'footer', 'heroMotion', 'imageStyles', 'updatedAt', 'updatedBy'])
+                          'pageHeaders', 'footer', 'heroMotion', 'imageStyles', 'dailyVerse', 'updatedAt', 'updatedBy'])
         && (!('sections' in changed) || !('sections' in d) || validSections(d.sections))
         && (!('homeOrder' in changed) || !('homeOrder' in d) || (d.homeOrder is list && d.homeOrder.size() <= 7
               && d.homeOrder.hasOnly(['banner', 'alerts', 'nextMass', 'quickContacts', 'milestones', 'directory', 'map'])))
@@ -509,7 +509,20 @@ service cloud.firestore {
                                                'seasons', 'facilities', 'clinics'])
               && d.imageStyles.values().hasOnly(['avatar', 'card', 'banner'])))
         && (!('pageHeaders' in changed) || !('pageHeaders' in d) || validPageHeaders(d.pageHeaders))
+        // Verse of the day (missing = on, daily rotation).
+        && (!('dailyVerse' in changed) || !('dailyVerse' in d) || validDailyVerse(d.dailyVerse))
         && (!changed.hasAny(['updatedAt', 'updatedBy']) || stampOk(d));
+    }
+
+    // Verse of the day: on/off, daily rotation or a fixed admin-entered verse
+    // (Arabic text <= 500 chars, reference <= 60). Strings only: concatenating
+    // a non-string errors, which denies the write.
+    function validDailyVerse(v) {
+      return v is map && v.keys().hasOnly(['enabled', 'mode', 'textAr', 'refAr'])
+        && v.get('enabled', true) is bool
+        && v.get('mode', 'daily') in ['daily', 'fixed']
+        && v.get('textAr', '') is string && v.get('refAr', '') is string
+        && (v.get('textAr', '') + '\u001f' + v.get('refAr', '')).matches('[^\\x1f]{0,500}\\x1f[^\\x1f]{0,60}');
     }
 
     // Footer options (FR-G-04).

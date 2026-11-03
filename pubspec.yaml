@@ -76,6 +76,7 @@ flutter:
 
   assets:
     - assets/seed/seed.json
+    - assets/verses/daily_verses.json
     - assets/branding/seal.png
     - assets/art/
     - assets/video/

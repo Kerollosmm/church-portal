@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:convert';
 
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -8,6 +10,7 @@ import '../data/admin_repository.dart';
 import '../data/content_repository.dart';
 import '../data/firebase_bootstrap.dart';
 import '../data/media_repository.dart';
+import '../domain/daily_verse.dart';
 import '../domain/features.dart';
 import '../domain/models.dart';
 
@@ -50,6 +53,14 @@ final facilitiesProvider = StreamProvider<List<Facility>>((ref) => _public(ref.w
 final priestsProvider = StreamProvider<List<Priest>>((ref) => _public(ref.watch(repositoryProvider).priests()));
 final milestonesProvider = StreamProvider<List<Milestone>>((ref) => _public(ref.watch(repositoryProvider).milestones()));
 final saintsProvider = StreamProvider<List<Saint>>((ref) => _public(ref.watch(repositoryProvider).saints()));
+
+/// The bundled verse-of-the-day list (assets/verses/daily_verses.json).
+/// Read as bytes and decoded here (no `compute` isolate) so it also works in
+/// widget tests, where it is usually overridden.
+final dailyVersesProvider = FutureProvider<List<Verse>>((ref) async {
+  final data = await rootBundle.load(dailyVersesAsset);
+  return parseDailyVerses(utf8.decode(data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes)));
+});
 
 /// Ticks every 30 s so time-based UI (next mass, "available today") stays fresh.
 final nowProvider = StreamProvider<DateTime>((ref) async* {

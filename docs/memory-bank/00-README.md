@@ -21,7 +21,9 @@ SEO, parent-aware phone Back arrow, card Details links, custom page headers / in
 PR #14 (`feat/pr14-detail-pages-default-on`: detail pages on by default — opt-out `detailsEnabled` — with labelled
 key facts, add-to-calendar, directions, share link and "More in this section"; ADR-021) plus PR #15
 (`design/coptic-identity`: "Golden hour" poster identity, image display styles, seamless hero with a trimmed looping
-video on every screen size, new parish seal and regenerated icons; ADR-022 revised, ADR-023, ADR-018 amendment).
+video on every screen size, new parish seal and regenerated icons; ADR-022 revised, ADR-023, ADR-018 amendment) plus PR #16
+(`feat/daily-verse`: verse of the day on the home page — 366 public-domain Arabic Van Dyck verses, rotating at Cairo
+midnight, admin on/off and fixed verse; ADR-024).
 
 > **Golden rule:** read this folder before changing anything, and update it in the same PR as every change that
 > alters behaviour, data shape, rules, workflows, content status or open tasks.

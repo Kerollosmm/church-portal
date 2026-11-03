@@ -5,6 +5,7 @@ import 'package:material_ui/material_ui.dart';
 import '../../core/l10n.dart';
 import '../../core/launch.dart';
 import '../../core/theme.dart';
+import '../../domain/daily_verse.dart';
 import '../../domain/features.dart';
 import '../../domain/item_detail.dart';
 import '../../domain/models.dart';
@@ -26,7 +27,11 @@ class HomePage extends ConsumerWidget {
     final wide = MediaQuery.sizeOf(context).width >= 900;
     final blocks = features.visibleHomeBlocks;
 
-    final children = <Widget>[];
+    final children = <Widget>[
+      // Verse of the day: right under the hero (admin switch, not an
+      // orderable home block).
+      const KeyedSubtree(key: ValueKey('home-dailyVerse'), child: DailyVerseCard()),
+    ];
     // The patrons teaser (not admin-orderable yet: a new home block needs a
     // settings/features rules change) sits before the first "discover" block.
     var patronsPlaced = false;
@@ -558,6 +563,69 @@ class _MilestoneCard extends StatelessWidget {
           ]),
         ),
         ]),
+      ),
+    );
+  }
+}
+
+/// "Verse of the day" (settings/features.dailyVerse): a warm golden-hour
+/// panel with the Arabic verse in the calligraphic face and its reference
+/// in «». Rotates by the Cairo calendar day; hidden when switched off or
+/// while the bundled list loads.
+class DailyVerseCard extends ConsumerWidget {
+  const DailyVerseCard({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final config = ref.watch(featuresProvider.select((f) => f.dailyVerse));
+    if (!config.enabled) return const SizedBox.shrink();
+    final verses = ref.watch(dailyVersesProvider).value ?? const <Verse>[];
+    final now = ref.watch(nowProvider).value ?? DateTime.now();
+    final verse = resolveDailyVerse(config, verses, now);
+    if (verse == null) return const SizedBox.shrink();
+    final narrow = MediaQuery.sizeOf(context).width < 600;
+    final ref0 = context.isAr || verse.refEn.isEmpty ? verse.refAr : verse.refEn;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 760),
+          child: Reveal(
+            child: WarmPanel(
+              key: const Key('dailyVerseCard'),
+              padding: EdgeInsets.symmetric(horizontal: narrow ? 18 : 32, vertical: 18),
+              child: Semantics(
+                container: true,
+                child: Column(children: [
+                  Text(context.tr('accentDailyVerse'),
+                      style: AppFonts.script(size: narrow ? 16 : 18, color: AppColors.script)),
+                  Semantics(
+                    header: true,
+                    child: Text(context.tr('dailyVerse'),
+                        style: AppFonts.heading(size: narrow ? 22 : 26, color: Theme.of(context).colorScheme.primary)),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    verse.textAr,
+                    key: const Key('dailyVerseText'),
+                    textAlign: TextAlign.center,
+                    textDirection: TextDirection.rtl,
+                    style: TextStyle(fontSize: narrow ? 19 : 22, height: 1.9, color: AppColors.ink, fontWeight: FontWeight.w700),
+                  ),
+                  if (ref0.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      '« $ref0 »',
+                      key: const Key('dailyVerseRef'),
+                      textDirection: verse.refEn.isNotEmpty && !context.isAr ? TextDirection.ltr : TextDirection.rtl,
+                      style: const TextStyle(color: AppColors.goldText, fontSize: 15, fontWeight: FontWeight.w700),
+                    ),
+                  ],
+                ]),
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

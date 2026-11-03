@@ -916,6 +916,32 @@ describe('ADR-022: hero motion & video switch (settings/features.heroMotion)', (
   });
 });
 
+describe('Verse of the day (settings/features.dailyVerse)', () => {
+  test('admins switch it, pick daily / fixed, and enter a fixed verse', async () => {
+    const ref = doc(db(EDITOR), 'settings', 'features');
+    await assertSucceeds(setDoc(ref, { theme: 'burgundy', dailyVerse: { enabled: false, mode: 'daily', textAr: '', refAr: '' } }));
+    await assertSucceeds(setDoc(ref, { dailyVerse: { enabled: true, mode: 'fixed', textAr: 'آية '.repeat(100).trim(), refAr: 'يوحنا ٣: ١٦' } }));
+    await assertSucceeds(setDoc(ref, { dailyVerse: {} }), 'missing keys = defaults');
+    await assertSucceeds(setDoc(ref, { theme: 'navy' }), 'doc without dailyVerse still saves');
+  });
+
+  test('rejects bad shapes, modes, types and lengths', async () => {
+    const ref = doc(db(EDITOR), 'settings', 'features');
+    const ok = { enabled: true, mode: 'daily', textAr: '', refAr: '' };
+    for (const v of [
+      'daily', null, { ...ok, mode: 'weekly' }, { ...ok, enabled: 'yes' }, { ...ok, textAr: 5 }, { ...ok, refAr: null },
+      { ...ok, textAr: 'x'.repeat(501) }, { ...ok, refAr: 'x'.repeat(61) }, { ...ok, textEn: 'hi' },
+      { ...ok, textAr: 'a\u001fb' },
+    ]) {
+      await assertFails(setDoc(ref, { dailyVerse: v }), JSON.stringify(v).slice(0, 80));
+    }
+  });
+
+  test('visitors cannot change it', async () => {
+    await assertFails(setDoc(doc(db(null), 'settings', 'features'), { dailyVerse: { enabled: false } }));
+  });
+});
+
 describe('ADR-023: image display style (imageStyle / settings/features.imageStyles)', () => {
   const stamp = () => ({ updatedAt: serverTimestamp(), updatedBy: `${EDITOR}@x.test` });
   const priest = { name: 'أبونا', status: 'serving', visible: true, order: 10 };

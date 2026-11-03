@@ -80,6 +80,14 @@ Status as of 2 Nov 2026 (after PR #7, PR #8, PR #9 `ad621cf`, PR #10 and PR #11)
       real photos).
 - [ ] Masonry vs equal-height rows in the grid (now: each card keeps its own height, rows top-aligned).
 
+## Verse of the day (PR #16, ADR-024)
+
+- [x] 366 Van Dyck verses bundled (eBible.org, public domain, SHA-pinned), Cairo-day rotation, admin on/off + fixed verse.
+- [ ] Optional: let the church office review / reorder the 366 references (`tool/daily_verse_refs.txt`, then
+      `python3 tool/gen_daily_verses.py`), e.g. to follow the Coptic calendar or feasts.
+- [ ] Optional: an English verse alongside (a public-domain English translation such as KJV/WEB would need its own
+      verified source); today the English UI shows the Arabic verse with an English reference.
+
 ## Content (owner: church office — see `09-content-status.md`)
 
 - [ ] Real liturgy/vespers/praise timetable (47 placeholders), meetings (11), clinics (11 — or remove the section),

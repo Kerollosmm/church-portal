@@ -140,3 +140,15 @@ Not seeded until the church confirms them: القس يسى إبراهيم and ا
 The main images of the two patron saints in live data are AI paintings (Google Gemini, Nov 2026) chosen by the
 site owner, served from Hosting: `/art/saint-moses-black.webp` and `/art/saints-maximus-domadius.webp`
 (`web/art/`, 806×1000). Decorative, not historical icons; swap for the church's own icons when available.
+
+## Verse of the day (PR #16, 3 Nov 2026)
+
+`assets/verses/daily_verses.json` — **366** verses, Arabic **Van Dyck (Smith-Van Dyke, 1865)** translation.
+- Source: eBible.org, https://ebible.org/Scriptures/arb-vd_vpl.zip (details: https://ebible.org/find/details.php?id=arb-vd),
+  file `arb-vd_vpl.txt`, eBible build dated 2020-08-03; zip SHA-256
+  `070404da2e13e641b7550b50d7e777480b2cc2667e9669f2194d909ca04cd68a` (checked by the generator).
+- License: **Public Domain** (eBible.org's about file and copyright list: "Public Domain"; translation by the Syrian
+  Mission, contributor American Bible Society).
+- Text is copied byte-for-byte by `tool/gen_daily_verses.py` (never typed); only the choice of references
+  (`tool/daily_verse_refs.txt`) and the Arabic/English book names are ours. Status: **verified** (public-domain text).
+- A fixed verse entered by an admin (`settings/features.dailyVerse`) is the church's own responsibility.

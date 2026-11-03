@@ -1,6 +1,7 @@
 // Feature toggles and home-page layout (Firestore doc `settings/features`).
 // Pure Dart: no Flutter / Firebase imports, so the logic is unit-tested.
 
+import 'daily_verse.dart';
 import 'image_style.dart';
 
 /// Public sections an admin can switch on or off.
@@ -254,6 +255,9 @@ class FeatureSettings {
   /// [ImageStyles.collections], values: [ImageStyles.all]). Missing = built-in default.
   final Map<String, String> imageStyles;
 
+  /// Home "verse of the day" options. Missing = on, daily rotation.
+  final DailyVerseConfig dailyVerse;
+
   const FeatureSettings({
     this.sections = const {},
     this.homeOrder = HomeBlocks.defaultOrder,
@@ -271,6 +275,7 @@ class FeatureSettings {
     this.footer = const FooterConfig(),
     this.heroMotion = true,
     this.imageStyles = const {},
+    this.dailyVerse = DailyVerseConfig.defaults,
   });
 
   /// Everything on: used before the doc loads and when it does not exist.
@@ -308,6 +313,7 @@ class FeatureSettings {
       footer: FooterConfig.fromMap(m['footer']),
       heroMotion: _bool(m['heroMotion']) ?? true,
       imageStyles: parseImageStyles(m['imageStyles']),
+      dailyVerse: DailyVerseConfig.fromMap(m['dailyVerse']),
     );
   }
 
@@ -331,6 +337,7 @@ class FeatureSettings {
         'footer': footer.toMap(),
         'heroMotion': heroMotion,
         'imageStyles': {for (final c in ImageStyles.collections) if (imageStyles[c] != null) c: imageStyles[c]},
+        'dailyVerse': dailyVerse.toMap(),
       };
 
   FeatureSettings copyWith({
@@ -350,6 +357,7 @@ class FeatureSettings {
     FooterConfig? footer,
     bool? heroMotion,
     Map<String, String>? imageStyles,
+    DailyVerseConfig? dailyVerse,
   }) =>
       FeatureSettings(
         sections: sections ?? this.sections,
@@ -368,6 +376,7 @@ class FeatureSettings {
         footer: footer ?? this.footer,
         heroMotion: heroMotion ?? this.heroMotion,
         imageStyles: imageStyles ?? this.imageStyles,
+        dailyVerse: dailyVerse ?? this.dailyVerse,
       );
 
   bool enabled(String section) => sections[section] ?? true;

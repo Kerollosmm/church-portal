@@ -95,6 +95,9 @@ Notable details:
   `banner` when it changes; it is on the allow-list of the 9 image collections (and `ownFieldsUnchanged`), never on
   `liturgies`. `validFeatures` accepts `imageStyles` as a map whose keys are the 9 collections and values the 3 styles.
   Emulator tests: "ADR-023" group in `tool/rules_test/rules.test.mjs`.
+- **Verse of the day (PR #16, ADR-024):** `validFeatures` allows `dailyVerse`; `validDailyVerse` (only when it changes):
+  map with keys ⊆ enabled/mode/textAr/refAr, `enabled` bool, `mode` ∈ daily/fixed, strings with text ≤500 and ref ≤60
+  (joined + regex). Emulator tests: "Verse of the day" group in `tool/rules_test/rules.test.mjs`.
 - `validFeatures`: key allow-list via `keysAllowed` (create: `keys().hasOnly`; update: only the **changed** keys must
   be allowed, so an untouched legacy key no longer blocks a merge save — same as `settings/church`, PR #10), `sections` keys ⊆ the 16 section keys
   (incl. `media`)

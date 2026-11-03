@@ -184,6 +184,10 @@ Existence of `settings/church` = "database is seeded" (see `03-architecture.md`)
   `milestones→milestones`, `map→contactInfo` (block disappears when its section is off). `directory` and `banner`
   have no section.
 
+- `dailyVerse` (PR #16, ADR-024): map `{enabled: bool (default true), mode: 'daily'|'fixed' (default daily), textAr: string ≤500,
+  refAr: string ≤60}`; missing map or keys = on + daily rotation; a fixed verse with empty text falls back to daily.
+  Written only once it differs from the default or is already stored. Not seeded. Verse list: bundled asset
+  `assets/verses/daily_verses.json` (not Firestore).
 - `imageStyles` (PR #15, ADR-023): map `collection → avatar|card|banner`, keys limited to the 9 image collections;
   missing key = built-in default. Written only once an admin sets one (saves keep working against older rules).
 

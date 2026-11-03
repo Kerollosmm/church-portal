@@ -92,6 +92,9 @@ cancels and re-subscribes every stream (BUG-18; `ChurchInfoScreen` does the same
   `isEchoOfEditor(shown, latest, editorValues)` (`admin_validators.dart`) — if only metadata changed or every changed
   field already equals what the form holds, the editor key is kept, so the scroll position stays.
 
+- **Verse of the day** card (PR #16, ADR-024): "Show the verse of the day" switch, mode chips "A different verse
+  every day" / "A fixed verse I choose"; fixed mode shows the Arabic text (required, ≤500) and reference (≤60) fields →
+  `settings/features.dailyVerse`.
 - **Image display** card (PR #15, ADR-023): one dropdown per image collection (avatar / card / banner) →
   `settings/features.imageStyles`; the dropdown shows the built-in default until changed.
 - Item forms on image collections have **"Image display (— = section default)"** under the image (`imageStyle`,

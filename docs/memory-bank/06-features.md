@@ -28,6 +28,12 @@ render with `PageBody` (+ `Footer`). Content comes from Riverpod providers (hidd
   | `map` | `ChurchMap` (iframe + Open in Maps + Directions) | contactInfo |
   On wide screens (≥ 900 px) adjacent `nextMass` + `quickContacts` share a row.
 
+- **Verse of the day (PR #16, ADR-024):** `DailyVerseCard` (`home_page.dart`) is the first block under the hero: a
+  WarmPanel with «كلمة الله» accent, "آية اليوم / Verse of the day" title, the Arabic verse and «reference». Daily
+  mode = entry (Cairo day of year − 1) of `assets/verses/daily_verses.json` (366 Van Dyck verses, public domain),
+  changing at Cairo midnight; fixed mode = the admin's verse. Hidden when switched off (`settings/features.dailyVerse.enabled`)
+  or while the asset loads.
+
 ### `/about` — `about_page.dart` `AboutPage`
 - History card (bishop line + `historyAr/En`) and **altars** grid (main altar gets a gold cross) — section `history`.
 - Patron saints cards (name, feast pills Coptic + Gregorian, bio) — section `saints`.
