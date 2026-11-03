@@ -304,6 +304,18 @@ console.
 - Before the first question `_awaitContent()` waits (≤ 10 s) for settings, features, assistant settings, the content
   lists, and — while their section is on — milestones, contact settings, categories + entries, custom pages; the
   section flags are re-read after each round so a section switched on meanwhile is awaited too (CodeRabbit).
+- **PR #20 (grounding fix):** the page **`ref.watch`es every grounding provider in `build`** (`_watchGrounding`:
+  features, liturgies, seasons, clinics, meetings, activities, facilities, alerts, priests, saints; milestones /
+  contact settings / categories + entries / custom pages while their section is on). **Riverpod 3 pauses a provider
+  with no listener** (its stream subscription is paused in `onCancel`), so the PR #19 page — which only `ref.read`
+  them — never got liturgies & co. on a direct visit to `/ask`: `_awaitContent` hit its 10 s timeout and the first
+  prompt had empty sections (live: «مواعيد القداسات إيه؟» → "no mass schedule data"). Rule: **any content the
+  instruction reads must be watched by the page**, never only read. Watching also preloads the data on page open.
+- **PR #20 (first-call error):** `AssistantModel.warmUp()` mints the App Check token in `initState` (when
+  `firebaseStatus.appCheckActive`; `FirebaseAppCheck.getToken`, 15 s, errors swallowed), and
+  `AssistantConversation.ask` retries a failed or empty call **once** after `retryDelay` (700 ms) — still one
+  question for the limits; the model-unavailable fallback is unchanged. The one-off "تعذّر الحصول على إجابة الآن" on
+  the first question was most likely the first reCAPTCHA Enterprise token racing the call (no client logs to prove it).
 - **Admin-editable** (`settings/assistant`, `/admin` → AI assistant): model, persona instructions, allowed topics,
   refusal (ar/en), welcome text (ar/en; else `askIntro`), suggested questions (ar/en, ≤ 3 lines; else the built-in
   three), `maxChars`, `perMinute`, `perSession`. The switches stay the section `assistant` and

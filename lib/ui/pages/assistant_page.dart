@@ -48,6 +48,46 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
   bool _busy = false;
 
   @override
+  void initState() {
+    super.initState();
+    // Mint the App Check token while the visitor reads the welcome, so the
+    // first question does not race it (the model also retries once).
+    if (ref.read(firebaseStatusProvider).appCheckActive) {
+      ref.read(assistantModelProvider).warmUp();
+    }
+  }
+
+  /// Keeps every provider the instruction is built from subscribed while the
+  /// page is open. Riverpod 3 pauses a provider nobody listens to, so a
+  /// stream the page only `read` (liturgies, meetings, priests…) never
+  /// delivered on a direct visit to /ask: `_awaitContent` timed out and the
+  /// first prompt had empty sections ("no mass schedule data"). Watching them
+  /// also starts loading them as soon as the page opens. Contact types and
+  /// custom sections / pages only while their section is on.
+  void _watchGrounding() {
+    final f = ref.watch(featuresProvider);
+    ref
+      ..watch(featuresStreamProvider)
+      ..watch(liturgiesProvider)
+      ..watch(seasonsProvider)
+      ..watch(clinicsProvider)
+      ..watch(meetingsProvider)
+      ..watch(activitiesProvider)
+      ..watch(facilitiesProvider)
+      ..watch(alertsProvider)
+      ..watch(priestsProvider)
+      ..watch(saintsProvider);
+    if (f.enabled(Sections.milestones)) ref.watch(milestonesProvider);
+    if (f.enabled(Sections.contactForm)) ref.watch(contactSettingsProvider);
+    if (f.enabled(Sections.customSections)) {
+      ref
+        ..watch(categoriesProvider)
+        ..watch(entriesProvider);
+    }
+    if (f.enabled(Sections.customPages)) ref.watch(customPagesProvider);
+  }
+
+  @override
   void dispose() {
     _input.dispose();
     _scroll.dispose();
@@ -240,6 +280,7 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
   Widget build(BuildContext context) {
     final visible = ref.watch(assistantVisibleProvider);
     final settings = ref.watch(settingsProvider);
+    if (visible) _watchGrounding();
     if (settings.isLoading) return const Center(child: CircularProgressIndicator());
     if (!visible) {
       return PageBody(

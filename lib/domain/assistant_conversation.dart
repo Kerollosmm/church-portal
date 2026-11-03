@@ -23,6 +23,10 @@ abstract class AssistantModel {
     required List<AssistantTurn> history,
     required String prompt,
   });
+
+  /// Called when the assistant page opens: fetches the App Check token
+  /// ahead of the first question. Never throws.
+  Future<void> warmUp();
 }
 
 enum AssistantOutcome {
@@ -106,7 +110,11 @@ class AssistantConversation {
   /// Max contents replayed (user + model), oldest dropped first.
   final int maxHistory;
 
-  AssistantConversation(this.backend, {required this.defaultModel, this.maxHistory = 20});
+  /// Pause before the one automatic retry of a failed / empty call.
+  final Duration retryDelay;
+
+  AssistantConversation(this.backend,
+      {required this.defaultModel, this.maxHistory = 20, this.retryDelay = const Duration(milliseconds: 700)});
 
   final List<AssistantTurn> _history = [];
   final AssistantRateLimiter limiter = AssistantRateLimiter();
@@ -144,13 +152,18 @@ class AssistantConversation {
     limiter.record(now);
     final prompt = stamp.isEmpty ? q : '$stamp\n$q';
     final arabic = looksArabic(q);
-    String? raw;
-    try {
-      raw = await _generate(settings, instruction, prompt);
-    } catch (_) {
-      return const AssistantReply(AssistantOutcome.error);
+    // One automatic retry: the first call of a visit can fail while the App
+    // Check token (reCAPTCHA Enterprise / Play Integrity) is still being
+    // minted, or the model can return nothing once. Counted as one question.
+    var text = '';
+    for (var attempt = 0; attempt < 2 && text.isEmpty; attempt++) {
+      if (attempt > 0) await Future<void>.delayed(retryDelay);
+      try {
+        text = (await _generate(settings, instruction, prompt))?.trim() ?? '';
+      } catch (_) {
+        text = '';
+      }
     }
-    final text = raw?.trim() ?? '';
     if (text.isEmpty) return const AssistantReply(AssistantOutcome.error);
     if (isOutOfScopeReply(text)) {
       // Refusals are not replayed: they add nothing for later questions.

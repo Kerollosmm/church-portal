@@ -1,4 +1,6 @@
 import 'package:firebase_ai/firebase_ai.dart';
+import 'package:firebase_app_check/firebase_app_check.dart';
+import 'package:flutter/foundation.dart';
 
 import '../domain/assistant_conversation.dart';
 
@@ -8,6 +10,17 @@ import '../domain/assistant_conversation.dart';
 /// question, which is what a chat session sends anyway.
 class FirebaseAssistantModel implements AssistantModel {
   const FirebaseAssistantModel();
+
+  /// Mints the App Check token now (reCAPTCHA Enterprise on web can take a
+  /// few seconds the first time), so the first question does not race it.
+  @override
+  Future<void> warmUp() async {
+    try {
+      await FirebaseAppCheck.instance.getToken().timeout(const Duration(seconds: 15));
+    } catch (e) {
+      debugPrint('Assistant: App Check warm-up failed: $e');
+    }
+  }
 
   @override
   Future<String?> generate({
