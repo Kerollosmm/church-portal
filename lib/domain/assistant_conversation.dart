@@ -23,6 +23,10 @@ abstract class AssistantModel {
     required List<AssistantTurn> history,
     required String prompt,
   });
+
+  /// Called when the assistant page opens: fetches the App Check token
+  /// ahead of the first question. Never throws.
+  Future<void> warmUp();
 }
 
 enum AssistantOutcome {
@@ -97,6 +101,29 @@ bool isModelUnavailableError(Object e, String model) {
   return aboutModel && unavailable;
 }
 
+/// Whether one more identical call may succeed: App Check (token still
+/// minting on the first call), network, timeout and server errors are; quota /
+/// rate limits, invalid requests and safety blocks are not (a repeat gets the
+/// same rejection). Model-unavailable errors are handled by the fallback.
+bool isRetryableAssistantError(Object e) {
+  final t = e.toString().toLowerCase();
+  const permanent = [
+    '429',
+    'quota',
+    'resource_exhausted',
+    'resource exhausted',
+    'rate limit',
+    'too many requests',
+    'invalid_argument',
+    'invalid argument',
+    '400',
+    'safety',
+    'blocked',
+    'billing',
+  ];
+  return !permanent.any(t.contains);
+}
+
 class AssistantConversation {
   final AssistantModel backend;
 
@@ -106,7 +133,11 @@ class AssistantConversation {
   /// Max contents replayed (user + model), oldest dropped first.
   final int maxHistory;
 
-  AssistantConversation(this.backend, {required this.defaultModel, this.maxHistory = 20});
+  /// Pause before the one automatic retry of a failed / empty call.
+  final Duration retryDelay;
+
+  AssistantConversation(this.backend,
+      {required this.defaultModel, this.maxHistory = 20, this.retryDelay = const Duration(milliseconds: 700)});
 
   final List<AssistantTurn> _history = [];
   final AssistantRateLimiter limiter = AssistantRateLimiter();
@@ -144,13 +175,20 @@ class AssistantConversation {
     limiter.record(now);
     final prompt = stamp.isEmpty ? q : '$stamp\n$q';
     final arabic = looksArabic(q);
-    String? raw;
-    try {
-      raw = await _generate(settings, instruction, prompt);
-    } catch (_) {
-      return const AssistantReply(AssistantOutcome.error);
+    // One automatic retry: the first call of a visit can fail while the App
+    // Check token (reCAPTCHA Enterprise / Play Integrity) is still being
+    // minted, or the model can return nothing once. Counted as one question.
+    // Quota / rate-limit / bad-request errors are not retried (CodeRabbit).
+    var text = '';
+    for (var attempt = 0; attempt < 2 && text.isEmpty; attempt++) {
+      if (attempt > 0) await Future<void>.delayed(retryDelay);
+      try {
+        text = (await _generate(settings, instruction, prompt))?.trim() ?? '';
+      } catch (e) {
+        if (!isRetryableAssistantError(e)) return const AssistantReply(AssistantOutcome.error);
+        text = '';
+      }
     }
-    final text = raw?.trim() ?? '';
     if (text.isEmpty) return const AssistantReply(AssistantOutcome.error);
     if (isOutOfScopeReply(text)) {
       // Refusals are not replayed: they add nothing for later questions.

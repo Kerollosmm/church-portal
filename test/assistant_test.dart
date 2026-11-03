@@ -1,10 +1,12 @@
 // PR #19 (ADR-029): the assistant on web + Android — prompt building and
 // scope, refusal / limits / model fallback with a fake model, App Check
 // provider selection, assistant settings, and stable contact category ids.
+import 'dart:async';
 import 'dart:math';
 
 import 'package:church_portal/data/app_check_providers.dart';
 import 'package:church_portal/data/content_repository.dart';
+import 'package:church_portal/data/firebase_bootstrap.dart';
 import 'package:church_portal/data/seed_data.dart';
 import 'package:church_portal/domain/assistant_context.dart';
 import 'package:church_portal/domain/assistant_conversation.dart';
@@ -14,6 +16,7 @@ import 'package:church_portal/domain/contact_categories.dart';
 import 'package:church_portal/domain/custom_content.dart';
 import 'package:church_portal/domain/features.dart';
 import 'package:church_portal/domain/models.dart';
+import 'package:church_portal/domain/time_format.dart';
 import 'package:church_portal/state/providers.dart';
 import 'package:church_portal/ui/admin/admin_schema.dart';
 import 'package:church_portal/ui/admin/admin_validators.dart';
@@ -68,6 +71,13 @@ class _FakeModel implements AssistantModel {
   final Map<String, Object> errorFor;
   final calls = <({String model, String instruction, int history, String prompt})>[];
 
+  /// Calls that throw a transient (non-model) error before answering.
+  int failNext = 0;
+  int warmUps = 0;
+
+  @override
+  Future<void> warmUp() async => warmUps++;
+
   @override
   Future<String?> generate({
     required String model,
@@ -78,6 +88,10 @@ class _FakeModel implements AssistantModel {
     calls.add((model: model, instruction: instruction, history: history.length, prompt: prompt));
     final e = errorFor[model];
     if (e != null) throw e;
+    if (failNext > 0) {
+      failNext--;
+      throw Exception('App Check token not ready');
+    }
     return reply;
   }
 }
@@ -298,7 +312,8 @@ void main() {
       final c = AssistantConversation(m, defaultModel: 'gemini-3.1-flash-lite');
       final s = AssistantSettings.fromMap({'model': 'gemini-3.5-flash-lite'});
       expect((await _ask(c, 'q', s: s)).outcome, AssistantOutcome.error);
-      expect(m.calls.map((x) => x.model), ['gemini-3.5-flash-lite']);
+      // Retried once (transient), still on the admin's model.
+      expect(m.calls.map((x) => x.model), ['gemini-3.5-flash-lite', 'gemini-3.5-flash-lite']);
       expect(isModelUnavailableError(Exception('models/gemini-x is not found for API version v1beta'), 'gemini-x'), isTrue);
     });
 
@@ -313,9 +328,27 @@ void main() {
       final m = _FakeModel(errorFor: {'gemini-3.1-flash-lite': Exception('403 App Check token is invalid')});
       final c = AssistantConversation(m, defaultModel: 'gemini-3.1-flash-lite');
       expect((await _ask(c, 'q')).outcome, AssistantOutcome.error);
-      expect(m.calls, hasLength(1));
-      final empty = AssistantConversation(_FakeModel(reply: '  '), defaultModel: 'd');
+      // Retried once automatically, never a model switch.
+      expect(m.calls, hasLength(2));
+      expect(m.calls.map((x) => x.model).toSet(), {'gemini-3.1-flash-lite'});
+      final blank = _FakeModel(reply: '  ');
+      final empty = AssistantConversation(blank, defaultModel: 'd', retryDelay: Duration.zero);
       expect((await _ask(empty, 'q')).outcome, AssistantOutcome.error);
+      expect(blank.calls, hasLength(2));
+      // One transient failure, then an answer: one question counted.
+      final flaky = _FakeModel(reply: 'At 7 AM.')..failNext = 1;
+      final f = AssistantConversation(flaky, defaultModel: 'd', retryDelay: Duration.zero);
+      final r = await _ask(f, 'q');
+      expect((r.outcome, r.text), (AssistantOutcome.answer, 'At 7 AM.'));
+      expect(f.limiter.total, 1);
+      // Quota / bad-request errors are not retried.
+      final quota = _FakeModel(errorFor: {'d': Exception('429 RESOURCE_EXHAUSTED: quota exceeded')});
+      final q = AssistantConversation(quota, defaultModel: 'd', retryDelay: Duration.zero);
+      expect((await _ask(q, 'q')).outcome, AssistantOutcome.error);
+      expect(quota.calls, hasLength(1));
+      expect(isRetryableAssistantError(Exception('403 App Check token is invalid')), isTrue);
+      expect(isRetryableAssistantError(TimeoutException('45 s')), isTrue);
+      expect(isRetryableAssistantError(Exception('400 INVALID_ARGUMENT')), isFalse);
     });
   });
 
@@ -427,15 +460,19 @@ void main() {
   group('assistant page with a fake model', () {
     SeedData seed() => SeedData(jsonDecode(File('assets/seed/seed.json').readAsStringSync()) as Map<String, dynamic>);
 
-    Future<_FakeModel> pump(WidgetTester tester, {AssistantSettings? settings, String reply = outOfScopeToken}) async {
+    Future<_FakeModel> pump(WidgetTester tester,
+        {AssistantSettings? settings,
+        String reply = outOfScopeToken,
+        ContentRepository Function(SeedData, AssistantSettings)? repo}) async {
       tester.view.physicalSize = const Size(900, 1600);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.reset);
       final model = _FakeModel(reply: reply);
       await tester.pumpWidget(ProviderScope(
         overrides: [
-          repositoryProvider.overrideWithValue(_Repo(seed(), settings ?? AssistantSettings.defaults)),
+          repositoryProvider.overrideWithValue((repo ?? _Repo.new)(seed(), settings ?? AssistantSettings.defaults)),
           assistantVisibleProvider.overrideWithValue(true),
+          firebaseStatusProvider.overrideWithValue(const FirebaseStatus(available: true, appCheckActive: true)),
           assistantModelProvider.overrideWithValue(model),
         ],
         child: MaterialApp(
@@ -467,6 +504,81 @@ void main() {
       expect(model.calls.single.prompt, startsWith('[Current Cairo time: '));
     });
 
+    testWidgets('the first question is grounded on every public section (mass times, meetings, priests…)',
+        (tester) async {
+      // Regression (live /ask, Nov 2026): providers the page only `read` were
+      // paused by Riverpod 3 (no listener), so the first prompt had empty
+      // sections and the assistant said there was no mass schedule.
+      final model = await pump(tester, reply: 'At 7 AM.');
+      await tester.enterText(find.byKey(const Key('askInput')), 'مواعيد القداسات إيه؟');
+      await tester.tap(find.byTooltip('Send'));
+      await tester.pumpAndSettle();
+      final s = seed();
+      final instr = model.calls.single.instruction;
+      // Mass schedule: every regular liturgy with its time.
+      final regular = s.liturgies.where((l) => l.seasonKey == null && l.date == null && l.weekday != null).toList();
+      expect(regular, isNotEmpty);
+      expect(instr, contains('## Weekly liturgy schedule (regular)'));
+      for (final l in regular) {
+        expect(instr, contains(l.nameEn.isNotEmpty ? l.nameEn : l.nameAr));
+        expect(instr, contains(formatRangeLatin(l.start, l.end)));
+      }
+      expect(instr, contains('## Holy seasons'));
+      for (final m in s.meetings) {
+        expect(instr, contains(m.nameAr));
+      }
+      for (final a in s.activities) {
+        expect(instr, contains(a.titleAr));
+      }
+      for (final x in s.facilities) {
+        expect(instr, contains(x.nameAr));
+      }
+      for (final p in s.priests) {
+        expect(instr, contains(p.name));
+      }
+      for (final x in s.saints) {
+        expect(instr, contains(x.nameAr));
+      }
+      for (final m in s.milestones) {
+        expect(instr, contains(m.titleAr));
+      }
+      expect(instr, contains('Phone - '));
+      expect(instr, contains(s.settings.phones.first.number));
+      // Clinics are switched off in the seed: not grounded.
+      expect(s.features.enabled(Sections.clinics), isFalse);
+      expect(instr, isNot(contains('## Clinics')));
+      expect(find.text('At 7 AM.'), findsOneWidget);
+    });
+
+    testWidgets('clinics, custom sections, custom pages (donations) and contact types reach the first prompt',
+        (tester) async {
+      final model = await pump(tester, reply: 'Yes.', repo: _CustomRepo.new);
+      await tester.enterText(find.byKey(const Key('askInput')), 'How can I donate?');
+      await tester.tap(find.byTooltip('Send'));
+      await tester.pumpAndSettle();
+      final instr = model.calls.single.instruction;
+      expect(instr, contains('## Clinics (book by phone or WhatsApp)'));
+      for (final c in seed().clinics.where((c) => c.active)) {
+        expect(instr, contains(c.doctorName));
+      }
+      expect(instr, contains('## Scouts (الكشافة) (page /section/scouts)'));
+      expect(instr, contains('- Saturday troop'));
+      expect(instr, contains('## Support us (page /page/support)'));
+      expect(instr, contains('InstaPay church@instapay'));
+      expect(instr, contains('## Contact form and bookings (page /contact)'));
+    });
+
+    testWidgets('the App Check token is pre-warmed; a transient model error is retried once', (tester) async {
+      final model = await pump(tester, reply: 'At 7 AM.');
+      expect(model.warmUps, 1);
+      model.failNext = 1;
+      await tester.enterText(find.byKey(const Key('askInput')), 'When is mass?');
+      await tester.tap(find.byTooltip('Send'));
+      await tester.pumpAndSettle();
+      expect(find.text('At 7 AM.'), findsOneWidget);
+      expect(model.calls, hasLength(2));
+    });
+
     testWidgets('the per-visit limit shows a message and sends nothing more', (tester) async {
       final model = await pump(tester, settings: AssistantSettings.fromMap({'perSession': 1}), reply: 'At 7 AM.');
       await tester.enterText(find.byKey(const Key('askInput')), 'When is mass?');
@@ -487,4 +599,32 @@ class _Repo extends SeedRepository {
   final AssistantSettings assistant;
   @override
   Stream<AssistantSettings> assistantSettings() => Stream.value(assistant);
+}
+
+/// Seed + clinics switched on, one custom section and one custom page with a
+/// donation block.
+class _CustomRepo extends _Repo {
+  _CustomRepo(super.seed, super.assistant);
+  @override
+  Stream<FeatureSettings> features() => Stream.value(FeatureSettings.fromMap({
+        ...seed.features.toMap(),
+        'sections': {...seed.features.toMap()['sections'] as Map, Sections.clinics: true},
+      }));
+  @override
+  Stream<List<CustomCategory>> categories() => Stream.value([
+        CustomCategory.fromMap('cat1', {'slug': 'scouts', 'nameAr': 'الكشافة', 'nameEn': 'Scouts', 'visible': true}),
+      ]);
+  @override
+  Stream<List<CategoryEntry>> entries() => Stream.value([
+        CategoryEntry.fromMap('e1', {'categoryId': 'cat1', 'titleEn': 'Saturday troop', 'visible': true}),
+      ]);
+  @override
+  Stream<List<CustomPage>> pages() => Stream.value([
+        CustomPage.fromMap('p1', {
+          'slug': 'support',
+          'titleEn': 'Support us',
+          'visible': true,
+          'blocks': [PageBlock(type: BlockTypes.donation, instapay: 'church@instapay').encode()],
+        }),
+      ]);
 }
