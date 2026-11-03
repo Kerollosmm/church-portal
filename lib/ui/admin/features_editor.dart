@@ -4,6 +4,7 @@ import '../../core/l10n.dart';
 import '../../core/theme.dart';
 import '../../data/admin_repository.dart';
 import '../../domain/features.dart';
+import '../../domain/image_style.dart';
 import 'admin_validators.dart';
 
 /// Section on/off switches + home layout (settings/features).
@@ -110,6 +111,10 @@ List<Map<String, dynamic>> featuresSaveWrites(FeatureSettings next, Map<String, 
   // heroMotion (ADR-022) is written only once it differs from the default or
   // is already stored, so saves keep working against rules that predate it.
   if (next.heroMotion && (stored == null || !stored.containsKey('heroMotion'))) base.remove('heroMotion');
+  // Same for imageStyles (ADR-023): nothing to write until a default is set.
+  if ((base['imageStyles'] as Map).isEmpty && (stored == null || !stored.containsKey('imageStyles'))) {
+    base.remove('imageStyles');
+  }
   final before = FeatureSettings.fromMap(stored).toMap()['pageHeaders'];
   return [
     base,
@@ -423,6 +428,32 @@ class FeaturesEditorState extends State<FeaturesEditor> {
                 _text('footerNoteEn', context.tr('footerNoteEn'),
                     maxLength: footerNoteMax, fieldKey: const ValueKey('footer-noteEn'), lines: 2),
               ], hint: context.tr('footerHint')),
+              _card(context.tr('imageDisplay'), Icons.photo_size_select_large_rounded, [
+                for (final c in ImageStyles.collections)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: DropdownButtonFormField<String>(
+                      key: ValueKey('imageStyle-$c'),
+                      isExpanded: true,
+                      initialValue: f.imageStyleFor(c, ''),
+                      decoration: InputDecoration(
+                        labelText: context.pick(ImageStyles.collectionLabels[c]![0], ImageStyles.collectionLabels[c]![1]),
+                      ),
+                      items: [
+                        for (final v in ImageStyles.all)
+                          DropdownMenuItem(
+                            value: v,
+                            child: Text(context.pick(ImageStyles.labels[v]![0], ImageStyles.labels[v]![1]),
+                                overflow: TextOverflow.ellipsis),
+                          ),
+                      ],
+                      onChanged: (v) {
+                        if (v == null) return;
+                        _set(f.copyWith(imageStyles: {...f.imageStyles, c: v}));
+                      },
+                    ),
+                  ),
+              ], hint: context.tr('imageDisplayHint')),
               _card(context.tr('themeColor'), Icons.palette_outlined, [
                 Wrap(spacing: 10, runSpacing: 10, children: [
                   for (final e in ThemePresets.all.entries)

@@ -84,7 +84,6 @@ class HomePage extends ConsumerWidget {
             isEmpty: (d) => d.isEmpty,
             loading: const SkeletonList(count: 4, itemHeight: 120),
             builder: (context, items) => ResponsiveGrid(
-              minItemWidth: 240,
               children: [for (final m in items) _MilestoneCard(m)],
             ),
           ),
@@ -109,7 +108,7 @@ class HomePage extends ConsumerWidget {
         if (cards.isEmpty) return const SizedBox.shrink();
         return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           SectionTitle(context.tr('directory'), accent: context.tr('accentServices')),
-          ResponsiveGrid(minItemWidth: 320, children: cards),
+          ResponsiveGrid(children: cards),
         ]);
       case HomeBlocks.map:
         return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -348,7 +347,7 @@ class _PatronsTeaser extends ConsumerWidget {
       );
     }
 
-    final panels = ResponsiveGrid(minItemWidth: 400, spacing: 18, children: [for (final s in saints.take(2)) saintPanel(s)]);
+    final panels = ResponsiveGrid(maxColumns: 2, minItemWidth: 380, spacing: 18, children: [for (final s in saints.take(2)) saintPanel(s)]);
 
     return Padding(
       padding: const EdgeInsets.only(top: 28),
@@ -518,16 +517,22 @@ class _MilestoneCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final title = context.pick(m.titleAr, m.titleEn);
     final detail = cardDetailPath(DetailKind.milestone, m.id, m.details);
+    final desc = context.pick(m.descAr, m.descEn);
     return Card(
+      clipBehavior: Clip.antiAlias,
       child: DetailTapArea(
         path: detail,
-        child: Padding(
-          padding: const EdgeInsets.all(16),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          CardCover(collection: 'milestones', itemStyle: m.imageStyle, image: m.image, label: title, enlargeOnTap: detail == null),
+          Padding(
+          padding: const EdgeInsets.all(Space.card),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(children: [
-              ItemImage(
+              CardLead(
+                collection: 'milestones',
+                itemStyle: m.imageStyle,
                 image: m.image,
-                size: 48,
+                size: 56,
                 label: title,
                 enlargeOnTap: detail == null,
                 placeholder: CircleAvatar(
@@ -535,18 +540,22 @@ class _MilestoneCard extends StatelessWidget {
                   child: Icon(_icon, color: Theme.of(context).colorScheme.primary),
                 ),
               ),
-              const Spacer(),
               if (m.year != null)
-                Text(localDigits(context, '${m.year}'),
-                    style: const TextStyle(color: AppColors.goldText, fontWeight: FontWeight.w800)),
+                Flexible(
+                  child: Text(localDigits(context, '${m.year}'),
+                      style: displayStyle(context, size: 22, color: AppColors.goldText)),
+                ),
             ]),
-            const SizedBox(height: 10),
+            const SizedBox(height: Space.s),
             Text(title, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
-            const SizedBox(height: 4),
-            Text(context.pick(m.descAr, m.descEn), style: const TextStyle(color: AppColors.muted, height: 1.5, fontSize: 13)),
+            if (desc.isNotEmpty) ...[
+              const SizedBox(height: Space.xs),
+              Text(desc, style: const TextStyle(color: AppColors.muted, height: 1.5, fontSize: 13)),
+            ],
             if (detail != null) DetailsLink(path: detail, title: title, id: m.id),
           ]),
         ),
+        ]),
       ),
     );
   }

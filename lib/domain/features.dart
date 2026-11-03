@@ -1,6 +1,8 @@
 // Feature toggles and home-page layout (Firestore doc `settings/features`).
 // Pure Dart: no Flutter / Firebase imports, so the logic is unit-tested.
 
+import 'image_style.dart';
+
 /// Public sections an admin can switch on or off.
 class Sections {
   Sections._();
@@ -248,6 +250,10 @@ class FeatureSettings {
   /// visitors' reduced-motion and save-data settings still win.
   final bool heroMotion;
 
+  /// Per-collection default image display style (ADR-023; keys:
+  /// [ImageStyles.collections], values: [ImageStyles.all]). Missing = built-in default.
+  final Map<String, String> imageStyles;
+
   const FeatureSettings({
     this.sections = const {},
     this.homeOrder = HomeBlocks.defaultOrder,
@@ -264,6 +270,7 @@ class FeatureSettings {
     this.pageHeaders = const {},
     this.footer = const FooterConfig(),
     this.heroMotion = true,
+    this.imageStyles = const {},
   });
 
   /// Everything on: used before the doc loads and when it does not exist.
@@ -300,6 +307,7 @@ class FeatureSettings {
       pageHeaders: _pageHeaders(m['pageHeaders']),
       footer: FooterConfig.fromMap(m['footer']),
       heroMotion: _bool(m['heroMotion']) ?? true,
+      imageStyles: parseImageStyles(m['imageStyles']),
     );
   }
 
@@ -322,6 +330,7 @@ class FeatureSettings {
         },
         'footer': footer.toMap(),
         'heroMotion': heroMotion,
+        'imageStyles': {for (final c in ImageStyles.collections) if (imageStyles[c] != null) c: imageStyles[c]},
       };
 
   FeatureSettings copyWith({
@@ -340,6 +349,7 @@ class FeatureSettings {
     Map<String, PageCustom>? pageHeaders,
     FooterConfig? footer,
     bool? heroMotion,
+    Map<String, String>? imageStyles,
   }) =>
       FeatureSettings(
         sections: sections ?? this.sections,
@@ -357,6 +367,7 @@ class FeatureSettings {
         pageHeaders: pageHeaders ?? this.pageHeaders,
         footer: footer ?? this.footer,
         heroMotion: heroMotion ?? this.heroMotion,
+        imageStyles: imageStyles ?? this.imageStyles,
       );
 
   bool enabled(String section) => sections[section] ?? true;
@@ -387,6 +398,11 @@ class FeatureSettings {
     if (sections == null) return true;
     return sections.any(enabled);
   }
+
+  /// Image display style for an item of [collection] (its own [itemStyle]
+  /// wins over the section default).
+  String imageStyleFor(String collection, String itemStyle) =>
+      ImageStyles.resolve(collection, itemStyle: itemStyle, sectionStyle: imageStyles[collection]);
 
   int get disabledCount => Sections.all.where((s) => !enabled(s)).length;
 }

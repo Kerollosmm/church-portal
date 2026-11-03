@@ -286,6 +286,9 @@ class Alert implements Hideable {
 
   /// Optional picture (null = keep the icon / initials placeholder).
   final MediaImage? image;
+
+  /// How [image] is displayed on the card (ImageStyles); '' = section default.
+  final String imageStyle;
   const Alert({
     this.visible = true,
     this.order = 0,
@@ -300,6 +303,7 @@ class Alert implements Hideable {
     this.priority = 0,
     this.link,
     this.image,
+    this.imageStyle = '',
   });
   factory Alert.fromMap(String id, Map<String, dynamic> m) => Alert(
         visible: m['visible'] is bool ? m['visible'] as bool : true,
@@ -315,6 +319,7 @@ class Alert implements Hideable {
         priority: _ni(m['priority']) ?? 0,
         link: _ns(m['link']),
         image: MediaImage.fromMap(m['image']),
+        imageStyle: _s(m['imageStyle']),
       );
 }
 
@@ -333,6 +338,9 @@ class Season {
 
   /// Optional picture (null = keep the icon / initials placeholder).
   final MediaImage? image;
+
+  /// How [image] is displayed on the card (ImageStyles); '' = section default.
+  final String imageStyle;
   const Season({
     required this.id,
     required this.key,
@@ -343,6 +351,7 @@ class Season {
     this.active = true,
     this.replacesRegular = true,
     this.image,
+    this.imageStyle = '',
   });
   factory Season.fromMap(String id, Map<String, dynamic> m) => Season(
         id: id,
@@ -354,6 +363,7 @@ class Season {
         active: _b(m['active']),
         replacesRegular: m['replacesRegular'] is bool ? m['replacesRegular'] as bool : true,
         image: MediaImage.fromMap(m['image']),
+        imageStyle: _s(m['imageStyle']),
       );
 }
 
@@ -429,6 +439,9 @@ class Meeting implements Hideable {
   final bool sample;
   /// Optional picture (null = keep the icon / initials placeholder).
   final MediaImage? image;
+
+  /// How [image] is displayed on the card (ImageStyles); '' = section default.
+  final String imageStyle;
   /// Detail page settings (on unless an admin switches it off).
   final ItemDetails details;
   const Meeting({
@@ -448,6 +461,7 @@ class Meeting implements Hideable {
     this.notes = '',
     this.sample = false,
     this.image,
+    this.imageStyle = '',
     this.details = ItemDetails.none,
   });
   factory Meeting.fromMap(String id, Map<String, dynamic> m) => Meeting(
@@ -467,6 +481,7 @@ class Meeting implements Hideable {
         notes: _s(m['notes']),
         sample: _b(m['sample']),
         image: MediaImage.fromMap(m['image']),
+        imageStyle: _s(m['imageStyle']),
         details: ItemDetails.fromMap(m),
       );
 }
@@ -488,6 +503,9 @@ class Activity implements Hideable {
 
   /// Optional picture (null = keep the icon / initials placeholder).
   final MediaImage? image;
+
+  /// How [image] is displayed on the card (ImageStyles); '' = section default.
+  final String imageStyle;
   const Activity({
     this.visible = true,
     this.order = 0,
@@ -503,6 +521,7 @@ class Activity implements Hideable {
     this.contactPhone = '',
     this.link = '',
     this.image,
+    this.imageStyle = '',
     this.sample = false,
     this.details = ItemDetails.none,
   });
@@ -521,6 +540,7 @@ class Activity implements Hideable {
         contactPhone: _s(m['contactPhone']),
         link: _s(m['link']),
         image: MediaImage.fromMap(m['image']),
+        imageStyle: _s(m['imageStyle']),
         sample: _b(m['sample']),
         details: ItemDetails.fromMap(m, urlKey: 'link'),
       );
@@ -540,6 +560,9 @@ class Clinic implements Hideable {
   final bool sample;
   /// Optional picture (null = keep the icon / initials placeholder).
   final MediaImage? image;
+
+  /// How [image] is displayed on the card (ImageStyles); '' = section default.
+  final String imageStyle;
   /// Detail page settings (on unless an admin switches it off).
   final ItemDetails details;
   const Clinic({
@@ -560,6 +583,7 @@ class Clinic implements Hideable {
     this.active = true,
     this.sample = false,
     this.image,
+    this.imageStyle = '',
     this.details = ItemDetails.none,
   });
   factory Clinic.fromMap(String id, Map<String, dynamic> m) => Clinic(
@@ -580,6 +604,7 @@ class Clinic implements Hideable {
         active: m['active'] is bool ? m['active'] as bool : true,
         sample: _b(m['sample']),
         image: MediaImage.fromMap(m['image']),
+        imageStyle: _s(m['imageStyle']),
         details: ItemDetails.fromMap(m, phoneKey: 'bookingPhone'),
       );
 }
@@ -595,6 +620,9 @@ class Facility implements Hideable {
   final bool sample;
   /// Optional picture (null = keep the icon / initials placeholder).
   final MediaImage? image;
+
+  /// How [image] is displayed on the card (ImageStyles); '' = section default.
+  final String imageStyle;
   /// Detail page settings (on unless an admin switches it off).
   final ItemDetails details;
   const Facility({
@@ -611,6 +639,7 @@ class Facility implements Hideable {
     this.hoursEn = '',
     this.sample = false,
     this.image,
+    this.imageStyle = '',
     this.details = ItemDetails.none,
   });
   factory Facility.fromMap(String id, Map<String, dynamic> m) => Facility(
@@ -627,6 +656,7 @@ class Facility implements Hideable {
         hoursEn: _s(m['hoursEn']),
         sample: _b(m['sample']),
         image: MediaImage.fromMap(m['image']),
+        imageStyle: _s(m['imageStyle']),
         details: ItemDetails.fromMap(m, phoneKey: 'phone'),
       );
 }
@@ -644,6 +674,9 @@ class Priest implements Hideable {
 
   /// Optional picture (null = keep the icon / initials placeholder).
   final MediaImage? image;
+
+  /// How [image] is displayed on the card (ImageStyles); '' = section default.
+  final String imageStyle;
   /// Detail page settings (on unless an admin switches it off).
   final ItemDetails details;
   const Priest({
@@ -662,6 +695,7 @@ class Priest implements Hideable {
     this.order = 0,
     this.sample = false,
     this.image,
+    this.imageStyle = '',
     this.details = ItemDetails.none,
   });
   factory Priest.fromMap(String id, Map<String, dynamic> m) => Priest(
@@ -680,6 +714,7 @@ class Priest implements Hideable {
         order: _ni(m['order']) ?? 0,
         sample: _b(m['sample']),
         image: MediaImage.fromMap(m['image']),
+        imageStyle: _s(m['imageStyle']),
         details: ItemDetails.fromMap(m),
       );
   bool get departed => status == 'departed';
@@ -700,6 +735,9 @@ class Milestone implements Hideable {
 
   /// Optional picture (null = keep the icon / initials placeholder).
   final MediaImage? image;
+
+  /// How [image] is displayed on the card (ImageStyles); '' = section default.
+  final String imageStyle;
   /// Detail page settings (on unless an admin switches it off).
   final ItemDetails details;
   const Milestone({
@@ -713,6 +751,7 @@ class Milestone implements Hideable {
     this.icon = '',
     this.order = 0,
     this.image,
+    this.imageStyle = '',
     this.details = ItemDetails.none,
   });
   factory Milestone.fromMap(String id, Map<String, dynamic> m) => Milestone(
@@ -726,6 +765,7 @@ class Milestone implements Hideable {
         icon: _s(m['icon']),
         order: _ni(m['order']) ?? 0,
         image: MediaImage.fromMap(m['image']),
+        imageStyle: _s(m['imageStyle']),
         details: ItemDetails.fromMap(m),
       );
 }
@@ -741,6 +781,9 @@ class Saint implements Hideable {
 
   /// Optional picture (null = keep the icon / initials placeholder).
   final MediaImage? image;
+
+  /// How [image] is displayed on the card (ImageStyles); '' = section default.
+  final String imageStyle;
   /// Detail page settings (on unless an admin switches it off).
   final ItemDetails details;
   const Saint({
@@ -756,6 +799,7 @@ class Saint implements Hideable {
     this.feastGregorianAr = '',
     this.order = 0,
     this.image,
+    this.imageStyle = '',
     this.details = ItemDetails.none,
   });
   factory Saint.fromMap(String id, Map<String, dynamic> m) => Saint(
@@ -771,6 +815,7 @@ class Saint implements Hideable {
         feastGregorianAr: _s(m['feastGregorianAr']),
         order: _ni(m['order']) ?? 0,
         image: MediaImage.fromMap(m['image']),
+        imageStyle: _s(m['imageStyle']),
         details: ItemDetails.fromMap(m),
       );
 }

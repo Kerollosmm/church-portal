@@ -915,3 +915,45 @@ describe('ADR-022: hero motion & video switch (settings/features.heroMotion)', (
     await assertFails(setDoc(doc(db(null), 'settings', 'features'), { heroMotion: false }));
   });
 });
+
+describe('ADR-023: image display style (imageStyle / settings/features.imageStyles)', () => {
+  const stamp = () => ({ updatedAt: serverTimestamp(), updatedBy: `${EDITOR}@x.test` });
+  const priest = { name: 'أبونا', status: 'serving', visible: true, order: 10 };
+
+  test('items accept avatar / card / banner, or no style (section default)', async () => {
+    const ed = db(EDITOR);
+    for (const v of ['avatar', 'card', 'banner']) {
+      await assertSucceeds(setDoc(doc(ed, 'priests', `s-${v}`), { ...priest, imageStyle: v }));
+    }
+    await assertSucceeds(updateDoc(doc(ed, 'priests', 's-card'), { imageStyle: 'avatar', ...stamp() }));
+    await assertSucceeds(updateDoc(doc(ed, 'priests', 's-card'), { imageStyle: null, ...stamp() })); // back to default
+    await assertSucceeds(setDoc(doc(ed, 'saints', 'st'), { nameAr: 'x', imageStyle: 'card' }));
+    await assertSucceeds(setDoc(doc(ed, 'milestones', 'ms'), { titleAr: 'x', imageStyle: 'banner' }));
+    await assertSucceeds(setDoc(doc(ed, 'activities', 'ac'), { titleAr: 'x', imageStyle: 'card' }));
+    await assertSucceeds(setDoc(doc(ed, 'alerts', 'al'), { titleAr: 'x', imageStyle: 'banner' }));
+    await assertSucceeds(setDoc(doc(ed, 'seasons', 'se'), { key: 'pascha', nameAr: 'القيامة', imageStyle: 'card' }));
+  });
+
+  test('rejects unknown styles, non-strings and the field on collections without images', async () => {
+    const ed = db(EDITOR);
+    for (const v of ['circle', 'AVATAR', '', 1, true, { s: 'card' }]) {
+      await assertFails(setDoc(doc(ed, 'priests', 'bad'), { ...priest, imageStyle: v }), JSON.stringify(v));
+    }
+    await assertFails(setDoc(doc(ed, 'liturgies', 'l1'),
+      { type: 'liturgy', nameAr: 'قداس', weekday: 7, start: '07:00', end: '09:00', imageStyle: 'card' }));
+  });
+
+  test('admins set per-section defaults; only known sections and styles', async () => {
+    const ref = doc(db(EDITOR), 'settings', 'features');
+    await assertSucceeds(setDoc(ref, { theme: 'burgundy', imageStyles: { priests: 'avatar', saints: 'card', activities: 'banner' } }));
+    await assertSucceeds(setDoc(ref, { imageStyles: {}, ...stamp() }, { merge: true }));
+    for (const v of [{ priests: 'round' }, { liturgies: 'card' }, { priests: 1 }, 'card', ['card']]) {
+      await assertFails(setDoc(ref, { imageStyles: v }, { merge: true }), JSON.stringify(v));
+    }
+  });
+
+  test('visitors cannot change them', async () => {
+    await assertFails(setDoc(doc(db(null), 'settings', 'features'), { imageStyles: { priests: 'card' } }));
+    await assertFails(updateDoc(doc(db(null), 'priests', 'x'), { imageStyle: 'card' }));
+  });
+});

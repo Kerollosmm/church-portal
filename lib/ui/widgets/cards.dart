@@ -15,6 +15,9 @@ import '../../domain/time_format.dart';
 import '../../state/providers.dart';
 import 'common.dart';
 import 'item_image.dart';
+import 'styled_image.dart';
+
+export 'styled_image.dart';
 
 /// Card for one liturgy on the schedule page.
 class LiturgyCard extends StatelessWidget {
@@ -262,23 +265,31 @@ class _AlertBannerState extends ConsumerState<AlertBanner> {
       for (final a in _expanded ? visible : visible.take(_collapsedCount))
         Container(
           width: double.infinity,
-          margin: const EdgeInsets.only(bottom: 10),
+          margin: const EdgeInsets.only(bottom: Space.m),
+          clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
             color: const Color(0xFFFFF4E0),
             borderRadius: BorderRadius.circular(14),
             border: const BorderDirectional(start: BorderSide(color: AppColors.alert, width: 5)),
           ),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          // Card / banner style: the picture across the top (ADR-023).
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 220),
+            child: CardCover(
+                collection: 'alerts', itemStyle: a.imageStyle, image: a.image, label: context.pick(a.titleAr, a.titleEn)),
+          ),
+          Padding(
           padding: const EdgeInsets.all(14),
           child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            ItemImage(
+            CardLead(
+              collection: 'alerts',
+              itemStyle: a.imageStyle,
               image: a.image,
-              size: 48,
-              circle: false,
-              radius: 10,
+              size: 52,
               label: context.pick(a.titleAr, a.titleEn),
               placeholder: const Icon(Icons.campaign_rounded, color: AppColors.alert),
             ),
-            const SizedBox(width: 10),
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text(context.pick(a.titleAr, a.titleEn),
@@ -295,6 +306,8 @@ class _AlertBannerState extends ConsumerState<AlertBanner> {
               ]),
             ),
             if (!compact && _linkShown(a.link, features)) _learnMore(context, a.link!.trim()),
+          ]),
+        ),
           ]),
         ),
       if (hidden > 0)

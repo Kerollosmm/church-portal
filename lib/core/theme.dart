@@ -105,6 +105,24 @@ class AppFonts {
 /// Panel / card radius (soft rounded, like the posters' boxes).
 const double kPanelRadius = 20;
 
+/// Spacing scale (logical px). Use these instead of ad-hoc numbers so cards,
+/// grids and sections share one rhythm.
+class Space {
+  Space._();
+  static const double xs = 4;
+  static const double s = 8;
+  static const double m = 12;
+  static const double l = 16;
+  static const double xl = 24;
+  static const double xxl = 32;
+
+  /// Gap between cards in a grid (both directions).
+  static const double grid = 16;
+
+  /// Inner padding of a content card.
+  static const double card = 16;
+}
+
 /// Darker shade of the active theme colour (admin-selected preset), used for
 /// tab gradients and pressed states so they follow every preset.
 Color primaryDarkOf(BuildContext context) => Color.lerp(Theme.of(context).colorScheme.primary, Colors.black, 0.30)!;

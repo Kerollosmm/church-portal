@@ -296,6 +296,10 @@ class DocEditorState extends State<DocEditor> {
     final route = ModalRoute.of(context);
     // Existing docs: write only what changed (merge), never stale values.
     var payload = _persisted ? changedFields(_initialValues, data) : data;
+    // A new document does not write an unset image style (ADR-023): missing
+    // already means "section default", and rules that predate the field
+    // keep accepting the save.
+    if (!_persisted && payload['imageStyle'] == null) payload = {...payload}..remove('imageStyle');
     if (payload.isEmpty && !_hasPendingUploads) {
       messenger?.showSnackBar(SnackBar(content: Text(context.tr('noChanges'))));
       setState(() => _dirty = false);

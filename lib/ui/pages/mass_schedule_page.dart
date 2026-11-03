@@ -4,6 +4,7 @@ import 'package:material_ui/material_ui.dart';
 import '../../core/l10n.dart';
 import '../../core/theme.dart';
 import '../../domain/features.dart';
+import '../../domain/image_style.dart';
 import '../../domain/cairo_time.dart';
 import '../../domain/models.dart';
 import '../../domain/schedule.dart';
@@ -11,7 +12,6 @@ import '../../domain/time_format.dart';
 import '../../state/providers.dart';
 import '../widgets/cards.dart';
 import '../widgets/common.dart';
-import '../widgets/item_image.dart';
 
 class MassSchedulePage extends ConsumerStatefulWidget {
   const MassSchedulePage({super.key});
@@ -105,7 +105,7 @@ class _MassSchedulePageState extends ConsumerState<MassSchedulePage> {
           icon: Icons.auto_awesome_rounded,
           trailing: Pill(context.tr('activeNow'), icon: Icons.circle),
         ),
-        ResponsiveGrid(minItemWidth: 340, children: [
+        ResponsiveGrid(children: [
           for (final l in e.value) LiturgyCard(liturgy: l, showDate: true),
         ]),
       ],
@@ -113,7 +113,7 @@ class _MassSchedulePageState extends ConsumerState<MassSchedulePage> {
       // Year's Eve), which the weekly tabs cannot show.
       if (special.isNotEmpty) ...[
         SectionTitle(context.tr('specialServices'), icon: Icons.event_available_rounded),
-        ResponsiveGrid(minItemWidth: 340, children: [
+        ResponsiveGrid(children: [
           for (final l in special) LiturgyCard(liturgy: l, showDate: true),
         ]),
       ],
@@ -139,14 +139,14 @@ class _MassSchedulePageState extends ConsumerState<MassSchedulePage> {
       if (list.isEmpty)
         const EmptyState(icon: Icons.event_busy)
       else
-        ResponsiveGrid(minItemWidth: 340, children: [
+        ResponsiveGrid(children: [
           for (final l in list) LiturgyCard(liturgy: l, showWeekday: showWeekday),
         ]),
       SectionTitle(context.tr('vespersPraise'), icon: Icons.nightlight_round),
       if (vespers.isEmpty)
         const EmptyState()
       else
-        ResponsiveGrid(minItemWidth: 340, children: [
+        ResponsiveGrid(children: [
           for (final l in vespers) LiturgyCard(liturgy: l, showWeekday: true, showDate: true),
         ]),
     ];
@@ -175,24 +175,29 @@ class _MassSchedulePageState extends ConsumerState<MassSchedulePage> {
         trailing: active ? Pill(context.tr('activeNow'), icon: Icons.circle) : null,
       ));
       final hasImage = s.image != null && showImages;
-      if (range.isNotEmpty || hasImage) {
+      final name = context.pick(s.nameAr, s.nameEn);
+      final seasonStyle = ref.watch(featuresProvider).imageStyleFor('seasons', s.imageStyle);
+      // Optional season / revival picture, in its display style (ADR-023);
+      // nothing when there is none.
+      if (hasImage && seasonStyle != ImageStyles.avatar) {
         out.add(Padding(
-          padding: const EdgeInsets.only(bottom: 10),
+          padding: const EdgeInsets.only(bottom: Space.m),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: seasonStyle == ImageStyles.banner ? double.infinity : 560),
+            child: DetailCover(key: const Key('seasonCover'), style: seasonStyle, image: s.image!, label: name),
+          ),
+        ));
+      }
+      if (range.isNotEmpty || (hasImage && seasonStyle == ImageStyles.avatar)) {
+        out.add(Padding(
+          padding: const EdgeInsets.only(bottom: Space.m),
           child: Row(children: [
-            // Optional season / revival picture; nothing when there is none.
-            ItemImage(
-              image: s.image,
-              size: 72,
-              circle: false,
-              label: context.pick(s.nameAr, s.nameEn),
-              placeholder: const SizedBox.shrink(),
-            ),
-            if (hasImage) const SizedBox(width: 12),
+            CardLead(collection: 'seasons', itemStyle: s.imageStyle, image: s.image, size: 72, label: name),
             if (range.isNotEmpty) Expanded(child: IconLine(Icons.date_range_rounded, range)),
           ]),
         ));
       }
-      out.add(ResponsiveGrid(minItemWidth: 340, children: [
+      out.add(ResponsiveGrid(children: [
         for (final l in e.value) LiturgyCard(liturgy: l, showDate: true),
       ]));
     }

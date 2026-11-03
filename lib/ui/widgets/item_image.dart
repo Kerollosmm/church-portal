@@ -21,6 +21,10 @@ class MediaImageView extends StatefulWidget {
   final String semanticLabel;
   final MediaCache? cache;
 
+  /// Key the picture `itemImage` (tests / automation). Off for decorative
+  /// copies such as a cover's blurred backdrop.
+  final bool keyed;
+
   const MediaImageView({
     super.key,
     required this.image,
@@ -29,6 +33,7 @@ class MediaImageView extends StatefulWidget {
     this.fit = BoxFit.cover,
     this.semanticLabel = '',
     this.cache,
+    this.keyed = true,
   });
 
   @override
@@ -77,7 +82,7 @@ class _MediaImageViewState extends State<MediaImageView> {
     if (widget.image.isRemote) {
       return Image.network(
         widget.image.url,
-        key: const Key('itemImage'),
+        key: widget.keyed ? const Key('itemImage') : null,
         fit: widget.fit,
         semanticLabel: label,
         excludeFromSemantics: label == null,
@@ -96,7 +101,7 @@ class _MediaImageViewState extends State<MediaImageView> {
         if (data == null || data.isEmpty) return widget.placeholder;
         return Image.memory(
           data,
-          key: const Key('itemImage'),
+          key: widget.keyed ? const Key('itemImage') : null,
           fit: widget.fit,
           gaplessPlayback: true,
           semanticLabel: label,

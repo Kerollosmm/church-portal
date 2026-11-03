@@ -14,7 +14,8 @@ import '../../state/providers.dart';
 import 'coptic_cross.dart';
 import 'golden.dart';
 
-const double kMaxContentWidth = 1100;
+/// Max width of page content (cards grid, text); wider screens centre it.
+const double kMaxContentWidth = 1200;
 
 /// Scrollable page body: centred, width-capped content + footer. Each
 /// section fades and rises in the first time it scrolls into view (static
@@ -241,23 +242,52 @@ class SectionTitle extends StatelessWidget {
   }
 }
 
-/// Responsive grid of cards (1 column on phones, 2-3 on wider screens).
+/// Columns for a grid [width] wide: phone 1, tablet 2, desktop 3 (the
+/// breakpoints are on the grid's own width, so a grid inside a narrower
+/// panel follows its panel), capped at [maxColumns].
+int gridColumns(double width, {int maxColumns = 3}) {
+  final cols = width < 560 ? 1 : (width < 900 ? 2 : 3);
+  return cols.clamp(1, maxColumns);
+}
+
+/// Responsive grid of cards: 1 column on phones, 2 on tablets, 3 on desktop
+/// (see [gridColumns]). Cards keep their own height (they size to their
+/// content: nothing is stretched to fill a row) and start at the reading
+/// edge (right in Arabic). [minItemWidth] only lowers the column count when
+/// cards would get narrower than it (e.g. wide saint panels).
 class ResponsiveGrid extends StatelessWidget {
   final List<Widget> children;
   final double minItemWidth;
   final double spacing;
-  const ResponsiveGrid({super.key, required this.children, this.minItemWidth = 300, this.spacing = 12});
+  final int maxColumns;
+  const ResponsiveGrid({
+    super.key,
+    required this.children,
+    this.minItemWidth = 260,
+    this.spacing = Space.grid,
+    this.maxColumns = 3,
+  });
 
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, c) {
-        final cols = (c.maxWidth / minItemWidth).floor().clamp(1, 4);
-        final w = (c.maxWidth - spacing * (cols - 1)) / cols;
-        return Wrap(
-          spacing: spacing,
-          runSpacing: spacing,
-          children: [for (final ch in children) SizedBox(width: w, child: ch)],
+        var cols = gridColumns(c.maxWidth, maxColumns: maxColumns);
+        while (cols > 1 && (c.maxWidth - spacing * (cols - 1)) / cols < minItemWidth) {
+          cols--;
+        }
+        final w = ((c.maxWidth - spacing * (cols - 1)) / cols).floorToDouble();
+        // Full width even under loose constraints, so runs start at the
+        // reading edge (right in Arabic) instead of shrink-wrapping left.
+        return SizedBox(
+          width: c.maxWidth.isFinite ? c.maxWidth : null,
+          child: Wrap(
+            spacing: spacing,
+            runSpacing: spacing,
+            alignment: WrapAlignment.start,
+            crossAxisAlignment: WrapCrossAlignment.start,
+            children: [for (final ch in children) SizedBox(width: w, child: ch)],
+          ),
         );
       },
     );
@@ -545,6 +575,8 @@ class TimeRangeText extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // No time set: nothing (no empty line reserving space).
+    if (start.trim().isEmpty) return const SizedBox.shrink();
     final latin = formatRangeLatin(start, end);
     final arabic = formatRangeArabic(start, end);
     final primary = context.isAr ? arabic : latin;

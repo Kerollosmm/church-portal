@@ -407,6 +407,12 @@ const Map<String, List<String>> _strings = {
   'opt_revival_maximus': ['نهضة مكسيموس ودوماديوس', 'Maximus & Domadius revival'],
   'opt_revival_moses': ['نهضة الأنبا موسى', 'St Moses revival'],
   'opt_summer': ['الصيف', 'Summer'],
+  'opt_avatar': ['دائرة (صورة شخص)', 'Avatar (round, a person)'],
+  'opt_card': ['بطاقة (الصورة كاملة)', 'Card (whole picture)'],
+  'opt_banner': ['شريط عريض', 'Banner (full width)'],
+  'imageDisplay': ['طريقة عرض الصور', 'Image display'],
+  'imageDisplayHint': ['الافتراضي لكل قسم. يمكن تغييره لكل عنصر من «الصورة» في نموذج العنصر.',
+      'Default per section. Each item can override it under its image in the item form.'],
   // "Golden hour" identity (ADR-022): calligraphic accent words above titles.
   'heroAccent': ['أهلاً بكم في', 'Welcome to'],
   'accent_about': ['تعرّف على', 'Discover'],

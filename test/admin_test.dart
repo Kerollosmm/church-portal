@@ -423,7 +423,10 @@ void main() {
       await tester.pumpAndSettle();
       expect(saved, isNotNull);
       expect(saved!['doctorName'], 'د. مينا');
-      expect(saved!.keys, containsAll(def.fields.map((f) => f.key))); // new doc: every field
+      // New doc: every field, except an unset image style (ADR-023: missing =
+      // section default, so a new doc does not write it).
+      expect(saved!.keys, containsAll(def.fields.map((f) => f.key).where((k) => k != 'imageStyle')));
+      expect(saved!.containsKey('imageStyle'), isFalse);
       expect(saved!['bookingPhone'], '01012345678');
       expect(saved!['order'], 30);
       expect(saved!['visible'], isTrue); // new items start visible
