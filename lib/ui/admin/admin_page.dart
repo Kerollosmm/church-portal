@@ -6,6 +6,7 @@ import 'package:material_ui/material_ui.dart';
 import '../../core/l10n.dart';
 import '../../core/theme.dart';
 import '../../data/admin_repository.dart';
+import '../../data/error_reporting.dart';
 import '../../state/providers.dart';
 import '../widgets/coptic_cross.dart';
 import 'admin_schema.dart';
@@ -341,7 +342,11 @@ class _AdminDashboardState extends State<AdminDashboard> {
       case 'overview':
         return OverviewScreen(repo: repo, role: widget.role, onOpen: _open);
       case 'features':
-        return FeaturesScreen(repo: repo);
+        return FeaturesScreen(
+          repo: repo,
+          // Owner only (ADR-034): one harmless test event to check Sentry.
+          onSendTestError: widget.role == AdminRoles.owner ? ErrorReporting.sendTestEvent : null,
+        );
       case 'church':
         return ChurchInfoScreen(repo: repo);
       case 'assistant':

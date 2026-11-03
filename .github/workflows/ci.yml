@@ -34,7 +34,15 @@ jobs:
         run: flutter test
 
       - name: Build web (release)
-        run: flutter build web --release
+        # Not deployed: tagged `ci` so a crash while testing this build is
+        # never mistaken for production (Sentry, ADR-034).
+        env:
+          SENTRY_DSN: ${{ vars.SENTRY_DSN || '' }}
+        run: |
+          APP_VERSION=$(sed -n 's/^version: *//p' pubspec.yaml | head -1)
+          DEFINES=(--dart-define=SENTRY_ENVIRONMENT=ci --dart-define=GIT_SHA="$GITHUB_SHA" --dart-define=APP_VERSION="$APP_VERSION")
+          if [ -n "$SENTRY_DSN" ]; then DEFINES+=(--dart-define=SENTRY_DSN="$SENTRY_DSN"); fi
+          flutter build web --release "${DEFINES[@]}"
 
       - name: Fingerprint icon fonts (cache busting, PR #23)
         run: python3 tool/fingerprint_icon_fonts.py build/web

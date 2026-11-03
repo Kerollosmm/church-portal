@@ -44,6 +44,15 @@ final featuresReadyProvider = Provider<bool>((ref) {
   return f.hasValue || f.hasError;
 });
 
+/// The admin's error-report switch (ADR-034): null until `settings/features`
+/// (or its seed fallback) has arrived; a failed stream means the default (on).
+final errorReportingSwitchProvider = Provider<bool?>((ref) {
+  final f = ref.watch(featuresStreamProvider);
+  if (f.hasValue) return f.value!.errorReporting;
+  if (f.hasError) return true;
+  return null;
+});
+
 /// Public lists: items an admin hid are dropped, the rest sorted by `order`.
 Stream<List<T>> _public<T extends Hideable>(Stream<List<T>> s) => s.map(publicItems);
 

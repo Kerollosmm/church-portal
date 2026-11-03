@@ -33,15 +33,25 @@ jobs:
           # without it: App Check stays off there and the App Check-enforced
           # assistant is hidden instead of failing (ADR-014 / ADR-029).
           RECAPTCHA_SITE_KEY: ${{ github.event_name == 'push' && vars.RECAPTCHA_SITE_KEY || '' }}
+          # Sentry error tracking (ADR-034). The DSN is public: an optional
+          # repository variable SENTRY_DSN overrides it, otherwise the release
+          # build uses the project DSN in lib/config/app_config.dart.
+          SENTRY_DSN: ${{ vars.SENTRY_DSN || '' }}
+          SENTRY_ENVIRONMENT: ${{ github.event_name == 'push' && 'production' || 'preview' }}
+          GIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
+          APP_VERSION=$(sed -n 's/^version: *//p' pubspec.yaml | head -1)
+          DEFINES=(--dart-define=SENTRY_ENVIRONMENT="$SENTRY_ENVIRONMENT" --dart-define=GIT_SHA="$GIT_SHA" --dart-define=APP_VERSION="$APP_VERSION")
+          if [ -n "$SENTRY_DSN" ]; then DEFINES+=(--dart-define=SENTRY_DSN="$SENTRY_DSN"); fi
+          echo "::notice::Sentry: environment=$SENTRY_ENVIRONMENT release=church-portal@$APP_VERSION+${GIT_SHA:0:7}"
           if [ -n "$RECAPTCHA_SITE_KEY" ]; then
             echo "::notice::App Check: building with RECAPTCHA_SITE_KEY (reCAPTCHA Enterprise)"
-            flutter build web --release --dart-define=RECAPTCHA_SITE_KEY="$RECAPTCHA_SITE_KEY"
+            flutter build web --release "${DEFINES[@]}" --dart-define=RECAPTCHA_SITE_KEY="$RECAPTCHA_SITE_KEY"
           else
             if [ "${{ github.event_name }}" = "push" ]; then
               echo "::warning::RECAPTCHA_SITE_KEY repository variable is empty: App Check is off and the assistant is hidden on the live site"
             fi
-            flutter build web --release
+            flutter build web --release "${DEFINES[@]}"
           fi
       - name: Fingerprint icon fonts (cache busting, PR #23)
         # The tree-shaken icon fonts keep one file name per build but Hosting

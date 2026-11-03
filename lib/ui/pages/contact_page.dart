@@ -7,7 +7,9 @@ import '../../core/l10n.dart';
 import '../../core/launch.dart';
 import '../../core/theme.dart';
 import '../../data/content_repository.dart';
+import '../../data/error_reporting.dart';
 import '../../domain/cairo_time.dart';
+import '../../domain/error_privacy.dart';
 import '../../domain/features.dart';
 import '../../domain/models.dart';
 import '../../domain/rules.dart';
@@ -264,7 +266,12 @@ class _ContactFormState extends ConsumerState<ContactForm> {
       _done(msgs.timeoutRetry, false);
     } on ContactUnavailableException {
       _done(msgs.unavailable, false);
-    } catch (_) {
+    } catch (e, st) {
+      // The error only (never the form's text, ADR-034). A permission-denied
+      // write is the server-side rate limit doing its job: not reported.
+      if (!'$e'.contains('permission-denied')) {
+        ErrorReporting.capture(ContactSubmitFailure(e.runtimeType.toString(), scrubText('$e')), st, section: 'contact');
+      }
       _done(msgs.failed, false);
     }
   }

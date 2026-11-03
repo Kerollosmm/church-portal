@@ -16,6 +16,9 @@ python3 tool/fingerprint_icon_fonts.py build/web   # content-hashed icon font na
   stable to `~/flutter`, enables web, installs `firebase-tools` and `flutterfire_cli`, runs `flutter pub get` and
   `npm install` in `tool/`. Ports 8080 (web-server), 4000 (Emulator UI), 8085, 9099.
 - Without network/Firebase the app runs on `assets/seed/seed.json` (nothing to configure for UI work).
+- Sentry (PR #24, ADR-034): debug runs report nothing unless you pass `--dart-define=SENTRY_DSN=<dsn>` (environment
+  `debug`); release builds report to the project DSN unless `--dart-define=SENTRY_DSN=` (empty) switches it off.
+  CI adds `SENTRY_ENVIRONMENT` (`production` / `preview` / `ci`), `GIT_SHA` and `APP_VERSION` (from `pubspec.yaml`).
 - Useful `--dart-define`s: `RECAPTCHA_SITE_KEY=…`, `GEMINI_MODEL=…`, `APPCHECK_DEBUG=true`,
   `APPCHECK_DEBUG_TOKEN=<uuid>` (debug builds use the App Check debug provider automatically),
   `MEDIA_BACKEND=firestore|storage` (where uploaded images go; `storage` needs Blaze + the steps in ADR-017).
@@ -27,7 +30,7 @@ python3 tool/fingerprint_icon_fonts.py build/web   # content-hashed icon font na
 | Task | Command |
 |---|---|
 | Static analysis | `flutter analyze` (lints: `package:flutter_lints/flutter.yaml`; excludes build/android/ios/web) |
-| Unit + widget tests | `flutter test` (`test/domain_test.dart`, `features_test.dart`, `feature_gate_test.dart`, `admin_test.dart`, `seed_test.dart`, `media_test.dart`, `occasion_theme_test.dart` — every preset's contrast on panels / cards / scene / hero scrim / bars incl. the dark Holy Week scene and the hero verse, random admin palettes auto-corrected, legacy `burgundy`, Coptic Easter 1900–2099 + known years, Cairo-midnight switching, YouTube link parsing, and a rendered-text contrast walk of the public pages per preset; `occasion_admin_test.dart` — theme / video editors and save writes; `accessibility_test.dart` — WCAG contrast maths, 320 px × 200 % overflow sweep of every public route (ar + en), theme-preset propagation, semantics, `?lang=` sync, admin fixes; `phase3_test.dart` — PDPL consent, canonical + JSON-LD vs seed, `DeferredLoader` (load, retry) + deferred `/admin`/`/ask` and `AssistantGate` (no chunk while the assistant is off), saved-language precedence/persistence via a fake `LanguageStore`; `assistant_test.dart` (PR #19) — prompt scope / guardrails / new grounding, refusal swap, limits, history and model fallback with a fake `AssistantModel`, App Check provider selection, assistant settings, stable contact category ids, `/ask` with a fake model). In a proxied sandbox set `NO_PROXY=127.0.0.1,localhost` or the test runner cannot reach its local websocket. |
+| Unit + widget tests | `flutter test` (`test/domain_test.dart`, `features_test.dart`, `feature_gate_test.dart`, `admin_test.dart`, `seed_test.dart`, `media_test.dart`, `occasion_theme_test.dart` — every preset's contrast on panels / cards / scene / hero scrim / bars incl. the dark Holy Week scene and the hero verse, random admin palettes auto-corrected, legacy `burgundy`, Coptic Easter 1900–2099 + known years, Cairo-midnight switching, YouTube link parsing, and a rendered-text contrast walk of the public pages per preset; `occasion_admin_test.dart` — theme / video editors and save writes; `accessibility_test.dart` — WCAG contrast maths, 320 px × 200 % overflow sweep of every public route (ar + en), theme-preset propagation, semantics, `?lang=` sync, admin fixes; `phase3_test.dart` — PDPL consent, canonical + JSON-LD vs seed, `DeferredLoader` (load, retry) + deferred `/admin`/`/ask` and `AssistantGate` (no chunk while the assistant is off), saved-language precedence/persistence via a fake `LanguageStore`; `assistant_test.dart` (PR #19) — prompt scope / guardrails / new grounding, refusal swap, limits, history and model fallback with a fake `AssistantModel`, App Check provider selection, assistant settings, stable contact category ids, `/ask` with a fake model; `error_reporting_test.dart` (PR #24) — Sentry off without a DSN, DSN / environment / release resolution, `beforeSend` scrubbing (no user / IP / cookies / query strings / form or question text), the admin switch (off → nothing reaches a recording transport; events wait for the switch), assistant / content capture hooks, the Error reports card and owner-only test button). In a proxied sandbox set `NO_PROXY=127.0.0.1,localhost` or the test runner cannot reach its local websocket. |
 | Regenerate seed | `python3 tool/gen_seed.py` → writes `assets/seed/seed.json`, `tool/known_seed_ids.json`, `tool/retired_seed_ids.json` (commit all three) |
 | Rules tests (emulator, Java 11+) | `cd tool/rules_test && npm ci && npm test` (runs `firebase emulators:exec --only firestore --project demo-church-portal`) |
 | Seed preview | `cd tool && npm install && node seed_firestore.js --dry-run` |
@@ -65,13 +68,16 @@ Runs in the **`production` environment** with the service-account secret. Inputs
 
 ### `ci.yml` — every push (all branches) and PR; concurrency `ci-<ref>`, cancel in progress
 Job **analyze-test-build** (ubuntu, 30 min): checkout → `subosito/flutter-action@v2` (stable, cached) →
-`flutter --version` → `flutter pub get` → `flutter analyze` → `flutter test` → `flutter build web --release` →
+`flutter --version` → `flutter pub get` → `flutter analyze` → `flutter test` → `flutter build web --release`
+(Sentry defines: `SENTRY_ENVIRONMENT=ci`, `GIT_SHA`, `APP_VERSION`, `SENTRY_DSN` when the variable is set) →
 `python3 tool/fingerprint_icon_fonts.py build/web` → validate `seed.json` parses (node) → **`python3 tool/gen_seed.py` and `git diff --exit-code`** on `seed.json`,
 `retired_seed_ids.json`, `known_seed_ids.json` (fails if you hand-edited the JSON or forgot to regenerate).
 Job **firestore-rules** (15 min): Java Temurin 21 + Node 22 → `npm ci` in `tool/rules_test` → `npm test` (emulator).
 
 ### `deploy.yml` — push to `main` and PRs (`FIREBASE_PROJECT_ID=asafra-church-portal`)
-1. **build** (skipped for fork PRs): Flutter stable → `pub get` → `flutter test` → `flutter build web --release`,
+1. **build** (skipped for fork PRs): Flutter stable → `pub get` → `flutter test` → `flutter build web --release`
+   with the Sentry defines (PR #24: `SENTRY_ENVIRONMENT` = `production` on push / `preview` on PRs, `GIT_SHA` = the
+   PR head or pushed SHA, `APP_VERSION` from `pubspec.yaml`, `SENTRY_DSN` only when the repo variable is set),
    with `--dart-define=RECAPTCHA_SITE_KEY` only on push builds when the repo variable is set →
    `tool/fingerprint_icon_fonts.py` → artifact `web-build`
    (3 days).
@@ -95,6 +101,7 @@ Normalises the service-account secret (first JSON object only, validates, `$RUNN
 |---|---|---|
 | `FIREBASE_SERVICE_ACCOUNT_ASAFRA_CHURCH_PORTAL` | secret | deploy-live, deploy-rules, preview, seed |
 | `RECAPTCHA_SITE_KEY` | repository **variable** (optional, not set yet) | live web build |
+| `SENTRY_DSN` | repository **variable** (optional, not set — PR #24) | web builds in `ci.yml` / `deploy.yml` pass it as `--dart-define=SENTRY_DSN` when set; otherwise release builds use the public DSN constant `AppConfig.sentryDefaultDsn` (ADR-034) |
 | Environment `production` | GitHub environment | deploy-live, seed — add **required reviewers** (open task) |
 
 ## PR process

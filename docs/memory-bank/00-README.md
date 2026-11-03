@@ -33,7 +33,9 @@ suggestions, inbox boxes / booking status / notes; ADR-027, ADR-028; merged as `
 (`feat/assistant-ai-logic`: the "Ask the church" assistant on web + Android — reCAPTCHA Enterprise / Play Integrity
 App Check, default model `gemini-3.1-flash-lite`, church-only scope with an admin refusal message, grounding of
 contact types and custom sections / pages, per-visit limits, `/admin` → AI assistant settings; stable contact
-category ids; ADR-029).
+category ids; ADR-029) … plus PR #24 (`feat/sentry-error-tracking`: Sentry error tracking on web + Android with
+PDPL-safe scrubbing and the `/admin` switch `settings/features.errorReporting`; ADR-034 — later PRs are listed in
+`10-decisions-and-history.md`).
 
 > **Golden rule:** read this folder before changing anything, and update it in the same PR as every change that
 > alters behaviour, data shape, rules, workflows, content status or open tasks.

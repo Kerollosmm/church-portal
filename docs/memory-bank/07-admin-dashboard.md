@@ -119,6 +119,12 @@ cancels and re-subscribes every stream (BUG-18; `ChurchInfoScreen` does the same
   **"Show address in hero"** switch (`ValueKey('features-heroShowAddress')`, `heroShowAddress`, default off): the
   address ribbon under the hero title when no subtitle is set.
 
+- **Error reports** card (PR #24, ADR-034), last card of the page: switch **"Send error reports (Sentry)"**
+  (`ValueKey('features-errorReporting')`, `settings/features.errorReporting`, default on; off = the web / Android app
+  sends nothing). **Owners** also see **"Send test error"** (`ValueKey('features-sendTestError')`): one harmless
+  `StateError('Test error from /admin (ignore)')` tagged `section: admin`, `test: true`; a snackbar says whether it
+  was sent (not sent when the build has no DSN or the switch is off).
+
 - **Verse of the day** card (PR #16, ADR-024; since PR #17 it controls the **hero** verse): "Show the verse of the day" switch (same flag as the
   `dailyVerse` section toggle), mode chips "A different verse
   every day" / "A fixed verse I choose"; fixed mode shows the Arabic text (required, ≤500) and reference (≤60) fields →

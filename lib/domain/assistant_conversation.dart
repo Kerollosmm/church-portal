@@ -4,6 +4,7 @@
 // signature change), the out-of-scope refusal swap and the model fallback.
 
 import 'assistant_quota.dart';
+import 'error_privacy.dart';
 import 'assistant_settings.dart';
 
 /// One past turn sent back to the model.
@@ -140,8 +141,28 @@ bool isRetryableAssistantError(Object e) {
   return !permanent.any(t.contains);
 }
 
+/// An assistant failure as it may be reported (ADR-034): the error's type
+/// and its message with the visitor's question removed ([redact]).
+class AssistantFailure implements Exception {
+  final String type;
+  final String message;
+  const AssistantFailure(this.type, this.message);
+
+  /// [error] with every [secrets] (question, prompt) redacted.
+  factory AssistantFailure.from(Object error, Iterable<String> secrets) =>
+      AssistantFailure(error.runtimeType.toString(), redact(error.toString(), secrets));
+
+  @override
+  String toString() => 'AssistantFailure($type): $message';
+}
+
 class AssistantConversation {
   final AssistantModel backend;
+
+  /// Receives failures worth reporting (ADR-034): never quota / rate-limit /
+  /// billing / safety rejections (the visitor sees those as a message), and
+  /// always as an [AssistantFailure] without the visitor's question.
+  final void Function(AssistantFailure failure, StackTrace stack)? onError;
 
   /// Build-time default model (AppConfig.geminiModel).
   final String defaultModel;
@@ -153,7 +174,15 @@ class AssistantConversation {
   final Duration retryDelay;
 
   AssistantConversation(this.backend,
-      {required this.defaultModel, this.maxHistory = 20, this.retryDelay = const Duration(milliseconds: 700)});
+      {required this.defaultModel,
+      this.maxHistory = 20,
+      this.retryDelay = const Duration(milliseconds: 700),
+      this.onError});
+
+  void _report(Object e, StackTrace st, List<String> secrets) {
+    if (isUserFacingAssistantError(e)) return;
+    onError?.call(AssistantFailure.from(e, secrets), st);
+  }
 
   final List<AssistantTurn> _history = [];
   final AssistantRateLimiter limiter = AssistantRateLimiter();
@@ -196,16 +225,26 @@ class AssistantConversation {
     // minted, or the model can return nothing once. Counted as one question.
     // Quota / rate-limit / bad-request errors are not retried (CodeRabbit).
     var text = '';
+    (Object, StackTrace)? lastError;
     for (var attempt = 0; attempt < 2 && text.isEmpty; attempt++) {
       if (attempt > 0) await Future<void>.delayed(retryDelay);
       try {
         text = (await _generate(settings, instruction, prompt))?.trim() ?? '';
-      } catch (e) {
-        if (!isRetryableAssistantError(e)) return const AssistantReply(AssistantOutcome.error);
+        lastError = null;
+      } catch (e, st) {
+        if (!isRetryableAssistantError(e)) {
+          _report(e, st, [q, prompt]);
+          return const AssistantReply(AssistantOutcome.error);
+        }
+        lastError = (e, st);
         text = '';
       }
     }
-    if (text.isEmpty) return const AssistantReply(AssistantOutcome.error);
+    if (text.isEmpty) {
+      // Both attempts failed with a (retryable) error: worth reporting.
+      if (lastError != null) _report(lastError.$1, lastError.$2, [q, prompt]);
+      return const AssistantReply(AssistantOutcome.error);
+    }
     if (text.contains(sourceSearchToken)) {
       // Not replayed either; the page builds the reply (search + contact).
       return const AssistantReply(AssistantOutcome.sourceSearch);

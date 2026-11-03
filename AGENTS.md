@@ -30,6 +30,9 @@ Branding: the parish seal in `assets/branding/` — regenerate every icon with `
 8. Keep `flutter analyze` clean and all tests green; PRs are squash-merged after CI passes.
 9. **Images are optional** everywhere (`image` map, `media/{id}` inline bytes on the Spark plan — ADR-017). A card
    without an image must look exactly as before; never make an image required or seed one.
+10. **Error reports (Sentry, ADR-034)** go through `ErrorReporting.capture(e, st, section: …)` — never send form text,
+   assistant questions, user ids, e-mails, IPs or query strings; the admin switch `settings/features.errorReporting`
+   must keep working (`beforeSend` returns null when off).
 
 ## Commands
 

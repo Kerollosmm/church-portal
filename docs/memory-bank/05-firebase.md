@@ -171,6 +171,11 @@ Deployed with the rules on every push to `main`.
 
 ## Hosting (`firebase.json`, `.firebaserc`)
 
+> **Headers & Sentry (PR #24):** the app target sends no `Content-Security-Policy` (headers: Cache-Control,
+> X-Content-Type-Options, Referrer-Policy, X-Frame-Options, HSTS, Permissions-Policy), so the Sentry JS bundle from
+> `browser.sentry-cdn.com` and event posts to `*.ingest.de.sentry.io` need no change. **If a CSP is ever added**, it
+> must allow `script-src https://browser.sentry-cdn.com` and `connect-src https://*.ingest.de.sentry.io` (ADR-034).
+
 Two targets (array in `firebase.json`, mapped in `.firebaserc` → `targets.asafra-church-portal.hosting`):
 
 | Target | Site | Serves |
