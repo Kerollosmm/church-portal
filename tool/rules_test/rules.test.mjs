@@ -1381,7 +1381,8 @@ describe('ADR-029: assistant settings (settings/assistant)', () => {
     refusalAr: 'ع'.repeat(500), refusalEn: 'r'.repeat(500),
     welcomeAr: 'أ'.repeat(500), welcomeEn: 'w'.repeat(500),
     suggestionsAr: 'س'.repeat(300), suggestionsEn: 's'.repeat(300),
-    moreInfoAr: 'م'.repeat(300), moreInfoEn: 'm'.repeat(300), mentionUnconfirmed: true,
+    faithReplyAr: 'م'.repeat(300), faithReplyEn: 'm'.repeat(300), mentionUnconfirmed: true, showSuggestions: true,
+    sourceDomains: 'st-takla.org, example.org', perDay: 100,
     maxChars: 1000, perMinute: 20, perSession: 200,
   };
 
@@ -1401,7 +1402,9 @@ describe('ADR-029: assistant settings (settings/assistant)', () => {
       { model: 'gemini-' + 'a'.repeat(60) }, { model: 3 }, { model: null },
       { instructions: 'x'.repeat(4001) }, { topics: 'x'.repeat(2001) }, { refusalAr: 'x'.repeat(501) },
       { welcomeEn: 'x'.repeat(501) }, { suggestionsEn: 'x'.repeat(301) }, { refusalEn: 5 },
-      { moreInfoAr: 'x'.repeat(301) }, { moreInfoEn: 7 }, { mentionUnconfirmed: 'yes' },
+      { faithReplyAr: 'x'.repeat(301) }, { faithReplyEn: 7 }, { mentionUnconfirmed: 'yes' }, { showSuggestions: 1 },
+      { sourceDomains: 'St-Takla.org' }, { sourceDomains: 'a.org/<script>' }, { sourceDomains: 'a'.repeat(301) },
+      { perDay: 0 }, { perDay: 101 }, { perDay: '3' },
       { maxChars: 49 }, { maxChars: 1001 }, { maxChars: 300.5 }, { perMinute: 0 }, { perMinute: 21 },
       { perSession: 201 }, { perSession: '5' }, { enabled: true }, { updatedBy: 'someone@else.test' },
     ]) {

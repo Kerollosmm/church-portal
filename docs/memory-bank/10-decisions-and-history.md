@@ -501,10 +501,29 @@ supersede them.
   tiny, we control link safety (http(s), `tel:`, internal `/path` only; `javascript:`, `data:`, `//host`… stay plain
   text) and no HTML / image path exists at all. The prompt also asks for simple Markdown only.
 - **Grounding:** data answers are direct with no disclaimers; `sample` markers are hidden from the model unless the
-  admin turns on **Mention unconfirmed flags** (`settings/assistant.mentionUnconfirmed`, default off); questions on
-  the Coptic Orthodox faith not in the data may be answered from general knowledge + one admin-editable closing line
-  (`moreInfoAr/En`, default → `/contact`); invented church specifics stay forbidden ("not listed" → `/contact`);
-  unrelated topics still refused.
+  admin turns on **Mention unconfirmed flags** (`settings/assistant.mentionUnconfirmed`, default off); invented
+  church specifics stay forbidden ("not listed" → `/contact`); unrelated topics still refused. (An interim
+  "answer faith questions from general knowledge" rule was replaced by ADR-031 before merge.)
+
+## ADR-031 (PR #21) — Faith questions only from St-Takla.org; 3 questions per device per day; no default chips
+- **Source:** the only source for faith / church questions outside the site data is St-Takla.org (admin
+  `sourceDomains`). Checked Firebase AI Logic: Grounding with Google Search supports `gemini-3.1-flash-lite`
+  (<https://firebase.google.com/docs/ai-logic/grounding-google-search>) but the Gemini Developer API **free tier
+  marks it "Not available"** (paid: 5,000 free search requests / month shared across Gemini 3+, then $14 / 1,000,
+  1,500 / day cap — <https://ai.google.dev/gemini-api/docs/pricing>), and a grounded result must also render
+  Google's Search-suggestions HTML. The URL context tool is free but only reads URLs we pass in — it cannot search a
+  site. **Chosen: the fallback** — the model answers only from the site data and replies `[[SOURCE_SEARCH]]` for
+  other faith questions; the app shows `faithReplyAr/En` + `https://www.google.com/search?q=site:st-takla.org <q>` +
+  `/contact`. Upgrading to Blaze could enable grounding later (filter citations by `web.title` domain — on the
+  Developer API `uri` is a vertexaisearch redirect — and show the suggestions widget).
+- **Daily limit:** `perDay` (default 3) per device per Africa/Cairo day replaces the per-visit default of 30
+  (`perSession` ignored; the rules keep the key as legacy); per-minute limit unchanged. Counter + random 128-bit device
+  id in shared_preferences (localStorage on web). **Not a security boundary:** clearing site / app data resets it.
+  **No server enforcement:** AI Logic is called directly from the client, so a Firestore `assistantUsage` counter
+  could not gate the model call (a modified client skips it, and new device ids are free to mint) — it would only add
+  public writes. Real server-side protection = App Check (enforced) + the AI Logic per-user rate limit in the console,
+  or a Cloud Function proxy later.
+- **Chips:** no suggested questions by default; admin `showSuggestions` (default off) shows only the admin's list.
 
 ## Timeline
 
@@ -537,6 +556,6 @@ supersede them.
 | 3 Nov 2026 | **PR #18** — "Custom categories & pages, contact categories with bookings and anonymous messages" (`feat/categories-pages-contact`; PR #17 was squash-merged as `55e2a92`) | ADR-027/028: `categories` / `entries` / `pages` collections with `/section/<slug>` and `/page/<slug>`, menu entries, block editor (heading, paragraph, image, button, link, donation info), link picker for notices; `settings/contact` types (general, hall booking with occasions + date + phone, complaint, suggestion) with anonymous sending; inbox boxes, booking status and notes; rules + emulator groups; contrast walk over the new pages on every preset. |
 | 3 Nov 2026 | **PR #19** — "Assistant on web + Android: reCAPTCHA Enterprise / Play Integrity App Check, Gemini 3.1 Flash-Lite, church-only scope, admin settings" (`feat/assistant-ai-logic`; PR #18 was squash-merged as `37a58d5`) | ADR-029: `selectAppCheckPlan` (Enterprise on web, Play Integrity on Android, debug providers in debug), `INTERNET` permission for release APKs, default model `gemini-3.1-flash-lite` (Gemma not offered by AI Logic cloud), admin-editable model with fallback, fixed scope + `[[OUT_OF_SCOPE]]` refusal swap, grounding of contact types / custom sections / custom pages, per-visit limits, `/admin` → AI assistant (`settings/assistant`, rules `validAssistant`); contact categories get stable never-reused ids (ADR-028 caveat fixed); `test/assistant_test.dart` + emulator groups. |
 | 3 Nov 2026 | **PR #20** — "Assistant: ground the first question on live data (mass times & all sections), App Check warm-up, one retry" (`fix/assistant-grounding-load`; PR #19 was squash-merged as `d2d1ee2`) | Root cause: Riverpod 3 pauses unlistened providers, and `/ask` only `ref.read` the content providers, so on a direct visit the content never arrived and the prompt had empty sections. Fix: `_watchGrounding()` watches every grounding provider (section-gated for milestones / contact / custom); `AssistantModel.warmUp()` pre-mints the App Check token; one automatic retry of a failed / empty model call, not for quota / rate-limit / bad-request errors (`isRetryableAssistantError`, CodeRabbit). Widget tests assert the first prompt holds the mass schedule, meetings, activities, services, priests, saints, milestones, contacts, clinics, custom sections and custom pages (donations), plus the contact form heading; the individual contact types are asserted by the prompt-builder unit tests. |
-| 3 Nov 2026 | **PR #21** — "Assistant: safe Markdown replies, confident data answers, general faith answers" (`fix/assistant-markdown`; PR #20 was squash-merged as `8dd2680`) | ADR-030: `SafeMarkdown` renderer (no literal asterisks, safe links only, RTL by content, selection kept); prompt rewrite (no disclaimers on data answers, `mentionUnconfirmed` admin switch default off, general Coptic Orthodox answers + admin `moreInfoAr/En` closing line, "not listed → /contact", simple Markdown only); `validAssistant` + emulator cases; `test/safe_markdown_test.dart`, prompt tests for the three cases in `test/assistant_test.dart`. |
+| 3 Nov 2026 | **PR #21** — "Assistant: safe Markdown, confident data answers, St-Takla-only faith source, 3 questions / device / day, no default chips" (`fix/assistant-markdown`; PR #20 was squash-merged as `8dd2680`) | ADR-030/031: `SafeMarkdown` renderer (no literal asterisks, safe links only, RTL by content, selection kept); prompt rewrite (no disclaimers on data answers, `mentionUnconfirmed` switch default off, faith questions outside the data → `[[SOURCE_SEARCH]]` → faith reply + `site:st-takla.org` search + `/contact`, "not listed → /contact", simple Markdown only); `perDay` device limit (shared_preferences), `showSuggestions` default off, `sourceDomains`, `faithReplyAr/En`; `validAssistant` + emulator cases; `test/safe_markdown_test.dart`, `test/assistant_test.dart`. |
 
 Append new PRs to this table.

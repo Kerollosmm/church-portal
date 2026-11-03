@@ -131,9 +131,9 @@ const Map<String, List<String>> _strings = {
     'أرسلت أسئلة كثيرة في وقت قصير. انتظر دقيقة ثم حاول مرة أخرى.',
     'You sent several questions in a short time. Please wait a minute and try again.'
   ],
-  'askSessionLimit': [
-    'وصلت للحد الأقصى من الأسئلة في هذه الزيارة. للمزيد اتصل بمكتب الكنيسة.',
-    'You have reached the question limit for this visit. For more, please call the church office.'
+  'askDayLimit': [
+    'وصلت إلى حد الأسئلة اليومي ({n}) على هذا الجهاز. يتجدد بعد منتصف الليل بتوقيت القاهرة. وللاستفسار يسعدنا تواصلك عبر [صفحة تواصل معنا](/contact).',
+    "You've reached today's limit of {n} questions on this device. It resets at midnight Cairo time. Meanwhile, we're happy to help via the [contact page](/contact)."
   ],
   'askTooLong': ['السؤال طويل جدًا (الحد الأقصى {n} حرفًا).', 'The question is too long (at most {n} characters).'],
   'assistantSectionSwitch': ['قسم «اسأل الكنيسة» ظاهر', '"Ask the church" section shown'],
@@ -151,9 +151,6 @@ const Map<String, List<String>> _strings = {
     'The assistant also needs App Check (reCAPTCHA Enterprise key on the web, Play Integrity on Android). Default model: {m}. It answers only about the church and its services, from the site data, and politely declines anything else.'
   ],
   'askUnavailable': ['المساعد غير متاح حاليًا.', 'The assistant is not available right now.'],
-  'askSuggest1': ['متى القداس القادم؟', 'When is the next liturgy?'],
-  'askSuggest2': ['ما مواعيد عيادة الأطفال؟', 'When is the pediatrics clinic?'],
-  'askSuggest3': ['موعد اجتماع ثانوي؟', 'When is the secondary meeting?'],
   'admin': ['لوحة التحكم', 'Admin'],
   'signIn': ['تسجيل الدخول', 'Sign in'],
   'signOut': ['تسجيل الخروج', 'Sign out'],

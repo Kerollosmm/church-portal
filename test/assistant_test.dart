@@ -5,11 +5,14 @@ import 'dart:async';
 import 'dart:math';
 
 import 'package:church_portal/data/app_check_providers.dart';
+import 'package:church_portal/data/assistant_usage_store.dart';
 import 'package:church_portal/data/content_repository.dart';
 import 'package:church_portal/data/firebase_bootstrap.dart';
 import 'package:church_portal/data/seed_data.dart';
 import 'package:church_portal/domain/assistant_context.dart';
 import 'package:church_portal/domain/assistant_conversation.dart';
+import 'package:church_portal/domain/assistant_quota.dart';
+import 'package:church_portal/domain/simple_markdown.dart';
 import 'package:church_portal/domain/assistant_settings.dart';
 import 'package:church_portal/domain/cairo_time.dart';
 import 'package:church_portal/domain/contact_categories.dart';
@@ -24,6 +27,7 @@ import 'package:church_portal/ui/pages/assistant_page.dart';
 import 'package:church_portal/ui/widgets/safe_markdown.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -128,9 +132,11 @@ void main() {
       expect(t, contains('Do NOT add disclaimers such as "unconfirmed", "may change", "please verify" or "call/ask the church"'));
       expect(t, contains('Never say that any information is unconfirmed'));
       expect(t, isNot(contains('[UNCONFIRMED]')));
+      expect(t, isNot(contains('provisional placeholders'))); // Codex: no contradicting rule
+      expect(t, contains('This does not apply to faith questions'));
       expect(t, isNot(contains('say you do not know')));
-      // The "more info" line is reserved for general-knowledge answers.
-      expect(t, contains('ONLY for such general-knowledge answers, never for answers from the data'));
+      // The source-search token is only for questions the data does NOT answer.
+      expect(t, contains('that the church data below does NOT answer'));
     });
 
     test('case 1 - "Mention unconfirmed flags" on: once, briefly, only for the item asked about', () {
@@ -141,21 +147,38 @@ void main() {
       expect(AssistantSettings.fromMap({'mentionUnconfirmed': 'yes'}).mentionUnconfirmed, isFalse);
     });
 
-    test('case 2 - faith questions outside the data: general Coptic Orthodox knowledge + the editable closing line', () {
+    test('case 2 - faith questions outside the data: never general knowledge, the source-search token instead', () {
       final t = _prompt();
       expect(t, contains('- The Coptic Orthodox faith: saints, rites and sacraments, feasts and fasts'));
-      expect(t, contains('answer normally and briefly from general Coptic Orthodox knowledge'));
-      expect(t, contains('end with exactly one closing line'));
-      expect(t, contains('"${AssistantSettings.defaultMoreInfoAr}"'));
-      expect(t, contains('"${AssistantSettings.defaultMoreInfoEn}"'));
-      expect(AssistantSettings.defaultMoreInfoEn, contains('(/contact)'));
-      final custom = _prompt(a: AssistantSettings.fromMap({
-        'moreInfoAr': 'اسأل أبونا بعد القداس.',
-        'moreInfoEn': 'Ask Abouna after the liturgy.',
-      }));
-      expect(custom, contains('Arabic: "اسأل أبونا بعد القداس." / English: "Ask Abouna after the liturgy."'));
-      expect(custom, isNot(contains(AssistantSettings.defaultMoreInfoEn)));
-      expect(assistantSettingsDoc.fields.map((f) => f.key), containsAll(['moreInfoAr', 'moreInfoEn', 'mentionUnconfirmed']));
+      expect(t, contains('do NOT answer from your own or general knowledge'));
+      expect(t, contains('The only allowed source for them is st-takla.org'));
+      expect(t, contains('reply with exactly $sourceSearchToken and nothing else'));
+      expect(t, isNot(contains('general Coptic Orthodox knowledge, then')));
+      final custom = _prompt(a: AssistantSettings.fromMap({'sourceDomains': 'https://www.St-Takla.org/x, coptic.example'}));
+      expect(custom, contains('The only allowed source for them is st-takla.org, coptic.example'));
+      expect(assistantSettingsDoc.fields.map((f) => f.key),
+          containsAll(['sourceDomains', 'faithReplyAr', 'faithReplyEn', 'mentionUnconfirmed', 'showSuggestions', 'perDay']));
+      expect(assistantSettingsDoc.fields.map((f) => f.key), isNot(contains('perSession')));
+    });
+
+    test('source domains and the restricted search link', () {
+      expect(parseSourceDomains(''), ['st-takla.org']);
+      expect(parseSourceDomains('St-Takla.org\nhttps://www.example.org/path, bad_domain, example.org'),
+          ['st-takla.org', 'example.org']);
+      final url = Uri.parse(sourceSearchUrl(['st-takla.org'], 'من هو  الأنبا موسى الأسود؟'));
+      expect(url.host, 'www.google.com');
+      expect(url.queryParameters['q'], 'site:st-takla.org من هو الأنبا موسى الأسود؟');
+      expect(Uri.parse(sourceSearchUrl(['a.org', 'b.org'], 'x')).queryParameters['q'], 'site:a.org OR site:b.org x');
+      expect(safeLinkTarget(sourceSearchUrl(['st-takla.org'], 'q')), isNotNull);
+    });
+
+    test('a source-search reply is swapped, not replayed', () async {
+      final m = _FakeModel(reply: '  $sourceSearchToken ');
+      final c = AssistantConversation(m, defaultModel: 'd');
+      final r = await _ask(c, 'What does the Coptic Church teach about fasting?');
+      expect(r.outcome, AssistantOutcome.sourceSearch);
+      expect(r.ok, isTrue);
+      expect(c.history, isEmpty);
     });
 
     test('case 3 - never invent church specifics; unrelated topics still refused', () {
@@ -312,10 +335,12 @@ void main() {
       expect((await _ask(c, 'ما عاصمة فرنسا؟', s: custom)).text, 'نعتذر');
     });
 
-    test('message length and per-minute / per-visit limits block before calling the model', () async {
+    test('message length and per-minute / per-device daily limits block before calling the model', () async {
       final m = _FakeModel();
       final c = AssistantConversation(m, defaultModel: 'd');
-      final s = AssistantSettings.fromMap({'maxChars': 50, 'perMinute': 2, 'perSession': 3});
+      final store = MemoryUsageStore();
+      c.limiter.usage = store;
+      final s = AssistantSettings.fromMap({'maxChars': 50, 'perMinute': 2, 'perDay': 3, 'perSession': 1});
       expect((await _ask(c, 'x' * 51, s: s)).outcome, AssistantOutcome.invalid);
       expect((await _ask(c, '   ', s: s)).outcome, AssistantOutcome.invalid);
       final t0 = DateTime(2026, 11, 3, 12);
@@ -325,8 +350,36 @@ void main() {
           AssistantOutcome.rateLimitedMinute);
       expect((await _ask(c, 'q3', s: s, now: t0.add(const Duration(seconds: 61)))).ok, isTrue);
       expect((await _ask(c, 'q4', s: s, now: t0.add(const Duration(minutes: 5)))).outcome,
-          AssistantOutcome.rateLimitedSession);
+          AssistantOutcome.rateLimitedDay);
       expect(m.calls, hasLength(3));
+      expect(store.read(), DailyUsage(cairoDayKey(t0), 3));
+      // A legacy perSession value is ignored; the count resets at Cairo midnight
+      // (22:00 UTC in winter = 00:00 Cairo).
+      expect((await _ask(c, 'q5', s: s, now: DateTime.utc(2026, 11, 3, 21, 59))).outcome, AssistantOutcome.rateLimitedDay);
+      expect((await _ask(c, 'q5', s: s, now: DateTime.utc(2026, 11, 3, 22, 0))).ok, isTrue);
+      expect(store.read(), const DailyUsage('20261104', 1));
+    });
+
+    test('the device counter persists in shared_preferences (localStorage on web) under a stable device id', () async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final a = PrefsUsageStore(prefs);
+      expect(a.deviceId, matches(RegExp(r'^[0-9a-f]{32}$')));
+      a.write(const DailyUsage('20261103', 2));
+      final b = PrefsUsageStore(prefs); // reopened page / app
+      expect(b.deviceId, a.deviceId);
+      expect(b.read(), const DailyUsage('20261103', 2));
+    });
+
+    test('daily usage helpers', () {
+      expect(cairoDayKey(DateTime.utc(2026, 11, 3, 21, 59)), '20261103');
+      expect(cairoDayKey(DateTime.utc(2026, 11, 3, 22, 0)), '20261104');
+      const u = DailyUsage('20261103', 3);
+      expect(u.reached('20261103', 3), isTrue);
+      expect(u.reached('20261104', 3), isFalse);
+      expect(u.recorded('20261104'), const DailyUsage('20261104', 1));
+      expect(newDeviceId(), matches(RegExp(r'^[0-9a-f]{32}$')));
+      expect(newDeviceId(), isNot(newDeviceId()));
     });
 
     test('history is capped and cleared when the grounding key changes', () async {
@@ -409,13 +462,16 @@ void main() {
       const d = AssistantSettings.defaults;
       expect(d.maxChars, 500);
       expect(d.perMinute, AssistantLimits.perMinuteDefault);
-      expect(d.perSession, AssistantLimits.perSessionDefault);
+      expect(d.perDay, 3);
+      expect(d.showSuggestions, isFalse);
+      expect(AssistantSettings.fromMap({'suggestionsEn': 'a'}).visibleSuggestions(false), isEmpty);
+      expect(AssistantSettings.fromMap({'suggestionsEn': 'a', 'showSuggestions': true}).visibleSuggestions(false), ['a']);
       expect(d.effectiveModel('gemini-3.1-flash-lite'), 'gemini-3.1-flash-lite');
       expect(d.suggestions(true), isEmpty);
-      final s = AssistantSettings.fromMap({'maxChars': 5000, 'perMinute': 0, 'perSession': 7, 'suggestionsEn': 'a\n\nb\nc\nd'});
+      final s = AssistantSettings.fromMap({'maxChars': 5000, 'perMinute': 0, 'perDay': 500, 'suggestionsEn': 'a\n\nb\nc\nd'});
       expect(s.maxChars, AssistantLimits.maxCharsMax);
       expect(s.perMinute, AssistantLimits.perMinuteMin);
-      expect(s.perSession, 7);
+      expect(s.perDay, AssistantLimits.perDayMax);
       expect(s.suggestions(false), ['a', 'b', 'c']);
       expect(AssistantSettings.fromMap({'welcomeAr': ' أهلًا '}).welcome(true), 'أهلًا');
     });
@@ -515,6 +571,7 @@ void main() {
     Future<_FakeModel> pump(WidgetTester tester,
         {AssistantSettings? settings,
         String reply = outOfScopeToken,
+        AssistantUsageStore? usage,
         ContentRepository Function(SeedData, AssistantSettings)? repo}) async {
       tester.view.physicalSize = const Size(900, 1600);
       tester.view.devicePixelRatio = 1;
@@ -526,6 +583,7 @@ void main() {
           assistantVisibleProvider.overrideWithValue(true),
           firebaseStatusProvider.overrideWithValue(const FirebaseStatus(available: true, appCheckActive: true)),
           assistantModelProvider.overrideWithValue(model),
+          assistantUsageStoreProvider.overrideWith((ref) async => usage ?? MemoryUsageStore()),
         ],
         child: MaterialApp(
           locale: const Locale('en'),
@@ -542,6 +600,7 @@ void main() {
       final model = await pump(tester,
           settings: AssistantSettings.fromMap({
             'welcomeEn': 'Welcome to our parish desk!',
+            'showSuggestions': true,
             'suggestionsEn': 'When is mass?',
             'refusalEn': 'Only church questions, please.',
           }));
@@ -649,17 +708,66 @@ void main() {
       expect(model.calls.single.instruction, contains('use only simple Markdown'));
     });
 
-    testWidgets('the per-visit limit shows a message and sends nothing more', (tester) async {
-      final model = await pump(tester, settings: AssistantSettings.fromMap({'perSession': 1}), reply: 'At 7 AM.');
+    testWidgets('the daily device limit shows a friendly message with the contact link and sends nothing more',
+        (tester) async {
+      final usage = MemoryUsageStore();
+      final model = await pump(tester, settings: AssistantSettings.fromMap({'perDay': 1}), reply: 'At 7 AM.', usage: usage);
       await tester.enterText(find.byKey(const Key('askInput')), 'When is mass?');
       await tester.tap(find.byTooltip('Send'));
       await tester.pumpAndSettle();
       expect(find.text('At 7 AM.'), findsOneWidget);
+      expect(usage.read().count, 1);
       await tester.enterText(find.byKey(const Key('askInput')), 'And vespers?');
       await tester.tap(find.byTooltip('Send'));
       await tester.pumpAndSettle();
-      expect(find.textContaining('question limit for this visit'), findsOneWidget);
+      expect(find.textContaining("today's limit of 1 questions"), findsOneWidget);
+      expect(find.textContaining('midnight Cairo time'), findsOneWidget);
+      final link = _spansIn(tester).firstWhere((s) => s.text == 'contact page');
+      expect(link.recognizer, isNotNull);
       expect(model.calls, hasLength(1));
+    });
+
+    testWidgets('a used-up device stays blocked after reopening the page', (tester) async {
+      final usage = MemoryUsageStore(usage: DailyUsage(cairoDayKey(DateTime.now()), 3));
+      final model = await pump(tester, reply: 'At 7 AM.', usage: usage);
+      await tester.enterText(find.byKey(const Key('askInput')), 'When is mass?');
+      await tester.tap(find.byTooltip('Send'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining("today's limit of 3 questions"), findsOneWidget);
+      expect(model.calls, isEmpty);
+    });
+
+    testWidgets('a faith question outside the data gets the St-Takla search and contact links, no model text',
+        (tester) async {
+      await pump(tester, reply: sourceSearchToken);
+      await tester.enterText(find.byKey(const Key('askInput')), 'Who was Saint Moses the Black?');
+      await tester.tap(find.byTooltip('Send'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining(AssistantSettings.defaultFaithReplyEn), findsOneWidget);
+      expect(find.textContaining(sourceSearchToken), findsNothing);
+      final spans = _spansIn(tester);
+      final search = spans.firstWhere((s) => s.text == 'Search st-takla.org');
+      expect(search.recognizer, isNotNull);
+      expect(spans.firstWhere((s) => s.text == 'Contact page').recognizer, isNotNull);
+    });
+
+    testWidgets('no suggested-question chips by default (no built-in fallbacks); admin switch shows its own',
+        (tester) async {
+      await pump(tester, settings: AssistantSettings.fromMap({'suggestionsEn': 'When is mass?'}));
+      expect(find.byType(ActionChip), findsNothing);
+      expect(find.text('When is the next liturgy?'), findsNothing);
+    });
+
+    testWidgets('"Show suggested questions" on shows only the admin questions', (tester) async {
+      await pump(tester,
+          settings: AssistantSettings.fromMap({'showSuggestions': true, 'suggestionsEn': 'When is mass?'}));
+      expect(find.widgetWithText(ActionChip, 'When is mass?'), findsOneWidget);
+      expect(find.byType(ActionChip), findsOneWidget);
+    });
+
+    testWidgets('"Show suggested questions" on with an empty list shows no chips', (tester) async {
+      await pump(tester, settings: AssistantSettings.fromMap({'showSuggestions': true}));
+      expect(find.byType(ActionChip), findsNothing);
     });
   });
 }
@@ -697,4 +805,15 @@ class _CustomRepo extends _Repo {
           'blocks': [PageBlock(type: BlockTypes.donation, instapay: 'church@instapay').encode()],
         }),
       ]);
+}
+
+List<TextSpan> _spansIn(WidgetTester tester) {
+  final out = <TextSpan>[];
+  for (final rt in tester.widgetList<RichText>(find.descendant(of: find.byType(SafeMarkdown), matching: find.byType(RichText)))) {
+    rt.text.visitChildren((s) {
+      if (s is TextSpan) out.add(s);
+      return true;
+    });
+  }
+  return out;
 }

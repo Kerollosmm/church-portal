@@ -81,13 +81,15 @@ String buildAssistantInstruction({
               'only when the visitor asks about that specific item; never for other items or in general.'
           : 'Never say that any information is unconfirmed, provisional or a sample.',
     )
-    // 2. Church / faith questions outside the data: general knowledge + one closing line.
+    // 2. Faith / church questions outside the data: no general knowledge
+    //    (ADR-031) — the app answers with a search link restricted to the
+    //    admin's source domains (default st-takla.org) and the contact page.
     ..writeln(
       'Questions about the church or the Coptic Orthodox faith (saints, rites, sacraments, feasts, fasts, hymns, '
-      'the Bible, church history) that the data does not cover: answer normally and briefly from general Coptic '
-      'Orthodox knowledge, then end with exactly one closing line, in the language of the question - Arabic: '
-      '"${assistant.moreInfo(true)}" / English: "${assistant.moreInfo(false)}". Use this closing line ONLY for '
-      'such general-knowledge answers, never for answers from the data.',
+      'the Bible, church history) that the church data below does NOT answer: do NOT answer from your own or general '
+      'knowledge. The only allowed source for them is ${assistant.effectiveSourceDomains.join(', ')}, which you cannot '
+      'read here, so reply with exactly $sourceSearchToken and nothing else; the app then offers a search of that '
+      'site and the contact page.',
     )
     // 3. Never invent church specifics.
     ..writeln(
@@ -110,7 +112,11 @@ String buildAssistantInstruction({
       'Do not give medical, legal or spiritual-direction advice beyond pointing to the right clinic, '
       'meeting or priest. Do not ask for or collect personal data.',
     )
-    ..writeln('Topics without a section below are not offered on this portal: say so briefly.')
+    ..writeln(
+      'Portal services without a section below (e.g. a clinic or activity type that is not listed) are not '
+      'offered on this portal: say so briefly. This does not apply to faith questions: those always follow the '
+      '$sourceSearchToken rule above.',
+    )
     ..writeln(
       'Website paths below (like /contact) are pages of this website: you may point visitors to them.',
     )
@@ -132,10 +138,8 @@ String buildAssistantInstruction({
     if (settings.whatsappChannel.isNotEmpty) b.writeln('WhatsApp channel (announcements): ${settings.whatsappChannel}');
     if (settings.instagram.isNotEmpty) b.writeln('Instagram: ${settings.instagram}');
   }
-  b.writeln(
-    'Items marked [UNCONFIRMED] are provisional placeholders the church has not published yet: '
-    'say so clearly and ask the visitor to confirm with the church (phone or the WhatsApp channel).',
-  );
+  // The [UNCONFIRMED] handling is the single conditional rule in Grounding
+  // (ADR-030, Codex): no second, contradicting instruction here.
 
   if (f.enabled(Sections.alerts)) {
     final current = visibleAlerts(alerts, now);

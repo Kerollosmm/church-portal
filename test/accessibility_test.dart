@@ -28,6 +28,7 @@ import 'package:church_portal/ui/widgets/golden.dart';
 import 'package:church_portal/ui/widgets/map_embed.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
@@ -478,6 +479,7 @@ void main() {
     });
 
     testWidgets('assistant: labelled send button and a live-region spinner while busy', (tester) async {
+      SharedPreferences.setMockInitialValues({}); // the device's daily counter (ADR-031)
       tester.view.physicalSize = const Size(900, 1600);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.reset);
