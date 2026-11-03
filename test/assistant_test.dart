@@ -176,6 +176,19 @@ void main() {
       expect(t, contains('- Donations: account 1234-5678; InstaPay church@instapay;'));
       expect(t, isNot(contains('SECRET-IMAGE')));
 
+      // A block over the page budget is skipped; later short blocks still fit.
+      final long = CustomPage.fromMap('p2', {
+        'slug': 'long',
+        'titleEn': 'Long page',
+        'visible': true,
+        'blocks': [
+          PageBlock(type: BlockTypes.paragraph, textEn: 'a' * 400).encode(),
+          for (var i = 0; i < 6; i++) PageBlock(type: BlockTypes.paragraph, textEn: 'b' * 400).encode(),
+          PageBlock(type: BlockTypes.donation, wallet: '01099999999').encode(),
+        ],
+      });
+      expect(_prompt(pages: [long]), contains('mobile wallet 01099999999'));
+
       final off = _prompt(
           f: _features({'customSections': false, 'customPages': false}), categories: cats, entries: entries, pages: pages);
       expect(off, isNot(contains('Youth')));
@@ -228,7 +241,7 @@ void main() {
       expect(c.history, isEmpty);
 
       final custom = AssistantSettings.fromMap({'refusalAr': 'نعتذر', 'refusalEn': 'Sorry, church questions only.'});
-      m.reply = '  $outOfScopeToken\n';
+      m.reply = 'I am sorry. $outOfScopeToken Please ask about the church.';
       expect((await _ask(c, 'What is 2+2?', s: custom)).text, 'Sorry, church questions only.');
       expect((await _ask(c, 'ما عاصمة فرنسا؟', s: custom)).text, 'نعتذر');
     });
@@ -278,6 +291,22 @@ void main() {
       }
       expect(AssistantSettings.fromMap({'model': 'gemini-3.5-flash-lite'}).effectiveModel('dflt'),
           'gemini-3.5-flash-lite');
+    });
+
+    test('an unrelated 404 with an admin model is an error, not a model switch', () async {
+      final m = _FakeModel(errorFor: {'gemini-3.5-flash-lite': Exception('HTTP 404 from proxy')});
+      final c = AssistantConversation(m, defaultModel: 'gemini-3.1-flash-lite');
+      final s = AssistantSettings.fromMap({'model': 'gemini-3.5-flash-lite'});
+      expect((await _ask(c, 'q', s: s)).outcome, AssistantOutcome.error);
+      expect(m.calls.map((x) => x.model), ['gemini-3.5-flash-lite']);
+      expect(isModelUnavailableError(Exception('models/gemini-x is not found for API version v1beta'), 'gemini-x'), isTrue);
+    });
+
+    test('Arabic detection counts letters only (digits, tatweel do not)', () {
+      expect(looksArabic('متى القداس؟'), isTrue);
+      expect(looksArabic('What is ١٢٣?'), isFalse);
+      expect(looksArabic('Joke ـــ please'), isFalse);
+      expect(looksArabic('Hello'), isFalse);
     });
 
     test('other model errors (App Check, network) are an error, not a fallback', () async {
@@ -330,7 +359,7 @@ void main() {
     });
 
     test('web release without a usable key: not activated (assistant hidden)', () {
-      for (final k in ['', '  ', 'PLACEHOLDER_RECAPTCHA_SITE_KEY']) {
+      for (final k in ['', '  ', 'PLACEHOLDER_RECAPTCHA_SITE_KEY', '  PLACEHOLDER_RECAPTCHA_SITE_KEY']) {
         final p = selectAppCheckPlan(isWeb: true, debug: false, siteKey: k);
         expect(p.activate, isFalse, reason: k);
         expect(p.web, isNull);

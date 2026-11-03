@@ -264,8 +264,9 @@ editor — `_retired` — so old messages of a deleted type are never re-labelle
 `categories` map (`saveDoc`, one string per id, `order` renumbered 10, 20…).
 
 ### AI assistant (`AssistantAdminScreen`, `assistant_admin.dart`) → `settings/assistant` (PR #19, ADR-029)
-Top card `AssistantSwitches`: **"Ask the church" section shown** (`assistantSectionSwitch`, writes
-`settings/features.sections` with the stored map + `assistant`) and **Enable the AI assistant**
+Top card `AssistantSwitches`: **"Ask the church" section shown** (`assistantSectionSwitch`, a field-path `update` of
+`settings/features` `sections.assistant` only — a stale map never reverts another admin's section change; `saveDoc`
+only when the doc does not exist) and **Enable the AI assistant**
 (`assistantEnabledSwitch`, writes `settings/church.assistantEnabled` alone); visitors see the assistant only when
 both are on (and App Check is active); a note names the default model. Below it the generic settings form
 (`ChurchInfoScreen` with `doc: assistantSettingsDoc`, same reload banner / own-save rules): Model (text,

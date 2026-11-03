@@ -57,6 +57,19 @@ class _AssistantSwitchesState extends State<AssistantSwitches> {
     }
   }
 
+  Future<void> _update(String collection, String id, Map<String, dynamic> data) async {
+    final messenger = ScaffoldMessenger.of(context);
+    String failed(Object e) => context.tr('saveFailed', {'e': '$e'});
+    setState(() => _saving = true);
+    try {
+      await widget.repo.update(collection, id, data);
+    } catch (e) {
+      if (mounted) messenger.showSnackBar(SnackBar(content: Text(failed(e))));
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<AdminDoc?>(
@@ -68,9 +81,8 @@ class _AssistantSwitchesState extends State<AssistantSwitches> {
         builder: (context, features) {
           final enabled = church.data?.data['assistantEnabled'] == true;
           final rawSections = features.data?.data['sections'];
-          final sections = rawSections is Map ? Map<String, dynamic>.from(rawSections) : <String, dynamic>{};
           // A missing key = on (FeatureSettings.enabled).
-          final sectionOn = sections[Sections.assistant] != false;
+          final sectionOn = rawSections is! Map || rawSections[Sections.assistant] != false;
           final ready = church.hasData && features.hasData && !_saving;
           return Card(
             margin: const EdgeInsets.fromLTRB(12, 12, 12, 0),
@@ -82,10 +94,15 @@ class _AssistantSwitchesState extends State<AssistantSwitches> {
                   title: Text(context.tr('assistantSectionSwitch')),
                   subtitle: Text(context.tr('assistantSectionSwitchHint')),
                   value: sectionOn,
+                  // Only `sections.assistant` is written (a field-path update),
+                  // so another admin's concurrent change to a different section
+                  // is never reverted by a stale map.
                   onChanged: ready
-                      ? (v) => _save('settings/features', {
-                            'sections': {...sections, Sections.assistant: v},
-                          })
+                      ? (v) => features.data == null
+                          ? _save('settings/features', {
+                              'sections': {Sections.assistant: v},
+                            })
+                          : _update('settings', 'features', {'sections.${Sections.assistant}': v})
                       : null,
                 ),
                 SwitchListTile(

@@ -34,7 +34,10 @@ class AppConfig {
   static bool get hasRecaptchaKey => isUsableSiteKey(recaptchaSiteKey);
 
   /// A real key (not empty, not the PLACEHOLDER default).
-  static bool isUsableSiteKey(String key) => key.trim().isNotEmpty && !key.startsWith('PLACEHOLDER');
+  static bool isUsableSiteKey(String key) {
+    final k = key.trim();
+    return k.isNotEmpty && !k.startsWith('PLACEHOLDER');
+  }
 
   /// Where uploaded images are stored: `firestore` (default — inline base64
   /// in `media/{id}`, works on the Spark plan) or `storage` (Cloud Storage for

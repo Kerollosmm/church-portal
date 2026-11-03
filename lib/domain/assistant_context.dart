@@ -420,7 +420,9 @@ void _customContent(
           _ => text,
         };
         if (line.trim().isEmpty) continue;
-        if (budget - line.length < 0) break;
+        // Skip a block that does not fit; later short ones (donation, links)
+        // may still fit the budget.
+        if (budget - line.length < 0) continue;
         budget -= line.length;
         b.writeln(line);
       }

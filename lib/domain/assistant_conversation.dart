@@ -53,8 +53,11 @@ class AssistantReply {
   bool get ok => outcome == AssistantOutcome.answer || outcome == AssistantOutcome.refused;
 }
 
-/// Arabic letters anywhere in the question → reply in Arabic.
-bool looksArabic(String s) => RegExp('[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]').hasMatch(s);
+/// Arabic letters anywhere in the question → reply in Arabic. Letters only:
+/// Arabic-Indic digits, tatweel and combining marks do not count.
+final _arabicLetter = RegExp('[\u0621-\u063A\u0641-\u064A\u0671-\u06D3\u06D5\u06EE\u06EF\u06FA-\u06FC\u06FF'
+    '\u0750-\u077F\u08A0-\u08C9]');
+bool looksArabic(String s) => _arabicLetter.hasMatch(s);
 
 /// Client-side limits per page session: [perMinute] questions in any rolling
 /// 60 s and [perSession] in total. Only questions actually sent count.
@@ -77,17 +80,21 @@ class AssistantRateLimiter {
   }
 }
 
-/// Whether [e] looks like "this model does not exist / is not available"
-/// (then the default model is tried once instead).
-bool isModelUnavailableError(Object e) {
+/// Whether [e] says that [model] does not exist / is not available (then
+/// the default model is tried once instead). The error must name the model
+/// (or "model") AND say it is missing / unsupported, so an unrelated 404 does
+/// not switch models.
+bool isModelUnavailableError(Object e, String model) {
   final t = e.toString().toLowerCase();
-  return t.contains('not found') ||
+  final aboutModel = t.contains(model.toLowerCase()) || t.contains('model');
+  final unavailable = t.contains('not found') ||
       t.contains('not_found') ||
       t.contains('404') ||
       t.contains('is not supported') ||
-      t.contains('unsupported model') ||
+      t.contains('unsupported') ||
       t.contains('no longer available') ||
       t.contains('deprecated');
+  return aboutModel && unavailable;
 }
 
 class AssistantConversation {
@@ -162,7 +169,7 @@ class AssistantConversation {
     try {
       return await backend.generate(model: model, instruction: instruction, history: history, prompt: prompt);
     } catch (e) {
-      if (model == defaultModel || !isModelUnavailableError(e)) rethrow;
+      if (model == defaultModel || !isModelUnavailableError(e, model)) rethrow;
       // The admin's model is unknown / retired: fall back to the default.
       _badModels.add(model);
       return backend.generate(model: defaultModel, instruction: instruction, history: history, prompt: prompt);
@@ -170,9 +177,6 @@ class AssistantConversation {
   }
 }
 
-/// The model marked the question out of scope (the token alone, or a reply
-/// that starts / ends with it).
-bool isOutOfScopeReply(String text) {
-  final t = text.trim();
-  return t == outOfScopeToken || t.startsWith(outOfScopeToken) || t.endsWith(outOfScopeToken);
-}
+/// The model marked the question out of scope: the token anywhere in the
+/// reply (never shown raw; the admin's refusal replaces the whole reply).
+bool isOutOfScopeReply(String text) => text.contains(outOfScopeToken);

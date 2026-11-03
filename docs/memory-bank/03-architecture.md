@@ -97,7 +97,7 @@ flowchart TD
   R -->|fallback| SEED[[assets/seed/seed.json]]
   AR --> FS
   AR --> AUTH[Firebase Auth]
-  P -->|/ask| AI[Firebase AI Logic<br/>Gemini 2.5 Flash]
+  P -->|/ask| AI[Firebase AI Logic<br/>Gemini 3.1 Flash-Lite<br/>(admin-editable model)]
   AI -.App Check.-> AC[reCAPTCHA Enterprise / Play Integrity]
 ```
 

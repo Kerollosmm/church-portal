@@ -1407,6 +1407,18 @@ describe('ADR-029: assistant settings (settings/assistant)', () => {
     }
   });
 
+  test('the admin switches: sections.assistant (field-path update) and church assistantEnabled', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) =>
+      setDoc(doc(ctx.firestore(), 'settings', 'features'), convert(seed.settings.features)));
+    const ed = db(EDITOR);
+    const stamp = { updatedAt: serverTimestamp(), updatedBy: `${EDITOR}@x.test` };
+    await assertSucceeds(updateDoc(doc(ed, 'settings', 'features'), { 'sections.assistant': false, ...stamp }));
+    await assertSucceeds(updateDoc(doc(ed, 'settings', 'features'), { 'sections.assistant': true, ...stamp }));
+    await assertFails(updateDoc(doc(ed, 'settings', 'features'), { 'sections.assistant': 'yes', ...stamp }));
+    await assertSucceeds(setDoc(doc(ed, 'settings', 'church'), { assistantEnabled: true, ...stamp }, { merge: true }));
+    await assertFails(updateDoc(doc(db(null), 'settings', 'features'), { 'sections.assistant': false }));
+  });
+
   test('visitors and non-admins cannot change it; it can never be deleted', async () => {
     await assertFails(setDoc(doc(db(null), 'settings', 'assistant'), { model: 'gemini-3.1-flash-lite' }));
     await assertFails(setDoc(doc(db(STRANGER), 'settings', 'assistant'), { model: 'gemini-3.1-flash-lite' }));

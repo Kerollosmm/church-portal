@@ -54,9 +54,12 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
   }
 
   /// Waits (briefly) for every content stream the instruction is built from,
-  /// so the first question is not answered from a partial context.
+  /// so the first question is not answered from a partial context. Sections
+  /// switched on while waiting are picked up: the section flags are re-read
+  /// after each round until they stop changing (within the 10 s budget).
   Future<void> _awaitContent() async {
-    final f = ref.read(featuresProvider);
+    final deadline = DateTime.now().add(const Duration(seconds: 10));
+    final done = <String>{};
     try {
       await Future.wait<Object?>([
         ref.read(settingsProvider.future),
@@ -71,13 +74,28 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
         ref.read(alertsProvider.future),
         ref.read(priestsProvider.future),
         ref.read(saintsProvider.future),
+      ]).timeout(deadline.difference(DateTime.now()));
+      while (true) {
+        final f = ref.read(featuresProvider);
         // Grounded only while their section is on.
-        if (f.enabled(Sections.milestones)) ref.read(milestonesProvider.future),
-        if (f.enabled(Sections.contactForm)) ref.read(contactSettingsProvider.future),
-        if (f.enabled(Sections.customSections)) ref.read(categoriesProvider.future),
-        if (f.enabled(Sections.customSections)) ref.read(entriesProvider.future),
-        if (f.enabled(Sections.customPages)) ref.read(customPagesProvider.future),
-      ]).timeout(const Duration(seconds: 10));
+        final pending = {
+          if (f.enabled(Sections.milestones)) Sections.milestones,
+          if (f.enabled(Sections.contactForm)) Sections.contactForm,
+          if (f.enabled(Sections.customSections)) Sections.customSections,
+          if (f.enabled(Sections.customPages)) Sections.customPages,
+        }.difference(done);
+        if (pending.isEmpty) break;
+        final left = deadline.difference(DateTime.now());
+        if (left <= Duration.zero) break;
+        await Future.wait<Object?>([
+          if (pending.contains(Sections.milestones)) ref.read(milestonesProvider.future),
+          if (pending.contains(Sections.contactForm)) ref.read(contactSettingsProvider.future),
+          if (pending.contains(Sections.customSections)) ref.read(categoriesProvider.future),
+          if (pending.contains(Sections.customSections)) ref.read(entriesProvider.future),
+          if (pending.contains(Sections.customPages)) ref.read(customPagesProvider.future),
+        ]).timeout(left);
+        done.addAll(pending);
+      }
     } catch (e) {
       debugPrint('Assistant: content not fully loaded: $e');
     }
@@ -129,7 +147,10 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
       entries: ref.read(entriesProvider).value ?? const [],
       pages: ref.read(customPagesProvider).value ?? const [],
     );
-    return '$sections\u0000$details\u0000$custom';
+    // The allowed topics too: answers about a topic an admin removed are not
+    // replayed.
+    final topics = _settings.effectiveTopics.join('\n');
+    return '$sections\u0000$details\u0000$custom\u0000$topics';
   }
 
   static String _cairoStamp() {

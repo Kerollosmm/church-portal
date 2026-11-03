@@ -256,7 +256,8 @@ console.
   (checked 3 Nov 2026; `gemini-3.5-flash-lite` is the newer, pricier one). Gemma is **not** supported by the AI
   Logic cloud API (FAQ: only in some hybrid / on-device configurations). Admins can set `settings/assistant.model`
   (`gemini-[a-z0-9][a-z0-9.-]{0,52}`); 1.x / 2.x ids are ignored; a model the API rejects as unknown /
-  unsupported (404, "not found", "is not supported"…) is replaced by the default for the rest of the visit.
+  unsupported (the error must name the model or "model" **and** say 404 / not found / unsupported / deprecated — an
+  unrelated 404 is just an error) is replaced by the default for the rest of the visit.
 - **Visible** only when `assistantVisibleProvider` is true: section `assistant` on **and** Firebase available **and**
   App Check active **and** `settings/church.assistantEnabled == true`.
 - **Instruction** (`lib/domain/assistant_context.dart` `buildAssistantInstruction`):
@@ -286,21 +287,23 @@ console.
      occasions, "can be sent anonymously"); **custom sections** (customSections: each public category with its
      path `/section/<slug>`, intro clipped to 300, up to 30 visible items with description clipped to 300, phone
      and link); **custom pages** (customPages: each public page with its path `/page/<slug>`, subtitle, headings,
-     paragraphs clipped to 400, buttons / links, donation account / InstaPay / wallet; ≤ 2,500 chars per page).
+     paragraphs clipped to 400, buttons / links, donation account / InstaPay / wallet; ≤ 2,500 chars per page — a
+     block that does not fit is skipped and later shorter ones still go in).
      Never any image / gallery data. Every bilingual field goes through `_bi(ar, en)`.
   6. Items with `sample: true` are prefixed **`[UNCONFIRMED]`** and the model is told to say they are provisional.
 - **Conversation** (`AssistantConversation`, pure Dart): checks length (`maxChars`, default 500; the text field
   also caps it), per-rolling-minute (`perMinute`, default 4) and per-visit (`perSession`, default 30) limits
   **before** anything is sent (blocked questions show `askTooLong` / `askSlowDown` / `askSessionLimit`); prefixes
-  `[Current Cairo time: YYYY-MM-DD HH:mm (Weekday)]`; a reply that is (or starts / ends with) `[[OUT_OF_SCOPE]]`
+  `[Current Cairo time: YYYY-MM-DD HH:mm (Weekday)]`; a reply that contains `[[OUT_OF_SCOPE]]` anywhere
   becomes the admin refusal (`refusalAr` / `refusalEn`, else the built-in ones) in the question's language
-  (Arabic letters → Arabic) and is **not** kept in the history; answers are kept (max 20 contents = 10 turns);
+  (Arabic **letters** → Arabic; Arabic-Indic digits / tatweel do not count) and is **not** kept in the history; answers are kept (max 20 contents = 10 turns);
   the history is cleared when the enabled sections, `assistantDetailSignature` or `assistantCustomSignature`
-  (contact types, custom sections / items / pages grounding — Codex review on PR #19) change. The model is injected
+  (contact types, custom sections / items / pages grounding — Codex review on PR #19) or the allowed topics change. The model is injected
   through `assistantModelProvider` (declared in the deferred `assistant_page.dart`, so `firebase_ai` stays out of
   the main bundle); tests use a fake.
 - Before the first question `_awaitContent()` waits (≤ 10 s) for settings, features, assistant settings, the content
-  lists, and — while their section is on — milestones, contact settings, categories + entries, custom pages.
+  lists, and — while their section is on — milestones, contact settings, categories + entries, custom pages; the
+  section flags are re-read after each round so a section switched on meanwhile is awaited too (CodeRabbit).
 - **Admin-editable** (`settings/assistant`, `/admin` → AI assistant): model, persona instructions, allowed topics,
   refusal (ar/en), welcome text (ar/en; else `askIntro`), suggested questions (ar/en, ≤ 3 lines; else the built-in
   three), `maxChars`, `perMinute`, `perSession`. The switches stay the section `assistant` and
