@@ -53,6 +53,16 @@ class DocEditor extends StatefulWidget {
   /// Resize/compress pipeline for uploads (tests may inject a fake).
   final Future<EncodedImage> Function(Uint8List bytes) prepareImage;
 
+  /// Run-time options of [FieldDef.dynamicOptions] choice fields:
+  /// source name → (stored value, label) pairs (e.g. the custom categories).
+  final Map<String, List<(String, String)>> dynamicChoices;
+
+  /// Targets offered by [FieldDef.linkPicker] URL fields (ADR-027).
+  final List<(String, String)> linkTargets;
+
+  /// Slugs other documents of this collection already use (ADR-027).
+  final Set<String> takenSlugs;
+
   const DocEditor({
     super.key,
     required this.title,
@@ -66,6 +76,9 @@ class DocEditor extends StatefulWidget {
     this.media,
     this.pickImage = pickImageFromDevice,
     this.prepareImage = prepareUpload,
+    this.dynamicChoices = const {},
+    this.linkTargets = const [],
+    this.takenSlugs = const {},
   });
 
   @override
@@ -154,7 +167,11 @@ class DocEditorState extends State<DocEditor> {
             : v.toString();
       case FieldType.objectList:
         _rows[f.key] = [
-          for (final r in (v is List ? v : const []).whereType<Map>()) _Row.from(f.subFields, r, _markDirty),
+          for (final r in (v is List ? v : const []))
+            if (r is Map)
+              _Row.from(f.subFields, r, _markDirty)
+            else if (f.encodedRows && r is String)
+              _Row.from(f.subFields, _decodeRow(f, r), _markDirty),
         ];
       case FieldType.image:
         final img = MediaImage.fromMap(v);
@@ -166,6 +183,17 @@ class DocEditorState extends State<DocEditor> {
             if (MediaImage.fromMap(e) case final MediaImage img) _GalleryEntry(img, null, _ctrl(img.alt)),
         ];
     }
+  }
+
+  static const _rowSep = '\u001f';
+
+  /// [FieldDef.encodedRows]: sub-field values in order, joined by U+001F.
+  static String _encodeRow(FieldDef f, Map<String, dynamic> row) =>
+      [for (final sf in f.subFields) '${row[sf.key] ?? ''}'.replaceAll(_rowSep, '')].join(_rowSep);
+
+  static Map<String, dynamic> _decodeRow(FieldDef f, String s) {
+    final parts = s.split(_rowSep);
+    return {for (var i = 0; i < f.subFields.length; i++) f.subFields[i].key: i < parts.length ? parts[i] : ''};
   }
 
   TextEditingController _ctrl(String text) => TextEditingController(text: text)..addListener(_markDirty);
@@ -212,7 +240,9 @@ class DocEditorState extends State<DocEditor> {
         case FieldType.weekdays:
           out[f.key] = (_values[f.key] as Set<int>).toList()..sort();
         case FieldType.objectList:
-          out[f.key] = [for (final r in _rows[f.key]!) r.collect()];
+          out[f.key] = [
+            for (final r in _rows[f.key]!) f.encodedRows ? _encodeRow(f, r.collect()) : r.collect(),
+          ];
         case FieldType.image:
           out[f.key] = _collectImage(f.key);
         case FieldType.imageList:
@@ -432,11 +462,23 @@ class DocEditorState extends State<DocEditor> {
         FieldType.multiline => TextInputType.multiline,
         _ => null,
       },
-      validator: (v) => _validate(f, v) ?? rowError?.call(),
+      validator: (v) =>
+          _validate(f, v) ??
+          (f.slug && widget.takenSlugs.contains((v ?? '').trim()) ? context.tr('slugTaken') : null) ??
+          rowError?.call(),
       autovalidateMode: AutovalidateMode.onUserInteraction,
       decoration: InputDecoration(
         labelText: _label(f),
         helperText: hint.isEmpty ? null : hint,
+        helperMaxLines: 3,
+        suffixIcon: f.linkPicker && widget.linkTargets.isNotEmpty
+            ? IconButton(
+                key: ValueKey('linkPick-${f.key}'),
+                tooltip: context.tr('linkPick'),
+                icon: const Icon(Icons.link_rounded),
+                onPressed: () => _pickLink(c),
+              )
+            : null,
         hintText: switch (f.type) {
           FieldType.time => '06:30',
           FieldType.dateTime => '2027-01-06 20:00',
@@ -448,6 +490,29 @@ class DocEditorState extends State<DocEditor> {
         },
       ),
     );
+  }
+
+  /// "Pick a page…": custom pages, categories and built-in routes.
+  Future<void> _pickLink(TextEditingController c) async {
+    final picked = await showDialog<String>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: Text(context.tr('linkPickTitle')),
+        children: [
+          for (final t in widget.linkTargets)
+            SimpleDialogOption(
+              key: ValueKey('linkTarget-${t.$1}'),
+              onPressed: () => Navigator.pop(ctx, t.$1),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(t.$2, style: const TextStyle(fontWeight: FontWeight.w700)),
+                Text(t.$1, textDirection: TextDirection.ltr, style: const TextStyle(fontSize: 12, color: AppColors.muted)),
+              ]),
+            ),
+        ],
+      ),
+    );
+    if (picked == null || !mounted) return;
+    c.text = picked;
   }
 
   Widget _field(FieldDef f) {
@@ -500,6 +565,27 @@ class DocEditorState extends State<DocEditor> {
                 }),
               ),
           ]),
+        );
+      case FieldType.choice when f.dynamicOptions.isNotEmpty:
+        final opts = widget.dynamicChoices[f.dynamicOptions] ?? const <(String, String)>[];
+        final cur = _values[f.key] as String?;
+        return DropdownButtonFormField<String?>(
+          key: ValueKey('field-${f.key}'),
+          isExpanded: true,
+          initialValue: cur,
+          decoration: InputDecoration(labelText: label),
+          validator: (v) => f.required && (v == null || v.isEmpty) ? context.tr('required') : null,
+          items: [
+            if (f.nullableChoice || cur == null) const DropdownMenuItem<String?>(value: null, child: Text('—')),
+            for (final o in opts) DropdownMenuItem<String?>(value: o.$1, child: Text(o.$2)),
+            // A value whose option is gone (e.g. a deleted category).
+            if (cur != null && !opts.any((o) => o.$1 == cur))
+              DropdownMenuItem<String?>(value: cur, child: Text(context.tr('noCategory'))),
+          ],
+          onChanged: (v) => setState(() {
+            _values[f.key] = v;
+            _dirty = true;
+          }),
         );
       case FieldType.choice:
         return DropdownButtonFormField<String?>(
@@ -928,6 +1014,7 @@ class DocEditorState extends State<DocEditor> {
               padding: const EdgeInsets.all(10),
               child: Column(children: [
                 for (final sf in f.subFields)
+                  if (sf.showWhen == null || sf.showWhen!.value.contains(rows[i].values[sf.showWhen!.key]))
                   Padding(
                     padding: const EdgeInsets.only(bottom: 8),
                     child: switch (sf.type) {

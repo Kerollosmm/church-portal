@@ -115,6 +115,27 @@ render with `PageBody` (+ `Footer`). Content comes from Riverpod providers (hidd
   `socials`). `ContactForm` (section `contactForm`). Map at the bottom (contactInfo). Info and form side by side
   on ≥ 900 px.
 
+### `/section/<slug>` — `category_page.dart` `CategoryPage` (PR #18, ADR-027)
+An admin-defined category: poster header with its name, optional intro panel, then its visible items
+(`entriesOf`) as `EntryCard`s in the `ResponsiveGrid` with `CardCover` / `CardLead` (collection `entries`, the
+item's `imageStyle` else the category's), description, call / WhatsApp, and a link button (in-app path via
+`context.go`, else `openUrl`). Hidden / unknown slug → `ContentUnavailable` (`Key('categoryUnavailable')`,
+`noindex`); no items → «لا توجد عناصر في هذا القسم بعد». Gated by `Sections.customSections` (all categories and
+their menu entries) plus each category's own `visible`.
+
+### `/page/<slug>` — `custom_page.dart` `CustomPageView` (PR #18, ADR-027)
+Header (title + subtitle), optional hero `FittedCover`, then the blocks (`PageBlockView`): heading (semantic
+header), paragraph (selectable), image (https link + caption), button (`FilledButton`), text link, donation info
+(`DonationInfoCard`: bank account / InstaPay / wallet with copy buttons, notes, «للعلم فقط: لا يتم أي دفع عبر
+الموقع»). Empty blocks are skipped. Hidden / unknown → `Key('pageUnavailable')`, `noindex`. Pages are reached from
+notices («اعرف المزيد»), buttons or links, and appear in the menu only with `showInNav`. Gated by
+`Sections.customPages` plus each page's `visible`.
+
+### Menu entries for custom content (PR #18)
+`customNavItems(ref)` (`app_shell.dart`): categories with `showInNav` are appended to the "Church services" popup
+(desktop) and drawer group; pages with `showInNav` to the desktop bar (after the services menu) and the "The
+church" drawer group. `NavItem.labelAr/labelEn` carry their own labels.
+
 ### `/ask` — `assistant_page.dart` `AssistantPage`
 Chat UI with intro bubble, 3 suggestion chips, 500-char input, disclaimer «إجابات آلية قد تحتوي أخطاء». Shows
 "assistant not available" when `assistantVisibleProvider` is false. Details in `05-firebase.md`.
@@ -326,6 +347,15 @@ digits, Cairo `02` + 8, Alexandria `03` + 7, other governorates `0[4-9]` + 7–8
   `ContactError.consentRequired` («برجاء الموافقة على إشعار الخصوصية لإرسال الرسالة») blocks sending and keeps the
   typed text. Consent is **not** written to Firestore (payload keys unchanged, rules untouched); the box is cleared
   after a successful send.
+- **Categories (PR #18, ADR-028):** a «نوع الرسالة» dropdown (`Key('contactCategory')`, shown when more than one
+  type is on) from `contactSettingsProvider` (`settings/contact`, else code defaults). **Hall booking**: occasion
+  chips (`subtype-<key>`), a preferred date (`Key('preferredDate')`, date picker from today; `ContactError.dateInvalid`
+  for a past / malformed date on the Cairo calendar), phone required (`ContactError.phoneRequired`), occasion
+  required when the type has some (`subtypeRequired`). **Complaint / suggestion** with anonymous allowed: «إرسال دون
+  ذكر الاسم» switch (`Key('anonSwitch')`): name / phone / email disappear, a hint says nothing identifying is stored
+  and no reply is possible (`anonymousHint`), and the notice / consent switch to `privacyNoticeAnon` /
+  `consentLabelAnon` (only the message text is stored; same Firebase disclosure). The anonymous payload is
+  `{category, kind, anonymous: true, message}` only (`validateContactForm`).
 - Not implemented yet: retention clean-up (12 months).
 
 ### Time formatting (`time_format.dart`)

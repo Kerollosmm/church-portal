@@ -1,6 +1,7 @@
 /// Field schemas for the admin editors (collections + the church-info doc).
 library;
 
+import '../../domain/custom_content.dart';
 import '../../domain/image_style.dart';
 
 enum FieldType {
@@ -84,6 +85,26 @@ class FieldDef {
   /// Editor group (collapsible card) this field belongs to.
   final FieldGroup group;
 
+  /// Text field holding a URL slug (lower-case latin, digits, hyphens; unique
+  /// within its collection — ADR-027).
+  final bool slug;
+
+  /// [FieldType.objectList] sub-fields: shown only while the row's
+  /// [showWhen.key] choice is one of [showWhen.value] (page block types).
+  final MapEntry<String, List<String>>? showWhen;
+
+  /// [FieldType.choice]: options loaded at run time (e.g. 'categories': the
+  /// admin-defined categories), passed to the editor by the list screen.
+  final String dynamicOptions;
+
+  /// URL fields: offer a "Pick a page…" list (custom pages, categories,
+  /// built-in routes) next to the field.
+  final bool linkPicker;
+
+  /// [FieldType.objectList]: each row is stored as one string, its
+  /// sub-field values in order joined by U+001F (page blocks, ADR-027).
+  final bool encodedRows;
+
   const FieldDef(this.key, this.labelAr, this.labelEn, this.type,
       {this.required = false,
       this.options = const [],
@@ -100,7 +121,12 @@ class FieldDef {
       this.hintAr = '',
       this.hintEn = '',
       this.maxRows = 20,
-      this.group = FieldGroup.basic});
+      this.group = FieldGroup.basic,
+      this.slug = false,
+      this.showWhen,
+      this.dynamicOptions = '',
+      this.linkPicker = false,
+      this.encodedRows = false});
 
   int get effectiveMaxLength => maxLength > 0
       ? maxLength
@@ -141,6 +167,9 @@ class CollectionDef {
   /// Public route showing this content (for "open on site" links).
   final String publicPath;
 
+  /// Optional note shown above the list (e.g. where built-in sections are managed).
+  final String noteAr, noteEn;
+
   const CollectionDef(this.name, this.labelAr, this.labelEn, this.fields, this.titleKeys,
       {String? id,
       this.requireAnyOf = const [],
@@ -148,7 +177,9 @@ class CollectionDef {
       this.filter,
       this.newDefaults = const {},
       this.icon = 'list',
-      this.publicPath = '/'})
+      this.publicPath = '/',
+      this.noteAr = '',
+      this.noteEn = ''})
       : id = id ?? name;
 
   bool matches(Map<String, dynamic> data) {
@@ -205,6 +236,7 @@ const _imageStyleFieldFlat = FieldDef('imageStyle', 'طريقة عرض الصو�
 /// Collections whose documents may carry an `image` (see lib/domain/media.dart).
 const imageCollections = [
   'alerts', 'seasons', 'meetings', 'activities', 'clinics', 'facilities', 'priests', 'milestones', 'saints', //
+  'entries', 'pages', // ADR-027
 ];
 
 // ---- optional item detail page (meetings, activities, clinics, facilities,
@@ -337,7 +369,12 @@ const adminCollections = <CollectionDef>[
     FieldDef('endsAt', 'ينتهي (توقيت القاهرة)', 'Ends (Cairo time)', FieldType.dateTime),
     FieldDef('priority', 'الأولوية (الأعلى يظهر أولًا)', 'Priority (higher shows first)', FieldType.integer,
         min: 0, max: 1000),
-    FieldDef('link', 'رابط (مثل /mass-schedule)', 'Link (e.g. /mass-schedule)', FieldType.url, allowPath: true),
+    FieldDef('link', 'رابط «اعرف المزيد» (صفحة، قسم أو رابط خارجي)', '"Learn more" link (a page, a section or an external URL)',
+        FieldType.url,
+        allowPath: true,
+        linkPicker: true,
+        hintAr: 'اختر صفحة مخصصة (مثل صفحة التبرعات) أو قسمًا من «اختيار صفحة…»، أو اكتب رابطًا خارجيًا يبدأ بـ https://',
+        hintEn: 'Pick a custom page (e.g. a donations page) or a section from "Pick a page…", or type an external https:// link'),
     _imageField,
     _imageStyleFieldFlat,
     _visibleField,
@@ -552,6 +589,109 @@ const adminCollections = <CollectionDef>[
     'titleAr',
     'titleEn'
   ], orderable: true, icon: 'milestones', publicPath: '/'),
+  CollectionDef('categories', 'الأقسام المخصصة', 'Custom sections', [
+    FieldDef('nameAr', 'اسم القسم (عربي)', 'Section name (Arabic)', FieldType.text, required: true, maxLength: 120),
+    FieldDef('nameEn', 'اسم القسم (إنجليزي)', 'Section name (English)', FieldType.text, maxLength: 120),
+    FieldDef('slug', 'رابط الصفحة (حروف إنجليزية صغيرة وأرقام و-)', 'Page address (lower-case latin, digits, -)',
+        FieldType.text,
+        required: true,
+        maxLength: slugMaxLength,
+        slug: true,
+        hintAr: 'تظهر الصفحة على /section/<الرابط> مثل /section/youth-trips',
+        hintEn: 'The page lives at /section/<address>, e.g. /section/youth-trips'),
+    FieldDef('introAr', 'مقدمة (عربي)', 'Intro (Arabic)', FieldType.multiline, maxLength: 1500),
+    FieldDef('introEn', 'مقدمة (إنجليزي)', 'Intro (English)', FieldType.multiline, maxLength: 1500),
+    FieldDef('icon', 'الأيقونة', 'Icon', FieldType.choice, options: CategoryIcons.all, defaultOption: 'star'),
+    FieldDef('imageStyle', 'طريقة عرض صور العناصر', 'Image display of its items', FieldType.choice,
+        options: ImageStyles.all, nullableChoice: true),
+    FieldDef('showInNav', 'يظهر في القائمة (خدمات الكنيسة)', 'Shown in the menu (Church services)', FieldType.boolean,
+        missingBool: true, newBool: true),
+    _orderField,
+    _visibleField,
+  ], [
+    'nameAr',
+    'nameEn'
+  ],
+      orderable: true,
+      icon: 'categories',
+      publicPath: '/',
+      noteAr: 'الأقسام الأساسية (العيادات، الاجتماعات، الأنشطة…) تُخفى أو تُظهر من «الأقسام والصفحة الرئيسية» ويُعاد تسميتها من «عناوين الصفحات» هناك. '
+          'حذف قسم مخصص يُخفي عناصره ولا يحذفها.',
+      noteEn: 'Built-in sections (clinics, meetings, activities…) are switched on/off in "Sections & home page" and renamed in its '
+          '"Page headers". Deleting a custom section hides its items, never deletes them.'),
+  CollectionDef('entries', 'عناصر الأقسام', 'Section items', [
+    FieldDef('categoryId', 'القسم', 'Section', FieldType.choice, required: true, dynamicOptions: 'categories'),
+    FieldDef('titleAr', 'العنوان (عربي)', 'Title (Arabic)', FieldType.text, required: true),
+    FieldDef('titleEn', 'العنوان (إنجليزي)', 'Title (English)', FieldType.text),
+    FieldDef('descAr', 'الوصف (عربي)', 'Description (Arabic)', FieldType.multiline, maxLength: 2000),
+    FieldDef('descEn', 'الوصف (إنجليزي)', 'Description (English)', FieldType.multiline, maxLength: 2000),
+    FieldDef('contactPhone', 'تليفون التواصل', 'Contact phone', FieldType.phone),
+    FieldDef('externalUrl', 'رابط (صفحة أو رابط خارجي)', 'Link (a page or an external URL)', FieldType.url,
+        allowPath: true, linkPicker: true),
+    FieldDef('externalLabelAr', 'نص زر الرابط (عربي)', 'Link button text (Arabic)', FieldType.text, maxLength: 80),
+    FieldDef('externalLabelEn', 'نص زر الرابط (إنجليزي)', 'Link button text (English)', FieldType.text, maxLength: 80),
+    _imageField,
+    _imageStyleFieldFlat,
+    _orderField,
+    _visibleField,
+    _sampleField,
+  ], [
+    'titleAr',
+    'titleEn'
+  ], orderable: true, icon: 'entries', publicPath: '/'),
+  CollectionDef('pages', 'الصفحات المخصصة', 'Custom pages', [
+    FieldDef('titleAr', 'العنوان (عربي)', 'Title (Arabic)', FieldType.text, required: true, maxLength: 200),
+    FieldDef('titleEn', 'العنوان (إنجليزي)', 'Title (English)', FieldType.text, maxLength: 200),
+    FieldDef('slug', 'رابط الصفحة (حروف إنجليزية صغيرة وأرقام و-)', 'Page address (lower-case latin, digits, -)',
+        FieldType.text,
+        required: true,
+        maxLength: slugMaxLength,
+        slug: true,
+        hintAr: 'تظهر الصفحة على /page/<الرابط> مثل /page/new-building-donations',
+        hintEn: 'The page lives at /page/<address>, e.g. /page/new-building-donations'),
+    FieldDef('subtitleAr', 'العنوان الفرعي (عربي)', 'Subtitle (Arabic)', FieldType.text),
+    FieldDef('subtitleEn', 'العنوان الفرعي (إنجليزي)', 'Subtitle (English)', FieldType.text),
+    FieldDef('image', 'صورة الواجهة (اختياري)', 'Hero image (optional)', FieldType.image),
+    FieldDef('blocks', 'محتوى الصفحة (حتى 20 فقرة)', 'Page content (up to 20 blocks)', FieldType.objectList,
+        maxRows: pageMaxBlocks,
+        encodedRows: true,
+        subFields: [
+          FieldDef('type', 'نوع الفقرة', 'Block type', FieldType.choice,
+              options: BlockTypes.all, defaultOption: BlockTypes.paragraph),
+          FieldDef('textAr', 'النص (عربي)', 'Text (Arabic)', FieldType.multiline,
+              maxLength: blockTextMax,
+              showWhen: MapEntry('type', [BlockTypes.heading, BlockTypes.paragraph, BlockTypes.image, BlockTypes.button,
+                BlockTypes.link, BlockTypes.donation]),
+              hintAr: 'للصورة: وصف/تعليق. للزر والرابط: النص الظاهر. للتبرع: ملاحظات.',
+              hintEn: 'Image: caption. Button / link: its text. Donation: notes.'),
+          FieldDef('textEn', 'النص (إنجليزي)', 'Text (English)', FieldType.multiline,
+              maxLength: blockTextMax,
+              showWhen: MapEntry('type', [BlockTypes.heading, BlockTypes.paragraph, BlockTypes.image, BlockTypes.button,
+                BlockTypes.link, BlockTypes.donation])),
+          FieldDef('url', 'الرابط', 'Link', FieldType.url,
+              allowPath: true,
+              linkPicker: true,
+              showWhen: MapEntry('type', [BlockTypes.image, BlockTypes.button, BlockTypes.link]),
+              hintAr: 'للصورة: رابط https للصورة. للزر والرابط: صفحة داخلية أو رابط خارجي.',
+              hintEn: 'Image: the picture\'s https link. Button / link: an in-app page or an external URL.'),
+          FieldDef('account', 'رقم الحساب البنكي (والبنك)', 'Bank account (and bank)', FieldType.text,
+              maxLength: blockAccountMax, showWhen: MapEntry('type', [BlockTypes.donation])),
+          FieldDef('instapay', 'عنوان/رقم إنستاباي', 'InstaPay address / number', FieldType.text,
+              maxLength: blockInstapayMax, showWhen: MapEntry('type', [BlockTypes.donation])),
+          FieldDef('wallet', 'رقم المحفظة', 'Wallet number', FieldType.text,
+              maxLength: blockWalletMax, showWhen: MapEntry('type', [BlockTypes.donation])),
+        ]),
+    FieldDef('showInNav', 'إظهار في القائمة', 'Show in the menu', FieldType.boolean,
+        missingBool: false,
+        newBool: false,
+        hintAr: 'غير ظاهرة في القائمة افتراضيًا؛ اربطها من تنويه («اعرف المزيد») أو من زر.',
+        hintEn: 'Not in the menu by default; link it from a notice ("Learn more") or a button.'),
+    _orderField,
+    _visibleField,
+  ], [
+    'titleAr',
+    'titleEn'
+  ], orderable: true, icon: 'pages', publicPath: '/'),
 ];
 
 /// settings/church: identity, contacts, socials, history.

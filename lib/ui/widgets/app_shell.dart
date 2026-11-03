@@ -7,6 +7,7 @@ import '../../core/theme.dart';
 import '../../domain/features.dart';
 import '../../domain/item_detail.dart';
 import '../../state/providers.dart';
+import '../pages/category_page.dart' show categoryIcon;
 import 'coptic_cross.dart';
 import 'golden.dart';
 
@@ -14,7 +15,33 @@ class NavItem {
   final String key;
   final String path;
   final IconData icon;
-  const NavItem(this.key, this.path, this.icon);
+
+  /// Admin-defined entries (categories / custom pages, ADR-027) carry their
+  /// own labels; built-in ones use the l10n [key].
+  final String? labelAr, labelEn;
+  const NavItem(this.key, this.path, this.icon, {this.labelAr, this.labelEn});
+
+  String label(BuildContext context) => labelAr == null ? context.tr(key) : context.pick(labelAr!, labelEn ?? '');
+}
+
+/// Menu entries of admin-defined categories ("Church services" group) and
+/// of custom pages switched into the menu ("The church" group).
+({List<NavItem> categories, List<NavItem> pages}) customNavItems(WidgetRef ref) {
+  final f = ref.watch(featuresProvider);
+  // Each list follows its section switch (Sections.customSections / customPages).
+  final cats = f.enabled(Sections.customSections) ? ref.watch(categoriesProvider).value ?? const [] : const [];
+  final pages = f.enabled(Sections.customPages) ? ref.watch(customPagesProvider).value ?? const [] : const [];
+  return (
+    categories: [
+      for (final c in cats)
+        if (c.showInNav) NavItem('cat-${c.slug}', c.path, categoryIcon(c.icon), labelAr: c.nameAr, labelEn: c.nameEn),
+    ],
+    pages: [
+      for (final p in pages)
+        if (p.showInNav)
+          NavItem('page-${p.slug}', p.path, Icons.article_rounded, labelAr: p.titleAr, labelEn: p.titleEn),
+    ],
+  );
 }
 
 const navItems = [
@@ -162,6 +189,7 @@ class _AppShellState extends ConsumerState<AppShell> {
                   _navText(context, 'home', '/'),
                   if (features.routeEnabled('/about')) _navText(context, 'about', '/about'),
                   _ServicesMenu(location: location),
+                  for (final p in customNavItems(ref).pages) _navItemText(context, p),
                   if (showAsk) _navText(context, 'ask', '/ask'),
                   if (features.routeEnabled('/contact')) _navText(context, 'contact', '/contact'),
                 ]),
@@ -231,6 +259,17 @@ class _AppShellState extends ConsumerState<AppShell> {
     ]);
   }
 
+  Widget _navItemText(BuildContext context, NavItem item) {
+    final selected = widget.location == item.path;
+    final primary = Theme.of(context).colorScheme.primary;
+    return _NavLabel(
+      label: item.label(context),
+      selected: selected,
+      color: selected ? primary : context.pal.ink,
+      onTap: () => context.go(item.path),
+    );
+  }
+
   Widget _navText(BuildContext context, String key, String path) {
     final location = widget.location;
     final selected = location == path;
@@ -288,6 +327,7 @@ class _ServicesMenu extends ConsumerWidget {
     final items = [
       for (final i in navItems)
         if (serviceNavPaths.contains(i.path) && f.routeEnabled(i.path) && (ready || i.path != '/clinics')) i,
+      ...customNavItems(ref).categories,
     ];
     if (items.isEmpty) return const SizedBox.shrink();
     final selected = items.any((i) => location == i.path || location.startsWith('${i.path}/'));
@@ -304,7 +344,7 @@ class _ServicesMenu extends ConsumerWidget {
             child: Row(children: [
               Icon(i.icon, color: primary, size: 20),
               const SizedBox(width: 12),
-              Flexible(child: Text(context.tr(i.key), style: const TextStyle(fontWeight: FontWeight.w700))),
+              Flexible(child: Text(i.label(context), style: const TextStyle(fontWeight: FontWeight.w700))),
             ]),
           ),
       ],
@@ -366,8 +406,15 @@ class _AppDrawer extends ConsumerWidget {
     final items = visibleNavItems(ref.watch(featuresProvider), showAsk: showAsk);
     final settings = ref.watch(settingsProvider).value;
     final primary = Theme.of(context).colorScheme.primary;
-    final church = [for (final i in items) if (!serviceNavPaths.contains(i.path) && i.path != '/ask') i];
-    final services = [for (final i in items) if (serviceNavPaths.contains(i.path) || i.path == '/ask') i];
+    final custom = customNavItems(ref);
+    final church = [
+      for (final i in items) if (!serviceNavPaths.contains(i.path) && i.path != '/ask') i,
+      ...custom.pages,
+    ];
+    final services = [
+      for (final i in items) if (serviceNavPaths.contains(i.path) || i.path == '/ask') i,
+      ...custom.categories,
+    ];
 
     Widget group(String title, List<NavItem> list) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           Padding(
@@ -384,7 +431,7 @@ class _AppDrawer extends ConsumerWidget {
               child: ListTile(
                 minTileHeight: 48,
                 leading: Icon(i.icon, color: location == i.path ? context.pal.onPrimaryAccent : primary, size: 22),
-                title: Text(context.tr(i.key), style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+                title: Text(i.label(context), style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
                 selected: location == i.path,
                 selectedColor: context.pal.onPrimary,
                 selectedTileColor: primary,

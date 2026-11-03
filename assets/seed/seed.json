@@ -56,7 +56,9 @@
     "contactForm": true,
     "assistant": true,
     "media": true,
-    "dailyVerse": true
+    "dailyVerse": true,
+    "customSections": true,
+    "customPages": true
    },
    "homeOrder": [
     "banner",

@@ -179,8 +179,8 @@ Existence of `settings/church` = "database is seeded" (see `03-architecture.md`)
 - `FeatureSettings.defaults` (everything on) is used before the doc loads and when it does not exist.
 - **Seed** (`gen_seed.py`): every section on **except `clinics: false`** (PR 1) — `/clinics` stays off until the
   church office confirms the clinics and their booking numbers. Live docs keep whatever the admin set.
-- `toMap()` always writes **all** 17 section keys explicitly. Live docs saved before PR #5 lack `media` → on; before
-  PR #16 lack `dailyVerse` → on.
+- `toMap()` always writes **all** 19 section keys explicitly. Live docs saved before PR #5 lack `media` → on; before
+  PR #16 lack `dailyVerse` → on; before PR #18 lack `customSections` / `customPages` → on.
 - The seed (PR #11) adds `pageHeaders: {}` and the default `footer` map; live docs get them with
   `node tool/seed_firestore.js --fill-missing` (adds absent fields only) or on the next save in /admin. Missing =
   defaults, so nothing changes until then.
@@ -188,6 +188,8 @@ Existence of `settings/church` = "database is seeded" (see `03-architecture.md`)
   `milestones→milestones`, `map→contactInfo` (block disappears when its section is off). `directory` and `banner`
   have no section.
 
+- PR #18 (ADR-027): `sections.customSections` (custom categories at `/section/*` + their menu entries) and
+  `sections.customPages` (custom pages at `/page/*` + their menu entries); missing = on; seeded `true`.
 - `dailyVerse` (PR #16, ADR-024): map `{mode: 'daily'|'fixed' (default daily), textAr: string ≤500, refAr: string ≤60}`;
   missing map or keys = daily rotation; a fixed verse with empty text falls back to daily. On/off is the section
   **`sections.dailyVerse`** (missing = on; seeded `true`). The map is written only once it differs from the default or
@@ -275,6 +277,28 @@ serving**), `bioAr/En` (≤5000), meta. Two admin screens over one collection: `
 `nameAr` (**req**), `nameEn`, `bioAr/En` (≤5000), `feastCopticAr/En`, `feastGregorian` (EN), `feastGregorianAr`
 (≤300), `image` (optional), `order`, `visible`. Seed: `maximus-domadius`, `moses-black`.
 
+### `categories/{auto-id}` — `CustomCategory` (`lib/domain/custom_content.dart`, PR #18, ADR-027; Hideable, orderable)
+`slug` (**req**, `[a-z0-9]+(-[a-z0-9]+)*` ≤ 60, unique per collection — checked by the admin form, not the rules;
+public page `/section/<slug>`), `nameAr` (**req**, ≤ 120, not blank), `nameEn` (≤ 120), `introAr/En` (≤ 1500),
+`icon` (`star, church, people, heart, book, music, medical, school, event, volunteer, donate, info`; missing =
+star), `imageStyle` (default style of its items, ADR-023), `showInNav` (bool, missing = **true**), `visible`,
+`order`. Not seeded. Deleting one first sets `visible: false` on its visible entries (never deletes them).
+
+### `entries/{auto-id}` — `CategoryEntry` (PR #18; Hideable, orderable)
+`categoryId` (**req**, the category's doc id; an entry whose category is gone is never public), `titleAr`
+(**req**, ≤ 300), `titleEn` (≤ 300), `descAr/En` (≤ 2000), `contactPhone` (digits / `+`, ≤ 20), `externalUrl`
+(`''`, an in-app path or an http(s) URL, ≤ 500), `externalLabelAr/En` (≤ 80), `image` + `imageStyle` (item style,
+else the category's), `visible`, `order`, `sample`. Not seeded.
+
+### `pages/{auto-id}` — `CustomPage` (PR #18; Hideable, orderable)
+`slug` (**req**, as above; public page `/page/<slug>`), `titleAr` (**req**, ≤ 200, not blank), `titleEn` (≤ 200),
+`subtitleAr/En` (≤ 300), `image` (optional hero), `showInNav` (bool, missing = **false**: pages are off the menu
+by default), `visible`, `order`, `blocks` (≤ 20, saved in their own write). **Each block is one string**:
+`type␟textAr␟textEn␟url␟account␟instapay␟wallet` (U+001F, `PageBlock.encode` / `fromStored`; maps are still read
+tolerantly). Types: `heading`, `paragraph` (texts ≤ 4000), `image` (`url` = https picture link, texts = caption),
+`button` / `link` (texts = label, `url` = in-app path or http(s) URL), `donation` (`account` ≤ 120, `instapay` ≤ 80,
+`wallet` ≤ 30, texts = notes; display only). Not seeded.
+
 ## Non-content collections
 
 ### `contact_messages/{id}` (created by the public form, `FirestoreRepository.submitContact`)
@@ -289,6 +313,20 @@ serving**), `bioAr/En` (≤5000), meta. Two admin screens over one collection: `
 | `createdAt` | `serverTimestamp()` == `request.time` | **required** |
 At least one of phone/email must be non-empty. Written in **one batch** with `meta/contact_rate` (see below).
 Admins add `updatedAt/updatedBy` when changing status.
+
+PR #18 (ADR-028) adds: `category` (slot `c1…c12` of `settings/contact`, must be on), `kind`
+(`general|booking|complaint|suggestion`, must match the slot), bookings: `bookingType` (subtype key
+`[a-z0-9_-]{1,30}`) + `preferredDate` (`YYYY-MM-DD`, required) + a non-empty `phone`; `anonymous: true` (complaint /
+suggestion slots that allow it) — then the doc has **only** `category, kind, anonymous, message, lang, status,
+createdAt` (no name / phone / email at all). Admin-only: `status` also `contacted|confirmed|declined` (bookings),
+`adminNotes` (≤ 2000). Messages without `category` (older ones) are general inquiries in the inbox.
+
+### `settings/contact` — `ContactSettings` (`lib/domain/contact_categories.dart`, PR #18, ADR-028)
+`categories: {c1…c12: string}`; each slot one string `kind␟on␟anon␟order␟labelAr␟labelEn␟subtypes` (on / anon
+`1`/`0`; anon only for complaint / suggestion; `labelAr` 1–80 not blank, `labelEn` ≤ 80; up to 8 subtypes
+`key|labelAr|labelEn` joined by U+001E, Arabic label 1–60). **Missing doc = code defaults**
+(`ContactSettings.defaults` = rules `defaultContactCats()`): c1 general inquiry, c2 hall booking (wedding فرح /
+condolence عزاء), c3 complaint (anonymous allowed), c4 suggestion (anonymous allowed). Not seeded.
 
 ### `meta/contact_rate`
 Single doc `{lastAt: timestamp, lastMsgId: string}` — global server-side throttle: every contact create must set

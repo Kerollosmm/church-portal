@@ -210,7 +210,8 @@ void main() {
       expect(FieldGroup.values, [FieldGroup.basic, FieldGroup.details, FieldGroup.media, FieldGroup.contacts]);
       expect(const FieldDef('x', 'x', 'x', FieldType.text).group, FieldGroup.basic);
       expect(imageCollections,
-          ['alerts', 'seasons', 'meetings', 'activities', 'clinics', 'facilities', 'priests', 'milestones', 'saints']);
+          ['alerts', 'seasons', 'meetings', 'activities', 'clinics', 'facilities', 'priests', 'milestones', 'saints',
+            'entries', 'pages']);
       for (final c in adminCollections) {
         expect(c.fields.any((f) => f.key == 'image'), imageCollections.contains(c.name), reason: c.id);
       }

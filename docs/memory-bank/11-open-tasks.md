@@ -103,6 +103,18 @@ Status as of 2 Nov 2026 (after PR #7, PR #8, PR #9 `ad621cf`, PR #10 and PR #11)
       them (e.g. a parish motto).
 - [ ] Optional: a dark theme for the admin dashboard (it keeps Golden hour).
 
+## Custom sections, pages & contact types (PR #18, ADR-027/028)
+
+- [x] Admin-defined categories with items and their own pages + menu entries; custom pages (blocks incl. donation
+      info) linked from notices; contact types with hall booking, anonymous complaints / suggestions, inbox boxes,
+      booking status and notes.
+- [ ] Church office: create the donations page for the new building (account / InstaPay / wallet details) and
+      confirm the contact types and booking occasions.
+- [ ] Optional: let built-in sections and custom categories share one menu order (built-ins come first today).
+- [ ] Optional: detail pages for custom items (cards show the full description today).
+- [ ] Optional: add custom sections / pages to `web/sitemap.xml` (static file) and to the assistant grounding.
+- [ ] Optional: never reuse a deleted contact-type slot (older messages of that type would show under the new one).
+
 ## Content (owner: church office — see `09-content-status.md`)
 
 - [ ] Real liturgy/vespers/praise timetable (47 placeholders), meetings (11), clinics (11 — or remove the section),

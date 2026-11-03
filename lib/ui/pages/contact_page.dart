@@ -7,6 +7,7 @@ import '../../core/l10n.dart';
 import '../../core/launch.dart';
 import '../../core/theme.dart';
 import '../../data/content_repository.dart';
+import '../../domain/cairo_time.dart';
 import '../../domain/features.dart';
 import '../../domain/models.dart';
 import '../../domain/rules.dart';
@@ -170,7 +171,13 @@ class _ContactFormState extends ConsumerState<ContactForm> {
   final _email = TextEditingController();
   final _message = TextEditingController();
   final _honeypot = TextEditingController();
+  final _date = TextEditingController();
   Map<ContactField, ContactError> _errors = const {};
+
+  /// Chosen category slot (ADR-028); null = the first visible one.
+  String? _slot;
+  bool _anonymous = false;
+  String _bookingType = '';
   bool _sending = false;
   bool _consented = false;
   String? _status;
@@ -178,7 +185,7 @@ class _ContactFormState extends ConsumerState<ContactForm> {
 
   @override
   void dispose() {
-    for (final c in [_name, _phone, _email, _message, _honeypot]) {
+    for (final c in [_name, _phone, _email, _message, _honeypot, _date]) {
       c.dispose();
     }
     super.dispose();
@@ -194,18 +201,27 @@ class _ContactFormState extends ConsumerState<ContactForm> {
       ContactError.phoneOrEmailRequired => 'errPhoneOrEmail',
       ContactError.messageLength => 'errMessage',
       ContactError.consentRequired => 'errConsent',
+      ContactError.phoneRequired => 'errPhoneRequired',
+      ContactError.subtypeRequired => 'errSubtype',
+      ContactError.dateInvalid => 'errDate',
     });
   }
 
   Future<void> _submit() async {
     if (_sending) return; // a submission is already in flight
     FocusScope.of(context).unfocus();
+    final cat = _category(ref.read(contactSettingsProvider).value ?? ContactSettings.defaults);
     final v = validateContactForm(ContactFormInput(
       name: _name.text,
       phone: _phone.text,
       email: _email.text,
       message: _message.text,
       consented: _consented,
+      category: cat,
+      anonymous: _anonymous,
+      bookingType: _bookingType,
+      preferredDate: _date.text,
+      today: _cairoToday(),
     ));
     setState(() {
       _errors = v.errors;
@@ -264,14 +280,55 @@ class _ContactFormState extends ConsumerState<ContactForm> {
         _phone.clear();
         _email.clear();
         _message.clear();
+        _date.clear();
+        _bookingType = '';
+        _anonymous = false;
         _consented = false; // each message needs its own consent
       }
+    });
+  }
+
+  static String _two(int n) => n.toString().padLeft(2, '0');
+
+  static String _cairoToday() {
+    final c = CairoTime.fromInstant(DateTime.now());
+    return '${c.year}-${_two(c.month)}-${_two(c.day)}';
+  }
+
+  /// The selected category (the first visible one by default), or null when
+  /// none is configured (legacy message without a category).
+  ContactCategory? _category(ContactSettings cfg) {
+    final list = cfg.visible;
+    for (final c in list) {
+      if (c.slot == _slot) return c;
+    }
+    return list.isEmpty ? null : list.first;
+  }
+
+  Future<void> _pickDate() async {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final picked = await showDatePicker(
+      context: context,
+      firstDate: today,
+      lastDate: DateTime(today.year + 2, 12, 31),
+      initialDate: DateTime.tryParse(_date.text) ?? today,
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      _date.text = '${picked.year}-${_two(picked.month)}-${_two(picked.day)}';
+      _errors = Map.of(_errors)..remove(ContactField.date);
     });
   }
 
   @override
   Widget build(BuildContext context) {
     final contactErr = _err(ContactField.contact);
+    final cfg = ref.watch(contactSettingsProvider).value ?? ContactSettings.defaults;
+    final cats = cfg.visible;
+    final cat = _category(cfg);
+    final anonymous = _anonymous && (cat?.allowsAnonymous ?? false);
+    final booking = cat?.isBooking ?? false;
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -280,6 +337,93 @@ class _ContactFormState extends ConsumerState<ContactForm> {
             Text(context.tr('contactForm'),
                 style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17, color: Theme.of(context).colorScheme.primary)),
             const SizedBox(height: 12),
+            if (cats.length > 1) ...[
+              DropdownButtonFormField<String>(
+                key: const Key('contactCategory'),
+                isExpanded: true,
+                initialValue: cat?.slot,
+                decoration: InputDecoration(labelText: context.tr('contactCategory'), prefixIcon: const Icon(Icons.forum_outlined)),
+                items: [
+                  for (final c in cats) DropdownMenuItem(value: c.slot, child: Text(context.pick(c.labelAr, c.labelEn))),
+                ],
+                onChanged: (v) => setState(() {
+                  _slot = v;
+                  _bookingType = '';
+                  _errors = const {};
+                }),
+              ),
+              const SizedBox(height: 8),
+            ],
+            if (cat?.allowsAnonymous ?? false) ...[
+              SwitchListTile(
+                key: const Key('anonSwitch'),
+                contentPadding: EdgeInsets.zero,
+                title: Text(context.tr('sendAnonymously'), style: const TextStyle(fontWeight: FontWeight.w700)),
+                value: _anonymous,
+                onChanged: (v) => setState(() {
+                  _anonymous = v;
+                  _errors = const {};
+                }),
+              ),
+              if (anonymous)
+                Container(
+                  key: const Key('anonHint'),
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: context.pal.surfaceAlt,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: context.pal.hairline),
+                  ),
+                  child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Icon(Icons.privacy_tip_outlined, color: context.pal.goldText),
+                    const SizedBox(width: 8),
+                    Expanded(child: Text(context.tr('anonymousHint'), style: TextStyle(height: 1.6, color: context.pal.ink))),
+                  ]),
+                ),
+            ],
+            if (booking && cat!.subtypes.isNotEmpty) ...[
+              Text(context.tr('bookingType'), style: const TextStyle(fontWeight: FontWeight.w700)),
+              const SizedBox(height: 6),
+              Wrap(spacing: 8, runSpacing: 6, children: [
+                for (final s in cat.subtypes)
+                  ChoiceChip(
+                    key: ValueKey('subtype-${s.key}'),
+                    label: Text(context.pick(s.labelAr, s.labelEn)),
+                    selected: _bookingType == s.key,
+                    onSelected: (_) => setState(() {
+                      _bookingType = s.key;
+                      _errors = Map.of(_errors)..remove(ContactField.subtype);
+                    }),
+                  ),
+              ]),
+              if (_err(ContactField.subtype) != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(_err(ContactField.subtype)!,
+                      style: TextStyle(color: Theme.of(context).colorScheme.error, fontSize: 12.5)),
+                ),
+              const SizedBox(height: 10),
+            ],
+            if (booking) ...[
+              TextField(
+                key: const Key('preferredDate'),
+                controller: _date,
+                readOnly: true,
+                onTap: _pickDate,
+                textDirection: TextDirection.ltr,
+                decoration: InputDecoration(
+                  labelText: '${context.tr('preferredDate')} *',
+                  hintText: 'YYYY-MM-DD',
+                  errorText: _err(ContactField.date),
+                  prefixIcon: const Icon(Icons.event_rounded),
+                  suffixIcon: IconButton(
+                      tooltip: context.tr('pickDate'), icon: const Icon(Icons.calendar_month), onPressed: _pickDate),
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
+            if (!anonymous) ...[
             TextField(
               controller: _name,
               maxLength: contactNameMax,
@@ -296,7 +440,7 @@ class _ContactFormState extends ConsumerState<ContactForm> {
               textInputAction: TextInputAction.next,
               textDirection: TextDirection.ltr,
               decoration: InputDecoration(
-                labelText: context.tr('phone'),
+                labelText: booking ? '${context.tr('phone')} *' : context.tr('phone'),
                 hintText: '01XXXXXXXXX',
                 errorText: _err(ContactField.phone) ?? contactErr,
                 prefixIcon: const Icon(Icons.phone_iphone),
@@ -316,6 +460,7 @@ class _ContactFormState extends ConsumerState<ContactForm> {
               ),
             ),
             const SizedBox(height: 12),
+            ],
             TextField(
               controller: _message,
               minLines: 4,
@@ -330,7 +475,9 @@ class _ContactFormState extends ConsumerState<ContactForm> {
             // Honeypot (invisible to humans).
             Offstage(child: TextField(controller: _honeypot)),
             // Egyptian PDPL privacy notice + explicit consent (FR-CT-06).
-            Text(context.tr('privacyNotice'), style: Theme.of(context).textTheme.bodySmall),
+            // Anonymous messages store no identity: the notice says so (ADR-028).
+            Text(context.tr(anonymous ? 'privacyNoticeAnon' : 'privacyNotice'),
+                key: const Key('privacyNotice'), style: Theme.of(context).textTheme.bodySmall),
             CheckboxListTile(
               value: _consented,
               onChanged: (v) => setState(() {
@@ -341,7 +488,7 @@ class _ContactFormState extends ConsumerState<ContactForm> {
               }),
               controlAffinity: ListTileControlAffinity.leading,
               contentPadding: EdgeInsets.zero,
-              title: Text(context.tr('consentLabel')),
+              title: Text(context.tr(anonymous ? 'consentLabelAnon' : 'consentLabel')),
               subtitle: _err(ContactField.consent) == null
                   ? null
                   : Text(_err(ContactField.consent)!, style: TextStyle(color: Theme.of(context).colorScheme.error)),

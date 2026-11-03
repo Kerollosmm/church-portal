@@ -61,7 +61,7 @@ settings = {
     "sections": {**{k: True for k in [
       "schedule", "meetings", "clinics", "services", "history", "milestones", "saints", "priests",
       "departedPriests", "activities", "alerts", "contactInfo", "socials", "contactForm", "assistant", "media",
-      "dailyVerse",
+      "dailyVerse", "customSections", "customPages",
     ]}, "clinics": False},
     "homeOrder": ["banner", "alerts", "nextMass", "quickContacts", "milestones", "directory", "map"],
     "homeHidden": [],

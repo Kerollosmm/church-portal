@@ -10,6 +10,7 @@ import '../../state/providers.dart';
 import '../widgets/coptic_cross.dart';
 import 'admin_schema.dart';
 import 'admin_screens.dart';
+import 'contact_admin.dart';
 import 'collection_list.dart';
 import 'features_editor.dart';
 
@@ -303,6 +304,7 @@ List<AdminDest> adminDestinations(String role) => [
   const AdminDest('church', Icons.church_outlined, 'بيانات الكنيسة', 'Church info'),
   for (final c in adminCollections) AdminDest(c.id, adminIcon(c.icon), c.labelAr, c.labelEn),
   const AdminDest('messages', Icons.mail_outline, 'رسائل الزوار', 'Contact messages'),
+  const AdminDest('contactCats', Icons.forum_outlined, 'أنواع رسائل التواصل', 'Contact form types'),
   if (role == AdminRoles.owner) const AdminDest('admins', Icons.admin_panel_settings_outlined, 'المشرفون', 'Admins'),
 ];
 
@@ -342,6 +344,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
         return ChurchInfoScreen(repo: repo);
       case 'messages':
         return MessagesScreen(repo: repo);
+      case 'contactCats':
+        return ContactCategoriesScreen(repo: repo);
       case 'admins':
         return widget.role == AdminRoles.owner
             ? AdminsScreen(repo: repo, selfUid: widget.uid)

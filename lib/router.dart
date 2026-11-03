@@ -15,9 +15,11 @@ import 'state/providers.dart';
 import 'ui/admin/admin_page.dart' deferred as admin_page;
 import 'ui/pages/about_page.dart';
 import 'ui/pages/activities_page.dart';
+import 'ui/pages/category_page.dart';
 import 'ui/pages/assistant_page.dart' deferred as assistant_page;
 import 'ui/pages/clinics_page.dart';
 import 'ui/pages/contact_page.dart';
+import 'ui/pages/custom_page.dart';
 import 'ui/pages/education_page.dart';
 import 'ui/pages/home_page.dart';
 import 'ui/pages/item_detail_page.dart';
@@ -158,6 +160,16 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(path: '/public-services', pageBuilder: (c, s) => _page(s, const PublicServicesPage())),
           GoRoute(path: '/contact', pageBuilder: (c, s) => _page(s, const ContactPage())),
+          // Admin-defined categories and custom pages (ADR-027). Not behind a
+          // section switch: each has its own `visible` flag.
+          GoRoute(
+            path: '/section/:slug',
+            pageBuilder: (c, s) => _page(s, CategoryPage(slug: s.pathParameters['slug'] ?? '')),
+          ),
+          GoRoute(
+            path: '/page/:slug',
+            pageBuilder: (c, s) => _page(s, CustomPageView(slug: s.pathParameters['slug'] ?? '')),
+          ),
           // Shareable item detail pages (ADR-020). FeatureGate gates each like
           // its section (prefix-aware `routeEnabled`: `/about/priests/<id>`
           // stays open while either priests section is on; the page itself

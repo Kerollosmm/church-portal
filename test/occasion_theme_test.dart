@@ -12,6 +12,7 @@ import 'package:church_portal/core/theme.dart';
 import 'package:church_portal/data/content_repository.dart';
 import 'package:church_portal/data/seed_data.dart';
 import 'package:church_portal/domain/cairo_time.dart';
+import 'package:church_portal/domain/custom_content.dart';
 import 'package:church_portal/domain/features.dart';
 import 'package:church_portal/domain/hero_video.dart';
 import 'package:church_portal/domain/occasion_theme.dart';
@@ -29,6 +30,31 @@ SeedData _seed(Map<String, dynamic> features) {
   f.addAll(features);
   raw['settings']['features'] = f;
   return SeedData(raw);
+}
+
+/// The seed plus an admin-defined category with items and a custom page
+/// with every text block type (ADR-027), for the contrast walk.
+class _CustomRepo extends SeedRepository {
+  _CustomRepo(super.seed);
+  @override
+  Stream<List<CustomCategory>> categories() => Stream.value(const [
+        CustomCategory(id: 'k1', slug: 'youth-trips', nameAr: 'رحلات', nameEn: 'Youth trips', introEn: 'Trips for youth'),
+      ]);
+  @override
+  Stream<List<CategoryEntry>> entries() => Stream.value(const [
+        CategoryEntry(id: 'e1', categoryId: 'k1', titleAr: 'رحلة', titleEn: 'Alexandria trip', descEn: 'A day by the sea',
+            contactPhone: '01012345678', externalUrl: '/page/donate', externalLabelEn: 'Register', sample: true),
+      ]);
+  @override
+  Stream<List<CustomPage>> pages() => Stream.value(const [
+        CustomPage(id: 'p1', slug: 'donate', titleAr: 'تبرع', titleEn: 'Building donations', subtitleEn: 'Help us', blocks: [
+          PageBlock(type: BlockTypes.heading, textEn: 'The new building'),
+          PageBlock(type: BlockTypes.paragraph, textEn: 'Every gift helps.'),
+          PageBlock(type: BlockTypes.button, textEn: 'Contact us', url: '/contact'),
+          PageBlock(type: BlockTypes.link, textEn: 'Diocese site', url: 'https://example.org'),
+          PageBlock(type: BlockTypes.donation, account: 'CIB 100', instapay: 'church@instapay', wallet: '010', textEn: 'Notes'),
+        ]),
+      ]);
 }
 
 class _English extends LocaleNotifier {
@@ -52,7 +78,7 @@ Future<ProviderContainer> _pumpApp(WidgetTester tester, Map<String, dynamic> fea
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
   final container = ProviderContainer(overrides: [
-    repositoryProvider.overrideWithValue(SeedRepository(_seed(features))),
+    repositoryProvider.overrideWithValue(_CustomRepo(_seed(features))),
     nowProvider.overrideWith((ref) => Stream.value(now ?? _nov1)),
     localeProvider.overrideWith(_English.new),
   ]);
@@ -427,6 +453,37 @@ void main() {
           await tester.pumpAndSettle();
           failures.addAll(_contrastFailures(tester, '$key $r'));
         }
+        expect(failures, isEmpty);
+      });
+    }
+
+    // ADR-027 / ADR-028: custom category and page, and the contact form's
+    // booking and anonymous views, on every preset.
+    for (final key in ThemePresets.keys) {
+      testWidgets('$key: custom section, custom page and contact form variants', (tester) async {
+        final c = await _pumpApp(tester, {'theme': key}, size: const Size(1200, 6000));
+        final failures = <String>[];
+        for (final r in ['/section/youth-trips', '/page/donate', '/contact']) {
+          c.read(routerProvider).go(r);
+          await tester.pumpAndSettle();
+          failures.addAll(_contrastFailures(tester, '$key $r'));
+        }
+        expect(find.byKey(const Key('anonSwitch')), findsNothing);
+        await tester.tap(find.byKey(const Key('contactCategory')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Hall booking').last);
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const ValueKey('subtype-wedding')));
+        await tester.pumpAndSettle();
+        failures.addAll(_contrastFailures(tester, '$key /contact booking'));
+        await tester.tap(find.byKey(const Key('contactCategory')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Complaint').last);
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('anonSwitch')));
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('anonHint')), findsOneWidget);
+        failures.addAll(_contrastFailures(tester, '$key /contact anonymous'));
         expect(failures, isEmpty);
       });
     }

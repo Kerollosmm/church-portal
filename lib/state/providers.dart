@@ -11,6 +11,8 @@ import '../data/content_repository.dart';
 import '../data/firebase_bootstrap.dart';
 import '../data/media_repository.dart';
 import '../domain/cairo_time.dart';
+import '../domain/contact_categories.dart';
+import '../domain/custom_content.dart';
 import '../domain/daily_verse.dart';
 import '../domain/features.dart';
 import '../domain/models.dart';
@@ -54,6 +56,22 @@ final facilitiesProvider = StreamProvider<List<Facility>>((ref) => _public(ref.w
 final priestsProvider = StreamProvider<List<Priest>>((ref) => _public(ref.watch(repositoryProvider).priests()));
 final milestonesProvider = StreamProvider<List<Milestone>>((ref) => _public(ref.watch(repositoryProvider).milestones()));
 final saintsProvider = StreamProvider<List<Saint>>((ref) => _public(ref.watch(repositoryProvider).saints()));
+
+/// Admin-defined categories (ADR-027): public ones (visible, usable slug,
+/// unique), sorted by `order`.
+final categoriesProvider =
+    StreamProvider<List<CustomCategory>>((ref) => ref.watch(repositoryProvider).categories().map(publicCategories));
+
+/// Every category item (filtered per category by [entriesOf]).
+final entriesProvider = StreamProvider<List<CategoryEntry>>((ref) => ref.watch(repositoryProvider).entries());
+
+/// Public custom pages (visible, usable slug, unique), sorted by `order`.
+final customPagesProvider =
+    StreamProvider<List<CustomPage>>((ref) => ref.watch(repositoryProvider).pages().map(publicPages));
+
+/// Contact-form categories (ADR-028); code defaults until / unless stored.
+final contactSettingsProvider =
+    StreamProvider<ContactSettings>((ref) => ref.watch(repositoryProvider).contactSettings());
 
 /// The bundled verse-of-the-day list (assets/verses/daily_verses.json).
 /// Read as bytes and decoded here (no `compute` isolate) so it also works in
