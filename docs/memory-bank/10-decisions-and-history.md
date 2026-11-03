@@ -589,14 +589,15 @@ supersede them.
     (`ui.*`) breadcrumbs dropped; tags limited to `route`, `section`, `source`, `test`. Assistant errors are reported
     as `AssistantFailure` with the question redacted; quota / rate-limit / billing / safety rejections are not
     reported. Contact submit errors are reported as type + scrubbed message, never the form; `permission-denied`
-    (the server throttle) is not reported. **No** Session Replay, screenshots, view hierarchy, release-health
+    (usually the server throttle, but also any rules rejection) is tagged `source: permission-denied` (review). **No** Session Replay, screenshots, view hierarchy, release-health
     sessions, client reports, tracing (`tracesSampleRate` null — errors only, keeps us inside the free quota) or
     profiling.
   - **Admin switch:** `settings/features.errorReporting` (bool, default on; rules: bool only; seeded `true`; written
     only once off or stored). `beforeSend` awaits the switch (≤ 10 s, then the default) and drops everything while
     it is off; switching off also closes the SDK; switching back on applies from the next visit / app start. The
     web Sentry **JS** SDK (loaded by `sentry_flutter` from `browser.sentry-cdn.com`, reports window errors itself)
-    gets the same switch + scrubbing via its client `beforeSend` (`sentry_js_gate_web.dart`).
+    gets the same switch + scrubbing via its client `beforeSend` (`sentry_js_gate_web.dart`): a Promise that awaits
+    the switch and returns the event rebuilt from its JSON by `scrubEventJson`, fail closed (review: Codex / Seer).
   - Owner-only **Send test error** button in `/admin` (Sections & home page → Error reports).
 - **Not done (open tasks):** web source maps and Android obfuscation symbols need a Sentry auth token; Sentry
   project privacy settings (IP storage off, server-side scrubbers) are set in the Sentry UI. No CSP exists in

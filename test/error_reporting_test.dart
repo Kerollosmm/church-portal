@@ -163,6 +163,62 @@ void main() {
       expect(stripQuery('/section/youth?lang=en#top'), '/section/youth');
     });
 
+    test('JS SDK events (window errors) are scrubbed with the same rules (scrubEventJson)', () {
+      final js = <String, dynamic>{
+        'event_id': 'e1',
+        'platform': 'javascript',
+        'user': {'ip_address': '{{auto}}', 'email': 'visitor@example.com'},
+        'server_name': 'h',
+        'extra': {'question': _question},
+        'message': {'formatted': 'Failed for mina@example.com', 'message': 'x 01011122233'},
+        'request': {
+          'url': 'https://maximos-domadios-church.web.app/ask?q=prayer',
+          'query_string': 'q=prayer',
+          'cookies': 'a=b',
+          'data': {'message': _contactText},
+          'headers': {'User-Agent': 'Mozilla/5.0', 'Referer': 'https://x/?q=1', 'X-Forwarded-For': '41.33.1.2'},
+        },
+        'exception': {
+          'values': [
+            {'type': 'TypeError', 'value': 'cannot read mina@example.com', 'stacktrace': {'frames': []}}
+          ]
+        },
+        'breadcrumbs': [
+          {'category': 'ui.input', 'message': _question},
+          {'category': 'fetch', 'data': {'url': 'https://firestore.googleapis.com/x?key=SECRET', 'status_code': 403}},
+          {'category': 'console', 'message': 'phone 01234567890', 'data': {'arguments': ['x']}},
+        ],
+        'tags': {'route': '/ask?q=1', 'section': 'x', 'email': 'a@b.co'},
+        'transaction': '/ask?q=prayer',
+        'contexts': {'browser': {'name': 'Chrome'}, 'form': {'message': _contactText}},
+      };
+      final out = scrubEventJson(js);
+      expect(out.containsKey('user'), isFalse);
+      expect(out.containsKey('extra'), isFalse);
+      expect(out.containsKey('server_name'), isFalse);
+      expect(out['request'], {
+        'url': 'https://maximos-domadios-church.web.app/ask',
+        'method': null,
+        'headers': {'User-Agent': 'Mozilla/5.0'},
+      }..remove('method'));
+      expect(out['message'], {'formatted': 'Failed for [email]', 'message': 'x [number]'});
+      final ex = (out['exception'] as Map)['values'] as List;
+      expect((ex.single as Map)['value'], 'cannot read [email]');
+      expect((ex.single as Map)['stacktrace'], isNotNull);
+      final crumbs = out['breadcrumbs'] as List;
+      expect(crumbs, hasLength(2));
+      expect((crumbs[0] as Map)['data'], {'url': 'https://firestore.googleapis.com/x', 'status_code': 403});
+      expect((crumbs[1] as Map)['message'], 'phone [number]');
+      expect(out['tags'], {'route': '/ask', 'section': 'x'});
+      expect(out['transaction'], '/ask');
+      expect(out['contexts'], {'browser': {'name': 'Chrome'}});
+      expect(out['platform'], 'javascript');
+      final json = jsonEncode(out);
+      for (final secret in ['Mina', 'mina@', 'visitor@', '41.33.1.2', 'SECRET', 'prayer', 'pray', '{{auto}}']) {
+        expect(json, isNot(contains(secret)), reason: secret);
+      }
+    });
+
     test('redact removes the visitor question from an error message', () {
       final f = AssistantFailure.from(Exception('Bad request for prompt "$_question"'), [_question]);
       expect(f.toString(), isNot(contains('Marina')));
@@ -333,6 +389,14 @@ void main() {
       ]);
       expect(seen, hasLength(1));
       expect(seen.single.$2['section'], 'content:liturgies');
+    });
+
+    test('contact: a permission-denied submit is reported, tagged so it can be filtered', () {
+      final seen = <Map<String, String>>[];
+      ErrorReporting.debugSink = (e, st, tags) => seen.add(tags);
+      ErrorReporting.capture(const ContactSubmitFailure('FirebaseException', '[cloud_firestore/permission-denied]'), null,
+          section: 'contact', source: 'permission-denied');
+      expect(seen.single, {'section': 'contact', 'source': 'permission-denied'});
     });
 
     test('capture tags the section and the current route (path only)', () {

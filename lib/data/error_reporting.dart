@@ -107,9 +107,8 @@ SentryEvent scrubEvent(SentryEvent event) {
     ];
   }
   // Custom contexts could carry form state: keep only the SDK's own ones.
-  const keep = {'device', 'os', 'app', 'browser', 'runtime', 'gpu', 'culture', 'flutter_context', 'trace', 'response'};
   for (final k in event.contexts.keys.toList()) {
-    if (!keep.contains(k)) event.contexts.remove(k);
+    if (!sdkContextKeys.contains(k)) event.contexts.remove(k);
   }
   return event;
 }
@@ -168,8 +167,8 @@ class ErrorReporting {
 
   /// Reports a caught [error]. [section] names the feature (`content:<stream>`,
   /// `assistant`, `contact`, `admin`); the current route is added.
-  static void capture(Object error, StackTrace? stack, {required String section}) {
-    final tags = {'section': section, 'route': ?_route};
+  static void capture(Object error, StackTrace? stack, {required String section, String? source}) {
+    final tags = {'section': section, 'route': ?_route, 'source': ?source};
     debugSink?.call(error, stack, tags);
     if (!_active || !gate.enabled) return;
     unawaited(Sentry.captureException(error, stackTrace: stack, withScope: (scope) {
@@ -230,7 +229,7 @@ class ErrorReporting {
           _active = true;
           // The Sentry JS SDK (web) reports window errors itself; give it the
           // same switch and scrubbing.
-          installSentryJsGate(() => gate.enabled);
+          installSentryJsGate(gate.allowed);
           await appRunner();
         },
       );

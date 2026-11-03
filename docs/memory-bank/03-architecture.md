@@ -136,12 +136,14 @@ flowchart TD
   `section`, `source`, `test` are kept. No Session Replay, screenshots, view hierarchy, release-health sessions,
   client reports, tracing or profiling. On web the Sentry **JS** SDK (loaded by `sentry_flutter` from
   `browser.sentry-cdn.com`) also reports window errors: `installSentryJsGate` (`sentry_js_gate_web.dart`) sets its
-  `beforeSend` to the same switch + scrubbing.
+  `beforeSend` to a Promise that **awaits the same switch** (`gate.allowed`) and rebuilds the event from its JSON
+  with `scrubEventJson` (same rules as `scrubEvent`); any failure drops the event (fail closed).
 - **What is captured**: uncaught Flutter / platform / zone errors (SDK), Firestore stream failures in `guardSeeded`
   (`section: content:<stream>`), assistant failures (`AssistantConversation.onError` and the page's catch → an
   `AssistantFailure` with the visitor's question `redact`ed; quota / rate-limit / billing / safety rejections are not
-  reported — `isUserFacingAssistantError`), contact-form submit failures except `permission-denied` (the server
-  throttle) as a `ContactSubmitFailure` (type + scrubbed message, never the form). Every capture goes through
+  reported — `isUserFacingAssistantError`), contact-form submit failures as a `ContactSubmitFailure` (type + scrubbed message, never the form;
+  `permission-denied` — usually the server throttle, but also any rules rejection — is tagged
+  `source: permission-denied` so it can be filtered). Every capture goes through
   `ErrorReporting.capture(error, stack, section: …)`, which adds the current `route` (set in the router's redirect).
 - Owners get **"Send test error"** in `/admin` → Sections & home page → Error reports (`ErrorReporting.sendTestEvent`,
   tag `test: true`).

@@ -268,10 +268,10 @@ class _ContactFormState extends ConsumerState<ContactForm> {
       _done(msgs.unavailable, false);
     } catch (e, st) {
       // The error only (never the form's text, ADR-034). A permission-denied
-      // write is the server-side rate limit doing its job: not reported.
-      if (!'$e'.contains('permission-denied')) {
-        ErrorReporting.capture(ContactSubmitFailure(e.runtimeType.toString(), scrubText('$e')), st, section: 'contact');
-      }
+      // write is usually the server-side throttle, but also any rules
+      // rejection (schema drift): reported, tagged so it can be filtered.
+      ErrorReporting.capture(ContactSubmitFailure(e.runtimeType.toString(), scrubText('$e')), st,
+          section: 'contact', source: '$e'.contains('permission-denied') ? 'permission-denied' : null);
       _done(msgs.failed, false);
     }
   }

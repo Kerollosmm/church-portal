@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:js_interop';
 import 'dart:js_interop_unsafe';
 
@@ -5,11 +6,19 @@ import 'package:flutter/foundation.dart';
 
 import '../domain/error_privacy.dart';
 
-/// Sets `beforeSend` on the Sentry JS client: drops JS-side events while the
-/// admin switch is off, and removes the user, cookies, headers other than the
-/// User-Agent, and the URL query string. Events captured in Dart travel as
-/// envelopes and are filtered by the Dart `beforeSend` instead.
-void installSentryJsGate(bool Function() allowed) {
+@JS('JSON.stringify')
+external JSString? _stringify(JSAny? value);
+
+@JS('JSON.parse')
+external JSAny? _parse(JSString text);
+
+/// Sets `beforeSend` on the Sentry JS client (window errors the JS SDK
+/// catches itself; Dart events travel as envelopes and pass the Dart
+/// `beforeSend`). It returns a Promise: the event waits for the admin switch
+/// like the Dart side ([allowed]), is dropped while reporting is off, and is
+/// otherwise rebuilt from its JSON with [scrubEventJson]. If anything fails,
+/// the event is dropped (fail closed).
+void installSentryJsGate(Future<bool> Function() allowed) {
   try {
     final sentry = globalContext['Sentry'];
     if (sentry == null || !sentry.isA<JSObject>()) return;
@@ -17,32 +26,21 @@ void installSentryJsGate(bool Function() allowed) {
     if (client == null || !client.isA<JSObject>()) return;
     final options = (client as JSObject).callMethod<JSAny?>('getOptions'.toJS);
     if (options == null || !options.isA<JSObject>()) return;
-    JSObject? beforeSend(JSObject event, JSAny? hint) {
-      if (!allowed()) return null;
+
+    Future<JSAny?> gate(JSAny? event) async {
       try {
-        event.delete('user'.toJS);
-        event.delete('extra'.toJS);
-        final req = event['request'];
-        if (req != null && req.isA<JSObject>()) {
-          final r = req as JSObject;
-          final url = r['url'];
-          if (url != null && url.isA<JSString>()) r['url'] = stripQuery((url as JSString).toDart).toJS;
-          r.delete('query_string'.toJS);
-          r.delete('cookies'.toJS);
-          r.delete('data'.toJS);
-          final headers = r['headers'];
-          if (headers != null && headers.isA<JSObject>()) {
-            final ua = (headers as JSObject)['User-Agent'];
-            final kept = JSObject();
-            if (ua != null) kept['User-Agent'] = ua;
-            r['headers'] = kept;
-          }
-        }
+        if (!await allowed()) return null;
+        final text = _stringify(event)?.toDart;
+        if (text == null) return null;
+        final decoded = jsonDecode(text);
+        if (decoded is! Map<String, dynamic>) return null;
+        return _parse(jsonEncode(scrubEventJson(decoded)).toJS);
       } catch (_) {
-        return null; // could not scrub: do not send
+        return null;
       }
-      return event;
     }
+
+    JSPromise<JSAny?> beforeSend(JSAny? event, JSAny? hint) => gate(event).toJS;
 
     (options as JSObject)['beforeSend'] = beforeSend.toJS;
   } catch (e) {

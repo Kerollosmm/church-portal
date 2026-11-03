@@ -118,3 +118,111 @@ class ContactSubmitFailure implements Exception {
   @override
   String toString() => 'ContactSubmitFailure($type): $message';
 }
+
+/// Context keys the SDKs set themselves; custom ones (form state) are dropped.
+const Set<String> sdkContextKeys = {
+  'device', 'os', 'app', 'browser', 'runtime', 'gpu', 'culture', 'flutter_context', 'trace', 'response',
+};
+
+/// One breadcrumb as JSON (Sentry JS shape) scrubbed like the Dart ones; null = drop.
+Map<String, dynamic>? scrubBreadcrumbJson(Map<String, dynamic> b) {
+  final cat = '${b['category'] ?? ''}';
+  if (cat.startsWith('ui.')) return null;
+  final out = Map<String, dynamic>.of(b);
+  if (out['message'] is String) out['message'] = scrubText(out['message'] as String);
+  final data = out['data'];
+  if (data is Map) {
+    out['data'] = <String, dynamic>{
+      for (final e in data.entries)
+        if (!isSensitiveKey('${e.key}')) '${e.key}': ?_scrubValue('${e.key}', e.value),
+    };
+  } else {
+    out.remove('data');
+  }
+  return out;
+}
+
+Object? _scrubValue(String key, Object? v) => switch (v) {
+      final String s when key == 'url' || key == 'from' || key == 'to' => stripQuery(s),
+      final String s => scrubText(s),
+      final num n => n,
+      final bool b => b,
+      _ => null,
+    };
+
+/// A whole Sentry event as JSON (the shape the Sentry **JS** SDK hands to its
+/// `beforeSend`), scrubbed with the same rules as `scrubEvent` (ADR-034): no
+/// user / server name / extra / custom contexts, request without cookies, body
+/// or headers but the User-Agent, no query strings, scrubbed messages,
+/// exception values and breadcrumbs, only the allowed tags.
+Map<String, dynamic> scrubEventJson(Map<String, dynamic> event) {
+  final e = Map<String, dynamic>.of(event)
+    ..remove('user')
+    ..remove('extra')
+    ..remove('server_name');
+  final req = e['request'];
+  if (req is Map) {
+    String? ua;
+    final headers = req['headers'];
+    if (headers is Map) {
+      for (final h in headers.entries) {
+        if ('${h.key}'.toLowerCase() == 'user-agent' && h.value is String) ua = h.value as String;
+      }
+    }
+    e['request'] = <String, dynamic>{
+      if (req['url'] is String) 'url': stripQuery(req['url'] as String),
+      if (req['method'] is String) 'method': req['method'],
+      if (ua != null) 'headers': {'User-Agent': ua},
+    };
+  }
+  final msg = e['message'];
+  if (msg is String) {
+    e['message'] = scrubText(msg);
+  } else if (msg is Map) {
+    e['message'] = <String, dynamic>{
+      for (final k in ['formatted', 'message'])
+        if (msg[k] is String) k: scrubText(msg[k] as String),
+    };
+  }
+  final ex = e['exception'];
+  if (ex is Map && ex['values'] is List) {
+    e['exception'] = <String, dynamic>{
+      ...ex.map((k, v) => MapEntry('$k', v)),
+      'values': [
+        for (final v in ex['values'] as List)
+          if (v is Map)
+            <String, dynamic>{
+              ...v.map((k, x) => MapEntry('$k', x)),
+              if (v['value'] is String) 'value': scrubText(v['value'] as String),
+            },
+      ],
+    };
+  }
+  List<Map<String, dynamic>> crumbs(List l) => [
+        for (final b in l)
+          if (b is Map) ?scrubBreadcrumbJson(b.map((k, v) => MapEntry('$k', v))),
+      ];
+  final bc = e['breadcrumbs'];
+  if (bc is List) {
+    e['breadcrumbs'] = crumbs(bc);
+  } else if (bc is Map && bc['values'] is List) {
+    e['breadcrumbs'] = {'values': crumbs(bc['values'] as List)};
+  }
+  final tags = e['tags'];
+  if (tags is Map) {
+    e['tags'] = <String, dynamic>{
+      for (final t in tags.entries)
+        if (allowedTags.contains('${t.key}')) '${t.key}': t.key == 'route' && t.value is String ? stripQuery(t.value as String) : t.value,
+    };
+  }
+  if (e['transaction'] is String) e['transaction'] = stripQuery(e['transaction'] as String);
+  if (e['culprit'] is String) e['culprit'] = scrubText(e['culprit'] as String);
+  final ctx = e['contexts'];
+  if (ctx is Map) {
+    e['contexts'] = <String, dynamic>{
+      for (final c in ctx.entries)
+        if (sdkContextKeys.contains('${c.key}')) '${c.key}': c.value,
+    };
+  }
+  return e;
+}
