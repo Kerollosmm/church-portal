@@ -274,8 +274,13 @@ class _ChurchInfoScreenState extends State<ChurchInfoScreen> {
   @override
   void didUpdateWidget(covariant ChurchInfoScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // A different backend: re-bind the stream and rebuild the form from it.
-    if (widget.repo != oldWidget.repo || widget.doc.path != oldWidget.doc.path) {
+    // A different backend or document definition: re-bind the stream and
+    // rebuild the form from it. Two definitions may share a path with
+    // different fields (settings/features: today vs season settings), and
+    // DocEditor builds its per-field state only once.
+    if (widget.repo != oldWidget.repo ||
+        widget.doc.path != oldWidget.doc.path ||
+        !identical(widget.doc, oldWidget.doc)) {
       _stream = widget.repo.watchDoc(widget.doc.path);
       _shown = null;
       _loaded = false;

@@ -146,6 +146,13 @@ the defaults). They feed the run-time dropdowns «المكان / القاعة» 
 writes only the keys it changed. Since PR #33 (ADR-042) it also holds «آيات المواسم» `seasonVerses` (≤ 40 rows:
 season choice, verse text, reference).
 
+Since PR #36 (Sentry CHURCH-PORTAL-9) the dashboard keys each `ChurchInfoScreen` by section (`ValueKey('today')`,
+`ValueKey('seasonSettings')`, `ValueKey('church')`) and `ChurchInfoScreen.didUpdateWidget` rebuilds the form when the
+`DocDef` itself changes, not only its path: «اليوم والبث المباشر» and «إعدادات المواسم» share `settings/features`
+with different fields, and a reused `DocEditor` kept Today's per-field state, so opening Season settings next threw
+`Null check operator` on `_rows['venues']!`. Guarded by the dashboard Today → Season → Today test in
+`test/accessibility_test.dart`.
+
 ### Season preparation («تجهيز الموسم», `SeasonPresetScreen`, `lib/ui/admin/season_preset_admin.dart`) (PR #33, ADR-042)
 
 Season dropdown (upcoming first; names carry the year — ADR-043, sim B5) → checklist of 7 options (8 with «ثيم الموسم
