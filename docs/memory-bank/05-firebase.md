@@ -195,9 +195,14 @@ stays `asafra-church-portal.firebaseapp.com` (admin sign-in is email/password, n
 App target settings:
 
 - `public: build/web` (output of `flutter build web --release`); ignores `firebase.json`, dotfiles, `node_modules`.
-- `cleanUrls: true`, `trailingSlash: false`, **rewrite `**` → `/index.html`** (SPA + path URL strategy) — this also
-  serves the PR #13 item detail URLs (`/clinics/<id>`, `/about/priests/<id>`…) with HTTP 200; the app decides
-  what they show.
+- `cleanUrls: true`, `trailingSlash: false`, **rewrite `"regex": "^/[^.]*$"` → `/index.html`** (SPA + path URL
+  strategy; ADR-037 — was `**`) — every extension-less path, so the PR #13 item detail URLs (`/clinics/<id>`,
+  `/about/priests/<id>`…), `/section/<slug>`, `/page/<slug>`, `/admin`, `/ask` load with HTTP 200 and the app decides
+  what they show, while a missing **file** (`/.well-known/ard.json`, `*.map`, `wp-login.php` probes) is a real 404
+  instead of `index.html`. **Route slugs must not contain a dot.** `web/llms.txt` (ADR-037) describes the site for AI
+  agents (H1 + page links, all in the sitemap).
+- Headers on `**` also include `Cross-Origin-Opener-Policy: same-origin-allow-popups` (ADR-037; keeps Google sign-in
+  popups working); `mp4` (hero clip) is cached 7 days like images and fonts.
 - SEO in `web/index.html` (PR 3 of the review plan): a **static** `<link rel="canonical"
   href="https://maximos-domadios-church.web.app/">` in the shell. Since PR #10 (amending ADR-019) Flutter rewrites it
   per route with `setDocumentRouteMeta` (`lib/core/document_lang*.dart`): indexable routes get
@@ -232,15 +237,18 @@ App target settings:
   public, real writes from the contact form and /admin!).
 - Rollback: Firebase console → Hosting → release history → roll back.
 
-## App Check (`lib/data/app_check_providers.dart` `selectAppCheckPlan`, activated in `firebase_bootstrap.dart`)
+## App Check (`lib/data/app_check_providers.dart` `selectAppCheckPlan`, activated lazily by `ensureAppCheckActivated()` in `firebase_bootstrap.dart`)
 
-ADR-029 (PR #19). Firebase AI Logic **requires** App Check enforcement since 2 Nov 2026; it is **Enforced** in the
+ADR-029 (PR #19). **Since ADR-037 (PR #29) App Check is not activated at start-up**: `ensureAppCheckActivated()`
+(one shared Future) runs on the assistant's first `warmUp()` / `generate()`, so public pages never load reCAPTCHA
+Enterprise. `FirebaseStatus.appCheckActive` = "App Check is configured for this build" (`plan.activate`), which
+still gates the assistant; a later activation failure shows the assistant's normal error instead of hiding it. Firebase AI Logic **requires** App Check enforcement since 2 Nov 2026; it is **Enforced** in the
 console.
 
 | Build | Provider |
 |---|---|
 | Web release with key | `ReCaptchaEnterpriseProvider(AppConfig.recaptchaSiteKey)` — the key is a **reCAPTCHA Enterprise** key ("church-portal-web", site key `6LdJhw4uAAAAAI7yuMKtTRMVc_r9LdX1qPBqHMW3`, a public value); a `ReCaptchaV3Provider` would be rejected |
-| Web release without key (`PLACEHOLDER…`, empty — PR previews) | **not activated** → `appCheckActive = false` → assistant hidden |
+| Web release without key (`PLACEHOLDER…`, empty — PR previews) | **not configured** → `appCheckActive = false` → assistant hidden |
 | Debug builds or `--dart-define=APPCHECK_DEBUG=true` | `WebDebugProvider` / `AndroidDebugProvider` / `AppleDebugProvider` (token from `APPCHECK_DEBUG_TOKEN` or SDK-generated and printed in console/logcat — register it under App Check → Manage debug tokens) |
 | Android release | `AndroidPlayIntegrityProvider` (needs the release key's SHA-256 registered — **not done yet**, no release signing key) |
 | iOS release | `AppleAppAttestWithDeviceCheckFallbackProvider` |

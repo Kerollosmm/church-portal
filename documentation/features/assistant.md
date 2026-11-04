@@ -40,7 +40,7 @@
 - الصفحة `lib/ui/pages/assistant_page.dart` تُحمَّل كجزء منفصل (deferred) فقط عندما يكون المساعد مفعّلًا (`AssistantGate`)،
   حتى لا تدخل مكتبة الذكاء الاصطناعي في حزمة الموقع العامة.
 - الاستدعاء: **Firebase AI Logic** (Gemini Developer API، مجاني ومحدود المعدل على خطة Spark) مباشرة من التطبيق
-  (`lib/data/assistant_model.dart`). يسبقه تسخين رمز App Check، ومحاولة إعادة واحدة عند فشل عابر.
+  (`lib/data/assistant_model.dart`). يسبقه تفعيل App Check عند أول استخدام فقط (لا يُحمَّل reCAPTCHA في الصفحات العامة — ADR-037) وتسخين رمزه، ومحاولة إعادة واحدة عند فشل عابر.
 - **App Check مفروض (Enforced) على AI Logic**: الويب يستخدم **reCAPTCHA Enterprise** (مفتاح «church-portal-web»، متغير
   المستودع `RECAPTCHA_SITE_KEY`)، و Android يستخدم **Play Integrity** (`lib/data/app_check_providers.dart`). بدون App
   Check يختفي المساعد على الويب. نسخ المعاينة `pr-<n>` تُبنى بدون المفتاح، لذلك المساعد مخفي فيها.

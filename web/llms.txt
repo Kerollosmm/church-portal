@@ -1,0 +1,28 @@
+# كنيسة القديسين مكسيموس ودوماديوس والقوي الأنبا موسى الأسود
+
+> Church of Saints Maximus & Domadius and the Strong Anba Moussa the Black — a Coptic Orthodox church at the end of Street 45, El-Asafra Qebly, Alexandria, Egypt. This site is its public portal (Arabic first, English with `?lang=en`): mass times, meetings, activities, services, the church's story and how to reach it.
+
+- Address: آخر شارع 45، العصافرة قبلي، قطاع المنتزه، الإسكندرية، مصر
+- Telephone: +20 3 5368888
+- The pages are rendered by a Flutter web app; facts change in the church's admin dashboard, so read the live pages for current times.
+
+## Pages
+
+- [الرئيسية — Home](https://maximos-domadios-church.web.app/): next mass, announcements, verse of the day, directory of sections
+- [مواعيد القداسات — Mass schedule](https://maximos-domadios-church.web.app/mass-schedule): weekly liturgies and seasonal times
+- [التربية الكنسية — Church education](https://maximos-domadios-church.web.app/church-education): Sunday school and meetings by age
+- [الأنشطة — Church activities](https://maximos-domadios-church.web.app/church-activities): activities and services of the church
+- [الخدمات العامة — Public services](https://maximos-domadios-church.web.app/public-services): public services offered by the church
+- [عن الكنيسة — About](https://maximos-domadios-church.web.app/about): history, priests and the patron saints
+- [تواصل معنا — Contact](https://maximos-domadios-church.web.app/contact): phone numbers, map, directions and the contact form
+
+## Official channels
+
+- [Facebook](https://www.facebook.com/100070313048338)
+- [YouTube](https://www.youtube.com/channel/UCJiZ4u0IiUbSvBnTrJnRZBA)
+- [Instagram](https://www.instagram.com/maximos_coptic_church)
+- [WhatsApp channel](https://whatsapp.com/channel/0029Vb6Kmbs2UPBMUcrlVB0g)
+
+## Optional
+
+- [Sitemap](https://maximos-domadios-church.web.app/sitemap.xml)

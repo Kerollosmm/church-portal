@@ -41,9 +41,28 @@ Future<FirebaseStatus> bootstrapFirebase() async {
     debugPrint('Firestore settings: $e');
   }
 
-  final appCheck = await _activateAppCheck();
-  return FirebaseStatus(available: true, appCheckActive: appCheck);
+  // App Check is activated lazily, on the first assistant use
+  // ([ensureAppCheckActivated], ADR-037): it only protects Firebase AI Logic
+  // (Firestore is not enforced — see docs/memory-bank/05-firebase.md), and
+  // activating it here loaded reCAPTCHA Enterprise (~700 KiB of script, a
+  // Google iframe and a token exchange) on every public page and held the
+  // first frame until it answered. `appCheckActive` now says App Check is
+  // configured for this build, which is what gates the assistant.
+  return FirebaseStatus(available: true, appCheckActive: _appCheckPlan().activate);
 }
+
+Future<bool>? _appCheckActivation;
+
+/// Activates App Check once (later calls share the first result). Called by
+/// the assistant before it mints a token or calls the model.
+Future<bool> ensureAppCheckActivated() => _appCheckActivation ??= _activateAppCheck();
+
+AppCheckPlan _appCheckPlan() => selectAppCheckPlan(
+      isWeb: kIsWeb,
+      debug: kDebugMode || AppConfig.forceAppCheckDebug,
+      siteKey: AppConfig.recaptchaSiteKey,
+      debugToken: AppConfig.appCheckDebugToken,
+    );
 
 /// App Check (enforced for Firebase AI Logic; ADR-029). Providers are chosen
 /// by [selectAppCheckPlan]: reCAPTCHA Enterprise on web release builds
@@ -51,12 +70,7 @@ Future<FirebaseStatus> bootstrapFirebase() async {
 /// release, App Attest on Apple release, debug providers in debug builds or
 /// with APPCHECK_DEBUG=true.
 Future<bool> _activateAppCheck() async {
-  final plan = selectAppCheckPlan(
-    isWeb: kIsWeb,
-    debug: kDebugMode || AppConfig.forceAppCheckDebug,
-    siteKey: AppConfig.recaptchaSiteKey,
-    debugToken: AppConfig.appCheckDebugToken,
-  );
+  final plan = _appCheckPlan();
   if (!plan.activate) {
     debugPrint('App Check not activated (${plan.label}): set RECAPTCHA_SITE_KEY (see README).');
     return false;

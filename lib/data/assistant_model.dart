@@ -3,6 +3,7 @@ import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:flutter/foundation.dart';
 
 import '../domain/assistant_conversation.dart';
+import 'firebase_bootstrap.dart';
 
 /// [AssistantModel] on Firebase AI Logic (Gemini Developer API backend,
 /// App Check token attached automatically by the SDK — ADR-029). Stateless:
@@ -13,9 +14,12 @@ class FirebaseAssistantModel implements AssistantModel {
 
   /// Mints the App Check token now (reCAPTCHA Enterprise on web can take a
   /// few seconds the first time), so the first question does not race it.
+  /// App Check itself is activated here, on the assistant's first use, not at
+  /// start-up (ADR-037).
   @override
   Future<void> warmUp() async {
     try {
+      if (!await ensureAppCheckActivated()) return;
       await FirebaseAppCheck.instance.getToken().timeout(const Duration(seconds: 15));
     } catch (e) {
       debugPrint('Assistant: App Check warm-up failed: $e');
@@ -29,6 +33,8 @@ class FirebaseAssistantModel implements AssistantModel {
     required List<AssistantTurn> history,
     required String prompt,
   }) async {
+    // Normally done by warmUp already; a no-op then (shared Future).
+    await ensureAppCheckActivated();
     final m = FirebaseAI.googleAI().generativeModel(
       model: model,
       systemInstruction: Content.system(instruction),

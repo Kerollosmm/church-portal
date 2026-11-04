@@ -33,9 +33,16 @@ onbg() { # size pct colour out
   magick -size "${s}x${s}" xc:"$c" "$T/inner_${s}_${2}.png" -gravity center -composite -strip "$out"
 }
 
-# In-app logo (header tab, drawer, footer, admin) and the web splash: 384 px
-# (sharp at 120 css px on 3x screens; ~170 KB).
+# In-app logo (header tab, drawer, footer, admin): 384 px (sharp at 120 css px
+# on 3x screens), then 256-colour RGBA palette (~27 KB instead of ~178 KB, no
+# visible change — ADR-037; needs Pillow).
 shrink "$T/round.png" 384 "$B/seal.png"
+python3 - "$B/seal.png" <<'PY'
+import sys
+from PIL import Image
+p = sys.argv[1]
+Image.open(p).convert('RGBA').quantize(256, method=Image.Quantize.FASTOCTREE).save(p, optimize=True)
+PY
 # Web: favicons, PWA "any" icons (round on transparency), Apple touch icon
 # (opaque: iOS ignores transparency), maskable (seal inside the 80 % safe circle).
 shrink "$T/round.png" 32 "$W/favicon.png"

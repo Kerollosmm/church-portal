@@ -40,7 +40,7 @@ jobs:
           SENTRY_DSN: ${{ vars.SENTRY_DSN || '' }}
         run: |
           APP_VERSION=$(sed -n 's/^version: *//p' pubspec.yaml | head -1)
-          DEFINES=(--dart-define=SENTRY_ENVIRONMENT=ci --dart-define=GIT_SHA="$GITHUB_SHA" --dart-define=APP_VERSION="$APP_VERSION")
+          DEFINES=(--source-maps --dart-define=SENTRY_ENVIRONMENT=ci --dart-define=GIT_SHA="$GITHUB_SHA" --dart-define=APP_VERSION="$APP_VERSION")
           if [ -n "$SENTRY_DSN" ]; then DEFINES+=(--dart-define=SENTRY_DSN="$SENTRY_DSN"); fi
           flutter build web --release "${DEFINES[@]}"
 

@@ -6,6 +6,8 @@ import 'package:material_ui/material_ui.dart';
 import '../../core/motion_env.dart';
 import '../../core/theme.dart';
 import 'coptic_cross.dart';
+import 'hero_ambient.dart';
+import 'hero_ambient_spec.dart';
 import 'hero_feather.dart';
 import 'hero_video.dart';
 
@@ -305,29 +307,22 @@ class LightRaysPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final origin = Offset(size.width / 2, -size.height * 0.08);
-    final reach = size.height * 1.05;
-    const rays = 14;
-    for (var i = 0; i < rays; i++) {
-      final t = i / (rays - 1);
-      final angle = math.pi / 2 + (t - 0.5) * 1.5; // fan of ~86 degrees
-      final width = 0.035 + 0.02 * math.sin(i * 1.7);
-      final phase = math.sin((shimmer * 2 * math.pi) + i * 0.9) * 0.5 + 0.5;
-      final alpha = (0.10 + 0.16 * phase) * strength;
-      final a1 = angle - width / 2, a2 = angle + width / 2;
+    final sigma = HeroAmbientSpec.raySigma(size);
+    final (r, g, b) = HeroAmbientSpec.rayColor;
+    for (final ray in HeroAmbientSpec.rays(size, shimmer: shimmer, strength: strength)) {
       final path = Path()
-        ..moveTo(origin.dx, origin.dy)
-        ..lineTo(origin.dx + math.cos(a1) * reach, origin.dy + math.sin(a1) * reach)
-        ..lineTo(origin.dx + math.cos(a2) * reach, origin.dy + math.sin(a2) * reach)
+        ..moveTo(ray.origin.dx, ray.origin.dy)
+        ..lineTo(ray.p1.dx, ray.p1.dy)
+        ..lineTo(ray.p2.dx, ray.p2.dy)
         ..close();
       final paint = Paint()
         // Feathered sides: a ray is a soft beam, never a hard-edged wedge.
-        ..maskFilter = MaskFilter.blur(BlurStyle.normal, math.max(4, size.width * 0.012))
+        ..maskFilter = MaskFilter.blur(BlurStyle.normal, sigma)
         ..shader = RadialGradient(
           center: Alignment.topCenter,
           radius: 1.0,
-          colors: [Color.fromRGBO(255, 238, 196, alpha), const Color.fromRGBO(255, 238, 196, 0)],
-        ).createShader(Rect.fromCircle(center: origin, radius: reach));
+          colors: [Color.fromRGBO(r, g, b, ray.alpha), Color.fromRGBO(r, g, b, 0)],
+        ).createShader(Rect.fromCircle(center: ray.origin, radius: ray.reach));
       canvas.drawPath(path, paint);
     }
   }
@@ -504,7 +499,7 @@ class HeroStage extends StatefulWidget {
 
 class _HeroStageState extends State<HeroStage> with SingleTickerProviderStateMixin, ViewportVisibility<HeroStage> {
   // One slow master clock (60 s); every layer derives its phase from it.
-  late final AnimationController _clock = AnimationController(vsync: this, duration: const Duration(seconds: 60));
+  late final AnimationController _clock = AnimationController(vsync: this, duration: HeroAmbientSpec.clock);
   bool _ambient = false;
   bool _videoOn = false;
 
@@ -531,11 +526,19 @@ class _HeroStageState extends State<HeroStage> with SingleTickerProviderStateMix
   @override
   void onViewportVisibility(bool visible) {
     _sync();
-    if (_videoOn && mounted) setState(() {}); // pause / resume the video
+    if ((_videoOn || _domAmbient) && mounted) setState(() {}); // pause / resume the video / DOM layer
   }
 
+  /// Web: the haze and the ray shimmer are a CSS-animated DOM layer
+  /// ([HeroAmbientLayer], ADR-037) instead of a Flutter repaint every frame.
+  bool get _domAmbient => _ambient && heroAmbientInDom;
+
+  /// The Flutter clock runs only for what Flutter still animates: everything
+  /// off the web, and the Ken Burns of the painting (no video) on the web.
+  bool get _needsClock => _ambient && (!heroAmbientInDom || !_videoOn);
+
   void _sync() {
-    final run = _ambient && visibleInViewport;
+    final run = _needsClock && visibleInViewport;
     if (run && !_clock.isAnimating) {
       _clock.repeat();
     } else if (!run && _clock.isAnimating) {
@@ -600,15 +603,28 @@ class _HeroStageState extends State<HeroStage> with SingleTickerProviderStateMix
               play: visibleInViewport,
               cssFilter: art.artCssFilter,
             ),
-          if (_ambient) RepaintBoundary(child: sceneArt(context, _feather(_HazeDrift(clock: _clock)))),
-          if (widget.rays > 0)
+          if (_domAmbient)
+            HeroAmbientLayer(
+              key: ValueKey('ambient-${widget.rays > 0}'),
+              haze: true,
+              rays: widget.rays,
+              play: visibleInViewport,
+              cssFilter: art.artCssFilter,
+              clouds: ArtAssets.clouds,
+            ),
+          if (_ambient && !_domAmbient) RepaintBoundary(child: sceneArt(context, _feather(_HazeDrift(clock: _clock)))),
+          if (widget.rays > 0 && !_domAmbient)
             RepaintBoundary(
               child: sceneArt(
                   context,
                   _feather(AnimatedBuilder(
                     animation: _clock,
                     builder: (context, _) => CustomPaint(
-                      painter: LightRaysPainter(shimmer: _ambient ? _clock.value * 8 % 1 : 0.25, strength: widget.rays),
+                      painter: LightRaysPainter(
+                          shimmer: _ambient
+                              ? _clock.value * (HeroAmbientSpec.clock.inMilliseconds / HeroAmbientSpec.shimmerCycle.inMilliseconds) % 1
+                              : HeroAmbientSpec.stillShimmer,
+                          strength: widget.rays),
                     ),
                   ))),
             ),
@@ -626,11 +642,11 @@ class _HazeDrift extends StatelessWidget {
   final Animation<double> clock;
   const _HazeDrift({required this.clock});
 
-  static Shader _veil(Rect r) => const LinearGradient(
+  static Shader _veil(Rect r) => LinearGradient(
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
-        colors: [Color(0x5C000000), Color(0x47000000), Color(0x1F000000), Color(0x00000000)],
-        stops: [0, 0.35, 0.62, 0.9],
+        colors: [for (final (a, _) in HeroAmbientSpec.hazeVeil) Color.fromRGBO(0, 0, 0, a)],
+        stops: [for (final (_, s) in HeroAmbientSpec.hazeVeil) s],
       ).createShader(r);
 
   @override
