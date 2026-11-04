@@ -308,7 +308,10 @@ void main() {
       expect(adminDestinations(AdminRoles.editor).map((d) => d.id), contains('seasonSettings'));
       expect(seasonSettingsDoc.path, 'settings/features');
       final block = rules.substring(rules.indexOf('function validFeatures('), rules.indexOf('function validProgramOptions('));
-      for (final f in seasonSettingsDoc.fields) {
+      // Only the venue / audience lists here; the season verse sets (ADR-042) have their own format and limits.
+      final lists = seasonSettingsDoc.fields.where((f) => f.key == 'venues' || f.key == 'audiences').toList();
+      expect(lists.map((f) => f.key), containsAll(['venues', 'audiences']));
+      for (final f in lists) {
         expect(block, contains("'${f.key}'"), reason: f.key);
         expect(f.encodedRows, isTrue);
         expect(f.maxRows, ProgramOptions.max);
