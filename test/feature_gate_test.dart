@@ -74,7 +74,7 @@ void main() {
   testWidgets('all sections on: clinics page and nav entries are shown', (tester) async {
     // The seed ships clinics switched off until the church confirms them.
     final router = await _pump(tester, _seedWith(const {'clinics': true}));
-    expect(find.text('Clinics'), findsWidgets); // app bar highlight + hero + directory
+    expect(find.text('Clinics'), findsWidgets); // directory card + footer quick links (never the app bar)
     router.go('/clinics');
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('sectionUnavailable')), findsNothing);
@@ -93,6 +93,70 @@ void main() {
     await tester.tap(find.text('Back to home'));
     await tester.pumpAndSettle();
     expect(router.routerDelegate.currentConfiguration.uri.path, '/');
+  });
+
+  group('app bar never shows a Clinics shortcut (owner request, 4 Nov 2026)', () {
+    final appBar = find.byType(AppBar);
+    void expectNoClinicsAction(String reason) {
+      expect(find.descendant(of: appBar, matching: find.byTooltip('Clinics')), findsNothing, reason: reason);
+      expect(find.descendant(of: appBar, matching: find.byIcon(Icons.local_hospital_rounded)), findsNothing,
+          reason: reason);
+    }
+
+    for (final on in [true, false]) {
+      for (final size in const [Size(320, 800), Size(400, 800), Size(420, 1600), Size(1400, 2400)]) {
+        testWidgets('clinics ${on ? 'on' : 'off'}, ${size.width.toInt()} px', (tester) async {
+          final router = await _pump(tester, _seedWith({'clinics': on}), size: size);
+          expectNoClinicsAction('home');
+          router.go('/about');
+          await tester.pumpAndSettle();
+          expectNoClinicsAction('/about');
+          router.go('/clinics');
+          await tester.pumpAndSettle();
+          expectNoClinicsAction('/clinics');
+          // Phones keep the menu button (clinics are listed in the drawer).
+          if (size.width < 1024) expect(find.descendant(of: appBar, matching: find.byTooltip('Menu')), findsOneWidget);
+        });
+      }
+    }
+
+    testWidgets('clinics on: still reachable from the drawer and from Home', (tester) async {
+      final router = await _pump(tester, _seedWith(const {'clinics': true}), size: const Size(400, 1600));
+      expectNoClinicsAction('home');
+      expect(find.text('Specialties and booking'), findsOneWidget); // Home directory card
+      await tester.tap(find.byTooltip('Menu'));
+      await tester.pumpAndSettle();
+      final entry = find.descendant(of: find.byType(Drawer), matching: find.text('Clinics'));
+      expect(entry, findsOneWidget);
+      await tester.tap(entry);
+      await tester.pumpAndSettle();
+      expect(router.routerDelegate.currentConfiguration.uri.path, '/clinics');
+      expect(find.text('Charity specialty clinics'), findsWidgets);
+    });
+
+    testWidgets('Arabic phone bar: no clinics icon either', (tester) async {
+      tester.view.physicalSize = const Size(400, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final container = ProviderContainer(overrides: [
+        repositoryProvider.overrideWithValue(SeedRepository(_seedWith(const {'clinics': true}))),
+        nowProvider.overrideWith((ref) => Stream.value(CairoTime.at(2026, 11, 1, 12 * 60).toUtc())),
+      ]);
+      addTearDown(container.dispose);
+      await tester.pumpWidget(UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp.router(
+          locale: const Locale('ar'),
+          supportedLocales: const [Locale('ar'), Locale('en')],
+          localizationsDelegates: GlobalMaterialLocalizations.delegates,
+          routerConfig: container.read(routerProvider),
+        ),
+      ));
+      await tester.pumpAndSettle();
+      expect(find.descendant(of: appBar, matching: find.byTooltip('العيادات')), findsNothing);
+      expect(find.descendant(of: appBar, matching: find.byIcon(Icons.local_hospital_rounded)), findsNothing);
+      expect(find.descendant(of: appBar, matching: find.byTooltip('مواعيد القداسات')), findsOneWidget);
+    });
   });
 
   testWidgets('mobile drawer lists only enabled sections', (tester) async {

@@ -109,9 +109,12 @@ render with `PageBody` (+ `Footer`). Content comes from Riverpod providers (hidd
   In English, a placeholder (`sample`) doctor name «… — يُعلن لاحقًا» is shown as "<specialtyEn> doctor — to be
   announced" (`ClinicCard.isPlaceholderDoctor` + l10n `doctorTba`); the stored Arabic name is unchanged (BUG-17).
 - The seed ships section `clinics` **off** (PR 1): enable it in /admin → Sections only once the church office
-  confirms the clinics. **Live state (3 Nov 2026):** the owner deleted the 11 placeholder clinics and switched the
-  section off; the page, nav entry, home directory card, footer link and assistant topic are therefore hidden. The
-  admin screen stays.
+  confirms the clinics. **Live state:** the owner deleted the 11 seeded placeholder clinics on 3 Nov 2026 and
+  switched the section **off** on 4 Nov 2026 (live `settings/features` read, updated 07:51 Cairo; a new clinic added
+  that morning stays hidden while the section is off). While off, the page, nav entry, home directory card, footer
+  link and assistant grounding are hidden; the admin screen stays.
+- Entry points (when the section is on): phone drawer / desktop Services menu, the Home directory card,
+  footer quick links, public services cross-link. **Never the app bar** (owner request, 4 Nov 2026).
 - Subtitle `clinicsIntro` asks visitors to confirm with the church; `PendingConfirmationNote` if any clinic is sample.
 - Link to `/public-services` when that section is on.
 

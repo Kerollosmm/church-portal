@@ -307,14 +307,17 @@ chunks are fetched relative to `<base href>`).
 - `navItems`: home, massSchedule, clinics, education, activities, publicServices, about, contact; `askNavItem` added
   when `assistantVisibleProvider`. `visibleNavItems(f, showAsk:)` filters by `f.routeEnabled(path)`.
 - Wide layout when `width / textScale ≥ 1024` (large system text forces the compact bar): text links
-  (home/about/education), a **Services** popup (activities, public services, contact, ask), the gold **Mass times**
-  highlight button, language toggle (`EN` / `ع`). There is **no clinics button in the app bar** (removed for good by
-  the parallel PR `fix/appbar-no-clinics`): clinics are reached only from the drawer / Services menu and the home
-  page directory, and only while the `clinics` section is on.
-- Narrow: a compact 48×48 dp Mass times `IconButton` (`_HighlightButton`), language toggle, ☰ opens an **end
+  (home/about/education), a **Services** popup (activities, public services, contact, ask), gold **Mass times**
+  highlight button, language toggle (`EN` / `ع`).
+- Narrow: compact 48×48 dp **Mass times** `IconButton` (`_HighlightButton`), language toggle, ☰ opens an **end
   drawer** (`_AppDrawer`). Below **360 px**, at **≥ 150 % text**, or on a subpage below **400 px** (the Back arrow
-  takes another 48 dp) the highlight buttons are dropped from the bar (they are in the drawer) so the title keeps a
-  readable width. Phone subpages (`location != '/'`) get a leading
+  takes another 48 dp) the Mass button is dropped from the bar (it is in the drawer) so the title keeps a
+  readable width.
+- **No Clinics action in the app bar** (owner request, 4 Nov 2026), at any width or section state. It used to be a
+  compact `local_hospital_rounded` button on phones, shown when `featuresReady && !wide && !collapseHighlights &&
+  routeEnabled('/clinics')` — the same `sections.clinics` switch as the page, no separate condition. With the section
+  on, clinics stay reachable from the drawer, the desktop Services menu, the Home directory card and the footer quick links;
+  `test/feature_gate_test.dart` («app bar never shows a Clinics shortcut») guards it. Phone subpages (`location != '/'`) get a leading
   **Back-to-Home** arrow (`Key('backHome')`, `Icons.arrow_back_rounded`, mirrored in RTL) — every in-app link is a
   sibling `context.go`, so there is nothing to pop, and installed PWAs have no browser back button. On an item
   detail page the arrow is parent-aware (PR #13): `parentRouteOf(location)` (pure, `app_shell.dart`) returns

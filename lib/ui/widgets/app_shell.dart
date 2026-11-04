@@ -113,8 +113,8 @@ class _AppShellState extends ConsumerState<AppShell> {
     final parent = parentRouteOf(location);
     final toParent = parent != '/' || parseDetailPath(location) != null;
     // Ultra-narrow phones (< 360 px), very large text, or a subpage below
-    // 400 px (the Back arrow takes another 48 dp): the highlighted Mass/Clinics
-    // buttons move to the drawer (they are already listed there) so the church
+    // 400 px (the Back arrow takes another 48 dp): the highlighted Mass
+    // button moves to the drawer (it is already listed there) so the church
     // title keeps a readable width.
     final collapseHighlights = !wide && (width < 360 || textScale >= 1.5 || (showBack && width < 400));
     final showAsk = ref.watch(assistantVisibleProvider);
@@ -123,7 +123,8 @@ class _AppShellState extends ConsumerState<AppShell> {
     // before showing highlight buttons for sections an admin may have off.
     final ready = ref.watch(featuresReadyProvider);
     final showMass = ready && !collapseHighlights && features.routeEnabled('/mass-schedule');
-    final showClinics = ready && !wide && !collapseHighlights && features.routeEnabled('/clinics');
+    // No Clinics shortcut in the bar (owner request, 4 Nov 2026): clinics stay
+    // reachable from the drawer / Services menu and Home when their section is on.
     final settings = ref.watch(settingsProvider).value;
     // Full church name (admin-editable in settings); bundled l10n name until settings load.
     final fullName = settings == null ? context.tr('appName') : context.pick(settings.nameAr, settings.nameEn);
@@ -215,15 +216,6 @@ class _AppShellState extends ConsumerState<AppShell> {
               filled: true,
             ),
             const SizedBox(width: 6),
-          ],
-          if (showClinics) ...[
-            _HighlightButton(
-              label: context.tr('clinics'),
-              icon: Icons.local_hospital_rounded,
-              onTap: () => context.go('/clinics'),
-              compact: true,
-            ),
-            const SizedBox(width: 2),
           ],
           if (!wide)
             Builder(

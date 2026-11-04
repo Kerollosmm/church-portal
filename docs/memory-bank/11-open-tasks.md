@@ -147,7 +147,7 @@ Status as of 4 Nov 2026 (PR #25, re-checked against `main` at `d60261d` = PR #24
 ## Content (owner: church office — see `09-content-status.md`)
 
 - [ ] Real liturgy/vespers/praise timetable (47 placeholders), meetings (11), clinics (live documents deleted and
-      section off since 3 Nov 2026 — re-add real clinics in the admin only if the church runs them),
+      section off since 4 Nov 2026 — add real clinics in the admin only if the church runs them),
       facilities (4), priest roster confirmations, altars, photos (hero; priests/saints/activities can now be added
       in /admin — optional, only with the church's permission), founding year.
 - [ ] Re-date seasons/alerts every year (2027 Nativity, revivals, Holy Week/Pascha seeded; 2028 not yet).
@@ -225,10 +225,17 @@ Status as of 4 Nov 2026 (PR #25, re-checked against `main` at `d60261d` = PR #24
       code reading, not yet proven):** built-in collections go through `_col(..., confirms: list.isNotEmpty)`; when
       the `settings/church` seeding check cannot answer (8 s timeout — ADR-033 saw it fail in a test browser), only a
       **non-empty** live list replaces the seed, so a watched collection that is legitimately **empty** live keeps
-      serving the seed and keeps the note on — e.g. `clinics` after the 3 Nov deletion (watched by `/ask` and
-      `/clinics` only), or `alerts` on the home page if the church has removed every notice. A second suspect is
+      serving the seed and keeps the note on — e.g. `clinics` while it was empty after the 3 Nov deletion (watched by
+      `/ask` and `/clinics` only), or `alerts` on the home page if the church has removed every notice. A second suspect is
       the gate itself timing out while the listeners work (then every stream depends on its own `confirms`).
       Check it against the preview logs before changing `confirms`.
-- [x] The live `clinics` collection is empty (the owner deleted the 11 placeholders on 3 Nov 2026) and the owner
-      switched the clinics section **off**; the admin screen «العيادات» stays for real clinics later. Never run the
-      Seed workflow for clinics: even create-only it re-creates the 11 deleted placeholders.
+- [x] Clinics: the owner deleted the 11 seeded placeholders (3 Nov 2026) and switched the section **off** (4 Nov 2026,
+      live `settings/features` updated 07:51 Cairo; one clinic added that morning stays hidden while off). The admin
+      screen «العيادات» stays. Never run the Seed workflow for clinics: even create-only it re-creates the 11 deleted
+      placeholders.
+
+## Header / app bar (owner request, 4 Nov 2026)
+- [x] Clinics shortcut removed from the public app bar (all widths, section on or off); clinics stay in the drawer /
+      Services menu, Home directory and footer quick links when `sections.clinics` is on. Guarded by
+      `test/feature_gate_test.dart` (PR #26). At ~07:30 Cairo on 4 Nov the live `sections.clinics` still read true; it
+      was switched off at 07:51 (PR #25 live read).

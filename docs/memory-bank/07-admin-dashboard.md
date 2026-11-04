@@ -56,8 +56,8 @@ wanted settings and message deletion owner-only; the implementation deliberately
 clinics, facilities, activities, priests, departedPriests, saints, milestones, **categories** (Custom sections),
 **entries** (Section items), **pages** (Custom pages) — PR #18) → `messages` → `contactCats` (Contact form types,
 PR #18) → `admins` (owners only).
-The **Clinics** screen («العيادات») stays in the menu although the owner deleted the 11 placeholder clinics and
-switched the clinics section off on 3 Nov 2026 — it is where real clinics would be added before switching the
+The **Clinics** screen («العيادات») stays in the menu although the owner deleted the 11 placeholder clinics (3 Nov 2026) and
+switched the clinics section off (4 Nov 2026) — it is where real clinics would be added before switching the
 section back on.
 Every entry has its own icon (`adminIcon`; the assistant uses `smart_toy_outlined` since PR #23 so it no longer
 shares saints' `auto_awesome_outlined`). The nav is a `Material` (not a coloured `Container`, which hid the tiles'
