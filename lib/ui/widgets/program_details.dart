@@ -1,0 +1,83 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:material_ui/material_ui.dart';
+
+import '../../core/l10n.dart';
+import '../../core/launch.dart';
+import '../../core/theme.dart';
+import '../../domain/models.dart';
+import '../../state/providers.dart';
+import 'common.dart';
+
+/// Venue / audience labels of a programme (ADR-041): the admin lists in
+/// settings/features (defaults when none). An unknown key shows nothing.
+String venueLabel(BuildContext context, ProgramOptions o, String key) {
+  final v = o.venue(key);
+  return v == null ? '' : context.pick(v.labelAr, v.labelEn);
+}
+
+String audienceLabel(BuildContext context, ProgramOptions o, String key) {
+  final v = o.audience(key);
+  return v == null ? '' : context.pick(v.labelAr, v.labelEn);
+}
+
+/// Speaker, topic, choir, venue, audience and the PDF / Drive link of a
+/// liturgy, meeting or season (ADR-041). Renders nothing for an item
+/// without programme details, so existing cards look exactly as before.
+class ProgramDetails extends ConsumerWidget {
+  final ProgramInfo program;
+
+  /// Hide the venue (the card already shows it as its place line).
+  final bool showVenue;
+
+  /// "At the same time: …" line for services held in parallel elsewhere.
+  final String parallelText;
+  const ProgramDetails(this.program, {super.key, this.showVenue = true, this.parallelText = ''});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final p = program;
+    if (p.isEmpty && parallelText.isEmpty) return const SizedBox.shrink();
+    final opts = ref.watch(featuresProvider.select((f) => f.programOptions));
+    final speaker = context.pick(p.speakerAr, p.speakerEn);
+    final topic = context.pick(p.topicAr, p.topicEn);
+    final choir = context.pick(p.choirAr, p.choirEn);
+    final venue = showVenue ? venueLabel(context, opts, p.venue) : '';
+    final audience = audienceLabel(context, opts, p.audience);
+    final label = context.pick(p.attachmentLabelAr, p.attachmentLabelEn);
+    final primary = Theme.of(context).colorScheme.primary;
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      if (venue.isNotEmpty || audience.isNotEmpty)
+        Padding(
+          padding: const EdgeInsets.only(top: 4, bottom: 2),
+          child: Wrap(spacing: 6, runSpacing: 4, children: [
+            if (venue.isNotEmpty) Pill(venue, icon: Icons.place_outlined, color: primary),
+            if (audience.isNotEmpty) Pill(audience, icon: Icons.groups_outlined, color: context.pal.goldText),
+          ]),
+        ),
+      if (speaker.isNotEmpty)
+        IconLine(Icons.record_voice_over_outlined, '${context.tr('speakerLabel')}: $speaker'),
+      if (topic.isNotEmpty) IconLine(Icons.menu_book_outlined, '${context.tr('topicLabel')}: $topic'),
+      if (choir.isNotEmpty) IconLine(Icons.music_note_outlined, '${context.tr('choirLabel')}: $choir'),
+      if (parallelText.isNotEmpty) IconLine(Icons.call_split_rounded, context.tr('parallelAt', {'v': parallelText})),
+      if (p.hasAttachment)
+        Padding(
+          padding: const EdgeInsets.only(top: 6),
+          child: OutlinedButton.icon(
+            key: const Key('programPdf'),
+            onPressed: () => openUrl(p.attachmentUrl),
+            icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
+            label: Text(label.isNotEmpty ? label : context.tr('programPdf')),
+          ),
+        ),
+    ]);
+  }
+}
+
+/// "Lower hall (Youth) 19:00" for each parallel service (ADR-041).
+String parallelSummary(BuildContext context, ProgramOptions opts, List<Liturgy> others) => [
+      for (final o in others)
+        [
+          o.program.venue.isNotEmpty ? venueLabel(context, opts, o.program.venue) : context.pick(o.placeAr, o.placeEn),
+          if (audienceLabel(context, opts, o.program.audience) case final a when a.isNotEmpty) '($a)',
+        ].where((s) => s.isNotEmpty).join(' '),
+    ].where((s) => s.isNotEmpty).join(context.isAr ? '، ' : ', ');

@@ -1518,3 +1518,78 @@ describe('ADR-039 / ADR-040: today layer in settings/features (strip, day start,
     await assertFails(setDoc(doc(db(null), 'settings', 'features'), { dayEvents: [ev()] }));
   });
 });
+
+// ---------------------------------------------------------------------------
+// ADR-041: programme details on liturgies, meetings and seasons; venue /
+// audience lists in settings/features.
+describe('ADR-041: programme details (speaker, topic, choir, venue, audience, Drive PDF link)', () => {
+  const S = '\u001f';
+  const stamp = () => ({ updatedAt: serverTimestamp(), updatedBy: `${EDITOR}@x.test` });
+  const full = {
+    speakerAr: 'م'.repeat(200), speakerEn: 's'.repeat(200), topicAr: 'ع'.repeat(300), topicEn: 't'.repeat(300),
+    choirAr: 'ك'.repeat(200), choirEn: 'c'.repeat(200), venue: 'lower_hall-2', audience: 'youth',
+    attachmentUrl: 'https://drive.google.com/file/d/1AbC_dEf/view?usp=sharing', attachmentLabelAr: 'ك'.repeat(80),
+    attachmentLabelEn: 'Booklet',
+  };
+  const base = {
+    liturgies: { type: 'other', nameAr: 'بصخة ليلة الثلاثاء', start: '19:00', weekday: 1, seasonKey: 'holy_week' },
+    meetings: { stage: 'youth', nameAr: 'اجتماع الشباب' },
+    seasons: { key: 'holy_week', nameAr: 'أسبوع الآلام', replacesRegular: true },
+  };
+
+  test('every programme key on the three collections, worst case lengths', async () => {
+    const ed = db(EDITOR);
+    for (const [col, b] of Object.entries(base)) {
+      await assertSucceeds(setDoc(doc(ed, col, 'p'), { ...b, ...full, ...stamp() }), col);
+      await assertSucceeds(updateDoc(doc(ed, col, 'p'), { venue: null, audience: '', attachmentUrl: '', speakerAr: 'أبونا', ...stamp() }), col);
+      await assertSucceeds(updateDoc(doc(ed, col, 'p'), { topicAr: 'التوبة' }), col);
+    }
+  });
+
+  test('a meeting with a full detail page also takes the programme fields (expression budget)', async () => {
+    const ed = db(EDITOR);
+    await assertSucceeds(setDoc(doc(ed, 'meetings', 'big'), {
+      ...base.meetings, ...full, weekday: 5, start: '19:00', end: '21:00', hallAr: 'ق'.repeat(300), notes: 'ن'.repeat(300),
+      detailsEnabled: true, detailsAr: 'ت'.repeat(10000), detailsEn: 'd'.repeat(10000), whatsapp: '01012345678',
+      facebookUrl: 'https://facebook.com/x', whatsappUrl: 'https://chat.whatsapp.com/x', contactPhone: '01012345678',
+      externalUrl: 'https://forms.example.org/r', image: { source: 'url', url: 'https://img.example.org/c.jpg', alt: 'c' },
+      visible: true, sample: false, order: 1, ...stamp(),
+    }));
+  });
+
+  test('bad values are rejected', async () => {
+    const ed = db(EDITOR);
+    for (const [col, b] of Object.entries(base)) {
+      await assertSucceeds(setDoc(doc(ed, col, 'q'), b));
+      for (const bad of [
+        { attachmentUrl: 'http://drive.google.com/x' }, { attachmentUrl: 'javascript:alert(1)' },
+        { attachmentUrl: 'https://drive google.com/x' }, { venue: 'Lower Hall' }, { audience: 'x'.repeat(31) },
+        { speakerAr: 'م'.repeat(201) }, { topicEn: 't'.repeat(301) }, { choirAr: 5 }, { attachmentLabelAr: 'x'.repeat(81) },
+        { speakerAr: `a${S}b` }, { venue: true },
+      ]) {
+        await assertFails(updateDoc(doc(ed, col, 'q'), bad), `${col} ${JSON.stringify(bad).slice(0, 60)}`);
+      }
+    }
+  });
+
+  test('visitors cannot write programme details', async () => {
+    await assertFails(setDoc(doc(db(null), 'liturgies', 'v'), { ...base.liturgies, speakerAr: 'x' }));
+  });
+
+  test('venues / audiences: up to 12 encoded rows each', async () => {
+    const ref = doc(db(EDITOR), 'settings', 'features');
+    const row = (k, ar = 'القاعة', en = '') => [k, ar, en].join(S);
+    await assertSucceeds(setDoc(ref, { theme: 'burgundy', venues: [row('main', 'الكنيسة الكبرى', 'Main church'), row('lower')],
+      audiences: [row('general', 'عام', 'Everyone')] }));
+    await assertSucceeds(updateDoc(ref, { venues: Array.from({ length: 12 }, (_, i) => row(`v${i}`, 'ق'.repeat(80), 'e'.repeat(80))) }));
+    await assertSucceeds(updateDoc(ref, { venues: [], audiences: null }));
+    for (const bad of [
+      [row('Main')], [row('main', '')], [row('main') + S + 'x'], ['main'], [5], [row('a'.repeat(31))],
+      [row('main', 'ق'.repeat(81))], Array.from({ length: 13 }, (_, i) => row(`v${i}`)), 'main',
+    ]) {
+      await assertFails(updateDoc(ref, { venues: bad }), JSON.stringify(bad).slice(0, 60));
+      await assertFails(updateDoc(ref, { audiences: bad }), JSON.stringify(bad).slice(0, 60));
+    }
+    await assertFails(updateDoc(doc(db(null), 'settings', 'features'), { venues: [row('x')] }));
+  });
+});

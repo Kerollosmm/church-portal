@@ -46,7 +46,8 @@ ADR-035; plus the removal of the YouTube hero video library — ADR-036 — late
 latest: PR #29 PageSpeed (ADR-037) and PR #30 footer bundled-data note fix, sitemap generated from Firestore at deploy,
 loading screen until real content (ADR-038); PR #31 Coptic calendar / liturgical day at 18:00 / Coptic date strip
 (ADR-039) and the top event of the day (church event > Katameros > computed feasts) + live-stream banner at no
-Firestore cost (ADR-040)).
+Firestore cost (ADR-040); PR #32 programme details — speaker, topic, choir, venue, audience, Drive PDF link — on
+services, meetings and seasons, admin venue / audience lists, parallel services (ADR-041)).
 
 > **Golden rule:** read this folder before changing anything, and update it in the same PR as every change that
 > alters behaviour, data shape, rules, workflows, content status or open tasks.

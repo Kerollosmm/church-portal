@@ -16,8 +16,10 @@ import '../../domain/time_format.dart';
 import '../../state/providers.dart';
 import 'common.dart';
 import 'item_image.dart';
+import 'program_details.dart';
 import 'styled_image.dart';
 
+export 'program_details.dart' show ProgramDetails, parallelSummary;
 export 'styled_image.dart';
 
 /// Card for one liturgy on the schedule page.
@@ -25,7 +27,12 @@ class LiturgyCard extends StatelessWidget {
   final Liturgy liturgy;
   final bool showWeekday;
   final bool showDate;
-  const LiturgyCard({super.key, required this.liturgy, this.showWeekday = false, this.showDate = false});
+
+  /// Services held at the same time in another hall (ADR-041), e.g.
+  /// «القاعة السفلية (شباب)»; '' = none.
+  final String parallelText;
+  const LiturgyCard(
+      {super.key, required this.liturgy, this.showWeekday = false, this.showDate = false, this.parallelText = ''});
 
   IconData get _icon => switch (liturgy.type) {
         'vespers' => Icons.nightlight_round,
@@ -70,6 +77,7 @@ class LiturgyCard extends StatelessWidget {
               const SizedBox(height: 6),
               IconLine(Icons.place_outlined, context.pick(l.placeAr, l.placeEn)),
               IconLine(Icons.people_outline, context.pick(l.audienceAr, l.audienceEn)),
+              ProgramDetails(l.program, parallelText: parallelText),
             ]),
           ),
         ]),
@@ -216,6 +224,7 @@ class NextMassCard extends ConsumerWidget {
       children.add(const SizedBox(height: 6));
       children.add(IconLine(Icons.place_outlined, context.pick(n.liturgy.placeAr, n.liturgy.placeEn)));
       children.add(IconLine(Icons.people_outline, context.pick(n.liturgy.audienceAr, n.liturgy.audienceEn)));
+      children.add(ProgramDetails(n.liturgy.program));
       if (n.liturgy.sample) {
         children.add(Padding(
           padding: const EdgeInsets.only(top: 6),

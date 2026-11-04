@@ -25,6 +25,9 @@ class _MassSchedulePageState extends ConsumerState<MassSchedulePage> {
   bool _seasons = false;
   bool _seasonDefaultApplied = false;
 
+  /// Audience filter of the seasonal lists (ADR-041); '' = everyone.
+  String _audience = '';
+
   static ScheduleTab _todayTab() {
     final wd = CairoTime.now().weekday;
     return scheduleTabWeekdays.entries.firstWhere((e) => e.value.contains(wd)).key;
@@ -105,9 +108,8 @@ class _MassSchedulePageState extends ConsumerState<MassSchedulePage> {
           icon: Icons.auto_awesome_rounded,
           trailing: Pill(context.tr('activeNow'), icon: Icons.circle),
         ),
-        ResponsiveGrid(children: [
-          for (final l in e.value) LiturgyCard(liturgy: l, showDate: true),
-        ]),
+        Padding(padding: const EdgeInsets.only(bottom: Space.s), child: ProgramDetails(e.key.program)),
+        ..._seasonCards(context, e.value),
       ],
       // One-off dated services outside any season (e.g. a feast or New
       // Year's Eve), which the weekly tabs cannot show.
@@ -197,10 +199,65 @@ class _MassSchedulePageState extends ConsumerState<MassSchedulePage> {
           ]),
         ));
       }
-      out.add(ResponsiveGrid(children: [
-        for (final l in e.value) LiturgyCard(liturgy: l, showDate: true),
-      ]));
+      if (!s.program.isEmpty) {
+        out.add(Padding(padding: const EdgeInsets.only(bottom: Space.m), child: ProgramDetails(s.program)));
+      }
+      out.addAll(_seasonCards(context, e.value));
     }
-    return out;
+    return [..._audienceFilter(context, grouped.values.expand((l) => l)), ...out];
+  }
+
+  /// Audience chips (ADR-041) when the seasonal services name two or more
+  /// audiences (e.g. everyone / youth / children in parallel halls).
+  List<Widget> _audienceFilter(BuildContext context, Iterable<Liturgy> all) {
+    final opts = ref.watch(featuresProvider.select((f) => f.programOptions));
+    final keys = <String>{for (final l in all) if (opts.audience(l.program.audience) != null) l.program.audience};
+    if (keys.length < 2) return const [];
+    Widget chip(String key, String label) => Padding(
+          padding: const EdgeInsetsDirectional.only(end: 8),
+          child: ChoiceChip(
+            key: Key('audience-$key'),
+            label: Text(label),
+            selected: _audience == key,
+            showCheckmark: false,
+            labelStyle: TextStyle(
+                color: _audience == key ? context.pal.onPrimary : Theme.of(context).colorScheme.primary,
+                fontWeight: FontWeight.w700),
+            onSelected: (_) => setState(() => _audience = key),
+          ),
+        );
+    return [
+      const SizedBox(height: Space.m),
+      SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(children: [
+          chip('', context.tr('allAudiences')),
+          for (final o in opts.audiences)
+            if (keys.contains(o.key)) chip(o.key, context.pick(o.labelAr, o.labelEn)),
+        ]),
+      ),
+    ];
+  }
+
+  /// A season's services, filtered by [_audience] (a service without an
+  /// audience is for everyone), each with the services held at the same
+  /// time in another hall (ADR-041).
+  List<Widget> _seasonCards(BuildContext context, List<Liturgy> list) {
+    final opts = ref.watch(featuresProvider.select((f) => f.programOptions));
+    final shown = _audience.isEmpty
+        ? list
+        : [for (final l in list) if (l.program.audience.isEmpty || l.program.audience == _audience) l];
+    if (shown.isEmpty) return const [EmptyState(icon: Icons.event_busy)];
+    final parallel = parallelServices(list);
+    return [
+      ResponsiveGrid(children: [
+        for (final l in shown)
+          LiturgyCard(
+            liturgy: l,
+            showDate: true,
+            parallelText: parallelSummary(context, opts, parallel[l.id] ?? const []),
+          ),
+      ]),
+    ];
   }
 }

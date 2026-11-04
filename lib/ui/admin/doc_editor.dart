@@ -806,11 +806,13 @@ class DocEditorState extends State<DocEditor> {
   }
 
   static const _groupTitles = {
+    FieldGroup.program: 'groupProgram',
     FieldGroup.details: 'groupDetails',
     FieldGroup.media: 'groupMedia',
     FieldGroup.contacts: 'groupContacts',
   };
   static const _groupIcons = {
+    FieldGroup.program: Icons.campaign_outlined,
     FieldGroup.details: Icons.article_outlined,
     FieldGroup.media: Icons.photo_library_outlined,
     FieldGroup.contacts: Icons.contact_phone_outlined,
@@ -861,6 +863,7 @@ class DocEditorState extends State<DocEditor> {
             if (cover) context.tr('pillCover'),
             if (photos == 0 && !cover) context.tr('pillNoPhotos'),
           ];
+        case FieldGroup.program:
         case FieldGroup.contacts:
         case FieldGroup.basic:
           final n = [
@@ -877,7 +880,7 @@ class DocEditorState extends State<DocEditor> {
         );
     // Text counts follow typing (the form only rebuilds on its first edit).
     final controllers = [for (final f in fields) ?_text[f.key]];
-    return g == FieldGroup.contacts
+    return g == FieldGroup.contacts || g == FieldGroup.program
         ? ListenableBuilder(listenable: Listenable.merge(controllers), builder: (_, _) => wrap())
         : wrap();
   }

@@ -4,8 +4,10 @@
 
 import 'features.dart';
 import 'media.dart';
+import 'program.dart';
 
 export 'media.dart' show MediaImage;
+export 'program.dart' show ProgramInfo, ProgramOption, ProgramOptions;
 
 DateTime? parseDate(Object? v) {
   if (v == null) return null;
@@ -341,6 +343,10 @@ class Season {
 
   /// How [image] is displayed on the card (ImageStyles); '' = section default.
   final String imageStyle;
+
+  /// Optional programme details (speaker, topic, choir, venue, audience, PDF
+  /// link; ADR-041).
+  final ProgramInfo program;
   const Season({
     required this.id,
     required this.key,
@@ -352,6 +358,7 @@ class Season {
     this.replacesRegular = true,
     this.image,
     this.imageStyle = '',
+    this.program = ProgramInfo.none,
   });
   factory Season.fromMap(String id, Map<String, dynamic> m) => Season(
         id: id,
@@ -364,6 +371,7 @@ class Season {
         replacesRegular: m['replacesRegular'] is bool ? m['replacesRegular'] as bool : true,
         image: MediaImage.fromMap(m['image']),
         imageStyle: _s(m['imageStyle']),
+        program: ProgramInfo.fromMap(m),
       );
 }
 
@@ -385,6 +393,10 @@ class Liturgy implements Hideable {
 
   /// Placeholder time not yet confirmed by the church.
   final bool sample;
+
+  /// Optional programme details (speaker, topic, choir, venue, audience, PDF
+  /// link; ADR-041).
+  final ProgramInfo program;
   const Liturgy({
     this.visible = true,
     required this.id,
@@ -402,6 +414,7 @@ class Liturgy implements Hideable {
     this.seasonKey,
     this.order = 0,
     this.sample = false,
+    this.program = ProgramInfo.none,
   });
   factory Liturgy.fromMap(String id, Map<String, dynamic> m) => Liturgy(
         visible: m['visible'] is bool ? m['visible'] as bool : true,
@@ -420,6 +433,7 @@ class Liturgy implements Hideable {
         seasonKey: _ns(m['seasonKey']),
         order: _ni(m['order']) ?? 0,
         sample: _b(m['sample']),
+        program: ProgramInfo.fromMap(m),
       );
   int? get startMinutes => parseHm(start);
   int? get endMinutes => parseHm(end);
@@ -444,6 +458,10 @@ class Meeting implements Hideable {
   final String imageStyle;
   /// Detail page settings (on unless an admin switches it off).
   final ItemDetails details;
+
+  /// Optional programme details (speaker, topic, choir, venue, audience, PDF
+  /// link; ADR-041).
+  final ProgramInfo program;
   const Meeting({
     this.visible = true,
     this.order = 0,
@@ -463,6 +481,7 @@ class Meeting implements Hideable {
     this.image,
     this.imageStyle = '',
     this.details = ItemDetails.none,
+    this.program = ProgramInfo.none,
   });
   factory Meeting.fromMap(String id, Map<String, dynamic> m) => Meeting(
         visible: m['visible'] is bool ? m['visible'] as bool : true,
@@ -483,6 +502,7 @@ class Meeting implements Hideable {
         image: MediaImage.fromMap(m['image']),
         imageStyle: _s(m['imageStyle']),
         details: ItemDetails.fromMap(m),
+        program: ProgramInfo.fromMap(m),
       );
 }
 

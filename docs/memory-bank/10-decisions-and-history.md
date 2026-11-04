@@ -853,6 +853,34 @@ supersede them.
   `dayStartsAt` HH:mm, bools, `liveUrl` http(s) ≤ 500, labels ≤ 120, `liveEndsAt` timestamp/null, `dayEvents` ≤ 20
   valid strings) — `tool/rules_test` "ADR-039 / ADR-040" group.
 
+## ADR-041 (PR #32) — Programme details on services, meetings and seasons: speaker, topic, choir, venue, audience, Drive PDF link
+
+- **Context (owner plan §2.2, §2.3, §2.5, `docs/holy-week-and-revivals-roadmap.md`):** revival nights need the
+  preacher, sermon title and choir; Holy Week prayers run in parallel in several halls (main church, lower hall,
+  services building) for different age groups; the Pascha booklet / speakers list should be one tap away.
+- **Decision:** one shared, all-optional field set `ProgramInfo` (`lib/domain/program.dart`) on `Liturgy`, `Meeting`
+  and `Season`: `speakerAr/En` (≤ 200), `topicAr/En` (≤ 300), `choirAr/En` (≤ 200), `venue` / `audience` (keys of
+  admin lists), `attachmentUrl` (**https link only — Google Drive or any page; nothing is uploaded, owner 4 Nov 2026**)
+  + `attachmentLabelAr/En` (≤ 80). Missing keys = nothing shown, so existing cards are unchanged.
+- **Venues / audiences** are admin lists in `settings/features.venues` / `.audiences` (≤ 12 strings each,
+  `key␟labelAr␟labelEn`; missing / empty = defaults الكنيسة الكبرى / القاعة السفلية / مبنى الخدمات and عام / شباب /
+  أطفال), edited in the new /admin screen «إعدادات المواسم» / "Season settings" (generic form, writes only changed
+  keys). No new document, collection or listener: `settings/features` is already streamed. Items store the KEY, so a
+  renamed hall updates everywhere.
+- **Parallel prayers:** `parallelServices()` (`lib/domain/schedule.dart`) — same date (or weekday), overlapping times
+  (no end = one minute), different venue (or free-text place) — adds «وفي نفس الوقت: القاعة السفلية (شباب)» to each
+  card; the seasonal lists get audience filter chips when two or more audiences are used (a service without an
+  audience is for everyone).
+- **UI:** `ProgramDetails` widget (venue / audience pills, speaker / topic / choir lines, PDF button) on the liturgy
+  card, the next-service card, the season header on /mass-schedule, the meeting card; meeting detail pages list them
+  as facts. Admin: a collapsible «البرنامج: المتكلم والمكان والفئة وملف PDF» group (`FieldGroup.program`) on the
+  three collections, with run-time venue / audience dropdowns.
+- **Rules:** `programKeys()` added to the three allow-lists; `validProgram(d, changed)` checks all eleven on ONE
+  joined string (one regex) only when one changes; `ownFieldsUnchanged` accepts programme-only meeting edits;
+  `validProgramOptions` checks each list with one `join` + regex. Worst case (meeting with full detail page + every
+  programme key) stays under the 1,000-expression cap (emulator group "ADR-041").
+- Firebase cost per visit: +0 reads, +0 listeners. Tests: `test/program_test.dart`, rules group "ADR-041".
+
 ## Timeline
 
 | When | PR / commit | What |
@@ -897,5 +925,7 @@ supersede them.
 | 4 Nov 2026 | **PR #30** — "Footer bundled-data note, sitemap from Firestore, loading screen until real content" (`fix/footer-sitemap-loading`; PR #29 was squash-merged as `5a6a44c`) | ADR-038: `SeedGate.markSeeded` / `whenSeeded` (the `settings/church` listener proves seeding for every stream; empty collections / missing optional docs no longer strand the footer note), `sitemap.xml` generated read-only from Firestore in `deploy.yml` (`tool/export_public_content.js`, `tool/gen_sitemap.dart`, `lib/domain/sitemap.dart`, static fallback), loading screen kept until `app-content-ready` (9 s cap), hero video / CSS motion started at page idle; `test/sitemap_test.dart`, `test/content_ready_test.dart`, new groups in `content_guard_test.dart` / `pagespeed_test.dart`. Second commit (live-check follow-ups): footer hides «العيادات» until the switches load, live query started before the seeding check + custom fallback delay counted from the subscription (missing custom / detail pages settle in ≤ ~13 s instead of 15–24 s), English image alts and Latin-only times in English, `test/live_check_followups_test.dart`; CodeRabbit fixes to `tool/build_sitemap.sh` and the docs. |
 
 | 4 Nov 2026 | **PR #31** — "Coptic calendar, top event of the day, live banner" (`feat/coptic-calendar-today-live`, on `905cd04` = PR #30 + the owner's roadmap doc) | ADR-039 / ADR-040: `coptic_calendar.dart`, `sun.dart`, `coptic_feasts.dart`, `today.dart`, `synaxarium_source.dart`, `today_widgets.dart` (strip, live banner, top event card), liturgical-day verse and eve labels, /admin «اليوم والبث المباشر», `synaxarium.yml` + `tool/fetch_synaxarium.js` + `tool/publish_hosting_file.js`, footer note debounce (`SteadySeedNote`), time-zone labels removed from the UI; tests `coptic_calendar_test.dart`, `today_widgets_test.dart`, rules group. |
+
+| 4 Nov 2026 | **PR #32** — "Programme details: speaker, topic, choir, venue, audience, Drive PDF link" (`feat/programme-fields`) | ADR-041: `program.dart` (`ProgramInfo`, `ProgramOptions`), `parallelServices`, `ProgramDetails` widget, audience chips on the seasonal schedule, meeting detail facts, admin programme group + «إعدادات المواسم» (venues / audiences), rules `programKeys` / `validProgram` / `validProgramOptions`; `test/program_test.dart`, rules group. |
 
 Append new PRs to this table.

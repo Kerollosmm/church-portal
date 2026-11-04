@@ -333,3 +333,52 @@ Map<Season, List<Liturgy>> seasonalSchedule(Iterable<Season> seasons, Iterable<L
   }
   return map;
 }
+
+/// Where a service is held, for comparing parallel services (ADR-041): the
+/// admin venue key when set, else the free-text place.
+String _placeKey(Liturgy l) =>
+    l.program.venue.isNotEmpty ? 'v:${l.program.venue}' : (l.placeAr.trim().isEmpty ? '' : 'p:${l.placeAr.trim()}');
+
+/// The day a service belongs to: its one-off date, else its weekday.
+String _slotDay(Liturgy l) {
+  final d = l.date;
+  if (d != null) {
+    final c = CairoTime.calendarDate(d);
+    return 'd:${c.year}-${c.month}-${c.day}';
+  }
+  return l.weekday == null ? '' : 'w:${l.weekday}';
+}
+
+/// Services of [list] held at the same time in ANOTHER venue / hall
+/// (ADR-041: Holy Week prayers in the main church, the lower hall and the
+/// services building for different age groups). Two services are parallel
+/// when they fall on the same day (date, or weekday for weekly ones), their
+/// times overlap (a service without an end time counts as one minute) and
+/// their venues (or places) differ — both must name one. Returns, for each
+/// liturgy id that has any, the other services in start order.
+Map<String, List<Liturgy>> parallelServices(Iterable<Liturgy> list) {
+  final items = [
+    for (final l in list)
+      if (l.startMinutes != null && _placeKey(l).isNotEmpty && _slotDay(l).isNotEmpty) l,
+  ];
+  final out = <String, List<Liturgy>>{};
+  for (var i = 0; i < items.length; i++) {
+    final a = items[i];
+    final aStart = a.startMinutes!;
+    final aEnd = (a.endMinutes ?? 0) > aStart ? a.endMinutes! : aStart + 1;
+    for (var j = i + 1; j < items.length; j++) {
+      final b = items[j];
+      if (_slotDay(a) != _slotDay(b) || _placeKey(a) == _placeKey(b)) continue;
+      final bStart = b.startMinutes!;
+      final bEnd = (b.endMinutes ?? 0) > bStart ? b.endMinutes! : bStart + 1;
+      if (aStart < bEnd && bStart < aEnd) {
+        (out[a.id] ??= []).add(b);
+        (out[b.id] ??= []).add(a);
+      }
+    }
+  }
+  for (final v in out.values) {
+    v.sort((x, y) => x.startMinutes!.compareTo(y.startMinutes!));
+  }
+  return out;
+}

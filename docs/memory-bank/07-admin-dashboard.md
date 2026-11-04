@@ -135,6 +135,19 @@ cancels and re-subscribes every stream (BUG-18; `ChurchInfoScreen` does the same
 - Item forms on image collections have **"Image display (— = section default)"** under the image (`imageStyle`,
   nullable choice); a new document does not write it while unset.
 
+### Season settings («إعدادات المواسم», `ChurchInfoScreen(doc: seasonSettingsDoc)`) → `settings/features` (PR #32, ADR-041)
+
+Top-level keys `venues` and `audiences` (encoded-row lists, ≤ 12 rows each: key, Arabic name, English name; empty =
+the defaults). They feed the run-time dropdowns «المكان / القاعة» and «الفئة» of the programme group. The generic form
+writes only the keys it changed. Later season tools (verse sets, assistant limits, preset) join this screen (PR-C).
+
+### Programme group on liturgies, meetings and seasons (PR #32, ADR-041)
+
+Collapsible card «البرنامج: المتكلم والمكان والفئة وملف PDF» (`FieldGroup.program`, between basic and details):
+speaker, topic, choir (ar/en), venue and audience (dropdowns read from `settings/features` when the editor opens,
+defaults otherwise), PDF link (https only; hint explains sharing a Google Drive file as "Anyone with the link"), and
+the button text. `collection_list.dart` passes `dynamicChoices` `venues` / `audiences`.
+
 ### Today & live stream («اليوم والبث المباشر», `ChurchInfoScreen(doc: todaySettingsDoc)`) → `settings/features` (PR #31, ADR-039/040)
 
 Generic form over the today keys of `settings/features` (writes only changed keys, so it never clobbers the

@@ -4,6 +4,7 @@
 import 'daily_verse.dart';
 import 'image_style.dart';
 import 'occasion_theme.dart';
+import 'program.dart';
 import 'today.dart';
 
 export 'occasion_theme.dart' show OccasionConfig, ThemePalette, ThemePresets, ThemeRange, ThemeResolution, ThemeSource;
@@ -272,6 +273,10 @@ class FeatureSettings {
   /// [toMap]).
   final List<DayEvent> dayEvents;
 
+  /// Admin-defined venues (halls) and audiences for programme details
+  /// (`venues` / `audiences`, ADR-041; never written by [toMap]).
+  final ProgramOptions programOptions;
+
   const FeatureSettings({
     this.sections = const {},
     this.homeOrder = HomeBlocks.defaultOrder,
@@ -295,6 +300,7 @@ class FeatureSettings {
     this.errorReporting = true,
     this.today = TodaySettings.defaults,
     this.dayEvents = const [],
+    this.programOptions = ProgramOptions.defaults,
   });
 
   /// Everything on: used before the doc loads and when it does not exist.
@@ -339,6 +345,7 @@ class FeatureSettings {
       errorReporting: _bool(m['errorReporting']) ?? true,
       today: TodaySettings.fromMap(m),
       dayEvents: DayEvent.listFrom(m['dayEvents']),
+      programOptions: ProgramOptions.fromMap(m),
     );
   }
 
@@ -414,6 +421,7 @@ class FeatureSettings {
         errorReporting: errorReporting ?? this.errorReporting,
         today: today,
         dayEvents: dayEvents,
+        programOptions: programOptions,
       );
 
   bool enabled(String section) => sections[section] ?? true;

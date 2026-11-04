@@ -47,6 +47,7 @@
 | التاريخ القبطي وحدث اليوم والبث المباشر | [features/today-coptic-date-and-live.md](features/today-coptic-date-and-live.md) |
 | ثيمات المناسبات والألوان | [features/occasion-themes.md](features/occasion-themes.md) |
 | مواعيد القداسات والمواسم والقداس القادم | [features/mass-schedule-and-seasons.md](features/mass-schedule-and-seasons.md) |
+| تفاصيل البرنامج (المتكلم، الموضوع، الكورال، المكان، الفئة، ملف PDF) | [features/programme-details.md](features/programme-details.md) |
 | التربية الكنسية والاجتماعات | [features/meetings.md](features/meetings.md) |
 | العيادات | [features/clinics.md](features/clinics.md) |
 | عن الكنيسة: التاريخ والمذابح والآباء الكهنة والمتنيحون والشفعاء | [features/about-priests-saints.md](features/about-priests-saints.md) |

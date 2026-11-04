@@ -204,6 +204,8 @@ Existence of `settings/church` = "database is seeded" (see `03-architecture.md`)
   | `liveLabelAr`, `liveLabelEn` | string ≤ 120 | `''` = «بث مباشر الآن من الكنيسة» / "Live now from the church" |
   | `liveEndsAt` | timestamp / null | none (automatic switch-off) |
   | `dayEvents` | list ≤ 20 of strings `date␟endDate␟start␟end␟titleAr␟titleEn␟speakerAr␟speakerEn␟topicAr␟topicEn␟noteAr␟noteEn␟link` (U+001F; date `YYYY-MM-DD` required, endDate optional, times `''`/HH:mm, titleAr 1–300, texts ≤ 300, notes ≤ 500, link `''` / path / http(s)) | `[]` |
+  | `venues` | list ≤ 12 of strings `key␟labelAr␟labelEn` (key `[a-z0-9_-]{1,30}`, labelAr 1–80, labelEn ≤ 80) — PR #32, ADR-041 | missing / empty = `main` الكنيسة الكبرى, `lower` القاعة السفلية, `services` مبنى الخدمات |
+  | `audiences` | same format — PR #32, ADR-041 | missing / empty = `general` عام, `youth` شباب, `children` أطفال |
 
 - PR #18 (ADR-027): `sections.customSections` (custom categories at `/section/*` + their menu entries) and
   `sections.customPages` (custom pages at `/page/*` + their menu entries); missing = on; seeded `true`.
@@ -219,6 +221,15 @@ Existence of `settings/church` = "database is seeded" (see `03-architecture.md`)
   missing key = built-in default. Written only once an admin sets one (saves keep working against older rules).
 
 ## Content collections
+
+### Optional programme details (PR #32, ADR-041) — `ProgramInfo` (`lib/domain/program.dart`)
+
+On `liturgies`, `meetings` and `seasons` only; every key optional (missing = nothing shown):
+`speakerAr`, `speakerEn` (≤ 200), `topicAr`, `topicEn` (≤ 300), `choirAr`, `choirEn` (≤ 200), `venue`, `audience`
+(keys of `settings/features.venues` / `.audiences`, `[a-z0-9_-]{0,30}`; an unknown key shows nothing),
+`attachmentUrl` (https URL only — a Google Drive or other link; **no file upload**), `attachmentLabelAr/En` (≤ 80;
+blank = «البرنامج / الكتيب»). The free-text `placeAr/En`, `audienceAr/En` (liturgies) and `hallAr/En` (meetings)
+stay as before.
 
 ### `alerts/{id}` — `Alert` (Hideable)
 `titleAr` (**req**, ≤300), `titleEn` (≤300), `bodyAr`/`bodyEn` (≤2000; admin form caps 1000), `active` (bool,

@@ -4,6 +4,7 @@ library;
 import '../../domain/assistant_settings.dart';
 import '../../domain/custom_content.dart';
 import '../../domain/image_style.dart';
+import '../../domain/program.dart';
 
 enum FieldType {
   text,
@@ -36,8 +37,9 @@ enum FieldType {
 }
 
 /// Where a field sits in the editor: [basic] is always open at the top; the
-/// detail-page groups are collapsible cards below it.
-enum FieldGroup { basic, details, media, contacts }
+/// detail-page groups are collapsible cards below it. [program]: speaker,
+/// topic, choir, venue, audience and PDF link (ADR-041).
+enum FieldGroup { basic, program, details, media, contacts }
 
 class FieldDef {
   final String key;
@@ -370,6 +372,43 @@ const _priestFields = [
   ..._plainContactsGroup,
 ];
 
+// ---- programme details (ADR-041): liturgies, meetings, seasons. Venue /
+// audience choices are the admin lists of /admin → «إعدادات المواسم»
+// (settings/features.venues / .audiences); the PDF is a Google Drive (or any
+// https) link — nothing is uploaded (owner, 4 Nov 2026).
+const _programGroup = [
+  FieldDef('speakerAr', 'المتكلم / الواعظ (عربي)', 'Speaker / preacher (Arabic)', FieldType.text,
+      maxLength: 200, group: FieldGroup.program,
+      hintAr: 'مثل: نيافة الأنبا … أو القمص … (يظهر في البطاقة وصفحة التفاصيل)',
+      hintEn: 'E.g. His Grace Bishop … or Fr … (shown on the card and the detail page)'),
+  FieldDef('speakerEn', 'المتكلم / الواعظ (إنجليزي)', 'Speaker / preacher (English)', FieldType.text,
+      maxLength: 200, group: FieldGroup.program),
+  FieldDef('topicAr', 'الموضوع / عنوان العظة (عربي)', 'Topic / sermon title (Arabic)', FieldType.text,
+      maxLength: 300, group: FieldGroup.program),
+  FieldDef('topicEn', 'الموضوع / عنوان العظة (إنجليزي)', 'Topic / sermon title (English)', FieldType.text,
+      maxLength: 300, group: FieldGroup.program),
+  FieldDef('choirAr', 'فريق الكورال (عربي)', 'Choir (Arabic)', FieldType.text, maxLength: 200, group: FieldGroup.program),
+  FieldDef('choirEn', 'فريق الكورال (إنجليزي)', 'Choir (English)', FieldType.text, maxLength: 200, group: FieldGroup.program),
+  FieldDef('venue', 'المكان / القاعة', 'Venue / hall', FieldType.choice,
+      dynamicOptions: 'venues', nullableChoice: true, group: FieldGroup.program,
+      hintAr: 'القائمة من «إعدادات المواسم». صلوات في نفس الوقت بأماكن مختلفة تظهر معًا («وفي نفس الوقت: …»).',
+      hintEn: 'The list comes from "Season settings". Services at the same time in different venues are shown together ("At the same time: …").'),
+  FieldDef('audience', 'الفئة', 'Audience', FieldType.choice,
+      dynamicOptions: 'audiences', nullableChoice: true, group: FieldGroup.program,
+      hintAr: 'القائمة من «إعدادات المواسم». فارغ = للجميع.', hintEn: 'The list comes from "Season settings". Blank = everyone.'),
+  FieldDef('attachmentUrl', 'رابط ملف PDF (Google Drive)', 'PDF link (Google Drive)', FieldType.url,
+      group: FieldGroup.program,
+      pattern: r'[Hh][Tt][Tt][Pp][Ss]://\S+',
+      hintAr: 'كتيب البصخة أو جدول متكلمي النهضة: ارفع الملف على Google Drive واجعل المشاركة «أي شخص لديه الرابط»، ثم الصق الرابط هنا (https فقط). لا يُرفع أي ملف على الموقع.',
+      hintEn: 'Pascha booklet or revival speakers list: upload it to Google Drive, share it as "Anyone with the link", then paste the link here (https only). Nothing is uploaded to the site.'),
+  FieldDef('attachmentLabelAr', 'نص زر الملف (عربي، فارغ = البرنامج / الكتيب)', 'File button text (Arabic, blank = default)',
+      FieldType.text,
+      maxLength: 80, group: FieldGroup.program),
+  FieldDef('attachmentLabelEn', 'نص زر الملف (إنجليزي)', 'File button text (English, blank = "Programme / booklet")',
+      FieldType.text,
+      maxLength: 80, group: FieldGroup.program),
+];
+
 const adminCollections = <CollectionDef>[
   CollectionDef('alerts', 'التنويهات', 'Alerts', [
     FieldDef('titleAr', 'العنوان (عربي)', 'Title (Arabic)', FieldType.text, required: true),
@@ -410,6 +449,7 @@ const adminCollections = <CollectionDef>[
     ),
     _imageField,
     _imageStyleFieldFlat,
+    ..._programGroup,
   ], [
     'nameAr',
     'key'
@@ -431,6 +471,7 @@ const adminCollections = <CollectionDef>[
     _orderField,
     _visibleField,
     _sampleField,
+    ..._programGroup,
   ], [
     'nameAr',
     'start'
@@ -454,6 +495,7 @@ const adminCollections = <CollectionDef>[
     _orderField,
     _visibleField,
     _sampleField,
+    ..._programGroup,
     ..._detailsGroup,
     ..._meetingMediaGroup,
     ..._contactSwitches,
@@ -887,4 +929,34 @@ const todaySettingsDoc = DocDef('settings/features', 'اليوم والبث ال
   FieldDef('liveEndsAt', 'إيقاف تلقائي (اختياري)', 'Switch off automatically at (optional)', FieldType.dateTime,
       hintAr: 'بعد هذا الوقت يختفي الشريط وحده حتى لو بقي المفتاح مفعّلًا.',
       hintEn: 'After this time the banner disappears on its own, even if the switch stays on.'),
+]);
+
+const _optionRowFields = [
+  FieldDef('key', 'المفتاح (حروف إنجليزية صغيرة وأرقام، مثل lower)', 'Key (lower-case latin & digits, e.g. lower)',
+      FieldType.text,
+      required: true,
+      maxLength: 30,
+      pattern: r'[a-z0-9_-]{1,30}',
+      hintAr: 'لا تغيّره بعد استخدامه: القداسات والاجتماعات تحفظ المفتاح.',
+      hintEn: 'Do not change it once used: services and meetings store the key.'),
+  FieldDef('labelAr', 'الاسم (عربي)', 'Name (Arabic)', FieldType.text, required: true, maxLength: 80),
+  FieldDef('labelEn', 'الاسم (إنجليزي)', 'Name (English)', FieldType.text, maxLength: 80),
+];
+
+/// /admin → "Season settings" (ADR-041): top-level keys of
+/// settings/features (no extra document or listener). Venues and audiences
+/// offered by the programme fields of liturgies, meetings and seasons.
+const seasonSettingsDoc = DocDef('settings/features', 'إعدادات المواسم', 'Season settings', [
+  FieldDef('venues', 'الأماكن / القاعات (حتى 12)', 'Venues / halls (up to 12)', FieldType.objectList,
+      maxRows: ProgramOptions.max,
+      encodedRows: true,
+      hintAr: 'فارغة = الافتراضي: الكنيسة الكبرى، القاعة السفلية، مبنى الخدمات.',
+      hintEn: 'Empty = the defaults: Main church, Lower hall, Services building.',
+      subFields: _optionRowFields),
+  FieldDef('audiences', 'الفئات (حتى 12)', 'Audiences (up to 12)', FieldType.objectList,
+      maxRows: ProgramOptions.max,
+      encodedRows: true,
+      hintAr: 'فارغة = الافتراضي: عام، شباب، أطفال. تظهر كأزرار تصفية في جدول المواسم عند وجود فئتين أو أكثر.',
+      hintEn: 'Empty = the defaults: Everyone, Youth, Children. Shown as filter chips on the seasons schedule when two or more are used.',
+      subFields: _optionRowFields),
 ]);

@@ -35,6 +35,13 @@ const Map<String, List<String>> _strings = {
   'speakerLabel': ['المتكلم', 'Speaker'],
   'endDateBeforeStart': ['تاريخ النهاية قبل تاريخ البداية', 'The end date is before the start date'],
   'topicLabel': ['الموضوع', 'Topic'],
+  // Programme details (ADR-041)
+  'choirLabel': ['الكورال', 'Choir'],
+  'audienceLabel': ['الفئة', 'Audience'],
+  'programPdf': ['البرنامج / الكتيب', 'Programme / booklet'],
+  'parallelAt': ['وفي نفس الوقت: {v}', 'At the same time: {v}'],
+  'allVenues': ['كل الأماكن', 'All venues'],
+  'allAudiences': ['كل الفئات', 'Everyone'],
   'katamerosCredit': ['المصدر: القطمارس (katameros.app)', 'Source: Katameros (katameros.app)'],
   'inDays': ['بعد {n} أيام', 'In {n} days'],
   'startsIn': ['يبدأ بعد {t}', 'Starts in {t}'],
@@ -270,6 +277,7 @@ const Map<String, List<String>> _strings = {
   'imageUploadUnavailable': ['الرفع غير متاح هنا — استخدم رابط صورة', 'Upload unavailable here — use an image link'],
   'imageSize': ['{w}×{h} بكسل • {kb} ك.ب', '{w}×{h} px • {kb} KB'],
   // PR #12: admin customization studio (DocEditor groups, gallery, rows).
+  'groupProgram': ['البرنامج: المتكلم والمكان والفئة وملف PDF', 'Programme: speaker, venue, audience & PDF'],
   'groupDetails': ['صفحة التفاصيل والحقول الإضافية', 'Detail page & extra fields'],
   'groupMedia': ['الصور ومعرض الصور', 'Photos & gallery'],
   'groupContacts': ['التواصل والروابط', 'Contacts & links'],
