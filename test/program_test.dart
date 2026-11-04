@@ -14,6 +14,7 @@ import 'package:church_portal/domain/schedule.dart';
 import 'package:church_portal/state/providers.dart';
 import 'package:church_portal/ui/admin/admin_page.dart' show adminDestinations;
 import 'package:church_portal/ui/admin/admin_schema.dart';
+import 'package:church_portal/ui/admin/admin_validators.dart' show validateRowUnique;
 import 'package:church_portal/ui/widgets/cards.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -26,7 +27,8 @@ Liturgy lit(String id,
         DateTime? date,
         String venue = '',
         String audience = '',
-        String place = ''}) =>
+        String place = '',
+        String placeEn = ''}) =>
     Liturgy(
       id: id,
       type: 'other',
@@ -37,6 +39,7 @@ Liturgy lit(String id,
       start: start,
       end: end,
       placeAr: place,
+      placeEn: placeEn,
       program: ProgramInfo(venue: venue, audience: audience),
     );
 
@@ -143,6 +146,45 @@ void main() {
       expect(r['a']!.single.id, 'b');
       expect(r.containsKey('c'), isFalse);
       expect(r.containsKey('d'), isFalse);
+    });
+
+    test('a venue key and its own name as free text are the same place (CodeRabbit review)', () {
+      final services = [
+        lit('a', weekday: 5, venue: 'main'),
+        lit('b', weekday: 5, place: 'الكنيسة الكبرى'),
+        lit('c', weekday: 5, placeEn: 'Lower hall'),
+        lit('d', weekday: 5, placeEn: 'lower hall '),
+      ];
+      final r = parallelServices(services, ProgramOptions.defaults);
+      expect(r['a']!.map((l) => l.id), ['c', 'd']);
+      expect(r['b']!.map((l) => l.id), ['c', 'd']);
+      expect(r.containsKey('c') && r['c']!.any((l) => l.id == 'd'), isFalse); // same English place
+      // Without the options the key and the text differ (older callers).
+      expect(parallelServices(services)['a']!.map((l) => l.id), contains('b'));
+    });
+
+    test('a service crossing midnight overlaps one later that night (CodeRabbit review)', () {
+      final r = parallelServices([
+        lit('a', weekday: 6, venue: 'main', start: '23:30', end: '01:00'),
+        lit('b', weekday: 6, venue: 'lower', start: '23:45', end: '00:30'),
+        lit('c', weekday: 6, venue: 'services', start: '22:00', end: '23:00'),
+      ]);
+      expect(r['a']!.single.id, 'b');
+      expect(r['b']!.single.id, 'a');
+      expect(r.containsKey('c'), isFalse);
+    });
+  });
+
+  group('admin rows', () {
+    test('a repeated venue / audience key is refused on the later row (CodeRabbit review)', () {
+      final venues = seasonSettingsDoc.fields.firstWhere((f) => f.key == 'venues');
+      expect(venues.rowUniqueKey, 'key');
+      expect(seasonSettingsDoc.fields.firstWhere((f) => f.key == 'audiences').rowUniqueKey, 'key');
+      final keys = ['main', 'lower', ' main', ''];
+      expect(validateRowUnique(venues, keys, 0), isNull);
+      expect(validateRowUnique(venues, keys, 1), isNull);
+      expect(validateRowUnique(venues, keys, 2), 'duplicateKey');
+      expect(validateRowUnique(venues, keys, 3), isNull);
     });
   });
 

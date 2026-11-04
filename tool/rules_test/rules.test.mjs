@@ -1566,10 +1566,19 @@ describe('ADR-041: programme details (speaker, topic, choir, venue, audience, Dr
         { attachmentUrl: 'https://drive google.com/x' }, { venue: 'Lower Hall' }, { audience: 'x'.repeat(31) },
         { speakerAr: 'م'.repeat(201) }, { topicEn: 't'.repeat(301) }, { choirAr: 5 }, { attachmentLabelAr: 'x'.repeat(81) },
         { speakerAr: `a${S}b` }, { venue: true },
+        { attachmentUrl: 'https://drive.google.com/file/d/a\tb' }, { attachmentUrl: 'https://drive.google.com/x\ny' },
+        { attachmentUrl: 'https://drive.google.com/' + 'x'.repeat(476) },
       ]) {
         await assertFails(updateDoc(doc(ed, col, 'q'), bad), `${col} ${JSON.stringify(bad).slice(0, 60)}`);
       }
     }
+  });
+
+  test('a 500-character Drive link (the form maximum) is accepted', async () => {
+    const ed = db(EDITOR);
+    await assertSucceeds(setDoc(doc(ed, 'seasons', 'long'), { ...base.seasons, ...stamp() }));
+    const url = 'https://drive.google.com/' + 'x'.repeat(475);
+    await assertSucceeds(updateDoc(doc(ed, 'seasons', 'long'), { attachmentUrl: url, ...stamp() }));
   });
 
   test('visitors cannot write programme details', async () => {

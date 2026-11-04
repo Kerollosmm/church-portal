@@ -609,6 +609,7 @@ const Map<String, List<String>> _strings = {
   'opt_info': ['معلومات', 'Info'],
   'opt_star': ['نجمة', 'Star'],
   'invalidSlug': ['حروف إنجليزية صغيرة وأرقام وشرطات فقط (مثل new-building)', 'Lower-case latin letters, digits and hyphens only (e.g. new-building)'],
+  'duplicateKey': ['هذا المفتاح مكرر في صف سابق', 'This key is already used in an earlier row'],
   'slugTaken': ['هذا الرابط مستخدم بالفعل', 'This address is already used'],
   'blockImageUrl': ['فقرة الصورة تحتاج رابط صورة يبدأ بـ https://', 'An image block needs a picture link starting with https://'],
   'opt_church': ['كنيسة', 'Church'],

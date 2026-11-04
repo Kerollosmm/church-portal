@@ -359,7 +359,9 @@ service cloud.firestore {
         + '\u001f' + (d.get('attachmentUrl', null) == null ? '' : d.attachmentUrl)
         + '\u001f' + (d.get('attachmentLabelAr', null) == null ? '' : d.attachmentLabelAr)
         + '\u001f' + (d.get('attachmentLabelEn', null) == null ? '' : d.attachmentLabelEn)
-      ).matches('[^\\x1f]{0,200}\\x1f[^\\x1f]{0,200}\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{0,200}\\x1f[^\\x1f]{0,200}\\x1f[a-z0-9_-]{0,30}\\x1f[a-z0-9_-]{0,30}\\x1f(|[Hh][Tt][Tt][Pp][Ss]://[^/ \\x1f]+[.][^/ \\x1f]+([/?#][^ \\x1f]{0,480})?)\\x1f[^\\x1f]{0,80}\\x1f[^\\x1f]{0,80}');
+      ).matches('[^\\x1f]{0,200}\\x1f[^\\x1f]{0,200}\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{0,200}\\x1f[^\\x1f]{0,200}\\x1f[a-z0-9_-]{0,30}\\x1f[a-z0-9_-]{0,30}\\x1f(|[Hh][Tt][Tt][Pp][Ss]://[^/\\s\\x1f]+[.][^/\\s\\x1f]+([/?#][^\\s\\x1f]{0,500})?)\\x1f[^\\x1f]{0,80}\\x1f[^\\x1f]{0,80}')
+        // The form's 500-character cap (the regex bounds only the path).
+        && (d.get('attachmentUrl', null) == null || d.attachmentUrl.size() <= 500);
     }
 
     function validAlert(d) {

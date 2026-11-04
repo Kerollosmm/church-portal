@@ -77,7 +77,11 @@ class ProgramDetails extends ConsumerWidget {
 String parallelSummary(BuildContext context, ProgramOptions opts, List<Liturgy> others) => [
       for (final o in others)
         [
-          o.program.venue.isNotEmpty ? venueLabel(context, opts, o.program.venue) : context.pick(o.placeAr, o.placeEn),
+          // An unknown venue key falls back to the free-text place (CodeRabbit).
+          if (o.program.venue.isNotEmpty ? venueLabel(context, opts, o.program.venue) : '' case final v when v.isNotEmpty)
+            v
+          else
+            context.pick(o.placeAr, o.placeEn),
           if (audienceLabel(context, opts, o.program.audience) case final a when a.isNotEmpty) '($a)',
         ].where((s) => s.isNotEmpty).join(' '),
     ].where((s) => s.isNotEmpty).join(context.isAr ? '، ' : ', ');

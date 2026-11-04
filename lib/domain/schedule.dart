@@ -335,9 +335,28 @@ Map<Season, List<Liturgy>> seasonalSchedule(Iterable<Season> seasons, Iterable<L
 }
 
 /// Where a service is held, for comparing parallel services (ADR-041): the
-/// admin venue key when set, else the free-text place.
-String _placeKey(Liturgy l) =>
-    l.program.venue.isNotEmpty ? 'v:${l.program.venue}' : (l.placeAr.trim().isEmpty ? '' : 'p:${l.placeAr.trim()}');
+/// admin venue's Arabic name when [opts] knows the key (so the venue `main`
+/// and the free text «الكنيسة الكبرى» are the same place), else the key,
+/// else the free-text Arabic place, else the English one (compared only with
+/// other English-only places; CodeRabbit review on PR #32).
+String _placeKey(Liturgy l, ProgramOptions? opts) {
+  final v = l.program.venue;
+  if (v.isNotEmpty) {
+    final name = opts?.venue(v)?.labelAr.trim() ?? '';
+    return name.isNotEmpty ? 'n:$name' : 'v:$v';
+  }
+  if (l.placeAr.trim().isNotEmpty) return 'n:${l.placeAr.trim()}';
+  return l.placeEn.trim().isEmpty ? '' : 'e:${l.placeEn.trim().toLowerCase()}';
+}
+
+/// A service's end in minutes from its day's midnight: no end = one minute,
+/// an end at or before the start crosses midnight (as [_occurrence]).
+int _endMinutes(Liturgy l) {
+  final s = l.startMinutes!;
+  final e = l.endMinutes;
+  if (e == null) return s + 1;
+  return e <= s ? e + 24 * 60 : e;
+}
 
 /// The day a service belongs to: its one-off date, else its weekday.
 String _slotDay(Liturgy l) {
@@ -353,24 +372,25 @@ String _slotDay(Liturgy l) {
 /// (ADR-041: Holy Week prayers in the main church, the lower hall and the
 /// services building for different age groups). Two services are parallel
 /// when they fall on the same day (date, or weekday for weekly ones), their
-/// times overlap (a service without an end time counts as one minute) and
+/// times overlap (a service without an end time counts as one minute, an end
+/// at or before the start crosses midnight) and
 /// their venues (or places) differ — both must name one. Returns, for each
 /// liturgy id that has any, the other services in start order.
-Map<String, List<Liturgy>> parallelServices(Iterable<Liturgy> list) {
+Map<String, List<Liturgy>> parallelServices(Iterable<Liturgy> list, [ProgramOptions? opts]) {
   final items = [
     for (final l in list)
-      if (l.startMinutes != null && _placeKey(l).isNotEmpty && _slotDay(l).isNotEmpty) l,
+      if (l.startMinutes != null && _placeKey(l, opts).isNotEmpty && _slotDay(l).isNotEmpty) l,
   ];
   final out = <String, List<Liturgy>>{};
   for (var i = 0; i < items.length; i++) {
     final a = items[i];
     final aStart = a.startMinutes!;
-    final aEnd = (a.endMinutes ?? 0) > aStart ? a.endMinutes! : aStart + 1;
+    final aEnd = _endMinutes(a);
     for (var j = i + 1; j < items.length; j++) {
       final b = items[j];
-      if (_slotDay(a) != _slotDay(b) || _placeKey(a) == _placeKey(b)) continue;
+      if (_slotDay(a) != _slotDay(b) || _placeKey(a, opts) == _placeKey(b, opts)) continue;
       final bStart = b.startMinutes!;
-      final bEnd = (b.endMinutes ?? 0) > bStart ? b.endMinutes! : bStart + 1;
+      final bEnd = _endMinutes(b);
       if (aStart < bEnd && bStart < aEnd) {
         (out[a.id] ??= []).add(b);
         (out[b.id] ??= []).add(a);

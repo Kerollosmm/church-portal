@@ -110,7 +110,14 @@ class NextMassCard extends ConsumerWidget {
     } else {
       final r = computeNextMass(liturgies: lits.value ?? const [], seasons: seasons.value ?? const [], now: now);
       final s = ref.watch(settingsProvider).value;
-      body = _content(context, r, now, ref.watch(todaySettingsProvider), s?.lat, s?.lng);
+      // The next service's «وفي نفس الوقت: …» line, as on /mass-schedule
+      // (ADR-041; CodeRabbit review on PR #32).
+      final opts = ref.watch(featuresProvider.select((f) => f.programOptions));
+      final next = r.next?.liturgy;
+      final parallelText = next == null
+          ? ''
+          : parallelSummary(context, opts, parallelServices(lits.value ?? const [], opts)[next.id] ?? const []);
+      body = _content(context, r, now, ref.watch(todaySettingsProvider), s?.lat, s?.lng, parallelText);
     }
 
     final primary = Theme.of(context).colorScheme.primary;
@@ -156,7 +163,8 @@ class NextMassCard extends ConsumerWidget {
     );
   }
 
-  Widget _content(BuildContext context, NextMassResult r, DateTime now, TodaySettings today, double? lat, double? lng) {
+  Widget _content(BuildContext context, NextMassResult r, DateTime now, TodaySettings today, double? lat, double? lng,
+      [String parallelText = '']) {
     if (r.isEmpty) return EmptyState(message: context.tr('noUpcoming'), icon: Icons.event_busy);
     final children = <Widget>[];
     if (r.activeSeasons.isNotEmpty) {
@@ -224,7 +232,7 @@ class NextMassCard extends ConsumerWidget {
       children.add(const SizedBox(height: 6));
       children.add(IconLine(Icons.place_outlined, context.pick(n.liturgy.placeAr, n.liturgy.placeEn)));
       children.add(IconLine(Icons.people_outline, context.pick(n.liturgy.audienceAr, n.liturgy.audienceEn)));
-      children.add(ProgramDetails(n.liturgy.program));
+      children.add(ProgramDetails(n.liturgy.program, parallelText: parallelText));
       if (n.liturgy.sample) {
         children.add(Padding(
           padding: const EdgeInsets.only(top: 6),

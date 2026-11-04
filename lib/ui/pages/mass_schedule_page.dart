@@ -104,10 +104,14 @@ class _MassSchedulePageState extends ConsumerState<MassSchedulePage> {
     // view stays open, so their services (and feast liturgy) are listed here.
     final revivals = seasonalSchedule(seasons.where((s) => !s.replacesRegular && isSeasonActiveAt(s, now)), all);
     final showWeekday = _tab == ScheduleTab.other;
-    // Services at the same time in another hall, on every list (ADR-041).
+    // Services at the same time in another hall, across every list shown
+    // (ADR-041; Codex / CodeRabbit review on PR #32).
     final opts = ref.watch(featuresProvider.select((f) => f.programOptions));
-    final parallelSpecial = parallelServices(special);
-    final parallelRegular = parallelServices(list);
+    final shown = <String, Liturgy>{
+      for (final l in [...revivals.values.expand((l) => l), ...special, ...list, ...vespers]) l.id: l,
+    };
+    final parallel = parallelServices(shown.values, opts);
+    String parallelOf(Liturgy l) => parallelSummary(context, opts, parallel[l.id] ?? const []);
     return [
       for (final e in revivals.entries) ...[
         SectionTitle(
@@ -116,7 +120,8 @@ class _MassSchedulePageState extends ConsumerState<MassSchedulePage> {
           trailing: Pill(context.tr('activeNow'), icon: Icons.circle),
         ),
         Padding(padding: const EdgeInsets.only(bottom: Space.s), child: ProgramDetails(e.key.program)),
-        ..._seasonCards(context, e.value),
+        // No audience chips in this view: never filter (Sentry review).
+        ..._seasonCards(context, e.value, parallel),
       ],
       // One-off dated services outside any season (e.g. a feast or New
       // Year's Eve), which the weekly tabs cannot show.
@@ -127,7 +132,7 @@ class _MassSchedulePageState extends ConsumerState<MassSchedulePage> {
             LiturgyCard(
               liturgy: l,
               showDate: true,
-              parallelText: parallelSummary(context, opts, parallelSpecial[l.id] ?? const []),
+              parallelText: parallelOf(l),
             ),
         ]),
       ],
@@ -158,7 +163,7 @@ class _MassSchedulePageState extends ConsumerState<MassSchedulePage> {
             LiturgyCard(
               liturgy: l,
               showWeekday: showWeekday,
-              parallelText: parallelSummary(context, opts, parallelRegular[l.id] ?? const []),
+              parallelText: parallelOf(l),
             ),
         ]),
       SectionTitle(context.tr('vespersPraise'), icon: Icons.nightlight_round),
@@ -166,13 +171,21 @@ class _MassSchedulePageState extends ConsumerState<MassSchedulePage> {
         const EmptyState()
       else
         ResponsiveGrid(children: [
-          for (final l in vespers) LiturgyCard(liturgy: l, showWeekday: true, showDate: true),
+          for (final l in vespers)
+            LiturgyCard(liturgy: l, showWeekday: true, showDate: true, parallelText: parallelOf(l)),
         ]),
     ];
   }
 
   List<Widget> _seasonal(BuildContext context, List<Season> seasons, List<Liturgy> all, DateTime now) {
     final grouped = seasonalSchedule(seasons, all);
+    final opts = ref.watch(featuresProvider.select((f) => f.programOptions));
+    final allSeasonal = grouped.values.expand((l) => l).toList();
+    // One map for every season shown: services of two seasons can overlap.
+    final parallel = parallelServices(allSeasonal, opts);
+    // The chosen audience applies only while its chip is shown (CodeRabbit).
+    final keys = _audienceKeys(opts, allSeasonal);
+    final audience = keys.length >= 2 && keys.contains(_audience) ? _audience : '';
     final showImages = ref.watch(featuresProvider.select((f) => f.showImages));
     if (grouped.isEmpty) return [const EmptyState(icon: Icons.event_busy)];
     // Seasons in effect now come first, then the others in date order.
@@ -219,26 +232,29 @@ class _MassSchedulePageState extends ConsumerState<MassSchedulePage> {
       if (!s.program.isEmpty) {
         out.add(Padding(padding: const EdgeInsets.only(bottom: Space.m), child: ProgramDetails(s.program)));
       }
-      out.addAll(_seasonCards(context, e.value));
+      out.addAll(_seasonCards(context, e.value, parallel, audience: audience));
     }
-    return [..._audienceFilter(context, grouped.values.expand((l) => l)), ...out];
+    return [..._audienceFilter(context, keys, audience), ...out];
   }
+
+  /// The audience keys the seasonal services use that resolve to a label.
+  static Set<String> _audienceKeys(ProgramOptions opts, Iterable<Liturgy> all) =>
+      {for (final l in all) if (opts.audience(l.program.audience) != null) l.program.audience};
 
   /// Audience chips (ADR-041) when the seasonal services name two or more
   /// audiences (e.g. everyone / youth / children in parallel halls).
-  List<Widget> _audienceFilter(BuildContext context, Iterable<Liturgy> all) {
+  List<Widget> _audienceFilter(BuildContext context, Set<String> keys, String selected) {
     final opts = ref.watch(featuresProvider.select((f) => f.programOptions));
-    final keys = <String>{for (final l in all) if (opts.audience(l.program.audience) != null) l.program.audience};
     if (keys.length < 2) return const [];
     Widget chip(String key, String label) => Padding(
           padding: const EdgeInsetsDirectional.only(end: 8),
           child: ChoiceChip(
             key: Key('audience-$key'),
             label: Text(label),
-            selected: _audience == key,
+            selected: selected == key,
             showCheckmark: false,
             labelStyle: TextStyle(
-                color: _audience == key ? context.pal.onPrimary : Theme.of(context).colorScheme.primary,
+                color: selected == key ? context.pal.onPrimary : Theme.of(context).colorScheme.primary,
                 fontWeight: FontWeight.w700),
             onSelected: (_) => setState(() => _audience = key),
           ),
@@ -256,16 +272,16 @@ class _MassSchedulePageState extends ConsumerState<MassSchedulePage> {
     ];
   }
 
-  /// A season's services, filtered by [_audience] (a service without an
+  /// A season's services, filtered by [audience] (a service without an
   /// audience is for everyone), each with the services held at the same
-  /// time in another hall (ADR-041).
-  List<Widget> _seasonCards(BuildContext context, List<Liturgy> list) {
+  /// time in another hall ([parallel], ADR-041).
+  List<Widget> _seasonCards(BuildContext context, List<Liturgy> list, Map<String, List<Liturgy>> parallel,
+      {String audience = ''}) {
     final opts = ref.watch(featuresProvider.select((f) => f.programOptions));
-    final shown = _audience.isEmpty
+    final shown = audience.isEmpty
         ? list
-        : [for (final l in list) if (l.program.audience.isEmpty || l.program.audience == _audience) l];
+        : [for (final l in list) if (l.program.audience.isEmpty || l.program.audience == audience) l];
     if (shown.isEmpty) return const [EmptyState(icon: Icons.event_busy)];
-    final parallel = parallelServices(list);
     return [
       ResponsiveGrid(children: [
         for (final l in shown)

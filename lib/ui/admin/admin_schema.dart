@@ -117,6 +117,11 @@ class FieldDef {
   /// start date); both are YYYY-MM-DD. The error shows on the end field.
   final MapEntry<String, String>? rowNotBefore;
 
+  /// [FieldType.objectList]: row sub-field whose (trimmed) value may not
+  /// repeat across rows, e.g. a venue / audience key (the reader keeps only
+  /// the first row of a key). The error shows on the repeated row.
+  final String rowUniqueKey;
+
   const FieldDef(this.key, this.labelAr, this.labelEn, this.type,
       {this.required = false,
       this.options = const [],
@@ -140,7 +145,8 @@ class FieldDef {
       this.linkPicker = false,
       this.encodedRows = false,
       this.pattern = '',
-      this.rowNotBefore});
+      this.rowNotBefore,
+      this.rowUniqueKey = ''});
 
   int get effectiveMaxLength => maxLength > 0
       ? maxLength
@@ -952,11 +958,13 @@ const seasonSettingsDoc = DocDef('settings/features', 'إعدادات الموا
       encodedRows: true,
       hintAr: 'فارغة = الافتراضي: الكنيسة الكبرى، القاعة السفلية، مبنى الخدمات.',
       hintEn: 'Empty = the defaults: Main church, Lower hall, Services building.',
+      rowUniqueKey: 'key',
       subFields: _optionRowFields),
   FieldDef('audiences', 'الفئات (حتى 12)', 'Audiences (up to 12)', FieldType.objectList,
       maxRows: ProgramOptions.max,
       encodedRows: true,
       hintAr: 'فارغة = الافتراضي: عام، شباب، أطفال. تظهر كأزرار تصفية في جدول المواسم عند وجود فئتين أو أكثر.',
       hintEn: 'Empty = the defaults: Everyone, Youth, Children. Shown as filter chips on the seasons schedule when two or more are used.',
+      rowUniqueKey: 'key',
       subFields: _optionRowFields),
 ]);
