@@ -59,6 +59,20 @@ render with `PageBody` (+ `Footer`). Content comes from Riverpod providers (hidd
   hero `<video>` source and the CSS haze / ray layer start only when the page is idle afterwards (`ContentReady.whenIdle`);
   they fade in, the poster stays the LCP element and the final look is unchanged.
 
+### Today layer on every page and Home (PR #31, ADR-039 / ADR-040)
+
+- **Coptic date strip** (`CopticDateStrip`, top of the shell): the liturgical day in Coptic, «الأربعاء ٢٥ بابه ١٧٤٣ ش»;
+  after the day's start (18:00 by default, or sunset at the church) «ليلة الخميس ٢٦ بابه ١٧٤٣ ش». `copticStrip`:
+  every page / Home only / off. No time-zone label anywhere.
+- **Live banner** (`LiveStreamBanner`): red bar under the strip on every page while `liveEnabled` + an http(s)
+  `liveUrl` and before `liveEndsAt`; pulsing dot (static under reduced motion); tap opens the stream.
+- **Top event card** (`TopEventCard`, first on Home): «حدث اليوم» = an admin church event (`dayEvents`) covering today
+  and not ended (on the eve: the next liturgical day's event) with times, speaker, topic, note, link; else
+  «عيد اليوم» / «تذكار اليوم» from `/data/today.json` (Katameros, credited) for the liturgical day; else the computed
+  feast list; nothing on an ordinary day without data. `topEvent` off hides it; `commemoration` off = church events only.
+- **Verse of the day** rotates on the liturgical day (changes at the day's start, not midnight).
+- **Next service card**: a service starting after the day's start is labelled «الليلة • ليلة الخميس».
+
 ### `/about` — `about_page.dart` `AboutPage`
 - History card (bishop line + `historyAr/En`) and **altars** grid (main altar gets a gold cross) — section `history`.
 - Patron saints cards (name, feast pills Coptic + Gregorian, bio) — section `saints`.

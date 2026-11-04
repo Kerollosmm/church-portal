@@ -721,7 +721,7 @@ void main() {
       await tester.tap(find.byTooltip('Send'));
       await tester.pumpAndSettle();
       expect(find.textContaining("today's limit of 1 questions"), findsOneWidget);
-      expect(find.textContaining('midnight Cairo time'), findsOneWidget);
+      expect(find.textContaining('It resets at midnight'), findsOneWidget);
       final link = _spansIn(tester).firstWhere((s) => s.text == 'contact page');
       expect(link.recognizer, isNotNull);
       expect(model.calls, hasLength(1));

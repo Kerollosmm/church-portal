@@ -135,6 +135,14 @@ cancels and re-subscribes every stream (BUG-18; `ChurchInfoScreen` does the same
 - Item forms on image collections have **"Image display (— = section default)"** under the image (`imageStyle`,
   nullable choice); a new document does not write it while unset.
 
+### Today & live stream («اليوم والبث المباشر», `ChurchInfoScreen(doc: todaySettingsDoc)`) → `settings/features` (PR #31, ADR-039/040)
+
+Generic form over the today keys of `settings/features` (writes only changed keys, so it never clobbers the
+Sections & home page editor and vice versa): Coptic date strip (every page / Home only / off), start of the
+liturgical day (fixed time — default 18:00 — or sunset at the church), the fixed time, Home "Today's event" card,
+automatic feast / commemoration (Katameros), church events by date (≤ 20 rows: date, until, from / to, titles,
+speaker, topic, note, link), live-stream banner switch, stream link, banner texts, automatic switch-off.
+
 ### Church info (`ChurchInfoScreen`) → `settings/church`
 (`ChurchInfoScreen` takes a `DocDef doc` — default `churchInfoDoc` — and an optional `header`; PR #19 reuses it for
 `settings/assistant`.)

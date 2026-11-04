@@ -47,6 +47,12 @@ lib/
     contact_categories.dart ContactSettings (defaults), ContactCategory (encode/fromStored), ContactKinds,
                             MessageStatus, inboxBoxOf, messageIsOpen (PR #18, ADR-028); stable random ids
                             newContactCategoryId / ContactSettings.newId (PR #19)
+    coptic_calendar.dart    CopticDate (Gregorian <-> Coptic via JDN, month names, format), LiturgicalDay,
+                            liturgicalDayAt (fixed 18:00 default / sunset), DayStartModes — PR #31, ADR-039
+    sun.dart                sunsetUtc / sunsetLocalMinutes (NOAA) at the church coordinates — ADR-039
+    coptic_feasts.dart      copticFeastsOn (computed fixed + movable feasts, offline fallback) — ADR-040
+    today.dart              TodaySettings (settings/features today keys), DayEvent (encoded dayEvents), SynaxariumData
+                            (/data/today.json), resolveTopEvent, live banner rule — ADR-040
     item_detail.dart        DetailKind (basePath/parentPath/collection), detailPathFor, parseDetailPath,
                             detailStateFor (detail-page gating), itemSocialsShown (PR #13, ADR-020),
                             weeklyCalendarUrl, absoluteDetailUrl, pickRelated (PR #14, ADR-021)
@@ -235,6 +241,10 @@ flowchart LR
 | `assistantModelProvider` | `Provider<AssistantModel>` (in `ui/pages/assistant_page.dart`, deferred chunk) | `FirebaseAssistantModel`; overridden with a fake in tests — PR #19 |
 | `seasonsProvider` | `StreamProvider<List<Season>>` | **not** filtered (seasons have no `visible`/`order`) |
 | `nowProvider` | `StreamProvider<DateTime>` | ticks every 30 s (next mass, "available today", alerts) |
+| `todaySettingsProvider` | `Provider<TodaySettings>` | `featuresProvider.today` (ADR-039/040; no extra listener) |
+| `liturgicalDayProvider` | `Provider<LiturgicalDay>` | now + day start (fixed 18:00 / sunset at `settings/church` lat/lng) |
+| `synaxariumSourceProvider` / `synaxariumProvider` | `Provider` / `FutureProvider<SynaxariumData>` | `/data/today.json` after `ContentReady.whenIdle`, device-cached; empty in seed mode (ADR-040) |
+| `topEventProvider` | `Provider<TopEvent?>` | `resolveTopEvent` (church event > Katameros > computed feasts) |
 | `assistantVisibleProvider` | `Provider<bool>` | `features.enabled(assistant) && fb.available && fb.appCheckActive && settings.assistantEnabled` |
 | `languageStoreProvider` | `Provider<LanguageStore>` | `PlatformLanguageStore` (`lib/core/locale_storage.dart`): `window.localStorage['church_portal_lang']` on web via `package:web` (conditional import, errors swallowed), no-op on Android/iOS; overridden in tests |
 | `localeProvider` | `NotifierProvider<LocaleNotifier, Locale>` | initial = `LocaleNotifier.initialLocale(Uri.base, saved)`: explicit `?lang=en`/`?lang=ar` → saved choice → `ar`; `toggle()`/`set()` = visitor's choice (URL follows, choice saved in the `LanguageStore`), `syncFromUrl()` = the URL asked (no rewrite, not saved), `consumeUserChange()` read once by the router. A saved English choice on a parameter-free URL makes the first redirect add `?lang=en` |
@@ -345,6 +355,9 @@ chunks are fetched relative to `<base href>`).
   `DetailKind.parentPath` — `/church-education`, `/church-activities`, `/clinics`, `/public-services`, `/about`
   (priests, saints) or `/` (milestones: their cards live on Home) — shown as `Key('backParent')` with the tooltip
   «العودة إلى …» (`backToLabel`); every other route keeps `Key('backHome')` → `/`.
+- **Today layer (PR #31, ADR-039/040):** the shell body is `Column[CopticDateStrip(location), LiveStreamBanner,
+  Expanded(page)]` over the `WarmBackdrop` (`lib/ui/widgets/today_widgets.dart`): the Coptic date strip
+  (`copticStrip` all / home / off) and, while live, the red «بث مباشر الآن من الكنيسة» bar, on every page.
 - `PageBody` (common.dart) = width-capped (`kMaxContentWidth = 1100`) scroll view + `Footer`.
 
 ## i18n — Arabic-first RTL + English (`lib/core/l10n.dart`)

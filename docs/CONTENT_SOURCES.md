@@ -152,3 +152,19 @@ site owner, served from Hosting: `/art/saint-moses-black.webp` and `/art/saints-
 - Text is copied byte-for-byte by `tool/gen_daily_verses.py` (never typed); only the choice of references
   (`tool/daily_verse_refs.txt`) and the Arabic/English book names are ours. Status: **verified** (public-domain text).
 - A fixed verse entered by an admin (`settings/features.dailyVerse`) is the church's own responsibility.
+
+## Coptic calendar, feasts and the day's commemoration (PR #31, 4 Nov 2026)
+
+- **Coptic dates** are computed (`lib/domain/coptic_calendar.dart`, no data file). Test dates were checked against the
+  `copticDate` / feast titles returned by the open-source Katameros API (https://api.katameros.app,
+  https://github.com/pierresaid/katameros-api, MIT), read 4 Nov 2026: 25/2/1743 = 4 Nov 2026, 11/8/1743 = 19 Apr 2027,
+  3/10/1743 = 10 Jun 2027 (Ascension), Nayrouz 11 Sep 2026 and 12 Sep 2027, Nativity 7 Jan 2027 / 7 Jan 2028,
+  Theophany 19 Jan 2027 / 20 Jan 2028, Annunciation 7 Apr 2027, Entry into Egypt 1 Jun 2027, Transfiguration
+  19 Aug 2027, Assumption 22 Aug 2027, Cross 27 Sep 2026, Great Lent from 8 Mar 2027, Nineveh fast 22 Feb 2027.
+- **Computed feast list** (`lib/domain/coptic_feasts.dart`): only the well-established feasts / first days of fasts,
+  by Coptic date or offset from Coptic Easter; shown only when the Katameros data is unavailable.
+- **The day's commemoration** (Synaxarium titles and feast title, Arabic + English) comes from the Katameros API via
+  `/data/today.json` (scheduled workflow, ADR-040); credited on the card («المصدر: القطمارس (katameros.app)»).
+  Status: third-party liturgical data, not church content; the admin can switch it off (`commemoration`).
+- **Sunset** (optional cut-over mode) is computed with NOAA's general solar position equations; checked against
+  timeanddate.com for Alexandria (Nov 2026: 4th 17:09, 20th 16:59, 30th 16:57).

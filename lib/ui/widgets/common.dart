@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart';
 import 'package:go_router/go_router.dart';
@@ -950,15 +953,17 @@ class Footer extends ConsumerWidget {
                         textAlign: TextAlign.center,
                         style: TextStyle(color: context.pal.muted, fontSize: 12.5),
                       ),
-                      ValueListenableBuilder<bool>(
-                        valueListenable: servingSeed,
-                        builder: (context, onSeed, _) => onSeed
-                            ? Text(
-                                context.tr('offlineData'),
-                                textAlign: TextAlign.center,
-                                style: TextStyle(color: context.pal.muted, fontSize: 12),
-                              )
-                            : const SizedBox.shrink(),
+                      SteadySeedNote(
+                        servingSeed: servingSeed,
+                        // Live Firestore: only a lasting fallback is worth a
+                        // note (a stream briefly on the seed during a cold
+                        // start made it flash for 1-2 s, PR #30 live check).
+                        delay: ref.watch(repositoryProvider).isLive ? SteadySeedNote.liveDelay : Duration.zero,
+                        child: Text(
+                          context.tr('offlineData'),
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: context.pal.muted, fontSize: 12),
+                        ),
                       ),
                     ],
                   ),
@@ -970,4 +975,70 @@ class Footer extends ConsumerWidget {
       ],
     );
   }
+}
+
+/// Shows [child] once [servingSeed] has stayed true for [delay] (ADR-039:
+/// the footer's "bundled content" note no longer flashes while a stream
+/// sits on the seed for a second or two during a cold start).
+class SteadySeedNote extends StatefulWidget {
+  final ValueListenable<bool> servingSeed;
+  final Duration delay;
+  final Widget child;
+  const SteadySeedNote({super.key, required this.servingSeed, required this.delay, required this.child});
+
+  static const liveDelay = Duration(seconds: 4);
+
+  @override
+  State<SteadySeedNote> createState() => _SteadySeedNoteState();
+}
+
+class _SteadySeedNoteState extends State<SteadySeedNote> {
+  Timer? _timer;
+  bool _shown = false;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.servingSeed.addListener(_update);
+    _update();
+  }
+
+  @override
+  void didUpdateWidget(covariant SteadySeedNote old) {
+    super.didUpdateWidget(old);
+    if (old.servingSeed != widget.servingSeed) {
+      old.servingSeed.removeListener(_update);
+      widget.servingSeed.addListener(_update);
+      _update();
+    }
+  }
+
+  void _update() {
+    final on = widget.servingSeed.value;
+    if (!on) {
+      _timer?.cancel();
+      _timer = null;
+      if (_shown && mounted) setState(() => _shown = false);
+      return;
+    }
+    if (_shown || _timer != null) return;
+    if (widget.delay == Duration.zero) {
+      if (mounted) setState(() => _shown = true);
+      return;
+    }
+    _timer = Timer(widget.delay, () {
+      _timer = null;
+      if (mounted && widget.servingSeed.value) setState(() => _shown = true);
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    widget.servingSeed.removeListener(_update);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => _shown ? widget.child : const SizedBox.shrink();
 }

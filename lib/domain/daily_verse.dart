@@ -44,6 +44,15 @@ int cairoDayOfYear(DateTime instant) {
   return DateTime.utc(c.year, c.month, c.day).difference(DateTime.utc(c.year)).inDays + 1;
 }
 
+/// Day of the year (1–366) of the calendar date [date] (y/m/d only).
+int dayOfYear(DateTime date) =>
+    DateTime.utc(date.year, date.month, date.day).difference(DateTime.utc(date.year)).inDays + 1;
+
+/// The rotating verse for the calendar date [date] (e.g. the liturgical
+/// day, which rolls at 18:00 — ADR-039).
+Verse? verseForDate(List<Verse> verses, DateTime date) =>
+    verses.isEmpty ? null : verses[(dayOfYear(date) - 1) % verses.length];
+
 /// The rotating verse for the Cairo day of [instant] (day N -> entry N-1,
 /// wrapping when the list is shorter than the year).
 Verse? verseForDay(List<Verse> verses, DateTime instant) =>
@@ -101,10 +110,12 @@ class DailyVerseConfig {
 
 /// The verse the home page shows at [instant] (null when nothing is
 /// available). A fixed verse with no text falls back to the daily rotation.
-Verse? resolveDailyVerse(DailyVerseConfig config, List<Verse> verses, DateTime instant) {
+/// [day] (the liturgical day, ADR-039) picks the rotation's entry when
+/// given; otherwise the Cairo civil day of [instant].
+Verse? resolveDailyVerse(DailyVerseConfig config, List<Verse> verses, DateTime instant, {DateTime? day}) {
   final text = config.textAr.trim();
   if (config.mode == DailyVerseConfig.fixed && text.isNotEmpty) {
     return Verse(textAr: text, refAr: config.refAr.trim());
   }
-  return verseForDay(verses, instant);
+  return day != null ? verseForDate(verses, day) : verseForDay(verses, instant);
 }

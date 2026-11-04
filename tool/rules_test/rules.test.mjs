@@ -1463,3 +1463,58 @@ describe('ADR-029: assistant settings (settings/assistant)', () => {
     await assertFails(deleteDoc(doc(db(OWNER), 'settings', 'assistant')));
   });
 });
+
+describe('ADR-039 / ADR-040: today layer in settings/features (strip, day start, top event, live, events)', () => {
+  const S = '\u001f';
+  const ev = (o = {}) => {
+    const v = { date: '2026-11-04', endDate: '', start: '19:00', end: '21:00', titleAr: 'الليلة الرابعة من نهضة الشفعاء',
+      titleEn: 'Fourth night', speakerAr: '', speakerEn: '', topicAr: '', topicEn: '', noteAr: '', noteEn: '', link: '', ...o };
+    return ['date', 'endDate', 'start', 'end', 'titleAr', 'titleEn', 'speakerAr', 'speakerEn', 'topicAr', 'topicEn',
+      'noteAr', 'noteEn', 'link'].map((k) => v[k]).join(S);
+  };
+
+  test('admins set the strip, day start and top-event switches; wrong values are rejected', async () => {
+    const ref = doc(db(EDITOR), 'settings', 'features');
+    await assertSucceeds(setDoc(ref, { theme: 'burgundy', copticStrip: 'home', dayStartMode: 'sunset', dayStartsAt: '18:30',
+      topEvent: false, commemoration: true }));
+    await assertSucceeds(updateDoc(ref, { dayStartMode: 'fixed', dayStartsAt: '' }));
+    for (const bad of [{ copticStrip: 'top' }, { dayStartMode: 'noon' }, { dayStartsAt: '24:00' }, { dayStartsAt: 18 },
+      { topEvent: 'yes' }, { commemoration: 1 }]) {
+      await assertFails(updateDoc(ref, bad), JSON.stringify(bad));
+    }
+  });
+
+  test('live banner: bool switch, http(s) link, short labels, optional switch-off time', async () => {
+    const ref = doc(db(EDITOR), 'settings', 'features');
+    await assertSucceeds(setDoc(ref, { theme: 'burgundy', liveEnabled: true, liveUrl: 'https://www.youtube.com/live/abc',
+      liveLabelAr: 'بث مباشر الآن من الكنيسة', liveLabelEn: '', liveEndsAt: Timestamp.fromDate(new Date('2026-11-04T20:00:00Z')) }));
+    await assertSucceeds(updateDoc(ref, { liveEnabled: false, liveEndsAt: null, liveUrl: '' }));
+    for (const bad of [{ liveEnabled: 'on' }, { liveUrl: 'javascript:alert(1)' }, { liveUrl: 'ftp://x.y/z' },
+      { liveLabelAr: 'x'.repeat(121) }, { liveEndsAt: '2026-11-04' }]) {
+      await assertFails(updateDoc(ref, bad), JSON.stringify(bad).slice(0, 60));
+    }
+  });
+
+  test('church events: up to 20 encoded strings, each validated', async () => {
+    const ref = doc(db(EDITOR), 'settings', 'features');
+    await assertSucceeds(setDoc(ref, { theme: 'burgundy', dayEvents: [ev(), ev({ date: '2026-11-05', start: '', end: '',
+      titleAr: 'بصخة ليلة الخميس', link: '/mass-schedule', speakerAr: 'نيافة الأنبا', endDate: '2026-11-06' })] }));
+    await assertSucceeds(updateDoc(ref, { dayEvents: Array.from({ length: 20 }, () => ev({ link: 'https://fb.com/x' })) }));
+    await assertSucceeds(updateDoc(ref, { dayEvents: [] }));
+    // Same-day and later end dates; 20 events with end dates stay within the expression budget.
+    await assertSucceeds(updateDoc(ref, { dayEvents: [ev({ endDate: '2026-11-04' }), ev({ date: '2026-12-31', endDate: '2027-01-01' })] }));
+    await assertSucceeds(updateDoc(ref, { dayEvents: Array.from({ length: 20 }, () => ev({ endDate: '2026-11-30', link: 'https://fb.com/x' })) }));
+    for (const bad of [
+      [ev({ titleAr: '' })], [ev({ date: '4-11-2026' })], [ev({ start: '7pm' })], [ev({ link: 'javascript:x' })],
+      [ev({ noteAr: 'x'.repeat(501) })], [ev() + S + 'extra'], [5], Array.from({ length: 21 }, () => ev()),
+      [ev({ date: '2026-13-01' })], [ev({ date: '2026-00-10' })], [ev({ date: '2026-11-32' })], [ev({ endDate: '2026-11-00' })],
+    ]) {
+      await assertFails(updateDoc(ref, { dayEvents: bad }), JSON.stringify(bad).slice(0, 60));
+    }
+  });
+
+  test('visitors cannot change any of it', async () => {
+    await assertFails(updateDoc(doc(db(null), 'settings', 'features'), { liveEnabled: true }));
+    await assertFails(setDoc(doc(db(null), 'settings', 'features'), { dayEvents: [ev()] }));
+  });
+});

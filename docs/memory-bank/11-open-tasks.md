@@ -1,7 +1,7 @@
 # 11 — Open tasks
 
 Tick items off (or delete them) in the PR that completes them, and add new ones as you discover them.
-Status as of 4 Nov 2026 (PR #30 / ADR-038 on top of `5a6a44c` = PR #29; PR #25 re-checked against `d60261d`; earlier: PR #7–#24).
+Status as of 4 Nov 2026 (PR #31 / ADR-039–040 on top of `905cd04`; PR #30 / ADR-038 on top of `5a6a44c` = PR #29; PR #25 re-checked against `d60261d`; earlier: PR #7–#24).
 
 ## Top open items (owner's list, 4 Nov 2026 — details in the sections below)
 
@@ -23,6 +23,15 @@ Status as of 4 Nov 2026 (PR #30 / ADR-038 on top of `5a6a44c` = PR #29; PR #25 r
    on a real phone; if it fails there, check the "church-portal-web" key's allowed domains. Fixed in code in PR #30:
    footer «العيادات» link during load, the half-empty screen after the splash, slow "not available" on missing
    custom / detail pages, English image alts and Arabic digits in English times.
+
+10. **Holy Week & revivals roadmap (`docs/holy-week-and-revivals-roadmap.md`)** — PR #31 shipped the Coptic calendar /
+    liturgical day / date strip, the top event of the day and the live banner (ADR-039/040). Still to do (next PRs):
+    speaker / topic / choir / hall / audience / Drive PDF link on services, meetings and seasons (PDF = Google Drive
+    link only, no upload — owner 4 Nov 2026); season verse sets + assistant limit 6/day in exceptional seasons +
+    season schedule in the assistant prompt + assistant topics from enabled sections; the admin "season preset"
+    checklist (SOP §4) with reversible apply. Owner: after merge, run *Actions → Daily commemoration* once (or wait for
+    16:10 UTC) and optionally cap kept Hosting versions (Firebase console → Hosting → release storage) since the
+    workflow publishes twice a day.
 
 ## Infrastructure & security (owner: developer)
 
