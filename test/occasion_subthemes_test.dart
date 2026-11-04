@@ -263,6 +263,15 @@ void main() {
       expect(f.effectiveAt(end).theme, ThemePresets.goldenHour, reason: 'burgundy reads as Golden hour');
     });
 
+    test('no stored theme before the preset: after the end visitors get the default, like restore (Sentry #37)', () {
+      final w = apply(stored: '');
+      final f = FeatureSettings.fromMap({'theme': 'holyWeek', 'seasonPreset': w.features['seasonPreset']});
+      expect(f.effectiveAt(end.subtract(const Duration(minutes: 1))).theme, 'holyWeek');
+      expect(f.effectiveAt(end).theme, ThemePresets.goldenHour);
+      final p = SeasonPreset.fromMap(w.features['seasonPreset'])!;
+      expect(planRestore(p, sections: const {}, sectionKeys: Sections.all).features['theme'], ThemePresets.goldenHour);
+    });
+
     test('seasonRunningAt: from the season start (or the apply for older presets) to its end', () {
       final p = SeasonPreset.fromMap(apply().features['seasonPreset'])!;
       expect(p.seasonRunningAt(start.subtract(const Duration(minutes: 1))), isFalse);
@@ -326,6 +335,19 @@ void main() {
   });
 
   group('widgets take their colours from the theme', () {
+    test('selected chips have a distinct edge on every preset (Holy Week: crimson) — Sentry review on PR #37', () {
+      for (final key in ThemePresets.keys) {
+        final side = buildTheme(const Locale('ar'), palette: ThemePresets.palettes[key]!, key: key).chipTheme.side!;
+        final on = WidgetStateProperty.resolveAs<BorderSide?>(side, {WidgetState.selected})!;
+        final off = WidgetStateProperty.resolveAs<BorderSide?>(side, <WidgetState>{})!;
+        expect(on.color, isNot(off.color), reason: key);
+        expect(on.width, greaterThan(off.width), reason: key);
+      }
+      final hw = buildTheme(const Locale('ar'), palette: ThemePresets.palettes['holyWeek']!, key: 'holyWeek');
+      final edge = WidgetStateProperty.resolveAs<BorderSide?>(hw.chipTheme.side!, {WidgetState.selected})!.color;
+      expect(HSVColor.fromColor(edge).hue, anyOf(lessThan(20), greaterThan(340)), reason: 'crimson edge');
+    });
+
     test('no hard-coded colour in lib/ui (Color(0x…), Colors.*, AppColors.*) outside marked exemptions', () {
       final bad = <String>[];
       final re = RegExp(r'Color\(0x|Colors\.(?!transparent)[a-zA-Z]|AppColors\.');

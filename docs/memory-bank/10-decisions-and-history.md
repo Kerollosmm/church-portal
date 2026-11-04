@@ -1019,6 +1019,9 @@ supersede them.
   other pages and on visits that never open home. While it loads, the theme follows `settings/features.seasonPreset`
   (already streamed: +0). Switching «الثيم يتبع الموسم» off removes the listener from pages that did not hold it.
   Otherwise +0 reads: two more keys in the already-streamed `settings/features`.
+- **Review fixes (Sentry on PR #37):** selected chips get a stronger edge (Holy Week's crimson `barEdge`, else the
+  ornament, 1.6 px) because on dark scenes the band colour alone was close to the unselected surface; after the
+  season end a preset whose previous theme was empty gives visitors the default theme, as «استرجاع» writes it.
 - Tests: `test/occasion_subthemes_test.dart` (palettes, no violet in any scheme, no hard-coded colours in `lib/ui`,
   precedence, season map, legacy `purple`, preset theme item / restore / auto-revert, provider fallback to the preset),
   `test/holy_week_fixes_test.dart` (B1–B5, alias), rules group "ADR-043". Before / after renders of Holy Week, fasting,

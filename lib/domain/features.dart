@@ -469,10 +469,10 @@ class FeatureSettings {
       bannerAr: bannerAr,
       bannerEn: bannerEn,
       bannerLink: bannerLink,
-      // The preset's theme pick goes back too (ADR-043).
-      theme: p.has(PresetOption.theme) && p.prevString(PresetPrev.theme).isNotEmpty
-          ? ThemePresets.normalize(p.prevString(PresetPrev.theme))
-          : theme,
+      // The preset's theme pick goes back too (ADR-043); an empty previous
+      // theme (none stored before) = the default, as planRestore writes it
+      // (Sentry review on PR #37).
+      theme: p.has(PresetOption.theme) ? ThemePresets.normalize(p.prevString(PresetPrev.theme)) : theme,
       pageHeaders: pageHeaders,
       footer: footer,
       heroMotion: p.has(PresetOption.heroMotionOff) ? (p.prevBool(PresetPrev.heroMotion) ?? true) : heroMotion,

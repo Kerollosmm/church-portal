@@ -396,7 +396,12 @@ ThemeData buildTheme(Locale locale,
       labelStyle: TextStyle(fontFamily: AppFonts.body, fontWeight: FontWeight.w700, color: oc.ink),
       checkmarkColor: oc.onBar,
       secondaryLabelStyle: TextStyle(fontFamily: AppFonts.body, fontWeight: FontWeight.w700, color: oc.onBar),
-      side: BorderSide(color: oc.hairline),
+      // Selected chips also get a stronger edge (Holy Week's crimson, else
+      // the ornament): on dark scenes the band colour alone is close to the
+      // unselected surface (Sentry review on PR #37).
+      side: WidgetStateBorderSide.resolveWith((states) => states.contains(WidgetState.selected)
+          ? BorderSide(color: oc.barEdge ?? oc.ornament, width: 1.6)
+          : BorderSide(color: oc.hairline)),
       shape: stadium,
     ),
     inputDecorationTheme: InputDecorationTheme(
