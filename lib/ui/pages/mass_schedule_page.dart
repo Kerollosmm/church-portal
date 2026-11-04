@@ -280,7 +280,7 @@ class _MassSchedulePageState extends ConsumerState<MassSchedulePage> {
     final opts = ref.watch(featuresProvider.select((f) => f.programOptions));
     final shown = audience.isEmpty
         ? list
-        : [for (final l in list) if (l.program.audience.isEmpty || l.program.audience == audience) l];
+        : [for (final l in list) if (audienceMatches(l, audience, opts)) l];
     if (shown.isEmpty) return const [EmptyState(icon: Icons.event_busy)];
     return [
       ResponsiveGrid(children: [
@@ -293,4 +293,11 @@ class _MassSchedulePageState extends ConsumerState<MassSchedulePage> {
       ]),
     ];
   }
+}
+
+/// [l] shows under the audience chip [audience] (ADR-041): its own audience,
+/// or none / an unknown key (no chip of its own) = for everyone (Sentry review).
+bool audienceMatches(Liturgy l, String audience, ProgramOptions opts) {
+  final a = l.program.audience;
+  return audience.isEmpty || a.isEmpty || a == audience || opts.audience(a) == null;
 }

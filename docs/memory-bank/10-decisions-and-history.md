@@ -876,7 +876,8 @@ supersede them.
   regular weekday tabs; Codex review on PR #32); the seasonal lists get audience filter chips when two or more
   audiences are used (a service without an audience is for everyone). The chips live in the seasonal view only, so
   switching views clears the filter (Sentry review on PR #32), and a chosen audience applies only while its chip is
-  shown. CodeRabbit round on PR #32: one parallel map per view (services of two seasons can overlap); a venue key and
+  shown; a service with no audience or an unknown audience key shows under every chip (`audienceMatches`, Sentry
+  review on PR #32). CodeRabbit round on PR #32: one parallel map per view (services of two seasons can overlap); a venue key and
   its own Arabic name typed as free text are the same place (`parallelServices(list, opts)` keys venues by label);
   English-only places compare with English-only places; an end at or before the start crosses midnight (as
   `_occurrence`); the next-service card shows the line too, from that day's real occurrences (`parallelOccurrences`, so a suppressed or out-of-season service is never named — Sentry); an unknown venue key falls back to the free-text place.

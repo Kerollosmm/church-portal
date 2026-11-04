@@ -15,6 +15,7 @@ import 'package:church_portal/state/providers.dart';
 import 'package:church_portal/ui/admin/admin_page.dart' show adminDestinations;
 import 'package:church_portal/ui/admin/admin_schema.dart';
 import 'package:church_portal/ui/admin/admin_validators.dart' show validateRowUnique;
+import 'package:church_portal/ui/pages/mass_schedule_page.dart' show audienceMatches;
 import 'package:church_portal/ui/widgets/cards.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -198,6 +199,15 @@ void main() {
       expect(names(false), ['youth']);
       expect(names(true), ['rev', 'youth']);
     });
+  });
+
+  test('a service with no or an unknown audience shows under every chip (Sentry review)', () {
+    const o = ProgramOptions.defaults;
+    expect(audienceMatches(lit('a', audience: 'youth'), 'youth', o), isTrue);
+    expect(audienceMatches(lit('a', audience: 'youth'), 'children', o), isFalse);
+    expect(audienceMatches(lit('a'), 'children', o), isTrue);
+    expect(audienceMatches(lit('a', audience: 'deleted'), 'children', o), isTrue);
+    expect(audienceMatches(lit('a', audience: 'youth'), '', o), isTrue);
   });
 
   group('admin rows', () {
