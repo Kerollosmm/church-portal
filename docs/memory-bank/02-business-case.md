@@ -44,7 +44,7 @@ answered by phone calls, Facebook comments and stale WhatsApp forwards.
 Global
 | ID | Requirement | Status |
 |---|---|---|
-| FR-G-01 | Navbar with highlighted "Mass times" + "Clinics" | ✅ `AppShell._HighlightButton` (48×48 dp compact buttons on phones; below 360 px, at ≥ 150 % text, or on a subpage below 400 px they move to the drawer) |
+| FR-G-01 | Navbar with highlighted "Mass times" (+ "Clinics" in the original FRD) | ✅ `AppShell._HighlightButton` for **Mass times** only (48×48 dp compact button on phones; below 360 px, at ≥ 150 % text, or on a subpage below 400 px it moves to the drawer). **Changed 4 Nov 2026 (owner):** the app bar never shows a Clinics shortcut, even with the section on — clinics are reached from the drawer / Services menu and Home |
 | FR-G-02 | AR⇄EN toggle, remembered | ✅ toggle; `?lang=` synced both ways by the router (deep links / Back-Forward switch the language, the toggle rewrites the URL); the visitor's choice is saved in `localStorage` (`church_portal_lang`, web only) and restored on the next visit (startup: `?lang=` → saved → Arabic) |
 | FR-G-03 | Times in Arabic-Indic **and** Latin digits | ✅ `TimeRangeText`, `formatRangeArabic/Latin` |
 | FR-G-04 | Footer: address, phones, socials, quick links, last updated | ✅ PR #13: `Footer` shows name, address, clickable church phones (`footer.showPhones` + `contactInfo`), official social icon buttons — WhatsApp channel/chat, Facebook, YouTube, Instagram (`footer.showSocials` + `socials`), quick links (`footer.showQuickLinks`), the admin note (`footer.noteAr/En`), © and the bundled-content note; admin card since PR #12. A site-wide "last updated" date is not shown (no such timestamp is tracked — see `11-open-tasks.md`) |

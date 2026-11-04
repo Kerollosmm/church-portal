@@ -110,6 +110,8 @@ render with `PageBody` (+ `Footer`). Content comes from Riverpod providers (hidd
   announced" (`ClinicCard.isPlaceholderDoctor` + l10n `doctorTba`); the stored Arabic name is unchanged (BUG-17).
 - The seed ships section `clinics` **off** (PR 1): enable it in /admin → Sections only once the church office
   confirms the clinics.
+- Entry points (when the section is on): phone drawer / desktop Services menu, the Home directory card,
+  footer quick links, public services cross-link. **Never the app bar** (owner request, 4 Nov 2026).
 - Subtitle `clinicsIntro` asks visitors to confirm with the church; `PendingConfirmationNote` if any clinic is sample.
 - Link to `/public-services` when that section is on.
 

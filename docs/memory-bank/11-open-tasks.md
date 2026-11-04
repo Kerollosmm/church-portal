@@ -197,3 +197,11 @@ Status as of 3 Nov 2026 (after PR #19; earlier: PR #7–#18).
 - [ ] The live `clinics` collection is empty (its documents were deleted by the owner on 3 Nov 2026). Decide with the
       church office: re-add the verified clinics in the admin, or turn the clinics section off. Never re-seed (or
       `--force`) to restore them.
+
+## Header / app bar (owner request, 4 Nov 2026)
+- [x] Clinics shortcut removed from the public app bar (all widths, section on or off); clinics stay in the drawer /
+      Services menu, Home directory and footer quick links when `sections.clinics` is on. Guarded by
+      `test/feature_gate_test.dart`. Note: when the owner reported the icon, live `settings/features.sections.clinics`
+      read **true** (checked 4 Nov 2026 ~07:30 Cairo), so the switch was on at that time; the bar used that same
+      switch (`routeEnabled('/clinics')`), not a separate condition. If the owner means to hide clinics entirely,
+      switch the section off in /admin → Sections (see the empty `clinics` collection item above).
