@@ -658,7 +658,8 @@ supersede them.
 - **Decision:**
   - **Hero ambient layer on web = DOM + CSS** (`lib/ui/widgets/hero_ambient*.dart`, shared geometry in
     `HeroAmbientSpec`): the haze strip slides with a CSS transform animation; the rays are drawn once per size on a
-    few canvases at evenly spaced shimmer phases and crossfaded with CSS opacity animations (`plus-lighter`). Same
+    few canvases at evenly spaced shimmer phases and crossfaded with CSS opacity animations (`plus-lighter`); where `CanvasRenderingContext2D.filter` is missing (Safari) the static canvases get a CSS
+    `blur()` with the same sigma instead (Sentry review). Same
     geometry, colours, cycles (60 s clock, shimmer x8) and theme `cssFilter`; paused off-screen. The animation runs on
     the compositor, so Flutter no longer repaints per frame. Android / tests keep the Flutter painters
     (`heroAmbientInDom == false`).
@@ -673,8 +674,10 @@ supersede them.
   - **`Intl.v8BreakIterator` shim** (inline script before `flutter_bootstrap.js`) on top of `Intl.Segmenter`
     (UAX #14 subset: spaces, dashes / slashes / ZWSP, CJK, mandatory newlines, never inside a grapheme). Checked
     against the native iterator on 2,157 app / doc strings: 3 differences, all in Markdown / code strings.
-  - **Hosting:** rewrite only extension-less paths (`"regex": "^/[^.]*$"`), so missing files (`/.well-known/*`,
-    `*.map`, probes) are real 404s; `Cross-Origin-Opener-Policy: same-origin-allow-popups`; `mp4` cached 7 days.
+  - **Hosting:** rewrite only extension-less paths (`"regex": "^/[^.]*$"`) plus `/section|page/<slug>` and the 7
+    item-detail prefixes with any id (dots allowed), so missing files (`/.well-known/*`, `*.map`, probes) are real
+    404s; `Cross-Origin-Opener-Policy: same-origin-allow-popups` (the hero `mp4` keeps the default cache: fixed path,
+    not fingerprinted).
     `web/llms.txt` (H1, page links from the sitemap). Manifest background `#FBF3E4` (= splash). Web builds in
     `ci.yml` / `deploy.yml` pass `--source-maps`.
 - **Ceiling:** the site is a CanvasKit Flutter app: `main.dart.js` (~3 MB) + CanvasKit wasm must download, compile
@@ -725,6 +728,6 @@ supersede them.
 | 4 Nov 2026 | **PR #26** — "App bar: no Clinics shortcut (owner request)" (`fix/appbar-no-clinics`; PR #24 was squash-merged as `d60261d`) | Owner request: the public app bar never shows the Clinics (`local_hospital_rounded`) action, at any width or section state; **Mass times** is the only highlight button. It used the same `sections.clinics` switch (`routeEnabled('/clinics')`, phones only) — live `sections.clinics` was `true` when checked. Clinics stay in the drawer / Services menu, Home directory and footer quick links; route, page, admin unchanged. `test/feature_gate_test.dart` group guards the bar. |
 
 | 4 Nov 2026 | **PR #25** — "Docs: memory bank up to date + Arabic feature documentation" (`docs/feature-documentation`; PR #26 was squash-merged as `8886d08` first and merged into this branch) | ADR-035: memory bank re-checked against `d60261d` (assistant limits / suggestions / unconfirmed flags in `05-firebase.md`, clinics placeholders deleted 3 Nov + section off 4 Nov, create-only seeding re-creates deleted docs, bundled fonts, Sentry account facts, open tasks); new `documentation/` (Arabic): index, architecture, one file per feature, operations; README / AGENTS / CLAUDE link it with the same-PR rule. **ADR-036:** YouTube hero video library removed (admin card, `hero_video.dart`, `hero_youtube*.dart`, `youtube_player_iframe`; legacy `heroVideos` kept in rules, live data untouched). |
-| 4 Nov 2026 | **PR #29** — "PageSpeed: same hero, CSS ambient layer on web, lazy App Check, static first paint, crawler files" (`perf/pagespeed-green`; PR #27 was squash-merged as `b7e5ed2`, PR #28 closed unmerged) | ADR-037: hero haze + ray shimmer as a CSS-animated DOM layer on web (`hero_ambient*.dart`, `HeroAmbientSpec`), App Check activated on the assistant's first use (`ensureAppCheckActivated`), static hero poster + church name splash, `Intl.v8BreakIterator` → `Intl.Segmenter` shim, seal 178 → 27 KB, Hosting regex rewrite (real 404s) + COOP + mp4 cache, `web/llms.txt`, `--source-maps`; `test/pagespeed_test.dart`. |
+| 4 Nov 2026 | **PR #29** — "PageSpeed: same hero, CSS ambient layer on web, lazy App Check, static first paint, crawler files" (`perf/pagespeed-green`; PR #27 was squash-merged as `b7e5ed2`, PR #28 closed unmerged) | ADR-037: hero haze + ray shimmer as a CSS-animated DOM layer on web (`hero_ambient*.dart`, `HeroAmbientSpec`), App Check activated on the assistant's first use (`ensureAppCheckActivated`), static hero poster + church name splash, `Intl.v8BreakIterator` → `Intl.Segmenter` shim, seal 178 → 27 KB, Hosting regex rewrites (real 404s for missing files, dotted slugs / ids still load) + COOP, `web/llms.txt`, `--source-maps`; `test/pagespeed_test.dart`. |
 
 Append new PRs to this table.

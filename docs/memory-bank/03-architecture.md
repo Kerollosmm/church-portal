@@ -226,7 +226,8 @@ flowchart LR
 
 - `GoRouter(initialLocation: '/')`, **path URL strategy** (`/mass-schedule`, not `/#/mass-schedule`). Firebase
   Hosting rewrites every extension-less path (`^/[^.]*$`, ADR-037) → `/index.html` (`firebase.json`), so deep links
-  and reloads work (route slugs must not contain a dot).
+  and reloads work; a second rewrite covers `/section|page/<slug>` and the item detail prefixes, so a slug or id
+  with a dot still loads.
 - **Two-way `?lang=` sync** (PR 2 of the review plan, BUG-07) — pure rules in `resolveLangSync(uri, english:,
   userToggled:, fromPlatform:)`:
   - EN/ع toggle (`LocaleNotifier.consumeUserChange()`), or a refresh of the same URL (`lastSyncedUri`): the URL

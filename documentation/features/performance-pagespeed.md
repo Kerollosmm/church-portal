@@ -31,8 +31,8 @@
   على 2157 نصًا من الموقع: 3 فروق فقط في نصوص Markdown/أكواد). يُحذف عندما يتوقف Flutter عن استخدامها.
 - **الاستضافة** (`firebase.json`): إعادة التوجيه إلى `index.html` للمسارات التي **بلا امتداد** فقط (`^/[^.]*$`)، فروابط
   الصفحات (`/admin`، `/section/...`، `/page/...`، صفحات التفاصيل) تعمل، أما الملفات غير الموجودة (`/.well-known/ard.json`،
-  `*.map`) فترجع 404 حقيقيًا. **لا تستخدم نقطة في أي slug.** أُضيفت ترويسة `Cross-Origin-Opener-Policy:
-  same-origin-allow-popups`، وفيديو `mp4` يُخزَّن 7 أيام.
+  `*.map`) فترجع 404 حقيقيًا. وقاعدة ثانية تغطي `/section/...` و `/page/...` وصفحات التفاصيل حتى لو كان المعرّف يحتوي نقطة. أُضيفت ترويسة `Cross-Origin-Opener-Policy:
+  same-origin-allow-popups`.
 - بناء الويب في `ci.yml` و `deploy.yml` يضيف `--source-maps` (خرائط المصدر لأخطاء أوضح في Sentry و Lighthouse).
 - الاختبارات: `test/pagespeed_test.dart`.
 

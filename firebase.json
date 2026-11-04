@@ -14,6 +14,10 @@
         {
           "regex": "^/[^.]*$",
           "destination": "/index.html"
+        },
+        {
+          "regex": "^/(section|page|church-education|church-activities|clinics|public-services|about/priests|about/saints|about/milestones)/[^/]+$",
+          "destination": "/index.html"
         }
       ],
       "headers": [
@@ -51,7 +55,7 @@
           ]
         },
         {
-          "source": "**/*.@(png|jpg|jpeg|webp|gif|svg|ico|otf|ttf|woff|woff2|mp4)",
+          "source": "**/*.@(png|jpg|jpeg|webp|gif|svg|ico|otf|ttf|woff|woff2)",
           "headers": [
             {
               "key": "Cache-Control",

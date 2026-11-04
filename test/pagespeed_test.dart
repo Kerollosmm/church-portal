@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 
+import 'package:church_portal/domain/item_detail.dart';
 import 'package:church_portal/ui/widgets/hero_ambient.dart';
 import 'package:church_portal/ui/widgets/hero_ambient_spec.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -103,14 +104,24 @@ void main() {
       final cfg = jsonDecode(File('firebase.json').readAsStringSync()) as Map<String, dynamic>;
       final app = (cfg['hosting'] as List).first as Map<String, dynamic>;
       final rewrites = (app['rewrites'] as List).cast<Map<String, dynamic>>();
-      expect(rewrites, hasLength(1));
-      expect(rewrites.single['destination'], '/index.html');
-      final re = RegExp(rewrites.single['regex'] as String);
-      for (final route in ['/', '/mass-schedule', '/section/youth-meeting', '/page/donations', '/clinics/AbC123xyz', '/admin', '/ask']) {
-        expect(re.hasMatch(route), isTrue, reason: route);
+      expect(rewrites, hasLength(2));
+      for (final r in rewrites) {
+        expect(r['destination'], '/index.html');
       }
-      for (final file in ['/.well-known/ard.json', '/main.dart.js.map', '/flutter.js.map', '/wp-login.php']) {
-        expect(re.hasMatch(file), isFalse, reason: file);
+      final res = [for (final r in rewrites) RegExp(r['regex'] as String)];
+      bool rewritten(String path) => res.any((re) => re.hasMatch(path));
+      for (final route in ['/', '/mass-schedule', '/section/youth-meeting', '/page/donations', '/clinics/AbC123xyz', '/admin', '/ask']) {
+        expect(rewritten(route), isTrue, reason: route);
+      }
+      // Item / slug routes keep working when an id or slug contains a dot.
+      for (final kind in DetailKind.values) {
+        expect(rewritten('${kind.basePath}/item.v2'), isTrue, reason: kind.basePath);
+      }
+      for (final route in ['/section/a.b', '/page/st.mark']) {
+        expect(rewritten(route), isTrue, reason: route);
+      }
+      for (final file in ['/.well-known/ard.json', '/main.dart.js.map', '/flutter.js.map', '/wp-login.php', '/assets/x.png']) {
+        expect(rewritten(file), isFalse, reason: file);
       }
       final all = (app['headers'] as List).cast<Map<String, dynamic>>().firstWhere((h) => h['source'] == '**');
       final keys = {for (final h in (all['headers'] as List).cast<Map<String, dynamic>>()) h['key']: h['value']};

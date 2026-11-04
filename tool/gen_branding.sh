@@ -10,6 +10,7 @@ cd "$(dirname "$0")/.."
 SRC="${1:-assets/branding/seal_source.webp}"
 BG="#470812"     # maroon (the seal tab / theme primary dark): maskable + adaptive backgrounds, OG card
 B=assets/branding; W=web; R=android/app/src/main/res
+python3 -c 'import PIL' 2>/dev/null || { echo "gen_branding.sh: needs Python Pillow (pip install pillow) for the seal palette step" >&2; exit 1; }
 mkdir -p "$B" "$W/icons"
 if ! { [ -e "$B/seal_source.webp" ] && [ "$SRC" -ef "$B/seal_source.webp" ]; }; then
   magick "$SRC" -strip -define webp:lossless=true "$B/seal_source.webp"

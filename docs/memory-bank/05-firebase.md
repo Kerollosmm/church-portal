@@ -199,10 +199,11 @@ App target settings:
   strategy; ADR-037 — was `**`) — every extension-less path, so the PR #13 item detail URLs (`/clinics/<id>`,
   `/about/priests/<id>`…), `/section/<slug>`, `/page/<slug>`, `/admin`, `/ask` load with HTTP 200 and the app decides
   what they show, while a missing **file** (`/.well-known/ard.json`, `*.map`, `wp-login.php` probes) is a real 404
-  instead of `index.html`. **Route slugs must not contain a dot.** `web/llms.txt` (ADR-037) describes the site for AI
+  instead of `index.html`. A second rewrite (`^/(section|page|<the 7 detail base paths>)/[^/]+$`) keeps
+  `/section/<slug>`, `/page/<slug>` and item pages working when the slug / id contains a dot (Codex review). `web/llms.txt` (ADR-037) describes the site for AI
   agents (H1 + page links, all in the sitemap).
 - Headers on `**` also include `Cross-Origin-Opener-Policy: same-origin-allow-popups` (ADR-037; keeps Google sign-in
-  popups working); `mp4` (hero clip) is cached 7 days like images and fonts.
+  popups working). The hero `mp4` clips keep Hosting's default cache (fixed, non-fingerprinted paths — CodeRabbit).
 - SEO in `web/index.html` (PR 3 of the review plan): a **static** `<link rel="canonical"
   href="https://maximos-domadios-church.web.app/">` in the shell. Since PR #10 (amending ADR-019) Flutter rewrites it
   per route with `setDocumentRouteMeta` (`lib/core/document_lang*.dart`): indexable routes get
@@ -357,7 +358,8 @@ console.
   `mentionUnconfirmed`, `maxChars`, `perMinute`, `perDay` (`perSession` is a legacy key the rules still accept). The switches stay the section `assistant` and
   `settings/church.assistantEnabled` (both shown on that screen).
 - Kill switches (all platforms): section toggle `assistant`, `settings/church.assistantEnabled`, or App Check
-  failing to activate. **Web release builds only:** a missing/placeholder reCAPTCHA key also hides it. Android/iOS
+  not configured for the build (since ADR-037 a later activation **failure** no longer hides it — the assistant shows
+  its normal error). **Web release builds only:** a missing/placeholder reCAPTCHA key also hides it. Android/iOS
   release builds activate Play Integrity / App Attest without the key, so the assistant shows there when the
   other conditions hold (requests then need the Play Integrity registration). Cost cap / quota is a console task;
   on Spark the Developer API free tier is rate-limited, never billed.

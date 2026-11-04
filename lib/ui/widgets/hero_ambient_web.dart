@@ -1,4 +1,5 @@
 import 'dart:js_interop';
+import 'dart:js_interop_unsafe';
 import 'dart:math' as math;
 import 'dart:ui_web' as ui_web;
 
@@ -130,7 +131,17 @@ class _HeroAmbientLayerState extends State<HeroAmbientLayer> {
     if (size.isEmpty || size == _drawn) return;
     _drawn = size;
     final gen = ++_generation;
-    // One phase per task: keeps every task short while the page starts.
+    final layer = _canvases.first.parentElement as web.HTMLElement?;
+    if (layer != null && layer.classList.contains('hk-ready')) {
+      // Resize of a visible layer: redraw every phase in this one task, so no
+      // canvas shows its old bitmap stretched to the new size.
+      for (var k = 0; k < _canvases.length; k++) {
+        _drawPhase(_canvases[k], size, k / _canvases.length);
+      }
+      return;
+    }
+    // First draw (layer still hidden): one phase per task keeps every task
+    // short while the page starts.
     for (var k = 0; k < _canvases.length; k++) {
       Future<void>.delayed(Duration(milliseconds: 16 * k), () {
         if (gen != _generation || _host == null) return;
@@ -148,12 +159,21 @@ class _HeroAmbientLayerState extends State<HeroAmbientLayer> {
       ..height = h;
     final ctx = c.getContext('2d') as web.CanvasRenderingContext2D?;
     if (ctx == null) return;
+    final sigma = HeroAmbientSpec.raySigma(size);
     ctx
       ..clearRect(0, 0, w, h)
       ..save()
-      ..scale(_rayScale, _rayScale)
+      ..scale(_rayScale, _rayScale);
+    if (ctx.has('filter')) {
       // The filter works in canvas pixels (not the transformed space).
-      ..filter = 'blur(${(HeroAmbientSpec.raySigma(size) * _rayScale).toStringAsFixed(2)}px)';
+      ctx.filter = 'blur(${(sigma * _rayScale).toStringAsFixed(2)}px)';
+      c.style.filter = 'none';
+    } else {
+      // Safari / WebKit have no CanvasRenderingContext2D.filter: blur the
+      // (static) canvas element with CSS instead, same sigma in CSS pixels,
+      // so the rays stay soft beams rather than hard-edged wedges.
+      c.style.filter = 'blur(${sigma.toStringAsFixed(2)}px)';
+    }
     final (r, g, b) = HeroAmbientSpec.rayColor;
     for (final ray in HeroAmbientSpec.rays(size, shimmer: shimmer, strength: widget.rays)) {
       final gc = ray.gradientCenter;
