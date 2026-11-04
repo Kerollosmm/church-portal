@@ -1042,7 +1042,7 @@ supersede them.
   1. **Loading screen (`web/index.html`):** cream `#FBF3E4` (= `manifest.json` `background_color`), the parish seal
      (`assets/assets/branding/seal.png` — the same 27 KB file `ChurchSeal` loads, so it is downloaded once; decorative
      `alt=""` because the name follows), church name in Lalezar maroon `#6E1C1C`, a 220×4 px gold track with a shimmer
-     bar. Animations use `transform` only (composited); a static drop-shadow. A visually hidden `role="status"`
+     bar. Pulse and shimmer animate `transform` only, the final fade `opacity` (both composited); a static drop-shadow. A visually hidden `role="status"`
      «جارٍ التحميل…» keeps the loading announcement; `splashFailed()` replaces the track with the reload message.
      Hero posters stay preloaded (and referenced by a hidden `<img>`) so the Flutter hero paints from cache. Dismissal
      unchanged (ADR-038: `app-content-ready`, ≤ 9 s after the first frame), 0.6 s fade, then removed; reduced motion

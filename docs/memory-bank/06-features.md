@@ -64,8 +64,8 @@ render with `PageBody` (+ `Footer`). Content comes from Riverpod providers (hidd
 - **Liturgical web loading screen (ADR-044, PR #35; replaces the ADR-037 static hero copy):** `web/index.html` shows,
   on the cream `#FBF3E4` ground (= `manifest.json` `background_color`), the parish seal (`assets/assets/branding/seal.png`,
   the same 27 KB file the app's `ChurchSeal` loads, 104 px, decorative `alt=""`) with a slow scale pulse, the church
-  name in Lalezar maroon `#6E1C1C` (28 / 36 / 42 px), and a 220×4 px gold track with a shimmer bar. Only `transform`
-  animates (composited; `test/pagespeed_test.dart` bans `left` / `filter` / `width` in keyframes). A visually hidden
+  name in Lalezar maroon `#6E1C1C` (28 / 36 / 42 px), and a 220×4 px gold track with a shimmer bar. Pulse and shimmer animate only
+  `transform`, the fade `opacity` (composited; `test/pagespeed_test.dart` bans `left` / `filter` / `width` in keyframes). A visually hidden
   `role="status"` «جارٍ التحميل…» keeps the loading announcement; the failure path (30 s / script error) replaces the
   track with the reload message. The hero posters stay preloaded (plus a hidden `<img>`) so the Flutter hero paints
   from cache. It stays over the app until `app-content-ready` (ADR-038; ≤ 9 s after Flutter's first frame), then fades
