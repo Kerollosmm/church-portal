@@ -23,9 +23,17 @@
 | الاسم | النوع | الاستخدام |
 |---|---|---|
 | `FIREBASE_SERVICE_ACCOUNT_ASAFRA_CHURCH_PORTAL` | سر | مفتاح JSON لحساب خدمة النشر (يُحفظ بلا أي أحرف زائدة) |
+| `FIREBASE_WEB_API_KEY` | متغير أو سر اختياري | غير مطلوب؛ يُستخرج تلقائيًا من `lib/firebase_options.dart` لإرسال رابط تعيين كلمة المرور للمشرف الجديد |
 | `RECAPTCHA_SITE_KEY` | متغير | مفتاح reCAPTCHA Enterprise للويب (للنشر من `main` فقط) |
 | `SENTRY_DSN` | متغير اختياري | غير مطلوب؛ الكود فيه DSN عام |
 | `SENTRY_AUTH_TOKEN` | سر (غير موجود بعد) | لرفع source maps مستقبلًا |
+
+### أمان مفاتيح Firebase وتنبيهات GitHub Secret Scanning
+
+مفتاح الويب في `lib/firebase_options.dart` هو **معرّف عام للمشروع** (Client Identifier) وليس سرًا وفق توثيق Google و Firebase الرسمي. يُدمج المفتاح في كود الواجهة ويُرسل علنًا في طلبات المتصفح، وحماية البيانات تعتمد على قواعد أمان Firestore (`firestore.rules`). أما App Check فهو مفروض على Firebase AI Logic فقط، وليس على Firestore، ولا يعمل على الويب إلا عند ضبط `RECAPTCHA_SITE_KEY`.
+- تنبيه الأمان في GitHub (Secret Scanning Alert #1) جرى إغلاقه كـ **`false_positive`**.
+- في workflow البذر (`.github/workflows/seed.yml`) لا يُكتب المفتاح كنص صريح، بل يُستخرج تلقائيًا أو يُقرأ من متغيرات البيئة.
+- لحماية إضافية (Defense in depth): يُوصى في Google Cloud Console بحصر الـ APIs المسموح بها للمفتاح (API restrictions) على: Identity Toolkit و Firestore و App Check و Token Service. وإذا رغبت في تطبيق قيود نطاقات المتصفح (HTTP referrers) على مفتاح الويب، يجب توفير مفتاح منفصل للـ CI عبر GitHub Secret باسم `FIREBASE_WEB_API_KEY` حتى لا تُحظر طلبات `curl` في سير عمل البذر لعدم وجود متصفح (HTTP referrer).
 
 ## 2. إضافة مشرف
 
