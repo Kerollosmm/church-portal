@@ -4,7 +4,7 @@
 > `FIREBASE_SERVICE_ACCOUNT_ASAFRA_CHURCH_PORTAL`. The Firebase **web API key** in `lib/firebase_options.dart` (also used
 > dynamically by `.github/workflows/seed.yml` to send a password-reset email) is a public client identifier, not a secret.
 > GitHub Secret Scanning Alert #1 flagged this generic Google API key pattern and was resolved as `false_positive`
-> (per Google/Firebase guidance: client API keys identify the project, while Firestore Rules and App Check protect data).
+> (per Google/Firebase guidance: client API keys identify the project, while Firestore Rules protect data and App Check guards AI Logic).
 
 ## Project
 

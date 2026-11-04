@@ -1,6 +1,6 @@
 # Resolve GitHub Secret Scanning Alert #1 Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> Implementation plan reference document for resolving secret scanning alert #1.
 
 **Goal:** Fix and resolve GitHub Secret Scanning Alert #1 (`https://github.com/Kerollosmm/church-portal/security/secret-scanning/1`) by eliminating raw secret strings from GitHub Actions workflows, clarifying public Firebase client API key configuration, documenting Google Cloud Console API key restriction best practices, and marking the GitHub Secret Scanning alert as resolved (`false_positive`).
 
