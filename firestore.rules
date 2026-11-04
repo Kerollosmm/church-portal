@@ -377,7 +377,7 @@ service cloud.firestore {
       return keysAllowed(['key', 'nameAr', 'nameEn', 'startsAt', 'endsAt', 'active', 'replacesRegular',
                           'image', 'imageStyle'].concat(meta()).concat(programKeys()))
         && validProgram(d, changedKeys(d))
-        && d.key in ['holy_week', 'pascha', 'nativity', 'revival_maximus', 'revival_moses', 'summer']
+        && d.key in ['holy_week', 'pascha', 'nativity', 'epiphany', 'marian', 'fast', 'revival_maximus', 'revival_moses', 'summer']
         && reqString(d, 'nameAr', 300) && optString(d, 'nameEn', 300)
         && optTimestamp(d, 'startsAt') && optTimestamp(d, 'endsAt') && optBool(d, 'active')
         && optBool(d, 'replacesRegular');
@@ -393,7 +393,7 @@ service cloud.firestore {
         && 'start' in d && d.start is string && optTime(d, 'start') && optTime(d, 'end')
         && optString(d, 'placeAr', 300) && optString(d, 'placeEn', 300)
         && optString(d, 'audienceAr', 300) && optString(d, 'audienceEn', 300)
-        && optIn(d, 'seasonKey', ['holy_week', 'pascha', 'nativity', 'revival_maximus', 'revival_moses', 'summer']);
+        && optIn(d, 'seasonKey', ['holy_week', 'pascha', 'nativity', 'epiphany', 'marian', 'fast', 'revival_maximus', 'revival_moses', 'summer']);
     }
 
     function validMeeting(d, changed) {
@@ -685,8 +685,8 @@ service cloud.firestore {
         || (d.seasonVerses is list && d.seasonVerses.size() <= 40
             && (d.seasonVerses.size() == 0
                 || d.seasonVerses.join('\u001e').matches(
-                     '(holy_week|pascha|nativity|revival_maximus|revival_moses|summer)\x1f[^\x1f\x1e]{1,500}\x1f[^\x1f\x1e]{0,60}'
-                     + '(\x1e(holy_week|pascha|nativity|revival_maximus|revival_moses|summer)\x1f[^\x1f\x1e]{1,500}\x1f[^\x1f\x1e]{0,60}){0,39}')));
+                     '(holy_week|pascha|nativity|epiphany|marian|fast|revival_maximus|revival_moses|summer)\x1f[^\x1f\x1e]{1,500}\x1f[^\x1f\x1e]{0,60}'
+                     + '(\x1e(holy_week|pascha|nativity|epiphany|marian|fast|revival_maximus|revival_moses|summer)\x1f[^\x1f\x1e]{1,500}\x1f[^\x1f\x1e]{0,60}){0,39}')));
     }
 
     // The applied season preset (ADR-042): which season, when, the ticked
@@ -694,18 +694,22 @@ service cloud.firestore {
     function validSeasonPreset(p) {
       let prev = p.get('previous', {});
       return p is map
-        && p.keys().hasOnly(['seasonId', 'seasonKey', 'appliedAt', 'endsAt', 'options', 'previous'])
+        && p.keys().hasOnly(['seasonId', 'seasonKey', 'appliedAt', 'startsAt', 'endsAt', 'options', 'previous'])
         && p.get('seasonId', '') is string && p.get('seasonId', '').matches('[A-Za-z0-9_-]{1,100}')
-        && p.get('seasonKey', '') in ['', 'holy_week', 'pascha', 'nativity', 'revival_maximus', 'revival_moses', 'summer']
+        && p.get('seasonKey', '') in ['', 'holy_week', 'pascha', 'nativity', 'epiphany', 'marian', 'fast', 'revival_maximus', 'revival_moses', 'summer']
         && (p.get('appliedAt', null) == null || p.appliedAt is timestamp)
+        && (p.get('startsAt', null) == null || p.startsAt is timestamp)
         && (p.get('endsAt', null) == null || p.endsAt is timestamp)
-        && p.get('options', []) is list && p.get('options', []).size() <= 7
+        && p.get('options', []) is list && p.get('options', []).size() <= 8
+        && p.get('options', []).toSet().size() == p.get('options', []).size()
         && p.get('options', []).hasOnly(['replaceRegular', 'hideMeetings', 'hideClinics', 'heroMotionOff', 'weddingOff',
-                                          'live', 'pdf'])
+                                          'live', 'pdf', 'theme'])
         && prev is map
         && prev.keys().hasOnly(['seasonActive', 'replacesRegular', 'meetings', 'clinics', 'heroMotion',
                                 'weddingBookingOff', 'liveUrl', 'liveEndsAt', 'attachmentUrl', 'attachmentLabelAr',
-                                'attachmentLabelEn'])
+                                'attachmentLabelEn', 'theme'])
+        // The theme the preset replaced (ADR-043): '' or a stored theme key.
+        && prev.get('theme', '') in themeKeys().concat(['burgundy', ''])
         && (prev.get('seasonActive', null) == null || prev.seasonActive is bool)
         && (prev.get('replacesRegular', null) == null || prev.replacesRegular is bool)
         && (prev.get('meetings', null) == null || prev.meetings is bool)
@@ -764,40 +768,63 @@ service cloud.firestore {
     // re-corrects any stored palette when it renders.
     function validOccasions(o) {
       let old = resource == null ? {} : resource.data.get('occasions', {});
-      return o is map && o.keys().hasOnly(['auto', 'easter', 'resurrectionDays', 'schedule'])
-        && [o.get('auto', false), o.get('easter', true)].hasOnly([true, false])
-        && o.get('resurrectionDays', 7) is int
-        && o.get('resurrectionDays', 7) >= 1 && o.get('resurrectionDays', 7) <= 50
-        && o.get('schedule', {}) is map
-        && o.get('schedule', {}).keys().hasOnly(['r1', 'r2', 'r3', 'r4', 'r5', 'r6', 'r7', 'r8', 'r9', 'r10', 'r11', 'r12'])
-        && validRanges(o.get('schedule', {}),
-             o.get('schedule', {}).diff(old is map && old.get('schedule', {}) is map ? old.get('schedule', {}) : {})
-               .affectedKeys());
+      let sch = o.get('schedule', {});
+      let rd = o.get('resurrectionDays', 7);
+      let j = sch is map ? sch.values().join(',') : '';
+      return o is map && o.keys().hasOnly(['auto', 'easter', 'resurrectionDays', 'schedule', 'followSeason', 'seasonThemes'])
+        && [o.get('auto', false), o.get('easter', true), o.get('followSeason', true)].hasOnly([true, false])
+        // Season key -> theme preset or 'none' (ADR-043). Checked only when
+        // present and changed, so it does not eat the slot budget below.
+        && (!('seasonThemes' in o) || (old is map && old.get('seasonThemes', null) == o.seasonThemes)
+            || validSeasonThemes(o.seasonThemes))
+        && rd is int && rd >= 1 && rd <= 50
+        && sch is map
+        && sch.keys().hasOnly(['r1', 'r2', 'r3', 'r4', 'r5', 'r6', 'r7', 'r8', 'r9', 'r10', 'r11', 'r12'])
+        // Every slot's shape in one regex over the joined values (one
+        // expression however many slots; the split count refuses a value
+        // carrying a comma); start <= end per changed slot.
+        && (sch.size() == 0 || (j.split(',').size() == sch.size() && j.matches(
+              '(goldenHour|holyWeek|resurrection|nativity|epiphany|fasting|marian|navy|green|brown|purple)[|]20[0-9]{2}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])[|]20[0-9]{2}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])'
+              + '(,(goldenHour|holyWeek|resurrection|nativity|epiphany|fasting|marian|navy|green|brown|purple)[|]20[0-9]{2}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])[|]20[0-9]{2}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])){0,11}')))
+        && validRanges(sch, sch.diff(old is map && old.get('schedule', {}) is map ? old.schedule : {}).affectedKeys());
+    }
+
+    // Values as one joined string and one regex (cheaper than a list
+    // literal of presets), so 12 new slots + the map fit one write; the
+    // split count refuses an empty value or one carrying a comma.
+    function validSeasonThemes(t) {
+      let v = t.values().join(',');
+      return t is map
+        && t.keys().hasOnly(['holy_week', 'pascha', 'nativity', 'epiphany', 'marian', 'fast',
+                             'revival_maximus', 'revival_moses', 'summer'])
+        && (t.size() == 0
+            || (v.matches('(goldenHour|holyWeek|resurrection|nativity|epiphany|fasting|marian|navy|green|brown|purple|none)'
+                          + '(,(goldenHour|holyWeek|resurrection|nativity|epiphany|fasting|marian|navy|green|brown|purple|none)){0,8}')
+                && v.split(',').size() == t.size()));
     }
 
     // [ch]: the slots this write adds or changes (computed once by the caller).
     function validRanges(s, ch) {
-      return (!ch.hasAny(['r1']) || !('r1' in s) || validRange(s.r1))
-        && (!ch.hasAny(['r2']) || !('r2' in s) || validRange(s.r2))
-        && (!ch.hasAny(['r3']) || !('r3' in s) || validRange(s.r3))
-        && (!ch.hasAny(['r4']) || !('r4' in s) || validRange(s.r4))
-        && (!ch.hasAny(['r5']) || !('r5' in s) || validRange(s.r5))
-        && (!ch.hasAny(['r6']) || !('r6' in s) || validRange(s.r6))
-        && (!ch.hasAny(['r7']) || !('r7' in s) || validRange(s.r7))
-        && (!ch.hasAny(['r8']) || !('r8' in s) || validRange(s.r8))
-        && (!ch.hasAny(['r9']) || !('r9' in s) || validRange(s.r9))
-        && (!ch.hasAny(['r10']) || !('r10' in s) || validRange(s.r10))
-        && (!ch.hasAny(['r11']) || !('r11' in s) || validRange(s.r11))
-        && (!ch.hasAny(['r12']) || !('r12' in s) || validRange(s.r12));
+      return (!('r1' in ch) || !('r1' in s) || validRange(s.r1))
+        && (!('r2' in ch) || !('r2' in s) || validRange(s.r2))
+        && (!('r3' in ch) || !('r3' in s) || validRange(s.r3))
+        && (!('r4' in ch) || !('r4' in s) || validRange(s.r4))
+        && (!('r5' in ch) || !('r5' in s) || validRange(s.r5))
+        && (!('r6' in ch) || !('r6' in s) || validRange(s.r6))
+        && (!('r7' in ch) || !('r7' in s) || validRange(s.r7))
+        && (!('r8' in ch) || !('r8' in s) || validRange(s.r8))
+        && (!('r9' in ch) || !('r9' in s) || validRange(s.r9))
+        && (!('r10' in ch) || !('r10' in s) || validRange(s.r10))
+        && (!('r11' in ch) || !('r11' in s) || validRange(s.r11))
+        && (!('r12' in ch) || !('r12' in s) || validRange(s.r12));
     }
 
-    // 'theme|YYYY-MM-DD|YYYY-MM-DD': a known preset, two dates (2000–2099),
-    // start <= end. One string per slot keeps twelve slots within budget.
+    // 'theme|YYYY-MM-DD|YYYY-MM-DD' (shape checked by the caller's joined
+    // regex): start <= end. One string per slot keeps twelve slots within
+    // budget.
     function validRange(r) {
-      return r is string && r.matches(
-             '(goldenHour|holyWeek|resurrection|nativity|epiphany|fasting|marian|navy|green|brown|purple)'
-             + '[|]20[0-9]{2}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])[|]20[0-9]{2}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])')
-        && r.split('[|]')[1] <= r.split('[|]')[2];
+      let p = r.split('[|]');
+      return p[1] <= p[2];
     }
 
     // Admin colour edits per preset (settings/features.themeColors).

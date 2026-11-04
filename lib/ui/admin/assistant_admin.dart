@@ -118,7 +118,7 @@ class _AssistantSwitchesState extends State<AssistantSwitches> {
                   padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
                   child: Text(
                     context.tr('assistantStatusNote', {'m': AppConfig.geminiModel}),
-                    style: const TextStyle(fontSize: 12, color: AppColors.muted),
+                    style: TextStyle(fontSize: 12, color: context.pal.muted),
                   ),
                 ),
               ]),

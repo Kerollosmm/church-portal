@@ -64,15 +64,27 @@ void main() {
 
     test('liturgical splash screen: church seal, name, progress track, fades out', () {
       expect(html, contains('<h1>كنيسة القديسين مكسيموس ودوماديوس والقوي الأنبا موسى الأسود</h1>'));
-      expect(RegExp(r'<img class="seal" src="icons/Icon-192\.png"').hasMatch(html), isTrue);
+      // The seal is the app's own 27 KB seal (shared cache with ChurchSeal),
+      // decorative next to the h1 (alt="").
+      expect(RegExp(r'<img class="seal" src="assets/assets/branding/seal\.png" alt=""').hasMatch(html), isTrue);
+      expect(html, isNot(contains('Icon-192.png')));
+      // Screen readers still hear that the site is loading.
+      expect(html, contains('role="status" aria-live="polite">جارٍ التحميل…</div>'));
       expect(html, contains('progress-track'));
       expect(html, contains('progress-bar'));
       expect(html, contains('class="sr-only"'));
       expect(html, contains("s.classList.add('gone')"));
       expect(html, contains('overflow-y: auto;'));
       expect(html, contains('background: #FBF3E4;'));
-      // The old unoptimized 178 KB seal is not used.
-      expect(html, isNot(contains('branding/seal.png')));
+      // Only composited properties animate (Lighthouse "non-composited
+      // animations"; no per-frame paint while main.dart.js compiles).
+      final keyframes = RegExp(r'@keyframes \w+ \{(?:[^{}]*\{[^{}]*\})*[^{}]*\}').allMatches(html).map((m) => m[0]!);
+      expect(keyframes, isNotEmpty);
+      for (final k in keyframes) {
+        for (final prop in ['left:', 'top:', 'width:', 'filter:', 'box-shadow:']) {
+          expect(k, isNot(contains(prop)), reason: k);
+        }
+      }
       for (final f in ['assets/art/hero_poster.webp', 'assets/art/hero_poster_tall.webp']) {
         expect(File(f).lengthSync(), lessThan(40 * 1024), reason: f);
       }

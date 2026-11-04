@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
@@ -21,6 +20,7 @@ import '../domain/custom_content.dart';
 import '../domain/daily_verse.dart';
 import '../domain/features.dart';
 import '../domain/models.dart';
+import '../domain/schedule.dart' show activeSeasonsAt;
 import '../domain/today.dart';
 
 /// Overridden in main() after bootstrapping.
@@ -230,17 +230,37 @@ class ActiveTheme {
   int get hashCode => Object.hash(key, source, palette);
 }
 
-/// Resolves `settings/features` (selected theme, automatic schedule / Coptic
-/// Easter on the Cairo calendar day, colour edits) into the theme in force.
-/// Equal values do not notify, so the app rebuilds its theme only when the
-/// theme actually changes — at Cairo midnight
-/// at the latest.
+/// Resolves `settings/features` (selected theme, admin ranges, the active
+/// church season, Coptic Easter on the Cairo calendar day, colour edits)
+/// into the theme in force (ADR-025, ADR-043). Equal values do not notify,
+/// so the app rebuilds its theme only when the theme actually changes.
+///
+/// The active season comes from the `seasons` list (the same stream the
+/// home page's next-service card and /mass-schedule already hold) and, until
+/// that list has loaded, from the applied season preset in
+/// `settings/features.seasonPreset` (no extra read), so a Holy Week visit
+/// paints dark from the first frame. Followed only while
+/// `occasions.followSeason` is on.
 final activeThemeProvider = Provider<ActiveTheme>((ref) {
   final f = ref.watch(featuresProvider);
   final now = ref.watch(nowProvider).value ?? DateTime.now();
   final c = CairoTime.fromInstant(now);
-  final r = f.themeOn(DateTime.utc(c.year, c.month, c.day));
+  final keys = f.occasions.followSeason ? ref.watch(activeSeasonKeysProvider).split(',') : const <String>[];
+  final r = f.themeOn(DateTime.utc(c.year, c.month, c.day), activeSeasonKeys: keys);
   return ActiveTheme(r.theme, r.source, f.occasions.paletteFor(r.theme));
+});
+
+/// Keys of the church seasons active now (ADR-043), sorted and joined by
+/// ',' (a String compares by value, so the clock tick does not notify):
+/// from the loaded seasons list, else from the season preset in force.
+final activeSeasonKeysProvider = Provider<String>((ref) {
+  final now = ref.watch(nowProvider).value ?? DateTime.now();
+  final seasons = ref.watch(seasonsProvider);
+  if (seasons.hasValue) {
+    return ({for (final s in activeSeasonsAt(seasons.value!, now)) s.key}.toList()..sort()).join(',');
+  }
+  final p = ref.watch(featuresStreamProvider).value?.seasonPreset;
+  return p != null && p.seasonKey.isNotEmpty && p.seasonRunningAt(now) ? p.seasonKey : '';
 });
 
 // ------------------------- today layer (ADR-039 / ADR-040) -------------------------
@@ -264,7 +284,7 @@ final synaxariumSourceProvider = Provider<SynaxariumSource>((ref) => SynaxariumS
 /// The Katameros commemoration (/data/today.json), loaded after the page is
 /// complete and idle; empty in seed mode (no Firebase: offline or tests).
 final synaxariumProvider = FutureProvider<SynaxariumData>((ref) async {
-  if (!ref.watch(repositoryProvider).isLive && !kIsWeb) return SynaxariumData.empty;
+  if (!ref.watch(repositoryProvider).isLive) return SynaxariumData.empty;
   final date = ref.watch(liturgicalDayProvider.select((d) => d.date));
   await ContentReady.whenIdle;
   return ref.read(synaxariumSourceProvider).load(date);

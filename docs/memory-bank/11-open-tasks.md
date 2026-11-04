@@ -1,7 +1,7 @@
 # 11 — Open tasks
 
 Tick items off (or delete them) in the PR that completes them, and add new ones as you discover them.
-Status as of 4 Nov 2026 (PR #34 / ADR-043; PR #33 / ADR-042; PR #32 / ADR-041; PR #31 / ADR-039–040; PR #30 / ADR-038; PR #25 re-checked against `d60261d`; earlier: PR #7–#24).
+Status as of 5 Nov 2026 (PR #35 / ADR-044; PR #37 / ADR-043; PR #33 / ADR-042; PR #32 / ADR-041; PR #31 / ADR-039–040; PR #30 / ADR-038; PR #25 re-checked against `d60261d`; earlier: PR #7–#24).
 
 ## Top open items (owner's list, 4 Nov 2026 — details in the sections below)
 
@@ -146,6 +146,14 @@ Status as of 4 Nov 2026 (PR #34 / ADR-043; PR #33 / ADR-042; PR #32 / ADR-041; P
 - [ ] Optional: remove the legacy `heroVideos` key + `validHeroVideos` from `firestore.rules` once no live
       `settings/features` stores it (check the live doc first; never delete live data from the app) — ADR-036.
 - [ ] Optional: a dark theme for the admin dashboard (it keeps Golden hour).
+- [x] Theme follows the active church season; Holy Week / fasts palettes without violet or gold; legacy `purple` hidden
+      (PR #37, ADR-043).
+- [ ] Owner (ADR-043): before entering a dated Holy Week on live, hide the seed's weekday templates `hw-day-1…3` /
+      `hw-eve-1…3` (or enter every day): templates of weekdays without dated services still show in that season (B4
+      is handled per day, by design).
+- [ ] Optional (ADR-043 cost): if the app-wide `seasons` listener matters, derive the active season from
+      `settings/features.seasonPreset` only (no listener) when no season list is needed on the page.
+- [x] ADR number: PR #35 (splash / top bar) renumbered to ADR-044 after PR #37 took ADR-043.
 
 ## Custom sections, pages & contact types (PR #18, ADR-027/028)
 
@@ -263,7 +271,11 @@ Status as of 4 Nov 2026 (PR #34 / ADR-043; PR #33 / ADR-042; PR #32 / ADR-041; P
       Services menu, Home directory and footer quick links when `sections.clinics` is on. Guarded by
       `test/feature_gate_test.dart` (PR #26). At ~07:30 Cairo on 4 Nov the live `sections.clinics` still read true; it
       was switched off at 07:51 (PR #25 live read).
-- [x] **Redesigned liturgical web splash screen & top utility bar (PR #34, ADR-043):**
-      - Liturgical splash in `web/index.html`: `#2A0808` dark burgundy backdrop, radial gold glow, parish seal pulse animation, Lalezar gold typography, shimmer progress track (220×4 px), IBM Plex Sans Arabic subtitle «جاري تجهيز الصلوات والبيانات...», smooth 0.6 s cross-fadeout and full reduced-motion support.
-      - Dedicated 32 px `TopUtilityBar` (`today_widgets.dart`, `app_shell.dart`): placed at the top of the viewport above AppBar in `#3B0A0A` burgundy with gold hairline border; displays Coptic date strip and integrated pulsing live badge (`topBarLiveBadge`) that opens stream URL on tap.
-      - AppShell body column cleanup: floating strip removed, giving hero full room; `SealTab` alignment offset +32 px flush with AppBar.
+- [x] **Liturgical web loading screen & top utility bar (PR #35, ADR-044)** — cream loading screen with the app's seal,
+      Lalezar name and a composited gold progress track; `TopUtilityBar` above the app bar on the palette's title band
+      with the Coptic date and a live badge; seal tab offset by the bar height.
+- [ ] Owner (ADR-044): approve the visuals on the PR #35 preview before merging (Golden hour and Holy Week).
+- [ ] Owner (ADR-044): while live, both the top-bar badge and the red `LiveStreamBanner` show — keep both, or drop the
+      banner now that the badge is on every page?
+- [ ] Owner (ADR-044): the HTML loading screen is always cream; on a dark theme (Holy Week) it switches to charcoal when
+      the app appears. Optional: remember the last theme's ground in `localStorage` and paint the screen with it.

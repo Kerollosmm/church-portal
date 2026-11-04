@@ -49,8 +49,9 @@ loading screen until real content (ADR-038); PR #31 Coptic calendar / liturgical
 Firestore cost (ADR-040); PR #32 programme details — speaker, topic, choir, venue, audience, Drive PDF link — on
 services, meetings and seasons, admin venue / audience lists, parallel services (ADR-041); PR #33 season presets —
 one reversible «تجهيز الموسم» action with auto-revert at the season end, season verse sets, assistant season limit
-and section-aware topics, hero v2 loops (ADR-042); PR #34 liturgical web splash screen with parish seal, shimmer progress
-bar and Plex subtitle, dedicated 32 px top utility bar with Coptic date strip and integrated live badge, AppShell layout cleanup (ADR-043)).
+and section-aware topics, hero v2 loops (ADR-042); PR #37 occasion sub-themes follow the season, every UI colour from
+the palette (ADR-043); PR #35 liturgical web loading screen (seal, church name, gold progress track), top utility bar
+with the Coptic date and a live badge above the app bar, on the palette's title-band roles (ADR-044)).
 
 > **Golden rule:** read this folder before changing anything, and update it in the same PR as every change that
 > alters behaviour, data shape, rules, workflows, content status or open tasks.

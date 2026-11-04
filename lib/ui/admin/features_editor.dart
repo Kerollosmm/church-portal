@@ -16,7 +16,9 @@ class FeaturesScreen extends StatefulWidget {
   /// Owner only (ADR-034): sends one harmless test error to Sentry; returns
   /// false when reporting is not active in this build. Null hides the button.
   final Future<bool> Function()? onSendTestError;
-  const FeaturesScreen({super.key, required this.repo, this.onSendTestError});
+  /// Keys of the church seasons active now (ADR-043; "theme in force").
+  final List<String> activeSeasonKeys;
+  const FeaturesScreen({super.key, required this.repo, this.onSendTestError, this.activeSeasonKeys = const []});
 
   @override
   State<FeaturesScreen> createState() => _FeaturesScreenState();
@@ -94,6 +96,7 @@ class _FeaturesScreenState extends State<FeaturesScreen> {
               updatedAt: doc?.updatedAt,
               updatedBy: doc?.updatedBy ?? '',
               onSendTestError: widget.onSendTestError,
+              activeSeasonKeys: widget.activeSeasonKeys,
               onSave: (f) async {
                 for (final w in featuresSaveWrites(f, doc?.data)) {
                   await widget.repo.saveDoc('settings/features', w);
@@ -170,7 +173,11 @@ class FeaturesEditor extends StatefulWidget {
     this.exists = true,
     this.updatedAt,
     this.updatedBy = '',
+    this.activeSeasonKeys = const [],
   });
+
+  /// See [FeaturesScreen.activeSeasonKeys].
+  final List<String> activeSeasonKeys;
 
   @override
   State<FeaturesEditor> createState() => FeaturesEditorState();
@@ -332,17 +339,17 @@ class FeaturesEditorState extends State<FeaturesEditor> {
           padding: const EdgeInsets.all(16),
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             Row(children: [
-              Icon(icon, color: AppColors.burgundy),
+              Icon(icon, color: context.pal.primary),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(title,
-                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: AppColors.burgundy)),
+                    style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: context.pal.primary)),
               ),
             ]),
             if (hint != null)
               Padding(
                 padding: const EdgeInsets.only(top: 4),
-                child: Text(hint, style: const TextStyle(color: AppColors.muted, fontSize: 12.5)),
+                child: Text(hint, style: TextStyle(color: context.pal.muted, fontSize: 12.5)),
               ),
             const SizedBox(height: 8),
             ...children,
@@ -382,15 +389,15 @@ class FeaturesEditorState extends State<FeaturesEditor> {
   Widget build(BuildContext context) {
     final order = f.homeOrder;
     return Scaffold(
-      backgroundColor: AppColors.cream,
+      backgroundColor: context.pal.background,
       floatingActionButton: FloatingActionButton.extended(
         key: const Key('features-save'),
         heroTag: 'features-save',
-        backgroundColor: _dirty ? AppColors.burgundy : AppColors.muted,
-        foregroundColor: Colors.white,
+        backgroundColor: _dirty ? context.pal.primary : context.pal.muted,
+        foregroundColor: context.pal.onBar,
         onPressed: _saving ? null : _save,
         icon: _saving
-            ? const SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+            ? SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2, color: context.pal.onBar))
             : const Icon(Icons.save),
         label: Text(context.tr(_dirty ? 'saveChanges' : 'save')),
       ),
@@ -402,10 +409,10 @@ class FeaturesEditorState extends State<FeaturesEditor> {
             child: ListView(padding: const EdgeInsets.fromLTRB(16, 16, 16, 100), children: [
               if (!widget.exists)
                 Card(
-                  color: AppColors.parchment,
+                  color: context.pal.surfaceAlt,
                   margin: const EdgeInsets.only(bottom: 14),
                   child: ListTile(
-                    leading: const Icon(Icons.info_outline, color: AppColors.burgundy),
+                    leading: Icon(Icons.info_outline, color: context.pal.primary),
                     title: Text(context.tr('featuresDefaultsNote')),
                   ),
                 ),
@@ -414,7 +421,7 @@ class FeaturesEditorState extends State<FeaturesEditor> {
                   padding: const EdgeInsets.only(bottom: 10),
                   child: Text(
                     context.tr('updatedBy', {'t': fmtDateTime(widget.updatedAt!), 'u': widget.updatedBy}),
-                    style: const TextStyle(color: AppColors.muted, fontSize: 12),
+                    style: TextStyle(color: context.pal.muted, fontSize: 12),
                   ),
                 ),
               _card(context.tr('sectionsTitle'), Icons.toggle_on_outlined, [
@@ -552,7 +559,8 @@ class FeaturesEditorState extends State<FeaturesEditor> {
                   ),
               ], hint: context.tr('imageDisplayHint')),
               _card(context.tr('themeColor'), Icons.palette_outlined, [
-                OccasionThemeEditor(value: f, onChanged: (edit) => _set(edit(f))),
+                OccasionThemeEditor(
+                    value: f, onChanged: (edit) => _set(edit(f)), activeSeasonKeys: widget.activeSeasonKeys),
               ], hint: context.tr('themeHint')),
               _card(context.tr('errorReportingTitle'), Icons.bug_report_outlined, [
                 SwitchListTile(
@@ -606,12 +614,12 @@ class FeaturesEditorState extends State<FeaturesEditor> {
                     margin: const EdgeInsets.only(top: 4),
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                     decoration: BoxDecoration(
-                      color: AppColors.parchment,
+                      color: context.pal.surfaceAlt,
                       borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: AppColors.burgundy.withValues(alpha: 0.35)),
+                      border: Border.all(color: context.pal.primary.withValues(alpha: 0.35)),
                     ),
                     child: Text(context.tr('pageCustomized'),
-                        style: const TextStyle(fontSize: 12, color: AppColors.burgundy, fontWeight: FontWeight.w700)),
+                        style: TextStyle(fontSize: 12, color: context.pal.primary, fontWeight: FontWeight.w700)),
                   ),
                 )
               : null,
@@ -669,7 +677,7 @@ class FeaturesEditorState extends State<FeaturesEditor> {
       ),
     ];
     final offNote = sectionOff
-        ? Text(context.tr('blockSectionOff'), style: const TextStyle(color: AppColors.alert, fontSize: 12))
+        ? Text(context.tr('blockSectionOff'), style: TextStyle(color: context.pal.alert, fontSize: 12))
         : null;
     final toggle = Switch(
       value: shown,

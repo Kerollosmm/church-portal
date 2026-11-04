@@ -155,6 +155,54 @@ class OccasionColors extends ThemeExtension<OccasionColors> {
   Color get hairline => Color(palette.hairline);
   bool get dark => palette.dark;
 
+  /// The theme's scene accents (ADR-043): every decorative surface reads
+  /// these, never a fixed colour.
+  SceneAccents get accents => _accentCache.putIfAbsent((key, palette), () => SceneAccents.of(key, palette));
+  static final _accentCache = <(String, ThemePalette), SceneAccents>{};
+
+  /// Decorative metal (gold; ash on Holy Week): rings, rules. Never text.
+  Color get ornament => Color(accents.ornament);
+
+  /// Hairline border of panels and cards (the ornament at 38 %).
+  Color get ornamentLine => ornament.withValues(alpha: 0.38);
+
+  /// Title bands (next-service header, seal tab, selected chips / tabs,
+  /// filled buttons): gradient [bar] → [barDeep], text [onBar], accent
+  /// [onBarAccent], optional [barEdge] line.
+  Color get bar => Color(accents.bar);
+  Color get barDeep => Color(accents.barDeep);
+  Color get onBar => Color(accents.onBar);
+  Color get onBarAccent => Color(accents.onBarAccent);
+  Color? get barEdge => accents.barEdge == null ? null : Color(accents.barEdge!);
+  LinearGradient barGradient({AlignmentGeometry begin = AlignmentDirectional.centerStart, AlignmentGeometry end = AlignmentDirectional.centerEnd}) =>
+      LinearGradient(begin: begin, end: end, colors: [bar, barDeep]);
+
+  Color get ribbon => Color(accents.ribbon);
+  Color get ribbonText => Color(accents.ribbonText);
+  Color get sepiaTop => Color(accents.sepiaTop);
+  Color get sepiaBottom => Color(accents.sepiaBottom);
+  Color get sepiaEdge => Color(accents.sepiaEdge);
+  Color get glow => Color(accents.glow);
+  List<Color> get halo => [Color(accents.haloInner), Color(accents.haloMid), Color(accents.haloOuter)];
+
+  /// Shadow tint at [alpha] (0–1).
+  Color shadow(double alpha) => Color(accents.shadow).withValues(alpha: alpha);
+  Color get notice => Color(accents.notice);
+  Color get noticeEdge => Color(accents.noticeEdge);
+  Color get noticeInk => Color(accents.noticeInk);
+  Color get alertGround => Color(accents.alertGround);
+  Color get alert => Color(accents.alert);
+  Color get success => Color(accents.success);
+  Color get live => Color(accents.live);
+  Color get onLive => Color(accents.onLive);
+  Color get cross => Color(accents.cross);
+
+  /// Soft shadow under floating panels, in the theme's tint.
+  List<BoxShadow> get panelShadow => [
+        BoxShadow(color: shadow(0.25), blurRadius: 28, offset: const Offset(0, 10), spreadRadius: -12),
+        BoxShadow(color: shadow(0.08), blurRadius: 6, offset: const Offset(0, 2)),
+      ];
+
   /// Translucent panel over imagery ([ThemePalette.panelAlpha]).
   Color get panel => surface.withValues(alpha: ThemePalette.panelAlpha);
 
@@ -231,19 +279,40 @@ ThemeData buildTheme(Locale locale,
     brightness: oc.dark ? Brightness.dark : Brightness.light,
     primary: primaryColor,
     onPrimary: oc.onPrimary,
-    secondary: AppColors.gold,
-    onSecondary: oc.dark ? oc.background : AppColors.ink,
+    secondary: oc.ornament,
+    onSecondary: oc.dark ? oc.background : oc.ink,
     surface: oc.background,
     onSurface: oc.ink,
     onSurfaceVariant: oc.muted,
-    error: AppColors.alert,
+    error: oc.alert,
   ).copyWith(
+    // Every scheme role from the palette (ADR-043): Material's seeded
+    // tones (tertiary, containers…) can drift to violet on a blue seed.
+    primaryContainer: oc.surfaceAlt,
+    onPrimaryContainer: oc.ink,
+    secondaryContainer: oc.surfaceAlt,
+    onSecondaryContainer: oc.ink,
+    tertiary: oc.goldText,
+    onTertiary: oc.surface,
+    tertiaryContainer: oc.surfaceAlt,
+    onTertiaryContainer: oc.ink,
+    errorContainer: oc.alertGround,
+    onErrorContainer: oc.ink,
+    inversePrimary: oc.onPrimaryAccent,
+    inverseSurface: oc.ink,
+    onInverseSurface: oc.background,
+    surfaceTint: Colors.transparent,
+    surfaceDim: oc.surfaceAlt,
+    surfaceBright: oc.surface,
     surfaceContainerLowest: oc.surface,
     surfaceContainerLow: oc.surface,
     surfaceContainer: oc.surface,
     surfaceContainerHigh: oc.surfaceAlt,
+    surfaceContainerHighest: oc.surfaceAlt,
     outline: oc.muted,
     outlineVariant: oc.hairline,
+    shadow: oc.shadow(1),
+    scrim: oc.shadow(1),
   );
   const radius = BorderRadius.all(Radius.circular(kPanelRadius));
   const small = BorderRadius.all(Radius.circular(12));
@@ -283,21 +352,23 @@ ThemeData buildTheme(Locale locale,
     cardTheme: CardThemeData(
       color: oc.card,
       surfaceTintColor: Colors.transparent,
-      shadowColor: Color(0x66603208),
+      shadowColor: oc.shadow(0.4),
       elevation: 3,
       margin: EdgeInsets.zero,
-      shape: const RoundedRectangleBorder(borderRadius: radius, side: BorderSide(color: Color(0x66C9963F))),
+      shape: RoundedRectangleBorder(borderRadius: radius, side: BorderSide(color: oc.ornament.withValues(alpha: 0.4))),
     ),
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
-        backgroundColor: primaryColor,
-        foregroundColor: oc.onPrimary,
+        // The title-band colours: the primary on light scenes, charcoal with
+        // ash-white text on Holy Week (ADR-043).
+        backgroundColor: oc.bar,
+        foregroundColor: oc.onBar,
         minimumSize: const Size(48, 48),
         padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
         textStyle: buttonText,
         elevation: 2,
-        shadowColor: const Color(0x99401010),
-        shape: stadium,
+        shadowColor: oc.shadow(0.6),
+        shape: oc.barEdge == null ? stadium : StadiumBorder(side: BorderSide(color: oc.barEdge!)),
       ),
     ),
     outlinedButtonTheme: OutlinedButtonThemeData(
@@ -320,12 +391,17 @@ ThemeData buildTheme(Locale locale,
     ),
     iconButtonTheme: IconButtonThemeData(style: IconButton.styleFrom(shape: const CircleBorder())),
     chipTheme: base.chipTheme.copyWith(
-      selectedColor: primaryColor,
+      selectedColor: oc.bar,
       backgroundColor: oc.surface.withValues(alpha: 0.92),
       labelStyle: TextStyle(fontFamily: AppFonts.body, fontWeight: FontWeight.w700, color: oc.ink),
-      checkmarkColor: oc.onPrimary,
-      secondaryLabelStyle: TextStyle(fontFamily: AppFonts.body, fontWeight: FontWeight.w700, color: oc.onPrimary),
-      side: BorderSide(color: oc.hairline),
+      checkmarkColor: oc.onBar,
+      secondaryLabelStyle: TextStyle(fontFamily: AppFonts.body, fontWeight: FontWeight.w700, color: oc.onBar),
+      // Selected chips also get a stronger edge (Holy Week's crimson, else
+      // the ornament): on dark scenes the band colour alone is close to the
+      // unselected surface (Sentry review on PR #37).
+      side: WidgetStateBorderSide.resolveWith((states) => states.contains(WidgetState.selected)
+          ? BorderSide(color: oc.barEdge ?? oc.ornament, width: 1.6)
+          : BorderSide(color: oc.hairline)),
       shape: stadium,
     ),
     inputDecorationTheme: InputDecorationTheme(

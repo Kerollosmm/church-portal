@@ -20,7 +20,11 @@ class OccasionThemeEditor extends StatefulWidget {
 
   /// Today on the Cairo calendar (tests pin it).
   final DateTime? today;
-  const OccasionThemeEditor({super.key, required this.value, required this.onChanged, this.today});
+
+  /// Keys of the church seasons active now (ADR-043), for "in force today".
+  final List<String> activeSeasonKeys;
+  const OccasionThemeEditor(
+      {super.key, required this.value, required this.onChanged, this.today, this.activeSeasonKeys = const []});
 
   @override
   State<OccasionThemeEditor> createState() => _OccasionThemeEditorState();
@@ -76,7 +80,7 @@ class _OccasionThemeEditorState extends State<OccasionThemeEditor> {
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         gradient: SweepGradient(colors: [Color(p.background), Color(p.primary), Color(p.primary), Color(p.background)]),
-        border: Border.all(color: AppColors.hairline),
+        border: Border.all(color: context.pal.hairline),
       ),
     );
   }
@@ -123,7 +127,7 @@ class _OccasionThemeEditorState extends State<OccasionThemeEditor> {
   @override
   Widget build(BuildContext context) {
     final today = _today;
-    final now = f.themeOn(today);
+    final now = f.themeOn(today, activeSeasonKeys: widget.activeSeasonKeys);
     final easter = o.easterRanges(today.year);
     String span(ThemeRange r) => '${r.start} → ${r.end}';
     final rawEdit = ThemePalette.withOverrides(ThemePresets.palettes[_editing]!, o.custom[_editing] ?? const {});
@@ -134,15 +138,16 @@ class _OccasionThemeEditorState extends State<OccasionThemeEditor> {
       Text(context.tr('themeSelected'), style: const TextStyle(fontWeight: FontWeight.w700)),
       const SizedBox(height: 6),
       Wrap(spacing: 8, runSpacing: 8, children: [
-        for (final k in ThemePresets.keys)
+        // The legacy `purple` key only while a document still holds it (ADR-043).
+        for (final k in [...ThemePresets.pickable, if (f.theme == ThemePresets.legacyPurple) ThemePresets.legacyPurple])
           ChoiceChip(
             key: ValueKey('theme-$k'),
             avatar: _swatch(k),
             label: Text(_label(k)),
             selected: f.theme == k,
             showCheckmark: false,
-            selectedColor: AppColors.burgundy,
-            labelStyle: TextStyle(color: f.theme == k ? Colors.white : AppColors.burgundy, fontWeight: FontWeight.w700),
+            selectedColor: context.pal.bar,
+            labelStyle: TextStyle(color: f.theme == k ? context.pal.onBar : context.pal.primary, fontWeight: FontWeight.w700),
             onSelected: (_) => widget.onChanged((cur) => cur.copyWith(theme: k)),
           ),
       ]),
@@ -150,18 +155,35 @@ class _OccasionThemeEditorState extends State<OccasionThemeEditor> {
       Container(
         key: const Key('themeInForce'),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(color: AppColors.parchment, borderRadius: BorderRadius.circular(12)),
+        decoration: BoxDecoration(color: context.pal.surfaceAlt, borderRadius: BorderRadius.circular(12)),
         child: Row(children: [
           _swatch(now.theme, size: 22),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
               '${context.tr('themeInForce', {'t': _label(now.theme)})} — ${context.tr('themeSrc_${now.source.name}')}',
-              style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.ink),
+              style: TextStyle(fontWeight: FontWeight.w700, color: context.pal.ink),
             ),
           ),
         ]),
       ),
+      SwitchListTile(
+        key: const ValueKey('occasions-followSeason'),
+        contentPadding: const EdgeInsetsDirectional.only(start: 4),
+        title: Text(context.tr('themeFollowSeason')),
+        subtitle: Text(context.tr('themeFollowSeasonHint')),
+        value: o.followSeason,
+        onChanged: (v) => _setO((o) => o.copyWith(followSeason: v)),
+      ),
+      if (o.followSeason)
+        ExpansionTile(
+          key: const ValueKey('occasions-seasonMap'),
+          tilePadding: const EdgeInsetsDirectional.only(start: 4, end: 8),
+          title: Text(context.tr('themeSeasonMap'), style: const TextStyle(fontWeight: FontWeight.w700)),
+          subtitle: Text(context.tr('themeSeasonMapHint'), style: TextStyle(fontSize: 12.5, color: context.pal.muted)),
+          expandedCrossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [for (final k in SeasonThemes.seasonKeys) _seasonRow(k)],
+        ),
       SwitchListTile(
         key: const ValueKey('occasions-auto'),
         contentPadding: const EdgeInsetsDirectional.only(start: 4),
@@ -220,7 +242,7 @@ class _OccasionThemeEditorState extends State<OccasionThemeEditor> {
         key: const ValueKey('occasions-colors'),
         tilePadding: const EdgeInsetsDirectional.only(start: 4, end: 8),
         title: Text(context.tr('themeColors'), style: const TextStyle(fontWeight: FontWeight.w700)),
-        subtitle: Text(context.tr('themeColorsHint'), style: const TextStyle(fontSize: 12.5, color: AppColors.muted)),
+        subtitle: Text(context.tr('themeColorsHint'), style: TextStyle(fontSize: 12.5, color: context.pal.muted)),
         expandedCrossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           DropdownButtonFormField<String>(
@@ -244,7 +266,7 @@ class _OccasionThemeEditorState extends State<OccasionThemeEditor> {
             margin: const EdgeInsets.only(top: 4),
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: adjusted.isEmpty ? const Color(0xFFE6F2EA) : const Color(0xFFFFF3CD),
+              color: adjusted.isEmpty ? context.pal.success.withValues(alpha: 0.1) : context.pal.notice,
               borderRadius: BorderRadius.circular(10),
             ),
             child: Text(
@@ -256,11 +278,11 @@ class _OccasionThemeEditorState extends State<OccasionThemeEditor> {
                               '${colorToHex(rawEdit[k])}→${colorToHex(fixed[k])}')
                           .join('، '),
                     }),
-              style: const TextStyle(color: AppColors.ink, fontSize: 13),
+              style: TextStyle(color: context.pal.ink, fontSize: 13),
             ),
           ),
           const SizedBox(height: 10),
-          _Preview(palette: fixed),
+          _Preview(palette: fixed, themeKey: _editing),
           if ((o.custom[_editing] ?? const {}).isNotEmpty)
             Align(
               alignment: AlignmentDirectional.centerEnd,
@@ -282,6 +304,45 @@ class _OccasionThemeEditorState extends State<OccasionThemeEditor> {
         ],
       ),
     ]);
+  }
+
+  /// One season key → its theme (or none). Only differences from
+  /// [SeasonThemes.defaults] are stored.
+  Widget _seasonRow(String key) {
+    final current = o.themeForSeason(key) ?? SeasonThemes.none;
+    return Padding(
+      key: ValueKey('occasions-season-$key'),
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(children: [
+        Expanded(child: Text(context.tr('opt_$key'))),
+        const SizedBox(width: 8),
+        Flexible(
+          child: DropdownButton<String>(
+            key: ValueKey('occasions-season-$key-theme'),
+            value: current,
+            isExpanded: true,
+            items: [
+              DropdownMenuItem(value: SeasonThemes.none, child: Text(context.tr('themeSeasonNone'))),
+              for (final t in ThemePresets.pickable) DropdownMenuItem(value: t, child: Text(_label(t))),
+              if (current == ThemePresets.legacyPurple)
+                DropdownMenuItem(value: ThemePresets.legacyPurple, child: Text(_label(ThemePresets.legacyPurple))),
+            ],
+            onChanged: (t) {
+              if (t == null) return;
+              _setO((o) {
+                final m = {...o.seasonThemes};
+                if (t == SeasonThemes.defaults[key]) {
+                  m.remove(key);
+                } else {
+                  m[key] = t;
+                }
+                return o.copyWith(seasonThemes: m);
+              });
+            },
+          ),
+        ),
+      ]),
+    );
   }
 
   Widget _rangeRow(int i, ThemeRange r) => Padding(
@@ -331,7 +392,7 @@ class _OccasionThemeEditorState extends State<OccasionThemeEditor> {
             decoration: BoxDecoration(
               color: Color(raw[k]),
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: AppColors.hairline),
+              border: Border.all(color: context.pal.hairline),
             ),
           ),
           if (fixed[k] != raw[k]) ...[
@@ -362,14 +423,17 @@ class _OccasionThemeEditorState extends State<OccasionThemeEditor> {
 }
 
 /// A small live sample of a palette: the scene, a panel with body and
-/// secondary text, the accent word, a title and the primary bar.
+/// secondary text, the accent word, a title and the title band with its
+/// scene accents (ADR-043: the same band colours and edge as the site).
 class _Preview extends StatelessWidget {
   final ThemePalette palette;
-  const _Preview({required this.palette});
+  final String themeKey;
+  const _Preview({required this.palette, required this.themeKey});
 
   @override
   Widget build(BuildContext context) {
     final p = palette;
+    final a = SceneAccents.of(themeKey, p);
     return Container(
       key: const Key('themePreview'),
       padding: const EdgeInsets.all(12),
@@ -381,15 +445,23 @@ class _Preview extends StatelessWidget {
         const SizedBox(height: 8),
         Container(
           clipBehavior: Clip.antiAlias,
-          decoration: BoxDecoration(color: Color(p.surface), borderRadius: BorderRadius.circular(12)),
+          decoration: BoxDecoration(
+            color: Color(p.surface),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Color(a.ornament).withValues(alpha: 0.38)),
+          ),
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             Container(
-              color: Color(p.primary),
+              key: const Key('themePreviewBand'),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(colors: [Color(a.bar), Color(a.barDeep)]),
+                border: a.barEdge == null ? null : Border(bottom: BorderSide(color: Color(a.barEdge!), width: 2)),
+              ),
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               child: Row(children: [
-                Icon(Icons.access_time_filled_rounded, size: 18, color: Color(p.onPrimaryAccent)),
+                Icon(Icons.access_time_filled_rounded, size: 18, color: Color(a.onBarAccent)),
                 const SizedBox(width: 6),
-                Text(context.tr('nextMass'), style: TextStyle(color: Color(p.onPrimary), fontWeight: FontWeight.w700)),
+                Text(context.tr('nextMass'), style: TextStyle(color: Color(a.onBar), fontWeight: FontWeight.w700)),
               ]),
             ),
             Padding(

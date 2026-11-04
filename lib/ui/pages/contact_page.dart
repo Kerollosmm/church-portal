@@ -87,7 +87,7 @@ class _InfoColumn extends StatelessWidget {
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             TitleWithBadge(context.tr('phones'),
                 sample: s.sample,
-                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17, color: Theme.of(context).colorScheme.primary)),
+                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17, color: context.pal.primary)),
             const SizedBox(height: 6),
             for (final p in s.phones) PhoneRow(phone: p),
           ]),
@@ -101,7 +101,7 @@ class _InfoColumn extends StatelessWidget {
           padding: const EdgeInsets.all(16),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(context.tr('social'),
-                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17, color: Theme.of(context).colorScheme.primary)),
+                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17, color: context.pal.primary)),
             const SizedBox(height: 10),
             Wrap(spacing: 8, runSpacing: 8, children: [
               if (s.whatsappChannel.isNotEmpty)
@@ -143,7 +143,7 @@ class _InfoColumn extends StatelessWidget {
           padding: const EdgeInsets.all(16),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(context.tr('address'),
-                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17, color: Theme.of(context).colorScheme.primary)),
+                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17, color: context.pal.primary)),
             const SizedBox(height: 6),
             IconLine(Icons.location_on_outlined, context.pick(s.addressAr, s.addressEn),
                 style: const TextStyle(fontWeight: FontWeight.w700, height: 1.5)),
@@ -351,7 +351,7 @@ class _ContactFormState extends ConsumerState<ContactForm> {
         child: AutofillGroup(
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             Text(context.tr('contactForm'),
-                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17, color: Theme.of(context).colorScheme.primary)),
+                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17, color: context.pal.primary)),
             const SizedBox(height: 12),
             if (cats.length > 1) ...[
               // Rebuilt when the admin-managed list (settings/contact,
@@ -423,7 +423,7 @@ class _ContactFormState extends ConsumerState<ContactForm> {
                 Padding(
                   padding: const EdgeInsets.only(top: 4),
                   child: Text(_err(ContactField.subtype)!,
-                      style: TextStyle(color: Theme.of(context).colorScheme.error, fontSize: 12.5)),
+                      style: TextStyle(color: context.pal.alert, fontSize: 12.5)),
                 ),
               const SizedBox(height: 10),
             ],
@@ -513,14 +513,14 @@ class _ContactFormState extends ConsumerState<ContactForm> {
               title: Text(context.tr(anonymous ? 'consentLabelAnon' : 'consentLabel')),
               subtitle: _err(ContactField.consent) == null
                   ? null
-                  : Text(_err(ContactField.consent)!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+                  : Text(_err(ContactField.consent)!, style: TextStyle(color: context.pal.alert)),
             ),
             const SizedBox(height: 8),
             FilledButton.icon(
               onPressed: _sending ? null : _submit,
               icon: _sending
                   ? SizedBox.square(
-                      dimension: 18, child: CircularProgressIndicator(strokeWidth: 2, color: context.pal.onPrimary))
+                      dimension: 18, child: CircularProgressIndicator(strokeWidth: 2, color: context.pal.onBar))
                   : const Icon(Icons.send_rounded),
               label: Text(context.tr(_sending ? 'sending' : 'send')),
             ),
@@ -533,12 +533,12 @@ class _ContactFormState extends ConsumerState<ContactForm> {
                   child: Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: (_statusOk ? AppColors.success : AppColors.alert).withValues(alpha: 0.1),
+                      color: (_statusOk ? context.pal.success : context.pal.alert).withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(4),
                     ),
                     child: Row(children: [
                       Icon(_statusOk ? Icons.check_circle : Icons.error_outline,
-                          color: _statusOk ? AppColors.success : AppColors.alert),
+                          color: _statusOk ? context.pal.success : context.pal.alert),
                       const SizedBox(width: 8),
                       Expanded(child: Text(_status!)),
                     ]),

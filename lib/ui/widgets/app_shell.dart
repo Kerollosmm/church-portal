@@ -124,18 +124,18 @@ class _AppShellState extends ConsumerState<AppShell> {
     // before showing highlight buttons for sections an admin may have off.
     final ready = ref.watch(featuresReadyProvider);
     final showMass = ready && !collapseHighlights && features.routeEnabled('/mass-schedule');
-    // Top utility bar (Coptic date strip + live badge).
+    // Top utility bar (ADR-044: Coptic date + live badge). The shell rebuilds
+    // only when the bar appears / disappears, not on every 30 s clock tick.
     final todaySettings = ref.watch(todaySettingsProvider);
-    final copticMode = todaySettings.copticStrip;
-    final now = ref.watch(nowProvider).value ?? DateTime.now();
-    final liveActive = todaySettings.liveOn(now);
-    final showTopBar = ready && (TopUtilityBar.shownOn(copticMode, location) || liveActive);
+    final liveActive = ref.watch(nowProvider.select((n) => todaySettings.liveOn(n.value ?? DateTime.now())));
+    final showTopBar = ready && (TopUtilityBar.shownOn(todaySettings.copticStrip, location) || liveActive);
+    final topBarH = showTopBar ? TopUtilityBar.heightFor(context) : 0.0;
     // No Clinics shortcut in the bar (owner request, 4 Nov 2026): clinics stay
     // reachable from the drawer / Services menu and Home when their section is on.
     final settings = ref.watch(settingsProvider).value;
     // Full church name (admin-editable in settings); bundled l10n name until settings load.
     final fullName = settings == null ? context.tr('appName') : context.pick(settings.nameAr, settings.nameEn);
-    final primary = Theme.of(context).colorScheme.primary;
+    final primary = context.pal.primary;
     // The hanging seal tab (start corner, after the Back arrow on phones).
     final tabW = wide ? 88.0 : 64.0;
     final tabH = wide ? 108.0 : 80.0;
@@ -147,7 +147,7 @@ class _AppShellState extends ConsumerState<AppShell> {
       toolbarHeight: wide ? 76 : 64,
       titleSpacing: wide ? 24 : (showBack ? 0 : 6),
       leadingWidth: showBack ? 48 : null,
-      shape: const Border(bottom: BorderSide(color: Color(0x59C9963F))),
+      shape: Border(bottom: BorderSide(color: context.pal.ornament.withValues(alpha: 0.35))),
       leading: showBack
           ? IconButton(
               key: Key(toParent ? 'backParent' : 'backHome'),
@@ -238,13 +238,14 @@ class _AppShellState extends ConsumerState<AppShell> {
     final scaffold = Scaffold(
       onEndDrawerChanged: (open) => setState(() => _drawerOpen = open),
       appBar: PreferredSize(
-        preferredSize: Size.fromHeight((showTopBar ? 32.0 : 0.0) + (wide ? 76.0 : 64.0)),
+        preferredSize: Size.fromHeight(topBarH + (wide ? 76.0 : 64.0)),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             if (showTopBar) ...[
-              Container(
-                color: const Color(0xFF3B0A0A),
+              // The status-bar inset above the bar takes the bar's colour.
+              ColoredBox(
+                color: context.pal.bar,
                 child: SafeArea(
                   bottom: false,
                   child: TopUtilityBar(location: location),
@@ -276,7 +277,7 @@ class _AppShellState extends ConsumerState<AppShell> {
       if (!_drawerOpen)
         PositionedDirectional(
           start: tabStart,
-          top: MediaQuery.paddingOf(context).top + (showTopBar ? 32.0 : 0.0),
+          top: MediaQuery.paddingOf(context).top + topBarH,
           child: Semantics(
             link: true,
             label: '${context.tr('logoLabel')} — ${context.tr('home')}',
@@ -293,7 +294,7 @@ class _AppShellState extends ConsumerState<AppShell> {
 
   Widget _navItemText(BuildContext context, NavItem item) {
     final selected = widget.location == item.path;
-    final primary = Theme.of(context).colorScheme.primary;
+    final primary = context.pal.primary;
     return _NavLabel(
       label: item.label(context),
       selected: selected,
@@ -305,7 +306,7 @@ class _AppShellState extends ConsumerState<AppShell> {
   Widget _navText(BuildContext context, String key, String path) {
     final location = widget.location;
     final selected = location == path;
-    final primary = Theme.of(context).colorScheme.primary;
+    final primary = context.pal.primary;
     return _NavLabel(
       label: context.tr(key),
       selected: selected,
@@ -333,7 +334,7 @@ class _NavLabel extends StatelessWidget {
     final decorated = Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: selected ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.10) : null,
+        color: selected ? context.pal.primary.withValues(alpha: 0.10) : null,
         borderRadius: BorderRadius.circular(999),
       ),
       child: text,
@@ -363,7 +364,7 @@ class _ServicesMenu extends ConsumerWidget {
     ];
     if (items.isEmpty) return const SizedBox.shrink();
     final selected = items.any((i) => location == i.path || location.startsWith('${i.path}/'));
-    final primary = Theme.of(context).colorScheme.primary;
+    final primary = context.pal.primary;
     return PopupMenuButton<String>(
       tooltip: context.tr('churchServices'),
       onSelected: (p) => context.go(p),
@@ -404,7 +405,7 @@ class _HighlightButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final primary = Theme.of(context).colorScheme.primary;
+    final primary = context.pal.primary;
     if (compact) {
       // 48x48 dp minimum touch target (WCAG 2.5.8 / Material guideline).
       return IconButton(
@@ -412,8 +413,8 @@ class _HighlightButton extends StatelessWidget {
         onPressed: onTap,
         constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
         style: IconButton.styleFrom(
-          backgroundColor: filled ? primary : Colors.transparent,
-          foregroundColor: filled ? context.pal.onPrimary : primary,
+          backgroundColor: filled ? context.pal.bar : Colors.transparent,
+          foregroundColor: filled ? context.pal.onBar : primary,
           side: filled ? null : BorderSide(color: context.pal.hairline),
         ),
         icon: Icon(icon, size: 20),
@@ -437,7 +438,7 @@ class _AppDrawer extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final items = visibleNavItems(ref.watch(featuresProvider), showAsk: showAsk);
     final settings = ref.watch(settingsProvider).value;
-    final primary = Theme.of(context).colorScheme.primary;
+    final primary = context.pal.primary;
     final custom = customNavItems(ref);
     final church = [
       for (final i in items) if (!serviceNavPaths.contains(i.path) && i.path != '/ask') i,
@@ -462,11 +463,11 @@ class _AppDrawer extends ConsumerWidget {
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 1),
               child: ListTile(
                 minTileHeight: 48,
-                leading: Icon(i.icon, color: location == i.path ? context.pal.onPrimaryAccent : primary, size: 22),
+                leading: Icon(i.icon, color: location == i.path ? context.pal.onBarAccent : primary, size: 22),
                 title: Text(i.label(context), style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
                 selected: location == i.path,
-                selectedColor: context.pal.onPrimary,
-                selectedTileColor: primary,
+                selectedColor: context.pal.onBar,
+                selectedTileColor: context.pal.bar,
                 onTap: () {
                   Navigator.of(context).pop();
                   context.go(i.path);
@@ -484,11 +485,10 @@ class _AppDrawer extends ConsumerWidget {
             Container(
               padding: const EdgeInsetsDirectional.fromSTEB(16, 18, 8, 20),
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [primary, primaryDarkOf(context)],
-                ),
+                gradient: context.pal.barGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter),
+                border: context.pal.barEdge == null
+                    ? null
+                    : Border(bottom: BorderSide(color: context.pal.barEdge!, width: 2)),
                 borderRadius: const BorderRadius.vertical(bottom: Radius.circular(28)),
               ),
               child: Row(children: [
@@ -496,8 +496,8 @@ class _AppDrawer extends ConsumerWidget {
                   padding: const EdgeInsets.all(1.5),
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: context.pal.onPrimaryAccent,
-                    boxShadow: const [BoxShadow(color: Color(0x73200000), blurRadius: 8, offset: Offset(0, 2))],
+                    color: context.pal.onBarAccent,
+                    boxShadow: [BoxShadow(color: context.pal.shadow(0.45), blurRadius: 8, offset: const Offset(0, 2))],
                   ),
                   child: const ChurchSeal(size: 52),
                 ),
@@ -506,12 +506,12 @@ class _AppDrawer extends ConsumerWidget {
                   child: Text(settings == null ? context.tr('appName') : context.pick(settings.nameAr, settings.nameEn),
                       maxLines: 3,
                       overflow: TextOverflow.ellipsis,
-                      style: displayStyle(context, size: 17, color: context.pal.onPrimary, height: 1.4)),
+                      style: displayStyle(context, size: 17, color: context.pal.onBar, height: 1.4)),
                 ),
                 IconButton(
                   tooltip: context.tr('close'),
-                  color: context.pal.onPrimary,
-                  style: IconButton.styleFrom(backgroundColor: context.pal.onPrimary.withValues(alpha: 0.14)),
+                  color: context.pal.onBar,
+                  style: IconButton.styleFrom(backgroundColor: context.pal.onBar.withValues(alpha: 0.14)),
                   icon: const Icon(Icons.close_rounded),
                   onPressed: () => Navigator.of(context).pop(),
                 ),

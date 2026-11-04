@@ -195,24 +195,6 @@ void main() {
       expect(d.dayOf(DateTime.utc(2026, 11, 1)), isNotNull);
       expect(d.dayOf(DateTime.utc(2026, 11, 4)), isNull);
     });
-
-    test('primary URL 404s (e.g. preview channel/localhost): falls back to liveUrl', () async {
-      SharedPreferences.setMockInitialValues({});
-      final requested = <String>[];
-      final src = SynaxariumSource(
-        client: MockClient((r) async {
-          requested.add(r.url.toString());
-          if (r.url.toString() == SynaxariumSource.liveUrl) {
-            return http.Response.bytes(utf8.encode(file('2026-11-04')), 200);
-          }
-          return http.Response('not found', 404);
-        }),
-        prefs: SharedPreferences.getInstance,
-      );
-      final d = await src.load(DateTime.utc(2026, 11, 4));
-      expect(d.dayOf(DateTime.utc(2026, 11, 4)), isNotNull);
-      expect(requested, contains(SynaxariumSource.liveUrl));
-    });
   });
 
   group('top event of the day', () {

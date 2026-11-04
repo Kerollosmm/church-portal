@@ -8,6 +8,7 @@ import '../../domain/features.dart';
 import '../../domain/models.dart';
 import '../../domain/season_preset.dart';
 import '../../domain/time_format.dart';
+import '../widgets/common.dart' show localDigits;
 import 'doc_editor.dart' show choiceLabel;
 
 /// /admin → «تجهيز الموسم» / "Season preparation" (ADR-042): the owner's
@@ -71,9 +72,14 @@ class _SeasonPresetScreenState extends State<SeasonPresetScreen> {
     ];
   }
 
-  void _pick(Season s) => setState(() {
+  void _pick(Season s, OccasionConfig occ) => setState(() {
         _seasonId = s.id;
-        _options = {...PresetRequest.defaultsFor(s.key)};
+        _options = {
+          ...PresetRequest.defaultsFor(s.key),
+          // The season's theme by hand only when the theme does not already
+          // follow the season (ADR-043).
+          if (!occ.followSeason && occ.themeForSeason(s.key) != null) PresetOption.theme,
+        };
         _pdfUrl.text = s.program.attachmentUrl;
         _pdfLabelAr.text = s.program.attachmentLabelAr;
         _pdfLabelEn.text = s.program.attachmentLabelEn;
@@ -83,6 +89,17 @@ class _SeasonPresetScreenState extends State<SeasonPresetScreen> {
 
   String _seasonName(BuildContext context, Season s) =>
       context.pick(s.nameAr, s.nameEn.isEmpty ? s.nameAr : s.nameEn);
+
+  /// The name with its year (two seasons can share a name: Holy Week 2026 /
+  /// 2027 — sim B5), unless the name already says it.
+  String _seasonLabel(BuildContext context, Season s) {
+    final name = _seasonName(context, s);
+    final start = s.startsAt;
+    if (start == null) return name;
+    final y = '${CairoTime.calendarDate(start).year}';
+    final yl = localDigits(context, y);
+    return name.contains(y) || name.contains(yl) ? name : '$name $yl';
+  }
 
   String _date(BuildContext context, DateTime? d) =>
       d == null ? '—' : formatDate(CairoTime.calendarDate(d), arabic: context.isAr);
@@ -179,6 +196,8 @@ class _SeasonPresetScreenState extends State<SeasonPresetScreen> {
         liveUrl: f.today.liveUrl,
         liveEndsAt: f.today.liveEndsAt,
         now: now,
+        storedTheme: stored?['theme'] is String ? stored!['theme'] as String : '',
+        seasonTheme: f.occasions.themeForSeason(season.key),
       );
     });
   }
@@ -235,7 +254,7 @@ class _SeasonPresetScreenState extends State<SeasonPresetScreen> {
           return ListView(
             padding: const EdgeInsets.all(12),
             children: [
-              Text(context.tr('presetIntro'), style: const TextStyle(color: AppColors.muted)),
+              Text(context.tr('presetIntro'), style: TextStyle(color: context.pal.muted)),
               const SizedBox(height: 12),
               if (preset != null)
                 _appliedCard(context, preset, seasons, raw, now)
@@ -267,7 +286,7 @@ class _SeasonPresetScreenState extends State<SeasonPresetScreen> {
           if (season?.endsAt != null && season!.endsAt != p.endsAt) ...[
             const SizedBox(height: 8),
             Text(context.tr('presetEndChanged', {'e': _date(context, season.endsAt)}),
-                style: const TextStyle(color: AppColors.alert, fontSize: 12)),
+                style: TextStyle(color: context.pal.alert, fontSize: 12)),
             Align(
               alignment: AlignmentDirectional.centerStart,
               child: TextButton.icon(
@@ -285,7 +304,7 @@ class _SeasonPresetScreenState extends State<SeasonPresetScreen> {
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: (expired ? AppColors.success : AppColors.gold).withValues(alpha: 0.12),
+              color: (expired ? context.pal.success : context.pal.ornament).withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Text(
@@ -311,6 +330,8 @@ class _SeasonPresetScreenState extends State<SeasonPresetScreen> {
     }
     final season = seasons.where((s) => s.id == _seasonId).firstOrNull;
     final ended = season?.endsAt != null && !_now().isBefore(season!.endsAt!);
+    final occ = FeatureSettings.fromMap(raw).occasions;
+    final seasonTheme = season == null ? null : occ.themeForSeason(season.key);
     final err = _problem;
     return Card(
       child: Padding(
@@ -325,27 +346,35 @@ class _SeasonPresetScreenState extends State<SeasonPresetScreen> {
               for (final s in seasons)
                 DropdownMenuItem(
                   value: s.id,
-                  child: Text('${_seasonName(context, s)} (${_date(context, s.startsAt)} – ${_date(context, s.endsAt)})',
-                      overflow: TextOverflow.ellipsis),
+                  child: Text('${_seasonLabel(context, s)} (${_date(context, s.startsAt)} – ${_date(context, s.endsAt)})',
+                      key: ValueKey('presetSeasonItem-${s.id}'), overflow: TextOverflow.ellipsis),
                 ),
             ],
-            onChanged: _saving ? null : (id) => _pick(seasons.firstWhere((s) => s.id == id)),
+            onChanged: _saving ? null : (id) => _pick(seasons.firstWhere((s) => s.id == id), occ),
           ),
           if (season != null) ...[
             const SizedBox(height: 8),
             if (season.endsAt == null)
-              Text(context.tr('presetNoEnd'), style: const TextStyle(color: AppColors.alert, fontSize: 12)),
+              Text(context.tr('presetNoEnd'), style: TextStyle(color: context.pal.alert, fontSize: 12)),
             if (ended)
               Text(context.tr('presetEnded'),
-                  key: const Key('presetEnded'), style: const TextStyle(color: AppColors.alert, fontSize: 12)),
-            for (final o in PresetOption.all) ...[
+                  key: const Key('presetEnded'), style: TextStyle(color: context.pal.alert, fontSize: 12)),
+            for (final o in PresetOption.all)
+              // The theme item only for a season key that brings a theme.
+              if (o != PresetOption.theme || seasonTheme != null) ...[
               CheckboxListTile(
                 key: Key('presetOpt-$o'),
                 contentPadding: EdgeInsets.zero,
                 controlAffinity: ListTileControlAffinity.leading,
                 value: _options.contains(o),
-                title: Text(context.tr('presetOpt_$o')),
-                subtitle: Text(context.tr('presetHint_$o'), style: const TextStyle(fontSize: 12)),
+                title: Text(o == PresetOption.theme
+                    ? '${context.tr('presetOpt_theme')} — ${context.pick(ThemePresets.labels[seasonTheme]![0], ThemePresets.labels[seasonTheme]![1])}'
+                    : context.tr('presetOpt_$o')),
+                subtitle: Text(
+                    o == PresetOption.theme && occ.followSeason
+                        ? context.tr('presetHint_themeFollowing')
+                        : context.tr('presetHint_$o'),
+                    style: const TextStyle(fontSize: 12)),
                 onChanged: _saving
                     ? null
                     : (v) => setState(() => v == true ? _options.add(o) : _options.remove(o)),

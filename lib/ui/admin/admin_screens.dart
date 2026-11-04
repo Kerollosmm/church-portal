@@ -95,19 +95,19 @@ class _OverviewScreenState extends State<OverviewScreen> {
             if (d.updatedAt != null) (e.key, d),
     ]..sort((a, b) => b.$2.updatedAt!.compareTo(a.$2.updatedAt!));
     return Scaffold(
-      backgroundColor: AppColors.cream,
+      backgroundColor: context.pal.background,
       body: ListView(padding: const EdgeInsets.all(16), children: [
         Text(context.tr('overviewTitle'),
-            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: AppColors.burgundy)),
+            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: context.pal.primary)),
         const SizedBox(height: 4),
-        Text(context.tr('overviewHint'), style: const TextStyle(color: AppColors.muted)),
+        Text(context.tr('overviewHint'), style: TextStyle(color: context.pal.muted)),
         const SizedBox(height: 16),
         Wrap(spacing: 12, runSpacing: 12, children: [
           _StatCard(
             icon: Icons.mail_outline,
             label: context.tr('newMessages'),
             value: _failed.contains('contact_messages') ? '—' : (messages == null ? '…' : '$newMessages'),
-            color: newMessages > 0 ? AppColors.alert : AppColors.burgundy,
+            color: newMessages > 0 ? context.pal.alert : context.pal.primary,
             onTap: () => onOpen('messages'),
           ),
           _StatCard(
@@ -145,14 +145,14 @@ class _OverviewScreenState extends State<OverviewScreen> {
         Text(context.tr('recentEdits'), style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
         const SizedBox(height: 8),
         if (edited.isEmpty)
-          Text(context.tr('noRecentEdits'), style: const TextStyle(color: AppColors.muted))
+          Text(context.tr('noRecentEdits'), style: TextStyle(color: context.pal.muted))
         else
           Card(
             child: Column(children: [
               for (final e in edited.take(8))
                 ListTile(
                   dense: true,
-                  leading: Icon(adminIcon(_iconFor(e.$1)), color: AppColors.burgundy),
+                  leading: Icon(adminIcon(_iconFor(e.$1)), color: context.pal.primary),
                   title: Text(_titleOf(e.$2), overflow: TextOverflow.ellipsis),
                   subtitle: Text(context.tr('updatedBy', {'t': fmtDateTime(e.$2.updatedAt!), 'u': e.$2.updatedBy})),
                 ),
@@ -202,14 +202,14 @@ class _StatCard extends StatelessWidget {
   final String value;
   final String? sub;
   final VoidCallback onTap;
-  final Color color;
+  final Color? color;
   const _StatCard(
       {required this.icon,
       required this.label,
       required this.value,
       required this.onTap,
       this.sub,
-      this.color = AppColors.burgundy});
+      this.color});
 
   @override
   Widget build(BuildContext context) => SizedBox(
@@ -221,12 +221,12 @@ class _StatCard extends StatelessWidget {
             child: Padding(
               padding: const EdgeInsets.all(14),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Icon(icon, color: color),
+                Icon(icon, color: color ?? context.pal.primary),
                 const SizedBox(height: 6),
-                Text(value, style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: color)),
+                Text(value, style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: color ?? context.pal.primary)),
                 Text(label,
                     maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600)),
-                if (sub != null) Text(sub!, style: const TextStyle(color: AppColors.muted, fontSize: 12)),
+                if (sub != null) Text(sub!, style: TextStyle(color: context.pal.muted, fontSize: 12)),
               ]),
             ),
           ),
@@ -332,10 +332,10 @@ class _ChurchInfoScreenState extends State<ChurchInfoScreen> {
           if (doc?.updatedAt != null)
             Container(
               width: double.infinity,
-              color: AppColors.parchment,
+              color: context.pal.surfaceAlt,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
               child: Text(context.tr('updatedBy', {'t': fmtDateTime(doc!.updatedAt!), 'u': doc.updatedBy}),
-                  style: const TextStyle(fontSize: 12, color: AppColors.muted)),
+                  style: TextStyle(fontSize: 12, color: context.pal.muted)),
             ),
           Expanded(
             child: DocEditor(
@@ -385,7 +385,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.cream,
+      backgroundColor: context.pal.background,
       body: StreamBuilder<AdminDoc?>(
         key: ObjectKey(_config),
         stream: _config,
@@ -440,7 +440,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
           label: Text(label),
           selected: selected,
           showCheckmark: false,
-          labelStyle: TextStyle(color: selected ? Colors.white : AppColors.burgundy),
+          labelStyle: TextStyle(color: selected ? context.pal.onBar : context.pal.primary),
           onSelected: (_) => onTap(),
         );
     return Column(children: [
@@ -491,7 +491,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
     return Card(
       key: ValueKey(d.id),
       margin: const EdgeInsets.only(bottom: 8),
-      color: open ? Colors.white : const Color(0xFFF4F1EA),
+      color: open ? context.pal.surface : context.pal.surfaceAlt.withValues(alpha: 0.6),
       child: Padding(
         padding: const EdgeInsets.all(14),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -500,7 +500,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                 anonymous
                     ? Icons.privacy_tip_outlined
                     : (open ? Icons.mark_email_unread_outlined : Icons.mark_email_read_outlined),
-                color: open ? AppColors.burgundy : AppColors.muted),
+                color: open ? context.pal.primary : context.pal.muted),
             const SizedBox(width: 8),
             // Name and date wrap onto two lines on phones / large text.
             Expanded(
@@ -513,7 +513,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                   Text(anonymous ? context.tr('anonymousSender') : '${m['name'] ?? ''}',
                       style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
                   if (created is DateTime)
-                    Text(fmtDateTime(created), style: const TextStyle(color: AppColors.muted, fontSize: 12)),
+                    Text(fmtDateTime(created), style: TextStyle(color: context.pal.muted, fontSize: 12)),
                 ],
               ),
             ),
@@ -542,14 +542,14 @@ class _MessagesScreenState extends State<MessagesScreen> {
                 label: Text(email, textDirection: TextDirection.ltr),
                 onPressed: () => openUrl('mailto:$email'),
               ),
-            if (m['lang'] != null) Text('(${m['lang']})', style: const TextStyle(color: AppColors.muted)),
+            if (m['lang'] != null) Text('(${m['lang']})', style: TextStyle(color: context.pal.muted)),
           ]),
           if (notes.isNotEmpty) ...[
             const SizedBox(height: 8),
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(color: AppColors.parchment, borderRadius: BorderRadius.circular(8)),
+              decoration: BoxDecoration(color: context.pal.surfaceAlt, borderRadius: BorderRadius.circular(8)),
               child: Text('${context.tr('adminNotes')}: $notes', style: const TextStyle(height: 1.5)),
             ),
           ],
@@ -589,7 +589,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
               ),
               IconButton(
                 tooltip: context.tr('delete'),
-                icon: const Icon(Icons.delete_outline, color: AppColors.alert),
+                icon: Icon(Icons.delete_outline, color: context.pal.alert),
                 onPressed: () => _delete(context, d),
               ),
             ]),
@@ -674,11 +674,11 @@ class _InfoChip extends StatelessWidget {
   Widget build(BuildContext context) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
         decoration: BoxDecoration(
-          color: AppColors.parchment,
+          color: context.pal.surfaceAlt,
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: AppColors.burgundy.withValues(alpha: 0.35)),
+          border: Border.all(color: context.pal.primary.withValues(alpha: 0.35)),
         ),
-        child: Text(text, style: const TextStyle(fontSize: 12.5, color: AppColors.burgundy, fontWeight: FontWeight.w700)),
+        child: Text(text, style: TextStyle(fontSize: 12.5, color: context.pal.primary, fontWeight: FontWeight.w700)),
       );
 }
 
@@ -690,7 +690,7 @@ Future<bool> confirmDialog(BuildContext context, String text, {String? action}) 
       actions: [
         TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(context.tr('cancel'))),
         FilledButton(
-          style: FilledButton.styleFrom(backgroundColor: AppColors.alert),
+          style: FilledButton.styleFrom(backgroundColor: context.pal.alert),
           onPressed: () => Navigator.pop(ctx, true),
           child: Text(action ?? context.tr('delete')),
         ),
@@ -723,7 +723,7 @@ class _AdminsScreenState extends State<AdminsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.cream,
+      backgroundColor: context.pal.background,
       floatingActionButton: FloatingActionButton.extended(
         heroTag: 'add-admin',
         onPressed: () => _addDialog(context),
@@ -741,7 +741,7 @@ class _AdminsScreenState extends State<AdminsScreen> {
           final admins = [...snap.data!]..sort((a, b) => '${a.data['email']}'.compareTo('${b.data['email']}'));
           return ListView(padding: const EdgeInsets.fromLTRB(12, 12, 12, 90), children: [
             Card(
-              color: AppColors.parchment,
+              color: context.pal.surfaceAlt,
               child: Padding(
                 padding: const EdgeInsets.all(14),
                 child: Text(context.tr('adminsHelp'), style: const TextStyle(height: 1.6)),
@@ -762,7 +762,7 @@ class _AdminsScreenState extends State<AdminsScreen> {
       margin: const EdgeInsets.only(bottom: 8),
       child: ListTile(
         leading: Icon(role == AdminRoles.owner ? Icons.workspace_premium_outlined : Icons.edit_note,
-            color: AppColors.burgundy),
+            color: context.pal.primary),
         title: Text('${a.data['email'] ?? ''}${self ? ' (${context.tr('you')})' : ''}', textDirection: TextDirection.ltr),
         // The role menu and remove button wrap under the UID (phones / large text).
         subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -785,7 +785,7 @@ class _AdminsScreenState extends State<AdminsScreen> {
           ),
           IconButton(
             tooltip: context.tr('removeAdmin'),
-            icon: Icon(Icons.person_remove_outlined, color: self ? AppColors.muted : AppColors.alert),
+            icon: Icon(Icons.person_remove_outlined, color: self ? context.pal.muted : context.pal.alert),
             onPressed: self
                 ? null
                 : () async {

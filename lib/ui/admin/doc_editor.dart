@@ -505,7 +505,7 @@ class DocEditorState extends State<DocEditor> {
               onPressed: () => Navigator.pop(ctx, t.$1),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text(t.$2, style: const TextStyle(fontWeight: FontWeight.w700)),
-                Text(t.$1, textDirection: TextDirection.ltr, style: const TextStyle(fontSize: 12, color: AppColors.muted)),
+                Text(t.$1, textDirection: TextDirection.ltr, style: TextStyle(fontSize: 12, color: context.pal.muted)),
               ]),
             ),
         ],
@@ -554,9 +554,9 @@ class DocEditorState extends State<DocEditor> {
               FilterChip(
                 label: Text(weekdayName(d, arabic: context.isAr)),
                 selected: set.contains(d),
-                checkmarkColor: Colors.white,
+                checkmarkColor: context.pal.onBar,
                 labelStyle: TextStyle(
-                  color: set.contains(d) ? Colors.white : AppColors.burgundy,
+                  color: set.contains(d) ? context.pal.onBar : context.pal.primary,
                   fontWeight: FontWeight.w600,
                 ),
                 onSelected: (sel) => setState(() {
@@ -692,12 +692,12 @@ class DocEditorState extends State<DocEditor> {
     final current = MediaImage.fromMap(_values[f.key]);
     final busy = _processing == f.key;
     final hasImage = pending != null || current != null;
-    const placeholder = Icon(Icons.image_outlined, size: 40, color: AppColors.muted);
+    final placeholder = Icon(Icons.image_outlined, size: 40, color: context.pal.muted);
     final Widget preview = pending != null
         ? Image.memory(pending.bytes, key: const Key('imagePreviewPending'), fit: BoxFit.cover)
         : current != null
-            ? MediaImageView(image: current, loader: widget.media?.load, placeholder: const Center(child: placeholder))
-            : const Center(child: placeholder);
+            ? MediaImageView(image: current, loader: widget.media?.load, placeholder: Center(child: placeholder))
+            : Center(child: placeholder);
     final kb = (pending?.length ?? 0) / 1000;
     final status = busy
         ? context.tr('imageProcessing')
@@ -717,7 +717,7 @@ class DocEditorState extends State<DocEditor> {
       child: Container(
         width: 96,
         height: 96,
-        color: AppColors.parchment,
+        color: context.pal.surfaceAlt,
         child: busy ? const Center(child: CircularProgressIndicator(strokeWidth: 2)) : preview,
       ),
     );
@@ -726,7 +726,7 @@ class DocEditorState extends State<DocEditor> {
           key: const Key('imageStatus'),
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
-          style: const TextStyle(color: AppColors.muted, fontSize: 12)),
+          style: TextStyle(color: context.pal.muted, fontSize: 12)),
       const SizedBox(height: 8),
       Wrap(spacing: 8, runSpacing: 8, children: [
         OutlinedButton.icon(
@@ -745,15 +745,15 @@ class DocEditorState extends State<DocEditor> {
           TextButton.icon(
             key: const Key('imageRemoveBtn'),
             onPressed: busy || _saving ? null : () => _removeImage(f),
-            icon: const Icon(Icons.delete_outline, color: AppColors.alert),
-            label: Text(context.tr('imageRemove'), style: const TextStyle(color: AppColors.alert)),
+            icon: Icon(Icons.delete_outline, color: context.pal.alert),
+            label: Text(context.tr('imageRemove'), style: TextStyle(color: context.pal.alert)),
           ),
       ]),
       if (widget.media == null)
         Padding(
           padding: const EdgeInsets.only(top: 4),
           child: Text(context.tr('imageUploadUnavailable'),
-              style: const TextStyle(color: AppColors.muted, fontSize: 11)),
+              style: TextStyle(color: context.pal.muted, fontSize: 11)),
         ),
     ]);
     return InputDecorator(
@@ -794,12 +794,12 @@ class DocEditorState extends State<DocEditor> {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Icon(Icons.warning_amber_rounded, color: AppColors.alert, size: 20),
+        Icon(Icons.warning_amber_rounded, color: context.pal.alert, size: 20),
         const SizedBox(width: 6),
         Expanded(
           child: Text(hint,
               key: ValueKey('fieldHint-${f.key}'),
-              style: const TextStyle(color: AppColors.alert, fontWeight: FontWeight.w700, fontSize: 12.5)),
+              style: TextStyle(color: context.pal.alert, fontWeight: FontWeight.w700, fontSize: 12.5)),
         ),
       ]),
     );
@@ -830,9 +830,9 @@ class DocEditorState extends State<DocEditor> {
         key: ValueKey('group-${g.name}'),
         controller: _groupCtl[g],
         maintainState: true,
-        leading: Icon(_groupIcons[g], color: AppColors.burgundy),
+        leading: Icon(_groupIcons[g], color: context.pal.primary),
         title: Text(context.tr(_groupTitles[g]!),
-            style: const TextStyle(fontWeight: FontWeight.w800, color: AppColors.burgundy)),
+            style: TextStyle(fontWeight: FontWeight.w800, color: context.pal.primary)),
         subtitle: _pills(g, fields),
         childrenPadding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
         expandedCrossAxisAlignment: CrossAxisAlignment.stretch,
@@ -906,7 +906,7 @@ class DocEditorState extends State<DocEditor> {
         if (list.isEmpty)
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
-            child: Text(context.tr('galleryEmpty'), style: const TextStyle(color: AppColors.muted, fontSize: 12)),
+            child: Text(context.tr('galleryEmpty'), style: TextStyle(color: context.pal.muted, fontSize: 12)),
           ),
         for (var i = 0; i < list.length; i++) _galleryItem(list, i, stack),
         Wrap(spacing: 8, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
@@ -923,14 +923,14 @@ class DocEditorState extends State<DocEditor> {
             label: Text(context.tr('galleryAddUrl')),
           ),
           Text(context.tr('galleryCount', {'n': '${list.length}', 'max': '${f.maxRows}'}),
-              key: const Key('galleryCount'), style: const TextStyle(color: AppColors.muted, fontSize: 12)),
+              key: const Key('galleryCount'), style: TextStyle(color: context.pal.muted, fontSize: 12)),
           if (busy) const SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2)),
         ]),
         if (widget.media == null)
           Padding(
             padding: const EdgeInsets.only(top: 4),
             child: Text(context.tr('imageUploadUnavailable'),
-                style: const TextStyle(color: AppColors.muted, fontSize: 11)),
+                style: TextStyle(color: context.pal.muted, fontSize: 11)),
           ),
       ]),
     );
@@ -938,13 +938,13 @@ class DocEditorState extends State<DocEditor> {
 
   Widget _galleryItem(List<_GalleryEntry> list, int i, bool stack) {
     final g = list[i];
-    const placeholder = Center(child: Icon(Icons.image_outlined, size: 32, color: AppColors.muted));
+    final placeholder = Center(child: Icon(Icons.image_outlined, size: 32, color: context.pal.muted));
     final preview = ClipRRect(
       borderRadius: BorderRadius.circular(10),
       child: Container(
         width: 72,
         height: 72,
-        color: AppColors.parchment,
+        color: context.pal.surfaceAlt,
         child: g.pending != null
             ? Image.memory(g.pending!.bytes, key: const Key('galleryPreviewPending'), fit: BoxFit.cover)
             : MediaImageView(image: g.image!, loader: widget.media?.load, placeholder: placeholder),
@@ -985,14 +985,14 @@ class DocEditorState extends State<DocEditor> {
                     list.removeAt(i).alt.dispose();
                     _dirty = true;
                   }),
-          icon: const Icon(Icons.delete_outline, color: AppColors.alert),
-          label: Text(context.tr('galleryRemove'), style: const TextStyle(color: AppColors.alert)),
+          icon: Icon(Icons.delete_outline, color: context.pal.alert),
+          label: Text(context.tr('galleryRemove'), style: TextStyle(color: context.pal.alert)),
         ),
       ]),
     ]);
     return Card(
       key: ObjectKey(g),
-      color: AppColors.cream,
+      color: context.pal.background,
       margin: const EdgeInsets.only(bottom: 8),
       child: Padding(
         padding: const EdgeInsets.all(10),
@@ -1015,7 +1015,7 @@ class DocEditorState extends State<DocEditor> {
         for (var i = 0; i < rows.length; i++)
           Card(
             key: ObjectKey(rows[i]),
-            color: AppColors.cream,
+            color: context.pal.background,
             margin: const EdgeInsets.only(bottom: 8),
             child: Padding(
               padding: const EdgeInsets.all(10),
@@ -1103,8 +1103,8 @@ class DocEditorState extends State<DocEditor> {
                       rows.removeAt(i).dispose();
                       _dirty = true;
                     }),
-                    icon: const Icon(Icons.delete_outline, color: AppColors.alert),
-                    label: Text(context.tr('remove'), style: const TextStyle(color: AppColors.alert)),
+                    icon: Icon(Icons.delete_outline, color: context.pal.alert),
+                    label: Text(context.tr('remove'), style: TextStyle(color: context.pal.alert)),
                   ),
                 ]),
               ]),
@@ -1141,7 +1141,7 @@ class DocEditorState extends State<DocEditor> {
         }
       },
       child: Scaffold(
-        backgroundColor: AppColors.cream,
+        backgroundColor: context.pal.background,
         appBar: embedded
             ? null
             : AppBar(
@@ -1151,7 +1151,7 @@ class DocEditorState extends State<DocEditor> {
               key: const Key('editor-save-top'),
               onPressed: _saving ? null : save,
               child: Text(context.tr('save'),
-                  style: const TextStyle(color: AppColors.goldLight, fontWeight: FontWeight.w800)),
+                  style: TextStyle(color: context.pal.onPrimaryAccent, fontWeight: FontWeight.w800)),
             ),
           ],
         ),
@@ -1166,7 +1166,7 @@ class DocEditorState extends State<DocEditor> {
                   if (widget.docId != null)
                     Padding(
                       padding: const EdgeInsets.only(bottom: 12),
-                      child: SelectableText('ID: ${widget.docId}', style: const TextStyle(color: AppColors.muted)),
+                      child: SelectableText('ID: ${widget.docId}', style: TextStyle(color: context.pal.muted)),
                     ),
                   for (final f in widget.fields)
                     if (f.group == FieldGroup.basic)
@@ -1178,8 +1178,8 @@ class DocEditorState extends State<DocEditor> {
                     key: const Key('editor-save'),
                     onPressed: _saving ? null : save,
                     icon: _saving
-                        ? const SizedBox.square(
-                            dimension: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                        ? SizedBox.square(
+                            dimension: 18, child: CircularProgressIndicator(strokeWidth: 2, color: context.pal.onBar))
                         : const Icon(Icons.save),
                     label: Text(context.tr('save')),
                   ),
@@ -1267,11 +1267,11 @@ class _Pill extends StatelessWidget {
   Widget build(BuildContext context) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
         decoration: BoxDecoration(
-          color: AppColors.parchment,
+          color: context.pal.surfaceAlt,
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: AppColors.burgundy.withValues(alpha: 0.35)),
+          border: Border.all(color: context.pal.primary.withValues(alpha: 0.35)),
         ),
-        child: Text(text, style: const TextStyle(fontSize: 12, color: AppColors.burgundy, fontWeight: FontWeight.w700)),
+        child: Text(text, style: TextStyle(fontSize: 12, color: context.pal.primary, fontWeight: FontWeight.w700)),
       );
 }
 

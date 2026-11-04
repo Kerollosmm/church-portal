@@ -121,12 +121,12 @@ class _TimelineItem extends ConsumerWidget {
               width: 14,
               height: 14,
               decoration: BoxDecoration(
-                color: AppColors.gold,
+                color: context.pal.ornament,
                 shape: BoxShape.circle,
-                border: Border.all(color: Theme.of(context).colorScheme.primary, width: 2),
+                border: Border.all(color: context.pal.primary, width: 2),
               ),
             ),
-            if (!isLast) Expanded(child: Container(width: 2, color: AppColors.gold.withValues(alpha: 0.5))),
+            if (!isLast) Expanded(child: Container(width: 2, color: context.pal.ornament.withValues(alpha: 0.5))),
           ]),
         ),
         const SizedBox(width: 8),
@@ -146,7 +146,7 @@ class _TimelineItem extends ConsumerWidget {
                   // Wrap (not Row + Spacer): long stage names and the badges move
                   // to the next line on narrow screens instead of overflowing.
                   Wrap(spacing: 8, runSpacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: [
-                    if (label != null) Pill(context.pick(label[0], label[1]), color: Theme.of(context).colorScheme.primary),
+                    if (label != null) Pill(context.pick(label[0], label[1]), color: context.pal.primary),
                     if (m.weekday == todayWeekday) Pill(context.tr('today'), icon: Icons.today_rounded),
                     if (m.sample) const SampleBadge(),
                   ]),

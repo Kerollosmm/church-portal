@@ -152,14 +152,14 @@ class _AnnouncementBanner extends StatelessWidget {
     final internal = link.startsWith('/') && !link.startsWith('//');
     // A link to a switched-off section would only open "not available".
     if (internal && !features.routeEnabled(Uri.tryParse(link)?.path ?? link)) link = '';
-    final primary = Theme.of(context).colorScheme.primary;
+    final primary = context.pal.primary;
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: AppColors.gold.withValues(alpha: 0.16),
+        color: context.pal.ornament.withValues(alpha: 0.16),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.gold.withValues(alpha: 0.6)),
+        border: Border.all(color: context.pal.ornament.withValues(alpha: 0.6)),
       ),
       child: Row(children: [
         Icon(Icons.campaign_outlined, color: primary),
@@ -331,7 +331,7 @@ class _PatronsTeaser extends ConsumerWidget {
               const SizedBox(width: 16),
               Expanded(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(name, style: displayStyle(context, size: narrow ? 20 : 24, color: Theme.of(context).colorScheme.primary)),
+                  Text(name, style: displayStyle(context, size: narrow ? 20 : 24, color: context.pal.primary)),
                   const SizedBox(height: 2),
                   Text(context.pick(saint.bioAr, saint.bioEn),
                       maxLines: 3,
@@ -418,7 +418,7 @@ class _PaintedPatron extends StatelessWidget {
           blendMode: BlendMode.dstIn,
           shaderCallback: (r) => const RadialGradient(
             radius: 0.62,
-            colors: [Color(0xFF000000), Color(0xFF000000), Color(0x00000000)],
+            colors: [Color(0xFF000000), Color(0xFF000000), Color(0x00000000)], // palette-exempt: alpha mask
             stops: [0, 0.6, 1],
           ).createShader(r),
           child: AspectRatio(aspectRatio: 4 / 5, child: Image.asset(asset, fit: BoxFit.cover)),
@@ -440,11 +440,11 @@ class _QuickContacts extends ConsumerWidget {
           padding: const EdgeInsets.all(16),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(children: [
-              Icon(Icons.call_rounded, color: Theme.of(context).colorScheme.primary),
+              Icon(Icons.call_rounded, color: context.pal.primary),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(context.tr('phones'),
-                    style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17, color: Theme.of(context).colorScheme.primary)),
+                    style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17, color: context.pal.primary)),
               ),
               if (s.sample) const SampleBadge(),
             ]),
@@ -490,7 +490,7 @@ class PhoneRow extends StatelessWidget {
         IconButton.filledTonal(
           tooltip: actionSemanticLabel(context.tr('call'), target),
           onPressed: () => callPhone(phone.number),
-          icon: Icon(Icons.call, color: Theme.of(context).colorScheme.primary),
+          icon: Icon(Icons.call, color: context.pal.primary),
         ),
         if (phone.isMobile)
           IconButton.filledTonal(
@@ -538,8 +538,8 @@ class _MilestoneCard extends StatelessWidget {
                 label: title,
                 enlargeOnTap: detail == null,
                 placeholder: CircleAvatar(
-                  backgroundColor: AppColors.gold.withValues(alpha: 0.18),
-                  child: Icon(_icon, color: Theme.of(context).colorScheme.primary),
+                  backgroundColor: context.pal.ornament.withValues(alpha: 0.18),
+                  child: Icon(_icon, color: context.pal.primary),
                 ),
               ),
               if (m.year != null)
@@ -587,7 +587,7 @@ class HaloText extends StatelessWidget {
   final TextAlign? textAlign;
   final TextDirection? textDirection;
   const HaloText(this.text,
-      {super.key, required this.style, required this.ground, this.outline = 3.0, this.textAlign, this.textDirection});
+      {super.key, required this.style, required this.ground, this.outline = 2.5, this.textAlign, this.textDirection});
 
   @override
   Widget build(BuildContext context) {

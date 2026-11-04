@@ -469,7 +469,10 @@ class FeatureSettings {
       bannerAr: bannerAr,
       bannerEn: bannerEn,
       bannerLink: bannerLink,
-      theme: theme,
+      // The preset's theme pick goes back too (ADR-043); an empty previous
+      // theme (none stored before) = the default, as planRestore writes it
+      // (Sentry review on PR #37).
+      theme: p.has(PresetOption.theme) ? ThemePresets.normalize(p.prevString(PresetPrev.theme)) : theme,
       pageHeaders: pageHeaders,
       footer: footer,
       heroMotion: p.has(PresetOption.heroMotionOff) ? (p.prevBool(PresetPrev.heroMotion) ?? true) : heroMotion,
@@ -522,8 +525,11 @@ class FeatureSettings {
   String imageStyleFor(String collection, String itemStyle) =>
       ImageStyles.resolve(collection, itemStyle: itemStyle, sectionStyle: imageStyles[collection]);
 
-  /// The theme in force on the Cairo calendar day [cairoDay].
-  ThemeResolution themeOn(DateTime cairoDay) => occasions.resolve(theme, cairoDay);
+  /// The theme in force on the Cairo calendar day [cairoDay] while the
+  /// seasons [activeSeasonKeys] are active (ADR-043 precedence on
+  /// [OccasionConfig]).
+  ThemeResolution themeOn(DateTime cairoDay, {Iterable<String> activeSeasonKeys = const []}) =>
+      occasions.resolve(theme, cairoDay, activeSeasonKeys: activeSeasonKeys);
 
   int get disabledCount => Sections.all.where((s) => !enabled(s)).length;
 }

@@ -76,14 +76,16 @@
 
   <title>كنيسة القديسين مكسيموس ودوماديوس والقوي الأنبا موسى الأسود</title>
   <link rel="manifest" href="manifest.json">
-  <!-- First paint (ADR-037): a static copy of the home hero (painted poster,
-       church name) shows while Flutter loads. Same fonts, colours and crop as
-       the Flutter hero, so the page is visually complete early and the poster
-       is the LCP element. It stays over the app until the first real
-       settings / home data is on screen ("app-content-ready" from
+  <!-- First paint (ADR-037, redesigned in ADR-044): a liturgical loading
+       screen (parish seal, church name in Lalezar, a thin gold progress
+       track) shows while Flutter loads. The seal is the same 27 KB file the
+       app's ChurchSeal loads (one download, shared cache); the hero posters
+       stay preloaded (and referenced by a hidden <img>) so the Flutter hero
+       paints from cache. Only transform / opacity animate (composited, no
+       per-frame paint on the main thread). It stays over the app until the
+       first real settings / home data is on screen ("app-content-ready" from
        lib/core/content_ready.dart, ADR-038) — at most 9 s after Flutter's
        first frame — so the defaults never flash before the real content. -->
-  <link rel="preload" href="icons/Icon-192.png" as="image">
   <link rel="preload" as="image" href="assets/assets/art/hero_poster_tall.webp" media="(max-width: 599.98px)" fetchpriority="high">
   <link rel="preload" as="image" href="assets/assets/art/hero_poster.webp" media="(min-width: 600px)" fetchpriority="high">
   <style>
@@ -113,7 +115,9 @@
       height: 104px;
       border-radius: 50%;
       object-fit: contain;
+      filter: drop-shadow(0 4px 12px rgba(201, 150, 63, 0.45));
       animation: pulse 2.6s ease-in-out infinite;
+      will-change: transform;
     }
     #splash h1 {
       margin: 24px 0 16px;
@@ -138,7 +142,10 @@
       position: absolute;
       top: 0;
       bottom: 0;
+      left: 0;
       width: 45%;
+      transform: translateX(-100%);
+      will-change: transform;
       background: linear-gradient(90deg, transparent 0%, #C9963F 50%, #E5BE75 75%, #C9963F 100%);
       border-radius: 999px;
       animation: shimmer 1.8s ease-in-out infinite;
@@ -167,17 +174,17 @@
       #splash h1 { font-size: 42px; }
     }
     @keyframes pulse {
-      0%, 100% { transform: scale(1); filter: drop-shadow(0 4px 12px rgba(201, 150, 63, 0.35)); }
-      50% { transform: scale(1.035); filter: drop-shadow(0 6px 22px rgba(201, 150, 63, 0.6)); }
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.035); }
     }
     @keyframes shimmer {
-      0% { left: -45%; }
-      100% { left: 100%; }
+      0% { transform: translateX(-100%); }
+      100% { transform: translateX(223%); }
     }
     @media (prefers-reduced-motion: reduce) {
       #splash { transition: none; }
-      #splash .seal { animation: none; filter: drop-shadow(0 4px 12px rgba(201, 150, 63, 0.35)); }
-      #splash .progress-bar { animation: none; width: 100%; left: 0; background: #C9963F; }
+      #splash .seal { animation: none; }
+      #splash .progress-bar { animation: none; width: 100%; transform: none; background: #C9963F; }
     }
   </style>
 </head>
@@ -187,12 +194,12 @@
       <source media="(max-width: 599.98px)" srcset="assets/assets/art/hero_poster_tall.webp" width="432" height="768">
       <img src="assets/assets/art/hero_poster.webp" alt="" width="1280" height="720" fetchpriority="high" decoding="async">
     </picture>
-    <img class="seal" src="icons/Icon-192.png" alt="ختم كنيسة القديسين مكسيموس ودوماديوس والقوي الأنبا موسى الأسود" width="104" height="104" fetchpriority="high">
+    <img class="seal" src="assets/assets/branding/seal.png" alt="" width="104" height="104" fetchpriority="high" decoding="async">
     <h1>كنيسة القديسين مكسيموس ودوماديوس والقوي الأنبا موسى الأسود</h1>
     <div class="progress-track" aria-hidden="true">
       <div class="progress-bar"></div>
     </div>
-    <div id="splash-text" class="sr-only" aria-live="polite"></div>
+    <div id="splash-text" class="sr-only" role="status" aria-live="polite">جارٍ التحميل…</div>
   </div>
   <script>
     var appStarted = false;

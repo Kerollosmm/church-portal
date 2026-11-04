@@ -9,9 +9,14 @@ import '../../domain/today.dart';
 import '../../state/providers.dart';
 import 'common.dart';
 
-/// Top utility bar with the Coptic date of the liturgical day (ADR-039)
-/// and optional pulsing live-stream badge when active (ADR-040).
-/// Height: 32px, liturgical burgundy background `#3B0A0A`, gold hairline bottom border.
+/// Top utility bar above the app bar (ADR-044): the Coptic date of the
+/// liturgical day (ADR-039) at the start and, while the church is streaming
+/// (ADR-040), a compact live badge at the end. Every colour comes from the
+/// occasion palette (ADR-043): the title-band roles ([OccasionColors.bar],
+/// [OccasionColors.onBar]) and the live roles, so Holy Week turns it charcoal
+/// with a crimson badge like the rest of the site.
+/// Shown on every page or on Home only (settings/features.copticStrip); the
+/// badge follows the live switch (settings/features.live*).
 class TopUtilityBar extends ConsumerWidget {
   final String location;
   const TopUtilityBar({super.key, required this.location});
@@ -19,66 +24,71 @@ class TopUtilityBar extends ConsumerWidget {
   static bool shownOn(String mode, String location) =>
       mode == CopticStripModes.all || (mode == CopticStripModes.home && location == '/');
 
+  /// Text in the bar is capped at this scale; the bar grows with it (never
+  /// clips), so 200 % text stays readable without pushing the page down twice.
+  static const maxTextScale = 1.6;
+
+  /// The bar's height for the visitor's text size: 32 px at 100 %.
+  static double heightFor(BuildContext context) {
+    final scale = MediaQuery.textScalerOf(context).clamp(maxScaleFactor: maxTextScale).scale(13) / 13;
+    return (32.0 + 20.0 * (scale - 1)).clamp(32.0, 32.0 + 20.0 * (maxTextScale - 1)).roundToDouble();
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     if (!ref.watch(featuresReadyProvider)) return const SizedBox.shrink();
     final t = ref.watch(todaySettingsProvider);
-    final mode = t.copticStrip;
-    final showDate = shownOn(mode, location);
-    final now = ref.watch(nowProvider).value ?? DateTime.now();
-    final liveActive = t.liveOn(now);
+    final showDate = shownOn(t.copticStrip, location);
+    final liveActive = ref.watch(nowProvider.select((n) => t.liveOn(n.value ?? DateTime.now())));
     if (!showDate && !liveActive) return const SizedBox.shrink();
 
     final day = ref.watch(liturgicalDayProvider);
     final label = day.label(arabic: context.isAr);
+    final pal = context.pal;
 
     return MediaQuery.withClampedTextScaling(
-      maxScaleFactor: 1.25,
+      maxScaleFactor: maxTextScale,
       child: Container(
         key: const Key('copticDateStrip'),
         width: double.infinity,
-        height: 32.0,
+        height: heightFor(context),
         padding: const EdgeInsets.symmetric(horizontal: 12),
-        decoration: const BoxDecoration(
-          color: Color(0xFF3B0A0A),
-          border: Border(bottom: BorderSide(color: Color(0x33C9963F), width: 1)),
+        decoration: BoxDecoration(
+          gradient: pal.barGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter),
+          border: Border(bottom: BorderSide(color: pal.barEdge ?? pal.ornamentLine)),
         ),
         child: Row(
           children: [
-            if (showDate)
-              Expanded(
-                child: Semantics(
-                  container: true,
-                  label: '${context.tr('copticDate')}: $label',
-                  excludeSemantics: true,
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.event_note_rounded, size: 14, color: Color(0xFFC9963F)),
-                      const SizedBox(width: 6),
-                      Flexible(
-                        child: Text(
-                          label,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            fontFamily: 'IBM Plex Sans Arabic',
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: Color(0xFFF6E7C8),
+            // The date takes the free width; the badge keeps its own (≤ 150 px).
+            Expanded(
+              child: showDate
+                  ? Semantics(
+                      container: true,
+                      label: '${context.tr('copticDate')}: $label',
+                      excludeSemantics: true,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.event_note_rounded, size: 14, color: pal.onBarAccent),
+                          const SizedBox(width: 6),
+                          Flexible(
+                            child: Text(
+                              label,
+                              key: const Key('copticDateLabel'),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.center,
+                              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: pal.onBar),
+                            ),
                           ),
-                        ),
+                        ],
                       ),
-                    ],
-                  ),
-                ),
-              )
-            else
-              const Spacer(),
+                    )
+                  : const SizedBox.shrink(),
+            ),
             if (liveActive) ...[
               const SizedBox(width: 8),
-              Flexible(child: _LiveBadge(settings: t)),
+              _LiveBadge(settings: t),
             ],
           ],
         ),
@@ -90,6 +100,8 @@ class TopUtilityBar extends ConsumerWidget {
 /// Compatibility alias so existing code and tests referring to CopticDateStrip continue working.
 typedef CopticDateStrip = TopUtilityBar;
 
+/// The live badge in [TopUtilityBar]: the admin's live label (or «مباشر»),
+/// ≤ 150 px with an ellipsis, in the theme's live colours.
 class _LiveBadge extends StatelessWidget {
   final TodaySettings settings;
   const _LiveBadge({required this.settings});
@@ -98,6 +110,7 @@ class _LiveBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final custom = context.pick(settings.liveLabelAr, settings.liveLabelEn).trim();
     final label = custom.isEmpty ? context.tr('liveBadge') : custom;
+    final red = context.pal.live, onRed = context.pal.onLive;
     void open() => openUrl(settings.liveUrl);
     return Semantics(
       button: true,
@@ -114,9 +127,9 @@ class _LiveBadge extends StatelessWidget {
             constraints: const BoxConstraints(maxWidth: 150),
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
             decoration: BoxDecoration(
-              color: const Color(0xFFB3261E),
+              color: red,
               borderRadius: BorderRadius.circular(999),
-              border: Border.all(color: const Color(0x66F6E7C8), width: 0.8),
+              border: Border.all(color: onRed.withValues(alpha: 0.4), width: 0.8),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -128,12 +141,7 @@ class _LiveBadge extends StatelessWidget {
                     label,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontFamily: 'IBM Plex Sans Arabic',
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 11.5,
-                    ),
+                    style: TextStyle(color: onRed, fontWeight: FontWeight.w700, fontSize: 11.5),
                   ),
                 ),
               ],
@@ -158,7 +166,8 @@ class LiveStreamBanner extends ConsumerWidget {
     if (!t.liveOn(now)) return const SizedBox.shrink();
     final custom = context.pick(t.liveLabelAr, t.liveLabelEn).trim();
     final label = custom.isEmpty ? context.tr('liveNow') : custom;
-    const red = Color(0xFFB3261E);
+    // The theme's live colours (red; deep crimson on Holy Week — ADR-043).
+    final red = context.pal.live, onRed = context.pal.onLive;
     void open() => openUrl(t.liveUrl);
     return Semantics(
       button: true,
@@ -180,16 +189,16 @@ class LiveStreamBanner extends ConsumerWidget {
                 child: Text(label,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 14.5)),
+                    style: TextStyle(color: onRed, fontWeight: FontWeight.w800, fontSize: 14.5)),
               ),
               const SizedBox(width: 10),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(999)),
+                decoration: BoxDecoration(color: onRed, borderRadius: BorderRadius.circular(999)),
                 child: Row(mainAxisSize: MainAxisSize.min, children: [
-                  const Icon(Icons.play_arrow_rounded, size: 18, color: red),
+                  Icon(Icons.play_arrow_rounded, size: 18, color: red),
                   Text(context.tr('watchLive'),
-                      style: const TextStyle(color: red, fontWeight: FontWeight.w800, fontSize: 13)),
+                      style: TextStyle(color: red, fontWeight: FontWeight.w800, fontSize: 13)),
                 ]),
               ),
             ]),
@@ -236,7 +245,7 @@ class _PulseDotState extends State<_PulseDot> with SingleTickerProviderStateMixi
         child: Container(
           width: widget.size,
           height: widget.size,
-          decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+          decoration: BoxDecoration(color: context.pal.onLive, shape: BoxShape.circle),
         ),
       );
 }
@@ -252,7 +261,7 @@ class TopEventCard extends ConsumerWidget {
     if (e == null) return const SizedBox.shrink();
     final title = context.pick(e.titleAr, e.titleEn).trim();
     if (title.isEmpty) return const SizedBox.shrink();
-    final primary = Theme.of(context).colorScheme.primary;
+    final primary = context.pal.primary;
     final kicker = switch (e.kind) {
       TopEventKind.church => context.tr('todayEvent'),
       TopEventKind.feast => context.tr('todayFeast'),
@@ -315,8 +324,8 @@ class TopEventCard extends ConsumerWidget {
       decoration: BoxDecoration(
         color: context.pal.panel,
         borderRadius: BorderRadius.circular(kPanelRadius),
-        border: Border.all(color: const Color(0x61C9963F)),
-        boxShadow: kPanelShadow,
+        border: Border.all(color: context.pal.ornamentLine),
+        boxShadow: context.pal.panelShadow,
       ),
       child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Icon(e.kind == TopEventKind.church ? Icons.campaign_rounded : Icons.auto_awesome_rounded, color: primary),

@@ -78,8 +78,8 @@ class _MassSchedulePageState extends ConsumerState<MassSchedulePage> {
               // The visitor chose: never override it with the season default.
               _seasonDefaultApplied = true;
             }),
-            activeThumbColor: AppColors.gold,
-            secondary: Icon(Icons.auto_awesome_rounded, color: Theme.of(context).colorScheme.primary),
+            activeThumbColor: context.pal.ornament,
+            secondary: Icon(Icons.auto_awesome_rounded, color: context.pal.primary),
             title: Text(context.tr('holySeasons'), style: const TextStyle(fontWeight: FontWeight.w800)),
             subtitle: Text(context.tr('holySeasonsHint')),
           ),
@@ -148,7 +148,7 @@ class _MassSchedulePageState extends ConsumerState<MassSchedulePage> {
                 selected: _tab == t,
                 showCheckmark: false,
                 labelStyle: TextStyle(
-                    color: _tab == t ? context.pal.onPrimary : Theme.of(context).colorScheme.primary, fontWeight: FontWeight.w700),
+                    color: _tab == t ? context.pal.onBar : context.pal.primary, fontWeight: FontWeight.w700),
                 onSelected: (_) => setState(() => _tab = t),
               ),
             ),
@@ -239,7 +239,7 @@ class _MassSchedulePageState extends ConsumerState<MassSchedulePage> {
 
   /// The audience keys the seasonal services use that resolve to a label.
   static Set<String> _audienceKeys(ProgramOptions opts, Iterable<Liturgy> all) =>
-      {for (final l in all) if (opts.audience(l.program.audience) != null) l.program.audience};
+      {for (final l in all) if (opts.audience(l.program.audience) != null) opts.audienceKey(l.program.audience)};
 
   /// Audience chips (ADR-041) when the seasonal services name two or more
   /// audiences (e.g. everyone / youth / children in parallel halls).
@@ -254,7 +254,7 @@ class _MassSchedulePageState extends ConsumerState<MassSchedulePage> {
             selected: selected == key,
             showCheckmark: false,
             labelStyle: TextStyle(
-                color: selected == key ? context.pal.onPrimary : Theme.of(context).colorScheme.primary,
+                color: selected == key ? context.pal.onBar : context.pal.primary,
                 fontWeight: FontWeight.w700),
             onSelected: (_) => setState(() => _audience = key),
           ),
@@ -299,5 +299,6 @@ class _MassSchedulePageState extends ConsumerState<MassSchedulePage> {
 /// or none / an unknown key (no chip of its own) = for everyone (Sentry review).
 bool audienceMatches(Liturgy l, String audience, ProgramOptions opts) {
   final a = l.program.audience;
-  return audience.isEmpty || a.isEmpty || a == audience || opts.audience(a) == null;
+  // `kids` and `children` are one audience (ADR-043).
+  return audience.isEmpty || a.isEmpty || opts.audienceKey(a) == audience || opts.audience(a) == null;
 }

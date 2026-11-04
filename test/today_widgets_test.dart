@@ -6,6 +6,7 @@ import 'package:church_portal/data/content_repository.dart';
 import 'package:church_portal/data/seed_data.dart';
 import 'package:church_portal/domain/cairo_time.dart';
 import 'package:church_portal/domain/features.dart';
+import 'package:church_portal/domain/occasion_theme.dart' show ThemePresets, contrastRatio;
 import 'package:church_portal/domain/today.dart';
 import 'package:church_portal/state/providers.dart';
 import 'package:church_portal/ui/admin/admin_page.dart' show adminDestinations;
@@ -31,7 +32,9 @@ void main() {
       {FeatureSettings features = FeatureSettings.defaults,
       required DateTime now,
       String lang = 'ar',
-      Size? physicalSize}) async {
+      Size? physicalSize,
+      String themeKey = 'goldenHour',
+      double textScale = 1}) async {
     tester.view.physicalSize = physicalSize ?? const Size(1000, 2000);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
@@ -44,9 +47,11 @@ void main() {
       ],
       child: MaterialApp(
         locale: Locale(lang),
-        theme: buildTheme(Locale(lang)),
+        theme: buildTheme(Locale(lang), palette: ThemePresets.palettes[themeKey]!, key: themeKey),
         supportedLocales: const [Locale('ar'), Locale('en')],
         localizationsDelegates: GlobalMaterialLocalizations.delegates,
+        builder: (context, w) => MediaQuery(
+            data: MediaQuery.of(context).copyWith(textScaler: TextScaler.linear(textScale)), child: w!),
         home: Scaffold(body: SingleChildScrollView(child: child)),
       ),
     ));
@@ -151,6 +156,56 @@ void main() {
       expect(tester.takeException(), isNull);
       expect(find.byKey(const Key('copticDateStrip')), findsOneWidget);
       expect(find.byKey(const Key('topBarLiveBadge')), findsOneWidget);
+    });
+  });
+
+  group('top utility bar on the occasion palette (ADR-043 / ADR-044)', () {
+    final live = FeatureSettings.fromMap({
+      'liveEnabled': true,
+      'liveUrl': 'https://www.youtube.com/live/abc',
+      'liveEndsAt': DateTime.utc(2026, 11, 4, 19),
+    });
+
+    testWidgets('bar, date text and badge take the theme roles on Golden hour and Holy Week', (tester) async {
+      for (final key in ['goldenHour', 'holyWeek']) {
+        await pump(tester, const CopticDateStrip(location: '/'),
+            features: live, now: cairo(2026, 11, 4, 19), themeKey: key);
+        final ctx = tester.element(find.byKey(const Key('copticDateStrip')));
+        final pal = ctx.pal;
+        final deco = tester.widget<Container>(find.byKey(const Key('copticDateStrip'))).decoration! as BoxDecoration;
+        expect((deco.gradient! as LinearGradient).colors, [pal.bar, pal.barDeep], reason: key);
+        final label = tester.widget<Text>(find.byKey(const Key('copticDateLabel')));
+        expect(label.style!.color, pal.onBar, reason: key);
+        expect(contrastRatio(pal.onBar.toARGB32(), pal.bar.toARGB32()), greaterThanOrEqualTo(4.5), reason: key);
+        final badge = tester.widget<Container>(
+            find.descendant(of: find.byKey(const Key('topBarLiveBadge')), matching: find.byType(Container)).first);
+        expect((badge.decoration! as BoxDecoration).color, pal.live, reason: key);
+        expect(contrastRatio(pal.onLive.toARGB32(), pal.live.toARGB32()), greaterThanOrEqualTo(4.5), reason: key);
+      }
+      // Holy Week is a dark bar (charcoal), not the Golden-hour maroon.
+      await pump(tester, const CopticDateStrip(location: '/'), now: cairo(2026, 11, 4, 10), themeKey: 'holyWeek');
+      final hw = tester.element(find.byKey(const Key('copticDateStrip'))).pal;
+      expect(hw.bar.computeLuminance(), lessThan(0.05));
+    });
+
+    testWidgets('the date keeps the free width next to the badge (Sentry review on PR #35)', (tester) async {
+      await pump(tester, const CopticDateStrip(location: '/'),
+          features: live, now: cairo(2026, 11, 4, 19), physicalSize: const Size(390, 800));
+      final bar = tester.getSize(find.byKey(const Key('copticDateStrip'))).width;
+      final badge = tester.getSize(find.byKey(const Key('topBarLiveBadge'))).width;
+      expect(badge, lessThanOrEqualTo(150));
+      final dateArea = tester.getSize(find.ancestor(of: find.byKey(const Key('copticDateLabel')), matching: find.byType(Expanded)).first);
+      expect(dateArea.width, closeTo(bar - 24 - 8 - badge, 1));
+      expect(dateArea.width, greaterThan(bar / 2));
+    });
+
+    testWidgets('200 % text: the bar grows instead of clipping, capped at 1.6x', (tester) async {
+      await pump(tester, const CopticDateStrip(location: '/'),
+          features: live, now: cairo(2026, 11, 4, 19), physicalSize: const Size(320, 800), textScale: 2);
+      expect(tester.takeException(), isNull);
+      final h = tester.getSize(find.byKey(const Key('copticDateStrip'))).height;
+      expect(h, greaterThan(32));
+      expect(h, 44);
     });
   });
 
@@ -291,6 +346,7 @@ void main() {
     testWidgets('places TopUtilityBar above AppBar and adjusts SealTab position', (tester) async {
       tester.view.physicalSize = const Size(1200, 800);
       tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
       await tester.pumpWidget(ProviderScope(
         overrides: [
           repositoryProvider.overrideWithValue(SeedRepository(SeedData(const {}))),

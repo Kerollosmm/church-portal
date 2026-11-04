@@ -210,7 +210,7 @@ class _Entry {
   });
 
   static _Entry of(BuildContext context, WidgetRef ref, Object item) {
-    final primary = Theme.of(context).colorScheme.primary;
+    final primary = context.pal.primary;
     String date(String s) => formatLooseDate(s, arabic: context.isAr);
     final features = ref.watch(featuresProvider);
     switch (item) {
@@ -463,7 +463,7 @@ class _DetailView extends ConsumerWidget {
     final e = entry;
     final d = e.details;
     final f = ref.watch(featuresProvider);
-    final primary = Theme.of(context).colorScheme.primary;
+    final primary = context.pal.primary;
     final showImages = f.showImages && d.showDetailImages;
     final cover = showImages ? e.cover : null;
     final gallery = showImages ? d.gallery : const <MediaImage>[];
@@ -565,7 +565,7 @@ class _DetailView extends ConsumerWidget {
               decoration: BoxDecoration(
                 color: context.pal.background,
                 borderRadius: BorderRadius.circular(4),
-                border: Border.all(color: AppColors.gold.withValues(alpha: 0.5)),
+                border: Border.all(color: context.pal.ornament.withValues(alpha: 0.5)),
               ),
               child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Icon(Icons.info_outline_rounded, color: context.pal.goldText),
@@ -591,7 +591,6 @@ class _DetailView extends ConsumerWidget {
   /// Add to calendar (weekly items), directions to the church (on-site
   /// items, while the contact-info section is on) and share (every page).
   List<Widget> _quickActions(BuildContext context, WidgetRef ref, _Entry e) {
-    final primary = Theme.of(context).colorScheme.primary;
     final features = ref.watch(featuresProvider);
     final settings = features.enabled(Sections.contactInfo) ? ref.watch(settingsProvider).value : null;
     final english = !context.isAr;
@@ -619,7 +618,7 @@ class _DetailView extends ConsumerWidget {
           icon: Icons.event_available_rounded,
           label: context.tr('addToCalendar'),
           semanticLabel: actionSemanticLabel(context.tr('addToCalendar'), e.title),
-          color: primary,
+          color: context.pal.bar,
           onTap: () => openUrl(calendar),
         ),
       if (e.onSite && settings != null && _hasDestination(settings))
@@ -663,7 +662,6 @@ class _DetailView extends ConsumerWidget {
     if (e.officeFallback && phone.isEmpty && wa.isEmpty && ref.watch(featuresProvider).enabled(Sections.contactInfo)) {
       office = ref.watch(settingsProvider).value?.phones.where((p) => p.number.isNotEmpty).firstOrNull?.number;
     }
-    final primary = Theme.of(context).colorScheme.primary;
     return [
       if (phone.isNotEmpty)
         ActionChipButton(
@@ -671,7 +669,7 @@ class _DetailView extends ConsumerWidget {
           icon: Icons.call,
           label: '${context.tr('call')} $phone',
           semanticLabel: actionSemanticLabel('${context.tr('call')} $phone', e.title),
-          color: primary,
+          color: context.pal.bar,
           onTap: () => callPhone(phone),
         ),
       if (wa.isNotEmpty)
@@ -689,7 +687,7 @@ class _DetailView extends ConsumerWidget {
           icon: Icons.call,
           label: context.tr('callChurchOffice'),
           semanticLabel: actionSemanticLabel(context.tr('callChurchOffice'), e.title),
-          color: primary,
+          color: context.pal.bar,
           onTap: () => callPhone(office!),
         ),
     ];
@@ -718,7 +716,7 @@ class _DetailView extends ConsumerWidget {
         link('detailInstagram', Icons.photo_camera_rounded, context.tr('instagram'), instagramPink, d.instagramUrl.trim()),
       if (external.isNotEmpty)
         link('detailExternal', Icons.open_in_new_rounded, externalLabel.isEmpty ? context.tr('openPage') : externalLabel,
-            Theme.of(context).colorScheme.primary, external),
+            context.pal.primary, external),
     ];
   }
 }
@@ -737,12 +735,12 @@ class _FieldCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: context.pal.background,
         borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: AppColors.gold.withValues(alpha: 0.45)),
+        border: Border.all(color: context.pal.ornament.withValues(alpha: 0.45)),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         if (title.isNotEmpty)
           Text(title,
-              style: TextStyle(fontWeight: FontWeight.w800, color: Theme.of(context).colorScheme.primary, height: 1.4)),
+              style: TextStyle(fontWeight: FontWeight.w800, color: context.pal.primary, height: 1.4)),
         if (title.isNotEmpty && value.isNotEmpty) const SizedBox(height: 4),
         if (value.isNotEmpty) Text(value, style: TextStyle(height: 1.6, color: context.pal.ink)),
       ]),
@@ -762,7 +760,7 @@ class _FactRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final primary = Theme.of(context).colorScheme.primary;
+    final primary = context.pal.primary;
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -793,7 +791,7 @@ class _RelatedLink extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final primary = Theme.of(context).colorScheme.primary;
+    final primary = context.pal.primary;
     void open() => context.go(detailPathFor(kind, id));
     return Card(
       margin: const EdgeInsets.only(bottom: 8),

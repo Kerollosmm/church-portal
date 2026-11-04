@@ -117,7 +117,9 @@ void main() {
       expect(p.seasonId, 'hw');
       expect(p.seasonKey, 'holy_week');
       expect(p.endsAt, _end);
-      expect(p.options, PresetOption.all);
+      // The theme item (ADR-043) needs the season's theme; none was given here,
+      // so it is dropped (occasion_subthemes_test covers it).
+      expect(p.options, [for (final o in PresetOption.all) if (o != PresetOption.theme) o]);
       expect(p.prevBool(PresetPrev.seasonActive), isFalse);
       expect(p.prevBool(PresetPrev.replacesRegular), isFalse);
       expect(p.prevBool(PresetPrev.meetings), isTrue);

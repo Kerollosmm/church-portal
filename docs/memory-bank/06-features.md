@@ -34,7 +34,7 @@ render with `PageBody` (+ `Footer`). Content comes from Riverpod providers (hidd
 - **Verse of the day (PR #16, ADR-024; moved into the hero in PR #17):** `HeroVerse` (`home_page.dart`) is the hero's
   verse, set straight on the hero with **no panel** since PR #22 (ADR-032): `« verse »` in Ruqaa 20/24 px on `ink`,
   centred, line height 1.8, reference in `goldText` 13 px bold (the old fixed-verse typography), on a soft radial
-  `TextScrim` at `ThemePalette.verseScrimAlpha` (0.88) like the title's glow, each line a `HaloText` (a 3.0 px
+  `TextScrim` at `ThemePalette.verseScrimAlpha` (0.88) like the title's glow, each line a `HaloText` (a 2.5 px
   outline of the scene colour under the glyphs + soft shadows, like the title's halo) so the ground beside every
   stroke stays ≥ the 0.88 scrim even where the radial glow fades at wide line ends; keys `heroVerse` (the scrim),
   `dailyVerseText`, `dailyVerseRef` (the `HaloText`s)). Daily mode = entry
@@ -46,6 +46,14 @@ render with `PageBody` (+ `Footer`). Content comes from Riverpod providers (hidd
   next-mass bar and chips, footer) follows the theme in force — see `03-architecture.md` → Theming. Holy Week is a
   dark scene (black wash, dark panels, light text, ashen-silver accent with dark text, crimson accent word, art in
   dim greyscale); the Resurrection is festive (Easter red, bright gold, luminous ivory).
+- **Occasion sub-themes (PR #37, ADR-043):** Holy Week = black cloth / charcoal / ashen silver with deep crimson (no
+  gold, no violet); fasts = ash / stone with deep oxblood (was violet); legacy `purple` reads as oxblood and is hidden
+  from the pickers. Every widget takes its colours from the palette and its scene accents (`context.pal.bar`,
+  `ornament`, `notice`, `alert`…), and the Material scheme is filled from the palette, so nothing falls back to
+  Material violet. **The theme follows the active church season** (`occasions.followSeason`, default on; per-key map
+  `occasions.seasonThemes`, revivals / summer = no theme): admin range > active season > Easter dates > selected
+  theme. A Holy Week season document turns the site dark from its start to its end even off the computed Easter
+  dates; until the seasons list loads, the applied season preset decides (first paint already dark).
 - **Hero video:** the home hero plays the **bundled cloud clip** only (muted, looping, no controls; portrait crop on
   phones) over its poster; the painting shows when video is not allowed. Never for reduced motion, data saver,
   `heroMotion` off or under `flutter test`. The YouTube hero video library of PR #17 (ADR-026) was **removed in PR #25
@@ -53,25 +61,33 @@ render with `PageBody` (+ `Footer`). Content comes from Riverpod providers (hidd
 - **Hero ambient motion on web (ADR-037, PR #29):** the haze drift and light-ray shimmer look exactly as before but
   run as a CSS-animated DOM layer (`HeroAmbientLayer`) instead of a per-frame Flutter repaint; the first paint is a
   run as a CSS-animated DOM layer (`HeroAmbientLayer`) instead of a per-frame Flutter repaint; see `documentation/features/performance-pagespeed.md`.
-- **Liturgical web splash screen (ADR-043, PR #34):** `web/index.html` renders a dedicated liturgical splash screen
-  on a dark burgundy backdrop (`#2A0808`) with a soft radial gold glow, the official parish seal (`icons/Icon-192.png`)
-  with an animated breathing pulse, centered Lalezar church title in warm gold (`#F8E8C9`), a rounded golden progress
-  track (220×4 px) with an animated shimmer bar, and the subtitle «جاري تجهيز الصلوات والبيانات...» in IBM Plex Sans Arabic.
-  Stays over the app until `app-content-ready` (at most 9 s after Flutter's first frame, ADR-038) and fades out smoothly with
-  a 0.6 s cubic-bezier cross-fade before being removed from the DOM. Full reduced-motion support. The hero video and CSS
-  ambient layer start once the page is idle afterwards (`ContentReady.whenIdle`).
+- **Liturgical web loading screen (ADR-044, PR #35; replaces the ADR-037 static hero copy):** `web/index.html` shows,
+  on the cream `#FBF3E4` ground (= `manifest.json` `background_color`), the parish seal (`assets/assets/branding/seal.png`,
+  the same 27 KB file the app's `ChurchSeal` loads, 104 px, decorative `alt=""`) with a slow scale pulse, the church
+  name in Lalezar maroon `#6E1C1C` (28 / 36 / 42 px), and a 220×4 px gold track with a shimmer bar. Only `transform`
+  animates (composited; `test/pagespeed_test.dart` bans `left` / `filter` / `width` in keyframes). A visually hidden
+  `role="status"` «جارٍ التحميل…» keeps the loading announcement; the failure path (30 s / script error) replaces the
+  track with the reload message. The hero posters stay preloaded (plus a hidden `<img>`) so the Flutter hero paints
+  from cache. It stays over the app until `app-content-ready` (ADR-038; ≤ 9 s after Flutter's first frame), then fades
+  out in 0.6 s and is removed. The hero video and CSS ambient layer start once the page is idle (`ContentReady.whenIdle`).
+  The screen is static HTML, so it is always cream / maroon whatever the occasion theme (open question for the owner:
+  Holy Week goes cream → charcoal when the app appears).
 
-### Today layer on every page and Home (PR #31, ADR-039 / ADR-040; PR #34, ADR-043)
+### Today layer on every page and Home (PR #31, ADR-039 / ADR-040; PR #35, ADR-044)
 
-- **Top utility bar & Coptic date strip** (`TopUtilityBar`, alias `CopticDateStrip`, top of the viewport above the `AppBar`):
-  dedicated 32 px utility bar with liturgical burgundy ground (`#3B0A0A`) and hairline gold border (`0x33C9963F`).
-  Displays the liturgical day in Coptic, «الأربعاء ٢٥ بابه ١٧٤٣ ش»; after the day's start (18:00 by default, or sunset at the church)
-  «ليلة الخميس ٢٦ بابه ١٧٤٣ ش». `copticStrip`: every page / Home only / off. No time-zone label anywhere.
-- **Top bar live badge** (`_LiveBadge`, key `topBarLiveBadge`): when streaming is active (`liveOn(now)`), a compact pulsing badge
-  (`_PulseDot` + «مباشر» / `liveLabel` / 'Live') appears at the end of the top utility bar; tapping it opens the live stream URL directly.
-- **AppShell structure & SealTab**: the top utility bar sits inside `PreferredSize` stacked above the `AppBar`. The floating strip
-  was removed from the body column, giving the hero title and page content full breathing room. The hanging church seal tab (`SealTab`)
-  top position is offset by +32 px when the top utility bar is present so it stays flush with the top of the main AppBar.
+- **Top utility bar & Coptic date** (`TopUtilityBar`, alias `CopticDateStrip`, key `copticDateStrip`; above the
+  `AppBar`, inside the shell's `PreferredSize`): 32 px at 100 % text (grows to 44 px at ≥ 160 %, text capped at
+  1.6× — `TopUtilityBar.heightFor`), on the palette's title band (`barGradient` bar → barDeep, text `onBar`, icon
+  `onBarAccent`, bottom line `barEdge` or `ornamentLine`; ADR-043 roles — maroon on Golden hour, charcoal with a crimson
+  edge on Holy Week). The liturgical day in Coptic, «الأربعاء ٢٥ بابه ١٧٤٣ ش»; after the day's start (18:00 by
+  default, or sunset at the church) «ليلة الخميس ٢٦ بابه ١٧٤٣ ش». `copticStrip`: every page / Home only / off. No
+  time-zone label anywhere. The date takes all the width the badge leaves.
+- **Top bar live badge** (`_LiveBadge`, key `topBarLiveBadge`): while `liveOn(now)`, a pill (≤ 150 px, ellipsis) in the
+  theme's `live` / `onLive` colours with a 7 px pulsing dot and the admin's live label or «مباشر» / "Live"; tap opens
+  the stream. The bar also appears with only the badge when `copticStrip` hides the date on that page.
+- **AppShell**: the bar is no longer in the body column. The status-bar inset above it takes `pal.bar`; the hanging
+  seal tab moves down by the bar's height. The shell watches the clock through `select` (rebuilds only when the bar
+  appears / disappears). +0 reads, +0 listeners.
 - **Live banner** (`LiveStreamBanner`): red bar under the AppBar on every page while `liveEnabled` + an http(s)
   `liveUrl` and before `liveEndsAt`; pulsing dot (static under reduced motion); tap opens the stream.
 - **Top event card** (`TopEventCard`, first on Home): «حدث اليوم» = an admin church event (`dayEvents`) covering today
@@ -373,13 +389,22 @@ on); owners can press **Send test error**. Details: `03-architecture.md` → *Er
        only when it overlaps in time one of the season's services that day (e.g. Saturday vespers 18:30 vs the 18:30
        revival service). Before PR 1 a revival erased every morning mass for 9 days and the next-mass card showed
        "no upcoming liturgies".
+   - **Undated templates vs a dated programme (ADR-043, Holy Week sim B4):** on a day where a schedule-replacing
+     season has dated services of its own (`seasonHasDatedServicesOn`), the undated (weekday) services of its key do
+     not occur that day; the season list drops an undated service only when every such weekday in the window has
+     dated services (`liturgyInSeason`). A season of templates only (the seed's Holy Week 2027) and additive seasons
+     are unchanged.
    - `effectiveLiturgiesForDay` simply returns `occurrencesForDay(…, dayOffset: 0)`'s liturgies, so the two can never
      disagree.
-3. Default types `{'mass'}` (vespers/praise/other ignored unless `types` given).
+3. Default types `{'mass'}` (vespers/praise/other ignored unless `types` given) — **except** that while a season that
+   replaces the regular schedule is active, every service of that season counts whatever its type (the Holy Week
+   hours are `other`; ADR-043, sim B1), and the card is titled «الصلاة القادمة» instead of «القداس القادم».
 4. "Happening now": any occurrence of yesterday (past midnight) or today with `start ≤ now < end`.
 5. "Next": first occurrence with `start > now`, today first, then up to **7 days** ahead (`lookAheadDays`).
 6. Card shows: active season pill, happening-now strip, day label (today / tomorrow / in N days) + weekday,
    countdown "starts in Xh Ym" (today only), name, both-digit times, place, audience, «مواعيد تقريبية…» if `sample`.
+   The happening-now line is «name — place»: the free-text place, else the ADR-041 venue's name, and no dash when
+   neither (`serviceWithPlace`, ADR-043 sim B2).
    Empty → «لا توجد قداسات قادمة خلال الأسبوع».
 7. Refreshes every 30 s (`nowProvider`).
 

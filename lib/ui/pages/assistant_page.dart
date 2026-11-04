@@ -405,7 +405,7 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
         child: Container(
           decoration: BoxDecoration(
             color: context.pal.surface,
-            border: Border(top: BorderSide(color: AppColors.gold.withValues(alpha: 0.4))),
+            border: Border(top: BorderSide(color: context.pal.ornament.withValues(alpha: 0.4))),
           ),
           padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
           child: Center(
@@ -447,18 +447,18 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
           color: m.user
-              ? Theme.of(context).colorScheme.primary
+              ? context.pal.bar
               : m.error
-                  ? const Color(0xFFFDECEA)
+                  ? context.pal.alertGround
                   : context.pal.surface,
           borderRadius: BorderRadius.circular(4),
-          border: m.user ? null : Border.all(color: AppColors.gold.withValues(alpha: 0.4)),
+          border: m.user ? null : Border.all(color: context.pal.ornament.withValues(alpha: 0.4)),
         ),
         child: m.user
-            ? SelectableText(m.text, style: TextStyle(color: context.pal.onPrimary, height: 1.6))
+            ? SelectableText(m.text, style: TextStyle(color: context.pal.onBar, height: 1.6))
             // Replies and notices are Markdown: render the safe subset (ADR-030).
             : SafeMarkdown(m.text,
-                style: TextStyle(color: m.error ? AppColors.ink : context.pal.ink, height: 1.6)),
+                style: TextStyle(color: m.error ? context.pal.ink : context.pal.ink, height: 1.6)),
       ),
     );
   }

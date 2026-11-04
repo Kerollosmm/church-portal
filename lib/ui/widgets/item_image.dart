@@ -178,7 +178,7 @@ class ItemImage extends ConsumerWidget {
 Future<void> showImageViewer(BuildContext context, MediaImage image, {MediaLoader? loader, String label = ''}) =>
     showDialog<void>(
       context: context,
-      barrierColor: Colors.black87,
+      barrierColor: Colors.black87, // palette-exempt: photo viewer backdrop (neutral on every theme)
       builder: (ctx) => Dialog(
         backgroundColor: Colors.transparent,
         insetPadding: const EdgeInsets.all(16),
@@ -192,7 +192,7 @@ Future<void> showImageViewer(BuildContext context, MediaImage image, {MediaLoade
                 fit: BoxFit.contain,
                 semanticLabel: label,
                 placeholder: const SizedBox(
-                    width: 120, height: 120, child: Icon(Icons.image_outlined, size: 64, color: Colors.white54)),
+                    width: 120, height: 120, child: Icon(Icons.image_outlined, size: 64, color: Colors.white54)), // palette-exempt: on the black viewer backdrop
               ),
             ),
           ),
