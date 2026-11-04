@@ -77,6 +77,7 @@ class _SeasonPresetScreenState extends State<SeasonPresetScreen> {
         _pdfUrl.text = s.program.attachmentUrl;
         _pdfLabelAr.text = s.program.attachmentLabelAr;
         _pdfLabelEn.text = s.program.attachmentLabelEn;
+        _liveUrl.text = ''; // never carry one season's link to another (CodeRabbit review)
         _problem = null;
       });
 
@@ -112,21 +113,30 @@ class _SeasonPresetScreenState extends State<SeasonPresetScreen> {
     return ok == true;
   }
 
-  Future<void> _write(PresetWrites w, {required bool seasonExists}) async {
+  /// Writes what [plan] makes of the current `settings/features` and season
+  /// documents, read in the same transaction (CodeRabbit review on PR #33).
+  Future<void> _write(String seasonId, PresetWrites Function(Map<String, dynamic>? features, Map<String, dynamic>? season) plan) async {
     final messenger = ScaffoldMessenger.of(context);
     final done = context.tr('saved');
+    final conflict = context.tr('presetConflict');
     String failed(Object e) => context.tr('saveFailed', {'e': '$e'});
     setState(() => _saving = true);
     try {
-      await widget.repo.saveDocs({
-        'settings/features': w.features,
-        // Never create a deleted season (its rules need a key and a name).
-        if (w.season.isNotEmpty && seasonExists) 'seasons/${w.seasonId}': w.season,
+      final seasonPath = 'seasons/$seasonId';
+      await widget.repo.saveDocsFresh(['settings/features', seasonPath], (cur) {
+        final w = plan(cur['settings/features'], cur[seasonPath]);
+        return {
+          'settings/features': w.features,
+          // Never create a deleted season (its rules need a key and a name).
+          if (w.season.isNotEmpty && cur[seasonPath] != null) seasonPath: w.season,
+        };
       });
       if (mounted) {
         setState(() => _seasonId = null);
         messenger.showSnackBar(SnackBar(content: Text(done)));
       }
+    } on PresetConflict {
+      if (mounted) messenger.showSnackBar(SnackBar(content: Text(conflict)));
     } catch (e) {
       if (mounted) messenger.showSnackBar(SnackBar(content: Text(failed(e))));
     } finally {
@@ -145,7 +155,6 @@ class _SeasonPresetScreenState extends State<SeasonPresetScreen> {
     final problem = presetProblem(r, season);
     setState(() => _problem = problem);
     if (problem != null) return;
-    final f = FeatureSettings.fromMap(raw);
     final lines = [
       context.tr('presetLineActivate', {'s': _seasonName(context, season)}),
       for (final o in PresetOption.all)
@@ -155,21 +164,26 @@ class _SeasonPresetScreenState extends State<SeasonPresetScreen> {
     final ok = await _confirm(context, context.tr('presetApplyConfirmTitle'), lines, context.tr('presetApply'),
         key: const Key('presetApplyDialog'));
     if (!ok || !mounted) return;
-    final w = planApply(
-      r: r,
-      season: season,
-      sections: {for (final k in Sections.all) k: f.enabled(k)},
-      sectionKeys: Sections.all,
-      heroMotion: f.heroMotion,
-      weddingBookingOff: f.weddingBookingOff,
-      liveUrl: f.today.liveUrl,
-      liveEndsAt: f.today.liveEndsAt,
-      now: _now(),
-    );
-    await _write(w, seasonExists: true);
+    final now = _now();
+    await _write(season.id, (stored, seasonDoc) {
+      // Another admin applied a preset meanwhile, or deleted the season: write nothing.
+      if (SeasonPreset.fromMap(stored?['seasonPreset']) != null || seasonDoc == null) throw const PresetConflict();
+      final f = FeatureSettings.fromMap(stored);
+      return planApply(
+        r: r,
+        season: Season.fromMap(season.id, seasonDoc),
+        sections: {for (final k in Sections.all) k: f.enabled(k)},
+        sectionKeys: Sections.all,
+        heroMotion: f.heroMotion,
+        weddingBookingOff: f.weddingBookingOff,
+        liveUrl: f.today.liveUrl,
+        liveEndsAt: f.today.liveEndsAt,
+        now: now,
+      );
+    });
   }
 
-  Future<void> _restore(BuildContext context, SeasonPreset p, Map<String, dynamic>? raw, bool seasonExists) async {
+  Future<void> _restore(BuildContext context, SeasonPreset p) async {
     final ok = await _confirm(
         context,
         context.tr('presetRestoreConfirmTitle'),
@@ -181,9 +195,13 @@ class _SeasonPresetScreenState extends State<SeasonPresetScreen> {
         context.tr('presetRestore'),
         key: const Key('presetRestoreDialog'));
     if (!ok || !mounted) return;
-    final f = FeatureSettings.fromMap(raw);
-    final w = planRestore(p, sections: {for (final k in Sections.all) k: f.enabled(k)}, sectionKeys: Sections.all);
-    await _write(w, seasonExists: seasonExists);
+    await _write(p.seasonId, (stored, _) {
+      // Restored (or replaced) by another admin meanwhile: write nothing.
+      final fresh = SeasonPreset.fromMap(stored?['seasonPreset']);
+      if (fresh == null || fresh.seasonId != p.seasonId || fresh.appliedAt != p.appliedAt) throw const PresetConflict();
+      final f = FeatureSettings.fromMap(stored);
+      return planRestore(fresh, sections: {for (final k in Sections.all) k: f.enabled(k)}, sectionKeys: Sections.all);
+    });
   }
 
   @override
@@ -195,6 +213,9 @@ class _SeasonPresetScreenState extends State<SeasonPresetScreen> {
         key: ObjectKey(_features),
         stream: _features,
         builder: (context, featuresSnap) {
+          if (seasonsSnap.hasError || featuresSnap.hasError) {
+            return Center(child: Text(context.tr('presetLoadFailed', {'e': '${seasonsSnap.error ?? featuresSnap.error}'})));
+          }
           if (!seasonsSnap.hasData || featuresSnap.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
@@ -252,7 +273,7 @@ class _SeasonPresetScreenState extends State<SeasonPresetScreen> {
             key: const Key('presetRestore'),
             icon: const Icon(Icons.restore_rounded),
             label: Text(context.tr('presetRestore')),
-            onPressed: _saving ? null : () => _restore(context, p, raw, season != null),
+            onPressed: _saving ? null : () => _restore(context, p),
           ),
         ]),
       ),
@@ -264,6 +285,7 @@ class _SeasonPresetScreenState extends State<SeasonPresetScreen> {
       return Card(child: Padding(padding: const EdgeInsets.all(16), child: Text(context.tr('presetNoSeasons'))));
     }
     final season = seasons.where((s) => s.id == _seasonId).firstOrNull;
+    final ended = season?.endsAt != null && !_now().isBefore(season!.endsAt!);
     final err = _problem;
     return Card(
       child: Padding(
@@ -288,6 +310,9 @@ class _SeasonPresetScreenState extends State<SeasonPresetScreen> {
             const SizedBox(height: 8),
             if (season.endsAt == null)
               Text(context.tr('presetNoEnd'), style: const TextStyle(color: AppColors.alert, fontSize: 12)),
+            if (ended)
+              Text(context.tr('presetEnded'),
+                  key: const Key('presetEnded'), style: const TextStyle(color: AppColors.alert, fontSize: 12)),
             for (final o in PresetOption.all) ...[
               CheckboxListTile(
                 key: Key('presetOpt-$o'),
@@ -337,7 +362,8 @@ class _SeasonPresetScreenState extends State<SeasonPresetScreen> {
               key: const Key('presetApply'),
               icon: const Icon(Icons.auto_awesome_rounded),
               label: Text(context.tr('presetApply')),
-              onPressed: _saving ? null : () => _apply(context, season, raw),
+              // An ended season is never applied: `active` would stay on (CodeRabbit review).
+              onPressed: _saving || ended ? null : () => _apply(context, season, raw),
             ),
           ],
         ]),

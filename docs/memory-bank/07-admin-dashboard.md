@@ -146,7 +146,7 @@ season choice, verse text, reference).
 
 Season dropdown (upcoming first) → checklist of 7 options with per-season defaults (`PresetRequest.defaultsFor`), a
 live-link field and a Drive-link + button-text fields when ticked → «تطبيق تجهيز الموسم» → confirmation dialog listing
-every change → one batch (`saveDocs`) of `settings/features` + the season. While a preset is applied the screen shows
+every change → one transaction (`saveDocsFresh`: re-reads `settings/features` + the season and re-plans, so another admin's change meanwhile is kept and a preset applied meanwhile is never overwritten) writing `settings/features` + the season. While a preset is applied the screen shows
 it (season, applied / end dates, options), says whether the season is running or over (visitors already back to
 normal), and offers «استرجاع الإعدادات السابقة» (confirmed; never recreates a deleted season). Bad links are refused
 before the dialog. The assistant form gains «أقصى عدد أسئلة في اليوم أثناء المواسم الاستثنائية» (`perDaySeason`).

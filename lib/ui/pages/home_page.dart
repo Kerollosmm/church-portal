@@ -631,11 +631,17 @@ class HeroVerse extends ConsumerWidget {
     if (!features.enabled(Sections.dailyVerse)) return const SizedBox.shrink();
     final verses = ref.watch(dailyVersesProvider).value ?? const <Verse>[];
     final now = ref.watch(nowProvider).value ?? DateTime.now();
-    // Season verse set (ADR-042): the seasons stream the next-service card
-    // already opens, read only when an admin set season verses.
-    final seasonSet = features.seasonVerses.isEmpty
+    // Season verse set (ADR-042): read only when an admin set season verses.
+    // The seasons stream is usually already open for the next-service card;
+    // when that card is hidden (or the schedule is off) this opens the one
+    // seasons listener itself (CodeRabbit review on PR #33).
+    final seasons = features.seasonVerses.isEmpty ? null : ref.watch(seasonsProvider);
+    // Hold the verse until the seasons settle, so the general verse never
+    // flashes before the season's (CodeRabbit review on PR #33).
+    if (seasons != null && !seasons.hasValue && !seasons.hasError) return const SizedBox.shrink();
+    final seasonSet = seasons == null
         ? const <Verse>[]
-        : features.seasonVerses.activeSet(ref.watch(seasonsProvider).value ?? const [], now);
+        : features.seasonVerses.activeSet(seasons.value ?? const [], now);
     final verse = resolveSeasonalVerse(features.dailyVerse, verses, now,
         day: ref.watch(liturgicalDayProvider).date, seasonSet: seasonSet);
     if (verse == null) return const SizedBox.shrink();

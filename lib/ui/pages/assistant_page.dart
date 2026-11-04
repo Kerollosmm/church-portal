@@ -243,6 +243,15 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
   Future<void> _send([String? preset]) async {
     final q = (preset ?? _input.text).trim();
     if (q.isEmpty || _busy) return;
+    // The season decides the daily limit (ADR-042): wait briefly for the
+    // seasons so an exceptional season's higher limit is not missed
+    // (CodeRabbit review on PR #33). On a timeout / error the ordinary limit applies.
+    if (!ref.read(seasonsProvider).hasValue) {
+      try {
+        await ref.read(seasonsProvider.future).timeout(const Duration(seconds: 5));
+      } catch (_) {}
+      if (!mounted) return;
+    }
     final s = _settings;
     // The device's daily counter (preloaded in initState; memory-only if
     // storage fails).

@@ -47,7 +47,7 @@
   والأقسام المخفية في `buildAssistantInstruction` (`lib/domain/assistant_context.dart`).
 - قواعد الأمان: `validSeasonVerses` و`validSeasonPreset` و`weddingBookingOff` و`perDaySeason` في `firestore.rules`.
 - **التكلفة على Firebase**: للزائر صفر قراءات وصفر مستمعين إضافيين (مفاتيح داخل مستند مقروء أصلًا). في لوحة التحكم:
-  مستمعان أثناء فتح الشاشة؛ التطبيق = كتابتان في دفعة واحدة؛ الاسترجاع ≤ كتابتين؛ الرجوع التلقائي = صفر.
+  مستمعان أثناء فتح الشاشة؛ التطبيق = معاملة واحدة (قراءتان + كتابتان) تقرأ الإعدادات الحالية من جديد، فلا تضيع تغييرات مشرف آخر ولا يُكتب فوق تجهيز مطبَّق؛ الاسترجاع = معاملة (قراءتان + ≤ كتابتين)؛ الرجوع التلقائي = صفر.
 - الفيديو: `assets/video/hero_clouds.mp4` (1280×720، نحو 241 كيلوبايت) و`hero_clouds_tall.mp4` (432×768، نحو 117
   كيلوبايت)، والصور الأولى `assets/art/hero_poster*.webp`؛ `web/index.html` يحجز 432×768 للهاتف.
 - الاختبارات: `test/season_preset_test.dart` ومجموعة "ADR-042" في `tool/rules_test/rules.test.mjs`.

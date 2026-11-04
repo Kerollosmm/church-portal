@@ -657,6 +657,10 @@ const Map<String, List<String>> _strings = {
   'presetUndo_weddingOff': ['حجز الأفراح كما كان', 'Wedding bookings as they were'],
   'presetUndo_live': ['رابط البث السابق', 'The previous live-stream link'],
   'presetUndo_pdf': ['ملف البرنامج السابق للموسم', 'The season\'s previous programme file'],
+  'presetConflict': ['تغيّر تجهيز الموسم أو حُذف الموسم من جهاز آخر الآن؛ لم يُحفظ شيء. راجِع الشاشة وحاول مرة أخرى.',
+      'The season preparation changed or the season was deleted on another device just now; nothing was saved. Check the screen and try again.'],
+  'presetEnded': ['انتهى هذا الموسم: لا يمكن تجهيزه.', 'This season has ended: it can\'t be prepared.'],
+  'presetLoadFailed': ['تعذّر التحميل: {e}', 'Could not load: {e}'],
   'presetUndoActive': ['إلغاء تفعيل الموسم (كان غير مفعّل)', 'Deactivate the season (it was off)'],
 };
 

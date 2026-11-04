@@ -178,6 +178,12 @@ class PresetRequest {
 
 /// The writes of one apply / restore: `settings/features` fields and the
 /// `seasons/{id}` fields (empty map = no write to that doc).
+/// Thrown inside a fresh apply / restore when the stored preset or season
+/// changed since the screen read it (another admin): nothing is written.
+class PresetConflict implements Exception {
+  const PresetConflict();
+}
+
 class PresetWrites {
   final Map<String, dynamic> features;
   final String seasonId;
@@ -188,11 +194,18 @@ class PresetWrites {
 final _httpsRe = RegExp(r'^https://[^/\s]+\.[^/\s]+(\S*)$', caseSensitive: false);
 final _httpRe = RegExp(r'^https?://[^/\s]+\.[^/\s]+(\S*)$', caseSensitive: false);
 
+/// Longest live-stream / programme link the rules accept.
+const presetMaxUrl = 500;
+
 /// Why [planApply] refuses (null = fine).
 String? presetProblem(PresetRequest r, Season? season) {
   if (season == null) return 'season';
-  if (r.options.contains(PresetOption.live) && !_httpRe.hasMatch(r.liveUrl.trim())) return 'liveUrl';
-  if (r.options.contains(PresetOption.pdf) && !_httpsRe.hasMatch(r.attachmentUrl.trim())) return 'attachmentUrl';
+  // Same 500-character cap as the rules (`liveUrl`, `attachmentUrl`; CodeRabbit review on PR #33).
+  final live = r.liveUrl.trim(), pdf = r.attachmentUrl.trim();
+  if (r.options.contains(PresetOption.live) && (live.length > presetMaxUrl || !_httpRe.hasMatch(live))) return 'liveUrl';
+  if (r.options.contains(PresetOption.pdf) && (pdf.length > presetMaxUrl || !_httpsRe.hasMatch(pdf))) {
+    return 'attachmentUrl';
+  }
   return null;
 }
 

@@ -46,8 +46,9 @@ class _Backend extends AdminBackend {
   @override
   Stream<List<AdminDoc>> watch(String collection) => Stream.value(collection == 'seasons' ? seasons : const []);
   @override
-  Stream<AdminDoc?> watchDoc(String path) =>
-      Stream.value(path == 'settings/features' && features != null ? AdminDoc('features', features!) : null);
+  Stream<AdminDoc?> watchDoc(String path) => Stream.value(path == 'settings/features'
+      ? (features != null ? AdminDoc('features', features!) : null)
+      : seasons.where((d) => 'seasons/${d.id}' == path).firstOrNull);
   @override
   Future<String> save(String collection, String? id, Map<String, dynamic> data) async => id ?? 'new';
   @override
@@ -154,6 +155,10 @@ void main() {
       expect(presetProblem(const PresetRequest(options: {PresetOption.pdf}, attachmentUrl: 'http://drive.google.com/x'), s),
           'attachmentUrl');
       expect(presetProblem(const PresetRequest(options: {PresetOption.live}, liveUrl: 'https://youtu.be/x'), s), isNull);
+      // The rules' 500-character cap is checked before the dialog (CodeRabbit review).
+      final long = 'https://youtu.be/${'x' * 490}';
+      expect(presetProblem(PresetRequest(options: const {PresetOption.live}, liveUrl: long), s), 'liveUrl');
+      expect(presetProblem(PresetRequest(options: const {PresetOption.pdf}, attachmentUrl: long), s), 'attachmentUrl');
     });
 
     test('fromMap ignores unknown options / keys and a bad season id', () {
@@ -369,6 +374,48 @@ void main() {
       expect(w.keys.toSet(), {'settings/features', 'seasons/hw'});
       expect(w['settings/features']!['heroMotion'], isFalse);
       expect(w['seasons/hw'], containsPair('replacesRegular', true));
+    });
+
+    testWidgets('a preset applied meanwhile by another admin is never overwritten (CodeRabbit review)', (tester) async {
+      final b = _Backend(seasons: [
+        AdminDoc('hw', {'key': 'holy_week', 'nameAr': 'أسبوع الآلام', 'nameEn': 'Holy Week', 'startsAt': _start, 'endsAt': _end}),
+      ], features: {'heroMotion': true});
+      await pump(tester, b, _start.subtract(const Duration(days: 3)));
+      await tester.tap(find.byKey(const Key('presetSeason')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.textContaining('Holy Week').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('presetApply')));
+      await tester.pumpAndSettle();
+      // Another device applies a preset while the dialog is open.
+      b.features = {
+        'heroMotion': false,
+        'seasonPreset': {
+          'seasonId': 'hw',
+          'seasonKey': 'holy_week',
+          'appliedAt': _start,
+          'endsAt': _end,
+          'options': ['heroMotionOff'],
+          'previous': {'seasonActive': false, 'heroMotion': true},
+        },
+      };
+      await tester.tap(find.byKey(const Key('presetConfirm')));
+      await tester.pumpAndSettle();
+      expect(b.batches, isEmpty);
+      expect(find.textContaining('nothing was saved'), findsOneWidget);
+    });
+
+    testWidgets('an ended season can\'t be applied (CodeRabbit review)', (tester) async {
+      final b = _Backend(seasons: [
+        AdminDoc('hw', {'key': 'holy_week', 'nameAr': 'أسبوع الآلام', 'nameEn': 'Holy Week', 'startsAt': _start, 'endsAt': _end}),
+      ], features: const {});
+      await pump(tester, b, _end.add(const Duration(days: 1)));
+      await tester.tap(find.byKey(const Key('presetSeason')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.textContaining('Holy Week').last);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('presetEnded')), findsOneWidget);
+      expect(tester.widget<FilledButton>(find.byKey(const Key('presetApply'))).onPressed, isNull);
     });
 
     testWidgets('a bad live link shows an error and writes nothing', (tester) async {
