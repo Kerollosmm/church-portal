@@ -53,6 +53,11 @@ render with `PageBody` (+ `Footer`). Content comes from Riverpod providers (hidd
 - **Hero ambient motion on web (ADR-037, PR #29):** the haze drift and light-ray shimmer look exactly as before but
   run as a CSS-animated DOM layer (`HeroAmbientLayer`) instead of a per-frame Flutter repaint; the first paint is a
   static copy of the hero (poster + church name) in `web/index.html`. See `documentation/features/performance-pagespeed.md`.
+- **Loading screen until real content (ADR-038, PR #30):** that static copy now stays over the app until the first
+  settings/church + settings/features + hero verse list have arrived and been painted (`app-content-ready` from
+  `lib/core/content_ready.dart`; at most 9 s after Flutter's first frame), so the default layout never flashes. The
+  hero `<video>` source and the CSS haze / ray layer start only when the page is idle afterwards (`ContentReady.whenIdle`);
+  they fade in, the poster stays the LCP element and the final look is unchanged.
 
 ### `/about` — `about_page.dart` `AboutPage`
 - History card (bishop line + `historyAr/En`) and **altars** grid (main altar gets a gold cross) — section `history`.

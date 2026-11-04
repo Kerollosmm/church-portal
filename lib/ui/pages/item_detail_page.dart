@@ -100,42 +100,17 @@ class ItemDetailPage extends ConsumerWidget {
 /// no extra Firestore read.
 List<Object> _relatedTo(Object self, List<Object> list, FeatureSettings features) {
   final group = _groupOf(self);
-  bool opens(Object o) =>
-      detailStateFor(_detailsOf(o),
-          features: features, visible: _publiclyListed(o), priestDeparted: o is Priest ? o.departed : null) ==
-      DetailState.available;
+  bool opens(Object o) => detailItemOpens(o, features);
   return pickRelated([for (final o in list) if (o == self || opens(o)) o], self,
       sameGroup: group == null ? null : (o) => _groupOf(o) == group);
 }
 
-String _idOf(Object o) => switch (o) {
-      Meeting m => m.id,
-      Activity a => a.id,
-      Clinic c => c.id,
-      Facility f => f.id,
-      Priest p => p.id,
-      Saint s => s.id,
-      Milestone m => m.id,
-      _ => '',
-    };
+String _idOf(Object o) => detailItemId(o);
 
-ItemDetails _detailsOf(Object o) => switch (o) {
-      Meeting m => m.details,
-      Activity a => a.details,
-      Clinic c => c.details,
-      Facility f => f.details,
-      Priest p => p.details,
-      Saint s => s.details,
-      Milestone m => m.details,
-      _ => ItemDetails.none,
-    };
+ItemDetails _detailsOf(Object o) => detailItemDetails(o);
 
 /// Shown on its list page: visible (and, for clinics, active).
-bool _publiclyListed(Object o) => switch (o) {
-      Clinic c => c.visible && c.active,
-      Hideable h => h.visible,
-      _ => false,
-    };
+bool _publiclyListed(Object o) => detailItemListed(o);
 
 /// One labelled row of the "Key information" card (label above value, so
 /// long Arabic values wrap cleanly at 320 px / 200% text).

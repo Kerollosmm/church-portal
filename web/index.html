@@ -77,16 +77,19 @@
   <title>كنيسة القديسين مكسيموس ودوماديوس والقوي الأنبا موسى الأسود</title>
   <link rel="manifest" href="manifest.json">
   <!-- First paint (ADR-037): a static copy of the home hero (painted poster,
-       church name) shows while Flutter loads, then fades out on its first
-       frame. Same fonts, colours and crop as the Flutter hero, so the page
-       is visually complete early and the poster is the LCP element. -->
+       church name) shows while Flutter loads. Same fonts, colours and crop as
+       the Flutter hero, so the page is visually complete early and the poster
+       is the LCP element. It stays over the app until the first real
+       settings / home data is on screen ("app-content-ready" from
+       lib/core/content_ready.dart, ADR-038) — at most 9 s after Flutter's
+       first frame — so the defaults never flash before the real content. -->
   <link rel="preload" as="image" href="assets/assets/art/hero_poster_tall.webp" media="(max-width: 599.98px)" fetchpriority="high">
   <link rel="preload" as="image" href="assets/assets/art/hero_poster.webp" media="(min-width: 600px)" fetchpriority="high">
   <style>
     @font-face { font-family: "Lalezar"; src: url("assets/assets/fonts/Lalezar-Regular.ttf") format("truetype"); font-display: swap; }
     @font-face { font-family: "IBM Plex Sans Arabic"; src: url("assets/assets/fonts/IBMPlexSansArabic-Regular.ttf") format("truetype"); font-display: swap; }
     html, body { margin: 0; height: 100%; background: #FBF3E4; }
-    #splash { position: fixed; inset: 0; overflow: hidden; background: #FBF3E4; color: #6E1C1C;
+    #splash { position: fixed; inset: 0; z-index: 2147483000; overflow: hidden; background: #FBF3E4; color: #6E1C1C;
       font-family: "IBM Plex Sans Arabic", system-ui, "Segoe UI", Tahoma, sans-serif; transition: opacity .5s ease-out; }
     #splash.gone { opacity: 0; pointer-events: none; }
     #splash .bar { height: 64px; background: #FFF9EE; border-bottom: 1px solid #E2C99A; }
@@ -123,12 +126,21 @@
   </div>
   <script>
     var appStarted = false;
-    window.addEventListener('flutter-first-frame', function () {
-      appStarted = true;
-      var s = document.getElementById('splash'); if (!s) return;
-      // Fade out over the first Flutter frame (its hero art fades in), then remove.
+    // Hide the loading screen once (fade, then remove).
+    function splashDone() {
+      var s = document.getElementById('splash'); if (!s || s.classList.contains('gone')) return;
+      // Fade out over the first content frame (its hero art fades in), then remove.
       s.classList.add('gone');
       setTimeout(function () { s.remove(); }, 600);
+    }
+    // ADR-038: Flutter's first frame no longer hides the screen by itself —
+    // the app says when its first real content is painted. Cap: 9 s after the
+    // first frame (the app then shows its fallback / loading states).
+    window.addEventListener('app-content-ready', splashDone);
+    window.addEventListener('flutter-first-frame', function () {
+      appStarted = true;
+      if (window.__appContentReady) { splashDone(); return; }
+      setTimeout(splashDone, 9000);
     });
     // Failure path: replace the spinner with a message + reload link if the
     // bootstrap script fails to load or Flutter never renders a frame.

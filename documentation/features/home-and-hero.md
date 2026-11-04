@@ -53,6 +53,7 @@
   اللوحة، ولا مشغّل يوتيوب في التطبيق. حقل `heroVideos` القديم إن وُجد في `settings/features` يُتجاهل ولا يُحذف، والقواعد ما
   زالت تقبله حتى لا يفشل الحفظ.
 - على الويب تُحرَّك السحب وأشعة الضوء بـ CSS في طبقة HTML فوق الفيديو (`hero_ambient_web.dart`، ADR-037) بنفس الشكل، بدل إعادة رسم Flutter لكل إطار.
+- منذ PR #30 (ADR-038): على الويب تبقى شاشة التحميل (صورة الواجهة واسم الكنيسة) حتى تصل أول بيانات حقيقية، ثم يبدأ تحميل الفيديو وطبقة السحب والأشعة عندما يهدأ المتصفح وتظهر بتلاشٍ؛ الشكل النهائي كما هو. انظر [performance-pagespeed.md](performance-pagespeed.md).
 - الحركة تتوقف مع `prefers-reduced-motion` أو `saveData` (`lib/core/motion_env*.dart`) أو `heroMotion: false`.
 - الإعدادات في `settings/features`: `homeOrder` (ترتيب الكتل)، `homeHidden` (المخفية)، `heroTitleAr/En`،
   `heroSubtitleAr/En`، `heroMotion`، `heroShowAddress`، `bannerEnabled`، `bannerAr/En`، `bannerLink`.

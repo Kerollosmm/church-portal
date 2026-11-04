@@ -210,8 +210,15 @@ App target settings:
   `kCanonicalOrigin + path`; `/admin`, the 404 page and switched-off sections (`FeatureGate`, `AssistantGate` for
   `/ask`) drop the canonical link and add `<meta name="robots" content="noindex">` instead (never both); item
   detail pages (PR #13) are indexable only while the item's page is available (`ItemDetailPage`). Crawlers
-  that do not run JS still see `/` as the canonical. `web/sitemap.xml` keeps `/clinics` commented out while
-  `sections.clinics` is off in the seed (uncomment when clinics launch). Plus a `<script type="application/ld+json">` **`Church`** block with only
+  that do not run JS still see `/` as the canonical. **`sitemap.xml` is generated at deploy (PR #30, ADR-038):**
+  `deploy.yml` → `build` runs `tool/build_sitemap.sh` after `flutter build web` with the deploy key
+  (`firebase-credentials`, `continue-on-error`): `tool/export_public_content.js` reads `settings/features` + the 7
+  detail collections + `categories` + `pages` with **`get()` only** (never writes), `dart run tool/gen_sitemap.dart`
+  applies `lib/domain/sitemap.dart` (fixed pages by `routeEnabled`; public `/section/<slug>` / `/page/<slug>` while
+  `customSections` / `customPages` are on — nav-hidden pages included, as the app indexes them; item pages that open),
+  the XML is validated and written to `build/web/sitemap.xml`; the key is deleted at once. Any failure → `::warning::`
+  and the static `web/sitemap.xml` (fixed pages the seed keeps on; `/clinics` omitted while seed clinics are off)
+  ships instead. The sitemap reflects content at deploy time. `web/robots.txt` points to `/sitemap.xml`. Plus a `<script type="application/ld+json">` **`Church`** block with only
   verified facts mirrored from `settings/church` / `docs/CONTENT_SOURCES.md` and the display title: Arabic name
   (`nameAr`), `alternateName` = the English display title "St. Maximus & Domadius and St. Moses the Black Church"
   (`appName` in `l10n.dart`, ADR-018) and the full `nameEn`, `PostalAddress` (آخر شارع 45، العصافرة قبلي، قطاع المنتزه، الإسكندرية, EG), `GeoCoordinates`

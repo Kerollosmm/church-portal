@@ -87,6 +87,9 @@ Job **firestore-rules** (15 min): Java Temurin 21 + Node 22 → `npm ci` in `too
    with the Sentry defines (PR #24: `SENTRY_ENVIRONMENT` = `production` on push / `preview` on PRs, `GIT_SHA` = the
    PR head or pushed SHA, `APP_VERSION` from `pubspec.yaml`, `SENTRY_DSN` only when the repo variable is set),
    with `--dart-define=RECAPTCHA_SITE_KEY` only on push builds when the repo variable is set →
+   **sitemap from Firestore (PR #30, ADR-038):** Node 22 → `firebase-credentials` (`continue-on-error`) →
+   `tool/build_sitemap.sh build/web/sitemap.xml` (read-only export + `dart run tool/gen_sitemap.dart` + XML check;
+   any failure = `::warning::` and the static `web/sitemap.xml`) → remove key →
    `tool/fingerprint_icon_fonts.py` → artifact `web-build`
    (3 days).
 2. **deploy-live** (push to main, needs build **and deploy-rules** since PR #24 — a new app may write fields the
