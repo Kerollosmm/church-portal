@@ -16,7 +16,8 @@ class FirebaseAssistantModel implements AssistantModel {
   /// few seconds the first time), so the first question does not race it.
   @override
   Future<void> warmUp() async {
-    await ensureAppCheckActivated();
+    final ok = await ensureAppCheckActivated();
+    if (!ok) return;
     try {
       await FirebaseAppCheck.instance.getToken().timeout(const Duration(seconds: 15));
     } catch (e) {

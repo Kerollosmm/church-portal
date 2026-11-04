@@ -36,7 +36,7 @@ onbg() { # size pct colour out
 # In-app logo (header tab, drawer, footer, admin) and the web splash: 384 px
 # (sharp at 120 css px on 3x screens; quantized to < 35 KB).
 shrink "$T/round.png" 384 "$B/seal.png"
-if command -v python3 >/dev/null 2>&1; then
+if python3 -c "import PIL" >/dev/null 2>&1; then
   python3 -c "from PIL import Image; im = Image.open('$B/seal.png'); im.quantize(colors=256, method=Image.Quantize.FASTOCTREE).save('$B/seal.png', format='PNG', optimize=True)"
 elif command -v pngquant >/dev/null 2>&1; then
   pngquant --force --quality=80-95 --output "$B/seal.png" "$B/seal.png"
