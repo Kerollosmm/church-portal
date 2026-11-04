@@ -12,7 +12,7 @@
       "trailingSlash": false,
       "rewrites": [
         {
-          "source": "**",
+          "source": "!(*.map|.well-known/**)",
           "destination": "/index.html"
         }
       ],
@@ -23,6 +23,10 @@
             {
               "key": "Cache-Control",
               "value": "no-cache"
+            },
+            {
+              "key": "Cross-Origin-Opener-Policy",
+              "value": "same-origin-allow-popups"
             },
             {
               "key": "X-Content-Type-Options",
@@ -47,11 +51,11 @@
           ]
         },
         {
-          "source": "**/*.@(png|jpg|jpeg|webp|gif|svg|ico|otf|ttf|woff|woff2)",
+          "source": "**/*.@(png|jpg|jpeg|webp|gif|svg|ico|mp4|otf|ttf|woff|woff2)",
           "headers": [
             {
               "key": "Cache-Control",
-              "value": "public, max-age=604800"
+              "value": "public, max-age=31536000, immutable"
             }
           ]
         },
@@ -60,7 +64,7 @@
           "headers": [
             {
               "key": "Cache-Control",
-              "value": "public, max-age=604800"
+              "value": "public, max-age=31536000, immutable"
             }
           ]
         }

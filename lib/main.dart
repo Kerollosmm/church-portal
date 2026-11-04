@@ -1,5 +1,4 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
 import 'package:flutter/foundation.dart';
@@ -7,11 +6,9 @@ import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 
 import 'app.dart';
-import 'data/admin_repository.dart';
 import 'data/content_repository.dart';
 import 'data/error_reporting.dart';
 import 'data/firebase_bootstrap.dart';
-import 'data/media_repository.dart';
 import 'data/seed_data.dart';
 import 'domain/cairo_time.dart';
 import 'state/providers.dart';
@@ -42,16 +39,11 @@ Future<void> _start() async {
 
   final ContentRepository repo =
       status.available ? FirestoreRepository(FirebaseFirestore.instance, seed) : SeedRepository(seed);
-  final AdminRepository? admin =
-      status.available ? AdminRepository(FirebaseFirestore.instance, FirebaseAuth.instance) : null;
-  final MediaRepository? media = admin?.media;
 
   runApp(ProviderScope(
     overrides: [
       firebaseStatusProvider.overrideWithValue(status),
       repositoryProvider.overrideWithValue(repo),
-      adminRepositoryProvider.overrideWithValue(admin),
-      mediaRepositoryProvider.overrideWithValue(media),
     ],
     child: const ChurchPortalApp(),
   ));

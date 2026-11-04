@@ -524,6 +524,26 @@ void main() {
     });
   });
 
+  group('lazy App Check and Auth/Admin providers', () {
+    test('ensureAppCheckActivated is idempotent and memoizes result', () async {
+      resetAppCheckActivationForTest();
+      final r1 = await ensureAppCheckActivated();
+      final r2 = await ensureAppCheckActivated();
+      expect(r1, r2);
+    });
+
+    test('adminRepositoryProvider and mediaRepositoryProvider are null when Firebase is unavailable', () {
+      final container = ProviderContainer(
+        overrides: [
+          firebaseStatusProvider.overrideWithValue(FirebaseStatus.unavailable),
+        ],
+      );
+      addTearDown(container.dispose);
+      expect(container.read(adminRepositoryProvider), isNull);
+      expect(container.read(mediaRepositoryProvider), isNull);
+    });
+  });
+
   group('contact categories: stable unique ids', () {
     test('deleting a category and adding another never reuses its id (old messages keep their box)', () {
       final rnd = Random(1);

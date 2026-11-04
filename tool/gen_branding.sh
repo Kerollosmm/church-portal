@@ -34,8 +34,13 @@ onbg() { # size pct colour out
 }
 
 # In-app logo (header tab, drawer, footer, admin) and the web splash: 384 px
-# (sharp at 120 css px on 3x screens; ~170 KB).
+# (sharp at 120 css px on 3x screens; quantized to < 35 KB).
 shrink "$T/round.png" 384 "$B/seal.png"
+if command -v python3 >/dev/null 2>&1; then
+  python3 -c "from PIL import Image; im = Image.open('$B/seal.png'); im.quantize(colors=256, method=Image.Quantize.FASTOCTREE).save('$B/seal.png', format='PNG', optimize=True)"
+elif command -v pngquant >/dev/null 2>&1; then
+  pngquant --force --quality=80-95 --output "$B/seal.png" "$B/seal.png"
+fi
 # Web: favicons, PWA "any" icons (round on transparency), Apple touch icon
 # (opaque: iOS ignores transparency), maskable (seal inside the 80 % safe circle).
 shrink "$T/round.png" 32 "$W/favicon.png"

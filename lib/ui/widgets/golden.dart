@@ -502,20 +502,15 @@ class HeroStage extends StatefulWidget {
   State<HeroStage> createState() => _HeroStageState();
 }
 
-class _HeroStageState extends State<HeroStage> with SingleTickerProviderStateMixin, ViewportVisibility<HeroStage> {
-  // One slow master clock (60 s); every layer derives its phase from it.
-  late final AnimationController _clock = AnimationController(vsync: this, duration: const Duration(seconds: 60));
-  bool _ambient = false;
+class _HeroStageState extends State<HeroStage> with ViewportVisibility<HeroStage> {
   bool _videoOn = false;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _ambient = ambientMotionOn(context, adminOn: widget.motion);
     _videoOn = widget.video != null && heroVideoAllowed(context, adminOn: widget.motion);
     // Decode the still before it is needed (no pop-in, no flash on swaps).
     precacheImage(AssetImage(_still), context).ignore();
-    _sync();
   }
 
   String get _still => _videoOn ? (widget.poster ?? widget.image) : widget.image;
@@ -530,23 +525,7 @@ class _HeroStageState extends State<HeroStage> with SingleTickerProviderStateMix
 
   @override
   void onViewportVisibility(bool visible) {
-    _sync();
     if (_videoOn && mounted) setState(() {}); // pause / resume the video
-  }
-
-  void _sync() {
-    final run = _ambient && visibleInViewport;
-    if (run && !_clock.isAnimating) {
-      _clock.repeat();
-    } else if (!run && _clock.isAnimating) {
-      _clock.stop();
-    }
-  }
-
-  @override
-  void dispose() {
-    _clock.dispose();
-    super.dispose();
   }
 
   Widget _feather(Widget child) => widget.fadeBottom ? BottomFeather(child: child) : child;
@@ -569,26 +548,12 @@ class _HeroStageState extends State<HeroStage> with SingleTickerProviderStateMix
               child: child,
             ),
     );
-    // Ken Burns only on the painting: the video carries its own motion and
-    // must stay registered with its poster.
-    final kenBurns = _ambient && !_videoOn;
     final art = context.pal;
     return ExcludeSemantics(
       child: ClipRect(
         child: Stack(fit: StackFit.expand, children: [
           RepaintBoundary(
-            child: sceneArt(
-                context,
-                _feather(kenBurns
-                    ? AnimatedBuilder(
-                        animation: _clock,
-                        child: still,
-                        builder: (context, child) => Transform.scale(
-                          scale: 1 + 0.06 * (0.5 - 0.5 * math.cos(_clock.value * 2 * math.pi)),
-                          child: child,
-                        ),
-                      )
-                    : still)),
+            child: sceneArt(context, _feather(still)),
           ),
           // The bundled clip only: the YouTube hero video library was removed
           // (owner request, 4 Nov 2026 — ADR-036).
@@ -600,68 +565,19 @@ class _HeroStageState extends State<HeroStage> with SingleTickerProviderStateMix
               play: visibleInViewport,
               cssFilter: art.artCssFilter,
             ),
-          if (_ambient) RepaintBoundary(child: sceneArt(context, _feather(_HazeDrift(clock: _clock)))),
           if (widget.rays > 0)
             RepaintBoundary(
               child: sceneArt(
-                  context,
-                  _feather(AnimatedBuilder(
-                    animation: _clock,
-                    builder: (context, _) => CustomPaint(
-                      painter: LightRaysPainter(shimmer: _ambient ? _clock.value * 8 % 1 : 0.25, strength: widget.rays),
-                    ),
-                  ))),
+                context,
+                _feather(CustomPaint(
+                  painter: LightRaysPainter(shimmer: 0.25, strength: widget.rays),
+                )),
+              ),
             ),
         ]),
       ),
     );
   }
-}
-
-/// Gold haze drifting sideways across the whole stage. The strip is the
-/// cloud texture, its mirror image, then the texture again, so neighbours
-/// meet edge-to-edge without a seam and the loop restarts on an identical
-/// frame; a vertical alpha ramp keeps it a soft veil with no box edge.
-class _HazeDrift extends StatelessWidget {
-  final Animation<double> clock;
-  const _HazeDrift({required this.clock});
-
-  static Shader _veil(Rect r) => const LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: [Color(0x5C000000), Color(0x47000000), Color(0x1F000000), Color(0x00000000)],
-        stops: [0, 0.35, 0.62, 0.9],
-      ).createShader(r);
-
-  @override
-  Widget build(BuildContext context) => ShaderMask(
-        key: const Key('heroHaze'),
-        blendMode: BlendMode.dstIn,
-        shaderCallback: _veil,
-        child: LayoutBuilder(builder: (context, c) {
-          final w = c.maxWidth, h = c.maxHeight;
-          Widget tile(bool mirror) {
-            final img = Image.asset(ArtAssets.clouds, fit: BoxFit.cover, gaplessPlayback: true);
-            return SizedBox(width: w, height: h, child: mirror ? Transform.flip(flipX: true, child: img) : img);
-          }
-
-          return AnimatedBuilder(
-            animation: clock,
-            child: OverflowBox(
-              // Physical left (not start): in RTL a start-aligned strip would
-              // hang off the right edge and leave an empty band (a hard edge).
-              alignment: Alignment.topLeft,
-              minWidth: w * 3,
-              maxWidth: w * 3,
-              child: Row(textDirection: TextDirection.ltr, children: [tile(false), tile(true), tile(false)]),
-            ),
-            builder: (context, child) => Transform.translate(
-              offset: Offset(-2 * w * clock.value, 0),
-              child: child,
-            ),
-          );
-        }),
-      );
 }
 
 /// Soft cream glow behind hero / header text so it keeps AA contrast over any

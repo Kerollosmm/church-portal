@@ -239,3 +239,10 @@ Status as of 4 Nov 2026 (PR #25, re-checked against `main` at `d60261d` = PR #24
       Services menu, Home directory and footer quick links when `sections.clinics` is on. Guarded by
       `test/feature_gate_test.dart` (PR #26). At ~07:30 Cairo on 4 Nov the live `sections.clinics` still read true; it
       was switched off at 07:51 (PR #25 live read).
+
+## Web performance & PageSpeed (PR #28, ADR-037)
+- [x] Eliminate 60 FPS CanvasKit repaint loop in `HeroStage` (static `LightRaysPainter` in RepaintBoundary, remove `_clock.repeat()`, isolate `SkeletonBox`).
+- [x] Defer Firebase Auth and App Check off public startup path (`ensureAppCheckActivated()`, lazy `adminRepositoryProvider`).
+- [x] Compress `seal.png` < 35 KiB (27.2 KiB) and add splash `fetchpriority="high" decoding="async"`.
+- [x] 1-year immutable cache headers on static assets and canvaskit; COOP header; exclude `.map` and `.well-known/**` from SPA rewrite; `--source-maps` in CI and deploy; `web/llms.txt`.
+- [ ] Post-deploy PageSpeed verification: re-run PSI on Mobile and Desktop to confirm scores.

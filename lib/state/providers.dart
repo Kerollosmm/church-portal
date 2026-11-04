@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
@@ -21,11 +23,22 @@ import '../domain/models.dart';
 /// Overridden in main() after bootstrapping.
 final firebaseStatusProvider = Provider<FirebaseStatus>((ref) => FirebaseStatus.unavailable);
 final repositoryProvider = Provider<ContentRepository>((ref) => throw UnimplementedError('override in main'));
-final adminRepositoryProvider = Provider<AdminRepository?>((ref) => null);
+final adminRepositoryProvider = Provider<AdminRepository?>((ref) {
+  final status = ref.watch(firebaseStatusProvider);
+  if (!status.available) return null;
+  return AdminRepository(FirebaseFirestore.instance, FirebaseAuth.instance);
+});
 
 /// Reads (public) and uploads (admin) optional item images; null when
 /// Firebase is unavailable (inline images then show their placeholder).
-final mediaRepositoryProvider = Provider<MediaRepository?>((ref) => null);
+final mediaRepositoryProvider = Provider<MediaRepository?>((ref) {
+  final status = ref.watch(firebaseStatusProvider);
+  if (!status.available) return null;
+  return createMediaRepository(
+    FirebaseFirestore.instance,
+    () => ref.read(adminRepositoryProvider)?.actor ?? '',
+  );
+});
 
 final settingsProvider = StreamProvider<ChurchSettings>((ref) => ref.watch(repositoryProvider).settings());
 

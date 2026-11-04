@@ -112,10 +112,12 @@ flowchart TD
    - `SeedData.load()` reads `assets/seed/seed.json` (on error → empty `SeedData`).
    - `bootstrapFirebase()`: `DefaultFirebaseOptions.currentPlatformOrNull` (null for placeholder/unsupported
      platforms) → `Firebase.initializeApp` (10 s timeout) → Firestore `persistenceEnabled: true`,
-     `cacheSizeBytes: 40 MB` → `_activateAppCheck()`.
-3. Repository choice: `status.available ? FirestoreRepository(db, seed) : SeedRepository(seed)`; `AdminRepository`
-   only when Firebase is available (otherwise `/admin` shows `adminUnavailable`).
-4. `ProviderScope(overrides: [firebaseStatusProvider, repositoryProvider, adminRepositoryProvider])`.
+     `cacheSizeBytes: 40 MB` → evaluates `selectAppCheckPlan(...)` synchronously to populate `FirebaseStatus(available: true, appCheckActive: plan.activate)`
+     WITHOUT awaiting `_activateAppCheck()`. App Check activation is deferred to `ensureAppCheckActivated()` when `/ask` is accessed.
+3. Repository choice: `status.available ? FirestoreRepository(db, seed) : SeedRepository(seed)`.
+   `adminRepositoryProvider` and `mediaRepositoryProvider` instantiate lazily via Riverpod when Firebase is available;
+   public home visitors never touch `FirebaseAuth.instance` or load `__/auth/iframe.js`.
+4. `ProviderScope(overrides: [firebaseStatusProvider, repositoryProvider])`.
 
 ## Error reporting — Sentry (`lib/data/error_reporting.dart`, PR #24, ADR-034)
 

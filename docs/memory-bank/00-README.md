@@ -42,7 +42,8 @@ Sentry error tracking on web + Android with PDPL-safe scrubbing and the `/admin`
 `settings/features.errorReporting`; ADR-034; merged as `d60261d`) plus PR #25 (`docs/feature-documentation`, 4 Nov
 2026: the PR #15–#24 behaviour re-checked against the code at `d60261d`, stale assistant / clinics / seeding /
 font notes fixed, the Arabic feature documentation in [`/documentation/`](../../documentation/README.md);
-ADR-035; plus the removal of the YouTube hero video library — ADR-036 — later PRs are listed in `10-decisions-and-history.md`).
+ADR-035; plus the removal of the YouTube hero video library — ADR-036 — later PRs are listed in `10-decisions-and-history.md`)
+plus PR #28 (`fix/pagespeed-performance`: PageSpeed Insights & web startup optimization — lazy App Check & lazy Firebase Auth / AdminRepository off the public startup path, static RepaintBoundary rays in HeroStage eliminating 60 FPS repaints, seal.png compressed to ~27 KiB with splash `fetchpriority="high"`, 1-year immutable cache headers, COOP header, rewrites excluding .map and .well-known/**, --source-maps in CI/deploy, and `web/llms.txt`; ADR-037).
 
 > **Golden rule:** read this folder before changing anything, and update it in the same PR as every change that
 > alters behaviour, data shape, rules, workflows, content status or open tasks.

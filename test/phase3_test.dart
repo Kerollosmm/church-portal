@@ -329,4 +329,56 @@ void main() {
       expect(locs, contains('https://maximos-domadios-church.web.app/contact'));
     });
   });
+
+  group('PageSpeed & agentic headers, rewrites and llms.txt', () {
+    test('firebase.json headers cache static assets & canvaskit with 1-year immutable and set COOP', () {
+      final json = jsonDecode(File('firebase.json').readAsStringSync()) as Map<String, dynamic>;
+      final hosting = (json['hosting'] as List).first as Map<String, dynamic>;
+      final headers = hosting['headers'] as List;
+
+      // Global COOP header
+      final global = headers.firstWhere((h) => h['source'] == '**') as Map<String, dynamic>;
+      final globalList = global['headers'] as List;
+      expect(
+        globalList.any((h) => h['key'] == 'Cross-Origin-Opener-Policy' && h['value'] == 'same-origin-allow-popups'),
+        isTrue,
+        reason: 'COOP allows popup auth and satisfies best practices',
+      );
+
+      // Static assets (images, fonts, mp4 videos)
+      final staticAssets = headers.firstWhere(
+        (h) => (h['source'] as String).contains('mp4') && (h['source'] as String).contains('png'),
+      ) as Map<String, dynamic>;
+      final staticCache = (staticAssets['headers'] as List)
+          .firstWhere((h) => h['key'] == 'Cache-Control')['value'] as String;
+      expect(staticCache, 'public, max-age=31536000, immutable');
+
+      // CanvasKit
+      final canvaskit = headers.firstWhere((h) => h['source'] == 'canvaskit/**') as Map<String, dynamic>;
+      final canvaskitCache = (canvaskit['headers'] as List)
+          .firstWhere((h) => h['key'] == 'Cache-Control')['value'] as String;
+      expect(canvaskitCache, 'public, max-age=31536000, immutable');
+
+      // Rewrites exclude .map and .well-known/**
+      final rewrites = hosting['rewrites'] as List;
+      final spaRewrite = rewrites.firstWhere((r) => r['destination'] == '/index.html') as Map<String, dynamic>;
+      expect(spaRewrite['source'], contains('*.map'));
+      expect(spaRewrite['source'], contains('.well-known/**'));
+    });
+
+    test('web/llms.txt starts with #, lists core verified links, and contains no unverified content', () {
+      final text = File('web/llms.txt').readAsStringSync();
+      expect(text, startsWith('# كنيسة القديسين مكسيموس ودوماديوس والقوي الأنبا موسى الأسود — العصافرة قبلي، الإسكندرية'));
+      expect(text, contains('https://maximos-domadios-church.web.app/'));
+      expect(text, contains('https://maximos-domadios-church.web.app/mass-schedule'));
+      expect(text, contains('https://maximos-domadios-church.web.app/church-education'));
+      expect(text, contains('https://maximos-domadios-church.web.app/church-activities'));
+      expect(text, contains('https://maximos-domadios-church.web.app/public-services'));
+      expect(text, contains('https://maximos-domadios-church.web.app/about'));
+      expect(text, contains('https://maximos-domadios-church.web.app/contact'));
+      // No unverified content
+      expect(text, isNot(contains('sample')));
+      expect(text, isNot(contains('fake')));
+    });
+  });
 }

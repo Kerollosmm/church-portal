@@ -61,3 +61,6 @@ tool/node_modules/
 sa.json
 .env
 .env.*
+
+# Agent status notes
+.work/

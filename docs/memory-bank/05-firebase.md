@@ -195,9 +195,9 @@ stays `asafra-church-portal.firebaseapp.com` (admin sign-in is email/password, n
 App target settings:
 
 - `public: build/web` (output of `flutter build web --release`); ignores `firebase.json`, dotfiles, `node_modules`.
-- `cleanUrls: true`, `trailingSlash: false`, **rewrite `**` → `/index.html`** (SPA + path URL strategy) — this also
-  serves the PR #13 item detail URLs (`/clinics/<id>`, `/about/priests/<id>`…) with HTTP 200; the app decides
-  what they show.
+- `cleanUrls: true`, `trailingSlash: false`, **rewrite `!(*.map|.well-known/**)` → `/index.html`** (SPA + path URL strategy) — this also
+  serves the PR #13 item detail URLs (`/clinics/<id>`, `/about/priests/<id>`…) with HTTP 200, while ensuring missing `.map` source maps
+  and `.well-known/**` requests return 404 rather than HTML.
 - SEO in `web/index.html` (PR 3 of the review plan): a **static** `<link rel="canonical"
   href="https://maximos-domadios-church.web.app/">` in the shell. Since PR #10 (amending ADR-019) Flutter rewrites it
   per route with `setDocumentRouteMeta` (`lib/core/document_lang*.dart`): indexable routes get
@@ -215,15 +215,18 @@ App target settings:
   `addressCountry` and `url` are hard-coded in the test; `image` is not checked. If the church's facts change, update
   the seed, `web/index.html` and the hard-coded test values together.
 - Headers: `**` → `Cache-Control: no-cache` (Flutter bundles are not content-hashed, so HTML/JS must revalidate),
+  `Cross-Origin-Opener-Policy: same-origin-allow-popups` (enables auth popups and satisfies PageSpeed best practices),
   `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `X-Frame-Options: SAMEORIGIN`,
   `Strict-Transport-Security: max-age=31536000; includeSubDomains`, `Permissions-Policy: camera=(), microphone=(),
   geolocation=()` (PR 1, SEC-05);
-  images/fonts and `canvaskit/**` → `public, max-age=604800` (7 days).
+  media/fonts/videos (`**/*.@(png|jpg|jpeg|webp|gif|svg|ico|mp4|otf|ttf|woff|woff2)`) and `canvaskit/**` → `public, max-age=31536000, immutable` (1 year).
+  Also `web/llms.txt` serves verified church information and core Markdown links for AI/LLM crawlers.
   **Icon fonts are fingerprinted (PR #23):** `flutter build web` tree-shakes `MaterialIcons-Regular.otf` /
-  `CupertinoIcons.ttf` to the icons in use but keeps one file name, so the 7-day font cache kept an old subset and
+  `CupertinoIcons.ttf` to the icons in use but keeps one file name, so the font cache kept an old subset and
   icons added later (the PR #18 admin menu entries) drew as blank space. `tool/fingerprint_icon_fonts.py` (run by
   `ci.yml` and `deploy.yml` right after the build) renames them `<name>.<sha256[:12]>.<ext>` and rewrites
   `assets/FontManifest.json` (no-cache), so a new subset is a new URL. Manual deploys must run it too.
+  Source maps (`--source-maps`) are generated in `--release` build for production Sentry debugging.
 - **Live** deploy: push to `main` → `deploy.yml` job `deploy-live` (`firebase deploy --only hosting:app,hosting:legacy-redirect`),
   environment `production` (URL the new domain).
 - **Previews**: every same-repo PR → channel **`pr-<number>`** of the `app` target only (`--only app`), `--expires 7d`; the URL is posted/updated in one PR

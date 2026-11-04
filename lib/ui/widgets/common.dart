@@ -334,14 +334,16 @@ class _SkeletonBoxState extends State<SkeletonBox> with SingleTickerProviderStat
         decoration: BoxDecoration(color: context.pal.surfaceAlt, borderRadius: BorderRadius.circular(widget.radius)),
       );
     }
-    return AnimatedBuilder(
-      animation: _c,
-      builder: (_, _) => Container(
-        height: widget.height,
-        width: widget.width,
-        decoration: BoxDecoration(
-          color: Color.lerp(context.pal.surfaceAlt, context.pal.surface, _c.value),
-          borderRadius: BorderRadius.circular(widget.radius),
+    return RepaintBoundary(
+      child: AnimatedBuilder(
+        animation: _c,
+        builder: (_, _) => Container(
+          height: widget.height,
+          width: widget.width,
+          decoration: BoxDecoration(
+            color: Color.lerp(context.pal.surfaceAlt, context.pal.surface, _c.value),
+            borderRadius: BorderRadius.circular(widget.radius),
+          ),
         ),
       ),
     );

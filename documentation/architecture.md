@@ -134,12 +134,13 @@ Firestore في المتصفح يحتفظ بنسخة محلية (cache). عند �
 ## 8. الاستضافة والتحويل من الرابط القديم (`firebase.json`)
 
 - هدفان في Hosting:
-  - `app` → موقع `maximos-domadios-church` يقدّم `build/web` مع إعادة كل الروابط إلى `index.html`.
+  - `app` → موقع `maximos-domadios-church` يقدّم `build/web` مع إعادة الروابط إلى `index.html` مستثنيًا خرائط المصدر والملفات المعروفة (`!(*.map|.well-known/**)`).
   - `legacy-redirect` → موقع `asafra-church-portal` يحوّل أي رابط بتحويل دائم **301** إلى
     `https://maximos-domadios-church.web.app/<نفس المسار>`.
-- الترويسات: `Cache-Control: no-cache` للصفحات، وتخزين **7 أيام** للصور والخطوط و `canvaskit`، مع ترويسات أمان
+- الترويسات: `Cache-Control: no-cache` للصفحات مع `Cross-Origin-Opener-Policy: same-origin-allow-popups` (لمنع تعارض نوافذ تسجيل الدخول وتحسين PageSpeed)، وتخزين **سنة كاملة غير متغيرة** (`public, max-age=31536000, immutable`) للصور وملفات mp4 والخطوط و `canvaskit/**`، مع ترويسات أمان
   (`X-Content-Type-Options`, `Referrer-Policy`, `X-Frame-Options`, HSTS, `Permissions-Policy`). لا توجد CSP؛ إن
   أُضيفت يجب أن تسمح بـ `browser.sentry-cdn.com` و `*.ingest.de.sentry.io`.
+- يوفّر الموقع ملف `web/llms.txt` بحقائق موثقة وروابط الصفحات الأساسية لمحركات البحث والوكلاء الذكاء الاصطناعي (Agentic Browsing).
 
 ## 9. CI/CD (`.github/workflows/`)
 

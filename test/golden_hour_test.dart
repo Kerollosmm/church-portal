@@ -421,4 +421,36 @@ void main() {
     expect(ring.gradient, isA<SweepGradient>());
     expect(ring.boxShadow, isNotEmpty);
   });
+
+  testWidgets('performance: HeroStage caches static rays in RepaintBoundary without continuous Ticker; SkeletonBox isolated', (tester) async {
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: Column(
+          children: const [
+            SizedBox(
+              height: 300,
+              width: 800,
+              child: HeroStage(
+                image: ArtAssets.heroWide,
+                video: ArtAssets.heroVideo,
+                poster: ArtAssets.heroPoster,
+              ),
+            ),
+            SkeletonBox(height: 24, width: 120),
+          ],
+        ),
+      ),
+    ));
+    expect(find.byKey(const Key('heroStill')), findsOneWidget);
+    expect(find.byKey(const Key('heroHaze')), findsNothing,
+        reason: 'no 60fps 3x-width ShaderMask cloud strip repainting on main thread');
+    final skel = find.byType(SkeletonBox);
+    expect(find.descendant(of: skel, matching: find.byType(RepaintBoundary)), findsOneWidget);
+  });
+
+  test('performance: seal.png size is budgeted under 50 KB and web/index.html has fetchpriority=high', () {
+    expect(File('assets/branding/seal.png').lengthSync(), lessThan(50 * 1024),
+        reason: 'splash & seal tab PNG stays under 50 KB');
+    expect(File('web/index.html').readAsStringSync(), contains('fetchpriority="high"'));
+  });
 }

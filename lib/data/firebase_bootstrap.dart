@@ -41,8 +41,25 @@ Future<FirebaseStatus> bootstrapFirebase() async {
     debugPrint('Firestore settings: $e');
   }
 
-  final appCheck = await _activateAppCheck();
-  return FirebaseStatus(available: true, appCheckActive: appCheck);
+  final plan = selectAppCheckPlan(
+    isWeb: kIsWeb,
+    debug: kDebugMode || AppConfig.forceAppCheckDebug,
+    siteKey: AppConfig.recaptchaSiteKey,
+    debugToken: AppConfig.appCheckDebugToken,
+  );
+  return FirebaseStatus(available: true, appCheckActive: plan.activate);
+}
+
+Future<bool>? _appCheckFuture;
+
+/// Idempotent lazy activator for App Check (enforced for Firebase AI Logic; ADR-029).
+/// Called on `/ask` warm-up/generate so public visitors on `/` never incur reCAPTCHA
+/// Enterprise overhead, storage access prompts, or 403 errors.
+Future<bool> ensureAppCheckActivated() => _appCheckFuture ??= _activateAppCheck();
+
+@visibleForTesting
+void resetAppCheckActivationForTest() {
+  _appCheckFuture = null;
 }
 
 /// App Check (enforced for Firebase AI Logic; ADR-029). Providers are chosen

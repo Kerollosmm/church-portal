@@ -16,7 +16,7 @@
 ممنوع: الدفع مباشرة إلى `main`، و `git push --force`، وتعديل بيانات الإنتاج يدويًا من الكود.
 
 النشر اليدوي (للطوارئ فقط، بحساب له صلاحية):
-`flutter build web --release --dart-define=RECAPTCHA_SITE_KEY=<المفتاح> && python3 tool/fingerprint_icon_fonts.py build/web && npx firebase-tools deploy --only hosting:app,hosting:legacy-redirect --project asafra-church-portal`
+`flutter build web --release --source-maps --dart-define=RECAPTCHA_SITE_KEY=<المفتاح> && python3 tool/fingerprint_icon_fonts.py build/web && npx firebase-tools deploy --only hosting:app,hosting:legacy-redirect --project asafra-church-portal`
 
 ### الأسرار والمتغيرات (GitHub ← Settings ← Secrets and variables ← Actions)
 
