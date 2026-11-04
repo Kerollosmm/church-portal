@@ -46,7 +46,7 @@ render with `PageBody` (+ `Footer`). Content comes from Riverpod providers (hidd
   next-mass bar and chips, footer) follows the theme in force — see `03-architecture.md` → Theming. Holy Week is a
   dark scene (black wash, dark panels, light text, ashen-silver accent with dark text, crimson accent word, art in
   dim greyscale); the Resurrection is festive (Easter red, bright gold, luminous ivory).
-- **Occasion sub-themes (PR #36, ADR-043):** Holy Week = black cloth / charcoal / ashen silver with deep crimson (no
+- **Occasion sub-themes (PR #37, ADR-043):** Holy Week = black cloth / charcoal / ashen silver with deep crimson (no
   gold, no violet); fasts = ash / stone with deep oxblood (was violet); legacy `purple` reads as oxblood and is hidden
   from the pickers. Every widget takes its colours from the palette and its scene accents (`context.pal.bar`,
   `ornament`, `notice`, `alert`…), and the Material scheme is filled from the palette, so nothing falls back to

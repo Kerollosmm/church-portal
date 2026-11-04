@@ -957,7 +957,7 @@ supersede them.
   wedding switch, admin screen apply / restore / validation / deleted season, poster sizes vs `index.html`, video
   duration / faststart / no audio / byte budgets), rules group "ADR-042".
 
-## ADR-043 (PR #36) — Occasion sub-themes follow the church season; no violet anywhere; Holy Week simulation fixes
+## ADR-043 (PR #37) — Occasion sub-themes follow the church season; no violet anywhere; Holy Week simulation fixes
 
 - **Context (Holy Week simulation, 4 Nov 2026, `work/sim-holy-week/report.md`):** the screenshots showed violet
   where no theme asked for it. Cause: widgets that read `Theme.of(context).colorScheme.primary` / containers instead of
@@ -1071,6 +1071,6 @@ supersede them.
 
 | 4 Nov 2026 | **PR #32** — "Programme details: speaker, topic, choir, venue, audience, Drive PDF link" (`feat/programme-fields`) | ADR-041: `program.dart` (`ProgramInfo`, `ProgramOptions`), `parallelServices`, `ProgramDetails` widget, audience chips on the seasonal schedule, meeting detail facts, admin programme group + «إعدادات المواسم» (venues / audiences), rules `programKeys` / `validProgram` / `validProgramOptions`; `test/program_test.dart`, rules group. |
 | 4 Nov 2026 | **PR #33** — "Season presets, season verses, assistant season limit, hero v2" (`feat/season-presets`) | ADR-042: `season_preset.dart` + /admin «تجهيز الموسم» (apply / restore in one transaction, auto-revert at the season end without a write), `season_verses.dart` + «آيات المواسم» in «إعدادات المواسم», assistant `perDaySeason` / section-aware topics / current season in the prompt, `weddingBookingOff`, hero v2 9 s loops + posters, `AdminBackend.saveDocs` / `saveDocsFresh`; `test/season_preset_test.dart`, rules group. |
-| 5 Nov 2026 | **PR #36** — "Occasion sub-themes follow the season; no violet; Holy Week fixes" (`fix/occasion-themes-holy-week`) | ADR-043: Holy Week charcoal / ashen silver / crimson, fasts ash / stone / oxblood, legacy `purple` → oxblood (hidden), every widget on palette roles + scene accents and the Material scheme filled from the palette (test bans hard-coded colours), theme follows the active season (`occasions.followSeason` + `seasonThemes`; admin range > season > Easter > selected), preset item «ثيم الموسم» + `startsAt`, season keys epiphany / marian / fast, Holy Week sim fixes B1–B5 (B4 per day) + `kids` alias, rules budget restructure (joined-regex slot check), +1 seasons listener app-wide while following the season. |
+| 5 Nov 2026 | **PR #37** — "Occasion sub-themes follow the season; no violet; Holy Week fixes" (`fix/occasion-themes-holy-week`) | ADR-043: Holy Week charcoal / ashen silver / crimson, fasts ash / stone / oxblood, legacy `purple` → oxblood (hidden), every widget on palette roles + scene accents and the Material scheme filled from the palette (test bans hard-coded colours), theme follows the active season (`occasions.followSeason` + `seasonThemes`; admin range > season > Easter > selected), preset item «ثيم الموسم» + `startsAt`, season keys epiphany / marian / fast, Holy Week sim fixes B1–B5 (B4 per day) + `kids` alias, rules budget restructure (joined-regex slot check), +1 seasons listener app-wide while following the season. |
 
 Append new PRs to this table.

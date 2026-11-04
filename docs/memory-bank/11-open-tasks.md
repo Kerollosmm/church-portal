@@ -147,7 +147,7 @@ Status as of 4 Nov 2026 (PR #31 / ADR-039–040 on top of `905cd04`; PR #30 / AD
       `settings/features` stores it (check the live doc first; never delete live data from the app) — ADR-036.
 - [ ] Optional: a dark theme for the admin dashboard (it keeps Golden hour).
 - [x] Theme follows the active church season; Holy Week / fasts palettes without violet or gold; legacy `purple` hidden
-      (PR #36, ADR-043).
+      (PR #37, ADR-043).
 - [ ] Owner (ADR-043): before entering a dated Holy Week on live, hide the seed's weekday templates `hw-day-1…3` /
       `hw-eve-1…3` (or enter every day): templates of weekdays without dated services still show in that season (B4
       is handled per day, by design).
