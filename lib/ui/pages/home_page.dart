@@ -9,6 +9,7 @@ import '../../domain/daily_verse.dart';
 import '../../domain/features.dart';
 import '../../domain/item_detail.dart';
 import '../../domain/models.dart';
+import '../../domain/season_verses.dart';
 import '../../state/providers.dart';
 import '../widgets/cards.dart';
 import '../widgets/common.dart';
@@ -630,7 +631,13 @@ class HeroVerse extends ConsumerWidget {
     if (!features.enabled(Sections.dailyVerse)) return const SizedBox.shrink();
     final verses = ref.watch(dailyVersesProvider).value ?? const <Verse>[];
     final now = ref.watch(nowProvider).value ?? DateTime.now();
-    final verse = resolveDailyVerse(features.dailyVerse, verses, now, day: ref.watch(liturgicalDayProvider).date);
+    // Season verse set (ADR-042): the seasons stream the next-service card
+    // already opens, read only when an admin set season verses.
+    final seasonSet = features.seasonVerses.isEmpty
+        ? const <Verse>[]
+        : features.seasonVerses.activeSet(ref.watch(seasonsProvider).value ?? const [], now);
+    final verse = resolveSeasonalVerse(features.dailyVerse, verses, now,
+        day: ref.watch(liturgicalDayProvider).date, seasonSet: seasonSet);
     if (verse == null) return const SizedBox.shrink();
     final narrow = MediaQuery.sizeOf(context).width < 600;
     final reference = context.isAr || verse.refEn.isEmpty ? verse.refAr : verse.refEn;

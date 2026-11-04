@@ -115,6 +115,18 @@ the same day with overlapping times in different venues (`parallelServices`) get
 (شباب)» on every list (season, revival, special services and the weekly tabs). When the seasonal services use two or more audiences, chips «كل الفئات / عام / شباب / أطفال» filter them
 (a service without an audience always shows; switching views clears the filter). Nothing renders for items without these keys.
 
+#### Season presets, season verses, assistant in seasons, hero v2 (PR #33, ADR-042)
+
+- **Season preset:** after /admin «تجهيز الموسم» is applied, visitors see its switches (weekly schedule replaced,
+  meetings / clinics hidden, still hero, no wedding booking choice, live link, season booklet). From the season's
+  `endsAt` on, `featuresProvider` serves `FeatureSettings.effectiveAt` — the saved previous switches — with no write.
+- **Season verses:** `HeroVerse` uses `resolveSeasonalVerse`: fixed admin verse > the active season's set (rotating by
+  liturgical day) > the general list.
+- **Contact form:** `weddingBookingOff` drops the `wedding` subtype of booking categories (`withoutWedding`).
+- **Assistant:** daily limit `perDaySeason` (default 6) while Holy Week / Pascha / Nativity / a revival is active;
+  topics of switched-off sections are dropped; the prompt names the current season and the switched-off sections.
+- **Hero v2:** 9 s seamless loops (1280×720 / 432×768) and matching first-frame posters (ADR-042).
+
 ### `/church-education` — `education_page.dart` `EducationPage`
 - Meetings sorted by `stageOrder` (angels → elderly), then `order`, then start; grouped into
   **مدارس الأحد** (angels, primary, preparatory, secondary), **الشباب والجامعة والخريجون** (youth, university,

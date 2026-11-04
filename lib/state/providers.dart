@@ -38,8 +38,18 @@ final featuresStreamProvider = StreamProvider<FeatureSettings>((ref) => ref.watc
 
 /// Current feature toggles. Until the doc arrives, everything is on (the
 /// bundled defaults), so the first paint never blanks the page.
-final featuresProvider = Provider<FeatureSettings>(
-    (ref) => ref.watch(featuresStreamProvider).value ?? FeatureSettings.defaults);
+///
+/// After an applied season preset's season has ended, the switches it changed
+/// read their saved values ([FeatureSettings.effectiveAt], ADR-042). The clock
+/// is watched through a bool, so this rebuilds once at the season end, not on
+/// every tick.
+final featuresProvider = Provider<FeatureSettings>((ref) {
+  final f = ref.watch(featuresStreamProvider).value ?? FeatureSettings.defaults;
+  final p = f.seasonPreset;
+  if (p == null || p.endsAt == null) return f;
+  final ended = ref.watch(nowProvider.select((n) => p.expiredAt(n.value ?? DateTime.now())));
+  return ended ? f.effectiveAt(p.endsAt!) : f;
+});
 
 /// False until `settings/features` (or its seed fallback) has arrived, so
 /// gated pages wait one cached read instead of flashing switched-off content.

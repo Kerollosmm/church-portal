@@ -1602,3 +1602,81 @@ describe('ADR-041: programme details (speaker, topic, choir, venue, audience, Dr
     await assertFails(updateDoc(doc(db(null), 'settings', 'features'), { venues: [row('x')] }));
   });
 });
+
+describe('ADR-042: season preset, season verses, wedding switch, assistant season limit', () => {
+  const S = '\u001f';
+  const stamp = () => ({ updatedAt: serverTimestamp(), updatedBy: `${EDITOR}@x.test` });
+  const end = Timestamp.fromDate(new Date('2027-05-01T22:00:00Z'));
+  const preset = {
+    seasonId: 'hw', seasonKey: 'holy_week', appliedAt: Timestamp.fromDate(new Date('2027-04-20T10:00:00Z')), endsAt: end,
+    options: ['replaceRegular', 'hideMeetings', 'hideClinics', 'heroMotionOff', 'weddingOff', 'live', 'pdf'],
+    previous: {
+      seasonActive: false, replacesRegular: false, meetings: true, clinics: true, heroMotion: true, weddingBookingOff: false,
+      liveUrl: 'https://youtube.com/' + 'x'.repeat(480), liveEndsAt: null, attachmentUrl: 'https://drive.google.com/' + 'x'.repeat(575),
+      attachmentLabelAr: 'ك'.repeat(80), attachmentLabelEn: 'b'.repeat(80),
+    },
+  };
+
+  test('apply and restore as ONE batch of settings/features + the season', async () => {
+    const ed = db(EDITOR);
+    await assertSucceeds(setDoc(doc(ed, 'seasons', 'hw'), { key: 'holy_week', nameAr: 'أسبوع الآلام', endsAt: end, active: false }));
+    const apply = writeBatch(ed);
+    apply.set(doc(ed, 'settings', 'features'), {
+      sections: { meetings: false, clinics: false, schedule: true }, heroMotion: false, weddingBookingOff: true,
+      liveUrl: 'https://youtube.com/live/abc', liveEndsAt: end, seasonPreset: preset, ...stamp(),
+    }, { merge: true });
+    apply.set(doc(ed, 'seasons', 'hw'), {
+      active: true, replacesRegular: true, attachmentUrl: 'https://drive.google.com/file/d/x/view',
+      attachmentLabelAr: 'كتيب البصخة', attachmentLabelEn: '', ...stamp(),
+    }, { merge: true });
+    await assertSucceeds(apply.commit());
+    const restore = writeBatch(ed);
+    restore.set(doc(ed, 'settings', 'features'), {
+      seasonPreset: null, sections: { meetings: true, clinics: true, schedule: true }, heroMotion: true,
+      weddingBookingOff: false, liveUrl: '', liveEndsAt: null, ...stamp(),
+    }, { merge: true });
+    restore.set(doc(ed, 'seasons', 'hw'), { active: false, replacesRegular: false, attachmentUrl: '', ...stamp() }, { merge: true });
+    await assertSucceeds(restore.commit());
+  });
+
+  test('a bad preset is refused', async () => {
+    const ref = doc(db(EDITOR), 'settings', 'features');
+    await assertSucceeds(setDoc(ref, { theme: 'burgundy' }));
+    for (const bad of [
+      { ...preset, seasonId: 'a/b' }, { ...preset, seasonKey: 'lent' }, { ...preset, options: ['nuke'] },
+      { ...preset, options: [...preset.options, 'live'] }, { ...preset, endsAt: '2027-05-01' }, { ...preset, extra: 1 },
+      { ...preset, previous: { ...preset.previous, meetings: 'yes' } }, { ...preset, previous: { ...preset.previous, evil: 1 } },
+      { ...preset, previous: { ...preset.previous, liveUrl: 'x'.repeat(501) } },
+      { ...preset, previous: { ...preset.previous, attachmentLabelAr: 'x'.repeat(81) } },
+      { ...preset, previous: { ...preset.previous, liveEndsAt: 'tomorrow' } }, 'hw',
+    ]) {
+      await assertFails(updateDoc(ref, { seasonPreset: bad }), JSON.stringify(bad).slice(0, 80));
+    }
+    for (const bad of ['yes', 1]) await assertFails(updateDoc(ref, { weddingBookingOff: bad }));
+    await assertFails(updateDoc(doc(db(null), 'settings', 'features'), { seasonPreset: null }));
+    await assertFails(updateDoc(doc(db(null), 'settings', 'features'), { weddingBookingOff: true }));
+  });
+
+  test('season verses: up to 40 encoded rows of a known season', async () => {
+    const ref = doc(db(EDITOR), 'settings', 'features');
+    const row = (k, t = 'هوذا حمل الله', r = 'يو 1: 29') => [k, t, r].join(S);
+    await assertSucceeds(setDoc(ref, { seasonVerses: [row('holy_week'), row('pascha', 'المسيح قام', '')] }));
+    await assertSucceeds(updateDoc(ref, { seasonVerses: Array.from({ length: 40 }, () => row('summer', 'آ'.repeat(500), 'ر'.repeat(60))) }));
+    await assertSucceeds(updateDoc(ref, { seasonVerses: [] }));
+    await assertSucceeds(updateDoc(ref, { seasonVerses: null }));
+    for (const bad of [
+      [row('lent')], [row('holy_week', '')], [row('holy_week', 'آ'.repeat(501))], [row('holy_week', 'x', 'ر'.repeat(61))],
+      [row('holy_week') + S + 'x'], ['holy_week'], [5], Array.from({ length: 41 }, () => row('summer')), 'x',
+    ]) {
+      await assertFails(updateDoc(ref, { seasonVerses: bad }), JSON.stringify(bad).slice(0, 60));
+    }
+  });
+
+  test('assistant perDaySeason 1..100', async () => {
+    const ref = doc(db(EDITOR), 'settings', 'assistant');
+    await assertSucceeds(setDoc(ref, { perDay: 3, perDaySeason: 6 }));
+    await assertSucceeds(updateDoc(ref, { perDaySeason: 100 }));
+    await assertSucceeds(updateDoc(ref, { perDaySeason: null }));
+    for (const bad of [0, 101, '6', 6.5]) await assertFails(updateDoc(ref, { perDaySeason: bad }), String(bad));
+  });
+});

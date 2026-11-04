@@ -206,6 +206,9 @@ Existence of `settings/church` = "database is seeded" (see `03-architecture.md`)
   | `dayEvents` | list ≤ 20 of strings `date␟endDate␟start␟end␟titleAr␟titleEn␟speakerAr␟speakerEn␟topicAr␟topicEn␟noteAr␟noteEn␟link` (U+001F; date `YYYY-MM-DD` required, endDate optional, times `''`/HH:mm, titleAr 1–300, texts ≤ 300, notes ≤ 500, link `''` / path / http(s)) | `[]` |
   | `venues` | list ≤ 12 of strings `key␟labelAr␟labelEn` (key `[a-z0-9_-]{1,30}`, labelAr 1–80, labelEn ≤ 80) — PR #32, ADR-041 | missing / empty = `main` الكنيسة الكبرى, `lower` القاعة السفلية, `services` مبنى الخدمات |
   | `audiences` | same format — PR #32, ADR-041 | missing / empty = `general` عام, `youth` شباب, `children` أطفال |
+  | `seasonVerses` | list ≤ 40 of strings `seasonKey␟textAr␟refAr` (season key of `validSeason`, text 1–500, ref ≤ 60) — PR #33, ADR-042 | missing / empty = the general daily list always |
+  | `seasonPreset` | map `{seasonId, seasonKey, appliedAt, endsAt, options[≤7], previous{seasonActive, replacesRegular, meetings, clinics, heroMotion, weddingBookingOff, liveUrl, liveEndsAt, attachmentUrl, attachmentLabelAr, attachmentLabelEn}}` or null — written only by /admin «تجهيز الموسم» (PR #33, ADR-042) | none applied |
+  | `weddingBookingOff` | bool — PR #33, ADR-042 | false (the wedding booking choice shows) |
 
 - PR #18 (ADR-027): `sections.customSections` (custom categories at `/section/*` + their menu entries) and
   `sections.customPages` (custom pages at `/page/*` + their menu entries); missing = on; seeded `true`.

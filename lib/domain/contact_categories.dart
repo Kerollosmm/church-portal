@@ -238,6 +238,17 @@ class ContactSettings {
     return ContactSettings(sortCategories(list));
   }
 
+  /// The booking subtype the season preset can hide (ADR-042).
+  static const weddingSubtype = 'wedding';
+
+  /// These settings without the wedding choice of booking categories
+  /// (`settings/features.weddingBookingOff`, ADR-042: no weddings during
+  /// fasts and Holy Week). Other subtypes (condolences…) stay.
+  ContactSettings withoutWedding() => ContactSettings([
+        for (final c in categories)
+          c.isBooking ? c.copyWith(subtypes: [for (final s in c.subtypes) if (s.key != weddingSubtype) s]) : c,
+      ]);
+
   /// The visitor's choices (switched-on categories with a label).
   List<ContactCategory> get visible =>
       [for (final c in categories) if (c.on && (c.labelAr.trim().isNotEmpty || c.labelEn.trim().isNotEmpty)) c];

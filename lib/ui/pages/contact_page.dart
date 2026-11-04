@@ -209,10 +209,18 @@ class _ContactFormState extends ConsumerState<ContactForm> {
     });
   }
 
+  /// The contact types, without the wedding booking choice while the season
+  /// preset hides it (ADR-042).
+  static ContactSettings _contactSettings(ContactSettings? stored, bool weddingOff) {
+    final cfg = stored ?? ContactSettings.defaults;
+    return weddingOff ? cfg.withoutWedding() : cfg;
+  }
+
   Future<void> _submit() async {
     if (_sending) return; // a submission is already in flight
     FocusScope.of(context).unfocus();
-    final cat = _category(ref.read(contactSettingsProvider).value ?? ContactSettings.defaults);
+    final cat = _category(
+        _contactSettings(ref.read(contactSettingsProvider).value, ref.read(featuresProvider).weddingBookingOff));
     final v = validateContactForm(ContactFormInput(
       name: _name.text,
       phone: _phone.text,
@@ -331,7 +339,8 @@ class _ContactFormState extends ConsumerState<ContactForm> {
   @override
   Widget build(BuildContext context) {
     final contactErr = _err(ContactField.contact);
-    final cfg = ref.watch(contactSettingsProvider).value ?? ContactSettings.defaults;
+    final cfg = _contactSettings(ref.watch(contactSettingsProvider).value,
+        ref.watch(featuresProvider.select((f) => f.weddingBookingOff)));
     final cats = cfg.visible;
     final cat = _category(cfg);
     final anonymous = _anonymous && (cat?.allowsAnonymous ?? false);

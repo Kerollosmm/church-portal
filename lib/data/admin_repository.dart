@@ -40,6 +40,16 @@ abstract class AdminBackend {
   /// Merges a single document (settings/church, settings/features).
   Future<void> saveDoc(String path, Map<String, dynamic> data);
 
+  /// Merges several documents together (path → fields), atomically on
+  /// Firestore (one batch): the season preset's apply / restore writes
+  /// settings/features and the season (ADR-042). The default writes them in
+  /// order (in-memory test backends).
+  Future<void> saveDocs(Map<String, Map<String, dynamic>> writes) async {
+    for (final e in writes.entries) {
+      await saveDoc(e.key, e.value);
+    }
+  }
+
   /// Merges a few fields (visibility switch, message status).
   Future<void> update(String collection, String id, Map<String, dynamic> data);
   Future<void> delete(String collection, String id);
@@ -142,6 +152,16 @@ class AdminRepository implements AdminBackend {
 
   @override
   Future<void> saveDoc(String path, Map<String, dynamic> data) => _merge(db.doc(path), data);
+
+  @override
+  Future<void> saveDocs(Map<String, Map<String, dynamic>> writes) {
+    final batch = db.batch();
+    for (final e in writes.entries) {
+      final stamped = _stamp(e.value);
+      batch.set(db.doc(e.key), stamped, SetOptions(mergeFields: stamped.keys.toList()));
+    }
+    return batch.commit();
+  }
 
   /// Writes [data]'s top-level fields and leaves every other field as it is.
   /// A written map field is replaced as a whole (`mergeFields`), never

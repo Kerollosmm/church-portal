@@ -48,6 +48,7 @@
 | ثيمات المناسبات والألوان | [features/occasion-themes.md](features/occasion-themes.md) |
 | مواعيد القداسات والمواسم والقداس القادم | [features/mass-schedule-and-seasons.md](features/mass-schedule-and-seasons.md) |
 | تفاصيل البرنامج (المتكلم، الموضوع، الكورال، المكان، الفئة، ملف PDF) | [features/programme-details.md](features/programme-details.md) |
+| تجهيز الموسم وآيات المواسم والمساعد في المواسم | [features/season-preset.md](features/season-preset.md) |
 | التربية الكنسية والاجتماعات | [features/meetings.md](features/meetings.md) |
 | العيادات | [features/clinics.md](features/clinics.md) |
 | عن الكنيسة: التاريخ والمذابح والآباء الكهنة والمتنيحون والشفعاء | [features/about-priests-saints.md](features/about-priests-saints.md) |
