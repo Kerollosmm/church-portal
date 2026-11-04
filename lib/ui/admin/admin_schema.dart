@@ -228,7 +228,7 @@ class DocDef {
   const DocDef(this.path, this.labelAr, this.labelEn, this.fields);
 }
 
-const seasonKeys = ['holy_week', 'pascha', 'nativity', 'revival_maximus', 'revival_moses', 'summer'];
+const seasonKeys = ['holy_week', 'pascha', 'nativity', 'epiphany', 'marian', 'fast', 'revival_maximus', 'revival_moses', 'summer'];
 
 /// "Unconfirmed" flag: untick once the church has confirmed the entry, so
 /// the public pages stop showing the pending-confirmation notice.

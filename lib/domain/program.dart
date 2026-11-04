@@ -72,7 +72,29 @@ class ProgramOptions {
   /// built-in defaults, so an item saved with a default key (main, youth…)
   /// keeps its label after the admin replaces the list (Sentry review).
   ProgramOption? venue(String key) => _find(venues, key) ?? _find(defaultVenues, key);
-  ProgramOption? audience(String key) => _find(audiences, key) ?? _find(defaultAudiences, key);
+  ProgramOption? audience(String key) {
+    final k = audienceKey(key);
+    return _find(audiences, k) ?? _find(defaultAudiences, k);
+  }
+
+  /// Audience keys that mean the same group (ADR-043): the built-in
+  /// children key is `children`; `kids` (what an admin may type) is the same
+  /// audience, both ways.
+  static const audienceAliases = {'kids': 'children', 'children': 'kids'};
+
+  /// The key [key] is shown and filtered under: itself when the admin list
+  /// holds it, else its alias when the admin list holds that, else the
+  /// built-in key (itself or its alias), else [key] unchanged. So items saved
+  /// with `kids` and with `children` share one label, chip and filter.
+  String audienceKey(String key) {
+    if (key.isEmpty) return key;
+    final alias = audienceAliases[key];
+    if (_find(audiences, key) != null) return key;
+    if (alias != null && _find(audiences, alias) != null) return alias;
+    if (_find(defaultAudiences, key) != null) return key;
+    if (alias != null && _find(defaultAudiences, alias) != null) return alias;
+    return key;
+  }
 
   /// [list] followed by the options of [keys] it does not hold (resolved
   /// through [find]), for chips / dropdowns that must show every used key.

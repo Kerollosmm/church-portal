@@ -32,7 +32,7 @@ class ChurchMap extends StatelessWidget {
           padding: const EdgeInsets.all(12),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(children: [
-              Icon(Icons.location_on, color: Theme.of(context).colorScheme.primary),
+              Icon(Icons.location_on, color: context.pal.primary),
               const SizedBox(width: 6),
               Expanded(
                 child: Text(context.pick(settings.addressAr, settings.addressEn),
@@ -64,7 +64,7 @@ class ChurchMap extends StatelessWidget {
           color: context.pal.surfaceAlt,
           child: Center(
             child: Column(mainAxisSize: MainAxisSize.min, children: [
-              Icon(Icons.map_rounded, size: 56, color: Theme.of(context).colorScheme.primary),
+              Icon(Icons.map_rounded, size: 56, color: context.pal.primary),
               const SizedBox(height: 8),
               Text(context.tr('location'), style: const TextStyle(fontWeight: FontWeight.w700)),
             ]),

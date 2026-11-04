@@ -41,6 +41,33 @@ int blendOver(int fg, double alpha, int bg) {
 /// Linear mix of two opaque colours: [t] = 0 gives [a], 1 gives [b].
 int mixColor(int a, int b, double t) => blendOver(b, t, a);
 
+/// HSL hue (0–360) and saturation (0–1) of an opaque colour.
+(double, double) hueSat(int argb) {
+  final r = ((argb >> 16) & 0xFF) / 255, g = ((argb >> 8) & 0xFF) / 255, b = (argb & 0xFF) / 255;
+  final mx = math.max(r, math.max(g, b)), mn = math.min(r, math.min(g, b));
+  final d = mx - mn;
+  if (d == 0) return (0, 0);
+  final l = (mx + mn) / 2;
+  final sat = d / (1 - (2 * l - 1).abs());
+  double h;
+  if (mx == r) {
+    h = 60 * (((g - b) / d) % 6);
+  } else if (mx == g) {
+    h = 60 * ((b - r) / d + 2);
+  } else {
+    h = 60 * ((r - g) / d + 4);
+  }
+  return (h < 0 ? h + 360 : h, sat);
+}
+
+/// A violet / purple hue (ADR-043): hue 260–320° with saturation > 0.25.
+/// No built-in palette or scene accent may be one (the owner rejected the
+/// violet look as "AI slop"); greys and near-greys are never violet.
+bool isVioletPurple(int argb) {
+  final (h, sat) = hueSat(argb);
+  return h >= 260 && h <= 320 && sat > 0.25;
+}
+
 const int kBlack = 0xFF000000;
 const int kWhite = 0xFFFFFFFF;
 
@@ -365,6 +392,235 @@ class ContrastCheck {
 }
 
 // ---------------------------------------------------------------------------
+// Scene accents (ADR-043): the sub-theme every decorative surface reads.
+// ---------------------------------------------------------------------------
+
+/// The colours a theme gives the site's decorative surfaces beyond the ten
+/// editable [ThemePalette] roles: title bands (next-service header, seal tab,
+/// selected chips and tabs), ribbons, story panels, halos, notices, the live
+/// banner, status colours, shadows. Widgets never hard-code a colour (a test
+/// greps `lib/ui`); they read these through `context.pal`.
+///
+/// Golden hour and Holy Week are hand-tuned; every other palette (and any
+/// palette with admin colour edits) derives its accents from its roles, so an
+/// edit flows through to every surface. Text-bearing pairs are listed in
+/// [checks] and asserted for every preset.
+class SceneAccents {
+  /// Decorative metal: halo rings, rules, borders (gold on light scenes, ash
+  /// on Holy Week). Never text.
+  final int ornament;
+
+  /// Title bands: the next-service header, the seal tab, selected chips and
+  /// tabs, filled buttons. [bar] → [barDeep] gradient.
+  final int bar, barDeep;
+
+  /// Text / icons on the bands, and their accent (the clock, «الجدول الكامل»).
+  final int onBar, onBarAccent;
+
+  /// A thin line under / around the bands (Holy Week's deep crimson); null =
+  /// none.
+  final int? barEdge;
+
+  /// The posters' sub-title ribbon and its text.
+  final int ribbon, ribbonText;
+
+  /// The story box (sepia panel) gradient and its edge.
+  final int sepiaTop, sepiaBottom, sepiaEdge;
+
+  /// Glow behind poster headings.
+  final int glow;
+
+  /// Portrait halo (inner, middle, outer).
+  final int haloInner, haloMid, haloOuter;
+
+  /// Tint of panel shadows (RGB; the widgets set the alpha).
+  final int shadow;
+
+  /// "Sample data" / "pending" notice box: ground, edge, text.
+  final int notice, noticeEdge, noticeInk;
+
+  /// Alert notice ground, alert text, success text.
+  final int alertGround, alert, success;
+
+  /// Live-stream banner ground and its text.
+  final int live, onLive;
+
+  /// The drawn Coptic cross when no colour is given.
+  final int cross;
+
+  const SceneAccents({
+    required this.ornament,
+    required this.bar,
+    required this.barDeep,
+    required this.onBar,
+    required this.onBarAccent,
+    this.barEdge,
+    required this.ribbon,
+    required this.ribbonText,
+    required this.sepiaTop,
+    required this.sepiaBottom,
+    required this.sepiaEdge,
+    required this.glow,
+    required this.haloInner,
+    required this.haloMid,
+    required this.haloOuter,
+    required this.shadow,
+    required this.notice,
+    required this.noticeEdge,
+    required this.noticeInk,
+    required this.alertGround,
+    required this.alert,
+    required this.success,
+    required this.live,
+    required this.onLive,
+    required this.cross,
+  });
+
+  /// Deep crimson of Holy Week (decorative: band edges, the live banner).
+  static const crimson = 0xFF8E1B1B;
+
+  /// Status hues before they are made readable on a palette.
+  static const _alertBase = 0xFFB3261E;
+  static const _successBase = 0xFF2E6B45;
+
+  /// Golden hour, exactly as before ADR-043 (the owner-approved look).
+  static SceneAccents _golden(ThemePalette p) => SceneAccents(
+        ornament: 0xFFC9963F,
+        bar: p.primary,
+        barDeep: p.primaryDeep,
+        onBar: p.onPrimary,
+        onBarAccent: p.onPrimaryAccent,
+        ribbon: 0xFF7A4530,
+        ribbonText: 0xFFFFF3DC,
+        sepiaTop: 0xFFE6CFA9,
+        sepiaBottom: 0xFFDDC197,
+        sepiaEdge: 0xFFA06E3C,
+        glow: 0xFFFFF0D2,
+        haloInner: 0xFFFFEAB0,
+        haloMid: 0xFFE8B65C,
+        haloOuter: 0xFFC08A35,
+        shadow: 0xFF603208,
+        notice: 0xFFFFF3CD,
+        noticeEdge: 0xFFE0C36A,
+        noticeInk: p.ink,
+        alertGround: 0xFFFFF4E0,
+        alert: _alertBase,
+        success: _successBase,
+        live: _alertBase,
+        onLive: kWhite,
+        cross: 0xFFB8862B,
+      );
+
+  /// Accents derived from any palette's roles (light or dark scene).
+  factory SceneAccents.derive(ThemePalette p) {
+    final dark = p.dark;
+    final panel = p.panelGrounds;
+    if (dark) {
+      // Black cloth: charcoal bands with ink text and a silver accent, a
+      // crimson edge, ash ornaments, greyed halos. No gold, no violet.
+      final ornament = mixColor(p.muted, p.background, 0.3);
+      final alertGround = mixColor(p.surface, crimson, 0.18);
+      return SceneAccents(
+        ornament: ornament,
+        bar: p.surfaceAlt,
+        barDeep: mixColor(p.surfaceAlt, kBlack, 0.45),
+        onBar: ensureContrast(p.ink, [p.surfaceAlt, mixColor(p.surfaceAlt, kBlack, 0.45)]),
+        onBarAccent: ensureContrast(p.primary, [p.surfaceAlt, mixColor(p.surfaceAlt, kBlack, 0.45)]),
+        barEdge: crimson,
+        ribbon: p.surfaceAlt,
+        ribbonText: ensureContrast(p.ink, [p.surfaceAlt]),
+        sepiaTop: p.surfaceAlt,
+        sepiaBottom: p.surface,
+        sepiaEdge: ornament,
+        glow: p.background,
+        haloInner: mixColor(p.ink, p.background, 0.25),
+        haloMid: mixColor(p.muted, p.background, 0.35),
+        haloOuter: mixColor(p.muted, p.background, 0.6),
+        shadow: kBlack,
+        notice: mixColor(p.surfaceAlt, p.goldText, 0.08),
+        noticeEdge: mixColor(p.goldText, p.background, 0.5),
+        noticeInk: ensureContrast(p.ink, [mixColor(p.surfaceAlt, p.goldText, 0.08)]),
+        alertGround: alertGround,
+        alert: ensureContrast(_alertBase, [...panel, alertGround]),
+        success: ensureContrast(_successBase, panel),
+        live: crimson,
+        onLive: ensureContrast(p.ink, [crimson]),
+        cross: ornament,
+      );
+    }
+    final ornament = mixColor(p.onPrimaryAccent, p.goldText, 0.3);
+    final ribbon = mixColor(p.muted, p.primary, 0.35);
+    final notice = mixColor(p.surface, p.onPrimaryAccent, 0.25);
+    final alertGround = mixColor(p.surface, _alertBase, 0.06);
+    return SceneAccents(
+      ornament: ornament,
+      bar: p.primary,
+      barDeep: p.primaryDeep,
+      onBar: p.onPrimary,
+      onBarAccent: p.onPrimaryAccent,
+      ribbon: ribbon,
+      ribbonText: ensureContrast(p.surface, [ribbon]),
+      sepiaTop: _tint(p.surfaceAlt, ornament, 0.22, p.ink),
+      sepiaBottom: _tint(p.surfaceAlt, ornament, 0.34, p.ink),
+      sepiaEdge: mixColor(ornament, p.muted, 0.4),
+      glow: mixColor(p.background, p.onPrimaryAccent, 0.2),
+      haloInner: mixColor(p.onPrimaryAccent, kWhite, 0.45),
+      haloMid: p.onPrimaryAccent,
+      haloOuter: mixColor(p.onPrimaryAccent, p.goldText, 0.45),
+      shadow: mixColor(p.ink, p.primary, 0.3),
+      notice: notice,
+      noticeEdge: mixColor(p.onPrimaryAccent, p.goldText, 0.2),
+      noticeInk: ensureContrast(p.ink, [notice]),
+      alertGround: alertGround,
+      alert: ensureContrast(_alertBase, [...panel, alertGround]),
+      success: ensureContrast(_successBase, panel),
+      live: _alertBase,
+      onLive: kWhite,
+      cross: mixColor(ornament, p.goldText, 0.25),
+    );
+  }
+
+  /// [base] tinted toward [tint] by up to [t], less when [text] would drop
+  /// under 4.5:1 on it (an admin-edited ornament can be any colour).
+  static int _tint(int base, int tint, double t, int text) {
+    for (var x = t; x > 0; x -= 0.02) {
+      final c = mixColor(base, tint, x);
+      if (contrastRatio(text, c) >= kBodyContrast) return c;
+    }
+    return base;
+  }
+
+  /// The accents of preset [key] showing [palette]: the tuned Golden hour
+  /// set when the palette is the untouched default, else derived.
+  factory SceneAccents.of(String key, ThemePalette palette) {
+    if (key == ThemePresets.goldenHour && palette == ThemePresets.goldenHourPalette) return _golden(palette);
+    return SceneAccents.derive(palette);
+  }
+
+  /// Every colour (for the no-violet test).
+  List<int> get all => [
+        ornament, bar, barDeep, onBar, onBarAccent, ?barEdge, ribbon, ribbonText, //
+        sepiaTop, sepiaBottom, sepiaEdge, glow, haloInner, haloMid, haloOuter, shadow, notice, noticeEdge,
+        noticeInk, alertGround, alert, success, live, onLive, cross,
+      ];
+
+  /// Text-bearing pairs (≥ 4.5:1) on [p].
+  List<ContrastCheck> checks(ThemePalette p) => [
+        for (final g in [bar, barDeep]) ...[
+          ContrastCheck('onBar', onBar, g, kBodyContrast, 'bar'),
+          ContrastCheck('onBarAccent', onBarAccent, g, kBodyContrast, 'bar'),
+        ],
+        ContrastCheck('ribbonText', ribbonText, ribbon, kBodyContrast, 'ribbon'),
+        for (final g in [sepiaTop, sepiaBottom]) ContrastCheck('ink', p.ink, g, kBodyContrast, 'sepia'),
+        ContrastCheck('noticeInk', noticeInk, notice, kBodyContrast, 'notice'),
+        for (final g in [...p.panelGrounds, alertGround]) ContrastCheck('alert', alert, g, kBodyContrast, 'alert'),
+        ContrastCheck('ink', p.ink, alertGround, kBodyContrast, 'alert'),
+        for (final g in p.panelGrounds) ContrastCheck('success', success, g, kBodyContrast, 'panel'),
+        ContrastCheck('onLive', onLive, live, kBodyContrast, 'live'),
+      ];
+}
+
+// ---------------------------------------------------------------------------
 // Presets.
 // ---------------------------------------------------------------------------
 
@@ -386,6 +642,10 @@ class ThemePresets {
   /// The default before ADR-025 (oxblood, then maroon): stored documents and
   /// the seed may still say `burgundy`; it reads as [goldenHour].
   static const legacyBurgundy = 'burgundy';
+
+  /// The old violet accent preset (ADR-043): still a valid stored key, read
+  /// as a sober oxblood accent, hidden from the admin picker.
+  static const legacyPurple = 'purple';
 
   /// Kept for older call sites: the default preset key.
   static const burgundy = goldenHour;
@@ -421,19 +681,20 @@ class ThemePresets {
 
   static final palettes = <String, ThemePalette>{
     goldenHour: _golden,
-    // Black cloth of Pascha week: an ashen-silver accent with dark text, a
-    // crimson accent word, the art dimmed to grey.
+    // Black cloth of Pascha week (ADR-043): charcoal and black, ashen-silver
+    // titles and accents, deep crimson for the accent word and the bars'
+    // edge, the golden art dimmed to grey. No gold, no violet.
     holyWeek: const ThemePalette(
-      primary: 0xFFC9C1B6,
-      onPrimary: 0xFF15110F,
-      onPrimaryAccent: 0xFF6E1C1C,
-      background: 0xFF0D0B0A,
-      surface: 0xFF1B1816,
-      surfaceAlt: 0xFF27221F,
-      ink: 0xFFEEE7DD,
-      muted: 0xFFBDB2A5,
-      goldText: 0xFFD6B98C,
-      script: 0xFFE88B7E,
+      primary: 0xFFC8C2BA, // ashen silver
+      onPrimary: 0xFF141211,
+      onPrimaryAccent: 0xFF7A1016, // deep crimson on silver
+      background: 0xFF0C0B0A, // black cloth
+      surface: 0xFF1A1817, // charcoal
+      surfaceAlt: 0xFF26231F,
+      ink: 0xFFECE7E0, // ash white
+      muted: 0xFFB8B1A8, // ash
+      goldText: 0xFFC9BCA6, // the gold dimmed to ashen parchment
+      script: 0xFFE07468, // crimson, lifted just enough to read on black
     ),
     // Festive Easter red and bright gold on a luminous ivory.
     resurrection: const ThemePalette(
@@ -474,18 +735,19 @@ class ThemePresets {
       goldText: 0xFF6B5310,
       script: 0xFF7A2E1E,
     ),
-    // Fasts (Great Lent, the Nativity fast…): penitential violet on ash.
+    // Fasts (Great Lent, the Nativity fast…; ADR-043): sober ash and stone
+    // with a deep oxblood / dark umber accent. Penitential without violet.
     fasting: const ThemePalette(
-      primary: 0xFF4A235A,
+      primary: 0xFF4F2420, // deep oxblood umber
       onPrimary: 0xFFFFFFFF,
-      onPrimaryAccent: 0xFFE4C98A,
-      background: 0xFFF3EFF2,
-      surface: 0xFFFBF9FA,
-      surfaceAlt: 0xFFE7E0E6,
-      ink: 0xFF2A2230,
-      muted: 0xFF564A5C,
-      goldText: 0xFF6B5214,
-      script: 0xFF6A2142,
+      onPrimaryAccent: 0xFFDCC797, // muted candle gold
+      background: 0xFFF0EEEA, // ash
+      surface: 0xFFFAF9F6,
+      surfaceAlt: 0xFFE4E0D8, // stone
+      ink: 0xFF25211D,
+      muted: 0xFF534C44,
+      goldText: 0xFF66501F,
+      script: 0xFF7A2621, // oxblood
     ),
     // Feasts of the Theotokos: Marian blue on sky white.
     marian: const ThemePalette(
@@ -503,11 +765,18 @@ class ThemePresets {
     'navy': _accent(0xFF1F3A5F),
     'green': _accent(0xFF1E5631),
     'brown': _accent(0xFF5D3A1A),
-    'purple': _accent(0xFF4A235A),
+    // Legacy key (ADR-043): stored documents may still say `purple`; it now
+    // reads as the sober oxblood accent of the fasts, never violet, and is
+    // no longer offered in the admin picker ([pickable]).
+    legacyPurple: _accent(0xFF4F2420),
   };
 
-  /// Preset keys in admin order.
+  /// Preset keys in admin order (every key a stored document may hold).
   static List<String> get keys => palettes.keys.toList();
+
+  /// Keys offered in the admin's theme picker: [keys] without the legacy
+  /// `purple` (still selectable when a document already holds it).
+  static List<String> get pickable => [for (final k in keys) if (k != legacyPurple) k];
 
   /// Occasion presets (they change the whole scene).
   static const occasions = [goldenHour, holyWeek, resurrection, nativity, epiphany, fasting, marian];
@@ -526,7 +795,7 @@ class ThemePresets {
     'navy': ['كحلي', 'Navy'],
     'green': ['أخضر', 'Green'],
     'brown': ['بني', 'Brown'],
-    'purple': ['بنفسجي', 'Purple'],
+    legacyPurple: ['عنابي داكن (كان «بنفسجي»)', 'Dark oxblood (was “Purple”)'],
   };
 
   /// A stored key as a known preset: `burgundy` (and anything unknown) is the
@@ -605,8 +874,46 @@ class ThemeRange {
   int get hashCode => Object.hash(theme, start, end);
 }
 
+/// Which occasion theme each church-season key brings (ADR-043). The
+/// default map; an admin can change or switch off any entry
+/// (`settings/features.occasions.seasonThemes`, value [none]).
+class SeasonThemes {
+  SeasonThemes._();
+
+  /// No theme for this season key (the next rule decides).
+  static const none = 'none';
+
+  /// Every season key (mirrors `firestore.rules` and the admin's season
+  /// form), in priority order: when two seasons are active at once, the
+  /// first mapped one wins (Holy Week over a fast, a feast over a revival).
+  static const seasonKeys = [
+    'holy_week', 'pascha', 'nativity', 'epiphany', 'marian', 'fast', //
+    'revival_maximus', 'revival_moses', 'summer',
+  ];
+
+  static const defaults = <String, String>{
+    'holy_week': ThemePresets.holyWeek,
+    'pascha': ThemePresets.resurrection,
+    'nativity': ThemePresets.nativity,
+    'epiphany': ThemePresets.epiphany,
+    'marian': ThemePresets.marian,
+    'fast': ThemePresets.fasting,
+    'revival_maximus': none,
+    'revival_moses': none,
+    'summer': none,
+  };
+}
+
 /// Occasion-theme settings (`settings/features.occasions`). Missing = manual
-/// (the selected `theme` always applies), no schedule, no colour edits.
+/// (the selected `theme` applies), no schedule, no colour edits, and the
+/// theme follows the active church season (ADR-043).
+///
+/// Precedence ([resolve]), first match wins:
+/// 1. with [auto]: an admin date range covering the day;
+/// 2. with [followSeason]: the active season's theme ([seasonThemes]);
+/// 3. with [auto] and [easter]: Holy Week / the Resurrection by the computed
+///    Coptic Easter;
+/// 4. the selected theme (`settings/features.theme`).
 class OccasionConfig {
   /// Switch themes on their own by date. Off = the selected theme always
   /// applies (the manual override).
@@ -627,13 +934,30 @@ class OccasionConfig {
   /// `settings/features.themeColors`).
   final Map<String, Map<String, String>> custom;
 
+  /// The theme follows the active church season (`seasons/{id}` with an
+  /// active window now). Default on; off = the season never changes the
+  /// theme (ADR-043).
+  final bool followSeason;
+
+  /// Admin changes to [SeasonThemes.defaults]: season key → preset key or
+  /// [SeasonThemes.none]. Only the keys that differ are stored.
+  final Map<String, String> seasonThemes;
+
   const OccasionConfig({
     this.auto = false,
     this.easter = true,
     this.resurrectionDays = 7,
     this.schedule = const [],
     this.custom = const {},
+    this.followSeason = true,
+    this.seasonThemes = const {},
   });
+
+  /// The theme season [seasonKey] brings, or null (none / unknown key).
+  String? themeForSeason(String seasonKey) {
+    final t = seasonThemes[seasonKey] ?? SeasonThemes.defaults[seasonKey];
+    return t == null || t == SeasonThemes.none || !ThemePresets.palettes.containsKey(t) ? null : t;
+  }
 
   static const defaults = OccasionConfig();
   static const maxRanges = 12;
@@ -671,12 +995,23 @@ class OccasionConfig {
       }
     }
     final days = v['resurrectionDays'];
+    final rawSeasons = v['seasonThemes'];
     return OccasionConfig(
       auto: v['auto'] is bool ? v['auto'] as bool : false,
       easter: v['easter'] is bool ? v['easter'] as bool : true,
       resurrectionDays: days is int ? days.clamp(1, maxResurrectionDays) : 7,
       schedule: ranges,
       custom: custom,
+      followSeason: v['followSeason'] is bool ? v['followSeason'] as bool : true,
+      seasonThemes: rawSeasons is Map
+          ? {
+              for (final e in rawSeasons.entries)
+                if (SeasonThemes.seasonKeys.contains(e.key) &&
+                    (e.value == SeasonThemes.none || ThemePresets.palettes.containsKey(e.value)) &&
+                    e.value != SeasonThemes.defaults[e.key])
+                  e.key as String: e.value as String,
+            }
+          : const {},
     );
   }
 
@@ -685,6 +1020,11 @@ class OccasionConfig {
         'easter': easter,
         'resurrectionDays': resurrectionDays,
         'schedule': {for (var i = 0; i < schedule.length && i < maxRanges; i++) 'r${i + 1}': schedule[i].encode()},
+        'followSeason': followSeason,
+        'seasonThemes': {
+          for (final e in seasonThemes.entries)
+            if (e.value != SeasonThemes.defaults[e.key]) e.key: e.value,
+        },
       };
 
   /// `settings/features.themeColors` (its own field: its own write and
@@ -700,6 +1040,8 @@ class OccasionConfig {
     int? resurrectionDays,
     List<ThemeRange>? schedule,
     Map<String, Map<String, String>>? custom,
+    bool? followSeason,
+    Map<String, String>? seasonThemes,
   }) =>
       OccasionConfig(
         auto: auto ?? this.auto,
@@ -707,6 +1049,8 @@ class OccasionConfig {
         resurrectionDays: resurrectionDays ?? this.resurrectionDays,
         schedule: schedule ?? this.schedule,
         custom: custom ?? this.custom,
+        followSeason: followSeason ?? this.followSeason,
+        seasonThemes: seasonThemes ?? this.seasonThemes,
       );
 
   /// The config with each preset's colour edits replaced by the corrected
@@ -743,17 +1087,28 @@ class OccasionConfig {
     ];
   }
 
-  /// The theme in force on the Cairo calendar day [cairoDay] (y/m/d only):
-  /// with [auto] off, [selected]; otherwise the first admin range covering
-  /// the day, else (with [easter]) Holy Week / the Resurrection, else
-  /// [selected].
-  ThemeResolution resolve(String selected, DateTime cairoDay) {
+  /// The theme in force on the Cairo calendar day [cairoDay] (y/m/d only)
+  /// while the seasons [activeSeasonKeys] are active (see the precedence on
+  /// the class): an admin range (with [auto]), else the active season's
+  /// theme (with [followSeason]), else the Coptic Easter dates (with [auto]
+  /// and [easter]), else [selected].
+  ThemeResolution resolve(String selected, DateTime cairoDay, {Iterable<String> activeSeasonKeys = const []}) {
     final sel = ThemePresets.normalize(selected);
-    if (!auto) return ThemeResolution(sel, ThemeSource.manual);
     final day = DateTime.utc(cairoDay.year, cairoDay.month, cairoDay.day);
-    for (final r in schedule) {
-      if (r.covers(day)) return ThemeResolution(r.theme, ThemeSource.schedule, r);
+    if (auto) {
+      for (final r in schedule) {
+        if (r.covers(day)) return ThemeResolution(r.theme, ThemeSource.schedule, r);
+      }
     }
+    if (followSeason) {
+      final active = activeSeasonKeys.toSet();
+      for (final k in SeasonThemes.seasonKeys) {
+        if (!active.contains(k)) continue;
+        final t = themeForSeason(k);
+        if (t != null) return ThemeResolution(t, ThemeSource.season, null, k);
+      }
+    }
+    if (!auto) return ThemeResolution(sel, ThemeSource.manual);
     if (easter) {
       // The Fifty Days can spill into the next year's calendar only in
       // theory (Easter is in April / May), so this year's Easter is enough.
@@ -770,11 +1125,14 @@ class OccasionConfig {
       other.auto == auto &&
       other.easter == easter &&
       other.resurrectionDays == resurrectionDays &&
+      other.followSeason == followSeason &&
       _listEq(other.schedule, schedule) &&
-      _customEq(other.custom, custom);
+      _customEq(other.custom, custom) &&
+      _customEq({'s': other.seasonThemes}, {'s': seasonThemes});
 
   @override
-  int get hashCode => Object.hash(auto, easter, resurrectionDays, Object.hashAll(schedule), custom.length);
+  int get hashCode =>
+      Object.hash(auto, easter, resurrectionDays, followSeason, Object.hashAll(schedule), custom.length, seasonThemes.length);
 }
 
 bool _listEq<T>(List<T> a, List<T> b) {
@@ -797,12 +1155,15 @@ bool _customEq(Map<String, Map<String, String>> a, Map<String, Map<String, Strin
   return true;
 }
 
-enum ThemeSource { manual, schedule, easter, fallback }
+enum ThemeSource { manual, schedule, season, easter, fallback }
 
 /// Which theme applies and why.
 class ThemeResolution {
   final String theme;
   final ThemeSource source;
   final ThemeRange? range;
-  const ThemeResolution(this.theme, this.source, [this.range]);
+
+  /// The season key that brought the theme ([ThemeSource.season]).
+  final String? seasonKey;
+  const ThemeResolution(this.theme, this.source, [this.range, this.seasonKey]);
 }

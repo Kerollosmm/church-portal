@@ -189,7 +189,7 @@ class FittedCover extends ConsumerWidget {
               ),
             ),
           ),
-          const DecoratedBox(decoration: BoxDecoration(color: Color(0x33FBF3E4))),
+          DecoratedBox(decoration: BoxDecoration(color: context.pal.background.withValues(alpha: 0.2))),
           MediaImageView(
             image: image,
             loader: loader,

@@ -56,13 +56,9 @@ class LiturgyCard extends StatelessWidget {
             height: 46,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [Theme.of(context).colorScheme.primary, primaryDarkOf(context)],
-              ),
+              gradient: context.pal.barGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter),
             ),
-            child: Icon(_icon, color: context.pal.onPrimaryAccent, size: 22),
+            child: Icon(_icon, color: context.pal.onBarAccent, size: 22),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -129,23 +125,29 @@ class NextMassCard extends ConsumerWidget {
                       day: next.start,
                       dayOffset: next.dayOffset),
                   opts));
-      body = _content(context, r, now, ref.watch(todaySettingsProvider), s?.lat, s?.lng, parallelText);
+      body = _content(context, r, now, ref.watch(todaySettingsProvider), s?.lat, s?.lng, parallelText, opts);
     }
 
-    final primary = Theme.of(context).colorScheme.primary;
-    // Warm panel with a maroon title band (the posters' tab colour).
+    final pal = context.pal;
+    // During a season that replaces the weekly schedule the card lists its
+    // prayers (Pascha hours…), not only masses (ADR-043).
+    final seasonal = activeSeasonsAt(seasons.value ?? const [], now).any((s) => s.replacesRegular);
+    // Warm panel with a title band in the theme's band colours (maroon on
+    // the posters; charcoal with a crimson edge on Holy Week — ADR-043).
     return Container(
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        color: context.pal.panel,
+        color: pal.panel,
         borderRadius: BorderRadius.circular(kPanelRadius),
-        border: Border.all(color: const Color(0x61C9963F)),
-        boxShadow: kPanelShadow,
+        border: Border.all(color: pal.ornamentLine),
+        boxShadow: pal.panelShadow,
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Container(
+          key: const Key('nextMassBand'),
           decoration: BoxDecoration(
-            gradient: LinearGradient(colors: [primary, primaryDarkOf(context)]),
+            gradient: pal.barGradient(),
+            border: pal.barEdge == null ? null : Border(bottom: BorderSide(color: pal.barEdge!, width: 2)),
           ),
           padding: const EdgeInsetsDirectional.fromSTEB(16, 6, 6, 6),
           // Wrap: on narrow screens / large text "Full schedule" moves under
@@ -155,16 +157,16 @@ class NextMassCard extends ConsumerWidget {
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               Row(mainAxisSize: MainAxisSize.min, children: [
-                Icon(Icons.access_time_filled_rounded, color: context.pal.onPrimaryAccent, size: 20),
+                Icon(Icons.access_time_filled_rounded, color: pal.onBarAccent, size: 20),
                 const SizedBox(width: 8),
                 Flexible(
-                  child: Text(context.tr('nextMass'),
-                      style: displayStyle(context, size: 18, color: context.pal.onPrimary, height: 1.4)),
+                  child: Text(context.tr(seasonal ? 'nextPrayer' : 'nextMass'),
+                      style: displayStyle(context, size: 18, color: pal.onBar, height: 1.4)),
                 ),
               ]),
               TextButton(
                 onPressed: () => context.go('/mass-schedule'),
-                style: TextButton.styleFrom(foregroundColor: context.pal.onPrimaryAccent),
+                style: TextButton.styleFrom(foregroundColor: pal.onBarAccent),
                 child: Text(context.tr('fullSchedule')),
               ),
             ],
@@ -176,7 +178,7 @@ class NextMassCard extends ConsumerWidget {
   }
 
   Widget _content(BuildContext context, NextMassResult r, DateTime now, TodaySettings today, double? lat, double? lng,
-      [String parallelText = '']) {
+      [String parallelText = '', ProgramOptions opts = ProgramOptions.defaults]) {
     if (r.isEmpty) return EmptyState(message: context.tr('noUpcoming'), icon: Icons.event_busy);
     final children = <Widget>[];
     if (r.activeSeasons.isNotEmpty) {
@@ -185,7 +187,7 @@ class NextMassCard extends ConsumerWidget {
         child: Pill(
           context.tr('seasonActive', {'s': r.activeSeasons.map((s) => context.pick(s.nameAr, s.nameEn)).join('، ')}),
           maxLines: null, // every active season name must stay readable
-          color: Theme.of(context).colorScheme.primary,
+          color: context.pal.primary,
           icon: Icons.auto_awesome,
         ),
       ));
@@ -196,15 +198,16 @@ class NextMassCard extends ConsumerWidget {
         padding: const EdgeInsets.all(10),
         margin: const EdgeInsets.only(bottom: 10),
         decoration: BoxDecoration(
-          color: AppColors.success.withValues(alpha: 0.08),
+          color: context.pal.success.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(14),
         ),
         child: Row(children: [
-          Pill(context.tr('happeningNow'), icon: Icons.circle, color: AppColors.success),
+          Pill(context.tr('happeningNow'), icon: Icons.circle, color: context.pal.success),
           const SizedBox(width: 8),
           Expanded(
-            child: Text('${context.pick(o.liturgy.nameAr, o.liturgy.nameEn)} — ${context.pick(o.liturgy.placeAr, o.liturgy.placeEn)}',
-                style: const TextStyle(fontWeight: FontWeight.w700)),
+            // Free-text place, else the venue; no dash when neither (ADR-043).
+            child: Text(serviceWithPlace(context, opts, o.liturgy),
+                key: const Key('happeningNowLine'), style: const TextStyle(fontWeight: FontWeight.w700)),
           ),
         ]),
       ));
@@ -233,7 +236,7 @@ class NextMassCard extends ConsumerWidget {
             eve
                 ? '${n.dayOffset == 0 ? context.tr('tonight') : dayLabel} • ${context.tr('eveOf', {'d': weekdayLabel(context, n.start.add(const Duration(days: 1)).weekday)})}'
                 : '$dayLabel • ${weekdayLabel(context, n.start.weekday)}',
-            color: Theme.of(context).colorScheme.primary),
+            color: context.pal.primary),
         if (countdown != null) Pill(countdown, color: context.pal.goldText, icon: Icons.timer_outlined),
       ]));
       children.add(const SizedBox(height: 8));
@@ -278,7 +281,7 @@ class _AlertBannerState extends ConsumerState<AlertBanner> {
         onPressed: () => _isInternal(link) ? context.go(link) : openUrl(link),
         // The notice box stays light on every theme: a light (dark-theme)
         // primary would vanish on it.
-        style: context.pal.dark ? TextButton.styleFrom(foregroundColor: AppColors.alert) : null,
+        style: context.pal.dark ? TextButton.styleFrom(foregroundColor: context.pal.alert) : null,
         child: Text(context.tr('learnMore')),
       );
 
@@ -309,9 +312,9 @@ class _AlertBannerState extends ConsumerState<AlertBanner> {
           margin: const EdgeInsets.only(bottom: Space.m),
           clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
-            color: const Color(0xFFFFF4E0),
+            color: context.pal.alertGround,
             borderRadius: BorderRadius.circular(14),
-            border: const BorderDirectional(start: BorderSide(color: AppColors.alert, width: 5)),
+            border: BorderDirectional(start: BorderSide(color: context.pal.alert, width: 5)),
           ),
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           // Card / banner style: the picture across the top (ADR-023).
@@ -329,17 +332,17 @@ class _AlertBannerState extends ConsumerState<AlertBanner> {
               image: a.image,
               size: 52,
               label: context.pick(a.titleAr, a.titleEn),
-              placeholder: const Icon(Icons.campaign_rounded, color: AppColors.alert),
+              placeholder: Icon(Icons.campaign_rounded, color: context.pal.alert),
             ),
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text(context.pick(a.titleAr, a.titleEn),
-                    style: const TextStyle(fontWeight: FontWeight.w800, color: AppColors.alert)),
+                    style: TextStyle(fontWeight: FontWeight.w800, color: context.pal.alert)),
                 if (context.pick(a.bodyAr, a.bodyEn).isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.only(top: 2),
                     child: Text(context.pick(a.bodyAr, a.bodyEn),
-                        style: const TextStyle(height: 1.5, color: AppColors.ink)),
+                        style: TextStyle(height: 1.5, color: context.pal.ink)),
                   ),
                 // Phones / large text: the button goes under the text so the
                 // row never overflows.
@@ -377,7 +380,7 @@ class DirectoryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final primary = Theme.of(context).colorScheme.primary;
+    final primary = context.pal.primary;
     return Card(
       clipBehavior: Clip.antiAlias,
       child: InkWell(
@@ -391,14 +394,10 @@ class DirectoryCard extends StatelessWidget {
               width: 52,
               height: 52,
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [primary, primaryDarkOf(context)],
-                ),
+                gradient: context.pal.barGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter),
                 borderRadius: BorderRadius.circular(16),
               ),
-              child: Icon(icon, color: context.pal.onPrimaryAccent, size: 24),
+              child: Icon(icon, color: context.pal.onBarAccent, size: 24),
             ),
             const SizedBox(width: 14),
             Expanded(
@@ -412,11 +411,11 @@ class DirectoryCard extends StatelessWidget {
                   Flexible(
                     child: Text(context.tr('learnMore'),
                         style: TextStyle(
-                            color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.w700, fontSize: 13)),
+                            color: context.pal.primary, fontWeight: FontWeight.w700, fontSize: 13)),
                   ),
                   const SizedBox(width: 4),
                   Icon(Icons.arrow_forward_rounded,
-                      size: 16, color: Theme.of(context).colorScheme.primary),
+                      size: 16, color: context.pal.primary),
                 ]),
               ]),
             ),
@@ -448,8 +447,10 @@ class ActionChipButton extends StatelessWidget {
       style: FilledButton.styleFrom(
         backgroundColor: color,
         // Brand fills are dark (white text); a light fill (Holy Week's
-        // silver primary) gets dark text.
-        foregroundColor: color.computeLuminance() > 0.25 ? const Color(0xFF15110F) : Colors.white,
+        // silver primary) gets the theme's dark text.
+        foregroundColor: color.computeLuminance() > 0.25
+            ? context.pal.onPrimary
+            : Colors.white, // palette-exempt: white on darkened brand / band fills (≥ 4.5:1 by construction)
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         textStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
       ),
@@ -475,10 +476,11 @@ class ActionChipButton extends StatelessWidget {
 String actionSemanticLabel(String action, String target) => target.isEmpty ? action : '$action — $target';
 
 // Darkened brand fills so white button text meets WCAG AA (>= 4.5:1).
-const whatsappGreen = Color(0xFF157338);
-const facebookBlue = Color(0xFF145DBF);
-const youtubeRed = Color(0xFFD32F2F);
-const instagramPink = Color(0xFFC13584);
+// Third-party brand colours, not theme colours (palette-exempt).
+const whatsappGreen = Color(0xFF157338); // palette-exempt: WhatsApp brand
+const facebookBlue = Color(0xFF145DBF); // palette-exempt: Facebook brand
+const youtubeRed = Color(0xFFD32F2F); // palette-exempt: YouTube brand
+const instagramPink = Color(0xFFC13584); // palette-exempt: Instagram brand
 
 /// Detail page of an item card, or null when an admin switched it off
 /// (explicit `detailsEnabled: false`; missing = on since PR #14). The card
@@ -585,7 +587,7 @@ class EdgeAccent extends StatelessWidget {
   @override
   Widget build(BuildContext context) => DecoratedBox(
         decoration: BoxDecoration(
-          border: BorderDirectional(start: BorderSide(color: color ?? Theme.of(context).colorScheme.primary, width: 3)),
+          border: BorderDirectional(start: BorderSide(color: color ?? context.pal.primary, width: 3)),
         ),
         child: child,
       );

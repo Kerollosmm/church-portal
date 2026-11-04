@@ -20,6 +20,20 @@ String audienceLabel(BuildContext context, ProgramOptions o, String key) {
   return v == null ? '' : context.pick(v.labelAr, v.labelEn);
 }
 
+/// Where a service is held, for one-line summaries: its free-text place, else
+/// its venue's label ('' when neither; ADR-043, Holy Week sim B2).
+String servicePlace(BuildContext context, ProgramOptions o, Liturgy l) {
+  final place = context.pick(l.placeAr, l.placeEn).trim();
+  return place.isNotEmpty ? place : venueLabel(context, o, l.program.venue);
+}
+
+/// "Name — place", or just the name when there is no place (no dangling dash).
+String serviceWithPlace(BuildContext context, ProgramOptions o, Liturgy l) {
+  final name = context.pick(l.nameAr, l.nameEn);
+  final place = servicePlace(context, o, l);
+  return place.isEmpty ? name : '$name — $place';
+}
+
 /// Speaker, topic, choir, venue, audience and the PDF / Drive link of a
 /// liturgy, meeting or season (ADR-041). Renders nothing for an item
 /// without programme details, so existing cards look exactly as before.
@@ -44,7 +58,7 @@ class ProgramDetails extends ConsumerWidget {
     final venue = showVenue ? venueLabel(context, opts, p.venue) : '';
     final audience = audienceLabel(context, opts, p.audience);
     final label = context.pick(p.attachmentLabelAr, p.attachmentLabelEn);
-    final primary = Theme.of(context).colorScheme.primary;
+    final primary = context.pal.primary;
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       if (venue.isNotEmpty || audience.isNotEmpty)
         Padding(

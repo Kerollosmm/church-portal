@@ -106,15 +106,15 @@ class WarmPanel extends StatelessWidget {
         decoration: BoxDecoration(
           color: sepia ? null : context.pal.panel,
           gradient: sepia
-              ? const LinearGradient(
+              ? LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
-                  colors: [Color(0xFFE6CFA9), Color(0xFFDDC197)],
+                  colors: [context.pal.sepiaTop, context.pal.sepiaBottom],
                 )
               : null,
           borderRadius: BorderRadius.circular(radius),
-          border: Border.all(color: sepia ? const Color(0x66A06E3C) : const Color(0x61C9963F)),
-          boxShadow: kPanelShadow,
+          border: Border.all(color: sepia ? context.pal.sepiaEdge.withValues(alpha: 0.4) : context.pal.ornamentLine),
+          boxShadow: context.pal.panelShadow,
         ),
         child: child,
       );
@@ -129,20 +129,24 @@ class SealTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final primary = Theme.of(context).colorScheme.primary;
+    final pal = context.pal;
     final seal = width * 0.76;
     return Container(
       key: const Key('sealTab'),
       width: width,
       height: height,
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [primary, primaryDarkOf(context)],
-        ),
+        // The theme's band colours (maroon tab; charcoal with a crimson edge
+        // on Holy Week — ADR-043).
+        gradient: pal.barGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter),
+        border: pal.barEdge == null
+            ? null
+            : Border(
+                left: BorderSide(color: pal.barEdge!, width: 1.5),
+                right: BorderSide(color: pal.barEdge!, width: 1.5),
+                bottom: BorderSide(color: pal.barEdge!, width: 1.5)),
         borderRadius: BorderRadius.vertical(bottom: Radius.circular(width * 0.24)),
-        boxShadow: const [BoxShadow(color: Color(0x80300808), blurRadius: 18, offset: Offset(0, 10), spreadRadius: -8)],
+        boxShadow: [BoxShadow(color: pal.shadow(0.5), blurRadius: 18, offset: const Offset(0, 10), spreadRadius: -8)],
       ),
       alignment: Alignment.bottomCenter,
       padding: EdgeInsets.only(bottom: (height - seal) * 0.42),
@@ -154,14 +158,15 @@ class SealTab extends StatelessWidget {
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           gradient: SweepGradient(colors: [
-            context.pal.onPrimaryAccent, AppColors.gold, context.pal.onPrimaryAccent, AppColors.gold, //
-            context.pal.onPrimaryAccent,
+            pal.halo[0], pal.ornament, pal.halo[0], pal.ornament, //
+            pal.halo[0],
           ]),
-          boxShadow: const [BoxShadow(color: Color(0x73200000), blurRadius: 8, offset: Offset(0, 2))],
+          boxShadow: [BoxShadow(color: pal.shadow(0.45), blurRadius: 8, offset: const Offset(0, 2))],
         ),
         child: ClipOval(
           child: ColoredBox(
-            color: Colors.white,
+            // The seal artwork is drawn on white (palette-exempt: artwork ground).
+            color: Colors.white, // palette-exempt: the seal's own white ground
             child: Image.asset(ChurchSeal.asset, fit: BoxFit.cover, filterQuality: FilterQuality.medium, semanticLabel: ''),
           ),
         ),
@@ -190,9 +195,9 @@ class PosterHeading extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final primary = Theme.of(context).colorScheme.primary;
-    // The glow is the scene colour (cream, or black on a dark theme).
-    final halo = context.pal.dark ? context.pal.background : const Color(0xFFFFF0D2);
+    final primary = context.pal.primary;
+    // The glow is the scene colour (warm cream, or black on a dark theme).
+    final halo = context.pal.glow;
     final shadows = glow
         ? [Shadow(color: halo.withValues(alpha: 0.95), blurRadius: 18), Shadow(color: halo.withValues(alpha: 0.9), blurRadius: 4)]
         : null;
@@ -229,18 +234,21 @@ class TitleRibbon extends StatelessWidget {
   final IconData? icon;
   const TitleRibbon(this.text, {super.key, this.icon});
 
-  /// Solid middle of the ribbon (cream text on it: checked in the contrast test).
-  static const fill = Color(0xFF7A4530);
-  static const textColor = Color(0xFFFFF3DC);
+  /// Solid middle of the Golden hour ribbon (cream text on it: checked in
+  /// the contrast test). Every theme reads its own from `context.pal`.
+  static const fill = Color(0xFF7A4530); // palette-exempt: Golden hour reference value (tests)
+  static const textColor = Color(0xFFFFF3DC); // palette-exempt: Golden hour reference value (tests)
 
   @override
-  Widget build(BuildContext context) => Container(
+  Widget build(BuildContext context) {
+    final fill = context.pal.ribbon, textColor = context.pal.ribbonText;
+    return Container(
         padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 7),
-        decoration: const BoxDecoration(
-          borderRadius: BorderRadius.all(Radius.circular(999)),
+        decoration: BoxDecoration(
+          borderRadius: const BorderRadius.all(Radius.circular(999)),
           gradient: LinearGradient(
-            colors: [Color(0x007A4530), fill, fill, Color(0x007A4530)],
-            stops: [0, 0.1, 0.9, 1],
+            colors: [fill.withValues(alpha: 0), fill, fill, fill.withValues(alpha: 0)],
+            stops: const [0, 0.1, 0.9, 1],
           ),
         ),
         child: Row(
@@ -251,12 +259,13 @@ class TitleRibbon extends StatelessWidget {
               child: Text(
                 text,
                 textAlign: TextAlign.center,
-                style: const TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 14.5, height: 1.5),
+                style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 14.5, height: 1.5),
               ),
             ),
           ],
         ),
       );
+  }
 }
 
 /// Round portrait in a glowing gold halo (the posters' sun disc). [child] is
@@ -273,10 +282,11 @@ class HaloPortrait extends StatelessWidget {
         padding: EdgeInsets.all(size * 0.035),
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          gradient: const RadialGradient(colors: [Color(0xFFFFEAB0), AppColors.amber, Color(0xFFC08A35)], stops: [0, 0.62, 1]),
+          // Gold halo; greyed on Holy Week (ADR-043).
+          gradient: RadialGradient(colors: context.pal.halo, stops: const [0, 0.62, 1]),
           boxShadow: [
-            BoxShadow(color: const Color(0x59FFE2A0), spreadRadius: size * 0.045),
-            BoxShadow(color: const Color(0x80C8841E), blurRadius: size * 0.2, offset: Offset(0, size * 0.04)),
+            BoxShadow(color: context.pal.halo[0].withValues(alpha: 0.35), spreadRadius: size * 0.045),
+            BoxShadow(color: context.pal.halo[2].withValues(alpha: 0.5), blurRadius: size * 0.2, offset: Offset(0, size * 0.04)),
           ],
         ),
         child: ClipOval(child: SizedBox.expand(child: child)),
@@ -293,7 +303,7 @@ class HaloCrossFill extends StatelessWidget {
         child: Center(
           child: FractionallySizedBox(
             widthFactor: 0.46,
-            child: AspectRatio(aspectRatio: 1, child: CopticCross(color: Theme.of(context).colorScheme.primary)),
+            child: AspectRatio(aspectRatio: 1, child: CopticCross(color: context.pal.primary)),
           ),
         ),
       );

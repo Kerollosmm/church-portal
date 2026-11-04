@@ -115,7 +115,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.cream,
+      backgroundColor: context.pal.background,
       floatingActionButton: FloatingActionButton.extended(
         heroTag: 'add-${def.id}',
         onPressed: () => _openEditor(context, null),
@@ -169,7 +169,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
             child: Text(context.pick(def.noteAr, def.noteEn),
-                key: const Key('admin-collectionNote'), style: const TextStyle(color: AppColors.muted, height: 1.5)),
+                key: const Key('admin-collectionNote'), style: TextStyle(color: context.pal.muted, height: 1.5)),
           ),
         Row(children: [
           Expanded(
@@ -209,13 +209,13 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
                 label: Text(context.tr('filter_${f.name}')),
                 selected: _filter == f,
                 showCheckmark: false,
-                labelStyle: TextStyle(color: _filter == f ? Colors.white : AppColors.burgundy),
+                labelStyle: TextStyle(color: _filter == f ? context.pal.onBar : context.pal.primary),
                 onSelected: (_) => setState(() => _filter = f),
               ),
           Text('  ${context.tr('showingCount', {'n': '$shown', 't': '$total'})}',
-              style: const TextStyle(color: AppColors.muted, fontSize: 12)),
+              style: TextStyle(color: context.pal.muted, fontSize: 12)),
           if (canReorder)
-            Text('  ↕ ${context.tr('dragToReorder')}', style: const TextStyle(color: AppColors.muted, fontSize: 12)),
+            Text('  ↕ ${context.tr('dragToReorder')}', style: TextStyle(color: context.pal.muted, fontSize: 12)),
         ]),
       ]),
     );
@@ -271,7 +271,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     return Card(
       key: ValueKey(d.id),
       margin: const EdgeInsets.only(bottom: 8),
-      color: hidden ? const Color(0xFFF1ECE4) : Colors.white,
+      color: hidden ? context.pal.surfaceAlt.withValues(alpha: 0.7) : context.pal.surface,
       child: ListTile(
         leading: dragIndex != null
             ? ReorderableDragStartListener(index: dragIndex, child: const Icon(Icons.drag_indicator))
@@ -281,23 +281,23 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
             child: Text(_title(d),
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                    fontWeight: FontWeight.w700, color: hidden ? AppColors.muted : AppColors.ink)),
+                    fontWeight: FontWeight.w700, color: hidden ? context.pal.muted : context.pal.ink)),
           ),
-          if (hidden) _Tag(context.tr('hidden'), AppColors.muted),
-          if (unconfirmed) _Tag(context.tr('unconfirmed'), AppColors.goldText),
+          if (hidden) _Tag(context.tr('hidden'), context.pal.muted),
+          if (unconfirmed) _Tag(context.tr('unconfirmed'), context.pal.goldText),
         ]),
         subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           // Own line: the title row keeps its width on phones.
           if (details)
             Padding(
               padding: const EdgeInsets.only(top: 2, bottom: 2),
-              child: _Tag(context.tr('detailPageBadge'), AppColors.burgundy, margin: EdgeInsetsDirectional.zero),
+              child: _Tag(context.tr('detailPageBadge'), context.pal.primary, margin: EdgeInsetsDirectional.zero),
             ),
           if (sub.isNotEmpty) Text(sub),
           if (updated != null)
             Text(
               context.tr('updatedBy', {'t': fmtDateTime(updated), 'u': d.updatedBy.isEmpty ? '—' : d.updatedBy}),
-              style: const TextStyle(fontSize: 11, color: AppColors.muted),
+              style: TextStyle(fontSize: 11, color: context.pal.muted),
             ),
           // Phones: the move buttons (and the item's page link, which every
           // item has since PR #14) get their own row so the title keeps its width.
@@ -312,12 +312,12 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
             IconButton(
               tooltip: context.tr(hidden ? 'show' : 'hide'),
               icon: Icon(hidden ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                  color: hidden ? AppColors.muted : AppColors.success),
+                  color: hidden ? context.pal.muted : context.pal.success),
               onPressed: () => _setVisible(context, d, hidden),
             ),
           IconButton(
             tooltip: context.tr('delete'),
-            icon: const Icon(Icons.delete_outline, color: AppColors.alert),
+            icon: Icon(Icons.delete_outline, color: context.pal.alert),
             onPressed: () => _confirmDelete(context, d),
           ),
         ]),
@@ -364,7 +364,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(context.tr('cancel'))),
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: AppColors.alert),
+            style: FilledButton.styleFrom(backgroundColor: context.pal.alert),
             onPressed: () => Navigator.pop(ctx, true),
             child: Text(context.tr('delete')),
           ),
@@ -413,7 +413,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(context.tr('cancel'))),
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: AppColors.alert),
+            style: FilledButton.styleFrom(backgroundColor: context.pal.alert),
             onPressed: () => Navigator.pop(ctx, true),
             child: Text(context.tr('delete')),
           ),

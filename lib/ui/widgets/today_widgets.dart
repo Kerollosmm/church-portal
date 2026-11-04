@@ -66,7 +66,8 @@ class LiveStreamBanner extends ConsumerWidget {
     if (!t.liveOn(now)) return const SizedBox.shrink();
     final custom = context.pick(t.liveLabelAr, t.liveLabelEn).trim();
     final label = custom.isEmpty ? context.tr('liveNow') : custom;
-    const red = Color(0xFFB3261E);
+    // The theme's live colours (red; deep crimson on Holy Week — ADR-043).
+    final red = context.pal.live, onRed = context.pal.onLive;
     void open() => openUrl(t.liveUrl);
     return Semantics(
       button: true,
@@ -88,16 +89,16 @@ class LiveStreamBanner extends ConsumerWidget {
                 child: Text(label,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 14.5)),
+                    style: TextStyle(color: onRed, fontWeight: FontWeight.w800, fontSize: 14.5)),
               ),
               const SizedBox(width: 10),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(999)),
+                decoration: BoxDecoration(color: onRed, borderRadius: BorderRadius.circular(999)),
                 child: Row(mainAxisSize: MainAxisSize.min, children: [
-                  const Icon(Icons.play_arrow_rounded, size: 18, color: red),
+                  Icon(Icons.play_arrow_rounded, size: 18, color: red),
                   Text(context.tr('watchLive'),
-                      style: const TextStyle(color: red, fontWeight: FontWeight.w800, fontSize: 13)),
+                      style: TextStyle(color: red, fontWeight: FontWeight.w800, fontSize: 13)),
                 ]),
               ),
             ]),
@@ -143,7 +144,7 @@ class _PulseDotState extends State<_PulseDot> with SingleTickerProviderStateMixi
         child: Container(
           width: 12,
           height: 12,
-          decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+          decoration: BoxDecoration(color: context.pal.onLive, shape: BoxShape.circle),
         ),
       );
 }
@@ -159,7 +160,7 @@ class TopEventCard extends ConsumerWidget {
     if (e == null) return const SizedBox.shrink();
     final title = context.pick(e.titleAr, e.titleEn).trim();
     if (title.isEmpty) return const SizedBox.shrink();
-    final primary = Theme.of(context).colorScheme.primary;
+    final primary = context.pal.primary;
     final kicker = switch (e.kind) {
       TopEventKind.church => context.tr('todayEvent'),
       TopEventKind.feast => context.tr('todayFeast'),
@@ -222,8 +223,8 @@ class TopEventCard extends ConsumerWidget {
       decoration: BoxDecoration(
         color: context.pal.panel,
         borderRadius: BorderRadius.circular(kPanelRadius),
-        border: Border.all(color: const Color(0x61C9963F)),
-        boxShadow: kPanelShadow,
+        border: Border.all(color: context.pal.ornamentLine),
+        boxShadow: context.pal.panelShadow,
       ),
       child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Icon(e.kind == TopEventKind.church ? Icons.campaign_rounded : Icons.auto_awesome_rounded, color: primary),

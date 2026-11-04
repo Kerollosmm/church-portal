@@ -39,7 +39,7 @@ class AboutPage extends ConsumerWidget {
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   if (context.pick(s.bishopAr, s.bishopEn).isNotEmpty) ...[
                     IconLine(Icons.workspace_premium_rounded, '${context.tr('bishop')}: ${context.pick(s.bishopAr, s.bishopEn)}',
-                        style: TextStyle(fontWeight: FontWeight.w700, color: Theme.of(context).colorScheme.primary)),
+                        style: TextStyle(fontWeight: FontWeight.w700, color: context.pal.primary)),
                     const SizedBox(height: 8),
                   ],
                   Text(context.pick(s.historyAr, s.historyEn), style: const TextStyle(height: 1.9, fontSize: 15)),
@@ -56,8 +56,8 @@ class AboutPage extends ConsumerWidget {
                       CopticCross(
                           size: 30,
                           color: a.kind == 'main'
-                              ? AppColors.gold
-                              : Color.lerp(Theme.of(context).colorScheme.primary, Colors.white, 0.15)!),
+                              ? context.pal.ornament
+                              : Color.lerp(context.pal.primary, context.pal.background, 0.15)!),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(context.pick(a.nameAr, a.nameEn),
@@ -138,7 +138,7 @@ class PriestCard extends StatelessWidget {
             placeholder: CircleAvatar(
               radius: 34,
               backgroundColor: context.pal.surfaceAlt,
-              child: Icon(Icons.person, size: 36, color: Theme.of(context).colorScheme.primary),
+              child: Icon(Icons.person, size: 36, color: context.pal.primary),
             ),
           ),
           Expanded(
@@ -208,14 +208,14 @@ class SaintCard extends ConsumerWidget {
               Expanded(
                 child: Text(name,
                     style: TextStyle(
-                        fontWeight: FontWeight.w800, fontSize: 16, color: Theme.of(context).colorScheme.primary)),
+                        fontWeight: FontWeight.w800, fontSize: 16, color: context.pal.primary)),
               ),
             ]),
             if (feast.isNotEmpty || gregorian.isNotEmpty) ...[
               const SizedBox(height: Space.s),
               Wrap(spacing: 6, runSpacing: 6, children: [
                 if (feast.isNotEmpty)
-                  Pill('${context.tr('feast')}: $feast', color: Theme.of(context).colorScheme.primary, icon: Icons.event),
+                  Pill('${context.tr('feast')}: $feast', color: context.pal.primary, icon: Icons.event),
                 if (gregorian.isNotEmpty) Pill(gregorian, color: context.pal.muted),
               ]),
             ],

@@ -46,6 +46,14 @@ render with `PageBody` (+ `Footer`). Content comes from Riverpod providers (hidd
   next-mass bar and chips, footer) follows the theme in force — see `03-architecture.md` → Theming. Holy Week is a
   dark scene (black wash, dark panels, light text, ashen-silver accent with dark text, crimson accent word, art in
   dim greyscale); the Resurrection is festive (Easter red, bright gold, luminous ivory).
+- **Occasion sub-themes (PR #36, ADR-043):** Holy Week = black cloth / charcoal / ashen silver with deep crimson (no
+  gold, no violet); fasts = ash / stone with deep oxblood (was violet); legacy `purple` reads as oxblood and is hidden
+  from the pickers. Every widget takes its colours from the palette and its scene accents (`context.pal.bar`,
+  `ornament`, `notice`, `alert`…), and the Material scheme is filled from the palette, so nothing falls back to
+  Material violet. **The theme follows the active church season** (`occasions.followSeason`, default on; per-key map
+  `occasions.seasonThemes`, revivals / summer = no theme): admin range > active season > Easter dates > selected
+  theme. A Holy Week season document turns the site dark from its start to its end even off the computed Easter
+  dates; until the seasons list loads, the applied season preset decides (first paint already dark).
 - **Hero video:** the home hero plays the **bundled cloud clip** only (muted, looping, no controls; portrait crop on
   phones) over its poster; the painting shows when video is not allowed. Never for reduced motion, data saver,
   `heroMotion` off or under `flutter test`. The YouTube hero video library of PR #17 (ADR-026) was **removed in PR #25
@@ -365,13 +373,22 @@ on); owners can press **Send test error**. Details: `03-architecture.md` → *Er
        only when it overlaps in time one of the season's services that day (e.g. Saturday vespers 18:30 vs the 18:30
        revival service). Before PR 1 a revival erased every morning mass for 9 days and the next-mass card showed
        "no upcoming liturgies".
+   - **Undated templates vs a dated programme (ADR-043, Holy Week sim B4):** on a day where a schedule-replacing
+     season has dated services of its own (`seasonHasDatedServicesOn`), the undated (weekday) services of its key do
+     not occur that day; the season list drops an undated service only when every such weekday in the window has
+     dated services (`liturgyInSeason`). A season of templates only (the seed's Holy Week 2027) and additive seasons
+     are unchanged.
    - `effectiveLiturgiesForDay` simply returns `occurrencesForDay(…, dayOffset: 0)`'s liturgies, so the two can never
      disagree.
-3. Default types `{'mass'}` (vespers/praise/other ignored unless `types` given).
+3. Default types `{'mass'}` (vespers/praise/other ignored unless `types` given) — **except** that while a season that
+   replaces the regular schedule is active, every service of that season counts whatever its type (the Holy Week
+   hours are `other`; ADR-043, sim B1), and the card is titled «الصلاة القادمة» instead of «القداس القادم».
 4. "Happening now": any occurrence of yesterday (past midnight) or today with `start ≤ now < end`.
 5. "Next": first occurrence with `start > now`, today first, then up to **7 days** ahead (`lookAheadDays`).
 6. Card shows: active season pill, happening-now strip, day label (today / tomorrow / in N days) + weekday,
    countdown "starts in Xh Ym" (today only), name, both-digit times, place, audience, «مواعيد تقريبية…» if `sample`.
+   The happening-now line is «name — place»: the free-text place, else the ADR-041 venue's name, and no dash when
+   neither (`serviceWithPlace`, ADR-043 sim B2).
    Empty → «لا توجد قداسات قادمة خلال الأسبوع».
 7. Refreshes every 30 s (`nowProvider`).
 

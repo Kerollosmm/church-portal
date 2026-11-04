@@ -170,8 +170,8 @@ Existence of `settings/church` = "database is seeded" (see `03-architecture.md`)
 | `bannerEnabled` | bool | false |
 | `bannerAr`, `bannerEn` | string ≤ 500 | banner shows only if enabled **and** some text |
 | `bannerLink` | string ≤ 500 | `''`, in-app path `/…`, or `http(s)://host.tld…` (rules regex mirrors `isValidUrl(allowPath: true)`) |
-| `theme` | `goldenHour\|holyWeek\|resurrection\|nativity\|epiphany\|fasting\|marian\|navy\|green\|brown\|purple` (PR #17) | missing, legacy `burgundy` and unknown → `goldenHour`. With `occasions.auto` off this theme always applies (manual override); on, it is the fallback |
-| `occasions` | map (PR #17, ADR-025) | `{auto: bool (false), easter: bool (true), resurrectionDays: int 1–50 (7), schedule: {r1…r12: 'theme\|YYYY-MM-DD\|YYYY-MM-DD'}}` (`OccasionConfig`). Inclusive Cairo dates; invalid / reversed ranges dropped when read; first matching range wins, then the Easter ranges, else `theme`. Missing = manual |
+| `theme` | `goldenHour\|holyWeek\|resurrection\|nativity\|epiphany\|fasting\|marian\|navy\|green\|brown\|purple` (PR #17) | missing, legacy `burgundy` and unknown → `goldenHour`. Legacy `purple` (ADR-043) reads as the oxblood accent and is no longer offered. The selected theme applies when no admin range (with `auto`), no active season theme (with `followSeason`) and no Easter date (with `auto` + `easter`) applies — precedence in that order (ADR-043) |
+| `occasions` | map (PR #17, ADR-025) | `{auto: bool (false), easter: bool (true), resurrectionDays: int 1–50 (7), schedule: {r1…r12: 'theme\|YYYY-MM-DD\|YYYY-MM-DD'}, followSeason: bool (true), seasonThemes: {seasonKey: themeKey\|'none'}}` (`OccasionConfig`; `followSeason` / `seasonThemes` ADR-043). Inclusive Cairo dates; invalid / reversed ranges dropped when read. Precedence: first matching range (with `auto`) > the active season's theme (with `followSeason`; first key in `SeasonThemes.seasonKeys` order) > the Easter ranges (with `auto` + `easter`) > `theme`. `seasonThemes` stores only differences from the defaults (holy_week → holyWeek, pascha → resurrection, nativity, epiphany, marian, fast → fasting; revivals / summer → none). Missing = manual + follow the season |
 | `themeColors` | map (PR #17) | per preset key a string of the 10 palette colours in `ThemePalette.keys` order (`primary\|onPrimary\|onPrimaryAccent\|background\|surface\|surfaceAlt\|ink\|muted\|goldText\|script`), each `#RRGGBB` or empty (= the preset's). Saved auto-corrected for contrast and re-corrected when rendered. Its own field (and write) for the rules budget. Missing = presets as built |
 | `heroVideos` | map (PR #17, ADR-026) — **legacy since PR #25 (ADR-036)** | no longer read or written by the app (the YouTube hero video library was removed); a stored value is kept untouched and the rules still accept / validate the key so saves keep working |
 | `pageHeaders` | map `<pageKey, PageCustom>` (PR #11) | `{}`. Keys = `CustomizablePages.all`: `about, schedule, education, activities, clinics, services, contact, ask`; each entry `{titleAr, titleEn` ≤ 200, `subtitleAr, subtitleEn` ≤ 300, `introAr, introEn` ≤ 1500`}` (all 6 keys written). Unknown pages / non-maps / empty entries are dropped by `fromMap`; `toMap` writes non-empty entries only. `pageHeader(key)` → `PageCustom.empty` when unset. Rendered since PR #13 (`CustomizablePageHeader` / `PageIntro`: title/subtitle override for the current language only; intro via `context.pick`) |
@@ -207,7 +207,7 @@ Existence of `settings/church` = "database is seeded" (see `03-architecture.md`)
   | `venues` | list ≤ 12 of strings `key␟labelAr␟labelEn` (key `[a-z0-9_-]{1,30}`, labelAr 1–80, labelEn ≤ 80) — PR #32, ADR-041 | missing / empty = `main` الكنيسة الكبرى, `lower` القاعة السفلية, `services` مبنى الخدمات |
   | `audiences` | same format — PR #32, ADR-041 | missing / empty = `general` عام, `youth` شباب, `children` أطفال |
   | `seasonVerses` | list ≤ 40 of strings `seasonKey␟textAr␟refAr` (season key of `validSeason`, text 1–500, ref ≤ 60) — PR #33, ADR-042 | missing / empty = the general daily list always |
-  | `seasonPreset` | map `{seasonId, seasonKey, appliedAt, endsAt, options[≤7], previous{seasonActive, replacesRegular, meetings, clinics, heroMotion, weddingBookingOff, liveUrl, liveEndsAt, attachmentUrl, attachmentLabelAr, attachmentLabelEn}}` or null — written only by /admin «تجهيز الموسم» (PR #33, ADR-042) | none applied |
+  | `seasonPreset` | map `{seasonId, seasonKey, appliedAt, startsAt, endsAt, options[≤8, no duplicates], previous{seasonActive, replacesRegular, meetings, clinics, heroMotion, weddingBookingOff, liveUrl, liveEndsAt, attachmentUrl, attachmentLabelAr, attachmentLabelEn, theme}}` or null — written only by /admin «تجهيز الموسم» (PR #33, ADR-042; `startsAt`, option `theme` and `previous.theme` ADR-043) | none applied |
   | `weddingBookingOff` | bool — PR #33, ADR-042 | false (the wedding booking choice shows) |
 
 - PR #18 (ADR-027): `sections.customSections` (custom categories at `/section/*` + their menu entries) and
@@ -241,7 +241,7 @@ default false in model), `startsAt`/`endsAt` (timestamp), `priority` (int 0–10
 `revival-moses-2027`.
 
 ### `seasons/{id}` — `Season` (not Hideable)
-`key` (**required**, one of `holy_week, pascha, nativity, revival_maximus, revival_moses, summer`), `nameAr` (**req**),
+`key` (**required**, one of `holy_week, pascha, nativity, epiphany, marian, fast, revival_maximus, revival_moses, summer`; the three after nativity ADR-043), `nameAr` (**req**),
 `nameEn`, `startsAt`, `endsAt` (timestamps, exact window), `active` (bool, default false in model),
 `replacesRegular` (bool, **missing = true**, PR 1: `true` = its services REPLACE the regular schedule on the days they
 cover — Holy Week, Pascha, Nativity; `false` = ADDITIVE evening revival, regular morning masses continue — see
@@ -252,14 +252,14 @@ cover — Holy Week, Pascha, Nativity; `false` = ADDITIVE evening revival, regul
 ### `liturgies/{id}` — `Liturgy` (Hideable)
 | Field | Type | Notes |
 |---|---|---|
-| `type` | `mass\|vespers\|praise\|other` | missing → `mass`. Next-mass card uses `mass` only |
+| `type` | `mass\|vespers\|praise\|other` | missing → `mass`. Next-service card uses `mass` only, except while a season that replaces the regular schedule is active: then every service of that season counts (ADR-043) |
 | `nameAr` (**req**), `nameEn` | string ≤300 | |
 | `weekday` | int 1–7 or null | weekly schedule |
 | `date` | timestamp or null | one-off (Cairo day). Admin requires `weekday` **or** `date` (`requireAnyOf`) |
 | `start` | "HH:mm" | **required key** (rules: `'start' in d`) |
 | `end` | "HH:mm" or '' | may be ≤ start = crosses midnight; missing end → start + 120 min |
 | `placeAr/En`, `audienceAr/En` | string ≤300 | |
-| `seasonKey` | season key or null | null = regular schedule |
+| `seasonKey` | season key or null | null = regular schedule. Keys: holy_week, pascha, nativity, epiphany, marian, fast (the last three ADR-043), revival_maximus, revival_moses, summer. An undated seasonal service does not occur on a day its schedule-replacing season has dated services (ADR-043) |
 | `order`, `visible`, `sample` | | |
 Seed: 47 docs, all `sample: true` (ids like `fri-1`, `sun-youth`, `sat-vespers`, `nat-eve`, `rev-max-1…7`,
 `rev-max-feast`, `hw-day-1…3`, `hw-eve-1…3`, `hw-palm`, `hw-thursday`, `hw-friday`, `hw-saturday`, `pascha-eve`,

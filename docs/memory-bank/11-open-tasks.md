@@ -146,6 +146,14 @@ Status as of 4 Nov 2026 (PR #31 / ADR-039–040 on top of `905cd04`; PR #30 / AD
 - [ ] Optional: remove the legacy `heroVideos` key + `validHeroVideos` from `firestore.rules` once no live
       `settings/features` stores it (check the live doc first; never delete live data from the app) — ADR-036.
 - [ ] Optional: a dark theme for the admin dashboard (it keeps Golden hour).
+- [x] Theme follows the active church season; Holy Week / fasts palettes without violet or gold; legacy `purple` hidden
+      (PR #36, ADR-043).
+- [ ] Owner (ADR-043): before entering a dated Holy Week on live, hide the seed's weekday templates `hw-day-1…3` /
+      `hw-eve-1…3` (or enter every day): templates of weekdays without dated services still show in that season (B4
+      is handled per day, by design).
+- [ ] Optional (ADR-043 cost): if the app-wide `seasons` listener matters, derive the active season from
+      `settings/features.seasonPreset` only (no listener) when no season list is needed on the page.
+- [ ] ADR number: PR #35 (splash / top bar) also calls itself ADR-043 — renumber whichever merges second.
 
 ## Custom sections, pages & contact types (PR #18, ADR-027/028)
 

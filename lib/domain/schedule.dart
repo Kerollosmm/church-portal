@@ -116,6 +116,9 @@ List<LiturgyOccurrence> occurrencesForDay({
   final dayStart = CairoTime.startOfDay(day);
   final active = seasons.where((s) => isSeasonActiveOnDay(s, dayStart)).toList();
   bool typeOk(Liturgy l) => types == null || types.contains(l.type);
+  // On a day a season has dated services of its own, the undated (weekday)
+  // services of its key do not apply (ADR-043, Holy Week sim B4).
+  final datedToday = {for (final s in active) s: seasonHasDatedServicesOn(s, liturgies, dayStart)};
 
   final seasonal = <LiturgyOccurrence>[];
   final replacing = <Season>{};
@@ -124,7 +127,9 @@ List<LiturgyOccurrence> occurrencesForDay({
     if (l.seasonKey == null || !_matchesDay(l, dayStart)) continue;
     final o = _occurrence(l, dayStart, dayOffset);
     if (o == null) continue;
-    final windows = active.where((s) => s.key == l.seasonKey && isSeasonActiveAt(s, o.start)).toList();
+    final windows = active
+        .where((s) => s.key == l.seasonKey && isSeasonActiveAt(s, o.start) && (l.date != null || !datedToday[s]!))
+        .toList();
     if (windows.isEmpty) continue;
     seasonal.add(o);
     // Replacement is decided on ALL seasonal services (so e.g. Holy Week
@@ -170,6 +175,10 @@ List<LiturgyOccurrence> occurrencesForDay({
 ///
 /// [now] is any instant; it is converted to Africa/Cairo. By default only
 /// `type == 'mass'` is considered; pass [types] to include vespers etc.
+/// While a season that replaces the regular schedule (Holy Week, Pascha,
+/// Nativity) is active, EVERY service of that season counts whatever its
+/// type (the Holy Week hours are `other`; ADR-043, Holy Week sim B1) —
+/// otherwise the card skipped them and showed a regular mass days later.
 NextMassResult computeNextMass({
   required Iterable<Liturgy> liturgies,
   required Iterable<Season> seasons,
@@ -181,18 +190,27 @@ NextMassResult computeNextMass({
   final today = CairoTime.startOfDay(cairoNow);
   LiturgyOccurrence? happening;
   LiturgyOccurrence? next;
+  final replacing = [for (final s in seasons) if (s.replacesRegular) s];
+  bool counts(LiturgyOccurrence o) =>
+      types.contains(o.liturgy.type) ||
+      (o.liturgy.seasonKey != null &&
+          replacing.any((s) => s.key == o.liturgy.seasonKey && isSeasonActiveAt(s, o.start)));
+  // Every type is read (the suppression of regular services is the same),
+  // then filtered by [counts].
+  List<LiturgyOccurrence> day(tz.TZDateTime d, int offset) => [
+        for (final o in occurrencesForDay(liturgies: liturgies, seasons: seasons, day: d, dayOffset: offset))
+          if (counts(o)) o,
+      ];
 
   // Yesterday's occurrences may still be running past midnight.
   final yesterday = CairoTime.at(today.year, today.month, today.day - 1);
-  for (final o in occurrencesForDay(
-      liturgies: liturgies, seasons: seasons, day: yesterday, dayOffset: -1, types: types)) {
+  for (final o in day(yesterday, -1)) {
     if (o.isHappeningAt(cairoNow)) happening ??= o;
   }
 
   for (var offset = 0; offset <= lookAheadDays && next == null; offset++) {
-    final day = CairoTime.at(today.year, today.month, today.day + offset);
-    for (final o in occurrencesForDay(
-        liturgies: liturgies, seasons: seasons, day: day, dayOffset: offset, types: types)) {
+    final d = CairoTime.at(today.year, today.month, today.day + offset);
+    for (final o in day(d, offset)) {
       if (offset == 0 && o.isHappeningAt(cairoNow)) {
         happening ??= o;
         continue;
@@ -311,16 +329,54 @@ bool _dateInSeason(DateTime date, Season s) {
   return true;
 }
 
+/// Does [s] — a season that replaces the regular schedule (Holy Week,
+/// Pascha, Nativity: programmes written day by day) — have dated services of
+/// its own on the Cairo day [dayStart]? Then the undated (weekday) services
+/// of its key do not apply on that day: the dated programme is the plan for
+/// that day (ADR-043, Holy Week sim B4 — the seed's sample weekday templates
+/// no longer mix into an owner's dated Holy Week). Days without dated
+/// services keep their weekday services (the seed's own Holy Week 2027), and
+/// additive seasons are unchanged (a revival's nightly service also runs on
+/// its dated feast day).
+bool seasonHasDatedServicesOn(Season s, Iterable<Liturgy> all, tz.TZDateTime dayStart) =>
+    s.replacesRegular &&
+    all.any((l) => l.seasonKey == s.key && l.date != null && _matchesDay(l, dayStart) && _dateInSeason(l.date!, s));
+
+/// [l] is one of [s]'s services for the season lists: its key, and a dated
+/// one inside the window, or an undated one — unless [s] has dated services
+/// on every day of the window with its weekday ([seasonHasDatedServicesOn];
+/// an additive, open-ended or year-long season keeps every undated service,
+/// as before).
+bool liturgyInSeason(Liturgy l, Season s, Iterable<Liturgy> all) {
+  if (l.seasonKey != s.key) return false;
+  if (l.date != null) return _dateInSeason(l.date!, s);
+  final from = s.startsAt, to = s.endsAt, wd = l.weekday;
+  if (!s.replacesRegular || from == null || to == null || wd == null) return true;
+  var sawWeekday = false;
+  final first = CairoTime.calendarDate(from), last = CairoTime.calendarDate(to);
+  var day = CairoTime.at(first.year, first.month, first.day);
+  for (var i = 0; i < 400 && !day.isAfter(CairoTime.at(last.year, last.month, last.day)); i++) {
+    if (day.weekday == wd) {
+      sawWeekday = true;
+      if (!seasonHasDatedServicesOn(s, all, day)) return true;
+    }
+    day = CairoTime.at(day.year, day.month, day.day + 1);
+  }
+  // No such weekday in the window at all: listed as before (unchanged).
+  return !sawWeekday;
+}
+
 /// Seasonal liturgies grouped by season, for active seasons only, seasons
 /// sorted by start date. A dated liturgy is attached only to the season
 /// whose window covers its day, so e.g. 2027 and 2028 seasons sharing a key
-/// never pick up each other's services.
+/// never pick up each other's services; an undated one only when it still
+/// falls on a day of the season without dated services ([liturgyInSeason]).
 Map<Season, List<Liturgy>> seasonalSchedule(Iterable<Season> seasons, Iterable<Liturgy> all) {
   final sorted = seasons.where((s) => s.active).toList()
     ..sort((a, b) => (a.startsAt ?? DateTime(9999)).compareTo(b.startsAt ?? DateTime(9999)));
   final map = <Season, List<Liturgy>>{};
   for (final s in sorted) {
-    final ls = all.where((l) => l.seasonKey == s.key && (l.date == null || _dateInSeason(l.date!, s))).toList()
+    final ls = all.where((l) => liturgyInSeason(l, s, all)).toList()
       ..sort((a, b) {
         final da = a.date ?? DateTime(2000, 1, a.weekday ?? 0);
         final db = b.date ?? DateTime(2000, 1, b.weekday ?? 0);
