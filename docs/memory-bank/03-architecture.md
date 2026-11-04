@@ -415,7 +415,8 @@ chunks are fetched relative to `<base href>`).
   (elliptical radial glow bleeding past the text). `HeroVideo` (`hero_video.dart`, conditional export): web =
   native `<video muted playsinline loop>` via `HtmlElementView.fromTagName` with a CSS mask + fade-in on `playing`
   (`hero_video_web.dart`); Android/iOS = `video_player` (`hero_video_io.dart`). `HeroStage` plays **only the bundled
-  clip** (`assets/video/hero_clouds.mp4`, `hero_clouds_tall.mp4` on phones) over its poster / painting: the PR #17
+  clip** (`assets/video/hero_clouds.mp4`, `hero_clouds_tall.mp4` on phones; 9 s seamless loops since PR #33, ADR-042)
+  over its poster / painting: the PR #17
   YouTube hero video library (`HeroStage(youtubeId:)`, `hero_youtube*.dart`, `youtube_player_iframe`) was **removed
   in PR #25 (ADR-036)**. Gated by `settings/features.heroMotion`
   and the visitor's reduced-motion / save-data (`lib/core/motion_env*.dart`); phones get the portrait crop.

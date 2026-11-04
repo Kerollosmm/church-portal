@@ -5,6 +5,7 @@ import '../../domain/assistant_settings.dart';
 import '../../domain/custom_content.dart';
 import '../../domain/image_style.dart';
 import '../../domain/program.dart';
+import '../../domain/season_verses.dart';
 
 enum FieldType {
   text,
@@ -863,6 +864,11 @@ const assistantSettingsDoc = DocDef('settings/assistant', 'المساعد الذ
       min: AssistantLimits.perDayMin, max: AssistantLimits.perDayMax,
       hintAr: 'الافتراضي ${AssistantLimits.perDayDefault}، يتجدد عند منتصف الليل (عدّاد على الجهاز؛ مسح بيانات الموقع يعيده).',
       hintEn: 'Default ${AssistantLimits.perDayDefault}, resets at midnight (an on-device counter; clearing site data resets it).'),
+  FieldDef('perDaySeason', 'أقصى عدد أسئلة في اليوم أثناء المواسم الاستثنائية', 'Max questions per day during exceptional seasons',
+      FieldType.integer,
+      min: AssistantLimits.perDayMin, max: AssistantLimits.perDayMax,
+      hintAr: 'الافتراضي ${AssistantLimits.perDaySeasonDefault}. يُطبَّق تلقائيًا طوال موسم مفعّل: أسبوع الآلام، القيامة، الميلاد، النهضات (وليس الصيف).',
+      hintEn: 'Default ${AssistantLimits.perDaySeasonDefault}. Applies automatically while an active season runs: Holy Week, Pascha, Nativity, revivals (not summer).'),
 ]);
 
 CollectionDef? collectionById(String id) {
@@ -967,4 +973,20 @@ const seasonSettingsDoc = DocDef('settings/features', 'إعدادات الموا
       hintEn: 'Empty = the defaults: Everyone, Youth, Children. Shown as filter chips on the seasons schedule when two or more are used.',
       rowUniqueKey: 'key',
       subFields: _optionRowFields),
+  // ADR-042: while a season is active, "verse of the day" rotates through
+  // its verses (stored 'seasonKey␟textAr␟refAr', firestore.rules
+  // validSeasonVerses).
+  FieldDef('seasonVerses', 'آيات المواسم (حتى 40)', 'Season verses (up to 40)', FieldType.objectList,
+      maxRows: SeasonVerses.max,
+      encodedRows: true,
+      hintAr: 'أثناء موسم مفعّل تتبدل «آية اليوم» يوميًا بين آيات هذا الموسم بدل القائمة العامة (الآية الثابتة من «الأقسام» تبقى لها الأولوية). فارغة = القائمة العامة دائمًا.',
+      hintEn: 'While a season is active, "verse of the day" rotates daily through that season\'s verses instead of the general list (a fixed verse set under "Sections" still wins). Empty = always the general list.',
+      subFields: [
+        FieldDef('season', 'الموسم', 'Season', FieldType.choice,
+            options: SeasonVerses.seasonKeys, defaultOption: 'holy_week'),
+        FieldDef('textAr', 'نص الآية', 'Verse text', FieldType.multiline,
+            required: true, maxLength: SeasonVerses.maxText),
+        FieldDef('refAr', 'الشاهد (مثل يو 3: 16)', 'Reference (e.g. John 3:16)', FieldType.text,
+            maxLength: SeasonVerses.maxRef),
+      ]),
 ]);

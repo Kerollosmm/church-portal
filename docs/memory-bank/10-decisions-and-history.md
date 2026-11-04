@@ -894,6 +894,69 @@ supersede them.
   programme key) stays under the 1,000-expression cap (emulator group "ADR-041").
 - Firebase cost per visit: +0 reads, +0 listeners. Tests: `test/program_test.dart`, rules group "ADR-041".
 
+## ADR-042 (PR #33) — Season presets: one reversible «تجهيز الموسم» action, season verse sets, assistant season limit and topics, hero v2
+
+- **Context (owner plan §2.6, §3, §4 SOP; `docs/holy-week-and-revivals-roadmap.md` gap 6):** before Holy Week the
+  owner flips five or six switches by hand (weekly schedule replaced, meetings and clinics hidden, calm hero, no
+  wedding bookings, live link, booklet) and must remember to flip them all back; the assistant's 3 questions a day run
+  out at once in busy seasons and it offered sections that were switched off; "verse of the day" ignored the season.
+- **Decision — season preset (`lib/domain/season_preset.dart`, /admin «تجهيز الموسم» `SeasonPresetScreen`):** pick a
+  season, tick up to 7 options (`replaceRegular`, `hideMeetings`, `hideClinics`, `heroMotionOff`, `weddingOff`,
+  `live`, `pdf`; defaults per season kind — Holy Week ticks the first five, Pascha / Nativity only `replaceRegular`,
+  revivals none), confirm a dialog that lists every change. `planApply` writes the changes AND the values they replace
+  into `settings/features.seasonPreset` `{seasonId, seasonKey, appliedAt, endsAt, options, previous}` and activates the
+  season; «استرجاع الإعدادات السابقة» (`planRestore`, confirmed) writes `previous` back and clears the preset. Each is
+  ONE batched write (`AdminBackend.saveDocs`) of `settings/features` + `seasons/{id}` (a deleted season is never
+  recreated). `sections` is written whole (validSections), from the switches read just before.
+- **Auto-revert at the season end without a write or a Cloud Function:** `FeatureSettings.effectiveAt(instant)` gives
+  visitors the `previous` values of the switches the preset changed once `endsAt` has passed; `featuresProvider`
+  watches the clock through a bool, so it rebuilds once at the end. The live link already stops at `liveEndsAt` =
+  season end, and the season stops by its own dates. The stored values change only when the admin presses restore
+  (the screen says the season is over and visitors already see the normal site). A season without an end date never
+  reverts on its own (the screen warns).
+- **Wedding switch:** `settings/features.weddingBookingOff` hides the `wedding` subtype of booking categories on the
+  contact form and in the assistant's contact context (`ContactSettings.withoutWedding`); condolences stay. A booking
+  category whose only choice was the wedding is hidden while the switch is on, so an unspecified hall booking can't be
+  sent instead (Codex review on PR #33).
+- **Season verse sets (`lib/domain/season_verses.dart`):** `settings/features.seasonVerses` (≤ 40 rows
+  `seasonKey␟textAr␟refAr`, edited in «إعدادات المواسم»). While a season with verses is active (the latest-starting
+  one when several), the home verse rotates through its set by liturgical day; a fixed admin verse still wins; no set
+  = the general list. The home verse reads the seasons stream only when sets exist (the next-service card already
+  opens it).
+- **Assistant:** `perDaySeason` in `settings/assistant` (1–100, default 6) applies while an exceptional season is
+  active (`holy_week`, `pascha`, `nativity`, `revival_maximus`, `revival_moses`; not `summer`) via
+  `withSeasonLimit` (a season never lowers a higher ordinary `perDay` — Sentry review on PR #33); allowed-topic lines (defaults and the admin's) are dropped when a section group they name is
+  all off (`topicSectionWords` / `topicsFor`; history and milestones are separate groups, so «history and
+  milestones» goes when either is off — Codex review on PR #33); the prompt names switched-off sections ("do not offer") and the current season
+  first ("use that season's schedule"); the answer cache key uses the filtered topics.
+- **Hero v2:** the owner-approved Gemini clip as muted 9 s loops whose last second cross-fades into the first (no
+  seam): `hero_clouds.mp4` 1280×720 (≈ 241 KB, was 308 KB), `hero_clouds_tall.mp4` 432×768 (≈ 117 KB); posters are the
+  first frames (`hero_poster.webp` 1280×720, `hero_poster_tall.webp` 432×768; `web/index.html` reserves 432×768); stills
+  `hero_wide*` / `hero_tall` regraded to match. Faststart (moov before mdat), no audio track.
+- **Rules:** `validFeatures` allows `seasonVerses` (`validSeasonVerses`: one `join` + regex), `seasonPreset`
+  (`validSeasonPreset`: key lists, timestamps, bools, the four strings checked as one joined string) and
+  `weddingBookingOff` (bool); `validAssistant` allows `perDaySeason` 1–100. Emulator group "ADR-042" (apply / restore
+  batch, bad presets, verse rows, limit range).
+- **Cost:** visitors +0 reads, +0 listeners in the default layout (three more keys in the already-streamed
+  `settings/features`; the seasons stream is already open on home for the next-service card and on /ask). Exception
+  (CodeRabbit review on PR #33): while season verses exist and the next-service card is hidden (or the schedule is
+  off), the home verse opens the seasons listener itself (+1 listener, ≈ 6 docs). Admin screen: 2 listeners while
+  open (`seasons` ≈ 6 docs + 1 doc). Apply = 1 transaction (2 document reads + 2 writes) that re-plans from the
+  current documents, so a switch saved meanwhile by another admin is kept, a preset applied meanwhile is never
+  overwritten and a season deleted meanwhile is not recreated; restore = 1 transaction (2 reads + ≤ 2 writes);
+  auto-revert = 0 writes. Admin screen review fixes: an ended season can't be applied (its `active` would stay on), the
+  live link is cleared when another season is picked, links over 500 characters are refused before the dialog, and a
+  load error is shown instead of a spinner. The home verse waits for the seasons while season verses exist (no general
+  verse flash); /ask waits up to 5 s for the seasons before the daily-limit check. The preset keeps the season end it
+  was applied with (visitors need no seasons listener for the auto-revert); when the admin later moves the season's
+  end, the applied card says so and «نقل الرجوع التلقائي إلى النهاية الجديدة» moves `seasonPreset.endsAt` (and the
+  live end the preset set) in one transaction (`planSyncEnd`, Sentry review on PR #33). After the end, the switches
+  the preset covered follow the preset's previous values until «استرجاع» (by design: the screen says so). Hero video bytes −67 KB on
+  tablets / desktops, +5 KB on phones.
+- Tests: `test/season_preset_test.dart` (preset domain, auto-revert, verse sets, assistant limit / topics / prompt,
+  wedding switch, admin screen apply / restore / validation / deleted season, poster sizes vs `index.html`, video
+  duration / faststart / no audio / byte budgets), rules group "ADR-042".
+
 ## Timeline
 
 | When | PR / commit | What |
@@ -940,5 +1003,6 @@ supersede them.
 | 4 Nov 2026 | **PR #31** — "Coptic calendar, top event of the day, live banner" (`feat/coptic-calendar-today-live`, on `905cd04` = PR #30 + the owner's roadmap doc) | ADR-039 / ADR-040: `coptic_calendar.dart`, `sun.dart`, `coptic_feasts.dart`, `today.dart`, `synaxarium_source.dart`, `today_widgets.dart` (strip, live banner, top event card), liturgical-day verse and eve labels, /admin «اليوم والبث المباشر», `synaxarium.yml` + `tool/fetch_synaxarium.js` + `tool/publish_hosting_file.js`, footer note debounce (`SteadySeedNote`), time-zone labels removed from the UI; tests `coptic_calendar_test.dart`, `today_widgets_test.dart`, rules group. |
 
 | 4 Nov 2026 | **PR #32** — "Programme details: speaker, topic, choir, venue, audience, Drive PDF link" (`feat/programme-fields`) | ADR-041: `program.dart` (`ProgramInfo`, `ProgramOptions`), `parallelServices`, `ProgramDetails` widget, audience chips on the seasonal schedule, meeting detail facts, admin programme group + «إعدادات المواسم» (venues / audiences), rules `programKeys` / `validProgram` / `validProgramOptions`; `test/program_test.dart`, rules group. |
+| 4 Nov 2026 | **PR #33** — "Season presets, season verses, assistant season limit, hero v2" (`feat/season-presets`) | ADR-042: `season_preset.dart` + /admin «تجهيز الموسم» (apply / restore in one transaction, auto-revert at the season end without a write), `season_verses.dart` + «آيات المواسم» in «إعدادات المواسم», assistant `perDaySeason` / section-aware topics / current season in the prompt, `weddingBookingOff`, hero v2 9 s loops + posters, `AdminBackend.saveDocs` / `saveDocsFresh`; `test/season_preset_test.dart`, rules group. |
 
 Append new PRs to this table.

@@ -27,10 +27,11 @@ Status as of 4 Nov 2026 (PR #31 / ADR-039–040 on top of `905cd04`; PR #30 / AD
 10. **Holy Week & revivals roadmap (`docs/holy-week-and-revivals-roadmap.md`)** — PR #31 shipped the Coptic calendar /
     liturgical day / date strip, the top event of the day and the live banner (ADR-039/040); PR #32 the programme
     details (speaker / topic / choir / venue / audience / Drive PDF link, ADR-041 — owner: review the venue / audience
-    lists in /admin → «إعدادات المواسم» and fill the programme group on Holy Week / revival services). Still to do
-    (next PR): season verse sets + assistant limit 6/day in exceptional seasons +
-    season schedule in the assistant prompt + assistant topics from enabled sections; the admin "season preset"
-    checklist (SOP §4) with reversible apply. Owner: after merge, run *Actions → Daily commemoration* once (or wait for
+    lists in /admin → «إعدادات المواسم» and fill the programme group on Holy Week / revival services); PR #33 the
+    season presets, season verse sets, assistant season limit / topics and hero v2 (ADR-042 — owner: add the Holy
+    Week verses in «إعدادات المواسم» → «آيات المواسم», check «المساعد الذكي» → season limit (default 6), and a few
+    days before Holy Week open «تجهيز الموسم», pick the season and apply; after it, press «استرجاع الإعدادات السابقة»).
+    Owner: after merge, run *Actions → Daily commemoration* once (or wait for
     16:10 UTC) and optionally cap kept Hosting versions (Firebase console → Hosting → release storage) since the
     workflow publishes twice a day.
 

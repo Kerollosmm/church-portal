@@ -5,6 +5,8 @@ import 'daily_verse.dart';
 import 'image_style.dart';
 import 'occasion_theme.dart';
 import 'program.dart';
+import 'season_preset.dart';
+import 'season_verses.dart';
 import 'today.dart';
 
 export 'occasion_theme.dart' show OccasionConfig, ThemePalette, ThemePresets, ThemeRange, ThemeResolution, ThemeSource;
@@ -277,6 +279,18 @@ class FeatureSettings {
   /// (`venues` / `audiences`, ADR-041; never written by [toMap]).
   final ProgramOptions programOptions;
 
+  /// Season verse sets for "verse of the day" (`seasonVerses`, ADR-042;
+  /// never written by [toMap]).
+  final SeasonVerses seasonVerses;
+
+  /// The applied season preset with the values it replaced
+  /// (`seasonPreset`, ADR-042; null = none; never written by [toMap]).
+  final SeasonPreset? seasonPreset;
+
+  /// The wedding choice of hall-booking requests is hidden on the contact
+  /// form (`weddingBookingOff`, ADR-042 season preset; default false).
+  final bool weddingBookingOff;
+
   const FeatureSettings({
     this.sections = const {},
     this.homeOrder = HomeBlocks.defaultOrder,
@@ -301,6 +315,9 @@ class FeatureSettings {
     this.today = TodaySettings.defaults,
     this.dayEvents = const [],
     this.programOptions = ProgramOptions.defaults,
+    this.seasonVerses = SeasonVerses.none,
+    this.seasonPreset,
+    this.weddingBookingOff = false,
   });
 
   /// Everything on: used before the doc loads and when it does not exist.
@@ -346,6 +363,9 @@ class FeatureSettings {
       today: TodaySettings.fromMap(m),
       dayEvents: DayEvent.listFrom(m['dayEvents']),
       programOptions: ProgramOptions.fromMap(m),
+      seasonVerses: SeasonVerses.fromList(m['seasonVerses']),
+      seasonPreset: SeasonPreset.fromMap(m['seasonPreset']),
+      weddingBookingOff: _bool(m['weddingBookingOff']) ?? false,
     );
   }
 
@@ -422,7 +442,51 @@ class FeatureSettings {
         today: today,
         dayEvents: dayEvents,
         programOptions: programOptions,
+        seasonVerses: seasonVerses,
+        seasonPreset: seasonPreset,
+        weddingBookingOff: weddingBookingOff,
       );
+
+  /// What visitors see at [instant] (ADR-042): once the applied season
+  /// preset's season has ended, the switches it changed read their saved
+  /// previous values again — the site returns to normal with no write. The
+  /// stored values change only when an admin presses «استرجاع».
+  FeatureSettings effectiveAt(DateTime instant) {
+    final p = seasonPreset;
+    if (p == null || !p.expiredAt(instant)) return this;
+    final next = Map<String, bool>.of(sections);
+    if (p.has(PresetOption.hideMeetings)) next[Sections.meetings] = p.prevBool(PresetPrev.meetings) ?? true;
+    if (p.has(PresetOption.hideClinics)) next[Sections.clinics] = p.prevBool(PresetPrev.clinics) ?? true;
+    return FeatureSettings(
+      sections: next,
+      homeOrder: homeOrder,
+      homeHidden: homeHidden,
+      heroTitleAr: heroTitleAr,
+      heroTitleEn: heroTitleEn,
+      heroSubtitleAr: heroSubtitleAr,
+      heroSubtitleEn: heroSubtitleEn,
+      bannerEnabled: bannerEnabled,
+      bannerAr: bannerAr,
+      bannerEn: bannerEn,
+      bannerLink: bannerLink,
+      theme: theme,
+      pageHeaders: pageHeaders,
+      footer: footer,
+      heroMotion: p.has(PresetOption.heroMotionOff) ? (p.prevBool(PresetPrev.heroMotion) ?? true) : heroMotion,
+      heroShowAddress: heroShowAddress,
+      imageStyles: imageStyles,
+      dailyVerse: dailyVerse,
+      occasions: occasions,
+      errorReporting: errorReporting,
+      today: today,
+      dayEvents: dayEvents,
+      programOptions: programOptions,
+      seasonVerses: seasonVerses,
+      seasonPreset: seasonPreset,
+      weddingBookingOff:
+          p.has(PresetOption.weddingOff) ? (p.prevBool(PresetPrev.weddingBookingOff) ?? false) : weddingBookingOff,
+    );
+  }
 
   bool enabled(String section) => sections[section] ?? true;
 

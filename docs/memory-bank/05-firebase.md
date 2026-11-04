@@ -127,6 +127,12 @@ Notable details:
   `[a-z0-9_-]{0,30}`, attachmentUrl '' or https with a host, no whitespace, at most 500 characters). `ownFieldsUnchanged` accepts programme-only meeting edits.
   `validFeatures` allows `venues` / `audiences`: `validProgramOptions` = list ≤ 12 whose `join('\u001e')` matches one
   regex of `key␟labelAr␟labelEn` rows. Emulator group "ADR-041".
+- **Season presets (PR #33, ADR-042):** `validFeatures` allows `seasonVerses` (`validSeasonVerses`: ≤ 40 rows, one
+  `join('\u001e')` + regex of `seasonKey␟textAr␟refAr`), `seasonPreset` (`validSeasonPreset`: allowed keys, season id
+  pattern, season key list, timestamps, ≤ 7 known options, `previous` keys typed, its four strings checked as one
+  joined string; null clears it) and `weddingBookingOff` (bool). `validAssistant` allows `perDaySeason` 1–100. The
+  apply / restore is one client batch (`AdminRepository.saveDocs`) of `settings/features` + `seasons/{id}`, each doc
+  checked by its own rule. Emulator group "ADR-042".
 - `validFeatures`: key allow-list via `keysAllowed` (create: `keys().hasOnly`; update: only the **changed** keys must
   be allowed, so an untouched legacy key no longer blocks a merge save — same as `settings/church`, PR #10), `sections` keys ⊆ the 19 section keys (PR #16 added `dailyVerse`, PR #18 `customSections` / `customPages`)
   (incl. `media`)

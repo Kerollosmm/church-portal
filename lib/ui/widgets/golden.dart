@@ -29,9 +29,10 @@ class ArtAssets {
   static const clouds = 'assets/art/clouds.webp'; // gold haze texture (backdrop, drift)
   static const saintMoses = 'assets/art/saint_moses.webp'; // painted St Moses the Black
   static const saintMaximusDomadius = 'assets/art/saint_md.webp'; // painted Sts Maximus & Domadius
-  // Muted loops cut from seconds 3-10 of the Gemini clip, cross-faded at the
-  // seam (6 s, no audio): 1280x720 for tablets / desktops, a 404x720 centre
-  // crop on the church for phones. Posters are their first frames.
+  // Muted 9 s loops of the owner-approved Gemini clip (hero v2, ADR-042):
+  // the last second is cross-faded into the first so the native loop has no
+  // seam (no audio): 1280x720 for tablets / desktops, 432x768 on the church
+  // for phones. Posters are their first frames.
   static const heroVideo = 'assets/video/hero_clouds.mp4';
   static const heroVideoTall = 'assets/video/hero_clouds_tall.mp4';
   static const heroPoster = 'assets/art/hero_poster.webp';

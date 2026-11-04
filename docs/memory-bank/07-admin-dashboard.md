@@ -139,7 +139,17 @@ cancels and re-subscribes every stream (BUG-18; `ChurchInfoScreen` does the same
 
 Top-level keys `venues` and `audiences` (encoded-row lists, ≤ 12 rows each: key, Arabic name, English name; empty =
 the defaults). They feed the run-time dropdowns «المكان / القاعة» and «الفئة» of the programme group. The generic form
-writes only the keys it changed. Later season tools (verse sets, assistant limits, preset) join this screen (PR-C).
+writes only the keys it changed. Since PR #33 (ADR-042) it also holds «آيات المواسم» `seasonVerses` (≤ 40 rows:
+season choice, verse text, reference).
+
+### Season preparation («تجهيز الموسم», `SeasonPresetScreen`, `lib/ui/admin/season_preset_admin.dart`) (PR #33, ADR-042)
+
+Season dropdown (upcoming first) → checklist of 7 options with per-season defaults (`PresetRequest.defaultsFor`), a
+live-link field and a Drive-link + button-text fields when ticked → «تطبيق تجهيز الموسم» → confirmation dialog listing
+every change → one transaction (`saveDocsFresh`: re-reads `settings/features` + the season and re-plans, so another admin's change meanwhile is kept and a preset applied meanwhile is never overwritten) writing `settings/features` + the season. While a preset is applied the screen shows
+it (season, applied / end dates, options), says whether the season is running or over (visitors already back to
+normal), and offers «استرجاع الإعدادات السابقة» (confirmed; never recreates a deleted season). Bad links are refused
+before the dialog. The assistant form gains «أقصى عدد أسئلة في اليوم أثناء المواسم الاستثنائية» (`perDaySeason`).
 
 ### Programme group on liturgies, meetings and seasons (PR #32, ADR-041)
 
