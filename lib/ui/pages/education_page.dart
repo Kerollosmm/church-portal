@@ -164,6 +164,9 @@ class _TimelineItem extends ConsumerWidget {
                   const SizedBox(height: Space.xs),
                   IconLine(Icons.meeting_room_outlined, context.pick(m.hallAr, m.hallEn)),
                   IconLine(Icons.info_outline, m.notes),
+                  // Speaker, topic, venue, audience, PDF link (ADR-041); the
+                  // venue pill only when no free-text hall is shown.
+                  ProgramDetails(m.program, showVenue: m.hallAr.isEmpty && m.hallEn.isEmpty),
                   if (socials && (m.facebookUrl.isNotEmpty || m.whatsappUrl.isNotEmpty)) ...[
                     const SizedBox(height: 8),
                     Wrap(spacing: 8, runSpacing: 8, children: [

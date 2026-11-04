@@ -1,18 +1,39 @@
 # 11 — Open tasks
 
 Tick items off (or delete them) in the PR that completes them, and add new ones as you discover them.
-Status as of 4 Nov 2026 (PR #25, re-checked against `main` at `d60261d` = PR #24; earlier: PR #7–#24).
+Status as of 4 Nov 2026 (PR #31 / ADR-039–040 on top of `905cd04`; PR #30 / ADR-038 on top of `5a6a44c` = PR #29; PR #25 re-checked against `d60261d`; earlier: PR #7–#24).
 
 ## Top open items (owner's list, 4 Nov 2026 — details in the sections below)
 
-1. Footer note «تعرض البيانات المحفوظة مع التطبيق» shows on the live site while Firestore works → *Live data follow-ups*.
+1. ~~Footer note «تعرض البيانات المحفوظة مع التطبيق» shows on the live site while Firestore works~~ — fixed in PR #30 (ADR-038) → *Live data follow-ups*.
 2. Sentry web source maps + Android symbols need a Sentry auth token → *Error tracking — Sentry*.
 3. Sentry project privacy: *Prevent Storing of IP Addresses* + server-side data scrubbers → *Error tracking — Sentry*.
 4. Android assistant needs release signing + Play Integrity registration → *Infrastructure & security*.
-5. Custom sections / pages are not in `web/sitemap.xml` and not named in the assistant's allowed topics → *Custom sections*.
+5. ~~Custom sections / pages are not in the sitemap~~ (PR #30: generated from Firestore at deploy, ADR-038); still not named in the assistant's allowed topics → *Custom sections*.
 6. 320 px overflow reported on a real phone → *Infrastructure & security* (320 px item).
 7. CI rebuild of the eBible verse asset (source-fidelity check) → *Verse of the day*.
 8. Server-side assistant limit (the 3/day limit is client-side only) → *Assistant follow-ups*.
+9. **Live check 4 Nov 2026 — owner items (not code):** (a) `settings/church.nameAr` reads «…الأنبا موسى **الابيض**»
+   (saved via /admin 4 Nov 12:33): correct it to «الأسود» in /admin → church settings; (b) decide whether
+   `/main.dart.js.map` (public, ~4.3 MB, exposes the Dart sources, built with `--source-maps` for PageSpeed) should
+   stay public or be deleted from `build/web` before deploy (it could go to Sentry instead once a token exists);
+   (c) `/contact` logs Google Maps `InvalidKeyMapError` — check the Maps embed key / its allowed referrers
+   (`maximos-domadios-church.web.app`); (d) `/ask` returned «تعذّر الحصول على إجابة الآن» in automated browsers
+   (App Check reCAPTCHA Enterprise 403 "App attestation failed", then a 1-day `appCheck/initial-throttle`): test once
+   on a real phone; if it fails there, check the "church-portal-web" key's allowed domains. Fixed in code in PR #30:
+   footer «العيادات» link during load, the half-empty screen after the splash, slow "not available" on missing
+   custom / detail pages, English image alts and Arabic digits in English times.
+
+10. **Holy Week & revivals roadmap (`docs/holy-week-and-revivals-roadmap.md`)** — PR #31 shipped the Coptic calendar /
+    liturgical day / date strip, the top event of the day and the live banner (ADR-039/040); PR #32 the programme
+    details (speaker / topic / choir / venue / audience / Drive PDF link, ADR-041 — owner: review the venue / audience
+    lists in /admin → «إعدادات المواسم» and fill the programme group on Holy Week / revival services); PR #33 the
+    season presets, season verse sets, assistant season limit / topics and hero v2 (ADR-042 — owner: add the Holy
+    Week verses in «إعدادات المواسم» → «آيات المواسم», check «المساعد الذكي» → season limit (default 6), and a few
+    days before Holy Week open «تجهيز الموسم», pick the season and apply; after it, press «استرجاع الإعدادات السابقة»).
+    Owner: after merge, run *Actions → Daily commemoration* once (or wait for
+    16:10 UTC) and optionally cap kept Hosting versions (Firebase console → Hosting → release storage) since the
+    workflow publishes twice a day.
 
 ## Infrastructure & security (owner: developer)
 
@@ -89,8 +110,8 @@ Status as of 4 Nov 2026 (PR #25, re-checked against `main` at `d60261d` = PR #24
       gaps below.
 - [x] **PR #14 — detail pages on by default:** opt-out `detailsEnabled`, labelled key facts, add-to-calendar,
       directions, share, related items, admin hint (ADR-021).
-- [ ] Optional: add detail URLs to `web/sitemap.xml` (every visible item has one since PR #14; the sitemap is static,
-      so it needs a build-time generator or a manual list).
+- [x] Detail URLs in the sitemap — PR #30 (ADR-038): `deploy.yml` generates `sitemap.xml` from Firestore (read-only)
+      with the app's own indexing rules; the static `web/sitemap.xml` is only the fallback.
 - [ ] Optional: native share sheet (Web Share API) on mobile instead of copy-link (needs a web-only plugin/JS interop).
 
 ## "Golden hour" identity (PR #15, merged 3 Nov 2026; ADR-022 revised / ADR-023)
@@ -135,8 +156,9 @@ Status as of 4 Nov 2026 (PR #25, re-checked against `main` at `d60261d` = PR #24
       confirm the contact types and booking occasions.
 - [ ] Optional: let built-in sections and custom categories share one menu order (built-ins come first today).
 - [ ] Optional: detail pages for custom items (cards show the full description today).
-- [ ] **Custom sections / pages in `web/sitemap.xml`** (static file, so `/section/<slug>` and `/page/<slug>` are not
-      listed): needs a build-time generator or a manual list kept in sync.
+- [x] **Custom sections / pages in the sitemap** — PR #30 (ADR-038): `/section/<slug>` and `/page/<slug>` of every
+      public category / page (nav-hidden pages included) while their section switch is on, generated at deploy.
+      Note: the sitemap refreshes on each deploy only — content an admin adds later is listed at the next deploy.
 - [ ] **Assistant topics for custom content:** the content of custom sections / pages is grounded (PR #19), but the
       allowed-topics list is static (`AssistantSettings.defaultTopics`: one generic line "The custom sections and
       pages of this website"); a section's own name is not a topic, and the default topics / refusal text still
@@ -162,8 +184,13 @@ Status as of 4 Nov 2026 (PR #25, re-checked against `main` at `d60261d` = PR #24
 - [ ] SEO/static shell: optional pre-rendered "today's masses" snapshot. (`Church` JSON-LD done in PR 3; keep it in
       sync with `settings/church`.) (`web/robots.txt` disallowing `/admin`, `web/sitemap.xml` and the Open Graph image
       `web/og-image.jpg` shipped in PR #6; per-route canonical + `noindex` on `/admin`, 404 and switched-off sections
-      done in PR #10 — crawlers that do not run JS still see the static `/` canonical.) When clinics go live,
-      uncomment `/clinics` in `web/sitemap.xml`.
+      done in PR #10 — crawlers that do not run JS still see the static `/` canonical.) Since PR #30 the deployed
+      sitemap follows `sections.clinics` by itself (generated from Firestore); the static fallback follows the seed.
+- [ ] PageSpeed beyond ADR-037 (PR #29): TBT / Speed Index stay high because the CanvasKit Flutter app must
+      download and start before the real page paints (the static hero splash covers first paint). Done in PR #30
+      (ADR-038): the splash stays until the first settings / home data (9 s cap) and the hero video / ambient layer
+      start at page idle. Still open if wanted: pre-rendered HTML for public pages. Remove the `Intl.v8BreakIterator` shim in `web/index.html` once Flutter's
+      engine stops calling it.
 - [ ] Performance budget (Lighthouse in CI), font subsetting (fonts are bundled since PR #15 — `assets/fonts/`, no
       runtime fetch — but not subset). (Deferred
       `/admin` and `/ask` chunks done in PR 3 of the review plan; verify lazy loading in the Network tab on the
@@ -219,16 +246,13 @@ Status as of 4 Nov 2026 (PR #25, re-checked against `main` at `d60261d` = PR #24
       Sentry (environment `production`, tags `section: admin`, `test: true`).
 
 ## Live data follow-ups (PR #23, ADR-033)
-- [ ] The footer note «تعرض البيانات المحفوظة مع التطبيق» (bundled content) shows on the live site even when Firestore
-      works: some stream still serves the bundled seed (`servingSeed` stays on). Find which `_fallbackStreams` key
-      stays marked (e.g. log it on the preview channel) and fix that stream; do not hide the note. **Lead (PR #25
-      code reading, not yet proven):** built-in collections go through `_col(..., confirms: list.isNotEmpty)`; when
-      the `settings/church` seeding check cannot answer (8 s timeout — ADR-033 saw it fail in a test browser), only a
-      **non-empty** live list replaces the seed, so a watched collection that is legitimately **empty** live keeps
-      serving the seed and keeps the note on — e.g. `clinics` while it was empty after the 3 Nov deletion (watched by
-      `/ask` and `/clinics` only), or `alerts` on the home page if the church has removed every notice. A second suspect is
-      the gate itself timing out while the listeners work (then every stream depends on its own `confirms`).
-      Check it against the preview logs before changing `confirms`.
+- [x] The footer note «تعرض البيانات المحفوظة مع التطبيق» showed on the live site while Firestore worked — **fixed in
+      PR #30 (ADR-038)**. Proven root cause: the `settings/church` seeding check timed out / failed "client is
+      offline" on a slow cold start, and a stream whose only snapshot cannot vouch for itself (missing optional doc
+      such as `settings/contact`, or an empty collection) never re-checked, so it stayed on the seed. Now the
+      `settings/church` listener proves seeding for every stream (`SeedGate.markSeeded` / `whenSeeded`).
+- [ ] Follow-up (optional): the content streams still subscribe only after the one-shot seeding check answers (up to
+      8 s on a slow start); subscribing at once and letting `whenSeeded` decide could make cold loads faster.
 - [x] Clinics: the owner deleted the 11 seeded placeholders (3 Nov 2026) and switched the section **off** (4 Nov 2026,
       live `settings/features` updated 07:51 Cairo; one clinic added that morning stays hidden while off). The admin
       screen «العيادات» stays. Never run the Seed workflow for clinics: even create-only it re-creates the 11 deleted

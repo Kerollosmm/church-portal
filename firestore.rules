@@ -123,7 +123,8 @@ service cloud.firestore {
     // its own) leaves the collection's own fields as they were validated.
     function ownFieldsUnchanged(changed) {
       return resource != null
-        && changed.hasOnly(detailKeys().concat(meta()).concat(['image', 'imageStyle', 'contactPhone', 'externalUrl']));
+        && changed.hasOnly(detailKeys().concat(meta()).concat(programKeys())
+                           .concat(['image', 'imageStyle', 'contactPhone', 'externalUrl']));
     }
 
     // Optional `image` map (only collections whose allow-list has 'image').
@@ -340,6 +341,29 @@ service cloud.firestore {
         && b.matches('(image\\x1f[^\\x1f]{0,1000}[^\\x1f]{0,1000}[^\\x1f]{0,1000}[^\\x1f]{0,1000}\\x1f[^\\x1f]{0,1000}[^\\x1f]{0,1000}[^\\x1f]{0,1000}[^\\x1f]{0,1000}\\x1fhttps://[^/ \\x1f]+[.][^/ \\x1f]+([/?#][^ \\x1f]*)?|(heading|paragraph|button|link|donation)\\x1f[^\\x1f]{0,1000}[^\\x1f]{0,1000}[^\\x1f]{0,1000}[^\\x1f]{0,1000}\\x1f[^\\x1f]{0,1000}[^\\x1f]{0,1000}[^\\x1f]{0,1000}[^\\x1f]{0,1000}\\x1f(|/([^/ \\x1f][^ \\x1f]*)?|[Hh][Tt][Tt][Pp][Ss]?://[^/ \\x1f]+[.][^/ \\x1f]+([/?#][^ \\x1f]*)?))\\x1f[^\\x1f]{0,120}\\x1f[^\\x1f]{0,80}\\x1f[^\\x1f]{0,30}');
     }
 
+    // ---- optional programme details (ADR-041): liturgies, meetings, seasons.
+    // speaker / topic / choir (Ar, En), venue / audience (keys of the admin
+    // lists settings/features.venues / .audiences), a PDF / Drive link (https
+    // only, no upload) and its button text. Checked on one joined string
+    // (see validImage) only when the write creates or changes one of them.
+    function programKeys() {
+      return ['speakerAr', 'speakerEn', 'topicAr', 'topicEn', 'choirAr', 'choirEn', 'venue', 'audience',
+              'attachmentUrl', 'attachmentLabelAr', 'attachmentLabelEn'];
+    }
+    function validProgram(d, changed) {
+      return !changed.hasAny(programKeys()) || (
+        (d.get('speakerAr', null) == null ? '' : d.speakerAr) + '\u001f' + (d.get('speakerEn', null) == null ? '' : d.speakerEn)
+        + '\u001f' + (d.get('topicAr', null) == null ? '' : d.topicAr) + '\u001f' + (d.get('topicEn', null) == null ? '' : d.topicEn)
+        + '\u001f' + (d.get('choirAr', null) == null ? '' : d.choirAr) + '\u001f' + (d.get('choirEn', null) == null ? '' : d.choirEn)
+        + '\u001f' + (d.get('venue', null) == null ? '' : d.venue) + '\u001f' + (d.get('audience', null) == null ? '' : d.audience)
+        + '\u001f' + (d.get('attachmentUrl', null) == null ? '' : d.attachmentUrl)
+        + '\u001f' + (d.get('attachmentLabelAr', null) == null ? '' : d.attachmentLabelAr)
+        + '\u001f' + (d.get('attachmentLabelEn', null) == null ? '' : d.attachmentLabelEn)
+      ).matches('[^\\x1f]{0,200}\\x1f[^\\x1f]{0,200}\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{0,200}\\x1f[^\\x1f]{0,200}\\x1f[a-z0-9_-]{0,30}\\x1f[a-z0-9_-]{0,30}\\x1f(|[Hh][Tt][Tt][Pp][Ss]://[^/\\s\\x1f]+[.][^/\\s\\x1f]+([/?#][^\\s\\x1f]{0,500})?)\\x1f[^\\x1f]{0,80}\\x1f[^\\x1f]{0,80}')
+        // The form's 500-character cap (the regex bounds only the path).
+        && (d.get('attachmentUrl', null) == null || d.attachmentUrl.size() <= 500);
+    }
+
     function validAlert(d) {
       return keysAllowed(['titleAr', 'titleEn', 'bodyAr', 'bodyEn', 'active', 'startsAt', 'endsAt', 'priority', 'link',
                           'image', 'imageStyle'].concat(meta()))
@@ -351,7 +375,8 @@ service cloud.firestore {
 
     function validSeason(d) {
       return keysAllowed(['key', 'nameAr', 'nameEn', 'startsAt', 'endsAt', 'active', 'replacesRegular',
-                          'image', 'imageStyle'].concat(meta()))
+                          'image', 'imageStyle'].concat(meta()).concat(programKeys()))
+        && validProgram(d, changedKeys(d))
         && d.key in ['holy_week', 'pascha', 'nativity', 'revival_maximus', 'revival_moses', 'summer']
         && reqString(d, 'nameAr', 300) && optString(d, 'nameEn', 300)
         && optTimestamp(d, 'startsAt') && optTimestamp(d, 'endsAt') && optBool(d, 'active')
@@ -360,7 +385,8 @@ service cloud.firestore {
 
     function validLiturgy(d) {
       return keysAllowed(['type', 'nameAr', 'nameEn', 'weekday', 'date', 'start', 'end', 'placeAr', 'placeEn',
-                          'audienceAr', 'audienceEn', 'seasonKey'].concat(meta()))
+                          'audienceAr', 'audienceEn', 'seasonKey'].concat(meta()).concat(programKeys()))
+        && validProgram(d, changedKeys(d))
         && optIn(d, 'type', ['mass', 'vespers', 'praise', 'other'])
         && reqString(d, 'nameAr', 300) && optString(d, 'nameEn', 300)
         && optInt(d, 'weekday', 1, 7) && optTimestamp(d, 'date')
@@ -374,9 +400,10 @@ service cloud.firestore {
       // = keysAllowed(...), reusing the changed keys.
       return changed.hasOnly(['stage', 'nameAr', 'nameEn', 'weekday', 'start', 'end', 'hallAr', 'hallEn',
                           'facebookUrl', 'whatsappUrl', 'notes', 'image', 'imageStyle', 'contactPhone',
-                          'externalUrl'].concat(meta()).concat(detailKeys()))
+                          'externalUrl'].concat(meta()).concat(detailKeys()).concat(programKeys()))
         && validDetailCommon(d, changed)
         && (!changed.hasAny(['contactPhone', 'whatsapp', 'whatsappUrl', 'facebookUrl', 'externalUrl']) || validDetailContacts(d))
+        && validProgram(d, changed)
         && (ownFieldsUnchanged(changed) || ownMeeting(d));
     }
 
@@ -555,7 +582,7 @@ service cloud.firestore {
     function validAssistant(d) {
       return keysAllowed(['model', 'instructions', 'topics', 'refusalAr', 'refusalEn', 'welcomeAr', 'welcomeEn',
                           'suggestionsAr', 'suggestionsEn', 'showSuggestions', 'faithReplyAr', 'faithReplyEn',
-                          'sourceDomains', 'mentionUnconfirmed', 'maxChars', 'perMinute', 'perDay',
+                          'sourceDomains', 'mentionUnconfirmed', 'maxChars', 'perMinute', 'perDay', 'perDaySeason',
                           'perSession', 'updatedAt', 'updatedBy'])
         && str(d, 'model', 60) && d.get('model', '').matches('(gemini-[a-z0-9][a-z0-9.-]{0,52})?')
         && str(d, 'instructions', 4000) && str(d, 'topics', 2000)
@@ -565,7 +592,7 @@ service cloud.firestore {
         && str(d, 'faithReplyAr', 300) && str(d, 'faithReplyEn', 300) && optBool(d, 'mentionUnconfirmed')
         && optBool(d, 'showSuggestions')
         && str(d, 'sourceDomains', 300) && d.get('sourceDomains', '').matches('[a-z0-9., -]*')
-        && optInt(d, 'perDay', 1, 100)
+        && optInt(d, 'perDay', 1, 100) && optInt(d, 'perDaySeason', 1, 100)
         && optInt(d, 'maxChars', 50, 1000) && optInt(d, 'perMinute', 1, 20) && optInt(d, 'perSession', 1, 200)
         && stampOk(d);
     }
@@ -590,7 +617,10 @@ service cloud.firestore {
       return keysAllowed(['sections', 'homeOrder', 'homeHidden', 'heroTitleAr', 'heroTitleEn', 'heroSubtitleAr',
                           'heroSubtitleEn', 'bannerEnabled', 'bannerAr', 'bannerEn', 'bannerLink', 'theme',
                           'pageHeaders', 'footer', 'heroMotion', 'heroShowAddress', 'imageStyles', 'dailyVerse', 'occasions', 'themeColors',
-                          'heroVideos', 'errorReporting', 'updatedAt', 'updatedBy'])
+                          'heroVideos', 'errorReporting', 'copticStrip', 'dayStartMode', 'dayStartsAt', 'topEvent',
+                          'commemoration', 'liveEnabled', 'liveUrl', 'liveLabelAr', 'liveLabelEn', 'liveEndsAt',
+                          'dayEvents', 'venues', 'audiences', 'seasonVerses', 'seasonPreset', 'weddingBookingOff',
+                          'updatedAt', 'updatedBy'])
         && (!('sections' in changed) || !('sections' in d) || validSections(d.sections))
         && (!('homeOrder' in changed) || !('homeOrder' in d) || (d.homeOrder is list && d.homeOrder.size() <= 7
               && d.homeOrder.hasOnly(['banner', 'alerts', 'nextMass', 'quickContacts', 'milestones', 'directory', 'map'])))
@@ -624,7 +654,100 @@ service cloud.firestore {
         && (!('pageHeaders' in changed) || !('pageHeaders' in d) || validPageHeaders(d.pageHeaders))
         // Verse of the day mode / fixed verse (missing = daily rotation).
         && (!('dailyVerse' in changed) || !('dailyVerse' in d) || validDailyVerse(d.dailyVerse))
+        // Today layer (ADR-039 / ADR-040): Coptic date strip, start of the
+        // liturgical day, top event card, live-stream banner.
+        && (!changed.hasAny(['copticStrip', 'dayStartMode', 'dayStartsAt', 'topEvent', 'commemoration'])
+            || (optIn(d, 'copticStrip', ['all', 'home', 'off']) && optIn(d, 'dayStartMode', ['fixed', 'sunset'])
+                && optTime(d, 'dayStartsAt') && optBool(d, 'topEvent') && optBool(d, 'commemoration')))
+        && (!changed.hasAny(['liveEnabled', 'liveUrl', 'liveLabelAr', 'liveLabelEn', 'liveEndsAt'])
+            || (optBool(d, 'liveEnabled') && optHttpUrl(d, 'liveUrl', 500) && str(d, 'liveLabelAr', 120)
+                && str(d, 'liveLabelEn', 120) && optTimestamp(d, 'liveEndsAt')))
+        && (!('dayEvents' in changed) || validDayEvents(d))
+        // Programme venues / audiences (ADR-041): up to 12 'key␟labelAr␟labelEn'
+        // strings each, checked as one joined string (one regex per list).
+        && (!('venues' in changed) || validProgramOptions(d, 'venues'))
+        && (!('audiences' in changed) || validProgramOptions(d, 'audiences'))
+        // Season verses / preset / wedding switch (ADR-042), behind ONE gate so
+        // other saves (worst case: all page headers) stay under the
+        // 1,000-expression budget.
+        && (!changed.hasAny(['seasonVerses', 'seasonPreset', 'weddingBookingOff'])
+            || ((!('seasonVerses' in changed) || validSeasonVerses(d))
+                && (!('seasonPreset' in changed) || d.get('seasonPreset', null) == null
+                    || validSeasonPreset(d.seasonPreset))
+                && optBool(d, 'weddingBookingOff')))
         && (!changed.hasAny(['updatedAt', 'updatedBy']) || stampOk(d));
+    }
+
+    // Season verse sets (ADR-042): up to 40 'seasonKey␟textAr␟refAr'
+    // strings, checked as one joined string (one regex).
+    function validSeasonVerses(d) {
+      return d.get('seasonVerses', null) == null
+        || (d.seasonVerses is list && d.seasonVerses.size() <= 40
+            && (d.seasonVerses.size() == 0
+                || d.seasonVerses.join('\u001e').matches(
+                     '(holy_week|pascha|nativity|revival_maximus|revival_moses|summer)\x1f[^\x1f\x1e]{1,500}\x1f[^\x1f\x1e]{0,60}'
+                     + '(\x1e(holy_week|pascha|nativity|revival_maximus|revival_moses|summer)\x1f[^\x1f\x1e]{1,500}\x1f[^\x1f\x1e]{0,60}){0,39}')));
+    }
+
+    // The applied season preset (ADR-042): which season, when, the ticked
+    // options and the values it replaced (restored by the admin's button).
+    function validSeasonPreset(p) {
+      let prev = p.get('previous', {});
+      return p is map
+        && p.keys().hasOnly(['seasonId', 'seasonKey', 'appliedAt', 'endsAt', 'options', 'previous'])
+        && p.get('seasonId', '') is string && p.get('seasonId', '').matches('[A-Za-z0-9_-]{1,100}')
+        && p.get('seasonKey', '') in ['', 'holy_week', 'pascha', 'nativity', 'revival_maximus', 'revival_moses', 'summer']
+        && (p.get('appliedAt', null) == null || p.appliedAt is timestamp)
+        && (p.get('endsAt', null) == null || p.endsAt is timestamp)
+        && p.get('options', []) is list && p.get('options', []).size() <= 7
+        && p.get('options', []).hasOnly(['replaceRegular', 'hideMeetings', 'hideClinics', 'heroMotionOff', 'weddingOff',
+                                          'live', 'pdf'])
+        && prev is map
+        && prev.keys().hasOnly(['seasonActive', 'replacesRegular', 'meetings', 'clinics', 'heroMotion',
+                                'weddingBookingOff', 'liveUrl', 'liveEndsAt', 'attachmentUrl', 'attachmentLabelAr',
+                                'attachmentLabelEn'])
+        && (prev.get('seasonActive', null) == null || prev.seasonActive is bool)
+        && (prev.get('replacesRegular', null) == null || prev.replacesRegular is bool)
+        && (prev.get('meetings', null) == null || prev.meetings is bool)
+        && (prev.get('clinics', null) == null || prev.clinics is bool)
+        && (prev.get('heroMotion', null) == null || prev.heroMotion is bool)
+        && (prev.get('weddingBookingOff', null) == null || prev.weddingBookingOff is bool)
+        && (prev.get('liveEndsAt', null) == null || prev.liveEndsAt is timestamp)
+        && (prev.get('liveUrl', '') + '\u001f' + prev.get('attachmentUrl', '') + '\u001f'
+            + prev.get('attachmentLabelAr', '') + '\u001f' + prev.get('attachmentLabelEn', ''))
+             .matches('[^\x1f]{0,500}\x1f[^\x1f]{0,600}\x1f[^\x1f]{0,80}\x1f[^\x1f]{0,80}');
+    }
+
+    function validProgramOptions(d, k) {
+      return d.get(k, null) == null
+        || (d[k] is list && d[k].size() <= 12
+            && (d[k].size() == 0
+                || d[k].join('\u001e').matches('[a-z0-9_-]{1,30}\x1f[^\x1f\x1e]{1,80}\x1f[^\x1f\x1e]{0,80}(\x1e[a-z0-9_-]{1,30}\x1f[^\x1f\x1e]{1,80}\x1f[^\x1f\x1e]{0,80}){0,11}')));
+    }
+
+    // Church events of the day (ADR-040): up to 20, each ONE string
+    // date, endDate, start, end, titleAr, titleEn, speakerAr, speakerEn,
+    // topicAr, topicEn, noteAr, noteEn, link joined by U+001F
+    // (lib/domain/today.dart DayEvent.encode). One regex per event keeps the
+    // list within the 1,000-expression budget. date YYYY-MM-DD (required,
+    // month 01-12, day 01-31), endDate '' or such a date, times '' or HH:mm, titleAr 1-300, other texts
+    // <= 300, notes <= 500, link '' / in-app path / http(s) URL. An endDate
+    // before date is rejected by the admin form (validateRowOrder) and read as
+    // a one-day event by the client (DayEvent.lastDay); a split + compare per
+    // event here exceeds the expression cap for 20 events (tested).
+    function validDayEvents(d) {
+      return optList(d, 'dayEvents', 20)
+        && (d.get('dayEvents', null) == null || dayEventItems(d.dayEvents, d.dayEvents.size()));
+    }
+    function dayEventItems(b, n) {
+      return (n <= 0 || (validDayEvent(b[0]) && (n <= 1 || (validDayEvent(b[1]) && (n <= 2 || (validDayEvent(b[2]) && (n <= 3 || (validDayEvent(b[3]) && (n <= 4 || (validDayEvent(b[4]) && true))))))))))
+        && (n <= 5 || (validDayEvent(b[5]) && (n <= 6 || (validDayEvent(b[6]) && (n <= 7 || (validDayEvent(b[7]) && (n <= 8 || (validDayEvent(b[8]) && (n <= 9 || (validDayEvent(b[9]) && true))))))))))
+        && (n <= 10 || (validDayEvent(b[10]) && (n <= 11 || (validDayEvent(b[11]) && (n <= 12 || (validDayEvent(b[12]) && (n <= 13 || (validDayEvent(b[13]) && (n <= 14 || (validDayEvent(b[14]) && true))))))))))
+        && (n <= 15 || (validDayEvent(b[15]) && (n <= 16 || (validDayEvent(b[16]) && (n <= 17 || (validDayEvent(b[17]) && (n <= 18 || (validDayEvent(b[18]) && (n <= 19 || (validDayEvent(b[19]) && true))))))))));
+    }
+    function validDayEvent(e) {
+      return e is string && e.size() <= 4000
+        && e.matches('[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])\\x1f([0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01]))?\\x1f(([01][0-9]|2[0-3]):[0-5][0-9])?\\x1f(([01][0-9]|2[0-3]):[0-5][0-9])?\\x1f[^\\x1f]{1,300}\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{0,500}\\x1f[^\\x1f]{0,500}\\x1f(|/([^/ \\x1f][^ \\x1f]*)?|[Hh][Tt][Tt][Pp][Ss]?://[^/ \\x1f]+[.][^/ \\x1f]+([/?#][^ \\x1f]*)?)');
     }
 
     // ------------------- occasion themes & hero videos -----------------------

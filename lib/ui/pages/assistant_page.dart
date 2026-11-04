@@ -16,6 +16,8 @@ import '../../domain/custom_content.dart';
 import '../../domain/cairo_time.dart';
 import '../../domain/error_privacy.dart';
 import '../../domain/features.dart';
+import '../../domain/models.dart' show Season;
+import '../../domain/schedule.dart' show isSeasonActiveAt;
 import '../../domain/time_format.dart';
 import '../../state/providers.dart';
 import '../widgets/common.dart';
@@ -157,19 +159,30 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
     }
   }
 
-  AssistantSettings get _settings => ref.read(assistantSettingsProvider).value ?? AssistantSettings.defaults;
+  /// The admin settings, with the daily limit of an active exceptional
+  /// season (ADR-042: 6 instead of 3 by default) when one is on.
+  AssistantSettings get _settings {
+    final s = ref.read(assistantSettingsProvider).value ?? AssistantSettings.defaults;
+    final now = DateTime.now();
+    return s.withSeasonLimit([
+      for (final season in ref.read(seasonsProvider).value ?? const <Season>[])
+        if (isSeasonActiveAt(season, now)) season.key,
+    ]);
+  }
 
   /// Contact types / custom sections / custom pages, read only while their
   /// section is on (a switched-off section's provider is never subscribed).
   ({ContactSettings contact, List<CustomCategory> categories, List<CategoryEntry> entries, List<CustomPage> pages})
       _customInputs(FeatureSettings f) => (
             contact: f.enabled(Sections.contactForm)
-                ? (ref.read(contactSettingsProvider).value ?? ContactSettings.defaults)
+                ? _withoutWeddingIf(f.weddingBookingOff, ref.read(contactSettingsProvider).value ?? ContactSettings.defaults)
                 : ContactSettings.defaults,
             categories: f.enabled(Sections.customSections) ? (ref.read(categoriesProvider).value ?? const []) : const [],
             entries: f.enabled(Sections.customSections) ? (ref.read(entriesProvider).value ?? const []) : const [],
             pages: f.enabled(Sections.customPages) ? (ref.read(customPagesProvider).value ?? const []) : const [],
           );
+
+  static ContactSettings _withoutWeddingIf(bool off, ContactSettings c) => off ? c.withoutWedding() : c;
 
   String _buildInstruction() {
     final f = ref.read(featuresProvider);
@@ -217,7 +230,7 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
         features: f, contact: c.contact, categories: c.categories, entries: c.entries, pages: c.pages);
     // The allowed topics too: answers about a topic an admin removed are not
     // replayed.
-    final topics = _settings.effectiveTopics.join('\n');
+    final topics = _settings.topicsFor(f.enabled).join('\n');
     return '$sections\u0000$details\u0000$custom\u0000$topics';
   }
 
@@ -230,6 +243,15 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
   Future<void> _send([String? preset]) async {
     final q = (preset ?? _input.text).trim();
     if (q.isEmpty || _busy) return;
+    // The season decides the daily limit (ADR-042): wait briefly for the
+    // seasons so an exceptional season's higher limit is not missed
+    // (CodeRabbit review on PR #33). On a timeout / error the ordinary limit applies.
+    if (!ref.read(seasonsProvider).hasValue) {
+      try {
+        await ref.read(seasonsProvider.future).timeout(const Duration(seconds: 5));
+      } catch (_) {}
+      if (!mounted) return;
+    }
     final s = _settings;
     // The device's daily counter (preloaded in initState; memory-only if
     // storage fails).

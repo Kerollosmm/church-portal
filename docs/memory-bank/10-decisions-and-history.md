@@ -645,6 +645,318 @@ supersede them.
   home page editor has no video library card and saves never write `heroVideos` (`test/occasion_admin_test.dart`); a
   stored library does not affect the theme in force (`test/occasion_theme_test.dart`).
 
+## ADR-037 (PR #29) — PageSpeed: same hero, less main-thread work, App Check on demand, crawler files
+
+- **Context (4 Nov 2026):** live PageSpeed Insights (Lighthouse 13.6, `main` `b7e5ed2`) scored Performance 56 mobile /
+  60 desktop, Best Practices 77, Agentic browsing 2/4. Causes: the hero haze drift + 14 blurred light rays were
+  repainted by CanvasKit every frame for as long as the hero was visible (desktop TBT ~22 s, long tasks over the whole
+  trace); App Check activated at start-up loaded reCAPTCHA Enterprise (~700 KiB, an iframe, a token exchange that
+  logged 403 / `requestStorageAccess` errors) on every public page; a 178 KB seal in the splash; Flutter's line
+  breaker calls the deprecated `Intl.v8BreakIterator`; the `**` SPA rewrite answered `/llms.txt`,
+  `/.well-known/ard.json` and `*.map` with `index.html`. A first attempt (PR #28, draft ADR-037) froze the ray shimmer
+  and dropped the haze drift; the owner closed it unmerged — **the hero must keep its look**.
+- **Decision:**
+  - **Hero ambient layer on web = DOM + CSS** (`lib/ui/widgets/hero_ambient*.dart`, shared geometry in
+    `HeroAmbientSpec`): the haze strip slides with a CSS transform animation; the rays are drawn once per size on a
+    few canvases at evenly spaced shimmer phases and crossfaded with CSS opacity animations (`plus-lighter`); where `CanvasRenderingContext2D.filter` is missing (Safari) the static canvases get a CSS
+    `blur()` with the same sigma instead (Sentry review). Same
+    geometry, colours, cycles (60 s clock, shimmer x8) and theme `cssFilter`; paused off-screen. The animation runs on
+    the compositor, so Flutter no longer repaints per frame. Android / tests keep the Flutter painters
+    (`heroAmbientInDom == false`).
+  - **App Check is lazy:** `bootstrapFirebase` no longer activates it; `ensureAppCheckActivated()` (one shared
+    Future) runs on the assistant's `warmUp()` / `generate()`. `FirebaseStatus.appCheckActive` now means "App Check is
+    configured for this build" (`selectAppCheckPlan(...).activate`), which still gates the assistant. If activation
+    fails later, the assistant shows its normal error instead of being hidden. App Check only guards Firebase AI
+    Logic (Firestore is not enforced), so nothing else changes.
+  - **Static first paint** in `web/index.html`: the hero poster (`hero_poster(.tall).webp`, preloaded,
+    `fetchpriority=high`) + the church name in Lalezar + a small spinner, fading out on `flutter-first-frame`; the
+    failure path is unchanged. The splash no longer loads the seal; `seal.png` quantised 178 → 27 KB.
+  - **`Intl.v8BreakIterator` shim** (inline script before `flutter_bootstrap.js`) on top of `Intl.Segmenter`
+    (UAX #14 subset: spaces, dashes / slashes / ZWSP, CJK, mandatory newlines, never inside a grapheme). Checked
+    against the native iterator on 2,157 app / doc strings: 3 differences, all in Markdown / code strings.
+  - **Hosting:** rewrite only extension-less paths (`"regex": "^/[^.]*$"`) plus `/section|page/<slug>` and the 7
+    item-detail prefixes with any id (dots allowed), so missing files (`/.well-known/*`, `*.map`, probes) are real
+    404s; `Cross-Origin-Opener-Policy: same-origin-allow-popups` (the hero `mp4` keeps the default cache: fixed path,
+    not fingerprinted).
+    `web/llms.txt` (H1, page links from the sitemap). Manifest background `#FBF3E4` (= splash). Web builds in
+    `ci.yml` / `deploy.yml` pass `--source-maps`.
+- **Ceiling:** the site is a CanvasKit Flutter app: `main.dart.js` (~3 MB) + CanvasKit wasm must download, compile
+  and run before the real page paints, so Total Blocking Time and Speed Index stay well above Lighthouse's "green"
+  thresholds on the mobile profile (4x CPU throttle) whatever the page does. A green 90+ would need a different
+  first-paint architecture (pre-rendered HTML for the public pages, or a non-Flutter landing page) — out of scope.
+- **Tests:** `test/pagespeed_test.dart` (ray geometry = old painter formula, phase weights, DOM layer web-only,
+  splash poster / name / fade, shim before bootstrap, seal size, llms.txt links ⊂ sitemap, rewrite regex + COOP).
+- **Alternatives rejected:** freezing / removing hero motion (PR #28, owner said no); HTML renderer (removed from
+  Flutter); dropping App Check (AI Logic enforces it).
+
+## ADR-038 (PR #30) — Seeding proof shared by every stream; sitemap from Firestore at deploy; loading screen until real content
+
+- **Context (4 Nov 2026):** (1) the footer said «تعرض البيانات المحفوظة مع التطبيق» ("Showing bundled content") on
+  normal loads while Firestore was working. Reproduced on the live site in headless Chrome (412 × 5000, `/contact`,
+  35 s): note present. A diagnostics release build (temporary `print`s in `SeedGate` / `_markFallback`, not
+  committed) served locally against production showed the one-shot `settings/church` check (`get()`, 8 s timeout)
+  time out at ~9.7 s and later fail with `[cloud_firestore/unavailable] Failed to get document because the client is
+  offline`, while the listeners went on to deliver server data (`settings` / `features` switched to live at ~41 s
+  in the slow sandbox) — but `contact` stayed on the bundled defaults for good. (2) `sitemap.xml` was static: 7 fixed
+  pages, no item detail pages, custom sections or custom pages. (3) The HTML loading screen (ADR-037) faded out on
+  Flutter's first frame, before `settings/church` / `settings/features` arrived, so the default layout flashed
+  before the real one.
+- **Root cause (1):** `guardSeeded` re-checked the seeding marker only when its stream received a *new* value. A
+  stream whose live value cannot vouch for itself — a missing optional doc (`settings/contact`,
+  `settings/assistant` → identical code defaults) or a legitimately empty collection — gets **exactly one** snapshot
+  from Firestore (an unchanged empty result or a "fromCache → synced" change is not re-emitted without metadata
+  changes). When the gate could not answer at that moment (cold start: 8 s timeout, or the SDK's transient "client is
+  offline"), the stream stayed on the fallback forever, and `servingSeed` (any stream on the seed) kept the note on.
+  Meanwhile the `settings/church` listener itself had already proven the marker exists, but that proof was never
+  shared with the gate. (The suspected `settleFirst` / `customFallbackDelay` path of ADR-033 is one instance of the
+  same class: a held empty custom list could be stranded the same way.)
+- **Decision (1):** `SeedGate.markSeeded()` + `whenSeeded`: the `settings/church` live snapshot (when the document
+  exists) and any successful check mark the database seeded; every `guardSeeded` stream still unconfirmed then emits
+  the live value it holds back (or, with none yet, lets the next one through) and cancels a pending delayed custom
+  fallback. A negative / failed read that lands after the proof cannot undo it (`check()` returns the latest state).
+  Unchanged: a stream error still falls back with the note (truly bundled), one stream's non-empty data still never
+  vouches for another collection, and a known-unseeded database keeps the seed until the marker appears (now picked
+  up from the listener too, without waiting for another value).
+- **Decision (2):** the Spark plan has no Cloud Functions, so the sitemap is generated in `deploy.yml` → `build`
+  (push and same-repo PRs) after `flutter build web`: the existing `firebase-credentials` action (step
+  `continue-on-error`), then `tool/build_sitemap.sh` = `tool/export_public_content.js` (firebase-admin, **`get()`
+  only — never writes**) + `dart run tool/gen_sitemap.dart` (pure rules in `lib/domain/sitemap.dart`) + an XML
+  check (urlset namespace, home present, same origin, no duplicates, ≤ 50,000) → `build/web/sitemap.xml`; the key is
+  removed right after. Any failure prints a `::warning::` and keeps the static `web/sitemap.xml` (now marked as the
+  fallback; a test keeps it equal to the fixed pages the seed leaves on). Rules = the app's own indexing: fixed
+  pages by `routeEnabled` (like `FeatureGate`); `/section/<slug>` = `publicCategories` and `/page/<slug>` =
+  `publicPages` while `customSections` / `customPages` are on — a page with `showInNav: false` is still listed
+  because `CustomPageView` is indexable whenever the page exists (there is no separate noindex field; hidden /
+  unusable / duplicate slugs are not listed); item pages for the 7 `DetailKind` prefixes when
+  `routeEnabled(path)` and `detailItemOpens` (listed — clinics also active —, `detailsEnabled` not false, priests by
+  the section matching their status). `entries` have no page of their own. `detailItemId` / `detailItemDetails` /
+  `detailItemListed` / `detailItemOpens` moved from `item_detail_page.dart` to `lib/domain/item_detail.dart` so the
+  page and the sitemap share one rule. `robots.txt` unchanged (points to `/sitemap.xml`).
+- **Decision (3):** `web/index.html` keeps the loading screen (now `z-index` above the Flutter view) until the app
+  dispatches `app-content-ready` (`lib/core/content_ready.dart`), sent two frames after `contentReadyProvider` =
+  `firstContentArrived`: settings/church, settings/features (`featuresReadyProvider`) and the hero's verse list have
+  a value or failed (live or fallback). Cap: 9 s after `flutter-first-frame`; the 30 s failure path is unchanged.
+  The hero `<video>` gets its `src` and the CSS ambient layer (haze strip + ray canvases) is built only at
+  `ContentReady.whenIdle` (after the signal + the 0.5 s fade + `requestIdleCallback`, ≤ 2 s; Safari 600 ms; hard cap
+  12 s); the haze fades in (0.8 s) like the rays and the video already did. The poster under them stays the LCP
+  element; final hero look unchanged.
+- **Live-check follow-ups (same PR, second commit; live check of 4 Nov 2026 after PR #29):**
+  - **(a) Footer quick link «العيادات» during load:** the footer filtered its links with `routeEnabled` only, and
+    until `settings/features` arrives the defaults are "everything on", so «العيادات» (switched off live) showed and
+    a click landed on the section-off page. The footer now hides `/clinics` until `featuresReadyProvider`, the
+    same rule as the Services menu (`app_shell.dart`).
+  - **(b) Half-empty screen after the splash** (app bar, empty logo circle, `FeatureGate` spinner, footer for
+    3–5 s): that is exactly the "waiting for `settings/features`" state, and `contentReadyProvider` requires
+    settings/church **and** `featuresReadyProvider`, so the loading screen now covers it (the 9 s cap only applies if
+    even the seed fallback has not arrived, which the 8 s seeding check bounds).
+  - **(c) Missing `/section/x`, `/page/x`, `/about/priests/<bad-id>` on skeletons for 15–24 s:** `guardSeeded`
+    subscribed to the live query only *after* the seeding check (≤ 8 s), and the custom fallback delay (13 s)
+    started only after that check failed. Now the live query starts at once (its values wait in `onData` for the
+    gate's answer), `SeedGate.check()` also answers as soon as `whenSeeded` fires, and the 13 s custom delay counts
+    from the subscription. Worst case for a missing custom page: ~13 s on a stalled connection (was 21 s+), and
+    `max(query, check)` (usually 1–2 s) on a normal one; a detail page in a built-in collection: ≤ 8 s. ADR-033
+    cache-first holds: the delay is still longer than `customPatience` + `customCacheRead` (+1 s) measured from the
+    same moment the `settleFirst` query starts, the fallback still never fires before the gate has answered "not
+    seeded / could not tell", and on a seeded database custom content never falls back to the empty list.
+  - **(d) English leftovers:** images have one admin `alt` (usually Arabic); on the English site an Arabic-only alt
+    now gives way to the item's English name (`imageAltFor`, `lib/domain/media.dart`; used by `ItemImage`,
+    `HaloAvatar`, `FittedCover`). `TimeRangeText` shows Latin digits only in English; Arabic keeps both digit
+    systems (Arabic first, Latin underneath, LTR) — the "both digit systems" rule is for Arabic readers.
+  - **Not changed (owner's data / decisions):** the church name in `settings/church.nameAr` («الابيض» instead of
+    «الأسود», saved via /admin) is for the owner to correct in /admin. `/main.dart.js.map` is public (built with
+    `--source-maps` for PageSpeed diagnostics; exposes the Dart sources, no secrets) — owner to decide. `/contact`
+    logs Google Maps `InvalidKeyMapError` (the Maps embed key / referrer setup), not fixed here.
+  - **Review follow-ups (CodeRabbit):** `tool/build_sitemap.sh` export timeout 330 s (10 sequential reads × 30 s),
+    sitemap copied to `$OUT.tmp` then renamed (a failed copy never leaves a truncated file); the manual deploy
+    command runs the sitemap step; the service-account secret is listed as used by `build`.
+- **Tests:** `test/content_guard_test.dart` (group "footer bundled content note": empty collection, missing optional
+  doc, proof during an in-flight re-check, late negative read, known-unseeded → seeded, delayed custom fallback
+  cancelled, working check never marks bundled), `test/sitemap_test.dart` (switches, 7 prefixes, priests by status,
+  custom sections / pages incl. nav-hidden, export parsing with seed features, XML escaping, static fallback = seed,
+  robots), `test/content_ready_test.dart`, `test/pagespeed_test.dart` (loading screen waits for the event, cap,
+  z-index).
+- **Alternatives rejected:** a longer gate timeout (only moves the race); treating any non-empty collection as proof
+  (rejected in ADR-033: it vouches for nothing else); `includeMetadataChanges` on every built-in collection (more
+  events and re-checks for every page, still no proof for a missing doc); a scheduled sitemap job (needs Blaze /
+  Functions or another secret-bearing workflow); hiding the loading screen on a fixed delay.
+
+## ADR-039 (PR #31) — Coptic calendar engine, liturgical day at 18:00, Coptic date strip
+
+- **Context (owner plan «التقرير المعماري وخارطة تطوير بوابة الكنيسة للمناسبات الاستثنائية», `docs/holy-week-and-revivals-roadmap.md`,
+  4 Nov 2026):** the portal changed day at civil midnight, but the Church's day starts the evening before («بصخة
+  ليلة الثلاثاء» is prayed on Monday evening). No Coptic date was shown anywhere.
+- **Decision:** `lib/domain/coptic_calendar.dart` (pure Dart, offline): Gregorian ↔ Coptic through the Julian Day
+  Number (1 Tout 1 AM = JDN 1825030; Coptic leap year when `year % 4 == 3`, so 1 Tout 1744 = 12 Sep 2027), Arabic /
+  English month names, «الأربعاء ٢٥ بابه ١٧٤٣ ش». `liturgicalDayAt(instant, mode:, fixedAt:)`: **default a fixed
+  18:00** (owner, 4 Nov 2026: "keep the plan exactly"), admin-editable (`settings/features.dayStartsAt`, `00:00` =
+  civil midnight); optional mode `sunset` = the actual sunset at the **church in Alexandria** (`lib/domain/sun.dart`,
+  NOAA general solar position equations, church coordinates 31.260138 N, 30.01129 E, or `settings/church.lat/lng`;
+  checked within 2 min of timeanddate.com). Africa/Cairo (Egypt's single time zone) is only the clock; **no time-zone
+  label is shown anywhere in the UI** (owner) — the existing «توقيت القاهرة» / "Cairo time" admin labels and hints were
+  removed.
+- Uses: `CopticDateStrip` (top of every page by default; `copticStrip` = all / home / off) shows the liturgical day
+  («ليلة الخميس …» after the start); the **verse of the day** rotates on the liturgical day
+  (`resolveDailyVerse(..., day:)`); the next-service card labels a service after the start «الليلة • ليلة الخميس»
+  (`TodaySettings.isEveService`). `computeNextMass` itself is unchanged (real instants). Movable feasts reuse
+  `orthodoxEaster` (the Holy Week theme's computus).
+- **Footer note (PR #30 left-over):** `SteadySeedNote` shows «تعرض البيانات المحفوظة مع التطبيق» only once
+  `servingSeed` has stayed true for 4 s on live Firestore (at once in seed mode), so a stream briefly on the seed
+  during a cold start (`/page/<slug>`) no longer flashes it.
+- Tests: `test/coptic_calendar_test.dart` (known dates from api.katameros.app: 1 Tout 1743 = 11 Sep 2026, 29 Kiahk
+  1743 = 7 Jan 2027, 28 Kiahk 1744 = 7 Jan 2028, 1 Tout 1744 = 12 Sep 2027; 1900–2100 round trip; cut-over incl.
+  EEST; sunsets), `test/today_widgets_test.dart`.
+
+## ADR-040 (PR #31) — Top event of the day (church event > Katameros > computed feasts) and the live banner, at no Firestore cost
+
+- **Owner constraints (4 Nov 2026):** Spark plan (no Cloud Functions, no paid proxy); keep Firebase free quotas: no new
+  always-on listeners, no Firestore reads per visitor for the Katameros data (a static Hosting JSON), new settings
+  inside existing settings docs, no polling. The Katameros fetch runs in a **scheduled GitHub Action**, not in the
+  client (owner reversed a direct-call idea; for the record the API is MIT open source, answers
+  `Access-Control-Allow-Origin: *` and documents no rate limit).
+- **Hierarchy (`resolveTopEvent`, `lib/domain/today.dart`):** (1) an admin church event covering today and not yet
+  ended (on the eve, after the day's start: one covering the liturgical day) — title, times, speaker, topic, note,
+  link; (2) otherwise, when `commemoration` is on, the **Katameros** feast title / Synaxarium entries of the
+  liturgical day; (3) otherwise the **computed feast list** (`lib/domain/coptic_feasts.dart`: Nayrouz, Cross,
+  Nativity on 7 Jan, Theophany 11 Touba, Annunciation 29 Baramhat, Entry into Egypt, Transfiguration, Assumption,
+  fasts' first days, and from Easter: Nineveh, Great Lent, Lazarus Saturday, Palm Sunday, Holy Week days, Easter,
+  Thomas Sunday, Ascension, Pentecost, Apostles' fast). `topEvent` off hides the card.
+- **Storage:** all in **`settings/features`** (already streamed on every visit): `copticStrip`, `dayStartMode`,
+  `dayStartsAt`, `topEvent`, `commemoration`, `liveEnabled`, `liveUrl`, `liveLabelAr/En`, `liveEndsAt`, and
+  `dayEvents` (≤ 20 strings, `date␟endDate␟start␟end␟titleAr␟titleEn␟speakerAr␟speakerEn␟topicAr␟topicEn␟noteAr␟noteEn␟link`,
+  one regex each in the rules — `validDayEvent`). Parsed into `FeatureSettings.today` / `.dayEvents`, **never written
+  by `FeatureSettings.toMap()`**; edited in /admin → **«اليوم والبث المباشر» / Today & live stream** (generic
+  `DocDef` form on `settings/features`, which writes only the keys it changed). No new collection, no new listener.
+- **Katameros → `/data/today.json`:** `tool/fetch_synaxarium.js` (Node 22, built-ins only) fetches
+  `https://api.katameros.app/readings/gregorian/dd-MM-yyyy?languageId=3|2` for the Cairo days yesterday … +7 (18 small
+  GETs), keeps the feast title, Coptic date and Synaxarium titles (≈ 3 KB). `.github/workflows/synaxarium.yml` runs it
+  at 16:10 and 22:10 UTC (18:10 / 00:10 in winter, 19:10 / 01:10 in summer, local) and `tool/publish_hosting_file.js`
+  publishes the one file **without rebuilding**: Hosting REST API v1beta1 — clone the live version (excluding the
+  file), `populateFiles` + upload the gzip, finalize, release. Concurrency group `hosting-live` is shared with
+  `deploy.yml`'s `deploy-live`, so a clone can never roll back a fresh deploy; `deploy.yml`'s build also writes the
+  file (fallback: the live copy); only when both Katameros and the live site fail is the file missing from that
+  release, until the next scheduled publish (visitors keep their stored copy / the computed feast list). The fetcher
+  retries each request once, writes a day only with both languages, and keeps the previously published entry for a
+  day that still fails (PR #31 review). Each publish adds a Hosting version (files are
+  de-duplicated); the owner can cap kept versions in the Firebase console (Hosting → release storage settings).
+- **Client (`lib/data/synaxarium_source.dart`):** after the page is complete and idle (`ContentReady.whenIdle`), one
+  same-origin GET of `/data/today.json` **only when the copy stored on the device (shared_preferences / localStorage)
+  has no entry for the liturgical day** — so about one ~3 KB request per device per week at most (the file covers 8
+  days), none in seed mode. Any failure → stored copy → computed feasts. Credit line «المصدر: القطمارس (katameros.app)».
+- **Live banner (`LiveStreamBanner`):** red bar at the top of every page while `liveEnabled` and an http(s)
+  `liveUrl` (YouTube / Facebook / any) and before `liveEndsAt`; pulsing dot (static under reduced motion); one tap
+  opens the stream; default text «بث مباشر الآن من الكنيسة», admin text optional. Re-evaluated by the existing 30 s
+  clock (`nowProvider`), so the automatic switch-off needs no polling.
+- **Cost per visit (Firestore):** reads **+0**, listeners **+0**, writes **+0** (everything rides on the existing
+  `settings/features` listener); an admin save of the Today screen = 1 write. Hosting: ≤ 1 × ~3 KB GET per device
+  per day (usually per week). GitHub Actions: 2 short runs a day.
+- Rules: `validFeatures` allow-list + checks (`copticStrip` ∈ all/home/off, `dayStartMode` ∈ fixed/sunset,
+  `dayStartsAt` HH:mm, bools, `liveUrl` http(s) ≤ 500, labels ≤ 120, `liveEndsAt` timestamp/null, `dayEvents` ≤ 20
+  valid strings) — `tool/rules_test` "ADR-039 / ADR-040" group.
+
+## ADR-041 (PR #32) — Programme details on services, meetings and seasons: speaker, topic, choir, venue, audience, Drive PDF link
+
+- **Context (owner plan §2.2, §2.3, §2.5, `docs/holy-week-and-revivals-roadmap.md`):** revival nights need the
+  preacher, sermon title and choir; Holy Week prayers run in parallel in several halls (main church, lower hall,
+  services building) for different age groups; the Pascha booklet / speakers list should be one tap away.
+- **Decision:** one shared, all-optional field set `ProgramInfo` (`lib/domain/program.dart`) on `Liturgy`, `Meeting`
+  and `Season`: `speakerAr/En` (≤ 200), `topicAr/En` (≤ 300), `choirAr/En` (≤ 200), `venue` / `audience` (keys of
+  admin lists), `attachmentUrl` (**https link only — Google Drive or any page; nothing is uploaded, owner 4 Nov 2026**)
+  + `attachmentLabelAr/En` (≤ 80). Missing keys = nothing shown, so existing cards are unchanged.
+- **Venues / audiences** are admin lists in `settings/features.venues` / `.audiences` (≤ 12 strings each,
+  `key␟labelAr␟labelEn`; missing / empty = defaults الكنيسة الكبرى / القاعة السفلية / مبنى الخدمات and عام / شباب /
+  أطفال), edited in the new /admin screen «إعدادات المواسم» / "Season settings" (generic form, writes only changed
+  keys). No new document, collection or listener: `settings/features` is already streamed. Items store the KEY, so a
+  renamed hall updates everywhere.
+  A key missing from the admin list still resolves through the built-in defaults (`venue()` / `audience()` fall back,
+  `ProgramOptions.withUsed` keeps it in chips and in the item's dropdown), so items saved with `main` / `youth` keep
+  their label after the admin replaces the list (Sentry review on PR #32).
+- **Parallel prayers:** `parallelServices()` (`lib/domain/schedule.dart`) — same date (or weekday), overlapping times
+  (no end = one minute), different venue (or free-text place) — adds «وفي نفس الوقت: القاعة السفلية (شباب)» to each
+  card — on every list of /mass-schedule (season services, additive revivals, one-off special services and the
+  regular weekday tabs; Codex review on PR #32); the seasonal lists get audience filter chips when two or more
+  audiences are used (a service without an audience is for everyone). The chips live in the seasonal view only, so
+  switching views clears the filter (Sentry review on PR #32), and a chosen audience applies only while its chip is
+  shown; a service with no audience or an unknown audience key shows under every chip (`audienceMatches`, Sentry
+  review on PR #32). CodeRabbit round on PR #32: one parallel map per view (services of two seasons can overlap); a venue key and
+  its own Arabic name typed as free text are the same place (`parallelServices(list, opts)` keys venues by label);
+  English-only places compare with English-only places; an end at or before the start crosses midnight (as
+  `_occurrence`); the next-service card shows the line too, from that day's real occurrences (`parallelOccurrences`, so a suppressed or out-of-season service is never named — Sentry); an unknown venue key falls back to the free-text place.
+  Admin: a repeated venue / audience key is refused on the later row (`FieldDef.rowUniqueKey`, `validateRowUnique`,
+  error `duplicateKey`); the programme pill counts a chosen venue / audience. Rules: `attachmentUrl` path up to 500
+  characters with an overall 500 cap, no whitespace (tab / newline) in host or path.
+- **UI:** `ProgramDetails` widget (venue / audience pills, speaker / topic / choir lines, PDF button) on the liturgy
+  card, the next-service card, the season header on /mass-schedule, the meeting card; meeting detail pages list them
+  as facts. Admin: a collapsible «البرنامج: المتكلم والمكان والفئة وملف PDF» group (`FieldGroup.program`) on the
+  three collections, with run-time venue / audience dropdowns.
+- **Rules:** `programKeys()` added to the three allow-lists; `validProgram(d, changed)` checks all eleven on ONE
+  joined string (one regex) only when one changes; `ownFieldsUnchanged` accepts programme-only meeting edits;
+  `validProgramOptions` checks each list with one `join` + regex. Worst case (meeting with full detail page + every
+  programme key) stays under the 1,000-expression cap (emulator group "ADR-041").
+- Firebase cost per visit: +0 reads, +0 listeners. Tests: `test/program_test.dart`, rules group "ADR-041".
+
+## ADR-042 (PR #33) — Season presets: one reversible «تجهيز الموسم» action, season verse sets, assistant season limit and topics, hero v2
+
+- **Context (owner plan §2.6, §3, §4 SOP; `docs/holy-week-and-revivals-roadmap.md` gap 6):** before Holy Week the
+  owner flips five or six switches by hand (weekly schedule replaced, meetings and clinics hidden, calm hero, no
+  wedding bookings, live link, booklet) and must remember to flip them all back; the assistant's 3 questions a day run
+  out at once in busy seasons and it offered sections that were switched off; "verse of the day" ignored the season.
+- **Decision — season preset (`lib/domain/season_preset.dart`, /admin «تجهيز الموسم» `SeasonPresetScreen`):** pick a
+  season, tick up to 7 options (`replaceRegular`, `hideMeetings`, `hideClinics`, `heroMotionOff`, `weddingOff`,
+  `live`, `pdf`; defaults per season kind — Holy Week ticks the first five, Pascha / Nativity only `replaceRegular`,
+  revivals none), confirm a dialog that lists every change. `planApply` writes the changes AND the values they replace
+  into `settings/features.seasonPreset` `{seasonId, seasonKey, appliedAt, endsAt, options, previous}` and activates the
+  season; «استرجاع الإعدادات السابقة» (`planRestore`, confirmed) writes `previous` back and clears the preset. Each is
+  ONE batched write (`AdminBackend.saveDocs`) of `settings/features` + `seasons/{id}` (a deleted season is never
+  recreated). `sections` is written whole (validSections), from the switches read just before.
+- **Auto-revert at the season end without a write or a Cloud Function:** `FeatureSettings.effectiveAt(instant)` gives
+  visitors the `previous` values of the switches the preset changed once `endsAt` has passed; `featuresProvider`
+  watches the clock through a bool, so it rebuilds once at the end. The live link already stops at `liveEndsAt` =
+  season end, and the season stops by its own dates. The stored values change only when the admin presses restore
+  (the screen says the season is over and visitors already see the normal site). A season without an end date never
+  reverts on its own (the screen warns).
+- **Wedding switch:** `settings/features.weddingBookingOff` hides the `wedding` subtype of booking categories on the
+  contact form and in the assistant's contact context (`ContactSettings.withoutWedding`); condolences stay. A booking
+  category whose only choice was the wedding is hidden while the switch is on, so an unspecified hall booking can't be
+  sent instead (Codex review on PR #33).
+- **Season verse sets (`lib/domain/season_verses.dart`):** `settings/features.seasonVerses` (≤ 40 rows
+  `seasonKey␟textAr␟refAr`, edited in «إعدادات المواسم»). While a season with verses is active (the latest-starting
+  one when several), the home verse rotates through its set by liturgical day; a fixed admin verse still wins; no set
+  = the general list. The home verse reads the seasons stream only when sets exist (the next-service card already
+  opens it).
+- **Assistant:** `perDaySeason` in `settings/assistant` (1–100, default 6) applies while an exceptional season is
+  active (`holy_week`, `pascha`, `nativity`, `revival_maximus`, `revival_moses`; not `summer`) via
+  `withSeasonLimit` (a season never lowers a higher ordinary `perDay` — Sentry review on PR #33); allowed-topic lines (defaults and the admin's) are dropped when a section group they name is
+  all off (`topicSectionWords` / `topicsFor`; history and milestones are separate groups, so «history and
+  milestones» goes when either is off — Codex review on PR #33); the prompt names switched-off sections ("do not offer") and the current season
+  first ("use that season's schedule"); the answer cache key uses the filtered topics.
+- **Hero v2:** the owner-approved Gemini clip as muted 9 s loops whose last second cross-fades into the first (no
+  seam): `hero_clouds.mp4` 1280×720 (≈ 241 KB, was 308 KB), `hero_clouds_tall.mp4` 432×768 (≈ 117 KB); posters are the
+  first frames (`hero_poster.webp` 1280×720, `hero_poster_tall.webp` 432×768; `web/index.html` reserves 432×768); stills
+  `hero_wide*` / `hero_tall` regraded to match. Faststart (moov before mdat), no audio track.
+- **Rules:** `validFeatures` allows `seasonVerses` (`validSeasonVerses`: one `join` + regex), `seasonPreset`
+  (`validSeasonPreset`: key lists, timestamps, bools, the four strings checked as one joined string) and
+  `weddingBookingOff` (bool); `validAssistant` allows `perDaySeason` 1–100. Emulator group "ADR-042" (apply / restore
+  batch, bad presets, verse rows, limit range).
+- **Cost:** visitors +0 reads, +0 listeners in the default layout (three more keys in the already-streamed
+  `settings/features`; the seasons stream is already open on home for the next-service card and on /ask). Exception
+  (CodeRabbit review on PR #33): while season verses exist and the next-service card is hidden (or the schedule is
+  off), the home verse opens the seasons listener itself (+1 listener, ≈ 6 docs). Admin screen: 2 listeners while
+  open (`seasons` ≈ 6 docs + 1 doc). Apply = 1 transaction (2 document reads + 2 writes) that re-plans from the
+  current documents, so a switch saved meanwhile by another admin is kept, a preset applied meanwhile is never
+  overwritten and a season deleted meanwhile is not recreated; restore = 1 transaction (2 reads + ≤ 2 writes);
+  auto-revert = 0 writes. Admin screen review fixes: an ended season can't be applied (its `active` would stay on), the
+  live link is cleared when another season is picked, links over 500 characters are refused before the dialog, and a
+  load error is shown instead of a spinner. The home verse waits for the seasons while season verses exist (no general
+  verse flash); /ask waits up to 5 s for the seasons before the daily-limit check. The preset keeps the season end it
+  was applied with (visitors need no seasons listener for the auto-revert); when the admin later moves the season's
+  end, the applied card says so and «نقل الرجوع التلقائي إلى النهاية الجديدة» moves `seasonPreset.endsAt` (and the
+  live end the preset set) in one transaction (`planSyncEnd`, Sentry review on PR #33). After the end, the switches
+  the preset covered follow the preset's previous values until «استرجاع» (by design: the screen says so). Hero video bytes −67 KB on
+  tablets / desktops, +5 KB on phones.
+- Tests: `test/season_preset_test.dart` (preset domain, auto-revert, verse sets, assistant limit / topics / prompt,
+  wedding switch, admin screen apply / restore / validation / deleted season, poster sizes vs `index.html`, video
+  duration / faststart / no audio / byte budgets), rules group "ADR-042".
+
 ## Timeline
 
 | When | PR / commit | What |
@@ -684,5 +996,13 @@ supersede them.
 | 4 Nov 2026 | **PR #26** — "App bar: no Clinics shortcut (owner request)" (`fix/appbar-no-clinics`; PR #24 was squash-merged as `d60261d`) | Owner request: the public app bar never shows the Clinics (`local_hospital_rounded`) action, at any width or section state; **Mass times** is the only highlight button. It used the same `sections.clinics` switch (`routeEnabled('/clinics')`, phones only) — live `sections.clinics` was `true` when checked. Clinics stay in the drawer / Services menu, Home directory and footer quick links; route, page, admin unchanged. `test/feature_gate_test.dart` group guards the bar. |
 
 | 4 Nov 2026 | **PR #25** — "Docs: memory bank up to date + Arabic feature documentation" (`docs/feature-documentation`; PR #26 was squash-merged as `8886d08` first and merged into this branch) | ADR-035: memory bank re-checked against `d60261d` (assistant limits / suggestions / unconfirmed flags in `05-firebase.md`, clinics placeholders deleted 3 Nov + section off 4 Nov, create-only seeding re-creates deleted docs, bundled fonts, Sentry account facts, open tasks); new `documentation/` (Arabic): index, architecture, one file per feature, operations; README / AGENTS / CLAUDE link it with the same-PR rule. **ADR-036:** YouTube hero video library removed (admin card, `hero_video.dart`, `hero_youtube*.dart`, `youtube_player_iframe`; legacy `heroVideos` kept in rules, live data untouched). |
+| 4 Nov 2026 | **PR #29** — "PageSpeed: same hero, CSS ambient layer on web, lazy App Check, static first paint, crawler files" (`perf/pagespeed-green`; PR #27 was squash-merged as `b7e5ed2`, PR #28 closed unmerged) | ADR-037: hero haze + ray shimmer as a CSS-animated DOM layer on web (`hero_ambient*.dart`, `HeroAmbientSpec`), App Check activated on the assistant's first use (`ensureAppCheckActivated`), static hero poster + church name splash, `Intl.v8BreakIterator` → `Intl.Segmenter` shim, seal 178 → 27 KB, Hosting regex rewrites (real 404s for missing files, dotted slugs / ids still load) + COOP, `web/llms.txt`, `--source-maps`; `test/pagespeed_test.dart`. |
+
+| 4 Nov 2026 | **PR #30** — "Footer bundled-data note, sitemap from Firestore, loading screen until real content" (`fix/footer-sitemap-loading`; PR #29 was squash-merged as `5a6a44c`) | ADR-038: `SeedGate.markSeeded` / `whenSeeded` (the `settings/church` listener proves seeding for every stream; empty collections / missing optional docs no longer strand the footer note), `sitemap.xml` generated read-only from Firestore in `deploy.yml` (`tool/export_public_content.js`, `tool/gen_sitemap.dart`, `lib/domain/sitemap.dart`, static fallback), loading screen kept until `app-content-ready` (9 s cap), hero video / CSS motion started at page idle; `test/sitemap_test.dart`, `test/content_ready_test.dart`, new groups in `content_guard_test.dart` / `pagespeed_test.dart`. Second commit (live-check follow-ups): footer hides «العيادات» until the switches load, live query started before the seeding check + custom fallback delay counted from the subscription (missing custom / detail pages settle in ≤ ~13 s instead of 15–24 s), English image alts and Latin-only times in English, `test/live_check_followups_test.dart`; CodeRabbit fixes to `tool/build_sitemap.sh` and the docs. |
+
+| 4 Nov 2026 | **PR #31** — "Coptic calendar, top event of the day, live banner" (`feat/coptic-calendar-today-live`, on `905cd04` = PR #30 + the owner's roadmap doc) | ADR-039 / ADR-040: `coptic_calendar.dart`, `sun.dart`, `coptic_feasts.dart`, `today.dart`, `synaxarium_source.dart`, `today_widgets.dart` (strip, live banner, top event card), liturgical-day verse and eve labels, /admin «اليوم والبث المباشر», `synaxarium.yml` + `tool/fetch_synaxarium.js` + `tool/publish_hosting_file.js`, footer note debounce (`SteadySeedNote`), time-zone labels removed from the UI; tests `coptic_calendar_test.dart`, `today_widgets_test.dart`, rules group. |
+
+| 4 Nov 2026 | **PR #32** — "Programme details: speaker, topic, choir, venue, audience, Drive PDF link" (`feat/programme-fields`) | ADR-041: `program.dart` (`ProgramInfo`, `ProgramOptions`), `parallelServices`, `ProgramDetails` widget, audience chips on the seasonal schedule, meeting detail facts, admin programme group + «إعدادات المواسم» (venues / audiences), rules `programKeys` / `validProgram` / `validProgramOptions`; `test/program_test.dart`, rules group. |
+| 4 Nov 2026 | **PR #33** — "Season presets, season verses, assistant season limit, hero v2" (`feat/season-presets`) | ADR-042: `season_preset.dart` + /admin «تجهيز الموسم» (apply / restore in one transaction, auto-revert at the season end without a write), `season_verses.dart` + «آيات المواسم» in «إعدادات المواسم», assistant `perDaySeason` / section-aware topics / current season in the prompt, `weddingBookingOff`, hero v2 9 s loops + posters, `AdminBackend.saveDocs` / `saveDocsFresh`; `test/season_preset_test.dart`, rules group. |
 
 Append new PRs to this table.

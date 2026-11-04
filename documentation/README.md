@@ -44,8 +44,11 @@
 |---|---|
 | الصفحة الرئيسية والواجهة (الفيديو، الحركة، الكتل) | [features/home-and-hero.md](features/home-and-hero.md) |
 | آية اليوم | [features/daily-verse.md](features/daily-verse.md) |
+| التاريخ القبطي وحدث اليوم والبث المباشر | [features/today-coptic-date-and-live.md](features/today-coptic-date-and-live.md) |
 | ثيمات المناسبات والألوان | [features/occasion-themes.md](features/occasion-themes.md) |
 | مواعيد القداسات والمواسم والقداس القادم | [features/mass-schedule-and-seasons.md](features/mass-schedule-and-seasons.md) |
+| تفاصيل البرنامج (المتكلم، الموضوع، الكورال، المكان، الفئة، ملف PDF) | [features/programme-details.md](features/programme-details.md) |
+| تجهيز الموسم وآيات المواسم والمساعد في المواسم | [features/season-preset.md](features/season-preset.md) |
 | التربية الكنسية والاجتماعات | [features/meetings.md](features/meetings.md) |
 | العيادات | [features/clinics.md](features/clinics.md) |
 | عن الكنيسة: التاريخ والمذابح والآباء الكهنة والمتنيحون والشفعاء | [features/about-priests-saints.md](features/about-priests-saints.md) |
@@ -67,6 +70,7 @@
 | محركات البحث (SEO) | [features/seo.md](features/seo.md) |
 | اللغتان وحفظ اختيار اللغة | [features/localization.md](features/localization.md) |
 | تطبيق الويب (PWA) والتخزين المؤقت وخطوط الأيقونات | [features/pwa-and-caching.md](features/pwa-and-caching.md) |
+| سرعة الموقع ونتائج PageSpeed | [features/performance-pagespeed.md](features/performance-pagespeed.md) |
 | سهولة الوصول | [features/accessibility.md](features/accessibility.md) |
 | تطبيق Android | [features/android-app.md](features/android-app.md) |
 | البنية العامة | [architecture.md](architecture.md) |

@@ -134,6 +134,28 @@ String? validateRowAnyOf(FieldDef list, Map<String, String> row) {
   return list.rowRequireAnyOf.any((k) => (row[k] ?? '').trim().isNotEmpty) ? null : 'requiredTitleAnyLang';
 }
 
+/// Error key (`endDateBeforeStart`) when a row's [FieldDef.rowNotBefore] end
+/// date is set and earlier than its start date (YYYY-MM-DD compare as text).
+String? validateRowOrder(FieldDef list, Map<String, String> row) {
+  final o = list.rowNotBefore;
+  if (o == null) return null;
+  final end = (row[o.key] ?? '').trim(), start = (row[o.value] ?? '').trim();
+  if (end.isEmpty || start.isEmpty) return null;
+  return end.compareTo(start) < 0 ? 'endDateBeforeStart' : null;
+}
+
+/// Error key (`duplicateKey`) when row [index]'s [FieldDef.rowUniqueKey]
+/// value (in [values], one per row) is set and an earlier row has it too.
+String? validateRowUnique(FieldDef list, List<String> values, int index) {
+  if (list.rowUniqueKey.isEmpty || index >= values.length) return null;
+  final v = values[index].trim();
+  if (v.isEmpty) return null;
+  for (var j = 0; j < index; j++) {
+    if (values[j].trim() == v) return 'duplicateKey';
+  }
+  return null;
+}
+
 String? validateDocument(CollectionDef? def, Map<String, dynamic> data) {
   if (def != null && def.requireAnyOf.isNotEmpty && def.requireAnyOf.every((k) => data[k] == null || data[k] == '')) {
     return 'needWeekdayOrDate';

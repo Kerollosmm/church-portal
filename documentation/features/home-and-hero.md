@@ -30,6 +30,9 @@
 
 على الشاشات العريضة (900 بكسل فأكثر) تظهر بطاقة القداس القادم وأرقام التليفون جنبًا إلى جنب.
 
+- منذ PR #31: شريط التاريخ القبطي وشريط البث المباشر أعلى الصفحة، وبطاقة **«حدث اليوم»** أول الصفحة الرئيسية — التفاصيل في
+  [today-coptic-date-and-live.md](today-coptic-date-and-live.md). الواجهة (الصورة والفيديو) لم تتغير.
+
 ## التحكم من لوحة التحكم
 
 كل ما يلي في `/admin` ← **«الأقسام والصفحة الرئيسية»** ثم زر **«حفظ التغييرات»**:
@@ -48,10 +51,14 @@
 - الصفحة: `lib/ui/pages/home_page.dart` (`HomePage`, `_Hero`, `HeroVerse`, `_PatronsTeaser`).
 - الفيديو: **المقطع المدمج فقط** — `HeroStage` في `lib/ui/widgets/golden.dart` و `lib/ui/widgets/hero_video*.dart`
   (`assets/video/hero_clouds.mp4`، و`hero_clouds_tall.mp4` للهواتف بقصّ طولي)، فوق صورته الثابتة (poster)، واللوحة المرسومة
-  عندما لا يُسمح بالفيديو.
+  عندما لا يُسمح بالفيديو. منذ PR #33 (ADR-042): المقطع الجديد المعتمد من المالك، ٩ ثوانٍ يتكرر بدون قطع ظاهر (آخر ثانية
+  تذوب في الأولى)، 1280×720 و432×768 للهاتف، بدون صوت؛ «تجهيز الموسم» يمكنه إيقاف الحركة طوال الموسم
+  ([season-preset.md](season-preset.md)).
 - **أُزيلت مكتبة فيديو يوتيوب** («مكتبة فيديو الواجهة (يوتيوب)») في PR #25 بطلب المالك (ADR-036): لا توجد بطاقة لها في
   اللوحة، ولا مشغّل يوتيوب في التطبيق. حقل `heroVideos` القديم إن وُجد في `settings/features` يُتجاهل ولا يُحذف، والقواعد ما
   زالت تقبله حتى لا يفشل الحفظ.
+- على الويب تُحرَّك السحب وأشعة الضوء بـ CSS في طبقة HTML فوق الفيديو (`hero_ambient_web.dart`، ADR-037) بنفس الشكل، بدل إعادة رسم Flutter لكل إطار.
+- منذ PR #30 (ADR-038): على الويب تبقى شاشة التحميل (صورة الواجهة واسم الكنيسة) حتى تصل أول بيانات حقيقية، ثم يبدأ تحميل الفيديو وطبقة السحب والأشعة عندما يهدأ المتصفح وتظهر بتلاشٍ؛ الشكل النهائي كما هو. انظر [performance-pagespeed.md](performance-pagespeed.md).
 - الحركة تتوقف مع `prefers-reduced-motion` أو `saveData` (`lib/core/motion_env*.dart`) أو `heroMotion: false`.
 - الإعدادات في `settings/features`: `homeOrder` (ترتيب الكتل)، `homeHidden` (المخفية)، `heroTitleAr/En`،
   `heroSubtitleAr/En`، `heroMotion`، `heroShowAddress`، `bannerEnabled`، `bannerAr/En`، `bannerLink`.

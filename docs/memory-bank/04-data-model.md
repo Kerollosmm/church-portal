@@ -190,6 +190,26 @@ Existence of `settings/church` = "database is seeded" (see `03-architecture.md`)
   `milestones→milestones`, `map→contactInfo` (block disappears when its section is off). `directory` and `banner`
   have no section.
 
+- **Today layer (PR #31, ADR-039 / ADR-040)** — top-level keys, not seeded, read into `FeatureSettings.today` /
+  `.dayEvents` and **never written by `toMap()`** (edited by /admin → «اليوم والبث المباشر» with field-level merges):
+
+  | Key | Type / rule | Default |
+  |---|---|---|
+  | `copticStrip` | `all` \| `home` \| `off` | `all` (Coptic date strip on every page) |
+  | `dayStartMode` | `fixed` \| `sunset` | `fixed` |
+  | `dayStartsAt` | `''` or `HH:mm` | `''` = 18:00; `00:00` = civil midnight |
+  | `topEvent`, `commemoration` | bool | true, true |
+  | `liveEnabled` | bool | false |
+  | `liveUrl` | `''` / http(s) URL ≤ 500 | `''` (banner needs a link) |
+  | `liveLabelAr`, `liveLabelEn` | string ≤ 120 | `''` = «بث مباشر الآن من الكنيسة» / "Live now from the church" |
+  | `liveEndsAt` | timestamp / null | none (automatic switch-off) |
+  | `dayEvents` | list ≤ 20 of strings `date␟endDate␟start␟end␟titleAr␟titleEn␟speakerAr␟speakerEn␟topicAr␟topicEn␟noteAr␟noteEn␟link` (U+001F; date `YYYY-MM-DD` required, endDate optional, times `''`/HH:mm, titleAr 1–300, texts ≤ 300, notes ≤ 500, link `''` / path / http(s)) | `[]` |
+  | `venues` | list ≤ 12 of strings `key␟labelAr␟labelEn` (key `[a-z0-9_-]{1,30}`, labelAr 1–80, labelEn ≤ 80) — PR #32, ADR-041 | missing / empty = `main` الكنيسة الكبرى, `lower` القاعة السفلية, `services` مبنى الخدمات |
+  | `audiences` | same format — PR #32, ADR-041 | missing / empty = `general` عام, `youth` شباب, `children` أطفال |
+  | `seasonVerses` | list ≤ 40 of strings `seasonKey␟textAr␟refAr` (season key of `validSeason`, text 1–500, ref ≤ 60) — PR #33, ADR-042 | missing / empty = the general daily list always |
+  | `seasonPreset` | map `{seasonId, seasonKey, appliedAt, endsAt, options[≤7], previous{seasonActive, replacesRegular, meetings, clinics, heroMotion, weddingBookingOff, liveUrl, liveEndsAt, attachmentUrl, attachmentLabelAr, attachmentLabelEn}}` or null — written only by /admin «تجهيز الموسم» (PR #33, ADR-042) | none applied |
+  | `weddingBookingOff` | bool — PR #33, ADR-042 | false (the wedding booking choice shows) |
+
 - PR #18 (ADR-027): `sections.customSections` (custom categories at `/section/*` + their menu entries) and
   `sections.customPages` (custom pages at `/page/*` + their menu entries); missing = on; seeded `true`.
 - `dailyVerse` (PR #16, ADR-024): map `{mode: 'daily'|'fixed' (default daily), textAr: string ≤500, refAr: string ≤60}`;
@@ -204,6 +224,15 @@ Existence of `settings/church` = "database is seeded" (see `03-architecture.md`)
   missing key = built-in default. Written only once an admin sets one (saves keep working against older rules).
 
 ## Content collections
+
+### Optional programme details (PR #32, ADR-041) — `ProgramInfo` (`lib/domain/program.dart`)
+
+On `liturgies`, `meetings` and `seasons` only; every key optional (missing = nothing shown):
+`speakerAr`, `speakerEn` (≤ 200), `topicAr`, `topicEn` (≤ 300), `choirAr`, `choirEn` (≤ 200), `venue`, `audience`
+(keys of `settings/features.venues` / `.audiences`, `[a-z0-9_-]{0,30}`; an unknown key shows nothing),
+`attachmentUrl` (https URL only — a Google Drive or other link; **no file upload**), `attachmentLabelAr/En` (≤ 80;
+blank = «البرنامج / الكتيب»). The free-text `placeAr/En`, `audienceAr/En` (liturgies) and `hallAr/En` (meetings)
+stay as before.
 
 ### `alerts/{id}` — `Alert` (Hideable)
 `titleAr` (**req**, ≤300), `titleEn` (≤300), `bodyAr`/`bodyEn` (≤2000; admin form caps 1000), `active` (bool,
@@ -390,6 +419,13 @@ Doc id = Firebase Auth **UID**. Missing/unknown role is treated as **editor** (`
   `known − current − retired = ∅`, so removing an id from the seed **requires** adding it to `retired`.
 - Seed counts (current): settings 2, alerts 4, seasons 5, liturgies 47, meetings 11, activities 11, clinics 11,
   facilities 5, priests 11, milestones 4, saints 2.
+
+## Hosting data file `/data/today.json` (PR #31, ADR-040)
+
+Not Firestore: written by `.github/workflows/synaxarium.yml` (twice a day) and every `deploy.yml` build.
+`{"source": "api.katameros.app", "fetchedAt": ISO, "days": {"YYYY-MM-DD": {"coptic": "25/2/1743", "feastAr", "feastEn",
+"ar": [Synaxarium titles], "en": [...]}}}` for yesterday … +7 (Cairo dates). Read by `SynaxariumSource`
+(device-cached). Missing / malformed = computed feasts.
 
 ## Indexes
 

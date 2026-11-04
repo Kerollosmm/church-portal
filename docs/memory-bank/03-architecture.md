@@ -47,11 +47,19 @@ lib/
     contact_categories.dart ContactSettings (defaults), ContactCategory (encode/fromStored), ContactKinds,
                             MessageStatus, inboxBoxOf, messageIsOpen (PR #18, ADR-028); stable random ids
                             newContactCategoryId / ContactSettings.newId (PR #19)
+    coptic_calendar.dart    CopticDate (Gregorian <-> Coptic via JDN, month names, format), LiturgicalDay,
+                            liturgicalDayAt (fixed 18:00 default / sunset), DayStartModes — PR #31, ADR-039
+    sun.dart                sunsetUtc / sunsetLocalMinutes (NOAA) at the church coordinates — ADR-039
+    coptic_feasts.dart      copticFeastsOn (computed fixed + movable feasts, offline fallback) — ADR-040
+    today.dart              TodaySettings (settings/features today keys), DayEvent (encoded dayEvents), SynaxariumData
+                            (/data/today.json), resolveTopEvent, live banner rule — ADR-040
+    program.dart            ProgramInfo (speaker/topic/choir/venue/audience/PDF link on liturgies, meetings, seasons),
+                            ProgramOption / ProgramOptions (settings/features.venues / .audiences) — PR #32, ADR-041
     item_detail.dart        DetailKind (basePath/parentPath/collection), detailPathFor, parseDetailPath,
                             detailStateFor (detail-page gating), itemSocialsShown (PR #13, ADR-020),
                             weeklyCalendarUrl, absoluteDetailUrl, pickRelated (PR #14, ADR-021)
   data/
-    firebase_bootstrap.dart bootstrapFirebase() -> FirebaseStatus{available, appCheckActive}; App Check
+    firebase_bootstrap.dart bootstrapFirebase() -> FirebaseStatus{available, appCheckActive (= configured)}; ensureAppCheckActivated() (lazy, ADR-037)
     app_check_providers.dart selectAppCheckPlan (reCAPTCHA Enterprise web / Play Integrity / App Attest / debug) — PR #19
     assistant_model.dart    FirebaseAssistantModel (AssistantModel on Firebase AI Logic, imported only by /ask) — PR #19
     content_repository.dart ContentRepository (interface), SeedRepository, FirestoreRepository,
@@ -112,10 +120,15 @@ flowchart TD
    - `SeedData.load()` reads `assets/seed/seed.json` (on error → empty `SeedData`).
    - `bootstrapFirebase()`: `DefaultFirebaseOptions.currentPlatformOrNull` (null for placeholder/unsupported
      platforms) → `Firebase.initializeApp` (10 s timeout) → Firestore `persistenceEnabled: true`,
-     `cacheSizeBytes: 40 MB` → `_activateAppCheck()`.
+     `cacheSizeBytes: 40 MB`. App Check is **not** activated here (ADR-037): `ensureAppCheckActivated()` runs on the
+     assistant's first use.
 3. Repository choice: `status.available ? FirestoreRepository(db, seed) : SeedRepository(seed)`; `AdminRepository`
    only when Firebase is available (otherwise `/admin` shows `adminUnavailable`).
 4. `ProviderScope(overrides: [firebaseStatusProvider, repositoryProvider, adminRepositoryProvider])`.
+5. `ChurchPortalApp` watches `contentReadyProvider` (`firstContentArrived`: settings, `featuresReadyProvider`, daily
+   verses) and, two frames after it turns true, calls `ContentReady.signal()` → `app-content-ready` on `window`, which
+   hides the `web/index.html` loading screen (ADR-038; cap 9 s after `flutter-first-frame`). `ContentReady.whenIdle`
+   (signal + fade + `requestIdleCallback`, hard cap 12 s) gates the hero video source and the CSS ambient layer.
 
 ## Error reporting — Sentry (`lib/data/error_reporting.dart`, PR #24, ADR-034)
 
@@ -178,6 +191,20 @@ flowchart LR
   `_markFallback(key, false)`. A known-unseeded database
   (`settings/church` absent) keeps serving the seed until a later check finds the marker. A stream cancelled while on the seed clears its fallback mark
   (`finally`), so the banner is never stranded.
+- **Seeding proof shared by every stream (PR #30, ADR-038):** the `settings/church` listener calls
+  `SeedGate.markSeeded()` whenever its snapshot shows the document (and a successful check does the same);
+  `SeedGate.whenSeeded` then releases every stream still unconfirmed — it emits the live value it was holding back
+  (or lets the next one through) and cancels a pending delayed custom fallback. Without it, a stream whose only
+  snapshot cannot vouch for itself (a missing optional doc such as `settings/contact` → code defaults, or an empty
+  collection — Firestore does not re-emit an unchanged result) stayed on the seed for good after a timed-out /
+  "client is offline" check, keeping the footer note on. `check()` returns the latest state, so a late negative /
+  failed read never undoes the proof.
+- **Live query first, then the gate (PR #30 follow-up, ADR-038):** `guardSeeded` subscribes to the live query
+  immediately; values that arrive before the seeding answer wait in `onData` for it (`SeedGate.check()` also returns
+  as soon as `whenSeeded` fires). The custom-content fallback delay (`customFallbackDelay`, 13 s) counts from that
+  subscription and fires only after the gate has said "not seeded / could not tell"; on a seeded database custom
+  content never falls back to the empty list. A missing `/section/<x>` / `/page/<x>` now settles in ≤ ~13 s on a
+  stalled connection (was 15–24 s), a missing item in a built-in collection in ≤ 8 s.
 - **Settings docs prove themselves (PR #23):** `settings/features`, `settings/contact` and `settings/assistant`
   have `confirms: !identical(v, <code default>)` like `settings/church`: a stored doc replaces the default even while
   the seeding check cannot answer (before, `/contact` kept the four default types in that case).
@@ -216,6 +243,10 @@ flowchart LR
 | `assistantModelProvider` | `Provider<AssistantModel>` (in `ui/pages/assistant_page.dart`, deferred chunk) | `FirebaseAssistantModel`; overridden with a fake in tests — PR #19 |
 | `seasonsProvider` | `StreamProvider<List<Season>>` | **not** filtered (seasons have no `visible`/`order`) |
 | `nowProvider` | `StreamProvider<DateTime>` | ticks every 30 s (next mass, "available today", alerts) |
+| `todaySettingsProvider` | `Provider<TodaySettings>` | `featuresProvider.today` (ADR-039/040; no extra listener) |
+| `liturgicalDayProvider` | `Provider<LiturgicalDay>` | now + day start (fixed 18:00 / sunset at `settings/church` lat/lng) |
+| `synaxariumSourceProvider` / `synaxariumProvider` | `Provider` / `FutureProvider<SynaxariumData>` | `/data/today.json` after `ContentReady.whenIdle`, device-cached; empty in seed mode (ADR-040) |
+| `topEventProvider` | `Provider<TopEvent?>` | `resolveTopEvent` (church event > Katameros > computed feasts) |
 | `assistantVisibleProvider` | `Provider<bool>` | `features.enabled(assistant) && fb.available && fb.appCheckActive && settings.assistantEnabled` |
 | `languageStoreProvider` | `Provider<LanguageStore>` | `PlatformLanguageStore` (`lib/core/locale_storage.dart`): `window.localStorage['church_portal_lang']` on web via `package:web` (conditional import, errors swallowed), no-op on Android/iOS; overridden in tests |
 | `localeProvider` | `NotifierProvider<LocaleNotifier, Locale>` | initial = `LocaleNotifier.initialLocale(Uri.base, saved)`: explicit `?lang=en`/`?lang=ar` → saved choice → `ar`; `toggle()`/`set()` = visitor's choice (URL follows, choice saved in the `LanguageStore`), `syncFromUrl()` = the URL asked (no rewrite, not saved), `consumeUserChange()` read once by the router. A saved English choice on a parameter-free URL makes the first redirect add `?lang=en` |
@@ -224,7 +255,9 @@ flowchart LR
 ## Routing (`lib/router.dart`)
 
 - `GoRouter(initialLocation: '/')`, **path URL strategy** (`/mass-schedule`, not `/#/mass-schedule`). Firebase
-  Hosting rewrites `**` → `/index.html` (`firebase.json`), so deep links and reloads work.
+  Hosting rewrites every extension-less path (`^/[^.]*$`, ADR-037) → `/index.html` (`firebase.json`), so deep links
+  and reloads work; a second rewrite covers `/section|page/<slug>` and the item detail prefixes, so a slug or id
+  with a dot still loads.
 - **Two-way `?lang=` sync** (PR 2 of the review plan, BUG-07) — pure rules in `resolveLangSync(uri, english:,
   userToggled:, fromPlatform:)`:
   - EN/ع toggle (`LocaleNotifier.consumeUserChange()`), or a refresh of the same URL (`lastSyncedUri`): the URL
@@ -275,7 +308,7 @@ through `MediaCache`, when the page mounts. `detailStateFor` (pure, `domain/item
 Back-to-section button, `noindex`; a priest whose status section is off (departed father while `departedPriests`
 is off, serving while `priests` is off) → `SectionUnavailable`, `noindex`; otherwise the page, indexable with its
 canonical URL (`setDocumentRouteMeta(path: detailPathFor(kind, id), …)`, called after `FeatureGate`'s so it wins).
-Detail URLs are not in `sitemap.xml` (static file; every visible item has a page since PR #14 — see open tasks).
+Detail URLs are in the deployed `sitemap.xml` since PR #30 (ADR-038): generated at deploy from Firestore with the same rule (`detailItemOpens` + `routeEnabled`, `lib/domain/sitemap.dart`).
 "More in this section" (PR #14) is picked from the same already-loaded list (`pickRelated`), so it costs no read either.
 
 **Per-route `<head>` sync** (PR #10, amends ADR-019): `lib/core/document_lang.dart` holds the pure
@@ -324,6 +357,9 @@ chunks are fetched relative to `<base href>`).
   `DetailKind.parentPath` — `/church-education`, `/church-activities`, `/clinics`, `/public-services`, `/about`
   (priests, saints) or `/` (milestones: their cards live on Home) — shown as `Key('backParent')` with the tooltip
   «العودة إلى …» (`backToLabel`); every other route keeps `Key('backHome')` → `/`.
+- **Today layer (PR #31, ADR-039/040):** the shell body is `Column[CopticDateStrip(location), LiveStreamBanner,
+  Expanded(page)]` over the `WarmBackdrop` (`lib/ui/widgets/today_widgets.dart`): the Coptic date strip
+  (`copticStrip` all / home / off) and, while live, the red «بث مباشر الآن من الكنيسة» bar, on every page.
 - `PageBody` (common.dart) = width-capped (`kMaxContentWidth = 1100`) scroll view + `Footer`.
 
 ## i18n — Arabic-first RTL + English (`lib/core/l10n.dart`)
@@ -372,12 +408,15 @@ chunks are fetched relative to `<base href>`).
   rows start at the reading edge in RTL; cards keep their own height.
 - Art & motion (`lib/ui/widgets/golden.dart`): `ArtAssets` (hero wide/tall, Nile, clouds, painted patrons, hero
   video wide/tall + posters), `HaloPortrait` (gold halo ring), `HaloCrossFill`, `LightRaysPainter` (blurred rays),
-  `HeroStage` (full-bleed layers: still/poster with Ken Burns, `HeroVideo`, mirrored haze strip, rays; each feathered
+  `HeroStage` (full-bleed layers: still/poster with Ken Burns, `HeroVideo`, mirrored haze strip, rays — on **web** the
+  haze drift + ray shimmer are one CSS-animated DOM platform view, `HeroAmbientLayer` in `hero_ambient_web.dart`, with
+  the geometry shared in `HeroAmbientSpec` (ADR-037), so Flutter does not repaint per frame; each feathered
   by `BottomFeather` in `hero_feather.dart` so the hero dissolves into the page — no box edges), `TextScrim`
   (elliptical radial glow bleeding past the text). `HeroVideo` (`hero_video.dart`, conditional export): web =
   native `<video muted playsinline loop>` via `HtmlElementView.fromTagName` with a CSS mask + fade-in on `playing`
   (`hero_video_web.dart`); Android/iOS = `video_player` (`hero_video_io.dart`). `HeroStage` plays **only the bundled
-  clip** (`assets/video/hero_clouds.mp4`, `hero_clouds_tall.mp4` on phones) over its poster / painting: the PR #17
+  clip** (`assets/video/hero_clouds.mp4`, `hero_clouds_tall.mp4` on phones; 9 s seamless loops since PR #33, ADR-042)
+  over its poster / painting: the PR #17
   YouTube hero video library (`HeroStage(youtubeId:)`, `hero_youtube*.dart`, `youtube_player_iframe`) was **removed
   in PR #25 (ADR-036)**. Gated by `settings/features.heroMotion`
   and the visitor's reduced-motion / save-data (`lib/core/motion_env*.dart`); phones get the portrait crop.

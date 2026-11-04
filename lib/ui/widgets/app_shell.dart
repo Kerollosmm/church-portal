@@ -10,6 +10,7 @@ import '../../state/providers.dart';
 import '../pages/category_page.dart' show categoryIcon;
 import 'coptic_cross.dart';
 import 'golden.dart';
+import 'today_widgets.dart';
 
 class NavItem {
   final String key;
@@ -229,7 +230,16 @@ class _AppShellState extends ConsumerState<AppShell> {
         ],
       ),
       endDrawer: wide ? null : _AppDrawer(location: location, showAsk: showAsk),
-      body: Stack(children: [const Positioned.fill(child: WarmBackdrop()), widget.child]),
+      body: Stack(children: [
+        const Positioned.fill(child: WarmBackdrop()),
+        // Today layer (ADR-039 / ADR-040): the Coptic date strip and, while
+        // the church is streaming, the live banner sit above every page.
+        Column(children: [
+          CopticDateStrip(location: location),
+          const LiveStreamBanner(),
+          Expanded(child: widget.child),
+        ]),
+      ]),
     );
     return Stack(children: [
       scaffold,

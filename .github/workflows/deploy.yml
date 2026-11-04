@@ -41,7 +41,7 @@ jobs:
           GIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           APP_VERSION=$(sed -n 's/^version: *//p' pubspec.yaml | head -1)
-          DEFINES=(--dart-define=SENTRY_ENVIRONMENT="$SENTRY_ENVIRONMENT" --dart-define=GIT_SHA="$GIT_SHA" --dart-define=APP_VERSION="$APP_VERSION")
+          DEFINES=(--source-maps --dart-define=SENTRY_ENVIRONMENT="$SENTRY_ENVIRONMENT" --dart-define=GIT_SHA="$GIT_SHA" --dart-define=APP_VERSION="$APP_VERSION")
           if [ -n "$SENTRY_DSN" ]; then DEFINES+=(--dart-define=SENTRY_DSN="$SENTRY_DSN"); fi
           echo "::notice::Sentry: environment=$SENTRY_ENVIRONMENT release=church-portal@$APP_VERSION+${GIT_SHA:0:7}"
           if [ -n "$RECAPTCHA_SITE_KEY" ]; then
@@ -53,6 +53,33 @@ jobs:
             fi
             flutter build web --release "${DEFINES[@]}"
           fi
+      # sitemap.xml from Firestore (ADR-038): the Spark plan has no Cloud
+      # Functions, so the sitemap is built here, READ-ONLY (get() calls only),
+      # with the deploy key. Any failure keeps the static web/sitemap.xml.
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: Firebase credentials (read-only sitemap export)
+        continue-on-error: true
+        uses: ./.github/actions/firebase-credentials
+        with:
+          service-account: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_ASAFRA_CHURCH_PORTAL }}
+      - name: Sitemap from Firestore (static fallback)
+        run: bash tool/build_sitemap.sh build/web/sitemap.xml
+      - name: Day commemoration JSON (ADR-040; Katameros, live copy as fallback)
+        # /data/today.json is refreshed twice a day by synaxarium.yml. A deploy
+        # ships a fresh copy when Katameros or the live site answers; if both
+        # fail the file is omitted from this release until the next scheduled
+        # publish (the app then uses its stored copy / computed feast list).
+        continue-on-error: true
+        run: |
+          mkdir -p build/web/data
+          node tool/fetch_synaxarium.js build/web/data/today.json \
+            || curl -sf --max-time 20 https://maximos-domadios-church.web.app/data/today.json -o build/web/data/today.json \
+            || echo "::warning::no /data/today.json in this build (the app falls back to its computed feast list)"
+      - name: Remove key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/sa.json"
       - name: Fingerprint icon fonts (cache busting, PR #23)
         # The tree-shaken icon fonts keep one file name per build but Hosting
         # caches fonts for 7 days: a hashed name makes a new subset a new URL.
@@ -69,6 +96,10 @@ jobs:
     # old rules reject (e.g. settings/features.errorReporting).
     needs: [build, deploy-rules]
     runs-on: ubuntu-latest
+    # Shared with synaxarium.yml (ADR-040): never interleave two releases.
+    concurrency:
+      group: hosting-live
+      cancel-in-progress: false
     environment:
       name: production
       url: https://maximos-domadios-church.web.app

@@ -12,7 +12,11 @@
       "trailingSlash": false,
       "rewrites": [
         {
-          "source": "**",
+          "regex": "^/[^.]*$",
+          "destination": "/index.html"
+        },
+        {
+          "regex": "^/(section|page|church-education|church-activities|clinics|public-services|about/priests|about/saints|about/milestones)/[^/]+$",
           "destination": "/index.html"
         }
       ],
@@ -27,6 +31,10 @@
             {
               "key": "X-Content-Type-Options",
               "value": "nosniff"
+            },
+            {
+              "key": "Cross-Origin-Opener-Policy",
+              "value": "same-origin-allow-popups"
             },
             {
               "key": "Referrer-Policy",

@@ -20,6 +20,7 @@ import '../widgets/common.dart';
 import '../widgets/feature_gate.dart';
 import '../widgets/golden.dart';
 import '../widgets/item_image.dart';
+import '../widgets/program_details.dart';
 import 'activities_page.dart' show activityIcon;
 import 'clinics_page.dart' show ClinicCard;
 import 'education_page.dart' show meetingGroupOf, stageLabels;
@@ -100,45 +101,48 @@ class ItemDetailPage extends ConsumerWidget {
 /// no extra Firestore read.
 List<Object> _relatedTo(Object self, List<Object> list, FeatureSettings features) {
   final group = _groupOf(self);
-  bool opens(Object o) =>
-      detailStateFor(_detailsOf(o),
-          features: features, visible: _publiclyListed(o), priestDeparted: o is Priest ? o.departed : null) ==
-      DetailState.available;
+  bool opens(Object o) => detailItemOpens(o, features);
   return pickRelated([for (final o in list) if (o == self || opens(o)) o], self,
       sameGroup: group == null ? null : (o) => _groupOf(o) == group);
 }
 
-String _idOf(Object o) => switch (o) {
-      Meeting m => m.id,
-      Activity a => a.id,
-      Clinic c => c.id,
-      Facility f => f.id,
-      Priest p => p.id,
-      Saint s => s.id,
-      Milestone m => m.id,
-      _ => '',
-    };
+String _idOf(Object o) => detailItemId(o);
 
-ItemDetails _detailsOf(Object o) => switch (o) {
-      Meeting m => m.details,
-      Activity a => a.details,
-      Clinic c => c.details,
-      Facility f => f.details,
-      Priest p => p.details,
-      Saint s => s.details,
-      Milestone m => m.details,
-      _ => ItemDetails.none,
-    };
+ItemDetails _detailsOf(Object o) => detailItemDetails(o);
 
 /// Shown on its list page: visible (and, for clinics, active).
-bool _publiclyListed(Object o) => switch (o) {
-      Clinic c => c.visible && c.active,
-      Hideable h => h.visible,
-      _ => false,
-    };
+bool _publiclyListed(Object o) => detailItemListed(o);
 
 /// One labelled row of the "Key information" card (label above value, so
 /// long Arabic values wrap cleanly at 320 px / 200% text).
+/// Programme details of a meeting (ADR-041): venue (unless the free-text
+/// hall is set), audience, speaker, topic, choir and the PDF / Drive link.
+List<_Fact> _programFacts(BuildContext context, ProgramInfo p, ProgramOptions opts, {required bool hasPlace}) {
+  if (p.isEmpty) return const [];
+  final label = context.pick(p.attachmentLabelAr, p.attachmentLabelEn);
+  return [
+    if (!hasPlace) _Fact(Icons.meeting_room_outlined, context.tr('place'), venueLabel(context, opts, p.venue)),
+    _Fact(Icons.groups_outlined, context.tr('audienceLabel'), audienceLabel(context, opts, p.audience)),
+    _Fact(Icons.record_voice_over_outlined, context.tr('speakerLabel'), context.pick(p.speakerAr, p.speakerEn)),
+    _Fact(Icons.menu_book_outlined, context.tr('topicLabel'), context.pick(p.topicAr, p.topicEn)),
+    _Fact(Icons.music_note_outlined, context.tr('choirLabel'), context.pick(p.choirAr, p.choirEn)),
+    if (p.hasAttachment)
+      _Fact.widget(
+        Icons.picture_as_pdf_outlined,
+        context.tr('programPdf'),
+        Align(
+          alignment: AlignmentDirectional.centerStart,
+          child: OutlinedButton.icon(
+            key: const Key('programPdf'),
+            onPressed: () => openUrl(p.attachmentUrl),
+            icon: const Icon(Icons.open_in_new_rounded, size: 18),
+            label: Text(label.isNotEmpty ? label : context.tr('programPdf')),
+          ),
+        ),
+      ),
+  ];
+}
+
 class _Fact {
   final IconData icon;
   final String label;
@@ -225,6 +229,7 @@ class _Entry {
             if (m.start.isNotEmpty) _Fact.widget(Icons.schedule_rounded, context.tr('factTime'), TimeRangeText(m.start, m.end)),
             _Fact(Icons.meeting_room_outlined, context.tr('place'), context.pick(m.hallAr, m.hallEn)),
             _Fact(Icons.info_outline, context.tr('factNotes'), m.notes),
+            ..._programFacts(context, m.program, features.programOptions, hasPlace: m.hallAr.isNotEmpty || m.hallEn.isNotEmpty),
           ],
           calendarDays: [if (m.weekday != null) m.weekday!],
           start: m.start,

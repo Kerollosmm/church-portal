@@ -1,0 +1,48 @@
+name: Daily commemoration (Katameros -> /data/today.json)
+
+# ADR-040: the day's Coptic commemoration for the home page "top event" card.
+# The Spark plan has no Cloud Functions and visitors must not hit a third-party
+# API or Firestore for it, so this job fetches it from the open-source
+# Katameros API (MIT, https://api.katameros.app) and publishes ONE static file,
+# /data/today.json (yesterday + 7 days ahead, ~3 KB), into the live Hosting
+# site by cloning the live version (tool/publish_hosting_file.js) — no app
+# rebuild, no Firestore read or write. Deploy (main) also writes the file into
+# every build, so a code deploy never drops it.
+#
+# Times are UTC: 16:10 = 18:10 Cairo in winter (EET) / 19:10 in summer (EEST),
+# after the liturgical day starts; 22:10 = 00:10 / 01:10 Cairo.
+on:
+  schedule:
+    - cron: '10 16 * * *'
+    - cron: '10 22 * * *'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Never interleave with a Hosting deploy: a clone of the previous live
+    # version released after a new deploy would roll the app back.
+    concurrency:
+      group: hosting-live
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - run: npm install --no-audit --no-fund
+        working-directory: tool
+      - name: Fetch the commemoration (Katameros API)
+        run: node tool/fetch_synaxarium.js "$RUNNER_TEMP/today.json"
+      - uses: ./.github/actions/firebase-credentials
+        with:
+          service-account: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_ASAFRA_CHURCH_PORTAL }}
+      - name: Publish /data/today.json to the live site
+        run: node tool/publish_hosting_file.js "$RUNNER_TEMP/today.json" /data/today.json --site maximos-domadios-church
+      - name: Remove key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/sa.json"

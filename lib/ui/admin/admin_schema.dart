@@ -4,6 +4,8 @@ library;
 import '../../domain/assistant_settings.dart';
 import '../../domain/custom_content.dart';
 import '../../domain/image_style.dart';
+import '../../domain/program.dart';
+import '../../domain/season_verses.dart';
 
 enum FieldType {
   text,
@@ -36,8 +38,9 @@ enum FieldType {
 }
 
 /// Where a field sits in the editor: [basic] is always open at the top; the
-/// detail-page groups are collapsible cards below it.
-enum FieldGroup { basic, details, media, contacts }
+/// detail-page groups are collapsible cards below it. [program]: speaker,
+/// topic, choir, venue, audience and PDF link (ADR-041).
+enum FieldGroup { basic, program, details, media, contacts }
 
 class FieldDef {
   final String key;
@@ -110,6 +113,16 @@ class FieldDef {
   /// expression when not blank (e.g. the assistant's model name).
   final String pattern;
 
+  /// [FieldType.objectList] of dates: row sub-field [rowNotBefore.key] (an
+  /// optional end date) may not be earlier than [rowNotBefore.value] (the
+  /// start date); both are YYYY-MM-DD. The error shows on the end field.
+  final MapEntry<String, String>? rowNotBefore;
+
+  /// [FieldType.objectList]: row sub-field whose (trimmed) value may not
+  /// repeat across rows, e.g. a venue / audience key (the reader keeps only
+  /// the first row of a key). The error shows on the repeated row.
+  final String rowUniqueKey;
+
   const FieldDef(this.key, this.labelAr, this.labelEn, this.type,
       {this.required = false,
       this.options = const [],
@@ -132,7 +145,9 @@ class FieldDef {
       this.dynamicOptions = '',
       this.linkPicker = false,
       this.encodedRows = false,
-      this.pattern = ''});
+      this.pattern = '',
+      this.rowNotBefore,
+      this.rowUniqueKey = ''});
 
   int get effectiveMaxLength => maxLength > 0
       ? maxLength
@@ -364,6 +379,43 @@ const _priestFields = [
   ..._plainContactsGroup,
 ];
 
+// ---- programme details (ADR-041): liturgies, meetings, seasons. Venue /
+// audience choices are the admin lists of /admin → «إعدادات المواسم»
+// (settings/features.venues / .audiences); the PDF is a Google Drive (or any
+// https) link — nothing is uploaded (owner, 4 Nov 2026).
+const _programGroup = [
+  FieldDef('speakerAr', 'المتكلم / الواعظ (عربي)', 'Speaker / preacher (Arabic)', FieldType.text,
+      maxLength: 200, group: FieldGroup.program,
+      hintAr: 'مثل: نيافة الأنبا … أو القمص … (يظهر في البطاقة وصفحة التفاصيل)',
+      hintEn: 'E.g. His Grace Bishop … or Fr … (shown on the card and the detail page)'),
+  FieldDef('speakerEn', 'المتكلم / الواعظ (إنجليزي)', 'Speaker / preacher (English)', FieldType.text,
+      maxLength: 200, group: FieldGroup.program),
+  FieldDef('topicAr', 'الموضوع / عنوان العظة (عربي)', 'Topic / sermon title (Arabic)', FieldType.text,
+      maxLength: 300, group: FieldGroup.program),
+  FieldDef('topicEn', 'الموضوع / عنوان العظة (إنجليزي)', 'Topic / sermon title (English)', FieldType.text,
+      maxLength: 300, group: FieldGroup.program),
+  FieldDef('choirAr', 'فريق الكورال (عربي)', 'Choir (Arabic)', FieldType.text, maxLength: 200, group: FieldGroup.program),
+  FieldDef('choirEn', 'فريق الكورال (إنجليزي)', 'Choir (English)', FieldType.text, maxLength: 200, group: FieldGroup.program),
+  FieldDef('venue', 'المكان / القاعة', 'Venue / hall', FieldType.choice,
+      dynamicOptions: 'venues', nullableChoice: true, group: FieldGroup.program,
+      hintAr: 'القائمة من «إعدادات المواسم». صلوات في نفس الوقت بأماكن مختلفة تظهر معًا («وفي نفس الوقت: …»).',
+      hintEn: 'The list comes from "Season settings". Services at the same time in different venues are shown together ("At the same time: …").'),
+  FieldDef('audience', 'الفئة', 'Audience', FieldType.choice,
+      dynamicOptions: 'audiences', nullableChoice: true, group: FieldGroup.program,
+      hintAr: 'القائمة من «إعدادات المواسم». فارغ = للجميع.', hintEn: 'The list comes from "Season settings". Blank = everyone.'),
+  FieldDef('attachmentUrl', 'رابط ملف PDF (Google Drive)', 'PDF link (Google Drive)', FieldType.url,
+      group: FieldGroup.program,
+      pattern: r'[Hh][Tt][Tt][Pp][Ss]://\S+',
+      hintAr: 'كتيب البصخة أو جدول متكلمي النهضة: ارفع الملف على Google Drive واجعل المشاركة «أي شخص لديه الرابط»، ثم الصق الرابط هنا (https فقط). لا يُرفع أي ملف على الموقع.',
+      hintEn: 'Pascha booklet or revival speakers list: upload it to Google Drive, share it as "Anyone with the link", then paste the link here (https only). Nothing is uploaded to the site.'),
+  FieldDef('attachmentLabelAr', 'نص زر الملف (عربي، فارغ = البرنامج / الكتيب)', 'File button text (Arabic, blank = default)',
+      FieldType.text,
+      maxLength: 80, group: FieldGroup.program),
+  FieldDef('attachmentLabelEn', 'نص زر الملف (إنجليزي)', 'File button text (English, blank = "Programme / booklet")',
+      FieldType.text,
+      maxLength: 80, group: FieldGroup.program),
+];
+
 const adminCollections = <CollectionDef>[
   CollectionDef('alerts', 'التنويهات', 'Alerts', [
     FieldDef('titleAr', 'العنوان (عربي)', 'Title (Arabic)', FieldType.text, required: true),
@@ -371,8 +423,8 @@ const adminCollections = <CollectionDef>[
     FieldDef('bodyAr', 'النص (عربي)', 'Body (Arabic)', FieldType.multiline, maxLength: 1000),
     FieldDef('bodyEn', 'النص (إنجليزي)', 'Body (English)', FieldType.multiline, maxLength: 1000),
     FieldDef('active', 'مُفعّل', 'Active', FieldType.boolean),
-    FieldDef('startsAt', 'يبدأ (توقيت القاهرة)', 'Starts (Cairo time)', FieldType.dateTime),
-    FieldDef('endsAt', 'ينتهي (توقيت القاهرة)', 'Ends (Cairo time)', FieldType.dateTime),
+    FieldDef('startsAt', 'يبدأ', 'Starts', FieldType.dateTime),
+    FieldDef('endsAt', 'ينتهي', 'Ends', FieldType.dateTime),
     FieldDef('priority', 'الأولوية (الأعلى يظهر أولًا)', 'Priority (higher shows first)', FieldType.integer,
         min: 0, max: 1000),
     FieldDef('link', 'رابط «اعرف المزيد» (صفحة، قسم أو رابط خارجي)', '"Learn more" link (a page, a section or an external URL)',
@@ -392,8 +444,8 @@ const adminCollections = <CollectionDef>[
     FieldDef('key', 'نوع الموسم', 'Season key', FieldType.choice, required: true, options: seasonKeys),
     FieldDef('nameAr', 'الاسم (عربي)', 'Name (Arabic)', FieldType.text, required: true),
     FieldDef('nameEn', 'الاسم (إنجليزي)', 'Name (English)', FieldType.text),
-    FieldDef('startsAt', 'يبدأ (توقيت القاهرة)', 'Starts (Cairo time)', FieldType.dateTime),
-    FieldDef('endsAt', 'ينتهي (توقيت القاهرة)', 'Ends (Cairo time)', FieldType.dateTime),
+    FieldDef('startsAt', 'يبدأ', 'Starts', FieldType.dateTime),
+    FieldDef('endsAt', 'ينتهي', 'Ends', FieldType.dateTime),
     FieldDef('active', 'مُفعّل', 'Active', FieldType.boolean),
     FieldDef(
       'replacesRegular',
@@ -404,6 +456,7 @@ const adminCollections = <CollectionDef>[
     ),
     _imageField,
     _imageStyleFieldFlat,
+    ..._programGroup,
   ], [
     'nameAr',
     'key'
@@ -425,6 +478,7 @@ const adminCollections = <CollectionDef>[
     _orderField,
     _visibleField,
     _sampleField,
+    ..._programGroup,
   ], [
     'nameAr',
     'start'
@@ -448,6 +502,7 @@ const adminCollections = <CollectionDef>[
     _orderField,
     _visibleField,
     _sampleField,
+    ..._programGroup,
     ..._detailsGroup,
     ..._meetingMediaGroup,
     ..._contactSwitches,
@@ -807,8 +862,13 @@ const assistantSettingsDoc = DocDef('settings/assistant', 'المساعد الذ
       hintAr: 'الافتراضي ${AssistantLimits.perMinuteDefault}', hintEn: 'Default ${AssistantLimits.perMinuteDefault}'),
   FieldDef('perDay', 'أقصى عدد أسئلة لكل جهاز في اليوم', 'Max questions per device per day', FieldType.integer,
       min: AssistantLimits.perDayMin, max: AssistantLimits.perDayMax,
-      hintAr: 'الافتراضي ${AssistantLimits.perDayDefault}، يتجدد عند منتصف الليل بتوقيت القاهرة (عدّاد على الجهاز؛ مسح بيانات الموقع يعيده).',
-      hintEn: 'Default ${AssistantLimits.perDayDefault}, resets at Cairo midnight (an on-device counter; clearing site data resets it).'),
+      hintAr: 'الافتراضي ${AssistantLimits.perDayDefault}، يتجدد عند منتصف الليل (عدّاد على الجهاز؛ مسح بيانات الموقع يعيده).',
+      hintEn: 'Default ${AssistantLimits.perDayDefault}, resets at midnight (an on-device counter; clearing site data resets it).'),
+  FieldDef('perDaySeason', 'أقصى عدد أسئلة في اليوم أثناء المواسم الاستثنائية', 'Max questions per day during exceptional seasons',
+      FieldType.integer,
+      min: AssistantLimits.perDayMin, max: AssistantLimits.perDayMax,
+      hintAr: 'الافتراضي ${AssistantLimits.perDaySeasonDefault}. يُطبَّق تلقائيًا طوال موسم مفعّل: أسبوع الآلام، القيامة، الميلاد، النهضات (وليس الصيف).',
+      hintEn: 'Default ${AssistantLimits.perDaySeasonDefault}. Applies automatically while an active season runs: Holy Week, Pascha, Nativity, revivals (not summer).'),
 ]);
 
 CollectionDef? collectionById(String id) {
@@ -817,3 +877,116 @@ CollectionDef? collectionById(String id) {
   }
   return null;
 }
+
+/// /admin → "Today & live stream" (ADR-039 / ADR-040): top-level keys of
+/// settings/features (no extra document or listener for visitors). The
+/// generic form writes only the keys it changed, so the Sections & home page
+/// editor and this screen never overwrite each other.
+const todaySettingsDoc = DocDef('settings/features', 'اليوم والبث المباشر', 'Today & live stream', [
+  FieldDef('copticStrip', 'شريط التاريخ القبطي', 'Coptic date strip', FieldType.choice,
+      options: ['all', 'home', 'off'],
+      defaultOption: 'all',
+      hintAr: 'يظهر أعلى الصفحات: اليوم والشهر القبطي وسنة الشهداء (مثل «الأربعاء ٢٥ بابه ١٧٤٣ ش»). كل الصفحات، الرئيسية فقط، أو إيقاف.',
+      hintEn: 'Shown at the top of the pages: the day, Coptic month and Year of the Martyrs (e.g. "Wednesday 25 Baba 1743 AM"). Every page, Home only, or off.'),
+  FieldDef('dayStartMode', 'بداية اليوم الكنسي', 'Start of the liturgical day', FieldType.choice,
+      options: ['fixed', 'sunset'],
+      defaultOption: 'fixed',
+      hintAr: 'اليوم الكنسي يبدأ مساء اليوم السابق: بعد هذا الوقت يتحول التاريخ القبطي وآية اليوم إلى اليوم التالي («ليلة الخميس»). «ساعة ثابتة» (الافتراضي ١٨:٠٠) أو «غروب الشمس» محسوبًا لموقع الكنيسة.',
+      hintEn: 'The liturgical day starts the evening before: after this time the Coptic date and the verse of the day move to the next day ("Eve of Thursday"). A fixed time (default 18:00) or sunset computed for the church\'s location.'),
+  FieldDef('dayStartsAt', 'الساعة الثابتة (HH:mm، فارغ = 18:00)', 'Fixed time (HH:mm, blank = 18:00)', FieldType.time,
+      hintAr: 'تُستخدم مع «ساعة ثابتة». 00:00 = منتصف الليل (اليوم المدني).',
+      hintEn: 'Used with "fixed time". 00:00 = midnight (the civil day).'),
+  FieldDef('topEvent', 'بطاقة «حدث اليوم» في الرئيسية', 'Home "Today\'s event" card', FieldType.boolean,
+      missingBool: true,
+      newBool: true,
+      hintAr: 'تعرض حدث الكنيسة المضاف أدناه لهذا اليوم، وإلا عيد أو تذكار اليوم.',
+      hintEn: 'Shows the church event added below for the day, otherwise the day\'s feast or commemoration.'),
+  FieldDef('commemoration', 'عرض عيد / تذكار اليوم تلقائيًا (القطمارس)', 'Show the day\'s feast / commemoration automatically (Katameros)',
+      FieldType.boolean,
+      missingBool: true,
+      newBool: true,
+      hintAr: 'عند عدم وجود حدث للكنيسة: سنكسار اليوم من القطمارس (يُحدَّث مرتين يوميًا)، وبدون إنترنت قائمة الأعياد المحسوبة. أوقفه لإظهار أحداث الكنيسة فقط.',
+      hintEn: 'When there is no church event: the day\'s Synaxarium from Katameros (refreshed twice a day), or the computed feast list offline. Turn off to show church events only.'),
+  FieldDef('dayEvents', 'أحداث الكنيسة حسب التاريخ (حتى 20)', 'Church events by date (up to 20)', FieldType.objectList,
+      maxRows: 20,
+      encodedRows: true,
+      rowNotBefore: MapEntry('endDate', 'date'),
+      hintAr: 'مثل «الليلة الرابعة من نهضة الشفعاء» أو «بصخة ليلة الأربعاء». يتصدر الحدث الصفحة الرئيسية في يومه (وفي المساء يظهر حدث الليلة التالية بعد انتهاء حدث اليوم). احذف الأحداث القديمة لتوفير مكان.',
+      hintEn: 'E.g. "Fourth night of the patrons\' revival" or "Pascha of Wednesday eve". It leads the home page on its day (in the evening, the next night\'s event after today\'s has ended). Delete old events to make room.',
+      subFields: [
+        FieldDef('date', 'التاريخ (YYYY-MM-DD)', 'Date (YYYY-MM-DD)', FieldType.date, required: true),
+        FieldDef('endDate', 'حتى تاريخ (اختياري)', 'Until (optional)', FieldType.date),
+        FieldDef('start', 'من (HH:mm)', 'From (HH:mm)', FieldType.time),
+        FieldDef('end', 'إلى (HH:mm)', 'To (HH:mm)', FieldType.time),
+        FieldDef('titleAr', 'العنوان (عربي)', 'Title (Arabic)', FieldType.text, required: true),
+        FieldDef('titleEn', 'العنوان (إنجليزي)', 'Title (English)', FieldType.text),
+        FieldDef('speakerAr', 'المتكلم (عربي)', 'Speaker (Arabic)', FieldType.text),
+        FieldDef('speakerEn', 'المتكلم (إنجليزي)', 'Speaker (English)', FieldType.text),
+        FieldDef('topicAr', 'الموضوع (عربي)', 'Topic (Arabic)', FieldType.text),
+        FieldDef('topicEn', 'الموضوع (إنجليزي)', 'Topic (English)', FieldType.text),
+        FieldDef('noteAr', 'ملاحظة (عربي)', 'Note (Arabic)', FieldType.multiline, maxLength: 500),
+        FieldDef('noteEn', 'ملاحظة (إنجليزي)', 'Note (English)', FieldType.multiline, maxLength: 500),
+        FieldDef('link', 'رابط «اعرف المزيد» (اختياري)', '"Learn more" link (optional)', FieldType.url, allowPath: true),
+      ]),
+  FieldDef('liveEnabled', 'شريط البث المباشر', 'Live-stream banner', FieldType.boolean,
+      newBool: false,
+      hintAr: 'عند التشغيل يظهر أعلى كل الصفحات «بث مباشر الآن من الكنيسة» مع نبض أحمر، والضغط يفتح الرابط.',
+      hintEn: 'When on, "Live now from the church" with a pulsing red dot shows at the top of every page; a tap opens the link.'),
+  FieldDef('liveUrl', 'رابط البث (يوتيوب / فيسبوك)', 'Stream link (YouTube / Facebook)', FieldType.url),
+  FieldDef('liveLabelAr', 'نص الشريط (عربي، فارغ = بث مباشر الآن من الكنيسة)', 'Banner text (Arabic, blank = default)',
+      FieldType.text,
+      maxLength: 120),
+  FieldDef('liveLabelEn', 'نص الشريط (إنجليزي)', 'Banner text (English, blank = "Live now from the church")', FieldType.text,
+      maxLength: 120),
+  FieldDef('liveEndsAt', 'إيقاف تلقائي (اختياري)', 'Switch off automatically at (optional)', FieldType.dateTime,
+      hintAr: 'بعد هذا الوقت يختفي الشريط وحده حتى لو بقي المفتاح مفعّلًا.',
+      hintEn: 'After this time the banner disappears on its own, even if the switch stays on.'),
+]);
+
+const _optionRowFields = [
+  FieldDef('key', 'المفتاح (حروف إنجليزية صغيرة وأرقام، مثل lower)', 'Key (lower-case latin & digits, e.g. lower)',
+      FieldType.text,
+      required: true,
+      maxLength: 30,
+      pattern: r'[a-z0-9_-]{1,30}',
+      hintAr: 'لا تغيّره بعد استخدامه: القداسات والاجتماعات تحفظ المفتاح.',
+      hintEn: 'Do not change it once used: services and meetings store the key.'),
+  FieldDef('labelAr', 'الاسم (عربي)', 'Name (Arabic)', FieldType.text, required: true, maxLength: 80),
+  FieldDef('labelEn', 'الاسم (إنجليزي)', 'Name (English)', FieldType.text, maxLength: 80),
+];
+
+/// /admin → "Season settings" (ADR-041): top-level keys of
+/// settings/features (no extra document or listener). Venues and audiences
+/// offered by the programme fields of liturgies, meetings and seasons.
+const seasonSettingsDoc = DocDef('settings/features', 'إعدادات المواسم', 'Season settings', [
+  FieldDef('venues', 'الأماكن / القاعات (حتى 12)', 'Venues / halls (up to 12)', FieldType.objectList,
+      maxRows: ProgramOptions.max,
+      encodedRows: true,
+      hintAr: 'فارغة = الافتراضي: الكنيسة الكبرى، القاعة السفلية، مبنى الخدمات.',
+      hintEn: 'Empty = the defaults: Main church, Lower hall, Services building.',
+      rowUniqueKey: 'key',
+      subFields: _optionRowFields),
+  FieldDef('audiences', 'الفئات (حتى 12)', 'Audiences (up to 12)', FieldType.objectList,
+      maxRows: ProgramOptions.max,
+      encodedRows: true,
+      hintAr: 'فارغة = الافتراضي: عام، شباب، أطفال. تظهر كأزرار تصفية في جدول المواسم عند وجود فئتين أو أكثر.',
+      hintEn: 'Empty = the defaults: Everyone, Youth, Children. Shown as filter chips on the seasons schedule when two or more are used.',
+      rowUniqueKey: 'key',
+      subFields: _optionRowFields),
+  // ADR-042: while a season is active, "verse of the day" rotates through
+  // its verses (stored 'seasonKey␟textAr␟refAr', firestore.rules
+  // validSeasonVerses).
+  FieldDef('seasonVerses', 'آيات المواسم (حتى 40)', 'Season verses (up to 40)', FieldType.objectList,
+      maxRows: SeasonVerses.max,
+      encodedRows: true,
+      hintAr: 'أثناء موسم مفعّل تتبدل «آية اليوم» يوميًا بين آيات هذا الموسم بدل القائمة العامة (الآية الثابتة من «الأقسام» تبقى لها الأولوية). فارغة = القائمة العامة دائمًا.',
+      hintEn: 'While a season is active, "verse of the day" rotates daily through that season\'s verses instead of the general list (a fixed verse set under "Sections" still wins). Empty = always the general list.',
+      subFields: [
+        FieldDef('season', 'الموسم', 'Season', FieldType.choice,
+            options: SeasonVerses.seasonKeys, defaultOption: 'holy_week'),
+        FieldDef('textAr', 'نص الآية', 'Verse text', FieldType.multiline,
+            required: true, maxLength: SeasonVerses.maxText),
+        FieldDef('refAr', 'الشاهد (مثل يو 3: 16)', 'Reference (e.g. John 3:16)', FieldType.text,
+            maxLength: SeasonVerses.maxRef),
+      ]),
+]);

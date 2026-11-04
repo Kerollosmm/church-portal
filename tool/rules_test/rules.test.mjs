@@ -1463,3 +1463,220 @@ describe('ADR-029: assistant settings (settings/assistant)', () => {
     await assertFails(deleteDoc(doc(db(OWNER), 'settings', 'assistant')));
   });
 });
+
+describe('ADR-039 / ADR-040: today layer in settings/features (strip, day start, top event, live, events)', () => {
+  const S = '\u001f';
+  const ev = (o = {}) => {
+    const v = { date: '2026-11-04', endDate: '', start: '19:00', end: '21:00', titleAr: 'الليلة الرابعة من نهضة الشفعاء',
+      titleEn: 'Fourth night', speakerAr: '', speakerEn: '', topicAr: '', topicEn: '', noteAr: '', noteEn: '', link: '', ...o };
+    return ['date', 'endDate', 'start', 'end', 'titleAr', 'titleEn', 'speakerAr', 'speakerEn', 'topicAr', 'topicEn',
+      'noteAr', 'noteEn', 'link'].map((k) => v[k]).join(S);
+  };
+
+  test('admins set the strip, day start and top-event switches; wrong values are rejected', async () => {
+    const ref = doc(db(EDITOR), 'settings', 'features');
+    await assertSucceeds(setDoc(ref, { theme: 'burgundy', copticStrip: 'home', dayStartMode: 'sunset', dayStartsAt: '18:30',
+      topEvent: false, commemoration: true }));
+    await assertSucceeds(updateDoc(ref, { dayStartMode: 'fixed', dayStartsAt: '' }));
+    for (const bad of [{ copticStrip: 'top' }, { dayStartMode: 'noon' }, { dayStartsAt: '24:00' }, { dayStartsAt: 18 },
+      { topEvent: 'yes' }, { commemoration: 1 }]) {
+      await assertFails(updateDoc(ref, bad), JSON.stringify(bad));
+    }
+  });
+
+  test('live banner: bool switch, http(s) link, short labels, optional switch-off time', async () => {
+    const ref = doc(db(EDITOR), 'settings', 'features');
+    await assertSucceeds(setDoc(ref, { theme: 'burgundy', liveEnabled: true, liveUrl: 'https://www.youtube.com/live/abc',
+      liveLabelAr: 'بث مباشر الآن من الكنيسة', liveLabelEn: '', liveEndsAt: Timestamp.fromDate(new Date('2026-11-04T20:00:00Z')) }));
+    await assertSucceeds(updateDoc(ref, { liveEnabled: false, liveEndsAt: null, liveUrl: '' }));
+    for (const bad of [{ liveEnabled: 'on' }, { liveUrl: 'javascript:alert(1)' }, { liveUrl: 'ftp://x.y/z' },
+      { liveLabelAr: 'x'.repeat(121) }, { liveEndsAt: '2026-11-04' }]) {
+      await assertFails(updateDoc(ref, bad), JSON.stringify(bad).slice(0, 60));
+    }
+  });
+
+  test('church events: up to 20 encoded strings, each validated', async () => {
+    const ref = doc(db(EDITOR), 'settings', 'features');
+    await assertSucceeds(setDoc(ref, { theme: 'burgundy', dayEvents: [ev(), ev({ date: '2026-11-05', start: '', end: '',
+      titleAr: 'بصخة ليلة الخميس', link: '/mass-schedule', speakerAr: 'نيافة الأنبا', endDate: '2026-11-06' })] }));
+    await assertSucceeds(updateDoc(ref, { dayEvents: Array.from({ length: 20 }, () => ev({ link: 'https://fb.com/x' })) }));
+    await assertSucceeds(updateDoc(ref, { dayEvents: [] }));
+    // Same-day and later end dates; 20 events with end dates stay within the expression budget.
+    await assertSucceeds(updateDoc(ref, { dayEvents: [ev({ endDate: '2026-11-04' }), ev({ date: '2026-12-31', endDate: '2027-01-01' })] }));
+    await assertSucceeds(updateDoc(ref, { dayEvents: Array.from({ length: 20 }, () => ev({ endDate: '2026-11-30', link: 'https://fb.com/x' })) }));
+    for (const bad of [
+      [ev({ titleAr: '' })], [ev({ date: '4-11-2026' })], [ev({ start: '7pm' })], [ev({ link: 'javascript:x' })],
+      [ev({ noteAr: 'x'.repeat(501) })], [ev() + S + 'extra'], [5], Array.from({ length: 21 }, () => ev()),
+      [ev({ date: '2026-13-01' })], [ev({ date: '2026-00-10' })], [ev({ date: '2026-11-32' })], [ev({ endDate: '2026-11-00' })],
+    ]) {
+      await assertFails(updateDoc(ref, { dayEvents: bad }), JSON.stringify(bad).slice(0, 60));
+    }
+  });
+
+  test('visitors cannot change any of it', async () => {
+    await assertFails(updateDoc(doc(db(null), 'settings', 'features'), { liveEnabled: true }));
+    await assertFails(setDoc(doc(db(null), 'settings', 'features'), { dayEvents: [ev()] }));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ADR-041: programme details on liturgies, meetings and seasons; venue /
+// audience lists in settings/features.
+describe('ADR-041: programme details (speaker, topic, choir, venue, audience, Drive PDF link)', () => {
+  const S = '\u001f';
+  const stamp = () => ({ updatedAt: serverTimestamp(), updatedBy: `${EDITOR}@x.test` });
+  const full = {
+    speakerAr: 'م'.repeat(200), speakerEn: 's'.repeat(200), topicAr: 'ع'.repeat(300), topicEn: 't'.repeat(300),
+    choirAr: 'ك'.repeat(200), choirEn: 'c'.repeat(200), venue: 'lower_hall-2', audience: 'youth',
+    attachmentUrl: 'https://drive.google.com/file/d/1AbC_dEf/view?usp=sharing', attachmentLabelAr: 'ك'.repeat(80),
+    attachmentLabelEn: 'Booklet',
+  };
+  const base = {
+    liturgies: { type: 'other', nameAr: 'بصخة ليلة الثلاثاء', start: '19:00', weekday: 1, seasonKey: 'holy_week' },
+    meetings: { stage: 'youth', nameAr: 'اجتماع الشباب' },
+    seasons: { key: 'holy_week', nameAr: 'أسبوع الآلام', replacesRegular: true },
+  };
+
+  test('every programme key on the three collections, worst case lengths', async () => {
+    const ed = db(EDITOR);
+    for (const [col, b] of Object.entries(base)) {
+      await assertSucceeds(setDoc(doc(ed, col, 'p'), { ...b, ...full, ...stamp() }), col);
+      await assertSucceeds(updateDoc(doc(ed, col, 'p'), { venue: null, audience: '', attachmentUrl: '', speakerAr: 'أبونا', ...stamp() }), col);
+      await assertSucceeds(updateDoc(doc(ed, col, 'p'), { topicAr: 'التوبة' }), col);
+    }
+  });
+
+  test('a meeting with a full detail page also takes the programme fields (expression budget)', async () => {
+    const ed = db(EDITOR);
+    await assertSucceeds(setDoc(doc(ed, 'meetings', 'big'), {
+      ...base.meetings, ...full, weekday: 5, start: '19:00', end: '21:00', hallAr: 'ق'.repeat(300), notes: 'ن'.repeat(300),
+      detailsEnabled: true, detailsAr: 'ت'.repeat(10000), detailsEn: 'd'.repeat(10000), whatsapp: '01012345678',
+      facebookUrl: 'https://facebook.com/x', whatsappUrl: 'https://chat.whatsapp.com/x', contactPhone: '01012345678',
+      externalUrl: 'https://forms.example.org/r', image: { source: 'url', url: 'https://img.example.org/c.jpg', alt: 'c' },
+      visible: true, sample: false, order: 1, ...stamp(),
+    }));
+  });
+
+  test('bad values are rejected', async () => {
+    const ed = db(EDITOR);
+    for (const [col, b] of Object.entries(base)) {
+      await assertSucceeds(setDoc(doc(ed, col, 'q'), b));
+      for (const bad of [
+        { attachmentUrl: 'http://drive.google.com/x' }, { attachmentUrl: 'javascript:alert(1)' },
+        { attachmentUrl: 'https://drive google.com/x' }, { venue: 'Lower Hall' }, { audience: 'x'.repeat(31) },
+        { speakerAr: 'م'.repeat(201) }, { topicEn: 't'.repeat(301) }, { choirAr: 5 }, { attachmentLabelAr: 'x'.repeat(81) },
+        { speakerAr: `a${S}b` }, { venue: true },
+        { attachmentUrl: 'https://drive.google.com/file/d/a\tb' }, { attachmentUrl: 'https://drive.google.com/x\ny' },
+        { attachmentUrl: 'https://drive.google.com/' + 'x'.repeat(476) },
+      ]) {
+        await assertFails(updateDoc(doc(ed, col, 'q'), bad), `${col} ${JSON.stringify(bad).slice(0, 60)}`);
+      }
+    }
+  });
+
+  test('a 500-character Drive link (the form maximum) is accepted', async () => {
+    const ed = db(EDITOR);
+    await assertSucceeds(setDoc(doc(ed, 'seasons', 'long'), { ...base.seasons, ...stamp() }));
+    const url = 'https://drive.google.com/' + 'x'.repeat(475);
+    await assertSucceeds(updateDoc(doc(ed, 'seasons', 'long'), { attachmentUrl: url, ...stamp() }));
+  });
+
+  test('visitors cannot write programme details', async () => {
+    await assertFails(setDoc(doc(db(null), 'liturgies', 'v'), { ...base.liturgies, speakerAr: 'x' }));
+  });
+
+  test('venues / audiences: up to 12 encoded rows each', async () => {
+    const ref = doc(db(EDITOR), 'settings', 'features');
+    const row = (k, ar = 'القاعة', en = '') => [k, ar, en].join(S);
+    await assertSucceeds(setDoc(ref, { theme: 'burgundy', venues: [row('main', 'الكنيسة الكبرى', 'Main church'), row('lower')],
+      audiences: [row('general', 'عام', 'Everyone')] }));
+    await assertSucceeds(updateDoc(ref, { venues: Array.from({ length: 12 }, (_, i) => row(`v${i}`, 'ق'.repeat(80), 'e'.repeat(80))) }));
+    await assertSucceeds(updateDoc(ref, { venues: [], audiences: null }));
+    for (const bad of [
+      [row('Main')], [row('main', '')], [row('main') + S + 'x'], ['main'], [5], [row('a'.repeat(31))],
+      [row('main', 'ق'.repeat(81))], Array.from({ length: 13 }, (_, i) => row(`v${i}`)), 'main',
+    ]) {
+      await assertFails(updateDoc(ref, { venues: bad }), JSON.stringify(bad).slice(0, 60));
+      await assertFails(updateDoc(ref, { audiences: bad }), JSON.stringify(bad).slice(0, 60));
+    }
+    await assertFails(updateDoc(doc(db(null), 'settings', 'features'), { venues: [row('x')] }));
+  });
+});
+
+describe('ADR-042: season preset, season verses, wedding switch, assistant season limit', () => {
+  const S = '\u001f';
+  const stamp = () => ({ updatedAt: serverTimestamp(), updatedBy: `${EDITOR}@x.test` });
+  const end = Timestamp.fromDate(new Date('2027-05-01T22:00:00Z'));
+  const preset = {
+    seasonId: 'hw', seasonKey: 'holy_week', appliedAt: Timestamp.fromDate(new Date('2027-04-20T10:00:00Z')), endsAt: end,
+    options: ['replaceRegular', 'hideMeetings', 'hideClinics', 'heroMotionOff', 'weddingOff', 'live', 'pdf'],
+    previous: {
+      seasonActive: false, replacesRegular: false, meetings: true, clinics: true, heroMotion: true, weddingBookingOff: false,
+      liveUrl: 'https://youtube.com/' + 'x'.repeat(480), liveEndsAt: null, attachmentUrl: 'https://drive.google.com/' + 'x'.repeat(575),
+      attachmentLabelAr: 'ك'.repeat(80), attachmentLabelEn: 'b'.repeat(80),
+    },
+  };
+
+  test('apply and restore as ONE batch of settings/features + the season', async () => {
+    const ed = db(EDITOR);
+    await assertSucceeds(setDoc(doc(ed, 'seasons', 'hw'), { key: 'holy_week', nameAr: 'أسبوع الآلام', endsAt: end, active: false }));
+    const apply = writeBatch(ed);
+    apply.set(doc(ed, 'settings', 'features'), {
+      sections: { meetings: false, clinics: false, schedule: true }, heroMotion: false, weddingBookingOff: true,
+      liveUrl: 'https://youtube.com/live/abc', liveEndsAt: end, seasonPreset: preset, ...stamp(),
+    }, { merge: true });
+    apply.set(doc(ed, 'seasons', 'hw'), {
+      active: true, replacesRegular: true, attachmentUrl: 'https://drive.google.com/file/d/x/view',
+      attachmentLabelAr: 'كتيب البصخة', attachmentLabelEn: '', ...stamp(),
+    }, { merge: true });
+    await assertSucceeds(apply.commit());
+    const restore = writeBatch(ed);
+    restore.set(doc(ed, 'settings', 'features'), {
+      seasonPreset: null, sections: { meetings: true, clinics: true, schedule: true }, heroMotion: true,
+      weddingBookingOff: false, liveUrl: '', liveEndsAt: null, ...stamp(),
+    }, { merge: true });
+    restore.set(doc(ed, 'seasons', 'hw'), { active: false, replacesRegular: false, attachmentUrl: '', ...stamp() }, { merge: true });
+    await assertSucceeds(restore.commit());
+  });
+
+  test('a bad preset is refused', async () => {
+    const ref = doc(db(EDITOR), 'settings', 'features');
+    await assertSucceeds(setDoc(ref, { theme: 'burgundy' }));
+    for (const bad of [
+      { ...preset, seasonId: 'a/b' }, { ...preset, seasonKey: 'lent' }, { ...preset, options: ['nuke'] },
+      { ...preset, options: [...preset.options, 'live'] }, { ...preset, endsAt: '2027-05-01' }, { ...preset, extra: 1 },
+      { ...preset, previous: { ...preset.previous, meetings: 'yes' } }, { ...preset, previous: { ...preset.previous, evil: 1 } },
+      { ...preset, previous: { ...preset.previous, liveUrl: 'x'.repeat(501) } },
+      { ...preset, previous: { ...preset.previous, attachmentLabelAr: 'x'.repeat(81) } },
+      { ...preset, previous: { ...preset.previous, liveEndsAt: 'tomorrow' } }, 'hw',
+    ]) {
+      await assertFails(updateDoc(ref, { seasonPreset: bad }), JSON.stringify(bad).slice(0, 80));
+    }
+    for (const bad of ['yes', 1]) await assertFails(updateDoc(ref, { weddingBookingOff: bad }));
+    await assertFails(updateDoc(doc(db(null), 'settings', 'features'), { seasonPreset: null }));
+    await assertFails(updateDoc(doc(db(null), 'settings', 'features'), { weddingBookingOff: true }));
+  });
+
+  test('season verses: up to 40 encoded rows of a known season', async () => {
+    const ref = doc(db(EDITOR), 'settings', 'features');
+    const row = (k, t = 'هوذا حمل الله', r = 'يو 1: 29') => [k, t, r].join(S);
+    await assertSucceeds(setDoc(ref, { seasonVerses: [row('holy_week'), row('pascha', 'المسيح قام', '')] }));
+    await assertSucceeds(updateDoc(ref, { seasonVerses: Array.from({ length: 40 }, () => row('summer', 'آ'.repeat(500), 'ر'.repeat(60))) }));
+    await assertSucceeds(updateDoc(ref, { seasonVerses: [] }));
+    await assertSucceeds(updateDoc(ref, { seasonVerses: null }));
+    for (const bad of [
+      [row('lent')], [row('holy_week', '')], [row('holy_week', 'آ'.repeat(501))], [row('holy_week', 'x', 'ر'.repeat(61))],
+      [row('holy_week') + S + 'x'], ['holy_week'], [5], Array.from({ length: 41 }, () => row('summer')), 'x',
+    ]) {
+      await assertFails(updateDoc(ref, { seasonVerses: bad }), JSON.stringify(bad).slice(0, 60));
+    }
+  });
+
+  test('assistant perDaySeason 1..100', async () => {
+    const ref = doc(db(EDITOR), 'settings', 'assistant');
+    await assertSucceeds(setDoc(ref, { perDay: 3, perDaySeason: 6 }));
+    await assertSucceeds(updateDoc(ref, { perDaySeason: 100 }));
+    await assertSucceeds(updateDoc(ref, { perDaySeason: null }));
+    for (const bad of [0, 101, '6', 6.5]) await assertFails(updateDoc(ref, { perDaySeason: bad }), String(bad));
+  });
+});

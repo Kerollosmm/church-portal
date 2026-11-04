@@ -40,6 +40,28 @@ abstract class AdminBackend {
   /// Merges a single document (settings/church, settings/features).
   Future<void> saveDoc(String path, Map<String, dynamic> data);
 
+  /// Merges several documents together (path → fields), atomically on
+  /// Firestore (one batch). The default writes them in order (in-memory test
+  /// backends). The season preset (ADR-042) uses [saveDocsFresh].
+  Future<void> saveDocs(Map<String, Map<String, dynamic>> writes) async {
+    for (final e in writes.entries) {
+      await saveDoc(e.key, e.value);
+    }
+  }
+
+  /// Reads [paths] and writes what [plan] makes of their current data
+  /// (path → fields; a missing document = null), atomically on Firestore (one
+  /// transaction): a switch another admin saved meanwhile is not reverted, a
+  /// preset applied or restored meanwhile is seen, and a season deleted
+  /// meanwhile is not recreated (ADR-042, CodeRabbit review on PR #33).
+  /// [plan] throws to write nothing. The default reads each path's latest
+  /// value and calls [saveDocs] (in-memory test backends).
+  Future<void> saveDocsFresh(
+      List<String> paths, Map<String, Map<String, dynamic>> Function(Map<String, Map<String, dynamic>?> current) plan) async {
+    final current = {for (final p in paths) p: (await watchDoc(p).first)?.data};
+    await saveDocs(plan(current));
+  }
+
   /// Merges a few fields (visibility switch, message status).
   Future<void> update(String collection, String id, Map<String, dynamic> data);
   Future<void> delete(String collection, String id);
@@ -142,6 +164,31 @@ class AdminRepository implements AdminBackend {
 
   @override
   Future<void> saveDoc(String path, Map<String, dynamic> data) => _merge(db.doc(path), data);
+
+  @override
+  Future<void> saveDocs(Map<String, Map<String, dynamic>> writes) {
+    final batch = db.batch();
+    for (final e in writes.entries) {
+      final stamped = _stamp(e.value);
+      batch.set(db.doc(e.key), stamped, SetOptions(mergeFields: stamped.keys.toList()));
+    }
+    return batch.commit();
+  }
+
+  @override
+  Future<void> saveDocsFresh(
+          List<String> paths, Map<String, Map<String, dynamic>> Function(Map<String, Map<String, dynamic>?> current) plan) =>
+      db.runTransaction((tx) async {
+        final current = <String, Map<String, dynamic>?>{};
+        for (final p in paths) {
+          final snap = await tx.get(db.doc(p));
+          current[p] = snap.exists ? normalizeDoc(snap.data()) : null;
+        }
+        for (final e in plan(current).entries) {
+          final stamped = _stamp(e.value);
+          tx.set(db.doc(e.key), stamped, SetOptions(mergeFields: stamped.keys.toList()));
+        }
+      });
 
   /// Writes [data]'s top-level fields and leaves every other field as it is.
   /// A written map field is replaced as a whole (`mergeFields`), never

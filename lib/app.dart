@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 
+import 'core/content_ready.dart';
 import 'core/document_lang.dart';
 import 'core/l10n.dart';
 import 'core/theme.dart';
@@ -24,6 +25,9 @@ class ChurchPortalApp extends ConsumerWidget {
     // `select` keeps the 30 s clock from rebuilding the theme for nothing.
     final active = ref.watch(activeThemeProvider.select((t) => (t.key, t.palette)));
     setDocumentLanguage(locale.languageCode);
+    // The HTML loading screen waits for the first real content (ADR-038):
+    // tell it once that content has been painted (two frames later).
+    if (ref.watch(contentReadyProvider)) _signalContentPainted();
     return MaterialApp.router(
       onGenerateTitle: (context) => context.tr('appName'),
       debugShowCheckedModeBanner: false,
@@ -34,4 +38,13 @@ class ChurchPortalApp extends ConsumerWidget {
       routerConfig: router,
     );
   }
+}
+
+void _signalContentPainted() {
+  if (ContentReady.signalled) return;
+  final binding = WidgetsBinding.instance;
+  binding.addPostFrameCallback((_) {
+    binding.addPostFrameCallback((_) => ContentReady.signal());
+    binding.scheduleFrame();
+  });
 }

@@ -198,3 +198,19 @@ Set<String> extractDocMediaIds(Map<String, dynamic>? data) {
 /// save is still referenced, so it is never reported.
 List<String> orphanedDocMediaIds(Map<String, dynamic>? before, Map<String, dynamic>? after) =>
     extractDocMediaIds(before).difference(extractDocMediaIds(after)).toList();
+
+final _arabicScript = RegExp(r'[\u0600-\u06FF\u0750-\u077F]');
+
+/// Text alternative of an image for the current language (live check
+/// 4 Nov 2026). An image has one admin-entered `alt`, usually Arabic: on the
+/// English site an Arabic-only alt gives way to the item's English [label]
+/// (its name), so screen readers do not read Arabic there. Otherwise the alt
+/// wins, and [label] is the fallback when there is none.
+String imageAltFor(String alt, String label, {required bool english}) {
+  final a = alt.trim();
+  if (a.isEmpty) return label;
+  if (english && label.trim().isNotEmpty && _arabicScript.hasMatch(a) && !_arabicScript.hasMatch(label)) {
+    return label;
+  }
+  return a;
+}

@@ -29,6 +29,45 @@ class AssistantLimits {
   /// Questions per device per Cairo day (ADR-031; replaced the per-visit
   /// limit — a legacy `perSession` value is ignored).
   static const perDayMin = 1, perDayMax = 100, perDayDefault = 3;
+
+  /// Questions per device per Cairo day while an exceptional season is
+  /// active (ADR-042: Holy Week, Pascha, Nativity, revivals — not summer).
+  static const perDaySeasonDefault = 6;
+}
+
+/// Season keys that raise the daily limit to [AssistantSettings.perDaySeason]
+/// while active (ADR-042). The summer season is a long, ordinary period.
+const exceptionalSeasonKeys = ['holy_week', 'pascha', 'nativity', 'revival_maximus', 'revival_moses'];
+
+/// Which public sections an allowed-topic line needs (ADR-042): a line that
+/// mentions one of the words is dropped when none of its sections is on, so
+/// the assistant never offers clinics, meetings… that the admin switched off.
+/// Applies to the admin's own topic lines as well as the defaults.
+const topicSectionWords = <List<String>, List<String>>{
+  ['clinic', 'عياد', 'عيادة']: ['clinics'],
+  ['meeting', 'sunday school', 'اجتماع', 'مدارس الأحد', 'التربية الكنسية']: ['meetings'],
+  ['activit', 'choir', 'نشاط', 'أنشطة', 'كورال']: ['activities'],
+  ['public service', 'nursery', 'library', 'employment', 'خدمات عامة', 'الخدمات العامة', 'حضانة', 'مكتبة', 'توظيف']: ['services'],
+  ['priest', 'father', 'كاهن', 'كهنة', 'الآباء', 'متنيح']: ['priests', 'departedPriests'],
+  ['saint', 'قديس', 'شفيع', 'شفعاء']: ['saints'],
+  // Separate groups: «history and milestones» needs both sections (Codex review on PR #33).
+  ['history', 'تاريخ']: ['history'],
+  ['milestone', 'محطات']: ['milestones'],
+  ['announcement', 'notice', 'تنويه', 'إعلان']: ['alerts'],
+  ['liturgy', 'mass', 'vespers', 'praise', 'season', 'قداس', 'عشية', 'تسبحة', 'موسم', 'مواسم']: ['schedule'],
+  ['booking', 'contact form', 'حجز', 'نموذج المراسلة']: ['contactForm'],
+  ['contact', 'location', 'direction', 'تواصل', 'العنوان']: ['contactInfo', 'contactForm'],
+  ['donation', 'custom section', 'custom page', 'تبرع', 'أقسام مخصصة', 'صفحات مخصصة']: ['customSections', 'customPages'],
+};
+
+/// The section groups an allowed-topic [line] mentions: the line is kept
+/// when every group has at least one section on; empty = always kept.
+List<List<String>> topicSections(String line) {
+  final l = line.toLowerCase();
+  return [
+    for (final e in topicSectionWords.entries)
+      if (e.key.any(l.contains)) e.value,
+  ];
 }
 
 /// Model names the admin may enter: a Gemini model id (lower-case letters,
@@ -88,6 +127,10 @@ class AssistantSettings {
   /// [perMinute] and [perDay].
   final int? rawMaxChars, rawPerMinute, rawPerDay;
 
+  /// Stored daily limit during an exceptional season (null = default 6);
+  /// read the clamped [perDaySeason].
+  final int? rawPerDaySeason;
+
   const AssistantSettings({
     this.model = '',
     this.instructions = '',
@@ -106,6 +149,7 @@ class AssistantSettings {
     this.rawMaxChars,
     this.rawPerMinute,
     this.rawPerDay,
+    this.rawPerDaySeason,
   });
 
   static const defaults = AssistantSettings();
@@ -130,6 +174,7 @@ class AssistantSettings {
       rawMaxChars: _i(m['maxChars']),
       rawPerMinute: _i(m['perMinute']),
       rawPerDay: _i(m['perDay']),
+      rawPerDaySeason: _i(m['perDaySeason']),
     );
   }
 
@@ -147,6 +192,13 @@ class AssistantSettings {
     ];
     return lines.isEmpty ? defaultTopics.split('\n') : lines;
   }
+
+  /// [effectiveTopics] without the lines whose sections are all switched
+  /// off ([topicSections], ADR-042).
+  List<String> topicsFor(bool Function(String section) enabled) => [
+        for (final t in effectiveTopics)
+          if (topicSections(t).every((group) => group.any(enabled))) t,
+      ];
 
   String refusal(bool arabic) => arabic
       ? (refusalAr.isNotEmpty ? refusalAr : defaultRefusalAr)
@@ -180,6 +232,40 @@ class AssistantSettings {
   int get perDay =>
       _clamp(rawPerDay, AssistantLimits.perDayMin, AssistantLimits.perDayMax, AssistantLimits.perDayDefault);
 
+  /// Daily limit while an exceptional season is active (ADR-042, default 6).
+  int get perDaySeason => _clamp(rawPerDaySeason, AssistantLimits.perDayMin, AssistantLimits.perDayMax,
+      AssistantLimits.perDaySeasonDefault);
+
+  /// The daily limit that applies now: [perDaySeason] while one of
+  /// [activeSeasonKeys] is in [exceptionalSeasonKeys], else [perDay].
+  /// A season never lowers the ordinary limit (an admin's perDay 10 with the
+  /// default season limit 6 stays 10; Sentry review on PR #33).
+  int perDayFor(Iterable<String> activeSeasonKeys) =>
+      activeSeasonKeys.any(exceptionalSeasonKeys.contains) && perDaySeason > perDay ? perDaySeason : perDay;
+
+  /// These settings with [perDay] = [perDayFor] the active seasons, so the
+  /// limiter and the "daily limit reached" text both use the season limit.
+  AssistantSettings withSeasonLimit(Iterable<String> activeSeasonKeys) => AssistantSettings(
+        model: model,
+        instructions: instructions,
+        topics: topics,
+        refusalAr: refusalAr,
+        refusalEn: refusalEn,
+        welcomeAr: welcomeAr,
+        welcomeEn: welcomeEn,
+        suggestionsAr: suggestionsAr,
+        suggestionsEn: suggestionsEn,
+        showSuggestions: showSuggestions,
+        faithReplyAr: faithReplyAr,
+        faithReplyEn: faithReplyEn,
+        sourceDomains: sourceDomains,
+        mentionUnconfirmed: mentionUnconfirmed,
+        rawMaxChars: rawMaxChars,
+        rawPerMinute: rawPerMinute,
+        rawPerDay: perDayFor(activeSeasonKeys),
+        rawPerDaySeason: rawPerDaySeason,
+      );
+
   static int _clamp(int? v, int lo, int hi, int def) => v == null ? def : (v < lo ? lo : (v > hi ? hi : v));
 
   static const defaultInstructions =
@@ -191,8 +277,10 @@ class AssistantSettings {
   static const defaultTopics = 'Liturgy / mass, vespers and praise times, and holy seasons\n'
       'Sunday school and meetings\n'
       'Clinics and their times\n'
-      'Activities and public services\n'
-      'Priests, departed fathers and patron saints\n'
+      'Activities and choirs\n'
+      'Public services\n'
+      'Priests and departed fathers\n'
+      'Patron saints\n'
       'Church history and milestones\n'
       'Announcements\n'
       'Contact details, location and directions\n'

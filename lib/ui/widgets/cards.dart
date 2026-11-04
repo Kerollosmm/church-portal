@@ -11,12 +11,15 @@ import '../../domain/item_detail.dart';
 import '../../domain/models.dart';
 import '../../domain/rules.dart';
 import '../../domain/schedule.dart';
+import '../../domain/today.dart';
 import '../../domain/time_format.dart';
 import '../../state/providers.dart';
 import 'common.dart';
 import 'item_image.dart';
+import 'program_details.dart';
 import 'styled_image.dart';
 
+export 'program_details.dart' show ProgramDetails, parallelSummary;
 export 'styled_image.dart';
 
 /// Card for one liturgy on the schedule page.
@@ -24,7 +27,12 @@ class LiturgyCard extends StatelessWidget {
   final Liturgy liturgy;
   final bool showWeekday;
   final bool showDate;
-  const LiturgyCard({super.key, required this.liturgy, this.showWeekday = false, this.showDate = false});
+
+  /// Services held at the same time in another hall (ADR-041), e.g.
+  /// «القاعة السفلية (شباب)»; '' = none.
+  final String parallelText;
+  const LiturgyCard(
+      {super.key, required this.liturgy, this.showWeekday = false, this.showDate = false, this.parallelText = ''});
 
   IconData get _icon => switch (liturgy.type) {
         'vespers' => Icons.nightlight_round,
@@ -69,6 +77,7 @@ class LiturgyCard extends StatelessWidget {
               const SizedBox(height: 6),
               IconLine(Icons.place_outlined, context.pick(l.placeAr, l.placeEn)),
               IconLine(Icons.people_outline, context.pick(l.audienceAr, l.audienceEn)),
+              ProgramDetails(l.program, parallelText: parallelText),
             ]),
           ),
         ]),
@@ -100,7 +109,27 @@ class NextMassCard extends ConsumerWidget {
       body = ErrorState(onRetry: () => ref.invalidate(liturgiesProvider));
     } else {
       final r = computeNextMass(liturgies: lits.value ?? const [], seasons: seasons.value ?? const [], now: now);
-      body = _content(context, r, now);
+      final s = ref.watch(settingsProvider).value;
+      // The next service's «وفي نفس الوقت: …» line, as on /mass-schedule
+      // (ADR-041; CodeRabbit review on PR #32).
+      final opts = ref.watch(featuresProvider.select((f) => f.programOptions));
+      // From that day's real occurrences, so a suppressed or out-of-season
+      // service is never named (Sentry review).
+      final next = r.next;
+      final parallelText = next == null
+          ? ''
+          : parallelSummary(
+              context,
+              opts,
+              parallelOccurrences(
+                  next,
+                  occurrencesForDay(
+                      liturgies: lits.value ?? const [],
+                      seasons: seasons.value ?? const [],
+                      day: next.start,
+                      dayOffset: next.dayOffset),
+                  opts));
+      body = _content(context, r, now, ref.watch(todaySettingsProvider), s?.lat, s?.lng, parallelText);
     }
 
     final primary = Theme.of(context).colorScheme.primary;
@@ -146,7 +175,8 @@ class NextMassCard extends ConsumerWidget {
     );
   }
 
-  Widget _content(BuildContext context, NextMassResult r, DateTime now) {
+  Widget _content(BuildContext context, NextMassResult r, DateTime now, TodaySettings today, double? lat, double? lng,
+      [String parallelText = '']) {
     if (r.isEmpty) return EmptyState(message: context.tr('noUpcoming'), icon: Icons.event_busy);
     final children = <Widget>[];
     if (r.activeSeasons.isNotEmpty) {
@@ -187,6 +217,9 @@ class NextMassCard extends ConsumerWidget {
         _ => context.tr('inDays', {'n': localDigits(context, '${n.dayOffset}')}),
       };
       final mins = n.start.difference(now).inMinutes;
+      // A service after the liturgical day's start (18:00 by default)
+      // belongs to the next day: «الليلة • ليلة الخميس» (ADR-039).
+      final eve = today.isEveService(n.start, lat: lat, lng: lng);
       String? countdown;
       if (n.dayOffset == 0 && mins >= 0) {
         final h = mins ~/ 60, m = mins % 60;
@@ -196,7 +229,11 @@ class NextMassCard extends ConsumerWidget {
         countdown = context.tr('startsIn', {'t': t});
       }
       children.add(Wrap(spacing: 8, runSpacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: [
-        Pill('$dayLabel • ${weekdayLabel(context, n.start.weekday)}', color: Theme.of(context).colorScheme.primary),
+        Pill(
+            eve
+                ? '${n.dayOffset == 0 ? context.tr('tonight') : dayLabel} • ${context.tr('eveOf', {'d': weekdayLabel(context, n.start.add(const Duration(days: 1)).weekday)})}'
+                : '$dayLabel • ${weekdayLabel(context, n.start.weekday)}',
+            color: Theme.of(context).colorScheme.primary),
         if (countdown != null) Pill(countdown, color: context.pal.goldText, icon: Icons.timer_outlined),
       ]));
       children.add(const SizedBox(height: 8));
@@ -207,6 +244,7 @@ class NextMassCard extends ConsumerWidget {
       children.add(const SizedBox(height: 6));
       children.add(IconLine(Icons.place_outlined, context.pick(n.liturgy.placeAr, n.liturgy.placeEn)));
       children.add(IconLine(Icons.people_outline, context.pick(n.liturgy.audienceAr, n.liturgy.audienceEn)));
+      children.add(ProgramDetails(n.liturgy.program, parallelText: parallelText));
       if (n.liturgy.sample) {
         children.add(Padding(
           padding: const EdgeInsets.only(top: 6),

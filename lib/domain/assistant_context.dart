@@ -51,12 +51,32 @@ String buildAssistantInstruction({
     ..writeln('## Scope (always applies)')
     ..writeln('You ONLY answer questions about this church, its services, this website and the Coptic Orthodox faith. '
         'Allowed topics:');
-  for (final t in assistant.effectiveTopics) {
+  // Only topics of switched-on sections (ADR-042): no clinics when off.
+  for (final t in assistant.topicsFor(f.enabled)) {
     b.writeln('- $t');
   }
+  b.writeln('- The Coptic Orthodox faith: saints, rites and sacraments, feasts and fasts, hymns, the Bible, '
+      'the church calendar and church history');
+  final off = [
+    for (final s in _offerableSections)
+      if (!f.enabled(s)) Sections.labels[s]![1],
+  ];
+  if (off.isNotEmpty) {
+    b.writeln('Switched off on this website right now: ${off.join('; ')}. Do not offer, list or describe these; '
+        'if asked, say briefly that they are not shown on the website at the moment and $pointToContact.');
+  }
+  // The active season first (ADR-042), so organisational questions in a
+  // busy season (Holy Week prayers, Lakan, revival nights) are answered
+  // from its schedule below.
+  final activeSeasons = [
+    for (final s in seasons)
+      if (f.enabled(Sections.schedule) && isSeasonActiveAt(s, now)) s,
+  ];
+  if (activeSeasons.isNotEmpty) {
+    b.writeln('Current church season: ${activeSeasons.map((s) => _bi(s.nameAr, s.nameEn)).join('; ')}. '
+        'For questions about today\'s or this week\'s prayers, use that season\'s schedule under "Holy seasons" first.');
+  }
   b
-    ..writeln('- The Coptic Orthodox faith: saints, rites and sacraments, feasts and fasts, hymns, the Bible, '
-        'the church calendar and church history')
     ..writeln(
       'If a question is about anything else (general knowledge, news, politics, sports, other organisations, '
       'jokes, stories, poems, homework, maths, translation, coding, technology, or anything unrelated to this '
@@ -566,6 +586,12 @@ const _fieldTitleClip = 100;
 const _fieldValueClip = 300;
 
 String _clip(String s, int max) => s.length <= max ? s : '${s.substring(0, max).trimRight()}…';
+
+/// Public sections whose absence the assistant is told about (ADR-042).
+const _offerableSections = [
+  Sections.schedule, Sections.meetings, Sections.clinics, Sections.services, Sections.activities, //
+  Sections.priests, Sections.saints, Sections.contactForm,
+];
 
 String _liturgyLine(Liturgy l) {
   final audience = _bi(l.audienceAr, l.audienceEn);

@@ -1,14 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!-- Static FALLBACK (ADR-038). The Deploy workflow replaces build/web/sitemap.xml with one generated
+     from Firestore (tool/export_public_content.js read-only + tool/gen_sitemap.dart: detail pages,
+     /section/<slug>, /page/<slug>); this copy ships only when that read fails. It lists the fixed
+     pages the bundled seed keeps on (test/sitemap_test.dart checks it). -->
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url><loc>https://maximos-domadios-church.web.app/</loc></url>
   <url><loc>https://maximos-domadios-church.web.app/about</loc></url>
   <url><loc>https://maximos-domadios-church.web.app/mass-schedule</loc></url>
   <url><loc>https://maximos-domadios-church.web.app/church-education</loc></url>
   <url><loc>https://maximos-domadios-church.web.app/church-activities</loc></url>
-  <!-- /clinics is omitted while sections.clinics is disabled (assets/seed/seed.json).
-       Uncomment once sections.clinics is enabled in production:
-  <url><loc>https://maximos-domadios-church.web.app/clinics</loc></url>
-  -->
+  <!-- /clinics is omitted while sections.clinics is disabled in assets/seed/seed.json. -->
   <url><loc>https://maximos-domadios-church.web.app/public-services</loc></url>
   <url><loc>https://maximos-domadios-church.web.app/contact</loc></url>
 </urlset>

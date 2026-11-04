@@ -50,6 +50,28 @@ render with `PageBody` (+ `Footer`). Content comes from Riverpod providers (hidd
   phones) over its poster; the painting shows when video is not allowed. Never for reduced motion, data saver,
   `heroMotion` off or under `flutter test`. The YouTube hero video library of PR #17 (ADR-026) was **removed in PR #25
   (ADR-036, owner request 4 Nov 2026)**; a `heroVideos` map already stored in `settings/features` is ignored.
+- **Hero ambient motion on web (ADR-037, PR #29):** the haze drift and light-ray shimmer look exactly as before but
+  run as a CSS-animated DOM layer (`HeroAmbientLayer`) instead of a per-frame Flutter repaint; the first paint is a
+  static copy of the hero (poster + church name) in `web/index.html`. See `documentation/features/performance-pagespeed.md`.
+- **Loading screen until real content (ADR-038, PR #30):** that static copy now stays over the app until the first
+  settings/church + settings/features + hero verse list have arrived and been painted (`app-content-ready` from
+  `lib/core/content_ready.dart`; at most 9 s after Flutter's first frame), so the default layout never flashes. The
+  hero `<video>` source and the CSS haze / ray layer start only when the page is idle afterwards (`ContentReady.whenIdle`);
+  they fade in, the poster stays the LCP element and the final look is unchanged.
+
+### Today layer on every page and Home (PR #31, ADR-039 / ADR-040)
+
+- **Coptic date strip** (`CopticDateStrip`, top of the shell): the liturgical day in Coptic, «الأربعاء ٢٥ بابه ١٧٤٣ ش»;
+  after the day's start (18:00 by default, or sunset at the church) «ليلة الخميس ٢٦ بابه ١٧٤٣ ش». `copticStrip`:
+  every page / Home only / off. No time-zone label anywhere.
+- **Live banner** (`LiveStreamBanner`): red bar under the strip on every page while `liveEnabled` + an http(s)
+  `liveUrl` and before `liveEndsAt`; pulsing dot (static under reduced motion); tap opens the stream.
+- **Top event card** (`TopEventCard`, first on Home): «حدث اليوم» = an admin church event (`dayEvents`) covering today
+  and not ended (on the eve: the next liturgical day's event) with times, speaker, topic, note, link; else
+  «عيد اليوم» / «تذكار اليوم» from `/data/today.json` (Katameros, credited) for the liturgical day; else the computed
+  feast list; nothing on an ordinary day without data. `topEvent` off hides it; `commemoration` off = church events only.
+- **Verse of the day** rotates on the liturgical day (changes at the day's start, not midnight).
+- **Next service card**: a service starting after the day's start is labelled «الليلة • ليلة الخميس».
 
 ### `/about` — `about_page.dart` `AboutPage`
 - History card (bishop line + `historyAr/En`) and **altars** grid (main altar gets a gold cross) — section `history`.
@@ -83,6 +105,27 @@ render with `PageBody` (+ `Footer`). Content comes from Riverpod providers (hidd
   now are listed first, then the rest by `startsAt`; title + date range + "Active now" pill +
   `LiturgyCard(showDate: true)`.
 - `LiturgyCard`: name, both digit systems (`TimeRangeText`), place, audience, weekday/date, `SampleBadge`.
+
+#### Programme details & parallel services (PR #32, ADR-041)
+
+`ProgramDetails` (`lib/ui/widgets/program_details.dart`) under each liturgy card, the next-service card, the season
+header on the seasonal view (and on additive revivals in the weekly view) and each meeting card: venue / audience
+pills, «المتكلم: …», «الموضوع: …», «الكورال: …», and a «البرنامج / الكتيب» button opening the Drive link. Services on
+the same day with overlapping times in different venues (`parallelServices`) get «وفي نفس الوقت: القاعة السفلية
+(شباب)» on every list (season, revival, special services and the weekly tabs). When the seasonal services use two or more audiences, chips «كل الفئات / عام / شباب / أطفال» filter them
+(a service without an audience always shows; switching views clears the filter). Nothing renders for items without these keys.
+
+#### Season presets, season verses, assistant in seasons, hero v2 (PR #33, ADR-042)
+
+- **Season preset:** after /admin «تجهيز الموسم» is applied, visitors see its switches (weekly schedule replaced,
+  meetings / clinics hidden, still hero, no wedding booking choice, live link, season booklet). From the season's
+  `endsAt` on, `featuresProvider` serves `FeatureSettings.effectiveAt` — the saved previous switches — with no write.
+- **Season verses:** `HeroVerse` uses `resolveSeasonalVerse`: fixed admin verse > the active season's set (rotating by
+  liturgical day) > the general list.
+- **Contact form:** `weddingBookingOff` drops the `wedding` subtype of booking categories (`withoutWedding`).
+- **Assistant:** daily limit `perDaySeason` (default 6) while Holy Week / Pascha / Nativity / a revival is active;
+  topics of switched-off sections are dropped; the prompt names the current season and the switched-off sections.
+- **Hero v2:** 9 s seamless loops (1280×720 / 432×768) and matching first-frame posters (ADR-042).
 
 ### `/church-education` — `education_page.dart` `EducationPage`
 - Meetings sorted by `stageOrder` (angels → elderly), then `order`, then start; grouped into

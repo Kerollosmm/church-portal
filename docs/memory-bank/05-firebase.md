@@ -111,6 +111,28 @@ Notable details:
   of 12 ranges, 11 palettes or 12 videos under the 1,000-expression cap (maps of maps did not). Contrast is not
   checkable in rules: the app corrects on save and again on render. Emulator groups "ADR-025" and "ADR-026". **ADR-036 (PR #25):** the app no longer writes `heroVideos`; `validHeroVideos`
   and the allowed key stay (marked LEGACY in `firestore.rules`) so documents that already store it keep saving.
+- **Today layer (PR #31, ADR-039 / ADR-040):** `validFeatures` allows `copticStrip` (`all`/`home`/`off`),
+  `dayStartMode` (`fixed`/`sunset`), `dayStartsAt` ('' or HH:mm), `topEvent` / `commemoration` (bools) — checked
+  together only when one of them changes — and `liveEnabled` (bool), `liveUrl` ('' or http(s) URL with a host, ≤ 500),
+  `liveLabelAr` / `liveLabelEn` (≤ 120), `liveEndsAt` (timestamp / null). `dayEvents`: `validDayEvents` = list ≤ 20,
+  each item checked by `validDayEvent`: ONE string of 13 U+001F-joined fields (date YYYY-MM-DD with month 01–12 and
+  day 01–31, optional endDate of the same form (an endDate before date is refused by the admin form and read as one day by
+  the client; a per-event `split` compare exceeded the 1,000-expression cap at 20 events), optional HH:mm
+  start / end, titleAr 1–300, titleEn / speaker / topic ≤ 300, notes ≤ 500, link '' / in-app path / http(s) URL),
+  unrolled per index like `blockItems` so 20 events stay under the 1,000-expression cap. Emulator group
+  "ADR-039 / ADR-040". No new document or collection.
+- **Programme details (PR #32, ADR-041):** `validSeason`, `validLiturgy`, `validMeeting` allow `programKeys()`
+  (speaker / topic / choir ar+en, venue, audience, attachmentUrl, attachmentLabelAr/En); `validProgram(d, changed)`
+  runs only when one changes and checks all eleven on one U+001F-joined string (texts 200 / 300 / 200 / 80, keys
+  `[a-z0-9_-]{0,30}`, attachmentUrl '' or https with a host, no whitespace, at most 500 characters). `ownFieldsUnchanged` accepts programme-only meeting edits.
+  `validFeatures` allows `venues` / `audiences`: `validProgramOptions` = list ≤ 12 whose `join('\u001e')` matches one
+  regex of `key␟labelAr␟labelEn` rows. Emulator group "ADR-041".
+- **Season presets (PR #33, ADR-042):** `validFeatures` allows `seasonVerses` (`validSeasonVerses`: ≤ 40 rows, one
+  `join('\u001e')` + regex of `seasonKey␟textAr␟refAr`), `seasonPreset` (`validSeasonPreset`: allowed keys, season id
+  pattern, season key list, timestamps, ≤ 7 known options, `previous` keys typed, its four strings checked as one
+  joined string; null clears it) and `weddingBookingOff` (bool). `validAssistant` allows `perDaySeason` 1–100. The
+  apply / restore is one client batch (`AdminRepository.saveDocs`) of `settings/features` + `seasons/{id}`, each doc
+  checked by its own rule. Emulator group "ADR-042".
 - `validFeatures`: key allow-list via `keysAllowed` (create: `keys().hasOnly`; update: only the **changed** keys must
   be allowed, so an untouched legacy key no longer blocks a merge save — same as `settings/church`, PR #10), `sections` keys ⊆ the 19 section keys (PR #16 added `dailyVerse`, PR #18 `customSections` / `customPages`)
   (incl. `media`)
@@ -195,17 +217,30 @@ stays `asafra-church-portal.firebaseapp.com` (admin sign-in is email/password, n
 App target settings:
 
 - `public: build/web` (output of `flutter build web --release`); ignores `firebase.json`, dotfiles, `node_modules`.
-- `cleanUrls: true`, `trailingSlash: false`, **rewrite `**` → `/index.html`** (SPA + path URL strategy) — this also
-  serves the PR #13 item detail URLs (`/clinics/<id>`, `/about/priests/<id>`…) with HTTP 200; the app decides
-  what they show.
+- `cleanUrls: true`, `trailingSlash: false`, **rewrite `"regex": "^/[^.]*$"` → `/index.html`** (SPA + path URL
+  strategy; ADR-037 — was `**`) — every extension-less path, so the PR #13 item detail URLs (`/clinics/<id>`,
+  `/about/priests/<id>`…), `/section/<slug>`, `/page/<slug>`, `/admin`, `/ask` load with HTTP 200 and the app decides
+  what they show, while a missing **file** (`/.well-known/ard.json`, `*.map`, `wp-login.php` probes) is a real 404
+  instead of `index.html`. A second rewrite (`^/(section|page|<the 7 detail base paths>)/[^/]+$`) keeps
+  `/section/<slug>`, `/page/<slug>` and item pages working when the slug / id contains a dot (Codex review). `web/llms.txt` (ADR-037) describes the site for AI
+  agents (H1 + page links, all in the sitemap).
+- Headers on `**` also include `Cross-Origin-Opener-Policy: same-origin-allow-popups` (ADR-037; keeps Google sign-in
+  popups working). The hero `mp4` clips keep Hosting's default cache (fixed, non-fingerprinted paths — CodeRabbit).
 - SEO in `web/index.html` (PR 3 of the review plan): a **static** `<link rel="canonical"
   href="https://maximos-domadios-church.web.app/">` in the shell. Since PR #10 (amending ADR-019) Flutter rewrites it
   per route with `setDocumentRouteMeta` (`lib/core/document_lang*.dart`): indexable routes get
   `kCanonicalOrigin + path`; `/admin`, the 404 page and switched-off sections (`FeatureGate`, `AssistantGate` for
   `/ask`) drop the canonical link and add `<meta name="robots" content="noindex">` instead (never both); item
   detail pages (PR #13) are indexable only while the item's page is available (`ItemDetailPage`). Crawlers
-  that do not run JS still see `/` as the canonical. `web/sitemap.xml` keeps `/clinics` commented out while
-  `sections.clinics` is off in the seed (uncomment when clinics launch). Plus a `<script type="application/ld+json">` **`Church`** block with only
+  that do not run JS still see `/` as the canonical. **`sitemap.xml` is generated at deploy (PR #30, ADR-038):**
+  `deploy.yml` → `build` runs `tool/build_sitemap.sh` after `flutter build web` with the deploy key
+  (`firebase-credentials`, `continue-on-error`): `tool/export_public_content.js` reads `settings/features` + the 7
+  detail collections + `categories` + `pages` with **`get()` only** (never writes), `dart run tool/gen_sitemap.dart`
+  applies `lib/domain/sitemap.dart` (fixed pages by `routeEnabled`; public `/section/<slug>` / `/page/<slug>` while
+  `customSections` / `customPages` are on — nav-hidden pages included, as the app indexes them; item pages that open),
+  the XML is validated and written to `build/web/sitemap.xml`; the key is deleted at once. Any failure → `::warning::`
+  and the static `web/sitemap.xml` (fixed pages the seed keeps on; `/clinics` omitted while seed clinics are off)
+  ships instead. The sitemap reflects content at deploy time. `web/robots.txt` points to `/sitemap.xml`. Plus a `<script type="application/ld+json">` **`Church`** block with only
   verified facts mirrored from `settings/church` / `docs/CONTENT_SOURCES.md` and the display title: Arabic name
   (`nameAr`), `alternateName` = the English display title "St. Maximus & Domadius and St. Moses the Black Church"
   (`appName` in `l10n.dart`, ADR-018) and the full `nameEn`, `PostalAddress` (آخر شارع 45، العصافرة قبلي، قطاع المنتزه، الإسكندرية, EG), `GeoCoordinates`
@@ -232,15 +267,18 @@ App target settings:
   public, real writes from the contact form and /admin!).
 - Rollback: Firebase console → Hosting → release history → roll back.
 
-## App Check (`lib/data/app_check_providers.dart` `selectAppCheckPlan`, activated in `firebase_bootstrap.dart`)
+## App Check (`lib/data/app_check_providers.dart` `selectAppCheckPlan`, activated lazily by `ensureAppCheckActivated()` in `firebase_bootstrap.dart`)
 
-ADR-029 (PR #19). Firebase AI Logic **requires** App Check enforcement since 2 Nov 2026; it is **Enforced** in the
+ADR-029 (PR #19). **Since ADR-037 (PR #29) App Check is not activated at start-up**: `ensureAppCheckActivated()`
+(one shared Future) runs on the assistant's first `warmUp()` / `generate()`, so public pages never load reCAPTCHA
+Enterprise. `FirebaseStatus.appCheckActive` = "App Check is configured for this build" (`plan.activate`), which
+still gates the assistant; a later activation failure shows the assistant's normal error instead of hiding it. Firebase AI Logic **requires** App Check enforcement since 2 Nov 2026; it is **Enforced** in the
 console.
 
 | Build | Provider |
 |---|---|
 | Web release with key | `ReCaptchaEnterpriseProvider(AppConfig.recaptchaSiteKey)` — the key is a **reCAPTCHA Enterprise** key ("church-portal-web", site key `6LdJhw4uAAAAAI7yuMKtTRMVc_r9LdX1qPBqHMW3`, a public value); a `ReCaptchaV3Provider` would be rejected |
-| Web release without key (`PLACEHOLDER…`, empty — PR previews) | **not activated** → `appCheckActive = false` → assistant hidden |
+| Web release without key (`PLACEHOLDER…`, empty — PR previews) | **not configured** → `appCheckActive = false` → assistant hidden |
 | Debug builds or `--dart-define=APPCHECK_DEBUG=true` | `WebDebugProvider` / `AndroidDebugProvider` / `AppleDebugProvider` (token from `APPCHECK_DEBUG_TOKEN` or SDK-generated and printed in console/logcat — register it under App Check → Manage debug tokens) |
 | Android release | `AndroidPlayIntegrityProvider` (needs the release key's SHA-256 registered — **not done yet**, no release signing key) |
 | iOS release | `AppleAppAttestWithDeviceCheckFallbackProvider` |
@@ -349,7 +387,8 @@ console.
   `mentionUnconfirmed`, `maxChars`, `perMinute`, `perDay` (`perSession` is a legacy key the rules still accept). The switches stay the section `assistant` and
   `settings/church.assistantEnabled` (both shown on that screen).
 - Kill switches (all platforms): section toggle `assistant`, `settings/church.assistantEnabled`, or App Check
-  failing to activate. **Web release builds only:** a missing/placeholder reCAPTCHA key also hides it. Android/iOS
+  not configured for the build (since ADR-037 a later activation **failure** no longer hides it — the assistant shows
+  its normal error). **Web release builds only:** a missing/placeholder reCAPTCHA key also hides it. Android/iOS
   release builds activate Play Integrity / App Attest without the key, so the assistant shows there when the
   other conditions hold (requests then need the Play Integrity registration). Cost cap / quota is a console task;
   on Spark the Developer API free tier is rate-limited, never billed.

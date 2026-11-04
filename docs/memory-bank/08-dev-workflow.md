@@ -34,7 +34,7 @@ python3 tool/fingerprint_icon_fonts.py build/web   # content-hashed icon font na
 | Regenerate seed | `python3 tool/gen_seed.py` → writes `assets/seed/seed.json`, `tool/known_seed_ids.json`, `tool/retired_seed_ids.json` (commit all three) |
 | Rules tests (emulator, Java 11+) | `cd tool/rules_test && npm ci && npm test` (runs `firebase emulators:exec --only firestore --project demo-church-portal`) |
 | Seed preview | `cd tool && npm install && node seed_firestore.js --dry-run` |
-| Deploy (manual) | `flutter build web --release [--dart-define=RECAPTCHA_SITE_KEY=…] && python3 tool/fingerprint_icon_fonts.py build/web && firebase deploy` (or `--only hosting`, `--only firestore:rules,firestore:indexes`) |
+| Deploy (manual) | `flutter build web --release [--dart-define=RECAPTCHA_SITE_KEY=…] && bash tool/build_sitemap.sh build/web/sitemap.xml && python3 tool/fingerprint_icon_fonts.py build/web && firebase deploy` (the sitemap step keeps the static `web/sitemap.xml` with a warning when `GOOGLE_APPLICATION_CREDENTIALS` is not set) (or `--only hosting`, `--only firestore:rules,firestore:indexes`) |
 
 ## Seeding Firestore (`tool/seed_firestore.js`)
 
@@ -87,6 +87,9 @@ Job **firestore-rules** (15 min): Java Temurin 21 + Node 22 → `npm ci` in `too
    with the Sentry defines (PR #24: `SENTRY_ENVIRONMENT` = `production` on push / `preview` on PRs, `GIT_SHA` = the
    PR head or pushed SHA, `APP_VERSION` from `pubspec.yaml`, `SENTRY_DSN` only when the repo variable is set),
    with `--dart-define=RECAPTCHA_SITE_KEY` only on push builds when the repo variable is set →
+   **sitemap from Firestore (PR #30, ADR-038):** Node 22 → `firebase-credentials` (`continue-on-error`) →
+   `tool/build_sitemap.sh build/web/sitemap.xml` (read-only export + `dart run tool/gen_sitemap.dart` + XML check;
+   any failure = `::warning::` and the static `web/sitemap.xml`) → remove key →
    `tool/fingerprint_icon_fonts.py` → artifact `web-build`
    (3 days).
 2. **deploy-live** (push to main, needs build **and deploy-rules** since PR #24 — a new app may write fields the
@@ -101,6 +104,14 @@ Job **firestore-rules** (15 min): Java Temurin 21 + Node 22 → `npm ci` in `too
 4. **preview** (same-repo PRs, needs build): `hosting:channel:deploy pr-<n> --only app --expires 7d --json` → parse URL → upsert
    one PR comment "Firebase Hosting preview" (github-script).
 
+### `synaxarium.yml` — daily commemoration (PR #31, ADR-040)
+
+Cron `10 16 * * *` and `10 22 * * *` (UTC) + manual. `node tool/fetch_synaxarium.js $RUNNER_TEMP/today.json`
+(Katameros API, yesterday … +7) → firebase-credentials → `node tool/publish_hosting_file.js … /data/today.json`
+(clone the live Hosting version without that file, add it, finalize, release — no rebuild, no Firestore).
+Concurrency group `hosting-live`, shared with `deploy.yml` → `deploy-live`. `deploy.yml`'s build also writes
+`build/web/data/today.json` (fetch, else the live copy, else none). Re-run it from Actions if the file is stale.
+
 ### `.github/actions/firebase-credentials` (composite)
 Normalises the service-account secret (first JSON object only, validates, `$RUNNER_TEMP/sa.json` 0600, exports
 `GOOGLE_APPLICATION_CREDENTIALS`, never echoes) and primes firebase-tools' API-enablement cache (see `05-firebase.md`).
@@ -108,7 +119,7 @@ Normalises the service-account secret (first JSON object only, validates, `$RUNN
 ### Secrets & variables
 | Name | Kind | Used by |
 |---|---|---|
-| `FIREBASE_SERVICE_ACCOUNT_ASAFRA_CHURCH_PORTAL` | secret | deploy-live, deploy-rules, preview, seed |
+| `FIREBASE_SERVICE_ACCOUNT_ASAFRA_CHURCH_PORTAL` | secret | build (read-only sitemap export), deploy-live, deploy-rules, preview, seed |
 | `RECAPTCHA_SITE_KEY` | repository **variable** (optional, not set yet) | live web build |
 | `SENTRY_DSN` | repository **variable** (optional, not set — PR #24) | web builds in `ci.yml` / `deploy.yml` pass it as `--dart-define=SENTRY_DSN` when set; otherwise release builds use the public DSN constant `AppConfig.sentryDefaultDsn` (ADR-034) |
 | Environment `production` | GitHub environment | deploy-live, seed — add **required reviewers** (open task) |
@@ -186,8 +197,8 @@ Example: a new public collection `announcements` shown on `/news`.
 All logos/icons come from the parish seal (new seal since PR #15). The master `assets/branding/seal_source.webp` is
 the **round seal on a transparent background**, square, ≥ 1024 px, lossless. To change the logo, crop the artwork to
 its outer ring (transparent outside), then `tool/gen_branding.sh [round-seal.(webp|png)]` (ImageMagick 7) rewrites
-`assets/branding/seal.png` (384 px; in-app `ChurchSeal`, seal tab, drawer, footer, admin, and the web splash in
-`web/index.html`), `web/favicon.{ico,png}`, `web/favicon-16.png` (light unsharp, no blur),
+`assets/branding/seal.png` (384 px, quantised to a 256-colour palette with Pillow, ~27 KB — ADR-037; in-app
+`ChurchSeal`, seal tab, drawer, footer, admin — the web splash shows the hero poster since ADR-037), `web/favicon.{ico,png}`, `web/favicon-16.png` (light unsharp, no blur),
 `web/icons/Icon-{192,512}.png` (round, transparent), `Icon-maskable-{192,512}.png` (seal at 78% on `#470812`),
 `apple-touch-icon.png` (on white), `web/og-image.jpg` (1200×630, seal on maroon; also the JSON-LD `image`) and
 `android/.../mipmap-*/ic_launcher{,_foreground}.png` (+ adaptive icon XML, background

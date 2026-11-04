@@ -152,6 +152,12 @@ void main() {
         final keys = RegExp(r"'([A-Za-z]+)'").allMatches(list).map((m) => m.group(1)!).toSet();
         if (body.contains('concat(meta())')) keys.addAll(['visible', 'sample', 'order', 'updatedAt', 'updatedBy']);
         // PR #11: the 7 detail-page collections also allow the shared detail keys.
+        // ADR-041: liturgies, meetings and seasons allow the programme keys.
+        if (body.contains('concat(programKeys())')) {
+          final start = rules.indexOf('function programKeys()');
+          final prog = rules.substring(start, rules.indexOf('}', start));
+          keys.addAll(RegExp(r"'([A-Za-z]+)'").allMatches(prog).map((m) => m.group(1)!));
+        }
         if (body.contains('concat(detailKeys())')) {
           final start = rules.indexOf('function detailKeys()');
           final detail = rules.substring(start, rules.indexOf('}', start));
@@ -207,7 +213,8 @@ void main() {
 
     test('imageList type, field groups and the image collections', () {
       expect(FieldType.values, contains(FieldType.imageList));
-      expect(FieldGroup.values, [FieldGroup.basic, FieldGroup.details, FieldGroup.media, FieldGroup.contacts]);
+      expect(FieldGroup.values,
+          [FieldGroup.basic, FieldGroup.program, FieldGroup.details, FieldGroup.media, FieldGroup.contacts]);
       expect(const FieldDef('x', 'x', 'x', FieldType.text).group, FieldGroup.basic);
       expect(imageCollections,
           ['alerts', 'seasons', 'meetings', 'activities', 'clinics', 'facilities', 'priests', 'milestones', 'saints',
@@ -272,7 +279,8 @@ void main() {
         }
       }
       for (final c in adminCollections.where((c) => !detailCols.contains(c.name))) {
-        expect(c.fields.every((f) => f.group == FieldGroup.basic), isTrue, reason: c.id);
+        // Liturgies / seasons also carry the programme group (ADR-041).
+        expect(c.fields.every((f) => f.group == FieldGroup.basic || f.group == FieldGroup.program), isTrue, reason: c.id);
         expect(c.fields.map((f) => f.key), isNot(contains('detailsEnabled')), reason: c.id);
       }
     });
