@@ -58,7 +58,8 @@
 - لا تشغّله أبدًا لمجموعة `clinics` أو بدون `only`.
 - الخياران الوحيدان اللذان يقللان الخطر هما `only` (مجموعات أقل) و `--dry-run` (بدون كتابة).
 - جرّب أولًا: `cd tool && npm install && node seed_firestore.js --dry-run --only <مجموعة>`.
-- لحذف عنصر مبذور بشكل دائم: احذفه من `tool/gen_seed.py` وأضف معرفه إلى `tool/retired_seed_ids.json`.
+- لحذف عنصر مبذور بشكل دائم: احذفه من `tool/gen_seed.py` **وأضف معرفه** تحت اسم مجموعته في قاموس `retired` داخل
+  نفس الملف (المولّد يرفض حذف معرف دون تقاعده، ويكتب `tool/retired_seed_ids.json`)، ثم `python3 tool/gen_seed.py`.
 
 ## 4. متابعة Sentry
 

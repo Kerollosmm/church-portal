@@ -49,8 +49,10 @@ supersede them.
 - **Consequences:** admin edits are never clobbered accidentally; removing a seeded id requires retiring it.
   **Caveat (noted in PR #25):** create-only means a seeded document an admin **deleted** comes back on the next
   seed run (it no longer exists, so it is created again) — e.g. the 11 placeholder clinics deleted on 3 Nov 2026.
-  Deleting in /admin is therefore only durable while nobody seeds that collection; retire the id in `gen_seed.py`
-  (or drop it from the seed) if a deletion must survive seeding.
+  Deleting in /admin is therefore only durable while nobody seeds that collection. To make a deletion survive
+  seeding, remove the doc from `tool/gen_seed.py` **and** list its id under the collection's key in the `retired`
+  dict there (the generator asserts every known id is either still seeded or retired, and writes
+  `tool/retired_seed_ids.json`), then regenerate the seed.
 
 ## ADR-009 — No invented content; `sample` flag
 - **Decision (PR #2):** replace sample data with verified data; anything unverified stays as clearly labelled
