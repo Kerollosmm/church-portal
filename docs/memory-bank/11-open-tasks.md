@@ -115,15 +115,15 @@ Status as of 4 Nov 2026 (PR #25, re-checked against `main` at `d60261d` = PR #24
 
 ## Occasion themes & hero videos (PR #17, ADR-025/026)
 
-- [x] Theme presets, Cairo-date schedule, Coptic Easter, admin colour edits with contrast auto-correction, YouTube
-      hero video library with bundled-clip fallback, verse of the day in the hero.
+- [x] Theme presets, Cairo-date schedule, Coptic Easter, admin colour edits with contrast auto-correction, verse of the
+      day in the hero. (The YouTube hero video library shipped here was removed in PR #25, ADR-036.)
 - [ ] Church office: confirm the Holy Week / Resurrection looks and the default Resurrection length (7 days), and
       add the Nativity / fasts / Marian ranges each year (or ask for fixed-date presets such as 7 Jan / 19 Jan /
       the Marian feasts to be computed like Easter).
-- [ ] Manually check YouTube playback on a real phone browser and the Android app (autoplay policies; headless tests
-      cannot play it).
 - [ ] Optional: `settings/church.verseAr/En` are no longer shown publicly — retire them from the admin form or reuse
       them (e.g. a parish motto).
+- [ ] Optional: remove the legacy `heroVideos` key + `validHeroVideos` from `firestore.rules` once no live
+      `settings/features` stores it (check the live doc first; never delete live data from the app) — ADR-036.
 - [ ] Optional: a dark theme for the admin dashboard (it keeps Golden hour).
 
 ## Custom sections, pages & contact types (PR #18, ADR-027/028)

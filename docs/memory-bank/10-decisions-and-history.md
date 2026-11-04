@@ -368,7 +368,7 @@ supersede them.
   field `themeColors`. A first save with maps-of-maps exceeded the 1,000-expression cap in the emulator.
 - **Admin dashboard** keeps the Golden hour palette (wrapped in its own `Theme`).
 
-## ADR-026 (PR #17) — Hero video library from YouTube links
+## ADR-026 (PR #17) — Hero video library from YouTube links — **superseded by ADR-036 (removed in PR #25)**
 
 - **Context:** the church wanted to choose hero videos without uploads (Spark plan: no Storage, no video bytes in
   Firestore).
@@ -628,6 +628,23 @@ supersede them.
 - **Alternatives rejected:** translating the memory bank (too long and too technical for the church office, and two
   copies of the same text drift); an English manual (the owner and the church office read Arabic first).
 
+## ADR-036 (PR #25) — Remove the YouTube hero video library; the hero plays only the bundled clip
+
+- **Context (owner request, 4 Nov 2026 07:56 Cairo):** remove the «مكتبة فيديو الواجهة (يوتيوب)» admin card (YouTube
+  links, add to the library, active / per-theme selection) and the feature behind it.
+- **Decision:** the hero keeps the bundled clip (`hero_clouds.mp4` / `hero_clouds_tall.mp4`), its poster / painting
+  fallback and the `heroMotion` switch. Removed: `HeroVideoEditor` and its card, `lib/domain/hero_video.dart`
+  (`HeroVideoLibrary`, YouTube parsing), `lib/ui/widgets/hero_youtube*.dart`, `HeroStage.youtubeId`,
+  `ActiveTheme.video`, `FeatureSettings.heroVideos`, the `heroVideos` save write, the `heroVideo*` strings and the
+  `youtube_player_iframe` dependency.
+- **Data and rules:** nothing is deleted from live data. A `heroVideos` map already stored in `settings/features` is
+  ignored when read and never written (saves use `mergeFields`, so it stays untouched). `firestore.rules` keeps the key
+  allowed and `validHeroVideos` (marked LEGACY) so such documents keep saving; the ADR-026 emulator tests stay as rule
+  coverage. Removing the rule is an optional later clean-up once no live document stores the key.
+- **Tests:** the hero uses the bundled clip even with a stored library (`test/golden_hour_test.dart`); the Sections &
+  home page editor has no video library card and saves never write `heroVideos` (`test/occasion_admin_test.dart`); a
+  stored library does not affect the theme in force (`test/occasion_theme_test.dart`).
+
 ## Timeline
 
 | When | PR / commit | What |
@@ -666,6 +683,6 @@ supersede them.
 | 3 Nov 2026 | **PR #24** — "Sentry error tracking (web + Android), privacy first, admin switch" (`feat/sentry-error-tracking`; PR #23 was squash-merged as `93db6c7`) | ADR-034: `sentry_flutter` 10.3.0, `ErrorReporting.run` around start-up, DSN define / public default, environments `production` / `preview` / `ci` / `debug`, release `church-portal@version+sha7`, `scrubEvent` / `scrubBreadcrumb` / JS gate, captures in `guardSeeded`, assistant (`AssistantFailure`, redacted) and contact submit, `settings/features.errorReporting` switch (rules + emulator test + seed), owner-only Send test error; `test/error_reporting_test.dart`. |
 | 4 Nov 2026 | **PR #26** — "App bar: no Clinics shortcut (owner request)" (`fix/appbar-no-clinics`; PR #24 was squash-merged as `d60261d`) | Owner request: the public app bar never shows the Clinics (`local_hospital_rounded`) action, at any width or section state; **Mass times** is the only highlight button. It used the same `sections.clinics` switch (`routeEnabled('/clinics')`, phones only) — live `sections.clinics` was `true` when checked. Clinics stay in the drawer / Services menu, Home directory and footer quick links; route, page, admin unchanged. `test/feature_gate_test.dart` group guards the bar. |
 
-| 4 Nov 2026 | **PR #25** — "Docs: memory bank up to date + Arabic feature documentation" (`docs/feature-documentation`; PR #26 was squash-merged as `8886d08` first and merged into this branch) | ADR-035: memory bank re-checked against `d60261d` (assistant limits / suggestions / unconfirmed flags in `05-firebase.md`, clinics placeholders deleted 3 Nov + section off 4 Nov, create-only seeding re-creates deleted docs, bundled fonts, Sentry account facts, open tasks); new `documentation/` (Arabic): index, architecture, one file per feature, operations; README / AGENTS / CLAUDE link it with the same-PR rule. No code change. |
+| 4 Nov 2026 | **PR #25** — "Docs: memory bank up to date + Arabic feature documentation" (`docs/feature-documentation`; PR #26 was squash-merged as `8886d08` first and merged into this branch) | ADR-035: memory bank re-checked against `d60261d` (assistant limits / suggestions / unconfirmed flags in `05-firebase.md`, clinics placeholders deleted 3 Nov + section off 4 Nov, create-only seeding re-creates deleted docs, bundled fonts, Sentry account facts, open tasks); new `documentation/` (Arabic): index, architecture, one file per feature, operations; README / AGENTS / CLAUDE link it with the same-PR rule. **ADR-036:** YouTube hero video library removed (admin card, `hero_video.dart`, `hero_youtube*.dart`, `youtube_player_iframe`; legacy `heroVideos` kept in rules, live data untouched). |
 
 Append new PRs to this table.

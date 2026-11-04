@@ -355,7 +355,7 @@ chunks are fetched relative to `<base href>`).
   admin dashboard (which `router.dart` wraps in a Golden hour `Theme`) and for the few fixed light boxes (sample
   badge, "times pending" note, alert box) that keep dark text. `primaryDarkOf` = `palette.primaryDeep` (darker for a
   dark primary, lighter for Holy Week's silver). Dark scenes pass the art through `sceneArt()` (greyscale, 42 %
-  brightness; CSS `filter` on the web video / YouTube frame). `readableOn(color, grounds)` lifts status colours
+  brightness; CSS `filter` on the web video). `readableOn(color, grounds)` lifts status colours
   (success green) on dark panels (`Pill`).
 - Palettes, contrast maths and auto-correction are pure Dart in `lib/domain/occasion_theme.dart`
   (`ThemePalette.checks/failures/normalized`, `ensureContrast`); the theme in force is `activeThemeProvider`
@@ -376,11 +376,10 @@ chunks are fetched relative to `<base href>`).
   by `BottomFeather` in `hero_feather.dart` so the hero dissolves into the page — no box edges), `TextScrim`
   (elliptical radial glow bleeding past the text). `HeroVideo` (`hero_video.dart`, conditional export): web =
   native `<video muted playsinline loop>` via `HtmlElementView.fromTagName` with a CSS mask + fade-in on `playing`
-  (`hero_video_web.dart`); Android/iOS = `video_player` (`hero_video_io.dart`). PR #17 (ADR-026): `HeroStage(youtubeId:)`
-  plays the hero video library's YouTube link instead (`hero_youtube.dart`, conditional export: web =
-  `hero_youtube_web.dart`, a youtube-nocookie IFrame-player `<iframe>` driven over the IFrame API postMessage channel,
-  CSS-masked and cover-sized by `youtubeCover`; Android/iOS = `youtube_player_iframe` in `hero_youtube_io.dart`), and
-  falls back to the bundled clip on error / blocked autoplay / no "playing" within 12 s. Gated by `settings/features.heroMotion`
+  (`hero_video_web.dart`); Android/iOS = `video_player` (`hero_video_io.dart`). `HeroStage` plays **only the bundled
+  clip** (`assets/video/hero_clouds.mp4`, `hero_clouds_tall.mp4` on phones) over its poster / painting: the PR #17
+  YouTube hero video library (`HeroStage(youtubeId:)`, `hero_youtube*.dart`, `youtube_player_iframe`) was **removed
+  in PR #25 (ADR-036)**. Gated by `settings/features.heroMotion`
   and the visitor's reduced-motion / save-data (`lib/core/motion_env*.dart`); phones get the portrait crop.
 - **Image display styles (ADR-023):** `lib/ui/widgets/styled_image.dart` — `CardCover` (top of a card for
   `card`/`banner`), `CardLead` (title-row lead: halo avatar for `avatar`, the section icon when there is no image),

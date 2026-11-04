@@ -46,10 +46,10 @@ render with `PageBody` (+ `Footer`). Content comes from Riverpod providers (hidd
   next-mass bar and chips, footer) follows the theme in force — see `03-architecture.md` → Theming. Holy Week is a
   dark scene (black wash, dark panels, light text, ashen-silver accent with dark text, crimson accent word, art in
   dim greyscale); the Resurrection is festive (Easter red, bright gold, luminous ivory).
-- **Hero video library (PR #17, ADR-026):** the home hero plays the YouTube link of the theme in force
-  (`heroVideos.byTheme[theme]`, else `heroVideos.active`) muted, looping, without controls; else the bundled cloud
-  clip. The poster shows until the video plays; a YouTube error / blocked autoplay / nothing within 12 s → the
-  bundled clip (or the poster). Never for reduced motion, data saver, `heroMotion` off or under `flutter test`.
+- **Hero video:** the home hero plays the **bundled cloud clip** only (muted, looping, no controls; portrait crop on
+  phones) over its poster; the painting shows when video is not allowed. Never for reduced motion, data saver,
+  `heroMotion` off or under `flutter test`. The YouTube hero video library of PR #17 (ADR-026) was **removed in PR #25
+  (ADR-036, owner request 4 Nov 2026)**; a `heroVideos` map already stored in `settings/features` is ignored.
 
 ### `/about` — `about_page.dart` `AboutPage`
 - History card (bishop line + `historyAr/En`) and **altars** grid (main altar gets a gold cross) — section `history`.

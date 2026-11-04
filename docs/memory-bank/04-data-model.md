@@ -173,7 +173,7 @@ Existence of `settings/church` = "database is seeded" (see `03-architecture.md`)
 | `theme` | `goldenHour\|holyWeek\|resurrection\|nativity\|epiphany\|fasting\|marian\|navy\|green\|brown\|purple` (PR #17) | missing, legacy `burgundy` and unknown → `goldenHour`. With `occasions.auto` off this theme always applies (manual override); on, it is the fallback |
 | `occasions` | map (PR #17, ADR-025) | `{auto: bool (false), easter: bool (true), resurrectionDays: int 1–50 (7), schedule: {r1…r12: 'theme\|YYYY-MM-DD\|YYYY-MM-DD'}}` (`OccasionConfig`). Inclusive Cairo dates; invalid / reversed ranges dropped when read; first matching range wins, then the Easter ranges, else `theme`. Missing = manual |
 | `themeColors` | map (PR #17) | per preset key a string of the 10 palette colours in `ThemePalette.keys` order (`primary\|onPrimary\|onPrimaryAccent\|background\|surface\|surfaceAlt\|ink\|muted\|goldText\|script`), each `#RRGGBB` or empty (= the preset's). Saved auto-corrected for contrast and re-corrected when rendered. Its own field (and write) for the rules budget. Missing = presets as built |
-| `heroVideos` | map (PR #17, ADR-026) | `{items: {v1…v12: {name ≤ 80, url: 'https://www.youtube.com/watch?v=<11-char id>'}}, active: '' \| slot, byTheme: {<preset>: slot}}` (`HeroVideoLibrary`). `''` = the bundled clip. Invalid items, unknown slots / presets and references to missing slots are dropped when read. Missing = bundled clip |
+| `heroVideos` | map (PR #17, ADR-026) — **legacy since PR #25 (ADR-036)** | no longer read or written by the app (the YouTube hero video library was removed); a stored value is kept untouched and the rules still accept / validate the key so saves keep working |
 | `pageHeaders` | map `<pageKey, PageCustom>` (PR #11) | `{}`. Keys = `CustomizablePages.all`: `about, schedule, education, activities, clinics, services, contact, ask`; each entry `{titleAr, titleEn` ≤ 200, `subtitleAr, subtitleEn` ≤ 300, `introAr, introEn` ≤ 1500`}` (all 6 keys written). Unknown pages / non-maps / empty entries are dropped by `fromMap`; `toMap` writes non-empty entries only. `pageHeader(key)` → `PageCustom.empty` when unset. Rendered since PR #13 (`CustomizablePageHeader` / `PageIntro`: title/subtitle override for the current language only; intro via `context.pick`) |
 | `footer` | map (PR #11, FR-G-04) | `{showPhones: true, showSocials: true, showQuickLinks: true, noteAr: '', noteEn: ''}` (`FooterConfig`); notes ≤ 500. Rendered by `Footer` since PR #13 (phones also need `contactInfo`, socials `socials`) |
 | `updatedAt`, `updatedBy` | | stampOk |
@@ -197,7 +197,7 @@ Existence of `settings/church` = "database is seeded" (see `03-architecture.md`)
   **`sections.dailyVerse`** (missing = on; seeded `true`). The map is written only once it differs from the default or
   is already stored. Verse list: bundled asset `assets/verses/daily_verses.json` (not Firestore). Since PR #17 the
   verse is shown **in the hero** (`HeroVerse`), not in a separate card.
-- `occasions`, `themeColors`, `heroVideos` (PR #17): not seeded (missing = current behaviour); each is written only once
+- `occasions`, `themeColors` (PR #17): not seeded (`heroVideos`: legacy, see above) (missing = current behaviour); each is written only once
   it differs from the default or is already stored, in its own write (`featuresSaveWrites`). The seed keeps
   `theme: burgundy` on purpose (it exercises the legacy mapping).
 - `imageStyles` (PR #15, ADR-023): map `collection → avatar|card|banner`, keys limited to the 9 image collections;

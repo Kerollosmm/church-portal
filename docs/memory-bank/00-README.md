@@ -26,7 +26,7 @@ video on every screen size, new parish seal and regenerated icons; ADR-022 revis
 midnight, admin on/off and fixed verse; ADR-024; merged as `6759f0d`) plus PR #17 (`feat/occasion-themes`: occasion
 themes — Golden hour default, dark Holy Week, festive Resurrection, Nativity, Epiphany, fasts, Marian feasts — with
 Cairo-date scheduling and Coptic Easter, contrast-checked palettes and admin colour edits; a YouTube hero video
-library; the verse of the day moved into the hero; ADR-025, ADR-026, ADR-024 amendment; merged as `55e2a92`) plus
+library (removed again in PR #25, ADR-036); the verse of the day moved into the hero; ADR-025, ADR-026, ADR-024 amendment; merged as `55e2a92`) plus
 PR #18 (`feat/categories-pages-contact`: admin-defined categories with items and `/section/<slug>` pages, custom
 pages with blocks and donation info linked from notices, contact types with hall booking and anonymous complaints /
 suggestions, inbox boxes / booking status / notes; ADR-027, ADR-028; merged as `37a58d5`) plus PR #19
@@ -41,8 +41,8 @@ pages / contact types, fingerprinted icon fonts, admin nav icons; ADR-033) plus 
 Sentry error tracking on web + Android with PDPL-safe scrubbing and the `/admin` switch
 `settings/features.errorReporting`; ADR-034; merged as `d60261d`) plus PR #25 (`docs/feature-documentation`, 4 Nov
 2026: the PR #15–#24 behaviour re-checked against the code at `d60261d`, stale assistant / clinics / seeding /
-font notes fixed, and the Arabic feature documentation in [`/documentation/`](../../documentation/README.md);
-ADR-035 — later PRs are listed in `10-decisions-and-history.md`).
+font notes fixed, the Arabic feature documentation in [`/documentation/`](../../documentation/README.md);
+ADR-035; plus the removal of the YouTube hero video library — ADR-036 — later PRs are listed in `10-decisions-and-history.md`).
 
 > **Golden rule:** read this folder before changing anything, and update it in the same PR as every change that
 > alters behaviour, data shape, rules, workflows, content status or open tasks.

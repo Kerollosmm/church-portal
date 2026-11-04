@@ -43,7 +43,7 @@
   كساعة ذهبية)، `occasions` (`auto`، `easter`، `resurrectionDays`، `schedule` بفترات `r1…r12` كل منها نص
   `preset|YYYY-MM-DD|YYYY-MM-DD`)، و `themeColors` (الألوان المعدلة لكل ثيم).
 - أي لون يجعل نصًا أقل من تباين 4.5:1 **يُصحَّح تلقائيًا** عند الحفظ (`OccasionConfig.withReadableCustom`).
-- لكل ثيم فيديو واجهة اختياري (انظر [home-and-hero.md](home-and-hero.md)).
+- الثيم لا يغيّر فيديو الواجهة (كان هناك «فيديو لكل ثيم» في مكتبة يوتيوب التي أُزيلت في PR #25 — ADR-036).
 - القواعد: `validOccasions` و `validThemeColors` في `firestore.rules`. الاختبارات: `test/occasion_theme_test.dart`
   (تباين كل ثيم، حساب عيد القيامة 1900–2099، التبديل عند منتصف ليل القاهرة) و `test/occasion_admin_test.dart`.
 

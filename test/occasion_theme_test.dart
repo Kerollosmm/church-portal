@@ -14,7 +14,6 @@ import 'package:church_portal/data/seed_data.dart';
 import 'package:church_portal/domain/cairo_time.dart';
 import 'package:church_portal/domain/custom_content.dart';
 import 'package:church_portal/domain/features.dart';
-import 'package:church_portal/domain/hero_video.dart';
 import 'package:church_portal/domain/occasion_theme.dart';
 import 'package:church_portal/router.dart';
 import 'package:church_portal/state/providers.dart';
@@ -383,75 +382,17 @@ void main() {
     });
   });
 
-  group('hero video library', () {
-    test('YouTube links: youtube.com and youtu.be ids only', () {
-      const ok = {
-        'https://www.youtube.com/watch?v=dQw4w9WgXcQ': 'dQw4w9WgXcQ',
-        'https://youtube.com/watch?v=dQw4w9WgXcQ&t=10s': 'dQw4w9WgXcQ',
-        'https://m.youtube.com/watch?feature=share&v=dQw4w9WgXcQ': 'dQw4w9WgXcQ',
-        'https://youtu.be/dQw4w9WgXcQ?si=abc': 'dQw4w9WgXcQ',
-        'youtu.be/dQw4w9WgXcQ': 'dQw4w9WgXcQ',
-        'https://www.youtube.com/embed/dQw4w9WgXcQ': 'dQw4w9WgXcQ',
-        'https://www.youtube.com/shorts/dQw4w9WgXcQ': 'dQw4w9WgXcQ',
-        'https://www.youtube.com/live/dQw4w9WgXcQ': 'dQw4w9WgXcQ',
-      };
-      ok.forEach((u, id) => expect(youtubeVideoId(u), id, reason: u));
-      for (final bad in const [
-        '',
-        'dQw4w9WgXcQ',
-        'https://vimeo.com/12345678901',
-        'https://www.youtube.com.evil.com/watch?v=dQw4w9WgXcQ',
-        'https://evil.com/youtu.be/dQw4w9WgXcQ',
-        'https://www.youtube.com/watch?v=short',
-        'https://www.youtube.com/playlist?list=PL123',
-        'https://www.youtube.com/@church',
-        'javascript:alert(1)//youtu.be/dQw4w9WgXcQ',
-        'https://user@youtu.be/dQw4w9WgXcQ',
-        'ftp://youtu.be/dQw4w9WgXcQ',
-      ]) {
-        expect(youtubeVideoId(bad), isNull, reason: bad);
-      }
-      expect(canonicalYoutubeUrl('dQw4w9WgXcQ'), 'https://www.youtube.com/watch?v=dQw4w9WgXcQ');
-    });
-
-    test('library: active / per-theme video, removal keeps the others, invalid entries dropped', () {
-      final lib = HeroVideoLibrary.fromMap(const {
-        'items': {
-          'v1': {'name': 'Clouds', 'url': 'https://www.youtube.com/watch?v=aaaaaaaaaaa'},
-          'v2': {'name': 'Candles', 'url': 'https://youtu.be/bbbbbbbbbbb'},
-          'v3': {'name': 'Bad', 'url': 'https://vimeo.com/1'},
-          'v4': {'name': '', 'url': 'https://youtu.be/ccccccccccc'},
-          'x9': {'name': 'Slot', 'url': 'https://youtu.be/ddddddddddd'},
-        },
-        'active': 'v1',
-        'byTheme': {'holyWeek': 'v2', 'marian': 'v3', 'nope': 'v1'},
-      });
-      expect(lib.items.map((i) => i.id), ['v1', 'v2']);
-      expect(lib.byTheme, {'holyWeek': 'v2'});
-      expect(lib.videoFor('goldenHour')?.youtubeId, 'aaaaaaaaaaa');
-      expect(lib.videoFor('holyWeek')?.youtubeId, 'bbbbbbbbbbb');
-      expect(lib.freeSlot, 'v3');
-      final r = lib.remove('v2');
-      expect(r.items.map((i) => i.id), ['v1']);
-      expect(r.videoFor('holyWeek')?.id, 'v1');
-      expect(HeroVideoLibrary.fromMap(lib.toMap()), lib);
-      // Switching the active video deletes nothing.
-      final switched = lib.copyWith(active: 'v2');
-      expect(switched.items, lib.items);
-      expect(const HeroVideoLibrary().videoFor('holyWeek'), isNull); // bundled clip
-    });
-
-    test('activeThemeProvider picks the theme video', () async {
+  group('hero video library removed (ADR-036)', () {
+    test('a stored library does not affect the theme in force', () async {
       final c = ProviderContainer(overrides: [
         repositoryProvider.overrideWithValue(SeedRepository(_seed(const {
           'theme': 'holyWeek',
           'heroVideos': {
             'items': {
               'v1': {'name': 'A', 'url': 'https://www.youtube.com/watch?v=aaaaaaaaaaa'},
-              'v2': {'name': 'B', 'url': 'https://www.youtube.com/watch?v=bbbbbbbbbbb'},
             },
             'active': 'v1',
-            'byTheme': {'holyWeek': 'v2'},
+            'byTheme': {'holyWeek': 'v1'},
           },
         }))),
         nowProvider.overrideWith((ref) => Stream.value(_nov1)),
@@ -459,7 +400,7 @@ void main() {
       addTearDown(c.dispose);
       final t = await _active(c);
       expect(t.key, ThemePresets.holyWeek);
-      expect(t.video?.youtubeId, 'bbbbbbbbbbb');
+      expect(FeatureSettings.fromMap(const {'heroVideos': {'active': 'v1'}}).toMap().keys, isNot(contains('heroVideos')));
     });
   });
 

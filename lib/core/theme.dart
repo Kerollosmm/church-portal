@@ -167,7 +167,7 @@ class OccasionColors extends ThemeExtension<OccasionColors> {
   /// Dark scenes dim the golden art to a sombre grey (null = unchanged).
   ColorFilter? get artFilter => dark ? kSombreArtFilter : null;
 
-  /// The same for platform views (the web hero video / YouTube iframe).
+  /// The same for platform views (the web hero video).
   String get artCssFilter => dark ? 'grayscale(1) brightness(0.42)' : 'none';
 
   @override

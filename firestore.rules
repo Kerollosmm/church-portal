@@ -709,6 +709,10 @@ service cloud.firestore {
       return ['v1', 'v2', 'v3', 'v4', 'v5', 'v6', 'v7', 'v8', 'v9', 'v10', 'v11', 'v12'];
     }
 
+    // LEGACY (ADR-036, PR #25): the app no longer reads or writes heroVideos
+    // (the YouTube hero video library was removed). The key stays allowed and
+    // validated so documents that already store it keep saving; nothing is
+    // deleted from live data.
     // Hero video library (ADR-026): slots v1…v12 {name <= 80, url = a
     // youtube.com/watch?v= or youtu.be/ link with an 11-character id}, the
     // active slot ('' = the bundled clip) and an optional slot per preset.

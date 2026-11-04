@@ -178,35 +178,31 @@ final languageStoreProvider = Provider<LanguageStore>((ref) => const PlatformLan
 
 final localeProvider = NotifierProvider<LocaleNotifier, Locale>(LocaleNotifier.new);
 
-/// The theme in force (ADR-025) and the hero video it plays (ADR-026).
+/// The theme in force (ADR-025).
 @immutable
 class ActiveTheme {
   final String key;
   final ThemeSource source;
   final ThemePalette palette;
-
-  /// The YouTube link for the hero (the theme's own, else the active one), or
-  /// null for the bundled clip.
-  final HeroVideo? video;
-  const ActiveTheme(this.key, this.source, this.palette, this.video);
+  const ActiveTheme(this.key, this.source, this.palette);
 
   @override
   bool operator ==(Object other) =>
-      other is ActiveTheme && other.key == key && other.source == source && other.palette == palette && other.video == video;
+      other is ActiveTheme && other.key == key && other.source == source && other.palette == palette;
 
   @override
-  int get hashCode => Object.hash(key, source, palette, video);
+  int get hashCode => Object.hash(key, source, palette);
 }
 
 /// Resolves `settings/features` (selected theme, automatic schedule / Coptic
-/// Easter on the Cairo calendar day, colour edits, video library) into the
-/// theme in force. Equal values do not notify, so the app rebuilds its theme
-/// only when the theme (or its video) actually changes — at Cairo midnight
+/// Easter on the Cairo calendar day, colour edits) into the theme in force.
+/// Equal values do not notify, so the app rebuilds its theme only when the
+/// theme actually changes — at Cairo midnight
 /// at the latest.
 final activeThemeProvider = Provider<ActiveTheme>((ref) {
   final f = ref.watch(featuresProvider);
   final now = ref.watch(nowProvider).value ?? DateTime.now();
   final c = CairoTime.fromInstant(now);
   final r = f.themeOn(DateTime.utc(c.year, c.month, c.day));
-  return ActiveTheme(r.theme, r.source, f.occasions.paletteFor(r.theme), f.heroVideos.videoFor(r.theme));
+  return ActiveTheme(r.theme, r.source, f.occasions.paletteFor(r.theme));
 });

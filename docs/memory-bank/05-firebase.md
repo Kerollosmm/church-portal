@@ -107,7 +107,8 @@ Notable details:
   `{name, url}` with name 1–80 chars and url `https://www.youtube.com/watch?v=<id>` or `https://youtu.be/<id>`
   (`[A-Za-z0-9_-]{11}`, nothing after). Strings (not maps) and caller-computed changed-key sets keep a full first save
   of 12 ranges, 11 palettes or 12 videos under the 1,000-expression cap (maps of maps did not). Contrast is not
-  checkable in rules: the app corrects on save and again on render. Emulator groups "ADR-025" and "ADR-026".
+  checkable in rules: the app corrects on save and again on render. Emulator groups "ADR-025" and "ADR-026". **ADR-036 (PR #25):** the app no longer writes `heroVideos`; `validHeroVideos`
+  and the allowed key stay (marked LEGACY in `firestore.rules`) so documents that already store it keep saving.
 - `validFeatures`: key allow-list via `keysAllowed` (create: `keys().hasOnly`; update: only the **changed** keys must
   be allowed, so an untouched legacy key no longer blocks a merge save — same as `settings/church`, PR #10), `sections` keys ⊆ the 19 section keys (PR #16 added `dailyVerse`, PR #18 `customSections` / `customPages`)
   (incl. `media`)

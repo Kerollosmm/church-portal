@@ -390,6 +390,25 @@ void main() {
     expect(stage.motion, isTrue, reason: 'heroMotion defaults on');
   });
 
+  testWidgets('hero plays only the bundled clip, even with a stored YouTube library (ADR-036)', (tester) async {
+    await _pump(
+        tester,
+        _seedWith(const {}, features: const {
+          'heroVideos': {
+            'items': {
+              'v1': {'name': 'A', 'url': 'https://www.youtube.com/watch?v=aaaaaaaaaaa'},
+            },
+            'active': 'v1',
+          },
+        }),
+        size: const Size(1280, 3000));
+    final stage = tester.widget<HeroStage>(
+        find.descendant(of: find.byKey(const Key('homeHero')), matching: find.byType(HeroStage)));
+    expect(stage.video, ArtAssets.heroVideo);
+    expect(stage.poster, ArtAssets.heroPoster);
+    expect(stage.image, ArtAssets.heroWide);
+  });
+
   testWidgets('seal tab: new seal on a gold ring with a soft shadow', (tester) async {
     await tester.pumpWidget(const MaterialApp(home: Scaffold(body: Center(child: SealTab()))));
     final img = tester.widget<Image>(find.descendant(of: find.byType(SealTab), matching: find.byType(Image)));
