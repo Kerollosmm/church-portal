@@ -11,6 +11,7 @@ import '../../domain/item_detail.dart';
 import '../../domain/models.dart';
 import '../../domain/rules.dart';
 import '../../domain/schedule.dart';
+import '../../domain/today.dart';
 import '../../domain/time_format.dart';
 import '../../state/providers.dart';
 import 'common.dart';
@@ -100,7 +101,8 @@ class NextMassCard extends ConsumerWidget {
       body = ErrorState(onRetry: () => ref.invalidate(liturgiesProvider));
     } else {
       final r = computeNextMass(liturgies: lits.value ?? const [], seasons: seasons.value ?? const [], now: now);
-      body = _content(context, r, now);
+      final s = ref.watch(settingsProvider).value;
+      body = _content(context, r, now, ref.watch(todaySettingsProvider), s?.lat, s?.lng);
     }
 
     final primary = Theme.of(context).colorScheme.primary;
@@ -146,7 +148,7 @@ class NextMassCard extends ConsumerWidget {
     );
   }
 
-  Widget _content(BuildContext context, NextMassResult r, DateTime now) {
+  Widget _content(BuildContext context, NextMassResult r, DateTime now, TodaySettings today, double? lat, double? lng) {
     if (r.isEmpty) return EmptyState(message: context.tr('noUpcoming'), icon: Icons.event_busy);
     final children = <Widget>[];
     if (r.activeSeasons.isNotEmpty) {
@@ -187,6 +189,9 @@ class NextMassCard extends ConsumerWidget {
         _ => context.tr('inDays', {'n': localDigits(context, '${n.dayOffset}')}),
       };
       final mins = n.start.difference(now).inMinutes;
+      // A service after the liturgical day's start (18:00 by default)
+      // belongs to the next day: «الليلة • ليلة الخميس» (ADR-039).
+      final eve = today.isEveService(n.start, lat: lat, lng: lng);
       String? countdown;
       if (n.dayOffset == 0 && mins >= 0) {
         final h = mins ~/ 60, m = mins % 60;
@@ -196,7 +201,11 @@ class NextMassCard extends ConsumerWidget {
         countdown = context.tr('startsIn', {'t': t});
       }
       children.add(Wrap(spacing: 8, runSpacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: [
-        Pill('$dayLabel • ${weekdayLabel(context, n.start.weekday)}', color: Theme.of(context).colorScheme.primary),
+        Pill(
+            eve
+                ? '${n.dayOffset == 0 ? context.tr('tonight') : dayLabel} • ${context.tr('eveOf', {'d': weekdayLabel(context, n.start.add(const Duration(days: 1)).weekday)})}'
+                : '$dayLabel • ${weekdayLabel(context, n.start.weekday)}',
+            color: Theme.of(context).colorScheme.primary),
         if (countdown != null) Pill(countdown, color: context.pal.goldText, icon: Icons.timer_outlined),
       ]));
       children.add(const SizedBox(height: 8));

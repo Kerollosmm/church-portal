@@ -5,18 +5,22 @@ import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 
+import '../core/content_ready.dart';
 import '../core/locale_storage.dart';
 import '../data/admin_repository.dart';
 import '../data/content_repository.dart';
 import '../data/firebase_bootstrap.dart';
 import '../data/media_repository.dart';
+import '../data/synaxarium_source.dart';
 import '../domain/assistant_settings.dart';
 import '../domain/cairo_time.dart';
 import '../domain/contact_categories.dart';
+import '../domain/coptic_calendar.dart';
 import '../domain/custom_content.dart';
 import '../domain/daily_verse.dart';
 import '../domain/features.dart';
 import '../domain/models.dart';
+import '../domain/today.dart';
 
 /// Overridden in main() after bootstrapping.
 final firebaseStatusProvider = Provider<FirebaseStatus>((ref) => FirebaseStatus.unavailable);
@@ -226,4 +230,46 @@ final activeThemeProvider = Provider<ActiveTheme>((ref) {
   final c = CairoTime.fromInstant(now);
   final r = f.themeOn(DateTime.utc(c.year, c.month, c.day));
   return ActiveTheme(r.theme, r.source, f.occasions.paletteFor(r.theme));
+});
+
+// ------------------------- today layer (ADR-039 / ADR-040) -------------------------
+// Everything below reads settings/features (already streamed for every
+// visit) and the bundled / hosted data: no extra Firestore listener or read.
+
+/// "Today" settings (top-level keys of settings/features).
+final todaySettingsProvider = Provider<TodaySettings>((ref) => ref.watch(featuresProvider.select((f) => f.today)));
+
+/// The liturgical day now (rolls at 18:00 by default; equal values do not
+/// notify, so it changes at most twice a day).
+final liturgicalDayProvider = Provider<LiturgicalDay>((ref) {
+  final now = ref.watch(nowProvider).value ?? DateTime.now();
+  final s = ref.watch(settingsProvider).value;
+  return ref.watch(todaySettingsProvider).liturgicalDay(now, lat: s?.lat, lng: s?.lng);
+});
+
+/// Reads /data/today.json (overridden in tests).
+final synaxariumSourceProvider = Provider<SynaxariumSource>((ref) => SynaxariumSource());
+
+/// The Katameros commemoration (/data/today.json), loaded after the page is
+/// complete and idle; empty in seed mode (no Firebase: offline or tests).
+final synaxariumProvider = FutureProvider<SynaxariumData>((ref) async {
+  if (!ref.watch(repositoryProvider).isLive) return SynaxariumData.empty;
+  final date = ref.watch(liturgicalDayProvider.select((d) => d.date));
+  await ContentReady.whenIdle;
+  return ref.read(synaxariumSourceProvider).load(date);
+});
+
+/// The home page's top event (church event > Katameros > computed feasts).
+final topEventProvider = Provider<TopEvent?>((ref) {
+  final f = ref.watch(featuresProvider);
+  final now = ref.watch(nowProvider).value ?? DateTime.now();
+  final s = ref.watch(settingsProvider).value;
+  return resolveTopEvent(
+    now: now,
+    settings: f.today,
+    events: f.dayEvents,
+    synaxarium: ref.watch(synaxariumProvider).value ?? SynaxariumData.empty,
+    lat: s?.lat,
+    lng: s?.lng,
+  );
 });

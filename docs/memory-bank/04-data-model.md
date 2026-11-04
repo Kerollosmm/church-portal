@@ -190,6 +190,21 @@ Existence of `settings/church` = "database is seeded" (see `03-architecture.md`)
   `milestones→milestones`, `map→contactInfo` (block disappears when its section is off). `directory` and `banner`
   have no section.
 
+- **Today layer (PR #31, ADR-039 / ADR-040)** — top-level keys, not seeded, read into `FeatureSettings.today` /
+  `.dayEvents` and **never written by `toMap()`** (edited by /admin → «اليوم والبث المباشر» with field-level merges):
+
+  | Key | Type / rule | Default |
+  |---|---|---|
+  | `copticStrip` | `all` \| `home` \| `off` | `all` (Coptic date strip on every page) |
+  | `dayStartMode` | `fixed` \| `sunset` | `fixed` |
+  | `dayStartsAt` | `''` or `HH:mm` | `''` = 18:00; `00:00` = civil midnight |
+  | `topEvent`, `commemoration` | bool | true, true |
+  | `liveEnabled` | bool | false |
+  | `liveUrl` | `''` / http(s) URL ≤ 500 | `''` (banner needs a link) |
+  | `liveLabelAr`, `liveLabelEn` | string ≤ 120 | `''` = «بث مباشر الآن من الكنيسة» / "Live now from the church" |
+  | `liveEndsAt` | timestamp / null | none (automatic switch-off) |
+  | `dayEvents` | list ≤ 20 of strings `date␟endDate␟start␟end␟titleAr␟titleEn␟speakerAr␟speakerEn␟topicAr␟topicEn␟noteAr␟noteEn␟link` (U+001F; date `YYYY-MM-DD` required, endDate optional, times `''`/HH:mm, titleAr 1–300, texts ≤ 300, notes ≤ 500, link `''` / path / http(s)) | `[]` |
+
 - PR #18 (ADR-027): `sections.customSections` (custom categories at `/section/*` + their menu entries) and
   `sections.customPages` (custom pages at `/page/*` + their menu entries); missing = on; seeded `true`.
 - `dailyVerse` (PR #16, ADR-024): map `{mode: 'daily'|'fixed' (default daily), textAr: string ≤500, refAr: string ≤60}`;
@@ -390,6 +405,13 @@ Doc id = Firebase Auth **UID**. Missing/unknown role is treated as **editor** (`
   `known − current − retired = ∅`, so removing an id from the seed **requires** adding it to `retired`.
 - Seed counts (current): settings 2, alerts 4, seasons 5, liturgies 47, meetings 11, activities 11, clinics 11,
   facilities 5, priests 11, milestones 4, saints 2.
+
+## Hosting data file `/data/today.json` (PR #31, ADR-040)
+
+Not Firestore: written by `.github/workflows/synaxarium.yml` (twice a day) and every `deploy.yml` build.
+`{"source": "api.katameros.app", "fetchedAt": ISO, "days": {"YYYY-MM-DD": {"coptic": "25/2/1743", "feastAr", "feastEn",
+"ar": [Synaxarium titles], "en": [...]}}}` for yesterday … +7 (Cairo dates). Read by `SynaxariumSource`
+(device-cached). Missing / malformed = computed feasts.
 
 ## Indexes
 

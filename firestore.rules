@@ -590,7 +590,9 @@ service cloud.firestore {
       return keysAllowed(['sections', 'homeOrder', 'homeHidden', 'heroTitleAr', 'heroTitleEn', 'heroSubtitleAr',
                           'heroSubtitleEn', 'bannerEnabled', 'bannerAr', 'bannerEn', 'bannerLink', 'theme',
                           'pageHeaders', 'footer', 'heroMotion', 'heroShowAddress', 'imageStyles', 'dailyVerse', 'occasions', 'themeColors',
-                          'heroVideos', 'errorReporting', 'updatedAt', 'updatedBy'])
+                          'heroVideos', 'errorReporting', 'copticStrip', 'dayStartMode', 'dayStartsAt', 'topEvent',
+                          'commemoration', 'liveEnabled', 'liveUrl', 'liveLabelAr', 'liveLabelEn', 'liveEndsAt',
+                          'dayEvents', 'updatedAt', 'updatedBy'])
         && (!('sections' in changed) || !('sections' in d) || validSections(d.sections))
         && (!('homeOrder' in changed) || !('homeOrder' in d) || (d.homeOrder is list && d.homeOrder.size() <= 7
               && d.homeOrder.hasOnly(['banner', 'alerts', 'nextMass', 'quickContacts', 'milestones', 'directory', 'map'])))
@@ -624,7 +626,38 @@ service cloud.firestore {
         && (!('pageHeaders' in changed) || !('pageHeaders' in d) || validPageHeaders(d.pageHeaders))
         // Verse of the day mode / fixed verse (missing = daily rotation).
         && (!('dailyVerse' in changed) || !('dailyVerse' in d) || validDailyVerse(d.dailyVerse))
+        // Today layer (ADR-039 / ADR-040): Coptic date strip, start of the
+        // liturgical day, top event card, live-stream banner.
+        && (!changed.hasAny(['copticStrip', 'dayStartMode', 'dayStartsAt', 'topEvent', 'commemoration'])
+            || (optIn(d, 'copticStrip', ['all', 'home', 'off']) && optIn(d, 'dayStartMode', ['fixed', 'sunset'])
+                && optTime(d, 'dayStartsAt') && optBool(d, 'topEvent') && optBool(d, 'commemoration')))
+        && (!changed.hasAny(['liveEnabled', 'liveUrl', 'liveLabelAr', 'liveLabelEn', 'liveEndsAt'])
+            || (optBool(d, 'liveEnabled') && optHttpUrl(d, 'liveUrl', 500) && str(d, 'liveLabelAr', 120)
+                && str(d, 'liveLabelEn', 120) && optTimestamp(d, 'liveEndsAt')))
+        && (!('dayEvents' in changed) || validDayEvents(d))
         && (!changed.hasAny(['updatedAt', 'updatedBy']) || stampOk(d));
+    }
+
+    // Church events of the day (ADR-040): up to 20, each ONE string
+    // date, endDate, start, end, titleAr, titleEn, speakerAr, speakerEn,
+    // topicAr, topicEn, noteAr, noteEn, link joined by U+001F
+    // (lib/domain/today.dart DayEvent.encode). One regex per event keeps the
+    // list within the 1,000-expression budget. date YYYY-MM-DD (required),
+    // endDate '' or a date, times '' or HH:mm, titleAr 1-300, other texts
+    // <= 300, notes <= 500, link '' / in-app path / http(s) URL.
+    function validDayEvents(d) {
+      return optList(d, 'dayEvents', 20)
+        && (d.get('dayEvents', null) == null || dayEventItems(d.dayEvents, d.dayEvents.size()));
+    }
+    function dayEventItems(b, n) {
+      return (n <= 0 || (validDayEvent(b[0]) && (n <= 1 || (validDayEvent(b[1]) && (n <= 2 || (validDayEvent(b[2]) && (n <= 3 || (validDayEvent(b[3]) && (n <= 4 || (validDayEvent(b[4]) && true))))))))))
+        && (n <= 5 || (validDayEvent(b[5]) && (n <= 6 || (validDayEvent(b[6]) && (n <= 7 || (validDayEvent(b[7]) && (n <= 8 || (validDayEvent(b[8]) && (n <= 9 || (validDayEvent(b[9]) && true))))))))))
+        && (n <= 10 || (validDayEvent(b[10]) && (n <= 11 || (validDayEvent(b[11]) && (n <= 12 || (validDayEvent(b[12]) && (n <= 13 || (validDayEvent(b[13]) && (n <= 14 || (validDayEvent(b[14]) && true))))))))))
+        && (n <= 15 || (validDayEvent(b[15]) && (n <= 16 || (validDayEvent(b[16]) && (n <= 17 || (validDayEvent(b[17]) && (n <= 18 || (validDayEvent(b[18]) && (n <= 19 || (validDayEvent(b[19]) && true))))))))));
+    }
+    function validDayEvent(e) {
+      return e is string && e.size() <= 4000
+        && e.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}\\x1f([0-9]{4}-[0-9]{2}-[0-9]{2})?\\x1f(([01][0-9]|2[0-3]):[0-5][0-9])?\\x1f(([01][0-9]|2[0-3]):[0-5][0-9])?\\x1f[^\\x1f]{1,300}\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{0,500}\\x1f[^\\x1f]{0,500}\\x1f(|/([^/ \\x1f][^ \\x1f]*)?|[Hh][Tt][Tt][Pp][Ss]?://[^/ \\x1f]+[.][^/ \\x1f]+([/?#][^ \\x1f]*)?)');
     }
 
     // ------------------- occasion themes & hero videos -----------------------

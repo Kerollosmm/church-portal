@@ -104,6 +104,14 @@ Job **firestore-rules** (15 min): Java Temurin 21 + Node 22 → `npm ci` in `too
 4. **preview** (same-repo PRs, needs build): `hosting:channel:deploy pr-<n> --only app --expires 7d --json` → parse URL → upsert
    one PR comment "Firebase Hosting preview" (github-script).
 
+### `synaxarium.yml` — daily commemoration (PR #31, ADR-040)
+
+Cron `10 16 * * *` and `10 22 * * *` (UTC) + manual. `node tool/fetch_synaxarium.js $RUNNER_TEMP/today.json`
+(Katameros API, yesterday … +7) → firebase-credentials → `node tool/publish_hosting_file.js … /data/today.json`
+(clone the live Hosting version without that file, add it, finalize, release — no rebuild, no Firestore).
+Concurrency group `hosting-live`, shared with `deploy.yml` → `deploy-live`. `deploy.yml`'s build also writes
+`build/web/data/today.json` (fetch, else the live copy, else none). Re-run it from Actions if the file is stale.
+
 ### `.github/actions/firebase-credentials` (composite)
 Normalises the service-account secret (first JSON object only, validates, `$RUNNER_TEMP/sa.json` 0600, exports
 `GOOGLE_APPLICATION_CREDENTIALS`, never echoes) and primes firebase-tools' API-enablement cache (see `05-firebase.md`).

@@ -780,6 +780,76 @@ supersede them.
   events and re-checks for every page, still no proof for a missing doc); a scheduled sitemap job (needs Blaze /
   Functions or another secret-bearing workflow); hiding the loading screen on a fixed delay.
 
+## ADR-039 (PR #31) — Coptic calendar engine, liturgical day at 18:00, Coptic date strip
+
+- **Context (owner plan «التقرير المعماري وخارطة تطوير بوابة الكنيسة للمناسبات الاستثنائية», `docs/holy-week-and-revivals-roadmap.md`,
+  4 Nov 2026):** the portal changed day at civil midnight, but the Church's day starts the evening before («بصخة
+  ليلة الثلاثاء» is prayed on Monday evening). No Coptic date was shown anywhere.
+- **Decision:** `lib/domain/coptic_calendar.dart` (pure Dart, offline): Gregorian ↔ Coptic through the Julian Day
+  Number (1 Tout 1 AM = JDN 1825030; Coptic leap year when `year % 4 == 3`, so 1 Tout 1744 = 12 Sep 2027), Arabic /
+  English month names, «الأربعاء ٢٥ بابه ١٧٤٣ ش». `liturgicalDayAt(instant, mode:, fixedAt:)`: **default a fixed
+  18:00** (owner, 4 Nov 2026: "keep the plan exactly"), admin-editable (`settings/features.dayStartsAt`, `00:00` =
+  civil midnight); optional mode `sunset` = the actual sunset at the **church in Alexandria** (`lib/domain/sun.dart`,
+  NOAA general solar position equations, church coordinates 31.260138 N, 30.01129 E, or `settings/church.lat/lng`;
+  checked within 2 min of timeanddate.com). Africa/Cairo (Egypt's single time zone) is only the clock; **no time-zone
+  label is shown anywhere in the UI** (owner) — the existing «توقيت القاهرة» / "Cairo time" admin labels and hints were
+  removed.
+- Uses: `CopticDateStrip` (top of every page by default; `copticStrip` = all / home / off) shows the liturgical day
+  («ليلة الخميس …» after the start); the **verse of the day** rotates on the liturgical day
+  (`resolveDailyVerse(..., day:)`); the next-service card labels a service after the start «الليلة • ليلة الخميس»
+  (`TodaySettings.isEveService`). `computeNextMass` itself is unchanged (real instants). Movable feasts reuse
+  `orthodoxEaster` (the Holy Week theme's computus).
+- **Footer note (PR #30 left-over):** `SteadySeedNote` shows «تعرض البيانات المحفوظة مع التطبيق» only once
+  `servingSeed` has stayed true for 4 s on live Firestore (at once in seed mode), so a stream briefly on the seed
+  during a cold start (`/page/<slug>`) no longer flashes it.
+- Tests: `test/coptic_calendar_test.dart` (known dates from api.katameros.app: 1 Tout 1743 = 11 Sep 2026, 29 Kiahk
+  1743 = 7 Jan 2027, 28 Kiahk 1744 = 7 Jan 2028, 1 Tout 1744 = 12 Sep 2027; 1900–2100 round trip; cut-over incl.
+  EEST; sunsets), `test/today_widgets_test.dart`.
+
+## ADR-040 (PR #31) — Top event of the day (church event > Katameros > computed feasts) and the live banner, at no Firestore cost
+
+- **Owner constraints (4 Nov 2026):** Spark plan (no Cloud Functions, no paid proxy); keep Firebase free quotas: no new
+  always-on listeners, no Firestore reads per visitor for the Katameros data (a static Hosting JSON), new settings
+  inside existing settings docs, no polling. The Katameros fetch runs in a **scheduled GitHub Action**, not in the
+  client (owner reversed a direct-call idea; for the record the API is MIT open source, answers
+  `Access-Control-Allow-Origin: *` and documents no rate limit).
+- **Hierarchy (`resolveTopEvent`, `lib/domain/today.dart`):** (1) an admin church event covering today and not yet
+  ended (on the eve, after the day's start: one covering the liturgical day) — title, times, speaker, topic, note,
+  link; (2) otherwise, when `commemoration` is on, the **Katameros** feast title / Synaxarium entries of the
+  liturgical day; (3) otherwise the **computed feast list** (`lib/domain/coptic_feasts.dart`: Nayrouz, Cross,
+  Nativity on 7 Jan, Theophany 11 Touba, Annunciation 29 Baramhat, Entry into Egypt, Transfiguration, Assumption,
+  fasts' first days, and from Easter: Nineveh, Great Lent, Lazarus Saturday, Palm Sunday, Holy Week days, Easter,
+  Thomas Sunday, Ascension, Pentecost, Apostles' fast). `topEvent` off hides the card.
+- **Storage:** all in **`settings/features`** (already streamed on every visit): `copticStrip`, `dayStartMode`,
+  `dayStartsAt`, `topEvent`, `commemoration`, `liveEnabled`, `liveUrl`, `liveLabelAr/En`, `liveEndsAt`, and
+  `dayEvents` (≤ 20 strings, `date␟endDate␟start␟end␟titleAr␟titleEn␟speakerAr␟speakerEn␟topicAr␟topicEn␟noteAr␟noteEn␟link`,
+  one regex each in the rules — `validDayEvent`). Parsed into `FeatureSettings.today` / `.dayEvents`, **never written
+  by `FeatureSettings.toMap()`**; edited in /admin → **«اليوم والبث المباشر» / Today & live stream** (generic
+  `DocDef` form on `settings/features`, which writes only the keys it changed). No new collection, no new listener.
+- **Katameros → `/data/today.json`:** `tool/fetch_synaxarium.js` (Node 22, built-ins only) fetches
+  `https://api.katameros.app/readings/gregorian/dd-MM-yyyy?languageId=3|2` for the Cairo days yesterday … +7 (18 small
+  GETs), keeps the feast title, Coptic date and Synaxarium titles (≈ 3 KB). `.github/workflows/synaxarium.yml` runs it
+  at 16:10 and 22:10 UTC (18:10 / 00:10 in winter, 19:10 / 01:10 in summer, local) and `tool/publish_hosting_file.js`
+  publishes the one file **without rebuilding**: Hosting REST API v1beta1 — clone the live version (excluding the
+  file), `populateFiles` + upload the gzip, finalize, release. Concurrency group `hosting-live` is shared with
+  `deploy.yml`'s `deploy-live`, so a clone can never roll back a fresh deploy; `deploy.yml`'s build also writes the
+  file (fallback: the live copy), so a code deploy never drops it. Each publish adds a Hosting version (files are
+  de-duplicated); the owner can cap kept versions in the Firebase console (Hosting → release storage settings).
+- **Client (`lib/data/synaxarium_source.dart`):** after the page is complete and idle (`ContentReady.whenIdle`), one
+  same-origin GET of `/data/today.json` **only when the copy stored on the device (shared_preferences / localStorage)
+  has no entry for the liturgical day** — so about one ~3 KB request per device per week at most (the file covers 8
+  days), none in seed mode. Any failure → stored copy → computed feasts. Credit line «المصدر: القطمارس (katameros.app)».
+- **Live banner (`LiveStreamBanner`):** red bar at the top of every page while `liveEnabled` and an http(s)
+  `liveUrl` (YouTube / Facebook / any) and before `liveEndsAt`; pulsing dot (static under reduced motion); one tap
+  opens the stream; default text «بث مباشر الآن من الكنيسة», admin text optional. Re-evaluated by the existing 30 s
+  clock (`nowProvider`), so the automatic switch-off needs no polling.
+- **Cost per visit (Firestore):** reads **+0**, listeners **+0**, writes **+0** (everything rides on the existing
+  `settings/features` listener); an admin save of the Today screen = 1 write. Hosting: ≤ 1 × ~3 KB GET per device
+  per day (usually per week). GitHub Actions: 2 short runs a day.
+- Rules: `validFeatures` allow-list + checks (`copticStrip` ∈ all/home/off, `dayStartMode` ∈ fixed/sunset,
+  `dayStartsAt` HH:mm, bools, `liveUrl` http(s) ≤ 500, labels ≤ 120, `liveEndsAt` timestamp/null, `dayEvents` ≤ 20
+  valid strings) — `tool/rules_test` "ADR-039 / ADR-040" group.
+
 ## Timeline
 
 | When | PR / commit | What |
@@ -822,5 +892,7 @@ supersede them.
 | 4 Nov 2026 | **PR #29** — "PageSpeed: same hero, CSS ambient layer on web, lazy App Check, static first paint, crawler files" (`perf/pagespeed-green`; PR #27 was squash-merged as `b7e5ed2`, PR #28 closed unmerged) | ADR-037: hero haze + ray shimmer as a CSS-animated DOM layer on web (`hero_ambient*.dart`, `HeroAmbientSpec`), App Check activated on the assistant's first use (`ensureAppCheckActivated`), static hero poster + church name splash, `Intl.v8BreakIterator` → `Intl.Segmenter` shim, seal 178 → 27 KB, Hosting regex rewrites (real 404s for missing files, dotted slugs / ids still load) + COOP, `web/llms.txt`, `--source-maps`; `test/pagespeed_test.dart`. |
 
 | 4 Nov 2026 | **PR #30** — "Footer bundled-data note, sitemap from Firestore, loading screen until real content" (`fix/footer-sitemap-loading`; PR #29 was squash-merged as `5a6a44c`) | ADR-038: `SeedGate.markSeeded` / `whenSeeded` (the `settings/church` listener proves seeding for every stream; empty collections / missing optional docs no longer strand the footer note), `sitemap.xml` generated read-only from Firestore in `deploy.yml` (`tool/export_public_content.js`, `tool/gen_sitemap.dart`, `lib/domain/sitemap.dart`, static fallback), loading screen kept until `app-content-ready` (9 s cap), hero video / CSS motion started at page idle; `test/sitemap_test.dart`, `test/content_ready_test.dart`, new groups in `content_guard_test.dart` / `pagespeed_test.dart`. Second commit (live-check follow-ups): footer hides «العيادات» until the switches load, live query started before the seeding check + custom fallback delay counted from the subscription (missing custom / detail pages settle in ≤ ~13 s instead of 15–24 s), English image alts and Latin-only times in English, `test/live_check_followups_test.dart`; CodeRabbit fixes to `tool/build_sitemap.sh` and the docs. |
+
+| 4 Nov 2026 | **PR #31** — "Coptic calendar, top event of the day, live banner" (`feat/coptic-calendar-today-live`, on `905cd04` = PR #30 + the owner's roadmap doc) | ADR-039 / ADR-040: `coptic_calendar.dart`, `sun.dart`, `coptic_feasts.dart`, `today.dart`, `synaxarium_source.dart`, `today_widgets.dart` (strip, live banner, top event card), liturgical-day verse and eve labels, /admin «اليوم والبث المباشر», `synaxarium.yml` + `tool/fetch_synaxarium.js` + `tool/publish_hosting_file.js`, footer note debounce (`SteadySeedNote`), time-zone labels removed from the UI; tests `coptic_calendar_test.dart`, `today_widgets_test.dart`, rules group. |
 
 Append new PRs to this table.

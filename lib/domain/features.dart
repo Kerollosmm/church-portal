@@ -4,6 +4,7 @@
 import 'daily_verse.dart';
 import 'image_style.dart';
 import 'occasion_theme.dart';
+import 'today.dart';
 
 export 'occasion_theme.dart' show OccasionConfig, ThemePalette, ThemePresets, ThemeRange, ThemeResolution, ThemeSource;
 
@@ -262,6 +263,15 @@ class FeatureSettings {
   /// from the web or Android app (no personal data is sent either way).
   final bool errorReporting;
 
+  /// Today layer (ADR-039 / ADR-040): Coptic date strip, liturgical day,
+  /// top event card, live banner. Top-level keys of this document, edited by
+  /// /admin → "Today & live stream" (never written by [toMap]).
+  final TodaySettings today;
+
+  /// Admin church events of the day (`dayEvents`, ADR-040; never written by
+  /// [toMap]).
+  final List<DayEvent> dayEvents;
+
   const FeatureSettings({
     this.sections = const {},
     this.homeOrder = HomeBlocks.defaultOrder,
@@ -283,6 +293,8 @@ class FeatureSettings {
     this.dailyVerse = DailyVerseConfig.defaults,
     this.occasions = OccasionConfig.defaults,
     this.errorReporting = true,
+    this.today = TodaySettings.defaults,
+    this.dayEvents = const [],
   });
 
   /// Everything on: used before the doc loads and when it does not exist.
@@ -325,6 +337,8 @@ class FeatureSettings {
       dailyVerse: DailyVerseConfig.fromMap(m['dailyVerse']),
       occasions: OccasionConfig.fromMap(m['occasions'], m['themeColors']),
       errorReporting: _bool(m['errorReporting']) ?? true,
+      today: TodaySettings.fromMap(m),
+      dayEvents: DayEvent.listFrom(m['dayEvents']),
     );
   }
 
@@ -398,6 +412,8 @@ class FeatureSettings {
         dailyVerse: dailyVerse ?? this.dailyVerse,
         occasions: occasions ?? this.occasions,
         errorReporting: errorReporting ?? this.errorReporting,
+        today: today,
+        dayEvents: dayEvents,
       );
 
   bool enabled(String section) => sections[section] ?? true;

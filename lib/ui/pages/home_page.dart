@@ -15,6 +15,7 @@ import '../widgets/common.dart';
 import '../widgets/item_image.dart';
 import '../widgets/map_embed.dart';
 import '../widgets/golden.dart';
+import '../widgets/today_widgets.dart';
 
 class HomePage extends ConsumerWidget {
   const HomePage({super.key});
@@ -26,8 +27,9 @@ class HomePage extends ConsumerWidget {
     final wide = MediaQuery.sizeOf(context).width >= 900;
     final blocks = features.visibleHomeBlocks;
 
-    // The verse of the day lives in the hero ([HeroVerse]).
-    final children = <Widget>[];
+    // The verse of the day lives in the hero ([HeroVerse]). The top event of
+    // the day (church event > feast / commemoration, ADR-040) leads the page.
+    final children = <Widget>[const KeyedSubtree(key: ValueKey('home-topEvent'), child: TopEventCard())];
     // The patrons teaser (not admin-orderable yet: a new home block needs a
     // settings/features rules change) sits before the first "discover" block.
     var patronsPlaced = false;
@@ -628,7 +630,7 @@ class HeroVerse extends ConsumerWidget {
     if (!features.enabled(Sections.dailyVerse)) return const SizedBox.shrink();
     final verses = ref.watch(dailyVersesProvider).value ?? const <Verse>[];
     final now = ref.watch(nowProvider).value ?? DateTime.now();
-    final verse = resolveDailyVerse(features.dailyVerse, verses, now);
+    final verse = resolveDailyVerse(features.dailyVerse, verses, now, day: ref.watch(liturgicalDayProvider).date);
     if (verse == null) return const SizedBox.shrink();
     final narrow = MediaQuery.sizeOf(context).width < 600;
     final reference = context.isAr || verse.refEn.isEmpty ? verse.refAr : verse.refEn;
