@@ -266,6 +266,24 @@ void main() {
       expect(custom.withSeasonLimit(const []).perDay, 2);
     });
 
+    test('a season never lowers a higher ordinary daily limit (Sentry review)', () {
+      final s = AssistantSettings.fromMap(const {'perDay': 10});
+      expect(s.perDayFor(const ['holy_week']), 10);
+      expect(AssistantSettings.fromMap(const {'perDay': 10, 'perDaySeason': 20}).perDayFor(const ['holy_week']), 20);
+    });
+
+    test('sync end: the preset end (and the live end it set) follow the season\'s new end (Sentry review)', () {
+      final newEnd = _end.add(const Duration(days: 3));
+      final p = SeasonPreset(seasonId: 'hw', seasonKey: 'holy_week', appliedAt: _start, endsAt: _end,
+          options: const [PresetOption.live]);
+      final w = planSyncEnd(p, newEnd, storedLiveEndsAt: _end);
+      expect(SeasonPreset.fromMap(w.features['seasonPreset'])!.endsAt, newEnd);
+      expect(w.features['liveEndsAt'], newEnd);
+      expect(w.season, isEmpty);
+      // A live end changed by hand since the apply is left alone.
+      expect(planSyncEnd(p, newEnd, storedLiveEndsAt: _start).features.containsKey('liveEndsAt'), isFalse);
+    });
+
     test('topics of switched-off sections are dropped, the admin\'s own lines too', () {
       bool on(String s) => s != Sections.clinics && s != Sections.meetings;
       final t = AssistantSettings.defaults.topicsFor(on);
@@ -403,6 +421,30 @@ void main() {
       await tester.pumpAndSettle();
       expect(b.batches, isEmpty);
       expect(find.textContaining('nothing was saved'), findsOneWidget);
+    });
+
+    testWidgets('season end moved after the apply: one tap moves the auto-revert (Sentry review)', (tester) async {
+      final later = _end.add(const Duration(days: 2));
+      final b = _Backend(seasons: [
+        AdminDoc('hw', {'key': 'holy_week', 'nameAr': 'أسبوع الآلام', 'startsAt': _start, 'endsAt': later, 'active': true}),
+      ], features: {
+        'heroMotion': false,
+        'seasonPreset': {
+          'seasonId': 'hw',
+          'seasonKey': 'holy_week',
+          'appliedAt': _start,
+          'endsAt': _end,
+          'options': ['heroMotionOff'],
+          'previous': {'seasonActive': false, 'heroMotion': true},
+        },
+      });
+      await pump(tester, b, _start.add(const Duration(days: 1)));
+      await tester.tap(find.byKey(const Key('presetSyncEnd')));
+      await tester.pumpAndSettle();
+      expect(b.batches, hasLength(1));
+      final w = b.batches.single;
+      expect(w.keys, ['settings/features']);
+      expect((w['settings/features']!['seasonPreset'] as Map)['endsAt'], later);
     });
 
     testWidgets('an ended season can\'t be applied (CodeRabbit review)', (tester) async {

@@ -311,3 +311,13 @@ PresetWrites planRestore(SeasonPreset p, {required Map<String, bool> sections, r
   }
   return PresetWrites(f, p.seasonId, s);
 }
+
+/// The `settings/features` write that moves an applied preset's end to the
+/// season's current [seasonEnd] after the admin changed the season's dates
+/// (Sentry review on PR #33): the auto-revert and, when the preset set the
+/// live link, its `liveEndsAt` follow (unless the live end was changed by
+/// hand since: [storedLiveEndsAt] ≠ the preset's end).
+PresetWrites planSyncEnd(SeasonPreset p, DateTime seasonEnd, {DateTime? storedLiveEndsAt}) => PresetWrites({
+      'seasonPreset': {...p.toMap(), 'endsAt': seasonEnd},
+      if (p.has(PresetOption.live) && storedLiveEndsAt == p.endsAt) 'liveEndsAt': seasonEnd,
+    }, p.seasonId, const {});

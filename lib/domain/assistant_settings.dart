@@ -238,8 +238,10 @@ class AssistantSettings {
 
   /// The daily limit that applies now: [perDaySeason] while one of
   /// [activeSeasonKeys] is in [exceptionalSeasonKeys], else [perDay].
+  /// A season never lowers the ordinary limit (an admin's perDay 10 with the
+  /// default season limit 6 stays 10; Sentry review on PR #33).
   int perDayFor(Iterable<String> activeSeasonKeys) =>
-      activeSeasonKeys.any(exceptionalSeasonKeys.contains) ? perDaySeason : perDay;
+      activeSeasonKeys.any(exceptionalSeasonKeys.contains) && perDaySeason > perDay ? perDaySeason : perDay;
 
   /// These settings with [perDay] = [perDayFor] the active seasons, so the
   /// limiter and the "daily limit reached" text both use the season limit.

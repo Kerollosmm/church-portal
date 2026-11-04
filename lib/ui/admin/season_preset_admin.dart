@@ -183,6 +183,15 @@ class _SeasonPresetScreenState extends State<SeasonPresetScreen> {
     });
   }
 
+  Future<void> _syncEnd(SeasonPreset p) => _write(p.seasonId, (stored, seasonDoc) {
+        final fresh = SeasonPreset.fromMap(stored?['seasonPreset']);
+        final end = seasonDoc == null ? null : Season.fromMap(p.seasonId, seasonDoc).endsAt;
+        if (fresh == null || fresh.seasonId != p.seasonId || fresh.appliedAt != p.appliedAt || end == null) {
+          throw const PresetConflict();
+        }
+        return planSyncEnd(fresh, end, storedLiveEndsAt: FeatureSettings.fromMap(stored).today.liveEndsAt);
+      });
+
   Future<void> _restore(BuildContext context, SeasonPreset p) async {
     final ok = await _confirm(
         context,
@@ -253,6 +262,22 @@ class _SeasonPresetScreenState extends State<SeasonPresetScreen> {
               style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
           const SizedBox(height: 6),
           Text(context.tr('presetAppliedOn', {'a': _date(context, p.appliedAt), 'e': _date(context, p.endsAt)})),
+          // The season's dates changed after the apply: offer to move the
+          // auto-revert to the new end (Sentry review on PR #33).
+          if (season?.endsAt != null && season!.endsAt != p.endsAt) ...[
+            const SizedBox(height: 8),
+            Text(context.tr('presetEndChanged', {'e': _date(context, season.endsAt)}),
+                style: const TextStyle(color: AppColors.alert, fontSize: 12)),
+            Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: TextButton.icon(
+                key: const Key('presetSyncEnd'),
+                icon: const Icon(Icons.event_repeat_rounded),
+                label: Text(context.tr('presetSyncEnd')),
+                onPressed: _saving ? null : () => _syncEnd(p),
+              ),
+            ),
+          ],
           const SizedBox(height: 8),
           for (final o in PresetOption.all)
             if (p.has(o)) Text('• ${context.tr('presetOpt_$o')}'),

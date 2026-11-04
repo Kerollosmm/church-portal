@@ -925,7 +925,7 @@ supersede them.
   opens it).
 - **Assistant:** `perDaySeason` in `settings/assistant` (1–100, default 6) applies while an exceptional season is
   active (`holy_week`, `pascha`, `nativity`, `revival_maximus`, `revival_moses`; not `summer`) via
-  `withSeasonLimit`; allowed-topic lines (defaults and the admin's) are dropped when a section group they name is
+  `withSeasonLimit` (a season never lowers a higher ordinary `perDay` — Sentry review on PR #33); allowed-topic lines (defaults and the admin's) are dropped when a section group they name is
   all off (`topicSectionWords` / `topicsFor`; history and milestones are separate groups, so «history and
   milestones» goes when either is off — Codex review on PR #33); the prompt names switched-off sections ("do not offer") and the current season
   first ("use that season's schedule"); the answer cache key uses the filtered topics.
@@ -947,7 +947,11 @@ supersede them.
   auto-revert = 0 writes. Admin screen review fixes: an ended season can't be applied (its `active` would stay on), the
   live link is cleared when another season is picked, links over 500 characters are refused before the dialog, and a
   load error is shown instead of a spinner. The home verse waits for the seasons while season verses exist (no general
-  verse flash); /ask waits up to 5 s for the seasons before the daily-limit check. Hero video bytes −67 KB on
+  verse flash); /ask waits up to 5 s for the seasons before the daily-limit check. The preset keeps the season end it
+  was applied with (visitors need no seasons listener for the auto-revert); when the admin later moves the season's
+  end, the applied card says so and «نقل الرجوع التلقائي إلى النهاية الجديدة» moves `seasonPreset.endsAt` (and the
+  live end the preset set) in one transaction (`planSyncEnd`, Sentry review on PR #33). After the end, the switches
+  the preset covered follow the preset's previous values until «استرجاع» (by design: the screen says so). Hero video bytes −67 KB on
   tablets / desktops, +5 KB on phones.
 - Tests: `test/season_preset_test.dart` (preset domain, auto-revert, verse sets, assistant limit / topics / prompt,
   wedding switch, admin screen apply / restore / validation / deleted season, poster sizes vs `index.html`, video
