@@ -23,9 +23,17 @@
 | الاسم | النوع | الاستخدام |
 |---|---|---|
 | `FIREBASE_SERVICE_ACCOUNT_ASAFRA_CHURCH_PORTAL` | سر | مفتاح JSON لحساب خدمة النشر (يُحفظ بلا أي أحرف زائدة) |
+| `FIREBASE_WEB_API_KEY` | متغير أو سر اختياري | غير مطلوب؛ يُستخرج تلقائيًا من `lib/firebase_options.dart` لإرسال رابط تعيين كلمة المرور للمشرف الجديد |
 | `RECAPTCHA_SITE_KEY` | متغير | مفتاح reCAPTCHA Enterprise للويب (للنشر من `main` فقط) |
 | `SENTRY_DSN` | متغير اختياري | غير مطلوب؛ الكود فيه DSN عام |
 | `SENTRY_AUTH_TOKEN` | سر (غير موجود بعد) | لرفع source maps مستقبلًا |
+
+### أمان مفاتيح Firebase وتنبيهات GitHub Secret Scanning
+
+مفتاح الويب في `lib/firebase_options.dart` هو **معرّف عام للمشروع** (Client Identifier) وليس سرًا وفق توثيق Google و Firebase الرسمي. يُدمج المفتاح في كود الواجهة ويُرسل علنًا في طلبات المتصفح، وحماية البيانات تعتمد كليًا على قواعد أمان Firestore (`firestore.rules`) وخدمة App Check.
+- تنبيه الأمان في GitHub (Secret Scanning Alert #1) جرى إغلاقه كـ **`false_positive`**.
+- في workflow البذر (`.github/workflows/seed.yml`) لا يُكتب المفتاح كنص صريح، بل يُستخرج تلقائيًا أو يُقرأ من متغيرات البيئة.
+- لحماية إضافية (Defense in depth): يُوصى في Google Cloud Console بضبط قيود المفتاح (HTTP referrers لنطاقات الموقع، وحصر الـ APIs على Identity Toolkit و Firestore و App Check).
 
 ## 2. إضافة مشرف
 

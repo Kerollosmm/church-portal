@@ -2,7 +2,9 @@
 
 > No secret values in this file. The service-account key lives only in the GitHub secret
 > `FIREBASE_SERVICE_ACCOUNT_ASAFRA_CHURCH_PORTAL`. The Firebase **web API key** in `lib/firebase_options.dart` (also used
-> by `.github/workflows/seed.yml` to send a password-reset email) is a public client identifier, not a secret.
+> dynamically by `.github/workflows/seed.yml` to send a password-reset email) is a public client identifier, not a secret.
+> GitHub Secret Scanning Alert #1 flagged this generic Google API key pattern and was resolved as `false_positive`
+> (per Google/Firebase guidance: client API keys identify the project, while Firestore Rules and App Check protect data).
 
 ## Project
 
