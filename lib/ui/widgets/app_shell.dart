@@ -124,6 +124,12 @@ class _AppShellState extends ConsumerState<AppShell> {
     // before showing highlight buttons for sections an admin may have off.
     final ready = ref.watch(featuresReadyProvider);
     final showMass = ready && !collapseHighlights && features.routeEnabled('/mass-schedule');
+    // Top utility bar (Coptic date strip + live badge).
+    final todaySettings = ref.watch(todaySettingsProvider);
+    final copticMode = todaySettings.copticStrip;
+    final now = ref.watch(nowProvider).value ?? DateTime.now();
+    final liveActive = todaySettings.liveOn(now);
+    final showTopBar = ready && (TopUtilityBar.shownOn(copticMode, location) || liveActive);
     // No Clinics shortcut in the bar (owner request, 4 Nov 2026): clinics stay
     // reachable from the drawer / Services menu and Home when their section is on.
     final settings = ref.watch(settingsProvider).value;
@@ -136,106 +142,126 @@ class _AppShellState extends ConsumerState<AppShell> {
     final tabStart = (showBack ? 48.0 : 0.0) + (wide ? 24.0 : 6.0);
     final tabSpace = tabW + (wide ? 12.0 : 8.0) - (wide ? 0 : (showBack ? 0 : 6));
 
-    final scaffold = Scaffold(
-      onEndDrawerChanged: (open) => setState(() => _drawerOpen = open),
-      appBar: AppBar(
-        toolbarHeight: wide ? 76 : 64,
-        titleSpacing: wide ? 24 : (showBack ? 0 : 6),
-        leadingWidth: showBack ? 48 : null,
-        shape: const Border(bottom: BorderSide(color: Color(0x59C9963F))),
-        leading: showBack
-            ? IconButton(
-                key: Key(toParent ? 'backParent' : 'backHome'),
-                tooltip: toParent ? backToLabel(context, parent) : context.tr('backHome'),
-                // Mirrored automatically in RTL (matchTextDirection).
-                icon: const Icon(Icons.arrow_back_rounded),
-                onPressed: () => context.go(parent),
-              )
-            : null,
-        title: InkWell(
-          onTap: () => context.go('/'),
-          child: LayoutBuilder(builder: (context, c) {
-            // The seal hangs in the tab at the start corner: the title keeps
-            // its room. Wide bars with many entries (or very large text)
-            // leave little width: the name then disappears, never overflows.
-            if (c.maxWidth < tabSpace + 70) return SizedBox(width: c.maxWidth.clamp(0, tabSpace));
-            return Row(mainAxisSize: MainAxisSize.min, children: [
-              SizedBox(width: tabSpace),
-              // The full name is long: on wide screens show it under the short
-              // name; on phones show only the short name (max two lines).
-              Flexible(
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-                  Text(context.tr('appShort'),
-                      maxLines: wide ? 1 : 2,
+    final mainAppBar = AppBar(
+      primary: !showTopBar,
+      toolbarHeight: wide ? 76 : 64,
+      titleSpacing: wide ? 24 : (showBack ? 0 : 6),
+      leadingWidth: showBack ? 48 : null,
+      shape: const Border(bottom: BorderSide(color: Color(0x59C9963F))),
+      leading: showBack
+          ? IconButton(
+              key: Key(toParent ? 'backParent' : 'backHome'),
+              tooltip: toParent ? backToLabel(context, parent) : context.tr('backHome'),
+              // Mirrored automatically in RTL (matchTextDirection).
+              icon: const Icon(Icons.arrow_back_rounded),
+              onPressed: () => context.go(parent),
+            )
+          : null,
+      title: InkWell(
+        onTap: () => context.go('/'),
+        child: LayoutBuilder(builder: (context, c) {
+          // The seal hangs in the tab at the start corner: the title keeps
+          // its room. Wide bars with many entries (or very large text)
+          // leave little width: the name then disappears, never overflows.
+          if (c.maxWidth < tabSpace + 70) return SizedBox(width: c.maxWidth.clamp(0, tabSpace));
+          return Row(mainAxisSize: MainAxisSize.min, children: [
+            SizedBox(width: tabSpace),
+            // The full name is long: on wide screens show it under the short
+            // name; on phones show only the short name (max two lines).
+            Flexible(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+                Text(context.tr('appShort'),
+                    maxLines: wide ? 1 : 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: displayStyle(context, size: wide ? 23 : 17, color: primary, height: 1.25)),
+                if (wide)
+                  Text(fullName,
+                      maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: displayStyle(context, size: wide ? 23 : 17, color: primary, height: 1.25)),
-                  if (wide)
-                    Text(fullName,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(fontSize: 11.5, color: context.pal.muted, fontWeight: FontWeight.w400)),
-                ]),
-              ),
-            ]);
-          }),
-        ),
-        actions: [
-          if (wide) ...[
-            // Capped and scrollable: very large text or long labels never
-            // overflow the bar (the title then falls back to the seal).
-            ConstrainedBox(
-              constraints: BoxConstraints(maxWidth: width * 0.6),
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(mainAxisSize: MainAxisSize.min, children: [
-                  _navText(context, 'home', '/'),
-                  if (features.routeEnabled('/about')) _navText(context, 'about', '/about'),
-                  _ServicesMenu(location: location),
-                  for (final p in customNavItems(ref).pages) _navItemText(context, p),
-                  if (showAsk) _navText(context, 'ask', '/ask'),
-                  if (features.routeEnabled('/contact')) _navText(context, 'contact', '/contact'),
-                ]),
-              ),
+                      style: TextStyle(fontSize: 11.5, color: context.pal.muted, fontWeight: FontWeight.w400)),
+              ]),
             ),
-            const SizedBox(width: 8),
-          ],
-          IconButton(
-            tooltip: context.tr('language'),
-            onPressed: () => ref.read(localeProvider.notifier).toggle(),
-            style: IconButton.styleFrom(
-                backgroundColor: context.pal.surface, side: BorderSide(color: context.pal.hairline, width: 1.5)),
-            icon: Text(context.isAr ? 'EN' : 'ع',
-                style: TextStyle(fontWeight: FontWeight.w700, color: context.pal.goldText, fontSize: 15)),
+          ]);
+        }),
+      ),
+      actions: [
+        if (wide) ...[
+          // Capped and scrollable: very large text or long labels never
+          // overflow the bar (the title then falls back to the seal).
+          ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: width * 0.6),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                _navText(context, 'home', '/'),
+                if (features.routeEnabled('/about')) _navText(context, 'about', '/about'),
+                _ServicesMenu(location: location),
+                for (final p in customNavItems(ref).pages) _navItemText(context, p),
+                if (showAsk) _navText(context, 'ask', '/ask'),
+                if (features.routeEnabled('/contact')) _navText(context, 'contact', '/contact'),
+              ]),
+            ),
+          ),
+          const SizedBox(width: 8),
+        ],
+        IconButton(
+          tooltip: context.tr('language'),
+          onPressed: () => ref.read(localeProvider.notifier).toggle(),
+          style: IconButton.styleFrom(
+              backgroundColor: context.pal.surface, side: BorderSide(color: context.pal.hairline, width: 1.5)),
+          icon: Text(context.isAr ? 'EN' : 'ع',
+              style: TextStyle(fontWeight: FontWeight.w700, color: context.pal.goldText, fontSize: 15)),
+        ),
+        const SizedBox(width: 6),
+        if (showMass) ...[
+          _HighlightButton(
+            label: context.tr('massSchedule'),
+            icon: Icons.access_time_filled_rounded,
+            onTap: () => context.go('/mass-schedule'),
+            compact: !wide,
+            filled: true,
           ),
           const SizedBox(width: 6),
-          if (showMass) ...[
-            _HighlightButton(
-              label: context.tr('massSchedule'),
-              icon: Icons.access_time_filled_rounded,
-              onTap: () => context.go('/mass-schedule'),
-              compact: !wide,
-              filled: true,
-            ),
-            const SizedBox(width: 6),
-          ],
-          if (!wide)
-            Builder(
-              builder: (ctx) => IconButton(
-                tooltip: context.tr('menu'),
-                icon: Icon(Icons.menu_rounded, color: primary),
-                onPressed: () => Scaffold.of(ctx).openEndDrawer(),
-              ),
-            ),
-          SizedBox(width: wide ? 24 : 4),
         ],
+        if (!wide)
+          Builder(
+            builder: (ctx) => IconButton(
+              tooltip: context.tr('menu'),
+              icon: Icon(Icons.menu_rounded, color: primary),
+              onPressed: () => Scaffold.of(ctx).openEndDrawer(),
+            ),
+          ),
+        SizedBox(width: wide ? 24 : 4),
+      ],
+    );
+
+    final scaffold = Scaffold(
+      onEndDrawerChanged: (open) => setState(() => _drawerOpen = open),
+      appBar: PreferredSize(
+        preferredSize: Size.fromHeight((showTopBar ? 32.0 : 0.0) + (wide ? 76.0 : 64.0)),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (showTopBar)
+              Container(
+                color: const Color(0xFF3B0A0A),
+                child: SafeArea(
+                  bottom: false,
+                  left: false,
+                  right: false,
+                  child: TopUtilityBar(location: location),
+                ),
+              ),
+            mainAppBar,
+          ],
+        ),
       ),
       endDrawer: wide ? null : _AppDrawer(location: location, showAsk: showAsk),
       body: Stack(children: [
         const Positioned.fill(child: WarmBackdrop()),
-        // Today layer (ADR-039 / ADR-040): the Coptic date strip and, while
-        // the church is streaming, the live banner sit above every page.
+        // Today layer (ADR-040): while the church is streaming,
+        // the live banner sits above every page.
         Column(children: [
-          CopticDateStrip(location: location),
           const LiveStreamBanner(),
           Expanded(child: widget.child),
         ]),
@@ -246,7 +272,7 @@ class _AppShellState extends ConsumerState<AppShell> {
       if (!_drawerOpen)
         PositionedDirectional(
           start: tabStart,
-          top: MediaQuery.paddingOf(context).top,
+          top: MediaQuery.paddingOf(context).top + (showTopBar ? 32.0 : 0.0),
           child: Semantics(
             link: true,
             label: '${context.tr('logoLabel')} — ${context.tr('home')}',

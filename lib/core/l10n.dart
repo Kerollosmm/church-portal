@@ -28,6 +28,7 @@ const Map<String, List<String>> _strings = {
   'eveOf': ['ليلة {d}', 'Eve of {d}'],
   'tonight': ['الليلة', 'Tonight'],
   'liveNow': ['بث مباشر الآن من الكنيسة', 'Live now from the church'],
+  'liveBadge': ['مباشر', 'Live'],
   'watchLive': ['شاهد البث', 'Watch live'],
   'todayEvent': ['حدث اليوم', "Today's event"],
   'todayFeast': ['عيد اليوم', "Today's feast"],

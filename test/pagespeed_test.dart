@@ -62,12 +62,14 @@ void main() {
   group('web/index.html first paint', () {
     final html = File('web/index.html').readAsStringSync();
 
-    test('static hero copy: poster (LCP, high priority), church name, fades out on the first frame', () {
+    test('liturgical splash screen: church seal, name, progress track, subtitle, fades out', () {
       expect(html, contains('<h1>كنيسة القديسين مكسيموس ودوماديوس والقوي الأنبا موسى الأسود</h1>'));
-      expect(RegExp(r'<img src="assets/assets/art/hero_poster\.webp"[^>]*fetchpriority="high"').hasMatch(html), isTrue);
-      expect(html, contains('srcset="assets/assets/art/hero_poster_tall.webp"'));
+      expect(RegExp(r'<img class="seal" src="icons/Icon-192\.png"').hasMatch(html), isTrue);
+      expect(html, contains('progress-track'));
+      expect(html, contains('progress-bar'));
+      expect(html, contains('جاري تجهيز الصلوات والبيانات...'));
       expect(html, contains("s.classList.add('gone')"));
-      // The 178 KB seal is no longer part of the first paint.
+      // The old unoptimized 178 KB seal is not used.
       expect(html, isNot(contains('branding/seal.png')));
       for (final f in ['assets/art/hero_poster.webp', 'assets/art/hero_poster_tall.webp']) {
         expect(File(f).lengthSync(), lessThan(40 * 1024), reason: f);

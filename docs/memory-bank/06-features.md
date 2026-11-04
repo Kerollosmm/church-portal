@@ -34,7 +34,7 @@ render with `PageBody` (+ `Footer`). Content comes from Riverpod providers (hidd
 - **Verse of the day (PR #16, ADR-024; moved into the hero in PR #17):** `HeroVerse` (`home_page.dart`) is the hero's
   verse, set straight on the hero with **no panel** since PR #22 (ADR-032): `« verse »` in Ruqaa 20/24 px on `ink`,
   centred, line height 1.8, reference in `goldText` 13 px bold (the old fixed-verse typography), on a soft radial
-  `TextScrim` at `ThemePalette.verseScrimAlpha` (0.88) like the title's glow, each line a `HaloText` (a 2.5 px
+  `TextScrim` at `ThemePalette.verseScrimAlpha` (0.88) like the title's glow, each line a `HaloText` (a 3.0 px
   outline of the scene colour under the glyphs + soft shadows, like the title's halo) so the ground beside every
   stroke stays ≥ the 0.88 scrim even where the radial glow fades at wide line ends; keys `heroVerse` (the scrim),
   `dailyVerseText`, `dailyVerseRef` (the `HaloText`s)). Daily mode = entry
@@ -52,19 +52,27 @@ render with `PageBody` (+ `Footer`). Content comes from Riverpod providers (hidd
   (ADR-036, owner request 4 Nov 2026)**; a `heroVideos` map already stored in `settings/features` is ignored.
 - **Hero ambient motion on web (ADR-037, PR #29):** the haze drift and light-ray shimmer look exactly as before but
   run as a CSS-animated DOM layer (`HeroAmbientLayer`) instead of a per-frame Flutter repaint; the first paint is a
-  static copy of the hero (poster + church name) in `web/index.html`. See `documentation/features/performance-pagespeed.md`.
-- **Loading screen until real content (ADR-038, PR #30):** that static copy now stays over the app until the first
-  settings/church + settings/features + hero verse list have arrived and been painted (`app-content-ready` from
-  `lib/core/content_ready.dart`; at most 9 s after Flutter's first frame), so the default layout never flashes. The
-  hero `<video>` source and the CSS haze / ray layer start only when the page is idle afterwards (`ContentReady.whenIdle`);
-  they fade in, the poster stays the LCP element and the final look is unchanged.
+  run as a CSS-animated DOM layer (`HeroAmbientLayer`) instead of a per-frame Flutter repaint; see `documentation/features/performance-pagespeed.md`.
+- **Liturgical web splash screen (ADR-043, PR #34):** `web/index.html` renders a dedicated liturgical splash screen
+  on a dark burgundy backdrop (`#2A0808`) with a soft radial gold glow, the official parish seal (`icons/Icon-192.png`)
+  with an animated breathing pulse, centered Lalezar church title in warm gold (`#F8E8C9`), a rounded golden progress
+  track (220×4 px) with an animated shimmer bar, and the subtitle «جاري تجهيز الصلوات والبيانات...» in IBM Plex Sans Arabic.
+  Stays over the app until `app-content-ready` (at most 9 s after Flutter's first frame, ADR-038) and fades out smoothly with
+  a 0.6 s cubic-bezier cross-fade before being removed from the DOM. Full reduced-motion support. The hero video and CSS
+  ambient layer start once the page is idle afterwards (`ContentReady.whenIdle`).
 
-### Today layer on every page and Home (PR #31, ADR-039 / ADR-040)
+### Today layer on every page and Home (PR #31, ADR-039 / ADR-040; PR #34, ADR-043)
 
-- **Coptic date strip** (`CopticDateStrip`, top of the shell): the liturgical day in Coptic, «الأربعاء ٢٥ بابه ١٧٤٣ ش»;
-  after the day's start (18:00 by default, or sunset at the church) «ليلة الخميس ٢٦ بابه ١٧٤٣ ش». `copticStrip`:
-  every page / Home only / off. No time-zone label anywhere.
-- **Live banner** (`LiveStreamBanner`): red bar under the strip on every page while `liveEnabled` + an http(s)
+- **Top utility bar & Coptic date strip** (`TopUtilityBar`, alias `CopticDateStrip`, top of the viewport above the `AppBar`):
+  dedicated 32 px utility bar with liturgical burgundy ground (`#3B0A0A`) and hairline gold border (`0x33C9963F`).
+  Displays the liturgical day in Coptic, «الأربعاء ٢٥ بابه ١٧٤٣ ش»; after the day's start (18:00 by default, or sunset at the church)
+  «ليلة الخميس ٢٦ بابه ١٧٤٣ ش». `copticStrip`: every page / Home only / off. No time-zone label anywhere.
+- **Top bar live badge** (`_LiveBadge`, key `topBarLiveBadge`): when streaming is active (`liveOn(now)`), a compact pulsing badge
+  (`_PulseDot` + «مباشر» / `liveLabel` / 'Live') appears at the end of the top utility bar; tapping it opens the live stream URL directly.
+- **AppShell structure & SealTab**: the top utility bar sits inside `PreferredSize` stacked above the `AppBar`. The floating strip
+  was removed from the body column, giving the hero title and page content full breathing room. The hanging church seal tab (`SealTab`)
+  top position is offset by +32 px when the top utility bar is present so it stays flush with the top of the main AppBar.
+- **Live banner** (`LiveStreamBanner`): red bar under the AppBar on every page while `liveEnabled` + an http(s)
   `liveUrl` and before `liveEndsAt`; pulsing dot (static under reduced motion); tap opens the stream.
 - **Top event card** (`TopEventCard`, first on Home): «حدث اليوم» = an admin church event (`dayEvents`) covering today
   and not ended (on the eve: the next liturgical day's event) with times, speaker, topic, note, link; else

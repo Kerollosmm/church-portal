@@ -83,46 +83,103 @@
        settings / home data is on screen ("app-content-ready" from
        lib/core/content_ready.dart, ADR-038) — at most 9 s after Flutter's
        first frame — so the defaults never flash before the real content. -->
+  <link rel="preload" href="icons/Icon-192.png" as="image">
   <link rel="preload" as="image" href="assets/assets/art/hero_poster_tall.webp" media="(max-width: 599.98px)" fetchpriority="high">
   <link rel="preload" as="image" href="assets/assets/art/hero_poster.webp" media="(min-width: 600px)" fetchpriority="high">
   <style>
     @font-face { font-family: "Lalezar"; src: url("assets/assets/fonts/Lalezar-Regular.ttf") format("truetype"); font-display: swap; }
     @font-face { font-family: "IBM Plex Sans Arabic"; src: url("assets/assets/fonts/IBMPlexSansArabic-Regular.ttf") format("truetype"); font-display: swap; }
-    html, body { margin: 0; height: 100%; background: #FBF3E4; }
-    #splash { position: fixed; inset: 0; z-index: 2147483000; overflow: hidden; background: #FBF3E4; color: #6E1C1C;
-      font-family: "IBM Plex Sans Arabic", system-ui, "Segoe UI", Tahoma, sans-serif; transition: opacity .5s ease-out; }
-    #splash.gone { opacity: 0; pointer-events: none; }
-    #splash .bar { height: 64px; background: #FFF9EE; border-bottom: 1px solid #E2C99A; }
-    #splash .stage { position: absolute; left: 0; right: 0; top: 65px; bottom: 0; }
-    #splash .stage img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: 50% 100%;
-      -webkit-mask-image: linear-gradient(to bottom, #000 62%, transparent 100%); mask-image: linear-gradient(to bottom, #000 62%, transparent 100%); }
-    #splash .copy { position: absolute; left: 0; right: 0; top: 116px; bottom: 0; overflow-y: auto; padding: 0 16px 16px; text-align: center; }
-    #splash h1 { margin: 0 auto; max-width: 960px; font: 400 34px/1.3 "Lalezar", "IBM Plex Sans Arabic", system-ui, sans-serif; }
-    #splash .ring { width: 36px; height: 36px; margin: 28px auto 10px; border-radius: 50%; border: 4px solid #E2C99A;
-      border-top-color: #6E1C1C; animation: spin 0.9s linear infinite; }
-    #splash-text { font-size: 15px; }
-    @media (min-width: 600px) { #splash h1 { font-size: 44px; } }
-    @media (min-width: 900px) {
-      #splash .bar { height: 76px; } #splash .stage { top: 77px; } #splash .copy { top: 150px; } #splash h1 { font-size: 56px; }
+    html, body { margin: 0; height: 100%; background: #2A0808; }
+    #splash {
+      position: fixed;
+      inset: 0;
+      z-index: 2147483000;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      box-sizing: border-box;
+      background: #2A0808 radial-gradient(circle at 50% 45%, rgba(201, 150, 63, 0.15) 0%, rgba(42, 8, 8, 0.95) 70%, #2A0808 100%);
+      color: #F6E7C8;
+      font-family: "IBM Plex Sans Arabic", system-ui, "Segoe UI", Tahoma, sans-serif;
+      text-align: center;
+      transition: opacity 0.6s cubic-bezier(0.4, 0.0, 0.2, 1);
     }
-    @media (prefers-reduced-motion: reduce) { #splash .ring { animation: none; } #splash { transition: none; } }
-    @keyframes spin { to { transform: rotate(360deg); } }
+    #splash.gone { opacity: 0; pointer-events: none; }
+    #splash .seal {
+      width: 104px;
+      height: 104px;
+      border-radius: 50%;
+      object-fit: contain;
+      animation: pulse 2.6s ease-in-out infinite;
+    }
+    #splash h1 {
+      margin: 24px 0 16px;
+      max-width: 780px;
+      font-family: "Lalezar", "IBM Plex Sans Arabic", system-ui, sans-serif;
+      font-weight: 400;
+      font-size: 28px;
+      line-height: 1.35;
+      color: #F8E8C9;
+      text-shadow: 0 2px 16px rgba(0, 0, 0, 0.5);
+    }
+    #splash .progress-track {
+      position: relative;
+      width: 220px;
+      height: 4px;
+      margin: 16px 0 14px;
+      background: rgba(201, 150, 63, 0.2);
+      border-radius: 999px;
+      overflow: hidden;
+    }
+    #splash .progress-bar {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 45%;
+      background: linear-gradient(90deg, transparent 0%, #C9963F 50%, #F8E8C9 75%, #C9963F 100%);
+      border-radius: 999px;
+      animation: shimmer 1.8s ease-in-out infinite;
+    }
+    #splash-text {
+      font-size: 14px;
+      color: #E2C99A;
+      letter-spacing: 0.2px;
+    }
+    @media (min-width: 600px) {
+      #splash h1 { font-size: 36px; }
+    }
+    @media (min-width: 900px) {
+      #splash h1 { font-size: 42px; }
+    }
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); filter: drop-shadow(0 0 16px rgba(201, 150, 63, 0.4)); }
+      50% { transform: scale(1.035); filter: drop-shadow(0 0 28px rgba(201, 150, 63, 0.7)); }
+    }
+    @keyframes shimmer {
+      0% { left: -45%; }
+      100% { left: 100%; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      #splash { transition: none; }
+      #splash .seal { animation: none; filter: drop-shadow(0 0 16px rgba(201, 150, 63, 0.4)); }
+      #splash .progress-bar { animation: none; width: 100%; left: 0; background: #C9963F; }
+    }
   </style>
 </head>
 <body>
   <div id="splash" dir="rtl">
-    <div class="bar"></div>
-    <div class="stage">
-      <picture>
-        <source media="(max-width: 599.98px)" srcset="assets/assets/art/hero_poster_tall.webp" width="432" height="768">
-        <img src="assets/assets/art/hero_poster.webp" alt="" width="1280" height="720" fetchpriority="high" decoding="async">
-      </picture>
+    <picture aria-hidden="true" style="display:none">
+      <source media="(max-width: 599.98px)" srcset="assets/assets/art/hero_poster_tall.webp" width="432" height="768">
+      <img src="assets/assets/art/hero_poster.webp" alt="" width="1280" height="720" fetchpriority="high" decoding="async">
+    </picture>
+    <img class="seal" src="icons/Icon-192.png" alt="ختم كنيسة القديسين مكسيموس ودوماديوس والقوي الأنبا موسى الأسود" width="104" height="104" fetchpriority="high">
+    <h1>كنيسة القديسين مكسيموس ودوماديوس والقوي الأنبا موسى الأسود</h1>
+    <div class="progress-track" aria-hidden="true">
+      <div class="progress-bar"></div>
     </div>
-    <div class="copy">
-      <h1>كنيسة القديسين مكسيموس ودوماديوس والقوي الأنبا موسى الأسود</h1>
-      <div class="ring" aria-hidden="true"></div>
-      <div id="splash-text" aria-live="polite">جارٍ التحميل…</div>
-    </div>
+    <div id="splash-text" aria-live="polite">جاري تجهيز الصلوات والبيانات...</div>
   </div>
   <script>
     var appStarted = false;
@@ -142,15 +199,15 @@
       if (window.__appContentReady) { splashDone(); return; }
       setTimeout(splashDone, 9000);
     });
-    // Failure path: replace the spinner with a message + reload link if the
+    // Failure path: replace the progress indicator with a message + reload link if the
     // bootstrap script fails to load or Flutter never renders a frame.
     function splashFailed() {
       if (appStarted) return;
       var s = document.getElementById('splash'); if (!s) return;
-      var ring = s.querySelector('.ring'); if (ring) ring.remove();
+      var prog = s.querySelector('.progress-track, .ring'); if (prog) prog.remove();
       var t = document.getElementById('splash-text');
-      if (t) t.innerHTML = 'تعذّر تحميل الموقع. <a href="" onclick="location.reload();return false;">أعد المحاولة</a>' +
-        '<br><span lang="en" dir="ltr">Could not load the site. <a href="" onclick="location.reload();return false;">Reload</a></span>';
+      if (t) t.innerHTML = 'تعذّر تحميل الموقع. <a href="" onclick="location.reload();return false;" style="color:#F8E8C9;text-decoration:underline;">أعد المحاولة</a>' +
+        '<br><span lang="en" dir="ltr" style="display:inline-block;margin-top:6px;opacity:0.85;">Could not load the site. <a href="" onclick="location.reload();return false;" style="color:#F8E8C9;text-decoration:underline;">Reload</a></span>';
     }
     window.addEventListener('error', function (e) {
       if (e && e.target && e.target.tagName === 'SCRIPT') splashFailed();

@@ -1,7 +1,7 @@
 # 11 — Open tasks
 
 Tick items off (or delete them) in the PR that completes them, and add new ones as you discover them.
-Status as of 4 Nov 2026 (PR #31 / ADR-039–040 on top of `905cd04`; PR #30 / ADR-038 on top of `5a6a44c` = PR #29; PR #25 re-checked against `d60261d`; earlier: PR #7–#24).
+Status as of 4 Nov 2026 (PR #34 / ADR-043; PR #33 / ADR-042; PR #32 / ADR-041; PR #31 / ADR-039–040; PR #30 / ADR-038; PR #25 re-checked against `d60261d`; earlier: PR #7–#24).
 
 ## Top open items (owner's list, 4 Nov 2026 — details in the sections below)
 
@@ -258,8 +258,12 @@ Status as of 4 Nov 2026 (PR #31 / ADR-039–040 on top of `905cd04`; PR #30 / AD
       screen «العيادات» stays. Never run the Seed workflow for clinics: even create-only it re-creates the 11 deleted
       placeholders.
 
-## Header / app bar (owner request, 4 Nov 2026)
+## Header / app bar & splash screen (4 Nov 2026)
 - [x] Clinics shortcut removed from the public app bar (all widths, section on or off); clinics stay in the drawer /
       Services menu, Home directory and footer quick links when `sections.clinics` is on. Guarded by
       `test/feature_gate_test.dart` (PR #26). At ~07:30 Cairo on 4 Nov the live `sections.clinics` still read true; it
       was switched off at 07:51 (PR #25 live read).
+- [x] **Redesigned liturgical web splash screen & top utility bar (PR #34, ADR-043):**
+      - Liturgical splash in `web/index.html`: `#2A0808` dark burgundy backdrop, radial gold glow, parish seal pulse animation, Lalezar gold typography, shimmer progress track (220×4 px), IBM Plex Sans Arabic subtitle «جاري تجهيز الصلوات والبيانات...», smooth 0.6 s cross-fadeout and full reduced-motion support.
+      - Dedicated 32 px `TopUtilityBar` (`today_widgets.dart`, `app_shell.dart`): placed at the top of the viewport above AppBar in `#3B0A0A` burgundy with gold hairline border; displays Coptic date strip and integrated pulsing live badge (`topBarLiveBadge`) that opens stream URL on tap.
+      - AppShell body column cleanup: floating strip removed, giving hero full room; `SealTab` alignment offset +32 px flush with AppBar.

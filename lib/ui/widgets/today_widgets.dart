@@ -9,45 +9,129 @@ import '../../domain/today.dart';
 import '../../state/providers.dart';
 import 'common.dart';
 
-/// Top strip with the Coptic date of the liturgical day (ADR-039), e.g.
-/// «الأربعاء ٢٥ بابه ١٧٤٣ ش»; after the day's start «ليلة الخميس …».
-/// Shown on every page or on Home only (settings/features.copticStrip).
-class CopticDateStrip extends ConsumerWidget {
+/// Top utility bar with the Coptic date of the liturgical day (ADR-039)
+/// and optional pulsing live-stream badge when active (ADR-040).
+/// Height: 32px, liturgical burgundy background `#3B0A0A`, gold hairline bottom border.
+class TopUtilityBar extends ConsumerWidget {
   final String location;
-  const CopticDateStrip({super.key, required this.location});
+  const TopUtilityBar({super.key, required this.location});
 
   static bool shownOn(String mode, String location) =>
       mode == CopticStripModes.all || (mode == CopticStripModes.home && location == '/');
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final mode = ref.watch(todaySettingsProvider.select((t) => t.copticStrip));
-    if (!ref.watch(featuresReadyProvider) || !shownOn(mode, location)) return const SizedBox.shrink();
+    if (!ref.watch(featuresReadyProvider)) return const SizedBox.shrink();
+    final t = ref.watch(todaySettingsProvider);
+    final mode = t.copticStrip;
+    final showDate = shownOn(mode, location);
+    final now = ref.watch(nowProvider).value ?? DateTime.now();
+    final liveActive = t.liveOn(now);
+    if (!showDate && !liveActive) return const SizedBox.shrink();
+
     final day = ref.watch(liturgicalDayProvider);
     final label = day.label(arabic: context.isAr);
+
+    return Container(
+      key: const Key('copticDateStrip'),
+      width: double.infinity,
+      height: 32.0,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: const BoxDecoration(
+        color: Color(0xFF3B0A0A),
+        border: Border(bottom: BorderSide(color: Color(0x33C9963F), width: 1)),
+      ),
+      child: Row(
+        children: [
+          if (showDate)
+            Expanded(
+              child: Semantics(
+                container: true,
+                label: '${context.tr('copticDate')}: $label',
+                excludeSemantics: true,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.event_note_rounded, size: 14, color: Color(0xFFC9963F)),
+                    const SizedBox(width: 6),
+                    Flexible(
+                      child: Text(
+                        label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontFamily: 'IBM Plex Sans Arabic',
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFFF6E7C8),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          else
+            const Spacer(),
+          if (liveActive) ...[
+            const SizedBox(width: 8),
+            _LiveBadge(settings: t),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Compatibility alias so existing code and tests referring to CopticDateStrip continue working.
+typedef CopticDateStrip = TopUtilityBar;
+
+class _LiveBadge extends StatelessWidget {
+  final TodaySettings settings;
+  const _LiveBadge({required this.settings});
+
+  @override
+  Widget build(BuildContext context) {
+    final custom = context.pick(settings.liveLabelAr, settings.liveLabelEn).trim();
+    final label = custom.isEmpty ? context.tr('liveBadge') : custom;
+    void open() => openUrl(settings.liveUrl);
     return Semantics(
-      container: true,
-      label: '${context.tr('copticDate')}: $label',
+      button: true,
+      label: '$label — ${context.tr('watchLive')}',
+      onTap: open,
       excludeSemantics: true,
-      child: Container(
-        key: const Key('copticDateStrip'),
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-        decoration: BoxDecoration(
-          color: context.pal.surfaceAlt,
-          border: Border(bottom: BorderSide(color: context.pal.hairline)),
-        ),
-        child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Icon(Icons.event_note_rounded, size: 16, color: context.pal.goldText),
-          const SizedBox(width: 6),
-          Flexible(
-            child: Text(label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: context.pal.ink)),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          key: const Key('topBarLiveBadge'),
+          onTap: open,
+          borderRadius: BorderRadius.circular(999),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: const Color(0xFFB3261E),
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(color: const Color(0x66F6E7C8), width: 0.8),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const _PulseDot(size: 7),
+                const SizedBox(width: 5),
+                Text(
+                  label,
+                  style: const TextStyle(
+                    fontFamily: 'IBM Plex Sans Arabic',
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 11.5,
+                  ),
+                ),
+              ],
+            ),
           ),
-        ]),
+        ),
       ),
     );
   }
@@ -110,7 +194,8 @@ class LiveStreamBanner extends ConsumerWidget {
 
 /// The pulsing "on air" dot (static when the visitor asked for less motion).
 class _PulseDot extends StatefulWidget {
-  const _PulseDot();
+  final double size;
+  const _PulseDot({this.size = 12});
 
   @override
   State<_PulseDot> createState() => _PulseDotState();
@@ -141,8 +226,8 @@ class _PulseDotState extends State<_PulseDot> with SingleTickerProviderStateMixi
   Widget build(BuildContext context) => FadeTransition(
         opacity: Tween<double>(begin: 0.35, end: 1).animate(_c),
         child: Container(
-          width: 12,
-          height: 12,
+          width: widget.size,
+          height: widget.size,
           decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
         ),
       );

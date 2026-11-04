@@ -957,6 +957,35 @@ supersede them.
   wedding switch, admin screen apply / restore / validation / deleted season, poster sizes vs `index.html`, video
   duration / faststart / no audio / byte budgets), rules group "ADR-042".
 
+## ADR-043 (PR #34) — Liturgical web splash screen, dedicated top utility bar with live badge, and AppShell layout cleanup
+
+- **Context:**
+  1. The initial web first paint in `web/index.html` used a basic wireframe / poster overlay with an unstyled spinner ring. While functional, it lacked liturgical dignity and didn't match the church's sacred identity during the 1–3 s initial download and Firestore connection before `app-content-ready` fires.
+  2. The Coptic date strip introduced in PR #31 was rendered as a floating bar inside the content body column under the AppBar. On the home page, this crowded the hero title and created visual inconsistency between Home and inner pages.
+  3. When live streaming was active, visitors needed an immediate, persistent, lightweight indicator visible on every page without depending solely on the prominent in-body live banner.
+- **Decision:**
+  1. **Redesigned web liturgical splash screen (`web/index.html`):**
+     - Dark-burgundy `#2A0808` background with a soft radial gold glow (`rgba(201, 150, 63, 0.12)`).
+     - Official parish seal (`icons/Icon-192.png`, 104×104 px) centered with a breathing pulse animation (`pulse`, 2.6 s infinite).
+     - Full church title centered in `Lalezar` font (32–42 px) with warm gold tone (`#F8E8C9`) and soft drop shadow.
+     - Progress indicator: rounded golden track (220×4 px) with animated golden shimmer bar (`shimmer`, 1.8 s infinite).
+     - Liturgical subtitle: «جاري تجهيز الصلوات والبيانات...» in IBM Plex Sans Arabic (`#splash-text`, `#E2C99A`).
+     - Dismissal: smooth 0.6 s cubic-bezier cross-fadeout (`opacity 0.6s cubic-bezier(0.22, 1, 0.36, 1)`), adding class `gone` and fully removing `#splash` from the DOM in `splashDone()`.
+     - Accessibility: `@media (prefers-reduced-motion: reduce)` disables animations and transition, rendering a static 100% gold progress bar.
+     - Failure path: `splashFailed()` cleans up the progress bar and displays a styled reload link on network/script failure or timeout.
+  2. **Top utility bar (`lib/ui/widgets/today_widgets.dart`, `lib/ui/widgets/app_shell.dart`):**
+     - Positioned at the very top of the viewport (above the main navigation `AppBar`), wrapped in `SafeArea(bottom: false)` inside `PreferredSize` (height 32 px).
+     - Styled with liturgical deep burgundy `#3B0A0A` and a subtle gold hairline bottom border (`0x33C9963F`).
+     - Houses the formatted Coptic liturgical date text (centered, with `Icons.event_note_rounded`).
+     - Houses a compact pulsing live badge (`_LiveBadge`, key `topBarLiveBadge`) at the end (left in RTL, right in LTR) with a pulsing white dot (`_PulseDot`, size 7) and label («مباشر» / `liveLabel` / 'Live'). Tapping opens the live stream URL directly.
+     - Compatibility: `typedef CopticDateStrip = TopUtilityBar` preserves existing imports and tests.
+  3. **AppShell layout cleanup:**
+     - The floating strip is removed from the body column in `app_shell.dart`, giving the hero title and page content full breathing room.
+     - The hanging church seal tab (`SealTab`) top offset is adjusted by `+ (showTopBar ? 32.0 : 0.0)` so it remains perfectly flush with the top edge of the main `AppBar`.
+     - `LiveStreamBanner` continues to display in the body column under the AppBar while live streaming is active.
+- **Cost:** +0 Firestore reads, +0 listeners (reuses already streamed `todaySettingsProvider` and `nowProvider`).
+- **Tests:** `test/pagespeed_test.dart` (liturgical splash DOM, seal, progress track/bar, Plex subtitle, gone transition), `test/today_widgets_test.dart` (32 px height, liturgical styling, live badge tap launches URL, 320 px screen no overflow, AppShell top bar placement and SealTab alignment).
+
 ## Timeline
 
 | When | PR / commit | What |
@@ -1004,5 +1033,6 @@ supersede them.
 
 | 4 Nov 2026 | **PR #32** — "Programme details: speaker, topic, choir, venue, audience, Drive PDF link" (`feat/programme-fields`) | ADR-041: `program.dart` (`ProgramInfo`, `ProgramOptions`), `parallelServices`, `ProgramDetails` widget, audience chips on the seasonal schedule, meeting detail facts, admin programme group + «إعدادات المواسم» (venues / audiences), rules `programKeys` / `validProgram` / `validProgramOptions`; `test/program_test.dart`, rules group. |
 | 4 Nov 2026 | **PR #33** — "Season presets, season verses, assistant season limit, hero v2" (`feat/season-presets`) | ADR-042: `season_preset.dart` + /admin «تجهيز الموسم» (apply / restore in one transaction, auto-revert at the season end without a write), `season_verses.dart` + «آيات المواسم» in «إعدادات المواسم», assistant `perDaySeason` / section-aware topics / current season in the prompt, `weddingBookingOff`, hero v2 9 s loops + posters, `AdminBackend.saveDocs` / `saveDocsFresh`; `test/season_preset_test.dart`, rules group. |
+| 4 Nov 2026 | **PR #34** — "Liturgical splash screen & top utility bar with live badge" (`feat/redesign-splash-top-bar`) | ADR-043: Liturgical web splash screen (`web/index.html`) with parish seal pulse animation, Lalezar warm gold typography, shimmer progress track (220×4 px), Plex subtitle «جاري تجهيز الصلوات والبيانات...», 0.6 s cross-fade and reduced-motion support; dedicated 32 px top utility bar (`TopUtilityBar`, alias `CopticDateStrip`) positioned above AppBar in `#3B0A0A` burgundy with Coptic date and pulsing live badge (`topBarLiveBadge`); body column floating strip removed, `SealTab` aligned flush with AppBar; tests `pagespeed_test.dart`, `today_widgets_test.dart`. |
 
 Append new PRs to this table.

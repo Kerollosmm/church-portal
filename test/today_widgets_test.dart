@@ -11,6 +11,7 @@ import 'package:church_portal/state/providers.dart';
 import 'package:church_portal/ui/admin/admin_page.dart' show adminDestinations;
 import 'package:church_portal/ui/admin/admin_schema.dart';
 import 'package:church_portal/ui/admin/admin_validators.dart' show validateRowOrder;
+import 'package:church_portal/ui/widgets/app_shell.dart';
 import 'package:church_portal/ui/widgets/common.dart';
 import 'package:church_portal/ui/widgets/today_widgets.dart';
 import 'package:church_portal/core/theme.dart';
@@ -69,6 +70,49 @@ void main() {
       final off = FeatureSettings.fromMap(const {'copticStrip': 'off'});
       await pump(tester, const CopticDateStrip(location: '/'), features: off, now: cairo(2026, 11, 4, 10));
       expect(find.byKey(const Key('copticDateStrip')), findsNothing);
+    });
+
+    testWidgets('height is 32px with liturgical styling', (tester) async {
+      await pump(tester, const CopticDateStrip(location: '/'), now: cairo(2026, 11, 4, 10));
+      final size = tester.getSize(find.byKey(const Key('copticDateStrip')));
+      expect(size.height, 32.0);
+    });
+
+    testWidgets('shows pulsing live badge when live stream is active and opens url on tap', (tester) async {
+      final on = FeatureSettings.fromMap({
+        'liveEnabled': true,
+        'liveUrl': 'https://www.youtube.com/live/abc',
+        'liveEndsAt': cairo(2026, 11, 4, 21).toUtc(),
+      });
+      await pump(tester, const CopticDateStrip(location: '/'), features: on, now: cairo(2026, 11, 4, 19));
+      expect(find.byKey(const Key('topBarLiveBadge')), findsOneWidget);
+      expect(find.text('مباشر'), findsOneWidget);
+
+      final launched = <String>[];
+      const channel = MethodChannel('plugins.flutter.io/url_launcher');
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(channel, (call) async {
+        final args = call.arguments;
+        if (args is Map && args['url'] is String) launched.add(args['url'] as String);
+        return true;
+      });
+      addTearDown(() => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(channel, null));
+      await tester.tap(find.byKey(const Key('topBarLiveBadge')));
+      await tester.pump();
+      expect(launched, contains('https://www.youtube.com/live/abc'));
+    });
+
+    testWidgets('narrow screen (320px) layout renders without overflow', (tester) async {
+      tester.view.physicalSize = const Size(320, 600);
+      tester.view.devicePixelRatio = 1;
+      final on = FeatureSettings.fromMap({
+        'liveEnabled': true,
+        'liveUrl': 'https://www.youtube.com/live/abc',
+        'liveEndsAt': cairo(2026, 11, 4, 21).toUtc(),
+      });
+      await pump(tester, const CopticDateStrip(location: '/'), features: on, now: cairo(2026, 11, 4, 19));
+      expect(tester.takeException(), isNull);
+      expect(find.byKey(const Key('copticDateStrip')), findsOneWidget);
+      expect(find.byKey(const Key('topBarLiveBadge')), findsOneWidget);
     });
   });
 
@@ -202,6 +246,36 @@ void main() {
       expect(validateRowOrder(events, {'date': '2026-11-04', 'endDate': '2026-11-03'}), 'endDateBeforeStart');
       expect(validateRowOrder(events, {'date': '2026-11-04', 'endDate': '2026-11-04'}), isNull);
       expect(validateRowOrder(events, {'date': '2026-11-04', 'endDate': ''}), isNull);
+    });
+  });
+
+  group('AppShell top utility bar integration', () {
+    testWidgets('places TopUtilityBar above AppBar and adjusts SealTab position', (tester) async {
+      tester.view.physicalSize = const Size(1200, 800);
+      tester.view.devicePixelRatio = 1;
+      await tester.pumpWidget(ProviderScope(
+        overrides: [
+          repositoryProvider.overrideWithValue(SeedRepository(SeedData(const {}))),
+          featuresProvider.overrideWithValue(FeatureSettings.defaults),
+          featuresReadyProvider.overrideWithValue(true),
+          nowProvider.overrideWith((ref) => Stream.value(cairo(2026, 11, 4, 10))),
+        ],
+        child: MaterialApp(
+          locale: const Locale('ar'),
+          theme: buildTheme(const Locale('ar')),
+          supportedLocales: const [Locale('ar'), Locale('en')],
+          localizationsDelegates: GlobalMaterialLocalizations.delegates,
+          home: const AppShell(location: '/', child: Text('home content')),
+        ),
+      ));
+      await tester.pump();
+
+      expect(find.byKey(const Key('copticDateStrip')), findsOneWidget);
+      final stripTop = tester.getTopLeft(find.byKey(const Key('copticDateStrip'))).dy;
+      expect(stripTop, 0.0);
+
+      final sealTop = tester.getTopLeft(find.byKey(const Key('sealTabHome'))).dy;
+      expect(sealTop, 32.0);
     });
   });
 }
