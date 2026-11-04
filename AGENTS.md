@@ -1,6 +1,8 @@
 # AGENTS.md — guide for coding agents
 
 **Read [`docs/memory-bank/`](docs/memory-bank/00-README.md) first, and update it in the same PR as every change.**
+**Human manual (Arabic): [`documentation/`](documentation/README.md)** — one file per feature + `operations.md`;
+update it in the same PR as any feature change (golden rule 11).
 
 ## What this is
 
@@ -33,6 +35,11 @@ Branding: the parish seal in `assets/branding/` — regenerate every icon with `
 10. **Error reports (Sentry, ADR-034)** go through `ErrorReporting.capture(e, st, section: …)` — never send form text,
    assistant questions, user ids, e-mails, IPs or query strings; the admin switch `settings/features.errorReporting`
    must keep working (`beforeSend` returns null when off).
+11. **Documentation (ADR-035):** a PR that adds, removes or changes a feature, an admin screen / switch, a workflow or
+   an operational step also updates the matching Arabic file in `documentation/` (feature files, `architecture.md`,
+   `operations.md`, index in `documentation/README.md`) — in the same PR, like the memory bank. Write it in simple
+   Arabic; keep code identifiers, paths and collection / field names in English; use the real admin labels from the
+   code (`admin_page.dart`, `admin_schema.dart`, `lib/core/l10n.dart`).
 
 ## Commands
 
@@ -49,7 +56,7 @@ cd tool && npm install && node seed_firestore.js --dry-run
 
 ## Workflow
 
-Branch from up-to-date `main` → change + tests + memory-bank update → PR → comment `@coderabbitai review` → CI
+Branch from up-to-date `main` → change + tests + memory-bank update + `documentation/` update → PR → comment `@coderabbitai review` → CI
 (`ci.yml`: analyze/test/build/seed-diff + rules emulator; `deploy.yml`: build + preview channel `pr-<n>`) green →
 squash-merge → `main` auto-deploys Hosting + Firestore rules.
 
@@ -68,3 +75,5 @@ squash-merge → `main` auto-deploys Hosting + Firestore rules.
 | Decisions & history | `docs/memory-bank/10-decisions-and-history.md` |
 | Open tasks | `docs/memory-bank/11-open-tasks.md` |
 | Church terms | `docs/memory-bank/12-glossary.md` |
+| Arabic feature manual (owner / church office) | `documentation/README.md` |
+| Deploy, admins, seed safety, Sentry, common problems (Arabic) | `documentation/operations.md` |

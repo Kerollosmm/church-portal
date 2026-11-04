@@ -109,7 +109,9 @@ render with `PageBody` (+ `Footer`). Content comes from Riverpod providers (hidd
   In English, a placeholder (`sample`) doctor name «… — يُعلن لاحقًا» is shown as "<specialtyEn> doctor — to be
   announced" (`ClinicCard.isPlaceholderDoctor` + l10n `doctorTba`); the stored Arabic name is unchanged (BUG-17).
 - The seed ships section `clinics` **off** (PR 1): enable it in /admin → Sections only once the church office
-  confirms the clinics.
+  confirms the clinics. **Live state (3 Nov 2026):** the owner deleted the 11 placeholder clinics and switched the
+  section off; the page, nav entry, home directory card, footer link and assistant topic are therefore hidden. The
+  admin screen stays.
 - Subtitle `clinicsIntro` asks visitors to confirm with the church; `PendingConfirmationNote` if any clinic is sample.
 - Link to `/public-services` when that section is on.
 
@@ -219,6 +221,16 @@ keeps select / copy. Works on web (reCAPTCHA Enterprise) and Android (Play Integ
 
 ### `/admin` — see `07-admin-dashboard.md`.
 
+### Error reporting — Sentry (PR #24, ADR-034)
+Invisible to visitors: crashes, failed Firestore streams (`guardSeeded` → `ErrorReporting.capture(section:
+'content:<key>')`), assistant failures (`AssistantFailure`, question redacted; quota / rate-limit / safety not reported)
+and contact submit errors (type + scrubbed message, never the form) are sent to Sentry from the web and Android
+release builds. No personal data: `sendDefaultPii: false`, `scrubEvent` / `scrubBreadcrumb` /
+`scrubEventJson` (`lib/domain/error_privacy.dart`) strip user, IP, cookies, headers except User-Agent, query strings,
+e-mails and 7+ digit runs. Switched by `/admin` → Sections & home page → **Error reports** (`errorReporting`, default
+on); owners can press **Send test error**. Details: `03-architecture.md` → *Error reporting*, external account:
+`05-firebase.md` → *Sentry*.
+
 ### Optional images (PR #5) — `ItemImage` / `MediaImageView` (`lib/ui/widgets/item_image.dart`)
 - Where: priest + departed-father avatars (`PriestCard`, `/about`; legacy https `photoUrl` as fallback), patron
   saints (avatar beside the name), milestone avatars ("Our story" on `/`), activity thumbnails
@@ -264,8 +276,9 @@ keeps select / copy. Works on web (reCAPTCHA Enterprise) and Android (Play Integ
 
 ## Feature toggles (`settings/features`, `lib/domain/features.dart`)
 
-- 17 sections (`Sections.all`; `media` is not a page — it shows/hides all optional item images; `dailyVerse` (PR #16)
-  is the home verse-of-the-day card);
+- 19 sections (`Sections.all`; `media` is not a page — it shows/hides all optional item images; `dailyVerse` (PR #16)
+  is the hero verse of the day; `customSections` / `customPages` (PR #18) gate `/section/*` and `/page/*` with their
+  menu entries);
   **missing key = on**; before the doc loads and when it does not exist, everything is on.
 - A switched-off section disappears from: home blocks/CTAs/directory, app-bar links, Services menu, drawer, footer
   links, cross-links (e.g. clinics ↔ public services), and the **assistant's grounding**. Its route renders

@@ -109,7 +109,7 @@ Notable details:
   of 12 ranges, 11 palettes or 12 videos under the 1,000-expression cap (maps of maps did not). Contrast is not
   checkable in rules: the app corrects on save and again on render. Emulator groups "ADR-025" and "ADR-026".
 - `validFeatures`: key allow-list via `keysAllowed` (create: `keys().hasOnly`; update: only the **changed** keys must
-  be allowed, so an untouched legacy key no longer blocks a merge save — same as `settings/church`, PR #10), `sections` keys ⊆ the 17 section keys (PR #16 added `dailyVerse`)
+  be allowed, so an untouched legacy key no longer blocks a merge save — same as `settings/church`, PR #10), `sections` keys ⊆ the 19 section keys (PR #16 added `dailyVerse`, PR #18 `customSections` / `customPages`)
   (incl. `media`)
   and values bool, `homeOrder`/`homeHidden` ⊆ the 7 block keys (≤ 7), `bannerLink` via `optUrlOrPath(d, 'bannerLink',
   500)` (empty, in-app path or http(s) URL with a case-insensitive scheme — same as alert links, PR #10), `theme` ∈ 5
@@ -308,10 +308,15 @@ console.
      paragraphs clipped to 400, buttons / links, donation account / InstaPay / wallet; ≤ 2,500 chars per page — a
      block that does not fit is skipped and later shorter ones still go in).
      Never any image / gallery data. Every bilingual field goes through `_bi(ar, en)`.
-  6. Items with `sample: true` are prefixed **`[UNCONFIRMED]`** and the model is told to say they are provisional.
+  6. Items with `sample: true` are prefixed **`[UNCONFIRMED]`**; since PR #21 (ADR-030) the model is told to mention it
+     (once, briefly, only when asked about that item) **only** when the admin switch `settings/assistant.mentionUnconfirmed`
+     is on (default off) — otherwise it answers straight from the data with no disclaimer.
 - **Conversation** (`AssistantConversation`, pure Dart): checks length (`maxChars`, default 500; the text field
-  also caps it), per-rolling-minute (`perMinute`, default 4) and per-visit (`perSession`, default 30) limits
-  **before** anything is sent (blocked questions show `askTooLong` / `askSlowDown` / `askSessionLimit`); prefixes
+  also caps it), per-rolling-minute (`perMinute`, default 4) and **per device per Africa/Cairo day** (`perDay`, default 3 — PR #21,
+  ADR-031; `AssistantRateLimiter` + `AssistantUsageStore` in shared_preferences / localStorage; the legacy per-visit
+  `perSession` is ignored) limits **before** anything is sent (blocked questions show `askTooLong` / `askSlowDown` /
+  `askDayLimit`); a reply holding `[[SOURCE_SEARCH]]` becomes the faith reply (`faithReplyAr/En`) + a Google search
+  restricted to `sourceDomains` (default `st-takla.org`, `sourceSearchUrl`) + `/contact`; prefixes
   `[Current Cairo time: YYYY-MM-DD HH:mm (Weekday)]`; a reply that contains `[[OUT_OF_SCOPE]]` anywhere
   becomes the admin refusal (`refusalAr` / `refusalEn`, else the built-in ones) in the question's language
   (Arabic **letters** → Arabic; Arabic-Indic digits / tatweel do not count) and is **not** kept in the history; answers are kept (max 20 contents = 10 turns);
@@ -336,14 +341,30 @@ console.
   (`isRetryableAssistantError`); the model-unavailable fallback is unchanged. The one-off "تعذّر الحصول على إجابة الآن" on
   the first question was most likely the first reCAPTCHA Enterprise token racing the call (no client logs to prove it).
 - **Admin-editable** (`settings/assistant`, `/admin` → AI assistant): model, persona instructions, allowed topics,
-  refusal (ar/en), welcome text (ar/en; else `askIntro`), suggested questions (ar/en, ≤ 3 lines; else the built-in
-  three), `maxChars`, `perMinute`, `perSession`. The switches stay the section `assistant` and
+  refusal (ar/en), welcome text (ar/en; else `askIntro`), `showSuggestions` (default **off**; when on only the admin's
+  suggested questions ar/en, ≤ 3 lines — there are no built-in ones since PR #21), `sourceDomains`, `faithReplyAr/En`,
+  `mentionUnconfirmed`, `maxChars`, `perMinute`, `perDay` (`perSession` is a legacy key the rules still accept). The switches stay the section `assistant` and
   `settings/church.assistantEnabled` (both shown on that screen).
 - Kill switches (all platforms): section toggle `assistant`, `settings/church.assistantEnabled`, or App Check
   failing to activate. **Web release builds only:** a missing/placeholder reCAPTCHA key also hides it. Android/iOS
   release builds activate Play Integrity / App Attest without the key, so the assistant shows there when the
   other conditions hold (requests then need the Play Integrity registration). Cost cap / quota is a console task;
   on Spark the Developer API free tier is rate-limited, never billed.
+
+## Sentry (external service, PR #24, ADR-034)
+
+Not part of Firebase, but configured next to it. Facts below were given by the owner (3–4 Nov 2026) and live in the
+Sentry UI, not in the repo:
+- Org **`kerollos-0e`**, project **`church-portal`**, EU region (`*.ingest.de.sentry.io`; the public DSN is
+  `AppConfig.sentryDefaultDsn`). Plan: **Education Sponsored Team** until **2027-11-03** (then it falls back to the
+  free plan unless renewed — the app sends errors only, no tracing / replay, so it fits the free quota too).
+- Alert e-mails go to the developer's own e-mail (the address of the Sentry account; change it in Sentry → User
+  settings → Notifications); an **uptime monitor** watches the live
+  site; **Seer / Autofix** is on (AI issue analysis inside Sentry — it reads the scrubbed events and stack traces only).
+- Still open (see `11-open-tasks.md`): *Prevent Storing of IP Addresses* + server-side data scrubbers in the project
+  settings; source maps / Android symbols need a Sentry auth token.
+- In the app: switch `/admin` → Sections & home page → **Error reports** (`settings/features.errorReporting`) and
+  the owner-only **Send test error** button. Everything else in `03-architecture.md` → *Error reporting*.
 
 ## Service account (CI/CD)
 

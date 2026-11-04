@@ -1,7 +1,18 @@
 # 11 — Open tasks
 
 Tick items off (or delete them) in the PR that completes them, and add new ones as you discover them.
-Status as of 3 Nov 2026 (after PR #19; earlier: PR #7–#18).
+Status as of 4 Nov 2026 (PR #25, re-checked against `main` at `d60261d` = PR #24; earlier: PR #7–#24).
+
+## Top open items (owner's list, 4 Nov 2026 — details in the sections below)
+
+1. Footer note «تعرض البيانات المحفوظة مع التطبيق» shows on the live site while Firestore works → *Live data follow-ups*.
+2. Sentry web source maps + Android symbols need a Sentry auth token → *Error tracking — Sentry*.
+3. Sentry project privacy: *Prevent Storing of IP Addresses* + server-side data scrubbers → *Error tracking — Sentry*.
+4. Android assistant needs release signing + Play Integrity registration → *Infrastructure & security*.
+5. Custom sections / pages are not in `web/sitemap.xml` and not named in the assistant's allowed topics → *Custom sections*.
+6. 320 px overflow reported on a real phone → *Infrastructure & security* (320 px item).
+7. CI rebuild of the eBible verse asset (source-fidelity check) → *Verse of the day*.
+8. Server-side assistant limit (the 3/day limit is client-side only) → *Assistant follow-ups*.
 
 ## Infrastructure & security (owner: developer)
 
@@ -52,10 +63,12 @@ Status as of 3 Nov 2026 (after PR #19; earlier: PR #7–#18).
 - [ ] **Custom domain (optional)**: if the church buys a domain, add it to Hosting site `maximos-domadios-church`
       (console → Hosting → Add custom domain), add it to Auth authorized domains, and update OG/robots/
       sitemap URLs and the redirect destination in `firebase.json` (ADR-018).
-- [x] ~~Home page overflows by ~8 px at **320 px** width~~ — the app bar was the culprit (BUG-11 #1); below 360 px
-      the highlight buttons now move to the drawer, and `test/accessibility_test.dart` renders every public route at
-      320 px × 200 % text without overflow (Flutter test font). Still worth one look on a real 320 px phone with the
-      Cairo font.
+- [ ] **320 px overflow (reopened 4 Nov 2026, owner):** the automated sweep in `test/accessibility_test.dart` renders
+      every public route at 320 px × 200 % text without overflow, but it uses the Flutter **test font**; the owner
+      still lists 320 px overflow as open. Check on a real 320 px phone (or Chrome device mode at 320 px) with the
+      bundled **IBM Plex Sans Arabic** / Lalezar / Aref Ruqaa fonts, find the overflowing widget (hero, verse, app bar,
+      cards) and add a regression test that loads the real fonts. (Earlier fix: BUG-11 #1, highlight buttons move to
+      the drawer below 360 px.)
 - [ ] Ask the church office to update the admin-editable English name (`settings/church.nameEn`, currently "Church of
       Saints Maximus & Domadius and the Strong Anba Moussa the Black") if they prefer "St. Maximus & Domadius and
       St. Moses the Black Church" — not changed by the seed to avoid overwriting admin edits.
@@ -95,8 +108,8 @@ Status as of 3 Nov 2026 (after PR #19; earlier: PR #7–#18).
 - [x] 366 Van Dyck verses bundled (eBible.org, public domain, SHA-pinned), Cairo-day rotation, admin on/off + fixed verse.
 - [ ] Optional: let the church office review / reorder the 366 references (`tool/daily_verse_refs.txt`, then
       `python3 tool/gen_daily_verses.py`), e.g. to follow the Coptic calendar or feasts.
-- [ ] Optional: CI source-fidelity step (download the SHA-pinned eBible zip, run `tool/gen_daily_verses.py`, fail on
-      a diff). Skipped in PR #16 to keep CI free of a network dependency; a test checks the asset's `sourceSha256`.
+- [ ] **CI eBible rebuild** (source-fidelity step: download the SHA-pinned eBible zip, run `tool/gen_daily_verses.py`,
+      fail on a diff of `assets/verses/daily_verses.json`). Skipped in PR #16 to keep CI free of a network dependency; a test checks the asset's `sourceSha256`.
 - [ ] Optional: an English verse alongside (a public-domain English translation such as KJV/WEB would need its own
       verified source); today the English UI shows the Arabic verse with an English reference.
 
@@ -122,12 +135,19 @@ Status as of 3 Nov 2026 (after PR #19; earlier: PR #7–#18).
       confirm the contact types and booking occasions.
 - [ ] Optional: let built-in sections and custom categories share one menu order (built-ins come first today).
 - [ ] Optional: detail pages for custom items (cards show the full description today).
-- [ ] Optional: add custom sections / pages to `web/sitemap.xml` (static file). (Assistant grounding done in PR #19.)
+- [ ] **Custom sections / pages in `web/sitemap.xml`** (static file, so `/section/<slug>` and `/page/<slug>` are not
+      listed): needs a build-time generator or a manual list kept in sync.
+- [ ] **Assistant topics for custom content:** the content of custom sections / pages is grounded (PR #19), but the
+      allowed-topics list is static (`AssistantSettings.defaultTopics`: one generic line "The custom sections and
+      pages of this website"); a section's own name is not a topic, and the default topics / refusal text still
+      mention clinics while the clinics section is off. Option: build the topic lines from the enabled sections +
+      visible custom categories in `buildAssistantInstruction`, or let the admin edit them (Allowed topics field).
 - [x] Never reuse a deleted contact-type id (PR #19: stable random ids).
 
 ## Content (owner: church office — see `09-content-status.md`)
 
-- [ ] Real liturgy/vespers/praise timetable (47 placeholders), meetings (11), clinics (11 — or remove the section),
+- [ ] Real liturgy/vespers/praise timetable (47 placeholders), meetings (11), clinics (live documents deleted and
+      section off since 3 Nov 2026 — re-add real clinics in the admin only if the church runs them),
       facilities (4), priest roster confirmations, altars, photos (hero; priests/saints/activities can now be added
       in /admin — optional, only with the church's permission), founding year.
 - [ ] Re-date seasons/alerts every year (2027 Nativity, revivals, Holy Week/Pascha seeded; 2028 not yet).
@@ -144,12 +164,14 @@ Status as of 3 Nov 2026 (after PR #19; earlier: PR #7–#18).
       `web/og-image.jpg` shipped in PR #6; per-route canonical + `noindex` on `/admin`, 404 and switched-off sections
       done in PR #10 — crawlers that do not run JS still see the static `/` canonical.) When clinics go live,
       uncomment `/clinics` in `web/sitemap.xml`.
-- [ ] Performance budget (Lighthouse in CI), font subset/bundling (fonts are fetched at runtime now). (Deferred
+- [ ] Performance budget (Lighthouse in CI), font subsetting (fonts are bundled since PR #15 — `assets/fonts/`, no
+      runtime fetch — but not subset). (Deferred
       `/admin` and `/ask` chunks done in PR 3 of the review plan; verify lazy loading in the Network tab on the
       preview.)
 - [ ] Footer: "last updated" (optional; needs a tracked timestamp — phones and socials done in PR #13).
-- [ ] Persist the language choice on Android/iOS too (web uses `localStorage` since PR 3 of the review plan; native is
-      a no-op to avoid a new dependency).
+- [ ] Persist the language choice on Android/iOS too (web uses `localStorage` key `church_portal_lang` since PR 3 of
+      the review plan; native is still a no-op in `locale_storage_stub.dart`). `shared_preferences` is a dependency
+      since PR #21 (assistant daily counter), so a native `LanguageStore` no longer needs a new package.
 - [ ] Clinics/meetings freshness view in admin (FR-AD-06); "simulate now" next-mass preview for editors (FR-AD-03).
       (Meetings "today" badge FR-E-03 and admin "Open on site" via `CollectionDef.publicPath` done in PR 2 of the
       review plan.)
@@ -161,13 +183,16 @@ Status as of 3 Nov 2026 (after PR #19; earlier: PR #7–#18).
 
 ## Docs
 
-- [ ] Keep this memory bank current with every PR (see `00-README.md`).
+- [ ] Keep this memory bank **and** `/documentation/` (Arabic, one file per feature — PR #25, ADR-035) current with
+      every PR (see `00-README.md`).
+- [x] Arabic feature documentation (`documentation/`, PR #25).
 
 ## Assistant follow-ups (PR #21, ADR-031)
 - [ ] Optional: on the Blaze plan, enable Grounding with Google Search restricted to `sourceDomains` (filter
       citations by `web.title`, show source links + the required Search-suggestions widget) instead of the search link.
-- [ ] Optional: set the Firebase AI Logic per-user rate limit in the console (server-side; the daily device limit is
-      client-side only and resets when site data is cleared).
+- [ ] **Server-side assistant limit:** the 3-questions-per-device-per-day limit is client-side only (resets when site
+      data is cleared; a modified client skips it). Set the Firebase AI Logic per-user rate limit / quota in the
+      console, or later move the call behind a Cloud Function proxy (Blaze) that counts per App Check token.
 
 ## Error tracking — Sentry (PR #24, ADR-034)
 - [ ] **Web source maps**: upload `build/web/*.js.map` (dart2js `--source-maps`) to Sentry for readable stack traces —
@@ -183,7 +208,10 @@ Status as of 3 Nov 2026 (after PR #19; earlier: PR #7–#18).
       (Settings → Secrets and variables → Actions → Variables); `ci.yml` / `deploy.yml` already pass it when set.
 - [ ] **Sentry project settings** (sentry.io → church-portal → Settings → Security & Privacy): turn on *Prevent
       Storing of IP Addresses* and *Data Scrubber* + *Use Default Scrubbers* (server-side belt to the client
-      scrubbing); set an alert rule (e-mail on new issues) and, if wanted, inbound filters for `preview` / `ci`.
+      scrubbing); if wanted, inbound filters for `preview` / `ci`.
+- [x] Sentry alerts + monitoring (owner, 3–4 Nov 2026): alert e-mails to the developer, an uptime monitor on the live
+      site, Seer / Autofix on; plan Education Sponsored Team until 2027-11-03 (see `05-firebase.md` → *Sentry*).
+- [ ] Before **2027-11-03**: renew the Sentry education sponsorship or accept the free plan (errors-only usage fits).
 - [ ] Optional (CodeRabbit nitpick): a `@TestOn('browser')` test of the JS glue in `sentry_js_gate_web.dart` (fake
       `window.Sentry` client, assert the registered `beforeSend` Promise) + a `flutter test --platform chrome` CI
       step. The scrubbing itself is pure Dart (`scrubEventJson`) and covered by `test/error_reporting_test.dart`.
@@ -193,7 +221,14 @@ Status as of 3 Nov 2026 (after PR #19; earlier: PR #7–#18).
 ## Live data follow-ups (PR #23, ADR-033)
 - [ ] The footer note «تعرض البيانات المحفوظة مع التطبيق» (bundled content) shows on the live site even when Firestore
       works: some stream still serves the bundled seed (`servingSeed` stays on). Find which `_fallbackStreams` key
-      stays marked (e.g. log it on the preview channel) and fix that stream; do not hide the note.
-- [ ] The live `clinics` collection is empty (its documents were deleted by the owner on 3 Nov 2026). Decide with the
-      church office: re-add the verified clinics in the admin, or turn the clinics section off. Never re-seed (or
-      `--force`) to restore them.
+      stays marked (e.g. log it on the preview channel) and fix that stream; do not hide the note. **Lead (PR #25
+      code reading, not yet proven):** built-in collections go through `_col(..., confirms: list.isNotEmpty)`; when
+      the `settings/church` seeding check cannot answer (8 s timeout — ADR-033 saw it fail in a test browser), only a
+      **non-empty** live list replaces the seed, so a watched collection that is legitimately **empty** live keeps
+      serving the seed and keeps the note on — e.g. `clinics` after the 3 Nov deletion (watched by `/ask` and
+      `/clinics` only), or `alerts` on the home page if the church has removed every notice. A second suspect is
+      the gate itself timing out while the listeners work (then every stream depends on its own `confirms`).
+      Check it against the preview logs before changing `confirms`.
+- [x] The live `clinics` collection is empty (the owner deleted the 11 placeholders on 3 Nov 2026) and the owner
+      switched the clinics section **off**; the admin screen «العيادات» stays for real clinics later. Never run the
+      Seed workflow for clinics: even create-only it re-creates the 11 deleted placeholders.

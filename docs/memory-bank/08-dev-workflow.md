@@ -54,6 +54,12 @@ Auth: `GOOGLE_APPLICATION_CREDENTIALS=/path/key.json` or `gcloud auth applicatio
 
 All dates are validated before the first write; `startsAt/endsAt/date/createdAt` strings → Timestamps.
 
+> **Create-only is not harmless (verified in `tool/seed_firestore.js`, 4 Nov 2026):** without `--force` the seeder
+> skips documents that **exist**, so any seeded document an admin has **deleted** is **re-created** from
+> `assets/seed/seed.json` (e.g. the 11 placeholder clinics the owner deleted on 3 Nov 2026). Never run the Seed
+> workflow (or `seed_firestore.js`) on production without explicit owner approval, and use `--only` /
+> `--fill-missing` / `--dry-run` to keep the blast radius small. `--force` is never used on production.
+
 ### Seed workflow (`.github/workflows/seed.yml`, manual "Run workflow")
 Runs in the **`production` environment** with the service-account secret. Inputs (passed via env, validated —
 `only` must match `[a-z_,]`, email `[A-Za-z0-9@._+-]`):
@@ -108,7 +114,10 @@ Normalises the service-account secret (first JSON object only, validates, `$RUNN
 ## PR process
 
 1. `git checkout main && git pull`, then a branch: `feat/…`, `fix/…`, `content/…`, `docs/…`.
-2. Make the change **with tests** and **memory-bank updates** (see `00-README.md` update rules).
+2. Make the change **with tests**, **memory-bank updates** (see `00-README.md` update rules) **and
+   `documentation/` updates** (PR #25): a PR that adds, removes or changes a feature, an admin screen / switch, a
+   workflow or an operational step also updates the matching Arabic file in [`/documentation/`](../../documentation/README.md)
+   (one file per feature + `operations.md`). Reviewers treat stale documentation like a stale memory bank: a bug.
 3. Run `flutter analyze`, `flutter test`; if you touched rules or seed: `python3 tool/gen_seed.py` and the rules tests.
 4. Push, open a PR to `main` (squash-merge is the norm; history so far: PR #1–#3 squashed).
 5. Comment **`@coderabbitai review`** to trigger CodeRabbit. Address valid findings in follow-up commits (previous PRs

@@ -307,9 +307,11 @@ chunks are fetched relative to `<base href>`).
 - `navItems`: home, massSchedule, clinics, education, activities, publicServices, about, contact; `askNavItem` added
   when `assistantVisibleProvider`. `visibleNavItems(f, showAsk:)` filters by `f.routeEnabled(path)`.
 - Wide layout when `width / textScale ≥ 1024` (large system text forces the compact bar): text links
-  (home/about/education), a **Services** popup (activities, public services, contact, ask), gold **Mass times** and
-  white **Clinics** highlight buttons, language toggle (`EN` / `ع`).
-- Narrow: compact 48×48 dp Mass/Clinics `IconButton`s (`_HighlightButton`), language toggle, ☰ opens an **end
+  (home/about/education), a **Services** popup (activities, public services, contact, ask), the gold **Mass times**
+  highlight button, language toggle (`EN` / `ع`). There is **no clinics button in the app bar** (removed for good by
+  the parallel PR `fix/appbar-no-clinics`): clinics are reached only from the drawer / Services menu and the home
+  page directory, and only while the `clinics` section is on.
+- Narrow: a compact 48×48 dp Mass times `IconButton` (`_HighlightButton`), language toggle, ☰ opens an **end
   drawer** (`_AppDrawer`). Below **360 px**, at **≥ 150 % text**, or on a subpage below **400 px** (the Back arrow
   takes another 48 dp) the highlight buttons are dropped from the bar (they are in the drawer) so the title keeps a
   readable width. Phone subpages (`location != '/'`) get a leading

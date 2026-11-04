@@ -52,10 +52,13 @@ wanted settings and message deletion owner-only; the implementation deliberately
 
 ## Navigation (`adminDestinations(role)`)
 
-`overview` → `features` → `church` → one entry per `adminCollections` item (alerts, seasons, liturgies, meetings,
+`overview` → `features` → `church` → `assistant` (AI assistant, PR #19) → one entry per `adminCollections` item (alerts, seasons, liturgies, meetings,
 clinics, facilities, activities, priests, departedPriests, saints, milestones, **categories** (Custom sections),
 **entries** (Section items), **pages** (Custom pages) — PR #18) → `messages` → `contactCats` (Contact form types,
 PR #18) → `admins` (owners only).
+The **Clinics** screen («العيادات») stays in the menu although the owner deleted the 11 placeholder clinics and
+switched the clinics section off on 3 Nov 2026 — it is where real clinics would be added before switching the
+section back on.
 Every entry has its own icon (`adminIcon`; the assistant uses `smart_toy_outlined` since PR #23 so it no longer
 shares saints' `auto_awesome_outlined`). The nav is a `Material` (not a coloured `Container`, which hid the tiles'
 ink), so the selected entry shows the gold highlight; icons are burgundy, labels ink, and the selected entry's icon
@@ -76,7 +79,7 @@ cancels and re-subscribes every stream (BUG-18; `ChurchInfoScreen` does the same
 `FeaturesScreen` — which also resets its shown version and editor key — `MessagesScreen` and `AdminsScreen`).
 
 ### Sections & home page (`FeaturesScreen` / `FeaturesEditor`, `features_editor.dart`) → `settings/features`
-- Switch each of the 17 sections on/off (PR #16 added «آية اليوم» / Verse of the day) (+ "enable all"); labels from `Sections.labels`. The 16th, **«الصور» /
+- Switch each of the 19 sections on/off (PR #16 added «آية اليوم» / Verse of the day, PR #18 «الأقسام المخصصة» / Custom sections and «الصفحات المخصصة» / Custom pages) (+ "enable all"); labels from `Sections.labels`. **«الصور» /
   Images**, hides every optional item image site-wide (default on).
 - **Home layout**: drag to reorder the 7 blocks — or tap **Move up / Move down** (`ValueKey('home-<block>-up|down')`,
   WCAG 2.5.7 single-pointer alternative) — show/hide each; a block whose section is off is flagged

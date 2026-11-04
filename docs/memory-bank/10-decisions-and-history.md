@@ -47,6 +47,10 @@ supersede them.
   /admin; `--fill-missing` adds absent top-level fields in a transaction; `--force` + `--fill-missing` refused;
   `known_seed_ids.json` (grow-only) + `retired` list asserted by `gen_seed.py` and tests.
 - **Consequences:** admin edits are never clobbered accidentally; removing a seeded id requires retiring it.
+  **Caveat (noted in PR #25):** create-only means a seeded document an admin **deleted** comes back on the next
+  seed run (it no longer exists, so it is created again) — e.g. the 11 placeholder clinics deleted on 3 Nov 2026.
+  Deleting in /admin is therefore only durable while nobody seeds that collection; retire the id in `gen_seed.py`
+  (or drop it from the seed) if a deletion must survive seeding.
 
 ## ADR-009 — No invented content; `sample` flag
 - **Decision (PR #2):** replace sample data with verified data; anything unverified stays as clearly labelled
@@ -607,6 +611,21 @@ supersede them.
   false); a native crash cached on disk may be sent at the next start before the switch is known — acceptable,
   documented.
 
+## ADR-035 (PR #25) — An Arabic `documentation/` folder beside the memory bank, kept current in the same PR
+
+- **Context (4 Nov 2026):** the owner asked (in Arabic) for the memory bank to be brought up to date and for
+  documentation "for me or anyone who needs to know how the app works": one explanation per feature.
+- **Decision:** a top-level `documentation/` folder written in **Arabic** (simple wording; code identifiers, paths,
+  collection / field names stay in English): `README.md` (index), `architecture.md`, **one file per feature**
+  (what visitors see, how to control it from `/admin` with the exact labels from the code, how it works, limits) and
+  `operations.md` (deploy, add an admin, seed safely, Sentry, common problems). The memory bank stays the English,
+  agent-oriented long-term memory with ADRs and history; `documentation/` is the human manual and links back to it.
+- **Rule:** every PR that adds / removes / changes a feature, an admin screen or switch, a workflow or an
+  operational step updates the matching `documentation/` file in the same PR (AGENTS.md golden rule, `00-README.md`
+  update rules, `08-dev-workflow.md` PR process).
+- **Alternatives rejected:** translating the memory bank (too long and too technical for the church office, and two
+  copies of the same text drift); an English manual (the owner and the church office read Arabic first).
+
 ## Timeline
 
 | When | PR / commit | What |
@@ -643,5 +662,7 @@ supersede them.
 | 3 Nov 2026 | **PR #23** — "Custom sections, cold deep links and contact types: wait for live data; admin menu icons" (`fix/custom-content-loading`; PR #22 was squash-merged as `a29beaa`) | ADR-033: `settleFirst` + `fallbackDelay` for categories / entries / pages (no premature «غير متاحة», no endless placeholders), `confirms` for the settings docs (admin contact types reach `/contact`), re-keyed contact dropdown, fingerprinted icon fonts (`tool/fingerprint_icon_fonts.py` in ci/deploy), admin nav `Material` + consistent selected colours, assistant icon `smart_toy_outlined`; `test/live_loading_test.dart`. |
 
 | 3 Nov 2026 | **PR #24** — "Sentry error tracking (web + Android), privacy first, admin switch" (`feat/sentry-error-tracking`; PR #23 was squash-merged as `93db6c7`) | ADR-034: `sentry_flutter` 10.3.0, `ErrorReporting.run` around start-up, DSN define / public default, environments `production` / `preview` / `ci` / `debug`, release `church-portal@version+sha7`, `scrubEvent` / `scrubBreadcrumb` / JS gate, captures in `guardSeeded`, assistant (`AssistantFailure`, redacted) and contact submit, `settings/features.errorReporting` switch (rules + emulator test + seed), owner-only Send test error; `test/error_reporting_test.dart`. |
+
+| 4 Nov 2026 | **PR #25** — "Docs: memory bank up to date + Arabic feature documentation" (`docs/feature-documentation`; PR #24 was squash-merged as `d60261d`) | ADR-035: memory bank re-checked against `d60261d` (assistant limits / suggestions / unconfirmed flags in `05-firebase.md`, clinics deleted + section off on 3 Nov, create-only seeding re-creates deleted docs, bundled fonts, Sentry account facts, open tasks); new `documentation/` (Arabic): index, architecture, one file per feature, operations; README / AGENTS / CLAUDE link it with the same-PR rule. No code change. |
 
 Append new PRs to this table.

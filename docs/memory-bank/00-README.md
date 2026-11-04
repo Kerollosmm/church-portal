@@ -33,9 +33,16 @@ suggestions, inbox boxes / booking status / notes; ADR-027, ADR-028; merged as `
 (`feat/assistant-ai-logic`: the "Ask the church" assistant on web + Android — reCAPTCHA Enterprise / Play Integrity
 App Check, default model `gemini-3.1-flash-lite`, church-only scope with an admin refusal message, grounding of
 contact types and custom sections / pages, per-visit limits, `/admin` → AI assistant settings; stable contact
-category ids; ADR-029) … plus PR #24 (`feat/sentry-error-tracking`: Sentry error tracking on web + Android with
-PDPL-safe scrubbing and the `/admin` switch `settings/features.errorReporting`; ADR-034 — later PRs are listed in
-`10-decisions-and-history.md`).
+category ids; ADR-029) plus PR #20 (assistant grounded on live data on the first question, App Check warm-up, one
+retry) plus PR #21 (safe Markdown replies, faith questions only via a St-Takla.org search link, 3 questions per
+device per Cairo day, no default suggestion chips; ADR-030/031) plus PR #22 (hero without the address pill by
+default, verse of the day without a panel; ADR-032) plus PR #23 (`settleFirst` cache-first fix for custom sections /
+pages / contact types, fingerprinted icon fonts, admin nav icons; ADR-033) plus PR #24 (`feat/sentry-error-tracking`:
+Sentry error tracking on web + Android with PDPL-safe scrubbing and the `/admin` switch
+`settings/features.errorReporting`; ADR-034; merged as `d60261d`) plus PR #25 (`docs/feature-documentation`, 4 Nov
+2026: the PR #15–#24 behaviour re-checked against the code at `d60261d`, stale assistant / clinics / seeding /
+font notes fixed, and the Arabic feature documentation in [`/documentation/`](../../documentation/README.md);
+ADR-035 — later PRs are listed in `10-decisions-and-history.md`).
 
 > **Golden rule:** read this folder before changing anything, and update it in the same PR as every change that
 > alters behaviour, data shape, rules, workflows, content status or open tasks.
@@ -62,6 +69,11 @@ Related files outside this folder:
   `.github/copilot-instructions.md` point to it.
 - [`/README.md`](../../README.md) — human-oriented setup, admin guide, deploy and secrets.
 - [`/docs/CONTENT_SOURCES.md`](../CONTENT_SOURCES.md) — field → source → status for every seeded value.
+- [`/documentation/`](../../documentation/README.md) — **Arabic** documentation for the owner, church office and
+  anyone joining: what every feature does for visitors, how to control it from `/admin` (real screen / switch
+  labels), how it works technically, limits, plus `operations.md` (deploy, admins, seed safety, Sentry, common
+  problems). The memory bank is the agents' long-term memory; `documentation/` is the human manual. **Both are
+  updated in the same PR as a feature change** (ADR-035).
 
 ## How to use it (agents)
 
@@ -87,6 +99,8 @@ Related files outside this folder:
     the timeline there.
   - Task done / discovered → `11-open-tasks.md` (tick it off or add it).
   - New church term in code → `12-glossary.md`.
+  - Any feature, admin screen / switch, workflow or operational change → the matching Arabic file in
+    `/documentation/` (one file per feature; `operations.md` for deploy / seed / admins / Sentry) — same PR.
 - **Ground every claim** in a file path, class, function or field name. If you are unsure, check the code; if the
   code and these docs disagree, the code wins and the doc gets fixed.
 - **Never write secrets** (service-account JSON, private keys, passwords, reCAPTCHA *secret* key) in these files.

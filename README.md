@@ -11,6 +11,10 @@ Firebase project: **`asafra-church-portal`** (Firestore in `europe-west1`, produ
 
 > **Coding agents / new contributors:** start with [AGENTS.md](AGENTS.md) and the memory bank in
 > [docs/memory-bank/](docs/memory-bank/00-README.md).
+>
+> **التوثيق بالعربية / Arabic documentation:** شرح كل ميزة في الموقع وطريقة التحكم فيها من `/admin` وطريقة عملها،
+> وملف للتشغيل والنشر والمشاكل الشائعة — في المجلد [documentation/](documentation/README.md). Every feature change
+> updates it in the same PR.
 
 ---
 
