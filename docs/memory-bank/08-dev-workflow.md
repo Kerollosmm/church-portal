@@ -57,8 +57,10 @@ All dates are validated before the first write; `startsAt/endsAt/date/createdAt`
 > **Create-only is not harmless (verified in `tool/seed_firestore.js`, 4 Nov 2026):** without `--force` the seeder
 > skips documents that **exist**, so any seeded document an admin has **deleted** is **re-created** from
 > `assets/seed/seed.json` (e.g. the 11 placeholder clinics the owner deleted on 3 Nov 2026). Never run the Seed
-> workflow (or `seed_firestore.js`) on production without explicit owner approval, and use `--only` /
-> `--fill-missing` / `--dry-run` to keep the blast radius small. `--force` is never used on production.
+> workflow (or `seed_firestore.js`) on production without explicit owner approval. Only `--only` (fewer
+> collections) and `--dry-run` (no writes) reduce the blast radius; `--fill-missing` does **not** — it still
+> creates every missing seeded document like the default run and, in addition, adds absent fields to existing
+> ones (never changing a stored value). `--force` is never used on production.
 
 ### Seed workflow (`.github/workflows/seed.yml`, manual "Run workflow")
 Runs in the **`production` environment** with the service-account secret. Inputs (passed via env, validated —
