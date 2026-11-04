@@ -113,10 +113,22 @@ class NextMassCard extends ConsumerWidget {
       // The next service's «وفي نفس الوقت: …» line, as on /mass-schedule
       // (ADR-041; CodeRabbit review on PR #32).
       final opts = ref.watch(featuresProvider.select((f) => f.programOptions));
-      final next = r.next?.liturgy;
+      // From that day's real occurrences, so a suppressed or out-of-season
+      // service is never named (Sentry review).
+      final next = r.next;
       final parallelText = next == null
           ? ''
-          : parallelSummary(context, opts, parallelServices(lits.value ?? const [], opts)[next.id] ?? const []);
+          : parallelSummary(
+              context,
+              opts,
+              parallelOccurrences(
+                  next,
+                  occurrencesForDay(
+                      liturgies: lits.value ?? const [],
+                      seasons: seasons.value ?? const [],
+                      day: next.start,
+                      dayOffset: next.dayOffset),
+                  opts));
       body = _content(context, r, now, ref.watch(todaySettingsProvider), s?.lat, s?.lng, parallelText);
     }
 

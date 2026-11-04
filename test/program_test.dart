@@ -175,6 +175,31 @@ void main() {
     });
   });
 
+  group('next-service parallel line (Sentry review)', () {
+    test('only that day\'s real occurrences count: an out-of-season service is never named', () {
+      final friday = CairoTime.at(2027, 4, 30); // a Friday
+      Liturgy seasonal(String id, String venue) => Liturgy(
+          id: id, type: 'other', nameAr: id, nameEn: '', weekday: 5, start: '08:00', end: '10:00',
+          seasonKey: 'revival_moses', program: ProgramInfo(venue: venue));
+      final all = [
+        lit('mass', weekday: 5, start: '08:00', end: '10:00', venue: 'main'),
+        lit('youth', weekday: 5, start: '09:00', end: '10:00', venue: 'lower'),
+        seasonal('rev', 'services'),
+      ];
+      Season revival({required bool active}) => Season(
+          id: 's', key: 'revival_moses', nameAr: 'نهضة', nameEn: '', active: active, replacesRegular: false,
+          startsAt: DateTime.utc(2027, 4, 1), endsAt: DateTime.utc(2027, 5, 30));
+      List<String> names(bool active) {
+        final day = occurrencesForDay(liturgies: all, seasons: [revival(active: active)], day: friday, dayOffset: 0);
+        final mass = day.firstWhere((o) => o.liturgy.id == 'mass');
+        return parallelOccurrences(mass, day, ProgramOptions.defaults).map((l) => l.id).toList();
+      }
+
+      expect(names(false), ['youth']);
+      expect(names(true), ['rev', 'youth']);
+    });
+  });
+
   group('admin rows', () {
     test('a repeated venue / audience key is refused on the later row (CodeRabbit review)', () {
       final venues = seasonSettingsDoc.fields.firstWhere((f) => f.key == 'venues');

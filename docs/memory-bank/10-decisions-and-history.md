@@ -879,7 +879,7 @@ supersede them.
   shown. CodeRabbit round on PR #32: one parallel map per view (services of two seasons can overlap); a venue key and
   its own Arabic name typed as free text are the same place (`parallelServices(list, opts)` keys venues by label);
   English-only places compare with English-only places; an end at or before the start crosses midnight (as
-  `_occurrence`); the next-service card shows the line too; an unknown venue key falls back to the free-text place.
+  `_occurrence`); the next-service card shows the line too, from that day's real occurrences (`parallelOccurrences`, so a suppressed or out-of-season service is never named — Sentry); an unknown venue key falls back to the free-text place.
   Admin: a repeated venue / audience key is refused on the later row (`FieldDef.rowUniqueKey`, `validateRowUnique`,
   error `duplicateKey`); the programme pill counts a chosen venue / audience. Rules: `attachmentUrl` path up to 500
   characters with an overall 500 cap, no whitespace (tab / newline) in host or path.

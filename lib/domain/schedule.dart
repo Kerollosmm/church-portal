@@ -402,3 +402,28 @@ Map<String, List<Liturgy>> parallelServices(Iterable<Liturgy> list, [ProgramOpti
   }
   return out;
 }
+
+/// The services held at the same time as [target] in ANOTHER venue / hall,
+/// among [sameDay] = that day's real occurrences ([occurrencesForDay]: season
+/// windows and suppression already applied), for the next-service card
+/// (Sentry review on PR #32). Overlap uses the real instants (a service
+/// without an end time counts as one minute), places compare as in
+/// [parallelServices].
+List<Liturgy> parallelOccurrences(LiturgyOccurrence target, Iterable<LiturgyOccurrence> sameDay,
+    [ProgramOptions? opts]) {
+  final key = _placeKey(target.liturgy, opts);
+  if (key.isEmpty) return const [];
+  DateTime endOf(LiturgyOccurrence o) =>
+      o.liturgy.endMinutes == null ? o.start.add(const Duration(minutes: 1)) : o.end;
+  final tEnd = endOf(target);
+  final out = [
+    for (final o in sameDay)
+      if (o.liturgy.id != target.liturgy.id &&
+          _placeKey(o.liturgy, opts).isNotEmpty &&
+          _placeKey(o.liturgy, opts) != key &&
+          o.start.isBefore(tEnd) &&
+          target.start.isBefore(endOf(o)))
+        o,
+  ]..sort((a, b) => a.start.compareTo(b.start));
+  return [for (final o in out) o.liturgy];
+}
