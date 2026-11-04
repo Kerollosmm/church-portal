@@ -965,12 +965,12 @@ supersede them.
   3. When live streaming was active, visitors needed an immediate, persistent, lightweight indicator visible on every page without depending solely on the prominent in-body live banner.
 - **Decision:**
   1. **Redesigned web liturgical splash screen (`web/index.html`):**
-     - Dark-burgundy `#2A0808` background with a soft radial gold glow (`rgba(201, 150, 63, 0.12)`).
+     - Dark-burgundy `#2A0808` background with a soft radial gold glow (`radial-gradient(circle at 50% 45%, rgba(201, 150, 63, 0.15) 0%, rgba(42, 8, 8, 0.95) 70%, #2A0808 100%)`).
      - Official parish seal (`icons/Icon-192.png`, 104×104 px) centered with a breathing pulse animation (`pulse`, 2.6 s infinite).
-     - Full church title centered in `Lalezar` font (32–42 px) with warm gold tone (`#F8E8C9`) and soft drop shadow.
+     - Full church title centered in `Lalezar` font (28 px default, 36 px from 600 px, 42 px from 900 px) with warm gold tone (`#F8E8C9`) and soft drop shadow.
      - Progress indicator: rounded golden track (220×4 px) with animated golden shimmer bar (`shimmer`, 1.8 s infinite).
      - Liturgical subtitle: «جاري تجهيز الصلوات والبيانات...» in IBM Plex Sans Arabic (`#splash-text`, `#E2C99A`).
-     - Dismissal: smooth 0.6 s cubic-bezier cross-fadeout (`opacity 0.6s cubic-bezier(0.22, 1, 0.36, 1)`), adding class `gone` and fully removing `#splash` from the DOM in `splashDone()`.
+     - Dismissal: smooth 0.6 s cubic-bezier cross-fadeout (`opacity 0.6s cubic-bezier(0.4, 0.0, 0.2, 1)`), adding class `gone` and fully removing `#splash` from the DOM in `splashDone()`.
      - Accessibility: `@media (prefers-reduced-motion: reduce)` disables animations and transition, rendering a static 100% gold progress bar.
      - Failure path: `splashFailed()` cleans up the progress bar and displays a styled reload link on network/script failure or timeout.
   2. **Top utility bar (`lib/ui/widgets/today_widgets.dart`, `lib/ui/widgets/app_shell.dart`):**

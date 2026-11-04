@@ -242,17 +242,21 @@ class _AppShellState extends ConsumerState<AppShell> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (showTopBar)
+            if (showTopBar) ...[
               Container(
                 color: const Color(0xFF3B0A0A),
                 child: SafeArea(
                   bottom: false,
-                  left: false,
-                  right: false,
                   child: TopUtilityBar(location: location),
                 ),
               ),
-            mainAppBar,
+              SafeArea(
+                top: false,
+                bottom: false,
+                child: mainAppBar,
+              ),
+            ] else
+              mainAppBar,
           ],
         ),
       ),

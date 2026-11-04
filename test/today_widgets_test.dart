@@ -28,8 +28,11 @@ void main() {
   setUpAll(CairoTime.ensureInitialized);
 
   Future<void> pump(WidgetTester tester, Widget child,
-      {FeatureSettings features = FeatureSettings.defaults, required DateTime now, String lang = 'ar'}) async {
-    tester.view.physicalSize = const Size(1000, 2000);
+      {FeatureSettings features = FeatureSettings.defaults,
+      required DateTime now,
+      String lang = 'ar',
+      Size? physicalSize}) async {
+    tester.view.physicalSize = physicalSize ?? const Size(1000, 2000);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     await tester.pumpWidget(ProviderScope(
@@ -101,15 +104,50 @@ void main() {
       expect(launched, contains('https://www.youtube.com/live/abc'));
     });
 
-    testWidgets('narrow screen (320px) layout renders without overflow', (tester) async {
-      tester.view.physicalSize = const Size(320, 600);
-      tester.view.devicePixelRatio = 1;
+    testWidgets('narrow screen (320px) layout renders without overflow even with long live label', (tester) async {
+      final on = FeatureSettings.fromMap({
+        'liveEnabled': true,
+        'liveUrl': 'https://www.youtube.com/live/abc',
+        'liveLabelAr': 'بث مباشر خاص بنهضة عيد الشهيد العظيم مارجرجس الروماني مع نخبة من الآباء الكهنة والخدام',
+        'liveEndsAt': cairo(2026, 11, 4, 21).toUtc(),
+      });
+      await pump(
+        tester,
+        const CopticDateStrip(location: '/'),
+        features: on,
+        now: cairo(2026, 11, 4, 19),
+        physicalSize: const Size(320, 600),
+      );
+      expect(tester.takeException(), isNull);
+      expect(find.byKey(const Key('copticDateStrip')), findsOneWidget);
+      expect(find.byKey(const Key('topBarLiveBadge')), findsOneWidget);
+    });
+
+    testWidgets('renders cleanly under 200% accessibility text scale', (tester) async {
       final on = FeatureSettings.fromMap({
         'liveEnabled': true,
         'liveUrl': 'https://www.youtube.com/live/abc',
         'liveEndsAt': cairo(2026, 11, 4, 21).toUtc(),
       });
-      await pump(tester, const CopticDateStrip(location: '/'), features: on, now: cairo(2026, 11, 4, 19));
+      await tester.pumpWidget(ProviderScope(
+        overrides: [
+          repositoryProvider.overrideWithValue(SeedRepository(SeedData(const {}))),
+          featuresProvider.overrideWithValue(on),
+          featuresReadyProvider.overrideWithValue(true),
+          nowProvider.overrideWith((ref) => Stream.value(cairo(2026, 11, 4, 19))),
+        ],
+        child: MaterialApp(
+          locale: const Locale('ar'),
+          theme: buildTheme(const Locale('ar')),
+          supportedLocales: const [Locale('ar'), Locale('en')],
+          localizationsDelegates: GlobalMaterialLocalizations.delegates,
+          home: const MediaQuery(
+            data: MediaQueryData(textScaler: TextScaler.linear(2.0)),
+            child: Scaffold(body: CopticDateStrip(location: '/')),
+          ),
+        ),
+      ));
+      await tester.pump();
       expect(tester.takeException(), isNull);
       expect(find.byKey(const Key('copticDateStrip')), findsOneWidget);
       expect(find.byKey(const Key('topBarLiveBadge')), findsOneWidget);
@@ -276,6 +314,32 @@ void main() {
 
       final sealTop = tester.getTopLeft(find.byKey(const Key('sealTabHome'))).dy;
       expect(sealTop, 32.0);
+    });
+
+    testWidgets('preserves horizontal safe area insets on landscape cutouts', (tester) async {
+      tester.view.physicalSize = const Size(800, 400);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(ProviderScope(
+        overrides: [
+          repositoryProvider.overrideWithValue(SeedRepository(SeedData(const {}))),
+          featuresProvider.overrideWithValue(FeatureSettings.defaults),
+          featuresReadyProvider.overrideWithValue(true),
+          nowProvider.overrideWith((ref) => Stream.value(cairo(2026, 11, 4, 10))),
+        ],
+        child: MaterialApp(
+          locale: const Locale('ar'),
+          theme: buildTheme(const Locale('ar')),
+          supportedLocales: const [Locale('ar'), Locale('en')],
+          localizationsDelegates: GlobalMaterialLocalizations.delegates,
+          home: const MediaQuery(
+            data: MediaQueryData(padding: EdgeInsets.symmetric(horizontal: 44)),
+            child: AppShell(location: '/', child: Text('home content')),
+          ),
+        ),
+      ));
+      await tester.pump();
+      expect(tester.takeException(), isNull);
     });
   });
 }

@@ -69,6 +69,7 @@ void main() {
       expect(html, contains('progress-bar'));
       expect(html, contains('جاري تجهيز الصلوات والبيانات...'));
       expect(html, contains("s.classList.add('gone')"));
+      expect(html, contains('overflow-y: auto;'));
       // The old unoptimized 178 KB seal is not used.
       expect(html, isNot(contains('branding/seal.png')));
       for (final f in ['assets/art/hero_poster.webp', 'assets/art/hero_poster_tall.webp']) {
@@ -99,6 +100,11 @@ void main() {
 
     test('the in-app seal stays small', () {
       expect(File('assets/branding/seal.png').lengthSync(), lessThan(40 * 1024));
+    });
+
+    test('manifest.json background_color matches the dark burgundy splash background', () {
+      final manifest = jsonDecode(File('web/manifest.json').readAsStringSync()) as Map<String, dynamic>;
+      expect(manifest['background_color'], '#2A0808');
     });
   });
 

@@ -32,53 +32,56 @@ class TopUtilityBar extends ConsumerWidget {
     final day = ref.watch(liturgicalDayProvider);
     final label = day.label(arabic: context.isAr);
 
-    return Container(
-      key: const Key('copticDateStrip'),
-      width: double.infinity,
-      height: 32.0,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      decoration: const BoxDecoration(
-        color: Color(0xFF3B0A0A),
-        border: Border(bottom: BorderSide(color: Color(0x33C9963F), width: 1)),
-      ),
-      child: Row(
-        children: [
-          if (showDate)
-            Expanded(
-              child: Semantics(
-                container: true,
-                label: '${context.tr('copticDate')}: $label',
-                excludeSemantics: true,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Icons.event_note_rounded, size: 14, color: Color(0xFFC9963F)),
-                    const SizedBox(width: 6),
-                    Flexible(
-                      child: Text(
-                        label,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          fontFamily: 'IBM Plex Sans Arabic',
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFFF6E7C8),
+    return MediaQuery.withClampedTextScaling(
+      maxScaleFactor: 1.25,
+      child: Container(
+        key: const Key('copticDateStrip'),
+        width: double.infinity,
+        height: 32.0,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: const BoxDecoration(
+          color: Color(0xFF3B0A0A),
+          border: Border(bottom: BorderSide(color: Color(0x33C9963F), width: 1)),
+        ),
+        child: Row(
+          children: [
+            if (showDate)
+              Expanded(
+                child: Semantics(
+                  container: true,
+                  label: '${context.tr('copticDate')}: $label',
+                  excludeSemantics: true,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.event_note_rounded, size: 14, color: Color(0xFFC9963F)),
+                      const SizedBox(width: 6),
+                      Flexible(
+                        child: Text(
+                          label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            fontFamily: 'IBM Plex Sans Arabic',
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFFF6E7C8),
+                          ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-            )
-          else
-            const Spacer(),
-          if (liveActive) ...[
-            const SizedBox(width: 8),
-            _LiveBadge(settings: t),
+              )
+            else
+              const Spacer(),
+            if (liveActive) ...[
+              const SizedBox(width: 8),
+              Flexible(child: _LiveBadge(settings: t)),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
@@ -108,6 +111,7 @@ class _LiveBadge extends StatelessWidget {
           onTap: open,
           borderRadius: BorderRadius.circular(999),
           child: Container(
+            constraints: const BoxConstraints(maxWidth: 150),
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
             decoration: BoxDecoration(
               color: const Color(0xFFB3261E),
@@ -119,13 +123,17 @@ class _LiveBadge extends StatelessWidget {
               children: [
                 const _PulseDot(size: 7),
                 const SizedBox(width: 5),
-                Text(
-                  label,
-                  style: const TextStyle(
-                    fontFamily: 'IBM Plex Sans Arabic',
-                    color: Colors.white,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 11.5,
+                Flexible(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontFamily: 'IBM Plex Sans Arabic',
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 11.5,
+                    ),
                   ),
                 ),
               ],
