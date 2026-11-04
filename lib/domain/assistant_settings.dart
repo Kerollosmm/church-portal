@@ -50,7 +50,9 @@ const topicSectionWords = <List<String>, List<String>>{
   ['public service', 'nursery', 'library', 'employment', 'خدمات عامة', 'الخدمات العامة', 'حضانة', 'مكتبة', 'توظيف']: ['services'],
   ['priest', 'father', 'كاهن', 'كهنة', 'الآباء', 'متنيح']: ['priests', 'departedPriests'],
   ['saint', 'قديس', 'شفيع', 'شفعاء']: ['saints'],
-  ['history', 'milestone', 'تاريخ', 'محطات']: ['history', 'milestones'],
+  // Separate groups: «history and milestones» needs both sections (Codex review on PR #33).
+  ['history', 'تاريخ']: ['history'],
+  ['milestone', 'محطات']: ['milestones'],
   ['announcement', 'notice', 'تنويه', 'إعلان']: ['alerts'],
   ['liturgy', 'mass', 'vespers', 'praise', 'season', 'قداس', 'عشية', 'تسبحة', 'موسم', 'مواسم']: ['schedule'],
   ['booking', 'contact form', 'حجز', 'نموذج المراسلة']: ['contactForm'],

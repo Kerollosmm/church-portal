@@ -915,7 +915,9 @@ supersede them.
   (the screen says the season is over and visitors already see the normal site). A season without an end date never
   reverts on its own (the screen warns).
 - **Wedding switch:** `settings/features.weddingBookingOff` hides the `wedding` subtype of booking categories on the
-  contact form and in the assistant's contact context (`ContactSettings.withoutWedding`); condolences stay.
+  contact form and in the assistant's contact context (`ContactSettings.withoutWedding`); condolences stay. A booking
+  category whose only choice was the wedding is hidden while the switch is on, so an unspecified hall booking can't be
+  sent instead (Codex review on PR #33).
 - **Season verse sets (`lib/domain/season_verses.dart`):** `settings/features.seasonVerses` (≤ 40 rows
   `seasonKey␟textAr␟refAr`, edited in «إعدادات المواسم»). While a season with verses is active (the latest-starting
   one when several), the home verse rotates through its set by liturgical day; a fixed admin verse still wins; no set
@@ -923,8 +925,9 @@ supersede them.
   opens it).
 - **Assistant:** `perDaySeason` in `settings/assistant` (1–100, default 6) applies while an exceptional season is
   active (`holy_week`, `pascha`, `nativity`, `revival_maximus`, `revival_moses`; not `summer`) via
-  `withSeasonLimit`; allowed-topic lines (defaults and the admin's) are dropped when all their sections are off
-  (`topicSectionWords` / `topicsFor`); the prompt names switched-off sections ("do not offer") and the current season
+  `withSeasonLimit`; allowed-topic lines (defaults and the admin's) are dropped when a section group they name is
+  all off (`topicSectionWords` / `topicsFor`; history and milestones are separate groups, so «history and
+  milestones» goes when either is off — Codex review on PR #33); the prompt names switched-off sections ("do not offer") and the current season
   first ("use that season's schedule"); the answer cache key uses the filtered topics.
 - **Hero v2:** the owner-approved Gemini clip as muted 9 s loops whose last second cross-fades into the first (no
   seam): `hero_clouds.mp4` 1280×720 (≈ 241 KB, was 308 KB), `hero_clouds_tall.mp4` 432×768 (≈ 117 KB); posters are the

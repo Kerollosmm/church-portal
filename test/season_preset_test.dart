@@ -271,6 +271,14 @@ void main() {
       expect(admin.topicsFor(on), ['القداسات']);
     });
 
+    test('a line naming two sections needs both: history off drops «history and milestones» (Codex review)', () {
+      final t = AssistantSettings.defaults.topicsFor((s) => s != Sections.history);
+      expect(t.any((l) => l.toLowerCase().contains('history')), isFalse);
+      expect(AssistantSettings.defaults.topicsFor((_) => true).any((l) => l.toLowerCase().contains('history')), isTrue);
+      final admin = AssistantSettings.fromMap(const {'topics': 'محطات الكنيسة\nتاريخ الكنيسة'});
+      expect(admin.topicsFor((s) => s != Sections.history), ['محطات الكنيسة']);
+    });
+
     test('instructions name the current season and the switched-off sections', () {
       final text = buildAssistantInstruction(
         assistant: AssistantSettings.defaults,
@@ -298,6 +306,24 @@ void main() {
       expect(booking.subtypes.map((s) => s.key), contains('condolence'));
       expect(FeatureSettings.fromMap(const {}).weddingBookingOff, isFalse);
       expect(FeatureSettings.fromMap(const {'weddingBookingOff': true}).weddingBookingOff, isTrue);
+    });
+
+    test('a booking category whose only choice is the wedding is hidden while weddingBookingOff is on (Codex review)', () {
+      final base = ContactSettings.defaults;
+      final booking = base.categories.firstWhere((c) => c.isBooking);
+      final weddingOnly = ContactSettings([
+        for (final c in base.categories)
+          c.isBooking ? c.copyWith(subtypes: [for (final s in c.subtypes) if (s.key == 'wedding') s]) : c,
+      ]);
+      expect(weddingOnly.categories.firstWhere((c) => c.isBooking).subtypes, hasLength(1));
+      final off = weddingOnly.withoutWedding();
+      expect(off.categories.any((c) => c.isBooking), isFalse);
+      expect(off.categories.length, base.categories.length - 1);
+      // A booking category with no choices to begin with is left as it is.
+      final noChoices = ContactSettings([
+        for (final c in base.categories) c.isBooking ? c.copyWith(subtypes: const []) : c,
+      ]).withoutWedding();
+      expect(noChoices.categories.firstWhere((c) => c.isBooking).slot, booking.slot);
     });
   });
 
