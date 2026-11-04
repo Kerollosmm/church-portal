@@ -8,7 +8,6 @@ import '../../core/theme.dart';
 import 'coptic_cross.dart';
 import 'hero_feather.dart';
 import 'hero_video.dart';
-import 'hero_youtube.dart';
 
 export 'hero_feather.dart' show BottomFeather;
 
@@ -488,10 +487,6 @@ class HeroStage extends StatefulWidget {
   /// Dissolve into the page at the bottom edge.
   final bool fadeBottom;
 
-  /// A YouTube video id (the hero video library, ADR-026). It plays instead
-  /// of [video]; when it fails (error, autoplay refused, nothing within the
-  /// timeout) [video] — the bundled clip — takes over, else the poster stays.
-  final String? youtubeId;
   const HeroStage({
     super.key,
     required this.image,
@@ -501,7 +496,6 @@ class HeroStage extends StatefulWidget {
     this.poster,
     this.rays = 1,
     this.fadeBottom = true,
-    this.youtubeId,
   });
 
   @override
@@ -513,15 +507,12 @@ class _HeroStageState extends State<HeroStage> with SingleTickerProviderStateMix
   late final AnimationController _clock = AnimationController(vsync: this, duration: const Duration(seconds: 60));
   bool _ambient = false;
   bool _videoOn = false;
-  bool _youtubeFailed = false;
-
-  bool get _youtubeOn => _videoOn && widget.youtubeId != null && !_youtubeFailed;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     _ambient = ambientMotionOn(context, adminOn: widget.motion);
-    _videoOn = (widget.video != null || widget.youtubeId != null) && heroVideoAllowed(context, adminOn: widget.motion);
+    _videoOn = widget.video != null && heroVideoAllowed(context, adminOn: widget.motion);
     // Decode the still before it is needed (no pop-in, no flash on swaps).
     precacheImage(AssetImage(_still), context).ignore();
     _sync();
@@ -532,11 +523,7 @@ class _HeroStageState extends State<HeroStage> with SingleTickerProviderStateMix
   @override
   void didUpdateWidget(covariant HeroStage old) {
     super.didUpdateWidget(old);
-    if (old.youtubeId != widget.youtubeId) _youtubeFailed = false;
-    if (old.motion != widget.motion ||
-        old.video != widget.video ||
-        old.image != widget.image ||
-        old.youtubeId != widget.youtubeId) {
+    if (old.motion != widget.motion || old.video != widget.video || old.image != widget.image) {
       didChangeDependencies();
     }
   }
@@ -603,18 +590,9 @@ class _HeroStageState extends State<HeroStage> with SingleTickerProviderStateMix
                       )
                     : still)),
           ),
-          if (_youtubeOn)
-            HeroYouTube(
-              key: ValueKey('yt-${widget.youtubeId}'),
-              videoId: widget.youtubeId!,
-              alignment: widget.alignment,
-              play: visibleInViewport,
-              cssFilter: art.artCssFilter,
-              onFailed: () {
-                if (mounted) setState(() => _youtubeFailed = true);
-              },
-            )
-          else if (_videoOn && widget.video != null)
+          // The bundled clip only: the YouTube hero video library was removed
+          // (owner request, 4 Nov 2026 — ADR-036).
+          if (_videoOn && widget.video != null)
             HeroVideo(
               key: ValueKey(widget.video),
               asset: widget.video!,

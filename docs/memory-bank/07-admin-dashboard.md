@@ -52,10 +52,13 @@ wanted settings and message deletion owner-only; the implementation deliberately
 
 ## Navigation (`adminDestinations(role)`)
 
-`overview` → `features` → `church` → one entry per `adminCollections` item (alerts, seasons, liturgies, meetings,
+`overview` → `features` → `church` → `assistant` (AI assistant, PR #19) → one entry per `adminCollections` item (alerts, seasons, liturgies, meetings,
 clinics, facilities, activities, priests, departedPriests, saints, milestones, **categories** (Custom sections),
 **entries** (Section items), **pages** (Custom pages) — PR #18) → `messages` → `contactCats` (Contact form types,
 PR #18) → `admins` (owners only).
+The **Clinics** screen («العيادات») stays in the menu although the owner deleted the 11 placeholder clinics (3 Nov 2026) and
+switched the clinics section off (4 Nov 2026) — it is where real clinics would be added before switching the
+section back on.
 Every entry has its own icon (`adminIcon`; the assistant uses `smart_toy_outlined` since PR #23 so it no longer
 shares saints' `auto_awesome_outlined`). The nav is a `Material` (not a coloured `Container`, which hid the tiles'
 ink), so the selected entry shows the gold highlight; icons are burgundy, labels ink, and the selected entry's icon
@@ -76,7 +79,7 @@ cancels and re-subscribes every stream (BUG-18; `ChurchInfoScreen` does the same
 `FeaturesScreen` — which also resets its shown version and editor key — `MessagesScreen` and `AdminsScreen`).
 
 ### Sections & home page (`FeaturesScreen` / `FeaturesEditor`, `features_editor.dart`) → `settings/features`
-- Switch each of the 17 sections on/off (PR #16 added «آية اليوم» / Verse of the day) (+ "enable all"); labels from `Sections.labels`. The 16th, **«الصور» /
+- Switch each of the 19 sections on/off (PR #16 added «آية اليوم» / Verse of the day, PR #18 «الأقسام المخصصة» / Custom sections and «الصفحات المخصصة» / Custom pages) (+ "enable all"); labels from `Sections.labels`. **«الصور» /
   Images**, hides every optional item image site-wide (default on).
 - **Home layout**: drag to reorder the 7 blocks — or tap **Move up / Move down** (`ValueKey('home-<block>-up|down')`,
   WCAG 2.5.7 single-pointer alternative) — show/hide each; a block whose section is off is flagged
@@ -93,11 +96,9 @@ cancels and re-subscribes every stream (BUG-18; `ChurchInfoScreen` does the same
   pick a preset, one `#RRGGBB` field per palette colour with swatch, a live preview, a status line ("All text is
   readable" or "Will be saved corrected for readability: key old→new"), and "Reset to the preset colours". Saves
   store the corrected colours (`OccasionConfig.withReadableCustom`).
-- **Hero video library (YouTube)** card (PR #17, ADR-026; `HeroVideoEditor`): radio list "Built-in clip (default)" +
-  each link (name, url, remove); name (≤ 80) + YouTube link fields + "Add to the library" (only youtube.com / youtu.be
-  video links; stored canonical `https://www.youtube.com/watch?v=<id>`; the first link becomes active; max 12);
-  "Video per theme (optional)" dropdowns (the active video or a library link). Switching deletes nothing; a note shows
-  when Hero motion is off. The dashboard itself always uses the Golden hour palette.
+- ~~Hero video library (YouTube) card~~ (PR #17, ADR-026) — **removed in PR #25 (ADR-036)**: no `HeroVideoEditor`, no
+  YouTube links; the hero always plays the bundled clip, switched by *Hero motion & video*. The dashboard itself
+  always uses the Golden hour palette.
 - **Page titles, subtitles & intro notes** (PR #12): one collapsible row per customizable page (`about, schedule,
   education, activities, clinics, services, contact, ask` — `ValueKey('page-<key>')`, `maintainState: true`) with
   title AR/EN ≤ 200, subtitle AR/EN ≤ 300, intro AR/EN ≤ 1500 (`ValueKey('features-page-<key>-<field>')`); a
@@ -106,8 +107,8 @@ cancels and re-subscribes every stream (BUG-18; `ChurchInfoScreen` does the same
 - **Site footer (FR-G-04)** (PR #12): switches *Show phone numbers / social links / quick links*
   (`ValueKey('footer-<key>')`) and footer notes AR/EN ≤ 500 (`ValueKey('footer-noteAr|noteEn')`). Rendered by the public `Footer` since PR #13.
 - "Save changes" writes `FeatureSettings.toMap()` with `saveDoc` (mergeFields + stamp) — since PR #12 in two writes
-  when the page headers changed: everything else, then `{pageHeaders}` (PR #17 adds `{occasions}`, `{themeColors}`,
-  `{heroVideos}` writes, each only when changed / non-default) (`featuresSaveWrites`; the whole doc plus
+  when the page headers changed: everything else, then `{pageHeaders}` (PR #17 adds `{occasions}` and `{themeColors}`
+  writes, each only when changed / non-default; `heroVideos` is never written since PR #25) (`featuresSaveWrites`; the whole doc plus
   8 page headers in one write exceeds the rules' expression cap). `collect()` round-trips `pageHeaders`/`footer`, so
   the echo of your own save keeps the form (BUG-12). If the doc does not exist yet, a
   note says everything is on by default. If someone else saves while you have unsaved edits, a banner offers a reload

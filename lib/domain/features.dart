@@ -2,11 +2,9 @@
 // Pure Dart: no Flutter / Firebase imports, so the logic is unit-tested.
 
 import 'daily_verse.dart';
-import 'hero_video.dart';
 import 'image_style.dart';
 import 'occasion_theme.dart';
 
-export 'hero_video.dart' show HeroVideo, HeroVideoLibrary;
 export 'occasion_theme.dart' show OccasionConfig, ThemePalette, ThemePresets, ThemeRange, ThemeResolution, ThemeSource;
 
 /// Public sections an admin can switch on or off.
@@ -259,8 +257,6 @@ class FeatureSettings {
   /// (ADR-025). Missing = manual ([theme] always applies).
   final OccasionConfig occasions;
 
-  /// Hero video library (YouTube links, ADR-026). Missing = the bundled clip.
-  final HeroVideoLibrary heroVideos;
 
   /// Error reports to Sentry (ADR-034). Default on; off = nothing is sent
   /// from the web or Android app (no personal data is sent either way).
@@ -286,7 +282,6 @@ class FeatureSettings {
     this.imageStyles = const {},
     this.dailyVerse = DailyVerseConfig.defaults,
     this.occasions = OccasionConfig.defaults,
-    this.heroVideos = HeroVideoLibrary.defaults,
     this.errorReporting = true,
   });
 
@@ -329,7 +324,6 @@ class FeatureSettings {
       imageStyles: parseImageStyles(m['imageStyles']),
       dailyVerse: DailyVerseConfig.fromMap(m['dailyVerse']),
       occasions: OccasionConfig.fromMap(m['occasions'], m['themeColors']),
-      heroVideos: HeroVideoLibrary.fromMap(m['heroVideos']),
       errorReporting: _bool(m['errorReporting']) ?? true,
     );
   }
@@ -358,7 +352,6 @@ class FeatureSettings {
         'dailyVerse': dailyVerse.toMap(),
         'occasions': occasions.toMap(),
         'themeColors': occasions.colorsToMap(),
-        'heroVideos': heroVideos.toMap(),
         'errorReporting': errorReporting,
       };
 
@@ -382,7 +375,6 @@ class FeatureSettings {
     Map<String, String>? imageStyles,
     DailyVerseConfig? dailyVerse,
     OccasionConfig? occasions,
-    HeroVideoLibrary? heroVideos,
     bool? errorReporting,
   }) =>
       FeatureSettings(
@@ -405,7 +397,6 @@ class FeatureSettings {
         imageStyles: imageStyles ?? this.imageStyles,
         dailyVerse: dailyVerse ?? this.dailyVerse,
         occasions: occasions ?? this.occasions,
-        heroVideos: heroVideos ?? this.heroVideos,
         errorReporting: errorReporting ?? this.errorReporting,
       );
 

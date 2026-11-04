@@ -46,10 +46,10 @@ render with `PageBody` (+ `Footer`). Content comes from Riverpod providers (hidd
   next-mass bar and chips, footer) follows the theme in force — see `03-architecture.md` → Theming. Holy Week is a
   dark scene (black wash, dark panels, light text, ashen-silver accent with dark text, crimson accent word, art in
   dim greyscale); the Resurrection is festive (Easter red, bright gold, luminous ivory).
-- **Hero video library (PR #17, ADR-026):** the home hero plays the YouTube link of the theme in force
-  (`heroVideos.byTheme[theme]`, else `heroVideos.active`) muted, looping, without controls; else the bundled cloud
-  clip. The poster shows until the video plays; a YouTube error / blocked autoplay / nothing within 12 s → the
-  bundled clip (or the poster). Never for reduced motion, data saver, `heroMotion` off or under `flutter test`.
+- **Hero video:** the home hero plays the **bundled cloud clip** only (muted, looping, no controls; portrait crop on
+  phones) over its poster; the painting shows when video is not allowed. Never for reduced motion, data saver,
+  `heroMotion` off or under `flutter test`. The YouTube hero video library of PR #17 (ADR-026) was **removed in PR #25
+  (ADR-036, owner request 4 Nov 2026)**; a `heroVideos` map already stored in `settings/features` is ignored.
 
 ### `/about` — `about_page.dart` `AboutPage`
 - History card (bishop line + `historyAr/En`) and **altars** grid (main altar gets a gold cross) — section `history`.
@@ -109,7 +109,10 @@ render with `PageBody` (+ `Footer`). Content comes from Riverpod providers (hidd
   In English, a placeholder (`sample`) doctor name «… — يُعلن لاحقًا» is shown as "<specialtyEn> doctor — to be
   announced" (`ClinicCard.isPlaceholderDoctor` + l10n `doctorTba`); the stored Arabic name is unchanged (BUG-17).
 - The seed ships section `clinics` **off** (PR 1): enable it in /admin → Sections only once the church office
-  confirms the clinics.
+  confirms the clinics. **Live state:** the owner deleted the 11 seeded placeholder clinics on 3 Nov 2026 and
+  switched the section **off** on 4 Nov 2026 (live `settings/features` read, updated 07:51 Cairo; a new clinic added
+  that morning stays hidden while the section is off). While off, the page, nav entry, home directory card, footer
+  link and assistant grounding are hidden; the admin screen stays.
 - Entry points (when the section is on): phone drawer / desktop Services menu, the Home directory card,
   footer quick links, public services cross-link. **Never the app bar** (owner request, 4 Nov 2026).
 - Subtitle `clinicsIntro` asks visitors to confirm with the church; `PendingConfirmationNote` if any clinic is sample.
@@ -221,6 +224,16 @@ keeps select / copy. Works on web (reCAPTCHA Enterprise) and Android (Play Integ
 
 ### `/admin` — see `07-admin-dashboard.md`.
 
+### Error reporting — Sentry (PR #24, ADR-034)
+Invisible to visitors: crashes, failed Firestore streams (`guardSeeded` → `ErrorReporting.capture(section:
+'content:<key>')`), assistant failures (`AssistantFailure`, question redacted; quota / rate-limit / safety not reported)
+and contact submit errors (type + scrubbed message, never the form) are sent to Sentry from the web and Android
+release builds. No personal data: `sendDefaultPii: false`, `scrubEvent` / `scrubBreadcrumb` /
+`scrubEventJson` (`lib/domain/error_privacy.dart`) strip user, IP, cookies, headers except User-Agent, query strings,
+e-mails and 7+ digit runs. Switched by `/admin` → Sections & home page → **Error reports** (`errorReporting`, default
+on); owners can press **Send test error**. Details: `03-architecture.md` → *Error reporting*, external account:
+`05-firebase.md` → *Sentry*.
+
 ### Optional images (PR #5) — `ItemImage` / `MediaImageView` (`lib/ui/widgets/item_image.dart`)
 - Where: priest + departed-father avatars (`PriestCard`, `/about`; legacy https `photoUrl` as fallback), patron
   saints (avatar beside the name), milestone avatars ("Our story" on `/`), activity thumbnails
@@ -266,8 +279,9 @@ keeps select / copy. Works on web (reCAPTCHA Enterprise) and Android (Play Integ
 
 ## Feature toggles (`settings/features`, `lib/domain/features.dart`)
 
-- 17 sections (`Sections.all`; `media` is not a page — it shows/hides all optional item images; `dailyVerse` (PR #16)
-  is the home verse-of-the-day card);
+- 19 sections (`Sections.all`; `media` is not a page — it shows/hides all optional item images; `dailyVerse` (PR #16)
+  is the hero verse of the day; `customSections` / `customPages` (PR #18) gate `/section/*` and `/page/*` with their
+  menu entries);
   **missing key = on**; before the doc loads and when it does not exist, everything is on.
 - A switched-off section disappears from: home blocks/CTAs/directory, app-bar links, Services menu, drawer, footer
   links, cross-links (e.g. clinics ↔ public services), and the **assistant's grounding**. Its route renders

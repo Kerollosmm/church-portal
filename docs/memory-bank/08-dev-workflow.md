@@ -30,7 +30,7 @@ python3 tool/fingerprint_icon_fonts.py build/web   # content-hashed icon font na
 | Task | Command |
 |---|---|
 | Static analysis | `flutter analyze` (lints: `package:flutter_lints/flutter.yaml`; excludes build/android/ios/web) |
-| Unit + widget tests | `flutter test` (`test/domain_test.dart`, `features_test.dart`, `feature_gate_test.dart`, `admin_test.dart`, `seed_test.dart`, `media_test.dart`, `occasion_theme_test.dart` — every preset's contrast on panels / cards / scene / hero scrim / bars incl. the dark Holy Week scene and the hero verse, random admin palettes auto-corrected, legacy `burgundy`, Coptic Easter 1900–2099 + known years, Cairo-midnight switching, YouTube link parsing, and a rendered-text contrast walk of the public pages per preset; `occasion_admin_test.dart` — theme / video editors and save writes; `accessibility_test.dart` — WCAG contrast maths, 320 px × 200 % overflow sweep of every public route (ar + en), theme-preset propagation, semantics, `?lang=` sync, admin fixes; `phase3_test.dart` — PDPL consent, canonical + JSON-LD vs seed, `DeferredLoader` (load, retry) + deferred `/admin`/`/ask` and `AssistantGate` (no chunk while the assistant is off), saved-language precedence/persistence via a fake `LanguageStore`; `assistant_test.dart` (PR #19) — prompt scope / guardrails / new grounding, refusal swap, limits, history and model fallback with a fake `AssistantModel`, App Check provider selection, assistant settings, stable contact category ids, `/ask` with a fake model; `error_reporting_test.dart` (PR #24) — Sentry off without a DSN, DSN / environment / release resolution, `beforeSend` scrubbing (no user / IP / cookies / query strings / form or question text), the admin switch (off → nothing reaches a recording transport; events wait for the switch), assistant / content capture hooks, the Error reports card and owner-only test button). In a proxied sandbox set `NO_PROXY=127.0.0.1,localhost` or the test runner cannot reach its local websocket. |
+| Unit + widget tests | `flutter test` (`test/domain_test.dart`, `features_test.dart`, `feature_gate_test.dart`, `admin_test.dart`, `seed_test.dart`, `media_test.dart`, `occasion_theme_test.dart` — every preset's contrast on panels / cards / scene / hero scrim / bars incl. the dark Holy Week scene and the hero verse, random admin palettes auto-corrected, legacy `burgundy`, Coptic Easter 1900–2099 + known years, Cairo-midnight switching, a stored legacy `heroVideos` map being ignored (ADR-036), and a rendered-text contrast walk of the public pages per preset; `occasion_admin_test.dart` — theme / video editors and save writes; `accessibility_test.dart` — WCAG contrast maths, 320 px × 200 % overflow sweep of every public route (ar + en), theme-preset propagation, semantics, `?lang=` sync, admin fixes; `phase3_test.dart` — PDPL consent, canonical + JSON-LD vs seed, `DeferredLoader` (load, retry) + deferred `/admin`/`/ask` and `AssistantGate` (no chunk while the assistant is off), saved-language precedence/persistence via a fake `LanguageStore`; `assistant_test.dart` (PR #19) — prompt scope / guardrails / new grounding, refusal swap, limits, history and model fallback with a fake `AssistantModel`, App Check provider selection, assistant settings, stable contact category ids, `/ask` with a fake model; `error_reporting_test.dart` (PR #24) — Sentry off without a DSN, DSN / environment / release resolution, `beforeSend` scrubbing (no user / IP / cookies / query strings / form or question text), the admin switch (off → nothing reaches a recording transport; events wait for the switch), assistant / content capture hooks, the Error reports card and owner-only test button). In a proxied sandbox set `NO_PROXY=127.0.0.1,localhost` or the test runner cannot reach its local websocket. |
 | Regenerate seed | `python3 tool/gen_seed.py` → writes `assets/seed/seed.json`, `tool/known_seed_ids.json`, `tool/retired_seed_ids.json` (commit all three) |
 | Rules tests (emulator, Java 11+) | `cd tool/rules_test && npm ci && npm test` (runs `firebase emulators:exec --only firestore --project demo-church-portal`) |
 | Seed preview | `cd tool && npm install && node seed_firestore.js --dry-run` |
@@ -53,6 +53,14 @@ Auth: `GOOGLE_APPLICATION_CREDENTIALS=/path/key.json` or `gcloud auth applicatio
 | `--project <id>` | Default `asafra-church-portal` or `$GCLOUD_PROJECT` | — |
 
 All dates are validated before the first write; `startsAt/endsAt/date/createdAt` strings → Timestamps.
+
+> **Create-only is not harmless (verified in `tool/seed_firestore.js`, 4 Nov 2026):** without `--force` the seeder
+> skips documents that **exist**, so any seeded document an admin has **deleted** is **re-created** from
+> `assets/seed/seed.json` (e.g. the 11 placeholder clinics the owner deleted on 3 Nov 2026). Never run the Seed
+> workflow (or `seed_firestore.js`) on production without explicit owner approval. Only `--only` (fewer
+> collections) and `--dry-run` (no writes) reduce the blast radius; `--fill-missing` does **not** — it still
+> creates every missing seeded document like the default run and, in addition, adds absent fields to existing
+> ones (never changing a stored value). `--force` is never used on production.
 
 ### Seed workflow (`.github/workflows/seed.yml`, manual "Run workflow")
 Runs in the **`production` environment** with the service-account secret. Inputs (passed via env, validated —
@@ -108,7 +116,10 @@ Normalises the service-account secret (first JSON object only, validates, `$RUNN
 ## PR process
 
 1. `git checkout main && git pull`, then a branch: `feat/…`, `fix/…`, `content/…`, `docs/…`.
-2. Make the change **with tests** and **memory-bank updates** (see `00-README.md` update rules).
+2. Make the change **with tests**, **memory-bank updates** (see `00-README.md` update rules) **and
+   `documentation/` updates** (PR #25): a PR that adds, removes or changes a feature, an admin screen / switch, a
+   workflow or an operational step also updates the matching Arabic file in [`/documentation/`](../../documentation/README.md)
+   (one file per feature + `operations.md`). Reviewers treat stale documentation like a stale memory bank: a bug.
 3. Run `flutter analyze`, `flutter test`; if you touched rules or seed: `python3 tool/gen_seed.py` and the rules tests.
 4. Push, open a PR to `main` (squash-merge is the norm; history so far: PR #1–#3 squashed).
 5. Comment **`@coderabbitai review`** to trigger CodeRabbit. Address valid findings in follow-up commits (previous PRs

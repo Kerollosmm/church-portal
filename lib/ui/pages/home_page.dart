@@ -263,9 +263,6 @@ class _Hero extends ConsumerWidget {
             motion: f.heroMotion,
             // Phones get the portrait centre crop (the church stays centred).
             video: narrow ? ArtAssets.heroVideoTall : ArtAssets.heroVideo,
-            // The library's YouTube link for the theme in force (ADR-026);
-            // null = the bundled clip, which is also the fallback.
-            youtubeId: ref.watch(activeThemeProvider.select((t) => t.video?.youtubeId)),
             poster: narrow ? ArtAssets.heroPosterTall : ArtAssets.heroPoster,
           ),
         ),

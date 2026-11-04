@@ -36,7 +36,7 @@ summary agents need before touching content.
 |---|---|---|
 | Liturgies | **all 47** | Typical Alexandrian-parish placeholder times; places reduced to «الكنيسة / Church» |
 | Meetings | **all 11** | Placeholder days/times, no halls; youth meeting links the real Maximous Youth page |
-| Clinics | **all 11** | Generic «طبيب <التخصص> — يُعلن لاحقًا», no phones (English UI shows "<specialty> doctor — to be announced"; cards offer «Call church office»). Unknown whether the church runs clinics at all, so the seed ships section `clinics` **off** (PR 1); on the live site switch it off in /admin → Sections (an existing `settings/features` doc is not changed by the seed) |
+| Clinics | **11 placeholders in the seed; deleted live** | The seed still has 11 generic placeholders («طبيب <التخصص> — يُعلن لاحقًا», no phones) with section `clinics` **off**. **The owner deleted the 11 live placeholder documents on 3 Nov 2026 and switched the clinics section off on 4 Nov 2026** in /admin (one clinic the owner added on 4 Nov stays hidden while the section is off) (the admin screen «العيادات» is kept, so real clinics can be added later and the section switched back on). Never run the Seed workflow for `clinics` (even create-only, it would re-create the 11 placeholders) |
 | Facilities | nursery, employment, halls, library | No source; fake phones/hours removed |
 | Priests | Bigol, Saleeb (last confirmed 2022), Barnaba (single 2025 source), departed Maximus Fouad (single source) | |
 | Altars | none seeded | No source lists the altars (PRD lists main: Sts Maximus & Domadius; second: St Moses; annexes: St Mary, St Mina & St George — unverified) |

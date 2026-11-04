@@ -1,6 +1,7 @@
-// Admin side of occasion themes (ADR-025) and the hero video library
-// (ADR-026): the editors in Settings, what a save writes, and that colour
-// edits are stored auto-corrected for contrast.
+// Admin side of occasion themes (ADR-025): the editor in Settings, what a
+// save writes, and that colour edits are stored auto-corrected for contrast.
+// The hero video library (ADR-026) was removed (ADR-036): no admin card, and
+// a library already stored in settings/features is ignored and never written.
 import 'package:church_portal/domain/cairo_time.dart';
 import 'package:church_portal/domain/features.dart';
 import 'package:church_portal/domain/occasion_theme.dart';
@@ -57,7 +58,7 @@ void main() {
       }
     });
 
-    test('occasions, colours and videos go in their own writes, colours corrected for contrast', () {
+    test('occasions and colours go in their own writes, colours corrected for contrast', () {
       final next = FeatureSettings.defaults.copyWith(
         theme: ThemePresets.holyWeek,
         occasions: const OccasionConfig(
@@ -67,10 +68,6 @@ void main() {
             'goldenHour': {'ink': '#FFFFFF'}, // white body text on cream: unreadable
           },
         ),
-        heroVideos: const HeroVideoLibrary(
-          items: [HeroVideo(id: 'v1', name: 'Clouds', url: 'https://www.youtube.com/watch?v=aaaaaaaaaaa')],
-          active: 'v1',
-        ),
       );
       final w = featuresSaveWrites(next, const {'theme': 'burgundy', 'pageHeaders': {}});
       final occ = w.firstWhere((x) => x.containsKey('occasions'))['occasions'] as Map;
@@ -79,8 +76,7 @@ void main() {
       final colors = w.firstWhere((x) => x.containsKey('themeColors'))['themeColors'] as Map;
       final ink = parseHexColor((colors['goldenHour'] as String).split('|')[6])!;
       expect(contrastRatio(ink, ThemePresets.palettes['goldenHour']!.surface), greaterThanOrEqualTo(4.5));
-      final videos = w.firstWhere((x) => x.containsKey('heroVideos'))['heroVideos'] as Map;
-      expect(videos['active'], 'v1');
+      expect(w.any((x) => x.containsKey('heroVideos')), isFalse);
       expect(w.every((x) => x.length == 1 || x.containsKey('theme')), isTrue);
       // Saved again unchanged: only the base write.
       final stored = <String, dynamic>{'pageHeaders': const <String, dynamic>{}, for (final x in w) ...x};
@@ -141,39 +137,42 @@ void main() {
     });
   });
 
-  group('HeroVideoEditor', () {
-    testWidgets('only YouTube links; added, made active, switched back without deleting', (tester) async {
-      await tall(tester);
-      FeatureSettings? last;
-      await tester.pumpWidget(_app(_Host(
-        FeatureSettings.defaults,
-        (f, on) => HeroVideoEditor(value: f, onChanged: on),
-        (f) => last = f,
-      )));
-      await tester.enterText(find.byKey(const ValueKey('heroVideo-name')), 'Clouds');
-      await tester.enterText(find.byKey(const ValueKey('heroVideo-url')), 'https://vimeo.com/123');
-      await tester.tap(find.byKey(const ValueKey('heroVideo-add')));
-      await tester.pump();
-      expect(find.text('Only a youtube.com or youtu.be video link'), findsOneWidget);
-      expect(last, isNull);
-      await tester.enterText(find.byKey(const ValueKey('heroVideo-url')), 'https://youtu.be/dQw4w9WgXcQ?si=x');
-      await tester.tap(find.byKey(const ValueKey('heroVideo-add')));
-      await tester.pump();
-      expect(last!.heroVideos.items.single.url, 'https://www.youtube.com/watch?v=dQw4w9WgXcQ');
-      expect(last!.heroVideos.active, 'v1');
-      await tester.enterText(find.byKey(const ValueKey('heroVideo-name')), 'Candles');
-      await tester.enterText(find.byKey(const ValueKey('heroVideo-url')), 'youtube.com/watch?v=bbbbbbbbbbb');
-      await tester.tap(find.byKey(const ValueKey('heroVideo-add')));
-      await tester.pump();
-      expect(last!.heroVideos.items.map((i) => i.id), ['v1', 'v2']);
-      expect(last!.heroVideos.active, 'v1');
-      await tester.tap(find.byKey(const ValueKey('heroVideo-v2')));
-      await tester.pump();
-      expect(last!.heroVideos.active, 'v2');
-      await tester.tap(find.byKey(const ValueKey('heroVideo-builtin')));
-      await tester.pump();
-      expect(last!.heroVideos.active, '');
-      expect(last!.heroVideos.items, hasLength(2)); // nothing deleted
+  group('hero video library removed (ADR-036)', () {
+    const stored = <String, dynamic>{
+      'theme': 'goldenHour',
+      'pageHeaders': <String, dynamic>{},
+      // A library saved before the removal stays in the live document.
+      'heroVideos': {
+        'items': {'v1': 'Clouds|https://www.youtube.com/watch?v=aaaaaaaaaaa'},
+        'active': 'v1',
+      },
+    };
+
+    test('a stored library is read without error and never written back', () {
+      final f = FeatureSettings.fromMap(stored);
+      expect(f.toMap().keys, isNot(contains('heroVideos')));
+      final w = featuresSaveWrites(f.copyWith(heroMotion: false), stored);
+      expect(w.any((x) => x.containsKey('heroVideos')), isFalse, reason: 'saves never touch the stored field');
+      expect(w.first['heroMotion'], isFalse);
+    });
+
+    testWidgets('Sections & home page has no hero video library card', (tester) async {
+      tester.view.physicalSize = const Size(1000, 12000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(MaterialApp(
+        locale: const Locale('en'),
+        supportedLocales: const [Locale('ar'), Locale('en')],
+        localizationsDelegates: GlobalMaterialLocalizations.delegates,
+        home: Scaffold(body: FeaturesEditor(initial: FeatureSettings.fromMap(stored), onSave: (f) async {})),
+      ));
+      await tester.pumpAndSettle();
+      expect(find.text('Hero video library (YouTube)'), findsNothing);
+      expect(find.byKey(const ValueKey('heroVideo-builtin')), findsNothing);
+      expect(find.byKey(const ValueKey('heroVideo-add')), findsNothing);
+      // The hero motion switch (bundled clip on / off) stays.
+      expect(find.byKey(const ValueKey('features-heroMotion')), findsOneWidget);
+      expect(find.text('Site theme & occasions'), findsOneWidget);
     });
   });
 }

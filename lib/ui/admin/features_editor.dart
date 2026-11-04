@@ -116,11 +116,10 @@ List<Map<String, dynamic>> featuresSaveWrites(FeatureSettings next, Map<String, 
   // Colour edits are stored auto-corrected for contrast (ADR-025).
   final base = next.copyWith(occasions: next.occasions.withReadableCustom()).toMap();
   final headers = base.remove('pageHeaders');
-  // Occasion themes / hero videos: their own writes (like pageHeaders), and
+  // Occasion themes: their own writes (like pageHeaders), and
   // only once they differ from the default or are already stored.
   final occasions = base.remove('occasions');
   final colors = base.remove('themeColors');
-  final videos = base.remove('heroVideos');
   final storedF = FeatureSettings.fromMap(stored);
   final writeOccasions = (stored != null && stored.containsKey('occasions'))
       ? !sameValue(occasions, storedF.occasions.toMap())
@@ -128,9 +127,6 @@ List<Map<String, dynamic>> featuresSaveWrites(FeatureSettings next, Map<String, 
   final writeColors = (stored != null && stored.containsKey('themeColors'))
       ? !sameValue(colors, storedF.occasions.colorsToMap())
       : (colors as Map).isNotEmpty;
-  final writeVideos = (stored != null && stored.containsKey('heroVideos'))
-      ? !sameValue(videos, storedF.heroVideos.toMap())
-      : !next.heroVideos.isDefault;
   // heroMotion (ADR-022) is written only once it differs from the default or
   // is already stored, so saves keep working against rules that predate it.
   if (next.heroMotion && (stored == null || !stored.containsKey('heroMotion'))) base.remove('heroMotion');
@@ -154,7 +150,6 @@ List<Map<String, dynamic>> featuresSaveWrites(FeatureSettings next, Map<String, 
     if (stored == null || !stored.containsKey('pageHeaders') || !sameValue(headers, before)) {'pageHeaders': headers},
     if (writeOccasions) {'occasions': occasions},
     if (writeColors) {'themeColors': colors},
-    if (writeVideos) {'heroVideos': videos},
   ];
 }
 
@@ -559,9 +554,6 @@ class FeaturesEditorState extends State<FeaturesEditor> {
               _card(context.tr('themeColor'), Icons.palette_outlined, [
                 OccasionThemeEditor(value: f, onChanged: (edit) => _set(edit(f))),
               ], hint: context.tr('themeHint')),
-              _card(context.tr('heroVideosTitle'), Icons.smart_display_outlined, [
-                HeroVideoEditor(value: f, onChanged: (edit) => _set(edit(f))),
-              ], hint: context.tr('heroVideosHint')),
               _card(context.tr('errorReportingTitle'), Icons.bug_report_outlined, [
                 SwitchListTile(
                   key: const ValueKey('features-errorReporting'),
