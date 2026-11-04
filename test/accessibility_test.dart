@@ -410,7 +410,10 @@ void main() {
 
     testWidgets('compact app-bar buttons are at least 48x48 dp', (tester) async {
       await _pumpApp(tester, size: const Size(400, 800));
-      for (final label in ['Mass times', 'Clinics']) {
+      // Mass times is the only highlight button; the bar has no Clinics
+      // shortcut (owner request, 4 Nov 2026), even with clinics switched on.
+      expect(find.descendant(of: find.byType(AppBar), matching: find.byTooltip('Clinics')), findsNothing);
+      for (final label in ['Mass times', 'Menu']) {
         final button = find.ancestor(of: find.byTooltip(label), matching: find.byType(IconButton)).first;
         final size = tester.getSize(button);
         expect(size.width, greaterThanOrEqualTo(48), reason: label);
