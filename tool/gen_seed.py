@@ -89,30 +89,30 @@ def T(d, hm="00:00", off=None):
     return dt.isoformat()
 
 alerts = {
-  "follow-announcements": {"titleAr": "تابع إعلانات الكنيسة أولًا بأول", "titleEn": "Follow the church's announcements",
-    "bodyAr": "المواعيد والإعلانات الرسمية تُنشر على قناة الكنيسة على واتساب وصفحتها الرسمية على فيسبوك. انضم إلى القناة لتصلك أولًا بأول.",
-    "bodyEn": "Official times and announcements are posted on the church's WhatsApp channel and official Facebook page. Join the channel to get them first.",
+  "follow-announcements": {"titleAr": "تنبيه هام بخصوص متابعة إعلانات ومواعيد الكنيسة", "titleEn": "Important notice: official church announcements",
+    "bodyAr": "شعب الكنيسة المبارك: المواعيد الرسمية للقداسات الإلهية والتنبيهات الرعوية والنهضات تُنشر تباعًا عبر قناة واتساب وصفحة الكنيسة الرسمية. انضموا للقناة لمتابعة أي تحديث تنظيمي.",
+    "bodyEn": "Beloved parish congregation: official Divine Liturgy schedules, pastoral notices and revivals are announced on the church's WhatsApp channel and Facebook page. Follow for immediate updates.",
     "active": True, "startsAt": T("2026-10-31"), "endsAt": T("2027-12-31", "23:59"), "priority": 1, "link": WHATSAPP_CHANNEL},
-  "nativity-fast-2026": {"titleAr": "صوم الميلاد المجيد", "titleEn": "Nativity Fast",
-    "bodyAr": "يبدأ صوم الميلاد يوم 25 نوفمبر، وعيد الميلاد المجيد يوم 7 يناير. مواعيد تسبحة كيهك والقداسات تُعلن على قناة الكنيسة.",
-    "bodyEn": "The Nativity Fast begins on 25 November and the Feast of the Nativity is on 7 January. Kiahk praise and liturgy times are announced on the church's channel.",
+  "nativity-fast-2026": {"titleAr": "بركة صوم الميلاد المجيد وسهرات كيهك المباركة", "titleEn": "Holy Nativity Fast & Blessed Kiahk Vigils",
+    "bodyAr": "يبدأ صوم الميلاد المجيد يوم 25 نوفمبر وحتى الاحتفال بالقداس الإلهي لعيد الميلاد المجيد يوم 7 يناير (29 كيهك). مواعيد تسبحة وسهرات كيهك وجداول القداسات تُعلن عبر قنوات الكنيسة.",
+    "bodyEn": "The Holy Nativity Fast begins on 25 November until the Divine Liturgy of the Feast of Nativity on 7 January (29 Kiahk). Schedules for Kiahk praises and additional liturgies are posted on the church channels.",
     "active": True, "startsAt": T("2026-11-18"), "endsAt": T("2027-01-07", "23:59"), "priority": 3, "link": WHATSAPP_CHANNEL},
-  "revival-maximus-2027": {"titleAr": "نهضة القديسين مكسيموس ودوماديوس", "titleEn": "Revival of Saints Maximus & Domadius",
-    "bodyAr": "تقيم الكنيسة كل عام نهضة روحية لمدة خمسة أيام في يناير تُختتم بقداس عيد القديس دوماديوس يوم 25 يناير (17 طوبة). البرنامج والمواعيد تُعلن على قناة الكنيسة.",
-    "bodyEn": "Each January the church holds a five-day revival ending with the feast liturgy of St Domadius on 25 January (17 Tuba). The programme and times are announced on the church's channel.",
+  "revival-maximus-2027": {"titleAr": "نهضة وتذكار نياحة شفيعي الكنيسة القديسين مكسيموس ودوماديوس", "titleEn": "Revival & Departure Feast of Patron Saints Maximus & Domadius",
+    "bodyAr": "بركة صلوات ونهضة القديسين مكسيموس ودوماديوس: تقيم الكنيسة نهضتها الروحية السنوية المباركة (صلوات العشية وتطييب الرفات والقداسات الإلهية) في شهر طوبة، وتُختتم بالقداس الإلهي لتذكار نياحة القديس دوماديوس يوم 25 يناير (17 طوبة). تابعوا البرنامج ومواعيد المتكلمين عبر قناة الكنيسة.",
+    "bodyEn": "Blessing of our patron saints Maximus & Domadius: the church holds its annual five-day revival (Vespers, relic veneration, and Divine Liturgies) in Tuba, culminating in the Departure Liturgy of St. Domadius on 25 January (17 Tuba). Follow the church channels for speakers and times.",
     "active": True, "startsAt": T("2027-01-10"), "endsAt": T("2027-01-25", "23:59"), "priority": 5, "link": WHATSAPP_CHANNEL},
-  "revival-moses-2027": {"titleAr": "نهضة القوي الأنبا موسى الأسود", "titleEn": "Revival of the Strong Saint Moses the Black",
-    "bodyAr": "نهضة العشرة أيام السنوية من نحو 22 يونيو حتى عيد استشهاد الأنبا موسى الأسود يوم 1 يوليو (24 بؤونة). البرنامج والمواعيد تُعلن على قناة الكنيسة.",
-    "bodyEn": "The annual ten-day revival from about 22 June to the martyrdom feast of St Moses the Black on 1 July (24 Paona). The programme and times are announced on the church's channel.",
+  "revival-moses-2027": {"titleAr": "النهضة الروحية وتذكار استشهاد القوي الأنبا موسى الأسود", "titleEn": "Annual Revival & Martyrdom Feast of St. Moses the Black",
+    "bodyAr": "النهضة الروحية السنوية لشفيع الكنيسة القديس القوي الأنبا موسى الأسود (صلوات العشية والتمجيد وتطييب الرفات والعظات) من 22 يونيو وتُختتم بالقداس الإلهي لعيد استشهاده في 1 يوليو (24 بؤونة). تفاصيل النهضة تُعلن عبر قنوات الكنيسة الرسمية.",
+    "bodyEn": "The annual ten-day revival of patron Saint Moses the Black (Vespers, doxology, relic veneration, and sermons) runs from 22 June, concluding with the Martyrdom Feast Liturgy on 1 July (24 Paona). Full program details are announced on church channels.",
     "active": True, "startsAt": T("2027-06-12", "00:00"), "endsAt": T("2027-07-01", "23:59"), "priority": 5, "link": WHATSAPP_CHANNEL},
 }
 
 seasons = {
   "nativity-2027": {"key": "nativity", "nameAr": "عيد الميلاد المجيد", "nameEn": "Feast of the Nativity", "startsAt": T("2027-01-06"), "endsAt": T("2027-01-07", "23:59"), "active": True, "replacesRegular": True},
-  "revival-maximus-2027": {"key": "revival_maximus", "nameAr": "نهضة القديسين مكسيموس ودوماديوس", "nameEn": "Revival of Sts Maximus & Domadius", "startsAt": T("2027-01-21"), "endsAt": T("2027-01-25", "23:59"), "active": True, "replacesRegular": False},
-  "holy-week-2027": {"key": "holy_week", "nameAr": "أسبوع الآلام (البصخة المقدسة)", "nameEn": "Holy Week (Pascha)", "startsAt": T("2027-04-25", "00:00", "+03:00"), "endsAt": T("2027-05-01", "18:00", "+03:00"), "active": True, "replacesRegular": True},
-  "pascha-2027": {"key": "pascha", "nameAr": "عيد القيامة المجيد", "nameEn": "Feast of the Resurrection", "startsAt": T("2027-05-01", "18:00", "+03:00"), "endsAt": T("2027-05-02", "23:59", "+03:00"), "active": True, "replacesRegular": True},
-  "revival-moses-2027": {"key": "revival_moses", "nameAr": "نهضة القوي الأنبا موسى الأسود", "nameEn": "Revival of St Moses the Black", "startsAt": T("2027-06-22"), "endsAt": T("2027-07-01", "23:59"), "active": True, "replacesRegular": False},
+  "revival-maximus-2027": {"key": "revival_maximus", "nameAr": "نهضة وتذكار نياحة القديسين مكسيموس ودوماديوس", "nameEn": "Revival of Saints Maximus & Domadius", "startsAt": T("2027-01-21"), "endsAt": T("2027-01-25", "23:59"), "active": True, "replacesRegular": False},
+  "holy-week-2027": {"key": "holy_week", "nameAr": "أسبوع الآلام والبصخة المقدسة", "nameEn": "Holy Week & the Holy Pascha", "startsAt": T("2027-04-25", "00:00", "+03:00"), "endsAt": T("2027-05-01", "18:00", "+03:00"), "active": True, "replacesRegular": True},
+  "pascha-2027": {"key": "pascha", "nameAr": "عيد القيامة المجيد", "nameEn": "Feast of the Holy Resurrection", "startsAt": T("2027-05-01", "18:00", "+03:00"), "endsAt": T("2027-05-02", "23:59", "+03:00"), "active": True, "replacesRegular": True},
+  "revival-moses-2027": {"key": "revival_moses", "nameAr": "نهضة وتذكار استشهاد القديس القوي الأنبا موسى الأسود", "nameEn": "Revival of the Strong Saint Moses the Black", "startsAt": T("2027-06-22"), "endsAt": T("2027-07-01", "23:59"), "active": True, "replacesRegular": False},
 }
 
 # Places are not published either: every liturgy below is a placeholder.
@@ -128,43 +128,48 @@ def L(id, type, nameAr, nameEn, start, end, place, weekday=None, date=None, audA
 
 # Regular weekly schedule: PLACEHOLDER times (typical Alexandrian parish), sample=True
 # until the church publishes its timetable.
-L("fri-1", "mass", "القداس الأول (باكر)", "1st (early) liturgy", "06:30", "08:30", MAIN, 5, order=1)
-L("fri-2", "mass", "القداس الثاني", "2nd liturgy", "08:30", "10:30", MAIN, 5, order=2)
-L("fri-kids", "mass", "قداس الأطفال", "Children's liturgy", "08:30", "10:00", ANNEX, 5, audAr="للأطفال من الحضانة حتى ابتدائي", audEn="For children from nursery to primary", order=3)
-L("fri-3", "mass", "القداس الثالث", "3rd liturgy", "10:30", "12:30", GROUND, 5, order=4)
-L("sun-1", "mass", "القداس الأول (باكر)", "1st (early) liturgy", "06:00", "08:00", MAIN, 7, order=1)
-L("sun-2", "mass", "القداس الثاني", "2nd liturgy", "08:00", "10:00", MAIN, 7, order=2)
-L("sun-youth", "mass", "قداس الشباب والجامعيين", "Youth & university liturgy", "08:00", "10:00", GROUND, 7, audAr="للشباب والجامعيين", audEn="For youth and university students", order=3)
-L("wed-1", "mass", "قداس الأربعاء", "Wednesday liturgy", "07:00", "09:00", MAIN, 3, order=1)
-L("wed-moses", "mass", "قداس مذبح الأنبا موسى", "St Moses altar liturgy", "09:00", "11:00", MOSES, 3, audAr="قداس مع تمجيد للقديس الأنبا موسى", audEn="Liturgy with doxology for St Moses", order=2)
-L("sat-1", "mass", "قداس السبت", "Saturday liturgy", "07:00", "09:00", MAIN, 6, order=1)
-L("mon-1", "mass", "قداس الاثنين", "Monday liturgy", "07:00", "08:30", GROUND, 1)
-L("tue-1", "mass", "قداس الثلاثاء", "Tuesday liturgy", "07:00", "08:30", GROUND, 2)
-L("thu-1", "mass", "قداس الخميس", "Thursday liturgy", "07:00", "08:30", GROUND, 4)
-L("sat-vespers", "vespers", "عشية السبت", "Saturday vespers", "18:30", "19:30", MAIN, 6, order=1)
-L("sat-praise", "praise", "تسبحة نصف الليل", "Midnight praise", "19:30", "21:30", MAIN, 6, order=2)
-L("tue-vespers", "vespers", "عشية الأربعاء", "Tuesday-eve vespers", "18:30", "19:15", MAIN, 2)
-L("thu-vespers", "vespers", "عشية الجمعة", "Thursday-eve vespers", "18:30", "19:15", MAIN, 4)
+L("fri-1", "mass", "القداس الإلهي الأول (باكر)", "1st (early) Divine Liturgy", "06:30", "08:30", MAIN, 5, order=1)
+L("fri-2", "mass", "القداس الإلهي الثاني", "2nd Divine Liturgy", "08:30", "10:30", MAIN, 5, order=2)
+L("fri-kids", "mass", "القداس الإلهي لخدمة الأطفال (ملائكة وابتدائي)", "Children's Divine Liturgy", "08:30", "10:00", ANNEX, 5, audAr="للأطفال من الحضانة حتى ابتدائي", audEn="For children from nursery to primary", order=3)
+L("fri-3", "mass", "القداس الإلهي الثالث", "3rd Divine Liturgy", "10:30", "12:30", GROUND, 5, order=4)
+L("sun-1", "mass", "القداس الإلهي الأول (باكر)", "1st (early) Divine Liturgy", "06:00", "08:00", MAIN, 7, order=1)
+L("sun-2", "mass", "القداس الإلهي الثاني", "2nd Divine Liturgy", "08:00", "10:00", MAIN, 7, order=2)
+L("sun-youth", "mass", "القداس الإلهي لخدمة الشباب والجامعيين", "Youth & university Divine Liturgy", "08:00", "10:00", GROUND, 7, audAr="للشباب والجامعيين", audEn="For youth and university students", order=3)
+L("wed-1", "mass", "القداس الإلهي (الأربعاء)", "Wednesday Divine Liturgy", "07:00", "09:00", MAIN, 3, order=1)
+L("wed-moses", "mass", "القداس الإلهي بمذبح القوي الأنبا موسى الأسود", "St Moses altar Divine Liturgy", "09:00", "11:00", MOSES, 3, audAr="قداس إلهي مع تمجيد للقديس الأنبا موسى", audEn="Divine Liturgy with doxology for St Moses", order=2)
+L("sat-1", "mass", "القداس الإلهي (السبت)", "Saturday Divine Liturgy", "07:00", "09:00", MAIN, 6, order=1)
+L("mon-1", "mass", "القداس الإلهي (الاثنين)", "Monday Divine Liturgy", "07:00", "08:30", GROUND, 1)
+L("tue-1", "mass", "القداس الإلهي (الثلاثاء)", "Tuesday Divine Liturgy", "07:00", "08:30", GROUND, 2)
+L("thu-1", "mass", "القداس الإلهي (الخميس)", "Thursday Divine Liturgy", "07:00", "08:30", GROUND, 4)
+L("sat-vespers", "vespers", "صلوات عشية السبت وتسبحة العشية", "Saturday Vespers & Praise", "18:30", "19:30", MAIN, 6, order=1)
+L("sat-praise", "praise", "تسبحة نصف الليل المباركة", "Blessed Midnight Praise", "19:30", "21:30", MAIN, 6, order=2)
+L("tue-vespers", "vespers", "صلوات عشية (ليلة الأربعاء)", "Tuesday-eve Vespers", "18:30", "19:15", MAIN, 2)
+L("thu-vespers", "vespers", "صلوات عشية (ليلة الجمعة)", "Thursday-eve Vespers", "18:30", "19:15", MAIN, 4)
 # Seasonal (replace the regular services on the days they cover)
-L("nat-eve", "mass", "قداس عيد الميلاد المجيد", "Nativity Feast liturgy", "20:00", "00:30", MAIN, date=T("2027-01-06"), season="nativity", audAr="يرأسه الآباء الكهنة — يُرجى الحضور مبكرًا", audEn="Celebrated by all priests — please arrive early")
-L("nat-day", "mass", "قداس صباح العيد", "Feast-day morning liturgy", "08:00", "10:00", MAIN, date=T("2027-01-07"), season="nativity")
+L("nat-eve", "mass", "القداس الإلهي لعيد الميلاد المجيد (سهرة ليلة العيد)", "Nativity Vigil & Divine Liturgy", "20:00", "00:30", MAIN, date=T("2027-01-06"), season="nativity", audAr="يرأسه الآباء الكهنة — يُرجى الحضور مبكرًا", audEn="Celebrated by all priests — please arrive early")
+L("nat-day", "mass", "القداس الإلهي لصباح عيد الميلاد المجيد", "Feast-day morning Divine Liturgy", "08:00", "10:00", MAIN, date=T("2027-01-07"), season="nativity")
 L("rev-max-vespers", "other", "نهضة روحية: عشية وتمجيد", "Revival: vespers & doxology", "18:00", "20:30", MAIN, date=None, weekday=None, season="revival_maximus")
 for i, wd in enumerate([1, 2, 3, 4, 5, 6, 7]):
-    L(f"rev-max-{wd}", "other", "النهضة الروحية: عشية وعظة", "Revival: vespers & sermon", "18:00", "20:30", MAIN, wd, season="revival_maximus", order=i)
+    L(f"rev-max-{wd}", "other", "عشية ونهضة القديسين مكسيموس ودوماديوس • العظة الروحية", "Revival: vespers & sermon", "18:00", "20:30", MAIN, wd, season="revival_maximus", order=i)
 del liturgies["rev-max-vespers"]
-L("rev-max-feast", "mass", "قداس عيد استشهاد القديس دوماديوس", "Feast liturgy of St Domadius", "06:30", "10:00", MAIN, date=T("2027-01-25"), season="revival_maximus")
-for wd, (ar, en) in {1: ("البصخة: الاثنين", "Pascha: Monday"), 2: ("البصخة: الثلاثاء", "Pascha: Tuesday"), 3: ("البصخة: الأربعاء", "Pascha: Wednesday")}.items():
-    L(f"hw-day-{wd}", "other", ar + " (ساعات النهار)", en + " (day hours)", "09:00", "13:00", MAIN, wd, season="holy_week")
-    L(f"hw-eve-{wd}", "other", ar + " (ساعات الليل)", en + " (night hours)", "18:00", "21:00", MAIN, wd, season="holy_week")
-L("hw-palm", "mass", "قداس أحد الشعانين والجناز العام", "Palm Sunday liturgy & general funeral", "06:00", "11:00", MAIN, date=T("2027-04-25", "00:00", "+03:00"), season="holy_week")
-L("hw-thursday", "mass", "قداس خميس العهد واللقان", "Covenant Thursday liturgy & foot-washing", "07:00", "12:00", MAIN, date=T("2027-04-29", "00:00", "+03:00"), season="holy_week")
-L("hw-friday", "other", "صلوات الجمعة العظيمة", "Good Friday prayers", "08:00", "18:00", MAIN, date=T("2027-04-30", "00:00", "+03:00"), season="holy_week")
-L("hw-saturday", "mass", "ليلة أبو غلمسيس وقداس سبت الفرح", "Apocalypse night & Joyous Saturday liturgy", "00:00", "07:00", MAIN, date=T("2027-05-01", "00:00", "+03:00"), season="holy_week")
-L("pascha-eve", "mass", "قداس عيد القيامة المجيد", "Easter vigil liturgy", "21:00", "01:00", MAIN, date=T("2027-05-01", "00:00", "+03:00"), season="pascha", audAr="يُرجى الحضور مبكرًا", audEn="Please arrive early")
-L("pascha-day", "mass", "قداس صباح العيد", "Easter morning liturgy", "08:00", "10:00", MAIN, date=T("2027-05-02", "00:00", "+03:00"), season="pascha")
+L("rev-max-feast", "mass", "القداس الإلهي لتذكار نياحة القديس دوماديوس وتطييب الرفات", "Feast Liturgy of St Domadius & Veneration of Relics", "06:30", "10:00", MAIN, date=T("2027-01-25"), season="revival_maximus")
+pascha_days = {
+    1: ("صلوات البصخة المقدسة الصباحية (الاثنين)", "Morning Pascha prayers (Monday)", "صلوات البصخة المقدسة المسائية (ليلة الثلاثاء)", "Evening Pascha prayers (Tuesday eve)"),
+    2: ("صلوات البصخة المقدسة الصباحية (الثلاثاء)", "Morning Pascha prayers (Tuesday)", "صلوات البصخة المقدسة المسائية (ليلة الأربعاء)", "Evening Pascha prayers (Wednesday eve)"),
+    3: ("صلوات البصخة المقدسة الصباحية (الأربعاء)", "Morning Pascha prayers (Wednesday)", "صلوات البصخة المقدسة المسائية (ليلة الخميس)", "Evening Pascha prayers (Thursday eve)"),
+}
+for wd, (day_ar, day_en, eve_ar, eve_en) in pascha_days.items():
+    L(f"hw-day-{wd}", "other", day_ar, day_en, "09:00", "13:00", MAIN, wd, season="holy_week")
+    L(f"hw-eve-{wd}", "other", eve_ar, eve_en, "18:00", "21:00", MAIN, wd, season="holy_week")
+L("hw-palm", "mass", "القداس الإلهي لأحد الشعانين المبارك وصلاة التجنيز العام", "Palm Sunday Divine Liturgy & general funeral", "06:00", "11:00", MAIN, date=T("2027-04-25", "00:00", "+03:00"), season="holy_week")
+L("hw-thursday", "mass", "صلوة اللقان والقداس الإلهي لخميس العهد المجيد", "Foot-washing (Lakkan) service & Covenant Thursday Liturgy", "07:00", "12:00", MAIN, date=T("2027-04-29", "00:00", "+03:00"), season="holy_week")
+L("hw-friday", "other", "صلوات يوم الجمعة العظيمة (صلوات الآلام المقدسة)", "Good Friday holy prayers", "08:00", "18:00", MAIN, date=T("2027-04-30", "00:00", "+03:00"), season="holy_week")
+L("hw-saturday", "mass", "سهرة أبو غلمسيس والقداس الإلهي لسبت الفرح", "Apocalypse night & Joyous Saturday Divine Liturgy", "00:00", "07:00", MAIN, date=T("2027-05-01", "00:00", "+03:00"), season="holy_week")
+L("pascha-eve", "mass", "القداس الإلهي لعيد القيامة المجيد (سهرة العيد)", "Easter vigil Divine Liturgy", "21:00", "01:00", MAIN, date=T("2027-05-01", "00:00", "+03:00"), season="pascha", audAr="يُرجى الحضور مبكرًا", audEn="Please arrive early")
+L("pascha-day", "mass", "القداس الإلهي لصباح عيد القيامة المجيد", "Easter morning Divine Liturgy", "08:00", "10:00", MAIN, date=T("2027-05-02", "00:00", "+03:00"), season="pascha")
 for i, wd in enumerate([1, 2, 3, 4, 5, 6, 7]):
-    L(f"rev-moses-{wd}", "other", "نهضة الأنبا موسى: عشية وعظة", "St Moses revival: vespers & sermon", "18:30", "21:00", MOSES, wd, season="revival_moses", order=i)
-L("rev-moses-feast", "mass", "قداس عيد استشهاد الأنبا موسى الأسود", "Martyrdom feast liturgy of St Moses", "06:30", "10:30", MAIN, date=T("2027-07-01", "00:00", "+03:00"), season="revival_moses")
+    L(f"rev-moses-{wd}", "other", "عشية ونهضة القوي الأنبا موسى الأسود • العظة الروحية", "St Moses revival: vespers & sermon", "18:30", "21:00", MOSES, wd, season="revival_moses", order=i)
+L("rev-moses-feast", "mass", "القداس الإلهي لعيد استشهاد القوي الأنبا موسى وتطييب الرفات", "Martyrdom feast Divine Liturgy of St Moses & Veneration of Relics", "06:30", "10:30", MAIN, date=T("2027-07-01", "00:00", "+03:00"), season="revival_moses")
 for v in liturgies.values():
     v["sample"] = True
 
@@ -173,17 +178,17 @@ def M(id, stage, ar, en, wd, s, e, notes="", facebook=""):
     return id, {"stage": stage, "nameAr": ar, "nameEn": en, "weekday": wd, "start": s, "end": e, "hallAr": "", "hallEn": "",
                 "facebookUrl": facebook, "whatsappUrl": "", "notes": notes, "sample": True}
 meetings = dict([
-  M("angels", "angels", "مدارس الأحد — الملائكة (حضانة وروضة)", "Sunday school — Angels (nursery & KG)", 5, "10:30", "12:00"),
-  M("primary", "primary", "مدارس الأحد — ابتدائي", "Sunday school — Primary", 5, "10:30", "12:00"),
-  M("preparatory", "preparatory", "مدارس الأحد — إعدادي (خدمة إعدادي بنين)", "Sunday school — Preparatory (prep-school boys service)", 5, "17:00", "18:30"),
-  M("secondary", "secondary", "مدارس الأحد — ثانوي", "Sunday school — Secondary", 4, "18:00", "19:30"),
-  M("university", "university", "اجتماع الجامعيين", "University students meeting", 2, "19:30", "21:00"),
-  M("graduates", "graduates", "اجتماع الخريجين", "Graduates meeting", 3, "20:00", "21:30"),
-  M("youth", "youth", "اجتماع الشباب (Maximous Youth)", "Youth meeting (Maximous Youth)", 6, "19:30", "21:00", facebook="https://www.facebook.com/MaximousYouth"),
-  M("family", "family", "اجتماع الأسرة", "Family meeting", 1, "19:00", "20:30"),
-  M("men", "men", "اجتماع الرجال", "Men's meeting", 7, "19:00", "20:30"),
-  M("women", "women", "اجتماع السيدات", "Women's meeting", 2, "10:00", "11:30"),
-  M("elderly", "elderly", "اجتماع كبار السن", "Elderly meeting", 3, "10:00", "11:30"),
+  M("angels", "angels", "خدمة التربية الكنسية — مرحلة الملائكة (حضانة)", "Sunday school — Angels (nursery & KG)", 5, "10:30", "12:00"),
+  M("primary", "primary", "خدمة التربية الكنسية — مرحلة ابتدائي", "Sunday school — Primary", 5, "10:30", "12:00"),
+  M("preparatory", "preparatory", "خدمة التربية الكنسية — مرحلة إعدادي (إعدادي بنين)", "Sunday school — Preparatory (prep boys)", 5, "17:00", "18:30"),
+  M("secondary", "secondary", "خدمة التربية الكنسية — مرحلة ثانوي", "Sunday school — Secondary", 4, "18:00", "19:30"),
+  M("university", "university", "اجتماع الشباب الجامعيين", "University students meeting", 2, "19:30", "21:00"),
+  M("graduates", "graduates", "اجتماع الخريجين والمهنيين", "Graduates & professionals meeting", 3, "20:00", "21:30"),
+  M("youth", "youth", "اجتماع الشباب العام (Maximous Youth)", "Youth meeting (Maximous Youth)", 6, "19:30", "21:00", facebook="https://www.facebook.com/MaximousYouth"),
+  M("family", "family", "اجتماع الأسرة المباركة", "Family fellowship meeting", 1, "19:00", "20:30"),
+  M("men", "men", "اجتماع الرجال (داود النبي)", "Men's meeting", 7, "19:00", "20:30"),
+  M("women", "women", "اجتماع السيدات (أم النور)", "Women's meeting (St Mary)", 2, "10:00", "11:30"),
+  M("elderly", "elderly", "اجتماع الرواد والبركة (كبار السن)", "Seniors & elders meeting", 3, "10:00", "11:30"),
 ])
 
 def A(id, category, titleAr, titleEn, descAr, descEn, link="", scheduleAr="", scheduleEn="", sample=False):

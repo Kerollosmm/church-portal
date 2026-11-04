@@ -34,8 +34,8 @@ summary agents need before touching content.
 
 | Area | Count | Notes |
 |---|---|---|
-| Liturgies | **all 47** | Typical Alexandrian-parish placeholder times; places reduced to «الكنيسة / Church» |
-| Meetings | **all 11** | Placeholder days/times, no halls; youth meeting links the real Maximous Youth page |
+| Liturgies | **all 47** | Typical Alexandrian-parish placeholder times; places reduced to «الكنيسة / Church». All titles, season liturgies, and Pascha services aligned with authentic parish posters (see `docs/authentic-parish-vocabulary.md`); corrected St Domadius feast to departure (تذكار نياحة وتطييب الرفات) |
+| Meetings | **all 11** | Placeholder days/times, no halls; youth meeting links the real Maximous Youth page; stage names aligned with authentic Sunday School titles (اجتماع أسرة الملائكة، ابتدائي، إعدادي، ثانوي، خريجين، شباب، أسرة، رجال، سيدات، بركة كبار السن) |
 | Clinics | **11 placeholders in the seed; deleted live** | The seed still has 11 generic placeholders («طبيب <التخصص> — يُعلن لاحقًا», no phones) with section `clinics` **off**. **The owner deleted the 11 live placeholder documents on 3 Nov 2026 and switched the clinics section off on 4 Nov 2026** in /admin (one clinic the owner added on 4 Nov stays hidden while the section is off) (the admin screen «العيادات» is kept, so real clinics can be added later and the section switched back on). Never run the Seed workflow for `clinics` (even create-only, it would re-create the 11 placeholders) |
 | Facilities | nursery, employment, halls, library | No source; fake phones/hours removed |
 | Priests | Bigol, Saleeb (last confirmed 2022), Barnaba (single 2025 source), departed Maximus Fouad (single source) | |
