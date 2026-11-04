@@ -957,6 +957,76 @@ supersede them.
   wedding switch, admin screen apply / restore / validation / deleted season, poster sizes vs `index.html`, video
   duration / faststart / no audio / byte budgets), rules group "ADR-042".
 
+## ADR-043 (PR #37) — Occasion sub-themes follow the church season; no violet anywhere; Holy Week simulation fixes
+
+- **Context (Holy Week simulation, 4 Nov 2026, `work/sim-holy-week/report.md`):** the screenshots showed violet
+  where no theme asked for it. Cause: widgets that read `Theme.of(context).colorScheme.primary` / containers instead of
+  the palette, so Material 3's seeded tones (and the default violet scheme of a bare `MaterialApp`) leaked through;
+  the fasts palette itself was violet (`#4A235A`) and so was the `purple` accent preset. The theme also never followed
+  the season documents: Holy Week turned dark only on the computed Coptic Easter dates or an admin range, so an
+  off-date Holy Week (or a fast / Marian season) kept the normal theme. The simulation also found B1 (next-service
+  card skipped Holy Week prayers stored as `other`), B2 (dangling «—» in the "happening now" line), B3 (no venue /
+  audience in the assistant's service lines), B4 (the seed's undated Holy Week templates mixed into an owner's dated
+  Holy Week), B5 (two seasons with the same name in the preset picker) and the `kids` / `children` audience key.
+- **Decision — palettes (`ThemePresets.palettes`, `lib/domain/occasion_theme.dart`):** Holy Week = black cloth
+  `#0C0B0A`, charcoal `#1A1817` panels, ashen-silver `#C8C2BA` accent, ash-white ink, crimson `#7A1016` on silver and
+  `#E07468` script on black, the gold dimmed to ashen parchment (`#C9BCA6`) — no gold, no violet. Fasts = ash
+  `#F0EEEA` / stone `#E4E0D8` with a deep oxblood-umber `#4F2420` accent and oxblood `#7A2621` script. The legacy
+  `purple` key stays valid in stored documents and the rules but reads as the same oxblood accent and is hidden from
+  the admin pickers (`ThemePresets.pickable`). Golden hour, Resurrection, Nativity, Epiphany, Marian, navy / green /
+  brown unchanged.
+- **Every widget reads palette roles:** `context.pal` gained the scene accents (`SceneAccents.of(key, palette)`:
+  ornament, bar / barDeep / onBar / onBarAccent / barEdge for title bands and filled buttons, ribbon, sepia, halo,
+  notice, alert, success, live, cross, shadow tint), and `buildTheme` fills **every** Material scheme role (containers,
+  tertiary, surface tints…) from the palette, so a stray Material default can't drift to violet. A test bans
+  `Color(0x…)`, `Colors.*` and `AppColors.*` in `lib/ui` outside marked exemptions and scans each preset's scheme for
+  violet hues.
+- **The theme follows the active season (`occasions.followSeason`, default on; `occasions.seasonThemes`):** each
+  season key maps to a preset or `none` (defaults: holy_week → holyWeek, pascha → resurrection, nativity → nativity,
+  epiphany → epiphany, marian → marian, fast → fasting; revivals and summer → none). Only differences from the
+  defaults are stored. **Precedence** (`OccasionConfig.resolve`): an admin range (with `auto`) > the active season's
+  theme (with `followSeason`; when several are active the first in `SeasonThemes.seasonKeys` order wins — Holy Week
+  over a fast, a feast over a revival) > the Coptic Easter dates (with `auto` + `easter`) > the selected theme. The
+  admin «ثيم الموقع والمناسبات» card shows «الثيم يتبع الموسم الكنسي الجاري» and the «ثيم كل موسم» rows; the "in force
+  today" line names the source «حسب الموسم الكنسي الجاري». New season keys `epiphany`, `marian`, `fast` (season form,
+  services, verse sets, preset; rules lists).
+- **Season preset (ADR-042) item «ثيم الموسم»:** an 8th option that sets `theme` to the season key's theme and keeps the
+  old value in `previous.theme` (restore / auto-revert give it back). Offered only for a key that brings a theme and
+  ticked by default only when `followSeason` is off (with it on the theme already follows the season; the hint says
+  so). The preset now also stores the season's `startsAt`, so until the seasons list has loaded the theme can follow
+  the applied preset's season from the first paint (`activeSeasonKeysProvider`).
+- **Holy Week fixes:** B1 — while a season that replaces the regular schedule is active, every service of that season
+  counts for the next-service card whatever its type, and the card is titled «الصلاة القادمة» (`computeNextMass`).
+  B2 — "happening now" uses the free-text place, else the venue's name, and drops the dash when neither
+  (`serviceWithPlace`). B3 — the assistant's service lines carry venue and audience names. **B4 handled narrowly
+  (deviation from the report's suggestion):** the report suggested ignoring every undated seasonal service once a
+  season has any dated one. We drop an undated (weekday) service only **on the days** where a schedule-replacing season
+  has dated services of its own (`seasonHasDatedServicesOn`; season lists via `liturgyInSeason`), because the seed's
+  Holy Week 2027 is templates only and a partly-entered programme would otherwise lose its other days; additive
+  seasons (revivals) keep their nightly services on a dated feast. So the templates of weekdays the owner has not
+  entered yet still show (marked «بيانات تجريبية») until he hides them or enters those days. B5 — season names in the
+  preset picker carry the year. Audience alias: `kids` and `children` share one label, chip and filter.
+- **Rules:** `validOccasions` allows `followSeason` (bool) and `seasonThemes` (season keys → theme keys or `none`),
+  `validSeasonPreset` allows `startsAt`, the `theme` option (≤ 8 options, no duplicates) and `previous.theme`; the season
+  key lists add `epiphany`, `marian`, `fast`. **Expression budget:** the new checks pushed the ADR-025 "twelve new
+  slots in one write" case past Firestore's 1,000-expression limit. Fix: all slot shapes are checked by ONE regex over
+  the joined schedule values (with a split count that refuses a value carrying the separator); per changed slot only
+  start ≤ end remains; `seasonThemes` is checked only when present and changed, its values as one joined regex.
+  Twelve new slots plus a full season map now fit one write (emulator test). Emulator group "ADR-043".
+- **Cost (seasons listener):** the theme sits at the app root, so with `followSeason` on (the default) every visit now
+  holds the `seasons` listener for its whole length (+1 listener, ≈ 5–8 small docs, re-sent only when a season doc
+  changes). Home, /mass-schedule and /ask already held it (next-service card, assistant), so the increase is on the
+  other pages and on visits that never open home. While it loads, the theme follows `settings/features.seasonPreset`
+  (already streamed: +0). Switching «الثيم يتبع الموسم» off removes the listener from pages that did not hold it.
+  Otherwise +0 reads: two more keys in the already-streamed `settings/features`.
+- **Review fixes (Sentry on PR #37):** selected chips get a stronger edge (Holy Week's crimson `barEdge`, else the
+  ornament, 1.6 px) because on dark scenes the band colour alone was close to the unselected surface; after the
+  season end a preset whose previous theme was empty gives visitors the default theme, as «استرجاع» writes it.
+- Tests: `test/occasion_subthemes_test.dart` (palettes, no violet in any scheme, no hard-coded colours in `lib/ui`,
+  precedence, season map, legacy `purple`, preset theme item / restore / auto-revert, provider fallback to the preset),
+  `test/holy_week_fixes_test.dart` (B1–B5, alias), rules group "ADR-043". Before / after renders of Holy Week, fasting,
+  golden hour, resurrection and nativity at 390 px Arabic were checked by eye (no violet pixels after).
+
 ## Timeline
 
 | When | PR / commit | What |
@@ -1004,5 +1074,6 @@ supersede them.
 
 | 4 Nov 2026 | **PR #32** — "Programme details: speaker, topic, choir, venue, audience, Drive PDF link" (`feat/programme-fields`) | ADR-041: `program.dart` (`ProgramInfo`, `ProgramOptions`), `parallelServices`, `ProgramDetails` widget, audience chips on the seasonal schedule, meeting detail facts, admin programme group + «إعدادات المواسم» (venues / audiences), rules `programKeys` / `validProgram` / `validProgramOptions`; `test/program_test.dart`, rules group. |
 | 4 Nov 2026 | **PR #33** — "Season presets, season verses, assistant season limit, hero v2" (`feat/season-presets`) | ADR-042: `season_preset.dart` + /admin «تجهيز الموسم» (apply / restore in one transaction, auto-revert at the season end without a write), `season_verses.dart` + «آيات المواسم» in «إعدادات المواسم», assistant `perDaySeason` / section-aware topics / current season in the prompt, `weddingBookingOff`, hero v2 9 s loops + posters, `AdminBackend.saveDocs` / `saveDocsFresh`; `test/season_preset_test.dart`, rules group. |
+| 5 Nov 2026 | **PR #37** — "Occasion sub-themes follow the season; no violet; Holy Week fixes" (`fix/occasion-themes-holy-week`) | ADR-043: Holy Week charcoal / ashen silver / crimson, fasts ash / stone / oxblood, legacy `purple` → oxblood (hidden), every widget on palette roles + scene accents and the Material scheme filled from the palette (test bans hard-coded colours), theme follows the active season (`occasions.followSeason` + `seasonThemes`; admin range > season > Easter > selected), preset item «ثيم الموسم» + `startsAt`, season keys epiphany / marian / fast, Holy Week sim fixes B1–B5 (B4 per day) + `kids` alias, rules budget restructure (joined-regex slot check), +1 seasons listener app-wide while following the season. |
 
 Append new PRs to this table.

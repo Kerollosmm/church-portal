@@ -209,7 +209,7 @@ class SectionTitle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final wide = MediaQuery.sizeOf(context).width >= 900;
-    final primary = Theme.of(context).colorScheme.primary;
+    final primary = context.pal.primary;
     return Padding(
       padding: EdgeInsets.only(top: wide ? 44 : 30, bottom: 16),
       child: Column(
@@ -232,9 +232,13 @@ class SectionTitle extends StatelessWidget {
             child: Container(
               width: 170,
               height: 8,
-              decoration: const BoxDecoration(
-                borderRadius: BorderRadius.all(Radius.circular(99)),
-                gradient: LinearGradient(colors: [Color(0x007A4530), Color(0xB37A4530), Color(0x007A4530)]), // decorative
+              decoration: BoxDecoration(
+                borderRadius: const BorderRadius.all(Radius.circular(99)),
+                gradient: LinearGradient(colors: [
+                  context.pal.ribbon.withValues(alpha: 0),
+                  context.pal.ribbon.withValues(alpha: 0.7),
+                  context.pal.ribbon.withValues(alpha: 0),
+                ]), // decorative
               ),
             ),
           ),
@@ -393,9 +397,9 @@ class ErrorState extends StatelessWidget {
     padding: const EdgeInsets.symmetric(vertical: 28),
     child: Column(
       children: [
-        const Icon(Icons.cloud_off_rounded, size: 44, color: AppColors.alert),
+        Icon(Icons.cloud_off_rounded, size: 44, color: context.pal.alert),
         const SizedBox(height: 8),
-        Text(context.tr('loadError'), style: const TextStyle(color: AppColors.alert)),
+        Text(context.tr('loadError'), style: TextStyle(color: context.pal.alert)),
         if (onRetry != null)
           TextButton.icon(onPressed: onRetry, icon: const Icon(Icons.refresh), label: Text(context.tr('retry'))),
       ],
@@ -444,14 +448,14 @@ class PendingConfirmationNote extends StatelessWidget {
     margin: const EdgeInsets.only(bottom: 12),
     padding: const EdgeInsets.all(14),
     decoration: BoxDecoration(
-      color: const Color(0xFFFFF3CD),
+      color: context.pal.notice,
       borderRadius: BorderRadius.circular(16),
-      border: Border.all(color: const Color(0xFFE0C36A)),
+      border: Border.all(color: context.pal.noticeEdge),
     ),
     child: Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(Icons.info_outline_rounded, color: AppColors.goldText),
+        Icon(Icons.info_outline_rounded, color: context.pal.goldText),
         const SizedBox(width: 10),
         Expanded(
           child: Column(
@@ -459,10 +463,10 @@ class PendingConfirmationNote extends StatelessWidget {
             children: [
               Text(
                 context.tr('timesPending'),
-                style: TextStyle(fontWeight: FontWeight.w800, color: AppColors.goldText),
+                style: TextStyle(fontWeight: FontWeight.w800, color: context.pal.goldText),
               ),
               const SizedBox(height: 2),
-              Text(context.tr('timesPendingHint'), style: const TextStyle(height: 1.5, fontSize: 13, color: AppColors.ink)),
+              Text(context.tr('timesPendingHint'), style: TextStyle(height: 1.5, fontSize: 13, color: context.pal.noticeInk)),
             ],
           ),
         ),
@@ -479,11 +483,11 @@ class SampleBadge extends StatelessWidget {
     child: Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFF3CD),
+        color: context.pal.notice,
         borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: const Color(0xFFE0C36A)),
+        border: Border.all(color: context.pal.noticeEdge),
       ),
-      child: Text(context.tr('sampleData'), style: TextStyle(fontSize: 10, color: AppColors.goldText)),
+      child: Text(context.tr('sampleData'), style: TextStyle(fontSize: 10, color: context.pal.goldText)),
     ),
   );
 }
@@ -510,19 +514,21 @@ class TitleWithBadge extends StatelessWidget {
 
 class Pill extends StatelessWidget {
   final String text;
-  final Color color;
+  /// null = the theme's success green.
+  final Color? color;
   final IconData? icon;
 
   /// Lines before the label is ellipsized (null = wrap freely, for labels
   /// that list content shown nowhere else, e.g. the active seasons).
   final int? maxLines;
-  const Pill(this.text, {super.key, this.color = AppColors.success, this.icon, this.maxLines = 2});
+  const Pill(this.text, {super.key, this.color, this.icon, this.maxLines = 2});
 
   @override
   Widget build(BuildContext context) {
     // The tint sits on a panel or on the page: the label keeps 4.5:1 on both
     // (a status green is lightened on a dark theme).
     final pal = context.pal;
+    final color = this.color ?? pal.success;
     final fg = readableOn(color, [
       Color.alphaBlend(color.withValues(alpha: 0.12), pal.surface),
       Color.alphaBlend(color.withValues(alpha: 0.12), pal.background),
@@ -599,7 +605,7 @@ class TimeRangeText extends StatelessWidget {
       children: [
         Text(
           primary,
-          style: displayStyle(context, size: large ? 28 : 21, color: Theme.of(context).colorScheme.primary, height: 1.3),
+          style: displayStyle(context, size: large ? 28 : 21, color: context.pal.primary, height: 1.3),
         ),
         // Arabic mode: the Latin secondary line keeps its own script's base
         // direction (BUG-10).
@@ -639,7 +645,7 @@ class Footer extends ConsumerWidget {
     // before showing phones / social links an admin may have switched off.
     final ready = ref.watch(featuresReadyProvider);
     final footer = features.footer;
-    final primary = Theme.of(context).colorScheme.primary;
+    final primary = context.pal.primary;
     final links = <(String, String)>[
       ('massSchedule', '/mass-schedule'),
       ('clinics', '/clinics'),
@@ -729,9 +735,9 @@ class Footer extends ConsumerWidget {
                       style: IconButton.styleFrom(
                         minimumSize: const Size(48, 48),
                         tapTargetSize: MaterialTapTargetSize.padded,
-                        backgroundColor: primary,
+                        backgroundColor: context.pal.bar,
                       ),
-                      icon: Icon(x.$2, color: context.pal.onPrimaryAccent, size: 20),
+                      icon: Icon(x.$2, color: context.pal.onBarAccent, size: 20),
                     ),
                   ),
               ],
@@ -827,7 +833,7 @@ class Footer extends ConsumerWidget {
       context.tr('footerSignature'),
       key: const Key('footerSignature'),
       textAlign: TextAlign.center,
-      style: displayStyle(context, size: wide ? 20 : 17, color: primaryDarkOf(context), height: 1.5),
+      style: displayStyle(context, size: wide ? 20 : 17, color: context.pal.primaryDeep, height: 1.5),
     );
     final sigButtons = [
       for (final x in sigIcons)
@@ -840,9 +846,9 @@ class Footer extends ConsumerWidget {
             style: IconButton.styleFrom(
               minimumSize: const Size(48, 48),
               tapTargetSize: MaterialTapTargetSize.padded,
-              backgroundColor: primary,
+              backgroundColor: context.pal.bar,
             ),
-            icon: Icon(x.$2, color: context.pal.onPrimary, size: 18),
+            icon: Icon(x.$2, color: context.pal.onBar, size: 18),
           ),
         ),
     ];
@@ -859,7 +865,7 @@ class Footer extends ConsumerWidget {
               shaderCallback: (r) => const LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
-                colors: [Color(0x00000000), Color(0xFF000000)],
+                colors: [Color(0x00000000), Color(0xFF000000)], // palette-exempt: alpha mask, not a colour
                 stops: [0.05, 0.5],
               ).createShader(r),
               child: sceneArt(
@@ -890,8 +896,8 @@ class Footer extends ConsumerWidget {
                   decoration: BoxDecoration(
                     color: context.pal.panel,
                     borderRadius: BorderRadius.circular(kPanelRadius),
-                    border: Border.all(color: const Color(0x61C9963F)),
-                    boxShadow: kPanelShadow,
+                    border: Border.all(color: context.pal.ornamentLine),
+                    boxShadow: context.pal.panelShadow,
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,

@@ -50,7 +50,12 @@ class PresetOption {
   /// Season programme PDF / Drive link (`seasons/{id}.attachmentUrl`).
   static const pdf = 'pdf';
 
-  static const all = [replaceRegular, hideMeetings, hideClinics, heroMotionOff, weddingOff, live, pdf];
+  /// Pick the season's occasion theme by hand (`theme` = the season key's
+  /// theme, ADR-043). Only needed when «اتّباع الموسم» is off: with it on,
+  /// the theme already follows the active season.
+  static const theme = 'theme';
+
+  static const all = [replaceRegular, hideMeetings, hideClinics, heroMotionOff, weddingOff, live, pdf, theme];
 }
 
 /// Keys of [SeasonPreset.previous] (mirrored by firestore.rules
@@ -68,9 +73,12 @@ class PresetPrev {
   static const attachmentUrl = 'attachmentUrl';
   static const attachmentLabelAr = 'attachmentLabelAr';
   static const attachmentLabelEn = 'attachmentLabelEn';
+
+  /// The stored `settings/features.theme` before the preset (ADR-043).
+  static const theme = 'theme';
   static const all = [
     seasonActive, replacesRegular, meetings, clinics, heroMotion, weddingBookingOff, liveUrl, liveEndsAt, //
-    attachmentUrl, attachmentLabelAr, attachmentLabelEn,
+    attachmentUrl, attachmentLabelAr, attachmentLabelEn, theme,
   ];
 }
 
@@ -83,6 +91,11 @@ class SeasonPreset {
   final String seasonKey;
 
   final DateTime? appliedAt;
+
+  /// The season's start when applied (ADR-043; older presets: none). Lets
+  /// the theme follow the season from the first paint, before the seasons
+  /// list has loaded.
+  final DateTime? startsAt;
 
   /// The season's end when applied; null = until restored by hand.
   final DateTime? endsAt;
@@ -98,6 +111,7 @@ class SeasonPreset {
     required this.seasonId,
     this.seasonKey = '',
     this.appliedAt,
+    this.startsAt,
     this.endsAt,
     this.options = const [],
     this.previous = const {},
@@ -115,6 +129,7 @@ class SeasonPreset {
       seasonId: id,
       seasonKey: v['seasonKey'] is String ? v['seasonKey'] as String : '',
       appliedAt: _date(v['appliedAt']),
+      startsAt: _date(v['startsAt']),
       endsAt: _date(v['endsAt']),
       options: opts is List ? [for (final o in opts) if (o is String && PresetOption.all.contains(o)) o] : const [],
       previous: prev is Map
@@ -131,6 +146,7 @@ class SeasonPreset {
         'seasonId': seasonId,
         'seasonKey': seasonKey,
         'appliedAt': appliedAt,
+        if (startsAt != null) 'startsAt': startsAt,
         'endsAt': endsAt,
         'options': options,
         'previous': previous,
@@ -140,6 +156,14 @@ class SeasonPreset {
 
   /// The season is over: visitors read the [previous] values again.
   bool expiredAt(DateTime instant) => endsAt != null && !instant.isBefore(endsAt!);
+
+  /// The preset's season is running at [instant] (from its start, or from
+  /// the apply when the preset predates ADR-043, until its end).
+  bool seasonRunningAt(DateTime instant) {
+    final from = startsAt ?? appliedAt;
+    if (from != null && instant.isBefore(from)) return false;
+    return !expiredAt(instant);
+  }
 
   bool? prevBool(String key) => previous[key] is bool ? previous[key] as bool : null;
   String prevString(String key) => previous[key] is String ? previous[key] as String : '';
@@ -226,6 +250,8 @@ PresetWrites planApply({
   required String liveUrl,
   required DateTime? liveEndsAt,
   required DateTime now,
+  String storedTheme = '',
+  String? seasonTheme,
 }) {
   final o = r.options;
   final prev = <String, Object?>{PresetPrev.seasonActive: season.active};
@@ -270,12 +296,22 @@ PresetWrites planApply({
     s['attachmentLabelAr'] = r.attachmentLabelAr.trim();
     s['attachmentLabelEn'] = r.attachmentLabelEn.trim();
   }
+  // The season's theme by hand (ADR-043); nothing to do when the key brings
+  // no theme.
+  if (o.contains(PresetOption.theme) && seasonTheme != null) {
+    prev[PresetPrev.theme] = storedTheme;
+    f['theme'] = seasonTheme;
+  }
   f['seasonPreset'] = SeasonPreset(
     seasonId: season.id,
     seasonKey: season.key,
     appliedAt: now,
+    startsAt: season.startsAt,
     endsAt: season.endsAt,
-    options: [for (final k in PresetOption.all) if (o.contains(k)) k],
+    options: [
+      for (final k in PresetOption.all)
+        if (o.contains(k) && (k != PresetOption.theme || seasonTheme != null)) k,
+    ],
     previous: prev,
   ).toMap();
   return PresetWrites(f, season.id, s);
@@ -308,6 +344,10 @@ PresetWrites planRestore(SeasonPreset p, {required Map<String, bool> sections, r
     s['attachmentUrl'] = p.prevString(PresetPrev.attachmentUrl);
     s['attachmentLabelAr'] = p.prevString(PresetPrev.attachmentLabelAr);
     s['attachmentLabelEn'] = p.prevString(PresetPrev.attachmentLabelEn);
+  }
+  if (p.has(PresetOption.theme)) {
+    final t = p.prevString(PresetPrev.theme);
+    f['theme'] = t.isEmpty ? 'goldenHour' : t;
   }
   return PresetWrites(f, p.seasonId, s);
 }

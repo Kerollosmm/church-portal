@@ -70,7 +70,7 @@ class _ContactCategoriesScreenState extends State<ContactCategoriesScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.cream,
+      backgroundColor: context.pal.background,
       floatingActionButton: _cats == null
           ? null
           : FloatingActionButton.extended(
@@ -118,7 +118,7 @@ class _ContactCategoriesScreenState extends State<ContactCategoriesScreen> {
     return Form(
       key: _form,
       child: ListView(padding: const EdgeInsets.fromLTRB(12, 12, 12, 96), children: [
-        Text(context.tr('contactCatsHint'), style: const TextStyle(color: AppColors.muted, height: 1.6)),
+        Text(context.tr('contactCatsHint'), style: TextStyle(color: context.pal.muted, height: 1.6)),
         const SizedBox(height: 12),
         for (var i = 0; i < cats.length; i++) _card(context, i, cats[i]),
         Align(
@@ -236,7 +236,7 @@ class _ContactCategoriesScreenState extends State<ContactCategoriesScreen> {
                 ),
                 IconButton(
                   tooltip: context.tr('remove'),
-                  icon: const Icon(Icons.close, color: AppColors.alert),
+                  icon: Icon(Icons.close, color: context.pal.alert),
                   onPressed: () => _edit(i, cats[i].copyWith(subtypes: [...cats[i].subtypes]..removeAt(j))),
                 ),
               ]),
@@ -288,8 +288,8 @@ class _ContactCategoriesScreenState extends State<ContactCategoriesScreen> {
                         _retired.add(cats.removeAt(i).slot);
                         _dirty = true;
                       }),
-              icon: const Icon(Icons.delete_outline, color: AppColors.alert),
-              label: Text(context.tr('remove'), style: const TextStyle(color: AppColors.alert)),
+              icon: Icon(Icons.delete_outline, color: context.pal.alert),
+              label: Text(context.tr('remove'), style: TextStyle(color: context.pal.alert)),
             ),
           ]),
         ]),

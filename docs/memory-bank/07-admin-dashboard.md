@@ -96,6 +96,10 @@ cancels and re-subscribes every stream (BUG-18; `ChurchInfoScreen` does the same
   pick a preset, one `#RRGGBB` field per palette colour with swatch, a live preview, a status line ("All text is
   readable" or "Will be saved corrected for readability: key old→new"), and "Reset to the preset colours". Saves
   store the corrected colours (`OccasionConfig.withReadableCustom`).
+  **ADR-043:** switch «الثيم يتبع الموسم الكنسي الجاري» (`occasions-followSeason`, default on) and, under it, «ثيم كل
+  موسم» (`occasions-seasonMap`): one dropdown per season key (`occasions-season-<key>-theme`) with «بدون ثيم» + the
+  pickable presets (only differences from the defaults are saved). The "in force today" line can say «حسب الموسم
+  الكنسي الجاري». The `purple` chip is gone (`ThemePresets.pickable`); a document that still holds it shows it.
 - ~~Hero video library (YouTube) card~~ (PR #17, ADR-026) — **removed in PR #25 (ADR-036)**: no `HeroVideoEditor`, no
   YouTube links; the hero always plays the bundled clip, switched by *Hero motion & video*. The dashboard itself
   always uses the Golden hour palette.
@@ -144,7 +148,9 @@ season choice, verse text, reference).
 
 ### Season preparation («تجهيز الموسم», `SeasonPresetScreen`, `lib/ui/admin/season_preset_admin.dart`) (PR #33, ADR-042)
 
-Season dropdown (upcoming first) → checklist of 7 options with per-season defaults (`PresetRequest.defaultsFor`), a
+Season dropdown (upcoming first; names carry the year — ADR-043, sim B5) → checklist of 7 options (8 with «ثيم الموسم
+(ألوان الموقع)», ADR-043: offered only for a season key that brings a theme, ticked by default only while the theme
+does not already follow the season) with per-season defaults (`PresetRequest.defaultsFor`), a
 live-link field and a Drive-link + button-text fields when ticked → «تطبيق تجهيز الموسم» → confirmation dialog listing
 every change → one transaction (`saveDocsFresh`: re-reads `settings/features` + the season and re-plans, so another admin's change meanwhile is kept and a preset applied meanwhile is never overwritten) writing `settings/features` + the season. While a preset is applied the screen shows
 it (season, applied / end dates, options), says whether the season is running or over (visitors already back to

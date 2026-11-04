@@ -75,7 +75,7 @@ class LanguageToggle extends ConsumerWidget {
     onPressed: () => ref.read(localeProvider.notifier).toggle(),
     icon: Text(
       context.isAr ? 'EN' : 'ع',
-      style: const TextStyle(fontWeight: FontWeight.w800, color: AppColors.goldLight),
+      style: TextStyle(fontWeight: FontWeight.w800, color: context.pal.onPrimaryAccent),
     ),
   );
 }
@@ -111,7 +111,7 @@ class _AdminCheckState extends State<_AdminCheck> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.cloud_off_rounded, size: 48, color: AppColors.alert),
+                  Icon(Icons.cloud_off_rounded, size: 48, color: context.pal.alert),
                   const SizedBox(height: 8),
                   Text(context.tr('adminCheckFailed'), textAlign: TextAlign.center),
                   const SizedBox(height: 12),
@@ -150,10 +150,10 @@ class _AdminCheckState extends State<_AdminCheck> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.lock_outline, size: 48, color: AppColors.alert),
+              Icon(Icons.lock_outline, size: 48, color: context.pal.alert),
               const SizedBox(height: 8),
               Text(context.tr('notAdmin')),
-              Text(user.email ?? '', style: const TextStyle(color: AppColors.muted)),
+              Text(user.email ?? '', style: TextStyle(color: context.pal.muted)),
               const SizedBox(height: 12),
               OutlinedButton(onPressed: repo.signOut, child: Text(context.tr('signOut'))),
             ],
@@ -243,7 +243,7 @@ class _LoginFormState extends State<_LoginForm> {
                 children: [
                   Text(
                     context.tr('signIn'),
-                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.burgundy),
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: context.pal.primary),
                   ),
                   const SizedBox(height: 16),
                   TextField(
@@ -268,15 +268,15 @@ class _LoginFormState extends State<_LoginForm> {
                   if (_error != null)
                     Padding(
                       padding: const EdgeInsets.only(top: 10),
-                      child: Text(_error!, style: const TextStyle(color: AppColors.alert)),
+                      child: Text(_error!, style: TextStyle(color: context.pal.alert)),
                     ),
                   const SizedBox(height: 16),
                   FilledButton(
                     onPressed: _busy ? null : _signIn,
                     child: _busy
-                        ? const SizedBox.square(
+                        ? SizedBox.square(
                             dimension: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                            child: CircularProgressIndicator(strokeWidth: 2, color: context.pal.onBar),
                           )
                         : Text(context.tr('signIn')),
                   ),
@@ -346,10 +346,16 @@ class _AdminDashboardState extends State<AdminDashboard> {
       case 'overview':
         return OverviewScreen(repo: repo, role: widget.role, onOpen: _open);
       case 'features':
-        return FeaturesScreen(
-          repo: repo,
-          // Owner only (ADR-034): one harmless test event to check Sentry.
-          onSendTestError: widget.role == AdminRoles.owner ? ErrorReporting.sendTestEvent : null,
+        return Consumer(
+          builder: (context, ref, _) => FeaturesScreen(
+            repo: repo,
+            // Owner only (ADR-034): one harmless test event to check Sentry.
+            onSendTestError: widget.role == AdminRoles.owner ? ErrorReporting.sendTestEvent : null,
+            activeSeasonKeys: [
+              for (final k in ref.watch(activeSeasonKeysProvider).split(','))
+                if (k.isNotEmpty) k,
+            ],
+          ),
         );
       // Keyed per section: 'today' and 'seasonSettings' edit the same
       // document (settings/features) with different fields, so a reused
@@ -384,7 +390,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
     // is painted where it can be seen (PR #23: it was hidden under the
     // Container colour, leaving only the text tinted).
     return Material(
-      color: AppColors.parchment,
+      color: context.pal.surfaceAlt,
       child: SafeArea(
         child: ListView(
           padding: const EdgeInsets.symmetric(vertical: 8),
@@ -393,7 +399,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
               child: Row(
                 children: [
-                  const Icon(Icons.verified_user, color: AppColors.success, size: 18),
+                  Icon(Icons.verified_user, color: context.pal.success, size: 18),
                   const SizedBox(width: 6),
                   Expanded(
                     child: Column(
@@ -406,7 +412,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                         ),
                         Text(
                           context.tr('role_${widget.role}'),
-                          style: const TextStyle(color: AppColors.muted, fontSize: 12),
+                          style: TextStyle(color: context.pal.muted, fontSize: 12),
                         ),
                       ],
                     ),
@@ -425,10 +431,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 // Same colours for every entry: burgundy icons, ink labels;
                 // the selected one gets a gold highlight and a burgundy
                 // label (icon and text alike).
-                iconColor: AppColors.burgundy,
-                textColor: AppColors.ink,
-                selectedColor: AppColors.burgundy,
-                selectedTileColor: AppColors.gold.withValues(alpha: 0.22),
+                iconColor: context.pal.primary,
+                textColor: context.pal.ink,
+                selectedColor: context.pal.primary,
+                selectedTileColor: context.pal.ornament.withValues(alpha: 0.22),
                 shape: const RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(10))),
                 onTap: () {
                   if (inDrawer) Navigator.of(context).pop();
@@ -438,7 +444,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
             const Divider(),
             ListTile(
               dense: true,
-              leading: const Icon(Icons.logout, color: AppColors.alert),
+              leading: Icon(Icons.logout, color: context.pal.alert),
               title: Text(context.tr('signOut')),
               onTap: widget.onSignOut,
             ),
