@@ -2,6 +2,8 @@
 // list, top event of the day, live banner, today.json parsing.
 // Reference dates: api.katameros.app (copticDate / feast titles, read
 // 2026-11-04) and timeanddate.com (Alexandria sunsets) — docs/CONTENT_SOURCES.md.
+import 'dart:convert';
+
 import 'package:church_portal/data/synaxarium_source.dart';
 import 'package:church_portal/domain/cairo_time.dart';
 import 'package:church_portal/domain/coptic_calendar.dart';
@@ -11,6 +13,9 @@ import 'package:church_portal/domain/features.dart';
 import 'package:church_portal/domain/sun.dart';
 import 'package:church_portal/domain/today.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 DateTime d(int y, int m, int day) => DateTime.utc(y, m, day);
 
@@ -147,6 +152,51 @@ void main() {
     });
   });
 
+  group('SynaxariumSource.load (device copy, one GET when needed)', () {
+    String file(String day) => '{"days":{"$day":{"ar":["تذكار $day"],"en":["C $day"]}}}';
+
+    test('stored copy lacks the day: one GET, fresh data returned and stored', () async {
+      SharedPreferences.setMockInitialValues({SynaxariumSource.storeKey: file('2026-11-01')});
+      var gets = 0;
+      final src = SynaxariumSource(
+        client: MockClient((r) async {
+          gets++;
+          return http.Response.bytes(utf8.encode(file('2026-11-04')), 200);
+        }),
+        prefs: SharedPreferences.getInstance,
+      );
+      final d = await src.load(DateTime.utc(2026, 11, 4));
+      expect(gets, 1);
+      expect(d.dayOf(DateTime.utc(2026, 11, 4))!.ar.single, 'تذكار 2026-11-04');
+      expect((await SharedPreferences.getInstance()).getString(SynaxariumSource.storeKey), file('2026-11-04'));
+    });
+
+    test('stored copy covers the day: no GET', () async {
+      SharedPreferences.setMockInitialValues({SynaxariumSource.storeKey: file('2026-11-04')});
+      var gets = 0;
+      final src = SynaxariumSource(
+        client: MockClient((r) async {
+          gets++;
+          return http.Response('{}', 200);
+        }),
+        prefs: SharedPreferences.getInstance,
+      );
+      expect((await src.load(DateTime.utc(2026, 11, 4))).dayOf(DateTime.utc(2026, 11, 4)), isNotNull);
+      expect(gets, 0);
+    });
+
+    test('non-200: the stored copy is returned', () async {
+      SharedPreferences.setMockInitialValues({SynaxariumSource.storeKey: file('2026-11-01')});
+      final src = SynaxariumSource(
+        client: MockClient((r) async => http.Response('down', 503)),
+        prefs: SharedPreferences.getInstance,
+      );
+      final d = await src.load(DateTime.utc(2026, 11, 4));
+      expect(d.dayOf(DateTime.utc(2026, 11, 1)), isNotNull);
+      expect(d.dayOf(DateTime.utc(2026, 11, 4)), isNull);
+    });
+  });
+
   group('top event of the day', () {
     final events = DayEvent.listFrom([
       '2026-11-04\u001f\u001f19:00\u001f21:00\u001fالليلة الرابعة من نهضة الشفعاء\u001fFourth night\u001fنيافة الأنبا X\u001f\u001fالتوبة\u001f\u001f\u001f\u001f/mass-schedule',
@@ -167,6 +217,18 @@ void main() {
       expect(morning.titleAr, contains('نهضة'));
       final late = resolveTopEvent(now: cairo(2026, 11, 4, 21, 30), settings: s, events: events)!;
       expect(late.titleAr, 'بصخة ليلة الخميس');
+    });
+
+    test('an overnight event (22:00–02:00) stays listed after midnight until it ends', () {
+      final night = DayEvent.listFrom([
+        '2026-11-04\u001f\u001f22:00\u001f02:00\u001fسهرة كيهكية\u001f\u001f\u001f\u001f\u001f\u001f\u001f\u001f',
+      ]);
+      const s = TodaySettings(commemoration: false);
+      expect(night.single.overnight, isTrue);
+      expect(night.single.covers(DateTime.utc(2026, 11, 5)), isTrue);
+      expect(resolveTopEvent(now: cairo(2026, 11, 4, 23), settings: s, events: night)!.titleAr, 'سهرة كيهكية');
+      expect(resolveTopEvent(now: cairo(2026, 11, 5, 1, 30), settings: s, events: night)!.titleAr, 'سهرة كيهكية');
+      expect(resolveTopEvent(now: cairo(2026, 11, 5, 2, 1), settings: s, events: night), isNull);
     });
 
     test('no event: Katameros, else computed feasts; switches', () {

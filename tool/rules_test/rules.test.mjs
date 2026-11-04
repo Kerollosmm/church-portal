@@ -1501,9 +1501,13 @@ describe('ADR-039 / ADR-040: today layer in settings/features (strip, day start,
       titleAr: 'بصخة ليلة الخميس', link: '/mass-schedule', speakerAr: 'نيافة الأنبا', endDate: '2026-11-06' })] }));
     await assertSucceeds(updateDoc(ref, { dayEvents: Array.from({ length: 20 }, () => ev({ link: 'https://fb.com/x' })) }));
     await assertSucceeds(updateDoc(ref, { dayEvents: [] }));
+    // Same-day and later end dates; 20 events with end dates stay within the expression budget.
+    await assertSucceeds(updateDoc(ref, { dayEvents: [ev({ endDate: '2026-11-04' }), ev({ date: '2026-12-31', endDate: '2027-01-01' })] }));
+    await assertSucceeds(updateDoc(ref, { dayEvents: Array.from({ length: 20 }, () => ev({ endDate: '2026-11-30', link: 'https://fb.com/x' })) }));
     for (const bad of [
       [ev({ titleAr: '' })], [ev({ date: '4-11-2026' })], [ev({ start: '7pm' })], [ev({ link: 'javascript:x' })],
       [ev({ noteAr: 'x'.repeat(501) })], [ev() + S + 'extra'], [5], Array.from({ length: 21 }, () => ev()),
+      [ev({ date: '2026-13-01' })], [ev({ date: '2026-00-10' })], [ev({ date: '2026-11-32' })], [ev({ endDate: '2026-11-00' })],
     ]) {
       await assertFails(updateDoc(ref, { dayEvents: bad }), JSON.stringify(bad).slice(0, 60));
     }

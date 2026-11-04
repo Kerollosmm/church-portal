@@ -42,7 +42,7 @@ DateTime? sunsetUtc(DateTime date, {double lat = churchLat, double lng = churchL
 int sunsetLocalMinutes(DateTime date, {double lat = churchLat, double lng = churchLng}) {
   final s = sunsetUtc(date, lat: lat, lng: lng);
   if (s == null) return 18 * 60;
+  // Wall-clock minutes (stays right on a daylight-saving change day).
   final local = CairoTime.fromInstant(s);
-  final start = CairoTime.at(date.year, date.month, date.day);
-  return local.difference(start).inMinutes;
+  return local.hour * 60 + local.minute;
 }

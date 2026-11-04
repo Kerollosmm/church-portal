@@ -111,6 +111,16 @@ Notable details:
   of 12 ranges, 11 palettes or 12 videos under the 1,000-expression cap (maps of maps did not). Contrast is not
   checkable in rules: the app corrects on save and again on render. Emulator groups "ADR-025" and "ADR-026". **ADR-036 (PR #25):** the app no longer writes `heroVideos`; `validHeroVideos`
   and the allowed key stay (marked LEGACY in `firestore.rules`) so documents that already store it keep saving.
+- **Today layer (PR #31, ADR-039 / ADR-040):** `validFeatures` allows `copticStrip` (`all`/`home`/`off`),
+  `dayStartMode` (`fixed`/`sunset`), `dayStartsAt` ('' or HH:mm), `topEvent` / `commemoration` (bools) — checked
+  together only when one of them changes — and `liveEnabled` (bool), `liveUrl` ('' or http(s) URL with a host, ≤ 500),
+  `liveLabelAr` / `liveLabelEn` (≤ 120), `liveEndsAt` (timestamp / null). `dayEvents`: `validDayEvents` = list ≤ 20,
+  each item checked by `validDayEvent`: ONE string of 13 U+001F-joined fields (date YYYY-MM-DD with month 01–12 and
+  day 01–31, optional endDate of the same form (an endDate before date is refused by the admin form and read as one day by
+  the client; a per-event `split` compare exceeded the 1,000-expression cap at 20 events), optional HH:mm
+  start / end, titleAr 1–300, titleEn / speaker / topic ≤ 300, notes ≤ 500, link '' / in-app path / http(s) URL),
+  unrolled per index like `blockItems` so 20 events stay under the 1,000-expression cap. Emulator group
+  "ADR-039 / ADR-040". No new document or collection.
 - `validFeatures`: key allow-list via `keysAllowed` (create: `keys().hasOnly`; update: only the **changed** keys must
   be allowed, so an untouched legacy key no longer blocks a merge save — same as `settings/church`, PR #10), `sections` keys ⊆ the 19 section keys (PR #16 added `dailyVerse`, PR #18 `customSections` / `customPages`)
   (incl. `media`)

@@ -134,6 +134,16 @@ String? validateRowAnyOf(FieldDef list, Map<String, String> row) {
   return list.rowRequireAnyOf.any((k) => (row[k] ?? '').trim().isNotEmpty) ? null : 'requiredTitleAnyLang';
 }
 
+/// Error key (`endDateBeforeStart`) when a row's [FieldDef.rowNotBefore] end
+/// date is set and earlier than its start date (YYYY-MM-DD compare as text).
+String? validateRowOrder(FieldDef list, Map<String, String> row) {
+  final o = list.rowNotBefore;
+  if (o == null) return null;
+  final end = (row[o.key] ?? '').trim(), start = (row[o.value] ?? '').trim();
+  if (end.isEmpty || start.isEmpty) return null;
+  return end.compareTo(start) < 0 ? 'endDateBeforeStart' : null;
+}
+
 String? validateDocument(CollectionDef? def, Map<String, dynamic> data) {
   if (def != null && def.requireAnyOf.isNotEmpty && def.requireAnyOf.every((k) => data[k] == null || data[k] == '')) {
     return 'needWeekdayOrDate';

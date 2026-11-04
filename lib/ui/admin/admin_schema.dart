@@ -110,6 +110,11 @@ class FieldDef {
   /// expression when not blank (e.g. the assistant's model name).
   final String pattern;
 
+  /// [FieldType.objectList] of dates: row sub-field [rowNotBefore.key] (an
+  /// optional end date) may not be earlier than [rowNotBefore.value] (the
+  /// start date); both are YYYY-MM-DD. The error shows on the end field.
+  final MapEntry<String, String>? rowNotBefore;
+
   const FieldDef(this.key, this.labelAr, this.labelEn, this.type,
       {this.required = false,
       this.options = const [],
@@ -132,7 +137,8 @@ class FieldDef {
       this.dynamicOptions = '',
       this.linkPicker = false,
       this.encodedRows = false,
-      this.pattern = ''});
+      this.pattern = '',
+      this.rowNotBefore});
 
   int get effectiveMaxLength => maxLength > 0
       ? maxLength
@@ -850,6 +856,7 @@ const todaySettingsDoc = DocDef('settings/features', 'اليوم والبث ال
   FieldDef('dayEvents', 'أحداث الكنيسة حسب التاريخ (حتى 20)', 'Church events by date (up to 20)', FieldType.objectList,
       maxRows: 20,
       encodedRows: true,
+      rowNotBefore: MapEntry('endDate', 'date'),
       hintAr: 'مثل «الليلة الرابعة من نهضة الشفعاء» أو «بصخة ليلة الأربعاء». يتصدر الحدث الصفحة الرئيسية في يومه (وفي المساء يظهر حدث الليلة التالية بعد انتهاء حدث اليوم). احذف الأحداث القديمة لتوفير مكان.',
       hintEn: 'E.g. "Fourth night of the patrons\' revival" or "Pascha of Wednesday eve". It leads the home page on its day (in the evening, the next night\'s event after today\'s has ended). Delete old events to make room.',
       subFields: [

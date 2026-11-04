@@ -67,15 +67,18 @@ class LiveStreamBanner extends ConsumerWidget {
     final custom = context.pick(t.liveLabelAr, t.liveLabelEn).trim();
     final label = custom.isEmpty ? context.tr('liveNow') : custom;
     const red = Color(0xFFB3261E);
+    void open() => openUrl(t.liveUrl);
     return Semantics(
       button: true,
       label: '$label — ${context.tr('watchLive')}',
+      // The InkWell below is excluded from the semantics tree: expose its tap.
+      onTap: open,
       excludeSemantics: true,
       child: Material(
         key: const Key('liveStreamBanner'),
         color: red,
         child: InkWell(
-          onTap: () => openUrl(t.liveUrl),
+          onTap: open,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
@@ -164,8 +167,10 @@ class TopEventCard extends ConsumerWidget {
     };
     final ev = e.event;
     final lines = context.isAr || e.linesEn.isEmpty ? e.linesAr : e.linesEn;
-    final link = ev?.link ?? '';
-    final internal = link.startsWith('/') && !link.startsWith('//');
+    final rawLink = ev?.link ?? '';
+    final internal = rawLink.startsWith('/') && !rawLink.startsWith('//');
+    // An in-app link to a section the admin switched off is not offered.
+    final link = internal && !ref.watch(featuresProvider).routeEnabled(rawLink) ? '' : rawLink;
     final children = <Widget>[
       Text(kicker, style: TextStyle(color: context.pal.goldText, fontWeight: FontWeight.w800, fontSize: 13)),
       const SizedBox(height: 4),

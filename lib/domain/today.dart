@@ -228,14 +228,26 @@ class DayEvent implements Hideable {
     return DateTime.utc(c.year, c.month, c.day);
   }
 
+  /// An end time at or before the start (e.g. 22:00–02:00) runs past
+  /// midnight into the next date.
+  bool get overnight {
+    final s = parseHm(start), e = parseHm(end);
+    return s != null && e != null && e <= s;
+  }
+
+  /// Last calendar date the event touches (its end date, or its date; one
+  /// more for an [overnight] event, which ends there at [end]).
   DateTime? get lastDay {
     final f = firstDay;
     if (f == null) return null;
     final e = endDate;
-    if (e == null) return f;
-    final c = CairoTime.calendarDate(e);
-    final l = DateTime.utc(c.year, c.month, c.day);
-    return l.isBefore(f) ? f : l;
+    var l = f;
+    if (e != null) {
+      final c = CairoTime.calendarDate(e);
+      final x = DateTime.utc(c.year, c.month, c.day);
+      if (x.isAfter(f)) l = x;
+    }
+    return overnight ? l.add(const Duration(days: 1)) : l;
   }
 
   /// Does the event cover the calendar date [day] (date-only)?
@@ -245,14 +257,14 @@ class DayEvent implements Hideable {
     return !day.isBefore(f) && !day.isAfter(l);
   }
 
-  /// Has it finished at [now] on its last day ([end] passed; an end at or
-  /// before [start] runs past midnight and counts as the end of the day)?
+  /// Has it finished at [now] ([end] passed on its [lastDay]; no end time =
+  /// the end of that day; an [overnight] event ends at [end] on the date
+  /// after its last date)?
   bool endedAt(DateTime now) {
     final l = lastDay;
     if (l == null) return true;
-    final s = parseHm(start), e = parseHm(end);
-    var endMin = 24 * 60;
-    if (e != null && (s == null || e > s)) endMin = e;
+    final e = parseHm(end);
+    final endMin = e ?? 24 * 60;
     return !now.isBefore(CairoTime.at(l.year, l.month, l.day, endMin));
   }
 }

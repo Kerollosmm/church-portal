@@ -67,8 +67,10 @@ jobs:
       - name: Sitemap from Firestore (static fallback)
         run: bash tool/build_sitemap.sh build/web/sitemap.xml
       - name: Day commemoration JSON (ADR-040; Katameros, live copy as fallback)
-        # /data/today.json is refreshed twice a day by synaxarium.yml; every
-        # deploy also ships a fresh copy so a code deploy never drops it.
+        # /data/today.json is refreshed twice a day by synaxarium.yml. A deploy
+        # ships a fresh copy when Katameros or the live site answers; if both
+        # fail the file is omitted from this release until the next scheduled
+        # publish (the app then uses its stored copy / computed feast list).
         continue-on-error: true
         run: |
           mkdir -p build/web/data

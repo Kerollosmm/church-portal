@@ -833,7 +833,10 @@ supersede them.
   publishes the one file **without rebuilding**: Hosting REST API v1beta1 — clone the live version (excluding the
   file), `populateFiles` + upload the gzip, finalize, release. Concurrency group `hosting-live` is shared with
   `deploy.yml`'s `deploy-live`, so a clone can never roll back a fresh deploy; `deploy.yml`'s build also writes the
-  file (fallback: the live copy), so a code deploy never drops it. Each publish adds a Hosting version (files are
+  file (fallback: the live copy); only when both Katameros and the live site fail is the file missing from that
+  release, until the next scheduled publish (visitors keep their stored copy / the computed feast list). The fetcher
+  retries each request once, writes a day only with both languages, and keeps the previously published entry for a
+  day that still fails (PR #31 review). Each publish adds a Hosting version (files are
   de-duplicated); the owner can cap kept versions in the Firebase console (Hosting → release storage settings).
 - **Client (`lib/data/synaxarium_source.dart`):** after the page is complete and idle (`ContentReady.whenIdle`), one
   same-origin GET of `/data/today.json` **only when the copy stored on the device (shared_preferences / localStorage)

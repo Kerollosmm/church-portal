@@ -10,11 +10,14 @@ import 'package:church_portal/domain/today.dart';
 import 'package:church_portal/state/providers.dart';
 import 'package:church_portal/ui/admin/admin_page.dart' show adminDestinations;
 import 'package:church_portal/ui/admin/admin_schema.dart';
+import 'package:church_portal/ui/admin/admin_validators.dart' show validateRowOrder;
 import 'package:church_portal/ui/widgets/common.dart';
 import 'package:church_portal/ui/widgets/today_widgets.dart';
 import 'package:church_portal/core/theme.dart';
 import 'package:church_portal/data/admin_repository.dart' show AdminRoles;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/semantics.dart' show SemanticsAction;
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -82,7 +85,22 @@ void main() {
     testWidgets('on: default label, tappable; gone after the switch-off time', (tester) async {
       await pump(tester, const LiveStreamBanner(), features: on, now: cairo(2026, 11, 4, 19));
       expect(find.text('بث مباشر الآن من الكنيسة'), findsOneWidget);
-      expect(find.bySemanticsLabel(RegExp('بث مباشر الآن من الكنيسة')), findsOneWidget);
+      final label = find.bySemanticsLabel(RegExp('بث مباشر الآن من الكنيسة'));
+      expect(label, findsOneWidget);
+      // Assistive technology can activate it (PR #31 review).
+      expect(tester.getSemantics(label).getSemanticsData().hasAction(SemanticsAction.tap), isTrue);
+      // A tap launches the stream link (url_launcher's method channel).
+      final launched = <String>[];
+      const channel = MethodChannel('plugins.flutter.io/url_launcher');
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(channel, (call) async {
+        final args = call.arguments;
+        if (args is Map && args['url'] is String) launched.add(args['url'] as String);
+        return true;
+      });
+      addTearDown(() => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(channel, null));
+      await tester.tap(find.byKey(const Key('liveStreamBanner')));
+      await tester.pump();
+      expect(launched, contains('https://www.youtube.com/live/abc'));
     });
     testWidgets('gone after the switch-off time', (tester) async {
       await pump(tester, const LiveStreamBanner(), features: on, now: cairo(2026, 11, 4, 21, 1));
@@ -102,6 +120,17 @@ void main() {
       expect(find.text('حدث اليوم'), findsOneWidget);
       expect(find.textContaining('نيافة الأنبا X'), findsOneWidget);
       expect(find.textContaining('التوبة'), findsOneWidget);
+    });
+
+    testWidgets('"Learn more" only when its in-app section is on (PR #31 review)', (tester) async {
+      const ev = '2026-11-04\u001f\u001f19:00\u001f21:00\u001fنهضة\u001f\u001f\u001f\u001f\u001f\u001f\u001f\u001f/mass-schedule';
+      await pump(tester, const TopEventCard(), features: FeatureSettings.fromMap(const {'dayEvents': [ev]}),
+          now: cairo(2026, 11, 4, 12));
+      expect(find.text('اعرف المزيد'), findsOneWidget);
+      await pump(tester, const TopEventCard(),
+          features: FeatureSettings.fromMap(const {'dayEvents': [ev], 'sections': {'schedule': false}}),
+          now: cairo(2026, 11, 4, 12));
+      expect(find.text('اعرف المزيد'), findsNothing);
     });
 
     testWidgets('computed feast offline (no Katameros data), English', (tester) async {
@@ -168,6 +197,11 @@ void main() {
       expect(events.subFields.map((f) => f.key).toList(), DayEvent.storedKeys);
       expect(events.maxRows, DayEvent.maxEvents);
       expect(rules, contains("optList(d, 'dayEvents', ${DayEvent.maxEvents})"));
+      // An end date before the start date is rejected in the form (PR #31 review).
+      expect(events.rowNotBefore, const MapEntry('endDate', 'date'));
+      expect(validateRowOrder(events, {'date': '2026-11-04', 'endDate': '2026-11-03'}), 'endDateBeforeStart');
+      expect(validateRowOrder(events, {'date': '2026-11-04', 'endDate': '2026-11-04'}), isNull);
+      expect(validateRowOrder(events, {'date': '2026-11-04', 'endDate': ''}), isNull);
     });
   });
 }

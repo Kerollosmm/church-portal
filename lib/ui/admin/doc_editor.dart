@@ -1048,7 +1048,14 @@ class DocEditorState extends State<DocEditor> {
                                   });
                                   return err == null ? null : context.tr(err);
                                 }
-                              : null),
+                              : f.rowNotBefore?.key == sf.key
+                                  ? () {
+                                      final err = validateRowOrder(f, {
+                                        for (final e in rows[i].text.entries) e.key: e.value.text,
+                                      });
+                                      return err == null ? null : context.tr(err);
+                                    }
+                                  : null),
                     },
                   ),
                 // Wrap: at 320 px / 200% text the buttons flow onto two lines.

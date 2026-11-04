@@ -8,9 +8,15 @@
  *   node tool/fetch_synaxarium.js <out.json> [--days 8]
  *
  * 2 requests per day (Arabic + English), sequential with a short pause, so a
- * run makes ~18 small GETs twice a day. A day that fails is left out (the
- * app then shows its computed feast list for that day). Exits non-zero only
- * when no day at all could be fetched, so the workflow keeps the last file.
+ * run makes ~18 small GETs twice a day; a failed request is retried once.
+ * A day is written only when BOTH languages were fetched (the app treats a
+ * stored day as complete and would not re-fetch a missing English part).
+ * A day that still fails keeps its entry from the previously published file
+ * (the live /data/today.json, or $PREVIOUS_URL), so a transient failure never
+ * removes a commemoration visitors already had; with no previous entry it is
+ * left out (the app then shows its computed feast list for that day). Exits
+ * non-zero only when no day at all is available, so the workflow keeps the
+ * last file.
  *
  * Output (≈ 3–5 KB):
  * {"source": "api.katameros.app", "fetchedAt": ISO,
@@ -32,6 +38,7 @@ if (!out) {
 const API = 'https://api.katameros.app/readings/gregorian';
 const LANG = { ar: 3, en: 2 };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const PREVIOUS_URL = process.env.PREVIOUS_URL || 'https://maximos-domadios-church.web.app/data/today.json';
 
 /** Today's calendar date in Cairo as a UTC-midnight Date. */
 function cairoToday() {
@@ -72,26 +79,57 @@ async function fetchDay(date, lang) {
   }
 }
 
+/** One retry after a short pause (transient network / 5xx). */
+async function fetchDayRetry(date, lang) {
+  try {
+    return await fetchDay(date, lang);
+  } catch (e) {
+    console.warn(`retry ${lang} ${iso(date)}: ${e.message}`);
+    await sleep(1500);
+    return fetchDay(date, lang);
+  }
+}
+
+/** Days of the previously published file ({} when unavailable). */
+async function previousDays() {
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), 20000);
+  try {
+    const res = await fetch(PREVIOUS_URL, { signal: ctl.signal, headers: { Accept: 'application/json' } });
+    if (!res.ok) return {};
+    const j = await res.json();
+    return j && typeof j.days === 'object' && j.days ? j.days : {};
+  } catch (e) {
+    console.warn(`previous file unavailable: ${e.message}`);
+    return {};
+  } finally {
+    clearTimeout(t);
+  }
+}
+
 (async () => {
   const start = cairoToday();
   start.setUTCDate(start.getUTCDate() - 1);
   const days = {};
+  let previous = null;
   for (let i = 0; i <= AHEAD; i++) {
     const d = new Date(start);
     d.setUTCDate(start.getUTCDate() + i);
     try {
-      const ar = await fetchDay(d, 'ar');
+      const ar = await fetchDayRetry(d, 'ar');
       await sleep(300);
-      let en = { feast: '', synaxarium: [] };
-      try {
-        en = await fetchDay(d, 'en');
-      } catch (e) {
-        console.warn(`english ${iso(d)}: ${e.message}`);
-      }
+      const en = await fetchDayRetry(d, 'en');
       await sleep(300);
       days[iso(d)] = { coptic: ar.coptic, feastAr: ar.feast, feastEn: en.feast, ar: ar.synaxarium, en: en.synaxarium };
     } catch (e) {
-      console.warn(`skip ${iso(d)}: ${e.message}`);
+      if (previous === null) previous = await previousDays();
+      const old = previous[iso(d)];
+      if (old && typeof old === 'object') {
+        days[iso(d)] = old;
+        console.warn(`kept the published ${iso(d)}: ${e.message}`);
+      } else {
+        console.warn(`skip ${iso(d)}: ${e.message}`);
+      }
     }
   }
   if (Object.keys(days).length === 0) {

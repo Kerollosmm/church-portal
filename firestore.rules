@@ -642,9 +642,12 @@ service cloud.firestore {
     // date, endDate, start, end, titleAr, titleEn, speakerAr, speakerEn,
     // topicAr, topicEn, noteAr, noteEn, link joined by U+001F
     // (lib/domain/today.dart DayEvent.encode). One regex per event keeps the
-    // list within the 1,000-expression budget. date YYYY-MM-DD (required),
-    // endDate '' or a date, times '' or HH:mm, titleAr 1-300, other texts
-    // <= 300, notes <= 500, link '' / in-app path / http(s) URL.
+    // list within the 1,000-expression budget. date YYYY-MM-DD (required,
+    // month 01-12, day 01-31), endDate '' or such a date, times '' or HH:mm, titleAr 1-300, other texts
+    // <= 300, notes <= 500, link '' / in-app path / http(s) URL. An endDate
+    // before date is rejected by the admin form (validateRowOrder) and read as
+    // a one-day event by the client (DayEvent.lastDay); a split + compare per
+    // event here exceeds the expression cap for 20 events (tested).
     function validDayEvents(d) {
       return optList(d, 'dayEvents', 20)
         && (d.get('dayEvents', null) == null || dayEventItems(d.dayEvents, d.dayEvents.size()));
@@ -657,7 +660,7 @@ service cloud.firestore {
     }
     function validDayEvent(e) {
       return e is string && e.size() <= 4000
-        && e.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}\\x1f([0-9]{4}-[0-9]{2}-[0-9]{2})?\\x1f(([01][0-9]|2[0-3]):[0-5][0-9])?\\x1f(([01][0-9]|2[0-3]):[0-5][0-9])?\\x1f[^\\x1f]{1,300}\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{0,500}\\x1f[^\\x1f]{0,500}\\x1f(|/([^/ \\x1f][^ \\x1f]*)?|[Hh][Tt][Tt][Pp][Ss]?://[^/ \\x1f]+[.][^/ \\x1f]+([/?#][^ \\x1f]*)?)');
+        && e.matches('[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])\\x1f([0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01]))?\\x1f(([01][0-9]|2[0-3]):[0-5][0-9])?\\x1f(([01][0-9]|2[0-3]):[0-5][0-9])?\\x1f[^\\x1f]{1,300}\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{0,500}\\x1f[^\\x1f]{0,500}\\x1f(|/([^/ \\x1f][^ \\x1f]*)?|[Hh][Tt][Tt][Pp][Ss]?://[^/ \\x1f]+[.][^/ \\x1f]+([/?#][^ \\x1f]*)?)');
     }
 
     // ------------------- occasion themes & hero videos -----------------------
