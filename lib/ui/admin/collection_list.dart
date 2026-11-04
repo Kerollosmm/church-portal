@@ -8,6 +8,7 @@ import '../../core/theme.dart';
 import '../../data/admin_repository.dart';
 import '../../domain/item_detail.dart';
 import '../../domain/media.dart';
+import '../../domain/program.dart';
 import '../../domain/time_format.dart';
 import '../../domain/cairo_time.dart';
 import '../../domain/custom_content.dart';
@@ -444,9 +445,15 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
   Future<void> _openEditor(BuildContext context, AdminDoc? d) async {
     bool usesLinks(List<FieldDef> fs) => fs.any((f) => f.linkPicker || usesLinks(f.subFields));
     final needsCats = def.fields.any((f) => f.dynamicOptions == 'categories');
+    final needsProgram = def.fields.any((f) => f.dynamicOptions == 'venues' || f.dynamicOptions == 'audiences');
     final needsLinks = usesLinks(def.fields);
     final cats = needsCats || needsLinks ? await _read('categories') : const <AdminDoc>[];
     final pages = needsLinks ? await _read('pages') : const <AdminDoc>[];
+    // Venues / audiences (ADR-041): the admin lists in settings/features
+    // (defaults when none), read once when the editor opens.
+    final settings = needsProgram ? await _read('settings') : const <AdminDoc>[];
+    final features = settings.where((x) => x.id == 'features').firstOrNull;
+    final programOpts = ProgramOptions.fromMap(features?.data ?? const {});
     if (!context.mounted) return;
     String name(AdminDoc x, String ar, String en) {
       final v = context.pick('${x.data[ar] ?? ''}', '${x.data[en] ?? ''}');
@@ -465,7 +472,17 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
       for (final x in _lastDocs)
         if (x.id != d?.id && x.data['slug'] is String) x.data['slug'] as String,
     };
-    _pushEditor(context, d, dynamicChoices: {'categories': catChoices}, linkTargets: needsLinks ? targets : const [], takenSlugs: taken);
+    List<(String, String)> optChoices(List<ProgramOption> l) => [for (final o in l) (o.key, context.pick(o.labelAr, o.labelEn))];
+    _pushEditor(context, d,
+        dynamicChoices: {
+          'categories': catChoices,
+          // The item's own key stays selectable even if the admin list no
+          // longer holds it (a default key, Sentry review).
+          'venues': optChoices(ProgramOptions.withUsed(
+              programOpts.venues, ['${d?.data['venue'] ?? ''}'], programOpts.venue)),
+          'audiences': optChoices(ProgramOptions.withUsed(
+              programOpts.audiences, ['${d?.data['audience'] ?? ''}'], programOpts.audience)),
+        }, linkTargets: needsLinks ? targets : const [], takenSlugs: taken);
   }
 
   void _pushEditor(BuildContext context, AdminDoc? d,

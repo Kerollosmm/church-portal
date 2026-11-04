@@ -53,6 +53,8 @@ lib/
     coptic_feasts.dart      copticFeastsOn (computed fixed + movable feasts, offline fallback) — ADR-040
     today.dart              TodaySettings (settings/features today keys), DayEvent (encoded dayEvents), SynaxariumData
                             (/data/today.json), resolveTopEvent, live banner rule — ADR-040
+    program.dart            ProgramInfo (speaker/topic/choir/venue/audience/PDF link on liturgies, meetings, seasons),
+                            ProgramOption / ProgramOptions (settings/features.venues / .audiences) — PR #32, ADR-041
     item_detail.dart        DetailKind (basePath/parentPath/collection), detailPathFor, parseDetailPath,
                             detailStateFor (detail-page gating), itemSocialsShown (PR #13, ADR-020),
                             weeklyCalendarUrl, absoluteDetailUrl, pickRelated (PR #14, ADR-021)

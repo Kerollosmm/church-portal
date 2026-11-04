@@ -144,6 +144,18 @@ String? validateRowOrder(FieldDef list, Map<String, String> row) {
   return end.compareTo(start) < 0 ? 'endDateBeforeStart' : null;
 }
 
+/// Error key (`duplicateKey`) when row [index]'s [FieldDef.rowUniqueKey]
+/// value (in [values], one per row) is set and an earlier row has it too.
+String? validateRowUnique(FieldDef list, List<String> values, int index) {
+  if (list.rowUniqueKey.isEmpty || index >= values.length) return null;
+  final v = values[index].trim();
+  if (v.isEmpty) return null;
+  for (var j = 0; j < index; j++) {
+    if (values[j].trim() == v) return 'duplicateKey';
+  }
+  return null;
+}
+
 String? validateDocument(CollectionDef? def, Map<String, dynamic> data) {
   if (def != null && def.requireAnyOf.isNotEmpty && def.requireAnyOf.every((k) => data[k] == null || data[k] == '')) {
     return 'needWeekdayOrDate';

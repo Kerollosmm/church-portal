@@ -121,6 +121,12 @@ Notable details:
   start / end, titleAr 1–300, titleEn / speaker / topic ≤ 300, notes ≤ 500, link '' / in-app path / http(s) URL),
   unrolled per index like `blockItems` so 20 events stay under the 1,000-expression cap. Emulator group
   "ADR-039 / ADR-040". No new document or collection.
+- **Programme details (PR #32, ADR-041):** `validSeason`, `validLiturgy`, `validMeeting` allow `programKeys()`
+  (speaker / topic / choir ar+en, venue, audience, attachmentUrl, attachmentLabelAr/En); `validProgram(d, changed)`
+  runs only when one changes and checks all eleven on one U+001F-joined string (texts 200 / 300 / 200 / 80, keys
+  `[a-z0-9_-]{0,30}`, attachmentUrl '' or https with a host, no whitespace, at most 500 characters). `ownFieldsUnchanged` accepts programme-only meeting edits.
+  `validFeatures` allows `venues` / `audiences`: `validProgramOptions` = list ≤ 12 whose `join('\u001e')` matches one
+  regex of `key␟labelAr␟labelEn` rows. Emulator group "ADR-041".
 - `validFeatures`: key allow-list via `keysAllowed` (create: `keys().hasOnly`; update: only the **changed** keys must
   be allowed, so an untouched legacy key no longer blocks a merge save — same as `settings/church`, PR #10), `sections` keys ⊆ the 19 section keys (PR #16 added `dailyVerse`, PR #18 `customSections` / `customPages`)
   (incl. `media`)

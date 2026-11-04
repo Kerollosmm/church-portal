@@ -333,3 +333,97 @@ Map<Season, List<Liturgy>> seasonalSchedule(Iterable<Season> seasons, Iterable<L
   }
   return map;
 }
+
+/// Where a service is held, for comparing parallel services (ADR-041): the
+/// admin venue's Arabic name when [opts] knows the key (so the venue `main`
+/// and the free text «الكنيسة الكبرى» are the same place), else the key,
+/// else the free-text Arabic place, else the English one (compared only with
+/// other English-only places; CodeRabbit review on PR #32).
+String _placeKey(Liturgy l, ProgramOptions? opts) {
+  final v = l.program.venue;
+  if (v.isNotEmpty) {
+    final name = opts?.venue(v)?.labelAr.trim() ?? '';
+    return name.isNotEmpty ? 'n:$name' : 'v:$v';
+  }
+  if (l.placeAr.trim().isNotEmpty) return 'n:${l.placeAr.trim()}';
+  return l.placeEn.trim().isEmpty ? '' : 'e:${l.placeEn.trim().toLowerCase()}';
+}
+
+/// A service's end in minutes from its day's midnight: no end = one minute,
+/// an end at or before the start crosses midnight (as [_occurrence]).
+int _endMinutes(Liturgy l) {
+  final s = l.startMinutes!;
+  final e = l.endMinutes;
+  if (e == null) return s + 1;
+  return e <= s ? e + 24 * 60 : e;
+}
+
+/// The day a service belongs to: its one-off date, else its weekday.
+String _slotDay(Liturgy l) {
+  final d = l.date;
+  if (d != null) {
+    final c = CairoTime.calendarDate(d);
+    return 'd:${c.year}-${c.month}-${c.day}';
+  }
+  return l.weekday == null ? '' : 'w:${l.weekday}';
+}
+
+/// Services of [list] held at the same time in ANOTHER venue / hall
+/// (ADR-041: Holy Week prayers in the main church, the lower hall and the
+/// services building for different age groups). Two services are parallel
+/// when they fall on the same day (date, or weekday for weekly ones), their
+/// times overlap (a service without an end time counts as one minute, an end
+/// at or before the start crosses midnight) and
+/// their venues (or places) differ — both must name one. Returns, for each
+/// liturgy id that has any, the other services in start order.
+Map<String, List<Liturgy>> parallelServices(Iterable<Liturgy> list, [ProgramOptions? opts]) {
+  final items = [
+    for (final l in list)
+      if (l.startMinutes != null && _placeKey(l, opts).isNotEmpty && _slotDay(l).isNotEmpty) l,
+  ];
+  final out = <String, List<Liturgy>>{};
+  for (var i = 0; i < items.length; i++) {
+    final a = items[i];
+    final aStart = a.startMinutes!;
+    final aEnd = _endMinutes(a);
+    for (var j = i + 1; j < items.length; j++) {
+      final b = items[j];
+      if (_slotDay(a) != _slotDay(b) || _placeKey(a, opts) == _placeKey(b, opts)) continue;
+      final bStart = b.startMinutes!;
+      final bEnd = _endMinutes(b);
+      if (aStart < bEnd && bStart < aEnd) {
+        (out[a.id] ??= []).add(b);
+        (out[b.id] ??= []).add(a);
+      }
+    }
+  }
+  for (final v in out.values) {
+    v.sort((x, y) => x.startMinutes!.compareTo(y.startMinutes!));
+  }
+  return out;
+}
+
+/// The services held at the same time as [target] in ANOTHER venue / hall,
+/// among [sameDay] = that day's real occurrences ([occurrencesForDay]: season
+/// windows and suppression already applied), for the next-service card
+/// (Sentry review on PR #32). Overlap uses the real instants (a service
+/// without an end time counts as one minute), places compare as in
+/// [parallelServices].
+List<Liturgy> parallelOccurrences(LiturgyOccurrence target, Iterable<LiturgyOccurrence> sameDay,
+    [ProgramOptions? opts]) {
+  final key = _placeKey(target.liturgy, opts);
+  if (key.isEmpty) return const [];
+  DateTime endOf(LiturgyOccurrence o) =>
+      o.liturgy.endMinutes == null ? o.start.add(const Duration(minutes: 1)) : o.end;
+  final tEnd = endOf(target);
+  final out = [
+    for (final o in sameDay)
+      if (o.liturgy.id != target.liturgy.id &&
+          _placeKey(o.liturgy, opts).isNotEmpty &&
+          _placeKey(o.liturgy, opts) != key &&
+          o.start.isBefore(tEnd) &&
+          target.start.isBefore(endOf(o)))
+        o,
+  ]..sort((a, b) => a.start.compareTo(b.start));
+  return [for (final o in out) o.liturgy];
+}

@@ -16,8 +16,10 @@ import '../../domain/time_format.dart';
 import '../../state/providers.dart';
 import 'common.dart';
 import 'item_image.dart';
+import 'program_details.dart';
 import 'styled_image.dart';
 
+export 'program_details.dart' show ProgramDetails, parallelSummary;
 export 'styled_image.dart';
 
 /// Card for one liturgy on the schedule page.
@@ -25,7 +27,12 @@ class LiturgyCard extends StatelessWidget {
   final Liturgy liturgy;
   final bool showWeekday;
   final bool showDate;
-  const LiturgyCard({super.key, required this.liturgy, this.showWeekday = false, this.showDate = false});
+
+  /// Services held at the same time in another hall (ADR-041), e.g.
+  /// «القاعة السفلية (شباب)»; '' = none.
+  final String parallelText;
+  const LiturgyCard(
+      {super.key, required this.liturgy, this.showWeekday = false, this.showDate = false, this.parallelText = ''});
 
   IconData get _icon => switch (liturgy.type) {
         'vespers' => Icons.nightlight_round,
@@ -70,6 +77,7 @@ class LiturgyCard extends StatelessWidget {
               const SizedBox(height: 6),
               IconLine(Icons.place_outlined, context.pick(l.placeAr, l.placeEn)),
               IconLine(Icons.people_outline, context.pick(l.audienceAr, l.audienceEn)),
+              ProgramDetails(l.program, parallelText: parallelText),
             ]),
           ),
         ]),
@@ -102,7 +110,26 @@ class NextMassCard extends ConsumerWidget {
     } else {
       final r = computeNextMass(liturgies: lits.value ?? const [], seasons: seasons.value ?? const [], now: now);
       final s = ref.watch(settingsProvider).value;
-      body = _content(context, r, now, ref.watch(todaySettingsProvider), s?.lat, s?.lng);
+      // The next service's «وفي نفس الوقت: …» line, as on /mass-schedule
+      // (ADR-041; CodeRabbit review on PR #32).
+      final opts = ref.watch(featuresProvider.select((f) => f.programOptions));
+      // From that day's real occurrences, so a suppressed or out-of-season
+      // service is never named (Sentry review).
+      final next = r.next;
+      final parallelText = next == null
+          ? ''
+          : parallelSummary(
+              context,
+              opts,
+              parallelOccurrences(
+                  next,
+                  occurrencesForDay(
+                      liturgies: lits.value ?? const [],
+                      seasons: seasons.value ?? const [],
+                      day: next.start,
+                      dayOffset: next.dayOffset),
+                  opts));
+      body = _content(context, r, now, ref.watch(todaySettingsProvider), s?.lat, s?.lng, parallelText);
     }
 
     final primary = Theme.of(context).colorScheme.primary;
@@ -148,7 +175,8 @@ class NextMassCard extends ConsumerWidget {
     );
   }
 
-  Widget _content(BuildContext context, NextMassResult r, DateTime now, TodaySettings today, double? lat, double? lng) {
+  Widget _content(BuildContext context, NextMassResult r, DateTime now, TodaySettings today, double? lat, double? lng,
+      [String parallelText = '']) {
     if (r.isEmpty) return EmptyState(message: context.tr('noUpcoming'), icon: Icons.event_busy);
     final children = <Widget>[];
     if (r.activeSeasons.isNotEmpty) {
@@ -216,6 +244,7 @@ class NextMassCard extends ConsumerWidget {
       children.add(const SizedBox(height: 6));
       children.add(IconLine(Icons.place_outlined, context.pick(n.liturgy.placeAr, n.liturgy.placeEn)));
       children.add(IconLine(Icons.people_outline, context.pick(n.liturgy.audienceAr, n.liturgy.audienceEn)));
+      children.add(ProgramDetails(n.liturgy.program, parallelText: parallelText));
       if (n.liturgy.sample) {
         children.add(Padding(
           padding: const EdgeInsets.only(top: 6),

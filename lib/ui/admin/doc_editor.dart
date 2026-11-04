@@ -806,11 +806,13 @@ class DocEditorState extends State<DocEditor> {
   }
 
   static const _groupTitles = {
+    FieldGroup.program: 'groupProgram',
     FieldGroup.details: 'groupDetails',
     FieldGroup.media: 'groupMedia',
     FieldGroup.contacts: 'groupContacts',
   };
   static const _groupIcons = {
+    FieldGroup.program: Icons.campaign_outlined,
     FieldGroup.details: Icons.article_outlined,
     FieldGroup.media: Icons.photo_library_outlined,
     FieldGroup.contacts: Icons.contact_phone_outlined,
@@ -861,11 +863,16 @@ class DocEditorState extends State<DocEditor> {
             if (cover) context.tr('pillCover'),
             if (photos == 0 && !cover) context.tr('pillNoPhotos'),
           ];
+        case FieldGroup.program:
         case FieldGroup.contacts:
         case FieldGroup.basic:
           final n = [
             for (final f in fields)
-              if (_text[f.key] case final TextEditingController c when c.text.trim().isNotEmpty) f,
+              if (_text[f.key] case final TextEditingController c when c.text.trim().isNotEmpty)
+                f
+              // A chosen venue / audience counts too (CodeRabbit review on PR #32).
+              else if (f.type == FieldType.choice && '${_values[f.key] ?? ''}'.isNotEmpty && g == FieldGroup.program)
+                f,
           ].length;
           return [context.tr(n > 0 ? 'pillFilled' : 'pillEmpty', {'n': '$n'})];
       }
@@ -877,7 +884,7 @@ class DocEditorState extends State<DocEditor> {
         );
     // Text counts follow typing (the form only rebuilds on its first edit).
     final controllers = [for (final f in fields) ?_text[f.key]];
-    return g == FieldGroup.contacts
+    return g == FieldGroup.contacts || g == FieldGroup.program
         ? ListenableBuilder(listenable: Listenable.merge(controllers), builder: (_, _) => wrap())
         : wrap();
   }
@@ -1055,7 +1062,13 @@ class DocEditorState extends State<DocEditor> {
                                       });
                                       return err == null ? null : context.tr(err);
                                     }
-                                  : null),
+                                  : f.rowUniqueKey == sf.key
+                                      ? () {
+                                          final err = validateRowUnique(
+                                              f, [for (final r in rows) r.text[sf.key]?.text ?? ''], i);
+                                          return err == null ? null : context.tr(err);
+                                        }
+                                      : null),
                     },
                   ),
                 // Wrap: at 320 px / 200% text the buttons flow onto two lines.
