@@ -24,7 +24,8 @@ if [ -z "${GOOGLE_APPLICATION_CREDENTIALS:-}" ] || [ ! -s "$GOOGLE_APPLICATION_C
   fallback "no service-account credentials"
 fi
 (cd tool && npm install --no-save --no-audit --no-fund --loglevel=error) >/dev/null 2>&1 || fallback "npm install failed"
-timeout 180 node tool/export_public_content.js "$TMP/export.json" || fallback "Firestore read failed"
+# Ten sequential reads with a 30 s limit each (export_public_content.js): 300 s + margin.
+timeout 330 node tool/export_public_content.js "$TMP/export.json" || fallback "Firestore read failed"
 timeout 600 dart run tool/gen_sitemap.dart "$TMP/export.json" "$TMP/sitemap.xml" || fallback "generation failed"
 python3 - "$TMP/sitemap.xml" "$ORIGIN" <<'PY' || fallback "validation failed"
 import sys
@@ -41,5 +42,8 @@ assert len(locs) == len(set(locs)), "duplicate URL"
 assert len(locs) <= 50000, "too many URLs"
 print(f"sitemap OK: {len(locs)} URLs")
 PY
-cp "$TMP/sitemap.xml" "$OUT"
+# Copy next to $OUT, then rename over it: a failed copy never leaves a
+# truncated sitemap behind (the static copy stays in place).
+cp "$TMP/sitemap.xml" "$OUT.tmp" || { rm -f "$OUT.tmp"; fallback "copy failed"; }
+mv -f "$OUT.tmp" "$OUT" || { rm -f "$OUT.tmp"; fallback "replace failed"; }
 echo "::notice::sitemap.xml generated from Firestore ($(grep -c '<url>' "$OUT") URLs)"

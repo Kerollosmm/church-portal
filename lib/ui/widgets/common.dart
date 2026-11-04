@@ -575,8 +575,10 @@ class IconLine extends StatelessWidget {
   }
 }
 
-/// "06:30 AM – 08:30 AM" plus Arabic-digit version underneath (spec: both
-/// digit systems). Shown in the current language first.
+/// "٠٦:٣٠ ص – ٠٨:٣٠ ص" with the Latin-digit version underneath in Arabic
+/// (spec: both digit systems for Arabic readers); Latin digits only on the
+/// English site (live check 4 Nov 2026, ADR-038: Arabic digits there read as
+/// untranslated text).
 class TimeRangeText extends StatelessWidget {
   final String start, end;
   final bool large;
@@ -587,9 +589,7 @@ class TimeRangeText extends StatelessWidget {
     // No time set: nothing (no empty line reserving space).
     if (start.trim().isEmpty) return const SizedBox.shrink();
     final latin = formatRangeLatin(start, end);
-    final arabic = formatRangeArabic(start, end);
-    final primary = context.isAr ? arabic : latin;
-    final secondary = context.isAr ? latin : arabic;
+    final primary = context.isAr ? formatRangeArabic(start, end) : latin;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
@@ -598,15 +598,16 @@ class TimeRangeText extends StatelessWidget {
           primary,
           style: displayStyle(context, size: large ? 28 : 21, color: Theme.of(context).colorScheme.primary, height: 1.3),
         ),
-        // The secondary line is Latin in Arabic mode and Arabic in English mode:
-        // give it its own script's base direction.
-        Directionality(
-          textDirection: context.isAr ? TextDirection.ltr : TextDirection.rtl,
-          child: Text(
-            secondary,
-            style: TextStyle(fontSize: large ? 14 : 12, color: context.pal.muted),
+        // Arabic mode: the Latin secondary line keeps its own script's base
+        // direction (BUG-10).
+        if (context.isAr)
+          Directionality(
+            textDirection: TextDirection.ltr,
+            child: Text(
+              latin,
+              style: TextStyle(fontSize: large ? 14 : 12, color: context.pal.muted),
+            ),
           ),
-        ),
       ],
     );
   }
@@ -641,7 +642,9 @@ class Footer extends ConsumerWidget {
       ('clinics', '/clinics'),
       ('education', '/church-education'),
       ('contact', '/contact'),
-    ].where((l) => features.routeEnabled(l.$2)).toList();
+      // Clinics is off on the live site: never offer it before the switches
+      // have arrived (same rule as the Services menu, app_shell.dart).
+    ].where((l) => features.routeEnabled(l.$2) && (ready || l.$2 != '/clinics')).toList();
     final phones = ready && s != null && footer.showPhones && features.enabled(Sections.contactInfo)
         ? s.phones.where((p) => p.number.trim().isNotEmpty).toList()
         : const <PhoneEntry>[];

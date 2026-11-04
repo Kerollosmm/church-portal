@@ -191,6 +191,12 @@ flowchart LR
   collection — Firestore does not re-emit an unchanged result) stayed on the seed for good after a timed-out /
   "client is offline" check, keeping the footer note on. `check()` returns the latest state, so a late negative /
   failed read never undoes the proof.
+- **Live query first, then the gate (PR #30 follow-up, ADR-038):** `guardSeeded` subscribes to the live query
+  immediately; values that arrive before the seeding answer wait in `onData` for it (`SeedGate.check()` also returns
+  as soon as `whenSeeded` fires). The custom-content fallback delay (`customFallbackDelay`, 13 s) counts from that
+  subscription and fires only after the gate has said "not seeded / could not tell"; on a seeded database custom
+  content never falls back to the empty list. A missing `/section/<x>` / `/page/<x>` now settles in ≤ ~13 s on a
+  stalled connection (was 15–24 s), a missing item in a built-in collection in ≤ 8 s.
 - **Settings docs prove themselves (PR #23):** `settings/features`, `settings/contact` and `settings/assistant`
   have `confirms: !identical(v, <code default>)` like `settings/church`: a stored doc replaces the default even while
   the seeding check cannot answer (before, `/contact` kept the four default types in that case).

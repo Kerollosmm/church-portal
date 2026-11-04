@@ -163,7 +163,9 @@ class SeedGate {
   Future<bool> check() async {
     if (_seeded) return true;
     try {
-      final seeded = await (_pending ??= _read());
+      // A proof from the settings/church listener ([markSeeded]) answers at
+      // once instead of waiting for this read's timeout (ADR-038).
+      final seeded = await Future.any<bool>([_pending ??= _read(), whenSeeded.then((_) => true)]);
       _pending = null;
       if (seeded) {
         markSeeded();
@@ -240,41 +242,43 @@ Stream<T> guardSeeded<T>({
 
   out = StreamController<T>(
     onListen: () async {
-      var confirmed = await gate.check();
-      if (cancelled) return;
-      if (!confirmed) {
-        // Proof of seeding that arrives later (another stream's check, or
-        // the settings/church listener) releases the value held back.
-        unawaited(gate.whenSeeded.then((_) {
-          if (cancelled || done || confirmed) return;
-          confirmed = true;
-          fallbackTimer?.cancel(); // seeded: wait for the live value instead
-          fallbackDue = false;
-          if (holding) {
-            holding = false;
-            final v = heldLive as T;
-            heldLive = null;
-            emit(v, seed: false);
+      // The live query is subscribed at once (ADR-038, live check): its first
+      // values wait for the seeding answer in onData instead of the query
+      // starting only after the check (up to 8 s on a slow cold start).
+      var confirmed = false;
+      var checkDone = false;
+      if (fallbackDelay != null) {
+        // No bundled copy worth showing (custom content): give the live query
+        // [fallbackDelay] to answer before settling on the fallback, so a page
+        // never says "not available" while its data is on its way. The delay
+        // counts from here, when the live query starts, not from the end of
+        // the seeding check (ADR-038, live check: a missing /page/<x> sat on
+        // skeletons for 15-24 s). It only fires once the check has said "not
+        // seeded / could not tell"; a live value still on its re-check defers
+        // it until the re-check has answered (it may confirm the value).
+        fallbackTimer = Timer(fallbackDelay, () {
+          if (cancelled || emitted || confirmed) return;
+          if (rechecking || !checkDone) {
+            fallbackDue = true;
+          } else {
+            emit(fallback, seed: true);
           }
-        }));
-        if (fallbackDelay == null) {
-          emit(fallback, seed: true);
-        } else {
-          // No bundled copy worth showing (custom content): give the live
-          // query [fallbackDelay] to answer before settling on the fallback,
-          // so a page never says "not available" while its data is on its way.
-          // A live value still on its re-check defers the fallback until the
-          // re-check has answered (it may confirm the value instead).
-          fallbackTimer = Timer(fallbackDelay, () {
-            if (cancelled || emitted) return;
-            if (rechecking) {
-              fallbackDue = true;
-            } else {
-              emit(fallback, seed: true);
-            }
-          });
-        }
+        });
       }
+      // Proof of seeding that arrives later (another stream's check, or the
+      // settings/church listener) releases the value held back.
+      unawaited(gate.whenSeeded.then((_) {
+        if (cancelled || done || confirmed) return;
+        confirmed = true;
+        fallbackTimer?.cancel(); // seeded: wait for the live value instead
+        fallbackDue = false;
+        if (holding) {
+          holding = false;
+          final v = heldLive as T;
+          heldLive = null;
+          emit(v, seed: false);
+        }
+      }));
       final s = live().listen(null);
       sub = s;
       s.onData((v) async {
@@ -317,6 +321,30 @@ Stream<T> guardSeeded<T>({
         done = true;
         out.close();
       });
+      final seeded = await gate.check();
+      checkDone = true;
+      if (cancelled || done) return;
+      if (seeded) {
+        confirmed = true;
+        fallbackTimer?.cancel(); // seeded: wait for the live value instead
+        fallbackDue = false;
+        // A live value held back by an earlier, failed re-check goes out now.
+        if (holding) {
+          holding = false;
+          final v = heldLive as T;
+          heldLive = null;
+          emit(v, seed: false);
+        }
+        return;
+      }
+      // A live value already went out (proved by whenSeeded or by itself).
+      if (confirmed || emitted) return;
+      if (fallbackDelay == null) {
+        emit(fallback, seed: true);
+      } else if (fallbackDue && !rechecking) {
+        fallbackDue = false;
+        emit(fallback, seed: true);
+      }
     },
     onCancel: () async {
       cancelled = true;
@@ -469,9 +497,10 @@ class FirestoreRepository implements ContentRepository {
   static const customCacheRead = Duration(seconds: 4);
 
   /// How long the seeding fallback (the empty list) waits when the seeding
-  /// check cannot answer. Longer than [customPatience] + [customCacheRead]
-  /// (+1 s margin), so the cached list [settleFirst] emits at its patience
-  /// always reaches the guard first and "not available" never wins the race.
+  /// check cannot answer, counted from when the live query starts (ADR-038).
+  /// Longer than [customPatience] + [customCacheRead] (+1 s margin), measured
+  /// from that same moment, so the cached list [settleFirst] emits at its
+  /// patience always reaches the guard first and "not available" never wins.
   static const customFallbackDelay = Duration(seconds: 13);
 
   List<T> _docs<T>(QuerySnapshot<Map<String, dynamic>> snap, T Function(String, Map<String, dynamic>) f) =>

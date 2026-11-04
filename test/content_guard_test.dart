@@ -273,6 +273,79 @@ void main() {
       });
     });
 
+    test('the live query starts before the seeding check answers (live check)', () {
+      fakeAsync((async) {
+        final read = Completer<bool>();
+        var listened = false;
+        final ctl = StreamController<List<int>>(onListen: () => listened = true);
+        final sub = guardSeeded<List<int>>(
+          gate: SeedGate(() => read.future),
+          live: () => ctl.stream,
+          fallback: const [0],
+          onSeed: marks.add,
+        ).listen(got.add);
+        async.flushMicrotasks();
+        expect(listened, isTrue); // subscribed while the check is still pending
+        ctl.add([5]);
+        async.flushMicrotasks();
+        expect(got, isEmpty); // held until the gate answers
+        read.complete(true);
+        async.flushMicrotasks();
+        expect(got, [
+          [5],
+        ]);
+        expect(marks, [false]);
+        sub.cancel();
+        unawaited(ctl.close());
+      });
+    });
+
+    test('custom content: "not available" comes fallbackDelay after opening, not after check + delay', () {
+      fakeAsync((async) {
+        // The check times out at 8 s (cold start); before, the 13 s delay
+        // started only then (21 s of skeletons).
+        final gate = SeedGate(
+          () => Future<bool>.delayed(const Duration(seconds: 8), () => throw TimeoutException('8 s')),
+        );
+        final sub = listen(gate, fallbackDelay: const Duration(seconds: 13));
+        async.elapse(const Duration(seconds: 12));
+        expect(got, isEmpty);
+        async.elapse(const Duration(seconds: 1, milliseconds: 10));
+        expect(got, [
+          [0],
+        ]);
+        sub.cancel();
+      });
+    });
+
+    test('custom content: a check slower than the delay settles as soon as it fails', () {
+      fakeAsync((async) {
+        final gate = SeedGate(
+          () => Future<bool>.delayed(const Duration(seconds: 15), () => throw TimeoutException('slow')),
+        );
+        final sub = listen(gate, fallbackDelay: const Duration(seconds: 13));
+        async.elapse(const Duration(seconds: 14));
+        expect(got, isEmpty); // the gate has not answered: never decide early
+        async.elapse(const Duration(seconds: 1, milliseconds: 10));
+        expect(got, [
+          [0],
+        ]);
+        sub.cancel();
+      });
+    });
+
+    test('custom content on a seeded database never falls back to the empty list', () {
+      fakeAsync((async) {
+        final sub = listen(SeedGate(() async => true), fallbackDelay: const Duration(seconds: 13));
+        async.elapse(const Duration(seconds: 30));
+        expect(got, isEmpty); // waits for the live (settleFirst) value
+        live.add([]);
+        async.flushMicrotasks();
+        expect(got, [<int>[]]);
+        sub.cancel();
+      });
+    });
+
     test('with a working check nothing is ever marked as bundled', () async {
       final sub = listen(SeedGate(() async => true));
       await _settle();

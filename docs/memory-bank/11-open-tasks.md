@@ -13,6 +13,16 @@ Status as of 4 Nov 2026 (PR #30 / ADR-038 on top of `5a6a44c` = PR #29; PR #25 r
 6. 320 px overflow reported on a real phone → *Infrastructure & security* (320 px item).
 7. CI rebuild of the eBible verse asset (source-fidelity check) → *Verse of the day*.
 8. Server-side assistant limit (the 3/day limit is client-side only) → *Assistant follow-ups*.
+9. **Live check 4 Nov 2026 — owner items (not code):** (a) `settings/church.nameAr` reads «…الأنبا موسى **الابيض**»
+   (saved via /admin 4 Nov 12:33): correct it to «الأسود» in /admin → church settings; (b) decide whether
+   `/main.dart.js.map` (public, ~4.3 MB, exposes the Dart sources, built with `--source-maps` for PageSpeed) should
+   stay public or be deleted from `build/web` before deploy (it could go to Sentry instead once a token exists);
+   (c) `/contact` logs Google Maps `InvalidKeyMapError` — check the Maps embed key / its allowed referrers
+   (`maximos-domadios-church.web.app`); (d) `/ask` returned «تعذّر الحصول على إجابة الآن» in automated browsers
+   (App Check reCAPTCHA Enterprise 403 "App attestation failed", then a 1-day `appCheck/initial-throttle`): test once
+   on a real phone; if it fails there, check the "church-portal-web" key's allowed domains. Fixed in code in PR #30:
+   footer «العيادات» link during load, the half-empty screen after the splash, slow "not available" on missing
+   custom / detail pages, English image alts and Arabic digits in English times.
 
 ## Infrastructure & security (owner: developer)
 

@@ -560,19 +560,37 @@ void main() {
     });
 
     testWidgets('secondary time line uses its own script direction (BUG-10)', (tester) async {
-      for (final (locale, dir) in [(const Locale('en'), TextDirection.rtl), (const Locale('ar'), TextDirection.ltr)]) {
-        await tester.pumpWidget(MaterialApp(
-          locale: locale,
+      await tester.pumpWidget(
+        MaterialApp(
+          locale: const Locale('ar'),
           supportedLocales: const [Locale('ar'), Locale('en')],
           localizationsDelegates: GlobalMaterialLocalizations.delegates,
           home: const Scaffold(body: TimeRangeText('06:30', '08:30')),
-        ));
-        final texts = tester.widgetList<Text>(find.descendant(of: find.byType(TimeRangeText), matching: find.byType(Text)));
-        final secondary = find.text(texts.last.data!);
-        final d = tester.widget<Directionality>(
-            find.ancestor(of: secondary, matching: find.byType(Directionality)).first);
-        expect(d.textDirection, dir, reason: locale.languageCode);
-      }
+        ),
+      );
+      final secondary = find.text('06:30 AM – 08:30 AM');
+      expect(secondary, findsOneWidget);
+      final d = tester.widget<Directionality>(
+        find.ancestor(of: secondary, matching: find.byType(Directionality)).first,
+      );
+      expect(d.textDirection, TextDirection.ltr);
+    });
+
+    testWidgets('English times use Latin digits only (live check, ADR-038)', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          locale: const Locale('en'),
+          supportedLocales: const [Locale('ar'), Locale('en')],
+          localizationsDelegates: GlobalMaterialLocalizations.delegates,
+          home: const Scaffold(body: TimeRangeText('06:30', '08:30')),
+        ),
+      );
+      final texts = tester
+          .widgetList<Text>(find.descendant(of: find.byType(TimeRangeText), matching: find.byType(Text)))
+          .map((t) => t.data!)
+          .toList();
+      expect(texts, ['06:30 AM – 08:30 AM']);
+      expect(texts.join(), isNot(matches(RegExp('[\u0660-\u0669]'))));
     });
 
     testWidgets('education shows "Today" on meetings held today (FR-E-03)', (tester) async {

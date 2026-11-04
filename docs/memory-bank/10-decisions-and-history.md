@@ -740,6 +740,35 @@ supersede them.
   `ContentReady.whenIdle` (after the signal + the 0.5 s fade + `requestIdleCallback`, ≤ 2 s; Safari 600 ms; hard cap
   12 s); the haze fades in (0.8 s) like the rays and the video already did. The poster under them stays the LCP
   element; final hero look unchanged.
+- **Live-check follow-ups (same PR, second commit; live check of 4 Nov 2026 after PR #29):**
+  - **(a) Footer quick link «العيادات» during load:** the footer filtered its links with `routeEnabled` only, and
+    until `settings/features` arrives the defaults are "everything on", so «العيادات» (switched off live) showed and
+    a click landed on the section-off page. The footer now hides `/clinics` until `featuresReadyProvider`, the
+    same rule as the Services menu (`app_shell.dart`).
+  - **(b) Half-empty screen after the splash** (app bar, empty logo circle, `FeatureGate` spinner, footer for
+    3–5 s): that is exactly the "waiting for `settings/features`" state, and `contentReadyProvider` requires
+    settings/church **and** `featuresReadyProvider`, so the loading screen now covers it (the 9 s cap only applies if
+    even the seed fallback has not arrived, which the 8 s seeding check bounds).
+  - **(c) Missing `/section/x`, `/page/x`, `/about/priests/<bad-id>` on skeletons for 15–24 s:** `guardSeeded`
+    subscribed to the live query only *after* the seeding check (≤ 8 s), and the custom fallback delay (13 s)
+    started only after that check failed. Now the live query starts at once (its values wait in `onData` for the
+    gate's answer), `SeedGate.check()` also answers as soon as `whenSeeded` fires, and the 13 s custom delay counts
+    from the subscription. Worst case for a missing custom page: ~13 s on a stalled connection (was 21 s+), and
+    `max(query, check)` (usually 1–2 s) on a normal one; a detail page in a built-in collection: ≤ 8 s. ADR-033
+    cache-first holds: the delay is still longer than `customPatience` + `customCacheRead` (+1 s) measured from the
+    same moment the `settleFirst` query starts, the fallback still never fires before the gate has answered "not
+    seeded / could not tell", and on a seeded database custom content never falls back to the empty list.
+  - **(d) English leftovers:** images have one admin `alt` (usually Arabic); on the English site an Arabic-only alt
+    now gives way to the item's English name (`imageAltFor`, `lib/domain/media.dart`; used by `ItemImage`,
+    `HaloAvatar`, `FittedCover`). `TimeRangeText` shows Latin digits only in English; Arabic keeps both digit
+    systems (Arabic first, Latin underneath, LTR) — the "both digit systems" rule is for Arabic readers.
+  - **Not changed (owner's data / decisions):** the church name in `settings/church.nameAr` («الابيض» instead of
+    «الأسود», saved via /admin) is for the owner to correct in /admin. `/main.dart.js.map` is public (built with
+    `--source-maps` for PageSpeed diagnostics; exposes the Dart sources, no secrets) — owner to decide. `/contact`
+    logs Google Maps `InvalidKeyMapError` (the Maps embed key / referrer setup), not fixed here.
+  - **Review follow-ups (CodeRabbit):** `tool/build_sitemap.sh` export timeout 330 s (10 sequential reads × 30 s),
+    sitemap copied to `$OUT.tmp` then renamed (a failed copy never leaves a truncated file); the manual deploy
+    command runs the sitemap step; the service-account secret is listed as used by `build`.
 - **Tests:** `test/content_guard_test.dart` (group "footer bundled content note": empty collection, missing optional
   doc, proof during an in-flight re-check, late negative read, known-unseeded → seeded, delayed custom fallback
   cancelled, working check never marks bundled), `test/sitemap_test.dart` (switches, 7 prefixes, priests by status,
@@ -792,6 +821,6 @@ supersede them.
 | 4 Nov 2026 | **PR #25** — "Docs: memory bank up to date + Arabic feature documentation" (`docs/feature-documentation`; PR #26 was squash-merged as `8886d08` first and merged into this branch) | ADR-035: memory bank re-checked against `d60261d` (assistant limits / suggestions / unconfirmed flags in `05-firebase.md`, clinics placeholders deleted 3 Nov + section off 4 Nov, create-only seeding re-creates deleted docs, bundled fonts, Sentry account facts, open tasks); new `documentation/` (Arabic): index, architecture, one file per feature, operations; README / AGENTS / CLAUDE link it with the same-PR rule. **ADR-036:** YouTube hero video library removed (admin card, `hero_video.dart`, `hero_youtube*.dart`, `youtube_player_iframe`; legacy `heroVideos` kept in rules, live data untouched). |
 | 4 Nov 2026 | **PR #29** — "PageSpeed: same hero, CSS ambient layer on web, lazy App Check, static first paint, crawler files" (`perf/pagespeed-green`; PR #27 was squash-merged as `b7e5ed2`, PR #28 closed unmerged) | ADR-037: hero haze + ray shimmer as a CSS-animated DOM layer on web (`hero_ambient*.dart`, `HeroAmbientSpec`), App Check activated on the assistant's first use (`ensureAppCheckActivated`), static hero poster + church name splash, `Intl.v8BreakIterator` → `Intl.Segmenter` shim, seal 178 → 27 KB, Hosting regex rewrites (real 404s for missing files, dotted slugs / ids still load) + COOP, `web/llms.txt`, `--source-maps`; `test/pagespeed_test.dart`. |
 
-| 4 Nov 2026 | **PR #30** — "Footer bundled-data note, sitemap from Firestore, loading screen until real content" (`fix/footer-sitemap-loading`; PR #29 was squash-merged as `5a6a44c`) | ADR-038: `SeedGate.markSeeded` / `whenSeeded` (the `settings/church` listener proves seeding for every stream; empty collections / missing optional docs no longer strand the footer note), `sitemap.xml` generated read-only from Firestore in `deploy.yml` (`tool/export_public_content.js`, `tool/gen_sitemap.dart`, `lib/domain/sitemap.dart`, static fallback), loading screen kept until `app-content-ready` (9 s cap), hero video / CSS motion started at page idle; `test/sitemap_test.dart`, `test/content_ready_test.dart`, new groups in `content_guard_test.dart` / `pagespeed_test.dart`. |
+| 4 Nov 2026 | **PR #30** — "Footer bundled-data note, sitemap from Firestore, loading screen until real content" (`fix/footer-sitemap-loading`; PR #29 was squash-merged as `5a6a44c`) | ADR-038: `SeedGate.markSeeded` / `whenSeeded` (the `settings/church` listener proves seeding for every stream; empty collections / missing optional docs no longer strand the footer note), `sitemap.xml` generated read-only from Firestore in `deploy.yml` (`tool/export_public_content.js`, `tool/gen_sitemap.dart`, `lib/domain/sitemap.dart`, static fallback), loading screen kept until `app-content-ready` (9 s cap), hero video / CSS motion started at page idle; `test/sitemap_test.dart`, `test/content_ready_test.dart`, new groups in `content_guard_test.dart` / `pagespeed_test.dart`. Second commit (live-check follow-ups): footer hides «العيادات» until the switches load, live query started before the seeding check + custom fallback delay counted from the subscription (missing custom / detail pages settle in ≤ ~13 s instead of 15–24 s), English image alts and Latin-only times in English, `test/live_check_followups_test.dart`; CodeRabbit fixes to `tool/build_sitemap.sh` and the docs. |
 
 Append new PRs to this table.

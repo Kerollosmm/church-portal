@@ -17,13 +17,14 @@
 ممنوع: الدفع مباشرة إلى `main`، و `git push --force`، وتعديل بيانات الإنتاج يدويًا من الكود.
 
 النشر اليدوي (للطوارئ فقط، بحساب له صلاحية):
-`flutter build web --release --dart-define=RECAPTCHA_SITE_KEY=<المفتاح> && python3 tool/fingerprint_icon_fonts.py build/web && npx firebase-tools deploy --only hosting:app,hosting:legacy-redirect --project asafra-church-portal`
+`flutter build web --release --dart-define=RECAPTCHA_SITE_KEY=<المفتاح> && bash tool/build_sitemap.sh build/web/sitemap.xml && python3 tool/fingerprint_icon_fonts.py build/web && npx firebase-tools deploy --only hosting:app,hosting:legacy-redirect --project asafra-church-portal`
+(خطوة الخريطة تحتاج `GOOGLE_APPLICATION_CREDENTIALS`؛ بدونه تُبقي `web/sitemap.xml` الثابتة مع تحذير ولا توقف الأمر.)
 
 ### الأسرار والمتغيرات (GitHub ← Settings ← Secrets and variables ← Actions)
 
 | الاسم | النوع | الاستخدام |
 |---|---|---|
-| `FIREBASE_SERVICE_ACCOUNT_ASAFRA_CHURCH_PORTAL` | سر | مفتاح JSON لحساب خدمة النشر (يُحفظ بلا أي أحرف زائدة) |
+| `FIREBASE_SERVICE_ACCOUNT_ASAFRA_CHURCH_PORTAL` | سر | مفتاح JSON لحساب خدمة النشر (يُحفظ بلا أي أحرف زائدة)؛ تستخدمه مهام النشر والمعاينة والبذر، ومهمة البناء لقراءة المحتوى العام فقط لتوليد `sitemap.xml` |
 | `FIREBASE_WEB_API_KEY` | متغير أو سر اختياري | غير مطلوب؛ يُستخرج تلقائيًا من `lib/firebase_options.dart` لإرسال رابط تعيين كلمة المرور للمشرف الجديد |
 | `RECAPTCHA_SITE_KEY` | متغير | مفتاح reCAPTCHA Enterprise للويب (للنشر من `main` فقط) |
 | `SENTRY_DSN` | متغير اختياري | غير مطلوب؛ الكود فيه DSN عام |
