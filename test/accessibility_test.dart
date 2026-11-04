@@ -813,6 +813,43 @@ void main() {
       // The new backend's document is rendered, not the old backend's last snapshot.
       expect(find.textContaining('new-church@x.test'), findsOneWidget);
       expect(find.textContaining('old-church@x.test'), findsNothing);
+
+      // Same path, different fields (settings/features): the form is rebuilt
+      // for the new definition instead of reusing the old editor state.
+      final f = _FakeBackend(docs: {'settings/features': <String, dynamic>{}});
+      await tester.pumpWidget(_adminApp(ChurchInfoScreen(repo: f, doc: todaySettingsDoc)));
+      await tester.pumpAndSettle();
+      await tester.pumpWidget(_adminApp(ChurchInfoScreen(repo: f, doc: seasonSettingsDoc)));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(find.textContaining('Venues / halls'), findsOneWidget);
+    });
+
+    testWidgets('dashboard: Today -> Season settings -> Today rebuilds each form (CHURCH-PORTAL-9)', (tester) async {
+      // Both menu entries edit settings/features with different fields. The
+      // dashboard used to reuse one ChurchInfoScreen, so the Season form read
+      // Today's per-field state and threw on _rows['venues']!.
+      tester.view.physicalSize = const Size(1280, 2400);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final repo = _FakeBackend(docs: {'settings/features': <String, dynamic>{}});
+      await tester.pumpWidget(MaterialApp(
+        locale: const Locale('en'),
+        supportedLocales: const [Locale('ar'), Locale('en')],
+        localizationsDelegates: GlobalMaterialLocalizations.delegates,
+        home: AdminDashboard(
+            repo: repo, uid: 'u', email: 'admin@example.org', role: AdminRoles.owner, onSignOut: () {}, initial: 'today'),
+      ));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Venues / halls'), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('nav-seasonSettings')));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(find.textContaining('Venues / halls'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('nav-today')));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(find.textContaining('Venues / halls'), findsNothing);
     });
 
     test('open on site keeps the dashboard language', () {
