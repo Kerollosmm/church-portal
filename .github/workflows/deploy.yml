@@ -53,6 +53,22 @@ jobs:
             fi
             flutter build web --release "${DEFINES[@]}"
           fi
+      # sitemap.xml from Firestore (ADR-038): the Spark plan has no Cloud
+      # Functions, so the sitemap is built here, READ-ONLY (get() calls only),
+      # with the deploy key. Any failure keeps the static web/sitemap.xml.
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: Firebase credentials (read-only sitemap export)
+        continue-on-error: true
+        uses: ./.github/actions/firebase-credentials
+        with:
+          service-account: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_ASAFRA_CHURCH_PORTAL }}
+      - name: Sitemap from Firestore (static fallback)
+        run: bash tool/build_sitemap.sh build/web/sitemap.xml
+      - name: Remove key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/sa.json"
       - name: Fingerprint icon fonts (cache busting, PR #23)
         # The tree-shaken icon fonts keep one file name per build but Hosting
         # caches fonts for 7 days: a hashed name makes a new subset a new URL.

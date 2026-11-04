@@ -6,6 +6,7 @@ import 'dart:ui_web' as ui_web;
 import 'package:material_ui/material_ui.dart';
 import 'package:web/web.dart' as web;
 
+import '../../core/content_ready.dart';
 import 'hero_ambient_spec.dart';
 import 'hero_feather.dart';
 
@@ -23,6 +24,10 @@ const bool heroAmbientInDom = true;
 ///   size) with the same 14 rays as [LightRaysPainter] at evenly spaced
 ///   shimmer phases; CSS opacity animations crossfade between neighbouring
 ///   phases ([HeroAmbientSpec.phaseWeight]), added with `plus-lighter`.
+///
+/// The layers are built once the page is complete and idle
+/// ([ContentReady.whenIdle], ADR-038) and fade in, so they never compete with
+/// the first content; the poster below stays the LCP element.
 ///
 /// Transform / opacity animations run on the compositor, so the main thread
 /// stays idle; the whole layer pauses when the hero leaves the viewport
@@ -70,9 +75,10 @@ class _HeroAmbientLayerState extends State<HeroAmbientLayer> {
     return '@keyframes hk-haze{from{transform:translate3d(0,0,0)}to{transform:translate3d(-66.6667%,0,0)}}'
         '@keyframes hk-ray{$tri}'
         '.hk-host{position:relative;width:100%;height:100%;overflow:hidden;pointer-events:none;direction:ltr;isolation:isolate}'
-        '.hk-haze{position:absolute;top:0;left:0;width:300%;height:100%;display:flex;'
+        '.hk-haze{position:absolute;top:0;left:0;width:300%;height:100%;display:flex;opacity:0;transition:opacity .8s ease-out;'
         'will-change:transform;animation:hk-haze ${HeroAmbientSpec.hazeCycle.inMilliseconds}ms linear infinite;'
         '-webkit-mask-image:linear-gradient(to bottom, $veil);mask-image:linear-gradient(to bottom, $veil)}'
+        '.hk-in .hk-haze{opacity:1}'
         '.hk-tile{flex:0 0 33.33334%;height:100%;background-position:center;background-size:cover;background-repeat:no-repeat}'
         '.hk-rays{position:absolute;inset:0;isolation:isolate;opacity:0;transition:opacity .6s ease-out}'
         '.hk-rays.hk-ready{opacity:1}'
@@ -91,6 +97,14 @@ class _HeroAmbientLayerState extends State<HeroAmbientLayer> {
       ..style.cssText = 'filter:${widget.cssFilter};-webkit-mask-image:$mask;mask-image:$mask;';
     final style = web.document.createElement('style') as web.HTMLStyleElement..textContent = _css();
     host.append(style);
+    _syncPlay();
+    ContentReady.whenIdle.then((_) {
+      if (!identical(_host, host)) return; // disposed meanwhile
+      _buildLayers(host);
+    });
+  }
+
+  void _buildLayers(web.HTMLDivElement host) {
     if (widget.haze) {
       final strip = web.document.createElement('div') as web.HTMLDivElement..className = 'hk-haze';
       final url = ui_web.assetManager.getAssetUrl(widget.clouds);
@@ -122,11 +136,15 @@ class _HeroAmbientLayerState extends State<HeroAmbientLayer> {
         ..observe(host);
     }
     _syncPlay();
+    // Next frame: let the haze start transparent, then fade it in.
+    web.window.requestAnimationFrame(((double _) {
+      if (identical(_host, host)) host.classList.add('hk-in');
+    }).toJS);
   }
 
   void _scheduleDraw() {
     final host = _host;
-    if (host == null) return;
+    if (host == null || _canvases.isEmpty) return; // layers not built yet (idle)
     final size = Size(host.clientWidth.toDouble(), host.clientHeight.toDouble());
     if (size.isEmpty || size == _drawn) return;
     _drawn = size;

@@ -177,3 +177,42 @@ List<T> pickRelated<T>(List<T> items, T self, {bool Function(T)? sameGroup, int 
   final ordered = g == null ? others : [...others.where(g), ...others.where((i) => !g(i))];
   return ordered.take(max).toList();
 }
+
+/// Id of a detail-page item (one of the 7 [DetailKind] models), '' otherwise.
+String detailItemId(Object o) => switch (o) {
+      Meeting m => m.id,
+      Activity a => a.id,
+      Clinic c => c.id,
+      Facility f => f.id,
+      Priest p => p.id,
+      Saint s => s.id,
+      Milestone m => m.id,
+      _ => '',
+    };
+
+/// The detail fields of a detail-page item ([ItemDetails.none] otherwise).
+ItemDetails detailItemDetails(Object o) => switch (o) {
+      Meeting m => m.details,
+      Activity a => a.details,
+      Clinic c => c.details,
+      Facility f => f.details,
+      Priest p => p.details,
+      Saint s => s.details,
+      Milestone m => m.details,
+      _ => ItemDetails.none,
+    };
+
+/// Shown on its list page: visible (and, for clinics, active).
+bool detailItemListed(Object o) => switch (o) {
+      Clinic c => c.visible && c.active,
+      Hideable h => h.visible,
+      _ => false,
+    };
+
+/// Whether [o]'s own detail page opens ([DetailState.available]) under [f].
+/// Used by `ItemDetailPage` (related items) and the sitemap (ADR-038); the
+/// route's own section switch is `FeatureSettings.routeEnabled`.
+bool detailItemOpens(Object o, FeatureSettings f) =>
+    detailStateFor(detailItemDetails(o),
+        features: f, visible: detailItemListed(o), priestDeparted: o is Priest ? o.departed : null) ==
+    DetailState.available;

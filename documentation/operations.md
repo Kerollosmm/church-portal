@@ -10,19 +10,21 @@
 4. `ci.yml` (تحليل، اختبارات، بناء، فحص البذور، اختبارات القواعد) و `deploy.yml` (بناء + **قناة معاينة** `pr-<رقم>` لمدة 7
    أيام، ورابطها يُكتب تعليقًا على الـ PR) يجب أن ينجحا.
 5. **Squash merge**. الدمج في `main` يشغّل `deploy.yml`: اختبارات القواعد ← نشر قواعد وفهارس Firestore ← نشر Hosting
-   (الموقع + موقع التحويل القديم).
+   (الموقع + موقع التحويل القديم). مهمة البناء تولّد أيضًا `sitemap.xml` من Firestore **قراءة فقط** (PR #30،
+   `tool/build_sitemap.sh`)، وعند فشلها تُنشر الخريطة الثابتة دون أن يفشل النشر.
 6. تأكد أن تشغيل **Deploy to Firebase** على `main` أخضر في تبويب Actions.
 
 ممنوع: الدفع مباشرة إلى `main`، و `git push --force`، وتعديل بيانات الإنتاج يدويًا من الكود.
 
 النشر اليدوي (للطوارئ فقط، بحساب له صلاحية):
-`flutter build web --release --dart-define=RECAPTCHA_SITE_KEY=<المفتاح> && python3 tool/fingerprint_icon_fonts.py build/web && npx firebase-tools deploy --only hosting:app,hosting:legacy-redirect --project asafra-church-portal`
+`flutter build web --release --dart-define=RECAPTCHA_SITE_KEY=<المفتاح> && bash tool/build_sitemap.sh build/web/sitemap.xml && python3 tool/fingerprint_icon_fonts.py build/web && npx firebase-tools deploy --only hosting:app,hosting:legacy-redirect --project asafra-church-portal`
+(خطوة الخريطة تحتاج `GOOGLE_APPLICATION_CREDENTIALS`؛ بدونه تُبقي `web/sitemap.xml` الثابتة مع تحذير ولا توقف الأمر.)
 
 ### الأسرار والمتغيرات (GitHub ← Settings ← Secrets and variables ← Actions)
 
 | الاسم | النوع | الاستخدام |
 |---|---|---|
-| `FIREBASE_SERVICE_ACCOUNT_ASAFRA_CHURCH_PORTAL` | سر | مفتاح JSON لحساب خدمة النشر (يُحفظ بلا أي أحرف زائدة) |
+| `FIREBASE_SERVICE_ACCOUNT_ASAFRA_CHURCH_PORTAL` | سر | مفتاح JSON لحساب خدمة النشر (يُحفظ بلا أي أحرف زائدة)؛ تستخدمه مهام النشر والمعاينة والبذر، ومهمة البناء لقراءة المحتوى العام فقط لتوليد `sitemap.xml` |
 | `FIREBASE_WEB_API_KEY` | متغير أو سر اختياري | غير مطلوب؛ يُستخرج تلقائيًا من `lib/firebase_options.dart` لإرسال رابط تعيين كلمة المرور للمشرف الجديد |
 | `RECAPTCHA_SITE_KEY` | متغير | مفتاح reCAPTCHA Enterprise للويب (للنشر من `main` فقط) |
 | `SENTRY_DSN` | متغير اختياري | غير مطلوب؛ الكود فيه DSN عام |
@@ -84,7 +86,8 @@
 
 | المشكلة | السبب المحتمل | الحل |
 |---|---|---|
-| تظهر في التذييل «تعرض البيانات المحفوظة مع التطبيق» على الموقع المباشر | تيار بيانات ما زال على النسخة المدمجة. مشكلة مفتوحة؛ الاشتباه: مجموعة **فارغة** على الخادم (مثل `clinics` حين كانت فارغة بعد الحذف، أو `alerts` إن حُذفت كل التنويهات) عندما لا يُجيب فحص `settings/church` في 8 ثوانٍ، لأن القائمة الفارغة لا «تثبت نفسها» | لا تُخفِ الرسالة. شخّص على قناة المعاينة أي مفتاح في `_fallbackStreams` يبقى معلّمًا، ثم أصلح ذلك التيار (`11-open-tasks.md`) |
+| تظهر في التذييل «تعرض البيانات المحفوظة مع التطبيق» على الموقع المباشر | **أُصلح في PR #30 (ADR-038)**: كان تيار لا تثبت قيمته نفسها (مستند اختياري غير موجود أو مجموعة فارغة) يبقى على النسخة المدمجة إذا لم يُجب فحص `settings/church` في وقته. إن ظهرت الآن فالتطبيق فعلًا على النسخة المدمجة: لا اتصال، أو خطأ صلاحيات في قراءة مجموعة | تحقق من الاتصال ومن سجل Sentry (`content:<اسم>`)، ومن قواعد Firestore. لا تُخفِ الرسالة |
+| خريطة الموقع لا تحتوي صفحة جديدة | الخريطة تُولَّد عند النشر فقط (PR #30) | أعد تشغيل **Deploy to Firebase** على `main` (Re-run) أو انتظر النشر التالي. إن ظهر تحذير `sitemap:` في سجل مهمة build فقد نُشرت الخريطة الثابتة الاحتياطية |
 | حفظ في اللوحة يفشل بـ `permission-denied` | حقل غير مسموح في `firestore.rules`، أو طول أكبر من الحد، أو الحساب ليس مشرفًا | راجع حدود الحقل؛ المطور يضيف الحقل للقواعد والنموذج والمخطط والبذور معًا |
 | المساعد غير ظاهر | أحد المفتاحين («قسم اسأل الكنيسة ظاهر» / «تفعيل المساعد الذكي») مُطفأ، أو App Check لم يعمل، أو أنت على قناة معاينة (بلا مفتاح reCAPTCHA) | فعّل المفتاحين؛ تحقق من `RECAPTCHA_SITE_KEY` وتسجيل App Check |
 | المساعد يقول تعذّر الحصول على إجابة | حصة Gemini المجانية، أو App Check، أو نموذج مرفوض | راجع Sentry (`AssistantFailure`)؛ أفرغ حقل «النموذج» ليعود للافتراضي |

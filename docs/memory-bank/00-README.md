@@ -42,7 +42,9 @@ Sentry error tracking on web + Android with PDPL-safe scrubbing and the `/admin`
 `settings/features.errorReporting`; ADR-034; merged as `d60261d`) plus PR #25 (`docs/feature-documentation`, 4 Nov
 2026: the PR #15–#24 behaviour re-checked against the code at `d60261d`, stale assistant / clinics / seeding /
 font notes fixed, the Arabic feature documentation in [`/documentation/`](../../documentation/README.md);
-ADR-035; plus the removal of the YouTube hero video library — ADR-036 — later PRs are listed in `10-decisions-and-history.md`).
+ADR-035; plus the removal of the YouTube hero video library — ADR-036 — later PRs are listed in `10-decisions-and-history.md`;
+latest: PR #29 PageSpeed (ADR-037) and PR #30 footer bundled-data note fix, sitemap generated from Firestore at deploy,
+loading screen until real content (ADR-038)).
 
 > **Golden rule:** read this folder before changing anything, and update it in the same PR as every change that
 > alters behaviour, data shape, rules, workflows, content status or open tasks.

@@ -44,6 +44,27 @@ final featuresReadyProvider = Provider<bool>((ref) {
   return f.hasValue || f.hasError;
 });
 
+/// True once the first page content has arrived: settings/church, the
+/// section switches and layout (settings/features) and the bundled verse list
+/// of the home hero — live values or their fallbacks. Until then the HTML
+/// loading screen stays up (ADR-038), so visitors never see the defaults
+/// flash before the real data.
+final contentReadyProvider = Provider<bool>((ref) => firstContentArrived(
+      settings: ref.watch(settingsProvider),
+      featuresReady: ref.watch(featuresReadyProvider),
+      verses: ref.watch(dailyVersesProvider),
+    ));
+
+/// [contentReadyProvider]'s rule: every input has a value (or failed, which
+/// shows its fallback / error state and must not hold the page).
+@visibleForTesting
+bool firstContentArrived({
+  required AsyncValue<ChurchSettings> settings,
+  required bool featuresReady,
+  required AsyncValue<List<Verse>> verses,
+}) =>
+    (settings.hasValue || settings.hasError) && featuresReady && (verses.hasValue || verses.hasError);
+
 /// The admin's error-report switch (ADR-034): null until `settings/features`
 /// (or its seed fallback) has arrived; a failed stream means the default (on).
 ///

@@ -74,6 +74,20 @@ void main() {
       }
     });
 
+    test('the loading screen waits for the first real content, with a cap (ADR-038)', () {
+      // Hidden by the app's "app-content-ready" event, not by the first frame alone.
+      expect(html, contains("window.addEventListener('app-content-ready', splashDone)"));
+      final firstFrame = html.substring(html.indexOf("addEventListener('flutter-first-frame'"));
+      final handler = firstFrame.substring(0, firstFrame.indexOf('});'));
+      expect(handler, contains('setTimeout(splashDone, 9000)'));
+      expect(handler, contains('window.__appContentReady'));
+      expect(handler, isNot(contains("classList.add('gone')")));
+      // Painted above the Flutter view while it stays up.
+      expect(RegExp(r'#splash \{[^}]*z-index: \d+').hasMatch(html), isTrue);
+      // The 30 s failure path is still there.
+      expect(html, contains('setTimeout(splashFailed, 30000)'));
+    });
+
     test('Intl.v8BreakIterator is replaced by an Intl.Segmenter shim before Flutter loads', () {
       final shim = html.indexOf("Object.defineProperty(Intl, 'v8BreakIterator'");
       expect(shim, greaterThan(0));

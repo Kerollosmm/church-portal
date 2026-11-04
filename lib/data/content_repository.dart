@@ -126,6 +126,14 @@ Map<String, dynamic> normalizeDoc(Map<String, dynamic>? data) =>
 /// timed-out read is not, so a later check (the next subscription, or the next
 /// live value of a stream still on the seed) sees the database once it is
 /// seeded — e.g. when seeding runs while the app is open.
+///
+/// The marker can also be proven without this check: the live
+/// `settings/church` listener calls [markSeeded] as soon as a snapshot shows
+/// the document (ADR-038). [whenSeeded] then lets every stream still on the
+/// bundled copy switch to the live value it already holds — a missing
+/// optional doc (code defaults) or an empty collection gets no second
+/// snapshot from Firestore, so it could otherwise never recover from a
+/// seeding check that timed out on a slow cold start.
 @visibleForTesting
 class SeedGate {
   SeedGate(this._read);
@@ -133,24 +141,44 @@ class SeedGate {
   Future<bool>? _pending;
   bool _seeded = false;
   bool _markerAbsent = false;
+  final Completer<void> _seededSignal = Completer<void>();
 
   /// The last check that could answer found no `settings/church` (known
   /// unseeded, as opposed to "could not tell").
   bool get markerAbsent => _markerAbsent;
 
+  /// The database is known to be seeded (a check said so, or [markSeeded]).
+  bool get isSeeded => _seeded;
+
+  /// Completes once the database is known to be seeded.
+  Future<void> get whenSeeded => _seededSignal.future;
+
+  /// Records proof that `settings/church` exists (a live snapshot of it).
+  void markSeeded() {
+    _seeded = true;
+    _markerAbsent = false;
+    if (!_seededSignal.isCompleted) _seededSignal.complete();
+  }
+
   Future<bool> check() async {
     if (_seeded) return true;
     try {
-      final seeded = await (_pending ??= _read());
+      // A proof from the settings/church listener ([markSeeded]) answers at
+      // once instead of waiting for this read's timeout (ADR-038).
+      final seeded = await Future.any<bool>([_pending ??= _read(), whenSeeded.then((_) => true)]);
       _pending = null;
-      _seeded = seeded;
-      _markerAbsent = !seeded;
-      return seeded;
+      if (seeded) {
+        markSeeded();
+      } else if (!_seeded) {
+        _markerAbsent = true;
+      }
+      // A proof that arrived while this read was in flight wins over it.
+      return _seeded;
     } catch (e) {
       debugPrint('settings/church check failed, serving seed: $e');
       _pending = null;
-      _markerAbsent = false;
-      return false;
+      if (!_seeded) _markerAbsent = false;
+      return _seeded;
     }
   }
 }
@@ -164,6 +192,12 @@ class SeedGate {
 /// value itself proves its own data exists ([confirms], e.g. a non-empty
 /// collection; this never vouches for other streams). A database known to be
 /// unseeded keeps serving the seed until a later check finds the marker.
+/// When the gate learns later that the database is seeded
+/// ([SeedGate.whenSeeded], e.g. from the `settings/church` listener), the last
+/// live value held back is emitted at once and later values pass straight
+/// through (ADR-038: an empty collection or a missing optional doc produces
+/// no further snapshot, so waiting for "the next value" stranded the seed and
+/// the footer's "bundled content" note).
 /// [onSeed] reports whether this stream is on the seed; a stream cancelled
 /// while on the seed reports false so the "bundled content" banner is never
 /// stranded.
@@ -190,12 +224,16 @@ Stream<T> guardSeeded<T>({
   var rechecking = false;
   var fallbackDue = false;
   Timer? fallbackTimer;
+  // The last live value the gate has not vouched for yet (see whenSeeded).
+  T? heldLive;
+  var holding = false;
   void mark(bool v) {
     onSeedNow = v;
     onSeed(v);
   }
 
   void emit(T v, {required bool seed}) {
+    if (out.isClosed) return;
     fallbackTimer?.cancel();
     emitted = true;
     mark(seed);
@@ -204,27 +242,43 @@ Stream<T> guardSeeded<T>({
 
   out = StreamController<T>(
     onListen: () async {
-      var confirmed = await gate.check();
-      if (cancelled) return;
-      if (!confirmed) {
-        if (fallbackDelay == null) {
-          emit(fallback, seed: true);
-        } else {
-          // No bundled copy worth showing (custom content): give the live
-          // query [fallbackDelay] to answer before settling on the fallback,
-          // so a page never says "not available" while its data is on its way.
-          // A live value still on its re-check defers the fallback until the
-          // re-check has answered (it may confirm the value instead).
-          fallbackTimer = Timer(fallbackDelay, () {
-            if (cancelled || emitted) return;
-            if (rechecking) {
-              fallbackDue = true;
-            } else {
-              emit(fallback, seed: true);
-            }
-          });
-        }
+      // The live query is subscribed at once (ADR-038, live check): its first
+      // values wait for the seeding answer in onData instead of the query
+      // starting only after the check (up to 8 s on a slow cold start).
+      var confirmed = false;
+      var checkDone = false;
+      if (fallbackDelay != null) {
+        // No bundled copy worth showing (custom content): give the live query
+        // [fallbackDelay] to answer before settling on the fallback, so a page
+        // never says "not available" while its data is on its way. The delay
+        // counts from here, when the live query starts, not from the end of
+        // the seeding check (ADR-038, live check: a missing /page/<x> sat on
+        // skeletons for 15-24 s). It only fires once the check has said "not
+        // seeded / could not tell"; a live value still on its re-check defers
+        // it until the re-check has answered (it may confirm the value).
+        fallbackTimer = Timer(fallbackDelay, () {
+          if (cancelled || emitted || confirmed) return;
+          if (rechecking || !checkDone) {
+            fallbackDue = true;
+          } else {
+            emit(fallback, seed: true);
+          }
+        });
       }
+      // Proof of seeding that arrives later (another stream's check, or the
+      // settings/church listener) releases the value held back.
+      unawaited(gate.whenSeeded.then((_) {
+        if (cancelled || done || confirmed) return;
+        confirmed = true;
+        fallbackTimer?.cancel(); // seeded: wait for the live value instead
+        fallbackDue = false;
+        if (holding) {
+          holding = false;
+          final v = heldLive as T;
+          heldLive = null;
+          emit(v, seed: false);
+        }
+      }));
       final s = live().listen(null);
       sub = s;
       s.onData((v) async {
@@ -233,13 +287,16 @@ Stream<T> guardSeeded<T>({
           rechecking = true;
           try {
             final seeded = await gate.check();
-            confirmed = seeded || (!gate.markerAbsent && (confirms?.call(v) ?? false));
+            // `confirmed` may have been set meanwhile by whenSeeded.
+            confirmed = confirmed || seeded || (!gate.markerAbsent && (confirms?.call(v) ?? false));
           } finally {
             rechecking = false;
             if (!cancelled) s.resume();
           }
           if (cancelled) return;
           if (!confirmed) {
+            heldLive = v;
+            holding = true;
             if (fallbackDue && !emitted) {
               fallbackDue = false;
               emit(fallback, seed: true);
@@ -247,6 +304,8 @@ Stream<T> guardSeeded<T>({
             return;
           }
         }
+        holding = false;
+        heldLive = null;
         emit(v, seed: false);
       });
       s.onError((Object e, StackTrace st) {
@@ -262,6 +321,30 @@ Stream<T> guardSeeded<T>({
         done = true;
         out.close();
       });
+      final seeded = await gate.check();
+      checkDone = true;
+      if (cancelled || done) return;
+      if (seeded) {
+        confirmed = true;
+        fallbackTimer?.cancel(); // seeded: wait for the live value instead
+        fallbackDue = false;
+        // A live value held back by an earlier, failed re-check goes out now.
+        if (holding) {
+          holding = false;
+          final v = heldLive as T;
+          heldLive = null;
+          emit(v, seed: false);
+        }
+        return;
+      }
+      // A live value already went out (proved by whenSeeded or by itself).
+      if (confirmed || emitted) return;
+      if (fallbackDelay == null) {
+        emit(fallback, seed: true);
+      } else if (fallbackDue && !rechecking) {
+        fallbackDue = false;
+        emit(fallback, seed: true);
+      }
     },
     onCancel: () async {
       cancelled = true;
@@ -414,9 +497,10 @@ class FirestoreRepository implements ContentRepository {
   static const customCacheRead = Duration(seconds: 4);
 
   /// How long the seeding fallback (the empty list) waits when the seeding
-  /// check cannot answer. Longer than [customPatience] + [customCacheRead]
-  /// (+1 s margin), so the cached list [settleFirst] emits at its patience
-  /// always reaches the guard first and "not available" never wins the race.
+  /// check cannot answer, counted from when the live query starts (ADR-038).
+  /// Longer than [customPatience] + [customCacheRead] (+1 s margin), measured
+  /// from that same moment, so the cached list [settleFirst] emits at its
+  /// patience always reaches the guard first and "not available" never wins.
   static const customFallbackDelay = Duration(seconds: 13);
 
   List<T> _docs<T>(QuerySnapshot<Map<String, dynamic>> snap, T Function(String, Map<String, dynamic>) f) =>
@@ -460,7 +544,14 @@ class FirestoreRepository implements ContentRepository {
   @override
   Stream<ChurchSettings> settings() => _guard(
         'settings',
-        () => db.doc('settings/church').snapshots().map((d) => d.exists ? ChurchSettings.fromMap(normalizeDoc(d.data())) : seed.settings),
+        () => db.doc('settings/church').snapshots().map((d) {
+              if (!d.exists) return seed.settings;
+              // settings/church IS the seeding marker: a snapshot showing it
+              // answers the gate for every stream (ADR-038), even when the
+              // one-shot check timed out on a slow cold start.
+              _gate.markSeeded();
+              return ChurchSettings.fromMap(normalizeDoc(d.data()));
+            }),
         seed.settings,
         // settings/church IS the seeding marker: a live snapshot of it that
         // differs from the seed proves it exists.

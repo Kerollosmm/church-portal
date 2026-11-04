@@ -117,6 +117,10 @@ flowchart TD
 3. Repository choice: `status.available ? FirestoreRepository(db, seed) : SeedRepository(seed)`; `AdminRepository`
    only when Firebase is available (otherwise `/admin` shows `adminUnavailable`).
 4. `ProviderScope(overrides: [firebaseStatusProvider, repositoryProvider, adminRepositoryProvider])`.
+5. `ChurchPortalApp` watches `contentReadyProvider` (`firstContentArrived`: settings, `featuresReadyProvider`, daily
+   verses) and, two frames after it turns true, calls `ContentReady.signal()` → `app-content-ready` on `window`, which
+   hides the `web/index.html` loading screen (ADR-038; cap 9 s after `flutter-first-frame`). `ContentReady.whenIdle`
+   (signal + fade + `requestIdleCallback`, hard cap 12 s) gates the hero video source and the CSS ambient layer.
 
 ## Error reporting — Sentry (`lib/data/error_reporting.dart`, PR #24, ADR-034)
 
@@ -179,6 +183,20 @@ flowchart LR
   `_markFallback(key, false)`. A known-unseeded database
   (`settings/church` absent) keeps serving the seed until a later check finds the marker. A stream cancelled while on the seed clears its fallback mark
   (`finally`), so the banner is never stranded.
+- **Seeding proof shared by every stream (PR #30, ADR-038):** the `settings/church` listener calls
+  `SeedGate.markSeeded()` whenever its snapshot shows the document (and a successful check does the same);
+  `SeedGate.whenSeeded` then releases every stream still unconfirmed — it emits the live value it was holding back
+  (or lets the next one through) and cancels a pending delayed custom fallback. Without it, a stream whose only
+  snapshot cannot vouch for itself (a missing optional doc such as `settings/contact` → code defaults, or an empty
+  collection — Firestore does not re-emit an unchanged result) stayed on the seed for good after a timed-out /
+  "client is offline" check, keeping the footer note on. `check()` returns the latest state, so a late negative /
+  failed read never undoes the proof.
+- **Live query first, then the gate (PR #30 follow-up, ADR-038):** `guardSeeded` subscribes to the live query
+  immediately; values that arrive before the seeding answer wait in `onData` for it (`SeedGate.check()` also returns
+  as soon as `whenSeeded` fires). The custom-content fallback delay (`customFallbackDelay`, 13 s) counts from that
+  subscription and fires only after the gate has said "not seeded / could not tell"; on a seeded database custom
+  content never falls back to the empty list. A missing `/section/<x>` / `/page/<x>` now settles in ≤ ~13 s on a
+  stalled connection (was 15–24 s), a missing item in a built-in collection in ≤ 8 s.
 - **Settings docs prove themselves (PR #23):** `settings/features`, `settings/contact` and `settings/assistant`
   have `confirms: !identical(v, <code default>)` like `settings/church`: a stored doc replaces the default even while
   the seeding check cannot answer (before, `/contact` kept the four default types in that case).
@@ -278,7 +296,7 @@ through `MediaCache`, when the page mounts. `detailStateFor` (pure, `domain/item
 Back-to-section button, `noindex`; a priest whose status section is off (departed father while `departedPriests`
 is off, serving while `priests` is off) → `SectionUnavailable`, `noindex`; otherwise the page, indexable with its
 canonical URL (`setDocumentRouteMeta(path: detailPathFor(kind, id), …)`, called after `FeatureGate`'s so it wins).
-Detail URLs are not in `sitemap.xml` (static file; every visible item has a page since PR #14 — see open tasks).
+Detail URLs are in the deployed `sitemap.xml` since PR #30 (ADR-038): generated at deploy from Firestore with the same rule (`detailItemOpens` + `routeEnabled`, `lib/domain/sitemap.dart`).
 "More in this section" (PR #14) is picked from the same already-loaded list (`pickRelated`), so it costs no read either.
 
 **Per-route `<head>` sync** (PR #10, amends ADR-019): `lib/core/document_lang.dart` holds the pure

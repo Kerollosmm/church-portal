@@ -34,7 +34,7 @@ python3 tool/fingerprint_icon_fonts.py build/web   # content-hashed icon font na
 | Regenerate seed | `python3 tool/gen_seed.py` → writes `assets/seed/seed.json`, `tool/known_seed_ids.json`, `tool/retired_seed_ids.json` (commit all three) |
 | Rules tests (emulator, Java 11+) | `cd tool/rules_test && npm ci && npm test` (runs `firebase emulators:exec --only firestore --project demo-church-portal`) |
 | Seed preview | `cd tool && npm install && node seed_firestore.js --dry-run` |
-| Deploy (manual) | `flutter build web --release [--dart-define=RECAPTCHA_SITE_KEY=…] && python3 tool/fingerprint_icon_fonts.py build/web && firebase deploy` (or `--only hosting`, `--only firestore:rules,firestore:indexes`) |
+| Deploy (manual) | `flutter build web --release [--dart-define=RECAPTCHA_SITE_KEY=…] && bash tool/build_sitemap.sh build/web/sitemap.xml && python3 tool/fingerprint_icon_fonts.py build/web && firebase deploy` (the sitemap step keeps the static `web/sitemap.xml` with a warning when `GOOGLE_APPLICATION_CREDENTIALS` is not set) (or `--only hosting`, `--only firestore:rules,firestore:indexes`) |
 
 ## Seeding Firestore (`tool/seed_firestore.js`)
 
@@ -87,6 +87,9 @@ Job **firestore-rules** (15 min): Java Temurin 21 + Node 22 → `npm ci` in `too
    with the Sentry defines (PR #24: `SENTRY_ENVIRONMENT` = `production` on push / `preview` on PRs, `GIT_SHA` = the
    PR head or pushed SHA, `APP_VERSION` from `pubspec.yaml`, `SENTRY_DSN` only when the repo variable is set),
    with `--dart-define=RECAPTCHA_SITE_KEY` only on push builds when the repo variable is set →
+   **sitemap from Firestore (PR #30, ADR-038):** Node 22 → `firebase-credentials` (`continue-on-error`) →
+   `tool/build_sitemap.sh build/web/sitemap.xml` (read-only export + `dart run tool/gen_sitemap.dart` + XML check;
+   any failure = `::warning::` and the static `web/sitemap.xml`) → remove key →
    `tool/fingerprint_icon_fonts.py` → artifact `web-build`
    (3 days).
 2. **deploy-live** (push to main, needs build **and deploy-rules** since PR #24 — a new app may write fields the
@@ -108,7 +111,7 @@ Normalises the service-account secret (first JSON object only, validates, `$RUNN
 ### Secrets & variables
 | Name | Kind | Used by |
 |---|---|---|
-| `FIREBASE_SERVICE_ACCOUNT_ASAFRA_CHURCH_PORTAL` | secret | deploy-live, deploy-rules, preview, seed |
+| `FIREBASE_SERVICE_ACCOUNT_ASAFRA_CHURCH_PORTAL` | secret | build (read-only sitemap export), deploy-live, deploy-rules, preview, seed |
 | `RECAPTCHA_SITE_KEY` | repository **variable** (optional, not set yet) | live web build |
 | `SENTRY_DSN` | repository **variable** (optional, not set — PR #24) | web builds in `ci.yml` / `deploy.yml` pass it as `--dart-define=SENTRY_DSN` when set; otherwise release builds use the public DSN constant `AppConfig.sentryDefaultDsn` (ADR-034) |
 | Environment `production` | GitHub environment | deploy-live, seed — add **required reviewers** (open task) |

@@ -132,7 +132,7 @@ class HaloAvatar extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final loader = ref.watch(mediaRepositoryProvider)?.load;
-    final alt = image.alt.isNotEmpty ? image.alt : label;
+    final alt = imageAltFor(image.alt, label, english: !context.isAr);
     final halo = HaloPortrait(
       size: size,
       child: MediaImageView(
@@ -169,7 +169,7 @@ class FittedCover extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final loader = ref.watch(mediaRepositoryProvider)?.load;
-    final alt = image.alt.isNotEmpty ? image.alt : label;
+    final alt = imageAltFor(image.alt, label, english: !context.isAr);
     final fill = ColoredBox(color: context.pal.surfaceAlt);
     // AspectRatio (not LayoutBuilder) so the cover also works inside
     // IntrinsicHeight (the meetings timeline): height = width / ratio, capped

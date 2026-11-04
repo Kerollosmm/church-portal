@@ -147,7 +147,7 @@ class ItemImage extends ConsumerWidget {
     final show = ref.watch(featuresProvider.select((f) => f.showImages));
     if (img == null || !show) return placeholder;
     final loader = ref.watch(mediaRepositoryProvider)?.load;
-    final alt = img.alt.isNotEmpty ? img.alt : label;
+    final alt = imageAltFor(img.alt, label, english: !context.isAr);
     final framed = SizedBox.square(
       dimension: size,
       child: MediaImageView(

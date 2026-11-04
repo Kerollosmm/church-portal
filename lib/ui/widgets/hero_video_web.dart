@@ -4,11 +4,15 @@ import 'dart:ui_web' as ui_web;
 import 'package:material_ui/material_ui.dart';
 import 'package:web/web.dart' as web;
 
+import '../../core/content_ready.dart';
 import 'hero_feather.dart';
 
 /// Muted looping background video (web): a native `<video>` element, covered
 /// and positioned with CSS, its bottom feathered with a CSS mask (the same
 /// stops as [BottomFeather]), faded in with a CSS transition on `playing`.
+/// The source is set (and the download starts) only once the page is
+/// complete and idle ([ContentReady.whenIdle], ADR-038): the poster under it
+/// stays the LCP element and the video never competes with the first content.
 class HeroVideo extends StatefulWidget {
   final String asset;
   final Alignment alignment;
@@ -26,6 +30,7 @@ class HeroVideo extends StatefulWidget {
 
 class _HeroVideoState extends State<HeroVideo> {
   web.HTMLVideoElement? _el;
+  bool _hasSource = false;
 
   void _created(Object o) {
     final v = o as web.HTMLVideoElement;
@@ -55,13 +60,17 @@ class _HeroVideoState extends State<HeroVideo> {
         ((web.Event _) {
           v.style.opacity = '1';
         }).toJS);
-    v.src = ui_web.assetManager.getAssetUrl(widget.asset);
-    _sync();
+    ContentReady.whenIdle.then((_) {
+      if (!identical(_el, v)) return; // disposed meanwhile
+      v.src = ui_web.assetManager.getAssetUrl(widget.asset);
+      _hasSource = true;
+      _sync();
+    });
   }
 
   void _sync() {
     final v = _el;
-    if (v == null) return;
+    if (v == null || !_hasSource) return;
     if (widget.play) {
       // Autoplay can be refused (e.g. low-power mode): the poster stays.
       v.play().toDart.then((_) {}, onError: (_) {});

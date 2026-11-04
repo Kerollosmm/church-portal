@@ -689,6 +689,97 @@ supersede them.
 - **Alternatives rejected:** freezing / removing hero motion (PR #28, owner said no); HTML renderer (removed from
   Flutter); dropping App Check (AI Logic enforces it).
 
+## ADR-038 (PR #30) — Seeding proof shared by every stream; sitemap from Firestore at deploy; loading screen until real content
+
+- **Context (4 Nov 2026):** (1) the footer said «تعرض البيانات المحفوظة مع التطبيق» ("Showing bundled content") on
+  normal loads while Firestore was working. Reproduced on the live site in headless Chrome (412 × 5000, `/contact`,
+  35 s): note present. A diagnostics release build (temporary `print`s in `SeedGate` / `_markFallback`, not
+  committed) served locally against production showed the one-shot `settings/church` check (`get()`, 8 s timeout)
+  time out at ~9.7 s and later fail with `[cloud_firestore/unavailable] Failed to get document because the client is
+  offline`, while the listeners went on to deliver server data (`settings` / `features` switched to live at ~41 s
+  in the slow sandbox) — but `contact` stayed on the bundled defaults for good. (2) `sitemap.xml` was static: 7 fixed
+  pages, no item detail pages, custom sections or custom pages. (3) The HTML loading screen (ADR-037) faded out on
+  Flutter's first frame, before `settings/church` / `settings/features` arrived, so the default layout flashed
+  before the real one.
+- **Root cause (1):** `guardSeeded` re-checked the seeding marker only when its stream received a *new* value. A
+  stream whose live value cannot vouch for itself — a missing optional doc (`settings/contact`,
+  `settings/assistant` → identical code defaults) or a legitimately empty collection — gets **exactly one** snapshot
+  from Firestore (an unchanged empty result or a "fromCache → synced" change is not re-emitted without metadata
+  changes). When the gate could not answer at that moment (cold start: 8 s timeout, or the SDK's transient "client is
+  offline"), the stream stayed on the fallback forever, and `servingSeed` (any stream on the seed) kept the note on.
+  Meanwhile the `settings/church` listener itself had already proven the marker exists, but that proof was never
+  shared with the gate. (The suspected `settleFirst` / `customFallbackDelay` path of ADR-033 is one instance of the
+  same class: a held empty custom list could be stranded the same way.)
+- **Decision (1):** `SeedGate.markSeeded()` + `whenSeeded`: the `settings/church` live snapshot (when the document
+  exists) and any successful check mark the database seeded; every `guardSeeded` stream still unconfirmed then emits
+  the live value it holds back (or, with none yet, lets the next one through) and cancels a pending delayed custom
+  fallback. A negative / failed read that lands after the proof cannot undo it (`check()` returns the latest state).
+  Unchanged: a stream error still falls back with the note (truly bundled), one stream's non-empty data still never
+  vouches for another collection, and a known-unseeded database keeps the seed until the marker appears (now picked
+  up from the listener too, without waiting for another value).
+- **Decision (2):** the Spark plan has no Cloud Functions, so the sitemap is generated in `deploy.yml` → `build`
+  (push and same-repo PRs) after `flutter build web`: the existing `firebase-credentials` action (step
+  `continue-on-error`), then `tool/build_sitemap.sh` = `tool/export_public_content.js` (firebase-admin, **`get()`
+  only — never writes**) + `dart run tool/gen_sitemap.dart` (pure rules in `lib/domain/sitemap.dart`) + an XML
+  check (urlset namespace, home present, same origin, no duplicates, ≤ 50,000) → `build/web/sitemap.xml`; the key is
+  removed right after. Any failure prints a `::warning::` and keeps the static `web/sitemap.xml` (now marked as the
+  fallback; a test keeps it equal to the fixed pages the seed leaves on). Rules = the app's own indexing: fixed
+  pages by `routeEnabled` (like `FeatureGate`); `/section/<slug>` = `publicCategories` and `/page/<slug>` =
+  `publicPages` while `customSections` / `customPages` are on — a page with `showInNav: false` is still listed
+  because `CustomPageView` is indexable whenever the page exists (there is no separate noindex field; hidden /
+  unusable / duplicate slugs are not listed); item pages for the 7 `DetailKind` prefixes when
+  `routeEnabled(path)` and `detailItemOpens` (listed — clinics also active —, `detailsEnabled` not false, priests by
+  the section matching their status). `entries` have no page of their own. `detailItemId` / `detailItemDetails` /
+  `detailItemListed` / `detailItemOpens` moved from `item_detail_page.dart` to `lib/domain/item_detail.dart` so the
+  page and the sitemap share one rule. `robots.txt` unchanged (points to `/sitemap.xml`).
+- **Decision (3):** `web/index.html` keeps the loading screen (now `z-index` above the Flutter view) until the app
+  dispatches `app-content-ready` (`lib/core/content_ready.dart`), sent two frames after `contentReadyProvider` =
+  `firstContentArrived`: settings/church, settings/features (`featuresReadyProvider`) and the hero's verse list have
+  a value or failed (live or fallback). Cap: 9 s after `flutter-first-frame`; the 30 s failure path is unchanged.
+  The hero `<video>` gets its `src` and the CSS ambient layer (haze strip + ray canvases) is built only at
+  `ContentReady.whenIdle` (after the signal + the 0.5 s fade + `requestIdleCallback`, ≤ 2 s; Safari 600 ms; hard cap
+  12 s); the haze fades in (0.8 s) like the rays and the video already did. The poster under them stays the LCP
+  element; final hero look unchanged.
+- **Live-check follow-ups (same PR, second commit; live check of 4 Nov 2026 after PR #29):**
+  - **(a) Footer quick link «العيادات» during load:** the footer filtered its links with `routeEnabled` only, and
+    until `settings/features` arrives the defaults are "everything on", so «العيادات» (switched off live) showed and
+    a click landed on the section-off page. The footer now hides `/clinics` until `featuresReadyProvider`, the
+    same rule as the Services menu (`app_shell.dart`).
+  - **(b) Half-empty screen after the splash** (app bar, empty logo circle, `FeatureGate` spinner, footer for
+    3–5 s): that is exactly the "waiting for `settings/features`" state, and `contentReadyProvider` requires
+    settings/church **and** `featuresReadyProvider`, so the loading screen now covers it (the 9 s cap only applies if
+    even the seed fallback has not arrived, which the 8 s seeding check bounds).
+  - **(c) Missing `/section/x`, `/page/x`, `/about/priests/<bad-id>` on skeletons for 15–24 s:** `guardSeeded`
+    subscribed to the live query only *after* the seeding check (≤ 8 s), and the custom fallback delay (13 s)
+    started only after that check failed. Now the live query starts at once (its values wait in `onData` for the
+    gate's answer), `SeedGate.check()` also answers as soon as `whenSeeded` fires, and the 13 s custom delay counts
+    from the subscription. Worst case for a missing custom page: ~13 s on a stalled connection (was 21 s+), and
+    `max(query, check)` (usually 1–2 s) on a normal one; a detail page in a built-in collection: ≤ 8 s. ADR-033
+    cache-first holds: the delay is still longer than `customPatience` + `customCacheRead` (+1 s) measured from the
+    same moment the `settleFirst` query starts, the fallback still never fires before the gate has answered "not
+    seeded / could not tell", and on a seeded database custom content never falls back to the empty list.
+  - **(d) English leftovers:** images have one admin `alt` (usually Arabic); on the English site an Arabic-only alt
+    now gives way to the item's English name (`imageAltFor`, `lib/domain/media.dart`; used by `ItemImage`,
+    `HaloAvatar`, `FittedCover`). `TimeRangeText` shows Latin digits only in English; Arabic keeps both digit
+    systems (Arabic first, Latin underneath, LTR) — the "both digit systems" rule is for Arabic readers.
+  - **Not changed (owner's data / decisions):** the church name in `settings/church.nameAr` («الابيض» instead of
+    «الأسود», saved via /admin) is for the owner to correct in /admin. `/main.dart.js.map` is public (built with
+    `--source-maps` for PageSpeed diagnostics; exposes the Dart sources, no secrets) — owner to decide. `/contact`
+    logs Google Maps `InvalidKeyMapError` (the Maps embed key / referrer setup), not fixed here.
+  - **Review follow-ups (CodeRabbit):** `tool/build_sitemap.sh` export timeout 330 s (10 sequential reads × 30 s),
+    sitemap copied to `$OUT.tmp` then renamed (a failed copy never leaves a truncated file); the manual deploy
+    command runs the sitemap step; the service-account secret is listed as used by `build`.
+- **Tests:** `test/content_guard_test.dart` (group "footer bundled content note": empty collection, missing optional
+  doc, proof during an in-flight re-check, late negative read, known-unseeded → seeded, delayed custom fallback
+  cancelled, working check never marks bundled), `test/sitemap_test.dart` (switches, 7 prefixes, priests by status,
+  custom sections / pages incl. nav-hidden, export parsing with seed features, XML escaping, static fallback = seed,
+  robots), `test/content_ready_test.dart`, `test/pagespeed_test.dart` (loading screen waits for the event, cap,
+  z-index).
+- **Alternatives rejected:** a longer gate timeout (only moves the race); treating any non-empty collection as proof
+  (rejected in ADR-033: it vouches for nothing else); `includeMetadataChanges` on every built-in collection (more
+  events and re-checks for every page, still no proof for a missing doc); a scheduled sitemap job (needs Blaze /
+  Functions or another secret-bearing workflow); hiding the loading screen on a fixed delay.
+
 ## Timeline
 
 | When | PR / commit | What |
@@ -729,5 +820,7 @@ supersede them.
 
 | 4 Nov 2026 | **PR #25** — "Docs: memory bank up to date + Arabic feature documentation" (`docs/feature-documentation`; PR #26 was squash-merged as `8886d08` first and merged into this branch) | ADR-035: memory bank re-checked against `d60261d` (assistant limits / suggestions / unconfirmed flags in `05-firebase.md`, clinics placeholders deleted 3 Nov + section off 4 Nov, create-only seeding re-creates deleted docs, bundled fonts, Sentry account facts, open tasks); new `documentation/` (Arabic): index, architecture, one file per feature, operations; README / AGENTS / CLAUDE link it with the same-PR rule. **ADR-036:** YouTube hero video library removed (admin card, `hero_video.dart`, `hero_youtube*.dart`, `youtube_player_iframe`; legacy `heroVideos` kept in rules, live data untouched). |
 | 4 Nov 2026 | **PR #29** — "PageSpeed: same hero, CSS ambient layer on web, lazy App Check, static first paint, crawler files" (`perf/pagespeed-green`; PR #27 was squash-merged as `b7e5ed2`, PR #28 closed unmerged) | ADR-037: hero haze + ray shimmer as a CSS-animated DOM layer on web (`hero_ambient*.dart`, `HeroAmbientSpec`), App Check activated on the assistant's first use (`ensureAppCheckActivated`), static hero poster + church name splash, `Intl.v8BreakIterator` → `Intl.Segmenter` shim, seal 178 → 27 KB, Hosting regex rewrites (real 404s for missing files, dotted slugs / ids still load) + COOP, `web/llms.txt`, `--source-maps`; `test/pagespeed_test.dart`. |
+
+| 4 Nov 2026 | **PR #30** — "Footer bundled-data note, sitemap from Firestore, loading screen until real content" (`fix/footer-sitemap-loading`; PR #29 was squash-merged as `5a6a44c`) | ADR-038: `SeedGate.markSeeded` / `whenSeeded` (the `settings/church` listener proves seeding for every stream; empty collections / missing optional docs no longer strand the footer note), `sitemap.xml` generated read-only from Firestore in `deploy.yml` (`tool/export_public_content.js`, `tool/gen_sitemap.dart`, `lib/domain/sitemap.dart`, static fallback), loading screen kept until `app-content-ready` (9 s cap), hero video / CSS motion started at page idle; `test/sitemap_test.dart`, `test/content_ready_test.dart`, new groups in `content_guard_test.dart` / `pagespeed_test.dart`. Second commit (live-check follow-ups): footer hides «العيادات» until the switches load, live query started before the seeding check + custom fallback delay counted from the subscription (missing custom / detail pages settle in ≤ ~13 s instead of 15–24 s), English image alts and Latin-only times in English, `test/live_check_followups_test.dart`; CodeRabbit fixes to `tool/build_sitemap.sh` and the docs. |
 
 Append new PRs to this table.
