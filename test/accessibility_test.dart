@@ -813,6 +813,16 @@ void main() {
       // The new backend's document is rendered, not the old backend's last snapshot.
       expect(find.textContaining('new-church@x.test'), findsOneWidget);
       expect(find.textContaining('old-church@x.test'), findsNothing);
+
+      // Same path, different fields (settings/features): the form is rebuilt
+      // for the new definition instead of reusing the old editor state.
+      final f = _FakeBackend(docs: {'settings/features': <String, dynamic>{}});
+      await tester.pumpWidget(_adminApp(ChurchInfoScreen(repo: f, doc: todaySettingsDoc)));
+      await tester.pumpAndSettle();
+      await tester.pumpWidget(_adminApp(ChurchInfoScreen(repo: f, doc: seasonSettingsDoc)));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(find.textContaining('Venues / halls'), findsOneWidget);
     });
 
     test('open on site keeps the dashboard language', () {

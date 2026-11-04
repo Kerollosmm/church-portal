@@ -351,14 +351,17 @@ class _AdminDashboardState extends State<AdminDashboard> {
           // Owner only (ADR-034): one harmless test event to check Sentry.
           onSendTestError: widget.role == AdminRoles.owner ? ErrorReporting.sendTestEvent : null,
         );
+      // Keyed per section: 'today' and 'seasonSettings' edit the same
+      // document (settings/features) with different fields, so a reused
+      // screen would keep the other section's form state.
       case 'today':
-        return ChurchInfoScreen(repo: repo, doc: todaySettingsDoc);
+        return ChurchInfoScreen(key: const ValueKey('today'), repo: repo, doc: todaySettingsDoc);
       case 'seasonSettings':
-        return ChurchInfoScreen(repo: repo, doc: seasonSettingsDoc);
+        return ChurchInfoScreen(key: const ValueKey('seasonSettings'), repo: repo, doc: seasonSettingsDoc);
       case 'seasonPreset':
         return SeasonPresetScreen(repo: repo);
       case 'church':
-        return ChurchInfoScreen(repo: repo);
+        return ChurchInfoScreen(key: const ValueKey('church'), repo: repo);
       case 'assistant':
         return AssistantAdminScreen(repo: repo);
       case 'messages':
