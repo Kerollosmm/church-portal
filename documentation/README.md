@@ -67,6 +67,7 @@
 | محركات البحث (SEO) | [features/seo.md](features/seo.md) |
 | اللغتان وحفظ اختيار اللغة | [features/localization.md](features/localization.md) |
 | تطبيق الويب (PWA) والتخزين المؤقت وخطوط الأيقونات | [features/pwa-and-caching.md](features/pwa-and-caching.md) |
+| سرعة الموقع ونتائج PageSpeed | [features/performance-pagespeed.md](features/performance-pagespeed.md) |
 | سهولة الوصول | [features/accessibility.md](features/accessibility.md) |
 | تطبيق Android | [features/android-app.md](features/android-app.md) |
 | البنية العامة | [architecture.md](architecture.md) |

@@ -186,8 +186,8 @@ Example: a new public collection `announcements` shown on `/news`.
 All logos/icons come from the parish seal (new seal since PR #15). The master `assets/branding/seal_source.webp` is
 the **round seal on a transparent background**, square, ≥ 1024 px, lossless. To change the logo, crop the artwork to
 its outer ring (transparent outside), then `tool/gen_branding.sh [round-seal.(webp|png)]` (ImageMagick 7) rewrites
-`assets/branding/seal.png` (384 px; in-app `ChurchSeal`, seal tab, drawer, footer, admin, and the web splash in
-`web/index.html`), `web/favicon.{ico,png}`, `web/favicon-16.png` (light unsharp, no blur),
+`assets/branding/seal.png` (384 px, quantised to a 256-colour palette with Pillow, ~27 KB — ADR-037; in-app
+`ChurchSeal`, seal tab, drawer, footer, admin — the web splash shows the hero poster since ADR-037), `web/favicon.{ico,png}`, `web/favicon-16.png` (light unsharp, no blur),
 `web/icons/Icon-{192,512}.png` (round, transparent), `Icon-maskable-{192,512}.png` (seal at 78% on `#470812`),
 `apple-touch-icon.png` (on white), `web/og-image.jpg` (1200×630, seal on maroon; also the JSON-LD `image`) and
 `android/.../mipmap-*/ic_launcher{,_foreground}.png` (+ adaptive icon XML, background

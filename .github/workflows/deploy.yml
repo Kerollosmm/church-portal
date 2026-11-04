@@ -41,7 +41,7 @@ jobs:
           GIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           APP_VERSION=$(sed -n 's/^version: *//p' pubspec.yaml | head -1)
-          DEFINES=(--dart-define=SENTRY_ENVIRONMENT="$SENTRY_ENVIRONMENT" --dart-define=GIT_SHA="$GIT_SHA" --dart-define=APP_VERSION="$APP_VERSION")
+          DEFINES=(--source-maps --dart-define=SENTRY_ENVIRONMENT="$SENTRY_ENVIRONMENT" --dart-define=GIT_SHA="$GIT_SHA" --dart-define=APP_VERSION="$APP_VERSION")
           if [ -n "$SENTRY_DSN" ]; then DEFINES+=(--dart-define=SENTRY_DSN="$SENTRY_DSN"); fi
           echo "::notice::Sentry: environment=$SENTRY_ENVIRONMENT release=church-portal@$APP_VERSION+${GIT_SHA:0:7}"
           if [ -n "$RECAPTCHA_SITE_KEY" ]; then

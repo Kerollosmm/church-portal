@@ -52,6 +52,7 @@
 - **أُزيلت مكتبة فيديو يوتيوب** («مكتبة فيديو الواجهة (يوتيوب)») في PR #25 بطلب المالك (ADR-036): لا توجد بطاقة لها في
   اللوحة، ولا مشغّل يوتيوب في التطبيق. حقل `heroVideos` القديم إن وُجد في `settings/features` يُتجاهل ولا يُحذف، والقواعد ما
   زالت تقبله حتى لا يفشل الحفظ.
+- على الويب تُحرَّك السحب وأشعة الضوء بـ CSS في طبقة HTML فوق الفيديو (`hero_ambient_web.dart`، ADR-037) بنفس الشكل، بدل إعادة رسم Flutter لكل إطار.
 - الحركة تتوقف مع `prefers-reduced-motion` أو `saveData` (`lib/core/motion_env*.dart`) أو `heroMotion: false`.
 - الإعدادات في `settings/features`: `homeOrder` (ترتيب الكتل)، `homeHidden` (المخفية)، `heroTitleAr/En`،
   `heroSubtitleAr/En`، `heroMotion`، `heroShowAddress`، `bannerEnabled`، `bannerAr/En`، `bannerLink`.

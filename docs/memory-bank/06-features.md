@@ -50,6 +50,9 @@ render with `PageBody` (+ `Footer`). Content comes from Riverpod providers (hidd
   phones) over its poster; the painting shows when video is not allowed. Never for reduced motion, data saver,
   `heroMotion` off or under `flutter test`. The YouTube hero video library of PR #17 (ADR-026) was **removed in PR #25
   (ADR-036, owner request 4 Nov 2026)**; a `heroVideos` map already stored in `settings/features` is ignored.
+- **Hero ambient motion on web (ADR-037, PR #29):** the haze drift and light-ray shimmer look exactly as before but
+  run as a CSS-animated DOM layer (`HeroAmbientLayer`) instead of a per-frame Flutter repaint; the first paint is a
+  static copy of the hero (poster + church name) in `web/index.html`. See `documentation/features/performance-pagespeed.md`.
 
 ### `/about` — `about_page.dart` `AboutPage`
 - History card (bishop line + `historyAr/En`) and **altars** grid (main altar gets a gold cross) — section `history`.

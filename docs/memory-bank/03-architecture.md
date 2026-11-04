@@ -51,7 +51,7 @@ lib/
                             detailStateFor (detail-page gating), itemSocialsShown (PR #13, ADR-020),
                             weeklyCalendarUrl, absoluteDetailUrl, pickRelated (PR #14, ADR-021)
   data/
-    firebase_bootstrap.dart bootstrapFirebase() -> FirebaseStatus{available, appCheckActive}; App Check
+    firebase_bootstrap.dart bootstrapFirebase() -> FirebaseStatus{available, appCheckActive (= configured)}; ensureAppCheckActivated() (lazy, ADR-037)
     app_check_providers.dart selectAppCheckPlan (reCAPTCHA Enterprise web / Play Integrity / App Attest / debug) — PR #19
     assistant_model.dart    FirebaseAssistantModel (AssistantModel on Firebase AI Logic, imported only by /ask) — PR #19
     content_repository.dart ContentRepository (interface), SeedRepository, FirestoreRepository,
@@ -112,7 +112,8 @@ flowchart TD
    - `SeedData.load()` reads `assets/seed/seed.json` (on error → empty `SeedData`).
    - `bootstrapFirebase()`: `DefaultFirebaseOptions.currentPlatformOrNull` (null for placeholder/unsupported
      platforms) → `Firebase.initializeApp` (10 s timeout) → Firestore `persistenceEnabled: true`,
-     `cacheSizeBytes: 40 MB` → `_activateAppCheck()`.
+     `cacheSizeBytes: 40 MB`. App Check is **not** activated here (ADR-037): `ensureAppCheckActivated()` runs on the
+     assistant's first use.
 3. Repository choice: `status.available ? FirestoreRepository(db, seed) : SeedRepository(seed)`; `AdminRepository`
    only when Firebase is available (otherwise `/admin` shows `adminUnavailable`).
 4. `ProviderScope(overrides: [firebaseStatusProvider, repositoryProvider, adminRepositoryProvider])`.
@@ -224,7 +225,9 @@ flowchart LR
 ## Routing (`lib/router.dart`)
 
 - `GoRouter(initialLocation: '/')`, **path URL strategy** (`/mass-schedule`, not `/#/mass-schedule`). Firebase
-  Hosting rewrites `**` → `/index.html` (`firebase.json`), so deep links and reloads work.
+  Hosting rewrites every extension-less path (`^/[^.]*$`, ADR-037) → `/index.html` (`firebase.json`), so deep links
+  and reloads work; a second rewrite covers `/section|page/<slug>` and the item detail prefixes, so a slug or id
+  with a dot still loads.
 - **Two-way `?lang=` sync** (PR 2 of the review plan, BUG-07) — pure rules in `resolveLangSync(uri, english:,
   userToggled:, fromPlatform:)`:
   - EN/ع toggle (`LocaleNotifier.consumeUserChange()`), or a refresh of the same URL (`lastSyncedUri`): the URL
@@ -372,7 +375,9 @@ chunks are fetched relative to `<base href>`).
   rows start at the reading edge in RTL; cards keep their own height.
 - Art & motion (`lib/ui/widgets/golden.dart`): `ArtAssets` (hero wide/tall, Nile, clouds, painted patrons, hero
   video wide/tall + posters), `HaloPortrait` (gold halo ring), `HaloCrossFill`, `LightRaysPainter` (blurred rays),
-  `HeroStage` (full-bleed layers: still/poster with Ken Burns, `HeroVideo`, mirrored haze strip, rays; each feathered
+  `HeroStage` (full-bleed layers: still/poster with Ken Burns, `HeroVideo`, mirrored haze strip, rays — on **web** the
+  haze drift + ray shimmer are one CSS-animated DOM platform view, `HeroAmbientLayer` in `hero_ambient_web.dart`, with
+  the geometry shared in `HeroAmbientSpec` (ADR-037), so Flutter does not repaint per frame; each feathered
   by `BottomFeather` in `hero_feather.dart` so the hero dissolves into the page — no box edges), `TextScrim`
   (elliptical radial glow bleeding past the text). `HeroVideo` (`hero_video.dart`, conditional export): web =
   native `<video muted playsinline loop>` via `HtmlElementView.fromTagName` with a CSS mask + fade-in on `playing`

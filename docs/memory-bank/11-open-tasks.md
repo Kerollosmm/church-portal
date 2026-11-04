@@ -164,6 +164,11 @@ Status as of 4 Nov 2026 (PR #25, re-checked against `main` at `d60261d` = PR #24
       `web/og-image.jpg` shipped in PR #6; per-route canonical + `noindex` on `/admin`, 404 and switched-off sections
       done in PR #10 — crawlers that do not run JS still see the static `/` canonical.) When clinics go live,
       uncomment `/clinics` in `web/sitemap.xml`.
+- [ ] PageSpeed beyond ADR-037 (PR #29): TBT / Speed Index stay high because the CanvasKit Flutter app must
+      download and start before the real page paints (the static hero splash covers first paint). Next steps if
+      wanted: keep the splash until `settings` data arrives, defer the hero video / ambient layer to idle,
+      pre-rendered HTML for public pages. Remove the `Intl.v8BreakIterator` shim in `web/index.html` once Flutter's
+      engine stops calling it.
 - [ ] Performance budget (Lighthouse in CI), font subsetting (fonts are bundled since PR #15 — `assets/fonts/`, no
       runtime fetch — but not subset). (Deferred
       `/admin` and `/ask` chunks done in PR 3 of the review plan; verify lazy loading in the Network tab on the
