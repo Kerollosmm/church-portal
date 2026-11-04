@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
@@ -263,7 +264,7 @@ final synaxariumSourceProvider = Provider<SynaxariumSource>((ref) => SynaxariumS
 /// The Katameros commemoration (/data/today.json), loaded after the page is
 /// complete and idle; empty in seed mode (no Firebase: offline or tests).
 final synaxariumProvider = FutureProvider<SynaxariumData>((ref) async {
-  if (!ref.watch(repositoryProvider).isLive) return SynaxariumData.empty;
+  if (!ref.watch(repositoryProvider).isLive && !kIsWeb) return SynaxariumData.empty;
   final date = ref.watch(liturgicalDayProvider.select((d) => d.date));
   await ContentReady.whenIdle;
   return ref.read(synaxariumSourceProvider).load(date);

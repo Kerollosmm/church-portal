@@ -43,7 +43,10 @@ class SynaxariumSource {
     try {
       final client = _client ?? http.Client();
       try {
-        final res = await client.get(url).timeout(const Duration(seconds: 10));
+        var res = await client.get(url).timeout(const Duration(seconds: 10));
+        if (res.statusCode != 200 && url != Uri.parse(liveUrl)) {
+          res = await client.get(Uri.parse(liveUrl)).timeout(const Duration(seconds: 10));
+        }
         if (res.statusCode != 200) return cached;
         final body = utf8.decode(res.bodyBytes);
         final fresh = parse(body);

@@ -62,14 +62,15 @@ void main() {
   group('web/index.html first paint', () {
     final html = File('web/index.html').readAsStringSync();
 
-    test('liturgical splash screen: church seal, name, progress track, subtitle, fades out', () {
+    test('liturgical splash screen: church seal, name, progress track, fades out', () {
       expect(html, contains('<h1>كنيسة القديسين مكسيموس ودوماديوس والقوي الأنبا موسى الأسود</h1>'));
       expect(RegExp(r'<img class="seal" src="icons/Icon-192\.png"').hasMatch(html), isTrue);
       expect(html, contains('progress-track'));
       expect(html, contains('progress-bar'));
-      expect(html, contains('جاري تجهيز الصلوات والبيانات...'));
+      expect(html, contains('class="sr-only"'));
       expect(html, contains("s.classList.add('gone')"));
       expect(html, contains('overflow-y: auto;'));
+      expect(html, contains('background: #FBF3E4;'));
       // The old unoptimized 178 KB seal is not used.
       expect(html, isNot(contains('branding/seal.png')));
       for (final f in ['assets/art/hero_poster.webp', 'assets/art/hero_poster_tall.webp']) {
@@ -102,9 +103,9 @@ void main() {
       expect(File('assets/branding/seal.png').lengthSync(), lessThan(40 * 1024));
     });
 
-    test('manifest.json background_color matches the dark burgundy splash background', () {
+    test('manifest.json background_color matches the default warm splash background', () {
       final manifest = jsonDecode(File('web/manifest.json').readAsStringSync()) as Map<String, dynamic>;
-      expect(manifest['background_color'], '#2A0808');
+      expect(manifest['background_color'], '#FBF3E4');
     });
   });
 
