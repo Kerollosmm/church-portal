@@ -104,7 +104,7 @@ class _ActivityCard extends ConsumerWidget {
               placeholder: Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(color: context.pal.surfaceAlt, borderRadius: BorderRadius.circular(4)),
-                child: Icon(activityIcon(a.category), color: Theme.of(context).colorScheme.primary),
+                child: Icon(activityIcon(a.category), color: context.pal.primary),
               ),
             ),
             Expanded(
@@ -135,7 +135,7 @@ class _ActivityCard extends ConsumerWidget {
                   icon: Icons.call,
                   label: context.tr('call'),
                   semanticLabel: actionSemanticLabel(context.tr('call'), title),
-                  color: Theme.of(context).colorScheme.primary,
+                  color: context.pal.bar,
                   onTap: () => callPhone(a.contactPhone)),
               if (isEgyptianMobile(a.contactPhone))
                 ActionChipButton(
@@ -165,4 +165,4 @@ Color _linkColor(BuildContext context, String url) => url.contains('youtube.com'
     ? youtubeRed
     : url.contains('facebook.com')
         ? facebookBlue
-        : Theme.of(context).colorScheme.primary;
+        : context.pal.bar;

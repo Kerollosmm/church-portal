@@ -69,7 +69,7 @@ class PageBlockView extends StatelessWidget {
   Widget build(BuildContext context) {
     final b = block;
     final text = context.pick(b.textAr.trim(), b.textEn.trim());
-    final primary = Theme.of(context).colorScheme.primary;
+    final primary = context.pal.primary;
     switch (b.type) {
       case BlockTypes.heading:
         return Semantics(
@@ -138,7 +138,7 @@ class DonationInfoCard extends StatelessWidget {
             ),
             IconButton(
               tooltip: context.tr('copy'),
-              icon: Icon(Icons.copy_rounded, color: Theme.of(context).colorScheme.primary),
+              icon: Icon(Icons.copy_rounded, color: context.pal.primary),
               onPressed: () {
                 Clipboard.setData(ClipboardData(text: value));
                 ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(content: Text(context.tr('copied'))));
@@ -151,7 +151,7 @@ class DonationInfoCard extends StatelessWidget {
       padding: const EdgeInsets.all(18),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Row(children: [
-          Icon(Icons.volunteer_activism_rounded, color: Theme.of(context).colorScheme.primary),
+          Icon(Icons.volunteer_activism_rounded, color: context.pal.primary),
           const SizedBox(width: 8),
           Expanded(
             child: Text(context.tr('donationTitle'),

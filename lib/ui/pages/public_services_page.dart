@@ -37,7 +37,7 @@ class PublicServicesPage extends ConsumerWidget {
         Card(
           color: context.pal.surfaceAlt,
           child: ListTile(
-            leading: Icon(Icons.local_hospital_rounded, color: Theme.of(context).colorScheme.primary),
+            leading: Icon(Icons.local_hospital_rounded, color: context.pal.primary),
             title: Text(context.tr('charityClinics'), style: const TextStyle(fontWeight: FontWeight.w800)),
             subtitle: Text(context.tr('dir_clinics')),
             trailing: const Icon(Icons.chevron_right),
@@ -87,7 +87,7 @@ class _FacilityCard extends StatelessWidget {
                 placeholder: Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(color: context.pal.surfaceAlt, borderRadius: BorderRadius.circular(4)),
-                  child: Icon(facilityIcon(f.type), color: Theme.of(context).colorScheme.primary),
+                  child: Icon(facilityIcon(f.type), color: context.pal.primary),
                 ),
               ),
               Expanded(
@@ -107,7 +107,7 @@ class _FacilityCard extends StatelessWidget {
                   icon: Icons.call,
                   label: '${context.tr('call')} ${f.phone}',
                   semanticLabel: actionSemanticLabel('${context.tr('call')} ${f.phone}', name),
-                  color: Theme.of(context).colorScheme.primary,
+                  color: context.pal.bar,
                   onTap: () => callPhone(f.phone)),
             ],
             if (detail != null) DetailsLink(path: detail, title: name, id: f.id),

@@ -190,7 +190,7 @@ String buildAssistantInstruction({
       });
     for (final l in regular) {
       b.writeln(
-        '- ${l.sample ? '[UNCONFIRMED] ' : ''}${weekdayNamesEn[l.weekday!]}: ${_liturgyLine(l)}',
+        '- ${l.sample ? '[UNCONFIRMED] ' : ''}${weekdayNamesEn[l.weekday!]}: ${_liturgyLine(l, f.programOptions)}',
       );
     }
 
@@ -211,7 +211,7 @@ String buildAssistantInstruction({
         ..writeln('## Special one-off services');
       for (final l in oneOff) {
         b.writeln(
-          '- ${l.sample ? '[UNCONFIRMED] ' : ''}${_ymd(l.date!)}: ${_liturgyLine(l)}',
+          '- ${l.sample ? '[UNCONFIRMED] ' : ''}${_ymd(l.date!)}: ${_liturgyLine(l, f.programOptions)}',
         );
       }
     }
@@ -236,7 +236,7 @@ String buildAssistantInstruction({
         for (final l in e.value) {
           final when = l.date != null ? _ymd(l.date!) : (l.weekday != null ? weekdayNamesEn[l.weekday!] : 'every day');
           b.writeln(
-            '- ${l.sample ? '[UNCONFIRMED] ' : ''}$when: ${_liturgyLine(l)}',
+            '- ${l.sample ? '[UNCONFIRMED] ' : ''}$when: ${_liturgyLine(l, f.programOptions)}',
           );
         }
       }
@@ -593,10 +593,23 @@ const _offerableSections = [
   Sections.priests, Sections.saints, Sections.contactForm,
 ];
 
-String _liturgyLine(Liturgy l) {
-  final audience = _bi(l.audienceAr, l.audienceEn);
+/// One service: name, type, time, where (free-text place and / or the
+/// ADR-041 venue's name) and for whom (free-text audience and / or the
+/// audience's name), so "where is the youth prayer?" can be answered
+/// (ADR-043, Holy Week sim B3).
+String _liturgyLine(Liturgy l, [ProgramOptions opts = ProgramOptions.defaults]) {
+  final place = _bi(l.placeAr, l.placeEn);
+  final v = opts.venue(l.program.venue);
+  final venue = v == null ? '' : _bi(v.labelAr, v.labelEn);
+  final where = [place, if (venue.isNotEmpty && !place.contains(v!.labelAr)) venue].where((x) => x.isNotEmpty).join(', ');
+  final freeAudience = _bi(l.audienceAr, l.audienceEn);
+  final a = opts.audience(l.program.audience);
+  final group = a == null ? '' : _bi(a.labelAr, a.labelEn);
+  final audience = [freeAudience, if (group.isNotEmpty && !freeAudience.contains(a!.labelAr)) group]
+      .where((x) => x.isNotEmpty)
+      .join(', ');
   return '${_bi(l.nameAr, l.nameEn)} [${l.type}] ${formatRangeLatin(l.start, l.end)}'
-      '${_at(_bi(l.placeAr, l.placeEn))}${audience.isNotEmpty ? ' - $audience' : ''}';
+      '${_at(where)}${audience.isNotEmpty ? ' - $audience' : ''}';
 }
 
 String _priestLine(Priest p) =>

@@ -1680,3 +1680,74 @@ describe('ADR-042: season preset, season verses, wedding switch, assistant seaso
     for (const bad of [0, 101, '6', 6.5]) await assertFails(updateDoc(ref, { perDaySeason: bad }), String(bad));
   });
 });
+
+describe('ADR-043: season-following theme, season theme map, preset theme item, new season keys', () => {
+  const ref = () => doc(db(EDITOR), 'settings', 'features');
+  const start = Timestamp.fromDate(new Date('2027-04-24T00:00:00+02:00'));
+  const end = Timestamp.fromDate(new Date('2027-05-02T00:00:00+02:00'));
+  const preset = {
+    seasonId: 'hw', seasonKey: 'holy_week', appliedAt: start, startsAt: start, endsAt: end,
+    options: ['replaceRegular', 'hideMeetings', 'hideClinics', 'heroMotionOff', 'weddingOff', 'live', 'pdf', 'theme'],
+    previous: { seasonActive: false, heroMotion: true, theme: 'burgundy' },
+  };
+
+  test('followSeason and the season theme map are accepted', async () => {
+    await assertSucceeds(setDoc(ref(), {
+      theme: 'goldenHour',
+      occasions: {
+        auto: false, easter: true, resurrectionDays: 7, schedule: {}, followSeason: true,
+        seasonThemes: { holy_week: 'holyWeek', pascha: 'none', fast: 'fasting', marian: 'marian', epiphany: 'epiphany',
+          nativity: 'nativity', revival_maximus: 'brown', revival_moses: 'none', summer: 'none' },
+      },
+    }));
+    await assertSucceeds(updateDoc(ref(), { occasions: { followSeason: false, seasonThemes: {} } }));
+  });
+
+  test('twelve new slots and a full season theme map fit one write (expression budget)', async () => {
+    await assertSucceeds(setDoc(ref(), {
+      theme: 'goldenHour',
+      occasions: {
+        auto: true, easter: true, resurrectionDays: 50, followSeason: true,
+        schedule: Object.fromEntries(Array.from({ length: 12 }, (_, i) => [`r${i + 1}`, 'nativity|2026-12-25|2027-01-08'])),
+        seasonThemes: { holy_week: 'holyWeek', pascha: 'resurrection', fast: 'fasting', marian: 'marian',
+          epiphany: 'epiphany', nativity: 'nativity', revival_maximus: 'brown', revival_moses: 'none', summer: 'none' },
+      },
+    }));
+  });
+
+  test('bad switches and maps are refused', async () => {
+    for (const o of [
+      { followSeason: 'yes' }, { seasonThemes: [] }, { seasonThemes: { lent: 'fasting' } },
+      { seasonThemes: { holy_week: 'violet' } }, { seasonThemes: { holy_week: 5 } }, { seasonThemes: 'holyWeek' },
+      { seasonThemes: { holy_week: '' } }, { seasonThemes: { holy_week: 'holyWeek,none', pascha: 'none' } },
+      { seasonThemes: { holy_week: 'holyWeek,' } }, { schedule: { r1: '' } },
+      { schedule: { r1: 'holyWeek|2027-04-25|2027-05-01,holyWeek|2027-04-25|2027-05-01' } },
+    ]) {
+      await assertFails(setDoc(ref(), { occasions: o }), JSON.stringify(o).slice(0, 80));
+    }
+  });
+
+  test('the preset may set the theme (8 options, previous theme, season start)', async () => {
+    await assertSucceeds(setDoc(ref(), { theme: 'holyWeek', seasonPreset: preset }));
+    await assertSucceeds(updateDoc(ref(), { theme: 'burgundy', seasonPreset: null }), 'restore');
+    for (const bad of [
+      { ...preset, options: [...preset.options, 'theme'] },
+      { ...preset, options: ['theme', 'theme'] },
+      { ...preset, previous: { ...preset.previous, theme: 'neon' } },
+      { ...preset, previous: { ...preset.previous, theme: 5 } },
+      { ...preset, startsAt: '2027-04-24' },
+    ]) {
+      await assertFails(updateDoc(ref(), { seasonPreset: bad }), JSON.stringify(bad).slice(0, 80));
+    }
+  });
+
+  test('new season keys: epiphany, marian, fast (seasons, services, verses, preset)', async () => {
+    const ed = db(EDITOR);
+    for (const k of ['epiphany', 'marian', 'fast']) {
+      await assertSucceeds(setDoc(doc(ed, 'seasons', k), { key: k, nameAr: 'موسم', active: true }), k);
+      await assertSucceeds(setDoc(ref(), { seasonVerses: [[k, 'آية', ''].join('\u001f')] }), `${k} verse`);
+      await assertSucceeds(setDoc(ref(), { seasonPreset: { ...preset, seasonKey: k } }), `${k} preset`);
+    }
+    await assertFails(setDoc(doc(ed, 'seasons', 'lent'), { key: 'lent', nameAr: 'موسم', active: true }));
+  });
+});

@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:material_ui/material_ui.dart';
 
 import '../../core/l10n.dart';
+import '../../core/theme.dart';
 
 /// A Coptic cross (equal arms ending in three-point trefoils), drawn so the
 /// app needs no image assets for its logo / hero ornament.
@@ -36,12 +37,13 @@ class ChurchSeal extends StatelessWidget {
 
 class CopticCross extends StatelessWidget {
   final double size;
-  final Color color;
-  const CopticCross({super.key, this.size = 32, this.color = const Color(0xFFB8862B)});
+  /// null = the theme's cross colour (gold; ash on Holy Week — ADR-043).
+  final Color? color;
+  const CopticCross({super.key, this.size = 32, this.color});
 
   @override
   Widget build(BuildContext context) =>
-      SizedBox.square(dimension: size, child: CustomPaint(painter: _CrossPainter(color)));
+      SizedBox.square(dimension: size, child: CustomPaint(painter: _CrossPainter(color ?? context.pal.cross)));
 }
 
 class _CrossPainter extends CustomPainter {

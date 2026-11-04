@@ -15,7 +15,9 @@ class SeasonVerses {
   static const sep = '\u001f';
 
   /// The season keys a set can belong to (validSeason's `key` list).
-  static const seasonKeys = ['holy_week', 'pascha', 'nativity', 'revival_maximus', 'revival_moses', 'summer'];
+  static const seasonKeys = [
+    'holy_week', 'pascha', 'nativity', 'epiphany', 'marian', 'fast', 'revival_maximus', 'revival_moses', 'summer', //
+  ];
 
   /// Season key → its verses, in the admin's order.
   final Map<String, List<Verse>> bySeason;

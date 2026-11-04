@@ -126,7 +126,7 @@ class EntryCard extends ConsumerWidget {
     // The item's own style, else the category's default (ADR-023).
     final style = e.imageStyle.isNotEmpty ? e.imageStyle : category.imageStyle;
     final linkLabel = context.pick(e.externalLabelAr.trim(), e.externalLabelEn.trim());
-    final primary = Theme.of(context).colorScheme.primary;
+    final primary = context.pal.primary;
     return Card(
       key: Key('entry-${e.id}'),
       clipBehavior: Clip.antiAlias,
@@ -165,7 +165,7 @@ class EntryCard extends ConsumerWidget {
                       icon: Icons.call,
                       label: context.tr('call'),
                       semanticLabel: actionSemanticLabel(context.tr('call'), title),
-                      color: primary,
+                      color: context.pal.bar,
                       onTap: () => callPhone(e.contactPhone)),
                 if (e.contactPhone.isNotEmpty && isEgyptianMobile(e.contactPhone))
                   ActionChipButton(
@@ -179,7 +179,7 @@ class EntryCard extends ConsumerWidget {
                       icon: Icons.open_in_new_rounded,
                       label: linkLabel.isEmpty ? context.tr('learnMore') : linkLabel,
                       semanticLabel: actionSemanticLabel(linkLabel.isEmpty ? context.tr('learnMore') : linkLabel, title),
-                      color: primary,
+                      color: context.pal.bar,
                       onTap: () => openLink(context, e.externalUrl)),
               ]),
             ],
