@@ -112,8 +112,8 @@ render with `PageBody` (+ `Footer`). Content comes from Riverpod providers (hidd
 header on the seasonal view (and on additive revivals in the weekly view) and each meeting card: venue / audience
 pills, «المتكلم: …», «الموضوع: …», «الكورال: …», and a «البرنامج / الكتيب» button opening the Drive link. Services on
 the same day with overlapping times in different venues (`parallelServices`) get «وفي نفس الوقت: القاعة السفلية
-(شباب)». When the seasonal services use two or more audiences, chips «كل الفئات / عام / شباب / أطفال» filter them
-(a service without an audience always shows). Nothing renders for items without these keys.
+(شباب)» on every list (season, revival, special services and the weekly tabs). When the seasonal services use two or more audiences, chips «كل الفئات / عام / شباب / أطفال» filter them
+(a service without an audience always shows; switching views clears the filter). Nothing renders for items without these keys.
 
 ### `/church-education` — `education_page.dart` `EducationPage`
 - Meetings sorted by `stageOrder` (angels → elderly), then `order`, then start; grouped into

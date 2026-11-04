@@ -105,6 +105,16 @@ void main() {
       expect(o.audiences, ProgramOptions.defaultAudiences);
       expect(const ProgramOption('a', 'ب', 'C').encode(), 'a\u001fب\u001fC');
     });
+
+    test('a default key keeps its label after the admin replaces the list (Sentry review)', () {
+      final o = ProgramOptions.fromMap({
+        'venues': ['roof\u001fالسطح\u001fRoof'],
+      });
+      expect(o.venues.map((v) => v.key), ['roof']);
+      expect(o.venue('main')!.labelAr, 'الكنيسة الكبرى');
+      expect(o.venue('nope'), isNull);
+      expect(ProgramOptions.withUsed(o.venues, ['main', 'roof', 'nope', ''], o.venue).map((v) => v.key), ['roof', 'main']);
+    });
   });
 
   group('parallelServices', () {

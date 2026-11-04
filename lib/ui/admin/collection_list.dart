@@ -476,8 +476,12 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     _pushEditor(context, d,
         dynamicChoices: {
           'categories': catChoices,
-          'venues': optChoices(programOpts.venues),
-          'audiences': optChoices(programOpts.audiences),
+          // The item's own key stays selectable even if the admin list no
+          // longer holds it (a default key, Sentry review).
+          'venues': optChoices(ProgramOptions.withUsed(
+              programOpts.venues, ['${d?.data['venue'] ?? ''}'], programOpts.venue)),
+          'audiences': optChoices(ProgramOptions.withUsed(
+              programOpts.audiences, ['${d?.data['audience'] ?? ''}'], programOpts.audience)),
         }, linkTargets: needsLinks ? targets : const [], takenSlugs: taken);
   }
 

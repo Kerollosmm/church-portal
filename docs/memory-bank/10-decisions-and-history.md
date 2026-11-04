@@ -867,10 +867,15 @@ supersede them.
   أطفال), edited in the new /admin screen «إعدادات المواسم» / "Season settings" (generic form, writes only changed
   keys). No new document, collection or listener: `settings/features` is already streamed. Items store the KEY, so a
   renamed hall updates everywhere.
+  A key missing from the admin list still resolves through the built-in defaults (`venue()` / `audience()` fall back,
+  `ProgramOptions.withUsed` keeps it in chips and in the item's dropdown), so items saved with `main` / `youth` keep
+  their label after the admin replaces the list (Sentry review on PR #32).
 - **Parallel prayers:** `parallelServices()` (`lib/domain/schedule.dart`) — same date (or weekday), overlapping times
   (no end = one minute), different venue (or free-text place) — adds «وفي نفس الوقت: القاعة السفلية (شباب)» to each
-  card; the seasonal lists get audience filter chips when two or more audiences are used (a service without an
-  audience is for everyone).
+  card — on every list of /mass-schedule (season services, additive revivals, one-off special services and the
+  regular weekday tabs; Codex review on PR #32); the seasonal lists get audience filter chips when two or more
+  audiences are used (a service without an audience is for everyone). The chips live in the seasonal view only, so
+  switching views clears the filter (Sentry review on PR #32).
 - **UI:** `ProgramDetails` widget (venue / audience pills, speaker / topic / choir lines, PDF button) on the liturgy
   card, the next-service card, the season header on /mass-schedule, the meeting card; meeting detail pages list them
   as facts. Admin: a collapsible «البرنامج: المتكلم والمكان والفئة وملف PDF» group (`FieldGroup.program`) on the

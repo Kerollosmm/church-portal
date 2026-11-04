@@ -72,6 +72,9 @@ class _MassSchedulePageState extends ConsumerState<MassSchedulePage> {
             value: _seasons,
             onChanged: (v) => setState(() {
               _seasons = v;
+              // The audience chips live in the seasonal view only: never
+              // leave a hidden filter on (Sentry review).
+              _audience = '';
               // The visitor chose: never override it with the season default.
               _seasonDefaultApplied = true;
             }),
@@ -101,6 +104,10 @@ class _MassSchedulePageState extends ConsumerState<MassSchedulePage> {
     // view stays open, so their services (and feast liturgy) are listed here.
     final revivals = seasonalSchedule(seasons.where((s) => !s.replacesRegular && isSeasonActiveAt(s, now)), all);
     final showWeekday = _tab == ScheduleTab.other;
+    // Services at the same time in another hall, on every list (ADR-041).
+    final opts = ref.watch(featuresProvider.select((f) => f.programOptions));
+    final parallelSpecial = parallelServices(special);
+    final parallelRegular = parallelServices(list);
     return [
       for (final e in revivals.entries) ...[
         SectionTitle(
@@ -116,7 +123,12 @@ class _MassSchedulePageState extends ConsumerState<MassSchedulePage> {
       if (special.isNotEmpty) ...[
         SectionTitle(context.tr('specialServices'), icon: Icons.event_available_rounded),
         ResponsiveGrid(children: [
-          for (final l in special) LiturgyCard(liturgy: l, showDate: true),
+          for (final l in special)
+            LiturgyCard(
+              liturgy: l,
+              showDate: true,
+              parallelText: parallelSummary(context, opts, parallelSpecial[l.id] ?? const []),
+            ),
         ]),
       ],
       SectionTitle(context.tr('regularSchedule'), icon: Icons.calendar_month_rounded),
@@ -142,7 +154,12 @@ class _MassSchedulePageState extends ConsumerState<MassSchedulePage> {
         const EmptyState(icon: Icons.event_busy)
       else
         ResponsiveGrid(children: [
-          for (final l in list) LiturgyCard(liturgy: l, showWeekday: showWeekday),
+          for (final l in list)
+            LiturgyCard(
+              liturgy: l,
+              showWeekday: showWeekday,
+              parallelText: parallelSummary(context, opts, parallelRegular[l.id] ?? const []),
+            ),
         ]),
       SectionTitle(context.tr('vespersPraise'), icon: Icons.nightlight_round),
       if (vespers.isEmpty)
@@ -232,7 +249,7 @@ class _MassSchedulePageState extends ConsumerState<MassSchedulePage> {
         scrollDirection: Axis.horizontal,
         child: Row(children: [
           chip('', context.tr('allAudiences')),
-          for (final o in opts.audiences)
+          for (final o in ProgramOptions.withUsed(opts.audiences, keys, opts.audience))
             if (keys.contains(o.key)) chip(o.key, context.pick(o.labelAr, o.labelEn)),
         ]),
       ),

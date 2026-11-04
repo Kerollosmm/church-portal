@@ -68,8 +68,24 @@ class ProgramOptions {
         audiences: _list(m['audiences'], defaultAudiences),
       );
 
-  ProgramOption? venue(String key) => _find(venues, key);
-  ProgramOption? audience(String key) => _find(audiences, key);
+  /// The venue / audience named [key]: the admin list first, then the
+  /// built-in defaults, so an item saved with a default key (main, youth…)
+  /// keeps its label after the admin replaces the list (Sentry review).
+  ProgramOption? venue(String key) => _find(venues, key) ?? _find(defaultVenues, key);
+  ProgramOption? audience(String key) => _find(audiences, key) ?? _find(defaultAudiences, key);
+
+  /// [list] followed by the options of [keys] it does not hold (resolved
+  /// through [find]), for chips / dropdowns that must show every used key.
+  static List<ProgramOption> withUsed(
+      List<ProgramOption> list, Iterable<String> keys, ProgramOption? Function(String) find) {
+    final out = [...list];
+    for (final k in keys) {
+      if (out.any((o) => o.key == k)) continue;
+      final o = find(k);
+      if (o != null) out.add(o);
+    }
+    return out;
+  }
 
   static ProgramOption? _find(List<ProgramOption> l, String key) {
     if (key.isEmpty) return null;
