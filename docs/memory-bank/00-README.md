@@ -57,7 +57,7 @@ tonight's programme service, assistant grounds programme / church events / live 
 never mix into a season with real services (ADR-045); PR #39 live-test fixes — top event only on the stored
 features, English title before boot, App Check lazy again, no public sample marks, Coptic date fallback, pope-visit
 images on Hosting (ADR-046); PR #40 English verse of the day — bundled public-domain WEB
-(British Edition) text, optional English for the admin's fixed and season verses (ADR-047); PR #NN season card
+(British Edition) text, optional English for the admin's fixed and season verses (ADR-047); PR #42 season card
 timing — «يُقام الآن» names the services running now in other halls, overnight services and cross-midnight parallels,
 a readable seasonal switch on every theme, the day-to-night handover tested minute by minute (ADR-048)).
 
