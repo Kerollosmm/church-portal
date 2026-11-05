@@ -244,6 +244,12 @@ class FeatureSettings {
   /// visitors' reduced-motion and save-data settings still win.
   final bool heroMotion;
 
+  /// A soft wash of the season theme's colours over the hero painting
+  /// (ADR-050, issue 19): the golden painting follows a Marian-blue,
+  /// ash-fast or festive-red theme. Default on; the Golden-hour default and
+  /// dark themes show no wash. Ken Burns and the haze / rays are untouched.
+  final bool heroSeasonTint;
+
   /// The church address as a ribbon under the hero title (default off: the
   /// address lives on the contact page, the footer and the map). A hero
   /// subtitle the admin typed always shows instead.
@@ -307,6 +313,7 @@ class FeatureSettings {
     this.pageHeaders = const {},
     this.footer = const FooterConfig(),
     this.heroMotion = true,
+    this.heroSeasonTint = true,
     this.heroShowAddress = false,
     this.imageStyles = const {},
     this.dailyVerse = DailyVerseConfig.defaults,
@@ -355,6 +362,7 @@ class FeatureSettings {
       pageHeaders: _pageHeaders(m['pageHeaders']),
       footer: FooterConfig.fromMap(m['footer']),
       heroMotion: _bool(m['heroMotion']) ?? true,
+      heroSeasonTint: _bool(m['heroSeasonTint']) ?? true,
       heroShowAddress: _bool(m['heroShowAddress']) ?? false,
       imageStyles: parseImageStyles(m['imageStyles']),
       dailyVerse: DailyVerseConfig.fromMap(m['dailyVerse']),
@@ -388,6 +396,7 @@ class FeatureSettings {
         },
         'footer': footer.toMap(),
         'heroMotion': heroMotion,
+        'heroSeasonTint': heroSeasonTint,
         'heroShowAddress': heroShowAddress,
         'imageStyles': {for (final c in ImageStyles.collections) if (imageStyles[c] != null) c: imageStyles[c]},
         'dailyVerse': dailyVerse.toMap(),
@@ -412,6 +421,7 @@ class FeatureSettings {
     Map<String, PageCustom>? pageHeaders,
     FooterConfig? footer,
     bool? heroMotion,
+    bool? heroSeasonTint,
     bool? heroShowAddress,
     Map<String, String>? imageStyles,
     DailyVerseConfig? dailyVerse,
@@ -434,6 +444,7 @@ class FeatureSettings {
         pageHeaders: pageHeaders ?? this.pageHeaders,
         footer: footer ?? this.footer,
         heroMotion: heroMotion ?? this.heroMotion,
+        heroSeasonTint: heroSeasonTint ?? this.heroSeasonTint,
         heroShowAddress: heroShowAddress ?? this.heroShowAddress,
         imageStyles: imageStyles ?? this.imageStyles,
         dailyVerse: dailyVerse ?? this.dailyVerse,
@@ -476,6 +487,8 @@ class FeatureSettings {
       pageHeaders: pageHeaders,
       footer: footer,
       heroMotion: p.has(PresetOption.heroMotionOff) ? (p.prevBool(PresetPrev.heroMotion) ?? true) : heroMotion,
+      // Kept as stored: the preset never touches it (CodeRabbit on PR #45).
+      heroSeasonTint: heroSeasonTint,
       heroShowAddress: heroShowAddress,
       imageStyles: imageStyles,
       dailyVerse: dailyVerse,

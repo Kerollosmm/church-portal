@@ -165,6 +165,7 @@ Existence of `settings/church` = "database is seeded" (see `03-architecture.md`)
 | `homeHidden` | list of block keys | unknown keys dropped |
 | `heroTitleAr/En` | string ≤ 200 | empty → church name |
 | `heroSubtitleAr/En` | string ≤ 300 | empty → no ribbon (or the address when `heroShowAddress`) |
+| `heroSeasonTint` | bool, default **true** (ADR-050) | season theme's colour wash over the hero painting (occasion themes only); written only once off or already stored |
 | `heroShowAddress` | bool, default false (PR #22) | address ribbon in the hero when no subtitle; written only once on or already stored |
 | `errorReporting` | bool, default **true** (PR #24, ADR-034) | error reports to Sentry from the web / Android app; off = nothing is sent (`ErrorReportingGate`, SDK closed). Written only once off or already stored; seeded `true` |
 | `bannerEnabled` | bool | false |
@@ -263,6 +264,7 @@ cover — Holy Week, Pascha, Nativity; `false` = ADDITIVE evening revival, regul
 | `end` | "HH:mm" or '' | may be ≤ start = crosses midnight; missing end → start + 120 min |
 | `placeAr/En`, `audienceAr/En` | string ≤300 | |
 | `seasonKey` | season key or null | null = regular schedule. Keys: holy_week, pascha, nativity, epiphany, marian, fast (the last three ADR-043), revival_maximus, revival_moses, summer, apostles, nayrouz, kiahk, great_lent (ADR-051). An undated seasonal service does not occur on a day its schedule-replacing season has dated services (ADR-043) |
+| `replacesDay` | bool, missing = false (ADR-050) | seasonal feast liturgy in an ADDITIVE season: hides every regular mass of its day (off: only the overlapping ones). Rules: `optBool` |
 | `order`, `visible`, `sample` | | |
 Seed: 47 docs, all `sample: true` (ids like `fri-1`, `sun-youth`, `sat-vespers`, `nat-eve`, `rev-max-1…7`,
 `rev-max-feast`, `hw-day-1…3`, `hw-eve-1…3`, `hw-palm`, `hw-thursday`, `hw-friday`, `hw-saturday`, `pascha-eve`,

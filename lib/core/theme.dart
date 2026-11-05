@@ -235,6 +235,23 @@ class OccasionColors extends ThemeExtension<OccasionColors> {
   /// Dark scenes dim the golden art to a sombre grey (null = unchanged).
   ColorFilter? get artFilter => dark ? kSombreArtFilter : null;
 
+  /// Season wash over the hero painting (ADR-050, issue 19): top-down from
+  /// the theme's [primary] to its [background], fading out before the
+  /// bottom, so a Marian-blue / ash / festive theme reaches the golden art.
+  /// Null on the Golden-hour scene (and its accent-only colour presets) and
+  /// on dark themes, which already dim the art ([artFilter]). Palette roles
+  /// only, never a fixed colour.
+  List<Color>? get heroTint {
+    if (dark || key == ThemePresets.goldenHour || !ThemePresets.occasions.contains(key)) return null;
+    return [primary.withValues(alpha: heroTintTop), background.withValues(alpha: heroTintMid), background.withValues(alpha: 0)];
+  }
+
+  /// Alphas of [heroTint] at the top and the middle of the stage.
+  static const double heroTintTop = 0.22, heroTintMid = 0.14;
+
+  /// Stops of [heroTint].
+  List<double> get heroTintStops => const [0, 0.5, 0.92];
+
   /// The same for platform views (the web hero video).
   String get artCssFilter => dark ? 'grayscale(1) brightness(0.42)' : 'none';
 

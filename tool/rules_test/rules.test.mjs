@@ -917,6 +917,31 @@ describe('ADR-022: hero motion & video switch (settings/features.heroMotion)', (
   });
 });
 
+describe('ADR-050: liturgies.replacesDay and settings/features.heroSeasonTint', () => {
+  test('a liturgy may carry replacesDay as a bool only', async () => {
+    const ed = db(EDITOR);
+    const base = { type: 'mass', nameAr: 'قداس العيد', date: Timestamp.fromDate(new Date('2027-08-22T00:00:00Z')),
+      start: '10:00', end: '12:30', seasonKey: 'marian' };
+    await assertSucceeds(setDoc(doc(ed, 'liturgies', 'feast'), { ...base, replacesDay: true }));
+    await assertSucceeds(setDoc(doc(ed, 'liturgies', 'feast2'), base)); // absent = false
+    await assertSucceeds(updateDoc(doc(ed, 'liturgies', 'feast'), { replacesDay: false }));
+    for (const v of ['yes', 1, null, { on: true }]) {
+      await assertFails(setDoc(doc(ed, 'liturgies', 'feast3'), { ...base, replacesDay: v }), JSON.stringify(v));
+    }
+    await assertFails(setDoc(doc(db(null), 'liturgies', 'feast4'), { ...base, replacesDay: true }));
+  });
+
+  test('heroSeasonTint is a bool; visitors cannot change it', async () => {
+    const ref = doc(db(EDITOR), 'settings', 'features');
+    await assertSucceeds(setDoc(ref, { theme: 'marian', heroSeasonTint: false }));
+    await assertSucceeds(setDoc(ref, { theme: 'marian', heroSeasonTint: true }));
+    for (const v of ['off', 0, null, { on: true }]) {
+      await assertFails(setDoc(ref, { heroSeasonTint: v }), JSON.stringify(v));
+    }
+    await assertFails(setDoc(doc(db(null), 'settings', 'features'), { heroSeasonTint: false }));
+  });
+});
+
 describe('Hero address ribbon switch (settings/features.heroShowAddress)', () => {
   test('admins switch the address ribbon on and off; only a bool is accepted', async () => {
     const ref = doc(db(EDITOR), 'settings', 'features');

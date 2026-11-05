@@ -511,6 +511,16 @@ const adminCollections = <CollectionDef>[
     FieldDef('audienceEn', 'الفئة/ملاحظات (إنجليزي)', 'Audience/notes (English)', FieldType.text),
     FieldDef('seasonKey', 'الموسم (فارغ = الجدول العادي)', 'Season (empty = regular)', FieldType.choice,
         options: seasonKeys, nullableChoice: true),
+    // ADR-050: in an additive season a seasonal mass hides only the regular
+    // masses at the same time; a feast liturgy can hide all of that day's.
+    FieldDef('replacesDay', 'يحل محل قداسات اليوم المعتادة (قداس العيد)', "Replaces the day's regular masses (feast liturgy)",
+        FieldType.boolean,
+        newBool: false,
+        hintAr: 'للخدمات الموسمية فقط. اتركها غير مفعّلة ليبقى القداس المعتاد في وقته (مثل قداس الصباح مع قداس صوم الظهر)؛ '
+            'فعّلها لقداس عيد يُلغي كل قداسات ذلك اليوم المعتادة في موسم لا يستبدل الجدول العادي.',
+        hintEn: 'Seasonal services only. Leave it off to keep the regular mass at its own time (e.g. the morning mass beside a '
+            'midday fast liturgy); tick it for a feast liturgy that cancels every regular mass that day in a season that does '
+            'not replace the regular schedule.'),
     _orderField,
     _visibleField,
     _sampleField,

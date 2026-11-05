@@ -264,6 +264,7 @@ class _Hero extends ConsumerWidget {
             image: narrow ? ArtAssets.heroTall : ArtAssets.heroWide,
             alignment: Alignment.bottomCenter,
             motion: f.heroMotion,
+            tint: f.heroSeasonTint,
             // Phones get the portrait centre crop (the church stays centred).
             video: narrow ? ArtAssets.heroVideoTall : ArtAssets.heroVideo,
             poster: narrow ? ArtAssets.heroPosterTall : ArtAssets.heroPoster,

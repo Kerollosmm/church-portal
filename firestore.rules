@@ -405,8 +405,11 @@ service cloud.firestore {
 
     function validLiturgy(d) {
       return keysAllowed(['type', 'nameAr', 'nameEn', 'weekday', 'date', 'start', 'end', 'placeAr', 'placeEn',
-                          'audienceAr', 'audienceEn', 'seasonKey'].concat(meta()).concat(programKeys()))
+                          'audienceAr', 'audienceEn', 'seasonKey',
+                          'replacesDay'].concat(meta()).concat(programKeys()))
         && validProgram(d, changedKeys(d))
+        // ADR-050: a feast liturgy that replaces the day's regular masses.
+        && optBool(d, 'replacesDay')
         && optIn(d, 'type', ['mass', 'vespers', 'praise', 'other'])
         && reqString(d, 'nameAr', 300) && optString(d, 'nameEn', 300)
         && optInt(d, 'weekday', 1, 7) && optTimestamp(d, 'date')
@@ -644,6 +647,7 @@ service cloud.firestore {
                           'heroVideos', 'errorReporting', 'copticStrip', 'dayStartMode', 'dayStartsAt', 'topEvent',
                           'commemoration', 'topEventServices', 'liveEnabled', 'liveUrl', 'liveLabelAr', 'liveLabelEn', 'liveEndsAt',
                           'liveBadgeHideOnHome', 'dayEvents', 'venues', 'audiences', 'seasonVerses', 'seasonPreset', 'weddingBookingOff',
+                          'heroSeasonTint',
                           'updatedAt', 'updatedBy'])
         && (!('sections' in changed) || !('sections' in d) || validSections(d.sections))
         && (!('homeOrder' in changed) || !('homeOrder' in d) || (d.homeOrder is list && d.homeOrder.size() <= 7
@@ -664,8 +668,10 @@ service cloud.firestore {
         && (!('themeColors' in changed) || !('themeColors' in d) || validThemeColors(d.themeColors))
         && (!('heroVideos' in changed) || !('heroVideos' in d) || validHeroVideos(d.heroVideos))
         && (!('footer' in changed) || !('footer' in d) || validFooter(d.footer))
-        // Hero motion & video switch (ADR-022): a bool, default on.
-        && (!('heroMotion' in changed) || d.get('heroMotion', true) is bool)
+        // Hero motion & video switch (ADR-022) and the season colour wash over the hero painting (ADR-050):
+        // bools, default on; one check so an unchanged pair costs no more expressions than before.
+        && (!changed.hasAny(['heroMotion', 'heroSeasonTint'])
+            || (d.get('heroMotion', true) is bool && d.get('heroSeasonTint', true) is bool))
         // Address ribbon in the hero: a bool, default off.
         && (!('heroShowAddress' in changed) || d.get('heroShowAddress', false) is bool)
         // Error reports to Sentry (ADR-034): a bool, default on.

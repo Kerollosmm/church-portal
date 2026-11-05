@@ -1,7 +1,7 @@
 # 11 — Open tasks
 
 Tick items off (or delete them) in the PR that completes them, and add new ones as you discover them.
-Status as of 5 Nov 2026 (PR-B / ADR-051; PR #42 / ADR-049; PR #40 / ADR-047; PR #39 / ADR-046; PR #38 / ADR-045; PR #35 / ADR-044; PR #37 / ADR-043; PR #33 / ADR-042; PR #32 / ADR-041; PR #31 / ADR-039–040; PR #30 / ADR-038; PR #25 re-checked against `d60261d`; earlier: PR #7–#24).
+Status as of 5 Nov 2026 (PR #44 / ADR-051; PR #45 / ADR-050; PR #42 / ADR-049; PR #40 / ADR-047; PR #39 / ADR-046; PR #38 / ADR-045; PR #35 / ADR-044; PR #37 / ADR-043; PR #33 / ADR-042; PR #32 / ADR-041; PR #31 / ADR-039–040; PR #30 / ADR-038; PR #25 re-checked against `d60261d`; earlier: PR #7–#24).
 
 ## Top open items (owner's list, 4 Nov 2026 — details in the sections below)
 
@@ -35,7 +35,18 @@ Status as of 5 Nov 2026 (PR-B / ADR-051; PR #42 / ADR-049; PR #40 / ADR-047; PR 
     16:10 UTC) and optionally cap kept Hosting versions (Firebase console → Hosting → release storage) since the
     workflow publishes twice a day.
 
-11. **Seasons v2 follow-ups (ADR-051, PR-B)** — done in code: season keys `apostles` / `nayrouz` (+ Cross) / `kiahk` /
+11. **Seasons v2 fixes A (PR #45, ADR-050) — owner decisions on live data (nothing was written):** (a) placeholder
+    text «في انتظار تأكيد الكنيسة» / «(لم يُؤكَّد …)» is now hidden on display; clear it in /admin if live still stores
+    it: `facilities/nursery`, `employment`, `library` (`descAr/En`), `priests/bigol`, `saleeb`, `barnaba` (`bioAr/En`,
+    if those docs exist live); `activities/davids-tones`, `hymns-school` (`descAr/En`): drop «شريك» / "partner" if
+    live says it, the affiliation caveat stays; (b) seed samples `hw-palm`,
+    `hw-thursday`, `hw-friday`, `hw-saturday`, `pascha-eve`, `pascha-day` and the templates `hw-day-*`, `hw-eve-*`,
+    `rev-max-*`, `rev-moses-*` still show in a season with no real service — enter the real programme or hide them;
+    (c) after deploy, set `milestones/pope-visit.gallery[3].url` to
+    `https://maximos-domadios-church.web.app/media/milestones/pope-visit-gallery5.webp` (prepared in
+    `work/fixall/live-gallery3.json`, 1 write); (d) tick «يحل محل قداسات اليوم المعتادة» on feast liturgies of additive
+    seasons that should cancel the day's regular masses.
+12. **Seasons v2 follow-ups (ADR-051, PR #44)** — done in code: season keys `apostles` / `nayrouz` (+ Cross) / `kiahk` /
     `great_lent`, admin exceptional-quota list, prompt «Church calendar», Arabic digits in the limit message, /ask
     greeting / chips skip hidden sections, tonight's live end, `replaceDates`, fast presets without weddings, Holy Week
     day names, EN live label. **Owner:** re-key the 2027 season docs that used `fast` / `pascha` as stand-ins (Great
