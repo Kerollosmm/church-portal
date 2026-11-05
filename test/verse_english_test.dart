@@ -13,6 +13,8 @@ import 'package:church_portal/domain/season_verses.dart';
 import 'package:church_portal/router.dart';
 import 'package:church_portal/state/providers.dart';
 import 'package:church_portal/ui/admin/admin_schema.dart';
+import 'package:church_portal/ui/pages/home_page.dart' show HaloText;
+import 'package:crypto/crypto.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
@@ -59,6 +61,15 @@ void main() {
         expect(v.textEn, isNot(matches(RegExp(r'[\u0600-\u06FF]'))), reason: v.refEn);
         expect(v.textEn, isNot(contains('Yahweh')), reason: 'British Edition says "the LORD": ${v.refEn}');
       }
+      // Selection, order and Arabic pinned: SHA-256 over ref␟refAr␟refEn␟textAr of every verse in
+      // array order (verses joined by ␞), equal to the asset on main before ADR-047 (af8c917).
+      final raw = (meta['verses'] as List).cast<Map<String, dynamic>>();
+      final pinned = raw
+          .map((v) => ['ref', 'refAr', 'refEn', 'textAr'].map((k) => (v[k] ?? '') as String).join('\x1f'))
+          .join('\x1e');
+      expect(sha256.convert(utf8.encode(pinned)).toString(),
+          'ed2953e8df6bc2df3e52cafd12ad19ff3be7c5858ba34e58aec66c2c72ce33f1',
+          reason: 'a change to the verse selection, order or Arabic text needs an explicit review');
       final john = _verses.firstWhere((v) => v.refEn == 'John 3:16');
       expect(john.textEn, startsWith('For God so loved the world'));
       expect(john.refAr, 'يوحنا ٣: ١٦');
@@ -161,6 +172,8 @@ void main() {
       expect(find.text('“${v.textEn}”'), findsOneWidget);
       expect(find.text(v.refEn), findsOneWidget);
       expect(find.text('« ${v.textAr} »'), findsNothing);
+      expect(tester.widget<HaloText>(find.byKey(const Key('dailyVerseText'))).textDirection, TextDirection.ltr);
+      expect(tester.widget<HaloText>(find.byKey(const Key('dailyVerseRef'))).textDirection, TextDirection.ltr);
     });
 
     testWidgets('Arabic site: unchanged Arabic verse and reference', (tester) async {
