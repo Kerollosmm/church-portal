@@ -320,6 +320,14 @@ void main() {
         {'gallery': [img]},
         {'extraFields': [row]},
       ]);
+      // Today form (ADR-044): 20 church events go after the other Today keys.
+      expect(splitSavePayload({'liveEnabled': true, 'dayEvents': ['e'], 'liveBadgeHideOnHome': false}), [
+        {'liveEnabled': true, 'liveBadgeHideOnHome': false},
+        {'dayEvents': ['e']},
+      ]);
+      expect(splitSavePayload({'liveEnabled': false, 'dayEvents': []}), [
+        {'liveEnabled': false, 'dayEvents': []}
+      ]);
       // Empty or cleared lists cost almost nothing: they stay in the first write.
       expect(splitSavePayload({'nameAr': 'x', 'gallery': [], 'extraFields': null}), [
         {'nameAr': 'x', 'gallery': [], 'extraFields': null}

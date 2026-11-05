@@ -1027,6 +1027,68 @@ supersede them.
   `test/holy_week_fixes_test.dart` (B1–B5, alias), rules group "ADR-043". Before / after renders of Holy Week, fasting,
   golden hour, resurrection and nativity at 390 px Arabic were checked by eye (no violet pixels after).
 
+## ADR-044 (PR #35) — Liturgical web loading screen and a top utility bar (Coptic date + live badge) on the palette
+
+(PR #35 first called itself ADR-043; PR #37 merged first with that number, so this is ADR-044.)
+
+- **Context:**
+  1. The ADR-037 first paint (a static copy of the hero: poster + church name + spinner) did not read as a church
+     loading screen, and the owner wanted a calmer, liturgical identity while Flutter and the first Firestore data load.
+  2. The Coptic date strip (ADR-039) sat inside the body column under the app bar and crowded the home hero title.
+  3. While the church streams, visitors should see a small, persistent live indicator on every page.
+  4. ADR-043 (PR #37) requires every UI colour to come from the occasion palette (test bans hard-coded colours in
+     `lib/ui`), so Holy Week turns the whole shell charcoal.
+- **Decision:**
+  1. **Loading screen (`web/index.html`):** cream `#FBF3E4` (= `manifest.json` `background_color`), the parish seal
+     (`assets/assets/branding/seal.png` — the same 27 KB file `ChurchSeal` loads, so it is downloaded once; decorative
+     `alt=""` because the name follows), church name in Lalezar maroon `#6E1C1C`, a 220×4 px gold track with a shimmer
+     bar. Pulse and shimmer animate `transform` only, the final fade `opacity` (both composited); a static drop-shadow. A visually hidden `role="status"`
+     «جارٍ التحميل…» keeps the loading announcement; `splashFailed()` replaces the track with the reload message.
+     Hero posters stay preloaded (and referenced by a hidden `<img>`) so the Flutter hero paints from cache. Dismissal
+     unchanged (ADR-038: `app-content-ready`, ≤ 9 s after the first frame), 0.6 s fade, then removed; reduced motion
+     stops both animations. The static HTML cannot know the occasion theme (cream on every theme).
+  2. **Top utility bar (`TopUtilityBar` in `today_widgets.dart`, alias `CopticDateStrip`):** above the `AppBar` inside
+     the shell's `PreferredSize`; title-band roles from the palette (`barGradient`, `onBar`, `onBarAccent`,
+     `barEdge` / `ornamentLine`); 32 px at 100 % text, grows to 44 px with text capped at 1.6× (`heightFor`) instead
+     of clipping; the date is `Expanded` and the live badge keeps its own width (≤ 150 px, ellipsis) — Sentry review.
+     Live badge (`topBarLiveBadge`): theme `live` / `onLive`, 7 px pulse dot, admin live label or «مباشر» / "Live"
+     (new l10n `liveBadge`), tap opens the stream. The bar shows when the date is shown on this page
+     (`copticStrip`) or while live.
+  3. **AppShell:** strip removed from the body column; the status-bar inset above the bar is `pal.bar`; the seal tab
+     moves down by the bar height; the shell watches the clock via `nowProvider.select(liveBadgeOn)` so it rebuilds
+     only when the bar appears / disappears. `LiveStreamBanner` stays under the app bar on every page.
+  5. **Live on Home vs other pages (owner decision, 5 Nov):** on Home (`/`) only the red `LiveStreamBanner` (with its
+     «شاهد البث» button) shows; the top-bar badge hides there while the banner shows. Every other page shows the badge
+     (plus the banner). The badge is a button for touch, keyboard (focusable `InkWell`, Enter / Space) and screen
+     readers (label «<live label> — شاهد البث», tap action) and opens `liveUrl` exactly like the banner.
+     `TodaySettings.liveBadgeOn(now, location)` = `liveOn(now) && !(liveBadgeHideOnHome && location == '/')`, used by
+     both `TopUtilityBar` and `AppShell` (no empty bar on Home when the date is off). Admin switch in «اليوم والبث
+     المباشر»: «إخفاء شارة البث في الرئيسية عند ظهور الشريط» = `settings/features.liveBadgeHideOnHome` (bool, missing =
+     on; off = Home shows both). Rules: the key is allowed and checked with `optBool` inside the existing live gate
+     (`changed.hasAny([... 'liveBadgeHideOnHome'])`), +2 expressions only when a live key changes. Budget check found a
+     latent limit (already on main): 20 church events with end dates plus any other changed Today key in **one** write
+     exceed the 1,000 expressions, so the editor's save would fail. Fix: `dayEvents` joins `separatelySavedKeys`
+     (`splitSavePayload`: the other Today keys first, then the events in their own write); the emulator test saves the
+     whole form that way and shows the single write fails.
+  4. **Review fixes on merge (5 Nov):** hard-coded `#3B0A0A` / gold / white / red replaced by palette roles (would
+     fail ADR-043's test and stay burgundy on Holy Week); `HaloText` outline back to 2.5 px (the 3.0 px change worked
+     around a Holy Week contrast failure that ADR-043's palette already fixes; tests pass at 2.5); the
+     `SynaxariumSource` fallback to the live URL and the seed-mode fetch on web were removed — the live site sends no
+     `Access-Control-Allow-Origin`, so a browser on another origin can never read it (and preview channels already
+     serve their own `/data/today.json`); `Icon-192.png` (57 KB, preloaded) replaced by the shared 27 KB seal.
+     Sentry review on `5398d91`: with the bar shown, the AppBar's `systemOverlayStyle` region sits below the status
+     bar, so the icons over the dark band were left to the platform default — the band now carries its own
+     `AnnotatedRegion<SystemUiOverlayStyle>` (`statusBarStyleOn(pal.bar)`: light icons on a dark band; native / PWA).
+- **Cost:** +0 Firestore reads, +0 listeners, +0 writes, no new collection (reuses `todaySettingsProvider` and
+  `nowProvider`; the badge switch is one more key in `settings/features`). First
+  paint: −the visible poster (LCP is now the name / seal, painted with the first frame of HTML), seal shared with the app.
+- **Tests:** `test/pagespeed_test.dart` (seal path / alt / size, no `Icon-192`, status text, only composited
+  properties in keyframes, manifest colour), `test/today_widgets_test.dart` (32 px, badge tap, 320 px / long label,
+  200 % text grows to 44 px, palette roles + contrast on Golden hour and Holy Week, date width next to the badge,
+  AppShell placement and seal offset, landscape insets; Home shows only the banner, other pages show the badge, badge
+  tap / Tab+Enter / semantics open the stream, switch off shows both, no empty bar on Home with the date off),
+  `tool/rules_test/rules.test.mjs` (`liveBadgeHideOnHome` bool accepted / non-bool rejected; whole Today form in one write).
+
 ## Timeline
 
 | When | PR / commit | What |
@@ -1076,5 +1138,6 @@ supersede them.
 | 4 Nov 2026 | **PR #33** — "Season presets, season verses, assistant season limit, hero v2" (`feat/season-presets`) | ADR-042: `season_preset.dart` + /admin «تجهيز الموسم» (apply / restore in one transaction, auto-revert at the season end without a write), `season_verses.dart` + «آيات المواسم» in «إعدادات المواسم», assistant `perDaySeason` / section-aware topics / current season in the prompt, `weddingBookingOff`, hero v2 9 s loops + posters, `AdminBackend.saveDocs` / `saveDocsFresh`; `test/season_preset_test.dart`, rules group. |
 | 5 Nov 2026 | **PR #37** — "Occasion sub-themes follow the season; no violet; Holy Week fixes" (`fix/occasion-themes-holy-week`) | ADR-043: Holy Week charcoal / ashen silver / crimson, fasts ash / stone / oxblood, legacy `purple` → oxblood (hidden), every widget on palette roles + scene accents and the Material scheme filled from the palette (test bans hard-coded colours), theme follows the active season (`occasions.followSeason` + `seasonThemes`; admin range > season > Easter > selected), preset item «ثيم الموسم» + `startsAt`, season keys epiphany / marian / fast, Holy Week sim fixes B1–B5 (B4 per day) + `kids` alias, rules budget restructure (joined-regex slot check), +1 seasons listener app-wide while following the season. |
 | 5 Nov 2026 | **PR #36** — "Admin: reset the settings form when switching between Today and Season settings" (`seer/fix/admin-season-settings-switch-crash`, opened by Sentry Seer; PR #37 was squash-merged as `644ce8c` and merged into this branch) | Bug fix for Sentry CHURCH-PORTAL-9: both menu entries edit `settings/features` with different fields; the dashboard reused one unkeyed `ChurchInfoScreen` and `didUpdateWidget` compared only `doc.path`, so «إعدادات المواسم» read Today's `DocEditor` state and crashed on `_rows['venues']!`. Fix: per-section `ValueKey`s + rebuild when the `DocDef` changes. Regression tests: screen-level swap and a dashboard navigation test (both fail on `main` without the fix). No data, rules or listener change; no ADR (bug fix). |
+| 5 Nov 2026 | **PR #35** — "Liturgical web loading screen, top utility bar with live badge, app shell cleanup" (`feat/redesign-splash-top-bar`; PR #37 (`644ce8c`) and PR #36 (`98dc546`) were squash-merged and merged into this branch) | ADR-044 (renumbered from ADR-043): cream loading screen with the app's 27 KB seal, Lalezar name and a composited gold track (`web/index.html`); `TopUtilityBar` (alias `CopticDateStrip`) above the app bar on the palette's title band with the Coptic date and a `live`-coloured badge (`topBarLiveBadge`), grows with text; seal tab offset by the bar height; while live Home shows only the red banner and other pages the tappable badge (admin switch `liveBadgeHideOnHome`, default on); merge fixes: palette roles instead of hard-coded colours, `HaloText` back to 2.5 px, synaxarium live-URL fallback removed (no CORS on live); tests `pagespeed_test.dart`, `today_widgets_test.dart`. Not merged until the owner approves the visuals. |
 
 Append new PRs to this table.

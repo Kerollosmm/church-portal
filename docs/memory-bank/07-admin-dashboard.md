@@ -177,7 +177,11 @@ Generic form over the today keys of `settings/features` (writes only changed key
 Sections & home page editor and vice versa): Coptic date strip (every page / Home only / off), start of the
 liturgical day (fixed time — default 18:00 — or sunset at the church), the fixed time, Home "Today's event" card,
 automatic feast / commemoration (Katameros), church events by date (≤ 20 rows: date, until, from / to, titles,
-speaker, topic, note, link), live-stream banner switch, stream link, banner texts, automatic switch-off.
+speaker, topic, note, link), live-stream banner switch, stream link, banner texts, automatic switch-off, and (PR #35,
+ADR-044) «إخفاء شارة البث في الرئيسية عند ظهور الشريط» / "Hide the live badge on Home while the banner shows"
+(`liveBadgeHideOnHome`, `missingBool`/`newBool` true). Since PR #35 a non-empty `dayEvents` list is saved in its own
+write after the other keys (`separatelySavedKeys`; 20 events plus another Today key exceed the rules' 1,000-expression
+budget in one write).
 
 ### Church info (`ChurchInfoScreen`) → `settings/church`
 (`ChurchInfoScreen` takes a `DocDef doc` — default `churchInfoDoc` — and an optional `header`; PR #19 reuses it for

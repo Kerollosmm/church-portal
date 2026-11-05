@@ -1489,8 +1489,12 @@ describe('ADR-039 / ADR-040: today layer in settings/features (strip, day start,
     await assertSucceeds(setDoc(ref, { theme: 'burgundy', liveEnabled: true, liveUrl: 'https://www.youtube.com/live/abc',
       liveLabelAr: 'بث مباشر الآن من الكنيسة', liveLabelEn: '', liveEndsAt: Timestamp.fromDate(new Date('2026-11-04T20:00:00Z')) }));
     await assertSucceeds(updateDoc(ref, { liveEnabled: false, liveEndsAt: null, liveUrl: '' }));
+    // ADR-044: hide the top-bar badge on Home while the banner shows (bool, default on).
+    await assertSucceeds(updateDoc(ref, { liveBadgeHideOnHome: false }));
+    await assertSucceeds(updateDoc(ref, { liveBadgeHideOnHome: true, liveEnabled: true }));
     for (const bad of [{ liveEnabled: 'on' }, { liveUrl: 'javascript:alert(1)' }, { liveUrl: 'ftp://x.y/z' },
-      { liveLabelAr: 'x'.repeat(121) }, { liveEndsAt: '2026-11-04' }]) {
+      { liveLabelAr: 'x'.repeat(121) }, { liveEndsAt: '2026-11-04' }, { liveBadgeHideOnHome: 'yes' },
+      { liveBadgeHideOnHome: 1 }]) {
       await assertFails(updateDoc(ref, bad), JSON.stringify(bad).slice(0, 60));
     }
   });
@@ -1504,6 +1508,19 @@ describe('ADR-039 / ADR-040: today layer in settings/features (strip, day start,
     // Same-day and later end dates; 20 events with end dates stay within the expression budget.
     await assertSucceeds(updateDoc(ref, { dayEvents: [ev({ endDate: '2026-11-04' }), ev({ date: '2026-12-31', endDate: '2027-01-01' })] }));
     await assertSucceeds(updateDoc(ref, { dayEvents: Array.from({ length: 20 }, () => ev({ endDate: '2026-11-30', link: 'https://fb.com/x' })) }));
+    // The whole «اليوم والبث المباشر» form as the editor saves it (splitSavePayload, ADR-044):
+    // every other Today key in one write (the badge switch included), then 20 events with end dates.
+    const todayKeys = { copticStrip: 'home', dayStartMode: 'sunset', dayStartsAt: '18:30', topEvent: false,
+      commemoration: false, liveEnabled: true, liveUrl: 'https://www.youtube.com/live/abc', liveLabelAr: 'x'.repeat(120),
+      liveLabelEn: 'y'.repeat(120), liveEndsAt: Timestamp.fromDate(new Date('2026-11-04T20:00:00Z')), liveBadgeHideOnHome: false };
+    const fullEvents = Array.from({ length: 20 }, () => ev({ endDate: '2026-12-30', link: 'https://fb.com/y' }));
+    // Stamped like AdminRepository.saveDoc (updatedAt = request time, updatedBy = the admin's email): the production shape.
+    const stamp = () => ({ updatedAt: serverTimestamp(), updatedBy: `${EDITOR}@x.test` });
+    await assertSucceeds(updateDoc(ref, { ...todayKeys, ...stamp() }));
+    await assertSucceeds(updateDoc(ref, { dayEvents: fullEvents, ...stamp() }));
+    // Why the editor splits: 20 events plus another changed Today key in one write exceed the 1,000 expressions.
+    await assertFails(updateDoc(ref, { liveEnabled: false, ...stamp(),
+      dayEvents: fullEvents.map((e) => e.replace('2026-12-30', '2026-12-29')) }));
     for (const bad of [
       [ev({ titleAr: '' })], [ev({ date: '4-11-2026' })], [ev({ start: '7pm' })], [ev({ link: 'javascript:x' })],
       [ev({ noteAr: 'x'.repeat(501) })], [ev() + S + 'extra'], [5], Array.from({ length: 21 }, () => ev()),

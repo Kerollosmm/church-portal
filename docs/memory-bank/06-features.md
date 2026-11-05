@@ -60,20 +60,43 @@ render with `PageBody` (+ `Footer`). Content comes from Riverpod providers (hidd
   (ADR-036, owner request 4 Nov 2026)**; a `heroVideos` map already stored in `settings/features` is ignored.
 - **Hero ambient motion on web (ADR-037, PR #29):** the haze drift and light-ray shimmer look exactly as before but
   run as a CSS-animated DOM layer (`HeroAmbientLayer`) instead of a per-frame Flutter repaint; the first paint is a
-  static copy of the hero (poster + church name) in `web/index.html`. See `documentation/features/performance-pagespeed.md`.
-- **Loading screen until real content (ADR-038, PR #30):** that static copy now stays over the app until the first
-  settings/church + settings/features + hero verse list have arrived and been painted (`app-content-ready` from
-  `lib/core/content_ready.dart`; at most 9 s after Flutter's first frame), so the default layout never flashes. The
-  hero `<video>` source and the CSS haze / ray layer start only when the page is idle afterwards (`ContentReady.whenIdle`);
-  they fade in, the poster stays the LCP element and the final look is unchanged.
+  run as a CSS-animated DOM layer (`HeroAmbientLayer`) instead of a per-frame Flutter repaint; see `documentation/features/performance-pagespeed.md`.
+- **Liturgical web loading screen (ADR-044, PR #35; replaces the ADR-037 static hero copy):** `web/index.html` shows,
+  on the cream `#FBF3E4` ground (= `manifest.json` `background_color`), the parish seal (`assets/assets/branding/seal.png`,
+  the same 27 KB file the app's `ChurchSeal` loads, 104 px, decorative `alt=""`) with a slow scale pulse, the church
+  name in Lalezar maroon `#6E1C1C` (28 / 36 / 42 px), and a 220×4 px gold track with a shimmer bar. Pulse and shimmer animate only
+  `transform`, the fade `opacity` (composited; `test/pagespeed_test.dart` bans `left` / `filter` / `width` in keyframes). A visually hidden
+  `role="status"` «جارٍ التحميل…» keeps the loading announcement; the failure path (30 s / script error) replaces the
+  track with the reload message. The hero posters stay preloaded (plus a hidden `<img>`) so the Flutter hero paints
+  from cache. It stays over the app until `app-content-ready` (ADR-038; ≤ 9 s after Flutter's first frame), then fades
+  out in 0.6 s and is removed. The hero video and CSS ambient layer start once the page is idle (`ContentReady.whenIdle`).
+  The screen is static HTML, so it is always cream / maroon whatever the occasion theme (open question for the owner:
+  Holy Week goes cream → charcoal when the app appears).
 
-### Today layer on every page and Home (PR #31, ADR-039 / ADR-040)
+### Today layer on every page and Home (PR #31, ADR-039 / ADR-040; PR #35, ADR-044)
 
-- **Coptic date strip** (`CopticDateStrip`, top of the shell): the liturgical day in Coptic, «الأربعاء ٢٥ بابه ١٧٤٣ ش»;
-  after the day's start (18:00 by default, or sunset at the church) «ليلة الخميس ٢٦ بابه ١٧٤٣ ش». `copticStrip`:
-  every page / Home only / off. No time-zone label anywhere.
-- **Live banner** (`LiveStreamBanner`): red bar under the strip on every page while `liveEnabled` + an http(s)
-  `liveUrl` and before `liveEndsAt`; pulsing dot (static under reduced motion); tap opens the stream.
+- **Top utility bar & Coptic date** (`TopUtilityBar`, alias `CopticDateStrip`, key `copticDateStrip`; above the
+  `AppBar`, inside the shell's `PreferredSize`): 32 px at 100 % text (grows to 44 px at ≥ 160 %, text capped at
+  1.6× — `TopUtilityBar.heightFor`), on the palette's title band (`barGradient` bar → barDeep, text `onBar`, icon
+  `onBarAccent`, bottom line `barEdge` or `ornamentLine`; ADR-043 roles — maroon on Golden hour, charcoal with a crimson
+  edge on Holy Week). The liturgical day in Coptic, «الأربعاء ٢٥ بابه ١٧٤٣ ش»; after the day's start (18:00 by
+  default, or sunset at the church) «ليلة الخميس ٢٦ بابه ١٧٤٣ ش». `copticStrip`: every page / Home only / off. No
+  time-zone label anywhere. The date takes all the width the badge leaves.
+- **Top bar live badge** (`_LiveBadge`, key `topBarLiveBadge`): while `liveOn(now)`, a pill (≤ 150 px, ellipsis) in the
+  theme's `live` / `onLive` colours with a 7 px pulsing dot and the admin's live label or «مباشر» / "Live"; tap,
+  keyboard (focusable `InkWell`, Enter / Space) and screen readers (button «مباشر — شاهد البث» with a tap action) open
+  the stream (`openUrl(liveUrl)`, the banner's behaviour). **Owner decision (5 Nov):** on **Home** (`/`) only the red
+  banner shows — the badge hides while the banner shows (`TodaySettings.liveBadgeOn(now, location)`, switch
+  `liveBadgeHideOnHome`, default on; off = Home shows both). Every other page shows the badge. The bar also appears
+  with only the badge when `copticStrip` hides the date on that page, and disappears on Home when the date is off and
+  the badge is hidden.
+- **AppShell**: the bar is no longer in the body column. The status-bar inset above it takes `pal.bar` (status-bar
+  icons from `statusBarStyleOn(pal.bar)` — light on the dark band); the hanging
+  seal tab moves down by the bar's height. The shell watches the clock through `select` (rebuilds only when the bar
+  appears / disappears). +0 reads, +0 listeners.
+- **Live banner** (`LiveStreamBanner`): red bar under the AppBar on every page while `liveEnabled` + an http(s)
+  `liveUrl` and before `liveEndsAt`; pulsing dot (static under reduced motion); «شاهد البث» pill; tap opens the stream.
+  On Home it is the only live indicator (ADR-044 owner decision, above).
 - **Top event card** (`TopEventCard`, first on Home): «حدث اليوم» = an admin church event (`dayEvents`) covering today
   and not ended (on the eve: the next liturgical day's event) with times, speaker, topic, note, link; else
   «عيد اليوم» / «تذكار اليوم» from `/data/today.json` (Katameros, credited) for the liturgical day; else the computed

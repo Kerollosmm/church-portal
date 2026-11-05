@@ -9,45 +9,148 @@ import '../../domain/today.dart';
 import '../../state/providers.dart';
 import 'common.dart';
 
-/// Top strip with the Coptic date of the liturgical day (ADR-039), e.g.
-/// «الأربعاء ٢٥ بابه ١٧٤٣ ش»; after the day's start «ليلة الخميس …».
-/// Shown on every page or on Home only (settings/features.copticStrip).
-class CopticDateStrip extends ConsumerWidget {
+/// Top utility bar above the app bar (ADR-044): the Coptic date of the
+/// liturgical day (ADR-039) at the start and, while the church is streaming
+/// (ADR-040), a compact live badge at the end. Every colour comes from the
+/// occasion palette (ADR-043): the title-band roles ([OccasionColors.bar],
+/// [OccasionColors.onBar]) and the live roles, so Holy Week turns it charcoal
+/// with a crimson badge like the rest of the site.
+/// Shown on every page or on Home only (settings/features.copticStrip); the
+/// badge follows the live switch (settings/features.live*), except on Home
+/// where the red [LiveStreamBanner] already carries «شاهد البث»: there it
+/// hides while the banner shows (settings/features.liveBadgeHideOnHome,
+/// default on). The badge opens the stream like the banner's button.
+class TopUtilityBar extends ConsumerWidget {
   final String location;
-  const CopticDateStrip({super.key, required this.location});
+  const TopUtilityBar({super.key, required this.location});
 
   static bool shownOn(String mode, String location) =>
       mode == CopticStripModes.all || (mode == CopticStripModes.home && location == '/');
 
+  /// Text in the bar is capped at this scale; the bar grows with it (never
+  /// clips), so 200 % text stays readable without pushing the page down twice.
+  static const maxTextScale = 1.6;
+
+  /// The bar's height for the visitor's text size: 32 px at 100 %.
+  static double heightFor(BuildContext context) {
+    final scale = MediaQuery.textScalerOf(context).clamp(maxScaleFactor: maxTextScale).scale(13) / 13;
+    return (32.0 + 20.0 * (scale - 1)).clamp(32.0, 32.0 + 20.0 * (maxTextScale - 1)).roundToDouble();
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final mode = ref.watch(todaySettingsProvider.select((t) => t.copticStrip));
-    if (!ref.watch(featuresReadyProvider) || !shownOn(mode, location)) return const SizedBox.shrink();
+    if (!ref.watch(featuresReadyProvider)) return const SizedBox.shrink();
+    final t = ref.watch(todaySettingsProvider);
+    final showDate = shownOn(t.copticStrip, location);
+    final liveActive = ref.watch(nowProvider.select((n) => t.liveBadgeOn(n.value ?? DateTime.now(), location)));
+    if (!showDate && !liveActive) return const SizedBox.shrink();
+
     final day = ref.watch(liturgicalDayProvider);
     final label = day.label(arabic: context.isAr);
-    return Semantics(
-      container: true,
-      label: '${context.tr('copticDate')}: $label',
-      excludeSemantics: true,
+    final pal = context.pal;
+
+    return MediaQuery.withClampedTextScaling(
+      maxScaleFactor: maxTextScale,
       child: Container(
         key: const Key('copticDateStrip'),
         width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+        height: heightFor(context),
+        padding: const EdgeInsets.symmetric(horizontal: 12),
         decoration: BoxDecoration(
-          color: context.pal.surfaceAlt,
-          border: Border(bottom: BorderSide(color: context.pal.hairline)),
+          gradient: pal.barGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter),
+          border: Border(bottom: BorderSide(color: pal.barEdge ?? pal.ornamentLine)),
         ),
-        child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Icon(Icons.event_note_rounded, size: 16, color: context.pal.goldText),
-          const SizedBox(width: 6),
-          Flexible(
-            child: Text(label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: context.pal.ink)),
+        child: Row(
+          children: [
+            // The date takes the free width; the badge keeps its own (≤ 150 px).
+            Expanded(
+              child: showDate
+                  ? Semantics(
+                      container: true,
+                      label: '${context.tr('copticDate')}: $label',
+                      excludeSemantics: true,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.event_note_rounded, size: 14, color: pal.onBarAccent),
+                          const SizedBox(width: 6),
+                          Flexible(
+                            child: Text(
+                              label,
+                              key: const Key('copticDateLabel'),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.center,
+                              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: pal.onBar),
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  : const SizedBox.shrink(),
+            ),
+            if (liveActive) ...[
+              const SizedBox(width: 8),
+              _LiveBadge(settings: t),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Compatibility alias so existing code and tests referring to CopticDateStrip continue working.
+typedef CopticDateStrip = TopUtilityBar;
+
+/// The live badge in [TopUtilityBar]: the admin's live label (or «مباشر»),
+/// ≤ 150 px with an ellipsis, in the theme's live colours.
+class _LiveBadge extends StatelessWidget {
+  final TodaySettings settings;
+  const _LiveBadge({required this.settings});
+
+  @override
+  Widget build(BuildContext context) {
+    final custom = context.pick(settings.liveLabelAr, settings.liveLabelEn).trim();
+    final label = custom.isEmpty ? context.tr('liveBadge') : custom;
+    final red = context.pal.live, onRed = context.pal.onLive;
+    void open() => openUrl(settings.liveUrl);
+    return Semantics(
+      button: true,
+      label: '$label — ${context.tr('watchLive')}',
+      onTap: open,
+      excludeSemantics: true,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          key: const Key('topBarLiveBadge'),
+          onTap: open,
+          borderRadius: BorderRadius.circular(999),
+          child: Container(
+            constraints: const BoxConstraints(maxWidth: 150),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: red,
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(color: onRed.withValues(alpha: 0.4), width: 0.8),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const _PulseDot(size: 7),
+                const SizedBox(width: 5),
+                Flexible(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: onRed, fontWeight: FontWeight.w700, fontSize: 11.5),
+                  ),
+                ),
+              ],
+            ),
           ),
-        ]),
+        ),
       ),
     );
   }
@@ -111,7 +214,8 @@ class LiveStreamBanner extends ConsumerWidget {
 
 /// The pulsing "on air" dot (static when the visitor asked for less motion).
 class _PulseDot extends StatefulWidget {
-  const _PulseDot();
+  final double size;
+  const _PulseDot({this.size = 12});
 
   @override
   State<_PulseDot> createState() => _PulseDotState();
@@ -142,8 +246,8 @@ class _PulseDotState extends State<_PulseDot> with SingleTickerProviderStateMixi
   Widget build(BuildContext context) => FadeTransition(
         opacity: Tween<double>(begin: 0.35, end: 1).animate(_c),
         child: Container(
-          width: 12,
-          height: 12,
+          width: widget.size,
+          height: widget.size,
           decoration: BoxDecoration(color: context.pal.onLive, shape: BoxShape.circle),
         ),
       );

@@ -619,7 +619,7 @@ service cloud.firestore {
                           'pageHeaders', 'footer', 'heroMotion', 'heroShowAddress', 'imageStyles', 'dailyVerse', 'occasions', 'themeColors',
                           'heroVideos', 'errorReporting', 'copticStrip', 'dayStartMode', 'dayStartsAt', 'topEvent',
                           'commemoration', 'liveEnabled', 'liveUrl', 'liveLabelAr', 'liveLabelEn', 'liveEndsAt',
-                          'dayEvents', 'venues', 'audiences', 'seasonVerses', 'seasonPreset', 'weddingBookingOff',
+                          'liveBadgeHideOnHome', 'dayEvents', 'venues', 'audiences', 'seasonVerses', 'seasonPreset', 'weddingBookingOff',
                           'updatedAt', 'updatedBy'])
         && (!('sections' in changed) || !('sections' in d) || validSections(d.sections))
         && (!('homeOrder' in changed) || !('homeOrder' in d) || (d.homeOrder is list && d.homeOrder.size() <= 7
@@ -659,9 +659,10 @@ service cloud.firestore {
         && (!changed.hasAny(['copticStrip', 'dayStartMode', 'dayStartsAt', 'topEvent', 'commemoration'])
             || (optIn(d, 'copticStrip', ['all', 'home', 'off']) && optIn(d, 'dayStartMode', ['fixed', 'sunset'])
                 && optTime(d, 'dayStartsAt') && optBool(d, 'topEvent') && optBool(d, 'commemoration')))
-        && (!changed.hasAny(['liveEnabled', 'liveUrl', 'liveLabelAr', 'liveLabelEn', 'liveEndsAt'])
+        // ADR-044: liveBadgeHideOnHome (bool, default on) rides the same live gate.
+        && (!changed.hasAny(['liveEnabled', 'liveUrl', 'liveLabelAr', 'liveLabelEn', 'liveEndsAt', 'liveBadgeHideOnHome'])
             || (optBool(d, 'liveEnabled') && optHttpUrl(d, 'liveUrl', 500) && str(d, 'liveLabelAr', 120)
-                && str(d, 'liveLabelEn', 120) && optTimestamp(d, 'liveEndsAt')))
+                && str(d, 'liveLabelEn', 120) && optTimestamp(d, 'liveEndsAt') && optBool(d, 'liveBadgeHideOnHome')))
         && (!('dayEvents' in changed) || validDayEvents(d))
         // Programme venues / audiences (ADR-041): up to 12 'key␟labelAr␟labelEn'
         // strings each, checked as one joined string (one regex per list).

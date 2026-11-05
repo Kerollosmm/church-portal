@@ -941,6 +941,12 @@ const todaySettingsDoc = DocDef('settings/features', 'اليوم والبث ال
   FieldDef('liveEndsAt', 'إيقاف تلقائي (اختياري)', 'Switch off automatically at (optional)', FieldType.dateTime,
       hintAr: 'بعد هذا الوقت يختفي الشريط وحده حتى لو بقي المفتاح مفعّلًا.',
       hintEn: 'After this time the banner disappears on its own, even if the switch stays on.'),
+  FieldDef('liveBadgeHideOnHome', 'إخفاء شارة البث في الرئيسية عند ظهور الشريط',
+      'Hide the live badge on Home while the banner shows', FieldType.boolean,
+      missingBool: true,
+      newBool: true,
+      hintAr: 'أثناء البث تظهر في الرئيسية الشريط الأحمر وحده (فيه زر «شاهد البث»)، وفي باقي الصفحات شارة «مباشر» صغيرة أعلى الصفحة تفتح البث. أوقفه لإظهار الاثنين في الرئيسية أيضًا.',
+      hintEn: 'While live, Home shows only the red banner (with its "Watch live" button); every other page shows a small "Live" badge in the top bar that opens the stream. Turn off to show both on Home too.'),
 ]);
 
 const _optionRowFields = [

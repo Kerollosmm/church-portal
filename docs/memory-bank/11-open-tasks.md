@@ -1,7 +1,7 @@
 # 11 — Open tasks
 
 Tick items off (or delete them) in the PR that completes them, and add new ones as you discover them.
-Status as of 4 Nov 2026 (PR #31 / ADR-039–040 on top of `905cd04`; PR #30 / ADR-038 on top of `5a6a44c` = PR #29; PR #25 re-checked against `d60261d`; earlier: PR #7–#24).
+Status as of 5 Nov 2026 (PR #35 / ADR-044; PR #37 / ADR-043; PR #33 / ADR-042; PR #32 / ADR-041; PR #31 / ADR-039–040; PR #30 / ADR-038; PR #25 re-checked against `d60261d`; earlier: PR #7–#24).
 
 ## Top open items (owner's list, 4 Nov 2026 — details in the sections below)
 
@@ -153,7 +153,7 @@ Status as of 4 Nov 2026 (PR #31 / ADR-039–040 on top of `905cd04`; PR #30 / AD
       is handled per day, by design).
 - [ ] Optional (ADR-043 cost): if the app-wide `seasons` listener matters, derive the active season from
       `settings/features.seasonPreset` only (no listener) when no season list is needed on the page.
-- [ ] ADR number: PR #35 (splash / top bar) also calls itself ADR-043 — renumber whichever merges second.
+- [x] ADR number: PR #35 (splash / top bar) renumbered to ADR-044 after PR #37 took ADR-043.
 
 ## Custom sections, pages & contact types (PR #18, ADR-027/028)
 
@@ -266,8 +266,16 @@ Status as of 4 Nov 2026 (PR #31 / ADR-039–040 on top of `905cd04`; PR #30 / AD
       screen «العيادات» stays. Never run the Seed workflow for clinics: even create-only it re-creates the 11 deleted
       placeholders.
 
-## Header / app bar (owner request, 4 Nov 2026)
+## Header / app bar & splash screen (4 Nov 2026)
 - [x] Clinics shortcut removed from the public app bar (all widths, section on or off); clinics stay in the drawer /
       Services menu, Home directory and footer quick links when `sections.clinics` is on. Guarded by
       `test/feature_gate_test.dart` (PR #26). At ~07:30 Cairo on 4 Nov the live `sections.clinics` still read true; it
       was switched off at 07:51 (PR #25 live read).
+- [x] **Liturgical web loading screen & top utility bar (PR #35, ADR-044)** — cream loading screen with the app's seal,
+      Lalezar name and a composited gold progress track; `TopUtilityBar` above the app bar on the palette's title band
+      with the Coptic date and a live badge; seal tab offset by the bar height.
+- [ ] Owner (ADR-044): approve the visuals on the PR #35 preview before merging (Golden hour and Holy Week).
+- [x] Owner (ADR-044, 5 Nov): while live, Home shows only the red `LiveStreamBanner`; every other page shows the
+      tappable top-bar badge (admin switch «إخفاء شارة البث في الرئيسية عند ظهور الشريط», default on).
+- [ ] Owner (ADR-044): the HTML loading screen is always cream; on a dark theme (Holy Week) it switches to charcoal when
+      the app appears. Optional: remember the last theme's ground in `localStorage` and paint the screen with it.
