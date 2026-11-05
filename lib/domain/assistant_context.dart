@@ -722,11 +722,12 @@ void _todayAndTomorrow(
   for (final k in const [0, 1]) {
     final d = CairoTime.at(today.year, today.month, today.day + k);
     final occ = occurrencesForDay(liturgies: liturgies, seasons: seasons, day: d, dayOffset: k);
-    // A service of the evening before that runs past midnight is still on
-    // (the home card shows it; CodeRabbit on PR #45).
+    // A service of the evening before that runs past midnight (the home card
+    // shows it; CodeRabbit on PR #45): today only while it is still on
+    // (Sentry on PR #45), tomorrow as tonight's service ending after midnight.
     final prev = CairoTime.at(d.year, d.month, d.day - 1);
     final ongoing = occurrencesForDay(liturgies: liturgies, seasons: seasons, day: prev, dayOffset: k - 1)
-        .where((o) => o.end.isAfter(d))
+        .where((o) => o.end.isAfter(d) && (k > 0 || o.end.isAfter(cairoNow)))
         .toList();
     final off = regularSupersededOn(liturgies: liturgies, seasons: seasons, day: d);
     final name = '${k == 0 ? 'Today' : 'Tomorrow'} ${_ymd(d)} (${weekdayNamesEn[d.weekday]})';
@@ -734,7 +735,7 @@ void _todayAndTomorrow(
       b.writeln('- $name: no services listed.');
     }
     for (final o in ongoing) {
-      b.writeln('- $name: [ONGOING since the evening before, until ${formatTimeLatin('${o.end.hour.toString().padLeft(2, '0')}:${o.end.minute.toString().padLeft(2, '0')}')}] '
+      b.writeln('- $name: [${k == 0 ? 'ONGOING' : 'CONTINUES'} from the evening before, until ${formatTimeLatin('${o.end.hour.toString().padLeft(2, '0')}:${o.end.minute.toString().padLeft(2, '0')}')}] '
           '${o.liturgy.sample ? '[UNCONFIRMED] ' : ''}${_liturgyLine(o.liturgy, f.programOptions)}');
     }
     for (final o in occ) {

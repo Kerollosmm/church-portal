@@ -1428,7 +1428,7 @@ supersede them.
   is a sample hidden by another season's real one; `seasonHasRealServices` counts only a real service that can take
   place (a start time; dated: starting inside the window); the prompt's season label is read against the combined
   schedule, and "Services today and tomorrow" lists a service of the evening before still running past midnight as
-  «[ONGOING …, until …]»; /mass-schedule marks a superseded dated special service «لا يُقام اليوم» too;
+  «[ONGOING …, until …]» while it is still on (tomorrow: «[CONTINUES …]»; Sentry on PR #45); /mass-schedule marks a superseded dated special service «لا يُقام اليوم» too;
   `effectiveAt` keeps `heroSeasonTint` after a preset expires; placeholder matching ignores tashkeel and keeps links
   whole; affiliation caveats kept (above). Not changed: a seasonal mass of the evening before overlapping a regular
   mass after midnight (no regular mass runs then); the features editor's stale-snapshot merge (shared by every

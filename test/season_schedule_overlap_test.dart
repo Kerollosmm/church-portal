@@ -486,8 +486,13 @@ void main() {
   group('CodeRabbit on PR #45', () {
     test('the prompt lists an overnight service of the evening before as ongoing', () {
       final p = prompt(p2, [pascha27], cairo(2027, 5, 2, 0, 30));
-      expect(p, contains('- Today 2027-05-02 (Sunday): [ONGOING since the evening before, until 03:30 AM] Service main'));
+      expect(p, contains('- Today 2027-05-02 (Sunday): [ONGOING from the evening before, until 03:30 AM] Service main'));
       expect(p, isNot(contains('- Today 2027-05-02 (Sunday): no services listed.')));
+      // Once it has ended it is no longer listed as ongoing (Sentry on PR #45).
+      expect(prompt(p2, [pascha27], cairo(2027, 5, 2, 12)), isNot(contains('[ONGOING')));
+      // The evening before, tomorrow says it continues after midnight.
+      expect(prompt(p2, [pascha27], cairo(2027, 5, 1, 20)),
+          contains('- Tomorrow 2027-05-02 (Sunday): [CONTINUES from the evening before, until 03:30 AM] Service main'));
     });
 
     test('a full-override season replaces the regulars even when its only service is a hidden sample', () {
