@@ -180,8 +180,8 @@ This document provides a comprehensive, feature-by-feature manual for all 31 cap
 - **Technical Implementation:** Implemented in `lib/core/l10n.dart`. User preference is persisted in browser `localStorage` and synchronized via URL parameter (`?lang=en`).
 
 ### 28. Progressive Web App (PWA) & Asset Caching
-- **Visitor Experience:** Installable as a native-like web app on Android, iOS, and desktop with official parish seal icons and offline capabilities.
-- **Technical Implementation:** Configured with `web/manifest.json` and optimized cache-control headers on Firebase Hosting.
+- **Visitor Experience:** Installable as a home-screen web app on Android, iOS, and desktop with official parish seal icons; falls back gracefully to bundled seed data if Firebase is unreachable.
+- **Technical Implementation:** Configured via `web/manifest.json` and optimized cache-control headers on Firebase Hosting. Note: The web app shell is served with `no-cache` to ensure instantaneous deployment rollouts; full offline service-worker shell caching without an initial network fetch is an open task.
 
 ### 29. Web Performance & PageSpeed Optimization
 - **Visitor Experience:** Instantaneous initial paint (≤ 0.8s) and smooth 60fps scrolling across mobile and desktop devices.
@@ -193,4 +193,4 @@ This document provides a comprehensive, feature-by-feature manual for all 31 cap
 
 ### 31. Android Native Application & Play Integrity
 - **Visitor Experience:** Native Android APK installable on mobile devices with adaptive launch icons and hardware back-button navigation.
-- **Technical Implementation:** Built with Flutter Android embedding, signed with release keystore, and protected by Google Play Integrity for App Check verification.
+- **Technical Implementation:** Built with Flutter Android embedding. Release builds currently use debug signing; setting up a dedicated release keystore and registering its SHA-256 for Google Play Integrity App Check is an open operational task.
