@@ -275,7 +275,7 @@ Status as of 5 Nov 2026 (PR #35 / ADR-044; PR #37 / ADR-043; PR #33 / ADR-042; P
       Lalezar name and a composited gold progress track; `TopUtilityBar` above the app bar on the palette's title band
       with the Coptic date and a live badge; seal tab offset by the bar height.
 - [ ] Owner (ADR-044): approve the visuals on the PR #35 preview before merging (Golden hour and Holy Week).
-- [ ] Owner (ADR-044): while live, both the top-bar badge and the red `LiveStreamBanner` show — keep both, or drop the
-      banner now that the badge is on every page?
+- [x] Owner (ADR-044, 5 Nov): while live, Home shows only the red `LiveStreamBanner`; every other page shows the
+      tappable top-bar badge (admin switch «إخفاء شارة البث في الرئيسية عند ظهور الشريط», default on).
 - [ ] Owner (ADR-044): the HTML loading screen is always cream; on a dark theme (Holy Week) it switches to charcoal when
       the app appears. Optional: remember the last theme's ground in `localStorage` and paint the screen with it.

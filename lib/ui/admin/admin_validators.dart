@@ -229,12 +229,14 @@ String searchableText(Map<String, dynamic> data) =>
 /// Keys saved in a write of their own: Firestore evaluates at most 1,000
 /// rule expressions per request, and a full gallery (8 photos) plus a full
 /// `extraFields` list (15 rows) in one write exceeds it (firestore.rules,
-/// validGallery / validExtraFields; ADR-020).
-const separatelySavedKeys = ['gallery', 'extraFields', 'blocks'];
+/// validGallery / validExtraFields; ADR-020). `dayEvents` (settings/features,
+/// «اليوم والبث المباشر»): 20 events with end dates plus any other changed
+/// Today key (strip, live switch…) in one write exceeds it too (ADR-044).
+const separatelySavedKeys = ['gallery', 'extraFields', 'blocks', 'dayEvents'];
 
 /// Splits a save [payload] into writes made one after the other: everything
-/// else first (it creates a new document), then a non-empty `gallery`, then
-/// non-empty `extraFields`. Empty or cleared lists cost almost nothing and
+/// else first (it creates a new document), then each non-empty list in
+/// [separatelySavedKeys] order (`gallery`, `extraFields`, `blocks`, `dayEvents`). Empty or cleared lists cost almost nothing and
 /// stay in the first write. Empty writes are dropped.
 List<Map<String, dynamic>> splitSavePayload(Map<String, dynamic> payload) {
   bool own(String k) => separatelySavedKeys.contains(k) && payload[k] is List && (payload[k] as List).isNotEmpty;

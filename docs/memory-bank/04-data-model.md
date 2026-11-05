@@ -203,6 +203,7 @@ Existence of `settings/church` = "database is seeded" (see `03-architecture.md`)
   | `liveUrl` | `''` / http(s) URL ≤ 500 | `''` (banner needs a link) |
   | `liveLabelAr`, `liveLabelEn` | string ≤ 120 | `''` = «بث مباشر الآن من الكنيسة» / "Live now from the church" |
   | `liveEndsAt` | timestamp / null | none (automatic switch-off) |
+  | `liveBadgeHideOnHome` | bool (PR #35, ADR-044; validated in the live gate of `validFeatures`) | true (Home shows only the banner while live) |
   | `dayEvents` | list ≤ 20 of strings `date␟endDate␟start␟end␟titleAr␟titleEn␟speakerAr␟speakerEn␟topicAr␟topicEn␟noteAr␟noteEn␟link` (U+001F; date `YYYY-MM-DD` required, endDate optional, times `''`/HH:mm, titleAr 1–300, texts ≤ 300, notes ≤ 500, link `''` / path / http(s)) | `[]` |
   | `venues` | list ≤ 12 of strings `key␟labelAr␟labelEn` (key `[a-z0-9_-]{1,30}`, labelAr 1–80, labelEn ≤ 80) — PR #32, ADR-041 | missing / empty = `main` الكنيسة الكبرى, `lower` القاعة السفلية, `services` مبنى الخدمات |
   | `audiences` | same format — PR #32, ADR-041 | missing / empty = `general` عام, `youth` شباب, `children` أطفال |

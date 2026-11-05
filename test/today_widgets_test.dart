@@ -92,7 +92,7 @@ void main() {
         'liveUrl': 'https://www.youtube.com/live/abc',
         'liveEndsAt': cairo(2026, 11, 4, 21).toUtc(),
       });
-      await pump(tester, const CopticDateStrip(location: '/'), features: on, now: cairo(2026, 11, 4, 19));
+      await pump(tester, const CopticDateStrip(location: '/mass-schedule'), features: on, now: cairo(2026, 11, 4, 19));
       expect(find.byKey(const Key('topBarLiveBadge')), findsOneWidget);
       expect(find.text('مباشر'), findsOneWidget);
 
@@ -118,7 +118,7 @@ void main() {
       });
       await pump(
         tester,
-        const CopticDateStrip(location: '/'),
+        const CopticDateStrip(location: '/mass-schedule'),
         features: on,
         now: cairo(2026, 11, 4, 19),
         physicalSize: const Size(320, 600),
@@ -148,7 +148,7 @@ void main() {
           localizationsDelegates: GlobalMaterialLocalizations.delegates,
           home: const MediaQuery(
             data: MediaQueryData(textScaler: TextScaler.linear(2.0)),
-            child: Scaffold(body: CopticDateStrip(location: '/')),
+            child: Scaffold(body: CopticDateStrip(location: '/mass-schedule')),
           ),
         ),
       ));
@@ -168,7 +168,7 @@ void main() {
 
     testWidgets('bar, date text and badge take the theme roles on Golden hour and Holy Week', (tester) async {
       for (final key in ['goldenHour', 'holyWeek']) {
-        await pump(tester, const CopticDateStrip(location: '/'),
+        await pump(tester, const CopticDateStrip(location: '/mass-schedule'),
             features: live, now: cairo(2026, 11, 4, 19), themeKey: key);
         final ctx = tester.element(find.byKey(const Key('copticDateStrip')));
         final pal = ctx.pal;
@@ -189,7 +189,7 @@ void main() {
     });
 
     testWidgets('the date keeps the free width next to the badge (Sentry review on PR #35)', (tester) async {
-      await pump(tester, const CopticDateStrip(location: '/'),
+      await pump(tester, const CopticDateStrip(location: '/mass-schedule'),
           features: live, now: cairo(2026, 11, 4, 19), physicalSize: const Size(390, 800));
       final bar = tester.getSize(find.byKey(const Key('copticDateStrip'))).width;
       final badge = tester.getSize(find.byKey(const Key('topBarLiveBadge'))).width;
@@ -200,7 +200,7 @@ void main() {
     });
 
     testWidgets('200 % text: the bar grows instead of clipping, capped at 1.6x', (tester) async {
-      await pump(tester, const CopticDateStrip(location: '/'),
+      await pump(tester, const CopticDateStrip(location: '/mass-schedule'),
           features: live, now: cairo(2026, 11, 4, 19), physicalSize: const Size(320, 800), textScale: 2);
       expect(tester.takeException(), isNull);
       final h = tester.getSize(find.byKey(const Key('copticDateStrip'))).height;
@@ -396,6 +396,131 @@ void main() {
       ));
       await tester.pump();
       expect(tester.takeException(), isNull);
+    });
+  });
+
+  group('live: banner on Home, badge on the other pages (ADR-044, owner decision)', () {
+    Map<String, Object?> liveMap([Map<String, Object?> extra = const {}]) => {
+          'liveEnabled': true,
+          'liveUrl': 'https://www.youtube.com/live/abc',
+          'liveEndsAt': cairo(2026, 11, 4, 21).toUtc(),
+          ...extra,
+        };
+
+    Future<void> pumpShell(WidgetTester tester, String location, FeatureSettings f) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(ProviderScope(
+        overrides: [
+          repositoryProvider.overrideWithValue(SeedRepository(SeedData(const {}))),
+          featuresProvider.overrideWithValue(f),
+          featuresReadyProvider.overrideWithValue(true),
+          nowProvider.overrideWith((ref) => Stream.value(cairo(2026, 11, 4, 19))),
+        ],
+        child: MaterialApp(
+          locale: const Locale('ar'),
+          theme: buildTheme(const Locale('ar')),
+          supportedLocales: const [Locale('ar'), Locale('en')],
+          localizationsDelegates: GlobalMaterialLocalizations.delegates,
+          home: AppShell(location: location, child: const Text('page')),
+        ),
+      ));
+      await tester.pump();
+    }
+
+    List<String> mockLauncher(WidgetTester tester) {
+      final launched = <String>[];
+      const channel = MethodChannel('plugins.flutter.io/url_launcher');
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(channel, (call) async {
+        final args = call.arguments;
+        if (args is Map && args['url'] is String) launched.add(args['url'] as String);
+        return true;
+      });
+      addTearDown(() => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(channel, null));
+      return launched;
+    }
+
+    test('liveBadgeOn: hidden on Home by default, shown elsewhere, both with the switch off', () {
+      final now = cairo(2026, 11, 4, 19);
+      final t = FeatureSettings.fromMap(liveMap()).today;
+      expect(t.liveBadgeHideOnHome, isTrue);
+      expect(t.liveBadgeOn(now, '/'), isFalse);
+      expect(t.liveBadgeOn(now, '/mass-schedule'), isTrue);
+      expect(t.liveBadgeOn(now, '/clinics/x'), isTrue);
+      final both = FeatureSettings.fromMap(liveMap({'liveBadgeHideOnHome': false})).today;
+      expect(both.liveBadgeOn(now, '/'), isTrue);
+      // Not live: no badge anywhere.
+      expect(t.liveBadgeOn(cairo(2026, 11, 4, 21, 1), '/about'), isFalse);
+      // The admin key is read only, never written back by the sections editor.
+      expect(FeatureSettings.fromMap(liveMap({'liveBadgeHideOnHome': false})).toMap().containsKey('liveBadgeHideOnHome'),
+          isFalse);
+    });
+
+    testWidgets('Home: only the red banner (badge hidden while the banner shows)', (tester) async {
+      await pumpShell(tester, '/', FeatureSettings.fromMap(liveMap()));
+      expect(tester.takeException(), isNull);
+      expect(find.byKey(const Key('liveStreamBanner')), findsOneWidget);
+      expect(find.text('شاهد البث'), findsOneWidget);
+      expect(find.byKey(const Key('topBarLiveBadge')), findsNothing);
+      // The Coptic date still shows in the bar (copticStrip = all).
+      expect(find.byKey(const Key('copticDateStrip')), findsOneWidget);
+    });
+
+    testWidgets('Home with the date strip off: no empty bar is left behind', (tester) async {
+      await pumpShell(tester, '/', FeatureSettings.fromMap(liveMap({'copticStrip': 'off'})));
+      expect(find.byKey(const Key('copticDateStrip')), findsNothing);
+      expect(find.byKey(const Key('topBarLiveBadge')), findsNothing);
+      expect(find.byKey(const Key('liveStreamBanner')), findsOneWidget);
+      expect(tester.getTopLeft(find.byKey(const Key('sealTabHome'))).dy, 0.0);
+    });
+
+    testWidgets('other pages: the badge shows in the top bar', (tester) async {
+      for (final loc in ['/mass-schedule', '/about']) {
+        await pumpShell(tester, loc, FeatureSettings.fromMap(liveMap()));
+        expect(tester.takeException(), isNull);
+        expect(find.byKey(const Key('topBarLiveBadge')), findsOneWidget, reason: loc);
+      }
+      // Home-only strip: on other pages the bar still appears for the badge alone.
+      await pumpShell(tester, '/mass-schedule', FeatureSettings.fromMap(liveMap({'copticStrip': 'home'})));
+      expect(find.byKey(const Key('topBarLiveBadge')), findsOneWidget);
+      expect(find.byKey(const Key('copticDateLabel')), findsNothing);
+    });
+
+    testWidgets('the badge opens the stream: tap, keyboard (Tab + Enter) and screen readers', (tester) async {
+      await pumpShell(tester, '/mass-schedule', FeatureSettings.fromMap(liveMap()));
+      final launched = mockLauncher(tester);
+      await tester.tap(find.byKey(const Key('topBarLiveBadge')));
+      await tester.pump();
+      expect(launched, ['https://www.youtube.com/live/abc']);
+
+      // Keyboard: the badge takes focus and Enter activates it.
+      final badgeFocus = Focus.of(tester.element(find.descendant(
+          of: find.byKey(const Key('topBarLiveBadge')), matching: find.byType(Container)).first));
+      badgeFocus.requestFocus();
+      await tester.pump();
+      expect(badgeFocus.hasPrimaryFocus, isTrue);
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pump();
+      expect(launched, ['https://www.youtube.com/live/abc', 'https://www.youtube.com/live/abc']);
+
+      // Screen readers: a button named «مباشر — شاهد البث» with a tap action.
+      final sem = find.bySemanticsLabel('مباشر — شاهد البث');
+      expect(sem, findsOneWidget);
+      final data = tester.getSemantics(sem).getSemanticsData();
+      expect(data.hasAction(SemanticsAction.tap), isTrue);
+    });
+
+    testWidgets('switch off: Home shows both the banner and the badge', (tester) async {
+      await pumpShell(tester, '/', FeatureSettings.fromMap(liveMap({'liveBadgeHideOnHome': false})));
+      expect(find.byKey(const Key('liveStreamBanner')), findsOneWidget);
+      expect(find.byKey(const Key('topBarLiveBadge')), findsOneWidget);
+    });
+
+    testWidgets('not live: neither banner nor badge', (tester) async {
+      await pumpShell(tester, '/about', FeatureSettings.defaults);
+      expect(find.byKey(const Key('liveStreamBanner')), findsNothing);
+      expect(find.byKey(const Key('topBarLiveBadge')), findsNothing);
     });
   });
 }

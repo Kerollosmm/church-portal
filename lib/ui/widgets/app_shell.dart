@@ -127,8 +127,10 @@ class _AppShellState extends ConsumerState<AppShell> {
     // Top utility bar (ADR-044: Coptic date + live badge). The shell rebuilds
     // only when the bar appears / disappears, not on every 30 s clock tick.
     final todaySettings = ref.watch(todaySettingsProvider);
-    final liveActive = ref.watch(nowProvider.select((n) => todaySettings.liveOn(n.value ?? DateTime.now())));
-    final showTopBar = ready && (TopUtilityBar.shownOn(todaySettings.copticStrip, location) || liveActive);
+    // The badge hides on Home while the live banner shows there (ADR-044).
+    final liveBadge =
+        ref.watch(nowProvider.select((n) => todaySettings.liveBadgeOn(n.value ?? DateTime.now(), location)));
+    final showTopBar = ready && (TopUtilityBar.shownOn(todaySettings.copticStrip, location) || liveBadge);
     final topBarH = showTopBar ? TopUtilityBar.heightFor(context) : 0.0;
     // No Clinics shortcut in the bar (owner request, 4 Nov 2026): clinics stay
     // reachable from the drawer / Services menu and Home when their section is on.

@@ -53,6 +53,11 @@ class TodaySettings {
   /// Optional automatic switch-off instant (null = until switched off).
   final DateTime? liveEndsAt;
 
+  /// ADR-044: on Home the red live banner (with its «شاهد البث» button) is
+  /// enough, so the top bar's live badge hides there while the banner shows
+  /// (default on). Off = Home shows both. Other pages always show the badge.
+  final bool liveBadgeHideOnHome;
+
   const TodaySettings({
     this.copticStrip = CopticStripModes.all,
     this.dayStartMode = DayStartModes.fixed,
@@ -64,6 +69,7 @@ class TodaySettings {
     this.liveLabelAr = '',
     this.liveLabelEn = '',
     this.liveEndsAt,
+    this.liveBadgeHideOnHome = true,
   });
 
   static const defaults = TodaySettings();
@@ -79,6 +85,7 @@ class TodaySettings {
         liveLabelAr: _str(m['liveLabelAr']),
         liveLabelEn: _str(m['liveLabelEn']),
         liveEndsAt: parseDate(m['liveEndsAt']),
+        liveBadgeHideOnHome: _bool(m['liveBadgeHideOnHome'], true),
       );
 
   @override
@@ -93,11 +100,12 @@ class TodaySettings {
       other.liveUrl == liveUrl &&
       other.liveLabelAr == liveLabelAr &&
       other.liveLabelEn == liveLabelEn &&
-      other.liveEndsAt == liveEndsAt;
+      other.liveEndsAt == liveEndsAt &&
+      other.liveBadgeHideOnHome == liveBadgeHideOnHome;
 
   @override
   int get hashCode => Object.hash(copticStrip, dayStartMode, dayStartsAt, topEvent, commemoration, liveEnabled, liveUrl,
-      liveLabelAr, liveLabelEn, liveEndsAt);
+      liveLabelAr, liveLabelEn, liveEndsAt, liveBadgeHideOnHome);
 
   /// Is a service starting at [start] on the eve of the next liturgical day
   /// (at or after the day's start, e.g. 18:00)?
@@ -112,6 +120,12 @@ class TodaySettings {
   /// (when set) a switch-off time still ahead.
   bool liveOn(DateTime now) =>
       liveEnabled && isLiveUrl(liveUrl) && (liveEndsAt == null || now.isBefore(liveEndsAt!));
+
+  /// Does the top bar show the live badge on [location] at [now]? Only while
+  /// live; on Home ('/') not while the banner shows there, unless the admin
+  /// turned [liveBadgeHideOnHome] off (ADR-044).
+  bool liveBadgeOn(DateTime now, String location) =>
+      liveOn(now) && !(liveBadgeHideOnHome && location == '/');
 }
 
 final _liveUrlRe = RegExp(r'^https?://[^/\s]+\.[^/\s]+(\S*)$', caseSensitive: false);

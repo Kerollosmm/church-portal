@@ -16,7 +16,10 @@ import 'common.dart';
 /// [OccasionColors.onBar]) and the live roles, so Holy Week turns it charcoal
 /// with a crimson badge like the rest of the site.
 /// Shown on every page or on Home only (settings/features.copticStrip); the
-/// badge follows the live switch (settings/features.live*).
+/// badge follows the live switch (settings/features.live*), except on Home
+/// where the red [LiveStreamBanner] already carries «شاهد البث»: there it
+/// hides while the banner shows (settings/features.liveBadgeHideOnHome,
+/// default on). The badge opens the stream like the banner's button.
 class TopUtilityBar extends ConsumerWidget {
   final String location;
   const TopUtilityBar({super.key, required this.location});
@@ -39,7 +42,7 @@ class TopUtilityBar extends ConsumerWidget {
     if (!ref.watch(featuresReadyProvider)) return const SizedBox.shrink();
     final t = ref.watch(todaySettingsProvider);
     final showDate = shownOn(t.copticStrip, location);
-    final liveActive = ref.watch(nowProvider.select((n) => t.liveOn(n.value ?? DateTime.now())));
+    final liveActive = ref.watch(nowProvider.select((n) => t.liveBadgeOn(n.value ?? DateTime.now(), location)));
     if (!showDate && !liveActive) return const SizedBox.shrink();
 
     final day = ref.watch(liturgicalDayProvider);

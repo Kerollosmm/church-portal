@@ -83,13 +83,19 @@ render with `PageBody` (+ `Footer`). Content comes from Riverpod providers (hidd
   default, or sunset at the church) «ليلة الخميس ٢٦ بابه ١٧٤٣ ش». `copticStrip`: every page / Home only / off. No
   time-zone label anywhere. The date takes all the width the badge leaves.
 - **Top bar live badge** (`_LiveBadge`, key `topBarLiveBadge`): while `liveOn(now)`, a pill (≤ 150 px, ellipsis) in the
-  theme's `live` / `onLive` colours with a 7 px pulsing dot and the admin's live label or «مباشر» / "Live"; tap opens
-  the stream. The bar also appears with only the badge when `copticStrip` hides the date on that page.
+  theme's `live` / `onLive` colours with a 7 px pulsing dot and the admin's live label or «مباشر» / "Live"; tap,
+  keyboard (focusable `InkWell`, Enter / Space) and screen readers (button «مباشر — شاهد البث» with a tap action) open
+  the stream (`openUrl(liveUrl)`, the banner's behaviour). **Owner decision (5 Nov):** on **Home** (`/`) only the red
+  banner shows — the badge hides while the banner shows (`TodaySettings.liveBadgeOn(now, location)`, switch
+  `liveBadgeHideOnHome`, default on; off = Home shows both). Every other page shows the badge. The bar also appears
+  with only the badge when `copticStrip` hides the date on that page, and disappears on Home when the date is off and
+  the badge is hidden.
 - **AppShell**: the bar is no longer in the body column. The status-bar inset above it takes `pal.bar`; the hanging
   seal tab moves down by the bar's height. The shell watches the clock through `select` (rebuilds only when the bar
   appears / disappears). +0 reads, +0 listeners.
 - **Live banner** (`LiveStreamBanner`): red bar under the AppBar on every page while `liveEnabled` + an http(s)
-  `liveUrl` and before `liveEndsAt`; pulsing dot (static under reduced motion); tap opens the stream.
+  `liveUrl` and before `liveEndsAt`; pulsing dot (static under reduced motion); «شاهد البث» pill; tap opens the stream.
+  On Home it is the only live indicator (ADR-044 owner decision, above).
 - **Top event card** (`TopEventCard`, first on Home): «حدث اليوم» = an admin church event (`dayEvents`) covering today
   and not ended (on the eve: the next liturgical day's event) with times, speaker, topic, note, link; else
   «عيد اليوم» / «تذكار اليوم» from `/data/today.json` (Katameros, credited) for the liturgical day; else the computed
