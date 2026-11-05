@@ -234,7 +234,7 @@ For each `CollectionDef`:
 |---|---|---|---|---|---|
 | alerts | alerts | – | ✔ | – | title, body, active, starts/ends (Cairo), priority 0–1000, link (path or URL) |
 | seasons | seasons | – | – | – | key choice, names, starts/ends, active |
-| liturgies | liturgies | – (order field) | ✔ | ✔ | needs weekday **or** one-off date; end may be before start (midnight) |
+| liturgies | liturgies | – (order field) | ✔ | ✔ | needs weekday **or** one-off date; end may be before start (midnight); checkbox «يحل محل قداسات اليوم المعتادة (قداس العيد)» = `replacesDay` (ADR-050) |
 | meetings | meetings | – (order field) | ✔ | ✔ | stage choice |
 | clinics | clinics | ✔ | ✔ | ✔ | `active` missing = true |
 | facilities | facilities | ✔ | ✔ | ✔ | "Public services" |
@@ -384,3 +384,9 @@ role. The Auth user itself must be created in the console (or via the Seed workf
   dark fill (`chipTheme` also sets `checkmarkColor` / `secondaryLabelStyle` white); the image field stacks preview
   above its buttons below 420 px or at ≥ 1.5× text; the search clear button («مسح البحث» / Clear search) and the
   admin Home button (`backHome`) have tooltips.
+
+### Season schedule & hero tint (PR #PRNUM, ADR-050)
+- Liturgy form: **«يحل محل قداسات اليوم المعتادة (قداس العيد)»** (`replacesDay`, default off, hint under it). Off: in a
+  season that does not replace the regular schedule, a seasonal mass hides only the regular mass at the same time;
+  on: a feast liturgy hides every regular mass of that day.
+- «الأقسام والصفحة الرئيسية» → theme card: switch **«لون الموسم على صورة الواجهة»** (`heroSeasonTint`, default on).

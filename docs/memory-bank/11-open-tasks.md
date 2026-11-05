@@ -35,6 +35,17 @@ Status as of 5 Nov 2026 (PR #42 / ADR-049; PR #40 / ADR-047; PR #39 / ADR-046; P
     16:10 UTC) and optionally cap kept Hosting versions (Firebase console → Hosting → release storage) since the
     workflow publishes twice a day.
 
+11. **Seasons v2 fixes A (PR #PRNUM, ADR-050) — owner decisions on live data (nothing was written):** (a) placeholder
+    text «في انتظار تأكيد الكنيسة» / «(لم يُؤكَّد …)» is now hidden on display; clear it in /admin if live still stores
+    it: `facilities/nursery`, `employment`, `library` (`descAr/En`), `priests/bigol`, `saleeb`, `barnaba` (`bioAr/En`,
+    if those docs exist live), `activities/davids-tones`, `hymns-school` (`descAr/En`); (b) seed samples `hw-palm`,
+    `hw-thursday`, `hw-friday`, `hw-saturday`, `pascha-eve`, `pascha-day` and the templates `hw-day-*`, `hw-eve-*`,
+    `rev-max-*`, `rev-moses-*` still show in a season with no real service — enter the real programme or hide them;
+    (c) after deploy, set `milestones/pope-visit.gallery[3].url` to
+    `https://maximos-domadios-church.web.app/media/milestones/pope-visit-gallery5.webp` (prepared in
+    `work/fixall/live-gallery3.json`, 1 write); (d) tick «يحل محل قداسات اليوم المعتادة» on feast liturgies of additive
+    seasons that should cancel the day's regular masses.
+
 ## Infrastructure & security (owner: developer)
 
 - [ ] **Re-save the service-account secret** `FIREBASE_SERVICE_ACCOUNT_ASAFRA_CHURCH_PORTAL` with only the JSON key

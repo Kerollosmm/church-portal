@@ -203,10 +203,10 @@ activities = dict([
     "The church choir named after the Strong Saint Moses the Black. Follow its page for concerts and recordings.",
     link="https://www.facebook.com/100069922352210"),
   A("davids-tones", "choir", "كورال نغمات داود (David's Tones)", "David's Tones choir",
-    "كورال ترانيم شريك تتابعه الصفحة الرسمية للكنيسة (لم يُؤكَّد أنه تابع للكنيسة).", "A partner hymn choir followed by the church's official page (not confirmed as a church ministry).",
+    "كورال ترانيم شريك تتابعه الصفحة الرسمية للكنيسة.", "A partner hymn choir followed by the church's official page.",
     link="https://www.facebook.com/n8amatdawoudchoire"),
   A("hymns-school", "hymns", "مدرسة صانع الأجيال المرتل إسحاق إبراهيم لتعليم الألحان", "Esshaq Ibrahim hymns school",
-    "مدرسة شريكة لتعليم الألحان الكنسية القبطية تتابعها الصفحة الرسمية للكنيسة (لم يُؤكَّد أنها تابعة للكنيسة).", "A partner Coptic church-hymns school followed by the church's official page (not confirmed as a church ministry).",
+    "مدرسة شريكة لتعليم الألحان الكنسية القبطية تتابعها الصفحة الرسمية للكنيسة.", "A partner Coptic church-hymns school followed by the church's official page.",
     link="https://www.facebook.com/Esshaqibrahi"),
   A("maximous-youth", "youth", "شباب كنيسة مكسيموس (Maximous Youth)", "Maximous Youth",
     "خدمة الشباب بالكنيسة. تابع صفحتهم لمعرفة الاجتماعات والأنشطة.", "The church's youth ministry. Follow its page for meetings and activities.",
@@ -258,14 +258,14 @@ facilities = {
      "descAr": "رعاية إخوة الرب والأسر المحتاجة. قدّمها القس يوناثان محفوظ لقداسة البابا تواضروس الثاني في زيارته يوم 25 يونيو 2025 كأبرز خدمات الكنيسة. للاستفسار اتصل بالكنيسة.",
      "descEn": "Care for the poor and families in need. Fr Yonathan Mahfouz presented it to H.H. Pope Tawadros II during his 25 June 2025 visit as the church's leading service. Call the church for enquiries.",
      "phone": CHURCH_PHONE, "hoursAr": "", "hoursEn": "", "sample": False},
-  "nursery": {"type": "nursery", "nameAr": "الحضانة", "nameEn": "Nursery", "descAr": "حضانة للأطفال — التفاصيل في انتظار تأكيد الكنيسة.", "descEn": "Children's nursery — details pending church confirmation.", "phone": "", "hoursAr": "", "hoursEn": "", "sample": True},
-  "employment": {"type": "employment", "nameAr": "مكتب التوظيف", "nameEn": "Employment office", "descAr": "ربط الباحثين عن عمل بفرص متاحة — التفاصيل في انتظار تأكيد الكنيسة.", "descEn": "Connects job seekers with opportunities — details pending church confirmation.", "phone": "", "hoursAr": "", "hoursEn": "", "sample": True},
+  "nursery": {"type": "nursery", "nameAr": "الحضانة", "nameEn": "Nursery", "descAr": "حضانة للأطفال.", "descEn": "Children's nursery.", "phone": "", "hoursAr": "", "hoursEn": "", "sample": True},
+  "employment": {"type": "employment", "nameAr": "مكتب التوظيف", "nameEn": "Employment office", "descAr": "ربط الباحثين عن عمل بفرص متاحة.", "descEn": "Connects job seekers with opportunities.", "phone": "", "hoursAr": "", "hoursEn": "", "sample": True},
   "halls": {"type": "halls", "nameAr": "قاعات العزاء والمناسبات", "nameEn": "Condolence & occasion halls", "descAr": "قاعات للعزاء والمناسبات الكنسية — الحجز والتفاصيل من الكنيسة.", "descEn": "Halls for condolences and church occasions — booking and details from the church.", "phone": "", "hoursAr": "", "hoursEn": "", "sample": True},
-  "library": {"type": "other", "nameAr": "المكتبة الكنسية", "nameEn": "Church library", "descAr": "كتب روحية ووسائل تعليمية — التفاصيل في انتظار تأكيد الكنيسة.", "descEn": "Spiritual books and teaching aids — details pending church confirmation.", "phone": "", "hoursAr": "", "hoursEn": "", "sample": True},
+  "library": {"type": "other", "nameAr": "المكتبة الكنسية", "nameEn": "Church library", "descAr": "كتب روحية ووسائل تعليمية.", "descEn": "Spiritual books and teaching aids.", "phone": "", "hoursAr": "", "hoursEn": "", "sample": True},
 }
 
-PENDING_AR = "آخر تأكيد علني لخدمته بالكنيسة كان في 2022 — في انتظار تأكيد الكنيسة."
-PENDING_EN = "Last publicly confirmed serving here in 2022 — pending church confirmation."
+# ADR-050: no «في انتظار تأكيد الكنيسة» / "pending church confirmation" text in seed
+# content; `sample: True` alone marks what the church has not confirmed yet.
 def P(id, name, nameEn, rank, order, ordination="", hegumen="", bioAr="", bioEn="", sample=False, status="serving", departed=""):
     return id, {"name": name, "nameEn": nameEn, "photoUrl": "", "rank": rank, "ordinationDate": ordination, "hegumenDate": hegumen,
                 "departedDate": departed, "status": status, "bioAr": bioAr, "bioEn": bioEn, "order": order, "sample": sample}
@@ -274,7 +274,7 @@ priests = dict([
     "رُسم كاهنًا بيد البابا شنودة الثالث، ونال رتبة القمصية بيد البابا تواضروس الثاني في 10 نوفمبر 2022. قدّم نبذة عن تاريخ الكنيسة في زيارة قداسة البابا (يونيو 2025).",
     "Ordained by Pope Shenouda III; raised to hegumen by Pope Tawadros II on 10 Nov 2022. Presented the church's history during the Pope's visit (June 2025)."),
   P("bigol", "القمص بيجول صالح نخلة", "Hegumen Bigol Saleh Nakhla", "hegumen", 2, "2000-03-23", "2022-11-10",
-    "نال رتبة القمصية في 10 نوفمبر 2022. " + PENDING_AR, "Raised to hegumen on 10 Nov 2022. " + PENDING_EN, sample=True),
+    "نال رتبة القمصية في 10 نوفمبر 2022.", "Raised to hegumen on 10 Nov 2022.", sample=True),
   P("bedaba", "القمص بضابا بخيت شنودة", "Hegumen Bedaba Bekhit Shenouda", "hegumen", 3, "2000-03-23", "2022-11-10",
     "رُسم كاهنًا بيد البابا شنودة الثالث، ونال رتبة القمصية في 10 نوفمبر 2022.",
     "Ordained by Pope Shenouda III; raised to hegumen on 10 Nov 2022."),
@@ -284,10 +284,10 @@ priests = dict([
   P("yonathan", "القس يوناثان محفوظ", "Fr Yonathan Mahfouz", "priest", 6,
     bioAr="يخدم مشروع تطوير خدمة الأنبا أبرآم لرعاية الأسر المحتاجة.", bioEn="Serves the Anba Abraam development project for families in need."),
   P("loukas", "القس لوكاس رفاعي", "Fr Loukas Refaey", "priest", 7),
-  P("saleeb", "القس صليب سمير", "Fr Saleeb Samir", "priest", 8, bioAr=PENDING_AR, bioEn=PENDING_EN, sample=True),
+  P("saleeb", "القس صليب سمير", "Fr Saleeb Samir", "priest", 8, sample=True),
   P("barnaba", "القس برنابا أمير", "Fr Barnaba Amir", "priest", 9,
-    bioAr="ورد اسمه في عظات قناة الكنيسة (2025) — في انتظار تأكيد الكنيسة.",
-    bioEn="Named in the church channel's sermons (2025) — pending church confirmation.", sample=True),
+    bioAr="ورد اسمه في عظات قناة الكنيسة (2025).",
+    bioEn="Named in the church channel's sermons (2025).", sample=True),
   # Not seeded until the church confirms their ordination/assignment: Fr Yassa Ibrahim and
   # Fr Philemon Fawzy (named in priestly-calling congratulations on the FB page, 31 Oct 2026).
   P("tadros", "المتنيح القمص تادرس لبيب يوسف", "The late Hegumen Tadros Labib Youssef", "hegumen", 20, "1980-08-01", "2012-09-27",

@@ -119,9 +119,22 @@ render with `PageBody` (+ `Footer`). Content comes from Riverpod providers (hidd
   as the previous day's record; parallel services compare across midnight (`occurrencesAround`, adjacent days in
   `parallelServices`). The /mass-schedule seasonal switch uses `pal.switchOnTrack/OnThumb/OffTrack/OffThumb`
   (≥ 3:1 on every theme, ADR-049).
-- **Seed templates (ADR-045):** an undated `sample: true` seasonal service is hidden in a season that has any real
-  (non-sample) service; any undated service gives way on a day with a dated real service of its season (replacing:
-  any; additive: overlapping). All-sample seasons (the seed) are unchanged.
+- **Seed templates (ADR-045, widened ADR-050):** any `sample: true` seasonal service, undated or dated, is hidden in a
+  season that has any real (non-sample) service; any undated service gives way on a day with a dated real service of
+  its season (replacing: any; additive: overlapping). A seasonal sample also gives way to a real seasonal service of
+  ANY active season held at the same time, never supersedes a real regular service, and sorts after a real service at
+  the same start. All-sample seasons (the seed) are unchanged.
+- **Additive seasons (ADR-050):** a seasonal `mass` hides only the regular masses that overlap it in time (the 12:00
+  fasting liturgy keeps the 06:30 mass; a Kiahk 05:30–07:30 liturgy hides the 06:00 mass, not the 08:00 ones); a
+  seasonal service with `replacesDay` (feast liturgy) hides every regular mass of its day; vespers / praise keep the
+  overlap rule. `regularSupersededOn` lists what is hidden: /mass-schedule's weekly tab marks them «لا يُقام اليوم»
+  on today's weekday, and the assistant prompt lists today's / tomorrow's services from `occurrencesForDay` with a
+  "NOT held" line and a computed season label. The «يُقام الآن» box shows its end: «حتى ٠٣:٣٠ ص» (12-hour ص/م).
+- **Placeholder text (ADR-050):** «— في انتظار تأكيد الكنيسة.», «(لم يُؤكَّد …)», "pending church confirmation" in
+  `descAr/En` / `bioAr/En` is dropped on read (`stripPendingPlaceholders`), on public pages and in the prompt.
+- **Hero season tint (ADR-050):** on an occasion theme (Marian, fasting, Resurrection, Nativity, Epiphany) the hero
+  painting gets a still wash from the theme's `primary` to `background` (`OccasionColors.heroTint`); none on Golden
+  hour or dark themes; switch `heroSeasonTint`. Ken Burns, haze and rays unchanged. The parallel line keeps «، ».
 
 ### `/about` — `about_page.dart` `AboutPage`
 - History card (bishop line + `historyAr/En`) and **altars** grid (main altar gets a gold cross) — section `history`.

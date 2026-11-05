@@ -42,6 +42,9 @@
 - بطاقة **«نصوص الواجهة»**:
   - «العنوان الرئيسي (عربي / إنجليزي)» و «العنوان الفرعي (عربي / إنجليزي)» — اتركها فارغة لاستخدام اسم الكنيسة.
   - مفتاح **«حركة الواجهة والفيديو»** (`heroMotion`، مفعّل افتراضيًا).
+- بطاقة **الثيم**: مفتاح **«لون الموسم على صورة الواجهة»** (`heroSeasonTint`، مفعّل افتراضيًا — ADR-050): لمسة خفيفة من
+  ألوان ثيم الموسم (أزرق العذراء، رماد الأصوام، أحمر القيامة…) فوق لوحة الواجهة الذهبية. لا تظهر مع الثيم الذهبي
+  الافتراضي ولا الثيمات الداكنة، ولا تغيّر حركة الصورة أو السحب أو الأشعة.
   - مفتاح **«إظهار العنوان في الواجهة»** (`heroShowAddress`، مُطفأ افتراضيًا). العنوان الفرعي إن كُتب يظهر بدلًا منه دائمًا.
 - بطاقة **«شريط الإعلان»**: «إظهار شريط الإعلان»، «نص الإعلان (عربي / إنجليزي)»، «رابط الإعلان (اختياري)».
 - «صورة الواجهة (رابط)» في شاشة **«بيانات الكنيسة»** (`settings/church.heroImageUrl`).
@@ -63,7 +66,7 @@
 - الإعدادات في `settings/features`: `homeOrder` (ترتيب الكتل)، `homeHidden` (المخفية)، `heroTitleAr/En`،
   `heroSubtitleAr/En`، `heroMotion`، `heroShowAddress`، `bannerEnabled`، `bannerAr/En`، `bannerLink`.
   المنطق في `lib/domain/features.dart` (`HomeBlocks`، `showHomeBlock`، `visibleHomeBlocks`، `normalizeHomeOrder`).
-- القواعد: `validFeatures` في `firestore.rules` تقبل `heroShowAddress` و `heroMotion` كـ bool فقط.
+- القواعد: `validFeatures` في `firestore.rules` تقبل `heroShowAddress` و `heroMotion` و `heroSeasonTint` كـ bool فقط.
 - الكتل الجديدة التي لا يعرفها ترتيب قديم تُضاف تلقائيًا في آخر الترتيب.
 
 ## الحدود والمشاكل المعروفة

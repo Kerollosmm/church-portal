@@ -22,6 +22,8 @@ const Map<String, List<String>> _strings = {
   'nextMass': ['القداس القادم', 'Next liturgy'],
   'nextPrayer': ['الصلاة القادمة', 'Next service'],
   'happeningNow': ['يُقام الآن', 'Happening now'],
+  'untilTime': ['حتى {t}', 'Until {t}'],
+  'notHeldToday': ['لا يُقام اليوم', 'Not held today'],
   'today': ['اليوم', 'Today'],
   'tomorrow': ['غدًا', 'Tomorrow'],
   // Today layer (ADR-039 / ADR-040)
@@ -539,6 +541,9 @@ const Map<String, List<String>> _strings = {
   'heroShowAddressHint': ['شريط بعنوان الكنيسة تحت اسمها في أعلى الصفحة الرئيسية. العنوان يظهر دائمًا في صفحة التواصل والتذييل.',
       'A ribbon with the church address under its name at the top of the home page. The address always shows on the contact page and in the footer.'],
   'heroMotion': ['حركة الواجهة والفيديو', 'Hero motion & video'],
+  'heroSeasonTint': ['لون الموسم على صورة الواجهة', 'Season colour on the hero picture'],
+  'heroSeasonTintHint': ['لمسة خفيفة من ألوان ثيم الموسم فوق لوحة الواجهة الذهبية (أزرق العذراء، رماد الأصوام، أحمر القيامة). لا تظهر مع الثيم الذهبي الافتراضي ولا الثيمات الداكنة، ولا تغيّر الحركة.',
+      'A soft wash of the season theme\'s colours over the golden hero painting (Marian blue, fasting ash, Easter red). Never on the default Golden hour theme or dark themes; motion is unchanged.'],
   'heroMotionHint': ['سحب متحركة وأشعة ضوء وفيديو قصير في الواجهة. لا يعمل أبدًا لمن فعّل «تقليل الحركة» أو «توفير البيانات».',
       'Drifting clouds, light rays and a short looping video in the hero. Never plays for visitors with reduced motion or data saver on.'],
   // ---- Categories, custom pages & contact categories (ADR-027, ADR-028)

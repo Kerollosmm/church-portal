@@ -31,8 +31,18 @@ class LiturgyCard extends StatelessWidget {
   /// Services held at the same time in another hall (ADR-041), e.g.
   /// «القاعة السفلية (شباب)»; '' = none.
   final String parallelText;
+
+  /// A regular service a season supersedes TODAY ([regularSupersededOn]):
+  /// marked «لا يُقام اليوم» so the weekly tab never contradicts the home
+  /// card (ADR-050).
+  final bool notHeldToday;
   const LiturgyCard(
-      {super.key, required this.liturgy, this.showWeekday = false, this.showDate = false, this.parallelText = ''});
+      {super.key,
+      required this.liturgy,
+      this.showWeekday = false,
+      this.showDate = false,
+      this.parallelText = '',
+      this.notHeldToday = false});
 
   IconData get _icon => switch (liturgy.type) {
         'vespers' => Icons.nightlight_round,
@@ -66,6 +76,12 @@ class LiturgyCard extends StatelessWidget {
               if (dayText.isNotEmpty)
                 Text(dayText,
                     style: TextStyle(color: context.pal.goldText, fontWeight: FontWeight.w800, fontSize: 12)),
+              if (notHeldToday)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Pill(context.tr('notHeldToday'),
+                      key: const Key('notHeldToday'), icon: Icons.event_busy, color: context.pal.muted),
+                ),
               Text(context.pick(l.nameAr, l.nameEn),
                   style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
               const SizedBox(height: 6),
@@ -189,6 +205,13 @@ class NextMassCard extends ConsumerWidget {
     );
   }
 
+  /// [t] (a Cairo instant) as «٠٣:٣٠ ص» / "03:30 AM".
+  static String _hm(BuildContext context, DateTime t) {
+    final c = CairoTime.fromInstant(t);
+    final hm = '${c.hour.toString().padLeft(2, '0')}:${c.minute.toString().padLeft(2, '0')}';
+    return context.isAr ? formatTimeArabic(hm) : formatTimeLatin(hm);
+  }
+
   Widget _content(BuildContext context, NextMassResult r, DateTime now, TodaySettings today, double? lat, double? lng,
       [String parallelText = '', ProgramOptions opts = ProgramOptions.defaults, String nowParallelText = '']) {
     if (r.isEmpty) return EmptyState(message: context.tr('noUpcoming'), icon: Icons.event_busy);
@@ -226,6 +249,15 @@ class NextMassCard extends ConsumerWidget {
                   key: const Key('happeningNowLine'), style: const TextStyle(fontWeight: FontWeight.w700)),
             ),
           ]),
+          // When it ends («حتى ٠٣:٣٠ ص»), in the app's 12-hour ص/م format
+          // (ADR-050, issue 15); a service without an end time runs its
+          // default 120 minutes, as the card counts it.
+          Padding(
+            padding: const EdgeInsetsDirectional.only(top: 6),
+            child: Text(context.tr('untilTime', {'t': _hm(context, o.end)}),
+                key: const Key('happeningNowUntil'),
+                style: TextStyle(color: context.pal.goldText, fontWeight: FontWeight.w700)),
+          ),
           // While it runs (18:30–21:30 on a revival night, exactly when
           // visitors open the site) the programme stays: speaker, topic,
           // choir, audience and the PDF button (ADR-045, revival sim B2).

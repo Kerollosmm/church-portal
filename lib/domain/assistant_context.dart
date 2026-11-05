@@ -226,24 +226,40 @@ String buildAssistantInstruction({
         ..writeln('## Holy seasons')
         ..writeln(
           'A season marked [REPLACES regular schedule] replaces the regular services on the days it has services. '
-          'A season marked [ADDITIVE] adds its services: the regular morning masses continue, except a regular mass '
-          'on a day the season has its own mass, and regular vespers/praise overlapping a season service.',
+          'A season marked [ADDITIVE] adds its services: the regular services continue, except a regular mass held '
+          'at the same time as a season mass, every regular mass of a day with a season service marked '
+          "[REPLACES the day's regular masses], and regular vespers/praise overlapping a season service. "
+          'For today and tomorrow, "Services today and tomorrow" below is exactly what the website shows.',
         );
+      final today = CairoTime.startOfDay(cairoNow);
       for (final e in seasonal.entries) {
         final s = e.key;
+        // The label says what the schedule really does today (ADR-050,
+        // issue 8): not "regular masses continue" on a day this season
+        // hides some of them.
+        final hidesToday = !s.replacesRegular &&
+            isSeasonActiveOnDay(s, today) &&
+            regularSupersededOn(liturgies: liturgies, seasons: [s], day: today).isNotEmpty;
+        final label = s.replacesRegular
+            ? '[REPLACES regular schedule]'
+            : hidesToday
+                ? '[ADDITIVE — some regular services are NOT held today, see "Services today and tomorrow"]'
+                : '[ADDITIVE — regular services continue]';
         b.writeln(
           '### ${_bi(s.nameAr, s.nameEn)} ${s.startsAt?.toIso8601String() ?? ''} -> ${s.endsAt?.toIso8601String() ?? ''}'
-          ' ${s.replacesRegular ? '[REPLACES regular schedule]' : '[ADDITIVE — regular morning masses continue]'}'
+          ' $label'
           '${isSeasonActiveAt(s, now) ? ' [ACTIVE NOW]' : ''}',
         );
         for (final l in e.value) {
           final when = l.date != null ? _ymd(l.date!) : (l.weekday != null ? weekdayNamesEn[l.weekday!] : 'every day');
           b.writeln(
-            '- ${l.sample ? '[UNCONFIRMED] ' : ''}$when: ${_liturgyLine(l, f.programOptions)}',
+            '- ${l.sample ? '[UNCONFIRMED] ' : ''}$when: ${_liturgyLine(l, f.programOptions)}'
+            "${l.replacesDay && !s.replacesRegular ? " [REPLACES the day's regular masses]" : ''}",
           );
         }
       }
     }
+    _todayAndTomorrow(b, f, liturgies, seasons, cairoNow);
   }
 
   if (f.enabled(Sections.clinics)) {
@@ -688,6 +704,34 @@ const _offerableSections = [
 /// ADR-041 venue's name) and for whom (free-text audience and / or the
 /// audience's name), so "where is the youth prayer?" can be answered
 /// (ADR-043, Holy Week sim B3).
+/// "Services today and tomorrow": [occurrencesForDay], the one function the
+/// home card and /mass-schedule read, so the assistant can never list a
+/// service the card hides (or the reverse; ADR-050, issues 1–3 and 8). The
+/// regular services a season supersedes are named as not held.
+void _todayAndTomorrow(
+    StringBuffer b, FeatureSettings f, List<Liturgy> liturgies, List<Season> seasons, DateTime cairoNow) {
+  final today = CairoTime.startOfDay(CairoTime.fromInstant(cairoNow));
+  b
+    ..writeln()
+    ..writeln('## Services today and tomorrow (exactly as the website shows them)');
+  for (final k in const [0, 1]) {
+    final d = CairoTime.at(today.year, today.month, today.day + k);
+    final occ = occurrencesForDay(liturgies: liturgies, seasons: seasons, day: d, dayOffset: k);
+    final off = regularSupersededOn(liturgies: liturgies, seasons: seasons, day: d);
+    final name = '${k == 0 ? 'Today' : 'Tomorrow'} ${_ymd(d)} (${weekdayNamesEn[d.weekday]})';
+    if (occ.isEmpty) {
+      b.writeln('- $name: no services listed.');
+    }
+    for (final o in occ) {
+      b.writeln('- $name: ${o.liturgy.sample ? '[UNCONFIRMED] ' : ''}${_liturgyLine(o.liturgy, f.programOptions)}');
+    }
+    if (off.isNotEmpty) {
+      b.writeln('- $name, NOT held (the season replaces them): '
+          '${off.map((l) => '${_bi(l.nameAr, l.nameEn)} ${formatRangeLatin(l.start, l.end)}').join('; ')}');
+    }
+  }
+}
+
 String _liturgyLine(Liturgy l, [ProgramOptions opts = ProgramOptions.defaults]) {
   final place = _bi(l.placeAr, l.placeEn);
   final v = opts.venue(l.program.venue);

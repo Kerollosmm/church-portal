@@ -41,7 +41,7 @@
 | **إعدادات المواسم** | قائمتا الأماكن / القاعات والفئات (حتى ١٢ لكل منهما) المستخدمتان في بطاقة «البرنامج» بالقداسات والاجتماعات والمواسم | [programme-details.md](programme-details.md) |
 | **المساعد الذكي** | مفتاحا التشغيل وإعدادات النموذج والنطاق والحدود | [assistant.md](assistant.md) |
 | **التنويهات** | | [alerts-and-banner.md](alerts-and-banner.md) |
-| **المواسم** / **القداسات والصلوات** | | [mass-schedule-and-seasons.md](mass-schedule-and-seasons.md) |
+| **المواسم** / **القداسات والصلوات** | في نموذج القداس: «يحل محل قداسات اليوم المعتادة (قداس العيد)» (`replacesDay`، ADR-050) | [mass-schedule-and-seasons.md](mass-schedule-and-seasons.md) |
 | **الاجتماعات** | | [meetings.md](meetings.md) |
 | **العيادات** | (القسم موقوف حاليًا والشاشة باقية) | [clinics.md](clinics.md) |
 | **الخدمات العامة** | | [public-services.md](public-services.md) |
