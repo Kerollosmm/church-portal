@@ -385,7 +385,7 @@ role. The Auth user itself must be created in the console (or via the Seed workf
   above its buttons below 420 px or at ≥ 1.5× text; the search clear button («مسح البحث» / Clear search) and the
   admin Home button (`backHome`) have tooltips.
 
-### Season schedule & hero tint (PR #PRNUM, ADR-050)
+### Season schedule & hero tint (PR #45, ADR-050)
 - Liturgy form: **«يحل محل قداسات اليوم المعتادة (قداس العيد)»** (`replacesDay`, default off, hint under it). Off: in a
   season that does not replace the regular schedule, a seasonal mass hides only the regular mass at the same time;
   on: a feast liturgy hides every regular mass of that day.
