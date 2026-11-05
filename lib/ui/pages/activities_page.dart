@@ -108,8 +108,8 @@ class _ActivityCard extends ConsumerWidget {
               ),
             ),
             Expanded(
-              child: TitleWithBadge(title,
-                  sample: a.sample, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16, height: 1.4)),
+              child: Text(title,
+                  style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16, height: 1.4)),
             ),
           ]),
           if (desc.isNotEmpty) ...[

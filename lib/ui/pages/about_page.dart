@@ -143,8 +143,8 @@ class PriestCard extends StatelessWidget {
           ),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              TitleWithBadge(name,
-                  sample: p.sample, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, height: 1.4)),
+              Text(name,
+                  style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, height: 1.4)),
               Text(context.tr(p.rank == 'hegumen' ? 'hegumen' : 'priest'),
                   style: TextStyle(color: context.pal.goldText, fontWeight: FontWeight.w700, fontSize: 12)),
               if (p.ordinationDate.isNotEmpty || p.hegumenDate.isNotEmpty || (p.departed && p.departedDate.isNotEmpty))

@@ -30,7 +30,7 @@ const args = process.argv.slice(2);
 const out = args.find((a) => !a.startsWith('--'));
 const di = args.indexOf('--days');
 const AHEAD = Math.min(Math.max(parseInt((di >= 0 && args[di + 1]) || '8', 10) || 8, 1), 14);
-if (!out) {
+if (!out && require.main === module) {
   console.error('usage: node tool/fetch_synaxarium.js <out.json> [--days 8]');
   process.exit(2);
 }
@@ -50,6 +50,30 @@ function cairoToday() {
 const iso = (d) => d.toISOString().slice(0, 10);
 const ddmmyyyy = (d) => `${iso(d).slice(8, 10)}-${iso(d).slice(5, 7)}-${iso(d).slice(0, 4)}`;
 const clean = (s) => (typeof s === 'string' ? s.replace(/\s+/g, ' ').trim().slice(0, 300) : '');
+
+/**
+ * The Coptic date of a Gregorian calendar date as Katameros writes it
+ * ("D/M/YYYY", e.g. 8 Nov 2026 -> "29/2/1743"), computed locally through the
+ * Julian Day Number: the same algorithm as CopticDate.fromGregorian in
+ * lib/domain/coptic_calendar.dart (1 Tout 1 AM = JDN 1825030). Used when the
+ * API answers `copticDate: null` (ADR-046; seen for 2026-11-08).
+ */
+function copticDateOf(date) {
+  const y = date.getUTCFullYear();
+  const m = date.getUTCMonth() + 1;
+  const d = date.getUTCDate();
+  const a = Math.floor((14 - m) / 12);
+  const yy = y + 4800 - a;
+  const mm = m + 12 * a - 3;
+  const jdn = d + Math.floor((153 * mm + 2) / 5) + 365 * yy + Math.floor(yy / 4) - Math.floor(yy / 100) +
+    Math.floor(yy / 400) - 32045;
+  const EPOCH = 1825030;
+  const year = Math.floor((4 * (jdn - EPOCH) + 1463) / 1461);
+  const start = EPOCH - 1 + 365 * (year - 1) + Math.floor(year / 4) + 1;
+  const month = Math.floor((jdn - start) / 30) + 1;
+  const day = jdn - start - 30 * (month - 1) + 1;
+  return `${day}/${month}/${year}`;
+}
 
 async function fetchDay(date, lang) {
   const url = `${API}/${ddmmyyyy(date)}?languageId=${LANG[lang]}`;
@@ -73,7 +97,7 @@ async function fetchDay(date, lang) {
         }
       }
     }
-    return { feast: clean(d.title), coptic: clean(d.copticDate), synaxarium: synaxarium.slice(0, 6) };
+    return { feast: clean(d.title), coptic: clean(d.copticDate) || copticDateOf(date), synaxarium: synaxarium.slice(0, 6) };
   } finally {
     clearTimeout(t);
   }
@@ -107,7 +131,7 @@ async function previousDays() {
   }
 }
 
-(async () => {
+async function main() {
   const start = cairoToday();
   start.setUTCDate(start.getUTCDate() - 1);
   const days = {};
@@ -140,7 +164,13 @@ async function previousDays() {
   fs.mkdirSync(path.dirname(path.resolve(out)), { recursive: true });
   fs.writeFileSync(out, json);
   console.log(`wrote ${out}: ${Object.keys(days).length} days, ${json.length} bytes`);
-})().catch((e) => {
-  console.error(e);
-  process.exit(1);
-});
+}
+
+module.exports = { copticDateOf };
+
+if (require.main === module) {
+  main().catch((e) => {
+    console.error(e);
+    process.exit(1);
+  });
+}

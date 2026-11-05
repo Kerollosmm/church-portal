@@ -431,12 +431,13 @@ void main() {
       expect(find.text('تحميل برنامج النهضة (PDF)'), findsOneWidget);
     });
 
-    testWidgets('top event: a sample (unconfirmed) programme service carries the «times pending» note', (tester) async {
+    testWidgets('top event: a sample (unconfirmed) programme service shows its programme, no «times pending» note (ADR-046)', (tester) async {
       final sampleNight = lit('sampleNight',
           date: DateTime.utc(2026, 11, 5), start: '18:30', end: '21:30', season: 'revival_maximus', sample: true, program: programme);
       await pump(tester, const TopEventCard(), cairo(2026, 11, 5, 12), lits: [sampleNight]);
       expect(find.byKey(const Key('topEventProgramme')), findsOneWidget);
-      expect(find.byKey(const Key('topEventTimesPending')), findsOneWidget);
+      expect(find.byKey(const Key('topEventTimesPending')), findsNothing);
+      expect(find.textContaining('مواعيد تقريبية'), findsNothing);
     });
 
     testWidgets('top event: a church event\'s PDF has its own labelled button', (tester) async {

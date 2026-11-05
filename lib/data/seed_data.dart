@@ -30,8 +30,12 @@ class SeedData {
   List<T> _list<T>(String name, T Function(String, Map<String, dynamic>) f) =>
       collection(name).entries.map((e) => f(e.key, e.value)).toList();
 
-  ChurchSettings get settings => ChurchSettings.fromMap(collection('settings')['church'] ?? const {});
-  FeatureSettings get features => FeatureSettings.fromMap(collection('settings')['features']);
+  /// Parsed once, so every read returns the SAME object: the repository and
+  /// providers tell the bundled copy from a stored doc with `identical`
+  /// (`confirms`, `errorReportingSwitch`, `featuresLive`). As getters they
+  /// built a new object per read and that test never matched (ADR-046).
+  late final ChurchSettings settings = ChurchSettings.fromMap(collection('settings')['church'] ?? const {});
+  late final FeatureSettings features = FeatureSettings.fromMap(collection('settings')['features']);
   List<Alert> get alerts => _list('alerts', Alert.fromMap);
   List<Season> get seasons => _list('seasons', Season.fromMap);
   List<Liturgy> get liturgies => _list('liturgies', Liturgy.fromMap);

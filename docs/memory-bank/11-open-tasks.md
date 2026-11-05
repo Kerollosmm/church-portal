@@ -1,7 +1,7 @@
 # 11 — Open tasks
 
 Tick items off (or delete them) in the PR that completes them, and add new ones as you discover them.
-Status as of 5 Nov 2026 (PR #38 / ADR-045; PR #35 / ADR-044; PR #37 / ADR-043; PR #33 / ADR-042; PR #32 / ADR-041; PR #31 / ADR-039–040; PR #30 / ADR-038; PR #25 re-checked against `d60261d`; earlier: PR #7–#24).
+Status as of 5 Nov 2026 (PR #39 / ADR-046; PR #38 / ADR-045; PR #35 / ADR-044; PR #37 / ADR-043; PR #33 / ADR-042; PR #32 / ADR-041; PR #31 / ADR-039–040; PR #30 / ADR-038; PR #25 re-checked against `d60261d`; earlier: PR #7–#24).
 
 ## Top open items (owner's list, 4 Nov 2026 — details in the sections below)
 
@@ -152,12 +152,20 @@ Status as of 5 Nov 2026 (PR #38 / ADR-045; PR #35 / ADR-044; PR #37 / ADR-043; P
       template is hidden in any season that has a real service, additive revivals included.
 - [ ] Owner (ADR-045, recommended tidy-up): on live, hide (visible off) the seed templates `rev-max-1…7`,
       `rev-moses-1…7`, `hw-day-1…3` / `hw-eve-1…3` once the real programme is entered — they no longer mix in, but
-      they would show in a season with no real service yet («بيانات تجريبية»). Never delete live data from the app.
+      they would show in a season with no real service yet (no badge since ADR-046). Never delete live data from the app.
 - [ ] Owner (ADR-045): for each revival night add speaker / topic / PDF on the service itself — the Home top event
       and the assistant now read them from there (a church event in «اليوم والبث المباشر» still takes precedence).
 - [ ] Optional (ADR-043 cost): if the app-wide `seasons` listener matters, derive the active season from
       `settings/features.seasonPreset` only (no listener) when no season list is needed on the page.
 - [x] ADR number: PR #35 (splash / top bar) renumbered to ADR-044 after PR #37 took ADR-043.
+- [x] Live test 5 Nov 2026 (ADR-046, PR #39): top-event cold-load flicker, EN `<title>` / `lang`, reCAPTCHA on every page
+      after /ask, «تعرّف على عن الكنيسة», public sample badges / banner, empty Coptic date in `today.json`, CORS pope-visit images.
+- [ ] After PR #39 is merged and deployed: rewrite only `milestones/pope-visit` `image.url` + `gallery[0..2].url` on live to
+      `/media/milestones/pope-visit-*.webp` (owner-authorised, admin SDK; before / after in `work/live-fixes/status.md`).
+- [ ] Owner (data): `topEvent` and `commemoration` are off on live — switch them back on in «اليوم والبث المباشر» for the
+      card to show at all; confirm or hide the 47 sample liturgies / 4 priests / 4 facilities (no public mark now, but
+      the times are still unconfirmed and the assistant still marks them `[UNCONFIRMED]` when `mentionUnconfirmed` is on).
+- [ ] Optional (rca #5): cap or slow the hero Ken Burns clock — NOT without the owner (approved motion, standing rule).
 
 ## Custom sections, pages & contact types (PR #18, ADR-027/028)
 

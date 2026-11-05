@@ -85,8 +85,7 @@ class _InfoColumn extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            TitleWithBadge(context.tr('phones'),
-                sample: s.sample,
+            Text(context.tr('phones'),
                 style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17, color: context.pal.primary)),
             const SizedBox(height: 6),
             for (final p in s.phones) PhoneRow(phone: p),

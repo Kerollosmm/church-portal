@@ -27,6 +27,9 @@
   الاختبارات تبقى الرسومات في Flutter كما كانت.
 - **App Check عند الطلب** (`lib/data/firebase_bootstrap.dart`): لم يعد يُفعَّل عند بدء التشغيل؛ `ensureAppCheckActivated()`
   تُستدعى عند أول استخدام للمساعد (التسخين أو أول سؤال). ظهور المساعد ما زال مشروطًا بأن App Check مُعدّ في هذا البناء.
+  منذ PR #39 (ADR-046): مكتبة FlutterFire تحفظ مزوّد reCAPTCHA في `localStorage` بعد زيارة `/ask` وتعيد تفعيله في كل تحميل
+  لاحق (≈700 ك.ب في كل صفحة). سكربت `boot-prefs` في `web/index.html` يحذف مفاتيح `FlutterFire-[DEFAULT]-recaptcha*`
+  قبل تشغيل Firebase، فلا يُحمَّل reCAPTCHA إلا في `/ask`.
 - **شاشة البداية الكنسية** في `web/index.html` (أُعيد تصميمها في PR #35، ADR-044):
   - خلفية ورقية دافئة `#FBF3E4` (نفس `background_color` في `manifest.json`).
   - ختم الكنيسة `assets/assets/branding/seal.png` (نفس ملف الختم داخل التطبيق، 27 ك.ب، يُحمَّل مرة واحدة) بحجم 104×104

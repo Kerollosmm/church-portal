@@ -70,7 +70,6 @@ class EducationPage extends ConsumerWidget {
                 return o != 0 ? o : a.start.compareTo(b.start);
               });
             final children = <Widget>[
-              if (meetings.any((m) => m.sample)) const PendingConfirmationNote(),
             ];
             for (final g in _groups) {
               final items = sorted.where((m) => g.$1.contains(m.stage)).toList();
@@ -148,7 +147,6 @@ class _TimelineItem extends ConsumerWidget {
                   Wrap(spacing: 8, runSpacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: [
                     if (label != null) Pill(context.pick(label[0], label[1]), color: context.pal.primary),
                     if (m.weekday == todayWeekday) Pill(context.tr('today'), icon: Icons.today_rounded),
-                    if (m.sample) const SampleBadge(),
                   ]),
                   const SizedBox(height: Space.s),
                   Row(children: [

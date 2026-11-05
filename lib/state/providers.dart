@@ -106,6 +106,28 @@ bool? errorReportingSwitch(AsyncValue<FeatureSettings> f, {FeatureSettings? seed
   return null;
 }
 
+/// True once `settings/features` holds the stored doc, not the bundled seed
+/// copy (ADR-046). On a cold, slow load the seeding check can time out and the
+/// seed's defaults (every today switch on) are served first; blocks driven by
+/// the today switches wait for this so they never flash and then vanish when
+/// the stored doc (e.g. `topEvent: false`) arrives. Reads the existing
+/// features stream: no new listener. Off Firestore (seed mode, tests) the
+/// seed IS the content, so it counts; a failed stream shows the defaults.
+final featuresLiveProvider = Provider<bool>((ref) {
+  final repo = ref.watch(repositoryProvider);
+  if (repo is! FirestoreRepository) return true;
+  return featuresLive(ref.watch(featuresStreamProvider), seedCopy: repo.seed.features);
+});
+
+/// [featuresLiveProvider]'s rule on Firestore (the same `identical` test as
+/// [errorReportingSwitch]): false while loading or while [f] is the bundled
+/// [seedCopy]; true for a stored doc or a failed stream.
+@visibleForTesting
+bool featuresLive(AsyncValue<FeatureSettings> f, {required FeatureSettings seedCopy}) {
+  if (f.hasValue) return !identical(f.value, seedCopy);
+  return f.hasError;
+}
+
 /// Public lists: items an admin hid are dropped, the rest sorted by `order`.
 Stream<List<T>> _public<T extends Hideable>(Stream<List<T>> s) => s.map(publicItems);
 
@@ -293,6 +315,8 @@ final synaxariumProvider = FutureProvider<SynaxariumData>((ref) async {
 /// The home page's top event (church event > today's programme service >
 /// Katameros > computed feasts; ADR-040, ADR-045).
 final topEventProvider = Provider<TopEvent?>((ref) {
+  // Only on the stored today switches, never the seed's defaults (ADR-046).
+  if (!ref.watch(featuresLiveProvider)) return null;
   final f = ref.watch(featuresProvider);
   final now = ref.watch(nowProvider).value ?? DateTime.now();
   final s = ref.watch(settingsProvider).value;

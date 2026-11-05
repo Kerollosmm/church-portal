@@ -64,7 +64,6 @@ class _MassSchedulePageState extends ConsumerState<MassSchedulePage> {
       children: [
         const PageIntro(pageKey: CustomizablePages.schedule),
         const AlertBanner(),
-        if ((lits.value ?? const <Liturgy>[]).any((l) => l.sample)) const PendingConfirmationNote(),
         const NextMassCard(),
         const SizedBox(height: 16),
         Card(
