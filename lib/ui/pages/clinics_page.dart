@@ -64,7 +64,6 @@ class _ClinicsPageState extends ConsumerState<ClinicsPage> {
             var list = filterClinics(clinics, specialty: _specialty, now: now);
             if (_todayOnly) list = list.where((c) => isClinicAvailableToday(c, now)).toList();
             return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              if (clinics.any((c) => c.active && c.sample)) const PendingConfirmationNote(),
               Text(context.tr('specialtyFilter'), style: TextStyle(fontWeight: FontWeight.w700, color: context.pal.muted)),
               const SizedBox(height: 8),
               Wrap(spacing: 8, runSpacing: 8, children: [
@@ -151,7 +150,7 @@ class ClinicCard extends StatelessWidget {
     // Turning an item's contacts off hides them everywhere (ADR-020).
     final actions = _actions(context, c, doctor, clinicName, office);
     final doctorTitle =
-        TitleWithBadge(doctor, sample: c.sample, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16));
+        Text(doctor, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16));
     final degree = context.pick(c.degreeAr, c.degreeEn);
     return Card(
       clipBehavior: Clip.antiAlias,

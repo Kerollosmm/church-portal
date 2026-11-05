@@ -91,8 +91,8 @@ class _FacilityCard extends StatelessWidget {
                 ),
               ),
               Expanded(
-                child: TitleWithBadge(name,
-                    sample: f.sample, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+                child: Text(name,
+                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
               ),
             ]),
             if (desc.isNotEmpty) ...[

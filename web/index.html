@@ -75,6 +75,42 @@
   <link rel="preload" href="assets/assets/fonts/Lalezar-Regular.ttf" as="font" type="font/ttf" crossorigin>
 
   <title>كنيسة القديسين مكسيموس ودوماديوس والقوي الأنبا موسى الأسود</title>
+  <!-- ADR-046: runs right after <title>, before Flutter / Firebase load.
+       1. Language: the same rule as LocaleNotifier.initialLocale
+          (lib/state/providers.dart): ?lang=en|ar wins, else the saved
+          choice (localStorage church_portal_lang), else Arabic. English sets
+          <html lang="en"> and the English <title> at once, instead of 6-9 s
+          later when Flutter builds.
+       2. App Check stays lazy (ADR-037): the FlutterFire App Check web plugin
+          saves its reCAPTCHA provider in storage once /ask activates it and
+          re-activates it at Firebase.initializeApp on every later load
+          (reCAPTCHA Enterprise, ~700 KiB, on every page). Dropping those
+          keys here means only /ask loads reCAPTCHA again. -->
+  <script id="boot-prefs">
+    (function () {
+      try {
+        // The last ?lang= wins, as Dart's Uri.queryParameters reads it (CodeRabbit on PR #39).
+        var q = new URLSearchParams(location.search).getAll('lang').pop();
+        var saved = null;
+        try { saved = localStorage.getItem('church_portal_lang'); } catch (e) {}
+        var lang = q === 'en' || q === 'ar' ? q : (saved === 'en' ? 'en' : 'ar');
+        if (lang === 'en') {
+          document.documentElement.lang = 'en';
+          document.title = 'St. Maximus & Domadius and St. Moses the Black Church';
+        }
+      } catch (e) {}
+      [function () { return localStorage; }, function () { return sessionStorage; }].forEach(function (get) {
+        try {
+          var st = get(), drop = [];
+          for (var i = 0; i < st.length; i++) {
+            var k = st.key(i);
+            if (k && k.indexOf('FlutterFire-') === 0 && k.indexOf('-recaptcha') > 0) drop.push(k);
+          }
+          drop.forEach(function (k) { st.removeItem(k); });
+        } catch (e) {}
+      });
+    })();
+  </script>
   <link rel="manifest" href="manifest.json">
   <!-- First paint (ADR-037, redesigned in ADR-044): a liturgical loading
        screen (parish seal, church name in Lalezar, a thin gold progress

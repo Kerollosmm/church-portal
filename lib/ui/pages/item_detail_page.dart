@@ -161,7 +161,6 @@ class _Entry {
   final String title;
   final String subtitle;
   final IconData icon;
-  final bool sample;
   final MediaImage? cover;
 
   /// Resolved display style of [cover] (ADR-023).
@@ -194,7 +193,6 @@ class _Entry {
     required this.icon,
     required this.details,
     this.subtitle = '',
-    this.sample = false,
     this.cover,
     this.imageStyle = ImageStyles.card,
     this.pills = const [],
@@ -220,7 +218,6 @@ class _Entry {
           title: context.pick(m.nameAr, m.nameEn),
           icon: Icons.school_rounded,
           details: m.details,
-          sample: m.sample,
           cover: m.image,
           imageStyle: features.imageStyleFor('meetings', m.imageStyle),
           pills: [if (stage != null) Pill(context.pick(stage[0], stage[1]), color: primary)],
@@ -241,7 +238,6 @@ class _Entry {
           title: context.pick(a.titleAr, a.titleEn),
           icon: activityIcon(a.category),
           details: a.details,
-          sample: a.sample,
           cover: a.image,
           imageStyle: features.imageStyleFor('activities', a.imageStyle),
           facts: [
@@ -263,7 +259,6 @@ class _Entry {
           subtitle: doctor,
           icon: Icons.local_hospital_rounded,
           details: c.details,
-          sample: c.sample,
           cover: c.image,
           imageStyle: features.imageStyleFor('clinics', c.imageStyle),
           pills: [if (isClinicAvailableToday(c, now)) Pill(context.tr('availableToday'), icon: Icons.check_circle)],
@@ -287,7 +282,6 @@ class _Entry {
           title: context.pick(f.nameAr, f.nameEn),
           icon: facilityIcon(f.type),
           details: f.details,
-          sample: f.sample,
           cover: f.image,
           imageStyle: features.imageStyleFor('facilities', f.imageStyle),
           facts: [_Fact(Icons.schedule_rounded, context.tr('factHours'), context.pick(f.hoursAr, f.hoursEn))],
@@ -301,7 +295,6 @@ class _Entry {
           subtitle: rank,
           icon: p.departed ? Icons.local_florist_rounded : Icons.person_rounded,
           details: p.details,
-          sample: p.sample,
           cover: p.displayImage,
           imageStyle: features.imageStyleFor('priests', p.imageStyle),
           pills: [
@@ -480,13 +473,11 @@ class _DetailView extends ConsumerWidget {
       children: [
         _BackLink(parent: parent),
         const SizedBox(height: 4),
-        if (e.sample) const PendingConfirmationNote(),
-        if (e.pills.isNotEmpty || e.sample)
+        if (e.pills.isNotEmpty)
           Padding(
             padding: const EdgeInsets.only(bottom: 10),
             child: Wrap(spacing: 8, runSpacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: [
               ...e.pills,
-              if (e.sample) const SampleBadge(),
             ]),
           ),
         // Saints show their icon in the header's halo instead (unless an

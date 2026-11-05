@@ -106,6 +106,53 @@ bool? errorReportingSwitch(AsyncValue<FeatureSettings> f, {FeatureSettings? seed
   return null;
 }
 
+/// True once `settings/features` holds the stored doc, not the bundled seed
+/// copy (ADR-046). On a cold, slow load the seeding check can time out and the
+/// seed's defaults (every today switch on) are served first; blocks driven by
+/// the today switches wait for this so they never flash and then vanish when
+/// the stored doc (e.g. `topEvent: false`) arrives. Reads the existing
+/// features stream: no new listener. Off Firestore (seed mode, tests) the
+/// seed IS the content, so it counts; a failed stream shows the defaults.
+///
+/// The bundled copy is accepted after [featuresSeedPatience] (Seer review on
+/// PR #39): the repository turns a failed stream or a database it cannot
+/// reach into that copy, so offline (no cache) or on a failed stream the
+/// card still comes back with its defaults instead of never showing. The
+/// cold-load flicker had the stored doc ~12 s after the seed copy.
+final featuresLiveProvider = Provider<bool>((ref) {
+  final repo = ref.watch(repositoryProvider);
+  if (repo is! FirestoreRepository) return true;
+  final f = ref.watch(featuresStreamProvider);
+  if (featuresLive(f, seedCopy: repo.seed.features)) return true;
+  // Only the seed copy so far: start (or read) the patience timer.
+  return f.hasValue && ref.watch(_seedPatienceProvider);
+});
+
+/// How long the top event waits for the stored `settings/features` once the
+/// bundled copy is all there is (ADR-046).
+const featuresSeedPatience = Duration(seconds: 30);
+
+/// False until [featuresSeedPatience] after it is first read.
+final _seedPatienceProvider = NotifierProvider<_SeedPatience, bool>(_SeedPatience.new);
+
+class _SeedPatience extends Notifier<bool> {
+  @override
+  bool build() {
+    final t = Timer(featuresSeedPatience, () => state = true);
+    ref.onDispose(t.cancel);
+    return false;
+  }
+}
+
+/// [featuresLiveProvider]'s rule on Firestore (the same `identical` test as
+/// [errorReportingSwitch]): false while loading or while [f] is the bundled
+/// [seedCopy]; true for a stored doc or a failed stream.
+@visibleForTesting
+bool featuresLive(AsyncValue<FeatureSettings> f, {required FeatureSettings seedCopy}) {
+  if (f.hasValue) return !identical(f.value, seedCopy);
+  return f.hasError;
+}
+
 /// Public lists: items an admin hid are dropped, the rest sorted by `order`.
 Stream<List<T>> _public<T extends Hideable>(Stream<List<T>> s) => s.map(publicItems);
 
@@ -293,6 +340,8 @@ final synaxariumProvider = FutureProvider<SynaxariumData>((ref) async {
 /// The home page's top event (church event > today's programme service >
 /// Katameros > computed feasts; ADR-040, ADR-045).
 final topEventProvider = Provider<TopEvent?>((ref) {
+  // Only on the stored today switches, never the seed's defaults (ADR-046).
+  if (!ref.watch(featuresLiveProvider)) return null;
   final f = ref.watch(featuresProvider);
   final now = ref.watch(nowProvider).value ?? DateTime.now();
   final s = ref.watch(settingsProvider).value;

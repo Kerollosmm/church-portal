@@ -272,7 +272,11 @@ App target settings:
 ADR-029 (PR #19). **Since ADR-037 (PR #29) App Check is not activated at start-up**: `ensureAppCheckActivated()`
 (one shared Future) runs on the assistant's first `warmUp()` / `generate()`, so public pages never load reCAPTCHA
 Enterprise. `FirebaseStatus.appCheckActive` = "App Check is configured for this build" (`plan.activate`), which
-still gates the assistant; a later activation failure shows the assistant's normal error instead of hiding it. Firebase AI Logic **requires** App Check enforcement since 2 Nov 2026; it is **Enforced** in the
+still gates the assistant; a later activation failure shows the assistant's normal error instead of hiding it.
+**ADR-046:** the FlutterFire web plugin saves the provider in `localStorage` (`FlutterFire-[DEFAULT]-recaptchaType` /
+`…-recaptchaSiteKey`) and would re-activate App Check at `Firebase.initializeApp` on every later load; the
+`boot-prefs` script in `web/index.html` deletes those keys (local + session storage) before Flutter loads, so only /ask
+loads reCAPTCHA. Firebase AI Logic **requires** App Check enforcement since 2 Nov 2026; it is **Enforced** in the
 console.
 
 | Build | Provider |

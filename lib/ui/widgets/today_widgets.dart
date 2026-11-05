@@ -329,16 +329,6 @@ class TopEventCard extends ConsumerWidget {
       children.add(Padding(
           padding: const EdgeInsets.only(top: 6), child: TimeRangeText(o.liturgy.start, o.liturgy.end)));
       children.add(KeyedSubtree(key: const Key('topEventProgramme'), child: ProgramDetails(o.liturgy.program)));
-      // A sample (unconfirmed) service carries the same note as on the
-      // next-service card (CodeRabbit review on PR #38).
-      if (o.liturgy.sample) {
-        children.add(Padding(
-          padding: const EdgeInsets.only(top: 6),
-          child: Text(context.tr('timesPending'),
-              key: const Key('topEventTimesPending'),
-              style: TextStyle(color: context.pal.goldText, fontWeight: FontWeight.w700, fontSize: 12)),
-        ));
-      }
     } else {
       for (final l in lines.where((l) => l.trim().isNotEmpty && l.trim() != title)) {
         children.add(Padding(
