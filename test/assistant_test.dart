@@ -572,6 +572,7 @@ void main() {
         {AssistantSettings? settings,
         String reply = outOfScopeToken,
         AssistantUsageStore? usage,
+        String locale = 'en',
         ContentRepository Function(SeedData, AssistantSettings)? repo}) async {
       tester.view.physicalSize = const Size(900, 1600);
       tester.view.devicePixelRatio = 1;
@@ -586,7 +587,7 @@ void main() {
           assistantUsageStoreProvider.overrideWith((ref) async => usage ?? MemoryUsageStore()),
         ],
         child: MaterialApp(
-          locale: const Locale('en'),
+          locale: Locale(locale),
           supportedLocales: const [Locale('ar'), Locale('en')],
           localizationsDelegates: GlobalMaterialLocalizations.delegates,
           home: const Scaffold(body: AssistantPage()),
@@ -765,6 +766,34 @@ void main() {
       expect(find.byType(ActionChip), findsOneWidget);
     });
 
+    // ADR-051 (issue 6): Arabic-Indic digits in the Arabic limit message.
+    testWidgets('the Arabic daily-limit message uses Arabic-Indic digits', (tester) async {
+      final usage = MemoryUsageStore(usage: DailyUsage(cairoDayKey(DateTime.now()), 6));
+      final model = await pump(tester,
+          settings: AssistantSettings.fromMap({'perDay': 6}), reply: 'x', usage: usage, locale: 'ar');
+      await tester.enterText(find.byKey(const Key('askInput')), 'متى القداس؟');
+      await tester.tap(find.byTooltip('إرسال'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('وصلت إلى حد الأسئلة اليومي (٦)'), findsOneWidget);
+      expect(find.textContaining('(6)'), findsNothing);
+      expect(model.calls, isEmpty);
+    });
+
+    // ADR-051 (issue 7): the greeting and the chips skip hidden sections.
+    testWidgets('greeting and chips skip clinics and meetings when they are switched off', (tester) async {
+      await pump(tester,
+          locale: 'ar',
+          repo: _HiddenRepo.new,
+          settings: AssistantSettings.fromMap({
+            'showSuggestions': true,
+            'suggestionsAr': 'متى القداس؟\nمواعيد العيادة؟\nاجتماع الشباب امتى؟',
+          }));
+      expect(find.text('أهلًا بك! أجيب عن مواعيد القداسات وطرق التواصل، من بيانات الكنيسة الرسمية.'), findsOneWidget);
+      expect(find.textContaining('العيادات'), findsNothing);
+      expect(find.widgetWithText(ActionChip, 'متى القداس؟'), findsOneWidget);
+      expect(find.byType(ActionChip), findsOneWidget);
+    });
+
     testWidgets('"Show suggested questions" on with an empty list shows no chips', (tester) async {
       await pump(tester, settings: AssistantSettings.fromMap({'showSuggestions': true}));
       expect(find.byType(ActionChip), findsNothing);
@@ -777,6 +806,16 @@ class _Repo extends SeedRepository {
   final AssistantSettings assistant;
   @override
   Stream<AssistantSettings> assistantSettings() => Stream.value(assistant);
+}
+
+/// Seed with the clinics and meetings sections switched off (ADR-051).
+class _HiddenRepo extends _Repo {
+  _HiddenRepo(super.seed, super.assistant);
+  @override
+  Stream<FeatureSettings> features() => Stream.value(FeatureSettings.fromMap({
+        ...seed.features.toMap(),
+        'sections': {...seed.features.toMap()['sections'] as Map, Sections.clinics: false, Sections.meetings: false},
+      }));
 }
 
 /// Seed + clinics switched on, one custom section and one custom page with a

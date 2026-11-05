@@ -19,6 +19,7 @@ import '../../domain/features.dart';
 import '../../domain/models.dart' show Season;
 import '../../domain/schedule.dart' show isSeasonActiveAt;
 import '../../domain/time_format.dart';
+import '../../domain/today.dart' show SynaxariumData;
 import '../../state/providers.dart';
 import '../widgets/common.dart';
 import '../widgets/safe_markdown.dart';
@@ -208,6 +209,11 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
       entries: c.entries,
       pages: c.pages,
       contact: c.contact,
+      // The Katameros day only when the home page already loaded it (no new
+      // read; ADR-051): else the computed feast list.
+      synaxarium: ref.exists(synaxariumProvider)
+          ? (ref.read(synaxariumProvider).value ?? SynaxariumData.empty)
+          : SynaxariumData.empty,
     );
   }
 
@@ -320,8 +326,9 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
 
   String _blockedText(AssistantOutcome o, AssistantSettings s) => switch (o) {
         AssistantOutcome.rateLimitedMinute => context.tr('askSlowDown'),
-        AssistantOutcome.rateLimitedDay => context.tr('askDayLimit', {'n': '${s.perDay}'}),
-        AssistantOutcome.invalid => context.tr('askTooLong', {'n': '${s.maxChars}'}),
+        // Arabic-Indic digits in the Arabic text (ADR-051, issue 6).
+        AssistantOutcome.rateLimitedDay => context.tr('askDayLimit', {'n': localDigits(context, '${s.perDay}')}),
+        AssistantOutcome.invalid => context.tr('askTooLong', {'n': localDigits(context, '${s.maxChars}')}),
         _ => context.tr('askError'),
       };
 
@@ -362,7 +369,10 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
     final cfg = ref.watch(assistantSettingsProvider).value ?? AssistantSettings.defaults;
     // No chips unless the admin turned "Show suggested questions" on; no
     // built-in fallbacks.
-    final suggestions = cfg.visibleSuggestions(context.isAr);
+    // ADR-051 (issue 7): no chip and no built-in welcome topic for a
+    // section switched off in settings/features.sections.
+    final features = ref.watch(featuresProvider);
+    final suggestions = cfg.visibleSuggestions(context.isAr, features.enabled);
     final welcome = cfg.welcome(context.isAr);
     return Column(children: [
       CustomizablePageHeader(
@@ -376,7 +386,8 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
             constraints: const BoxConstraints(maxWidth: 800),
             child: ListView(controller: _scroll, padding: const EdgeInsets.all(16), children: [
               const PageIntro(pageKey: CustomizablePages.ask),
-              _bubble(_Msg(false, welcome.isNotEmpty ? welcome : context.tr('askIntro'))),
+              _bubble(_Msg(false,
+                  welcome.isNotEmpty ? welcome : askIntroText(arabic: context.isAr, enabled: features.enabled))),
               if (_messages.isEmpty && suggestions.isNotEmpty)
                 Padding(
                   padding: const EdgeInsets.only(top: 8),

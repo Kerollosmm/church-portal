@@ -163,7 +163,8 @@ List<LiturgyOccurrence> occurrencesForDay({
     // Replacement is decided on ALL seasonal services (so e.g. Holy Week
     // Pascha hours also suspend the regular weekday masses), then filtered.
     for (final s in windows) {
-      if (s.replacesRegular) {
+      // ADR-051: an additive season replaces on its `replaceDates` (feast night).
+      if (s.replacesOn(dayStart)) {
         replacing.add(s);
       } else {
         (additive[s] ??= []).add(o);
@@ -399,7 +400,7 @@ bool undatedSuppressedOn(Season s, Liturgy l, Iterable<Liturgy> all, tz.TZDateTi
     // start day) is not part of it (as in [occurrencesForDay]; CodeRabbit).
     final o = _occurrence(d, dayStart, 0);
     if (o == null || !isSeasonActiveAt(s, o.start)) continue;
-    if (s.replacesRegular) return true;
+    if (s.replacesOn(dayStart)) return true;
     if (mine == null || (o.start.isBefore(mine.end) && mine.start.isBefore(o.end))) return true;
   }
   return false;

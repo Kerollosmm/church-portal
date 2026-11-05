@@ -9,7 +9,10 @@
 // the season with no write and no Cloud Function; the admin dashboard then
 // offers the restore button to make the stored values match. Pure Dart.
 
-import 'models.dart' show Season;
+import 'cairo_time.dart';
+import 'models.dart' show Liturgy, Season;
+import 'schedule.dart' show occurrencesForDay;
+import 'season_keys.dart';
 
 DateTime? _date(Object? v) {
   if (v is DateTime) return v;
@@ -186,7 +189,10 @@ class PresetRequest {
   /// The checklist defaults per season kind (owner SOP): Holy Week / Pascha /
   /// Nativity replace the weekly schedule, hide meetings and clinics, stop
   /// the hero motion and hide wedding bookings; revivals add evening prayers
-  /// on top of the regular masses, so nothing is replaced or hidden.
+  /// on top of the regular masses, so nothing is replaced or hidden. The
+  /// fasts (`fast`, Great Lent, the Apostles' fast, Kiahk — the Nativity fast
+  /// uses `fast` or `kiahk`) hide wedding bookings: no weddings in a fast
+  /// (ADR-051, issue 12).
   static Set<String> defaultsFor(String seasonKey) => switch (seasonKey) {
         'holy_week' => {
             PresetOption.replaceRegular,
@@ -196,6 +202,7 @@ class PresetRequest {
             PresetOption.weddingOff,
           },
         'pascha' || 'nativity' => {PresetOption.replaceRegular},
+        _ when SeasonKeys.isFast(seasonKey) => {PresetOption.weddingOff},
         _ => const {},
       };
 }
@@ -252,6 +259,7 @@ PresetWrites planApply({
   required DateTime now,
   String storedTheme = '',
   String? seasonTheme,
+  DateTime? liveEnd,
 }) {
   final o = r.options;
   final prev = <String, Object?>{PresetPrev.seasonActive: season.active};
@@ -286,7 +294,9 @@ PresetWrites planApply({
     prev[PresetPrev.liveUrl] = liveUrl;
     prev[PresetPrev.liveEndsAt] = liveEndsAt;
     f['liveUrl'] = r.liveUrl.trim();
-    f['liveEndsAt'] = season.endsAt;
+    // ADR-051 (issue 10): tonight's end ([presetLiveEnd], editable on the
+    // screen); null = the season's end (older callers).
+    f['liveEndsAt'] = liveEnd ?? season.endsAt;
   }
   if (o.contains(PresetOption.pdf)) {
     prev[PresetPrev.attachmentUrl] = season.program.attachmentUrl;
@@ -315,6 +325,45 @@ PresetWrites planApply({
     previous: prev,
   ).toMap();
   return PresetWrites(f, season.id, s);
+}
+
+/// The default end of the live banner the preset sets (ADR-051, issue 10):
+/// the end of the last of [season]'s services on its first evening — today,
+/// or the season's first day when it has not started yet — plus 30 minutes
+/// (an overnight service ends the next morning); 23:59 that day when it has
+/// no service then, or when they have all ended before [now]. Never after the
+/// season's end. The admin can change it before applying, and the live
+/// banner is still switched on by hand every night.
+DateTime presetLiveEnd({required Season season, required Iterable<Liturgy> liturgies, required DateTime now}) {
+  final c = CairoTime.fromInstant(now);
+  var day = CairoTime.at(c.year, c.month, c.day);
+  final start = season.startsAt;
+  if (start != null && !start.isBefore(CairoTime.at(c.year, c.month, c.day + 1))) {
+    final s = CairoTime.fromInstant(start);
+    day = CairoTime.at(s.year, s.month, s.day);
+  }
+  // The season as it will be once applied (the preset activates it).
+  final active = Season(
+    id: season.id,
+    key: season.key,
+    nameAr: season.nameAr,
+    nameEn: season.nameEn,
+    startsAt: season.startsAt,
+    endsAt: season.endsAt,
+    replacesRegular: season.replacesRegular,
+    replaceDates: season.replaceDates,
+  );
+  DateTime? last;
+  for (final o in occurrencesForDay(liturgies: liturgies, seasons: [active], day: day, dayOffset: 0)) {
+    if (o.liturgy.seasonKey != season.key) continue;
+    if (last == null || o.end.isAfter(last)) last = o.end;
+  }
+  final fallback = CairoTime.at(day.year, day.month, day.day, 23 * 60 + 59);
+  var end = last == null ? fallback : last.add(const Duration(minutes: 30));
+  if (!end.isAfter(now)) end = fallback;
+  final seasonEnd = season.endsAt;
+  if (seasonEnd != null && end.isAfter(seasonEnd) && seasonEnd.isAfter(now)) end = seasonEnd;
+  return DateTime.fromMillisecondsSinceEpoch(end.millisecondsSinceEpoch, isUtc: true);
 }
 
 /// The restore writes: every value [p] replaced goes back, and the preset is

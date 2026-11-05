@@ -163,6 +163,16 @@ class DocEditorState extends State<DocEditor> {
         _values[f.key] = v is int ? v : null;
       case FieldType.weekdays:
         _values[f.key] = <int>{...((v as List?) ?? const []).whereType<int>()};
+      case FieldType.choices:
+        _values[f.key] = <String>{
+          for (final o in (v is List ? v : f.defaultValues))
+            if (o is String && f.options.contains(o)) o,
+        };
+      case FieldType.dateList:
+        _values[f.key] = <String>{
+          for (final o in (v is List ? v : const []))
+            if (o is String && isValidDate(o)) o,
+        };
       case FieldType.choice:
         _values[f.key] = (v == null || v.toString().isEmpty)
             ? (f.nullableChoice ? null : (f.defaultOption ?? (f.options.isNotEmpty ? f.options.first : null)))
@@ -240,6 +250,10 @@ class DocEditorState extends State<DocEditor> {
           out[f.key] = _values[f.key];
         case FieldType.weekdays:
           out[f.key] = (_values[f.key] as Set<int>).toList()..sort();
+        case FieldType.choices:
+          out[f.key] = [for (final o in f.options) if ((_values[f.key] as Set<String>).contains(o)) o];
+        case FieldType.dateList:
+          out[f.key] = (_values[f.key] as Set<String>).toList()..sort();
         case FieldType.objectList:
           out[f.key] = [
             for (final r in _rows[f.key]!) f.encodedRows ? _encodeRow(f, r.collect()) : r.collect(),
@@ -683,6 +697,35 @@ class DocEditorState extends State<DocEditor> {
               ),
           ]),
         );
+      case FieldType.choices:
+        final set = _values[f.key] as Set<String>;
+        return InputDecorator(
+          key: ValueKey('field-${f.key}'),
+          decoration: InputDecoration(
+            labelText: label,
+            helperText: context.pick(f.hintAr, f.hintEn).isEmpty ? null : context.pick(f.hintAr, f.hintEn),
+            helperMaxLines: 4,
+          ),
+          child: Wrap(spacing: 6, runSpacing: 6, children: [
+            for (final o in f.options)
+              FilterChip(
+                key: ValueKey('choice-${f.key}-$o'),
+                label: Text(choiceLabel(context, o)),
+                selected: set.contains(o),
+                checkmarkColor: context.pal.onBar,
+                labelStyle: TextStyle(
+                  color: set.contains(o) ? context.pal.onBar : context.pal.primary,
+                  fontWeight: FontWeight.w600,
+                ),
+                onSelected: (sel) => setState(() {
+                  sel ? set.add(o) : set.remove(o);
+                  _dirty = true;
+                }),
+              ),
+          ]),
+        );
+      case FieldType.dateList:
+        return _dateListEditor(f, label);
       case FieldType.choice when f.dynamicOptions.isNotEmpty:
         final opts = widget.dynamicChoices[f.dynamicOptions] ?? const <(String, String)>[];
         final cur = _values[f.key] as String?;
@@ -730,6 +773,58 @@ class DocEditorState extends State<DocEditor> {
       default:
         return _textField(f, _text[f.key]!);
     }
+  }
+
+  /// [FieldType.dateList]: one chip per date (× removes it) and an «add a
+  /// date» chip that opens the date picker (ADR-051).
+  Widget _dateListEditor(FieldDef f, String label) {
+    final set = _values[f.key] as Set<String>;
+    final dates = set.toList()..sort();
+    final hint = context.pick(f.hintAr, f.hintEn);
+    return InputDecorator(
+      key: ValueKey('field-${f.key}'),
+      decoration: InputDecoration(labelText: label, helperText: hint.isEmpty ? null : hint, helperMaxLines: 4),
+      child: Wrap(spacing: 6, runSpacing: 6, children: [
+        for (final d in dates)
+          InputChip(
+            key: ValueKey('date-${f.key}-$d'),
+            label: Text(_dateChipLabel(d)),
+            onDeleted: () => setState(() {
+              set.remove(d);
+              _dirty = true;
+            }),
+            deleteButtonTooltipMessage: context.tr('delete'),
+          ),
+        if (set.length < f.maxRows)
+          ActionChip(
+            key: ValueKey('dateAdd-${f.key}'),
+            avatar: Icon(Icons.add_rounded, size: 18, color: context.pal.primary),
+            label: Text(context.tr('addDate')),
+            onPressed: () async {
+              final now = CairoTime.now();
+              final picked = await showDatePicker(
+                context: context,
+                initialDate: DateTime(now.year, now.month, now.day),
+                firstDate: DateTime(2000),
+                lastDate: DateTime(2100, 12, 31),
+                helpText: label,
+              );
+              if (picked == null || !mounted) return;
+              setState(() {
+                set.add(formatPickedDate(picked.year, picked.month, picked.day));
+                _dirty = true;
+              });
+            },
+          ),
+      ]),
+    );
+  }
+
+  /// «١٢ يوليو ٢٠٢٧» / "12 July 2027" for a stored 'YYYY-MM-DD'.
+  String _dateChipLabel(String ymd) {
+    final m = dateRe.firstMatch(ymd);
+    if (m == null) return ymd;
+    return formatDate(DateTime(int.parse(m[1]!), int.parse(m[2]!), int.parse(m[3]!)), arabic: context.isAr);
   }
 
   Future<void> _pickImage(FieldDef f) => _pickFromDevice(f.key, (enc) => _pending[f.key] = enc);

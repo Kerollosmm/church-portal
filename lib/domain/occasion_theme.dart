@@ -889,8 +889,10 @@ class SeasonThemes {
   /// Every season key (mirrors `firestore.rules` and the admin's season
   /// form), in priority order: when two seasons are active at once, the
   /// first mapped one wins (Holy Week over a fast, a feast over a revival).
+  /// ADR-051: Nayrouz (festive) after the great feasts; Great Lent, the
+  /// Apostles' fast and Kiahk before the general `fast`.
   static const seasonKeys = [
-    'holy_week', 'pascha', 'nativity', 'epiphany', 'marian', 'fast', //
+    'holy_week', 'pascha', 'nativity', 'epiphany', 'nayrouz', 'marian', 'great_lent', 'apostles', 'kiahk', 'fast', //
     'revival_maximus', 'revival_moses', 'summer',
   ];
 
@@ -901,6 +903,13 @@ class SeasonThemes {
     'epiphany': ThemePresets.epiphany,
     'marian': ThemePresets.marian,
     'fast': ThemePresets.fasting,
+    // ADR-051: the fasting family shares the fasting palette's roles (ash,
+    // stone, oxblood; never violet); El-Nayrouz and the Cross are festive
+    // red (the Resurrection palette). An admin can remap any of them.
+    'great_lent': ThemePresets.fasting,
+    'apostles': ThemePresets.fasting,
+    'kiahk': ThemePresets.fasting,
+    'nayrouz': ThemePresets.resurrection,
     'revival_maximus': none,
     'revival_moses': none,
     'summer': none,

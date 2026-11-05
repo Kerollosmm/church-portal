@@ -41,6 +41,14 @@ class _SeasonPresetScreenState extends State<SeasonPresetScreen> {
   bool _saving = false;
   String? _problem;
 
+  /// The live banner's end the apply writes (ADR-051, issue 10): tonight's
+  /// default ([presetLiveEnd]) until the admin picks another one.
+  DateTime? _liveEnd;
+  bool _liveEndEdited = false;
+
+  /// The season's services, read once when a season is picked (no listener).
+  List<Liturgy> _liturgies = const [];
+
   DateTime _now() => (widget.now ?? DateTime.now)();
 
   @override
@@ -85,7 +93,49 @@ class _SeasonPresetScreenState extends State<SeasonPresetScreen> {
         _pdfLabelEn.text = s.program.attachmentLabelEn;
         _liveUrl.text = ''; // never carry one season's link to another (CodeRabbit review)
         _problem = null;
+        _liveEndEdited = false;
+        _liveEnd = presetLiveEnd(season: s, liturgies: _liturgies, now: _now());
+        _loadLiturgies(s);
       });
+
+  /// One read of `liturgies` (the stream's first snapshot, then closed) to
+  /// work out tonight's last service for the live banner's default end.
+  Future<void> _loadLiturgies(Season s) async {
+    try {
+      final docs = await widget.repo.watch('liturgies').first;
+      if (!mounted) return;
+      _liturgies = [for (final d in docs) Liturgy.fromMap(d.id, d.data)];
+      if (_seasonId == s.id && !_liveEndEdited) {
+        setState(() => _liveEnd = presetLiveEnd(season: s, liturgies: _liturgies, now: _now()));
+      }
+    } catch (_) {
+      // The 23:59 fallback stays.
+    }
+  }
+
+  String _liveEndText(BuildContext context, DateTime d) {
+    final c = CairoTime.fromInstant(d);
+    final hm = '${c.hour.toString().padLeft(2, '0')}:${c.minute.toString().padLeft(2, '0')}';
+    return '${context.isAr ? formatTimeArabic(hm) : formatTimeLatin(hm)} — ${formatDate(CairoTime.calendarDate(d), arabic: context.isAr)}';
+  }
+
+  Future<void> _editLiveEnd(BuildContext context) async {
+    final cur = CairoTime.fromInstant(_liveEnd ?? _now());
+    final d = await showDatePicker(
+      context: context,
+      initialDate: DateTime(cur.year, cur.month, cur.day),
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100, 12, 31),
+    );
+    if (d == null || !context.mounted) return;
+    final t = await showTimePicker(context: context, initialTime: TimeOfDay(hour: cur.hour, minute: cur.minute));
+    if (t == null || !mounted) return;
+    final at = CairoTime.at(d.year, d.month, d.day, t.hour * 60 + t.minute);
+    setState(() {
+      _liveEnd = DateTime.fromMillisecondsSinceEpoch(at.millisecondsSinceEpoch, isUtc: true);
+      _liveEndEdited = true;
+    });
+  }
 
   String _seasonName(BuildContext context, Season s) =>
       context.pick(s.nameAr, s.nameEn.isEmpty ? s.nameAr : s.nameEn);
@@ -99,6 +149,12 @@ class _SeasonPresetScreenState extends State<SeasonPresetScreen> {
     final y = '${CairoTime.calendarDate(start).year}';
     final yl = localDigits(context, y);
     return name.contains(y) || name.contains(yl) ? name : '$name $yl';
+  }
+
+  String _ymdLabel(BuildContext context, String ymd) {
+    final p = ymd.split('-');
+    if (p.length != 3) return ymd;
+    return formatDate(DateTime(int.parse(p[0]), int.parse(p[1]), int.parse(p[2])), arabic: context.isAr);
   }
 
   String _date(BuildContext context, DateTime? d) =>
@@ -176,8 +232,11 @@ class _SeasonPresetScreenState extends State<SeasonPresetScreen> {
       context.tr('presetLineActivate', {'s': _seasonName(context, season)}),
       for (final o in PresetOption.all)
         if (_options.contains(o)) context.tr('presetOpt_$o'),
+      if (_options.contains(PresetOption.live) && _liveEnd != null)
+        context.tr('presetLiveEnd', {'t': _liveEndText(context, _liveEnd!)}),
       context.tr('presetAutoRevert', {'d': _date(context, season.endsAt)}),
     ];
+    final liveEnd = _liveEnd;
     final ok = await _confirm(context, context.tr('presetApplyConfirmTitle'), lines, context.tr('presetApply'),
         key: const Key('presetApplyDialog'));
     if (!ok || !mounted) return;
@@ -198,6 +257,7 @@ class _SeasonPresetScreenState extends State<SeasonPresetScreen> {
         now: now,
         storedTheme: stored?['theme'] is String ? stored!['theme'] as String : '',
         seasonTheme: f.occasions.themeForSeason(season.key),
+        liveEnd: liveEnd,
       );
     });
   }
@@ -354,6 +414,25 @@ class _SeasonPresetScreenState extends State<SeasonPresetScreen> {
           ),
           if (season != null) ...[
             const SizedBox(height: 8),
+            // ADR-051 (issue 11): the feast night(s) of an additive season.
+            if (!season.replacesRegular && season.replaceDates.isNotEmpty)
+              Padding(
+                key: const Key('presetReplaceDates'),
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(context.tr('presetReplaceDates'), style: const TextStyle(fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 4),
+                  Wrap(spacing: 6, runSpacing: 6, children: [
+                    for (final d in season.replaceDates)
+                      Chip(
+                        avatar: Icon(Icons.event_rounded, size: 16, color: context.pal.primary),
+                        label: Text(_ymdLabel(context, d)),
+                      ),
+                  ]),
+                  const SizedBox(height: 2),
+                  Text(context.tr('presetReplaceDatesHint'), style: TextStyle(fontSize: 12, color: context.pal.muted)),
+                ]),
+              ),
             if (season.endsAt == null)
               Text(context.tr('presetNoEnd'), style: TextStyle(color: context.pal.alert, fontSize: 12)),
             if (ended)
@@ -379,6 +458,20 @@ class _SeasonPresetScreenState extends State<SeasonPresetScreen> {
                     ? null
                     : (v) => setState(() => v == true ? _options.add(o) : _options.remove(o)),
               ),
+              if (o == PresetOption.live && _options.contains(o) && _liveEnd != null)
+                ListTile(
+                  key: const Key('presetLiveEnd'),
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(Icons.timer_off_outlined, color: context.pal.primary),
+                  title: Text(context.tr('presetLiveEnd', {'t': _liveEndText(context, _liveEnd!)})),
+                  subtitle: Text(context.tr('presetLiveEndHint'), style: const TextStyle(fontSize: 12)),
+                  trailing: IconButton(
+                    key: const Key('presetLiveEndEdit'),
+                    tooltip: context.tr('presetLiveEndEdit'),
+                    icon: const Icon(Icons.edit_calendar_rounded),
+                    onPressed: _saving ? null : () => _editLiveEnd(context),
+                  ),
+                ),
               if (o == PresetOption.live && _options.contains(o))
                 TextField(
                   key: const Key('presetLiveUrl'),

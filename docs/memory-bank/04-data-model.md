@@ -244,7 +244,7 @@ default false in model), `startsAt`/`endsAt` (timestamp), `priority` (int 0–10
 `revival-moses-2027`.
 
 ### `seasons/{id}` — `Season` (not Hideable)
-`key` (**required**, one of `holy_week, pascha, nativity, epiphany, marian, fast, revival_maximus, revival_moses, summer`; the three after nativity ADR-043), `nameAr` (**req**),
+`key` (**required**, one of `holy_week, pascha, nativity, epiphany, marian, fast, revival_maximus, revival_moses, summer, apostles, nayrouz, kiahk, great_lent`; epiphany / marian / fast ADR-043, the last four ADR-051), `replaceDates` (optional list ≤ 10 of distinct `YYYY-MM-DD` civil Cairo dates: an additive season replaces the regular services on those days only, ADR-051), `nameAr` (**req**),
 `nameEn`, `startsAt`, `endsAt` (timestamps, exact window), `active` (bool, default false in model),
 `replacesRegular` (bool, **missing = true**, PR 1: `true` = its services REPLACE the regular schedule on the days they
 cover — Holy Week, Pascha, Nativity; `false` = ADDITIVE evening revival, regular morning masses continue — see
@@ -262,7 +262,7 @@ cover — Holy Week, Pascha, Nativity; `false` = ADDITIVE evening revival, regul
 | `start` | "HH:mm" | **required key** (rules: `'start' in d`) |
 | `end` | "HH:mm" or '' | may be ≤ start = crosses midnight; missing end → start + 120 min |
 | `placeAr/En`, `audienceAr/En` | string ≤300 | |
-| `seasonKey` | season key or null | null = regular schedule. Keys: holy_week, pascha, nativity, epiphany, marian, fast (the last three ADR-043), revival_maximus, revival_moses, summer. An undated seasonal service does not occur on a day its schedule-replacing season has dated services (ADR-043) |
+| `seasonKey` | season key or null | null = regular schedule. Keys: holy_week, pascha, nativity, epiphany, marian, fast (the last three ADR-043), revival_maximus, revival_moses, summer, apostles, nayrouz, kiahk, great_lent (ADR-051). An undated seasonal service does not occur on a day its schedule-replacing season has dated services (ADR-043) |
 | `order`, `visible`, `sample` | | |
 Seed: 47 docs, all `sample: true` (ids like `fri-1`, `sun-youth`, `sat-vespers`, `nat-eve`, `rev-max-1…7`,
 `rev-max-feast`, `hw-day-1…3`, `hw-eve-1…3`, `hw-palm`, `hw-thursday`, `hw-friday`, `hw-saturday`, `pascha-eve`,
@@ -377,7 +377,7 @@ Public read, admin write (`validAssistant`). **Missing doc / blank text / null n
 | `instructions` | string ≤ 4000 | `defaultInstructions` (persona / tone; the scope + grounding rules are always added) |
 | `topics` | string ≤ 2000, one topic per line (`-`/`*`/`•` bullets stripped) | `defaultTopics` (times, meetings, clinics, activities, priests, saints, history, announcements, contact, bookings, donations, custom sections / pages) |
 | `refusalAr`, `refusalEn` | string ≤ 500 | `defaultRefusalAr/En` |
-| `welcomeAr`, `welcomeEn` | string ≤ 500 | l10n `askIntro` |
+| `welcomeAr`, `welcomeEn` | string ≤ 500 | `askIntroText` (names only switched-on sections, ADR-051) |
 | `showSuggestions` | bool (PR #21) | `false` — no chips on /ask; when on, only the admin questions below (no built-in fallbacks) |
 | `suggestionsAr`, `suggestionsEn` | string ≤ 300, one question per line, first 3 used | none |
 | `sourceDomains` | string ≤ 300, `[a-z0-9., -]*`, comma separated (PR #21, ADR-031) | `st-takla.org` — the only source for faith questions outside the data (search link) |
@@ -386,6 +386,8 @@ Public read, admin write (`validAssistant`). **Missing doc / blank text / null n
 | `maxChars` | null or int 50–1000 | 500 |
 | `perMinute` | null or int 1–20 | 4 |
 | `perDay` | null or int 1–100 (PR #21, ADR-031) | 3 questions per device per Cairo day |
+| `perDaySeason` | null or int 1–100 (ADR-042) | 6 while an exceptional season is active |
+| `exceptionalSeasons` | null or list ≤ 13 of season keys (ADR-051) | `exceptionalSeasonKeys`: holy_week, pascha, nativity, revival_maximus, revival_moses, great_lent, kiahk, marian; `[]` = none |
 | `perSession` | legacy, null or int 1–200 — still accepted by the rules, **ignored** since PR #21 | — |
 | `updatedAt`, `updatedBy` | stamps (`stampOk`) | |
 

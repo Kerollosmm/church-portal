@@ -338,6 +338,11 @@ class Season {
   /// documents behave exactly as before.
   final bool replacesRegular;
 
+  /// ADR-051: civil Cairo dates ('YYYY-MM-DD') on which an ADDITIVE season
+  /// still replaces the regular services that start inside its window (the
+  /// feast night of a revival or a fast). Ignored when [replacesRegular].
+  final List<String> replaceDates;
+
   /// Optional picture (null = keep the icon / initials placeholder).
   final MediaImage? image;
 
@@ -356,10 +361,23 @@ class Season {
     this.endsAt,
     this.active = true,
     this.replacesRegular = true,
+    this.replaceDates = const [],
     this.image,
     this.imageStyle = '',
     this.program = ProgramInfo.none,
   });
+
+  static final _ymdRe = RegExp(r'^\d{4}-\d{2}-\d{2}$');
+
+  /// Does the season replace the regular services on the Cairo calendar day
+  /// [day] (y/m/d read as is)? Always for a full-override season; for an
+  /// additive one only on its [replaceDates] (ADR-051).
+  bool replacesOn(DateTime day) {
+    if (replacesRegular) return true;
+    if (replaceDates.isEmpty) return false;
+    String two(int v) => v.toString().padLeft(2, '0');
+    return replaceDates.contains('${day.year}-${two(day.month)}-${two(day.day)}');
+  }
   factory Season.fromMap(String id, Map<String, dynamic> m) => Season(
         id: id,
         key: _s(m['key']),
@@ -369,6 +387,12 @@ class Season {
         endsAt: parseDate(m['endsAt']),
         active: _b(m['active']),
         replacesRegular: m['replacesRegular'] is bool ? m['replacesRegular'] as bool : true,
+        replaceDates: m['replaceDates'] is List
+            ? [
+                for (final d in m['replaceDates'] as List)
+                  if (d is String && _ymdRe.hasMatch(d.trim())) d.trim(),
+              ]
+            : const [],
         image: MediaImage.fromMap(m['image']),
         imageStyle: _s(m['imageStyle']),
         program: ProgramInfo.fromMap(m),
