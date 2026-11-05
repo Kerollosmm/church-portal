@@ -163,7 +163,9 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
   /// season (ADR-042: 6 instead of 3 by default) when one is on.
   AssistantSettings get _settings {
     final s = ref.read(assistantSettingsProvider).value ?? AssistantSettings.defaults;
-    final now = DateTime.now();
+    // The app's clock (real time in production; pinned in tests and the
+    // simulations, ADR-045) like every other page.
+    final now = ref.read(nowProvider).value ?? DateTime.now();
     return s.withSeasonLimit([
       for (final season in ref.read(seasonsProvider).value ?? const <Season>[])
         if (isSeasonActiveAt(season, now)) season.key,
@@ -195,7 +197,7 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
       meetings: ref.read(meetingsProvider).value ?? const [],
       activities: ref.read(activitiesProvider).value ?? const [],
       facilities: ref.read(facilitiesProvider).value ?? const [],
-      now: CairoTime.now(),
+      now: ref.read(nowProvider).value ?? CairoTime.now(),
       features: f,
       alerts: ref.read(alertsProvider).value ?? const [],
       priests: ref.read(priestsProvider).value ?? const [],
@@ -231,7 +233,12 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
     // The allowed topics too: answers about a topic an admin removed are not
     // replayed.
     final topics = _settings.topicsFor(f.enabled).join('\n');
-    return '$sections\u0000$details\u0000$custom\u0000$topics';
+    // Live link, church events and service programmes (ADR-045).
+    final programme = assistantProgrammeSignature(
+        features: f,
+        now: ref.read(nowProvider).value ?? DateTime.now(),
+        liturgies: ref.read(liturgiesProvider).value ?? const []);
+    return '$sections\u0000$details\u0000$custom\u0000$topics\u0000$programme';
   }
 
   static String _cairoStamp() {

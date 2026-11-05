@@ -93,6 +93,7 @@ class NextMassCard extends ConsumerWidget {
     final now = ref.watch(nowProvider).value ?? DateTime.now();
 
     Widget body;
+    NextMassResult? result;
     if (lits.isLoading || seasons.isLoading) {
       body = const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         SkeletonBox(height: 14, width: 120),
@@ -105,6 +106,7 @@ class NextMassCard extends ConsumerWidget {
       body = ErrorState(onRetry: () => ref.invalidate(liturgiesProvider));
     } else {
       final r = computeNextMass(liturgies: lits.value ?? const [], seasons: seasons.value ?? const [], now: now);
+      result = r;
       final s = ref.watch(settingsProvider).value;
       // The next service's «وفي نفس الوقت: …» line, as on /mass-schedule
       // (ADR-041; CodeRabbit review on PR #32).
@@ -130,8 +132,12 @@ class NextMassCard extends ConsumerWidget {
 
     final pal = context.pal;
     // During a season that replaces the weekly schedule the card lists its
-    // prayers (Pascha hours…), not only masses (ADR-043).
-    final seasonal = activeSeasonsAt(seasons.value ?? const [], now).any((s) => s.replacesRegular);
+    // prayers (Pascha hours…), not only masses (ADR-043); it is also «الصلاة
+    // القادمة» whenever the service it shows is not a mass (a revival night,
+    // ADR-045).
+    final shown = [result?.happeningNow, result?.next].whereType<LiturgyOccurrence>();
+    final seasonal = activeSeasonsAt(seasons.value ?? const [], now).any((s) => s.replacesRegular) ||
+        shown.any((o) => o.liturgy.type != 'mass');
     // Warm panel with a title band in the theme's band colours (maroon on
     // the posters; charcoal with a crimson edge on Holy Week — ADR-043).
     return Container(
@@ -194,21 +200,30 @@ class NextMassCard extends ConsumerWidget {
     }
     if (r.happeningNow != null) {
       final o = r.happeningNow!;
+      // Without a free-text place the line already names the venue: no pill.
+      final lineHasVenue = context.pick(o.liturgy.placeAr, o.liturgy.placeEn).trim().isEmpty;
       children.add(Container(
+        key: const Key('happeningNowBox'),
         padding: const EdgeInsets.all(10),
         margin: const EdgeInsets.only(bottom: 10),
         decoration: BoxDecoration(
           color: context.pal.success.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(14),
         ),
-        child: Row(children: [
-          Pill(context.tr('happeningNow'), icon: Icons.circle, color: context.pal.success),
-          const SizedBox(width: 8),
-          Expanded(
-            // Free-text place, else the venue; no dash when neither (ADR-043).
-            child: Text(serviceWithPlace(context, opts, o.liturgy),
-                key: const Key('happeningNowLine'), style: const TextStyle(fontWeight: FontWeight.w700)),
-          ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Pill(context.tr('happeningNow'), icon: Icons.circle, color: context.pal.success),
+            const SizedBox(width: 8),
+            Expanded(
+              // Free-text place, else the venue; no dash when neither (ADR-043).
+              child: Text(serviceWithPlace(context, opts, o.liturgy),
+                  key: const Key('happeningNowLine'), style: const TextStyle(fontWeight: FontWeight.w700)),
+            ),
+          ]),
+          // While it runs (18:30–21:30 on a revival night, exactly when
+          // visitors open the site) the programme stays: speaker, topic,
+          // choir, audience and the PDF button (ADR-045, revival sim B2).
+          ProgramDetails(o.liturgy.program, showVenue: !lineHasVenue),
         ]),
       ));
     }

@@ -33,6 +33,8 @@ const Map<String, List<String>> _strings = {
   'watchLive': ['شاهد البث', 'Watch live'],
   'todayEvent': ['حدث اليوم', "Today's event"],
   'todayFeast': ['عيد اليوم', "Today's feast"],
+  'todayProgramme': ['اليوم في الكنيسة', 'Today at church'],
+  'tonightProgramme': ['الليلة في الكنيسة', 'Tonight at church'],
   'todayCommemoration': ['تذكار اليوم', "Today's commemoration"],
   'speakerLabel': ['المتكلم', 'Speaker'],
   'endDateBeforeStart': ['تاريخ النهاية قبل تاريخ البداية', 'The end date is before the start date'],

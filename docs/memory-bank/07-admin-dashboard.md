@@ -179,7 +179,10 @@ liturgical day (fixed time — default 18:00 — or sunset at the church), the f
 automatic feast / commemoration (Katameros), church events by date (≤ 20 rows: date, until, from / to, titles,
 speaker, topic, note, link), live-stream banner switch, stream link, banner texts, automatic switch-off, and (PR #35,
 ADR-044) «إخفاء شارة البث في الرئيسية عند ظهور الشريط» / "Hide the live badge on Home while the banner shows"
-(`liveBadgeHideOnHome`, `missingBool`/`newBool` true). Since PR #35 a non-empty `dayEvents` list is saved in its own
+(`liveBadgeHideOnHome`, `missingBool`/`newBool` true). PR #38 (ADR-045): «عند عدم وجود حدث: اعرض خدمة اليوم / الليلة من
+برنامج الموسم» (`topEventServices`, default on), and three more event columns: «رابط ملف PDF (Google Drive، اختياري)»
+(https), «نص زر الملف (عربي / إنجليزي)». The assistant's «أقصى عدد أسئلة في الدقيقة» hint explains it applies with
+the daily / season limit. Since PR #35 a non-empty `dayEvents` list is saved in its own
 write after the other keys (`separatelySavedKeys`; 20 events plus another Today key exceed the rules' 1,000-expression
 budget in one write).
 
