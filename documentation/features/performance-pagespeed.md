@@ -38,9 +38,9 @@
     محمّلتين مسبقًا (ومعهما `<img>` مخفية) لترسمها واجهة Flutter من الذاكرة.
   - نص مخفي بصريًا `role="status"` «جارٍ التحميل…» لقارئات الشاشة.
   - تلاشٍ ناعم `opacity 0.6s cubic-bezier(0.4, 0.0, 0.2, 1)`؛ وعند استدعاء `splashDone()` تُضاف الفئة `gone` ثم يُحذف العنصر `#splash` بالكامل من شجرة الـ DOM.
-  - تبقى الشاشة حتى الحدث `app-content-ready` الذي يرسله التطبيق (`lib/core/content_ready.dart`) بعد إطارين من وصول أول بيانات (`contentReadyProvider`: `settings/church` و `settings/features` وقائمة آيات اليوم)، وبحد أقصى 9 ثوانٍ بعد `flutter-first-frame`.
+  - تبقى الشاشة حتى الحدث `app-content-ready` الذي يرسله التطبيق (`lib/core/content_ready.dart`) بعد إطارين من جاهزية كل مصدر (`contentReadyProvider` / `firstContentArrived` في `lib/state/providers.dart`: `settings/church` وقائمة آيات اليوم جاهزتان بقيمة أو بخطأ يُظهر بديله أو رسالة الخطأ، و `settings/features` عند وصوله أو بديله `featuresReadyProvider`)، وبحد أقصى 9 ثوانٍ بعد `flutter-first-frame`.
   - دعم تقليل الحركة: `@media (prefers-reduced-motion: reduce)` يوقف التحريك تمامًا ويملأ شريط التحميل باللون الذهبي الثابت.
-  - مسار الفشل: في حال حدوث خطأ أو توقف التحميل لـ 30 ثانية، تستبدل دالة `splashFailed()` شريط التحميل برسالة خطأ ورابط إعادة المحاولة باللون `#6E1C1C`.
+  - مسار الفشل: تستبدل دالة `splashFailed()` في `web/index.html` شريط التحميل برسالة خطأ ورابط إعادة المحاولة باللون `#6E1C1C` في حالتين فقط: فشل تحميل سكربت الإقلاع (`flutter_bootstrap.js` أو خطأ تحميل عنصر `<script>`)، أو عدم رسم Flutter أي إطار خلال 30 ثانية. لا تعالج أخطاء التشغيل الأخرى.
 - **تأخير الفيديو والحركة حتى يهدأ المتصفح (PR #30)**: مصدر فيديو الواجهة وطبقة السحب والأشعة (CSS) لا تبدأ إلا بعد
   اختفاء الشاشة وعند `requestIdleCallback` (`ContentReady.whenIdle`، بحد أقصى ثانيتين، و12 ثانية كحد مطلق)، ثم تظهر
   بتلاشٍ. الصورة الثابتة تحتها تبقى عنصر LCP، والشكل النهائي للواجهة لم يتغير. الختم `seal.png` صُغّر من 178
