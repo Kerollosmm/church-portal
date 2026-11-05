@@ -446,7 +446,6 @@ class _QuickContacts extends ConsumerWidget {
                 child: Text(context.tr('phones'),
                     style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17, color: context.pal.primary)),
               ),
-              if (s.sample) const SampleBadge(),
             ]),
             const SizedBox(height: 8),
             for (final p in s.phones.take(3)) PhoneRow(phone: p),

@@ -132,12 +132,6 @@ const Map<String, List<String>> _strings = {
   ],
   'consentLabel': ['أوافق على استخدام بياناتي للرد على رسالتي', 'I agree to my details being used to reply to my message'],
   'errConsent': ['برجاء الموافقة على إشعار الخصوصية لإرسال الرسالة', 'Please accept the privacy notice to send your message'],
-  'sampleData': ['بيانات تجريبية', 'Sample data'],
-  'timesPending': ['مواعيد تقريبية — في انتظار تأكيد الكنيسة', 'Times pending church confirmation'],
-  'timesPendingHint': [
-    'بعض البيانات المعروضة هنا (مثل المواعيد) لم تؤكدها الكنيسة بعد، والعناصر غير المؤكدة عليها علامة «بيانات تجريبية». تابع قناة الكنيسة على واتساب أو صفحتها على فيسبوك، أو اتصل بالكنيسة للتأكد.',
-    'Some information shown here (such as times) has not been confirmed by the church yet; unconfirmed items carry a "Sample data" tag. Follow the church\'s WhatsApp channel or Facebook page, or call the church to confirm.'
-  ],
   'openPage': ['افتح الصفحة', 'Open page'],
   'instagram': ['إنستغرام', 'Instagram'],
   'offlineData': ['تعرض البيانات المحفوظة مع التطبيق', 'Showing bundled content'],
@@ -502,7 +496,7 @@ const Map<String, List<String>> _strings = {
       'Default per section. Each item can override it under its image in the item form.'],
   // "Golden hour" identity (ADR-022): calligraphic accent words above titles.
   'heroAccent': ['أهلاً بكم في', 'Welcome to'],
-  'accent_about': ['تعرّف على', 'Discover'],
+  'accent_about': ['كنيستنا', 'Our church'],
   'accent_schedule': ['تعالوا نصلّي', 'Come, let us pray'],
   'accent_education': ['نتعلّم معًا', 'Learning together'],
   'accent_activities': ['نخدم معًا', 'Serving together'],

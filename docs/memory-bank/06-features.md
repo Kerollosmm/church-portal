@@ -100,7 +100,8 @@ render with `PageBody` (+ `Footer`). Content comes from Riverpod providers (hidd
 - **Top event card** (`TopEventCard`, first on Home): «حدث اليوم» = an admin church event (`dayEvents`) covering today
   and not ended (on the eve: the next liturgical day's event) with times, speaker, topic, note, link; else
   «عيد اليوم» / «تذكار اليوم» from `/data/today.json` (Katameros, credited) for the liturgical day; else the computed
-  feast list; nothing on an ordinary day without data. `topEvent` off hides it; `commemoration` off = church events (and programme services while `topEventServices` is on) only.
+  feast list; nothing on an ordinary day without data. It renders only once the **stored** `settings/features` has
+  arrived, never on the bundled seed copy (`featuresLiveProvider`, ADR-046: no cold-load flash). `topEvent` off hides it; `commemoration` off = church events (and programme services while `topEventServices` is on) only.
   **ADR-045:** between the church event and Katameros, today's / tonight's programme service (the first not-ended
   occurrence of an active season with a speaker or topic) — «الليلة في الكنيسة» / «اليوم في الكنيسة», time, speaker,
   topic, choir, venue / audience and its labelled PDF button (`topEventServices`, default on; reads the liturgies /
@@ -119,11 +120,11 @@ render with `PageBody` (+ `Footer`). Content comes from Riverpod providers (hidd
 - History card (bishop line + `historyAr/En`) and **altars** grid (main altar gets a gold cross) — section `history`.
 - Patron saints cards (name, feast pills Coptic + Gregorian, bio) — section `saints`.
 - Priests (`PriestCard`: avatar/photo, name (`nameEn` in English if set), rank «قمص/قس», ordination date, hegumen
-  date, repose date «تاريخ النياحة / Departed» (`departedDate`, BUG-08), bio, `SampleBadge`) — section `priests` (status ≠ departed); departed fathers on a cream card — section
+  date, repose date «تاريخ النياحة / Departed» (`departedDate`, BUG-08), bio) — section `priests` (status ≠ departed); departed fathers on a cream card — section
   `departedPriests` (shown only if any).
 
 ### `/mass-schedule` — `mass_schedule_page.dart` `MassSchedulePage`
-- `AlertBanner`, `PendingConfirmationNote` if any liturgy is `sample`, `NextMassCard`.
+- `AlertBanner`, `NextMassCard` (no «times pending» banner since ADR-046).
 - **Holy Seasons** switch (`holySeasons`): defaults to **on** the first time seasons load only while a season that
   **replaces** the regular schedule is active (`activeSeasonsAt(seasons, now).any((s) => s.replacesRegular)`), so an
   additive evening revival keeps the weekly tabs; once the visitor flips it, their choice wins.
@@ -146,7 +147,7 @@ render with `PageBody` (+ `Footer`). Content comes from Riverpod providers (hidd
   and 2028 docs sharing a key never cross-attach); equal start times tie-break by `order` (BUG-03). Seasons in effect
   now are listed first, then the rest by `startsAt`; title + date range + "Active now" pill +
   `LiturgyCard(showDate: true)`.
-- `LiturgyCard`: name, both digit systems (`TimeRangeText`), place, audience, weekday/date, `SampleBadge`.
+- `LiturgyCard`: name, both digit systems (`TimeRangeText`), place, audience, weekday/date (no sample badge since ADR-046).
 
 #### Programme details & parallel services (PR #32, ADR-041)
 
@@ -174,9 +175,8 @@ the same day with overlapping times in different venues (`parallelServices`) get
   **مدارس الأحد** (angels, primary, preparatory, secondary), **الشباب والجامعة والخريجون** (youth, university,
   graduates), **اجتماعات خاصة** (family, men, women, elderly), plus "Other stages" for unknown stage keys.
 - Timeline item: a `Wrap` of stage pill (`stageLabels`), «اليوم / Today» pill when `m.weekday` is today's Cairo
-  weekday (FR-E-03) and `SampleBadge` (wraps at 320 px instead of overflowing, BUG-11); name, weekday (goldText),
+  weekday (FR-E-03) (wraps at 320 px instead of overflowing, BUG-11); name, weekday (goldText),
   both-digit time, hall, notes, Facebook/WhatsApp buttons (screen-reader label names the meeting).
-- `PendingConfirmationNote` when any meeting is `sample`.
 
 ### `/church-activities` — `activities_page.dart` `ActivitiesPage`
 - Cards sorted by `_categoryOrder` (service, choir, hymns, youth, servants, media, drama, scouts, deacons, bible,
@@ -200,7 +200,7 @@ the same day with overlapping times in different venues (`parallelServices`) get
   link and assistant grounding are hidden; the admin screen stays.
 - Entry points (when the section is on): phone drawer / desktop Services menu, the Home directory card,
   footer quick links, public services cross-link. **Never the app bar** (owner request, 4 Nov 2026).
-- Subtitle `clinicsIntro` asks visitors to confirm with the church; `PendingConfirmationNote` if any clinic is sample.
+- Subtitle `clinicsIntro` asks visitors to confirm with the church.
 - Link to `/public-services` when that section is on.
 
 ### `/public-services` — `public_services_page.dart` `PublicServicesPage`
@@ -260,7 +260,7 @@ keeps select / copy. Works on web (reCAPTCHA Enterprise) and Android (Play Integ
   serving one `priests` (else `SectionUnavailable`, noindex). Available pages are indexable with their canonical URL.
 - Layout (320 px × 200 % safe, RTL/LTR): «العودة إلى <القسم>» link; `PageHeader` with the item title (clinics:
   specialty, doctor as subtitle; priests: rank); pills (stage / available today / rank + departed) and
-  `SampleBadge` + `PendingConfirmationNote` when `sample`; hero cover (column width, 120–320 px, PR #14) and gallery
+  (no sample badge / note since ADR-046); hero cover (column width, 120–320 px, PR #14) and gallery
   thumbnails (104 px) **only when `showImages && showDetailImages`** — tapping any opens the zoomable
   `showImageViewer`; **«المعلومات الأساسية / Key information»** card (`Key('detailFacts')`, PR #14: labelled rows —
   icon, small label, value — Day / Time / Place / Notes for meetings, Schedule / Ages for activities, Doctor /
@@ -351,8 +351,9 @@ on); owners can press **Send test error**. Details: `03-architecture.md` → *Er
   spacing. Checked at 320/390/1440 px and 200 % text in `test/image_style_layout_test.dart`.
 
 ### Shared UI behaviours
-- `SampleBadge` («بيانات تجريبية / Sample data») on any `sample: true` item; `PendingConfirmationNote`
-  («مواعيد تقريبية — في انتظار تأكيد الكنيسة») on schedule, meetings and clinics pages.
+- **No sample marks in the public UI (ADR-046, owner, 5 Nov 2026):** the «بيانات تجريبية» badge, the
+  «مواعيد تقريبية — في انتظار تأكيد الكنيسة» banner and the cards' «times pending» line were removed. `sample` stays in the
+  data, rules, seed, admin («غير مؤكد») and internal logic (ADR-045 template suppression, assistant `[UNCONFIRMED]`).
 - `AsyncSection` handles loading skeletons, empty and error (+ retry by invalidating the provider).
 - Footer (FR-G-04, PR #13): church name, address (if contactInfo on), clickable church phone numbers
   (`Key('footerPhone-<number>')`, `footer.showPhones` and contactInfo on), official social icon buttons (48 dp,
@@ -420,7 +421,7 @@ on); owners can press **Send test error**. Details: `03-architecture.md` → *Er
 4. "Happening now": any occurrence of yesterday (past midnight) or today with `start ≤ now < end`.
 5. "Next": first occurrence with `start > now`, today first, then up to **7 days** ahead (`lookAheadDays`).
 6. Card shows: active season pill, happening-now strip, day label (today / tomorrow / in N days) + weekday,
-   countdown "starts in Xh Ym" (today only), name, both-digit times, place, audience, «مواعيد تقريبية…» if `sample`.
+   countdown "starts in Xh Ym" (today only), name, both-digit times, place, audience.
    The happening-now line is «name — place»: the free-text place, else the ADR-041 venue's name, and no dash when
    neither (`serviceWithPlace`, ADR-043 sim B2).
    Empty → «لا توجد قداسات قادمة خلال الأسبوع».

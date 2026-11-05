@@ -1154,6 +1154,74 @@ supersede them.
   encoded 13 / 16 fields, top-event and day-event PDF buttons); `holy_week_fixes_test.dart` (additive case updated);
   rules group "ADR-045". Simulations re-run from scratch on the merge commit: `work/fix-sims/report.md`.
 
+## ADR-046 (PR #39) — Live user test fixes: top event waits for the stored features, English title before boot, App Check lazy again, no public sample marks, Coptic date fallback, pope-visit images on Hosting
+
+- **Context:** the live user test of 5 Nov 2026 (`work/live-findings/rca.md`, main `af8c917`) found:
+  1. the top-event card showed once on a cold load and vanished (the seeding check timed out, `guardSeeded` served
+     the bundled `seed.features` — no today keys, so `topEvent` / `commemoration` read true — and the stored doc with
+     `topEvent: false` replaced it 4 s later);
+  2. `/?lang=en` kept the Arabic `<title>` and `lang="ar"` for 6–9 s, until `MaterialApp` built;
+  3. after one visit to `/ask`, every later page load (Home, /contact) loaded reCAPTCHA Enterprise (~700 KiB) and called
+     the App Check exchange: the FlutterFire App Check web plugin saves `FlutterFire-[DEFAULT]-recaptchaType` /
+     `…-recaptchaSiteKey` in `localStorage` and re-activates App Check at `Firebase.initializeApp`
+     (`firebase_app_check_web-0.3.1+3/lib/firebase_app_check_web.dart:41-82`), defeating ADR-037;
+  4. the /about header read «تعرّف على عن الكنيسة» (accent `accent_about` + title «عن الكنيسة»);
+  5. «بيانات تجريبية» badges and the yellow «مواعيد تقريبية» banner on every page — live has 47/47 liturgies, 4 priests
+     and 4 facilities with `sample: true`; the owner does not want them at launch;
+  6. `/data/today.json` had `coptic: ""` for 2026-11-08 (Katameros answered `copticDate: null`);
+  7. `milestones/pope-visit` hotlinks 4 images from `copticorthodox.church` (CanvasKit fetch fails CORS, the `<img>`
+     fallback shows them, with a console error and a double request).
+- **Decision:**
+  1. `featuresLiveProvider` / `featuresLive()` (`lib/state/providers.dart`): true once `featuresStreamProvider` holds a
+     value that is **not `identical`** to `repo.seed.features` (the test `errorReportingSwitch` already uses), or the
+     stream failed; always true off Firestore (seed mode). The bundled copy itself is accepted after
+     `featuresSeedPatience` (30 s; Seer on PR #39): `guardSeeded` turns a failed stream or an unreachable database into
+     that copy, so offline with no cache the card still returns with its defaults (the flicker had the stored doc ~12 s
+     after the seed copy). `topEventProvider` returns null until it is true, so the
+     card (and its programme-service step) never renders from the seed copy within that window. Cost of the trade:
+     on a slow cold load the card can only appear late (at worst 30 s after the seed copy, with its defaults). The other features-driven blocks keep ADR-038's behaviour (seed
+     defaults first) — they match the stored values on live today, and holding the splash longer was not wanted.
+     **Latent bug found on the way:** `SeedData.settings` / `.features` were getters that parsed a new object on every
+     read, so every `identical(v, seed.X)` test (`confirms` of settings/church and settings/features since PR #23,
+     `errorReportingSwitch` since ADR-034) could never match the bundled copy. They are now `late final` (parsed once);
+     with a stored doc on live nothing changes, and a *missing* doc is again treated as "not proven" as those ADRs meant.
+  2. `web/index.html`: inline `<script id="boot-prefs">` right after `<title>` applies `LocaleNotifier.initialLocale`'s
+     rule (`?lang=en|ar` → saved `church_portal_lang` → Arabic); English sets `<html lang="en">` and the English title
+     at once. Flutter still owns both afterwards (`setDocumentLanguage`, `onGenerateTitle`).
+  3. The same script drops every `FlutterFire-*-recaptcha*` key from `localStorage` and `sessionStorage` before
+     `flutter_bootstrap.js` loads, so App Check is activated again only by the assistant (`ensureAppCheckActivated`,
+     still enforced for AI Logic). Checked with headless Chrome: after visiting /ask, a reload of Home and of /contact
+     loads no reCAPTCHA script and makes no `exchangeRecaptchaEnterpriseToken` call.
+  4. `accent_about` = «كنيستنا» / "Our church".
+  5. Public UI: `SampleBadge`, `PendingConfirmationNote`, `TitleWithBadge` and the `sampleData` / `timesPending` /
+     `timesPendingHint` strings are removed; the next-service card and the top event no longer print «مواعيد تقريبية».
+     **Kept:** the `sample` field in the data, rules, seed and admin («غير مؤكد» chip, filter, switch), the suppression of
+     sample templates (ADR-045), the placeholder-doctor wording on /clinics and the assistant's `[UNCONFIRMED]` grounding
+     (`mentionUnconfirmed`).
+  6. `tool/fetch_synaxarium.js`: `copticDateOf()` ports `CopticDate.fromGregorian` (JDN, 1 Tout 1 AM = JDN 1825030);
+     a null / empty `copticDate` becomes the computed `D/M/YYYY`. The script now exports it and only runs `main()`
+     when executed directly.
+  7. Pope-visit images: the main image and the three `copticorthodox.church` gallery images are served from Hosting as
+     `web/media/milestones/pope-visit-{9712,9703,9744,9780}.webp` (1280 × 853, WebP q78, metadata stripped,
+     205–230 KB each; same-origin, so no CORS). **Never Firebase Storage** (Spark plan rule). After merge + deploy, only
+     `image.url` and `gallery[0..2].url` of that doc are rewritten on live (owner-authorised; before / after values in
+     `work/live-fixes/status.md`). The `media.elwatannews.com` gallery image and the `st-takla.org` saint galleries are
+     unchanged (no CORS error seen).
+- **Review fixes (PR #39):** Seer / CodeRabbit — the seed copy is accepted after `featuresSeedPatience` (30 s) so a failed
+  stream or an offline visit without cache still gets the card (declined the heavier "distinct error value in
+  `_guard`" variant: the patience covers both cases without touching the generic guard); `SeedData.features` is never the
+  shared `FeatureSettings.defaults` (an empty stored doc parses to it); the boot script reads the **last** `?lang=` like
+  Dart's `Uri.queryParameters`.
+- **Not changed:** the hero Ken Burns motion (approved standing rule; rca #5 is a tool artefact); live `sample` flags
+  (owner data in /admin); the Antibiotic team name (owner data).
+- **Cost:** +0 Firestore reads, +0 listeners, +0 writes per visit, no new collection or rule. Hosting: +4 static files
+  (~864 KB in the repo), fetched only on the milestone card / page (cached a week). Visitors who used /ask save ~700 KiB
+  of reCAPTCHA and one App Check exchange on every later page load. The one-off live fix is 1 document write.
+- **Tests:** `test/live_test_findings_test.dart` (featuresLive rule, top event null on the seed copy, the boot script run
+  under node for language and storage clean-up, `accent_about`, no sample marks on the liturgy / next-service cards and
+  no banned widgets in `lib/ui` outside admin, Coptic date script vs Dart for 731 days incl. 2026-11-08, media files);
+  `season_programme_fixes_test.dart` (a sample programme service shows no «times pending» note).
+
 ## Timeline
 
 | When | PR / commit | What |
@@ -1205,5 +1273,6 @@ supersede them.
 | 5 Nov 2026 | **PR #37** — "Occasion sub-themes follow the season; no violet; Holy Week fixes" (`fix/occasion-themes-holy-week`) | ADR-043: Holy Week charcoal / ashen silver / crimson, fasts ash / stone / oxblood, legacy `purple` → oxblood (hidden), every widget on palette roles + scene accents and the Material scheme filled from the palette (test bans hard-coded colours), theme follows the active season (`occasions.followSeason` + `seasonThemes`; admin range > season > Easter > selected), preset item «ثيم الموسم» + `startsAt`, season keys epiphany / marian / fast, Holy Week sim fixes B1–B5 (B4 per day) + `kids` alias, rules budget restructure (joined-regex slot check), +1 seasons listener app-wide while following the season. |
 | 5 Nov 2026 | **PR #36** — "Admin: reset the settings form when switching between Today and Season settings" (`seer/fix/admin-season-settings-switch-crash`, opened by Sentry Seer; PR #37 was squash-merged as `644ce8c` and merged into this branch) | Bug fix for Sentry CHURCH-PORTAL-9: both menu entries edit `settings/features` with different fields; the dashboard reused one unkeyed `ChurchInfoScreen` and `didUpdateWidget` compared only `doc.path`, so «إعدادات المواسم» read Today's `DocEditor` state and crashed on `_rows['venues']!`. Fix: per-section `ValueKey`s + rebuild when the `DocDef` changes. Regression tests: screen-level swap and a dashboard navigation test (both fail on `main` without the fix). No data, rules or listener change; no ADR (bug fix). |
 | 5 Nov 2026 | **PR #35** — "Liturgical web loading screen, top utility bar with live badge, app shell cleanup" (`feat/redesign-splash-top-bar`; PR #37 (`644ce8c`) and PR #36 (`98dc546`) were squash-merged and merged into this branch) | ADR-044 (renumbered from ADR-043): cream loading screen with the app's 27 KB seal, Lalezar name and a composited gold track (`web/index.html`); `TopUtilityBar` (alias `CopticDateStrip`) above the app bar on the palette's title band with the Coptic date and a `live`-coloured badge (`topBarLiveBadge`), grows with text; seal tab offset by the bar height; while live Home shows only the red banner and other pages the tappable badge (admin switch `liveBadgeHideOnHome`, default on); merge fixes: palette roles instead of hard-coded colours, `HaloText` back to 2.5 px, synaxarium live-URL fallback removed (no CORS on live); tests `pagespeed_test.dart`, `today_widgets_test.dart`. Not merged until the owner approves the visuals. |
+| 5 Nov 2026 | **PR #39** — "Live user test fixes" (`fix/live-test-findings`) | ADR-046: top event only on the stored `settings/features` (`featuresLiveProvider`, no seed flash); boot script in `web/index.html` sets the English title / `lang` and drops FlutterFire's saved reCAPTCHA provider (App Check on /ask only again); `accent_about` «كنيستنا»; sample badges / banner / «times pending» removed from the public UI (`sample` kept in data and admin); `fetch_synaxarium.js` computes a missing Coptic date; pope-visit images as Hosting WebP files. +0 reads / listeners / writes. |
 
 Append new PRs to this table.

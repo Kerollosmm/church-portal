@@ -30,7 +30,7 @@ Four places must agree for every field — change them together:
 |---|---|---|---|
 | `visible` | bool | **true** | false = hidden from the public by an admin (kept in DB). Filtered by `publicItems` in providers. Not on `seasons`. |
 | `order` | int (−100000…100000) | 0 | Display order (stable sort; ties keep input order). Drag-reorder writes 10, 20, 30… |
-| `sample` | bool | false | **Unconfirmed / placeholder** awaiting the church. UI shows `SampleBadge` («بيانات تجريبية») and `PendingConfirmationNote`; assistant prefixes `[UNCONFIRMED]`. Admin label "Unconfirmed (pending church confirmation)". |
+| `sample` | bool | false | **Unconfirmed / placeholder** awaiting the church. Public UI shows nothing since ADR-046 (badge / banner removed); admin shows «غير مؤكد»; assistant prefixes `[UNCONFIRMED]`; ADR-045 suppresses sample templates. Admin label "Unconfirmed (pending church confirmation)". |
 | `updatedAt` | timestamp | — | Stamped by `AdminRepository._stamp` (`FieldValue.serverTimestamp()`); rules require `== request.time` or unchanged |
 | `updatedBy` | string | — | Admin email (or uid); rules require it to equal `request.auth.token.email` (or uid) or be unchanged |
 
@@ -304,7 +304,8 @@ serving**), `bioAr/En` (≤5000), meta. Two admin screens over one collection: `
 
 ### `milestones/{id}` — `Milestone` (Hideable, orderable)
 `titleAr` (**req**), `titleEn`, `descAr/En` (≤2000), `year` (int 1–2200), `icon` (`church, people, altar, pope, star`),
-`image` (optional), `order`, `visible` (no `sample` in admin). Seed: `since-1980`, `deacons-2022`, `hegumens-2022`, `pope-visit`.
+`image` (optional), `order`, `visible` (no `sample` in admin). Seed: `since-1980`, `deacons-2022`, `hegumens-2022`, `pope-visit`. Live `pope-visit` images are Hosting files
+`/media/milestones/pope-visit-*.webp` (ADR-046; never Storage on Spark).
 
 ### `saints/{id}` — `Saint` (Hideable, orderable)
 `nameAr` (**req**), `nameEn`, `bioAr/En` (≤5000), `feastCopticAr/En`, `feastGregorian` (EN), `feastGregorianAr`

@@ -66,8 +66,8 @@ class LiturgyCard extends StatelessWidget {
               if (dayText.isNotEmpty)
                 Text(dayText,
                     style: TextStyle(color: context.pal.goldText, fontWeight: FontWeight.w800, fontSize: 12)),
-              TitleWithBadge(context.pick(l.nameAr, l.nameEn),
-                  sample: l.sample, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+              Text(context.pick(l.nameAr, l.nameEn),
+                  style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
               const SizedBox(height: 6),
               TimeRangeText(l.start, l.end),
               const SizedBox(height: 6),
@@ -263,13 +263,6 @@ class NextMassCard extends ConsumerWidget {
       children.add(IconLine(Icons.place_outlined, context.pick(n.liturgy.placeAr, n.liturgy.placeEn)));
       children.add(IconLine(Icons.people_outline, context.pick(n.liturgy.audienceAr, n.liturgy.audienceEn)));
       children.add(ProgramDetails(n.liturgy.program, parallelText: parallelText));
-      if (n.liturgy.sample) {
-        children.add(Padding(
-          padding: const EdgeInsets.only(top: 6),
-          child: Text(context.tr('timesPending'),
-              style: TextStyle(color: context.pal.goldText, fontWeight: FontWeight.w700, fontSize: 12)),
-        ));
-      }
     }
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: children);
   }
