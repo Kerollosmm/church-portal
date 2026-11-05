@@ -37,11 +37,18 @@ class Verse {
   ({String text, String ref, bool rtl}) display({required bool english}) {
     final en = textEn.trim();
     if (english && en.isNotEmpty) {
-      return (text: en, ref: refEn.trim().isNotEmpty ? refEn.trim() : refAr.trim(), rtl: false);
+      return (text: capitalizeVerseStart(en), ref: refEn.trim().isNotEmpty ? refEn.trim() : refAr.trim(), rtl: false);
     }
     return (text: textAr.trim(), ref: refAr.trim(), rtl: true);
   }
 }
+
+/// The first letter of an English verse in upper case (ADR-047): a verse cut
+/// from mid-sentence ("let's hold fast…", 28 of the bundled WEB verses) reads
+/// as a quotation on the hero. Leading quotes / punctuation are kept; the
+/// stored text (bundled asset, admin field) is not changed.
+String capitalizeVerseStart(String text) =>
+    text.replaceFirstMapped(RegExp(r'^([^A-Za-z]*)([a-z])'), (m) => '${m[1]}${m[2]!.toUpperCase()}');
 
 String _str(Object? v) => v is String ? v : '';
 

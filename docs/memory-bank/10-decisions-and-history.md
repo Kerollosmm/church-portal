@@ -1163,7 +1163,9 @@ supersede them.
 - **Decision:**
   1. `Verse.textEn` (+ `Verse.display(english:)`): the English site shows `“textEn”` LTR (Ruqaa 18/22 px, line height
      1.5) with `refEn` (else the Arabic reference); a verse **without** English shows the Arabic text with the **Arabic**
-     reference, so an English reference never sits under Arabic text. The Arabic site is unchanged.
+     reference, so an English reference never sits under Arabic text. The Arabic site is unchanged. The shown English
+     text starts with a capital letter (`capitalizeVerseStart`, after any leading quote): 28 bundled WEB verses start
+     mid-sentence ("let's hold fast…"); the stored text (asset, admin field) is unchanged (owner request on PR #40).
   2. `tool/gen_daily_verses.py` also reads the **World English Bible British Edition** from eBible.org
      (`eng-webbe_vpl.zip`, SHA-256 `018b2ac4…3423a`, "not copyrighted … Public Domain"; the WEB with "the LORD"
      instead of "Yahweh", chosen for a Coptic Orthodox readership — the owner asked for "WEB, else KJV") and writes

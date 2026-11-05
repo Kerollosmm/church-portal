@@ -85,6 +85,21 @@ void main() {
       const v = Verse(textAr: 'نص', refAr: 'يو ٣: ١٦', textEn: 'For God so loved');
       expect(v.display(english: true).ref, 'يو ٣: ١٦');
     });
+    test('the English text starts with a capital letter (mid-sentence verses), the stored text is unchanged', () {
+      const v = Verse(textAr: 'نص', refAr: 'عب ١٠: ٢٣', refEn: 'Hebrews 10:23',
+          textEn: 'let’s hold fast the confession of our hope without wavering; for he who promised is faithful.');
+      expect(v.display(english: true).text,
+          'Let’s hold fast the confession of our hope without wavering; for he who promised is faithful.');
+      expect(v.textEn, startsWith('let’s'));
+      expect(capitalizeVerseStart('“come to me'), '“Come to me');
+      expect(capitalizeVerseStart('For God so loved'), 'For God so loved');
+      expect(capitalizeVerseStart('“'), '“');
+      expect(capitalizeVerseStart(''), '');
+      // Every bundled English verse is shown with a capital first letter.
+      final verses = parseDailyVerses(File('assets/verses/daily_verses.json').readAsStringSync());
+      final shown = verses.map((v) => v.display(english: true).text);
+      expect(shown.where((t) => RegExp(r'^[^A-Za-z]*[a-z]').hasMatch(t)), isEmpty);
+    });
     test('the Arabic site always shows the Arabic', () {
       final d = both.display(english: false);
       expect([d.text, d.ref, d.rtl], ['نص', 'يو ٣: ١٦', true]);
