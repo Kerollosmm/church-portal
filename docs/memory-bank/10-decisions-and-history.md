@@ -1381,7 +1381,10 @@ supersede them.
      (overnight = next morning; no end = the 120-minute default the card counts), 12-hour ص/م like the rest of the app
      (`formatTimeArabic` / `formatTimeLatin`), `goldText` role.
   5. **Seed placeholder text (16):** `lib/domain/pending_text.dart` `stripPendingPlaceholders` drops a bracketed aside or
-     a sentence holding «في انتظار تأكيد» / «لم يُؤكَّد» / «غير مؤكد» / "pending (church) confirmation" / "not confirmed";
+     a sentence holding «في انتظار تأكيد» / «لم يُؤكَّد» / «غير مؤكد» / "pending (church) confirmation" / "not confirmed"
+     (matched without tashkeel; a link inside the sentence goes with it), but never an affiliation caveat («لم يُؤكَّد
+     أنه تابع للكنيسة», "not confirmed as a church ministry": a fact visitors need, kept; the seed's two activities
+     no longer say "partner", only that the church's page follows them — CodeRabbit on PR #45);
      applied on read to `descAr/En` (activities, facilities, milestones) and `bioAr/En` (priests, saints) in
      `models.dart`, so public pages and the prompt treat it as empty; the admin still edits the stored text (raw maps).
      `tool/gen_seed.py` / `seed.json` no longer carry the phrases (`sample: true` stays). Live documents were NOT
@@ -1407,7 +1410,8 @@ supersede them.
   (a) placeholder text, now hidden on display but still stored if live kept the seed text: `facilities/nursery`,
   `facilities/employment`, `facilities/library` (`descAr`, `descEn`); `priests/bigol`, `priests/saleeb`,
   `priests/barnaba` (`bioAr`, `bioEn`; ADR-046 notes live has its own priests, these may not exist);
-  `activities/davids-tones`, `activities/hymns-school` (`descAr`, `descEn`: «(لم يُؤكَّد …)»);
+  `activities/davids-tones`, `activities/hymns-school` (`descAr`, `descEn`): drop «شريك/شريكة» / "partner" if live
+  still says it (the affiliation caveat stays and is shown);
   (b) seed samples: `liturgies/hw-palm`, `hw-thursday`, `hw-friday`, `hw-saturday`, `pascha-eve`, `pascha-day` (dated),
   and the undated templates `hw-day-*`, `hw-eve-*`, `rev-max-*`, `rev-moses-*`: they now give way automatically once
   their season has a real service and beside a real service of any season, but still show in a season with none —
@@ -1420,6 +1424,15 @@ supersede them.
   «لا يُقام اليوم»; placeholder stripping, models, seed and prompt clean; WebP ≤ 200 KB; hero tint per theme, layer
   and switch); `test/domain_test.dart` label updated; rules: `replacesDay` and `heroSeasonTint` bool-only, visitors
   denied. Screenshots: `work/fixall/A/png/`.
+- **CodeRabbit on PR #45 (fixed):** a full-override season still replaces the regulars when its only service that day
+  is a sample hidden by another season's real one; `seasonHasRealServices` counts only a real service that can take
+  place (a start time; dated: starting inside the window); the prompt's season label is read against the combined
+  schedule, and "Services today and tomorrow" lists a service of the evening before still running past midnight as
+  «[ONGOING …, until …]»; /mass-schedule marks a superseded dated special service «لا يُقام اليوم» too;
+  `effectiveAt` keeps `heroSeasonTint` after a preset expires; placeholder matching ignores tashkeel and keeps links
+  whole; affiliation caveats kept (above). Not changed: a seasonal mass of the evening before overlapping a regular
+  mass after midnight (no regular mass runs then); the features editor's stale-snapshot merge (shared by every
+  default-valued switch since ADR-022); hiding unconfirmed facilities / priests (owner's ADR-046 choice).
 
 ## Timeline
 

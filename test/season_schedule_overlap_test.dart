@@ -323,6 +323,7 @@ void main() {
       expect(p, contains('- Today 2027-06-23 (Wednesday): Service revival'));
       expect(p, isNot(contains('- Today 2027-06-23 (Wednesday): [UNCONFIRMED] Service rev-moses-3')));
       expect(p, contains('- Today 2027-06-23 (Wednesday): Service wed-am'));
+      expect(p, contains('- Tomorrow 2027-06-24 (Thursday): Service thu-1'));
     });
   });
 
@@ -389,9 +390,18 @@ void main() {
           stripPendingPlaceholders(
               'نال رتبة القمصية في 10 نوفمبر 2022. آخر تأكيد علني لخدمته بالكنيسة كان في 2022 — في انتظار تأكيد الكنيسة.'),
           'نال رتبة القمصية في 10 نوفمبر 2022.');
-      expect(stripPendingPlaceholders('كورال ترانيم شريك (لم يُؤكَّد أنه تابع للكنيسة).'), 'كورال ترانيم شريك.');
+      // An affiliation caveat is a fact, not a placeholder: it stays.
+      expect(stripPendingPlaceholders('كورال ترانيم (لم يُؤكَّد أنه تابع للكنيسة).'), 'كورال ترانيم (لم يُؤكَّد أنه تابع للكنيسة).');
+      // Tashkeel does not hide a marker (CodeRabbit on PR #45).
+      expect(stripPendingPlaceholders('مكتبة للكتب. تفاصيل غير مُؤكَّدة.'), 'مكتبة للكتب.');
+      expect(hasPendingPlaceholder('تفاصيل غير مُؤكَّدة'), isTrue);
+      // A link inside a placeholder sentence goes with it, no fragment left.
+      const url = 'Library. Details pending church confirmation: https://example.org/contact.';
+      expect(stripPendingPlaceholders(url), 'Library.');
+      expect(stripPendingPlaceholders('Call us. Details: https://example.org/contact. Times pending church confirmation.'),
+          'Call us. Details: https://example.org/contact.');
       expect(stripPendingPlaceholders("Children's nursery — details pending church confirmation."), '');
-      expect(stripPendingPlaceholders('A partner choir (not confirmed as a church ministry).'), 'A partner choir.');
+      expect(stripPendingPlaceholders('A choir (not confirmed as a church ministry).'), 'A choir (not confirmed as a church ministry).');
       const clean = 'يخدم مشروع تطوير خدمة الأنبا أبرآم.';
       expect(stripPendingPlaceholders(clean), clean);
       expect(hasPendingPlaceholder(clean), isFalse);
@@ -404,9 +414,11 @@ void main() {
 
     test('the repo seed has no placeholder text left (its sample flags stay)', () {
       final raw = File('assets/seed/seed.json').readAsStringSync();
-      for (final m in ['في انتظار تأكيد', 'pending church confirmation', 'لم يُؤكَّد', 'not confirmed as']) {
+      for (final m in ['في انتظار تأكيد', 'pending church confirmation', 'شريك', 'partner']) {
         expect(raw, isNot(contains(m)), reason: m);
       }
+      // The activities' affiliation caveats stay (CodeRabbit on PR #45).
+      expect(raw, contains('not confirmed as a church ministry'));
       final seed = jsonDecode(raw) as Map<String, dynamic>;
       expect((seed['priests'] as Map)['saleeb']['sample'], isTrue);
       expect((seed['facilities'] as Map)['nursery']['sample'], isTrue);
@@ -468,6 +480,56 @@ void main() {
       expect(FeatureSettings.defaults.heroSeasonTint, isTrue);
       expect(FeatureSettings.fromMap({'heroSeasonTint': false}).heroSeasonTint, isFalse);
       expect(FeatureSettings.fromMap(const {}).copyWith(heroSeasonTint: false).toMap()['heroSeasonTint'], isFalse);
+    });
+  });
+
+  group('CodeRabbit on PR #45', () {
+    test('the prompt lists an overnight service of the evening before as ongoing', () {
+      final p = prompt(p2, [pascha27], cairo(2027, 5, 2, 0, 30));
+      expect(p, contains('- Today 2027-05-02 (Sunday): [ONGOING since the evening before, until 03:30 AM] Service main'));
+      expect(p, isNot(contains('- Today 2027-05-02 (Sunday): no services listed.')));
+    });
+
+    test('a full-override season replaces the regulars even when its only service is a hidden sample', () {
+      final hw = season('hw', 'holy_week', cairo(2027, 4, 26), cairo(2027, 4, 30, 23, 59), replaces: true);
+      final rev = season('rev', 'revival_moses', cairo(2027, 4, 26), cairo(2027, 4, 30, 23, 59));
+      final lits = [
+        lit('mon-am', weekday: 1, start: '07:00', end: '09:00'),
+        lit('hw-sample', weekday: 1, start: '18:00', end: '21:00', type: 'other', season: 'holy_week', sample: true),
+        lit('rev-real', date: DateTime(2027, 4, 26), start: '18:00', end: '21:00', type: 'other', season: 'revival_moses'),
+      ];
+      expect(occIds(lits, [hw, rev], cairo(2027, 4, 26)), ['rev-real']);
+    });
+
+    test('a real service that cannot take place does not hide the samples', () {
+      final s = season('rev', 'revival_moses', cairo(2027, 6, 22, 18), cairo(2027, 7, 1, 23));
+      final sample = lit('rev-s', date: DateTime(2027, 6, 23), start: '18:30', end: '21:00', type: 'other',
+          season: 'revival_moses', sample: true);
+      final noStart = lit('rev-x', date: DateTime(2027, 6, 24), start: '', end: '', type: 'other', season: 'revival_moses');
+      final early = lit('rev-y', date: DateTime(2027, 6, 22), start: '08:00', end: '09:00', season: 'revival_moses');
+      expect(seasonHasRealServices(s, [sample, noStart, early]), isFalse);
+      expect(occIds([sample, noStart, early], [s], cairo(2027, 6, 23)), ['rev-s']);
+      final real = lit('rev-z', date: DateTime(2027, 6, 24), start: '18:30', end: '21:00', type: 'other',
+          season: 'revival_moses');
+      expect(seasonHasRealServices(s, [sample, real]), isTrue);
+      expect(occIds([sample, real], [s], cairo(2027, 6, 23)), isEmpty);
+    });
+
+    test('after a preset expires heroSeasonTint keeps its stored value', () {
+      final end = DateTime.utc(2027, 5, 1, 22);
+      final f = FeatureSettings.fromMap({
+        'theme': ThemePresets.marian,
+        'heroSeasonTint': false,
+        'seasonPreset': {
+          'seasonId': 'm',
+          'seasonKey': 'marian',
+          'endsAt': end,
+          'options': ['heroMotionOff'],
+          'previous': {'heroMotion': true},
+        },
+      });
+      expect(f.effectiveAt(end).heroSeasonTint, isFalse);
+      expect(f.effectiveAt(end).heroMotion, isTrue);
     });
   });
 }

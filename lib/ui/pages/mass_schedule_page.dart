@@ -124,7 +124,10 @@ class _MassSchedulePageState extends ConsumerState<MassSchedulePage> {
     final notToday = {
       for (final l in regularSupersededOn(liturgies: all, seasons: seasons, day: today)) l.id,
     };
-    bool offToday(Liturgy l) => l.date == null && l.weekday == today.weekday && notToday.contains(l.id);
+    // A dated one-off (a special service or vespers) superseded today is
+    // marked too; [regularSupersededOn] only names one dated today
+    // (CodeRabbit on PR #45).
+    bool offToday(Liturgy l) => notToday.contains(l.id) && (l.date != null || l.weekday == today.weekday);
     return [
       for (final e in revivals.entries) ...[
         SectionTitle(
@@ -146,6 +149,7 @@ class _MassSchedulePageState extends ConsumerState<MassSchedulePage> {
               liturgy: l,
               showDate: true,
               parallelText: parallelOf(l),
+              notHeldToday: offToday(l),
             ),
         ]),
       ],

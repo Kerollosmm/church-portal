@@ -178,14 +178,16 @@ List<LiturgyOccurrence> occurrencesForDay({
   final replacing = <Season>{};
   final additive = <Season, List<LiturgyOccurrence>>{};
   for (final (o, windows) in candidates) {
-    if (o.liturgy.sample && candidates.any((c) => !c.$1.liturgy.sample && overlaps(c.$1, o))) continue;
-    seasonal.add(o);
+    final hidden = o.liturgy.sample && candidates.any((c) => !c.$1.liturgy.sample && overlaps(c.$1, o));
+    if (!hidden) seasonal.add(o);
     // Replacement is decided on ALL seasonal services (so e.g. Holy Week
     // Pascha hours also suspend the regular weekday masses), then filtered.
+    // A full-override season counts even when its only service today is a
+    // sample hidden by another season's real one (CodeRabbit on PR #45).
     for (final s in windows) {
       if (s.replacesRegular) {
         replacing.add(s);
-      } else {
+      } else if (!hidden) {
         (additive[s] ??= []).add(o);
       }
     }
@@ -420,8 +422,17 @@ bool _dateInSeason(DateTime date, Season s) {
 /// its window, or an undated one of its key? Then the seed's undated
 /// `sample: true` templates of that key are not part of it (ADR-045, sims
 /// B5: the owner's programme replaces the sample one).
-bool seasonHasRealServices(Season s, Iterable<Liturgy> all) => all.any(
-    (l) => l.seasonKey == s.key && !l.sample && (l.date == null || _dateInSeason(l.date!, s)));
+///
+/// Only a service that can take place counts (CodeRabbit on PR #45): it has
+/// a start time, and a dated one starts inside the season's window.
+bool seasonHasRealServices(Season s, Iterable<Liturgy> all) => all.any((l) {
+      if (l.seasonKey != s.key || l.sample || l.startMinutes == null) return false;
+      if (l.date == null) return true;
+      if (!_dateInSeason(l.date!, s)) return false;
+      final d = CairoTime.calendarDate(l.date!);
+      final o = _occurrence(l, CairoTime.at(d.year, d.month, d.day), 0);
+      return o != null && isSeasonActiveAt(s, o.start);
+    });
 
 /// Does the seasonal service [l] of [s] give way on the Cairo day
 /// [dayStart]? (ADR-043 B4, widened in ADR-045 B5 and ADR-050)

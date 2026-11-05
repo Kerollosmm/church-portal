@@ -422,12 +422,18 @@ on); owners can press **Send test error**. Details: `03-architecture.md` → *Er
        liturgies are dropped if they start inside the window of a season that has at least one valid service that
        day (so morning masses before an 18:00 season start remain). Replacement is decided on **all** seasonal
        services (e.g. Holy Week Pascha hours suspend weekday masses), then filtered by type.
-     - **Additive** (`false`: the Maximus and Moses revivals): the regular schedule stays. A regular `mass` is dropped
-       only when the season also has a `mass` that day and the regular mass starts inside the window (e.g. the
-       1 July feast liturgy `rev-moses-feast` supersedes Thursday's `thu-1`); a regular `vespers`/`praise` is dropped
-       only when it overlaps in time one of the season's services that day (e.g. Saturday vespers 18:30 vs the 18:30
-       revival service). Before PR 1 a revival erased every morning mass for 9 days and the next-mass card showed
-       "no upcoming liturgies".
+     - **Additive** (`false`: fasts, the Maximus and Moses revivals, the Holy 50 Days): the regular schedule stays
+       (ADR-050). A regular `mass` that starts inside the season's window is dropped only when one of the season's
+       services that day is a `mass` that **overlaps it in time** (e.g. the 1 July feast liturgy `rev-moses-feast`
+       supersedes Thursday's `thu-1` at the same hour), or is marked **`replacesDay`** (feast liturgy: every regular
+       mass of that day goes); a regular `vespers`/`praise` is dropped only when it overlaps in time one of the
+       season's services that day (e.g. Saturday vespers 18:30 vs the 18:30 revival service). Before PR 1 a revival
+       erased every morning mass for 9 days and the next-mass card showed "no upcoming liturgies".
+     - **Sample guards (ADR-050):** a `sample: true` seasonal service never supersedes a real (non-sample) regular
+       service (only a sample one); it is skipped when a real seasonal service of any active season overlaps it
+       (its full-override season still replaces the regular schedule that day); every sample of a season that has
+       a usable real service (`seasonHasRealServices`: a start time, and a dated one starting inside the window) is
+       left out; at the same start a real service sorts before a sample (`compareOccurrences`).
    - **Undated templates vs a dated programme (ADR-043, Holy Week sim B4):** on a day where a schedule-replacing
      season has dated services of its own (`seasonHasDatedServicesOn`), the undated (weekday) services of its key do
      not occur that day; the season list drops an undated service only when every such weekday in the window has

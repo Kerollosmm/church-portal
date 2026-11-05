@@ -487,6 +487,8 @@ class FeatureSettings {
       pageHeaders: pageHeaders,
       footer: footer,
       heroMotion: p.has(PresetOption.heroMotionOff) ? (p.prevBool(PresetPrev.heroMotion) ?? true) : heroMotion,
+      // Kept as stored: the preset never touches it (CodeRabbit on PR #45).
+      heroSeasonTint: heroSeasonTint,
       heroShowAddress: heroShowAddress,
       imageStyles: imageStyles,
       dailyVerse: dailyVerse,

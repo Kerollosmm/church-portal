@@ -232,14 +232,19 @@ String buildAssistantInstruction({
           'For today and tomorrow, "Services today and tomorrow" below is exactly what the website shows.',
         );
       final today = CairoTime.startOfDay(cairoNow);
+      final offToday = regularSupersededOn(liturgies: liturgies, seasons: seasons, day: today).toSet();
       for (final e in seasonal.entries) {
         final s = e.key;
         // The label says what the schedule really does today (ADR-050,
         // issue 8): not "regular masses continue" on a day this season
         // hides some of them.
+        // Read against the combined schedule (all seasons), so a sample of
+        // this season that another season's real service hides does not
+        // make the label claim regular masses are off (CodeRabbit on PR #45).
         final hidesToday = !s.replacesRegular &&
             isSeasonActiveOnDay(s, today) &&
-            regularSupersededOn(liturgies: liturgies, seasons: [s], day: today).isNotEmpty;
+            regularSupersededOn(liturgies: liturgies, seasons: [s], day: today)
+                .any(offToday.contains);
         final label = s.replacesRegular
             ? '[REPLACES regular schedule]'
             : hidesToday
@@ -717,10 +722,20 @@ void _todayAndTomorrow(
   for (final k in const [0, 1]) {
     final d = CairoTime.at(today.year, today.month, today.day + k);
     final occ = occurrencesForDay(liturgies: liturgies, seasons: seasons, day: d, dayOffset: k);
+    // A service of the evening before that runs past midnight is still on
+    // (the home card shows it; CodeRabbit on PR #45).
+    final prev = CairoTime.at(d.year, d.month, d.day - 1);
+    final ongoing = occurrencesForDay(liturgies: liturgies, seasons: seasons, day: prev, dayOffset: k - 1)
+        .where((o) => o.end.isAfter(d))
+        .toList();
     final off = regularSupersededOn(liturgies: liturgies, seasons: seasons, day: d);
     final name = '${k == 0 ? 'Today' : 'Tomorrow'} ${_ymd(d)} (${weekdayNamesEn[d.weekday]})';
-    if (occ.isEmpty) {
+    if (occ.isEmpty && ongoing.isEmpty) {
       b.writeln('- $name: no services listed.');
+    }
+    for (final o in ongoing) {
+      b.writeln('- $name: [ONGOING since the evening before, until ${formatTimeLatin('${o.end.hour.toString().padLeft(2, '0')}:${o.end.minute.toString().padLeft(2, '0')}')}] '
+          '${o.liturgy.sample ? '[UNCONFIRMED] ' : ''}${_liturgyLine(o.liturgy, f.programOptions)}');
     }
     for (final o in occ) {
       b.writeln('- $name: ${o.liturgy.sample ? '[UNCONFIRMED] ' : ''}${_liturgyLine(o.liturgy, f.programOptions)}');
