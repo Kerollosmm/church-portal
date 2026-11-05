@@ -89,7 +89,8 @@
   <script id="boot-prefs">
     (function () {
       try {
-        var q = new URLSearchParams(location.search).get('lang');
+        // The last ?lang= wins, as Dart's Uri.queryParameters reads it (CodeRabbit on PR #39).
+        var q = new URLSearchParams(location.search).getAll('lang').pop();
         var saved = null;
         try { saved = localStorage.getItem('church_portal_lang'); } catch (e) {}
         var lang = q === 'en' || q === 'ar' ? q : (saved === 'en' ? 'en' : 'ar');

@@ -10,6 +10,7 @@
 //      (the `sample` field stays in the data and the admin).
 //   6. fetch_synaxarium.js computes the Coptic date when Katameros sends null.
 //   7. The pope-visit milestone images are Hosting assets (no Storage).
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -30,6 +31,18 @@ import 'package:material_ui/material_ui.dart';
 import 'package:timezone/timezone.dart' as tz;
 
 tz.TZDateTime cairo(int y, int m, int d, [int h = 0, int min = 0]) => CairoTime.at(y, m, d, h * 60 + min);
+
+/// Passes `is FirestoreRepository` with a controllable features stream.
+class _Fs implements FirestoreRepository {
+  _Fs(this.seed, this._features);
+  @override
+  final SeedData seed;
+  final Stream<FeatureSettings> _features;
+  @override
+  Stream<FeatureSettings> features() => _features;
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
 
 class _Repo extends SeedRepository {
   _Repo(super.seed, this._lits);
@@ -83,12 +96,51 @@ void main() {
       // The stored doc's snapshot is parsed anew: never identical to the seed copy.
       final stored = FeatureSettings.fromMap(_seedRaw()['settings']['features'] as Map<String, dynamic>);
       expect(featuresLive(AsyncValue.data(stored), seedCopy: seed.features), isTrue);
+      // A seed without features (or one that failed to load) is still its own object, so an
+      // empty stored doc (parsed to the shared defaults) is not taken for it.
+      final empty = SeedData(const {});
+      expect(identical(empty.features, FeatureSettings.defaults), isFalse);
+      expect(featuresLive(const AsyncValue.data(FeatureSettings.defaults), seedCopy: empty.features), isTrue);
     });
 
     test('off Firestore (seed mode) the seed is the content, so it is live at once', () {
       final c = ProviderContainer(overrides: [repositoryProvider.overrideWithValue(_Repo(SeedData(_seedRaw()), const []))]);
       addTearDown(c.dispose);
       expect(c.read(featuresLiveProvider), isTrue);
+    });
+
+    testWidgets('on Firestore: the seed copy waits, the stored doc goes at once, the seed is accepted after the patience',
+        (tester) async {
+      final seed = SeedData(_seedRaw());
+      final ctl = StreamController<FeatureSettings>();
+      addTearDown(ctl.close);
+      final c = ProviderContainer(overrides: [repositoryProvider.overrideWithValue(_Fs(seed, ctl.stream))]);
+      final seen = <bool>[];
+      c.listen<bool>(featuresLiveProvider, (_, v) => seen.add(v), fireImmediately: true);
+      ctl.add(seed.features); // the bundled copy (slow cold load / offline)
+      await tester.pump();
+      expect(c.read(featuresLiveProvider), isFalse);
+      await tester.pump(featuresSeedPatience - const Duration(seconds: 1));
+      expect(c.read(featuresLiveProvider), isFalse, reason: 'still within the patience');
+      await tester.pump(const Duration(seconds: 2));
+      expect(c.read(featuresLiveProvider), isTrue, reason: 'offline / failed stream: the defaults come back');
+      expect(seen, [false, true]);
+      c.dispose(); // before the binding checks for pending timers
+    });
+
+    testWidgets('on Firestore: a stored doc right after the seed copy is live with no wait', (tester) async {
+      final seed = SeedData(_seedRaw());
+      final ctl = StreamController<FeatureSettings>();
+      addTearDown(ctl.close);
+      final c = ProviderContainer(overrides: [repositoryProvider.overrideWithValue(_Fs(seed, ctl.stream))]);
+      c.listen<bool>(featuresLiveProvider, (_, _) {}, fireImmediately: true);
+      ctl.add(seed.features);
+      await tester.pump();
+      expect(c.read(featuresLiveProvider), isFalse);
+      ctl.add(FeatureSettings.fromMap(const {'topEvent': false}));
+      await tester.pump();
+      expect(c.read(featuresLiveProvider), isTrue);
+      c.dispose(); // cancels the patience timer before the binding checks for pending timers
     });
 
     ProviderContainer container({required bool live}) {
@@ -182,6 +234,10 @@ console.log(JSON.stringify({title:document.title,lang:document.documentElement.l
       expect(run('?lang=ar', {'church_portal_lang': 'en'})!['title'], 'عربي');
       expect(run('', {})!['lang'], 'ar');
       expect(run('?lang=xx', {})!['lang'], 'ar');
+      // Duplicate keys: the last one wins, as in Dart's Uri.queryParameters.
+      expect(run('?lang=en&lang=ar', {})!['lang'], 'ar');
+      expect(run('?lang=ar&lang=en', {})!['lang'], 'en');
+      expect(Uri.parse('/?lang=en&lang=ar').queryParameters['lang'], 'ar');
     });
 
     test('App Check: the saved reCAPTCHA provider is dropped, other keys stay', () {

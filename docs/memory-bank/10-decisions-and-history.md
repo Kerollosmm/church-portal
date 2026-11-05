@@ -1174,10 +1174,12 @@ supersede them.
 - **Decision:**
   1. `featuresLiveProvider` / `featuresLive()` (`lib/state/providers.dart`): true once `featuresStreamProvider` holds a
      value that is **not `identical`** to `repo.seed.features` (the test `errorReportingSwitch` already uses), or the
-     stream failed; always true off Firestore (seed mode). `topEventProvider` returns null until it is true, so the
-     card (and its programme-service step) never renders from the seed copy. Cost of the trade: on a slow cold load
-     the card can only appear late, never wrongly. (A database with no `settings/features` doc at all shows no top event until an admin saves
-     it once; live has the doc.) The other features-driven blocks keep ADR-038's behaviour (seed
+     stream failed; always true off Firestore (seed mode). The bundled copy itself is accepted after
+     `featuresSeedPatience` (30 s; Seer on PR #39): `guardSeeded` turns a failed stream or an unreachable database into
+     that copy, so offline with no cache the card still returns with its defaults (the flicker had the stored doc ~12 s
+     after the seed copy). `topEventProvider` returns null until it is true, so the
+     card (and its programme-service step) never renders from the seed copy within that window. Cost of the trade:
+     on a slow cold load the card can only appear late (at worst 30 s after the seed copy, with its defaults). The other features-driven blocks keep ADR-038's behaviour (seed
      defaults first) — they match the stored values on live today, and holding the splash longer was not wanted.
      **Latent bug found on the way:** `SeedData.settings` / `.features` were getters that parsed a new object on every
      read, so every `identical(v, seed.X)` test (`confirms` of settings/church and settings/features since PR #23,
@@ -1205,6 +1207,11 @@ supersede them.
      `image.url` and `gallery[0..2].url` of that doc are rewritten on live (owner-authorised; before / after values in
      `work/live-fixes/status.md`). The `media.elwatannews.com` gallery image and the `st-takla.org` saint galleries are
      unchanged (no CORS error seen).
+- **Review fixes (PR #39):** Seer / CodeRabbit — the seed copy is accepted after `featuresSeedPatience` (30 s) so a failed
+  stream or an offline visit without cache still gets the card (declined the heavier "distinct error value in
+  `_guard`" variant: the patience covers both cases without touching the generic guard); `SeedData.features` is never the
+  shared `FeatureSettings.defaults` (an empty stored doc parses to it); the boot script reads the **last** `?lang=` like
+  Dart's `Uri.queryParameters`.
 - **Not changed:** the hero Ken Burns motion (approved standing rule; rca #5 is a tool artefact); live `sample` flags
   (owner data in /admin); the Antibiotic team name (owner data).
 - **Cost:** +0 Firestore reads, +0 listeners, +0 writes per visit, no new collection or rule. Hosting: +4 static files

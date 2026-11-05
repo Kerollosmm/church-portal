@@ -35,7 +35,17 @@ class SeedData {
   /// (`confirms`, `errorReportingSwitch`, `featuresLive`). As getters they
   /// built a new object per read and that test never matched (ADR-046).
   late final ChurchSettings settings = ChurchSettings.fromMap(collection('settings')['church'] ?? const {});
-  late final FeatureSettings features = FeatureSettings.fromMap(collection('settings')['features']);
+  ///
+  /// The features copy is always its own object, never the shared
+  /// [FeatureSettings.defaults] (a seed without features, or one that failed
+  /// to load): an empty stored doc parses to that shared constant and must
+  /// not be taken for the bundled copy (CodeRabbit on PR #39).
+  late final FeatureSettings features = _own(FeatureSettings.fromMap(collection('settings')['features']));
+
+  static FeatureSettings _own(FeatureSettings f) =>
+      // A new instance on purpose (not the const), see [features].
+      // ignore: prefer_const_constructors
+      identical(f, FeatureSettings.defaults) ? FeatureSettings() : f;
   List<Alert> get alerts => _list('alerts', Alert.fromMap);
   List<Season> get seasons => _list('seasons', Season.fromMap);
   List<Liturgy> get liturgies => _list('liturgies', Liturgy.fromMap);
