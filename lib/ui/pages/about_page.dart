@@ -11,6 +11,7 @@ import '../../state/providers.dart';
 import '../widgets/cards.dart';
 import '../widgets/common.dart';
 import '../widgets/coptic_cross.dart';
+import '../widgets/milestone_card.dart';
 
 class AboutPage extends ConsumerWidget {
   const AboutPage({super.key});
@@ -70,6 +71,21 @@ class AboutPage extends ConsumerWidget {
             ]),
           ]),
         ),
+        ],
+        // Church milestones (ADR-052): the same cards as Home "Our story",
+        // from the same milestonesProvider (no extra listener).
+        if (f.showAboutMilestones) ...[
+          SectionTitle(context.tr('churchMilestones'),
+              key: const ValueKey('about-milestones'), icon: Icons.timeline_rounded),
+          AsyncSection<List<Milestone>>(
+            provider: milestonesProvider,
+            retry: milestonesProvider,
+            isEmpty: (d) => d.isEmpty,
+            loading: const SkeletonList(count: 2, itemHeight: 120),
+            builder: (context, items) => ResponsiveGrid(children: [
+              for (final m in items) MilestoneCard(m, key: ValueKey('aboutCard-${m.id}')),
+            ]),
+          ),
         ],
         if (f.enabled(Sections.saints)) ...[
         SectionTitle(context.tr('patronSaints'), icon: Icons.auto_awesome_rounded),

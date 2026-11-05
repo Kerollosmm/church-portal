@@ -60,8 +60,10 @@ const askNavItem = NavItem('ask', '/ask', Icons.auto_awesome_rounded);
 
 /// Where the phone Back arrow goes from [location]: an item detail page
 /// (`/clinics/<id>`, `/about/priests/<id>`…) returns to the page listing it
-/// (milestones: Home, where "Our story" lives); every other route goes Home.
-String parentRouteOf(String location) => parseDetailPath(location)?.$1.parentPath ?? '/';
+/// (milestones: About, or Home when the admin lists them on Home only,
+/// ADR-052); every other route goes Home.
+String parentRouteOf(String location, [FeatureSettings features = FeatureSettings.defaults]) =>
+    parseDetailPath(location)?.$1.parentPathIn(features) ?? '/';
 
 /// l10n key naming the page [parentRoute] (for "Back to …").
 String _parentLabelKey(String parentRoute) => switch (parentRoute) {
@@ -117,7 +119,7 @@ class _AppShellState extends ConsumerState<AppShell> {
     // PWAs have no browser back button.
     final showBack = !wide && location != '/';
     // Item detail pages go back to the section that lists them, not Home.
-    final parent = parentRouteOf(location);
+    final parent = parentRouteOf(location, ref.watch(featuresProvider));
     final toParent = parent != '/' || parseDetailPath(location) != null;
     // Ultra-narrow phones (< 360 px), very large text, or a subpage below
     // 400 px (the Back arrow takes another 48 dp): the highlighted Mass

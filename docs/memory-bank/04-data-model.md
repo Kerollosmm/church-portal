@@ -166,6 +166,7 @@ Existence of `settings/church` = "database is seeded" (see `03-architecture.md`)
 | `heroTitleAr/En` | string ≤ 200 | empty → church name |
 | `heroSubtitleAr/En` | string ≤ 300 | empty → no ribbon (or the address when `heroShowAddress`) |
 | `heroShowAddress` | bool, default false (PR #22) | address ribbon in the hero when no subtitle; written only once on or already stored |
+| `aboutMilestones` | bool, default **true** (ADR-052) | milestones also listed on `/about` («محطات الكنيسة») when the `milestones` section is on; written only once off or already stored; rules: bool |
 | `errorReporting` | bool, default **true** (PR #24, ADR-034) | error reports to Sentry from the web / Android app; off = nothing is sent (`ErrorReportingGate`, SDK closed). Written only once off or already stored; seeded `true` |
 | `bannerEnabled` | bool | false |
 | `bannerAr`, `bannerEn` | string ≤ 500 | banner shows only if enabled **and** some text |

@@ -517,7 +517,9 @@ void main() {
 
   group('FeaturesEditor widget', () {
     testWidgets('switching a section off and saving writes the flag', (tester) async {
-      tester.view.physicalSize = const Size(1200, 5000);
+      // Tall enough for the theme chips below the sections card (it grew with
+      // the ADR-052 sub-switch), clear of the floating Save button.
+      tester.view.physicalSize = const Size(1200, 6000);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.reset);
       FeatureSettings? saved;

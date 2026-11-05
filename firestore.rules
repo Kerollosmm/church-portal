@@ -616,7 +616,7 @@ service cloud.firestore {
       let changed = changedKeys(d);
       return keysAllowed(['sections', 'homeOrder', 'homeHidden', 'heroTitleAr', 'heroTitleEn', 'heroSubtitleAr',
                           'heroSubtitleEn', 'bannerEnabled', 'bannerAr', 'bannerEn', 'bannerLink', 'theme',
-                          'pageHeaders', 'footer', 'heroMotion', 'heroShowAddress', 'imageStyles', 'dailyVerse', 'occasions', 'themeColors',
+                          'pageHeaders', 'footer', 'heroMotion', 'heroShowAddress', 'aboutMilestones', 'imageStyles', 'dailyVerse', 'occasions', 'themeColors',
                           'heroVideos', 'errorReporting', 'copticStrip', 'dayStartMode', 'dayStartsAt', 'topEvent',
                           'commemoration', 'topEventServices', 'liveEnabled', 'liveUrl', 'liveLabelAr', 'liveLabelEn', 'liveEndsAt',
                           'liveBadgeHideOnHome', 'dayEvents', 'venues', 'audiences', 'seasonVerses', 'seasonPreset', 'weddingBookingOff',
@@ -642,8 +642,11 @@ service cloud.firestore {
         && (!('footer' in changed) || !('footer' in d) || validFooter(d.footer))
         // Hero motion & video switch (ADR-022): a bool, default on.
         && (!('heroMotion' in changed) || d.get('heroMotion', true) is bool)
-        // Address ribbon in the hero: a bool, default off.
-        && (!('heroShowAddress' in changed) || d.get('heroShowAddress', false) is bool)
+        // Address ribbon in the hero (bool, default off) and milestones also on
+        // the About page (ADR-052; bool, default on): one gate, so the
+        // worst-case page-headers save stays under the 1,000-expression cap.
+        && (!changed.hasAny(['heroShowAddress', 'aboutMilestones'])
+            || (d.get('heroShowAddress', false) is bool && d.get('aboutMilestones', true) is bool))
         // Error reports to Sentry (ADR-034): a bool, default on.
         && (!('errorReporting' in changed) || d.get('errorReporting', true) is bool)
         // Per-section default image display style (ADR-023).

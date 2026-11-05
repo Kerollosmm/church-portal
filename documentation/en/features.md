@@ -95,9 +95,9 @@ This document provides a comprehensive, feature-by-feature manual for all 31 cap
 - **Technical Implementation:** Backed by `settings/church`, `priests`, and `saints` collections.
 
 ### 11. Historical Milestones ("Our Story")
-- **Visitor Experience:** A rich chronological timeline on the Home page highlighting pivotal events in parish history (laying the cornerstone, papal visits by Pope Shenouda III and Pope Tawadros II, consecrations).
-- **Admin Control (`/admin` → Milestones):** Add historical milestones with year stamps, narrative descriptions, display icons, and optional high-resolution photos.
-- **Technical Implementation:** Stored in `milestones` collection. Rendered via `_MilestoneCard` grid.
+- **Visitor Experience:** A rich chronological timeline on the Home page highlighting pivotal events in parish history (laying the cornerstone, papal visits by Pope Shenouda III and Pope Tawadros II, consecrations). Since ADR-052 the same cards also appear on the About page as "Church milestones" («محطات الكنيسة»), after the history and altars; a milestone's Back link returns to About while they are listed there.
+- **Admin Control (`/admin` → Milestones):** Add historical milestones with year stamps, narrative descriptions, display icons, and optional high-resolution photos. `/admin` → Sections & home page → under the milestones switch, "Also on the About page" (`settings/features.aboutMilestones`, default on); the Home block keeps its own home-layout switch.
+- **Technical Implementation:** Stored in `milestones` collection. Rendered via the shared `MilestoneCard` (`lib/ui/widgets/milestone_card.dart`) on Home and About, both from the same `milestonesProvider` (no extra listener).
 
 ### 12. Activities & Choirs
 - **Visitor Experience:** Directory of parish fellowship groups: St. Moses Scouts, St. Stephen Deacons School, David's Harp Hymns Institute, Bible Study fellowships, athletic clubs, and arts exhibitions.

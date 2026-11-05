@@ -1342,6 +1342,42 @@ supersede them.
   and church-event rows), `test/helpers/admin_pickers.dart`; the clinic save test in `admin_test.dart` now fills times
   through the picker. Phase 1 harness re-run on the branch: `work/seasons-sim/fixes1/status.md`.
 
+## ADR-052 — Church milestones on the About page («محطات الكنيسة»)
+
+- **Context:** The owner asked (6 Nov 2026) «ضيف محطات الكنيسه في صفحه عن الكنيسه». The milestones (`milestones`
+  collection, section `milestones`) were listed only by the Home block «قصتنا» (`HomeBlocks.milestones`, private
+  `_MilestoneCard` in `home_page.dart`); their detail pages already live under `/about/milestones/<id>`, but Back
+  went Home.
+- **Decision:**
+  1. **One shared card.** `_MilestoneCard` moved to `lib/ui/widgets/milestone_card.dart` as `MilestoneCard` (same
+     cover / lead image, year in local digits, title, text, «التفاصيل» link). Home and About render the same widget;
+     the Home block is otherwise unchanged (cards keyed `homeMilestone-<id>`).
+  2. **About section.** `/about` shows «محطات الكنيسة» / "Church milestones" (`SectionTitle`, key
+     `about-milestones`, cards keyed `aboutCard-<id>`, `ResponsiveGrid`) right after the history & altars and before
+     the patron saints, ordered by `order` as on Home, from the existing `milestonesProvider` (no new listener or
+     collection).
+  3. **Switch.** New `settings/features.aboutMilestones` (bool, default **on**; `FeatureSettings.aboutMilestones`,
+     `showAboutMilestones` = section `milestones` on AND the switch). /admin → «الأقسام والصفحة الرئيسية» →
+     «تشغيل وإيقاف الأقسام»: an indented switch «إظهارها أيضًا في «عن الكنيسة»» under «محطات تاريخية (قصتنا)»
+     (`ValueKey('features-aboutMilestones')`, disabled while the section is off). The Home block keeps its own
+     home-layout switch. Saved only once off or already stored (`featuresSaveWrites`), so saves keep working against
+     rules that predate the key; rules: key allowed, and `d.get('aboutMilestones', true) is bool` checked in ONE
+     gate with `heroShowAddress` (`changed.hasAny([...])`): a separate clause pushed the worst-case page-headers
+     save (all 8 pages, max lengths) over the 1,000-expression cap, the shared gate keeps it under (rules suite
+     118/118).
+  4. **Back / breadcrumb.** `DetailKind.parentPath` became `parentPathIn(FeatureSettings)`: a milestone's parent is
+     `/about` while the About page lists it (`showAboutMilestones` and `/about` enabled), else Home as before.
+     `parentRouteOf(location, features)` (phone Back arrow) and the detail page's «رجوع إلى …» use it.
+  5. Milestones alone do not keep `/about` alive (`routeSections['/about']` unchanged: history, saints, priests,
+     departed priests); with all four off the page is unavailable and milestone Back goes Home.
+- **Cost:** +0 writes; +0 new listeners. The About page watches the same app-wide `milestonesProvider` (not
+  autoDispose) as Home: Home → About reuses the open listener (+0 reads). Landing directly on /about opens the one
+  `milestones` listener Home would have opened (one read per milestone doc, 4 today), once per session.
+- **Tests:** `test/about_milestones_test.dart` (shown after the altars and before the saints in Home order, AR title,
+  hidden with the switch off / the section off, Home block unchanged and independent of it, model / save / rules
+  text, admin switch saves and is disabled with the section off); `test/detail_pages_test.dart` (milestone Back →
+  About, → Home with the switch / section / About off); rules group "ADR-052".
+
 ## Timeline
 
 | When | PR / commit | What |
@@ -1399,5 +1435,7 @@ supersede them.
 | 5 Nov 2026 | **Docs PR** — "English documentation suite & README overhaul" (`docs/english-readme-and-documentation`) | ADR-048: English documentation suite (`documentation/en/README.md`, `architecture.md`, `operations.md`, `features.md`), modernized root `README.md` with tech stack badges, framework icons, and architecture diagrams; cross-references in `documentation/README.md`, `AGENTS.md`, and `docs/memory-bank/00-README.md`. |
 | 5 Nov 2026 | **PR #42** — "Season card timing" (`fix/season-card-timing`) | ADR-049: «يُقام الآن» names the services running now in other halls (`runningNow`, `alsoRunning`); overnight services audited and pinned (Easter night, Kiahk, Apocalypse, DST), parallel services compared across midnight (`occurrencesAround`), assistant says an overnight service ends the next morning; /mass-schedule seasonal switch from palette roles at ≥ 3:1 in every theme; additive day-to-night handover tested minute by minute; admin time / date pickers (12-hour AM/PM picker with a 12-hour reading, stored 24-hour `HH:mm`, `YYYY-MM-DD`, stored types unchanged). +0 reads. |
 | 5 Nov 2026 | **Docs PR** — "README screenshots" (`docs/readme-screenshots`) | Docs only, no ADR: `screens/` now holds 4 shots: Home, Mass schedule and Ask (live site, Arabic, 390 px @2x) plus the admin dashboard overview (1280 px, real `AdminDashboard` rendered from the local Firestore-emulator export, no live sign-in); the 8 broken desktop shots from PR #41 removed; README "Visual Showcase" is one row of public shots plus an "Admin dashboard" shot. No code change. |
+
+| 6 Nov 2026 | **PR** — "Church milestones on the About page" (`feat/about-milestones`) | ADR-052: shared `MilestoneCard` (`lib/ui/widgets/milestone_card.dart`) for Home «قصتنا» and a new «محطات الكنيسة» section on `/about` after the history & altars; `settings/features.aboutMilestones` (default on) with an indented admin switch under the milestones section; milestone detail Back → About while listed there; rules key + bool check. +0 writes / new listeners; direct /about landing opens the existing milestones listener. |
 
 Append new PRs to this table.

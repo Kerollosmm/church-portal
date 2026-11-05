@@ -120,6 +120,10 @@ cancels and re-subscribes every stream (BUG-18; `ChurchInfoScreen` does the same
   `isEchoOfEditor(shown, latest, editorValues)` (`admin_validators.dart`) — if only metadata changed or every changed
   field already equals what the form holds, the editor key is kept, so the scroll position stays.
 
+- **Sections** card (ADR-052): under «محطات تاريخية (قصتنا)» an indented switch **«إظهارها أيضًا في «عن الكنيسة»» /
+  "Also on the About page"** (`ValueKey('features-aboutMilestones')`, `settings/features.aboutMilestones`, default on;
+  disabled while the milestones section is off). The Home «قصتنا» block keeps its own home-layout switch.
+
 - **Hero texts** card (PR #22, ADR-032): besides title / subtitle AR/EN and *Hero motion & video*, a
   **"Show address in hero"** switch (`ValueKey('features-heroShowAddress')`, `heroShowAddress`, default off): the
   address ribbon under the hero title when no subtitle is set.
