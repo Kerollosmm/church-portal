@@ -58,7 +58,10 @@ never mix into a season with real services (ADR-045); PR #39 live-test fixes —
 features, English title before boot, App Check lazy again, no public sample marks, Coptic date fallback, pope-visit
 images on Hosting (ADR-046); PR #40 English verse of the day — bundled public-domain WEB
 (British Edition) text, optional English for the admin's fixed and season verses (ADR-047); Docs PR: English
-documentation suite in `documentation/en/`, comprehensive project README overhaul with framework logos, and cross-references (ADR-048)).
+documentation suite in `documentation/en/`, comprehensive project README overhaul with framework logos, and cross-references (ADR-048);
+PR #42 season card timing — «يُقام الآن» names the services running now in other halls, overnight services and cross-midnight parallels,
+a readable seasonal switch on every theme, the day-to-night handover tested minute by minute, admin 12-hour (AM/PM)
+time and date pickers, stored 24-hour (ADR-049)).
 
 > **Golden rule:** read this folder before changing anything, and update it in the same PR as every change that
 > alters behaviour, data shape, rules, workflows, content status or open tasks.

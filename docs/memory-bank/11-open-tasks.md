@@ -1,7 +1,7 @@
 # 11 — Open tasks
 
 Tick items off (or delete them) in the PR that completes them, and add new ones as you discover them.
-Status as of 5 Nov 2026 (PR #40 / ADR-047; PR #39 / ADR-046; PR #38 / ADR-045; PR #35 / ADR-044; PR #37 / ADR-043; PR #33 / ADR-042; PR #32 / ADR-041; PR #31 / ADR-039–040; PR #30 / ADR-038; PR #25 re-checked against `d60261d`; earlier: PR #7–#24).
+Status as of 5 Nov 2026 (PR #42 / ADR-049; PR #40 / ADR-047; PR #39 / ADR-046; PR #38 / ADR-045; PR #35 / ADR-044; PR #37 / ADR-043; PR #33 / ADR-042; PR #32 / ADR-041; PR #31 / ADR-039–040; PR #30 / ADR-038; PR #25 re-checked against `d60261d`; earlier: PR #7–#24).
 
 ## Top open items (owner's list, 4 Nov 2026 — details in the sections below)
 
@@ -158,6 +158,13 @@ Status as of 5 Nov 2026 (PR #40 / ADR-047; PR #39 / ADR-046; PR #38 / ADR-045; P
 - [ ] Optional (ADR-043 cost): if the app-wide `seasons` listener matters, derive the active season from
       `settings/features.seasonPreset` only (no listener) when no season list is needed on the page.
 - [x] ADR number: PR #35 (splash / top bar) renumbered to ADR-044 after PR #37 took ADR-043.
+- [x] Seasons simulation Phase 1 (5 Nov 2026, `work/seasons-sim/phase1`): D1 «يُقام الآن» without the parallel
+      services and C1 the grey-on-grey seasonal switch on Holy Week — fixed in PR #42 (ADR-049), with overnight and
+      day-to-night handover tests. Still open from that report: S1 Holy Week day names in the top bar («ليلة الجمعة
+      العظيمة», new feature), S2 dated seed samples `hw-palm` / `hw-saturday` outside the owner's days, S3 gold in the
+      seal / photos on dark themes (design decision).
+- [ ] Owner (ADR-049, optional): an additive season's own `mass` hides every regular mass that day (ADR-045
+      feast rule); say if it should hide only the overlapping ones.
 - [x] Live test 5 Nov 2026 (ADR-046, PR #39): top-event cold-load flicker, EN `<title>` / `lang`, reCAPTCHA on every page
       after /ask, «تعرّف على عن الكنيسة», public sample badges / banner, empty Coptic date in `today.json`, CORS pope-visit images.
 - [ ] After PR #39 is merged and deployed: rewrite only `milestones/pope-visit` `image.url` + `gallery[0..2].url` on live to

@@ -15,6 +15,8 @@ import 'package:church_portal/ui/admin/features_editor.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 
+import 'helpers/admin_pickers.dart';
+
 FieldDef _f(FieldType t, {bool required = false, num? min, num? max, bool allowPath = false, int maxLength = 0}) =>
     FieldDef('k', 'ك', 'k', t, required: required, min: min, max: max, allowPath: allowPath, maxLength: maxLength);
 
@@ -423,18 +425,17 @@ void main() {
       await tester.enterText(find.byKey(const ValueKey('field-specialty')), 'dental');
       await tester.enterText(find.byKey(const ValueKey('field-specialtyAr')), 'الأسنان');
       await tester.enterText(find.byKey(const ValueKey('field-doctorName')), 'د. مينا');
-      await tester.enterText(find.byKey(const ValueKey('field-start')), '9:00'); // invalid
       // The booking phone sits in the collapsible "Contacts & links" group (PR #12).
       await tester.tap(find.byKey(const ValueKey('group-contacts')));
       await tester.pumpAndSettle();
       await tester.enterText(find.byKey(const ValueKey('field-bookingPhone')), '010 1234 5678');
+      await tester.enterText(find.byKey(const ValueKey('field-order')), 'abc'); // invalid
       await tester.tap(find.byKey(const Key('editor-save')));
       await tester.pumpAndSettle();
       expect(saved, isNull);
-      expect(find.text('Use HH:mm, e.g. 06:30'), findsOneWidget);
-
-      await tester.enterText(find.byKey(const ValueKey('field-start')), '16:00');
-      await tester.enterText(find.byKey(const ValueKey('field-end')), '20:00');
+      // Times come from the 12-hour picker since ADR-049 (read-only fields; stored 24h).
+      await pickTime(tester, 'start', 16, 0);
+      await pickTime(tester, 'end', 20, 0);
       await tester.enterText(find.byKey(const ValueKey('field-order')), '30');
       await tester.tap(find.byKey(const Key('editor-save')));
       await tester.pumpAndSettle();

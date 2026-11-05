@@ -77,7 +77,14 @@ class _MassSchedulePageState extends ConsumerState<MassSchedulePage> {
               // The visitor chose: never override it with the season default.
               _seasonDefaultApplied = true;
             }),
-            activeThumbColor: context.pal.ornament,
+            // ON / OFF clearly apart on every theme, Holy Week's charcoal
+            // included (ADR-049): palette roles only (ADR-043).
+            activeThumbColor: context.pal.switchOnThumb,
+            activeTrackColor: context.pal.switchOnTrack,
+            inactiveThumbColor: context.pal.switchOffThumb,
+            inactiveTrackColor: context.pal.switchOffTrack,
+            trackOutlineColor: WidgetStateProperty.resolveWith(
+                (states) => states.contains(WidgetState.selected) ? context.pal.switchOnTrack : context.pal.switchOffThumb),
             secondary: Icon(Icons.auto_awesome_rounded, color: context.pal.primary),
             title: Text(context.tr('holySeasons'), style: const TextStyle(fontWeight: FontWeight.w800)),
             subtitle: Text(context.tr('holySeasonsHint')),

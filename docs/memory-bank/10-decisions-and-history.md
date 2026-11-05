@@ -1267,6 +1267,81 @@ supersede them.
   3. Update `documentation/README.md`, `docs/memory-bank/00-README.md`, and `AGENTS.md` to maintain bilingual cross-references.
 - **Consequences:** English-speaking developers and church stakeholders have full parity with the Arabic documentation. Zero changes to runtime Dart code, rules, or database schemas.
 
+## ADR-049 (PR #42) — Season card timing: parallel services in «يُقام الآن», overnight services, readable seasonal switch, day-to-night handover, admin time / date pickers
+
+- **Context:** Phase 1 of the seasons simulation (`work/seasons-sim/phase1/report.md`, Holy Thursday 29 Apr 2027 18:30
+  on the emulator) found D1: at 18:30 the «يُقام الآن» box showed the main church's Evening Pascha only — Youth Pascha
+  (lower hall) and Children's Pascha (services building), both running since 18:30, appeared nowhere on the card
+  (`computeNextMass` kept the first running occurrence, `happening ??= o`; `NextMassCard` built «وفي نفس الوقت» only
+  for the next service). C1: the /mass-schedule seasonal switch read as OFF on Holy Week (ash thumb on an
+  ornament-at-50 % track, grey on grey). The owner also asked to audit overnight services (end ≤ start) and the
+  additive day-to-night handover, minute by minute.
+- **Decision:**
+  1. **Parallel now.** `NextMassResult.runningNow` keeps EVERY counted service in progress (yesterday's overnight ones
+     first, then today's in start order); `happeningNow` is its first, as before. `NextMassResult.alsoRunning(opts)`
+     = `parallelOccurrences(happeningNow, runningNow)`: the running services in ANOTHER venue / hall (ADR-041 rule:
+     same-venue ones and ones without a place are not named). The «يُقام الآن» box shows them on the same
+     «وفي نفس الوقت: [القاعة] ([الفئة])» line (`ProgramDetails.parallelText`, `Icons.call_split_rounded`) as the next
+     service. At 18:30: «وفي نفس الوقت: القاعة السفلية (شباب)، مبنى الخدمات (أطفال)». No layout change otherwise.
+     `alsoRunning` compares places only (every `runningNow` entry is running; a service without an end time runs its
+     default 120 minutes), not the 1-minute overlap rule (Sentry / CodeRabbit on PR #42).
+  2. **Overnight.** Audit of `schedule.dart`, `computeNextMass`, `programmeServiceAt` (top event),
+     `isDatedLiturgyCurrent`, `DayEvent.endedAt`, the card labels, the 18:00 liturgical-day shift and both Egypt DST
+     changes: occurrences already roll an end ≤ start into the next day, so an overnight service is never finished
+     before it starts and stays «يُقام الآن» after midnight as the previous day's record (`dayOffset` −1) — tests now
+     pin it (Easter night 22:30–03:30, Kiahk 21:00–05:30 → 05:30–07:30 liturgy, Apocalypse night Fri 23:00 → Sat
+     06:00 on the DST start day, Thursday 22:30–03:30 across DST start (4 real hours) and DST end (6 real hours)).
+     Two real gaps were fixed: (a) **parallel services across midnight** were never compared (`parallelServices`
+     matched the same date / weekday only; the card compared the next service with its own day only): services on
+     adjacent days (dated: ±1 day; weekly: ±1 weekday, Sunday ↔ Monday wraps) now compare on one clock, and the card
+     uses `occurrencesAround` (the day before, the day, the day after); one-off dates compare real Cairo instants
+     (`CairoTime.at`), so a wall time skipped by the spring DST change cannot fake an overlap (CodeRabbit), and the
+     lists agree with the card on the DST start day (tested); (b) **the assistant** listed
+     "10:30 PM – 03:30 AM" with nothing saying it ends the next morning — the line now adds
+     "(ends the next morning, after midnight)", so at 00:30 the model does not read the service as over.
+  3. **Seasonal switch.** Palette roles only (ADR-043), on `OccasionColors`: ON = filled `primary` track with the
+     `onPrimaryAccent` thumb (gold on the maroon posters, crimson on Holy Week's ash), OFF = `surfaceAlt` track with a
+     `muted` outline and thumb. Each nudged by `ensureContrast` to ≥ 3:1 (`kNonTextContrast`, WCAG 1.4.11) on the card
+     grounds and the thumb on its track, so admin palette edits cannot break it. Applied to the /mass-schedule
+     «المواسم والأعياد الكنسية» switch only (the /clinics «متاح اليوم» switch keeps its success colour). Before: the
+     ON track was 1.4–2.1:1 on the card in every theme.
+  4. **Additive handover.** Minute-by-minute test of a summer revival (EEST, additive): mass 07:00–09:00 → at 09:00
+     the revival is «الصلاة القادمة» («الليلة • ليلة الخميس», after the 18:00 shift) → 19:00 «يُقام الآن» → 21:30
+     the next day's mass at once, «القداس القادم» «غدًا • الخميس»; the revival never removes the regular morning
+     mass. This already worked on `main`; it is now pinned against an independent oracle (2 days × 1,440 minutes).
+  5. **Admin time / date pickers** (owner, added to this PR). Every `FieldType.time`, `date` and `dateTime` field of
+     the generic form (`DocEditor._textField`, top-level and inside rows: liturgy `date` / `start` / `end`, meeting and
+     clinic `start` / `end`, alert and season `startsAt` / `endsAt`, «اليوم والبث المباشر» `dayStartsAt`,
+     `liveEndsAt` and the church-event rows `date` / `endDate` / `start` / `end`) is read-only with a trailing clock /
+     calendar icon (a tap on the field opens it too). Time: `showTimePicker` as a 12-hour AM/PM picker (owner change: easier for
+     admins; Arabic shows ص/م; `MediaQuery alwaysUse24HourFormat: false`), saved strictly zero-padded 24-hour `HH:mm`
+     (`formatPickedTime`: 6:05 AM → `06:05`, 12:00 AM → `00:00`, 12:00 PM → `12:00`, 11:59 PM → `23:59`). Under the
+     read-only field the helper shows the friendly 12-hour reading in the app's style (`formatTimeArabic` /
+     `formatTimeLatin`: «٠٦:٣٠ م» / "06:30 PM"; a date-time adds the date: "26 Apr 2027, 06:30 PM"). The chosen ص/م is filled with `primary` (the theme's
+     containers match the dialog surface, so the default left both periods looking unselected). Date: `showDatePicker`, saved
+     `YYYY-MM-DD` (`formatPickedDate`). Date-time: date then time, `YYYY-MM-DD HH:mm` Cairo wall time. Stored types are
+     unchanged: `date` / `dateTime` still parse to the same Timestamp instant (`parseFieldValue`), row dates stay text.
+     The picker opens on the current value (a legacy unpadded `9:00` or Arabic digits still load,
+     `parseFieldTime` / `parseFieldDateTime`); an optional field gets a clear (×) button. No Firestore shape or rules
+     change. Left as they are: `looseDate` (priests' ordination dates allow `YYYY` or `YYYY-MM`, which a date picker
+     cannot express) and the occasion-theme date ranges (already on `showDatePicker` since ADR-025). No admin form
+     has a time or date in a plain text field.
+- **Not changed (by design, noted):** in an additive season, a seasonal `mass` on a day still supersedes that day's
+  regular masses (ADR-045 feast-liturgy rule), e.g. a Kiahk Sunday 05:30 liturgy would hide a regular Sunday mass;
+  the owner can ask for an overlap-only rule later.
+- **Cost:** +0 Firestore reads, +0 listeners, +0 writes: the card already holds liturgies and seasons; the extra work
+  is pure Dart on data in memory (two more days of occurrences for the next service's parallel line).
+- **Tests:** `test/season_card_timing_test.dart` (24: parallel now 18:30 / 19:30 / 20:30 / 22:30, same-hall and no-place
+  rules; Easter night minute by minute Sat 18:00 → Sun 08:00, 00:30 top event and one-off list, assistant line, Kiahk
+  minute by minute, Apocalypse night, DST start / end, cross-midnight parallels (dated, weekly wrap, card); revival
+  handover minute by minute vs an oracle and at the handover points; widgets: the now box line at 18:30 Holy Week,
+  00:30 «يُقام الآن», 09:00 / 19:00 / 21:30 handover; switch contrast in every theme and the Holy Week switch roles).
+  `test/admin_pickers_test.dart` (formatters: padding, 00:00, 23:59, prefill parsing; liturgy form read-only fields,
+  12-hour AM/PM picker (AM/PM and ص/م present, 6:05 AM / 11:59 PM / 12:00 AM / 12:00 PM → `06:05` / `23:59` / `00:00` /
+  `12:00`, the 12-hour reading), prefill, date, clear, Arabic RTL; season `startsAt` date + 6:30 PM → `2027-04-26 18:30`, same instant; «اليوم» `dayStartsAt`
+  and church-event rows), `test/helpers/admin_pickers.dart`; the clinic save test in `admin_test.dart` now fills times
+  through the picker. Phase 1 harness re-run on the branch: `work/seasons-sim/fixes1/status.md`.
+
 ## Timeline
 
 | When | PR / commit | What |
@@ -1322,5 +1397,6 @@ supersede them.
 
 | 5 Nov 2026 | **PR #40** — "English verse of the day" (`feat/verse-english`) | ADR-047: `Verse.textEn` + `display(english:)` (English text LTR, else Arabic with the Arabic reference); `gen_daily_verses.py` adds the public-domain WEB British Edition (SHA-pinned) for the same 366 verses; optional `textEn` / `refEn` for the fixed verse and a `␟textEn␟refEn` tail for season verses in `settings/features` (`encodedOptionalTail`); rules `validDailyVerse` / `validSeasonVerses`. +0 reads / listeners. |
 | 5 Nov 2026 | **Docs PR** — "English documentation suite & README overhaul" (`docs/english-readme-and-documentation`) | ADR-048: English documentation suite (`documentation/en/README.md`, `architecture.md`, `operations.md`, `features.md`), modernized root `README.md` with tech stack badges, framework icons, and architecture diagrams; cross-references in `documentation/README.md`, `AGENTS.md`, and `docs/memory-bank/00-README.md`. |
+| 5 Nov 2026 | **PR #42** — "Season card timing" (`fix/season-card-timing`) | ADR-049: «يُقام الآن» names the services running now in other halls (`runningNow`, `alsoRunning`); overnight services audited and pinned (Easter night, Kiahk, Apocalypse, DST), parallel services compared across midnight (`occurrencesAround`), assistant says an overnight service ends the next morning; /mass-schedule seasonal switch from palette roles at ≥ 3:1 in every theme; additive day-to-night handover tested minute by minute; admin time / date pickers (12-hour AM/PM picker with a 12-hour reading, stored 24-hour `HH:mm`, `YYYY-MM-DD`, stored types unchanged). +0 reads. |
 
 Append new PRs to this table.

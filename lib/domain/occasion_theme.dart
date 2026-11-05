@@ -86,6 +86,9 @@ int? parseHexColor(String? s) {
 /// Minimum contrast for body text (WCAG 1.4.3 AA).
 const double kBodyContrast = 4.5;
 
+/// WCAG 2.1 non-text contrast (1.4.11) of controls: switch tracks, thumbs.
+const double kNonTextContrast = 3.0;
+
 /// Minimum contrast for large text (≥ 24 px, or ≥ 18.66 px bold).
 const double kLargeContrast = 3.0;
 

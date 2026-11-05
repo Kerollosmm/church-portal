@@ -112,7 +112,8 @@ class NextMassCard extends ConsumerWidget {
       // (ADR-041; CodeRabbit review on PR #32).
       final opts = ref.watch(featuresProvider.select((f) => f.programOptions));
       // From that day's real occurrences, so a suppressed or out-of-season
-      // service is never named (Sentry review).
+      // service is never named (Sentry review); with the days either side,
+      // so a service crossing midnight meets the next day's (ADR-049).
       final next = r.next;
       final parallelText = next == null
           ? ''
@@ -121,13 +122,18 @@ class NextMassCard extends ConsumerWidget {
               opts,
               parallelOccurrences(
                   next,
-                  occurrencesForDay(
+                  occurrencesAround(
                       liturgies: lits.value ?? const [],
                       seasons: seasons.value ?? const [],
                       day: next.start,
                       dayOffset: next.dayOffset),
                   opts));
-      body = _content(context, r, now, ref.watch(todaySettingsProvider), s?.lat, s?.lng, parallelText, opts);
+      // The «يُقام الآن» box names the services running at this moment in
+      // the other halls (ADR-049 item 1: youth and children's Pascha beside
+      // the main church's): no extra read, the card already holds them.
+      final nowParallelText = parallelSummary(context, opts, r.alsoRunning(opts));
+      body = _content(context, r, now, ref.watch(todaySettingsProvider), s?.lat, s?.lng, parallelText, opts,
+          nowParallelText);
     }
 
     final pal = context.pal;
@@ -184,7 +190,7 @@ class NextMassCard extends ConsumerWidget {
   }
 
   Widget _content(BuildContext context, NextMassResult r, DateTime now, TodaySettings today, double? lat, double? lng,
-      [String parallelText = '', ProgramOptions opts = ProgramOptions.defaults]) {
+      [String parallelText = '', ProgramOptions opts = ProgramOptions.defaults, String nowParallelText = '']) {
     if (r.isEmpty) return EmptyState(message: context.tr('noUpcoming'), icon: Icons.event_busy);
     final children = <Widget>[];
     if (r.activeSeasons.isNotEmpty) {
@@ -223,7 +229,7 @@ class NextMassCard extends ConsumerWidget {
           // While it runs (18:30–21:30 on a revival night, exactly when
           // visitors open the site) the programme stays: speaker, topic,
           // choir, audience and the PDF button (ADR-045, revival sim B2).
-          ProgramDetails(o.liturgy.program, showVenue: !lineHasVenue),
+          ProgramDetails(o.liturgy.program, showVenue: !lineHasVenue, parallelText: nowParallelText),
         ]),
       ));
     }
