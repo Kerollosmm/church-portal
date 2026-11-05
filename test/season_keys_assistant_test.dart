@@ -248,7 +248,8 @@ void main() {
         facilities: const [],
         now: cairo(2027, 7, 1, 10),
       );
-      expect(out, contains('On 2027-07-12 this season REPLACES the regular services (feast night).'));
+      expect(out, contains('On 2027-07-12 this season REPLACES the regular services that start inside its window'));
+      expect(out, contains('regular services outside the window that day still take place'));
     });
   });
 
@@ -321,6 +322,27 @@ void main() {
       expect(presetLiveEnd(season: marian, liturgies: [sat], now: cairo(2027, 8, 5, 12)).millisecondsSinceEpoch, cairo(2027, 8, 7, 21, 30).millisecondsSinceEpoch);
     });
 
+    test('applied during last night\'s all-night service: its own end + 30 min', () {
+      final kiahk = Season(
+          id: 'k', key: 'kiahk', nameAr: 'كيهك', nameEn: '', startsAt: cairo(2026, 12, 10), endsAt: cairo(2027, 1, 7),
+          replacesRegular: false);
+      final praise = lit('praise', weekday: 6, start: '21:00', end: '05:30', type: 'praise', season: 'kiahk');
+      final sunNight = lit('sunNight', weekday: 7, start: '20:00', end: '22:00', type: 'praise', season: 'kiahk');
+      expect(presetLiveEnd(season: kiahk, liturgies: [praise, sunNight], now: cairo(2026, 12, 20, 0, 30)).millisecondsSinceEpoch,
+          cairo(2026, 12, 20, 6).millisecondsSinceEpoch);
+    });
+
+    test('morning-only first day and hidden services do not set the end', () {
+      final morning = lit('morning', date: DateTime.utc(2027, 8, 7), start: '07:00', end: '09:00', season: 'marian');
+      expect(presetLiveEnd(season: marian, liturgies: [morning], now: cairo(2027, 8, 5, 12)).millisecondsSinceEpoch,
+          cairo(2027, 8, 7, 23, 59).millisecondsSinceEpoch);
+      const hidden = Liturgy(
+          id: 'late', type: 'other', nameAr: 'x', nameEn: 'x', weekday: 2, start: '21:00', end: '23:30', seasonKey: 'marian',
+          visible: false);
+      expect(presetLiveEnd(season: marian, liturgies: [rev, hidden], now: cairo(2027, 8, 10, 9)).millisecondsSinceEpoch,
+          cairo(2027, 8, 10, 22).millisecondsSinceEpoch);
+    });
+
     test('never after the season end', () {
       final short = Season(
           id: 's', key: 'nayrouz', nameAr: 'النيروز', nameEn: '', startsAt: cairo(2027, 9, 11, 18), endsAt: cairo(2027, 9, 11, 22),
@@ -383,7 +405,7 @@ void main() {
       final parsed = Season.fromMap('s', {
         'key': 'apostles',
         'replacesRegular': false,
-        'replaceDates': ['2027-07-12', ' 2027-07-13 ', 'bad', 5],
+        'replaceDates': ['2027-07-12', ' 2027-07-13 ', 'bad', 5, '2027-02-31'],
       });
       expect(parsed.replaceDates, ['2027-07-12', '2027-07-13']);
       expect(Season.fromMap('s', {'key': 'fast'}).replaceDates, isEmpty);

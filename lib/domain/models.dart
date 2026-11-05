@@ -367,7 +367,16 @@ class Season {
     this.program = ProgramInfo.none,
   });
 
-  static final _ymdRe = RegExp(r'^\d{4}-\d{2}-\d{2}$');
+  static final _ymdRe = RegExp(r'^(\d{4})-(\d{2})-(\d{2})$');
+
+  /// A real calendar date 'YYYY-MM-DD' (2027-02-31 is refused; CodeRabbit on PR #44).
+  static bool _isCalendarDate(String s) {
+    final m = _ymdRe.firstMatch(s);
+    if (m == null) return false;
+    final y = int.parse(m[1]!), mo = int.parse(m[2]!), d = int.parse(m[3]!);
+    final dt = DateTime.utc(y, mo, d);
+    return dt.year == y && dt.month == mo && dt.day == d;
+  }
 
   /// Does the season replace the regular services on the Cairo calendar day
   /// [day] (y/m/d read as is)? Always for a full-override season; for an
@@ -390,7 +399,7 @@ class Season {
         replaceDates: m['replaceDates'] is List
             ? [
                 for (final d in m['replaceDates'] as List)
-                  if (d is String && _ymdRe.hasMatch(d.trim())) d.trim(),
+                  if (d is String && _isCalendarDate(d.trim())) d.trim(),
               ]
             : const [],
         image: MediaImage.fromMap(m['image']),

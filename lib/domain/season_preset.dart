@@ -328,13 +328,18 @@ PresetWrites planApply({
 }
 
 /// The default end of the live banner the preset sets (ADR-051, issue 10):
-/// the end of the last of [season]'s services on its first evening — today,
-/// or the season's first day when it has not started yet — plus 30 minutes
-/// (an overnight service ends the next morning); 23:59 that day when it has
-/// no service then, or when they have all ended before [now]. Never after the
-/// season's end. The admin can change it before applying, and the live
-/// banner is still switched on by hand every night.
+/// the end of the last of [season]'s visible evening services (starting at
+/// [eveningFrom] or later) on its first evening — today, or the season's
+/// first day when it has not started yet — plus 30 minutes (an overnight
+/// service ends the next morning); 23:59 that day when it has none then, or
+/// when they have all ended before [now]. A service of the season running
+/// at [now] since yesterday (applied at 00:30 during an all-night praise)
+/// gives its own end + 30 minutes. Never after the season's end. The admin
+/// can change it before applying, and the live banner is still switched on
+/// by hand every night.
 DateTime presetLiveEnd({required Season season, required Iterable<Liturgy> liturgies, required DateTime now}) {
+  // Hidden services never set the end (CodeRabbit on PR #44).
+  final shown = [for (final l in liturgies) if (l.visible) l];
   final c = CairoTime.fromInstant(now);
   var day = CairoTime.at(c.year, c.month, c.day);
   final start = season.startsAt;
@@ -353,9 +358,20 @@ DateTime presetLiveEnd({required Season season, required Iterable<Liturgy> litur
     replacesRegular: season.replacesRegular,
     replaceDates: season.replaceDates,
   );
+  // Last night's service still running now (an all-night praise at 00:30).
+  final yesterday = CairoTime.at(c.year, c.month, c.day - 1);
+  for (final o in occurrencesForDay(liturgies: shown, seasons: [active], day: yesterday, dayOffset: -1)) {
+    if (o.liturgy.seasonKey == season.key && !o.start.isAfter(now) && o.end.isAfter(now)) {
+      return _utc(o.end.add(const Duration(minutes: 30)));
+    }
+  }
   DateTime? last;
-  for (final o in occurrencesForDay(liturgies: liturgies, seasons: [active], day: day, dayOffset: 0)) {
+  for (final o in occurrencesForDay(liturgies: shown, seasons: [active], day: day, dayOffset: 0)) {
     if (o.liturgy.seasonKey != season.key) continue;
+    // Evening services only, unless it is running now (CodeRabbit on PR #44).
+    final evening = !o.start.isBefore(CairoTime.at(day.year, day.month, day.day, eveningFrom));
+    final runningNow = !o.start.isAfter(now) && o.end.isAfter(now);
+    if (!evening && !runningNow) continue;
     if (last == null || o.end.isAfter(last)) last = o.end;
   }
   final fallback = CairoTime.at(day.year, day.month, day.day, 23 * 60 + 59);
@@ -363,8 +379,15 @@ DateTime presetLiveEnd({required Season season, required Iterable<Liturgy> litur
   if (!end.isAfter(now)) end = fallback;
   final seasonEnd = season.endsAt;
   if (seasonEnd != null && end.isAfter(seasonEnd) && seasonEnd.isAfter(now)) end = seasonEnd;
-  return DateTime.fromMillisecondsSinceEpoch(end.millisecondsSinceEpoch, isUtc: true);
+  return _utc(end);
 }
+
+/// Services starting at or after this minute of the day count as the
+/// evening's for [presetLiveEnd] (12:00: Lent's afternoon liturgy and every
+/// vespers, praise and revival night).
+const eveningFrom = 12 * 60;
+
+DateTime _utc(DateTime d) => DateTime.fromMillisecondsSinceEpoch(d.millisecondsSinceEpoch, isUtc: true);
 
 /// The restore writes: every value [p] replaced goes back, and the preset is
 /// cleared (`seasonPreset` = null). [sections] = the current effective
@@ -403,10 +426,17 @@ PresetWrites planRestore(SeasonPreset p, {required Map<String, bool> sections, r
 
 /// The `settings/features` write that moves an applied preset's end to the
 /// season's current [seasonEnd] after the admin changed the season's dates
-/// (Sentry review on PR #33): the auto-revert and, when the preset set the
-/// live link, its `liveEndsAt` follow (unless the live end was changed by
-/// hand since: [storedLiveEndsAt] ≠ the preset's end).
+/// (Sentry review on PR #33): the auto-revert follows. When the preset set
+/// the live link and its `liveEndsAt` still equals the preset's old end
+/// ([storedLiveEndsAt]; not changed by hand since), the live end is pulled in
+/// to a shortened season end — never pushed later: since ADR-051 the live end
+/// is tonight's ([presetLiveEnd]), and extending it would keep a switched-on
+/// banner for days (CodeRabbit on PR #44).
 PresetWrites planSyncEnd(SeasonPreset p, DateTime seasonEnd, {DateTime? storedLiveEndsAt}) => PresetWrites({
       'seasonPreset': {...p.toMap(), 'endsAt': seasonEnd},
-      if (p.has(PresetOption.live) && storedLiveEndsAt == p.endsAt) 'liveEndsAt': seasonEnd,
+      if (p.has(PresetOption.live) &&
+          storedLiveEndsAt != null &&
+          storedLiveEndsAt == p.endsAt &&
+          seasonEnd.isBefore(storedLiveEndsAt))
+        'liveEndsAt': seasonEnd,
     }, p.seasonId, const {});

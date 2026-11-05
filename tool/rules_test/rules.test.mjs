@@ -1886,11 +1886,14 @@ describe('ADR-051: season keys, replaceDates, exceptional seasons', () => {
     const ref = doc(db(EDITOR), 'seasons', 'ap');
     await assertSucceeds(setDoc(ref, { key: 'apostles', nameAr: 'صوم الرسل', replacesRegular: false, replaceDates: ['2027-07-12'] }));
     await assertSucceeds(updateDoc(ref, { replaceDates: Array.from({ length: 10 }, (_, i) => `2027-07-${String(i + 10)}`) }));
+    await assertSucceeds(updateDoc(ref, { replaceDates: ['2028-02-29', '2000-02-29', '2027-01-31', '2027-12-31', '2027-06-30', '2027-02-28'] }));
     await assertSucceeds(updateDoc(ref, { replaceDates: [] }));
     await assertSucceeds(updateDoc(ref, { replaceDates: null }));
     for (const bad of [
       '2027-07-12', ['2027-7-12'], ['12/07/2027'], ['2027-07-12', '2027-07-12'], ['2027-13-01'], [20270712],
       ['2027-07-12,2027-07-13'], Array.from({ length: 11 }, (_, i) => `2027-08-${String(i + 10)}`), [''],
+      // Impossible calendar dates (CodeRabbit on PR #44).
+      ['2027-02-31'], ['2027-02-29'], ['2027-04-31'], ['2027-11-31'], ['2100-02-28'], ['2027-07-12', '2027-06-31'],
     ]) {
       await assertFails(updateDoc(ref, { replaceDates: bad }), JSON.stringify(bad).slice(0, 60));
     }
@@ -1904,6 +1907,7 @@ describe('ADR-051: season keys, replaceDates, exceptional seasons', () => {
       speakerAr: 'م'.repeat(200), speakerEn: 's'.repeat(200), topicAr: 'و'.repeat(300), topicEn: 't'.repeat(300),
       choirAr: 'ك'.repeat(200), choirEn: 'c'.repeat(200), venue: 'main', audience: 'general',
       attachmentUrl: 'https://drive.google.com/' + 'x'.repeat(470), attachmentLabelAr: 'ك'.repeat(80), attachmentLabelEn: 'b'.repeat(80),
+      image: { source: 'url', url: 'https://img.example.org/a.jpg', alt: 'a'.repeat(200), w: 1600, h: 900 },
       imageStyle: 'banner',
     }));
   });

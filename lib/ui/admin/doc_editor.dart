@@ -752,7 +752,11 @@ class DocEditorState extends State<DocEditor> {
           key: ValueKey('field-${f.key}'),
           isExpanded: true, // long labels ellipsize at 320 px / 200% text
           initialValue: _values[f.key] as String?,
-          decoration: InputDecoration(labelText: label),
+          decoration: InputDecoration(
+            labelText: label,
+            helperText: context.pick(f.hintAr, f.hintEn).isEmpty ? null : context.pick(f.hintAr, f.hintEn),
+            helperMaxLines: 4,
+          ),
           validator: (v) => f.required && (v == null || v.isEmpty) ? context.tr('required') : null,
           items: [
             if (f.nullableChoice) const DropdownMenuItem<String?>(value: null, child: Text('—')),
@@ -806,7 +810,8 @@ class DocEditorState extends State<DocEditor> {
                 context: context,
                 initialDate: DateTime(now.year, now.month, now.day),
                 firstDate: DateTime(2000),
-                lastDate: DateTime(2100, 12, 31),
+                // The rules accept 20xx years only (validReplaceDates; CodeRabbit on PR #44).
+                lastDate: DateTime(2099, 12, 31),
                 helpText: label,
               );
               if (picked == null || !mounted) return;

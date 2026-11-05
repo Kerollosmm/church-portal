@@ -39,7 +39,8 @@ Status as of 5 Nov 2026 (PR-B / ADR-051; PR #42 / ADR-049; PR #40 / ADR-047; PR 
     `great_lent`, admin exceptional-quota list, prompt «Church calendar», Arabic digits in the limit message, /ask
     greeting / chips skip hidden sections, tonight's live end, `replaceDates`, fast presets without weddings, Holy Week
     day names, EN live label. **Owner:** re-key the 2027 season docs that used `fast` / `pascha` as stand-ins (Great
-    Lent, Apostles, Kiahk, Nayrouz) in /admin → المواسم; review «المساعد الذكي» → «المواسم الاستثنائية»; set
+    Lent, Apostles, Kiahk, Nayrouz) in /admin → المواسم **together with their services' «الموسم» (`seasonKey`) in
+    القداسات والصلوات** (matching is by exact key: a season re-keyed alone loses its services; the season's «نوع الموسم» field now says so); review «المساعد الذكي» → «المواسم الاستثنائية»; set
     «أيام يحل فيها الموسم محل الجدول العادي» on revival / fast seasons that have a feast night; fill «نص الشريط
     (إنجليزي)» when streaming. Open: a separate `cross` key only if the church wants the Cross apart from Nayrouz;
     the admin's free-text welcome is not filtered by sections.

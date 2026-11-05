@@ -393,13 +393,14 @@ service cloud.firestore {
     // ADR-051: the civil Cairo dates (YYYY-MM-DD, at most 10, no repeats) on
     // which an additive season still replaces the regular services (a feast
     // night). One regex over the joined list; the split count refuses a value
-    // carrying a comma.
+    // carrying a comma. Real calendar dates only: month lengths, and 29 Feb in
+    // leap years (every 20xx year divisible by 4); CodeRabbit on PR #44.
     function validReplaceDates(d) {
       let v = d.get('replaceDates', null);
       return v == null
         || (v is list && v.size() <= 10 && v.toSet().size() == v.size()
             && (v.size() == 0 || (v.join(',').split(',').size() == v.size() && v.join(',').matches(
-                  '20[0-9]{2}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])(,20[0-9]{2}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])){0,9}'))));
+                  '(20[0-9]{2}-((0[13578]|1[02])-(0[1-9]|[12][0-9]|3[01])|(0[469]|11)-(0[1-9]|[12][0-9]|30)|02-(0[1-9]|1[0-9]|2[0-8]))|20([02468][048]|[13579][26])-02-29)(,(20[0-9]{2}-((0[13578]|1[02])-(0[1-9]|[12][0-9]|3[01])|(0[469]|11)-(0[1-9]|[12][0-9]|30)|02-(0[1-9]|1[0-9]|2[0-8]))|20([02468][048]|[13579][26])-02-29)){0,9}'))));
     }
 
     function validLiturgy(d) {

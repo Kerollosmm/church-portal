@@ -1379,12 +1379,17 @@ supersede them.
      times, clinics, meetings, contacts); suggested-question chips about a hidden section are dropped with the same
      `topicSections` rule as the allowed topics. The admin's own welcome text is shown as written.
   6. **Tonight's live end (10).** The preset's live option sets `liveEndsAt` = `presetLiveEnd()`: the end of the season's
-     last service on its first evening (today, or the season's first day when applied ahead) + 30 min (overnight =
-     next morning); 23:59 that day when there is none or all ended; never after the season end. The screen shows it
+     last visible evening service (start ≥ 12:00) on its first evening (today, or the season's first day when applied
+     ahead) + 30 min (overnight = next morning); a service running since last night (applied at 00:30 in an all-night
+     praise) gives its own end + 30; 23:59 that day when there is none or all ended; never after the season end. An
+     unedited default is worked out again at confirmation from the fresh season and clock; «تطبيق» waits for the
+     services; «نقل الرجوع التلقائي» now only pulls the live end in to a shortened season end, never later (CodeRabbit
+     on PR #44). The screen shows it
      («ينتهي شريط البث: …») with an edit button (date + time picker); «اليوم والبث المباشر» still edits it later. The
-     preset's own auto-revert stays the season end. The screen reads `liturgies` once (`watch(..).first`) when a season
-     is picked.
-  7. **Feast-night replace dates (11).** `seasons/{id}.replaceDates`: up to 10 civil Cairo dates `YYYY-MM-DD`. On those
+     preset's own auto-revert stays the season end. The screen reads `liturgies` when a season is picked (snapshots for 8 s, then closed).
+  7. **Feast-night replace dates (11).** `seasons/{id}.replaceDates`: up to 10 civil Cairo dates `YYYY-MM-DD` (the rules
+     and the reader refuse impossible dates such as 2027-02-31 or 29 Feb outside leap years; the picker stops at
+     2099, the rules' 20xx). On those
      days an additive season replaces the regular services starting inside its window (`Season.replacesOn`, used by
      `occurrencesForDay` and `undatedSuppressedOn`); other days stay additive; ignored when `replacesRegular`. Admin:
      date chips in the season form (new `FieldType.dateList`), shown read-only on «تجهيز الموسم»; the assistant prompt
@@ -1407,8 +1412,8 @@ supersede them.
   image style, 10 replace dates) both pass in the emulator.
 - **Firebase cost:** +0 collections, +0 public listeners, +0 visitor reads or writes. New fields live in existing docs
   (`settings/assistant`, `seasons/{id}`). The assistant uses the already-loaded Katameros day (Hosting JSON, not
-  Firestore) only when present. Admin only: one read of `liturgies` (~60 docs) when a season is picked on «تجهيز
-  الموسم» (no listener kept). Spark plan unaffected.
+  Firestore) only when present. Admin only: one read of `liturgies` (~60 docs; a cached then a server snapshot) when a season is picked on «تجهيز
+  الموسم», listener closed after 8 s. Spark plan unaffected.
 - **Tests:** `test/season_keys_assistant_test.dart` (key list vs rules / admin / verses / themes / labels; theme map;
   verse fallback; quota defaults and admin list; Holy Week names and labels; calendar line incl. rollover, Katameros,
   sunset; prompt line; replace-date prompt line; greeting / chips filter; fast preset defaults; `presetLiveEnd` cases;

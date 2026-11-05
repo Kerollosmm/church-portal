@@ -250,7 +250,9 @@ String buildAssistantInstruction({
         }
         // ADR-051: the feast night(s) of an additive season.
         if (!s.replacesRegular && s.replaceDates.isNotEmpty) {
-          b.writeln('- On ${s.replaceDates.join(', ')} this season REPLACES the regular services (feast night).');
+          b.writeln('- On ${s.replaceDates.join(', ')} this season REPLACES the regular services that start inside '
+              'its window (${s.startsAt?.toIso8601String() ?? 'start'} -> ${s.endsAt?.toIso8601String() ?? 'end'}; '
+              'feast night); regular services outside the window that day still take place.');
         }
       }
     }

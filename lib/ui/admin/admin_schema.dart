@@ -465,7 +465,12 @@ const adminCollections = <CollectionDef>[
     'titleEn'
   ], icon: 'alerts', publicPath: '/'),
   CollectionDef('seasons', 'المواسم', 'Seasons', [
-    FieldDef('key', 'نوع الموسم', 'Season key', FieldType.choice, required: true, options: seasonKeys),
+    // Services match their season by exact key: re-keying a season alone
+    // loses its services (CodeRabbit on PR #44).
+    FieldDef('key', 'نوع الموسم', 'Season key', FieldType.choice, required: true, options: seasonKeys,
+        hintAr: 'إذا غيّرت نوع موسم له خدمات، غيّر «الموسم» في خدماته أيضًا من «القداسات والصلوات»، وإلا تختفي من جدوله.',
+        hintEn: 'If you change the key of a season that has services, change their «Season» in Masses & prayers too, '
+            'or they drop out of its schedule.'),
     FieldDef('nameAr', 'الاسم (عربي)', 'Name (Arabic)', FieldType.text, required: true),
     FieldDef('nameEn', 'الاسم (إنجليزي)', 'Name (English)', FieldType.text),
     FieldDef('startsAt', 'يبدأ', 'Starts', FieldType.dateTime),

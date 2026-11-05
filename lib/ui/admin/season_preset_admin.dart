@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:material_ui/material_ui.dart';
 
 import '../../core/l10n.dart';
@@ -46,8 +48,13 @@ class _SeasonPresetScreenState extends State<SeasonPresetScreen> {
   DateTime? _liveEnd;
   bool _liveEndEdited = false;
 
-  /// The season's services, read once when a season is picked (no listener).
+  /// The services, read when a season is picked: the first snapshots for a
+  /// few seconds (a cached one, then the server's), then the listener is
+  /// closed (CodeRabbit on PR #44).
   List<Liturgy> _liturgies = const [];
+  StreamSubscription<List<AdminDoc>>? _liturgySub;
+  Timer? _liturgyStop;
+  bool _liturgiesLoading = false;
 
   DateTime _now() => (widget.now ?? DateTime.now)();
 
@@ -65,6 +72,8 @@ class _SeasonPresetScreenState extends State<SeasonPresetScreen> {
     for (final c in [_liveUrl, _pdfUrl, _pdfLabelAr, _pdfLabelEn]) {
       c.dispose();
     }
+    _liturgySub?.cancel();
+    _liturgyStop?.cancel();
     super.dispose();
   }
 
@@ -98,19 +107,32 @@ class _SeasonPresetScreenState extends State<SeasonPresetScreen> {
         _loadLiturgies(s);
       });
 
-  /// One read of `liturgies` (the stream's first snapshot, then closed) to
-  /// work out tonight's last service for the live banner's default end.
-  Future<void> _loadLiturgies(Season s) async {
-    try {
-      final docs = await widget.repo.watch('liturgies').first;
-      if (!mounted) return;
-      _liturgies = [for (final d in docs) Liturgy.fromMap(d.id, d.data)];
-      if (_seasonId == s.id && !_liveEndEdited) {
-        setState(() => _liveEnd = presetLiveEnd(season: s, liturgies: _liturgies, now: _now()));
-      }
-    } catch (_) {
-      // The 23:59 fallback stays.
+  /// Reads `liturgies` to work out tonight's last service for the live
+  /// banner's default end: every snapshot for 8 seconds (the offline cache's
+  /// first, then the server's), then the listener is closed.
+  void _loadLiturgies(Season s) {
+    _liturgySub?.cancel();
+    _liturgyStop?.cancel();
+    _liturgiesLoading = true;
+    void done() {
+      if (mounted && _liturgiesLoading) setState(() => _liturgiesLoading = false);
     }
+
+    _liturgySub = widget.repo.watch('liturgies').listen((docs) {
+      if (!mounted) return;
+      setState(() {
+        _liturgies = [for (final d in docs) Liturgy.fromMap(d.id, d.data)];
+        _liturgiesLoading = false;
+        if (_seasonId == s.id && !_liveEndEdited) {
+          _liveEnd = presetLiveEnd(season: s, liturgies: _liturgies, now: _now());
+        }
+      });
+    }, onError: (Object _) => done()); // the 23:59 fallback stays
+    _liturgyStop = Timer(const Duration(seconds: 8), () {
+      _liturgySub?.cancel();
+      _liturgySub = null;
+      done();
+    });
   }
 
   String _liveEndText(BuildContext context, DateTime d) {
@@ -128,7 +150,13 @@ class _SeasonPresetScreenState extends State<SeasonPresetScreen> {
       lastDate: DateTime(2100, 12, 31),
     );
     if (d == null || !context.mounted) return;
-    final t = await showTimePicker(context: context, initialTime: TimeOfDay(hour: cur.hour, minute: cur.minute));
+    // 12-hour AM/PM like every admin time picker (ADR-049), whatever the device setting.
+    final t = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay(hour: cur.hour, minute: cur.minute),
+      builder: (ctx, child) =>
+          MediaQuery(data: MediaQuery.of(ctx).copyWith(alwaysUse24HourFormat: false), child: child!),
+    );
     if (t == null || !mounted) return;
     final at = CairoTime.at(d.year, d.month, d.day, t.hour * 60 + t.minute);
     setState(() {
@@ -241,6 +269,8 @@ class _SeasonPresetScreenState extends State<SeasonPresetScreen> {
         key: const Key('presetApplyDialog'));
     if (!ok || !mounted) return;
     final now = _now();
+    final edited = _liveEndEdited;
+    final liturgies = _liturgies;
     await _write(season.id, (stored, seasonDoc) {
       // Another admin applied a preset meanwhile, or deleted the season: write nothing.
       if (SeasonPreset.fromMap(stored?['seasonPreset']) != null || seasonDoc == null) throw const PresetConflict();
@@ -257,7 +287,11 @@ class _SeasonPresetScreenState extends State<SeasonPresetScreen> {
         now: now,
         storedTheme: stored?['theme'] is String ? stored!['theme'] as String : '',
         seasonTheme: f.occasions.themeForSeason(season.key),
-        liveEnd: liveEnd,
+        // An unedited default is worked out again from the fresh season and
+        // the current time (the screen may have stayed open; CodeRabbit on PR #44).
+        liveEnd: edited || liveEnd == null
+            ? liveEnd
+            : presetLiveEnd(season: Season.fromMap(season.id, seasonDoc), liturgies: liturgies, now: now),
       );
     });
   }
@@ -510,7 +544,10 @@ class _SeasonPresetScreenState extends State<SeasonPresetScreen> {
               icon: const Icon(Icons.auto_awesome_rounded),
               label: Text(context.tr('presetApply')),
               // An ended season is never applied: `active` would stay on (CodeRabbit review).
-              onPressed: _saving || ended ? null : () => _apply(context, season, raw),
+              // Wait for the services before the live end can be confirmed (CodeRabbit on PR #44).
+              onPressed: _saving || ended || (_liturgiesLoading && _options.contains(PresetOption.live))
+                  ? null
+                  : () => _apply(context, season, raw),
             ),
           ],
         ]),
