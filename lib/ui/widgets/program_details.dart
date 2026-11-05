@@ -87,7 +87,10 @@ class ProgramDetails extends ConsumerWidget {
   }
 }
 
-/// "Lower hall (Youth) 19:00" for each parallel service (ADR-041).
+/// "Lower hall (Youth) 19:00" for each parallel service (ADR-041), joined
+/// with the Arabic list comma «، » (", " in English). Kept on purpose
+/// (ADR-050, issue 20): «،» is the correct Arabic list separator; «•»
+/// already separates the day and the time in the pills.
 String parallelSummary(BuildContext context, ProgramOptions opts, List<Liturgy> others) => [
       for (final o in others)
         [

@@ -89,6 +89,7 @@ class PageHeader extends ConsumerWidget {
     final phone = w < 600;
     final pad = phone ? 16.0 : (wide ? 40.0 : 24.0);
     final motion = ref.watch(featuresProvider.select((f) => f.heroMotion));
+    final tint = ref.watch(featuresProvider.select((f) => f.heroSeasonTint));
     final sub = subtitle?.trim() ?? '';
     return Stack(
       children: [
@@ -97,6 +98,7 @@ class PageHeader extends ConsumerWidget {
             image: backdrop == ArtAssets.heroWide && phone ? ArtAssets.heroWideSmall : backdrop,
             alignment: backdrop == ArtAssets.heroWide ? const Alignment(0, -0.35) : Alignment.center,
             motion: motion,
+            tint: tint,
             rays: backdrop == ArtAssets.heroWide ? 1 : 0.6,
           ),
         ),

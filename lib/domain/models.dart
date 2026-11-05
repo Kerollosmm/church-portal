@@ -4,6 +4,7 @@
 
 import 'features.dart';
 import 'media.dart';
+import 'pending_text.dart';
 import 'program.dart';
 
 export 'media.dart' show MediaImage;
@@ -397,6 +398,12 @@ class Liturgy implements Hideable {
   /// Optional programme details (speaker, topic, choir, venue, audience, PDF
   /// link; ADR-041).
   final ProgramInfo program;
+
+  /// A seasonal feast liturgy that replaces EVERY regular mass of its day in
+  /// an additive season (admin checkbox «يحل محل قداسات اليوم المعتادة»;
+  /// ADR-050). Off (the default), a seasonal mass hides only the regular
+  /// masses that overlap it in time.
+  final bool replacesDay;
   const Liturgy({
     this.visible = true,
     required this.id,
@@ -415,6 +422,7 @@ class Liturgy implements Hideable {
     this.order = 0,
     this.sample = false,
     this.program = ProgramInfo.none,
+    this.replacesDay = false,
   });
   factory Liturgy.fromMap(String id, Map<String, dynamic> m) => Liturgy(
         visible: m['visible'] is bool ? m['visible'] as bool : true,
@@ -434,6 +442,7 @@ class Liturgy implements Hideable {
         order: _ni(m['order']) ?? 0,
         sample: _b(m['sample']),
         program: ProgramInfo.fromMap(m),
+        replacesDay: _b(m['replacesDay']),
       );
   int? get startMinutes => parseHm(start);
   int? get endMinutes => parseHm(end);
@@ -552,8 +561,8 @@ class Activity implements Hideable {
         category: _s(m['category']),
         titleAr: _s(m['titleAr']),
         titleEn: _s(m['titleEn']),
-        descAr: _s(m['descAr']),
-        descEn: _s(m['descEn']),
+        descAr: stripPendingPlaceholders(_s(m['descAr'])),
+        descEn: stripPendingPlaceholders(_s(m['descEn'])),
         scheduleAr: _s(m['scheduleAr']),
         scheduleEn: _s(m['scheduleEn']),
         ageRange: _s(m['ageRange']),
@@ -669,8 +678,8 @@ class Facility implements Hideable {
         type: _s(m['type']),
         nameAr: _s(m['nameAr']),
         nameEn: _s(m['nameEn']),
-        descAr: _s(m['descAr']),
-        descEn: _s(m['descEn']),
+        descAr: stripPendingPlaceholders(_s(m['descAr'])),
+        descEn: stripPendingPlaceholders(_s(m['descEn'])),
         phone: _s(m['phone']),
         hoursAr: _s(m['hoursAr']),
         hoursEn: _s(m['hoursEn']),
@@ -729,8 +738,8 @@ class Priest implements Hideable {
         hegumenDate: _s(m['hegumenDate']),
         departedDate: _s(m['departedDate']),
         status: _s(m['status']).isEmpty ? 'serving' : _s(m['status']),
-        bioAr: _s(m['bioAr']),
-        bioEn: _s(m['bioEn']),
+        bioAr: stripPendingPlaceholders(_s(m['bioAr'])),
+        bioEn: stripPendingPlaceholders(_s(m['bioEn'])),
         order: _ni(m['order']) ?? 0,
         sample: _b(m['sample']),
         image: MediaImage.fromMap(m['image']),
@@ -779,8 +788,8 @@ class Milestone implements Hideable {
         id: id,
         titleAr: _s(m['titleAr']),
         titleEn: _s(m['titleEn']),
-        descAr: _s(m['descAr']),
-        descEn: _s(m['descEn']),
+        descAr: stripPendingPlaceholders(_s(m['descAr'])),
+        descEn: stripPendingPlaceholders(_s(m['descEn'])),
         year: _ni(m['year']),
         icon: _s(m['icon']),
         order: _ni(m['order']) ?? 0,
@@ -827,8 +836,8 @@ class Saint implements Hideable {
         id: id,
         nameAr: _s(m['nameAr']),
         nameEn: _s(m['nameEn']),
-        bioAr: _s(m['bioAr']),
-        bioEn: _s(m['bioEn']),
+        bioAr: stripPendingPlaceholders(_s(m['bioAr'])),
+        bioEn: stripPendingPlaceholders(_s(m['bioEn'])),
         feastCopticAr: _s(m['feastCopticAr']),
         feastCopticEn: _s(m['feastCopticEn']),
         feastGregorian: _s(m['feastGregorian']),

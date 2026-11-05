@@ -118,6 +118,16 @@ class _MassSchedulePageState extends ConsumerState<MassSchedulePage> {
     };
     final parallel = parallelServices(shown.values, opts);
     String parallelOf(Liturgy l) => parallelSummary(context, opts, parallel[l.id] ?? const []);
+    // Regular services a season supersedes today: the same function as the
+    // home card, so the tab marks them «لا يُقام اليوم» (ADR-050).
+    final today = CairoTime.startOfDay(CairoTime.fromInstant(now));
+    final notToday = {
+      for (final l in regularSupersededOn(liturgies: all, seasons: seasons, day: today)) l.id,
+    };
+    // A dated one-off (a special service or vespers) superseded today is
+    // marked too; [regularSupersededOn] only names one dated today
+    // (CodeRabbit on PR #45).
+    bool offToday(Liturgy l) => notToday.contains(l.id) && (l.date != null || l.weekday == today.weekday);
     return [
       for (final e in revivals.entries) ...[
         SectionTitle(
@@ -139,6 +149,7 @@ class _MassSchedulePageState extends ConsumerState<MassSchedulePage> {
               liturgy: l,
               showDate: true,
               parallelText: parallelOf(l),
+              notHeldToday: offToday(l),
             ),
         ]),
       ],
@@ -170,6 +181,7 @@ class _MassSchedulePageState extends ConsumerState<MassSchedulePage> {
               liturgy: l,
               showWeekday: showWeekday,
               parallelText: parallelOf(l),
+              notHeldToday: offToday(l),
             ),
         ]),
       SectionTitle(context.tr('vespersPraise'), icon: Icons.nightlight_round),
@@ -178,7 +190,8 @@ class _MassSchedulePageState extends ConsumerState<MassSchedulePage> {
       else
         ResponsiveGrid(children: [
           for (final l in vespers)
-            LiturgyCard(liturgy: l, showWeekday: true, showDate: true, parallelText: parallelOf(l)),
+            LiturgyCard(
+                liturgy: l, showWeekday: true, showDate: true, parallelText: parallelOf(l), notHeldToday: offToday(l)),
         ]),
     ];
   }

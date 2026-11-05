@@ -198,14 +198,17 @@ void main() {
       expect(occ.map((o) => o.liturgy.id), ['eve']);
     });
 
-    test('a dated sample service gives way to a real dated one on its day (not on other days)', () {
+    // ADR-050 (seasons v2 P2 B1): once the season has a real service, its DATED
+    // samples give way on every day too, not only on the real one's day.
+    test('a dated sample service gives way to a real dated one (on every day of the season)', () {
       final samplePalm =
           lit('palm', date: DateTime.utc(2026, 11, 8), start: '07:00', end: '11:00', season: 'holy_week', sample: true);
       final sampleThu =
           lit('thu', date: DateTime.utc(2026, 11, 5), start: '07:00', end: '11:00', season: 'holy_week', sample: true);
       final real = lit('realPalm', date: DateTime.utc(2026, 11, 8), start: '06:00', end: '10:00', season: 'holy_week');
       final all = [samplePalm, sampleThu, real];
-      expect(seasonalSchedule([holyWeek], all)[holyWeek]!.map((l) => l.id), ['thu', 'realPalm']);
+      expect(seasonalSchedule([holyWeek], all)[holyWeek]!.map((l) => l.id), ['realPalm']);
+      expect(occurrencesForDay(liturgies: all, seasons: [holyWeek], day: cairo(2026, 11, 5), dayOffset: 0), isEmpty);
       expect(occurrencesForDay(liturgies: all, seasons: [holyWeek], day: cairo(2026, 11, 8), dayOffset: 0).map((o) => o.liturgy.id),
           ['realPalm']);
       expect(computeNextMass(liturgies: all, seasons: [holyWeek], now: cairo(2026, 11, 8, 5)).next?.liturgy.id, 'realPalm');

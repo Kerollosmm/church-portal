@@ -636,10 +636,13 @@ class DocEditorState extends State<DocEditor> {
     final label = _label(f);
     switch (f.type) {
       case FieldType.boolean:
+        // The field's hint under the switch (e.g. `replacesDay`, ADR-050).
+        final hint = context.pick(f.hintAr, f.hintEn);
         return SwitchListTile(
           key: ValueKey('field-${f.key}'),
           contentPadding: const EdgeInsetsDirectional.only(start: 4),
           title: Text(label),
+          subtitle: hint.isEmpty ? null : Text(hint),
           value: _values[f.key] as bool,
           onChanged: (v) => setState(() {
             _values[f.key] = v;

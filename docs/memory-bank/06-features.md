@@ -119,9 +119,22 @@ render with `PageBody` (+ `Footer`). Content comes from Riverpod providers (hidd
   as the previous day's record; parallel services compare across midnight (`occurrencesAround`, adjacent days in
   `parallelServices`). The /mass-schedule seasonal switch uses `pal.switchOnTrack/OnThumb/OffTrack/OffThumb`
   (≥ 3:1 on every theme, ADR-049).
-- **Seed templates (ADR-045):** an undated `sample: true` seasonal service is hidden in a season that has any real
-  (non-sample) service; any undated service gives way on a day with a dated real service of its season (replacing:
-  any; additive: overlapping). All-sample seasons (the seed) are unchanged.
+- **Seed templates (ADR-045, widened ADR-050):** any `sample: true` seasonal service, undated or dated, is hidden in a
+  season that has any real (non-sample) service; any undated service gives way on a day with a dated real service of
+  its season (replacing: any; additive: overlapping). A seasonal sample also gives way to a real seasonal service of
+  ANY active season held at the same time, never supersedes a real regular service, and sorts after a real service at
+  the same start. All-sample seasons (the seed) are unchanged.
+- **Additive seasons (ADR-050):** a seasonal `mass` hides only the regular masses that overlap it in time (the 12:00
+  fasting liturgy keeps the 06:30 mass; a Kiahk 05:30–07:30 liturgy hides the 06:00 mass, not the 08:00 ones); a
+  seasonal service with `replacesDay` (feast liturgy) hides every regular mass of its day; vespers / praise keep the
+  overlap rule. `regularSupersededOn` lists what is hidden: /mass-schedule's weekly tab marks them «لا يُقام اليوم»
+  on today's weekday, and the assistant prompt lists today's / tomorrow's services from `occurrencesForDay` with a
+  "NOT held" line and a computed season label. The «يُقام الآن» box shows its end: «حتى ٠٣:٣٠ ص» (12-hour ص/م).
+- **Placeholder text (ADR-050):** «— في انتظار تأكيد الكنيسة.», «(لم يُؤكَّد …)», "pending church confirmation" in
+  `descAr/En` / `bioAr/En` is dropped on read (`stripPendingPlaceholders`), on public pages and in the prompt.
+- **Hero season tint (ADR-050):** on an occasion theme (Marian, fasting, Resurrection, Nativity, Epiphany) the hero
+  painting gets a still wash from the theme's `primary` to `background` (`OccasionColors.heroTint`); none on Golden
+  hour or dark themes; switch `heroSeasonTint`. Ken Burns, haze and rays unchanged. The parallel line keeps «، ».
 
 ### `/about` — `about_page.dart` `AboutPage`
 - History card (bishop line + `historyAr/En`) and **altars** grid (main altar gets a gold cross) — section `history`.
@@ -409,12 +422,18 @@ on); owners can press **Send test error**. Details: `03-architecture.md` → *Er
        liturgies are dropped if they start inside the window of a season that has at least one valid service that
        day (so morning masses before an 18:00 season start remain). Replacement is decided on **all** seasonal
        services (e.g. Holy Week Pascha hours suspend weekday masses), then filtered by type.
-     - **Additive** (`false`: the Maximus and Moses revivals): the regular schedule stays. A regular `mass` is dropped
-       only when the season also has a `mass` that day and the regular mass starts inside the window (e.g. the
-       1 July feast liturgy `rev-moses-feast` supersedes Thursday's `thu-1`); a regular `vespers`/`praise` is dropped
-       only when it overlaps in time one of the season's services that day (e.g. Saturday vespers 18:30 vs the 18:30
-       revival service). Before PR 1 a revival erased every morning mass for 9 days and the next-mass card showed
-       "no upcoming liturgies".
+     - **Additive** (`false`: fasts, the Maximus and Moses revivals, the Holy 50 Days): the regular schedule stays
+       (ADR-050). A regular `mass` that starts inside the season's window is dropped only when one of the season's
+       services that day is a `mass` that **overlaps it in time** (e.g. the 1 July feast liturgy `rev-moses-feast`
+       supersedes Thursday's `thu-1` at the same hour), or is marked **`replacesDay`** (feast liturgy: every regular
+       mass of that day goes); a regular `vespers`/`praise` is dropped only when it overlaps in time one of the
+       season's services that day (e.g. Saturday vespers 18:30 vs the 18:30 revival service). Before PR 1 a revival
+       erased every morning mass for 9 days and the next-mass card showed "no upcoming liturgies".
+     - **Sample guards (ADR-050):** a `sample: true` seasonal service never supersedes a real (non-sample) regular
+       service (only a sample one); it is skipped when a real seasonal service of any active season overlaps it
+       (its full-override season still replaces the regular schedule that day); every sample of a season that has
+       a usable real service (`seasonHasRealServices`: a start time, and a dated one starting inside the window) is
+       left out; at the same start a real service sorts before a sample (`compareOccurrences`).
    - **Undated templates vs a dated programme (ADR-043, Holy Week sim B4):** on a day where a schedule-replacing
      season has dated services of its own (`seasonHasDatedServicesOn`), the undated (weekday) services of its key do
      not occur that day; the season list drops an undated service only when every such weekday in the window has

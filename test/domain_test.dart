@@ -393,7 +393,8 @@ void main() {
           startsAt: cairo(2027, 6, 22, 0), endsAt: cairo(2027, 7, 1, 23, 59));
       final t = build(seasons: [additive, nativity]);
       expect(t, contains('### نهضة الأنبا موسى'));
-      expect(t, contains('[ADDITIVE — regular morning masses continue]'));
+      // ADR-050: the label says what the schedule shows today.
+      expect(t, contains('[ADDITIVE — regular services continue]'));
       expect(t, contains('- Friday: عشية النهضة [other] 06:00 PM – 08:00 PM at مذبح الأنبا موسى'));
       final off = build(seasons: [
         Season(id: 'rm', key: 'revival_moses', nameAr: 'x', nameEn: 'x', active: false, replacesRegular: false),
