@@ -360,9 +360,13 @@ bool undatedSuppressedOn(Season s, Liturgy l, Iterable<Liturgy> all, tz.TZDateTi
     if (d.seasonKey != s.key || d.date == null || d.sample || !_matchesDay(d, dayStart) || !_dateInSeason(d.date!, s)) {
       continue;
     }
-    if (s.replacesRegular) return true;
+    // Only a dated service that really occurs in the season counts: one
+    // starting before the season's start (a morning service on an 18:00
+    // start day) is not part of it (as in [occurrencesForDay]; CodeRabbit).
     final o = _occurrence(d, dayStart, 0);
-    if (mine == null || o == null || (o.start.isBefore(mine.end) && mine.start.isBefore(o.end))) return true;
+    if (o == null || !isSeasonActiveAt(s, o.start)) continue;
+    if (s.replacesRegular) return true;
+    if (mine == null || (o.start.isBefore(mine.end) && mine.start.isBefore(o.end))) return true;
   }
   return false;
 }

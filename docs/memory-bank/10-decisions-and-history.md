@@ -1133,6 +1133,15 @@ supersede them.
   7. Assistant limits: `perMinute` (default 4) stays — it only stops bursts; its admin hint now explains it applies
      together with the daily / season limit (4 a minute + 6 a day = wait a minute after the 4th quick question).
      `AssistantPage` reads `nowProvider` (real time in production) for the season limit and the instruction.
+  8. **Review fixes (CodeRabbit on PR #38):** a dated service that starts before its season (morning service on an
+     18:00-start day) no longer suppresses that day's weekday services; the wedding-pause line is written even when the
+     booking category had only the wedding choice; the assistant page's history key also covers the live link, church
+     events and service programmes (`assistantProgrammeSignature`); a sample programme service in the top event shows
+     «مواعيد تقريبية»; the day-event row cap is 4,200 characters and the PDF link has no whitespace, host parts ≤ 100 + 100
+     and path ≤ 290 (≤ 500 in total, the editor's limit); hints say the fallback needs the next-service card on Home and
+     that `commemoration` off still lets programme services show. Declined: a minimum-build gate for `dayEvents` (an
+     admin tab from before this PR would rewrite events as 13 fields — every admin gets the new build on reload, and no
+     PDF field exists on live yet).
   Not changed (documented designs, reports' "spec mismatch"): a live banner switched on by hand without `liveEndsAt`
   outlives the season; stored switches stay until «استرجاع»; the wedding choice is a subtype of «حجز قاعة».
 - **Rules:** `topEventServices` joins the Today gate (`optBool`, +1 expression only when a Today key changes);

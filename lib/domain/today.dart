@@ -43,8 +43,9 @@ class TodaySettings {
   /// The "top event of the day" card on the home page.
   final bool topEvent;
 
-  /// When no church event is set: show the day's commemoration (Katameros /
-  /// the computed feast list). Off = only church events.
+  /// When no church event (and no programme service, [topEventServices])
+  /// is shown: the day's commemoration (Katameros / the computed feast list).
+  /// Off = church events and programme services only.
   final bool commemoration;
 
   /// When no church event is set for the liturgical day: show today's /

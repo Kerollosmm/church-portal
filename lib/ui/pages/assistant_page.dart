@@ -233,7 +233,12 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
     // The allowed topics too: answers about a topic an admin removed are not
     // replayed.
     final topics = _settings.topicsFor(f.enabled).join('\n');
-    return '$sections\u0000$details\u0000$custom\u0000$topics';
+    // Live link, church events and service programmes (ADR-045).
+    final programme = assistantProgrammeSignature(
+        features: f,
+        now: ref.read(nowProvider).value ?? DateTime.now(),
+        liturgies: ref.read(liturgiesProvider).value ?? const []);
+    return '$sections\u0000$details\u0000$custom\u0000$topics\u0000$programme';
   }
 
   static String _cairoStamp() {

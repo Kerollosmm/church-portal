@@ -100,7 +100,7 @@ render with `PageBody` (+ `Footer`). Content comes from Riverpod providers (hidd
 - **Top event card** (`TopEventCard`, first on Home): «حدث اليوم» = an admin church event (`dayEvents`) covering today
   and not ended (on the eve: the next liturgical day's event) with times, speaker, topic, note, link; else
   «عيد اليوم» / «تذكار اليوم» from `/data/today.json` (Katameros, credited) for the liturgical day; else the computed
-  feast list; nothing on an ordinary day without data. `topEvent` off hides it; `commemoration` off = church events only.
+  feast list; nothing on an ordinary day without data. `topEvent` off hides it; `commemoration` off = church events (and programme services while `topEventServices` is on) only.
   **ADR-045:** between the church event and Katameros, today's / tonight's programme service (the first not-ended
   occurrence of an active season with a speaker or topic) — «الليلة في الكنيسة» / «اليوم في الكنيسة», time, speaker,
   topic, choir, venue / audience and its labelled PDF button (`topEventServices`, default on; reads the liturgies /

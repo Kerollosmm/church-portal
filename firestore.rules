@@ -734,8 +734,11 @@ service cloud.firestore {
     // Church events of the day (ADR-040): up to 20, each ONE string
     // date, endDate, start, end, titleAr, titleEn, speakerAr, speakerEn,
     // topicAr, topicEn, noteAr, noteEn, link (+ optionally attachmentUrl ''
-    // or https, attachmentLabelAr / En <= 80: ADR-045; a 13-field string
-    // from before stays valid) joined by U+001F
+    // or https without whitespace — host parts <= 100 + 100, path <= 290, so
+    // the whole URL stays within the editor's 500 characters — and
+    // attachmentLabelAr / En <= 80: ADR-045; a 13-field string from before
+    // stays valid; the 4200 row cap covers every field at its maximum)
+    // joined by U+001F
     // (lib/domain/today.dart DayEvent.encode). One regex per event keeps the
     // list within the 1,000-expression budget. date YYYY-MM-DD (required,
     // month 01-12, day 01-31), endDate '' or such a date, times '' or HH:mm, titleAr 1-300, other texts
@@ -754,8 +757,8 @@ service cloud.firestore {
         && (n <= 15 || (validDayEvent(b[15]) && (n <= 16 || (validDayEvent(b[16]) && (n <= 17 || (validDayEvent(b[17]) && (n <= 18 || (validDayEvent(b[18]) && (n <= 19 || (validDayEvent(b[19]) && true))))))))));
     }
     function validDayEvent(e) {
-      return e is string && e.size() <= 4000
-        && e.matches('[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])\\x1f([0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01]))?\\x1f(([01][0-9]|2[0-3]):[0-5][0-9])?\\x1f(([01][0-9]|2[0-3]):[0-5][0-9])?\\x1f[^\\x1f]{1,300}\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{0,500}\\x1f[^\\x1f]{0,500}\\x1f(|/([^/ \\x1f][^ \\x1f]*)?|[Hh][Tt][Tt][Pp][Ss]?://[^/ \\x1f]+[.][^/ \\x1f]+([/?#][^ \\x1f]*)?)(\\x1f(|[Hh][Tt][Tt][Pp][Ss]://[^/ \\x1f]+[.][^/ \\x1f]+([/?#][^ \\x1f]{0,500})?)\\x1f[^\\x1f]{0,80}\\x1f[^\\x1f]{0,80})?');
+      return e is string && e.size() <= 4200
+        && e.matches('[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])\\x1f([0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01]))?\\x1f(([01][0-9]|2[0-3]):[0-5][0-9])?\\x1f(([01][0-9]|2[0-3]):[0-5][0-9])?\\x1f[^\\x1f]{1,300}\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{0,500}\\x1f[^\\x1f]{0,500}\\x1f(|/([^/ \\x1f][^ \\x1f]*)?|[Hh][Tt][Tt][Pp][Ss]?://[^/ \\x1f]+[.][^/ \\x1f]+([/?#][^ \\x1f]*)?)(\\x1f(|[Hh][Tt][Tt][Pp][Ss]://[^/\\s\\x1f]{1,100}[.][^/\\s\\x1f]{1,100}([/?#][^\\s\\x1f]{0,290})?)\\x1f[^\\x1f]{0,80}\\x1f[^\\x1f]{0,80})?');
     }
 
     // ------------------- occasion themes & hero videos -----------------------

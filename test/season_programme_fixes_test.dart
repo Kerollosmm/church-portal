@@ -187,6 +187,56 @@ void main() {
     });
   });
 
+  group('review fixes (PR #38)', () {
+    test('a dated service before the season starts does not suppress the season\'s weekday service', () {
+      // Replacing season from Thu 5 Nov 18:00; a dated real morning service that day is outside it.
+      final evening = Season(
+          id: 'e', key: 'holy_week', nameAr: '', nameEn: '', startsAt: cairo(2026, 11, 5, 18), endsAt: cairo(2026, 11, 8, 19));
+      final morning = lit('morning', date: DateTime.utc(2026, 11, 5), start: '08:00', end: '10:00', season: 'holy_week');
+      final eve = lit('eve', weekday: 4, start: '19:00', end: '21:00', season: 'holy_week');
+      final occ = occurrencesForDay(liturgies: [morning, eve], seasons: [evening], day: cairo(2026, 11, 5), dayOffset: 0);
+      expect(occ.map((o) => o.liturgy.id), ['eve']);
+    });
+
+    test('wedding pause is announced even when the booking category had only the wedding choice', () {
+      const weddingOnly = ContactSettings([
+        ContactCategory(slot: 'c1', labelAr: 'استفسار عام', labelEn: 'General inquiry'),
+        ContactCategory(
+            slot: 'c2', labelAr: 'حجز قاعة', labelEn: 'Hall booking', kind: ContactKinds.booking,
+            subtypes: [ContactSubtype('wedding', 'فرح', 'Wedding')]),
+      ]);
+      final text = buildAssistantInstruction(
+        settings: const ChurchSettings(nameAr: 'كنيسة', nameEn: 'Church', addressAr: '', addressEn: ''),
+        liturgies: const [],
+        seasons: const [],
+        clinics: const [],
+        meetings: const [],
+        activities: const [],
+        facilities: const [],
+        now: cairo(2026, 11, 5, 12),
+        features: FeatureSettings.fromMap(const {'weddingBookingOff': true}),
+        contact: weddingOnly.withoutWedding(),
+      );
+      expect(text, contains('Wedding (فرح) hall bookings are NOT accepted'));
+      expect(text, isNot(contains('Hall booking (حجز قاعة)')));
+    });
+
+    test('the programme signature changes with a speaker, a church event or the live link', () {
+      final now = cairo(2026, 11, 5, 18, 30);
+      final base = assistantProgrammeSignature(features: FeatureSettings.defaults, now: now, liturgies: [night4]);
+      final otherSpeaker = lit('night4',
+          date: DateTime.utc(2026, 11, 5), start: '18:30', end: '21:30', type: 'vespers', season: 'revival_maximus',
+          program: const ProgramInfo(speakerAr: 'متكلم آخر'));
+      expect(assistantProgrammeSignature(features: FeatureSettings.defaults, now: now, liturgies: [otherSpeaker]), isNot(base));
+      final live = FeatureSettings.fromMap(const {'liveEnabled': true, 'liveUrl': 'https://youtube.com/live/x'});
+      expect(assistantProgrammeSignature(features: live, now: now, liturgies: [night4]), isNot(base));
+      final ev = FeatureSettings.fromMap(const {
+        'dayEvents': ['2026-11-05\u001f\u001f\u001f\u001fحدث\u001f\u001f\u001f\u001f\u001f\u001f\u001f\u001f'],
+      });
+      expect(assistantProgrammeSignature(features: ev, now: now, liturgies: [night4]), isNot(base));
+    });
+  });
+
   group('B3 / B4: the assistant instruction', () {
     String build({FeatureSettings f = FeatureSettings.defaults, DateTime? now, List<Liturgy>? lits}) =>
         buildAssistantInstruction(
@@ -366,6 +416,14 @@ void main() {
       expect(find.textContaining('نيافة الأنبا بافلي'), findsOneWidget);
       expect(find.textContaining('الجهاد والرجاء'), findsOneWidget);
       expect(find.text('تحميل برنامج النهضة (PDF)'), findsOneWidget);
+    });
+
+    testWidgets('top event: a sample (unconfirmed) programme service carries the «times pending» note', (tester) async {
+      final sampleNight = lit('sampleNight',
+          date: DateTime.utc(2026, 11, 5), start: '18:30', end: '21:30', season: 'revival_maximus', sample: true, program: programme);
+      await pump(tester, const TopEventCard(), cairo(2026, 11, 5, 12), lits: [sampleNight]);
+      expect(find.byKey(const Key('topEventProgramme')), findsOneWidget);
+      expect(find.byKey(const Key('topEventTimesPending')), findsOneWidget);
     });
 
     testWidgets('top event: a church event\'s PDF has its own labelled button', (tester) async {

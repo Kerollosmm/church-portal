@@ -177,15 +177,7 @@ String buildAssistantInstruction({
     }
   }
 
-  // Live stream (ADR-045, revival sim B3): only while the banner is on, so
-  // "is there a live stream tonight?" is answered with the real link.
-  if (f.today.liveOn(now)) {
-    final label = _bi(f.today.liveLabelAr.trim(), f.today.liveLabelEn.trim());
-    b
-      ..writeln()
-      ..writeln('## Live stream now')
-      ..writeln('- ${label.isNotEmpty ? label : 'Live now from the church (بث مباشر الآن من الكنيسة)'}: ${f.today.liveUrl}');
-  }
+  _liveStream(b, f, now);
   _dayEvents(b, f, now);
 
   if (f.enabled(Sections.schedule)) {
@@ -415,7 +407,10 @@ String assistantCustomSignature({
 void _contactForm(StringBuffer b, FeatureSettings f, ContactSettings contact) {
   if (!f.enabled(Sections.contactForm)) return;
   final cats = contact.visible;
-  if (cats.isEmpty) return;
+  // Paused weddings are announced even when no booking choice is left
+  // (`withoutWedding` drops a booking category whose only subtype was the
+  // wedding; CodeRabbit).
+  if (cats.isEmpty && !f.weddingBookingOff) return;
   b
     ..writeln()
     ..writeln('## Contact form and bookings (page /contact)')
@@ -438,7 +433,7 @@ void _contactForm(StringBuffer b, FeatureSettings f, ContactSettings contact) {
   // choice; say so explicitly, so "can I book the hall for a wedding?" gets
   // a clear answer instead of silence (ADR-045, revival sim B4).
   final booking = [for (final c in cats) if (c.isBooking) c];
-  if (f.weddingBookingOff && booking.isNotEmpty) {
+  if (f.weddingBookingOff) {
     final others = [
       for (final c in booking)
         for (final s in c.subtypes)
@@ -447,9 +442,41 @@ void _contactForm(StringBuffer b, FeatureSettings f, ContactSettings contact) {
     b.writeln(
       '- Wedding (فرح) hall bookings are NOT accepted during the current church season (no weddings in this '
       'season); say so clearly if asked.'
-      '${others.isNotEmpty ? ' Other hall bookings stay open via /contact: ${others.join(', ')}.' : ''}',
+      '${others.isNotEmpty ? ' Other hall bookings stay open via /contact: ${others.join(', ')}.' : ' For anything else, $_contactHint.'}',
     );
   }
+}
+
+const _contactHint = 'point to the contact page (/contact)';
+
+/// Live stream (ADR-045, revival sim B3): only while the banner is on, so
+/// "is there a live stream tonight?" is answered with the real link.
+void _liveStream(StringBuffer b, FeatureSettings f, DateTime now) {
+  if (!f.today.liveOn(now)) return;
+  final label = _bi(f.today.liveLabelAr.trim(), f.today.liveLabelEn.trim());
+  b
+    ..writeln()
+    ..writeln('## Live stream now')
+    ..writeln('- ${label.isNotEmpty ? label : 'Live now from the church (بث مباشر الآن من الكنيسة)'}: ${f.today.liveUrl}');
+}
+
+/// What the instruction grounds from the live stream, the church events and
+/// the services' programmes (speaker, topic, choir, PDF; ADR-045). The
+/// assistant page clears its replayed history when this changes, so an
+/// answer quoting a withdrawn link or an old speaker is not sent again
+/// (CodeRabbit review on PR #38).
+String assistantProgrammeSignature({
+  required FeatureSettings features,
+  required DateTime now,
+  List<Liturgy> liturgies = const [],
+}) {
+  final b = StringBuffer();
+  _liveStream(b, features, now);
+  _dayEvents(b, features, now);
+  for (final l in liturgies) {
+    if (!l.program.isEmpty) b.writeln('${l.id} ${_liturgyLine(l, features.programOptions)}');
+  }
+  return b.toString();
 }
 
 /// Church events of the day (`settings/features.dayEvents`, ADR-040), today
