@@ -128,7 +128,7 @@ List<LiturgyOccurrence> occurrencesForDay({
         .where((s) =>
             s.key == l.seasonKey &&
             isSeasonActiveAt(s, o.start) &&
-            (l.date != null || !undatedSuppressedOn(s, l, liturgies, dayStart)))
+            !undatedSuppressedOn(s, l, liturgies, dayStart))
         .toList();
     if (windows.isEmpty) continue;
     seasonal.add(o);
@@ -341,20 +341,23 @@ bool _dateInSeason(DateTime date, Season s) {
 bool seasonHasRealServices(Season s, Iterable<Liturgy> all) => all.any(
     (l) => l.seasonKey == s.key && !l.sample && (l.date == null || _dateInSeason(l.date!, s)));
 
-/// Does the undated (weekday) service [l] of [s] give way on the Cairo day
+/// Does the seasonal service [l] of [s] give way on the Cairo day
 /// [dayStart]? (ADR-043 B4, widened in ADR-045 B5)
-/// * A `sample: true` template, once [s] has any real service
+/// * An undated `sample: true` template, once [s] has any real service
 ///   ([seasonHasRealServices]) — the seed's templates never mix into an
 ///   owner's programme, Holy Week or revival alike.
-/// * Any undated service, on a day where [s] has dated non-sample services
-///   of its own: for a season that replaces the regular schedule any such
-///   service that day (the dated programme is the plan for that day); for an
-///   additive season one that overlaps it in time (a revival's nightly
-///   service still runs on its dated feast-morning liturgy).
-/// Seasons made only of sample data (the bundled seed) are unchanged.
+/// * Any undated service, and a dated `sample: true` one (CodeRabbit on
+///   PR #38), on a day where [s] has dated non-sample services of its own:
+///   for a season that replaces the regular schedule any such service that
+///   day (the dated programme is the plan for that day); for an additive
+///   season one that overlaps it in time (a revival's nightly service still
+///   runs on its dated feast-morning liturgy).
+/// A dated real service never gives way. Seasons made only of sample data
+/// (the bundled seed) are unchanged.
 bool undatedSuppressedOn(Season s, Liturgy l, Iterable<Liturgy> all, tz.TZDateTime dayStart) {
-  if (l.date != null || l.seasonKey != s.key) return false;
-  if (l.sample && seasonHasRealServices(s, all)) return true;
+  if (l.seasonKey != s.key) return false;
+  if (l.date != null && !l.sample) return false;
+  if (l.date == null && l.sample && seasonHasRealServices(s, all)) return true;
   final mine = _occurrence(l, dayStart, 0);
   for (final d in all) {
     if (d.seasonKey != s.key || d.date == null || d.sample || !_matchesDay(d, dayStart) || !_dateInSeason(d.date!, s)) {
@@ -378,7 +381,11 @@ bool undatedSuppressedOn(Season s, Liturgy l, Iterable<Liturgy> all, tz.TZDateTi
 /// template of a season with real services.
 bool liturgyInSeason(Liturgy l, Season s, Iterable<Liturgy> all) {
   if (l.seasonKey != s.key) return false;
-  if (l.date != null) return _dateInSeason(l.date!, s);
+  if (l.date != null) {
+    if (!_dateInSeason(l.date!, s)) return false;
+    final d = CairoTime.calendarDate(l.date!);
+    return !undatedSuppressedOn(s, l, all, CairoTime.at(d.year, d.month, d.day));
+  }
   if (l.sample && seasonHasRealServices(s, all)) return false;
   final from = s.startsAt, to = s.endsAt, wd = l.weekday;
   if (from == null || to == null || wd == null) return true;

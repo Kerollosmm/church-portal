@@ -198,6 +198,19 @@ void main() {
       expect(occ.map((o) => o.liturgy.id), ['eve']);
     });
 
+    test('a dated sample service gives way to a real dated one on its day (not on other days)', () {
+      final samplePalm =
+          lit('palm', date: DateTime.utc(2026, 11, 8), start: '07:00', end: '11:00', season: 'holy_week', sample: true);
+      final sampleThu =
+          lit('thu', date: DateTime.utc(2026, 11, 5), start: '07:00', end: '11:00', season: 'holy_week', sample: true);
+      final real = lit('realPalm', date: DateTime.utc(2026, 11, 8), start: '06:00', end: '10:00', season: 'holy_week');
+      final all = [samplePalm, sampleThu, real];
+      expect(seasonalSchedule([holyWeek], all)[holyWeek]!.map((l) => l.id), ['thu', 'realPalm']);
+      expect(occurrencesForDay(liturgies: all, seasons: [holyWeek], day: cairo(2026, 11, 8), dayOffset: 0).map((o) => o.liturgy.id),
+          ['realPalm']);
+      expect(computeNextMass(liturgies: all, seasons: [holyWeek], now: cairo(2026, 11, 8, 5)).next?.liturgy.id, 'realPalm');
+    });
+
     test('wedding pause is announced even when the booking category had only the wedding choice', () {
       const weddingOnly = ContactSettings([
         ContactCategory(slot: 'c1', labelAr: 'استفسار عام', labelEn: 'General inquiry'),
