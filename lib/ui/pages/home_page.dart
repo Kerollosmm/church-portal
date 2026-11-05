@@ -645,7 +645,10 @@ class HeroVerse extends ConsumerWidget {
         day: ref.watch(liturgicalDayProvider).date, seasonSet: seasonSet);
     if (verse == null) return const SizedBox.shrink();
     final narrow = MediaQuery.sizeOf(context).width < 600;
-    final reference = context.isAr || verse.refEn.isEmpty ? verse.refAr : verse.refEn;
+    // ADR-047: English text on the English site when the verse has it, else
+    // the Arabic text with its Arabic reference (never mixed).
+    final shown = verse.display(english: !context.isAr);
+    final reference = shown.ref;
     final ground = context.pal.background;
     return ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: 640),
@@ -659,17 +662,20 @@ class HeroVerse extends ConsumerWidget {
             container: true,
             label: context.tr('dailyVerse'),
             child: Column(children: [
-              HaloText('« ${verse.textAr} »',
+              HaloText(shown.rtl ? '« ${shown.text} »' : '“${shown.text}”',
                   key: const Key('dailyVerseText'),
                   ground: ground,
                   textAlign: TextAlign.center,
-                  textDirection: TextDirection.rtl,
-                  style: AppFonts.script(size: narrow ? 20 : 24, color: context.pal.ink, height: 1.8)),
+                  textDirection: shown.rtl ? TextDirection.rtl : TextDirection.ltr,
+                  style: AppFonts.script(
+                      size: shown.rtl ? (narrow ? 20 : 24) : (narrow ? 18 : 22),
+                      color: context.pal.ink,
+                      height: shown.rtl ? 1.8 : 1.5)),
               if (reference.isNotEmpty)
                 HaloText(reference,
                     key: const Key('dailyVerseRef'),
                     ground: ground,
-                    textDirection: verse.refEn.isNotEmpty && !context.isAr ? TextDirection.ltr : TextDirection.rtl,
+                    textDirection: shown.rtl || reference != verse.refEn.trim() ? TextDirection.rtl : TextDirection.ltr,
                     style: TextStyle(color: context.pal.goldText, fontSize: 13, fontWeight: FontWeight.w700)),
             ]),
           ),

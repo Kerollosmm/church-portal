@@ -2,7 +2,8 @@
 // active, "verse of the day" rotates through the verses the admin chose for
 // it (e.g. Holy Week verses) instead of the general list. Stored in
 // `settings/features.seasonVerses` (no new document or listener) as up to
-// [SeasonVerses.max] strings `seasonKey␟textAr␟refAr`. Pure Dart.
+// [SeasonVerses.max] strings `seasonKey␟textAr␟refAr`, optionally followed by
+// `␟textEn␟refEn` (ADR-047). Pure Dart.
 
 import 'daily_verse.dart';
 import 'models.dart' show Season;
@@ -36,7 +37,8 @@ class SeasonVerses {
       if (p.length < 2 || !seasonKeys.contains(p[0])) continue;
       final text = p[1].trim();
       if (text.isEmpty) continue;
-      (out[p[0]] ??= []).add(Verse(textAr: text, refAr: p.length > 2 ? p[2].trim() : ''));
+      String at(int i) => p.length > i ? p[i].trim() : '';
+      (out[p[0]] ??= []).add(Verse(textAr: text, refAr: at(2), textEn: at(3), refEn: at(4)));
       n++;
     }
     return out.isEmpty ? none : SeasonVerses(out);

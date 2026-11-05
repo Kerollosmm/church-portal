@@ -56,7 +56,8 @@ fixes — every active season's service on the next-service card, programme whil
 tonight's programme service, assistant grounds programme / church events / live link / paused weddings, seed templates
 never mix into a season with real services (ADR-045); PR #39 live-test fixes — top event only on the stored
 features, English title before boot, App Check lazy again, no public sample marks, Coptic date fallback, pope-visit
-images on Hosting (ADR-046)).
+images on Hosting (ADR-046); PR #40 English verse of the day — bundled public-domain WEB
+(British Edition) text, optional English for the admin's fixed and season verses (ADR-047)).
 
 > **Golden rule:** read this folder before changing anything, and update it in the same PR as every change that
 > alters behaviour, data shape, rules, workflows, content status or open tasks.

@@ -245,7 +245,9 @@ void main() {
       final f = seasonSettingsDoc.fields.firstWhere((f) => f.key == 'seasonVerses');
       expect(f.encodedRows, isTrue);
       expect(f.maxRows, 40);
-      expect(f.subFields.map((s) => s.key), ['season', 'textAr', 'refAr']);
+      // ADR-047: + optional English text / reference, stored as a tail only when set.
+      expect(f.subFields.map((s) => s.key), ['season', 'textAr', 'refAr', 'textEn', 'refEn']);
+      expect(f.encodedOptionalTail, 2);
       expect(f.subFields.first.options, SeasonVerses.seasonKeys);
       final rules = File('firestore.rules').readAsStringSync();
       expect(rules, contains('function validSeasonVerses'));

@@ -1222,6 +1222,38 @@ supersede them.
   no banned widgets in `lib/ui` outside admin, Coptic date script vs Dart for 731 days incl. 2026-11-08, media files);
   `season_programme_fixes_test.dart` (a sample programme service shows no «times pending» note).
 
+## ADR-047 (PR #40) — English text for the hero verse: bundled WEB (British Edition), optional English for the admin's fixed and season verses
+
+- **Context:** live test of 5 Nov 2026 (`work/live-findings/rca.md` #2): on `/?lang=en` the hero verse body was always
+  Arabic. There was no English verse text anywhere: `daily_verses.json` had `ref, refAr, refEn, textAr`, `Verse` had no
+  `textEn`, `HeroVerse` drew `textAr` RTL in both languages (under the *English* reference — mixed), and the fixed verse
+  (`DailyVerseConfig`) and season verses (`seasonVerses`) were Arabic-only.
+- **Decision:**
+  1. `Verse.textEn` (+ `Verse.display(english:)`): the English site shows `“textEn”` LTR (Ruqaa 18/22 px, line height
+     1.5) with `refEn` (else the Arabic reference); a verse **without** English shows the Arabic text with the **Arabic**
+     reference, so an English reference never sits under Arabic text. The Arabic site is unchanged. The shown English
+     text starts with a capital letter (`capitalizeVerseStart`, after any leading quote): 28 bundled WEB verses start
+     mid-sentence ("let's hold fast…"); the stored text (asset, admin field) is unchanged (owner request on PR #40).
+  2. `tool/gen_daily_verses.py` also reads the **World English Bible British Edition** from eBible.org
+     (`eng-webbe_vpl.zip`, SHA-256 `018b2ac4…3423a`, "not copyrighted … Public Domain"; the WEB with "the LORD"
+     instead of "Yahweh", chosen for a Coptic Orthodox readership — the owner asked for "WEB, else KJV") and writes
+     `textEn` byte-for-byte for the same 366 references. The selection is still made from the Arabic only: every
+     `ref` / `refAr` / `refEn` / `textAr` and so every day's verse is identical to before (checked). Asset 116 → 160 KB
+     (one bundled file, gzip on Hosting; no runtime request added).
+  3. Admin, inside the existing `settings/features` doc (no new collection, no listener): `dailyVerse` gains optional
+     `textEn` (≤ 500) / `refEn` (≤ 60), written only when set (`toMap`), with two optional fields in the fixed-verse
+     card; `seasonVerses` rows gain an optional `␟textEn␟refEn` tail (two optional sub-fields in «آيات المواسم»).
+     `FieldDef.encodedOptionalTail` (+ `encodeRowFields`) leaves an all-empty tail out, so rows without English keep
+     the old 3-field shape (still valid under the old rules); other encoded lists (day events) are untouched.
+  4. Rules: `validDailyVerse` allows `textEn` / `refEn` (strings, same lengths, one joined regex);
+     `validSeasonVerses`' single regex gains `(\x1f[^\x1f\x1e]{0,500}\x1f[^\x1f\x1e]{0,60})?` per row (40 full rows fit
+     one write — emulator test).
+- **Cost:** +0 Firestore reads / listeners / writes per visit; an admin save is the same single write. +44 KB in the
+  bundled verse asset (loaded once, cached).
+- **Tests:** `test/verse_english_test.dart` (asset English + metadata + SHA pin, no Arabic or "Yahweh" in English, old
+  lists still parse, `display` rules, fixed verse `fromMap` / `toMap` / resolve, season tail parse + encode, rules
+  text, hero in EN / AR / fixed with and without English); rules group "ADR-047".
+
 ## Timeline
 
 | When | PR / commit | What |
@@ -1274,5 +1306,7 @@ supersede them.
 | 5 Nov 2026 | **PR #36** — "Admin: reset the settings form when switching between Today and Season settings" (`seer/fix/admin-season-settings-switch-crash`, opened by Sentry Seer; PR #37 was squash-merged as `644ce8c` and merged into this branch) | Bug fix for Sentry CHURCH-PORTAL-9: both menu entries edit `settings/features` with different fields; the dashboard reused one unkeyed `ChurchInfoScreen` and `didUpdateWidget` compared only `doc.path`, so «إعدادات المواسم» read Today's `DocEditor` state and crashed on `_rows['venues']!`. Fix: per-section `ValueKey`s + rebuild when the `DocDef` changes. Regression tests: screen-level swap and a dashboard navigation test (both fail on `main` without the fix). No data, rules or listener change; no ADR (bug fix). |
 | 5 Nov 2026 | **PR #35** — "Liturgical web loading screen, top utility bar with live badge, app shell cleanup" (`feat/redesign-splash-top-bar`; PR #37 (`644ce8c`) and PR #36 (`98dc546`) were squash-merged and merged into this branch) | ADR-044 (renumbered from ADR-043): cream loading screen with the app's 27 KB seal, Lalezar name and a composited gold track (`web/index.html`); `TopUtilityBar` (alias `CopticDateStrip`) above the app bar on the palette's title band with the Coptic date and a `live`-coloured badge (`topBarLiveBadge`), grows with text; seal tab offset by the bar height; while live Home shows only the red banner and other pages the tappable badge (admin switch `liveBadgeHideOnHome`, default on); merge fixes: palette roles instead of hard-coded colours, `HaloText` back to 2.5 px, synaxarium live-URL fallback removed (no CORS on live); tests `pagespeed_test.dart`, `today_widgets_test.dart`. Not merged until the owner approves the visuals. |
 | 5 Nov 2026 | **PR #39** — "Live user test fixes" (`fix/live-test-findings`) | ADR-046: top event only on the stored `settings/features` (`featuresLiveProvider`, no seed flash); boot script in `web/index.html` sets the English title / `lang` and drops FlutterFire's saved reCAPTCHA provider (App Check on /ask only again); `accent_about` «كنيستنا»; sample badges / banner / «times pending» removed from the public UI (`sample` kept in data and admin); `fetch_synaxarium.js` computes a missing Coptic date; pope-visit images as Hosting WebP files. +0 reads / listeners / writes. |
+
+| 5 Nov 2026 | **PR #40** — "English verse of the day" (`feat/verse-english`) | ADR-047: `Verse.textEn` + `display(english:)` (English text LTR, else Arabic with the Arabic reference); `gen_daily_verses.py` adds the public-domain WEB British Edition (SHA-pinned) for the same 366 verses; optional `textEn` / `refEn` for the fixed verse and a `␟textEn␟refEn` tail for season verses in `settings/features` (`encodedOptionalTail`); rules `validDailyVerse` / `validSeasonVerses`. +0 reads / listeners. |
 
 Append new PRs to this table.

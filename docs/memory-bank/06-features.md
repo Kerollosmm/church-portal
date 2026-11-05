@@ -38,7 +38,9 @@ render with `PageBody` (+ `Footer`). Content comes from Riverpod providers (hidd
   outline of the scene colour under the glyphs + soft shadows, like the title's halo) so the ground beside every
   stroke stays ≥ the 0.88 scrim even where the radial glow fades at wide line ends; keys `heroVerse` (the scrim),
   `dailyVerseText`, `dailyVerseRef` (the `HaloText`s)). Daily mode = entry
-  (Cairo day of year − 1) of `assets/verses/daily_verses.json` (366 Van Dyck verses, public domain), changing at Cairo
+  (Cairo day of year − 1) of `assets/verses/daily_verses.json` (366 Van Dyck verses + their World English Bible British
+  Edition text since ADR-047, both public domain; the English site shows `“textEn”` LTR with the English reference, a
+  verse without English shows the Arabic with the Arabic reference), changing at Cairo
   midnight; fixed mode = the admin's verse. Hidden when `Sections.dailyVerse` is off, until the first
   `settings/features` value arrives (`featuresReadyProvider`), or while the asset loads. The separate card under the
   hero is gone (the verse is shown once); `settings/church.verseAr/En` are no longer shown publicly.

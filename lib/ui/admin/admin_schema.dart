@@ -109,6 +109,12 @@ class FieldDef {
   /// sub-field values in order joined by U+001F (page blocks, ADR-027).
   final bool encodedRows;
 
+  /// [encodedRows]: this many trailing sub-fields are an optional tail that
+  /// is left out of the stored string when all of them are empty (season
+  /// verses' English text + reference, ADR-047), so rows without it keep the
+  /// shape older rules and builds accept.
+  final int encodedOptionalTail;
+
   /// Text fields: the whole (trimmed) value must match this regular
   /// expression when not blank (e.g. the assistant's model name).
   final String pattern;
@@ -145,6 +151,7 @@ class FieldDef {
       this.dynamicOptions = '',
       this.linkPicker = false,
       this.encodedRows = false,
+      this.encodedOptionalTail = 0,
       this.pattern = '',
       this.rowNotBefore,
       this.rowUniqueKey = ''});
@@ -998,11 +1005,12 @@ const seasonSettingsDoc = DocDef('settings/features', 'إعدادات الموا
       rowUniqueKey: 'key',
       subFields: _optionRowFields),
   // ADR-042: while a season is active, "verse of the day" rotates through
-  // its verses (stored 'seasonKey␟textAr␟refAr', firestore.rules
-  // validSeasonVerses).
+  // its verses (stored 'seasonKey␟textAr␟refAr', plus '␟textEn␟refEn' when
+  // the English is set — ADR-047; firestore.rules validSeasonVerses).
   FieldDef('seasonVerses', 'آيات المواسم (حتى 40)', 'Season verses (up to 40)', FieldType.objectList,
       maxRows: SeasonVerses.max,
       encodedRows: true,
+      encodedOptionalTail: 2,
       hintAr: 'أثناء موسم مفعّل تتبدل «آية اليوم» يوميًا بين آيات هذا الموسم بدل القائمة العامة (الآية الثابتة من «الأقسام» تبقى لها الأولوية). فارغة = القائمة العامة دائمًا.',
       hintEn: 'While a season is active, "verse of the day" rotates daily through that season\'s verses instead of the general list (a fixed verse set under "Sections" still wins). Empty = always the general list.',
       subFields: [
@@ -1012,5 +1020,23 @@ const seasonSettingsDoc = DocDef('settings/features', 'إعدادات الموا
             required: true, maxLength: SeasonVerses.maxText),
         FieldDef('refAr', 'الشاهد (مثل يو 3: 16)', 'Reference (e.g. John 3:16)', FieldType.text,
             maxLength: SeasonVerses.maxRef),
+        // ADR-047: optional English for the English site (else it shows the Arabic).
+        FieldDef('textEn', 'نص الآية بالإنجليزية (اختياري)', 'Verse text in English (optional)', FieldType.multiline,
+            maxLength: SeasonVerses.maxText),
+        FieldDef('refEn', 'الشاهد بالإنجليزية (اختياري، مثل John 3:16)', 'English reference (optional, e.g. John 3:16)',
+            FieldType.text,
+            maxLength: SeasonVerses.maxRef),
       ]),
 ]);
+
+/// [FieldDef.encodedRows]: the row's sub-field values in order, joined by
+/// [sep] (U+001F); an all-empty optional tail ([FieldDef.encodedOptionalTail])
+/// is left out (ADR-047).
+String encodeRowFields(FieldDef f, Map<String, dynamic> row, [String sep = '\u001f']) {
+  final parts = [for (final sf in f.subFields) '${row[sf.key] ?? ''}'.replaceAll(sep, '')];
+  final tail = f.encodedOptionalTail.clamp(0, parts.length);
+  if (tail > 0 && parts.sublist(parts.length - tail).every((p) => p.trim().isEmpty)) {
+    parts.removeRange(parts.length - tail, parts.length);
+  }
+  return parts.join(sep);
+}

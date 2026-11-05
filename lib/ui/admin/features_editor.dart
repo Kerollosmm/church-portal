@@ -197,6 +197,8 @@ class FeaturesEditorState extends State<FeaturesEditor> {
     'footerNoteEn': TextEditingController(text: f.footer.noteEn),
     'verseTextAr': TextEditingController(text: f.dailyVerse.textAr),
     'verseRefAr': TextEditingController(text: f.dailyVerse.refAr),
+    'verseTextEn': TextEditingController(text: f.dailyVerse.textEn),
+    'verseRefEn': TextEditingController(text: f.dailyVerse.refEn),
   };
 
   /// Page header / intro inputs: page key -> field -> controller.
@@ -261,7 +263,11 @@ class FeaturesEditorState extends State<FeaturesEditor> {
         // Daily mode hides (and so does not validate) the fixed-verse fields:
         // save them cleared so an over-long hidden draft cannot fail the save.
         dailyVerse: f.dailyVerse.mode == DailyVerseConfig.fixed
-            ? f.dailyVerse.copyWith(textAr: _t['verseTextAr']!.text.trim(), refAr: _t['verseRefAr']!.text.trim())
+            ? f.dailyVerse.copyWith(
+                textAr: _t['verseTextAr']!.text.trim(),
+                refAr: _t['verseRefAr']!.text.trim(),
+                textEn: _t['verseTextEn']!.text.trim(),
+                refEn: _t['verseRefEn']!.text.trim())
             : const DailyVerseConfig(),
       );
 
@@ -496,6 +502,8 @@ class FeaturesEditorState extends State<FeaturesEditor> {
                   _text('verseTextAr', context.tr('dailyVerseText'),
                       maxLength: DailyVerseConfig.maxText, lines: 3, required: true),
                   _text('verseRefAr', context.tr('dailyVerseRef'), maxLength: DailyVerseConfig.maxRef),
+                  _text('verseTextEn', context.tr('dailyVerseTextEn'), maxLength: DailyVerseConfig.maxText, lines: 3),
+                  _text('verseRefEn', context.tr('dailyVerseRefEn'), maxLength: DailyVerseConfig.maxRef),
                 ],
               ], hint: context.tr('dailyVerseHint')),
               _card(context.tr('pageHeadersTitle'), Icons.view_headline_rounded, [
