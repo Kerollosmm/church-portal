@@ -41,9 +41,21 @@ class NextMassResult {
   /// [happeningNow] (ADR-041 rule: both must name a place), for the
   /// «وفي نفس الوقت» line of the «يُقام الآن» box (ADR-048). Same-venue
   /// services and ones without a place are left out, as on the schedule.
+  ///
+  /// Every entry of [runningNow] is in progress now by construction (a
+  /// service without an end time runs its default 120 minutes, as in
+  /// [computeNextMass]), so only the place is compared here — not the
+  /// 1-minute overlap rule of [parallelOccurrences] (Sentry review on PR #42).
   List<Liturgy> alsoRunning([ProgramOptions? opts]) {
     final h = happeningNow;
-    return h == null ? const [] : parallelOccurrences(h, runningNow, opts);
+    if (h == null) return const [];
+    final key = _placeKey(h.liturgy, opts);
+    if (key.isEmpty) return const [];
+    return [
+      for (final o in runningNow)
+        if (o.liturgy.id != h.liturgy.id && _placeKey(o.liturgy, opts).isNotEmpty && _placeKey(o.liturgy, opts) != key)
+          o.liturgy,
+    ];
   }
 
 

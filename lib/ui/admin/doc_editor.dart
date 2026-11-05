@@ -8,6 +8,7 @@ import '../../core/l10n.dart';
 import '../../core/theme.dart';
 import '../../data/image_processing.dart';
 import '../../data/media_repository.dart';
+import '../../domain/cairo_time.dart';
 import '../../domain/media.dart';
 import '../../domain/time_format.dart';
 import '../widgets/item_image.dart';
@@ -441,7 +442,78 @@ class DocEditorState extends State<DocEditor> {
 
   String _label(FieldDef f) => context.pick(f.labelAr, f.labelEn) + (f.required ? ' *' : '');
 
+  /// Time / date / date-time fields are read-only and filled from the
+  /// pickers (ADR-048): a clock or calendar icon (and a tap on the field)
+  /// opens [showTimePicker] in 24-hour mode / [showDatePicker]; the text is
+  /// stored strictly as "HH:mm", "YYYY-MM-DD" or "YYYY-MM-DD HH:mm" (Cairo
+  /// wall time, parsed to the same stored instant as before).
+  static bool _picked(FieldType t) => t == FieldType.time || t == FieldType.date || t == FieldType.dateTime;
+
+  Future<void> _pick(FieldDef f, TextEditingController c) async {
+    final now = CairoTime.now();
+    Future<(int, int)?> time((int, int)? current) async {
+      final init = current ?? (f.type == FieldType.time ? (18, 0) : (now.hour, now.minute));
+      final t = await showTimePicker(
+        context: context,
+        initialTime: TimeOfDay(hour: init.$1, minute: init.$2),
+        helpText: _label(f),
+        builder: (ctx, child) => MediaQuery(
+          data: MediaQuery.of(ctx).copyWith(alwaysUse24HourFormat: true),
+          child: child!,
+        ),
+      );
+      return t == null ? null : (t.hour, t.minute);
+    }
+
+    if (f.type == FieldType.time) {
+      final t = await time(parseFieldTime(c.text));
+      if (t != null && mounted) c.text = formatPickedTime(t.$1, t.$2);
+      return;
+    }
+    final cur = parseFieldDateTime(c.text);
+    final initial = cur == null ? DateTime(now.year, now.month, now.day) : DateTime(cur.$1, cur.$2, cur.$3);
+    final first = DateTime(2000), last = DateTime(2100, 12, 31);
+    final d = await showDatePicker(
+      context: context,
+      initialDate: initial.isBefore(first) ? first : (initial.isAfter(last) ? last : initial),
+      firstDate: first,
+      lastDate: last,
+      helpText: _label(f),
+    );
+    if (d == null || !mounted) return;
+    if (f.type == FieldType.date) {
+      c.text = formatPickedDate(d.year, d.month, d.day);
+      return;
+    }
+    final t = await time(cur == null ? null : (cur.$4, cur.$5));
+    if (t == null || !mounted) return;
+    c.text = formatPickedDateTime(d.year, d.month, d.day, t.$1, t.$2);
+  }
+
+  Widget? _pickerSuffix(FieldDef f, TextEditingController c) {
+    if (!_picked(f.type)) return null;
+    return ValueListenableBuilder<TextEditingValue>(
+      valueListenable: c,
+      builder: (context, v, _) => Row(mainAxisSize: MainAxisSize.min, children: [
+        if (!f.required && v.text.trim().isNotEmpty)
+          IconButton(
+            key: ValueKey('clear-${f.key}'),
+            tooltip: context.tr('clearField'),
+            icon: const Icon(Icons.close_rounded),
+            onPressed: () => c.clear(),
+          ),
+        IconButton(
+          key: ValueKey('pick-${f.key}'),
+          tooltip: context.tr(f.type == FieldType.time ? 'pickTime' : 'pickDate'),
+          icon: Icon(f.type == FieldType.time ? Icons.access_time_rounded : Icons.calendar_month_rounded),
+          onPressed: () => _pick(f, c),
+        ),
+      ]),
+    );
+  }
+
   Widget _textField(FieldDef f, TextEditingController c, {String? Function()? rowError}) {
+    final picked = _picked(f.type);
     final ltr = switch (f.type) {
       FieldType.text || FieldType.multiline => false,
       _ => true,
@@ -450,6 +522,8 @@ class DocEditorState extends State<DocEditor> {
     return TextFormField(
       key: ValueKey('field-${f.key}'),
       controller: c,
+      readOnly: picked,
+      onTap: picked ? () => _pick(f, c) : null,
       minLines: f.type == FieldType.multiline ? 3 : 1,
       maxLines: f.type == FieldType.multiline ? 12 : 1,
       textDirection: ltr ? TextDirection.ltr : null,
@@ -470,14 +544,14 @@ class DocEditorState extends State<DocEditor> {
         labelText: _label(f),
         helperText: hint.isEmpty ? null : hint,
         helperMaxLines: 3,
-        suffixIcon: f.linkPicker && widget.linkTargets.isNotEmpty
+        suffixIcon: _pickerSuffix(f, c) ?? (f.linkPicker && widget.linkTargets.isNotEmpty
             ? IconButton(
                 key: ValueKey('linkPick-${f.key}'),
                 tooltip: context.tr('linkPick'),
                 icon: const Icon(Icons.link_rounded),
                 onPressed: () => _pickLink(c),
               )
-            : null,
+            : null),
         hintText: switch (f.type) {
           FieldType.time => '06:30',
           FieldType.dateTime => '2027-01-06 20:00',

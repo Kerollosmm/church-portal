@@ -29,6 +29,41 @@ bool isValidDateTime(String v) {
   return h <= 23 && min <= 59 && isCalendarDate(int.parse(m[1]!), int.parse(m[2]!), int.parse(m[3]!));
 }
 
+/// Picker output (ADR-048): a time as strictly zero-padded 24-hour "HH:mm"
+/// (00:00 … 23:59). Out-of-range parts are clamped, never wrapped.
+String formatPickedTime(int hour, int minute) => '${two(hour.clamp(0, 23))}:${two(minute.clamp(0, 59))}';
+
+/// Picker output (ADR-048): a calendar date as strictly "YYYY-MM-DD".
+String formatPickedDate(int year, int month, int day) => '${year.toString().padLeft(4, '0')}-${two(month)}-${two(day)}';
+
+/// Picker output for a date-and-time field: "YYYY-MM-DD HH:mm" (Cairo wall
+/// time, the format [parseFieldValue] turns into the stored instant).
+String formatPickedDateTime(int year, int month, int day, int hour, int minute) =>
+    '${formatPickedDate(year, month, day)} ${formatPickedTime(hour, minute)}';
+
+/// The time already in a field, for prefilling the picker: "HH:mm", also a
+/// legacy unpadded "9:00" (Arabic-Indic digits too); null when blank or not
+/// a time.
+(int, int)? parseFieldTime(String raw) {
+  final m = RegExp(r'^(\d{1,2}):(\d{2})$').firstMatch(normalizeDigits(raw.trim()));
+  if (m == null) return null;
+  final h = int.parse(m[1]!), min = int.parse(m[2]!);
+  return h <= 23 && min <= 59 ? (h, min) : null;
+}
+
+/// The date (and time) already in a date / date-time field, for prefilling
+/// the pickers; null when blank or invalid.
+(int, int, int, int, int)? parseFieldDateTime(String raw) {
+  final v = normalizeDigits(raw.trim());
+  final dt = dateTimeRe.firstMatch(v);
+  if (dt != null && isValidDateTime(v)) {
+    return (int.parse(dt[1]!), int.parse(dt[2]!), int.parse(dt[3]!), int.parse(dt[4]!), int.parse(dt[5]!));
+  }
+  final d = dateRe.firstMatch(v);
+  if (d != null && isValidDate(v)) return (int.parse(d[1]!), int.parse(d[2]!), int.parse(d[3]!), 0, 0);
+  return null;
+}
+
 /// YYYY, YYYY-MM or YYYY-MM-DD.
 bool isValidLooseDate(String v) {
   final m = _looseDateRe.firstMatch(v);

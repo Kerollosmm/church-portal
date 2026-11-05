@@ -553,6 +553,8 @@ const Map<String, List<String>> _strings = {
   'bookingType': ['نوع المناسبة', 'Occasion'],
   'preferredDate': ['التاريخ المفضل', 'Preferred date'],
   'pickDate': ['اختر التاريخ', 'Pick a date'],
+  'pickTime': ['اختر الوقت', 'Pick a time'],
+  'clearField': ['مسح', 'Clear'],
   'sendAnonymously': ['إرسال دون ذكر الاسم', 'Send anonymously'],
   'anonymousHint': [
     'لن يُحفَظ اسمك أو رقمك أو بريدك على الإطلاق، ولذلك لن نستطيع الرد عليك. لتبقى مجهولًا لا تكتب داخل الرسالة ما يدل على شخصيتك.',

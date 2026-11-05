@@ -1254,7 +1254,7 @@ supersede them.
   lists still parse, `display` rules, fixed verse `fromMap` / `toMap` / resolve, season tail parse + encode, rules
   text, hero in EN / AR / fixed with and without English); rules group "ADR-047".
 
-## ADR-048 (PR #42) — Season card timing: parallel services in «يُقام الآن», overnight services, readable seasonal switch, day-to-night handover
+## ADR-048 (PR #42) — Season card timing: parallel services in «يُقام الآن», overnight services, readable seasonal switch, day-to-night handover, admin time / date pickers
 
 - **Context:** Phase 1 of the seasons simulation (`work/seasons-sim/phase1/report.md`, Holy Thursday 29 Apr 2027 18:30
   on the emulator) found D1: at 18:30 the «يُقام الآن» box showed the main church's Evening Pascha only — Youth Pascha
@@ -1292,17 +1292,33 @@ supersede them.
      the revival is «الصلاة القادمة» («الليلة • ليلة الخميس», after the 18:00 shift) → 19:00 «يُقام الآن» → 21:30
      the next day's mass at once, «القداس القادم» «غدًا • الخميس»; the revival never removes the regular morning
      mass. This already worked on `main`; it is now pinned against an independent oracle (2 days × 1,440 minutes).
+  5. **Admin time / date pickers** (owner, added to this PR). Every `FieldType.time`, `date` and `dateTime` field of
+     the generic form (`DocEditor._textField`, top-level and inside rows: liturgy `date` / `start` / `end`, meeting and
+     clinic `start` / `end`, alert and season `startsAt` / `endsAt`, «اليوم والبث المباشر» `dayStartsAt`,
+     `liveEndsAt` and the church-event rows `date` / `endDate` / `start` / `end`) is read-only with a trailing clock /
+     calendar icon (a tap on the field opens it too). Time: `showTimePicker` in 24-hour mode (`MediaQuery
+     alwaysUse24HourFormat: true`), saved strictly `HH:mm` (`formatPickedTime`). Date: `showDatePicker`, saved
+     `YYYY-MM-DD` (`formatPickedDate`). Date-time: date then time, `YYYY-MM-DD HH:mm` Cairo wall time. Stored types are
+     unchanged: `date` / `dateTime` still parse to the same Timestamp instant (`parseFieldValue`), row dates stay text.
+     The picker opens on the current value (a legacy unpadded `9:00` or Arabic digits still load,
+     `parseFieldTime` / `parseFieldDateTime`); an optional field gets a clear (×) button. No Firestore shape or rules
+     change. Left as they are: `looseDate` (priests' ordination dates allow `YYYY` or `YYYY-MM`, which a date picker
+     cannot express) and the occasion-theme date ranges (already on `showDatePicker` since ADR-025). No admin form
+     has a time or date in a plain text field.
 - **Not changed (by design, noted):** in an additive season, a seasonal `mass` on a day still supersedes that day's
   regular masses (ADR-045 feast-liturgy rule), e.g. a Kiahk Sunday 05:30 liturgy would hide a regular Sunday mass;
   the owner can ask for an overlap-only rule later.
 - **Cost:** +0 Firestore reads, +0 listeners, +0 writes: the card already holds liturgies and seasons; the extra work
   is pure Dart on data in memory (two more days of occurrences for the next service's parallel line).
-- **Tests:** `test/season_card_timing_test.dart` (21: parallel now 18:30 / 19:30 / 20:30 / 22:30, same-hall and no-place
+- **Tests:** `test/season_card_timing_test.dart` (22: parallel now 18:30 / 19:30 / 20:30 / 22:30, same-hall and no-place
   rules; Easter night minute by minute Sat 18:00 → Sun 08:00, 00:30 top event and one-off list, assistant line, Kiahk
   minute by minute, Apocalypse night, DST start / end, cross-midnight parallels (dated, weekly wrap, card); revival
   handover minute by minute vs an oracle and at the handover points; widgets: the now box line at 18:30 Holy Week,
   00:30 «يُقام الآن», 09:00 / 19:00 / 21:30 handover; switch contrast in every theme and the Holy Week switch roles).
-  Phase 1 harness re-run on the branch: `work/seasons-sim/fixes1/status.md`.
+  `test/admin_pickers_test.dart` (formatters: padding, 00:00, 23:59, prefill parsing; liturgy form read-only fields,
+  24-hour picker, prefill, date, clear, Arabic RTL; season `startsAt` date + time → same instant; «اليوم» `dayStartsAt`
+  and church-event rows), `test/helpers/admin_pickers.dart`; the clinic save test in `admin_test.dart` now fills times
+  through the picker. Phase 1 harness re-run on the branch: `work/seasons-sim/fixes1/status.md`.
 
 ## Timeline
 
@@ -1358,6 +1374,6 @@ supersede them.
 | 5 Nov 2026 | **PR #39** — "Live user test fixes" (`fix/live-test-findings`) | ADR-046: top event only on the stored `settings/features` (`featuresLiveProvider`, no seed flash); boot script in `web/index.html` sets the English title / `lang` and drops FlutterFire's saved reCAPTCHA provider (App Check on /ask only again); `accent_about` «كنيستنا»; sample badges / banner / «times pending» removed from the public UI (`sample` kept in data and admin); `fetch_synaxarium.js` computes a missing Coptic date; pope-visit images as Hosting WebP files. +0 reads / listeners / writes. |
 
 | 5 Nov 2026 | **PR #40** — "English verse of the day" (`feat/verse-english`) | ADR-047: `Verse.textEn` + `display(english:)` (English text LTR, else Arabic with the Arabic reference); `gen_daily_verses.py` adds the public-domain WEB British Edition (SHA-pinned) for the same 366 verses; optional `textEn` / `refEn` for the fixed verse and a `␟textEn␟refEn` tail for season verses in `settings/features` (`encodedOptionalTail`); rules `validDailyVerse` / `validSeasonVerses`. +0 reads / listeners. |
-| 5 Nov 2026 | **PR #42** — "Season card timing" (`fix/season-card-timing`) | ADR-048: «يُقام الآن» names the services running now in other halls (`runningNow`, `alsoRunning`); overnight services audited and pinned (Easter night, Kiahk, Apocalypse, DST), parallel services compared across midnight (`occurrencesAround`), assistant says an overnight service ends the next morning; /mass-schedule seasonal switch from palette roles at ≥ 3:1 in every theme; additive day-to-night handover tested minute by minute. +0 reads. |
+| 5 Nov 2026 | **PR #42** — "Season card timing" (`fix/season-card-timing`) | ADR-048: «يُقام الآن» names the services running now in other halls (`runningNow`, `alsoRunning`); overnight services audited and pinned (Easter night, Kiahk, Apocalypse, DST), parallel services compared across midnight (`occurrencesAround`), assistant says an overnight service ends the next morning; /mass-schedule seasonal switch from palette roles at ≥ 3:1 in every theme; additive day-to-night handover tested minute by minute; admin time / date pickers (24-hour `HH:mm`, `YYYY-MM-DD`, stored types unchanged). +0 reads. |
 
 Append new PRs to this table.

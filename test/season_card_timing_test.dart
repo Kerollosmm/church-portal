@@ -149,6 +149,16 @@ void main() {
       expect(r.alsoRunning(), isEmpty);
     });
 
+    test('a running service without an end time (default 120 min) still names the others (Sentry review)', () {
+      final lits = [
+        lit('a', date: DateTime(2027, 4, 29), start: '18:00', end: '', season: 'holy_week', venue: 'main'),
+        lit('b', date: DateTime(2027, 4, 29), start: '18:30', end: '', season: 'holy_week', venue: 'lower'),
+      ];
+      final r = at(cairo(2027, 4, 29, 19), lits, [holyWeek27]);
+      expect(r.happeningNow?.liturgy.id, 'a');
+      expect(ids(r.alsoRunning()), ['b']);
+    });
+
     test('nothing running: no list', () {
       final r = at(cairo(2027, 4, 29, 13), hwLits, [holyWeek27]);
       expect(r.happeningNow, isNull);

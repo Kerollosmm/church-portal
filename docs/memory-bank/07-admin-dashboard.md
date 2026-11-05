@@ -249,6 +249,10 @@ For each `CollectionDef`:
 ### Generic form (`DocEditor`, `doc_editor.dart`)
 - Field widgets by `FieldType`: text, multiline, integer, decimal, boolean, time (HH:mm), weekday, weekdays (chips),
   dateTime / date (Cairo), looseDate, choice (labels via `choiceLabel`/`opt_*`), url, phone, objectList, **image**.
+- **Pickers (ADR-048):** time / date / dateTime fields (also inside rows) are read-only with a clock / calendar
+  suffix (`pick-<key>`; optional fields also `clear-<key>`); time = `showTimePicker` forced 24-hour, stored `HH:mm`;
+  date = `showDatePicker` (2000–2100), `YYYY-MM-DD`; dateTime = date then time, `YYYY-MM-DD HH:mm` Cairo. Formatters
+  `formatPickedTime/Date/DateTime`, prefill `parseFieldTime/DateTime` in `admin_validators.dart`. Stored types unchanged.
 - Validation (`admin_validators.dart` `validateFieldValue`): required, max length (`effectiveMaxLength`), `HH:mm`,
   real calendar dates (rejects 2027-02-30), loose dates, numeric ranges (Arabic digits accepted), URLs (`https://…`
   or in-app path where `allowPath`), phones (`^\+?[0-9]{5,15}$` after normalising). Cross-field
