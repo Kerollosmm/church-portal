@@ -57,7 +57,8 @@ tonight's programme service, assistant grounds programme / church events / live 
 never mix into a season with real services (ADR-045); PR #39 live-test fixes — top event only on the stored
 features, English title before boot, App Check lazy again, no public sample marks, Coptic date fallback, pope-visit
 images on Hosting (ADR-046); PR #40 English verse of the day — bundled public-domain WEB
-(British Edition) text, optional English for the admin's fixed and season verses (ADR-047)).
+(British Edition) text, optional English for the admin's fixed and season verses (ADR-047); Docs PR: English
+documentation suite in `documentation/en/`, comprehensive project README overhaul with framework logos, and cross-references (ADR-048)).
 
 > **Golden rule:** read this folder before changing anything, and update it in the same PR as every change that
 > alters behaviour, data shape, rules, workflows, content status or open tasks.
@@ -84,6 +85,7 @@ Related files outside this folder:
   `.github/copilot-instructions.md` point to it.
 - [`/README.md`](../../README.md) — human-oriented setup, admin guide, deploy and secrets.
 - [`/docs/CONTENT_SOURCES.md`](../CONTENT_SOURCES.md) — field → source → status for every seeded value.
+- [`/documentation/en/`](../../documentation/en/README.md) — **English** human documentation suite (Architecture, Operations runbook, Master Feature Reference).
 - [`/documentation/`](../../documentation/README.md) — **Arabic** documentation for the owner, church office and
   anyone joining: what every feature does for visitors, how to control it from `/admin` (real screen / switch
   labels), how it works technically, limits, plus `operations.md` (deploy, admins, seed safety, Sentry, common

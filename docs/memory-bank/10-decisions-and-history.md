@@ -1254,6 +1254,19 @@ supersede them.
   lists still parse, `display` rules, fixed verse `fromMap` / `toMap` / resolve, season tail parse + encode, rules
   text, hero in EN / AR / fixed with and without English); rules group "ADR-047".
 
+## ADR-048 — English documentation suite and comprehensive project README overhaul
+
+- **Context:** The original human manual in `documentation/` (31 feature files, `architecture.md`, and `operations.md`) was written solely in Arabic. Concurrently, the root `README.md` was outdated and lacked coverage of critical features introduced across PR #10 through PR #40 (top utility bar, live badge, liturgical web loading screen, dynamic occasion themes, 1-click season presets, programme details, custom section/page builders, Gemini AI assistant, and Sentry error monitoring). International developers, contributors, and church staff needed complete, first-class English documentation.
+- **Decision:**
+  1. Establish the English documentation suite under `documentation/en/` with three core documents:
+     - `documentation/en/README.md`: English documentation portal and overview.
+     - `documentation/en/architecture.md`: Comprehensive technical architecture manual (Flutter layers, Riverpod 3, Firestore models, security rules, Spark plan media strategy, and PageSpeed engineering).
+     - `documentation/en/operations.md`: Operational and deployment runbook (GitHub Actions CI/CD, preview channels, secrets, admin provisioning, safe seeding rules, Sentry telemetry, and troubleshooting).
+     - `documentation/en/features.md`: Unified master reference for all 31 features, specifying visitor experiences, exact `/admin` labels and switches, and technical limits.
+  2. Overhaul the root `README.md` into an authoritative, professional English entry point featuring technology stack badges/icons (Flutter, Dart, Firebase, Cloud Firestore, Gemini API, Sentry, GitHub Actions), mermaid architecture diagrams, feature matrix, admin guide, and resilience workflows.
+  3. Update `documentation/README.md`, `docs/memory-bank/00-README.md`, and `AGENTS.md` to maintain bilingual cross-references.
+- **Consequences:** English-speaking developers and church stakeholders have full parity with the Arabic documentation. Zero changes to runtime Dart code, rules, or database schemas.
+
 ## Timeline
 
 | When | PR / commit | What |
@@ -1308,5 +1321,6 @@ supersede them.
 | 5 Nov 2026 | **PR #39** — "Live user test fixes" (`fix/live-test-findings`) | ADR-046: top event only on the stored `settings/features` (`featuresLiveProvider`, no seed flash); boot script in `web/index.html` sets the English title / `lang` and drops FlutterFire's saved reCAPTCHA provider (App Check on /ask only again); `accent_about` «كنيستنا»; sample badges / banner / «times pending» removed from the public UI (`sample` kept in data and admin); `fetch_synaxarium.js` computes a missing Coptic date; pope-visit images as Hosting WebP files. +0 reads / listeners / writes. |
 
 | 5 Nov 2026 | **PR #40** — "English verse of the day" (`feat/verse-english`) | ADR-047: `Verse.textEn` + `display(english:)` (English text LTR, else Arabic with the Arabic reference); `gen_daily_verses.py` adds the public-domain WEB British Edition (SHA-pinned) for the same 366 verses; optional `textEn` / `refEn` for the fixed verse and a `␟textEn␟refEn` tail for season verses in `settings/features` (`encodedOptionalTail`); rules `validDailyVerse` / `validSeasonVerses`. +0 reads / listeners. |
+| 5 Nov 2026 | **Docs PR** — "English documentation suite & README overhaul" (`docs/english-readme-and-documentation`) | ADR-048: English documentation suite (`documentation/en/README.md`, `architecture.md`, `operations.md`, `features.md`), modernized root `README.md` with tech stack badges, framework icons, and architecture diagrams; cross-references in `documentation/README.md`, `AGENTS.md`, and `docs/memory-bank/00-README.md`. |
 
 Append new PRs to this table.

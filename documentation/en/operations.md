@@ -1,0 +1,165 @@
+# Operations & Deployment Runbook
+
+This runbook covers operational procedures for the Church Portal: CI/CD deployment pipelines, secrets management, administrator provisioning, safe database seeding practices, Sentry error monitoring, and troubleshooting common operational issues.
+
+For deep-dive memory bank references, see:
+- [`docs/memory-bank/08-dev-workflow.md`](../../docs/memory-bank/08-dev-workflow.md) — Developer workflow, local gates, and seed rules.
+- [`docs/memory-bank/05-firebase.md`](../../docs/memory-bank/05-firebase.md) — Hosting, App Check, and security configurations.
+
+---
+
+## 1. Automated CI/CD & Deployments
+
+Deployments are fully automated through GitHub Actions. Manual production deployments from developer laptops are strictly prohibited under normal operations.
+
+### Release Workflow
+```mermaid
+sequenceDiagram
+    participant Dev as Developer / Agent
+    participant PR as Pull Request
+    participant CI as GitHub CI (ci.yml)
+    participant Preview as Preview Channel (deploy.yml)
+    participant Main as Branch: main
+    participant Live as Live Production Deploy
+
+    Dev->>PR: Push feature branch
+    PR->>CI: Trigger test, analyze, seed diff, security rules emulator
+    PR->>Preview: Deploy ephemeral preview channel (pr-NNN)
+    CI-->>PR: Green checkmark
+    Preview-->>PR: Comment with live preview URL (expires in 7 days)
+    Dev->>Main: Squash-merge PR
+    Main->>Live: Run deploy.yml (Rules + Indexes + Hosting + Sitemap)
+    Live-->>Main: Site live on maximos-domadios-church.web.app
+```
+
+1. **Feature Branch:** Create a branch from `main` (`feat/…`, `fix/…`, `docs/…`). Direct pushes to `main` are blocked.
+2. **Automated PR Gate (`ci.yml`):**
+   - Flutter analyze (0 warnings/errors required).
+   - Full test suite execution (`flutter test`).
+   - Seed validation: verifies `assets/seed/seed.json` matches `tool/gen_seed.py` output byte-for-byte.
+   - Firestore security rules testing in the local Firebase emulator (`tool/rules_test`).
+3. **PR Preview Channel (`deploy.yml`):** Automatically builds and deploys an ephemeral preview channel at `https://maximos-domadios-church--pr-<number>-<hash>.web.app` (active for 7 days).
+4. **Squash-Merge to `main`:** Squash-merging automatically triggers the production release in `deploy.yml`:
+   - Deploys Firestore security rules and composite indexes.
+   - Executes `tool/build_sitemap.sh` to generate `sitemap.xml` directly from Firestore (falls back to static sitemap if Firestore is unreachable).
+   - Fingerprints icon fonts (`tool/fingerprint_icon_fonts.py`).
+   - Deploys static build artifacts to Firebase Hosting target `app` (`maximos-domadios-church`) and target `legacy-redirect` (`asafra-church-portal`).
+
+### Emergency Manual Deployment
+In extreme emergencies where GitHub Actions is down, an authenticated administrator with Firebase CLI access can deploy manually:
+
+```bash
+# 1. Build web release with reCAPTCHA Enterprise site key
+flutter build web --release --dart-define=RECAPTCHA_SITE_KEY=<YOUR_RECAPTCHA_KEY>
+
+# 2. Build sitemap from Firestore (requires GOOGLE_APPLICATION_CREDENTIALS)
+bash tool/build_sitemap.sh build/web/sitemap.xml
+
+# 3. Fingerprint web icon fonts to prevent stale browser cache
+python3 tool/fingerprint_icon_fonts.py build/web
+
+# 4. Deploy to Firebase Hosting targets
+npx firebase-tools deploy --only hosting:app,hosting:legacy-redirect --project asafra-church-portal
+```
+
+---
+
+## 2. Secrets & Environment Variables
+
+Configure these settings in **GitHub Repository → Settings → Secrets and variables → Actions**:
+
+| Name | Type | Purpose & Scope |
+|---|---|---|
+| `FIREBASE_SERVICE_ACCOUNT_ASAFRA_CHURCH_PORTAL` | Secret | JSON private key for the Google Cloud service account (`github-deployer`). Required for deployment, PR previews, and sitemap generation. |
+| `RECAPTCHA_SITE_KEY` | Variable | Public reCAPTCHA Enterprise site key ("church-portal-web") required for production builds to enable App Check and the AI Assistant. |
+| `FIREBASE_WEB_API_KEY` | Secret / Variable | Optional. Extracted automatically from `lib/firebase_options.dart` if omitted. Used only for sending password reset emails to newly seeded admins. |
+| `SENTRY_DSN` | Variable | Optional. A public fallback DSN is already embedded in `AppConfig.sentryDsn`. |
+| `SENTRY_AUTH_TOKEN` | Secret | Optional. Reserved for future release source-map uploads. |
+
+### Firebase API Key Security
+The Firebase Web API key in `lib/firebase_options.dart` is a **public client identifier**, not a secret. It is embedded in compiled client JavaScript and transmitted openly in browser network headers. Data protection is enforced entirely by `firestore.rules`.
+- Any GitHub Secret Scanning alert for this key is closed as a **`false_positive`**.
+- To enforce defense-in-depth, API key restrictions in Google Cloud Console should restrict this key to: **Identity Toolkit API**, **Cloud Firestore API**, **App Check API**, and **Token Service API**.
+
+---
+
+## 3. Administrator Provisioning
+
+The portal uses a hidden administrative dashboard at `/admin`. Admins authenticate using email and password.
+
+### Recommended Admin Onboarding Procedure
+1. Open **Firebase Console → Authentication → Users → Add User**.
+2. Enter the administrator's email and a temporary strong password. Copy the generated **User UID**.
+3. Sign in to **`/admin`** using an existing **Owner** account.
+4. Navigate to **Admins («المشرفون»)** → click **Add Admin («إضافة مشرف»)**.
+5. Paste the **UID**, enter the email, and choose the appropriate role:
+   - **`editor` («محرر»):** Can edit all content, schedule details, custom sections, announcement banners, and view contact inbox messages.
+   - **`owner` («مالك»):** Has all editor permissions plus the ability to add, modify, or remove administrator accounts.
+6. The new admin logs in at `/admin` and changes their temporary password via the **Forgot Password? («نسيت كلمة المرور؟»)** flow.
+
+> [!IMPORTANT]
+> An administrator cannot change their own role or delete their own account. This structural rule ensures at least one owner account permanently exists. Maintain at least two distinct owner accounts for redundancy.
+
+### Bootstrapping the Initial Owner
+If no admin accounts exist yet (e.g. fresh database setup), create the initial owner document directly in Firestore:
+- Collection: `admins`
+- Document ID: `<AUTHENTICATED_USER_UID>`
+- Document Body: `{"email": "admin@example.com", "role": "owner"}`
+
+---
+
+## 4. Safe Database Seeding
+
+The seed content in `assets/seed/seed.json` is generated deterministically by `tool/gen_seed.py`. Seeding writes baseline documents to Firestore via `tool/seed_firestore.js` or the manual **Seed Firestore** GitHub Action.
+
+### Seeding Modes & Safety Matrix
+
+| Command / Flag | Behavior | Operational Risk | Recommended Use |
+|---|---|---|---|
+| `node seed_firestore.js --dry-run` | Simulates writes without modifying Firestore. | **Zero Risk** | Always run first before real writes. |
+| `node seed_firestore.js --only <col>` | Writes only specified collections (e.g. `meetings,activities`). | **Low Risk** | Standard updates when adding new baseline categories. |
+| `node seed_firestore.js --only settings --fill-missing` | Adds absent top-level fields to existing settings without overwriting. | **Low Risk** | Use after deploying new feature settings schemas. |
+| Default (No flags) | Creates missing documents; skips existing ones. | **Medium Risk** | **Recreates deleted documents!** (e.g. removed clinics will reappear). |
+| **`--force`** | **Overwrites all documents** and removes retired IDs. | **CRITICAL RISK** | **FORBIDDEN ON PRODUCTION.** Completely wipes non-developer admin edits. |
+
+### Permanent Deletion of Seeded Items
+Because default seeding recreates missing documents, deleting a seeded item in `/admin` is only temporary if someone runs the seeder later. To permanently retire a seeded item:
+1. Open `tool/gen_seed.py`.
+2. Remove the document definition from the generator.
+3. Add its document ID to the `retired` dictionary under the appropriate collection key.
+4. Run `python3 tool/gen_seed.py` (which validates `tool/known_seed_ids.json` and updates `tool/retired_seed_ids.json`).
+5. Commit the generated files.
+
+---
+
+## 5. Sentry Observability & Monitoring
+
+The portal integrates Sentry for privacy-first technical error reporting on Web and Android.
+
+- **Dashboard:** <https://sentry.io> → Organization: `kerollos-0e` → Project: `church-portal`.
+- **Environment Filtering:**
+  - `production`: Live traffic on `maximos-domadios-church.web.app`.
+  - `preview`: Automated PR preview channels.
+  - `ci`: Build-time test runs.
+- **Strict Privacy Scrubbing (PDPL Compliance):**
+  - All form submission fields (names, phone numbers, emails, message text) are completely redacted before leaving the browser.
+  - AI Assistant prompt questions and conversation history are never sent to Sentry.
+  - IP address collection is disabled in client SDK configurations.
+- **Diagnostic Verification:** Owners can trigger a benign test error in `/admin` → **Sections & Home Page** → **Error Reporting** → **Send test error («إرسال خطأ تجريبي»)**. Verify that `Test error from /admin (ignore)` appears in Sentry with tag `test: true`.
+
+---
+
+## 6. Troubleshooting Common Issues
+
+| Symptom | Probable Cause | Corrective Action |
+|---|---|---|
+| **Footer displays "Showing bundled data saved with app" on live site** | The app is running on offline fallback because Firestore could not be read. | Check user internet connection, inspect Sentry for `content:<collection>` read errors, and verify that `firestore.rules` allows public reads. |
+| **Admin save fails with `permission-denied`** | Document contains an unexpected key, exceeded length limit, or caller is not authenticated. | Check Firestore security rules key allow-list. Ensure all changed fields match the schema in `lib/domain/models.dart`. |
+| **AI Assistant `/ask` is not visible** | Either the section toggle is disabled, or App Check failed to initialize. | Verify that `/admin` → **AI Assistant** has both switches enabled, and verify that `RECAPTCHA_SITE_KEY` is configured in CI/CD variables. |
+| **AI Assistant says "Unable to get an answer"** | Gemini free-tier quota exhausted, invalid model specified, or App Check token rejected. | Check Sentry for `AssistantFailure` logs. In `/admin` → **AI Assistant**, clear the **Model** field to revert to the default `gemini-3.1-flash-lite`. |
+| **Visitor reaches 3 questions limit** | Per-device daily question cap reached (resets at Cairo midnight). | The visitor must wait until midnight Africa/Cairo time, or an admin can raise the limit in `/admin` → **AI Assistant** → **Max questions per device per day**. |
+| **Custom section or page displays "Section Unavailable"** | Document `visible` flag is `false` or the custom slug does not match. | Verify in `/admin` that the custom section/page has visibility set to true and that the URL slug matches the link. |
+| **Icons appear blank or corrupted after a new deployment** | User browser cached an outdated web font version. | The CI pipeline's `tool/fingerprint_icon_fonts.py` step fingerprints font assets. Perform a hard refresh (Ctrl+F5) in the browser. |
+| **"Another admin modified this document" warning** | Concurrent edit detected via optimistic concurrency control (`updatedAt` check). | Click **Reload** to fetch the latest server version, then re-apply changes. |
+| **Hero video does not play** | Visitor enabled reduced-motion or data-saver, or `heroMotion` is turned off. | This is expected accessibility behavior; the hero displays a static high-resolution poster or painting instead. (YouTube hero video was removed in PR #25). |
+| **Top utility bar live badge does not appear on Home page** | Intentional default behavior (`liveBadgeHideOnHome: true`). | The Home page displays the prominent red live stream banner instead. Other sub-pages display the compact live badge. To display both on Home, toggle off **Hide live badge on Home when banner is showing** in `/admin` → **Today & Live Stream**. |

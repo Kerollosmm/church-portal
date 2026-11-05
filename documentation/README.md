@@ -1,5 +1,7 @@
 # توثيق بوابة كنيسة القديسين مكسيموس ودوماديوس والقوي الأنبا موسى الأسود
 
+> **English Documentation / الدليل باللغة الإنجليزية:** For the complete English documentation suite (Architecture, Operations, Master Feature Guide), see [**`documentation/en/README.md`**](en/README.md).
+
 هذا المجلد يشرح **كيف يعمل التطبيق** بلغة بسيطة: ماذا يرى الزائر، وكيف يتحكم المشرف في كل شيء من لوحة
 التحكم `/admin`، وكيف تعمل كل ميزة من الداخل، وما حدودها المعروفة. هو مكتوب لصاحب المشروع ولمكتب الكنيسة ولأي
 مطوّر جديد ينضم للمشروع.

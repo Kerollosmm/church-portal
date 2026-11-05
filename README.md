@@ -1,290 +1,226 @@
-# Church Portal — كنيسة القديسين مكسيموس ودوماديوس والقوي الأنبا موسى الأسود
+# St. Maximus & Domadius Church Portal
 
-Public digital portal for the Coptic Orthodox Church of Saints Maximus & Domadius and the Strong Anba Moussa the Black,
-**end of Street 45, El‑Asafra Qebly, Montaza, Alexandria** (آخر شارع 45، العصافرة قبلي، قطاع المنتزه، الإسكندرية).
+<div align="center">
 
-Flutter (web + Android, iOS‑ready) + Firebase (Firestore, Hosting, Auth for admins, App Check, Firebase AI Logic).
-Arabic‑first (RTL) with an English toggle, mobile‑first, works offline on bundled seed data if Firebase is unreachable.
+<img src="assets/branding/seal.png" alt="Parish Seal of Saints Maximus and Domadius" width="128" height="128" />
 
-Live: **<https://maximos-domadios-church.web.app>** (the old `asafra-church-portal.web.app` 301-redirects there).
-Firebase project: **`asafra-church-portal`** (Firestore in `europe-west1`, production mode).
+### كنيسة القديسين مكسيموس ودوماديوس والقوي الأنبا موسى الأسود
+**Coptic Orthodox Church of Saints Maximus & Domadius and the Strong Anba Moussa the Black**  
+*End of Street 45, El‑Asafra Qebly, Montaza District, Alexandria, Egypt*
 
-> **Coding agents / new contributors:** start with [AGENTS.md](AGENTS.md) and the memory bank in
-> [docs/memory-bank/](docs/memory-bank/00-README.md).
->
-> **التوثيق بالعربية / Arabic documentation:** شرح كل ميزة في الموقع وطريقة التحكم فيها من `/admin` وطريقة عملها،
-> وملف للتشغيل والنشر والمشاكل الشائعة — في المجلد [documentation/](documentation/README.md). Every feature change
-> updates it in the same PR.
-
----
-
-## Features
-
-| Route | Page |
-|---|---|
-| `/` | Home: hero (bundled looping background clip, switchable in /admin) + the verse of the day, CTA buttons, **Next‑liturgy smart card** (Africa/Cairo, season‑aware, "happening now"), urgent alert banner, 4 history highlight cards, service directory grid, embedded Google Map + Open in Maps / GPS directions |
-| `/about` | History, altars, patron saints (feasts), priests directory incl. departed fathers |
-| `/mass-schedule` | Day tabs (Friday / Sunday / Wednesday / Saturday / Other days), liturgy cards with Arabic‑Indic **and** Latin digit times, vespers & praise section, **Holy Seasons** toggle (Holy Week, Pascha, Nativity, revivals, summer) |
-| `/church-education` | Timeline per age stage (angels → graduates, family/men/women/elderly) with day/time/hall + Facebook/WhatsApp links |
-| `/church-activities` | Scouts, deacons school, hymns institute, Bible study, summer club, sports, exhibitions |
-| `/clinics` | Charity clinics: specialty filter, "available today" badge (Cairo weekday), call (`tel:`) + WhatsApp (`wa.me`) booking. `?specialty=dental` pre‑filters |
-| `/public-services` | Nursery, employment office, condolence/occasion halls, library |
-| `/contact` | Phones, WhatsApp channel, Facebook, YouTube live, address + transport, map + GPS directions, validated contact form → Firestore `contact_messages` (create‑only) |
-| `/ask` | Optional "Ask the church" assistant (Gemini via Firebase AI Logic), grounded on the portal content. Hidden when `settings/church.assistantEnabled == false` |
-| `/admin` | Hidden admin dashboard (email/password, only if `admins/{uid}` exists): overview, **section on/off toggles + home layout**, church info, every content type, contact‑message inbox, admins (owners). See [Admin guide](#4-admin-guide) |
-
-### Project layout
-
-```
-lib/
-  main.dart                 bootstrap: seed + Firebase (never crashes if Firebase fails) -> ProviderScope
-  app.dart, router.dart     MaterialApp.router, go_router routes (path URL strategy)
-  firebase_options.dart     Firebase config (web + android real, iOS placeholder)
-  config/app_config.dart    default Gemini model, reCAPTCHA Enterprise site key, App Check debug token
-  domain/                   PURE DART business logic (unit-tested)
-    models.dart             data model + tolerant fromMap
-    cairo_time.dart         Africa/Cairo via `timezone` (EET UTC+2 / EEST UTC+3 DST)
-    schedule.dart           next-mass computation, season override, schedule tabs
-    rules.dart              alert filtering, clinic availability, phone/WhatsApp, contact validation, rate limiter
-    features.dart           section toggles, route guards, home layout, hidden items (settings/features)
-    time_format.dart        "06:30 AM" / "٠٦:٣٠ ص", weekday & date names
-    assistant_context.dart  grounding system instruction for the assistant
-  data/                     Firestore + seed repositories, admin repository, Firebase/App Check bootstrap
-  state/providers.dart      Riverpod providers
-  core/                     theme (burgundy/gold/cream, Cairo font), l10n (ar/en map), url launch helpers
-  ui/pages, ui/widgets      public pages; widgets/feature_gate.dart = "section not available" guard
-  ui/admin/                 dashboard shell, schema (fields per collection), generic form editor,
-                            list (search/filter/reorder/hide), toggles editor, inbox, admins
-assets/seed/seed.json       bundled fallback content == Firestore seed (generated by tool/gen_seed.py)
-tool/seed_firestore.js      uploads seed.json to Firestore (firebase-admin)
-test/                       domain, seed, feature-flag, route-guard and admin form tests
-tool/rules_test/            Firestore security-rules tests (emulator, run in CI)
-firebase.json, .firebaserc, firestore.rules, firestore.indexes.json
-.github/workflows/          ci.yml, deploy.yml
-.devcontainer/              Codespaces (Flutter + Node + firebase-tools)
-```
+[![Flutter](https://img.shields.io/badge/Flutter-3.47+-02569B?style=for-the-badge&logo=flutter&logoColor=white)](https://flutter.dev)
+[![Dart](https://img.shields.io/badge/Dart-3.13+-0175C2?style=for-the-badge&logo=dart&logoColor=white)](https://dart.dev)
+[![Firebase](https://img.shields.io/badge/Firebase-Spark_Plan-FFCA28?style=for-the-badge&logo=firebase&logoColor=black)](https://firebase.google.com)
+[![Cloud Firestore](https://img.shields.io/badge/Cloud_Firestore-europe--west1-FFA611?style=for-the-badge&logo=firebase&logoColor=white)](https://firebase.google.com/docs/firestore)
+[![Firebase Hosting](https://img.shields.io/badge/Firebase_Hosting-CDN-FF8F00?style=for-the-badge&logo=firebase&logoColor=white)](https://firebase.google.com/docs/hosting)
+[![Google Gemini](https://img.shields.io/badge/Google_Gemini-3.1_Flash--Lite-8E75C2?style=for-the-badge&logo=google-gemini&logoColor=white)](https://ai.google.dev/)
+[![Sentry](https://img.shields.io/badge/Sentry-Telemetry-362D59?style=for-the-badge&logo=sentry&logoColor=white)](https://sentry.io)
+[![GitHub Actions](https://img.shields.io/badge/CI%2FCD-Automated-2088FF?style=for-the-badge&logo=github-actions&logoColor=white)](https://github.com/features/actions)
+[![PWA](https://img.shields.io/badge/PWA-Ready-5A0FC8?style=for-the-badge&logo=pwa&logoColor=white)](https://web.dev/progressive-web-apps/)
+[![Accessibility](https://img.shields.io/badge/WCAG-2.2_AA_Compliant-005A9C?style=for-the-badge)](https://www.w3.org/WAI/standards-guidelines/wcag/)
 
 ---
 
-## 1. Local setup
+**[🌐 Live Portal](https://maximos-domadios-church.web.app)** • **[📖 English Documentation](documentation/en/README.md)** • **[📜 الدليل العربي](documentation/README.md)** • **[🧠 Memory Bank](docs/memory-bank/00-README.md)** • **[🔒 Hidden Admin (`/admin`)](https://maximos-domadios-church.web.app/admin)**
+
+</div>
+
+---
+
+## 🌟 Overview
+
+The **Church Portal** is a high-performance, lightweight digital directory and parish home for the Coptic Orthodox Church of Saints Maximus & Domadius and the Strong Anba Moussa the Black in Alexandria, Egypt. 
+
+Engineered with **Flutter Web and Android**, it delivers an **Arabic-first (RTL)** experience with seamless **English (LTR)** localization, instant offline fallback, dynamic liturgical theming, and an AI assistant grounded strictly in parish data.
+
+### Guiding Principles
+- **Public Directory, Not an ERP/CSMS:** Intentionally excludes membership records, confidential pastoral notes, financial ledgers, or attendance tracking (ADR-001). This eliminates data privacy liabilities and allows the entire system to run perpetually on the free **Firebase Spark** tier with zero hosting costs.
+- **Immediate Visitor Answers:** Liturgy schedules, "Happening Now" status, live streaming badges, Coptic calendar feasts, charity clinics, priest directories, and emergency contact channels answer visitor questions in seconds.
+- **Empowered Non-Technical Admins:** Parish servants manage nearly 100% of the site's content, announcement banners, season presets, and theme adjustments via `/admin` without writing code or redeploying.
+- **Offline & First-Load Resilience:** If Firebase is unreachable or unconfigured, the application gracefully falls back to bundled seed data (`assets/seed/seed.json`) without crashing.
+
+---
+
+## 🏗️ Architecture & Technology Stack
+
+```mermaid
+graph TD
+    User["Visitor Device (Web Browser / Android App)"]
+    CDN["Firebase Hosting (maximos-domadios-church.web.app)"]
+    Firestore[("Cloud Firestore (europe-west1)")]
+    Auth["Firebase Authentication (Admins only)"]
+    AppCheck["App Check (reCAPTCHA Enterprise / Play Integrity)"]
+    Gemini["Firebase AI Logic (Gemini 3.1 Flash-Lite)"]
+    Sentry["Sentry Error Reporting (kerollos-0e/church-portal)"]
+
+    User -->|Loads build/web assets| CDN
+    User -->|Real-time streams| Firestore
+    User -->|Admin credentials| Auth
+    User -->|Attestation token| AppCheck
+    User -->|Grounded parish Q&A| Gemini
+    User -->|Sanitized error logs| Sentry
+```
+
+### Technical Pillars
+- **Framework & State:** Built with **Flutter** (Web & Android, iOS-ready) and **Riverpod 3** reactive stream providers.
+- **Pure-Dart Domain Layer (`lib/domain/`):** Completely decoupled from UI and Firebase SDKs, enabling 100% deterministic unit testing.
+- **Timezone Sanctity (`CairoTime`):** All schedule windows, active season overrides, and liturgical transitions are computed in `Africa/Cairo` time (EET UTC+2 / EEST UTC+3 DST) via IANA zone data.
+- **Liturgical Eve Transition (18:00 / Sunset):** At 18:00 (or calculated parish sunset), the portal automatically transitions to the Coptic liturgical "Eve" of the next day.
+- **Zero-Cost Inline Media:** To operate within Spark plan constraints (no Cloud Storage bucket), uploaded images are compressed client-side (≤ 800px WebP, ~250 KB) and stored in Firestore's `media/{id}` collection, fetched lazily by cards.
+- **PageSpeed 90+ Engineering:** Atmospheric haze and ray shimmering in the hero section are implemented via a pure CSS DOM overlay (`HeroAmbientLayer`) on web, eliminating per-frame Flutter canvas repaints.
+
+---
+
+## 📱 Visual Showcase
+
+| Home & Hero Section | Church Chronicle & Altars | Divine Liturgy Schedule |
+|:---:|:---:|:---:|
+| <img src="screens/01_home.png" alt="Home Screen" width="260"/> | <img src="screens/02_about.png" alt="About Screen" width="260"/> | <img src="screens/03_mass_schedule.png" alt="Schedule Screen" width="260"/> |
+
+| Church Education & Meetings | Charity Medical Clinics | Public Parish Services |
+|:---:|:---:|:---:|
+| <img src="screens/04_church_education.png" alt="Meetings Screen" width="260"/> | <img src="screens/06_clinics.png" alt="Clinics Screen" width="260"/> | <img src="screens/07_public_services.png" alt="Services Screen" width="260"/> |
+
+| Sourced Contact & Maps | AI Assistant ("Ask the Church") |
+|:---:|:---:|
+| <img src="screens/08_contact.png" alt="Contact Screen" width="260"/> | <img src="screens/09_ask.png" alt="Assistant Screen" width="260"/> |
+
+---
+
+## 🗺️ Application Features & Routes
+
+| Route | Page | Visitor Experience & Capabilities | Section Guard |
+|---|---|---|---|
+| `/` | **Home** | Seamless hero with ambient light motion, daily Scripture verse (Arabic & English), top utility bar with live Coptic calendar, "Next Liturgy" card with "Happening Now" status, urgent notice banner, patron saints teaser, orderable directory cards, and interactive GPS map. | Always On |
+| `/about` | **About the Church** | Founding chronicle, consecrated altars, biographies of patron saints (Saints Maximus & Domadius, Strong Anba Moussa), directory of currently serving priests, and memorial list of departed fathers. | `history`, `saints`, `priests`, or `departedPriests` |
+| `/mass-schedule` | **Mass Schedule** | Tabbed liturgy schedule (Friday, Sunday, Wednesday, Saturday, Other days) with bilingual times (Latin & Arabic-Indic digits), celebrants, halls, vespers/praises, and Holy Season schedule overrides. | `schedule` |
+| `/church-education` | **Church Education** | Age-stage timelines from nursery angels to youth and seniors with meeting days, times, church halls, and links to WhatsApp/Facebook groups. | `meetings` |
+| `/church-activities` | **Activities & Choirs** | Directory of fellowship groups: St. Moses Scouts, St. Stephen Deacons School, David's Harp Hymns Institute, Bible study fellowships, and cultural exhibitions. | `activities` |
+| `/clinics` | **Charity Clinics** | Specialized charity medical clinics with specialty filtering, "Available Today" badges by Cairo weekday, direct phone call (`tel:`) buttons, and WhatsApp booking links. | `clinics` |
+| `/public-services` | **Public Services** | St. Mary Nursery, community employment services, St. Joseph Condolence & Event Halls, and the parish lending library. | `services` |
+| `/contact` | **Contact & Location** | Verified parish phone numbers, WhatsApp channel, social media links, embedded Google Map, transport directions, and secure contact form with hall bookings and anonymous boxes. | `contactInfo`, `socials`, or `contactForm` |
+| `/section/:slug` | **Custom Sections** | Admin-created dedicated sections (e.g. Youth Conventions, Summer Trips) with custom items and navigation links. | `customSections` |
+| `/page/:slug` | **Custom Pages** | Dynamic rich-text pages containing paragraphs, images, buttons, external links, and official church donation details (InstaPay, Bank Accounts, Wallets). | `customPages` |
+| `/priest/:slug`, `/saint/:slug`, etc. | **Item Detail Pages** | Shareable deep-linked detail views with zoomable multi-image galleries, key facts, add-to-calendar links, GPS directions, and social sharing. | Parent Section |
+| `/ask` | **AI Assistant** | Conversational assistant powered by Gemini (via Firebase AI Logic) answering questions strictly from parish data. Gated behind App Check. | `Sections.assistant` + `assistantEnabled` |
+| `/admin` | **Admin Dashboard** | Hidden, role-based administrative studio. Desktop sidebar and mobile drawer navigation. Excluded from search engines (`noindex`). | Firebase Auth (`admins/{uid}`) |
+
+---
+
+## 🎨 Dynamic Occasion Themes & Season Presets
+
+The portal features an automated liturgical theming system that changes colors, backgrounds, and accents to match church seasons:
+
+```
+Golden Hour (Parchment & Gold) ──► Standard year-round identity
+Holy Week (Charcoal & Crimson) ──► Pascha Week (Zero violet, zero gold)
+Resurrection (Ivory & Gold)    ──► 50 Days of Pentecost & Feast of the Resurrection
+Nativity & Epiphany (Midnight) ──► Nativity Fast & Theophany
+Fasts & Apostles (Stone & Ash) ──► Apostles Fast, Jonah's Fast, St. Mary Fast
+Marian Feasts (Heavenly Blue)  ──► Feasts of the Theotokos
+```
+
+- **WCAG 2.2 AA Contrast Enforcement:** All color palettes are programmatically checked against accessibility standards (≥ 4.5:1 for body text). If an admin overrides accent colors in `/admin`, the engine automatically corrects lightness to guarantee readability.
+- **One-Click Season Presets («تجهيز الموسم»):** Admins can apply complete seasonal settings (theme, banners, season verses, wedding booking suspension) in a single transaction that automatically reverts when the season concludes.
+
+---
+
+## 🛡️ Security, Privacy & Compliance
+
+1. **Egyptian PDPL Compliance:**
+   - The contact form includes an explicit privacy notice and required consent checkbox (`ContactField.consent`).
+   - Sentry error monitoring employs client-side scrubbing: visitor names, phone numbers, email addresses, and AI assistant prompts are completely redacted before leaving the browser. IP address collection is strictly disabled.
+2. **Contact Form Abuse Defense:**
+   - Client-side validation: Name (2–80 chars), Message (5–1,000 chars), valid Egyptian phone or email.
+   - Invisible honeypot field (`website`) blocks automated spambots.
+   - Atomic server-side rate throttle: Enforced via `meta/contact_rate` batch writes in Firestore security rules (requires ≥ 10s between global submissions).
+3. **App Check Protection:**
+   - Enforced on Firebase AI Logic (Gemini API) using **reCAPTCHA Enterprise** on Web and **Google Play Integrity** on Android, preventing unauthorized API abuse.
+4. **Firestore Security Rules:**
+   - Per-collection key allow-lists.
+   - Update delta auditing using `diff().affectedKeys()`.
+   - Strict expression budget optimization staying under Firestore's 1,000-expression limit.
+
+---
+
+## 🛠️ Developer Quickstart
+
+### Prerequisites
+- **Flutter SDK:** Stable channel (tested on Flutter 3.47+ / Dart 3.13+).
+- **Node.js:** v20+ LTS (for Firebase tools and rules testing).
+- **Firebase CLI:** `npm install -g firebase-tools`.
+
+### Local Setup & Verification
 
 ```bash
-flutter --version            # stable channel (built with Flutter 3.47 / Dart 3.13)
+# 1. Clone repository and install dependencies
+git clone https://github.com/Kerollosmm/church-portal.git
+cd church-portal
 flutter pub get
-flutter test                 # domain unit tests
+
+# 2. Run static analysis (0 warnings required)
 flutter analyze
-flutter run -d chrome        # or: flutter run -d web-server --web-port 8080
-flutter build web --release  # output: build/web
+
+# 3. Run unit, widget, and domain tests
+flutter test
+
+# 4. Launch locally in Chrome (uses bundled seed fallback if Firebase is unconfigured)
+flutter run -d chrome
+
+# 5. Build production web bundle
+flutter build web --release --dart-define=RECAPTCHA_SITE_KEY=<YOUR_RECAPTCHA_KEY>
 ```
 
-Or open the repo in **GitHub Codespaces** — `.devcontainer/` installs Flutter stable, Node 20, `firebase-tools`
-and the FlutterFire CLI. Run with `flutter run -d web-server --web-port 8080 --web-hostname 0.0.0.0`.
-
-## 2. Firebase configuration
-
-`lib/firebase_options.dart` already contains the **real web and Android config** for `asafra-church-portal`.
-
-Still to do:
-
-| Item | Where | Status |
-|---|---|---|
-| iOS app | `lib/firebase_options.dart` → `ios` (`PLACEHOLDER_IOS_API_KEY`, `PLACEHOLDER_IOS_APP_ID`) | **Placeholder.** Register an iOS app (bundle id `com.asafrachurch.churchPortal`) then run `flutterfire configure --project=asafra-church-portal` (regenerates the whole file) or paste the values. Until then iOS runs on seed data. |
-| Android API key | `lib/firebase_options.dart` → `android.apiKey` | Uses the browser key. If Android calls are rejected, replace with `current_key` from `google-services.json`. |
-| reCAPTCHA **Enterprise** site key (App Check, web) | repo variable `RECAPTCHA_SITE_KEY` → `--dart-define=RECAPTCHA_SITE_KEY=...` (`deploy.yml`, live builds only); code default `PLACEHOLDER_RECAPTCHA_SITE_KEY` | **Set** (key "church-portal-web", Nov 2026). Required for the assistant on the live site. |
-| Android App Check (Play Integrity) | Firebase console → App Check → Android app | **To do**: needs a release signing key, then register its SHA-256 (see below). |
-
-Regenerating with FlutterFire (optional):
+### Firestore Security Rules Testing (Emulator)
+Security rules are verified against the local Firebase Firestore emulator (requires Java 11+):
 
 ```bash
-dart pub global activate flutterfire_cli
-firebase login
-flutterfire configure --project=asafra-church-portal --platforms=web,android,ios \
-  --android-package-name=com.asafrachurch.church_portal --ios-bundle-id=com.asafrachurch.churchPortal
+cd tool/rules_test
+npm ci
+npm test
 ```
 
-If Firebase is unconfigured or unreachable, the app **does not crash**: it serves `assets/seed/seed.json`.
-If Firestore is reachable but `settings/church` does not exist (DB not seeded yet), it also serves the seed.
-
-### App Check (enforced for Firebase AI Logic — required since 2 Nov 2026)
-
-Providers are picked by `selectAppCheckPlan` (`lib/data/app_check_providers.dart`, ADR-029):
-
-| Build | Provider |
-|---|---|
-| Web release with `RECAPTCHA_SITE_KEY` | `ReCaptchaEnterpriseProvider(siteKey)` — the key is a **reCAPTCHA Enterprise** key, so the v3 provider would be rejected |
-| Web release without the key (PR previews) | not activated → assistant hidden |
-| Debug builds / `--dart-define=APPCHECK_DEBUG=true` | `WebDebugProvider` / `AndroidDebugProvider` / `AppleDebugProvider` |
-| Android release | `AndroidPlayIntegrityProvider` |
-| iOS release | `AppleAppAttestWithDeviceCheckFallbackProvider` |
-
-1. **Web (done, Nov 2026):** reCAPTCHA Enterprise key "church-portal-web" (domains `maximos-domadios-church.web.app`,
-   `maximos-domadios-church.firebaseapp.com`, `localhost`), registered under App Check → Apps → Web with the
-   reCAPTCHA Enterprise provider; repo variable `RECAPTCHA_SITE_KEY` holds the site key and `deploy.yml` passes it
-   as a dart-define for live builds. Local release build: `flutter build web --release --dart-define=RECAPTCHA_SITE_KEY=<key>`.
-2. **Android (manual):** create a release signing key (`keytool -genkey -v -keystore upload-keystore.jks -keyalg RSA
-   -keysize 2048 -validity 10000 -alias upload`), configure `android/app/build.gradle.kts` `signingConfigs.release`
-   (today release builds are signed with the debug key), get its SHA-256 (`keytool -list -v -keystore
-   upload-keystore.jks -alias upload`, or Play Console → App integrity → App signing key certificate when Play signs
-   the app), add it in Firebase console → Project settings → Android app `com.asafrachurch.church_portal` →
-   SHA certificate fingerprints, then App Check → Apps → Android → **Play Integrity** → Register (and link the
-   Google Cloud project in Play Console → App integrity). Until then the release APK's assistant requests are refused.
-3. **Debug tokens:** debug builds print a token in the browser console / logcat ("Enter this debug secret into the
-   allow list…"); add it under App Check → Apps → ⋮ → **Manage debug tokens**, or pin one with
-   `--dart-define=APPCHECK_DEBUG_TOKEN=<uuid>` (`APPCHECK_DEBUG=true` forces the debug provider in a release
-   build). Never ship a debug token in a public build; delete tokens you no longer use.
-4. Do **not** enforce App Check on Firestore yet (Android release builds would lose public reads until Play
-   Integrity is registered).
-
-### Assistant (Firebase AI Logic)
-
-- Gemini Developer API (free tier, Spark plan). Default model **`gemini-3.1-flash-lite`** (`AppConfig.geminiModel`,
-  build override `--dart-define=GEMINI_MODEL=...`), changeable at run time in `/admin` → **AI assistant** → Model;
-  an unknown / retired model falls back to the default automatically. Gemma models are not offered by the
-  Firebase AI Logic cloud API (only in hybrid / on-device setups); Gemini 2.x is shut down or closed to new projects.
-- It answers **only** about this church and its services, from the live site data (settings, every enabled
-  section, contact form types, custom sections and pages); anything else gets the admin's refusal message in
-  the visitor's language. It never invents times, phones or prices — unknown → "call the church office".
-- `/admin` → **AI assistant**: the two on/off switches (the "Ask the church" section switch and
-  `settings/church.assistantEnabled`), model, persona instructions, allowed topics, refusal and welcome texts
-  (ar/en), suggested questions, max question length, questions per minute and per visit (`settings/assistant`).
-- Switched‑off sections are left out of the assistant's grounding, so it never answers about them.
-
-## 3. Seed Firestore
-
-`assets/seed/seed.json` covers every collection. Church identity, address, coordinates (31.260138, 30.01129),
-landline, social links, history, saints, priests, activities and alerts are **real, sourced data**; see
-[docs/CONTENT_SOURCES.md](docs/CONTENT_SOURCES.md) for each field's source and status. Values with
-`"sample": true` are **placeholders awaiting the church's confirmation** (every liturgy and meeting time, clinics,
-some facilities and priests). The app shows a badge on them and a «مواعيد تقريبية — في انتظار تأكيد الكنيسة» notice
-on the schedule, meetings and clinics pages. Once an item is confirmed, untick "Unconfirmed" in `/admin` (liturgies,
-meetings, clinics, priests), or edit `tool/gen_seed.py` and run `python3 tool/gen_seed.py`.
-`--force` also deletes the retired sample documents listed in `tool/retired_seed_ids.json` (a retired id that was edited
-in `/admin` — it carries `updatedAt` — is kept). `tool/known_seed_ids.json` records every id any seed has written; CI fails
-if an id disappears from the seed without being retired. The **Seed Firestore** workflow takes `only` and `fill_missing`
-inputs: `only=settings, fill_missing=true` adds `settings/features` and new church fields without touching anything else.
+### Deterministic Seed Generation
+The database seed in `assets/seed/seed.json` is generated deterministically from Python source:
 
 ```bash
-cd tool && npm install
-# Option A: service account key (Project settings > Service accounts > Generate new private key)
-GOOGLE_APPLICATION_CREDENTIALS=/path/to/key.json node seed_firestore.js
-# Option B: Application Default Credentials
-gcloud auth application-default login && node seed_firestore.js
-
-node seed_firestore.js --dry-run             # preview
-node seed_firestore.js --only clinics,meetings
-node seed_firestore.js --only settings --fill-missing  # add new docs/fields only (safe after admin edits)
-node seed_firestore.js --force               # overwrite existing docs (default skips them) — replaces /admin edits!
-node seed_firestore.js --admin <UID>:<email> # also create admins/{uid}
+python3 tool/gen_seed.py
 ```
-
-## 4. Admin guide
-
-Open **`https://maximos-domadios-church.web.app/admin`** (not linked from the public site) and sign in with your admin
-email + password ("Forgot password?" emails a reset link). Arabic‑first; the `EN/ع` button switches language.
-Desktop shows a sidebar, phones a ☰ drawer.
-
-| Screen | What you can do |
-|---|---|
-| **Overview** | Counts per content type (hidden / unconfirmed), new contact messages, sections switched on, quick links, the latest edits (who / when). |
-| **Sections & home page** (`settings/features`) | Switch any section **on/off**: liturgies & seasons, meetings, clinics, public services, history, milestones, saints, priests, departed fathers, activities, urgent notices, phones/address/map, social links, contact form, AI assistant, images. Reorder / hide home blocks (announcement banner, notices, next‑liturgy card, phones, our story, directory, map), set hero title/subtitle, an announcement banner (text + link), the **site theme** (Golden hour default; Holy Week (dark), Resurrection, Nativity, Epiphany, fasts, Marian feasts, 4 accent colours) with automatic switching by Cairo date / Coptic Easter and per-theme colour edits (auto-corrected for readability), and the **Hero motion & video** switch (the bundled clip; the YouTube video library was removed in PR #25). Press **Save changes**. |
-| **Church info** (`settings/church`) | Name, bishop, address, directions, coordinates, map link, phone list (with "mobile/WhatsApp"), WhatsApp/Facebook/YouTube/Instagram, verse, hero image, history, altars, assistant switch. |
-| Content lists | Alerts, seasons, liturgies, meetings, clinics, public services, activities, priests, departed fathers, saints, milestones: **search**, filter (all / visible / hidden / unconfirmed), **add / edit / delete** (with confirmation), 👁 **hide/show** without deleting, **drag to reorder** (clinics, services, activities, priests, saints, milestones). Every form validates times (HH:mm), dates, links (https://…), phones and number ranges; "Unconfirmed (pending church confirmation)" stays per item. |
-| **Custom sections / Section items / Custom pages** | Add your own sections (e.g. youth trips) with their items, each at `/section/<address>`, optionally in the menu; deleting a section hides its items (never deletes them). Build pages (`/page/<address>`) from headings, paragraphs, image links, buttons, links and **donation info** (account, InstaPay, wallet — display only); link a notice's "Learn more" to a page with **Pick a page…**. Pages are off the menu unless you switch them on. |
-| **Contact messages** | One box per message type plus the **anonymous box**; call/email the sender, mark handled / new, set a hall booking's status (new / contacted / confirmed / declined), add internal notes, delete. |
-| **Contact form types** | The types visitors pick on the contact form (general inquiry, hall booking with wedding / condolence, complaint, suggestion by default): rename, reorder, hide, delete or add; allow anonymous complaints / suggestions (then no name, phone or email is stored). |
-| **Admins** (owners only) | Add an admin by UID + email, choose **owner** (also manages admins) or **editor** (all content + toggles), change role, remove. You cannot change or remove yourself, so an owner always remains. |
-
-A switched‑off section disappears from the home page, menus, footer, search‑like directory cards and the assistant, and
-its URL shows «هذا القسم غير متاح حاليًا» with a "Back to home" button. Hidden items (`visible: false`) stay in the
-database but never reach the public pages. If `settings/features` does not exist yet, everything is on (same as the
-bundled seed, which the offline fallback uses).
-
-**Optional images** — priests, departed fathers, saints, milestones, activities, alerts and seasons have an
-**Image (optional)** field: *Upload image* (resized to ≤ 800 px and compressed to ~250 KB in the browser, max 700 KB;
-stored in Firestore `media/` because the Spark plan has no Cloud Storage), *Image link* (an `https://` URL) or *Remove
-image*, plus an image description. Without an image the card keeps its icon. **Sections & home page → Images** hides
-all images at once.
-
-**Add an admin**
-1. Firebase console → Authentication → Users → **Add user** (email + password). Copy the **UID**.
-2. In `/admin` → **Admins** → **Add admin** (UID, email, role). Bootstrap the very first owner from the console
-   (`admins/{UID}` = `{ "email": "...", "role": "owner" }`) or the Seed workflow's `admin_email` input
-   (or `node tool/seed_firestore.js --only none --admin <UID>:<email>`).
-
-Every admin save stamps `updatedAt` / `updatedBy`. `firestore.rules` validates each write (per‑collection key allow‑list,
-types, sizes, HH:mm times, coordinates, the toggles doc shape); `tool/rules_test` covers them in the Firestore emulator.
-
-## 5. Deploy
-
-```bash
-npm install -g firebase-tools
-firebase login
-flutter build web --release --dart-define=RECAPTCHA_SITE_KEY=<site key>
-firebase deploy                     # hosting (app + legacy-redirect targets) + firestore rules + indexes
-firebase deploy --only hosting
-firebase deploy --only firestore:rules,firestore:indexes
-```
-
-Hosting serves `build/web` with an SPA rewrite to `/index.html` (clean URLs like `/mass-schedule`), `no-cache` on
-HTML/JS (Flutter bundles are not content‑hashed) and longer caching for fonts/images/canvaskit.
-
-## 6. GitHub Actions & secrets
-
-- `.github/workflows/ci.yml` — every push & PR: Flutter stable → `pub get` → `analyze` → `test` → `build web`
-  → seed JSON parses and matches `tool/gen_seed.py`; plus a **firestore-rules** job (Java + Firestore emulator,
-  `tool/rules_test`).
-- `.github/workflows/deploy.yml` (all deploys use the `firebase-tools` CLI with `GOOGLE_APPLICATION_CREDENTIALS`)
-  - push to `main`: build → **Firebase Hosting live** (`firebase deploy --only hosting`) + **Firestore rules & indexes**.
-  - pull requests (same repo): build → **preview channel `pr-<number>`** (`hosting:channel:deploy --expires 7d`);
-    the URL is posted/updated in one PR comment.
-- `.github/workflows/seed.yml` — manual Firestore seed; runs in the `production` environment.
-- `.github/actions/firebase-credentials` — writes the service-account secret to a temp file (mode 600). It keeps
-  only the first JSON object, so stray characters pasted after the key (e.g. a trailing note or a second copy)
-  no longer break deploys; a warning is printed and the key itself is never echoed.
-  It also primes firebase-tools' API-enablement cache for Hosting/Firestore/Rules, because the deploy service account
-  has no `serviceusage.services.get` permission (alternatively grant it **Service Usage Consumer**).
-
-### Required secret: `FIREBASE_SERVICE_ACCOUNT_ASAFRA_CHURCH_PORTAL`
-
-Easiest: `firebase init hosting:github` (it creates the service account and the secret for you).
-Manual:
-
-1. Google Cloud console → IAM & Admin → Service accounts (project `asafra-church-portal`) → **Create**
-   e.g. `github-deployer`.
-2. Grant roles: **Firebase Hosting Admin**, **Firebase Rules Admin**, **Cloud Datastore Index Admin**,
-   **Service Account User**, and **API Keys Viewer** (or simply *Firebase Admin* for a small project).
-3. Keys → Add key → JSON. Copy the whole JSON.
-4. GitHub repo → Settings → Secrets and variables → Actions → **New repository secret**
-   name `FIREBASE_SERVICE_ACCOUNT_ASAFRA_CHURCH_PORTAL`, value = the JSON. Delete the local key file.
-
-Optional repository **variable** `RECAPTCHA_SITE_KEY` (Settings → Variables) is passed to the live `flutter build web`.
-Recommended: add **required reviewers** to the `production` environment (Settings → Environments) so live deploys
-and the Seed workflow (which can overwrite production data with `force`) need approval.
+> *Note: CI automatically fails if `tool/gen_seed.py` is edited without regenerating and committing `assets/seed/seed.json`.*
 
 ---
 
-## Business rules (implemented in `lib/domain`, covered by `test/domain_test.dart`)
+## 🚀 Deployment & Operations
 
-- **Next liturgy**: now in Africa/Cairo; an active season's services (those starting inside its exact
-  `[startsAt, endsAt]` window) **replace** the regular liturgies that start inside that window on the days the season
-  has services (regular services before a mid-day season start are kept); shows "happening now" (incl. services crossing midnight), then the next
-  start today, else tomorrow's first (looks up to 7 days ahead).
-- **Alerts**: banner only when `active` and now within `[startsAt, endsAt]`, highest `priority` first.
-- **Clinics**: specialty filter, `available today` by Cairo weekday, `tel:` + `https://wa.me/20…`.
-- **Contact form**: name 2–80, Egyptian mobile/landline (Arabic digits accepted) or email required,
-  message 5–1000; client rate limit (60 s, 3/hour) + honeypot; Firestore rule re‑validates; only admins read.
-- **Feature toggles** (`lib/domain/features.dart`, `test/features_test.dart`, `test/feature_gate_test.dart`): one streamed
-  doc `settings/features`; missing keys = on; a route stays available while any of its sections is on (`/about` = history,
-  saints, priests, departed; `/contact` = contact info, socials, form); hidden items are filtered and the rest sorted by
-  `order` (stable).
+Deployments are fully automated via GitHub Actions:
+- **Pull Requests:** Every PR deploys to an ephemeral preview channel at `https://maximos-domadios-church--pr-<number>-<hash>.web.app` (active for 7 days).
+- **Squash-Merge to `main`:** Automatically deploys Firestore rules, composite indexes, generates `sitemap.xml` directly from Firestore, fingerprints icon fonts, and deploys to Firebase Hosting.
 
-## Branding & domain
+### GitHub Repository Secrets & Variables
 
-- Logo: the parish's official seal. Source `assets/branding/seal_source.webp`; `tool/gen_branding.sh` regenerates the
-  in-app logo (`assets/branding/seal.png`), web favicons (`favicon.ico`, `favicon.png`, `favicon-16.png`), PWA icons
-  (`web/icons/Icon-*.png`, maskable on maroon `#470812`), `apple-touch-icon.png`, the share image `web/og-image.jpg`
-  (1200×630) and the Android launcher icons (legacy + adaptive). Requires ImageMagick 7 (`magick`).
-- Hosting has two targets (`.firebaserc`): **`app`** → site `maximos-domadios-church` (https://maximos-domadios-church.web.app, the app,
-  live + PR previews) and **`legacy-redirect`** → site `asafra-church-portal` (301 of every path to the new domain,
-  public dir `hosting/legacy_redirect/`). Firebase Auth authorized domains include both `maximos-domadios-church`
-  domains.
+| Name | Type | Description |
+|---|---|---|
+| `FIREBASE_SERVICE_ACCOUNT_ASAFRA_CHURCH_PORTAL` | Secret | JSON service account key for automated deployments and sitemap generation. |
+| `RECAPTCHA_SITE_KEY` | Variable | Public reCAPTCHA Enterprise site key ("church-portal-web") passed to production web builds for App Check. |
+| `FIREBASE_WEB_API_KEY` | Variable | Optional. Extracted automatically from `lib/firebase_options.dart` if omitted. |
+| `SENTRY_DSN` | Variable | Optional. Overrides the public fallback DSN embedded in `app_config.dart`. |
+
+---
+
+## 📚 Documentation Index
+
+For complete and detailed guides, please refer to:
+
+- 🇬🇧 **[English Documentation Portal](documentation/en/README.md)**
+  - 🏛️ **[Architecture & Technical Design](documentation/en/architecture.md)** — Flutter structure, routing, Firestore models, rules, and theming.
+  - ⚙️ **[Operations & Deployment Runbook](documentation/en/operations.md)** — CI/CD pipelines, secrets, safe database seeding, and admin onboarding.
+  - 📋 **[Master Feature Reference Guide](documentation/en/features.md)** — Comprehensive breakdown of all 31 portal features.
+- 🇪🇬 **[الدليل العربي للميزات والتشغيل](documentation/README.md)** — دليل استخدام ميزات الموقع ولوحة التحكم والتشغيل باللغة العربية.
+- 🤖 **[Coding Agent Memory Bank](docs/memory-bank/00-README.md)** — Internal system specifications, architectural decisions (ADR-001 through ADR-048), and open tasks.
+- 📋 **[Verified Content Sources](docs/CONTENT_SOURCES.md)** — Field-by-field verification sources for parish data.
+
+---
+
+<div align="center">
+Made with dedication for the congregation and servants of <b>St. Maximus & Domadius Coptic Orthodox Church</b>.
+</div>
