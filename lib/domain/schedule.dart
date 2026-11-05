@@ -20,8 +20,14 @@ class LiturgyOccurrence {
 }
 
 class NextMassResult {
-  /// Liturgy currently in progress (now within [start, end)).
+  /// Liturgy currently in progress (now within [start, end)): the first of
+  /// [runningNow].
   final LiturgyOccurrence? happeningNow;
+
+  /// EVERY counted service in progress at now, in start order (yesterday's
+  /// overnight ones first), so services held at the same moment in other
+  /// halls are not dropped (ADR-048 item 1). [happeningNow] is its first.
+  final List<LiturgyOccurrence> runningNow;
 
   /// Next liturgy whose start is after now (today, else tomorrow, else the
   /// next day that has one within a week).
@@ -29,7 +35,17 @@ class NextMassResult {
 
   /// Seasons that are overriding the regular schedule right now.
   final List<Season> activeSeasons;
-  const NextMassResult({this.happeningNow, this.next, this.activeSeasons = const []});
+  const NextMassResult({this.happeningNow, this.next, this.activeSeasons = const [], this.runningNow = const []});
+
+  /// The other services running now in ANOTHER venue / hall than
+  /// [happeningNow] (ADR-041 rule: both must name a place), for the
+  /// «وفي نفس الوقت» line of the «يُقام الآن» box (ADR-048). Same-venue
+  /// services and ones without a place are left out, as on the schedule.
+  List<Liturgy> alsoRunning([ProgramOptions? opts]) {
+    final h = happeningNow;
+    return h == null ? const [] : parallelOccurrences(h, runningNow, opts);
+  }
+
 
   bool get isEmpty => happeningNow == null && next == null;
 }
@@ -189,7 +205,7 @@ NextMassResult computeNextMass({
 }) {
   final cairoNow = CairoTime.fromInstant(now);
   final today = CairoTime.startOfDay(cairoNow);
-  LiturgyOccurrence? happening;
+  final running = <LiturgyOccurrence>[];
   LiturgyOccurrence? next;
   // Every service of an ACTIVE season counts whatever its type, additive
   // seasons included (ADR-045, revival sim B1: a revival night stored as
@@ -207,17 +223,19 @@ NextMassResult computeNextMass({
           if (counts(o)) o,
       ];
 
-  // Yesterday's occurrences may still be running past midnight.
+  // Yesterday's occurrences may still be running past midnight (an end at
+  // or before the start is the next morning: Easter night 22:30–03:30).
   final yesterday = CairoTime.at(today.year, today.month, today.day - 1);
   for (final o in day(yesterday, -1)) {
-    if (o.isHappeningAt(cairoNow)) happening ??= o;
+    if (o.isHappeningAt(cairoNow)) running.add(o);
   }
 
   for (var offset = 0; offset <= lookAheadDays && next == null; offset++) {
     final d = CairoTime.at(today.year, today.month, today.day + offset);
     for (final o in day(d, offset)) {
       if (offset == 0 && o.isHappeningAt(cairoNow)) {
-        happening ??= o;
+        // Keep every running service, not only the first (ADR-048 item 1).
+        running.add(o);
         continue;
       }
       if (o.start.isAfter(cairoNow)) {
@@ -227,7 +245,8 @@ NextMassResult computeNextMass({
     }
   }
   return NextMassResult(
-    happeningNow: happening,
+    happeningNow: running.isEmpty ? null : running.first,
+    runningNow: List.unmodifiable(running),
     next: next,
     activeSeasons: activeSeasonsAt(seasons, cairoNow),
   );
@@ -454,49 +473,91 @@ int _endMinutes(Liturgy l) {
   return e <= s ? e + 24 * 60 : e;
 }
 
-/// The day a service belongs to: its one-off date, else its weekday.
-String _slotDay(Liturgy l) {
+/// The day a service belongs to: `('d', days since epoch)` for a one-off
+/// date, `('w', ISO weekday)` for a weekly one, null when it has neither.
+(String, int)? _slotDay(Liturgy l) {
   final d = l.date;
   if (d != null) {
     final c = CairoTime.calendarDate(d);
-    return 'd:${c.year}-${c.month}-${c.day}';
+    return ('d', DateTime.utc(c.year, c.month, c.day).millisecondsSinceEpoch ~/ Duration.millisecondsPerDay);
   }
-  return l.weekday == null ? '' : 'w:${l.weekday}';
+  final w = l.weekday;
+  return w == null ? null : ('w', w);
+}
+
+/// Whole days from [a]'s day to [b]'s day when they are the same day or
+/// adjacent (-1, 0, 1; weekly days wrap Sunday → Monday), else null. Two
+/// services on adjacent days can overlap when one crosses midnight
+/// (ADR-048: Easter night 22:30–03:30 and a 00:00 service the next day).
+int? _dayShift((String, int) a, (String, int) b) {
+  if (a.$1 != b.$1) return null;
+  var diff = b.$2 - a.$2;
+  if (a.$1 == 'w') {
+    diff = ((diff % 7) + 7) % 7;
+    if (diff == 6) diff = -1;
+  }
+  return diff >= -1 && diff <= 1 ? diff : null;
 }
 
 /// Services of [list] held at the same time in ANOTHER venue / hall
 /// (ADR-041: Holy Week prayers in the main church, the lower hall and the
 /// services building for different age groups). Two services are parallel
-/// when they fall on the same day (date, or weekday for weekly ones), their
-/// times overlap (a service without an end time counts as one minute, an end
-/// at or before the start crosses midnight) and
+/// when their times overlap on the same day or across midnight on adjacent
+/// days (date, or weekday for weekly ones; a service without an end time
+/// counts as one minute, an end at or before the start crosses midnight into
+/// the next day, ADR-048) and
 /// their venues (or places) differ — both must name one. Returns, for each
 /// liturgy id that has any, the other services in start order.
 Map<String, List<Liturgy>> parallelServices(Iterable<Liturgy> list, [ProgramOptions? opts]) {
   final items = [
     for (final l in list)
-      if (l.startMinutes != null && _placeKey(l, opts).isNotEmpty && _slotDay(l).isNotEmpty) l,
+      if (l.startMinutes != null && _placeKey(l, opts).isNotEmpty && _slotDay(l) != null) l,
   ];
-  final out = <String, List<Liturgy>>{};
+  // For each id: the other services with their start on its own clock.
+  final found = <String, List<(Liturgy, int)>>{};
   for (var i = 0; i < items.length; i++) {
     final a = items[i];
     final aStart = a.startMinutes!;
     final aEnd = _endMinutes(a);
     for (var j = i + 1; j < items.length; j++) {
       final b = items[j];
-      if (_slotDay(a) != _slotDay(b) || _placeKey(a, opts) == _placeKey(b, opts)) continue;
-      final bStart = b.startMinutes!;
-      final bEnd = _endMinutes(b);
+      final shift = _dayShift(_slotDay(a)!, _slotDay(b)!);
+      if (shift == null || _placeKey(a, opts) == _placeKey(b, opts)) continue;
+      // b on a's clock: +24 h when it is the next day, -24 h the day before.
+      final bStart = b.startMinutes! + shift * 24 * 60;
+      final bEnd = _endMinutes(b) + shift * 24 * 60;
       if (aStart < bEnd && bStart < aEnd) {
-        (out[a.id] ??= []).add(b);
-        (out[b.id] ??= []).add(a);
+        (found[a.id] ??= []).add((b, bStart));
+        (found[b.id] ??= []).add((a, aStart - shift * 24 * 60));
       }
     }
   }
-  for (final v in out.values) {
-    v.sort((x, y) => x.startMinutes!.compareTo(y.startMinutes!));
-  }
-  return out;
+  return {
+    for (final MapEntry(:key, :value) in found.entries)
+      key: [for (final (l, _) in value..sort((x, y) => x.$2.compareTo(y.$2))) l],
+  };
+}
+
+/// The occurrences of the Cairo day of [day] together with those of the day
+/// before and the day after ([occurrencesForDay] each, with their own
+/// season windows), so services overlapping across midnight compare
+/// (ADR-048: the next-service card's «وفي نفس الوقت» line for a service at
+/// 22:30 that runs into a 00:00 one, or the reverse).
+List<LiturgyOccurrence> occurrencesAround({
+  required Iterable<Liturgy> liturgies,
+  required Iterable<Season> seasons,
+  required tz.TZDateTime day,
+  required int dayOffset,
+}) {
+  final d = CairoTime.fromInstant(day);
+  return [
+    for (final k in const [-1, 0, 1])
+      ...occurrencesForDay(
+          liturgies: liturgies,
+          seasons: seasons,
+          day: CairoTime.at(d.year, d.month, d.day + k),
+          dayOffset: dayOffset + k),
+  ];
 }
 
 /// The services held at the same time as [target] in ANOTHER venue / hall,

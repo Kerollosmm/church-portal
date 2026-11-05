@@ -113,7 +113,12 @@ render with `PageBody` (+ `Footer`). Content comes from Riverpod providers (hidd
 - **Next service card**: a service starting after the day's start is labelled «الليلة • ليلة الخميس». Every service
   of an **active** season counts whatever its type, additive revivals included (ADR-045); the title is «الصلاة
   القادمة» during a replacing season or when the service shown is not a mass. «يُقام الآن» keeps the programme
-  (speaker, topic, choir, PDF).
+  (speaker, topic, choir, PDF) and, since ADR-048, names every other service running at that moment in another hall
+  («وفي نفس الوقت: القاعة السفلية (شباب)، مبنى الخدمات (أطفال)» — `NextMassResult.runningNow` / `alsoRunning`).
+  An overnight service (end ≤ start: Easter night 22:30–03:30, Kiahk 21:00–05:30) stays «يُقام الآن» after midnight
+  as the previous day's record; parallel services compare across midnight (`occurrencesAround`, adjacent days in
+  `parallelServices`). The /mass-schedule seasonal switch uses `pal.switchOnTrack/OnThumb/OffTrack/OffThumb`
+  (≥ 3:1 on every theme, ADR-048).
 - **Seed templates (ADR-045):** an undated `sample: true` seasonal service is hidden in a season that has any real
   (non-sample) service; any undated service gives way on a day with a dated real service of its season (replacing:
   any; additive: overlapping). All-sample seasons (the seed) are unchanged.

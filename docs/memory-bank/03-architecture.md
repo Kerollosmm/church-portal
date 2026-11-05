@@ -30,8 +30,8 @@ lib/
                             Clinic, Facility, Priest, Milestone, Saint (+ tolerant fromMap, parseHm, parseDate)
     features.dart           Sections, HomeBlocks, ThemePresets, FeatureSettings, routeSections,
                             normalizeHomeOrder, Hideable, publicItems
-    schedule.dart           computeNextMass, occurrencesForDay, effectiveLiturgiesForDay, seasons helpers,
-                            ScheduleTab, regularLiturgiesForTab, vespersAndPraise, seasonalSchedule
+    schedule.dart           computeNextMass (runningNow / alsoRunning, ADR-048), occurrencesForDay,
+                            occurrencesAround, effectiveLiturgiesForDay, parallelServices, seasons helpers, ScheduleTab, regularLiturgiesForTab, vespersAndPraise, seasonalSchedule
     rules.dart              alerts, clinics, digits/phones (Egypt), wa.me/tel links, contact validation,
                             ContactRateLimiter
     cairo_time.dart         CairoTime (fromInstant, at, startOfDay, calendarDate)

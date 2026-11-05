@@ -203,6 +203,26 @@ class OccasionColors extends ThemeExtension<OccasionColors> {
         BoxShadow(color: shadow(0.08), blurRadius: 6, offset: const Offset(0, 2)),
       ];
 
+  /// Grounds a control on a card sits on: the opaque surface and the card
+  /// ([ThemePalette.cardAlpha]) over the darkest and lightest backdrop.
+  List<int> get _cardGrounds => [
+        palette.surface,
+        blendOver(palette.surface, ThemePalette.cardAlpha, kBlack),
+        blendOver(palette.surface, ThemePalette.cardAlpha, kWhite),
+      ];
+
+  /// On / off switch colours from the palette (ADR-048): ON is a filled
+  /// [primary] track with the [onPrimaryAccent] thumb (gold on the maroon
+  /// posters, crimson on Holy Week's ash), OFF the card's [surfaceAlt] track
+  /// with a [muted] outline and thumb, so the two states never read alike
+  /// on a dark theme. Each part keeps ≥ 3:1 (WCAG non-text) against the card
+  /// and the thumb against its track, whatever the admin edits.
+  Color get switchOnTrack => Color(ensureContrast(palette.primary, _cardGrounds, kNonTextContrast));
+  Color get switchOnThumb => Color(ensureContrast(
+      palette.onPrimaryAccent, [switchOnTrack.toARGB32() | 0xFF000000], kNonTextContrast));
+  Color get switchOffTrack => surfaceAlt;
+  Color get switchOffThumb => Color(ensureContrast(palette.muted, [..._cardGrounds, palette.surfaceAlt], kNonTextContrast));
+
   /// Translucent panel over imagery ([ThemePalette.panelAlpha]).
   Color get panel => surface.withValues(alpha: ThemePalette.panelAlpha);
 
