@@ -26,7 +26,7 @@ class NextMassResult {
 
   /// EVERY counted service in progress at now, in start order (yesterday's
   /// overnight ones first), so services held at the same moment in other
-  /// halls are not dropped (ADR-048 item 1). [happeningNow] is its first.
+  /// halls are not dropped (ADR-049 item 1). [happeningNow] is its first.
   final List<LiturgyOccurrence> runningNow;
 
   /// Next liturgy whose start is after now (today, else tomorrow, else the
@@ -39,7 +39,7 @@ class NextMassResult {
 
   /// The other services running now in ANOTHER venue / hall than
   /// [happeningNow] (ADR-041 rule: both must name a place), for the
-  /// «وفي نفس الوقت» line of the «يُقام الآن» box (ADR-048). Same-venue
+  /// «وفي نفس الوقت» line of the «يُقام الآن» box (ADR-049). Same-venue
   /// services and ones without a place are left out, as on the schedule.
   ///
   /// Every entry of [runningNow] is in progress now by construction (a
@@ -246,7 +246,7 @@ NextMassResult computeNextMass({
     final d = CairoTime.at(today.year, today.month, today.day + offset);
     for (final o in day(d, offset)) {
       if (offset == 0 && o.isHappeningAt(cairoNow)) {
-        // Keep every running service, not only the first (ADR-048 item 1).
+        // Keep every running service, not only the first (ADR-049 item 1).
         running.add(o);
         continue;
       }
@@ -507,7 +507,7 @@ DateTime _instant(Liturgy l, int minutes) {
 /// Whole days from [a]'s day to [b]'s day when they are the same day or
 /// adjacent (-1, 0, 1; weekly days wrap Sunday → Monday), else null. Two
 /// services on adjacent days can overlap when one crosses midnight
-/// (ADR-048: Easter night 22:30–03:30 and a 00:00 service the next day).
+/// (ADR-049: Easter night 22:30–03:30 and a 00:00 service the next day).
 int? _dayShift((String, int) a, (String, int) b) {
   if (a.$1 != b.$1) return null;
   var diff = b.$2 - a.$2;
@@ -524,7 +524,7 @@ int? _dayShift((String, int) a, (String, int) b) {
 /// when their times overlap on the same day or across midnight on adjacent
 /// days (date, or weekday for weekly ones; a service without an end time
 /// counts as one minute, an end at or before the start crosses midnight into
-/// the next day, ADR-048) and
+/// the next day, ADR-049) and
 /// their venues (or places) differ — both must name one. Returns, for each
 /// liturgy id that has any, the other services in start order.
 Map<String, List<Liturgy>> parallelServices(Iterable<Liturgy> list, [ProgramOptions? opts]) {
@@ -568,7 +568,7 @@ Map<String, List<Liturgy>> parallelServices(Iterable<Liturgy> list, [ProgramOpti
 /// The occurrences of the Cairo day of [day] together with those of the day
 /// before and the day after ([occurrencesForDay] each, with their own
 /// season windows), so services overlapping across midnight compare
-/// (ADR-048: the next-service card's «وفي نفس الوقت» line for a service at
+/// (ADR-049: the next-service card's «وفي نفس الوقت» line for a service at
 /// 22:30 that runs into a 00:00 one, or the reverse).
 List<LiturgyOccurrence> occurrencesAround({
   required Iterable<Liturgy> liturgies,

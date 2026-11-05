@@ -78,7 +78,7 @@ class _MassSchedulePageState extends ConsumerState<MassSchedulePage> {
               _seasonDefaultApplied = true;
             }),
             // ON / OFF clearly apart on every theme, Holy Week's charcoal
-            // included (ADR-048): palette roles only (ADR-043).
+            // included (ADR-049): palette roles only (ADR-043).
             activeThumbColor: context.pal.switchOnThumb,
             activeTrackColor: context.pal.switchOnTrack,
             inactiveThumbColor: context.pal.switchOffThumb,

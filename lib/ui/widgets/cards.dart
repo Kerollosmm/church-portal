@@ -113,7 +113,7 @@ class NextMassCard extends ConsumerWidget {
       final opts = ref.watch(featuresProvider.select((f) => f.programOptions));
       // From that day's real occurrences, so a suppressed or out-of-season
       // service is never named (Sentry review); with the days either side,
-      // so a service crossing midnight meets the next day's (ADR-048).
+      // so a service crossing midnight meets the next day's (ADR-049).
       final next = r.next;
       final parallelText = next == null
           ? ''
@@ -129,7 +129,7 @@ class NextMassCard extends ConsumerWidget {
                       dayOffset: next.dayOffset),
                   opts));
       // The «يُقام الآن» box names the services running at this moment in
-      // the other halls (ADR-048 item 1: youth and children's Pascha beside
+      // the other halls (ADR-049 item 1: youth and children's Pascha beside
       // the main church's): no extra read, the card already holds them.
       final nowParallelText = parallelSummary(context, opts, r.alsoRunning(opts));
       body = _content(context, r, now, ref.watch(todaySettingsProvider), s?.lat, s?.lng, parallelText, opts,

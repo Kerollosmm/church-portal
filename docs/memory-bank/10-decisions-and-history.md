@@ -1254,7 +1254,7 @@ supersede them.
   lists still parse, `display` rules, fixed verse `fromMap` / `toMap` / resolve, season tail parse + encode, rules
   text, hero in EN / AR / fixed with and without English); rules group "ADR-047".
 
-## ADR-048 (PR #42) — Season card timing: parallel services in «يُقام الآن», overnight services, readable seasonal switch, day-to-night handover, admin time / date pickers
+## ADR-049 (PR #42) — Season card timing: parallel services in «يُقام الآن», overnight services, readable seasonal switch, day-to-night handover, admin time / date pickers
 
 - **Context:** Phase 1 of the seasons simulation (`work/seasons-sim/phase1/report.md`, Holy Thursday 29 Apr 2027 18:30
   on the emulator) found D1: at 18:30 the «يُقام الآن» box showed the main church's Evening Pascha only — Youth Pascha
@@ -1383,6 +1383,6 @@ supersede them.
 | 5 Nov 2026 | **PR #39** — "Live user test fixes" (`fix/live-test-findings`) | ADR-046: top event only on the stored `settings/features` (`featuresLiveProvider`, no seed flash); boot script in `web/index.html` sets the English title / `lang` and drops FlutterFire's saved reCAPTCHA provider (App Check on /ask only again); `accent_about` «كنيستنا»; sample badges / banner / «times pending» removed from the public UI (`sample` kept in data and admin); `fetch_synaxarium.js` computes a missing Coptic date; pope-visit images as Hosting WebP files. +0 reads / listeners / writes. |
 
 | 5 Nov 2026 | **PR #40** — "English verse of the day" (`feat/verse-english`) | ADR-047: `Verse.textEn` + `display(english:)` (English text LTR, else Arabic with the Arabic reference); `gen_daily_verses.py` adds the public-domain WEB British Edition (SHA-pinned) for the same 366 verses; optional `textEn` / `refEn` for the fixed verse and a `␟textEn␟refEn` tail for season verses in `settings/features` (`encodedOptionalTail`); rules `validDailyVerse` / `validSeasonVerses`. +0 reads / listeners. |
-| 5 Nov 2026 | **PR #42** — "Season card timing" (`fix/season-card-timing`) | ADR-048: «يُقام الآن» names the services running now in other halls (`runningNow`, `alsoRunning`); overnight services audited and pinned (Easter night, Kiahk, Apocalypse, DST), parallel services compared across midnight (`occurrencesAround`), assistant says an overnight service ends the next morning; /mass-schedule seasonal switch from palette roles at ≥ 3:1 in every theme; additive day-to-night handover tested minute by minute; admin time / date pickers (12-hour AM/PM picker with a 12-hour reading, stored 24-hour `HH:mm`, `YYYY-MM-DD`, stored types unchanged). +0 reads. |
+| 5 Nov 2026 | **PR #42** — "Season card timing" (`fix/season-card-timing`) | ADR-049: «يُقام الآن» names the services running now in other halls (`runningNow`, `alsoRunning`); overnight services audited and pinned (Easter night, Kiahk, Apocalypse, DST), parallel services compared across midnight (`occurrencesAround`), assistant says an overnight service ends the next morning; /mass-schedule seasonal switch from palette roles at ≥ 3:1 in every theme; additive day-to-night handover tested minute by minute; admin time / date pickers (12-hour AM/PM picker with a 12-hour reading, stored 24-hour `HH:mm`, `YYYY-MM-DD`, stored types unchanged). +0 reads. |
 
 Append new PRs to this table.

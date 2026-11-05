@@ -707,7 +707,7 @@ String _liturgyLine(Liturgy l, [ProgramOptions opts = ProgramOptions.defaults]) 
   final pdfLabel = _bi(p.attachmentLabelAr.trim(), p.attachmentLabelEn.trim());
   // An end at or before the start runs past midnight (Easter night 22:30 –
   // 03:30): say so, or the model reads 03:30 AM as before the start and the
-  // service as over at 00:30 (ADR-048 item 2).
+  // service as over at 00:30 (ADR-049 item 2).
   final s = l.startMinutes, e = l.endMinutes;
   final overnight = s != null && e != null && e <= s ? ' (ends the next morning, after midnight)' : '';
   return '${_bi(l.nameAr, l.nameEn)} [${l.type}] ${formatRangeLatin(l.start, l.end)}$overnight'

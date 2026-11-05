@@ -29,12 +29,12 @@ bool isValidDateTime(String v) {
   return h <= 23 && min <= 59 && isCalendarDate(int.parse(m[1]!), int.parse(m[2]!), int.parse(m[3]!));
 }
 
-/// Picker output (ADR-048): the admin picks on a 12-hour AM/PM picker, but
+/// Picker output (ADR-049): the admin picks on a 12-hour AM/PM picker, but
 /// the time is stored as strictly zero-padded 24-hour "HH:mm" (00:00 …
 /// 23:59). Out-of-range parts are clamped, never wrapped.
 String formatPickedTime(int hour, int minute) => '${two(hour.clamp(0, 23))}:${two(minute.clamp(0, 59))}';
 
-/// Picker output (ADR-048): a calendar date as strictly "YYYY-MM-DD".
+/// Picker output (ADR-049): a calendar date as strictly "YYYY-MM-DD".
 String formatPickedDate(int year, int month, int day) => '${year.toString().padLeft(4, '0')}-${two(month)}-${two(day)}';
 
 /// Picker output for a date-and-time field: "YYYY-MM-DD HH:mm" (Cairo wall

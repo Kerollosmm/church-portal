@@ -1,4 +1,4 @@
-// ADR-048: findings of the Phase 1 seasons simulation
+// ADR-049: findings of the Phase 1 seasons simulation
 // (work/seasons-sim/phase1/report.md) and the owner's follow-ups.
 // 1. The «يُقام الآن» box names every other service running at that moment
 //    in another hall («وفي نفس الوقت: …»), not only the first one.

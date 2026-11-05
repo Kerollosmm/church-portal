@@ -1,4 +1,4 @@
-// ADR-048 item 5: admin time / date pickers. Every FieldType.time / date /
+// ADR-049 item 5: admin time / date pickers. Every FieldType.time / date /
 // dateTime field (top-level and inside rows) is read-only and filled from
 // showTimePicker (12-hour AM/PM, ص/م in Arabic) / showDatePicker; stored
 // strictly as 24-hour "HH:mm", "YYYY-MM-DD" or the unchanged date-time

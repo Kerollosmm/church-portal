@@ -249,7 +249,7 @@ For each `CollectionDef`:
 ### Generic form (`DocEditor`, `doc_editor.dart`)
 - Field widgets by `FieldType`: text, multiline, integer, decimal, boolean, time (HH:mm), weekday, weekdays (chips),
   dateTime / date (Cairo), looseDate, choice (labels via `choiceLabel`/`opt_*`), url, phone, objectList, **image**.
-- **Pickers (ADR-048):** time / date / dateTime fields (also inside rows) are read-only with a clock / calendar
+- **Pickers (ADR-049):** time / date / dateTime fields (also inside rows) are read-only with a clock / calendar
   suffix (`pick-<key>`; optional fields also `clear-<key>`); time = `showTimePicker` in 12-hour AM/PM mode (ص/م in Arabic,
   `alwaysUse24HourFormat: false`), stored strictly 24-hour `HH:mm`, the field's helper shows the 12-hour reading
   (`formatTimeArabic/Latin`, «٠٦:٣٠ م» / "06:30 PM"; date-times also the date);

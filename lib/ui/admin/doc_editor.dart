@@ -444,7 +444,7 @@ class DocEditorState extends State<DocEditor> {
   String _label(FieldDef f) => context.pick(f.labelAr, f.labelEn) + (f.required ? ' *' : '');
 
   /// Time / date / date-time fields are read-only and filled from the
-  /// pickers (ADR-048): a clock or calendar icon (and a tap on the field)
+  /// pickers (ADR-049): a clock or calendar icon (and a tap on the field)
   /// opens [showTimePicker] as a 12-hour AM/PM picker (ص/م in Arabic) /
   /// [showDatePicker]. Storage stays 24-hour: the text is strictly "HH:mm",
   /// "YYYY-MM-DD" or "YYYY-MM-DD HH:mm" (Cairo wall time, parsed to the same

@@ -211,7 +211,7 @@ class OccasionColors extends ThemeExtension<OccasionColors> {
         blendOver(palette.surface, ThemePalette.cardAlpha, kWhite),
       ];
 
-  /// On / off switch colours from the palette (ADR-048): ON is a filled
+  /// On / off switch colours from the palette (ADR-049): ON is a filled
   /// [primary] track with the [onPrimaryAccent] thumb (gold on the maroon
   /// posters, crimson on Holy Week's ash), OFF the card's [surfaceAlt] track
   /// with a [muted] outline and thumb, so the two states never read alike
