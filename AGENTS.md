@@ -1,6 +1,7 @@
 # AGENTS.md — guide for coding agents
 
 **Read [`docs/memory-bank/`](docs/memory-bank/00-README.md) first, and update it in the same PR as every change.**
+**Human documentation (English): [`documentation/en/`](documentation/en/README.md)** — Architecture, operations, master feature reference.
 **Human manual (Arabic): [`documentation/`](documentation/README.md)** — one file per feature + `operations.md`;
 update it in the same PR as any feature change (golden rule 11).
 
@@ -75,5 +76,6 @@ squash-merge → `main` auto-deploys Hosting + Firestore rules.
 | Decisions & history | `docs/memory-bank/10-decisions-and-history.md` |
 | Open tasks | `docs/memory-bank/11-open-tasks.md` |
 | Church terms | `docs/memory-bank/12-glossary.md` |
+| English documentation suite (Architecture, Operations, Features) | `documentation/en/README.md` |
 | Arabic feature manual (owner / church office) | `documentation/README.md` |
 | Deploy, admins, seed safety, Sentry, common problems (Arabic) | `documentation/operations.md` |
