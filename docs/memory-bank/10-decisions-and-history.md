@@ -1270,6 +1270,8 @@ supersede them.
      same-venue ones and ones without a place are not named). The «يُقام الآن» box shows them on the same
      «وفي نفس الوقت: [القاعة] ([الفئة])» line (`ProgramDetails.parallelText`, `Icons.call_split_rounded`) as the next
      service. At 18:30: «وفي نفس الوقت: القاعة السفلية (شباب)، مبنى الخدمات (أطفال)». No layout change otherwise.
+     `alsoRunning` compares places only (every `runningNow` entry is running; a service without an end time runs its
+     default 120 minutes), not the 1-minute overlap rule (Sentry / CodeRabbit on PR #42).
   2. **Overnight.** Audit of `schedule.dart`, `computeNextMass`, `programmeServiceAt` (top event),
      `isDatedLiturgyCurrent`, `DayEvent.endedAt`, the card labels, the 18:00 liturgical-day shift and both Egypt DST
      changes: occurrences already roll an end ≤ start into the next day, so an overnight service is never finished
@@ -1279,7 +1281,9 @@ supersede them.
      Two real gaps were fixed: (a) **parallel services across midnight** were never compared (`parallelServices`
      matched the same date / weekday only; the card compared the next service with its own day only): services on
      adjacent days (dated: ±1 day; weekly: ±1 weekday, Sunday ↔ Monday wraps) now compare on one clock, and the card
-     uses `occurrencesAround` (the day before, the day, the day after); (b) **the assistant** listed
+     uses `occurrencesAround` (the day before, the day, the day after); one-off dates compare real Cairo instants
+     (`CairoTime.at`), so a wall time skipped by the spring DST change cannot fake an overlap (CodeRabbit), and the
+     lists agree with the card on the DST start day (tested); (b) **the assistant** listed
      "10:30 PM – 03:30 AM" with nothing saying it ends the next morning — the line now adds
      "(ends the next morning, after midnight)", so at 00:30 the model does not read the service as over.
   3. **Seasonal switch.** Palette roles only (ADR-043), on `OccasionColors`: ON = filled `primary` track with the
@@ -1310,7 +1314,7 @@ supersede them.
   the owner can ask for an overlap-only rule later.
 - **Cost:** +0 Firestore reads, +0 listeners, +0 writes: the card already holds liturgies and seasons; the extra work
   is pure Dart on data in memory (two more days of occurrences for the next service's parallel line).
-- **Tests:** `test/season_card_timing_test.dart` (22: parallel now 18:30 / 19:30 / 20:30 / 22:30, same-hall and no-place
+- **Tests:** `test/season_card_timing_test.dart` (24: parallel now 18:30 / 19:30 / 20:30 / 22:30, same-hall and no-place
   rules; Easter night minute by minute Sat 18:00 → Sun 08:00, 00:30 top event and one-off list, assistant line, Kiahk
   minute by minute, Apocalypse night, DST start / end, cross-midnight parallels (dated, weekly wrap, card); revival
   handover minute by minute vs an oracle and at the handover points; widgets: the now box line at 18:30 Holy Week,

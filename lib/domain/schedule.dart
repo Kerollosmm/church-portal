@@ -497,6 +497,13 @@ int _endMinutes(Liturgy l) {
   return w == null ? null : ('w', w);
 }
 
+/// [minutes] from the Cairo midnight of the one-off service [l]'s date as a
+/// real instant (minutes past 24:00 roll into the next day).
+DateTime _instant(Liturgy l, int minutes) {
+  final c = CairoTime.calendarDate(l.date!);
+  return CairoTime.at(c.year, c.month, c.day, minutes);
+}
+
 /// Whole days from [a]'s day to [b]'s day when they are the same day or
 /// adjacent (-1, 0, 1; weekly days wrap Sunday → Monday), else null. Two
 /// services on adjacent days can overlap when one crosses midnight
@@ -538,7 +545,15 @@ Map<String, List<Liturgy>> parallelServices(Iterable<Liturgy> list, [ProgramOpti
       // b on a's clock: +24 h when it is the next day, -24 h the day before.
       final bStart = b.startMinutes! + shift * 24 * 60;
       final bEnd = _endMinutes(b) + shift * 24 * 60;
-      if (aStart < bEnd && bStart < aEnd) {
+      // One-off dates compare real Cairo instants, so a wall time skipped by
+      // the spring DST change (00:30 on the last Friday of April) cannot
+      // fake an overlap (CodeRabbit on PR #42); weekly services have no date
+      // and keep the nominal clock.
+      final overlap = _slotDay(a)!.$1 == 'd'
+          ? _instant(a, aStart).isBefore(_instant(b, _endMinutes(b))) &&
+              _instant(b, b.startMinutes!).isBefore(_instant(a, aEnd))
+          : aStart < bEnd && bStart < aEnd;
+      if (overlap) {
         (found[a.id] ??= []).add((b, bStart));
         (found[b.id] ??= []).add((a, aStart - shift * 24 * 60));
       }

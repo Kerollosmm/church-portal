@@ -347,6 +347,21 @@ void main() {
     });
   });
 
+  test('DST start day: the schedule lists and the card agree on cross-midnight parallels (CodeRabbit)', () {
+    for (final aEnd in const ['00:00', '00:30', '01:00', '01:30']) {
+      for (var m = 0; m <= 150; m += 15) {
+        final bStart = '${(m ~/ 60).toString().padLeft(2, '0')}:${(m % 60).toString().padLeft(2, '0')}';
+        final a = lit('thu', date: DateTime(2027, 4, 29), start: '22:30', end: aEnd, season: 'holy_week', venue: 'main');
+        final b = lit('fri', date: DateTime(2027, 4, 30), start: bStart, end: '03:00', season: 'holy_week', venue: 'lower');
+        final lists = parallelServices([a, b])['thu']?.isNotEmpty ?? false;
+        final occ = occurrencesAround(liturgies: [a, b], seasons: [holyWeek27], day: cairo(2027, 4, 29), dayOffset: 0);
+        final target = occ.firstWhere((o) => o.liturgy.id == 'thu');
+        final card = parallelOccurrences(target, occ).isNotEmpty;
+        expect(lists, card, reason: 'thu 22:30–$aEnd vs fri $bStart–03:00');
+      }
+    }
+  });
+
   group('4: additive revival, day to night handover, minute by minute', () {
     // A summer revival (EEST): regular daily mass 07:00–09:00, revival nights
     // 19:00–21:30 on 10–13 Aug 2027 with a programme.
@@ -435,6 +450,17 @@ void main() {
       expect(find.byKey(const Key('happeningNowBox')), findsNothing);
 
     });
+  });
+
+  testWidgets('2: the upcoming overnight service names the parallel one on the next date (CodeRabbit)', (tester) async {
+    final pascha = season('pascha', cairo(2027, 5, 1), cairo(2027, 6, 1));
+    final sa = lit('sat-night', date: DateTime(2027, 5, 1), start: '22:30', end: '03:30', season: 'pascha', venue: 'main');
+    final sb = lit('sun-early',
+        date: DateTime(2027, 5, 2), start: '00:00', end: '02:00', season: 'pascha', venue: 'lower', audience: 'youth');
+    await pump(tester, const NextMassCard(), cairo(2027, 5, 1, 20), [sa, sb], [pascha]);
+    expect(find.text('خدمة sat-night'), findsOneWidget);
+    expect(find.text('وفي نفس الوقت: القاعة السفلية (شباب)'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   group('4: widgets (handover)', () {
