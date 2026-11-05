@@ -51,7 +51,10 @@ services, meetings and seasons, admin venue / audience lists, parallel services 
 one reversible «تجهيز الموسم» action with auto-revert at the season end, season verse sets, assistant season limit
 and section-aware topics, hero v2 loops (ADR-042); PR #37 occasion sub-themes follow the season, every UI colour from
 the palette (ADR-043); PR #35 liturgical web loading screen (seal, church name, gold progress track), top utility bar
-with the Coptic date and a live badge above the app bar, on the palette's title-band roles (ADR-044)).
+with the Coptic date and a live badge above the app bar, on the palette's title-band roles (ADR-044); PR #38 simulation
+fixes — every active season's service on the next-service card, programme while «يُقام الآن», top event falls back to
+tonight's programme service, assistant grounds programme / church events / live link / paused weddings, seed templates
+never mix into a season with real services (ADR-045)).
 
 > **Golden rule:** read this folder before changing anything, and update it in the same PR as every change that
 > alters behaviour, data shape, rules, workflows, content status or open tasks.

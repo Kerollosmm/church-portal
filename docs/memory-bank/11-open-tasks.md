@@ -1,7 +1,7 @@
 # 11 — Open tasks
 
 Tick items off (or delete them) in the PR that completes them, and add new ones as you discover them.
-Status as of 5 Nov 2026 (PR #35 / ADR-044; PR #37 / ADR-043; PR #33 / ADR-042; PR #32 / ADR-041; PR #31 / ADR-039–040; PR #30 / ADR-038; PR #25 re-checked against `d60261d`; earlier: PR #7–#24).
+Status as of 5 Nov 2026 (PR #38 / ADR-045; PR #35 / ADR-044; PR #37 / ADR-043; PR #33 / ADR-042; PR #32 / ADR-041; PR #31 / ADR-039–040; PR #30 / ADR-038; PR #25 re-checked against `d60261d`; earlier: PR #7–#24).
 
 ## Top open items (owner's list, 4 Nov 2026 — details in the sections below)
 
@@ -148,9 +148,13 @@ Status as of 5 Nov 2026 (PR #35 / ADR-044; PR #37 / ADR-043; PR #33 / ADR-042; P
 - [ ] Optional: a dark theme for the admin dashboard (it keeps Golden hour).
 - [x] Theme follows the active church season; Holy Week / fasts palettes without violet or gold; legacy `purple` hidden
       (PR #37, ADR-043).
-- [ ] Owner (ADR-043): before entering a dated Holy Week on live, hide the seed's weekday templates `hw-day-1…3` /
-      `hw-eve-1…3` (or enter every day): templates of weekdays without dated services still show in that season (B4
-      is handled per day, by design).
+- [x] Seed templates mixed into an owner's season (ADR-043 B4 per day; sims B5): since PR #38 (ADR-045) a `sample`
+      template is hidden in any season that has a real service, additive revivals included.
+- [ ] Owner (ADR-045, recommended tidy-up): on live, hide (visible off) the seed templates `rev-max-1…7`,
+      `rev-moses-1…7`, `hw-day-1…3` / `hw-eve-1…3` once the real programme is entered — they no longer mix in, but
+      they would show in a season with no real service yet («بيانات تجريبية»). Never delete live data from the app.
+- [ ] Owner (ADR-045): for each revival night add speaker / topic / PDF on the service itself — the Home top event
+      and the assistant now read them from there (a church event in «اليوم والبث المباشر» still takes precedence).
 - [ ] Optional (ADR-043 cost): if the app-wide `seasons` listener matters, derive the active season from
       `settings/features.seasonPreset` only (no listener) when no season list is needed on the page.
 - [x] ADR number: PR #35 (splash / top bar) renumbered to ADR-044 after PR #37 took ADR-043.

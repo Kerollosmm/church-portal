@@ -8,6 +8,7 @@ import '../../core/theme.dart';
 import '../../domain/today.dart';
 import '../../state/providers.dart';
 import 'common.dart';
+import 'program_details.dart';
 
 /// Top utility bar above the app bar (ADR-044): the Coptic date of the
 /// liturgical day (ADR-039) at the start and, while the church is streaming
@@ -253,8 +254,10 @@ class _PulseDotState extends State<_PulseDot> with SingleTickerProviderStateMixi
       );
 }
 
-/// The top event of the day on Home (ADR-040): the admin's church event, or
-/// the day's feast / commemoration (Katameros, else the computed list).
+/// The top event of the day on Home (ADR-040): the admin's church event,
+/// else today's / tonight's programme service of an active season (speaker,
+/// topic, choir and its PDF button; ADR-045), else the day's feast /
+/// commemoration (Katameros, else the computed list).
 class TopEventCard extends ConsumerWidget {
   const TopEventCard({super.key});
 
@@ -267,6 +270,7 @@ class TopEventCard extends ConsumerWidget {
     final primary = context.pal.primary;
     final kicker = switch (e.kind) {
       TopEventKind.church => context.tr('todayEvent'),
+      TopEventKind.service => context.tr(e.tonight ? 'tonightProgramme' : 'todayProgramme'),
       TopEventKind.feast => context.tr('todayFeast'),
       TopEventKind.commemoration => context.tr('todayCommemoration'),
     };
@@ -297,6 +301,19 @@ class TopEventCard extends ConsumerWidget {
       if (note.isNotEmpty) {
         children.add(Padding(padding: const EdgeInsets.only(top: 4), child: Text(note, style: const TextStyle(height: 1.6))));
       }
+      // The event's programme / PDF with its own labelled button (ADR-045).
+      if (ev.attachmentUrl.isNotEmpty) {
+        final label = context.pick(ev.attachmentLabelAr, ev.attachmentLabelEn).trim();
+        children.add(Padding(
+          padding: const EdgeInsets.only(top: 6),
+          child: OutlinedButton.icon(
+            key: const Key('topEventPdf'),
+            onPressed: () => openUrl(ev.attachmentUrl),
+            icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
+            label: Text(label.isNotEmpty ? label : context.tr('programPdf')),
+          ),
+        ));
+      }
       if (link.isNotEmpty) {
         children.add(Align(
           alignment: AlignmentDirectional.centerStart,
@@ -306,6 +323,12 @@ class TopEventCard extends ConsumerWidget {
           ),
         ));
       }
+    } else if (e.service case final o?) {
+      // Today's / tonight's programme service (ADR-045): its time, then the
+      // programme (speaker, topic, choir, venue, audience, PDF button).
+      children.add(Padding(
+          padding: const EdgeInsets.only(top: 6), child: TimeRangeText(o.liturgy.start, o.liturgy.end)));
+      children.add(KeyedSubtree(key: const Key('topEventProgramme'), child: ProgramDetails(o.liturgy.program)));
     } else {
       for (final l in lines.where((l) => l.trim().isNotEmpty && l.trim() != title)) {
         children.add(Padding(
@@ -331,7 +354,13 @@ class TopEventCard extends ConsumerWidget {
         boxShadow: context.pal.panelShadow,
       ),
       child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Icon(e.kind == TopEventKind.church ? Icons.campaign_rounded : Icons.auto_awesome_rounded, color: primary),
+        Icon(
+            switch (e.kind) {
+              TopEventKind.church => Icons.campaign_rounded,
+              TopEventKind.service => Icons.event_note_rounded,
+              _ => Icons.auto_awesome_rounded,
+            },
+            color: primary),
         const SizedBox(width: 12),
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: children)),
       ]),

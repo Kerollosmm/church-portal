@@ -290,15 +290,22 @@ final synaxariumProvider = FutureProvider<SynaxariumData>((ref) async {
   return ref.read(synaxariumSourceProvider).load(date);
 });
 
-/// The home page's top event (church event > Katameros > computed feasts).
+/// The home page's top event (church event > today's programme service >
+/// Katameros > computed feasts; ADR-040, ADR-045).
 final topEventProvider = Provider<TopEvent?>((ref) {
   final f = ref.watch(featuresProvider);
   final now = ref.watch(nowProvider).value ?? DateTime.now();
   final s = ref.watch(settingsProvider).value;
+  // The programme-service step reads the liturgies / seasons listeners only
+  // while Home already holds them for the next-service card (+0 listeners,
+  // ADR-045); otherwise it is skipped.
+  final services = f.today.topEvent && f.today.topEventServices && f.visibleHomeBlocks.contains(HomeBlocks.nextMass);
   return resolveTopEvent(
     now: now,
     settings: f.today,
     events: f.dayEvents,
+    liturgies: services ? (ref.watch(liturgiesProvider).value ?? const []) : const [],
+    seasons: services ? (ref.watch(seasonsProvider).value ?? const []) : const [],
     synaxarium: ref.watch(synaxariumProvider).value ?? SynaxariumData.empty,
     lat: s?.lat,
     lng: s?.lng,

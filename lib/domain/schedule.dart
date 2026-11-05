@@ -116,9 +116,6 @@ List<LiturgyOccurrence> occurrencesForDay({
   final dayStart = CairoTime.startOfDay(day);
   final active = seasons.where((s) => isSeasonActiveOnDay(s, dayStart)).toList();
   bool typeOk(Liturgy l) => types == null || types.contains(l.type);
-  // On a day a season has dated services of its own, the undated (weekday)
-  // services of its key do not apply (ADR-043, Holy Week sim B4).
-  final datedToday = {for (final s in active) s: seasonHasDatedServicesOn(s, liturgies, dayStart)};
 
   final seasonal = <LiturgyOccurrence>[];
   final replacing = <Season>{};
@@ -128,7 +125,10 @@ List<LiturgyOccurrence> occurrencesForDay({
     final o = _occurrence(l, dayStart, dayOffset);
     if (o == null) continue;
     final windows = active
-        .where((s) => s.key == l.seasonKey && isSeasonActiveAt(s, o.start) && (l.date != null || !datedToday[s]!))
+        .where((s) =>
+            s.key == l.seasonKey &&
+            isSeasonActiveAt(s, o.start) &&
+            (l.date != null || !undatedSuppressedOn(s, l, liturgies, dayStart)))
         .toList();
     if (windows.isEmpty) continue;
     seasonal.add(o);
@@ -175,10 +175,11 @@ List<LiturgyOccurrence> occurrencesForDay({
 ///
 /// [now] is any instant; it is converted to Africa/Cairo. By default only
 /// `type == 'mass'` is considered; pass [types] to include vespers etc.
-/// While a season that replaces the regular schedule (Holy Week, Pascha,
-/// Nativity) is active, EVERY service of that season counts whatever its
-/// type (the Holy Week hours are `other`; ADR-043, Holy Week sim B1) —
-/// otherwise the card skipped them and showed a regular mass days later.
+/// While a season is active (Holy Week, Pascha, Nativity, and the additive
+/// revivals too), EVERY service of that season counts whatever its type (the
+/// Holy Week hours and revival nights are `other` / `vespers`; ADR-043 and
+/// ADR-045, sims B1) — otherwise the card skipped them and showed a regular
+/// mass hours or days later.
 NextMassResult computeNextMass({
   required Iterable<Liturgy> liturgies,
   required Iterable<Season> seasons,
@@ -190,11 +191,15 @@ NextMassResult computeNextMass({
   final today = CairoTime.startOfDay(cairoNow);
   LiturgyOccurrence? happening;
   LiturgyOccurrence? next;
-  final replacing = [for (final s in seasons) if (s.replacesRegular) s];
+  // Every service of an ACTIVE season counts whatever its type, additive
+  // seasons included (ADR-045, revival sim B1: a revival night stored as
+  // `vespers` / `other` is the evening's service). Regular services keep the
+  // type filter; [occurrencesForDay] already merges an additive season with
+  // the regular schedule.
   bool counts(LiturgyOccurrence o) =>
       types.contains(o.liturgy.type) ||
       (o.liturgy.seasonKey != null &&
-          replacing.any((s) => s.key == o.liturgy.seasonKey && isSeasonActiveAt(s, o.start)));
+          seasons.any((s) => s.key == o.liturgy.seasonKey && isSeasonActiveAt(s, o.start)));
   // Every type is read (the suppression of regular services is the same),
   // then filtered by [counts].
   List<LiturgyOccurrence> day(tz.TZDateTime d, int offset) => [
@@ -329,36 +334,60 @@ bool _dateInSeason(DateTime date, Season s) {
   return true;
 }
 
-/// Does [s] — a season that replaces the regular schedule (Holy Week,
-/// Pascha, Nativity: programmes written day by day) — have dated services of
-/// its own on the Cairo day [dayStart]? Then the undated (weekday) services
-/// of its key do not apply on that day: the dated programme is the plan for
-/// that day (ADR-043, Holy Week sim B4 — the seed's sample weekday templates
-/// no longer mix into an owner's dated Holy Week). Days without dated
-/// services keep their weekday services (the seed's own Holy Week 2027), and
-/// additive seasons are unchanged (a revival's nightly service also runs on
-/// its dated feast day).
-bool seasonHasDatedServicesOn(Season s, Iterable<Liturgy> all, tz.TZDateTime dayStart) =>
-    s.replacesRegular &&
-    all.any((l) => l.seasonKey == s.key && l.date != null && _matchesDay(l, dayStart) && _dateInSeason(l.date!, s));
+/// Does [s] have a real (non-sample) service of its own: a dated one inside
+/// its window, or an undated one of its key? Then the seed's undated
+/// `sample: true` templates of that key are not part of it (ADR-045, sims
+/// B5: the owner's programme replaces the sample one).
+bool seasonHasRealServices(Season s, Iterable<Liturgy> all) => all.any(
+    (l) => l.seasonKey == s.key && !l.sample && (l.date == null || _dateInSeason(l.date!, s)));
+
+/// Does the undated (weekday) service [l] of [s] give way on the Cairo day
+/// [dayStart]? (ADR-043 B4, widened in ADR-045 B5)
+/// * A `sample: true` template, once [s] has any real service
+///   ([seasonHasRealServices]) — the seed's templates never mix into an
+///   owner's programme, Holy Week or revival alike.
+/// * Any undated service, on a day where [s] has dated non-sample services
+///   of its own: for a season that replaces the regular schedule any such
+///   service that day (the dated programme is the plan for that day); for an
+///   additive season one that overlaps it in time (a revival's nightly
+///   service still runs on its dated feast-morning liturgy).
+/// Seasons made only of sample data (the bundled seed) are unchanged.
+bool undatedSuppressedOn(Season s, Liturgy l, Iterable<Liturgy> all, tz.TZDateTime dayStart) {
+  if (l.date != null || l.seasonKey != s.key) return false;
+  if (l.sample && seasonHasRealServices(s, all)) return true;
+  final mine = _occurrence(l, dayStart, 0);
+  for (final d in all) {
+    if (d.seasonKey != s.key || d.date == null || d.sample || !_matchesDay(d, dayStart) || !_dateInSeason(d.date!, s)) {
+      continue;
+    }
+    if (s.replacesRegular) return true;
+    final o = _occurrence(d, dayStart, 0);
+    if (mine == null || o == null || (o.start.isBefore(mine.end) && mine.start.isBefore(o.end))) return true;
+  }
+  return false;
+}
 
 /// [l] is one of [s]'s services for the season lists: its key, and a dated
-/// one inside the window, or an undated one — unless [s] has dated services
-/// on every day of the window with its weekday ([seasonHasDatedServicesOn];
-/// an additive, open-ended or year-long season keeps every undated service,
-/// as before).
+/// one inside the window, or an undated one that still applies on at least
+/// one day of the window with its weekday ([undatedSuppressedOn]). An
+/// undated service of an open-ended season is listed unless it is a sample
+/// template of a season with real services.
 bool liturgyInSeason(Liturgy l, Season s, Iterable<Liturgy> all) {
   if (l.seasonKey != s.key) return false;
   if (l.date != null) return _dateInSeason(l.date!, s);
+  if (l.sample && seasonHasRealServices(s, all)) return false;
   final from = s.startsAt, to = s.endsAt, wd = l.weekday;
-  if (!s.replacesRegular || from == null || to == null || wd == null) return true;
+  if (from == null || to == null || wd == null) return true;
+  // Cheap common case (and long seasons such as summer): no dated real
+  // service in the window at all, so no day can suppress it.
+  if (!all.any((d) => d.seasonKey == s.key && d.date != null && !d.sample && _dateInSeason(d.date!, s))) return true;
   var sawWeekday = false;
   final first = CairoTime.calendarDate(from), last = CairoTime.calendarDate(to);
   var day = CairoTime.at(first.year, first.month, first.day);
   for (var i = 0; i < 400 && !day.isAfter(CairoTime.at(last.year, last.month, last.day)); i++) {
     if (day.weekday == wd) {
       sawWeekday = true;
-      if (!seasonHasDatedServicesOn(s, all, day)) return true;
+      if (!undatedSuppressedOn(s, l, all, day)) return true;
     }
     day = CairoTime.at(day.year, day.month, day.day + 1);
   }

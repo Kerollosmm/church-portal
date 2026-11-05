@@ -8,7 +8,8 @@ import 'coptic_calendar.dart';
 import 'coptic_feasts.dart';
 import 'media.dart';
 import 'features.dart' show Hideable;
-import 'models.dart' show parseDate, parseHm;
+import 'models.dart' show Liturgy, Season, parseDate, parseHm;
+import 'schedule.dart';
 
 String _str(Object? v) => v is String ? v : (v == null ? '' : v.toString());
 bool _bool(Object? v, bool def) => v is bool ? v : def;
@@ -46,6 +47,11 @@ class TodaySettings {
   /// the computed feast list). Off = only church events.
   final bool commemoration;
 
+  /// When no church event is set for the liturgical day: show today's /
+  /// tonight's programme service of an active season (a revival night with
+  /// its speaker, topic and PDF; ADR-045). Default on.
+  final bool topEventServices;
+
   /// Live-stream banner.
   final bool liveEnabled;
   final String liveUrl, liveLabelAr, liveLabelEn;
@@ -64,6 +70,7 @@ class TodaySettings {
     this.dayStartsAt = '',
     this.topEvent = true,
     this.commemoration = true,
+    this.topEventServices = true,
     this.liveEnabled = false,
     this.liveUrl = '',
     this.liveLabelAr = '',
@@ -80,6 +87,7 @@ class TodaySettings {
         dayStartsAt: _str(m['dayStartsAt']),
         topEvent: _bool(m['topEvent'], true),
         commemoration: _bool(m['commemoration'], true),
+        topEventServices: _bool(m['topEventServices'], true),
         liveEnabled: _bool(m['liveEnabled'], false),
         liveUrl: _str(m['liveUrl']).trim(),
         liveLabelAr: _str(m['liveLabelAr']),
@@ -96,6 +104,7 @@ class TodaySettings {
       other.dayStartsAt == dayStartsAt &&
       other.topEvent == topEvent &&
       other.commemoration == commemoration &&
+      other.topEventServices == topEventServices &&
       other.liveEnabled == liveEnabled &&
       other.liveUrl == liveUrl &&
       other.liveLabelAr == liveLabelAr &&
@@ -104,8 +113,8 @@ class TodaySettings {
       other.liveBadgeHideOnHome == liveBadgeHideOnHome;
 
   @override
-  int get hashCode => Object.hash(copticStrip, dayStartMode, dayStartsAt, topEvent, commemoration, liveEnabled, liveUrl,
-      liveLabelAr, liveLabelEn, liveEndsAt, liveBadgeHideOnHome);
+  int get hashCode => Object.hash(copticStrip, dayStartMode, dayStartsAt, topEvent, commemoration, topEventServices,
+      liveEnabled, liveUrl, liveLabelAr, liveLabelEn, liveEndsAt, liveBadgeHideOnHome);
 
   /// Is a service starting at [start] on the eve of the next liturgical day
   /// (at or after the day's start, e.g. 18:00)?
@@ -128,6 +137,11 @@ class TodaySettings {
       liveOn(now) && !(liveBadgeHideOnHome && location == '/');
 }
 
+final _httpsAttachmentRe = RegExp(r'^https://[^/\s]+\.[^/\s]+(\S*)$', caseSensitive: false);
+
+/// A day event's PDF link: https only (like a programme's attachment).
+String _httpsAttachment(String url) => _httpsAttachmentRe.hasMatch(url) ? url : '';
+
 final _liveUrlRe = RegExp(r'^https?://[^/\s]+\.[^/\s]+(\S*)$', caseSensitive: false);
 
 /// A usable stream link (YouTube, Facebook or any http(s) page).
@@ -149,6 +163,10 @@ class DayEvent implements Hideable {
 
   /// "Details" link: in-app path or http(s) URL.
   final String link;
+
+  /// Programme / PDF (Google Drive or any https URL) with its own button and
+  /// label, e.g. «تحميل برنامج النهضة (PDF)» (ADR-045). '' = none.
+  final String attachmentUrl, attachmentLabelAr, attachmentLabelEn;
   final MediaImage? image;
   @override
   final bool visible;
@@ -170,6 +188,9 @@ class DayEvent implements Hideable {
     this.noteAr = '',
     this.noteEn = '',
     this.link = '',
+    this.attachmentUrl = '',
+    this.attachmentLabelAr = '',
+    this.attachmentLabelEn = '',
     this.image,
     this.visible = true,
     this.order = 0,
@@ -190,6 +211,9 @@ class DayEvent implements Hideable {
         noteAr: _str(m['noteAr']),
         noteEn: _str(m['noteEn']),
         link: _str(m['link']).trim(),
+        attachmentUrl: _httpsAttachment(_str(m['attachmentUrl']).trim()),
+        attachmentLabelAr: _str(m['attachmentLabelAr']),
+        attachmentLabelEn: _str(m['attachmentLabelEn']),
         image: MediaImage.fromMap(m['image']),
         visible: _bool(m['visible'], true),
         order: m['order'] is num ? (m['order'] as num).toInt() : 0,
@@ -199,6 +223,8 @@ class DayEvent implements Hideable {
   static const storedKeys = [
     'date', 'endDate', 'start', 'end', 'titleAr', 'titleEn', 'speakerAr', 'speakerEn', //
     'topicAr', 'topicEn', 'noteAr', 'noteEn', 'link',
+    // ADR-045: optional trailing fields; a 13-field string (before) stays valid.
+    'attachmentUrl', 'attachmentLabelAr', 'attachmentLabelEn',
   ];
   static const sep = '\u001f';
 
@@ -336,7 +362,7 @@ class SynaxariumData {
   SynaxariumDay? dayOf(DateTime date) => days[dayKey(date)];
 }
 
-enum TopEventKind { church, feast, commemoration }
+enum TopEventKind { church, service, feast, commemoration }
 
 /// What the home page shows at the top for the day.
 class TopEvent {
@@ -349,6 +375,13 @@ class TopEvent {
   /// The church event itself (speaker, topic, times, link) for [TopEventKind.church].
   final DayEvent? event;
 
+  /// Today's / tonight's programme service of an active season (speaker,
+  /// topic, choir, PDF) for [TopEventKind.service] (ADR-045).
+  final LiturgyOccurrence? service;
+
+  /// [service] starts after the liturgical day's start: «الليلة».
+  final bool tonight;
+
   /// From the Katameros commemoration (/data/today.json): credit the source.
   final bool fromKatameros;
 
@@ -360,6 +393,8 @@ class TopEvent {
     this.linesAr = const [],
     this.linesEn = const [],
     this.event,
+    this.service,
+    this.tonight = false,
   });
 }
 
@@ -367,15 +402,20 @@ class TopEvent {
 /// 1. an admin church event covering today (not yet ended), else — on the
 ///    eve, after the liturgical day started — one covering the liturgical
 ///    day (lowest `order`, then earliest start);
-/// 2. else (when [TodaySettings.commemoration]) the Katameros commemoration
+/// 2. else (when [TodaySettings.topEventServices], ADR-045) today's /
+///    tonight's not-yet-ended service of an active season that has a speaker
+///    or a topic (a revival night), from [liturgies] / [seasons];
+/// 3. else (when [TodaySettings.commemoration]) the Katameros commemoration
 ///    of the liturgical day: its feast, else its first synaxarium entry;
-/// 3. else the computed feast list for that day;
+/// 4. else the computed feast list for that day;
 /// null when nothing applies or the card is switched off.
 TopEvent? resolveTopEvent({
   required DateTime now,
   required TodaySettings settings,
   required Iterable<DayEvent> events,
   SynaxariumData synaxarium = SynaxariumData.empty,
+  Iterable<Liturgy> liturgies = const [],
+  Iterable<Season> seasons = const [],
   double? lat,
   double? lng,
 }) {
@@ -395,6 +435,18 @@ TopEvent? resolveTopEvent({
   }
   if (pick != null) {
     return TopEvent(kind: TopEventKind.church, titleAr: pick.titleAr, titleEn: pick.titleEn, event: pick);
+  }
+  if (settings.topEventServices) {
+    final o = programmeServiceAt(now, liturgies, seasons);
+    if (o != null) {
+      return TopEvent(
+        kind: TopEventKind.service,
+        titleAr: o.liturgy.nameAr,
+        titleEn: o.liturgy.nameEn,
+        service: o,
+        tonight: settings.isEveService(o.start, lat: lat, lng: lng),
+      );
+    }
   }
   if (!settings.commemoration) return null;
   final s = synaxarium.dayOf(day.date);
@@ -429,4 +481,30 @@ TopEvent? resolveTopEvent({
     linesAr: [for (final f in feasts.skip(1)) f.ar],
     linesEn: [for (final f in feasts.skip(1)) f.en],
   );
+}
+
+/// Today's programme service for the top event (ADR-045): among the Cairo
+/// day's real occurrences ([occurrencesForDay]: season windows, suppression
+/// and templates already applied) plus yesterday's still running past
+/// midnight, the first one of an ACTIVE season that has a speaker or a topic
+/// and has not ended at [now]. null when none.
+LiturgyOccurrence? programmeServiceAt(DateTime now, Iterable<Liturgy> liturgies, Iterable<Season> seasons) {
+  if (liturgies.isEmpty || seasons.isEmpty) return null;
+  final c = CairoTime.fromInstant(now);
+  bool hasProgramme(Liturgy l) {
+    final p = l.program;
+    return '${p.speakerAr}${p.speakerEn}${p.topicAr}${p.topicEn}'.trim().isNotEmpty;
+  }
+
+  final candidates = [
+    for (final offset in const [-1, 0])
+      for (final o in occurrencesForDay(
+          liturgies: liturgies, seasons: seasons, day: CairoTime.at(c.year, c.month, c.day + offset), dayOffset: offset))
+        if (o.liturgy.seasonKey != null &&
+            o.end.isAfter(now) &&
+            hasProgramme(o.liturgy) &&
+            seasons.any((s) => s.key == o.liturgy.seasonKey && isSeasonActiveAt(s, o.start)))
+          o,
+  ]..sort((a, b) => a.start.compareTo(b.start));
+  return candidates.isEmpty ? null : candidates.first;
 }

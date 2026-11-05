@@ -177,6 +177,17 @@ String buildAssistantInstruction({
     }
   }
 
+  // Live stream (ADR-045, revival sim B3): only while the banner is on, so
+  // "is there a live stream tonight?" is answered with the real link.
+  if (f.today.liveOn(now)) {
+    final label = _bi(f.today.liveLabelAr.trim(), f.today.liveLabelEn.trim());
+    b
+      ..writeln()
+      ..writeln('## Live stream now')
+      ..writeln('- ${label.isNotEmpty ? label : 'Live now from the church (بث مباشر الآن من الكنيسة)'}: ${f.today.liveUrl}');
+  }
+  _dayEvents(b, f, now);
+
   if (f.enabled(Sections.schedule)) {
     b
       ..writeln()
@@ -423,6 +434,59 @@ void _contactForm(StringBuffer b, FeatureSettings f, ContactSettings contact) {
       '${c.allowsAnonymous ? '; can be sent anonymously' : ''}',
     );
   }
+  // The season preset's «إيقاف حجز الأفراح» (ADR-042) hides the wedding
+  // choice; say so explicitly, so "can I book the hall for a wedding?" gets
+  // a clear answer instead of silence (ADR-045, revival sim B4).
+  final booking = [for (final c in cats) if (c.isBooking) c];
+  if (f.weddingBookingOff && booking.isNotEmpty) {
+    final others = [
+      for (final c in booking)
+        for (final s in c.subtypes)
+          if (s.key != ContactSettings.weddingSubtype) _bi(s.labelAr, s.labelEn),
+    ].where((x) => x.isNotEmpty).toSet().toList();
+    b.writeln(
+      '- Wedding (فرح) hall bookings are NOT accepted during the current church season (no weddings in this '
+      'season); say so clearly if asked.'
+      '${others.isNotEmpty ? ' Other hall bookings stay open via /contact: ${others.join(', ')}.' : ''}',
+    );
+  }
+}
+
+/// Church events of the day (`settings/features.dayEvents`, ADR-040), today
+/// and the next 7 days, while the home «حدث اليوم» card is on (ADR-045,
+/// revival sim B3: speaker, topic and links of tonight's event).
+void _dayEvents(StringBuffer b, FeatureSettings f, DateTime now) {
+  if (!f.today.topEvent) return;
+  final c = CairoTime.fromInstant(now);
+  final today = DateTime.utc(c.year, c.month, c.day);
+  final soon = [
+    for (final e in f.dayEvents)
+      if (e.visible && !e.endedAt(now) && e.firstDay != null && !e.firstDay!.isAfter(today.add(const Duration(days: 7))))
+        e,
+  ]..sort((a, b) => a.firstDay!.compareTo(b.firstDay!));
+  if (soon.isEmpty) return;
+  b
+    ..writeln()
+    ..writeln('## Church events (today and the next 7 days)');
+  for (final e in soon) {
+    String ymd(DateTime d) => '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+    final last = e.endDate == null ? null : CairoTime.calendarDate(e.endDate!);
+    final when = '${ymd(e.firstDay!)}${last != null && last.isAfter(e.firstDay!) ? ' to ${ymd(last)}' : ''}';
+    final speaker = _bi(e.speakerAr.trim(), e.speakerEn.trim());
+    final topic = _bi(e.topicAr.trim(), e.topicEn.trim());
+    final note = _bi(_clip(e.noteAr.trim(), 300), _clip(e.noteEn.trim(), 300));
+    final internal = e.link.startsWith('/') && !e.link.startsWith('//');
+    final link = internal && !f.routeEnabled(e.link) ? '' : e.link;
+    final pdfLabel = _bi(e.attachmentLabelAr.trim(), e.attachmentLabelEn.trim());
+    b.writeln(
+      '- $when: ${_bi(e.titleAr.trim(), e.titleEn.trim())}'
+      '${e.start.isNotEmpty ? ' ${formatRangeLatin(e.start, e.end)}' : ''}'
+      '${speaker.isNotEmpty ? '; speaker: $speaker' : ''}${topic.isNotEmpty ? '; topic: $topic' : ''}'
+      '${note.isNotEmpty ? '; note: $note' : ''}'
+      '${e.attachmentUrl.isNotEmpty ? '; ${pdfLabel.isNotEmpty ? pdfLabel : 'programme PDF'}: ${e.attachmentUrl}' : ''}'
+      '${link.isNotEmpty ? '; more: $link' : ''}',
+    );
+  }
 }
 
 /// Admin-defined sections and pages (ADR-027), each only while its section
@@ -608,8 +672,18 @@ String _liturgyLine(Liturgy l, [ProgramOptions opts = ProgramOptions.defaults]) 
   final audience = [freeAudience, if (group.isNotEmpty && !freeAudience.contains(a!.labelAr)) group]
       .where((x) => x.isNotEmpty)
       .join(', ');
+  // Programme (ADR-041; ADR-045, revival sim B3): "who speaks tonight?".
+  final p = l.program;
+  final speaker = _bi(p.speakerAr.trim(), p.speakerEn.trim());
+  final topic = _bi(p.topicAr.trim(), p.topicEn.trim());
+  final choir = _bi(p.choirAr.trim(), p.choirEn.trim());
+  final pdfLabel = _bi(p.attachmentLabelAr.trim(), p.attachmentLabelEn.trim());
   return '${_bi(l.nameAr, l.nameEn)} [${l.type}] ${formatRangeLatin(l.start, l.end)}'
-      '${_at(where)}${audience.isNotEmpty ? ' - $audience' : ''}';
+      '${_at(where)}${audience.isNotEmpty ? ' - $audience' : ''}'
+      '${speaker.isNotEmpty ? '; speaker: $speaker' : ''}'
+      '${topic.isNotEmpty ? '; topic: $topic' : ''}'
+      '${choir.isNotEmpty ? '; choir: $choir' : ''}'
+      '${p.hasAttachment ? '; ${pdfLabel.isNotEmpty ? pdfLabel : 'programme PDF'}: ${p.attachmentUrl}' : ''}';
 }
 
 String _priestLine(Priest p) =>

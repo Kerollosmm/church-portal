@@ -101,8 +101,19 @@ render with `PageBody` (+ `Footer`). Content comes from Riverpod providers (hidd
   and not ended (on the eve: the next liturgical day's event) with times, speaker, topic, note, link; else
   «عيد اليوم» / «تذكار اليوم» from `/data/today.json` (Katameros, credited) for the liturgical day; else the computed
   feast list; nothing on an ordinary day without data. `topEvent` off hides it; `commemoration` off = church events only.
+  **ADR-045:** between the church event and Katameros, today's / tonight's programme service (the first not-ended
+  occurrence of an active season with a speaker or topic) — «الليلة في الكنيسة» / «اليوم في الكنيسة», time, speaker,
+  topic, choir, venue / audience and its labelled PDF button (`topEventServices`, default on; reads the liturgies /
+  seasons only while Home shows the next-service card). A church event's PDF (`attachmentUrl`) has its own button
+  with its label.
 - **Verse of the day** rotates on the liturgical day (changes at the day's start, not midnight).
-- **Next service card**: a service starting after the day's start is labelled «الليلة • ليلة الخميس».
+- **Next service card**: a service starting after the day's start is labelled «الليلة • ليلة الخميس». Every service
+  of an **active** season counts whatever its type, additive revivals included (ADR-045); the title is «الصلاة
+  القادمة» during a replacing season or when the service shown is not a mass. «يُقام الآن» keeps the programme
+  (speaker, topic, choir, PDF).
+- **Seed templates (ADR-045):** an undated `sample: true` seasonal service is hidden in a season that has any real
+  (non-sample) service; any undated service gives way on a day with a dated real service of its season (replacing:
+  any; additive: overlapping). All-sample seasons (the seed) are unchanged.
 
 ### `/about` — `about_page.dart` `AboutPage`
 - History card (bishop line + `historyAr/En`) and **altars** grid (main altar gets a gold cross) — section `history`.

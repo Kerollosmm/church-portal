@@ -1089,6 +1089,62 @@ supersede them.
   tap / Tab+Enter / semantics open the stream, switch off shows both, no empty bar on Home with the date off),
   `tool/rules_test/rules.test.mjs` (`liveBadgeHideOnHome` bool accepted / non-bool rejected; whole Today form in one write).
 
+## ADR-045 (PR #38) — Simulation fixes: every active season's service on the next-service card, programme while «يُقام الآن», top event falls back to tonight's programme service, assistant grounds programme / events / live / paused weddings, seed templates never mix into an owner's season
+
+- **Context:** three local simulations (`work/sim-holy-week`, the ADR-043 re-run, `work/sim-revival`, 4–5 Nov 2026, Firestore
+  emulator + the real app) left these failures on `e197da9`:
+  1. **B1** the next-service card skipped an *additive* revival night (`vespers` / `other`): `computeNextMass.counts`
+     took `types = {'mass'}` plus services of schedule-*replacing* seasons only, so at 18:00 / 18:30 on the revival
+     evening it showed tomorrow's 06:30 mass under «جدول موسمي مُفعّل: نهضة…».
+  2. **B2** «يُقام الآن» rendered only «name — place»; speaker, topic, choir and the PDF button vanished exactly while
+     the service runs (18:30–21:30).
+  3. **B3** the assistant had no speaker / topic / choir / PDF per service, no church events of the day
+     (`dayEvents`) and no live link: "who speaks at the revival tonight?" could not be grounded.
+  4. **B4** with `weddingBookingOff` the wedding subtype was dropped silently from the assistant's contact section.
+  5. **B5** undated seed templates (`rev-max-1…7`, `hw-day-*` / `hw-eve-*`, all `sample: true`) attached to every
+     season with their key; ADR-043's per-day rule applied to replacing seasons only and kept templates of days the
+     owner had not entered yet.
+  6. **Spec gap (owner):** the Home top event should show tonight's revival with speaker, topic and a PDF button; it read
+     only `dayEvents`, and a day event's Drive link opened from «اعرف المزيد» with no label.
+- **Decision:**
+  1. `computeNextMass`: a service counts when its type is in `types` **or** it belongs to any **active** season
+     (additive included), whatever its type; `occurrencesForDay` already merges additive seasons with the regular
+     schedule (morning masses stay). The card title is «الصلاة القادمة» when a replacing season is active or the
+     service shown is not a mass. This reverses ADR-043's "additive: only masses count".
+  2. The happening-now box renders `ProgramDetails` (speaker, topic, choir, audience, PDF; the venue pill only when
+     the line shows a free-text place instead of the venue).
+  3. `_liturgyLine` appends `speaker`, `topic`, `choir` and `<label or "programme PDF">: <url>`. New prompt sections:
+     «Live stream now» (label + `liveUrl`, only while `today.liveOn(now)`) and «Church events (today and the next 7
+     days)» from `dayEvents` (only while the `topEvent` card is on; an in-app link to a switched-off section is left out).
+  4. `_contactForm`: with `weddingBookingOff` and a visible booking category, one explicit line — wedding (فرح) hall
+     bookings are not accepted this season; the other subtypes (عزاء) stay open via /contact.
+  5. Seed templates (`undatedSuppressedOn`, `seasonHasRealServices`, `liturgyInSeason`), both season types:
+     (a) an undated **`sample: true`** service is not part of a season that has **any non-sample service** (dated in
+     its window, or undated of its key); (b) any undated service gives way on a day where the season has a dated
+     **non-sample** service — any such service for a replacing season, an **overlapping** one for an additive season
+     (a real nightly revival service still runs on its dated feast-morning liturgy). Seasons made only of samples
+     (the bundled seed, all of 2027) are unchanged.
+  6. Top event hierarchy: admin church event > **today's / tonight's programme service** (new step: the first
+     not-ended occurrence of an active season with a speaker or topic, civil today plus yesterday's still running;
+     kicker «الليلة في الكنيسة» / «اليوم في الكنيسة»; time + `ProgramDetails` with its labelled PDF button) > Katameros >
+     computed feasts. Admin switch «عند عدم وجود حدث: اعرض خدمة اليوم / الليلة من برنامج الموسم» =
+     `settings/features.topEventServices` (bool, missing = on). Day events get three optional trailing fields
+     `attachmentUrl` (https), `attachmentLabelAr`, `attachmentLabelEn` (≤ 80) and their own button (`topEventPdf`).
+  7. Assistant limits: `perMinute` (default 4) stays — it only stops bursts; its admin hint now explains it applies
+     together with the daily / season limit (4 a minute + 6 a day = wait a minute after the 4th quick question).
+     `AssistantPage` reads `nowProvider` (real time in production) for the season limit and the instruction.
+  Not changed (documented designs, reports' "spec mismatch"): a live banner switched on by hand without `liveEndsAt`
+  outlives the season; stored switches stay until «استرجاع»; the wedding choice is a subtype of «حجز قاعة».
+- **Rules:** `topEventServices` joins the Today gate (`optBool`, +1 expression only when a Today key changes);
+  `validDayEvent`'s single regex gains an optional `(␟https-url␟label≤80␟label≤80)?` tail (still one expression per
+  event; a 13-field string from before stays valid). 20 events with PDFs and 80-character labels fit one write (test).
+- **Cost:** +0 reads, +0 listeners, +0 writes, no new collection. The top-event step reads `liturgiesProvider` /
+  `seasonsProvider` only while Home shows the next-service card (which already holds both), else it is skipped.
+- **Tests:** `test/season_programme_fixes_test.dart` (B1 domain + card, B2 box, B3 lines / events / live, B4 line,
+  B5 additive / replacing / seed-only / real seed / overlap, top-event fallback / precedence / switch / no programme,
+  encoded 13 / 16 fields, top-event and day-event PDF buttons); `holy_week_fixes_test.dart` (additive case updated);
+  rules group "ADR-045". Simulations re-run from scratch on the merge commit: `work/fix-sims/report.md`.
+
 ## Timeline
 
 | When | PR / commit | What |
@@ -1136,6 +1192,7 @@ supersede them.
 
 | 4 Nov 2026 | **PR #32** — "Programme details: speaker, topic, choir, venue, audience, Drive PDF link" (`feat/programme-fields`) | ADR-041: `program.dart` (`ProgramInfo`, `ProgramOptions`), `parallelServices`, `ProgramDetails` widget, audience chips on the seasonal schedule, meeting detail facts, admin programme group + «إعدادات المواسم» (venues / audiences), rules `programKeys` / `validProgram` / `validProgramOptions`; `test/program_test.dart`, rules group. |
 | 4 Nov 2026 | **PR #33** — "Season presets, season verses, assistant season limit, hero v2" (`feat/season-presets`) | ADR-042: `season_preset.dart` + /admin «تجهيز الموسم» (apply / restore in one transaction, auto-revert at the season end without a write), `season_verses.dart` + «آيات المواسم» in «إعدادات المواسم», assistant `perDaySeason` / section-aware topics / current season in the prompt, `weddingBookingOff`, hero v2 9 s loops + posters, `AdminBackend.saveDocs` / `saveDocsFresh`; `test/season_preset_test.dart`, rules group. |
+| 5 Nov 2026 | **PR #38** — "Simulation fixes: season services on the next-service card, programme while running, top event from tonight's programme, assistant grounding" (`fix/season-programme-sim-bugs`) | ADR-045: next-service card counts every active season's service (additive revivals too) and titles non-mass services «الصلاة القادمة»; «يُقام الآن» keeps the programme; top event falls back to today's / tonight's programme service (`topEventServices`, default on) and day events get their own labelled PDF (`attachmentUrl` / labels); assistant grounds speaker / topic / choir / PDF, church events, the live link and says wedding bookings are paused; seed `sample` templates never mix into a season with real services (both season types; additive: overlap per day); `perMinute` hint; rules: `topEventServices`, day-event regex tail. +0 reads / listeners. |
 | 5 Nov 2026 | **PR #37** — "Occasion sub-themes follow the season; no violet; Holy Week fixes" (`fix/occasion-themes-holy-week`) | ADR-043: Holy Week charcoal / ashen silver / crimson, fasts ash / stone / oxblood, legacy `purple` → oxblood (hidden), every widget on palette roles + scene accents and the Material scheme filled from the palette (test bans hard-coded colours), theme follows the active season (`occasions.followSeason` + `seasonThemes`; admin range > season > Easter > selected), preset item «ثيم الموسم» + `startsAt`, season keys epiphany / marian / fast, Holy Week sim fixes B1–B5 (B4 per day) + `kids` alias, rules budget restructure (joined-regex slot check), +1 seasons listener app-wide while following the season. |
 | 5 Nov 2026 | **PR #36** — "Admin: reset the settings form when switching between Today and Season settings" (`seer/fix/admin-season-settings-switch-crash`, opened by Sentry Seer; PR #37 was squash-merged as `644ce8c` and merged into this branch) | Bug fix for Sentry CHURCH-PORTAL-9: both menu entries edit `settings/features` with different fields; the dashboard reused one unkeyed `ChurchInfoScreen` and `didUpdateWidget` compared only `doc.path`, so «إعدادات المواسم» read Today's `DocEditor` state and crashed on `_rows['venues']!`. Fix: per-section `ValueKey`s + rebuild when the `DocDef` changes. Regression tests: screen-level swap and a dashboard navigation test (both fail on `main` without the fix). No data, rules or listener change; no ADR (bug fix). |
 | 5 Nov 2026 | **PR #35** — "Liturgical web loading screen, top utility bar with live badge, app shell cleanup" (`feat/redesign-splash-top-bar`; PR #37 (`644ce8c`) and PR #36 (`98dc546`) were squash-merged and merged into this branch) | ADR-044 (renumbered from ADR-043): cream loading screen with the app's 27 KB seal, Lalezar name and a composited gold track (`web/index.html`); `TopUtilityBar` (alias `CopticDateStrip`) above the app bar on the palette's title band with the Coptic date and a `live`-coloured badge (`topBarLiveBadge`), grows with text; seal tab offset by the bar height; while live Home shows only the red banner and other pages the tappable badge (admin switch `liveBadgeHideOnHome`, default on); merge fixes: palette roles instead of hard-coded colours, `HaloText` back to 2.5 px, synaxarium live-URL fallback removed (no CORS on live); tests `pagespeed_test.dart`, `today_widgets_test.dart`. Not merged until the owner approves the visuals. |

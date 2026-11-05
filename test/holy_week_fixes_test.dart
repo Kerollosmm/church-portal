@@ -88,13 +88,16 @@ void main() {
       }
     });
 
-    test('outside the season, or in an additive revival, only masses count (unchanged)', () {
+    test('outside the season only masses count; in an additive revival its night counts too (ADR-045)', () {
       final rev = Season(
           id: 'rev', key: 'revival_moses', nameAr: '', nameEn: '', startsAt: cairo(2026, 11, 3), endsAt: cairo(2026, 11, 9),
           replacesRegular: false);
       final eve = lit('revEve', weekday: 4, start: '18:30', end: '21:00', season: 'revival_moses');
       final r = computeNextMass(liturgies: [...regular, eve], seasons: [rev], now: cairo(2026, 11, 5, 12));
-      expect(r.next?.liturgy.id, 'fri');
+      expect(r.next?.liturgy.id, 'revEve');
+      // After the night the regular Friday mass is next again.
+      expect(computeNextMass(liturgies: [...regular, eve], seasons: [rev], now: cairo(2026, 11, 5, 21, 30)).next?.liturgy.id,
+          'fri');
       final after = computeNextMass(liturgies: [...regular, ...owner], seasons: [hw2026], now: cairo(2026, 11, 10, 12));
       expect(after.next?.liturgy.type, 'mass');
     });

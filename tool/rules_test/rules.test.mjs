@@ -1768,3 +1768,36 @@ describe('ADR-043: season-following theme, season theme map, preset theme item, 
     await assertFails(setDoc(doc(ed, 'seasons', 'lent'), { key: 'lent', nameAr: 'موسم', active: true }));
   });
 });
+
+// ---------------------------------------------------------------------------
+// ADR-045: top-event fallback switch and a church event's own PDF button
+// (three optional trailing fields of the encoded event string).
+describe('ADR-045: topEventServices switch, day-event attachment', () => {
+  const S = '\u001f';
+  const base = ['2026-11-05', '', '18:30', '21:30', 'الليلة الرابعة', '', 'أبونا', '', 'الرجاء', '', '', '', ''];
+  const ev = (url = 'https://drive.google.com/file/d/x/view', ar = 'تحميل برنامج النهضة (PDF)', en = '') =>
+    [...base, url, ar, en].join(S);
+  const ref = () => doc(db(EDITOR), 'settings', 'features');
+  const stamp = () => ({ updatedAt: serverTimestamp(), updatedBy: `${EDITOR}@x.test` });
+
+  test('topEventServices is an optional bool', async () => {
+    await assertSucceeds(setDoc(ref(), { theme: 'burgundy', topEventServices: false }));
+    await assertSucceeds(updateDoc(ref(), { topEventServices: true, topEvent: true, commemoration: false }));
+    for (const bad of [{ topEventServices: 'yes' }, { topEventServices: 1 }]) {
+      await assertFails(updateDoc(ref(), bad), JSON.stringify(bad));
+    }
+  });
+
+  test('events with an https PDF and labels; the 13-field form stays valid', async () => {
+    await assertSucceeds(setDoc(ref(), { theme: 'burgundy', dayEvents: [ev(), base.join(S), ev('', '', '')] }));
+    // 20 events carrying a PDF and both labels fit one write (expression budget), stamped like the editor.
+    await assertSucceeds(updateDoc(ref(), { dayEvents: Array.from({ length: 20 }, () => ev(undefined, 'x'.repeat(80), 'y'.repeat(80))),
+      ...stamp() }));
+    for (const bad of [
+      [ev('http://drive.google.com/x')], [ev('javascript:alert(1)')], [ev('/mass-schedule')], [ev(undefined, 'x'.repeat(81))],
+      [ev() + S + 'extra'], [[...base, 'https://drive.google.com/x'].join(S)],
+    ]) {
+      await assertFails(updateDoc(ref(), { dayEvents: bad }), JSON.stringify(bad).slice(0, 80));
+    }
+  });
+});
