@@ -1,7 +1,8 @@
 // ADR-048 item 5: admin time / date pickers. Every FieldType.time / date /
 // dateTime field (top-level and inside rows) is read-only and filled from
-// showTimePicker (24-hour) / showDatePicker; stored strictly as "HH:mm",
-// "YYYY-MM-DD" or the unchanged date-time instant.
+// showTimePicker (12-hour AM/PM, ص/م in Arabic) / showDatePicker; stored
+// strictly as 24-hour "HH:mm", "YYYY-MM-DD" or the unchanged date-time
+// instant. The field shows the friendly 12-hour reading under it.
 import 'package:church_portal/domain/cairo_time.dart';
 import 'package:church_portal/ui/admin/admin_schema.dart';
 import 'package:church_portal/ui/admin/admin_validators.dart';
@@ -73,7 +74,7 @@ void main() {
   group('liturgy form', () {
     final def = collectionById('liturgies')!;
 
-    testWidgets('time fields are read-only; the clock opens a 24-hour picker; saved HH:mm', (tester) async {
+    testWidgets('time fields are read-only; the clock opens a 12-hour AM/PM picker; saved 24h HH:mm', (tester) async {
       Map<String, dynamic>? saved;
       await _pump(
           tester,
@@ -97,22 +98,30 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('pick-start')));
       await tester.pumpAndSettle();
       expect(find.byType(TimePickerDialog), findsOneWidget);
-      expect(MediaQuery.of(tester.element(find.byType(TimePickerDialog))).alwaysUse24HourFormat, isTrue);
-      expect(find.text('AM'), findsNothing, reason: '24-hour: no AM/PM');
-      await enterTimeInOpenPicker(tester, 6, 5);
+      expect(MediaQuery.of(tester.element(find.byType(TimePickerDialog))).alwaysUse24HourFormat, isFalse);
+      final dialog = find.byType(TimePickerDialog);
+      expect(find.descendant(of: dialog, matching: find.text('AM')), findsWidgets, reason: '12-hour: AM/PM shown');
+      expect(find.descendant(of: dialog, matching: find.text('PM')), findsWidgets);
+      await enterTimeInOpenPicker(tester, 6, 5); // 6:05 AM
       expect(_text(tester, 'start'), '06:05');
+      expect(find.text('06:05 AM'), findsOneWidget, reason: '12-hour reading under the field');
 
       // Tapping the field itself opens the picker too.
       await tester.tap(find.byKey(const ValueKey('field-end')));
       await tester.pumpAndSettle();
-      await enterTimeInOpenPicker(tester, 23, 59);
+      await enterTimeInOpenPicker(tester, 23, 59); // 11:59 PM
       expect(_text(tester, 'end'), '23:59');
-      await pickTime(tester, 'end', 0, 0);
+      expect(find.text('11:59 PM'), findsOneWidget);
+      await pickTime(tester, 'end', 0, 0); // 12:00 AM
       expect(_text(tester, 'end'), '00:00');
+      expect(find.text('12:00 AM'), findsOneWidget);
+      await pickTime(tester, 'start', 12, 0); // 12:00 PM
+      expect(_text(tester, 'start'), '12:00');
+      expect(find.text('12:00 PM'), findsOneWidget);
 
       await tester.tap(find.byKey(const Key('editor-save')));
       await tester.pumpAndSettle();
-      expect(saved?['start'], '06:05');
+      expect(saved?['start'], '12:00');
       expect(saved?['end'], '00:00');
     });
 
@@ -135,16 +144,18 @@ void main() {
             onSave: (d) async => saved = {...?saved, ...d},
           ));
       expect(_text(tester, 'date'), '2027-01-06');
-      // The picker opens on the stored time (21:30), OK keeps it padded.
+      expect(find.text('09:30 PM'), findsOneWidget, reason: 'reading of the stored 21:30');
+      // The picker opens on the stored time (21:30 = 9:30 PM), OK keeps 21:30.
       await tester.tap(find.byKey(const ValueKey('pick-end')));
       await tester.pumpAndSettle();
       await tester.tap(find.byIcon(Icons.keyboard_outlined));
       await tester.pumpAndSettle();
       final fields = find.descendant(of: find.byType(Dialog), matching: find.byType(TextField));
-      expect(tester.widget<TextField>(fields.at(0)).controller?.text, '21');
+      expect(tester.widget<TextField>(fields.at(0)).controller?.text, '9');
       expect(tester.widget<TextField>(fields.at(1)).controller?.text, '30');
       await tester.tap(find.text('OK'));
       await tester.pumpAndSettle();
+      expect(_text(tester, 'end'), '21:30');
       // Legacy "9:00" → padded on pick.
       await pickTime(tester, 'start', 9, 0);
       expect(_text(tester, 'start'), '09:00');
@@ -163,12 +174,19 @@ void main() {
       expect(saved?['end'], '');
     });
 
-    testWidgets('Arabic RTL: the 24-hour picker opens and saves HH:mm', (tester) async {
+    testWidgets('Arabic RTL: the 12-hour picker shows ص/م and saves 24h HH:mm', (tester) async {
       await _pump(tester, DocEditor(title: 'قداس', fields: def.fields, def: def, popOnSave: false, onSave: (d) async {}),
           locale: const Locale('ar'));
       expect(Directionality.of(tester.element(find.byKey(const ValueKey('field-start')))), TextDirection.rtl);
-      await pickTime(tester, 'start', 18, 30);
+      await tester.tap(find.byKey(const ValueKey('pick-start')));
+      await tester.pumpAndSettle();
+      final dialog = find.byType(TimePickerDialog);
+      expect(MediaQuery.of(tester.element(dialog)).alwaysUse24HourFormat, isFalse);
+      expect(find.descendant(of: dialog, matching: find.text('ص')), findsWidgets);
+      expect(find.descendant(of: dialog, matching: find.text('م')), findsWidgets);
+      await enterTimeInOpenPicker(tester, 18, 30); // ٦:٣٠ م
       expect(_text(tester, 'start'), '18:30');
+      expect(find.text('٠٦:٣٠ م'), findsOneWidget, reason: 'Arabic 12-hour reading');
     });
   });
 
@@ -200,9 +218,10 @@ void main() {
       await tester.tap(find.text('OK'));
       await tester.pumpAndSettle();
       expect(find.byType(TimePickerDialog), findsOneWidget);
-      expect(MediaQuery.of(tester.element(find.byType(TimePickerDialog))).alwaysUse24HourFormat, isTrue);
-      await enterTimeInOpenPicker(tester, 18, 30);
+      expect(MediaQuery.of(tester.element(find.byType(TimePickerDialog))).alwaysUse24HourFormat, isFalse);
+      await enterTimeInOpenPicker(tester, 18, 30); // 6:30 PM
       expect(_text(tester, 'startsAt'), '2027-04-26 18:30');
+      expect(find.text('26 Apr 2027, 06:30 PM'), findsOneWidget);
       await tester.tap(find.byKey(const Key('editor-save')));
       await tester.pumpAndSettle();
       expect(saved?['startsAt'], isA<DateTime>());

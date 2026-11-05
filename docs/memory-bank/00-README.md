@@ -59,8 +59,8 @@ features, English title before boot, App Check lazy again, no public sample mark
 images on Hosting (ADR-046); PR #40 English verse of the day — bundled public-domain WEB
 (British Edition) text, optional English for the admin's fixed and season verses (ADR-047); PR #42 season card
 timing — «يُقام الآن» names the services running now in other halls, overnight services and cross-midnight parallels,
-a readable seasonal switch on every theme, the day-to-night handover tested minute by minute, admin 24-hour time
-and date pickers (ADR-048)).
+a readable seasonal switch on every theme, the day-to-night handover tested minute by minute, admin 12-hour (AM/PM)
+time and date pickers, stored 24-hour (ADR-048)).
 
 > **Golden rule:** read this folder before changing anything, and update it in the same PR as every change that
 > alters behaviour, data shape, rules, workflows, content status or open tasks.

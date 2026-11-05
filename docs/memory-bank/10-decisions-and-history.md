@@ -1300,8 +1300,12 @@ supersede them.
      the generic form (`DocEditor._textField`, top-level and inside rows: liturgy `date` / `start` / `end`, meeting and
      clinic `start` / `end`, alert and season `startsAt` / `endsAt`, «اليوم والبث المباشر» `dayStartsAt`,
      `liveEndsAt` and the church-event rows `date` / `endDate` / `start` / `end`) is read-only with a trailing clock /
-     calendar icon (a tap on the field opens it too). Time: `showTimePicker` in 24-hour mode (`MediaQuery
-     alwaysUse24HourFormat: true`), saved strictly `HH:mm` (`formatPickedTime`). Date: `showDatePicker`, saved
+     calendar icon (a tap on the field opens it too). Time: `showTimePicker` as a 12-hour AM/PM picker (owner change: easier for
+     admins; Arabic shows ص/م; `MediaQuery alwaysUse24HourFormat: false`), saved strictly zero-padded 24-hour `HH:mm`
+     (`formatPickedTime`: 6:05 AM → `06:05`, 12:00 AM → `00:00`, 12:00 PM → `12:00`, 11:59 PM → `23:59`). Under the
+     read-only field the helper shows the friendly 12-hour reading in the app's style (`formatTimeArabic` /
+     `formatTimeLatin`: «٠٦:٣٠ م» / "06:30 PM"; a date-time adds the date: "26 Apr 2027, 06:30 PM"). The chosen ص/م is filled with `primary` (the theme's
+     containers match the dialog surface, so the default left both periods looking unselected). Date: `showDatePicker`, saved
      `YYYY-MM-DD` (`formatPickedDate`). Date-time: date then time, `YYYY-MM-DD HH:mm` Cairo wall time. Stored types are
      unchanged: `date` / `dateTime` still parse to the same Timestamp instant (`parseFieldValue`), row dates stay text.
      The picker opens on the current value (a legacy unpadded `9:00` or Arabic digits still load,
@@ -1320,7 +1324,8 @@ supersede them.
   handover minute by minute vs an oracle and at the handover points; widgets: the now box line at 18:30 Holy Week,
   00:30 «يُقام الآن», 09:00 / 19:00 / 21:30 handover; switch contrast in every theme and the Holy Week switch roles).
   `test/admin_pickers_test.dart` (formatters: padding, 00:00, 23:59, prefill parsing; liturgy form read-only fields,
-  24-hour picker, prefill, date, clear, Arabic RTL; season `startsAt` date + time → same instant; «اليوم» `dayStartsAt`
+  12-hour AM/PM picker (AM/PM and ص/م present, 6:05 AM / 11:59 PM / 12:00 AM / 12:00 PM → `06:05` / `23:59` / `00:00` /
+  `12:00`, the 12-hour reading), prefill, date, clear, Arabic RTL; season `startsAt` date + 6:30 PM → `2027-04-26 18:30`, same instant; «اليوم» `dayStartsAt`
   and church-event rows), `test/helpers/admin_pickers.dart`; the clinic save test in `admin_test.dart` now fills times
   through the picker. Phase 1 harness re-run on the branch: `work/seasons-sim/fixes1/status.md`.
 
@@ -1378,6 +1383,6 @@ supersede them.
 | 5 Nov 2026 | **PR #39** — "Live user test fixes" (`fix/live-test-findings`) | ADR-046: top event only on the stored `settings/features` (`featuresLiveProvider`, no seed flash); boot script in `web/index.html` sets the English title / `lang` and drops FlutterFire's saved reCAPTCHA provider (App Check on /ask only again); `accent_about` «كنيستنا»; sample badges / banner / «times pending» removed from the public UI (`sample` kept in data and admin); `fetch_synaxarium.js` computes a missing Coptic date; pope-visit images as Hosting WebP files. +0 reads / listeners / writes. |
 
 | 5 Nov 2026 | **PR #40** — "English verse of the day" (`feat/verse-english`) | ADR-047: `Verse.textEn` + `display(english:)` (English text LTR, else Arabic with the Arabic reference); `gen_daily_verses.py` adds the public-domain WEB British Edition (SHA-pinned) for the same 366 verses; optional `textEn` / `refEn` for the fixed verse and a `␟textEn␟refEn` tail for season verses in `settings/features` (`encodedOptionalTail`); rules `validDailyVerse` / `validSeasonVerses`. +0 reads / listeners. |
-| 5 Nov 2026 | **PR #42** — "Season card timing" (`fix/season-card-timing`) | ADR-048: «يُقام الآن» names the services running now in other halls (`runningNow`, `alsoRunning`); overnight services audited and pinned (Easter night, Kiahk, Apocalypse, DST), parallel services compared across midnight (`occurrencesAround`), assistant says an overnight service ends the next morning; /mass-schedule seasonal switch from palette roles at ≥ 3:1 in every theme; additive day-to-night handover tested minute by minute; admin time / date pickers (24-hour `HH:mm`, `YYYY-MM-DD`, stored types unchanged). +0 reads. |
+| 5 Nov 2026 | **PR #42** — "Season card timing" (`fix/season-card-timing`) | ADR-048: «يُقام الآن» names the services running now in other halls (`runningNow`, `alsoRunning`); overnight services audited and pinned (Easter night, Kiahk, Apocalypse, DST), parallel services compared across midnight (`occurrencesAround`), assistant says an overnight service ends the next morning; /mass-schedule seasonal switch from palette roles at ≥ 3:1 in every theme; additive day-to-night handover tested minute by minute; admin time / date pickers (12-hour AM/PM picker with a 12-hour reading, stored 24-hour `HH:mm`, `YYYY-MM-DD`, stored types unchanged). +0 reads. |
 
 Append new PRs to this table.

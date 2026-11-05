@@ -433,7 +433,7 @@ void main() {
       await tester.tap(find.byKey(const Key('editor-save')));
       await tester.pumpAndSettle();
       expect(saved, isNull);
-      // Times come from the 24-hour picker since ADR-048 (read-only fields).
+      // Times come from the 12-hour picker since ADR-048 (read-only fields; stored 24h).
       await pickTime(tester, 'start', 16, 0);
       await pickTime(tester, 'end', 20, 0);
       await tester.enterText(find.byKey(const ValueKey('field-order')), '30');

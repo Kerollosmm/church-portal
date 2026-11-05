@@ -10,6 +10,7 @@ import '../../data/image_processing.dart';
 import '../../data/media_repository.dart';
 import '../../domain/cairo_time.dart';
 import '../../domain/media.dart';
+import '../../domain/rules.dart' show normalizeDigits;
 import '../../domain/time_format.dart';
 import '../widgets/item_image.dart';
 import 'admin_schema.dart';
@@ -444,9 +445,10 @@ class DocEditorState extends State<DocEditor> {
 
   /// Time / date / date-time fields are read-only and filled from the
   /// pickers (ADR-048): a clock or calendar icon (and a tap on the field)
-  /// opens [showTimePicker] in 24-hour mode / [showDatePicker]; the text is
-  /// stored strictly as "HH:mm", "YYYY-MM-DD" or "YYYY-MM-DD HH:mm" (Cairo
-  /// wall time, parsed to the same stored instant as before).
+  /// opens [showTimePicker] as a 12-hour AM/PM picker (ص/م in Arabic) /
+  /// [showDatePicker]. Storage stays 24-hour: the text is strictly "HH:mm",
+  /// "YYYY-MM-DD" or "YYYY-MM-DD HH:mm" (Cairo wall time, parsed to the same
+  /// stored instant as before); [_pickedReading] shows the 12-hour reading.
   static bool _picked(FieldType t) => t == FieldType.time || t == FieldType.date || t == FieldType.dateTime;
 
   Future<void> _pick(FieldDef f, TextEditingController c) async {
@@ -457,10 +459,25 @@ class DocEditorState extends State<DocEditor> {
         context: context,
         initialTime: TimeOfDay(hour: init.$1, minute: init.$2),
         helpText: _label(f),
-        builder: (ctx, child) => MediaQuery(
-          data: MediaQuery.of(ctx).copyWith(alwaysUse24HourFormat: true),
-          child: child!,
-        ),
+        builder: (ctx, child) {
+          // The theme's containers match the dialog surface, so mark the
+          // chosen ص/م (AM/PM) like the chosen hour on the dial.
+          final theme = Theme.of(ctx), cs = theme.colorScheme;
+          return MediaQuery(
+            data: MediaQuery.of(ctx).copyWith(alwaysUse24HourFormat: false),
+            child: Theme(
+              data: theme.copyWith(
+                timePickerTheme: theme.timePickerTheme.copyWith(
+                  dayPeriodColor: WidgetStateColor.resolveWith(
+                      (s) => s.contains(WidgetState.selected) ? cs.primary : Colors.transparent),
+                  dayPeriodTextColor: WidgetStateColor.resolveWith(
+                      (s) => s.contains(WidgetState.selected) ? cs.onPrimary : cs.onSurface),
+                ),
+              ),
+              child: child!,
+            ),
+          );
+        },
       );
       return t == null ? null : (t.hour, t.minute);
     }
@@ -490,6 +507,22 @@ class DocEditorState extends State<DocEditor> {
     c.text = formatPickedDateTime(d.year, d.month, d.day, t.$1, t.$2);
   }
 
+  /// The friendly 12-hour reading of a picked time / date-time field, shown
+  /// under it: "٠٦:٣٠ م" / "06:30 PM", with the date first for date-times;
+  /// null when blank or not a valid value (the field then shows its hint).
+  String? _pickedReading(FieldDef f, String raw) {
+    final ar = context.isAr;
+    String time(int h, int m) => (ar ? formatTimeArabic : formatTimeLatin)(formatPickedTime(h, m));
+    if (f.type == FieldType.time) {
+      final t = parseFieldTime(raw);
+      return t == null ? null : time(t.$1, t.$2);
+    }
+    if (f.type != FieldType.dateTime) return null;
+    final d = parseFieldDateTime(raw);
+    if (d == null || dateTimeRe.firstMatch(normalizeDigits(raw.trim())) == null) return null;
+    return '${formatDate(DateTime(d.$1, d.$2, d.$3), arabic: ar)}${ar ? '، ' : ', '}${time(d.$4, d.$5)}';
+  }
+
   Widget? _pickerSuffix(FieldDef f, TextEditingController c) {
     if (!_picked(f.type)) return null;
     return ValueListenableBuilder<TextEditingValue>(
@@ -513,12 +546,23 @@ class DocEditorState extends State<DocEditor> {
   }
 
   Widget _textField(FieldDef f, TextEditingController c, {String? Function()? rowError}) {
+    if (f.type == FieldType.time || f.type == FieldType.dateTime) {
+      // Rebuilds with the value so the 12-hour reading follows each pick.
+      return ValueListenableBuilder<TextEditingValue>(
+        valueListenable: c,
+        builder: (context, v, _) => _textFieldBody(f, c, rowError, _pickedReading(f, v.text)),
+      );
+    }
+    return _textFieldBody(f, c, rowError, null);
+  }
+
+  Widget _textFieldBody(FieldDef f, TextEditingController c, String? Function()? rowError, String? reading) {
     final picked = _picked(f.type);
     final ltr = switch (f.type) {
       FieldType.text || FieldType.multiline => false,
       _ => true,
     };
-    final hint = context.pick(f.hintAr, f.hintEn);
+    final hint = [reading ?? '', context.pick(f.hintAr, f.hintEn)].where((s) => s.isNotEmpty).join('\n');
     return TextFormField(
       key: ValueKey('field-${f.key}'),
       controller: c,
@@ -543,7 +587,7 @@ class DocEditorState extends State<DocEditor> {
       decoration: InputDecoration(
         labelText: _label(f),
         helperText: hint.isEmpty ? null : hint,
-        helperMaxLines: 3,
+        helperMaxLines: reading == null ? 3 : 4,
         suffixIcon: _pickerSuffix(f, c) ?? (f.linkPicker && widget.linkTargets.isNotEmpty
             ? IconButton(
                 key: ValueKey('linkPick-${f.key}'),
