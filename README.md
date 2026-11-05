@@ -73,17 +73,15 @@ graph TD
 
 ## 📱 Visual Showcase
 
-| Home & Hero Section | Church Chronicle & Altars | Divine Liturgy Schedule |
-|:---:|:---:|:---:|
-| <img src="screens/01_home.png" alt="Home Screen" width="260"/> | <img src="screens/02_about.png" alt="About Screen" width="260"/> | <img src="screens/03_mass_schedule.png" alt="Schedule Screen" width="260"/> |
+Captured from the live site (Arabic, 390 px phone viewport) and, for the dashboard, from the real admin UI rendered against local Firestore-emulator data (no live sign-in).
 
-| Church Education & Meetings | Charity Medical Clinics | Public Parish Services |
+| Home | Mass Schedule | Ask the Church (AI assistant) |
 |:---:|:---:|:---:|
-| <img src="screens/04_church_education.png" alt="Meetings Screen" width="260"/> | <img src="screens/06_clinics.png" alt="Clinics Screen" width="260"/> | <img src="screens/07_public_services.png" alt="Services Screen" width="260"/> |
+| <img src="screens/01_home.png" alt="Home screen: hero with the church name, daily verse and Coptic date bar" width="240"/> | <img src="screens/02_mass_schedule.png" alt="Mass schedule: notice, next liturgy card and seasons switch" width="240"/> | <img src="screens/03_ask.png" alt="Ask the Church assistant: greeting and question box" width="240"/> |
 
-| Sourced Contact & Maps | AI Assistant ("Ask the Church") |
-|:---:|:---:|
-| <img src="screens/08_contact.png" alt="Contact Screen" width="260"/> | <img src="screens/09_ask.png" alt="Assistant Screen" width="260"/> |
+**Admin dashboard** (overview after sign-in: section sidebar and content tiles)
+
+<img src="screens/04_admin_dashboard.png" alt="Admin dashboard overview with the section sidebar and per-collection tiles" width="760"/>
 
 ---
 
