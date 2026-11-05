@@ -372,6 +372,36 @@ void main() {
       expect(sealTop, 32.0);
     });
 
+    testWidgets('status-bar icons contrast with the top bar on every theme (Sentry review on PR #35)', (tester) async {
+      for (final key in ThemePresets.palettes.keys) {
+        final pal = ThemePresets.palettes[key]!;
+        await tester.pumpWidget(ProviderScope(
+          overrides: [
+            repositoryProvider.overrideWithValue(SeedRepository(SeedData(const {}))),
+            featuresProvider.overrideWithValue(FeatureSettings.defaults),
+            featuresReadyProvider.overrideWithValue(true),
+            nowProvider.overrideWith((ref) => Stream.value(cairo(2026, 11, 4, 10))),
+          ],
+          child: MaterialApp(
+            locale: const Locale('ar'),
+            theme: buildTheme(const Locale('ar'), palette: pal, key: key),
+            supportedLocales: const [Locale('ar'), Locale('en')],
+            localizationsDelegates: GlobalMaterialLocalizations.delegates,
+            home: const AppShell(location: '/about', child: Text('page')),
+          ),
+        ));
+        await tester.pump();
+        final region = tester.widget<AnnotatedRegion<SystemUiOverlayStyle>>(find
+            .ancestor(of: find.byKey(const Key('copticDateStrip')), matching: find.byType(AnnotatedRegion<SystemUiOverlayStyle>))
+            .first);
+        final bar = tester.element(find.byKey(const Key('copticDateStrip'))).pal.bar;
+        final darkBar = ThemeData.estimateBrightnessForColor(bar) == Brightness.dark;
+        expect(region.value.statusBarIconBrightness, darkBar ? Brightness.light : Brightness.dark, reason: key);
+        // Golden hour (maroon) and Holy Week (charcoal) are dark bands: light icons.
+        if (key == 'goldenHour' || key == 'holyWeek') expect(region.value, SystemUiOverlayStyle.light, reason: key);
+      }
+    });
+
     testWidgets('preserves horizontal safe area insets on landscape cutouts', (tester) async {
       tester.view.physicalSize = const Size(800, 400);
       tester.view.devicePixelRatio = 1;

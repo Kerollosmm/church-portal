@@ -1076,6 +1076,9 @@ supersede them.
      `SynaxariumSource` fallback to the live URL and the seed-mode fetch on web were removed — the live site sends no
      `Access-Control-Allow-Origin`, so a browser on another origin can never read it (and preview channels already
      serve their own `/data/today.json`); `Icon-192.png` (57 KB, preloaded) replaced by the shared 27 KB seal.
+     Sentry review on `5398d91`: with the bar shown, the AppBar's `systemOverlayStyle` region sits below the status
+     bar, so the icons over the dark band were left to the platform default — the band now carries its own
+     `AnnotatedRegion<SystemUiOverlayStyle>` (`statusBarStyleOn(pal.bar)`: light icons on a dark band; native / PWA).
 - **Cost:** +0 Firestore reads, +0 listeners, +0 writes, no new collection (reuses `todaySettingsProvider` and
   `nowProvider`; the badge switch is one more key in `settings/features`). First
   paint: −the visible poster (LCP is now the name / seal, painted with the first frame of HTML), seal shared with the app.

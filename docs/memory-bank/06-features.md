@@ -90,7 +90,8 @@ render with `PageBody` (+ `Footer`). Content comes from Riverpod providers (hidd
   `liveBadgeHideOnHome`, default on; off = Home shows both). Every other page shows the badge. The bar also appears
   with only the badge when `copticStrip` hides the date on that page, and disappears on Home when the date is off and
   the badge is hidden.
-- **AppShell**: the bar is no longer in the body column. The status-bar inset above it takes `pal.bar`; the hanging
+- **AppShell**: the bar is no longer in the body column. The status-bar inset above it takes `pal.bar` (status-bar
+  icons from `statusBarStyleOn(pal.bar)` — light on the dark band); the hanging
   seal tab moves down by the bar's height. The shell watches the clock through `select` (rebuilds only when the bar
   appears / disappears). +0 reads, +0 listeners.
 - **Live banner** (`LiveStreamBanner`): red bar under the AppBar on every page while `liveEnabled` + an http(s)

@@ -1,3 +1,4 @@
+import 'package:flutter/services.dart' show SystemUiOverlayStyle;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
@@ -75,6 +76,11 @@ String _parentLabelKey(String parentRoute) => switch (parentRoute) {
 /// "Back to …" for a detail page's parent ("Back to home" for Home).
 String backToLabel(BuildContext context, String parentRoute) =>
     parentRoute == '/' ? context.tr('backHome') : context.tr('backTo', {'s': context.tr(_parentLabelKey(parentRoute))});
+
+/// Status-bar icon style over a band of colour [band]: light icons on a dark
+/// band (the top utility bar's title band on every theme), dark on a light one.
+SystemUiOverlayStyle statusBarStyleOn(Color band) =>
+    ThemeData.estimateBrightnessForColor(band) == Brightness.dark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark;
 
 /// Paths grouped under «خدمات الكنيسة / Church services» (desktop menu and
 /// drawer group); the rest sit under «الكنيسة / The church».
@@ -245,12 +251,18 @@ class _AppShellState extends ConsumerState<AppShell> {
           mainAxisSize: MainAxisSize.min,
           children: [
             if (showTopBar) ...[
-              // The status-bar inset above the bar takes the bar's colour.
-              ColoredBox(
-                color: context.pal.bar,
-                child: SafeArea(
-                  bottom: false,
-                  child: TopUtilityBar(location: location),
+              // The status-bar inset above the bar takes the bar's colour, and
+              // the status-bar icons contrast with it (light on the dark title
+              // band; the AppBar's own style sits lower and follows its light
+              // background — Sentry review on PR #35).
+              AnnotatedRegion<SystemUiOverlayStyle>(
+                value: statusBarStyleOn(context.pal.bar),
+                child: ColoredBox(
+                  color: context.pal.bar,
+                  child: SafeArea(
+                    bottom: false,
+                    child: TopUtilityBar(location: location),
+                  ),
                 ),
               ),
               SafeArea(
