@@ -132,7 +132,8 @@ cancels and re-subscribes every stream (BUG-18; `ChurchInfoScreen` does the same
 
 - **Verse of the day** card (PR #16, ADR-024; since PR #17 it controls the **hero** verse): "Show the verse of the day" switch (same flag as the
   `dailyVerse` section toggle), mode chips "A different verse
-  every day" / "A fixed verse I choose"; fixed mode shows the Arabic text (required, ≤500) and reference (≤60) fields →
+  every day" / "A fixed verse I choose"; fixed mode shows the Arabic text (required, ≤500) and reference (≤60) fields, plus optional English text (≤500) and
+  English reference (≤60) since ADR-047 →
   `settings/features.dailyVerse`. Saving in daily mode clears the (hidden, unvalidated) fixed-verse fields.
 - **Image display** card (PR #15, ADR-023): one dropdown per image collection (avatar / card / banner) →
   `settings/features.imageStyles`; the dropdown shows the built-in default until changed.
@@ -144,7 +145,8 @@ cancels and re-subscribes every stream (BUG-18; `ChurchInfoScreen` does the same
 Top-level keys `venues` and `audiences` (encoded-row lists, ≤ 12 rows each: key, Arabic name, English name; empty =
 the defaults). They feed the run-time dropdowns «المكان / القاعة» and «الفئة» of the programme group. The generic form
 writes only the keys it changed. Since PR #33 (ADR-042) it also holds «آيات المواسم» `seasonVerses` (≤ 40 rows:
-season choice, verse text, reference).
+season choice, verse text, reference; since ADR-047 optional English text and English reference, stored as a
+`␟textEn␟refEn` tail only when filled — `FieldDef.encodedOptionalTail: 2`).
 
 Since PR #36 (Sentry CHURCH-PORTAL-9) the dashboard keys each `ChurchInfoScreen` by section (`ValueKey('today')`,
 `ValueKey('seasonSettings')`, `ValueKey('church')`) and `ChurchInfoScreen.didUpdateWidget` rebuilds the form when the

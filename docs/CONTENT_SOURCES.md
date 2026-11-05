@@ -151,7 +151,15 @@ site owner, served from Hosting: `/art/saint-moses-black.webp` and `/art/saints-
   Mission, contributor American Bible Society).
 - Text is copied byte-for-byte by `tool/gen_daily_verses.py` (never typed); only the choice of references
   (`tool/daily_verse_refs.txt`) and the Arabic/English book names are ours. Status: **verified** (public-domain text).
-- A fixed verse entered by an admin (`settings/features.dailyVerse`) is the church's own responsibility.
+- **English (PR #40, ADR-047):** `textEn` of the same 366 verses from the **World English Bible British Edition**
+  (WEBBE), eBible.org, https://ebible.org/Scriptures/eng-webbe_vpl.zip (details:
+  https://ebible.org/find/details.php?id=eng-webbe), file `eng-webbe_vpl.txt`, downloaded 5 Nov 2026; zip SHA-256
+  `018b2ac4ebafdbfcd00c69f9a48ee775c2a6f318d20a93476058a1162d63423a` (checked by the generator). License: **Public
+  Domain** ("The World English Bible British Edition is not copyrighted. It is in the Public Domain."; "World English
+  Bible" is a trademark, so the text is not altered). Copied byte-for-byte; the British Edition reads "the LORD" where
+  the WEB reads "Yahweh". Status: **verified** (public-domain text).
+- A fixed verse or season verse entered by an admin (`settings/features.dailyVerse` / `seasonVerses`, Arabic and
+  optional English) is the church's own responsibility.
 
 ## Coptic calendar, feasts and the day's commemoration (PR #31, 4 Nov 2026)
 

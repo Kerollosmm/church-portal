@@ -3,2203 +3,2573 @@
  "license": "Public Domain",
  "source": "https://ebible.org/Scriptures/arb-vd_vpl.zip",
  "sourceSha256": "070404da2e13e641b7550b50d7e777480b2cc2667e9669f2194d909ca04cd68a",
+ "translationEn": "World English Bible British Edition (WEBBE)",
+ "licenseEn": "Public Domain",
+ "sourceEn": "https://ebible.org/Scriptures/eng-webbe_vpl.zip",
+ "sourceEnSha256": "018b2ac4ebafdbfcd00c69f9a48ee775c2a6f318d20a93476058a1162d63423a",
  "count": 366,
  "verses": [
   {
    "ref": "PSA 55:22",
    "refAr": "مزمور ٥٥: ٢٢",
    "refEn": "Psalm 55:22",
-   "textAr": "أَلْقِ عَلَى ٱلرَّبِّ هَمَّكَ فَهُوَ يَعُولُكَ. لَا يَدَعُ ٱلصِّدِّيقَ يَتَزَعْزَعُ إِلَى ٱلْأَبَدِ."
+   "textAr": "أَلْقِ عَلَى ٱلرَّبِّ هَمَّكَ فَهُوَ يَعُولُكَ. لَا يَدَعُ ٱلصِّدِّيقَ يَتَزَعْزَعُ إِلَى ٱلْأَبَدِ.",
+   "textEn": "Cast your burden on the LORD and he will sustain you. He will never allow the righteous to be moved."
   },
   {
    "ref": "1JO 3:1",
    "refAr": "يوحنا الأولى ٣: ١",
    "refEn": "1 John 3:1",
-   "textAr": "اُنْظُرُوا أَيَّةَ مَحَبَّةٍ أَعْطَانَا ٱلْآبُ حَتَّى نُدْعَى أَوْلَادَ ٱللهِ! مِنْ أَجْلِ هَذَا لَا يَعْرِفُنَا ٱلْعَالَمُ، لِأَنَّهُ لَا يَعْرِفُهُ."
+   "textAr": "اُنْظُرُوا أَيَّةَ مَحَبَّةٍ أَعْطَانَا ٱلْآبُ حَتَّى نُدْعَى أَوْلَادَ ٱللهِ! مِنْ أَجْلِ هَذَا لَا يَعْرِفُنَا ٱلْعَالَمُ، لِأَنَّهُ لَا يَعْرِفُهُ.",
+   "textEn": "See how great a love the Father has given to us, that we should be called children of God! For this cause the world doesn’t know us, because it didn’t know him."
   },
   {
    "ref": "EPH 4:29",
    "refAr": "أفسس ٤: ٢٩",
    "refEn": "Ephesians 4:29",
-   "textAr": "لَا تَخْرُجْ كَلِمَةٌ رَدِيَّةٌ مِنْ أَفْوَاهِكُمْ، بَلْ كُلُّ مَا كَانَ صَالِحًا لِلْبُنْيَانِ حَسَبَ ٱلْحَاجَةِ، كَيْ يُعْطِيَ نِعْمَةً لِلسَّامِعِينَ."
+   "textAr": "لَا تَخْرُجْ كَلِمَةٌ رَدِيَّةٌ مِنْ أَفْوَاهِكُمْ، بَلْ كُلُّ مَا كَانَ صَالِحًا لِلْبُنْيَانِ حَسَبَ ٱلْحَاجَةِ، كَيْ يُعْطِيَ نِعْمَةً لِلسَّامِعِينَ.",
+   "textEn": "Let no corrupt speech proceed out of your mouth, but only what is good for building others up as the need may be, that it may give grace to those who hear."
   },
   {
    "ref": "PHI 4:13",
    "refAr": "فيلبي ٤: ١٣",
    "refEn": "Philippians 4:13",
-   "textAr": "أَسْتَطِيعُ كُلَّ شَيْءٍ فِي ٱلْمَسِيحِ ٱلَّذِي يُقَوِّينِي."
+   "textAr": "أَسْتَطِيعُ كُلَّ شَيْءٍ فِي ٱلْمَسِيحِ ٱلَّذِي يُقَوِّينِي.",
+   "textEn": "I can do all things through Christ who strengthens me."
   },
   {
    "ref": "GAL 5:22",
    "refAr": "غلاطية ٥: ٢٢",
    "refEn": "Galatians 5:22",
-   "textAr": "وَأَمَّا ثَمَرُ ٱلرُّوحِ فَهُوَ: مَحَبَّةٌ، فَرَحٌ، سَلَامٌ، طُولُ أَنَاةٍ، لُطْفٌ، صَلَاحٌ، إِيمَانٌ،"
+   "textAr": "وَأَمَّا ثَمَرُ ٱلرُّوحِ فَهُوَ: مَحَبَّةٌ، فَرَحٌ، سَلَامٌ، طُولُ أَنَاةٍ، لُطْفٌ، صَلَاحٌ، إِيمَانٌ،",
+   "textEn": "But the fruit of the Spirit is love, joy, peace, patience, kindness, goodness, faith,"
   },
   {
    "ref": "JOH 1:5",
    "refAr": "يوحنا ١: ٥",
    "refEn": "John 1:5",
-   "textAr": "وَٱلنُّورُ يُضِيءُ فِي ٱلظُّلْمَةِ، وَٱلظُّلْمَةُ لَمْ تُدْرِكْهُ."
+   "textAr": "وَٱلنُّورُ يُضِيءُ فِي ٱلظُّلْمَةِ، وَٱلظُّلْمَةُ لَمْ تُدْرِكْهُ.",
+   "textEn": "The light shines in the darkness, and the darkness hasn’t overcome it."
   },
   {
    "ref": "PSA 91:1",
    "refAr": "مزمور ٩١: ١",
    "refEn": "Psalm 91:1",
-   "textAr": "اَلسَّاكِنُ فِي سِتْرِ ٱلْعَلِيِّ، فِي ظِلِّ ٱلْقَدِيرِ يَبِيتُ."
+   "textAr": "اَلسَّاكِنُ فِي سِتْرِ ٱلْعَلِيِّ، فِي ظِلِّ ٱلْقَدِيرِ يَبِيتُ.",
+   "textEn": "He who dwells in the secret place of the Most High will rest in the shadow of the Almighty."
   },
   {
    "ref": "ROM 10:13",
    "refAr": "رومية ١٠: ١٣",
    "refEn": "Romans 10:13",
-   "textAr": "لِأَنَّ «كُلَّ مَنْ يَدْعُو بِٱسْمِ ٱلرَّبِّ يَخْلُصُ»."
+   "textAr": "لِأَنَّ «كُلَّ مَنْ يَدْعُو بِٱسْمِ ٱلرَّبِّ يَخْلُصُ».",
+   "textEn": "For, “Whoever will call on the name of the Lord will be saved.”"
   },
   {
    "ref": "1CO 13:13",
    "refAr": "كورنثوس الأولى ١٣: ١٣",
    "refEn": "1 Corinthians 13:13",
-   "textAr": "أَمَّا ٱلْآنَ فَيَثْبُتُ: ٱلْإِيمَانُ وَٱلرَّجَاءُ وَٱلْمَحَبَّةُ، هَذِهِ ٱلثَّلَاثَةُ وَلَكِنَّ أَعْظَمَهُنَّ ٱلْمَحَبَّةُ."
+   "textAr": "أَمَّا ٱلْآنَ فَيَثْبُتُ: ٱلْإِيمَانُ وَٱلرَّجَاءُ وَٱلْمَحَبَّةُ، هَذِهِ ٱلثَّلَاثَةُ وَلَكِنَّ أَعْظَمَهُنَّ ٱلْمَحَبَّةُ.",
+   "textEn": "But now faith, hope, and love remain—these three. The greatest of these is love."
   },
   {
    "ref": "EPH 2:10",
    "refAr": "أفسس ٢: ١٠",
    "refEn": "Ephesians 2:10",
-   "textAr": "لِأَنَّنَا نَحْنُ عَمَلُهُ، مَخْلُوقِينَ فِي ٱلْمَسِيحِ يَسُوعَ لِأَعْمَالٍ صَالِحَةٍ، قَدْ سَبَقَ ٱللهُ فَأَعَدَّهَا لِكَيْ نَسْلُكَ فِيهَا."
+   "textAr": "لِأَنَّنَا نَحْنُ عَمَلُهُ، مَخْلُوقِينَ فِي ٱلْمَسِيحِ يَسُوعَ لِأَعْمَالٍ صَالِحَةٍ، قَدْ سَبَقَ ٱللهُ فَأَعَدَّهَا لِكَيْ نَسْلُكَ فِيهَا.",
+   "textEn": "For we are his workmanship, created in Christ Jesus for good works, which God prepared before that we would walk in them."
   },
   {
    "ref": "PSA 18:2",
    "refAr": "مزمور ١٨: ٢",
    "refEn": "Psalm 18:2",
-   "textAr": "ٱلرَّبُّ صَخْرَتِي وَحِصْنِي وَمُنْقِذِي. إِلَهِي صَخْرَتِي بِهِ أَحْتَمِي. تُرْسِي وَقَرْنُ خَلَاصِي وَمَلْجَإِي."
+   "textAr": "ٱلرَّبُّ صَخْرَتِي وَحِصْنِي وَمُنْقِذِي. إِلَهِي صَخْرَتِي بِهِ أَحْتَمِي. تُرْسِي وَقَرْنُ خَلَاصِي وَمَلْجَإِي.",
+   "textEn": "The LORD is my rock, my fortress, and my deliverer; my God, my rock, in whom I take refuge; my shield, and the horn of my salvation, my high tower."
   },
   {
    "ref": "PHI 2:5",
    "refAr": "فيلبي ٢: ٥",
    "refEn": "Philippians 2:5",
-   "textAr": "فَلْيَكُنْ فِيكُمْ هَذَا ٱلْفِكْرُ ٱلَّذِي فِي ٱلْمَسِيحِ يَسُوعَ أَيْضًا:"
+   "textAr": "فَلْيَكُنْ فِيكُمْ هَذَا ٱلْفِكْرُ ٱلَّذِي فِي ٱلْمَسِيحِ يَسُوعَ أَيْضًا:",
+   "textEn": "Have this in your mind, which was also in Christ Jesus,"
   },
   {
    "ref": "ACT 2:21",
    "refAr": "أعمال الرسل ٢: ٢١",
    "refEn": "Acts 2:21",
-   "textAr": "وَيَكُونُ كُلُّ مَنْ يَدْعُو بِٱسْمِ ٱلرَّبِّ يَخْلُصُ."
+   "textAr": "وَيَكُونُ كُلُّ مَنْ يَدْعُو بِٱسْمِ ٱلرَّبِّ يَخْلُصُ.",
+   "textEn": "It will be that whoever will call on the name of the Lord will be saved.’"
   },
   {
    "ref": "JOH 4:24",
    "refAr": "يوحنا ٤: ٢٤",
    "refEn": "John 4:24",
-   "textAr": "ٱللهُ رُوحٌ. وَٱلَّذِينَ يَسْجُدُونَ لَهُ فَبِالرُّوحِ وَٱلْحَقِّ يَنْبَغِي أَنْ يَسْجُدُوا»."
+   "textAr": "ٱللهُ رُوحٌ. وَٱلَّذِينَ يَسْجُدُونَ لَهُ فَبِالرُّوحِ وَٱلْحَقِّ يَنْبَغِي أَنْ يَسْجُدُوا».",
+   "textEn": "God is spirit, and those who worship him must worship in spirit and truth.”"
   },
   {
    "ref": "JOH 6:35",
    "refAr": "يوحنا ٦: ٣٥",
    "refEn": "John 6:35",
-   "textAr": "فَقَالَ لَهُمْ يَسُوعُ: «أَنَا هُوَ خُبْزُ ٱلْحَيَاةِ. مَنْ يُقْبِلْ إِلَيَّ فَلَا يَجُوعُ، وَمَنْ يُؤْمِنْ بِي فَلَا يَعْطَشُ أَبَدًا."
+   "textAr": "فَقَالَ لَهُمْ يَسُوعُ: «أَنَا هُوَ خُبْزُ ٱلْحَيَاةِ. مَنْ يُقْبِلْ إِلَيَّ فَلَا يَجُوعُ، وَمَنْ يُؤْمِنْ بِي فَلَا يَعْطَشُ أَبَدًا.",
+   "textEn": "Jesus said to them, “I am the bread of life. Whoever comes to me will not be hungry, and whoever believes in me will never be thirsty."
   },
   {
    "ref": "1TH 4:17",
    "refAr": "تسالونيكي الأولى ٤: ١٧",
    "refEn": "1 Thessalonians 4:17",
-   "textAr": "ثُمَّ نَحْنُ ٱلْأَحْيَاءَ ٱلْبَاقِينَ سَنُخْطَفُ جَمِيعًا مَعَهُمْ فِي ٱلسُّحُبِ لِمُلَاقَاةِ ٱلرَّبِّ فِي ٱلْهَوَاءِ، وَهَكَذَا نَكُونُ كُلَّ حِينٍ مَعَ ٱلرَّبِّ."
+   "textAr": "ثُمَّ نَحْنُ ٱلْأَحْيَاءَ ٱلْبَاقِينَ سَنُخْطَفُ جَمِيعًا مَعَهُمْ فِي ٱلسُّحُبِ لِمُلَاقَاةِ ٱلرَّبِّ فِي ٱلْهَوَاءِ، وَهَكَذَا نَكُونُ كُلَّ حِينٍ مَعَ ٱلرَّبِّ.",
+   "textEn": "then we who are alive, who are left, will be caught up together with them in the clouds to meet the Lord in the air. So we will be with the Lord forever."
   },
   {
    "ref": "1JO 4:19",
    "refAr": "يوحنا الأولى ٤: ١٩",
    "refEn": "1 John 4:19",
-   "textAr": "نَحْنُ نُحِبُّهُ لِأَنَّهُ هُوَ أَحَبَّنَا أَوَّلًا."
+   "textAr": "نَحْنُ نُحِبُّهُ لِأَنَّهُ هُوَ أَحَبَّنَا أَوَّلًا.",
+   "textEn": "We love him, because he first loved us."
   },
   {
    "ref": "MAT 11:29",
    "refAr": "متى ١١: ٢٩",
    "refEn": "Matthew 11:29",
-   "textAr": "اِحْمِلُوا نِيرِي عَلَيْكُمْ وَتَعَلَّمُوا مِنِّي، لِأَنِّي وَدِيعٌ وَمُتَوَاضِعُ ٱلْقَلْبِ، فَتَجِدُوا رَاحَةً لِنُفُوسِكُمْ."
+   "textAr": "اِحْمِلُوا نِيرِي عَلَيْكُمْ وَتَعَلَّمُوا مِنِّي، لِأَنِّي وَدِيعٌ وَمُتَوَاضِعُ ٱلْقَلْبِ، فَتَجِدُوا رَاحَةً لِنُفُوسِكُمْ.",
+   "textEn": "Take my yoke upon you and learn from me, for I am gentle and humble in heart; and you will find rest for your souls."
   },
   {
    "ref": "LUK 21:33",
    "refAr": "لوقا ٢١: ٣٣",
    "refEn": "Luke 21:33",
-   "textAr": "اَلسَّمَاءُ وَٱلْأَرْضُ تَزُولَانِ، وَلَكِنَّ كَلَامِي لَايَزُولُ."
+   "textAr": "اَلسَّمَاءُ وَٱلْأَرْضُ تَزُولَانِ، وَلَكِنَّ كَلَامِي لَايَزُولُ.",
+   "textEn": "Heaven and earth will pass away, but my words will by no means pass away."
   },
   {
    "ref": "PRO 22:6",
    "refAr": "أمثال ٢٢: ٦",
    "refEn": "Proverbs 22:6",
-   "textAr": "رَبِّ ٱلْوَلَدَ فِي طَرِيقِهِ، فَمَتَى شَاخَ أَيْضًا لَا يَحِيدُ عَنْهُ."
+   "textAr": "رَبِّ ٱلْوَلَدَ فِي طَرِيقِهِ، فَمَتَى شَاخَ أَيْضًا لَا يَحِيدُ عَنْهُ.",
+   "textEn": "Train up a child in the way he should go, and when he is old he will not depart from it."
   },
   {
    "ref": "JOH 14:21",
    "refAr": "يوحنا ١٤: ٢١",
    "refEn": "John 14:21",
-   "textAr": "اَلَّذِي عِنْدَهُ وَصَايَايَ وَيَحْفَظُهَا فَهُوَ ٱلَّذِي يُحِبُّنِي، وَٱلَّذِي يُحِبُّنِي يُحِبُّهُ أَبِي، وَأَنَا أُحِبُّهُ، وَأُظْهِرُ لَهُ ذَاتِي»."
+   "textAr": "اَلَّذِي عِنْدَهُ وَصَايَايَ وَيَحْفَظُهَا فَهُوَ ٱلَّذِي يُحِبُّنِي، وَٱلَّذِي يُحِبُّنِي يُحِبُّهُ أَبِي، وَأَنَا أُحِبُّهُ، وَأُظْهِرُ لَهُ ذَاتِي».",
+   "textEn": "One who has my commandments and keeps them, that person is one who loves me. One who loves me will be loved by my Father, and I will love him, and will reveal myself to him.”"
   },
   {
    "ref": "MAR 11:24",
    "refAr": "مرقس ١١: ٢٤",
    "refEn": "Mark 11:24",
-   "textAr": "لِذَلِكَ أَقُولُ لَكُمْ: كُلُّ مَا تَطْلُبُونَهُ حِينَمَا تُصَلُّونَ، فَآمِنُوا أَنْ تَنَالُوهُ، فَيَكُونَ لَكُمْ."
+   "textAr": "لِذَلِكَ أَقُولُ لَكُمْ: كُلُّ مَا تَطْلُبُونَهُ حِينَمَا تُصَلُّونَ، فَآمِنُوا أَنْ تَنَالُوهُ، فَيَكُونَ لَكُمْ.",
+   "textEn": "Therefore I tell you, all things whatever you pray and ask for, believe that you have received them, and you shall have them."
   },
   {
    "ref": "1PE 2:9",
    "refAr": "بطرس الأولى ٢: ٩",
    "refEn": "1 Peter 2:9",
-   "textAr": "وَأَمَّا أَنْتُمْ فَجِنْسٌ مُخْتَارٌ، وَكَهَنُوتٌ مُلُوكِيٌّ، أُمَّةٌ مُقَدَّسَةٌ، شَعْبُ ٱقْتِنَاءٍ، لِكَيْ تُخْبِرُوا بِفَضَائِلِ ٱلَّذِي دَعَاكُمْ مِنَ ٱلظُّلْمَةِ إِلَى نُورِهِ ٱلْعَجِيبِ."
+   "textAr": "وَأَمَّا أَنْتُمْ فَجِنْسٌ مُخْتَارٌ، وَكَهَنُوتٌ مُلُوكِيٌّ، أُمَّةٌ مُقَدَّسَةٌ، شَعْبُ ٱقْتِنَاءٍ، لِكَيْ تُخْبِرُوا بِفَضَائِلِ ٱلَّذِي دَعَاكُمْ مِنَ ٱلظُّلْمَةِ إِلَى نُورِهِ ٱلْعَجِيبِ.",
+   "textEn": "But you are a chosen race, a royal priesthood, a holy nation, a people for God’s own possession, that you may proclaim the excellence of him who called you out of darkness into his marvellous light."
   },
   {
    "ref": "1JO 1:7",
    "refAr": "يوحنا الأولى ١: ٧",
    "refEn": "1 John 1:7",
-   "textAr": "وَلَكِنْ إِنْ سَلَكْنَا فِي ٱلنُّورِ كَمَا هُوَ فِي ٱلنُّورِ، فَلَنَا شَرِكَةٌ بَعْضِنَا مَعَ بَعْضٍ، وَدَمُ يَسُوعَ ٱلْمَسِيحِ ٱبْنِهِ يُطَهِّرُنَا مِنْ كُلِّ خَطِيَّةٍ."
+   "textAr": "وَلَكِنْ إِنْ سَلَكْنَا فِي ٱلنُّورِ كَمَا هُوَ فِي ٱلنُّورِ، فَلَنَا شَرِكَةٌ بَعْضِنَا مَعَ بَعْضٍ، وَدَمُ يَسُوعَ ٱلْمَسِيحِ ٱبْنِهِ يُطَهِّرُنَا مِنْ كُلِّ خَطِيَّةٍ.",
+   "textEn": "But if we walk in the light as he is in the light, we have fellowship with one another, and the blood of Jesus Christ his Son cleanses us from all sin."
   },
   {
    "ref": "PSA 66:20",
    "refAr": "مزمور ٦٦: ٢٠",
    "refEn": "Psalm 66:20",
-   "textAr": "مُبَارَكٌ ٱللهُ، ٱلَّذِي لَمْ يُبْعِدْ صَلَاتِي وَلَا رَحْمَتَهُ عَنِّي."
+   "textAr": "مُبَارَكٌ ٱللهُ، ٱلَّذِي لَمْ يُبْعِدْ صَلَاتِي وَلَا رَحْمَتَهُ عَنِّي.",
+   "textEn": "Blessed be God, who has not turned away my prayer, nor his loving kindness from me."
   },
   {
    "ref": "MAT 11:28",
    "refAr": "متى ١١: ٢٨",
    "refEn": "Matthew 11:28",
-   "textAr": "تَعَالَوْا إِلَيَّ يا جَمِيعَ ٱلْمُتْعَبِينَ وَٱلثَّقِيلِي ٱلْأَحْمَالِ، وَأَنَا أُرِيحُكُمْ."
+   "textAr": "تَعَالَوْا إِلَيَّ يا جَمِيعَ ٱلْمُتْعَبِينَ وَٱلثَّقِيلِي ٱلْأَحْمَالِ، وَأَنَا أُرِيحُكُمْ.",
+   "textEn": "“Come to me, all you who labour and are heavily burdened, and I will give you rest."
   },
   {
    "ref": "COL 3:16",
    "refAr": "كولوسي ٣: ١٦",
    "refEn": "Colossians 3:16",
-   "textAr": "لِتَسْكُنْ فِيكُمْ كَلِمَةُ ٱلْمَسِيحِ بِغِنًى، وَأَنْتُمْ بِكُلِّ حِكْمَةٍ مُعَلِّمُونَ وَمُنْذِرُونَ بَعْضُكُمْ بَعْضًا، بِمَزَامِيرَ وَتَسَابِيحَ وَأَغَانِيَّ رُوحِيَّةٍ، بِنِعْمَةٍ، مُتَرَنِّمِينَ فِي قُلُوبِكُمْ لِلرَّبِّ."
+   "textAr": "لِتَسْكُنْ فِيكُمْ كَلِمَةُ ٱلْمَسِيحِ بِغِنًى، وَأَنْتُمْ بِكُلِّ حِكْمَةٍ مُعَلِّمُونَ وَمُنْذِرُونَ بَعْضُكُمْ بَعْضًا، بِمَزَامِيرَ وَتَسَابِيحَ وَأَغَانِيَّ رُوحِيَّةٍ، بِنِعْمَةٍ، مُتَرَنِّمِينَ فِي قُلُوبِكُمْ لِلرَّبِّ.",
+   "textEn": "Let the word of Christ dwell in you richly; in all wisdom teaching and admonishing one another with psalms, hymns, and spiritual songs, singing with grace in your heart to the Lord."
   },
   {
    "ref": "1TH 5:15",
    "refAr": "تسالونيكي الأولى ٥: ١٥",
    "refEn": "1 Thessalonians 5:15",
-   "textAr": "ٱنْظُرُوا أَنْ لَا يُجَازِيَ أَحَدٌ أَحَدًا عَنْ شَرٍّ بِشَرٍّ، بَلْ كُلَّ حِينٍ ٱتَّبِعُوا ٱلْخَيْرَ بَعْضُكُمْ لِبَعْضٍ وَلِلْجَمِيعِ."
+   "textAr": "ٱنْظُرُوا أَنْ لَا يُجَازِيَ أَحَدٌ أَحَدًا عَنْ شَرٍّ بِشَرٍّ، بَلْ كُلَّ حِينٍ ٱتَّبِعُوا ٱلْخَيْرَ بَعْضُكُمْ لِبَعْضٍ وَلِلْجَمِيعِ.",
+   "textEn": "See that no one returns evil for evil to anyone, but always follow after that which is good for one another and for all."
   },
   {
    "ref": "ROM 12:12",
    "refAr": "رومية ١٢: ١٢",
    "refEn": "Romans 12:12",
-   "textAr": "فَرِحِينَ فِي ٱلرَّجَاءِ، صَابِرِينَ فِي ٱلضِّيْقِ، مُواظِبِينَ عَلَى ٱلصَّلَاةِ،"
+   "textAr": "فَرِحِينَ فِي ٱلرَّجَاءِ، صَابِرِينَ فِي ٱلضِّيْقِ، مُواظِبِينَ عَلَى ٱلصَّلَاةِ،",
+   "textEn": "rejoicing in hope, enduring in troubles, continuing steadfastly in prayer,"
   },
   {
    "ref": "TIT 2:11",
    "refAr": "تيطس ٢: ١١",
    "refEn": "Titus 2:11",
-   "textAr": "لِأَنَّهُ قَدْ ظَهَرَتْ نِعْمَةُ ٱللهِ ٱلْمُخَلِّصَةُ لِجَمِيعِ ٱلنَّاسِ،"
+   "textAr": "لِأَنَّهُ قَدْ ظَهَرَتْ نِعْمَةُ ٱللهِ ٱلْمُخَلِّصَةُ لِجَمِيعِ ٱلنَّاسِ،",
+   "textEn": "For the grace of God has appeared, bringing salvation to all men,"
   },
   {
    "ref": "PSA 95:6",
    "refAr": "مزمور ٩٥: ٦",
    "refEn": "Psalm 95:6",
-   "textAr": "هَلُمَّ نَسْجُدُ وَنَرْكَعُ وَنَجْثُو أَمَامَ ٱلرَّبِّ خَالِقِنَا،"
+   "textAr": "هَلُمَّ نَسْجُدُ وَنَرْكَعُ وَنَجْثُو أَمَامَ ٱلرَّبِّ خَالِقِنَا،",
+   "textEn": "Oh come, let’s worship and bow down. Let’s kneel before the LORD, our Maker,"
   },
   {
    "ref": "JOH 11:25",
    "refAr": "يوحنا ١١: ٢٥",
    "refEn": "John 11:25",
-   "textAr": "قَالَ لَهَا يَسُوعُ: «أَنَا هُوَ ٱلْقِيَامَةُ وَٱلْحَيَاةُ. مَنْ آمَنَ بِي وَلَوْ مَاتَ فَسَيَحْيَا،"
+   "textAr": "قَالَ لَهَا يَسُوعُ: «أَنَا هُوَ ٱلْقِيَامَةُ وَٱلْحَيَاةُ. مَنْ آمَنَ بِي وَلَوْ مَاتَ فَسَيَحْيَا،",
+   "textEn": "Jesus said to her, “I am the resurrection and the life. He who believes in me will still live, even if he dies."
   },
   {
    "ref": "1TH 5:24",
    "refAr": "تسالونيكي الأولى ٥: ٢٤",
    "refEn": "1 Thessalonians 5:24",
-   "textAr": "أَمِينٌ هُوَ ٱلَّذِي يَدْعُوكُمُ ٱلَّذِي سَيَفْعَلُ أَيْضًا."
+   "textAr": "أَمِينٌ هُوَ ٱلَّذِي يَدْعُوكُمُ ٱلَّذِي سَيَفْعَلُ أَيْضًا.",
+   "textEn": "He who calls you is faithful, who will also do it."
   },
   {
    "ref": "LUK 19:10",
    "refAr": "لوقا ١٩: ١٠",
    "refEn": "Luke 19:10",
-   "textAr": "لِأَنَّ ٱبْنَ ٱلْإِنْسَانِ قَدْ جَاءَ لِكَيْ يَطْلُبَ وَيُخَلِّصَ مَا قَدْ هَلَكَ»."
+   "textAr": "لِأَنَّ ٱبْنَ ٱلْإِنْسَانِ قَدْ جَاءَ لِكَيْ يَطْلُبَ وَيُخَلِّصَ مَا قَدْ هَلَكَ».",
+   "textEn": "For the Son of Man came to seek and to save that which was lost.”"
   },
   {
    "ref": "LUK 2:10",
    "refAr": "لوقا ٢: ١٠",
    "refEn": "Luke 2:10",
-   "textAr": "فَقَالَ لَهُمُ ٱلْمَلَاكُ: «لَا تَخَافُوا! فَهَا أَنَا أُبَشِّرُكُمْ بِفَرَحٍ عَظِيمٍ يَكُونُ لِجَمِيعِ ٱلشَّعْبِ:"
+   "textAr": "فَقَالَ لَهُمُ ٱلْمَلَاكُ: «لَا تَخَافُوا! فَهَا أَنَا أُبَشِّرُكُمْ بِفَرَحٍ عَظِيمٍ يَكُونُ لِجَمِيعِ ٱلشَّعْبِ:",
+   "textEn": "The angel said to them, “Don’t be afraid, for behold, I bring you good news of great joy which will be to all the people."
   },
   {
    "ref": "PRO 27:17",
    "refAr": "أمثال ٢٧: ١٧",
    "refEn": "Proverbs 27:17",
-   "textAr": "ٱلْحَدِيدُ بِٱلْحَدِيدِ يُحَدَّدُ، وَٱلْإِنْسَانُ يُحَدِّدُ وَجْهَ صَاحِبِهِ."
+   "textAr": "ٱلْحَدِيدُ بِٱلْحَدِيدِ يُحَدَّدُ، وَٱلْإِنْسَانُ يُحَدِّدُ وَجْهَ صَاحِبِهِ.",
+   "textEn": "Iron sharpens iron; so a man sharpens his friend’s countenance."
   },
   {
    "ref": "PSA 119:114",
    "refAr": "مزمور ١١٩: ١١٤",
    "refEn": "Psalm 119:114",
-   "textAr": "سِتْرِي وَمِجَنِّي أَنْتَ. كَلَامَكَ ٱنْتَظَرْتُ."
+   "textAr": "سِتْرِي وَمِجَنِّي أَنْتَ. كَلَامَكَ ٱنْتَظَرْتُ.",
+   "textEn": "You are my hiding place and my shield. I hope in your word."
   },
   {
    "ref": "PSA 103:12",
    "refAr": "مزمور ١٠٣: ١٢",
    "refEn": "Psalm 103:12",
-   "textAr": "كَبُعْدِ ٱلْمَشْرِقِ مِنَ ٱلْمَغْرِبِ أَبْعَدَ عَنَّا مَعَاصِيَنَا."
+   "textAr": "كَبُعْدِ ٱلْمَشْرِقِ مِنَ ٱلْمَغْرِبِ أَبْعَدَ عَنَّا مَعَاصِيَنَا.",
+   "textEn": "As far as the east is from the west, so far has he removed our transgressions from us."
   },
   {
    "ref": "2CO 4:18",
    "refAr": "كورنثوس الثانية ٤: ١٨",
    "refEn": "2 Corinthians 4:18",
-   "textAr": "وَنَحْنُ غَيْرُ نَاظِرِينَ إِلَى ٱلْأَشْيَاءِ ٱلَّتِي تُرَى، بَلْ إِلَى ٱلَّتِي لَا تُرَى. لِأَنَّ ٱلَّتِي تُرَى وَقْتِيَّةٌ، وَأَمَّا ٱلَّتِي لَا تُرَى فَأَبَدِيَّةٌ."
+   "textAr": "وَنَحْنُ غَيْرُ نَاظِرِينَ إِلَى ٱلْأَشْيَاءِ ٱلَّتِي تُرَى، بَلْ إِلَى ٱلَّتِي لَا تُرَى. لِأَنَّ ٱلَّتِي تُرَى وَقْتِيَّةٌ، وَأَمَّا ٱلَّتِي لَا تُرَى فَأَبَدِيَّةٌ.",
+   "textEn": "while we don’t look at the things which are seen, but at the things which are not seen. For the things which are seen are temporal, but the things which are not seen are eternal."
   },
   {
    "ref": "JOH 14:15",
    "refAr": "يوحنا ١٤: ١٥",
    "refEn": "John 14:15",
-   "textAr": "«إِنْ كُنْتُمْ تُحِبُّونَنِي فَٱحْفَظُوا وَصَايَايَ،"
+   "textAr": "«إِنْ كُنْتُمْ تُحِبُّونَنِي فَٱحْفَظُوا وَصَايَايَ،",
+   "textEn": "If you love me, keep my commandments."
   },
   {
    "ref": "PSA 91:4",
    "refAr": "مزمور ٩١: ٤",
    "refEn": "Psalm 91:4",
-   "textAr": "بِخَوَافِيهِ يُظَلِّلُكَ، وَتَحْتَ أَجْنِحَتِهِ تَحْتَمِي. تُرْسٌ وَمِجَنٌّ حَقُّهُ."
+   "textAr": "بِخَوَافِيهِ يُظَلِّلُكَ، وَتَحْتَ أَجْنِحَتِهِ تَحْتَمِي. تُرْسٌ وَمِجَنٌّ حَقُّهُ.",
+   "textEn": "He will cover you with his feathers. Under his wings you will take refuge. His faithfulness is your shield and rampart."
   },
   {
    "ref": "MAT 5:4",
    "refAr": "متى ٥: ٤",
    "refEn": "Matthew 5:4",
-   "textAr": "طُوبَى لِلْحَزَانَى، لِأَنَّهُمْ يَتَعَزَّوْنَ."
+   "textAr": "طُوبَى لِلْحَزَانَى، لِأَنَّهُمْ يَتَعَزَّوْنَ.",
+   "textEn": "Blessed are those who mourn, for they shall be comforted."
   },
   {
    "ref": "PSA 138:8",
    "refAr": "مزمور ١٣٨: ٨",
    "refEn": "Psalm 138:8",
-   "textAr": "ٱلرَّبُّ يُحَامِي عَنِّي. يَارَبُّ، رَحْمَتُكَ إِلَى ٱلْأَبَدِ. عَنْ أَعْمَالِ يَدَيْكَ لَا تَتَخَلَّ."
+   "textAr": "ٱلرَّبُّ يُحَامِي عَنِّي. يَارَبُّ، رَحْمَتُكَ إِلَى ٱلْأَبَدِ. عَنْ أَعْمَالِ يَدَيْكَ لَا تَتَخَلَّ.",
+   "textEn": "The LORD will fulfil that which concerns me. Your loving kindness, LORD, endures forever. Don’t forsake the works of your own hands."
   },
   {
    "ref": "REV 22:13",
    "refAr": "رؤيا يوحنا ٢٢: ١٣",
    "refEn": "Revelation 22:13",
-   "textAr": "أَنَا ٱلْأَلِفُ وَٱلْيَاءُ، ٱلْبِدَايَةُ وَٱلنِّهَايَةُ، ٱلْأَوَّلُ وَٱلْآخِرُ»."
+   "textAr": "أَنَا ٱلْأَلِفُ وَٱلْيَاءُ، ٱلْبِدَايَةُ وَٱلنِّهَايَةُ، ٱلْأَوَّلُ وَٱلْآخِرُ».",
+   "textEn": "I am the Alpha and the Omega, the First and the Last, the Beginning and the End."
   },
   {
    "ref": "ROM 8:37",
    "refAr": "رومية ٨: ٣٧",
    "refEn": "Romans 8:37",
-   "textAr": "وَلَكِنَّنَا فِي هَذِهِ جَمِيعِهَا يَعْظُمُ ٱنْتِصَارُنَا بِٱلَّذِي أَحَبَّنَا."
+   "textAr": "وَلَكِنَّنَا فِي هَذِهِ جَمِيعِهَا يَعْظُمُ ٱنْتِصَارُنَا بِٱلَّذِي أَحَبَّنَا.",
+   "textEn": "No, in all these things we are more than conquerors through him who loved us."
   },
   {
    "ref": "PSA 16:8",
    "refAr": "مزمور ١٦: ٨",
    "refEn": "Psalm 16:8",
-   "textAr": "جَعَلْتُ ٱلرَّبَّ أَمَامِي فِي كُلِّ حِينٍ، لِأَنَّهُ عَنْ يَمِينِي فَلَا أَتَزَعْزَعُ."
+   "textAr": "جَعَلْتُ ٱلرَّبَّ أَمَامِي فِي كُلِّ حِينٍ، لِأَنَّهُ عَنْ يَمِينِي فَلَا أَتَزَعْزَعُ.",
+   "textEn": "I have set the LORD always before me. Because he is at my right hand, I shall not be moved."
   },
   {
    "ref": "EPH 4:32",
    "refAr": "أفسس ٤: ٣٢",
    "refEn": "Ephesians 4:32",
-   "textAr": "وَكُونُوا لُطَفَاءَ بَعْضُكُمْ نَحْوَ بَعْضٍ، شَفُوقِينَ، مُتَسَامِحِينَ كَمَا سَامَحَكُمُ ٱللهُ أَيْضًا فِي ٱلْمَسِيحِ."
+   "textAr": "وَكُونُوا لُطَفَاءَ بَعْضُكُمْ نَحْوَ بَعْضٍ، شَفُوقِينَ، مُتَسَامِحِينَ كَمَا سَامَحَكُمُ ٱللهُ أَيْضًا فِي ٱلْمَسِيحِ.",
+   "textEn": "And be kind to one another, tender hearted, forgiving each other, just as God also in Christ forgave you."
   },
   {
    "ref": "PSA 4:8",
    "refAr": "مزمور ٤: ٨",
    "refEn": "Psalm 4:8",
-   "textAr": "بِسَلَامَةٍ أَضْطَجِعُ بَلْ أَيْضًا أَنَامُ، لِأَنَّكَ أَنْتَ يَارَبُّ مُنْفَرِدًا فِي طُمَأْنِينَةٍ تُسَكِّنُنِي."
+   "textAr": "بِسَلَامَةٍ أَضْطَجِعُ بَلْ أَيْضًا أَنَامُ، لِأَنَّكَ أَنْتَ يَارَبُّ مُنْفَرِدًا فِي طُمَأْنِينَةٍ تُسَكِّنُنِي.",
+   "textEn": "In peace I will both lay myself down and sleep, for you alone, LORD, make me live in safety."
   },
   {
    "ref": "MAT 22:37",
    "refAr": "متى ٢٢: ٣٧",
    "refEn": "Matthew 22:37",
-   "textAr": "فَقَالَ لَهُ يَسُوعُ: «تُحِبُّ ٱلرَّبَّ إِلَهَكَ مِنْ كُلِّ قَلْبِكَ، وَمِنْ كُلِّ نَفْسِكَ، وَمِنْ كُلِّ فِكْرِكَ."
+   "textAr": "فَقَالَ لَهُ يَسُوعُ: «تُحِبُّ ٱلرَّبَّ إِلَهَكَ مِنْ كُلِّ قَلْبِكَ، وَمِنْ كُلِّ نَفْسِكَ، وَمِنْ كُلِّ فِكْرِكَ.",
+   "textEn": "Jesus said to him, “‘You shall love the Lord your God with all your heart, with all your soul, and with all your mind.’"
   },
   {
    "ref": "1CO 16:13",
    "refAr": "كورنثوس الأولى ١٦: ١٣",
    "refEn": "1 Corinthians 16:13",
-   "textAr": "اِسْهَرُوا. ٱثْبُتُوا فِي ٱلْإِيمَانِ. كُونُوا رِجَالًا. تَقَوَّوْا."
+   "textAr": "اِسْهَرُوا. ٱثْبُتُوا فِي ٱلْإِيمَانِ. كُونُوا رِجَالًا. تَقَوَّوْا.",
+   "textEn": "Watch! Stand firm in the faith! Be courageous! Be strong!"
   },
   {
    "ref": "PSA 91:2",
    "refAr": "مزمور ٩١: ٢",
    "refEn": "Psalm 91:2",
-   "textAr": "أَقُولُ لِلرَّبِّ: «مَلْجَإِي وَحِصْنِي. إِلَهِي فَأَتَّكِلُ عَلَيْهِ»."
+   "textAr": "أَقُولُ لِلرَّبِّ: «مَلْجَإِي وَحِصْنِي. إِلَهِي فَأَتَّكِلُ عَلَيْهِ».",
+   "textEn": "I will say of the LORD, “He is my refuge and my fortress; my God, in whom I trust.”"
   },
   {
    "ref": "JOH 15:5",
    "refAr": "يوحنا ١٥: ٥",
    "refEn": "John 15:5",
-   "textAr": "أَنَا ٱلْكَرْمَةُ وَأَنْتُمُ ٱلْأَغْصَانُ. ٱلَّذِي يَثْبُتُ فِيَّ وَأَنَا فِيهِ هَذَا يَأْتِي بِثَمَرٍ كَثِيرٍ، لِأَنَّكُمْ بِدُونِي لَا تَقْدِرُونَ أَنْ تَفْعَلُوا شَيْئًا."
+   "textAr": "أَنَا ٱلْكَرْمَةُ وَأَنْتُمُ ٱلْأَغْصَانُ. ٱلَّذِي يَثْبُتُ فِيَّ وَأَنَا فِيهِ هَذَا يَأْتِي بِثَمَرٍ كَثِيرٍ، لِأَنَّكُمْ بِدُونِي لَا تَقْدِرُونَ أَنْ تَفْعَلُوا شَيْئًا.",
+   "textEn": "I am the vine. You are the branches. He who remains in me and I in him bears much fruit, for apart from me you can do nothing."
   },
   {
    "ref": "PSA 119:11",
    "refAr": "مزمور ١١٩: ١١",
    "refEn": "Psalm 119:11",
-   "textAr": "خَبَأْتُ كَلَامَكَ فِي قَلْبِي لِكَيْلَا أُخْطِئَ إِلَيْكَ."
+   "textAr": "خَبَأْتُ كَلَامَكَ فِي قَلْبِي لِكَيْلَا أُخْطِئَ إِلَيْكَ.",
+   "textEn": "I have hidden your word in my heart, that I might not sin against you."
   },
   {
    "ref": "PHI 4:8",
    "refAr": "فيلبي ٤: ٨",
    "refEn": "Philippians 4:8",
-   "textAr": "أَخِيرًا أَيُّهَا ٱلْإِخْوَةُ، كُلُّ مَا هُوَ حَقٌّ، كُلُّ مَا هُوَ جَلِيلٌ، كُلُّ مَا هُوَ عَادِلٌ، كُلُّ مَا هُوَ طَاهِرٌ، كُلُّ مَا هُوَ مُسِرٌّ، كُلُّ مَا صِيتُهُ حَسَنٌ، إِنْ كَانَتْ فَضِيلَةٌ وَإِنْ كَانَ مَدْحٌ، فَفِي هَذِهِ ٱفْتَكِرُوا."
+   "textAr": "أَخِيرًا أَيُّهَا ٱلْإِخْوَةُ، كُلُّ مَا هُوَ حَقٌّ، كُلُّ مَا هُوَ جَلِيلٌ، كُلُّ مَا هُوَ عَادِلٌ، كُلُّ مَا هُوَ طَاهِرٌ، كُلُّ مَا هُوَ مُسِرٌّ، كُلُّ مَا صِيتُهُ حَسَنٌ، إِنْ كَانَتْ فَضِيلَةٌ وَإِنْ كَانَ مَدْحٌ، فَفِي هَذِهِ ٱفْتَكِرُوا.",
+   "textEn": "Finally, brothers, whatever things are true, whatever things are honourable, whatever things are just, whatever things are pure, whatever things are lovely, whatever things are of good report: if there is any virtue and if there is anything worthy of praise, think about these things."
   },
   {
    "ref": "ACT 4:12",
    "refAr": "أعمال الرسل ٤: ١٢",
    "refEn": "Acts 4:12",
-   "textAr": "وَلَيْسَ بِأَحَدٍ غَيْرِهِ ٱلْخَلَاصُ. لِأَنْ لَيْسَ ٱسْمٌ آخَرُ تَحْتَ ٱلسَّمَاءِ، قَدْ أُعْطِيَ بَيْنَ ٱلنَّاسِ، بِهِ يَنْبَغِي أَنْ نَخْلُصَ»."
+   "textAr": "وَلَيْسَ بِأَحَدٍ غَيْرِهِ ٱلْخَلَاصُ. لِأَنْ لَيْسَ ٱسْمٌ آخَرُ تَحْتَ ٱلسَّمَاءِ، قَدْ أُعْطِيَ بَيْنَ ٱلنَّاسِ، بِهِ يَنْبَغِي أَنْ نَخْلُصَ».",
+   "textEn": "There is salvation in no one else, for there is no other name under heaven that is given amongst men, by which we must be saved!”"
   },
   {
    "ref": "LUK 6:36",
    "refAr": "لوقا ٦: ٣٦",
    "refEn": "Luke 6:36",
-   "textAr": "فَكُونُوا رُحَمَاءَ كَمَا أَنَّ أَبَاكُمْ أَيْضًا رَحِيمٌ."
+   "textAr": "فَكُونُوا رُحَمَاءَ كَمَا أَنَّ أَبَاكُمْ أَيْضًا رَحِيمٌ.",
+   "textEn": "“Therefore be merciful, even as your Father is also merciful."
   },
   {
    "ref": "MAT 5:8",
    "refAr": "متى ٥: ٨",
    "refEn": "Matthew 5:8",
-   "textAr": "طُوبَى لِلْأَنْقِيَاءِ ٱلْقَلْبِ، لِأَنَّهُمْ يُعَايِنُونَ ٱللهَ."
+   "textAr": "طُوبَى لِلْأَنْقِيَاءِ ٱلْقَلْبِ، لِأَنَّهُمْ يُعَايِنُونَ ٱللهَ.",
+   "textEn": "Blessed are the pure in heart, for they shall see God."
   },
   {
    "ref": "1PE 5:6",
    "refAr": "بطرس الأولى ٥: ٦",
    "refEn": "1 Peter 5:6",
-   "textAr": "فَتَوَاضَعُوا تَحْتَ يَدِ ٱللهِ ٱلْقَوِيَّةِ لِكَيْ يَرْفَعَكُمْ فِي حِينِهِ،"
+   "textAr": "فَتَوَاضَعُوا تَحْتَ يَدِ ٱللهِ ٱلْقَوِيَّةِ لِكَيْ يَرْفَعَكُمْ فِي حِينِهِ،",
+   "textEn": "Humble yourselves therefore under the mighty hand of God, that he may exalt you in due time,"
   },
   {
    "ref": "JAM 1:5",
    "refAr": "يعقوب ١: ٥",
    "refEn": "James 1:5",
-   "textAr": "وَإِنَّمَا إِنْ كَانَ أَحَدُكُمْ تُعْوِزُهُ حِكْمَةٌ، فَلْيَطْلُبْ مِنَ ٱللهِ ٱلَّذِي يُعْطِي ٱلْجَمِيعَ بِسَخَاءٍ وَلَا يُعَيِّرُ، فَسَيُعْطَى لَهُ."
+   "textAr": "وَإِنَّمَا إِنْ كَانَ أَحَدُكُمْ تُعْوِزُهُ حِكْمَةٌ، فَلْيَطْلُبْ مِنَ ٱللهِ ٱلَّذِي يُعْطِي ٱلْجَمِيعَ بِسَخَاءٍ وَلَا يُعَيِّرُ، فَسَيُعْطَى لَهُ.",
+   "textEn": "But if any of you lacks wisdom, let him ask of God, who gives to all liberally and without reproach, and it will be given to him."
   },
   {
    "ref": "PSA 62:1",
    "refAr": "مزمور ٦٢: ١",
    "refEn": "Psalm 62:1",
-   "textAr": "لِإِمَامِ ٱلْمُغَنِّينَ عَلَى «يَدُوثُونَ». مَزْمُورٌ لِدَاوُدَ إِنَّمَا لِلهِ ٱنْتَظَرَتْ نَفْسِي. مِنْ قِبَلِهِ خَلَاصِي."
+   "textAr": "لِإِمَامِ ٱلْمُغَنِّينَ عَلَى «يَدُوثُونَ». مَزْمُورٌ لِدَاوُدَ إِنَّمَا لِلهِ ٱنْتَظَرَتْ نَفْسِي. مِنْ قِبَلِهِ خَلَاصِي.",
+   "textEn": "For the Chief Musician. To Jeduthun. A Psalm by David. My soul rests in God alone. My salvation is from him."
   },
   {
    "ref": "LUK 2:14",
    "refAr": "لوقا ٢: ١٤",
    "refEn": "Luke 2:14",
-   "textAr": "«ٱلْمَجْدُ لِلهِ فِي ٱلْأَعَالِي، وَعَلَى ٱلْأَرْضِ ٱلسَّلَامُ، وَبِالنَّاسِ ٱلْمَسَرَّةُ»."
+   "textAr": "«ٱلْمَجْدُ لِلهِ فِي ٱلْأَعَالِي، وَعَلَى ٱلْأَرْضِ ٱلسَّلَامُ، وَبِالنَّاسِ ٱلْمَسَرَّةُ».",
+   "textEn": "“Glory to God in the highest, on earth peace, good will towards men.”"
   },
   {
    "ref": "1TH 5:16",
    "refAr": "تسالونيكي الأولى ٥: ١٦",
    "refEn": "1 Thessalonians 5:16",
-   "textAr": "ٱفْرَحُوا كُلَّ حِينٍ."
+   "textAr": "ٱفْرَحُوا كُلَّ حِينٍ.",
+   "textEn": "Always rejoice."
   },
   {
    "ref": "PSA 139:14",
    "refAr": "مزمور ١٣٩: ١٤",
    "refEn": "Psalm 139:14",
-   "textAr": "أَحْمَدُكَ مِنْ أَجْلِ أَنِّي قَدِ ٱمْتَزْتُ عَجَبًا. عَجِيبَةٌ هِيَ أَعْمَالُكَ، وَنَفْسِي تَعْرِفُ ذَلِكَ يَقِينًا."
+   "textAr": "أَحْمَدُكَ مِنْ أَجْلِ أَنِّي قَدِ ٱمْتَزْتُ عَجَبًا. عَجِيبَةٌ هِيَ أَعْمَالُكَ، وَنَفْسِي تَعْرِفُ ذَلِكَ يَقِينًا.",
+   "textEn": "I will give thanks to you, for I am fearfully and wonderfully made. Your works are wonderful. My soul knows that very well."
   },
   {
    "ref": "PSA 121:8",
    "refAr": "مزمور ١٢١: ٨",
    "refEn": "Psalm 121:8",
-   "textAr": "ٱلرَّبُّ يَحْفَظُ خُرُوجَكَ وَدُخُولَكَ مِنَ ٱلْآنَ وَإِلَى ٱلدَّهْرِ."
+   "textAr": "ٱلرَّبُّ يَحْفَظُ خُرُوجَكَ وَدُخُولَكَ مِنَ ٱلْآنَ وَإِلَى ٱلدَّهْرِ.",
+   "textEn": "The LORD will keep your going out and your coming in, from this time forward, and forever more."
   },
   {
    "ref": "PSA 27:1",
    "refAr": "مزمور ٢٧: ١",
    "refEn": "Psalm 27:1",
-   "textAr": "لِدَاوُدَ اَلرَّبُّ نُورِي وَخَلَاصِي، مِمَّنْ أَخَافُ؟ ٱلرَّبُّ حِصْنُ حَيَاتِي، مِمَّنْ أَرْتَعِبُ؟"
+   "textAr": "لِدَاوُدَ اَلرَّبُّ نُورِي وَخَلَاصِي، مِمَّنْ أَخَافُ؟ ٱلرَّبُّ حِصْنُ حَيَاتِي، مِمَّنْ أَرْتَعِبُ؟",
+   "textEn": "By David. The LORD is my light and my salvation. Whom shall I fear? The LORD is the strength of my life. Of whom shall I be afraid?"
   },
   {
    "ref": "LUK 15:10",
    "refAr": "لوقا ١٥: ١٠",
    "refEn": "Luke 15:10",
-   "textAr": "هَكَذَا، أَقُولُ لَكُمْ: يَكُونُ فَرَحٌ قُدَّامَ مَلَائِكَةِ ٱللهِ بِخَاطِئٍ وَاحِدٍ يَتُوبُ."
+   "textAr": "هَكَذَا، أَقُولُ لَكُمْ: يَكُونُ فَرَحٌ قُدَّامَ مَلَائِكَةِ ٱللهِ بِخَاطِئٍ وَاحِدٍ يَتُوبُ.",
+   "textEn": "Even so, I tell you, there is joy in the presence of the angels of God over one sinner repenting.”"
   },
   {
    "ref": "ROM 5:8",
    "refAr": "رومية ٥: ٨",
    "refEn": "Romans 5:8",
-   "textAr": "وَلَكِنَّ ٱللهَ بَيَّنَ مَحَبَّتَهُ لَنَا، لِأَنَّهُ وَنَحْنُ بَعْدُ خُطَاةٌ مَاتَ ٱلْمَسِيحُ لِأَجْلِنَا."
+   "textAr": "وَلَكِنَّ ٱللهَ بَيَّنَ مَحَبَّتَهُ لَنَا، لِأَنَّهُ وَنَحْنُ بَعْدُ خُطَاةٌ مَاتَ ٱلْمَسِيحُ لِأَجْلِنَا.",
+   "textEn": "But God commends his own love towards us, in that while we were yet sinners, Christ died for us."
   },
   {
    "ref": "LUK 12:32",
    "refAr": "لوقا ١٢: ٣٢",
    "refEn": "Luke 12:32",
-   "textAr": "«لَا تَخَفْ، أَيُّهَا ٱلْقَطِيعُ ٱلصَّغِيرُ، لِأَنَّ أَبَاكُمْ قَدْ سُرَّ أَنْ يُعْطِيَكُمُ ٱلْمَلَكُوتَ."
+   "textAr": "«لَا تَخَفْ، أَيُّهَا ٱلْقَطِيعُ ٱلصَّغِيرُ، لِأَنَّ أَبَاكُمْ قَدْ سُرَّ أَنْ يُعْطِيَكُمُ ٱلْمَلَكُوتَ.",
+   "textEn": "“Don’t be afraid, little flock, for it is your Father’s good pleasure to give you the Kingdom."
   },
   {
    "ref": "JAM 5:16",
    "refAr": "يعقوب ٥: ١٦",
    "refEn": "James 5:16",
-   "textAr": "اِعْتَرِفُوا بَعْضُكُمْ لِبَعْضٍ بِٱلزَلَّاتِ، وَصَلُّوا بَعْضُكُمْ لِأَجْلِ بَعْضٍ، لِكَيْ تُشْفَوْا. طَلِبَةُ ٱلْبَارِّ تَقْتَدِرُ كَثِيرًا فِي فِعْلِهَا."
+   "textAr": "اِعْتَرِفُوا بَعْضُكُمْ لِبَعْضٍ بِٱلزَلَّاتِ، وَصَلُّوا بَعْضُكُمْ لِأَجْلِ بَعْضٍ، لِكَيْ تُشْفَوْا. طَلِبَةُ ٱلْبَارِّ تَقْتَدِرُ كَثِيرًا فِي فِعْلِهَا.",
+   "textEn": "Confess your sins to one another and pray for one another, that you may be healed. The insistent prayer of a righteous person is powerfully effective."
   },
   {
    "ref": "2TI 4:7",
    "refAr": "تيموثاوس الثانية ٤: ٧",
    "refEn": "2 Timothy 4:7",
-   "textAr": "قَدْ جَاهَدْتُ ٱلْجِهَادَ ٱلْحَسَنَ، أَكْمَلْتُ ٱلسَّعْيَ، حَفِظْتُ ٱلْإِيمَانَ،"
+   "textAr": "قَدْ جَاهَدْتُ ٱلْجِهَادَ ٱلْحَسَنَ، أَكْمَلْتُ ٱلسَّعْيَ، حَفِظْتُ ٱلْإِيمَانَ،",
+   "textEn": "I have fought the good fight. I have finished the course. I have kept the faith."
   },
   {
    "ref": "HEB 13:8",
    "refAr": "العبرانيين ١٣: ٨",
    "refEn": "Hebrews 13:8",
-   "textAr": "يَسُوعُ ٱلْمَسِيحُ هُوَ هُوَ أَمْسًا وَٱلْيَوْمَ وَإِلَى ٱلْأَبَدِ."
+   "textAr": "يَسُوعُ ٱلْمَسِيحُ هُوَ هُوَ أَمْسًا وَٱلْيَوْمَ وَإِلَى ٱلْأَبَدِ.",
+   "textEn": "Jesus Christ is the same yesterday, today, and forever."
   },
   {
    "ref": "MAT 28:20",
    "refAr": "متى ٢٨: ٢٠",
    "refEn": "Matthew 28:20",
-   "textAr": "وَعَلِّمُوهُمْ أَنْ يَحْفَظُوا جَمِيعَ مَا أَوْصَيْتُكُمْ بِهِ. وَهَا أَنَا مَعَكُمْ كُلَّ ٱلْأَيَّامِ إِلَى ٱنْقِضَاءِ ٱلدَّهْرِ». آمِينَ."
+   "textAr": "وَعَلِّمُوهُمْ أَنْ يَحْفَظُوا جَمِيعَ مَا أَوْصَيْتُكُمْ بِهِ. وَهَا أَنَا مَعَكُمْ كُلَّ ٱلْأَيَّامِ إِلَى ٱنْقِضَاءِ ٱلدَّهْرِ». آمِينَ.",
+   "textEn": "teaching them to observe all things that I commanded you. Behold, I am with you always, even to the end of the age.” Amen."
   },
   {
    "ref": "COL 4:6",
    "refAr": "كولوسي ٤: ٦",
    "refEn": "Colossians 4:6",
-   "textAr": "لِيَكُنْ كَلَامُكُمْ كُلَّ حِينٍ بِنِعْمَةٍ، مُصْلَحًا بِمِلْحٍ، لِتَعْلَمُوا كَيْفَ يَجِبُ أَنْ تُجَاوِبُوا كُلَّ وَاحِدٍ."
+   "textAr": "لِيَكُنْ كَلَامُكُمْ كُلَّ حِينٍ بِنِعْمَةٍ، مُصْلَحًا بِمِلْحٍ، لِتَعْلَمُوا كَيْفَ يَجِبُ أَنْ تُجَاوِبُوا كُلَّ وَاحِدٍ.",
+   "textEn": "Let your speech always be with grace, seasoned with salt, that you may know how you ought to answer each one."
   },
   {
    "ref": "JAM 1:19",
    "refAr": "يعقوب ١: ١٩",
    "refEn": "James 1:19",
-   "textAr": "إِذًا يَا إِخْوَتِي ٱلْأَحِبَّاءَ، لِيَكُنْ كُلُّ إِنْسَانٍ مُسْرِعًا فِي ٱلِٱسْتِمَاعِ، مُبْطِئًا فِي ٱلتَّكَلُّمِ، مُبْطِئًا فِي ٱلْغَضَبِ،"
+   "textAr": "إِذًا يَا إِخْوَتِي ٱلْأَحِبَّاءَ، لِيَكُنْ كُلُّ إِنْسَانٍ مُسْرِعًا فِي ٱلِٱسْتِمَاعِ، مُبْطِئًا فِي ٱلتَّكَلُّمِ، مُبْطِئًا فِي ٱلْغَضَبِ،",
+   "textEn": "So, then, my beloved brothers, let every man be swift to hear, slow to speak, and slow to anger;"
   },
   {
    "ref": "JOH 8:36",
    "refAr": "يوحنا ٨: ٣٦",
    "refEn": "John 8:36",
-   "textAr": "فَإِنْ حَرَّرَكُمْ ٱلِٱبْنُ فَبِالْحَقِيقَةِ تَكُونُونَ أَحْرَارًا."
+   "textAr": "فَإِنْ حَرَّرَكُمْ ٱلِٱبْنُ فَبِالْحَقِيقَةِ تَكُونُونَ أَحْرَارًا.",
+   "textEn": "If therefore the Son makes you free, you will be free indeed."
   },
   {
    "ref": "LUK 11:9",
    "refAr": "لوقا ١١: ٩",
    "refEn": "Luke 11:9",
-   "textAr": "وَأَنَا أَقُولُ لَكُمُ: ٱسْأَلُوا تُعْطَوْا، اُطْلُبُوا تَجِدُوا، اِقْرَعُوا يُفْتَحْ لَكُمْ."
+   "textAr": "وَأَنَا أَقُولُ لَكُمُ: ٱسْأَلُوا تُعْطَوْا، اُطْلُبُوا تَجِدُوا، اِقْرَعُوا يُفْتَحْ لَكُمْ.",
+   "textEn": "“I tell you, keep asking, and it will be given you. Keep seeking, and you will find. Keep knocking, and it will be opened to you."
   },
   {
    "ref": "GAL 2:20",
    "refAr": "غلاطية ٢: ٢٠",
    "refEn": "Galatians 2:20",
-   "textAr": "مَعَ ٱلْمَسِيحِ صُلِبْتُ، فَأَحْيَا لَا أَنَا، بَلِ ٱلْمَسِيحُ يَحْيَا فِيَّ. فَمَا أَحْيَاهُ ٱلْآنَ فِي ٱلْجَسَدِ، فَإِنَّمَا أَحْيَاهُ فِي ٱلْإِيمَانِ، إِيمَانِ ٱبْنِ ٱللهِ، ٱلَّذِي أَحَبَّنِي وَأَسْلَمَ نَفْسَهُ لِأَجْلِي."
+   "textAr": "مَعَ ٱلْمَسِيحِ صُلِبْتُ، فَأَحْيَا لَا أَنَا، بَلِ ٱلْمَسِيحُ يَحْيَا فِيَّ. فَمَا أَحْيَاهُ ٱلْآنَ فِي ٱلْجَسَدِ، فَإِنَّمَا أَحْيَاهُ فِي ٱلْإِيمَانِ، إِيمَانِ ٱبْنِ ٱللهِ، ٱلَّذِي أَحَبَّنِي وَأَسْلَمَ نَفْسَهُ لِأَجْلِي.",
+   "textEn": "I have been crucified with Christ, and it is no longer I who live, but Christ lives in me. That life which I now live in the flesh, I live by faith in the Son of God, who loved me and gave himself up for me."
   },
   {
    "ref": "MAT 25:40",
    "refAr": "متى ٢٥: ٤٠",
    "refEn": "Matthew 25:40",
-   "textAr": "فَيُجِيبُ ٱلْمَلِكُ وَيَقُولُ لَهُمُ: ٱلْحَقَّ أَقُولُ لَكُمْ: بِمَا أَنَّكُمْ فَعَلْتُمُوهُ بِأَحَدِ إِخْوَتِي هَؤُلَاءِ ٱلْأَصَاغِرِ، فَبِي فَعَلْتُمْ."
+   "textAr": "فَيُجِيبُ ٱلْمَلِكُ وَيَقُولُ لَهُمُ: ٱلْحَقَّ أَقُولُ لَكُمْ: بِمَا أَنَّكُمْ فَعَلْتُمُوهُ بِأَحَدِ إِخْوَتِي هَؤُلَاءِ ٱلْأَصَاغِرِ، فَبِي فَعَلْتُمْ.",
+   "textEn": "“The King will answer them, ‘Most certainly I tell you, because you did it to one of the least of these my brothers, you did it to me.’"
   },
   {
    "ref": "MAT 22:39",
    "refAr": "متى ٢٢: ٣٩",
    "refEn": "Matthew 22:39",
-   "textAr": "وَٱلثَّانِيَةُ مِثْلُهَا: تُحِبُّ قَرِيبَكَ كَنَفْسِكَ."
+   "textAr": "وَٱلثَّانِيَةُ مِثْلُهَا: تُحِبُّ قَرِيبَكَ كَنَفْسِكَ.",
+   "textEn": "A second likewise is this, ‘You shall love your neighbour as yourself.’"
   },
   {
    "ref": "MAR 16:15",
    "refAr": "مرقس ١٦: ١٥",
    "refEn": "Mark 16:15",
-   "textAr": "وَقَالَ لَهُمُ: «ٱذْهَبُوا إِلَى ٱلْعَالَمِ أَجْمَعَ وَٱكْرِزُوا بِٱلْإِنْجِيلِ لِلْخَلِيقَةِ كُلِّهَا."
+   "textAr": "وَقَالَ لَهُمُ: «ٱذْهَبُوا إِلَى ٱلْعَالَمِ أَجْمَعَ وَٱكْرِزُوا بِٱلْإِنْجِيلِ لِلْخَلِيقَةِ كُلِّهَا.",
+   "textEn": "He said to them, “Go into all the world and preach the Good News to the whole creation."
   },
   {
    "ref": "ROM 13:10",
    "refAr": "رومية ١٣: ١٠",
    "refEn": "Romans 13:10",
-   "textAr": "اَلْمَحَبَّةُ لَا تَصْنَعُ شَرًّا لِلْقَرِيبِ، فَٱلْمَحَبَّةُ هِيَ تَكْمِيلُ ٱلنَّامُوسِ."
+   "textAr": "اَلْمَحَبَّةُ لَا تَصْنَعُ شَرًّا لِلْقَرِيبِ، فَٱلْمَحَبَّةُ هِيَ تَكْمِيلُ ٱلنَّامُوسِ.",
+   "textEn": "Love doesn’t harm a neighbour. Love therefore is the fulfilment of the law."
   },
   {
    "ref": "PSA 119:105",
    "refAr": "مزمور ١١٩: ١٠٥",
    "refEn": "Psalm 119:105",
-   "textAr": "سِرَاجٌ لِرِجْلِي كَلَامُكَ وَنُورٌ لِسَبِيلِي."
+   "textAr": "سِرَاجٌ لِرِجْلِي كَلَامُكَ وَنُورٌ لِسَبِيلِي.",
+   "textEn": "Your word is a lamp to my feet, and a light for my path."
   },
   {
    "ref": "EPH 6:10",
    "refAr": "أفسس ٦: ١٠",
    "refEn": "Ephesians 6:10",
-   "textAr": "أَخِيرًا يَا إِخْوَتِي، تَقَوَّوْا فِي ٱلرَّبِّ وَفِي شِدَّةِ قُوَّتِهِ."
+   "textAr": "أَخِيرًا يَا إِخْوَتِي، تَقَوَّوْا فِي ٱلرَّبِّ وَفِي شِدَّةِ قُوَّتِهِ.",
+   "textEn": "Finally, be strong in the Lord and in the strength of his might."
   },
   {
    "ref": "ROM 8:18",
    "refAr": "رومية ٨: ١٨",
    "refEn": "Romans 8:18",
-   "textAr": "فَإِنِّي أَحْسِبُ أَنَّ آلَامَ ٱلزَّمَانِ ٱلْحَاضِرِ لَا تُقَاسُ بِٱلْمَجْدِ ٱلْعَتِيدِ أَنْ يُسْتَعْلَنَ فِينَا."
+   "textAr": "فَإِنِّي أَحْسِبُ أَنَّ آلَامَ ٱلزَّمَانِ ٱلْحَاضِرِ لَا تُقَاسُ بِٱلْمَجْدِ ٱلْعَتِيدِ أَنْ يُسْتَعْلَنَ فِينَا.",
+   "textEn": "For I consider that the sufferings of this present time are not worthy to be compared with the glory which will be revealed towards us."
   },
   {
    "ref": "MAT 19:26",
    "refAr": "متى ١٩: ٢٦",
    "refEn": "Matthew 19:26",
-   "textAr": "فَنَظَرَ إِلَيْهِمْ يَسُوعُ وَقَالَ لَهُمْ: «هَذَا عِنْدَ ٱلنَّاسِ غَيْرُ مُسْتَطَاعٍ، وَلَكِنْ عِنْدَ ٱللهِ كُلُّ شَيْءٍ مُسْتَطَاعٌ»."
+   "textAr": "فَنَظَرَ إِلَيْهِمْ يَسُوعُ وَقَالَ لَهُمْ: «هَذَا عِنْدَ ٱلنَّاسِ غَيْرُ مُسْتَطَاعٍ، وَلَكِنْ عِنْدَ ٱللهِ كُلُّ شَيْءٍ مُسْتَطَاعٌ».",
+   "textEn": "Looking at them, Jesus said, “With men this is impossible, but with God all things are possible.”"
   },
   {
    "ref": "COL 3:2",
    "refAr": "كولوسي ٣: ٢",
    "refEn": "Colossians 3:2",
-   "textAr": "ٱهْتَمُّوا بِمَا فَوْقُ لَا بِمَا عَلَى ٱلْأَرْضِ،"
+   "textAr": "ٱهْتَمُّوا بِمَا فَوْقُ لَا بِمَا عَلَى ٱلْأَرْضِ،",
+   "textEn": "Set your mind on the things that are above, not on the things that are on the earth."
   },
   {
    "ref": "JOH 17:17",
    "refAr": "يوحنا ١٧: ١٧",
    "refEn": "John 17:17",
-   "textAr": "قَدِّسْهُمْ فِي حَقِّكَ. كَلَامُكَ هُوَ حَقٌّ."
+   "textAr": "قَدِّسْهُمْ فِي حَقِّكَ. كَلَامُكَ هُوَ حَقٌّ.",
+   "textEn": "Sanctify them in your truth. Your word is truth."
   },
   {
    "ref": "LUK 1:37",
    "refAr": "لوقا ١: ٣٧",
    "refEn": "Luke 1:37",
-   "textAr": "لِأَنَّهُ لَيْسَ شَيْءٌ غَيْرَ مُمْكِنٍ لَدَى ٱللهِ»."
+   "textAr": "لِأَنَّهُ لَيْسَ شَيْءٌ غَيْرَ مُمْكِنٍ لَدَى ٱللهِ».",
+   "textEn": "For nothing spoken by God is impossible.”"
   },
   {
    "ref": "MAT 6:21",
    "refAr": "متى ٦: ٢١",
    "refEn": "Matthew 6:21",
-   "textAr": "لِأَنَّهُ حَيْثُ يَكُونُ كَنْزُكَ هُنَاكَ يَكُونُ قَلْبُكَ أَيْضًا."
+   "textAr": "لِأَنَّهُ حَيْثُ يَكُونُ كَنْزُكَ هُنَاكَ يَكُونُ قَلْبُكَ أَيْضًا.",
+   "textEn": "for where your treasure is, there your heart will be also."
   },
   {
    "ref": "1CO 13:4",
    "refAr": "كورنثوس الأولى ١٣: ٤",
    "refEn": "1 Corinthians 13:4",
-   "textAr": "ٱلْمَحَبَّةُ تَتَأَنَّى وَتَرْفُقُ. ٱلْمَحَبَّةُ لَا تَحْسِدُ. ٱلْمَحَبَّةُ لَا تَتَفَاخَرُ، وَلَا تَنْتَفِخُ،"
+   "textAr": "ٱلْمَحَبَّةُ تَتَأَنَّى وَتَرْفُقُ. ٱلْمَحَبَّةُ لَا تَحْسِدُ. ٱلْمَحَبَّةُ لَا تَتَفَاخَرُ، وَلَا تَنْتَفِخُ،",
+   "textEn": "Love is patient and is kind. Love doesn’t envy. Love doesn’t brag, is not proud,"
   },
   {
    "ref": "PRO 16:9",
    "refAr": "أمثال ١٦: ٩",
    "refEn": "Proverbs 16:9",
-   "textAr": "قَلْبُ ٱلْإِنْسَانِ يُفَكِّرُ فِي طَرِيقِهِ، وَٱلرَّبُّ يَهْدِي خَطْوَتَهُ."
+   "textAr": "قَلْبُ ٱلْإِنْسَانِ يُفَكِّرُ فِي طَرِيقِهِ، وَٱلرَّبُّ يَهْدِي خَطْوَتَهُ.",
+   "textEn": "A man’s heart plans his course, but the LORD directs his steps."
   },
   {
    "ref": "JOH 14:23",
    "refAr": "يوحنا ١٤: ٢٣",
    "refEn": "John 14:23",
-   "textAr": "أَجَابَ يَسُوعُ وَقَالَ لَهُ: «إِنْ أَحَبَّنِي أَحَدٌ يَحْفَظْ كَلَامِي، وَيُحِبُّهُ أَبِي، وَإِلَيْهِ نَأْتِي، وَعِنْدَهُ نَصْنَعُ مَنْزِلًا."
+   "textAr": "أَجَابَ يَسُوعُ وَقَالَ لَهُ: «إِنْ أَحَبَّنِي أَحَدٌ يَحْفَظْ كَلَامِي، وَيُحِبُّهُ أَبِي، وَإِلَيْهِ نَأْتِي، وَعِنْدَهُ نَصْنَعُ مَنْزِلًا.",
+   "textEn": "Jesus answered him, “If a man loves me, he will keep my word. My Father will love him, and we will come to him and make our home with him."
   },
   {
    "ref": "EPH 5:8",
    "refAr": "أفسس ٥: ٨",
    "refEn": "Ephesians 5:8",
-   "textAr": "لِأَنَّكُمْ كُنْتُمْ قَبْلًا ظُلْمَةً، وَأَمَّا ٱلْآنَ فَنُورٌ فِي ٱلرَّبِّ. ٱسْلُكُوا كَأَوْلَادِ نُورٍ."
+   "textAr": "لِأَنَّكُمْ كُنْتُمْ قَبْلًا ظُلْمَةً، وَأَمَّا ٱلْآنَ فَنُورٌ فِي ٱلرَّبِّ. ٱسْلُكُوا كَأَوْلَادِ نُورٍ.",
+   "textEn": "For you were once darkness, but are now light in the Lord. Walk as children of light,"
   },
   {
    "ref": "1CO 10:31",
    "refAr": "كورنثوس الأولى ١٠: ٣١",
    "refEn": "1 Corinthians 10:31",
-   "textAr": "فَإِذَا كُنْتُمْ تَأْكُلُونَ أَوْ تَشْرَبُونَ أَوْ تَفْعَلُونَ شَيْئًا، فَٱفْعَلُوا كُلَّ شَيْءٍ لِمَجْدِ ٱللهِ."
+   "textAr": "فَإِذَا كُنْتُمْ تَأْكُلُونَ أَوْ تَشْرَبُونَ أَوْ تَفْعَلُونَ شَيْئًا، فَٱفْعَلُوا كُلَّ شَيْءٍ لِمَجْدِ ٱللهِ.",
+   "textEn": "Whether therefore you eat or drink, or whatever you do, do all to the glory of God."
   },
   {
    "ref": "GAL 5:1",
    "refAr": "غلاطية ٥: ١",
    "refEn": "Galatians 5:1",
-   "textAr": "فَٱثْبُتُوا إِذًا فِي ٱلْحُرِّيَّةِ ٱلَّتِي قَدْ حَرَّرَنَا ٱلْمَسِيحُ بِهَا، وَلَا تَرْتَبِكُوا أَيْضًا بِنِيرِ عُبُودِيَّةٍ."
+   "textAr": "فَٱثْبُتُوا إِذًا فِي ٱلْحُرِّيَّةِ ٱلَّتِي قَدْ حَرَّرَنَا ٱلْمَسِيحُ بِهَا، وَلَا تَرْتَبِكُوا أَيْضًا بِنِيرِ عُبُودِيَّةٍ.",
+   "textEn": "Stand firm therefore in the liberty by which Christ has made us free, and don’t be entangled again with a yoke of bondage."
   },
   {
    "ref": "PHI 1:6",
    "refAr": "فيلبي ١: ٦",
    "refEn": "Philippians 1:6",
-   "textAr": "وَاثِقًا بِهَذَا عَيْنِهِ أَنَّ ٱلَّذِي ٱبْتَدَأَ فِيكُمْ عَمَلًا صَالِحًا يُكَمِّلُ إِلَى يَوْمِ يَسُوعَ ٱلْمَسِيحِ."
+   "textAr": "وَاثِقًا بِهَذَا عَيْنِهِ أَنَّ ٱلَّذِي ٱبْتَدَأَ فِيكُمْ عَمَلًا صَالِحًا يُكَمِّلُ إِلَى يَوْمِ يَسُوعَ ٱلْمَسِيحِ.",
+   "textEn": "being confident of this very thing, that he who began a good work in you will complete it until the day of Jesus Christ."
   },
   {
    "ref": "MAT 16:26",
    "refAr": "متى ١٦: ٢٦",
    "refEn": "Matthew 16:26",
-   "textAr": "لِأَنَّهُ مَاذَا يَنْتَفِعُ ٱلْإِنْسَانُ لَوْ رَبِحَ ٱلْعَالَمَ كُلَّهُ وَخَسِرَ نَفْسَهُ؟ أَوْ مَاذَا يُعْطِي ٱلْإِنْسَانُ فِدَاءً عَنْ نَفْسِهِ؟"
+   "textAr": "لِأَنَّهُ مَاذَا يَنْتَفِعُ ٱلْإِنْسَانُ لَوْ رَبِحَ ٱلْعَالَمَ كُلَّهُ وَخَسِرَ نَفْسَهُ؟ أَوْ مَاذَا يُعْطِي ٱلْإِنْسَانُ فِدَاءً عَنْ نَفْسِهِ؟",
+   "textEn": "For what will it profit a man if he gains the whole world and forfeits his life? Or what will a man give in exchange for his life?"
   },
   {
    "ref": "JOH 10:10",
    "refAr": "يوحنا ١٠: ١٠",
    "refEn": "John 10:10",
-   "textAr": "اَلسَّارِقُ لَا يَأْتِي إِلَّا لِيَسْرِقَ وَيَذْبَحَ وَيُهْلِكَ، وَأَمَّا أَنَا فَقَدْ أَتَيْتُ لِتَكُونَ لَهُمْ حَيَاةٌ وَلِيَكُونَ لَهُمْ أَفْضَلُ."
+   "textAr": "اَلسَّارِقُ لَا يَأْتِي إِلَّا لِيَسْرِقَ وَيَذْبَحَ وَيُهْلِكَ، وَأَمَّا أَنَا فَقَدْ أَتَيْتُ لِتَكُونَ لَهُمْ حَيَاةٌ وَلِيَكُونَ لَهُمْ أَفْضَلُ.",
+   "textEn": "The thief only comes to steal, kill, and destroy. I came that they may have life, and may have it abundantly."
   },
   {
    "ref": "PSA 147:3",
    "refAr": "مزمور ١٤٧: ٣",
    "refEn": "Psalm 147:3",
-   "textAr": "يَشْفِي ٱلْمُنْكَسِرِي ٱلْقُلُوبِ، وَيَجْبُرُ كَسْرَهُمْ."
+   "textAr": "يَشْفِي ٱلْمُنْكَسِرِي ٱلْقُلُوبِ، وَيَجْبُرُ كَسْرَهُمْ.",
+   "textEn": "He heals the broken in heart, and binds up their wounds."
   },
   {
    "ref": "MAT 7:7",
    "refAr": "متى ٧: ٧",
    "refEn": "Matthew 7:7",
-   "textAr": "«اِسْأَلُوا تُعْطَوْا. اُطْلُبُوا تَجِدُوا. اِقْرَعُوا يُفْتَحْ لَكُمْ."
+   "textAr": "«اِسْأَلُوا تُعْطَوْا. اُطْلُبُوا تَجِدُوا. اِقْرَعُوا يُفْتَحْ لَكُمْ.",
+   "textEn": "“Ask, and it will be given you. Seek, and you will find. Knock, and it will be opened for you."
   },
   {
    "ref": "PSA 23:4",
    "refAr": "مزمور ٢٣: ٤",
    "refEn": "Psalm 23:4",
-   "textAr": "أَيْضًا إِذَا سِرْتُ فِي وَادِي ظِلِّ ٱلْمَوْتِ لَا أَخَافُ شَرًّا، لِأَنَّكَ أَنْتَ مَعِي. عَصَاكَ وَعُكَّازُكَ هُمَا يُعَزِّيَانِنِي."
+   "textAr": "أَيْضًا إِذَا سِرْتُ فِي وَادِي ظِلِّ ٱلْمَوْتِ لَا أَخَافُ شَرًّا، لِأَنَّكَ أَنْتَ مَعِي. عَصَاكَ وَعُكَّازُكَ هُمَا يُعَزِّيَانِنِي.",
+   "textEn": "Even though I walk through the valley of the shadow of death, I will fear no evil, for you are with me. Your rod and your staff, they comfort me."
   },
   {
    "ref": "PSA 150:6",
    "refAr": "مزمور ١٥٠: ٦",
    "refEn": "Psalm 150:6",
-   "textAr": "كُلُّ نَسَمَةٍ فَلْتُسَبِّحِ ٱلرَّبَّ. هَلِّلُويَا."
+   "textAr": "كُلُّ نَسَمَةٍ فَلْتُسَبِّحِ ٱلرَّبَّ. هَلِّلُويَا.",
+   "textEn": "Let everything that has breath praise the LORD! Praise the LORD!"
   },
   {
    "ref": "2CO 4:16",
    "refAr": "كورنثوس الثانية ٤: ١٦",
    "refEn": "2 Corinthians 4:16",
-   "textAr": "لِذَلِكَ لَا نَفْشَلُ، بَلْ وَإِنْ كَانَ إِنْسَانُنَا ٱلْخَارِجُ يَفْنَى، فَٱلدَّاخِلُ يَتَجَدَّدُ يَوْمًا فَيَوْمًا."
+   "textAr": "لِذَلِكَ لَا نَفْشَلُ، بَلْ وَإِنْ كَانَ إِنْسَانُنَا ٱلْخَارِجُ يَفْنَى، فَٱلدَّاخِلُ يَتَجَدَّدُ يَوْمًا فَيَوْمًا.",
+   "textEn": "Therefore we don’t faint, but though our outward person is decaying, yet our inward person is renewed day by day."
   },
   {
    "ref": "ROM 5:5",
    "refAr": "رومية ٥: ٥",
    "refEn": "Romans 5:5",
-   "textAr": "وَٱلرَّجَاءُ لَا يُخْزِي، لِأَنَّ مَحَبَّةَ ٱللهِ قَدِ ٱنْسَكَبَتْ فِي قُلُوبِنَا بِٱلرُّوحِ ٱلْقُدُسِ ٱلْمُعْطَى لَنَا."
+   "textAr": "وَٱلرَّجَاءُ لَا يُخْزِي، لِأَنَّ مَحَبَّةَ ٱللهِ قَدِ ٱنْسَكَبَتْ فِي قُلُوبِنَا بِٱلرُّوحِ ٱلْقُدُسِ ٱلْمُعْطَى لَنَا.",
+   "textEn": "and hope doesn’t disappoint us, because God’s love has been poured into our hearts through the Holy Spirit who was given to us."
   },
   {
    "ref": "JOH 15:13",
    "refAr": "يوحنا ١٥: ١٣",
    "refEn": "John 15:13",
-   "textAr": "لَيْسَ لِأَحَدٍ حُبٌّ أَعْظَمُ مِنْ هَذَا: أَنْ يَضَعَ أَحَدٌ نَفْسَهُ لِأَجْلِ أَحِبَّائِهِ."
+   "textAr": "لَيْسَ لِأَحَدٍ حُبٌّ أَعْظَمُ مِنْ هَذَا: أَنْ يَضَعَ أَحَدٌ نَفْسَهُ لِأَجْلِ أَحِبَّائِهِ.",
+   "textEn": "Greater love has no one than this, that someone lay down his life for his friends."
   },
   {
    "ref": "ROM 8:39",
    "refAr": "رومية ٨: ٣٩",
    "refEn": "Romans 8:39",
-   "textAr": "وَلَا عُلْوَ وَلَا عُمْقَ، وَلَا خَلِيقَةَ أُخْرَى، تَقْدِرُ أَنْ تَفْصِلَنَا عَنْ مَحَبَّةِ ٱللهِ ٱلَّتِي فِي ٱلْمَسِيحِ يَسُوعَ رَبِّنَا."
+   "textAr": "وَلَا عُلْوَ وَلَا عُمْقَ، وَلَا خَلِيقَةَ أُخْرَى، تَقْدِرُ أَنْ تَفْصِلَنَا عَنْ مَحَبَّةِ ٱللهِ ٱلَّتِي فِي ٱلْمَسِيحِ يَسُوعَ رَبِّنَا.",
+   "textEn": "nor height, nor depth, nor any other created thing will be able to separate us from God’s love which is in Christ Jesus our Lord."
   },
   {
    "ref": "ACT 20:35",
    "refAr": "أعمال الرسل ٢٠: ٣٥",
    "refEn": "Acts 20:35",
-   "textAr": "فِي كُلِّ شَيْءٍ أَرَيْتُكُمْ أَنَّهُ هَكَذَا يَنْبَغِي أَنَّكُمْ تَتْعَبُونَ وَتَعْضُدُونَ ٱلضُّعَفَاءَ، مُتَذَكِّرِينَ كَلِمَاتِ ٱلرَّبِّ يَسُوعَ أَنَّهُ قَالَ: مَغْبُوطٌ هُوَ ٱلْعَطَاءُ أَكْثَرُ مِنَ ٱلْأَخْذِ»."
+   "textAr": "فِي كُلِّ شَيْءٍ أَرَيْتُكُمْ أَنَّهُ هَكَذَا يَنْبَغِي أَنَّكُمْ تَتْعَبُونَ وَتَعْضُدُونَ ٱلضُّعَفَاءَ، مُتَذَكِّرِينَ كَلِمَاتِ ٱلرَّبِّ يَسُوعَ أَنَّهُ قَالَ: مَغْبُوطٌ هُوَ ٱلْعَطَاءُ أَكْثَرُ مِنَ ٱلْأَخْذِ».",
+   "textEn": "In all things I gave you an example, that so labouring you ought to help the weak, and to remember the words of the Lord Jesus, that he himself said, ‘It is more blessed to give than to receive.’ ”"
   },
   {
    "ref": "1PE 5:7",
    "refAr": "بطرس الأولى ٥: ٧",
    "refEn": "1 Peter 5:7",
-   "textAr": "مُلْقِينَ كُلَّ هَمِّكُمْ عَلَيْهِ، لِأَنَّهُ هُوَ يَعْتَنِي بِكُمْ."
+   "textAr": "مُلْقِينَ كُلَّ هَمِّكُمْ عَلَيْهِ، لِأَنَّهُ هُوَ يَعْتَنِي بِكُمْ.",
+   "textEn": "casting all your worries on him, because he cares for you."
   },
   {
    "ref": "TIT 3:5",
    "refAr": "تيطس ٣: ٥",
    "refEn": "Titus 3:5",
-   "textAr": "لَا بِأَعْمَالٍ فِي بِرٍّ عَمِلْنَاهَا نَحْنُ، بَلْ بِمُقْتَضَى رَحْمَتِهِ - خَلَّصَنَا بِغُسْلِ ٱلْمِيلَادِ ٱلثَّانِي وَتَجْدِيدِ ٱلرُّوحِ ٱلْقُدُسِ،"
+   "textAr": "لَا بِأَعْمَالٍ فِي بِرٍّ عَمِلْنَاهَا نَحْنُ، بَلْ بِمُقْتَضَى رَحْمَتِهِ - خَلَّصَنَا بِغُسْلِ ٱلْمِيلَادِ ٱلثَّانِي وَتَجْدِيدِ ٱلرُّوحِ ٱلْقُدُسِ،",
+   "textEn": "not by works of righteousness which we did ourselves, but according to his mercy, he saved us through the washing of regeneration and renewing by the Holy Spirit,"
   },
   {
    "ref": "1CO 16:14",
    "refAr": "كورنثوس الأولى ١٦: ١٤",
    "refEn": "1 Corinthians 16:14",
-   "textAr": "لِتَصِرْ كُلُّ أُمُورِكُمْ فِي مَحَبَّةٍ."
+   "textAr": "لِتَصِرْ كُلُّ أُمُورِكُمْ فِي مَحَبَّةٍ.",
+   "textEn": "Let all that you do be done in love."
   },
   {
    "ref": "PHI 4:4",
    "refAr": "فيلبي ٤: ٤",
    "refEn": "Philippians 4:4",
-   "textAr": "اِفْرَحُوا فِي ٱلرَّبِّ كُلَّ حِينٍ، وَأَقُولُ أَيْضًا: ٱفْرَحُوا."
+   "textAr": "اِفْرَحُوا فِي ٱلرَّبِّ كُلَّ حِينٍ، وَأَقُولُ أَيْضًا: ٱفْرَحُوا.",
+   "textEn": "Rejoice in the Lord always! Again I will say, “Rejoice!”"
   },
   {
    "ref": "JOH 13:35",
    "refAr": "يوحنا ١٣: ٣٥",
    "refEn": "John 13:35",
-   "textAr": "بِهَذَا يَعْرِفُ ٱلْجَمِيعُ أَنَّكُمْ تَلَامِيذِي: إِنْ كَانَ لَكُمْ حُبٌّ بَعْضًا لِبَعْضٍ»."
+   "textAr": "بِهَذَا يَعْرِفُ ٱلْجَمِيعُ أَنَّكُمْ تَلَامِيذِي: إِنْ كَانَ لَكُمْ حُبٌّ بَعْضًا لِبَعْضٍ».",
+   "textEn": "By this everyone will know that you are my disciples, if you have love for one another.”"
   },
   {
    "ref": "1CO 13:7",
    "refAr": "كورنثوس الأولى ١٣: ٧",
    "refEn": "1 Corinthians 13:7",
-   "textAr": "وَتَحْتَمِلُ كُلَّ شَيْءٍ، وَتُصَدِّقُ كُلَّ شَيْءٍ، وَتَرْجُو كُلَّ شَيْءٍ، وَتَصْبِرُ عَلَى كُلِّ شَيْءٍ."
+   "textAr": "وَتَحْتَمِلُ كُلَّ شَيْءٍ، وَتُصَدِّقُ كُلَّ شَيْءٍ، وَتَرْجُو كُلَّ شَيْءٍ، وَتَصْبِرُ عَلَى كُلِّ شَيْءٍ.",
+   "textEn": "bears all things, believes all things, hopes all things, and endures all things."
   },
   {
    "ref": "2PE 3:18",
    "refAr": "بطرس الثانية ٣: ١٨",
    "refEn": "2 Peter 3:18",
-   "textAr": "وَلَكِنِ ٱنْمُوا فِي ٱلنِّعْمَةِ وَفِي مَعْرِفَةِ رَبِّنَا وَمُخَلِّصِنَا يَسُوعَ ٱلْمَسِيحِ. لَهُ ٱلْمَجْدُ ٱلْآنَ وَإِلَى يَوْمِ ٱلدَّهْرِ. آمِينَ."
+   "textAr": "وَلَكِنِ ٱنْمُوا فِي ٱلنِّعْمَةِ وَفِي مَعْرِفَةِ رَبِّنَا وَمُخَلِّصِنَا يَسُوعَ ٱلْمَسِيحِ. لَهُ ٱلْمَجْدُ ٱلْآنَ وَإِلَى يَوْمِ ٱلدَّهْرِ. آمِينَ.",
+   "textEn": "But grow in the grace and knowledge of our Lord and Saviour Jesus Christ. To him be the glory both now and forever. Amen."
   },
   {
    "ref": "HEB 12:1",
    "refAr": "العبرانيين ١٢: ١",
    "refEn": "Hebrews 12:1",
-   "textAr": "لِذَلِكَ نَحْنُ أَيْضًا إِذْ لَنَا سَحَابَةٌ مِنَ ٱلشُّهُودِ مِقْدَارُ هَذِهِ مُحِيطَةٌ بِنَا، لِنَطْرَحْ كُلَّ ثِقْلٍ، وَٱلْخَطِيَّةَ ٱلْمُحِيطَةَ بِنَا بِسُهُولَةٍ، وَلْنُحَاضِرْ بِٱلصَّبْرِ فِي ٱلْجِهَادِ ٱلْمَوْضُوعِ أَمَامَنَا،"
+   "textAr": "لِذَلِكَ نَحْنُ أَيْضًا إِذْ لَنَا سَحَابَةٌ مِنَ ٱلشُّهُودِ مِقْدَارُ هَذِهِ مُحِيطَةٌ بِنَا، لِنَطْرَحْ كُلَّ ثِقْلٍ، وَٱلْخَطِيَّةَ ٱلْمُحِيطَةَ بِنَا بِسُهُولَةٍ، وَلْنُحَاضِرْ بِٱلصَّبْرِ فِي ٱلْجِهَادِ ٱلْمَوْضُوعِ أَمَامَنَا،",
+   "textEn": "Therefore let’s also, seeing we are surrounded by so great a cloud of witnesses, lay aside every weight and the sin which so easily entangles us, and let’s run with perseverance the race that is set before us,"
   },
   {
    "ref": "1JO 5:4",
    "refAr": "يوحنا الأولى ٥: ٤",
    "refEn": "1 John 5:4",
-   "textAr": "لِأَنَّ كُلَّ مَنْ وُلِدَ مِنَ ٱللهِ يَغْلِبُ ٱلْعَالَمَ. وَهَذِهِ هِيَ ٱلْغَلَبَةُ ٱلَّتِي تَغْلِبُ ٱلْعَالَمَ: إِيمَانُنَا."
+   "textAr": "لِأَنَّ كُلَّ مَنْ وُلِدَ مِنَ ٱللهِ يَغْلِبُ ٱلْعَالَمَ. وَهَذِهِ هِيَ ٱلْغَلَبَةُ ٱلَّتِي تَغْلِبُ ٱلْعَالَمَ: إِيمَانُنَا.",
+   "textEn": "For whatever is born of God overcomes the world. This is the victory that has overcome the world: your faith."
   },
   {
    "ref": "JOH 6:37",
    "refAr": "يوحنا ٦: ٣٧",
    "refEn": "John 6:37",
-   "textAr": "كُلُّ مَا يُعْطِينِي ٱلْآبُ فَإِلَيَّ يُقْبِلُ، وَمَنْ يُقْبِلْ إِلَيَّ لَا أُخْرِجْهُ خَارِجًا."
+   "textAr": "كُلُّ مَا يُعْطِينِي ٱلْآبُ فَإِلَيَّ يُقْبِلُ، وَمَنْ يُقْبِلْ إِلَيَّ لَا أُخْرِجْهُ خَارِجًا.",
+   "textEn": "All those whom the Father gives me will come to me. He who comes to me I will in no way throw out."
   },
   {
    "ref": "2CO 5:7",
    "refAr": "كورنثوس الثانية ٥: ٧",
    "refEn": "2 Corinthians 5:7",
-   "textAr": "لِأَنَّنَا بِٱلْإِيمَانِ نَسْلُكُ لَا بِٱلْعِيَانِ."
+   "textAr": "لِأَنَّنَا بِٱلْإِيمَانِ نَسْلُكُ لَا بِٱلْعِيَانِ.",
+   "textEn": "for we walk by faith, not by sight."
   },
   {
    "ref": "MAT 5:14",
    "refAr": "متى ٥: ١٤",
    "refEn": "Matthew 5:14",
-   "textAr": "أَنْتُمْ نُورُ ٱلْعَالَمِ. لَا يُمْكِنُ أَنْ تُخْفَى مَدِينَةٌ مَوْضُوعَةٌ عَلَى جَبَلٍ،"
+   "textAr": "أَنْتُمْ نُورُ ٱلْعَالَمِ. لَا يُمْكِنُ أَنْ تُخْفَى مَدِينَةٌ مَوْضُوعَةٌ عَلَى جَبَلٍ،",
+   "textEn": "“You are the light of the world. A city located on a hill can’t be hidden."
   },
   {
    "ref": "1JO 3:18",
    "refAr": "يوحنا الأولى ٣: ١٨",
    "refEn": "1 John 3:18",
-   "textAr": "يَا أَوْلَادِي، لَا نُحِبَّ بِٱلْكَلَامِ وَلَا بِٱللِّسَانِ، بَلْ بِٱلْعَمَلِ وَٱلْحَقِّ!"
+   "textAr": "يَا أَوْلَادِي، لَا نُحِبَّ بِٱلْكَلَامِ وَلَا بِٱللِّسَانِ، بَلْ بِٱلْعَمَلِ وَٱلْحَقِّ!",
+   "textEn": "My little children, let’s not love in word only, or with the tongue only, but in deed and truth."
   },
   {
    "ref": "MAT 5:16",
    "refAr": "متى ٥: ١٦",
    "refEn": "Matthew 5:16",
-   "textAr": "فَلْيُضِئْ نُورُكُمْ هَكَذَا قُدَّامَ ٱلنَّاسِ، لِكَيْ يَرَوْا أَعْمَالَكُمُ ٱلْحَسَنَةَ، وَيُمَجِّدُوا أَبَاكُمُ ٱلَّذِي فِي ٱلسَّمَاوَاتِ."
+   "textAr": "فَلْيُضِئْ نُورُكُمْ هَكَذَا قُدَّامَ ٱلنَّاسِ، لِكَيْ يَرَوْا أَعْمَالَكُمُ ٱلْحَسَنَةَ، وَيُمَجِّدُوا أَبَاكُمُ ٱلَّذِي فِي ٱلسَّمَاوَاتِ.",
+   "textEn": "Even so, let your light shine before men, that they may see your good works and glorify your Father who is in heaven."
   },
   {
    "ref": "PSA 126:5",
    "refAr": "مزمور ١٢٦: ٥",
    "refEn": "Psalm 126:5",
-   "textAr": "ٱلَّذِينَ يَزْرَعُونَ بِٱلدُّمُوعِ يَحْصُدُونَ بِٱلِٱبْتِهَاجِ."
+   "textAr": "ٱلَّذِينَ يَزْرَعُونَ بِٱلدُّمُوعِ يَحْصُدُونَ بِٱلِٱبْتِهَاجِ.",
+   "textEn": "Those who sow in tears will reap in joy."
   },
   {
    "ref": "PSA 145:8",
    "refAr": "مزمور ١٤٥: ٨",
    "refEn": "Psalm 145:8",
-   "textAr": "اَلرَّبُّ حَنَّانٌ وَرَحِيمٌ، طَوِيلُ ٱلرُّوحِ وَكَثِيرُ ٱلرَّحْمَةِ."
+   "textAr": "اَلرَّبُّ حَنَّانٌ وَرَحِيمٌ، طَوِيلُ ٱلرُّوحِ وَكَثِيرُ ٱلرَّحْمَةِ.",
+   "textEn": "The LORD is gracious, merciful, slow to anger, and of great loving kindness."
   },
   {
    "ref": "HEB 13:2",
    "refAr": "العبرانيين ١٣: ٢",
    "refEn": "Hebrews 13:2",
-   "textAr": "لَا تَنْسُوا إِضَافَةَ ٱلْغُرَبَاءِ، لِأَنْ بِهَا أَضَافَ أُنَاسٌ مَلَائِكَةً وَهُمْ لَا يَدْرُونَ."
+   "textAr": "لَا تَنْسُوا إِضَافَةَ ٱلْغُرَبَاءِ، لِأَنْ بِهَا أَضَافَ أُنَاسٌ مَلَائِكَةً وَهُمْ لَا يَدْرُونَ.",
+   "textEn": "Don’t forget to show hospitality to strangers, for in doing so, some have entertained angels without knowing it."
   },
   {
    "ref": "1PE 4:8",
    "refAr": "بطرس الأولى ٤: ٨",
    "refEn": "1 Peter 4:8",
-   "textAr": "وَلَكِنْ قَبْلَ كُلِّ شَيْءٍ، لِتَكُنْ مَحَبَّتُكُمْ بَعْضِكُمْ لِبَعْضٍ شَدِيدَةً، لِأَنَّ ٱلْمَحَبَّةَ تَسْتُرُ كَثْرَةً مِنَ ٱلْخَطَايَا."
+   "textAr": "وَلَكِنْ قَبْلَ كُلِّ شَيْءٍ، لِتَكُنْ مَحَبَّتُكُمْ بَعْضِكُمْ لِبَعْضٍ شَدِيدَةً، لِأَنَّ ٱلْمَحَبَّةَ تَسْتُرُ كَثْرَةً مِنَ ٱلْخَطَايَا.",
+   "textEn": "And above all things be earnest in your love amongst yourselves, for love covers a multitude of sins."
   },
   {
    "ref": "LUK 1:47",
    "refAr": "لوقا ١: ٤٧",
    "refEn": "Luke 1:47",
-   "textAr": "وَتَبْتَهِجُ رُوحِي بِٱللهِ مُخَلِّصِي،"
+   "textAr": "وَتَبْتَهِجُ رُوحِي بِٱللهِ مُخَلِّصِي،",
+   "textEn": "My spirit has rejoiced in God my Saviour,"
   },
   {
    "ref": "JOH 12:46",
    "refAr": "يوحنا ١٢: ٤٦",
    "refEn": "John 12:46",
-   "textAr": "أَنَا قَدْ جِئْتُ نُورًا إِلَى ٱلْعَالَمِ، حَتَّى كُلُّ مَنْ يُؤْمِنُ بِي لَا يَمْكُثُ فِي ٱلظُّلْمَةِ."
+   "textAr": "أَنَا قَدْ جِئْتُ نُورًا إِلَى ٱلْعَالَمِ، حَتَّى كُلُّ مَنْ يُؤْمِنُ بِي لَا يَمْكُثُ فِي ٱلظُّلْمَةِ.",
+   "textEn": "I have come as a light into the world, that whoever believes in me may not remain in the darkness."
   },
   {
    "ref": "JOH 15:12",
    "refAr": "يوحنا ١٥: ١٢",
    "refEn": "John 15:12",
-   "textAr": "«هَذِهِ هِيَ وَصِيَّتِي أَنْ تُحِبُّوا بَعْضُكُمْ بَعْضًا كَمَا أَحْبَبْتُكُمْ."
+   "textAr": "«هَذِهِ هِيَ وَصِيَّتِي أَنْ تُحِبُّوا بَعْضُكُمْ بَعْضًا كَمَا أَحْبَبْتُكُمْ.",
+   "textEn": "“This is my commandment, that you love one another, even as I have loved you."
   },
   {
    "ref": "MAT 5:44",
    "refAr": "متى ٥: ٤٤",
    "refEn": "Matthew 5:44",
-   "textAr": "وَأَمَّا أَنَا فَأَقُولُ لَكُمْ: أَحِبُّوا أَعْدَاءَكُمْ. بَارِكُوا لَاعِنِيكُمْ. أَحْسِنُوا إِلَى مُبْغِضِيكُمْ، وَصَلُّوا لِأَجْلِ ٱلَّذِينَ يُسِيئُونَ إِلَيْكُمْ وَيَطْرُدُونَكُمْ،"
+   "textAr": "وَأَمَّا أَنَا فَأَقُولُ لَكُمْ: أَحِبُّوا أَعْدَاءَكُمْ. بَارِكُوا لَاعِنِيكُمْ. أَحْسِنُوا إِلَى مُبْغِضِيكُمْ، وَصَلُّوا لِأَجْلِ ٱلَّذِينَ يُسِيئُونَ إِلَيْكُمْ وَيَطْرُدُونَكُمْ،",
+   "textEn": "But I tell you, love your enemies, bless those who curse you, do good to those who hate you, and pray for those who mistreat you and persecute you,"
   },
   {
    "ref": "COL 3:13",
    "refAr": "كولوسي ٣: ١٣",
    "refEn": "Colossians 3:13",
-   "textAr": "مُحْتَمِلِينَ بَعْضُكُمْ بَعْضًا، وَمُسَامِحِينَ بَعْضُكُمْ بَعْضًا. إِنْ كَانَ لِأَحَدٍ عَلَى أَحَدٍ شَكْوَى، كَمَا غَفَرَ لَكُمُ ٱلْمَسِيحُ هَكَذَا أَنْتُمْ أَيْضًا."
+   "textAr": "مُحْتَمِلِينَ بَعْضُكُمْ بَعْضًا، وَمُسَامِحِينَ بَعْضُكُمْ بَعْضًا. إِنْ كَانَ لِأَحَدٍ عَلَى أَحَدٍ شَكْوَى، كَمَا غَفَرَ لَكُمُ ٱلْمَسِيحُ هَكَذَا أَنْتُمْ أَيْضًا.",
+   "textEn": "bearing with one another, and forgiving each other, if any man has a complaint against any; even as Christ forgave you, so you also do."
   },
   {
    "ref": "PSA 143:8",
    "refAr": "مزمور ١٤٣: ٨",
    "refEn": "Psalm 143:8",
-   "textAr": "أَسْمِعْنِي رَحْمَتَكَ فِي ٱلْغَدَاةِ، لِأَنِّي عَلَيْكَ تَوَكَّلْتُ. عَرِّفْنِي ٱلطَّرِيقَ ٱلَّتِي أَسْلُكُ فِيهَا، لِأَنِّي إِلَيْكَ رَفَعْتُ نَفْسِي."
+   "textAr": "أَسْمِعْنِي رَحْمَتَكَ فِي ٱلْغَدَاةِ، لِأَنِّي عَلَيْكَ تَوَكَّلْتُ. عَرِّفْنِي ٱلطَّرِيقَ ٱلَّتِي أَسْلُكُ فِيهَا، لِأَنِّي إِلَيْكَ رَفَعْتُ نَفْسِي.",
+   "textEn": "Cause me to hear your loving kindness in the morning, for I trust in you. Cause me to know the way in which I should walk, for I lift up my soul to you."
   },
   {
    "ref": "ROM 12:10",
    "refAr": "رومية ١٢: ١٠",
    "refEn": "Romans 12:10",
-   "textAr": "وَادِّينَ بَعْضُكُمْ بَعْضًا بِٱلْمَحَبَّةِ ٱلْأَخَوِيَّةِ، مُقَدِّمِينَ بَعْضُكُمْ بَعْضًا فِي ٱلْكَرَامَةِ."
+   "textAr": "وَادِّينَ بَعْضُكُمْ بَعْضًا بِٱلْمَحَبَّةِ ٱلْأَخَوِيَّةِ، مُقَدِّمِينَ بَعْضُكُمْ بَعْضًا فِي ٱلْكَرَامَةِ.",
+   "textEn": "In love of the brothers be tenderly affectionate to one another; in honour prefer one another,"
   },
   {
    "ref": "MAT 5:5",
    "refAr": "متى ٥: ٥",
    "refEn": "Matthew 5:5",
-   "textAr": "طُوبَى لِلْوُدَعَاءِ، لِأَنَّهُمْ يَرِثُونَ ٱلْأَرْضَ."
+   "textAr": "طُوبَى لِلْوُدَعَاءِ، لِأَنَّهُمْ يَرِثُونَ ٱلْأَرْضَ.",
+   "textEn": "Blessed are the gentle, for they shall inherit the earth."
   },
   {
    "ref": "GAL 5:23",
    "refAr": "غلاطية ٥: ٢٣",
    "refEn": "Galatians 5:23",
-   "textAr": "وَدَاعَةٌ، تَعَفُّفٌ. ضِدَّ أَمْثَالِ هَذِهِ لَيْسَ نَامُوسٌ."
+   "textAr": "وَدَاعَةٌ، تَعَفُّفٌ. ضِدَّ أَمْثَالِ هَذِهِ لَيْسَ نَامُوسٌ.",
+   "textEn": "gentleness, and self-control. Against such things there is no law."
   },
   {
    "ref": "PSA 46:1",
    "refAr": "مزمور ٤٦: ١",
    "refEn": "Psalm 46:1",
-   "textAr": "لِإِمَامِ ٱلْمُغَنِّينَ. لِبَنِي قُورَحَ. عَلَى «ٱلْجَوَابِ». تَرْنِيمَةٌ ٱللهُ لَنَا مَلْجَأٌ وَقُوَّةٌ. عَوْنًا فِي ٱلضِّيْقَاتِ وُجِدَ شَدِيدًا."
+   "textAr": "لِإِمَامِ ٱلْمُغَنِّينَ. لِبَنِي قُورَحَ. عَلَى «ٱلْجَوَابِ». تَرْنِيمَةٌ ٱللهُ لَنَا مَلْجَأٌ وَقُوَّةٌ. عَوْنًا فِي ٱلضِّيْقَاتِ وُجِدَ شَدِيدًا.",
+   "textEn": "For the Chief Musician. By the sons of Korah. According to Alamoth. God is our refuge and strength, a very present help in trouble."
   },
   {
    "ref": "2TI 3:16",
    "refAr": "تيموثاوس الثانية ٣: ١٦",
    "refEn": "2 Timothy 3:16",
-   "textAr": "كُلُّ ٱلْكِتَابِ هُوَ مُوحًى بِهِ مِنَ ٱللهِ، وَنَافِعٌ لِلتَّعْلِيمِ وَٱلتَّوْبِيخِ، لِلتَّقْوِيمِ وَٱلتَّأْدِيبِ ٱلَّذِي فِي ٱلْبِرِّ،"
+   "textAr": "كُلُّ ٱلْكِتَابِ هُوَ مُوحًى بِهِ مِنَ ٱللهِ، وَنَافِعٌ لِلتَّعْلِيمِ وَٱلتَّوْبِيخِ، لِلتَّقْوِيمِ وَٱلتَّأْدِيبِ ٱلَّذِي فِي ٱلْبِرِّ،",
+   "textEn": "Every Scripture is God-breathed and profitable for teaching, for reproof, for correction, and for instruction in righteousness,"
   },
   {
    "ref": "JOH 20:31",
    "refAr": "يوحنا ٢٠: ٣١",
    "refEn": "John 20:31",
-   "textAr": "وَأَمَّا هَذِهِ فَقَدْ كُتِبَتْ لِتُؤْمِنُوا أَنَّ يَسُوعَ هُوَ ٱلْمَسِيحُ ٱبْنُ ٱللهِ، وَلِكَيْ تَكُونَ لَكُمْ إِذَا آمَنْتُمْ حَيَاةٌ بِٱسْمِهِ."
+   "textAr": "وَأَمَّا هَذِهِ فَقَدْ كُتِبَتْ لِتُؤْمِنُوا أَنَّ يَسُوعَ هُوَ ٱلْمَسِيحُ ٱبْنُ ٱللهِ، وَلِكَيْ تَكُونَ لَكُمْ إِذَا آمَنْتُمْ حَيَاةٌ بِٱسْمِهِ.",
+   "textEn": "but these are written that you may believe that Jesus is the Christ, the Son of God, and that believing you may have life in his name."
   },
   {
    "ref": "1TH 5:17",
    "refAr": "تسالونيكي الأولى ٥: ١٧",
    "refEn": "1 Thessalonians 5:17",
-   "textAr": "صَلُّوا بِلَا ٱنْقِطَاعٍ."
+   "textAr": "صَلُّوا بِلَا ٱنْقِطَاعٍ.",
+   "textEn": "Pray without ceasing."
   },
   {
    "ref": "JOH 5:24",
    "refAr": "يوحنا ٥: ٢٤",
    "refEn": "John 5:24",
-   "textAr": "«اَلْحَقَّ ٱلْحَقَّ أَقُولُ لَكُمْ: إِنَّ مَنْ يَسْمَعُ كَلَامِي وَيُؤْمِنُ بِالَّذِي أَرْسَلَنِي فَلَهُ حَيَاةٌ أَبَدِيَّةٌ، وَلَا يَأْتِي إِلَى دَيْنُونَةٍ، بَلْ قَدِ ٱنْتَقَلَ مِنَ ٱلْمَوْتِ إِلَى ٱلْحَيَاةِ."
+   "textAr": "«اَلْحَقَّ ٱلْحَقَّ أَقُولُ لَكُمْ: إِنَّ مَنْ يَسْمَعُ كَلَامِي وَيُؤْمِنُ بِالَّذِي أَرْسَلَنِي فَلَهُ حَيَاةٌ أَبَدِيَّةٌ، وَلَا يَأْتِي إِلَى دَيْنُونَةٍ، بَلْ قَدِ ٱنْتَقَلَ مِنَ ٱلْمَوْتِ إِلَى ٱلْحَيَاةِ.",
+   "textEn": "“Most certainly I tell you, he who hears my word and believes him who sent me has eternal life, and doesn’t come into judgement, but has passed out of death into life."
   },
   {
    "ref": "JUD 1:21",
    "refAr": "يهوذا ١: ٢١",
    "refEn": "Jude 1:21",
-   "textAr": "وَٱحْفَظُوا أَنْفُسَكُمْ فِي مَحَبَّةِ ٱللهِ، مُنْتَظِرِينَ رَحْمَةَ رَبِّنَا يَسُوعَ ٱلْمَسِيحِ لِلْحَيَاةِ ٱلْأَبَدِيَّةِ."
+   "textAr": "وَٱحْفَظُوا أَنْفُسَكُمْ فِي مَحَبَّةِ ٱللهِ، مُنْتَظِرِينَ رَحْمَةَ رَبِّنَا يَسُوعَ ٱلْمَسِيحِ لِلْحَيَاةِ ٱلْأَبَدِيَّةِ.",
+   "textEn": "Keep yourselves in God’s love, looking for the mercy of our Lord Jesus Christ to eternal life."
   },
   {
    "ref": "1CO 15:58",
    "refAr": "كورنثوس الأولى ١٥: ٥٨",
    "refEn": "1 Corinthians 15:58",
-   "textAr": "إِذًا يَا إِخْوَتِي ٱلْأَحِبَّاءَ، كُونُوا رَاسِخِينَ، غَيْرَ مُتَزَعْزِعِينَ، مُكْثِرِينَ فِي عَمَلِ ٱلرَّبِّ كُلَّ حِينٍ، عَالِمِينَ أَنَّ تَعَبَكُمْ لَيْسَ بَاطِلًا فِي ٱلرَّبِّ."
+   "textAr": "إِذًا يَا إِخْوَتِي ٱلْأَحِبَّاءَ، كُونُوا رَاسِخِينَ، غَيْرَ مُتَزَعْزِعِينَ، مُكْثِرِينَ فِي عَمَلِ ٱلرَّبِّ كُلَّ حِينٍ، عَالِمِينَ أَنَّ تَعَبَكُمْ لَيْسَ بَاطِلًا فِي ٱلرَّبِّ.",
+   "textEn": "Therefore, my beloved brothers, be steadfast, immovable, always abounding in the Lord’s work, because you know that your labour is not in vain in the Lord."
   },
   {
    "ref": "1JO 4:16",
    "refAr": "يوحنا الأولى ٤: ١٦",
    "refEn": "1 John 4:16",
-   "textAr": "وَنَحْنُ قَدْ عَرَفْنَا وَصَدَّقْنَا ٱلْمَحَبَّةَ ٱلَّتِي لِلهِ فِينَا. ٱللهُ مَحَبَّةٌ، وَمَنْ يَثْبُتْ فِي ٱلْمَحَبَّةِ، يَثْبُتْ فِي ٱللهِ وَٱللهُ فِيهِ."
+   "textAr": "وَنَحْنُ قَدْ عَرَفْنَا وَصَدَّقْنَا ٱلْمَحَبَّةَ ٱلَّتِي لِلهِ فِينَا. ٱللهُ مَحَبَّةٌ، وَمَنْ يَثْبُتْ فِي ٱلْمَحَبَّةِ، يَثْبُتْ فِي ٱللهِ وَٱللهُ فِيهِ.",
+   "textEn": "We know and have believed the love which God has for us. God is love, and he who remains in love remains in God, and God remains in him."
   },
   {
    "ref": "PSA 86:5",
    "refAr": "مزمور ٨٦: ٥",
    "refEn": "Psalm 86:5",
-   "textAr": "لِأَنَّكَ أَنْتَ يَارَبُّ صَالِحٌ وَغَفُورٌ، وَكَثِيرُ ٱلرَّحْمَةِ لِكُلِّ ٱلدَّاعِينَ إِلَيْكَ."
+   "textAr": "لِأَنَّكَ أَنْتَ يَارَبُّ صَالِحٌ وَغَفُورٌ، وَكَثِيرُ ٱلرَّحْمَةِ لِكُلِّ ٱلدَّاعِينَ إِلَيْكَ.",
+   "textEn": "For you, Lord, are good, and ready to forgive, abundant in loving kindness to all those who call on you."
   },
   {
    "ref": "PSA 31:24",
    "refAr": "مزمور ٣١: ٢٤",
    "refEn": "Psalm 31:24",
-   "textAr": "لِتَتَشَدَّدْ وَلْتَتَشَجَّعْ قُلُوبُكُمْ، يَا جَمِيعَ ٱلْمُنْتَظِرِينَ ٱلرَّبَّ."
+   "textAr": "لِتَتَشَدَّدْ وَلْتَتَشَجَّعْ قُلُوبُكُمْ، يَا جَمِيعَ ٱلْمُنْتَظِرِينَ ٱلرَّبَّ.",
+   "textEn": "Be strong, and let your heart take courage, all you who hope in the LORD."
   },
   {
    "ref": "LUK 2:11",
    "refAr": "لوقا ٢: ١١",
    "refEn": "Luke 2:11",
-   "textAr": "أَنَّهُ وُلِدَ لَكُمُ ٱلْيَوْمَ فِي مَدِينَةِ دَاوُدَ مُخَلِّصٌ هُوَ ٱلْمَسِيحُ ٱلرَّبُّ."
+   "textAr": "أَنَّهُ وُلِدَ لَكُمُ ٱلْيَوْمَ فِي مَدِينَةِ دَاوُدَ مُخَلِّصٌ هُوَ ٱلْمَسِيحُ ٱلرَّبُّ.",
+   "textEn": "For there is born to you today, in David’s city, a Saviour, who is Christ the Lord."
   },
   {
    "ref": "ROM 6:23",
    "refAr": "رومية ٦: ٢٣",
    "refEn": "Romans 6:23",
-   "textAr": "لِأَنَّ أُجْرَةَ ٱلْخَطِيَّةِ هِيَ مَوْتٌ، وَأَمَّا هِبَةُ ٱللهِ فَهِيَ حَيَاةٌ أَبَدِيَّةٌ بِٱلْمَسِيحِ يَسُوعَ رَبِّنَا."
+   "textAr": "لِأَنَّ أُجْرَةَ ٱلْخَطِيَّةِ هِيَ مَوْتٌ، وَأَمَّا هِبَةُ ٱللهِ فَهِيَ حَيَاةٌ أَبَدِيَّةٌ بِٱلْمَسِيحِ يَسُوعَ رَبِّنَا.",
+   "textEn": "For the wages of sin is death, but the free gift of God is eternal life in Christ Jesus our Lord."
   },
   {
    "ref": "PSA 34:18",
    "refAr": "مزمور ٣٤: ١٨",
    "refEn": "Psalm 34:18",
-   "textAr": "قَرِيبٌ هُوَ ٱلرَّبُّ مِنَ ٱلْمُنْكَسِرِي ٱلْقُلُوبِ، وَيُخَلِّصُ ٱلْمُنْسَحِقِي ٱلرُّوحِ."
+   "textAr": "قَرِيبٌ هُوَ ٱلرَّبُّ مِنَ ٱلْمُنْكَسِرِي ٱلْقُلُوبِ، وَيُخَلِّصُ ٱلْمُنْسَحِقِي ٱلرُّوحِ.",
+   "textEn": "The LORD is near to those who have a broken heart, and saves those who have a crushed spirit."
   },
   {
    "ref": "PHI 4:11",
    "refAr": "فيلبي ٤: ١١",
    "refEn": "Philippians 4:11",
-   "textAr": "لَيْسَ أَنِّي أَقُولُ مِنْ جِهَةِ ٱحْتِيَاجٍ، فَإِنِّي قَدْ تَعَلَّمْتُ أَنْ أَكُونَ مُكْتَفِيًا بِمَا أَنَا فِيهِ."
+   "textAr": "لَيْسَ أَنِّي أَقُولُ مِنْ جِهَةِ ٱحْتِيَاجٍ، فَإِنِّي قَدْ تَعَلَّمْتُ أَنْ أَكُونَ مُكْتَفِيًا بِمَا أَنَا فِيهِ.",
+   "textEn": "Not that I speak because of lack, for I have learnt in whatever state I am, to be content in it."
   },
   {
    "ref": "2TH 3:3",
    "refAr": "تسالونيكي الثانية ٣: ٣",
    "refEn": "2 Thessalonians 3:3",
-   "textAr": "أَمِينٌ هُوَ ٱلرَّبُّ ٱلَّذِي سَيُثَبِّتُكُمْ وَيَحْفَظُكُمْ مِنَ ٱلشِّرِّيرِ."
+   "textAr": "أَمِينٌ هُوَ ٱلرَّبُّ ٱلَّذِي سَيُثَبِّتُكُمْ وَيَحْفَظُكُمْ مِنَ ٱلشِّرِّيرِ.",
+   "textEn": "But the Lord is faithful, who will establish you and guard you from the evil one."
   },
   {
    "ref": "JOH 20:29",
    "refAr": "يوحنا ٢٠: ٢٩",
    "refEn": "John 20:29",
-   "textAr": "قَالَ لَهُ يَسُوعُ: «لِأَنَّكَ رَأَيْتَنِي يَا تُومَا آمَنْتَ! طُوبَى لِلَّذِينَ آمَنُوا وَلَمْ يَرَوْا»."
+   "textAr": "قَالَ لَهُ يَسُوعُ: «لِأَنَّكَ رَأَيْتَنِي يَا تُومَا آمَنْتَ! طُوبَى لِلَّذِينَ آمَنُوا وَلَمْ يَرَوْا».",
+   "textEn": "Jesus said to him, “Because you have seen me, you have believed. Blessed are those who have not seen and have believed.”"
   },
   {
    "ref": "2CO 5:17",
    "refAr": "كورنثوس الثانية ٥: ١٧",
    "refEn": "2 Corinthians 5:17",
-   "textAr": "إِذًا إِنْ كَانَ أَحَدٌ فِي ٱلْمَسِيحِ فَهُوَ خَلِيقَةٌ جَدِيدَةٌ: ٱلْأَشْيَاءُ ٱلْعَتِيقَةُ قَدْ مَضَتْ، هُوَذَا ٱلْكُلُّ قَدْ صَارَ جَدِيدًا."
+   "textAr": "إِذًا إِنْ كَانَ أَحَدٌ فِي ٱلْمَسِيحِ فَهُوَ خَلِيقَةٌ جَدِيدَةٌ: ٱلْأَشْيَاءُ ٱلْعَتِيقَةُ قَدْ مَضَتْ، هُوَذَا ٱلْكُلُّ قَدْ صَارَ جَدِيدًا.",
+   "textEn": "Therefore if anyone is in Christ, he is a new creation. The old things have passed away. Behold, all things have become new."
   },
   {
    "ref": "ROM 10:9",
    "refAr": "رومية ١٠: ٩",
    "refEn": "Romans 10:9",
-   "textAr": "لِأَنَّكَ إِنِ ٱعْتَرَفْتَ بِفَمِكَ بِٱلرَّبِّ يَسُوعَ، وَآمَنْتَ بِقَلْبِكَ أَنَّ ٱللهَ أَقَامَهُ مِنَ ٱلْأَمْوَاتِ، خَلَصْتَ."
+   "textAr": "لِأَنَّكَ إِنِ ٱعْتَرَفْتَ بِفَمِكَ بِٱلرَّبِّ يَسُوعَ، وَآمَنْتَ بِقَلْبِكَ أَنَّ ٱللهَ أَقَامَهُ مِنَ ٱلْأَمْوَاتِ، خَلَصْتَ.",
+   "textEn": "that if you will confess with your mouth that Jesus is Lord and believe in your heart that God raised him from the dead, you will be saved."
   },
   {
    "ref": "PRO 15:1",
    "refAr": "أمثال ١٥: ١",
    "refEn": "Proverbs 15:1",
-   "textAr": "اَلْجَوَابُ ٱللَّيِّنُ يَصْرِفُ ٱلْغَضَبَ، وَٱلْكَلَامُ ٱلْمُوجِعُ يُهَيِّجُ ٱلسَّخَطَ."
+   "textAr": "اَلْجَوَابُ ٱللَّيِّنُ يَصْرِفُ ٱلْغَضَبَ، وَٱلْكَلَامُ ٱلْمُوجِعُ يُهَيِّجُ ٱلسَّخَطَ.",
+   "textEn": "A gentle answer turns away wrath, but a harsh word stirs up anger."
   },
   {
    "ref": "JOH 15:4",
    "refAr": "يوحنا ١٥: ٤",
    "refEn": "John 15:4",
-   "textAr": "اُثْبُتُوا فِيَّ وَأَنَا فِيكُمْ. كَمَا أَنَّ ٱلْغُصْنَ لَا يَقْدِرُ أَنْ يَأْتِيَ بِثَمَرٍ مِنْ ذَاتِهِ إِنْ لَمْ يَثْبُتْ فِي ٱلْكَرْمَةِ، كَذَلِكَ أَنْتُمْ أَيْضًا إِنْ لَمْ تَثْبُتُوا فِيَّ."
+   "textAr": "اُثْبُتُوا فِيَّ وَأَنَا فِيكُمْ. كَمَا أَنَّ ٱلْغُصْنَ لَا يَقْدِرُ أَنْ يَأْتِيَ بِثَمَرٍ مِنْ ذَاتِهِ إِنْ لَمْ يَثْبُتْ فِي ٱلْكَرْمَةِ، كَذَلِكَ أَنْتُمْ أَيْضًا إِنْ لَمْ تَثْبُتُوا فِيَّ.",
+   "textEn": "Remain in me, and I in you. As the branch can’t bear fruit by itself unless it remains in the vine, so neither can you, unless you remain in me."
   },
   {
    "ref": "PSA 27:14",
    "refAr": "مزمور ٢٧: ١٤",
    "refEn": "Psalm 27:14",
-   "textAr": "ٱنْتَظِرِ ٱلرَّبَّ. لِيَتَشَدَّدْ وَلْيَتَشَجَّعْ قَلْبُكَ، وَٱنْتَظِرِ ٱلرَّبَّ."
+   "textAr": "ٱنْتَظِرِ ٱلرَّبَّ. لِيَتَشَدَّدْ وَلْيَتَشَجَّعْ قَلْبُكَ، وَٱنْتَظِرِ ٱلرَّبَّ.",
+   "textEn": "Wait for the LORD. Be strong, and let your heart take courage. Yes, wait for the LORD."
   },
   {
    "ref": "PRO 17:22",
    "refAr": "أمثال ١٧: ٢٢",
    "refEn": "Proverbs 17:22",
-   "textAr": "ٱلْقَلْبُ ٱلْفَرْحَانُ يُطَيِّبُ ٱلْجِسْمَ، وَٱلرُّوحُ ٱلْمُنْسَحِقَةُ تُجَفِّفُ ٱلْعَظْمَ."
+   "textAr": "ٱلْقَلْبُ ٱلْفَرْحَانُ يُطَيِّبُ ٱلْجِسْمَ، وَٱلرُّوحُ ٱلْمُنْسَحِقَةُ تُجَفِّفُ ٱلْعَظْمَ.",
+   "textEn": "A cheerful heart makes good medicine, but a crushed spirit dries up the bones."
   },
   {
    "ref": "MAR 10:27",
    "refAr": "مرقس ١٠: ٢٧",
    "refEn": "Mark 10:27",
-   "textAr": "فَنَظَرَ إِلَيْهِمْ يَسُوعُ وَقَالَ: «عِنْدَ ٱلنَّاسِ غَيْرُ مُسْتَطَاعٍ، وَلَكِنْ لَيْسَ عِنْدَ ٱللهِ، لِأَنَّ كُلَّ شَيْءٍ مُسْتَطَاعٌ عِنْدَ ٱللهِ»."
+   "textAr": "فَنَظَرَ إِلَيْهِمْ يَسُوعُ وَقَالَ: «عِنْدَ ٱلنَّاسِ غَيْرُ مُسْتَطَاعٍ، وَلَكِنْ لَيْسَ عِنْدَ ٱللهِ، لِأَنَّ كُلَّ شَيْءٍ مُسْتَطَاعٌ عِنْدَ ٱللهِ».",
+   "textEn": "Jesus, looking at them, said, “With men it is impossible, but not with God, for all things are possible with God.”"
   },
   {
    "ref": "LUK 1:46",
    "refAr": "لوقا ١: ٤٦",
    "refEn": "Luke 1:46",
-   "textAr": "فَقَالَتْ مَرْيَمُ: «تُعَظِّمُ نَفْسِي ٱلرَّبَّ،"
+   "textAr": "فَقَالَتْ مَرْيَمُ: «تُعَظِّمُ نَفْسِي ٱلرَّبَّ،",
+   "textEn": "Mary said, “My soul magnifies the Lord."
   },
   {
    "ref": "COL 3:15",
    "refAr": "كولوسي ٣: ١٥",
    "refEn": "Colossians 3:15",
-   "textAr": "وَلْيَمْلِكْ فِي قُلُوبِكُمْ سَلَامُ ٱللهِ ٱلَّذِي إِلَيْهِ دُعِيتُمْ فِي جَسَدٍ وَاحِدٍ، وَكُونُوا شَاكِرِينَ."
+   "textAr": "وَلْيَمْلِكْ فِي قُلُوبِكُمْ سَلَامُ ٱللهِ ٱلَّذِي إِلَيْهِ دُعِيتُمْ فِي جَسَدٍ وَاحِدٍ، وَكُونُوا شَاكِرِينَ.",
+   "textEn": "And let the peace of God rule in your hearts, to which also you were called in one body, and be thankful."
   },
   {
    "ref": "1CO 1:18",
    "refAr": "كورنثوس الأولى ١: ١٨",
    "refEn": "1 Corinthians 1:18",
-   "textAr": "فَإِنَّ كَلِمَةَ ٱلصَّلِيبِ عِنْدَ ٱلْهَالِكِينَ جَهَالَةٌ، وَأَمَّا عِنْدَنَا نَحْنُ ٱلْمُخَلَّصِينَ فَهِيَ قُوَّةُ ٱللهِ،"
+   "textAr": "فَإِنَّ كَلِمَةَ ٱلصَّلِيبِ عِنْدَ ٱلْهَالِكِينَ جَهَالَةٌ، وَأَمَّا عِنْدَنَا نَحْنُ ٱلْمُخَلَّصِينَ فَهِيَ قُوَّةُ ٱللهِ،",
+   "textEn": "For the word of the cross is foolishness to those who are dying, but to us who are being saved it is the power of God."
   },
   {
    "ref": "EPH 4:2",
    "refAr": "أفسس ٤: ٢",
    "refEn": "Ephesians 4:2",
-   "textAr": "بِكُلِّ تَوَاضُعٍ وَوَدَاعَةٍ وَبِطُولِ أَنَاةٍ، مُحْتَمِلِينَ بَعْضُكُمْ بَعْضًا فِي ٱلْمَحَبَّةِ."
+   "textAr": "بِكُلِّ تَوَاضُعٍ وَوَدَاعَةٍ وَبِطُولِ أَنَاةٍ، مُحْتَمِلِينَ بَعْضُكُمْ بَعْضًا فِي ٱلْمَحَبَّةِ.",
+   "textEn": "with all lowliness and humility, with patience, bearing with one another in love,"
   },
   {
    "ref": "JOH 4:14",
    "refAr": "يوحنا ٤: ١٤",
    "refEn": "John 4:14",
-   "textAr": "وَلَكِنْ مَنْ يَشْرَبُ مِنَ ٱلْمَاءِ ٱلَّذِي أُعْطِيهِ أَنَا فَلَنْ يَعْطَشَ إِلَى ٱلْأَبَدِ، بَلِ ٱلْمَاءُ ٱلَّذِي أُعْطِيهِ يَصِيرُ فِيهِ يَنْبُوعَ مَاءٍ يَنْبَعُ إِلَى حَيَاةٍ أَبَدِيَّةٍ»."
+   "textAr": "وَلَكِنْ مَنْ يَشْرَبُ مِنَ ٱلْمَاءِ ٱلَّذِي أُعْطِيهِ أَنَا فَلَنْ يَعْطَشَ إِلَى ٱلْأَبَدِ، بَلِ ٱلْمَاءُ ٱلَّذِي أُعْطِيهِ يَصِيرُ فِيهِ يَنْبُوعَ مَاءٍ يَنْبَعُ إِلَى حَيَاةٍ أَبَدِيَّةٍ».",
+   "textEn": "but whoever drinks of the water that I will give him will never thirst again; but the water that I will give him will become in him a well of water springing up to eternal life.”"
   },
   {
    "ref": "LUK 6:37",
    "refAr": "لوقا ٦: ٣٧",
    "refEn": "Luke 6:37",
-   "textAr": "«وَلَا تَدِينُوا فَلَا تُدَانُوا. لَا تَقْضُوا عَلَى أَحَدٍ فَلَا يُقْضَى عَلَيْكُمْ. اِغْفِرُوا يُغْفَرْ لَكُمْ."
+   "textAr": "«وَلَا تَدِينُوا فَلَا تُدَانُوا. لَا تَقْضُوا عَلَى أَحَدٍ فَلَا يُقْضَى عَلَيْكُمْ. اِغْفِرُوا يُغْفَرْ لَكُمْ.",
+   "textEn": "Don’t judge, and you won’t be judged. Don’t condemn, and you won’t be condemned. Set free, and you will be set free."
   },
   {
    "ref": "LUK 6:31",
    "refAr": "لوقا ٦: ٣١",
    "refEn": "Luke 6:31",
-   "textAr": "وَكَمَا تُرِيدُونَ أَنْ يَفْعَلَ ٱلنَّاسُ بِكُمُ ٱفْعَلُوا أَنْتُمْ أَيْضًا بِهِمْ هَكَذَا."
+   "textAr": "وَكَمَا تُرِيدُونَ أَنْ يَفْعَلَ ٱلنَّاسُ بِكُمُ ٱفْعَلُوا أَنْتُمْ أَيْضًا بِهِمْ هَكَذَا.",
+   "textEn": "“As you would like people to do to you, do exactly so to them."
   },
   {
    "ref": "JOH 8:32",
    "refAr": "يوحنا ٨: ٣٢",
    "refEn": "John 8:32",
-   "textAr": "وَتَعْرِفُونَ ٱلْحَقَّ، وَٱلْحَقُّ يُحَرِّرُكُمْ»."
+   "textAr": "وَتَعْرِفُونَ ٱلْحَقَّ، وَٱلْحَقُّ يُحَرِّرُكُمْ».",
+   "textEn": "You will know the truth, and the truth will make you free.”"
   },
   {
    "ref": "JOH 10:28",
    "refAr": "يوحنا ١٠: ٢٨",
    "refEn": "John 10:28",
-   "textAr": "وَأَنَا أُعْطِيهَا حَيَاةً أَبَدِيَّةً، وَلَنْ تَهْلِكَ إِلَى ٱلْأَبَدِ، وَلَا يَخْطَفُهَا أَحَدٌ مِنْ يَدِي."
+   "textAr": "وَأَنَا أُعْطِيهَا حَيَاةً أَبَدِيَّةً، وَلَنْ تَهْلِكَ إِلَى ٱلْأَبَدِ، وَلَا يَخْطَفُهَا أَحَدٌ مِنْ يَدِي.",
+   "textEn": "I give eternal life to them. They will never perish, and no one will snatch them out of my hand."
   },
   {
    "ref": "PHI 3:13",
    "refAr": "فيلبي ٣: ١٣",
    "refEn": "Philippians 3:13",
-   "textAr": "أَيُّهَا ٱلْإِخْوَةُ، أَنَا لَسْتُ أَحْسِبُ نَفْسِي أَنِّي قَدْ أَدْرَكْتُ. وَلَكِنِّي أَفْعَلُ شَيْئًا وَاحِدًا: إِذْ أَنَا أَنْسَى مَا هُوَ وَرَاءُ وَأَمْتَدُّ إِلَى مَا هُوَ قُدَّامُ،"
+   "textAr": "أَيُّهَا ٱلْإِخْوَةُ، أَنَا لَسْتُ أَحْسِبُ نَفْسِي أَنِّي قَدْ أَدْرَكْتُ. وَلَكِنِّي أَفْعَلُ شَيْئًا وَاحِدًا: إِذْ أَنَا أَنْسَى مَا هُوَ وَرَاءُ وَأَمْتَدُّ إِلَى مَا هُوَ قُدَّامُ،",
+   "textEn": "Brothers, I don’t regard myself as yet having taken hold, but one thing I do: forgetting the things which are behind and stretching forward to the things which are before,"
   },
   {
    "ref": "JOH 14:18",
    "refAr": "يوحنا ١٤: ١٨",
    "refEn": "John 14:18",
-   "textAr": "لَا أَتْرُكُكُمْ يَتَامَى. إِنِّي آتِي إِلَيْكُمْ."
+   "textAr": "لَا أَتْرُكُكُمْ يَتَامَى. إِنِّي آتِي إِلَيْكُمْ.",
+   "textEn": "I will not leave you orphans. I will come to you."
   },
   {
    "ref": "HEB 13:5",
    "refAr": "العبرانيين ١٣: ٥",
    "refEn": "Hebrews 13:5",
-   "textAr": "لِتَكُنْ سِيرَتُكُمْ خَالِيَةً مِنْ مَحَبَّةِ ٱلْمَالِ. كُونُوا مُكْتَفِينَ بِمَا عِنْدَكُمْ، لِأَنَّهُ قَالَ: «لَا أُهْمِلُكَ وَلَا أَتْرُكُكَ»،"
+   "textAr": "لِتَكُنْ سِيرَتُكُمْ خَالِيَةً مِنْ مَحَبَّةِ ٱلْمَالِ. كُونُوا مُكْتَفِينَ بِمَا عِنْدَكُمْ، لِأَنَّهُ قَالَ: «لَا أُهْمِلُكَ وَلَا أَتْرُكُكَ»،",
+   "textEn": "Be free from the love of money, content with such things as you have, for he has said, “I will in no way leave you, neither will I in any way forsake you.”"
   },
   {
    "ref": "LUK 18:27",
    "refAr": "لوقا ١٨: ٢٧",
    "refEn": "Luke 18:27",
-   "textAr": "فَقَالَ: «غَيْرُ ٱلْمُسْتَطَاعِ عِنْدَ ٱلنَّاسِ مُسْتَطَاعٌ عِنْدَ ٱللهِ»."
+   "textAr": "فَقَالَ: «غَيْرُ ٱلْمُسْتَطَاعِ عِنْدَ ٱلنَّاسِ مُسْتَطَاعٌ عِنْدَ ٱللهِ».",
+   "textEn": "But he said, “The things which are impossible with men are possible with God.”"
   },
   {
    "ref": "HEB 11:1",
    "refAr": "العبرانيين ١١: ١",
    "refEn": "Hebrews 11:1",
-   "textAr": "وَأَمَّا ٱلْإِيمَانُ فَهُوَ ٱلثِّقَةُ بِمَا يُرْجَى وَٱلْإِيقَانُ بِأُمُورٍ لَا تُرَى."
+   "textAr": "وَأَمَّا ٱلْإِيمَانُ فَهُوَ ٱلثِّقَةُ بِمَا يُرْجَى وَٱلْإِيقَانُ بِأُمُورٍ لَا تُرَى.",
+   "textEn": "Now faith is assurance of things hoped for, proof of things not seen."
   },
   {
    "ref": "3JO 1:2",
    "refAr": "يوحنا الثالثة ١: ٢",
    "refEn": "3 John 1:2",
-   "textAr": "أَيُّهَا ٱلْحَبِيبُ، فِي كُلِّ شَيْءٍ أَرُومُ أَنْ تَكُونَ نَاجِحًا وَصَحِيحًا، كَمَا أَنَّ نَفْسَكَ نَاجِحَةٌ."
+   "textAr": "أَيُّهَا ٱلْحَبِيبُ، فِي كُلِّ شَيْءٍ أَرُومُ أَنْ تَكُونَ نَاجِحًا وَصَحِيحًا، كَمَا أَنَّ نَفْسَكَ نَاجِحَةٌ.",
+   "textEn": "Beloved, I pray that you may prosper in all things and be healthy, even as your soul prospers."
   },
   {
    "ref": "JOH 15:16",
    "refAr": "يوحنا ١٥: ١٦",
    "refEn": "John 15:16",
-   "textAr": "لَيْسَ أَنْتُمُ ٱخْتَرْتُمُونِي بَلْ أَنَا ٱخْتَرْتُكُمْ، وَأَقَمْتُكُمْ لِتَذْهَبُوا وَتَأْتُوا بِثَمَرٍ، وَيَدُومَ ثَمَرُكُمْ، لِكَيْ يُعْطِيَكُمُ ٱلْآبُ كُلَّ مَا طَلَبْتُمْ بِٱسْمِي."
+   "textAr": "لَيْسَ أَنْتُمُ ٱخْتَرْتُمُونِي بَلْ أَنَا ٱخْتَرْتُكُمْ، وَأَقَمْتُكُمْ لِتَذْهَبُوا وَتَأْتُوا بِثَمَرٍ، وَيَدُومَ ثَمَرُكُمْ، لِكَيْ يُعْطِيَكُمُ ٱلْآبُ كُلَّ مَا طَلَبْتُمْ بِٱسْمِي.",
+   "textEn": "You didn’t choose me, but I chose you and appointed you, that you should go and bear fruit, and that your fruit should remain; that whatever you will ask of the Father in my name, he may give it to you."
   },
   {
    "ref": "ACT 1:8",
    "refAr": "أعمال الرسل ١: ٨",
    "refEn": "Acts 1:8",
-   "textAr": "لَكِنَّكُمْ سَتَنَالُونَ قُوَّةً مَتَى حَلَّ ٱلرُّوحُ ٱلْقُدُسُ عَلَيْكُمْ، وَتَكُونُونَ لِي شُهُودًا فِي أُورُشَلِيمَ وَفِي كُلِّ ٱلْيَهُودِيَّةِ وَٱلسَّامِرَةِ وَإِلَى أَقْصَى ٱلْأَرْضِ»."
+   "textAr": "لَكِنَّكُمْ سَتَنَالُونَ قُوَّةً مَتَى حَلَّ ٱلرُّوحُ ٱلْقُدُسُ عَلَيْكُمْ، وَتَكُونُونَ لِي شُهُودًا فِي أُورُشَلِيمَ وَفِي كُلِّ ٱلْيَهُودِيَّةِ وَٱلسَّامِرَةِ وَإِلَى أَقْصَى ٱلْأَرْضِ».",
+   "textEn": "But you will receive power when the Holy Spirit has come upon you. You will be witnesses to me in Jerusalem, in all Judea and Samaria, and to the uttermost parts of the earth.”"
   },
   {
    "ref": "HEB 13:16",
    "refAr": "العبرانيين ١٣: ١٦",
    "refEn": "Hebrews 13:16",
-   "textAr": "وَلَكِنْ لَا تَنْسُوا فِعْلَ ٱلْخَيْرِ وَٱلتَّوْزِيعَ، لِأَنَّهُ بِذَبَائِحَ مِثْلِ هَذِهِ يُسَرُّ ٱللهُ."
+   "textAr": "وَلَكِنْ لَا تَنْسُوا فِعْلَ ٱلْخَيْرِ وَٱلتَّوْزِيعَ، لِأَنَّهُ بِذَبَائِحَ مِثْلِ هَذِهِ يُسَرُّ ٱللهُ.",
+   "textEn": "But don’t forget to be doing good and sharing, for with such sacrifices God is well pleased."
   },
   {
    "ref": "PSA 19:14",
    "refAr": "مزمور ١٩: ١٤",
    "refEn": "Psalm 19:14",
-   "textAr": "لِتَكُنْ أَقْوَالُ فَمِي وَفِكْرُ قَلْبِي مَرْضِيَّةً أَمَامَكَ يَارَبُّ، صَخْرَتِي وَوَلِيِّي."
+   "textAr": "لِتَكُنْ أَقْوَالُ فَمِي وَفِكْرُ قَلْبِي مَرْضِيَّةً أَمَامَكَ يَارَبُّ، صَخْرَتِي وَوَلِيِّي.",
+   "textEn": "Let the words of my mouth and the meditation of my heart be acceptable in your sight, LORD, my rock, and my redeemer."
   },
   {
    "ref": "MAR 10:45",
    "refAr": "مرقس ١٠: ٤٥",
    "refEn": "Mark 10:45",
-   "textAr": "لِأَنَّ ٱبْنَ ٱلْإِنْسَانِ أَيْضًا لَمْ يَأْتِ لِيُخْدَمَ بَلْ لِيَخْدِمَ وَلِيَبْذِلَ نَفْسَهُ فِدْيَةً عَنْ كَثِيرِينَ»."
+   "textAr": "لِأَنَّ ٱبْنَ ٱلْإِنْسَانِ أَيْضًا لَمْ يَأْتِ لِيُخْدَمَ بَلْ لِيَخْدِمَ وَلِيَبْذِلَ نَفْسَهُ فِدْيَةً عَنْ كَثِيرِينَ».",
+   "textEn": "For the Son of Man also came not to be served but to serve, and to give his life as a ransom for many.”"
   },
   {
    "ref": "PRO 16:3",
    "refAr": "أمثال ١٦: ٣",
    "refEn": "Proverbs 16:3",
-   "textAr": "أَلْقِ عَلَى ٱلرَّبِّ أَعْمَالَكَ فَتُثَبَّتَ أَفْكَارُكَ."
+   "textAr": "أَلْقِ عَلَى ٱلرَّبِّ أَعْمَالَكَ فَتُثَبَّتَ أَفْكَارُكَ.",
+   "textEn": "Commit your deeds to the LORD, and your plans shall succeed."
   },
   {
    "ref": "2TI 2:13",
    "refAr": "تيموثاوس الثانية ٢: ١٣",
    "refEn": "2 Timothy 2:13",
-   "textAr": "إِنْ كُنَّا غَيْرَ أُمَنَاءَ فَهُوَ يَبْقَى أَمِينًا، لَنْ يَقْدِرَ أَنْ يُنْكِرَ نَفْسَهُ."
+   "textAr": "إِنْ كُنَّا غَيْرَ أُمَنَاءَ فَهُوَ يَبْقَى أَمِينًا، لَنْ يَقْدِرَ أَنْ يُنْكِرَ نَفْسَهُ.",
+   "textEn": "If we are faithless, he remains faithful; for he can’t deny himself.”"
   },
   {
    "ref": "JOH 16:33",
    "refAr": "يوحنا ١٦: ٣٣",
    "refEn": "John 16:33",
-   "textAr": "قَدْ كَلَّمْتُكُمْ بِهَذَا لِيَكُونَ لَكُمْ فِيَّ سَلَامٌ. فِي ٱلْعَالَمِ سَيَكُونُ لَكُمْ ضِيقٌ، وَلَكِنْ ثِقُوا: أَنَا قَدْ غَلَبْتُ ٱلْعَالَمَ»."
+   "textAr": "قَدْ كَلَّمْتُكُمْ بِهَذَا لِيَكُونَ لَكُمْ فِيَّ سَلَامٌ. فِي ٱلْعَالَمِ سَيَكُونُ لَكُمْ ضِيقٌ، وَلَكِنْ ثِقُوا: أَنَا قَدْ غَلَبْتُ ٱلْعَالَمَ».",
+   "textEn": "I have told you these things, that in me you may have peace. In the world you have trouble; but cheer up! I have overcome the world.”"
   },
   {
    "ref": "1TI 6:6",
    "refAr": "تيموثاوس الأولى ٦: ٦",
    "refEn": "1 Timothy 6:6",
-   "textAr": "وَأَمَّا ٱلتَّقْوَى مَعَ ٱلْقَنَاعَةِ فَهِيَ تِجَارَةٌ عَظِيمَةٌ."
+   "textAr": "وَأَمَّا ٱلتَّقْوَى مَعَ ٱلْقَنَاعَةِ فَهِيَ تِجَارَةٌ عَظِيمَةٌ.",
+   "textEn": "But godliness with contentment is great gain."
   },
   {
    "ref": "ROM 3:23",
    "refAr": "رومية ٣: ٢٣",
    "refEn": "Romans 3:23",
-   "textAr": "إِذِ ٱلْجَمِيعُ أَخْطَأُوا وَأَعْوَزَهُمْ مَجْدُ ٱللهِ،"
+   "textAr": "إِذِ ٱلْجَمِيعُ أَخْطَأُوا وَأَعْوَزَهُمْ مَجْدُ ٱللهِ،",
+   "textEn": "for all have sinned, and fall short of the glory of God;"
   },
   {
    "ref": "PSA 84:11",
    "refAr": "مزمور ٨٤: ١١",
    "refEn": "Psalm 84:11",
-   "textAr": "لِأَنَّ ٱلرَّبَّ ٱللهَ، شَمْسٌ وَمِجَنٌّ. ٱلرَّبُّ يُعْطِي رَحْمَةً وَمَجْدًا. لَا يَمْنَعُ خَيْرًا عَنِ ٱلسَّالِكِينَ بِٱلْكَمَالِ."
+   "textAr": "لِأَنَّ ٱلرَّبَّ ٱللهَ، شَمْسٌ وَمِجَنٌّ. ٱلرَّبُّ يُعْطِي رَحْمَةً وَمَجْدًا. لَا يَمْنَعُ خَيْرًا عَنِ ٱلسَّالِكِينَ بِٱلْكَمَالِ.",
+   "textEn": "For the LORD God is a sun and a shield. The LORD will give grace and glory. He withholds no good thing from those who walk blamelessly."
   },
   {
    "ref": "MAT 26:41",
    "refAr": "متى ٢٦: ٤١",
    "refEn": "Matthew 26:41",
-   "textAr": "اِسْهَرُوا وَصَلُّوا لِئَلَّا تَدْخُلُوا فِي تَجْرِبَةٍ. أَمَّا ٱلرُّوحُ فَنَشِيطٌ وَأَمَّا ٱلْجَسَدُ فَضَعِيفٌ»."
+   "textAr": "اِسْهَرُوا وَصَلُّوا لِئَلَّا تَدْخُلُوا فِي تَجْرِبَةٍ. أَمَّا ٱلرُّوحُ فَنَشِيطٌ وَأَمَّا ٱلْجَسَدُ فَضَعِيفٌ».",
+   "textEn": "Watch and pray, that you don’t enter into temptation. The spirit indeed is willing, but the flesh is weak.”"
   },
   {
    "ref": "ROM 15:13",
    "refAr": "رومية ١٥: ١٣",
    "refEn": "Romans 15:13",
-   "textAr": "وَلْيَمْلَأْكُمْ إِلَهُ ٱلرَّجَاءِ كُلَّ سُرُورٍ وَسَلَامٍ فِي ٱلْإِيمَانِ، لِتَزْدَادُوا فِي ٱلرَّجَاءِ بِقُوَّةِ ٱلرُّوحِ ٱلْقُدُسِ."
+   "textAr": "وَلْيَمْلَأْكُمْ إِلَهُ ٱلرَّجَاءِ كُلَّ سُرُورٍ وَسَلَامٍ فِي ٱلْإِيمَانِ، لِتَزْدَادُوا فِي ٱلرَّجَاءِ بِقُوَّةِ ٱلرُّوحِ ٱلْقُدُسِ.",
+   "textEn": "Now may the God of hope fill you with all joy and peace in believing, that you may abound in hope in the power of the Holy Spirit."
   },
   {
    "ref": "PHI 4:6",
    "refAr": "فيلبي ٤: ٦",
    "refEn": "Philippians 4:6",
-   "textAr": "لَا تَهْتَمُّوا بِشَيْءٍ، بَلْ فِي كُلِّ شَيْءٍ بِٱلصَّلَاةِ وَٱلدُّعَاءِ مَعَ ٱلشُّكْرِ، لِتُعْلَمْ طِلْبَاتُكُمْ لَدَى ٱللهِ."
+   "textAr": "لَا تَهْتَمُّوا بِشَيْءٍ، بَلْ فِي كُلِّ شَيْءٍ بِٱلصَّلَاةِ وَٱلدُّعَاءِ مَعَ ٱلشُّكْرِ، لِتُعْلَمْ طِلْبَاتُكُمْ لَدَى ٱللهِ.",
+   "textEn": "In nothing be anxious, but in everything, by prayer and petition with thanksgiving, let your requests be made known to God."
   },
   {
    "ref": "GAL 5:13",
    "refAr": "غلاطية ٥: ١٣",
    "refEn": "Galatians 5:13",
-   "textAr": "فَإِنَّكُمْ إِنَّمَا دُعِيتُمْ لِلْحُرِّيَّةِ أَيُّهَا ٱلْإِخْوَةُ. غَيْرَ أَنَّهُ لَا تُصَيِّرُوا ٱلْحُرِّيَّةَ فُرْصَةً لِلْجَسَدِ، بَلْ بِٱلْمَحَبَّةِ ٱخْدِمُوا بَعْضُكُمْ بَعْضًا."
+   "textAr": "فَإِنَّكُمْ إِنَّمَا دُعِيتُمْ لِلْحُرِّيَّةِ أَيُّهَا ٱلْإِخْوَةُ. غَيْرَ أَنَّهُ لَا تُصَيِّرُوا ٱلْحُرِّيَّةَ فُرْصَةً لِلْجَسَدِ، بَلْ بِٱلْمَحَبَّةِ ٱخْدِمُوا بَعْضُكُمْ بَعْضًا.",
+   "textEn": "For you, brothers, were called for freedom. Only don’t use your freedom as an opportunity for the flesh, but through love be servants to one another."
   },
   {
    "ref": "JOH 15:7",
    "refAr": "يوحنا ١٥: ٧",
    "refEn": "John 15:7",
-   "textAr": "إِنْ ثَبَتُّمْ فِيَّ وَثَبَتَ كَلَامِي فِيكُمْ تَطْلُبُونَ مَا تُرِيدُونَ فَيَكُونُ لَكُمْ."
+   "textAr": "إِنْ ثَبَتُّمْ فِيَّ وَثَبَتَ كَلَامِي فِيكُمْ تَطْلُبُونَ مَا تُرِيدُونَ فَيَكُونُ لَكُمْ.",
+   "textEn": "If you remain in me, and my words remain in you, you will ask whatever you desire, and it will be done for you."
   },
   {
    "ref": "PSA 16:11",
    "refAr": "مزمور ١٦: ١١",
    "refEn": "Psalm 16:11",
-   "textAr": "تُعَرِّفُنِي سَبِيلَ ٱلْحَيَاةِ. أَمَامَكَ شِبَعُ سُرُورٍ. فِي يَمِينِكَ نِعَمٌ إِلَى ٱلْأَبَدِ."
+   "textAr": "تُعَرِّفُنِي سَبِيلَ ٱلْحَيَاةِ. أَمَامَكَ شِبَعُ سُرُورٍ. فِي يَمِينِكَ نِعَمٌ إِلَى ٱلْأَبَدِ.",
+   "textEn": "You will show me the path of life. In your presence is fullness of joy. In your right hand there are pleasures forever more."
   },
   {
    "ref": "ROM 10:17",
    "refAr": "رومية ١٠: ١٧",
    "refEn": "Romans 10:17",
-   "textAr": "إِذًا ٱلْإِيمَانُ بِٱلْخَبَرِ، وَٱلْخَبَرُ بِكَلِمَةِ ٱللهِ."
+   "textAr": "إِذًا ٱلْإِيمَانُ بِٱلْخَبَرِ، وَٱلْخَبَرُ بِكَلِمَةِ ٱللهِ.",
+   "textEn": "So faith comes by hearing, and hearing by the word of God."
   },
   {
    "ref": "MAT 6:20",
    "refAr": "متى ٦: ٢٠",
    "refEn": "Matthew 6:20",
-   "textAr": "بَلِ ٱكْنِزُوا لَكُمْ كُنُوزًا فِي ٱلسَّمَاءِ، حَيْثُ لَا يُفْسِدُ سُوسٌ وَلَا صَدَأٌ، وَحَيْثُ لَا يَنْقُبُ سَارِقُونَ وَلَا يَسْرِقُونَ،"
+   "textAr": "بَلِ ٱكْنِزُوا لَكُمْ كُنُوزًا فِي ٱلسَّمَاءِ، حَيْثُ لَا يُفْسِدُ سُوسٌ وَلَا صَدَأٌ، وَحَيْثُ لَا يَنْقُبُ سَارِقُونَ وَلَا يَسْرِقُونَ،",
+   "textEn": "but lay up for yourselves treasures in heaven, where neither moth nor rust consume, and where thieves don’t break through and steal;"
   },
   {
    "ref": "2TI 1:7",
    "refAr": "تيموثاوس الثانية ١: ٧",
    "refEn": "2 Timothy 1:7",
-   "textAr": "لِأَنَّ ٱللهَ لَمْ يُعْطِنَا رُوحَ ٱلْفَشَلِ، بَلْ رُوحَ ٱلْقُوَّةِ وَٱلْمَحَبَّةِ وَٱلنُّصْحِ."
+   "textAr": "لِأَنَّ ٱللهَ لَمْ يُعْطِنَا رُوحَ ٱلْفَشَلِ، بَلْ رُوحَ ٱلْقُوَّةِ وَٱلْمَحَبَّةِ وَٱلنُّصْحِ.",
+   "textEn": "For God didn’t give us a spirit of fear, but of power, love, and self-control."
   },
   {
    "ref": "JOH 15:9",
    "refAr": "يوحنا ١٥: ٩",
    "refEn": "John 15:9",
-   "textAr": "كَمَا أَحَبَّنِي ٱلْآبُ كَذَلِكَ أَحْبَبْتُكُمْ أَنَا. اُثْبُتُوا فِي مَحَبَّتِي."
+   "textAr": "كَمَا أَحَبَّنِي ٱلْآبُ كَذَلِكَ أَحْبَبْتُكُمْ أَنَا. اُثْبُتُوا فِي مَحَبَّتِي.",
+   "textEn": "Even as the Father has loved me, I also have loved you. Remain in my love."
   },
   {
    "ref": "PSA 46:10",
    "refAr": "مزمور ٤٦: ١٠",
    "refEn": "Psalm 46:10",
-   "textAr": "كُفُّوا وَٱعْلَمُوا أَنِّي أَنَا ٱللهُ. أَتَعَالَى بَيْنَ ٱلْأُمَمِ، أَتَعَالَى فِي ٱلْأَرْضِ."
+   "textAr": "كُفُّوا وَٱعْلَمُوا أَنِّي أَنَا ٱللهُ. أَتَعَالَى بَيْنَ ٱلْأُمَمِ، أَتَعَالَى فِي ٱلْأَرْضِ.",
+   "textEn": "“Be still, and know that I am God. I will be exalted amongst the nations. I will be exalted on the earth.”"
   },
   {
    "ref": "REV 3:20",
    "refAr": "رؤيا يوحنا ٣: ٢٠",
    "refEn": "Revelation 3:20",
-   "textAr": "هَأَنَذَا وَاقِفٌ عَلَى ٱلْبَابِ وَأَقْرَعُ. إِنْ سَمِعَ أَحَدٌ صَوْتِي وَفَتَحَ ٱلْبَابَ، أَدْخُلُ إِلَيْهِ وَأَتَعَشَّى مَعَهُ وَهُوَ مَعِي."
+   "textAr": "هَأَنَذَا وَاقِفٌ عَلَى ٱلْبَابِ وَأَقْرَعُ. إِنْ سَمِعَ أَحَدٌ صَوْتِي وَفَتَحَ ٱلْبَابَ، أَدْخُلُ إِلَيْهِ وَأَتَعَشَّى مَعَهُ وَهُوَ مَعِي.",
+   "textEn": "Behold, I stand at the door and knock. If anyone hears my voice and opens the door, then I will come in to him and will dine with him, and he with me."
   },
   {
    "ref": "ROM 12:21",
    "refAr": "رومية ١٢: ٢١",
    "refEn": "Romans 12:21",
-   "textAr": "لَا يَغْلِبَنَّكَ ٱلشَّرُّ بَلِ ٱغْلِبِ ٱلشَّرَّ بِٱلْخَيْرِ."
+   "textAr": "لَا يَغْلِبَنَّكَ ٱلشَّرُّ بَلِ ٱغْلِبِ ٱلشَّرَّ بِٱلْخَيْرِ.",
+   "textEn": "Don’t be overcome by evil, but overcome evil with good."
   },
   {
    "ref": "1TH 5:11",
    "refAr": "تسالونيكي الأولى ٥: ١١",
    "refEn": "1 Thessalonians 5:11",
-   "textAr": "لِذَلِكَ عَزُّوا بَعْضُكُمْ بَعْضًا وَٱبْنُوا أَحَدُكُمُ ٱلْآخَرَ، كَمَا تَفْعَلُونَ أَيْضًا."
+   "textAr": "لِذَلِكَ عَزُّوا بَعْضُكُمْ بَعْضًا وَٱبْنُوا أَحَدُكُمُ ٱلْآخَرَ، كَمَا تَفْعَلُونَ أَيْضًا.",
+   "textEn": "Therefore exhort one another, and build each other up, even as you also do."
   },
   {
    "ref": "PSA 118:6",
    "refAr": "مزمور ١١٨: ٦",
    "refEn": "Psalm 118:6",
-   "textAr": "ٱلرَّبُّ لِي فَلَا أَخَافُ. مَاذَا يَصْنَعُ بِي ٱلْإِنْسَانُ؟"
+   "textAr": "ٱلرَّبُّ لِي فَلَا أَخَافُ. مَاذَا يَصْنَعُ بِي ٱلْإِنْسَانُ؟",
+   "textEn": "The LORD is on my side. I will not be afraid. What can man do to me?"
   },
   {
    "ref": "PSA 118:24",
    "refAr": "مزمور ١١٨: ٢٤",
    "refEn": "Psalm 118:24",
-   "textAr": "هَذَا هُوَ ٱلْيَوْمُ ٱلَّذِي صَنَعُهُ ٱلرَّبُّ، نَبْتَهِجُ وَنَفْرَحُ فِيهِ."
+   "textAr": "هَذَا هُوَ ٱلْيَوْمُ ٱلَّذِي صَنَعُهُ ٱلرَّبُّ، نَبْتَهِجُ وَنَفْرَحُ فِيهِ.",
+   "textEn": "This is the day that the LORD has made. We will rejoice and be glad in it!"
   },
   {
    "ref": "PHI 1:21",
    "refAr": "فيلبي ١: ٢١",
    "refEn": "Philippians 1:21",
-   "textAr": "لِأَنَّ لِيَ ٱلْحَيَاةَ هِيَ ٱلْمَسِيحُ وَٱلْمَوْتُ هُوَ رِبْحٌ."
+   "textAr": "لِأَنَّ لِيَ ٱلْحَيَاةَ هِيَ ٱلْمَسِيحُ وَٱلْمَوْتُ هُوَ رِبْحٌ.",
+   "textEn": "For to me to live is Christ, and to die is gain."
   },
   {
    "ref": "MAR 12:30",
    "refAr": "مرقس ١٢: ٣٠",
    "refEn": "Mark 12:30",
-   "textAr": "وَتُحِبُّ ٱلرَّبَّ إِلَهَكَ مِنْ كُلِّ قَلْبِكَ، وَمِنْ كُلِّ نَفْسِكَ، وَمِنْ كُلِّ فِكْرِكَ، وَمِنْ كُلِّ قُدْرَتِكَ. هَذِهِ هِيَ ٱلْوَصِيَّةُ ٱلْأُولَى."
+   "textAr": "وَتُحِبُّ ٱلرَّبَّ إِلَهَكَ مِنْ كُلِّ قَلْبِكَ، وَمِنْ كُلِّ نَفْسِكَ، وَمِنْ كُلِّ فِكْرِكَ، وَمِنْ كُلِّ قُدْرَتِكَ. هَذِهِ هِيَ ٱلْوَصِيَّةُ ٱلْأُولَى.",
+   "textEn": "You shall love the Lord your God with all your heart, with all your soul, with all your mind, and with all your strength.’ This is the first commandment."
   },
   {
    "ref": "PRO 3:6",
    "refAr": "أمثال ٣: ٦",
    "refEn": "Proverbs 3:6",
-   "textAr": "فِي كُلِّ طُرُقِكَ ٱعْرِفْهُ، وَهُوَ يُقَوِّمُ سُبُلَكَ."
+   "textAr": "فِي كُلِّ طُرُقِكَ ٱعْرِفْهُ، وَهُوَ يُقَوِّمُ سُبُلَكَ.",
+   "textEn": "In all your ways acknowledge him, and he will make your paths straight."
   },
   {
    "ref": "PSA 119:165",
    "refAr": "مزمور ١١٩: ١٦٥",
    "refEn": "Psalm 119:165",
-   "textAr": "سَلَامَةٌ جَزِيلَةٌ لِمُحِبِّي شَرِيعَتِكَ، وَلَيْسَ لَهُمْ مَعْثَرَةٌ."
+   "textAr": "سَلَامَةٌ جَزِيلَةٌ لِمُحِبِّي شَرِيعَتِكَ، وَلَيْسَ لَهُمْ مَعْثَرَةٌ.",
+   "textEn": "Those who love your law have great peace. Nothing causes them to stumble."
   },
   {
    "ref": "LUK 6:38",
    "refAr": "لوقا ٦: ٣٨",
    "refEn": "Luke 6:38",
-   "textAr": "أَعْطُوا تُعْطَوْا، كَيْلًا جَيِّدًا مُلَبَّدًا مَهْزُوزًا فَائِضًا يُعْطُونَ فِي أَحْضَانِكُمْ. لِأَنَّهُ بِنَفْسِ ٱلْكَيْلِ ٱلَّذِي بِهِ تَكِيلُونَ يُكَالُ لَكُمْ»."
+   "textAr": "أَعْطُوا تُعْطَوْا، كَيْلًا جَيِّدًا مُلَبَّدًا مَهْزُوزًا فَائِضًا يُعْطُونَ فِي أَحْضَانِكُمْ. لِأَنَّهُ بِنَفْسِ ٱلْكَيْلِ ٱلَّذِي بِهِ تَكِيلُونَ يُكَالُ لَكُمْ».",
+   "textEn": "“Give, and it will be given to you: good measure, pressed down, shaken together, and running over, will be given to you. For with the same measure you measure it will be measured back to you.”"
   },
   {
    "ref": "PSA 23:6",
    "refAr": "مزمور ٢٣: ٦",
    "refEn": "Psalm 23:6",
-   "textAr": "إِنَّمَا خَيْرٌ وَرَحْمَةٌ يَتْبَعَانِنِي كُلَّ أَيَّامِ حَيَاتِي، وَأَسْكُنُ فِي بَيْتِ ٱلرَّبِّ إِلَى مَدَى ٱلْأَيَّامِ."
+   "textAr": "إِنَّمَا خَيْرٌ وَرَحْمَةٌ يَتْبَعَانِنِي كُلَّ أَيَّامِ حَيَاتِي، وَأَسْكُنُ فِي بَيْتِ ٱلرَّبِّ إِلَى مَدَى ٱلْأَيَّامِ.",
+   "textEn": "Surely goodness and loving kindness shall follow me all the days of my life, and I will dwell in the LORD’s house forever."
   },
   {
    "ref": "COL 4:2",
    "refAr": "كولوسي ٤: ٢",
    "refEn": "Colossians 4:2",
-   "textAr": "وَاظِبُوا عَلَى ٱلصَّلَاةِ سَاهِرِينَ فِيهَا بِٱلشُّكْرِ،"
+   "textAr": "وَاظِبُوا عَلَى ٱلصَّلَاةِ سَاهِرِينَ فِيهَا بِٱلشُّكْرِ،",
+   "textEn": "Continue steadfastly in prayer, watching in it with thanksgiving,"
   },
   {
    "ref": "PHI 2:3",
    "refAr": "فيلبي ٢: ٣",
    "refEn": "Philippians 2:3",
-   "textAr": "لَا شَيْئًا بِتَحَزُّبٍ أَوْ بِعُجْبٍ، بَلْ بِتَوَاضُعٍ، حَاسِبِينَ بَعْضُكُمُ ٱلْبَعْضَ أَفْضَلَ مِنْ أَنْفُسِهِمْ."
+   "textAr": "لَا شَيْئًا بِتَحَزُّبٍ أَوْ بِعُجْبٍ، بَلْ بِتَوَاضُعٍ، حَاسِبِينَ بَعْضُكُمُ ٱلْبَعْضَ أَفْضَلَ مِنْ أَنْفُسِهِمْ.",
+   "textEn": "doing nothing through rivalry or through conceit, but in humility, each counting others better than himself;"
   },
   {
    "ref": "JAM 4:8",
    "refAr": "يعقوب ٤: ٨",
    "refEn": "James 4:8",
-   "textAr": "اِقْتَرِبُوا إِلَى ٱللهِ فَيَقْتَرِبَ إِلَيْكُمْ. نَقُّوا أَيْدِيَكُمْ أَيُّهَا ٱلْخُطَاةُ، وَطَهِّرُوا قُلُوبَكُمْ يَا ذَوِي ٱلرَّأْيَيْنِ."
+   "textAr": "اِقْتَرِبُوا إِلَى ٱللهِ فَيَقْتَرِبَ إِلَيْكُمْ. نَقُّوا أَيْدِيَكُمْ أَيُّهَا ٱلْخُطَاةُ، وَطَهِّرُوا قُلُوبَكُمْ يَا ذَوِي ٱلرَّأْيَيْنِ.",
+   "textEn": "Draw near to God, and he will draw near to you. Cleanse your hands, you sinners. Purify your hearts, you double-minded."
   },
   {
    "ref": "JAM 1:2",
    "refAr": "يعقوب ١: ٢",
    "refEn": "James 1:2",
-   "textAr": "اِحْسِبُوهُ كُلَّ فَرَحٍ يَا إِخْوَتِي حِينَمَا تَقَعُونَ فِي تَجَارِبَ مُتَنَوِّعَةٍ،"
+   "textAr": "اِحْسِبُوهُ كُلَّ فَرَحٍ يَا إِخْوَتِي حِينَمَا تَقَعُونَ فِي تَجَارِبَ مُتَنَوِّعَةٍ،",
+   "textEn": "Count it all joy, my brothers, when you fall into various temptations,"
   },
   {
    "ref": "PSA 121:7",
    "refAr": "مزمور ١٢١: ٧",
    "refEn": "Psalm 121:7",
-   "textAr": "ٱلرَّبُّ يَحْفَظُكَ مِنْ كُلِّ شَرٍّ. يَحْفَظُ نَفْسَكَ."
+   "textAr": "ٱلرَّبُّ يَحْفَظُكَ مِنْ كُلِّ شَرٍّ. يَحْفَظُ نَفْسَكَ.",
+   "textEn": "The LORD will keep you from all evil. He will keep your soul."
   },
   {
    "ref": "JOH 6:68",
    "refAr": "يوحنا ٦: ٦٨",
    "refEn": "John 6:68",
-   "textAr": "فَأَجَابَهُ سِمْعَانُ بُطْرُسُ: «يَارَبُّ، إِلَى مَنْ نَذْهَبُ؟ كَلَامُ ٱلْحَيَاةِ ٱلْأَبَدِيَّةِ عِنْدَكَ،"
+   "textAr": "فَأَجَابَهُ سِمْعَانُ بُطْرُسُ: «يَارَبُّ، إِلَى مَنْ نَذْهَبُ؟ كَلَامُ ٱلْحَيَاةِ ٱلْأَبَدِيَّةِ عِنْدَكَ،",
+   "textEn": "Simon Peter answered him, “Lord, to whom would we go? You have the words of eternal life."
   },
   {
    "ref": "PSA 103:8",
    "refAr": "مزمور ١٠٣: ٨",
    "refEn": "Psalm 103:8",
-   "textAr": "ٱلرَّبُّ رَحِيمٌ وَرَؤُوفٌ، طَوِيلُ ٱلرُّوحِ وَكَثِيرُ ٱلرَّحْمَةِ."
+   "textAr": "ٱلرَّبُّ رَحِيمٌ وَرَؤُوفٌ، طَوِيلُ ٱلرُّوحِ وَكَثِيرُ ٱلرَّحْمَةِ.",
+   "textEn": "The LORD is merciful and gracious, slow to anger, and abundant in loving kindness."
   },
   {
    "ref": "JOH 14:27",
    "refAr": "يوحنا ١٤: ٢٧",
    "refEn": "John 14:27",
-   "textAr": "«سَلَامًا أَتْرُكُ لَكُمْ. سَلَامِي أُعْطِيكُمْ. لَيْسَ كَمَا يُعْطِي ٱلْعَالَمُ أُعْطِيكُمْ أَنَا. لَا تَضْطَرِبْ قُلُوبُكُمْ وَلَا تَرْهَبْ."
+   "textAr": "«سَلَامًا أَتْرُكُ لَكُمْ. سَلَامِي أُعْطِيكُمْ. لَيْسَ كَمَا يُعْطِي ٱلْعَالَمُ أُعْطِيكُمْ أَنَا. لَا تَضْطَرِبْ قُلُوبُكُمْ وَلَا تَرْهَبْ.",
+   "textEn": "Peace I leave with you. My peace I give to you; not as the world gives, I give to you. Don’t let your heart be troubled, neither let it be fearful."
   },
   {
    "ref": "MAT 7:12",
    "refAr": "متى ٧: ١٢",
    "refEn": "Matthew 7:12",
-   "textAr": "فَكُلُّ مَا تُرِيدُونَ أَنْ يَفْعَلَ ٱلنَّاسُ بِكُمُ ٱفْعَلُوا هَكَذَا أَنْتُمْ أَيْضًا بِهِمْ، لِأَنَّ هَذَا هُوَ ٱلنَّامُوسُ وَٱلْأَنْبِيَاءُ."
+   "textAr": "فَكُلُّ مَا تُرِيدُونَ أَنْ يَفْعَلَ ٱلنَّاسُ بِكُمُ ٱفْعَلُوا هَكَذَا أَنْتُمْ أَيْضًا بِهِمْ، لِأَنَّ هَذَا هُوَ ٱلنَّامُوسُ وَٱلْأَنْبِيَاءُ.",
+   "textEn": "Therefore, whatever you desire for men to do to you, you shall also do to them; for this is the law and the prophets."
   },
   {
    "ref": "PSA 145:9",
    "refAr": "مزمور ١٤٥: ٩",
    "refEn": "Psalm 145:9",
-   "textAr": "ٱلرَّبُّ صَالِحٌ لِلْكُلِّ، وَمَرَاحِمُهُ عَلَى كُلِّ أَعْمَالِهِ."
+   "textAr": "ٱلرَّبُّ صَالِحٌ لِلْكُلِّ، وَمَرَاحِمُهُ عَلَى كُلِّ أَعْمَالِهِ.",
+   "textEn": "The LORD is good to all. His tender mercies are over all his works."
   },
   {
    "ref": "PSA 63:1",
    "refAr": "مزمور ٦٣: ١",
    "refEn": "Psalm 63:1",
-   "textAr": "مَزْمُورٌ لِدَاوُدَ لَمَّا كَانَ فِي بَرِّيَّةِ يَهُوذَا يَا ٱللهُ، إِلَهِي أَنْتَ. إِلَيْكَ أُبَكِّرُ. عَطِشَتْ إِلَيْكَ نَفْسِي، يَشْتَاقُ إِلَيْكَ جَسَدِي فِي أَرْضٍ نَاشِفَةٍ وَيَابِسَةٍ بِلَا مَاءٍ،"
+   "textAr": "مَزْمُورٌ لِدَاوُدَ لَمَّا كَانَ فِي بَرِّيَّةِ يَهُوذَا يَا ٱللهُ، إِلَهِي أَنْتَ. إِلَيْكَ أُبَكِّرُ. عَطِشَتْ إِلَيْكَ نَفْسِي، يَشْتَاقُ إِلَيْكَ جَسَدِي فِي أَرْضٍ نَاشِفَةٍ وَيَابِسَةٍ بِلَا مَاءٍ،",
+   "textEn": "A Psalm by David, when he was in the desert of Judah. God, you are my God. I will earnestly seek you. My soul thirsts for you. My flesh longs for you, in a dry and weary land, where there is no water."
   },
   {
    "ref": "GAL 6:2",
    "refAr": "غلاطية ٦: ٢",
    "refEn": "Galatians 6:2",
-   "textAr": "اِحْمِلُوا بَعْضُكُمْ أَثْقَالَ بَعْضٍ، وَهَكَذَا تَمِّمُوا نَامُوسَ ٱلْمَسِيحِ."
+   "textAr": "اِحْمِلُوا بَعْضُكُمْ أَثْقَالَ بَعْضٍ، وَهَكَذَا تَمِّمُوا نَامُوسَ ٱلْمَسِيحِ.",
+   "textEn": "Bear one another’s burdens, and so fulfil the law of Christ."
   },
   {
    "ref": "JOH 13:34",
    "refAr": "يوحنا ١٣: ٣٤",
    "refEn": "John 13:34",
-   "textAr": "وَصِيَّةً جَدِيدَةً أَنَا أُعْطِيكُمْ: أَنْ تُحِبُّوا بَعْضُكُمْ بَعْضًا. كَمَا أَحْبَبْتُكُمْ أَنَا تُحِبُّونَ أَنْتُمْ أَيْضًا بَعْضُكُمْ بَعْضًا."
+   "textAr": "وَصِيَّةً جَدِيدَةً أَنَا أُعْطِيكُمْ: أَنْ تُحِبُّوا بَعْضُكُمْ بَعْضًا. كَمَا أَحْبَبْتُكُمْ أَنَا تُحِبُّونَ أَنْتُمْ أَيْضًا بَعْضُكُمْ بَعْضًا.",
+   "textEn": "A new commandment I give to you, that you love one another. Just as I have loved you, you also love one another."
   },
   {
    "ref": "HEB 4:12",
    "refAr": "العبرانيين ٤: ١٢",
    "refEn": "Hebrews 4:12",
-   "textAr": "لِأَنَّ كَلِمَةَ ٱللهِ حَيَّةٌ وَفَعَّالَةٌ وَأَمْضَى مِنْ كُلِّ سَيْفٍ ذِي حَدَّيْنِ، وَخَارِقَةٌ إِلَى مَفْرَقِ ٱلنَّفْسِ وَٱلرُّوحِ وَٱلْمَفَاصِلِ وَٱلْمِخَاخِ، وَمُمَيِّزَةٌ أَفْكَارَ ٱلْقَلْبِ وَنِيَّاتِهِ."
+   "textAr": "لِأَنَّ كَلِمَةَ ٱللهِ حَيَّةٌ وَفَعَّالَةٌ وَأَمْضَى مِنْ كُلِّ سَيْفٍ ذِي حَدَّيْنِ، وَخَارِقَةٌ إِلَى مَفْرَقِ ٱلنَّفْسِ وَٱلرُّوحِ وَٱلْمَفَاصِلِ وَٱلْمِخَاخِ، وَمُمَيِّزَةٌ أَفْكَارَ ٱلْقَلْبِ وَنِيَّاتِهِ.",
+   "textEn": "For the word of God is living and active, and sharper than any two-edged sword, piercing even to the dividing of soul and spirit, of both joints and marrow, and is able to discern the thoughts and intentions of the heart."
   },
   {
    "ref": "1CO 15:57",
    "refAr": "كورنثوس الأولى ١٥: ٥٧",
    "refEn": "1 Corinthians 15:57",
-   "textAr": "وَلَكِنْ شُكْرًا لِلهِ ٱلَّذِي يُعْطِينَا ٱلْغَلَبَةَ بِرَبِّنَا يَسُوعَ ٱلْمَسِيحِ."
+   "textAr": "وَلَكِنْ شُكْرًا لِلهِ ٱلَّذِي يُعْطِينَا ٱلْغَلَبَةَ بِرَبِّنَا يَسُوعَ ٱلْمَسِيحِ.",
+   "textEn": "But thanks be to God, who gives us the victory through our Lord Jesus Christ."
   },
   {
    "ref": "PRO 19:17",
    "refAr": "أمثال ١٩: ١٧",
    "refEn": "Proverbs 19:17",
-   "textAr": "مَنْ يَرْحَمُ ٱلْفَقِيرَ يُقْرِضُ ٱلرَّبَّ، وَعَنْ مَعْرُوفِهِ يُجَازِيهِ."
+   "textAr": "مَنْ يَرْحَمُ ٱلْفَقِيرَ يُقْرِضُ ٱلرَّبَّ، وَعَنْ مَعْرُوفِهِ يُجَازِيهِ.",
+   "textEn": "He who has pity on the poor lends to the LORD; he will reward him."
   },
   {
    "ref": "PRO 4:23",
    "refAr": "أمثال ٤: ٢٣",
    "refEn": "Proverbs 4:23",
-   "textAr": "فَوْقَ كُلِّ تَحَفُّظٍ ٱحْفَظْ قَلْبَكَ، لِأَنَّ مِنْهُ مَخَارِجَ ٱلْحَيَاةِ."
+   "textAr": "فَوْقَ كُلِّ تَحَفُّظٍ ٱحْفَظْ قَلْبَكَ، لِأَنَّ مِنْهُ مَخَارِجَ ٱلْحَيَاةِ.",
+   "textEn": "Keep your heart with all diligence, for out of it is the wellspring of life."
   },
   {
    "ref": "JOH 3:16",
    "refAr": "يوحنا ٣: ١٦",
    "refEn": "John 3:16",
-   "textAr": "لِأَنَّهُ هَكَذَا أَحَبَّ ٱللهُ ٱلْعَالَمَ حَتَّى بَذَلَ ٱبْنَهُ ٱلْوَحِيدَ، لِكَيْ لَا يَهْلِكَ كُلُّ مَنْ يُؤْمِنُ بِهِ، بَلْ تَكُونُ لَهُ ٱلْحَيَاةُ ٱلْأَبَدِيَّةُ."
+   "textAr": "لِأَنَّهُ هَكَذَا أَحَبَّ ٱللهُ ٱلْعَالَمَ حَتَّى بَذَلَ ٱبْنَهُ ٱلْوَحِيدَ، لِكَيْ لَا يَهْلِكَ كُلُّ مَنْ يُؤْمِنُ بِهِ، بَلْ تَكُونُ لَهُ ٱلْحَيَاةُ ٱلْأَبَدِيَّةُ.",
+   "textEn": "For God so loved the world, that he gave his only born Son, that whoever believes in him should not perish, but have eternal life."
   },
   {
    "ref": "JOH 14:1",
    "refAr": "يوحنا ١٤: ١",
    "refEn": "John 14:1",
-   "textAr": "«لَا تَضْطَرِبْ قُلُوبُكُمْ. أَنْتُمْ تُؤْمِنُونَ بِٱللهِ فَآمِنُوا بِي."
+   "textAr": "«لَا تَضْطَرِبْ قُلُوبُكُمْ. أَنْتُمْ تُؤْمِنُونَ بِٱللهِ فَآمِنُوا بِي.",
+   "textEn": "“Don’t let your heart be troubled. Believe in God. Believe also in me."
   },
   {
    "ref": "JOH 1:12",
    "refAr": "يوحنا ١: ١٢",
    "refEn": "John 1:12",
-   "textAr": "وَأَمَّا كُلُّ ٱلَّذِينَ قَبِلُوهُ فَأَعْطَاهُمْ سُلْطَانًا أَنْ يَصِيرُوا أَوْلَادَ ٱللهِ، أَيِ ٱلْمُؤْمِنُونَ بِٱسْمِهِ."
+   "textAr": "وَأَمَّا كُلُّ ٱلَّذِينَ قَبِلُوهُ فَأَعْطَاهُمْ سُلْطَانًا أَنْ يَصِيرُوا أَوْلَادَ ٱللهِ، أَيِ ٱلْمُؤْمِنُونَ بِٱسْمِهِ.",
+   "textEn": "But as many as received him, to them he gave the right to become God’s children, to those who believe in his name:"
   },
   {
    "ref": "1PE 5:10",
    "refAr": "بطرس الأولى ٥: ١٠",
    "refEn": "1 Peter 5:10",
-   "textAr": "وَإِلَهُ كُلِّ نِعْمَةٍ ٱلَّذِي دَعَانَا إِلَى مَجْدِهِ ٱلْأَبَدِيِّ فِي ٱلْمَسِيحِ يَسُوعَ، بَعْدَمَا تَأَلَّمْتُمْ يَسِيرًا، هُوَ يُكَمِّلُكُمْ، وَيُثَبِّتُكُمْ، وَيُقَوِّيكُمْ، وَيُمَكِّنُكُمْ."
+   "textAr": "وَإِلَهُ كُلِّ نِعْمَةٍ ٱلَّذِي دَعَانَا إِلَى مَجْدِهِ ٱلْأَبَدِيِّ فِي ٱلْمَسِيحِ يَسُوعَ، بَعْدَمَا تَأَلَّمْتُمْ يَسِيرًا، هُوَ يُكَمِّلُكُمْ، وَيُثَبِّتُكُمْ، وَيُقَوِّيكُمْ، وَيُمَكِّنُكُمْ.",
+   "textEn": "But may the God of all grace, who called you to his eternal glory by Christ Jesus, after you have suffered a little while, perfect, establish, strengthen, and settle you."
   },
   {
    "ref": "JOH 15:14",
    "refAr": "يوحنا ١٥: ١٤",
    "refEn": "John 15:14",
-   "textAr": "أَنْتُمْ أَحِبَّائِي إِنْ فَعَلْتُمْ مَا أُوصِيكُمْ بِهِ."
+   "textAr": "أَنْتُمْ أَحِبَّائِي إِنْ فَعَلْتُمْ مَا أُوصِيكُمْ بِهِ.",
+   "textEn": "You are my friends if you do whatever I command you."
   },
   {
    "ref": "ROM 1:16",
    "refAr": "رومية ١: ١٦",
    "refEn": "Romans 1:16",
-   "textAr": "لِأَنِّي لَسْتُ أَسْتَحِي بِإِنْجِيلِ ٱلْمَسِيحِ، لِأَنَّهُ قُوَّةُ ٱللهِ لِلْخَلَاصِ لِكُلِّ مَنْ يُؤْمِنُ: لِلْيَهُودِيِّ أَوَّلًا ثُمَّ لِلْيُونَانِيِّ."
+   "textAr": "لِأَنِّي لَسْتُ أَسْتَحِي بِإِنْجِيلِ ٱلْمَسِيحِ، لِأَنَّهُ قُوَّةُ ٱللهِ لِلْخَلَاصِ لِكُلِّ مَنْ يُؤْمِنُ: لِلْيَهُودِيِّ أَوَّلًا ثُمَّ لِلْيُونَانِيِّ.",
+   "textEn": "For I am not ashamed of the Good News of Christ, because it is the power of God for salvation for everyone who believes, for the Jew first, and also for the Greek."
   },
   {
    "ref": "PSA 34:8",
    "refAr": "مزمور ٣٤: ٨",
    "refEn": "Psalm 34:8",
-   "textAr": "ذُوقُوا وَٱنْظُرُوا مَا أَطْيَبَ ٱلرَّبَّ! طُوبَى لِلرَّجُلِ ٱلْمُتَوَكِّلِ عَلَيْهِ."
+   "textAr": "ذُوقُوا وَٱنْظُرُوا مَا أَطْيَبَ ٱلرَّبَّ! طُوبَى لِلرَّجُلِ ٱلْمُتَوَكِّلِ عَلَيْهِ.",
+   "textEn": "Oh taste and see that the LORD is good. Blessed is the man who takes refuge in him."
   },
   {
    "ref": "COL 3:17",
    "refAr": "كولوسي ٣: ١٧",
    "refEn": "Colossians 3:17",
-   "textAr": "وَكُلُّ مَا عَمِلْتُمْ بِقَوْلٍ أَوْ فِعْلٍ، فَٱعْمَلُوا ٱلْكُلَّ بِٱسْمِ ٱلرَّبِّ يَسُوعَ، شَاكِرِينَ ٱللهَ وَٱلْآبَ بِهِ."
+   "textAr": "وَكُلُّ مَا عَمِلْتُمْ بِقَوْلٍ أَوْ فِعْلٍ، فَٱعْمَلُوا ٱلْكُلَّ بِٱسْمِ ٱلرَّبِّ يَسُوعَ، شَاكِرِينَ ٱللهَ وَٱلْآبَ بِهِ.",
+   "textEn": "Whatever you do, in word or in deed, do all in the name of the Lord Jesus, giving thanks to God the Father through him."
   },
   {
    "ref": "MAT 5:6",
    "refAr": "متى ٥: ٦",
    "refEn": "Matthew 5:6",
-   "textAr": "طُوبَى لِلْجِيَاعِ وَٱلْعِطَاشِ إِلَى ٱلْبِرِّ، لِأَنَّهُمْ يُشْبَعُونَ."
+   "textAr": "طُوبَى لِلْجِيَاعِ وَٱلْعِطَاشِ إِلَى ٱلْبِرِّ، لِأَنَّهُمْ يُشْبَعُونَ.",
+   "textEn": "Blessed are those who hunger and thirst for righteousness, for they shall be filled."
   },
   {
    "ref": "JOH 14:2",
    "refAr": "يوحنا ١٤: ٢",
    "refEn": "John 14:2",
-   "textAr": "فِي بَيْتِ أَبِي مَنَازِلُ كَثِيرَةٌ، وَإِلَّا فَإِنِّي كُنْتُ قَدْ قُلْتُ لَكُمْ. أَنَا أَمْضِي لِأُعِدَّ لَكُمْ مَكَانًا،"
+   "textAr": "فِي بَيْتِ أَبِي مَنَازِلُ كَثِيرَةٌ، وَإِلَّا فَإِنِّي كُنْتُ قَدْ قُلْتُ لَكُمْ. أَنَا أَمْضِي لِأُعِدَّ لَكُمْ مَكَانًا،",
+   "textEn": "In my Father’s house are many homes. If it weren’t so, I would have told you. I am going to prepare a place for you."
   },
   {
    "ref": "LUK 15:7",
    "refAr": "لوقا ١٥: ٧",
    "refEn": "Luke 15:7",
-   "textAr": "أَقُولُ لَكُمْ: إِنَّهُ هَكَذَا يَكُونُ فَرَحٌ فِي ٱلسَّمَاءِ بِخَاطِئٍ وَاحِدٍ يَتُوبُ أَكْثَرَ مِنْ تِسْعَةٍ وَتِسْعِينَ بَارًّا لَا يَحْتَاجُونَ إِلَى تَوْبَةٍ."
+   "textAr": "أَقُولُ لَكُمْ: إِنَّهُ هَكَذَا يَكُونُ فَرَحٌ فِي ٱلسَّمَاءِ بِخَاطِئٍ وَاحِدٍ يَتُوبُ أَكْثَرَ مِنْ تِسْعَةٍ وَتِسْعِينَ بَارًّا لَا يَحْتَاجُونَ إِلَى تَوْبَةٍ.",
+   "textEn": "I tell you that even so there will be more joy in heaven over one sinner who repents, than over ninety-nine righteous people who need no repentance."
   },
   {
    "ref": "ROM 14:8",
    "refAr": "رومية ١٤: ٨",
    "refEn": "Romans 14:8",
-   "textAr": "لِأَنَّنَا إِنْ عِشْنَا فَلِلرَّبِّ نَعِيشُ، وَإِنْ مُتْنَا فَلِلرَّبِّ نَمُوتُ. فَإِنْ عِشْنَا وَإِنْ مُتْنَا فَلِلرَّبِّ نَحْنُ."
+   "textAr": "لِأَنَّنَا إِنْ عِشْنَا فَلِلرَّبِّ نَعِيشُ، وَإِنْ مُتْنَا فَلِلرَّبِّ نَمُوتُ. فَإِنْ عِشْنَا وَإِنْ مُتْنَا فَلِلرَّبِّ نَحْنُ.",
+   "textEn": "For if we live, we live to the Lord. Or if we die, we die to the Lord. If therefore we live or die, we are the Lord’s."
   },
   {
    "ref": "JAM 1:17",
    "refAr": "يعقوب ١: ١٧",
    "refEn": "James 1:17",
-   "textAr": "كُلُّ عَطِيَّةٍ صَالِحَةٍ وَكُلُّ مَوْهِبَةٍ تَامَّةٍ هِيَ مِنْ فَوْقُ، نَازِلَةٌ مِنْ عِنْدِ أَبِي ٱلْأَنْوَارِ، ٱلَّذِي لَيْسَ عِنْدَهُ تَغْيِيرٌ وَلَا ظِلُّ دَوَرَانٍ."
+   "textAr": "كُلُّ عَطِيَّةٍ صَالِحَةٍ وَكُلُّ مَوْهِبَةٍ تَامَّةٍ هِيَ مِنْ فَوْقُ، نَازِلَةٌ مِنْ عِنْدِ أَبِي ٱلْأَنْوَارِ، ٱلَّذِي لَيْسَ عِنْدَهُ تَغْيِيرٌ وَلَا ظِلُّ دَوَرَانٍ.",
+   "textEn": "Every good gift and every perfect gift is from above, coming down from the Father of lights, with whom can be no variation nor turning shadow."
   },
   {
    "ref": "MAT 18:20",
    "refAr": "متى ١٨: ٢٠",
    "refEn": "Matthew 18:20",
-   "textAr": "لِأَنَّهُ حَيْثُمَا ٱجْتَمَعَ ٱثْنَانِ أَوْ ثَلَاثَةٌ بِٱسْمِي فَهُنَاكَ أَكُونُ فِي وَسْطِهِمْ»."
+   "textAr": "لِأَنَّهُ حَيْثُمَا ٱجْتَمَعَ ٱثْنَانِ أَوْ ثَلَاثَةٌ بِٱسْمِي فَهُنَاكَ أَكُونُ فِي وَسْطِهِمْ».",
+   "textEn": "For where two or three are gathered together in my name, there I am in the middle of them.”"
   },
   {
    "ref": "EPH 5:2",
    "refAr": "أفسس ٥: ٢",
    "refEn": "Ephesians 5:2",
-   "textAr": "وَٱسْلُكُوا فِي ٱلْمَحَبَّةِ كَمَا أَحَبَّنَا ٱلْمَسِيحُ أَيْضًا وَأَسْلَمَ نَفْسَهُ لِأَجْلِنَا، قُرْبَانًا وَذَبِيحَةً لِلهِ رَائِحَةً طَيِّبَةً."
+   "textAr": "وَٱسْلُكُوا فِي ٱلْمَحَبَّةِ كَمَا أَحَبَّنَا ٱلْمَسِيحُ أَيْضًا وَأَسْلَمَ نَفْسَهُ لِأَجْلِنَا، قُرْبَانًا وَذَبِيحَةً لِلهِ رَائِحَةً طَيِّبَةً.",
+   "textEn": "Walk in love, even as Christ also loved us and gave himself up for us, an offering and a sacrifice to God for a sweet-smelling fragrance."
   },
   {
    "ref": "REV 22:20",
    "refAr": "رؤيا يوحنا ٢٢: ٢٠",
    "refEn": "Revelation 22:20",
-   "textAr": "يَقُولُ ٱلشَّاهِدُ بِهَذَا: «نَعَمْ! أَنَا آتِي سَرِيعًا». آمِينَ. تَعَالَ أَيُّهَا ٱلرَّبُّ يَسُوعُ."
+   "textAr": "يَقُولُ ٱلشَّاهِدُ بِهَذَا: «نَعَمْ! أَنَا آتِي سَرِيعًا». آمِينَ. تَعَالَ أَيُّهَا ٱلرَّبُّ يَسُوعُ.",
+   "textEn": "He who testifies these things says, “Yes, I am coming soon.” Amen! Yes, come, Lord Jesus!"
   },
   {
    "ref": "PRO 3:7",
    "refAr": "أمثال ٣: ٧",
    "refEn": "Proverbs 3:7",
-   "textAr": "لَا تَكُنْ حَكِيمًا فِي عَيْنَيْ نَفْسِكَ. ٱتَّقِ ٱلرَّبَّ وَٱبْعُدْ عَنِ ٱلشَّرِّ،"
+   "textAr": "لَا تَكُنْ حَكِيمًا فِي عَيْنَيْ نَفْسِكَ. ٱتَّقِ ٱلرَّبَّ وَٱبْعُدْ عَنِ ٱلشَّرِّ،",
+   "textEn": "Don’t be wise in your own eyes. Fear the LORD, and depart from evil."
   },
   {
    "ref": "PSA 100:5",
    "refAr": "مزمور ١٠٠: ٥",
    "refEn": "Psalm 100:5",
-   "textAr": "لِأَنَّ ٱلرَّبَّ صَالِحٌ، إِلَى ٱلْأَبَدِ رَحْمَتُهُ، وَإِلَى دَوْرٍ فَدَوْرٍ أَمَانَتُهُ."
+   "textAr": "لِأَنَّ ٱلرَّبَّ صَالِحٌ، إِلَى ٱلْأَبَدِ رَحْمَتُهُ، وَإِلَى دَوْرٍ فَدَوْرٍ أَمَانَتُهُ.",
+   "textEn": "For the LORD is good. His loving kindness endures forever, his faithfulness to all generations."
   },
   {
    "ref": "PSA 56:3",
    "refAr": "مزمور ٥٦: ٣",
    "refEn": "Psalm 56:3",
-   "textAr": "فِي يَوْمِ خَوْفِي، أَنَا عَلَيْكَ أَتَّكِلُ."
+   "textAr": "فِي يَوْمِ خَوْفِي، أَنَا عَلَيْكَ أَتَّكِلُ.",
+   "textEn": "When I am afraid, I will put my trust in you."
   },
   {
    "ref": "ROM 5:1",
    "refAr": "رومية ٥: ١",
    "refEn": "Romans 5:1",
-   "textAr": "فَإِذْ قَدْ تَبَرَّرْنَا بِٱلْإِيمَانِ لَنَا سَلَامٌ مَعَ ٱللهِ بِرَبِّنَا يَسُوعَ ٱلْمَسِيحِ،"
+   "textAr": "فَإِذْ قَدْ تَبَرَّرْنَا بِٱلْإِيمَانِ لَنَا سَلَامٌ مَعَ ٱللهِ بِرَبِّنَا يَسُوعَ ٱلْمَسِيحِ،",
+   "textEn": "Being therefore justified by faith, we have peace with God through our Lord Jesus Christ;"
   },
   {
    "ref": "PRO 3:5",
    "refAr": "أمثال ٣: ٥",
    "refEn": "Proverbs 3:5",
-   "textAr": "تَوَكَّلْ عَلَى ٱلرَّبِّ بِكُلِّ قَلْبِكَ، وَعَلَى فَهْمِكَ لَا تَعْتَمِدْ."
+   "textAr": "تَوَكَّلْ عَلَى ٱلرَّبِّ بِكُلِّ قَلْبِكَ، وَعَلَى فَهْمِكَ لَا تَعْتَمِدْ.",
+   "textEn": "Trust in the LORD with all your heart, and don’t lean on your own understanding."
   },
   {
    "ref": "PSA 100:4",
    "refAr": "مزمور ١٠٠: ٤",
    "refEn": "Psalm 100:4",
-   "textAr": "ٱدْخُلُوا أَبْوَابَهُ بِحَمْدٍ، دِيَارَهُ بِٱلتَّسْبِيحِ. ٱحْمَدُوهُ، بَارِكُوا ٱسْمَهُ."
+   "textAr": "ٱدْخُلُوا أَبْوَابَهُ بِحَمْدٍ، دِيَارَهُ بِٱلتَّسْبِيحِ. ٱحْمَدُوهُ، بَارِكُوا ٱسْمَهُ.",
+   "textEn": "Enter into his gates with thanksgiving, and into his courts with praise. Give thanks to him, and bless his name."
   },
   {
    "ref": "ROM 8:31",
    "refAr": "رومية ٨: ٣١",
    "refEn": "Romans 8:31",
-   "textAr": "فَمَاذَا نَقُولُ لِهَذَا؟ إِنْ كَانَ ٱللهُ مَعَنَا، فَمَنْ عَلَيْنَا؟"
+   "textAr": "فَمَاذَا نَقُولُ لِهَذَا؟ إِنْ كَانَ ٱللهُ مَعَنَا، فَمَنْ عَلَيْنَا؟",
+   "textEn": "What then shall we say about these things? If God is for us, who can be against us?"
   },
   {
    "ref": "PSA 42:5",
    "refAr": "مزمور ٤٢: ٥",
    "refEn": "Psalm 42:5",
-   "textAr": "لِمَاذَا أَنْتِ مُنْحَنِيَةٌ يَا نَفْسِي؟ وَلِمَاذَا تَئِنِّينَ فِيَّ؟ ٱرْتَجِي ٱللهَ، لِأَنِّي بَعْدُ أَحْمَدُهُ، لِأَجْلِ خَلَاصِ وَجْهِهِ."
+   "textAr": "لِمَاذَا أَنْتِ مُنْحَنِيَةٌ يَا نَفْسِي؟ وَلِمَاذَا تَئِنِّينَ فِيَّ؟ ٱرْتَجِي ٱللهَ، لِأَنِّي بَعْدُ أَحْمَدُهُ، لِأَجْلِ خَلَاصِ وَجْهِهِ.",
+   "textEn": "Why are you in despair, my soul? Why are you disturbed within me? Hope in God! For I shall still praise him for the saving help of his presence."
   },
   {
    "ref": "1CO 2:9",
    "refAr": "كورنثوس الأولى ٢: ٩",
    "refEn": "1 Corinthians 2:9",
-   "textAr": "بَلْ كَمَا هُوَ مَكْتُوبٌ: «مَا لَمْ تَرَ عَيْنٌ، وَلَمْ تَسْمَعْ أُذُنٌ، وَلَمْ يَخْطُرْ عَلَى بَالِ إِنْسَانٍ: مَا أَعَدَّهُ ٱللهُ لِلَّذِينَ يُحِبُّونَهُ»."
+   "textAr": "بَلْ كَمَا هُوَ مَكْتُوبٌ: «مَا لَمْ تَرَ عَيْنٌ، وَلَمْ تَسْمَعْ أُذُنٌ، وَلَمْ يَخْطُرْ عَلَى بَالِ إِنْسَانٍ: مَا أَعَدَّهُ ٱللهُ لِلَّذِينَ يُحِبُّونَهُ».",
+   "textEn": "But as it is written, “Things which an eye didn’t see, and an ear didn’t hear, which didn’t enter into the heart of man, these God has prepared for those who love him.”"
   },
   {
    "ref": "PSA 32:8",
    "refAr": "مزمور ٣٢: ٨",
    "refEn": "Psalm 32:8",
-   "textAr": "«أُعَلِّمُكَ وَأُرْشِدُكَ ٱلطَّرِيقَ ٱلَّتِي تَسْلُكُهَا. أَنْصَحُكَ. عَيْنِي عَلَيْكَ."
+   "textAr": "«أُعَلِّمُكَ وَأُرْشِدُكَ ٱلطَّرِيقَ ٱلَّتِي تَسْلُكُهَا. أَنْصَحُكَ. عَيْنِي عَلَيْكَ.",
+   "textEn": "I will instruct you and teach you in the way which you shall go. I will counsel you with my eye on you."
   },
   {
    "ref": "1TH 5:18",
    "refAr": "تسالونيكي الأولى ٥: ١٨",
    "refEn": "1 Thessalonians 5:18",
-   "textAr": "ٱشْكُرُوا فِي كُلِّ شَيْءٍ، لِأَنَّ هَذِهِ هِيَ مَشِيئَةُ ٱللهِ فِي ٱلْمَسِيحِ يَسُوعَ مِنْ جِهَتِكُمْ."
+   "textAr": "ٱشْكُرُوا فِي كُلِّ شَيْءٍ، لِأَنَّ هَذِهِ هِيَ مَشِيئَةُ ٱللهِ فِي ٱلْمَسِيحِ يَسُوعَ مِنْ جِهَتِكُمْ.",
+   "textEn": "In everything give thanks, for this is the will of God in Christ Jesus towards you."
   },
   {
    "ref": "COL 1:13",
    "refAr": "كولوسي ١: ١٣",
    "refEn": "Colossians 1:13",
-   "textAr": "ٱلَّذِي أَنْقَذَنَا مِنْ سُلْطَانِ ٱلظُّلْمَةِ، وَنَقَلَنَا إِلَى مَلَكُوتِ ٱبْنِ مَحَبَّتِهِ،"
+   "textAr": "ٱلَّذِي أَنْقَذَنَا مِنْ سُلْطَانِ ٱلظُّلْمَةِ، وَنَقَلَنَا إِلَى مَلَكُوتِ ٱبْنِ مَحَبَّتِهِ،",
+   "textEn": "who delivered us out of the power of darkness, and translated us into the Kingdom of the Son of his love,"
   },
   {
    "ref": "PHI 4:5",
    "refAr": "فيلبي ٤: ٥",
    "refEn": "Philippians 4:5",
-   "textAr": "لِيَكُنْ حِلْمُكُمْ مَعْرُوفًا عِنْدَ جَمِيعِ ٱلنَّاسِ. اَلرَّبُّ قَرِيبٌ."
+   "textAr": "لِيَكُنْ حِلْمُكُمْ مَعْرُوفًا عِنْدَ جَمِيعِ ٱلنَّاسِ. اَلرَّبُّ قَرِيبٌ.",
+   "textEn": "Let your gentleness be known to all men. The Lord is at hand."
   },
   {
    "ref": "ROM 8:1",
    "refAr": "رومية ٨: ١",
    "refEn": "Romans 8:1",
-   "textAr": "إِذًا لَا شَيْءَ مِنَ ٱلدَّيْنُونَةِ ٱلْآنَ عَلَى ٱلَّذِينَ هُمْ فِي ٱلْمَسِيحِ يَسُوعَ، ٱلسَّالِكِينَ لَيْسَ حَسَبَ ٱلْجَسَدِ بَلْ حَسَبَ ٱلرُّوحِ."
+   "textAr": "إِذًا لَا شَيْءَ مِنَ ٱلدَّيْنُونَةِ ٱلْآنَ عَلَى ٱلَّذِينَ هُمْ فِي ٱلْمَسِيحِ يَسُوعَ، ٱلسَّالِكِينَ لَيْسَ حَسَبَ ٱلْجَسَدِ بَلْ حَسَبَ ٱلرُّوحِ.",
+   "textEn": "There is therefore now no condemnation to those who are in Christ Jesus, who don’t walk according to the flesh, but according to the Spirit."
   },
   {
    "ref": "PRO 12:25",
    "refAr": "أمثال ١٢: ٢٥",
    "refEn": "Proverbs 12:25",
-   "textAr": "ٱلْغَمُّ فِي قَلْبِ ٱلرَّجُلِ يُحْنِيهِ، وَٱلْكَلِمَةُ ٱلطَّيِّبَةُ تُفَرِّحُهُ."
+   "textAr": "ٱلْغَمُّ فِي قَلْبِ ٱلرَّجُلِ يُحْنِيهِ، وَٱلْكَلِمَةُ ٱلطَّيِّبَةُ تُفَرِّحُهُ.",
+   "textEn": "Anxiety in a man’s heart weighs it down, but a kind word makes it glad."
   },
   {
    "ref": "1TI 6:12",
    "refAr": "تيموثاوس الأولى ٦: ١٢",
    "refEn": "1 Timothy 6:12",
-   "textAr": "جَاهِدْ جِهَادَ ٱلْإِيمَانِ ٱلْحَسَنَ، وَأَمْسِكْ بِٱلْحَيَاةِ ٱلْأَبَدِيَّةِ ٱلَّتِي إِلَيْهَا دُعِيتَ أَيْضًا، وَٱعْتَرَفْتَ ٱلِٱعْتِرَافَ ٱلْحَسَنَ أَمَامَ شُهُودٍ كَثِيرِينَ."
+   "textAr": "جَاهِدْ جِهَادَ ٱلْإِيمَانِ ٱلْحَسَنَ، وَأَمْسِكْ بِٱلْحَيَاةِ ٱلْأَبَدِيَّةِ ٱلَّتِي إِلَيْهَا دُعِيتَ أَيْضًا، وَٱعْتَرَفْتَ ٱلِٱعْتِرَافَ ٱلْحَسَنَ أَمَامَ شُهُودٍ كَثِيرِينَ.",
+   "textEn": "Fight the good fight of faith. Take hold of the eternal life to which you were called, and you confessed the good confession in the sight of many witnesses."
   },
   {
    "ref": "PSA 90:12",
    "refAr": "مزمور ٩٠: ١٢",
    "refEn": "Psalm 90:12",
-   "textAr": "إِحْصَاءَ أَيَّامِنَا هَكَذَا عَلِّمْنَا فَنُؤْتَى قَلْبَ حِكْمَةٍ."
+   "textAr": "إِحْصَاءَ أَيَّامِنَا هَكَذَا عَلِّمْنَا فَنُؤْتَى قَلْبَ حِكْمَةٍ.",
+   "textEn": "So teach us to count our days, that we may gain a heart of wisdom."
   },
   {
    "ref": "PSA 62:8",
    "refAr": "مزمور ٦٢: ٨",
    "refEn": "Psalm 62:8",
-   "textAr": "تَوَكَّلُوا عَلَيْهِ فِي كُلِّ حِينٍ يَا قَوْمُ. ٱسْكُبُوا قُدَّامَهُ قُلُوبَكُمْ. ٱللهُ مَلْجَأٌ لَنَا. سِلَاهْ."
+   "textAr": "تَوَكَّلُوا عَلَيْهِ فِي كُلِّ حِينٍ يَا قَوْمُ. ٱسْكُبُوا قُدَّامَهُ قُلُوبَكُمْ. ٱللهُ مَلْجَأٌ لَنَا. سِلَاهْ.",
+   "textEn": "Trust in him at all times, you people. Pour out your heart before him. God is a refuge for us. Selah."
   },
   {
    "ref": "EPH 4:3",
    "refAr": "أفسس ٤: ٣",
    "refEn": "Ephesians 4:3",
-   "textAr": "مُجْتَهِدِينَ أَنْ تَحْفَظُوا وَحْدَانِيَّةَ ٱلرُّوحِ بِرِبَاطِ ٱلسَّلَامِ."
+   "textAr": "مُجْتَهِدِينَ أَنْ تَحْفَظُوا وَحْدَانِيَّةَ ٱلرُّوحِ بِرِبَاطِ ٱلسَّلَامِ.",
+   "textEn": "being eager to keep the unity of the Spirit in the bond of peace."
   },
   {
    "ref": "2CO 9:8",
    "refAr": "كورنثوس الثانية ٩: ٨",
    "refEn": "2 Corinthians 9:8",
-   "textAr": "وَٱللهُ قَادِرٌ أَنْ يَزِيدَكُمْ كُلَّ نِعْمَةٍ، لِكَيْ تَكُونُوا وَلَكُمْ كُلُّ ٱكْتِفَاءٍ كُلَّ حِينٍ فِي كُلِّ شَيْءٍ، تَزْدَادُونَ فِي كُلِّ عَمَلٍ صَالِحٍ."
+   "textAr": "وَٱللهُ قَادِرٌ أَنْ يَزِيدَكُمْ كُلَّ نِعْمَةٍ، لِكَيْ تَكُونُوا وَلَكُمْ كُلُّ ٱكْتِفَاءٍ كُلَّ حِينٍ فِي كُلِّ شَيْءٍ، تَزْدَادُونَ فِي كُلِّ عَمَلٍ صَالِحٍ.",
+   "textEn": "And God is able to make all grace abound to you, that you, always having all sufficiency in everything, may abound to every good work."
   },
   {
    "ref": "JOH 10:27",
    "refAr": "يوحنا ١٠: ٢٧",
    "refEn": "John 10:27",
-   "textAr": "خِرَافِي تَسْمَعُ صَوْتِي، وَأَنَا أَعْرِفُهَا فَتَتْبَعُنِي."
+   "textAr": "خِرَافِي تَسْمَعُ صَوْتِي، وَأَنَا أَعْرِفُهَا فَتَتْبَعُنِي.",
+   "textEn": "My sheep hear my voice, and I know them, and they follow me."
   },
   {
    "ref": "HEB 12:14",
    "refAr": "العبرانيين ١٢: ١٤",
    "refEn": "Hebrews 12:14",
-   "textAr": "اِتْبَعُوا ٱلسَّلَامَ مَعَ ٱلْجَمِيعِ، وَٱلْقَدَاسَةَ ٱلَّتِي بِدُونِهَا لَنْ يَرَى أَحَدٌ ٱلرَّبَّ،"
+   "textAr": "اِتْبَعُوا ٱلسَّلَامَ مَعَ ٱلْجَمِيعِ، وَٱلْقَدَاسَةَ ٱلَّتِي بِدُونِهَا لَنْ يَرَى أَحَدٌ ٱلرَّبَّ،",
+   "textEn": "Follow after peace with all men, and the sanctification without which no man will see the Lord,"
   },
   {
    "ref": "1JO 4:4",
    "refAr": "يوحنا الأولى ٤: ٤",
    "refEn": "1 John 4:4",
-   "textAr": "أَنْتُمْ مِنَ ٱللهِ أَيُّهَا ٱلْأَوْلَادُ، وَقَدْ غَلَبْتُمُوهُمْ لِأَنَّ ٱلَّذِي فِيكُمْ أَعْظَمُ مِنَ ٱلَّذِي فِي ٱلْعَالَمِ."
+   "textAr": "أَنْتُمْ مِنَ ٱللهِ أَيُّهَا ٱلْأَوْلَادُ، وَقَدْ غَلَبْتُمُوهُمْ لِأَنَّ ٱلَّذِي فِيكُمْ أَعْظَمُ مِنَ ٱلَّذِي فِي ٱلْعَالَمِ.",
+   "textEn": "You are of God, little children, and have overcome them, because greater is he who is in you than he who is in the world."
   },
   {
    "ref": "1PE 1:3",
    "refAr": "بطرس الأولى ١: ٣",
    "refEn": "1 Peter 1:3",
-   "textAr": "مُبَارَكٌ ٱللهُ أَبُو رَبِّنَا يَسُوعَ ٱلْمَسِيحِ، ٱلَّذِي حَسَبَ رَحْمَتِهِ ٱلْكَثِيرَةِ وَلَدَنَا ثَانِيَةً لِرَجَاءٍ حَيٍّ، بِقِيَامَةِ يَسُوعَ ٱلْمَسِيحِ مِنَ ٱلْأَمْوَاتِ،"
+   "textAr": "مُبَارَكٌ ٱللهُ أَبُو رَبِّنَا يَسُوعَ ٱلْمَسِيحِ، ٱلَّذِي حَسَبَ رَحْمَتِهِ ٱلْكَثِيرَةِ وَلَدَنَا ثَانِيَةً لِرَجَاءٍ حَيٍّ، بِقِيَامَةِ يَسُوعَ ٱلْمَسِيحِ مِنَ ٱلْأَمْوَاتِ،",
+   "textEn": "Blessed be the God and Father of our Lord Jesus Christ, who according to his great mercy caused us to be born again to a living hope through the resurrection of Jesus Christ from the dead,"
   },
   {
    "ref": "1JO 1:5",
    "refAr": "يوحنا الأولى ١: ٥",
    "refEn": "1 John 1:5",
-   "textAr": "وَهَذَا هُوَ ٱلْخَبَرُ ٱلَّذِي سَمِعْنَاهُ مِنْهُ وَنُخْبِرُكُمْ بِهِ: إِنَّ ٱللهَ نُورٌ وَلَيْسَ فِيهِ ظُلْمَةٌ ٱلْبَتَّةَ."
+   "textAr": "وَهَذَا هُوَ ٱلْخَبَرُ ٱلَّذِي سَمِعْنَاهُ مِنْهُ وَنُخْبِرُكُمْ بِهِ: إِنَّ ٱللهَ نُورٌ وَلَيْسَ فِيهِ ظُلْمَةٌ ٱلْبَتَّةَ.",
+   "textEn": "This is the message which we have heard from him and announce to you, that God is light, and in him is no darkness at all."
   },
   {
    "ref": "1CO 10:13",
    "refAr": "كورنثوس الأولى ١٠: ١٣",
    "refEn": "1 Corinthians 10:13",
-   "textAr": "لَمْ تُصِبْكُمْ تَجْرِبَةٌ إِلَّا بَشَرِيَّةٌ. وَلَكِنَّ ٱللهَ أَمِينٌ، ٱلَّذِي لَا يَدَعُكُمْ تُجَرَّبُونَ فَوْقَ مَا تَسْتَطِيعُونَ، بَلْ سَيَجْعَلُ مَعَ ٱلتَّجْرِبَةِ أَيْضًا ٱلْمَنْفَذَ، لِتَسْتَطِيعُوا أَنْ تَحْتَمِلُوا."
+   "textAr": "لَمْ تُصِبْكُمْ تَجْرِبَةٌ إِلَّا بَشَرِيَّةٌ. وَلَكِنَّ ٱللهَ أَمِينٌ، ٱلَّذِي لَا يَدَعُكُمْ تُجَرَّبُونَ فَوْقَ مَا تَسْتَطِيعُونَ، بَلْ سَيَجْعَلُ مَعَ ٱلتَّجْرِبَةِ أَيْضًا ٱلْمَنْفَذَ، لِتَسْتَطِيعُوا أَنْ تَحْتَمِلُوا.",
+   "textEn": "No temptation has taken you except what is common to man. God is faithful, who will not allow you to be tempted above what you are able, but will with the temptation also make the way of escape, that you may be able to endure it."
   },
   {
    "ref": "ACT 16:31",
    "refAr": "أعمال الرسل ١٦: ٣١",
    "refEn": "Acts 16:31",
-   "textAr": "فَقَالَا: «آمِنْ بِٱلرَّبِّ يَسُوعَ ٱلْمَسِيحِ فَتَخْلُصَ أَنْتَ وَأَهْلُ بَيْتِكَ»."
+   "textAr": "فَقَالَا: «آمِنْ بِٱلرَّبِّ يَسُوعَ ٱلْمَسِيحِ فَتَخْلُصَ أَنْتَ وَأَهْلُ بَيْتِكَ».",
+   "textEn": "They said, “Believe in the Lord Jesus Christ, and you will be saved, you and your household.”"
   },
   {
    "ref": "COL 2:6",
    "refAr": "كولوسي ٢: ٦",
    "refEn": "Colossians 2:6",
-   "textAr": "فَكَمَا قَبِلْتُمُ ٱلْمَسِيحَ يَسُوعَ ٱلرَّبَّ ٱسْلُكُوا فِيهِ،"
+   "textAr": "فَكَمَا قَبِلْتُمُ ٱلْمَسِيحَ يَسُوعَ ٱلرَّبَّ ٱسْلُكُوا فِيهِ،",
+   "textEn": "As therefore you received Christ Jesus the Lord, walk in him,"
   },
   {
    "ref": "1JO 1:9",
    "refAr": "يوحنا الأولى ١: ٩",
    "refEn": "1 John 1:9",
-   "textAr": "إِنِ ٱعْتَرَفْنَا بِخَطَايَانَا فَهُوَ أَمِينٌ وَعَادِلٌ، حَتَّى يَغْفِرَ لَنَا خَطَايَانَا وَيُطَهِّرَنَا مِنْ كُلِّ إِثْمٍ."
+   "textAr": "إِنِ ٱعْتَرَفْنَا بِخَطَايَانَا فَهُوَ أَمِينٌ وَعَادِلٌ، حَتَّى يَغْفِرَ لَنَا خَطَايَانَا وَيُطَهِّرَنَا مِنْ كُلِّ إِثْمٍ.",
+   "textEn": "If we confess our sins, he is faithful and righteous to forgive us the sins and to cleanse us from all unrighteousness."
   },
   {
    "ref": "PSA 37:4",
    "refAr": "مزمور ٣٧: ٤",
    "refEn": "Psalm 37:4",
-   "textAr": "وَتَلَذَّذْ بِٱلرَّبِّ فَيُعْطِيَكَ سُؤْلَ قَلْبِكَ."
+   "textAr": "وَتَلَذَّذْ بِٱلرَّبِّ فَيُعْطِيَكَ سُؤْلَ قَلْبِكَ.",
+   "textEn": "Also delight yourself in the LORD, and he will give you the desires of your heart."
   },
   {
    "ref": "PSA 116:1",
    "refAr": "مزمور ١١٦: ١",
    "refEn": "Psalm 116:1",
-   "textAr": "أَحْبَبْتُ لِأَنَّ ٱلرَّبَّ يَسْمَعُ صَوْتِي، تَضَرُّعَاتِي."
+   "textAr": "أَحْبَبْتُ لِأَنَّ ٱلرَّبَّ يَسْمَعُ صَوْتِي، تَضَرُّعَاتِي.",
+   "textEn": "I love the LORD, because he listens to my voice, and my cries for mercy."
   },
   {
    "ref": "MAR 9:23",
    "refAr": "مرقس ٩: ٢٣",
    "refEn": "Mark 9:23",
-   "textAr": "فَقَالَ لَهُ يَسُوعُ: «إِنْ كُنْتَ تَسْتَطِيعُ أَنْ تُؤْمِنَ. كُلُّ شَيْءٍ مُسْتَطَاعٌ لِلْمُؤْمِنِ»."
+   "textAr": "فَقَالَ لَهُ يَسُوعُ: «إِنْ كُنْتَ تَسْتَطِيعُ أَنْ تُؤْمِنَ. كُلُّ شَيْءٍ مُسْتَطَاعٌ لِلْمُؤْمِنِ».",
+   "textEn": "Jesus said to him, “If you can believe, all things are possible to him who believes.”"
   },
   {
    "ref": "JOH 10:11",
    "refAr": "يوحنا ١٠: ١١",
    "refEn": "John 10:11",
-   "textAr": "أَنَا هُوَ ٱلرَّاعِي ٱلصَّالِحُ، وَٱلرَّاعِي ٱلصَّالِحُ يَبْذِلُ نَفْسَهُ عَنِ ٱلْخِرَافِ."
+   "textAr": "أَنَا هُوَ ٱلرَّاعِي ٱلصَّالِحُ، وَٱلرَّاعِي ٱلصَّالِحُ يَبْذِلُ نَفْسَهُ عَنِ ٱلْخِرَافِ.",
+   "textEn": "“I am the good shepherd. The good shepherd lays down his life for the sheep."
   },
   {
    "ref": "JOH 1:14",
    "refAr": "يوحنا ١: ١٤",
    "refEn": "John 1:14",
-   "textAr": "وَٱلْكَلِمَةُ صَارَ جَسَدًا وَحَلَّ بَيْنَنَا، وَرَأَيْنَا مَجْدَهُ، مَجْدًا كَمَا لِوَحِيدٍ مِنَ ٱلْآبِ، مَمْلُوءًا نِعْمَةً وَحَقًّا."
+   "textAr": "وَٱلْكَلِمَةُ صَارَ جَسَدًا وَحَلَّ بَيْنَنَا، وَرَأَيْنَا مَجْدَهُ، مَجْدًا كَمَا لِوَحِيدٍ مِنَ ٱلْآبِ، مَمْلُوءًا نِعْمَةً وَحَقًّا.",
+   "textEn": "The Word became flesh and lived amongst us. We saw his glory, such glory as of the only born Son of the Father, full of grace and truth."
   },
   {
    "ref": "1CO 13:8",
    "refAr": "كورنثوس الأولى ١٣: ٨",
    "refEn": "1 Corinthians 13:8",
-   "textAr": "اَلْمَحَبَّةُ لَا تَسْقُطُ أَبَدًا. وَأَمَّا ٱلنُّبُوَّاتُ فَسَتُبْطَلُ، وَٱلْأَلْسِنَةُ فَسَتَنْتَهِي، وَٱلْعِلْمُ فَسَيُبْطَلُ."
+   "textAr": "اَلْمَحَبَّةُ لَا تَسْقُطُ أَبَدًا. وَأَمَّا ٱلنُّبُوَّاتُ فَسَتُبْطَلُ، وَٱلْأَلْسِنَةُ فَسَتَنْتَهِي، وَٱلْعِلْمُ فَسَيُبْطَلُ.",
+   "textEn": "Love never fails. But where there are prophecies, they will be done away with. Where there are various languages, they will cease. Where there is knowledge, it will be done away with."
   },
   {
    "ref": "2CO 13:14",
    "refAr": "كورنثوس الثانية ١٣: ١٤",
    "refEn": "2 Corinthians 13:14",
-   "textAr": "نِعْمَةُ رَبِّنَا يَسُوعَ ٱلْمَسِيحِ، وَمَحَبَّةُ ٱللهِ، وَشَرِكَةُ ٱلرُّوحِ ٱلْقُدُسِ مَعَ جَمِيعِكُمْ. آمِينَ."
+   "textAr": "نِعْمَةُ رَبِّنَا يَسُوعَ ٱلْمَسِيحِ، وَمَحَبَّةُ ٱللهِ، وَشَرِكَةُ ٱلرُّوحِ ٱلْقُدُسِ مَعَ جَمِيعِكُمْ. آمِينَ.",
+   "textEn": "The grace of the Lord Jesus Christ, God’s love, and the fellowship of the Holy Spirit be with you all. Amen."
   },
   {
    "ref": "ACT 17:28",
    "refAr": "أعمال الرسل ١٧: ٢٨",
    "refEn": "Acts 17:28",
-   "textAr": "لِأَنَّنَا بِهِ نَحْيَا وَنَتَحَرَّكُ وَنُوجَدُ، كَمَا قَالَ بَعْضُ شُعَرَائِكُمْ أَيْضًا: لِأَنَّنَا أَيْضًا ذُرِّيَّتُهُ."
+   "textAr": "لِأَنَّنَا بِهِ نَحْيَا وَنَتَحَرَّكُ وَنُوجَدُ، كَمَا قَالَ بَعْضُ شُعَرَائِكُمْ أَيْضًا: لِأَنَّنَا أَيْضًا ذُرِّيَّتُهُ.",
+   "textEn": "‘For in him we live, move, and have our being.’ As some of your own poets have said, ‘For we are also his offspring.’"
   },
   {
    "ref": "HEB 12:2",
    "refAr": "العبرانيين ١٢: ٢",
    "refEn": "Hebrews 12:2",
-   "textAr": "نَاظِرِينَ إِلَى رَئِيسِ ٱلْإِيمَانِ وَمُكَمِّلِهِ يَسُوعَ، ٱلَّذِي مِنْ أَجْلِ ٱلسُّرُورِ ٱلْمَوْضُوعِ أَمَامَهُ، ٱحْتَمَلَ ٱلصَّلِيبَ مُسْتَهِينًا بِٱلْخِزْيِ، فَجَلَسَ فِي يَمِينِ عَرْشِ ٱللهِ."
+   "textAr": "نَاظِرِينَ إِلَى رَئِيسِ ٱلْإِيمَانِ وَمُكَمِّلِهِ يَسُوعَ، ٱلَّذِي مِنْ أَجْلِ ٱلسُّرُورِ ٱلْمَوْضُوعِ أَمَامَهُ، ٱحْتَمَلَ ٱلصَّلِيبَ مُسْتَهِينًا بِٱلْخِزْيِ، فَجَلَسَ فِي يَمِينِ عَرْشِ ٱللهِ.",
+   "textEn": "looking to Jesus, the author and perfecter of faith, who for the joy that was set before him endured the cross, despising its shame, and has sat down at the right hand of the throne of God."
   },
   {
    "ref": "PRO 11:25",
    "refAr": "أمثال ١١: ٢٥",
    "refEn": "Proverbs 11:25",
-   "textAr": "ٱلنَّفْسُ ٱلسَّخِيَّةُ تُسَمَّنُ، وَٱلْمُرْوِي هُوَ أَيْضًا يُرْوَى."
+   "textAr": "ٱلنَّفْسُ ٱلسَّخِيَّةُ تُسَمَّنُ، وَٱلْمُرْوِي هُوَ أَيْضًا يُرْوَى.",
+   "textEn": "The liberal soul shall be made fat. He who waters shall be watered also himself."
   },
   {
    "ref": "PRO 9:10",
    "refAr": "أمثال ٩: ١٠",
    "refEn": "Proverbs 9:10",
-   "textAr": "بَدْءُ ٱلْحِكْمَةِ مَخَافَةُ ٱلرَّبِّ، وَمَعْرِفَةُ ٱلْقُدُّوسِ فَهْمٌ."
+   "textAr": "بَدْءُ ٱلْحِكْمَةِ مَخَافَةُ ٱلرَّبِّ، وَمَعْرِفَةُ ٱلْقُدُّوسِ فَهْمٌ.",
+   "textEn": "The fear of the LORD is the beginning of wisdom. The knowledge of the Holy One is understanding."
   },
   {
    "ref": "1JO 4:8",
    "refAr": "يوحنا الأولى ٤: ٨",
    "refEn": "1 John 4:8",
-   "textAr": "وَمَنْ لَا يُحِبُّ لَمْ يَعْرِفِ ٱللهَ، لِأَنَّ ٱللهَ مَحَبَّةٌ."
+   "textAr": "وَمَنْ لَا يُحِبُّ لَمْ يَعْرِفِ ٱللهَ، لِأَنَّ ٱللهَ مَحَبَّةٌ.",
+   "textEn": "He who doesn’t love doesn’t know God, for God is love."
   },
   {
    "ref": "GAL 6:9",
    "refAr": "غلاطية ٦: ٩",
    "refEn": "Galatians 6:9",
-   "textAr": "فَلَا نَفْشَلْ فِي عَمَلِ ٱلْخَيْرِ لِأَنَّنَا سَنَحْصُدُ فِي وَقْتِهِ إِنْ كُنَّا لَا نَكِلُّ."
+   "textAr": "فَلَا نَفْشَلْ فِي عَمَلِ ٱلْخَيْرِ لِأَنَّنَا سَنَحْصُدُ فِي وَقْتِهِ إِنْ كُنَّا لَا نَكِلُّ.",
+   "textEn": "Let’s not be weary in doing good, for we will reap in due season if we don’t give up."
   },
   {
    "ref": "1TI 4:12",
    "refAr": "تيموثاوس الأولى ٤: ١٢",
    "refEn": "1 Timothy 4:12",
-   "textAr": "لَا يَسْتَهِنْ أَحَدٌ بِحَدَاثَتِكَ، بَلْ كُنْ قُدْوَةً لِلْمُؤْمِنِينَ: فِي ٱلْكَلَامِ، فِي ٱلتَّصَرُّفِ، فِي ٱلْمَحَبَّةِ، فِي ٱلرُّوحِ، فِي ٱلْإِيمَانِ، فِي ٱلطَّهَارَةِ."
+   "textAr": "لَا يَسْتَهِنْ أَحَدٌ بِحَدَاثَتِكَ، بَلْ كُنْ قُدْوَةً لِلْمُؤْمِنِينَ: فِي ٱلْكَلَامِ، فِي ٱلتَّصَرُّفِ، فِي ٱلْمَحَبَّةِ، فِي ٱلرُّوحِ، فِي ٱلْإِيمَانِ، فِي ٱلطَّهَارَةِ.",
+   "textEn": "Let no man despise your youth; but be an example to those who believe, in word, in your way of life, in love, in spirit, in faith, and in purity."
   },
   {
    "ref": "PSA 133:1",
    "refAr": "مزمور ١٣٣: ١",
    "refEn": "Psalm 133:1",
-   "textAr": "تَرْنِيمَةُ ٱلْمَصَاعِدِ. لِدَاوُدَ هُوَذَا مَا أَحْسَنَ وَمَا أَجْمَلَ أَنْ يَسْكُنَ ٱلْإِخْوَةُ مَعًا!"
+   "textAr": "تَرْنِيمَةُ ٱلْمَصَاعِدِ. لِدَاوُدَ هُوَذَا مَا أَحْسَنَ وَمَا أَجْمَلَ أَنْ يَسْكُنَ ٱلْإِخْوَةُ مَعًا!",
+   "textEn": "A Song of Ascents. By David. See how good and how pleasant it is for brothers to live together in unity!"
   },
   {
    "ref": "PSA 25:4",
    "refAr": "مزمور ٢٥: ٤",
    "refEn": "Psalm 25:4",
-   "textAr": "طُرُقَكَ يَارَبُّ عَرِّفْنِي. سُبُلَكَ عَلِّمْنِي."
+   "textAr": "طُرُقَكَ يَارَبُّ عَرِّفْنِي. سُبُلَكَ عَلِّمْنِي.",
+   "textEn": "Show me your ways, LORD. Teach me your paths."
   },
   {
    "ref": "PSA 34:4",
    "refAr": "مزمور ٣٤: ٤",
    "refEn": "Psalm 34:4",
-   "textAr": "طَلَبْتُ إِلَى ٱلرَّبِّ فَٱسْتَجَابَ لِي، وَمِنْ كُلِّ مَخَاوِفِي أَنْقَذَنِي."
+   "textAr": "طَلَبْتُ إِلَى ٱلرَّبِّ فَٱسْتَجَابَ لِي، وَمِنْ كُلِّ مَخَاوِفِي أَنْقَذَنِي.",
+   "textEn": "I sought the LORD, and he answered me, and delivered me from all my fears."
   },
   {
    "ref": "JAM 1:22",
    "refAr": "يعقوب ١: ٢٢",
    "refEn": "James 1:22",
-   "textAr": "وَلَكِنْ كُونُوا عَامِلِينَ بِٱلْكَلِمَةِ، لَا سَامِعِينَ فَقَطْ خَادِعِينَ نُفُوسَكُمْ."
+   "textAr": "وَلَكِنْ كُونُوا عَامِلِينَ بِٱلْكَلِمَةِ، لَا سَامِعِينَ فَقَطْ خَادِعِينَ نُفُوسَكُمْ.",
+   "textEn": "But be doers of the word, and not only hearers, deluding your own selves."
   },
   {
    "ref": "MAT 7:8",
    "refAr": "متى ٧: ٨",
    "refEn": "Matthew 7:8",
-   "textAr": "لِأَنَّ كُلَّ مَنْ يَسْأَلُ يَأْخُذُ، وَمَنْ يَطْلُبُ يَجِدُ، وَمَنْ يَقْرَعُ يُفْتَحُ لَهُ."
+   "textAr": "لِأَنَّ كُلَّ مَنْ يَسْأَلُ يَأْخُذُ، وَمَنْ يَطْلُبُ يَجِدُ، وَمَنْ يَقْرَعُ يُفْتَحُ لَهُ.",
+   "textEn": "For everyone who asks receives. He who seeks finds. To him who knocks it will be opened."
   },
   {
    "ref": "ROM 8:38",
    "refAr": "رومية ٨: ٣٨",
    "refEn": "Romans 8:38",
-   "textAr": "فَإِنِّي مُتَيَقِّنٌ أَنَّهُ لَا مَوْتَ وَلَا حَيَاةَ، وَلَا مَلَائِكَةَ وَلَا رُؤَسَاءَ وَلَا قُوَّاتِ، وَلَا أُمُورَ حَاضِرَةً وَلَا مُسْتَقْبَلَةً،"
+   "textAr": "فَإِنِّي مُتَيَقِّنٌ أَنَّهُ لَا مَوْتَ وَلَا حَيَاةَ، وَلَا مَلَائِكَةَ وَلَا رُؤَسَاءَ وَلَا قُوَّاتِ، وَلَا أُمُورَ حَاضِرَةً وَلَا مُسْتَقْبَلَةً،",
+   "textEn": "For I am persuaded that neither death, nor life, nor angels, nor principalities, nor things present, nor things to come, nor powers,"
   },
   {
    "ref": "2PE 3:9",
    "refAr": "بطرس الثانية ٣: ٩",
    "refEn": "2 Peter 3:9",
-   "textAr": "لَا يَتَبَاطَأُ ٱلرَّبُّ عَنْ وَعْدِهِ كَمَا يَحْسِبُ قَوْمٌ ٱلتَّبَاطُؤَ، لَكِنَّهُ يَتَأَنَّى عَلَيْنَا، وَهُوَ لَا يَشَاءُ أَنْ يَهْلِكَ أُنَاسٌ، بَلْ أَنْ يُقْبِلَ ٱلْجَمِيعُ إِلَى ٱلتَّوْبَةِ."
+   "textAr": "لَا يَتَبَاطَأُ ٱلرَّبُّ عَنْ وَعْدِهِ كَمَا يَحْسِبُ قَوْمٌ ٱلتَّبَاطُؤَ، لَكِنَّهُ يَتَأَنَّى عَلَيْنَا، وَهُوَ لَا يَشَاءُ أَنْ يَهْلِكَ أُنَاسٌ، بَلْ أَنْ يُقْبِلَ ٱلْجَمِيعُ إِلَى ٱلتَّوْبَةِ.",
+   "textEn": "The Lord is not slow concerning his promise, as some count slowness; but he is patient with us, not wishing that anyone should perish, but that all should come to repentance."
   },
   {
    "ref": "PSA 107:1",
    "refAr": "مزمور ١٠٧: ١",
    "refEn": "Psalm 107:1",
-   "textAr": "اِحْمَدُوا ٱلرَّبَّ لِأَنَّهُ صَالِحٌ، لِأَنَّ إِلَى ٱلْأَبَدِ رَحْمَتَهُ."
+   "textAr": "اِحْمَدُوا ٱلرَّبَّ لِأَنَّهُ صَالِحٌ، لِأَنَّ إِلَى ٱلْأَبَدِ رَحْمَتَهُ.",
+   "textEn": "Give thanks to the LORD, for he is good, for his loving kindness endures forever."
   },
   {
    "ref": "1PE 3:15",
    "refAr": "بطرس الأولى ٣: ١٥",
    "refEn": "1 Peter 3:15",
-   "textAr": "بَلْ قَدِّسُوا ٱلرَّبَّ ٱلْإِلَهَ فِي قُلُوبِكُمْ، مُسْتَعِدِّينَ دَائِمًا لِمُجَاوَبَةِ كُلِّ مَنْ يَسْأَلُكُمْ عَنْ سَبَبِ ٱلرَّجَاءِ ٱلَّذِي فِيكُمْ، بِوَدَاعَةٍ وَخَوْفٍ،"
+   "textAr": "بَلْ قَدِّسُوا ٱلرَّبَّ ٱلْإِلَهَ فِي قُلُوبِكُمْ، مُسْتَعِدِّينَ دَائِمًا لِمُجَاوَبَةِ كُلِّ مَنْ يَسْأَلُكُمْ عَنْ سَبَبِ ٱلرَّجَاءِ ٱلَّذِي فِيكُمْ، بِوَدَاعَةٍ وَخَوْفٍ،",
+   "textEn": "But sanctify the Lord God in your hearts. Always be ready to give an answer to everyone who asks you a reason concerning the hope that is in you, with humility and fear,"
   },
   {
    "ref": "HEB 11:6",
    "refAr": "العبرانيين ١١: ٦",
    "refEn": "Hebrews 11:6",
-   "textAr": "وَلَكِنْ بِدُونِ إِيمَانٍ لَا يُمْكِنُ إِرْضَاؤُهُ، لِأَنَّهُ يَجِبُ أَنَّ ٱلَّذِي يَأْتِي إِلَى ٱللهِ يُؤْمِنُ بِأَنَّهُ مَوْجُودٌ، وَأَنَّهُ يُجَازِي ٱلَّذِينَ يَطْلُبُونَهُ."
+   "textAr": "وَلَكِنْ بِدُونِ إِيمَانٍ لَا يُمْكِنُ إِرْضَاؤُهُ، لِأَنَّهُ يَجِبُ أَنَّ ٱلَّذِي يَأْتِي إِلَى ٱللهِ يُؤْمِنُ بِأَنَّهُ مَوْجُودٌ، وَأَنَّهُ يُجَازِي ٱلَّذِينَ يَطْلُبُونَهُ.",
+   "textEn": "Without faith it is impossible to be well pleasing to him, for he who comes to God must believe that he exists, and that he is a rewarder of those who seek him."
   },
   {
    "ref": "PRO 17:17",
    "refAr": "أمثال ١٧: ١٧",
    "refEn": "Proverbs 17:17",
-   "textAr": "اَلصَّدِيقُ يُحِبُّ فِي كُلِّ وَقْتٍ، أَمَّا ٱلْأَخُ فَلِلشِّدَّةِ يُولَدُ."
+   "textAr": "اَلصَّدِيقُ يُحِبُّ فِي كُلِّ وَقْتٍ، أَمَّا ٱلْأَخُ فَلِلشِّدَّةِ يُولَدُ.",
+   "textEn": "A friend loves at all times; and a brother is born for adversity."
   },
   {
    "ref": "REV 21:4",
    "refAr": "رؤيا يوحنا ٢١: ٤",
    "refEn": "Revelation 21:4",
-   "textAr": "وَسَيَمْسَحُ ٱللهُ كُلَّ دَمْعَةٍ مِنْ عُيُونِهِمْ، وَٱلْمَوْتُ لَا يَكُونُ فِي مَا بَعْدُ، وَلَا يَكُونُ حُزْنٌ وَلَا صُرَاخٌ وَلَا وَجَعٌ فِي مَا بَعْدُ، لِأَنَّ ٱلْأُمُورَ ٱلْأُولَى قَدْ مَضَتْ»."
+   "textAr": "وَسَيَمْسَحُ ٱللهُ كُلَّ دَمْعَةٍ مِنْ عُيُونِهِمْ، وَٱلْمَوْتُ لَا يَكُونُ فِي مَا بَعْدُ، وَلَا يَكُونُ حُزْنٌ وَلَا صُرَاخٌ وَلَا وَجَعٌ فِي مَا بَعْدُ، لِأَنَّ ٱلْأُمُورَ ٱلْأُولَى قَدْ مَضَتْ».",
+   "textEn": "He will wipe away every tear from their eyes. Death will be no more; neither will there be mourning, nor crying, nor pain any more. The first things have passed away.”"
   },
   {
    "ref": "JOH 14:6",
    "refAr": "يوحنا ١٤: ٦",
    "refEn": "John 14:6",
-   "textAr": "قَالَ لَهُ يَسُوعُ: «أَنَا هُوَ ٱلطَّرِيقُ وَٱلْحَقُّ وَٱلْحَيَاةُ. لَيْسَ أَحَدٌ يَأْتِي إِلَى ٱلْآبِ إِلَّا بِي."
+   "textAr": "قَالَ لَهُ يَسُوعُ: «أَنَا هُوَ ٱلطَّرِيقُ وَٱلْحَقُّ وَٱلْحَيَاةُ. لَيْسَ أَحَدٌ يَأْتِي إِلَى ٱلْآبِ إِلَّا بِي.",
+   "textEn": "Jesus said to him, “I am the way, the truth, and the life. No one comes to the Father, except through me."
   },
   {
    "ref": "MAT 11:30",
    "refAr": "متى ١١: ٣٠",
    "refEn": "Matthew 11:30",
-   "textAr": "لِأَنَّ نِيرِي هَيِّنٌ وَحِمْلِي خَفِيفٌ»."
+   "textAr": "لِأَنَّ نِيرِي هَيِّنٌ وَحِمْلِي خَفِيفٌ».",
+   "textEn": "For my yoke is easy, and my burden is light.”"
   },
   {
    "ref": "PRO 16:24",
    "refAr": "أمثال ١٦: ٢٤",
    "refEn": "Proverbs 16:24",
-   "textAr": "اَلْكَلَامُ ٱلْحَسَنُ شَهْدُ عَسَلٍ، حُلْوٌ لِلنَّفْسِ وَشِفَاءٌ لِلْعِظَامِ."
+   "textAr": "اَلْكَلَامُ ٱلْحَسَنُ شَهْدُ عَسَلٍ، حُلْوٌ لِلنَّفْسِ وَشِفَاءٌ لِلْعِظَامِ.",
+   "textEn": "Pleasant words are a honeycomb, sweet to the soul, and health to the bones."
   },
   {
    "ref": "PSA 37:7",
    "refAr": "مزمور ٣٧: ٧",
    "refEn": "Psalm 37:7",
-   "textAr": "ٱنْتَظِرِ ٱلرَّبَّ وَٱصْبِرْ لَهُ، وَلَا تَغَرْ مِنَ ٱلَّذِي يَنْجَحُ فِي طَرِيقِهِ، مِنَ ٱلرَّجُلِ ٱلْمُجْرِي مَكَايِدَ."
+   "textAr": "ٱنْتَظِرِ ٱلرَّبَّ وَٱصْبِرْ لَهُ، وَلَا تَغَرْ مِنَ ٱلَّذِي يَنْجَحُ فِي طَرِيقِهِ، مِنَ ٱلرَّجُلِ ٱلْمُجْرِي مَكَايِدَ.",
+   "textEn": "Rest in the LORD, and wait patiently for him. Don’t fret because of him who prospers in his way, because of the man who makes wicked plots happen."
   },
   {
    "ref": "PSA 103:2",
    "refAr": "مزمور ١٠٣: ٢",
    "refEn": "Psalm 103:2",
-   "textAr": "بَارِكِي يَا نَفْسِي ٱلرَّبَّ، وَلَا تَنْسَيْ كُلَّ حَسَنَاتِهِ."
+   "textAr": "بَارِكِي يَا نَفْسِي ٱلرَّبَّ، وَلَا تَنْسَيْ كُلَّ حَسَنَاتِهِ.",
+   "textEn": "Praise the LORD, my soul, and don’t forget all his benefits,"
   },
   {
    "ref": "REV 1:8",
    "refAr": "رؤيا يوحنا ١: ٨",
    "refEn": "Revelation 1:8",
-   "textAr": "«أَنَا هُوَ ٱلْأَلِفُ وَٱلْيَاءُ، ٱلْبِدَايَةُ وَٱلنِّهَايَةُ» يَقُولُ ٱلرَّبُّ ٱلْكَائِنُ وَٱلَّذِي كَانَ وَٱلَّذِي يَأْتِي، ٱلْقَادِرُ عَلَى كُلِّ شَيْءٍ."
+   "textAr": "«أَنَا هُوَ ٱلْأَلِفُ وَٱلْيَاءُ، ٱلْبِدَايَةُ وَٱلنِّهَايَةُ» يَقُولُ ٱلرَّبُّ ٱلْكَائِنُ وَٱلَّذِي كَانَ وَٱلَّذِي يَأْتِي، ٱلْقَادِرُ عَلَى كُلِّ شَيْءٍ.",
+   "textEn": "“I am the Alpha and the Omega,” says the Lord God, “who is and who was and who is to come, the Almighty.”"
   },
   {
    "ref": "PSA 121:2",
    "refAr": "مزمور ١٢١: ٢",
    "refEn": "Psalm 121:2",
-   "textAr": "مَعُونَتِي مِنْ عِنْدِ ٱلرَّبِّ، صَانِعِ ٱلسَّمَاوَاتِ وَٱلْأَرْضِ."
+   "textAr": "مَعُونَتِي مِنْ عِنْدِ ٱلرَّبِّ، صَانِعِ ٱلسَّمَاوَاتِ وَٱلْأَرْضِ.",
+   "textEn": "My help comes from the LORD, who made heaven and earth."
   },
   {
    "ref": "2PE 1:3",
    "refAr": "بطرس الثانية ١: ٣",
    "refEn": "2 Peter 1:3",
-   "textAr": "كَمَا أَنَّ قُدْرَتَهُ ٱلْإِلَهِيَّةَ قَدْ وَهَبَتْ لَنَا كُلَّ مَا هُوَ لِلْحَيَاةِ وَٱلتَّقْوَى، بِمَعْرِفَةِ ٱلَّذِي دَعَانَا بِٱلْمَجْدِ وَٱلْفَضِيلَةِ،"
+   "textAr": "كَمَا أَنَّ قُدْرَتَهُ ٱلْإِلَهِيَّةَ قَدْ وَهَبَتْ لَنَا كُلَّ مَا هُوَ لِلْحَيَاةِ وَٱلتَّقْوَى، بِمَعْرِفَةِ ٱلَّذِي دَعَانَا بِٱلْمَجْدِ وَٱلْفَضِيلَةِ،",
+   "textEn": "seeing that his divine power has granted to us all things that pertain to life and godliness, through the knowledge of him who called us by his own glory and virtue,"
   },
   {
    "ref": "PSA 33:4",
    "refAr": "مزمور ٣٣: ٤",
    "refEn": "Psalm 33:4",
-   "textAr": "لِأَنَّ كَلِمَةَ ٱلرَّبِّ مُسْتَقِيمَةٌ، وَكُلَّ صُنْعِهِ بِٱلْأَمَانَةِ."
+   "textAr": "لِأَنَّ كَلِمَةَ ٱلرَّبِّ مُسْتَقِيمَةٌ، وَكُلَّ صُنْعِهِ بِٱلْأَمَانَةِ.",
+   "textEn": "For the LORD’s word is right. All his work is done in faithfulness."
   },
   {
    "ref": "PRO 14:29",
    "refAr": "أمثال ١٤: ٢٩",
    "refEn": "Proverbs 14:29",
-   "textAr": "بَطِيءُ ٱلْغَضَبِ كَثِيرُ ٱلْفَهْمِ، وَقَصِيرُ ٱلرُّوحِ مُعَلِّي ٱلْحَمَقِ."
+   "textAr": "بَطِيءُ ٱلْغَضَبِ كَثِيرُ ٱلْفَهْمِ، وَقَصِيرُ ٱلرُّوحِ مُعَلِّي ٱلْحَمَقِ.",
+   "textEn": "He who is slow to anger has great understanding, but he who has a quick temper displays folly."
   },
   {
    "ref": "1CO 3:16",
    "refAr": "كورنثوس الأولى ٣: ١٦",
    "refEn": "1 Corinthians 3:16",
-   "textAr": "أَمَا تَعْلَمُونَ أَنَّكُمْ هَيْكَلُ ٱللهِ، وَرُوحُ ٱللهِ يَسْكُنُ فِيكُمْ؟"
+   "textAr": "أَمَا تَعْلَمُونَ أَنَّكُمْ هَيْكَلُ ٱللهِ، وَرُوحُ ٱللهِ يَسْكُنُ فِيكُمْ؟",
+   "textEn": "Don’t you know that you are God’s temple and that God’s Spirit lives in you?"
   },
   {
    "ref": "REV 21:5",
    "refAr": "رؤيا يوحنا ٢١: ٥",
    "refEn": "Revelation 21:5",
-   "textAr": "وَقَالَ ٱلْجَالِسُ عَلَى ٱلْعَرْشِ: «هَا أَنَا أَصْنَعُ كُلَّ شَيْءٍ جَدِيدًا!». وَقَالَ لِيَ: «ٱكْتُبْ: فَإِنَّ هَذِهِ ٱلْأَقْوَالَ صَادِقَةٌ وَأَمِينَةٌ»."
+   "textAr": "وَقَالَ ٱلْجَالِسُ عَلَى ٱلْعَرْشِ: «هَا أَنَا أَصْنَعُ كُلَّ شَيْءٍ جَدِيدًا!». وَقَالَ لِيَ: «ٱكْتُبْ: فَإِنَّ هَذِهِ ٱلْأَقْوَالَ صَادِقَةٌ وَأَمِينَةٌ».",
+   "textEn": "He who sits on the throne said, “Behold, I am making all things new.” He said, “Write, for these words of God are faithful and true.”"
   },
   {
    "ref": "PSA 136:1",
    "refAr": "مزمور ١٣٦: ١",
    "refEn": "Psalm 136:1",
-   "textAr": "اِحْمَدُوا ٱلرَّبَّ لِأَنَّهُ صَالِحٌ، لِأَنَّ إِلَى ٱلْأَبَدِ رَحْمَتَهُ."
+   "textAr": "اِحْمَدُوا ٱلرَّبَّ لِأَنَّهُ صَالِحٌ، لِأَنَّ إِلَى ٱلْأَبَدِ رَحْمَتَهُ.",
+   "textEn": "Give thanks to the LORD, for he is good, for his loving kindness endures forever."
   },
   {
    "ref": "PSA 139:23",
    "refAr": "مزمور ١٣٩: ٢٣",
    "refEn": "Psalm 139:23",
-   "textAr": "ٱخْتَبِرْنِي يَا ٱللهُ وَٱعْرِفْ قَلْبِي. ٱمْتَحِنِّي وَٱعْرِفْ أَفْكَارِي."
+   "textAr": "ٱخْتَبِرْنِي يَا ٱللهُ وَٱعْرِفْ قَلْبِي. ٱمْتَحِنِّي وَٱعْرِفْ أَفْكَارِي.",
+   "textEn": "Search me, God, and know my heart. Try me, and know my thoughts."
   },
   {
    "ref": "1JO 4:18",
    "refAr": "يوحنا الأولى ٤: ١٨",
    "refEn": "1 John 4:18",
-   "textAr": "لَا خَوْفَ فِي ٱلْمَحَبَّةِ، بَلِ ٱلْمَحَبَّةُ ٱلْكَامِلَةُ تَطْرَحُ ٱلْخَوْفَ إِلَى خَارِجٍ لِأَنَّ ٱلْخَوْفَ لَهُ عَذَابٌ. وَأَمَّا مَنْ خَافَ فَلَمْ يَتَكَمَّلْ فِي ٱلْمَحَبَّةِ."
+   "textAr": "لَا خَوْفَ فِي ٱلْمَحَبَّةِ، بَلِ ٱلْمَحَبَّةُ ٱلْكَامِلَةُ تَطْرَحُ ٱلْخَوْفَ إِلَى خَارِجٍ لِأَنَّ ٱلْخَوْفَ لَهُ عَذَابٌ. وَأَمَّا مَنْ خَافَ فَلَمْ يَتَكَمَّلْ فِي ٱلْمَحَبَّةِ.",
+   "textEn": "There is no fear in love; but perfect love casts out fear, because fear has punishment. He who fears is not made perfect in love."
   },
   {
    "ref": "HEB 10:23",
    "refAr": "العبرانيين ١٠: ٢٣",
    "refEn": "Hebrews 10:23",
-   "textAr": "لِنَتَمَسَّكْ بِإِقْرَارِ ٱلرَّجَاءِ رَاسِخًا، لِأَنَّ ٱلَّذِي وَعَدَ هُوَ أَمِينٌ."
+   "textAr": "لِنَتَمَسَّكْ بِإِقْرَارِ ٱلرَّجَاءِ رَاسِخًا، لِأَنَّ ٱلَّذِي وَعَدَ هُوَ أَمِينٌ.",
+   "textEn": "let’s hold fast the confession of our hope without wavering; for he who promised is faithful."
   },
   {
    "ref": "MAT 6:33",
    "refAr": "متى ٦: ٣٣",
    "refEn": "Matthew 6:33",
-   "textAr": "لَكِنِ ٱطْلُبُوا أَوَّلًا مَلَكُوتَ ٱللهِ وَبِرَّهُ، وَهَذِهِ كُلُّهَا تُزَادُ لَكُمْ."
+   "textAr": "لَكِنِ ٱطْلُبُوا أَوَّلًا مَلَكُوتَ ٱللهِ وَبِرَّهُ، وَهَذِهِ كُلُّهَا تُزَادُ لَكُمْ.",
+   "textEn": "But seek first God’s Kingdom and his righteousness; and all these things will be given to you as well."
   },
   {
    "ref": "1JO 4:7",
    "refAr": "يوحنا الأولى ٤: ٧",
    "refEn": "1 John 4:7",
-   "textAr": "أَيُّهَا ٱلْأَحِبَّاءُ، لِنُحِبَّ بَعْضُنَا بَعْضًا، لِأَنَّ ٱلْمَحَبَّةَ هِيَ مِنَ ٱللهِ، وَكُلُّ مَنْ يُحِبُّ فَقَدْ وُلِدَ مِنَ ٱللهِ وَيَعْرِفُ ٱللهَ."
+   "textAr": "أَيُّهَا ٱلْأَحِبَّاءُ، لِنُحِبَّ بَعْضُنَا بَعْضًا، لِأَنَّ ٱلْمَحَبَّةَ هِيَ مِنَ ٱللهِ، وَكُلُّ مَنْ يُحِبُّ فَقَدْ وُلِدَ مِنَ ٱللهِ وَيَعْرِفُ ٱللهَ.",
+   "textEn": "Beloved, let’s love one another, for love is of God; and everyone who loves has been born of God and knows God."
   },
   {
    "ref": "PSA 28:7",
    "refAr": "مزمور ٢٨: ٧",
    "refEn": "Psalm 28:7",
-   "textAr": "ٱلرَّبُّ عِزِّي وَتُرْسِي. عَلَيْهِ ٱتَّكَلَ قَلْبِي، فَٱنْتَصَرْتُ. وَيَبْتَهِجُ قَلْبِي وَبِأُغْنِيَتِي أَحْمَدُهُ."
+   "textAr": "ٱلرَّبُّ عِزِّي وَتُرْسِي. عَلَيْهِ ٱتَّكَلَ قَلْبِي، فَٱنْتَصَرْتُ. وَيَبْتَهِجُ قَلْبِي وَبِأُغْنِيَتِي أَحْمَدُهُ.",
+   "textEn": "The LORD is my strength and my shield. My heart has trusted in him, and I am helped. Therefore my heart greatly rejoices. With my song I will thank him."
   },
   {
    "ref": "PSA 51:10",
    "refAr": "مزمور ٥١: ١٠",
    "refEn": "Psalm 51:10",
-   "textAr": "قَلْبًا نَقِيًّا ٱخْلُقْ فِيَّ يَا ٱللهُ، وَرُوحًا مُسْتَقِيمًا جَدِّدْ فِي دَاخِلِي."
+   "textAr": "قَلْبًا نَقِيًّا ٱخْلُقْ فِيَّ يَا ٱللهُ، وَرُوحًا مُسْتَقِيمًا جَدِّدْ فِي دَاخِلِي.",
+   "textEn": "Create in me a clean heart, O God. Renew a right spirit within me."
   },
   {
    "ref": "1TI 1:15",
    "refAr": "تيموثاوس الأولى ١: ١٥",
    "refEn": "1 Timothy 1:15",
-   "textAr": "صَادِقَةٌ هِيَ ٱلْكَلِمَةُ وَمُسْتَحِقَّةٌ كُلَّ قُبُولٍ: أَنَّ ٱلْمَسِيحَ يَسُوعَ جَاءَ إِلَى ٱلْعَالَمِ لِيُخَلِّصَ ٱلْخُطَاةَ ٱلَّذِينَ أَوَّلُهُمْ أَنَا."
+   "textAr": "صَادِقَةٌ هِيَ ٱلْكَلِمَةُ وَمُسْتَحِقَّةٌ كُلَّ قُبُولٍ: أَنَّ ٱلْمَسِيحَ يَسُوعَ جَاءَ إِلَى ٱلْعَالَمِ لِيُخَلِّصَ ٱلْخُطَاةَ ٱلَّذِينَ أَوَّلُهُمْ أَنَا.",
+   "textEn": "The saying is faithful and worthy of all acceptance, that Christ Jesus came into the world to save sinners, of whom I am chief."
   },
   {
    "ref": "MAT 5:3",
    "refAr": "متى ٥: ٣",
    "refEn": "Matthew 5:3",
-   "textAr": "«طُوبَى لِلْمَسَاكِينِ بِٱلرُّوحِ، لِأَنَّ لَهُمْ مَلَكُوتَ ٱلسَّمَاوَاتِ."
+   "textAr": "«طُوبَى لِلْمَسَاكِينِ بِٱلرُّوحِ، لِأَنَّ لَهُمْ مَلَكُوتَ ٱلسَّمَاوَاتِ.",
+   "textEn": "“Blessed are the poor in spirit, for theirs is the Kingdom of Heaven."
   },
   {
    "ref": "HEB 4:16",
    "refAr": "العبرانيين ٤: ١٦",
    "refEn": "Hebrews 4:16",
-   "textAr": "فَلْنَتَقَدَّمْ بِثِقَةٍ إِلَى عَرْشِ ٱلنِّعْمَةِ لِكَيْ نَنَالَ رَحْمَةً وَنَجِدَ نِعْمَةً عَوْنًا فِي حِينِهِ."
+   "textAr": "فَلْنَتَقَدَّمْ بِثِقَةٍ إِلَى عَرْشِ ٱلنِّعْمَةِ لِكَيْ نَنَالَ رَحْمَةً وَنَجِدَ نِعْمَةً عَوْنًا فِي حِينِهِ.",
+   "textEn": "Let’s therefore draw near with boldness to the throne of grace, that we may receive mercy and may find grace for help in time of need."
   },
   {
    "ref": "JAM 4:10",
    "refAr": "يعقوب ٤: ١٠",
    "refEn": "James 4:10",
-   "textAr": "ٱتَّضِعُوا قُدَّامَ ٱلرَّبِّ فَيَرْفَعَكُمْ."
+   "textAr": "ٱتَّضِعُوا قُدَّامَ ٱلرَّبِّ فَيَرْفَعَكُمْ.",
+   "textEn": "Humble yourselves in the sight of the Lord, and he will exalt you."
   },
   {
    "ref": "COL 3:12",
    "refAr": "كولوسي ٣: ١٢",
    "refEn": "Colossians 3:12",
-   "textAr": "فَٱلْبَسُوا كَمُخْتَارِي ٱللهِ ٱلْقِدِّيسِينَ ٱلْمَحْبُوبِينَ أَحْشَاءَ رَأْفَاتٍ، وَلُطْفًا، وَتَوَاضُعًا، وَوَدَاعَةً، وَطُولَ أَنَاةٍ،"
+   "textAr": "فَٱلْبَسُوا كَمُخْتَارِي ٱللهِ ٱلْقِدِّيسِينَ ٱلْمَحْبُوبِينَ أَحْشَاءَ رَأْفَاتٍ، وَلُطْفًا، وَتَوَاضُعًا، وَوَدَاعَةً، وَطُولَ أَنَاةٍ،",
+   "textEn": "Put on therefore, as God’s chosen ones, holy and beloved, a heart of compassion, kindness, lowliness, humility, and perseverance;"
   },
   {
    "ref": "COL 3:14",
    "refAr": "كولوسي ٣: ١٤",
    "refEn": "Colossians 3:14",
-   "textAr": "وَعَلَى جَمِيعِ هَذِهِ ٱلْبَسُوا ٱلْمَحَبَّةَ ٱلَّتِي هِيَ رِبَاطُ ٱلْكَمَالِ."
+   "textAr": "وَعَلَى جَمِيعِ هَذِهِ ٱلْبَسُوا ٱلْمَحَبَّةَ ٱلَّتِي هِيَ رِبَاطُ ٱلْكَمَالِ.",
+   "textEn": "Above all these things, walk in love, which is the bond of perfection."
   },
   {
    "ref": "JOH 8:12",
    "refAr": "يوحنا ٨: ١٢",
    "refEn": "John 8:12",
-   "textAr": "ثُمَّ كَلَّمَهُمْ يَسُوعُ أَيْضًا قَائِلًا: «أَنَا هُوَ نُورُ ٱلْعَالَمِ. مَنْ يَتْبَعْنِي فَلَا يَمْشِي فِي ٱلظُّلْمَةِ بَلْ يَكُونُ لَهُ نُورُ ٱلْحَيَاةِ»."
+   "textAr": "ثُمَّ كَلَّمَهُمْ يَسُوعُ أَيْضًا قَائِلًا: «أَنَا هُوَ نُورُ ٱلْعَالَمِ. مَنْ يَتْبَعْنِي فَلَا يَمْشِي فِي ٱلظُّلْمَةِ بَلْ يَكُونُ لَهُ نُورُ ٱلْحَيَاةِ».",
+   "textEn": "Again, therefore, Jesus spoke to them, saying, “I am the light of the world. He who follows me will not walk in the darkness, but will have the light of life.”"
   },
   {
    "ref": "EPH 2:8",
    "refAr": "أفسس ٢: ٨",
    "refEn": "Ephesians 2:8",
-   "textAr": "لِأَنَّكُمْ بِٱلنِّعْمَةِ مُخَلَّصُونَ، بِٱلْإِيمَانِ، وَذَلِكَ لَيْسَ مِنْكُمْ. هُوَ عَطِيَّةُ ٱللهِ."
+   "textAr": "لِأَنَّكُمْ بِٱلنِّعْمَةِ مُخَلَّصُونَ، بِٱلْإِيمَانِ، وَذَلِكَ لَيْسَ مِنْكُمْ. هُوَ عَطِيَّةُ ٱللهِ.",
+   "textEn": "for by grace you have been saved through faith, and that not of yourselves; it is the gift of God,"
   },
   {
    "ref": "PSA 40:1",
    "refAr": "مزمور ٤٠: ١",
    "refEn": "Psalm 40:1",
-   "textAr": "لِإِمَامِ ٱلْمُغَنِّينَ. مَزْمُورٌ لِدَاوُدَ اِنْتِظَارًا ٱنْتَظَرْتُ ٱلرَّبَّ، فَمَالَ إِلَيَّ وَسَمِعَ صُرَاخِي،"
+   "textAr": "لِإِمَامِ ٱلْمُغَنِّينَ. مَزْمُورٌ لِدَاوُدَ اِنْتِظَارًا ٱنْتَظَرْتُ ٱلرَّبَّ، فَمَالَ إِلَيَّ وَسَمِعَ صُرَاخِي،",
+   "textEn": "For the Chief Musician. A Psalm by David. I waited patiently for the LORD. He turned to me, and heard my cry."
   },
   {
    "ref": "MAT 24:35",
    "refAr": "متى ٢٤: ٣٥",
    "refEn": "Matthew 24:35",
-   "textAr": "اَلسَّمَاءُ وَٱلْأَرْضُ تَزُولَانِ وَلَكِنَّ كَلَامِي لَا يَزُولُ."
+   "textAr": "اَلسَّمَاءُ وَٱلْأَرْضُ تَزُولَانِ وَلَكِنَّ كَلَامِي لَا يَزُولُ.",
+   "textEn": "Heaven and earth will pass away, but my words will not pass away."
   },
   {
    "ref": "JAM 4:7",
    "refAr": "يعقوب ٤: ٧",
    "refEn": "James 4:7",
-   "textAr": "فَٱخْضَعُوا لِلهِ. قَاوِمُوا إِبْلِيسَ فَيَهْرُبَ مِنْكُمْ."
+   "textAr": "فَٱخْضَعُوا لِلهِ. قَاوِمُوا إِبْلِيسَ فَيَهْرُبَ مِنْكُمْ.",
+   "textEn": "Be subject therefore to God. Resist the devil, and he will flee from you."
   },
   {
    "ref": "PSA 145:18",
    "refAr": "مزمور ١٤٥: ١٨",
    "refEn": "Psalm 145:18",
-   "textAr": "ٱلرَّبُّ قَرِيبٌ لِكُلِّ ٱلَّذِينَ يَدْعُونَهُ، ٱلَّذِينَ يَدْعُونَهُ بِٱلْحَقِّ."
+   "textAr": "ٱلرَّبُّ قَرِيبٌ لِكُلِّ ٱلَّذِينَ يَدْعُونَهُ، ٱلَّذِينَ يَدْعُونَهُ بِٱلْحَقِّ.",
+   "textEn": "The LORD is near to all those who call on him, to all who call on him in truth."
   },
   {
    "ref": "2CO 12:9",
    "refAr": "كورنثوس الثانية ١٢: ٩",
    "refEn": "2 Corinthians 12:9",
-   "textAr": "فَقَالَ لِي: «تَكْفِيكَ نِعْمَتِي، لِأَنَّ قُوَّتِي فِي ٱلضَّعْفِ تُكْمَلُ». فَبِكُلِّ سُرُورٍ أَفْتَخِرُ بِٱلْحَرِيِّ فِي ضَعَفَاتِي، لِكَيْ تَحِلَّ عَلَيَّ قُوَّةُ ٱلْمَسِيحِ."
+   "textAr": "فَقَالَ لِي: «تَكْفِيكَ نِعْمَتِي، لِأَنَّ قُوَّتِي فِي ٱلضَّعْفِ تُكْمَلُ». فَبِكُلِّ سُرُورٍ أَفْتَخِرُ بِٱلْحَرِيِّ فِي ضَعَفَاتِي، لِكَيْ تَحِلَّ عَلَيَّ قُوَّةُ ٱلْمَسِيحِ.",
+   "textEn": "He has said to me, “My grace is sufficient for you, for my power is made perfect in weakness.” Most gladly therefore I will rather glory in my weaknesses, that the power of Christ may rest on me."
   },
   {
    "ref": "PSA 19:1",
    "refAr": "مزمور ١٩: ١",
    "refEn": "Psalm 19:1",
-   "textAr": "لِإِمَامِ ٱلْمُغَنِّينَ. مَزْمُورٌ لِدَاوُدَ اَلسَّمَاوَاتُ تُحَدِّثُ بِمَجْدِ ٱللهِ، وَٱلْفَلَكُ يُخْبِرُ بِعَمَلِ يَدَيْهِ."
+   "textAr": "لِإِمَامِ ٱلْمُغَنِّينَ. مَزْمُورٌ لِدَاوُدَ اَلسَّمَاوَاتُ تُحَدِّثُ بِمَجْدِ ٱللهِ، وَٱلْفَلَكُ يُخْبِرُ بِعَمَلِ يَدَيْهِ.",
+   "textEn": "For the Chief Musician. A Psalm by David. The heavens declare the glory of God. The expanse shows his handiwork."
   },
   {
    "ref": "PSA 30:5",
    "refAr": "مزمور ٣٠: ٥",
    "refEn": "Psalm 30:5",
-   "textAr": "لِأَنَّ لِلَحْظَةٍ غَضَبَهُ. حَيَاةٌ فِي رِضَاهُ. عِنْدَ ٱلْمَسَاءِ يَبِيتُ ٱلْبُكَاءُ، وَفِي ٱلصَّبَاحِ تَرَنُّمٌ."
+   "textAr": "لِأَنَّ لِلَحْظَةٍ غَضَبَهُ. حَيَاةٌ فِي رِضَاهُ. عِنْدَ ٱلْمَسَاءِ يَبِيتُ ٱلْبُكَاءُ، وَفِي ٱلصَّبَاحِ تَرَنُّمٌ.",
+   "textEn": "For his anger is but for a moment. His favour is for a lifetime. Weeping may stay for the night, but joy comes in the morning."
   },
   {
    "ref": "MAT 4:4",
    "refAr": "متى ٤: ٤",
    "refEn": "Matthew 4:4",
-   "textAr": "فَأَجَابَ وَقَالَ: «مَكْتُوبٌ: لَيْسَ بِٱلْخُبْزِ وَحْدَهُ يَحْيَا ٱلْإِنْسَانُ، بَلْ بِكُلِّ كَلِمَةٍ تَخْرُجُ مِنْ فَمِ ٱللهِ»."
+   "textAr": "فَأَجَابَ وَقَالَ: «مَكْتُوبٌ: لَيْسَ بِٱلْخُبْزِ وَحْدَهُ يَحْيَا ٱلْإِنْسَانُ، بَلْ بِكُلِّ كَلِمَةٍ تَخْرُجُ مِنْ فَمِ ٱللهِ».",
+   "textEn": "But he answered, “It is written, ‘Man shall not live by bread alone, but by every word that proceeds out of God’s mouth.’”"
   },
   {
    "ref": "PHI 3:14",
    "refAr": "فيلبي ٣: ١٤",
    "refEn": "Philippians 3:14",
-   "textAr": "أَسْعَى نَحْوَ ٱلْغَرَضِ لِأَجْلِ جَعَالَةِ دَعْوَةِ ٱللهِ ٱلْعُلْيَا فِي ٱلْمَسِيحِ يَسُوعَ."
+   "textAr": "أَسْعَى نَحْوَ ٱلْغَرَضِ لِأَجْلِ جَعَالَةِ دَعْوَةِ ٱللهِ ٱلْعُلْيَا فِي ٱلْمَسِيحِ يَسُوعَ.",
+   "textEn": "I press on towards the goal for the prize of the high calling of God in Christ Jesus."
   },
   {
    "ref": "JOH 16:24",
    "refAr": "يوحنا ١٦: ٢٤",
    "refEn": "John 16:24",
-   "textAr": "إِلَى ٱلْآنَ لَمْ تَطْلُبُوا شَيْئًا بِٱسْمِي. اُطْلُبُوا تَأْخُذُوا، لِيَكُونَ فَرَحُكُمْ كَامِلًا."
+   "textAr": "إِلَى ٱلْآنَ لَمْ تَطْلُبُوا شَيْئًا بِٱسْمِي. اُطْلُبُوا تَأْخُذُوا، لِيَكُونَ فَرَحُكُمْ كَامِلًا.",
+   "textEn": "Until now, you have asked nothing in my name. Ask, and you will receive, that your joy may be made full."
   },
   {
    "ref": "PSA 119:9",
    "refAr": "مزمور ١١٩: ٩",
    "refEn": "Psalm 119:9",
-   "textAr": "بِمَ يُزَكِّي ٱلشَّابُّ طَرِيقَهُ؟ بِحِفْظِهِ إِيَّاهُ حَسَبَ كَلَامِكَ."
+   "textAr": "بِمَ يُزَكِّي ٱلشَّابُّ طَرِيقَهُ؟ بِحِفْظِهِ إِيَّاهُ حَسَبَ كَلَامِكَ.",
+   "textEn": "How can a young man keep his way pure? By living according to your word."
   },
   {
    "ref": "PRO 18:10",
    "refAr": "أمثال ١٨: ١٠",
    "refEn": "Proverbs 18:10",
-   "textAr": "اِسْمُ ٱلرَّبِّ بُرْجٌ حَصِينٌ، يَرْكُضُ إِلَيْهِ ٱلصِّدِّيقُ وَيَتَمَنَّعُ."
+   "textAr": "اِسْمُ ٱلرَّبِّ بُرْجٌ حَصِينٌ، يَرْكُضُ إِلَيْهِ ٱلصِّدِّيقُ وَيَتَمَنَّعُ.",
+   "textEn": "The LORD’s name is a strong tower: the righteous run to him, and are safe."
   },
   {
    "ref": "COL 3:23",
    "refAr": "كولوسي ٣: ٢٣",
    "refEn": "Colossians 3:23",
-   "textAr": "وَكُلُّ مَا فَعَلْتُمْ، فَٱعْمَلُوا مِنَ ٱلْقَلْبِ، كَمَا لِلرَّبِّ لَيْسَ لِلنَّاسِ،"
+   "textAr": "وَكُلُّ مَا فَعَلْتُمْ، فَٱعْمَلُوا مِنَ ٱلْقَلْبِ، كَمَا لِلرَّبِّ لَيْسَ لِلنَّاسِ،",
+   "textEn": "And whatever you do, work heartily, as for the Lord and not for men,"
   },
   {
    "ref": "PHI 4:19",
    "refAr": "فيلبي ٤: ١٩",
    "refEn": "Philippians 4:19",
-   "textAr": "فَيَمْلَأُ إِلَهِي كُلَّ ٱحْتِيَاجِكُمْ بِحَسَبِ غِنَاهُ فِي ٱلْمَجْدِ فِي ٱلْمَسِيحِ يَسُوعَ."
+   "textAr": "فَيَمْلَأُ إِلَهِي كُلَّ ٱحْتِيَاجِكُمْ بِحَسَبِ غِنَاهُ فِي ٱلْمَجْدِ فِي ٱلْمَسِيحِ يَسُوعَ.",
+   "textEn": "My God will supply every need of yours according to his riches in glory in Christ Jesus."
   },
   {
    "ref": "PHI 4:7",
    "refAr": "فيلبي ٤: ٧",
    "refEn": "Philippians 4:7",
-   "textAr": "وَسَلَامُ ٱللهِ ٱلَّذِي يَفُوقُ كُلَّ عَقْلٍ، يَحْفَظُ قُلُوبَكُمْ وَأَفْكَارَكُمْ فِي ٱلْمَسِيحِ يَسُوعَ."
+   "textAr": "وَسَلَامُ ٱللهِ ٱلَّذِي يَفُوقُ كُلَّ عَقْلٍ، يَحْفَظُ قُلُوبَكُمْ وَأَفْكَارَكُمْ فِي ٱلْمَسِيحِ يَسُوعَ.",
+   "textEn": "And the peace of God, which surpasses all understanding, will guard your hearts and your thoughts in Christ Jesus."
   },
   {
    "ref": "ROM 15:4",
    "refAr": "رومية ١٥: ٤",
    "refEn": "Romans 15:4",
-   "textAr": "لِأَنَّ كُلَّ مَا سَبَقَ فَكُتِبَ كُتِبَ لِأَجْلِ تَعْلِيمِنَا، حَتَّى بِٱلصَّبْرِ وَٱلتَّعْزِيَةِ بِمَا فِي ٱلْكُتُبِ يَكُونُ لَنَا رَجَاءٌ."
+   "textAr": "لِأَنَّ كُلَّ مَا سَبَقَ فَكُتِبَ كُتِبَ لِأَجْلِ تَعْلِيمِنَا، حَتَّى بِٱلصَّبْرِ وَٱلتَّعْزِيَةِ بِمَا فِي ٱلْكُتُبِ يَكُونُ لَنَا رَجَاءٌ.",
+   "textEn": "For whatever things were written before were written for our learning, that through perseverance and through encouragement of the Scriptures we might have hope."
   },
   {
    "ref": "2TH 3:16",
    "refAr": "تسالونيكي الثانية ٣: ١٦",
    "refEn": "2 Thessalonians 3:16",
-   "textAr": "وَرَبُّ ٱلسَّلَامِ نَفْسُهُ يُعْطِيكُمُ ٱلسَّلَامَ دَائِمًا مِنْ كُلِّ وَجْهٍ. ٱلرَّبُّ مَعَ جَمِيعِكُمْ."
+   "textAr": "وَرَبُّ ٱلسَّلَامِ نَفْسُهُ يُعْطِيكُمُ ٱلسَّلَامَ دَائِمًا مِنْ كُلِّ وَجْهٍ. ٱلرَّبُّ مَعَ جَمِيعِكُمْ.",
+   "textEn": "Now may the Lord of peace himself give you peace at all times in all ways. The Lord be with you all."
   },
   {
    "ref": "ROM 3:24",
    "refAr": "رومية ٣: ٢٤",
    "refEn": "Romans 3:24",
-   "textAr": "مُتَبَرِّرِينَ مَجَّانًا بِنِعْمَتِهِ بِٱلْفِدَاءِ ٱلَّذِي بِيَسُوعَ ٱلْمَسِيحِ،"
+   "textAr": "مُتَبَرِّرِينَ مَجَّانًا بِنِعْمَتِهِ بِٱلْفِدَاءِ ٱلَّذِي بِيَسُوعَ ٱلْمَسِيحِ،",
+   "textEn": "being justified freely by his grace through the redemption that is in Christ Jesus,"
   },
   {
    "ref": "EPH 3:20",
    "refAr": "أفسس ٣: ٢٠",
    "refEn": "Ephesians 3:20",
-   "textAr": "وَٱلْقَادِرُ أَنْ يَفْعَلَ فَوْقَ كُلِّ شَيْءٍ، أَكْثَرَ جِدًّا مِمَّا نَطْلُبُ أَوْ نَفْتَكِرُ، بِحَسَبِ ٱلْقُوَّةِ ٱلَّتِي تَعْمَلُ فِينَا،"
+   "textAr": "وَٱلْقَادِرُ أَنْ يَفْعَلَ فَوْقَ كُلِّ شَيْءٍ، أَكْثَرَ جِدًّا مِمَّا نَطْلُبُ أَوْ نَفْتَكِرُ، بِحَسَبِ ٱلْقُوَّةِ ٱلَّتِي تَعْمَلُ فِينَا،",
+   "textEn": "Now to him who is able to do exceedingly abundantly above all that we ask or think, according to the power that works in us,"
   },
   {
    "ref": "PRO 10:12",
    "refAr": "أمثال ١٠: ١٢",
    "refEn": "Proverbs 10:12",
-   "textAr": "اَلْبُغْضَةُ تُهَيِّجُ خُصُومَاتٍ، وَٱلْمَحَبَّةُ تَسْتُرُ كُلَّ ٱلذُّنُوبِ."
+   "textAr": "اَلْبُغْضَةُ تُهَيِّجُ خُصُومَاتٍ، وَٱلْمَحَبَّةُ تَسْتُرُ كُلَّ ٱلذُّنُوبِ.",
+   "textEn": "Hatred stirs up strife, but love covers all wrongs."
   },
   {
    "ref": "JOH 3:17",
    "refAr": "يوحنا ٣: ١٧",
    "refEn": "John 3:17",
-   "textAr": "لِأَنَّهُ لَمْ يُرْسِلِ ٱللهُ ٱبْنَهُ إِلَى ٱلْعَالَمِ لِيَدِينَ ٱلْعَالَمَ، بَلْ لِيَخْلُصَ بِهِ ٱلْعَالَمُ."
+   "textAr": "لِأَنَّهُ لَمْ يُرْسِلِ ٱللهُ ٱبْنَهُ إِلَى ٱلْعَالَمِ لِيَدِينَ ٱلْعَالَمَ، بَلْ لِيَخْلُصَ بِهِ ٱلْعَالَمُ.",
+   "textEn": "For God didn’t send his Son into the world to judge the world, but that the world should be saved through him."
   },
   {
    "ref": "JAM 1:12",
    "refAr": "يعقوب ١: ١٢",
    "refEn": "James 1:12",
-   "textAr": "طُوبَى لِلرَّجُلِ ٱلَّذِي يَحْتَمِلُ ٱلتَّجْرِبَةَ، لِأَنَّهُ إِذَا تَزَكَّى يَنَالُ «إِكْلِيلَ ٱلْحَيَاةِ» ٱلَّذِي وَعَدَ بِهِ ٱلرَّبُّ لِلَّذِينَ يُحِبُّونَهُ."
+   "textAr": "طُوبَى لِلرَّجُلِ ٱلَّذِي يَحْتَمِلُ ٱلتَّجْرِبَةَ، لِأَنَّهُ إِذَا تَزَكَّى يَنَالُ «إِكْلِيلَ ٱلْحَيَاةِ» ٱلَّذِي وَعَدَ بِهِ ٱلرَّبُّ لِلَّذِينَ يُحِبُّونَهُ.",
+   "textEn": "Blessed is a person who endures temptation, for when he has been approved, he will receive the crown of life which the Lord promised to those who love him."
   },
   {
    "ref": "MAT 5:7",
    "refAr": "متى ٥: ٧",
    "refEn": "Matthew 5:7",
-   "textAr": "طُوبَى لِلرُّحَمَاءِ، لِأَنَّهُمْ يُرْحَمُونَ."
+   "textAr": "طُوبَى لِلرُّحَمَاءِ، لِأَنَّهُمْ يُرْحَمُونَ.",
+   "textEn": "Blessed are the merciful, for they shall obtain mercy."
   },
   {
    "ref": "2CO 9:7",
    "refAr": "كورنثوس الثانية ٩: ٧",
    "refEn": "2 Corinthians 9:7",
-   "textAr": "كُلُّ وَاحِدٍ كَمَا يَنْوِي بِقَلْبِهِ، لَيْسَ عَنْ حُزْنٍ أَوِ ٱضْطِرَارٍ. لِأَنَّ ٱلْمُعْطِيَ ٱلْمَسْرُورَ يُحِبُّهُ ٱللهُ."
+   "textAr": "كُلُّ وَاحِدٍ كَمَا يَنْوِي بِقَلْبِهِ، لَيْسَ عَنْ حُزْنٍ أَوِ ٱضْطِرَارٍ. لِأَنَّ ٱلْمُعْطِيَ ٱلْمَسْرُورَ يُحِبُّهُ ٱللهُ.",
+   "textEn": "Let each man give according as he has determined in his heart, not grudgingly or under compulsion, for God loves a cheerful giver."
   },
   {
    "ref": "MAT 6:6",
    "refAr": "متى ٦: ٦",
    "refEn": "Matthew 6:6",
-   "textAr": "وَأَمَّا أَنْتَ فَمَتَى صَلَّيْتَ فَٱدْخُلْ إِلَى مِخْدَعِكَ وَأَغْلِقْ بَابَكَ، وَصَلِّ إِلَى أَبِيكَ ٱلَّذِي فِي ٱلْخَفَاءِ. فَأَبُوكَ ٱلَّذِي يَرَى فِي ٱلْخَفَاءِ يُجَازِيكَ عَلَانِيَةً."
+   "textAr": "وَأَمَّا أَنْتَ فَمَتَى صَلَّيْتَ فَٱدْخُلْ إِلَى مِخْدَعِكَ وَأَغْلِقْ بَابَكَ، وَصَلِّ إِلَى أَبِيكَ ٱلَّذِي فِي ٱلْخَفَاءِ. فَأَبُوكَ ٱلَّذِي يَرَى فِي ٱلْخَفَاءِ يُجَازِيكَ عَلَانِيَةً.",
+   "textEn": "But you, when you pray, enter into your inner room, and having shut your door, pray to your Father who is in secret; and your Father who sees in secret will reward you openly."
   },
   {
    "ref": "JOH 17:3",
    "refAr": "يوحنا ١٧: ٣",
    "refEn": "John 17:3",
-   "textAr": "وَهَذِهِ هِيَ ٱلْحَيَاةُ ٱلْأَبَدِيَّةُ: أَنْ يَعْرِفُوكَ أَنْتَ ٱلْإِلَهَ ٱلْحَقِيقِيَّ وَحْدَكَ وَيَسُوعَ ٱلْمَسِيحَ ٱلَّذِي أَرْسَلْتَهُ."
+   "textAr": "وَهَذِهِ هِيَ ٱلْحَيَاةُ ٱلْأَبَدِيَّةُ: أَنْ يَعْرِفُوكَ أَنْتَ ٱلْإِلَهَ ٱلْحَقِيقِيَّ وَحْدَكَ وَيَسُوعَ ٱلْمَسِيحَ ٱلَّذِي أَرْسَلْتَهُ.",
+   "textEn": "This is eternal life, that they should know you, the only true God, and him whom you sent, Jesus Christ."
   },
   {
    "ref": "PSA 91:11",
    "refAr": "مزمور ٩١: ١١",
    "refEn": "Psalm 91:11",
-   "textAr": "لِأَنَّهُ يُوصِي مَلَائِكَتَهُ بِكَ لِكَيْ يَحْفَظُوكَ فِي كُلِّ طُرُقِكَ."
+   "textAr": "لِأَنَّهُ يُوصِي مَلَائِكَتَهُ بِكَ لِكَيْ يَحْفَظُوكَ فِي كُلِّ طُرُقِكَ.",
+   "textEn": "For he will put his angels in charge of you, to guard you in all your ways."
   },
   {
    "ref": "JOH 1:1",
    "refAr": "يوحنا ١: ١",
    "refEn": "John 1:1",
-   "textAr": "فِي ٱلْبَدْءِ كَانَ ٱلْكَلِمَةُ، وَٱلْكَلِمَةُ كَانَ عِنْدَ ٱللهِ، وَكَانَ ٱلْكَلِمَةُ ٱللهَ."
+   "textAr": "فِي ٱلْبَدْءِ كَانَ ٱلْكَلِمَةُ، وَٱلْكَلِمَةُ كَانَ عِنْدَ ٱللهِ، وَكَانَ ٱلْكَلِمَةُ ٱللهَ.",
+   "textEn": "In the beginning was the Word, and the Word was with God, and the Word was God."
   },
   {
    "ref": "ROM 12:2",
    "refAr": "رومية ١٢: ٢",
    "refEn": "Romans 12:2",
-   "textAr": "وَلَا تُشَاكِلُوا هَذَا ٱلدَّهْرَ، بَلْ تَغَيَّرُوا عَنْ شَكْلِكُمْ بِتَجْدِيدِ أَذْهَانِكُمْ، لِتَخْتَبِرُوا مَا هِيَ إِرَادَةُ ٱللهِ: ٱلصَّالِحَةُ ٱلْمَرْضِيَّةُ ٱلْكَامِلَةُ."
+   "textAr": "وَلَا تُشَاكِلُوا هَذَا ٱلدَّهْرَ، بَلْ تَغَيَّرُوا عَنْ شَكْلِكُمْ بِتَجْدِيدِ أَذْهَانِكُمْ، لِتَخْتَبِرُوا مَا هِيَ إِرَادَةُ ٱللهِ: ٱلصَّالِحَةُ ٱلْمَرْضِيَّةُ ٱلْكَامِلَةُ.",
+   "textEn": "Don’t be conformed to this world, but be transformed by the renewing of your mind, so that you may prove what is the good, well-pleasing, and perfect will of God."
   },
   {
    "ref": "HEB 13:6",
    "refAr": "العبرانيين ١٣: ٦",
    "refEn": "Hebrews 13:6",
-   "textAr": "حَتَّى إِنَّنَا نَقُولُ وَاثِقِينَ: «ٱلرَّبُّ مُعِينٌ لِي فَلَا أَخَافُ. مَاذَا يَصْنَعُ بِي إِنْسَانٌ؟»."
+   "textAr": "حَتَّى إِنَّنَا نَقُولُ وَاثِقِينَ: «ٱلرَّبُّ مُعِينٌ لِي فَلَا أَخَافُ. مَاذَا يَصْنَعُ بِي إِنْسَانٌ؟».",
+   "textEn": "So that with good courage we say, “The Lord is my helper. I will not fear. What can man do to me?”"
   },
   {
    "ref": "PSA 51:12",
    "refAr": "مزمور ٥١: ١٢",
    "refEn": "Psalm 51:12",
-   "textAr": "رُدَّ لِي بَهْجَةَ خَلَاصِكَ، وَبِرُوحٍ مُنْتَدِبَةٍ ٱعْضُدْنِي."
+   "textAr": "رُدَّ لِي بَهْجَةَ خَلَاصِكَ، وَبِرُوحٍ مُنْتَدِبَةٍ ٱعْضُدْنِي.",
+   "textEn": "Restore to me the joy of your salvation. Uphold me with a willing spirit."
   },
   {
    "ref": "1JO 2:17",
    "refAr": "يوحنا الأولى ٢: ١٧",
    "refEn": "1 John 2:17",
-   "textAr": "وَٱلْعَالَمُ يَمْضِي وَشَهْوَتُهُ، وَأَمَّا ٱلَّذِي يَصْنَعُ مَشِيئَةَ ٱللهِ فَيَثْبُتُ إِلَى ٱلْأَبَدِ."
+   "textAr": "وَٱلْعَالَمُ يَمْضِي وَشَهْوَتُهُ، وَأَمَّا ٱلَّذِي يَصْنَعُ مَشِيئَةَ ٱللهِ فَيَثْبُتُ إِلَى ٱلْأَبَدِ.",
+   "textEn": "The world is passing away with its lusts, but he who does God’s will remains forever."
   },
   {
    "ref": "PSA 25:5",
    "refAr": "مزمور ٢٥: ٥",
    "refEn": "Psalm 25:5",
-   "textAr": "دَرِّبْنِي فِي حَقِّكَ وَعَلِّمْنِي، لِأَنَّكَ أَنْتَ إِلَهُ خَلَاصِي. إِيَّاكَ ٱنْتَظَرْتُ ٱلْيَوْمَ كُلَّهُ."
+   "textAr": "دَرِّبْنِي فِي حَقِّكَ وَعَلِّمْنِي، لِأَنَّكَ أَنْتَ إِلَهُ خَلَاصِي. إِيَّاكَ ٱنْتَظَرْتُ ٱلْيَوْمَ كُلَّهُ.",
+   "textEn": "Guide me in your truth, and teach me, for you are the God of my salvation. I wait for you all day long."
   },
   {
    "ref": "PSA 37:5",
    "refAr": "مزمور ٣٧: ٥",
    "refEn": "Psalm 37:5",
-   "textAr": "سَلِّمْ لِلرَّبِّ طَرِيقَكَ وَٱتَّكِلْ عَلَيْهِ وَهُوَ يُجْرِي،"
+   "textAr": "سَلِّمْ لِلرَّبِّ طَرِيقَكَ وَٱتَّكِلْ عَلَيْهِ وَهُوَ يُجْرِي،",
+   "textEn": "Commit your way to the LORD. Trust also in him, and he will do this:"
   },
   {
    "ref": "HEB 4:15",
    "refAr": "العبرانيين ٤: ١٥",
    "refEn": "Hebrews 4:15",
-   "textAr": "لِأَنْ لَيْسَ لَنَا رَئِيسُ كَهَنَةٍ غَيْرُ قَادِرٍ أَنْ يَرْثِيَ لِضَعَفَاتِنَا، بَلْ مُجَرَّبٌ فِي كُلِّ شَيْءٍ مِثْلُنَا، بِلَا خَطِيَّةٍ."
+   "textAr": "لِأَنْ لَيْسَ لَنَا رَئِيسُ كَهَنَةٍ غَيْرُ قَادِرٍ أَنْ يَرْثِيَ لِضَعَفَاتِنَا، بَلْ مُجَرَّبٌ فِي كُلِّ شَيْءٍ مِثْلُنَا، بِلَا خَطِيَّةٍ.",
+   "textEn": "For we don’t have a high priest who can’t be touched with the feeling of our infirmities, but one who has been in all points tempted like we are, yet without sin."
   },
   {
    "ref": "PSA 29:11",
    "refAr": "مزمور ٢٩: ١١",
    "refEn": "Psalm 29:11",
-   "textAr": "ٱلرَّبُّ يُعْطِي عِزًّا لِشَعْبِهِ. ٱلرَّبُّ يُبَارِكُ شَعْبَهُ بِٱلسَّلَامِ."
+   "textAr": "ٱلرَّبُّ يُعْطِي عِزًّا لِشَعْبِهِ. ٱلرَّبُّ يُبَارِكُ شَعْبَهُ بِٱلسَّلَامِ.",
+   "textEn": "The LORD will give strength to his people. The LORD will bless his people with peace."
   },
   {
    "ref": "PSA 103:1",
    "refAr": "مزمور ١٠٣: ١",
    "refEn": "Psalm 103:1",
-   "textAr": "لِدَاوُدَ بَارِكِي يَا نَفْسِي ٱلرَّبَّ، وَكُلُّ مَا فِي بَاطِنِي لِيُبَارِكِ ٱسْمَهُ ٱلْقُدُّوسَ."
+   "textAr": "لِدَاوُدَ بَارِكِي يَا نَفْسِي ٱلرَّبَّ، وَكُلُّ مَا فِي بَاطِنِي لِيُبَارِكِ ٱسْمَهُ ٱلْقُدُّوسَ.",
+   "textEn": "By David. Praise the LORD, my soul! All that is within me, praise his holy name!"
   },
   {
    "ref": "PSA 73:26",
    "refAr": "مزمور ٧٣: ٢٦",
    "refEn": "Psalm 73:26",
-   "textAr": "قَدْ فَنِيَ لَحْمِي وَقَلْبِي. صَخْرَةُ قَلْبِي وَنَصِيبِي ٱللهُ إِلَى ٱلدَّهْرِ."
+   "textAr": "قَدْ فَنِيَ لَحْمِي وَقَلْبِي. صَخْرَةُ قَلْبِي وَنَصِيبِي ٱللهُ إِلَى ٱلدَّهْرِ.",
+   "textEn": "My flesh and my heart fails, but God is the strength of my heart and my portion forever."
   },
   {
    "ref": "ROM 8:28",
    "refAr": "رومية ٨: ٢٨",
    "refEn": "Romans 8:28",
-   "textAr": "وَنَحْنُ نَعْلَمُ أَنَّ كُلَّ ٱلْأَشْيَاءِ تَعْمَلُ مَعًا لِلْخَيْرِ لِلَّذِينَ يُحِبُّونَ ٱللهَ، ٱلَّذِينَ هُمْ مَدْعُوُّونَ حَسَبَ قَصْدِهِ."
+   "textAr": "وَنَحْنُ نَعْلَمُ أَنَّ كُلَّ ٱلْأَشْيَاءِ تَعْمَلُ مَعًا لِلْخَيْرِ لِلَّذِينَ يُحِبُّونَ ٱللهَ، ٱلَّذِينَ هُمْ مَدْعُوُّونَ حَسَبَ قَصْدِهِ.",
+   "textEn": "We know that all things work together for good for those who love God, for those who are called according to his purpose."
   },
   {
    "ref": "MAT 5:9",
    "refAr": "متى ٥: ٩",
    "refEn": "Matthew 5:9",
-   "textAr": "طُوبَى لِصَانِعِي ٱلسَّلَامِ، لِأَنَّهُمْ أَبْنَاءَ ٱللهِ يُدْعَوْنَ."
+   "textAr": "طُوبَى لِصَانِعِي ٱلسَّلَامِ، لِأَنَّهُمْ أَبْنَاءَ ٱللهِ يُدْعَوْنَ.",
+   "textEn": "Blessed are the peacemakers, for they shall be called children of God."
   },
   {
    "ref": "PSA 121:1",
    "refAr": "مزمور ١٢١: ١",
    "refEn": "Psalm 121:1",
-   "textAr": "تَرْنِيمَةُ ٱلْمَصَاعِدِ أَرْفَعُ عَيْنَيَّ إِلَى ٱلْجِبَالِ، مِنْ حَيْثُ يَأْتِي عَوْنِي!"
+   "textAr": "تَرْنِيمَةُ ٱلْمَصَاعِدِ أَرْفَعُ عَيْنَيَّ إِلَى ٱلْجِبَالِ، مِنْ حَيْثُ يَأْتِي عَوْنِي!",
+   "textEn": "A Song of Ascents. I will lift up my eyes to the hills. Where does my help come from?"
   },
   {
    "ref": "1JO 5:14",
    "refAr": "يوحنا الأولى ٥: ١٤",
    "refEn": "1 John 5:14",
-   "textAr": "وَهَذِهِ هِيَ ٱلثِّقَةُ ٱلَّتِي لَنَا عِنْدَهُ: أَنَّهُ إِنْ طَلَبْنَا شَيْئًا حَسَبَ مَشِيئَتِهِ يَسْمَعُ لَنَا."
+   "textAr": "وَهَذِهِ هِيَ ٱلثِّقَةُ ٱلَّتِي لَنَا عِنْدَهُ: أَنَّهُ إِنْ طَلَبْنَا شَيْئًا حَسَبَ مَشِيئَتِهِ يَسْمَعُ لَنَا.",
+   "textEn": "This is the boldness which we have towards him, that if we ask anything according to his will, he listens to us."
   },
   {
    "ref": "1JO 4:10",
    "refAr": "يوحنا الأولى ٤: ١٠",
    "refEn": "1 John 4:10",
-   "textAr": "فِي هَذَا هِيَ ٱلْمَحَبَّةُ: لَيْسَ أَنَّنَا نَحْنُ أَحْبَبْنَا ٱللهَ، بَلْ أَنَّهُ هُوَ أَحَبَّنَا، وَأَرْسَلَ ٱبْنَهُ كَفَّارَةً لِخَطَايَانَا."
+   "textAr": "فِي هَذَا هِيَ ٱلْمَحَبَّةُ: لَيْسَ أَنَّنَا نَحْنُ أَحْبَبْنَا ٱللهَ، بَلْ أَنَّهُ هُوَ أَحَبَّنَا، وَأَرْسَلَ ٱبْنَهُ كَفَّارَةً لِخَطَايَانَا.",
+   "textEn": "In this is love, not that we loved God, but that he loved us, and sent his Son as the atoning sacrifice for our sins."
   },
   {
    "ref": "EPH 4:26",
    "refAr": "أفسس ٤: ٢٦",
    "refEn": "Ephesians 4:26",
-   "textAr": "اِغْضَبُوا وَلَا تُخْطِئُوا. لَا تَغْرُبِ ٱلشَّمْسُ عَلَى غَيْظِكُمْ،"
+   "textAr": "اِغْضَبُوا وَلَا تُخْطِئُوا. لَا تَغْرُبِ ٱلشَّمْسُ عَلَى غَيْظِكُمْ،",
+   "textEn": "“Be angry, and don’t sin.” Don’t let the sun go down on your wrath,"
   },
   {
    "ref": "MAT 6:34",
    "refAr": "متى ٦: ٣٤",
    "refEn": "Matthew 6:34",
-   "textAr": "فَلَا تَهْتَمُّوا لِلْغَدِ، لِأَنَّ ٱلْغَدَ يَهْتَمُّ بِمَا لِنَفْسِهِ. يَكْفِي ٱلْيَوْمَ شَرُّهُ."
+   "textAr": "فَلَا تَهْتَمُّوا لِلْغَدِ، لِأَنَّ ٱلْغَدَ يَهْتَمُّ بِمَا لِنَفْسِهِ. يَكْفِي ٱلْيَوْمَ شَرُّهُ.",
+   "textEn": "Therefore don’t be anxious for tomorrow, for tomorrow will be anxious for itself. Each day’s own evil is sufficient."
   }
  ]
 }

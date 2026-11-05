@@ -530,6 +530,8 @@ const Map<String, List<String>> _strings = {
   'dailyVerseModeFixed': ['آية ثابتة أختارها', 'A fixed verse I choose'],
   'dailyVerseText': ['نص الآية (بالعربية)', 'Verse text (Arabic)'],
   'dailyVerseRef': ['الشاهد (مثال: يوحنا ٣: ١٦)', 'Reference (e.g. يوحنا ٣: ١٦)'],
+  'dailyVerseTextEn': ['نص الآية بالإنجليزية (اختياري، يظهر في الموقع الإنجليزي)', 'Verse text in English (optional, for the English site)'],
+  'dailyVerseRefEn': ['الشاهد بالإنجليزية (اختياري، مثال: John 3:16)', 'English reference (optional, e.g. John 3:16)'],
   'dailyVerseHint': ['التدوير اليومي يختار من ٣٦٦ آية من ترجمة فاندايك (ملكية عامة)، وتتغير الآية مع بداية اليوم الكنسي (١٨:٠٠ افتراضيًا، أو الغروب حسب «اليوم والبث المباشر»).',
       'Daily rotation picks from 366 verses of the Van Dyck translation (public domain); the verse changes at the start of the liturgical day (18:00 by default, or sunset — see "Today & live stream").'],
   'errorReportingTitle': ['تقارير الأخطاء', 'Error reports'],

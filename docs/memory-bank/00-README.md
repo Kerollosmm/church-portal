@@ -54,7 +54,8 @@ the palette (ADR-043); PR #35 liturgical web loading screen (seal, church name, 
 with the Coptic date and a live badge above the app bar, on the palette's title-band roles (ADR-044); PR #38 simulation
 fixes — every active season's service on the next-service card, programme while «يُقام الآن», top event falls back to
 tonight's programme service, assistant grounds programme / church events / live link / paused weddings, seed templates
-never mix into a season with real services (ADR-045)).
+never mix into a season with real services (ADR-045); PR #40 English verse of the day — bundled public-domain WEB
+(British Edition) text, optional English for the admin's fixed and season verses (ADR-047)).
 
 > **Golden rule:** read this folder before changing anything, and update it in the same PR as every change that
 > alters behaviour, data shape, rules, workflows, content status or open tasks.

@@ -188,8 +188,7 @@ class DocEditorState extends State<DocEditor> {
   static const _rowSep = '\u001f';
 
   /// [FieldDef.encodedRows]: sub-field values in order, joined by U+001F.
-  static String _encodeRow(FieldDef f, Map<String, dynamic> row) =>
-      [for (final sf in f.subFields) '${row[sf.key] ?? ''}'.replaceAll(_rowSep, '')].join(_rowSep);
+  static String _encodeRow(FieldDef f, Map<String, dynamic> row) => encodeRowFields(f, row, _rowSep);
 
   static Map<String, dynamic> _decodeRow(FieldDef f, String s) {
     final parts = s.split(_rowSep);

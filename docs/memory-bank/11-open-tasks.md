@@ -1,7 +1,7 @@
 # 11 — Open tasks
 
 Tick items off (or delete them) in the PR that completes them, and add new ones as you discover them.
-Status as of 5 Nov 2026 (PR #38 / ADR-045; PR #35 / ADR-044; PR #37 / ADR-043; PR #33 / ADR-042; PR #32 / ADR-041; PR #31 / ADR-039–040; PR #30 / ADR-038; PR #25 re-checked against `d60261d`; earlier: PR #7–#24).
+Status as of 5 Nov 2026 (PR #40 / ADR-047; PR #38 / ADR-045; PR #35 / ADR-044; PR #37 / ADR-043; PR #33 / ADR-042; PR #32 / ADR-041; PR #31 / ADR-039–040; PR #30 / ADR-038; PR #25 re-checked against `d60261d`; earlier: PR #7–#24).
 
 ## Top open items (owner's list, 4 Nov 2026 — details in the sections below)
 
@@ -158,6 +158,9 @@ Status as of 5 Nov 2026 (PR #38 / ADR-045; PR #35 / ADR-044; PR #37 / ADR-043; P
 - [ ] Optional (ADR-043 cost): if the app-wide `seasons` listener matters, derive the active season from
       `settings/features.seasonPreset` only (no listener) when no season list is needed on the page.
 - [x] ADR number: PR #35 (splash / top bar) renumbered to ADR-044 after PR #37 took ADR-043.
+- [x] English verse of the day (live test 5 Nov 2026, rca #2): PR #40 / ADR-047 (WEB British Edition, admin English fields).
+- [ ] Owner (optional, ADR-047): add English text to the fixed verse / season verses in /admin when used — without it the
+      English site shows that verse in Arabic.
 
 ## Custom sections, pages & contact types (PR #18, ADR-027/028)
 

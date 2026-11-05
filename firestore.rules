@@ -682,13 +682,14 @@ service cloud.firestore {
 
     // Season verse sets (ADR-042): up to 40 'seasonKey␟textAr␟refAr'
     // strings, checked as one joined string (one regex).
+    // ADR-047: each row may end with an optional ␟textEn␟refEn tail.
     function validSeasonVerses(d) {
       return d.get('seasonVerses', null) == null
         || (d.seasonVerses is list && d.seasonVerses.size() <= 40
             && (d.seasonVerses.size() == 0
                 || d.seasonVerses.join('\u001e').matches(
-                     '(holy_week|pascha|nativity|epiphany|marian|fast|revival_maximus|revival_moses|summer)\x1f[^\x1f\x1e]{1,500}\x1f[^\x1f\x1e]{0,60}'
-                     + '(\x1e(holy_week|pascha|nativity|epiphany|marian|fast|revival_maximus|revival_moses|summer)\x1f[^\x1f\x1e]{1,500}\x1f[^\x1f\x1e]{0,60}){0,39}')));
+                     '(holy_week|pascha|nativity|epiphany|marian|fast|revival_maximus|revival_moses|summer)\x1f[^\x1f\x1e]{1,500}\x1f[^\x1f\x1e]{0,60}(\x1f[^\x1f\x1e]{0,500}\x1f[^\x1f\x1e]{0,60})?'
+                     + '(\x1e(holy_week|pascha|nativity|epiphany|marian|fast|revival_maximus|revival_moses|summer)\x1f[^\x1f\x1e]{1,500}\x1f[^\x1f\x1e]{0,60}(\x1f[^\x1f\x1e]{0,500}\x1f[^\x1f\x1e]{0,60})?){0,39}')));
     }
 
     // The applied season preset (ADR-042): which season, when, the ticked
@@ -907,11 +908,14 @@ service cloud.firestore {
 
     // Verse of the day: daily rotation or a fixed admin-entered verse (Arabic
     // text <= 500 chars, reference <= 60). On/off is sections.dailyVerse.
+    // ADR-047: optional English text / reference (written only when set).
     function validDailyVerse(v) {
-      return v is map && v.keys().hasOnly(['mode', 'textAr', 'refAr'])
+      return v is map && v.keys().hasOnly(['mode', 'textAr', 'refAr', 'textEn', 'refEn'])
         && v.get('mode', 'daily') in ['daily', 'fixed']
         && v.get('textAr', '') is string && v.get('refAr', '') is string
-        && (v.get('textAr', '') + '\u001f' + v.get('refAr', '')).matches('[^\\x1f]{0,500}\\x1f[^\\x1f]{0,60}');
+        && v.get('textEn', '') is string && v.get('refEn', '') is string
+        && (v.get('textAr', '') + '\u001f' + v.get('refAr', '') + '\u001f' + v.get('textEn', '') + '\u001f' + v.get('refEn', ''))
+             .matches('[^\\x1f]{0,500}\\x1f[^\\x1f]{0,60}\\x1f[^\\x1f]{0,500}\\x1f[^\\x1f]{0,60}');
     }
 
     // Footer options (FR-G-04).

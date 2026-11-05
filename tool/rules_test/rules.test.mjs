@@ -963,7 +963,7 @@ describe('Verse of the day (settings/features.dailyVerse + sections.dailyVerse)'
     const ok = { mode: 'daily', textAr: '', refAr: '' };
     for (const v of [
       'daily', null, { ...ok, mode: 'weekly' }, { ...ok, enabled: true }, { ...ok, textAr: 5 }, { ...ok, refAr: null },
-      { ...ok, textAr: 'x'.repeat(501) }, { ...ok, refAr: 'x'.repeat(61) }, { ...ok, textEn: 'hi' },
+      { ...ok, textAr: 'x'.repeat(501) }, { ...ok, refAr: 'x'.repeat(61) }, { ...ok, textFr: 'hi' },
       { ...ok, textAr: 'a\u001fb' },
     ]) {
       await assertFails(setDoc(ref, { dailyVerse: v }), JSON.stringify(v).slice(0, 80));
@@ -1804,6 +1804,38 @@ describe('ADR-045: topEventServices switch, day-event attachment', () => {
       [ev('https://drive.google.com/a\tb')], [ev('https://drive.google.com/a\nb')], [ev('https://drive.google.com/' + 'p'.repeat(480))],
     ]) {
       await assertFails(updateDoc(ref(), { dayEvents: bad }), JSON.stringify(bad).slice(0, 80));
+    }
+  });
+});
+
+describe('ADR-047: English text for the fixed verse and the season verses', () => {
+  const S = '\u001f';
+  const ref = () => doc(db(EDITOR), 'settings', 'features');
+
+  test('fixed verse: optional textEn / refEn, same limits as Arabic; old shape still valid', async () => {
+    await assertSucceeds(setDoc(ref(), { dailyVerse: { mode: 'fixed', textAr: 'ع', refAr: 'يو 3: 16', textEn: 'For God so loved', refEn: 'John 3:16' } }));
+    await assertSucceeds(setDoc(ref(), { dailyVerse: { mode: 'fixed', textAr: 'ع'.repeat(500), refAr: 'ي'.repeat(60),
+      textEn: 'e'.repeat(500), refEn: 'r'.repeat(60) } }));
+    await assertSucceeds(setDoc(ref(), { dailyVerse: { mode: 'fixed', textAr: 'ع', refAr: '' } }), 'no English keys');
+    const ok = { mode: 'fixed', textAr: 'ع', refAr: '' };
+    for (const v of [
+      { ...ok, textEn: 'e'.repeat(501) }, { ...ok, refEn: 'r'.repeat(61) }, { ...ok, textEn: 5 }, { ...ok, refEn: null },
+      { ...ok, textEn: 'a\u001fb' },
+    ]) {
+      await assertFails(setDoc(ref(), { dailyVerse: v }), JSON.stringify(v).slice(0, 80));
+    }
+  });
+
+  test('season verses: rows with or without the ␟textEn␟refEn tail; 40 full rows fit', async () => {
+    const row = (k, en = 'Behold, the Lamb of God', er = 'John 1:29') => [k, 'هوذا حمل الله', 'يو 1: 29', en, er].join(S);
+    await assertSucceeds(setDoc(ref(), { seasonVerses: [row('holy_week'), ['pascha', 'المسيح قام', ''].join(S), row('pascha', '', '')] }));
+    await assertSucceeds(updateDoc(ref(), { seasonVerses: Array.from({ length: 40 },
+      () => ['summer', 'آ'.repeat(500), 'ر'.repeat(60), 'e'.repeat(500), 'r'.repeat(60)].join(S)) }));
+    for (const bad of [
+      [row('holy_week', 'e'.repeat(501))], [row('holy_week', 'x', 'r'.repeat(61))], [row('holy_week') + S + 'x'],
+      [['holy_week', 'آية', '', 'only English text'].join(S)],
+    ]) {
+      await assertFails(updateDoc(ref(), { seasonVerses: bad }), JSON.stringify(bad).slice(0, 60));
     }
   });
 });

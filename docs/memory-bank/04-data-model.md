@@ -208,13 +208,14 @@ Existence of `settings/church` = "database is seeded" (see `03-architecture.md`)
   | `dayEvents` | list ≤ 20 of strings `date␟endDate␟start␟end␟titleAr␟titleEn␟speakerAr␟speakerEn␟topicAr␟topicEn␟noteAr␟noteEn␟link[␟attachmentUrl␟attachmentLabelAr␟attachmentLabelEn]` (U+001F; the 3 trailing fields are optional — PR #38, ADR-045: https PDF link and its button texts ≤ 80; date `YYYY-MM-DD` required, endDate optional, times `''`/HH:mm, titleAr 1–300, texts ≤ 300, notes ≤ 500, link `''` / path / http(s)) | `[]` |
   | `venues` | list ≤ 12 of strings `key␟labelAr␟labelEn` (key `[a-z0-9_-]{1,30}`, labelAr 1–80, labelEn ≤ 80) — PR #32, ADR-041 | missing / empty = `main` الكنيسة الكبرى, `lower` القاعة السفلية, `services` مبنى الخدمات |
   | `audiences` | same format — PR #32, ADR-041 | missing / empty = `general` عام, `youth` شباب, `children` أطفال |
-  | `seasonVerses` | list ≤ 40 of strings `seasonKey␟textAr␟refAr` (season key of `validSeason`, text 1–500, ref ≤ 60) — PR #33, ADR-042 | missing / empty = the general daily list always |
+  | `seasonVerses` | list ≤ 40 of strings `seasonKey␟textAr␟refAr`, optionally `␟textEn␟refEn` (ADR-047; season key of `validSeason`, text 1–500, ref ≤ 60, textEn ≤ 500, refEn ≤ 60) — PR #33, ADR-042 | missing / empty = the general daily list always |
   | `seasonPreset` | map `{seasonId, seasonKey, appliedAt, startsAt, endsAt, options[≤8, no duplicates], previous{seasonActive, replacesRegular, meetings, clinics, heroMotion, weddingBookingOff, liveUrl, liveEndsAt, attachmentUrl, attachmentLabelAr, attachmentLabelEn, theme}}` or null — written only by /admin «تجهيز الموسم» (PR #33, ADR-042; `startsAt`, option `theme` and `previous.theme` ADR-043) | none applied |
   | `weddingBookingOff` | bool — PR #33, ADR-042 | false (the wedding booking choice shows) |
 
 - PR #18 (ADR-027): `sections.customSections` (custom categories at `/section/*` + their menu entries) and
   `sections.customPages` (custom pages at `/page/*` + their menu entries); missing = on; seeded `true`.
-- `dailyVerse` (PR #16, ADR-024): map `{mode: 'daily'|'fixed' (default daily), textAr: string ≤500, refAr: string ≤60}`;
+- `dailyVerse` (PR #16, ADR-024): map `{mode: 'daily'|'fixed' (default daily), textAr: string ≤500, refAr: string ≤60,
+  textEn?: string ≤500, refEn?: string ≤60}` (English keys ADR-047, written only when set);
   missing map or keys = daily rotation; a fixed verse with empty text falls back to daily. On/off is the section
   **`sections.dailyVerse`** (missing = on; seeded `true`). The map is written only once it differs from the default or
   is already stored. Verse list: bundled asset `assets/verses/daily_verses.json` (not Firestore). Since PR #17 the
