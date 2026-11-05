@@ -57,8 +57,9 @@ tonight's programme service, assistant grounds programme / church events / live 
 never mix into a season with real services (ADR-045); PR #39 live-test fixes — top event only on the stored
 features, English title before boot, App Check lazy again, no public sample marks, Coptic date fallback, pope-visit
 images on Hosting (ADR-046); PR #40 English verse of the day — bundled public-domain WEB
-(British Edition) text, optional English for the admin's fixed and season verses (ADR-047); PR #42 season card
-timing — «يُقام الآن» names the services running now in other halls, overnight services and cross-midnight parallels,
+(British Edition) text, optional English for the admin's fixed and season verses (ADR-047); Docs PR: English
+documentation suite in `documentation/en/`, comprehensive project README overhaul with framework logos, and cross-references (ADR-048);
+PR #42 season card timing — «يُقام الآن» names the services running now in other halls, overnight services and cross-midnight parallels,
 a readable seasonal switch on every theme, the day-to-night handover tested minute by minute, admin 12-hour (AM/PM)
 time and date pickers, stored 24-hour (ADR-049)).
 
@@ -87,6 +88,7 @@ Related files outside this folder:
   `.github/copilot-instructions.md` point to it.
 - [`/README.md`](../../README.md) — human-oriented setup, admin guide, deploy and secrets.
 - [`/docs/CONTENT_SOURCES.md`](../CONTENT_SOURCES.md) — field → source → status for every seeded value.
+- [`/documentation/en/`](../../documentation/en/README.md) — **English** human documentation suite (Architecture, Operations runbook, Master Feature Reference).
 - [`/documentation/`](../../documentation/README.md) — **Arabic** documentation for the owner, church office and
   anyone joining: what every feature does for visitors, how to control it from `/admin` (real screen / switch
   labels), how it works technically, limits, plus `operations.md` (deploy, admins, seed safety, Sentry, common
