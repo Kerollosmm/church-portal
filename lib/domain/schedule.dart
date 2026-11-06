@@ -96,6 +96,20 @@ bool isSeasonActiveOnDay(Season s, tz.TZDateTime dayStart) {
 List<Season> activeSeasonsAt(Iterable<Season> seasons, DateTime instant) =>
     seasons.where((s) => isSeasonActiveAt(s, instant)).toList();
 
+/// The enabled season that starts soonest after [instant] (ADR-055): the
+/// «الموسم القادم» line of the seasonal view's empty state. Null when no
+/// enabled season has a start in the future. Works on the seasons already
+/// loaded: no extra read.
+Season? nextUpcomingSeason(Iterable<Season> seasons, DateTime instant) {
+  Season? best;
+  for (final s in seasons) {
+    final start = s.startsAt;
+    if (!s.active || start == null || !instant.isBefore(start)) continue;
+    if (best == null || start.isBefore(best.startsAt!)) best = s;
+  }
+  return best;
+}
+
 bool _matchesDay(Liturgy l, tz.TZDateTime day) {
   if (l.date != null) {
     final d = CairoTime.calendarDate(l.date!);
