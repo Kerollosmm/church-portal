@@ -6,23 +6,28 @@
 | ADR | **ADR-058** |
 | Depends on | PR A (type model `NotifyType`, `PushPrefs`, install fields `installApkBuild` / `installAndroidUrl`) |
 | Owner console work | **signing keystore + 4 GitHub secrets** (§15). Without them CI produces debug-signed *test* APKs only |
-| Live effect after merge | none on the website; a signed APK is published to GitHub Releases by a tag (§12), then its URL goes into `/admin` |
+| Live effect after merge | none on the website; a signed APK + its version manifest are published by a tag (§12) to the download host chosen in README §8 #6, then the URL goes into `/admin` |
 
 ## ١. الهدف (Goal)
 
 A small, complete Android app built from the same Flutter code, downloaded from the site as an APK, that schedules
-**local notifications on the phone** (verse of the day, season starts, feasts, mass / occasion reminders) from
-data it already loads — no server, no extra Firestore reads — following the admin's configuration (built-in
-defaults until PR C adds the admin editor) and the user's per-type choices.
+**local notifications on the phone** — the **local-owned** types: verse of the day, feasts / commemorations and
+pre-scheduled recurring mass / occasion reminders — from data it already loads (no server, no extra Firestore
+reads), following the admin's configuration (built-in defaults until PR C adds the admin editor) and the user's
+per-type choices. Remote-owned types (announcements and dynamic season alerts) arrive by FCM in PR C and are
+**never** planned locally (README §3.1). The app **updates itself**: it downloads the new APK inside the app,
+verifies its SHA-256 against a version manifest and hands it to Android's package installer (§3.3).
 
 ## ٢. قصص المستخدم (User stories)
 
 - أحمّل التطبيق من الموقع وأثبته، يفتح بشاشة البداية وأيقونة الختم، بالعربي أو الإنجليزي كما اخترت آخر مرة.
-- أفتح «الإشعارات» في القائمة: أختار آية اليوم الساعة ٧ صباحًا، وتذكير القداس قبل ساعة، وبداية المواسم.
+- أفتح «الإشعارات» في القائمة: أختار آية اليوم الساعة ٧ صباحًا، وتذكير القداس قبل ساعة، وتنبيهات المواسم (تصل من
+  الكنيسة عبر الإنترنت).
 - تصلني الإشعارات حتى بدون إنترنت (مجدولة على الهاتف)، ولا تصلني في ساعات الهدوء.
 - أضغط الإشعار فيفتح الصفحة المناسبة (مواعيد القداسات، الموسم، …).
 - أرى سجل آخر الإشعارات داخل التطبيق.
-- عند صدور إصدار جديد أرى «تحديث متاح» وأحمّله بضغطة.
+- عند صدور إصدار جديد أرى «تحديث متاح»، أضغط «تحديث الآن» فيُحمَّل داخل التطبيق مع شريط تقدم، ثم تظهر شاشة التثبيت
+  من Android مباشرة — بدون فتح المتصفح أو صفحة الإصدارات.
 - زر الرجوع في Android يرجع للصفحة الأم ثم للرئيسية ثم يخرج من التطبيق.
 - لا توجد لوحة تحكم داخل التطبيق.
 
@@ -39,7 +44,7 @@ defaults until PR C adds the admin editor) and the user's per-type choices.
 | Offline | Firestore offline persistence + bundled seed (already). Verify airplane-mode start shows cached content |
 | Splash + icon | existing `LaunchTheme` + adaptive icon from `tool/gen_branding.sh`; Android 12+ splash API uses `windowSplashScreenBackground` `#FBF3E4` + seal (`values-v31/styles.xml`) |
 | Dark mode | follows the **site theme** (occasion palettes incl. dark Holy Week), not the system dark mode — same as the web; ADR-058 records it. `values-night` launch theme uses the cream background to avoid a dark flash |
-| Update prompt | the APK is built with `--dart-define=APP_BUILD=<pubspec build number>` (CI reads it from `pubspec.yaml`); `AppConfig.appBuild` (full integer, no ABI offset arithmetic — `package_info_plus`'s versionCode includes Flutter's per-ABI offset and would be ambiguous above 999, CodeRabbit) < `installApkBuild` (already in the streamed `settings/features`) → banner «تحديث متاح — الإصدار ١٫٢٫٠» → opens `installAndroidUrl` in the browser. Dismiss per version |
+| Update prompt | the APK is built with `--dart-define=APP_BUILD=<pubspec build number>` (CI reads it from `pubspec.yaml`); `AppConfig.appBuild` (full integer, no ABI offset arithmetic — `package_info_plus`'s versionCode includes Flutter's per-ABI offset and would be ambiguous above 999, CodeRabbit) < `installApkBuild` (already in the streamed `settings/features`, so the check costs nothing) → fetch the **version manifest** (§3.3) → banner «تحديث متاح — الإصدار ١٫٢٫٠ (١٨٫٤ م.ب)» → «تحديث الآن» runs the **in-app update** (§3.3). Dismiss per version; no redirect to the browser or to a releases page |
 | Install banner | hidden (`!kIsWeb`) |
 
 ### 3.2 Local notifications
@@ -47,7 +52,7 @@ defaults until PR C adds the admin editor) and the user's per-type choices.
 |---|---|
 | Permission explainer | the PR A page; Android 13+ `POST_NOTIFICATIONS` requested via `flutter_local_notifications` `requestNotificationsPermission()` only after the tap |
 | Blocked state | Android: «الإعدادات ← التطبيقات ← كنيسة مكسيموس ودوماديوس ← الإشعارات ← سماح» + button that opens the app's notification settings (`AppSettings`-style intent via the plugin's `openNotificationSettings` / `android.settings.APP_NOTIFICATION_SETTINGS`) |
-| Per-type toggles | only admin-offered `pushTypes` |
+| Per-type toggles | only admin-offered `pushTypes`; local types (`verse_daily`, `feasts`, `occasions`) drive the planner, remote types (`announcements`, `seasons`) drive FCM topic subscription (PR C) — the page groups them «على هاتفك» / «من الكنيسة عبر الإنترنت» |
 | Times | verse time (admin default 07:00, user may override within the page: «وقت آية اليوم»), mass reminder lead (admin default 60 min, user choice 15/30/60/120) |
 | Quiet hours | user «ساعات الهدوء» from–to (default 22:00–07:00, can switch off): planned alarms inside the window move to its end (verse) or are skipped (reminders that would be after the event) |
 | Test notification | «جرّب إشعارًا» → `show()` now with the chosen type's sample text |
@@ -55,12 +60,29 @@ defaults until PR C adds the admin editor) and the user's per-type choices.
 | Deep link | payload `link` → `router.go(safeNotificationLink(link))`; app started from a notification → `getNotificationAppLaunchDetails()` → initial location; deleted page → existing 404 with «الرجوع للرئيسية»; switched-off section → FeatureGate «غير متاح» |
 | Unsubscribe all | cancels all pending alarms + clears prefs (PR C: also unsubscribes the FCM topic) |
 | Re-sync | re-plan on: app start, resume (`AppLifecycleState.resumed`), prefs change, `settings/features` change (admin edits types / verse / dayEvents), date or time-zone change (`didChangeLocales` no; use resume + `DateTime.now().timeZoneOffset` compare), device reboot (plugin's `ScheduledNotificationBootReceiver` restores) |
-| Planning horizon | next **14 days**, at most **60 pending** alarms (Android allows ~500 per app) — cancel-all then schedule, earliest first (ids = stable hash `type:date:key`). Priority when > 60: announcements none (FCM), then verse, feasts, seasons, occasions; occasions limited to the user's chosen services |
+| Planning horizon | next **14 days**, at most **60 pending** alarms (Android allows ~500 per app) — cancel-all then schedule, earliest first (ids = stable hash `local:type:date:key`, a namespace disjoint from FCM display ids = hash(`nid`)). Priority when > 60: verse, feasts, occasions; occasions limited to the user's chosen services. The planner's input type set is `NotifyType.values.where(isLocalOwned)` — it can never schedule `announcements` or `seasons` (unit-tested) |
 | Background replenishment | `workmanager` periodic task (**every 24 h**, inexact, network not required): re-plans from a **snapshot** of the planner inputs (verses, admin config, seasons, `dayEvents`, today.json) that each foreground plan writes to `shared_preferences` — so the 14-day / 60-item window keeps sliding even if the app stays closed (CodeRabbit on the plan PR). If an OEM blocks background work, the remaining plan still covers up to 14 days; the notifications page then says «افتح التطبيق مرة كل أسبوعين على الأقل لتستمر الإشعارات» and the battery note applies |
-| Channels | one channel per type (`verse_daily`, `seasons`, `feasts`, `occasions`, `announcements`) with Arabic names, so users can mute a channel in system settings |
+| Channels | one channel per type (`verse_daily`, `seasons`, `feasts`, `occasions`, `announcements`) with Arabic names, so users can mute a channel in system settings (`seasons` / `announcements` are used by the FCM display path of PR C) |
 | Exactness | **inexact** `AndroidScheduleMode.inexactAllowWhileIdle` (± ~10 min in Doze). No `SCHEDULE_EXACT_ALARM` / `USE_EXACT_ALARM` (special permission, policy risk). Documented caveat |
 | Battery optimisation | if notifications arrive late on some brands (Xiaomi, Oppo, Realme, Huawei, Samsung "Sleeping apps"), the page shows «إذا تأخرت الإشعارات: الإعدادات ← البطارية ← التطبيق ← بدون قيود» with a button to `ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS` (list, not the direct request — no `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` permission) |
-| Content sources | `verse_daily`: `dailyVerseFor` (bundled `assets/verses/daily_verses.json`, admin fixed / season verses from `settings/features`); `seasons`: `seasonsProvider` (already cached) → start day at the type time, optional N days before; `feasts`: `copticFeastsOn` (computed) for each day + `/data/today.json` titles when cached; `occasions`: `occurrencesForDay` of liturgies / season programme services + `dayEvents` with times, `lead` minutes before. Texts from `notifyTypes` templates (PR C) or built-in defaults |
+| Content sources | `verse_daily`: `dailyVerseFor` (bundled `assets/verses/daily_verses.json`, admin fixed / season verses from `settings/features`); `feasts`: `copticFeastsOn` (computed) for each day + `/data/today.json` titles when cached; `occasions`: `occurrencesForDay` of liturgies / season programme services + `dayEvents` with times, `lead` minutes before. Texts from `notifyTypes` templates (PR C) or built-in defaults. **Not local:** `seasons` (dynamic season alerts) and `announcements` — FCM only (owner's channel rule, README §3.1) |
+
+### 3.3 In-app update (download → verify → install)
+| Sub-feature | Detail |
+|---|---|
+| Version manifest | static JSON `https://maximos-domadios-church.web.app/app/android/version.json` (≈ 500 B, `Cache-Control: no-cache`; always on our own Hosting, whatever the APK host — README §8 #6) generated by CI at release: `{"schema":1, "version":"1.2.0", "build":3, "minSupportedBuild":1, "publishedAt":"2027-01-10T08:00:00Z", "notesAr":"…", "notesEn":"…", "certSha256":"AB:CD:…", "apks":{"arm64-v8a":{"url":"…/church-portal-arm64.apk","sha256":"<64 hex>","size":18350000}, "armeabi-v7a":{…}}}`. Fetched only when `installApkBuild > APP_BUILD` (and on the update banner tap); `build` in the manifest must equal `installApkBuild`, else «جارٍ تجهيز التحديث، حاول لاحقًا» (the admin saved the number before the files went live) |
+| ABI choice | `Build.SUPPORTED_ABIS[0]` via the platform channel → `arm64-v8a` or `armeabi-v7a` entry |
+| Download inside the app | `dart:io` `HttpClient` streaming (follows redirects — needed for GitHub release URLs) into `getApplicationCacheDirectory()/updates/church-portal-<build>.apk.part`; progress bar with MB / % and «إلغاء»; resumes with `Range` after a dropped connection; Wi-Fi hint when the size is > 10 MB on mobile data; runs while the app is in the foreground (no extra background service — the screen stays on the update sheet; leaving the app pauses and the next tap resumes) |
+| Integrity | streaming SHA-256 (`package:crypto`, already a dependency) + exact `size` against the manifest; mismatch → delete the file, «الملف تالف أو غير مكتمل — أعد المحاولة» (3 tries, then «تعذّر التحديث الآن»). The manifest is fetched over HTTPS from our own Hosting, so a compromised download host cannot pass the hash check; Android itself additionally rejects an APK not signed with the installed app's key |
+| Signature pre-check | before launching the installer, the platform channel compares the downloaded APK's signing certificate (`PackageManager.getPackageArchiveInfo(…, GET_SIGNING_CERTIFICATES)`) with the installed app's (and with `certSha256`); mismatch (e.g. a debug-signed test build on the phone) → «هذا الإصدار لا يمكن تثبيته فوق النسخة الحالية — احذف التطبيق ثم ثبّته من الموقع» instead of Android's vague «لم يتم تثبيت التطبيق» |
+| Unknown-apps permission | `<uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>`; `canRequestPackageInstalls()` false → explainer sheet (placeholder screenshot like PR A §3.3, ar/en: «اسمح لتطبيق الكنيسة بتثبيت التحديثات — مرة واحدة فقط») → `Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES` with `package:com.asafrachurch.church_portal` → on resume re-check → continue. This is the permission **for the church app itself** (not the browser) |
+| Launch the installer | `Intent.ACTION_VIEW` with a `FileProvider` content URI (`${applicationId}.updates`, `res/xml/update_paths.xml` → `<cache-path name="updates" path="updates/"/>`), MIME `application/vnd.android.package-archive`, `FLAG_GRANT_READ_URI_PERMISSION` + `FLAG_ACTIVITY_NEW_TASK`. Android shows its own «هل تريد تحديث هذا التطبيق؟» → «تحديث»; the app restarts on the new version with its data (same key) |
+| Implementation choice | a small **Kotlin platform channel** `church_portal/installer` in `MainActivity.kt` (~80 lines: `supportedAbi`, `canRequestInstalls`, `openUnknownSourcesSettings`, `apkCertMatches(path)`, `installApk(path)`) — no extra plugin, minimal size. Alternative: `open_filex` (FileProvider + install intent); check on pub.dev at implementation time that its version does not add unwanted permissions and record the choice in ADR-058 |
+| Same signing key | upgrades work **only** with the same release key (LAUNCH §3). Debug-signed test installs must be uninstalled once (the pre-check explains it) |
+| Clean-up | on start, delete `updates/*` when `APP_BUILD >= build` of the file; never keep more than one APK |
+| Forced minimum | `APP_BUILD < minSupportedBuild` → the banner cannot be dismissed (app still usable); used only for a security fix |
+| Fallback | after 3 failed downloads: «حمّل من موقع الكنيسة» opens the site's install banner (`/?install=android`), never a GitHub page |
+| Privacy / Sentry | errors as `section: 'update'` with HTTP status / step only — no URLs with tokens, no file paths with user data |
 
 ## ٤. الشاشات (Screens)
 
@@ -76,17 +98,21 @@ defaults until PR C adds the admin editor) and the user's per-type choices.
 
 No new Firestore keys or rules in this PR (reads `installApkBuild`, `installAndroidUrl`, `pushTypes` from PR A and,
 once PR C lands, `notifyTypes`). Built-in defaults live in `lib/domain/push.dart` (`NotifyTypeConfig.defaults`:
-verse 07:00, seasons 08:00 on the start day, feasts 07:30, occasions lead 60 min).
+verse 07:00, feasts 07:30, occasions lead 60 min; seasons 08:00 on the start day is the **sender's** default, PR C).
 
 Device storage (`shared_preferences`): `church_portal_push` (same JSON as web), `church_portal_lang`,
 `church_portal_notify_plan` (list of `{id,type,at,title,body,link}` for the inbox), `church_portal_inbox` (FCM),
-`church_portal_update_dismissed` (build number).
+`church_portal_seen_nids` (last 100 FCM `nid`s, PR C), `church_portal_update_dismissed` (build number),
+`church_portal_update` (`{build, bytes, etag}` for resuming a partial download). Static file (Hosting, not
+Firestore): `/app/android/version.json` (§3.3).
 
 ## ٦. التكلفة (Cost)
 
 Firestore +0 (the planner reads the providers the app already streams; it does not start any listener that the
-Home page would not). Network +0 except `/data/today.json` already fetched by the Home page. CI: Android build
-~8–12 min per run on `ubuntu-latest` (free, public repo).
+Home page would not). Network +0 except `/data/today.json` already fetched by the Home page, and — only when an
+update exists — one ~500 B manifest fetch plus the APK download from the chosen host (README §8 #6: on Firebase
+Hosting every APK download counts against the project's 10 GB/month transfer). CI: Android build ~8–12 min per run
+on `ubuntu-latest` (free while the repo is public; on a private repo ≈ 10 billed minutes per build).
 
 ## ٧. الملفات (Files)
 
@@ -94,16 +120,25 @@ Create:
 - `lib/domain/notify_plan.dart` — pure `List<PlannedNotification> planNotifications({required DateTime now, required PushPrefs prefs, required NotifyConfig config, required inputs…})` (Cairo time via `CairoTime`, quiet hours, horizon, ids).
 - `lib/data/local_notifications.dart` — `LocalNotifier` wrapper around `FlutterLocalNotificationsPlugin` (init, channels, permission, `zonedSchedule`, cancelAll, launch details), conditional import so web never links it (`local_notifications_stub.dart`).
 - `lib/state/notify_providers.dart` — `notifyPlannerProvider` (listens to prefs / features / seasons / now-day, debounced 2 s, re-plans).
-- `lib/ui/widgets/update_banner.dart`.
+- `lib/ui/widgets/update_banner.dart` (banner + update sheet: progress, cancel, permission explainer, errors).
+- `lib/data/app_updater.dart` (+ `app_updater_stub.dart` for web) — manifest fetch/parse, ABI pick, resumable
+  download, SHA-256 + size check, platform-channel calls; `lib/domain/app_update.dart` (pure: `UpdateManifest`,
+  `UpdateDecision decideUpdate({appBuild, installApkBuild, manifest, dismissedBuild})`).
+- `android/app/src/main/kotlin/com/asafrachurch/church_portal/MainActivity.kt` (installer channel, §3.3),
+  `android/app/src/main/res/xml/update_paths.xml`.
+- `tool/make_apk_manifest.mjs` — CI: writes `version.json` (sizes, SHA-256, cert fingerprint via `apksigner verify
+  --print-certs`, notes from `android/RELEASE_NOTES.md`).
 - `lib/core/locale_storage_io.dart` (shared_preferences) — conditional import update in `locale_storage.dart`.
 - `android/app/src/main/res/drawable/ic_stat_seal.xml`, `android/app/src/main/res/values-v31/styles.xml`.
 - `android/key.properties.example` (documented, real file git-ignored); `android/RELEASE_NOTES.md` (Arabic notes shown on the GitHub Release, edited per release).
 - `.github/workflows/android.yml` (§12).
-- `test/notify_plan_test.dart`, `test/android_shell_test.dart`.
+- `test/notify_plan_test.dart`, `test/android_shell_test.dart`, `test/app_update_test.dart`.
 - `documentation/features/android-app.md` (rewrite), ADR-058.
 
 Modify:
-- `pubspec.yaml` (§8), `android/app/build.gradle.kts` (signing from env / `key.properties`, `isMinifyEnabled = true`, `isShrinkResources = true`, core-library desugaring), `android/app/src/main/AndroidManifest.xml` (permissions + plugin receivers, `android:label` Arabic name kept), `android/app/proguard-rules.pro` (plugin keep rules if R8 strips them).
+- `pubspec.yaml` (§8), `android/app/build.gradle.kts` (signing from env / `key.properties`, `isMinifyEnabled = true`, `isShrinkResources = true`, core-library desugaring), `android/app/src/main/AndroidManifest.xml` (permissions incl. `REQUEST_INSTALL_PACKAGES`, the `FileProvider`
+`<provider android:name="androidx.core.content.FileProvider" android:authorities="${applicationId}.updates"
+android:exported="false" android:grantUriPermissions="true">` + plugin receivers, `android:label` Arabic name kept), `android/app/proguard-rules.pro` (plugin keep rules if R8 strips them).
 - `lib/router.dart` (`kIsWeb` admin guard, initial location from a launch notification), `lib/ui/widgets/app_shell.dart` (PopScope, update banner, drawer «الإشعارات»), `lib/ui/pages/notifications_page.dart` (Android sections), `lib/ui/pages/assistant_page.dart` / nav (open web `/ask` on Android), `lib/main.dart` (init `LocalNotifier` after first frame — never block start-up).
 - `.gitignore` (`android/key.properties`, `*.jks`, `*.keystore`).
 - Docs: memory bank 03/06/08/10/11, `documentation/features/android-app.md`, `documentation/operations.md` (release steps), `documentation/en/operations.md`.
@@ -116,6 +151,9 @@ Modify:
 | `workmanager` | `^0.10.10` (Flutter ≥ 3.38) | daily background re-plan (replenishment) | Android WorkManager; verify the version on pub.dev at implementation time |
 | `package_info_plus` | `^10.2.2` | version name for display (the update check uses `APP_BUILD`) | optional |
 | `shared_preferences` | `^2.5.6` | already a dependency | prefs, inbox, language |
+| `crypto` | `^3.0.8` | already a dependency | SHA-256 of the downloaded APK |
+| `path_provider` | verify on pub.dev | cache directory for the update file | only if not reachable through an existing dependency; or return the path from the platform channel instead (no package) |
+| `open_filex` | optional, verify on pub.dev | install intent | only if the Kotlin channel is not used (§3.3) |
 | `share_plus` | optional (`^12`) | system share sheet | add only if the APK budget allows |
 | `firebase_messaging` | — | **PR C** (announcements) | not in this PR |
 
@@ -131,8 +169,10 @@ Modify:
 5. Planner provider: re-plan triggers (start, resume, prefs, features, day change); boot receiver; inputs snapshot +
    `workmanager` daily replenishment (test: closed app for 3 simulated days still has a full 14-day window).
 6. Inbox, test notification, quiet hours, battery note, unsubscribe all.
-7. Update banner (`installApkBuild`).
-8. `android.yml` workflow: APK artifacts on PRs, signed release on tag.
+7. Update banner (`installApkBuild`) + in-app update (§3.3): manifest, download with progress, SHA-256, signature
+   pre-check, unknown-apps permission flow, FileProvider install intent, clean-up.
+8. `android.yml` workflow: APK artifacts on PRs, signed release on tag, manifest generation, publish to the chosen
+   download host (§12).
 9. Docs + ADR-058; size report (APK per ABI) in the PR body.
 10. Real-device pass (§11) on at least: Android 14/15 Samsung, Android 13 Xiaomi/Redmi, Android 10 or 11 low-end
     (armeabi-v7a), Android 8.1 (minSdk check: Flutter default `minSdk 21+`; plugin needs ≥ 21).
@@ -140,14 +180,19 @@ Modify:
 ## ١٠. الاختبارات (Tests)
 
 - `notify_plan_test.dart`: verse at 07:00 Cairo for 14 days; quiet hours move 06:30 → 07:00 and skip reminders
-  inside; mass reminder 60 min before each Sunday liturgy and a weekday one-off `dayEvents` item; season start on
-  its start day (+ N days before); feast list from `copticFeastsOn` around Nativity (29 Kiahk) and a movable feast
+  inside; mass reminder 60 min before each Sunday liturgy and a weekday one-off `dayEvents` item; a season
+  programme service reminder (occasions); **no season-start item** (remote-owned); feast list from `copticFeastsOn` around Nativity (29 Kiahk) and a movable feast
   (Pascha); offered-types filter; user type off → nothing; ≤ 60 items, earliest first; stable ids; links
-  `safeNotificationLink`; templates with `{season}`, `{feast}`, `{verse}`, `{time}` substituted ar/en; past times
+  `safeNotificationLink`; templates with `{feast}`, `{verse}`, `{service}`, `{time}` substituted ar/en; past times
   skipped.
 - Shell: `/admin` is not a route when `kIsWeb` is false (test via injectable `isWeb` param of the router builder);
   back-button mapping (`parentRouteOf`); update banner shown only when `installApkBuild` > local build;
   language persists through the IO store (fake).
+- Planner: never emits `announcements` or `seasons` items, whatever the prefs.
+- `app_update_test.dart` (fake HTTP + fake channel): manifest parse / schema mismatch / `build` ≠ `installApkBuild`;
+  ABI pick; progress events; resume after a cut (Range); wrong SHA-256 or size → file deleted + error; cert
+  mismatch → uninstall-first message; permission false → explainer → settings → resume → install called once;
+  `minSupportedBuild` → non-dismissable; clean-up of old files; no URL of a releases page is ever launched.
 - Widget: Android `/notifications` sections render, toggles call the planner (fake `LocalNotifier`), permission
   requested only after tap.
 
@@ -164,7 +209,10 @@ Modify:
 | 7 | Change language EN → kill → reopen | still EN; notifications EN after re-plan |
 | 8 | Admin changes a `dayEvents` item time (web) → open app | reminder re-planned |
 | 9 | Back button on detail page / sub-page / Home | parent / Home / exit (double press) |
-| 10 | Publish build N+1 (`installApkBuild`) | «تحديث متاح» → download → install over the old one keeps data (same key!) |
+| 10 | Publish build N+1 (`installApkBuild`) | «تحديث متاح» → «تحديث الآن» → in-app progress → (first time) «السماح بتثبيت التحديثات» for the church app → Android's update dialog → app restarts on N+1 with data kept (same key!) |
+| 10b | Turn Wi-Fi off mid-download, then on | resumes from where it stopped |
+| 10c | Serve a manifest with a wrong SHA-256 (test channel) | «الملف تالف…», file deleted, nothing installed |
+| 10d | Debug-signed build installed, release update offered | uninstall-first message, no Android error |
 | 11 | Deleted custom page link in the inbox | 404 «الرجوع للرئيسية» |
 | 12 | Themes (Golden hour, Holy Week dark) | readable; status bar contrast |
 | 13 | 320-px-class phone (e.g. small Android Go) + largest font | no overflow |
@@ -223,21 +271,59 @@ jobs:
           cd build/app/outputs/flutter-apk
           mv app-arm64-v8a-release.apk church-portal-arm64.apk
           mv app-armeabi-v7a-release.apk church-portal-arm32.apk
-          gh release create "$GITHUB_REF_NAME" church-portal-arm64.apk church-portal-arm32.apk \
+          node "$GITHUB_WORKSPACE/tool/make_apk_manifest.mjs" --base-url "${{ vars.APK_BASE_URL }}" \
+            church-portal-arm64.apk church-portal-arm32.apk > version.json
+          gh release create "$GITHUB_REF_NAME" church-portal-arm64.apk church-portal-arm32.apk version.json \
             --title "تطبيق الكنيسة $GITHUB_REF_NAME" --notes-file "$GITHUB_WORKSPACE/android/RELEASE_NOTES.md" --latest
+      # Publish for the public (README §8 #6). The release above is only the canonical archive: it works even if the
+      # repo is private (deploy.yml can read it with GITHUB_TOKEN), but private release assets are NOT downloadable
+      # by the public.
+      - name: Publish manifest (+ APKs when hosted on Firebase) to Hosting
+        if: startsWith(github.ref, 'refs/tags/apk-v')
+        env: { SA: '${{ secrets.FIREBASE_SERVICE_ACCOUNT_ASAFRA_CHURCH_PORTAL }}' }
+        run: |
+          printf '%s' "$SA" > "$RUNNER_TEMP/sa.json"; export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/sa.json"
+          cd build/app/outputs/flutter-apk
+          if [ "${{ vars.APK_HOST }}" = "firebase" ]; then
+            node "$GITHUB_WORKSPACE/tool/publish_hosting_file.js" church-portal-arm64.apk /app/android/church-portal-arm64.apk
+            node "$GITHUB_WORKSPACE/tool/publish_hosting_file.js" church-portal-arm32.apk /app/android/church-portal-arm32.apk
+          fi
+          node "$GITHUB_WORKSPACE/tool/publish_hosting_file.js" version.json /app/android/version.json   # last: switch-over
+          rm -f "$RUNNER_TEMP/sa.json"
+      - name: Mirror to the public releases repo (APK_HOST=releases-repo)
+        if: startsWith(github.ref, 'refs/tags/apk-v') && vars.APK_HOST == 'releases-repo'
+        env: { GH_TOKEN: '${{ secrets.RELEASES_REPO_TOKEN }}' }    # fine-grained, that repo only, Contents: write
+        run: |
+          cd build/app/outputs/flutter-apk
+          gh release create "$GITHUB_REF_NAME" church-portal-arm64.apk church-portal-arm32.apk \
+            -R Kerollosmm/church-portal-apk --title "تطبيق الكنيسة $GITHUB_REF_NAME" --notes-file "$GITHUB_WORKSPACE/android/RELEASE_NOTES.md" --latest
     permissions: { contents: write }
 ```
 - `build.gradle.kts` reads `ANDROID_KEYSTORE_PATH` etc. from env (or `android/key.properties` locally); empty →
   debug signing (PR / preview builds).
-- Stable URLs for `/admin`: `https://github.com/Kerollosmm/church-portal/releases/latest/download/church-portal-arm64.apk`
-  and `…/church-portal-arm32.apk`.
+- Repo variables: `APK_HOST` = `firebase` | `releases-repo` | `this-repo` (README §8 #6) and `APK_BASE_URL` = the
+  public folder the manifest points at: `https://maximos-domadios-church.web.app/app/android/` (firebase),
+  `https://github.com/Kerollosmm/church-portal-apk/releases/latest/download/` (releases-repo) or
+  `https://github.com/Kerollosmm/church-portal/releases/latest/download/` (this-repo — **only while this repo is
+  public**). For the two GitHub hosts the manifest's URLs use `releases/download/<tag>/…` (not `latest`) so a hash
+  always matches its file; on Firebase the fixed `/app/android/*.apk` files are replaced first and the manifest
+  last.
+- `/admin` APK link = `<APK_BASE_URL>church-portal-arm64.apk` (and `…arm32.apk`).
+- **Hosting persistence:** `tool/publish_hosting_file.js` (ADR-040) clones the live version, so the next normal
+  `deploy.yml` deploy would drop `/app/android/*`. `deploy.yml` therefore gains a step that downloads the latest
+  `apk-v*` release's `version.json` (and, when `APK_HOST=firebase`, the two APKs) with `gh release download`
+  (`GITHUB_TOKEN`, works on a private repo too) into `build/web/app/android/` before `firebase deploy`, plus a
+  `firebase.json` header `Cache-Control: no-cache` for `/app/android/version.json` and
+  `Content-Type: application/vnd.android.package-archive` + `Content-Disposition: attachment` for `*.apk`.
 - Sentry: upload Dart symbols (`sentry-dart-plugin`) optional later; obfuscation map kept as artifact.
 
 ## ١٣. التوثيق (Docs / ADR)
 
-ADR-058: APK from GitHub Releases (Hosting egress), split-per-abi arm64 + arm32 (no x86), inexact local alarms,
-14-day horizon, no exact-alarm permission, admin compiled out, assistant via the web, dark mode = site theme,
-update prompt via `installApkBuild`, debug-signed until the keystore exists.
+ADR-058: APK host per README §8 #6 with the version manifest always on our Hosting, split-per-abi arm64 + arm32
+(no x86), local-only types (verse, feasts, occasions) with inexact alarms, 14-day horizon, no exact-alarm
+permission, admin compiled out, assistant via the web, dark mode = site theme, **in-app update** (manifest +
+SHA-256 + signature pre-check + `REQUEST_INSTALL_PACKAGES` + FileProvider installer intent), debug-signed until the
+keystore exists.
 
 ## ١٤. المخاطر (Risks)
 
@@ -246,7 +332,10 @@ update prompt via `installApkBuild`, debug-signed until the keystore exists.
 | **Lost keystore** → no updates possible (users must uninstall) | two offline backups + password manager (LAUNCH §3) |
 | Debug-signed early installs can't upgrade to release-signed | publish to users only release-signed builds; debug builds are for testers |
 | OEM battery killers delay alarms | inexact + note + settings shortcut; FCM not used for daily types on Android |
-| Play Protect warns about an unknown app | normal for sideloading; guide text; signing with the same key builds reputation |
+| Play Protect warns about an unknown app | normal for sideloading; PR A visual guide; signing with the same key builds reputation |
+| `REQUEST_INSTALL_PACKAGES` looks sensitive to Play Protect / users | used only for self-update, explained in the sheet; no other install source; listed in the privacy text; the app never installs anything but its own signed update |
+| APK downloads take the **whole site** offline (Firebase Hosting on Spark: 10 GB/month transfer for the project; past it, after a short grace period, sites are disabled until the next month — https://firebase.google.com/docs/hosting/usage-quotas-pricing) | README §8 #6: prefer a public releases host; on Firebase watch Hosting usage weekly (LAUNCH §11), keep APKs small (PR E), and switch `APK_HOST` before the monthly total nears ~7 GB |
+| Update installs fail after a key change | never change the key; signature pre-check explains uninstall-first for test builds |
 | Google Android developer verification (4 countries since 30 Sep 2026, global 2027) | LAUNCH §8: register in the Android Developer Console and register the package with the release-signed APK before it applies in Egypt |
 | APK size > 25 MB | budget in PR E: arm64 ≤ 20 MB; remove `share_plus` if needed; `--obfuscate`; R8 |
 | Plan runs out if the app is not opened for 14 days **and** the OEM blocks background work | daily `workmanager` replenishment from the snapshot; boot + resume re-plan; FCM announcements still arrive (PR C); in-app note |
@@ -275,8 +364,14 @@ update prompt via `installApkBuild`, debug-signed until the keystore exists.
 5. (Optional, for the assistant via App Check later) `keytool -list -v -keystore church-portal-release.jks -alias
    church-portal` → copy SHA-256 → Firebase console → ⚙ Project settings → Your apps → Android → **Add
    fingerprint**.
-6. **First release**: bump `version:` in `pubspec.yaml` (e.g. `1.1.0+2`) in a PR, merge, then GitHub → **Releases**
+6. **Choose the download host** (README §8 #6) and set repo variables `APK_HOST` + `APK_BASE_URL` (GitHub →
+   Settings → Secrets and variables → Actions → Variables). For `releases-repo`: create the **public** repo
+   `Kerollosmm/church-portal-apk` (README only), then a fine-grained token for **that repo only**, Contents: Read
+   and write → secret `RELEASES_REPO_TOKEN`.
+7. **First release**: bump `version:` in `pubspec.yaml` (e.g. `1.1.0+2`) in a PR, merge, then GitHub → **Releases**
    → **Draft a new release** → tag `apk-v1.1.0` → **Publish** (or `git tag apk-v1.1.0 && git push origin
-   apk-v1.1.0`). The workflow attaches the two APKs.
-7. `/admin` → «التطبيق والإشعارات»: رابط APK = the arm64 "latest" URL above; رابط الهواتف القديمة = the arm32 URL;
-   الإصدار `1.1.0`; رقم البناء `2`; الحجم (from the release page, MB).
+   apk-v1.1.0`). The workflow attaches the two APKs + `version.json` and publishes them to the chosen host.
+8. Open `https://maximos-domadios-church.web.app/app/android/version.json` — it shows the new build and hashes.
+9. `/admin` → «التطبيق والإشعارات»: رابط APK = `<APK_BASE_URL>church-portal-arm64.apk`; رابط الهواتف القديمة =
+   `…arm32.apk`; الإصدار `1.1.0`; رقم البناء `2` (**save this last** — it is what makes installed apps offer the
+   update); الحجم (MB).

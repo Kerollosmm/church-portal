@@ -1693,29 +1693,41 @@ supersede them.
   prompt on the web with OS detection; responsive; small size; complete UX per feature; a handoff-ready plan; feature
   PRs as a stacked chain merged only after the whole chain is approved.
 - **Decision (details in [`docs/plans/phase2/`](../plans/phase2/README.md)):**
-  1. **Delivery:** Android schedules verse / seasons / feasts / occasions **locally** (`flutter_local_notifications`,
-     14-day / 60-alarm window replenished daily by `workmanager` from an inputs snapshot, inexact alarms, no
-     exact-alarm permission) from data it already loads; admin announcements and
-     every web notification go through **FCM topics** (`app_announcements_<lang>`, `web_<type>_<lang>`), sent by a
-     scheduled **GitHub Actions** job (`push-sender.yml`, every 15 min, honest 15–30 min latency) — no Cloud
-     Functions (Spark).
+  1. **Delivery — strict channel segregation** (owner, 6 Nov evening): each type has one owner channel. **Local**
+     (Android APK only, `flutter_local_notifications`, 14-day / 60-alarm window replenished daily by `workmanager`
+     from an inputs snapshot, inexact alarms, no exact-alarm permission): `verse_daily`, `feasts`, `occasions`
+     (pre-scheduled recurring reminders). **Remote / FCM topics** (`<app|web>_<announcements|seasons>_<ar|en>`, 8
+     topics, none for local-owned types): announcements (live broadcasts, emergencies, notices) and dynamic season
+     alerts. The daily verse is never sent by FCM; the web gets pushes only for the remote types. Data-only messages
+     carry `type` + `nid`; clients drop local-owned types and repeated `nid`s. Sender = **GitHub Actions**
+     `push-sender.yml` with a **dual trigger**: cron every 15 min for routine work + an immediate
+     `workflow_dispatch` from `/admin` for urgent one-offs (~1–2 min), token = fine-grained PAT (this repo,
+     Actions: write only, 90 days) in the owner-only doc `admin_secrets/github_dispatch` (Cloudflare Worker proxy as
+     optional hardening); one claim transaction per row makes cron + dispatch idempotent; a failed dispatch falls
+     back to the next cron run — no Cloud Functions (Spark).
   2. **Config:** new top-level keys of the existing `settings/features` doc (install banner fields, `push` default
      off, `pushVapidKey`, `pushTypes`, `notifyTypes`), admin-only writes, +0 visitor reads / listeners; the one-off
      schedule and sent log in a new **admin-only** doc `settings/notifications` (not public, not streamed by
      visitors; each row keeps its own sent marker). Device-only user choices (types, quiet hours, inbox, token).
   3. **Web push:** lazy `push_client.js` + `firebase-messaging-sw.js` at a private scope (nothing on page load;
      messaging JS ignored at boot via `flutterfire_ignore_scripts`); browsers subscribe through a create-only
-     `push_queue` (full desired topic set per doc; 3 s spacing + 1,000/day cap) drained by the sender with the Instance ID API (token-list fallback documented);
-     iPhone only as an installed PWA on iOS 16.4+.
+     `push_queue` (full desired topic set per doc, ≤ 2 remote web topics; 3 s spacing + 1,000/day cap) drained by the
+     sender with the Instance ID API (token-list fallback documented); iPhone only as an installed PWA on iOS
+     16.4+: the install banner never asks for permission (Share → Add to Home Screen first); the permission UI exists
+     only when standalone on iOS ≥ 16.4.
   4. **APK:** split-per-abi (arm64 + arm32), R8, obfuscation, admin compiled out (`kIsWeb`), assistant opens the web
-     `/ask`, published on **GitHub Releases** (Hosting egress on Spark too small), update prompt via
-     `installApkBuild`; release signing from GitHub secrets (owner creates and backs up the keystore). Android
-     developer verification (global in 2027) must be completed before it reaches Egypt.
+     `/ask`; a visual step-by-step sideload guide on the web (browser warning, Play Protect, «install unknown
+     apps»); **in-app update** (version manifest `/app/android/version.json` on our Hosting, resumable download,
+     SHA-256 + signature pre-check, `REQUEST_INSTALL_PACKAGES`, FileProvider installer intent; no releases page);
+     APK host = owner decision (Firebase Hosting — quota can disable the whole site — vs a public releases repo vs
+     this repo's Releases while it is public; GitHub reports the repo public, the owner called it private); release
+     signing from GitHub secrets (owner creates and backs up the keystore). Android developer verification (global
+     in 2027) must be completed before it reaches Egypt.
   5. **Process:** stacked chain PR 0 (plans) → A (ADR-057) → B (ADR-058) → C (ADR-059) → D (ADR-060) → E (ADR-061);
      each draft, reviewed (@coderabbitai, @sentry, ≤ 2 rounds), CI green, not merged; after owner approval merged
      bottom-up with squash, merging `main` into the next branch (no rebase, no force-push) — `HANDOFF.md` §5.6.
-- **Cost:** A, B, E +0; C ≤ 192 reads + ~10 writes/day (sender); D 2 writes per web opt-in + sender read/delete,
-  hard-capped at 1,000 queue writes/day by the rules.
+- **Cost:** A, B, E +0; C ≤ 192 reads + ~10 writes/day (sender) + 1 read / 1 write per urgent send; D 2 writes per
+  web opt-in + sender read/delete, hard-capped at 1,000 queue writes/day by the rules.
 - **Rules / data / seed:** unchanged in this PR (docs only).
 
 ## Timeline

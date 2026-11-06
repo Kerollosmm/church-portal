@@ -11,9 +11,12 @@
 ## ١. الهدف (Goal)
 
 Visitors on **Android Chrome / Samsung Internet / desktop browsers** and **iPhone/iPad users who installed the site
-to the Home Screen (iOS/iPadOS 16.4+)** can opt in per type and receive the church's notifications (daily types
-from the sender + admin announcements), with the same complete UX as the APK: explainer, blocked state, quiet
-hours, test notification, inbox, deep links, unsubscribe-all — with **zero cost on page load**.
+to the Home Screen (iOS/iPadOS 16.4+)** can opt in and receive the church's **remote-owned** notifications —
+announcements (live broadcasts, emergencies, notices; urgent ones within ~1–2 min, PR C §16) and season alerts —
+with the same complete UX as the APK: explainer, blocked state, quiet hours, test notification, inbox, deep links,
+unsubscribe-all — with **zero cost on page load**. Per the owner's channel rule (README §3.1) the daily verse,
+feasts and mass / occasion reminders are **never** sent by FCM, so the web offers only `announcements` and
+`seasons`; the page says the others appear on the Home page and as local notifications in the Android app.
 
 ## ٢. قصص المستخدم (User stories)
 
@@ -27,21 +30,38 @@ hours, test notification, inbox, deep links, unsubscribe-all — with **zero cos
 
 | Sub-feature | Detail |
 |---|---|
-| Support detection | `'Notification' in window && 'serviceWorker' in navigator && 'PushManager' in window`; iOS: only when standalone (else → install steps from PR A); Firefox private windows / Safari < 16 → «غير مدعوم في هذا المتصفح» |
+| Support detection | `'Notification' in window && 'serviceWorker' in navigator && 'PushManager' in window`; iOS: only when standalone (else → install steps from PR A, see «iOS onboarding» below); Firefox private windows / Safari < 16 → «غير مدعوم في هذا المتصفح» |
+| Web types offered | `pushTypes ∩ {announcements, seasons}` (remote-owned only). Local-owned types are listed below the switches as a muted line «آية اليوم والأعياد وتذكيرات القداس: في الصفحة الرئيسية، وكإشعارات محلية في تطبيق Android» (no switch) |
 | Explainer → tap → permission | PR A flow; `Notification.requestPermission()` inside the click handler (iOS requires a user gesture) |
 | Token | on grant: inject `/push_client.js` (once), which `import()`s `https://www.gstatic.com/firebasejs/<SDK_VERSION>/firebase-messaging.js` (same version FlutterFire loaded: `window.firebase_core.SDK_VERSION`, fallback `13.1.0` from `firebase_core_web 4.1.0`), registers `/firebase-messaging-sw.js` with scope `/firebase-cloud-messaging-push-scope`, `getToken(messaging, {vapidKey, serviceWorkerRegistration})` |
-| Subscribe to topics | browsers cannot subscribe themselves → write ONE doc `push_queue/{auto}` = `{token, want:['web_announcements_ar',…], createdAt: serverTimestamp()}` carrying the **full desired topic set** (not a diff); the sender (PR C) groups queue docs by token, keeps only the **newest** (`createdAt`), applies `batchAdd` for `want` and `batchRemove` for every other web topic via the **Instance ID API** `https://iid.googleapis.com/iid/v1:batchAdd` / `:batchRemove` (OAuth token of `push-sender`, header `access_token_auth: true`), then deletes all docs of that token — idempotent and order-safe (an ar → en → ar flip before the drain ends on ar; CodeRabbit) |
+| Subscribe to topics | browsers cannot subscribe themselves → write ONE doc `push_queue/{auto}` = `{token, want:['web_announcements_ar',…], createdAt: serverTimestamp()}` carrying the **full desired topic set** (not a diff; at most 2 topics: `web_announcements_<lang>`, `web_seasons_<lang>`); the sender (PR C) groups queue docs by token, keeps only the **newest** (`createdAt`), applies `batchAdd` for `want` and `batchRemove` for every other web topic via the **Instance ID API** `https://iid.googleapis.com/iid/v1:batchAdd` / `:batchRemove` (OAuth token of `push-sender`, header `access_token_auth: true`), then deletes all docs of that token — idempotent and order-safe (an ar → en → ar flip before the drain ends on ar; CodeRabbit) |
 | Change types / language | one queue doc with the new full `want` set |
 | Unsubscribe all | queue `want: []` (the sender removes every web topic) + `deleteToken()` + clear prefs |
 | Token refresh | FCM does not move topic subscriptions to a new token. Allowed refresh point (resolves "nothing on load" vs refresh — CodeRabbit): only for a device that **already enabled** notifications (local flag) and has permission `granted`, **at most once every 7 days**, after `ContentReady` + `requestIdleCallback` (≥ 10 s after load): load the SDK, `getToken`; if it differs from the stored token → queue `{token: new, prevToken: old, want}` (the sender removes `prevToken` from all topics). First-time visitors and opted-out devices never load anything |
 | Pending / throttled writes | the desired state is saved locally first (`pendingWant`); a rejected queue write (3 s spacing or daily cap) is retried with jitter (≤ 5 tries this visit) and again on the next visits until it succeeds; the page shows «جارٍ التفعيل…» / «تعذّر الآن، سنحاول تلقائيًا» until then (CodeRabbit) |
 | Quiet hours | the SW reads quiet hours from IndexedDB (written by the page) and shows notifications **silently** (`silent: true`, no vibrate) inside the window — it never drops a push (iOS/Chrome penalise invisible pushes) |
+| Guard + dedupe (SW) | same rule as Android (PR C §3): a message whose `type` is local-owned or unknown is not shown as a church notification. Because iOS / Chrome penalise pushes that show nothing, the SW still shows a minimal, silent «تحديث من الكنيسة» notification with the link `/` and logs `push.dropped_local_type` — this can only happen through a sender bug, which the sender tests prevent. A repeated `nid` (seen-set of the last 100 in IndexedDB) re-uses `tag: nid` with `renotify: false`, so it replaces silently instead of stacking |
 | Test notification | page → `registration.showNotification(title, {body, icon:'/icons/Icon-192.png', badge:'/icons/badge-72.png', data:{link}})` |
 | Inbox | the SW appends each shown notification to IndexedDB `church_portal_push/inbox` (last 30); the page lists them with time + link; «مسح السجل» |
 | Deep link | SW `notificationclick`: `link = safe(data.link)`; focus an existing client of the origin and `postMessage({type:'open', link})` (the app listens and calls `router.go`) or `clients.openWindow(link)`; installed PWA opens in its standalone window (manifest `scope: /`) |
 | Fallback | invalid link → `/`; deleted page → app 404 «الرجوع للرئيسية» |
 | Blocked state | PR A texts + detection of `permission === 'denied'` on every visit (shows the how-to) |
-| iOS specifics | permission only from the Home Screen app; shows «يجب فتح التطبيق من الشاشة الرئيسية»; badge count not used; notifications show the site icon (apple-touch-icon) |
+| iOS specifics | permission only from the Home Screen app; badge count not used; notifications show the site icon (apple-touch-icon). Full onboarding below |
+
+### 3.1 iOS onboarding (install first, permission only when standalone)
+| State (detected on `/notifications` and in the install banner) | Detection | What the user sees |
+|---|---|---|
+| iPhone / iPad in **Safari tab**, not installed | iOS (PR A `detectInstallOs`) and **not** standalone (`matchMedia('(display-mode: standalone)').matches == false` and `navigator.standalone !== true`) | the PR A install banner and, on `/notifications`, an **install-first card**: Share → «إضافة إلى الشاشة الرئيسية» → «إضافة» → open from the new icon; the type list is shown **read-only** (greyed preview) with «تتوفر الإشعارات بعد فتح التطبيق من الشاشة الرئيسية (iOS 16.4 أو أحدث)». **No enable button, no `Notification` / `PushManager` call at all** (in a Safari tab they are absent or unusable anyway) |
+| In-app browser on iOS (Facebook, Instagram, WhatsApp) | PR A `inAppBrowser` | «افتح الموقع في Safari أولًا» + copy-link button, then the steps above |
+| Installed (standalone) but **iOS < 16.4** | standalone and iOS version from the UA `OS (\d+)_(\d+)` < 16.4, or `PushManager` missing | «حدّث iOS إلى 16.4 أو أحدث لتصلك الإشعارات» (Settings → General → Software Update); app otherwise works |
+| Installed (standalone), iOS ≥ 16.4, permission `default` | standalone + `'PushManager' in window` | normal explainer → «تفعيل الإشعارات» → `Notification.requestPermission()` **inside the tap handler** (user gesture) |
+| Installed, `granted` / `denied` | `Notification.permission` | normal granted / blocked states (blocked how-to: Settings → Notifications → the church app) |
+| Added to Home Screen from a non-Safari browser on iOS < 17 | standalone false in that browser | treated like a Safari tab: «افتح الموقع في Safari ثم أضفه» |
+
+Rules that keep this safe: the install banner on iOS **never** requests notification permission (PR A §3.1); the
+permission UI is rendered only when `isStandalone && iosVersion >= 16.4 && 'PushManager' in window`; the manifest
+keeps `display: standalone` (required for iOS web push). Users who never install still get everything on the site
+itself (Home verse, feasts, announcements banner) — only push needs the install.
 | Admin test | PR C «جرّب على هذا الجهاز» uses the same SW |
 
 ## ٤. الشاشات (Screens)
@@ -85,14 +105,14 @@ function validPushQueue(d) {
   return d.keys().hasOnly(['token', 'prevToken', 'want', 'createdAt'])
     && d.token is string && d.token.matches('^[A-Za-z0-9:_-]{100,400}$')
     && (!('prevToken' in d) || (d.prevToken is string && d.prevToken.matches('^[A-Za-z0-9:_-]{100,400}$')))
-    && d.want is list && d.want.size() <= 5
-    && d.want.hasOnly(webTopics())                 // the 10 web_<type>_<ar|en> names
+    && d.want is list && d.want.size() <= 2
+    && d.want.hasOnly(webTopics())                 // the 4 remote-owned web topics: web_(announcements|seasons)_(ar|en)
     && d.createdAt == request.time;
 }
 ```
 Tests: a valid `want` doc (incl. the initial subscription and `want: []`) passes in a batch with the throttle; alone → denied; second within 3 s → denied; count 1,001 →
 denied; new UTC day resets the count to 1 (count 2 on a new day → denied); `day` not today → denied; bad token,
-unknown topic, 11 topics, read/update/delete → denied.
+unknown topic, **a local-owned topic such as `web_verse_daily_ar` → denied**, 3 topics, read/update/delete → denied.
 
 **Fallback if the IID API stops working** (it is old; verify in step 1): collection `push_subscribers/{sha256(token)}`
 `{token, topics, updatedAt}` written by the client (same validation), and the sender sends to each token with
@@ -144,22 +164,26 @@ No Dart package (uses PR C's `firebase_messaging` only on Android; on web its SD
 
 ## ١٠. الاختبارات (Tests)
 
-- Dart (fake env): states (unsupported, ios not installed, default, granted, denied); enable writes exactly one
+- Dart (fake env): states (unsupported, ios not installed, ios standalone < 16.4, in-app browser, default, granted,
+  denied); on iOS not standalone **zero** calls to `requestPermission` / `PushManager` whatever the user taps;
+  only `announcements` / `seasons` offered on the web; enable writes exactly one
   queue doc with the full `want` set for ar/en; changing types writes the new full set; unsubscribe-all → `want: []`
   + deleteToken; token change → prevToken flow only for enabled devices, once per 7 days, after idle; first-time
   visitors: no env calls on load; throttled write → pending state + retry.
 - JS (node:test with a fake `self`): SW quiet-hours silent flag, inbox cap 30, `safe(link)`, click focuses or
-  opens.
+  opens, local-owned `type` → minimal silent notice + breadcrumb (no church text), repeated `nid` → same `tag`, not
+  stacked.
 - Rules emulator (§5). Sender queue tests (grouping, deletion, error handling).
 
 ## ١١. اختبار يدوي (Manual QA)
 
 | Device | Steps | Expected |
 |---|---|---|
-| iPhone iOS 17/18 Safari, not installed | open `/notifications` | install steps, no enable button |
+| iPhone iOS 17/18 Safari, not installed | open `/notifications`; tap around | install-first card + read-only type preview, no enable button, **no permission prompt ever** |
+| iPhone, install banner | tap «طريقة الإضافة» | steps sheet only (Share → Add to Home Screen); no permission prompt |
 | iPhone installed PWA | enable → allow | test notification shows; one-off from admin arrives (≤ 30 min); tap opens the page inside the PWA |
 | iPhone: Settings → Notifications → app → off | reopen page | blocked state with how-to |
-| Android Chrome (not installed) | enable, choose verse | daily verse arrives after the admin time |
+| Android Chrome (not installed) | enable, choose season alerts | season alert arrives on a season start day; no daily verse push (local-only type, not offered on the web) |
 | Android Chrome installed PWA | tap notification | opens in the PWA window |
 | Desktop Chrome / Edge / Firefox / Safari macOS | enable, test, announcement | works; Firefox shows its own permission UI |
 | Quiet hours | set now inside | silent notification, listed in inbox |
@@ -174,7 +198,9 @@ No Dart package (uses PR C's `firebase_messaging` only on Android; on web its SD
 ## ١٣. التوثيق (Docs / ADR)
 
 ADR-060: lazy messaging SDK, SW at a private scope, VAPID public key in `settings/features`, queue + IID (or the
-token-list fallback), silent-not-dropped quiet hours, iOS installed-only. Arabic manual + `operations.md`
+token-list fallback), silent-not-dropped quiet hours, iOS installed-only with the install-first onboarding (no
+permission request before standalone), web offers only remote-owned types (announcements, seasons), SW guard +
+`nid` dedupe. Arabic manual + `operations.md`
 (VAPID rotation, what to tell iPhone users).
 
 ## ١٤. المخاطر (Risks)
@@ -186,6 +212,7 @@ token-list fallback), silent-not-dropped quiet hours, iOS installed-only. Arabic
 | Spam writes to `push_queue` (CodeRabbit: "per-client limits") | strict validation, 3 s global spacing **and a 1,000-per-day cap** (worst case 2,000 writes + ~3,000 rule reads + 1,000 sender reads + 1,000 deletes per day — about 10–15 % of each Spark quota, so contact messages and admin saves keep working), create-only, sender deletes. True per-client limits need an identity: **App Check enforcement on Firestore** would make every visitor load reCAPTCHA on every page (rejected by ADR-037 for PageSpeed) and anonymous Auth gives no real per-person limit; both stay listed as later hardening if abuse is ever seen (sender summary shows daily queue counts). An attacker can at worst fill the day's cap — legitimate opt-ins then wait until the next day (pending state retries automatically); client retries with jitter (≤ 5 tries) and shows «الخدمة مشغولة، حاول بعد قليل» / «حاول غدًا» when the cap is reached; later hardening: enforce App Check on Firestore for web |
 | SW conflicts with Flutter's cleanup SW | separate scope; test on real devices; fallback: register at `/push/` scope with the SW file under `/push/` |
 | VAPID key rotated → old tokens invalid | runbook: rotating means everyone must re-enable — avoid |
+| Same person opted in on the Android APK **and** in Chrome on the same phone → two copies of an announcement | different devices / installs cannot share a dedupe set; the web `/notifications` page on Android shows «لديك تطبيق Android؟ فعّل الإشعارات من التطبيق بدلًا من المتصفح» and the APK's page reminds the user to turn off browser notifications |
 | PageSpeed | nothing on load; Lighthouse check in QA |
 
 ## ١٥. ما يفعله المالك (Owner steps — click by click)

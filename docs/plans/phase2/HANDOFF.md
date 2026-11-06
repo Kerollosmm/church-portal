@@ -10,7 +10,7 @@
 
 | Item | Value |
 |---|---|
-| Repo | `Kerollosmm/church-portal` (public), default branch `main` (auto-deploys Hosting + rules — **never push to it**) |
+| Repo | `Kerollosmm/church-portal` (public per the GitHub API on 6 Nov 2026; the owner called it private — README §5, §8 #6 / #15), default branch `main` (auto-deploys Hosting + rules — **never push to it**) |
 | Firebase | project `asafra-church-portal`, Hosting site `maximos-domadios-church`, plan **Spark** |
 | Live | https://maximos-domadios-church.web.app (`/admin` hidden admin) |
 | Plan PR | branch `docs/phase2-plans` → base `main` (ADR-056) |

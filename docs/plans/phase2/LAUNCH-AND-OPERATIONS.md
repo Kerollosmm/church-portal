@@ -9,11 +9,13 @@ guidance, privacy, real-device tests, release, rollback, monitoring, the admin r
 |---|---|---|---|---|
 | 1 | Your computer | create the APK signing keystore + 2 backups | B | owner |
 | 2 | GitHub → Settings → Secrets → Actions | `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD` | B | owner |
-| 3 | GitHub → Releases | first tag `apk-v1.1.0` → APKs attached (after the chain is merged) | B | owner |
+| 2b | GitHub → Variables (+ new public repo if chosen) | APK host decision (README §8 #6): `APK_HOST`, `APK_BASE_URL`; for `releases-repo` create `Kerollosmm/church-portal-apk` + secret `RELEASES_REPO_TOKEN` | B | owner |
+| 3 | GitHub → Releases | first tag `apk-v1.1.0` → APKs + `version.json` attached and published (after the chain is merged) | B | owner |
 | 4 | `/admin` → «التطبيق والإشعارات» | APK URLs, version, build, size | B | admin |
 | 5 | Google Cloud → APIs | enable **Firebase Cloud Messaging API** | C | owner |
 | 6 | Google Cloud → IAM → Service accounts | `push-sender` with **Firebase Cloud Messaging API Admin** + **Cloud Datastore User**, JSON key | C | owner |
 | 7 | GitHub → Secrets / Variables | secret `FIREBASE_SA_PUSH`, variable `PUSH_DRY_RUN=true` | C | owner |
+| 7b | GitHub → Developer settings → Fine-grained tokens, then `/admin` | urgent-dispatch token (this repo, Actions: write only, 90 days) saved in «رمز الإرسال الفوري» (§14) | C | owner |
 | 8 | Firebase console → Cloud Messaging → Web Push certificates | **Generate key pair**, paste the public key in `/admin` | D | owner (or Hark's browser session) |
 | 9 | `/admin` → «الإشعارات» | types offered, texts, times; `push` on (launch day) | C/D | admin |
 | 10 | GitHub → Variables | `PUSH_DRY_RUN=false` (launch day) | C | owner |
@@ -49,24 +51,42 @@ D: VAPID).
 
 1. Bump `version:` in `pubspec.yaml` (`1.2.0+3`: name `1.2.0`, build `3`) in a normal PR; merge.
 2. GitHub → **Releases** → **Draft a new release** → tag `apk-v1.2.0` (create on publish) → title «تطبيق الكنيسة
-   1.2.0» → Arabic notes → **Publish**. `android.yml` builds, signs, attaches `church-portal-arm64.apk` +
-   `church-portal-arm32.apk` (~10–15 min).
-3. Check the release page: both files present; note the sizes.
-4. `/admin` → «التطبيق والإشعارات»: الإصدار `1.2.0`, رقم البناء `3`, الحجم → **حفظ**. The APK URLs use
-   `/releases/latest/download/…` so they never change.
-5. Installed apps see «تحديث متاح» (their build < 3) → download → install over the old one (same key → data kept).
-6. Hosting choice: **GitHub Releases** (public repo). Firebase Hosting `/downloads/` would allow only ~18
-   downloads/day of a 20 MB APK on Spark (360 MB/day).
+   1.2.0» → Arabic notes → **Publish**. `android.yml` builds, signs, writes `version.json` (sizes, SHA-256, cert
+   fingerprint), attaches all three files and publishes them to the chosen host (~10–15 min).
+3. Check: the release has both APKs + `version.json`; `https://maximos-domadios-church.web.app/app/android/version.json`
+   shows build `3`; the APK URL in it downloads and its size matches.
+4. `/admin` → «التطبيق والإشعارات»: الإصدار `1.2.0`, الحجم, then **رقم البناء `3` last** → **حفظ**. (The download
+   links are stable per host: `<APK_BASE_URL>church-portal-arm64.apk`.)
+5. Installed apps see «تحديث متاح» (their build < 3) → «تحديث الآن» → the app downloads the APK itself, checks its
+   SHA-256 against `version.json`, asks once for «السماح بتثبيت التحديثات» for the church app, and opens Android's
+   installer → update over the old one (same key → data kept). No browser, no releases page.
+6. **Hosting choice (owner, README §8 #6):**
+   | Host | Public download works if… | Cost / risk |
+   |---|---|---|
+   | (a) Firebase Hosting `/app/android/` | always | counts against the project's Hosting transfer (Spark 10 GB/month; past it the whole site is disabled until next month after a short grace period); watch usage weekly (§11), switch before ~7 GB/month |
+   | (b) public repo `Kerollosmm/church-portal-apk` Releases (**recommended**) | always (repo public, contains only releases) | free, no effect on the site's quota; one extra token `RELEASES_REPO_TOKEN` (that repo only, Contents: write) |
+   | (c) this repo's Releases | **only while `Kerollosmm/church-portal` is public** — release assets of a private repo are not downloadable by the public | free; GitHub reports the repo public on 6 Nov 2026, the owner called it private → confirm |
+   The manifest itself is always on our Hosting (tiny). Changing host later = change `APK_HOST` / `APK_BASE_URL`,
+   publish the next release, update the `/admin` link; installed apps follow the manifest automatically.
 
 ## ٥. إرشادات المستخدم (User guidance texts — shown in the app and on the site)
 
-**تثبيت تطبيق Android (من خارج المتجر):**
-1. اضغط «تحميل التطبيق» وانتظر انتهاء التحميل.
-2. افتح الملف من الإشعار أو من «التنزيلات».
-3. إذا ظهرت رسالة أن التثبيت من هذا المصدر غير مسموح: اضغط «الإعدادات» ← فعّل «السماح من هذا المصدر» ← ارجع
+**تثبيت تطبيق Android (من خارج المتجر)** — the canonical text of PR A's visual guide (§3.3; 5 steps with
+screenshot placeholders, Arabic + English there):
+1. اضغط «تحميل التطبيق». إذا قال المتصفح «قد يكون هذا الملف ضارًا»: تأكد أن العنوان `maximos-domadios-church.web.app`
+   ثم «تنزيل على أي حال».
+2. افتح الملف من إشعار «اكتمل التنزيل» أو من «التنزيلات».
+3. إذا ظهرت رسالة أن التثبيت من هذا المصدر غير مسموح: «الإعدادات» ← فعّل «السماح من هذا المصدر» للمتصفح ← ارجع
    واضغط «تثبيت». (Android 8 وأحدث: الإذن خاص بالمتصفح الذي حمّلت منه، مثل Chrome.)
-4. إذا ظهر تحذير Google Play Protect: اضغط «تفاصيل إضافية» ← «التثبيت على أي حال». التطبيق رسمي من موقع الكنيسة.
-5. بعد التثبيت يمكنك إلغاء «السماح من هذا المصدر».
+4. Google Play Protect: اسمح بفحص التطبيق إذا طُلب؛ إذا قال إنه لا يعرف المطوّر: «مزيد من التفاصيل» ← «التثبيت على
+   أي حال». التطبيق رسمي من موقع الكنيسة.
+5. بعد التثبيت يمكنك (وهو الأكثر أمانًا) إيقاف «السماح من هذا المصدر» للمتصفح.
+**للأمان:** حمّل من موقع الكنيسة فقط لا من ملفات مرسلة على واتساب · الكنيسة لا تطلب أبدًا إيقاف Play Protect بالكامل ·
+الإصدار والحجم على الزر يطابقان الملف. (الشكل قد يختلف حسب الهاتف.)
+
+**تحديث التطبيق:** عند ظهور «تحديث متاح» اضغط «تحديث الآن» — يُحمَّل التحديث داخل التطبيق ويُفحص تلقائيًا. أول مرة
+فقط يطلب Android «السماح بتثبيت التطبيقات من هذا المصدر» **لتطبيق الكنيسة** (ليس للمتصفح): فعّله وارجع، ثم «تحديث».
+بياناتك وإعداداتك تبقى كما هي.
 
 **الإشعارات على Android 13 وأحدث:** عند التفعيل يسألك الهاتف «السماح بإرسال الإشعارات؟» ← «سماح». إذا رفضت:
 الإعدادات ← التطبيقات ← كنيسة مكسيموس ودوماديوس ← الإشعارات ← تشغيل.
@@ -80,8 +100,11 @@ D: VAPID).
 2. اضغط زر المشاركة (مربع وسهم لأعلى).
 3. اختر «إضافة إلى الشاشة الرئيسية» ← «إضافة».
 4. افتح الكنيسة من الأيقونة الجديدة. الإشعارات تعمل بهذه الطريقة فقط وعلى iOS 16.4 أو أحدث
-   (الإعدادات ← عام ← حول ← إصدار iOS).
-5. للإيقاف: صفحة «الإشعارات» في التطبيق، أو الإعدادات ← الإشعارات ← الكنيسة.
+   (الإعدادات ← عام ← حول ← إصدار iOS). من داخل التطبيق المثبّت: «الإشعارات» ← «تفعيل الإشعارات» ← «سماح».
+   (في Safari العادي لا يظهر زر التفعيل ولا يُطلب أي إذن — هذا مقصود.)
+5. على الويب و iPhone تصل إعلانات الكنيسة وتنبيهات المواسم فقط؛ آية اليوم والأعياد ومواعيد القداس تجدها في الصفحة
+   الرئيسية للموقع (وكإشعارات محلية في تطبيق Android).
+6. للإيقاف: صفحة «الإشعارات» في التطبيق، أو الإعدادات ← الإشعارات ← الكنيسة.
 
 ## ٦. الخصوصية (Privacy notice — PDPL, Egypt Law 151/2020)
 
@@ -90,8 +113,9 @@ Add to the privacy texts (`lib/core/l10n.dart`, the notifications page, `documen
 
 > **الإشعارات:** إذا فعّلت الإشعارات تبقى ساعات الهدوء وسجل الإشعارات على جهازك فقط. لإيصال الإشعارات يعطي متصفحك أو
 > التطبيق «رمز جهاز» عشوائيًا من خدمة Google Firebase Cloud Messaging لا يحتوي على اسمك أو رقمك أو بريدك.
-> - **في تطبيق Android:** يسجّل التطبيق هذا الرمز مباشرة لدى Google في قناة «إعلانات الكنيسة» بلغتك فقط؛ باقي
->   الإشعارات (آية اليوم، المواسم، الأعياد، التذكيرات) تُجدول على هاتفك دون إرسال أي شيء.
+> - **في تطبيق Android:** يسجّل التطبيق هذا الرمز مباشرة لدى Google في قناتي «إعلانات الكنيسة» و«تنبيهات المواسم»
+>   (حسب اختيارك) بلغتك فقط؛ باقي الإشعارات (آية اليوم، الأعياد، تذكيرات القداس) تُجدول على هاتفك دون إرسال أي شيء.
+>   لتحديث التطبيق يحمّل التطبيق ملف الإصدار الجديد من موقع الكنيسة ويطلب منك إذن تثبيته؛ لا يُرسل شيئًا عنك.
 > - **على الموقع وتطبيق الويب (iPhone):** يُرسَل الرمز مع **أنواع الإشعارات التي اخترتها ولغتك** إلى قاعدة بيانات
 >   الكنيسة على Google Firebase (خوادم قد تكون خارج مصر) لدقائق حتى تسجّله أداة الإرسال لدى Google ثم يُحذف من
 >   قاعدة البيانات. يحتفظ Google بالاشتراك ما دمت مشتركًا.
@@ -100,8 +124,10 @@ Add to the privacy texts (`lib/core/l10n.dart`, the notifications page, `documen
 > **Notifications:** quiet hours and your notification history stay on your device. To deliver notifications your
 > browser or the app gets a random device token from Google Firebase Cloud Messaging; it contains no name, phone
 > number or e-mail.
-> - **Android app:** the app registers this token directly with Google for the church-announcements channel in your
->   language only; everything else (verse, seasons, feasts, reminders) is scheduled on your phone and sends nothing.
+> - **Android app:** the app registers this token directly with Google for the church-announcements and season-alert
+>   channels you chose, in your language only; everything else (verse, feasts, mass reminders) is scheduled on your
+>   phone and sends nothing. To update itself the app downloads the new version file from the church's download
+>   address and asks your permission to install it; nothing about you is sent.
 > - **Website / iPhone web app:** the token, **the notification types you chose and your language** are sent to the
 >   church's Google Firebase database (servers may be outside Egypt) for a few minutes until the sender registers
 >   them with Google, then deleted from the database. Google keeps the subscription while you stay subscribed.
@@ -113,10 +139,10 @@ Sentry rules (ADR-034) apply: never log tokens, links' query strings or user tex
 
 | Device | OS | Tests |
 |---|---|---|
-| Samsung (A-series) | Android 14/15 | APK install, every type, quiet hours, reboot, update over the old version, back button, Holy Week theme |
+| Samsung (A-series) | Android 14/15 | APK install following the PR A visual guide, every type, quiet hours, reboot, **in-app update** N → N+1, back button, Holy Week theme |
 | Xiaomi / Redmi | Android 13/14 | battery-optimisation delay, permission flow |
 | Old / low-end phone | Android 9–11, 32-bit | arm32 APK installs and runs |
-| iPhone | iOS 17/18 | PWA install, web push, deep links, quiet hours, blocked state |
+| iPhone | iOS 17/18 | Safari tab: install-first card, **no permission prompt**; PWA install, then web push (announcements, season alerts), deep links, quiet hours, blocked state |
 | iPhone | iOS ≤ 16.3 (if available) | "update iOS" message |
 | Android Chrome (not installed) | any | web push |
 | Windows / Mac: Chrome, Edge, Safari, Firefox | — | web push, no install banner |
@@ -138,6 +164,11 @@ Run each PR's §11 table on these, Arabic and English; record results in the PR 
 - **iOS web push** rules change with iOS releases; re-test after each major iOS release.
 - **Instance ID API** (web topic subscription): if retired, switch to the token-list fallback (PR D §5).
 - **GitHub scheduled workflows** are disabled after 60 days without repository activity.
+- **Urgent-dispatch token expiry** (`admin_secrets/github_dispatch.expiresOn`): the admin card warns 14 days before;
+  rotate per §14. An expired token only slows urgent sends to the cron (fallback), it never loses one.
+- **Repo visibility**: if `Kerollosmm/church-portal` is made private → APK host (c) stops working publicly and the
+  15-min cron exceeds the free Actions minutes → hourly cron (README §8 #15).
+- **Firebase Hosting transfer** (only if APKs are hosted there): Firebase console → Hosting → Usage, weekly.
 - **Firebase JS SDK version** used by `push_client.js` follows FlutterFire; after upgrading `firebase_core`,
   re-test web push.
 
@@ -147,7 +178,9 @@ Run each PR's §11 table on these, Arabic and English; record results in the PR 
 - [ ] `pubspec.yaml` version bumped (name + build).
 - [ ] Tag `apk-vX.Y.Z` → `android.yml` green → both APKs on the release.
 - [ ] Install the arm64 APK **over** the previous version on a test phone → data kept, notifications still planned.
-- [ ] `/admin` version, build, size updated.
+- [ ] `version.json` live with the new build; SHA-256 matches (`sha256sum` of the downloaded file).
+- [ ] In-app update tested from the previous version on a real phone (progress, permission, installer, data kept).
+- [ ] `/admin` version, size updated, then build number (last).
 - [ ] Sentry: no new crash in 24 h (environment `production`).
 - [ ] Arabic release notes on the GitHub Release.
 
@@ -160,7 +193,8 @@ Run each PR's §11 table on these, Arabic and English; record results in the PR 
 | Notifications UI problem on the site | `/admin` → «التطبيق والإشعارات» → `push` off |
 | Install banner problem | `/admin` → «شريط تثبيت التطبيق» off |
 | Bad web release | GitHub → the merged PR → **Revert** → merge → auto-deploy; or Firebase console → Hosting → release history → **Rollback** |
-| Bad APK release | Android cannot downgrade: publish a fix with a **higher** build number; meanwhile mark the bad release "pre-release" and the previous one **Latest**; lower `installApkBuild` in `/admin` so nobody is prompted |
+| Bad APK release | Android cannot downgrade: publish a fix with a **higher** build number; meanwhile lower `installApkBuild` in `/admin` so nobody is prompted, re-publish the previous `version.json` (`node tool/publish_hosting_file.js`), and mark the bad release "pre-release" and the previous one **Latest** |
+| Urgent sends misbehaving / token suspected leaked | GitHub → Settings → Developer settings → Fine-grained tokens → **Delete** the token; `/admin` → «رمز الإرسال الفوري» → delete; urgent rows still go out with the next cron run (§14) |
 | Sender key leak | delete the key in Google Cloud → new key → update the secret |
 | Spam in `push_queue` | throttle limits it; a rules PR with `allow create: if false`; the sender deletes queued docs |
 
@@ -170,7 +204,8 @@ Run each PR's §11 table on these, Arabic and English; record results in the PR 
   a new `production` issue.
 - **GitHub Actions** failure e-mails for `push-sender.yml`, `android.yml`, `synaxarium.yml` (GitHub → Settings →
   Notifications → Actions → failed workflows only).
-- **Sender run summary**: sent items, queue processed, errors (no tokens).
+- **Sender run summary**: trigger (`cron` / `urgent` / `manual`), sent items, queue processed, errors (no tokens).
+- **Dispatch failures**: rows with `dispatch = failed:<code>` in `/admin` (401 = token expired / revoked → §14).
 - **Firebase console → Messaging → Reports**: aggregate Android delivery (sent / received / opened).
 - **Firestore usage**: Firebase console → Firestore → Usage, weekly during the first month.
 
@@ -183,11 +218,14 @@ Run each PR's §11 table on these, Arabic and English; record results in the PR 
 | Daily verse | automatic; fixed / season verses as today |
 | Monthly | GitHub → Actions: `push-sender` ran recently (not disabled); Sentry clean |
 | Every app release | §9 |
+| Every 90 days | rotate the urgent-dispatch token (§14) |
 | Yearly | rotate the sender key; open the keystore backup; review texts |
 | Every 3 months | §8 watch items |
 
 Admin golden rules: title ≤ 40 chars, body ≤ 120 shows fully; always set a deep link; at most ~1 announcement a
-day; never personal data in a notification.
+day; «عاجل» only for real emergencies / a live broadcast starting now (it reaches everyone within ~2 minutes); never
+personal data in a notification; never send the verse, a feast or a mass reminder as a one-off (they are already
+local in the app — duplicate).
 
 ## ١٣. يوم الإطلاق (Launch-day checklist)
 
@@ -195,6 +233,9 @@ day; never personal data in a notification.
 - [ ] Whole PR chain merged (HANDOFF §5.6); Lighthouse mobile ≥ 61 on the live site.
 - [ ] Keystore created + 2 backups; secrets set; first signed APK released; `/admin` APK fields filled.
 - [ ] FCM API enabled; `push-sender` SA + `FIREBASE_SA_PUSH`; dry runs (`PUSH_DRY_RUN=true`) correct for 3 days.
+- [ ] Urgent-dispatch token saved (§14); a dry-run urgent send shows «في الطابور» → the run appears in Actions within
+      a minute with trigger `urgent`.
+- [ ] APK host chosen and the in-app update tested from build N to N+1 on a real phone.
 - [ ] VAPID key saved in `/admin`.
 - [ ] Real-device plan (§7) passed and recorded.
 - [ ] Privacy texts approved (§6).
@@ -204,7 +245,8 @@ day; never personal data in a notification.
 **يوم الإطلاق**
 - [ ] `/admin` → «الإشعارات» → offered types → `push` **on**.
 - [ ] GitHub → Variables → `PUSH_DRY_RUN` = `false`.
-- [ ] Owner's phones: APK + iPhone PWA, all types on, a test one-off (+15 min, link `/mass-schedule`) received.
+- [ ] Owner's phones: APK + iPhone PWA, all types on, a test one-off (+15 min, link `/mass-schedule`) received, and
+      one urgent test to the test topic received in ~1–2 min — exactly once.
 - [ ] Announce (church, WhatsApp channel, Facebook): site link + «حمّل التطبيق» + iPhone steps (§5) + short screen
       recording.
 - [ ] Check Sentry and the sender summary at noon and evening.
@@ -212,3 +254,44 @@ day; never personal data in a notification.
 **بعدها بأسبوع**
 - [ ] Review delivery reports, error log, Firestore usage, servants' feedback; adjust times / texts.
 - [ ] Tag the first fix release if needed.
+
+## ١٤. رمز الإرسال الفوري (Urgent-dispatch token runbook — create, store, rotate, revoke)
+
+Why: `/admin` triggers `push-sender.yml` immediately for urgent one-offs (PR C §16). Spark has no Cloud Functions,
+so the admin's browser calls GitHub's API itself with a token that must never be public.
+
+**Create (owner, ~3 min)**
+1. Owner Google accounts used for `/admin` have **2-step verification** on (the token is readable by owner-role
+   admins only).
+2. GitHub (account `Kerollosmm`) → avatar → **Settings** → **Developer settings** → **Personal access tokens** →
+   **Fine-grained tokens** → **Generate new token**.
+3. Token name `church-portal-urgent-dispatch`; **Expiration: 90 days** (custom date); Resource owner `Kerollosmm`.
+4. **Repository access → Only select repositories → `Kerollosmm/church-portal`**.
+5. **Repository permissions → Actions: Read and write.** Leave everything else at **No access** (Metadata: Read-only
+   is added automatically). **Never add Contents** (that would allow pushing code) — if dispatch is refused, use the
+   Worker option below instead.
+6. **Generate token** → copy it once (starts with `github_pat_`).
+7. `/admin` → «الإشعارات» → «رمز الإرسال الفوري» → paste, set «ينتهي في» to the same date → **حفظ**. The card then
+   shows only «محفوظ — ينتهي في …». Do not keep the token anywhere else (no notes, chats, e-mails).
+8. Test: with `PUSH_DRY_RUN=true`, «إرسال عاجل الآن» to the test topic → chip «في الطابور» → GitHub → Actions shows a
+   «Push sender (FCM)» run with trigger `urgent` within a minute.
+
+**Rotate (every 90 days, or when an admin with owner role leaves)**: create a new token as above → paste it in
+`/admin` (overwrites) → test → GitHub → Fine-grained tokens → **Delete** the old one. Calendar reminder 7 days before
+expiry; the admin card warns from 14 days before.
+
+**Revoke (suspected leak)**: GitHub → Fine-grained tokens → **Delete** (instant) → `/admin` → delete the token →
+GitHub → Actions: cancel unknown runs, re-enable any disabled workflow, check `deploy.yml` / `seed.yml` /
+`android.yml` runs of the last days → create a new token later. Nothing else needs changing: the token could never
+read code or secrets.
+
+**Expired / missing token** → urgent rows show «فشل الإرسال الفوري — سيُرسل في الدورة التالية» and go out with the next
+cron run (15–30 min). Nothing is lost.
+
+**Optional hardening — Cloudflare Worker proxy (token never reaches a browser)**: free Cloudflare account →
+Workers → new Worker `church-dispatch` → secret `GITHUB_TOKEN` (same fine-grained token) + variable `OWNER_UIDS` →
+code (~60 lines, kept in `tool/dispatch-worker/` if adopted): accept `POST {row_id}` only from the site origin, verify
+the `Authorization: Bearer <Firebase ID token>` against Google's public keys (`aud`/`iss` =
+`asafra-church-portal`, not expired, `uid` in `OWNER_UIDS`), then call the GitHub dispatch API. `/admin` then calls
+the Worker instead of GitHub and `admin_secrets/github_dispatch` is deleted. Free tier ≈ 100k requests/day.
+

@@ -87,6 +87,9 @@ the owner approves the whole chain.
 - [ ] PR E — responsive + size audit (ADR-061; includes the 320 px app-bar item below)
 - [ ] Owner: keystore + secrets, FCM API + `push-sender` service account, VAPID key, Android developer verification
       before 2027 (`docs/plans/phase2/LAUNCH-AND-OPERATIONS.md`)
+- [ ] Owner decisions on the plan (README §8): APK host (#6), urgent-dispatch token placement and who may send urgent
+      (#12), web pushes limited to announcements + season alerts (#13), seasons via FCM on the APK (#14), repo
+      visibility (#15); then the urgent-dispatch token (LAUNCH §14)
 
 ## Infrastructure & security (owner: developer)
 

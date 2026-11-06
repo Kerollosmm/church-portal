@@ -19,7 +19,9 @@
 
 ## ٢. قصص المستخدم (User stories)
 
-- كزائر على Android أرى «حمّل تطبيق الكنيسة» مع رقم الإصدار والحجم، وبضغطة واحدة يبدأ التحميل.
+- كزائر على Android أرى «حمّل تطبيق الكنيسة» مع رقم الإصدار والحجم، وبضغطة واحدة يبدأ التحميل، ويظهر لي دليل مصوّر
+  خطوة بخطوة يشرح رسالة «قد يكون هذا الملف ضارًا» وتحذير Google Play Protect وإذن «تثبيت التطبيقات غير المعروفة»
+  بأمان.
 - كزائر على iPhone أرى «أضف الموقع إلى الشاشة الرئيسية» وعند الضغط تظهر ٣ خطوات بالأيقونات الحقيقية لـ Safari.
 - إذا ضغطت ✕ لا يظهر الشريط مرة أخرى قبل المدة التي حددها المشرف (افتراضي ٣٠ يومًا)؛ «ذكّرني لاحقًا» يخفيه ٣ أيام.
 - إذا كنت أفتح الموقع من التطبيق المثبت (PWA) أو من تطبيق Android لا أرى الشريط أبدًا.
@@ -35,8 +37,8 @@
 | OS detection | pure Dart `detectInstallOs(userAgent, platform, maxTouchPoints)` → `android` / `ios` (iPhone, iPod, iPad, **iPadOS that reports "Macintosh" with touch points > 1**) / `desktop` / `other`. In-app browsers (Facebook `FBAN/FBAV`, Instagram, WhatsApp `WhatsApp/`) flagged `inAppBrowser` → the iOS steps say "open in Safari first", Android download still works |
 | Already installed | hidden when `matchMedia('(display-mode: standalone)')`, `(display-mode: minimal-ui)`, `navigator.standalone == true`, on any non-web build (`!kIsWeb` = the APK) and on `/admin`. The `appinstalled` event hides the banner **for the current browser session only** (`sessionStorage`), never permanently — so after the user uninstalls the PWA, a later browser visit shows the banner again (CodeRabbit on the plan PR). Where supported (Chrome Android), `navigator.getInstalledRelatedApps()` with a `related_applications` entry of type `webapp` for our own manifest confirms a still-installed PWA; unsupported → rely on the dismiss memory |
 | Android action | `installAndroidUrl` set → button «تحميل التطبيق (١٨٫٤ م.ب • إصدار ١٫١٫٠)» opens the URL (download); optional small link «هاتف قديم؟» → `installAndroidUrl32`. URL blank → if the browser fired `beforeinstallprompt` (captured early in `index.html`) the button calls `prompt()`; else a sheet with "⋮ → تثبيت التطبيق / إضافة إلى الشاشة الرئيسية" |
-| After APK tap | a short sheet: «بعد التحميل افتح الملف واسمح بالتثبيت من مصادر غير معروفة إذا طُلب» + link to the full guide (see LAUNCH-AND-OPERATIONS §5) |
-| iPhone/iPad action | bottom sheet with 3 numbered steps using the real glyphs: 1 `Icons.ios_share` «اضغط زر المشاركة», 2 `Icons.add_box_outlined` «إضافة إلى الشاشة الرئيسية», 3 «إضافة». Note for iOS < 16.4 / non-Safari: «افتح الموقع في Safari». No screenshots (size) |
+| After APK tap | the download starts **and** the **visual sideload guide** opens (§3.3): a step-by-step modal that explains the browser's «file might be harmful» bar, opening the file, allowing «install unknown apps» for the browser, the Google Play Protect prompt and how to turn the permission off again. Also reachable from a «طريقة التثبيت» link on the banner and from `/notifications` on Android browsers (same modal), so a user who closed it can reopen it |
+| iPhone/iPad action | bottom sheet with 3 numbered steps using the real glyphs: 1 `Icons.ios_share` «اضغط زر المشاركة», 2 `Icons.add_box_outlined` «إضافة إلى الشاشة الرئيسية», 3 «إضافة», then «افتح الكنيسة من الأيقونة الجديدة». Note for iOS < 16.4 / non-Safari: «افتح الموقع في Safari». No screenshots (size). **The iOS banner and sheet never request notification permission and never touch `Notification` / `PushManager`** — on iOS the permission UI exists only inside the installed app (standalone, iOS 16.4+; PR D §3.1) |
 | Dismiss ✕ | stores `church_portal_install = {"until": "<ISO date>"}` in localStorage = now + `installReshowDays`; 0 = never again (`until` = far future) |
 | Remind later | «ذكّرني لاحقًا» = now + `installRemindDays` |
 | Timing | shown after the first real content (`ContentReady`, ADR-038) + 4 s, never over the loading screen; bottom of the viewport, above the safe-area inset; max width 560 px centred; does **not** change the hero |
@@ -46,17 +48,44 @@
 ### 3.2 Notification preferences (behind `push`)
 | Sub-feature | Detail |
 |---|---|
-| Type model | `NotifyType` (`announcements`, `verse_daily`, `seasons`, `feasts`, `occasions`), ar/en labels + one-line descriptions, icons, FCM topic names (`web_<type>_<lang>`, `app_announcements_<lang>`) |
+| Type model | `NotifyType` (`announcements`, `verse_daily`, `seasons`, `feasts`, `occasions`), ar/en labels + one-line descriptions, icons, and the **channel owner** (README §3.1): `NotifyChannel.local` for `verse_daily`, `feasts`, `occasions` (Android APK only, scheduled on the phone, never FCM) and `NotifyChannel.remote` for `announcements`, `seasons` (FCM). `topicFor(type, lang, {web})` returns `web_<type>_<lang>` / `app_<type>_<lang>` **only for remote types and throws `ArgumentError` for local-owned ones**, so no code path can subscribe to a topic that duplicates a local notification. `isLocalOwned(String type)` is the shared guard used by the Android handler (PR C) and mirrored in the SW (PR D) |
 | Route `/notifications` | «الإشعارات» page; in the drawer and footer only when `push` is on. When off → the normal 404 (not indexable) |
 | Explainer | before any browser prompt: what we send, how often, no personal data, «يمكنك الإيقاف في أي وقت» |
-| Per-type toggles | only `pushTypes` offered by the admin; quiet default = all off; first opt-in pre-ticks `announcements` + `seasons` |
+| Per-type toggles | only `pushTypes` offered by the admin, **filtered by platform**: web (browser / iPhone PWA) shows only remote types (`announcements`, `seasons`) with a muted line for the local-only ones; the APK (PR B) shows all five; quiet default = all off; first opt-in pre-ticks `announcements` + `seasons` |
 | Permission on tap only | `Notification.requestPermission()` only from the «تفعيل الإشعارات» button, never on load |
-| States | `unsupported` (no `Notification`/`PushManager`/`serviceWorker`), `iosNeedsInstall` (iOS not standalone → show the install steps), `default`, `granted`, `denied` (blocked) |
+| States | `unsupported` (no `Notification`/`PushManager`/`serviceWorker`), `iosNeedsInstall` (iOS, not standalone: `display-mode: standalone` false and `navigator.standalone !== true` → install-first card + read-only type preview, **no enable button, no permission call**), `iosTooOld` (standalone but iOS < 16.4 → «حدّث iOS»), `inAppBrowser` (→ «افتح في Safari / Chrome»), `default`, `granted`, `denied` (blocked). Order of checks: in-app browser → iOS not standalone → iOS too old → unsupported → permission |
 | Blocked state | how to re-enable: Chrome Android «🔒 → الأذونات → الإشعارات → سماح», iPhone «الإعدادات → الإشعارات → كنيسة مكسيموس ودوماديوس», desktop Chrome/Edge/Firefox/Safari one line each |
 | Unsubscribe all | «إيقاف كل الإشعارات» → clears choices; PR D also deletes the FCM token and queues an unsubscribe |
 | Storage | localStorage `church_portal_push` = `{"types":[…],"lang":"ar","quiet":{"from":"22:00","to":"07:00"},"updatedAt":…}`; nothing in Firestore |
 | Web scaffold | `web/firebase-messaging-sw.js` (no fetch handler, own scope) and `web/push_client.js` (lazy, injected on tap) — present but only used by PR D; with no `pushVapidKey` the enable button explains "قريبًا" and stays disabled |
 | Not in this PR | quiet hours UI, test notification, inbox → PR B (Android) / PR D (web) — they need a delivery path |
+
+### 3.3 Android sideload guide (visual modal)
+Opens right after the APK download starts (and from «طريقة التثبيت»). A `showModalBottomSheet` (full height on
+phones, max width 560 px) with a `PageView` stepper: step dots, «التالي» / «السابق», «تم», swipe, RTL-aware order,
+`Semantics` per step («الخطوة ٢ من ٥»), 48 dp targets, 320 px × 200 % text without overflow. Each step = a
+**screenshot placeholder** (fixed 9:16 frame, 200 px tall on a 390 px phone, rounded, `outlineVariant` border, a
+seal glyph + «صورة توضيحية» caption until the real image exists) + title + 1–3 short lines, Arabic and English from
+`l10n.dart`. Images are optional static files `web/install-guide/android-<n>-<ar|en>.webp` (≤ 30 KB each, loaded
+with `Image.network` **only when the modal opens** → +0 bytes on page load, not in `main.dart.js`, not in the APK);
+if a file is missing or fails, the placeholder frame stays (no broken image). Real screenshots are taken by the
+implementer on a Samsung (One UI) and a Pixel-style phone (Android 14/15), Arabic UI, cropped to the dialog,
+personal data blurred, then committed (PR A or later) — wording on other brands varies, so the texts say «قد يختلف
+الشكل حسب الهاتف».
+
+| # | Placeholder (screenshot to take) | العربية | English |
+|---|---|---|---|
+| 1 | Chrome download bar «قد يكون هذا الملف ضارًا» with «تنزيل على أي حال» highlighted | **رسالة «قد يكون الملف ضارًا»**: يعرضها المتصفح لأي تطبيق من خارج متجر Play. تأكد أن العنوان في الأعلى هو `maximos-domadios-church.web.app` ثم اضغط «تنزيل على أي حال» | **"File might be harmful"**: the browser shows this for any app from outside the Play Store. Check that the address bar shows `maximos-domadios-church.web.app`, then tap "Download anyway" |
+| 2 | Download-complete notification / Downloads list with the `.apk` | **افتح الملف**: من إشعار «اكتمل التنزيل» أو من «التنزيلات» اضغط على ملف تطبيق الكنيسة (الحجم المكتوب على الزر نفسه) | **Open the file** from the "Download complete" notification or Downloads; the size matches the one on the button |
+| 3 | «لا يُسمح لهاتفك بتثبيت تطبيقات غير معروفة من هذا المصدر» → «الإعدادات»; then the «السماح من هذا المصدر» toggle for Chrome | **اسمح للمتصفح بالتثبيت مرة واحدة**: اضغط «الإعدادات» ← فعّل «السماح من هذا المصدر» لمتصفح Chrome (أو المتصفح الذي حمّلت منه) ← ارجع | **Allow the browser once**: tap "Settings" → turn on "Allow from this source" for Chrome (or the browser you used) → go back |
+| 4 | Install dialog, then the Play Protect sheet («تطبيق غير آمن تم حظره» / «فحص التطبيق») with «مزيد من التفاصيل» → «التثبيت على أي حال» | **Google Play Protect**: قد يقترح فحص التطبيق — اسمح بالفحص. إذا قال إنه لا يعرف المطوّر: «مزيد من التفاصيل» ← «التثبيت على أي حال». هذا طبيعي لتطبيق من خارج المتجر | **Google Play Protect** may offer to scan the app — allow the scan. If it says the developer is unknown: "More details" → "Install anyway". Normal for an app from outside the store |
+| 5 | App icon on the home screen + the «السماح من هذا المصدر» toggle switched off | **افتح التطبيق**، ثم (اختياري وأكثر أمانًا) ارجع إلى الإعدادات وأوقف «السماح من هذا المصدر» للمتصفح | **Open the app**, then (optional, safer) switch "Allow from this source" off again for the browser |
+
+Safety box at the bottom of every step («للأمان»): حمّل التطبيق من موقع الكنيسة فقط، لا من ملفات مرسلة على واتساب أو
+فيسبوك · الكنيسة لا تطلب أبدًا إيقاف Play Protect بالكامل أو أي إذن آخر · رقم الإصدار والحجم على الزر يجب أن
+يطابقا الملف. (Only download from the church site, never from forwarded files; the church never asks you to turn
+Play Protect off entirely; version and size on the button must match the file.) The same texts are the canonical
+copy in LAUNCH-AND-OPERATIONS §5.
 
 ## ٤. الشاشات (Screens)
 
@@ -125,6 +154,9 @@ Create:
 - `lib/core/install_env.dart` + `install_env_stub.dart` + `install_env_web.dart` — `userAgent`, `platform`, `maxTouchPoints`, `isStandalone`, `hasDeferredPrompt`, `Future<bool> promptInstall()`, `readJson/writeJson(key)` (localStorage, try/catch like `locale_storage_web.dart`).
 - `lib/core/push_env.dart` + `push_env_stub.dart` + `push_env_web.dart` — `isSupported`, `permission`, `Future<String> requestPermission()`; (PR D adds token calls).
 - `lib/ui/widgets/install_banner.dart` — `InstallBanner` (ConsumerStatefulWidget) + `showIosInstallSteps` / `showAndroidSteps` sheets.
+- `lib/ui/widgets/apk_install_guide.dart` — `showApkInstallGuide(context)` (§3.3: stepper, placeholders, safety box).
+- `web/install-guide/README.md` — file names, size limit and how to capture / blur the five screenshots (images
+  themselves optional; placeholders until added).
 - `lib/ui/pages/notifications_page.dart` — `NotificationsPage`.
 - `web/firebase-messaging-sw.js` — scaffold (see PR D for the full file); `web/push_client.js` — scaffold.
 - `test/install_banner_test.dart`, `test/push_prefs_test.dart`.
@@ -139,7 +171,7 @@ Modify:
 - `lib/router.dart` — `GoRoute('/notifications')` (404 when `push` off; `setDocumentRouteMeta(indexable: false)`).
 - `lib/domain/features.dart` `CustomizablePages` — add `notifications` (page header override).
 - `lib/ui/admin/admin_schema.dart` — `appSettingsDoc`; `lib/ui/admin/admin_page.dart` — destination `app` («التطبيق والإشعارات»).
-- `lib/core/l10n.dart` — ~45 strings `[ar, en]`.
+- `lib/core/l10n.dart` — ~70 strings `[ar, en]` (incl. the 5 guide steps + safety box, iOS states).
 - `firestore.rules`, `tool/rules_test/rules.test.mjs`.
 - `lib/domain/sitemap.dart` — `/notifications` **not** in the sitemap.
 - Docs: `docs/memory-bank/03,04,05,06,07,10,11`, `documentation/README.md`, `documentation/features/pwa-and-caching.md`, `documentation/features/feature-toggles.md`, `documentation/en/features.md`.
@@ -156,7 +188,7 @@ None. Uses `package:web` (already `^1.1.2`) and `dart:js_interop`.
 2. `FeatureSettings` parsing + tests (defaults, bad values clamp, unknown types dropped).
 3. Rules + emulator tests (`cd tool/rules_test && npm test`).
 4. Web env (`install_env_web.dart`, `push_env_web.dart`) + `index.html` early capture.
-5. `InstallBanner` + sheets; place in `AppShell`; widget tests with a fake env (inject via provider
+5. `InstallBanner` + sheets + `apk_install_guide.dart`; place in `AppShell`; widget tests with a fake env (inject via provider
    `installEnvProvider`).
 6. `NotificationsPage` + route + nav/footer entries behind `push`; widget tests per permission state.
 7. Admin `appSettingsDoc` + destination; admin widget test (fields render, save writes only changed keys).
@@ -164,8 +196,8 @@ None. Uses `package:web` (already `^1.1.2`) and `dart:js_interop`.
 9. Small-screen check of the banner at 320 / 360 / 390 / 768 / 1024 px, ar + en, 200 % text.
 10. Docs (memory bank, Arabic `documentation/`, English `documentation/en/`), ADR-057, open tasks.
 11. `flutter analyze`, `flutter test`, rules tests, release build; compare `main.dart.js` size (budget **+20 KB gz**).
-12. Screenshots 390 px Arabic: Android banner, iPhone banner + steps sheet, preferences page (flag forced on in the
-    test harness only).
+12. Screenshots 390 px Arabic: Android banner, the sideload guide (step 1 and 4, placeholders), iPhone banner + steps
+    sheet, preferences page incl. the iOS install-first state (flag forced on in the test harness only).
 
 ## ١٠. الاختبارات (Tests)
 
@@ -173,11 +205,16 @@ None. Uses `package:web` (already `^1.1.2`) and `dart:js_interop`.
   dismissed until future/past, reshow 0 = never, remind later, not web).
 - `resolveInstallAction`: apk URL wins; no URL + prompt → pwaPrompt; no prompt → androidSteps; iOS → iosSteps.
 - `PushPrefs` encode/decode round trip, corrupted JSON → defaults, unknown types dropped, offered filter.
+- `topicFor`: remote types → `web_/app_<type>_<lang>`; `verse_daily` / `feasts` / `occasions` → throws;
+  `isLocalOwned` table.
 - `safeNotificationLink`: `/mass-schedule` ok, `/page/x?y=1#z` ok, `https://evil`, `javascript:`, `//evil.com`,
   empty → `/`.
 - Widgets: banner shows on Android/iOS, hidden on desktop & standalone; ✕ writes `until`; «لاحقًا» writes remind
-  date; the APK button calls `launch` with the URL; iOS steps sheet opens; 320 px × 200 % no overflow (ar/en).
-- `/notifications`: hidden (404) with `push` off; with `push` on each state renders; toggles persist; permission
+  date; the APK button calls `launch` with the URL **and opens the sideload guide**; guide: 5 steps, next / back /
+  done, RTL order, missing image → placeholder, 320 px × 200 % no overflow; iOS steps sheet opens and **the fake env
+  records zero permission calls**; 320 px × 200 % no overflow (ar/en).
+- `/notifications`: hidden (404) with `push` off; with `push` on each state renders (incl. `iosNeedsInstall`,
+  `iosTooOld`, `inAppBrowser`); web lists only remote types; toggles persist; permission
   requested only after tap (fake env counts calls); «إيقاف كل الإشعارات» clears.
 - Admin: `appSettingsDoc` fields, validators (URL, version pattern, VAPID pattern).
 - Existing guards stay green: no hard-coded colours in `lib/ui` (palette roles only), accessibility sweep,
@@ -187,9 +224,9 @@ None. Uses `package:web` (already `^1.1.2`) and `dart:js_interop`.
 
 | Device | Checks |
 |---|---|
-| Android Chrome (real phone) | **install the PWA, uninstall it, revisit in the browser → banner shows again** (unless dismissed); banner after content; APK button downloads (use a test URL); without URL the install prompt appears; ✕ → gone after reload; «لاحقًا» → gone; installed PWA → no banner |
+| Android Chrome (real phone) | **install the PWA, uninstall it, revisit in the browser → banner shows again** (unless dismissed); banner after content; APK button downloads (use a test URL) and the sideload guide opens; follow the guide end to end on Android 14/15 (Samsung + Pixel-style) and note any wording difference for the screenshots; without URL the install prompt appears; ✕ → gone after reload; «لاحقًا» → gone; installed PWA → no banner |
 | Samsung Internet | banner + steps fallback |
-| iPhone Safari (iOS 17/18) | banner → steps sheet; after Add to Home Screen, opening from the icon → no banner |
+| iPhone Safari (iOS 17/18) | banner → steps sheet, **no notification prompt at any point**; `/notifications` in Safari → install-first card; after Add to Home Screen, opening from the icon → no banner, and `/notifications` shows the enable button (PR D) |
 | iPhone in Facebook/WhatsApp in-app browser | "open in Safari" hint |
 | iPad | treated as iOS |
 | Desktop Chrome / Safari / Firefox | no banner |
@@ -205,8 +242,9 @@ channel `pr-<n>`) cover it.
 
 ## ١٣. التوثيق (Docs / ADR)
 
-ADR-057 "Install banner + notification preferences foundation": OS detection rules, APK-first on Android, iOS
-steps instead of an App Store link, dismiss memory in localStorage, `push` default off, settings as top-level keys,
+ADR-057 "Install banner + notification preferences foundation": OS detection rules, APK-first on Android with the
+visual sideload guide, iOS steps instead of an App Store link (never a permission request outside standalone),
+channel-owner model (`topicFor` refuses local-owned types), dismiss memory in localStorage, `push` default off, settings as top-level keys,
 +0 reads. Arabic manual `documentation/features/install-and-notifications.md` with the admin labels.
 
 ## ١٤. المخاطر (Risks)
