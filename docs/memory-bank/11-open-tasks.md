@@ -1,7 +1,7 @@
 # 11 — Open tasks
 
 Tick items off (or delete them) in the PR that completes them, and add new ones as you discover them.
-Status as of 6 Nov 2026 (ADR-055 empty-state PR; ADR-054 / PR #48; ADR-053 / PR #47; PR #44 / ADR-051; PR #45 / ADR-050; PR #42 / ADR-049; PR #40 / ADR-047; PR #39 / ADR-046; PR #38 / ADR-045; PR #35 / ADR-044; PR #37 / ADR-043; PR #33 / ADR-042; PR #32 / ADR-041; PR #31 / ADR-039–040; PR #30 / ADR-038; PR #25 re-checked against `d60261d`; earlier: PR #7–#24).
+Status as of 6 Nov 2026 (ADR-055 / PR #49; ADR-054 / PR #48; ADR-053 / PR #47; PR #44 / ADR-051; PR #45 / ADR-050; PR #42 / ADR-049; PR #40 / ADR-047; PR #39 / ADR-046; PR #38 / ADR-045; PR #35 / ADR-044; PR #37 / ADR-043; PR #33 / ADR-042; PR #32 / ADR-041; PR #31 / ADR-039–040; PR #30 / ADR-038; PR #25 re-checked against `d60261d`; earlier: PR #7–#24).
 
 ## Top open items (owner's list, 4 Nov 2026 — details in the sections below)
 

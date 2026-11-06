@@ -1658,7 +1658,7 @@ supersede them.
   counts; past seasons in lists / prompt / page; `presetReplaceDays` + the dialog AR/EN, unticked = no warning; the
   12:30 repro + a third service still named; balanced pill). Screenshots `work/fixall/D/png/` (390 px AR).
 
-## ADR-055 — Seasonal list empty state («لا توجد مواسم حالية» + next season)
+## ADR-055 (PR #49) — Seasonal list empty state («لا توجد مواسم حالية» + next season)
 
 - **Context:** the seasons v2 round-4 simulation showed an empty screen on /mass-schedule with the «المواسم والأعياد
   الكنسية» switch on while no season was in effect (all ended — hidden since ADR-054 — or none started yet): only the
@@ -1746,6 +1746,6 @@ supersede them.
 | 6 Nov 2026 | **PR #46** — "Church milestones on the About page" (`feat/about-milestones`) | ADR-052: shared `MilestoneCard` (`lib/ui/widgets/milestone_card.dart`) for Home «قصتنا» and a new «محطات الكنيسة» section on `/about` after the history & altars; `settings/features.aboutMilestones` (default on) with an indented admin switch under the milestones section; milestone detail Back → About while listed there; rules key + bool check. +0 writes / new listeners; direct /about landing opens the existing milestones listener. |
 | 6 Nov 2026 | **PR #47** — "Season replace window, cross-season samples in lists, later parallel line" (`fix/season-replace-window`) | ADR-053: a full-override season with exact dates replaces every regular service in its window, also on days without its own service (Good Friday no longer shows the weekly Divine Liturgy; holds with the seed samples deleted); season lists / prompt weekly list drop a sample hidden behind another active season's real service on every matching weekday; next-service card names a later parallel service with its time («وبعدها ٠٧:٠٠ ص: …»); switch subtitle mentions fasts. +0 reads / writes / listeners. |
 | 6 Nov 2026 | **PR #48** — "Season lists polish" (`fix/season-lists-polish`) | ADR-054: a listed undated sample states the days another season's real service replaces it («لا يُقام ٢٣ يونيو», prompt "(not on …: replaced by …)"); seasons ended before today leave /mass-schedule and the prompt; «بعد يومين» / «بعد ١١ يومًا»; preset dialog warns when a season replaces the weekly schedule for more than 3 days (defaults unchanged); the next card never repeats a service named in the «يُقام الآن» box; balanced season chip. +0 reads / writes / listeners. |
-| 6 Nov 2026 | **PR #?** — "Seasonal list empty state" (`fix/season-empty-state`) | ADR-055: /mass-schedule seasonal view with no season in effect shows «لا توجد مواسم حالية» / "No current seasons" and, when an enabled season starts later, «الموسم القادم: صوم الميلاد — يبدأ ٢٥ نوفمبر» (`nextUpcomingSeason`, `EmptyState.detail`); fixed i18n strings (not admin-configurable). +0 reads / writes / listeners. |
+| 6 Nov 2026 | **PR #49** — "Seasonal list empty state" (`fix/season-empty-state`) | ADR-055: /mass-schedule seasonal view with no season in effect shows «لا توجد مواسم حالية» / "No current seasons" and, when an enabled season starts later, «الموسم القادم: صوم الميلاد — يبدأ ٢٥ نوفمبر» (`nextUpcomingSeason`, `EmptyState.detail`); fixed i18n strings (not admin-configurable). +0 reads / writes / listeners. |
 
 Append new PRs to this table.
