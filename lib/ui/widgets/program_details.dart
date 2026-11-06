@@ -45,12 +45,17 @@ class ProgramDetails extends ConsumerWidget {
 
   /// "At the same time: …" line for services held in parallel elsewhere.
   final String parallelText;
-  const ProgramDetails(this.program, {super.key, this.showVenue = true, this.parallelText = ''});
+
+  /// «وبعدها ٠٧:٠٠ ص: …» lines for parallel services that start later, while
+  /// this one runs (ADR-053), already worded ([parallelThenLine]).
+  final List<String> parallelThen;
+  const ProgramDetails(this.program,
+      {super.key, this.showVenue = true, this.parallelText = '', this.parallelThen = const []});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final p = program;
-    if (p.isEmpty && parallelText.isEmpty) return const SizedBox.shrink();
+    if (p.isEmpty && parallelText.isEmpty && parallelThen.isEmpty) return const SizedBox.shrink();
     final opts = ref.watch(featuresProvider.select((f) => f.programOptions));
     final speaker = context.pick(p.speakerAr, p.speakerEn);
     final topic = context.pick(p.topicAr, p.topicEn);
@@ -73,6 +78,7 @@ class ProgramDetails extends ConsumerWidget {
       if (topic.isNotEmpty) IconLine(Icons.menu_book_outlined, '${context.tr('topicLabel')}: $topic'),
       if (choir.isNotEmpty) IconLine(Icons.music_note_outlined, '${context.tr('choirLabel')}: $choir'),
       if (parallelText.isNotEmpty) IconLine(Icons.call_split_rounded, context.tr('parallelAt', {'v': parallelText})),
+      for (final (i, t) in parallelThen.indexed) IconLine(Icons.call_split_rounded, t, key: Key('parallelThen$i')),
       if (p.hasAttachment)
         Padding(
           padding: const EdgeInsets.only(top: 6),
@@ -87,7 +93,20 @@ class ProgramDetails extends ConsumerWidget {
   }
 }
 
-/// "Lower hall (Youth) 19:00" for each parallel service (ADR-041).
+/// «وبعدها ٠٧:٠٠ ص: القداس الإلهي (صباح الأحد) — الكنيسة الكبرى (عام)»: a
+/// parallel service that starts later than the one shown, named with its own
+/// start time [time] (already formatted), so the card does not call it «في
+/// نفس الوقت» (ADR-053, sims r2 P2 O-a).
+String parallelThenLine(BuildContext context, ProgramOptions opts, Liturgy o, String time) {
+  final audience = audienceLabel(context, opts, o.program.audience);
+  final v = [serviceWithPlace(context, opts, o), if (audience.isNotEmpty) '($audience)'].join(' ');
+  return context.tr('parallelThen', {'t': time, 'v': v});
+}
+
+/// "Lower hall (Youth) 19:00" for each parallel service (ADR-041), joined
+/// with the Arabic list comma «، » (", " in English). Kept on purpose
+/// (ADR-050, issue 20): «،» is the correct Arabic list separator; «•»
+/// already separates the day and the time in the pills.
 String parallelSummary(BuildContext context, ProgramOptions opts, List<Liturgy> others) => [
       for (final o in others)
         [

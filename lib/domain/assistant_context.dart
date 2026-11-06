@@ -1,11 +1,14 @@
 import 'assistant_settings.dart';
 import 'cairo_time.dart';
+import 'coptic_calendar.dart' show DayStartModes;
+import 'coptic_feasts.dart';
 import 'custom_content.dart';
 import 'features.dart';
 import 'models.dart';
 import 'rules.dart';
 import 'schedule.dart';
 import 'time_format.dart';
+import 'today.dart' show SynaxariumData;
 
 /// Builds the grounding system instruction for the "Ask the church"
 /// assistant from the current portal content.
@@ -28,6 +31,7 @@ String buildAssistantInstruction({
   List<CategoryEntry> entries = const [],
   List<CustomPage> pages = const [],
   ContactSettings contact = ContactSettings.defaults,
+  SynaxariumData synaxarium = SynaxariumData.empty,
 }) {
   final f = features;
   final cairoNow = CairoTime.fromInstant(now);
@@ -128,6 +132,8 @@ String buildAssistantInstruction({
       'All times are Africa/Cairo local time. Today in Cairo: ${_ymd(cairoNow)} '
       '(${weekdayNamesEn[cairoNow.weekday]}). Each question starts with the exact current Cairo time.',
     )
+    // ADR-051 (issue 4): the Coptic date and the feast of the liturgical day.
+    ..writeln(churchCalendarLine(f, now, synaxarium: synaxarium, lat: settings.lat, lng: settings.lng))
     ..writeln(
       'Do not give medical, legal or spiritual-direction advice beyond pointing to the right clinic, '
       'meeting or priest. Do not ask for or collect personal data.',
@@ -219,31 +225,82 @@ String buildAssistantInstruction({
       }
     }
 
-    final seasonal = seasonalSchedule(seasons, liturgies);
+    final listed = seasonalSchedule(seasons, liturgies);
+    // A full-override season with exact dates replaces the regular schedule
+    // in its window even with no service listed (ADR-053), so it is named
+    // too, or the weekly list would read as held there (CodeRabbit on PR #47).
+    final seasonal = <Season, List<Liturgy>>{
+      ...listed,
+      for (final s in seasons)
+        if (s.active &&
+            s.replacesRegular &&
+            s.startsAt != null &&
+            s.endsAt != null &&
+            !s.endsAt!.isBefore(now) &&
+            !listed.containsKey(s))
+          s: const <Liturgy>[],
+    };
+    final ordered = seasonal.entries.toList()
+      ..sort((a, b) => (a.key.startsAt ?? DateTime(9999)).compareTo(b.key.startsAt ?? DateTime(9999)));
     if (seasonal.isNotEmpty) {
       b
         ..writeln()
         ..writeln('## Holy seasons')
         ..writeln(
-          'A season marked [REPLACES regular schedule] replaces the regular services on the days it has services. '
-          'A season marked [ADDITIVE] adds its services: the regular morning masses continue, except a regular mass '
-          'on a day the season has its own mass, and regular vespers/praise overlapping a season service.',
+          'A season marked [REPLACES regular schedule] replaces every regular service between its start and end, '
+          'even on a day with no season service listed (no regular mass is held then). '
+          'A season marked [REPLACES regular schedule on its service days] has no start or no end: it replaces the '
+          'regular services only on the days it has services; on other days they take place. '
+          'A season marked [ADDITIVE] adds its services: the regular services continue, except a regular mass held '
+          'at the same time as a season mass, every regular mass of a day with a season service marked '
+          "[REPLACES the day's regular masses], and regular vespers/praise overlapping a season service. "
+          'For today and tomorrow, "Services today and tomorrow" below is exactly what the website shows.',
         );
-      for (final e in seasonal.entries) {
+      final today = CairoTime.startOfDay(cairoNow);
+      final offToday = regularSupersededOn(liturgies: liturgies, seasons: seasons, day: today).toSet();
+      for (final e in ordered) {
         final s = e.key;
+        // The label says what the schedule really does today (ADR-050,
+        // issue 8): not "regular masses continue" on a day this season
+        // hides some of them.
+        // Read against the combined schedule (all seasons), so a sample of
+        // this season that another season's real service hides does not
+        // make the label claim regular masses are off (CodeRabbit on PR #45).
+        final hidesToday = !s.replacesRegular &&
+            isSeasonActiveOnDay(s, today) &&
+            regularSupersededOn(liturgies: liturgies, seasons: [s], day: today)
+                .any(offToday.contains);
+        final label = s.replacesRegular
+            ? (s.startsAt != null && s.endsAt != null
+                ? '[REPLACES regular schedule]'
+                : '[REPLACES regular schedule on its service days]')
+            : hidesToday
+                ? '[ADDITIVE — some regular services are NOT held today, see "Services today and tomorrow"]'
+                : '[ADDITIVE — regular services continue]';
         b.writeln(
           '### ${_bi(s.nameAr, s.nameEn)} ${s.startsAt?.toIso8601String() ?? ''} -> ${s.endsAt?.toIso8601String() ?? ''}'
-          ' ${s.replacesRegular ? '[REPLACES regular schedule]' : '[ADDITIVE — regular morning masses continue]'}'
+          ' $label'
           '${isSeasonActiveAt(s, now) ? ' [ACTIVE NOW]' : ''}',
         );
+        if (e.value.isEmpty) {
+          b.writeln('- No season services are listed yet: regular services are NOT held between these dates.');
+        }
         for (final l in e.value) {
           final when = l.date != null ? _ymd(l.date!) : (l.weekday != null ? weekdayNamesEn[l.weekday!] : 'every day');
           b.writeln(
-            '- ${l.sample ? '[UNCONFIRMED] ' : ''}$when: ${_liturgyLine(l, f.programOptions)}',
+            '- ${l.sample ? '[UNCONFIRMED] ' : ''}$when: ${_liturgyLine(l, f.programOptions)}'
+            "${l.replacesDay && !s.replacesRegular ? " [REPLACES the day's regular masses]" : ''}",
           );
+        }
+        // ADR-051: the feast night(s) of an additive season.
+        if (!s.replacesRegular && s.replaceDates.isNotEmpty) {
+          b.writeln('- On ${s.replaceDates.join(', ')} this season REPLACES the regular services that start inside '
+              'its window (${s.startsAt?.toIso8601String() ?? 'start'} -> ${s.endsAt?.toIso8601String() ?? 'end'}; '
+              'feast night); regular services outside the window that day still take place.');
         }
       }
     }
+    _todayAndTomorrow(b, f, liturgies, seasons, cairoNow);
   }
 
   if (f.enabled(Sections.clinics)) {
@@ -666,6 +723,41 @@ String _itemDetails(
 
 /// Bilingual value that never comes out blank when an editor filled only
 /// one language: "English (Arabic)", or whichever one is set.
+/// The "Church calendar" line of the prompt (ADR-051, issue 4): the
+/// liturgical day at [now] as the site's top bar shows it (the Coptic date,
+/// rolling over at the admin's day start, 18:00 by default, or sunset; Holy
+/// Week day names) and the feast of that day from the loaded Katameros day
+/// ([synaxarium], when the home page already loaded it — no new read) plus
+/// the app's computed feast list. Built for every question, so it follows the
+/// rollover with no refresh of its own.
+String churchCalendarLine(FeatureSettings f, DateTime now,
+    {SynaxariumData synaxarium = SynaxariumData.empty, double? lat, double? lng}) {
+  final t = f.today;
+  final day = t.liturgicalDay(now, lat: lat, lng: lng);
+  final start = t.dayStartMode == DayStartModes.sunset
+      ? 'at sunset'
+      : 'at ${t.dayStartsAt.trim().isEmpty ? '18:00' : t.dayStartsAt.trim()}';
+  final feasts = <String>[];
+  void add(String v) {
+    if (v.isNotEmpty && !feasts.contains(v)) feasts.add(v);
+  }
+
+  final k = synaxarium.dayOf(day.date);
+  if (k != null) add(_bi(k.feastAr, k.feastEn));
+  for (final c in copticFeastsOn(day.date)) {
+    add(_bi(c.ar, c.en));
+  }
+  final commemorations = [
+    if (k != null)
+      for (var i = 0; i < 2 && (i < k.ar.length || i < k.en.length); i++)
+        _bi(i < k.ar.length ? k.ar[i] : '', i < k.en.length ? k.en[i] : ''),
+  ];
+  return 'Church calendar (the Coptic liturgical day starts the evening before, $start Cairo time): '
+      'now ${day.label(arabic: false)} (${day.label(arabic: true)}). '
+      '${feasts.isEmpty ? 'No major feast or fast begins on this day.' : 'Feast of the day: ${feasts.join('; ')}.'}'
+      '${commemorations.isEmpty ? '' : ' Commemorations (Synaxarium, Katameros): ${commemorations.join('; ')}.'}';
+}
+
 String _bi(String ar, String en) => en.isNotEmpty && ar.isNotEmpty ? '$en ($ar)' : (en.isNotEmpty ? en : ar);
 
 String _at(String place) => place.isNotEmpty ? ' at $place' : '';
@@ -688,6 +780,45 @@ const _offerableSections = [
 /// ADR-041 venue's name) and for whom (free-text audience and / or the
 /// audience's name), so "where is the youth prayer?" can be answered
 /// (ADR-043, Holy Week sim B3).
+/// "Services today and tomorrow": [occurrencesForDay], the one function the
+/// home card and /mass-schedule read, so the assistant can never list a
+/// service the card hides (or the reverse; ADR-050, issues 1–3 and 8). The
+/// regular services a season supersedes are named as not held.
+void _todayAndTomorrow(
+    StringBuffer b, FeatureSettings f, List<Liturgy> liturgies, List<Season> seasons, DateTime cairoNow) {
+  final today = CairoTime.startOfDay(CairoTime.fromInstant(cairoNow));
+  b
+    ..writeln()
+    ..writeln('## Services today and tomorrow (exactly as the website shows them)');
+  for (final k in const [0, 1]) {
+    final d = CairoTime.at(today.year, today.month, today.day + k);
+    final occ = occurrencesForDay(liturgies: liturgies, seasons: seasons, day: d, dayOffset: k);
+    // A service of the evening before that runs past midnight (the home card
+    // shows it; CodeRabbit on PR #45): today only while it is still on
+    // (Sentry on PR #45), tomorrow as tonight's service ending after midnight.
+    final prev = CairoTime.at(d.year, d.month, d.day - 1);
+    final ongoing = occurrencesForDay(liturgies: liturgies, seasons: seasons, day: prev, dayOffset: k - 1)
+        .where((o) => o.end.isAfter(d) && (k > 0 || o.end.isAfter(cairoNow)))
+        .toList();
+    final off = regularSupersededOn(liturgies: liturgies, seasons: seasons, day: d);
+    final name = '${k == 0 ? 'Today' : 'Tomorrow'} ${_ymd(d)} (${weekdayNamesEn[d.weekday]})';
+    if (occ.isEmpty && ongoing.isEmpty) {
+      b.writeln('- $name: no services listed.');
+    }
+    for (final o in ongoing) {
+      b.writeln('- $name: [${k == 0 ? 'ONGOING' : 'CONTINUES'} from the evening before, until ${formatTimeLatin('${o.end.hour.toString().padLeft(2, '0')}:${o.end.minute.toString().padLeft(2, '0')}')}] '
+          '${o.liturgy.sample ? '[UNCONFIRMED] ' : ''}${_liturgyLine(o.liturgy, f.programOptions)}');
+    }
+    for (final o in occ) {
+      b.writeln('- $name: ${o.liturgy.sample ? '[UNCONFIRMED] ' : ''}${_liturgyLine(o.liturgy, f.programOptions)}');
+    }
+    if (off.isNotEmpty) {
+      b.writeln('- $name, NOT held (the season replaces them): '
+          '${off.map((l) => '${_bi(l.nameAr, l.nameEn)} ${formatRangeLatin(l.start, l.end)}').join('; ')}');
+    }
+  }
+}
+
 String _liturgyLine(Liturgy l, [ProgramOptions opts = ProgramOptions.defaults]) {
   final place = _bi(l.placeAr, l.placeEn);
   final v = opts.venue(l.program.venue);

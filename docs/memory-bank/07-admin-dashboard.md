@@ -169,6 +169,16 @@ every change → one transaction (`saveDocsFresh`: re-reads `settings/features` 
 it (season, applied / end dates, options), says whether the season is running or over (visitors already back to
 normal), and offers «استرجاع الإعدادات السابقة» (confirmed; never recreates a deleted season). Bad links are refused
 before the dialog. The assistant form gains «أقصى عدد أسئلة في اليوم أثناء المواسم الاستثنائية» (`perDaySeason`).
+**ADR-051:** fasting keys (`fast`, `great_lent`, `apostles`, `kiahk`) tick «إخفاء حجز الأفراح» by default. The live
+option shows «ينتهي شريط البث: …» = tonight's last service of the season + 30 min (23:59 when none; the season's first
+evening when applied ahead; read from one `liturgies` read when a season is picked) with an edit button (date + time
+pickers); `liveEndsAt` gets that value, the auto-revert stays the season end. An additive season's `replaceDates` show
+as chips («يحل محل الجدول العادي في:»). The assistant form adds «المواسم الاستثنائية» (`exceptionalSeasons`,
+`FieldType.choices`: one chip per season key, missing = the defaults ticked). The season form adds «أيام يحل فيها
+الموسم محل الجدول العادي (ليلة العيد)» (`replaceDates`, `FieldType.dateList`: date chips, × to remove, «إضافة تاريخ»
+opens the date picker, ≤ 10). The season-key dropdown lists 13 keys (adds صوم الآباء الرسل، النيروز وعيد الصليب، شهر
+كيهك، الصوم الكبير المقدس). «اليوم والبث المباشر» → `liveLabelEn` hint: English pages only, blank = "Live now from the
+church".
 
 ### Programme group on liturgies, meetings and seasons (PR #32, ADR-041)
 
@@ -238,7 +248,7 @@ For each `CollectionDef`:
 |---|---|---|---|---|---|
 | alerts | alerts | – | ✔ | – | title, body, active, starts/ends (Cairo), priority 0–1000, link (path or URL) |
 | seasons | seasons | – | – | – | key choice, names, starts/ends, active |
-| liturgies | liturgies | – (order field) | ✔ | ✔ | needs weekday **or** one-off date; end may be before start (midnight) |
+| liturgies | liturgies | – (order field) | ✔ | ✔ | needs weekday **or** one-off date; end may be before start (midnight); checkbox «يحل محل قداسات اليوم المعتادة (قداس العيد)» = `replacesDay` (ADR-050) |
 | meetings | meetings | – (order field) | ✔ | ✔ | stage choice |
 | clinics | clinics | ✔ | ✔ | ✔ | `active` missing = true |
 | facilities | facilities | ✔ | ✔ | ✔ | "Public services" |
@@ -388,3 +398,9 @@ role. The Auth user itself must be created in the console (or via the Seed workf
   dark fill (`chipTheme` also sets `checkmarkColor` / `secondaryLabelStyle` white); the image field stacks preview
   above its buttons below 420 px or at ≥ 1.5× text; the search clear button («مسح البحث» / Clear search) and the
   admin Home button (`backHome`) have tooltips.
+
+### Season schedule & hero tint (PR #45, ADR-050)
+- Liturgy form: **«يحل محل قداسات اليوم المعتادة (قداس العيد)»** (`replacesDay`, default off, hint under it). Off: in a
+  season that does not replace the regular schedule, a seasonal mass hides only the regular mass at the same time;
+  on: a feast liturgy hides every regular mass of that day.
+- «الأقسام والصفحة الرئيسية» → theme card: switch **«لون الموسم على صورة الواجهة»** (`heroSeasonTint`, default on).

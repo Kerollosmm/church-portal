@@ -133,6 +133,8 @@ List<Map<String, dynamic>> featuresSaveWrites(FeatureSettings next, Map<String, 
   // heroMotion (ADR-022) is written only once it differs from the default or
   // is already stored, so saves keep working against rules that predate it.
   if (next.heroMotion && (stored == null || !stored.containsKey('heroMotion'))) base.remove('heroMotion');
+  // Same for heroSeasonTint (ADR-050, default on).
+  if (next.heroSeasonTint && (stored == null || !stored.containsKey('heroSeasonTint'))) base.remove('heroSeasonTint');
   // Same for heroShowAddress (default off).
   if (!next.heroShowAddress && (stored == null || !stored.containsKey('heroShowAddress'))) {
     base.remove('heroShowAddress');
@@ -585,6 +587,15 @@ class FeaturesEditorState extends State<FeaturesEditor> {
               _card(context.tr('themeColor'), Icons.palette_outlined, [
                 OccasionThemeEditor(
                     value: f, onChanged: (edit) => _set(edit(f)), activeSeasonKeys: widget.activeSeasonKeys),
+                // The season theme's wash over the hero painting (ADR-050).
+                SwitchListTile(
+                  key: const ValueKey('features-heroSeasonTint'),
+                  contentPadding: const EdgeInsetsDirectional.only(start: 4),
+                  title: Text(context.tr('heroSeasonTint')),
+                  subtitle: Text(context.tr('heroSeasonTintHint')),
+                  value: f.heroSeasonTint,
+                  onChanged: (v) => _set(f.copyWith(heroSeasonTint: v)),
+                ),
               ], hint: context.tr('themeHint')),
               _card(context.tr('errorReportingTitle'), Icons.bug_report_outlined, [
                 SwitchListTile(

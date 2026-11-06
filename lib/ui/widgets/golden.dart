@@ -493,6 +493,11 @@ class HeroStage extends StatefulWidget {
   /// Dissolve into the page at the bottom edge.
   final bool fadeBottom;
 
+  /// The season theme's colour wash over the art ([OccasionColors.heroTint],
+  /// admin switch `heroSeasonTint`, ADR-050). A separate top layer: the Ken
+  /// Burns, the haze and the rays are not touched.
+  final bool tint;
+
   const HeroStage({
     super.key,
     required this.image,
@@ -502,6 +507,7 @@ class HeroStage extends StatefulWidget {
     this.poster,
     this.rays = 1,
     this.fadeBottom = true,
+    this.tint = true,
   });
 
   @override
@@ -587,6 +593,7 @@ class _HeroStageState extends State<HeroStage> with SingleTickerProviderStateMix
     // must stay registered with its poster.
     final kenBurns = _ambient && !_videoOn;
     final art = context.pal;
+    final tintColors = widget.tint ? art.heroTint : null;
     return ExcludeSemantics(
       child: ClipRect(
         child: Stack(fit: StackFit.expand, children: [
@@ -638,6 +645,21 @@ class _HeroStageState extends State<HeroStage> with SingleTickerProviderStateMix
                           strength: widget.rays),
                     ),
                   ))),
+            ),
+          // Season wash (ADR-050): a still gradient above every layer.
+          if (tintColors != null)
+            IgnorePointer(
+              child: _feather(DecoratedBox(
+                key: const Key('heroSeasonTint'),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: tintColors,
+                    stops: art.heroTintStops,
+                  ),
+                ),
+              )),
             ),
         ]),
       ),

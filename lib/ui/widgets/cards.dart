@@ -19,7 +19,7 @@ import 'item_image.dart';
 import 'program_details.dart';
 import 'styled_image.dart';
 
-export 'program_details.dart' show ProgramDetails, parallelSummary;
+export 'program_details.dart' show ProgramDetails, parallelSummary, parallelThenLine;
 export 'styled_image.dart';
 
 /// Card for one liturgy on the schedule page.
@@ -31,8 +31,18 @@ class LiturgyCard extends StatelessWidget {
   /// Services held at the same time in another hall (ADR-041), e.g.
   /// «القاعة السفلية (شباب)»; '' = none.
   final String parallelText;
+
+  /// A regular service a season supersedes TODAY ([regularSupersededOn]):
+  /// marked «لا يُقام اليوم» so the weekly tab never contradicts the home
+  /// card (ADR-050).
+  final bool notHeldToday;
   const LiturgyCard(
-      {super.key, required this.liturgy, this.showWeekday = false, this.showDate = false, this.parallelText = ''});
+      {super.key,
+      required this.liturgy,
+      this.showWeekday = false,
+      this.showDate = false,
+      this.parallelText = '',
+      this.notHeldToday = false});
 
   IconData get _icon => switch (liturgy.type) {
         'vespers' => Icons.nightlight_round,
@@ -66,6 +76,12 @@ class LiturgyCard extends StatelessWidget {
               if (dayText.isNotEmpty)
                 Text(dayText,
                     style: TextStyle(color: context.pal.goldText, fontWeight: FontWeight.w800, fontSize: 12)),
+              if (notHeldToday)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Pill(context.tr('notHeldToday'),
+                      key: const Key('notHeldToday'), icon: Icons.event_busy, color: context.pal.muted),
+                ),
               Text(context.pick(l.nameAr, l.nameEn),
                   style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
               const SizedBox(height: 6),
@@ -115,25 +131,33 @@ class NextMassCard extends ConsumerWidget {
       // service is never named (Sentry review); with the days either side,
       // so a service crossing midnight meets the next day's (ADR-049).
       final next = r.next;
-      final parallelText = next == null
-          ? ''
-          : parallelSummary(
-              context,
-              opts,
-              parallelOccurrences(
-                  next,
-                  occurrencesAround(
-                      liturgies: lits.value ?? const [],
-                      seasons: seasons.value ?? const [],
-                      day: next.start,
-                      dayOffset: next.dayOffset),
-                  opts));
+      final parallel = next == null
+          ? const <LiturgyOccurrence>[]
+          : parallelOccurrencesOf(
+              next,
+              occurrencesAround(
+                  liturgies: lits.value ?? const [],
+                  seasons: seasons.value ?? const [],
+                  day: next.start,
+                  dayOffset: next.dayOffset),
+              opts);
+      // One starting later, while the next service runs, is named with its
+      // own time («وبعدها ٠٧:٠٠ ص: …»), not «في نفس الوقت» (ADR-053, sims
+      // r2 P2 O-a); one already running when it starts stays «في نفس الوقت».
+      final parallelText = parallelSummary(context, opts, [
+        for (final o in parallel)
+          if (!o.start.isAfter(next!.start)) o.liturgy,
+      ]);
+      final parallelThen = [
+        for (final o in parallel)
+          if (o.start.isAfter(next!.start)) parallelThenLine(context, opts, o.liturgy, _hm(context, o.start)),
+      ];
       // The «يُقام الآن» box names the services running at this moment in
       // the other halls (ADR-049 item 1: youth and children's Pascha beside
       // the main church's): no extra read, the card already holds them.
       final nowParallelText = parallelSummary(context, opts, r.alsoRunning(opts));
       body = _content(context, r, now, ref.watch(todaySettingsProvider), s?.lat, s?.lng, parallelText, opts,
-          nowParallelText);
+          nowParallelText, parallelThen);
     }
 
     final pal = context.pal;
@@ -189,8 +213,18 @@ class NextMassCard extends ConsumerWidget {
     );
   }
 
+  /// [t] (a Cairo instant) as «٠٣:٣٠ ص» / "03:30 AM".
+  static String _hm(BuildContext context, DateTime t) {
+    final c = CairoTime.fromInstant(t);
+    final hm = '${c.hour.toString().padLeft(2, '0')}:${c.minute.toString().padLeft(2, '0')}';
+    return context.isAr ? formatTimeArabic(hm) : formatTimeLatin(hm);
+  }
+
   Widget _content(BuildContext context, NextMassResult r, DateTime now, TodaySettings today, double? lat, double? lng,
-      [String parallelText = '', ProgramOptions opts = ProgramOptions.defaults, String nowParallelText = '']) {
+      [String parallelText = '',
+      ProgramOptions opts = ProgramOptions.defaults,
+      String nowParallelText = '',
+      List<String> parallelThen = const []]) {
     if (r.isEmpty) return EmptyState(message: context.tr('noUpcoming'), icon: Icons.event_busy);
     final children = <Widget>[];
     if (r.activeSeasons.isNotEmpty) {
@@ -226,6 +260,15 @@ class NextMassCard extends ConsumerWidget {
                   key: const Key('happeningNowLine'), style: const TextStyle(fontWeight: FontWeight.w700)),
             ),
           ]),
+          // When it ends («حتى ٠٣:٣٠ ص»), in the app's 12-hour ص/م format
+          // (ADR-050, issue 15); a service without an end time runs its
+          // default 120 minutes, as the card counts it.
+          Padding(
+            padding: const EdgeInsetsDirectional.only(top: 6),
+            child: Text(context.tr('untilTime', {'t': _hm(context, o.end)}),
+                key: const Key('happeningNowUntil'),
+                style: TextStyle(color: context.pal.goldText, fontWeight: FontWeight.w700)),
+          ),
           // While it runs (18:30–21:30 on a revival night, exactly when
           // visitors open the site) the programme stays: speaker, topic,
           // choir, audience and the PDF button (ADR-045, revival sim B2).
@@ -268,7 +311,7 @@ class NextMassCard extends ConsumerWidget {
       children.add(const SizedBox(height: 6));
       children.add(IconLine(Icons.place_outlined, context.pick(n.liturgy.placeAr, n.liturgy.placeEn)));
       children.add(IconLine(Icons.people_outline, context.pick(n.liturgy.audienceAr, n.liturgy.audienceEn)));
-      children.add(ProgramDetails(n.liturgy.program, parallelText: parallelText));
+      children.add(ProgramDetails(n.liturgy.program, parallelText: parallelText, parallelThen: parallelThen));
     }
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: children);
   }

@@ -917,6 +917,31 @@ describe('ADR-022: hero motion & video switch (settings/features.heroMotion)', (
   });
 });
 
+describe('ADR-050: liturgies.replacesDay and settings/features.heroSeasonTint', () => {
+  test('a liturgy may carry replacesDay as a bool only', async () => {
+    const ed = db(EDITOR);
+    const base = { type: 'mass', nameAr: 'قداس العيد', date: Timestamp.fromDate(new Date('2027-08-22T00:00:00Z')),
+      start: '10:00', end: '12:30', seasonKey: 'marian' };
+    await assertSucceeds(setDoc(doc(ed, 'liturgies', 'feast'), { ...base, replacesDay: true }));
+    await assertSucceeds(setDoc(doc(ed, 'liturgies', 'feast2'), base)); // absent = false
+    await assertSucceeds(updateDoc(doc(ed, 'liturgies', 'feast'), { replacesDay: false }));
+    for (const v of ['yes', 1, null, { on: true }]) {
+      await assertFails(setDoc(doc(ed, 'liturgies', 'feast3'), { ...base, replacesDay: v }), JSON.stringify(v));
+    }
+    await assertFails(setDoc(doc(db(null), 'liturgies', 'feast4'), { ...base, replacesDay: true }));
+  });
+
+  test('heroSeasonTint is a bool; visitors cannot change it', async () => {
+    const ref = doc(db(EDITOR), 'settings', 'features');
+    await assertSucceeds(setDoc(ref, { theme: 'marian', heroSeasonTint: false }));
+    await assertSucceeds(setDoc(ref, { theme: 'marian', heroSeasonTint: true }));
+    for (const v of ['off', 0, null, { on: true }]) {
+      await assertFails(setDoc(ref, { heroSeasonTint: v }), JSON.stringify(v));
+    }
+    await assertFails(setDoc(doc(db(null), 'settings', 'features'), { heroSeasonTint: false }));
+  });
+});
+
 describe('Hero address ribbon switch (settings/features.heroShowAddress)', () => {
   test('admins switch the address ribbon on and off; only a bool is accepted', async () => {
     const ref = doc(db(EDITOR), 'settings', 'features');
@@ -1858,5 +1883,92 @@ describe('ADR-047: English text for the fixed verse and the season verses', () =
     ]) {
       await assertFails(updateDoc(ref(), { seasonVerses: bad }), JSON.stringify(bad).slice(0, 60));
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ADR-051: new season keys (apostles, nayrouz, kiahk, great_lent), a season's
+// feast-night replace dates, and the assistant's exceptional-season list.
+describe('ADR-051: season keys, replaceDates, exceptional seasons', () => {
+  const NEW = ['apostles', 'nayrouz', 'kiahk', 'great_lent'];
+  const features = () => doc(db(EDITOR), 'settings', 'features');
+  const start = Timestamp.fromDate(new Date('Mon 2027-06-21 12:00 AM EEST (UTC+03:00)'));
+  const end = Timestamp.fromDate(new Date('Sun 2027-07-11 11:59 PM EEST (UTC+03:00)'));
+  const preset = (k) => ({
+    seasonId: 'ap', seasonKey: k, appliedAt: start, startsAt: start, endsAt: end,
+    options: ['weddingOff', 'live'], previous: { seasonActive: false, weddingBookingOff: false, liveUrl: '', liveEndsAt: null },
+  });
+
+  test('the new keys on seasons, services, verses, theme map and preset; fast still works', async () => {
+    const ed = db(EDITOR);
+    for (const k of [...NEW, 'fast']) {
+      await assertSucceeds(setDoc(doc(ed, 'seasons', k), { key: k, nameAr: 'موسم', active: true }), k);
+      await assertSucceeds(setDoc(doc(ed, 'liturgies', `l-${k}`), { type: 'mass', nameAr: 'قداس', start: '07:00', seasonKey: k }), `${k} liturgy`);
+      await assertSucceeds(setDoc(features(), { seasonVerses: [[k, 'آية', ''].join('\u001f')] }), `${k} verse`);
+      await assertSucceeds(setDoc(features(), { seasonPreset: preset(k) }), `${k} preset`);
+    }
+    for (const bad of ['cross', 'lent', 'Apostles', 'great-lent']) {
+      await assertFails(setDoc(doc(ed, 'seasons', 'x'), { key: bad, nameAr: 'موسم' }), bad);
+      await assertFails(setDoc(doc(ed, 'liturgies', 'x'), { type: 'mass', nameAr: 'قداس', start: '07:00', seasonKey: bad }), bad);
+    }
+  });
+
+  test('a full 13-key season theme map plus 12 schedule slots fit one write (expression budget)', async () => {
+    await assertSucceeds(setDoc(features(), {
+      theme: 'goldenHour',
+      occasions: {
+        auto: true, easter: true, resurrectionDays: 50, followSeason: true,
+        schedule: Object.fromEntries(Array.from({ length: 12 }, (_, i) => [`r${i + 1}`, 'nativity|2026-12-25|2027-01-08'])),
+        seasonThemes: { holy_week: 'holyWeek', pascha: 'resurrection', fast: 'fasting', marian: 'marian',
+          epiphany: 'epiphany', nativity: 'nativity', revival_maximus: 'brown', revival_moses: 'none', summer: 'none',
+          apostles: 'fasting', nayrouz: 'resurrection', kiahk: 'marian', great_lent: 'fasting' },
+      },
+    }));
+    await assertFails(setDoc(features(), { occasions: { seasonThemes: { cross: 'resurrection' } } }));
+    await assertFails(setDoc(features(), { occasions: { seasonThemes: { kiahk: 'violet' } } }));
+  });
+
+  test('replaceDates: up to 10 distinct YYYY-MM-DD strings', async () => {
+    const ref = doc(db(EDITOR), 'seasons', 'ap');
+    await assertSucceeds(setDoc(ref, { key: 'apostles', nameAr: 'صوم الرسل', replacesRegular: false, replaceDates: ['2027-07-12'] }));
+    await assertSucceeds(updateDoc(ref, { replaceDates: Array.from({ length: 10 }, (_, i) => `2027-07-${String(i + 10)}`) }));
+    await assertSucceeds(updateDoc(ref, { replaceDates: ['2028-02-29', '2000-02-29', '2027-01-31', '2027-12-31', '2027-06-30', '2027-02-28'] }));
+    await assertSucceeds(updateDoc(ref, { replaceDates: [] }));
+    await assertSucceeds(updateDoc(ref, { replaceDates: null }));
+    for (const bad of [
+      '2027-07-12', ['2027-7-12'], ['12/07/2027'], ['2027-07-12', '2027-07-12'], ['2027-13-01'], [20270712],
+      ['2027-07-12,2027-07-13'], Array.from({ length: 11 }, (_, i) => `2027-08-${String(i + 10)}`), [''],
+      // Impossible calendar dates (CodeRabbit on PR #44).
+      ['2027-02-31'], ['2027-02-29'], ['2027-04-31'], ['2027-11-31'], ['2100-02-28'], ['2027-07-12', '2027-06-31'],
+    ]) {
+      await assertFails(updateDoc(ref, { replaceDates: bad }), JSON.stringify(bad).slice(0, 60));
+    }
+  });
+
+  test('replaceDates with a full programme and image still fits (expression budget)', async () => {
+    const ed = db(EDITOR);
+    await assertSucceeds(setDoc(doc(ed, 'seasons', 'big'), {
+      key: 'great_lent', nameAr: 'ص'.repeat(300), nameEn: 'n'.repeat(300), startsAt: start, endsAt: end, active: true,
+      replacesRegular: false, replaceDates: Array.from({ length: 10 }, (_, i) => `2027-04-${String(i + 10)}`),
+      speakerAr: 'م'.repeat(200), speakerEn: 's'.repeat(200), topicAr: 'و'.repeat(300), topicEn: 't'.repeat(300),
+      choirAr: 'ك'.repeat(200), choirEn: 'c'.repeat(200), venue: 'main', audience: 'general',
+      attachmentUrl: 'https://drive.google.com/' + 'x'.repeat(470), attachmentLabelAr: 'ك'.repeat(80), attachmentLabelEn: 'b'.repeat(80),
+      image: { source: 'url', url: 'https://img.example.org/a.jpg', alt: 'a'.repeat(200), w: 1600, h: 900 },
+      imageStyle: 'banner',
+    }));
+  });
+
+  test('assistant exceptionalSeasons: a list of known season keys (empty = none)', async () => {
+    const ref = doc(db(EDITOR), 'settings', 'assistant');
+    await assertSucceeds(setDoc(ref, { perDay: 3, perDaySeason: 6,
+      exceptionalSeasons: ['holy_week', 'pascha', 'nativity', 'revival_maximus', 'revival_moses', 'great_lent', 'kiahk', 'marian'] }));
+    await assertSucceeds(updateDoc(ref, { exceptionalSeasons: [] }));
+    await assertSucceeds(updateDoc(ref, { exceptionalSeasons: ['holy_week', 'pascha', 'nativity', 'epiphany', 'marian', 'fast',
+      'revival_maximus', 'revival_moses', 'summer', 'apostles', 'nayrouz', 'kiahk', 'great_lent'] }));
+    await assertSucceeds(updateDoc(ref, { exceptionalSeasons: null }));
+    for (const bad of ['holy_week', ['lent'], [5], Array.from({ length: 14 }, () => 'fast')]) {
+      await assertFails(updateDoc(ref, { exceptionalSeasons: bad }), JSON.stringify(bad));
+    }
+    await assertFails(setDoc(doc(db(STRANGER), 'settings', 'assistant'), { exceptionalSeasons: [] }));
   });
 });

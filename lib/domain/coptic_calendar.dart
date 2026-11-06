@@ -16,6 +16,7 @@
 // api.katameros.app, docs/CONTENT_SOURCES.md).
 
 import 'cairo_time.dart';
+import 'occasion_theme.dart' show orthodoxEaster;
 import 'rules.dart' show toArabicDigits;
 import 'sun.dart';
 import 'time_format.dart' show weekdayNamesAr, weekdayNamesEn;
@@ -136,12 +137,33 @@ class LiturgicalDay {
   int get weekday => date.weekday;
 
   /// «الأربعاء ٢٥ بابه ١٧٤٣ ش» / "Wednesday 25 Baba 1743 AM"; on the eve
-  /// «ليلة الخميس …» / "Eve of Thursday …".
+  /// «ليلة الخميس …» / "Eve of Thursday …". In Holy Week the day's name
+  /// replaces the weekday (ADR-051): «ليلة الجمعة العظيمة ٢٢ برموده ١٧٤٣ ش».
   String label({required bool arabic}) {
-    final wd = arabic ? weekdayNamesAr[weekday] : weekdayNamesEn[weekday];
+    final wd = holyWeekDayName(date, arabic: arabic) ?? (arabic ? weekdayNamesAr[weekday] : weekdayNamesEn[weekday]);
     final day = isEve ? (arabic ? 'ليلة $wd' : 'Eve of $wd') : wd;
     return '$day ${coptic.format(arabic: arabic)}';
   }
+}
+
+/// Holy Week day names by their offset from Coptic Easter Sunday (ADR-051).
+const _holyWeekNames = <int, (String, String)>{
+  -7: ('أحد الشعانين', 'Palm Sunday'),
+  -6: ('اثنين البصخة', 'Holy Monday'),
+  -5: ('ثلاثاء البصخة', 'Holy Tuesday'),
+  -4: ('أربعاء البصخة', 'Holy Wednesday'),
+  -3: ('خميس العهد', 'Covenant Thursday'),
+  -2: ('الجمعة العظيمة', 'Good Friday'),
+  -1: ('سبت النور', 'Joyous Saturday'),
+};
+
+/// The Holy Week name of the Gregorian date [date] (y/m/d; Palm Sunday to
+/// Joyous Saturday, from the app's Coptic Easter computus), or null on any
+/// other day (ADR-051, issue 13).
+String? holyWeekDayName(DateTime date, {required bool arabic}) {
+  final d = DateTime.utc(date.year, date.month, date.day);
+  final n = _holyWeekNames[d.difference(orthodoxEaster(d.year)).inDays];
+  return n == null ? null : (arabic ? n.$1 : n.$2);
 }
 
 /// Minutes after local midnight of a fixed "HH:mm" start; blank /

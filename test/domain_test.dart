@@ -132,9 +132,22 @@ void main() {
       expect(morning.next?.liturgy.id, 'wed1'); // regular 07:00 is before the season starts
       final afternoon = computeNextMass(liturgies: ls, seasons: [evening], now: cairo(2027, 1, 13, 12));
       expect(afternoon.next?.liturgy.id, 'revEve');
-      // Thursday is fully inside the season but has no seasonal service -> regular.
+      // Thursday is fully inside the window of this full-override season:
+      // since ADR-053 (sims r2 P1 N1) its regular services are replaced even
+      // without a seasonal service that day -> the next is Friday's.
       final thu = computeNextMass(liturgies: ls, seasons: [evening], now: cairo(2027, 1, 14, 5));
-      expect(thu.next?.liturgy.id, 'thu1');
+      expect(thu.next?.liturgy.id, 'fri1');
+      // An additive season without a service that day keeps the regular one.
+      final additive = Season(
+        id: 'rev',
+        key: 'revival_maximus',
+        nameAr: '',
+        nameEn: '',
+        startsAt: cairo(2027, 1, 13, 18),
+        endsAt: cairo(2027, 1, 14, 23, 59),
+        replacesRegular: false,
+      );
+      expect(computeNextMass(liturgies: ls, seasons: [additive], now: cairo(2027, 1, 14, 5)).next?.liturgy.id, 'thu1');
     });
 
     test('a seasonal service before its season starts is not used', () {
@@ -393,7 +406,8 @@ void main() {
           startsAt: cairo(2027, 6, 22, 0), endsAt: cairo(2027, 7, 1, 23, 59));
       final t = build(seasons: [additive, nativity]);
       expect(t, contains('### نهضة الأنبا موسى'));
-      expect(t, contains('[ADDITIVE — regular morning masses continue]'));
+      // ADR-050: the label says what the schedule shows today.
+      expect(t, contains('[ADDITIVE — regular services continue]'));
       expect(t, contains('- Friday: عشية النهضة [other] 06:00 PM – 08:00 PM at مذبح الأنبا موسى'));
       final off = build(seasons: [
         Season(id: 'rm', key: 'revival_moses', nameAr: 'x', nameEn: 'x', active: false, replacesRegular: false),

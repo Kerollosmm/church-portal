@@ -373,27 +373,50 @@ service cloud.firestore {
         && optInt(d, 'priority', 0, 1000) && optUrlOrPath(d, 'link', 500);
     }
 
+    // Church-season keys (ADR-051 added apostles, nayrouz, kiahk, great_lent);
+    // mirrors SeasonKeys.all in lib/domain/season_keys.dart.
+    function seasonKeyList() {
+      return ['holy_week', 'pascha', 'nativity', 'epiphany', 'marian', 'fast', 'revival_maximus', 'revival_moses',
+              'summer', 'apostles', 'nayrouz', 'kiahk', 'great_lent'];
+    }
+
     function validSeason(d) {
-      return keysAllowed(['key', 'nameAr', 'nameEn', 'startsAt', 'endsAt', 'active', 'replacesRegular',
+      return keysAllowed(['key', 'nameAr', 'nameEn', 'startsAt', 'endsAt', 'active', 'replacesRegular', 'replaceDates',
                           'image', 'imageStyle'].concat(meta()).concat(programKeys()))
         && validProgram(d, changedKeys(d))
-        && d.key in ['holy_week', 'pascha', 'nativity', 'epiphany', 'marian', 'fast', 'revival_maximus', 'revival_moses', 'summer']
+        && d.key in seasonKeyList()
         && reqString(d, 'nameAr', 300) && optString(d, 'nameEn', 300)
         && optTimestamp(d, 'startsAt') && optTimestamp(d, 'endsAt') && optBool(d, 'active')
-        && optBool(d, 'replacesRegular');
+        && optBool(d, 'replacesRegular') && validReplaceDates(d);
+    }
+
+    // ADR-051: the civil Cairo dates (YYYY-MM-DD, at most 10, no repeats) on
+    // which an additive season still replaces the regular services (a feast
+    // night). One regex over the joined list; the split count refuses a value
+    // carrying a comma. Real calendar dates only: month lengths, and 29 Feb in
+    // leap years (every 20xx year divisible by 4); CodeRabbit on PR #44.
+    function validReplaceDates(d) {
+      let v = d.get('replaceDates', null);
+      return v == null
+        || (v is list && v.size() <= 10 && v.toSet().size() == v.size()
+            && (v.size() == 0 || (v.join(',').split(',').size() == v.size() && v.join(',').matches(
+                  '(20[0-9]{2}-((0[13578]|1[02])-(0[1-9]|[12][0-9]|3[01])|(0[469]|11)-(0[1-9]|[12][0-9]|30)|02-(0[1-9]|1[0-9]|2[0-8]))|20([02468][048]|[13579][26])-02-29)(,(20[0-9]{2}-((0[13578]|1[02])-(0[1-9]|[12][0-9]|3[01])|(0[469]|11)-(0[1-9]|[12][0-9]|30)|02-(0[1-9]|1[0-9]|2[0-8]))|20([02468][048]|[13579][26])-02-29)){0,9}'))));
     }
 
     function validLiturgy(d) {
       return keysAllowed(['type', 'nameAr', 'nameEn', 'weekday', 'date', 'start', 'end', 'placeAr', 'placeEn',
-                          'audienceAr', 'audienceEn', 'seasonKey'].concat(meta()).concat(programKeys()))
+                          'audienceAr', 'audienceEn', 'seasonKey',
+                          'replacesDay'].concat(meta()).concat(programKeys()))
         && validProgram(d, changedKeys(d))
+        // ADR-050: a feast liturgy that replaces the day's regular masses.
+        && optBool(d, 'replacesDay')
         && optIn(d, 'type', ['mass', 'vespers', 'praise', 'other'])
         && reqString(d, 'nameAr', 300) && optString(d, 'nameEn', 300)
         && optInt(d, 'weekday', 1, 7) && optTimestamp(d, 'date')
         && 'start' in d && d.start is string && optTime(d, 'start') && optTime(d, 'end')
         && optString(d, 'placeAr', 300) && optString(d, 'placeEn', 300)
         && optString(d, 'audienceAr', 300) && optString(d, 'audienceEn', 300)
-        && optIn(d, 'seasonKey', ['holy_week', 'pascha', 'nativity', 'epiphany', 'marian', 'fast', 'revival_maximus', 'revival_moses', 'summer']);
+        && optIn(d, 'seasonKey', seasonKeyList());
     }
 
     function validMeeting(d, changed) {
@@ -583,7 +606,7 @@ service cloud.firestore {
       return keysAllowed(['model', 'instructions', 'topics', 'refusalAr', 'refusalEn', 'welcomeAr', 'welcomeEn',
                           'suggestionsAr', 'suggestionsEn', 'showSuggestions', 'faithReplyAr', 'faithReplyEn',
                           'sourceDomains', 'mentionUnconfirmed', 'maxChars', 'perMinute', 'perDay', 'perDaySeason',
-                          'perSession', 'updatedAt', 'updatedBy'])
+                          'exceptionalSeasons', 'perSession', 'updatedAt', 'updatedBy'])
         && str(d, 'model', 60) && d.get('model', '').matches('(gemini-[a-z0-9][a-z0-9.-]{0,52})?')
         && str(d, 'instructions', 4000) && str(d, 'topics', 2000)
         && str(d, 'refusalAr', 500) && str(d, 'refusalEn', 500)
@@ -593,6 +616,10 @@ service cloud.firestore {
         && optBool(d, 'showSuggestions')
         && str(d, 'sourceDomains', 300) && d.get('sourceDomains', '').matches('[a-z0-9., -]*')
         && optInt(d, 'perDay', 1, 100) && optInt(d, 'perDaySeason', 1, 100)
+        // ADR-051: the season keys that raise the daily limit (missing = the code defaults).
+        && (d.get('exceptionalSeasons', null) == null
+            || (d.exceptionalSeasons is list && d.exceptionalSeasons.size() <= 13
+                && d.exceptionalSeasons.hasOnly(seasonKeyList())))
         && optInt(d, 'maxChars', 50, 1000) && optInt(d, 'perMinute', 1, 20) && optInt(d, 'perSession', 1, 200)
         && stampOk(d);
     }
@@ -620,6 +647,7 @@ service cloud.firestore {
                           'heroVideos', 'errorReporting', 'copticStrip', 'dayStartMode', 'dayStartsAt', 'topEvent',
                           'commemoration', 'topEventServices', 'liveEnabled', 'liveUrl', 'liveLabelAr', 'liveLabelEn', 'liveEndsAt',
                           'liveBadgeHideOnHome', 'dayEvents', 'venues', 'audiences', 'seasonVerses', 'seasonPreset', 'weddingBookingOff',
+                          'heroSeasonTint',
                           'updatedAt', 'updatedBy'])
         && (!('sections' in changed) || !('sections' in d) || validSections(d.sections))
         && (!('homeOrder' in changed) || !('homeOrder' in d) || (d.homeOrder is list && d.homeOrder.size() <= 7
@@ -640,13 +668,14 @@ service cloud.firestore {
         && (!('themeColors' in changed) || !('themeColors' in d) || validThemeColors(d.themeColors))
         && (!('heroVideos' in changed) || !('heroVideos' in d) || validHeroVideos(d.heroVideos))
         && (!('footer' in changed) || !('footer' in d) || validFooter(d.footer))
-        // Hero motion & video switch (ADR-022): a bool, default on.
-        && (!('heroMotion' in changed) || d.get('heroMotion', true) is bool)
-        // Address ribbon in the hero (bool, default off) and milestones also on
-        // the About page (ADR-052; bool, default on): one gate, so the
-        // worst-case page-headers save stays under the 1,000-expression cap.
-        && (!changed.hasAny(['heroShowAddress', 'aboutMilestones'])
-            || (d.get('heroShowAddress', false) is bool && d.get('aboutMilestones', true) is bool))
+        // Hero switches, all bools in ONE gate so the worst-case page-headers save
+        // (all 8 pages, max lengths) stays under the 1,000-expression cap:
+        // hero motion & video (ADR-022, default on), the season colour wash over
+        // the hero painting (ADR-050, default on), the address ribbon in the hero
+        // (default off) and milestones also on the About page (ADR-052, default on).
+        && (!changed.hasAny(['heroMotion', 'heroSeasonTint', 'heroShowAddress', 'aboutMilestones'])
+            || (d.get('heroMotion', true) is bool && d.get('heroSeasonTint', true) is bool
+                && d.get('heroShowAddress', false) is bool && d.get('aboutMilestones', true) is bool))
         // Error reports to Sentry (ADR-034): a bool, default on.
         && (!('errorReporting' in changed) || d.get('errorReporting', true) is bool)
         // Per-section default image display style (ADR-023).
@@ -691,8 +720,8 @@ service cloud.firestore {
         || (d.seasonVerses is list && d.seasonVerses.size() <= 40
             && (d.seasonVerses.size() == 0
                 || d.seasonVerses.join('\u001e').matches(
-                     '(holy_week|pascha|nativity|epiphany|marian|fast|revival_maximus|revival_moses|summer)\x1f[^\x1f\x1e]{1,500}\x1f[^\x1f\x1e]{0,60}(\x1f[^\x1f\x1e]{0,500}\x1f[^\x1f\x1e]{0,60})?'
-                     + '(\x1e(holy_week|pascha|nativity|epiphany|marian|fast|revival_maximus|revival_moses|summer)\x1f[^\x1f\x1e]{1,500}\x1f[^\x1f\x1e]{0,60}(\x1f[^\x1f\x1e]{0,500}\x1f[^\x1f\x1e]{0,60})?){0,39}')));
+                     '(holy_week|pascha|nativity|epiphany|marian|fast|revival_maximus|revival_moses|summer|apostles|nayrouz|kiahk|great_lent)\x1f[^\x1f\x1e]{1,500}\x1f[^\x1f\x1e]{0,60}(\x1f[^\x1f\x1e]{0,500}\x1f[^\x1f\x1e]{0,60})?'
+                     + '(\x1e(holy_week|pascha|nativity|epiphany|marian|fast|revival_maximus|revival_moses|summer|apostles|nayrouz|kiahk|great_lent)\x1f[^\x1f\x1e]{1,500}\x1f[^\x1f\x1e]{0,60}(\x1f[^\x1f\x1e]{0,500}\x1f[^\x1f\x1e]{0,60})?){0,39}')));
     }
 
     // The applied season preset (ADR-042): which season, when, the ticked
@@ -702,7 +731,7 @@ service cloud.firestore {
       return p is map
         && p.keys().hasOnly(['seasonId', 'seasonKey', 'appliedAt', 'startsAt', 'endsAt', 'options', 'previous'])
         && p.get('seasonId', '') is string && p.get('seasonId', '').matches('[A-Za-z0-9_-]{1,100}')
-        && p.get('seasonKey', '') in ['', 'holy_week', 'pascha', 'nativity', 'epiphany', 'marian', 'fast', 'revival_maximus', 'revival_moses', 'summer']
+        && p.get('seasonKey', '') in seasonKeyList().concat([''])
         && (p.get('appliedAt', null) == null || p.appliedAt is timestamp)
         && (p.get('startsAt', null) == null || p.startsAt is timestamp)
         && (p.get('endsAt', null) == null || p.endsAt is timestamp)
@@ -806,11 +835,10 @@ service cloud.firestore {
     function validSeasonThemes(t) {
       let v = t.values().join(',');
       return t is map
-        && t.keys().hasOnly(['holy_week', 'pascha', 'nativity', 'epiphany', 'marian', 'fast',
-                             'revival_maximus', 'revival_moses', 'summer'])
+        && t.keys().hasOnly(seasonKeyList())
         && (t.size() == 0
             || (v.matches('(goldenHour|holyWeek|resurrection|nativity|epiphany|fasting|marian|navy|green|brown|purple|none)'
-                          + '(,(goldenHour|holyWeek|resurrection|nativity|epiphany|fasting|marian|navy|green|brown|purple|none)){0,8}')
+                          + '(,(goldenHour|holyWeek|resurrection|nativity|epiphany|fasting|marian|navy|green|brown|purple|none)){0,12}')
                 && v.split(',').size() == t.size()));
     }
 

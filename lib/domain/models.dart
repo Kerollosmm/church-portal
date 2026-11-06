@@ -4,6 +4,7 @@
 
 import 'features.dart';
 import 'media.dart';
+import 'pending_text.dart';
 import 'program.dart';
 
 export 'media.dart' show MediaImage;
@@ -333,10 +334,16 @@ class Season {
   final bool active;
 
   /// true (Holy Week, Pascha, Nativity): its services REPLACE the regular
-  /// schedule on the days they cover. false (evening revivals): ADDITIVE, the
+  /// schedule: every regular service starting inside its window when it has
+  /// both dates (ADR-053), else on the days its services cover. false (evening revivals): ADDITIVE, the
   /// regular morning masses continue. Missing in Firestore = true, so older
   /// documents behave exactly as before.
   final bool replacesRegular;
+
+  /// ADR-051: civil Cairo dates ('YYYY-MM-DD') on which an ADDITIVE season
+  /// still replaces the regular services that start inside its window (the
+  /// feast night of a revival or a fast). Ignored when [replacesRegular].
+  final List<String> replaceDates;
 
   /// Optional picture (null = keep the icon / initials placeholder).
   final MediaImage? image;
@@ -356,10 +363,32 @@ class Season {
     this.endsAt,
     this.active = true,
     this.replacesRegular = true,
+    this.replaceDates = const [],
     this.image,
     this.imageStyle = '',
     this.program = ProgramInfo.none,
   });
+
+  static final _ymdRe = RegExp(r'^(\d{4})-(\d{2})-(\d{2})$');
+
+  /// A real calendar date 'YYYY-MM-DD' (2027-02-31 is refused; CodeRabbit on PR #44).
+  static bool _isCalendarDate(String s) {
+    final m = _ymdRe.firstMatch(s);
+    if (m == null) return false;
+    final y = int.parse(m[1]!), mo = int.parse(m[2]!), d = int.parse(m[3]!);
+    final dt = DateTime.utc(y, mo, d);
+    return dt.year == y && dt.month == mo && dt.day == d;
+  }
+
+  /// Does the season replace the regular services on the Cairo calendar day
+  /// [day] (y/m/d read as is)? Always for a full-override season; for an
+  /// additive one only on its [replaceDates] (ADR-051).
+  bool replacesOn(DateTime day) {
+    if (replacesRegular) return true;
+    if (replaceDates.isEmpty) return false;
+    String two(int v) => v.toString().padLeft(2, '0');
+    return replaceDates.contains('${day.year}-${two(day.month)}-${two(day.day)}');
+  }
   factory Season.fromMap(String id, Map<String, dynamic> m) => Season(
         id: id,
         key: _s(m['key']),
@@ -369,6 +398,12 @@ class Season {
         endsAt: parseDate(m['endsAt']),
         active: _b(m['active']),
         replacesRegular: m['replacesRegular'] is bool ? m['replacesRegular'] as bool : true,
+        replaceDates: m['replaceDates'] is List
+            ? [
+                for (final d in m['replaceDates'] as List)
+                  if (d is String && _isCalendarDate(d.trim())) d.trim(),
+              ]
+            : const [],
         image: MediaImage.fromMap(m['image']),
         imageStyle: _s(m['imageStyle']),
         program: ProgramInfo.fromMap(m),
@@ -397,6 +432,12 @@ class Liturgy implements Hideable {
   /// Optional programme details (speaker, topic, choir, venue, audience, PDF
   /// link; ADR-041).
   final ProgramInfo program;
+
+  /// A seasonal feast liturgy that replaces EVERY regular mass of its day in
+  /// an additive season (admin checkbox «يحل محل قداسات اليوم المعتادة»;
+  /// ADR-050). Off (the default), a seasonal mass hides only the regular
+  /// masses that overlap it in time.
+  final bool replacesDay;
   const Liturgy({
     this.visible = true,
     required this.id,
@@ -415,6 +456,7 @@ class Liturgy implements Hideable {
     this.order = 0,
     this.sample = false,
     this.program = ProgramInfo.none,
+    this.replacesDay = false,
   });
   factory Liturgy.fromMap(String id, Map<String, dynamic> m) => Liturgy(
         visible: m['visible'] is bool ? m['visible'] as bool : true,
@@ -434,6 +476,7 @@ class Liturgy implements Hideable {
         order: _ni(m['order']) ?? 0,
         sample: _b(m['sample']),
         program: ProgramInfo.fromMap(m),
+        replacesDay: _b(m['replacesDay']),
       );
   int? get startMinutes => parseHm(start);
   int? get endMinutes => parseHm(end);
@@ -552,8 +595,8 @@ class Activity implements Hideable {
         category: _s(m['category']),
         titleAr: _s(m['titleAr']),
         titleEn: _s(m['titleEn']),
-        descAr: _s(m['descAr']),
-        descEn: _s(m['descEn']),
+        descAr: stripPendingPlaceholders(_s(m['descAr'])),
+        descEn: stripPendingPlaceholders(_s(m['descEn'])),
         scheduleAr: _s(m['scheduleAr']),
         scheduleEn: _s(m['scheduleEn']),
         ageRange: _s(m['ageRange']),
@@ -669,8 +712,8 @@ class Facility implements Hideable {
         type: _s(m['type']),
         nameAr: _s(m['nameAr']),
         nameEn: _s(m['nameEn']),
-        descAr: _s(m['descAr']),
-        descEn: _s(m['descEn']),
+        descAr: stripPendingPlaceholders(_s(m['descAr'])),
+        descEn: stripPendingPlaceholders(_s(m['descEn'])),
         phone: _s(m['phone']),
         hoursAr: _s(m['hoursAr']),
         hoursEn: _s(m['hoursEn']),
@@ -729,8 +772,8 @@ class Priest implements Hideable {
         hegumenDate: _s(m['hegumenDate']),
         departedDate: _s(m['departedDate']),
         status: _s(m['status']).isEmpty ? 'serving' : _s(m['status']),
-        bioAr: _s(m['bioAr']),
-        bioEn: _s(m['bioEn']),
+        bioAr: stripPendingPlaceholders(_s(m['bioAr'])),
+        bioEn: stripPendingPlaceholders(_s(m['bioEn'])),
         order: _ni(m['order']) ?? 0,
         sample: _b(m['sample']),
         image: MediaImage.fromMap(m['image']),
@@ -779,8 +822,8 @@ class Milestone implements Hideable {
         id: id,
         titleAr: _s(m['titleAr']),
         titleEn: _s(m['titleEn']),
-        descAr: _s(m['descAr']),
-        descEn: _s(m['descEn']),
+        descAr: stripPendingPlaceholders(_s(m['descAr'])),
+        descEn: stripPendingPlaceholders(_s(m['descEn'])),
         year: _ni(m['year']),
         icon: _s(m['icon']),
         order: _ni(m['order']) ?? 0,
@@ -827,8 +870,8 @@ class Saint implements Hideable {
         id: id,
         nameAr: _s(m['nameAr']),
         nameEn: _s(m['nameEn']),
-        bioAr: _s(m['bioAr']),
-        bioEn: _s(m['bioEn']),
+        bioAr: stripPendingPlaceholders(_s(m['bioAr'])),
+        bioEn: stripPendingPlaceholders(_s(m['bioEn'])),
         feastCopticAr: _s(m['feastCopticAr']),
         feastCopticEn: _s(m['feastCopticEn']),
         feastGregorian: _s(m['feastGregorian']),
