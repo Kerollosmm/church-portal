@@ -440,3 +440,19 @@ PresetWrites planSyncEnd(SeasonPreset p, DateTime seasonEnd, {DateTime? storedLi
           seasonEnd.isBefore(storedLiveEndsAt))
         'liveEndsAt': seasonEnd,
     }, p.seasonId, const {});
+
+/// The days, rounded up, that applying a preset with [options] to [season]
+/// at [now] would replace the whole weekly schedule, when that is more than
+/// 3 days; null otherwise (ADR-054, sims r3 O-3: the Pascha preset's
+/// default replaceRegular on a 50-day window). Counted from the later of the
+/// season's start and [now] to its end; the season replaces when the preset
+/// ticks [PresetOption.replaceRegular] or it already does.
+int? presetReplaceDays(Season season, Set<String> options, DateTime now) {
+  final replaces = options.contains(PresetOption.replaceRegular) || season.replacesRegular;
+  final end = season.endsAt;
+  if (!replaces || end == null) return null;
+  final start = season.startsAt == null || season.startsAt!.isBefore(now) ? now : season.startsAt!;
+  final minutes = end.difference(start).inMinutes;
+  if (minutes <= 3 * 24 * 60) return null;
+  return (minutes / (24 * 60)).ceil();
+}

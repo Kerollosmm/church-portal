@@ -225,7 +225,8 @@ String buildAssistantInstruction({
       }
     }
 
-    final listed = seasonalSchedule(seasons, liturgies);
+    // A season that ended before today is not listed (ADR-054).
+    final listed = seasonalSchedule(seasons, liturgies, now: now);
     // A full-override season with exact dates replaces the regular schedule
     // in its window even with no service listed (ADR-053), so it is named
     // too, or the weekly list would read as held there (CodeRabbit on PR #47).
@@ -287,9 +288,15 @@ String buildAssistantInstruction({
         }
         for (final l in e.value) {
           final when = l.date != null ? _ymd(l.date!) : (l.weekday != null ? weekdayNamesEn[l.weekday!] : 'every day');
+          // A listed sample not held on some days: another season's real
+          // service takes its time then (ADR-054, sims r3 P3 item 9).
+          final except = seasonListExceptions(l, s, liturgies, seasons: seasons, from: now)
+              .map((x) => 'not on ${_ymd(x.date)}: replaced by ${_bi(x.by.nameAr, x.by.nameEn)}')
+              .join('; ');
           b.writeln(
             '- ${l.sample ? '[UNCONFIRMED] ' : ''}$when: ${_liturgyLine(l, f.programOptions)}'
-            "${l.replacesDay && !s.replacesRegular ? " [REPLACES the day's regular masses]" : ''}",
+            "${l.replacesDay && !s.replacesRegular ? " [REPLACES the day's regular masses]" : ''}"
+            '${except.isEmpty ? '' : ' ($except)'}',
           );
         }
         // ADR-051: the feast night(s) of an additive season.

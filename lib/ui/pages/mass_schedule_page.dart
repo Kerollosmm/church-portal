@@ -138,7 +138,7 @@ class _MassSchedulePageState extends ConsumerState<MassSchedulePage> {
         ),
         Padding(padding: const EdgeInsets.only(bottom: Space.s), child: ProgramDetails(e.key.program)),
         // No audience chips in this view: never filter (Sentry review).
-        ..._seasonCards(context, e.value, parallel),
+        ..._seasonCards(context, e.value, parallel, season: e.key, all: all, seasons: seasons, now: now),
       ],
       // One-off dated services outside any season (e.g. a feast or New
       // Year's Eve), which the weekly tabs cannot show.
@@ -198,7 +198,8 @@ class _MassSchedulePageState extends ConsumerState<MassSchedulePage> {
   }
 
   List<Widget> _seasonal(BuildContext context, List<Season> seasons, List<Liturgy> all, DateTime now) {
-    final grouped = seasonalSchedule(seasons, all);
+    // A season that ended before today is no longer listed (ADR-054).
+    final grouped = seasonalSchedule(seasons, all, now: now);
     final opts = ref.watch(featuresProvider.select((f) => f.programOptions));
     final allSeasonal = grouped.values.expand((l) => l).toList();
     // One map for every season shown: services of two seasons can overlap.
@@ -252,7 +253,8 @@ class _MassSchedulePageState extends ConsumerState<MassSchedulePage> {
       if (!s.program.isEmpty) {
         out.add(Padding(padding: const EdgeInsets.only(bottom: Space.m), child: ProgramDetails(s.program)));
       }
-      out.addAll(_seasonCards(context, e.value, parallel, audience: audience));
+      out.addAll(_seasonCards(context, e.value, parallel,
+          audience: audience, season: s, all: all, seasons: seasons, now: now));
     }
     return [..._audienceFilter(context, keys, audience), ...out];
   }
@@ -295,8 +297,16 @@ class _MassSchedulePageState extends ConsumerState<MassSchedulePage> {
   /// A season's services, filtered by [audience] (a service without an
   /// audience is for everyone), each with the services held at the same
   /// time in another hall ([parallel], ADR-041).
+  ///
+  /// A sample still listed but not held on some days, because another
+  /// season's real service takes its time, says so on its card («لا يُقام
+  /// ٢٣ يونيو», ADR-054); past days are not named.
   List<Widget> _seasonCards(BuildContext context, List<Liturgy> list, Map<String, List<Liturgy>> parallel,
-      {String audience = ''}) {
+      {String audience = '',
+      Season? season,
+      List<Liturgy> all = const [],
+      List<Season> seasons = const [],
+      DateTime? now}) {
     final opts = ref.watch(featuresProvider.select((f) => f.programOptions));
     final shown = audience.isEmpty
         ? list
@@ -309,6 +319,11 @@ class _MassSchedulePageState extends ConsumerState<MassSchedulePage> {
             liturgy: l,
             showDate: true,
             parallelText: parallelSummary(context, opts, parallel[l.id] ?? const []),
+            notHeldOn: season == null
+                ? ''
+                : seasonListExceptions(l, season, all, seasons: seasons, from: now)
+                    .map((x) => formatDayMonth(x.date, arabic: context.isAr))
+                    .join(context.isAr ? '، ' : ', '),
           ),
       ]),
     ];

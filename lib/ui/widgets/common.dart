@@ -449,7 +449,12 @@ class Pill extends StatelessWidget {
   /// Lines before the label is ellipsized (null = wrap freely, for labels
   /// that list content shown nowhere else, e.g. the active seasons).
   final int? maxLines;
-  const Pill(this.text, {super.key, this.color, this.icon, this.maxLines = 2});
+
+  /// When the label wraps, keep its lines about the same length instead of
+  /// leaving a word or two alone on the last one (ADR-054, sims r3 P5: the
+  /// Nayrouz name left «ش)» alone). Same number of lines, narrower box.
+  final bool balanced;
+  const Pill(this.text, {super.key, this.color, this.icon, this.maxLines = 2, this.balanced = false});
 
   @override
   Widget build(BuildContext context) {
@@ -471,16 +476,72 @@ class Pill extends StatelessWidget {
         // Long labels (e.g. several active seasons) wrap/ellipsize instead
         // of overflowing narrow cards.
         Flexible(
-          child: Text(
-            text,
-            maxLines: maxLines,
-            overflow: maxLines == null ? null : TextOverflow.ellipsis,
-            style: TextStyle(color: fg, fontWeight: FontWeight.w700, fontSize: 12),
-          ),
+          child: balanced
+              ? BalancedText(text,
+                  maxLines: maxLines, style: TextStyle(color: fg, fontWeight: FontWeight.w700, fontSize: 12))
+              : Text(
+                  text,
+                  maxLines: maxLines,
+                  overflow: maxLines == null ? null : TextOverflow.ellipsis,
+                  style: TextStyle(color: fg, fontWeight: FontWeight.w700, fontSize: 12),
+                ),
         ),
       ],
     ),
   );
+  }
+}
+
+/// A [Text] whose wrapped lines are balanced (ADR-054): it takes the
+/// narrowest width that still needs no more lines than the full width does,
+/// so the last line is never a lone word. One line: a plain [Text].
+class BalancedText extends StatelessWidget {
+  final String text;
+  final TextStyle? style;
+  final int? maxLines;
+  const BalancedText(this.text, {super.key, this.style, this.maxLines});
+
+  /// The balanced width for [text] in a box [maxWidth] wide, or null when it
+  /// fits on one line (exposed for tests).
+  static double? balancedWidth(String text, TextStyle style, double maxWidth, TextDirection dir, TextScaler scaler,
+      {int? maxLines}) {
+    int lines(double w) {
+      final tp = TextPainter(
+          text: TextSpan(text: text, style: style), textDirection: dir, textScaler: scaler, maxLines: maxLines)
+        ..layout(maxWidth: w);
+      final n = tp.computeLineMetrics().length;
+      tp.dispose();
+      return n;
+    }
+
+    final full = lines(maxWidth);
+    if (full <= 1) return null;
+    var lo = 0.0, hi = maxWidth;
+    for (var i = 0; i < 14 && hi - lo > 1; i++) {
+      final mid = (lo + hi) / 2;
+      if (lines(mid) <= full) {
+        hi = mid;
+      } else {
+        lo = mid;
+      }
+    }
+    return hi;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final effective = DefaultTextStyle.of(context).style.merge(style);
+    final overflow = maxLines == null ? null : TextOverflow.ellipsis;
+    return LayoutBuilder(builder: (context, c) {
+      if (!c.hasBoundedWidth) return Text(text, style: style, maxLines: maxLines, overflow: overflow);
+      final w = balancedWidth(text, effective, c.maxWidth, Directionality.of(context), MediaQuery.textScalerOf(context),
+          maxLines: maxLines);
+      if (w == null) return Text(text, style: style, maxLines: maxLines, overflow: overflow);
+      return SizedBox(
+        width: (w + 1).clamp(0, c.maxWidth).toDouble(),
+        child: Text(text, style: style, maxLines: maxLines, overflow: overflow),
+      );
+    });
   }
 }
 

@@ -1,5 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 
+import '../domain/rules.dart' show toArabicDigits;
+
 /// Minimal in-app localisation: Arabic (default, RTL) and English.
 const Map<String, List<String>> _strings = {
   // key: [ar, en]
@@ -51,7 +53,18 @@ const Map<String, List<String>> _strings = {
   'allVenues': ['كل الأماكن', 'All venues'],
   'allAudiences': ['كل الفئات', 'Everyone'],
   'katamerosCredit': ['المصدر: القطمارس (katameros.app)', 'Source: Katameros (katameros.app)'],
+  // «بعد {n} أيام» for 3–10 only; the card words 2 and 11+ with
+  // [L10nX.inDays] (ADR-054: «بعد يومين», «بعد ١٢ يومًا»).
   'inDays': ['بعد {n} أيام', 'In {n} days'],
+  'inTwoDays': ['بعد يومين', 'In 2 days'],
+  'inManyDays': ['بعد {n} يومًا', 'In {n} days'],
+  // A listed season sample not held on these days (ADR-054).
+  'notHeldOn': ['لا يُقام {d}', 'Not held {d}'],
+  // Preset dialog: a long window that replaces the weekly schedule (ADR-054).
+  'presetReplaceLongWarn': [
+    'تنبيه: هذا الموسم سيُلغي كل القداسات المعتادة لمدة {d}؛ لن يظهر أي قداس من الجدول الأسبوعي حتى نهايته. لإبقاء القداسات المعتادة أزِل علامة «صلوات الموسم تحل محل الجدول الأسبوعي».',
+    'Warning: this season will cancel every regular service for {n} days; no weekly service will show until it ends. To keep the regular services, untick "Season services replace the weekly schedule".'
+  ],
   'startsIn': ['يبدأ بعد {t}', 'Starts in {t}'],
   'hoursShort': ['س', 'h'],
   'minutesShort': ['د', 'min'],
@@ -710,6 +723,24 @@ extension L10nX on BuildContext {
     var s = pair == null ? key : (isAr ? pair[0] : pair[1]);
     args.forEach((k, v) => s = s.replaceAll('{$k}', v));
     return s;
+  }
+
+  /// «بعد ٣ أيام» for a day [n] days ahead, with the Arabic count rules
+  /// (ADR-054): 1 «غدًا», 2 «بعد يومين», 3–10 «بعد ٣ أيام», 11+ «بعد ١١
+  /// يومًا», Arabic-Indic digits. English: "Tomorrow" / "In {n} days".
+  String inDays(int n) {
+    if (n == 1) return tr('tomorrow');
+    if (!isAr) return tr('inDays', {'n': '$n'});
+    if (n == 2) return tr('inTwoDays');
+    return tr(n >= 3 && n <= 10 ? 'inDays' : 'inManyDays', {'n': toArabicDigits('$n')});
+  }
+
+  /// «٥ أيام» / «يومين» / «١٢ يومًا» (Arabic count rules, ADR-054); "5 days".
+  String dayCount(int n) {
+    if (!isAr) return n == 1 ? '1 day' : '$n days';
+    if (n == 1) return 'يوم واحد';
+    if (n == 2) return 'يومين';
+    return '${toArabicDigits('$n')} ${n <= 10 ? 'أيام' : 'يومًا'}';
   }
 
   /// Translated UI string, or null when [key] has no entry.

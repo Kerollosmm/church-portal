@@ -42,7 +42,12 @@ class LiturgyCard extends StatelessWidget {
       this.showWeekday = false,
       this.showDate = false,
       this.parallelText = '',
-      this.notHeldToday = false});
+      this.notHeldToday = false,
+      this.notHeldOn = ''});
+
+  /// The days a listed season sample is not held (ADR-054), already
+  /// formatted («٢٣ يونيو»); '' = none.
+  final String notHeldOn;
 
   IconData get _icon => switch (liturgy.type) {
         'vespers' => Icons.nightlight_round,
@@ -81,6 +86,12 @@ class LiturgyCard extends StatelessWidget {
                   padding: const EdgeInsets.only(bottom: 4),
                   child: Pill(context.tr('notHeldToday'),
                       key: const Key('notHeldToday'), icon: Icons.event_busy, color: context.pal.muted),
+                ),
+              if (notHeldOn.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Pill(context.tr('notHeldOn', {'d': notHeldOn}),
+                      key: const Key('notHeldOn'), icon: Icons.event_busy, color: context.pal.muted),
                 ),
               Text(context.pick(l.nameAr, l.nameEn),
                   style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
@@ -131,16 +142,21 @@ class NextMassCard extends ConsumerWidget {
       // service is never named (Sentry review); with the days either side,
       // so a service crossing midnight meets the next day's (ADR-049).
       final next = r.next;
+      // A service the «يُقام الآن» box above already names is not repeated
+      // under the next one (ADR-054, sims r3 P7 12:30).
       final parallel = next == null
           ? const <LiturgyOccurrence>[]
-          : parallelOccurrencesOf(
+          : [
+              for (final o in parallelOccurrencesOf(
               next,
               occurrencesAround(
                   liturgies: lits.value ?? const [],
                   seasons: seasons.value ?? const [],
                   day: next.start,
                   dayOffset: next.dayOffset),
-              opts);
+              opts))
+                if (!r.shownInNowBox(o, opts)) o,
+            ];
       // One starting later, while the next service runs, is named with its
       // own time («وبعدها ٠٧:٠٠ ص: …»), not «في نفس الوقت» (ADR-053, sims
       // r2 P2 O-a); one already running when it starts stays «في نفس الوقت».
@@ -233,6 +249,9 @@ class NextMassCard extends ConsumerWidget {
         child: Pill(
           context.tr('seasonActive', {'s': r.activeSeasons.map((s) => context.pick(s.nameAr, s.nameEn)).join('، ')}),
           maxLines: null, // every active season name must stay readable
+          // Balanced lines: a long name never leaves «ش)» alone (ADR-054).
+          balanced: true,
+          key: const Key('seasonActivePill'),
           color: context.pal.primary,
           icon: Icons.auto_awesome,
         ),
@@ -281,7 +300,7 @@ class NextMassCard extends ConsumerWidget {
       final dayLabel = switch (n.dayOffset) {
         0 => context.tr('today'),
         1 => context.tr('tomorrow'),
-        _ => context.tr('inDays', {'n': localDigits(context, '${n.dayOffset}')}),
+        _ => context.inDays(n.dayOffset),
       };
       final mins = n.start.difference(now).inMinutes;
       // A service after the liturgical day's start (18:00 by default)
