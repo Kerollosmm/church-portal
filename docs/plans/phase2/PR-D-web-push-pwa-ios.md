@@ -30,10 +30,11 @@ hours, test notification, inbox, deep links, unsubscribe-all — with **zero cos
 | Support detection | `'Notification' in window && 'serviceWorker' in navigator && 'PushManager' in window`; iOS: only when standalone (else → install steps from PR A); Firefox private windows / Safari < 16 → «غير مدعوم في هذا المتصفح» |
 | Explainer → tap → permission | PR A flow; `Notification.requestPermission()` inside the click handler (iOS requires a user gesture) |
 | Token | on grant: inject `/push_client.js` (once), which `import()`s `https://www.gstatic.com/firebasejs/<SDK_VERSION>/firebase-messaging.js` (same version FlutterFire loaded: `window.firebase_core.SDK_VERSION`, fallback `13.1.0` from `firebase_core_web 4.1.0`), registers `/firebase-messaging-sw.js` with scope `/firebase-cloud-messaging-push-scope`, `getToken(messaging, {vapidKey, serviceWorkerRegistration})` |
-| Subscribe to topics | browsers cannot subscribe themselves → write ONE doc `push_queue/{auto}` = `{op:'sub', token, topics:['web_announcements_ar',…], createdAt: serverTimestamp()}`; the sender (PR C) drains it with the **Instance ID API** `https://iid.googleapis.com/iid/v1:batchAdd` / `:batchRemove` (OAuth token of `push-sender`, header `access_token_auth: true`) and deletes the doc |
-| Change types / language | diff → one queue doc with `sub` + `unsub` lists |
-| Unsubscribe all | queue `unsub` all web topics + `deleteToken()` + clear prefs |
-| Token refresh | on each visit with permission granted the client calls `getToken` (cheap, cached); if it differs from the stored one → queue `sub` with the new token and `unsub` with `prevToken` |
+| Subscribe to topics | browsers cannot subscribe themselves → write ONE doc `push_queue/{auto}` = `{token, want:['web_announcements_ar',…], createdAt: serverTimestamp()}` carrying the **full desired topic set** (not a diff); the sender (PR C) groups queue docs by token, keeps only the **newest** (`createdAt`), applies `batchAdd` for `want` and `batchRemove` for every other web topic via the **Instance ID API** `https://iid.googleapis.com/iid/v1:batchAdd` / `:batchRemove` (OAuth token of `push-sender`, header `access_token_auth: true`), then deletes all docs of that token — idempotent and order-safe (an ar → en → ar flip before the drain ends on ar; CodeRabbit) |
+| Change types / language | one queue doc with the new full `want` set |
+| Unsubscribe all | queue `want: []` (the sender removes every web topic) + `deleteToken()` + clear prefs |
+| Token refresh | FCM does not move topic subscriptions to a new token. Allowed refresh point (resolves "nothing on load" vs refresh — CodeRabbit): only for a device that **already enabled** notifications (local flag) and has permission `granted`, **at most once every 7 days**, after `ContentReady` + `requestIdleCallback` (≥ 10 s after load): load the SDK, `getToken`; if it differs from the stored token → queue `{token: new, prevToken: old, want}` (the sender removes `prevToken` from all topics). First-time visitors and opted-out devices never load anything |
+| Pending / throttled writes | the desired state is saved locally first (`pendingWant`); a rejected queue write (3 s spacing or daily cap) is retried with jitter (≤ 5 tries this visit) and again on the next visits until it succeeds; the page shows «جارٍ التفعيل…» / «تعذّر الآن، سنحاول تلقائيًا» until then (CodeRabbit) |
 | Quiet hours | the SW reads quiet hours from IndexedDB (written by the page) and shows notifications **silently** (`silent: true`, no vibrate) inside the window — it never drops a push (iOS/Chrome penalise invisible pushes) |
 | Test notification | page → `registration.showNotification(title, {body, icon:'/icons/Icon-192.png', badge:'/icons/badge-72.png', data:{link}})` |
 | Inbox | the SW appends each shown notification to IndexedDB `church_portal_push/inbox` (last 30); the page lists them with time + link; «مسح السجل» |
@@ -81,17 +82,15 @@ match /push_queue/{id} {
     && getAfter(/databases/$(database)/documents/meta/push_rate).data.get('lastId', '') == id;
 }
 function validPushQueue(d) {
-  return d.keys().hasOnly(['op', 'token', 'prevToken', 'sub', 'unsub', 'createdAt'])
-    && d.op in ['sub', 'unsub', 'change']
+  return d.keys().hasOnly(['token', 'prevToken', 'want', 'createdAt'])
     && d.token is string && d.token.matches('^[A-Za-z0-9:_-]{100,400}$')
     && (!('prevToken' in d) || (d.prevToken is string && d.prevToken.matches('^[A-Za-z0-9:_-]{100,400}$')))
-    && d.get('sub', []) is list && d.get('sub', []).size() <= 10
-    && d.get('unsub', []) is list && d.get('unsub', []).size() <= 10
-    && d.get('sub', []).concat(d.get('unsub', [])).hasOnly(webTopics())   // the 10 web_<type>_<ar|en> names
+    && d.want is list && d.want.size() <= 5
+    && d.want.hasOnly(webTopics())                 // the 10 web_<type>_<ar|en> names
     && d.createdAt == request.time;
 }
 ```
-Tests: valid sub passes in a batch with the throttle; alone → denied; second within 3 s → denied; count 1,001 →
+Tests: a valid `want` doc (incl. the initial subscription and `want: []`) passes in a batch with the throttle; alone → denied; second within 3 s → denied; count 1,001 →
 denied; new UTC day resets the count to 1 (count 2 on a new day → denied); `day` not today → denied; bad token,
 unknown topic, 11 topics, read/update/delete → denied.
 
@@ -137,7 +136,8 @@ No Dart package (uses PR C's `firebase_messaging` only on Android; on web its SD
    Record results (IID OK? iOS OK?) in ADR-060 and pick the queue or the fallback.
 2. Rules + emulator tests for `push_queue` + throttle.
 3. `push_client.js` + SW (complete) + Dart interop; enable / disable / token refresh; queue writes.
-4. Sender: drain queue (+ tests with a fake IID).
+4. Sender: drain queue — newest doc per token wins, add `want` / remove the rest / remove `prevToken`; drained even
+   while `push` is off (+ tests with a fake IID, including out-of-order docs).
 5. Page: quiet hours, test, inbox, iOS states; deep-link messages.
 6. PageSpeed check: Lighthouse mobile on the preview (no new requests on load; score ≥ previous − 2).
 7. Docs + ADR-060.
@@ -145,8 +145,9 @@ No Dart package (uses PR C's `firebase_messaging` only on Android; on web its SD
 ## ١٠. الاختبارات (Tests)
 
 - Dart (fake env): states (unsupported, ios not installed, default, granted, denied); enable writes exactly one
-  queue doc with the right topics for ar/en; changing types writes sub+unsub diff; unsubscribe-all → unsub all +
-  deleteToken; token change → prevToken flow; nothing happens on page load (no env calls before tap).
+  queue doc with the full `want` set for ar/en; changing types writes the new full set; unsubscribe-all → `want: []`
+  + deleteToken; token change → prevToken flow only for enabled devices, once per 7 days, after idle; first-time
+  visitors: no env calls on load; throttled write → pending state + retry.
 - JS (node:test with a fake `self`): SW quiet-hours silent flag, inbox cap 30, `safe(link)`, click focuses or
   opens.
 - Rules emulator (§5). Sender queue tests (grouping, deletion, error handling).
@@ -163,7 +164,7 @@ No Dart package (uses PR C's `firebase_messaging` only on Android; on web its SD
 | Desktop Chrome / Edge / Firefox / Safari macOS | enable, test, announcement | works; Firefox shows its own permission UI |
 | Quiet hours | set now inside | silent notification, listed in inbox |
 | Unsubscribe all | then admin sends | nothing arrives |
-| Arabic / English | switch language | topics switch (unsub _ar, sub _en) |
+| Arabic / English | switch language | topics switch (new `want` = the `_en` topics; the sender removes the `_ar` ones) |
 | PageSpeed | Lighthouse mobile | no new network request on load |
 
 ## ١٢. CI
@@ -182,7 +183,7 @@ token-list fallback), silent-not-dropped quiet hours, iOS installed-only. Arabic
 |---|---|
 | IID API deprecated / blocked | spike first; token-list fallback ready |
 | iOS web push limits (installed only, 16.4+, can be revoked silently if many pushes are not shown) | always show a notification; clear UI guidance |
-| Spam writes to `push_queue` | strict validation, 3 s global spacing **and a 1,000-per-day cap** (worst case 2,000 writes + 1,000 deletes/day, well inside Spark's 20k), create-only, sender deletes; client retries with jitter (≤ 5 tries) and shows «الخدمة مشغولة، حاول بعد قليل» / «حاول غدًا» when the cap is reached; later hardening: enforce App Check on Firestore for web |
+| Spam writes to `push_queue` (CodeRabbit: "per-client limits") | strict validation, 3 s global spacing **and a 1,000-per-day cap** (worst case 2,000 writes + ~3,000 rule reads + 1,000 sender reads + 1,000 deletes per day — about 10–15 % of each Spark quota, so contact messages and admin saves keep working), create-only, sender deletes. True per-client limits need an identity: **App Check enforcement on Firestore** would make every visitor load reCAPTCHA on every page (rejected by ADR-037 for PageSpeed) and anonymous Auth gives no real per-person limit; both stay listed as later hardening if abuse is ever seen (sender summary shows daily queue counts). An attacker can at worst fill the day's cap — legitimate opt-ins then wait until the next day (pending state retries automatically); client retries with jitter (≤ 5 tries) and shows «الخدمة مشغولة، حاول بعد قليل» / «حاول غدًا» when the cap is reached; later hardening: enforce App Check on Firestore for web |
 | SW conflicts with Flutter's cleanup SW | separate scope; test on real devices; fallback: register at `/push/` scope with the SW file under `/push/` |
 | VAPID key rotated → old tokens invalid | runbook: rotating means everyone must re-enable — avoid |
 | PageSpeed | nothing on load; Lighthouse check in QA |

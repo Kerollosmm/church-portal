@@ -85,18 +85,27 @@ D: VAPID).
 
 ## ٦. الخصوصية (Privacy notice — PDPL, Egypt Law 151/2020)
 
-Add to the privacy texts (`lib/core/l10n.dart`, the notifications page, `documentation/`), approved by the owner:
+Add to the privacy texts (`lib/core/l10n.dart`, the notifications page, `documentation/`), approved by the owner
+(corrected after CodeRabbit on the plan PR: the web flow does transfer the chosen types with the token):
 
-> **الإشعارات:** إذا فعّلت الإشعارات يحفظ هاتفك اختياراتك فقط (أنواع الإشعارات وساعات الهدوء) ولا نرسلها لأي خادم.
-> لإيصال الإشعارات يعطي متصفحك أو التطبيق «رمز جهاز» عشوائيًا من خدمة Google Firebase Cloud Messaging، يُستخدم فقط
-> لإرسال إشعارات الكنيسة التي اخترتها، ولا يحتوي على اسمك أو رقمك أو بريدك. على الويب يُحفظ هذا الرمز مؤقتًا لدقائق
-> حتى يُسجَّل في الخدمة ثم يُحذف. يمكنك الإيقاف في أي وقت من صفحة «الإشعارات» أو من إعدادات الهاتف.
+> **الإشعارات:** إذا فعّلت الإشعارات تبقى ساعات الهدوء وسجل الإشعارات على جهازك فقط. لإيصال الإشعارات يعطي متصفحك أو
+> التطبيق «رمز جهاز» عشوائيًا من خدمة Google Firebase Cloud Messaging لا يحتوي على اسمك أو رقمك أو بريدك.
+> - **في تطبيق Android:** يسجّل التطبيق هذا الرمز مباشرة لدى Google في قناة «إعلانات الكنيسة» بلغتك فقط؛ باقي
+>   الإشعارات (آية اليوم، المواسم، الأعياد، التذكيرات) تُجدول على هاتفك دون إرسال أي شيء.
+> - **على الموقع وتطبيق الويب (iPhone):** يُرسَل الرمز مع **أنواع الإشعارات التي اخترتها ولغتك** إلى قاعدة بيانات
+>   الكنيسة على Google Firebase (خوادم قد تكون خارج مصر) لدقائق حتى تسجّله أداة الإرسال لدى Google ثم يُحذف من
+>   قاعدة البيانات. يحتفظ Google بالاشتراك ما دمت مشتركًا.
+> يمكنك الإيقاف في أي وقت من صفحة «الإشعارات» (يُلغى الاشتراك ويُحذف الرمز) أو من إعدادات الهاتف.
 >
-> **Notifications:** if you turn notifications on, your choices (types, quiet hours) stay on your device. To deliver
-> them, your browser or the app gets a random device token from Google Firebase Cloud Messaging, used only to send
-> the church notifications you chose; it contains no name, phone number or e-mail. On the web the token is stored
-> for a few minutes until it is registered with the service, then deleted. You can stop at any time from the
-> Notifications page or your phone's settings.
+> **Notifications:** quiet hours and your notification history stay on your device. To deliver notifications your
+> browser or the app gets a random device token from Google Firebase Cloud Messaging; it contains no name, phone
+> number or e-mail.
+> - **Android app:** the app registers this token directly with Google for the church-announcements channel in your
+>   language only; everything else (verse, seasons, feasts, reminders) is scheduled on your phone and sends nothing.
+> - **Website / iPhone web app:** the token, **the notification types you chose and your language** are sent to the
+>   church's Google Firebase database (servers may be outside Egypt) for a few minutes until the sender registers
+>   them with Google, then deleted from the database. Google keeps the subscription while you stay subscribed.
+> You can stop at any time from the Notifications page (unsubscribes and deletes the token) or your phone's settings.
 
 Sentry rules (ADR-034) apply: never log tokens, links' query strings or user text.
 

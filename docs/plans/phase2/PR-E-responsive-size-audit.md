@@ -30,7 +30,7 @@ the web bundle and the APK stay small, with budgets enforced in CI.
 | Landscape phones | 740 × 360: app bar + top utility bar ≤ 40 % of height; banner hidden in landscape when height < 420 |
 | Safe areas | notch / home indicator: banner and update banner use `SafeArea` / `MediaQuery.viewPadding` (iPhone PWA standalone, Android gesture nav) |
 | Web bundle budget | baseline `main.dart.js` on `main` @ `7e4705b`: **4,898,252 B (1,334,591 B gzip -9)**. Budget: Phase 2 total ≤ +60 KB gzip; CI step fails above `MAIN_JS_GZ_MAX` (repo variable, default 1,400,000) |
-| APK budget | arm64 ≤ 20 MB, arm32 ≤ 18 MB (report in PR B); `--split-per-abi`, R8 + resource shrinking, `--obfuscate --split-debug-info`, tree-shaken icons; no x86 |
+| APK budget | arm64 ≤ 20 MB, arm32 ≤ 18 MB, **enforced in `android.yml` before artifact upload and release** (PR B step "APK size budget", repo variables `APK_ARM64_MAX` / `APK_ARM32_MAX`); PR E adds a test of the failure path; `--split-per-abi`, R8 + resource shrinking, `--obfuscate --split-debug-info`, tree-shaken icons; no x86 |
 | Asset audit | `assets/video/*.mp4` (358 KB) and art webp are already small; fonts are full (522 KB) → subset IBM Plex Sans Arabic / Lalezar / Aref Ruqaa to Arabic + Latin + digits with `pyftsubset` (target −50 %), keep licences; verify Arabic shaping in goldens |
 | PageSpeed guard | Lighthouse CI (mobile) on the preview channel URL in `deploy.yml` (job `lighthouse`, `treosh/lighthouse-ci-action@v12`), **warn** below 61 performance, report in the PR; not blocking (network variance) |
 
@@ -59,7 +59,7 @@ None in the app. CI: `treosh/lighthouse-ci-action@v12` (optional), `fonttools` (
 1. Reproduce the 320 px overlap with real fonts in a widget test → fix → test green.
 2. Extend the sweep matrix; fix each failure at its root cause (no blanket `FittedBox`).
 3. Font subsetting + Arabic shaping check (goldens, manual on a phone).
-4. Bundle-size CI step:
+4. Bundle-size CI step (map the repository variable into the step: `env: MAIN_JS_GZ_MAX: ${{ vars.MAIN_JS_GZ_MAX }}`):
    ```bash
    GZ=$(gzip -9c build/web/main.dart.js | wc -c); echo "main.dart.js gzip: $GZ"
    [ "$GZ" -le "${MAIN_JS_GZ_MAX:-1400000}" ] || { echo "::error::main.dart.js too big"; exit 1; }

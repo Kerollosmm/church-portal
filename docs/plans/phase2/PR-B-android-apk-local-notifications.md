@@ -39,7 +39,7 @@ defaults until PR C adds the admin editor) and the user's per-type choices.
 | Offline | Firestore offline persistence + bundled seed (already). Verify airplane-mode start shows cached content |
 | Splash + icon | existing `LaunchTheme` + adaptive icon from `tool/gen_branding.sh`; Android 12+ splash API uses `windowSplashScreenBackground` `#FBF3E4` + seal (`values-v31/styles.xml`) |
 | Dark mode | follows the **site theme** (occasion palettes incl. dark Holy Week), not the system dark mode — same as the web; ADR-058 records it. `values-night` launch theme uses the cream background to avoid a dark flash |
-| Update prompt | `package_info_plus` build number `% 1000` (split-per-abi adds 1000×ABI) < `installApkBuild` (already in the streamed `settings/features`) → banner «تحديث متاح — الإصدار ١٫٢٫٠» → opens `installAndroidUrl` in the browser. Dismiss per version |
+| Update prompt | the APK is built with `--dart-define=APP_BUILD=<pubspec build number>` (CI reads it from `pubspec.yaml`); `AppConfig.appBuild` (full integer, no ABI offset arithmetic — `package_info_plus`'s versionCode includes Flutter's per-ABI offset and would be ambiguous above 999, CodeRabbit) < `installApkBuild` (already in the streamed `settings/features`) → banner «تحديث متاح — الإصدار ١٫٢٫٠» → opens `installAndroidUrl` in the browser. Dismiss per version |
 | Install banner | hidden (`!kIsWeb`) |
 
 ### 3.2 Local notifications
@@ -55,7 +55,8 @@ defaults until PR C adds the admin editor) and the user's per-type choices.
 | Deep link | payload `link` → `router.go(safeNotificationLink(link))`; app started from a notification → `getNotificationAppLaunchDetails()` → initial location; deleted page → existing 404 with «الرجوع للرئيسية»; switched-off section → FeatureGate «غير متاح» |
 | Unsubscribe all | cancels all pending alarms + clears prefs (PR C: also unsubscribes the FCM topic) |
 | Re-sync | re-plan on: app start, resume (`AppLifecycleState.resumed`), prefs change, `settings/features` change (admin edits types / verse / dayEvents), date or time-zone change (`didChangeLocales` no; use resume + `DateTime.now().timeZoneOffset` compare), device reboot (plugin's `ScheduledNotificationBootReceiver` restores) |
-| Planning horizon | next **14 days**, ≤ 60 pending (Android caps ~500/app; Samsung 500) — cancel-all then schedule (ids derived from a stable hash `type:date:key`) |
+| Planning horizon | next **14 days**, at most **60 pending** alarms (Android allows ~500 per app) — cancel-all then schedule, earliest first (ids = stable hash `type:date:key`). Priority when > 60: announcements none (FCM), then verse, feasts, seasons, occasions; occasions limited to the user's chosen services |
+| Background replenishment | `workmanager` periodic task (**every 24 h**, inexact, network not required): re-plans from a **snapshot** of the planner inputs (verses, admin config, seasons, `dayEvents`, today.json) that each foreground plan writes to `shared_preferences` — so the 14-day / 60-item window keeps sliding even if the app stays closed (CodeRabbit on the plan PR). If an OEM blocks background work, the remaining plan still covers up to 14 days; the notifications page then says «افتح التطبيق مرة كل أسبوعين على الأقل لتستمر الإشعارات» and the battery note applies |
 | Channels | one channel per type (`verse_daily`, `seasons`, `feasts`, `occasions`, `announcements`) with Arabic names, so users can mute a channel in system settings |
 | Exactness | **inexact** `AndroidScheduleMode.inexactAllowWhileIdle` (± ~10 min in Doze). No `SCHEDULE_EXACT_ALARM` / `USE_EXACT_ALARM` (special permission, policy risk). Documented caveat |
 | Battery optimisation | if notifications arrive late on some brands (Xiaomi, Oppo, Realme, Huawei, Samsung "Sleeping apps"), the page shows «إذا تأخرت الإشعارات: الإعدادات ← البطارية ← التطبيق ← بدون قيود» with a button to `ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS` (list, not the direct request — no `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` permission) |
@@ -112,7 +113,8 @@ Modify:
 | Package | Version | Why | Notes |
 |---|---|---|---|
 | `flutter_local_notifications` | `^23.0.0` | scheduled local notifications | needs Flutter ≥ 3.44 (repo builds on stable 3.47); depends on `timezone ^0.11.0` (repo already `^0.11.2`); requires **core library desugaring** (`isCoreLibraryDesugaringEnabled = true`, `coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")`) |
-| `package_info_plus` | `^10.2.2` | APK build number for the update prompt | small |
+| `workmanager` | `^0.10.10` (Flutter ≥ 3.38) | daily background re-plan (replenishment) | Android WorkManager; verify the version on pub.dev at implementation time |
+| `package_info_plus` | `^10.2.2` | version name for display (the update check uses `APP_BUILD`) | optional |
 | `shared_preferences` | `^2.5.6` | already a dependency | prefs, inbox, language |
 | `share_plus` | optional (`^12`) | system share sheet | add only if the APK budget allows |
 | `firebase_messaging` | — | **PR C** (announcements) | not in this PR |
@@ -126,7 +128,8 @@ Modify:
    `flutter build apk --release --split-per-abi` locally or in CI.
 3. `kIsWeb` admin guard; Android language store; PopScope back handling; assistant opens web `/ask`.
 4. `LocalNotifier` + channels + permission flow; wire `/notifications` Android sections.
-5. Planner provider: re-plan triggers (start, resume, prefs, features, day change); boot receiver.
+5. Planner provider: re-plan triggers (start, resume, prefs, features, day change); boot receiver; inputs snapshot +
+   `workmanager` daily replenishment (test: closed app for 3 simulated days still has a full 14-day window).
 6. Inbox, test notification, quiet hours, battery note, unsubscribe all.
 7. Update banner (`installApkBuild`).
 8. `android.yml` workflow: APK artifacts on PRs, signed release on tag.
@@ -198,11 +201,17 @@ jobs:
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           APP_VERSION=$(sed -n 's/^version: *//p' pubspec.yaml | head -1)
+          BUILD=${APP_VERSION#*+}
           flutter build apk --release --split-per-abi --target-platform android-arm,android-arm64 \
-            --obfuscate --split-debug-info=build/symbols \
+            --dart-define=APP_BUILD=$BUILD --obfuscate --split-debug-info=build/symbols \
             --dart-define=SENTRY_ENVIRONMENT=${{ startsWith(github.ref, 'refs/tags/') && 'production' || 'preview' }} \
             --dart-define=GIT_SHA=$GITHUB_SHA --dart-define=APP_VERSION=$APP_VERSION
           ls -l build/app/outputs/flutter-apk/
+      - name: APK size budget (fails before upload / release)
+        run: |
+          check() { f=build/app/outputs/flutter-apk/$1; max=$2; sz=$(stat -c %s "$f"); echo "$1: $sz B (max $max)"; [ "$sz" -le "$max" ] || { echo "::error::$1 over budget"; exit 1; }; }
+          check app-arm64-v8a-release.apk ${{ vars.APK_ARM64_MAX || 20971520 }}
+          check app-armeabi-v7a-release.apk ${{ vars.APK_ARM32_MAX || 18874368 }}
       - run: rm -f "$RUNNER_TEMP/release.jks"
         if: always()
       - uses: actions/upload-artifact@v5
@@ -240,7 +249,7 @@ update prompt via `installApkBuild`, debug-signed until the keystore exists.
 | Play Protect warns about an unknown app | normal for sideloading; guide text; signing with the same key builds reputation |
 | Google Android developer verification (4 countries since 30 Sep 2026, global 2027) | LAUNCH §8: register in the Android Developer Console and register the package with the release-signed APK before it applies in Egypt |
 | APK size > 25 MB | budget in PR E: arm64 ≤ 20 MB; remove `share_plus` if needed; `--obfuscate`; R8 |
-| Plan exceeds horizon if the app is not opened for 14 days | boot + resume re-plan; FCM announcements still arrive (PR C) |
+| Plan runs out if the app is not opened for 14 days **and** the OEM blocks background work | daily `workmanager` replenishment from the snapshot; boot + resume re-plan; FCM announcements still arrive (PR C); in-app note |
 
 ## ١٥. ما يفعله المالك (Owner steps — click by click)
 

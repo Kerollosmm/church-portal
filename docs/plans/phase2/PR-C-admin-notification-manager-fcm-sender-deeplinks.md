@@ -33,7 +33,7 @@ notification opens the chosen page on Android and (PR D) on the web / installed 
 |---|---|
 | Types editor | 5 rows (fixed set). Per type: offered (writes `pushTypes`), time `HH:mm` (verse, feasts, seasons), days before (seasons 0–7), lead minutes (occasions 15–240), title/body templates ar/en with placeholders, default link. Placeholder help under each field |
 | Placeholders | `{verse}` `{ref}` (verse), `{season}` `{days}` (seasons), `{feast}` (feasts), `{service}` `{time}` `{place}` (occasions), `{date}` everywhere; unknown placeholders flagged by the validator |
-| One-off schedule | stored in the **admin-only** doc `settings/notifications` (never streamed by visitors, unreadable by the public — unsent texts stay private); list ≤ 20; row = title ar/en (≤ 80), body ar/en (≤ 240), send-at (Cairo date + time picker, 12-hour UI / 24-hour stored like ADR-049; blank = «في أقرب دورة»), deep link (route picker), targets (web, app; default both), type (default `announcements`) |
+| One-off schedule | stored in the **admin-only** doc `settings/notifications` (never streamed by visitors, unreadable by the public — unsent texts stay private); list ≤ 20; row = title ar/en (≤ 80), body ar/en (≤ 240), send-at (Cairo date + time picker, 12-hour UI / 24-hour stored like ADR-049; blank = «في أقرب دورة»), deep link (route picker), targets (web, app; default both). One-offs are **always type `announcements`** (no type field): the APK only subscribes to `app_announcements_<lang>`, so a «feast» one-off would otherwise reach users who turned feasts off (CodeRabbit) — word a feast reminder as an announcement |
 | Route picker | existing `FieldDef.linkPicker` («اختر صفحة…»): built-in routes (`/`, `/mass-schedule`, `/mass-schedule?tab=seasons`, `/about`, `/church-education`, `/church-activities`, `/clinics`, `/public-services`, `/contact`, `/ask`, `/notifications`), custom pages `/page/<slug>`, categories `/section/<slug>`, item detail pages (`/about/saints/<id>`, `/church-activities/<id>`…), plus the live-stream https link. Free text accepted if it passes the URL/path validator |
 | Create / edit / delete | generic `objectList` editor (encoded rows) — edit allowed until sent; the sender writes `sentAt` + `result` **into the row itself** (permanent sent marker, independent of the capped log); a sent row shows «أُرسل ١٠:١٥ ص» and is read-only, delete allowed. An unsent row whose `sendAt` is more than 24 h in the past is **expired** («فات موعده ولم يُرسل») and is never sent later |
 | Preview | live card under the row: notification mock (seal icon, app name, title, body, «الآن») in Arabic and English, character counters, truncation warning (Android shows ~2 lines collapsed) |
@@ -71,9 +71,9 @@ notifyTypes:   'type␟time␟daysBefore␟leadMin␟titleAr␟titleEn␟bodyAr�
 **Admin-only — new doc `settings/notifications`** (Sentry review on the plan PR: unsent announcements must not be
 publicly readable, and the sender's writes must not wake every visitor's `settings/features` listener):
 ```
-schedule:  'id␟type␟sendAt␟titleAr␟titleEn␟bodyAr␟bodyEn␟link␟targets␟sentAt␟result'   (≤ 20)
+schedule:  'id␟sendAt␟titleAr␟titleEn␟bodyAr␟bodyEn␟link␟targets␟sentAt␟result'         (≤ 20; always type announcements)
            id = [A-Za-z0-9]{8}; sendAt = '' | 'YYYY-MM-DDTHH:mm' (Cairo wall time); targets = 'web,app' | 'web' | 'app';
-           sentAt = '' | ISO instant (written by the sender); result = '' | 'ok' | 'error:<code>' | 'expired'
+           sentAt = '' | ISO instant (written by the sender); result = '' | 'sending' | 'ok' | 'error:<code>' | 'expired'
 sentLog:   'key␟sentAtIso␟result␟title'                                                   (≤ 60, newest first; trimmed by the sender)
 updatedAt, updatedBy                                                                       (admin stamp, as other settings docs)
 ```
@@ -95,18 +95,21 @@ function validNotifications(d) {
   let changed = changedKeys(d);
   return keysAllowed(['schedule', 'sentLog', 'updatedAt', 'updatedBy'])
     && (!('schedule' in changed) || validNotifySchedule(d))
-    && (!('sentLog' in changed) || (optList(d, 'sentLog', 60)
-          && (d.get('sentLog', []).size() == 0 || d.sentLog.join('\u001e').size() <= 20000)))
+    // admins may only CLEAR the log (owner button); only the sender (Admin SDK, bypasses rules) appends to it
+    && (!('sentLog' in changed) || d.get('sentLog', []).size() == 0)
     && (!changed.hasAny(['updatedAt', 'updatedBy']) || stampOk(d));
 }
 ```
 `validNotifyTypes`: list ≤ 5, joined with `\u001e`, one regex:
 `(announcements|verse_daily|seasons|feasts|occasions)\x1f(|[01][0-9]:[0-5][0-9]|2[0-3]:[0-5][0-9])\x1f[0-7]?\x1f[0-9]{0,3}\x1f[^\x1f\x1e]{0,80}\x1f[^\x1f\x1e]{0,80}\x1f[^\x1f\x1e]{0,240}\x1f[^\x1f\x1e]{0,240}\x1f(|/[^\x1f\x1e ]{0,300}|[Hh][Tt][Tt][Pp][Ss]://[^\x1f\x1e ]{1,300})`
 repeated `{0,4}` after `\x1e`. `validNotifySchedule`: list ≤ 20, same technique:
-`[A-Za-z0-9]{8}\x1f(announcements|…)\x1f(|20[2-9][0-9]-[01][0-9]-[0-3][0-9]T[0-2][0-9]:[0-5][0-9])\x1f[^\x1f\x1e]{1,80}\x1f[^\x1f\x1e]{0,80}\x1f[^\x1f\x1e]{1,240}\x1f[^\x1f\x1e]{0,240}\x1f(link)\x1f(web,app|web|app)\x1f[^\x1f\x1e]{0,40}\x1f(|ok|expired|error:[a-z0-9/_-]{1,60})`.
-The sender writes `schedule` (`sentAt` / `result`) and `sentLog` with the Admin SDK (bypasses rules) in one
-transaction. Emulator tests: valid rows pass; `javascript:` link, 21 rows, bad date, oversize text, stranger write
-→ denied; **a visitor (unauthenticated or non-admin) cannot read `settings/notifications`** while `settings/features`
+`[A-Za-z0-9]{8}\x1f(|20[2-9][0-9]-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])T([01][0-9]|2[0-3]):[0-5][0-9])\x1f[^\x1f\x1e]{1,80}\x1f[^\x1f\x1e]{0,80}\x1f[^\x1f\x1e]{1,240}\x1f[^\x1f\x1e]{0,240}\x1f(link)\x1f(web,app|web|app)\x1f[^\x1f\x1e]{0,40}\x1f(|sending|ok|expired|error:[a-z0-9/_-]{1,60})`. Impossible calendar dates (31 Feb) cannot be
+expressed in a regex: the admin form's date picker cannot produce them, `admin_validators.dart` rejects them, and
+the sender marks an unparsable `sendAt` `error:bad-date` instead of sending.
+The sender writes `schedule` (`sentAt` / `result`) and `sentLog` with the Admin SDK (bypasses rules). Admins cannot
+forge log entries (only clearing is allowed); an admin editing a row's `sentAt` is equivalent to deleting it (admins
+are trusted with the schedule; the admin UI never writes those two columns). Emulator tests: valid rows pass; `javascript:` link, 21 rows, bad date, oversize text, stranger write
+→ denied; an admin adding a non-empty `sentLog` → denied, clearing it → allowed; **a visitor (unauthenticated or non-admin) cannot read `settings/notifications`** while `settings/features`
 stays public; unrelated `settings/features` saves still within budget.
 
 ## ٦. التكلفة (Cost)
@@ -122,11 +125,17 @@ stays public; unrelated `settings/features` saves still within budget.
 ## ٧. الملفات (Files)
 
 Create:
-- `tool/push_sender.js` — Node 22, `firebase-admin` (Firestore read/write + `getMessaging().send`). Steps: load
-  `settings/features` and `settings/notifications`; exit if `push` false; compute due items (one-offs with empty
+- `tool/push_sender.js` — Node 22, `firebase-admin` (Firestore read/write + `getMessaging().send`). Steps: (0) **always** drain `push_queue` first (PR D; subscription changes and unsubscribes are processed even
+  while `push` is off, so tokens are deleted as promised — CodeRabbit); (1) load
+  `settings/features` and `settings/notifications`; stop sending (not draining) if `push` false; compute due items (one-offs with empty
   `sentAt` and `now − 24 h <= sendAt <= now`; older unsent rows get `result = expired`; daily web types for **today**
-  via `tool/push_daily.js`, skipped if their key is in `sentLog`); send; in one transaction write `sentAt` / `result`
-  into each sent row and prepend to `sentLog` (trim to 60); print a job summary
+  via `tool/push_daily.js`, skipped if their key is in `sentLog`); **claim** each item in a transaction before
+  calling FCM (row `result = sending` + `sentAt = now`; daily key logged as `sending`); send; then a second
+  transaction sets `ok` / `error:<code>`. **At-most-once recovery** (CodeRabbit): a claim still `sending` after
+  10 minutes (the run crashed between FCM and the second write) is marked `error:unconfirmed` and is **never
+  re-sent automatically** — the admin sees it and can press «أعد الإرسال» (clears `sentAt` / `result`). A duplicate
+  is worse than a rare unconfirmed send for a parish; the job's concurrency group prevents two runs claiming
+  together. Print a job summary
   (`$GITHUB_STEP_SUMMARY`) without tokens or personal data.
 - `tool/push_daily.js` — web daily items: verse (port of `lib/domain/daily_verse.dart` rotation over
   `assets/verses/daily_verses.json` + admin fixed / season verses), feasts (from the live `/data/today.json`),
@@ -186,7 +195,8 @@ Modify:
   picker output.
 - Admin widgets: add / edit / delete a one-off writes only `settings/notifications.schedule`; sent rows read-only; preview text;
   validators (title required, link invalid, sendAt in the past warns).
-- Node: a sent one-off is never re-sent even after 100 later sends evict its log entry or the log is cleared; an
+- Node: claim → crash (FCM ok, second write fails) → next run marks `error:unconfirmed`, sends nothing; «أعد
+  الإرسال» makes it due again; queue drained while `push` is off; a sent one-off is never re-sent even after 100 later sends evict its log entry or the log is cleared; an
   unsent row older than 24 h becomes `expired`, never sent; sender skips when `push` false; sends due one-off to `web_announcements_ar`/`_en` and
   `app_announcements_ar`/`_en` per targets and language (Arabic text to `_ar`, English to `_en`, fallback to
   Arabic when English blank); never twice (dedup); trims log to 60; daily web verse once per day after its time;

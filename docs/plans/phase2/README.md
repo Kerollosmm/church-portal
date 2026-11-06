@@ -156,10 +156,12 @@ notification inbox (last 30), the FCM token.
 | A | +0 | +0 | — | new keys ride the existing `settings/features` stream |
 | B | +0 | +0 | CI minutes (free, public repo) | local scheduling on the phone |
 | C | +0 | +0 | ≤ 192 reads/day (2 per sender run, every 15 min) + ≤ ~10 writes/day to the admin-only `settings/notifications` | FCM free |
-| D | +0 per visit | 1 create per web opt-in / change (+ throttle doc) | sender: 1 read + 1 delete per queued request | ~100 opt-ins → ~300 ops once; hard cap 1,000 queue writes/day (rules) |
+| D | +0 per visit | 2 writes per web opt-in / change (queue doc + throttle doc) + ~3 security-rule document reads (`exists` / `existsAfter` / `getAfter`) | sender: 1 read + 1 delete per queued doc | ≈ 7 operations per opt-in; hard cap 1,000 queue writes/day (rules) |
 | E | +0 | +0 | — | — |
 
-Worst realistic day (500 web opt-ins): ~1,500 extra operations — far under the free limits.
+Worst realistic day (500 web opt-ins): 1,000 writes + ~1,500 rule reads + 500 sender reads + 500 deletes ≈ 3,500
+operations; worst abusive day (cap reached): ≈ 7,000 — both far under Spark's daily limits (50k reads, 20k writes,
+20k deletes).
 
 ## ٨. قرارات المالك (Owner decisions)
 

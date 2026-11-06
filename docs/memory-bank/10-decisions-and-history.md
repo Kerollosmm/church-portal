@@ -1694,7 +1694,8 @@ supersede them.
   PRs as a stacked chain merged only after the whole chain is approved.
 - **Decision (details in [`docs/plans/phase2/`](../plans/phase2/README.md)):**
   1. **Delivery:** Android schedules verse / seasons / feasts / occasions **locally** (`flutter_local_notifications`,
-     14-day horizon, inexact alarms, no exact-alarm permission) from data it already loads; admin announcements and
+     14-day / 60-alarm window replenished daily by `workmanager` from an inputs snapshot, inexact alarms, no
+     exact-alarm permission) from data it already loads; admin announcements and
      every web notification go through **FCM topics** (`app_announcements_<lang>`, `web_<type>_<lang>`), sent by a
      scheduled **GitHub Actions** job (`push-sender.yml`, every 15 min, honest 15–30 min latency) — no Cloud
      Functions (Spark).
@@ -1704,7 +1705,7 @@ supersede them.
      visitors; each row keeps its own sent marker). Device-only user choices (types, quiet hours, inbox, token).
   3. **Web push:** lazy `push_client.js` + `firebase-messaging-sw.js` at a private scope (nothing on page load;
      messaging JS ignored at boot via `flutterfire_ignore_scripts`); browsers subscribe through a create-only
-     `push_queue` (throttled) drained by the sender with the Instance ID API (token-list fallback documented);
+     `push_queue` (full desired topic set per doc; 3 s spacing + 1,000/day cap) drained by the sender with the Instance ID API (token-list fallback documented);
      iPhone only as an installed PWA on iOS 16.4+.
   4. **APK:** split-per-abi (arm64 + arm32), R8, obfuscation, admin compiled out (`kIsWeb`), assistant opens the web
      `/ask`, published on **GitHub Releases** (Hosting egress on Spark too small), update prompt via

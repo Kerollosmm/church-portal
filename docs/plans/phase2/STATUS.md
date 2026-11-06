@@ -5,7 +5,8 @@
 ## الوضع الحالي (Current state)
 
 - **Updated:** 6 Nov 2026 (Cairo), by Hark.
-- **Plan PR (#0):** branch `docs/phase2-plans` → `main`, draft — waiting for the owner's review (gate G0).
+- **Plan PR:** [#50](https://github.com/Kerollosmm/church-portal/pull/50) — branch `docs/phase2-plans` → `main`, draft;
+  CI green; review round 1 (Sentry 3 + CodeRabbit 19 findings) addressed — waiting for the owner's review (gate G0).
 - **Next action:** owner reviews the plan. **Do not start PR A** until the owner says so.
 - **Blockers / owner decisions open:** README §8 #5–#11 (keystore, APK host, VAPID, service account, launch types,
   assistant in APK, Android developer verification).
@@ -15,9 +16,9 @@
 ## PR 0 — Plans (ADR-056)
 - [x] Plan files written (README, HANDOFF, STATUS, PR A–E, LAUNCH-AND-OPERATIONS)
 - [x] Memory bank (ADR-056, open tasks) + Arabic / English documentation index updated
-- [ ] Draft PR opened · # ___ · head ___
-- [ ] CI green
-- [ ] `@coderabbitai review` · `@sentry review` requested; findings handled (≤ 2 rounds)
+- [x] Draft PR opened · #50
+- [x] CI green (first two heads)
+- [x] `@coderabbitai review` · `@sentry review` requested; round 1 findings handled
 - [ ] **G0 owner approval of the plan**
 
 ## PR A — Install banner + prefs (ADR-057) · `feat/p2a-install-prefs` → `docs/phase2-plans`
@@ -40,9 +41,9 @@
 - [ ] Gradle: desugaring, minify/shrink, env signing (debug fallback)
 - [ ] Admin compiled out (`kIsWeb`), Android language store, back button, assistant via web
 - [ ] `LocalNotifier`, channels, permission, prefs sections (times, quiet hours, test, inbox, battery note)
-- [ ] Re-plan triggers + boot receiver
+- [ ] Re-plan triggers + boot receiver + inputs snapshot + `workmanager` daily replenishment
 - [ ] Update banner (`installApkBuild`)
-- [ ] `android.yml` (artifacts on PRs, release on `apk-v*` tags)
+- [ ] `android.yml` (artifacts on PRs, release on `apk-v*` tags, APK size budget step, `APP_BUILD` define)
 - [ ] Docs + ADR-058 · APK sizes arm64 ___ / arm32 ___
 - [ ] Draft PR # ___ · CI green · reviews done
 - [ ] Owner: keystore + secrets (or accept debug test builds)

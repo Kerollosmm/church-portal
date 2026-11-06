@@ -33,7 +33,7 @@
 | Sub-feature | Detail |
 |---|---|
 | OS detection | pure Dart `detectInstallOs(userAgent, platform, maxTouchPoints)` → `android` / `ios` (iPhone, iPod, iPad, **iPadOS that reports "Macintosh" with touch points > 1**) / `desktop` / `other`. In-app browsers (Facebook `FBAN/FBAV`, Instagram, WhatsApp `WhatsApp/`) flagged `inAppBrowser` → the iOS steps say "open in Safari first", Android download still works |
-| Already installed | hidden when `matchMedia('(display-mode: standalone)')`, `(display-mode: minimal-ui)`, `navigator.standalone == true`, after the `appinstalled` event (remembered), on any non-web build (`!kIsWeb` = the APK), and on `/admin` |
+| Already installed | hidden when `matchMedia('(display-mode: standalone)')`, `(display-mode: minimal-ui)`, `navigator.standalone == true`, on any non-web build (`!kIsWeb` = the APK) and on `/admin`. The `appinstalled` event hides the banner **for the current browser session only** (`sessionStorage`), never permanently — so after the user uninstalls the PWA, a later browser visit shows the banner again (CodeRabbit on the plan PR). Where supported (Chrome Android), `navigator.getInstalledRelatedApps()` with a `related_applications` entry of type `webapp` for our own manifest confirms a still-installed PWA; unsupported → rely on the dismiss memory |
 | Android action | `installAndroidUrl` set → button «تحميل التطبيق (١٨٫٤ م.ب • إصدار ١٫١٫٠)» opens the URL (download); optional small link «هاتف قديم؟» → `installAndroidUrl32`. URL blank → if the browser fired `beforeinstallprompt` (captured early in `index.html`) the button calls `prompt()`; else a sheet with "⋮ → تثبيت التطبيق / إضافة إلى الشاشة الرئيسية" |
 | After APK tap | a short sheet: «بعد التحميل افتح الملف واسمح بالتثبيت من مصادر غير معروفة إذا طُلب» + link to the full guide (see LAUNCH-AND-OPERATIONS §5) |
 | iPhone/iPad action | bottom sheet with 3 numbered steps using the real glyphs: 1 `Icons.ios_share` «اضغط زر المشاركة», 2 `Icons.add_box_outlined` «إضافة إلى الشاشة الرئيسية», 3 «إضافة». Note for iOS < 16.4 / non-Safari: «افتح الموقع في Safari». No screenshots (size) |
@@ -131,7 +131,7 @@ Create:
 - `documentation/features/install-and-notifications.md` (Arabic), ADR-057 in `docs/memory-bank/10-decisions-and-history.md`.
 
 Modify:
-- `web/index.html` — early inline script in `boot-prefs`: `window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); window.__installPrompt = e; })` and `appinstalled` → `localStorage church_portal_installed=1`.
+- `web/index.html` — early inline script in `boot-prefs`: `window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); window.__installPrompt = e; })` and `appinstalled` → `sessionStorage church_portal_installed=1` (session only — see «Already installed»).
 - `lib/domain/features.dart` — parse `install` / `pushSettings`; `Sections`? **no** (not a public section; gating by `push`).
 - `lib/state/providers.dart` — `installSettingsProvider`, `pushSettingsProvider` (`featuresProvider.select`), `pushPrefsProvider` (Notifier backed by `install_env` storage).
 - `lib/ui/widgets/app_shell.dart` — add `InstallBanner` in the outer `Stack` (bottom, `PositionedDirectional`), drawer entry «الإشعارات» when `push` on.
@@ -187,7 +187,7 @@ None. Uses `package:web` (already `^1.1.2`) and `dart:js_interop`.
 
 | Device | Checks |
 |---|---|
-| Android Chrome (real phone) | banner after content; APK button downloads (use a test URL); without URL the install prompt appears; ✕ → gone after reload; «لاحقًا» → gone; installed PWA → no banner |
+| Android Chrome (real phone) | **install the PWA, uninstall it, revisit in the browser → banner shows again** (unless dismissed); banner after content; APK button downloads (use a test URL); without URL the install prompt appears; ✕ → gone after reload; «لاحقًا» → gone; installed PWA → no banner |
 | Samsung Internet | banner + steps fallback |
 | iPhone Safari (iOS 17/18) | banner → steps sheet; after Add to Home Screen, opening from the icon → no banner |
 | iPhone in Facebook/WhatsApp in-app browser | "open in Safari" hint |
