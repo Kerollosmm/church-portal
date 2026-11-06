@@ -141,6 +141,11 @@ render with `PageBody` (+ `Footer`). Content comes from Riverpod providers (hidd
   (`shownInNowBox`). The active-season chip wraps with balanced lines (`Pill(balanced: true)` / `BalancedText`).
   Preset apply dialog: alert box when the season replaces the weekly schedule for more than 3 days
   (`presetReplaceDays`, `presetReplaceLongWarn`); stored defaults unchanged.
+- **Seasonal empty state (ADR-055):** with the seasonal switch on and no season in effect now, /mass-schedule shows
+  «لا توجد مواسم حالية» / "No current seasons" and, when an enabled season starts later (`nextUpcomingSeason`), a
+  second line «الموسم القادم: صوم الميلاد — يبدأ ٢٥ نوفمبر» / "Next season: Nativity Fast — starts 25 Nov" (year added
+  when it starts in another year). Upcoming seasons with services stay listed below it. Fixed i18n strings
+  (`noCurrentSeasons`, `nextSeasonLine`), not admin fields. +0 reads.
 - **Parallel line on the next-service card (ADR-053):** `parallelOccurrencesOf` keeps each parallel occurrence; one
   starting with (or before) the card's service stays in «وفي نفس الوقت: …», one starting later while it runs gets its
   own line «وبعدها ٠٧:٠٠ ص: <name> — <place> (<audience>)» (`parallelThen` / "Then at {t}: {v}",

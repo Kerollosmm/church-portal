@@ -99,6 +99,8 @@ const Map<String, List<String>> _strings = {
   'holySeasonsHint': ['عرض مواعيد أسبوع الآلام والأعياد والأصوام والنهضات الروحية', 'Show Holy Week, feast, fast and revival times'],
   'regularSchedule': ['الجدول الأسبوعي', 'Weekly schedule'],
   'activeNow': ['مُفعّل الآن', 'Active now'],
+  'noCurrentSeasons': ['لا توجد مواسم حالية', 'No current seasons'],
+  'nextSeasonLine': ['الموسم القادم: {name} — يبدأ {date}', 'Next season: {name} — starts {date}'],
   'specialServices': ['صلوات ومناسبات كنسية قادمة', 'Upcoming special liturgical services'],
   'place': ['المكان', 'Place'],
   'noItems': ['لا توجد بيانات حاليًا', 'Nothing here yet'],

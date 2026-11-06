@@ -371,7 +371,10 @@ class SkeletonList extends StatelessWidget {
 class EmptyState extends StatelessWidget {
   final String? message;
   final IconData icon;
-  const EmptyState({super.key, this.message, this.icon = Icons.inbox_outlined});
+
+  /// Optional second line under [message] (e.g. «الموسم القادم: …», ADR-055).
+  final String? detail;
+  const EmptyState({super.key, this.message, this.icon = Icons.inbox_outlined, this.detail});
 
   @override
   Widget build(BuildContext context) => Padding(
@@ -385,6 +388,15 @@ class EmptyState extends StatelessWidget {
           textAlign: TextAlign.center,
           style: TextStyle(color: context.pal.muted),
         ),
+        if (detail != null) ...[
+          const SizedBox(height: 6),
+          Text(
+            detail!,
+            key: const Key('emptyStateDetail'),
+            textAlign: TextAlign.center,
+            style: TextStyle(color: context.pal.primary, fontWeight: FontWeight.w700),
+          ),
+        ],
       ],
     ),
   );

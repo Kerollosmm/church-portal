@@ -208,7 +208,11 @@ class _MassSchedulePageState extends ConsumerState<MassSchedulePage> {
     final keys = _audienceKeys(opts, allSeasonal);
     final audience = keys.length >= 2 && keys.contains(_audience) ? _audience : '';
     final showImages = ref.watch(featuresProvider.select((f) => f.showImages));
-    if (grouped.isEmpty) return [const EmptyState(icon: Icons.event_busy)];
+    // No season in effect now (all ended / none enabled yet): a friendly
+    // empty state naming the next season, from the seasons already loaded
+    // (ADR-055). Upcoming seasons with services stay listed below it.
+    final none = activeSeasonsAt(seasons, now).isEmpty ? _noCurrentSeasons(context, seasons, now) : null;
+    if (grouped.isEmpty) return [none ?? const EmptyState(icon: Icons.event_busy)];
     // Seasons in effect now come first, then the others in date order.
     final entries = [
       ...grouped.entries.where((e) => isSeasonActiveAt(e.key, now)),
@@ -256,7 +260,27 @@ class _MassSchedulePageState extends ConsumerState<MassSchedulePage> {
       out.addAll(_seasonCards(context, e.value, parallel,
           audience: audience, season: s, all: all, seasons: seasons, now: now));
     }
-    return [..._audienceFilter(context, keys, audience), ...out];
+    return [?none, ..._audienceFilter(context, keys, audience), ...out];
+  }
+
+  /// «لا توجد مواسم حالية» + «الموسم القادم: … — يبدأ ٢٥ نوفمبر» (ADR-055).
+  Widget _noCurrentSeasons(BuildContext context, List<Season> seasons, DateTime now) {
+    final next = nextUpcomingSeason(seasons, now);
+    String? line;
+    if (next != null) {
+      final start = CairoTime.calendarDate(next.startsAt!);
+      final today = CairoTime.fromInstant(now);
+      final date = start.year == today.year
+          ? formatDayMonth(start, arabic: context.isAr)
+          : formatDate(start, arabic: context.isAr);
+      line = context.tr('nextSeasonLine', {'name': context.pick(next.nameAr, next.nameEn), 'date': date});
+    }
+    return EmptyState(
+      key: const Key('noCurrentSeasons'),
+      icon: Icons.event_available_rounded,
+      message: context.tr('noCurrentSeasons'),
+      detail: line,
+    );
   }
 
   /// The audience keys the seasonal services use that resolve to a label.
