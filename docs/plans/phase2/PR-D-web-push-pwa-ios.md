@@ -55,16 +55,24 @@ New collection `push_queue/{docId}` — **create-only for visitors**, nobody rea
 (Admin SDK). Batched with a global throttle like `contact_messages` + `meta/contact_rate`:
 
 ```
-// Same pattern as contact_messages + meta/contact_rate (firestore.rules ~L1027).
+// Same pattern as contact_messages + meta/contact_rate (firestore.rules ~L1027), plus a DAILY CAP (Sentry review on
+// the plan PR: a 2-second spacing alone would allow ~43k batches/day and exhaust Spark's 20k writes/day).
 match /meta/push_rate {
   allow read, delete: if false;
-  allow create, update: if request.resource.data.keys().hasOnly(['lastAt', 'lastId'])
+  allow create, update: if request.resource.data.keys().hasOnly(['lastAt', 'lastId', 'day', 'count'])
     && request.resource.data.lastAt == request.time
     && request.resource.data.lastId is string && request.resource.data.lastId.matches('^[A-Za-z0-9]{10,64}$')
     && !exists(/databases/$(database)/documents/push_queue/$(request.resource.data.lastId))
     && existsAfter(/databases/$(database)/documents/push_queue/$(request.resource.data.lastId))
-    // global: one queue write per 2 s overall (≈ 43k/day ceiling, far above need)
-    && (resource == null || request.time > resource.data.lastAt + duration.value(2, 's'));
+    // spacing: one queue write per 3 s overall
+    && (resource == null || request.time > resource.data.lastAt + duration.value(3, 's'))
+    // daily cap: `day` = the UTC date of request.time (the client writes today's UTC midnight as a Timestamp);
+    // count restarts at 1 each day; at most 1,000 per day. Final syntax confirmed by the emulator tests.
+    && request.resource.data.day == request.time.date()
+    && request.resource.data.count is int && request.resource.data.count <= 1000
+    && (resource == null || resource.data.day != request.resource.data.day
+          ? request.resource.data.count == 1
+          : request.resource.data.count == resource.data.count + 1);
 }
 match /push_queue/{id} {
   allow read, update, delete: if false;          // only the sender (Admin SDK) reads / deletes
@@ -83,7 +91,8 @@ function validPushQueue(d) {
     && d.createdAt == request.time;
 }
 ```
-Tests: valid sub passes in a batch with the throttle; alone → denied; second within 2 s → denied; bad token,
+Tests: valid sub passes in a batch with the throttle; alone → denied; second within 3 s → denied; count 1,001 →
+denied; new UTC day resets the count to 1 (count 2 on a new day → denied); `day` not today → denied; bad token,
 unknown topic, 11 topics, read/update/delete → denied.
 
 **Fallback if the IID API stops working** (it is old; verify in step 1): collection `push_subscribers/{sha256(token)}`
@@ -94,7 +103,7 @@ reads). ADR-060 records which path was used.
 ## ٦. التكلفة (Cost)
 
 Page load: **0** (no SW registration, no SDK, no Firestore) until the user taps «تفعيل». Per opt-in / change: 2
-writes (queue + throttle); sender: 1 read + 1 delete per queued doc + IID call (free). FCM free.
+writes (queue + throttle), hard-capped at 1,000 queue writes per day by the rules; sender: 1 read + 1 delete per queued doc + IID call (free). FCM free.
 
 ## ٧. الملفات (Files)
 
@@ -173,7 +182,7 @@ token-list fallback), silent-not-dropped quiet hours, iOS installed-only. Arabic
 |---|---|
 | IID API deprecated / blocked | spike first; token-list fallback ready |
 | iOS web push limits (installed only, 16.4+, can be revoked silently if many pushes are not shown) | always show a notification; clear UI guidance |
-| Spam writes to `push_queue` | strict validation, global throttle, create-only, sender deletes; monitor counts in the sender summary |
+| Spam writes to `push_queue` | strict validation, 3 s global spacing **and a 1,000-per-day cap** (worst case 2,000 writes + 1,000 deletes/day, well inside Spark's 20k), create-only, sender deletes; client retries with jitter (≤ 5 tries) and shows «الخدمة مشغولة، حاول بعد قليل» / «حاول غدًا» when the cap is reached; later hardening: enforce App Check on Firestore for web |
 | SW conflicts with Flutter's cleanup SW | separate scope; test on real devices; fallback: register at `/push/` scope with the SW file under `/push/` |
 | VAPID key rotated → old tokens invalid | runbook: rotating means everyone must re-enable — avoid |
 | PageSpeed | nothing on load; Lighthouse check in QA |

@@ -1699,8 +1699,9 @@ supersede them.
      scheduled **GitHub Actions** job (`push-sender.yml`, every 15 min, honest 15–30 min latency) — no Cloud
      Functions (Spark).
   2. **Config:** new top-level keys of the existing `settings/features` doc (install banner fields, `push` default
-     off, `pushVapidKey`, `pushTypes`, `notifyTypes`, `notifySchedule`, `pushSent`), admin-only writes, +0 visitor
-     reads / listeners. Device-only user choices (types, quiet hours, inbox, token).
+     off, `pushVapidKey`, `pushTypes`, `notifyTypes`), admin-only writes, +0 visitor reads / listeners; the one-off
+     schedule and sent log in a new **admin-only** doc `settings/notifications` (not public, not streamed by
+     visitors; each row keeps its own sent marker). Device-only user choices (types, quiet hours, inbox, token).
   3. **Web push:** lazy `push_client.js` + `firebase-messaging-sw.js` at a private scope (nothing on page load;
      messaging JS ignored at boot via `flutterfire_ignore_scripts`); browsers subscribe through a create-only
      `push_queue` (throttled) drained by the sender with the Instance ID API (token-list fallback documented);
@@ -1712,7 +1713,8 @@ supersede them.
   5. **Process:** stacked chain PR 0 (plans) → A (ADR-057) → B (ADR-058) → C (ADR-059) → D (ADR-060) → E (ADR-061);
      each draft, reviewed (@coderabbitai, @sentry, ≤ 2 rounds), CI green, not merged; after owner approval merged
      bottom-up with squash, merging `main` into the next branch (no rebase, no force-push) — `HANDOFF.md` §5.6.
-- **Cost:** A, B, E +0; C ≤ 96 reads + ~10 writes/day (sender); D 2 writes per web opt-in + sender read/delete.
+- **Cost:** A, B, E +0; C ≤ 192 reads + ~10 writes/day (sender); D 2 writes per web opt-in + sender read/delete,
+  hard-capped at 1,000 queue writes/day by the rules.
 - **Rules / data / seed:** unchanged in this PR (docs only).
 
 ## Timeline

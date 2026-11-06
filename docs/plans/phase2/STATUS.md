@@ -49,7 +49,7 @@
 
 ## PR C — Admin notification manager + FCM sender + deep links (ADR-059) · `feat/p2c-notification-manager` → B
 - [ ] `NotifyConfig`, templates, `dueNow`, dedup + tests
-- [ ] Rules (`notifyTypes`, `notifySchedule`, `pushSent`) + emulator tests
+- [ ] Rules (`notifyTypes`; admin-only `settings/notifications` with `schedule` / `sentLog`) + emulator tests
 - [ ] Admin «الإشعارات» (types, schedule CRUD, route picker, preview, test-on-device, log)
 - [ ] `tool/push_sender.js`, `tool/push_daily.js` + node tests + verse parity fixture
 - [ ] `push-sender.yml` (dry run default)

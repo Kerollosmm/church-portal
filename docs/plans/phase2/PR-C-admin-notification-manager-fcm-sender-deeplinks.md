@@ -33,66 +33,89 @@ notification opens the chosen page on Android and (PR D) on the web / installed 
 |---|---|
 | Types editor | 5 rows (fixed set). Per type: offered (writes `pushTypes`), time `HH:mm` (verse, feasts, seasons), days before (seasons 0–7), lead minutes (occasions 15–240), title/body templates ar/en with placeholders, default link. Placeholder help under each field |
 | Placeholders | `{verse}` `{ref}` (verse), `{season}` `{days}` (seasons), `{feast}` (feasts), `{service}` `{time}` `{place}` (occasions), `{date}` everywhere; unknown placeholders flagged by the validator |
-| One-off schedule | list ≤ 20; row = title ar/en (≤ 80), body ar/en (≤ 240), send-at (Cairo date + time picker, 12-hour UI / 24-hour stored like ADR-049; blank = «في أقرب دورة»), deep link (route picker), targets (web, app; default both), type (default `announcements`) |
+| One-off schedule | stored in the **admin-only** doc `settings/notifications` (never streamed by visitors, unreadable by the public — unsent texts stay private); list ≤ 20; row = title ar/en (≤ 80), body ar/en (≤ 240), send-at (Cairo date + time picker, 12-hour UI / 24-hour stored like ADR-049; blank = «في أقرب دورة»), deep link (route picker), targets (web, app; default both), type (default `announcements`) |
 | Route picker | existing `FieldDef.linkPicker` («اختر صفحة…»): built-in routes (`/`, `/mass-schedule`, `/mass-schedule?tab=seasons`, `/about`, `/church-education`, `/church-activities`, `/clinics`, `/public-services`, `/contact`, `/ask`, `/notifications`), custom pages `/page/<slug>`, categories `/section/<slug>`, item detail pages (`/about/saints/<id>`, `/church-activities/<id>`…), plus the live-stream https link. Free text accepted if it passes the URL/path validator |
-| Create / edit / delete | generic `objectList` editor (encoded rows) — edit allowed until sent; a sent row shows «أُرسل ١٠:١٥ ص» and is read-only, delete allowed (keeps the log) |
+| Create / edit / delete | generic `objectList` editor (encoded rows) — edit allowed until sent; the sender writes `sentAt` + `result` **into the row itself** (permanent sent marker, independent of the capped log); a sent row shows «أُرسل ١٠:١٥ ص» and is read-only, delete allowed. An unsent row whose `sendAt` is more than 24 h in the past is **expired** («فات موعده ولم يُرسل») and is never sent later |
 | Preview | live card under the row: notification mock (seal icon, app name, title, body, «الآن») in Arabic and English, character counters, truncation warning (Android shows ~2 lines collapsed) |
 | Test on this device | admin browser: `Notification.permission` → `registration.showNotification(...)` via the PR A service-worker scaffold (no server). If permission not granted, explains how |
 | Send now | sets `sendAt` = now; screen states the cron delay honestly («يُرسل خلال ١٥–٣٠ دقيقة») |
-| Sent log | `pushSent` table: when, what (title), topic(s), result (`ok` / `error:<code>`), from the sender. «مسح السجل» (owner only) |
+| Sent log | `sentLog` (in `settings/notifications`) table: when, what (title), topic(s), result (`ok` / `error:<code>`), from the sender. «مسح السجل» (owner only) |
 | Kill switch | `push` off → the sender sends nothing (and the client UI hides) |
 | Quiet hours (server side) | the sender never sends daily web types between 22:00–06:00 Cairo; one-offs are sent when scheduled (admin's choice), Android shows them silently inside the user's quiet hours (data message → local display, §3.2) |
 | Android FCM | `firebase_messaging` subscribes to `app_announcements_<lang>` when the user has `announcements` on (and unsubscribes on off / unsubscribe-all / language change). Data-only messages (`android.priority = high`) → background handler shows a local notification on the `announcements` channel, honouring quiet hours (silent) and storing it in the inbox |
 | Deep links | payload `data.link`; Android: `onMessageOpenedApp`, `getInitialMessage`, local `onDidReceiveNotificationResponse` → `router.go(safeNotificationLink(link))`; external https only for the live-stream link (opens browser). Fallback: unknown / deleted page → 404 with «الرجوع للرئيسية»; switched-off section → FeatureGate notice |
-| Dedup | every send has a key (`one:<id>`, `verse:2026-11-07`, `season:<seasonId>:<date>`, `feast:<date>`, `event:<date>:<i>`); sender skips keys in `pushSent` |
+| Dedup | one-offs: the row's own `sentAt` (never the log). Daily web types: key `verse:2026-11-07`, `season:<seasonId>:<date>`, `feast:<date>`, `event:<date>:<i>` — the sender only computes **today's** items, so a key can only matter on its own day; the log keeps ≥ 60 entries (≈ 6 days of ≤ 10 sends) and keys older than today are ignored, so eviction can never cause a re-send |
 | Local planner follows admin | PR B planner reads `notifyTypes` (templates, times, leads) and `pushTypes` from the already-streamed doc — re-plans on change |
 
 ## ٤. الشاشات (Screens — `/admin` → «الإشعارات», `Icons.notifications_active_outlined`)
 
 1. Header card: switch «تشغيل الإشعارات» (`push`), status line («المُرسِل يعمل كل ١٥ دقيقة — آخر تشغيل: …» from
-   the last `pushSent` entry), link to the guide.
+   the last `sentLog` entry), link to the guide.
 2. «أنواع الإشعارات» — 5 collapsible cards (generic `DocEditor` fields of `notifyTypes`, one encoded row per type).
 3. «إشعارات مجدولة» — list with «إضافة إشعار»; each row: preview, send-at, link, targets, state.
 4. «سجل الإرسال» — table (latest first).
 Implementation: a dedicated `NotificationsAdminScreen` composed of the generic `ChurchInfoScreen` pieces with
-`notifyDoc` (`DocDef('settings/features', 'الإشعارات', 'Notifications', [...])`) + a read-only log widget; writes
-only changed keys (like `todaySettingsDoc`).
+`notifyTypesDoc` (`DocDef('settings/features', …)`, field `notifyTypes`) and `notifyScheduleDoc`
+(`DocDef('settings/notifications', …)`, field `schedule`) + a read-only `sentLog` widget; each writes only its changed
+keys (like `todaySettingsDoc`). `AdminRepository` gains read/write of `settings/notifications` (admin session only).
 
 ## ٥. نموذج البيانات + القواعد (Data model + rules)
 
-Top-level keys of `settings/features` (encoded rows, `␟` = U+001F, like `dayEvents`):
+Two places (encoded rows, `␟` = U+001F, like `dayEvents`):
 
+**Public — top-level key of `settings/features`** (needed by the APK's local planner; templates are not secret):
 ```
-notifyTypes:   'type␟time␟daysBefore␟leadMin␟titleAr␟titleEn␟bodyAr␟bodyEn␟link'      (≤ 5, unique type)
-notifySchedule:'id␟type␟sendAt␟titleAr␟titleEn␟bodyAr␟bodyEn␟link␟targets'             (≤ 20)
-               id = [A-Za-z0-9]{8}; sendAt = '' | 'YYYY-MM-DDTHH:mm' (Cairo wall time); targets = 'web,app' | 'web' | 'app'
-pushSent:      'key␟sentAtIso␟result␟title'                                              (≤ 60, newest first; trimmed by the sender)
+notifyTypes:   'type␟time␟daysBefore␟leadMin␟titleAr␟titleEn␟bodyAr␟bodyEn␟link'       (≤ 5, unique type)
 ```
-Dart: `NotifyConfig.fromFeatures(m)` (`lib/domain/push.dart`), `ScheduledNotification`, `SentEntry`, `dueNow(...)`,
-`renderTemplate(...)`.
 
-Rules (`validFeatures`), one gate each:
+**Admin-only — new doc `settings/notifications`** (Sentry review on the plan PR: unsent announcements must not be
+publicly readable, and the sender's writes must not wake every visitor's `settings/features` listener):
 ```
+schedule:  'id␟type␟sendAt␟titleAr␟titleEn␟bodyAr␟bodyEn␟link␟targets␟sentAt␟result'   (≤ 20)
+           id = [A-Za-z0-9]{8}; sendAt = '' | 'YYYY-MM-DDTHH:mm' (Cairo wall time); targets = 'web,app' | 'web' | 'app';
+           sentAt = '' | ISO instant (written by the sender); result = '' | 'ok' | 'error:<code>' | 'expired'
+sentLog:   'key␟sentAtIso␟result␟title'                                                   (≤ 60, newest first; trimmed by the sender)
+updatedAt, updatedBy                                                                       (admin stamp, as other settings docs)
+```
+Dart: `NotifyConfig.fromFeatures(m)` + `NotifySchedule.fromDoc(m)` (`lib/domain/push.dart`), `ScheduledNotification`
+(with `sentAt`, `isExpiredAt(now)`), `SentEntry`, `dueNow(...)`, `renderTemplate(...)`. The admin screen streams
+`settings/notifications` only while it is open (admins only).
+
+Rules:
+```
+match /settings/{docId} {
+  allow read: if docId != 'notifications' || isAdmin();          // was: if true
+  allow create, update: if isAdmin() && (… existing docs …
+      || (docId == 'notifications' && validNotifications(request.resource.data)));
+  allow delete: if false;
+}
+// in validFeatures:
 && (!('notifyTypes' in changed) || validNotifyTypes(d))
-&& (!('notifySchedule' in changed) || validNotifySchedule(d))
-&& (!('pushSent' in changed) || (optList(d,'pushSent',60)
-       && (d.get('pushSent',[]).size() == 0 || d.pushSent.join('\u001e').size() <= 20000)))
+function validNotifications(d) {
+  let changed = changedKeys(d);
+  return keysAllowed(['schedule', 'sentLog', 'updatedAt', 'updatedBy'])
+    && (!('schedule' in changed) || validNotifySchedule(d))
+    && (!('sentLog' in changed) || (optList(d, 'sentLog', 60)
+          && (d.get('sentLog', []).size() == 0 || d.sentLog.join('\u001e').size() <= 20000)))
+    && (!changed.hasAny(['updatedAt', 'updatedBy']) || stampOk(d));
+}
 ```
 `validNotifyTypes`: list ≤ 5, joined with `\u001e`, one regex:
 `(announcements|verse_daily|seasons|feasts|occasions)\x1f(|[01][0-9]:[0-5][0-9]|2[0-3]:[0-5][0-9])\x1f[0-7]?\x1f[0-9]{0,3}\x1f[^\x1f\x1e]{0,80}\x1f[^\x1f\x1e]{0,80}\x1f[^\x1f\x1e]{0,240}\x1f[^\x1f\x1e]{0,240}\x1f(|/[^\x1f\x1e ]{0,300}|[Hh][Tt][Tt][Pp][Ss]://[^\x1f\x1e ]{1,300})`
 repeated `{0,4}` after `\x1e`. `validNotifySchedule`: list ≤ 20, same technique:
-`[A-Za-z0-9]{8}\x1f(announcements|…)\x1f(|20[2-9][0-9]-[01][0-9]-[0-3][0-9]T[0-2][0-9]:[0-5][0-9])\x1f[^\x1f\x1e]{1,80}\x1f[^\x1f\x1e]{0,80}\x1f[^\x1f\x1e]{1,240}\x1f[^\x1f\x1e]{0,240}\x1f(link)\x1f(web,app|web|app)`.
-The sender writes `pushSent` with the Admin SDK (bypasses rules); admins may only clear it (owner UI).
-Emulator tests: valid rows pass; `javascript:` link, 21 rows, bad date, duplicate-free check, oversize text,
-stranger write → denied; unrelated saves still within budget.
+`[A-Za-z0-9]{8}\x1f(announcements|…)\x1f(|20[2-9][0-9]-[01][0-9]-[0-3][0-9]T[0-2][0-9]:[0-5][0-9])\x1f[^\x1f\x1e]{1,80}\x1f[^\x1f\x1e]{0,80}\x1f[^\x1f\x1e]{1,240}\x1f[^\x1f\x1e]{0,240}\x1f(link)\x1f(web,app|web|app)\x1f[^\x1f\x1e]{0,40}\x1f(|ok|expired|error:[a-z0-9/_-]{1,60})`.
+The sender writes `schedule` (`sentAt` / `result`) and `sentLog` with the Admin SDK (bypasses rules) in one
+transaction. Emulator tests: valid rows pass; `javascript:` link, 21 rows, bad date, oversize text, stranger write
+→ denied; **a visitor (unauthenticated or non-admin) cannot read `settings/notifications`** while `settings/features`
+stays public; unrelated `settings/features` saves still within budget.
 
 ## ٦. التكلفة (Cost)
 
 | Item | Reads | Writes | Notes |
 |---|---|---|---|
-| Visitors | +0 | +0 | same doc |
+| Visitors | +0 | +0 | `notifyTypes` rides the existing `settings/features` stream; the schedule and log live in the admin-only doc |
 | Admin edits | — | 1 per save | |
-| Sender run (every 15 min) | 1 (`settings/features`) | 0, or 1 when something was sent (`pushSent`) | ≤ 96 reads + ~5–10 writes/day |
+| Sender run (every 15 min) | 2 (`settings/features` for `push` + `notifyTypes`; `settings/notifications`) | 0, or 1 when something was sent (`settings/notifications`) | ≤ 192 reads + ~5–10 writes/day; visitors never see these writes (admin-only doc) |
 | FCM | — | — | free, no quota cost |
 | GitHub Actions | — | — | free for public repos (~40 s/run) |
 
@@ -100,8 +123,10 @@ stranger write → denied; unrelated saves still within budget.
 
 Create:
 - `tool/push_sender.js` — Node 22, `firebase-admin` (Firestore read/write + `getMessaging().send`). Steps: load
-  `settings/features`; exit if `push` false; compute due items (one-offs `sendAt <= now` not in `pushSent`; daily
-  web types via `tool/push_daily.js`); send; append to `pushSent` (transaction, trim to 60); print a job summary
+  `settings/features` and `settings/notifications`; exit if `push` false; compute due items (one-offs with empty
+  `sentAt` and `now − 24 h <= sendAt <= now`; older unsent rows get `result = expired`; daily web types for **today**
+  via `tool/push_daily.js`, skipped if their key is in `sentLog`); send; in one transaction write `sentAt` / `result`
+  into each sent row and prepend to `sentLog` (trim to 60); print a job summary
   (`$GITHUB_STEP_SUMMARY`) without tokens or personal data.
 - `tool/push_daily.js` — web daily items: verse (port of `lib/domain/daily_verse.dart` rotation over
   `assets/verses/daily_verses.json` + admin fixed / season verses), feasts (from the live `/data/today.json`),
@@ -159,9 +184,10 @@ Modify:
 - Dart: rows round-trip, invalid rows dropped, template rendering ar/en with missing values, `dueNow` (past,
   future, blank = now, already sent), Cairo times across the summer-time switch, `safeNotificationLink` with every
   picker output.
-- Admin widgets: add / edit / delete a one-off writes only `notifySchedule`; sent rows read-only; preview text;
+- Admin widgets: add / edit / delete a one-off writes only `settings/notifications.schedule`; sent rows read-only; preview text;
   validators (title required, link invalid, sendAt in the past warns).
-- Node: sender skips when `push` false; sends due one-off to `web_announcements_ar`/`_en` and
+- Node: a sent one-off is never re-sent even after 100 later sends evict its log entry or the log is cleared; an
+  unsent row older than 24 h becomes `expired`, never sent; sender skips when `push` false; sends due one-off to `web_announcements_ar`/`_en` and
   `app_announcements_ar`/`_en` per targets and language (Arabic text to `_ar`, English to `_en`, fallback to
   Arabic when English blank); never twice (dedup); trims log to 60; daily web verse once per day after its time;
   no daily web sends 22:00–06:00; FCM error recorded as `error:<code>`; dry run sends nothing.
@@ -228,7 +254,8 @@ jobs:
 
 ADR-059: admin-managed types/one-offs inside `settings/features`; GitHub Actions cron sender (no Functions) with
 honest 15–30 min latency; topics per platform/type/language; data-only messages on Android for quiet hours +
-inbox; dedup log `pushSent`; deep links in-app only; messaging JS ignored at load. Arabic manual
+inbox; one-offs marked sent in their own row and kept in the admin-only `settings/notifications` (Sentry review),
+daily keys per day in `sentLog`; deep links in-app only; messaging JS ignored at load. Arabic manual
 `documentation/features/notifications.md` (admin how-to with the exact labels) + `operations.md` runbook.
 
 ## ١٤. المخاطر (Risks)

@@ -139,8 +139,9 @@ stream. Missing key = the default in the table. Rules validate only changed keys
 | `pushVapidKey` | `''` or `^[A-Za-z0-9_-]{80,100}$` | `''` | A (used in D) | Web Push public key |
 | `pushTypes` | list ⊆ the 5 types, unique | all 5 | A | types offered to users |
 | `notifyTypes` | list ≤ 5 encoded rows (`␟` U+001F) | built-in per type | C | per type: time, lead minutes, title/body templates ar/en, default link |
-| `notifySchedule` | list ≤ 20 encoded rows | `[]` | C | admin one-offs: id, sendAt, title/body ar/en, link, targets |
-| `pushSent` | list ≤ 60 encoded rows | `[]` | C (written by the sender) | sent log + dedup keys |
+
+**Admin-only doc `settings/notifications`** (PR C; not readable by visitors, not streamed by them): `schedule`
+(≤ 20 one-offs, each row carrying its own `sentAt` / `result`), `sentLog` (≤ 60, written by the sender).
 
 New collection (PR D only): `push_queue/{autoId}` — public **create-only** web subscription requests, drained and
 deleted by the sender. Never read by visitors.
@@ -154,8 +155,8 @@ notification inbox (last 30), the FCM token.
 |---|---|---|---|---|
 | A | +0 | +0 | — | new keys ride the existing `settings/features` stream |
 | B | +0 | +0 | CI minutes (free, public repo) | local scheduling on the phone |
-| C | +0 | +0 | ≤ 96 reads/day (1 per sender run, every 15 min) + ≤ ~10 writes/day (`pushSent`) | FCM free |
-| D | +0 per visit | 1 create per web opt-in / change (+ throttle doc) | sender: 1 read + 1 delete per queued request | ~100 opt-ins → ~300 ops once |
+| C | +0 | +0 | ≤ 192 reads/day (2 per sender run, every 15 min) + ≤ ~10 writes/day to the admin-only `settings/notifications` | FCM free |
+| D | +0 per visit | 1 create per web opt-in / change (+ throttle doc) | sender: 1 read + 1 delete per queued request | ~100 opt-ins → ~300 ops once; hard cap 1,000 queue writes/day (rules) |
 | E | +0 | +0 | — | — |
 
 Worst realistic day (500 web opt-ins): ~1,500 extra operations — far under the free limits.
