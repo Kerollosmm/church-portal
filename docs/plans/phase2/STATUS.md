@@ -8,12 +8,13 @@
 - **Plan PR:** [#50](https://github.com/Kerollosmm/church-portal/pull/50) — branch `docs/phase2-plans` → `main`, draft;
   review round 1 (Sentry 3 + CodeRabbit 19 findings) addressed; **owner change requests of 6 Nov evening applied**
   (urgent instant dispatch / dual trigger, APK sideload guide + in-app update + hosting decision, strict channel
-  segregation + iOS onboarding); review round 2 requested (last allowed round) — waiting for the owner (gate G0).
+  segregation + iOS onboarding); review round 2 (last allowed round) addressed — waiting for the owner (gate G0).
 - **Next action:** owner reviews the plan and answers README §8. **Do not start PR A** until the owner says so.
 - **Blockers / owner decisions open:** README §8 #5–#15 (keystore, **APK host**, VAPID, service account, launch types,
   assistant in APK, Android developer verification, **urgent-dispatch token placement / who may send urgent**,
   **confirm web gets only announcements + season alerts**, **confirm seasons = FCM on the APK**, **repo
-  visibility**).
+  visibility**) — plus the prerequisite **required reviewers on the `production` environment** before any dispatch
+  token exists (none today).
 - **Notes:** baseline `main.dart.js` 4,898,252 B / gzip 1,334,591 B (`main` @ `7e4705b`). No code written for
   Phase 2 yet; create `wtA` on `feat/p2a-install-prefs` per HANDOFF §1 when the owner allows.
 
@@ -25,7 +26,13 @@
 - [x] `@coderabbitai review` · `@sentry review` requested; round 1 findings handled
 - [x] Owner change requests (6 Nov evening) applied: dual trigger (PR C §16, LAUNCH §14), sideload guide (PR A §3.3),
       in-app update + hosting (PR B §3.3 / §12, LAUNCH §4), channel segregation + iOS onboarding (README §3.1, PR D §3.1)
-- [ ] Review round 2 (`@coderabbitai review` · `@sentry review`, last round) findings handled
+- [x] Review round 2 (`@coderabbitai review` · `@sentry review`, last round) findings handled — Sentry 3 (counter
+      without reads, `includeUncontrolled`, admin/sender field split) + CodeRabbit 20 (production approval before the
+      token, Admin-SDK topic management with per-token results, `prevToken` union, plain SW foreground delivery,
+      `requestIdleCallback` fallback, per-topic partial-send recovery, `topic_override` safeguards, urgent = «now»
+      only, `saveDocsFresh`, API-level signature check, `cancelAllPendingNotifications`, replenishment freshness,
+      `hosting-live` publish job, arm32 size, «the app that opened the file», storage / privacy wording, abuse
+      recovery) + 2 round-1 follow-ups (same-tab stale flag, rejected-request rule reads)
 - [ ] **G0 owner approval of the plan** (+ answers to README §8 #6, #12–#15)
 
 ## PR A — Install banner + prefs (ADR-057) · `feat/p2a-install-prefs` → `docs/phase2-plans`

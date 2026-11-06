@@ -133,6 +133,11 @@ Add to the privacy texts (`lib/core/l10n.dart`, the notifications page, `documen
 >   them with Google, then deleted from the database. Google keeps the subscription while you stay subscribed.
 > You can stop at any time from the Notifications page (unsubscribes and deletes the token) or your phone's settings.
 
+*Alternative paragraph — only if PR D falls back to the token list:* replace the website bullet with «يُحفَظ الرمز مع
+أنواع الإشعارات التي اخترتها ولغتك في قاعدة بيانات الكنيسة على Google Firebase **طوال مدة اشتراكك**، ويُحذف عند
+الإيقاف» / "the token, your chosen types and language are stored in the church's Google Firebase database **for as
+long as you stay subscribed** and deleted when you unsubscribe".
+
 Sentry rules (ADR-034) apply: never log tokens, links' query strings or user text.
 
 ## ٧. خطة الاختبار على أجهزة حقيقية (Real-device test plan)
@@ -162,7 +167,8 @@ Run each PR's §11 table on these, Arabic and English; record results in the PR 
   verification, limited devices — check current limits), and **register `com.asafrachurch.church_portal`** by
   uploading an APK signed with the release key. Re-check every 3 months for Egypt's date and fees.
 - **iOS web push** rules change with iOS releases; re-test after each major iOS release.
-- **Instance ID API** (web topic subscription): if retired, switch to the token-list fallback (PR D §5).
+- **Web topic subscription** (Admin SDK `subscribeToTopic` for web tokens): if it stops working, switch to the
+  token-list fallback (PR D §5) and change the privacy text (§6, alternative paragraph).
 - **GitHub scheduled workflows** are disabled after 60 days without repository activity.
 - **Urgent-dispatch token expiry** (`admin_secrets/github_dispatch.expiresOn`): the admin card warns 14 days before;
   rotate per §14. An expired token only slows urgent sends to the cron (fallback), it never loses one.
@@ -196,7 +202,7 @@ Run each PR's §11 table on these, Arabic and English; record results in the PR 
 | Bad APK release | Android cannot downgrade: publish a fix with a **higher** build number; meanwhile lower `installApkBuild` in `/admin` so nobody is prompted, re-publish the previous `version.json` (`node tool/publish_hosting_file.js`), and mark the bad release "pre-release" and the previous one **Latest** |
 | Urgent sends misbehaving / token suspected leaked | GitHub → Settings → Developer settings → Fine-grained tokens → **Delete** the token; `/admin` → «رمز الإرسال الفوري» → delete; urgent rows still go out with the next cron run (§14) |
 | Sender key leak | delete the key in Google Cloud → new key → update the secret |
-| Spam in `push_queue` | throttle limits it; a rules PR with `allow create: if false`; the sender deletes queued docs |
+| Spam in `push_queue` | throttle + daily cap limit it; capped two days in a row → clear the VAPID key in `/admin` temporarily (enable button disabled; paste the same key back later), then App Check enforcement on Firestore or a rules PR with `allow create: if false`; the sender deletes queued docs; legitimate pending opt-ins resend themselves later (PR D §14) |
 
 ## ١١. المتابعة (Monitoring)
 
@@ -207,7 +213,8 @@ Run each PR's §11 table on these, Arabic and English; record results in the PR 
 - **Sender run summary**: trigger (`cron` / `urgent` / `manual`), sent items, queue processed, errors (no tokens).
 - **Dispatch failures**: rows with `dispatch = failed:<code>` in `/admin` (401 = token expired / revoked → §14).
 - **Firebase console → Messaging → Reports**: aggregate Android delivery (sent / received / opened).
-- **Firestore usage**: Firebase console → Firestore → Usage, weekly during the first month.
+- **Firestore usage**: Firebase console → Firestore → Usage — **daily** for the first two weeks after `push` is on
+  (reads included: rejected `push_queue` requests still cost rule reads, PR D §5), then weekly.
 
 ## ١٢. دليل المشرف (Admin runbook)
 
@@ -260,7 +267,14 @@ local in the app — duplicate).
 Why: `/admin` triggers `push-sender.yml` immediately for urgent one-offs (PR C §16). Spark has no Cloud Functions,
 so the admin's browser calls GitHub's API itself with a token that must never be public.
 
-**Create (owner, ~3 min)**
+**Create (owner, ~5 min)**
+0. **Protect `production` first** (required — today it has no protection rules): GitHub → repo → **Settings** →
+   **Environments** → `production` → **Required reviewers** → add yourself (and optionally a second trusted person)
+   → **Save protection rules**. Leave "Allow administrators to bypass" as you prefer for your own manual runs, but
+   the token can never approve (it has no Deployments permission). Check: start «Seed Firestore» with no inputs →
+   the run shows «Waiting for review» → reject it. Without this step a leaked token could run `seed.yml` with
+   `force` (overwrite `/admin` edits) or `admin_email` (add an owner) — **do not create the token until it is done**.
+   (Rules deploys from `deploy.yml` will then also wait for your approval.)
 1. Owner Google accounts used for `/admin` have **2-step verification** on (the token is readable by owner-role
    admins only).
 2. GitHub (account `Kerollosmm`) → avatar → **Settings** → **Developer settings** → **Personal access tokens** →

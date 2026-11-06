@@ -1703,16 +1703,24 @@ supersede them.
      `push-sender.yml` with a **dual trigger**: cron every 15 min for routine work + an immediate
      `workflow_dispatch` from `/admin` for urgent one-offs (~1–2 min), token = fine-grained PAT (this repo,
      Actions: write only, 90 days) in the owner-only doc `admin_secrets/github_dispatch` (Cloudflare Worker proxy as
-     optional hardening); one claim transaction per row makes cron + dispatch idempotent; a failed dispatch falls
-     back to the next cron run — no Cloud Functions (Spark).
+     optional hardening); **prerequisite: required reviewers on the `production` environment** (none today) so the
+     token cannot run `seed.yml`; per-topic claims make cron + dispatch idempotent and partial sends recoverable;
+     a failed dispatch falls back to the next cron run; `topic_override` test runs need `PUSH_TEST_ENABLED` and never
+     touch production rows — no Cloud Functions (Spark).
   2. **Config:** new top-level keys of the existing `settings/features` doc (install banner fields, `push` default
      off, `pushVapidKey`, `pushTypes`, `notifyTypes`), admin-only writes, +0 visitor reads / listeners; the one-off
      schedule and sent log in a new **admin-only** doc `settings/notifications` (not public, not streamed by
-     visitors; each row keeps its own sent marker). Device-only user choices (types, quiet hours, inbox, token).
+     visitors; sent markers in a sender-only `status` map, never overwritten by admin saves). Device-only: quiet
+     hours, inbox, and on the APK the chosen types / language / token; on the web the token + chosen topics sit in
+     `push_queue` only until the sender processes them (privacy notice says so; a token-list fallback would store
+     them while subscribed and change the notice).
   3. **Web push:** lazy `push_client.js` + `firebase-messaging-sw.js` at a private scope (nothing on page load;
      messaging JS ignored at boot via `flutterfire_ignore_scripts`); browsers subscribe through a create-only
-     `push_queue` (full desired topic set per doc, ≤ 2 remote web topics; 3 s spacing + 1,000/day cap) drained by the
-     sender with the Instance ID API (token-list fallback documented); iPhone only as an installed PWA on iOS
+     `push_queue` (full desired topic set per doc, ≤ 2 remote web topics; 3 s spacing + 1,000/day cap; rejected
+     requests still cost rule reads — cheap checks first; sustained-abuse response: opt-in off → App Check / rules,
+     pending opt-ins resend themselves) drained by the sender with the Admin SDK `subscribeToTopic` /
+     `unsubscribeFromTopic` (per-token results, union of `prevToken`s; token-list fallback with storage / cost /
+     privacy contracts documented); a plain SW shows every push itself (no foreground gap); iPhone only as an installed PWA on iOS
      16.4+: the install banner never asks for permission (Share → Add to Home Screen first); the permission UI exists
      only when standalone on iOS ≥ 16.4.
   4. **APK:** split-per-abi (arm64 + arm32), R8, obfuscation, admin compiled out (`kIsWeb`), assistant opens the web

@@ -35,7 +35,7 @@
 | Sub-feature | Detail |
 |---|---|
 | OS detection | pure Dart `detectInstallOs(userAgent, platform, maxTouchPoints)` → `android` / `ios` (iPhone, iPod, iPad, **iPadOS that reports "Macintosh" with touch points > 1**) / `desktop` / `other`. In-app browsers (Facebook `FBAN/FBAV`, Instagram, WhatsApp `WhatsApp/`) flagged `inAppBrowser` → the iOS steps say "open in Safari first", Android download still works |
-| Already installed | hidden when `matchMedia('(display-mode: standalone)')`, `(display-mode: minimal-ui)`, `navigator.standalone == true`, on any non-web build (`!kIsWeb` = the APK) and on `/admin`. The `appinstalled` event hides the banner **for the current browser session only** (`sessionStorage`), never permanently — so after the user uninstalls the PWA, a later browser visit shows the banner again (CodeRabbit on the plan PR). Where supported (Chrome Android), `navigator.getInstalledRelatedApps()` with a `related_applications` entry of type `webapp` for our own manifest confirms a still-installed PWA; unsupported → rely on the dismiss memory |
+| Already installed | hidden when `matchMedia('(display-mode: standalone)')`, `(display-mode: minimal-ui)`, `navigator.standalone == true`, on any non-web build (`!kIsWeb` = the APK) and on `/admin`. The `appinstalled` event hides the banner **for the current browser session only** (`sessionStorage`), never permanently — so after the user uninstalls the PWA, a later browser visit shows the banner again (CodeRabbit on the plan PR). **Stale flag in the same tab** (CodeRabbit round 1 follow-up: `sessionStorage` survives reloads of that tab): where `getInstalledRelatedApps()` exists, an empty result **clears** `church_portal_installed` and the banner shows again on that same tab; where it does not exist (Samsung Internet, Firefox, iOS Safari), the banner stays hidden in that tab until the tab is closed — a known, self-healing limitation (any new tab / later visit shows it), stated in ADR-057. Where supported (Chrome Android), `navigator.getInstalledRelatedApps()` with a `related_applications` entry of type `webapp` for our own manifest confirms a still-installed PWA; unsupported → rely on the dismiss memory |
 | Android action | `installAndroidUrl` set → button «تحميل التطبيق (١٨٫٤ م.ب • إصدار ١٫١٫٠)» opens the URL (download); optional small link «هاتف قديم؟» → `installAndroidUrl32`. URL blank → if the browser fired `beforeinstallprompt` (captured early in `index.html`) the button calls `prompt()`; else a sheet with "⋮ → تثبيت التطبيق / إضافة إلى الشاشة الرئيسية" |
 | After APK tap | the download starts **and** the **visual sideload guide** opens (§3.3): a step-by-step modal that explains the browser's «file might be harmful» bar, opening the file, allowing «install unknown apps» for the browser, the Google Play Protect prompt and how to turn the permission off again. Also reachable from a «طريقة التثبيت» link on the banner and from `/notifications` on Android browsers (same modal), so a user who closed it can reopen it |
 | iPhone/iPad action | bottom sheet with 3 numbered steps using the real glyphs: 1 `Icons.ios_share` «اضغط زر المشاركة», 2 `Icons.add_box_outlined` «إضافة إلى الشاشة الرئيسية», 3 «إضافة», then «افتح الكنيسة من الأيقونة الجديدة». Note for iOS < 16.4 / non-Safari: «افتح الموقع في Safari». No screenshots (size). **The iOS banner and sheet never request notification permission and never touch `Notification` / `PushManager`** — on iOS the permission UI exists only inside the installed app (standalone, iOS 16.4+; PR D §3.1) |
@@ -76,10 +76,10 @@ personal data blurred, then committed (PR A or later) — wording on other brand
 | # | Placeholder (screenshot to take) | العربية | English |
 |---|---|---|---|
 | 1 | Chrome download bar «قد يكون هذا الملف ضارًا» with «تنزيل على أي حال» highlighted | **رسالة «قد يكون الملف ضارًا»**: يعرضها المتصفح لأي تطبيق من خارج متجر Play. تأكد أن العنوان في الأعلى هو `maximos-domadios-church.web.app` ثم اضغط «تنزيل على أي حال» | **"File might be harmful"**: the browser shows this for any app from outside the Play Store. Check that the address bar shows `maximos-domadios-church.web.app`, then tap "Download anyway" |
-| 2 | Download-complete notification / Downloads list with the `.apk` | **افتح الملف**: من إشعار «اكتمل التنزيل» أو من «التنزيلات» اضغط على ملف تطبيق الكنيسة (الحجم المكتوب على الزر نفسه) | **Open the file** from the "Download complete" notification or Downloads; the size matches the one on the button |
-| 3 | «لا يُسمح لهاتفك بتثبيت تطبيقات غير معروفة من هذا المصدر» → «الإعدادات»; then the «السماح من هذا المصدر» toggle for Chrome | **اسمح للمتصفح بالتثبيت مرة واحدة**: اضغط «الإعدادات» ← فعّل «السماح من هذا المصدر» لمتصفح Chrome (أو المتصفح الذي حمّلت منه) ← ارجع | **Allow the browser once**: tap "Settings" → turn on "Allow from this source" for Chrome (or the browser you used) → go back |
+| 2 | Download-complete notification / Downloads list with the `.apk` | **افتح الملف**: من إشعار «اكتمل التنزيل» أو من «التنزيلات» اضغط على ملف تطبيق الكنيسة. حجمه **{size} م.ب** (يُعرض حجم الملف الذي اخترته: `installApkSizeMb` للرابط العادي أو `installApkSize32Mb` لرابط «هاتف قديم؟») | **Open the file** from the "Download complete" notification or Downloads; it is **{size} MB** (the size of the file you chose: `installApkSizeMb` for the normal link, `installApkSize32Mb` for the "older phone" link) |
+| 3 | «لا يُسمح لهاتفك بتثبيت تطبيقات غير معروفة من هذا المصدر» → «الإعدادات»; then the «السماح من هذا المصدر» toggle | **اسمح مرة واحدة للتطبيق الذي فتح الملف**: اضغط «الإعدادات» ← فعّل «السماح من هذا المصدر» للتطبيق الظاهر في الصفحة — المتصفح (مثل Chrome) إذا فتحت الملف من إشعار التنزيل، أو «الملفات» / «ملفاتي» إذا فتحته من مدير الملفات ← ارجع | **Allow the app that opened the file, once**: tap "Settings" → turn on "Allow from this source" for the app shown on that page — the browser (e.g. Chrome) if you opened the file from the download notification, or Files / My Files if you opened it from a file manager → go back |
 | 4 | Install dialog, then the Play Protect sheet («تطبيق غير آمن تم حظره» / «فحص التطبيق») with «مزيد من التفاصيل» → «التثبيت على أي حال» | **Google Play Protect**: قد يقترح فحص التطبيق — اسمح بالفحص. إذا قال إنه لا يعرف المطوّر: «مزيد من التفاصيل» ← «التثبيت على أي حال». هذا طبيعي لتطبيق من خارج المتجر | **Google Play Protect** may offer to scan the app — allow the scan. If it says the developer is unknown: "More details" → "Install anyway". Normal for an app from outside the store |
-| 5 | App icon on the home screen + the «السماح من هذا المصدر» toggle switched off | **افتح التطبيق**، ثم (اختياري وأكثر أمانًا) ارجع إلى الإعدادات وأوقف «السماح من هذا المصدر» للمتصفح | **Open the app**, then (optional, safer) switch "Allow from this source" off again for the browser |
+| 5 | App icon on the home screen + the «السماح من هذا المصدر» toggle switched off | **افتح التطبيق**، ثم (اختياري وأكثر أمانًا) ارجع إلى الإعدادات ← التطبيقات ← **نفس التطبيق الذي سمحت له في الخطوة ٣** (المتصفح أو مدير الملفات) ← «تثبيت التطبيقات غير المعروفة» وأوقف «السماح من هذا المصدر» | **Open the app**, then (optional, safer) go to Settings → Apps → **the same app you allowed in step 3** (browser or file manager) → "Install unknown apps" and switch "Allow from this source" off again |
 
 Safety box at the bottom of every step («للأمان»): حمّل التطبيق من موقع الكنيسة فقط، لا من ملفات مرسلة على واتساب أو
 فيسبوك · الكنيسة لا تطلب أبدًا إيقاف Play Protect بالكامل أو أي إذن آخر · رقم الإصدار والحجم على الزر يجب أن
@@ -104,28 +104,28 @@ copy in LAUNCH-AND-OPERATIONS §5.
 
 New top-level keys in `settings/features` (see README §6 for the full contract): `installPrompt`,
 `installTitleAr`, `installTitleEn`, `installBodyAr`, `installBodyEn`, `installAndroidUrl`, `installAndroidUrl32`,
-`installApkVersion`, `installApkBuild`, `installApkSizeMb`, `installReshowDays`, `installRemindDays`, `push`,
+`installApkVersion`, `installApkBuild`, `installApkSizeMb`, `installApkSize32Mb`, `installReshowDays`, `installRemindDays`, `push`,
 `pushVapidKey`, `pushTypes`.
 
 Dart (`lib/domain/app_install.dart`, `lib/domain/push.dart`, pure):
 ```dart
 class InstallSettings { bool enabled; String titleAr, titleEn, bodyAr, bodyEn, androidUrl, androidUrl32,
-  apkVersion; int apkBuild; double apkSizeMb; int reshowDays, remindDays; factory fromMap(Map m); }
+  apkVersion; int apkBuild; double apkSizeMb, apkSize32Mb; int reshowDays, remindDays; factory fromMap(Map m); }
 class PushSettings { bool enabled; String vapidKey; List<NotifyType> offered; bool get webReady => enabled && vapidKey.isNotEmpty; }
 ```
 Both parsed in `FeatureSettings.fromMap` as `install` / `pushSettings` (never written by `toMap`, like `today`).
 
-`firestore.rules` → `validFeatures`: add the 15 keys to `keysAllowed([...])` and two gates (only evaluated when
+`firestore.rules` → `validFeatures`: add the 16 keys to `keysAllowed([...])` and two gates (only evaluated when
 one of their keys changes, so the 1,000-expression budget of other saves is untouched):
 ```
 && (!changed.hasAny(['installPrompt','installTitleAr','installTitleEn','installBodyAr','installBodyEn',
-     'installAndroidUrl','installAndroidUrl32','installApkVersion','installApkBuild','installApkSizeMb',
+     'installAndroidUrl','installAndroidUrl32','installApkVersion','installApkBuild','installApkSizeMb','installApkSize32Mb',
      'installReshowDays','installRemindDays'])
     || (optBool(d,'installPrompt') && str(d,'installTitleAr',120) && str(d,'installTitleEn',120)
         && str(d,'installBodyAr',300) && str(d,'installBodyEn',300)
         && optUrlOrPath(d,'installAndroidUrl',500) && optUrlOrPath(d,'installAndroidUrl32',500)
         && d.get('installApkVersion','').matches('^$|^[0-9]+([.][0-9]+){0,3}$')
-        && optInt(d,'installApkBuild',0,999999) && optNumber(d,'installApkSizeMb',0,200)
+        && optInt(d,'installApkBuild',0,999999) && optNumber(d,'installApkSizeMb',0,200) && optNumber(d,'installApkSize32Mb',0,200)
         && optInt(d,'installReshowDays',0,365) && optInt(d,'installRemindDays',1,60)))
 && (!changed.hasAny(['push','pushVapidKey','pushTypes'])
     || (optBool(d,'push') && d.get('pushVapidKey','').matches('^$|^[A-Za-z0-9_-]{80,100}$')
@@ -224,7 +224,7 @@ None. Uses `package:web` (already `^1.1.2`) and `dart:js_interop`.
 
 | Device | Checks |
 |---|---|
-| Android Chrome (real phone) | **install the PWA, uninstall it, revisit in the browser → banner shows again** (unless dismissed); banner after content; APK button downloads (use a test URL) and the sideload guide opens; follow the guide end to end on Android 14/15 (Samsung + Pixel-style) and note any wording difference for the screenshots; without URL the install prompt appears; ✕ → gone after reload; «لاحقًا» → gone; installed PWA → no banner |
+| Android Chrome (real phone) | **install the PWA, uninstall it, revisit in the browser → banner shows again** (unless dismissed); **same tab**: install, uninstall, reload the original tab → banner shows again (stale flag cleared by `getInstalledRelatedApps()`); Samsung Internet same-tab → stays hidden until a new tab (documented limitation); banner after content; APK button downloads (use a test URL) and the sideload guide opens; follow the guide end to end on Android 14/15 (Samsung + Pixel-style) and note any wording difference for the screenshots; without URL the install prompt appears; ✕ → gone after reload; «لاحقًا» → gone; installed PWA → no banner |
 | Samsung Internet | banner + steps fallback |
 | iPhone Safari (iOS 17/18) | banner → steps sheet, **no notification prompt at any point**; `/notifications` in Safari → install-first card; after Add to Home Screen, opening from the icon → no banner, and `/notifications` shows the enable button (PR D) |
 | iPhone in Facebook/WhatsApp in-app browser | "open in Safari" hint |

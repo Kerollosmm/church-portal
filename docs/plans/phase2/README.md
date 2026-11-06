@@ -82,7 +82,7 @@ flowchart LR
   FCM --> M
   FCM --> W[Web push: browser / installed PWA<br/>firebase-messaging-sw.js]
   W -->|1 create per opt-in| Q[(push_queue)]
-  Q -->|drained by sender: IID batchAdd → delete| P
+  Q -->|drained by sender: Admin SDK subscribeToTopic → delete| P
 ```
 
 ### 3.1 فصل القنوات ومنع التكرار (Strict channel segregation — owner, 6 Nov 2026 evening)
@@ -175,6 +175,10 @@ Each PR: draft → CI green (`ci.yml` + preview from `deploy.yml`) → `@coderab
 - **Admin is web-only**: `/admin` is compiled out of the APK (`kIsWeb` guard in the router).
 - **No secrets in git**: keystore, service-account JSON only as GitHub secrets. The VAPID *public* key and the
   Firebase web config are public by design.
+- **`production` environment must require approval before the urgent-dispatch token exists**: `seed.yml`
+  (`force`, `admin_email` → owner) can be started with `workflow_dispatch`; today the `production` environment has
+  no protection rules (GitHub API, 6 Nov 2026). Required reviewers on `production` make every seed / rules run wait
+  for an approval the token (Actions: write only, no Deployments permission) cannot give — PR C §16.4, LAUNCH §14.
 
 ## ٦. عقد البيانات المشترك (Shared data contract — `settings/features`)
 
@@ -190,7 +194,8 @@ stream. Missing key = the default in the table. Rules validate only changed keys
 | `installAndroidUrl32` | same | `''` | A | APK for older 32-bit phones (optional second link) |
 | `installApkVersion` | string ≤ 20, `^[0-9]+(\.[0-9]+){0,3}$` | `''` | A | shown on the banner, e.g. `1.1.0` |
 | `installApkBuild` | int 0–999999 | `0` | A (read in B) | pubspec build number of the published APK → update prompt in the APK |
-| `installApkSizeMb` | number 0–200 | `0` | A | shown on the banner, e.g. `18.4` |
+| `installApkSizeMb` | number 0–200 | `0` | A | arm64 APK size, shown on the banner and in the guide, e.g. `18.4` |
+| `installApkSize32Mb` | number 0–200 | `0` | A | arm32 APK size, shown next to «هاتف قديم؟» and in the guide when that link was chosen |
 | `installReshowDays` | int 0–365 | `30` | A | days before the banner returns after ✕ (0 = never) |
 | `installRemindDays` | int 1–60 | `3` | A | days for «ذكّرني لاحقًا» |
 | `push` | bool | `false` | A | master switch: notification UI shown, sender active |
@@ -199,8 +204,9 @@ stream. Missing key = the default in the table. Rules validate only changed keys
 | `notifyTypes` | list ≤ 5 encoded rows (`␟` U+001F) | built-in per type | C | per type: time, lead minutes, title/body templates ar/en, default link |
 
 **Admin-only doc `settings/notifications`** (PR C; not readable by visitors, not streamed by them): `schedule`
-(≤ 20 one-offs, each row carrying `urgent`, `dispatch` (admin client) and its own `sentAt` / `result` (sender)),
-`sentLog` (≤ 60, written by the sender).
+(≤ 20 one-offs, admin columns only incl. `urgent`), `status` (map rowId → sent marker, **sender only**), `dispatch`
+(map rowId → `queued` / `failed:<code>`, admin client), `sentLog` (≤ 60, written by the sender) — admin and sender
+never write the same field, so neither can overwrite the other.
 
 **Owner-only doc `admin_secrets/github_dispatch`** (PR C §16): `token` (fine-grained PAT, `github_pat_…`, this repo,
 Actions: write only), `expiresOn`, `updatedAt`, `updatedBy`. Readable and writable **only** by `isOwner()`; never
@@ -215,8 +221,12 @@ notes, signing-cert fingerprint and per-ABI `url` / `sha256` / `size`.
 New collection (PR D only): `push_queue/{autoId}` — public **create-only** web subscription requests, drained and
 deleted by the sender. Never read by visitors.
 
-Device-only state (never in Firestore): the user's chosen types, quiet hours, language, banner dismiss date, the
-notification inbox (last 30), the FCM token.
+Device-only state (never in Firestore): quiet hours, banner dismiss date, the notification inbox (last 30), and —
+on the Android APK — the chosen types, language and FCM token (the APK subscribes to topics directly with FCM).
+**Web exception:** to subscribe a browser, its FCM token **with the chosen topics (types + language)** is written to
+`push_queue` and kept there only until the sender processes it (normally minutes, then deleted; PR D §5). If the
+token-list fallback is ever chosen, tokens and topics are stored in Firestore **while subscribed** and the privacy
+notice changes accordingly (LAUNCH §6).
 
 ## ٧. التكلفة (Cost summary)
 
@@ -247,7 +257,7 @@ operations; worst abusive day (cap reached): ≈ 7,000 — both far under Spark'
 | 9 | Types offered at launch and the verse time (default 07:00 Cairo) | **open** — editable in `/admin` later |
 | 10 | Assistant («اسأل الكنيسة») in the APK: open the web `/ask` in the browser (App Check Play Integrity needs Play) | **recommended**, confirm |
 | 11 | Google's Android developer verification (live in 4 countries since 30 Sep 2026, global in 2027): register the package in the Android Developer Console before it reaches Egypt | **open — needed before 2027**, see LAUNCH-AND-OPERATIONS §8 |
-| 12 | Urgent instant dispatch token: (A) fine-grained PAT (this repo, Actions: write only, 90-day expiry) in the owner-only doc `admin_secrets/github_dispatch` (**recommended**), or (B) Cloudflare Worker proxy (token never in a browser; needs a Cloudflare account). Also: owner-only (`isOwner`, recommended) or every admin may send urgent notices | **open — owner** |
+| 12 | **Prerequisite:** add Required reviewers to the `production` environment (none today). Then the urgent instant dispatch token: (A) fine-grained PAT (this repo, Actions: write only, 90-day expiry) in the owner-only doc `admin_secrets/github_dispatch` (**recommended**), or (B) Cloudflare Worker proxy (token never in a browser; needs a Cloudflare account). Also: owner-only (`isOwner`, recommended) or every admin may send urgent notices | **open — owner** |
 | 13 | Consequence of the channel rule: web / iPhone-PWA users get pushes only for announcements + season alerts (no verse / feast / mass-reminder pushes on the web) | **confirm** |
 | 14 | `seasons` read as the owner's "dynamic seasonal alerts" → FCM on both platforms (no longer local on the APK); the alternative is keeping season starts local on the APK and FCM only on the web | **confirm** — plans follow FCM-only |
 | 15 | Repo visibility: GitHub reports **public**; if it is made private → hourly cron (Actions minutes), APK host (a) or (b) | **confirm** current intent |

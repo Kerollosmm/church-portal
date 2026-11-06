@@ -60,8 +60,8 @@ verifies its SHA-256 against a version manifest and hands it to Android's packag
 | Deep link | payload `link` → `router.go(safeNotificationLink(link))`; app started from a notification → `getNotificationAppLaunchDetails()` → initial location; deleted page → existing 404 with «الرجوع للرئيسية»; switched-off section → FeatureGate «غير متاح» |
 | Unsubscribe all | cancels all pending alarms + clears prefs (PR C: also unsubscribes the FCM topic) |
 | Re-sync | re-plan on: app start, resume (`AppLifecycleState.resumed`), prefs change, `settings/features` change (admin edits types / verse / dayEvents), date or time-zone change (`didChangeLocales` no; use resume + `DateTime.now().timeZoneOffset` compare), device reboot (plugin's `ScheduledNotificationBootReceiver` restores) |
-| Planning horizon | next **14 days**, at most **60 pending** alarms (Android allows ~500 per app) — cancel-all then schedule, earliest first (ids = stable hash `local:type:date:key`, a namespace disjoint from FCM display ids = hash(`nid`)). Priority when > 60: verse, feasts, occasions; occasions limited to the user's chosen services. The planner's input type set is `NotifyType.values.where(isLocalOwned)` — it can never schedule `announcements` or `seasons` (unit-tested) |
-| Background replenishment | `workmanager` periodic task (**every 24 h**, inexact, network not required): re-plans from a **snapshot** of the planner inputs (verses, admin config, seasons, `dayEvents`, today.json) that each foreground plan writes to `shared_preferences` — so the 14-day / 60-item window keeps sliding even if the app stays closed (CodeRabbit on the plan PR). If an OEM blocks background work, the remaining plan still covers up to 14 days; the notifications page then says «افتح التطبيق مرة كل أسبوعين على الأقل لتستمر الإشعارات» and the battery note applies |
+| Planning horizon | next **14 days**, at most **60 pending** alarms (Android allows ~500 per app) — `cancelAllPendingNotifications()` (pending alarms only; notifications already shown stay in the shade) then schedule, earliest first (ids = stable hash `local:type:date:key`, a namespace disjoint from FCM display ids = hash(`nid`)). Priority when > 60: verse, feasts, occasions; occasions limited to the user's chosen services. The planner's input type set is `NotifyType.values.where(isLocalOwned)` — it can never schedule `announcements` or `seasons` (unit-tested) |
+| Background replenishment | `workmanager` periodic task (**every 24 h**, inexact, network not required): re-plans from a **snapshot** of the planner inputs (verses, admin config, seasons, `dayEvents`, today.json) that each foreground plan writes to `shared_preferences` — so the 14-day / 60-item window keeps sliding even if the app stays closed (CodeRabbit on the plan PR). **Freshness:** the worker never opens Firestore (no background reads, no listener); admin changes (a mass time, a `dayEvents` item, templates, offered types) reach the phone at the **next app open** (the foreground stream re-plans at once). If network is available the worker may refresh only the static `/data/today.json` (Hosting, no Firestore); offline it proceeds from the saved snapshot as is. The snapshot records `savedAt`; the page shows «آخر تحديث للمواعيد: …» and, when it is older than 7 days, «افتح التطبيق مع الإنترنت لتحديث المواعيد». A last-minute change that must reach everyone is sent as an announcement (FCM, PR C). If an OEM blocks background work, the remaining plan still covers up to 14 days; the notifications page then says «افتح التطبيق مرة كل أسبوعين على الأقل لتستمر الإشعارات» and the battery note applies |
 | Channels | one channel per type (`verse_daily`, `seasons`, `feasts`, `occasions`, `announcements`) with Arabic names, so users can mute a channel in system settings (`seasons` / `announcements` are used by the FCM display path of PR C) |
 | Exactness | **inexact** `AndroidScheduleMode.inexactAllowWhileIdle` (± ~10 min in Doze). No `SCHEDULE_EXACT_ALARM` / `USE_EXACT_ALARM` (special permission, policy risk). Documented caveat |
 | Battery optimisation | if notifications arrive late on some brands (Xiaomi, Oppo, Realme, Huawei, Samsung "Sleeping apps"), the page shows «إذا تأخرت الإشعارات: الإعدادات ← البطارية ← التطبيق ← بدون قيود» with a button to `ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS` (list, not the direct request — no `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` permission) |
@@ -74,7 +74,7 @@ verifies its SHA-256 against a version manifest and hands it to Android's packag
 | ABI choice | `Build.SUPPORTED_ABIS[0]` via the platform channel → `arm64-v8a` or `armeabi-v7a` entry |
 | Download inside the app | `dart:io` `HttpClient` streaming (follows redirects — needed for GitHub release URLs) into `getApplicationCacheDirectory()/updates/church-portal-<build>.apk.part`; progress bar with MB / % and «إلغاء»; resumes with `Range` after a dropped connection; Wi-Fi hint when the size is > 10 MB on mobile data; runs while the app is in the foreground (no extra background service — the screen stays on the update sheet; leaving the app pauses and the next tap resumes) |
 | Integrity | streaming SHA-256 (`package:crypto`, already a dependency) + exact `size` against the manifest; mismatch → delete the file, «الملف تالف أو غير مكتمل — أعد المحاولة» (3 tries, then «تعذّر التحديث الآن»). The manifest is fetched over HTTPS from our own Hosting, so a compromised download host cannot pass the hash check; Android itself additionally rejects an APK not signed with the installed app's key |
-| Signature pre-check | before launching the installer, the platform channel compares the downloaded APK's signing certificate (`PackageManager.getPackageArchiveInfo(…, GET_SIGNING_CERTIFICATES)`) with the installed app's (and with `certSha256`); mismatch (e.g. a debug-signed test build on the phone) → «هذا الإصدار لا يمكن تثبيته فوق النسخة الحالية — احذف التطبيق ثم ثبّته من الموقع» instead of Android's vague «لم يتم تثبيت التطبيق» |
+| Signature pre-check | before launching the installer, the platform channel compares the downloaded APK's signing certificate with the installed app's (and with `certSha256`), branching by API level: **API ≥ 28** `getPackageArchiveInfo(path, GET_SIGNING_CERTIFICATES)` / `getPackageInfo(own, GET_SIGNING_CERTIFICATES)` → `signingInfo`; **API < 28** `GET_SIGNATURES` → `PackageInfo.signatures` for both (on some API < 28 devices `getPackageArchiveInfo` needs `applicationInfo.sourceDir`/`publicSourceDir` set to the path first); SHA-256 of the certificate bytes compared in both branches; mismatch (e.g. a debug-signed test build on the phone) → «هذا الإصدار لا يمكن تثبيته فوق النسخة الحالية — احذف التطبيق ثم ثبّته من الموقع» instead of Android's vague «لم يتم تثبيت التطبيق» |
 | Unknown-apps permission | `<uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>`; `canRequestPackageInstalls()` false → explainer sheet (placeholder screenshot like PR A §3.3, ar/en: «اسمح لتطبيق الكنيسة بتثبيت التحديثات — مرة واحدة فقط») → `Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES` with `package:com.asafrachurch.church_portal` → on resume re-check → continue. This is the permission **for the church app itself** (not the browser) |
 | Launch the installer | `Intent.ACTION_VIEW` with a `FileProvider` content URI (`${applicationId}.updates`, `res/xml/update_paths.xml` → `<cache-path name="updates" path="updates/"/>`), MIME `application/vnd.android.package-archive`, `FLAG_GRANT_READ_URI_PERMISSION` + `FLAG_ACTIVITY_NEW_TASK`. Android shows its own «هل تريد تحديث هذا التطبيق؟» → «تحديث»; the app restarts on the new version with its data (same key) |
 | Implementation choice | a small **Kotlin platform channel** `church_portal/installer` in `MainActivity.kt` (~80 lines: `supportedAbi`, `canRequestInstalls`, `openUnknownSourcesSettings`, `apkCertMatches(path)`, `installApk(path)`) — no extra plugin, minimal size. Alternative: `open_filex` (FileProvider + install intent); check on pub.dev at implementation time that its version does not add unwanted permissions and record the choice in ADR-058 |
@@ -278,18 +278,6 @@ jobs:
       # Publish for the public (README §8 #6). The release above is only the canonical archive: it works even if the
       # repo is private (deploy.yml can read it with GITHUB_TOKEN), but private release assets are NOT downloadable
       # by the public.
-      - name: Publish manifest (+ APKs when hosted on Firebase) to Hosting
-        if: startsWith(github.ref, 'refs/tags/apk-v')
-        env: { SA: '${{ secrets.FIREBASE_SERVICE_ACCOUNT_ASAFRA_CHURCH_PORTAL }}' }
-        run: |
-          printf '%s' "$SA" > "$RUNNER_TEMP/sa.json"; export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/sa.json"
-          cd build/app/outputs/flutter-apk
-          if [ "${{ vars.APK_HOST }}" = "firebase" ]; then
-            node "$GITHUB_WORKSPACE/tool/publish_hosting_file.js" church-portal-arm64.apk /app/android/church-portal-arm64.apk
-            node "$GITHUB_WORKSPACE/tool/publish_hosting_file.js" church-portal-arm32.apk /app/android/church-portal-arm32.apk
-          fi
-          node "$GITHUB_WORKSPACE/tool/publish_hosting_file.js" version.json /app/android/version.json   # last: switch-over
-          rm -f "$RUNNER_TEMP/sa.json"
       - name: Mirror to the public releases repo (APK_HOST=releases-repo)
         if: startsWith(github.ref, 'refs/tags/apk-v') && vars.APK_HOST == 'releases-repo'
         env: { GH_TOKEN: '${{ secrets.RELEASES_REPO_TOKEN }}' }    # fine-grained, that repo only, Contents: write
@@ -298,6 +286,36 @@ jobs:
           gh release create "$GITHUB_REF_NAME" church-portal-arm64.apk church-portal-arm32.apk \
             -R Kerollosmm/church-portal-apk --title "تطبيق الكنيسة $GITHUB_REF_NAME" --notes-file "$GITHUB_WORKSPACE/android/RELEASE_NOTES.md" --latest
     permissions: { contents: write }
+
+  # Hosting writes are serialised with deploy.yml / synaxarium.yml (same group, never cancelled mid-release).
+  publish-hosting:
+    needs: apk
+    if: startsWith(github.ref, 'refs/tags/apk-v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    concurrency: { group: hosting-live, cancel-in-progress: false }
+    permissions: { contents: read }
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with: { node-version: 22 }
+      - run: npm install --no-audit --no-fund      # google-auth-library for publish_hosting_file.js (clean runner)
+        working-directory: tool
+      - name: Fetch the release files
+        env: { GH_TOKEN: '${{ github.token }}' }
+        run: gh release download "$GITHUB_REF_NAME" -D rel -p 'version.json' -p 'church-portal-*.apk'
+      - name: Publish manifest (+ APKs when hosted on Firebase) to Hosting
+        env: { SA: '${{ secrets.FIREBASE_SERVICE_ACCOUNT_ASAFRA_CHURCH_PORTAL }}' }
+        run: |
+          printf '%s' "$SA" > "$RUNNER_TEMP/sa.json"; export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/sa.json"
+          cd rel
+          if [ "${{ vars.APK_HOST }}" = "firebase" ]; then
+            node "$GITHUB_WORKSPACE/tool/publish_hosting_file.js" church-portal-arm64.apk /app/android/church-portal-arm64.apk
+            node "$GITHUB_WORKSPACE/tool/publish_hosting_file.js" church-portal-arm32.apk /app/android/church-portal-arm32.apk
+          fi
+          node "$GITHUB_WORKSPACE/tool/publish_hosting_file.js" version.json /app/android/version.json   # last: switch-over
+      - if: always()
+        run: rm -f "$RUNNER_TEMP/sa.json"
 ```
 - `build.gradle.kts` reads `ANDROID_KEYSTORE_PATH` etc. from env (or `android/key.properties` locally); empty →
   debug signing (PR / preview builds).
