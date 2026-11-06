@@ -231,7 +231,8 @@ String buildAssistantInstruction({
         ..writeln()
         ..writeln('## Holy seasons')
         ..writeln(
-          'A season marked [REPLACES regular schedule] replaces the regular services on the days it has services. '
+          'A season marked [REPLACES regular schedule] replaces every regular service between its start and end, '
+          'even on a day with no season service listed (no regular mass is held then). '
           'A season marked [ADDITIVE] adds its services: the regular services continue, except a regular mass held '
           'at the same time as a season mass, every regular mass of a day with a season service marked '
           "[REPLACES the day's regular masses], and regular vespers/praise overlapping a season service. "

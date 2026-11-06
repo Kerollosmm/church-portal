@@ -19,7 +19,7 @@ import 'item_image.dart';
 import 'program_details.dart';
 import 'styled_image.dart';
 
-export 'program_details.dart' show ProgramDetails, parallelSummary;
+export 'program_details.dart' show ProgramDetails, parallelSummary, parallelThenLine;
 export 'styled_image.dart';
 
 /// Card for one liturgy on the schedule page.
@@ -131,25 +131,33 @@ class NextMassCard extends ConsumerWidget {
       // service is never named (Sentry review); with the days either side,
       // so a service crossing midnight meets the next day's (ADR-049).
       final next = r.next;
-      final parallelText = next == null
-          ? ''
-          : parallelSummary(
-              context,
-              opts,
-              parallelOccurrences(
-                  next,
-                  occurrencesAround(
-                      liturgies: lits.value ?? const [],
-                      seasons: seasons.value ?? const [],
-                      day: next.start,
-                      dayOffset: next.dayOffset),
-                  opts));
+      final parallel = next == null
+          ? const <LiturgyOccurrence>[]
+          : parallelOccurrencesOf(
+              next,
+              occurrencesAround(
+                  liturgies: lits.value ?? const [],
+                  seasons: seasons.value ?? const [],
+                  day: next.start,
+                  dayOffset: next.dayOffset),
+              opts);
+      // One starting later, while the next service runs, is named with its
+      // own time («وبعدها ٠٧:٠٠ ص: …»), not «في نفس الوقت» (ADR-053, sims
+      // r2 P2 O-a); one already running when it starts stays «في نفس الوقت».
+      final parallelText = parallelSummary(context, opts, [
+        for (final o in parallel)
+          if (!o.start.isAfter(next!.start)) o.liturgy,
+      ]);
+      final parallelThen = [
+        for (final o in parallel)
+          if (o.start.isAfter(next!.start)) parallelThenLine(context, opts, o.liturgy, _hm(context, o.start)),
+      ];
       // The «يُقام الآن» box names the services running at this moment in
       // the other halls (ADR-049 item 1: youth and children's Pascha beside
       // the main church's): no extra read, the card already holds them.
       final nowParallelText = parallelSummary(context, opts, r.alsoRunning(opts));
       body = _content(context, r, now, ref.watch(todaySettingsProvider), s?.lat, s?.lng, parallelText, opts,
-          nowParallelText);
+          nowParallelText, parallelThen);
     }
 
     final pal = context.pal;
@@ -213,7 +221,10 @@ class NextMassCard extends ConsumerWidget {
   }
 
   Widget _content(BuildContext context, NextMassResult r, DateTime now, TodaySettings today, double? lat, double? lng,
-      [String parallelText = '', ProgramOptions opts = ProgramOptions.defaults, String nowParallelText = '']) {
+      [String parallelText = '',
+      ProgramOptions opts = ProgramOptions.defaults,
+      String nowParallelText = '',
+      List<String> parallelThen = const []]) {
     if (r.isEmpty) return EmptyState(message: context.tr('noUpcoming'), icon: Icons.event_busy);
     final children = <Widget>[];
     if (r.activeSeasons.isNotEmpty) {
@@ -300,7 +311,7 @@ class NextMassCard extends ConsumerWidget {
       children.add(const SizedBox(height: 6));
       children.add(IconLine(Icons.place_outlined, context.pick(n.liturgy.placeAr, n.liturgy.placeEn)));
       children.add(IconLine(Icons.people_outline, context.pick(n.liturgy.audienceAr, n.liturgy.audienceEn)));
-      children.add(ProgramDetails(n.liturgy.program, parallelText: parallelText));
+      children.add(ProgramDetails(n.liturgy.program, parallelText: parallelText, parallelThen: parallelThen));
     }
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: children);
   }

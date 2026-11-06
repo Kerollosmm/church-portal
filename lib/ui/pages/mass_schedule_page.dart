@@ -108,7 +108,8 @@ class _MassSchedulePageState extends ConsumerState<MassSchedulePage> {
     final special = upcomingSpecialLiturgies(all, now);
     // Additive seasons in effect now (e.g. an evening revival): the weekly
     // view stays open, so their services (and feast liturgy) are listed here.
-    final revivals = seasonalSchedule(seasons.where((s) => !s.replacesRegular && isSeasonActiveAt(s, now)), all);
+    final revivals =
+        seasonalSchedule(seasons.where((s) => !s.replacesRegular && isSeasonActiveAt(s, now)), all, context: seasons);
     final showWeekday = _tab == ScheduleTab.other;
     // Services at the same time in another hall, across every list shown
     // (ADR-041; Codex / CodeRabbit review on PR #32).

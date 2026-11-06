@@ -1513,6 +1513,55 @@ supersede them.
   and replace-date chips; preset screen: Great Lent weddings off, tonight's live end, replace dates, one batch),
   `test/assistant_test.dart` (Arabic «(٦)», greeting / chips with clinics + meetings off); rules tests "ADR-051".
 
+## ADR-053 (PR #47) — Full-override seasons replace the regular schedule on every day of their window, cross-season samples leave the season lists, a later parallel service is named with its time
+
+- **Context:** the seasons v2 round-2 simulation (`work/seasons-v2/r2/phase1–7/report.md`, code at `d15a225`) found
+  one regression and three smaller items. **N1 (P1, FAIL):** ADR-050 hides every sample of a season that has a real
+  service, *before* the replacement step; on Holy Week days where the owner entered nothing (Good Friday) the season
+  then had no candidate service, was never added to `replacing`, and the regular weekly masses came back — home card
+  «غدًا • الجمعة — القداس الإلهي الأول (باكر)», /mass-schedule, `computeNextMass` and the prompt's "Tomorrow" list.
+  Deleting the seed sample docs would cause the same. **P3 (low):** an undated sample of one season (`rev-moses-3`,
+  Wed 18:30) stayed in the /mass-schedule seasonal section and the prompt's weekly "Holy seasons" list beside another
+  active season's real service at that hour, while the day views hid it. **P2 O-a:** at 03:31 on Easter morning the
+  card's 06:00 mass read «وفي نفس الوقت: الكنيسة الكبرى (عام)» for a mass starting at 07:00. **P7 O3:** the seasonal
+  switch subtitle did not mention fasts.
+- **Decision:**
+  1. **Window replacement (N1, option a).** In `occurrencesForDay`, every active season with `replacesRegular` and
+     both `startsAt` and `endsAt` is in `replacing` from the start: it supersedes every regular service *starting
+     inside its window* (`isSeasonActiveAt(s, o.start)`), whether or not it has a service that day and whatever the
+     samples. Holy Week, Pascha and Nativity windows are exact, which is the owner's meaning of «صلوات الموسم تحل محل
+     الجدول الأسبوعي». Kept: morning services before an 18:00 start; an **open-ended** full-override season (no start
+     or no end) still replaces only on its service days (it would otherwise erase the weekly schedule for good);
+     additive seasons (overlap rule, `replacesDay`) and `replaceDates` (feast night, decided on that day's services)
+     unchanged. Card, /mass-schedule («لا يُقام اليوم» via `regularSupersededOn`), `computeNextMass` and the prompt
+     ("Services today and tomorrow" + "NOT held" line) read the same function; the prompt's "Holy seasons" legend now
+     says a [REPLACES regular schedule] season replaces every regular service between its dates, even on a day with
+     no season service listed. Consequence for the owner: a 50-day season must stay additive (it was in the sims).
+  2. **Cross-season samples in the lists (P3).** `liturgyInSeason(l, s, all, [seasons])` / `seasonalSchedule(...,
+     {context})`: a `sample` is left out when a real service of another active season overlaps it (same rule as the
+     day views: `_sampleHiddenByOtherSeason`, the other service must really occur in its own season) — a dated sample
+     on its day; an undated one when that holds on **every** day of its weekday inside its window (on a week without
+     such a real service it is still held, so it stays listed). /mass-schedule's additive view passes all seasons as
+     `context`. Cheap path unchanged when no other active season has a real service.
+  3. **Later parallel service (P2 O-a).** `parallelOccurrencesOf` (occurrences; `parallelOccurrences` maps it). The
+     next-service card keeps «وفي نفس الوقت: …» for services starting with (or before, still running) the card's
+     service and adds one line per service starting later while it runs: «وبعدها ٠٧:٠٠ ص: القداس الإلهي (صباح
+     الأحد) — الكنيسة الكبرى (عام)» / "Then at 07:00 AM: …" (`parallelThen` l10n, `parallelThenLine`, 12-hour ص/م as
+     elsewhere). The «يُقام الآن» box (all running now) and the /mass-schedule list cards (weekly templates, ADR-041)
+     keep their wording.
+  4. **Switch subtitle (P7 O3).** `holySeasonsHint`: «عرض مواعيد أسبوع الآلام والأعياد والأصوام والنهضات الروحية» /
+     "Show Holy Week, feast, fast and revival times".
+- **Rules:** unchanged. **Data:** no field, no write; seed unchanged.
+- **Firebase cost:** +0 reads, +0 writes, +0 listeners (pure client logic on the already-loaded liturgies / seasons).
+- **Tests:** `test/season_replace_window_test.dart` (Good Friday with the seed sample and with the sample docs
+  deleted: no regular masses, `regularSupersededOn`, next after Thu 23:00 = Sunday after the window; Holy Thursday,
+  Saturday before / after 18:00; prompt "Tomorrow … no services listed" + NOT held; Nativity and Pascha-from-18:00
+  windows; open-ended full override and additive seasons unchanged; card and /mass-schedule widgets; P3 list / prompt /
+  dated sample / `context` / sample-only; parallel "then" line AR + EN + no same-time line; switch subtitle).
+  Updated: `domain_test.dart` (a full-override day without its own service is now replaced; additive variant keeps
+  it), `season_card_timing_test.dart` (the 50 Days additive in the overnight minute-by-minute test; the next-date
+  parallel service now reads «وبعدها ١٢:٠٠ ص: …»). The ADR-050 P3/P6/P7 additive repros pass unchanged.
+
 ## Timeline
 
 | When | PR / commit | What |
@@ -1572,5 +1621,6 @@ supersede them.
 | 5 Nov 2026 | **Docs PR** — "README screenshots" (`docs/readme-screenshots`) | Docs only, no ADR: `screens/` now holds 4 shots: Home, Mass schedule and Ask (live site, Arabic, 390 px @2x) plus the admin dashboard overview (1280 px, real `AdminDashboard` rendered from the local Firestore-emulator export, no live sign-in); the 8 broken desktop shots from PR #41 removed; README "Visual Showcase" is one row of public shots plus an "Admin dashboard" shot. No code change. |
 | 5 Nov 2026 | **PR #45** — "Seasons v2 fixes A: season schedule overlap" (`fix/season-schedule-overlap`) | ADR-050: additive seasons hide only overlapping regular masses, `liturgies.replacesDay` (admin checkbox) for a feast liturgy; samples (dated too) give way once their season has real services, never supersede / outrank a real service of any season, real before sample; `regularSupersededOn` → /mass-schedule «لا يُقام اليوم» + prompt "Services today and tomorrow" and computed season labels; now box «حتى …»; seed placeholder text stripped on read and from the seed; `web/media/milestones/pope-visit-gallery5.webp` (live field change prepared, not applied); hero season tint (`heroSeasonTint`); «،» kept. +0 reads. |
 | 6 Nov 2026 | **PR #44** — "Season keys, exceptional quota, church calendar in the assistant" (`feat/season-keys-assistant`) | ADR-051: season keys `apostles`, `nayrouz` (+ the Cross), `kiahk`, `great_lent` (`SeasonKeys.all` = rules `seasonKeyList()`; fasting / festive palettes); `settings/assistant.exceptionalSeasons` chips (default + Great Lent, Kiahk, Marian); prompt «Church calendar» line (Coptic date + feast, loaded Katameros only); Arabic digits in the limit message; /ask greeting and chips skip hidden sections; preset live end = tonight's last service + 30 min (editable); `seasons.replaceDates` feast-night override (date chips); fast presets untick weddings; Holy Week day names in the top bar; EN pages use `liveLabelEn` or a generic label. +0 visitor reads / listeners. |
+| 6 Nov 2026 | **PR #47** — "Season replace window, cross-season samples in lists, later parallel line" (`fix/season-replace-window`) | ADR-053: a full-override season with exact dates replaces every regular service in its window, also on days without its own service (Good Friday no longer shows the weekly Divine Liturgy; holds with the seed samples deleted); season lists / prompt weekly list drop a sample hidden behind another active season's real service on every matching weekday; next-service card names a later parallel service with its time («وبعدها ٠٧:٠٠ ص: …»); switch subtitle mentions fasts. +0 reads / writes / listeners. |
 
 Append new PRs to this table.

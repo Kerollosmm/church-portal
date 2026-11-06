@@ -128,7 +128,14 @@ render with `PageBody` (+ `Footer`). Content comes from Riverpod providers (hidd
   season that has any real (non-sample) service; any undated service gives way on a day with a dated real service of
   its season (replacing: any; additive: overlapping). A seasonal sample also gives way to a real seasonal service of
   ANY active season held at the same time, never supersedes a real regular service, and sorts after a real service at
-  the same start. All-sample seasons (the seed) are unchanged.
+  the same start. All-sample seasons (the seed) are unchanged. Since ADR-053 the season lists (`seasonalSchedule` /
+  `liturgyInSeason`, read by /mass-schedule and the prompt's weekly "Holy seasons") apply the cross-season rule too:
+  a sample is left out on a day a real service of another active season overlaps it (dated: its day; undated: every
+  day of its weekday in the window). /mass-schedule's additive view passes all seasons as `context`.
+- **Parallel line on the next-service card (ADR-053):** `parallelOccurrencesOf` keeps each parallel occurrence; one
+  starting with (or before) the card's service stays in «وفي نفس الوقت: …», one starting later while it runs gets its
+  own line «وبعدها ٠٧:٠٠ ص: <name> — <place> (<audience>)» (`parallelThen` / "Then at {t}: {v}",
+  `parallelThenLine`, keys `parallelThen0…`). /mass-schedule's list cards keep the ADR-041 overlap summary.
 - **Additive seasons (ADR-050):** a seasonal `mass` hides only the regular masses that overlap it in time (the 12:00
   fasting liturgy keeps the 06:30 mass; a Kiahk 05:30–07:30 liturgy hides the 06:00 mass, not the 08:00 ones); a
   seasonal service with `replacesDay` (feast liturgy) hides every regular mass of its day; vespers / praise keep the
@@ -430,9 +437,12 @@ on); owners can press **Send test error**. Details: `03-architecture.md` → *Er
      active season window with that key (`isSeasonActiveAt`: `active` flag on and instant within
      `[startsAt, endsAt]`). Then, by `Season.replacesRegular` (PR 1, BUG-01):
      - **Full override** (`true`: Holy Week, Pascha, Nativity; also any season doc without the field): regular
-       liturgies are dropped if they start inside the window of a season that has at least one valid service that
-       day (so morning masses before an 18:00 season start remain). Replacement is decided on **all** seasonal
-       services (e.g. Holy Week Pascha hours suspend weekday masses), then filtered by type.
+       liturgies are dropped if they start inside the window of the season — **on every day of the window when the
+       season has both `startsAt` and `endsAt`**, whether or not it has a service that day (ADR-053, sims r2 P1 N1:
+       Good Friday fell back to the regular Divine Liturgy once the seed samples hid behind the owner's Thursday
+       programme); an open-ended full-override season only on a day it has at least one valid service. Morning
+       masses before an 18:00 season start remain. Replacement is decided on **all** seasonal services (e.g. Holy
+       Week Pascha hours suspend weekday masses), then filtered by type.
      - **Additive** (`false`: fasts, the Maximus and Moses revivals, the Holy 50 Days): the regular schedule stays
        (ADR-050). A regular `mass` that starts inside the season's window is dropped only when one of the season's
        services that day is a `mass` that **overlaps it in time** (e.g. the 1 July feast liturgy `rev-moses-feast`

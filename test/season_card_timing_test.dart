@@ -169,8 +169,10 @@ void main() {
 
   group('2: overnight services', () {
     // Coptic Easter 2027 = Sun 2 May; the Easter night liturgy is on the
-    // Saturday's record, 22:30 → 03:30 Sunday (after the DST change).
-    final pascha = season('pascha', cairo(2027, 5, 1, 18), cairo(2027, 6, 10));
+    // Saturday's record, 22:30 → 03:30 Sunday (after the DST change). The
+    // Holy 50 Days are additive (a full-override season replaces every
+    // regular service in its window, ADR-053).
+    final pascha = season('pascha', cairo(2027, 5, 1, 18), cairo(2027, 6, 10), replaces: false);
     final easter =
         lit('easter', date: DateTime(2027, 5, 1), start: '22:30', end: '03:30', type: 'mass', season: 'pascha', venue: 'main', speaker: 'الأب الكاهن');
     final sunMass = lit('reg-sun', weekday: 7, start: '07:00', end: '09:30', type: 'mass');
@@ -459,7 +461,10 @@ void main() {
         date: DateTime(2027, 5, 2), start: '00:00', end: '02:00', season: 'pascha', venue: 'lower', audience: 'youth');
     await pump(tester, const NextMassCard(), cairo(2027, 5, 1, 20), [sa, sb], [pascha]);
     expect(find.text('خدمة sat-night'), findsOneWidget);
-    expect(find.text('وفي نفس الوقت: القاعة السفلية (شباب)'), findsOneWidget);
+    // It starts later (00:00, the next date) while sat-night runs: named
+    // with its time, not «في نفس الوقت» (ADR-053, sims r2 P2 O-a).
+    expect(find.text('وبعدها ١٢:٠٠ ص: خدمة sun-early — القاعة السفلية (شباب)'), findsOneWidget);
+    expect(find.textContaining('وفي نفس الوقت'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
