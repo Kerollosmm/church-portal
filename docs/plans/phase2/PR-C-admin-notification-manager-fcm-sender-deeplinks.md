@@ -436,14 +436,14 @@ choices are readable, and sending to a topic without subscribers is free and har
   so subscribers follow automatically when `eventKey` is unchanged); a removed event → nothing sent. Day events whose
   title / date / time changes get a new `day-` key — the web client notices the missing key on the next visit and
   shows «تغيّر الحدث — أعد ضبط التذكير» in «تذكيراتي».
-- **Clean-up:** `remindersSent` keeps today + yesterday only (pruned by the planner). Browsers unsubscribe expired
+- **Clean-up:** `remindersSent` retains all entries with `occurrenceDate >= yesterday` (yesterday, today, and tomorrow — pruned by the planner only when `occurrenceDate < yesterday`, so a `lead = 1440` reminder sent today for tomorrow's liturgy is never pruned while tomorrow's occurrence is still in the 36 h window). Browsers unsubscribe expired
   once-topics on their next visit (PR D) — stale subscriptions are harmless (the topic is never sent again) and far
   below FCM's 2,000-topics-per-instance limit.
 - **Cost:** see §6 — planner ≈ 1,560 reads/day, ≤ ~30 writes/day; FCM sends free.
 - **Tests (`tool/push_reminders.test.mjs`):** occurrences for a Holy Week day (season replaces regular schedule),
   an additive revival evening, a `replacesDay` feast liturgy, a `dayEvents` item, hidden items excluded; Cairo DST
   nights; slots per lead; due window (`fireAt − 5 min`); missed run → sent before start, `late-skip` after; both
-  topics sent with one `nid`; slot sent once across runs; deleted event → not sent; `remindersSent` pruned; parity
+  topics sent with one `nid`; slot sent once across runs; deleted event → not sent; `remindersSent` pruned only for `occurrenceDate < yesterday` (a `1440` min lead sent today for tomorrow's liturgy survives hourly re-plans); parity
   fixture matches Dart for 60 sample days.
 
 ## ١٧. استمرار التشغيل وتنبيه التوقف (Keep-alive + sender-health alert — owner 19:35)
@@ -467,17 +467,22 @@ jobs:
     steps:
       - env: { GH_TOKEN: '${{ github.token }}' }
         run: |
-          for wf in push-sender.yml synaxarium.yml keepalive.yml; do
-            gh api -X PUT "repos/${GITHUB_REPOSITORY}/actions/workflows/$wf/enable" && echo "enabled $wf"
+          for wf in push-sender.yml synaxarium.yml; do
+            gh api -X PUT "repos/${GITHUB_REPOSITORY}/actions/workflows/$wf/disable" || true
+            gh api -X PUT "repos/${GITHUB_REPOSITORY}/actions/workflows/$wf/enable" && echo "toggled $wf"
           done
+          gh api -X PUT "repos/${GITHUB_REPOSITORY}/actions/workflows/keepalive.yml/enable" && echo "enabled keepalive.yml"
 ```
-- Uses the documented **Enable a workflow** endpoint (`PUT /repos/{owner}/{repo}/actions/workflows/{workflow_id}/enable`,
+- Uses the documented **Disable / Enable a workflow** endpoints (`PUT /repos/{owner}/{repo}/actions/workflows/{workflow_id}/disable` + `/enable`,
   needs `actions: write` — https://docs.github.com/en/rest/actions/workflows#enable-a-workflow) with the run's own
-  `GITHUB_TOKEN`: no personal token, no dummy commit, nothing pushed to `main`. Calling it on an enabled workflow is a
-  harmless no-op that counts as activity for the inactivity timer (the approach of the widely used
-  `gautamkrishnar/keepalive-workflow` "API mode"). It also re-enables a workflow GitHub already disabled.
-- **Not trusted blindly:** the first 60-day window after launch is watched (LAUNCH §14); if GitHub ever ignores it,
-  the fallbacks below still catch a stop within hours, and the owner re-enables with one click.
+  `GITHUB_TOKEN`: no personal token, no dummy commit, nothing pushed to `main`. Toggling `disable` → `enable` on
+  `push-sender.yml` and `synaxarium.yml` forces a real state transition (whereas a bare `PUT .../enable` on an
+  already-enabled workflow can be a no-op that does not reset the 60-day schedule timer), and also re-enables a
+  workflow GitHub already disabled.
+- **Not trusted blindly:** because GitHub Actions runs using `GITHUB_TOKEN` may not count as user-initiated repository
+  activity if the repo goes completely untouched for 60 days, the first 60-day window after launch is watched
+  (LAUNCH §14); if GitHub ever disables `keepalive.yml` itself at day 60, the fallbacks below (`push-sender` Sentry
+  cron monitor + `/admin` red health card) catch the stop within hours, and the owner re-enables with one click.
 
 **Sender-health alert (layers):**
 1. **`/admin` health card** (§3): `health.lastRunAt` stamped by the sender at least hourly; amber > 1 h, **red > 3 h**

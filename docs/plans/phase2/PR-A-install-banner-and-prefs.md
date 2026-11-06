@@ -61,7 +61,7 @@
 | Unsubscribe all | «إيقاف كل الإشعارات» → clears choices; PR D also deletes the FCM token and queues an unsubscribe |
 | Storage | localStorage `church_portal_push` = `{"types":[…],"lang":"ar","quiet":{"from":"22:00","to":"07:00"},"updatedAt":…}`; nothing in Firestore |
 | Web scaffold | `web/firebase-messaging-sw.js` (no fetch handler, own scope) and `web/push_client.js` (lazy, injected on tap) — present but only used by PR D; with no `pushVapidKey` the enable button explains "قريبًا" and stays disabled |
-| «ذكّرني» button (scaffold) | `RemindMeButton(eventKey, occurrence, title, startsAt, recurring)` on liturgy / season-service / meeting cards, detail pages and today's events (`dayEvents`), shown only when `push` is on, `reminders` is offered and the source is in `reminderSources`; bell icon + «ذكّرني» (filled bell + chip «قبل ساعة» when set); 48 dp, `Semantics(label: 'ذكّرني بـ …')`. Hidden for occurrences already started |
+| «ذكّرني» button (scaffold) | `RemindMeButton(eventKey, occurrence, title, startsAt, recurring)` on liturgy / season-service / meeting cards, detail pages and today's events (`dayEvents`), shown only when `push` is on, `reminders` is offered and the source is in `reminderSources` (defaults to `{'lit', 'mtg', 'day'}` when the key is absent, before PR C adds the admin field); bell icon + «ذكّرني» (filled bell + chip «قبل ساعة» when set); 48 dp, `Semantics(label: 'ذكّرني بـ …')`. Hidden for occurrences already started |
 | Lead-time sheet | bottom sheet: title + date/time of the occurrence; radio list from `reminderLeads` («في الموعد» / «قبل ١٥ دقيقة» / «قبل ساعة» / «قبل يوم»; labels generated for 5/10/30/120/180 too), default `reminderDefaultLead`; recurring item → segmented «هذه المرة فقط» / «كل مرة»; leads whose fire time is already past are disabled; platform line (filled in by PR B / PR D): APK «سيصلك التذكير في موعده بالضبط على هذا الهاتف»; web «يصل التذكير عبر الإنترنت وقد يتأخر حتى ٣٠ دقيقة تقريبًا» + «أضف إلى التقويم» (existing ADR-021 `.ics` action); «حفظ» / «إلغاء التذكير» |
 | «تذكيراتي» | section on `/notifications` (and reachable from the chip): list sorted by next fire time — title, occurrence, lead, «كل مرة» badge, state («مجدول» / «انتهى» / «تغيّر الحدث — أعد ضبطه» / «أُلغي الحدث»); tap → the sheet; swipe / button «إلغاء»; «مسح المنتهية». Max 30 reminders per device (message when full) |
 | Reminder storage | `ReminderStore` (device only): `church_portal_reminders` = `[{"eventKey","occurrence":"YYYY-MM-DD"\|null,"lead":60,"every":false,"title":{"ar","en"},"startsAt":ISO,"createdAt"}]` — localStorage on the web, `shared_preferences` on the APK; nothing in Firestore. Pure `reconcileReminders(stored, currentOccurrences, now)` → kept / moved (same key, new time) / changed (key missing, `day-` item edited) / removed / expired — used by PR B (reschedule) and PR D (topic clean-up) |
@@ -113,13 +113,13 @@ copy in LAUNCH-AND-OPERATIONS §5.
 New top-level keys in `settings/features` (see README §6 for the full contract): `installPrompt`,
 `installTitleAr`, `installTitleEn`, `installBodyAr`, `installBodyEn`, `installAndroidUrl`, `installAndroidUrl32`,
 `installApkVersion`, `installApkBuild`, `installApkSizeMb`, `installApkSize32Mb`, `installReshowDays`, `installRemindDays`, `push`,
-`pushVapidKey`, `pushTypes`, `reminderLeads`, `reminderDefaultLead` (`reminderSources` and `notifyTypes` come in PR C).
+`pushVapidKey`, `pushTypes`, `reminderLeads`, `reminderDefaultLead` (admin writing of `reminderSources` and `notifyTypes` comes in PR C; `PushSettings.fromMap` already parses `reminderSources` with default `{'lit', 'mtg', 'day'}`).
 
 Dart (`lib/domain/app_install.dart`, `lib/domain/push.dart`, pure):
 ```dart
 class InstallSettings { bool enabled; String titleAr, titleEn, bodyAr, bodyEn, androidUrl, androidUrl32,
   apkVersion; int apkBuild; double apkSizeMb, apkSize32Mb; int reshowDays, remindDays; factory fromMap(Map m); }
-class PushSettings { bool enabled; String vapidKey; List<NotifyType> offered; List<int> reminderLeads; int defaultLead;
+class PushSettings { bool enabled; String vapidKey; List<NotifyType> offered; List<int> reminderLeads; int defaultLead; Set<String> reminderSources;
   bool get webReady => enabled && vapidKey.isNotEmpty; }
 class Reminder { String eventKey; String? occurrence; int lead; bool every; Map<String,String> title; DateTime startsAt; }
 ```
