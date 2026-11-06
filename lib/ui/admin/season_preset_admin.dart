@@ -188,7 +188,8 @@ class _SeasonPresetScreenState extends State<SeasonPresetScreen> {
   String _date(BuildContext context, DateTime? d) =>
       d == null ? '—' : formatDate(CairoTime.calendarDate(d), arabic: context.isAr);
 
-  Future<bool> _confirm(BuildContext context, String title, List<String> lines, String action, {Key? key}) async {
+  Future<bool> _confirm(BuildContext context, String title, List<String> lines, String action,
+      {Key? key, String? warning}) async {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -198,7 +199,27 @@ class _SeasonPresetScreenState extends State<SeasonPresetScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: [for (final l in lines) Padding(padding: const EdgeInsets.only(bottom: 6), child: Text('• $l'))],
+            children: [
+              for (final l in lines) Padding(padding: const EdgeInsets.only(bottom: 6), child: Text('• $l')),
+              if (warning != null)
+                Container(
+                  key: const Key('presetReplaceLongWarn'),
+                  margin: const EdgeInsets.only(top: 6),
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: context.pal.alert.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: context.pal.alert),
+                  ),
+                  child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Icon(Icons.warning_amber_rounded, color: context.pal.alert, size: 20),
+                    const SizedBox(width: 8),
+                    Expanded(
+                        child: Text(warning,
+                            style: TextStyle(color: context.pal.alert, fontWeight: FontWeight.w700, height: 1.5))),
+                  ]),
+                ),
+            ],
           ),
         ),
         actions: [
@@ -220,6 +241,7 @@ class _SeasonPresetScreenState extends State<SeasonPresetScreen> {
     final messenger = ScaffoldMessenger.of(context);
     final done = context.tr('saved');
     final conflict = context.tr('presetConflict');
+    final replaceChanged = context.tr('presetReplaceChanged');
     String failed(Object e) => context.tr('saveFailed', {'e': '$e'});
     setState(() => _saving = true);
     try {
@@ -236,8 +258,8 @@ class _SeasonPresetScreenState extends State<SeasonPresetScreen> {
         setState(() => _seasonId = null);
         messenger.showSnackBar(SnackBar(content: Text(done)));
       }
-    } on PresetConflict {
-      if (mounted) messenger.showSnackBar(SnackBar(content: Text(conflict)));
+    } on PresetConflict catch (e) {
+      if (mounted) messenger.showSnackBar(SnackBar(content: Text(e.replaceChanged ? replaceChanged : conflict)));
     } catch (e) {
       if (mounted) messenger.showSnackBar(SnackBar(content: Text(failed(e))));
     } finally {
@@ -265,8 +287,16 @@ class _SeasonPresetScreenState extends State<SeasonPresetScreen> {
       context.tr('presetAutoRevert', {'d': _date(context, season.endsAt)}),
     ];
     final liveEnd = _liveEnd;
+    // ADR-054 (sims r3 O-3): replacing the weekly schedule for more than
+    // 3 days hides every regular mass that long; say so before applying.
+    // Stored defaults are unchanged (the owner decides).
+    final replaceDays = presetReplaceDays(season, _options, _now());
     final ok = await _confirm(context, context.tr('presetApplyConfirmTitle'), lines, context.tr('presetApply'),
-        key: const Key('presetApplyDialog'));
+        key: const Key('presetApplyDialog'),
+        warning: replaceDays == null
+            ? null
+            : context.tr(season.replacesRegular ? 'presetReplaceLongWarnStored' : 'presetReplaceLongWarn',
+                {'d': context.dayCount(replaceDays), 'n': '$replaceDays'}));
     if (!ok || !mounted) return;
     final now = _now();
     final edited = _liveEndEdited;
@@ -274,10 +304,18 @@ class _SeasonPresetScreenState extends State<SeasonPresetScreen> {
     await _write(season.id, (stored, seasonDoc) {
       // Another admin applied a preset meanwhile, or deleted the season: write nothing.
       if (SeasonPreset.fromMap(stored?['seasonPreset']) != null || seasonDoc == null) throw const PresetConflict();
+      // The long-replace warning confirmed must still hold for the fresh
+      // season (another admin may have moved its dates or switched its
+      // replacement meanwhile; CodeRabbit on PR #48).
+      final fresh = Season.fromMap(season.id, seasonDoc);
+      if (presetReplaceDays(fresh, r.options, now) != presetReplaceDays(season, r.options, now) ||
+          (replaceDays != null && fresh.replacesRegular != season.replacesRegular)) {
+        throw const PresetConflict(replaceChanged: true);
+      }
       final f = FeatureSettings.fromMap(stored);
       return planApply(
         r: r,
-        season: Season.fromMap(season.id, seasonDoc),
+        season: fresh,
         sections: {for (final k in Sections.all) k: f.enabled(k)},
         sectionKeys: Sections.all,
         heroMotion: f.heroMotion,

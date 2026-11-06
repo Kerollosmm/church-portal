@@ -48,6 +48,10 @@ String formatDate(DateTime d, {required bool arabic}) {
   return '${d.day} ${_monthsEn[d.month]} ${d.year}';
 }
 
+/// "23 يونيو" / "23 Jun" (no year; Arabic-Indic digits in Arabic, ADR-054).
+String formatDayMonth(DateTime d, {required bool arabic}) =>
+    arabic ? '${toArabicDigits('${d.day}')} ${_monthsAr[d.month]}' : '${d.day} ${_monthsEn[d.month]}';
+
 /// Formats a stored ISO date-ish string ("1987-06-14" or "1987").
 String formatLooseDate(String s, {required bool arabic}) {
   if (s.isEmpty) return '';

@@ -58,6 +58,19 @@ class NextMassResult {
     ];
   }
 
+  /// Is [o] already named in the «يُقام الآن» box: [happeningNow] itself, or
+  /// one of its «وفي نفس الوقت» services ([alsoRunning])? The next-service
+  /// card's parallel lines leave such a service out, so the card never names
+  /// it twice (ADR-054, sims r3 P7 12:30: «وفي نفس الوقت: الكنيسة الكبرى
+  /// (عام)» under the youth liturgy while the main one was the now box).
+  bool shownInNowBox(LiturgyOccurrence o, [ProgramOptions? opts]) {
+    final h = happeningNow;
+    if (h == null) return false;
+    bool same(LiturgyOccurrence a) => a.liturgy.id == o.liturgy.id && a.start.isAtSameMomentAs(o.start);
+    if (same(h)) return true;
+    final also = {for (final l in alsoRunning(opts)) l.id};
+    return runningNow.any((a) => also.contains(a.liturgy.id) && same(a));
+  }
 
   bool get isEmpty => happeningNow == null && next == null;
 }
@@ -488,21 +501,28 @@ bool undatedSuppressedOn(Season s, Liturgy l, Iterable<Liturgy> all, tz.TZDateTi
 /// season lists never name a sample the day views leave out (ADR-053, sims
 /// r2 P3: the seed's St Moses night beside the owner's own revival).
 bool _sampleHiddenByOtherSeason(
+        Liturgy l, Season s, Iterable<Liturgy> all, Iterable<Season> seasons, tz.TZDateTime dayStart) =>
+    _otherSeasonServiceHiding(l, s, all, seasons, dayStart) != null;
+
+/// The real service of another active season that hides the sample [l] of
+/// [s] on [dayStart] ([_sampleHiddenByOtherSeason]), or null (ADR-054: the
+/// lists name it beside the sample's exception date).
+Liturgy? _otherSeasonServiceHiding(
     Liturgy l, Season s, Iterable<Liturgy> all, Iterable<Season> seasons, tz.TZDateTime dayStart) {
-  if (!l.sample) return false;
+  if (!l.sample) return null;
   final mine = _occurrence(l, dayStart, 0);
-  if (mine == null) return false;
+  if (mine == null) return null;
   for (final d in all) {
     if (d.sample || d.seasonKey == null || d.seasonKey == s.key || !_matchesDay(d, dayStart)) continue;
     final o = _occurrence(d, dayStart, 0);
     if (o == null || !(o.start.isBefore(mine.end) && mine.start.isBefore(o.end))) continue;
     for (final s2 in seasons) {
       if (s2.key == d.seasonKey && isSeasonActiveAt(s2, o.start) && !undatedSuppressedOn(s2, d, all, dayStart)) {
-        return true;
+        return d;
       }
     }
   }
-  return false;
+  return null;
 }
 
 /// [l] is one of [s]'s services for the season lists: its key, and a dated
@@ -533,12 +553,7 @@ bool liturgyInSeason(Liturgy l, Season s, Iterable<Liturgy> all, [Iterable<Seaso
   // service in the window at all, so no day can suppress it, and (for a
   // sample) no real service of another active season to hide behind.
   final ownDated = all.any((d) => d.seasonKey == s.key && d.date != null && !d.sample && _dateInSeason(d.date!, s));
-  final crossCheck = l.sample &&
-      all.any((d) =>
-          !d.sample &&
-          d.seasonKey != null &&
-          d.seasonKey != s.key &&
-          seasons.any((s2) => s2.active && s2.key == d.seasonKey));
+  final crossCheck = _crossSeasonCheck(l, s, all, seasons);
   if (!ownDated && !crossCheck) return true;
   var sawWeekday = false;
   final first = CairoTime.calendarDate(from), last = CairoTime.calendarDate(to);
@@ -566,6 +581,72 @@ bool liturgyInSeason(Liturgy l, Season s, Iterable<Liturgy> all, [Iterable<Seaso
   return !sawWeekday;
 }
 
+/// Can a real service of another active season hide the sample [l] of [s]?
+bool _crossSeasonCheck(Liturgy l, Season s, Iterable<Liturgy> all, Iterable<Season> seasons) =>
+    l.sample &&
+    all.any((d) =>
+        !d.sample &&
+        d.seasonKey != null &&
+        d.seasonKey != s.key &&
+        seasons.any((s2) => s2.active && s2.key == d.seasonKey));
+
+/// A day on which a listed undated sample is NOT held because a real
+/// service of another season ([by]) takes its time (ADR-054).
+class SeasonListException {
+  /// The Cairo calendar date (year, month, day; time 00:00).
+  final DateTime date;
+  final Liturgy by;
+  const SeasonListException(this.date, this.by);
+
+  @override
+  String toString() => 'SeasonListException(${date.year}-${date.month}-${date.day}, ${by.id})';
+}
+
+/// The days of [s]'s window on which the undated `sample` [l] is hidden
+/// behind a real service of another active season ([_sampleHiddenByOtherSeason]),
+/// in date order, from the Cairo day of [from] on when given (ADR-054, sims
+/// r3 P3 item 9). [liturgyInSeason] keeps such a sample listed while any
+/// other matching day still holds it; the lists then state these days
+/// («لا يُقام ٢٣ يونيو», "(not on 2027-06-23: replaced by …)") so the list
+/// never contradicts the day views. Empty for a dated or real service, an
+/// open-ended season, or a sample no other season's real service can hide.
+List<SeasonListException> seasonListExceptions(Liturgy l, Season s, Iterable<Liturgy> all,
+    {Iterable<Season> seasons = const [], DateTime? from}) {
+  if (l.seasonKey != s.key || l.date != null || !l.sample) return const [];
+  final start = s.startsAt, end = s.endsAt, wd = l.weekday;
+  if (start == null || end == null || wd == null || l.startMinutes == null) return const [];
+  if (!_crossSeasonCheck(l, s, all, seasons)) return const [];
+  final first = CairoTime.calendarDate(start), last = CairoTime.calendarDate(end);
+  final lastDay = CairoTime.at(last.year, last.month, last.day);
+  final fromDay = from == null ? null : CairoTime.startOfDay(CairoTime.fromInstant(from));
+  final out = <SeasonListException>[];
+  // The scan starts at today when that is later, so the 400 days checked are
+  // the upcoming ones (CodeRabbit on PR #48).
+  var day = CairoTime.at(first.year, first.month, first.day);
+  if (fromDay != null && fromDay.isAfter(day)) day = fromDay;
+  for (var i = 0; i < 400 && !day.isAfter(lastDay); i++) {
+    if (day.weekday == wd) {
+      final o = _occurrence(l, day, 0);
+      if (o != null && isSeasonActiveAt(s, o.start) && !undatedSuppressedOn(s, l, all, day)) {
+        final by = _otherSeasonServiceHiding(l, s, all, seasons, day);
+        if (by != null) out.add(SeasonListException(DateTime(day.year, day.month, day.day), by));
+      }
+    }
+    day = CairoTime.at(day.year, day.month, day.day + 1);
+  }
+  return out;
+}
+
+/// Has [s] ended before the Cairo day of [now] began? Such a season is no
+/// longer listed on /mass-schedule or in the assistant prompt (ADR-054, sims
+/// r3 P1 O-2: Nativity and the January revival listed on Good Friday). A
+/// season ending later today stays listed until midnight.
+bool seasonEndedBeforeToday(Season s, DateTime now) {
+  final end = s.endsAt;
+  if (end == null) return false;
+  return end.isBefore(CairoTime.startOfDay(CairoTime.fromInstant(now)));
+}
+
 /// Seasonal liturgies grouped by season, for active seasons only, seasons
 /// sorted by start date. A dated liturgy is attached only to the season
 /// whose window covers its day, so e.g. 2027 and 2028 seasons sharing a key
@@ -574,10 +655,13 @@ bool liturgyInSeason(Liturgy l, Season s, Iterable<Liturgy> all, [Iterable<Seaso
 /// A sample hidden behind another active season's real service is left out
 /// ([liturgyInSeason]); [context] are the seasons that check reads (default:
 /// [seasons]), so a view listing only some seasons still sees the others.
+///
+/// With [now], a season that ended before the Cairo day of [now] is left out
+/// ([seasonEndedBeforeToday], ADR-054); it still counts in [context].
 Map<Season, List<Liturgy>> seasonalSchedule(Iterable<Season> seasons, Iterable<Liturgy> all,
-    {Iterable<Season>? context}) {
+    {Iterable<Season>? context, DateTime? now}) {
   final ctx = (context ?? seasons).where((s) => s.active).toList();
-  final sorted = seasons.where((s) => s.active).toList()
+  final sorted = seasons.where((s) => s.active && (now == null || !seasonEndedBeforeToday(s, now))).toList()
     ..sort((a, b) => (a.startsAt ?? DateTime(9999)).compareTo(b.startsAt ?? DateTime(9999)));
   final map = <Season, List<Liturgy>>{};
   for (final s in sorted) {

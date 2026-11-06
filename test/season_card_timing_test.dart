@@ -423,8 +423,10 @@ void main() {
       expect(box, findsOneWidget);
       expect(find.descendant(of: box, matching: find.text('وفي نفس الوقت: القاعة السفلية (شباب)، مبنى الخدمات (أطفال)')),
           findsOneWidget);
-      // The next service (elders at 19:00) keeps its own line.
-      expect(find.text('وفي نفس الوقت: الكنيسة الكبرى (عام)، القاعة السفلية (شباب)'), findsOneWidget);
+      // The next service (elders at 19:00) no longer repeats the main church
+      // and the youth hall: both are already named in the box (ADR-054).
+      expect(find.text('وفي نفس الوقت: الكنيسة الكبرى (عام)، القاعة السفلية (شباب)'), findsNothing);
+      expect(find.textContaining('وفي نفس الوقت: '), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
 

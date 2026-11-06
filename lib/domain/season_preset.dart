@@ -212,7 +212,10 @@ class PresetRequest {
 /// Thrown inside a fresh apply / restore when the stored preset or season
 /// changed since the screen read it (another admin): nothing is written.
 class PresetConflict implements Exception {
-  const PresetConflict();
+  /// The season's long-replace warning no longer matches what was confirmed
+  /// (ADR-054; CodeRabbit on PR #48).
+  final bool replaceChanged;
+  const PresetConflict({this.replaceChanged = false});
 }
 
 class PresetWrites {
@@ -440,3 +443,22 @@ PresetWrites planSyncEnd(SeasonPreset p, DateTime seasonEnd, {DateTime? storedLi
           seasonEnd.isBefore(storedLiveEndsAt))
         'liveEndsAt': seasonEnd,
     }, p.seasonId, const {});
+
+/// The days, rounded up, that applying a preset with [options] to [season]
+/// at [now] would replace the whole weekly schedule, when that is more than
+/// 3 days; null otherwise (ADR-054, sims r3 O-3: the Pascha preset's
+/// default replaceRegular on a 50-day window). Counted from the later of the
+/// season's start and [now] to its end; the season replaces when the preset
+/// ticks [PresetOption.replaceRegular] or it already does. A season without
+/// a start or an end replaces only on its service days: null.
+int? presetReplaceDays(Season season, Set<String> options, DateTime now) {
+  final replaces = options.contains(PresetOption.replaceRegular) || season.replacesRegular;
+  final end = season.endsAt, begin = season.startsAt;
+  // Without a start or an end the season replaces only on its service days
+  // (ADR-053), not the whole window: no such warning (CodeRabbit on PR #48).
+  if (!replaces || end == null || begin == null) return null;
+  final start = begin.isBefore(now) ? now : begin;
+  final span = end.difference(start);
+  if (span <= const Duration(days: 3)) return null;
+  return (span.inMicroseconds / const Duration(days: 1).inMicroseconds).ceil();
+}

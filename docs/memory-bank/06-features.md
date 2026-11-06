@@ -132,6 +132,15 @@ render with `PageBody` (+ `Footer`). Content comes from Riverpod providers (hidd
   `liturgyInSeason`, read by /mass-schedule and the prompt's weekly "Holy seasons") apply the cross-season rule too:
   a sample is left out on a day a real service of another active season overlaps it (dated: its day; undated: every
   day of its weekday in the window). /mass-schedule's additive view passes all seasons as `context`.
+- **Season lists polish (ADR-054):** an undated sample still listed but hidden on some day by another active season's
+  real service names that day: «لا يُقام ٢٣ يونيو» / "Not held 23 Jun" pill on its /mass-schedule card (seasonal and
+  additive views) and "(not on 2027-06-23: replaced by <name>)" in the prompt's weekly list
+  (`seasonListExceptions`, past days skipped). `seasonalSchedule(..., now:)` drops seasons that ended before today
+  (/mass-schedule seasonal view, prompt). The card's day label uses Arabic counts (`context.inDays`: «غدًا»، «بعد
+  يومين»، «بعد ٣ أيام»، «بعد ١١ يومًا»). The next card's parallel lines skip a service already in the «يُقام الآن» box
+  (`shownInNowBox`). The active-season chip wraps with balanced lines (`Pill(balanced: true)` / `BalancedText`).
+  Preset apply dialog: alert box when the season replaces the weekly schedule for more than 3 days
+  (`presetReplaceDays`, `presetReplaceLongWarn`); stored defaults unchanged.
 - **Parallel line on the next-service card (ADR-053):** `parallelOccurrencesOf` keeps each parallel occurrence; one
   starting with (or before) the card's service stays in «وفي نفس الوقت: …», one starting later while it runs gets its
   own line «وبعدها ٠٧:٠٠ ص: <name> — <place> (<audience>)» (`parallelThen` / "Then at {t}: {v}",

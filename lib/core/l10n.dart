@@ -1,5 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 
+import '../domain/rules.dart' show toArabicDigits;
+
 /// Minimal in-app localisation: Arabic (default, RTL) and English.
 const Map<String, List<String>> _strings = {
   // key: [ar, en]
@@ -51,7 +53,31 @@ const Map<String, List<String>> _strings = {
   'allVenues': ['كل الأماكن', 'All venues'],
   'allAudiences': ['كل الفئات', 'Everyone'],
   'katamerosCredit': ['المصدر: القطمارس (katameros.app)', 'Source: Katameros (katameros.app)'],
+  // «بعد {n} أيام» for 3–10 only; the card words 2 and 11+ with
+  // [L10nX.inDays] (ADR-054: «بعد يومين», «بعد ١٢ يومًا»).
   'inDays': ['بعد {n} أيام', 'In {n} days'],
+  'inTwoDays': ['بعد يومين', 'In 2 days'],
+  'inManyDays': ['بعد {n} يومًا', 'In {n} days'],
+  // A listed season sample not held on these days (ADR-054).
+  'notHeldOn': ['لا يُقام {d}', 'Not held {d}'],
+  // Preset dialog: a long window that replaces the weekly schedule (ADR-054).
+  'presetReplaceLongWarn': [
+    'تنبيه: هذا الموسم سيُلغي كل القداسات المعتادة لمدة {d}؛ لن يظهر أي قداس من الجدول الأسبوعي حتى نهايته. لإبقاء القداسات المعتادة أزِل علامة «صلوات الموسم تحل محل الجدول الأسبوعي».',
+    'Warning: this season will cancel every regular service for {n} days; no weekly service will show until it ends. To keep the regular services, untick "Season services replace the weekly schedule".'
+  ],
+  // The season doc already replaces: unticking the preset changes nothing
+  // (CodeRabbit on PR #48).
+  'presetReplaceLongWarnStored': [
+    'تنبيه: هذا الموسم مضبوط ليحلّ محل الجدول الأسبوعي، فسيُلغي كل القداسات المعتادة لمدة {d}؛ لن يظهر أي قداس من الجدول الأسبوعي حتى نهايته. لإبقاء القداسات المعتادة ألغِ «يستبدل الجدول العادي» في «المواسم» قبل التطبيق.',
+    'Warning: this season is set to replace the weekly schedule, so it will cancel every regular service for {n} days; no weekly service will show until it ends. To keep the regular services, turn off "Replaces regular schedule" in Seasons before applying.'
+  ],
+  'presetReplaceChanged': ['تغيّرت تواريخ الموسم أو استبداله للجدول من جهاز آخر الآن؛ لم يُحفظ شيء. راجِع التنبيه وحاول مرة أخرى.',
+      'The season\'s dates or schedule replacement changed on another device just now; nothing was saved. Check the warning and try again.'],
+  // Day counts (ADR-054): [L10nX.dayCount].
+  'dayCountOne': ['يوم واحد', '1 day'],
+  'dayCountTwo': ['يومين', '2 days'],
+  'dayCountFew': ['{n} أيام', '{n} days'],
+  'dayCountMany': ['{n} يومًا', '{n} days'],
   'startsIn': ['يبدأ بعد {t}', 'Starts in {t}'],
   'hoursShort': ['س', 'h'],
   'minutesShort': ['د', 'min'],
@@ -711,6 +737,23 @@ extension L10nX on BuildContext {
     args.forEach((k, v) => s = s.replaceAll('{$k}', v));
     return s;
   }
+
+  /// «بعد ٣ أيام» for a day [n] days ahead, with the Arabic count rules
+  /// (ADR-054): 1 «غدًا», 2 «بعد يومين», 3–10 «بعد ٣ أيام», 11+ «بعد ١١
+  /// يومًا», Arabic-Indic digits. English: "Tomorrow" / "In {n} days".
+  String inDays(int n) {
+    if (n == 1) return tr('tomorrow');
+    if (!isAr) return tr('inDays', {'n': '$n'});
+    if (n == 2) return tr('inTwoDays');
+    return tr(n >= 3 && n <= 10 ? 'inDays' : 'inManyDays', {'n': toArabicDigits('$n')});
+  }
+
+  /// «٥ أيام» / «يومين» / «١٢ يومًا» (Arabic count rules, ADR-054); "5 days".
+  String dayCount(int n) => switch (n) {
+        1 => tr('dayCountOne'),
+        2 => tr('dayCountTwo'),
+        _ => tr(n >= 3 && n <= 10 ? 'dayCountFew' : 'dayCountMany', {'n': isAr ? toArabicDigits('$n') : '$n'}),
+      };
 
   /// Translated UI string, or null when [key] has no entry.
   String? trOrNull(String key) => _strings.containsKey(key) ? tr(key) : null;
