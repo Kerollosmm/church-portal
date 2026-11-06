@@ -509,13 +509,15 @@ class BalancedText extends StatelessWidget {
       final tp = TextPainter(
           text: TextSpan(text: text, style: style), textDirection: dir, textScaler: scaler, maxLines: maxLines)
         ..layout(maxWidth: w);
-      final n = tp.computeLineMetrics().length;
+      // A width that truncates text past [maxLines] counts as too narrow
+      // (CodeRabbit on PR #48).
+      final n = tp.didExceedMaxLines ? 1 << 20 : tp.computeLineMetrics().length;
       tp.dispose();
       return n;
     }
 
     final full = lines(maxWidth);
-    if (full <= 1) return null;
+    if (full <= 1 || full >= 1 << 20) return null;
     var lo = 0.0, hi = maxWidth;
     for (var i = 0; i < 14 && hi - lo > 1; i++) {
       final mid = (lo + hi) / 2;

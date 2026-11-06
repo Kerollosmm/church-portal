@@ -241,6 +241,7 @@ class _SeasonPresetScreenState extends State<SeasonPresetScreen> {
     final messenger = ScaffoldMessenger.of(context);
     final done = context.tr('saved');
     final conflict = context.tr('presetConflict');
+    final replaceChanged = context.tr('presetReplaceChanged');
     String failed(Object e) => context.tr('saveFailed', {'e': '$e'});
     setState(() => _saving = true);
     try {
@@ -257,8 +258,8 @@ class _SeasonPresetScreenState extends State<SeasonPresetScreen> {
         setState(() => _seasonId = null);
         messenger.showSnackBar(SnackBar(content: Text(done)));
       }
-    } on PresetConflict {
-      if (mounted) messenger.showSnackBar(SnackBar(content: Text(conflict)));
+    } on PresetConflict catch (e) {
+      if (mounted) messenger.showSnackBar(SnackBar(content: Text(e.replaceChanged ? replaceChanged : conflict)));
     } catch (e) {
       if (mounted) messenger.showSnackBar(SnackBar(content: Text(failed(e))));
     } finally {
@@ -294,7 +295,8 @@ class _SeasonPresetScreenState extends State<SeasonPresetScreen> {
         key: const Key('presetApplyDialog'),
         warning: replaceDays == null
             ? null
-            : context.tr('presetReplaceLongWarn', {'d': context.dayCount(replaceDays), 'n': '$replaceDays'}));
+            : context.tr(season.replacesRegular ? 'presetReplaceLongWarnStored' : 'presetReplaceLongWarn',
+                {'d': context.dayCount(replaceDays), 'n': '$replaceDays'}));
     if (!ok || !mounted) return;
     final now = _now();
     final edited = _liveEndEdited;
@@ -302,10 +304,18 @@ class _SeasonPresetScreenState extends State<SeasonPresetScreen> {
     await _write(season.id, (stored, seasonDoc) {
       // Another admin applied a preset meanwhile, or deleted the season: write nothing.
       if (SeasonPreset.fromMap(stored?['seasonPreset']) != null || seasonDoc == null) throw const PresetConflict();
+      // The long-replace warning confirmed must still hold for the fresh
+      // season (another admin may have moved its dates or switched its
+      // replacement meanwhile; CodeRabbit on PR #48).
+      final fresh = Season.fromMap(season.id, seasonDoc);
+      if (presetReplaceDays(fresh, r.options, now) != presetReplaceDays(season, r.options, now) ||
+          (replaceDays != null && fresh.replacesRegular != season.replacesRegular)) {
+        throw const PresetConflict(replaceChanged: true);
+      }
       final f = FeatureSettings.fromMap(stored);
       return planApply(
         r: r,
-        season: Season.fromMap(season.id, seasonDoc),
+        season: fresh,
         sections: {for (final k in Sections.all) k: f.enabled(k)},
         sectionKeys: Sections.all,
         heroMotion: f.heroMotion,

@@ -620,9 +620,12 @@ List<SeasonListException> seasonListExceptions(Liturgy l, Season s, Iterable<Lit
   final lastDay = CairoTime.at(last.year, last.month, last.day);
   final fromDay = from == null ? null : CairoTime.startOfDay(CairoTime.fromInstant(from));
   final out = <SeasonListException>[];
+  // The scan starts at today when that is later, so the 400 days checked are
+  // the upcoming ones (CodeRabbit on PR #48).
   var day = CairoTime.at(first.year, first.month, first.day);
+  if (fromDay != null && fromDay.isAfter(day)) day = fromDay;
   for (var i = 0; i < 400 && !day.isAfter(lastDay); i++) {
-    if (day.weekday == wd && (fromDay == null || !day.isBefore(fromDay))) {
+    if (day.weekday == wd) {
       final o = _occurrence(l, day, 0);
       if (o != null && isSeasonActiveAt(s, o.start) && !undatedSuppressedOn(s, l, all, day)) {
         final by = _otherSeasonServiceHiding(l, s, all, seasons, day);

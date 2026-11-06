@@ -65,6 +65,19 @@ const Map<String, List<String>> _strings = {
     'تنبيه: هذا الموسم سيُلغي كل القداسات المعتادة لمدة {d}؛ لن يظهر أي قداس من الجدول الأسبوعي حتى نهايته. لإبقاء القداسات المعتادة أزِل علامة «صلوات الموسم تحل محل الجدول الأسبوعي».',
     'Warning: this season will cancel every regular service for {n} days; no weekly service will show until it ends. To keep the regular services, untick "Season services replace the weekly schedule".'
   ],
+  // The season doc already replaces: unticking the preset changes nothing
+  // (CodeRabbit on PR #48).
+  'presetReplaceLongWarnStored': [
+    'تنبيه: هذا الموسم مضبوط ليحلّ محل الجدول الأسبوعي، فسيُلغي كل القداسات المعتادة لمدة {d}؛ لن يظهر أي قداس من الجدول الأسبوعي حتى نهايته. لإبقاء القداسات المعتادة ألغِ «يستبدل الجدول العادي» في «المواسم» قبل التطبيق.',
+    'Warning: this season is set to replace the weekly schedule, so it will cancel every regular service for {n} days; no weekly service will show until it ends. To keep the regular services, turn off "Replaces regular schedule" in Seasons before applying.'
+  ],
+  'presetReplaceChanged': ['تغيّرت تواريخ الموسم أو استبداله للجدول من جهاز آخر الآن؛ لم يُحفظ شيء. راجِع التنبيه وحاول مرة أخرى.',
+      'The season\'s dates or schedule replacement changed on another device just now; nothing was saved. Check the warning and try again.'],
+  // Day counts (ADR-054): [L10nX.dayCount].
+  'dayCountOne': ['يوم واحد', '1 day'],
+  'dayCountTwo': ['يومين', '2 days'],
+  'dayCountFew': ['{n} أيام', '{n} days'],
+  'dayCountMany': ['{n} يومًا', '{n} days'],
   'startsIn': ['يبدأ بعد {t}', 'Starts in {t}'],
   'hoursShort': ['س', 'h'],
   'minutesShort': ['د', 'min'],
@@ -736,12 +749,11 @@ extension L10nX on BuildContext {
   }
 
   /// «٥ أيام» / «يومين» / «١٢ يومًا» (Arabic count rules, ADR-054); "5 days".
-  String dayCount(int n) {
-    if (!isAr) return n == 1 ? '1 day' : '$n days';
-    if (n == 1) return 'يوم واحد';
-    if (n == 2) return 'يومين';
-    return '${toArabicDigits('$n')} ${n <= 10 ? 'أيام' : 'يومًا'}';
-  }
+  String dayCount(int n) => switch (n) {
+        1 => tr('dayCountOne'),
+        2 => tr('dayCountTwo'),
+        _ => tr(n >= 3 && n <= 10 ? 'dayCountFew' : 'dayCountMany', {'n': isAr ? toArabicDigits('$n') : '$n'}),
+      };
 
   /// Translated UI string, or null when [key] has no entry.
   String? trOrNull(String key) => _strings.containsKey(key) ? tr(key) : null;

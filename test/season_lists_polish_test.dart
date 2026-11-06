@@ -125,7 +125,7 @@ String prompt(List<Liturgy> lits, List<Season> seasons, DateTime now) {
 }
 
 class _Backend extends AdminBackend {
-  _Backend(this.seasons);
+  _Backend(List<AdminDoc> seasons) : seasons = [...seasons];
   final List<AdminDoc> seasons;
   final batches = <Map<String, Map<String, dynamic>>>[];
   @override
@@ -332,6 +332,14 @@ void main() {
       expect(presetReplaceDays(nat, {PresetOption.replaceRegular}, cairo(2027, 1, 5)), isNull);
       // Stored defaults unchanged.
       expect(PresetRequest.defaultsFor('pascha'), contains(PresetOption.replaceRegular));
+      // No start (or no end): replaces only on its service days, no warning (CodeRabbit on PR #48).
+      final noStart = Season(id: 'x', key: 'pascha', nameAr: '', nameEn: '', endsAt: cairo(2027, 6, 20));
+      expect(presetReplaceDays(noStart, {PresetOption.replaceRegular}, before), isNull);
+      // 3 days and 30 seconds: warned (full duration compared).
+      final edge = Season(
+          id: 'e', key: 'pascha', nameAr: '', nameEn: '', startsAt: cairo(2027, 5, 1),
+          endsAt: cairo(2027, 5, 4).add(const Duration(seconds: 30)), replacesRegular: false);
+      expect(presetReplaceDays(edge, {PresetOption.replaceRegular}, cairo(2027, 4, 1)), 4);
     });
 
     for (final (loc, text) in [
@@ -382,6 +390,62 @@ void main() {
         expect(b.batches, isEmpty);
       });
     }
+  });
+
+  group('4b: stored replace + apply-time re-check (CodeRabbit on PR #48)', () {
+    Future<_Backend> open(WidgetTester tester, Map<String, dynamic> doc) async {
+      final b = _Backend([AdminDoc('pascha-2027', doc)]);
+      tester.view.physicalSize = const Size(390, 1600);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(MaterialApp(
+        locale: const Locale('ar'),
+        supportedLocales: const [Locale('ar'), Locale('en')],
+        localizationsDelegates: GlobalMaterialLocalizations.delegates,
+        home: Scaffold(body: SeasonPresetScreen(repo: b, now: () => DateTime.utc(2027, 5, 1, 14))),
+      ));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('presetSeason')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('presetSeasonItem-pascha-2027')).last);
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.byKey(const Key('presetApply')));
+      await tester.pumpAndSettle();
+      return b;
+    }
+
+    final doc = {
+      'key': 'pascha',
+      'nameAr': 'الخماسين المقدسة',
+      'nameEn': 'Holy Fifty Days',
+      'startsAt': DateTime.utc(2027, 5, 1, 15),
+      'endsAt': DateTime.utc(2027, 6, 20, 21, 59),
+    };
+
+    testWidgets('a season doc that already replaces: the warning says to turn it off in «المواسم»', (tester) async {
+      await open(tester, {...doc, 'replacesRegular': true});
+      await tester.tap(find.byKey(const Key('presetApply')));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('ألغِ «يستبدل الجدول العادي» في «المواسم»'), findsOneWidget);
+    });
+
+    testWidgets('the season was made additive meanwhile: nothing is written', (tester) async {
+      final b = await open(tester, {...doc, 'replacesRegular': true});
+      // Untick the preset option so only the stored flag replaces.
+      await tester.tap(find.byKey(const Key('presetOpt-replaceRegular')));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.byKey(const Key('presetApply')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('presetApply')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('presetReplaceLongWarn')), findsOneWidget);
+      // Another admin switches the season to additive before the confirm.
+      b.seasons[0] = AdminDoc('pascha-2027', {...doc, 'replacesRegular': false});
+      await tester.tap(find.byKey(const Key('presetConfirm')));
+      await tester.pumpAndSettle();
+      expect(b.batches, isEmpty);
+      expect(find.textContaining('تغيّرت تواريخ الموسم أو استبداله'), findsOneWidget);
+    });
   });
 
   // ── 5: the r3 P7 12:30 repro (Great Lent Tuesday).

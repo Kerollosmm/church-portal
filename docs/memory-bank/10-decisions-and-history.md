@@ -1606,7 +1606,7 @@ supersede them.
   it), `season_card_timing_test.dart` (the 50 Days additive in the overnight minute-by-minute test; the next-date
   parallel service now reads «وبعدها ١٢:٠٠ ص: …»). The ADR-050 P3/P6/P7 additive repros pass unchanged.
 
-## ADR-054 (PR #TBD) — Season lists polish: sample exception days, past seasons hidden, Arabic day counts, long-replace warning, no repeated now-box service, balanced season pill
+## ADR-054 (PR #48) — Season lists polish: sample exception days, past seasons hidden, Arabic day counts, long-replace warning, no repeated now-box service, balanced season pill
 
 - **Context:** the seasons v2 round-3 simulation (`work/seasons-v2/r3/phase1–7/report.md`, code at `aa544ab`) left
   one PARTIAL and five low observations. **P3 item 9 (PARTIAL):** the undated sample `rev-moses-3` (Wed 18:30) stays
@@ -1635,15 +1635,25 @@ supersede them.
      replaceRegular, or the season already replaces, and the window (from the later of its start and now) is longer
      than 3 days, the apply dialog shows an alert box «تنبيه: هذا الموسم سيُلغي كل القداسات المعتادة لمدة ٥١ يومًا؛
      لن يظهر أي قداس من الجدول الأسبوعي حتى نهايته. لإبقاء القداسات المعتادة أزِل علامة «صلوات الموسم تحل محل
-     الجدول الأسبوعي».» / EN (key `presetReplaceLongWarn`). Stored preset defaults are unchanged (the owner decides).
+     الجدول الأسبوعي».» / EN (key `presetReplaceLongWarn`); when the season doc itself already replaces, the text says
+     to turn off «يستبدل الجدول العادي» in «المواسم» (`presetReplaceLongWarnStored`). No warning without a start or an
+     end (such a season replaces only on its service days). The apply transaction re-checks the warning against the
+     fresh season and refuses (`PresetConflict(replaceChanged)`, «تغيّرت تواريخ الموسم…») when it changed. Stored
+     preset defaults are unchanged (the owner decides).
   5. **No repeat (P7 12:30).** `NextMassResult.shownInNowBox(o, opts)`: the next card's «وفي نفس الوقت» / «وبعدها»
      lines leave out an occurrence already named in the now box (`happeningNow` or one of `alsoRunning`); other
      parallel services stay.
   6. **Balanced season pill (P5 O-d).** `Pill(balanced: true)` → `BalancedText`: when the label wraps it takes the
      narrowest width that keeps the same number of lines, so the last line is never a lone word; one line = plain
      `Text` (no stretching). Used by the active-season chip; owner text untouched (no digit or name change).
+- **Review (CodeRabbit on PR #48):** stored-replace warning variant, apply-time re-check, no warning without a start,
+  full-duration compare, day-count phrases in the string catalog, exception scan from today, the «لا يُقام» pill wraps
+  freely, a balanced pill never accepts a width that truncates past `maxLines`. Not changed: exception days for an
+  **open-ended** season (no finite window; ADR-053 keeps open-ended seasons out of the cross-season list check) and a
+  warning for open-ended replacement (it replaces only on its service days).
 - **Rules:** unchanged. **Data:** no field, no write; seed unchanged.
-- **Firebase cost:** +0 reads, +0 writes, +0 listeners (client logic on the already-loaded liturgies / seasons).
+- **Firebase cost:** +0 reads, +0 writes, +0 listeners (client logic on the already-loaded liturgies / seasons; the
+  re-check reads the season doc the apply transaction already reads).
 - **Tests:** `test/season_lists_polish_test.dart` (exception day + prompt + both /mass-schedule views, AR/EN; Arabic
   counts; past seasons in lists / prompt / page; `presetReplaceDays` + the dialog AR/EN, unticked = no warning; the
   12:30 repro + a third service still named; balanced pill). Screenshots `work/fixall/D/png/` (390 px AR).
@@ -1709,6 +1719,6 @@ supersede them.
 | 6 Nov 2026 | **PR #44** — "Season keys, exceptional quota, church calendar in the assistant" (`feat/season-keys-assistant`) | ADR-051: season keys `apostles`, `nayrouz` (+ the Cross), `kiahk`, `great_lent` (`SeasonKeys.all` = rules `seasonKeyList()`; fasting / festive palettes); `settings/assistant.exceptionalSeasons` chips (default + Great Lent, Kiahk, Marian); prompt «Church calendar» line (Coptic date + feast, loaded Katameros only); Arabic digits in the limit message; /ask greeting and chips skip hidden sections; preset live end = tonight's last service + 30 min (editable); `seasons.replaceDates` feast-night override (date chips); fast presets untick weddings; Holy Week day names in the top bar; EN pages use `liveLabelEn` or a generic label. +0 visitor reads / listeners. |
 | 6 Nov 2026 | **PR #46** — "Church milestones on the About page" (`feat/about-milestones`) | ADR-052: shared `MilestoneCard` (`lib/ui/widgets/milestone_card.dart`) for Home «قصتنا» and a new «محطات الكنيسة» section on `/about` after the history & altars; `settings/features.aboutMilestones` (default on) with an indented admin switch under the milestones section; milestone detail Back → About while listed there; rules key + bool check. +0 writes / new listeners; direct /about landing opens the existing milestones listener. |
 | 6 Nov 2026 | **PR #47** — "Season replace window, cross-season samples in lists, later parallel line" (`fix/season-replace-window`) | ADR-053: a full-override season with exact dates replaces every regular service in its window, also on days without its own service (Good Friday no longer shows the weekly Divine Liturgy; holds with the seed samples deleted); season lists / prompt weekly list drop a sample hidden behind another active season's real service on every matching weekday; next-service card names a later parallel service with its time («وبعدها ٠٧:٠٠ ص: …»); switch subtitle mentions fasts. +0 reads / writes / listeners. |
-| 6 Nov 2026 | **PR #TBD** — "Season lists polish" (`fix/season-lists-polish`) | ADR-054: a listed undated sample states the days another season's real service replaces it («لا يُقام ٢٣ يونيو», prompt "(not on …: replaced by …)"); seasons ended before today leave /mass-schedule and the prompt; «بعد يومين» / «بعد ١١ يومًا»; preset dialog warns when a season replaces the weekly schedule for more than 3 days (defaults unchanged); the next card never repeats a service named in the «يُقام الآن» box; balanced season chip. +0 reads / writes / listeners. |
+| 6 Nov 2026 | **PR #48** — "Season lists polish" (`fix/season-lists-polish`) | ADR-054: a listed undated sample states the days another season's real service replaces it («لا يُقام ٢٣ يونيو», prompt "(not on …: replaced by …)"); seasons ended before today leave /mass-schedule and the prompt; «بعد يومين» / «بعد ١١ يومًا»; preset dialog warns when a season replaces the weekly schedule for more than 3 days (defaults unchanged); the next card never repeats a service named in the «يُقام الآن» box; balanced season chip. +0 reads / writes / listeners. |
 
 Append new PRs to this table.

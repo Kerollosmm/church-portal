@@ -90,8 +90,9 @@ class LiturgyCard extends StatelessWidget {
               if (notHeldOn.isNotEmpty)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 4),
+                  // Every date stays readable (no line limit; CodeRabbit on PR #48).
                   child: Pill(context.tr('notHeldOn', {'d': notHeldOn}),
-                      key: const Key('notHeldOn'), icon: Icons.event_busy, color: context.pal.muted),
+                      key: const Key('notHeldOn'), icon: Icons.event_busy, color: context.pal.muted, maxLines: null),
                 ),
               Text(context.pick(l.nameAr, l.nameEn),
                   style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
