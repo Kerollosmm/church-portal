@@ -1,7 +1,7 @@
 # 11 — Open tasks
 
 Tick items off (or delete them) in the PR that completes them, and add new ones as you discover them.
-Status as of 6 Nov 2026 (ADR-055 / PR #49; ADR-054 / PR #48; ADR-053 / PR #47; PR #44 / ADR-051; PR #45 / ADR-050; PR #42 / ADR-049; PR #40 / ADR-047; PR #39 / ADR-046; PR #38 / ADR-045; PR #35 / ADR-044; PR #37 / ADR-043; PR #33 / ADR-042; PR #32 / ADR-041; PR #31 / ADR-039–040; PR #30 / ADR-038; PR #25 re-checked against `d60261d`; earlier: PR #7–#24).
+Status as of 6 Nov 2026 (ADR-056 Phase 2 plan; ADR-055 / PR #49; ADR-054 / PR #48; ADR-053 / PR #47; PR #44 / ADR-051; PR #45 / ADR-050; PR #42 / ADR-049; PR #40 / ADR-047; PR #39 / ADR-046; PR #38 / ADR-045; PR #35 / ADR-044; PR #37 / ADR-043; PR #33 / ADR-042; PR #32 / ADR-041; PR #31 / ADR-039–040; PR #30 / ADR-038; PR #25 re-checked against `d60261d`; earlier: PR #7–#24).
 
 ## Top open items (owner's list, 4 Nov 2026 — details in the sections below)
 
@@ -75,6 +75,29 @@ Status as of 6 Nov 2026 (ADR-055 / PR #49; ADR-054 / PR #48; ADR-053 / PR #47; P
     «لا توجد مواسم حالية» + «الموسم القادم: … — يبدأ …» (round-4 empty screen). **Owner:** visual approval of the PR
     preview before merge.
 
+## Phase 2 — notifications & mobile apps (ADR-056, plan in `docs/plans/phase2/`)
+
+Progress is tracked in [`docs/plans/phase2/STATUS.md`](../plans/phase2/STATUS.md); the chain is merged only after
+the owner approves the whole chain.
+
+- [ ] PR A — install banner + notification preferences (ADR-057)
+- [ ] PR B — Android APK + local notifications (ADR-058)
+- [ ] PR C — admin notification manager + FCM sender + deep links (ADR-059)
+- [ ] PR D — web push + PWA + iPhone (ADR-060)
+- [ ] PR E — responsive + size audit (ADR-061; includes the 320 px app-bar item below)
+- [ ] Owner: keystore + secrets, FCM API + `push-sender` service account, VAPID key, Android developer verification
+      before 2027 (`docs/plans/phase2/LAUNCH-AND-OPERATIONS.md`)
+- [x] Owner decisions 6 Nov 2026 19:57 (README §8): **#6** APKs on GitHub Releases of a separate public repo
+      `Kerollosmm/church-portal-apk`, manifest on Hosting; **#17** Katameros = Arabic Van Dyck full text + English
+      references only (no NKJV), daily file ≤ ~20–25 KB.
+- [ ] At PR B time: create the public repo `Kerollosmm/church-portal-apk` (owner, or the agent with the owner's
+      approval), fine-grained `RELEASES_REPO_TOKEN` (that repo only, Contents: Read and write) as a main-repo Actions
+      secret, variables `APK_HOST=releases-repo` + `APK_BASE_URL`; retention = newest 5 releases (PR B §12 / §15)
+- [ ] Owner decisions on the plan (README §8): launch types / default times (#9), web «ذكّرني» design
+      (#12), web pushes = event pushes + seasons + reminders (#13), seasons via FCM on the APK (#14), repo visibility
+      (#15), exact alarms for APK reminders (#16), reminders in quiet hours (#18). (The urgent instant-dispatch token was removed from the plan on 6 Nov 19:31.)
+- [ ] After PR C: Sentry cron monitor `push-sender` + `keepalive.yml` first run (LAUNCH §14)
+
 ## Infrastructure & security (owner: developer)
 
 - [ ] **Re-save the service-account secret** `FIREBASE_SERVICE_ACCOUNT_ASAFRA_CHURCH_PORTAL` with only the JSON key
@@ -95,7 +118,7 @@ Status as of 6 Nov 2026 (ADR-055 / PR #49; ADR-054 / PR #48; ADR-053 / PR #47; P
       Play Console → App integrity). **Debug APKs:** run once, copy the debug token from logcat ("Enter this debug
       secret into the allow list…") into App Check → Apps → ⋮ → Manage debug tokens (or build with
       `--dart-define=APPCHECK_DEBUG_TOKEN=<uuid>` registered there). Until then Android assistant requests are refused.
-- [ ] **`production` environment required reviewers** (Settings → Environments) so live deploys, rules deploys
+- [ ] **`production` environment required reviewers** (recommended hygiene; no Phase 2 dependency since 6 Nov 19:31) (Settings → Environments) so live deploys, rules deploys
       (`deploy-rules` uses the environment since PR 1) and the Seed workflow (`force` can overwrite production data)
       need approval.
 - [ ] **iOS**: register the iOS app (bundle `com.asafrachurch.churchPortal`), `flutterfire configure`, replace the
