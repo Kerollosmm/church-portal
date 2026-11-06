@@ -1693,20 +1693,26 @@ supersede them.
   prompt on the web with OS detection; responsive; small size; complete UX per feature; a handoff-ready plan; feature
   PRs as a stacked chain merged only after the whole chain is approved.
 - **Decision (details in [`docs/plans/phase2/`](../plans/phase2/README.md)):**
-  1. **Delivery — strict channel segregation** (owner, 6 Nov evening): each type has one owner channel. **Local**
-     (Android APK only, `flutter_local_notifications`, 14-day / 60-alarm window replenished daily by `workmanager`
-     from an inputs snapshot, inexact alarms, no exact-alarm permission): `verse_daily`, `feasts`, `occasions`
-     (pre-scheduled recurring reminders). **Remote / FCM topics** (`<app|web>_<announcements|seasons>_<ar|en>`, 8
-     topics, none for local-owned types): announcements (live broadcasts, emergencies, notices) and dynamic season
-     alerts. The daily verse is never sent by FCM; the web gets pushes only for the remote types. Data-only messages
-     carry `type` + `nid`; clients drop local-owned types and repeated `nid`s. Sender = **GitHub Actions**
-     `push-sender.yml` with a **dual trigger**: cron every 15 min for routine work + an immediate
-     `workflow_dispatch` from `/admin` for urgent one-offs (~1–2 min), token = fine-grained PAT (this repo,
-     Actions: write only, 90 days) in the owner-only doc `admin_secrets/github_dispatch` (Cloudflare Worker proxy as
-     optional hardening); **prerequisite: required reviewers on the `production` environment** (none today) so the
-     token cannot run `seed.yml`; per-topic claims make cron + dispatch idempotent and partial sends recoverable;
-     a failed dispatch falls back to the next cron run; `topic_override` test runs need `PUSH_TEST_ENABLED` and never
-     touch production rows — no Cloud Functions (Spark).
+  1. **Delivery — strict channel segregation per platform** (owner, 6 Nov evening; **revised 19:31 / 19:35**): each
+     (platform, type) has one owner channel. **Local on the Android APK** (`flutter_local_notifications`): `verse_daily`
+     and `katameros_daily` (rolling ~9-day window, inexact, no exact-alarm permission; tap → `/readings/<date>` with
+     the full verse / full Katameros readings, offline from per-day static files `/data/readings/<date>.json` built
+     from the Katameros API by `synaxarium.yml`), `feasts`, and the user's **«ذكّرني» reminders** (`reminders`,
+     replacing the blanket `occasions` type; exact alarms via `USE_EXACT_ALARM` / `SCHEDULE_EXACT_ALARM` ≤ 32 with an
+     inexact fallback, reboot-safe, follow edits, cancelled when the event is removed); window replenished daily by
+     `workmanager`; per-brand battery-saver guidance + diagnostic check. **Remote / FCM topics**: admin **event pushes**
+     (`announcements`) and dynamic season alerts on both platforms (8 fixed topics), plus **web / iPhone reminders**
+     as per-event topics `web_rem_<eventKey>[-<date>]_<lead>_<lang>` (no reminder data in Firestore; may arrive up to
+     ~30 min late — said in the UI — with «أضف إلى التقويم» for exact time). Verse / Katameros / feasts are never
+     sent by FCM; the web shows them on Home. Data-only messages carry `type` + `nid` (+ `eventKey`); clients drop
+     local-owned types and repeated `nid`s; a push and a reminder for the same event share one slot. Sender =
+     **GitHub Actions** `push-sender.yml` on a **cron every 15 min only** — the instant `workflow_dispatch` / token
+     design was **removed** (owner 19:31: speed is not important, delivery is): per-topic claim markers (at most once),
+     retries (≤ 3), catch-up of missed runs (event pushes up to 24 h, reminders until the event), sent / partial /
+     failed / expired status in `/admin`; an hourly reminder planner (~65 reads) writes the next 36 h of web-reminder
+     slots; `keepalive.yml` re-enables the scheduled workflows monthly via the API (no dummy commits); sender health
+     = `/admin` card (red > 3 h) + a Sentry cron monitor; `topic_override` test runs need `PUSH_TEST_ENABLED` — no
+     Cloud Functions (Spark). `production` environment reviewers: recommended hygiene, no longer a prerequisite.
   2. **Config:** new top-level keys of the existing `settings/features` doc (install banner fields, `push` default
      off, `pushVapidKey`, `pushTypes`, `notifyTypes`), admin-only writes, +0 visitor reads / listeners; the one-off
      schedule and sent log in a new **admin-only** doc `settings/notifications` (not public, not streamed by
@@ -1716,7 +1722,7 @@ supersede them.
      them while subscribed and change the notice).
   3. **Web push:** lazy `push_client.js` + `firebase-messaging-sw.js` at a private scope (nothing on page load;
      messaging JS ignored at boot via `flutterfire_ignore_scripts`); browsers subscribe through a create-only
-     `push_queue` (full desired topic set per doc, ≤ 2 remote web topics; 3 s spacing + 1,000/day cap; rejected
+     `push_queue` (full desired topic set per doc: ≤ 2 fixed web topics + ≤ 30 reminder topics as `rem` / `drop` strings; 3 s spacing + 1,000/day cap; rejected
      requests still cost rule reads — cheap checks first; sustained-abuse response: opt-in off → App Check / rules,
      pending opt-ins resend themselves) drained by the sender with the Admin SDK `subscribeToTopic` /
      `unsubscribeFromTopic` (per-token results, union of `prevToken`s; token-list fallback with storage / cost /
@@ -1734,8 +1740,9 @@ supersede them.
   5. **Process:** stacked chain PR 0 (plans) → A (ADR-057) → B (ADR-058) → C (ADR-059) → D (ADR-060) → E (ADR-061);
      each draft, reviewed (@coderabbitai, @sentry, ≤ 2 rounds), CI green, not merged; after owner approval merged
      bottom-up with squash, merging `main` into the next branch (no rebase, no force-push) — `HANDOFF.md` §5.6.
-- **Cost:** A, B, E +0; C ≤ 192 reads + ~10 writes/day (sender) + 1 read / 1 write per urgent send; D 2 writes per
-  web opt-in + sender read/delete, hard-capped at 1,000 queue writes/day by the rules.
+- **Cost:** A, B, E +0 Firestore (B: each day's readings file ≈ 15 KB gzip once per device); C ≈ 1,750 reads +
+  ≤ ~60 writes/day (sender + hourly reminder planner, admin-only doc); D 2 writes per web change batch (opt-in,
+  language, debounced «ذكّرني» changes) + sender read/delete, hard-capped at 1,000 queue writes/day by the rules.
 - **Rules / data / seed:** unchanged in this PR (docs only).
 
 ## Timeline
@@ -1803,4 +1810,4 @@ supersede them.
 | 6 Nov 2026 | **PR #49** — "Seasonal list empty state" (`fix/season-empty-state`) | ADR-055: /mass-schedule seasonal view with no season in effect shows «لا توجد مواسم حالية» / "No current seasons" and, when an enabled season starts later, «الموسم القادم: صوم الميلاد — يبدأ ٢٥ نوفمبر» (`nextUpcomingSeason`, `EmptyState.detail`); fixed i18n strings (not admin-configurable). +0 reads / writes / listeners. |
 
 Append new PRs to this table.
-| 6 Nov 2026 | **Phase 2 plans** (`docs/phase2-plans`, docs only) | ADR-056: `docs/plans/phase2/` — README (architecture, data contract, cost, decisions), HANDOFF (workflow, stacked chain, merge procedure), STATUS (checklists), PR A–E plans, LAUNCH-AND-OPERATIONS (consoles, keystore, user guidance, privacy, device tests, rollback, monitoring, runbook, launch day). No code. |
+| 6 Nov 2026 | **Phase 2 plans** (`docs/phase2-plans`, docs only) | ADR-056: `docs/plans/phase2/` — README (architecture, data contract, cost, decisions; revised 6 Nov 19:31–19:35: scheduled-only sender, event pushes, «ذكّرني» reminders, local verse + Katameros, keep-alive), HANDOFF (workflow, stacked chain, merge procedure), STATUS (checklists), PR A–E plans, LAUNCH-AND-OPERATIONS (consoles, keystore, user guidance, privacy, device tests, rollback, monitoring, runbook, launch day). No code. |

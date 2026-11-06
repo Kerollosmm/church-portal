@@ -13,8 +13,9 @@
 1. Phones visiting the site get a small, dismissible card offering the app: **Android → download the APK** (or the
    browser's own install), **iPhone/iPad → step-by-step "Add to Home Screen"**. Desktop and already-installed
    visitors never see it.
-2. Lay the **notification foundation** used by PRs B–D: the type model, the preferences page with its complete UX,
-   and the admin switches — all behind `settings/features.push` (default **off**), so nothing about notifications is
+2. Lay the **notification foundation** used by PRs B–D: the type model (6 types incl. Katameros and user reminders),
+   the preferences page with its complete UX, the **«ذكّرني» button + lead-time sheet + «تذكيراتي» list** (stored on
+   the device; delivery is wired in PR B for the APK and PR D for the web), and the admin switches — all behind `settings/features.push` (default **off**), so nothing about notifications is
    visible on the live site until the owner turns it on after PR C/D.
 
 ## ٢. قصص المستخدم (User stories)
@@ -28,6 +29,8 @@
 - كمشرف أغيّر النصوص والروابط ورقم الإصدار والحجم والمدد من `/admin` بدون نشر جديد.
 - (after `push` is on) as a visitor I open «الإشعارات», read what each type means, choose the types I want, and only
   then does the browser ask for permission. If I blocked it, I see how to re-enable it on my phone/browser.
+- (after `push` is on) على كارت أي قداس أو خدمة أو مناسبة (مثل صلاة الساعة السادسة يوم الجمعة العظيمة) أضغط
+  «ذكّرني»، أختار «قبل ساعة»، وأرى التذكير في «تذكيراتي» حيث أستطيع تغييره أو إلغاءه.
 
 ## ٣. الخصائص الفرعية (Complete sub-features)
 
@@ -48,17 +51,21 @@
 ### 3.2 Notification preferences (behind `push`)
 | Sub-feature | Detail |
 |---|---|
-| Type model | `NotifyType` (`announcements`, `verse_daily`, `seasons`, `feasts`, `occasions`), ar/en labels + one-line descriptions, icons, and the **channel owner** (README §3.1): `NotifyChannel.local` for `verse_daily`, `feasts`, `occasions` (Android APK only, scheduled on the phone, never FCM) and `NotifyChannel.remote` for `announcements`, `seasons` (FCM). `topicFor(type, lang, {web})` returns `web_<type>_<lang>` / `app_<type>_<lang>` **only for remote types and throws `ArgumentError` for local-owned ones**, so no code path can subscribe to a topic that duplicates a local notification. `isLocalOwned(String type)` is the shared guard used by the Android handler (PR C) and mirrored in the SW (PR D) |
+| Type model | `NotifyType` (`announcements`, `verse_daily`, `katameros_daily`, `seasons`, `feasts`, `reminders`), ar/en labels + one-line descriptions, icons, and the **channel owner per platform** (README §3.1): `channelOf(type, platform)` → `local` for `verse_daily`, `katameros_daily`, `feasts` on the APK (none on the web — shown on Home), `local` for `reminders` on the APK and `remote` on the web, `remote` for `announcements`, `seasons` everywhere. `topicFor(type, lang, platform)` returns `web_<type>_<lang>` / `app_<type>_<lang>` **only for remote pairs with a fixed topic and throws `ArgumentError` otherwise** (`reminders` on the web uses `reminderTopic(eventKey, occurrence, lead, lang, {every})` → `web_rem_…`; on the APK it throws). `isLocalOwned(type, platform)` is the shared guard used by the Android handler (PR C) and mirrored in the SW (PR D). (`reminders` replaces the earlier blanket `occasions` type — owner 19:31) |
 | Route `/notifications` | «الإشعارات» page; in the drawer and footer only when `push` is on. When off → the normal 404 (not indexable) |
 | Explainer | before any browser prompt: what we send, how often, no personal data, «يمكنك الإيقاف في أي وقت» |
-| Per-type toggles | only `pushTypes` offered by the admin, **filtered by platform**: web (browser / iPhone PWA) shows only remote types (`announcements`, `seasons`) with a muted line for the local-only ones; the APK (PR B) shows all five; quiet default = all off; first opt-in pre-ticks `announcements` + `seasons` |
+| Per-type toggles | only `pushTypes` offered by the admin, **filtered by platform**: web (browser / iPhone PWA) shows `announcements`, `seasons`, `reminders` with a muted line «آية اليوم وقراءات القطمارس والأعياد: في الصفحة الرئيسية» for the APK-only ones; the APK (PR B) shows all six; quiet default = all off; first opt-in pre-ticks `announcements` + `seasons` + `reminders` |
 | Permission on tap only | `Notification.requestPermission()` only from the «تفعيل الإشعارات» button, never on load |
 | States | `unsupported` (no `Notification`/`PushManager`/`serviceWorker`), `iosNeedsInstall` (iOS, not standalone: `display-mode: standalone` false and `navigator.standalone !== true` → install-first card + read-only type preview, **no enable button, no permission call**), `iosTooOld` (standalone but iOS < 16.4 → «حدّث iOS»), `inAppBrowser` (→ «افتح في Safari / Chrome»), `default`, `granted`, `denied` (blocked). Order of checks: in-app browser → iOS not standalone → iOS too old → unsupported → permission |
 | Blocked state | how to re-enable: Chrome Android «🔒 → الأذونات → الإشعارات → سماح», iPhone «الإعدادات → الإشعارات → كنيسة مكسيموس ودوماديوس», desktop Chrome/Edge/Firefox/Safari one line each |
 | Unsubscribe all | «إيقاف كل الإشعارات» → clears choices; PR D also deletes the FCM token and queues an unsubscribe |
 | Storage | localStorage `church_portal_push` = `{"types":[…],"lang":"ar","quiet":{"from":"22:00","to":"07:00"},"updatedAt":…}`; nothing in Firestore |
 | Web scaffold | `web/firebase-messaging-sw.js` (no fetch handler, own scope) and `web/push_client.js` (lazy, injected on tap) — present but only used by PR D; with no `pushVapidKey` the enable button explains "قريبًا" and stays disabled |
-| Not in this PR | quiet hours UI, test notification, inbox → PR B (Android) / PR D (web) — they need a delivery path |
+| «ذكّرني» button (scaffold) | `RemindMeButton(eventKey, occurrence, title, startsAt, recurring)` on liturgy / season-service / meeting cards, detail pages and today's events (`dayEvents`), shown only when `push` is on, `reminders` is offered and the source is in `reminderSources`; bell icon + «ذكّرني» (filled bell + chip «قبل ساعة» when set); 48 dp, `Semantics(label: 'ذكّرني بـ …')`. Hidden for occurrences already started |
+| Lead-time sheet | bottom sheet: title + date/time of the occurrence; radio list from `reminderLeads` («في الموعد» / «قبل ١٥ دقيقة» / «قبل ساعة» / «قبل يوم»; labels generated for 5/10/30/120/180 too), default `reminderDefaultLead`; recurring item → segmented «هذه المرة فقط» / «كل مرة»; leads whose fire time is already past are disabled; platform line (filled in by PR B / PR D): APK «سيصلك التذكير في موعده بالضبط على هذا الهاتف»; web «يصل التذكير عبر الإنترنت وقد يتأخر حتى ٣٠ دقيقة تقريبًا» + «أضف إلى التقويم» (existing ADR-021 `.ics` action); «حفظ» / «إلغاء التذكير» |
+| «تذكيراتي» | section on `/notifications` (and reachable from the chip): list sorted by next fire time — title, occurrence, lead, «كل مرة» badge, state («مجدول» / «انتهى» / «تغيّر الحدث — أعد ضبطه» / «أُلغي الحدث»); tap → the sheet; swipe / button «إلغاء»; «مسح المنتهية». Max 30 reminders per device (message when full) |
+| Reminder storage | `ReminderStore` (device only): `church_portal_reminders` = `[{"eventKey","occurrence":"YYYY-MM-DD"\|null,"lead":60,"every":false,"title":{"ar","en"},"startsAt":ISO,"createdAt"}]` — localStorage on the web, `shared_preferences` on the APK; nothing in Firestore. Pure `reconcileReminders(stored, currentOccurrences, now)` → kept / moved (same key, new time) / changed (key missing, `day-` item edited) / removed / expired — used by PR B (reschedule) and PR D (topic clean-up) |
+| Not in this PR | delivery of reminders (PR B local alarms / PR D web topics), quiet hours UI, test notification, inbox, reading screen → PR B (Android) / PR D (web) — they need a delivery path |
 
 ### 3.3 Android sideload guide (visual modal)
 Opens right after the APK download starts (and from «طريقة التثبيت»). A `showModalBottomSheet` (full height on
@@ -94,8 +101,9 @@ copy in LAUNCH-AND-OPERATIONS §5.
 - **Banner (iPhone)**: same; primary «طريقة الإضافة» → steps sheet.
 - **Steps sheet (iPhone)**: 3 numbered rows with glyphs, «تم» button.
 - **/notifications**: header (`CustomizablePageHeader`, page key `notifications`), explainer card, status card
-  (granted / blocked / unsupported / install-first), type list (switch + label + description), «إيقاف كل
+  (granted / blocked / unsupported / install-first), type list (switch + label + description), «تذكيراتي», «إيقاف كل
   الإشعارات», privacy line.
+- **«ذكّرني»** button on event cards + lead-time sheet (§3.2).
 - **Admin `/admin` → «التطبيق والإشعارات»** (new destination, `Icons.install_mobile_outlined`): generic
   `ChurchInfoScreen` with `appSettingsDoc` (`DocDef('settings/features', …)`, writes only changed keys like
   `todaySettingsDoc`). Two groups: «شريط تثبيت التطبيق» and «الإشعارات (تجريبي)».
@@ -105,17 +113,19 @@ copy in LAUNCH-AND-OPERATIONS §5.
 New top-level keys in `settings/features` (see README §6 for the full contract): `installPrompt`,
 `installTitleAr`, `installTitleEn`, `installBodyAr`, `installBodyEn`, `installAndroidUrl`, `installAndroidUrl32`,
 `installApkVersion`, `installApkBuild`, `installApkSizeMb`, `installApkSize32Mb`, `installReshowDays`, `installRemindDays`, `push`,
-`pushVapidKey`, `pushTypes`.
+`pushVapidKey`, `pushTypes`, `reminderLeads`, `reminderDefaultLead` (`reminderSources` and `notifyTypes` come in PR C).
 
 Dart (`lib/domain/app_install.dart`, `lib/domain/push.dart`, pure):
 ```dart
 class InstallSettings { bool enabled; String titleAr, titleEn, bodyAr, bodyEn, androidUrl, androidUrl32,
   apkVersion; int apkBuild; double apkSizeMb, apkSize32Mb; int reshowDays, remindDays; factory fromMap(Map m); }
-class PushSettings { bool enabled; String vapidKey; List<NotifyType> offered; bool get webReady => enabled && vapidKey.isNotEmpty; }
+class PushSettings { bool enabled; String vapidKey; List<NotifyType> offered; List<int> reminderLeads; int defaultLead;
+  bool get webReady => enabled && vapidKey.isNotEmpty; }
+class Reminder { String eventKey; String? occurrence; int lead; bool every; Map<String,String> title; DateTime startsAt; }
 ```
 Both parsed in `FeatureSettings.fromMap` as `install` / `pushSettings` (never written by `toMap`, like `today`).
 
-`firestore.rules` → `validFeatures`: add the 16 keys to `keysAllowed([...])` and two gates (only evaluated when
+`firestore.rules` → `validFeatures`: add the 18 keys to `keysAllowed([...])` and two gates (only evaluated when
 one of their keys changes, so the 1,000-expression budget of other saves is untouched):
 ```
 && (!changed.hasAny(['installPrompt','installTitleAr','installTitleEn','installBodyAr','installBodyEn',
@@ -127,17 +137,22 @@ one of their keys changes, so the 1,000-expression budget of other saves is unto
         && d.get('installApkVersion','').matches('^$|^[0-9]+([.][0-9]+){0,3}$')
         && optInt(d,'installApkBuild',0,999999) && optNumber(d,'installApkSizeMb',0,200) && optNumber(d,'installApkSize32Mb',0,200)
         && optInt(d,'installReshowDays',0,365) && optInt(d,'installRemindDays',1,60)))
-&& (!changed.hasAny(['push','pushVapidKey','pushTypes'])
+&& (!changed.hasAny(['push','pushVapidKey','pushTypes','reminderLeads','reminderDefaultLead'])
     || (optBool(d,'push') && d.get('pushVapidKey','').matches('^$|^[A-Za-z0-9_-]{80,100}$')
-        && optList(d,'pushTypes',5)
-        && d.get('pushTypes',[]).hasOnly(['announcements','verse_daily','seasons','feasts','occasions'])
-        && d.get('pushTypes',[]).toSet().size() == d.get('pushTypes',[]).size()))
+        && optList(d,'pushTypes',6)
+        && d.get('pushTypes',[]).hasOnly(['announcements','verse_daily','katameros_daily','seasons','feasts','reminders'])
+        && d.get('pushTypes',[]).toSet().size() == d.get('pushTypes',[]).size()
+        && optList(d,'reminderLeads',4)
+        && d.get('reminderLeads',[]).hasOnly([0,5,10,15,30,60,120,180,1440])
+        && d.get('reminderLeads',[]).toSet().size() == d.get('reminderLeads',[]).size()
+        && (!('reminderDefaultLead' in d) || d.get('reminderLeads',[0,15,60,1440]).hasAny([d.reminderDefaultLead]))))
 ```
 Also allow the page key `notifications` wherever `validPageHeaders` lists the customizable pages (the page header
 override of `/notifications`), and add it to `CustomizablePages.all`.
 
 Rules tests (`tool/rules_test/rules.test.mjs`): admin can set each key; stranger cannot; bad URL (`javascript:`),
-version `1.x`, build −1, size 500, reshow 400, remind 0, VAPID with spaces, unknown type, duplicate type → denied;
+version `1.x`, build −1, size 500, reshow 400, remind 0, VAPID with spaces, unknown type (incl. the retired
+`occasions`), duplicate type, lead 7, 5 leads, default lead not in the list → denied;
 an unrelated save (e.g. `heroMotion`) still passes with the worst-case page headers.
 
 ## ٦. التكلفة (Read / write cost)
@@ -150,7 +165,9 @@ banner adds no request; `push_client.js` (~3 KB) and the gstatic messaging modul
 
 Create:
 - `lib/domain/app_install.dart` — `InstallSettings`, `InstallOs`, `detectInstallOs`, `InstallBannerDecision shouldShowInstallBanner({settings, os, standalone, installedEvent, dismissedUntil, now, path, isWeb})`, `InstallAction resolveInstallAction(...)` (`apk` / `pwaPrompt` / `androidSteps` / `iosSteps` / `none`).
-- `lib/domain/push.dart` — `NotifyType` enum + labels/descriptions/icons keys, `PushSettings`, `PushPrefs` (encode/decode JSON, defaults, `firstOptInTypes`), `topicFor(type, lang, {web})`, `PushPermissionState`, `safeNotificationLink(String)` (in-app path only, else `/`).
+- `lib/domain/push.dart` — `NotifyType` enum + labels/descriptions/icons keys, `PushSettings`, `PushPrefs` (encode/decode JSON, defaults, `firstOptInTypes`), `channelOf` / `isLocalOwned` / `topicFor(type, lang, platform)` / `reminderTopic(...)`, `PushPermissionState`, `safeNotificationLink(String)` (in-app path only, else `/`).
+- `lib/domain/reminders.dart` — `Reminder`, `EventKey` (`eventKeyFor(...)`, shared with PR C's sender port), `reconcileReminders(...)`, `leadLabel(lead, lang)`; `lib/data/reminder_store.dart` (+ web / io storage via `install_env`).
+- `lib/ui/widgets/remind_me.dart` — `RemindMeButton`, `showReminderSheet`, `MyRemindersSection`.
 - `lib/core/install_env.dart` + `install_env_stub.dart` + `install_env_web.dart` — `userAgent`, `platform`, `maxTouchPoints`, `isStandalone`, `hasDeferredPrompt`, `Future<bool> promptInstall()`, `readJson/writeJson(key)` (localStorage, try/catch like `locale_storage_web.dart`).
 - `lib/core/push_env.dart` + `push_env_stub.dart` + `push_env_web.dart` — `isSupported`, `permission`, `Future<String> requestPermission()`; (PR D adds token calls).
 - `lib/ui/widgets/install_banner.dart` — `InstallBanner` (ConsumerStatefulWidget) + `showIosInstallSteps` / `showAndroidSteps` sheets.
@@ -159,7 +176,7 @@ Create:
   themselves optional; placeholders until added).
 - `lib/ui/pages/notifications_page.dart` — `NotificationsPage`.
 - `web/firebase-messaging-sw.js` — scaffold (see PR D for the full file); `web/push_client.js` — scaffold.
-- `test/install_banner_test.dart`, `test/push_prefs_test.dart`.
+- `test/install_banner_test.dart`, `test/push_prefs_test.dart`, `test/reminders_test.dart`.
 - `documentation/features/install-and-notifications.md` (Arabic), ADR-057 in `docs/memory-bank/10-decisions-and-history.md`.
 
 Modify:
@@ -171,7 +188,10 @@ Modify:
 - `lib/router.dart` — `GoRoute('/notifications')` (404 when `push` off; `setDocumentRouteMeta(indexable: false)`).
 - `lib/domain/features.dart` `CustomizablePages` — add `notifications` (page header override).
 - `lib/ui/admin/admin_schema.dart` — `appSettingsDoc`; `lib/ui/admin/admin_page.dart` — destination `app` («التطبيق والإشعارات»).
-- `lib/core/l10n.dart` — ~70 strings `[ar, en]` (incl. the 5 guide steps + safety box, iOS states).
+- `lib/core/l10n.dart` — ~95 strings `[ar, en]` (incl. the 5 guide steps + safety box, iOS states, «ذكّرني» sheet,
+  lead labels, «تذكيراتي» states, the web delay line).
+- `lib/ui/widgets/cards.dart`, `lib/ui/pages/item_detail_page.dart`, `lib/ui/widgets/today_widgets.dart` — place
+  `RemindMeButton` (behind `push` + offered `reminders`).
 - `firestore.rules`, `tool/rules_test/rules.test.mjs`.
 - `lib/domain/sitemap.dart` — `/notifications` **not** in the sitemap.
 - Docs: `docs/memory-bank/03,04,05,06,07,10,11`, `documentation/README.md`, `documentation/features/pwa-and-caching.md`, `documentation/features/feature-toggles.md`, `documentation/en/features.md`.
@@ -191,6 +211,8 @@ None. Uses `package:web` (already `^1.1.2`) and `dart:js_interop`.
 5. `InstallBanner` + sheets + `apk_install_guide.dart`; place in `AppShell`; widget tests with a fake env (inject via provider
    `installEnvProvider`).
 6. `NotificationsPage` + route + nav/footer entries behind `push`; widget tests per permission state.
+6b. Reminders: `reminders.dart` (event keys, `reconcileReminders`) + tests; `RemindMeButton`, sheet, «تذكيراتي»;
+   widget tests (no delivery yet — a fake `ReminderScheduler` records calls; PR B / PR D implement it).
 7. Admin `appSettingsDoc` + destination; admin widget test (fields render, save writes only changed keys).
 8. `web/firebase-messaging-sw.js` + `web/push_client.js` scaffolds (no registration in this PR).
 9. Small-screen check of the banner at 320 / 360 / 390 / 768 / 1024 px, ar + en, 200 % text.
@@ -205,8 +227,11 @@ None. Uses `package:web` (already `^1.1.2`) and `dart:js_interop`.
   dismissed until future/past, reshow 0 = never, remind later, not web).
 - `resolveInstallAction`: apk URL wins; no URL + prompt → pwaPrompt; no prompt → androidSteps; iOS → iosSteps.
 - `PushPrefs` encode/decode round trip, corrupted JSON → defaults, unknown types dropped, offered filter.
-- `topicFor`: remote types → `web_/app_<type>_<lang>`; `verse_daily` / `feasts` / `occasions` → throws;
-  `isLocalOwned` table.
+- `topicFor`: `announcements` / `seasons` → `web_/app_<type>_<lang>`; `verse_daily` / `katameros_daily` / `feasts` →
+  throws on both platforms; `reminders` → throws on the APK, `reminderTopic` on the web (`web_rem_lit-x-20270430_60_ar`,
+  every-time variant without the date); topic names match `[a-zA-Z0-9-_.~%]+`; `isLocalOwned(type, platform)` table.
+- Reminders: `eventKeyFor` stable; `reconcileReminders` (kept / moved / changed / removed / expired); 30-item cap;
+  leads already past disabled; «كل مرة» only for recurring items.
 - `safeNotificationLink`: `/mass-schedule` ok, `/page/x?y=1#z` ok, `https://evil`, `javascript:`, `//evil.com`,
   empty → `/`.
 - Widgets: banner shows on Android/iOS, hidden on desktop & standalone; ✕ writes `until`; «لاحقًا» writes remind
@@ -214,7 +239,8 @@ None. Uses `package:web` (already `^1.1.2`) and `dart:js_interop`.
   done, RTL order, missing image → placeholder, 320 px × 200 % no overflow; iOS steps sheet opens and **the fake env
   records zero permission calls**; 320 px × 200 % no overflow (ar/en).
 - `/notifications`: hidden (404) with `push` off; with `push` on each state renders (incl. `iosNeedsInstall`,
-  `iosTooOld`, `inAppBrowser`); web lists only remote types; toggles persist; permission
+  `iosTooOld`, `inAppBrowser`); web lists `announcements` / `seasons` / `reminders` only; «تذكيراتي» lists, edits
+  and cancels; «ذكّرني» hidden when `reminders` not offered; sheet at 320 px × 200 % text; toggles persist; permission
   requested only after tap (fake env counts calls); «إيقاف كل الإشعارات» clears.
 - Admin: `appSettingsDoc` fields, validators (URL, version pattern, VAPID pattern).
 - Existing guards stay green: no hard-coded colours in `lib/ui` (palette roles only), accessibility sweep,
@@ -244,7 +270,8 @@ channel `pr-<n>`) cover it.
 
 ADR-057 "Install banner + notification preferences foundation": OS detection rules, APK-first on Android with the
 visual sideload guide, iOS steps instead of an App Store link (never a permission request outside standalone),
-channel-owner model (`topicFor` refuses local-owned types), dismiss memory in localStorage, `push` default off, settings as top-level keys,
+channel-owner model per platform (`topicFor` refuses local-owned pairs), the «ذكّرني» UI and device-only reminder
+store with `reconcileReminders`, dismiss memory in localStorage, `push` default off, settings as top-level keys,
 +0 reads. Arabic manual `documentation/features/install-and-notifications.md` with the admin labels.
 
 ## ١٤. المخاطر (Risks)

@@ -15,7 +15,9 @@ guidance, privacy, real-device tests, release, rollback, monitoring, the admin r
 | 5 | Google Cloud → APIs | enable **Firebase Cloud Messaging API** | C | owner |
 | 6 | Google Cloud → IAM → Service accounts | `push-sender` with **Firebase Cloud Messaging API Admin** + **Cloud Datastore User**, JSON key | C | owner |
 | 7 | GitHub → Secrets / Variables | secret `FIREBASE_SA_PUSH`, variable `PUSH_DRY_RUN=true` | C | owner |
-| 7b | GitHub → Developer settings → Fine-grained tokens, then `/admin` | urgent-dispatch token (this repo, Actions: write only, 90 days) saved in «رمز الإرسال الفوري» (§14) | C | owner |
+| 7b | Sentry → Crons (+ GitHub secret) | cron monitor `push-sender` + secret `SENTRY_CRONS_URL` (optional, recommended; §14) | C | owner |
+| 7c | GitHub → Actions | `keepalive.yml` present and its first manual run green (§14) | C | owner |
+| 7d | GitHub → Settings → Environments → `production` | Required reviewers (recommended hygiene, not required — README §8 #19) | — | owner |
 | 8 | Firebase console → Cloud Messaging → Web Push certificates | **Generate key pair**, paste the public key in `/admin` | D | owner (or Hark's browser session) |
 | 9 | `/admin` → «الإشعارات» | types offered, texts, times; `push` on (launch day) | C/D | admin |
 | 10 | GitHub → Variables | `PUSH_DRY_RUN=false` (launch day) | C | owner |
@@ -92,8 +94,13 @@ screenshot placeholders, Arabic + English there):
 الإعدادات ← التطبيقات ← كنيسة مكسيموس ودوماديوس ← الإشعارات ← تشغيل.
 
 **إذا تأخرت الإشعارات (توفير البطارية):** بعض الهواتف (شاومي، أوبو، ريلمي، هواوي، سامسونج) توقف التطبيقات في
-الخلفية: الإعدادات ← البطارية (أو التطبيقات) ← كنيسة مكسيموس ودوماديوس ← «بدون قيود». على سامسونج: أزل التطبيق من
-«التطبيقات في وضع السكون». قد تتأخر الإشعارات المجدولة بضع دقائق — هذا طبيعي (لا نطلب إذن «المنبّهات الدقيقة»).
+الخلفية. داخل التطبيق: «الإشعارات» ← «إذا لم تصلك الإشعارات» يعرض خطوات هاتفك بالتحديد (التشغيل التلقائي، «بدون
+قيود» للبطارية، إزالة التطبيق من «التطبيقات في وضع السكون» على سامسونج)، و«افحص الإشعارات» يخبرك ما الذي يمنعها. آية
+اليوم والقراءات قد تتأخر بضع دقائق — هذا طبيعي؛ تذكيراتك («ذكّرني») ترن في موعدها بالضبط.
+
+**«ذكّرني»:** اضغط «ذكّرني» على أي قداس أو خدمة أو مناسبة واختر الوقت (في الموعد / قبل ١٥ دقيقة / قبل ساعة / قبل
+يوم). في تطبيق Android يرن في موعده بالضبط. على الموقع و iPhone يصل عبر الإنترنت **وقد يتأخر حتى ٣٠ دقيقة تقريبًا**؛
+للتنبيه في الموعد بالضبط اضغط «أضف إلى التقويم». تجد كل تذكيراتك في «الإشعارات» ← «تذكيراتي».
 
 **iPhone / iPad (بدون App Store):**
 1. افتح الموقع في **Safari**.
@@ -102,8 +109,8 @@ screenshot placeholders, Arabic + English there):
 4. افتح الكنيسة من الأيقونة الجديدة. الإشعارات تعمل بهذه الطريقة فقط وعلى iOS 16.4 أو أحدث
    (الإعدادات ← عام ← حول ← إصدار iOS). من داخل التطبيق المثبّت: «الإشعارات» ← «تفعيل الإشعارات» ← «سماح».
    (في Safari العادي لا يظهر زر التفعيل ولا يُطلب أي إذن — هذا مقصود.)
-5. على الويب و iPhone تصل إعلانات الكنيسة وتنبيهات المواسم فقط؛ آية اليوم والأعياد ومواعيد القداس تجدها في الصفحة
-   الرئيسية للموقع (وكإشعارات محلية في تطبيق Android).
+5. على الويب و iPhone تصل إشعارات الكنيسة للأحداث وتنبيهات المواسم وتذكيراتك «ذكّرني»؛ آية اليوم وقراءات القطمارس
+   والأعياد تجدها في الصفحة الرئيسية وشاشة «قراءات اليوم» (وكإشعارات محلية في تطبيق Android).
 6. للإيقاف: صفحة «الإشعارات» في التطبيق، أو الإعدادات ← الإشعارات ← الكنيسة.
 
 ## ٦. الخصوصية (Privacy notice — PDPL, Egypt Law 151/2020)
@@ -114,23 +121,27 @@ Add to the privacy texts (`lib/core/l10n.dart`, the notifications page, `documen
 > **الإشعارات:** إذا فعّلت الإشعارات تبقى ساعات الهدوء وسجل الإشعارات على جهازك فقط. لإيصال الإشعارات يعطي متصفحك أو
 > التطبيق «رمز جهاز» عشوائيًا من خدمة Google Firebase Cloud Messaging لا يحتوي على اسمك أو رقمك أو بريدك.
 > - **في تطبيق Android:** يسجّل التطبيق هذا الرمز مباشرة لدى Google في قناتي «إعلانات الكنيسة» و«تنبيهات المواسم»
->   (حسب اختيارك) بلغتك فقط؛ باقي الإشعارات (آية اليوم، الأعياد، تذكيرات القداس) تُجدول على هاتفك دون إرسال أي شيء.
+>   (حسب اختيارك) بلغتك فقط؛ باقي الإشعارات (آية اليوم، قراءات القطمارس، الأعياد، وتذكيراتك «ذكّرني») تُجدول على
+>   هاتفك دون إرسال أي شيء.
 >   لتحديث التطبيق يحمّل التطبيق ملف الإصدار الجديد من موقع الكنيسة ويطلب منك إذن تثبيته؛ لا يُرسل شيئًا عنك.
 > - **على الموقع وتطبيق الويب (iPhone):** يُرسَل الرمز مع **أنواع الإشعارات التي اخترتها ولغتك** إلى قاعدة بيانات
 >   الكنيسة على Google Firebase (خوادم قد تكون خارج مصر) لدقائق حتى تسجّله أداة الإرسال لدى Google ثم يُحذف من
->   قاعدة البيانات. يحتفظ Google بالاشتراك ما دمت مشتركًا.
+>   قاعدة البيانات. يحتفظ Google بالاشتراك ما دمت مشتركًا. إذا استخدمت «ذكّرني» يُرسل بنفس الطريقة اسم القناة الخاصة
+>   بكل تذكير (الحدث ووقت التذكير فقط، دون أي بيانات عنك).
 > يمكنك الإيقاف في أي وقت من صفحة «الإشعارات» (يُلغى الاشتراك ويُحذف الرمز) أو من إعدادات الهاتف.
 >
 > **Notifications:** quiet hours and your notification history stay on your device. To deliver notifications your
 > browser or the app gets a random device token from Google Firebase Cloud Messaging; it contains no name, phone
 > number or e-mail.
 > - **Android app:** the app registers this token directly with Google for the church-announcements and season-alert
->   channels you chose, in your language only; everything else (verse, feasts, mass reminders) is scheduled on your
->   phone and sends nothing. To update itself the app downloads the new version file from the church's download
+>   channels you chose, in your language only; everything else (verse, Katameros readings, feasts and your «Remind me»
+>   reminders) is scheduled on your phone and sends nothing. To update itself the app downloads the new version file from the church's download
 >   address and asks your permission to install it; nothing about you is sent.
 > - **Website / iPhone web app:** the token, **the notification types you chose and your language** are sent to the
 >   church's Google Firebase database (servers may be outside Egypt) for a few minutes until the sender registers
->   them with Google, then deleted from the database. Google keeps the subscription while you stay subscribed.
+>   them with Google, then deleted from the database. Google keeps the subscription while you stay subscribed. If you
+>   use «Remind me», the channel name of each reminder (the event and lead time only, nothing about you) travels the
+>   same way.
 > You can stop at any time from the Notifications page (unsubscribes and deletes the token) or your phone's settings.
 
 *Alternative paragraph — only if PR D falls back to the token list:* replace the website bullet with «يُحفَظ الرمز مع
@@ -144,10 +155,11 @@ Sentry rules (ADR-034) apply: never log tokens, links' query strings or user tex
 
 | Device | OS | Tests |
 |---|---|---|
-| Samsung (A-series) | Android 14/15 | APK install following the PR A visual guide, every type, quiet hours, reboot, **in-app update** N → N+1, back button, Holy Week theme |
-| Xiaomi / Redmi | Android 13/14 | battery-optimisation delay, permission flow |
+| Samsung (A-series) | Android 14/15 | APK install following the PR A visual guide, every type, quiet hours, reboot, **in-app update** N → N+1, back button, Holy Week theme, exact «ذكّرني» after reboot, Katameros tap offline |
+| Xiaomi / Redmi (HyperOS) | Android 13/14 | battery-saver guidance + diagnostic check, Autostart, permission flow, verse / Katameros over 8 days |
+| Oppo / Realme, Vivo, Huawei / Honor (if available) | any | guidance buttons open the right screens; test reminder arrives |
 | Old / low-end phone | Android 9–11, 32-bit | arm32 APK installs and runs |
-| iPhone | iOS 17/18 | Safari tab: install-first card, **no permission prompt**; PWA install, then web push (announcements, season alerts), deep links, quiet hours, blocked state |
+| iPhone | iOS 17/18 | Safari tab: install-first card, **no permission prompt**; PWA install, then web push (event pushes, season alerts, «ذكّرني» with the delay copy), «أضف إلى التقويم», deep links, quiet hours, blocked state |
 | iPhone | iOS ≤ 16.3 (if available) | "update iOS" message |
 | Android Chrome (not installed) | any | web push |
 | Windows / Mac: Chrome, Edge, Safari, Firefox | — | web push, no install banner |
@@ -169,9 +181,12 @@ Run each PR's §11 table on these, Arabic and English; record results in the PR 
 - **iOS web push** rules change with iOS releases; re-test after each major iOS release.
 - **Web topic subscription** (Admin SDK `subscribeToTopic` for web tokens): if it stops working, switch to the
   token-list fallback (PR D §5) and change the privacy text (§6, alternative paragraph).
-- **GitHub scheduled workflows** are disabled after 60 days without repository activity.
-- **Urgent-dispatch token expiry** (`admin_secrets/github_dispatch.expiresOn`): the admin card warns 14 days before;
-  rotate per §14. An expired token only slows urgent sends to the cron (fallback), it never loses one.
+- **GitHub scheduled workflows** are disabled after 60 days without repository activity → `keepalive.yml` +
+  health alerts (§14); watch the first 60-day window after launch.
+- **Katameros API** (`api.katameros.app`, open source, no SLA) feeds `/data/today.json` and `/data/readings/*`:
+  if it changes shape or disappears, the app keeps the last published days and falls back to computed feasts;
+  `synaxarium.yml` failure e-mails show it.
+- **NKJV licence** for English readings (README §8 #17).
 - **Repo visibility**: if `Kerollosmm/church-portal` is made private → APK host (c) stops working publicly and the
   15-min cron exceeds the free Actions minutes → hourly cron (README §8 #15).
 - **Firebase Hosting transfer** (only if APKs are hosted there): Firebase console → Hosting → Usage, weekly.
@@ -200,7 +215,8 @@ Run each PR's §11 table on these, Arabic and English; record results in the PR 
 | Install banner problem | `/admin` → «شريط تثبيت التطبيق» off |
 | Bad web release | GitHub → the merged PR → **Revert** → merge → auto-deploy; or Firebase console → Hosting → release history → **Rollback** |
 | Bad APK release | Android cannot downgrade: publish a fix with a **higher** build number; meanwhile lower `installApkBuild` in `/admin` so nobody is prompted, re-publish the previous `version.json` (`node tool/publish_hosting_file.js`), and mark the bad release "pre-release" and the previous one **Latest** |
-| Urgent sends misbehaving / token suspected leaked | GitHub → Settings → Developer settings → Fine-grained tokens → **Delete** the token; `/admin` → «رمز الإرسال الفوري» → delete; urgent rows still go out with the next cron run (§14) |
+| Sender stopped (health card red / Sentry missed check-in) | §14 «المُرسِل متوقف»: re-enable the workflow, check the last run's error; due pushes and reminders go out with the next run (catch-up) |
+| Wrong reminder slots (planner bug) | `/admin` → «أنواع الإشعارات» → untick «ذكّرني» as offered (web reminders stop at the next run; APK reminders are local and unaffected) → fix PR |
 | Sender key leak | delete the key in Google Cloud → new key → update the secret |
 | Spam in `push_queue` | throttle + daily cap limit it; capped two days in a row → clear the VAPID key in `/admin` temporarily (enable button disabled; paste the same key back later), then App Check enforcement on Firestore or a rules PR with `allow create: if false`; the sender deletes queued docs; legitimate pending opt-ins resend themselves later (PR D §14) |
 
@@ -210,8 +226,10 @@ Run each PR's §11 table on these, Arabic and English; record results in the PR 
   a new `production` issue.
 - **GitHub Actions** failure e-mails for `push-sender.yml`, `android.yml`, `synaxarium.yml` (GitHub → Settings →
   Notifications → Actions → failed workflows only).
-- **Sender run summary**: trigger (`cron` / `urgent` / `manual`), sent items, queue processed, errors (no tokens).
-- **Dispatch failures**: rows with `dispatch = failed:<code>` in `/admin` (401 = token expired / revoked → §14).
+- **Sender run summary**: trigger (`cron` / `manual`), sent items (event pushes, season alerts, reminder slots),
+  retries, expired / late-skipped items, queue processed, cap reached, errors (no tokens).
+- **Sender health**: `/admin` health card (amber > 1 h, red > 3 h) + Sentry cron monitor `push-sender` (e-mail on
+  missed / failed check-ins) + `push.sender_stale` Sentry message (§14).
 - **Firebase console → Messaging → Reports**: aggregate Android delivery (sent / received / opened).
 - **Firestore usage**: Firebase console → Firestore → Usage — **daily** for the first two weeks after `push` is on
   (reads included: rejected `push_queue` requests still cost rule reads, PR D §5), then weekly.
@@ -223,16 +241,15 @@ Run each PR's §11 table on these, Arabic and English; record results in the PR 
 | Weekly (5 min) | `/admin` → «الإشعارات» → السجل: any `error`? upcoming one-offs correct? |
 | Before each feast / season | one-off announcement with a deep link to the season page; check the season dates (they drive "season starts") |
 | Daily verse | automatic; fixed / season verses as today |
-| Monthly | GitHub → Actions: `push-sender` ran recently (not disabled); Sentry clean |
+| Monthly | GitHub → Actions: `push-sender` ran recently, `keepalive.yml` ran on the 1st and is green; Sentry clean |
 | Every app release | §9 |
-| Every 90 days | rotate the urgent-dispatch token (§14) |
 | Yearly | rotate the sender key; open the keystore backup; review texts |
 | Every 3 months | §8 watch items |
 
-Admin golden rules: title ≤ 40 chars, body ≤ 120 shows fully; always set a deep link; at most ~1 announcement a
-day; «عاجل» only for real emergencies / a live broadcast starting now (it reaches everyone within ~2 minutes); never
-personal data in a notification; never send the verse, a feast or a mass reminder as a one-off (they are already
-local in the app — duplicate).
+Admin golden rules: title ≤ 40 chars, body ≤ 120 shows fully; always set a deep link (or pick the event); at most ~1
+event push a day; pushes are **scheduled, not instant** — set the time 30 min before you need it to arrive; never
+personal data in a notification; never send the verse, Katameros, a feast or a «remind me» style mass reminder as a
+push (they are local in the app and users set their own reminders — duplicate).
 
 ## ١٣. يوم الإطلاق (Launch-day checklist)
 
@@ -240,8 +257,8 @@ local in the app — duplicate).
 - [ ] Whole PR chain merged (HANDOFF §5.6); Lighthouse mobile ≥ 61 on the live site.
 - [ ] Keystore created + 2 backups; secrets set; first signed APK released; `/admin` APK fields filled.
 - [ ] FCM API enabled; `push-sender` SA + `FIREBASE_SA_PUSH`; dry runs (`PUSH_DRY_RUN=true`) correct for 3 days.
-- [ ] Urgent-dispatch token saved (§14); a dry-run urgent send shows «في الطابور» → the run appears in Actions within
-      a minute with trigger `urgent`.
+- [ ] `keepalive.yml` manual run green; Sentry cron monitor receiving check-ins; `/admin` health card green (§14).
+- [ ] `/data/readings/*.json` live for the next 9 days (open one in the browser); reading screen OK offline on a phone.
 - [ ] APK host chosen and the in-app update tested from build N to N+1 on a real phone.
 - [ ] VAPID key saved in `/admin`.
 - [ ] Real-device plan (§7) passed and recorded.
@@ -252,8 +269,8 @@ local in the app — duplicate).
 **يوم الإطلاق**
 - [ ] `/admin` → «الإشعارات» → offered types → `push` **on**.
 - [ ] GitHub → Variables → `PUSH_DRY_RUN` = `false`.
-- [ ] Owner's phones: APK + iPhone PWA, all types on, a test one-off (+15 min, link `/mass-schedule`) received, and
-      one urgent test to the test topic received in ~1–2 min — exactly once.
+- [ ] Owner's phones: APK + iPhone PWA, all types on, a test event push (+15 min, link `/mass-schedule`) received
+      exactly once within ~30 min; a «ذكّرني» on each phone (APK on the minute; iPhone within ~30 min).
 - [ ] Announce (church, WhatsApp channel, Facebook): site link + «حمّل التطبيق» + iPhone steps (§5) + short screen
       recording.
 - [ ] Check Sentry and the sender summary at noon and evening.
@@ -262,50 +279,41 @@ local in the app — duplicate).
 - [ ] Review delivery reports, error log, Firestore usage, servants' feedback; adjust times / texts.
 - [ ] Tag the first fix release if needed.
 
-## ١٤. رمز الإرسال الفوري (Urgent-dispatch token runbook — create, store, rotate, revoke)
+## ١٤. استمرار التشغيل وصحة المُرسِل (Keep-alive + sender health runbook — owner 19:35)
 
-Why: `/admin` triggers `push-sender.yml` immediately for urgent one-offs (PR C §16). Spark has no Cloud Functions,
-so the admin's browser calls GitHub's API itself with a token that must never be public.
+> Replaces the former «urgent-dispatch token» runbook: the instant-dispatch design was **removed** on 6 Nov 2026
+> 19:31 (speed is not important). There is no dispatch token to create, rotate or revoke.
 
-**Create (owner, ~5 min)**
-0. **Protect `production` first** (required — today it has no protection rules): GitHub → repo → **Settings** →
-   **Environments** → `production` → **Required reviewers** → add yourself (and optionally a second trusted person)
-   → **Save protection rules**. Leave "Allow administrators to bypass" as you prefer for your own manual runs, but
-   the token can never approve (it has no Deployments permission). Check: start «Seed Firestore» with no inputs →
-   the run shows «Waiting for review» → reject it. Without this step a leaked token could run `seed.yml` with
-   `force` (overwrite `/admin` edits) or `admin_email` (add an owner) — **do not create the token until it is done**.
-   (Rules deploys from `deploy.yml` will then also wait for your approval.)
-1. Owner Google accounts used for `/admin` have **2-step verification** on (the token is readable by owner-role
-   admins only).
-2. GitHub (account `Kerollosmm`) → avatar → **Settings** → **Developer settings** → **Personal access tokens** →
-   **Fine-grained tokens** → **Generate new token**.
-3. Token name `church-portal-urgent-dispatch`; **Expiration: 90 days** (custom date); Resource owner `Kerollosmm`.
-4. **Repository access → Only select repositories → `Kerollosmm/church-portal`**.
-5. **Repository permissions → Actions: Read and write.** Leave everything else at **No access** (Metadata: Read-only
-   is added automatically). **Never add Contents** (that would allow pushing code) — if dispatch is refused, use the
-   Worker option below instead.
-6. **Generate token** → copy it once (starts with `github_pat_`).
-7. `/admin` → «الإشعارات» → «رمز الإرسال الفوري» → paste, set «ينتهي في» to the same date → **حفظ**. The card then
-   shows only «محفوظ — ينتهي في …». Do not keep the token anywhere else (no notes, chats, e-mails).
-8. Test: with `PUSH_DRY_RUN=true`, «إرسال عاجل الآن» to the test topic → chip «في الطابور» → GitHub → Actions shows a
-   «Push sender (FCM)» run with trigger `urgent` within a minute.
+**Why:** GitHub disables scheduled workflows in a public repo after **60 days without repository activity**
+(https://docs.github.com/en/actions/managing-workflow-runs-and-deployments/managing-workflow-runs/disabling-and-enabling-a-workflow).
+The sender, `synaxarium.yml` (commemoration + Katameros readings files) and the keep-alive itself are scheduled.
 
-**Rotate (every 90 days, or when an admin with owner role leaves)**: create a new token as above → paste it in
-`/admin` (overwrites) → test → GitHub → Fine-grained tokens → **Delete** the old one. Calendar reminder 7 days before
-expiry; the admin card warns from 14 days before.
+**Keep-alive (set up once with PR C):** `.github/workflows/keepalive.yml` runs on the 1st of every month and calls
+`PUT /repos/Kerollosmm/church-portal/actions/workflows/<file>/enable` for `push-sender.yml`, `synaxarium.yml` and
+itself with the run's own `GITHUB_TOKEN` (`permissions: actions: write`) — no personal token, no commit, nothing
+pushed to `main` (PR C §17). After merge: GitHub → Actions → «Keep scheduled workflows enabled» → **Run workflow** →
+green. **First 60 days after launch:** note the date of the last commit; around day 55 check GitHub → Actions that no
+workflow shows "This scheduled workflow is disabled" — if one does, the API approach is not counted by GitHub:
+click **Enable workflow** and fall back to the reminders below (and tell the developer to revisit PR C §17).
 
-**Revoke (suspected leak)**: GitHub → Fine-grained tokens → **Delete** (instant) → `/admin` → delete the token →
-GitHub → Actions: cancel unknown runs, re-enable any disabled workflow, check `deploy.yml` / `seed.yml` /
-`android.yml` runs of the last days → create a new token later. Nothing else needs changing: the token could never
-read code or secrets.
+**Sender health — what alerts you:**
+1. `/admin` → «الإشعارات»: «آخر تشغيل للمُرسِل» — amber after 1 h, **red after 3 h**.
+2. Sentry cron monitor `push-sender` (free plan includes one cron monitor — https://docs.sentry.io/pricing/): e-mail
+   after 3 missed / failed check-ins or no check-in for 3 h. Setup: PR C §15 step 6 (secret `SENTRY_CRONS_URL`).
+3. Sentry issue `push.sender_stale` raised by an admin's browser that sees a red card.
+4. GitHub failed-run e-mails (§11).
 
-**Expired / missing token** → urgent rows show «فشل الإرسال الفوري — سيُرسل في الدورة التالية» and go out with the next
-cron run (15–30 min). Nothing is lost.
+**«المُرسِل متوقف» — what to do (10 min):**
+1. GitHub → Actions → «Push sender (FCM)»: if it says *disabled* → **Enable workflow**; then **Run workflow**
+   (dry run off only if `PUSH_DRY_RUN` is already `false`; otherwise keep the default) → green?
+2. If runs fail: open the last run → error. Common: `FIREBASE_SA_PUSH` key deleted / expired → new key (PR C §15
+   step 3–4); FCM API disabled → enable; Firestore quota exhausted → wait for the reset (Pacific midnight) and check
+   usage (§11).
+3. Nothing is lost: the next successful run **catches up** — event pushes due in the last 24 h are sent, reminders
+   still before their event are sent, older ones are marked «فات موعده» / skipped (visible in `/admin`).
+4. If GitHub Actions itself is down: wait; status at https://www.githubstatus.com.
 
-**Optional hardening — Cloudflare Worker proxy (token never reaches a browser)**: free Cloudflare account →
-Workers → new Worker `church-dispatch` → secret `GITHUB_TOKEN` (same fine-grained token) + variable `OWNER_UIDS` →
-code (~60 lines, kept in `tool/dispatch-worker/` if adopted): accept `POST {row_id}` only from the site origin, verify
-the `Authorization: Bearer <Firebase ID token>` against Google's public keys (`aud`/`iss` =
-`asafra-church-portal`, not expired, `uid` in `OWNER_UIDS`), then call the GitHub dispatch API. `/admin` then calls
-the Worker instead of GitHub and `admin_secrets/github_dispatch` is deleted. Free tier ≈ 100k requests/day.
-
+**`production` environment (recommended hygiene, not required):** GitHub → repo → **Settings** → **Environments** →
+`production` → **Required reviewers** → add yourself → **Save protection rules**. Then `seed.yml` (whose `force` /
+`admin_email` inputs can overwrite production data or add an owner) and rules deploys wait for your approval. No
+Phase 2 feature depends on it any more (README §8 #19); it simply protects against a mistaken manual run.

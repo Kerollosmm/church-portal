@@ -87,9 +87,11 @@ the owner approves the whole chain.
 - [ ] PR E — responsive + size audit (ADR-061; includes the 320 px app-bar item below)
 - [ ] Owner: keystore + secrets, FCM API + `push-sender` service account, VAPID key, Android developer verification
       before 2027 (`docs/plans/phase2/LAUNCH-AND-OPERATIONS.md`)
-- [ ] Owner decisions on the plan (README §8): APK host (#6), urgent-dispatch token placement and who may send urgent
-      (#12), web pushes limited to announcements + season alerts (#13), seasons via FCM on the APK (#14), repo
-      visibility (#15); then the urgent-dispatch token (LAUNCH §14)
+- [ ] Owner decisions on the plan (README §8): APK host (#6), launch types / default times (#9), web «ذكّرني» design
+      (#12), web pushes = event pushes + seasons + reminders (#13), seasons via FCM on the APK (#14), repo visibility
+      (#15), exact alarms for APK reminders (#16), English Katameros text / NKJV licence (#17), reminders in quiet
+      hours (#18). (The urgent instant-dispatch token was removed from the plan on 6 Nov 19:31.)
+- [ ] After PR C: Sentry cron monitor `push-sender` + `keepalive.yml` first run (LAUNCH §14)
 
 ## Infrastructure & security (owner: developer)
 
@@ -111,7 +113,7 @@ the owner approves the whole chain.
       Play Console → App integrity). **Debug APKs:** run once, copy the debug token from logcat ("Enter this debug
       secret into the allow list…") into App Check → Apps → ⋮ → Manage debug tokens (or build with
       `--dart-define=APPCHECK_DEBUG_TOKEN=<uuid>` registered there). Until then Android assistant requests are refused.
-- [ ] **`production` environment required reviewers** (Settings → Environments) so live deploys, rules deploys
+- [ ] **`production` environment required reviewers** (recommended hygiene; no Phase 2 dependency since 6 Nov 19:31) (Settings → Environments) so live deploys, rules deploys
       (`deploy-rules` uses the environment since PR 1) and the Seed workflow (`force` can overwrite production data)
       need approval.
 - [ ] **iOS**: register the iOS app (bundle `com.asafrachurch.churchPortal`), `flutterfire configure`, replace the
