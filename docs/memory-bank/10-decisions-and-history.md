@@ -1684,6 +1684,37 @@ supersede them.
   no seasons; next season in another year carries its year; upcoming season with services listed under the notice;
   a current season shows no notice). Screenshot `work/fixall/wtE-empty-state.png` (390 px AR).
 
+## ADR-056 (docs PR) — Phase 2 architecture: notifications & mobile apps (plan only)
+
+- **Context:** owner request 6 Nov 2026 17:29–17:47 (Arabic): notifications for what each visitor wants (verse, season
+  starts, feasts, occasions / mass reminders, announcements) on web, Android and iPhone; admin web-only manages types,
+  texts, times, lead times, scheduled one-offs and deep links; users opt in per type; Android = APK from the site (no
+  Play Store), iPhone = installed PWA (no App Store); local notifications on the phone where possible; an install
+  prompt on the web with OS detection; responsive; small size; complete UX per feature; a handoff-ready plan; feature
+  PRs as a stacked chain merged only after the whole chain is approved.
+- **Decision (details in [`docs/plans/phase2/`](../plans/phase2/README.md)):**
+  1. **Delivery:** Android schedules verse / seasons / feasts / occasions **locally** (`flutter_local_notifications`,
+     14-day horizon, inexact alarms, no exact-alarm permission) from data it already loads; admin announcements and
+     every web notification go through **FCM topics** (`app_announcements_<lang>`, `web_<type>_<lang>`), sent by a
+     scheduled **GitHub Actions** job (`push-sender.yml`, every 15 min, honest 15–30 min latency) — no Cloud
+     Functions (Spark).
+  2. **Config:** new top-level keys of the existing `settings/features` doc (install banner fields, `push` default
+     off, `pushVapidKey`, `pushTypes`, `notifyTypes`, `notifySchedule`, `pushSent`), admin-only writes, +0 visitor
+     reads / listeners. Device-only user choices (types, quiet hours, inbox, token).
+  3. **Web push:** lazy `push_client.js` + `firebase-messaging-sw.js` at a private scope (nothing on page load;
+     messaging JS ignored at boot via `flutterfire_ignore_scripts`); browsers subscribe through a create-only
+     `push_queue` (throttled) drained by the sender with the Instance ID API (token-list fallback documented);
+     iPhone only as an installed PWA on iOS 16.4+.
+  4. **APK:** split-per-abi (arm64 + arm32), R8, obfuscation, admin compiled out (`kIsWeb`), assistant opens the web
+     `/ask`, published on **GitHub Releases** (Hosting egress on Spark too small), update prompt via
+     `installApkBuild`; release signing from GitHub secrets (owner creates and backs up the keystore). Android
+     developer verification (global in 2027) must be completed before it reaches Egypt.
+  5. **Process:** stacked chain PR 0 (plans) → A (ADR-057) → B (ADR-058) → C (ADR-059) → D (ADR-060) → E (ADR-061);
+     each draft, reviewed (@coderabbitai, @sentry, ≤ 2 rounds), CI green, not merged; after owner approval merged
+     bottom-up with squash, merging `main` into the next branch (no rebase, no force-push) — `HANDOFF.md` §5.6.
+- **Cost:** A, B, E +0; C ≤ 96 reads + ~10 writes/day (sender); D 2 writes per web opt-in + sender read/delete.
+- **Rules / data / seed:** unchanged in this PR (docs only).
+
 ## Timeline
 
 | When | PR / commit | What |
@@ -1749,3 +1780,4 @@ supersede them.
 | 6 Nov 2026 | **PR #49** — "Seasonal list empty state" (`fix/season-empty-state`) | ADR-055: /mass-schedule seasonal view with no season in effect shows «لا توجد مواسم حالية» / "No current seasons" and, when an enabled season starts later, «الموسم القادم: صوم الميلاد — يبدأ ٢٥ نوفمبر» (`nextUpcomingSeason`, `EmptyState.detail`); fixed i18n strings (not admin-configurable). +0 reads / writes / listeners. |
 
 Append new PRs to this table.
+| 6 Nov 2026 | **Phase 2 plans** (`docs/phase2-plans`, docs only) | ADR-056: `docs/plans/phase2/` — README (architecture, data contract, cost, decisions), HANDOFF (workflow, stacked chain, merge procedure), STATUS (checklists), PR A–E plans, LAUNCH-AND-OPERATIONS (consoles, keystore, user guidance, privacy, device tests, rollback, monitoring, runbook, launch day). No code. |

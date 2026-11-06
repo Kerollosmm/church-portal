@@ -77,6 +77,7 @@
 | تطبيق Android | [features/android-app.md](features/android-app.md) |
 | البنية العامة | [architecture.md](architecture.md) |
 | التشغيل والنشر والمشاكل الشائعة | [operations.md](operations.md) |
+| **خطة المرحلة الثانية: الإشعارات وتطبيقات الهاتف** (خطة فقط، لم تُنفَّذ بعد) | [../docs/plans/phase2/README.md](../docs/plans/phase2/README.md) |
 
 ## العلاقة مع «بنك الذاكرة»
 
