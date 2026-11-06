@@ -23,7 +23,7 @@ render with `PageBody` (+ `Footer`). Content comes from Riverpod providers (hidd
   | `alerts` | `AlertBanner` (2 highest, "show all N" toggle; an in-app link to a switched-off section shows no "Learn more", BUG-09) | alerts |
   | `nextMass` | `NextMassCard` | schedule |
   | `quickContacts` | `_QuickContacts` (first 3 phones, call + WhatsApp for mobiles) | contactInfo |
-  | `milestones` | "Our story" `_MilestoneCard` grid (icon by `icon`, year in local digits) | milestones |
+  | `milestones` | "Our story" `MilestoneCard` grid (`lib/ui/widgets/milestone_card.dart`, shared with `/about`, ADR-052; icon by `icon`, year in local digits) | milestones |
   | `directory` | `DirectoryCard` grid from `_directory` (mass, clinics, education, activities, services, about, contact) + "Ask the church" when visible; cards for disabled routes are skipped | — |
   | `map` | `ChurchMap` (iframe + Open in Maps + Directions) | contactInfo |
   On wide screens (≥ 900 px) adjacent `nextMass` + `quickContacts` share a row.
@@ -150,6 +150,9 @@ render with `PageBody` (+ `Footer`). Content comes from Riverpod providers (hidd
 
 ### `/about` — `about_page.dart` `AboutPage`
 - History card (bishop line + `historyAr/En`) and **altars** grid (main altar gets a gold cross) — section `history`.
+- **«محطات الكنيسة» / "Church milestones"** (ADR-052, key `about-milestones`): the same `MilestoneCard`s as Home
+  "Our story", in `order`, right after the history & altars — section `milestones` AND
+  `settings/features.aboutMilestones` (default on). Milestone detail Back goes to `/about` while listed here.
 - Patron saints cards (name, feast pills Coptic + Gregorian, bio) — section `saints`.
 - Priests (`PriestCard`: avatar/photo, name (`nameEn` in English if set), rank «قمص/قس», ordination date, hegumen
   date, repose date «تاريخ النياحة / Departed» (`departedDate`, BUG-08), bio) — section `priests` (status ≠ departed); departed fathers on a cream card — section
@@ -417,6 +420,8 @@ on); owners can press **Send test error**. Details: `03-architecture.md` → *Er
   `/clinics/*` (clinics), `/church-education/*` (meetings), `/church-activities/*` (activities), `/public-services/*`
   (services), `/about/priests/*` (priests or departedPriests), `/about/saints/*` (saints), `/about/milestones/*`
   (milestones); other sub-paths follow their top-level page. The routes exist since PR #13 (`ItemDetailPage`).
+  Back from a detail page: `parentRouteOf(location, features)` → `DetailKind.parentPathIn(features)`; milestones go
+  to `/about` while it lists them (ADR-052), else Home.
 - `settings/features` also carries `pageHeaders` (per-page title / subtitle / intro overrides) and `footer`
   (FR-G-04 options) since PR #11 (model + rules; admin cards since PR #12; rendered since PR #13).
 - Per-item visibility: `visible: false` items never reach public pages (`publicItems`).

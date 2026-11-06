@@ -198,7 +198,7 @@ const _detailRoutes = {
   DetailKind.facility: ('/public-services/d-facility', 'Test facility', '/public-services'),
   DetailKind.priest: ('/about/priests/d-priest', 'Fr. Test', '/about'),
   DetailKind.saint: ('/about/saints/d-saint', 'Test saint', '/about'),
-  DetailKind.milestone: ('/about/milestones/d-milestone', 'Test milestone', '/'),
+  DetailKind.milestone: ('/about/milestones/d-milestone', 'Test milestone', '/about'), // listed on About (ADR-052)
 };
 
 void main() {
@@ -213,7 +213,14 @@ void main() {
       expect(parentRouteOf('/public-services/library?lang=en'), '/public-services');
       expect(parentRouteOf('/about/priests/bemwa'), '/about');
       expect(parentRouteOf('/about/saints/moses-black'), '/about');
-      expect(parentRouteOf('/about/milestones/since-1980'), '/'); // listed on Home
+      expect(parentRouteOf('/about/milestones/since-1980'), '/about'); // listed on About (ADR-052)
+      // Kept on Home only, the milestones section off, or the About page off: Home.
+      expect(parentRouteOf('/about/milestones/since-1980', const FeatureSettings(aboutMilestones: false)), '/');
+      expect(parentRouteOf('/about/milestones/since-1980', const FeatureSettings(sections: {'milestones': false})), '/');
+      expect(
+          parentRouteOf('/about/milestones/since-1980',
+              const FeatureSettings(sections: {'history': false, 'saints': false, 'priests': false, 'departedPriests': false})),
+          '/');
       for (final top in ['/', '/clinics', '/about', '/contact', '/ask', '/nope/x/y', '/about/priests']) {
         expect(parentRouteOf(top), '/', reason: top);
       }
@@ -223,7 +230,7 @@ void main() {
       for (final k in DetailKind.values) {
         final p = detailPathFor(k, 'a b');
         expect(parseDetailPath(p), (k, 'a b'));
-        expect(parentRouteOf(p), k.parentPath);
+        expect(parentRouteOf(p), k.parentPathIn(FeatureSettings.defaults));
         expect(detailKindForCollection(k.collection), k);
         expect(sectionsForPath(p), isNotNull, reason: 'gated like its section: $p');
       }

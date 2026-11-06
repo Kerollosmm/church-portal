@@ -1433,6 +1433,7 @@ supersede them.
   whole; affiliation caveats kept (above). Not changed: a seasonal mass of the evening before overlapping a regular
   mass after midnight (no regular mass runs then); the features editor's stale-snapshot merge (shared by every
   default-valued switch since ADR-022); hiding unconfirmed facilities / priests (owner's ADR-046 choice).
+
 ## ADR-051 (PR #44) — Season keys of their own, admin exceptional-quota list, church calendar in the assistant, feast-night replace dates, tonight's live end, Holy Week day names, EN live label
 
 - **Context:** the seasons v2 simulation (phases 1–7, `work/seasons-v2/ISSUES.md`) used the nearest existing key for
@@ -1512,6 +1513,43 @@ supersede them.
   `test/season_keys_assistant_widgets_test.dart` (top bar Holy Week AR / EN; EN banner / badge label; admin quota chips
   and replace-date chips; preset screen: Great Lent weddings off, tonight's live end, replace dates, one batch),
   `test/assistant_test.dart` (Arabic «(٦)», greeting / chips with clinics + meetings off); rules tests "ADR-051".
+
+## ADR-052 (PR #46) — Church milestones on the About page («محطات الكنيسة»)
+
+- **Context:** The owner asked (6 Nov 2026) «ضيف محطات الكنيسه في صفحه عن الكنيسه». The milestones (`milestones`
+  collection, section `milestones`) were listed only by the Home block «قصتنا» (`HomeBlocks.milestones`, private
+  `_MilestoneCard` in `home_page.dart`); their detail pages already live under `/about/milestones/<id>`, but Back
+  went Home.
+- **Decision:**
+  1. **One shared card.** `_MilestoneCard` moved to `lib/ui/widgets/milestone_card.dart` as `MilestoneCard` (same
+     cover / lead image, year in local digits, title, text, «التفاصيل» link). Home and About render the same widget;
+     the Home block is otherwise unchanged (cards keyed `homeMilestone-<id>`).
+  2. **About section.** `/about` shows «محطات الكنيسة» / "Church milestones" (`SectionTitle`, key
+     `about-milestones`, cards keyed `aboutCard-<id>`, `ResponsiveGrid`) right after the history & altars and before
+     the patron saints, ordered by `order` as on Home, from the existing `milestonesProvider` (no new listener or
+     collection).
+  3. **Switch.** New `settings/features.aboutMilestones` (bool, default **on**; `FeatureSettings.aboutMilestones`,
+     `showAboutMilestones` = section `milestones` on AND the switch). /admin → «الأقسام والصفحة الرئيسية» →
+     «تشغيل وإيقاف الأقسام»: an indented switch «إظهارها أيضًا في «عن الكنيسة»» under «محطات تاريخية (قصتنا)»
+     (`ValueKey('features-aboutMilestones')`, disabled while the section is off). The Home block keeps its own
+     home-layout switch. Saved only once off or already stored (`featuresSaveWrites`), so saves keep working against
+     rules that predate the key; rules: key allowed, and `d.get('aboutMilestones', true) is bool` checked in ONE
+     gate with the other hero bools (`changed.hasAny([...])`): a separate clause pushed the worst-case page-headers
+     save (all 8 pages, max lengths) over the 1,000-expression cap. After merging main (ADR-050 `heroSeasonTint`)
+     the two hero gates (`heroMotion` + `heroSeasonTint`, `heroShowAddress` + `aboutMilestones`) still went over,
+     so all four share one gate; the worst case passes again.
+  4. **Back / breadcrumb.** `DetailKind.parentPath` became `parentPathIn(FeatureSettings)`: a milestone's parent is
+     `/about` while the About page lists it (`showAboutMilestones` and `/about` enabled), else Home as before.
+     `parentRouteOf(location, features)` (phone Back arrow) and the detail page's «رجوع إلى …» use it.
+  5. Milestones alone do not keep `/about` alive (`routeSections['/about']` unchanged: history, saints, priests,
+     departed priests); with all four off the page is unavailable and milestone Back goes Home.
+- **Cost:** +0 writes; +0 new listeners. The About page watches the same app-wide `milestonesProvider` (not
+  autoDispose) as Home: Home → About reuses the open listener (+0 reads). Landing directly on /about opens the one
+  `milestones` listener Home would have opened (one read per milestone doc, 4 today), once per session.
+- **Tests:** `test/about_milestones_test.dart` (shown after the altars and before the saints in Home order, AR title,
+  hidden with the switch off / the section off, Home block unchanged and independent of it, model / save / rules
+  text, admin switch saves and is disabled with the section off); `test/detail_pages_test.dart` (milestone Back →
+  About, → Home with the switch / section / About off); rules group "ADR-052".
 
 ## ADR-053 (PR #47) — Full-override seasons replace the regular schedule on every day of their window, cross-season samples leave the season lists, a later parallel service is named with its time
 
@@ -1627,6 +1665,7 @@ supersede them.
 | 5 Nov 2026 | **Docs PR** — "README screenshots" (`docs/readme-screenshots`) | Docs only, no ADR: `screens/` now holds 4 shots: Home, Mass schedule and Ask (live site, Arabic, 390 px @2x) plus the admin dashboard overview (1280 px, real `AdminDashboard` rendered from the local Firestore-emulator export, no live sign-in); the 8 broken desktop shots from PR #41 removed; README "Visual Showcase" is one row of public shots plus an "Admin dashboard" shot. No code change. |
 | 5 Nov 2026 | **PR #45** — "Seasons v2 fixes A: season schedule overlap" (`fix/season-schedule-overlap`) | ADR-050: additive seasons hide only overlapping regular masses, `liturgies.replacesDay` (admin checkbox) for a feast liturgy; samples (dated too) give way once their season has real services, never supersede / outrank a real service of any season, real before sample; `regularSupersededOn` → /mass-schedule «لا يُقام اليوم» + prompt "Services today and tomorrow" and computed season labels; now box «حتى …»; seed placeholder text stripped on read and from the seed; `web/media/milestones/pope-visit-gallery5.webp` (live field change prepared, not applied); hero season tint (`heroSeasonTint`); «،» kept. +0 reads. |
 | 6 Nov 2026 | **PR #44** — "Season keys, exceptional quota, church calendar in the assistant" (`feat/season-keys-assistant`) | ADR-051: season keys `apostles`, `nayrouz` (+ the Cross), `kiahk`, `great_lent` (`SeasonKeys.all` = rules `seasonKeyList()`; fasting / festive palettes); `settings/assistant.exceptionalSeasons` chips (default + Great Lent, Kiahk, Marian); prompt «Church calendar» line (Coptic date + feast, loaded Katameros only); Arabic digits in the limit message; /ask greeting and chips skip hidden sections; preset live end = tonight's last service + 30 min (editable); `seasons.replaceDates` feast-night override (date chips); fast presets untick weddings; Holy Week day names in the top bar; EN pages use `liveLabelEn` or a generic label. +0 visitor reads / listeners. |
+| 6 Nov 2026 | **PR #46** — "Church milestones on the About page" (`feat/about-milestones`) | ADR-052: shared `MilestoneCard` (`lib/ui/widgets/milestone_card.dart`) for Home «قصتنا» and a new «محطات الكنيسة» section on `/about` after the history & altars; `settings/features.aboutMilestones` (default on) with an indented admin switch under the milestones section; milestone detail Back → About while listed there; rules key + bool check. +0 writes / new listeners; direct /about landing opens the existing milestones listener. |
 | 6 Nov 2026 | **PR #47** — "Season replace window, cross-season samples in lists, later parallel line" (`fix/season-replace-window`) | ADR-053: a full-override season with exact dates replaces every regular service in its window, also on days without its own service (Good Friday no longer shows the weekly Divine Liturgy; holds with the seed samples deleted); season lists / prompt weekly list drop a sample hidden behind another active season's real service on every matching weekday; next-service card names a later parallel service with its time («وبعدها ٠٧:٠٠ ص: …»); switch subtitle mentions fasts. +0 reads / writes / listeners. |
 
 Append new PRs to this table.

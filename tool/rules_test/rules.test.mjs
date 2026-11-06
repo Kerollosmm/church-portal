@@ -957,6 +957,27 @@ describe('Hero address ribbon switch (settings/features.heroShowAddress)', () =>
   });
 });
 
+describe('ADR-052: milestones on the About page (settings/features.aboutMilestones)', () => {
+  test('admins switch it off and on; only a bool is accepted', async () => {
+    const ref = doc(db(EDITOR), 'settings', 'features');
+    await assertSucceeds(setDoc(ref, { theme: 'burgundy', aboutMilestones: false }));
+    await assertSucceeds(setDoc(ref, { theme: 'burgundy', aboutMilestones: true }));
+    for (const v of ['off', 0, null, { on: false }]) {
+      await assertFails(setDoc(ref, { aboutMilestones: v }), JSON.stringify(v));
+    }
+  });
+
+  test('an untouched stored value does not block other edits', async () => {
+    const ref = doc(db(EDITOR), 'settings', 'features');
+    await assertSucceeds(setDoc(ref, { theme: 'burgundy', aboutMilestones: false }));
+    await assertSucceeds(setDoc(ref, { theme: 'goldenHour', aboutMilestones: false }));
+  });
+
+  test('visitors cannot change it', async () => {
+    await assertFails(setDoc(doc(db(null), 'settings', 'features'), { aboutMilestones: false }));
+  });
+});
+
 describe('ADR-034: error reporting switch (settings/features.errorReporting)', () => {
   test('admins switch error reports on and off; only a bool is accepted', async () => {
     const ref = doc(db(EDITOR), 'settings', 'features');

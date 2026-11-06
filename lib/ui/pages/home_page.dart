@@ -15,6 +15,7 @@ import '../widgets/cards.dart';
 import '../widgets/common.dart';
 import '../widgets/item_image.dart';
 import '../widgets/map_embed.dart';
+import '../widgets/milestone_card.dart';
 import '../widgets/golden.dart';
 import '../widgets/today_widgets.dart';
 
@@ -88,7 +89,7 @@ class HomePage extends ConsumerWidget {
             isEmpty: (d) => d.isEmpty,
             loading: const SkeletonList(count: 4, itemHeight: 120),
             builder: (context, items) => ResponsiveGrid(
-              children: [for (final m in items) _MilestoneCard(m)],
+              children: [for (final m in items) MilestoneCard(m, key: ValueKey('homeMilestone-${m.id}'))],
             ),
           ),
         ]);
@@ -499,66 +500,6 @@ class PhoneRow extends StatelessWidget {
             icon: const Icon(Icons.chat_rounded, color: whatsappGreen),
           ),
       ]),
-    );
-  }
-}
-
-class _MilestoneCard extends StatelessWidget {
-  final Milestone m;
-  const _MilestoneCard(this.m);
-
-  IconData get _icon => switch (m.icon) {
-        'church' => Icons.church_rounded,
-        'people' => Icons.diversity_3_rounded,
-        'altar' => Icons.local_fire_department_rounded,
-        'pope' => Icons.workspace_premium_rounded,
-        _ => Icons.star_rounded,
-      };
-
-  @override
-  Widget build(BuildContext context) {
-    final title = context.pick(m.titleAr, m.titleEn);
-    final detail = cardDetailPath(DetailKind.milestone, m.id, m.details);
-    final desc = context.pick(m.descAr, m.descEn);
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      child: DetailTapArea(
-        path: detail,
-        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          CardCover(collection: 'milestones', itemStyle: m.imageStyle, image: m.image, label: title, enlargeOnTap: detail == null),
-          Padding(
-          padding: const EdgeInsets.all(Space.card),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Row(children: [
-              CardLead(
-                collection: 'milestones',
-                itemStyle: m.imageStyle,
-                image: m.image,
-                size: 56,
-                label: title,
-                enlargeOnTap: detail == null,
-                placeholder: CircleAvatar(
-                  backgroundColor: context.pal.ornament.withValues(alpha: 0.18),
-                  child: Icon(_icon, color: context.pal.primary),
-                ),
-              ),
-              if (m.year != null)
-                Flexible(
-                  child: Text(localDigits(context, '${m.year}'),
-                      style: displayStyle(context, size: 22, color: context.pal.goldText)),
-                ),
-            ]),
-            const SizedBox(height: Space.s),
-            Text(title, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
-            if (desc.isNotEmpty) ...[
-              const SizedBox(height: Space.xs),
-              Text(desc, style: TextStyle(color: context.pal.muted, height: 1.5, fontSize: 13)),
-            ],
-            if (detail != null) DetailsLink(path: detail, title: title, id: m.id),
-          ]),
-        ),
-        ]),
-      ),
     );
   }
 }

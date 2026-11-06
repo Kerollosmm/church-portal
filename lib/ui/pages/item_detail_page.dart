@@ -51,7 +51,7 @@ class ItemDetailPage extends ConsumerWidget {
     final items = ref.watch(provider);
     final features = ref.watch(featuresProvider);
     final path = detailPathFor(kind, id);
-    final parent = kind.parentPath;
+    final parent = kind.parentPathIn(features);
     return items.when(
       skipLoadingOnReload: true,
       loading: () => const PageBody(children: [

@@ -255,6 +255,11 @@ class FeatureSettings {
   /// subtitle the admin typed always shows instead.
   final bool heroShowAddress;
 
+  /// The church milestones («محطات تاريخية», [Sections.milestones]) are also
+  /// listed on the About page as «محطات الكنيسة» (ADR-052). Default on; the
+  /// Home "Our story" block keeps its own home-blocks switch.
+  final bool aboutMilestones;
+
   /// Per-collection default image display style (ADR-023; keys:
   /// [ImageStyles.collections], values: [ImageStyles.all]). Missing = built-in default.
   final Map<String, String> imageStyles;
@@ -315,6 +320,7 @@ class FeatureSettings {
     this.heroMotion = true,
     this.heroSeasonTint = true,
     this.heroShowAddress = false,
+    this.aboutMilestones = true,
     this.imageStyles = const {},
     this.dailyVerse = DailyVerseConfig.defaults,
     this.occasions = OccasionConfig.defaults,
@@ -364,6 +370,7 @@ class FeatureSettings {
       heroMotion: _bool(m['heroMotion']) ?? true,
       heroSeasonTint: _bool(m['heroSeasonTint']) ?? true,
       heroShowAddress: _bool(m['heroShowAddress']) ?? false,
+      aboutMilestones: _bool(m['aboutMilestones']) ?? true,
       imageStyles: parseImageStyles(m['imageStyles']),
       dailyVerse: DailyVerseConfig.fromMap(m['dailyVerse']),
       occasions: OccasionConfig.fromMap(m['occasions'], m['themeColors']),
@@ -398,6 +405,7 @@ class FeatureSettings {
         'heroMotion': heroMotion,
         'heroSeasonTint': heroSeasonTint,
         'heroShowAddress': heroShowAddress,
+        'aboutMilestones': aboutMilestones,
         'imageStyles': {for (final c in ImageStyles.collections) if (imageStyles[c] != null) c: imageStyles[c]},
         'dailyVerse': dailyVerse.toMap(),
         'occasions': occasions.toMap(),
@@ -423,6 +431,7 @@ class FeatureSettings {
     bool? heroMotion,
     bool? heroSeasonTint,
     bool? heroShowAddress,
+    bool? aboutMilestones,
     Map<String, String>? imageStyles,
     DailyVerseConfig? dailyVerse,
     OccasionConfig? occasions,
@@ -446,6 +455,7 @@ class FeatureSettings {
         heroMotion: heroMotion ?? this.heroMotion,
         heroSeasonTint: heroSeasonTint ?? this.heroSeasonTint,
         heroShowAddress: heroShowAddress ?? this.heroShowAddress,
+        aboutMilestones: aboutMilestones ?? this.aboutMilestones,
         imageStyles: imageStyles ?? this.imageStyles,
         dailyVerse: dailyVerse ?? this.dailyVerse,
         occasions: occasions ?? this.occasions,
@@ -490,6 +500,7 @@ class FeatureSettings {
       // Kept as stored: the preset never touches it (CodeRabbit on PR #45).
       heroSeasonTint: heroSeasonTint,
       heroShowAddress: heroShowAddress,
+      aboutMilestones: aboutMilestones,
       imageStyles: imageStyles,
       dailyVerse: dailyVerse,
       occasions: occasions,
@@ -521,6 +532,9 @@ class FeatureSettings {
     if (block == HomeBlocks.banner) return bannerEnabled && (bannerAr.trim().isNotEmpty || bannerEn.trim().isNotEmpty);
     return true;
   }
+
+  /// The About page lists the milestones (section on and [aboutMilestones]).
+  bool get showAboutMilestones => enabled(Sections.milestones) && aboutMilestones;
 
   /// Home blocks to render, in order.
   List<String> get visibleHomeBlocks => homeOrder.where(showHomeBlock).toList();

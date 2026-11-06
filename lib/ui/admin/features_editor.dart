@@ -139,6 +139,10 @@ List<Map<String, dynamic>> featuresSaveWrites(FeatureSettings next, Map<String, 
   if (!next.heroShowAddress && (stored == null || !stored.containsKey('heroShowAddress'))) {
     base.remove('heroShowAddress');
   }
+  // Same for aboutMilestones (ADR-052, default on).
+  if (next.aboutMilestones && (stored == null || !stored.containsKey('aboutMilestones'))) {
+    base.remove('aboutMilestones');
+  }
   // Same for errorReporting (ADR-034, default on).
   if (next.errorReporting && (stored == null || !stored.containsKey('errorReporting'))) {
     base.remove('errorReporting');
@@ -439,7 +443,7 @@ class FeaturesEditorState extends State<FeaturesEditor> {
                     child: Text(context.tr('enableAll')),
                   ),
                 ]),
-                for (final s in Sections.all)
+                for (final s in Sections.all) ...[
                   SwitchListTile(
                     key: ValueKey('section-$s'),
                     contentPadding: const EdgeInsetsDirectional.only(start: 4),
@@ -447,6 +451,18 @@ class FeaturesEditorState extends State<FeaturesEditor> {
                     value: f.enabled(s),
                     onChanged: (v) => _set(f.copyWith(sections: {...f.sections, s: v})),
                   ),
+                  // Where the milestones show (ADR-052): also on the About
+                  // page; the home block has its own switch in the home layout.
+                  if (s == Sections.milestones)
+                    SwitchListTile(
+                      key: const ValueKey('features-aboutMilestones'),
+                      contentPadding: const EdgeInsetsDirectional.only(start: 28),
+                      title: Text(context.tr('aboutMilestonesSwitch')),
+                      subtitle: Text(context.tr('aboutMilestonesHint')),
+                      value: f.aboutMilestones,
+                      onChanged: f.enabled(Sections.milestones) ? (v) => _set(f.copyWith(aboutMilestones: v)) : null,
+                    ),
+                ],
               ], hint: context.tr('sectionsHint')),
               _card(context.tr('homeLayout'), Icons.dashboard_customize_outlined, [
                 ReorderableListView(

@@ -21,10 +21,12 @@ extension DetailKindX on DetailKind {
       };
 
   /// Public page listing the item (where "Back" goes). Milestones are listed
-  /// on Home ("Our story"), not on /about.
-  String get parentPath => switch (this) {
+  /// on /about («محطات الكنيسة», ADR-052) unless the admin keeps them on Home
+  /// only ([FeatureSettings.aboutMilestones] off) or the About page itself is
+  /// off (its own sections all off): then Home ("Our story").
+  String parentPathIn(FeatureSettings f) => switch (this) {
         DetailKind.priest || DetailKind.saint => '/about',
-        DetailKind.milestone => '/',
+        DetailKind.milestone => f.showAboutMilestones && f.routeEnabled('/about') ? '/about' : '/',
         _ => basePath,
       };
 
