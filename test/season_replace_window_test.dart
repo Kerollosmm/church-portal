@@ -130,6 +130,7 @@ String prompt(List<Liturgy> lits, List<Season> seasons, DateTime now) {
 
 void main() {
   setUpAll(CairoTime.ensureInitialized);
+  reviewFixes();
 
   group('N1: a full-override season replaces the regular schedule on every day of its window', () {
     for (final (label, lits) in [('with the seed sample', p1), ('sample docs deleted', p1NoSamples)]) {
@@ -309,5 +310,46 @@ void main() {
   testWidgets('P7 O3: the seasonal switch subtitle mentions the fasts', (tester) async {
     await pump(tester, const MassSchedulePage(), cairo(2027, 3, 16, 13), regular, const [], scroll: false);
     expect(find.text('عرض مواعيد أسبوع الآلام والأعياد والأصوام والنهضات الروحية'), findsOneWidget);
+  });
+}
+
+// CodeRabbit on PR #47.
+void reviewFixes() {
+  group('CodeRabbit on PR #47', () {
+    test('prompt: a bounded full-override season with no service listed is named with its dates', () {
+      final p = prompt(regular, [hw27], cairo(2027, 4, 20, 10));
+      expect(p, contains('[REPLACES regular schedule]'));
+      expect(p, contains('- No season services are listed yet: regular services are NOT held between these dates.'));
+    });
+
+    test('prompt: an open-ended full-override season is labelled as replacing only on its service days', () {
+      final open = season('open', 'holy_week', null, null, replaces: true);
+      final lits = [...regular, lit('x', weekday: 4, start: '18:00', end: '20:00', season: 'holy_week')];
+      final p = prompt(lits, [open], cairo(2027, 4, 27, 10));
+      expect(p, contains('[REPLACES regular schedule on its service days]'));
+      expect(p, isNot(contains('No season services are listed yet')));
+    });
+
+    test('a weekday occurrence before the season start does not keep a hidden sample listed', () {
+      // Moses window from Wed 23 Jun 19:00: the 18:30 Wednesday that day is outside it.
+      final apostles = season('apostles-2027', 'apostles', cairo(2027, 6, 21), cairo(2027, 7, 11, 23, 59));
+      final moses = season('m', 'revival_moses', cairo(2027, 6, 23, 19), cairo(2027, 7, 1, 23));
+      final lits = [
+        lit('rev-moses-3', weekday: 3, start: '18:30', end: '21:00', type: 'other', season: 'revival_moses', sample: true),
+        lit('rev-moses-4', weekday: 4, start: '18:30', end: '21:00', type: 'other', season: 'revival_moses', sample: true),
+        lit('revival', date: DateTime(2027, 6, 30), start: '18:30', end: '21:00', type: 'other', season: 'apostles'),
+      ];
+      expect(ids(seasonalSchedule([apostles, moses], lits)[moses]!), ['rev-moses-4']);
+    });
+
+    test('a window longer than the scan keeps the sample listed', () {
+      final long = season('long', 'summer', cairo(2027, 1, 1), cairo(2029, 1, 1));
+      final other = season('o', 'apostles', cairo(2027, 1, 1), cairo(2028, 1, 1));
+      final lits = [
+        lit('s', weekday: 3, start: '18:30', end: '21:00', season: 'summer', sample: true),
+        lit('r', weekday: 3, start: '18:30', end: '21:00', season: 'apostles'),
+      ];
+      expect(ids(seasonalSchedule([long, other], lits)[long]!), ['s']);
+    });
   });
 }

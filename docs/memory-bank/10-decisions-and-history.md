@@ -1551,6 +1551,12 @@ supersede them.
      keep their wording.
   4. **Switch subtitle (P7 O3).** `holySeasonsHint`: «عرض مواعيد أسبوع الآلام والأعياد والأصوام والنهضات الروحية» /
      "Show Holy Week, feast, fast and revival times".
+- **Review (CodeRabbit on PR #47):** the prompt's "Holy seasons" list also names a bounded full-override season with no
+  service listed («No season services are listed yet: regular services are NOT held between these dates») and labels
+  an open-ended one «[REPLACES regular schedule on its service days]» (the legend explains both); the list scan counts
+  a weekday only when the occurrence starts inside the season's window, and a window longer than the 400-day scan
+  keeps the sample listed. Not changed: cross-season hiding for **open-ended** seasons in the lists (no finite set of
+  days to check; the day views still hide such a sample).
 - **Rules:** unchanged. **Data:** no field, no write; seed unchanged.
 - **Firebase cost:** +0 reads, +0 writes, +0 listeners (pure client logic on the already-loaded liturgies / seasons).
 - **Tests:** `test/season_replace_window_test.dart` (Good Friday with the seed sample and with the sample docs

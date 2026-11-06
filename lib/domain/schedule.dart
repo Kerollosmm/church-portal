@@ -542,9 +542,15 @@ bool liturgyInSeason(Liturgy l, Season s, Iterable<Liturgy> all, [Iterable<Seaso
   if (!ownDated && !crossCheck) return true;
   var sawWeekday = false;
   final first = CairoTime.calendarDate(from), last = CairoTime.calendarDate(to);
+  final lastDay = CairoTime.at(last.year, last.month, last.day);
   var day = CairoTime.at(first.year, first.month, first.day);
-  for (var i = 0; i < 400 && !day.isAfter(CairoTime.at(last.year, last.month, last.day)); i++) {
-    if (day.weekday == wd) {
+  for (var i = 0; i < 400 && !day.isAfter(lastDay); i++) {
+    // Only a day where the occurrence really starts inside the window counts
+    // (a 07:00 service on an 18:00 start day is not part of the season, as in
+    // [occurrencesForDay]; CodeRabbit on PR #47).
+    // A service without a start time keeps the day check alone (unchanged).
+    final o = day.weekday == wd ? _occurrence(l, day, 0) : null;
+    if (day.weekday == wd && (l.startMinutes == null || (o != null && isSeasonActiveAt(s, o.start)))) {
       sawWeekday = true;
       if (!undatedSuppressedOn(s, l, all, day) &&
           !(crossCheck && _sampleHiddenByOtherSeason(l, s, all, seasons, day))) {
@@ -553,6 +559,9 @@ bool liturgyInSeason(Liturgy l, Season s, Iterable<Liturgy> all, [Iterable<Seaso
     }
     day = CairoTime.at(day.year, day.month, day.day + 1);
   }
+  // A window longer than the scan: the rest is not checked, so it stays
+  // listed (CodeRabbit on PR #47).
+  if (!day.isAfter(lastDay)) return true;
   // No such weekday in the window at all: listed as before (unchanged).
   return !sawWeekday;
 }
