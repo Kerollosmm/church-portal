@@ -1,7 +1,7 @@
 # 11 — Open tasks
 
 Tick items off (or delete them) in the PR that completes them, and add new ones as you discover them.
-Status as of 5 Nov 2026 (PR #44 / ADR-051; PR #45 / ADR-050; PR #42 / ADR-049; PR #40 / ADR-047; PR #39 / ADR-046; PR #38 / ADR-045; PR #35 / ADR-044; PR #37 / ADR-043; PR #33 / ADR-042; PR #32 / ADR-041; PR #31 / ADR-039–040; PR #30 / ADR-038; PR #25 re-checked against `d60261d`; earlier: PR #7–#24).
+Status as of 6 Nov 2026 (ADR-053 fix PR; PR #44 / ADR-051; PR #45 / ADR-050; PR #42 / ADR-049; PR #40 / ADR-047; PR #39 / ADR-046; PR #38 / ADR-045; PR #35 / ADR-044; PR #37 / ADR-043; PR #33 / ADR-042; PR #32 / ADR-041; PR #31 / ADR-039–040; PR #30 / ADR-038; PR #25 re-checked against `d60261d`; earlier: PR #7–#24).
 
 ## Top open items (owner's list, 4 Nov 2026 — details in the sections below)
 
@@ -55,6 +55,14 @@ Status as of 5 Nov 2026 (PR #44 / ADR-051; PR #45 / ADR-050; PR #42 / ADR-049; P
     «أيام يحل فيها الموسم محل الجدول العادي» on revival / fast seasons that have a feast night; fill «نص الشريط
     (إنجليزي)» when streaming. Open: a separate `cross` key only if the church wants the Cross apart from Nayrouz;
     the admin's free-text welcome is not filtered by sections.
+
+13. **Seasons v2 round 2 fixes (ADR-053)** — done in code: full-override seasons replace the regular schedule on every
+    day of an exact window (r2 P1 N1), cross-season sample hidden from the season lists / prompt weekly list (r2 P3),
+    later parallel service named with its time on the card (r2 P2 O-a), switch subtitle mentions fasts (r2 P7 O3).
+    **Owner:** a Holy Week / Pascha / Nativity season doc must have exact `startsAt` / `endsAt` (it now cancels every
+    regular service inside, also on days with no entered programme) — keep the 50 Days additive. **Next:** re-run the
+    7 season phases on the new main; still open from r2: «ليلة عيد القيامة» name (owner choice, P2 O-b); the
+    /mass-schedule list cards' parallel summary still uses the overlap wording.
 
 ## Infrastructure & security (owner: developer)
 

@@ -46,6 +46,8 @@ const Map<String, List<String>> _strings = {
   'audienceLabel': ['الفئة', 'Audience'],
   'programPdf': ['البرنامج / الكتيب', 'Programme / booklet'],
   'parallelAt': ['وفي نفس الوقت: {v}', 'At the same time: {v}'],
+  // A parallel service that starts later, while the shown one runs (ADR-053).
+  'parallelThen': ['وبعدها {t}: {v}', 'Then at {t}: {v}'],
   'allVenues': ['كل الأماكن', 'All venues'],
   'allAudiences': ['كل الفئات', 'Everyone'],
   'katamerosCredit': ['المصدر: القطمارس (katameros.app)', 'Source: Katameros (katameros.app)'],
@@ -68,7 +70,7 @@ const Map<String, List<String>> _strings = {
   'otherDays': ['باقي الأيام', 'Other days'],
   'vespersPraise': ['صلوات العشية والتسبحة', 'Vespers & Midnight Praise'],
   'holySeasons': ['المواسم والأعياد الكنسية', 'Liturgical seasons & feasts'],
-  'holySeasonsHint': ['عرض مواعيد أسبوع الآلام والأعياد والنهضات الروحية', 'Show Holy Week, feasts and revival times'],
+  'holySeasonsHint': ['عرض مواعيد أسبوع الآلام والأعياد والأصوام والنهضات الروحية', 'Show Holy Week, feast, fast and revival times'],
   'regularSchedule': ['الجدول الأسبوعي', 'Weekly schedule'],
   'activeNow': ['مُفعّل الآن', 'Active now'],
   'specialServices': ['صلوات ومناسبات كنسية قادمة', 'Upcoming special liturgical services'],

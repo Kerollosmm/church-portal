@@ -225,13 +225,32 @@ String buildAssistantInstruction({
       }
     }
 
-    final seasonal = seasonalSchedule(seasons, liturgies);
+    final listed = seasonalSchedule(seasons, liturgies);
+    // A full-override season with exact dates replaces the regular schedule
+    // in its window even with no service listed (ADR-053), so it is named
+    // too, or the weekly list would read as held there (CodeRabbit on PR #47).
+    final seasonal = <Season, List<Liturgy>>{
+      ...listed,
+      for (final s in seasons)
+        if (s.active &&
+            s.replacesRegular &&
+            s.startsAt != null &&
+            s.endsAt != null &&
+            !s.endsAt!.isBefore(now) &&
+            !listed.containsKey(s))
+          s: const <Liturgy>[],
+    };
+    final ordered = seasonal.entries.toList()
+      ..sort((a, b) => (a.key.startsAt ?? DateTime(9999)).compareTo(b.key.startsAt ?? DateTime(9999)));
     if (seasonal.isNotEmpty) {
       b
         ..writeln()
         ..writeln('## Holy seasons')
         ..writeln(
-          'A season marked [REPLACES regular schedule] replaces the regular services on the days it has services. '
+          'A season marked [REPLACES regular schedule] replaces every regular service between its start and end, '
+          'even on a day with no season service listed (no regular mass is held then). '
+          'A season marked [REPLACES regular schedule on its service days] has no start or no end: it replaces the '
+          'regular services only on the days it has services; on other days they take place. '
           'A season marked [ADDITIVE] adds its services: the regular services continue, except a regular mass held '
           'at the same time as a season mass, every regular mass of a day with a season service marked '
           "[REPLACES the day's regular masses], and regular vespers/praise overlapping a season service. "
@@ -239,7 +258,7 @@ String buildAssistantInstruction({
         );
       final today = CairoTime.startOfDay(cairoNow);
       final offToday = regularSupersededOn(liturgies: liturgies, seasons: seasons, day: today).toSet();
-      for (final e in seasonal.entries) {
+      for (final e in ordered) {
         final s = e.key;
         // The label says what the schedule really does today (ADR-050,
         // issue 8): not "regular masses continue" on a day this season
@@ -252,7 +271,9 @@ String buildAssistantInstruction({
             regularSupersededOn(liturgies: liturgies, seasons: [s], day: today)
                 .any(offToday.contains);
         final label = s.replacesRegular
-            ? '[REPLACES regular schedule]'
+            ? (s.startsAt != null && s.endsAt != null
+                ? '[REPLACES regular schedule]'
+                : '[REPLACES regular schedule on its service days]')
             : hidesToday
                 ? '[ADDITIVE — some regular services are NOT held today, see "Services today and tomorrow"]'
                 : '[ADDITIVE — regular services continue]';
@@ -261,6 +282,9 @@ String buildAssistantInstruction({
           ' $label'
           '${isSeasonActiveAt(s, now) ? ' [ACTIVE NOW]' : ''}',
         );
+        if (e.value.isEmpty) {
+          b.writeln('- No season services are listed yet: regular services are NOT held between these dates.');
+        }
         for (final l in e.value) {
           final when = l.date != null ? _ymd(l.date!) : (l.weekday != null ? weekdayNamesEn[l.weekday!] : 'every day');
           b.writeln(

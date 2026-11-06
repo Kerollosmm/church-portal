@@ -334,7 +334,8 @@ class Season {
   final bool active;
 
   /// true (Holy Week, Pascha, Nativity): its services REPLACE the regular
-  /// schedule on the days they cover. false (evening revivals): ADDITIVE, the
+  /// schedule: every regular service starting inside its window when it has
+  /// both dates (ADR-053), else on the days its services cover. false (evening revivals): ADDITIVE, the
   /// regular morning masses continue. Missing in Firestore = true, so older
   /// documents behave exactly as before.
   final bool replacesRegular;

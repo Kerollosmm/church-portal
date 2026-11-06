@@ -124,10 +124,16 @@ LiturgyOccurrence? _occurrence(Liturgy l, tz.TZDateTime day, int dayOffset) {
 /// [startsAt, endsAt].
 ///
 /// * A full-override season (`replacesRegular == true`: Holy Week, Pascha,
-///   Nativity) that has any service on the day replaces every regular service
-///   starting inside its window (so e.g. morning masses before a season
-///   starting at 18:00 keep the regular schedule). That is the owner's own
-///   choice for the season, so it applies whatever the services' `sample`.
+///   Nativity) with an exact window (both `startsAt` and `endsAt`) replaces
+///   every regular service starting inside that window, whether or not it has
+///   a service of its own that day (ADR-053, sims r2 P1 N1: Good Friday with
+///   no owner service fell back to the regular Divine Liturgy once the seed
+///   samples were hidden behind the owner's programme, and would again if the
+///   sample docs were deleted). Morning masses before a season starting at
+///   18:00 keep the regular schedule. An open-ended full-override season
+///   (no start or no end) still replaces only on the days it has a service.
+///   That is the owner's own choice for the season, so it applies whatever
+///   the services' `sample`.
 /// * An additive season (`replacesRegular == false`: fasts, revivals, the
 ///   Holy 50 Days) keeps the regular schedule (ADR-050): a regular `mass` is
 ///   superseded only by a seasonal `mass` that overlaps it in time, or by a
@@ -175,7 +181,12 @@ List<LiturgyOccurrence> occurrencesForDay({
   // season held at the same time (P3 B2: the seed's St Moses revival night
   // beside the owner's own revival of the Apostles' fast).
   final seasonal = <LiturgyOccurrence>[];
-  final replacing = <Season>{};
+  // A full-override season with an exact window replaces the regular
+  // schedule inside it on every day, service or not (ADR-053, P1 N1).
+  final replacing = <Season>{
+    for (final s in active)
+      if (s.replacesRegular && s.startsAt != null && s.endsAt != null) s,
+  };
   final additive = <Season, List<LiturgyOccurrence>>{};
   for (final (o, windows) in candidates) {
     final hidden = o.liturgy.sample && candidates.any((c) => !c.$1.liturgy.sample && overlaps(c.$1, o));
@@ -471,35 +482,86 @@ bool undatedSuppressedOn(Season s, Liturgy l, Iterable<Liturgy> all, tz.TZDateTi
   return false;
 }
 
+/// Is the `sample: true` service [l] of [s], on the Cairo day [dayStart],
+/// hidden behind a real service of ANOTHER active season held at the same
+/// time? The same rule as [occurrencesForDay] (ADR-050, P3 B2), so the
+/// season lists never name a sample the day views leave out (ADR-053, sims
+/// r2 P3: the seed's St Moses night beside the owner's own revival).
+bool _sampleHiddenByOtherSeason(
+    Liturgy l, Season s, Iterable<Liturgy> all, Iterable<Season> seasons, tz.TZDateTime dayStart) {
+  if (!l.sample) return false;
+  final mine = _occurrence(l, dayStart, 0);
+  if (mine == null) return false;
+  for (final d in all) {
+    if (d.sample || d.seasonKey == null || d.seasonKey == s.key || !_matchesDay(d, dayStart)) continue;
+    final o = _occurrence(d, dayStart, 0);
+    if (o == null || !(o.start.isBefore(mine.end) && mine.start.isBefore(o.end))) continue;
+    for (final s2 in seasons) {
+      if (s2.key == d.seasonKey && isSeasonActiveAt(s2, o.start) && !undatedSuppressedOn(s2, d, all, dayStart)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 /// [l] is one of [s]'s services for the season lists: its key, and a dated
 /// one inside the window, or an undated one that still applies on at least
 /// one day of the window with its weekday ([undatedSuppressedOn]). An
 /// undated service of an open-ended season is listed unless it is a sample
 /// template of a season with real services.
-bool liturgyInSeason(Liturgy l, Season s, Iterable<Liturgy> all) {
+///
+/// With [seasons] (the seasons the lists are read against), a `sample` is
+/// also left out on a day where a real service of another active season
+/// overlaps it, as the day views do: a dated sample on its day, an undated
+/// one when that holds on EVERY day of the window with its weekday (on a
+/// week without such a real service it would still be held, so it stays
+/// listed; ADR-053).
+bool liturgyInSeason(Liturgy l, Season s, Iterable<Liturgy> all, [Iterable<Season> seasons = const []]) {
   if (l.seasonKey != s.key) return false;
   if (l.date != null) {
     if (!_dateInSeason(l.date!, s)) return false;
     if (l.sample && seasonHasRealServices(s, all)) return false;
     final d = CairoTime.calendarDate(l.date!);
-    return !undatedSuppressedOn(s, l, all, CairoTime.at(d.year, d.month, d.day));
+    final day = CairoTime.at(d.year, d.month, d.day);
+    return !undatedSuppressedOn(s, l, all, day) && !_sampleHiddenByOtherSeason(l, s, all, seasons, day);
   }
   if (l.sample && seasonHasRealServices(s, all)) return false;
   final from = s.startsAt, to = s.endsAt, wd = l.weekday;
   if (from == null || to == null || wd == null) return true;
   // Cheap common case (and long seasons such as summer): no dated real
-  // service in the window at all, so no day can suppress it.
-  if (!all.any((d) => d.seasonKey == s.key && d.date != null && !d.sample && _dateInSeason(d.date!, s))) return true;
+  // service in the window at all, so no day can suppress it, and (for a
+  // sample) no real service of another active season to hide behind.
+  final ownDated = all.any((d) => d.seasonKey == s.key && d.date != null && !d.sample && _dateInSeason(d.date!, s));
+  final crossCheck = l.sample &&
+      all.any((d) =>
+          !d.sample &&
+          d.seasonKey != null &&
+          d.seasonKey != s.key &&
+          seasons.any((s2) => s2.active && s2.key == d.seasonKey));
+  if (!ownDated && !crossCheck) return true;
   var sawWeekday = false;
   final first = CairoTime.calendarDate(from), last = CairoTime.calendarDate(to);
+  final lastDay = CairoTime.at(last.year, last.month, last.day);
   var day = CairoTime.at(first.year, first.month, first.day);
-  for (var i = 0; i < 400 && !day.isAfter(CairoTime.at(last.year, last.month, last.day)); i++) {
-    if (day.weekday == wd) {
+  for (var i = 0; i < 400 && !day.isAfter(lastDay); i++) {
+    // Only a day where the occurrence really starts inside the window counts
+    // (a 07:00 service on an 18:00 start day is not part of the season, as in
+    // [occurrencesForDay]; CodeRabbit on PR #47).
+    // A service without a start time keeps the day check alone (unchanged).
+    final o = day.weekday == wd ? _occurrence(l, day, 0) : null;
+    if (day.weekday == wd && (l.startMinutes == null || (o != null && isSeasonActiveAt(s, o.start)))) {
       sawWeekday = true;
-      if (!undatedSuppressedOn(s, l, all, day)) return true;
+      if (!undatedSuppressedOn(s, l, all, day) &&
+          !(crossCheck && _sampleHiddenByOtherSeason(l, s, all, seasons, day))) {
+        return true;
+      }
     }
     day = CairoTime.at(day.year, day.month, day.day + 1);
   }
+  // A window longer than the scan: the rest is not checked, so it stays
+  // listed (CodeRabbit on PR #47).
+  if (!day.isAfter(lastDay)) return true;
   // No such weekday in the window at all: listed as before (unchanged).
   return !sawWeekday;
 }
@@ -509,12 +571,17 @@ bool liturgyInSeason(Liturgy l, Season s, Iterable<Liturgy> all) {
 /// whose window covers its day, so e.g. 2027 and 2028 seasons sharing a key
 /// never pick up each other's services; an undated one only when it still
 /// falls on a day of the season without dated services ([liturgyInSeason]).
-Map<Season, List<Liturgy>> seasonalSchedule(Iterable<Season> seasons, Iterable<Liturgy> all) {
+/// A sample hidden behind another active season's real service is left out
+/// ([liturgyInSeason]); [context] are the seasons that check reads (default:
+/// [seasons]), so a view listing only some seasons still sees the others.
+Map<Season, List<Liturgy>> seasonalSchedule(Iterable<Season> seasons, Iterable<Liturgy> all,
+    {Iterable<Season>? context}) {
+  final ctx = (context ?? seasons).where((s) => s.active).toList();
   final sorted = seasons.where((s) => s.active).toList()
     ..sort((a, b) => (a.startsAt ?? DateTime(9999)).compareTo(b.startsAt ?? DateTime(9999)));
   final map = <Season, List<Liturgy>>{};
   for (final s in sorted) {
-    final ls = all.where((l) => liturgyInSeason(l, s, all)).toList()
+    final ls = all.where((l) => liturgyInSeason(l, s, all, ctx)).toList()
       ..sort((a, b) {
         final da = a.date ?? DateTime(2000, 1, a.weekday ?? 0);
         final db = b.date ?? DateTime(2000, 1, b.weekday ?? 0);
@@ -661,13 +728,20 @@ List<LiturgyOccurrence> occurrencesAround({
 /// without an end time counts as one minute), places compare as in
 /// [parallelServices].
 List<Liturgy> parallelOccurrences(LiturgyOccurrence target, Iterable<LiturgyOccurrence> sameDay,
+        [ProgramOptions? opts]) =>
+    [for (final o in parallelOccurrencesOf(target, sameDay, opts)) o.liturgy];
+
+/// [parallelOccurrences] with each service's own occurrence, so the card
+/// can tell one starting with [target] («وفي نفس الوقت») from one starting
+/// later while [target] runs («وبعدها ٠٧:٠٠ ص: …», ADR-053, sims r2 P2 O-a).
+List<LiturgyOccurrence> parallelOccurrencesOf(LiturgyOccurrence target, Iterable<LiturgyOccurrence> sameDay,
     [ProgramOptions? opts]) {
   final key = _placeKey(target.liturgy, opts);
   if (key.isEmpty) return const [];
   DateTime endOf(LiturgyOccurrence o) =>
       o.liturgy.endMinutes == null ? o.start.add(const Duration(minutes: 1)) : o.end;
   final tEnd = endOf(target);
-  final out = [
+  return [
     for (final o in sameDay)
       if (o.liturgy.id != target.liturgy.id &&
           _placeKey(o.liturgy, opts).isNotEmpty &&
@@ -676,5 +750,4 @@ List<Liturgy> parallelOccurrences(LiturgyOccurrence target, Iterable<LiturgyOccu
           target.start.isBefore(endOf(o)))
         o,
   ]..sort((a, b) => a.start.compareTo(b.start));
-  return [for (final o in out) o.liturgy];
 }
