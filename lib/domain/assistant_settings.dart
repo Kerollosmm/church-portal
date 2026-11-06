@@ -4,6 +4,7 @@
 // mirrors the limits. Pure Dart.
 
 import 'assistant_quota.dart' show parseSourceDomains;
+import 'season_keys.dart';
 
 String _s(Object? v) => v is String ? v.trim() : '';
 int? _i(Object? v) => v is int ? v : (v is num && v == v.roundToDouble() ? v.toInt() : null);
@@ -35,9 +36,16 @@ class AssistantLimits {
   static const perDaySeasonDefault = 6;
 }
 
-/// Season keys that raise the daily limit to [AssistantSettings.perDaySeason]
-/// while active (ADR-042). The summer season is a long, ordinary period.
-const exceptionalSeasonKeys = ['holy_week', 'pascha', 'nativity', 'revival_maximus', 'revival_moses'];
+/// The default season keys that raise the daily limit to
+/// [AssistantSettings.perDaySeason] while active (ADR-042; ADR-051 added
+/// Great Lent, Kiahk and the Marian seasons: busy seasons with many visitor
+/// questions). The general `fast`, the Apostles' fast, Nayrouz, Epiphany and
+/// summer stay ordinary by default. An admin replaces the list with
+/// `settings/assistant.exceptionalSeasons` ([AssistantSettings.exceptionalSeasons]).
+const exceptionalSeasonKeys = [
+  SeasonKeys.holyWeek, SeasonKeys.pascha, SeasonKeys.nativity, SeasonKeys.revivalMaximus, SeasonKeys.revivalMoses, //
+  SeasonKeys.greatLent, SeasonKeys.kiahk, SeasonKeys.marian,
+];
 
 /// Which public sections an allowed-topic line needs (ADR-042): a line that
 /// mentions one of the words is dropped when none of its sections is on, so
@@ -68,6 +76,30 @@ List<List<String>> topicSections(String line) {
     for (final e in topicSectionWords.entries)
       if (e.key.any(l.contains)) e.value,
   ];
+}
+
+/// The built-in /ask welcome (ADR-051, issue 7): it names only the topics
+/// whose sections are on (liturgy times, clinics, meetings, contacts), so
+/// it never offers a section the admin switched off. Used when the admin
+/// left the welcome text blank.
+String askIntroText({required bool arabic, required bool Function(String section) enabled}) {
+  final parts = <(String, String)>[
+    if (enabled('schedule')) ('مواعيد القداسات', 'liturgy times'),
+    if (enabled('clinics')) ('العيادات', 'clinics'),
+    if (enabled('meetings')) ('الاجتماعات', 'meetings'),
+    if (enabled('contactInfo') || enabled('contactForm')) ('طرق التواصل', 'contacts'),
+  ];
+  if (arabic) {
+    final what = parts.isEmpty ? 'أسئلتك عن الكنيسة' : parts.map((p) => p.$1).join(' و');
+    return 'أهلًا بك! أجيب عن $what، من بيانات الكنيسة الرسمية.';
+  }
+  final en = [for (final p in parts) p.$2];
+  final what = switch (en.length) {
+    0 => 'questions about the church',
+    1 => 'questions about ${en.first}',
+    _ => 'questions about ${en.sublist(0, en.length - 1).join(', ')} and ${en.last}',
+  };
+  return "Welcome! I answer $what using the church's official data.";
 }
 
 /// Model names the admin may enter: a Gemini model id (lower-case letters,
@@ -131,6 +163,11 @@ class AssistantSettings {
   /// read the clamped [perDaySeason].
   final int? rawPerDaySeason;
 
+  /// The admin's list of exceptional season keys (ADR-051; null = not set,
+  /// [exceptionalSeasonKeys] apply; an empty list = no season raises the
+  /// limit). Read [exceptionalSeasons].
+  final List<String>? rawExceptionalSeasons;
+
   const AssistantSettings({
     this.model = '',
     this.instructions = '',
@@ -150,6 +187,7 @@ class AssistantSettings {
     this.rawPerMinute,
     this.rawPerDay,
     this.rawPerDaySeason,
+    this.rawExceptionalSeasons,
   });
 
   static const defaults = AssistantSettings();
@@ -175,6 +213,12 @@ class AssistantSettings {
       rawPerMinute: _i(m['perMinute']),
       rawPerDay: _i(m['perDay']),
       rawPerDaySeason: _i(m['perDaySeason']),
+      rawExceptionalSeasons: m['exceptionalSeasons'] is List
+          ? [
+              for (final k in m['exceptionalSeasons'] as List)
+                if (k is String && SeasonKeys.all.contains(k)) k,
+            ]
+          : null,
     );
   }
 
@@ -216,8 +260,15 @@ class AssistantSettings {
   /// '' = the app's built-in welcome text.
   String welcome(bool arabic) => arabic ? welcomeAr : welcomeEn;
 
-  /// The chips the page shows: none unless [showSuggestions] is on.
-  List<String> visibleSuggestions(bool arabic) => showSuggestions ? suggestions(arabic) : const [];
+  /// The chips the page shows: none unless [showSuggestions] is on. With
+  /// [enabled], a suggestion about a switched-off section is dropped
+  /// ([topicSections], ADR-051 issue 7), like the allowed topics.
+  List<String> visibleSuggestions(bool arabic, [bool Function(String section)? enabled]) => showSuggestions
+      ? [
+          for (final q in suggestions(arabic))
+            if (enabled == null || topicSections(q).every((group) => group.any(enabled))) q,
+        ]
+      : const [];
 
   /// Up to three suggested questions for [arabic] (admin text only).
   List<String> suggestions(bool arabic) => [
@@ -236,12 +287,16 @@ class AssistantSettings {
   int get perDaySeason => _clamp(rawPerDaySeason, AssistantLimits.perDayMin, AssistantLimits.perDayMax,
       AssistantLimits.perDaySeasonDefault);
 
+  /// The season keys that raise the daily limit: the admin's list, else the
+  /// defaults ([exceptionalSeasonKeys]).
+  List<String> get exceptionalSeasons => rawExceptionalSeasons ?? exceptionalSeasonKeys;
+
   /// The daily limit that applies now: [perDaySeason] while one of
-  /// [activeSeasonKeys] is in [exceptionalSeasonKeys], else [perDay].
+  /// [activeSeasonKeys] is in [exceptionalSeasons], else [perDay].
   /// A season never lowers the ordinary limit (an admin's perDay 10 with the
   /// default season limit 6 stays 10; Sentry review on PR #33).
   int perDayFor(Iterable<String> activeSeasonKeys) =>
-      activeSeasonKeys.any(exceptionalSeasonKeys.contains) && perDaySeason > perDay ? perDaySeason : perDay;
+      activeSeasonKeys.any(exceptionalSeasons.contains) && perDaySeason > perDay ? perDaySeason : perDay;
 
   /// These settings with [perDay] = [perDayFor] the active seasons, so the
   /// limiter and the "daily limit reached" text both use the season limit.
@@ -264,6 +319,7 @@ class AssistantSettings {
         rawPerMinute: rawPerMinute,
         rawPerDay: perDayFor(activeSeasonKeys),
         rawPerDaySeason: rawPerDaySeason,
+        rawExceptionalSeasons: rawExceptionalSeasons,
       );
 
   static int _clamp(int? v, int lo, int hi, int def) => v == null ? def : (v < lo ? lo : (v > hi ? hi : v));

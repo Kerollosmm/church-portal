@@ -5,6 +5,7 @@ import '../../domain/assistant_settings.dart';
 import '../../domain/custom_content.dart';
 import '../../domain/image_style.dart';
 import '../../domain/program.dart';
+import '../../domain/season_keys.dart';
 import '../../domain/season_verses.dart';
 
 enum FieldType {
@@ -35,6 +36,15 @@ enum FieldType {
   /// Ordered list of `image` maps (an item's detail-page `gallery`), at most
   /// [FieldDef.maxRows] photos.
   imageList,
+
+  /// Several of [FieldDef.options], stored as a list of strings in the
+  /// options' order (ADR-051: the assistant's exceptional seasons). A
+  /// document without the field shows [FieldDef.defaultValues] ticked.
+  choices,
+
+  /// Up to [FieldDef.maxRows] calendar dates stored as sorted 'YYYY-MM-DD'
+  /// strings, edited as chips (ADR-051: a season's `replaceDates`).
+  dateList,
 }
 
 /// Where a field sits in the editor: [basic] is always open at the top; the
@@ -129,6 +139,10 @@ class FieldDef {
   /// the first row of a key). The error shows on the repeated row.
   final String rowUniqueKey;
 
+  /// [FieldType.choices]: the values a document without the field starts
+  /// with (match the reader's default).
+  final List<String> defaultValues;
+
   const FieldDef(this.key, this.labelAr, this.labelEn, this.type,
       {this.required = false,
       this.options = const [],
@@ -154,7 +168,8 @@ class FieldDef {
       this.encodedOptionalTail = 0,
       this.pattern = '',
       this.rowNotBefore,
-      this.rowUniqueKey = ''});
+      this.rowUniqueKey = '',
+      this.defaultValues = const []});
 
   int get effectiveMaxLength => maxLength > 0
       ? maxLength
@@ -235,7 +250,9 @@ class DocDef {
   const DocDef(this.path, this.labelAr, this.labelEn, this.fields);
 }
 
-const seasonKeys = ['holy_week', 'pascha', 'nativity', 'epiphany', 'marian', 'fast', 'revival_maximus', 'revival_moses', 'summer'];
+/// Every season key (ADR-051: [SeasonKeys.all], mirrored by firestore.rules
+/// `seasonKeyList()`).
+const seasonKeys = SeasonKeys.all;
 
 /// "Unconfirmed" flag: untick once the church has confirmed the entry, so
 /// the public pages stop showing the pending-confirmation notice.
@@ -448,7 +465,12 @@ const adminCollections = <CollectionDef>[
     'titleEn'
   ], icon: 'alerts', publicPath: '/'),
   CollectionDef('seasons', 'المواسم', 'Seasons', [
-    FieldDef('key', 'نوع الموسم', 'Season key', FieldType.choice, required: true, options: seasonKeys),
+    // Services match their season by exact key: re-keying a season alone
+    // loses its services (CodeRabbit on PR #44).
+    FieldDef('key', 'نوع الموسم', 'Season key', FieldType.choice, required: true, options: seasonKeys,
+        hintAr: 'إذا غيّرت نوع موسم له خدمات، غيّر «الموسم» في خدماته أيضًا من «القداسات والصلوات»، وإلا تختفي من جدوله.',
+        hintEn: 'If you change the key of a season that has services, change their «Season» in Masses & prayers too, '
+            'or they drop out of its schedule.'),
     FieldDef('nameAr', 'الاسم (عربي)', 'Name (Arabic)', FieldType.text, required: true),
     FieldDef('nameEn', 'الاسم (إنجليزي)', 'Name (English)', FieldType.text),
     FieldDef('startsAt', 'يبدأ', 'Starts', FieldType.dateTime),
@@ -461,6 +483,13 @@ const adminCollections = <CollectionDef>[
       FieldType.boolean,
       missingBool: true,
     ),
+    // ADR-051: an additive season still replaces the regular services on
+    // these dates only (the feast night).
+    FieldDef('replaceDates', 'أيام يحل فيها الموسم محل الجدول العادي (ليلة العيد)',
+        'Days the season replaces the regular schedule (feast night)', FieldType.dateList,
+        maxRows: 10,
+        hintAr: 'للموسم الإضافي فقط (المفتاح أعلاه مغلق): في هذه الأيام تُخفى القداسات والصلوات العادية التي تبدأ داخل الموسم، مثل ليلة العيد. باقي الأيام يبقى الجدول العادي.',
+        hintEn: 'Additive seasons only (the switch above off): on these days the regular services starting inside the season are hidden, e.g. the feast night. Every other day keeps the regular schedule.'),
     _imageField,
     _imageStyleFieldFlat,
     ..._programGroup,
@@ -885,8 +914,15 @@ const assistantSettingsDoc = DocDef('settings/assistant', 'المساعد الذ
   FieldDef('perDaySeason', 'أقصى عدد أسئلة في اليوم أثناء المواسم الاستثنائية', 'Max questions per day during exceptional seasons',
       FieldType.integer,
       min: AssistantLimits.perDayMin, max: AssistantLimits.perDayMax,
-      hintAr: 'الافتراضي ${AssistantLimits.perDaySeasonDefault}. يُطبَّق تلقائيًا طوال موسم مفعّل: أسبوع الآلام، القيامة، الميلاد، النهضات (وليس الصيف).',
-      hintEn: 'Default ${AssistantLimits.perDaySeasonDefault}. Applies automatically while an active season runs: Holy Week, Pascha, Nativity, revivals (not summer).'),
+      hintAr: 'الافتراضي ${AssistantLimits.perDaySeasonDefault}. يُطبَّق تلقائيًا طوال موسم مفعّل من المواسم المختارة أدناه.',
+      hintEn: 'Default ${AssistantLimits.perDaySeasonDefault}. Applies automatically while an active season of the kinds ticked below runs.'),
+  // ADR-051: which season kinds are exceptional (missing = the defaults).
+  FieldDef('exceptionalSeasons', 'المواسم الاستثنائية (يُطبَّق فيها الحد الأعلى)', 'Exceptional seasons (the higher limit applies)',
+      FieldType.choices,
+      options: SeasonKeys.all,
+      defaultValues: exceptionalSeasonKeys,
+      hintAr: 'الافتراضي: أسبوع الآلام، القيامة، الميلاد، النهضتان، الصوم الكبير، كيهك، مواسم السيدة العذراء. ألغِ الكل ليبقى الحد اليومي العادي في كل المواسم.',
+      hintEn: 'Default: Holy Week, Pascha, the Nativity, both revivals, Great Lent, Kiahk and the Marian seasons. Untick all to keep the ordinary daily limit in every season.'),
 ]);
 
 CollectionDef? collectionById(String id) {
@@ -972,7 +1008,9 @@ const todaySettingsDoc = DocDef('settings/features', 'اليوم والبث ال
       FieldType.text,
       maxLength: 120),
   FieldDef('liveLabelEn', 'نص الشريط (إنجليزي)', 'Banner text (English, blank = "Live now from the church")', FieldType.text,
-      maxLength: 120),
+      maxLength: 120,
+      hintAr: 'يظهر في الصفحات الإنجليزية فقط. فارغ = "Live now from the church" (لا يظهر النص العربي في الصفحات الإنجليزية).',
+      hintEn: 'Shown on the English pages only. Blank = "Live now from the church" (the Arabic text never shows on English pages).'),
   FieldDef('liveEndsAt', 'إيقاف تلقائي (اختياري)', 'Switch off automatically at (optional)', FieldType.dateTime,
       hintAr: 'بعد هذا الوقت يختفي الشريط وحده حتى لو بقي المفتاح مفعّلًا.',
       hintEn: 'After this time the banner disappears on its own, even if the switch stays on.'),

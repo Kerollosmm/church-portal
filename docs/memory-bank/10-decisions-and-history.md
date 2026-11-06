@@ -1433,6 +1433,85 @@ supersede them.
   whole; affiliation caveats kept (above). Not changed: a seasonal mass of the evening before overlapping a regular
   mass after midnight (no regular mass runs then); the features editor's stale-snapshot merge (shared by every
   default-valued switch since ADR-022); hiding unconfirmed facilities / priests (owner's ADR-046 choice).
+## ADR-051 (PR #44) — Season keys of their own, admin exceptional-quota list, church calendar in the assistant, feast-night replace dates, tonight's live end, Holy Week day names, EN live label
+
+- **Context:** the seasons v2 simulation (phases 1–7, `work/seasons-v2/ISSUES.md`) used the nearest existing key for
+  the Apostles' fast, Kiahk and Great Lent (`fast`) and for Nayrouz / the Cross (`pascha`), and found: no Coptic date
+  or feast in the assistant prompt (4); the 6-a-day quota missing Great Lent, Kiahk and the Marian seasons (5); a Latin
+  «(6)» in the Arabic limit message (6); the /ask greeting offering hidden clinics / meetings (7); the preset's live
+  banner lasting until the season end (10); no way for one additive season to replace the regular schedule on the feast
+  night only (11); fast presets keeping weddings (12); no Holy Week day names (13); the Arabic live label on English
+  pages (14). Issues 1–3, 8, 15–20 are PR-A (ADR-050).
+- **Decision:**
+  1. **Season keys (9).** `lib/domain/season_keys.dart` (`SeasonKeys.all`) is the one list read by the season / liturgy
+     forms, season verses, the season → theme map, the preset and the assistant; firestore.rules has
+     `seasonKeyList()` (a test compares them). New keys: `apostles` (صوم الآباء الرسل), `nayrouz` (النيروز وعيد الصليب),
+     `kiahk` (شهر كيهك), `great_lent` (الصوم الكبير المقدس). **Nayrouz covers the Feast of the Cross**: the Nayrouz
+     season (its festive tune) runs from 1 Tout to the Cross on 17 Tout, both festive red; one key keeps the rules'
+     regexes and the admin list short — a separate `cross` key can be added later if the church keeps them apart.
+     `fast` stays valid (older documents; the Nativity fast before Kiahk, Nineveh), its label now says "general".
+     Themes (palette roles only, no violet): `great_lent` / `apostles` / `kiahk` → `fasting` (ash, stone, oxblood),
+     `nayrouz` → `resurrection` (festive red); all remappable in «ثيم الموقع والمناسبات». Theme priority:
+     holy_week, pascha, nativity, epiphany, nayrouz, marian, great_lent, apostles, kiahk, fast, revivals, summer. A
+     fasting key without verses of its own uses the `fast` verse set (`SeasonVerses.versesFor`).
+  2. **Exceptional quota (5).** `settings/assistant.exceptionalSeasons` (list of season keys; missing = the code
+     default; empty = no season raises the limit), edited as chips («المواسم الاستثنائية») in /admin → المساعد الذكي
+     (new generic `FieldType.choices`). Default: holy_week, pascha, nativity, revival_maximus, revival_moses,
+     **great_lent, kiahk, marian** — the busy seasons with many visitor questions (long services, revival nights,
+     Kiahk praises); the general `fast`, `apostles`, `nayrouz`, `epiphany`, `summer` stay ordinary (admin can tick them).
+     `perDaySeason` (default 6) and `perDay` stay admin numbers; a season never lowers `perDay`.
+  3. **Church calendar line (4).** `churchCalendarLine()` adds to the system instruction: the liturgical day exactly as
+     the top bar shows it (Coptic date, the admin's day start — 18:00 by default or sunset — Holy Week names) and the
+     feast of that day from the Katameros day the home page already loaded (`ref.exists(synaxariumProvider)`, no new
+     read) plus the computed feast list. The instruction is built for every question, so it follows the 18:00 rollover
+     with no refresh of its own.
+  4. **Arabic digits (6).** The limit / too-long messages pass `localDigits` → «(٦)» on Arabic pages.
+  5. **/ask greeting and chips (7).** The built-in welcome (`askIntroText`) names only switched-on sections (liturgy
+     times, clinics, meetings, contacts); suggested-question chips about a hidden section are dropped with the same
+     `topicSections` rule as the allowed topics. The admin's own welcome text is shown as written.
+  6. **Tonight's live end (10).** The preset's live option sets `liveEndsAt` = `presetLiveEnd()`: the end of the season's
+     last visible evening service (start ≥ 12:00) on its first evening (today, or the season's first day when applied
+     ahead) + 30 min (overnight = next morning); a service running since last night (applied at 00:30 in an all-night
+     praise) gives its own end + 30; 23:59 that day when there is none or all ended; never after the season end. An
+     unedited default is worked out again at confirmation from the fresh season and clock; «تطبيق» waits for the
+     services; «نقل الرجوع التلقائي» now only pulls the live end in to a shortened season end, never later (CodeRabbit
+     on PR #44). The screen shows it
+     («ينتهي شريط البث: …») with an edit button (date + time picker); «اليوم والبث المباشر» still edits it later. The
+     preset's own auto-revert stays the season end. The screen reads `liturgies` when a season is picked (snapshots for 8 s, then closed).
+  7. **Feast-night replace dates (11).** `seasons/{id}.replaceDates`: up to 10 civil Cairo dates `YYYY-MM-DD` (the rules
+     and the reader refuse impossible dates such as 2027-02-31 or 29 Feb outside leap years; the picker stops at
+     2099, the rules' 20xx). On those
+     days an additive season replaces the regular services starting inside its window (`Season.replacesOn`, used by
+     `occurrencesForDay` and `undatedSuppressedOn`); other days stay additive; ignored when `replacesRegular`. Admin:
+     date chips in the season form (new `FieldType.dateList`), shown read-only on «تجهيز الموسم»; the assistant prompt
+     lists them per season.
+  8. **Fast presets (12).** `PresetRequest.defaultsFor`: `fast`, `great_lent`, `apostles`, `kiahk` tick «إخفاء حجز
+     الأفراح» by default (the Nativity fast uses `fast` / `kiahk`). Holy Week unchanged; feasts, revivals, Marian,
+     Nayrouz unchanged.
+  9. **Holy Week day names (13).** `holyWeekDayName()` from `orthodoxEaster`: أحد الشعانين، اثنين / ثلاثاء / أربعاء
+     البصخة، خميس العهد، الجمعة العظيمة، سبت النور (Palm Sunday, Holy Monday–Wednesday, Covenant Thursday, Good Friday,
+     Joyous Saturday) replace the weekday in `LiturgicalDay.label` — top bar «ليلة الجمعة العظيمة ٢٢ برموده ١٧٤٣ ش»
+     after the rollover, and the prompt's calendar line. Computed from the date (no season needed).
+  10. **EN live label (14).** `liveLabelEn` already existed in `settings/features` and «اليوم والبث المباشر»; the
+     banner and badge used `pick(ar, en)`, which fell back to the Arabic text. Now `TodaySettings.liveLabelFor`:
+     English pages show `liveLabelEn` or the generic "Live now from the church" / "Live", never the Arabic; the admin
+     field's hint says so.
+- **Rules:** `seasonKeyList()` used by `validSeason`, `validLiturgy`, `validSeasonPreset`, `validSeasonThemes` (13 keys,
+  values regex `{0,12}`); the season-verse regex knows the new keys; `validReplaceDates` (≤ 10, unique, one regex over
+  the joined list + split count); `validAssistant.exceptionalSeasons` (list ≤ 13, `hasOnly(seasonKeyList())`).
+  Expression budget: a full 13-key theme map + 12 schedule slots in one write, and a season at maximum (programme,
+  image style, 10 replace dates) both pass in the emulator.
+- **Firebase cost:** +0 collections, +0 public listeners, +0 visitor reads or writes. New fields live in existing docs
+  (`settings/assistant`, `seasons/{id}`). The assistant uses the already-loaded Katameros day (Hosting JSON, not
+  Firestore) only when present. Admin only: one read of `liturgies` (~60 docs; a cached then a server snapshot) when a season is picked on «تجهيز
+  الموسم», listener closed after 8 s. Spark plan unaffected.
+- **Tests:** `test/season_keys_assistant_test.dart` (key list vs rules / admin / verses / themes / labels; theme map;
+  verse fallback; quota defaults and admin list; Holy Week names and labels; calendar line incl. rollover, Katameros,
+  sunset; prompt line; replace-date prompt line; greeting / chips filter; fast preset defaults; `presetLiveEnd` cases;
+  `planApply` live end; `replaceDates` on `occurrencesForDay`; live label per language),
+  `test/season_keys_assistant_widgets_test.dart` (top bar Holy Week AR / EN; EN banner / badge label; admin quota chips
+  and replace-date chips; preset screen: Great Lent weddings off, tonight's live end, replace dates, one batch),
+  `test/assistant_test.dart` (Arabic «(٦)», greeting / chips with clinics + meetings off); rules tests "ADR-051".
 
 ## Timeline
 
@@ -1492,5 +1571,6 @@ supersede them.
 | 5 Nov 2026 | **PR #42** — "Season card timing" (`fix/season-card-timing`) | ADR-049: «يُقام الآن» names the services running now in other halls (`runningNow`, `alsoRunning`); overnight services audited and pinned (Easter night, Kiahk, Apocalypse, DST), parallel services compared across midnight (`occurrencesAround`), assistant says an overnight service ends the next morning; /mass-schedule seasonal switch from palette roles at ≥ 3:1 in every theme; additive day-to-night handover tested minute by minute; admin time / date pickers (12-hour AM/PM picker with a 12-hour reading, stored 24-hour `HH:mm`, `YYYY-MM-DD`, stored types unchanged). +0 reads. |
 | 5 Nov 2026 | **Docs PR** — "README screenshots" (`docs/readme-screenshots`) | Docs only, no ADR: `screens/` now holds 4 shots: Home, Mass schedule and Ask (live site, Arabic, 390 px @2x) plus the admin dashboard overview (1280 px, real `AdminDashboard` rendered from the local Firestore-emulator export, no live sign-in); the 8 broken desktop shots from PR #41 removed; README "Visual Showcase" is one row of public shots plus an "Admin dashboard" shot. No code change. |
 | 5 Nov 2026 | **PR #45** — "Seasons v2 fixes A: season schedule overlap" (`fix/season-schedule-overlap`) | ADR-050: additive seasons hide only overlapping regular masses, `liturgies.replacesDay` (admin checkbox) for a feast liturgy; samples (dated too) give way once their season has real services, never supersede / outrank a real service of any season, real before sample; `regularSupersededOn` → /mass-schedule «لا يُقام اليوم» + prompt "Services today and tomorrow" and computed season labels; now box «حتى …»; seed placeholder text stripped on read and from the seed; `web/media/milestones/pope-visit-gallery5.webp` (live field change prepared, not applied); hero season tint (`heroSeasonTint`); «،» kept. +0 reads. |
+| 6 Nov 2026 | **PR #44** — "Season keys, exceptional quota, church calendar in the assistant" (`feat/season-keys-assistant`) | ADR-051: season keys `apostles`, `nayrouz` (+ the Cross), `kiahk`, `great_lent` (`SeasonKeys.all` = rules `seasonKeyList()`; fasting / festive palettes); `settings/assistant.exceptionalSeasons` chips (default + Great Lent, Kiahk, Marian); prompt «Church calendar» line (Coptic date + feast, loaded Katameros only); Arabic digits in the limit message; /ask greeting and chips skip hidden sections; preset live end = tonight's last service + 30 min (editable); `seasons.replaceDates` feast-night override (date chips); fast presets untick weddings; Holy Week day names in the top bar; EN pages use `liveLabelEn` or a generic label. +0 visitor reads / listeners. |
 
 Append new PRs to this table.

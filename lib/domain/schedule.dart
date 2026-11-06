@@ -185,7 +185,8 @@ List<LiturgyOccurrence> occurrencesForDay({
     // A full-override season counts even when its only service today is a
     // sample hidden by another season's real one (CodeRabbit on PR #45).
     for (final s in windows) {
-      if (s.replacesRegular) {
+      // ADR-051: an additive season replaces on its `replaceDates` (feast night).
+      if (s.replacesOn(dayStart)) {
         replacing.add(s);
       } else if (!hidden) {
         (additive[s] ??= []).add(o);
@@ -464,7 +465,7 @@ bool undatedSuppressedOn(Season s, Liturgy l, Iterable<Liturgy> all, tz.TZDateTi
     // start day) is not part of it (as in [occurrencesForDay]; CodeRabbit).
     final o = _occurrence(d, dayStart, 0);
     if (o == null || !isSeasonActiveAt(s, o.start)) continue;
-    if (s.replacesRegular) return true;
+    if (s.replacesOn(dayStart)) return true;
     if (mine == null || (o.start.isBefore(mine.end) && mine.start.isBefore(o.end))) return true;
   }
   return false;

@@ -121,6 +121,11 @@ class TodaySettings {
   /// (at or after the day's start, e.g. 18:00)?
   bool isEveService(DateTime start, {double? lat, double? lng}) => liturgicalDay(start, lat: lat, lng: lng).isEve;
 
+  /// The admin's live label for the page language (ADR-051, issue 14):
+  /// [liveLabelAr] on Arabic pages, [liveLabelEn] on English ones — never
+  /// the other language's text; '' = the generic «بث مباشر…» / "Live now…".
+  String liveLabelFor({required bool arabic}) => (arabic ? liveLabelAr : liveLabelEn).trim();
+
   /// The liturgical day at [now] with these settings (church coordinates
   /// [lat] / [lng], default the church in Alexandria).
   LiturgicalDay liturgicalDay(DateTime now, {double? lat, double? lng}) =>

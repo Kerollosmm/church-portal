@@ -54,7 +54,7 @@ This document provides a comprehensive, feature-by-feature manual for all 31 cap
 - **Limits:** Editing the built-in 366-verse rotation pool requires editing `tool/gen_daily_verses.py` and recompiling the asset.
 
 ### 3. Top Utility Bar, Coptic Calendar & Live Stream
-- **Visitor Experience:** A slim utility bar sits above the main navigation displaying the full Coptic liturgical date (e.g. «الأربعاء ٢٥ بابه ١٧٤٣ ش»). At 18:00 (or parish sunset), the liturgical day transitions to the Eve of the following day («ليلة الخميس»). When a live stream is active, a pulsing live indicator appears.
+- **Visitor Experience:** A slim utility bar sits above the main navigation displaying the full Coptic liturgical date (e.g. «الأربعاء ٢٥ بابه ١٧٤٣ ش»). At 18:00 (or parish sunset), the liturgical day transitions to the Eve of the following day («ليلة الخميس»). During Holy Week the day's name replaces the weekday, computed from Coptic Easter (Palm Sunday, Holy Monday–Wednesday, Covenant Thursday, Good Friday, Joyous Saturday; e.g. «ليلة الجمعة العظيمة ٢٢ برموده ١٧٤٣ ش» / "Eve of Good Friday 22 Baramouda 1743 AM", ADR-051). When a live stream is active, a pulsing live indicator appears; English pages show the English live label or a generic "Live now", never the Arabic text (ADR-051).
 - **Admin Control (`/admin` → Today & Live Stream):** Configure live stream status, broadcast URL (YouTube, Facebook, etc.), scheduled end time, custom live badge label, and toggle whether the compact badge hides on Home when the prominent banner is displayed.
 - **Technical Implementation:** Powered by `lib/domain/coptic_calendar.dart` and `sun.dart` using astronomical calculations for Alexandria coordinates. Stored in `settings/features.today`.
 - **Limits:** Does not calculate historical Coptic dates prior to 1 AM (Anno Martyrum).
@@ -70,6 +70,7 @@ This document provides a comprehensive, feature-by-feature manual for all 31 cap
 - **Admin Control (`/admin` → Liturgies & Seasons):** Full CRUD for regular liturgies, seasonal override liturgies, vespers, and praises. Assign halls, priests, and visibility.
 - **Technical Implementation:** Schedule evaluation in `lib/domain/schedule.dart`. Active seasons take precedence over regular weekly schedules during their exact start and end windows (ADR-006).
 - **Additive seasons & samples (ADR-050):** in a season that does not replace the regular schedule (fasts, revivals, the Holy 50 Days) a seasonal mass hides only the regular masses that overlap it in time; a seasonal service ticked "Replaces the day's regular masses (feast liturgy)" (`replacesDay`) hides every regular mass of its day. Hidden regular masses show "Not held today" on the weekly tab and the assistant reads the same list. A `sample` service never replaces or outranks a real one (any season), and a season's samples disappear once it has a real service. The "Happening now" box shows the end time ("Until 03:30 AM"). Seed placeholder text ("pending church confirmation") is treated as empty.
+- **Season keys (ADR-051):** `holy_week`, `pascha`, `nativity`, `epiphany`, `marian`, `fast` (general), `revival_maximus`, `revival_moses`, `summer`, plus `apostles`, `nayrouz` (Nayrouz through the Feast of the Cross), `kiahk` and `great_lent` (`lib/domain/season_keys.dart`, mirrored by `seasonKeyList()` in `firestore.rules`). The fasting keys use the fasting palette, Nayrouz the festive red one. An additive season can still replace the regular schedule on chosen days (`replaceDates`, e.g. the feast night), edited as date chips in the season form.
 
 ### 6. Programme Details (Speaker, Topic, PDF Notes)
 - **Visitor Experience:** Liturgies, revivals, and spiritual meetings display rich programmatic details: guest speaker/bishop name, sermon topic, choir name, venue/hall, intended audience chips, and a direct link to download or view sermon PDF notes on Google Drive.
@@ -80,6 +81,7 @@ This document provides a comprehensive, feature-by-feature manual for all 31 cap
 - **Visitor Experience:** During major feasts or fasts, the site immediately adapts its banners, themes, seasonal verses, and program details without manual day-to-day reconfiguration.
 - **Admin Control (`/admin` → Season Settings → "Prepare Season"):** A one-click administrative action that applies complete seasonal configurations (theme, announcement banner, seasonal verses, wedding booking suspension) in a single atomic transaction. Automatically reverts back when the season ends.
 - **Technical Implementation:** Managed by `lib/domain/season_preset.dart`. Concurrency-safe writes executed via `AdminBackend.saveDocsFresh`.
+- **ADR-051:** fasting seasons (general fast, Great Lent, Apostles' fast, Kiahk) hide wedding bookings by default; the live link's banner ends tonight (the season's last service tonight + 30 minutes, 23:59 if none; editable on the screen) instead of at the season end.
 
 ### 8. Church Education & Meetings
 - **Visitor Experience:** Interactive timelines organized by age group (angels nursery, primary, preparatory, secondary, university, graduates, young professionals, family, women, seniors). Displays meeting days, times, church halls, and links to WhatsApp or Facebook groups.
@@ -148,7 +150,8 @@ This document provides a comprehensive, feature-by-feature manual for all 31 cap
 
 ### 21. AI Assistant "Ask the Church" (`/ask`)
 - **Visitor Experience:** Grounded conversational assistant answering visitor queries about liturgy times, meetings, priest contacts, and church directions in Arabic or English. Non-church or theological queries are politely declined or routed to St. Takla theological search.
-- **Admin Control (`/admin` → AI Assistant):** Toggle assistant availability, specify Gemini model (defaults to `gemini-3.1-flash-lite`), adjust system persona prompts, define allowed topics, and configure per-device question caps.
+- **Admin Control (`/admin` → AI Assistant):** Toggle assistant availability, specify Gemini model (defaults to `gemini-3.1-flash-lite`), adjust system persona prompts, define allowed topics, and configure per-device question caps, including which season kinds raise the daily cap ("Exceptional seasons" chips; default Holy Week, Pascha, Nativity, both revivals, Great Lent, Kiahk, Marian seasons — ADR-051).
+- **ADR-051:** the prompt carries a "Church calendar" line (the Coptic liturgical date, rolling over at 18:00 / sunset, and the feast of the day from the already-loaded Katameros data or the computed feast list); the built-in greeting and suggestion chips skip sections switched off; the Arabic limit message uses Arabic-Indic digits.
 - **Technical Implementation:** Built with Firebase AI Logic (Gemini API). Client requests are verified via reCAPTCHA Enterprise / Play Integrity App Check tokens.
 
 ### 22. Administrative Dashboard (`/admin`)

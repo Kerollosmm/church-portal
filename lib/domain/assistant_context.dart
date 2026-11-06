@@ -1,11 +1,14 @@
 import 'assistant_settings.dart';
 import 'cairo_time.dart';
+import 'coptic_calendar.dart' show DayStartModes;
+import 'coptic_feasts.dart';
 import 'custom_content.dart';
 import 'features.dart';
 import 'models.dart';
 import 'rules.dart';
 import 'schedule.dart';
 import 'time_format.dart';
+import 'today.dart' show SynaxariumData;
 
 /// Builds the grounding system instruction for the "Ask the church"
 /// assistant from the current portal content.
@@ -28,6 +31,7 @@ String buildAssistantInstruction({
   List<CategoryEntry> entries = const [],
   List<CustomPage> pages = const [],
   ContactSettings contact = ContactSettings.defaults,
+  SynaxariumData synaxarium = SynaxariumData.empty,
 }) {
   final f = features;
   final cairoNow = CairoTime.fromInstant(now);
@@ -128,6 +132,8 @@ String buildAssistantInstruction({
       'All times are Africa/Cairo local time. Today in Cairo: ${_ymd(cairoNow)} '
       '(${weekdayNamesEn[cairoNow.weekday]}). Each question starts with the exact current Cairo time.',
     )
+    // ADR-051 (issue 4): the Coptic date and the feast of the liturgical day.
+    ..writeln(churchCalendarLine(f, now, synaxarium: synaxarium, lat: settings.lat, lng: settings.lng))
     ..writeln(
       'Do not give medical, legal or spiritual-direction advice beyond pointing to the right clinic, '
       'meeting or priest. Do not ask for or collect personal data.',
@@ -261,6 +267,12 @@ String buildAssistantInstruction({
             '- ${l.sample ? '[UNCONFIRMED] ' : ''}$when: ${_liturgyLine(l, f.programOptions)}'
             "${l.replacesDay && !s.replacesRegular ? " [REPLACES the day's regular masses]" : ''}",
           );
+        }
+        // ADR-051: the feast night(s) of an additive season.
+        if (!s.replacesRegular && s.replaceDates.isNotEmpty) {
+          b.writeln('- On ${s.replaceDates.join(', ')} this season REPLACES the regular services that start inside '
+              'its window (${s.startsAt?.toIso8601String() ?? 'start'} -> ${s.endsAt?.toIso8601String() ?? 'end'}; '
+              'feast night); regular services outside the window that day still take place.');
         }
       }
     }
@@ -687,6 +699,41 @@ String _itemDetails(
 
 /// Bilingual value that never comes out blank when an editor filled only
 /// one language: "English (Arabic)", or whichever one is set.
+/// The "Church calendar" line of the prompt (ADR-051, issue 4): the
+/// liturgical day at [now] as the site's top bar shows it (the Coptic date,
+/// rolling over at the admin's day start, 18:00 by default, or sunset; Holy
+/// Week day names) and the feast of that day from the loaded Katameros day
+/// ([synaxarium], when the home page already loaded it — no new read) plus
+/// the app's computed feast list. Built for every question, so it follows the
+/// rollover with no refresh of its own.
+String churchCalendarLine(FeatureSettings f, DateTime now,
+    {SynaxariumData synaxarium = SynaxariumData.empty, double? lat, double? lng}) {
+  final t = f.today;
+  final day = t.liturgicalDay(now, lat: lat, lng: lng);
+  final start = t.dayStartMode == DayStartModes.sunset
+      ? 'at sunset'
+      : 'at ${t.dayStartsAt.trim().isEmpty ? '18:00' : t.dayStartsAt.trim()}';
+  final feasts = <String>[];
+  void add(String v) {
+    if (v.isNotEmpty && !feasts.contains(v)) feasts.add(v);
+  }
+
+  final k = synaxarium.dayOf(day.date);
+  if (k != null) add(_bi(k.feastAr, k.feastEn));
+  for (final c in copticFeastsOn(day.date)) {
+    add(_bi(c.ar, c.en));
+  }
+  final commemorations = [
+    if (k != null)
+      for (var i = 0; i < 2 && (i < k.ar.length || i < k.en.length); i++)
+        _bi(i < k.ar.length ? k.ar[i] : '', i < k.en.length ? k.en[i] : ''),
+  ];
+  return 'Church calendar (the Coptic liturgical day starts the evening before, $start Cairo time): '
+      'now ${day.label(arabic: false)} (${day.label(arabic: true)}). '
+      '${feasts.isEmpty ? 'No major feast or fast begins on this day.' : 'Feast of the day: ${feasts.join('; ')}.'}'
+      '${commemorations.isEmpty ? '' : ' Commemorations (Synaxarium, Katameros): ${commemorations.join('; ')}.'}';
+}
+
 String _bi(String ar, String en) => en.isNotEmpty && ar.isNotEmpty ? '$en ($ar)' : (en.isNotEmpty ? en : ar);
 
 String _at(String place) => place.isNotEmpty ? ' at $place' : '';

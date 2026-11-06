@@ -276,14 +276,17 @@ void main() {
       expect(AssistantSettings.fromMap(const {'perDay': 10, 'perDaySeason': 20}).perDayFor(const ['holy_week']), 20);
     });
 
-    test('sync end: the preset end (and the live end it set) follow the season\'s new end (Sentry review)', () {
+    test('sync end: the preset end follows the season\'s new end; the live end is only ever pulled in (Sentry review, ADR-051)', () {
       final newEnd = _end.add(const Duration(days: 3));
       final p = SeasonPreset(seasonId: 'hw', seasonKey: 'holy_week', appliedAt: _start, endsAt: _end,
           options: const [PresetOption.live]);
       final w = planSyncEnd(p, newEnd, storedLiveEndsAt: _end);
       expect(SeasonPreset.fromMap(w.features['seasonPreset'])!.endsAt, newEnd);
-      expect(w.features['liveEndsAt'], newEnd);
+      // A later season end never keeps a switched-on banner for days (CodeRabbit on PR #44).
+      expect(w.features.containsKey('liveEndsAt'), isFalse);
       expect(w.season, isEmpty);
+      final shorter = _end.subtract(const Duration(days: 1));
+      expect(planSyncEnd(p, shorter, storedLiveEndsAt: _end).features['liveEndsAt'], shorter);
       // A live end changed by hand since the apply is left alone.
       expect(planSyncEnd(p, newEnd, storedLiveEndsAt: _start).features.containsKey('liveEndsAt'), isFalse);
     });

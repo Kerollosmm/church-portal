@@ -1,7 +1,7 @@
 # 11 — Open tasks
 
 Tick items off (or delete them) in the PR that completes them, and add new ones as you discover them.
-Status as of 5 Nov 2026 (PR #42 / ADR-049; PR #40 / ADR-047; PR #39 / ADR-046; PR #38 / ADR-045; PR #35 / ADR-044; PR #37 / ADR-043; PR #33 / ADR-042; PR #32 / ADR-041; PR #31 / ADR-039–040; PR #30 / ADR-038; PR #25 re-checked against `d60261d`; earlier: PR #7–#24).
+Status as of 5 Nov 2026 (PR #44 / ADR-051; PR #45 / ADR-050; PR #42 / ADR-049; PR #40 / ADR-047; PR #39 / ADR-046; PR #38 / ADR-045; PR #35 / ADR-044; PR #37 / ADR-043; PR #33 / ADR-042; PR #32 / ADR-041; PR #31 / ADR-039–040; PR #30 / ADR-038; PR #25 re-checked against `d60261d`; earlier: PR #7–#24).
 
 ## Top open items (owner's list, 4 Nov 2026 — details in the sections below)
 
@@ -46,6 +46,15 @@ Status as of 5 Nov 2026 (PR #42 / ADR-049; PR #40 / ADR-047; PR #39 / ADR-046; P
     `https://maximos-domadios-church.web.app/media/milestones/pope-visit-gallery5.webp` (prepared in
     `work/fixall/live-gallery3.json`, 1 write); (d) tick «يحل محل قداسات اليوم المعتادة» on feast liturgies of additive
     seasons that should cancel the day's regular masses.
+12. **Seasons v2 follow-ups (ADR-051, PR #44)** — done in code: season keys `apostles` / `nayrouz` (+ Cross) / `kiahk` /
+    `great_lent`, admin exceptional-quota list, prompt «Church calendar», Arabic digits in the limit message, /ask
+    greeting / chips skip hidden sections, tonight's live end, `replaceDates`, fast presets without weddings, Holy Week
+    day names, EN live label. **Owner:** re-key the 2027 season docs that used `fast` / `pascha` as stand-ins (Great
+    Lent, Apostles, Kiahk, Nayrouz) in /admin → المواسم **together with their services' «الموسم» (`seasonKey`) in
+    القداسات والصلوات** (matching is by exact key: a season re-keyed alone loses its services; the season's «نوع الموسم» field now says so); review «المساعد الذكي» → «المواسم الاستثنائية»; set
+    «أيام يحل فيها الموسم محل الجدول العادي» on revival / fast seasons that have a feast night; fill «نص الشريط
+    (إنجليزي)» when streaming. Open: a separate `cross` key only if the church wants the Cross apart from Nayrouz;
+    the admin's free-text welcome is not filtered by sections.
 
 ## Infrastructure & security (owner: developer)
 

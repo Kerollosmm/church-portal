@@ -7,6 +7,7 @@
 
 import 'daily_verse.dart';
 import 'models.dart' show Season;
+import 'season_keys.dart';
 import 'schedule.dart' show isSeasonActiveAt;
 
 class SeasonVerses {
@@ -16,9 +17,7 @@ class SeasonVerses {
   static const sep = '\u001f';
 
   /// The season keys a set can belong to (validSeason's `key` list).
-  static const seasonKeys = [
-    'holy_week', 'pascha', 'nativity', 'epiphany', 'marian', 'fast', 'revival_maximus', 'revival_moses', 'summer', //
-  ];
+  static const seasonKeys = SeasonKeys.all;
 
   /// Season key → its verses, in the admin's order.
   final Map<String, List<Verse>> bySeason;
@@ -44,6 +43,16 @@ class SeasonVerses {
     return out.isEmpty ? none : SeasonVerses(out);
   }
 
+  /// The verses of season key [key]: its own set, else — for a fasting
+  /// key (Great Lent, the Apostles' fast, Kiahk; ADR-051) — the general
+  /// `fast` set. Empty = none.
+  List<Verse> versesFor(String key) {
+    final own = bySeason[key];
+    if (own != null && own.isNotEmpty) return own;
+    if (key != SeasonKeys.fast && SeasonKeys.isFast(key)) return bySeason[SeasonKeys.fast] ?? const [];
+    return const [];
+  }
+
   /// The set of the active season at [instant] that has verses: when
   /// several are active, the one that started last (the more specific one,
   /// e.g. Holy Week inside a longer season). Empty = no season set applies.
@@ -51,11 +60,11 @@ class SeasonVerses {
     if (isEmpty) return const [];
     Season? best;
     for (final s in seasons) {
-      if (!(bySeason[s.key]?.isNotEmpty ?? false) || !isSeasonActiveAt(s, instant)) continue;
+      if (versesFor(s.key).isEmpty || !isSeasonActiveAt(s, instant)) continue;
       final a = s.startsAt, b = best?.startsAt;
       if (best == null || (a != null && (b == null || a.isAfter(b)))) best = s;
     }
-    return best == null ? const [] : bySeason[best.key]!;
+    return best == null ? const [] : versesFor(best.key);
   }
 }
 

@@ -112,7 +112,7 @@ class _LiveBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final custom = context.pick(settings.liveLabelAr, settings.liveLabelEn).trim();
+    final custom = settings.liveLabelFor(arabic: context.isAr);
     final label = custom.isEmpty ? context.tr('liveBadge') : custom;
     final red = context.pal.live, onRed = context.pal.onLive;
     void open() => openUrl(settings.liveUrl);
@@ -168,7 +168,7 @@ class LiveStreamBanner extends ConsumerWidget {
     final t = ref.watch(todaySettingsProvider);
     final now = ref.watch(nowProvider).value ?? DateTime.now();
     if (!t.liveOn(now)) return const SizedBox.shrink();
-    final custom = context.pick(t.liveLabelAr, t.liveLabelEn).trim();
+    final custom = t.liveLabelFor(arabic: context.isAr);
     final label = custom.isEmpty ? context.tr('liveNow') : custom;
     // The theme's live colours (red; deep crimson on Holy Week — ADR-043).
     final red = context.pal.live, onRed = context.pal.onLive;

@@ -83,9 +83,14 @@ render with `PageBody` (+ `Footer`). Content comes from Riverpod providers (hidd
   `onBarAccent`, bottom line `barEdge` or `ornamentLine`; ADR-043 roles — maroon on Golden hour, charcoal with a crimson
   edge on Holy Week). The liturgical day in Coptic, «الأربعاء ٢٥ بابه ١٧٤٣ ش»; after the day's start (18:00 by
   default, or sunset at the church) «ليلة الخميس ٢٦ بابه ١٧٤٣ ش». `copticStrip`: every page / Home only / off. No
-  time-zone label anywhere. The date takes all the width the badge leaves.
+  time-zone label anywhere. The date takes all the width the badge leaves. **Holy Week (ADR-051):** the day's name
+  replaces the weekday, computed from `orthodoxEaster` (`holyWeekDayName`): «أحد الشعانين»، «اثنين / ثلاثاء / أربعاء
+  البصخة»، «خميس العهد»، «الجمعة العظيمة»، «سبت النور»; after the rollover «ليلة الجمعة العظيمة ٢٢ برموده ١٧٤٣ ش» /
+  "Eve of Good Friday 22 Baramouda 1743 AM".
 - **Top bar live badge** (`_LiveBadge`, key `topBarLiveBadge`): while `liveOn(now)`, a pill (≤ 150 px, ellipsis) in the
-  theme's `live` / `onLive` colours with a 7 px pulsing dot and the admin's live label or «مباشر» / "Live"; tap,
+  theme's `live` / `onLive` colours with a 7 px pulsing dot and the admin's live label for the page language
+  (`liveLabelFor`: `liveLabelAr` on Arabic pages, `liveLabelEn` on English ones — never the other language, ADR-051)
+  or «مباشر» / "Live"; tap,
   keyboard (focusable `InkWell`, Enter / Space) and screen readers (button «مباشر — شاهد البث» with a tap action) open
   the stream (`openUrl(liveUrl)`, the banner's behaviour). **Owner decision (5 Nov):** on **Home** (`/`) only the red
   banner shows — the badge hides while the banner shows (`TodaySettings.liveBadgeOn(now, location)`, switch
@@ -186,8 +191,11 @@ the same day with overlapping times in different venues (`parallelServices`) get
 - **Season verses:** `HeroVerse` uses `resolveSeasonalVerse`: fixed admin verse > the active season's set (rotating by
   liturgical day) > the general list.
 - **Contact form:** `weddingBookingOff` drops the `wedding` subtype of booking categories (`withoutWedding`).
-- **Assistant:** daily limit `perDaySeason` (default 6) while Holy Week / Pascha / Nativity / a revival is active;
-  topics of switched-off sections are dropped; the prompt names the current season and the switched-off sections.
+- **Assistant:** daily limit `perDaySeason` (default 6) while an active season's key is in
+  `settings/assistant.exceptionalSeasons` (default Holy Week, Pascha, Nativity, both revivals, Great Lent, Kiahk,
+  Marian — ADR-051); topics of switched-off sections are dropped; the prompt names the current season and the
+  switched-off sections, and (ADR-051) a «Church calendar» line: the liturgical day as the top bar shows it and the
+  feast of that day (loaded Katameros day, else the computed list).
 - **Hero v2:** 9 s seamless loops (1280×720 / 432×768) and matching first-frame posters (ADR-042).
 
 ### `/church-education` — `education_page.dart` `EducationPage`
@@ -257,12 +265,15 @@ notices («اعرف المزيد»), buttons or links, and appear in the menu on
 church" drawer group. `NavItem.labelAr/labelEn` carry their own labels.
 
 ### `/ask` — `assistant_page.dart` `AssistantPage`
-Chat UI with a welcome bubble (admin `welcomeAr/En`, else `askIntro`), **no suggestion chips by default** (PR #21:
-only when admin `showSuggestions` is on, then only `suggestionsAr/En`, no built-ins), an input capped at `maxChars` (default 500), disclaimer «إجابات آلية قد
+Chat UI with a welcome bubble (admin `welcomeAr/En`, else `askIntroText` naming only the switched-on sections —
+liturgy times, clinics, meetings, contacts; ADR-051), **no suggestion chips by default** (PR #21:
+only when admin `showSuggestions` is on, then only `suggestionsAr/En`, no built-ins; a suggestion about a hidden section
+is dropped, ADR-051), an input capped at `maxChars` (default 500), disclaimer «إجابات آلية قد
 تحتوي أخطاء». Answers only about the church and its services (ADR-029): off-topic questions get the admin refusal
 message in the visitor's language; limits (questions per minute per visit, and **per device per Cairo day**,
 default 3 — ADR-031, counter in shared_preferences / localStorage under a random device id, resets at Cairo
-midnight) show `askSlowDown` / `askDayLimit` (with a `/contact` link) without calling the model. Faith questions
+midnight) show `askSlowDown` / `askDayLimit` (with a `/contact` link; the number in Arabic-Indic digits on Arabic
+pages, ADR-051) without calling the model. Faith questions
 the data does not answer get the faith reply + a `site:st-takla.org` search link + `/contact` (ADR-031). Shows "assistant not available" when `assistantVisibleProvider` is
 false. **Replies render as safe Markdown** (PR #21, ADR-030: `lib/domain/simple_markdown.dart` parser +
 `lib/ui/widgets/safe_markdown.dart` `SafeMarkdown`): bold, italics, bullet / numbered lists, links — only http(s),
@@ -459,8 +470,13 @@ on seed data" (**every day** 1 Nov 2026 → 1 Nov 2027, 366 days), "Holy Week 20
 day".
 
 ### Seasons (`seasons` collection)
-Keys: `holy_week` (أسبوع الآلام / البصخة), `pascha` (عيد القيامة), `nativity` (عيد الميلاد), `revival_maximus`
-(نهضة القديسين مكسيموس ودوماديوس), `revival_moses` (نهضة الأنبا موسى الأسود), `summer` (allowed key, no season seeded).
+Keys (`SeasonKeys.all`, rules `seasonKeyList()`): `holy_week` (أسبوع الآلام / البصخة), `pascha` (عيد القيامة),
+`nativity` (عيد الميلاد), `epiphany`, `marian`, `fast` (general fast), `revival_maximus`
+(نهضة القديسين مكسيموس ودوماديوس), `revival_moses` (نهضة الأنبا موسى الأسود), `summer` (allowed key, no season seeded),
+and since ADR-051 `apostles` (صوم الرسل), `nayrouz` (النيروز وعيد الصليب — one key for 1–17 Tout), `kiahk`
+(شهر كيهك), `great_lent` (الصوم الكبير). Themes: the fasting family → `fasting`, `nayrouz` → `resurrection`.
+**Feast-night override (ADR-051):** `replaceDates` (≤ 10 `YYYY-MM-DD`): on those days an additive season replaces the
+regular services starting inside its window (`Season.replacesOn`); other days stay additive.
 Seeded 2027 windows (Cairo): Nativity 6–7 Jan; revival Maximus 21–25 Jan; Holy Week 25 Apr 00:00 → 1 May 18:00;
 Pascha 1 May 18:00 → 2 May 23:59; revival Moses 22 Jun → 1 Jul. Seasons must be re-dated each year (admin).
 Admin field «يستبدل الجدول العادي» (`replacesRegular`, missing = on): keep it on for feasts/Holy Week, switch it off
