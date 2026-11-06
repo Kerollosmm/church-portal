@@ -17,7 +17,8 @@ admin **event pushes** (scheduled, not urgent: within ~15–30 min of their time
 plainly in the UI, §3.2) — with the same complete UX as the APK: explainer, blocked state, quiet hours, test
 notification, inbox, deep links, unsubscribe-all — with **zero cost on page load**. Per the owner's channel rule
 (README §3.1) the verse, Katameros and feasts are **never** sent by FCM: the web shows them on Home and in the
-`/readings/<date>` screen.
+`/readings/<date>` screen (one `/data/readings/<date>.json` fetched on demand, ≤ ~20–25 KB: Arabic Van Dyck full
+text + English references only, e.g. "Gospel: John 15:1-12" — no NKJV text; README §8 #17, decided 6 Nov 2026).
 
 ## ٢. قصص المستخدم (User stories)
 

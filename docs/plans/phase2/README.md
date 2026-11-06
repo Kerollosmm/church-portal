@@ -32,10 +32,21 @@
 11. **APK sideloading guide + in-app update**: a visual step-by-step modal for the download (browser warning, Play
     Protect, «install unknown apps») (PR A §3.3); the app downloads its update itself, verifies SHA-256 against a
     version manifest and opens Android's installer — no redirect to a releases page (PR B §3.3); hosting decided
-    by the owner (§8 #6).
+    by the owner (§8 #6 — **decided 6 Nov 2026 19:57**: a separate public releases repo, manifest on our Hosting).
 12. **De-duplication + iOS onboarding**: strict channel segregation (§3.1) — the daily verse is never sent by FCM;
     the iOS install banner never asks for push permission; permission only inside the installed app on iOS 16.4+
     (PR D §3.1).
+
+**Owner decisions, 6 Nov 2026 19:57 (final)** — §8 #6 and #17:
+
+- **Katameros text (#17):** Arabic full text (Van Dyck, public domain) + English as **references only** (e.g.
+  "Gospel: John 15:1-12") — **no NKJV text**. One daily file `/data/readings/<date>.json`, target ≤ ~20–25 KB.
+  Future option: swap in a public-domain English translation (WEB / ASV) without any architecture change (§3.5).
+- **APK hosting (#6):** a separate **public releases repo** (proposed name `Kerollosmm/church-portal-apk`) whose
+  GitHub Releases carry the APK files; the small version manifest (`version.json`, ~500 B: version, size, SHA-256,
+  download URL → the Release asset) stays on Firebase Hosting. Reasons: Spark's Hosting transfer cap (10 GB/month)
+  would take the **whole site** down if APKs were served from it; independence from the main repo's visibility; the
+  main repo stays light (§5).
 
 **Owner clarification, 6 Nov 2026 19:31 (Arabic, binding)** — «السرعة مش مهمة»:
 
@@ -194,9 +205,13 @@ exact-time alternative.
 ### 3.5 الآية والقطمارس محليًا (Local verse + Katameros — feature 3)
 
 - **Data:** verse = bundled `assets/verses/daily_verses.json` + admin fixed / season verses (as today); Katameros =
-  new static files `/data/readings/<YYYY-MM-DD>.json` (yesterday … +9 days, ar + en, ~40–50 KB raw / ~12–15 KB
-  gzip each) built by an extended `synaxarium.yml` from the Katameros API (PR B §3.5). English text = NKJV in the
-  API → licence decision §8 #17.
+  new static files `/data/readings/<YYYY-MM-DD>.json` (yesterday … +9 days) built by an extended `synaxarium.yml`
+  from the Katameros API (PR B §3.5). **Text (decided §8 #17, 6 Nov 2026):** Arabic full text (Van Dyck, public
+  domain) + English **references only** (e.g. "Gospel: John 15:1-12", built from the API's book / chapter / verse
+  numbers — no English verse text, no NKJV). **Size target ≤ ~20–25 KB per daily file** as served (the Arabic API
+  payload measured 29–31 KB raw / ≈ 7.5–8 KB gzip on three sample days, 6 Nov 2026; the builder keeps only the
+  fields the screen uses). Future option: public-domain English text (WEB / ASV) fills the existing `textEn` fields —
+  no architecture change.
 - **APK:** local notifications in a **rolling ~9-day window** (inexact, no exact-alarm permission); refreshed on app
   open / resume and by the daily background task when fewer than 4 days remain; each day's file is downloaded once
   and cached. Payload `{type, date}` → `/readings/<date>?tab=verse|katameros` → in-app reading screen (full verse;
@@ -215,7 +230,7 @@ force-push (HANDOFF §5.6).
 |---|---|---|---|---|
 | 0 | Plans (this folder) | `docs/phase2-plans` → `main` | ADR-056 | review & approve the plan (gate G0) |
 | 1 | **A** install banner + prefs | `feat/p2a-install-prefs` → `docs/phase2-plans` | ADR-057 | visual check of the preview |
-| 2 | **B** Android APK + local notifications | `feat/p2b-android-local-notifications` → A | ADR-058 | keystore + secrets (or accept debug-signed test builds); APK host (§8 #6) |
+| 2 | **B** Android APK + local notifications | `feat/p2b-android-local-notifications` → A | ADR-058 | keystore + secrets (or accept debug-signed test builds); create the public releases repo `Kerollosmm/church-portal-apk` (or approve the agent creating it at PR B time) + `RELEASES_REPO_TOKEN` (§8 #6, decided) |
 | 3 | **C** admin notification manager + FCM sender + deep links | `feat/p2c-notification-manager` → B | ADR-059 | FCM API, `push-sender` service account, `FIREBASE_SA_PUSH`, `PUSH_DRY_RUN=true`, Sentry cron monitor (optional DSN secret); recommended: `production` required reviewers (§8 #19) |
 | 4 | **D** web push + PWA + iPhone | `feat/p2d-web-push` → C | ADR-060 | VAPID key in `/admin` |
 | 5 | **E** responsive + size audit | `fix/p2e-responsive-size` → D | ADR-061 | visual check |
@@ -233,17 +248,22 @@ Each PR: draft → CI green (`ci.yml` + preview from `deploy.yml`) → `@coderab
   doc (already streamed by every visitor). Static data comes from Hosting (`/data/today.json`, `/data/readings/<date>.json`, bundled assets).
 - **Admin-only writes** for every new `settings/features` key (rules `validFeatures` gates, 1,000-expression budget,
   emulator tests). The only public write is PR D's create-only `push_queue` (strict validation + global throttle).
-- **APK hosting** (owner decision §8 #6): the **version manifest** (`/app/android/version.json`, ~500 B) is always
-  on our Firebase Hosting; the APK files go to one of: (a) **Firebase Hosting** `/app/android/` (owner's original
-  choice) — simplest, same domain, but every download counts against the project's Hosting transfer (Spark: 360
-  MB/day on the pricing page, 10 GB/month in the Hosting docs; past it the **whole site** is disabled after a short
-  grace period until the next month — https://firebase.google.com/docs/hosting/usage-quotas-pricing), i.e. roughly
-  500 downloads of an 18 MB APK per month shared with all site traffic; (b) a separate **public releases repo**
-  `Kerollosmm/church-portal-apk` (GitHub Releases, free, no transfer quota on our site); (c) this repo's Releases —
-  **only while this repo is public**. **Repo visibility:** the GitHub API reports `Kerollosmm/church-portal` as
-  **public** (checked 6 Nov 2026); the owner described it as private. If it is (or becomes) private, its release
-  assets are **not publicly downloadable** (only signed-in collaborators can fetch them), so (c) is impossible and
-  the choice is (a) or (b). The plans are written host-agnostic (`APK_HOST`, `APK_BASE_URL`; PR B §12).
+- **APK hosting** (owner decision §8 #6 — **decided 6 Nov 2026 19:57**): the APK files are published as assets of
+  **GitHub Releases in a separate public repo** (proposed name `Kerollosmm/church-portal-apk`, contains only a README
+  and releases); the **version manifest** (`/app/android/version.json`, ~500 B: version, build, size, SHA-256 and the
+  download URL of the Release asset, per ABI) stays on our Firebase Hosting. Why: (1) Spark Hosting transfer is
+  capped (360 MB/day on the pricing page, 10 GB/month in the Hosting docs; past it the **whole site** is disabled
+  after a short grace period until the next month — https://firebase.google.com/docs/hosting/usage-quotas-pricing),
+  i.e. roughly 500 downloads of an 18 MB APK per month would be shared with all site traffic; (2) public downloads
+  keep working whatever the main repo's visibility (release assets of a private repo are not publicly downloadable;
+  the GitHub API reports `Kerollosmm/church-portal` as **public** on 6 Nov 2026, the owner described it as private);
+  (3) the main repo stays light. Setup (PR B §12 / §15, LAUNCH §1 / §4): the owner creates the repo (or approves the
+  agent creating it at PR B time — **not before**); a fine-grained token limited to that repo (Contents: Read and
+  write) is stored as the main repo's Actions secret `RELEASES_REPO_TOKEN` and used only by the release workflow
+  (`android.yml`) to publish there; **retention**: keep the newest 5 releases (the live one is always the newest),
+  older releases and their tags are deleted by the same workflow. Rejected alternatives: (a) Firebase Hosting
+  `/app/android/` (quota risk above), (c) the main repo's Releases (only while it is public). `APK_HOST` /
+  `APK_BASE_URL` stay as variables (value `releases-repo`), so an emergency switch needs no code change.
 - **GitHub Actions minutes**: free and unlimited for public repos. On a private repo (2,000 free minutes/month on
   GitHub Free) the 15-min cron alone (~96 billed minutes/day ≈ 2,900/month) would exceed it → hourly cron (§8 #15);
   event pushes and web reminders then arrive up to ~60–75 min late.
@@ -292,10 +312,12 @@ stream. Missing key = the default in the table. Rules validate only changed keys
 (Removed 19:31: the `urgent` column, the `dispatch` map and the owner-only `admin_secrets/github_dispatch` doc.)
 
 **Static file `/app/android/version.json`** (PR B §3.3, Hosting, not Firestore): build, version, minimum build,
-notes, signing-cert fingerprint and per-ABI `url` / `sha256` / `size`.
+notes, signing-cert fingerprint and per-ABI `url` / `sha256` / `size`; `url` = the asset of the matching GitHub
+Release in `Kerollosmm/church-portal-apk` (§8 #6).
 
-**Static files `/data/readings/<YYYY-MM-DD>.json`** (PR B §3.5, Hosting): the day's full Katameros readings ar + en,
-yesterday … +9 days, published by `synaxarium.yml` with `/data/today.json`.
+**Static files `/data/readings/<YYYY-MM-DD>.json`** (PR B §3.5, Hosting): the day's full Katameros readings — Arabic
+full text (Van Dyck) + English references only (§8 #17), target ≤ ~20–25 KB each — yesterday … +9 days, published by
+`synaxarium.yml` with `/data/today.json`.
 
 `pushTypes` keeps all 6 types (the APK offers all of them); the web offers `announcements`, `seasons` and
 `reminders` (§3.1).
@@ -317,7 +339,7 @@ notice changes accordingly (LAUNCH §6).
 | PR | Visitor reads | Visitor writes | Server / Action | Notes |
 |---|---|---|---|---|
 | A | +0 | +0 | — | new keys ride the existing `settings/features` stream; reminders list in local storage |
-| B | +0 | +0 | CI minutes (free while public) | local scheduling on the phone; readings: each day's ~12–15 KB gzip file downloaded once per device (≈ 15 MB/day of Hosting transfer for 1,000 APK users); update manifest only when an update exists; APK downloads count against Hosting only if hosted there (§5) |
+| B | +0 | +0 | CI minutes (free while public) | local scheduling on the phone; readings: each day's file (Arabic text + English refs, ≈ 8 KB gzip) downloaded once per device (≈ 8 MB/day of Hosting transfer for 1,000 APK users); update manifest (~500 B) only when an update exists; APK downloads are served by GitHub Releases, not Hosting (§5) |
 | C | +0 | +0 | sender: ≤ 192 reads/day (2 per run) + hourly reminder planner ≈ 65 reads/run ≈ 1,560 reads/day + ≤ ~40 writes/day (markers, plan, health) on the admin-only doc | FCM free (≈ 100–200 topic sends/day for web reminders) |
 | D | +0 per visit | 2 writes per web change batch (queue doc + throttle doc; «ذكّرني» changes debounced into one batch) + ~3 security-rule document reads | sender: 1 read + 1 delete per queued doc | hard cap 1,000 queue writes/day (rules) |
 | E | +0 | +0 | — | — |
@@ -335,7 +357,7 @@ both far under Spark's daily limits (50k reads, 20k writes, 20k deletes).
 | 3 | Local notifications preferred; FCM for announcements + web | **decided** 6 Nov 17:32; **refined** 6 Nov evening and **19:31**: per platform one channel — APK local = verse, Katameros, feasts, user reminders; FCM = admin event pushes, season alerts, web / iPhone user reminders; verse and Katameros never via FCM (§3.1) |
 | 4 | Admin manages types, texts, times, event pushes, deep links — **scheduled sender only, no urgent / instant path; delivery guaranteed, speed not important** | **decided** 6 Nov 17:33–17:34; **19:31** (instant dispatch removed) |
 | 5 | Release **signing keystore**: create once, back it up, store as GitHub secrets (PR B) | **open** — until then CI builds are debug-signed test builds (cannot be upgraded by a later release-signed APK) |
-| 6 | APK hosting (manifest always on our Hosting): (a) **Firebase Hosting** `/app/android/` (owner's original choice; quota risk can disable the whole site for the rest of the month), (b) **public releases repo** `Kerollosmm/church-portal-apk` (**recommended**: no quota risk, works whether this repo is public or private), (c) this repo's Releases (only while it stays public) | **open — owner** |
+| 6 | APK hosting: a separate **public releases repo** (proposed `Kerollosmm/church-portal-apk`) — GitHub Releases carry the APK assets; the version manifest `version.json` (~500 B: version, size, SHA-256, download URL → the Release asset) stays on Firebase Hosting. Reasons: Spark's 10 GB/month Hosting transfer cap would take the whole site down; independent of the main repo's visibility; keeps the main repo light. Steps: owner creates the repo (or approves the agent creating it at PR B time); fine-grained token for that repo only → main-repo secret `RELEASES_REPO_TOKEN` for the release workflow; retention: newest 5 releases kept (§5, PR B §12 / §15) | **decided** 2026-11-06 (19:57) |
 | 7 | VAPID key generation (Firebase console, PR D) | **open** — owner or Hark's browser session |
 | 8 | Service account for the sender: new `push-sender` (recommended) vs add roles to the deploy account | **open** |
 | 9 | Types offered at launch and default times: verse 07:00, Katameros 06:30, feasts 07:30 Cairo; reminder leads «في الموعد / ١٥ د / ساعة / يوم» (default ساعة) | **open** — editable in `/admin` later |
@@ -344,9 +366,9 @@ both far under Spark's daily limits (50k reads, 20k writes, 20k deletes).
 | 12 | Web / iPhone «ذكّرني»: (A) **per-event FCM topics via `push_queue` + the scheduled sender**, up to ~30 min late, plus «أضف إلى التقويم» for exact time (**recommended**, §3.4), or (B) calendar link only (no push, no Firestore cost) | **confirm** |
 | 13 | Consequence of the channel rule: web / iPhone-PWA users get pushes for event pushes, season alerts and their own reminders; verse, Katameros and feasts appear on Home (no push on the web) | **confirm** |
 | 14 | `seasons` read as the owner's "dynamic seasonal alerts" → FCM on both platforms (no longer local on the APK); the alternative is keeping season starts local on the APK and FCM only on the web | **confirm** — plans follow FCM-only |
-| 15 | Repo visibility: GitHub reports **public**; if it is made private → hourly cron (Actions minutes; event pushes / web reminders up to ~60–75 min late), APK host (a) or (b) | **confirm** current intent |
+| 15 | Repo visibility: GitHub reports **public**; if it is made private → hourly cron (Actions minutes; event pushes / web reminders up to ~60–75 min late); the APK host (#6, separate public releases repo) is unaffected | **confirm** current intent |
 | 16 | Exact alarms for APK user reminders: declare `USE_EXACT_ALARM` (Android 13+, granted at install) + `SCHEDULE_EXACT_ALARM` with `maxSdkVersion 32`; fallback inexact (± ~10 min) if exact scheduling is unavailable; verse / Katameros / feasts stay inexact. Fine for a sideloaded APK; must be revisited if the app ever goes to Google Play (policy limits `USE_EXACT_ALARM` to alarm / calendar apps) | **recommended**, confirm |
-| 17 | English Katameros text: the Katameros API serves **NKJV** for English (Arabic = Van Dyck, public domain). NKJV gratis use is limited (≤ 500 verses, ≤ 25 % of the work — https://www.thomasnelson.com/about-us/permissions); a daily lectionary exceeds that over time. (A) Arabic full text + English references / intro only (**recommended until permission**), (B) request written permission from HarperCollins Christian, (C) another public-domain English source | **open — owner** |
+| 17 | Katameros text: **Arabic full text** (Van Dyck, public domain) + **English as references only** (e.g. "Gospel: John 15:1-12"), **no NKJV text** (NKJV gratis use is limited: ≤ 500 verses, ≤ 25 % of the work — https://www.thomasnelson.com/about-us/permissions). Daily file `/data/readings/<date>.json` target ≤ ~20–25 KB. Future option: a public-domain English translation (WEB / ASV) in the same `textEn` fields, no architecture change (§3.5, PR B §3.5) | **decided** 2026-11-06 (19:57) |
 | 18 | User reminders inside quiet hours: ring normally by default (the user asked for them), switch to make them silent | **recommended**, confirm |
 | 19 | `production` environment Required reviewers: good hygiene (seed / rules runs need the owner's approval), **no longer a prerequisite** of anything in Phase 2 | **recommended** |
 

@@ -1733,14 +1733,24 @@ supersede them.
      `/ask`; a visual step-by-step sideload guide on the web (browser warning, Play Protect, «install unknown
      apps»); **in-app update** (version manifest `/app/android/version.json` on our Hosting, resumable download,
      SHA-256 + signature pre-check, `REQUEST_INSTALL_PACKAGES`, FileProvider installer intent; no releases page);
-     APK host = owner decision (Firebase Hosting — quota can disable the whole site — vs a public releases repo vs
-     this repo's Releases while it is public; GitHub reports the repo public, the owner called it private); release
+     APK host **decided by the owner 6 Nov 2026 19:57** (README §8 #6): APK files on GitHub Releases of a separate
+     **public** repo `Kerollosmm/church-portal-apk` (proposed name; created at PR B time by the owner or by the agent
+     with approval — not yet), the ~500 B manifest (version, size, SHA-256, download URL → Release asset) on our
+     Hosting; reasons: Spark's 10 GB/month Hosting transfer cap would take the whole site down, independence from the
+     main repo's visibility, main repo stays light; the release workflow publishes there with a fine-grained
+     `RELEASES_REPO_TOKEN` (that repo only, Contents: Read and write) and keeps the newest 5 releases; release
      signing from GitHub secrets (owner creates and backs up the keystore). Android developer verification (global
      in 2027) must be completed before it reaches Egypt.
   5. **Process:** stacked chain PR 0 (plans) → A (ADR-057) → B (ADR-058) → C (ADR-059) → D (ADR-060) → E (ADR-061);
      each draft, reviewed (@coderabbitai, @sentry, ≤ 2 rounds), CI green, not merged; after owner approval merged
      bottom-up with squash, merging `main` into the next branch (no rebase, no force-push) — `HANDOFF.md` §5.6.
-- **Cost:** A, B, E +0 Firestore (B: each day's readings file ≈ 15 KB gzip once per device); C ≈ 1,750 reads +
+  6. **Katameros text** (owner, **decided 6 Nov 2026 19:57**, README §8 #17): Arabic full text (Van Dyck, public
+     domain) + English as **references only** (e.g. "Gospel: John 15:1-12", built from the API's book / chapter /
+     verse numbers), **no NKJV text** (its gratis-use limits would be exceeded by a daily lectionary); daily file
+     `/data/readings/<date>.json` targeted at ≤ ~20–25 KB (Arabic payload ≈ 29–31 KB raw / ≈ 8 KB gzip on sample
+     days). Future option: a public-domain English translation (WEB / ASV) in the same `textEn` fields, no
+     architecture change.
+- **Cost:** A, B, E +0 Firestore (B: each day's readings file ≈ 8 KB gzip once per device); C ≈ 1,750 reads +
   ≤ ~60 writes/day (sender + hourly reminder planner, admin-only doc); D 2 writes per web change batch (opt-in,
   language, debounced «ذكّرني» changes) + sender read/delete, hard-capped at 1,000 queue writes/day by the rules.
 - **Rules / data / seed:** unchanged in this PR (docs only).
@@ -1810,4 +1820,4 @@ supersede them.
 | 6 Nov 2026 | **PR #49** — "Seasonal list empty state" (`fix/season-empty-state`) | ADR-055: /mass-schedule seasonal view with no season in effect shows «لا توجد مواسم حالية» / "No current seasons" and, when an enabled season starts later, «الموسم القادم: صوم الميلاد — يبدأ ٢٥ نوفمبر» (`nextUpcomingSeason`, `EmptyState.detail`); fixed i18n strings (not admin-configurable). +0 reads / writes / listeners. |
 
 Append new PRs to this table.
-| 6 Nov 2026 | **Phase 2 plans** (`docs/phase2-plans`, docs only) | ADR-056: `docs/plans/phase2/` — README (architecture, data contract, cost, decisions; revised 6 Nov 19:31–19:35: scheduled-only sender, event pushes, «ذكّرني» reminders, local verse + Katameros, keep-alive), HANDOFF (workflow, stacked chain, merge procedure), STATUS (checklists), PR A–E plans, LAUNCH-AND-OPERATIONS (consoles, keystore, user guidance, privacy, device tests, rollback, monitoring, runbook, launch day). No code. |
+| 6 Nov 2026 | **Phase 2 plans** (`docs/phase2-plans`, docs only) | ADR-056: `docs/plans/phase2/` — README (architecture, data contract, cost, decisions; revised 6 Nov 19:31–19:35: scheduled-only sender, event pushes, «ذكّرني» reminders, local verse + Katameros, keep-alive; owner decisions 19:57: APKs on a separate public releases repo, Katameros Arabic text + English refs only), HANDOFF (workflow, stacked chain, merge procedure), STATUS (checklists), PR A–E plans, LAUNCH-AND-OPERATIONS (consoles, keystore, user guidance, privacy, device tests, rollback, monitoring, runbook, launch day). No code. |

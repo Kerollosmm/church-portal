@@ -9,7 +9,7 @@ guidance, privacy, real-device tests, release, rollback, monitoring, the admin r
 |---|---|---|---|---|
 | 1 | Your computer | create the APK signing keystore + 2 backups | B | owner |
 | 2 | GitHub → Settings → Secrets → Actions | `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD` | B | owner |
-| 2b | GitHub → Variables (+ new public repo if chosen) | APK host decision (README §8 #6): `APK_HOST`, `APK_BASE_URL`; for `releases-repo` create `Kerollosmm/church-portal-apk` + secret `RELEASES_REPO_TOKEN` | B | owner |
+| 2b | GitHub → new public repo + Secrets / Variables | APK host (README §8 #6, **decided 6 Nov 2026**): create `Kerollosmm/church-portal-apk` (owner, or the agent with the owner's approval at PR B time), fine-grained token for that repo only (Contents: Read and write) → secret `RELEASES_REPO_TOKEN`; variables `APK_HOST=releases-repo`, `APK_BASE_URL`; retention = newest 5 releases (automatic) | B | owner |
 | 3 | GitHub → Releases | first tag `apk-v1.1.0` → APKs + `version.json` attached and published (after the chain is merged) | B | owner |
 | 4 | `/admin` → «التطبيق والإشعارات» | APK URLs, version, build, size | B | admin |
 | 5 | Google Cloud → APIs | enable **Firebase Cloud Messaging API** | C | owner |
@@ -54,7 +54,7 @@ D: VAPID).
 1. Bump `version:` in `pubspec.yaml` (`1.2.0+3`: name `1.2.0`, build `3`) in a normal PR; merge.
 2. GitHub → **Releases** → **Draft a new release** → tag `apk-v1.2.0` (create on publish) → title «تطبيق الكنيسة
    1.2.0» → Arabic notes → **Publish**. `android.yml` builds, signs, writes `version.json` (sizes, SHA-256, cert
-   fingerprint), attaches all three files and publishes them to the chosen host (~10–15 min).
+   fingerprint), attaches all three files, mirrors the APKs to the releases repo `Kerollosmm/church-portal-apk` (README §8 #6) and puts `version.json` on our Hosting (~10–15 min).
 3. Check: the release has both APKs + `version.json`; `https://maximos-domadios-church.web.app/app/android/version.json`
    shows build `3`; the APK URL in it downloads and its size matches.
 4. `/admin` → «التطبيق والإشعارات»: الإصدار `1.2.0`, الحجم, then **رقم البناء `3` last** → **حفظ**. (The download
@@ -62,14 +62,15 @@ D: VAPID).
 5. Installed apps see «تحديث متاح» (their build < 3) → «تحديث الآن» → the app downloads the APK itself, checks its
    SHA-256 against `version.json`, asks once for «السماح بتثبيت التحديثات» for the church app, and opens Android's
    installer → update over the old one (same key → data kept). No browser, no releases page.
-6. **Hosting choice (owner, README §8 #6):**
-   | Host | Public download works if… | Cost / risk |
-   |---|---|---|
-   | (a) Firebase Hosting `/app/android/` | always | counts against the project's Hosting transfer (Spark 10 GB/month; past it the whole site is disabled until next month after a short grace period); watch usage weekly (§11), switch before ~7 GB/month |
-   | (b) public repo `Kerollosmm/church-portal-apk` Releases (**recommended**) | always (repo public, contains only releases) | free, no effect on the site's quota; one extra token `RELEASES_REPO_TOKEN` (that repo only, Contents: write) |
-   | (c) this repo's Releases | **only while `Kerollosmm/church-portal` is public** — release assets of a private repo are not downloadable by the public | free; GitHub reports the repo public on 6 Nov 2026, the owner called it private → confirm |
-   The manifest itself is always on our Hosting (tiny). Changing host later = change `APK_HOST` / `APK_BASE_URL`,
-   publish the next release, update the `/admin` link; installed apps follow the manifest automatically.
+6. **Hosting (README §8 #6, decided 6 Nov 2026 19:57):** the APKs are assets of GitHub Releases in the separate
+   **public** repo `Kerollosmm/church-portal-apk`; the manifest `version.json` (~500 B: version, size, SHA-256,
+   download URL → the Release asset) stays on our Firebase Hosting. Why: Spark's Hosting transfer cap (10 GB/month;
+   past it the whole site is disabled until next month after a short grace period) is never touched by APK
+   downloads; public downloads work whatever the main repo's visibility; the main repo stays light. The workflow
+   keeps the newest 5 releases there (older ones and their tags are deleted). Rejected: (a) Firebase Hosting
+   `/app/android/`, (c) the main repo's Releases (only while it is public). Emergency switch later = change
+   `APK_HOST` / `APK_BASE_URL`, publish the next release, update the `/admin` link; installed apps follow the
+   manifest automatically. If the token expired, the release job fails red — renew `RELEASES_REPO_TOKEN` and re-run.
 
 ## ٥. إرشادات المستخدم (User guidance texts — shown in the app and on the site)
 
@@ -186,10 +187,13 @@ Run each PR's §11 table on these, Arabic and English; record results in the PR 
 - **Katameros API** (`api.katameros.app`, open source, no SLA) feeds `/data/today.json` and `/data/readings/*`:
   if it changes shape or disappears, the app keeps the last published days and falls back to computed feasts;
   `synaxarium.yml` failure e-mails show it.
-- **NKJV licence** for English readings (README §8 #17).
-- **Repo visibility**: if `Kerollosmm/church-portal` is made private → APK host (c) stops working publicly and the
-  15-min cron exceeds the free Actions minutes → hourly cron (README §8 #15).
-- **Firebase Hosting transfer** (only if APKs are hosted there): Firebase console → Hosting → Usage, weekly.
+- **English readings**: references only, no NKJV text (README §8 #17, decided 6 Nov 2026); switching to a
+  public-domain English translation (WEB / ASV) later is a data change only.
+- **Repo visibility**: if `Kerollosmm/church-portal` is made private → APK downloads are unaffected (separate public
+  releases repo, §8 #6), but the 15-min cron exceeds the free Actions minutes → hourly cron (README §8 #15).
+- **`RELEASES_REPO_TOKEN` expiry** (fine-grained token, releases repo only): renew before the date set at creation.
+- **Firebase Hosting transfer**: APKs are not hosted there (§8 #6); glance at Hosting → Usage monthly (readings
+  files + site traffic), weekly only if `APK_HOST=firebase` is ever used as an emergency switch.
 - **Firebase JS SDK version** used by `push_client.js` follows FlutterFire; after upgrading `firebase_core`,
   re-test web push.
 
@@ -259,7 +263,8 @@ push (they are local in the app and users set their own reminders — duplicate)
 - [ ] FCM API enabled; `push-sender` SA + `FIREBASE_SA_PUSH`; dry runs (`PUSH_DRY_RUN=true`) correct for 3 days.
 - [ ] `keepalive.yml` manual run green; Sentry cron monitor receiving check-ins; `/admin` health card green (§14).
 - [ ] `/data/readings/*.json` live for the next 9 days (open one in the browser); reading screen OK offline on a phone.
-- [ ] APK host chosen and the in-app update tested from build N to N+1 on a real phone.
+- [ ] Releases repo `Kerollosmm/church-portal-apk` live with the first release, `RELEASES_REPO_TOKEN` + variables
+      set, manifest URLs point at its Release assets, and the in-app update tested from build N to N+1 on a real phone.
 - [ ] VAPID key saved in `/admin`.
 - [ ] Real-device plan (§7) passed and recorded.
 - [ ] Privacy texts approved (§6).

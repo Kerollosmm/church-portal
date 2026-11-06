@@ -9,11 +9,15 @@
   review rounds 1 and 2 (the maximum) addressed; owner change requests of 6 Nov evening applied; **owner
   clarification of 19:31 + additions of 19:35 applied** (instant dispatch removed — scheduled sender only with
   guaranteed delivery; admin event pushes; new user «ذكّرني» reminders; local verse + Katameros with a reading
-  screen; keep-alive + sender-health alert; honest web-reminder delay copy; OEM battery guidance + diagnostics) —
-  waiting for the owner (gate G0). No further bot review rounds on this PR.
+  screen; keep-alive + sender-health alert; honest web-reminder delay copy; OEM battery guidance + diagnostics); **owner decisions of 19:57 recorded** (§8 #6
+  releases repo, #17 Arabic text + English refs) — waiting for the owner (gate G0). No further bot review rounds on this PR.
 - **Next action:** owner reviews the plan and answers README §8. **Do not start PR A** until the owner says so.
-- **Blockers / owner decisions open:** README §8 #5–#9, #11 (keystore, **APK host**, VAPID, service account, launch
-  types and default times, Android developer verification), **#17 English Katameros text (NKJV licence)**; to
+- **Decided 6 Nov 2026 19:57:** README §8 **#6** (APKs on GitHub Releases of a separate public repo
+  `Kerollosmm/church-portal-apk`, manifest on Hosting, newest 5 releases kept — repo **not created yet**, created at
+  PR B time by the owner or with approval) and **#17** (Katameros = Arabic Van Dyck full text + English references
+  only, no NKJV; daily file ≤ ~20–25 KB; WEB / ASV swap possible later).
+- **Blockers / owner decisions open:** README §8 #5, #7–#9, #11 (keystore, VAPID, service account, launch
+  types and default times, Android developer verification); to
   confirm: #10 (assistant in APK), **#12 web reminders design**, #13 (web gets event pushes + seasons + reminders;
   verse / Katameros / feasts on Home), #14 (seasons = FCM), #15 (repo visibility), **#16 exact alarms**, **#18
   reminders in quiet hours**; recommended: #19 (`production` required reviewers — hygiene, no longer a blocker).
@@ -40,7 +44,9 @@
       (README §3.3); user reminders «ذكّرني» (README §3.4, PR A §3.2, PR B §3.4, PR C §16, PR D §3.2); local verse +
       Katameros + reading screen (README §3.5, PR B §3.5); keep-alive + health alert (PR C §17, LAUNCH §14); OEM
       guidance + diagnostics (PR B §3.6); decisions renumbered (README §8 #12, #16–#19)
-- [ ] **G0 owner approval of the plan** (+ answers to README §8 #5–#9, #11, #12, #16–#18)
+- [x] Owner decisions 19:57 recorded (docs only): §8 #6 releases repo (README §5, PR B §12 / §15, LAUNCH §1 / §4) and
+      §8 #17 Arabic text + English refs (README §3.5, PR B §3.5, LAUNCH §11), ADR-056 + open tasks
+- [ ] **G0 owner approval of the plan** (+ answers to README §8 #5, #7–#9, #11, #12, #16, #18)
 
 ## PR A — Install banner + prefs (ADR-057) · `feat/p2a-install-prefs` → `docs/phase2-plans`
 - [ ] Domain: `app_install.dart`, `push.dart` + tests
@@ -62,7 +68,7 @@
 
 ## PR B — Android APK + local notifications (ADR-058) · `feat/p2b-android-local-notifications` → A
 - [ ] `planNotifications` (Android-local types only: verse, Katameros, feasts, reminders; ~9-day window, refresh < 4 days) + tests
-- [ ] Readings: `tool/fetch_readings.js` + `synaxarium.yml` / `deploy.yml` publishing `/data/readings/*.json` (multi-file `publish_hosting_file.js`), `readings.dart`, cache, `/readings/<date>` screen (offline) + tests; English per §8 #17 (`refs-only` until decided)
+- [ ] Readings: `tool/fetch_readings.js` + `synaxarium.yml` / `deploy.yml` publishing `/data/readings/*.json` (multi-file `publish_hosting_file.js`), `readings.dart`, cache, `/readings/<date>` screen (offline) + tests; Arabic Van Dyck full text + English references only per §8 #17 (decided 6 Nov 2026; `bibleEn: refs-only`, target ≤ ~20–25 KB per file)
 - [ ] `ReminderScheduler` (exact `USE_EXACT_ALARM` / `SCHEDULE_EXACT_ALARM` ≤ 32 with inexact fallback, boot + package-replaced, follow edits / cancel on removal, notification action) + tests
 - [ ] OEM battery guidance screen (Xiaomi / Oppo-Realme / Vivo / Huawei-Honor / Samsung, try-list intents) + diagnostic check («افحص الإشعارات», «اختبار بعد دقيقتين») + tests
 - [ ] Gradle: desugaring, minify/shrink, env signing (debug fallback)
@@ -73,7 +79,8 @@
 - [ ] `android.yml` (artifacts on PRs, release on `apk-v*` tags, APK size budget step, `APP_BUILD` define, `version.json` via `tool/make_apk_manifest.mjs`, publish per `APK_HOST`) + `deploy.yml` keeps `/app/android/*`
 - [ ] Docs + ADR-058 · APK sizes arm64 ___ / arm32 ___
 - [ ] Draft PR # ___ · CI green · reviews done
-- [ ] Owner: keystore + secrets (or accept debug test builds); APK host (`APK_HOST`, `APK_BASE_URL`, optional `RELEASES_REPO_TOKEN`)
+- [ ] Owner: keystore + secrets (or accept debug test builds); releases repo `Kerollosmm/church-portal-apk` created (owner, or agent with approval at PR B time) + `RELEASES_REPO_TOKEN` (fine-grained, that repo only, Contents: Read and write) + variables `APK_HOST=releases-repo`, `APK_BASE_URL` (§8 #6, decided)
+- [ ] Release workflow: mirror to the releases repo + retention step (newest 5 kept) — PR B §12
 
 ## PR C — Admin notification manager + FCM sender + deep links (ADR-059) · `feat/p2c-notification-manager` → B
 - [ ] `NotifyConfig`, templates, `dueNow`, dedup, `EventKey` + tests
