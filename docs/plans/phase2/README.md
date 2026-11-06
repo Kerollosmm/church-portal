@@ -40,7 +40,7 @@
 **Owner decisions, 6 Nov 2026 19:57 (final)** — §8 #6 and #17:
 
 - **Katameros text (#17):** Arabic full text (Van Dyck, public domain) + English as **references only** (e.g.
-  "Gospel: John 15:1-12") — **no NKJV text**. One daily file `/data/readings/<date>.json`, target ≤ ~20–25 KB.
+  "Gospel: John 15:1-12") — **no NKJV text**. One daily file `/data/readings/<date>.json` (≈ 8 KB gzip, target ≤ ~20–25 KB uncompressed / minified JSON).
   Future option: swap in a public-domain English translation (WEB / ASV) without any architecture change (§3.5).
 - **APK hosting (#6):** a separate **public releases repo** (proposed name `Kerollosmm/church-portal-apk`) whose
   GitHub Releases carry the APK files; the small version manifest (`version.json`, ~500 B: version, size, SHA-256,
@@ -208,7 +208,7 @@ exact-time alternative.
   new static files `/data/readings/<YYYY-MM-DD>.json` (yesterday … +9 days) built by an extended `synaxarium.yml`
   from the Katameros API (PR B §3.5). **Text (decided §8 #17, 6 Nov 2026):** Arabic full text (Van Dyck, public
   domain) + English **references only** (e.g. "Gospel: John 15:1-12", built from the API's book / chapter / verse
-  numbers — no English verse text, no NKJV). **Size target ≤ ~20–25 KB per daily file** as served (the Arabic API
+  numbers — no English verse text, no NKJV). **Daily file size ≈ 8 KB gzip (target ≤ ~20–25 KB uncompressed / minified JSON)** as served (the Arabic API
   payload measured 29–31 KB raw / ≈ 7.5–8 KB gzip on three sample days, 6 Nov 2026; the builder keeps only the
   fields the screen uses). Future option: public-domain English text (WEB / ASV) fills the existing `textEn` fields —
   no architecture change.
@@ -316,7 +316,7 @@ notes, signing-cert fingerprint and per-ABI `url` / `sha256` / `size`; `url` = t
 Release in `Kerollosmm/church-portal-apk` (§8 #6).
 
 **Static files `/data/readings/<YYYY-MM-DD>.json`** (PR B §3.5, Hosting): the day's full Katameros readings — Arabic
-full text (Van Dyck) + English references only (§8 #17), target ≤ ~20–25 KB each — yesterday … +9 days, published by
+full text (Van Dyck) + English references only (§8 #17), ≈ 8 KB gzip (target ≤ ~20–25 KB uncompressed / minified JSON) each — yesterday … +9 days, published by
 `synaxarium.yml` with `/data/today.json`.
 
 `pushTypes` keeps all 6 types (the APK offers all of them); the web offers `announcements`, `seasons` and
@@ -368,7 +368,7 @@ both far under Spark's daily limits (50k reads, 20k writes, 20k deletes).
 | 14 | `seasons` read as the owner's "dynamic seasonal alerts" → FCM on both platforms (no longer local on the APK); the alternative is keeping season starts local on the APK and FCM only on the web | **confirm** — plans follow FCM-only |
 | 15 | Repo visibility: GitHub reports **public**; if it is made private → hourly cron (Actions minutes; event pushes / web reminders up to ~60–75 min late); the APK host (#6, separate public releases repo) is unaffected | **confirm** current intent |
 | 16 | Exact alarms for APK user reminders: declare `USE_EXACT_ALARM` (Android 13+, granted at install) + `SCHEDULE_EXACT_ALARM` with `maxSdkVersion 32`; fallback inexact (± ~10 min) if exact scheduling is unavailable; verse / Katameros / feasts stay inexact. Fine for a sideloaded APK; must be revisited if the app ever goes to Google Play (policy limits `USE_EXACT_ALARM` to alarm / calendar apps) | **recommended**, confirm |
-| 17 | Katameros text: **Arabic full text** (Van Dyck, public domain) + **English as references only** (e.g. "Gospel: John 15:1-12"), **no NKJV text** (NKJV gratis use is limited: ≤ 500 verses, ≤ 25 % of the work — https://www.thomasnelson.com/about-us/permissions). Daily file `/data/readings/<date>.json` target ≤ ~20–25 KB. Future option: a public-domain English translation (WEB / ASV) in the same `textEn` fields, no architecture change (§3.5, PR B §3.5) | **decided** 2026-11-06 (19:57) |
+| 17 | Katameros text: **Arabic full text** (Van Dyck, public domain) + **English as references only** (e.g. "Gospel: John 15:1-12"), **no NKJV text** (NKJV gratis use is limited: ≤ 500 verses, ≤ 25 % of the work — https://www.thomasnelson.com/about-us/permissions). Daily file `/data/readings/<date>.json` (≈ 8 KB gzip, target ≤ ~20–25 KB uncompressed / minified JSON). Future option: a public-domain English translation (WEB / ASV) in the same `textEn` fields, no architecture change (§3.5, PR B §3.5) | **decided** 2026-11-06 (19:57) |
 | 18 | User reminders inside quiet hours: ring normally by default (the user asked for them), switch to make them silent | **recommended**, confirm |
 | 19 | `production` environment Required reviewers: good hygiene (seed / rules runs need the owner's approval), **no longer a prerequisite** of anything in Phase 2 | **recommended** |
 

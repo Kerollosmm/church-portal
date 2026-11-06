@@ -81,6 +81,7 @@ itself (Home verse, feasts, announcements banner) — only push needs the instal
 | Limits | ≤ 30 reminder topics per browser (FCM allows 2,000 per instance); the reminder only arrives if the scheduled sender is running (health alert, PR C §17); a reminder for an event whose `day-` key changed shows «تغيّر الحدث — أعد ضبط التذكير» |
 | Dedupe | the sender sends both the once- and every-time topic copies with one `nid` → same `tag` → one notification; with an admin push for the same event the `event:X` slot (README §3.1 rule 5) |
 | Privacy | the reminder topics name the event and lead time (not the person); they sit in `push_queue` only until drained (minutes), then only Google's topic registry holds them (LAUNCH §6) |
+| Client clock skew & retry | Queue batches write `push_queue` with `meta/push_rate` enforcing `request.resource.data.day == request.time.date()`. If the client clock is inaccurate or skewed across UTC midnight, `web_push_repository.dart` / `push_client.js` falls back by retrying with the adjacent UTC date or inspecting the HTTP `Date` response header from `/data/today.json` to synchronize before retrying (§5) |
 
 ## ٤. الشاشات (Screens)
 
@@ -141,8 +142,17 @@ writes `meta/push_rate` with `set({lastAt: serverTimestamp(), lastId, day: <toda
 FieldValue.increment(1)}, {merge: true})` — the rules see the post-increment value, so on the same UTC day `count ==
 old + 1` holds without the client knowing `old`; on a missing doc the increment yields 1. On the **first write of a
 new UTC day** the increment yields `old + 1 ≠ 1` and is denied; the client then retries once with the literal
-`count: 1` (and, near midnight, with the neighbouring `day` if its clock is off). `allow read` stays false: no
-counter or `lastId` is ever exposed. Cost of that daily retry: one rejected request (~2 rule reads) per day.
+`count: 1`. `allow read` stays false: no counter or `lastId` is ever exposed. Cost of that daily retry: one rejected
+request (~2 rule reads) per day.
+
+**Client clock skew on `meta/push_rate.day`:**
+The security rule `request.resource.data.day == request.time.date()` requires matching the UTC date of `request.time`.
+If a client device clock is skewed across UTC midnight or inaccurate, `new Date()` computed locally will differ from
+`request.time.date()`, causing a rule rejection. `web_push_repository.dart` / `push_client.js` implements an explicit
+fallback mechanism: if the initial write is rejected and local time is near UTC midnight, it retries with the adjacent
+UTC date (`±1 day`); if still rejected or if local time is not near midnight, it inspects the HTTP `Date` response
+header from a lightweight endpoint (e.g. `/data/today.json`, already fetched by the app) to synchronize time before
+retrying.
 
 **Rejected requests still cost rule reads** (CodeRabbit round 1 follow-up; Firebase: reads made by `get()` /
 `exists()` / `getAfter()` are charged even when the request is denied —

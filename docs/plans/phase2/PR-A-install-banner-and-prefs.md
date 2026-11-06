@@ -149,11 +149,17 @@ one of their keys changes, so the 1,000-expression budget of other saves is unto
 ```
 Also allow the page key `notifications` wherever `validPageHeaders` lists the customizable pages (the page header
 override of `/notifications`), and add it to `CustomizablePages.all`.
+Adding `notifications` as the 9th customizable page in `validPageHeaders` introduces an additional validation branch in
+`firestore.rules`. Because `validPageHeaders` uses `h.diff(old).affectedKeys()`, incremental admin saves evaluate only
+the modified keys and remain well under Firestore's 1,000-expression evaluation budget. However, a fresh create or a
+bulk save evaluates all 9 branches simultaneously.
 
 Rules tests (`tool/rules_test/rules.test.mjs`): admin can set each key; stranger cannot; bad URL (`javascript:`),
 version `1.x`, build −1, size 500, reshow 400, remind 0, VAPID with spaces, unknown type (incl. the retired
 `occasions`), duplicate type, lead 7, 5 leads, default lead not in the list → denied;
-an unrelated save (e.g. `heroMotion`) still passes with the worst-case page headers.
+an unrelated save (e.g. `heroMotion`) still passes with the worst-case page headers; explicitly verify that a fresh
+create setting all 9 page headers simultaneously with maximum character lengths stays safely within Firestore's
+1,000-expression cap.
 
 ## ٦. التكلفة (Read / write cost)
 
@@ -243,6 +249,10 @@ None. Uses `package:web` (already `^1.1.2`) and `dart:js_interop`.
   and cancels; «ذكّرني» hidden when `reminders` not offered; sheet at 320 px × 200 % text; toggles persist; permission
   requested only after tap (fake env counts calls); «إيقاف كل الإشعارات» clears.
 - Admin: `appSettingsDoc` fields, validators (URL, version pattern, VAPID pattern).
+- Rules tests (`tool/rules_test/rules.test.mjs`): adding `notifications` as the 9th customizable page in
+  `validPageHeaders` introduces an additional branch in `firestore.rules`. Verify that incremental saves (via
+  `h.diff(old).affectedKeys()`) stay well under the budget, and explicitly verify that a fresh create setting all 9 page
+  headers with maximum character lengths stays safely within the 1,000-expression cap.
 - Existing guards stay green: no hard-coded colours in `lib/ui` (palette roles only), accessibility sweep,
   PageSpeed tests.
 

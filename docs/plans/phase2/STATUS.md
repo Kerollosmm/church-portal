@@ -15,7 +15,7 @@
 - **Decided 6 Nov 2026 19:57:** README §8 **#6** (APKs on GitHub Releases of a separate public repo
   `Kerollosmm/church-portal-apk`, manifest on Hosting, newest 5 releases kept — repo **not created yet**, created at
   PR B time by the owner or with approval) and **#17** (Katameros = Arabic Van Dyck full text + English references
-  only, no NKJV; daily file ≤ ~20–25 KB; WEB / ASV swap possible later).
+  only, no NKJV; daily file ≈ 8 KB gzip, target ≤ ~20–25 KB uncompressed / minified JSON; WEB / ASV swap possible later).
 - **Blockers / owner decisions open:** README §8 #5, #7–#9, #11 (keystore, VAPID, service account, launch
   types and default times, Android developer verification); to
   confirm: #10 (assistant in APK), **#12 web reminders design**, #13 (web gets event pushes + seasons + reminders;
@@ -68,7 +68,7 @@
 
 ## PR B — Android APK + local notifications (ADR-058) · `feat/p2b-android-local-notifications` → A
 - [ ] `planNotifications` (Android-local types only: verse, Katameros, feasts, reminders; ~9-day window, refresh < 4 days) + tests
-- [ ] Readings: `tool/fetch_readings.js` + `synaxarium.yml` / `deploy.yml` publishing `/data/readings/*.json` (multi-file `publish_hosting_file.js`), `readings.dart`, cache, `/readings/<date>` screen (offline) + tests; Arabic Van Dyck full text + English references only per §8 #17 (decided 6 Nov 2026; `bibleEn: refs-only`, target ≤ ~20–25 KB per file)
+- [ ] Readings: `tool/fetch_readings.js` + `synaxarium.yml` / `deploy.yml` publishing `/data/readings/*.json` (multi-file `publish_hosting_file.js`), `readings.dart`, cache, `/readings/<date>` screen (offline) + tests; Arabic Van Dyck full text + English references only per §8 #17 (decided 6 Nov 2026; `bibleEn: refs-only`, ≈ 8 KB gzip, target ≤ ~20–25 KB uncompressed / minified JSON per file)
 - [ ] `ReminderScheduler` (exact `USE_EXACT_ALARM` / `SCHEDULE_EXACT_ALARM` ≤ 32 with inexact fallback, boot + package-replaced, follow edits / cancel on removal, notification action) + tests
 - [ ] OEM battery guidance screen (Xiaomi / Oppo-Realme / Vivo / Huawei-Honor / Samsung, try-list intents) + diagnostic check («افحص الإشعارات», «اختبار بعد دقيقتين») + tests
 - [ ] Gradle: desugaring, minify/shrink, env signing (debug fallback)
