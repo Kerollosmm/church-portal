@@ -6,11 +6,29 @@
  * to immutable tag paths, and outputs the manifest to stdout.
  *
  * Usage:
- *   node tool/make_apk_manifest.mjs --base-url <url> --tag <tag> [--notes-file <file>] <apk1> [<apk2>...]
+ *   node tool/make_apk_manifest.mjs --base-url <url> --tag <tag> [--notes-file <file>]
+ *     [--version <x.y.z>] [--build <n>] [--min-supported-build <n>] [--pubspec <path>] <apk1> [<apk2>...]
+ *
+ * Version / build default to the repo's pubspec.yaml, resolved next to this script (the release
+ * workflow runs it from the APK output directory). The build must equal the `installApkBuild` the
+ * admin saves, so a missing build is an error rather than a silent `1`.
  */
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { fileURLToPath } from 'node:url';
+
+/** Reads `version: x.y.z+n` from a pubspec; null when absent / unreadable. */
+export function readPubspecVersion(pubspecPath) {
+  try {
+    const m = fs.readFileSync(pubspecPath, 'utf8').match(/^version:\s*([0-9.]+)\+([0-9]+)/m);
+    return m ? { version: m[1], build: parseInt(m[2], 10) } : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+export const defaultPubspecPath = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'pubspec.yaml');
 
 /**
  * Resolves the download URL for an APK asset given a base URL, tag, and file name.
@@ -100,6 +118,8 @@ async function main() {
   let notesFile = '';
   let version = '';
   let buildNumber = 0;
+  let minSupportedBuild = 1;
+  let pubspecPath = defaultPubspecPath;
   const apkFiles = [];
 
   for (let i = 0; i < args.length; i++) {
@@ -114,6 +134,10 @@ async function main() {
       version = args[++i];
     } else if (a === '--build') {
       buildNumber = parseInt(args[++i], 10);
+    } else if (a === '--min-supported-build') {
+      minSupportedBuild = parseInt(args[++i], 10);
+    } else if (a === '--pubspec') {
+      pubspecPath = args[++i];
     } else if (!a.startsWith('--')) {
       apkFiles.push(a);
     }
@@ -124,16 +148,19 @@ async function main() {
     process.exit(2);
   }
 
-  // Try extracting version and build from pubspec.yaml if not passed
+  // Version and build from the repo's pubspec.yaml when not passed (independent of the cwd).
   if (!version || !buildNumber) {
-    try {
-      const pubspec = fs.readFileSync('pubspec.yaml', 'utf8');
-      const m = pubspec.match(/^version:\s*([0-9.]+)\+([0-9]+)/m);
-      if (m) {
-        if (!version) version = m[1];
-        if (!buildNumber) buildNumber = parseInt(m[2], 10);
-      }
-    } catch (_) {}
+    const pv = readPubspecVersion(pubspecPath);
+    if (pv) {
+      if (!version) version = pv.version;
+      if (!buildNumber) buildNumber = pv.build;
+    }
+  }
+  if (!Number.isInteger(buildNumber) || buildNumber < 1) {
+    throw new Error(`no build number: pass --build or keep "version: x.y.z+n" in ${pubspecPath}`);
+  }
+  if (!Number.isInteger(minSupportedBuild) || minSupportedBuild < 1 || minSupportedBuild > buildNumber) {
+    throw new Error(`--min-supported-build must be between 1 and the build (${buildNumber})`);
   }
 
   let notesAr = '';
@@ -143,8 +170,8 @@ async function main() {
 
   const manifest = buildManifest({
     version: version || '1.0.0',
-    build: buildNumber || 1,
-    minSupportedBuild: 1,
+    build: buildNumber,
+    minSupportedBuild,
     publishedAt: new Date().toISOString(),
     notesAr,
     notesEn: '',

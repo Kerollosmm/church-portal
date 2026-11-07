@@ -195,20 +195,20 @@ The native Android app is packaged as lightweight, split release APKs for maximu
   - `ANDROID_KEY_PASSWORD` / `KEY_PASSWORD`: Key private password.
 - **Automated Debug Fallback:** In pull requests, manual dispatch runs, or local builds without signing secrets, Gradle automatically falls back to the default Android debug signing config (`signingConfigs.debug`). Tagged release builds (`apk-v*`) strictly require the production secrets and fail immediately if they are missing to prevent distributing unsigned binaries.
 
-### Release & Update Manifest (`manifest.json` / `version.json`)
+### Release & Update Manifest (`version.json`)
 - Post-build step executes `tool/make_apk_manifest.mjs` against generated APKs:
   - Computes byte sizes and cryptographic SHA-256 hashes.
   - Ingests version code, version name, minSupportedBuild, and release notes in Arabic and English.
-  - Publishes `manifest.json` (and `version.json`) to Firebase Hosting under `/app/android/manifest.json`.
+  - Publishes `version.json` to Firebase Hosting under `/app/android/version.json`; every code deploy (`deploy.yml`) carries the live copy over so a release never disappears. `minSupportedBuild` comes from the `APK_MIN_SUPPORTED_BUILD` repository variable (default 1); `certSha256` from `apksigner`.
   - Configured with strict edge cache headers in `firebase.json` (`no-cache, no-store, must-revalidate`) ensuring devices immediately discover new releases.
 
 ### Katameros Daily Readings Pipeline (`.github/workflows/synaxarium.yml`)
 - Runs automatically every night at Cairo midnight (00:00 Cairo time / 22:10 UTC, with liturgical eve refresh at 16:10 UTC).
-- Executes `node tool/fetch_readings.js "$RUNNER_TEMP/readings" --days=12` to fetch a rolling 12-day window of Coptic Katameros scripture readings with full Arabic text (Van Dyck) and English reference citations (`refs-only`, target `< 25 KB` uncompressed per day).
+- Executes `node tool/fetch_readings.js "$RUNNER_TEMP/readings" --days=9 --previous-url …/data/readings/` to fetch the rolling window (yesterday … +9 days; a date that fails keeps the live file) of Coptic Katameros scripture readings with full Arabic text (Van Dyck) and English reference citations (`refs-only`, target `< 25 KB` uncompressed per day).
 - Deploys static files to `/data/readings/{date}.json` and `/data/today.json` directly to Firebase Hosting via `tool/publish_hosting_file.js` with zero Firestore reads/writes.
 
 ### In-App Update Verification & Installation Flow
-1. On startup, the native app checks `/app/android/manifest.json` (or `/app/android/version.json`).
+1. When `installApkBuild` (admin) is greater than the app's build, the app fetches `/app/android/version.json`.
 2. When `manifest.build > currentBuild`, a persistent update banner prompts the user.
 3. Resumable downloading leverages HTTP `Range` headers to survive flaky network connections.
 4. The downloaded APK's SHA-256 checksum is validated against the manifest.

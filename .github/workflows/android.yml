@@ -54,7 +54,14 @@ jobs:
           cd build/app/outputs/flutter-apk
           mv app-arm64-v8a-release.apk church-portal-arm64.apk
           mv app-armeabi-v7a-release.apk church-portal-arm32.apk
+          # certSha256 in the manifest = the release key's certificate (the app compares it before installing)
+          APKSIGNER="$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)apksigner"
+          CERT_SHA256=$("$APKSIGNER" verify --print-certs church-portal-arm64.apk | sed -n 's/.*certificate SHA-256 digest: //p' | head -1)
+          [ -n "$CERT_SHA256" ] || { echo "::error::could not read the APK signing certificate"; exit 1; }
+          export CERT_SHA256
           node "$GITHUB_WORKSPACE/tool/make_apk_manifest.mjs" --base-url "${{ vars.APK_BASE_URL }}" --tag "$GITHUB_REF_NAME" \
+            --notes-file "$GITHUB_WORKSPACE/android/RELEASE_NOTES.md" \
+            --min-supported-build "${{ vars.APK_MIN_SUPPORTED_BUILD || 1 }}" \
             church-portal-arm64.apk church-portal-arm32.apk > version.json
           gh release create "$GITHUB_REF_NAME" church-portal-arm64.apk church-portal-arm32.apk version.json \
             --title "تطبيق الكنيسة $GITHUB_REF_NAME" --notes-file "$GITHUB_WORKSPACE/android/RELEASE_NOTES.md" --latest

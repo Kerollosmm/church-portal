@@ -184,16 +184,46 @@ async function fetchDayWithRetry(date) {
   }
 }
 
+function argValue(args, name) {
+  const eq = args.find((a) => a.startsWith(`${name}=`));
+  if (eq) return eq.slice(name.length + 1);
+  const i = args.indexOf(name);
+  return i >= 0 && args[i + 1] && !args[i + 1].startsWith('--') ? args[i + 1] : null;
+}
+
+/** Days ahead of today (`--days 9` or `--days=9`), clamped to 1…14; default 9 (PR B §3.5). */
+function parseDaysArg(args) {
+  const n = parseInt(argValue(args, '--days') || '9', 10);
+  return Math.min(Math.max(Number.isFinite(n) ? n : 9, 1), 14);
+}
+
+/** The currently published file for [dateStr], validated as JSON; null when there is none. */
+async function fetchPrevious(baseUrl, dateStr) {
+  const url = `${baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`}${dateStr}.json`;
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), 15000);
+  try {
+    const res = await fetch(url, { signal: ctrl.signal });
+    if (!res.ok) return null;
+    const text = await res.text();
+    const json = JSON.parse(text);
+    return json && json.date === dateStr ? text : null;
+  } finally {
+    clearTimeout(t);
+  }
+}
+
 async function main() {
   const args = process.argv.slice(2);
   const outDir = args.find((a) => !a.startsWith('--'));
-  const di = args.indexOf('--days');
-  const AHEAD = Math.min(Math.max(parseInt((di >= 0 && args[di + 1]) || '9', 10) || 9, 1), 14);
-  const prevIdx = args.indexOf('--previous-dir');
-  const prevDir = prevIdx >= 0 ? args[prevIdx + 1] : null;
+  const AHEAD = parseDaysArg(args);
+  const prevDir = argValue(args, '--previous-dir');
+  // Live copy of the window (e.g. https://…/data/readings/): a date whose Katameros call fails keeps
+  // the file already published, so a multi-file publish never drops a day that was online.
+  const prevUrl = argValue(args, '--previous-url');
 
   if (!outDir && require.main === module) {
-    console.error('usage: node tool/fetch_readings.js <outDir> [--days 9] [--previous-dir <dir>]');
+    console.error('usage: node tool/fetch_readings.js <outDir> [--days 9] [--previous-dir <dir>] [--previous-url <base>]');
     process.exit(2);
   }
 
@@ -214,11 +244,12 @@ async function main() {
       const raw = await fetchDayWithRetry(d);
       const parsed = parseKatamerosDay(raw, d);
       const jsonStr = JSON.stringify(parsed);
+      const bytes = Buffer.byteLength(jsonStr, 'utf8'); // Arabic text: UTF-8 bytes, not UTF-16 units
       const gzSize = zlib.gzipSync(jsonStr).length;
 
       fs.writeFileSync(targetFile, jsonStr);
       writtenCount++;
-      console.log(`wrote ${dateStr}.json: ${jsonStr.length} B (gzip: ${gzSize} B)`);
+      console.log(`wrote ${dateStr}.json: ${bytes} B (gzip: ${gzSize} B)`);
       if (gzSize > 25600) {
         console.warn(`WARNING: ${dateStr}.json gzip size (${gzSize} B) exceeds 25 KB target`);
       }
@@ -248,6 +279,20 @@ async function main() {
         }
       }
 
+      if (!fallbackFound && prevUrl) {
+        try {
+          const live = await fetchPrevious(prevUrl, dateStr);
+          if (live) {
+            fs.writeFileSync(targetFile, live);
+            console.log(`kept live file for ${dateStr}`);
+            writtenCount++;
+            fallbackFound = true;
+          }
+        } catch (err) {
+          console.warn(`no live copy for ${dateStr}: ${err.message}`);
+        }
+      }
+
       if (!fallbackFound) {
         console.warn(`no fallback available for ${dateStr}`);
       }
@@ -265,6 +310,8 @@ module.exports = {
   BIBLE_BOOKS_EN,
   parseKatamerosDay,
   cairoToday,
+  parseDaysArg,
+  argValue,
 };
 
 if (require.main === module) {

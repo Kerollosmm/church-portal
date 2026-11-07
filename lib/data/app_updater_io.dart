@@ -79,10 +79,10 @@ class PlatformAppUpdater {
         'filePath': filePath,
         'expectedCertSha256': ?expectedCertSha256,
       });
-      return match ?? true;
+      return match ?? false;
     } catch (_) {
-      // In mock/test environments without native channel, default to true
-      return true;
+      // Fail closed (PR B §3.3): no proven certificate match → never launch the installer.
+      return false;
     }
   }
 

@@ -143,7 +143,9 @@ class LocalNotifierImpl implements LocalNotifier {
       final tzDate = tz.TZDateTime.from(n.scheduledAt, CairoTime.location);
       final scheduleMode = n.exact
           ? AndroidScheduleMode.exactAllowWhileIdle
-          : AndroidScheduleMode.inexact;
+          // Daily types (and the reminder fallback) must still fire in Doze, within ~10 min
+          // (PR B §3.2 «Exactness»); plain `inexact` waits for the next maintenance window.
+          : AndroidScheduleMode.inexactAllowWhileIdle;
       final channel = _channelFor(n.channelId);
 
       final title = useEnglish && n.titleEn.trim().isNotEmpty ? n.titleEn : n.titleAr;
@@ -162,17 +164,26 @@ class LocalNotifierImpl implements LocalNotifier {
         silent: n.silent,
       );
 
+      Future<void> schedule(AndroidScheduleMode mode) => _plugin.zonedSchedule(
+            id: n.id,
+            title: title,
+            body: body,
+            scheduledDate: tzDate,
+            notificationDetails: NotificationDetails(android: androidDetails),
+            androidScheduleMode: mode,
+            payload: n.payload ?? '',
+          );
       try {
-        await _plugin.zonedSchedule(
-          id: n.id,
-          title: title,
-          body: body,
-          scheduledDate: tzDate,
-          notificationDetails: NotificationDetails(android: androidDetails),
-          androidScheduleMode: scheduleMode,
-          payload: n.payload ?? '',
-        );
-      } catch (_) {}
+        await schedule(scheduleMode);
+      } catch (_) {
+        // Exact-alarm access can be revoked between the planner's check and this call
+        // (`exact_alarms_not_permitted`): the reminder still rings, approximately.
+        if (n.exact) {
+          try {
+            await schedule(AndroidScheduleMode.inexactAllowWhileIdle);
+          } catch (_) {}
+        }
+      }
     }
   }
 

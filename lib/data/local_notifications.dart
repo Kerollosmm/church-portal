@@ -13,8 +13,10 @@ export 'local_notifications_stub.dart'
 /// Notification color: church brand burgundy (#6E1C1C).
 const notificationColor = Color(0xFF6E1C1C);
 
-/// Default small icon for local notifications.
-const notificationSmallIcon = '@mipmap/ic_launcher';
+/// Small (status-bar) icon for local notifications: the white monochrome seal
+/// (`res/drawable/ic_stat_seal.xml`, kept from resource shrinking by `res/raw/keep.xml`). The
+/// full-colour launcher icon would render as a solid white square on Android 5+.
+const notificationSmallIcon = 'ic_stat_seal';
 
 /// Canonical notification channel IDs.
 class NotificationChannels {

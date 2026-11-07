@@ -38,13 +38,23 @@ jobs:
         working-directory: tool
       - name: Fetch the commemoration (Katameros API)
         run: node tool/fetch_synaxarium.js "$RUNNER_TEMP/today.json"
-      - name: Fetch Katameros readings window (12 days)
-        run: node tool/fetch_readings.js "$RUNNER_TEMP/readings" --days=12
+      - name: Fetch Katameros readings window (yesterday … +9 days, PR B §3.5)
+        id: readings
+        # A failed date keeps the file already live; if nothing at all can be fetched or kept, the
+        # commemoration below is still published on its own (the live readings stay untouched).
+        continue-on-error: true
+        run: node tool/fetch_readings.js "$RUNNER_TEMP/readings" --days=9 --previous-url https://maximos-domadios-church.web.app/data/readings/
       - uses: ./.github/actions/firebase-credentials
         with:
           service-account: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_ASAFRA_CHURCH_PORTAL }}
       - name: Publish /data/today.json to the live site
-        run: node tool/publish_hosting_file.js --dir "$RUNNER_TEMP/readings" --prefix /data/readings/ --file "$RUNNER_TEMP/today.json" /data/today.json --site maximos-domadios-church
+        run: |
+          if [ "${{ steps.readings.outcome }}" = "success" ]; then
+            node tool/publish_hosting_file.js --dir "$RUNNER_TEMP/readings" --prefix /data/readings/ --file "$RUNNER_TEMP/today.json" /data/today.json --site maximos-domadios-church
+          else
+            echo "::warning::readings window not refreshed this run; publishing /data/today.json only"
+            node tool/publish_hosting_file.js "$RUNNER_TEMP/today.json" /data/today.json --site maximos-domadios-church
+          fi
       - name: Remove key
         if: always()
         run: rm -f "$RUNNER_TEMP/sa.json"

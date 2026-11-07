@@ -580,7 +580,7 @@ digits, Cairo `02` + 8, Alexandria `03` + 7, other governorates `0[4-9]` + 7–8
 - Step-by-step guidance tailored to the user's phone brand with one-click intent launcher buttons (`church_portal/device` platform channel) falling back to App Info settings.
 
 ### In-App Update Banner (`UpdateBanner`, `UpdateSheet`, `app_updater.dart`, ADR-058)
-- Native Android app checks `/app/android/manifest.json` on app startup.
+- Native Android app fetches `/app/android/version.json` when `installApkBuild` > its own build.
 - If a newer build is published (`installApkBuild > currentBuild`), a dismissable bottom banner appears.
 - If `currentBuild < minSupportedBuild`, the update is mandatory and non-dismissable.
 - Tapping «تحديث الآن» opens `UpdateSheet` displaying Arabic release notes, file size, download progress bar with speed/percentage, and triggers APK installation via Android `FileProvider`.

@@ -357,6 +357,13 @@ List<PlannedNotification> planNotifications({
 
   // 2. User Reminders
   if (isLocalTypeAllowed(NotifyType.reminders)) {
+    // Liturgy occurrences cover a known date range (the provider computes ~60 days). Inside it, a
+    // `lit-` reminder whose service has no occurrence that day is replaced / removed; outside it (or
+    // before the liturgies have loaded) nothing can be concluded, so the stored time is kept.
+    final litDays = liturgies.map((o) => isoDate(o.start)).toList()..sort();
+    bool covered(String iso) =>
+        litDays.isNotEmpty && iso.compareTo(litDays.first) >= 0 && iso.compareTo(litDays.last) <= 0;
+
     for (final reminder in reminders) {
       if (reminder.every) {
         // Recurring reminder: schedule up to 4 upcoming occurrences within 60 days
@@ -380,18 +387,16 @@ List<PlannedNotification> planNotifications({
           bool replaced = false;
           tz.TZDateTime effectiveStart = candidateStartsAt;
 
-          if (reminder.eventKey.startsWith('lit-')) {
-            final sameDayLiturgies = liturgies.where((o) => isoDate(o.start) == candDateIso).toList();
-            if (sameDayLiturgies.isNotEmpty) {
-              final matching = sameDayLiturgies.where((o) =>
-                  o.liturgy.id == reminder.eventKey ||
-                  'lit-${o.liturgy.id}' == reminder.eventKey).toList();
-              if (matching.isEmpty) {
-                // Replaced by season (e.g. Holy Week) or cancelled
-                replaced = true;
-              } else {
-                effectiveStart = matching.first.start;
-              }
+          if (reminder.eventKey.startsWith('lit-') && covered(candDateIso)) {
+            final matching = liturgies.where((o) =>
+                isoDate(o.start) == candDateIso &&
+                (o.liturgy.id == reminder.eventKey || 'lit-${o.liturgy.id}' == reminder.eventKey)).toList();
+            if (matching.isEmpty) {
+              // Replaced by a season (e.g. Holy Week — even when the season leaves the day with no
+              // liturgy at all), hidden or removed: nothing rings that day.
+              replaced = true;
+            } else {
+              effectiveStart = matching.first.start;
             }
           } else if (reminder.eventKey.startsWith('meeting-')) {
             final sameDayMeetings = meetings.where((m) => isoDate(m.start) == candDateIso).toList();
@@ -407,21 +412,15 @@ List<PlannedNotification> planNotifications({
 
           if (!replaced) {
             final nominalFire = effectiveStart.subtract(Duration(minutes: reminder.lead));
-            final tz.TZDateTime scheduledAt;
-            final bool exact;
+            final scheduledAt = reminderFireTime(
+              nominalFire: nominalFire,
+              now: now,
+              createdAt: reminder.createdAt,
+              exactAllowed: exactAlarmsAllowed,
+            );
+            final exact = exactAlarmsAllowed;
 
-            if (exactAlarmsAllowed) {
-              scheduledAt = nominalFire;
-              exact = true;
-            } else {
-              final candidate = nominalFire.subtract(const Duration(minutes: 10));
-              scheduledAt = candidate.isBefore(now)
-                  ? CairoTime.fromInstant(now.add(const Duration(seconds: 30)))
-                  : candidate;
-              exact = false;
-            }
-
-            if (!scheduledAt.isBefore(now)) {
+            if (scheduledAt != null) {
               bool silent = false;
               if (prefs.quietHoursEnabled && prefs.remindersRespectQuietHours) {
                 final (inQuiet, _) = evaluateQuietHours(scheduledAt, prefs.quiet.from, prefs.quiet.to);
@@ -481,17 +480,14 @@ List<PlannedNotification> planNotifications({
         final remDateIso = reminder.occurrence ?? isoDate(startsAt);
         bool replaced = false;
 
-        if (reminder.eventKey.startsWith('lit-')) {
-          final sameDayLiturgies = liturgies.where((o) => isoDate(o.start) == remDateIso).toList();
-          if (sameDayLiturgies.isNotEmpty) {
-            final matching = sameDayLiturgies.where((o) =>
-                o.liturgy.id == reminder.eventKey ||
-                'lit-${o.liturgy.id}' == reminder.eventKey).toList();
-            if (matching.isEmpty) {
-              replaced = true;
-            } else {
-              startsAt = matching.first.start;
-            }
+        if (reminder.eventKey.startsWith('lit-') && covered(remDateIso)) {
+          final matching = liturgies.where((o) =>
+              isoDate(o.start) == remDateIso &&
+              (o.liturgy.id == reminder.eventKey || 'lit-${o.liturgy.id}' == reminder.eventKey)).toList();
+          if (matching.isEmpty) {
+            replaced = true;
+          } else {
+            startsAt = matching.first.start;
           }
         } else if (reminder.eventKey.startsWith('meeting-')) {
           final sameDayMeetings = meetings.where((m) => isoDate(m.start) == remDateIso).toList();
@@ -519,21 +515,15 @@ List<PlannedNotification> planNotifications({
 
         if (!replaced) {
           final nominalFire = startsAt.subtract(Duration(minutes: reminder.lead));
-          final tz.TZDateTime scheduledAt;
-          final bool exact;
+          final scheduledAt = reminderFireTime(
+            nominalFire: nominalFire,
+            now: now,
+            createdAt: reminder.createdAt,
+            exactAllowed: exactAlarmsAllowed,
+          );
+          final exact = exactAlarmsAllowed;
 
-          if (exactAlarmsAllowed) {
-            scheduledAt = nominalFire;
-            exact = true;
-          } else {
-            final candidate = nominalFire.subtract(const Duration(minutes: 10));
-            scheduledAt = candidate.isBefore(now)
-                ? CairoTime.fromInstant(now.add(const Duration(seconds: 30)))
-                : candidate;
-            exact = false;
-          }
-
-          if (!scheduledAt.isBefore(now)) {
+          if (scheduledAt != null) {
             bool silent = false;
             if (prefs.quietHoursEnabled && prefs.remindersRespectQuietHours) {
               final (inQuiet, _) = evaluateQuietHours(scheduledAt, prefs.quiet.from, prefs.quiet.to);
@@ -600,6 +590,30 @@ List<PlannedNotification> planNotifications({
 
   final combined = <PlannedNotification>[...reminderNotifications, ...dailyNotifications];
   return combined.take(80).toList();
+}
+
+/// When a reminder occurrence whose nominal fire time is [nominalFire] should be scheduled, or
+/// null when it must not be (PR B §3.2 «Exactness»).
+///
+/// * A nominal time already in the past is never (re)scheduled — otherwise every re-plan would
+///   ring an expired reminder again.
+/// * Exact alarms: the nominal time.
+/// * Inexact fallback: 10 min earlier. When that early slot has already passed, a reminder that
+///   existed before it was already scheduled for (and has rung at) that slot, so it is skipped —
+///   re-planning it would ring twice. A reminder created inside the last 10 minutes rings in 30 s.
+tz.TZDateTime? reminderFireTime({
+  required tz.TZDateTime nominalFire,
+  required DateTime now,
+  required DateTime createdAt,
+  required bool exactAllowed,
+}) {
+  if (nominalFire.isBefore(now)) return null;
+  if (exactAllowed) return nominalFire;
+  final early = nominalFire.subtract(const Duration(minutes: 10));
+  if (!early.isBefore(now)) return early;
+  if (createdAt.isBefore(early)) return null;
+  final soon = CairoTime.fromInstant(now.add(const Duration(seconds: 30)));
+  return soon.isAfter(nominalFire) ? nominalFire : soon;
 }
 
 /// Replenishment check: returns true if fewer than [minRemainingDays] future

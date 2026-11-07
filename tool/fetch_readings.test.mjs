@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import zlib from 'node:zlib';
-import { BIBLE_BOOKS_EN, parseKatamerosDay } from './fetch_readings.js';
+import { BIBLE_BOOKS_EN, parseKatamerosDay, parseDaysArg } from './fetch_readings.js';
 
 test('BIBLE_BOOKS_EN contains all 66 canonical books', () => {
   assert.equal(Object.keys(BIBLE_BOOKS_EN).length, 66);
@@ -171,4 +171,13 @@ test('parseKatamerosDay transforms raw API structure into DayReadings JSON', () 
   const gz = zlib.gzipSync(json);
   assert.ok(json.length < 25000, `JSON length (${json.length}) should be under 25KB`);
   assert.ok(gz.length < 25000, `Gzip length (${gz.length}) should be under 25KB`);
+});
+
+test('parseDaysArg accepts both --days N and --days=N, clamped to 1…14, default 9', () => {
+  assert.equal(parseDaysArg(['out']), 9);
+  assert.equal(parseDaysArg(['out', '--days', '5']), 5);
+  assert.equal(parseDaysArg(['out', '--days=12']), 12);
+  assert.equal(parseDaysArg(['out', '--days=40']), 14);
+  assert.equal(parseDaysArg(['out', '--days=0']), 1);
+  assert.equal(parseDaysArg(['out', '--days=x']), 9);
 });

@@ -17,6 +17,7 @@ import '../domain/notify_plan.dart';
 import '../domain/readings.dart';
 import '../domain/reminders.dart';
 import '../domain/schedule.dart';
+import '../domain/today.dart';
 import 'providers.dart';
 
 /// SharedPreferences key for the local notification plan JSON list.
@@ -149,7 +150,7 @@ class PlannerSnapshot {
   Map<String, dynamic> toJson() => {
         'savedAt': savedAt.toIso8601String(),
         'pushPrefs': pushPrefs.toJson(),
-        'features': features.toMap(),
+        'features': snapshotFeaturesMap(features),
         'reminders': reminders.map((r) => r.toJson()).toList(),
         'verseConfig': verseConfig.toMap(),
         'verses': verses
@@ -204,6 +205,48 @@ class PlannerSnapshot {
           .toList(),
     );
   }
+}
+
+/// `FeatureSettings.toMap()` is the admin-editor map and omits the push keys and `dayEvents`;
+/// the background worker needs both, or it would plan types the admin withdrew and lose the
+/// times of day-event reminders. Written in the Firestore shape so `FeatureSettings.fromMap`
+/// reads them back unchanged.
+Map<String, dynamic> snapshotFeaturesMap(FeatureSettings f) => {
+      ...f.toMap(),
+      'push': f.pushSettings.enabled,
+      'pushTypes': f.pushSettings.offered.map((t) => t.name).toList(),
+      'reminderLeads': f.pushSettings.reminderLeads,
+      'reminderDefaultLead': f.pushSettings.defaultLead,
+      'reminderSources': f.pushSettings.reminderSources.toList()..sort(),
+      'dayEvents': _dayEventsForSnapshot(f.dayEvents),
+    };
+
+/// Day events keep their stored position: the id (`e<index>`, part of a reminder's `day-` event
+/// key) is derived from it, so skipped invalid entries are kept as nulls.
+List<Map<String, dynamic>?> _dayEventsForSnapshot(List<DayEvent> events) {
+  final out = <Map<String, dynamic>?>[];
+  for (final e in events) {
+    final index = int.tryParse(e.id.startsWith('e') ? e.id.substring(1) : '') ?? out.length;
+    while (out.length < index) {
+      out.add(null);
+    }
+    final map = {
+      'date': e.date?.toIso8601String(),
+      'endDate': e.endDate?.toIso8601String(),
+      'start': e.start,
+      'end': e.end,
+      'titleAr': e.titleAr,
+      'titleEn': e.titleEn,
+      'link': e.link,
+      'visible': e.visible,
+    };
+    if (index < out.length) {
+      out[index] = map;
+    } else {
+      out.add(map);
+    }
+  }
+  return out;
 }
 
 Map<String, dynamic> _liturgyToMap(Liturgy l) => {
@@ -424,6 +467,9 @@ Future<bool> executeReplenishmentTask({
   CairoTime.ensureInitialized();
   final effectiveNow = now ?? DateTime.now();
   final sp = prefs ?? await SharedPreferences.getInstance();
+  // «آخر تشغيل في الخلفية» (diagnostic, PR B §3.6): stamped on every run, not only when the
+  // window needed refilling, so a healthy worker never shows as stale.
+  await sp.setString(notifyDiagLastReplenishKey, effectiveNow.toIso8601String());
 
   final currentPlan = await loadStoredPlan(prefs: sp);
 
@@ -442,7 +488,9 @@ Future<bool> executeReplenishmentTask({
   final meetingOccurrences = computeMeetingOccurrences(snapshot.meetings, cNow);
   final cachedReadings = loadCachedReadingsFromStorage(sp, cNow);
 
+  // The worker runs in its own isolate: the plugin there has not been initialised yet.
   final localNotifier = notifier ?? LocalNotifier();
+  if (notifier == null) await localNotifier.initialize();
   final exactAllowed = await localNotifier.canScheduleExactAlarms();
 
   final newPlan = planNotifications(
@@ -464,7 +512,6 @@ Future<bool> executeReplenishmentTask({
 
   final planJson = jsonEncode(newPlan.map((n) => n.toJson()).toList());
   await sp.setString(notifyPlanStorageKey, planJson);
-  await sp.setString(notifyDiagLastReplenishKey, effectiveNow.toIso8601String());
 
   return true;
 }

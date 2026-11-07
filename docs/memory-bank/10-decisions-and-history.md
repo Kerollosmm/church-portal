@@ -1786,7 +1786,7 @@ supersede them.
      - Intent try-lists for auto-start, battery optimization, and notification channel settings with graceful fallback to app details.
      - Live diagnostic checklist verifying permissions, exact alarms, battery optimization exemption, and background replenishment freshness (< 48 hours).
   4. **In-app updater (`app_update.dart`, `app_updater.dart`, `UpdateBanner`):**
-     - Serverless update checking via static manifest on Hosting (`/app/android/manifest.json` / `/app/android/version.json`).
+     - Serverless update checking via static manifest on Hosting (`/app/android/version.json`).
      - Resumable streaming HTTP download with `Range` header support and SHA-256 integrity verification.
      - `installApkInternal` triggers package installation via Android `ACTION_VIEW` intent with a `FileProvider` content URI (`${applicationId}.updates`) and `FLAG_GRANT_READ_URI_PERMISSION`.
      - Non-dismissable forced update when `currentBuild < minSupportedBuild` (`isDismissible: false`, `enableDrag: false`).

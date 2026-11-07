@@ -75,3 +75,22 @@ test('buildManifest generates complete manifest with SHA-256 and size', () => {
 
   fs.rmSync(tmpDir, { recursive: true, force: true });
 });
+
+test('readPubspecVersion reads the repo pubspec independently of the working directory', async () => {
+  const { readPubspecVersion, defaultPubspecPath } = await import('./make_apk_manifest.mjs');
+  const cwd = process.cwd();
+  process.chdir(os.tmpdir());
+  try {
+    const pv = readPubspecVersion(defaultPubspecPath);
+    assert.ok(pv, 'pubspec found from another cwd');
+    assert.match(pv.version, /^[0-9]+\.[0-9]+\.[0-9]+$/);
+    assert.ok(Number.isInteger(pv.build) && pv.build >= 1);
+  } finally {
+    process.chdir(cwd);
+  }
+});
+
+test('readPubspecVersion returns null for a missing file', async () => {
+  const { readPubspecVersion } = await import('./make_apk_manifest.mjs');
+  assert.equal(readPubspecVersion(path.join(os.tmpdir(), 'no-such-pubspec.yaml')), null);
+});
