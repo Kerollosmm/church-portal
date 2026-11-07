@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../../core/document_lang.dart';
@@ -171,6 +172,31 @@ class NotificationsPage extends ConsumerWidget {
               // Re-read the browser permission so a denial shows the
               // blocked-permission steps right away.
               () => ref.invalidate(pushPermissionProvider)),
+
+          if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) ...[
+            const SizedBox(height: 16),
+            Material(
+              color: pal.surface,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: BorderSide(color: pal.hairline),
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: ListTile(
+                leading: Icon(Icons.battery_charging_full_outlined, color: pal.goldText),
+                title: Text(
+                  context.isAr ? 'حالة الإشعارات وتحسين البطارية' : 'Notification Health & Battery Guide',
+                  style: TextStyle(fontWeight: FontWeight.w600, color: pal.primaryDeep),
+                ),
+                subtitle: Text(
+                  context.isAr ? 'دليل استثناء التطبيق من توفير الطاقة' : 'OEM battery optimization guide & diagnostics',
+                  style: TextStyle(fontSize: 13, color: pal.muted),
+                ),
+                trailing: Icon(Icons.chevron_right_rounded, color: pal.muted),
+                onTap: () => context.push('/notifications/battery'),
+              ),
+            ),
+          ],
 
           const SizedBox(height: 20),
 

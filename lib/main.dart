@@ -15,6 +15,9 @@ import 'data/firebase_bootstrap.dart';
 import 'data/media_repository.dart';
 import 'data/seed_data.dart';
 import 'domain/cairo_time.dart';
+import 'data/local_notifications.dart';
+import 'state/notify_providers.dart';
+import 'package:workmanager/workmanager.dart';
 import 'state/providers.dart';
 
 /// Sentry error tracking (ADR-034) wraps the whole start-up when a DSN is
@@ -46,6 +49,24 @@ Future<void> _start() async {
   final AdminRepository? admin =
       status.available ? AdminRepository(FirebaseFirestore.instance, FirebaseAuth.instance) : null;
   final MediaRepository? media = admin?.media;
+
+  if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+    final notifier = LocalNotifier();
+    await notifier.initialize();
+    Workmanager().initialize(
+      notificationReplenishCallbackDispatcher,
+    );
+    Workmanager().registerPeriodicTask(
+      'church_portal_replenish_task',
+      'notificationReplenishment',
+      frequency: const Duration(hours: 24),
+      constraints: Constraints(
+        networkType: NetworkType.notRequired,
+        requiresBatteryNotLow: true,
+      ),
+      existingWorkPolicy: ExistingPeriodicWorkPolicy.keep,
+    );
+  }
 
   runApp(ProviderScope(
     overrides: [

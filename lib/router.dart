@@ -28,8 +28,8 @@ import 'ui/pages/item_detail_page.dart';
 import 'ui/pages/mass_schedule_page.dart';
 import 'ui/pages/notifications_page.dart' deferred as notifications_page;
 import 'ui/pages/public_services_page.dart';
-import 'ui/pages/readings_page.dart';
-import 'ui/pages/notification_health_page.dart';
+import 'ui/pages/readings_page.dart' deferred as readings_page;
+import 'ui/pages/notification_health_page.dart' deferred as health_page;
 import 'ui/widgets/app_shell.dart';
 import 'ui/widgets/assistant_gate.dart';
 import 'ui/widgets/common.dart';
@@ -197,16 +197,26 @@ GoRouter buildAppRouter(Ref ref, {bool? isWeb, String initialLocation = '/'}) {
           ),
           GoRoute(
             path: '/notifications/battery',
-            pageBuilder: (c, s) => _page(s, const NotificationHealthPage()),
+            pageBuilder: (c, s) => _page(
+              s,
+              DeferredLoader(
+                loadLibrary: health_page.loadLibrary,
+                builder: (_) => health_page.NotificationHealthPage(),
+              ),
+            ),
           ),
           GoRoute(
             path: '/readings/:date',
             pageBuilder: (c, s) => _page(
               s,
-              ReadingsPage(
-                dateIso: s.pathParameters['date'] ?? '',
-                initialTab: s.uri.queryParameters['tab'],
+              DeferredLoader(
+                loadLibrary: readings_page.loadLibrary,
+                builder: (_) => readings_page.ReadingsPage(
+                  dateIso: s.pathParameters['date'] ?? '',
+                  initialTab: s.uri.queryParameters['tab'],
+                ),
               ),
+
             ),
           ),
           // Shareable item detail pages (ADR-020). FeatureGate gates each like

@@ -248,14 +248,22 @@ class MainActivity : FlutterActivity() {
                     val intent = Intent().setComponent(ComponentName(pkg, cls))
                     intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                     if (intent.resolveActivity(packageManager) != null) {
-                        startActivity(intent)
-                        return true
+                        try {
+                            startActivity(intent)
+                            return true
+                        } catch (e: Exception) {
+                            // fallback to next candidate
+                        }
                     }
                 } else {
                     val intent = Intent(entry).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                     if (intent.resolveActivity(packageManager) != null) {
-                        startActivity(intent)
-                        return true
+                        try {
+                            startActivity(intent)
+                            return true
+                        } catch (e: Exception) {
+                            // fallback to next candidate
+                        }
                     }
                 }
             } catch (_: Exception) {}

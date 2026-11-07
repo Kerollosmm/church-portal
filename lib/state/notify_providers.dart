@@ -295,6 +295,7 @@ class NotifyPlanner {
   Timer? _debounceTimer;
   List<PlannedNotification> _currentPlan = const [];
   bool _isPlanning = false;
+  bool _needsAnotherReplan = false;
 
   NotifyPlanner(this.ref) {
     _listen();
@@ -328,7 +329,10 @@ class NotifyPlanner {
     SharedPreferences? prefs,
   }) async {
     _debounceTimer?.cancel();
-    if (_isPlanning) return _currentPlan;
+    if (_isPlanning) {
+      _needsAnotherReplan = true;
+      return _currentPlan;
+    }
     _isPlanning = true;
 
     try {
@@ -391,6 +395,10 @@ class NotifyPlanner {
       return plan;
     } finally {
       _isPlanning = false;
+      if (_needsAnotherReplan) {
+        _needsAnotherReplan = false;
+        scheduleReplan(Duration.zero);
+      }
     }
   }
 

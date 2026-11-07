@@ -185,7 +185,7 @@ class UpdateSheet extends ConsumerStatefulWidget {
   ConsumerState<UpdateSheet> createState() => _UpdateSheetState();
 }
 
-class _UpdateSheetState extends ConsumerState<UpdateSheet> {
+class _UpdateSheetState extends ConsumerState<UpdateSheet> with WidgetsBindingObserver {
   _UpdateStatus _status = _UpdateStatus.idle;
   UpdateDownloadProgress? _progress;
   String? _errorMessage;
@@ -195,6 +195,7 @@ class _UpdateSheetState extends ConsumerState<UpdateSheet> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     if (widget.autoStart && widget.decision.asset != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _startDownload();
@@ -204,8 +205,18 @@ class _UpdateSheetState extends ConsumerState<UpdateSheet> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _downloadSub?.cancel();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && _status == _UpdateStatus.installing) {
+      setState(() {
+        _status = _UpdateStatus.readyToInstall;
+      });
+    }
   }
 
   void _startDownload() {

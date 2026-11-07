@@ -414,7 +414,10 @@ List<PlannedNotification> planNotifications({
               scheduledAt = nominalFire;
               exact = true;
             } else {
-              scheduledAt = nominalFire.subtract(const Duration(minutes: 10));
+              final candidate = nominalFire.subtract(const Duration(minutes: 10));
+              scheduledAt = candidate.isBefore(now)
+                  ? CairoTime.fromInstant(now.add(const Duration(seconds: 30)))
+                  : candidate;
               exact = false;
             }
 
@@ -523,7 +526,10 @@ List<PlannedNotification> planNotifications({
             scheduledAt = nominalFire;
             exact = true;
           } else {
-            scheduledAt = nominalFire.subtract(const Duration(minutes: 10));
+            final candidate = nominalFire.subtract(const Duration(minutes: 10));
+            scheduledAt = candidate.isBefore(now)
+                ? CairoTime.fromInstant(now.add(const Duration(seconds: 30)))
+                : candidate;
             exact = false;
           }
 

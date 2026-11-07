@@ -1,12 +1,15 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 
 import 'core/content_ready.dart';
 import 'core/document_lang.dart';
 import 'core/l10n.dart';
+import 'core/motion_env.dart';
 import 'core/theme.dart';
 import 'data/error_reporting.dart';
 import 'router.dart';
+import 'state/notify_providers.dart';
 import 'state/providers.dart';
 
 class ChurchPortalApp extends ConsumerWidget {
@@ -14,6 +17,9 @@ class ChurchPortalApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    if (!kIsWeb && !MotionEnv.isTest) {
+      ref.watch(notifyPlannerProvider);
+    }
     final locale = ref.watch(localeProvider);
     final router = ref.watch(routerProvider);
     // Admin switch for error reports (settings/features.errorReporting, ADR-034).
