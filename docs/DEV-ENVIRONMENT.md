@@ -6,7 +6,7 @@ tried on the **real** Firebase project before anything reaches production.
 | | `main` (production) | `dev` (testing) |
 |---|---|---|
 | Workflow | `deploy.yml` | `deploy-dev.yml` (push to `dev` + manual run) |
-| Hosting | live site `https://maximos-domadios-church.web.app` (+ legacy redirect) | channel **`dev`** of the same site — stable URL `https://maximos-domadios-church--dev-<hash>.web.app` (see the run's summary / notice) |
+| Hosting | live site `https://maximos-domadios-church.web.app` (+ legacy redirect) | channel **`dev`** of the same site — stable URL **https://maximos-domadios-church--dev-7qxh72kj.web.app** (the hash stays while the channel exists; a deleted/expired channel gets a new one) |
 | Firestore rules + indexes | deployed after the rules tests | **also deployed to the live project `asafra-church-portal`** after the rules tests |
 | Data | live Firestore | the same live Firestore (no separate database) |
 | Sentry environment | `production` | `dev` |
@@ -21,8 +21,10 @@ The channel expires **30 days after its latest deploy**; every push to `dev` (or
    merged into `main`, and no PR from `dev` to `main` is opened.
 2. Pushing `dev` builds the web release, runs the rules emulator suite, deploys
    `firestore.rules`/`firestore.indexes.json` to the live project, then the `dev` channel.
-3. Test on the dev URL (sign-in at `/admin` works there: the channel domain is listed in
-   Firebase Auth authorized domains and the reCAPTCHA Enterprise key's domains).
+3. Test on the dev URL. Sign-in at `/admin` and App Check work there because the channel
+   domain is in Firebase Auth → Authorized domains and in the reCAPTCHA Enterprise key
+   `church-portal-web` → Domains (added 7 Nov 2026). If the channel is ever recreated with a
+   new hash, add the new domain to both lists (the dev build ships with App Check on).
 4. Final merges to `main` still follow the normal rule: **bottom-up, squash, after the
    owner approves the whole chain**, merging `main` into the next branch (HANDOFF §5.6).
    `main` stays production; nothing on `dev` changes that.
