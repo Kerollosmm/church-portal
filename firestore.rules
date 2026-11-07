@@ -635,20 +635,74 @@ service cloud.firestore {
       return s is map && s.keys().hasOnly(sectionKeys()) && s.values().hasOnly([true, false]);
     }
 
+    // App install banner + push settings (ADR-057). Kept OUT of the legacy
+    // allow-list so a save that does not touch them (the common case: page
+    // headers, hero videos, day events) pays only for the legacy hasOnly and
+    // never for these checks (Firestore evaluates at most 1,000 expressions
+    // per request).
+    function installPushKeys() {
+      return ['installPrompt', 'installTitleAr', 'installTitleEn', 'installBodyAr', 'installBodyEn',
+              'installAndroidUrl', 'installAndroidUrl32', 'installApkVersion', 'installApkBuild',
+              'installApkSizeMb', 'installApkSize32Mb', 'installReshowDays', 'installRemindDays',
+              'push', 'pushVapidKey', 'pushTypes', 'reminderLeads', 'reminderDefaultLead'];
+    }
+
+    function legacyFeatureKeys() {
+      return ['sections', 'homeOrder', 'homeHidden', 'heroTitleAr', 'heroTitleEn', 'heroSubtitleAr',
+              'heroSubtitleEn', 'bannerEnabled', 'bannerAr', 'bannerEn', 'bannerLink', 'theme',
+              'pageHeaders', 'footer', 'heroMotion', 'heroShowAddress', 'aboutMilestones', 'imageStyles', 'dailyVerse', 'occasions', 'themeColors',
+              'heroVideos', 'errorReporting', 'copticStrip', 'dayStartMode', 'dayStartsAt', 'topEvent',
+              'commemoration', 'topEventServices', 'liveEnabled', 'liveUrl', 'liveLabelAr', 'liveLabelEn', 'liveEndsAt',
+              'liveBadgeHideOnHome', 'dayEvents', 'venues', 'audiences', 'seasonVerses', 'seasonPreset', 'weddingBookingOff',
+              'heroSeasonTint', 'updatedAt', 'updatedBy'];
+    }
+
+    // Only reached when the write changes a key outside the legacy list.
+    function validInstallPush(d, changed) {
+      return changed.hasOnly(legacyFeatureKeys().concat(installPushKeys()))
+        && validInstallSettings(d, changed) && validPushSettings(d, changed);
+    }
+
+    function validInstallSettings(d, changed) {
+      return !changed.hasAny(['installPrompt', 'installTitleAr', 'installTitleEn', 'installBodyAr', 'installBodyEn',
+                              'installAndroidUrl', 'installAndroidUrl32', 'installApkVersion', 'installApkBuild',
+                              'installApkSizeMb', 'installApkSize32Mb', 'installReshowDays', 'installRemindDays'])
+        || (optBool(d, 'installPrompt') && str(d, 'installTitleAr', 120) && str(d, 'installTitleEn', 120)
+            && str(d, 'installBodyAr', 300) && str(d, 'installBodyEn', 300)
+            && optUrlOrPath(d, 'installAndroidUrl', 500) && optUrlOrPath(d, 'installAndroidUrl32', 500)
+            && d.get('installApkVersion', '').matches('^$|^[0-9]+([.][0-9]+){0,3}$')
+            && optInt(d, 'installApkBuild', 0, 999999) && optNumber(d, 'installApkSizeMb', 0, 200)
+            && optNumber(d, 'installApkSize32Mb', 0, 200) && optInt(d, 'installReshowDays', 0, 365)
+            && optInt(d, 'installRemindDays', 1, 60));
+    }
+
+    // pushTypes: up to 6 distinct known types; reminderLeads: up to 4
+    // distinct allowed minutes; reminderDefaultLead null or one of the leads.
+    function validPushSettings(d, changed) {
+      let types = d.get('pushTypes', []);
+      let leads = d.get('reminderLeads', []);
+      return !changed.hasAny(['push', 'pushVapidKey', 'pushTypes', 'reminderLeads', 'reminderDefaultLead'])
+        || (optBool(d, 'push') && d.get('pushVapidKey', '').matches('^$|^[A-Za-z0-9_-]{80,100}$')
+            && types is list && types.size() <= 6
+            && types.hasOnly(['announcements', 'verse_daily', 'katameros_daily', 'seasons', 'feasts', 'reminders'])
+            && types.toSet().size() == types.size()
+            && leads is list && leads.size() <= 4
+            && leads.hasOnly([0, 5, 10, 15, 30, 60, 120, 180, 1440])
+            && leads.toSet().size() == leads.size()
+            // absent or null = the app default (60); else one of the leads.
+            && (d.get('reminderDefaultLead', null) == null
+                || d.reminderDefaultLead in d.get('reminderLeads', [0, 15, 60, 1440])));
+    }
+
     function validFeatures(d) {
       // Like settings/church: an untouched legacy key does not block an edit.
       // Only the keys this write creates or changes are validated (the admin
       // saves the whole document; Firestore evaluates at most 1,000
-      // expressions per request).
+      // expressions per request). Reusing `changed` instead of calling keysAllowed
+      // saves recalculating affectedKeys; ADR-057 keys are checked only when
+      // a non-legacy key changes.
       let changed = changedKeys(d);
-      return keysAllowed(['sections', 'homeOrder', 'homeHidden', 'heroTitleAr', 'heroTitleEn', 'heroSubtitleAr',
-                          'heroSubtitleEn', 'bannerEnabled', 'bannerAr', 'bannerEn', 'bannerLink', 'theme',
-                          'pageHeaders', 'footer', 'heroMotion', 'heroShowAddress', 'aboutMilestones', 'imageStyles', 'dailyVerse', 'occasions', 'themeColors',
-                          'heroVideos', 'errorReporting', 'copticStrip', 'dayStartMode', 'dayStartsAt', 'topEvent',
-                          'commemoration', 'topEventServices', 'liveEnabled', 'liveUrl', 'liveLabelAr', 'liveLabelEn', 'liveEndsAt',
-                          'liveBadgeHideOnHome', 'dayEvents', 'venues', 'audiences', 'seasonVerses', 'seasonPreset', 'weddingBookingOff',
-                          'heroSeasonTint',
-                          'updatedAt', 'updatedBy'])
+      return (changed.hasOnly(legacyFeatureKeys()) || validInstallPush(d, changed))
         && (!('sections' in changed) || !('sections' in d) || validSections(d.sections))
         && (!('homeOrder' in changed) || !('homeOrder' in d) || (d.homeOrder is list && d.homeOrder.size() <= 7
               && d.homeOrder.hasOnly(['banner', 'alerts', 'nextMass', 'quickContacts', 'milestones', 'directory', 'map'])))
@@ -962,7 +1016,7 @@ service cloud.firestore {
       let old = resource == null ? {} : resource.data.get('pageHeaders', {});
       let changed = old is map ? h.diff(old).affectedKeys() : h.keys().toSet();
       return h is map
-        && h.keys().hasOnly(['about', 'schedule', 'education', 'activities', 'clinics', 'services', 'contact', 'ask'])
+        && h.keys().hasOnly(['about', 'schedule', 'education', 'activities', 'clinics', 'services', 'contact', 'ask', 'notifications'])
         && (!changed.hasAny(['about']) || !('about' in h) || validPageHeader(h.about))
         && (!changed.hasAny(['schedule']) || !('schedule' in h) || validPageHeader(h.schedule))
         && (!changed.hasAny(['education']) || !('education' in h) || validPageHeader(h.education))
@@ -970,7 +1024,9 @@ service cloud.firestore {
         && (!changed.hasAny(['clinics']) || !('clinics' in h) || validPageHeader(h.clinics))
         && (!changed.hasAny(['services']) || !('services' in h) || validPageHeader(h.services))
         && (!changed.hasAny(['contact']) || !('contact' in h) || validPageHeader(h.contact))
-        && (!changed.hasAny(['ask']) || !('ask' in h) || validPageHeader(h.ask));
+        && (!changed.hasAny(['ask']) || !('ask' in h) || validPageHeader(h.ask))
+        // Notifications page (ADR-057): `in` on the set, the cheapest gate.
+        && (!('notifications' in changed) || !('notifications' in h) || validPageHeader(h.notifications));
     }
     // Exactly the 6 keys (the admin form always writes all six: size 6 and
     // each one read), all strings; titles <= 200, subtitles <= 300, intros

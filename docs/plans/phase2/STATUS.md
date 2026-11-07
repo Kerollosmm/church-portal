@@ -4,14 +4,17 @@
 
 ## الوضع الحالي (Current state)
 
-- **Updated:** 6 Nov 2026 (Cairo), by Hark.
+- **Updated:** 7 Nov 2026 (Cairo), by Hark.
 - **Plan PR:** [#50](https://github.com/Kerollosmm/church-portal/pull/50) — branch `docs/phase2-plans` → `main`, draft;
   review rounds 1 and 2 (the maximum) addressed; owner change requests of 6 Nov evening applied; **owner
   clarification of 19:31 + additions of 19:35 applied** (instant dispatch removed — scheduled sender only with
   guaranteed delivery; admin event pushes; new user «ذكّرني» reminders; local verse + Katameros with a reading
   screen; keep-alive + sender-health alert; honest web-reminder delay copy; OEM battery guidance + diagnostics); **owner decisions of 19:57 recorded** (§8 #6
   releases repo, #17 Arabic text + English refs) — waiting for the owner (gate G0). No further bot review rounds on this PR.
-- **Next action:** owner reviews the plan and answers README §8. **Do not start PR A** until the owner says so.
+- **Next action:** PR A is implemented in draft PR [#51](https://github.com/Kerollosmm/church-portal/pull/51)
+  (`feat/p2a-install-prefs` → `docs/phase2-plans`; bot review rounds 1 and 2 — the maximum — answered). The owner
+  reviews #51 and answers the open README §8 items. **Do not start PR B** until the owner says so. Gate G0 approval
+  status is not recorded in this file (unconfirmed).
 - **Decided 6 Nov 2026 19:57:** README §8 **#6** (APKs on GitHub Releases of a separate public repo
   `Kerollosmm/church-portal-apk`, manifest on Hosting, newest 5 releases kept — repo **not created yet**, created at
   PR B time by the owner or with approval) and **#17** (Katameros = Arabic Van Dyck full text + English references
@@ -21,8 +24,8 @@
   confirm: #10 (assistant in APK), **#12 web reminders design**, #13 (web gets event pushes + seasons + reminders;
   verse / Katameros / feasts on Home), #14 (seasons = FCM), #15 (repo visibility), **#16 exact alarms**, **#18
   reminders in quiet hours**; recommended: #19 (`production` required reviewers — hygiene, no longer a blocker).
-- **Notes:** baseline `main.dart.js` 4,898,252 B / gzip 1,334,591 B (`main` @ `7e4705b`). No code written for
-  Phase 2 yet; create `wtA` on `feat/p2a-install-prefs` per HANDOFF §1 when the owner allows.
+- **Notes:** baseline `main.dart.js` 4,898,252 B / gzip 1,334,591 B (`main` @ `7e4705b`). Phase 2 code so far:
+  PR A only, on `feat/p2a-install-prefs` (#51); no PR B–E branches yet.
 
 ## PR 0 — Plans (ADR-056)
 - [x] Plan files written (README, HANDOFF, STATUS, PR A–E, LAUNCH-AND-OPERATIONS)
@@ -49,21 +52,21 @@
 - [ ] **G0 owner approval of the plan** (+ answers to README §8 #5, #7–#9, #11, #12, #16, #18)
 
 ## PR A — Install banner + prefs (ADR-057) · `feat/p2a-install-prefs` → `docs/phase2-plans`
-- [ ] Domain: `app_install.dart`, `push.dart` + tests
-- [ ] `FeatureSettings` parsing of install / push keys + tests
-- [ ] Rules + emulator tests
-- [ ] Web env + `index.html` early `beforeinstallprompt` capture
-- [ ] Channel-owner model per platform (6 types): `channelOf` / `isLocalOwned(type, platform)`, `topicFor` throws for local-owned pairs, `reminderTopic` + tests
-- [ ] Reminders foundation: `reminders.dart` (`EventKey`, `reconcileReminders`), `ReminderStore`, `RemindMeButton` + lead sheet + «تذكيراتي» (no delivery yet) + `reminderLeads` / `reminderDefaultLead` keys + tests
-- [ ] `InstallBanner` (Android APK / PWA prompt / steps, iOS steps sheet **without any permission call**, ✕, later, installed detection)
-- [ ] Android sideload guide modal (5 steps, screenshot placeholders, ar/en, safety box) + `web/install-guide/README.md`
-- [ ] `/notifications` page (explainer, states incl. `iosNeedsInstall` / `iosTooOld` / `inAppBrowser`, blocked how-to, platform-filtered toggles, unsubscribe-all) behind `push`
-- [ ] Admin «التطبيق والإشعارات»
-- [ ] SW + `push_client.js` scaffolds
-- [ ] Docs: memory bank, Arabic `documentation/`, English, ADR-057
-- [ ] analyze / test / rules / build green · size Δ ___
+- [x] Domain: `app_install.dart`, `push.dart` + tests
+- [x] `FeatureSettings` parsing of install / push keys + tests
+- [x] Rules + emulator tests
+- [x] Web env + `index.html` early `beforeinstallprompt` capture
+- [x] Channel-owner model per platform (6 types): `channelOf` / `isLocalOwned(type, platform)`, `topicFor` throws for local-owned pairs, `reminderTopic` + tests
+- [x] Reminders foundation: `reminders.dart` (`EventKey`, `reconcileReminders`), `ReminderStore`, `RemindMeButton` + lead sheet + «تذكيراتي» (no delivery yet) + `reminderLeads` / `reminderDefaultLead` keys + tests
+- [x] `InstallBanner` (Android APK / PWA prompt / steps, iOS steps sheet **without any permission call**, ✕, later, installed detection)
+- [x] Android sideload guide modal (5 steps, screenshot placeholders, ar/en, safety box) + `web/install-guide/README.md`
+- [x] `/notifications` page (explainer, states incl. `iosNeedsInstall` / `iosTooOld` / `inAppBrowser`, blocked how-to, platform-filtered toggles, unsubscribe-all) behind `push`
+- [x] Admin «التطبيق والإشعارات»
+- [x] SW + `push_client.js` scaffolds
+- [x] Docs: memory bank, Arabic `documentation/`, English, ADR-057
+- [x] analyze 0 · flutter test 1110/1110 · rules 133/133 · build green · `main.dart.js` 4,964,109 B / gzip -9 1,353,225 B vs base `1881ce6` 4,898,239 / 1,334,622 → **Δ +65,870 B raw / +18,603 B gzip** (≤ +20 KB budget; notifications page, reminder sheet + «تذكيراتي», install guides are deferred chunks)
 - [ ] Screenshots (390 px AR: Android banner, sideload guide steps 1 + 4, iPhone banner + sheet, prefs page incl. iOS install-first)
-- [ ] Draft PR # ___ · CI green · preview ___ · reviews done
+- [ ] Draft PR #51 · CI green · preview https://maximos-domadios-church--pr-51-gqdq4466.web.app · reviews done (CodeRabbit + Sentry rounds 1 and 2 — the maximum — answered)
 - [ ] PSI mobile median ___
 
 ## PR B — Android APK + local notifications (ADR-058) · `feat/p2b-android-local-notifications` → A

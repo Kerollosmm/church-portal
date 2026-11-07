@@ -19,9 +19,10 @@ Branding: the parish seal in `assets/branding/` — regenerate every icon with `
 1. **Never invent church content** (times, names, phones, doctors, photos). Unverified data stays `sample: true`;
    sources go in `docs/CONTENT_SOURCES.md`.
 2. **Business logic is pure Dart in `lib/domain/`** with unit tests. All time logic goes through `CairoTime`
-   (Africa/Cairo); weekdays are ISO 1–7; times are `"HH:mm"`.
+   (Africa/Cairo); weekdays are ISO 1–7; times are `"HH:mm"`. Recurring reminders («كل مرة») never expire and roll forward weekly in Cairo time; lead times must clamp to valid future intervals.
 3. **A field change touches four places together**: model (`lib/domain/models.dart` / `features.dart`), admin schema
    (`lib/ui/admin/admin_schema.dart`), `firestore.rules`, seed (`tool/gen_seed.py`) — plus tests.
+   **Firestore rules budget (1,000 expressions):** Keep new feature keys out of the legacy allow-list on large settings docs (`settings/features`); branch on `changed.hasOnly(legacyKeys)` so standard saves never evaluate new schemas. Use `'key' in changed` rather than `changed.hasAny(['key'])`. Always include worst-case whole-doc emulator tests.
 4. **The seed is generated**: edit `tool/gen_seed.py`, run `python3 tool/gen_seed.py`, commit `assets/seed/seed.json`
    and `tool/known_seed_ids.json`/`retired_seed_ids.json`. Removing a seeded id ⇒ add it to `retired`.
 5. **Strings** go in `lib/core/l10n.dart` (`[ar, en]`); content renders with `context.pick(ar, en)`; import widgets
@@ -41,6 +42,7 @@ Branding: the parish seal in `assets/branding/` — regenerate every icon with `
    `operations.md`, index in `documentation/README.md`) — in the same PR, like the memory bank. Write it in simple
    Arabic; keep code identifiers, paths and collection / field names in English; use the real admin labels from the
    code (`admin_page.dart`, `admin_schema.dart`, `lib/core/l10n.dart`).
+12. **Deferred imports for secondary UI:** Multi-step guides (e.g. sideload install guides), heavy bottom sheets, and secondary preference pages must use deferred loading (`deferred as ...`) with dedicated string tables to keep bundle growth within the +20 KB gzip budget.
 
 ## Commands
 

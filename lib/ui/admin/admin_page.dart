@@ -307,6 +307,7 @@ List<AdminDest> adminDestinations(String role) => [
   const AdminDest('today', Icons.today_outlined, 'اليوم والبث المباشر', 'Today & live stream'),
   const AdminDest('seasonSettings', Icons.celebration_outlined, 'إعدادات المواسم', 'Season settings'),
   const AdminDest('seasonPreset', Icons.checklist_rounded, 'تجهيز الموسم', 'Season preparation'),
+  const AdminDest('app', Icons.install_mobile_outlined, 'التطبيق والإشعارات', 'App & notifications'),
   const AdminDest('church', Icons.church_outlined, 'بيانات الكنيسة', 'Church info'),
   const AdminDest('assistant', Icons.smart_toy_outlined, 'المساعد الذكي', 'AI assistant'),
   for (final c in adminCollections) AdminDest(c.id, adminIcon(c.icon), c.labelAr, c.labelEn),
@@ -366,6 +367,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
         return ChurchInfoScreen(key: const ValueKey('seasonSettings'), repo: repo, doc: seasonSettingsDoc);
       case 'seasonPreset':
         return SeasonPresetScreen(repo: repo);
+      case 'app':
+        return ChurchInfoScreen(key: const ValueKey('app'), repo: repo, doc: appSettingsDoc);
       case 'church':
         return ChurchInfoScreen(key: const ValueKey('church'), repo: repo);
       case 'assistant':

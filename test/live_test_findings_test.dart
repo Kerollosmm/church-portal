@@ -64,7 +64,7 @@ const _eventToday = <String, dynamic>{
 /// Runs `node` when it is on PATH (GitHub runners have it); null otherwise.
 String? _node(List<String> args) {
   try {
-    final r = Process.runSync('node', args);
+    final r = Process.runSync('node', args, stdoutEncoding: utf8, stderrEncoding: utf8);
     if (r.exitCode != 0) throw StateError('node failed: ${r.stderr}');
     return (r.stdout as String).trim();
   } on ProcessException {
@@ -183,7 +183,7 @@ void main() {
     });
 
     test('no new listener: the gate reads featuresStreamProvider only', () {
-      final src = File('lib/state/providers.dart').readAsStringSync();
+      final src = File('lib/state/providers.dart').readAsStringSync().replaceAll('\r\n', '\n');
       final body = src.substring(src.indexOf('final featuresLiveProvider'), src.indexOf('@visibleForTesting\nbool featuresLive'));
       expect(body, contains('featuresStreamProvider'));
       expect(body, isNot(contains('StreamProvider<')));

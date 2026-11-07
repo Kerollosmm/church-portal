@@ -206,6 +206,18 @@ void main() {
       expect(f.weddingBookingOff, isFalse);
       expect(f.seasonPreset, isNotNull, reason: 'the admin still gets the restore button');
     });
+
+    test('preserves install and push settings when season preset expires', () {
+      final custom = stored.copyWith(
+        install: const InstallSettings(enabled: false, titleAr: 'تطبيق الكنيسة'),
+        pushSettings: const PushSettings(enabled: true, vapidKey: 'vapid_test_key'),
+      );
+      final f = custom.effectiveAt(_end);
+      expect(f.install.enabled, isFalse);
+      expect(f.install.titleAr, 'تطبيق الكنيسة');
+      expect(f.pushSettings.enabled, isTrue);
+      expect(f.pushSettings.vapidKey, 'vapid_test_key');
+    });
   });
 
   group('season verses', () {

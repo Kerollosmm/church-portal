@@ -5,10 +5,14 @@ import 'package:material_ui/material_ui.dart';
 import '../../core/l10n.dart';
 import '../../core/launch.dart';
 import '../../core/theme.dart';
+import '../../domain/cairo_time.dart';
+import '../../domain/models.dart' show parseHm;
+import '../../domain/reminders.dart';
 import '../../domain/today.dart';
 import '../../state/providers.dart';
 import 'common.dart';
 import 'program_details.dart';
+import 'remind_me.dart';
 
 /// Top utility bar above the app bar (ADR-044): the Coptic date of the
 /// liturgical day (ADR-039) at the start and, while the church is streaming
@@ -323,12 +327,43 @@ class TopEventCard extends ConsumerWidget {
           ),
         ));
       }
+      if (ev.start.isNotEmpty) {
+        final now = ref.watch(nowProvider).value ?? DateTime.now();
+        final m = parseHm(ev.start) ?? 0;
+        // The occurrence the card shows: an overnight one that started
+        // yesterday (then already past: no button), today, or tomorrow.
+        final day = ev.reminderDay(now);
+        final startsAt = CairoTime.at(day.year, day.month, day.day, m);
+        children.add(Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: RemindMeButton(
+            eventKey: EventKey.dayEvent(ev.id),
+            // A multi-day event: one reminder per day.
+            occurrence: isoDate(day),
+            title: {'ar': ev.titleAr.isNotEmpty ? ev.titleAr : e.titleAr, 'en': ev.titleEn.isNotEmpty ? ev.titleEn : e.titleEn},
+            startsAt: startsAt,
+            recurring: false,
+          ),
+        ));
+      }
     } else if (e.service case final o?) {
       // Today's / tonight's programme service (ADR-045): its time, then the
       // programme (speaker, topic, choir, venue, audience, PDF button).
       children.add(Padding(
           padding: const EdgeInsets.only(top: 6), child: TimeRangeText(o.liturgy.start, o.liturgy.end)));
       children.add(KeyedSubtree(key: const Key('topEventProgramme'), child: ProgramDetails(o.liturgy.program)));
+      children.add(Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: RemindMeButton(
+          eventKey: EventKey.liturgy(o.liturgy.id),
+          // Same identity as the next-service card: dated services by
+          // their date, weekly ones without (one reminder for the service).
+          occurrence: o.liturgy.date != null ? isoDate(CairoTime.calendarDate(o.liturgy.date!)) : null,
+          title: {'ar': o.liturgy.nameAr, 'en': o.liturgy.nameEn},
+          startsAt: o.start,
+          recurring: o.liturgy.date == null,
+        ),
+      ));
     } else {
       for (final l in lines.where((l) => l.trim().isNotEmpty && l.trim() != title)) {
         children.add(Padding(

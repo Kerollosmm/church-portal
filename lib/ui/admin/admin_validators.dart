@@ -203,6 +203,10 @@ String? validateDocument(CollectionDef? def, Map<String, dynamic> data) {
   }
   final s = data['startsAt'], e = data['endsAt'];
   if (s is DateTime && e is DateTime && !e.isAfter(s)) return 'endBeforeStart';
+  // App & notifications (ADR-057): the default lead must be one of the
+  // offered leads (firestore.rules denies the save otherwise).
+  final leads = data['reminderLeads'], lead = data['reminderDefaultLead'];
+  if (lead is int && leads is List && !leads.contains(lead)) return 'reminderDefaultLeadNotOffered';
   // Custom page blocks (firestore.rules validPageBlock): an image needs an
   // https picture link.
   final blocks = data['blocks'];

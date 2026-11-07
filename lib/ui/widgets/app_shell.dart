@@ -11,6 +11,7 @@ import '../../state/providers.dart';
 import '../pages/category_page.dart' show categoryIcon;
 import 'coptic_cross.dart';
 import 'golden.dart';
+import 'install_banner.dart';
 import 'today_widgets.dart';
 
 class NavItem {
@@ -305,6 +306,14 @@ class _AppShellState extends ConsumerState<AppShell> {
             ),
           ),
         ),
+      PositionedDirectional(
+        start: 0,
+        end: 0,
+        bottom: 0,
+        // Hidden (not disposed: keeps its delay / dismiss state) while the
+        // drawer is open.
+        child: Offstage(offstage: _drawerOpen, child: InstallBanner(currentPath: location)),
+      ),
     ]);
   }
 
@@ -456,9 +465,11 @@ class _AppDrawer extends ConsumerWidget {
     final settings = ref.watch(settingsProvider).value;
     final primary = context.pal.primary;
     final custom = customNavItems(ref);
+    final pushOn = ref.watch(pushSettingsProvider.select((p) => p.enabled));
     final church = [
       for (final i in items) if (!serviceNavPaths.contains(i.path) && i.path != '/ask') i,
       ...custom.pages,
+      if (pushOn) const NavItem('notifications', '/notifications', Icons.notifications_outlined),
     ];
     final services = [
       for (final i in items) if (serviceNavPaths.contains(i.path) || i.path == '/ask') i,

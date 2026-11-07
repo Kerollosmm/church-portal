@@ -303,6 +303,30 @@ class DayEvent implements Hideable {
     return !day.isBefore(f) && !day.isAfter(l);
   }
 
+  /// Date (UTC midnight) of the occurrence a «ذكّرني» on this event's card
+  /// is for at [now]: an [overnight] occurrence that started yesterday and is
+  /// still running after midnight; else today while today is a start day and
+  /// today's session has not ended; else tomorrow (the next day's session of
+  /// a multi-day event, or the eve the card shows ahead).
+  DateTime reminderDay(DateTime now) {
+    final c = CairoTime.fromInstant(now);
+    final today = DateTime.utc(c.year, c.month, c.day);
+    final f = firstDay, l = lastDay;
+    if (f == null || l == null) return today;
+    final lastStart = overnight ? l.subtract(const Duration(days: 1)) : l;
+    bool startDay(DateTime d) => !d.isBefore(f) && !d.isAfter(lastStart);
+    final e = parseHm(end);
+    if (overnight && e != null && c.hour * 60 + c.minute < e) {
+      final y = today.subtract(const Duration(days: 1));
+      if (startDay(y)) return y;
+    }
+    // A multi-day event runs as one session a day: once today's (non-
+    // overnight) session has ended, the next one is tomorrow's.
+    final todayDone = !overnight && e != null && c.hour * 60 + c.minute >= e;
+    if (startDay(today) && !todayDone && !endedAt(now)) return today;
+    return today.add(const Duration(days: 1));
+  }
+
   /// Has it finished at [now] ([end] passed on its [lastDay]; no end time =
   /// the end of that day; an [overnight] event ends at [end] on the date
   /// after its last date)?
