@@ -61,6 +61,10 @@ Branch from up-to-date `main` → change + tests + memory-bank update + `documen
 (`ci.yml`: analyze/test/build/seed-diff + rules emulator; `deploy.yml`: build + preview channel `pr-<n>`) green →
 squash-merge → `main` auto-deploys Hosting + Firestore rules.
 
+Testing on the real project: merge chain PRs into the `dev` branch (no rebase) → `deploy-dev.yml` deploys
+channel `dev` **and the rules to the live project**, so rules on `dev` must stay backward compatible with `main`.
+`main` stays production; final merges to `main` stay bottom-up. See `docs/DEV-ENVIRONMENT.md`.
+
 ## Where to look
 
 | Need | File |

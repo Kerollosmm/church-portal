@@ -104,6 +104,13 @@ Job **firestore-rules** (15 min): Java Temurin 21 + Node 22 → `npm ci` in `too
 4. **preview** (same-repo PRs, needs build): `hosting:channel:deploy pr-<n> --only app --expires 7d --json` → parse URL → upsert
    one PR comment "Firebase Hosting preview" (github-script).
 
+### `deploy-dev.yml` — push to `dev` (+ manual run): real-world testing (7 Nov 2026)
+Builds the web release (Sentry env `dev`, App Check on), runs the rules emulator suite, deploys
+`firestore.rules`/indexes to the **live** project, then Hosting channel `dev` of `maximos-domadios-church`
+(30-day expiry, refreshed by every deploy; concurrency `deploy-dev`, never live Hosting). Chain PRs are
+merged into `dev` for testing; `dev` rules must stay backward compatible with `main`, and a `main` deploy
+replaces them (re-run this workflow afterwards). Details: [`docs/DEV-ENVIRONMENT.md`](../DEV-ENVIRONMENT.md).
+
 ### `synaxarium.yml` — daily commemoration (PR #31, ADR-040)
 
 Cron `10 16 * * *` and `10 22 * * *` (UTC) + manual. `node tool/fetch_synaxarium.js $RUNNER_TEMP/today.json`

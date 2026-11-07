@@ -1,0 +1,170 @@
+name: Deploy dev (testing channel)
+
+# The `dev` branch is the real-world testing environment (see docs/DEV-ENVIRONMENT.md).
+# push to dev -> 1. rules emulator tests, 2. Firestore rules + indexes to the LIVE
+#                project asafra-church-portal (rules are project-wide!),
+#                3. Hosting channel `dev` of site maximos-domadios-church
+#                (stable URL, expires 30 days after the latest deploy: every
+#                push / manual run refreshes it).
+# main stays production (deploy.yml). This workflow never deploys live Hosting.
+on:
+  push:
+    branches: [dev]
+  workflow_dispatch: {}
+
+# Never overlap two dev deploys; a newer push waits for the running one.
+concurrency:
+  group: deploy-dev
+  cancel-in-progress: false
+
+env:
+  FIREBASE_PROJECT_ID: asafra-church-portal
+  CHANNEL: dev
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    if: github.ref == 'refs/heads/dev'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: flutter test
+      - name: Build web (release, Sentry environment "dev")
+        env:
+          # The reCAPTCHA Enterprise key must list the dev channel domain
+          # (maximos-domadios-church--dev-*.web.app) for App Check to work here.
+          RECAPTCHA_SITE_KEY: ${{ vars.RECAPTCHA_SITE_KEY || '' }}
+          SENTRY_DSN: ${{ vars.SENTRY_DSN || '' }}
+          SENTRY_ENVIRONMENT: dev
+          GIT_SHA: ${{ github.sha }}
+        run: |
+          APP_VERSION=$(sed -n 's/^version: *//p' pubspec.yaml | head -1)
+          DEFINES=(--source-maps --dart-define=SENTRY_ENVIRONMENT="$SENTRY_ENVIRONMENT" --dart-define=GIT_SHA="$GIT_SHA" --dart-define=APP_VERSION="$APP_VERSION")
+          if [ -n "$SENTRY_DSN" ]; then DEFINES+=(--dart-define=SENTRY_DSN="$SENTRY_DSN"); fi
+          if [ -n "$RECAPTCHA_SITE_KEY" ]; then DEFINES+=(--dart-define=RECAPTCHA_SITE_KEY="$RECAPTCHA_SITE_KEY"); fi
+          echo "::notice::dev build: environment=$SENTRY_ENVIRONMENT release=church-portal@$APP_VERSION+${GIT_SHA:0:7} appCheck=$([ -n "$RECAPTCHA_SITE_KEY" ] && echo on || echo off)"
+          flutter build web --release "${DEFINES[@]}"
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: Firebase credentials (read-only sitemap export)
+        continue-on-error: true
+        uses: ./.github/actions/firebase-credentials
+        with:
+          service-account: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_ASAFRA_CHURCH_PORTAL }}
+      - name: Sitemap from Firestore (static fallback)
+        run: bash tool/build_sitemap.sh build/web/sitemap.xml
+      - name: Day commemoration JSON (Katameros, live copy as fallback)
+        continue-on-error: true
+        run: |
+          mkdir -p build/web/data
+          node tool/fetch_synaxarium.js build/web/data/today.json \
+            || curl -sf --max-time 20 https://maximos-domadios-church.web.app/data/today.json -o build/web/data/today.json \
+            || echo "::warning::no /data/today.json in this build"
+      - name: Remove key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/sa.json"
+      - name: Fingerprint icon fonts (cache busting, PR #23)
+        run: python3 tool/fingerprint_icon_fonts.py build/web
+      - uses: actions/upload-artifact@v5
+        with:
+          name: web-build-dev
+          path: build/web
+          retention-days: 3
+
+  # Rules deploy to the live project only after the emulator suite passes.
+  rules-test:
+    if: github.ref == 'refs/heads/dev'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: tool/rules_test/package-lock.json
+      - name: Install
+        working-directory: tool/rules_test
+        run: npm ci --no-audit --no-fund
+      - name: Firestore rules tests (emulator)
+        working-directory: tool/rules_test
+        run: npm test
+
+  deploy-rules:
+    # LIVE project: dev rules must stay backward compatible with main's app.
+    needs: [build, rules-test]
+    if: github.ref == 'refs/heads/dev'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: firestore-rules
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - uses: ./.github/actions/firebase-credentials
+        with:
+          service-account: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_ASAFRA_CHURCH_PORTAL }}
+      - name: Deploy Firestore rules & indexes (from dev, to the live project)
+        run: |
+          echo "::notice::Deploying firestore.rules from dev@${GITHUB_SHA:0:7} to $FIREBASE_PROJECT_ID (project-wide; a later main deploy replaces them)"
+          npx --yes firebase-tools@latest deploy --only firestore:rules,firestore:indexes --project "$FIREBASE_PROJECT_ID" --non-interactive
+      - name: Remove key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/sa.json"
+
+  deploy-channel:
+    needs: [build, deploy-rules]
+    if: github.ref == 'refs/heads/dev'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v5
+        with:
+          name: web-build-dev
+          path: build/web
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - uses: ./.github/actions/firebase-credentials
+        with:
+          service-account: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_ASAFRA_CHURCH_PORTAL }}
+      - name: Deploy Hosting channel `dev` (30 days, refreshed on every deploy)
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@latest hosting:channel:deploy "$CHANNEL" --only app \
+            --expires 30d --project "$FIREBASE_PROJECT_ID" --non-interactive --json > "$RUNNER_TEMP/deploy.json" \
+            || { cat "$RUNNER_TEMP/deploy.json"; exit 1; }
+          python3 - "$RUNNER_TEMP/deploy.json" <<'PY'
+          import json, os, sys
+          text = open(sys.argv[1], encoding="utf-8").read()
+          data = json.JSONDecoder().raw_decode(text[text.index("{"):])[0]
+          if data.get("status") != "success":
+              sys.exit(f"dev channel deploy failed: {data.get('error') or data}")
+          sites = data.get("result") or {}
+          for v in sites.values():
+              if isinstance(v, dict) and v.get("url"):
+                  print(f"::notice::dev channel: {v['url']} (expires {v.get('expireTime', '?')})")
+                  with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as s:
+                      s.write(f"### dev channel\n\n{v['url']}\n\nExpires: {v.get('expireTime', '?')}\n")
+                  break
+          else:
+              sys.exit("dev channel deploy returned no URL")
+          PY
+      - name: Remove key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/sa.json"
