@@ -69,6 +69,11 @@ Helpers:
   must be non-empty strings.
 - `keysAllowed(allowed)` — **create**: all keys ∈ allowed; **update**: only *changed* keys ∈ allowed
   (`diff().affectedKeys()`), so legacy fields already in a doc never block an edit.
+- **Rules 1,000-Expression Budget (ADR-057, PR #51):** On large settings documents (`settings/features`), evaluating 50+
+  keys in an allow-list or nested objects like 9 page headers hits Firestore's 1,000-expression ceiling. Rules solve
+  this via **Fast-path branching**: `changed.hasOnly(legacyFeatureKeys()) ? validLegacyFeatures(...) : (validInstallPush(...) && validLegacyFeatures(...))`.
+  Writes touching only legacy keys never allocate or evaluate the new schemas. In addition, single-key checks use the
+  primitive `'key' in set` operator (1 expression) instead of `set.hasAny(['key'])`.
 
 Match blocks:
 
