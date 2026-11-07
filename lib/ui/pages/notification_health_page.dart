@@ -6,6 +6,7 @@ import 'package:material_ui/material_ui.dart';
 import '../../core/l10n.dart';
 import '../../core/theme.dart';
 import '../../domain/oem_guide.dart';
+import '../../state/notify_providers.dart';
 
 /// Screen for OEM battery saver guidance and notification diagnostics (`/notifications/battery`, ADR-058 / §3.6).
 class NotificationHealthPage extends ConsumerStatefulWidget {
@@ -30,10 +31,10 @@ class _NotificationHealthPageState extends ConsumerState<NotificationHealthPage>
   @override
   void initState() {
     super.initState();
-    _fetchDeviceDiagnostics();
+    _runDiagnostics();
   }
 
-  Future<void> _fetchDeviceDiagnostics() async {
+  Future<void> _runDiagnostics() async {
     try {
       final res = await _deviceChannel.invokeMapMethod<String, dynamic>('getDiagnostics');
       if (res != null) {
@@ -43,11 +44,16 @@ class _NotificationHealthPageState extends ConsumerState<NotificationHealthPage>
         _isBatteryOptimisationIgnored = res['isIgnoringBatteryOptimizations'] as bool? ?? false;
         _exactAlarmsAllowed = res['canScheduleExactAlarms'] as bool? ?? true;
         _notificationsAllowed = res['notificationsAllowed'] as bool? ?? true;
-        _pendingCount = res['pendingCount'] as int? ?? 0;
       }
     } catch (_) {
       // Platform channel not available (e.g. web/desktop/test)
       _detectedBrand = detectOemBrand('Android');
+    }
+
+    try {
+      _pendingCount = await ref.read(localNotifierProvider).pendingCount();
+    } catch (_) {
+      _pendingCount = 0;
     }
 
     if (mounted) {

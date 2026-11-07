@@ -94,8 +94,8 @@ void main() {
         size: samplePayload.length,
       );
 
-      expect(
-        () => updater.downloadUpdate(mismatchAsset, build: 102).drain(),
+      await expectLater(
+        updater.downloadUpdate(mismatchAsset, build: 102).drain(),
         throwsA(isA<UpdateIntegrityException>()),
       );
 
@@ -324,6 +324,28 @@ void main() {
       expect(find.text('v2.1.0'), findsOneWidget);
       expect(find.text('ملاحظات الإصدار التجريبية'), findsOneWidget);
       expect(find.byKey(const Key('startDownloadButton')), findsOneWidget);
+    });
+
+    testWidgets('forced update opens modal sheet with non-dismissible barrier', (tester) async {
+      const forcedDecision = UpdateDecision(
+        hasUpdate: true,
+        forced: true,
+        targetVersion: '2.1.0',
+        targetBuild: 210,
+        asset: ApkAsset(url: 'https://example.com/test.apk', sha256: 'abc', size: 1000),
+      );
+
+      await tester.pumpWidget(buildBannerWrapper(decision: forcedDecision));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('updateNowButton')));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(UpdateSheet), findsOneWidget);
+      final modalBarrierFinder = find.byType(ModalBarrier);
+      expect(modalBarrierFinder, findsWidgets);
+      final barrier = tester.widget<ModalBarrier>(modalBarrierFinder.last);
+      expect(barrier.dismissible, isFalse);
     });
   });
 }

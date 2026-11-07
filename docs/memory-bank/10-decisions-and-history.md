@@ -1786,9 +1786,10 @@ supersede them.
      - Intent try-lists for auto-start, battery optimization, and notification channel settings with graceful fallback to app details.
      - Live diagnostic checklist verifying permissions, exact alarms, battery optimization exemption, and background replenishment freshness (< 48 hours).
   4. **In-app updater (`app_update.dart`, `app_updater.dart`, `UpdateBanner`):**
-     - Serverless update checking via static `manifest.json` on Hosting (`/app/android/manifest.json`).
-     - Resumable streaming HTTP download with `Range` header support, SHA-256 integrity verification, and package installer session invocation via `FileProvider` (`${applicationId}.updates`).
-     - Non-dismissable forced update when `currentBuild < minSupportedBuild`.
+     - Serverless update checking via static manifest on Hosting (`/app/android/manifest.json` / `/app/android/version.json`).
+     - Resumable streaming HTTP download with `Range` header support and SHA-256 integrity verification.
+     - `installApkInternal` triggers package installation via Android `ACTION_VIEW` intent with a `FileProvider` content URI (`${applicationId}.updates`) and `FLAG_GRANT_READ_URI_PERMISSION`.
+     - Non-dismissable forced update when `currentBuild < minSupportedBuild` (`isDismissible: false`, `enableDrag: false`).
   5. **Android native shell (`app_shell.dart`, `router.dart`, `locale_storage_io.dart`):**
      - Route `/admin` is compiled out and guarded when `isWeb` is false.
      - `PopScope` handles back button navigation (`parentRouteOf` maps subpages to listing/home, double back-press on `/` within 2 seconds exits the app).
@@ -1802,7 +1803,6 @@ supersede them.
 
 | When | PR / commit | What |
 |---|---|---|
-| 7 Nov 2026 | **PR B** — "Android APK, local notifications, Katameros readings, OEM battery diagnostics, in-app update" (`feat/p2b-android-local-notifications`) | ADR-058: Split APKs (arm64 + arm32) with R8 minification and core library desugaring; rolling 9-day local notification planner with exact alarms and replenishment worker; Katameros pipeline (`tool/fetch_readings.js`, `/readings/<date>`); OEM battery guide & diagnostics (`/notifications/battery`); in-app updater (Range resume, SHA-256 verification, FileProvider install); Android shell (PopScope double-back exit, SharedPreferences language store, Assistant web redirect). +0 Firestore reads/writes. |
 | 7 Nov 2026 | **PR A** — "Install banner, sideload guide, notification preferences & reminders foundation" (`feat/p2a-install-prefs`) | ADR-057: `InstallBanner` (Android APK / PWA, iOS sheet), `ApkInstallGuide` 5-step modal, `/notifications` preferences page with channel-owner model, `RemindMeButton` + «تذكيراتي» list, `ReminderStore`, admin «التطبيق والإشعارات», rules for 18 new fields on `settings/features`. +0 Firestore reads / writes for visitors. |
 | 31 Oct 2026 | `6f4a0d8` Initial commit | Empty repo (Kerollosmm) |
 | 31 Oct 2026 | **PR #1** `5eb9820` — "Church portal: Flutter + Firebase app, rules, seed, CI/CD" | The whole app: public pages, next-mass/season logic, assistant, contact form, Firestore rules, seed generator + seeder, CI, deploy (live + PR previews), Seed workflow (admin by email + set-password link), Codespaces. Review rounds: server-side contact throttle, hide assistant without App Check, safe workflow inputs, tolerant SA handling, firebase-tools CLI deploy, Node 24 actions, per-occurrence season windows, DST-correct seed instants, admin lookup retry, lang query sync, `<html lang>`, compact app bar for large text, map fallback, splash failure path; CI skip of the serviceusage probe. |
@@ -1866,3 +1866,4 @@ supersede them.
 
 Append new PRs to this table.
 | 6 Nov 2026 | **Phase 2 plans** (`docs/phase2-plans`, docs only) | ADR-056: `docs/plans/phase2/` — README (architecture, data contract, cost, decisions; revised 6 Nov 19:31–19:35: scheduled-only sender, event pushes, «ذكّرني» reminders, local verse + Katameros, keep-alive; owner decisions 19:57: APKs on a separate public releases repo, Katameros Arabic text + English refs only), HANDOFF (workflow, stacked chain, merge procedure), STATUS (checklists), PR A–E plans, LAUNCH-AND-OPERATIONS (consoles, keystore, user guidance, privacy, device tests, rollback, monitoring, runbook, launch day). No code. |
+| 7 Nov 2026 | **PR B** — "Android APK, local notifications, Katameros readings, OEM battery diagnostics, in-app update" (`feat/p2b-android-local-notifications`) | ADR-058: Split APKs (arm64 + arm32) with R8 minification and core library desugaring; rolling 9-day local notification planner with exact alarms and replenishment worker; Katameros pipeline (`tool/fetch_readings.js`, `/readings/<date>`); OEM battery guide & diagnostics (`/notifications/battery`); in-app updater (Range resume, SHA-256 verification, FileProvider install); Android shell (PopScope double-back exit, SharedPreferences language store, Assistant web redirect). +0 Firestore reads/writes. |

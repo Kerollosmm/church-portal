@@ -148,15 +148,31 @@ class _UpdateBannerState extends ConsumerState<UpdateBanner> {
     ref.invalidate(updateDecisionProvider);
   }
 
-  void _openUpdateSheet(BuildContext context, UpdateDecision decision) {
-    showModalBottomSheet(
+  /// Displays the modal bottom sheet for in-app update installation.
+  /// When [decision.isForced] is true, the sheet cannot be dismissed by tapping outside or dragging down.
+  static Future<void> showUpdateSheet(
+    BuildContext context,
+    UpdateDecision decision, {
+    bool autoStartDownload = true,
+  }) {
+    return showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      isDismissible: !decision.isForced,
+      enableDrag: !decision.isForced,
       backgroundColor: Colors.transparent,
       builder: (sheetContext) => UpdateSheet(
         decision: decision,
-        autoStart: widget.autoStartDownload,
+        autoStart: autoStartDownload,
       ),
+    );
+  }
+
+  void _openUpdateSheet(BuildContext context, UpdateDecision decision) {
+    showUpdateSheet(
+      context,
+      decision,
+      autoStartDownload: widget.autoStartDownload,
     );
   }
 }
