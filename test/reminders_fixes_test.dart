@@ -1,6 +1,7 @@
 // PR #51 review fixes (ADR-057): recurring reminders, storage failures,
 // strict occurrence lookup, lead clamping, reconciliation of moved events.
 import 'package:church_portal/core/install_env.dart';
+import 'package:church_portal/core/push_env.dart' show pushStorageKey;
 import 'package:church_portal/data/reminder_store.dart';
 import 'package:church_portal/domain/app_install.dart';
 import 'package:church_portal/domain/cairo_time.dart';
@@ -8,8 +9,10 @@ import 'package:church_portal/domain/models.dart' show Liturgy;
 import 'package:church_portal/domain/push.dart';
 import 'package:church_portal/domain/reminders.dart';
 import 'package:church_portal/domain/today.dart' show DayEvent;
+import 'package:church_portal/state/providers.dart' show installEnvProvider, pushPrefsProvider, pushSettingsProvider;
 import 'package:church_portal/ui/widgets/cards.dart' show nextLiturgyOccurrence;
 import 'package:church_portal/ui/widgets/reminder_sheet.dart' show initialReminderLead;
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 class _Env implements InstallEnv {
@@ -252,6 +255,39 @@ void main() {
       bool heldOn(DateTime d) => !off.contains(DateTime.utc(d.year, d.month, d.day));
       expect(nextLiturgyOccurrence(sunday, now, heldOn: heldOn), CairoTime.at(2026, 11, 22, 7 * 60));
       expect(nextLiturgyOccurrence(sunday, now, heldOn: (_) => false), isNull);
+    });
+  });
+  group('Sentry round 2', () {
+    test('multi-day event: after today\'s session ends the reminder is for tomorrow\'s', () {
+      final ev = DayEvent.fromMap('e2', {'date': '2026-11-04', 'endDate': '2026-11-06', 'start': '18:00', 'end': '21:00', 'titleAr': 'نهضة'});
+      expect(ev.reminderDay(CairoTime.at(2026, 11, 4, 12 * 60)), DateTime.utc(2026, 11, 4));
+      expect(ev.reminderDay(CairoTime.at(2026, 11, 4, 19 * 60)), DateTime.utc(2026, 11, 4));
+      expect(ev.reminderDay(CairoTime.at(2026, 11, 4, 22 * 60)), DateTime.utc(2026, 11, 5));
+      expect(ev.reminderDay(CairoTime.at(2026, 11, 5, 21 * 60)), DateTime.utc(2026, 11, 6));
+      // No end time: the session runs to the end of the day.
+      final open = DayEvent.fromMap('e3', {'date': '2026-11-04', 'endDate': '2026-11-06', 'start': '18:00', 'titleAr': 'معرض'});
+      expect(open.reminderDay(CairoTime.at(2026, 11, 4, 23 * 60)), DateTime.utc(2026, 11, 4));
+    });
+
+    test('push prefs: a change keeps the stored choice for a type hidden for now; unsubscribe-all clears it', () {
+      final env = _Env();
+      env.storage[pushStorageKey] = {
+        'types': ['announcements', 'feasts'],
+        'lang': 'ar',
+        'updatedAt': '2026-11-01T00:00:00.000Z',
+      };
+      final c = ProviderContainer(overrides: [
+        installEnvProvider.overrideWithValue(env),
+        pushSettingsProvider.overrideWithValue(
+            const PushSettings(enabled: true, offered: [NotifyType.announcements, NotifyType.seasons])),
+      ]);
+      addTearDown(c.dispose);
+      expect(c.read(pushPrefsProvider).types, {NotifyType.announcements});
+      c.read(pushPrefsProvider.notifier).toggleType(NotifyType.seasons);
+      expect(c.read(pushPrefsProvider).types, {NotifyType.announcements, NotifyType.seasons});
+      expect((env.storage[pushStorageKey]!['types'] as List).toSet(), {'announcements', 'seasons', 'feasts'});
+      c.read(pushPrefsProvider.notifier).clearAll();
+      expect(env.storage[pushStorageKey]!['types'], isEmpty);
     });
   });
 }

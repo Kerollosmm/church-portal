@@ -306,7 +306,8 @@ class DayEvent implements Hideable {
   /// Date (UTC midnight) of the occurrence a «ذكّرني» on this event's card
   /// is for at [now]: an [overnight] occurrence that started yesterday and is
   /// still running after midnight; else today while today is a start day and
-  /// the event has not ended; else tomorrow (the eve the card shows ahead).
+  /// today's session has not ended; else tomorrow (the next day's session of
+  /// a multi-day event, or the eve the card shows ahead).
   DateTime reminderDay(DateTime now) {
     final c = CairoTime.fromInstant(now);
     final today = DateTime.utc(c.year, c.month, c.day);
@@ -319,7 +320,10 @@ class DayEvent implements Hideable {
       final y = today.subtract(const Duration(days: 1));
       if (startDay(y)) return y;
     }
-    if (startDay(today) && !endedAt(now)) return today;
+    // A multi-day event runs as one session a day: once today's (non-
+    // overnight) session has ended, the next one is tomorrow's.
+    final todayDone = !overnight && e != null && c.hour * 60 + c.minute >= e;
+    if (startDay(today) && !todayDone && !endedAt(now)) return today;
     return today.add(const Duration(days: 1));
   }
 

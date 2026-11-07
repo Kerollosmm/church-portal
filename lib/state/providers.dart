@@ -424,18 +424,29 @@ class PushPrefsNotifier extends Notifier<PushPrefs> {
     _update(state.copyWith(types: defaultTypes, updatedAt: DateTime.now().toUtc()));
   }
 
+  /// Unsubscribe from everything, including types not offered right now.
   void clearAll() {
-    _update(state.copyWith(types: const {}, updatedAt: DateTime.now().toUtc()));
+    _update(state.copyWith(types: const {}, updatedAt: DateTime.now().toUtc()), keepUnoffered: false);
   }
 
   void setLang(String lang) {
     _update(state.copyWith(lang: lang, updatedAt: DateTime.now().toUtc()));
   }
 
-  void _update(PushPrefs next) {
+  /// Publishes [next] and stores it. The state only holds offered types, so
+  /// with [keepUnoffered] the stored choices for types an admin has hidden
+  /// for now are carried over, and come back when the type is offered again.
+  void _update(PushPrefs next, {bool keepUnoffered = true}) {
     state = next;
     try {
-      ref.read(installEnvProvider).writeJson(pushStorageKey, next.toJson());
+      final env = ref.read(installEnvProvider);
+      var stored = next;
+      if (keepUnoffered) {
+        final offered = ref.read(pushSettingsProvider).offered;
+        final hidden = PushPrefs.fromJson(env.readJson(pushStorageKey)).types.where((t) => !offered.contains(t));
+        if (hidden.isNotEmpty) stored = next.copyWith(types: {...next.types, ...hidden});
+      }
+      env.writeJson(pushStorageKey, stored.toJson());
     } catch (_) {}
   }
 }
