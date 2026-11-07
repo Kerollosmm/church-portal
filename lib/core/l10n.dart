@@ -727,14 +727,56 @@ const Map<String, List<String>> _strings = {
   'presetEnded': ['انتهى هذا الموسم: لا يمكن تجهيزه.', 'This season has ended: it can\'t be prepared.'],
   'presetLoadFailed': ['تعذّر التحميل: {e}', 'Could not load: {e}'],
   'presetUndoActive': ['إلغاء تفعيل الموسم (كان غير مفعّل)', 'Deactivate the season (it was off)'],
+
+  // App Install Banner & Sideload Guide (ADR-057)
+  'installAppTitle': ['تطبيق الكنيسة على هاتفك', 'Church app on your phone'],
+  'installAppBody': ['تابع القداسات والصلوات والمواسم وتلقّ التنبيهات بسهولة من هاتفك.', 'Follow liturgies, prayers and seasons with easy updates on your phone.'],
+  'installDownloadApk': ['تحميل التطبيق', 'Download app'],
+  'installOlderPhone': ['هاتف قديم؟', 'Older phone?'],
+  'installLater': ['لاحقًا', 'Later'],
+  'installDismiss': ['إغلاق', 'Close'],
+  'installOpenMethod': ['طريقة التثبيت', 'Install guide'],
+  'installIosAction': ['طريقة الإضافة', 'How to add'],
+
+  // iOS Add-to-Home-Screen Steps Sheet
+
+  // Android APK Sideload Guide
+
+  // Notification Preferences Page (/notifications)
+  'notifications': ['الإشعارات', 'Notifications'],
+
+  // Reminders «ذكّرني»
+  'remindMe': ['ذكّرني', 'Remind me'],
+  'remindMeSet': ['مجدول ({lead})', 'Set ({lead})'],
+  'remindMeSemantic': ['ذكّرني بـ {title}', 'Remind me about {title}'],
+  'reminderDefaultLeadNotOffered': ['مدة التذكير الافتراضية يجب أن تكون إحدى المدد المختارة.', 'The default reminder lead must be one of the offered lead times.'],
+
+  // Admin App & Notifications Settings
+  'opt_announcements': ['إعلانات وتنبيهات الكنيسة', 'Church announcements & alerts'],
+  'opt_verse_daily': ['آية اليوم الصباحية (خاص بالتطبيق)', 'Daily morning verse (app only)'],
+  'opt_katameros_daily': ['قراءات وسنكسار اليوم (خاص بالتطبيق)', 'Daily Katameros & Synaxarium (app only)'],
+  'opt_seasons': ['مواسم الكنيسة وبداية الأصوام', 'Church seasons & fasts'],
+  'opt_feasts': ['أعياد ومناسبات الكنيسة (خاص بالتطبيق)', 'Church feasts & commemorations (app only)'],
+  'opt_reminders': ['تذكيرات المناسبات والصلوات', 'Event & mass reminders'],
 };
+
+/// Strings of deferred chunks (ADR-057: the notifications page, the reminder
+/// sheet, the install guides): each chunk registers its own table before it
+/// builds, so its text never weighs on `main.dart.js`.
+final Map<String, List<String>> _chunkStrings = {};
+final Set<Object> _registeredChunks = {};
+
+/// Adds a deferred chunk's strings (idempotent per [table]).
+void registerStrings(Map<String, List<String>> table) {
+  if (_registeredChunks.add(table)) _chunkStrings.addAll(table);
+}
 
 extension L10nX on BuildContext {
   bool get isAr => Localizations.localeOf(this).languageCode == 'ar';
 
   /// Translated UI string; `{name}` placeholders replaced from [args].
   String tr(String key, [Map<String, String> args = const {}]) {
-    final pair = _strings[key];
+    final pair = _strings[key] ?? _chunkStrings[key];
     var s = pair == null ? key : (isAr ? pair[0] : pair[1]);
     args.forEach((k, v) => s = s.replaceAll('{$k}', v));
     return s;

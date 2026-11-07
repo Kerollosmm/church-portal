@@ -6,11 +6,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../core/content_ready.dart';
+import '../core/install_env.dart';
 import '../core/locale_storage.dart';
+import '../core/push_env.dart';
 import '../data/admin_repository.dart';
 import '../data/content_repository.dart';
 import '../data/firebase_bootstrap.dart';
 import '../data/media_repository.dart';
+import '../data/reminder_store.dart';
 import '../data/synaxarium_source.dart';
 import '../domain/assistant_settings.dart';
 import '../domain/cairo_time.dart';
@@ -20,6 +23,7 @@ import '../domain/custom_content.dart';
 import '../domain/daily_verse.dart';
 import '../domain/features.dart';
 import '../domain/models.dart';
+import '../domain/reminders.dart';
 import '../domain/schedule.dart' show activeSeasonsAt;
 import '../domain/today.dart';
 
@@ -360,3 +364,122 @@ final topEventProvider = Provider<TopEvent?>((ref) {
     lng: s?.lng,
   );
 });
+
+// ------------------- App Install & Push Notifications (ADR-057) -------------------
+
+/// App install banner settings (ADR-057).
+final installSettingsProvider = Provider<InstallSettings>((ref) {
+  return ref.watch(featuresProvider.select((f) => f.install));
+});
+
+/// Push notifications settings (ADR-057).
+final pushSettingsProvider = Provider<PushSettings>((ref) {
+  return ref.watch(featuresProvider.select((f) => f.pushSettings));
+});
+
+/// Install environment provider (overridable in tests).
+final installEnvProvider = Provider<InstallEnv>((ref) => const PlatformInstallEnv());
+
+/// Push environment provider (overridable in tests).
+final pushEnvProvider = Provider<PushEnv>((ref) => const PlatformPushEnv());
+
+/// The browser's notification permission ('default' / 'granted' /
+/// 'denied'). Invalidated after a permission request: the value is re-read,
+/// and a changed string (e.g. 'default' -> 'denied') rebuilds its readers.
+final pushPermissionProvider = Provider<String>((ref) => ref.watch(pushEnvProvider).permission);
+
+/// Device reminder store provider (overridable in tests).
+final reminderStoreProvider = Provider<ReminderStore>((ref) {
+  return ReminderStore(env: ref.watch(installEnvProvider));
+});
+
+/// Push preferences state notifier and provider.
+final pushPrefsProvider = NotifierProvider<PushPrefsNotifier, PushPrefs>(PushPrefsNotifier.new);
+
+class PushPrefsNotifier extends Notifier<PushPrefs> {
+  @override
+  PushPrefs build() {
+    final env = ref.watch(installEnvProvider);
+    final pushSettings = ref.watch(pushSettingsProvider);
+    return PushPrefs.fromJson(env.readJson(pushStorageKey), offered: pushSettings.offered);
+  }
+
+  void toggleType(NotifyType type) {
+    final nextTypes = Set<NotifyType>.of(state.types);
+    if (nextTypes.contains(type)) {
+      nextTypes.remove(type);
+    } else {
+      nextTypes.add(type);
+    }
+    _update(state.copyWith(types: nextTypes, updatedAt: DateTime.now().toUtc()));
+  }
+
+  void setAllTypes(Set<NotifyType> types) {
+    _update(state.copyWith(types: types, updatedAt: DateTime.now().toUtc()));
+  }
+
+  void firstOptIn() {
+    final offered = ref.read(pushSettingsProvider).offered;
+    final defaultTypes = PushPrefs.firstOptInTypes.where(offered.contains).toSet();
+    _update(state.copyWith(types: defaultTypes, updatedAt: DateTime.now().toUtc()));
+  }
+
+  /// Unsubscribe from everything, including types not offered right now.
+  void clearAll() {
+    _update(state.copyWith(types: const {}, updatedAt: DateTime.now().toUtc()), keepUnoffered: false);
+  }
+
+  void setLang(String lang) {
+    _update(state.copyWith(lang: lang, updatedAt: DateTime.now().toUtc()));
+  }
+
+  /// Publishes [next] and stores it. The state only holds offered types, so
+  /// with [keepUnoffered] the stored choices for types an admin has hidden
+  /// for now are carried over, and come back when the type is offered again.
+  void _update(PushPrefs next, {bool keepUnoffered = true}) {
+    state = next;
+    try {
+      final env = ref.read(installEnvProvider);
+      var stored = next;
+      if (keepUnoffered) {
+        final offered = ref.read(pushSettingsProvider).offered;
+        final hidden = PushPrefs.fromJson(env.readJson(pushStorageKey)).types.where((t) => !offered.contains(t));
+        if (hidden.isNotEmpty) stored = next.copyWith(types: {...next.types, ...hidden});
+      }
+      env.writeJson(pushStorageKey, stored.toJson());
+    } catch (_) {}
+  }
+}
+
+/// User's device reminders notifier and provider.
+final userRemindersProvider = NotifierProvider<UserRemindersNotifier, List<Reminder>>(UserRemindersNotifier.new);
+
+class UserRemindersNotifier extends Notifier<List<Reminder>> {
+  @override
+  List<Reminder> build() {
+    final store = ref.watch(reminderStoreProvider);
+    return store.load();
+  }
+
+  ReminderPutResult put(Reminder reminder, {Reminder? replacing}) {
+    final store = ref.read(reminderStoreProvider);
+    final result = store.put(reminder, replacing: replacing);
+    if (result == ReminderPutResult.ok) {
+      state = store.load();
+    }
+    return result;
+  }
+
+  void remove(String eventKey, {String? occurrence}) {
+    final store = ref.read(reminderStoreProvider);
+    store.remove(eventKey, occurrence: occurrence);
+    state = store.load();
+  }
+
+  void clearExpired(DateTime now) {
+    final store = ref.read(reminderStoreProvider);
+    store.clearExpired(now);
+    state = store.load();
+  }
+}
+

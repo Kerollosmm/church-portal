@@ -1684,10 +1684,94 @@ supersede them.
   no seasons; next season in another year carries its year; upcoming season with services listed under the notice;
   a current season shows no notice). Screenshot `work/fixall/wtE-empty-state.png` (390 px AR).
 
+## ADR-056 (docs PR) — Phase 2 architecture: notifications & mobile apps (plan only)
+
+- **Context:** owner request 6 Nov 2026 17:29–17:47 (Arabic): notifications for what each visitor wants (verse, season
+  starts, feasts, occasions / mass reminders, announcements) on web, Android and iPhone; admin web-only manages types,
+  texts, times, lead times, scheduled one-offs and deep links; users opt in per type; Android = APK from the site (no
+  Play Store), iPhone = installed PWA (no App Store); local notifications on the phone where possible; an install
+  prompt on the web with OS detection; responsive; small size; complete UX per feature; a handoff-ready plan; feature
+  PRs as a stacked chain merged only after the whole chain is approved.
+- **Decision (details in [`docs/plans/phase2/`](../plans/phase2/README.md)):**
+  1. **Delivery — strict channel segregation per platform** (owner, 6 Nov evening; **revised 19:31 / 19:35**): each
+     (platform, type) has one owner channel. **Local on the Android APK** (`flutter_local_notifications`): `verse_daily`
+     and `katameros_daily` (rolling ~9-day window, inexact, no exact-alarm permission; tap → `/readings/<date>` with
+     the full verse / full Katameros readings, offline from per-day static files `/data/readings/<date>.json` built
+     from the Katameros API by `synaxarium.yml`), `feasts`, and the user's **«ذكّرني» reminders** (`reminders`,
+     replacing the blanket `occasions` type; exact alarms via `USE_EXACT_ALARM` / `SCHEDULE_EXACT_ALARM` ≤ 32 with an
+     inexact fallback, reboot-safe, follow edits, cancelled when the event is removed); window replenished daily by
+     `workmanager`; per-brand battery-saver guidance + diagnostic check. **Remote / FCM topics**: admin **event pushes**
+     (`announcements`) and dynamic season alerts on both platforms (8 fixed topics), plus **web / iPhone reminders**
+     as per-event topics `web_rem_<eventKey>[-<date>]_<lead>_<lang>` (no reminder data in Firestore; may arrive up to
+     ~30 min late — said in the UI — with «أضف إلى التقويم» for exact time). Verse / Katameros / feasts are never
+     sent by FCM; the web shows them on Home. Data-only messages carry `type` + `nid` (+ `eventKey`); clients drop
+     local-owned types and repeated `nid`s; a push and a reminder for the same event share one slot. Sender =
+     **GitHub Actions** `push-sender.yml` on a **cron every 15 min only** — the instant `workflow_dispatch` / token
+     design was **removed** (owner 19:31: speed is not important, delivery is): per-topic claim markers (at most once),
+     retries (≤ 3), catch-up of missed runs (event pushes up to 24 h, reminders until the event), sent / partial /
+     failed / expired status in `/admin`; an hourly reminder planner (~65 reads) writes the next 36 h of web-reminder
+     slots; `keepalive.yml` re-enables the scheduled workflows monthly via the API (no dummy commits); sender health
+     = `/admin` card (red > 3 h) + a Sentry cron monitor; `topic_override` test runs need `PUSH_TEST_ENABLED` — no
+     Cloud Functions (Spark). `production` environment reviewers: recommended hygiene, no longer a prerequisite.
+  2. **Config:** new top-level keys of the existing `settings/features` doc (install banner fields, `push` default
+     off, `pushVapidKey`, `pushTypes`, `notifyTypes`), admin-only writes, +0 visitor reads / listeners; the one-off
+     schedule and sent log in a new **admin-only** doc `settings/notifications` (not public, not streamed by
+     visitors; sent markers in a sender-only `status` map, never overwritten by admin saves). Device-only: quiet
+     hours, inbox, and on the APK the chosen types / language / token; on the web the token + chosen topics sit in
+     `push_queue` only until the sender processes them (privacy notice says so; a token-list fallback would store
+     them while subscribed and change the notice).
+  3. **Web push:** lazy `push_client.js` + `firebase-messaging-sw.js` at a private scope (nothing on page load;
+     messaging JS ignored at boot via `flutterfire_ignore_scripts`); browsers subscribe through a create-only
+     `push_queue` (full desired topic set per doc: ≤ 2 fixed web topics + ≤ 30 reminder topics as `rem` / `drop` strings; 3 s spacing + 1,000/day cap; rejected
+     requests still cost rule reads — cheap checks first; sustained-abuse response: opt-in off → App Check / rules,
+     pending opt-ins resend themselves) drained by the sender with the Admin SDK `subscribeToTopic` /
+     `unsubscribeFromTopic` (per-token results, union of `prevToken`s; token-list fallback with storage / cost /
+     privacy contracts documented); a plain SW shows every push itself (no foreground gap); iPhone only as an installed PWA on iOS
+     16.4+: the install banner never asks for permission (Share → Add to Home Screen first); the permission UI exists
+     only when standalone on iOS ≥ 16.4.
+  4. **APK:** split-per-abi (arm64 + arm32), R8, obfuscation, admin compiled out (`kIsWeb`), assistant opens the web
+     `/ask`; a visual step-by-step sideload guide on the web (browser warning, Play Protect, «install unknown
+     apps»); **in-app update** (version manifest `/app/android/version.json` on our Hosting, resumable download,
+     SHA-256 + signature pre-check, `REQUEST_INSTALL_PACKAGES`, FileProvider installer intent; no releases page);
+     APK host **decided by the owner 6 Nov 2026 19:57** (README §8 #6): APK files on GitHub Releases of a separate
+     **public** repo `Kerollosmm/church-portal-apk` (proposed name; created at PR B time by the owner or by the agent
+     with approval — not yet), the ~500 B manifest (version, size, SHA-256, download URL → Release asset) on our
+     Hosting; reasons: Spark's 10 GB/month Hosting transfer cap would take the whole site down, independence from the
+     main repo's visibility, main repo stays light; the release workflow publishes there with a fine-grained
+     `RELEASES_REPO_TOKEN` (that repo only, Contents: Read and write) and keeps the newest 5 releases; release
+     signing from GitHub secrets (owner creates and backs up the keystore). Android developer verification (global
+     in 2027) must be completed before it reaches Egypt.
+  5. **Process:** stacked chain PR 0 (plans) → A (ADR-057) → B (ADR-058) → C (ADR-059) → D (ADR-060) → E (ADR-061);
+     each draft, reviewed (@coderabbitai, @sentry, ≤ 2 rounds), CI green, not merged; after owner approval merged
+     bottom-up with squash, merging `main` into the next branch (no rebase, no force-push) — `HANDOFF.md` §5.6.
+  6. **Katameros text** (owner, **decided 6 Nov 2026 19:57**, README §8 #17): Arabic full text (Van Dyck, public
+     domain) + English as **references only** (e.g. "Gospel: John 15:1-12", built from the API's book / chapter /
+     verse numbers), **no NKJV text** (its gratis-use limits would be exceeded by a daily lectionary); daily file
+     `/data/readings/<date>.json` targeted at ≤ ~20–25 KB (Arabic payload ≈ 29–31 KB raw / ≈ 8 KB gzip on sample
+     days). Future option: a public-domain English translation (WEB / ASV) in the same `textEn` fields, no
+     architecture change.
+- **Cost:** A, B, E +0 Firestore (B: each day's readings file ≈ 8 KB gzip once per device); C ≈ 1,750 reads +
+  ≤ ~60 writes/day (sender + hourly reminder planner, admin-only doc); D 2 writes per web change batch (opt-in,
+  language, debounced «ذكّرني» changes) + sender read/delete, hard-capped at 1,000 queue writes/day by the rules.
+- **Rules / data / seed:** unchanged in this PR (docs only).
+
+## ADR-057 — App install banner, sideload guide, notification preferences, and reminder foundation
+- **Context:** Phase 2 adds the Android app and notifications. Phone visitors need an easy, safe way to install the APK or add the site to the Home Screen, and a place to choose notification types and keep personal reminders — with no accounts and no server storage.
+- **Decision:**
+  1. **Install banner (`InstallBanner`):** phone browsers only; hidden on desktop, standalone / installed, the APK build, `/admin`, and while the drawer is open; shown 4 s after content arrives. Android: `installAndroidUrl` → download + 5-step sideload guide; else the captured `beforeinstallprompt`; else a ⋮-menu steps sheet. iOS: 3-step Add-to-Home-Screen sheet, never a permission call. «لاحقًا» = `installRemindDays` (default 3), ✕ = `installReshowDays` (default 30, 0 = never), device storage. `appinstalled` hides it for the browser session; where `getInstalledRelatedApps()` exists (Chrome Android, `related_applications` webapp entry in the manifest) an empty result clears that flag, elsewhere it lasts until the tab closes (known, self-healing).
+  2. **`/notifications`:** explainer, permission states incl. `iosNeedsInstall`, `iosTooOld` (UA iOS < 16.4, or standalone without PushManager), `inAppBrowser`; platform-filtered type switches; unsubscribe-all. The enable button is disabled («قريبًا») until a delivery path ships (`kPushDeliveryShipped`, flipped by PR D) whatever the VAPID key — no wasted one-time permission prompt. Quiet hours are part of the stored visitor prefs model only; **no quiet-hours UI in PR A** (plan: needs delivery). The non-web build reports `unsupported` until PR B.
+  3. **Reminders («ذكّرني»):** `RemindMeButton` + lead sheet + «تذكيراتي», device-only `ReminderStore` (max 30). Times shown in Cairo (`CairoTime.fromInstant`). Occurrence identity: dated items by `yyyy-MM-dd`, weekly items without one (same on every card); lookups are strict (`null` is not a wildcard) except that an `every` reminder covers all occurrences of its event. `every` reminders never expire and roll forward weekly at the same Cairo wall time (`nextStartsAt`). The default lead clamps to the longest still-valid lead; save is disabled when none is left or the lead is not offered. Storage failures surface as an error in the sheet (`ReminderPutResult.storageError`). Event sources follow `reminderSources` (README §6; `lit` liturgies + season services, `mtg` meetings, `day` today's events; admin field from PR C, default `lit,mtg,day` in PR A): with that default «ذكّرني» is **no longer shown on clinic detail pages** (clinics are none of the three sources). A cancelled dated service («لا يقام اليوم») offers no reminder; a weekly one points at the next week a season does not replace (schedule page, `regularSupersededOn`). A weekly item's one-off reminder (no occurrence id) counts as set only on its own Cairo date. An overnight day event's reminder after midnight belongs to the occurrence that started the evening before (`DayEvent.reminderDay`). Browser storage refusals propagate (`writeJson` throws) so the sheet reports them.
+  4. **Admin «التطبيق والإشعارات»:** `installPrompt`, `installTitleAr/En`, `installBodyAr/En`, `installAndroidUrl`, `installAndroidUrl32`, `installApkVersion`, `installApkBuild`, `installApkSizeMb`, `installApkSize32Mb`, `installReshowDays`, `installRemindDays`, `push`, `pushVapidKey`, `pushTypes`, `reminderLeads` (default 0/15/60/1440), `reminderDefaultLead` (default 60, null allowed). No admin quiet-hours fields. `FeatureSettings.effectiveAt` carries install / push settings through season-preset expiry.
+  5. **Rules economy:** the 18 keys are kept out of the legacy allow-list; `changed.hasOnly(legacyFeatureKeys())` short-circuits, and the ADR-057 validation runs only when a non-legacy key changes. `pageHeaders.notifications` is gated with `in` on the changed set. Result: every existing worst case (page headers, hero videos, 20 day events, PDF events) passes as before; known limit: one single write that changes all 18 ADR-057 keys **and** all 9 page headers at maximum length exceeds 1,000 expressions — the admin never does this (separate screens, changed-fields-only saves).
+  6. **Size:** the notifications page, the reminder sheet + «تذكيراتي», and the install guides / steps sheets are deferred imports registering their own string tables (`registerStrings`), so `main.dart.js` carries only the banner and the button.
+  7. **Cost & privacy:** +0 Firestore reads / writes / listeners for visitors; prefs and reminders only on the device.
+- **Consequences:** Ships dark (`push` off, banner on only on phones). Rollout / rollback uses two independent switches on `settings/features`: `installPrompt` (banner, default on) and `push` (page, «ذكّرني», drawer link; default off) — turning `push` off does not hide the banner. Delivery (APK local alarms, FCM, web push SW) follows in PR B–D; `web/firebase-messaging-sw.js` and `web/push_client.js` are scaffolds the plan requires in PR A, unused until PR D.
+
 ## Timeline
 
 | When | PR / commit | What |
 |---|---|---|
+| 7 Nov 2026 | **PR A** — "Install banner, sideload guide, notification preferences & reminders foundation" (`feat/p2a-install-prefs`) | ADR-057: `InstallBanner` (Android APK / PWA, iOS sheet), `ApkInstallGuide` 5-step modal, `/notifications` preferences page with channel-owner model, `RemindMeButton` + «تذكيراتي» list, `ReminderStore`, admin «التطبيق والإشعارات», rules for 18 new fields on `settings/features`. +0 Firestore reads / writes for visitors. |
 | 31 Oct 2026 | `6f4a0d8` Initial commit | Empty repo (Kerollosmm) |
 | 31 Oct 2026 | **PR #1** `5eb9820` — "Church portal: Flutter + Firebase app, rules, seed, CI/CD" | The whole app: public pages, next-mass/season logic, assistant, contact form, Firestore rules, seed generator + seeder, CI, deploy (live + PR previews), Seed workflow (admin by email + set-password link), Codespaces. Review rounds: server-side contact throttle, hide assistant without App Check, safe workflow inputs, tolerant SA handling, firebase-tools CLI deploy, Node 24 actions, per-occurrence season windows, DST-correct seed instants, admin lookup retry, lang query sync, `<html lang>`, compact app bar for large text, map fallback, splash failure path; CI skip of the serviceusage probe. |
 | 31 Oct 2026 | **PR #2** `c42837a` — "Content: replace sample data with verified church data" | Real name/address (Qebly)/coordinates/landline/socials/bishop/history/milestones, reconciled priests, saints, activities with links, Anba Abraam, real alerts; times stay sample with page notice; no invented doctors/phones; `--force` deletes retired ids; `docs/CONTENT_SOURCES.md`. Review: unconfirmed one-offs in assistant, partner orgs labelled, new unconfirmed priests not seeded. |
@@ -1749,3 +1833,4 @@ supersede them.
 | 6 Nov 2026 | **PR #49** — "Seasonal list empty state" (`fix/season-empty-state`) | ADR-055: /mass-schedule seasonal view with no season in effect shows «لا توجد مواسم حالية» / "No current seasons" and, when an enabled season starts later, «الموسم القادم: صوم الميلاد — يبدأ ٢٥ نوفمبر» (`nextUpcomingSeason`, `EmptyState.detail`); fixed i18n strings (not admin-configurable). +0 reads / writes / listeners. |
 
 Append new PRs to this table.
+| 6 Nov 2026 | **Phase 2 plans** (`docs/phase2-plans`, docs only) | ADR-056: `docs/plans/phase2/` — README (architecture, data contract, cost, decisions; revised 6 Nov 19:31–19:35: scheduled-only sender, event pushes, «ذكّرني» reminders, local verse + Katameros, keep-alive; owner decisions 19:57: APKs on a separate public releases repo, Katameros Arabic text + English refs only), HANDOFF (workflow, stacked chain, merge procedure), STATUS (checklists), PR A–E plans, LAUNCH-AND-OPERATIONS (consoles, keystore, user guidance, privacy, device tests, rollback, monitoring, runbook, launch day). No code. |

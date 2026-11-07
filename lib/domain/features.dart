@@ -1,15 +1,19 @@
 // Feature toggles and home-page layout (Firestore doc `settings/features`).
 // Pure Dart: no Flutter / Firebase imports, so the logic is unit-tested.
 
+import 'app_install.dart';
 import 'daily_verse.dart';
 import 'image_style.dart';
 import 'occasion_theme.dart';
 import 'program.dart';
+import 'push.dart';
 import 'season_preset.dart';
 import 'season_verses.dart';
 import 'today.dart';
 
+export 'app_install.dart';
 export 'occasion_theme.dart' show OccasionConfig, ThemePalette, ThemePresets, ThemeRange, ThemeResolution, ThemeSource;
+export 'push.dart';
 
 /// Public sections an admin can switch on or off.
 class Sections {
@@ -108,8 +112,9 @@ class CustomizablePages {
   static const services = 'services';
   static const contact = 'contact';
   static const ask = 'ask';
+  static const notifications = 'notifications';
 
-  static const all = [about, schedule, education, activities, clinics, services, contact, ask];
+  static const all = [about, schedule, education, activities, clinics, services, contact, ask, notifications];
 
   /// [ar, en] labels used in the admin features screen.
   static const labels = <String, List<String>>{
@@ -121,6 +126,7 @@ class CustomizablePages {
     services: ['الخدمات العامة', 'Public services'],
     contact: ['تواصل معنا', 'Contact us'],
     ask: ['اسأل الكنيسة', 'Ask the church'],
+    notifications: ['الإشعارات', 'Notifications'],
   };
 }
 
@@ -302,6 +308,12 @@ class FeatureSettings {
   /// form (`weddingBookingOff`, ADR-042 season preset; default false).
   final bool weddingBookingOff;
 
+  /// App install banner settings (ADR-057). Never written by [toMap].
+  final InstallSettings install;
+
+  /// Push notifications settings (ADR-057). Never written by [toMap].
+  final PushSettings pushSettings;
+
   const FeatureSettings({
     this.sections = const {},
     this.homeOrder = HomeBlocks.defaultOrder,
@@ -331,6 +343,8 @@ class FeatureSettings {
     this.seasonVerses = SeasonVerses.none,
     this.seasonPreset,
     this.weddingBookingOff = false,
+    this.install = InstallSettings.defaults,
+    this.pushSettings = PushSettings.defaults,
   });
 
   /// Everything on: used before the doc loads and when it does not exist.
@@ -381,6 +395,8 @@ class FeatureSettings {
       seasonVerses: SeasonVerses.fromList(m['seasonVerses']),
       seasonPreset: SeasonPreset.fromMap(m['seasonPreset']),
       weddingBookingOff: _bool(m['weddingBookingOff']) ?? false,
+      install: InstallSettings.fromMap(m),
+      pushSettings: PushSettings.fromMap(m),
     );
   }
 
@@ -436,6 +452,8 @@ class FeatureSettings {
     DailyVerseConfig? dailyVerse,
     OccasionConfig? occasions,
     bool? errorReporting,
+    InstallSettings? install,
+    PushSettings? pushSettings,
   }) =>
       FeatureSettings(
         sections: sections ?? this.sections,
@@ -466,6 +484,8 @@ class FeatureSettings {
         seasonVerses: seasonVerses,
         seasonPreset: seasonPreset,
         weddingBookingOff: weddingBookingOff,
+        install: install ?? this.install,
+        pushSettings: pushSettings ?? this.pushSettings,
       );
 
   /// What visitors see at [instant] (ADR-042): once the applied season
@@ -512,6 +532,8 @@ class FeatureSettings {
       seasonPreset: seasonPreset,
       weddingBookingOff:
           p.has(PresetOption.weddingOff) ? (p.prevBool(PresetPrev.weddingBookingOff) ?? false) : weddingBookingOff,
+      install: install,
+      pushSettings: pushSettings,
     );
   }
 
@@ -542,6 +564,7 @@ class FeatureSettings {
   /// Whether a public route (or one of its detail sub-routes, such as
   /// `/clinics/<id>`) is available. Unknown routes are always allowed.
   bool routeEnabled(String path) {
+    if (path == '/notifications' || path.startsWith('/notifications/')) return pushSettings.enabled;
     final sections = sectionsForPath(path);
     if (sections == null) return true;
     return sections.any(enabled);
