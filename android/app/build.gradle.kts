@@ -53,6 +53,15 @@ android {
         versionName = flutter.versionName
     }
 
+    // Native libraries compressed inside the APK (extracted at install). With minSdk ≥ 23 AGP stores
+    // them uncompressed for mmap, which made the sideloaded / in-app-update download ~29 MB (over the
+    // 20 MB budget, PR B §12); compressed they are a fraction of that. Costs a little install-time disk.
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
+
     signingConfigs {
         create("release") {
             if (!storeFilePath.isNullOrBlank() && !keyAliasValue.isNullOrBlank() && !keyPasswordValue.isNullOrBlank() && !storePasswordValue.isNullOrBlank()) {
