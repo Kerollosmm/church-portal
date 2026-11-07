@@ -51,7 +51,7 @@ android {
 
     signingConfigs {
         create("release") {
-            if (storeFilePath != null && keyAliasValue != null && keyPasswordValue != null && storePasswordValue != null) {
+            if (!storeFilePath.isNullOrBlank() && !keyAliasValue.isNullOrBlank() && !keyPasswordValue.isNullOrBlank() && !storePasswordValue.isNullOrBlank()) {
                 val resolvedStoreFile = File(storeFilePath).let { if (it.isAbsolute) it else rootProject.file(storeFilePath) }
                 if (resolvedStoreFile.exists()) {
                     storeFile = resolvedStoreFile
