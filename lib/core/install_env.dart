@@ -19,6 +19,7 @@ abstract class InstallEnv {
   Future<bool> promptInstall();
 
   Map<String, dynamic>? readJson(String key);
+  /// Throws when device storage refuses the write.
   void writeJson(String key, Map<String, dynamic> data);
   void remove(String key);
 

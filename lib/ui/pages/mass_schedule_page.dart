@@ -129,6 +129,12 @@ class _MassSchedulePageState extends ConsumerState<MassSchedulePage> {
     // marked too; [regularSupersededOn] only names one dated today
     // (CodeRabbit on PR #45).
     bool offToday(Liturgy l) => notToday.contains(l.id) && (l.date != null || l.weekday == today.weekday);
+    // The reminder's next occurrence skips weeks a season replaces too.
+    bool Function(DateTime) heldOn(Liturgy l) => (day) => !regularSupersededOn(
+          liturgies: all,
+          seasons: seasons,
+          day: CairoTime.fromInstant(day),
+        ).any((x) => x.id == l.id);
     return [
       for (final e in revivals.entries) ...[
         SectionTitle(
@@ -151,6 +157,7 @@ class _MassSchedulePageState extends ConsumerState<MassSchedulePage> {
               showDate: true,
               parallelText: parallelOf(l),
               notHeldToday: offToday(l),
+              heldOn: l.date == null ? heldOn(l) : null,
             ),
         ]),
       ],
@@ -183,6 +190,7 @@ class _MassSchedulePageState extends ConsumerState<MassSchedulePage> {
               showWeekday: showWeekday,
               parallelText: parallelOf(l),
               notHeldToday: offToday(l),
+              heldOn: l.date == null ? heldOn(l) : null,
             ),
         ]),
       SectionTitle(context.tr('vespersPraise'), icon: Icons.nightlight_round),
@@ -192,7 +200,12 @@ class _MassSchedulePageState extends ConsumerState<MassSchedulePage> {
         ResponsiveGrid(children: [
           for (final l in vespers)
             LiturgyCard(
-                liturgy: l, showWeekday: true, showDate: true, parallelText: parallelOf(l), notHeldToday: offToday(l)),
+                liturgy: l,
+                showWeekday: true,
+                showDate: true,
+                parallelText: parallelOf(l),
+                notHeldToday: offToday(l),
+                heldOn: l.date == null ? heldOn(l) : null),
         ]),
     ];
   }

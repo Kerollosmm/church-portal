@@ -39,7 +39,8 @@ class RemindMeButton extends ConsumerWidget {
 
     // Exact occurrence (strict: null matches only null), or a recurring
     // «كل مرة» reminder for this event.
-    final activeReminder = ReminderStore.findIn(ref.watch(userRemindersProvider), eventKey, occurrence: occurrence);
+    final activeReminder =
+        ReminderStore.findIn(ref.watch(userRemindersProvider), eventKey, occurrence: occurrence, startsAt: startsAt);
 
     final isSet = activeReminder != null;
     final pal = context.pal;

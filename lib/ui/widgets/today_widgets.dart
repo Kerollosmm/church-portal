@@ -329,13 +329,10 @@ class TopEventCard extends ConsumerWidget {
       }
       if (ev.start.isNotEmpty) {
         final now = ref.watch(nowProvider).value ?? DateTime.now();
-        final cNow = CairoTime.fromInstant(now);
         final m = parseHm(ev.start) ?? 0;
-        // The occurrence the card shows (as resolveTopEvent picks it): today
-        // while the event covers today and has not ended, else (the eve of
-        // the liturgical day, after sunset / midnight) the next day.
-        final civil = DateTime(cNow.year, cNow.month, cNow.day);
-        final day = ev.covers(civil) && !ev.endedAt(now) ? civil : DateTime(cNow.year, cNow.month, cNow.day + 1);
+        // The occurrence the card shows: an overnight one that started
+        // yesterday (then already past: no button), today, or tomorrow.
+        final day = ev.reminderDay(now);
         final startsAt = CairoTime.at(day.year, day.month, day.day, m);
         children.add(Padding(
           padding: const EdgeInsets.only(top: 8),

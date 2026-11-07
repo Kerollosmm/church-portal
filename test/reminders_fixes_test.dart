@@ -4,8 +4,11 @@ import 'package:church_portal/core/install_env.dart';
 import 'package:church_portal/data/reminder_store.dart';
 import 'package:church_portal/domain/app_install.dart';
 import 'package:church_portal/domain/cairo_time.dart';
+import 'package:church_portal/domain/models.dart' show Liturgy;
 import 'package:church_portal/domain/push.dart';
 import 'package:church_portal/domain/reminders.dart';
+import 'package:church_portal/domain/today.dart' show DayEvent;
+import 'package:church_portal/ui/widgets/cards.dart' show nextLiturgyOccurrence;
 import 'package:church_portal/ui/widgets/reminder_sheet.dart' show initialReminderLead;
 import 'package:flutter_test/flutter_test.dart';
 
@@ -210,6 +213,45 @@ void main() {
       expect(p.remindsFor(EventKey.dayEvent('1')), isFalse);
       expect(p.remindsFor(EventKey.custom('clinic', '1')), isFalse);
       expect(PushSettings.fromMap({'push': false}).remindsFor(EventKey.liturgy('1')), isFalse);
+    });
+  });
+
+  group('CodeRabbit round-1 follow-ups', () {
+    test('a weekly one-off (no occurrence) matches only its own Cairo date', () {
+      final thisWeek = CairoTime.at(2026, 11, 8, 7 * 60);
+      final lastWeek = CairoTime.at(2026, 11, 1, 7 * 60);
+      final once = Reminder(
+          eventKey: EventKey.liturgy('sun'), lead: 60, title: const {'ar': 'ق', 'en': 'L'}, startsAt: lastWeek, createdAt: lastWeek);
+      expect(ReminderStore.findIn([once], EventKey.liturgy('sun'), startsAt: thisWeek), isNull);
+      expect(ReminderStore.findIn([once], EventKey.liturgy('sun'), startsAt: lastWeek), same(once));
+      // Same date, time moved by the admin: still this reminder.
+      expect(ReminderStore.findIn([once], EventKey.liturgy('sun'), startsAt: CairoTime.at(2026, 11, 1, 9 * 60)), same(once));
+      final every = Reminder(
+          eventKey: EventKey.liturgy('sun'), lead: 60, every: true, title: const {'ar': 'ق', 'en': 'L'}, startsAt: lastWeek, createdAt: lastWeek);
+      expect(ReminderStore.findIn([every], EventKey.liturgy('sun'), startsAt: thisWeek), same(every));
+    });
+
+    test('overnight day event: after midnight the reminder is for the occurrence that started yesterday', () {
+      final ev = DayEvent.fromMap('e0', {'date': '2026-11-04', 'start': '22:00', 'end': '02:00', 'titleAr': 'سهرة كيهكية'});
+      expect(ev.reminderDay(CairoTime.at(2026, 11, 4, 20 * 60)), DateTime.utc(2026, 11, 4));
+      expect(ev.reminderDay(CairoTime.at(2026, 11, 5, 90)), DateTime.utc(2026, 11, 4));
+      final multi = DayEvent.fromMap('e1', {'date': '2026-11-04', 'endDate': '2026-11-06', 'start': '22:00', 'end': '02:00', 'titleAr': 'نهضة'});
+      expect(multi.reminderDay(CairoTime.at(2026, 11, 5, 90)), DateTime.utc(2026, 11, 4));
+      expect(multi.reminderDay(CairoTime.at(2026, 11, 5, 12 * 60)), DateTime.utc(2026, 11, 5));
+    });
+
+    test('liturgy reminder: a cancelled dated service has none; weekly skips weeks a season replaces', () {
+      final now = CairoTime.at(2026, 11, 6, 12 * 60); // Friday
+      final dated = Liturgy.fromMap('d', {'date': '2026-11-06', 'start': '18:00', 'nameAr': 'قداس'});
+      expect(nextLiturgyOccurrence(dated, now, skipToday: true), isNull);
+      expect(nextLiturgyOccurrence(dated, now), CairoTime.at(2026, 11, 6, 18 * 60));
+      final sunday = Liturgy.fromMap('w', {'weekday': 7, 'start': '07:00', 'nameAr': 'قداس الأحد'});
+      expect(nextLiturgyOccurrence(sunday, now), CairoTime.at(2026, 11, 8, 7 * 60));
+      // A season replaces the next two Sundays.
+      final off = {DateTime.utc(2026, 11, 8), DateTime.utc(2026, 11, 15)};
+      bool heldOn(DateTime d) => !off.contains(DateTime.utc(d.year, d.month, d.day));
+      expect(nextLiturgyOccurrence(sunday, now, heldOn: heldOn), CairoTime.at(2026, 11, 22, 7 * 60));
+      expect(nextLiturgyOccurrence(sunday, now, heldOn: (_) => false), isNull);
     });
   });
 }

@@ -24,22 +24,33 @@ import 'styled_image.dart';
 export 'program_details.dart' show ProgramDetails, parallelSummary, parallelThenLine;
 export 'styled_image.dart';
 
-/// The occurrence a liturgy card's «ذكّرني» is for. [skipToday]: today's
-/// service is replaced by a season service (the card's «لا يقام اليوم»), so
-/// a weekly liturgy points at next week instead.
-DateTime _nextLiturgyOccurrence(Liturgy l, DateTime now, {bool skipToday = false}) {
+/// The occurrence a liturgy card's «ذكّرني» is for, or null when there is
+/// none to remind of. [skipToday]: today's service is replaced by a season
+/// service (the card's «لا يقام اليوم»): a dated service then has no
+/// occurrence, a weekly one points at a later week. [heldOn] (the schedule
+/// page's season-aware check, by Cairo start of day) skips weeks a season
+/// replaces too; none held in the next 12 weeks = null.
+DateTime? nextLiturgyOccurrence(Liturgy l, DateTime now, {bool skipToday = false, bool Function(DateTime day)? heldOn}) {
   if (l.date != null) {
+    if (skipToday) return null;
     final c = CairoTime.calendarDate(l.date!);
     return CairoTime.at(c.year, c.month, c.day, l.startMinutes ?? 0);
   }
   final cNow = CairoTime.fromInstant(now);
   final weekday = l.weekday ?? 7;
-  final daysAhead = (weekday - cNow.weekday + 7) % 7;
+  var daysAhead = (weekday - cNow.weekday + 7) % 7;
   var target = CairoTime.at(cNow.year, cNow.month, cNow.day + daysAhead, l.startMinutes ?? 0);
   if (target.isBefore(cNow) || (skipToday && daysAhead == 0)) {
-    target = CairoTime.at(cNow.year, cNow.month, cNow.day + daysAhead + 7, l.startMinutes ?? 0);
+    daysAhead += 7;
+    target = CairoTime.at(cNow.year, cNow.month, cNow.day + daysAhead, l.startMinutes ?? 0);
   }
-  return target;
+  if (heldOn == null) return target;
+  for (var w = 0; w < 12; w++) {
+    if (heldOn(CairoTime.startOfDay(target))) return target;
+    daysAhead += 7;
+    target = CairoTime.at(cNow.year, cNow.month, cNow.day + daysAhead, l.startMinutes ?? 0);
+  }
+  return null;
 }
 
 /// Card for one liturgy on the schedule page.
@@ -56,6 +67,10 @@ class LiturgyCard extends StatelessWidget {
   /// marked «لا يُقام اليوم» so the weekly tab never contradicts the home
   /// card (ADR-050).
   final bool notHeldToday;
+
+  /// Season-aware "is this service held on that day" for the reminder's
+  /// next occurrence (Cairo start of day); null = every week.
+  final bool Function(DateTime day)? heldOn;
   const LiturgyCard(
       {super.key,
       required this.liturgy,
@@ -63,6 +78,7 @@ class LiturgyCard extends StatelessWidget {
       this.showDate = false,
       this.parallelText = '',
       this.notHeldToday = false,
+      this.heldOn,
       this.notHeldOn = ''});
 
   /// The days a listed season sample is not held (ADR-054), already
@@ -122,16 +138,17 @@ class LiturgyCard extends StatelessWidget {
               IconLine(Icons.place_outlined, context.pick(l.placeAr, l.placeEn)),
               IconLine(Icons.people_outline, context.pick(l.audienceAr, l.audienceEn)),
               ProgramDetails(l.program, parallelText: parallelText),
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: RemindMeButton(
-                  eventKey: EventKey.liturgy(l.id),
-                  occurrence: l.date != null ? isoDate(CairoTime.calendarDate(l.date!)) : null,
-                  title: {'ar': l.nameAr, 'en': l.nameEn},
-                  startsAt: _nextLiturgyOccurrence(l, CairoTime.now(), skipToday: notHeldToday),
-                  recurring: l.date == null,
+              if (nextLiturgyOccurrence(l, CairoTime.now(), skipToday: notHeldToday, heldOn: heldOn) case final next?)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: RemindMeButton(
+                    eventKey: EventKey.liturgy(l.id),
+                    occurrence: l.date != null ? isoDate(CairoTime.calendarDate(l.date!)) : null,
+                    title: {'ar': l.nameAr, 'en': l.nameEn},
+                    startsAt: next,
+                    recurring: l.date == null,
+                  ),
                 ),
-              ),
             ]),
           ),
         ]),

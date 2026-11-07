@@ -184,6 +184,24 @@ void main() {
     expect(find.text('لتفعيل الإشعارات على iPhone'), findsOneWidget);
   });
 
+  testWidgets('a permission denial rebuilds into the blocked how-to (pushPermissionProvider re-read)', (tester) async {
+    final pushEnv = FakeTestPushEnv(permission: 'default');
+    await tester.pumpWidget(buildTestable(
+      child: const NotificationsPage(isWeb: true),
+      pushSettings: const PushSettings(enabled: true, vapidKey: 'k'),
+      pushEnv: pushEnv,
+      installEnv: FakeTestInstallEnv(),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.text('الإشعارات محظورة في متصفحك'), findsNothing);
+
+    // What the enable button does after the browser prompt was answered.
+    pushEnv.permission = 'denied';
+    ProviderScope.containerOf(tester.element(find.byType(NotificationsPage))).invalidate(pushPermissionProvider);
+    await tester.pumpAndSettle();
+    expect(find.text('الإشعارات محظورة في متصفحك'), findsOneWidget);
+  });
+
   testWidgets('MyRemindersSection displays Cairo wall time for UTC stored reminders', (tester) async {
     final pushEnv = FakeTestPushEnv(permission: 'granted');
     final installEnv = FakeTestInstallEnv();

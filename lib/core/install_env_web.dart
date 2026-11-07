@@ -94,10 +94,14 @@ Map<String, dynamic>? readJson(String key) {
   }
 }
 
+/// Throws when the browser refuses the write (private mode, quota, storage
+/// disabled), so callers such as [ReminderStore] can report it.
 void writeJson(String key, Map<String, dynamic> data) {
   try {
     web.window.localStorage.setItem(key, jsonEncode(data));
-  } catch (_) {}
+  } catch (e) {
+    throw StateError('localStorage write refused: $e');
+  }
 }
 
 void removeStorageKey(String key) {

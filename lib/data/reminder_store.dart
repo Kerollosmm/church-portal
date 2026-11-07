@@ -1,4 +1,5 @@
 import 'package:church_portal/core/install_env.dart';
+import 'package:church_portal/domain/cairo_time.dart';
 import 'package:church_portal/domain/reminders.dart';
 
 /// Storage key for user reminders on device.
@@ -108,13 +109,26 @@ class ReminderStore {
   Reminder? find(String eventKey, {String? occurrence}) => findIn(load(), eventKey, occurrence: occurrence);
 
   /// As [find], on an already loaded list.
-  static Reminder? findIn(List<Reminder> list, String eventKey, {String? occurrence}) {
+  ///
+  /// [startsAt], when given, is the occurrence the caller shows: a one-off
+  /// reminder stored without an occurrence (a weekly item's «هذه المرة فقط»)
+  /// matches only when it is for that same Cairo calendar date, so last
+  /// week's one-off is not reported as set on next week's card.
+  static Reminder? findIn(List<Reminder> list, String eventKey, {String? occurrence, DateTime? startsAt}) {
     Reminder? recurring;
     for (final r in list) {
       if (r.eventKey != eventKey) continue;
-      if (r.occurrence == occurrence) return r;
+      if (r.occurrence == occurrence &&
+          (r.every || occurrence != null || startsAt == null || _sameCairoDay(r.startsAt, startsAt))) {
+        return r;
+      }
       if (r.every) recurring ??= r;
     }
     return recurring;
+  }
+
+  static bool _sameCairoDay(DateTime a, DateTime b) {
+    final x = CairoTime.fromInstant(a), y = CairoTime.fromInstant(b);
+    return x.year == y.year && x.month == y.month && x.day == y.day;
   }
 }

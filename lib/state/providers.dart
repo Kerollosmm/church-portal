@@ -383,6 +383,11 @@ final installEnvProvider = Provider<InstallEnv>((ref) => const PlatformInstallEn
 /// Push environment provider (overridable in tests).
 final pushEnvProvider = Provider<PushEnv>((ref) => const PlatformPushEnv());
 
+/// The browser's notification permission ('default' / 'granted' /
+/// 'denied'). Invalidated after a permission request: the value is re-read,
+/// and a changed string (e.g. 'default' -> 'denied') rebuilds its readers.
+final pushPermissionProvider = Provider<String>((ref) => ref.watch(pushEnvProvider).permission);
+
 /// Device reminder store provider (overridable in tests).
 final reminderStoreProvider = Provider<ReminderStore>((ref) {
   return ReminderStore(env: ref.watch(installEnvProvider));

@@ -95,7 +95,11 @@ class _InstallBannerState extends ConsumerState<InstallBanner> {
     final until = days == 0
         ? DateTime.utc(2099, 1, 1)
         : now.add(Duration(days: days));
-    env.writeJson(installStorageKey, {'until': until.toIso8601String()});
+    try {
+      env.writeJson(installStorageKey, {'until': until.toIso8601String()});
+    } catch (_) {
+      // Storage refused: hidden for this session only.
+    }
   }
 
   @override

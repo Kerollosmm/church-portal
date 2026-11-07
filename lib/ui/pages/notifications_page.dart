@@ -42,6 +42,7 @@ class NotificationsPage extends ConsumerWidget {
     required String userAgent,
     required bool isStandalone,
     required PushEnv pushEnv,
+    required String permission,
     required bool isWeb,
   }) {
     // The phone app's own notification permission arrives with PR B; until
@@ -67,7 +68,7 @@ class NotificationsPage extends ConsumerWidget {
       return PushPermissionState.unsupported;
     }
 
-    final p = pushEnv.permission;
+    final p = permission;
     if (p == 'granted') return PushPermissionState.granted;
     if (p == 'denied') return PushPermissionState.denied;
     return PushPermissionState.defaultState;
@@ -111,6 +112,7 @@ class NotificationsPage extends ConsumerWidget {
       userAgent: installEnv.userAgent,
       isStandalone: installEnv.isStandalone,
       pushEnv: pushEnv,
+      permission: ref.watch(pushPermissionProvider),
       isWeb: web,
     );
 
@@ -168,7 +170,7 @@ class NotificationsPage extends ConsumerWidget {
           _buildStatusCard(context, pal, permState, pushSettings, pushEnv, prefsNotifier,
               // Re-read the browser permission so a denial shows the
               // blocked-permission steps right away.
-              () => ref.invalidate(pushEnvProvider)),
+              () => ref.invalidate(pushPermissionProvider)),
 
           const SizedBox(height: 20),
 
