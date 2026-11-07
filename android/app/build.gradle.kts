@@ -46,7 +46,8 @@ android {
 
     defaultConfig {
         applicationId = "com.asafrachurch.church_portal"
-        minSdk = flutter.minSdkVersion
+        // sentry_flutter 10 declares minSdk 26 (Android 8.0); Flutter's default is 24.
+        minSdk = maxOf(flutter.minSdkVersion, 26)
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName

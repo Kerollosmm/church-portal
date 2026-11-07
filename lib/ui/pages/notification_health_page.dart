@@ -74,14 +74,21 @@ class _NotificationHealthPageState extends ConsumerState<NotificationHealthPage>
 
   Future<void> _scheduleTwoMinTest() async {
     try {
-      await _deviceChannel.invokeMethod('scheduleTestAlarm', {'minutes': 2});
+      final mode = await _deviceChannel.invokeMethod<Object?>('scheduleTestAlarm', {'minutes': 2});
       if (!mounted) return;
+      // 'inexact' = exact alarms are off for the app: the test (like reminders) may arrive a few
+      // minutes late, which is itself useful diagnostic information.
+      final inexact = mode == 'inexact';
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            context.isAr
-                ? 'تمت جدولة إشعار تجريبي بعد دقيقتين. يمكنك إغلاق التطبيق الآن.'
-                : 'Test notification scheduled in 2 minutes. You can close the app now.',
+            inexact
+                ? (context.isAr
+                    ? 'تمت جدولة إشعار تجريبي بعد دقيقتين تقريبًا (المنبّهات الدقيقة غير مسموح بها، فقد يتأخر قليلًا). يمكنك إغلاق التطبيق الآن.'
+                    : 'Test notification scheduled in about 2 minutes (exact alarms are off, so it may arrive a little late). You can close the app now.')
+                : (context.isAr
+                    ? 'تمت جدولة إشعار تجريبي بعد دقيقتين. يمكنك إغلاق التطبيق الآن.'
+                    : 'Test notification scheduled in 2 minutes. You can close the app now.'),
           ),
           duration: const Duration(seconds: 4),
         ),

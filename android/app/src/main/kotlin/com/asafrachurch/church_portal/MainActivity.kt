@@ -130,8 +130,12 @@ class MainActivity : FlutterActivity() {
                     }
                     "scheduleTestAlarm" -> {
                         val minutes = call.argument<Int>("minutes") ?: 2
-                        scheduleTestAlarmInternal(minutes)
-                        result.success(true)
+                        val mode = scheduleTestAlarmInternal(minutes)
+                        if (mode == null) {
+                            result.error("SCHEDULE_FAILED", "test alarm could not be scheduled", null)
+                        } else {
+                            result.success(mode)
+                        }
                     }
                     else -> result.notImplemented()
                 }
@@ -141,6 +145,9 @@ class MainActivity : FlutterActivity() {
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, installerChannelName)
             .setMethodCallHandler { call, result ->
                 when (call.method) {
+                    // The FileProvider (`res/xml/update_paths.xml`) only shares `cacheDir/updates/`;
+                    // Dart's `Directory.systemTemp` is the code-cache dir on Android, outside it.
+                    "getCacheDir" -> result.success(cacheDir.absolutePath)
                     "supportedAbi" -> {
                         val abi = Build.SUPPORTED_ABIS.firstOrNull() ?: "universal"
                         result.success(abi)
@@ -287,9 +294,11 @@ class MainActivity : FlutterActivity() {
         }
     }
 
-    private fun scheduleTestAlarmInternal(minutes: Int) {
+    /** Schedules the diagnostic test alarm with the reminders' mode: `"exact"` when exact alarms are
+     *  allowed, `"inexact"` (≈ ±10 min in Doze) otherwise; null when nothing could be scheduled. */
+    private fun scheduleTestAlarmInternal(minutes: Int): String? {
         try {
-            val alarmManager = getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
+            val alarmManager = getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return null
             val intent = Intent(this, TestAlarmReceiver::class.java)
             val pi = PendingIntent.getBroadcast(
                 this,
@@ -298,12 +307,26 @@ class MainActivity : FlutterActivity() {
                 PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0)
             )
             val triggerAt = System.currentTimeMillis() + (minutes * 60 * 1000L)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pi)
+            val exactAllowed = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                alarmManager.canScheduleExactAlarms()
             } else {
-                alarmManager.set(AlarmManager.RTC_WAKEUP, triggerAt, pi)
+                true
             }
-        } catch (_: Exception) {}
+            return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                if (exactAllowed) {
+                    alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pi)
+                    "exact"
+                } else {
+                    alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pi)
+                    "inexact"
+                }
+            } else {
+                alarmManager.setExact(AlarmManager.RTC_WAKEUP, triggerAt, pi)
+                "exact"
+            }
+        } catch (_: Exception) {
+            return null
+        }
     }
 
     private fun getInstalledCertificates(): List<ByteArray> {
@@ -348,9 +371,9 @@ class MainActivity : FlutterActivity() {
             } else {
                 @Suppress("DEPRECATION")
                 val packageInfo = packageManager.getPackageArchiveInfo(filePath, PackageManager.GET_SIGNATURES)
-                if (packageInfo != null && packageInfo.applicationInfo != null) {
-                    packageInfo.applicationInfo.sourceDir = filePath
-                    packageInfo.applicationInfo.publicSourceDir = filePath
+                packageInfo?.applicationInfo?.let {
+                    it.sourceDir = filePath
+                    it.publicSourceDir = filePath
                 }
                 @Suppress("DEPRECATION")
                 packageInfo?.signatures?.map { it.toByteArray() } ?: emptyList()
@@ -370,6 +393,16 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun verifyApkSignatureInternal(filePath: String, expectedCertSha256: String?): Boolean {
+        // Same signing key is not enough: the archive must be this app (not another app signed
+        // with the same key), otherwise the installer would offer a different application.
+        val archivePackage = try {
+            packageManager.getPackageArchiveInfo(filePath, 0)?.packageName
+        } catch (_: Exception) {
+            null
+        }
+        if (archivePackage != packageName) {
+            return false
+        }
         val installedCerts = getInstalledCertificates()
         val archiveCerts = getArchiveCertificates(filePath)
         if (installedCerts.isEmpty() || archiveCerts.isEmpty()) {
@@ -407,9 +440,10 @@ class TestAlarmReceiver : BroadcastReceiver() {
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return
         val channelId = "reminders"
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            // Same id / name as the Dart channel (local_notifications_io.dart) so this does not rename it.
             val channel = NotificationChannel(
                 channelId,
-                "التذكيرات",
+                "تذكيراتي",
                 NotificationManager.IMPORTANCE_HIGH
             ).apply {
                 description = "إشعارات التذكيرات بالقداسات والمناسبات"
@@ -435,7 +469,7 @@ class TestAlarmReceiver : BroadcastReceiver() {
         val notification = builder
             .setContentTitle("اختبار الإشعارات")
             .setContentText("وصلك الإشعار التجريبي بنجاح!")
-            .setSmallIcon(context.applicationInfo.icon)
+            .setSmallIcon(R.drawable.ic_stat_seal)
             .setContentIntent(pi)
             .setAutoCancel(true)
             .build()
