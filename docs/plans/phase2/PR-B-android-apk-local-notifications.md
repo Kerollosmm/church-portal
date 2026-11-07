@@ -429,9 +429,11 @@ jobs:
   with a hard error.
 - `/admin` APK link = `<APK_BASE_URL>church-portal-arm64.apk` (and `…arm32.apk`).
 - **Hosting persistence:** `tool/publish_hosting_file.js` (ADR-040) clones the live version, so the next normal
-  `deploy.yml` deploy would drop `/app/android/*`. `deploy.yml` therefore gains a step that downloads the latest
-  `apk-v*` release's `version.json` (and, when `APK_HOST=firebase`, the two APKs) with `gh release download`
-  (`GITHUB_TOKEN`, works on a private repo too) into `build/web/app/android/` before `firebase deploy`, plus a
+  `deploy.yml` deploy would drop `/app/android/*`. `deploy.yml` therefore gains a step (`continue-on-error: true`) that
+  finds the latest `apk-v*` release via `gh release list` and, when one exists, downloads its `version.json` (and, when
+  `APK_HOST=firebase`, the two APKs) with `gh release download` (`GITHUB_TOKEN`, works on a private repo too; falls back
+  to `curl -sf https://maximos-domadios-church.web.app/app/android/version.json`, and cleanly no-ops before the first
+  `apk-v*` tag is cut) into `build/web/app/android/` before `firebase deploy`, plus a
   `firebase.json` header `Cache-Control: no-cache` for `/app/android/version.json` and
   `Content-Type: application/vnd.android.package-archive` + `Content-Disposition: attachment` for `*.apk`.
 - Sentry: upload Dart symbols (`sentry-dart-plugin`) optional later; obfuscation map kept as artifact.

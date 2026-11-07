@@ -294,12 +294,12 @@ push (they are local in the app and users set their own reminders — duplicate)
 The sender, `synaxarium.yml` (commemoration + Katameros readings files) and the keep-alive itself are scheduled.
 
 **Keep-alive (set up once with PR C):** `.github/workflows/keepalive.yml` runs on the 1st of every month and calls
-`PUT /repos/Kerollosmm/church-portal/actions/workflows/<file>/enable` for `push-sender.yml`, `synaxarium.yml` and
-itself with the run's own `GITHUB_TOKEN` (`permissions: actions: write`) — no personal token, no commit, nothing
-pushed to `main` (PR C §17). After merge: GitHub → Actions → «Keep scheduled workflows enabled» → **Run workflow** →
-green. **First 60 days after launch:** note the date of the last commit; around day 55 check GitHub → Actions that no
-workflow shows "This scheduled workflow is disabled" — if one does, the API approach is not counted by GitHub:
-click **Enable workflow** and fall back to the reminders below (and tell the developer to revisit PR C §17).
+`PUT /repos/Kerollosmm/church-portal/actions/workflows/<file>/disable` followed by `/enable` for `push-sender.yml`
+and `synaxarium.yml` (plus `/enable` on itself) with the run's own `GITHUB_TOKEN` (`permissions: actions: write`) — no
+personal token, no commit, nothing pushed to `main` (PR C §17). After merge: GitHub → Actions → «Keep scheduled
+workflows enabled» → **Run workflow** → green. **First 60 days after launch:** note the date of the last commit;
+around day 55 check GitHub → Actions that no workflow shows "This scheduled workflow is disabled" — if one does,
+click **Enable workflow** and fall back to the alerts below (and tell the developer to revisit PR C §17).
 
 **Sender health — what alerts you:**
 1. `/admin` → «الإشعارات»: «آخر تشغيل للمُرسِل» — amber after 1 h, **red after 3 h**.

@@ -302,11 +302,12 @@ stream. Missing key = the default in the table. Rules validate only changed keys
 | `notifyTypes` | list ≤ 6 encoded rows (`␟` U+001F) | built-in per type | C | per type: time, days before, title/body templates ar/en, default link |
 | `reminderLeads` | list ≤ 4 ints ⊆ {0, 5, 10, 15, 30, 60, 120, 180, 1440}, unique | `[0, 15, 60, 1440]` | A | lead-time choices in the «ذكّرني» sheet (minutes before the event) |
 | `reminderDefaultLead` | int ∈ `reminderLeads` | `60` | A | pre-selected lead |
+| `reminderSources` | `'lit,mtg,day'` subset of `lit\|mtg\|day` | `'lit,mtg,day'` | C (default in A) | which event sources show the «ذكّرني» button |
 
 **Admin-only doc `settings/notifications`** (PR C; not readable by visitors, not streamed by them): `schedule`
 (≤ 20 event pushes, admin columns only, incl. optional `eventKey`), `status` (map rowId → per-topic send markers,
 **sender only**), `sentLog` (≤ 60, sender), `reminderPlan` (next 36 h of web-reminder slots, sender's hourly planner),
-`remindersSent` (map slot key → result, today + yesterday only, sender), `health` (`lastRunAt`, `lastPlanAt`,
+`remindersSent` (map slot key → result, retained while `occurrenceDate >= yesterday` so 24 h lead reminders for tomorrow's events are never pruned early, sender), `health` (`lastRunAt`, `lastPlanAt`,
 `lastError`, sender) — admin and sender never write the same field, so neither can overwrite the other.
 
 (Removed 19:31: the `urgent` column, the `dispatch` map and the owner-only `admin_secrets/github_dispatch` doc.)

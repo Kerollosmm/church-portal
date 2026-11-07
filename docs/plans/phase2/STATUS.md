@@ -87,8 +87,8 @@
 - [ ] Rules (`notifyTypes` ≤ 6, `reminderSources`; admin-only `settings/notifications` with `schedule` incl. `eventKey`, sender-only `status` / `sentLog` / `reminderPlan` / `remindersSent` / `health`) + emulator tests
 - [ ] Admin «الإشعارات» (types with channel labels, «ذكّرني» card, event pushes CRUD with route / event picker, status chips, sender health card, preview, test-on-device, log)
 - [ ] `tool/push_sender.js` (cron only; per-topic claim, retries ≤ 3, catch-up, 24 h expiry, health stamp, Sentry check-in), `tool/push_daily.js` (season alerts) + node tests (delivery guarantee)
-- [ ] `tool/push_reminders.js` (hourly planner, slot sender, catch-up / late-skip) + Dart↔JS occurrence parity fixture + node tests
-- [ ] `push-sender.yml` (cron + manual dry run / test topic; concurrency group) + `keepalive.yml` (monthly `PUT …/enable`)
+- [ ] `tool/push_reminders.js` (hourly planner, slot sender, catch-up / late-skip, prune `occurrenceDate < yesterday`) + Dart↔JS occurrence parity fixture + node tests
+- [ ] `push-sender.yml` (cron + manual dry run / test topic; concurrency group) + `keepalive.yml` (monthly `disable` → `enable` toggle)
 - [ ] Android FCM (`app_announcements_*`, `app_seasons_*` only) + data-only payload `type` / `nid` / `eventKey` + client guard + seen-set + `event:X` slot + deep links; `flutterfire_ignore_scripts` on web
 - [ ] Docs + ADR-059
 - [ ] Draft PR # ___ · CI green · reviews done · PSI ___
@@ -96,7 +96,7 @@
 
 ## PR D — Web push + PWA + iPhone (ADR-060) · `feat/p2d-web-push` → C
 - [ ] Spike: token on Android Chrome + iPhone PWA; IID batchAdd works? (result: ___)
-- [ ] Rules `push_queue` (4 fixed web topics + `rem` / `drop` reminder-topic strings ≤ 30) + `meta/push_rate` + emulator tests
+- [ ] Rules `push_queue` (4 fixed web topics + `rem` / `drop` reminder-topic strings ≤ 30) + `meta/push_rate` (`day` as UTC `YYYYMMDD` int, deterministic retry sequence) + emulator tests
 - [ ] `push_client.js` + `firebase-messaging-sw.js` complete; Dart interop
 - [ ] Sender drains the queue (fixed topics, `rem` subscribe, `drop` + `prevToken` unsubscribe)
 - [ ] Web «ذكّرني»: debounced queue writes, delay copy ar / en (≤ ~30 min; hourly variant), «أضف إلى التقويم» with `VALARM`, expired clean-up

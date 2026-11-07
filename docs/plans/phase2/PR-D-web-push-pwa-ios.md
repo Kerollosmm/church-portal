@@ -81,7 +81,7 @@ itself (Home verse, feasts, announcements banner) — only push needs the instal
 | Limits | ≤ 30 reminder topics per browser (FCM allows 2,000 per instance); the reminder only arrives if the scheduled sender is running (health alert, PR C §17); a reminder for an event whose `day-` key changed shows «تغيّر الحدث — أعد ضبط التذكير» |
 | Dedupe | the sender sends both the once- and every-time topic copies with one `nid` → same `tag` → one notification; with an admin push for the same event the `event:X` slot (README §3.1 rule 5) |
 | Privacy | the reminder topics name the event and lead time (not the person); they sit in `push_queue` only until drained (minutes), then only Google's topic registry holds them (LAUNCH §6) |
-| Client clock skew & retry | Queue batches write `push_queue` with `meta/push_rate` enforcing `request.resource.data.day == request.time.date()`. If the client clock is inaccurate or skewed across UTC midnight, `web_push_repository.dart` / `push_client.js` falls back by retrying with the adjacent UTC date or inspecting the HTTP `Date` response header from `/data/today.json` to synchronize before retrying (§5) |
+| Client clock skew & retry | Queue batches write `push_queue` with `meta/push_rate` enforcing `request.resource.data.day == request.time.year() * 10000 + request.time.month() * 100 + request.time.day()` (integer `YYYYMMDD`, avoiding Timestamp millisecond truncation pitfalls). On rejection, `web_push_repository.dart` / `push_client.js` follows a deterministic retry sequence that separates 3 s spacing collisions, UTC midnight rollover (`count: 1`), and client clock skew via the HTTP `Date` header (§5) |
 
 ## ٤. الشاشات (Screens)
 
@@ -105,10 +105,11 @@ match /meta/push_rate {
     && request.resource.data.lastId is string && request.resource.data.lastId.matches('^[A-Za-z0-9]{10,64}$')
     // spacing: one queue write per 3 s overall
     && (resource == null || request.time > resource.data.lastAt + duration.value(3, 's'))
-    // daily cap: `day` = the UTC date of request.time (the client writes today's UTC midnight as a Timestamp);
+    // daily cap: `day` = UTC date integer YYYYMMDD (e.g. 20270430) — avoids Timestamp type/millisecond pitfalls;
     // count restarts at 1 each day; at most 1,000 per day. Final syntax confirmed by the emulator tests.
-    && request.resource.data.day == request.time.date()
-    && request.resource.data.count is int && request.resource.data.count <= 1000
+    && request.resource.data.day is int
+    && request.resource.data.day == request.time.year() * 10000 + request.time.month() * 100 + request.time.day()
+    && request.resource.data.count is int && request.resource.data.count >= 1 && request.resource.data.count <= 1000
     && (resource == null || resource.data.day != request.resource.data.day
           ? request.resource.data.count == 1
           : request.resource.data.count == resource.data.count + 1)
@@ -138,21 +139,27 @@ function remList() {   // '' or 1–30 topics web_rem_<key>_<lead>_<lang>
 }
 ```
 **How the client satisfies the counter without reading it** (Sentry round 2: the doc is unreadable): the batch
-writes `meta/push_rate` with `set({lastAt: serverTimestamp(), lastId, day: <today 00:00 UTC>, count:
+writes `meta/push_rate` with `set({lastAt: serverTimestamp(), lastId, day: <UTC YYYYMMDD int>, count:
 FieldValue.increment(1)}, {merge: true})` — the rules see the post-increment value, so on the same UTC day `count ==
-old + 1` holds without the client knowing `old`; on a missing doc the increment yields 1. On the **first write of a
-new UTC day** the increment yields `old + 1 ≠ 1` and is denied; the client then retries once with the literal
-`count: 1`. `allow read` stays false: no counter or `lastId` is ever exposed. Cost of that daily retry: one rejected
-request (~2 rule reads) per day.
+old + 1` holds without the client knowing `old`; on a missing doc the increment yields 1. `allow read` stays false:
+no counter or `lastId` is ever exposed.
 
-**Client clock skew on `meta/push_rate.day`:**
-The security rule `request.resource.data.day == request.time.date()` requires matching the UTC date of `request.time`.
-If a client device clock is skewed across UTC midnight or inaccurate, `new Date()` computed locally will differ from
-`request.time.date()`, causing a rule rejection. `web_push_repository.dart` / `push_client.js` implements an explicit
-fallback mechanism: if the initial write is rejected and local time is near UTC midnight, it retries with the adjacent
-UTC date (`±1 day`); if still rejected or if local time is not near midnight, it inspects the HTTP `Date` response
-header from a lightweight endpoint (e.g. `/data/today.json`, already fetched by the app) to synchronize time before
-retrying.
+**Deterministic retry protocol (disambiguating 3 s spacing, UTC day rollover, and client clock skew):**
+Because all rule rejections return `permission-denied`, the client must not blindly confuse a 3 s spacing collision
+with a new-UTC-day rollover (`resource.data.day != request.resource.data.day`, where `FieldValue.increment(1)` yields
+`old + 1 != 1`) or an inaccurate device clock (`day != server YYYYMMDD`). `web_push_repository.dart` / `push_client.js`
+executes this exact sequence:
+1. **Attempt 1 (normal path):** write with local UTC `day` (`YYYYMMDD`) and `count: FieldValue.increment(1)`.
+2. **Sync server date on first rejection:** if Attempt 1 fails with `permission-denied`, fetch `HEAD /data/today.json`
+   (same-origin, lightweight) and read its HTTP `Date` response header to obtain the authoritative UTC `serverDay`
+   (`YYYYMMDD`, falling back to local UTC date if the header is absent).
+3. **Attempt 2 (new-UTC-day rollover):** tried **once** with `day: serverDay` and literal `count: 1` (if today's first
+   write has not happened yet, this resets the counter to `1` for `serverDay` and succeeds; if `meta/push_rate.day` is
+   already `serverDay`, the rule requires `old + 1` so `count: 1` is harmlessly rejected). Additionally, `push_sender.js`
+   (running every 15 min via Admin SDK) pre-rolls `meta/push_rate` to `{day: todayUtcInt, count: 0}` on its first run
+   after `00:00 UTC` whenever `day < todayUtcInt`, so visitors after `00:07 UTC` rarely even need Attempt 2.
+4. **Attempts 3–5 (3 s spacing backoff):** wait `3.2 s + random(0..1.5 s)` jitter and retry with `day: serverDay` and
+   `count: FieldValue.increment(1)`.
 
 **Rejected requests still cost rule reads** (CodeRabbit round 1 follow-up; Firebase: reads made by `get()` /
 `exists()` / `getAfter()` are charged even when the request is denied —
@@ -169,8 +176,8 @@ Firestore for the web (rejected for now by ADR-037 for PageSpeed). The emulator 
 evaluate no document read.
 
 Tests: a valid `want` doc (incl. the initial subscription and `want: []`) passes in a batch with the throttle; alone → denied; second within 3 s → denied; count 1,001 →
-denied; `count: increment(1)` accepted on the same day without a prior read; new UTC day: increment denied, literal
-`count: 1` accepted (count 2 on a new day → denied); `day` not today → denied; malformed request → no document
+denied; `count: increment(1)` accepted on the same day without a prior read; new UTC day (`YYYYMMDD` integer): increment denied, literal
+`count: 1` accepted (count 2 on a new day → denied); `day` not today's integer → denied; client retry sequence test (spacing rejection vs new-day rollover vs skewed client clock corrected via HTTP `Date`); malformed request → no document
 read evaluated; bad token,
 unknown topic, **a local-owned topic such as `web_verse_daily_ar` / `web_katameros_daily_ar` → denied**, 3 fixed
 topics, `rem` with 31 topics / an upper-case key / lead 7 / `app_rem_…` → denied, 30 valid reminder topics →
