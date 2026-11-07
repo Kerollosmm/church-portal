@@ -10,6 +10,9 @@ import 'package:church_portal/ui/widgets/reminder_sheet.dart' show initialRemind
 import 'package:flutter_test/flutter_test.dart';
 
 class _Env implements InstallEnv {
+  @override
+  void Function() listenInstallChanges(void Function() onChange) => () {};
+
   final Map<String, Map<String, dynamic>> storage = {};
   bool failWrites = false;
 
@@ -187,6 +190,26 @@ void main() {
       final b = PushPrefs(types: {NotifyType.seasons, NotifyType.announcements}, updatedAt: at);
       expect(a, b);
       expect(a.hashCode, b.hashCode);
+    });
+  });
+
+  group('reminderSources (README §6, default in PR A)', () {
+    test('absent = lit, mtg, day; parsed from a comma string or a list', () {
+      expect(PushSettings.fromMap({'push': true}).reminderSources, {'lit', 'mtg', 'day'});
+      expect(PushSettings.fromMap({'reminderSources': 'lit, day'}).reminderSources, {'lit', 'day'});
+      expect(PushSettings.fromMap({'reminderSources': ['mtg', 'bogus']}).reminderSources, {'mtg'});
+      expect(PushSettings.fromMap({'reminderSources': 'bogus'}).reminderSources, {'lit', 'mtg', 'day'});
+      expect(PushSettings.fromMap({'reminderSources': ''}).reminderSources, isEmpty);
+    });
+
+    test('remindsFor maps event keys to sources', () {
+      final p = PushSettings.fromMap({'push': true, 'reminderSources': 'lit,mtg'});
+      expect(p.remindsFor(EventKey.liturgy('1')), isTrue);
+      expect(p.remindsFor(EventKey.seasonService('1')), isTrue);
+      expect(p.remindsFor(EventKey.meeting('1')), isTrue);
+      expect(p.remindsFor(EventKey.dayEvent('1')), isFalse);
+      expect(p.remindsFor(EventKey.custom('clinic', '1')), isFalse);
+      expect(PushSettings.fromMap({'push': false}).remindsFor(EventKey.liturgy('1')), isFalse);
     });
   });
 }

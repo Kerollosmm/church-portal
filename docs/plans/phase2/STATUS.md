@@ -61,9 +61,9 @@
 - [x] Admin «التطبيق والإشعارات»
 - [x] SW + `push_client.js` scaffolds
 - [x] Docs: memory bank, Arabic `documentation/`, English, ADR-057
-- [x] analyze / test / rules / build green · size Δ +145 KB raw / +67 KB gzip
+- [x] analyze 0 · flutter test 1104/1104 · rules 133/133 · build green · `main.dart.js` 4,962,119 B / gzip -9 1,352,567 B vs base `1881ce6` 4,898,239 / 1,334,622 → **Δ +63,880 B raw / +17,945 B gzip** (≤ +20 KB budget; notifications page, reminder sheet + «تذكيراتي», install guides are deferred chunks)
 - [ ] Screenshots (390 px AR: Android banner, sideload guide steps 1 + 4, iPhone banner + sheet, prefs page incl. iOS install-first)
-- [ ] Draft PR # ___ · CI green · preview ___ · reviews done
+- [ ] Draft PR #51 · CI green · preview ___ · reviews done (CodeRabbit + Sentry round 1 answered; round 2 pending)
 - [ ] PSI mobile median ___
 
 ## PR B — Android APK + local notifications (ADR-058) · `feat/p2b-android-local-notifications` → A

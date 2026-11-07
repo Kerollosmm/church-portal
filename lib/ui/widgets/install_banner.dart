@@ -35,10 +35,16 @@ class _InstallBannerState extends ConsumerState<InstallBanner> {
   Timer? _timer;
   bool _readyToDisplay = false;
   bool _dismissedThisSession = false;
+  void Function()? _unlistenInstall;
 
   @override
   void initState() {
     super.initState();
+    // A prompt that arrives late, or an install from the browser menu,
+    // re-evaluates the banner (its action or whether it shows at all).
+    _unlistenInstall = ref.read(installEnvProvider).listenInstallChanges(() {
+      if (mounted) setState(() {});
+    });
     // The reading delay starts when the content arrives (not at app start),
     // so a slow first load never pops the banner over a spinner.
     if (ref.read(contentReadyProvider)) {
@@ -67,6 +73,7 @@ class _InstallBannerState extends ConsumerState<InstallBanner> {
   @override
   void dispose() {
     _timer?.cancel();
+    _unlistenInstall?.call();
     super.dispose();
   }
 
@@ -294,7 +301,7 @@ class _InstallBannerState extends ConsumerState<InstallBanner> {
           icon: const Icon(Icons.info_outline, size: 18),
           label: Text(context.tr('installOpenMethod')),
           // No APK and no browser prompt: the browser-menu steps (⋮ → Install).
-          onPressed: () => _guide(context, guide.showAndroidInstallSteps),
+          onPressed: () => _guide(context, (c) => guide.showAndroidInstallSteps(c)),
         );
         break;
 
@@ -306,7 +313,7 @@ class _InstallBannerState extends ConsumerState<InstallBanner> {
           ),
           icon: const Icon(Icons.ios_share, size: 18),
           label: Text(context.tr('installIosAction')),
-          onPressed: () => _guide(context, guide.showIosInstallSteps),
+          onPressed: () => _guide(context, (c) => guide.showIosInstallSteps(c)),
         );
         break;
 

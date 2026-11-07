@@ -139,6 +139,7 @@ class _ReminderConfigSheetState extends ConsumerState<_ReminderConfigSheet> {
 
     return SafeArea(
       child: Center(
+        heightFactor: 1,
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 560),
           child: Padding(
@@ -450,7 +451,7 @@ class MyRemindersSection extends ConsumerWidget {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            '$dateStr • $timeStr (${context.tr('remindMeSet', {'lead': lead})})',
+                            '$dateStr • $timeStr • $lead',
                             style: TextStyle(fontSize: 12.5, color: pal.muted),
                           ),
                           if (r.every)

@@ -6,6 +6,9 @@ import 'package:church_portal/domain/time_format.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 class FakeInstallEnv implements InstallEnv {
+  @override
+  void Function() listenInstallChanges(void Function() onChange) => () {};
+
   final Map<String, Map<String, dynamic>> storage = {};
 
   @override

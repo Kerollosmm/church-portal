@@ -4,7 +4,6 @@ import 'package:material_ui/material_ui.dart';
 import '../../core/l10n.dart';
 import '../../core/theme.dart';
 import '../../data/reminder_store.dart';
-import '../../domain/push.dart';
 import '../../domain/reminders.dart';
 import '../../state/providers.dart';
 // The sheet and «تذكيراتي» ship in their own web chunk, fetched on the first
@@ -31,9 +30,8 @@ class RemindMeButton extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final pushSettings = ref.watch(pushSettingsProvider);
-    if (!pushSettings.enabled || !pushSettings.offered.contains(NotifyType.reminders)) {
-      return const SizedBox.shrink();
-    }
+    // `push` on, `reminders` offered and the event's source in reminderSources.
+    if (!pushSettings.remindsFor(eventKey)) return const SizedBox.shrink();
 
     // Do not show for past events
     final now = ref.watch(nowProvider).value ?? DateTime.now();

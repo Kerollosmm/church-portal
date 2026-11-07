@@ -11,3 +11,4 @@ Future<bool> promptInstall() => Future.value(false);
 Map<String, dynamic>? readJson(String key) => null;
 void writeJson(String key, Map<String, dynamic> data) {}
 void removeStorageKey(String key) {}
+void Function() listenInstallChanges(void Function() onChange) => () {};

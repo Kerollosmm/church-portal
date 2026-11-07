@@ -209,13 +209,31 @@ class PushSettings {
   final List<int> reminderLeads;
   final int defaultLead;
 
+  /// Event sources that show «ذكّرني» (README §6): `lit` (liturgies and
+  /// season services), `mtg` (meetings), `day` (today's events). Written by
+  /// the admin from PR C; absent = all three.
+  final Set<String> reminderSources;
+
+  static const allReminderSources = {'lit', 'mtg', 'day'};
+
   const PushSettings({
     this.enabled = false,
     this.vapidKey = '',
     this.offered = NotifyType.values,
     this.reminderLeads = const [0, 15, 60, 1440],
     this.defaultLead = 60,
+    this.reminderSources = allReminderSources,
   });
+
+  /// Source of an [EventKey] (`lit-…` / `meeting-…` / `day-…`), else its prefix.
+  static String sourceOf(String eventKey) {
+    final prefix = eventKey.split('-').first;
+    return switch (prefix) { 'meeting' => 'mtg', 'season' => 'lit', _ => prefix };
+  }
+
+  /// Whether «ذكّرني» is offered for [eventKey].
+  bool remindsFor(String eventKey) =>
+      enabled && offered.contains(NotifyType.reminders) && reminderSources.contains(sourceOf(eventKey));
 
   static const defaults = PushSettings();
 
@@ -273,12 +291,26 @@ class PushSettings {
       defaultLead = reminderLeads.first;
     }
 
+    // 'lit,mtg,day' (README §6) or a list; unknown values dropped; absent or
+    // nothing valid = all sources.
+    var reminderSources = allReminderSources;
+    final rawSources = m['reminderSources'];
+    final srcList = rawSources is String ? rawSources.split(',') : (rawSources is List ? rawSources : const []);
+    final parsedSources = {
+      for (final e in srcList)
+        if (allReminderSources.contains(e?.toString().trim())) e.toString().trim(),
+    };
+    if (rawSources != null && (parsedSources.isNotEmpty || (rawSources is String && rawSources.trim().isEmpty) || (rawSources is List && rawSources.isEmpty))) {
+      reminderSources = parsedSources;
+    }
+
     return PushSettings(
       enabled: enabled,
       vapidKey: vapidKey,
       offered: offered,
       reminderLeads: reminderLeads,
       defaultLead: defaultLead,
+      reminderSources: reminderSources,
     );
   }
 
@@ -290,7 +322,9 @@ class PushSettings {
           other.vapidKey == vapidKey &&
           _listEquals(other.offered, offered) &&
           _listEquals(other.reminderLeads, reminderLeads) &&
-          other.defaultLead == defaultLead;
+          other.defaultLead == defaultLead &&
+          other.reminderSources.length == reminderSources.length &&
+          other.reminderSources.containsAll(reminderSources);
 
   @override
   int get hashCode => Object.hash(
@@ -298,6 +332,7 @@ class PushSettings {
         vapidKey,
         Object.hashAll(offered),
         Object.hashAll(reminderLeads),
+        Object.hashAllUnordered(reminderSources),
         defaultLead,
       );
 }

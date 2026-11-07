@@ -24,7 +24,10 @@ import 'styled_image.dart';
 export 'program_details.dart' show ProgramDetails, parallelSummary, parallelThenLine;
 export 'styled_image.dart';
 
-DateTime _nextLiturgyOccurrence(Liturgy l, DateTime now) {
+/// The occurrence a liturgy card's «ذكّرني» is for. [skipToday]: today's
+/// service is replaced by a season service (the card's «لا يقام اليوم»), so
+/// a weekly liturgy points at next week instead.
+DateTime _nextLiturgyOccurrence(Liturgy l, DateTime now, {bool skipToday = false}) {
   if (l.date != null) {
     final c = CairoTime.calendarDate(l.date!);
     return CairoTime.at(c.year, c.month, c.day, l.startMinutes ?? 0);
@@ -33,7 +36,7 @@ DateTime _nextLiturgyOccurrence(Liturgy l, DateTime now) {
   final weekday = l.weekday ?? 7;
   final daysAhead = (weekday - cNow.weekday + 7) % 7;
   var target = CairoTime.at(cNow.year, cNow.month, cNow.day + daysAhead, l.startMinutes ?? 0);
-  if (target.isBefore(cNow)) {
+  if (target.isBefore(cNow) || (skipToday && daysAhead == 0)) {
     target = CairoTime.at(cNow.year, cNow.month, cNow.day + daysAhead + 7, l.startMinutes ?? 0);
   }
   return target;
@@ -125,7 +128,7 @@ class LiturgyCard extends StatelessWidget {
                   eventKey: EventKey.liturgy(l.id),
                   occurrence: l.date != null ? isoDate(CairoTime.calendarDate(l.date!)) : null,
                   title: {'ar': l.nameAr, 'en': l.nameEn},
-                  startsAt: _nextLiturgyOccurrence(l, CairoTime.now()),
+                  startsAt: _nextLiturgyOccurrence(l, CairoTime.now(), skipToday: notHeldToday),
                   recurring: l.date == null,
                 ),
               ),

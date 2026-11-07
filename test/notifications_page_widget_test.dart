@@ -35,6 +35,9 @@ class FakeTestPushEnv implements PushEnv {
 
 class FakeTestInstallEnv implements InstallEnv {
   @override
+  void Function() listenInstallChanges(void Function() onChange) => () {};
+
+  @override
   String userAgent;
   @override
   String platform;

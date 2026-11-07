@@ -21,6 +21,11 @@ abstract class InstallEnv {
   Map<String, dynamic>? readJson(String key);
   void writeJson(String key, Map<String, dynamic> data);
   void remove(String key);
+
+  /// Calls [onChange] when the browser reports an install change after the
+  /// banner rendered (`beforeinstallprompt`, `appinstalled`). Returns the
+  /// unsubscribe function.
+  void Function() listenInstallChanges(void Function() onChange);
 }
 
 /// Default platform install environment.
@@ -59,4 +64,7 @@ class PlatformInstallEnv extends InstallEnv {
 
   @override
   void remove(String key) => impl.removeStorageKey(key);
+
+  @override
+  void Function() listenInstallChanges(void Function() onChange) => impl.listenInstallChanges(onChange);
 }

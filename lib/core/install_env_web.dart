@@ -105,3 +105,19 @@ void removeStorageKey(String key) {
     web.window.localStorage.removeItem(key);
   } catch (_) {}
 }
+
+/// Window listeners registered after index.html's own capture handlers, so
+/// `__installPrompt` / the session flag are already set when [onChange] runs.
+void Function() listenInstallChanges(void Function() onChange) {
+  try {
+    final handler = ((web.Event _) => onChange()).toJS;
+    web.window.addEventListener('beforeinstallprompt', handler);
+    web.window.addEventListener('appinstalled', handler);
+    return () {
+      web.window.removeEventListener('beforeinstallprompt', handler);
+      web.window.removeEventListener('appinstalled', handler);
+    };
+  } catch (_) {
+    return () {};
+  }
+}

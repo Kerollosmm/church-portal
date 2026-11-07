@@ -93,6 +93,7 @@ class _ApkInstallGuideSheetState extends State<_ApkInstallGuideSheet> {
 
     return SafeArea(
       child: Center(
+        heightFactor: 1,
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 560),
           child: Padding(
@@ -343,7 +344,7 @@ class _ApkInstallGuideSheetState extends State<_ApkInstallGuideSheet> {
           Icon(Icons.touch_app_outlined, size: 40, color: pal.goldText.withValues(alpha: 0.7)),
           const SizedBox(height: 8),
           Text(
-            context.tr('apkGuidePlaceholderCaption', {'n': '$stepNum'}),
+            context.tr('apkGuidePlaceholderCaption', {'n': context.isAr ? toArabicDigits('$stepNum') : '$stepNum'}),
             style: TextStyle(
               fontSize: 13,
               color: pal.muted,
@@ -413,6 +414,7 @@ Future<void> _showInstallSteps(
     ),
     builder: (ctx) => SafeArea(
       child: Center(
+        heightFactor: 1,
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 560),
           child: Padding(
@@ -509,7 +511,7 @@ Widget _buildIosStep({
         ),
         alignment: Alignment.center,
         child: Text(
-          '$number',
+          context.isAr ? toArabicDigits('$number') : '$number',
           style: TextStyle(
             color: pal.onBar,
             fontWeight: FontWeight.bold,

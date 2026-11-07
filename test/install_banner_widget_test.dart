@@ -11,6 +11,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 
 class FakeInstallEnv implements InstallEnv {
+  void Function()? installListener;
+  @override
+  void Function() listenInstallChanges(void Function() onChange) {
+    installListener = onChange;
+    return () => installListener = null;
+  }
+
   @override
   String userAgent;
   @override
@@ -115,6 +122,22 @@ void main() {
     expect(find.text('تطبيق الكنيسة'), findsOneWidget);
     expect(find.text('تحميل التطبيق'), findsOneWidget);
     expect(find.text('لاحقًا'), findsOneWidget);
+  });
+
+  testWidgets('a late appinstalled event hides the banner (CodeRabbit)', (tester) async {
+    final env = FakeInstallEnv();
+    await tester.pumpWidget(buildTestable(
+      child: const InstallBanner(currentPath: '/', delay: Duration.zero, isWeb: true),
+      installEnv: env,
+    ));
+    await tester.pumpAndSettle();
+    expect(find.text('تطبيق الكنيسة'), findsOneWidget);
+    expect(env.installListener, isNotNull);
+
+    env.installedEventReceived = true;
+    env.installListener!();
+    await tester.pumpAndSettle();
+    expect(find.text('تطبيق الكنيسة'), findsNothing);
   });
 
   testWidgets('Close button ✕ writes dismissedUntil in storage', (tester) async {
