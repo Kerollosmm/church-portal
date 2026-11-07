@@ -7,10 +7,12 @@ import '../../core/document_lang.dart';
 import '../../core/l10n.dart';
 import '../../core/launch.dart';
 import '../../core/theme.dart';
+import '../../domain/cairo_time.dart';
 import '../../domain/features.dart';
 import '../../domain/image_style.dart';
 import '../../domain/item_detail.dart';
 import '../../domain/models.dart';
+import '../../domain/reminders.dart';
 import '../../domain/rules.dart';
 import '../../domain/time_format.dart';
 import '../../state/providers.dart';
@@ -21,6 +23,7 @@ import '../widgets/feature_gate.dart';
 import '../widgets/golden.dart';
 import '../widgets/item_image.dart';
 import '../widgets/program_details.dart';
+import '../widgets/remind_me.dart';
 import 'activities_page.dart' show activityIcon;
 import 'clinics_page.dart' show ClinicCard;
 import 'education_page.dart' show meetingGroupOf, stageLabels;
@@ -612,6 +615,27 @@ class _DetailView extends ConsumerWidget {
           color: context.pal.bar,
           onTap: () => openUrl(calendar),
         ),
+      if (e.calendarDays.isNotEmpty && e.start.isNotEmpty)
+        Builder(builder: (c) {
+          final cNow = CairoTime.fromInstant(now);
+          final weekday = e.calendarDays.first;
+          final daysAhead = (weekday - cNow.weekday + 7) % 7;
+          final sm = parseHm(e.start) ?? 0;
+          var target = CairoTime.at(cNow.year, cNow.month, cNow.day + daysAhead, sm);
+          if (target.isBefore(cNow)) {
+            target = CairoTime.at(cNow.year, cNow.month, cNow.day + daysAhead + 7, sm);
+          }
+          final key = switch (kind) {
+            DetailKind.meeting => EventKey.meeting(id),
+            _ => EventKey.custom(kind.name, id),
+          };
+          return RemindMeButton(
+            eventKey: key,
+            title: {'ar': e.title, 'en': e.title},
+            startsAt: target,
+            recurring: true,
+          );
+        }),
       if (e.onSite && settings != null && _hasDestination(settings))
         ActionChipButton(
           key: const Key('detailDirections'),

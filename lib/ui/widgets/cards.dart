@@ -9,6 +9,7 @@ import '../../domain/cairo_time.dart';
 import '../../domain/features.dart';
 import '../../domain/item_detail.dart';
 import '../../domain/models.dart';
+import '../../domain/reminders.dart';
 import '../../domain/rules.dart';
 import '../../domain/schedule.dart';
 import '../../domain/today.dart';
@@ -17,10 +18,29 @@ import '../../state/providers.dart';
 import 'common.dart';
 import 'item_image.dart';
 import 'program_details.dart';
+import 'remind_me.dart';
 import 'styled_image.dart';
 
 export 'program_details.dart' show ProgramDetails, parallelSummary, parallelThenLine;
 export 'styled_image.dart';
+
+String _isoDate(DateTime d) =>
+    '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+DateTime _nextLiturgyOccurrence(Liturgy l, DateTime now) {
+  if (l.date != null) {
+    final c = CairoTime.calendarDate(l.date!);
+    return CairoTime.at(c.year, c.month, c.day, l.startMinutes ?? 0);
+  }
+  final cNow = CairoTime.fromInstant(now);
+  final weekday = l.weekday ?? 7;
+  final daysAhead = (weekday - cNow.weekday + 7) % 7;
+  var target = CairoTime.at(cNow.year, cNow.month, cNow.day + daysAhead, l.startMinutes ?? 0);
+  if (target.isBefore(cNow)) {
+    target = CairoTime.at(cNow.year, cNow.month, cNow.day + daysAhead + 7, l.startMinutes ?? 0);
+  }
+  return target;
+}
 
 /// Card for one liturgy on the schedule page.
 class LiturgyCard extends StatelessWidget {
@@ -102,6 +122,16 @@ class LiturgyCard extends StatelessWidget {
               IconLine(Icons.place_outlined, context.pick(l.placeAr, l.placeEn)),
               IconLine(Icons.people_outline, context.pick(l.audienceAr, l.audienceEn)),
               ProgramDetails(l.program, parallelText: parallelText),
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: RemindMeButton(
+                  eventKey: EventKey.liturgy(l.id),
+                  occurrence: l.date != null ? _isoDate(CairoTime.calendarDate(l.date!)) : null,
+                  title: {'ar': l.nameAr, 'en': l.nameEn},
+                  startsAt: _nextLiturgyOccurrence(l, CairoTime.now()),
+                  recurring: l.date == null,
+                ),
+              ),
             ]),
           ),
         ]),
@@ -332,6 +362,16 @@ class NextMassCard extends ConsumerWidget {
       children.add(IconLine(Icons.place_outlined, context.pick(n.liturgy.placeAr, n.liturgy.placeEn)));
       children.add(IconLine(Icons.people_outline, context.pick(n.liturgy.audienceAr, n.liturgy.audienceEn)));
       children.add(ProgramDetails(n.liturgy.program, parallelText: parallelText, parallelThen: parallelThen));
+      children.add(Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: RemindMeButton(
+          eventKey: EventKey.liturgy(n.liturgy.id),
+          occurrence: n.liturgy.date != null ? _isoDate(CairoTime.calendarDate(n.liturgy.date!)) : null,
+          title: {'ar': n.liturgy.nameAr, 'en': n.liturgy.nameEn},
+          startsAt: n.start,
+          recurring: n.liturgy.date == null,
+        ),
+      ));
     }
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: children);
   }

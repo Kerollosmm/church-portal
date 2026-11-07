@@ -55,6 +55,22 @@ void main() {
       expect(f.toMap()['sections'], hasLength(Sections.all.length));
     });
 
+    test('parses install and pushSettings without serializing them in toMap', () {
+      final f = FeatureSettings.fromMap({
+        'installPrompt': false,
+        'installApkVersion': '2.0.0',
+        'push': true,
+        'pushVapidKey': 'test-vapid-key-12345678901234567890123456789012345678901234567890123456789012345678901234567890',
+        'pushTypes': ['announcements', 'seasons'],
+      });
+      expect(f.install.enabled, isFalse);
+      expect(f.install.apkVersion, '2.0.0');
+      expect(f.pushSettings.enabled, isTrue);
+      expect(f.pushSettings.offered, [NotifyType.announcements, NotifyType.seasons]);
+      expect(f.toMap().containsKey('installPrompt'), isFalse);
+      expect(f.toMap().containsKey('push'), isFalse);
+    });
+
     test('disabled sections guard their routes', () {
       final f = FeatureSettings.fromMap({
         'sections': {'clinics': false, 'schedule': false, 'assistant': false},
@@ -145,7 +161,17 @@ void main() {
 
   group('page headers (pageHeaders)', () {
     test('customizable pages are listed with bilingual labels', () {
-      expect(CustomizablePages.all, ['about', 'schedule', 'education', 'activities', 'clinics', 'services', 'contact', 'ask']);
+      expect(CustomizablePages.all, [
+        'about',
+        'schedule',
+        'education',
+        'activities',
+        'clinics',
+        'services',
+        'contact',
+        'ask',
+        'notifications',
+      ]);
       for (final k in CustomizablePages.all) {
         expect(CustomizablePages.labels[k], hasLength(2), reason: k);
       }

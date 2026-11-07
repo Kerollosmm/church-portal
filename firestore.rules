@@ -648,6 +648,10 @@ service cloud.firestore {
                           'commemoration', 'topEventServices', 'liveEnabled', 'liveUrl', 'liveLabelAr', 'liveLabelEn', 'liveEndsAt',
                           'liveBadgeHideOnHome', 'dayEvents', 'venues', 'audiences', 'seasonVerses', 'seasonPreset', 'weddingBookingOff',
                           'heroSeasonTint',
+                          'installPrompt', 'installTitleAr', 'installTitleEn', 'installBodyAr', 'installBodyEn',
+                          'installAndroidUrl', 'installAndroidUrl32', 'installApkVersion', 'installApkBuild',
+                          'installApkSizeMb', 'installApkSize32Mb', 'installReshowDays', 'installRemindDays',
+                          'push', 'pushVapidKey', 'pushTypes', 'reminderLeads', 'reminderDefaultLead',
                           'updatedAt', 'updatedBy'])
         && (!('sections' in changed) || !('sections' in d) || validSections(d.sections))
         && (!('homeOrder' in changed) || !('homeOrder' in d) || (d.homeOrder is list && d.homeOrder.size() <= 7
@@ -709,6 +713,27 @@ service cloud.firestore {
                 && (!('seasonPreset' in changed) || d.get('seasonPreset', null) == null
                     || validSeasonPreset(d.seasonPreset))
                 && optBool(d, 'weddingBookingOff')))
+        // App install banner (ADR-057).
+        && (!changed.hasAny(['installPrompt', 'installTitleAr', 'installTitleEn', 'installBodyAr', 'installBodyEn',
+                             'installAndroidUrl', 'installAndroidUrl32', 'installApkVersion', 'installApkBuild',
+                             'installApkSizeMb', 'installApkSize32Mb', 'installReshowDays', 'installRemindDays'])
+            || (optBool(d, 'installPrompt') && str(d, 'installTitleAr', 120) && str(d, 'installTitleEn', 120)
+                && str(d, 'installBodyAr', 300) && str(d, 'installBodyEn', 300)
+                && optUrlOrPath(d, 'installAndroidUrl', 500) && optUrlOrPath(d, 'installAndroidUrl32', 500)
+                && d.get('installApkVersion', '').matches('^$|^[0-9]+([.][0-9]+){0,3}$')
+                && optInt(d, 'installApkBuild', 0, 999999) && optNumber(d, 'installApkSizeMb', 0, 200)
+                && optNumber(d, 'installApkSize32Mb', 0, 200) && optInt(d, 'installReshowDays', 0, 365)
+                && optInt(d, 'installRemindDays', 1, 60)))
+        // Push & notifications settings (ADR-057).
+        && (!changed.hasAny(['push', 'pushVapidKey', 'pushTypes', 'reminderLeads', 'reminderDefaultLead'])
+            || (optBool(d, 'push') && d.get('pushVapidKey', '').matches('^$|^[A-Za-z0-9_-]{80,100}$')
+                && optList(d, 'pushTypes', 6)
+                && d.get('pushTypes', []).hasOnly(['announcements', 'verse_daily', 'katameros_daily', 'seasons', 'feasts', 'reminders'])
+                && d.get('pushTypes', []).toSet().size() == d.get('pushTypes', []).size()
+                && optList(d, 'reminderLeads', 4)
+                && d.get('reminderLeads', []).hasOnly([0, 5, 10, 15, 30, 60, 120, 180, 1440])
+                && d.get('reminderLeads', []).toSet().size() == d.get('reminderLeads', []).size()
+                && (!('reminderDefaultLead' in d) || d.get('reminderLeads', [0, 15, 60, 1440]).hasAny([d.reminderDefaultLead]))))
         && (!changed.hasAny(['updatedAt', 'updatedBy']) || stampOk(d));
     }
 
@@ -962,7 +987,7 @@ service cloud.firestore {
       let old = resource == null ? {} : resource.data.get('pageHeaders', {});
       let changed = old is map ? h.diff(old).affectedKeys() : h.keys().toSet();
       return h is map
-        && h.keys().hasOnly(['about', 'schedule', 'education', 'activities', 'clinics', 'services', 'contact', 'ask'])
+        && h.keys().hasOnly(['about', 'schedule', 'education', 'activities', 'clinics', 'services', 'contact', 'ask', 'notifications'])
         && (!changed.hasAny(['about']) || !('about' in h) || validPageHeader(h.about))
         && (!changed.hasAny(['schedule']) || !('schedule' in h) || validPageHeader(h.schedule))
         && (!changed.hasAny(['education']) || !('education' in h) || validPageHeader(h.education))
@@ -970,7 +995,8 @@ service cloud.firestore {
         && (!changed.hasAny(['clinics']) || !('clinics' in h) || validPageHeader(h.clinics))
         && (!changed.hasAny(['services']) || !('services' in h) || validPageHeader(h.services))
         && (!changed.hasAny(['contact']) || !('contact' in h) || validPageHeader(h.contact))
-        && (!changed.hasAny(['ask']) || !('ask' in h) || validPageHeader(h.ask));
+        && (!changed.hasAny(['ask']) || !('ask' in h) || validPageHeader(h.ask))
+        && (!changed.hasAny(['notifications']) || !('notifications' in h) || validPageHeader(h.notifications));
     }
     // Exactly the 6 keys (the admin form always writes all six: size 6 and
     // each one read), all strings; titles <= 200, subtitles <= 300, intros

@@ -1972,3 +1972,110 @@ describe('ADR-051: season keys, replaceDates, exceptional seasons', () => {
     await assertFails(setDoc(doc(db(STRANGER), 'settings', 'assistant'), { exceptionalSeasons: [] }));
   });
 });
+
+describe('install banner and push settings (ADR-057)', () => {
+  const featuresRef = () => doc(db(EDITOR), 'settings', 'features');
+  const validInstallAndPush = {
+    installPrompt: true,
+    installTitleAr: 'تطبيق الكنيسة على هاتفك',
+    installTitleEn: 'Church app on your phone',
+    installBodyAr: 'تابع القداسات والصلوات والمواسم وتلقّ التنبيهات بسهولة من هاتفك.',
+    installBodyEn: 'Follow liturgies, prayers and seasons with easy updates on your phone.',
+    installAndroidUrl: 'https://example.com/app.apk',
+    installAndroidUrl32: '/app/android/older.apk',
+    installApkVersion: '1.1.0',
+    installApkBuild: 42,
+    installApkSizeMb: 18.4,
+    installApkSize32Mb: 17.9,
+    installReshowDays: 30,
+    installRemindDays: 3,
+    push: true,
+    pushVapidKey: 'BKAGkFj27-exampleVapidKey890123456789012345678901234567890123456789012345678901234567890',
+    pushTypes: ['announcements', 'verse_daily', 'katameros_daily', 'seasons', 'feasts', 'reminders'],
+    reminderLeads: [0, 15, 60, 1440],
+    reminderDefaultLead: 60,
+  };
+
+  test('admin can save valid install and push settings', async () => {
+    await assertSucceeds(setDoc(featuresRef(), validInstallAndPush, { merge: true }));
+  });
+
+  test('stranger cannot write install or push settings', async () => {
+    await assertFails(setDoc(doc(db(STRANGER), 'settings', 'features'), validInstallAndPush, { merge: true }));
+  });
+
+  test('rejects invalid install fields', async () => {
+    const badCases = [
+      { installAndroidUrl: 'javascript:alert(1)' },
+      { installAndroidUrl32: '//evil.com/phish' },
+      { installApkVersion: '1.x' },
+      { installApkBuild: -1 },
+      { installApkBuild: 1000000 },
+      { installApkSizeMb: 500 },
+      { installApkSize32Mb: -1 },
+      { installReshowDays: 400 },
+      { installRemindDays: 0 },
+      { installRemindDays: 61 },
+    ];
+    for (const bad of badCases) {
+      await assertFails(setDoc(featuresRef(), bad, { merge: true }), JSON.stringify(bad));
+    }
+  });
+
+  test('rejects invalid push fields', async () => {
+    const badCases = [
+      { pushVapidKey: 'with spaces in the middle 8901234567890123456789012345678901234567890123456789012345678901234567890' },
+      { pushVapidKey: 'too-short' },
+      { pushTypes: ['announcements', 'occasions'] }, // retired occasions type
+      { pushTypes: ['announcements', 'announcements'] }, // duplicate type
+      { pushTypes: ['announcements', 'unknown_type'] },
+      { reminderLeads: [7] }, // not in allowed set
+      { reminderLeads: [0, 15, 60, 120, 180] }, // more than 4 items
+      { reminderLeads: [15, 15] }, // duplicate lead
+      { reminderDefaultLead: 99 }, // not in reminderLeads
+    ];
+    for (const bad of badCases) {
+      await assertFails(setDoc(featuresRef(), bad, { merge: true }), JSON.stringify(bad));
+    }
+  });
+
+  test('pageHeaders allows notifications page override and handles all 9 pages at max lengths', async () => {
+    const pageHeader = () => ({
+      titleAr: 'ت'.repeat(200),
+      titleEn: 't'.repeat(200),
+      subtitleAr: 'س'.repeat(300),
+      subtitleEn: 's'.repeat(300),
+      introAr: 'م'.repeat(1500),
+      introEn: 'i'.repeat(1500),
+    });
+
+    const allNineHeaders = {
+      about: pageHeader(),
+      schedule: pageHeader(),
+      education: pageHeader(),
+      activities: pageHeader(),
+      clinics: pageHeader(),
+      services: pageHeader(),
+      contact: pageHeader(),
+      ask: pageHeader(),
+      notifications: pageHeader(),
+    };
+
+    // Incremental update of notifications only
+    await assertSucceeds(setDoc(featuresRef(), {
+      pageHeaders: { notifications: pageHeader() },
+    }, { merge: true }));
+
+    // Full fresh create with all 9 page headers at max lengths (evaluating expression cap)
+    await assertSucceeds(setDoc(featuresRef(), {
+      pageHeaders: allNineHeaders,
+      heroMotion: true,
+    }, { merge: true }));
+
+    // Unrelated update (e.g. heroMotion) still succeeds
+    await assertSucceeds(setDoc(featuresRef(), {
+      heroMotion: false,
+    }, { merge: true }));
+  });
+});
+

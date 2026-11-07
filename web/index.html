@@ -109,6 +109,18 @@
           drop.forEach(function (k) { st.removeItem(k); });
         } catch (e) {}
       });
+      // ADR-057: early capture of PWA beforeinstallprompt and appinstalled events.
+      try {
+        window.addEventListener('beforeinstallprompt', function (e) {
+          e.preventDefault();
+          window.__installPrompt = e;
+        });
+        window.addEventListener('appinstalled', function () {
+          try {
+            sessionStorage.setItem('church_portal_installed', '1');
+          } catch (e) {}
+        });
+      } catch (e) {}
     })();
   </script>
   <link rel="manifest" href="manifest.json">

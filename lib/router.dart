@@ -25,6 +25,7 @@ import 'ui/pages/education_page.dart';
 import 'ui/pages/home_page.dart';
 import 'ui/pages/item_detail_page.dart';
 import 'ui/pages/mass_schedule_page.dart';
+import 'ui/pages/notifications_page.dart';
 import 'ui/pages/public_services_page.dart';
 import 'ui/widgets/app_shell.dart';
 import 'ui/widgets/assistant_gate.dart';
@@ -163,6 +164,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(path: '/public-services', pageBuilder: (c, s) => _page(s, const PublicServicesPage())),
           GoRoute(path: '/contact', pageBuilder: (c, s) => _page(s, const ContactPage())),
+          GoRoute(path: '/notifications', pageBuilder: (c, s) => _page(s, const NotificationsPage())),
           // Admin-defined categories and custom pages (ADR-027). Not behind a
           // section switch: each has its own `visible` flag.
           GoRoute(

@@ -49,19 +49,19 @@
 - [ ] **G0 owner approval of the plan** (+ answers to README §8 #5, #7–#9, #11, #12, #16, #18)
 
 ## PR A — Install banner + prefs (ADR-057) · `feat/p2a-install-prefs` → `docs/phase2-plans`
-- [ ] Domain: `app_install.dart`, `push.dart` + tests
-- [ ] `FeatureSettings` parsing of install / push keys + tests
-- [ ] Rules + emulator tests
-- [ ] Web env + `index.html` early `beforeinstallprompt` capture
-- [ ] Channel-owner model per platform (6 types): `channelOf` / `isLocalOwned(type, platform)`, `topicFor` throws for local-owned pairs, `reminderTopic` + tests
-- [ ] Reminders foundation: `reminders.dart` (`EventKey`, `reconcileReminders`), `ReminderStore`, `RemindMeButton` + lead sheet + «تذكيراتي» (no delivery yet) + `reminderLeads` / `reminderDefaultLead` keys + tests
-- [ ] `InstallBanner` (Android APK / PWA prompt / steps, iOS steps sheet **without any permission call**, ✕, later, installed detection)
-- [ ] Android sideload guide modal (5 steps, screenshot placeholders, ar/en, safety box) + `web/install-guide/README.md`
-- [ ] `/notifications` page (explainer, states incl. `iosNeedsInstall` / `iosTooOld` / `inAppBrowser`, blocked how-to, platform-filtered toggles, unsubscribe-all) behind `push`
-- [ ] Admin «التطبيق والإشعارات»
-- [ ] SW + `push_client.js` scaffolds
-- [ ] Docs: memory bank, Arabic `documentation/`, English, ADR-057
-- [ ] analyze / test / rules / build green · size Δ ___
+- [x] Domain: `app_install.dart`, `push.dart` + tests
+- [x] `FeatureSettings` parsing of install / push keys + tests
+- [x] Rules + emulator tests
+- [x] Web env + `index.html` early `beforeinstallprompt` capture
+- [x] Channel-owner model per platform (6 types): `channelOf` / `isLocalOwned(type, platform)`, `topicFor` throws for local-owned pairs, `reminderTopic` + tests
+- [x] Reminders foundation: `reminders.dart` (`EventKey`, `reconcileReminders`), `ReminderStore`, `RemindMeButton` + lead sheet + «تذكيراتي» (no delivery yet) + `reminderLeads` / `reminderDefaultLead` keys + tests
+- [x] `InstallBanner` (Android APK / PWA prompt / steps, iOS steps sheet **without any permission call**, ✕, later, installed detection)
+- [x] Android sideload guide modal (5 steps, screenshot placeholders, ar/en, safety box) + `web/install-guide/README.md`
+- [x] `/notifications` page (explainer, states incl. `iosNeedsInstall` / `iosTooOld` / `inAppBrowser`, blocked how-to, platform-filtered toggles, unsubscribe-all) behind `push`
+- [x] Admin «التطبيق والإشعارات»
+- [x] SW + `push_client.js` scaffolds
+- [x] Docs: memory bank, Arabic `documentation/`, English, ADR-057
+- [x] analyze / test / rules / build green · size Δ +145 KB raw / +67 KB gzip
 - [ ] Screenshots (390 px AR: Android banner, sideload guide steps 1 + 4, iPhone banner + sheet, prefs page incl. iOS install-first)
 - [ ] Draft PR # ___ · CI green · preview ___ · reviews done
 - [ ] PSI mobile median ___

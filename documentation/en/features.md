@@ -37,6 +37,7 @@ This document provides a comprehensive, feature-by-feature manual for all 31 cap
 29. [Web Performance & PageSpeed Optimization](#29-web-performance--pagespeed-optimization)
 30. [Accessibility & WCAG 2.2 AA Compliance](#30-accessibility--wcag-22-aa-compliance)
 31. [Android Native Application & Play Integrity](#31-android-native-application--play-integrity)
+32. [App Installation, Notification Preferences & Reminders](#32-app-installation-notification-preferences--reminders)
 
 ---
 
@@ -202,3 +203,19 @@ This document provides a comprehensive, feature-by-feature manual for all 31 cap
 ### 31. Android Native Application & Play Integrity
 - **Visitor Experience:** Native Android APK installable on mobile devices with adaptive launch icons and hardware back-button navigation.
 - **Technical Implementation:** Built with Flutter Android embedding. Release builds currently use debug signing; setting up a dedicated release keystore and registering its SHA-256 for Google Play Integrity App Check is an open operational task.
+
+### 32. App Installation, Notification Preferences & Reminders
+- **Visitor Experience:**
+  - **Install Banner (`InstallBanner`):** Appears exclusively for phone visitors on mobile browsers (Android and iOS). On Android, offers direct APK download with an interactive 5-step sideload guide modal explaining file downloading, Chrome unknown app permission, installation, Play Protect scan, and completion (with safety callout and security advice). If an APK URL is not configured or on supported browsers, offers native PWA installation. On iOS/iPadOS Safari, presents a non-intrusive 3-step bottom sheet ("Share" -> "Add to Home Screen" -> "Add") with no push notification prompts outside standalone mode. The banner respects dismissals: "Later" snoozes for 7 days (`installRemindUntil`), "Close (✕)" snoozes for 30 days (`installDismissedUntil`), and it hides permanently once installed or in standalone display mode.
+  - **Notification Preferences (`/notifications`):** A dedicated preferences hub explaining the 6 notification types (Announcements, Fasting & Feasts, Daily Verse, Katameros Readings, Broadcasts, and Liturgy/Event Reminders). Features platform channel segregation (distinguishing local-scheduled notifications on Android vs. push/web notifications), an unsubscribe-all button with confirmation, and visitor reminder management. On iOS Safari non-standalone mode, displays an install-first guidance card explaining that Web Push on iOS requires adding to Home Screen.
+  - **Liturgical & Event Reminders («ذكّرني»):** Available on mass schedule and event items, allowing visitors to schedule personal reminders with customizable lead times (15 min, 30 min, 1 hr, 2 hr, 1 day, or custom defaults). Reminders are stored locally on the device (`ReminderStore`) and displayed under "My Reminders" («تذكيراتي») on the `/notifications` page.
+- **Admin Control (`/admin` → "App & Notifications"):**
+  - Grouped into two clear cards:
+    - **Phone App & Installation («تطبيق الهاتف وتثبيته»):** Toggle install banner (`installBannerEnabled`), APK download URL (`installApkUrl`), version label (`installApkVersion`), build number (`installApkBuild`), and APK file size (`installApkSize`).
+    - **Notification System («نظام الإشعارات والتنبيهات»):** Master push toggle (`pushEnabled`), Web VAPID key (`pushVapidKey`), default quiet hours (`pushQuietStart`, `pushQuietEnd`), available reminder lead options (`reminderLeads`), default reminder lead (`reminderDefaultLead`), and custom prompt texts.
+- **Technical Implementation:**
+  - Domain models in `lib/domain/app_install.dart`, `push.dart`, and `reminders.dart`.
+  - Preferences and reminders are stored purely in client-side storage (`localStorage` on Web, `SharedPreferences` on mobile), incurring zero additional Firestore database reads or writes and keeping costs at zero on the Firebase Spark tier.
+  - Firestore security rules strictly validate all 18 `install*`, `push*`, and `reminder*` configuration fields on `settings/features`.
+- **Limits:** Web push delivery and Android native alarm execution are implemented in subsequent PRs (PR B–D); PR A establishes the UI, storage foundation, channel-owner model, and administrative configuration.
+
