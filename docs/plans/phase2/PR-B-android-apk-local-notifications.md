@@ -206,7 +206,7 @@ android:exported="false" android:grantUriPermissions="true">` + plugin receivers
 
 | Package | Version | Why | Notes |
 |---|---|---|---|
-| `flutter_local_notifications` | `^23.0.0` | scheduled local notifications | needs Flutter ≥ 3.44 (repo builds on stable 3.47); depends on `timezone ^0.11.0` (repo already `^0.11.2`); requires **core library desugaring** (`isCoreLibraryDesugaringEnabled = true`, `coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")`) |
+| `flutter_local_notifications` | `^22.3.3` (8 Nov 2026: 23.0.0 requires compileSdk 37 + AGP 9.1.1, the project is on AGP 9.1.0 / compileSdk 36 — revisit when AGP is upgraded) | scheduled local notifications | 23.x needs Flutter ≥ 3.44 (repo builds on stable 3.47); depends on `timezone ^0.11.0` (repo already `^0.11.2`); requires **core library desugaring** (`isCoreLibraryDesugaringEnabled = true`, `coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")`) |
 | `workmanager` | `^0.10.10` (Flutter ≥ 3.38) | daily background re-plan (replenishment) | Android WorkManager; verify the version on pub.dev at implementation time |
 | `package_info_plus` | `^10.2.2` | version name for display (the update check uses `APP_BUILD`) | optional |
 | `shared_preferences` | `^2.5.6` | already a dependency | prefs, inbox, language |
@@ -240,7 +240,7 @@ android:exported="false" android:grantUriPermissions="true">` + plugin receivers
    download host (§12).
 9. Docs + ADR-058; size report (APK per ABI) in the PR body.
 10. Real-device pass (§11) on at least: Android 14/15 Samsung, Android 13 Xiaomi/Redmi, Android 10 or 11 low-end
-    (armeabi-v7a), Android 8.1 (minSdk check: Flutter default `minSdk 21+`; plugin needs ≥ 21).
+    (armeabi-v7a), Android 8.1 (minSdk is **26** — Android 8.0 — because `sentry_flutter` 10 requires it, 8 Nov 2026).
 
 ## ١٠. الاختبارات (Tests)
 

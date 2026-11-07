@@ -1798,6 +1798,17 @@ supersede them.
 - **Consequences:**
   - Android users receive reliable reminders, daily verse, Katameros notifications, and offline readings with zero battery/data bloat and +0 Firestore reads/writes.
   - Sideloaded APKs self-update seamlessly from GitHub Releases or Firebase Hosting.
+- **Fix round (8 Nov 2026):** the `apk` job never produced an APK before this. Build: `flutter_local_notifications`
+  pinned to `^22.3.3` (23.0.0 requires compileSdk 37 + AGP 9.1.1; same Dart API, has the DST wall-clock fix for
+  repeating notifications), `minSdk 26` (required by `sentry_flutter` 10 → Android 8.0+), native libraries
+  compressed (`useLegacyPackaging`, APK arm64 ≈ 15.0 MB / arm32 ≈ 14.6 MB instead of ≈ 29.6 / 27.3 MB). Behaviour:
+  Android `InstallEnv` now persists prefs and reminders (`install_env_io.dart`, SharedPreferences preloaded before
+  `runApp`); the worker snapshot keeps the push keys, `dayEvents` and `seasonVerses`; an expired or already-rung
+  reminder is never re-scheduled; daily types use `inexactAllowWhileIdle`; the signature pre-check fails closed and
+  requires this package name; the update file lives under `cacheDir/updates` (FileProvider path); the manifest build
+  comes from `pubspec.yaml` (not the cwd) and `deploy.yml` carries `/app/android/version.json` over each deploy;
+  `fetch_readings.js` keeps the live file for a date it cannot fetch. Verse notification / reader use the same
+  seasonal choice as Home.
 
 ## Timeline
 

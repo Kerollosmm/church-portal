@@ -4,7 +4,7 @@
 
 ## الوضع الحالي (Current state)
 
-- **Updated:** 7 Nov 2026 (Cairo), by Hark.
+- **Updated:** 8 Nov 2026 (Cairo), by Hark — PR B fix round (apk build, review findings), see the PR B section.
 - **Plan PR:** [#50](https://github.com/Kerollosmm/church-portal/pull/50) — branch `docs/phase2-plans` → `main`, draft;
   review rounds 1 and 2 (the maximum) addressed; owner change requests of 6 Nov evening applied; **owner
   clarification of 19:31 + additions of 19:35 applied** (instant dispatch removed — scheduled sender only with
@@ -74,14 +74,15 @@
 - [x] Readings: `tool/fetch_readings.js` + `synaxarium.yml` / `deploy.yml` publishing `/data/readings/*.json` (multi-file `publish_hosting_file.js`), `readings.dart`, cache, `/readings/<date>` screen (offline) + tests; Arabic Van Dyck full text + English references only per §8 #17 (decided 6 Nov 2026; `bibleEn: refs-only`, ≈ 8 KB gzip, target ≤ ~20–25 KB uncompressed / minified JSON per file)
 - [x] `ReminderScheduler` (exact `USE_EXACT_ALARM` / `SCHEDULE_EXACT_ALARM` ≤ 32 with inexact fallback, boot + package-replaced, follow edits / cancel on removal, notification action) + tests
 - [x] OEM battery guidance screen (Xiaomi / Oppo-Realme / Vivo / Huawei-Honor / Samsung, try-list intents) + diagnostic check («افحص الإشعارات», «اختبار بعد دقيقتين») + tests
-- [ ] Gradle: desugaring, minify/shrink, env signing (debug fallback)
-- [ ] Admin compiled out (`kIsWeb`), Android language store, back button, assistant via web
+- [x] Gradle: desugaring, minify/shrink, env signing (debug fallback); `flutter_local_notifications ^22.3.3` (23.x needs compileSdk 37 / AGP 9.1.1), minSdk 26 (`sentry_flutter` 10), compressed native libs
+- [x] Admin compiled out (`kIsWeb || !dart.vm.product` compile-time guard), Android language store, back button, assistant via web
 - [ ] `LocalNotifier`, channels (6), permission, prefs sections (verse / readings times, quiet hours + reminders rule, test, inbox)
 - [ ] Re-plan triggers + boot receiver + inputs snapshot + `workmanager` daily replenishment
 - [ ] Update banner (`installApkBuild`) + **in-app update**: manifest, resumable download with progress, SHA-256 + size, signature pre-check, `REQUEST_INSTALL_PACKAGES` explainer, FileProvider installer intent (Kotlin channel), clean-up
 - [ ] `android.yml` (artifacts on PRs, release on `apk-v*` tags, APK size budget step, `APP_BUILD` define, `version.json` via `tool/make_apk_manifest.mjs`, publish per `APK_HOST`) + `deploy.yml` keeps `/app/android/*`
-- [ ] Docs + ADR-058 · APK sizes arm64 ___ / arm32 ___
-- [ ] Draft PR # ___ · CI green · reviews done
+- [ ] Docs + ADR-058 · APK sizes arm64 14,978,067 B / arm32 14,565,355 B (CI `apk` on `8184692`, debug-signed, budget 20 / 18 MiB) · web `main.dart.js` 4,972,733 B / gzip -9 1,355,532 B vs PR A 4,964,109 / 1,353,225 → **Δ +8,624 B raw / +2,307 B gzip**
+- [ ] Draft PR #52 · CI green (incl. `apk` from `8184692`) · reviews: bot findings of round 1 triaged in the 8 Nov fix round (open threads listed in the PR body); no new bot round requested
+- [x] Fix round 8 Nov 2026: Android prefs / reminders were not persisted (stub `InstallEnv`) → `install_env_io.dart`; worker snapshot lost push keys / `dayEvents` / `seasonVerses`; expired / double inexact reminders; updater fail-open + wrong cache dir + manifest build 1; `deploy.yml` dropped `version.json`; partial readings window deleted hosted days (all fixed, see PR body)
 - [ ] Owner: keystore + secrets (or accept debug test builds); releases repo `Kerollosmm/church-portal-apk` created (owner, or agent with approval at PR B time) + `RELEASES_REPO_TOKEN` (fine-grained, that repo only, Contents: Read and write) + variables `APK_HOST=releases-repo`, `APK_BASE_URL` (§8 #6, decided)
 - [ ] Release workflow: mirror to the releases repo + retention step (newest 5 kept) — PR B §12
 
