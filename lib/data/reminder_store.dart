@@ -7,6 +7,19 @@ const remindersStorageKey = 'church_portal_reminders';
 /// Maximum allowed reminders per device to prevent unbounded storage or scheduling.
 const int maxDeviceReminders = 30;
 
+/// Outcome of [ReminderStore.put].
+enum ReminderPutResult {
+  /// Saved on this device.
+  ok,
+
+  /// A new reminder would exceed [maxDeviceReminders]; nothing changed.
+  full,
+
+  /// Device storage refused the write (private mode, quota, disabled
+  /// storage); nothing was saved.
+  storageError,
+}
+
 /// Manages persistent storage of event reminders on the device.
 class ReminderStore {
   final InstallEnv env;
@@ -51,25 +64,27 @@ class ReminderStore {
     }
   }
 
-  /// Adds or updates a reminder.
+  /// Adds or updates a reminder (same event key and exact occurrence).
   ///
-  /// Returns `false` if adding a new reminder would exceed [maxDeviceReminders]
-  /// or if writing to device storage fails.
-  bool put(Reminder reminder) {
+  /// [replacing], when given, is the reminder being edited: it is removed in
+  /// the same write (e.g. switching «هذه المرة فقط» to «كل مرة» changes the
+  /// stored occurrence). Reports [ReminderPutResult.full] when a new reminder
+  /// would exceed [maxDeviceReminders] and [ReminderPutResult.storageError]
+  /// when device storage refuses the write.
+  ReminderPutResult put(Reminder reminder, {Reminder? replacing}) {
     final current = List<Reminder>.of(load());
+    if (replacing != null) {
+      current.removeWhere((r) => r.eventKey == replacing.eventKey && r.occurrence == replacing.occurrence);
+    }
     final index = current.indexWhere((r) => r.eventKey == reminder.eventKey && r.occurrence == reminder.occurrence);
 
     if (index >= 0) {
       current[index] = reminder;
-      return save(current);
+    } else {
+      if (current.length >= maxDeviceReminders) return ReminderPutResult.full;
+      current.add(reminder);
     }
-
-    if (current.length >= maxDeviceReminders) {
-      return false;
-    }
-
-    current.add(reminder);
-    return save(current);
+    return save(current) ? ReminderPutResult.ok : ReminderPutResult.storageError;
   }
 
   /// Removes a reminder by eventKey and occurrence (strict match).
@@ -79,21 +94,27 @@ class ReminderStore {
     save(current);
   }
 
-  /// Removes all reminders whose event has passed.
+  /// Removes all reminders whose event has passed (recurring «كل مرة»
+  /// reminders never expire; see [Reminder.isExpired]).
   void clearExpired(DateTime now) {
     final current = List<Reminder>.of(load());
     current.removeWhere((r) => r.isExpired(now));
     save(current);
   }
 
-  /// Finds a reminder for the given event, matching exact occurrence.
-  Reminder? find(String eventKey, {String? occurrence}) {
-    final current = load();
-    for (final r in current) {
-      if (r.eventKey == eventKey && r.occurrence == occurrence) {
-        return r;
-      }
+  /// Finds the reminder covering the given event occurrence: the exact
+  /// occurrence first (strict, `null` matches only `null`), else a recurring
+  /// reminder for the event.
+  Reminder? find(String eventKey, {String? occurrence}) => findIn(load(), eventKey, occurrence: occurrence);
+
+  /// As [find], on an already loaded list.
+  static Reminder? findIn(List<Reminder> list, String eventKey, {String? occurrence}) {
+    Reminder? recurring;
+    for (final r in list) {
+      if (r.eventKey != eventKey) continue;
+      if (r.occurrence == occurrence) return r;
+      if (r.every) recurring ??= r;
     }
-    return null;
+    return recurring;
   }
 }

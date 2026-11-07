@@ -120,6 +120,16 @@
             sessionStorage.setItem('church_portal_installed', '1');
           } catch (e) {}
         });
+        // Stale flag in the same tab (sessionStorage survives reloads): where
+        // getInstalledRelatedApps() exists (Chrome Android), an empty result
+        // means the PWA was uninstalled, so the banner may show again.
+        // Elsewhere the flag lasts until the tab closes (documented in ADR-057).
+        if (sessionStorage.getItem('church_portal_installed') === '1'
+            && navigator.getInstalledRelatedApps) {
+          navigator.getInstalledRelatedApps().then(function (apps) {
+            if (!apps || apps.length === 0) sessionStorage.removeItem('church_portal_installed');
+          }).catch(function () {});
+        }
       } catch (e) {}
     })();
   </script>

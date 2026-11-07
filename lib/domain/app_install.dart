@@ -31,6 +31,31 @@ class InstallOsInfo {
   String toString() => 'InstallOsInfo(os: $os, inAppBrowser: $inAppBrowser)';
 }
 
+/// An APK link as the browser should open it: a root-relative path set in the
+/// admin (e.g. `/app/android/church.apk` on our Hosting) is resolved against
+/// the portal origin [base]; absolute URLs are returned unchanged.
+String resolveInstallUrl(String url, Uri base) {
+  final t = url.trim();
+  if (t.startsWith('/') && !t.startsWith('//')) return base.resolve(t).toString();
+  return t;
+}
+
+/// iOS / iPadOS version from a Safari user agent as `major * 100 + minor`
+/// (16.4 -> 1604), from `OS 16_4` (iPhone / iPad) or, for iPadOS desktop
+/// mode, `Version/16.4`; `null` when the agent carries neither.
+int? iosVersionFromUserAgent(String ua) {
+  final m = RegExp(r'OS (\d+)_(\d+)').firstMatch(ua) ?? RegExp(r'Version/(\d+)\.(\d+)').firstMatch(ua);
+  if (m == null) return null;
+  return int.parse(m.group(1)!) * 100 + int.parse(m.group(2)!);
+}
+
+/// Web push on iPhone / iPad needs iOS 16.4+ and the app on the Home Screen.
+/// True only when the version is known and older (unknown is not "too old").
+bool iosTooOldForPush(String ua) {
+  final v = iosVersionFromUserAgent(ua);
+  return v != null && v < 1604;
+}
+
 /// Detects the visitor's operating system and in-app browser status.
 ///
 /// Handles iPadOS desktop UA where Safari reports "Macintosh" / "MacIntel"

@@ -564,7 +564,7 @@ class FeatureSettings {
   /// Whether a public route (or one of its detail sub-routes, such as
   /// `/clinics/<id>`) is available. Unknown routes are always allowed.
   bool routeEnabled(String path) {
-    if (path == '/notifications') return pushSettings.enabled;
+    if (path == '/notifications' || path.startsWith('/notifications/')) return pushSettings.enabled;
     final sections = sectionsForPath(path);
     if (sections == null) return true;
     return sections.any(enabled);

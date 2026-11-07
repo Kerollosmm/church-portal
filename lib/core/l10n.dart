@@ -732,7 +732,6 @@ const Map<String, List<String>> _strings = {
   'installAppTitle': ['تطبيق الكنيسة على هاتفك', 'Church app on your phone'],
   'installAppBody': ['تابع القداسات والصلوات والمواسم وتلقّ التنبيهات بسهولة من هاتفك.', 'Follow liturgies, prayers and seasons with easy updates on your phone.'],
   'installDownloadApk': ['تحميل التطبيق', 'Download app'],
-  'installDownloadApkDetails': ['{version} • {size} م.ب', '{version} • {size} MB'],
   'installOlderPhone': ['هاتف قديم؟', 'Older phone?'],
   'installLater': ['لاحقًا', 'Later'],
   'installDismiss': ['إغلاق', 'Close'],
@@ -740,102 +739,19 @@ const Map<String, List<String>> _strings = {
   'installIosAction': ['طريقة الإضافة', 'How to add'],
 
   // iOS Add-to-Home-Screen Steps Sheet
-  'iosInstallTitle': ['إضافة الموقع للشاشة الرئيسية', 'Add site to Home Screen'],
-  'iosInstallStep1': ['اضغط زر المشاركة في أسفل المتصفح', 'Tap the Share button at the bottom of Safari'],
-  'iosInstallStep2': ['اختر «إضافة إلى الشاشة الرئيسية»', 'Select "Add to Home Screen"'],
-  'iosInstallStep3': ['اضغط «إضافة» في أعلى الشاشة', 'Tap "Add" in the top right'],
-  'iosInstallOpenIcon': ['افتح الكنيسة من الأيقونة الجديدة على شاشتك', 'Open the church app from the new icon on your home screen'],
-  'iosInstallSafariNote': ['إذا لم يظهر الخيار، تأكد من فتح الموقع في متصفح Safari.', 'If the option does not appear, make sure to open the site in Safari.'],
-  'iosInstallDone': ['تم', 'Done'],
 
   // Android APK Sideload Guide
-  'apkGuideTitle': ['دليل تثبيت تطبيق الكنيسة (APK)', 'Church app install guide (APK)'],
-  'apkGuideStep': ['الخطوة {current} من {total}', 'Step {current} of {total}'],
-  'apkGuideNext': ['التالي', 'Next'],
-  'apkGuidePrev': ['السابق', 'Back'],
-  'apkGuideDone': ['تم، فهمت الخطوات', 'Done, I understand'],
-  'apkGuideDiffersNote': ['قد يختلف الشكل قليلًا حسب نوع هاتفك ونظام Android', 'Appearance may vary slightly depending on your phone and Android version'],
-  'apkGuideStep1Title': ['رسالة «قد يكون الملف ضارًا»', '"File might be harmful" warning'],
-  'apkGuideStep1Body': ['يعرضها المتصفح لأي تطبيق من خارج متجر Play. تأكد أن العنوان في الأعلى هو maximos-domadios-church.web.app ثم اضغط «تنزيل على أي حال»', 'The browser shows this for any app from outside the Play Store. Check that the address bar shows maximos-domadios-church.web.app, then tap "Download anyway"'],
-  'apkGuideStep2Title': ['افتح الملف بعد التنزيل', 'Open the downloaded file'],
-  'apkGuideStep2Body': ['من إشعار «اكتمل التنزيل» أو من مجلد «التنزيلات» اضغط على ملف تطبيق الكنيسة. حجم الملف تقريبًا {size} م.ب', 'From the "Download complete" notification or Downloads folder, tap the church app file. File size is approx {size} MB'],
-  'apkGuideStep2BodyNoSize': ['من إشعار «اكتمل التنزيل» أو من مجلد «التنزيلات» اضغط على ملف تطبيق الكنيسة', 'From the "Download complete" notification or Downloads folder, tap the church app file'],
-  'apkGuideStep3Title': ['اسمح بالتثبيت لهذا التطبيق مرة واحدة', 'Allow install from this source once'],
-  'apkGuideStep3Body': ['اضغط «الإعدادات» ← فعّل «السماح من هذا المصدر» للتطبيق الظاهر في الصفحة — المتصفح (مثل Chrome) إذا فتحت الملف من إشعار التنزيل، أو «الملفات» / «ملفاتي» إذا فتحته من مدير الملفات ← ارجع', 'Tap "Settings" → turn on "Allow from this source" for the app shown on that page — the browser (e.g. Chrome) if you opened the file from the download notification, or Files / My Files if you opened it from a file manager → go back'],
-  'apkGuideStep4Title': ['تحذير Google Play Protect', 'Google Play Protect'],
-  'apkGuideStep4Body': ['قد يقترح فحص التطبيق — اسمح بالفحص. إذا قال إنه لا يعرف المطوّر: «مزيد من التفاصيل» ← «التثبيت على أي حال». هذا طبيعي لتطبيق من خارج المتجر', 'Google Play Protect may offer to scan the app — allow the scan. If it says the developer is unknown: "More details" → "Install anyway". Normal for an app from outside the store'],
-  'apkGuideStep5Title': ['افتح التطبيق وأعد الأمان', 'Open the app & restore security'],
-  'apkGuideStep5Body': ['افتح التطبيق، ثم (اختياري وأكثر أمانًا) ارجع إلى الإعدادات ← التطبيقات ← نفس التطبيق الذي سمحت له في الخطوة ٣ (المتصفح أو مدير الملفات) ← «تثبيت التطبيقات غير المعروفة» وأوقف «السماح من هذا المصدر»', 'Open the app, then (optional, safer) go to Settings → Apps → the same app you allowed in step 3 (browser or file manager) → "Install unknown apps" and switch "Allow from this source" off again'],
-  'apkGuidePlaceholderCaption': ['صورة توضيحية للخطوة {n}', 'Illustration for step {n}'],
-  'apkGuideSafetyBoxTitle': ['للأمان والسلامة', 'For your safety'],
-  'apkGuideSafetyBox1': ['حمّل التطبيق من موقع الكنيسة فقط، لا من ملفات مرسلة على واتساب أو فيسبوك', 'Only download the app from the church website, never from forwarded files on WhatsApp or Facebook'],
-  'apkGuideSafetyBox2': ['الكنيسة لا تطلب أبدًا إيقاف Play Protect بالكامل أو منح أذونات غير معتادة', 'The church will never ask you to disable Play Protect entirely or grant unusual permissions'],
-  'apkGuideSafetyBox3': ['تأكد أن رقم الإصدار والحجم يطابقان ما هو معلن على الموقع', 'Ensure version number and file size match what is stated on the site'],
 
   // Notification Preferences Page (/notifications)
   'notifications': ['الإشعارات', 'Notifications'],
-  'notificationsExplainerTitle': ['إشعارات وتنبيهات الكنيسة', 'Church notifications & alerts'],
-  'notificationsExplainerBody': ['اختر التنبيهات التي تهمك لتصلك مواعيد القداسات، تنبيهات مواسم الصوم وأسبوع الآلام، والتذكيرات التي تحددها بنفسك. لا نجمع أي بيانات شخصية ويمكنك إيقاف الإشعارات في أي وقت.', 'Choose the updates you care about: mass schedules, fasting seasons & Holy Week alerts, and reminders you set yourself. No personal data is collected and you can disable notifications at any time.'],
-  'notificationsEnableButton': ['تفعيل الإشعارات', 'Enable notifications'],
-  'notificationsComingSoon': ['خدمة الإشعارات عبر المتصفح قادمة قريبًا', 'Web push notifications are coming soon'],
-  'notificationsEnabledChip': ['الإشعارات مفعلة', 'Notifications enabled'],
-  'notificationsDisabledChip': ['الإشعارات متوقفة', 'Notifications disabled'],
-  'notificationsBlockedTitle': ['الإشعارات محظورة في متصفحك', 'Notifications are blocked in your browser'],
-  'notificationsBlockedChrome': ['اضغط أيقونة 🔒 بجوار عنوان الموقع ← الأذونات ← الإشعارات ← سماح', 'Tap the 🔒 icon next to the address bar → Permissions → Notifications → Allow'],
-  'notificationsBlockedIos': ['من إعدادات الهاتف ← الإشعارات ← كنيسة مكسيموس ودوماديوس ← السماح بالإشعارات', 'Go to iPhone Settings → Notifications → Church App → Allow Notifications'],
-  'notificationsBlockedOther': ['يمكنك إعادة تفعيل الإشعارات من إعدادات المتصفح أو أذونات الموقع.', 'You can re-enable notifications from browser settings or site permissions.'],
-  'notificationsUnsupported': ['هذا المتصفح لا يدعم تلقي الإشعارات.', 'This browser does not support push notifications.'],
-  'notificationsIosNeedsInstallTitle': ['لتفعيل الإشعارات على iPhone', 'To enable notifications on iPhone'],
-  'notificationsIosNeedsInstallBody': ['يتطلب نظام iOS إضافة الموقع إلى الشاشة الرئيسية أولًا. اضغط زر المشاركة ثم «إضافة إلى الشاشة الرئيسية»، ثم افتح التطبيق من الشاشة الرئيسية لتفعيل الإشعارات.', 'iOS requires adding the website to your Home Screen first. Tap the Share button, select "Add to Home Screen", then open the app from your home screen to enable notifications.'],
-  'notificationsIosTooOld': ['يتطلب تلقي الإشعارات على iPhone تحديث نظام iOS إلى الإصدار 16.4 أو أحدث.', 'Web push notifications on iPhone require iOS 16.4 or later.'],
-  'notificationsInAppBrowser': ['أنت تفتح الموقع من داخل تطبيق (مثل Facebook أو WhatsApp). للحصول على أفضل تجربة وتفعيل التنبيهات، افتح الموقع في متصفح Safari أو Chrome.', 'You are viewing this site inside an app (such as Facebook or WhatsApp). To enable notifications, open the link in Safari or Chrome.'],
-  'notificationsQuietNoteWeb': ['آية اليوم وقراءات القطمارس والأعياد متوفرة مباشرة في الصفحة الرئيسية.', 'Daily verse, Katameros readings, and feast commemorations are available directly on the home page.'],
-  'notificationsUnsubscribeAll': ['إيقاف كل الإشعارات', 'Turn off all notifications'],
-  'notificationsUnsubscribeConfirm': ['تم إيقاف جميع الإشعارات', 'All notifications turned off'],
 
   // Reminders «ذكّرني»
   'remindMe': ['ذكّرني', 'Remind me'],
   'remindMeSet': ['مجدول ({lead})', 'Set ({lead})'],
   'remindMeSemantic': ['ذكّرني بـ {title}', 'Remind me about {title}'],
-  'remindSheetTitle': ['تذكير بموعد', 'Event reminder'],
-  'remindLeadPrompt': ['متى تحب أن نذكّرك؟', 'When would you like to be reminded?'],
-  'remindLeadPast': ['(فات موعد التنبيه)', '(Reminder time has passed)'],
-  'remindOccurrenceSingle': ['هذه المرة فقط', 'This time only'],
-  'remindOccurrenceEvery': ['كل مرة (تكرار)', 'Every time (recurring)'],
-  'remindWebDelayNotice': ['يصل التذكير عبر الإنترنت وقد يتأخر حتى ٣٠ دقيقة تقريبًا — للتنبيه في الموعد بالضبط يمكنك استخدام «أضف إلى التقويم»', 'Online reminders may arrive up to ~30 minutes late. For exact-time alerts, you can also use "Add to calendar"'],
-  'remindSaveButton': ['حفظ التذكير', 'Save reminder'],
-  'remindCancelButton': ['إلغاء التذكير', 'Cancel reminder'],
-  'myRemindersTitle': ['تذكيراتي', 'My reminders'],
-  'myRemindersEmpty': ['لا توجد تذكيرات مجدولة حاليًا.', 'No scheduled reminders currently.'],
-  'myRemindersMaxReached': ['وصلت للحد الأقصى للتذكيرات (٣٠ تذكيرًا). ألغِ بعض التذكيرات لإضافة غيرها.', 'Maximum limit of 30 reminders reached. Remove some reminders to add more.'],
-  'myRemindersClearExpired': ['مسح التذكيرات المنتهية', 'Clear expired reminders'],
-  'reminderStateScheduled': ['مجدول', 'Scheduled'],
-  'reminderStateMoved': ['تغيّر موعد الحدث — أعد ضبطه', 'Event time changed — update reminder'],
-  'reminderStateChanged': ['أُلغي الحدث أو لم يعد موجودًا', 'Event cancelled or removed'],
-  'reminderStateExpired': ['انتهى', 'Expired'],
+  'reminderDefaultLeadNotOffered': ['مدة التذكير الافتراضية يجب أن تكون إحدى المدد المختارة.', 'The default reminder lead must be one of the offered lead times.'],
 
   // Admin App & Notifications Settings
-  'adminAppAndNotifications': ['التطبيق والإشعارات', 'App & notifications'],
-  'adminInstallGroup': ['شريط تثبيت التطبيق', 'App install banner'],
-  'adminPushGroup': ['الإشعارات (تجريبي)', 'Notifications (experimental)'],
-  'adminInstallPromptLabel': ['إظهار شريط التثبيت على الهواتف', 'Show install banner on phones'],
-  'adminInstallTitleAr': ['عنوان الشريط (عربي)', 'Banner title (Arabic)'],
-  'adminInstallTitleEn': ['عنوان الشريط (إنجليزي)', 'Banner title (English)'],
-  'adminInstallBodyAr': ['نص الشريط (عربي)', 'Banner text (Arabic)'],
-  'adminInstallBodyEn': ['نص الشريط (إنجليزي)', 'Banner text (English)'],
-  'adminInstallAndroidUrl': ['رابط تحميل تطبيق Android (APK)', 'Android APK download URL'],
-  'adminInstallAndroidUrl32': ['رابط APK للهواتف القديمة 32-bit (اختياري)', 'Older phones 32-bit APK download URL (optional)'],
-  'adminInstallApkVersion': ['رقم الإصدار المعروض (مثل 1.1.0)', 'Displayed APK version (e.g. 1.1.0)'],
-  'adminInstallApkBuild': ['رقم البناء الداخلي (build number)', 'Internal build number'],
-  'adminInstallApkSizeMb': ['حجم ملف APK الأساسي (ميجابايت)', 'Main APK file size (MB)'],
-  'adminInstallApkSize32Mb': ['حجم ملف APK للهواتف القديمة (ميجابايت)', 'Older phone APK file size (MB)'],
-  'adminInstallReshowDays': ['أيام إعادة العرض بعد الإغلاق ✕ (0 = أبدًا)', 'Days before banner returns after ✕ (0 = never)'],
-  'adminInstallRemindDays': ['أيام الإخفاء عند الضغط على «لاحقًا»', 'Days hidden after tapping "Later"'],
-  'adminPushEnabledLabel': ['تفعيل نظام وصفحة الإشعارات (المفتاح العام)', 'Master switch: show notifications UI'],
-  'adminPushVapidKeyLabel': ['مفتاح Web Push العام (VAPID Public Key)', 'Web Push VAPID public key'],
-  'adminPushTypesLabel': ['أنواع الإشعارات المتاحة للمستخدمين', 'Notification types offered to visitors'],
-  'adminReminderLeadsLabel': ['خيارات مدد التذكير المتاحة بالدقائق (مثال: 0, 15, 60, 1440)', 'Available reminder lead times in minutes (e.g. 0, 15, 60, 1440)'],
-  'adminReminderDefaultLeadLabel': ['مدة التذكير المحددة افتراضيًا (بالدقائق)', 'Default reminder lead time in minutes'],
   'opt_announcements': ['إعلانات وتنبيهات الكنيسة', 'Church announcements & alerts'],
   'opt_verse_daily': ['آية اليوم الصباحية (خاص بالتطبيق)', 'Daily morning verse (app only)'],
   'opt_katameros_daily': ['قراءات وسنكسار اليوم (خاص بالتطبيق)', 'Daily Katameros & Synaxarium (app only)'],
@@ -844,12 +760,23 @@ const Map<String, List<String>> _strings = {
   'opt_reminders': ['تذكيرات المناسبات والصلوات', 'Event & mass reminders'],
 };
 
+/// Strings of deferred chunks (ADR-057: the notifications page, the reminder
+/// sheet, the install guides): each chunk registers its own table before it
+/// builds, so its text never weighs on `main.dart.js`.
+final Map<String, List<String>> _chunkStrings = {};
+final Set<Object> _registeredChunks = {};
+
+/// Adds a deferred chunk's strings (idempotent per [table]).
+void registerStrings(Map<String, List<String>> table) {
+  if (_registeredChunks.add(table)) _chunkStrings.addAll(table);
+}
+
 extension L10nX on BuildContext {
   bool get isAr => Localizations.localeOf(this).languageCode == 'ar';
 
   /// Translated UI string; `{name}` placeholders replaced from [args].
   String tr(String key, [Map<String, String> args = const {}]) {
-    final pair = _strings[key];
+    final pair = _strings[key] ?? _chunkStrings[key];
     var s = pair == null ? key : (isAr ? pair[0] : pair[1]);
     args.forEach((k, v) => s = s.replaceAll('{$k}', v));
     return s;

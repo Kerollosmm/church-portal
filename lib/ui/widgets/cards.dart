@@ -24,9 +24,6 @@ import 'styled_image.dart';
 export 'program_details.dart' show ProgramDetails, parallelSummary, parallelThenLine;
 export 'styled_image.dart';
 
-String _isoDate(DateTime d) =>
-    '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
-
 DateTime _nextLiturgyOccurrence(Liturgy l, DateTime now) {
   if (l.date != null) {
     final c = CairoTime.calendarDate(l.date!);
@@ -126,7 +123,7 @@ class LiturgyCard extends StatelessWidget {
                 padding: const EdgeInsets.only(top: 8),
                 child: RemindMeButton(
                   eventKey: EventKey.liturgy(l.id),
-                  occurrence: l.date != null ? _isoDate(CairoTime.calendarDate(l.date!)) : null,
+                  occurrence: l.date != null ? isoDate(CairoTime.calendarDate(l.date!)) : null,
                   title: {'ar': l.nameAr, 'en': l.nameEn},
                   startsAt: _nextLiturgyOccurrence(l, CairoTime.now()),
                   recurring: l.date == null,
@@ -366,7 +363,7 @@ class NextMassCard extends ConsumerWidget {
         padding: const EdgeInsets.only(top: 8),
         child: RemindMeButton(
           eventKey: EventKey.liturgy(n.liturgy.id),
-          occurrence: n.liturgy.date != null ? _isoDate(CairoTime.calendarDate(n.liturgy.date!)) : null,
+          occurrence: n.liturgy.date != null ? isoDate(CairoTime.calendarDate(n.liturgy.date!)) : null,
           title: {'ar': n.liturgy.nameAr, 'en': n.liturgy.nameEn},
           startsAt: n.start,
           recurring: n.liturgy.date == null,

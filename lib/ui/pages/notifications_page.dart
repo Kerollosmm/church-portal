@@ -9,7 +9,28 @@ import '../../core/theme.dart';
 import '../../domain/features.dart';
 import '../../state/providers.dart';
 import '../widgets/common.dart';
-import '../widgets/remind_me.dart';
+import '../widgets/reminder_sheet.dart';
+
+/// Strings only this deferred chunk uses (registered before it builds).
+const Map<String, List<String>> notificationsPageStrings = {
+  'adminPushTypesLabel': ['أنواع الإشعارات المتاحة للمستخدمين', 'Notification types offered to visitors'],
+  'notificationsBlockedChrome': ['اضغط أيقونة 🔒 بجوار عنوان الموقع ← الأذونات ← الإشعارات ← سماح', 'Tap the 🔒 icon next to the address bar → Permissions → Notifications → Allow'],
+  'notificationsBlockedIos': ['من إعدادات الهاتف ← الإشعارات ← كنيسة مكسيموس ودوماديوس ← السماح بالإشعارات', 'Go to iPhone Settings → Notifications → Church App → Allow Notifications'],
+  'notificationsBlockedTitle': ['الإشعارات محظورة في متصفحك', 'Notifications are blocked in your browser'],
+  'notificationsComingSoon': ['خدمة الإشعارات عبر المتصفح قادمة قريبًا', 'Web push notifications are coming soon'],
+  'notificationsEnableButton': ['تفعيل الإشعارات', 'Enable notifications'],
+  'notificationsEnabledChip': ['الإشعارات مفعلة', 'Notifications enabled'],
+  'notificationsExplainerBody': ['اختر التنبيهات التي تهمك لتصلك مواعيد القداسات، تنبيهات مواسم الصوم وأسبوع الآلام، والتذكيرات التي تحددها بنفسك. لا نجمع أي بيانات شخصية ويمكنك إيقاف الإشعارات في أي وقت.', 'Choose the updates you care about: mass schedules, fasting seasons & Holy Week alerts, and reminders you set yourself. No personal data is collected and you can disable notifications at any time.'],
+  'notificationsExplainerTitle': ['إشعارات وتنبيهات الكنيسة', 'Church notifications & alerts'],
+  'notificationsInAppBrowser': ['أنت تفتح الموقع من داخل تطبيق (مثل Facebook أو WhatsApp). للحصول على أفضل تجربة وتفعيل التنبيهات، افتح الموقع في متصفح Safari أو Chrome.', 'You are viewing this site inside an app (such as Facebook or WhatsApp). To enable notifications, open the link in Safari or Chrome.'],
+  'notificationsIosNeedsInstallBody': ['على iPhone تعمل الإشعارات من iOS 16.4 فأحدث، بعد إضافة الموقع إلى الشاشة الرئيسية. اضغط زر المشاركة ثم «إضافة إلى الشاشة الرئيسية»، ثم افتح التطبيق من الشاشة الرئيسية لتفعيل الإشعارات.', 'On iPhone, notifications need iOS 16.4 or later and the site added to your Home Screen. Tap the Share button, select "Add to Home Screen", then open the app from your home screen to enable notifications.'],
+  'notificationsIosNeedsInstallTitle': ['لتفعيل الإشعارات على iPhone', 'To enable notifications on iPhone'],
+  'notificationsIosTooOld': ['يتطلب تلقي الإشعارات على iPhone تحديث نظام iOS إلى الإصدار 16.4 أو أحدث.', 'Web push notifications on iPhone require iOS 16.4 or later.'],
+  'notificationsQuietNoteWeb': ['آية اليوم وقراءات القطمارس والأعياد متوفرة مباشرة في الصفحة الرئيسية.', 'Daily verse, Katameros readings, and feast commemorations are available directly on the home page.'],
+  'notificationsUnsubscribeAll': ['إيقاف كل الإشعارات', 'Turn off all notifications'],
+  'notificationsUnsubscribeConfirm': ['تم إيقاف جميع الإشعارات', 'All notifications turned off'],
+  'notificationsUnsupported': ['هذا المتصفح لا يدعم تلقي الإشعارات.', 'This browser does not support push notifications.'],
+};
 
 /// The visitor's notification preferences and reminders page (`/notifications`, ADR-057).
 class NotificationsPage extends ConsumerWidget {
@@ -18,17 +39,22 @@ class NotificationsPage extends ConsumerWidget {
 
   PushPermissionState _resolveState({
     required InstallOsInfo osInfo,
+    required String userAgent,
     required bool isStandalone,
     required PushEnv pushEnv,
     required bool isWeb,
   }) {
-    if (!isWeb) return PushPermissionState.granted;
+    // The phone app's own notification permission arrives with PR B; until
+    // then never claim notifications are on.
+    if (!isWeb) return PushPermissionState.unsupported;
 
     if (osInfo.inAppBrowser) {
       return PushPermissionState.inAppBrowser;
     }
 
     if (osInfo.os == InstallOs.ios) {
+      // iOS < 16.4 has no web push at all, installed or not.
+      if (iosTooOldForPush(userAgent)) return PushPermissionState.iosTooOld;
       if (!isStandalone) {
         return PushPermissionState.iosNeedsInstall;
       }
@@ -49,6 +75,7 @@ class NotificationsPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    registerStrings(notificationsPageStrings);
     setDocumentRouteMeta(
       path: '/notifications',
       indexable: false,
@@ -81,6 +108,7 @@ class NotificationsPage extends ConsumerWidget {
     final web = isWeb ?? kIsWeb;
     final permState = _resolveState(
       osInfo: osInfo,
+      userAgent: installEnv.userAgent,
       isStandalone: installEnv.isStandalone,
       pushEnv: pushEnv,
       isWeb: web,
@@ -137,7 +165,10 @@ class NotificationsPage extends ConsumerWidget {
           const SizedBox(height: 16),
 
           // Status & Permission card
-          _buildStatusCard(context, pal, permState, pushSettings, pushEnv, prefsNotifier),
+          _buildStatusCard(context, pal, permState, pushSettings, pushEnv, prefsNotifier,
+              // Re-read the browser permission so a denial shows the
+              // blocked-permission steps right away.
+              () => ref.invalidate(pushEnvProvider)),
 
           const SizedBox(height: 20),
 
@@ -213,6 +244,7 @@ class NotificationsPage extends ConsumerWidget {
     PushSettings pushSettings,
     PushEnv pushEnv,
     PushPrefsNotifier prefsNotifier,
+    VoidCallback onPermissionChanged,
   ) {
     switch (state) {
       case PushPermissionState.inAppBrowser:
@@ -321,16 +353,17 @@ class NotificationsPage extends ConsumerWidget {
                 style: FilledButton.styleFrom(
                   minimumSize: const Size(48, 48),
                 ),
-                onPressed: pushSettings.webReady
+                onPressed: pushSettings.canRequestPermission
                     ? () async {
                         final res = await pushEnv.requestPermission();
                         if (res == 'granted') {
                           prefsNotifier.firstOptIn();
                         }
+                        onPermissionChanged();
                       }
                     : null,
               ),
-              if (!pushSettings.webReady)
+              if (!pushSettings.canRequestPermission)
                 Padding(
                   padding: const EdgeInsets.only(top: 8),
                   child: Text(

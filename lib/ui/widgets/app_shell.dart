@@ -310,7 +310,9 @@ class _AppShellState extends ConsumerState<AppShell> {
         start: 0,
         end: 0,
         bottom: 0,
-        child: InstallBanner(currentPath: location),
+        // Hidden (not disposed: keeps its delay / dismiss state) while the
+        // drawer is open.
+        child: Offstage(offstage: _drawerOpen, child: InstallBanner(currentPath: location)),
       ),
     ]);
   }

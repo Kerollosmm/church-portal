@@ -445,13 +445,13 @@ class UserRemindersNotifier extends Notifier<List<Reminder>> {
     return store.load();
   }
 
-  bool put(Reminder reminder) {
+  ReminderPutResult put(Reminder reminder, {Reminder? replacing}) {
     final store = ref.read(reminderStoreProvider);
-    final ok = store.put(reminder);
-    if (ok) {
+    final result = store.put(reminder, replacing: replacing);
+    if (result == ReminderPutResult.ok) {
       state = store.load();
     }
-    return ok;
+    return result;
   }
 
   void remove(String eventKey, {String? occurrence}) {

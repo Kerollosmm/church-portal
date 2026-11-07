@@ -178,6 +178,10 @@ class _Entry {
   final List<int> calendarDays;
   final String start, end;
 
+  /// Both-language title saved with a reminder (ADR-057), so «تذكيراتي»
+  /// follows the visitor's language later.
+  final Map<String, String> reminderTitle;
+
   /// Happens at the church (meetings, activities, clinics, services): the
   /// page offers directions to the church.
   final bool onSite;
@@ -204,6 +208,7 @@ class _Entry {
     this.calendarDays = const [],
     this.start = '',
     this.end = '',
+    this.reminderTitle = const {},
     this.onSite = false,
     this.officeFallback = false,
     this.whatsappFromPhone = false,
@@ -232,6 +237,7 @@ class _Entry {
             ..._programFacts(context, m.program, features.programOptions, hasPlace: m.hallAr.isNotEmpty || m.hallEn.isNotEmpty),
           ],
           calendarDays: [if (m.weekday != null) m.weekday!],
+          reminderTitle: {'ar': m.nameAr, 'en': m.nameEn},
           start: m.start,
           end: m.end,
           onSite: true,
@@ -272,6 +278,7 @@ class _Entry {
             if (c.start.isNotEmpty) _Fact.widget(Icons.schedule_rounded, context.tr('factTime'), TimeRangeText(c.start, c.end)),
           ],
           calendarDays: c.days,
+          reminderTitle: {'ar': c.specialtyAr, 'en': c.specialtyEn},
           start: c.start,
           end: c.end,
           onSite: true,
@@ -617,13 +624,16 @@ class _DetailView extends ConsumerWidget {
         ),
       if (e.calendarDays.isNotEmpty && e.start.isNotEmpty)
         Builder(builder: (c) {
+          // The earliest coming session over all the item's weekdays (a
+          // clinic may run on several days); today's counts until it starts.
           final cNow = CairoTime.fromInstant(now);
-          final weekday = e.calendarDays.first;
-          final daysAhead = (weekday - cNow.weekday + 7) % 7;
           final sm = parseHm(e.start) ?? 0;
-          var target = CairoTime.at(cNow.year, cNow.month, cNow.day + daysAhead, sm);
-          if (target.isBefore(cNow)) {
-            target = CairoTime.at(cNow.year, cNow.month, cNow.day + daysAhead + 7, sm);
+          DateTime? target;
+          for (final weekday in e.calendarDays) {
+            final daysAhead = (weekday - cNow.weekday + 7) % 7;
+            var t = CairoTime.at(cNow.year, cNow.month, cNow.day + daysAhead, sm);
+            if (t.isBefore(cNow)) t = CairoTime.at(cNow.year, cNow.month, cNow.day + daysAhead + 7, sm);
+            if (target == null || t.isBefore(target)) target = t;
           }
           final key = switch (kind) {
             DetailKind.meeting => EventKey.meeting(id),
@@ -631,8 +641,8 @@ class _DetailView extends ConsumerWidget {
           };
           return RemindMeButton(
             eventKey: key,
-            title: {'ar': e.title, 'en': e.title},
-            startsAt: target,
+            title: e.reminderTitle.isNotEmpty ? e.reminderTitle : {'ar': e.title, 'en': e.title},
+            startsAt: target!,
             recurring: true,
           );
         }),

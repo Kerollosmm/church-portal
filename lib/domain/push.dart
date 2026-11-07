@@ -191,7 +191,10 @@ String reminderTopic({
     return 'web_rem_${cleanKey}_${lead}_$normalizedLang';
   }
 
-  final cleanOcc = occurrence.replaceAll('-', '');
+  // FCM topics allow [a-zA-Z0-9-_.~%]; occurrences are ISO dates
+  // (2027-04-30 -> 20270430). Anything else (slashes, ':' of a timestamp)
+  // is dropped so the topic stays valid.
+  final cleanOcc = occurrence.replaceAll(RegExp(r'[^a-zA-Z0-9_.~%]'), '');
   return 'web_rem_${cleanKey}_${cleanOcc}_${lead}_$normalizedLang';
 }
 
@@ -218,6 +221,12 @@ class PushSettings {
 
   bool get webReady => enabled && vapidKey.trim().isNotEmpty;
 
+  /// Whether the «فعّل الإشعارات» button may ask the browser for permission.
+  /// False until a delivery path ships (PR D web push), whatever the VAPID
+  /// key: asking for a permission nothing uses yet would burn the one-time
+  /// browser prompt. The button stays disabled with «قريبًا» until then.
+  bool get canRequestPermission => kPushDeliveryShipped && webReady;
+
   factory PushSettings.fromMap(Map<String, dynamic>? m) {
     if (m == null || m.isEmpty) return defaults;
 
@@ -235,7 +244,9 @@ class PushSettings {
           parsed.add(t);
         }
       }
-      if (parsed.isNotEmpty) {
+      // An explicitly empty list = the admin offers none; a non-empty list
+      // with nothing valid falls back to all types.
+      if (parsed.isNotEmpty || rawTypes.isEmpty) {
         offered = parsed;
       }
     }
@@ -291,7 +302,13 @@ class PushSettings {
       );
 }
 
-/// Visitor's quiet hours specification.
+/// Flipped to `true` by PR D (web push delivery). Until then no permission
+/// prompt is shown (ADR-057).
+const bool kPushDeliveryShipped = false;
+
+/// Visitor's quiet hours specification. Stored with the visitor's prefs so
+/// PR B / PR D can honour it; there is no quiet-hours UI in PR A (plan: it
+/// needs a delivery path).
 class QuietHours {
   final String from;
   final String to;
@@ -409,7 +426,7 @@ class PushPrefs {
           other.updatedAt == updatedAt;
 
   @override
-  int get hashCode => Object.hash(Object.hashAll(types), lang, quiet, updatedAt);
+  int get hashCode => Object.hash(Object.hashAllUnordered(types), lang, quiet, updatedAt);
 }
 
 /// Browser / device permission state for push notifications.

@@ -1,6 +1,12 @@
 // Domain logic for user-chosen event reminders (ADR-057).
 // Pure Dart: no Flutter / web imports, so it is fully unit-tested.
 
+import 'cairo_time.dart';
+
+/// `yyyy-MM-dd` of a calendar date: the reminder occurrence id.
+String isoDate(DateTime d) =>
+    '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
 /// Stable key generator for events that can be reminded.
 class EventKey {
   EventKey._();
@@ -32,11 +38,41 @@ class Reminder {
     required this.createdAt,
   });
 
-  /// When the reminder should trigger.
+  /// When the reminder should trigger (for the stored occurrence).
   DateTime get fireTime => startsAt.subtract(Duration(minutes: lead));
 
-  /// Whether the event has already started/passed.
-  bool isExpired(DateTime now) => startsAt.isBefore(now);
+  /// The occurrence this reminder points at, as of [now].
+  ///
+  /// A one-off reminder always points at [startsAt]. A recurring «كل مرة»
+  /// reminder ([every]) repeats weekly at the same Cairo wall time (weekly
+  /// liturgies and meetings, the only recurring events), so once [startsAt]
+  /// has passed it rolls forward a week at a time, in Cairo local time so a
+  /// DST change never shifts the hour.
+  DateTime nextStartsAt(DateTime now) {
+    if (!every || !startsAt.isBefore(now)) return startsAt;
+    final c = CairoTime.fromInstant(startsAt);
+    final minutes = c.hour * 60 + c.minute;
+    final weeks = now.difference(startsAt).inDays ~/ 7;
+    var day = c.day + weeks * 7;
+    var next = CairoTime.at(c.year, c.month, day, minutes);
+    while (next.isBefore(now)) {
+      day += 7;
+      next = CairoTime.at(c.year, c.month, day, minutes);
+    }
+    return next;
+  }
+
+  /// When the reminder next triggers, as of [now].
+  DateTime nextFireTime(DateTime now) => nextStartsAt(now).subtract(Duration(minutes: lead));
+
+  /// Whether the event has already started/passed. A recurring reminder
+  /// never expires on its own: it moves on to the next occurrence.
+  bool isExpired(DateTime now) => !every && startsAt.isBefore(now);
+
+  /// Whether this reminder covers the button for [key] / [occ]: the exact
+  /// occurrence (strict, `null` matches only `null`), or any occurrence of
+  /// the event when it is a recurring reminder.
+  bool covers(String key, String? occ) => eventKey == key && (occurrence == occ || every);
 
   /// Unique composite identifier for this reminder instance.
   String get id => '$eventKey:${occurrence ?? 'all'}:$lead:${every ? 'every' : 'once'}';
@@ -169,21 +205,24 @@ ReconciledReminders reconcileReminders(
   final expired = <Reminder>[];
 
   for (final reminder in stored) {
-    if (reminder.isExpired(now)) {
+    // Lookup event by composite key first, then bare key.
+    final compositeKey = '${reminder.eventKey}:${reminder.occurrence ?? 'all'}';
+    final currentStartsAt = currentOccurrences[compositeKey] ?? currentOccurrences[reminder.eventKey];
+
+    // Past its stored time: expired, unless the event was moved to a time
+    // still ahead (then it is reported as moved below).
+    if (reminder.isExpired(now) && (currentStartsAt == null || !currentStartsAt.isAfter(now))) {
       items.add(ReconciledItem(reminder: reminder, state: ReminderState.expired));
       expired.add(reminder);
       continue;
     }
 
-    // Lookup event by composite key first, then bare key.
-    final compositeKey = '${reminder.eventKey}:${reminder.occurrence ?? 'all'}';
-    final currentStartsAt = currentOccurrences[compositeKey] ?? currentOccurrences[reminder.eventKey];
-
     if (currentStartsAt == null) {
       // Event missing or removed from calendar
       items.add(ReconciledItem(reminder: reminder, state: ReminderState.changed));
       changed.add(reminder);
-    } else if (currentStartsAt == reminder.startsAt) {
+    } else if (currentStartsAt == reminder.startsAt
+        || (reminder.every && currentStartsAt == reminder.nextStartsAt(now))) {
       // Unchanged
       items.add(ReconciledItem(reminder: reminder, state: ReminderState.scheduled));
       kept.add(reminder);

@@ -77,6 +77,9 @@ void main() {
       });
       expect(f.routeEnabled('/clinics'), isFalse);
       expect(f.routeEnabled('/clinics/'), isFalse);
+      // ADR-057: /notifications follows the push switch (off by default), trailing slash too.
+      expect(f.routeEnabled('/notifications'), isFalse);
+      expect(f.routeEnabled('/notifications/'), isFalse);
       expect(f.routeEnabled('/mass-schedule'), isFalse);
       expect(f.routeEnabled('/ask'), isFalse);
       expect(f.routeEnabled('/'), isTrue);

@@ -8,6 +8,7 @@ import 'package:church_portal/domain/features.dart';
 import 'package:church_portal/domain/reminders.dart';
 import 'package:church_portal/state/providers.dart';
 import 'package:church_portal/ui/pages/notifications_page.dart';
+import 'package:church_portal/ui/widgets/remind_me.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
@@ -73,6 +74,11 @@ class FakeTestInstallEnv implements InstallEnv {
 
   @override
   void remove(String key) => storage.remove(key);
+}
+
+class _FailingInstallEnv extends FakeTestInstallEnv {
+  @override
+  void writeJson(String key, Map<String, dynamic> data) => throw StateError('QuotaExceededError');
 }
 
 class _FakeRemindersNotifier extends UserRemindersNotifier {
@@ -203,5 +209,96 @@ void main() {
     // Verified: shows 07:00 Cairo time, never 05:00 UTC
     expect(find.textContaining('٠٧:٠٠ ص'), findsOneWidget);
     expect(find.textContaining('٠٥:٠٠'), findsNothing);
+  });
+
+  testWidgets('enable button stays disabled with «قريبًا» even with a VAPID key (no delivery until PR D)', (tester) async {
+    final pushEnv = FakeTestPushEnv(permission: 'default');
+    await tester.pumpWidget(buildTestable(
+      child: const NotificationsPage(isWeb: true),
+      pushSettings: const PushSettings(
+        enabled: true,
+        offered: [NotifyType.announcements, NotifyType.reminders],
+        vapidKey: 'test_vapid_key_01234567890123456789012345678901234567890123456789012345678901234567890123456789',
+      ),
+      pushEnv: pushEnv,
+      installEnv: FakeTestInstallEnv(),
+    ));
+    await tester.pumpAndSettle();
+
+    final button = tester.widget<ButtonStyleButton>(find.ancestor(
+      of: find.text('تفعيل الإشعارات'),
+      matching: find.byWidgetPredicate((w) => w is ButtonStyleButton),
+    ));
+    expect(button.onPressed, isNull);
+    expect(find.textContaining('قريبًا'), findsWidgets);
+    expect(pushEnv.requestCalls, 0);
+  });
+
+  testWidgets('installed iPhone on iOS < 16.4 gets the update card; the app build is never "enabled"', (tester) async {
+    await tester.pumpWidget(buildTestable(
+      child: const NotificationsPage(isWeb: true),
+      pushSettings: const PushSettings(enabled: true),
+      pushEnv: FakeTestPushEnv(isSupported: false),
+      installEnv: FakeTestInstallEnv(
+        userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_3 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148',
+        platform: 'iPhone',
+        isStandalone: true,
+      ),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('16.4'), findsOneWidget);
+
+    await tester.pumpWidget(buildTestable(
+      child: const NotificationsPage(isWeb: false),
+      pushSettings: const PushSettings(enabled: true),
+      pushEnv: FakeTestPushEnv(permission: 'granted'),
+      installEnv: FakeTestInstallEnv(),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.text('الإشعارات مفعلة'), findsNothing);
+  });
+
+  testWidgets('a recurring «كل مرة» reminder past its first occurrence shows its next one and is not expired', (tester) async {
+    // Stored for Sun 1 Nov 2026 08:00 Cairo; "now" is Fri 6 Nov 2026 -> Sun 8 Nov.
+    final weekly = Reminder(
+      eventKey: 'lit-sunday',
+      lead: 60,
+      every: true,
+      title: const {'ar': 'قداس الأحد', 'en': 'Sunday Liturgy'},
+      startsAt: CairoTime.at(2026, 11, 1, 8 * 60).toUtc(),
+      createdAt: DateTime.utc(2026, 10, 20),
+    );
+    await tester.pumpWidget(buildTestable(
+      child: const NotificationsPage(isWeb: true),
+      pushSettings: const PushSettings(enabled: true, offered: [NotifyType.reminders]),
+      pushEnv: FakeTestPushEnv(permission: 'granted'),
+      installEnv: FakeTestInstallEnv(),
+      initialReminders: [weekly],
+    ));
+    await tester.pumpAndSettle();
+    expect(find.text('مسح التذكيرات المنتهية'), findsNothing);
+    expect(find.textContaining('٨'), findsWidgets);
+    expect(find.byIcon(Icons.event_busy), findsNothing);
+  });
+
+  testWidgets('reminder sheet shows a storage error and stays open when the device refuses the write', (tester) async {
+    await tester.pumpWidget(buildTestable(
+      child: RemindMeButton(
+        eventKey: 'lit-x',
+        title: const {'ar': 'قداس', 'en': 'Liturgy'},
+        startsAt: CairoTime.at(2026, 11, 8, 8 * 60).toUtc(),
+      ),
+      pushSettings: const PushSettings(enabled: true, offered: [NotifyType.reminders]),
+      pushEnv: FakeTestPushEnv(),
+      installEnv: _FailingInstallEnv(),
+    ));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('ذكّرني'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('حفظ التذكير'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('remindSheetError')), findsOneWidget);
+    expect(find.textContaining('تعذّر حفظ التذكير'), findsOneWidget);
+    expect(find.text('حفظ التذكير'), findsOneWidget); // still open
   });
 }

@@ -4,8 +4,46 @@ import '../../core/l10n.dart';
 import '../../core/theme.dart';
 import '../../domain/rules.dart' show toArabicDigits;
 
+/// Strings only this deferred chunk uses (registered before it builds).
+const Map<String, List<String>> installGuideStrings = {
+  'iosInstallTitle': ['إضافة الموقع للشاشة الرئيسية', 'Add site to Home Screen'],
+  'iosInstallStep1': ['اضغط زر المشاركة في أسفل المتصفح', 'Tap the Share button at the bottom of Safari'],
+  'iosInstallStep2': ['اختر «إضافة إلى الشاشة الرئيسية»', 'Select "Add to Home Screen"'],
+  'iosInstallStep3': ['اضغط «إضافة» في أعلى الشاشة', 'Tap "Add" in the top right'],
+  'iosInstallOpenIcon': ['افتح الكنيسة من الأيقونة الجديدة على شاشتك', 'Open the church app from the new icon on your home screen'],
+  'iosInstallSafariNote': ['إذا لم يظهر الخيار، تأكد من فتح الموقع في متصفح Safari.', 'If the option does not appear, make sure to open the site in Safari.'],
+  'androidInstallTitle': ['تثبيت التطبيق من المتصفح', 'Install from the browser'],
+  'androidInstallStep1': ['اضغط زر القائمة ⋮ أعلى المتصفح', 'Tap the ⋮ menu at the top of the browser'],
+  'androidInstallStep2': ['اختر «تثبيت التطبيق» أو «إضافة إلى الشاشة الرئيسية»', 'Choose "Install app" or "Add to Home screen"'],
+  'androidInstallNote': ['قد يختلف اسم الخيار قليلًا حسب المتصفح.', 'The option name may differ slightly between browsers.'],
+  'iosInstallDone': ['تم', 'Done'],
+  'apkGuideTitle': ['دليل تثبيت تطبيق الكنيسة (APK)', 'Church app install guide (APK)'],
+  'apkGuideStep': ['الخطوة {current} من {total}', 'Step {current} of {total}'],
+  'apkGuideNext': ['التالي', 'Next'],
+  'apkGuidePrev': ['السابق', 'Back'],
+  'apkGuideDone': ['تم، فهمت الخطوات', 'Done, I understand'],
+  'apkGuideDiffersNote': ['قد يختلف الشكل قليلًا حسب نوع هاتفك ونظام Android', 'Appearance may vary slightly depending on your phone and Android version'],
+  'apkGuideStep1Title': ['رسالة «قد يكون الملف ضارًا»', '"File might be harmful" warning'],
+  'apkGuideStep1Body': ['يعرضها المتصفح لأي تطبيق من خارج متجر Play. تأكد أن العنوان في الأعلى هو maximos-domadios-church.web.app ثم اضغط «تنزيل على أي حال»', 'The browser shows this for any app from outside the Play Store. Check that the address bar shows maximos-domadios-church.web.app, then tap "Download anyway"'],
+  'apkGuideStep2Title': ['افتح الملف بعد التنزيل', 'Open the downloaded file'],
+  'apkGuideStep2Body': ['من إشعار «اكتمل التنزيل» أو من مجلد «التنزيلات» اضغط على ملف تطبيق الكنيسة. حجم الملف تقريبًا {size} م.ب', 'From the "Download complete" notification or Downloads folder, tap the church app file. File size is approx {size} MB'],
+  'apkGuideStep2BodyNoSize': ['من إشعار «اكتمل التنزيل» أو من مجلد «التنزيلات» اضغط على ملف تطبيق الكنيسة', 'From the "Download complete" notification or Downloads folder, tap the church app file'],
+  'apkGuideStep3Title': ['اسمح بالتثبيت لهذا التطبيق مرة واحدة', 'Allow install from this source once'],
+  'apkGuideStep3Body': ['اضغط «الإعدادات» ← فعّل «السماح من هذا المصدر» للتطبيق الظاهر في الصفحة — المتصفح (مثل Chrome) إذا فتحت الملف من إشعار التنزيل، أو «الملفات» / «ملفاتي» إذا فتحته من مدير الملفات ← ارجع', 'Tap "Settings" → turn on "Allow from this source" for the app shown on that page — the browser (e.g. Chrome) if you opened the file from the download notification, or Files / My Files if you opened it from a file manager → go back'],
+  'apkGuideStep4Title': ['تحذير Google Play Protect', 'Google Play Protect'],
+  'apkGuideStep4Body': ['قد يقترح فحص التطبيق — اسمح بالفحص. إذا قال إنه لا يعرف المطوّر: «مزيد من التفاصيل» ← «التثبيت على أي حال». هذا طبيعي لتطبيق من خارج المتجر', 'Google Play Protect may offer to scan the app — allow the scan. If it says the developer is unknown: "More details" → "Install anyway". Normal for an app from outside the store'],
+  'apkGuideStep5Title': ['افتح التطبيق وأعد الأمان', 'Open the app & restore security'],
+  'apkGuideStep5Body': ['افتح التطبيق، ثم (اختياري وأكثر أمانًا) ارجع إلى الإعدادات ← التطبيقات ← نفس التطبيق الذي سمحت له في الخطوة ٣ (المتصفح أو مدير الملفات) ← «تثبيت التطبيقات غير المعروفة» وأوقف «السماح من هذا المصدر»', 'Open the app, then (optional, safer) go to Settings → Apps → the same app you allowed in step 3 (browser or file manager) → "Install unknown apps" and switch "Allow from this source" off again'],
+  'apkGuidePlaceholderCaption': ['صورة توضيحية للخطوة {n}', 'Illustration for step {n}'],
+  'apkGuideSafetyBoxTitle': ['للأمان والسلامة', 'For your safety'],
+  'apkGuideSafetyBox1': ['حمّل التطبيق من موقع الكنيسة فقط، لا من ملفات مرسلة على واتساب أو فيسبوك', 'Only download the app from the church website, never from forwarded files on WhatsApp or Facebook'],
+  'apkGuideSafetyBox2': ['الكنيسة لا تطلب أبدًا إيقاف Play Protect بالكامل أو منح أذونات غير معتادة', 'The church will never ask you to disable Play Protect entirely or grant unusual permissions'],
+  'apkGuideSafetyBox3': ['تأكد أن رقم الإصدار والحجم يطابقان ما هو معلن على الموقع', 'Ensure version number and file size match what is stated on the site'],
+};
+
 /// Shows the step-by-step visual sideload guide modal (ADR-057).
 Future<void> showApkInstallGuide(BuildContext context, {double? apkSizeMb}) {
+  registerStrings(installGuideStrings);
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
@@ -278,7 +316,8 @@ class _ApkInstallGuideSheetState extends State<_ApkInstallGuideSheet> {
 
   Widget _buildStepImage(BuildContext context, dynamic pal, int stepNum) {
     final lang = context.isAr ? 'ar' : 'en';
-    final imageUrl = 'web/install-guide/android-$stepNum-$lang.webp';
+    // Served from Hosting's root (`web/` is only the source folder).
+    final imageUrl = '/install-guide/android-$stepNum-$lang.webp';
 
     return Container(
       height: 180,
@@ -330,4 +369,167 @@ class _ApkInstallGuideSheetState extends State<_ApkInstallGuideSheet> {
       ],
     );
   }
+}
+
+/// Shows the 3-step iOS Add-to-Home-Screen instructions sheet.
+///
+/// NEVER touches Notification / PushManager APIs.
+Future<void> showIosInstallSteps(BuildContext context) => _showInstallSteps(
+      context,
+      titleKey: 'iosInstallTitle',
+      steps: const [
+        (Icons.ios_share, 'iosInstallStep1'),
+        (Icons.add_box_outlined, 'iosInstallStep2'),
+        (Icons.add, 'iosInstallStep3'),
+      ],
+      noteKey: 'iosInstallSafariNote',
+    );
+
+/// Android without an APK link or a browser install prompt: install from the
+/// browser menu (⋮ → «تثبيت التطبيق» / «إضافة إلى الشاشة الرئيسية»).
+Future<void> showAndroidInstallSteps(BuildContext context) => _showInstallSteps(
+      context,
+      titleKey: 'androidInstallTitle',
+      steps: const [
+        (Icons.more_vert, 'androidInstallStep1'),
+        (Icons.add_to_home_screen, 'androidInstallStep2'),
+      ],
+      noteKey: 'androidInstallNote',
+    );
+
+Future<void> _showInstallSteps(
+  BuildContext context, {
+  required String titleKey,
+  required List<(IconData, String)> steps,
+  required String noteKey,
+}) {
+  registerStrings(installGuideStrings);
+  final pal = context.pal;
+  return showModalBottomSheet<void>(
+    context: context,
+    backgroundColor: pal.surface,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+    ),
+    builder: (ctx) => SafeArea(
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 560),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      margin: const EdgeInsets.only(bottom: 12),
+                      decoration: BoxDecoration(
+                        color: pal.hairline,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  Text(
+                    ctx.tr(titleKey),
+                    style: AppFonts.heading(size: 19, color: pal.primaryDeep),
+                    textAlign: TextAlign.center,
+                  ),
+                  for (var i = 0; i < steps.length; i++) ...[
+                    SizedBox(height: i == 0 ? 16 : 12),
+                    _buildIosStep(
+                      context: ctx,
+                      pal: pal,
+                      number: i + 1,
+                      icon: steps[i].$1,
+                      text: ctx.tr(steps[i].$2),
+                    ),
+                  ],
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: pal.surfaceAlt,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: pal.hairline),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.touch_app_outlined, size: 20, color: pal.goldText),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            ctx.tr('iosInstallOpenIcon'),
+                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: pal.ink),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    ctx.tr(noteKey),
+                    style: TextStyle(fontSize: 12, color: pal.muted),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 16),
+                  FilledButton(
+                    style: FilledButton.styleFrom(minimumSize: const Size(48, 48)),
+                    onPressed: () => Navigator.of(ctx).pop(),
+                    child: Text(ctx.tr('iosInstallDone')),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+Widget _buildIosStep({
+  required BuildContext context,
+  required dynamic pal,
+  required int number,
+  required IconData icon,
+  required String text,
+}) {
+  return Row(
+    children: [
+      Container(
+        width: 32,
+        height: 32,
+        decoration: BoxDecoration(
+          color: pal.bar,
+          shape: BoxShape.circle,
+        ),
+        alignment: Alignment.center,
+        child: Text(
+          '$number',
+          style: TextStyle(
+            color: pal.onBar,
+            fontWeight: FontWeight.bold,
+            fontSize: 14,
+          ),
+        ),
+      ),
+      const SizedBox(width: 12),
+      Icon(icon, size: 22, color: pal.primary),
+      const SizedBox(width: 10),
+      Expanded(
+        child: Text(
+          text,
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: pal.ink,
+          ),
+        ),
+      ),
+    ],
+  );
 }

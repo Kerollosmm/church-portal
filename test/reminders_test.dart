@@ -200,8 +200,8 @@ void main() {
         createdAt: DateTime.utc(2027, 5, 1),
       );
 
-      expect(store.put(r1), isTrue);
-      expect(store.put(r2), isTrue);
+      expect(store.put(r1), ReminderPutResult.ok);
+      expect(store.put(r2), ReminderPutResult.ok);
 
       final loaded = store.load();
       expect(loaded.length, 2);
@@ -220,7 +220,7 @@ void main() {
       store.put(r1);
 
       final r1Updated = r1.copyWith(lead: 60);
-      expect(store.put(r1Updated), isTrue);
+      expect(store.put(r1Updated), ReminderPutResult.ok);
 
       final loaded = store.load();
       expect(loaded.length, 1);
@@ -236,7 +236,7 @@ void main() {
           startsAt: DateTime.utc(2027, 5, 1, i),
           createdAt: DateTime.utc(2027, 4, 1),
         );
-        expect(store.put(r), isTrue);
+        expect(store.put(r), ReminderPutResult.ok);
       }
 
       expect(store.load().length, maxDeviceReminders);
@@ -249,7 +249,7 @@ void main() {
         startsAt: DateTime.utc(2027, 5, 2, 0),
         createdAt: DateTime.utc(2027, 4, 1),
       );
-      expect(store.put(overflow), isFalse);
+      expect(store.put(overflow), ReminderPutResult.full);
       expect(store.load().length, maxDeviceReminders);
     });
 

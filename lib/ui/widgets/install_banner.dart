@@ -10,7 +10,9 @@ import '../../core/launch.dart';
 import '../../core/theme.dart';
 import '../../domain/app_install.dart';
 import '../../state/providers.dart';
-import 'apk_install_guide.dart';
+// The sideload guide and the install-steps sheets ship in their own web
+// chunk, fetched on tap (ADR-057 size budget).
+import 'apk_install_guide.dart' deferred as guide;
 
 /// App install banner shown at the bottom of the viewport on mobile web (ADR-057).
 class InstallBanner extends ConsumerStatefulWidget {
@@ -37,16 +39,24 @@ class _InstallBannerState extends ConsumerState<InstallBanner> {
   @override
   void initState() {
     super.initState();
-    _startTimerIfNeeded();
+    // The reading delay starts when the content arrives (not at app start),
+    // so a slow first load never pops the banner over a spinner.
+    if (ref.read(contentReadyProvider)) {
+      _startTimerIfNeeded();
+    } else {
+      ref.listenManual<bool>(contentReadyProvider, (prev, ready) {
+        if (ready && _timer == null && !_readyToDisplay) _startTimerIfNeeded();
+      });
+    }
   }
 
   void _startTimerIfNeeded() {
     _timer?.cancel();
     if (widget.delay == Duration.zero) {
-      _readyToDisplay = true;
+      if (mounted) setState(() => _readyToDisplay = true);
       return;
     }
-    // Shown 4 seconds after content arrives
+    // Shown [delay] (4 s) after content arrives
     _timer = Timer(widget.delay, () {
       if (mounted) {
         setState(() => _readyToDisplay = true);
@@ -209,6 +219,16 @@ class _InstallBannerState extends ConsumerState<InstallBanner> {
     );
   }
 
+  /// Loads the guide chunk, then opens [show] (nothing on a failed fetch).
+  Future<void> _guide(BuildContext context, Future<void> Function(BuildContext) show) async {
+    try {
+      await guide.loadLibrary();
+    } catch (_) {
+      return;
+    }
+    if (context.mounted) await show(context);
+  }
+
   Widget _buildActions(
     BuildContext context,
     dynamic pal,
@@ -231,8 +251,8 @@ class _InstallBannerState extends ConsumerState<InstallBanner> {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           ),
           onPressed: () {
-            openUrl(settings.androidUrl);
-            showApkInstallGuide(context, apkSizeMb: settings.apkSizeMb);
+            openUrl(resolveInstallUrl(settings.androidUrl, Uri.base));
+            _guide(context, (c) => guide.showApkInstallGuide(c, apkSizeMb: settings.apkSizeMb));
           },
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -257,7 +277,10 @@ class _InstallBannerState extends ConsumerState<InstallBanner> {
           icon: const Icon(Icons.download, size: 18),
           label: Text(context.tr('installDownloadApk')),
           onPressed: () async {
-            await env.promptInstall();
+            // The deferred prompt is single-use: hide the banner for this
+            // session once it has been shown (installed or declined).
+            final shown = await env.promptInstall();
+            if (shown && mounted) setState(() => _dismissedThisSession = true);
           },
         );
         break;
@@ -270,7 +293,8 @@ class _InstallBannerState extends ConsumerState<InstallBanner> {
           ),
           icon: const Icon(Icons.info_outline, size: 18),
           label: Text(context.tr('installOpenMethod')),
-          onPressed: () => showApkInstallGuide(context, apkSizeMb: settings.apkSizeMb),
+          // No APK and no browser prompt: the browser-menu steps (⋮ → Install).
+          onPressed: () => _guide(context, guide.showAndroidInstallSteps),
         );
         break;
 
@@ -282,7 +306,7 @@ class _InstallBannerState extends ConsumerState<InstallBanner> {
           ),
           icon: const Icon(Icons.ios_share, size: 18),
           label: Text(context.tr('installIosAction')),
-          onPressed: () => showIosInstallSteps(context),
+          onPressed: () => _guide(context, guide.showIosInstallSteps),
         );
         break;
 
@@ -313,8 +337,8 @@ class _InstallBannerState extends ConsumerState<InstallBanner> {
             child: Center(
               child: TextButton(
                 onPressed: () {
-                  openUrl(settings.androidUrl32);
-                  showApkInstallGuide(context, apkSizeMb: settings.apkSize32Mb);
+                  openUrl(resolveInstallUrl(settings.androidUrl32, Uri.base));
+                  _guide(context, (c) => guide.showApkInstallGuide(c, apkSizeMb: settings.apkSize32Mb));
                 },
                 child: Text(
                   context.tr('installOlderPhone'),
@@ -326,152 +350,4 @@ class _InstallBannerState extends ConsumerState<InstallBanner> {
       ],
     );
   }
-}
-
-/// Shows the 3-step iOS Add-to-Home-Screen instructions sheet.
-///
-/// NEVER touches Notification / PushManager APIs.
-Future<void> showIosInstallSteps(BuildContext context) {
-  final pal = context.pal;
-  return showModalBottomSheet<void>(
-    context: context,
-    backgroundColor: pal.surface,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-    ),
-    builder: (ctx) => SafeArea(
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 560),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Center(
-                    child: Container(
-                      width: 40,
-                      height: 4,
-                      margin: const EdgeInsets.only(bottom: 12),
-                      decoration: BoxDecoration(
-                        color: pal.hairline,
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
-                  ),
-                  Text(
-                    ctx.tr('iosInstallTitle'),
-                    style: AppFonts.heading(size: 19, color: pal.primaryDeep),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 16),
-                  _buildIosStep(
-                    context: ctx,
-                    pal: pal,
-                    number: 1,
-                    icon: Icons.ios_share,
-                    text: ctx.tr('iosInstallStep1'),
-                  ),
-                  const SizedBox(height: 12),
-                  _buildIosStep(
-                    context: ctx,
-                    pal: pal,
-                    number: 2,
-                    icon: Icons.add_box_outlined,
-                    text: ctx.tr('iosInstallStep2'),
-                  ),
-                  const SizedBox(height: 12),
-                  _buildIosStep(
-                    context: ctx,
-                    pal: pal,
-                    number: 3,
-                    icon: Icons.add,
-                    text: ctx.tr('iosInstallStep3'),
-                  ),
-                  const SizedBox(height: 16),
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: pal.surfaceAlt,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: pal.hairline),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(Icons.touch_app_outlined, size: 20, color: pal.goldText),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            ctx.tr('iosInstallOpenIcon'),
-                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: pal.ink),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    ctx.tr('iosInstallSafariNote'),
-                    style: TextStyle(fontSize: 12, color: pal.muted),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 16),
-                  FilledButton(
-                    style: FilledButton.styleFrom(minimumSize: const Size(48, 48)),
-                    onPressed: () => Navigator.of(ctx).pop(),
-                    child: Text(ctx.tr('iosInstallDone')),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    ),
-  );
-}
-
-Widget _buildIosStep({
-  required BuildContext context,
-  required dynamic pal,
-  required int number,
-  required IconData icon,
-  required String text,
-}) {
-  return Row(
-    children: [
-      Container(
-        width: 32,
-        height: 32,
-        decoration: BoxDecoration(
-          color: pal.bar,
-          shape: BoxShape.circle,
-        ),
-        alignment: Alignment.center,
-        child: Text(
-          '$number',
-          style: TextStyle(
-            color: pal.onBar,
-            fontWeight: FontWeight.bold,
-            fontSize: 14,
-          ),
-        ),
-      ),
-      const SizedBox(width: 12),
-      Icon(icon, size: 22, color: pal.primary),
-      const SizedBox(width: 10),
-      Expanded(
-        child: Text(
-          text,
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-            color: pal.ink,
-          ),
-        ),
-      ),
-    ],
-  );
 }

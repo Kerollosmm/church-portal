@@ -331,11 +331,18 @@ class TopEventCard extends ConsumerWidget {
         final now = ref.watch(nowProvider).value ?? DateTime.now();
         final cNow = CairoTime.fromInstant(now);
         final m = parseHm(ev.start) ?? 0;
-        final startsAt = CairoTime.at(cNow.year, cNow.month, cNow.day, m);
+        // The occurrence the card shows (as resolveTopEvent picks it): today
+        // while the event covers today and has not ended, else (the eve of
+        // the liturgical day, after sunset / midnight) the next day.
+        final civil = DateTime(cNow.year, cNow.month, cNow.day);
+        final day = ev.covers(civil) && !ev.endedAt(now) ? civil : DateTime(cNow.year, cNow.month, cNow.day + 1);
+        final startsAt = CairoTime.at(day.year, day.month, day.day, m);
         children.add(Padding(
           padding: const EdgeInsets.only(top: 8),
           child: RemindMeButton(
             eventKey: EventKey.dayEvent(ev.id),
+            // A multi-day event: one reminder per day.
+            occurrence: isoDate(day),
             title: {'ar': ev.titleAr.isNotEmpty ? ev.titleAr : e.titleAr, 'en': ev.titleEn.isNotEmpty ? ev.titleEn : e.titleEn},
             startsAt: startsAt,
             recurring: false,
@@ -352,7 +359,9 @@ class TopEventCard extends ConsumerWidget {
         padding: const EdgeInsets.only(top: 8),
         child: RemindMeButton(
           eventKey: EventKey.liturgy(o.liturgy.id),
-          occurrence: '${o.start.year.toString().padLeft(4, '0')}-${o.start.month.toString().padLeft(2, '0')}-${o.start.day.toString().padLeft(2, '0')}',
+          // Same identity as the next-service card: dated services by
+          // their date, weekly ones without (one reminder for the service).
+          occurrence: o.liturgy.date != null ? isoDate(CairoTime.calendarDate(o.liturgy.date!)) : null,
           title: {'ar': o.liturgy.nameAr, 'en': o.liturgy.nameEn},
           startsAt: o.start,
           recurring: o.liturgy.date == null,

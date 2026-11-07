@@ -2066,16 +2066,51 @@ describe('install banner and push settings (ADR-057)', () => {
       pageHeaders: { notifications: pageHeader() },
     }, { merge: true }));
 
-    // Full fresh create with all 9 page headers at max lengths (evaluating expression cap)
-    await assertSucceeds(setDoc(featuresRef(), {
-      pageHeaders: allNineHeaders,
-      heroMotion: true,
-    }, { merge: true }));
-
     // Unrelated update (e.g. heroMotion) still succeeds
     await assertSucceeds(setDoc(featuresRef(), {
       heroMotion: false,
     }, { merge: true }));
+  });
+
+  test('fresh create of settings/features with all 9 page headers at max lengths (expression cap)', async () => {
+    const pageHeader = () => ({
+      titleAr: 'ت'.repeat(200), titleEn: 't'.repeat(200),
+      subtitleAr: 'س'.repeat(300), subtitleEn: 's'.repeat(300),
+      introAr: 'م'.repeat(1500), introEn: 'i'.repeat(1500),
+    });
+    const keys = ['about', 'schedule', 'education', 'activities', 'clinics', 'services', 'contact', 'ask', 'notifications'];
+    // No earlier write in this test: the document does not exist yet (create).
+    await assertSucceeds(setDoc(featuresRef(), {
+      pageHeaders: Object.fromEntries(keys.map((k) => [k, pageHeader()])),
+      heroMotion: true,
+    }));
+  });
+
+  test('whole-document saves: worst-case page headers next to stored ADR-057 fields, and the App screen save next to stored headers', async () => {
+    const pageHeader = (t = 't') => ({
+      titleAr: 'ت'.repeat(200), titleEn: t.repeat(200),
+      subtitleAr: 'س'.repeat(300), subtitleEn: 's'.repeat(300),
+      introAr: 'م'.repeat(1500), introEn: 'i'.repeat(1500),
+    });
+    const keys = ['about', 'schedule', 'education', 'activities', 'clinics', 'services', 'contact', 'ask', 'notifications'];
+    const headers = (t) => Object.fromEntries(keys.map((k) => [k, pageHeader(t)]));
+    const stamp = () => ({ updatedAt: serverTimestamp(), updatedBy: `${EDITOR}@x.test` });
+    // Admin «App & notifications» screen: every ADR-057 field at once.
+    await assertSucceeds(setDoc(featuresRef(), { ...validInstallAndPush, ...stamp() }));
+    // Page-headers screen on that document: all 9 headers rewritten at max
+    // length, the ADR-057 fields unchanged (they cost nothing then).
+    await assertSucceeds(setDoc(featuresRef(), { pageHeaders: headers('a'), ...stamp() }, { merge: true }));
+    await assertSucceeds(setDoc(featuresRef(), { pageHeaders: headers('b'), ...stamp() }, { merge: true }));
+    // App screen again, with the worst-case headers stored and unchanged.
+    await assertSucceeds(setDoc(featuresRef(), { ...validInstallAndPush, installApkBuild: 43, reminderDefaultLead: 15, ...stamp() }, { merge: true }));
+  });
+
+  test('reminderDefaultLead may be cleared to null; unknown keys still rejected next to ADR-057 keys', async () => {
+    await assertSucceeds(setDoc(featuresRef(), validInstallAndPush, { merge: true }));
+    await assertSucceeds(setDoc(featuresRef(), { reminderDefaultLead: null }, { merge: true }));
+    await assertFails(setDoc(featuresRef(), { installPrompt: true, bogusKey: 1 }, { merge: true }));
+    await assertFails(setDoc(featuresRef(), { pushTypes: 'announcements' }, { merge: true }));
+    await assertFails(setDoc(featuresRef(), { reminderLeads: null }, { merge: true }));
   });
 });
 
