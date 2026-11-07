@@ -1767,10 +1767,42 @@ supersede them.
   7. **Cost & privacy:** +0 Firestore reads / writes / listeners for visitors; prefs and reminders only on the device.
 - **Consequences:** Ships dark (`push` off, banner on only on phones). Rollout / rollback uses two independent switches on `settings/features`: `installPrompt` (banner, default on) and `push` (page, «ذكّرني», drawer link; default off) — turning `push` off does not hide the banner. Delivery (APK local alarms, FCM, web push SW) follows in PR B–D; `web/firebase-messaging-sw.js` and `web/push_client.js` are scaffolds the plan requires in PR A, unused until PR D.
 
+## ADR-058 — Android APK, local notification planner, Katameros readings pipeline, OEM battery diagnostics, and in-app updates
+- **Context:** Phase 2 PR B introduces the native Android application package (APK) with zero server-side push dependencies (Spark-safe), local notification scheduling, an offline Katameros daily readings reader, OEM battery optimization troubleshooting, and an in-app update mechanism.
+- **Decision:**
+  1. **Local notifications & rolling 9-day planner (`notify_plan.dart`, `notify_providers.dart`):**
+     - Scheduled purely on the device using `flutter_local_notifications` with exact alarms (`USE_EXACT_ALARM`) and a 10-minute early inexact fallback if exact alarms are disallowed.
+     - Rolling 9-day schedule window covering daily verse (07:00), Katameros readings (06:30), and major feasts (07:30 Cairo time).
+     - User reminders («ذكّرني») for dated and weekly services (up to 4 occurrences, skipping weeks replaced by seasons or Holy Week).
+     - Quiet hours adjust daily notifications to quiet end. User reminders ring by default unless muted.
+     - Periodic replenishment triggered on app resume, preference change, and via `workmanager` background worker (`replenish_notifications`) when remaining days fall below 4. Total alarms capped at 80 with user reminders prioritized.
+  2. **Katameros readings pipeline & `/readings/<date>` screen:**
+     - Pure static data fetched daily at liturgical eve by `synaxarium.yml` and `deploy.yml` into `/data/readings/<date>.json` via `tool/fetch_readings.js`.
+     - Decision #17: Arabic text + English biblical references only (`refs-only`), keeping file sizes <= 25 KB raw / ~8 KB gzip.
+     - Stored locally via `ReadingsStore` in `shared_preferences` with offline cache fallback and automatic pruning for entries older than yesterday.
+     - Today widgets expose «اقرأ القراءات» opening `/readings/<date>`.
+  3. **OEM battery guidance & diagnostic health check (`oem_guide.dart`, `/notifications/battery`):**
+     - Manufacturer detection for Xiaomi, Oppo/Realme, Vivo, Huawei/Honor, Samsung, and other brands.
+     - Intent try-lists for auto-start, battery optimization, and notification channel settings with graceful fallback to app details.
+     - Live diagnostic checklist verifying permissions, exact alarms, battery optimization exemption, and background replenishment freshness (< 48 hours).
+  4. **In-app updater (`app_update.dart`, `app_updater.dart`, `UpdateBanner`):**
+     - Serverless update checking via static `manifest.json` on Hosting (`/app/android/manifest.json`).
+     - Resumable streaming HTTP download with `Range` header support, SHA-256 integrity verification, and package installer session invocation via `FileProvider` (`${applicationId}.updates`).
+     - Non-dismissable forced update when `currentBuild < minSupportedBuild`.
+  5. **Android native shell (`app_shell.dart`, `router.dart`, `locale_storage_io.dart`):**
+     - Route `/admin` is compiled out and guarded when `isWeb` is false.
+     - `PopScope` handles back button navigation (`parentRouteOf` maps subpages to listing/home, double back-press on `/` within 2 seconds exits the app).
+     - Persistent language store on Android via `shared_preferences` (`initLanguageStore`, `PlatformLanguageStore`).
+     - Assistant page on Android renders a clean external web redirect card to `https://maximos-domadios-church.web.app/ask` due to Play Integrity requirement.
+- **Consequences:**
+  - Android users receive reliable reminders, daily verse, Katameros notifications, and offline readings with zero battery/data bloat and +0 Firestore reads/writes.
+  - Sideloaded APKs self-update seamlessly from GitHub Releases or Firebase Hosting.
+
 ## Timeline
 
 | When | PR / commit | What |
 |---|---|---|
+| 7 Nov 2026 | **PR B** — "Android APK, local notifications, Katameros readings, OEM battery diagnostics, in-app update" (`feat/p2b-android-local-notifications`) | ADR-058: Split APKs (arm64 + arm32) with R8 minification and core library desugaring; rolling 9-day local notification planner with exact alarms and replenishment worker; Katameros pipeline (`tool/fetch_readings.js`, `/readings/<date>`); OEM battery guide & diagnostics (`/notifications/battery`); in-app updater (Range resume, SHA-256 verification, FileProvider install); Android shell (PopScope double-back exit, SharedPreferences language store, Assistant web redirect). +0 Firestore reads/writes. |
 | 7 Nov 2026 | **PR A** — "Install banner, sideload guide, notification preferences & reminders foundation" (`feat/p2a-install-prefs`) | ADR-057: `InstallBanner` (Android APK / PWA, iOS sheet), `ApkInstallGuide` 5-step modal, `/notifications` preferences page with channel-owner model, `RemindMeButton` + «تذكيراتي» list, `ReminderStore`, admin «التطبيق والإشعارات», rules for 18 new fields on `settings/features`. +0 Firestore reads / writes for visitors. |
 | 31 Oct 2026 | `6f4a0d8` Initial commit | Empty repo (Kerollosmm) |
 | 31 Oct 2026 | **PR #1** `5eb9820` — "Church portal: Flutter + Firebase app, rules, seed, CI/CD" | The whole app: public pages, next-mass/season logic, assistant, contact form, Firestore rules, seed generator + seeder, CI, deploy (live + PR previews), Seed workflow (admin by email + set-password link), Codespaces. Review rounds: server-side contact throttle, hide assistant without App Check, safe workflow inputs, tolerant SA handling, firebase-tools CLI deploy, Node 24 actions, per-occurrence season windows, DST-correct seed instants, admin lookup retry, lang query sync, `<html lang>`, compact app bar for large text, map fallback, splash failure path; CI skip of the serviceusage probe. |

@@ -566,3 +566,27 @@ digits, Cairo `02` + 8, Alexandria `03` + 7, other governorates `0[4-9]` + 7–8
 ### Time formatting (`time_format.dart`)
 `formatTimeLatin("06:30")` → `06:30 AM`; `formatTimeArabic` → `٠٦:٣٠ ص` (ص/م); weekday names AR/EN (ISO index);
 `formatDate` → `6 يناير 2027` (Arabic digits) / `6 Jan 2027`; `formatLooseDate` for priest dates.
+
+### Katameros Daily Readings (`/readings/<date>`, `readings_page.dart`, ADR-058)
+- Displays complete liturgical readings for any date: Matins Prophecies, Matins Gospel, Paul, Catholic Epistle, Acts, Synaxarium, Liturgy Psalm, Liturgy Gospel.
+- Date navigation bar (previous / next day, calendar date picker).
+- Arabic scripture text and English chapter:verse references (`refs-only`).
+- Offline caching via `ReadingsStore` (SharedPreferences on mobile, in-memory on web) with automatic pruning of dates older than yesterday.
+- Accessible directly via the «اقرأ القراءات» action on the Today card or direct link `/readings/YYYY-MM-DD`.
+
+### Notification Health & OEM Guidance (`/notifications/battery`, `notification_health_page.dart`, ADR-058)
+- Diagnostic check for Android background delivery: notification permissions, exact alarms capability, battery optimization exemption, and background replenishment worker recency (< 48 hours).
+- OEM vendor detection (Xiaomi/Redmi/POCO, Oppo/Realme/OnePlus, Vivo/iQOO, Huawei/Honor, Samsung, Other).
+- Step-by-step guidance tailored to the user's phone brand with one-click intent launcher buttons (`church_portal/device` platform channel) falling back to App Info settings.
+
+### In-App Update Banner (`UpdateBanner`, `UpdateSheet`, `app_updater.dart`, ADR-058)
+- Native Android app checks `/app/android/manifest.json` on app startup.
+- If a newer build is published (`installApkBuild > currentBuild`), a dismissable bottom banner appears.
+- If `currentBuild < minSupportedBuild`, the update is mandatory and non-dismissable.
+- Tapping «تحديث الآن» opens `UpdateSheet` displaying Arabic release notes, file size, download progress bar with speed/percentage, and triggers APK installation via Android `FileProvider`.
+- Streaming download supports HTTP `Range` resume on network dropouts and verifies SHA-256 hash before renaming `.apk.part` to `.apk`.
+
+### Android Native Shell (`app_shell.dart`, `router.dart`, ADR-058)
+- Route `/admin` is completely compiled out when `!isWeb`.
+- `PopScope` intercepts device back buttons: detail routes return to parent listing (`parentRouteOf`), subpages return to `/`, and pressing back on `/` shows a toast «اضغط مرة أخرى للخروج من التطبيق» exiting if tapped again within 2 seconds.
+- Assistant page on Android native displays a clean redirect card with a button opening the web assistant at `https://maximos-domadios-church.web.app/ask` in the external browser.

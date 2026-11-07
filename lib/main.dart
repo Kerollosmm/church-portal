@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 
 import 'app.dart';
+import 'core/locale_storage.dart';
 import 'data/admin_repository.dart';
 import 'data/content_repository.dart';
 import 'data/error_reporting.dart';
@@ -36,7 +37,7 @@ Future<void> _start() async {
   });
   CairoTime.ensureInitialized();
 
-  final results = await Future.wait([SeedData.load(), bootstrapFirebase()]);
+  final results = await Future.wait([SeedData.load(), bootstrapFirebase(), initLanguageStore()]);
   final seed = results[0] as SeedData;
   final status = results[1] as FirebaseStatus;
 

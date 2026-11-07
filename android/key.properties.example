@@ -1,0 +1,11 @@
+# Android release signing keystore configuration
+# Copy this file to android/key.properties and replace with real credentials.
+# NEVER commit key.properties or keystore files to version control.
+#
+# Alternatively, set the following environment variables in CI/CD:
+# KEY_ALIAS, KEY_PASSWORD, STORE_PASSWORD, STORE_FILE
+
+keyAlias=upload
+keyPassword=your_key_password_here
+storePassword=your_store_password_here
+storeFile=../upload-keystore.jks

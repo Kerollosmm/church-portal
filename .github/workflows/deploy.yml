@@ -73,10 +73,12 @@ jobs:
         # publish (the app then uses its stored copy / computed feast list).
         continue-on-error: true
         run: |
-          mkdir -p build/web/data
+          mkdir -p build/web/data/readings build/web/app/android
           node tool/fetch_synaxarium.js build/web/data/today.json \
             || curl -sf --max-time 20 https://maximos-domadios-church.web.app/data/today.json -o build/web/data/today.json \
             || echo "::warning::no /data/today.json in this build (the app falls back to its computed feast list)"
+          node tool/fetch_readings.js build/web/data/readings --days=12 || echo "::warning::no readings in this build"
+          curl -sf --max-time 20 https://maximos-domadios-church.web.app/app/android/manifest.json -o build/web/app/android/manifest.json || true
       - name: Remove key
         if: always()
         run: rm -f "$RUNNER_TEMP/sa.json"

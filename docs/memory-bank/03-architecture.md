@@ -5,7 +5,7 @@
 | Concern | Choice (file) |
 |---|---|
 | UI | Flutter, Material 3. Widgets are imported from **`package:material_ui/material_ui.dart`** (pub package `material_ui ^1.9.0`), not `package:flutter/material.dart` — follow that convention. |
-| Platforms | Web (primary, Firebase Hosting) + Android (`com.asafrachurch.church_portal`). iOS project exists, Firebase iOS app **not registered** (placeholders). |
+| Platforms | Web (primary, Firebase Hosting) + Android (`com.asafrachurch.church_portal`, split APKs arm64/arm32, ADR-058). iOS project exists, Firebase iOS app **not registered** (placeholders). |
 | SDK | Dart `^3.13.7` (`pubspec.yaml`); README: built with Flutter 3.47 / Dart 3.13, stable channel |
 | State | `flutter_riverpod ^3.4.3` (`lib/state/providers.dart`) |
 | Routing | `go_router ^18.1.2` (`lib/router.dart`), **path URL strategy** (`usePathUrlStrategy()` in `main.dart`) |
@@ -58,6 +58,12 @@ lib/
     item_detail.dart        DetailKind (basePath/parentPath/collection), detailPathFor, parseDetailPath,
                             detailStateFor (detail-page gating), itemSocialsShown (PR #13, ADR-020),
                             weeklyCalendarUrl, absoluteDetailUrl, pickRelated (PR #14, ADR-021)
+    notify_plan.dart        PlannedNotification, notificationIdFor, buildNotificationPlan (rolling 9-day
+                            window, verse/katameros/feasts, quiet hours, <= 80 alarms), needsReplenishment — ADR-058
+    oem_guide.dart          OemBrand, detectOemBrand (Xiaomi/Oppo/Vivo/Huawei/Samsung), OemActionInfo,
+                            oemIntentTryList, getOemSteps — ADR-058
+    app_update.dart         ApkManifest, UpdateDecision, checkForUpdate, shouldForceUpdate — ADR-058
+    readings.dart           DayReadings, ReadingSection, ReadingPassage, parseKatamerosDay, formatCopticDay — ADR-058
   data/
     firebase_bootstrap.dart bootstrapFirebase() -> FirebaseStatus{available, appCheckActive (= configured)}; ensureAppCheckActivated() (lazy, ADR-037)
     app_check_providers.dart selectAppCheckPlan (reCAPTCHA Enterprise web / Play Integrity / App Attest / debug) — PR #19
@@ -70,19 +76,23 @@ lib/
                             (Blaze stub), MediaCache (in-memory LRU), EncodedImage
     image_processing.dart   prepareUpload/compressDecoded; codecs image_codec/image_codec_web.dart (canvas, WebP)
                             and image_codec_io.dart (`image` package, JPEG) via conditional import
+    local_notifications*.dart LocalNotifier, PlatformLocalNotifier (flutter_local_notifications wrapper, channels, exact alarms) — ADR-058
+    readings_store.dart     ReadingsStore (local caching of /data/readings/<date>.json, offline reading fallback, prune) — ADR-058
+    app_updater*.dart       AppUpdater, PlatformAppUpdater (resumable streaming download, Range resume, SHA-256 validation, FileProvider install) — ADR-058
   state/providers.dart      all Riverpod providers (see below)
+  state/notify_providers.dart localNotifierProvider, notifyPlannerProvider (debounced planner, WorkManager replenishment worker) — ADR-058
   core/                     theme.dart (AppColors, buildTheme), l10n.dart (_strings, tr/pick/isAr),
                             launch.dart (openUrl, callPhone, openWhatsApp, maps URLs), document_lang*.dart,
-                            locale_storage*.dart (LanguageStore: localStorage on web, no-op elsewhere)
+                            locale_storage*.dart (LanguageStore: localStorage on web, SharedPreferences on IO, ADR-058)
   ui/pages/                 one file per public route; item_detail_page.dart (ItemDetailPage) serves the 7 detail
-                            routes
+                            routes; readings_page.dart (/readings/<date>); notification_health_page.dart (/notifications/battery)
   ui/widgets/               item_image (ItemImage, MediaImageView, showImageViewer), app_shell, cards (LiturgyCard, NextMassCard, AlertBanner, DirectoryCard,
                             ActionChipButton, cardDetailPath, DetailTapArea, DetailsLink, CardImageLead), common
                             (PageBody, PageHeader, CustomizablePageHeader, PageIntro, SectionTitle, ResponsiveGrid,
                             Skeleton*, EmptyState, ErrorState, AsyncSection, PendingConfirmationNote,
                             SampleBadge, Pill, IconLine, TimeRangeText, Footer), feature_gate, map_embed*,
                             deferred_loader (DeferredLoader: spinner → page, retry on chunk failure), assistant_gate,
-                            coptic_cross
+                            coptic_cross, update_banner (UpdateBanner, UpdateSheet)
   ui/admin/                 admin_page (sign-in, role check, dashboard shell), admin_schema (FieldDef,
                             CollectionDef, adminCollections, churchInfoDoc), doc_editor (generic form),
                             collection_list, features_editor, admin_screens (overview, church info,

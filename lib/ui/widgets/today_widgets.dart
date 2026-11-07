@@ -372,9 +372,24 @@ class TopEventCard extends ConsumerWidget {
         ));
       }
       if (e.fromKatameros) {
+        final now = ref.watch(nowProvider).value ?? DateTime.now();
+        final todayIso = isoDate(CairoTime.calendarDate(now));
         children.add(Padding(
-          padding: const EdgeInsets.only(top: 6),
-          child: Text(context.tr('katamerosCredit'), style: TextStyle(fontSize: 11.5, color: context.pal.muted)),
+          padding: const EdgeInsets.only(top: 8),
+          child: Wrap(
+            spacing: 12,
+            runSpacing: 6,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              OutlinedButton.icon(
+                key: const Key('readKatamerosButton'),
+                onPressed: () => context.go('/readings/$todayIso'),
+                icon: const Icon(Icons.menu_book_rounded, size: 16),
+                label: Text(context.tr('readReadings')),
+              ),
+              Text(context.tr('katamerosCredit'), style: TextStyle(fontSize: 11.5, color: context.pal.muted)),
+            ],
+          ),
         ));
       }
     }

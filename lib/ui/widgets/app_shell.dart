@@ -1,4 +1,5 @@
-import 'package:flutter/services.dart' show SystemUiOverlayStyle;
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/services.dart' show SystemNavigator, SystemUiOverlayStyle;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
@@ -13,6 +14,7 @@ import 'coptic_cross.dart';
 import 'golden.dart';
 import 'install_banner.dart';
 import 'today_widgets.dart';
+import 'update_banner.dart';
 
 class NavItem {
   final String key;
@@ -104,7 +106,9 @@ class AppShell extends ConsumerStatefulWidget {
 }
 
 class _AppShellState extends ConsumerState<AppShell> {
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   bool _drawerOpen = false;
+  DateTime? _lastBackPressTime;
 
   String get location => widget.location;
 
@@ -247,6 +251,7 @@ class _AppShellState extends ConsumerState<AppShell> {
     );
 
     final scaffold = Scaffold(
+      key: _scaffoldKey,
       onEndDrawerChanged: (open) => setState(() => _drawerOpen = open),
       appBar: PreferredSize(
         preferredSize: Size.fromHeight(topBarH + (wide ? 76.0 : 64.0)),
@@ -284,12 +289,13 @@ class _AppShellState extends ConsumerState<AppShell> {
         // Today layer (ADR-040): while the church is streaming,
         // the live banner sits above every page.
         Column(children: [
+          if (!kIsWeb) const UpdateBanner(),
           const LiveStreamBanner(),
           Expanded(child: widget.child),
         ]),
       ]),
     );
-    return Stack(children: [
+    final content = Stack(children: [
       scaffold,
       if (!_drawerOpen)
         PositionedDirectional(
@@ -315,6 +321,37 @@ class _AppShellState extends ConsumerState<AppShell> {
         child: Offstage(offstage: _drawerOpen, child: InstallBanner(currentPath: location)),
       ),
     ]);
+
+    if (kIsWeb) return content;
+
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        if (_drawerOpen || (_scaffoldKey.currentState?.isEndDrawerOpen ?? false)) {
+          _scaffoldKey.currentState?.closeEndDrawer();
+          setState(() => _drawerOpen = false);
+          return;
+        }
+        if (location != '/') {
+          context.go(parentRouteOf(location, ref.read(featuresProvider)));
+          return;
+        }
+        final now = DateTime.now();
+        if (_lastBackPressTime != null && now.difference(_lastBackPressTime!) <= const Duration(seconds: 2)) {
+          SystemNavigator.pop();
+        } else {
+          _lastBackPressTime = now;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(context.tr('exitAppConfirm')),
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
+      },
+      child: content,
+    );
   }
 
   Widget _navItemText(BuildContext context, NavItem item) {

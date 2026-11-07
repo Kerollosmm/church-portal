@@ -38,11 +38,13 @@ jobs:
         working-directory: tool
       - name: Fetch the commemoration (Katameros API)
         run: node tool/fetch_synaxarium.js "$RUNNER_TEMP/today.json"
+      - name: Fetch Katameros readings window (12 days)
+        run: node tool/fetch_readings.js "$RUNNER_TEMP/readings" --days=12
       - uses: ./.github/actions/firebase-credentials
         with:
           service-account: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_ASAFRA_CHURCH_PORTAL }}
       - name: Publish /data/today.json to the live site
-        run: node tool/publish_hosting_file.js "$RUNNER_TEMP/today.json" /data/today.json --site maximos-domadios-church
+        run: node tool/publish_hosting_file.js --dir "$RUNNER_TEMP/readings" --prefix /data/readings/ --file "$RUNNER_TEMP/today.json" /data/today.json --site maximos-domadios-church
       - name: Remove key
         if: always()
         run: rm -f "$RUNNER_TEMP/sa.json"

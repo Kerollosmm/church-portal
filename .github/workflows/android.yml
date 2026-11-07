@@ -1,0 +1,108 @@
+name: Android APK
+on:
+  pull_request: { paths: ['lib/**','android/**','pubspec.*','assets/**','.github/workflows/android.yml'] }
+  push: { tags: ['apk-v*'] }
+  workflow_dispatch: {}
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions: { contents: write }
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '17' }
+      - uses: subosito/flutter-action@v2
+        with: { channel: stable, cache: true }
+      - run: flutter pub get
+      - name: Keystore (release only)
+        if: startsWith(github.ref, 'refs/tags/apk-v')
+        env: { KS: '${{ secrets.ANDROID_KEYSTORE_BASE64 }}' }
+        run: |
+          # a release tag without the keystore secret must fail loudly (an empty secret would write a 0-byte .jks →
+          # Gradle EOFException); a debug-signed APK must never be published as a release
+          [ -n "$KS" ] || { echo "::error::ANDROID_KEYSTORE_BASE64 is not set — cannot sign $GITHUB_REF_NAME"; exit 1; }
+          echo "$KS" | base64 -d > "$RUNNER_TEMP/release.jks"
+          [ -s "$RUNNER_TEMP/release.jks" ] || { echo "::error::decoded keystore is empty"; exit 1; }
+      - name: Build split APKs
+        env:
+          ANDROID_KEYSTORE_PATH: ${{ startsWith(github.ref, 'refs/tags/apk-v') && format('{0}/release.jks', runner.temp) || '' }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          APP_VERSION=$(sed -n 's/^version: *//p' pubspec.yaml | head -1)
+          BUILD=${APP_VERSION#*+}
+          flutter build apk --release --split-per-abi --target-platform android-arm,android-arm64 \
+            --dart-define=APP_BUILD=$BUILD --obfuscate --split-debug-info=build/symbols \
+            --dart-define=SENTRY_ENVIRONMENT=${{ startsWith(github.ref, 'refs/tags/') && 'production' || 'preview' }} \
+            --dart-define=GIT_SHA=$GITHUB_SHA --dart-define=APP_VERSION=$APP_VERSION
+          ls -l build/app/outputs/flutter-apk/
+      - name: APK size budget (fails before upload / release)
+        run: |
+          check() { f=build/app/outputs/flutter-apk/$1; max=$2; sz=$(stat -c %s "$f"); echo "$1: $sz B (max $max)"; [ "$sz" -le "$max" ] || { echo "::error::$1 over budget"; exit 1; }; }
+          check app-arm64-v8a-release.apk ${{ vars.APK_ARM64_MAX || 20971520 }}
+          check app-armeabi-v7a-release.apk ${{ vars.APK_ARM32_MAX || 18874368 }}
+      - run: rm -f "$RUNNER_TEMP/release.jks"
+        if: always()
+      - uses: actions/upload-artifact@v5
+        with: { name: apk, path: build/app/outputs/flutter-apk/*.apk, retention-days: 14 }
+      - name: GitHub Release (tags only)
+        if: startsWith(github.ref, 'refs/tags/apk-v')
+        env: { GH_TOKEN: '${{ github.token }}' }
+        run: |
+          cd build/app/outputs/flutter-apk
+          mv app-arm64-v8a-release.apk church-portal-arm64.apk
+          mv app-armeabi-v7a-release.apk church-portal-arm32.apk
+          node "$GITHUB_WORKSPACE/tool/make_apk_manifest.mjs" --base-url "${{ vars.APK_BASE_URL }}" --tag "$GITHUB_REF_NAME" \
+            church-portal-arm64.apk church-portal-arm32.apk > version.json
+          gh release create "$GITHUB_REF_NAME" church-portal-arm64.apk church-portal-arm32.apk version.json \
+            --title "تطبيق الكنيسة $GITHUB_REF_NAME" --notes-file "$GITHUB_WORKSPACE/android/RELEASE_NOTES.md" --latest
+      # Publish for the public (README §8 #6). The release above is only the canonical archive: it works even if the
+      # repo is private (deploy.yml can read it with GITHUB_TOKEN), but private release assets are NOT downloadable
+      # by the public.
+      - name: Mirror to the public releases repo (APK_HOST=releases-repo)
+        if: startsWith(github.ref, 'refs/tags/apk-v') && vars.APK_HOST == 'releases-repo'
+        env: { GH_TOKEN: '${{ secrets.RELEASES_REPO_TOKEN }}' }    # fine-grained, that repo only, Contents: write
+        run: |
+          cd build/app/outputs/flutter-apk
+          gh release create "$GITHUB_REF_NAME" church-portal-arm64.apk church-portal-arm32.apk \
+            -R Kerollosmm/church-portal-apk --title "تطبيق الكنيسة $GITHUB_REF_NAME" --notes-file "$GITHUB_WORKSPACE/android/RELEASE_NOTES.md" --latest
+      # Retention (README §8 #6): keep the newest 5 releases (newest first; the live one is the newest).
+      - name: Prune old releases in the releases repo
+        if: startsWith(github.ref, 'refs/tags/apk-v') && vars.APK_HOST == 'releases-repo'
+        continue-on-error: true      # a pruning hiccup must never block publishing the manifest
+        env: { GH_TOKEN: '${{ secrets.RELEASES_REPO_TOKEN }}' }
+        run: |
+          gh release list -R Kerollosmm/church-portal-apk --limit 100 --json tagName --jq '.[5:][].tagName' |
+            while read -r t; do gh release delete "$t" -R Kerollosmm/church-portal-apk --yes --cleanup-tag; done
+
+  # Hosting writes are serialised with deploy.yml / synaxarium.yml (same group, never cancelled mid-release).
+  publish-hosting:
+    needs: apk
+    if: startsWith(github.ref, 'refs/tags/apk-v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    concurrency: { group: hosting-live, cancel-in-progress: false }
+    permissions: { contents: read }
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with: { node-version: 22 }
+      - run: npm install --no-audit --no-fund      # google-auth-library for publish_hosting_file.js (clean runner)
+        working-directory: tool
+      - name: Fetch the release files
+        env: { GH_TOKEN: '${{ github.token }}' }
+        run: gh release download "$GITHUB_REF_NAME" -D rel -p 'version.json' -p 'church-portal-*.apk'
+      - name: Publish manifest (+ APKs when hosted on Firebase) to Hosting
+        env: { SA: '${{ secrets.FIREBASE_SERVICE_ACCOUNT_ASAFRA_CHURCH_PORTAL }}' }
+        run: |
+          printf '%s' "$SA" > "$RUNNER_TEMP/sa.json"; export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/sa.json"
+          cd rel
+          if [ "${{ vars.APK_HOST }}" = "firebase" ]; then
+            node "$GITHUB_WORKSPACE/tool/publish_hosting_file.js" church-portal-arm64.apk /app/android/church-portal-arm64.apk
+            node "$GITHUB_WORKSPACE/tool/publish_hosting_file.js" church-portal-arm32.apk /app/android/church-portal-arm32.apk
+          fi
+          node "$GITHUB_WORKSPACE/tool/publish_hosting_file.js" version.json /app/android/version.json   # last: switch-over
+      - if: always()
+        run: rm -f "$RUNNER_TEMP/sa.json"

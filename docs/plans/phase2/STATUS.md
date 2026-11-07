@@ -70,10 +70,10 @@
 - [ ] PSI mobile median ___
 
 ## PR B — Android APK + local notifications (ADR-058) · `feat/p2b-android-local-notifications` → A
-- [ ] `planNotifications` (Android-local types only: verse, Katameros, feasts, reminders; ~9-day window, refresh < 4 days) + tests
-- [ ] Readings: `tool/fetch_readings.js` + `synaxarium.yml` / `deploy.yml` publishing `/data/readings/*.json` (multi-file `publish_hosting_file.js`), `readings.dart`, cache, `/readings/<date>` screen (offline) + tests; Arabic Van Dyck full text + English references only per §8 #17 (decided 6 Nov 2026; `bibleEn: refs-only`, ≈ 8 KB gzip, target ≤ ~20–25 KB uncompressed / minified JSON per file)
-- [ ] `ReminderScheduler` (exact `USE_EXACT_ALARM` / `SCHEDULE_EXACT_ALARM` ≤ 32 with inexact fallback, boot + package-replaced, follow edits / cancel on removal, notification action) + tests
-- [ ] OEM battery guidance screen (Xiaomi / Oppo-Realme / Vivo / Huawei-Honor / Samsung, try-list intents) + diagnostic check («افحص الإشعارات», «اختبار بعد دقيقتين») + tests
+- [x] `planNotifications` (Android-local types only: verse, Katameros, feasts, reminders; ~9-day window, refresh < 4 days) + tests
+- [x] Readings: `tool/fetch_readings.js` + `synaxarium.yml` / `deploy.yml` publishing `/data/readings/*.json` (multi-file `publish_hosting_file.js`), `readings.dart`, cache, `/readings/<date>` screen (offline) + tests; Arabic Van Dyck full text + English references only per §8 #17 (decided 6 Nov 2026; `bibleEn: refs-only`, ≈ 8 KB gzip, target ≤ ~20–25 KB uncompressed / minified JSON per file)
+- [x] `ReminderScheduler` (exact `USE_EXACT_ALARM` / `SCHEDULE_EXACT_ALARM` ≤ 32 with inexact fallback, boot + package-replaced, follow edits / cancel on removal, notification action) + tests
+- [x] OEM battery guidance screen (Xiaomi / Oppo-Realme / Vivo / Huawei-Honor / Samsung, try-list intents) + diagnostic check («افحص الإشعارات», «اختبار بعد دقيقتين») + tests
 - [ ] Gradle: desugaring, minify/shrink, env signing (debug fallback)
 - [ ] Admin compiled out (`kIsWeb`), Android language store, back button, assistant via web
 - [ ] `LocalNotifier`, channels (6), permission, prefs sections (verse / readings times, quiet hours + reminders rule, test, inbox)
