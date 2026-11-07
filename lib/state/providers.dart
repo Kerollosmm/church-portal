@@ -1,9 +1,14 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:package_info_plus/package_info_plus.dart';
+
+import '../data/app_updater.dart';
+import '../domain/app_update.dart';
 
 import '../core/content_ready.dart';
 import '../core/install_env.dart';
@@ -482,4 +487,38 @@ class UserRemindersNotifier extends Notifier<List<Reminder>> {
     state = store.load();
   }
 }
+
+// ------------------- In-App Updates (ADR-058 / PR B §3.3) -------------------
+
+/// In-app updater service provider (IO on Android / stub on web).
+final appUpdaterProvider = Provider<AppUpdater>((ref) => AppUpdater());
+
+/// Current installed application build number (defaults to 1).
+final currentAppBuildProvider = FutureProvider<int>((ref) async {
+  if (kIsWeb) return 1;
+  try {
+    final info = await PackageInfo.fromPlatform();
+    return int.tryParse(info.buildNumber) ?? 1;
+  } catch (_) {
+    return 1;
+  }
+});
+
+/// Evaluates whether an in-app update is available for the current Android client.
+final updateDecisionProvider = FutureProvider<UpdateDecision?>((ref) async {
+  if (kIsWeb) return null;
+  final updater = ref.watch(appUpdaterProvider);
+  if (!updater.isSupported) return null;
+
+  final installSettings = ref.watch(installSettingsProvider);
+  final installApkBuild = installSettings.apkBuild;
+  final currentBuild = await ref.watch(currentAppBuildProvider.future);
+
+  if (installApkBuild <= currentBuild) return null;
+
+  return updater.checkForUpdate(
+    currentBuild: currentBuild,
+    installApkBuild: installApkBuild,
+  );
+});
 

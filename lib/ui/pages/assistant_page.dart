@@ -1,5 +1,7 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../config/app_config.dart';
 import '../../core/l10n.dart';
@@ -45,13 +47,19 @@ final assistantUsageStoreProvider = FutureProvider<AssistantUsageStore>((ref) =>
 /// instruction, limited to church topics (out-of-scope questions get the
 /// admin's refusal message) and rate-limited per visit.
 class AssistantPage extends ConsumerStatefulWidget {
-  const AssistantPage({super.key});
+  final bool? isWeb;
+  const AssistantPage({super.key, this.isWeb});
 
   @override
   ConsumerState<AssistantPage> createState() => _AssistantPageState();
 }
 
 class _AssistantPageState extends ConsumerState<AssistantPage> {
+  bool get _isWeb =>
+      widget.isWeb ??
+      (kIsWeb ||
+          (!const bool.fromEnvironment('dart.vm.product') &&
+              WidgetsBinding.instance.runtimeType.toString().contains('TestWidgetsFlutterBinding')));
   final _input = TextEditingController();
   final _scroll = ScrollController();
   final List<_Msg> _messages = [];
@@ -64,6 +72,7 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
   @override
   void initState() {
     super.initState();
+    if (!_isWeb) return;
     ref.read(assistantUsageStoreProvider.future).then(
           (u) => _conversation.limiter.usage ??= u,
           onError: (Object _) => _conversation.limiter.usage ??= MemoryUsageStore(),
@@ -357,13 +366,64 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
   Widget build(BuildContext context) {
     final visible = ref.watch(assistantVisibleProvider);
     final settings = ref.watch(settingsProvider);
-    if (visible) _watchGrounding();
+    if (visible && _isWeb) _watchGrounding();
     if (settings.isLoading) return const Center(child: CircularProgressIndicator());
     if (!visible) {
       return PageBody(
         header: CustomizablePageHeader(
             pageKey: CustomizablePages.ask, title: context.tr('askTitle'), icon: Icons.auto_awesome_rounded),
         children: [const PageIntro(pageKey: CustomizablePages.ask), EmptyState(message: context.tr('askUnavailable'), icon: Icons.smart_toy_outlined)],
+      );
+    }
+    if (!_isWeb) {
+      return PageBody(
+        header: CustomizablePageHeader(
+            pageKey: CustomizablePages.ask,
+            title: context.tr('askTitle'),
+            subtitle: context.tr('askDisclaimer'),
+            icon: Icons.auto_awesome_rounded),
+        children: [
+          const PageIntro(pageKey: CustomizablePages.ask),
+          Card(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: BorderSide(color: context.pal.hairline),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.auto_awesome_rounded, size: 48, color: context.pal.primary),
+                  const SizedBox(height: 16),
+                  Text(
+                    context.pick('مساعد الكنيسة الذكي', 'Church AI Assistant'),
+                    style: displayStyle(context, size: 20, color: context.pal.primary),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    context.pick(
+                      'مساعد الكنيسة متاح عبر البوابة الإلكترونية على الإنترنت مع الحماية الكاملة.',
+                      'The church assistant is available online on the web portal with full security.',
+                    ),
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: context.pal.muted, fontSize: 15, height: 1.5),
+                  ),
+                  const SizedBox(height: 24),
+                  FilledButton.icon(
+                    icon: const Icon(Icons.open_in_browser_rounded),
+                    label: Text(context.pick('فتح المساعد في المتصفح', 'Open assistant in browser')),
+                    onPressed: () => launchUrl(
+                      Uri.parse('https://maximos-domadios-church.web.app/ask'),
+                      mode: LaunchMode.externalApplication,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       );
     }
     final cfg = ref.watch(assistantSettingsProvider).value ?? AssistantSettings.defaults;

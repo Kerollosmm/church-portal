@@ -368,12 +368,25 @@ class QuietHours {
   int get hashCode => Object.hash(from, to);
 }
 
+/// Built-in defaults for notification scheduling (PR B / ADR-058 §5).
+class NotifyTypeConfig {
+  NotifyTypeConfig._();
+
+  static const defaultVerseTime = '07:00';
+  static const defaultKatamerosTime = '06:30';
+  static const defaultFeastsTime = '07:30';
+}
+
 /// Device-stored push notification preferences (`church_portal_push`).
 class PushPrefs {
   final Set<NotifyType> types;
   final String lang;
   final QuietHours quiet;
   final DateTime updatedAt;
+  final String? verseTime;
+  final String? katamerosTime;
+  final bool quietHoursEnabled;
+  final bool remindersRespectQuietHours;
 
   static const defaultTypes = <NotifyType>{};
   static const firstOptInTypes = {
@@ -387,6 +400,10 @@ class PushPrefs {
     this.lang = 'ar',
     this.quiet = const QuietHours(),
     required this.updatedAt,
+    this.verseTime,
+    this.katamerosTime,
+    this.quietHoursEnabled = true,
+    this.remindersRespectQuietHours = false,
   });
 
   Map<String, dynamic> toJson() => {
@@ -394,6 +411,10 @@ class PushPrefs {
         'lang': lang,
         'quiet': quiet.toJson(),
         'updatedAt': updatedAt.toIso8601String(),
+        if (verseTime != null) 'verseTime': verseTime,
+        if (katamerosTime != null) 'katamerosTime': katamerosTime,
+        'quietHoursEnabled': quietHoursEnabled,
+        'remindersRespectQuietHours': remindersRespectQuietHours,
       };
 
   factory PushPrefs.fromJson(Map<String, dynamic>? json, {List<NotifyType>? offered}) {
@@ -429,11 +450,20 @@ class PushPrefs {
       updatedAt = DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
     }
 
+    final verseTime = json['verseTime'] is String ? json['verseTime'] as String : null;
+    final katamerosTime = json['katamerosTime'] is String ? json['katamerosTime'] as String : null;
+    final quietHoursEnabled = json['quietHoursEnabled'] is bool ? json['quietHoursEnabled'] as bool : true;
+    final remindersRespectQuietHours = json['remindersRespectQuietHours'] == true;
+
     return PushPrefs(
       types: parsedTypes,
       lang: lang,
       quiet: quiet,
       updatedAt: updatedAt,
+      verseTime: verseTime,
+      katamerosTime: katamerosTime,
+      quietHoursEnabled: quietHoursEnabled,
+      remindersRespectQuietHours: remindersRespectQuietHours,
     );
   }
 
@@ -442,12 +472,20 @@ class PushPrefs {
     String? lang,
     QuietHours? quiet,
     DateTime? updatedAt,
+    String? verseTime,
+    String? katamerosTime,
+    bool? quietHoursEnabled,
+    bool? remindersRespectQuietHours,
   }) {
     return PushPrefs(
       types: types ?? this.types,
       lang: lang ?? this.lang,
       quiet: quiet ?? this.quiet,
       updatedAt: updatedAt ?? this.updatedAt,
+      verseTime: verseTime ?? this.verseTime,
+      katamerosTime: katamerosTime ?? this.katamerosTime,
+      quietHoursEnabled: quietHoursEnabled ?? this.quietHoursEnabled,
+      remindersRespectQuietHours: remindersRespectQuietHours ?? this.remindersRespectQuietHours,
     );
   }
 
@@ -458,10 +496,23 @@ class PushPrefs {
           _setEquals(other.types, types) &&
           other.lang == lang &&
           other.quiet == quiet &&
-          other.updatedAt == updatedAt;
+          other.updatedAt == updatedAt &&
+          other.verseTime == verseTime &&
+          other.katamerosTime == katamerosTime &&
+          other.quietHoursEnabled == quietHoursEnabled &&
+          other.remindersRespectQuietHours == remindersRespectQuietHours;
 
   @override
-  int get hashCode => Object.hash(Object.hashAllUnordered(types), lang, quiet, updatedAt);
+  int get hashCode => Object.hash(
+        Object.hashAllUnordered(types),
+        lang,
+        quiet,
+        updatedAt,
+        verseTime,
+        katamerosTime,
+        quietHoursEnabled,
+        remindersRespectQuietHours,
+      );
 }
 
 /// Browser / device permission state for push notifications.

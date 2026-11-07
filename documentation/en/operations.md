@@ -163,3 +163,74 @@ The portal integrates Sentry for privacy-first technical error reporting on Web 
 | **"Another admin modified this document" warning** | Concurrent edit detected via optimistic concurrency control (`updatedAt` check). | Click **Reload** to fetch the latest server version, then re-apply changes. |
 | **Hero video does not play** | Visitor enabled reduced-motion or data-saver, or `heroMotion` is turned off. | This is expected accessibility behavior; the hero displays a static high-resolution poster or painting instead. (YouTube hero video was removed in PR #25). |
 | **Top utility bar live badge does not appear on Home page** | Intentional default behavior (`liveBadgeHideOnHome: true`). | The Home page displays the prominent red live stream banner instead. Other sub-pages display the compact live badge. To display both on Home, toggle off **Hide live badge on Home when banner is showing** in `/admin` → **Today & Live Stream**. |
+| **Android notifications delayed or missed** | OEM aggressive battery managers (MIUI/ColorOS/OneUI) killing background tasks. | Direct user to the in-app Battery Guidance screen (`/notifications/battery`) to whitelist the app from battery optimization and enable autostart. |
+
+---
+
+## 7. Android APK Packaging, Releases, and In-App Updates (ADR-058)
+
+The native Android app is packaged as lightweight, split release APKs for maximum download efficiency and zero server-side push overhead (+0 Firestore reads/writes on Spark).
+
+### Automated CI/CD Workflow (`.github/workflows/android.yml`)
+- **Triggers:**
+  - Automated release: Triggered whenever a tag matching `apk-v*` is pushed (e.g., `apk-v1.0.0+1`).
+  - Manual testing: Triggered via `workflow_dispatch` on any branch.
+  - Pull requests modifying Android assets or native code (`lib/**`, `android/**`, `pubspec.*`, `assets/**`, `.github/workflows/android.yml`).
+- **Split APK Generation:** Produces two architecture-specific APK binaries:
+  - `church-portal-arm64.apk` (`app-arm64-v8a-release.apk`) for modern 64-bit devices.
+  - `church-portal-arm32.apk` (`app-armeabi-v7a-release.apk`) for older 32-bit devices.
+- **Strict Size Budget Enforcement:** Build steps strictly assert binary limits prior to upload:
+  - ARM64: `< 20 MB` (`20,971,520` bytes limit).
+  - ARM32: `< 18 MB` (`18,874,368` bytes limit).
+  Any size regression fails the CI pipeline before artifacts are released.
+- **R8 Shrinking & Java 17 Desugaring:**
+  - Uses full code minification (`isMinifyEnabled = true`) and resource stripping (`isShrinkResources = true`).
+  - Implements core library desugaring via `com.android.tools:desugar_jdk_libs:2.1.5` on Java 17 target compatibility to support modern `java.time` APIs on older Android OS levels (minSdk 21).
+
+### Keystore & Release Signing
+- **Production Secrets:** Configured in GitHub Repository Secrets:
+  - `ANDROID_KEYSTORE_BASE64`: Base64-encoded `release.jks` keystore.
+  - `ANDROID_KEYSTORE_PASSWORD` / `KEYSTORE_PASSWORD`: Keystore password.
+  - `ANDROID_KEY_ALIAS` / `KEY_ALIAS`: Key alias.
+  - `ANDROID_KEY_PASSWORD` / `KEY_PASSWORD`: Key private password.
+- **Automated Debug Fallback:** In pull requests, manual dispatch runs, or local builds without signing secrets, Gradle automatically falls back to the default Android debug signing config (`signingConfigs.debug`). Tagged release builds (`apk-v*`) strictly require the production secrets and fail immediately if they are missing to prevent distributing unsigned binaries.
+
+### Release & Update Manifest (`version.json`)
+- Post-build step executes `tool/make_apk_manifest.mjs` against generated APKs:
+  - Computes byte sizes and cryptographic SHA-256 hashes.
+  - Ingests version code, version name, minSupportedBuild, and release notes in Arabic and English.
+  - Publishes `version.json` to Firebase Hosting under `/app/android/version.json`; every code deploy (`deploy.yml`) carries the live copy over so a release never disappears. `minSupportedBuild` comes from the `APK_MIN_SUPPORTED_BUILD` repository variable (default 1); `certSha256` from `apksigner`.
+  - Configured with strict edge cache headers in `firebase.json` (`no-cache, no-store, must-revalidate`) ensuring devices immediately discover new releases.
+
+### Katameros Daily Readings Pipeline (`.github/workflows/synaxarium.yml`)
+- Runs automatically every night at Cairo midnight (00:00 Cairo time / 22:10 UTC, with liturgical eve refresh at 16:10 UTC).
+- Executes `node tool/fetch_readings.js "$RUNNER_TEMP/readings" --days=9 --previous-url …/data/readings/` to fetch the rolling window (yesterday … +9 days; a date that fails keeps the live file) of Coptic Katameros scripture readings with full Arabic text (Van Dyck) and English reference citations (`refs-only`, target `< 25 KB` uncompressed per day).
+- Deploys static files to `/data/readings/{date}.json` and `/data/today.json` directly to Firebase Hosting via `tool/publish_hosting_file.js` with zero Firestore reads/writes.
+
+### In-App Update Verification & Installation Flow
+1. When `installApkBuild` (admin) is greater than the app's build, the app fetches `/app/android/version.json`.
+2. When `manifest.build > currentBuild`, a persistent update banner prompts the user.
+3. Resumable downloading leverages HTTP `Range` headers to survive flaky network connections.
+4. The downloaded APK's SHA-256 checksum is validated against the manifest.
+5. The package signature is verified against the installed app's signing certificate using `PackageManager` before invoking the installer.
+6. The app requests `REQUEST_INSTALL_PACKAGES` permission if not already granted, and launches the Android Package Installer session via secure `FileProvider` (`${applicationId}.updates`).
+7. Forced updates are enforced if `currentBuild < minSupportedBuild`.
+
+### OEM Battery Optimization Troubleshooting
+- Aggressive OEM battery killers (Xiaomi MIUI/HyperOS, Oppo ColorOS, Realme UI, Huawei EMUI, Samsung OneUI, Vivo Funtouch) frequently suppress background tasks and delay exact alarms.
+- Users reporting delayed or missed service reminders or daily readings notifications should be guided to the built-in diagnostic and guidance screen:
+  - Route: `/notifications/battery` (accessible from `/notifications` preferences).
+  - Diagnostic checks: Notification permission (`POST_NOTIFICATIONS`), Exact alarm permission (`SCHEDULE_EXACT_ALARM`), Battery optimization ignore status (`REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`), and WorkManager periodic replenishment freshness.
+  - Provides vendor-specific quick-launch intent actions for OEM autostart and background power management settings.
+
+---
+
+## 8. Open Operational Tasks (Summary)
+
+- Upload web source maps and Android symbols to Sentry (requires auth token).
+- In Sentry: disable client IP collection and activate server-side scrubbers.
+- Production signing & Play Integrity registration for Android APK.
+- Server-side rate limiter for the AI Assistant.
+- Configure required reviewers for GitHub `production` environment.
+- Complete task tracker: [`docs/memory-bank/11-open-tasks.md`](../../docs/memory-bank/11-open-tasks.md).
+

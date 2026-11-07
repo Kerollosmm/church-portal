@@ -53,6 +53,14 @@ const Map<String, List<String>> _strings = {
   'allVenues': ['كل الأماكن', 'All venues'],
   'allAudiences': ['كل الفئات', 'Everyone'],
   'katamerosCredit': ['المصدر: القطمارس (katameros.app)', 'Source: Katameros (katameros.app)'],
+  'readReadings': ['اقرأ القراءات', 'Read the readings'],
+  'readings': ['قراءات اليوم', 'Daily readings'],
+  'verseTab': ['آية اليوم', 'Verse of the day'],
+  'katamerosTab': ['القطمارس', 'Katameros'],
+  'offlineReadingsError': [
+    'تعذّر تحميل قراءات هذا اليوم — اتصل بالإنترنت وحاول مجددًا',
+    'Could not load readings for this day. Connect to the internet and try again.'
+  ],
   // «بعد {n} أيام» for 3–10 only; the card words 2 and 11+ with
   // [L10nX.inDays] (ADR-054: «بعد يومين», «بعد ١٢ يومًا»).
   'inDays': ['بعد {n} أيام', 'In {n} days'],
@@ -219,6 +227,7 @@ const Map<String, List<String>> _strings = {
   'invalid': ['قيمة غير صحيحة', 'Invalid value'],
   'notFound': ['الصفحة غير موجودة', 'Page not found'],
   'backHome': ['العودة للرئيسية', 'Back to home'],
+  'exitAppConfirm': ['اضغط مرة أخرى للخروج من التطبيق', 'Press back again to exit the app'],
   'rights': ['جميع الحقوق محفوظة', 'All rights reserved'],
   'quickLinks': ['روابط سريعة', 'Quick links'],
   // Coptic identity (design/coptic-identity)
@@ -758,6 +767,23 @@ const Map<String, List<String>> _strings = {
   'opt_seasons': ['مواسم الكنيسة وبداية الأصوام', 'Church seasons & fasts'],
   'opt_feasts': ['أعياد ومناسبات الكنيسة (خاص بالتطبيق)', 'Church feasts & commemorations (app only)'],
   'opt_reminders': ['تذكيرات المناسبات والصلوات', 'Event & mass reminders'],
+  // In-app APK updates (ADR-058 / PR B §3.3)
+  'updateAvailable': ['يتوفر تحديث جديد للتطبيق (إصدار {version})', 'A new app update is available (v{version})'],
+  'updateNow': ['تحديث الآن', 'Update now'],
+  'updateDismiss': ['إغلاق', 'Dismiss'],
+  'updateSheetTitle': ['تحديث التطبيق', 'App update'],
+  'updateWhatsNew': ['ما الجديد في هذا الإصدار:', "What's new in this release:"],
+  'updateDownloading': ['جارٍ تحميل التحديث...', 'Downloading update...'],
+  'updateCancel': ['إلغاء', 'Cancel'],
+  'updateInstall': ['تثبيت الآن', 'Install now'],
+  'updateReadyToInstall': ['اكتمل التحميل وجاهز للتثبيت', 'Download complete, ready to install'],
+  'updatePermissionRequired': ['يلزم السماح بتثبيت التطبيقات من هذا المصدر', 'Permission required to install apps from this source'],
+  'updatePermissionGuide': ['اضغط هنا لفتح الإعدادات والسماح بتثبيت التحديث، ثم عد إلى التطبيق.', 'Tap here to open Settings and allow installing the update, then return to the app.'],
+  'updateOpenSettings': ['فتح الإعدادات', 'Open Settings'],
+  'updateIntegrityError': ['الملف تالف أو غير مكتمل — أعد المحاولة', 'The file is corrupt or incomplete. Please try again.'],
+  'updateSignatureError': ['هذا الإصدار لا يمكن تثبيته فوق النسخة الحالية — احذف التطبيق ثم ثبّته من الموقع', 'This version cannot be installed over the current app. Uninstall and reinstall from the website.'],
+  'updateFailed': ['تعذّر التحديث الآن — أعد المحاولة لاحقًا', 'Could not update at this time. Please try again later.'],
+  'updateRetry': ['إعادة المحاولة', 'Retry'],
 };
 
 /// Strings of deferred chunks (ADR-057: the notifications page, the reminder

@@ -80,8 +80,8 @@ Status as of 6 Nov 2026 (ADR-056 Phase 2 plan; ADR-055 / PR #49; ADR-054 / PR #4
 Progress is tracked in [`docs/plans/phase2/STATUS.md`](../plans/phase2/STATUS.md); the chain is merged only after
 the owner approves the whole chain.
 
-- [ ] PR A — install banner + notification preferences (ADR-057)
-- [ ] PR B — Android APK + local notifications (ADR-058)
+- [x] PR A — install banner + notification preferences (ADR-057)
+- [x] PR B — Android APK + local notifications (ADR-058)
 - [ ] PR C — admin notification manager + FCM sender + deep links (ADR-059)
 - [ ] PR D — web push + PWA + iPhone (ADR-060)
 - [ ] PR E — responsive + size audit (ADR-061; includes the 320 px app-bar item below)

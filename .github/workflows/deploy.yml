@@ -73,10 +73,32 @@ jobs:
         # publish (the app then uses its stored copy / computed feast list).
         continue-on-error: true
         run: |
-          mkdir -p build/web/data
+          mkdir -p build/web/data/readings build/web/app/android
           node tool/fetch_synaxarium.js build/web/data/today.json \
             || curl -sf --max-time 20 https://maximos-domadios-church.web.app/data/today.json -o build/web/data/today.json \
             || echo "::warning::no /data/today.json in this build (the app falls back to its computed feast list)"
+          node tool/fetch_readings.js build/web/data/readings --days=9 --previous-url https://maximos-domadios-church.web.app/data/readings/ \
+            || echo "::warning::no readings in this build"
+      - name: Keep the live Android release files (PR B §3.3 / §12)
+        # A code deploy replaces the whole Hosting version: carry the in-app update manifest (and the
+        # APKs when they are hosted on Firebase) over, or the app would stop seeing the release. A
+        # missing manifest is fine only before the first release; a failed copy of an existing one
+        # stops the deploy.
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          mkdir -p build/web/app/android
+          base=https://maximos-domadios-church.web.app/app/android
+          code=$(curl -s -o build/web/app/android/version.json -w '%{http_code}' --max-time 30 "$base/version.json" || echo 000)
+          if [ "$code" = "404" ]; then
+            rm -f build/web/app/android/version.json; echo "no Android release published yet"
+          elif [ "$code" != "200" ] || ! python3 -c 'import json,sys; json.load(open(sys.argv[1]))' build/web/app/android/version.json; then
+            echo "::error::could not preserve /app/android/version.json (HTTP $code)"; exit 1
+          fi
+          if [ "${{ vars.APK_HOST }}" = "firebase" ] && [ -f build/web/app/android/version.json ]; then
+            for f in church-portal-arm64.apk church-portal-arm32.apk; do
+              curl -sf --max-time 300 "$base/$f" -o "build/web/app/android/$f" || { echo "::error::could not preserve $f"; exit 1; }
+            done
+          fi
       - name: Remove key
         if: always()
         run: rm -f "$RUNNER_TEMP/sa.json"

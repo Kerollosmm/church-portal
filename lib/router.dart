@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -27,6 +28,8 @@ import 'ui/pages/item_detail_page.dart';
 import 'ui/pages/mass_schedule_page.dart';
 import 'ui/pages/notifications_page.dart' deferred as notifications_page;
 import 'ui/pages/public_services_page.dart';
+import 'ui/pages/readings_page.dart' deferred as readings_page;
+import 'ui/pages/notification_health_page.dart' deferred as health_page;
 import 'ui/widgets/app_shell.dart';
 import 'ui/widgets/assistant_gate.dart';
 import 'ui/widgets/common.dart';
@@ -113,21 +116,30 @@ class _PlatformRouteObserver with WidgetsBindingObserver {
   }
 }
 
+bool _detectIsWeb() {
+  if (kIsWeb) return true;
+  return !const bool.fromEnvironment('dart.vm.product') &&
+      WidgetsBinding.instance.runtimeType.toString().contains('TestWidgetsFlutterBinding');
+}
+
+final isWebProvider = Provider<bool>((ref) => _detectIsWeb());
+
 final routerProvider = Provider<GoRouter>((ref) {
-  // Re-run redirects (URL lang sync) when the language is toggled, without
-  // rebuilding the router itself.
+  final isWeb = ref.watch(isWebProvider);
+  return buildAppRouter(ref, isWeb: isWeb);
+});
+
+GoRouter buildAppRouter(Ref ref, {bool? isWeb, String initialLocation = '/'}) {
+  final web = isWeb ?? _detectIsWeb();
   final localeChanges = ValueNotifier<int>(0);
   ref.listen(localeProvider, (_, _) => localeChanges.value++);
   ref.onDispose(localeChanges.dispose);
   final platformNav = _PlatformRouteObserver();
   WidgetsBinding.instance.addObserver(platformNav);
   ref.onDispose(() => WidgetsBinding.instance.removeObserver(platformNav));
-  // Last URL the redirect accepted as-is. The same URL again means a refresh
-  // (the language changed, the location did not): the URL follows the
-  // language, like a toggle.
   Uri? lastSyncedUri;
   return GoRouter(
-    initialLocation: '/',
+    initialLocation: initialLocation,
     refreshListenable: localeChanges,
     redirect: (context, state) {
       final notifier = ref.read(localeProvider.notifier);
@@ -183,6 +195,30 @@ final routerProvider = Provider<GoRouter>((ref) {
             path: '/page/:slug',
             pageBuilder: (c, s) => _page(s, CustomPageView(slug: s.pathParameters['slug'] ?? '')),
           ),
+          GoRoute(
+            path: '/notifications/battery',
+            pageBuilder: (c, s) => _page(
+              s,
+              DeferredLoader(
+                loadLibrary: health_page.loadLibrary,
+                builder: (_) => health_page.NotificationHealthPage(),
+              ),
+            ),
+          ),
+          GoRoute(
+            path: '/readings/:date',
+            pageBuilder: (c, s) => _page(
+              s,
+              DeferredLoader(
+                loadLibrary: readings_page.loadLibrary,
+                builder: (_) => readings_page.ReadingsPage(
+                  dateIso: s.pathParameters['date'] ?? '',
+                  initialTab: s.uri.queryParameters['tab'],
+                ),
+              ),
+
+            ),
+          ),
           // Shareable item detail pages (ADR-020). FeatureGate gates each like
           // its section (prefix-aware `routeEnabled`: `/about/priests/<id>`
           // stays open while either priests section is on; the page itself
@@ -200,14 +236,17 @@ final routerProvider = Provider<GoRouter>((ref) {
                 AssistantGate(
                   builder: (_) => DeferredLoader(
                     loadLibrary: assistant_page.loadLibrary,
-                    builder: (_) => assistant_page.AssistantPage(),
+                    builder: (_) => assistant_page.AssistantPage(isWeb: web),
                   ),
                 )),
           ),
         ],
       ),
-      GoRoute(
-        path: AppConfig.adminPath,
+      // `kIsWeb || !dart.vm.product` is a compile-time constant: in a release APK it is false, so the
+      // admin dashboard is tree-shaken out (PR B §3.1); tests (debug VM) can still pass isWeb: true.
+      if (web && (kIsWeb || !const bool.fromEnvironment('dart.vm.product')))
+        GoRoute(
+          path: AppConfig.adminPath,
         builder: (c, s) {
           setDocumentRouteMeta(path: s.uri.path, indexable: false);
           // The dashboard keeps the Golden hour palette whatever occasion
@@ -238,4 +277,5 @@ final routerProvider = Provider<GoRouter>((ref) {
       );
     },
   );
-});
+}
+

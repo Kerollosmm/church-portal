@@ -1,4 +1,9 @@
-import 'locale_storage_stub.dart' if (dart.library.js_interop) 'locale_storage_web.dart' as impl;
+import 'locale_storage_stub.dart'
+    if (dart.library.js_interop) 'locale_storage_web.dart'
+    if (dart.library.io) 'locale_storage_io.dart' as impl;
+
+/// Preloads saved language preference on IO/Android.
+Future<void> initLanguageStore() => impl.initLanguageStore();
 
 /// `localStorage` key holding the visitor's chosen language (`ar` / `en`).
 const languageStorageKey = 'church_portal_lang';

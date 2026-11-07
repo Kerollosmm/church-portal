@@ -1767,6 +1767,49 @@ supersede them.
   7. **Cost & privacy:** +0 Firestore reads / writes / listeners for visitors; prefs and reminders only on the device.
 - **Consequences:** Ships dark (`push` off, banner on only on phones). Rollout / rollback uses two independent switches on `settings/features`: `installPrompt` (banner, default on) and `push` (page, «ذكّرني», drawer link; default off) — turning `push` off does not hide the banner. Delivery (APK local alarms, FCM, web push SW) follows in PR B–D; `web/firebase-messaging-sw.js` and `web/push_client.js` are scaffolds the plan requires in PR A, unused until PR D.
 
+## ADR-058 — Android APK, local notification planner, Katameros readings pipeline, OEM battery diagnostics, and in-app updates
+- **Context:** Phase 2 PR B introduces the native Android application package (APK) with zero server-side push dependencies (Spark-safe), local notification scheduling, an offline Katameros daily readings reader, OEM battery optimization troubleshooting, and an in-app update mechanism.
+- **Decision:**
+  1. **Local notifications & rolling 9-day planner (`notify_plan.dart`, `notify_providers.dart`):**
+     - Scheduled purely on the device using `flutter_local_notifications` with exact alarms (`USE_EXACT_ALARM`) and a 10-minute early inexact fallback if exact alarms are disallowed.
+     - Rolling 9-day schedule window covering daily verse (07:00), Katameros readings (06:30), and major feasts (07:30 Cairo time).
+     - User reminders («ذكّرني») for dated and weekly services (up to 4 occurrences, skipping weeks replaced by seasons or Holy Week).
+     - Quiet hours adjust daily notifications to quiet end. User reminders ring by default unless muted.
+     - Periodic replenishment triggered on app resume, preference change, and via `workmanager` background worker (`replenish_notifications`) when remaining days fall below 4. Total alarms capped at 80 with user reminders prioritized.
+  2. **Katameros readings pipeline & `/readings/<date>` screen:**
+     - Pure static data fetched daily at liturgical eve by `synaxarium.yml` and `deploy.yml` into `/data/readings/<date>.json` via `tool/fetch_readings.js`.
+     - Decision #17: Arabic text + English biblical references only (`refs-only`), keeping file sizes <= 25 KB raw / ~8 KB gzip.
+     - Stored locally via `ReadingsStore` in `shared_preferences` with offline cache fallback and automatic pruning for entries older than yesterday.
+     - Today widgets expose «اقرأ القراءات» opening `/readings/<date>`.
+  3. **OEM battery guidance & diagnostic health check (`oem_guide.dart`, `/notifications/battery`):**
+     - Manufacturer detection for Xiaomi, Oppo/Realme, Vivo, Huawei/Honor, Samsung, and other brands.
+     - Intent try-lists for auto-start, battery optimization, and notification channel settings with graceful fallback to app details.
+     - Live diagnostic checklist verifying permissions, exact alarms, battery optimization exemption, and background replenishment freshness (< 48 hours).
+  4. **In-app updater (`app_update.dart`, `app_updater.dart`, `UpdateBanner`):**
+     - Serverless update checking via static manifest on Hosting (`/app/android/version.json`).
+     - Resumable streaming HTTP download with `Range` header support and SHA-256 integrity verification.
+     - `installApkInternal` triggers package installation via Android `ACTION_VIEW` intent with a `FileProvider` content URI (`${applicationId}.updates`) and `FLAG_GRANT_READ_URI_PERMISSION`.
+     - Non-dismissable forced update when `currentBuild < minSupportedBuild` (`isDismissible: false`, `enableDrag: false`).
+  5. **Android native shell (`app_shell.dart`, `router.dart`, `locale_storage_io.dart`):**
+     - Route `/admin` is compiled out and guarded when `isWeb` is false.
+     - `PopScope` handles back button navigation (`parentRouteOf` maps subpages to listing/home, double back-press on `/` within 2 seconds exits the app).
+     - Persistent language store on Android via `shared_preferences` (`initLanguageStore`, `PlatformLanguageStore`).
+     - Assistant page on Android renders a clean external web redirect card to `https://maximos-domadios-church.web.app/ask` due to Play Integrity requirement.
+- **Consequences:**
+  - Android users receive reliable reminders, daily verse, Katameros notifications, and offline readings with zero battery/data bloat and +0 Firestore reads/writes.
+  - Sideloaded APKs self-update seamlessly from GitHub Releases or Firebase Hosting.
+- **Fix round (8 Nov 2026):** the `apk` job never produced an APK before this. Build: `flutter_local_notifications`
+  pinned to `^22.3.3` (23.0.0 requires compileSdk 37 + AGP 9.1.1; same Dart API, has the DST wall-clock fix for
+  repeating notifications), `minSdk 26` (required by `sentry_flutter` 10 → Android 8.0+), native libraries
+  compressed (`useLegacyPackaging`, APK arm64 ≈ 15.0 MB / arm32 ≈ 14.6 MB instead of ≈ 29.6 / 27.3 MB). Behaviour:
+  Android `InstallEnv` now persists prefs and reminders (`install_env_io.dart`, SharedPreferences preloaded before
+  `runApp`); the worker snapshot keeps the push keys, `dayEvents` and `seasonVerses`; an expired or already-rung
+  reminder is never re-scheduled; daily types use `inexactAllowWhileIdle`; the signature pre-check fails closed and
+  requires this package name; the update file lives under `cacheDir/updates` (FileProvider path); the manifest build
+  comes from `pubspec.yaml` (not the cwd) and `deploy.yml` carries `/app/android/version.json` over each deploy;
+  `fetch_readings.js` keeps the live file for a date it cannot fetch. Verse notification / reader use the same
+  seasonal choice as Home.
+
 ## Timeline
 
 | When | PR / commit | What |
@@ -1834,3 +1877,4 @@ supersede them.
 
 Append new PRs to this table.
 | 6 Nov 2026 | **Phase 2 plans** (`docs/phase2-plans`, docs only) | ADR-056: `docs/plans/phase2/` — README (architecture, data contract, cost, decisions; revised 6 Nov 19:31–19:35: scheduled-only sender, event pushes, «ذكّرني» reminders, local verse + Katameros, keep-alive; owner decisions 19:57: APKs on a separate public releases repo, Katameros Arabic text + English refs only), HANDOFF (workflow, stacked chain, merge procedure), STATUS (checklists), PR A–E plans, LAUNCH-AND-OPERATIONS (consoles, keystore, user guidance, privacy, device tests, rollback, monitoring, runbook, launch day). No code. |
+| 7 Nov 2026 | **PR B** — "Android APK, local notifications, Katameros readings, OEM battery diagnostics, in-app update" (`feat/p2b-android-local-notifications`) | ADR-058: Split APKs (arm64 + arm32) with R8 minification and core library desugaring; rolling 9-day local notification planner with exact alarms and replenishment worker; Katameros pipeline (`tool/fetch_readings.js`, `/readings/<date>`); OEM battery guide & diagnostics (`/notifications/battery`); in-app updater (Range resume, SHA-256 verification, FileProvider install); Android shell (PopScope double-back exit, SharedPreferences language store, Assistant web redirect). +0 Firestore reads/writes. |

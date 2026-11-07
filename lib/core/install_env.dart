@@ -1,5 +1,10 @@
 import 'install_env_stub.dart'
-    if (dart.library.js_interop) 'install_env_web.dart' as impl;
+    if (dart.library.js_interop) 'install_env_web.dart'
+    if (dart.library.io) 'install_env_io.dart' as impl;
+
+/// Preloads device storage on Android (SharedPreferences) so [InstallEnv.readJson] can stay
+/// synchronous; a no-op on the web (`localStorage` is synchronous already).
+Future<void> initInstallStore() => impl.initInstallStore();
 
 /// Storage key in localStorage for install banner dismiss date.
 const installStorageKey = 'church_portal_install';

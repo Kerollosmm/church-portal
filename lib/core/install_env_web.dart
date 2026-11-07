@@ -125,3 +125,6 @@ void Function() listenInstallChanges(void Function() onChange) {
     return () {};
   }
 }
+
+/// Nothing to preload here.
+Future<void> initInstallStore() async {}
