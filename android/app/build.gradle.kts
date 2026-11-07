@@ -13,20 +13,23 @@ if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(FileInputStream(keystorePropertiesFile))
 }
 
-val keyAliasValue = System.getenv("ANDROID_KEY_ALIAS")
-    ?: System.getenv("KEY_ALIAS")
+// An env var that is set but empty (the PR build passes blank secrets) must fall through to the next source.
+fun envOrNull(name: String): String? = System.getenv(name)?.takeUnless { it.isBlank() }
+
+val keyAliasValue = envOrNull("ANDROID_KEY_ALIAS")
+    ?: envOrNull("KEY_ALIAS")
     ?: keystoreProperties.getProperty("keyAlias")
     ?: keystoreProperties.getProperty("KEY_ALIAS")
-val keyPasswordValue = System.getenv("ANDROID_KEY_PASSWORD")
-    ?: System.getenv("KEY_PASSWORD")
+val keyPasswordValue = envOrNull("ANDROID_KEY_PASSWORD")
+    ?: envOrNull("KEY_PASSWORD")
     ?: keystoreProperties.getProperty("keyPassword")
     ?: keystoreProperties.getProperty("KEY_PASSWORD")
-val storePasswordValue = System.getenv("ANDROID_KEYSTORE_PASSWORD")
-    ?: System.getenv("STORE_PASSWORD")
+val storePasswordValue = envOrNull("ANDROID_KEYSTORE_PASSWORD")
+    ?: envOrNull("STORE_PASSWORD")
     ?: keystoreProperties.getProperty("storePassword")
     ?: keystoreProperties.getProperty("STORE_PASSWORD")
-val storeFilePath = System.getenv("ANDROID_KEYSTORE_PATH")
-    ?: System.getenv("STORE_FILE")
+val storeFilePath = envOrNull("ANDROID_KEYSTORE_PATH")
+    ?: envOrNull("STORE_FILE")
     ?: keystoreProperties.getProperty("storeFile")
     ?: keystoreProperties.getProperty("STORE_FILE")
 
@@ -82,13 +85,6 @@ android {
 
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
-}
-
-configurations.all {
-    resolutionStrategy {
-        force("androidx.core:core:1.15.0")
-        force("androidx.core:core-ktx:1.15.0")
-    }
 }
 
 kotlin {
