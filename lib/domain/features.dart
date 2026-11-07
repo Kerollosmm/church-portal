@@ -532,6 +532,8 @@ class FeatureSettings {
       seasonPreset: seasonPreset,
       weddingBookingOff:
           p.has(PresetOption.weddingOff) ? (p.prevBool(PresetPrev.weddingBookingOff) ?? false) : weddingBookingOff,
+      install: install,
+      pushSettings: pushSettings,
     );
   }
 

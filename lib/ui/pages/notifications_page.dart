@@ -32,6 +32,9 @@ class NotificationsPage extends ConsumerWidget {
       if (!isStandalone) {
         return PushPermissionState.iosNeedsInstall;
       }
+      if (!pushEnv.isSupported) {
+        return PushPermissionState.iosTooOld;
+      }
     }
 
     if (!pushEnv.isSupported) {

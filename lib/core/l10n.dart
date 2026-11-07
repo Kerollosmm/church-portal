@@ -759,6 +759,7 @@ const Map<String, List<String>> _strings = {
   'apkGuideStep1Body': ['يعرضها المتصفح لأي تطبيق من خارج متجر Play. تأكد أن العنوان في الأعلى هو maximos-domadios-church.web.app ثم اضغط «تنزيل على أي حال»', 'The browser shows this for any app from outside the Play Store. Check that the address bar shows maximos-domadios-church.web.app, then tap "Download anyway"'],
   'apkGuideStep2Title': ['افتح الملف بعد التنزيل', 'Open the downloaded file'],
   'apkGuideStep2Body': ['من إشعار «اكتمل التنزيل» أو من مجلد «التنزيلات» اضغط على ملف تطبيق الكنيسة. حجم الملف تقريبًا {size} م.ب', 'From the "Download complete" notification or Downloads folder, tap the church app file. File size is approx {size} MB'],
+  'apkGuideStep2BodyNoSize': ['من إشعار «اكتمل التنزيل» أو من مجلد «التنزيلات» اضغط على ملف تطبيق الكنيسة', 'From the "Download complete" notification or Downloads folder, tap the church app file'],
   'apkGuideStep3Title': ['اسمح بالتثبيت لهذا التطبيق مرة واحدة', 'Allow install from this source once'],
   'apkGuideStep3Body': ['اضغط «الإعدادات» ← فعّل «السماح من هذا المصدر» للتطبيق الظاهر في الصفحة — المتصفح (مثل Chrome) إذا فتحت الملف من إشعار التنزيل، أو «الملفات» / «ملفاتي» إذا فتحته من مدير الملفات ← ارجع', 'Tap "Settings" → turn on "Allow from this source" for the app shown on that page — the browser (e.g. Chrome) if you opened the file from the download notification, or Files / My Files if you opened it from a file manager → go back'],
   'apkGuideStep4Title': ['تحذير Google Play Protect', 'Google Play Protect'],

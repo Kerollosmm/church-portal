@@ -47,8 +47,8 @@ class Reminder {
         'lead': lead,
         'every': every,
         'title': title,
-        'startsAt': startsAt.toIso8601String(),
-        'createdAt': createdAt.toIso8601String(),
+        'startsAt': startsAt.toUtc().toIso8601String(),
+        'createdAt': createdAt.toUtc().toIso8601String(),
       };
 
   factory Reminder.fromJson(Map<String, dynamic> json) {

@@ -174,4 +174,34 @@ void main() {
 
     expect(find.text('لتفعيل الإشعارات على iPhone'), findsOneWidget);
   });
+
+  testWidgets('MyRemindersSection displays Cairo wall time for UTC stored reminders', (tester) async {
+    final pushEnv = FakeTestPushEnv(permission: 'granted');
+    final installEnv = FakeTestInstallEnv();
+    // 05:00 UTC in winter (UTC+2) is 07:00 Cairo time
+    final utcReminder = Reminder(
+      eventKey: 'lit-morning',
+      lead: 15,
+      title: const {'ar': 'قداس الصباح الباكر', 'en': 'Early Morning Liturgy'},
+      startsAt: DateTime.utc(2026, 11, 7, 5, 0),
+      createdAt: DateTime.utc(2026, 11, 1),
+    );
+
+    await tester.pumpWidget(buildTestable(
+      child: const NotificationsPage(isWeb: true),
+      pushSettings: const PushSettings(
+        enabled: true,
+        offered: [NotifyType.reminders],
+      ),
+      pushEnv: pushEnv,
+      installEnv: installEnv,
+      initialReminders: [utcReminder],
+    ));
+    await tester.pumpAndSettle();
+
+    expect(find.text('قداس الصباح الباكر'), findsOneWidget);
+    // Verified: shows 07:00 Cairo time, never 05:00 UTC
+    expect(find.textContaining('٠٧:٠٠ ص'), findsOneWidget);
+    expect(find.textContaining('٠٥:٠٠'), findsNothing);
+  });
 }

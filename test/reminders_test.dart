@@ -1,6 +1,8 @@
 import 'package:church_portal/core/install_env.dart';
 import 'package:church_portal/data/reminder_store.dart';
+import 'package:church_portal/domain/cairo_time.dart';
 import 'package:church_portal/domain/reminders.dart';
+import 'package:church_portal/domain/time_format.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 class FakeInstallEnv implements InstallEnv {
@@ -286,6 +288,62 @@ void main() {
       store.remove('future1');
       expect(store.load().length, 1);
       expect(store.load().first.eventKey, 'future2');
+    });
+
+    test('strict occurrence matching on remove and find (no null wildcard)', () {
+      final recurring = Reminder(
+        eventKey: 'lit-mass',
+        occurrence: null,
+        lead: 15,
+        title: const {'ar': 'قداس الأحد'},
+        startsAt: DateTime.utc(2027, 5, 2, 6, 0),
+        createdAt: DateTime.utc(2027, 4, 1),
+      );
+      final dated = Reminder(
+        eventKey: 'lit-mass',
+        occurrence: '2027-05-09',
+        lead: 30,
+        title: const {'ar': 'قداس الأحد القادم'},
+        startsAt: DateTime.utc(2027, 5, 9, 6, 0),
+        createdAt: DateTime.utc(2027, 4, 1),
+      );
+
+      store.put(recurring);
+      store.put(dated);
+      expect(store.load().length, 2);
+
+      // find with occurrence: null finds recurring, not dated
+      expect(store.find('lit-mass', occurrence: null)?.lead, 15);
+      expect(store.find('lit-mass', occurrence: '2027-05-09')?.lead, 30);
+
+      // remove with occurrence: null removes only the recurring one
+      store.remove('lit-mass', occurrence: null);
+      expect(store.load().length, 1);
+      expect(store.load().first.occurrence, '2027-05-09');
+
+      // remove with dated occurrence removes the dated one
+      store.remove('lit-mass', occurrence: '2027-05-09');
+      expect(store.load(), isEmpty);
+    });
+
+    test('converts UTC startsAt to Cairo wall time for display', () {
+      CairoTime.ensureInitialized();
+      // In Cairo winter (November), UTC+2: 05:00 UTC == 07:00 Cairo
+      final utcTime = DateTime.utc(2026, 11, 7, 5, 0);
+      final r = Reminder(
+        eventKey: 'lit-test',
+        lead: 15,
+        title: const {'ar': 'قداس الصباح'},
+        startsAt: utcTime,
+        createdAt: DateTime.utc(2026, 11, 1),
+      );
+
+      final cairo = CairoTime.fromInstant(r.startsAt);
+      expect(cairo.hour, 7);
+      expect(cairo.minute, 0);
+
+      final hm = '${cairo.hour.toString().padLeft(2, '0')}:${cairo.minute.toString().padLeft(2, '0')}';
+      expect(formatTimeArabic(hm), '٠٧:٠٠ ص');
     });
   });
 }

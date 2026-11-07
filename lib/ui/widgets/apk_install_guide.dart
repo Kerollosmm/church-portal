@@ -50,9 +50,8 @@ class _ApkInstallGuideSheetState extends State<_ApkInstallGuideSheet> {
   @override
   Widget build(BuildContext context) {
     final pal = context.pal;
-    final sizeStr = widget.apkSizeMb != null && widget.apkSizeMb! > 0
-        ? widget.apkSizeMb!.toStringAsFixed(1)
-        : '18.4';
+    final hasPositiveSize = widget.apkSizeMb != null && widget.apkSizeMb! > 0;
+    final sizeStr = hasPositiveSize ? widget.apkSizeMb!.toStringAsFixed(1) : '';
 
     return SafeArea(
       child: Center(
@@ -141,6 +140,9 @@ class _ApkInstallGuideSheetState extends State<_ApkInstallGuideSheet> {
                       onPageChanged: (i) => setState(() => _currentStep = i),
                       itemBuilder: (ctx, index) {
                         final stepNum = index + 1;
+                        final bodyKey = (stepNum == 2 && !hasPositiveSize)
+                            ? 'apkGuideStep2BodyNoSize'
+                            : 'apkGuideStep${stepNum}Body';
                         return SingleChildScrollView(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -165,7 +167,7 @@ class _ApkInstallGuideSheetState extends State<_ApkInstallGuideSheet> {
 
                               // Step Body
                               Text(
-                                context.tr('apkGuideStep${stepNum}Body', {'size': sizeStr}),
+                                context.tr(bodyKey, {'size': sizeStr}),
                                 style: TextStyle(
                                   fontSize: 14,
                                   height: 1.6,

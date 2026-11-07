@@ -635,24 +635,56 @@ service cloud.firestore {
       return s is map && s.keys().hasOnly(sectionKeys()) && s.values().hasOnly([true, false]);
     }
 
+    function installPushKeys() {
+      return ['installPrompt', 'installTitleAr', 'installTitleEn', 'installBodyAr', 'installBodyEn',
+              'installAndroidUrl', 'installAndroidUrl32', 'installApkVersion', 'installApkBuild',
+              'installApkSizeMb', 'installApkSize32Mb', 'installReshowDays', 'installRemindDays',
+              'push', 'pushVapidKey', 'pushTypes', 'reminderLeads', 'reminderDefaultLead'];
+    }
+
+    function featureKeyList() {
+      return ['sections', 'homeOrder', 'homeHidden', 'heroTitleAr', 'heroTitleEn', 'heroSubtitleAr',
+              'heroSubtitleEn', 'bannerEnabled', 'bannerAr', 'bannerEn', 'bannerLink', 'theme',
+              'pageHeaders', 'footer', 'heroMotion', 'heroShowAddress', 'aboutMilestones', 'imageStyles', 'dailyVerse', 'occasions', 'themeColors',
+              'heroVideos', 'errorReporting', 'copticStrip', 'dayStartMode', 'dayStartsAt', 'topEvent',
+              'commemoration', 'topEventServices', 'liveEnabled', 'liveUrl', 'liveLabelAr', 'liveLabelEn', 'liveEndsAt',
+              'liveBadgeHideOnHome', 'dayEvents', 'venues', 'audiences', 'seasonVerses', 'seasonPreset', 'weddingBookingOff',
+              'heroSeasonTint', 'updatedAt', 'updatedBy'].concat(installPushKeys());
+    }
+
+    function validInstallSettings(d, changed) {
+      return !changed.hasAny(['installPrompt', 'installTitleAr', 'installTitleEn', 'installBodyAr', 'installBodyEn',
+                              'installAndroidUrl', 'installAndroidUrl32', 'installApkVersion', 'installApkBuild',
+                              'installApkSizeMb', 'installApkSize32Mb', 'installReshowDays', 'installRemindDays'])
+        || (optBool(d, 'installPrompt') && str(d, 'installTitleAr', 120) && str(d, 'installTitleEn', 120)
+            && str(d, 'installBodyAr', 300) && str(d, 'installBodyEn', 300)
+            && optUrlOrPath(d, 'installAndroidUrl', 500) && optUrlOrPath(d, 'installAndroidUrl32', 500)
+            && d.get('installApkVersion', '').matches('^$|^[0-9]+([.][0-9]+){0,3}$')
+            && optInt(d, 'installApkBuild', 0, 999999) && optNumber(d, 'installApkSizeMb', 0, 200)
+            && optNumber(d, 'installApkSize32Mb', 0, 200) && optInt(d, 'installReshowDays', 0, 365)
+            && optInt(d, 'installRemindDays', 1, 60));
+    }
+
+    function validPushSettings(d, changed) {
+      return !changed.hasAny(['push', 'pushVapidKey', 'pushTypes', 'reminderLeads', 'reminderDefaultLead'])
+        || (optBool(d, 'push') && d.get('pushVapidKey', '').matches('^$|^[A-Za-z0-9_-]{80,100}$')
+            && optList(d, 'pushTypes', 6)
+            && d.get('pushTypes', []).hasOnly(['announcements', 'verse_daily', 'katameros_daily', 'seasons', 'feasts', 'reminders'])
+            && d.get('pushTypes', []).toSet().size() == d.get('pushTypes', []).size()
+            && optList(d, 'reminderLeads', 4)
+            && d.get('reminderLeads', []).hasOnly([0, 5, 10, 15, 30, 60, 120, 180, 1440])
+            && d.get('reminderLeads', []).toSet().size() == d.get('reminderLeads', []).size()
+            && (!('reminderDefaultLead' in d) || d.get('reminderLeads', [0, 15, 60, 1440]).hasAny([d.reminderDefaultLead])));
+    }
+
     function validFeatures(d) {
       // Like settings/church: an untouched legacy key does not block an edit.
       // Only the keys this write creates or changes are validated (the admin
       // saves the whole document; Firestore evaluates at most 1,000
-      // expressions per request).
+      // expressions per request). Reusing `changed` instead of calling keysAllowed
+      // saves recalculating affectedKeys.
       let changed = changedKeys(d);
-      return keysAllowed(['sections', 'homeOrder', 'homeHidden', 'heroTitleAr', 'heroTitleEn', 'heroSubtitleAr',
-                          'heroSubtitleEn', 'bannerEnabled', 'bannerAr', 'bannerEn', 'bannerLink', 'theme',
-                          'pageHeaders', 'footer', 'heroMotion', 'heroShowAddress', 'aboutMilestones', 'imageStyles', 'dailyVerse', 'occasions', 'themeColors',
-                          'heroVideos', 'errorReporting', 'copticStrip', 'dayStartMode', 'dayStartsAt', 'topEvent',
-                          'commemoration', 'topEventServices', 'liveEnabled', 'liveUrl', 'liveLabelAr', 'liveLabelEn', 'liveEndsAt',
-                          'liveBadgeHideOnHome', 'dayEvents', 'venues', 'audiences', 'seasonVerses', 'seasonPreset', 'weddingBookingOff',
-                          'heroSeasonTint',
-                          'installPrompt', 'installTitleAr', 'installTitleEn', 'installBodyAr', 'installBodyEn',
-                          'installAndroidUrl', 'installAndroidUrl32', 'installApkVersion', 'installApkBuild',
-                          'installApkSizeMb', 'installApkSize32Mb', 'installReshowDays', 'installRemindDays',
-                          'push', 'pushVapidKey', 'pushTypes', 'reminderLeads', 'reminderDefaultLead',
-                          'updatedAt', 'updatedBy'])
+      return changed.hasOnly(featureKeyList())
         && (!('sections' in changed) || !('sections' in d) || validSections(d.sections))
         && (!('homeOrder' in changed) || !('homeOrder' in d) || (d.homeOrder is list && d.homeOrder.size() <= 7
               && d.homeOrder.hasOnly(['banner', 'alerts', 'nextMass', 'quickContacts', 'milestones', 'directory', 'map'])))
@@ -713,27 +745,12 @@ service cloud.firestore {
                 && (!('seasonPreset' in changed) || d.get('seasonPreset', null) == null
                     || validSeasonPreset(d.seasonPreset))
                 && optBool(d, 'weddingBookingOff')))
-        // App install banner (ADR-057).
-        && (!changed.hasAny(['installPrompt', 'installTitleAr', 'installTitleEn', 'installBodyAr', 'installBodyEn',
-                             'installAndroidUrl', 'installAndroidUrl32', 'installApkVersion', 'installApkBuild',
-                             'installApkSizeMb', 'installApkSize32Mb', 'installReshowDays', 'installRemindDays'])
-            || (optBool(d, 'installPrompt') && str(d, 'installTitleAr', 120) && str(d, 'installTitleEn', 120)
-                && str(d, 'installBodyAr', 300) && str(d, 'installBodyEn', 300)
-                && optUrlOrPath(d, 'installAndroidUrl', 500) && optUrlOrPath(d, 'installAndroidUrl32', 500)
-                && d.get('installApkVersion', '').matches('^$|^[0-9]+([.][0-9]+){0,3}$')
-                && optInt(d, 'installApkBuild', 0, 999999) && optNumber(d, 'installApkSizeMb', 0, 200)
-                && optNumber(d, 'installApkSize32Mb', 0, 200) && optInt(d, 'installReshowDays', 0, 365)
-                && optInt(d, 'installRemindDays', 1, 60)))
-        // Push & notifications settings (ADR-057).
-        && (!changed.hasAny(['push', 'pushVapidKey', 'pushTypes', 'reminderLeads', 'reminderDefaultLead'])
-            || (optBool(d, 'push') && d.get('pushVapidKey', '').matches('^$|^[A-Za-z0-9_-]{80,100}$')
-                && optList(d, 'pushTypes', 6)
-                && d.get('pushTypes', []).hasOnly(['announcements', 'verse_daily', 'katameros_daily', 'seasons', 'feasts', 'reminders'])
-                && d.get('pushTypes', []).toSet().size() == d.get('pushTypes', []).size()
-                && optList(d, 'reminderLeads', 4)
-                && d.get('reminderLeads', []).hasOnly([0, 5, 10, 15, 30, 60, 120, 180, 1440])
-                && d.get('reminderLeads', []).toSet().size() == d.get('reminderLeads', []).size()
-                && (!('reminderDefaultLead' in d) || d.get('reminderLeads', [0, 15, 60, 1440]).hasAny([d.reminderDefaultLead]))))
+        // App install banner and push settings (ADR-057) behind ONE gate so
+        // other saves (page headers, hero videos, day events) stay well under the
+        // 1,000-expression cap.
+        && (!changed.hasAny(installPushKeys()) || (
+            validInstallSettings(d, changed) && validPushSettings(d, changed)
+        ))
         && (!changed.hasAny(['updatedAt', 'updatedBy']) || stampOk(d));
     }
 

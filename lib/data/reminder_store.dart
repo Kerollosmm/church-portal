@@ -36,27 +36,32 @@ class ReminderStore {
   }
 
   /// Saves the complete list of reminders.
-  void save(List<Reminder> reminders) {
+  ///
+  /// Returns `true` if saved successfully, `false` on storage errors.
+  bool save(List<Reminder> reminders) {
     try {
       final capped = reminders.take(maxDeviceReminders).toList();
       capped.sort((a, b) => a.fireTime.compareTo(b.fireTime));
       env.writeJson(remindersStorageKey, {
         'reminders': capped.map((r) => r.toJson()).toList(),
       });
-    } catch (_) {}
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   /// Adds or updates a reminder.
   ///
-  /// Returns `false` if adding a new reminder would exceed [maxDeviceReminders].
+  /// Returns `false` if adding a new reminder would exceed [maxDeviceReminders]
+  /// or if writing to device storage fails.
   bool put(Reminder reminder) {
     final current = List<Reminder>.of(load());
     final index = current.indexWhere((r) => r.eventKey == reminder.eventKey && r.occurrence == reminder.occurrence);
 
     if (index >= 0) {
       current[index] = reminder;
-      save(current);
-      return true;
+      return save(current);
     }
 
     if (current.length >= maxDeviceReminders) {
@@ -64,14 +69,13 @@ class ReminderStore {
     }
 
     current.add(reminder);
-    save(current);
-    return true;
+    return save(current);
   }
 
-  /// Removes a reminder by eventKey and optional occurrence.
+  /// Removes a reminder by eventKey and occurrence (strict match).
   void remove(String eventKey, {String? occurrence}) {
     final current = List<Reminder>.of(load());
-    current.removeWhere((r) => r.eventKey == eventKey && (occurrence == null || r.occurrence == occurrence));
+    current.removeWhere((r) => r.eventKey == eventKey && r.occurrence == occurrence);
     save(current);
   }
 
@@ -82,11 +86,11 @@ class ReminderStore {
     save(current);
   }
 
-  /// Finds a reminder for the given event, if any.
+  /// Finds a reminder for the given event, matching exact occurrence.
   Reminder? find(String eventKey, {String? occurrence}) {
     final current = load();
     for (final r in current) {
-      if (r.eventKey == eventKey && (occurrence == null || r.occurrence == occurrence)) {
+      if (r.eventKey == eventKey && r.occurrence == occurrence) {
         return r;
       }
     }

@@ -4,6 +4,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../../core/l10n.dart';
 import '../../core/theme.dart';
+import '../../domain/cairo_time.dart';
 import '../../domain/push.dart';
 import '../../domain/reminders.dart';
 import '../../domain/time_format.dart';
@@ -40,7 +41,7 @@ class RemindMeButton extends ConsumerWidget {
     final reminders = ref.watch(userRemindersProvider);
     Reminder? activeReminder;
     for (final r in reminders) {
-      if (r.eventKey == eventKey && (occurrence == null || r.occurrence == occurrence)) {
+      if (r.eventKey == eventKey && r.occurrence == occurrence) {
         activeReminder = r;
         break;
       }
@@ -163,7 +164,16 @@ class _ReminderConfigSheetState extends State<_ReminderConfigSheet> {
   void initState() {
     super.initState();
     final pushSettings = widget.ref.read(pushSettingsProvider);
-    _selectedLead = widget.existing?.lead ?? pushSettings.defaultLead;
+    final now = widget.ref.read(nowProvider).value ?? DateTime.now();
+    final preferred = widget.existing?.lead ?? pushSettings.defaultLead;
+    if (!widget.startsAt.subtract(Duration(minutes: preferred)).isBefore(now)) {
+      _selectedLead = preferred;
+    } else {
+      final valid = pushSettings.reminderLeads.where(
+        (lead) => !widget.startsAt.subtract(Duration(minutes: lead)).isBefore(now),
+      );
+      _selectedLead = valid.isNotEmpty ? valid.first : 0;
+    }
     _every = widget.existing?.every ?? false;
   }
 
@@ -175,8 +185,9 @@ class _ReminderConfigSheetState extends State<_ReminderConfigSheet> {
     final now = widget.ref.watch(nowProvider).value ?? DateTime.now();
 
     final titleText = context.pick(widget.title['ar'] ?? '', widget.title['en'] ?? '');
-    final dateStr = formatDate(widget.startsAt, arabic: context.isAr);
-    final hm = '${widget.startsAt.hour.toString().padLeft(2, '0')}:${widget.startsAt.minute.toString().padLeft(2, '0')}';
+    final cairoStartsAt = CairoTime.fromInstant(widget.startsAt);
+    final dateStr = formatDate(cairoStartsAt, arabic: context.isAr);
+    final hm = '${cairoStartsAt.hour.toString().padLeft(2, '0')}:${cairoStartsAt.minute.toString().padLeft(2, '0')}';
     final timeStr = context.isAr ? formatTimeArabic(hm) : formatTimeLatin(hm);
 
     return SafeArea(
@@ -414,8 +425,9 @@ class MyRemindersSection extends ConsumerWidget {
             final expired = r.isExpired(now);
             final title = context.pick(r.title['ar'] ?? '', r.title['en'] ?? '');
             final lead = leadLabel(r.lead, context.isAr ? 'ar' : 'en');
-            final dateStr = formatDate(r.startsAt, arabic: context.isAr);
-            final hm = '${r.startsAt.hour.toString().padLeft(2, '0')}:${r.startsAt.minute.toString().padLeft(2, '0')}';
+            final cairoStartsAt = CairoTime.fromInstant(r.startsAt);
+            final dateStr = formatDate(cairoStartsAt, arabic: context.isAr);
+            final hm = '${cairoStartsAt.hour.toString().padLeft(2, '0')}:${cairoStartsAt.minute.toString().padLeft(2, '0')}';
             final timeStr = context.isAr ? formatTimeArabic(hm) : formatTimeLatin(hm);
 
             return Dismissible(
