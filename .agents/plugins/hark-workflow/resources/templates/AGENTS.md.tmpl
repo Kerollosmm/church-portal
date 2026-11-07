@@ -1,0 +1,36 @@
+# AGENTS.md — guide for coding agents
+
+**Read [`docs/memory-bank/`](docs/memory-bank/00-README.md) first, and update it in the same PR as every change.**
+Human manual: [`documentation/`](documentation/README.md) — one file per feature; update it in the same PR.
+
+## What this is
+<!-- 3–5 lines: product, stack, live URL, backend project, where the admin lives. -->
+
+## Golden rules
+<!-- Copy from .agents/rules/project-rules.md, plus the stack rules: -->
+1. Branch per change; never push to `main`; never force-push; squash-merge after CI is green.
+2. Tests for every change; root-cause bugs with a regression test.
+3. A data field change touches model + admin schema + security rules + seed + tests together.
+4. Never commit secrets. Never run destructive data scripts without the owner's explicit OK.
+5. Docs (memory bank + documentation/ + ADR) in the same PR.
+
+## Commands
+```bash
+# install, analyze, test, build, rules tests, seed dry-run
+```
+
+## Workflow
+Branch from up-to-date `main` → change + tests + memory bank + documentation → PR (draft → ready) →
+`@coderabbitai review` / `@sentry review` → fix findings, reply, resolve → CI green on head → squash-merge →
+`main` auto-deploys → verify the deploy run and the live site → report.
+Agents with the hark-workflow kit: start with the `hw-start` skill (or the `parent-agent` agent).
+
+## Where to look
+| Need | File |
+|---|---|
+| Overview / index | `docs/memory-bank/00-README.md` |
+| Architecture | `docs/memory-bank/03-architecture.md` |
+| Data model | `docs/memory-bank/04-data-model.md` |
+| Dev workflow, CI/CD | `docs/memory-bank/08-dev-workflow.md` |
+| Decisions | `docs/memory-bank/10-decisions-and-history.md` |
+| Open tasks | `docs/memory-bank/11-open-tasks.md` |

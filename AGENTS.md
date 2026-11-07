@@ -61,6 +61,11 @@ Branch from up-to-date `main` → change + tests + memory-bank update + `documen
 (`ci.yml`: analyze/test/build/seed-diff + rules emulator; `deploy.yml`: build + preview channel `pr-<n>`) green →
 squash-merge → `main` auto-deploys Hosting + Firestore rules.
 
+**Antigravity:** see [`.agents/`](.agents/) — the hark-workflow v2 plugin in `.agents/plugins/hark-workflow/` (entry
+point: skill `hw-start` or the `parent-agent`; its README has the start prompt), owner/process rules in
+`.agents/AGENTS.md`, code rules in `.agents/rules/church-portal.md`, settings in `.agents/workflow.env.example`
+(copy to `.agents/workflow.env`).
+
 ## Where to look
 
 | Need | File |
