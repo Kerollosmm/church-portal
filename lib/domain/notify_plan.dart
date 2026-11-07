@@ -13,6 +13,7 @@ import 'models.dart';
 import 'readings.dart';
 import 'reminders.dart';
 import 'schedule.dart';
+import 'season_verses.dart';
 import 'time_format.dart';
 import 'today.dart';
 
@@ -183,6 +184,7 @@ List<PlannedNotification> planNotifications({
   required Map<String, DayReadings> cachedReadings,
   required List<CopticFeast> computedFeasts,
   bool exactAlarmsAllowed = true,
+  List<Season> seasons = const [],
 }) {
   CairoTime.ensureInitialized();
   final cairoNow = CairoTime.fromInstant(now);
@@ -217,7 +219,9 @@ List<PlannedNotification> planNotifications({
       }
 
       if (!vScheduledAt.isBefore(now)) {
-        final verse = resolveDailyVerse(verseConfig, verses, vScheduledAt, day: dayDate);
+        // Same choice as Home / the reading screen: fixed admin verse, else the active season's set.
+        final seasonSet = features.seasonVerses.activeSet(seasons, vScheduledAt);
+        final verse = resolveSeasonalVerse(verseConfig, verses, vScheduledAt, day: dayDate, seasonSet: seasonSet);
         String titleAr = 'آية اليوم';
         String titleEn = 'Daily Verse';
         String bodyAr = 'آية يومية مشجعة مع قراءات اليوم';

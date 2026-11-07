@@ -17,6 +17,7 @@ import '../domain/notify_plan.dart';
 import '../domain/readings.dart';
 import '../domain/reminders.dart';
 import '../domain/schedule.dart';
+import '../domain/season_verses.dart';
 import '../domain/today.dart';
 import 'providers.dart';
 
@@ -207,7 +208,8 @@ class PlannerSnapshot {
   }
 }
 
-/// `FeatureSettings.toMap()` is the admin-editor map and omits the push keys and `dayEvents`;
+/// `FeatureSettings.toMap()` is the admin-editor map and omits the push keys, `dayEvents` and
+/// `seasonVerses`;
 /// the background worker needs both, or it would plan types the admin withdrew and lose the
 /// times of day-event reminders. Written in the Firestore shape so `FeatureSettings.fromMap`
 /// reads them back unchanged.
@@ -219,6 +221,10 @@ Map<String, dynamic> snapshotFeaturesMap(FeatureSettings f) => {
       'reminderDefaultLead': f.pushSettings.defaultLead,
       'reminderSources': f.pushSettings.reminderSources.toList()..sort(),
       'dayEvents': _dayEventsForSnapshot(f.dayEvents),
+      'seasonVerses': [
+        for (final e in f.seasonVerses.bySeason.entries)
+          for (final v in e.value) [e.key, v.textAr, v.refAr, v.textEn, v.refEn].join(SeasonVerses.sep),
+      ],
     };
 
 /// Day events keep their stored position: the id (`e<index>`, part of a reminder's `day-` event
@@ -414,6 +420,7 @@ class NotifyPlanner {
         cachedReadings: cachedReadings,
         computedFeasts: const [],
         exactAlarmsAllowed: exactAllowed,
+        seasons: seasons,
       );
 
       await notifier.schedulePlan(plan, lang: pushPrefs.lang);
@@ -506,6 +513,7 @@ Future<bool> executeReplenishmentTask({
     cachedReadings: cachedReadings,
     computedFeasts: const [],
     exactAlarmsAllowed: exactAllowed,
+    seasons: snapshot.seasons,
   );
 
   await localNotifier.schedulePlan(newPlan, lang: snapshot.pushPrefs.lang);

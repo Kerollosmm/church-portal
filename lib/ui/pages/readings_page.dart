@@ -10,6 +10,7 @@ import '../../domain/cairo_time.dart';
 import '../../domain/coptic_calendar.dart';
 import '../../domain/daily_verse.dart';
 import '../../domain/readings.dart';
+import '../../domain/season_verses.dart';
 import '../../state/providers.dart';
 
 /// Reading screen for the day's Verse of the Day and Katameros readings (`/readings/:date`, ADR-058).
@@ -58,6 +59,9 @@ class _ReadingsPageState extends ConsumerState<ReadingsPage> {
       _currentDate = _parseDate(widget.dateIso);
       _loadReadings();
     }
+    if (oldWidget.initialTab != widget.initialTab && widget.initialTab != null) {
+      _selectedTab = widget.initialTab == 'verse' ? 1 : 0;
+    }
   }
 
   DateTime _parseDate(String iso) {
@@ -81,7 +85,12 @@ class _ReadingsPageState extends ConsumerState<ReadingsPage> {
     return '$y-$m-$d';
   }
 
+  /// Bumped per request: a slower answer for a date the user already left is dropped, so the page
+  /// never shows one day's header with another day's readings.
+  int _loadGeneration = 0;
+
   Future<void> _loadReadings({bool forceFetch = false}) async {
+    final generation = ++_loadGeneration;
     setState(() {
       _isLoading = true;
       _errorMessage = null;
@@ -89,7 +98,7 @@ class _ReadingsPageState extends ConsumerState<ReadingsPage> {
 
     try {
       final data = await _store.getReadings(_currentIso, forceFetch: forceFetch);
-      if (!mounted) return;
+      if (!mounted || generation != _loadGeneration) return;
       setState(() {
         _readings = data;
         _isLoading = false;
@@ -100,7 +109,7 @@ class _ReadingsPageState extends ConsumerState<ReadingsPage> {
         }
       });
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted || generation != _loadGeneration) return;
       setState(() {
         _readings = null;
         _isLoading = false;
@@ -122,7 +131,7 @@ class _ReadingsPageState extends ConsumerState<ReadingsPage> {
   }
 
   void _shareReading() {
-    final url = 'https://maximos-domadios-church.web.app/readings/$_currentIso';
+    final url = 'https://maximos-domadios-church.web.app/readings/$_currentIso?tab=${_selectedTab == 1 ? 'verse' : 'katameros'}';
     Clipboard.setData(ClipboardData(text: url));
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -138,7 +147,14 @@ class _ReadingsPageState extends ConsumerState<ReadingsPage> {
     final isAr = context.isAr;
     final versesAsync = ref.watch(dailyVersesProvider);
     final verses = versesAsync.value ?? const [];
-    final verse = verseForDate(verses, _currentDate);
+    // Same verse as Home and the notification (fixed admin verse → season set → rotation).
+    final features = ref.watch(featuresProvider);
+    final seasons = features.seasonVerses.isEmpty ? null : ref.watch(seasonsProvider);
+    final noon = CairoTime.at(_currentDate.year, _currentDate.month, _currentDate.day, 12 * 60);
+    final seasonSet = seasons == null
+        ? const <Verse>[]
+        : features.seasonVerses.activeSet(seasons.value ?? const [], noon);
+    final verse = resolveSeasonalVerse(features.dailyVerse, verses, noon, day: _currentDate, seasonSet: seasonSet);
     final coptic = _readings != null && _readings!.coptic.isNotEmpty
         ? _readings!.coptic
         : CopticDate.fromGregorian(_currentDate).format(arabic: isAr);

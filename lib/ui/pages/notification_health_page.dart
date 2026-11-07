@@ -287,7 +287,7 @@ class _NotificationHealthPageState extends ConsumerState<NotificationHealthPage>
       children: [
         Icon(
           ok ? Icons.check_circle_rounded : Icons.warning_amber_rounded,
-          color: ok ? Colors.green.shade700 : Colors.amber.shade800, // palette-exempt: semantic diagnostic status
+          color: ok ? pal.success : pal.alert, // palette roles (occasion themes incl. dark Holy Week)
           size: 18,
         ),
         const SizedBox(width: 10),

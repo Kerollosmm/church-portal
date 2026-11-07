@@ -25,7 +25,8 @@ class UpdateBanner extends ConsumerStatefulWidget {
 }
 
 class _UpdateBannerState extends ConsumerState<UpdateBanner> {
-  bool _dismissedLocally = false;
+  /// The build the user dismissed in this session; a newer announced build shows again.
+  int? _dismissedBuild;
 
   @override
   Widget build(BuildContext context) {
@@ -38,7 +39,7 @@ class _UpdateBannerState extends ConsumerState<UpdateBanner> {
       return const SizedBox.shrink();
     }
 
-    if (_dismissedLocally && !decision.isForced) {
+    if (_dismissedBuild != null && _dismissedBuild == decision.targetBuild && !decision.isForced) {
       return const SizedBox.shrink();
     }
 
@@ -142,7 +143,7 @@ class _UpdateBannerState extends ConsumerState<UpdateBanner> {
   }
 
   void _dismiss(UpdateDecision decision) async {
-    setState(() => _dismissedLocally = true);
+    setState(() => _dismissedBuild = decision.targetBuild);
     final updater = ref.read(appUpdaterProvider);
     await updater.dismissUpdate(decision.targetBuild);
     ref.invalidate(updateDecisionProvider);
@@ -297,6 +298,8 @@ class _UpdateSheetState extends ConsumerState<UpdateSheet> with WidgetsBindingOb
       return;
     }
 
+    // The user may have closed a non-forced sheet while the permission check ran.
+    if (!mounted) return;
     _install(filePath);
   }
 

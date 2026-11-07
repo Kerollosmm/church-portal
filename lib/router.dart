@@ -242,7 +242,9 @@ GoRouter buildAppRouter(Ref ref, {bool? isWeb, String initialLocation = '/'}) {
           ),
         ],
       ),
-      if (web)
+      // `kIsWeb || !dart.vm.product` is a compile-time constant: in a release APK it is false, so the
+      // admin dashboard is tree-shaken out (PR B §3.1); tests (debug VM) can still pass isWeb: true.
+      if (web && (kIsWeb || !const bool.fromEnvironment('dart.vm.product')))
         GoRoute(
           path: AppConfig.adminPath,
         builder: (c, s) {

@@ -855,4 +855,96 @@ void main() {
       }
     });
   });
+
+  group('Reminder fire time (review fixes, ADR-058)', () {
+    final prefs = PushPrefs(types: {NotifyType.reminders}, quietHoursEnabled: false, updatedAt: DateTime.utc(2026));
+    final features = FeatureSettings(pushSettings: PushSettings(enabled: true, offered: NotifyType.values));
+    List<PlannedNotification> plan(DateTime now, List<Reminder> reminders,
+            {bool exact = true, List<LiturgyOccurrence> liturgies = const []}) =>
+        planNotifications(
+          now: now,
+          prefs: prefs,
+          features: features,
+          reminders: reminders,
+          verseConfig: DailyVerseConfig.defaults,
+          verses: const [],
+          liturgies: liturgies,
+          meetings: const [],
+          dayEvents: const [],
+          cachedReadings: const {},
+          computedFeasts: const [],
+          exactAlarmsAllowed: exact,
+        );
+
+    test('an expired one-off reminder is never re-scheduled (inexact fallback)', () {
+      final created = CairoTime.at(2026, 11, 6, 8 * 60);
+      final r = Reminder(
+        eventKey: 'day-e0',
+        lead: 60,
+        title: const {'ar': 'نهضة'},
+        startsAt: CairoTime.at(2026, 11, 7, 10 * 60), // nominal fire 09:00
+        createdAt: created,
+      );
+      expect(plan(CairoTime.at(2026, 11, 7, 9 * 60 + 30), [r], exact: false), isEmpty);
+      expect(plan(CairoTime.at(2026, 11, 7, 9 * 60 + 30), [r], exact: true), isEmpty);
+    });
+
+    test('inexact: an early slot already passed for an older reminder is skipped (it has rung)', () {
+      final r = Reminder(
+        eventKey: 'day-e0',
+        lead: 60,
+        title: const {'ar': 'نهضة'},
+        startsAt: CairoTime.at(2026, 11, 7, 10 * 60), // nominal 09:00, early slot 08:50
+        createdAt: CairoTime.at(2026, 11, 6, 8 * 60),
+      );
+      expect(plan(CairoTime.at(2026, 11, 7, 8 * 60 + 55), [r], exact: false), isEmpty);
+    });
+
+    test('inexact: a reminder created inside the last 10 minutes rings in 30 s', () {
+      final now = CairoTime.at(2026, 11, 7, 8 * 60 + 55);
+      final r = Reminder(
+        eventKey: 'day-e0',
+        lead: 60,
+        title: const {'ar': 'نهضة'},
+        startsAt: CairoTime.at(2026, 11, 7, 10 * 60),
+        createdAt: now,
+      );
+      final p = plan(now, [r], exact: false).single;
+      expect(p.exact, isFalse);
+      expect(p.scheduledAt, equals(now.add(const Duration(seconds: 30))));
+    });
+
+    test('a weekly lit- reminder is suppressed on a day the season leaves with no liturgy', () {
+      final now = CairoTime.at(2026, 11, 7, 8 * 60); // Saturday
+      final sunday = Liturgy(
+        id: 'sun',
+        type: 'mass',
+        nameAr: 'قداس الأحد',
+        nameEn: 'Sunday Mass',
+        weekday: 7,
+        start: '08:00',
+        end: '10:00',
+      );
+      // Occurrences on Sun 8 Nov and Sun 22 Nov only: 15 Nov is a replaced day with no liturgy at all.
+      LiturgyOccurrence occ(int day) {
+        final s = CairoTime.at(2026, 11, day, 8 * 60);
+        return LiturgyOccurrence(sunday, s, s.add(const Duration(hours: 2)), day - 7);
+      }
+      final weekdayOnly = Liturgy(id: 'wed', type: 'mass', nameAr: 'قداس', nameEn: 'Mass', weekday: 3, start: '07:00', end: '09:00');
+      final wedStart = CairoTime.at(2026, 11, 25, 7 * 60);
+      final liturgies = [occ(8), occ(22), LiturgyOccurrence(weekdayOnly, wedStart, wedStart.add(const Duration(hours: 2)), 18)];
+      final r = Reminder(
+        eventKey: 'lit-sun',
+        every: true,
+        lead: 60,
+        title: const {'ar': 'قداس الأحد'},
+        startsAt: CairoTime.at(2026, 11, 8, 8 * 60),
+        createdAt: now,
+      );
+      final dates = plan(now, [r], liturgies: liturgies).map((p) => isoDate(CairoTime.fromInstant(p.scheduledAt))).toList();
+      expect(dates, contains('2026-11-08'));
+      expect(dates, contains('2026-11-22'));
+      expect(dates, isNot(contains('2026-11-15')), reason: 'replaced day without any liturgy');
+    });
+  });
 }
