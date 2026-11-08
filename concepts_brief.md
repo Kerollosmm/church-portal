@@ -1,65 +1,73 @@
-# APK Scroll Performance & Katameros Focus Reader
+# Unified Mobile Experience, Performance Hardening & Navigation Chrome De-Duplication
 
 * **Author:** Kerollos
 * **Date:** 2026-11-08
 
 ## Overview
 
-Parishioners reading the daily Katameros lectionary and Verse of the Day on the Android APK face three connected issues:
-1. **APK scroll and frame lag:** `ReadingsPage` (`lib/ui/pages/readings_page.dart`) eagerly builds every liturgical section and reading card inside a single `SingleChildScrollView` + `Column`, while `WarmBackdrop` (`lib/ui/widgets/golden.dart`) and `HeroVideo` (`lib/ui/widgets/hero_video_io.dart`) lack repaint isolation in key places.
-2. **Cluttered reading environment without adaptive scroll:** `/readings/:date` stacks `AppShell`'s global chrome (`TopUtilityBar`, `AppBar`, `SealTab`, `UpdateBanner`, `LiveStreamBanner`, `InstallBanner`) on top of `ReadingsPage`'s own duplicate title bar, date bar, and tab bar. None of these bars hide when scrolling down to read.
-3. **Day-navigation arrows vs. font resizing up to `2.0x`:** Currently, the `A−` / `A+` buttons sit in the middle of the date-switcher row (`readings_page.dart`, lines 220–275) where the date and day-navigation arrows belong, while font scaling is capped at `1.45x` and resets on exit. The date bar should use clear RTL-aware arrow icons to navigate through days, while font resizing is provided as a dedicated reader control supporting up to `2.0x` scale with device persistence.
+The mobile Android experience for the parish portal currently exhibits three visible quality and performance defects:
+1. **Home Screen APK Frame Drops & GPU Jank:** In `lib/ui/widgets/golden.dart`, `HeroStage` runs an unconstrained 60-second continuous `AnimationController` (`_clock.repeat()`). While the Web platform offloads haze and ray shimmer to hardware-accelerated CSS DOM layers (`HeroAmbientLayer`, ADR-037), on the mobile Android APK (`!kIsWeb`), Flutter drives Ken Burns continuous scaling, `_HazeDrift` cloud repaints, and an expensive `LightRaysPainter` with `MaskFilter.blur` on every frame at 60/120 Hz. This exhausts mobile CPU/GPU budgets and induces visible opening lag and scroll stutter on the Home screen.
+2. **Jarring White Flash at App Launch:** The Android native launch drawable (`launch_background.xml` in `android/app/src/main/res/drawable/` and `drawable-v21/`) is hardcoded to `@android:color/white` and `?android:colorBackground` (`#FFFFFF`). On cold start, Android displays a stark white window for 1–2 seconds while Flutter and Firebase bootstrap before painting the church's warm cream wash (`#FBF3E4`), causing an abrupt, unbranded white flicker.
+3. **Stacked Navigation Chrome & Double Back Arrows:**
+   * In `ItemDetailPage` (`lib/ui/pages/item_detail_page.dart`), `AppShell` already provides an `AppBar` with a leading `arrow_back_rounded` icon on mobile (`showBack = !wide && location != '/'`). Inside the content body, `ItemDetailPage` redundantly renders `_BackLink(parent: parent)`, creating two vertically stacked back arrows within 120 pixels on mobile viewports.
+   * In `NotificationHealthPage` (`lib/ui/pages/notification_health_page.dart`, `/notifications/battery`), the page is routed inside `ShellRoute` (so `AppShell`'s `AppBar` is already present), but the page introduces a nested `Scaffold` with a custom `Container` top bar and a second back button and title, creating stacked app bars and duplicate back navigation.
+   * In `AppShell` (`lib/ui/widgets/app_shell.dart`), `parentRouteOf('/notifications/battery')` currently defaults to `'/'` instead of returning `/notifications`.
 
 ## Analysis
 
-All seven Goldfish review lenses (`egm-design`, `egm-codebase-details`, `egm-zoom-out`, `egm-comprehension`, `egm-implementation-readiness`, `egm-structural`, and `egm-inventive-catalyst`) audited the codebase and identified the technical constraints required to deliver these three improvements cleanly:
+The 7-lens Goldfish review (`egm-design`, `egm-codebase-details`, `egm-zoom-out`, `egm-comprehension`, `egm-implementation-readiness`, `egm-structural`, and `egm-inventive-catalyst`) evaluated the problem space and established the following technical resolutions:
 
-### 1. Distraction-Free Reading Environment without 60 Hz Shell Rebuilds
-* **The Contradiction:** A focused reading environment requires hiding both the outer `AppShell` bars/banners (`TopUtilityBar`, `AppBar`, `SealTab`, `UpdateBanner`, `LiveStreamBanner`, `InstallBanner`) and the inner reading controls when the user scrolls down. However, streaming raw scroll pixel offsets into `AppShell` on every frame causes 60–120 Hz whole-shell rebuilds, detaches the absolute-positioned `SealTab` (`PositionedDirectional`), and risks leaving `AppShell` collapsed if the user navigates to another route.
-* **Resolution:**
-  1. **Remove duplicate static chrome:** Consolidate `ReadingsPage`'s duplicate top title bar ("قراءات اليوم" + second Back button) with the unified reader header so 56 dp of redundant chrome is eliminated immediately.
-  2. **Damped boolean focus state for `AppShell`:** Use a route-scoped boolean provider (`readerFocusModeProvider`, active only when `location.startsWith('/readings/')` and automatically reset to `false` on route exit or dispose). Toggle it only when continuous scroll delta exceeds a $\ge 40\text{ dp}$ hysteresis threshold downward (enter focus mode) or upward (exit focus mode). `AppShell` animates its top bar, `SealTab`, and banners out/in via a single GPU-composited `AnimatedSlide` / `AnimatedSize` transition on direction change—zero widget rebuilds during ongoing scroll frames.
-  3. **Native Sliver collapse for inner bars:** Place the date navigation bar and Katameros/Verse tab bar inside a `SliverAppBar(floating: true, snap: true)` inside `ReadingsPage`'s `CustomScrollView` so inner bars collapse and snap back via native sliver physics.
+### 1. Platform-Gated Ambient Animation Throttling (`!kIsWeb` only)
+* **The Contradiction:** Ethereal golden-hour aesthetics require shimmering light rays and moving haze, but low-end Android mobile GPUs experience dropped frames and thermal throttling under continuous canvas repaints.
+* **Resolution (TRIZ Principle 2 - Separation & Principle 19 - Periodic/Static Action):**
+  * Detect the mobile runtime via `bool get _isMobileApk => !kIsWeb && defaultTargetPlatform == TargetPlatform.android;`.
+  * On mobile APK, stop the continuous `_clock.repeat()` loop for ambient motion. Render the hero painting statically without Ken Burns scaling, omit `_HazeDrift`, and render `LightRaysPainter` statically using `HeroAmbientSpec.stillShimmer` without `AnimatedBuilder`.
+  * The Web platform (`kIsWeb`) remains 100% untouched, continuing to run full CSS-animated DOM layers (`HeroAmbientLayer`).
+  * This drops idle GPU canvas repaints to zero on Android, eliminating frame drops during Home screen scrolling and opening.
 
-### 2. Dedicated Day-Navigation Arrows & `2.0x` Font Scaling
-* **Day Navigation via Arrow Icons:**
-  * Replace the current mixed bar (`< A− A+ >`) with a clean day-navigation bar containing RTL-aware previous-day and next-day arrow buttons (`Icons.arrow_back_rounded` / `Icons.arrow_forward_rounded`, minimum 48x48 dp touch targets) flanking the current Gregorian and Coptic date display (`$_currentIso • $coptic`), so tapping the arrows clearly navigates backward and forward through days.
-* **Font Resizing up to `2.0x`:**
-  * Move font resizing out of the center of the day-navigation arrows into a dedicated font-size control (e.g., an `Icons.format_size_rounded` button/pill in the reader header that opens a compact font-size slider/stepper from `0.85x` to `2.0x` with a percentage readout and one-tap `100%` reset, or a dedicated reader-controls row).
-  * **Overflow protection at `2.0x` on 320 px screens:** Refactor `_buildReadingCard`'s header (title + scripture reference pill in `readings_page.dart`, lines 481–513) from a rigid `Row` to a `Wrap` (or column layout when scale $> 1.3\text{x}$ or width $< 360\text{ px}$) so scaling to `2.0x` never triggers `RenderFlex` overflow on 320 px viewports.
-  * **Zero-flash persistence:** Pre-warm the saved font scale (`church_portal_reading_font_scale`, clamped to `[0.85, 2.0]`) at startup alongside `initLanguageStore()` and `initInstallStore()` in `main.dart`, and debounce writes to `shared_preferences` by 400 ms.
+### 2. Native Android Splash Screen Color Continuity
+* **The Contradiction:** Flutter and Firebase bootstrap operations require 500ms–1500ms before first paint, but displaying a blank white OS window creates a jarring visual flash.
+* **Resolution (TRIZ Principle 10 - Prior Action):**
+  * Define `<color name="splash_cream">#FBF3E4</color>` in `android/app/src/main/res/values/colors.xml`.
+  * Update `launch_background.xml` (both `drawable/` and `drawable-v21/`) to replace `@android:color/white` and `?android:colorBackground` with `@color/splash_cream`.
+  * Update `LaunchTheme` and `NormalTheme` in `android/app/src/main/res/values/styles.xml` to use `@color/splash_cream` for `android:windowBackground`.
+  * The native OS window displays the exact liturgical cream wash with the centered parish seal from frame zero, eliminating startup flicker.
 
-### 3. Lazy Sliver Virtualization & Targeted Repaint Isolation
-* **Flattened `SliverList.builder`:** Convert the Katameros tab in `ReadingsPage` from `SingleChildScrollView` + `Column` to a `CustomScrollView` with a flattened list of sliver items (commemoration banner, section headers, individual reading cards, attribution footer) backed by `SliverList.builder`, deterministic `ValueKey`s, and `cacheExtent: 500`.
-* **Scroll Offset Hygiene:** Reset the Katameros scroll offset to `0.0` when navigating to a previous or next day (`_shiftDay`), and keep the single-card Daily Verse tab in its own independent scroll viewport so switching tabs does not jump or desynchronize.
-* **Targeted `RepaintBoundary` Placement:**
-  * Wrap `WarmBackdrop` (`lib/ui/widgets/golden.dart`, line 66) in a `RepaintBoundary` so the full-screen cloud texture + `ColorFilter` is raster-cached once and never repainted during body scrolling.
-  * Wrap the `VideoPlayer` inside `HeroVideo` (`lib/ui/widgets/hero_video_io.dart`, line 100) in a `RepaintBoundary` so 60 fps video frame decoding on the Home page does not dirty ancestor layers.
-  * Leave `HeroStage`'s existing `RepaintBoundary` wrappers (`golden.dart`, lines 600, 633, 635) untouched to avoid redundant full-screen GPU texture allocations on low-RAM Android devices.
+### 3. Unified Navigation Chrome & Sub-Screen De-Duplication
+* **The Contradiction:** Deep detail pages need a clear mechanism to return to parent listings, but duplicating back buttons inside the body clutters mobile screens and confuses screen readers.
+* **Resolution (TRIZ Principle 5 - Merging & Principle 6 - Universality):**
+  * **Enforce Single Scaffold Invariant (`INV-NAV-01`):** `AppShell` is the sole `Scaffold` provider for all public routes. Remove the nested `Scaffold` and custom top bar from `NotificationHealthPage`, converting it to standard `PageBody` + `PageHeader`.
+  * **Enforce Single Back Arrow Invariant (`INV-NAV-02`):** `AppShell.leading` is the sole back arrow on mobile (`!wide`). In `ItemDetailPage`, render `_BackLink` only on desktop (`if (wide) _BackLink(...)`), eliminating the duplicate arrow on mobile viewports while preserving desktop breadcrumbs.
+  * **Route Hierarchy Mapping:** Update `parentRouteOf` in `AppShell` so `/notifications/battery` navigates up to `/notifications`.
 
 ## Goals vs. Non-Goals
 
 * **In-Scope Goals:**
-  * Lazy sliver virtualization (`CustomScrollView` + `SliverList.builder`) for Katameros readings in `lib/ui/pages/readings_page.dart`.
-  * Distraction-free adaptive scrolling on `/readings/:date` that hides outer `AppShell` chrome/banners (via a damped, route-scoped boolean focus state) and collapses inner reading bars (`SliverAppBar(floating: true, snap: true)`) on downward scroll, restoring them on upward scroll.
-  * Clean day-navigation bar using RTL-aware arrow icons (`prevDayButton` / `nextDayButton`) with the date in between, replacing the misplaced `A−` / `A+` buttons.
-  * Dedicated font-size resize feature supporting `0.85x` to `2.0x` normally, persisted in `shared_preferences` (`church_portal_reading_font_scale`, pre-warmed at startup), with `Wrap`-based reading card headers verified at 320 px width.
-  * Targeted `RepaintBoundary` isolation on `WarmBackdrop` and `HeroVideo`.
+  * Disable continuous ambient canvas animation tickers in `HeroStage` exclusively on mobile APK (`!kIsWeb && defaultTargetPlatform == TargetPlatform.android`), achieving smooth 60–120 FPS Home screen scrolling.
+  * Brand the native Android launch screen with `#FBF3E4` (`@color/splash_cream`) and centered parish seal across `launch_background.xml` and `styles.xml`.
+  * Remove `_BackLink` on mobile viewports in `ItemDetailPage` (`lib/ui/pages/item_detail_page.dart`).
+  * Remove the nested `Scaffold` and duplicate top bar in `NotificationHealthPage` (`lib/ui/pages/notification_health_page.dart`), adopting `PageBody` + `PageHeader`.
+  * Update `parentRouteOf` in `AppShell` (`lib/ui/widgets/app_shell.dart`) to route `/notifications/battery` to `/notifications`.
 
 * **Out-of-Scope Non-Goals:**
-  * Firestore schema, `firestore.rules`, or `/admin` dashboard field changes (`+0` rules expressions).
-  * Changes to `tool/fetch_readings.js` or background notification scheduling (`notify_plan.dart`).
-  * Production Sentry performance tracing (kept off per ADR-034 / PDPL).
+  * Modifying Web animations (Web retains full CSS DOM animations).
+  * Changing Firestore schemas, `firestore.rules`, or `/admin` fields (`+0` rules expressions).
+  * Altering bottom sheet navigation or dialog flows.
 
 ## Alternatives Weighed
 
-* **Keeping `A−` / `A+` in the center of the date switcher row or replacing font buttons with arrows:** Rejected by author: the arrow icons in the bar are meant to navigate through days (previous/next day), while font resizing should be a proper resize control supporting up to `2.0x`.
-* **Capping font scale at `1.5x`–`1.65x`:** Rejected by author: reading text must scale up to `2.0x` normally, solved by making reading card headers wrap cleanly at 320 px.
-* **Collapsing only inner headers while leaving `AppShell` bars and banners pinned during reading:** Rejected by author: the reader needs a clean, distraction-free reading environment on scroll, achieved safely via a damped boolean focus state (`readerFocusModeProvider`) rather than per-pixel `AppShell` rebuilds.
-* **Streaming raw `ScrollController` offsets into `AppShell` at 60 Hz:** Rejected by Goldfish review (`egm-design`, `egm-structural`, `egm-zoom-out`, `egm-implementation-readiness`, `egm-inventive-catalyst`) because it triggers full-shell rebuilds on every frame and detaches `SealTab`.
+* **Removing the main AppBar from Home on mobile:** Rejected by author: the main AppBar must remain intact across the app to preserve the drawer menu access, language switch, and parish seal tab.
+* **Removing all back buttons from both AppBar and body:** Rejected by review: leaves standalone PWA deep links stranded with no parent navigation, forcing users through Home or the drawer.
+* **Keeping continuous Ken Burns scale on mobile APK with lower frame rate:** Rejected by review: any active ticker triggers continuous canvas repaints on Flutter, preventing the raster thread from sleeping during idle or scroll.
+* **Using a Flutter splash package (`flutter_native_splash`):** Rejected by review: unnecessary third-party dependency; the native Android drawable and styles configuration can be updated directly via standard Android XML resources in minutes without code bloat.
 
 ## Key Decisions & Staging for Next Steps
 
-1. **Adaptive Focus Mode:** `/readings/:date` uses a single unified `CustomScrollView` with `SliverAppBar(floating: true, snap: true)` for inner controls and a damped ($\ge 40\text{ dp}$ hysteresis), route-scoped `readerFocusModeProvider` that slides `AppShell` top chrome (`TopUtilityBar`, `AppBar`, `SealTab`) and banners (`UpdateBanner`, `LiveStreamBanner`, `InstallBanner`) out of view when scrolling down and restores them when scrolling up or leaving the route.
-2. **Day Navigation & Font Resize UI:** The date bar displays `[← Previous Day] [Gregorian • Coptic Date] [Next Day →]` using directional arrow icons; font resizing (`0.85x–2.0x`, default `1.0x`, persisted in `church_portal_reading_font_scale`) is accessed via a dedicated font-size control in the reader header with responsive `Wrap` headers on reading cards.
-3. **APK Performance Gate:** Flatten Katameros sections into lazy slivers (`SliverList.builder`, `cacheExtent: 500`) and isolate `WarmBackdrop` and `HeroVideo` with `RepaintBoundary` widgets.
+1. **Architecture & Scope Sealing:**
+   * `INV-NAV-01`: Only `AppShell` manages `Scaffold` chrome for routed public pages.
+   * `INV-NAV-02`: Exactly one back arrow on mobile viewports, located in `AppShell.leading`.
+   * `INV-PERF-01`: Zero continuous ambient tickers on mobile Android APK (`!kIsWeb`).
+   * `INV-SPLASH-01`: Native Android launch window background locked to `#FBF3E4`.
+2. **Next Steps:**
+   * Review brief with author.
+   * Transition to implementation via standard Hark Workflow cycle on feature branch.

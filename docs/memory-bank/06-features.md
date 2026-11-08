@@ -61,7 +61,6 @@ render with `PageBody` (+ `Footer`). Content comes from Riverpod providers (hidd
   `heroMotion` off or under `flutter test`. The YouTube hero video library of PR #17 (ADR-026) was **removed in PR #25
   (ADR-036, owner request 4 Nov 2026)**; a `heroVideos` map already stored in `settings/features` is ignored.
 - **Hero ambient motion on web (ADR-037, PR #29):** the haze drift and light-ray shimmer look exactly as before but
-  run as a CSS-animated DOM layer (`HeroAmbientLayer`) instead of a per-frame Flutter repaint; the first paint is a
   run as a CSS-animated DOM layer (`HeroAmbientLayer`) instead of a per-frame Flutter repaint; see `documentation/features/performance-pagespeed.md`.
 - **Liturgical web loading screen (ADR-044, PR #35; replaces the ADR-037 static hero copy):** `web/index.html` shows,
   on the cream `#FBF3E4` ground (= `manifest.json` `background_color`), the parish seal (`assets/assets/branding/seal.png`,
@@ -582,7 +581,8 @@ digits, Cairo `02` + 8, Alexandria `03` + 7, other governorates `0[4-9]` + 7–8
 - Offline caching via `ReadingsStore` (SharedPreferences on mobile, in-memory on web) with automatic pruning of dates older than yesterday.
 - Accessible directly via the «اقرأ القراءات» action on the Today card or direct link `/readings/YYYY-MM-DD`.
 
-### Notification Health & OEM Guidance (`/notifications/battery`, `notification_health_page.dart`, ADR-058)
+### Notification Health & OEM Guidance (`/notifications/battery`, `notification_health_page.dart`, ADR-058, ADR-062)
+- Screen uses unified `PageBody` + `PageHeader` (ADR-062, `INV-NAV-01`; no nested `Scaffold` or custom top bar) with localized strings registered via dedicated deferred string table `notificationHealthStrings`. `parentRouteOf('/notifications/battery')` routes back to `/notifications` with tooltip «العودة إلى الإشعارات» / "Back to Notifications".
 - Diagnostic check for Android background delivery: notification permissions, exact alarms capability, battery optimization exemption, and background replenishment worker recency (< 48 hours).
 - OEM vendor detection (Xiaomi/Redmi/POCO, Oppo/Realme/OnePlus, Vivo/iQOO, Huawei/Honor, Samsung, Other).
 - Step-by-step guidance tailored to the user's phone brand with one-click intent launcher buttons (`church_portal/device` platform channel) falling back to App Info settings.
@@ -596,5 +596,6 @@ digits, Cairo `02` + 8, Alexandria `03` + 7, other governorates `0[4-9]` + 7–8
 
 ### Android Native Shell (`app_shell.dart`, `router.dart`, ADR-058)
 - Route `/admin` is completely compiled out when `!isWeb`.
-- `PopScope` intercepts device back buttons: detail routes return to parent listing (`parentRouteOf`), subpages return to `/`, and pressing back on `/` shows a toast «اضغط مرة أخرى للخروج من التطبيق» exiting if tapped again within 2 seconds.
+- `PopScope` intercepts device back buttons: detail routes return to parent listing (`parentRouteOf`), `/notifications/battery` returns to `/notifications` (ADR-062), subpages return to `/`, and pressing back on `/` shows a toast «اضغط مرة أخرى للخروج من التطبيق» exiting if tapped again within 2 seconds.
+- Single back arrow invariant (`INV-NAV-02`, ADR-062): phone viewports display exactly one back arrow located in `AppShell.leading`; `ItemDetailPage` hides its in-body back link on mobile and only displays it on desktop (`shellIsWide(context)` >= 1024 unscaled text width).
 - Assistant page on Android native displays a clean redirect card with a button opening the web assistant at `https://maximos-domadios-church.web.app/ask` in the external browser.

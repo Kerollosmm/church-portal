@@ -326,7 +326,9 @@ void main() {
       expect(find.byKey(const Key('itemDetailPage')), findsOneWidget);
       expect(find.text('Dental'), findsWidgets);
       expect(find.text('د. تجربة'), findsWidgets);
-      expect(find.byKey(const Key('detailBackLink')), findsOneWidget);
+      // On mobile (default 400px), single back arrow is in AppShell (INV-NAV-02)
+      expect(find.byKey(const Key('backParent')), findsOneWidget);
+      expect(find.byKey(const Key('detailBackLink')), findsNothing);
       final text = tester.widget<SelectableText>(find.byKey(const Key('detailText')));
       expect(text.data, 'Long-form details about this service');
       expect(text.style?.height, 1.8);
@@ -343,6 +345,30 @@ void main() {
       expect(specs.last.noIndex, isFalse);
     });
 
+    testWidgets('single back arrow on phone vs desktop (INV-NAV-02)', (tester) async {
+      // Mobile widths: 360, 400, 1023 -> backParent x1, detailBackLink x0, arrow_back_rounded x1
+      for (final width in [360.0, 400.0, 1023.0]) {
+        await _pump(tester, initial: '/clinics/d-clinic', size: Size(width, 2400));
+        expect(find.byKey(const Key('backParent')), findsOneWidget, reason: 'width $width');
+        expect(find.byKey(const Key('detailBackLink')), findsNothing, reason: 'width $width');
+        expect(find.byIcon(Icons.arrow_back_rounded), findsOneWidget, reason: 'width $width');
+      }
+
+      // Desktop widths: 1024, 1400 -> backParent x0, detailBackLink x1, arrow_back_rounded x1
+      for (final width in [1024.0, 1400.0]) {
+        await _pump(tester, initial: '/clinics/d-clinic', size: Size(width, 2400));
+        expect(find.byKey(const Key('backParent')), findsNothing, reason: 'width $width');
+        expect(find.byKey(const Key('detailBackLink')), findsOneWidget, reason: 'width $width');
+        expect(find.byIcon(Icons.arrow_back_rounded), findsOneWidget, reason: 'width $width');
+      }
+
+      // Large system text on desktop: 1400 with textScale 2.0 -> unscaled 700 < 1024 -> phone mode
+      await _pump(tester, initial: '/clinics/d-clinic', size: const Size(1400, 2400), textScale: 2.0);
+      expect(find.byKey(const Key('backParent')), findsOneWidget);
+      expect(find.byKey(const Key('detailBackLink')), findsNothing);
+      expect(find.byIcon(Icons.arrow_back_rounded), findsOneWidget);
+    });
+
     testWidgets('Arabic: content picked in Arabic, external label falls back to "open page"', (tester) async {
       await _pump(tester,
           locale: const Locale('ar'),
