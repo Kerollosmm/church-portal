@@ -49,10 +49,13 @@ export function parseScheduleRow(raw) {
   };
 }
 
+const MAX_TOPIC_ATTEMPTS = 3;
+const MAX_SUBREQUESTS_PER_RUN = 24; // Cloudflare Worker allows 25; keep 1 reserve for final commit
+
 /**
  * Sends a data-only FCM message to a topic with automatic retry on transient errors.
  */
-export async function sendFcmMessage(projectId, token, topic, data, fetchImpl = fetch) {
+export async function sendFcmMessage(projectId, token, topic, data, fetchImpl = fetch, subrequestBudget = null) {
   const url = `https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`;
   const body = {
     message: {
@@ -79,6 +82,12 @@ export async function sendFcmMessage(projectId, token, topic, data, fetchImpl = 
   const maxAttempts = 3;
 
   while (attempts < maxAttempts) {
+    if (subrequestBudget) {
+      if (subrequestBudget.count >= subrequestBudget.max) {
+        return { status: 'retry:subrequest_cap' };
+      }
+      subrequestBudget.count++;
+    }
     attempts++;
     try {
       const res = await fetchImpl(url, {
@@ -100,7 +109,7 @@ export async function sendFcmMessage(projectId, token, topic, data, fetchImpl = 
 
       const status = res.status;
       const isTransient = status === 429 || (status >= 500 && status < 600);
-      if (isTransient && attempts < maxAttempts) {
+      if (isTransient && attempts < maxAttempts && (!subrequestBudget || subrequestBudget.count < subrequestBudget.max)) {
         // Simple backoff
         await new Promise((resolve) => setTimeout(resolve, attempts * 300));
         continue;
@@ -118,7 +127,7 @@ export async function sendFcmMessage(projectId, token, topic, data, fetchImpl = 
       }
       return { status: `error:${code}` };
     } catch (netErr) {
-      if (attempts < maxAttempts) {
+      if (attempts < maxAttempts && (!subrequestBudget || subrequestBudget.count < subrequestBudget.max)) {
         await new Promise((resolve) => setTimeout(resolve, attempts * 300));
         continue;
       }
@@ -269,10 +278,14 @@ export async function runPushSender(env, options = {}) {
       if (isWeb) candidateTopics.push('web_announcements_ar', 'web_announcements_en');
 
       const currentTopics = rowStatus.topics || {};
+      const attempts = rowStatus.attempts || {};
       for (const t of candidateTopics) {
-        if (currentTopics[t] !== 'ok') {
-          neededTopics.push(t);
-        }
+        const state = currentTopics[t];
+        const numAttempts = attempts[t] || (state ? 1 : 0);
+        // Terminal if 'ok', 'unconfirmed', or max attempts reached
+        if (state === 'ok' || state === 'unconfirmed') continue;
+        if (numAttempts >= MAX_TOPIC_ATTEMPTS) continue;
+        neededTopics.push(t);
       }
 
       if (neededTopics.length > 0) {
@@ -323,13 +336,17 @@ export async function runPushSender(env, options = {}) {
     claimConflict,
   };
 
+  const subrequestBudget = { count: 0, max: MAX_SUBREQUESTS_PER_RUN };
+
   if (!claimConflict) {
     // Send due event pushes
     for (const { row, neededTopics } of dueRows) {
       const rowStatus = statusMap[row.id] || {};
       const topicsState = { ...(rowStatus.topics || {}) };
+      const attempts = { ...(rowStatus.attempts || {}) };
 
       for (const t of neededTopics) {
+        attempts[t] = (attempts[t] || 0) + 1;
         const lang = t.endsWith('_en') ? 'en' : 'ar';
         const title = lang === 'en' && row.titleEn ? row.titleEn : row.titleAr;
         const body = lang === 'en' && row.bodyEn ? row.bodyEn : row.bodyAr;
@@ -353,6 +370,7 @@ export async function runPushSender(env, options = {}) {
               sentAt: nowIso,
             },
             fetchImpl,
+            subrequestBudget,
           );
         }
 
@@ -386,6 +404,7 @@ export async function runPushSender(env, options = {}) {
         result: newState,
         claimedAt: nowIso,
         topics: topicsState,
+        attempts,
       };
 
       // Record in sentLog
@@ -405,17 +424,19 @@ export async function runPushSender(env, options = {}) {
       now,
     );
 
-    if (seasonsRes.lastSeasonDate) {
-      health.lastSeasonDate = seasonsRes.lastSeasonDate;
-    }
+    let allSeasonAlertsComplete = true;
 
     for (const alert of seasonsRes.alerts) {
       // 4 topics per season alert
       const seasonTopics = ['app_seasons_ar', 'app_seasons_en', 'web_seasons_ar', 'web_seasons_en'];
+      let sentTopicsCount = 0;
       let anyFailed = false;
 
       for (const st of seasonTopics) {
-        if (resultsSummary.fcmSends >= MAX_FCM_SENDS_PER_RUN) break;
+        if (resultsSummary.fcmSends >= MAX_FCM_SENDS_PER_RUN) {
+          allSeasonAlertsComplete = false;
+          break;
+        }
 
         const lang = st.endsWith('_en') ? 'en' : 'ar';
         const title = lang === 'en' ? alert.titleEn : alert.titleAr;
@@ -438,16 +459,26 @@ export async function runPushSender(env, options = {}) {
               sentAt: nowIso,
             },
             fetchImpl,
+            subrequestBudget,
           );
           if (res.status !== 'ok') anyFailed = true;
         }
+        sentTopicsCount++;
         resultsSummary.fcmSends++;
       }
 
-      const alertResult = anyFailed ? 'partial' : 'ok';
-      const logEntry = `${alert.logKey}\x1f${nowIso}\x1f${alertResult}\x1f${alert.titleAr}\x1f${options.trigger || 'cron'}`;
-      sentLog.unshift(logEntry);
-      resultsSummary.dailySeasonsSent++;
+      if (sentTopicsCount === seasonTopics.length) {
+        const alertResult = anyFailed ? 'partial' : 'ok';
+        const logEntry = `${alert.logKey}\x1f${nowIso}\x1f${alertResult}\x1f${alert.titleAr}\x1f${options.trigger || 'cron'}`;
+        sentLog.unshift(logEntry);
+        resultsSummary.dailySeasonsSent++;
+      } else {
+        allSeasonAlertsComplete = false;
+      }
+    }
+
+    if (allSeasonAlertsComplete && seasonsRes.lastSeasonDate) {
+      health.lastSeasonDate = seasonsRes.lastSeasonDate;
     }
 
     // Cap sentLog at MAX_SENT_LOG_SIZE (30 items)

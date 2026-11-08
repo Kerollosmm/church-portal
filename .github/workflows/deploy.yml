@@ -216,9 +216,79 @@ jobs:
           CHANNEL: pr-${{ github.event.pull_request.number }}
         run: |
           set -euo pipefail
-          npx --yes firebase-tools@latest hosting:channel:deploy "$CHANNEL" --only app \
-            --expires 7d --project "$FIREBASE_PROJECT_ID" --non-interactive --json > "$RUNNER_TEMP/deploy.json" \
-            || { cat "$RUNNER_TEMP/deploy.json"; exit 1; }
+
+          # Prune old preview channels if channel quota is approached (Spark plan limit is 10 channels)
+          python3 - <<'PRUNE_PY'
+          import json, os, subprocess
+          site = "maximos-domadios-church"
+          proj = os.environ.get("FIREBASE_PROJECT_ID", "asafra-church-portal")
+          try:
+              res = subprocess.run(
+                  ["npx", "--yes", "firebase-tools@latest", "hosting:channel:list", "--site", site, "--project", proj, "--json"],
+                  capture_output=True, text=True, check=True
+              )
+              raw = res.stdout
+              out = json.loads(raw[raw.find("{"):])
+              channels = out.get("result", {}).get("channels", [])
+              previews = [c for c in channels if not c.get("name", "").endswith("/live")]
+              if len(previews) >= 8:
+                  previews.sort(key=lambda c: c.get("updateTime", ""))
+                  to_delete = previews[:len(previews) - 6]
+                  for c in to_delete:
+                      cid = c["name"].split("/")[-1]
+                      print(f"Pruning old preview channel: {cid}")
+                      subprocess.run(
+                          ["npx", "--yes", "firebase-tools@latest", "hosting:channel:delete", cid, "--site", site, "--project", proj, "--force"],
+                          check=False
+                      )
+          except Exception as e:
+              print(f"Notice: preview channel prune check: {e}")
+          PRUNE_PY
+
+          deploy_ok=0
+          for attempt in 1 2; do
+            if npx --yes firebase-tools@latest hosting:channel:deploy "$CHANNEL" --only app \
+              --expires 7d --project "$FIREBASE_PROJECT_ID" --non-interactive --json > "$RUNNER_TEMP/deploy.json"; then
+              deploy_ok=1
+              break
+            else
+              cat "$RUNNER_TEMP/deploy.json" || true
+              if [ "$attempt" -eq 1 ] && grep -q "channel quota reached" "$RUNNER_TEMP/deploy.json"; then
+                echo "Channel quota reached, forcing cleanup of oldest preview channels..."
+                python3 - <<'FORCE_PRUNE'
+                import json, os, subprocess
+                site = "maximos-domadios-church"
+                proj = os.environ.get("FIREBASE_PROJECT_ID", "asafra-church-portal")
+                try:
+                    res = subprocess.run(
+                        ["npx", "--yes", "firebase-tools@latest", "hosting:channel:list", "--site", site, "--project", proj, "--json"],
+                        capture_output=True, text=True, check=True
+                    )
+                    raw = res.stdout
+                    out = json.loads(raw[raw.find("{"):])
+                    channels = out.get("result", {}).get("channels", [])
+                    previews = [c for c in channels if not c.get("name", "").endswith("/live")]
+                    previews.sort(key=lambda c: c.get("updateTime", ""))
+                    for c in previews[:3]:
+                        cid = c["name"].split("/")[-1]
+                        print(f"Force deleting preview channel: {cid}")
+                        subprocess.run(
+                            ["npx", "--yes", "firebase-tools@latest", "hosting:channel:delete", cid, "--site", site, "--project", proj, "--force"],
+                            check=False
+                        )
+                except Exception as e:
+                    print(f"Force prune error: {e}")
+                FORCE_PRUNE
+              else
+                break
+              fi
+            fi
+          done
+
+          if [ "$deploy_ok" -ne 1 ]; then
+            exit 1
+          fi
+
           python3 - "$RUNNER_TEMP/deploy.json" <<'PY'
           import json, os, sys
           text = open(sys.argv[1], encoding="utf-8").read()

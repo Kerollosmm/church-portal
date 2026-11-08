@@ -206,6 +206,7 @@ Existence of `settings/church` = "database is seeded" (see `03-architecture.md`)
   | `liveUrl` | `''` / http(s) URL ≤ 500 | `''` (banner needs a link) |
   | `liveLabelAr`, `liveLabelEn` | string ≤ 120 | `''` = «بث مباشر الآن من الكنيسة» / "Live now from the church" |
   | `liveEndsAt` | timestamp / null | none (automatic switch-off) |
+  | `liveBadgeHideOnHome` | bool (PR #35, ADR-044; validated in the live gate of `validFeatures`) | true (Home shows only the banner while live) |
   | `dayEvents` | list ≤ 20 of strings `date␟endDate␟start␟end␟titleAr␟titleEn␟speakerAr␟speakerEn␟topicAr␟topicEn␟noteAr␟noteEn␟link[␟attachmentUrl␟attachmentLabelAr␟attachmentLabelEn[␟id]]` (U+001F; trailing attachment fields and optional 17th `id` field `[a-z0-9]{8,10}` — PR #38 / ADR-045 / ADR-059; date `YYYY-MM-DD` required, endDate optional, times `''`/HH:mm, titleAr 1–300, texts ≤ 300, notes ≤ 500, link `''` / path / http(s)) | `[]` |
   | `notifyTypes` | list ≤ 6 of strings `id␟time␟daysBefore␟titleAr␟titleEn␟bodyAr␟bodyEn` (ADR-059; 6 fixed types: `announcements, verse_daily, katameros_daily, seasons, feasts, reminders`) | `[]` (built-in defaults apply) |
   | `reminderSources` | comma-separated string of enabled sources (ADR-059; subset of `lit,mtg,day`) | `'lit,mtg,day'` |
@@ -236,9 +237,9 @@ Added in ADR-059 for scheduled remote push notifications and sender state tracki
 | Field | Type / Rule | Description |
 |---|---|---|
 | `schedule` | list ≤ 20 of strings | Rows: `id␟atUtcIso␟targets␟titleAr␟titleEn␟bodyAr␟bodyEn␟link␟eventKey` (9 U+001F fields). `targets` is `'all'`, `'app'`, or `'web'`. `link` is `/...` or empty. `eventKey` is empty or `(lit\|meeting\|day\|season)-[a-z0-9-]{1,40}`. Client writable by admins. |
-| `status` | map `<rowId, rowStatus>` | Per-row delivery status: `{state: 'draft'\|'sending'\|'ok'\|'partial'\|'error'\|'unconfirmed'\|'expired', at: ISO, targets: {app, web}, error?}`. Server/sender only (client write rejected). |
-| `sentLog` | list ≤ 100 of maps | History log entries of completed sends: `{id, sentAt, targets, titleAr, titleEn, bodyAr, bodyEn, link, eventKey, status}`. Server/sender append; clear allowed for owner only (`size() == 0`). |
-| `health` | map | Sender health stats: `{lastRunAt, sender, version, sentToday, sparkReadsToday, errorsToday, activeLocks}`. Server/sender only. |
+| `status` | map `<rowId, rowStatus>` | Per-row delivery status: `{state: 'draft'\|'sending'\|'ok'\|'partial'\|'error'\|'unconfirmed'\|'expired', result, claimedAt: ISO, topics: {<topic>: 'ok'\|'error'\|'unconfirmed'}}`. Server/sender only (client write rejected). |
+| `sentLog` | list ≤ 30 strings (or maps) | History log entries: sender writes serialized strings `id␟sentAt␟result␟titleAr␟trigger` (capped at 30 items); Dart parser handles both strings and map objects. Clear allowed for owner only (`size() == 0`). |
+| `health` | map | Sender health stats: `{lastRunAt, lastError, lastSeasonDate, sentToday, sparkReadsToday}`. Server/sender only. |
 | `reminderPlan` | map | Internal daily reminder planner state. Server/sender only. |
 | `remindersSent` | map | Set of processed reminder occurrences. Server/sender only. |
 | `updatedAt`, `updatedBy` | stampOk | Audit timestamps. |

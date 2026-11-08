@@ -243,6 +243,29 @@ void main() {
       final clonedForWeb = scheduleAppOk.cloneDraftForRetry(src, 'new_id_web', DateTime.utc(2026, 11, 8, 15, 0));
       expect(clonedForWeb.targets, 'web');
     });
+
+    test('fromDoc parses both serialized string and map sentLog entries', () {
+      final doc = {
+        'sentLog': [
+          'r1\u001f2026-11-08T12:00:00.000Z\u001fok\u001fعنوان عربي\u001fcron',
+          {
+            'id': 'r2',
+            'sentAt': '2026-11-08T13:00:00.000Z',
+            'titleAr': 'عنوان ثاني',
+            'webState': 'partial',
+            'appState': 'ok',
+          },
+        ],
+      };
+      final schedule = NotifySchedule.fromDoc(doc);
+      expect(schedule.sentLog.length, 2);
+      expect(schedule.sentLog[0].id, 'r1');
+      expect(schedule.sentLog[0].titleAr, 'عنوان عربي');
+      expect(schedule.sentLog[0].webState, 'ok');
+      expect(schedule.sentLog[1].id, 'r2');
+      expect(schedule.sentLog[1].titleAr, 'عنوان ثاني');
+      expect(schedule.sentLog[1].webState, 'partial');
+    });
   });
 
   group('safeNotificationLink Security', () {

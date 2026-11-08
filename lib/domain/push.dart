@@ -1058,6 +1058,24 @@ class NotifySchedule {
       for (final entry in rawSentLog) {
         if (entry is Map) {
           sentLog.add(SentEntry.fromMap(Map<String, dynamic>.from(entry)));
+        } else if (entry is String) {
+          final parts = entry.split('\u001f');
+          if (parts.length >= 4) {
+            DateTime sent;
+            try {
+              sent = DateTime.parse(parts[1]);
+            } catch (_) {
+              sent = DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
+            }
+            final res = parts[2];
+            sentLog.add(SentEntry(
+              id: parts[0],
+              sentAt: sent,
+              webState: res,
+              appState: res,
+              titleAr: parts[3],
+            ));
+          }
         }
       }
     }
