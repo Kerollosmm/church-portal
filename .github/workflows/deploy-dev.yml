@@ -103,10 +103,12 @@ jobs:
       - name: Build test APKs (data from the dev channel)
         run: |
           APP_VERSION=$(sed -n 's/^version: *//p' pubspec.yaml | head -1)
-          flutter build apk --release --split-per-abi --target-platform android-arm,android-arm64 \
+          # GitHub release downloads (Gradle, Kotlin) sometimes answer 504: retry.
+          for i in 1 2 3; do flutter build apk --release --split-per-abi --target-platform android-arm,android-arm64 \
             --dart-define=APP_BUILD=${APP_VERSION#*+} --dart-define=SENTRY_ENVIRONMENT=dev \
             --dart-define=GIT_SHA=$GITHUB_SHA --dart-define=APP_VERSION=$APP_VERSION \
-            --dart-define=SITE_ORIGIN=${{ vars.DEV_CHANNEL_ORIGIN || 'https://maximos-domadios-church--dev-7qxh72kj.web.app' }}
+            --dart-define=SITE_ORIGIN=${{ vars.DEV_CHANNEL_ORIGIN || 'https://maximos-domadios-church--dev-7qxh72kj.web.app' }} \
+            && break; [ $i = 3 ] && exit 1; echo "::warning::APK build attempt $i failed, retrying"; sleep 90; done
           mkdir -p apk
           cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk apk/church-portal-dev-arm64.apk
           cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk apk/church-portal-dev-arm32.apk
@@ -163,7 +165,8 @@ jobs:
 
   deploy-channel:
     needs: [build, deploy-rules, apk]
-    if: github.ref == 'refs/heads/dev'
+    # The web build ships even when the test APK failed (the APK is then missing from the channel).
+    if: ${{ !cancelled() && github.ref == 'refs/heads/dev' && needs.build.result == 'success' && needs.deploy-rules.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -172,6 +175,7 @@ jobs:
           name: web-build-dev
           path: build/web
       - uses: actions/download-artifact@v5
+        if: needs.apk.result == 'success'
         with:
           name: apk-dev
           path: build/web/app/android
