@@ -70,6 +70,12 @@ jobs:
           node tool/fetch_synaxarium.js build/web/data/today.json \
             || curl -sf --max-time 20 https://maximos-domadios-church.web.app/data/today.json -o build/web/data/today.json \
             || echo "::warning::no /data/today.json in this build"
+      - name: Katameros readings window (PR B; the dev web + test APK read it from this channel)
+        continue-on-error: true
+        run: |
+          mkdir -p build/web/data/readings
+          node tool/fetch_readings.js build/web/data/readings --days=9 --previous-url https://maximos-domadios-church.web.app/data/readings/ \
+            || echo "::warning::no readings in this build"
       - name: Remove key
         if: always()
         run: rm -f "$RUNNER_TEMP/sa.json"
@@ -80,6 +86,33 @@ jobs:
           name: web-build-dev
           path: build/web
           retention-days: 3
+
+  # Test APK (debug-signed, never a release) that reads static data from the dev
+  # channel. Served at <dev channel>/app/android/church-portal-dev-arm64.apk.
+  apk:
+    if: github.ref == 'refs/heads/dev'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '17' }
+      - uses: subosito/flutter-action@v2
+        with: { channel: stable, cache: true }
+      - run: flutter pub get
+      - name: Build test APKs (data from the dev channel)
+        run: |
+          APP_VERSION=$(sed -n 's/^version: *//p' pubspec.yaml | head -1)
+          flutter build apk --release --split-per-abi --target-platform android-arm,android-arm64 \
+            --dart-define=APP_BUILD=${APP_VERSION#*+} --dart-define=SENTRY_ENVIRONMENT=dev \
+            --dart-define=GIT_SHA=$GITHUB_SHA --dart-define=APP_VERSION=$APP_VERSION \
+            --dart-define=SITE_ORIGIN=${{ vars.DEV_CHANNEL_ORIGIN || 'https://maximos-domadios-church--dev-7qxh72kj.web.app' }}
+          mkdir -p apk
+          cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk apk/church-portal-dev-arm64.apk
+          cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk apk/church-portal-dev-arm32.apk
+          ls -l apk
+      - uses: actions/upload-artifact@v5
+        with: { name: apk-dev, path: apk/*.apk, retention-days: 7 }
 
   # Rules deploy to the live project only after the emulator suite passes.
   rules-test:
@@ -129,7 +162,7 @@ jobs:
         run: rm -f "$RUNNER_TEMP/sa.json"
 
   deploy-channel:
-    needs: [build, deploy-rules]
+    needs: [build, deploy-rules, apk]
     if: github.ref == 'refs/heads/dev'
     runs-on: ubuntu-latest
     steps:
@@ -138,6 +171,10 @@ jobs:
         with:
           name: web-build-dev
           path: build/web
+      - uses: actions/download-artifact@v5
+        with:
+          name: apk-dev
+          path: build/web/app/android
       - uses: actions/setup-node@v5
         with:
           node-version: 22
