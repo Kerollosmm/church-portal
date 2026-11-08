@@ -88,7 +88,8 @@ jobs:
           retention-days: 3
 
   # Test APK (debug-signed, never a release) that reads static data from the dev
-  # channel. Served at <dev channel>/app/android/church-portal-dev-arm64.apk.
+  # channel. Download it from the run's `apk-dev` artifact: Firebase Hosting on
+  # the Spark plan refuses .apk files ("Executable files are forbidden").
   apk:
     if: github.ref == 'refs/heads/dev'
     runs-on: ubuntu-latest
@@ -164,9 +165,8 @@ jobs:
         run: rm -f "$RUNNER_TEMP/sa.json"
 
   deploy-channel:
-    needs: [build, deploy-rules, apk]
-    # The web build ships even when the test APK failed (the APK is then missing from the channel).
-    if: ${{ !cancelled() && github.ref == 'refs/heads/dev' && needs.build.result == 'success' && needs.deploy-rules.result == 'success' }}
+    needs: [build, deploy-rules]
+    if: github.ref == 'refs/heads/dev'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -174,11 +174,6 @@ jobs:
         with:
           name: web-build-dev
           path: build/web
-      - uses: actions/download-artifact@v5
-        if: needs.apk.result == 'success'
-        with:
-          name: apk-dev
-          path: build/web/app/android
       - uses: actions/setup-node@v5
         with:
           node-version: 22
