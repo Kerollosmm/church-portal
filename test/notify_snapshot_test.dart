@@ -19,7 +19,7 @@ void main() {
         ['2026-11-20', '', '18:00', '21:00', 'نهضة', 'Revival', '', '', '', '', '', '', ''].join(DayEvent.sep),
       ],
     });
-    expect(features.dayEvents.single.id, 'e1');
+    expect(features.dayEvents.single.id, '5d16df6bbc');
 
     final back = FeatureSettings.fromMap(snapshotFeaturesMap(features));
     expect(back.pushSettings.enabled, isTrue);
@@ -27,7 +27,7 @@ void main() {
     expect(back.pushSettings.reminderLeads, [15, 60]);
     expect(back.pushSettings.defaultLead, 15);
     final e = back.dayEvents.single;
-    expect(e.id, 'e1', reason: 'day- reminder keys depend on the stored position');
+    expect(e.id, '5d16df6bbc', reason: 'day- reminder keys use persistent hash ID for legacy rows');
     expect(e.start, '18:00');
     expect(e.titleAr, 'نهضة');
     expect(e.firstDay, features.dayEvents.single.firstDay);

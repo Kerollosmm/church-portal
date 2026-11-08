@@ -52,7 +52,7 @@ wanted settings and message deletion owner-only; the implementation deliberately
 
 ## Navigation (`adminDestinations(role)`)
 
-`overview` → `features` → `church` → `assistant` (AI assistant, PR #19) → one entry per `adminCollections` item (alerts, seasons, liturgies, meetings,
+`overview` → `features` → `today` → `seasonSettings` → `seasonPreset` → `app` (App & notifications, ADR-057, ADR-059) → `church` → `assistant` (AI assistant, PR #19) → one entry per `adminCollections` item (alerts, seasons, liturgies, meetings,
 clinics, facilities, activities, priests, departedPriests, saints, milestones, **categories** (Custom sections),
 **entries** (Section items), **pages** (Custom pages) — PR #18) → `messages` → `contactCats` (Contact form types,
 PR #18) → `admins` (owners only).
@@ -201,6 +201,20 @@ ADR-044) «إخفاء شارة البث في الرئيسية عند ظهور ا
 the daily / season limit. Since PR #35 a non-empty `dayEvents` list is saved in its own
 write after the other keys (`separatelySavedKeys`; 20 events plus another Today key exceed the rules' 1,000-expression
 budget in one write).
+
+### App & notifications («التطبيق والإشعارات», `AppAndNotificationsScreen`, `lib/ui/admin/notifications_admin.dart`) → `settings/features` & `settings/notifications` (ADR-057, ADR-059)
+
+Two-card management screen for PWA/APK install settings and push notifications:
+- **Install & APK Distribution Settings (`DocEditor` over `installSettingsDoc`):**
+  PWA prompt switches, install banner dismissal days, Android APK direct download URL, APK build number, SHA-256 checksum, file size (MB), and minimum supported build for forced updates.
+- **Push Notification Types & Templates (`NotificationsAdminSection`):**
+  Configuration for the 6 notification types (`announcements`, `verse_daily`, `katameros_daily`, `seasons`, `feasts`, `reminders`). Each type supports custom send times, lead days (for feasts/seasons/reminders), and Arabic/English title & body templates with dynamic placeholders (`{verse}`, `{ref}`, `{reading}`, `{season}`, `{days}`, `{feast}`, `{event}`, `{time}`, `{place}`, `{lead}`, `{date}`). Real-time character counters and live template preview cards. Invalid placeholders are flagged immediately. «استعادة النصوص الافتراضية» resets templates back to code defaults.
+- **Scheduled Push Broadcasts (up to 20 rows):**
+  Admin draft composer with date and time pickers, target selector (All / Android App / Web PWA), bilingual title and body inputs, in-app link selector (`/`, `/today`, `/mass-schedule`, `/seasons`, `/readings/...`), and service/event linker (`lit-...`, `meeting-...`, `day-...`, `season-...`).
+- **Schedule Management:**
+  Table displaying scheduled, pending, and completed rows with delivery status badges (`draft`, `sending`, `ok`, `partial`, `error`, `unconfirmed`, `expired`). Non-sending rows can be deleted by admins so the 20-row limit never deadlocks. Partial or errored rows provide a one-tap «نسخ لإعادة المحاولة» clone button which creates a new draft with targets automatically narrowed to the failed platform (`web` or `app`).
+- **Sender Health & Sent Log:**
+  Health status card displaying Cloudflare Worker / cron execution details: last run timestamp, version, messages sent today, Spark REST reads used today, and errors. The Sent Log displays a history of up to 100 recent broadcasts, and the Owner role can clear the log once full.
 
 ### Church info (`ChurchInfoScreen`) → `settings/church`
 (`ChurchInfoScreen` takes a `DocDef doc` — default `churchInfoDoc` — and an optional `header`; PR #19 reuses it for

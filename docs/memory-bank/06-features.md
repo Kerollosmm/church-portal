@@ -598,3 +598,13 @@ digits, Cairo `02` + 8, Alexandria `03` + 7, other governorates `0[4-9]` + 7–8
 - Route `/admin` is completely compiled out when `!isWeb`.
 - `PopScope` intercepts device back buttons: detail routes return to parent listing (`parentRouteOf`), subpages return to `/`, and pressing back on `/` shows a toast «اضغط مرة أخرى للخروج من التطبيق» exiting if tapped again within 2 seconds.
 - Assistant page on Android native displays a clean redirect card with a button opening the web assistant at `https://maximos-domadios-church.web.app/ask` in the external browser.
+
+### Admin Notification Manager & Remote FCM Push (ADR-059)
+- **Administrative control plane:** `/admin` → «التطبيق والإشعارات» provides full configuration for the 6 notification types (`announcements`, `verse_daily`, `katameros_daily`, `seasons`, `feasts`, `reminders`).
+- **Template management:** Admin can configure custom send times, lead days, and Arabic/English title/body templates with dynamic placeholders (`{verse}`, `{ref}`, `{reading}`, `{season}`, `{days}`, `{feast}`, `{event}`, `{time}`, `{place}`, `{lead}`, `{date}`). Live character counters and placeholder validation prevent invalid drafts.
+- **Schedule queue:** Admins can draft and schedule up to 20 remote push broadcasts targeting `'all'`, `'app'`, or `'web'` with deep links (`/liturgies`, `/readings/...`, etc.).
+- **Deletable non-sending rows:** Non-sending rows (`draft`, `ok`, `partial`, `error`, `unconfirmed`, `expired`) can be deleted at any time so the 20-row limit never deadlocks.
+- **Retry cloning:** Partial or errored rows can be cloned into new drafts with targets automatically narrowed to the failed platform (`web` or `app`).
+- **Cloudflare Worker sender:** Runs cron `*/15 * * * *`, queries `settings/notifications` via `:batchGet`, claims due rows, mints RS256 JWT, sends up to 16 FCM messages within ≤ 25 subrequests, and commits delivery status. Spark quota protected (~197 reads/day).
+- **Client FCM guard:** Android client background handler drops any incoming FCM notification matching local types to eliminate duplicates, uses a 100-item ring buffer for idempotency, shares `event:X` notification slots within ±60 minutes, and routes taps via `safeNotificationLink`.
+

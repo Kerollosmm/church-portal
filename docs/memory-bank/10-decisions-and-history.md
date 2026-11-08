@@ -1818,10 +1818,45 @@ supersede them.
   `fetch_readings.js` keeps the live file for a date it cannot fetch. Verse notification / reader use the same
   seasonal choice as Home.
 
+## ADR-059 — Admin notification manager, Cloudflare Worker FCM sender & deep links
+
+- **Context (Phase 2 PR C, 8 Nov 2026):**
+  - Admins need full control over notification types, timing, templates, and scheduled event pushes.
+  - Public visitors need weekly reminders («ذكّرني») for liturgies, meetings, and special day events, respecting admin preferences and source filters (`reminderSources`).
+  - Scheduled remote pushes must be sent reliably to FCM topics (`all`, `web`, `app`) without expensive server infrastructure, respecting the Spark quota (max ~197 Firestore reads/day; cron-only trigger `*/15 * * * *`; max 16 FCM topic sends / ≤ 25 subrequests per run).
+  - Android client requires background FCM handling (`@pragma('vm:entry-point')`), 100-item persistent deduplication ring buffer, `event:X` slot sharing within ±60 minutes, and safe internal deep link navigation.
+- **Decision:**
+  - **Domain & State (`lib/domain/push.dart`, `lib/domain/features.dart`, `lib/domain/today.dart`):**
+    - 6 notification types (`announcements`, `verse_daily`, `katameros_daily`, `seasons`, `feasts`, `reminders`) with built-in templates, default times, `daysBefore`, and link fallbacks.
+    - `notifyTypes` (List<String>) in `FeatureSettings` configured via 7-field `\u001f`-delimited strings (`id␟time␟daysBefore␟titleAr␟titleEn␟bodyAr␟bodyEn`).
+    - `reminderSources` string (comma-separated subset of `'lit,mtg,day'`) gating «ذكّرني» buttons via `pushSettings.remindsFor(eventKey)`.
+    - Persistent 8-character `DayEvent.id` (17th field in `DayEvent.storedKeys`) with NFC-normalized 10-character SHA-1 prefix fallback for legacy rows (`DayEvent.computeHashId`), ensuring identical IDs across Dart and JS runtimes without positional fallbacks.
+    - `ScheduledNotification` (9-field `\u001f` string) supporting admin CRUD, expiry (> 24h past schedule), claim/lease status (`status[id].state`), retry cloning with narrowed targets, and non-sending deletion.
+  - **Firestore Rules (`firestore.rules`):**
+    - `settings/notifications`: read restricted to `isAdmin()`, create/update restricted to valid admin writes on `schedule` (max 20 rows matching `validNotifyRow`). Server-only fields (`status`, `reminderPlan`, `remindersSent`, `health`) forbidden to clients. `sentLog` clearable by owner only.
+    - `settings/features`: gated evaluation of `validInstallSettings` and `validPushSettings` behind `changed.hasAny` to strictly stay within the 1,000-expression budget on whole-document saves.
+    - `validDayEvent`: updated regex to accept the optional 17th `id` field (`[a-z0-9]{8,10}`).
+  - **Admin UI (`lib/ui/admin/notifications_admin.dart`):**
+    - Replaced placeholder App & Notifications tab with `AppAndNotificationsScreen`.
+    - Live template editor with placeholders (`{verse}`, `{reading}`, `{season}`, `{days}`, `{feast}`, `{event}`, `{time}`, `{place}`, `{lead}`, `{date}`), live preview, character counter, error flagging, and reset defaults.
+    - Scheduled pushes manager: new push draft form, target selector (`all`, `web`, `app`), service linker for liturgical and day events, Cairo time picker, relative lead calculator, retry action for failed rows, and deletion of non-sending rows.
+    - Sender health status card and recent sent log viewer.
+  - **Remote FCM Sender (`tool/cf_push_worker.js`, `tool/push_sender.js`, `tool/firestore_rest.js`):**
+    - Pure Web-API Cloudflare Worker cron trigger (`*/15 * * * *`, no `POST /trigger`) + Node 22 CLI fallback.
+    - Token minting via Google OAuth2 service account JWT (RS256 with Web Crypto `crypto.subtle`), Firestore REST `:batchGet` (2 reads/run) + seasons query once per day = ~197 reads/day.
+    - Claim lease with 120s timeout, exponential backoff with jitter on 429/5xx, delivery confirmation via REST write, and health updates.
+  - **Android FCM Client & Deep Links (`lib/data/push_messaging*.dart`, `lib/router.dart`):**
+    - Background message handler dropping local types (`verse_daily`, `katameros_daily`, `feasts`, `reminders`) to prevent duplicate native alarms.
+    - 100-item persistent `seen_nids` ring buffer in SharedPreferences.
+    - Notification display with `event:X` slot sharing within ±60 minutes.
+    - Deep linking: notification tap opens validated in-app routes via `safeNotificationLink` and `navigateToNotification(link)` on `rootNavigatorKey`.
+
 ## Timeline
 
 | When | PR / commit | What |
 |---|---|---|
+| 8 Nov 2026 | **PR C** — "Admin notification manager, Cloudflare Worker FCM sender & deep links" (`feat/p2c-notification-manager`) | ADR-059: 6 notification types with templates and times in `/admin`; scheduled pushes manager (CRUD ≤ 20 rows, non-sending deletable, retry clone); `reminderSources` gating; persistent 8-char `DayEvent.id` with NFC SHA-1 fallback; Cloudflare Worker cron-only FCM sender (`*/15 * * * *`, Spark-safe ~197 reads/day) + Node 22 fallback; Android FCM background handler, 100-nid ring buffer, `event:X` slot sharing, safe deep links. |
+| 7 Nov 2026 | **PR B** — "Android APK, local notifications, Katameros readings, OEM battery diagnostics, in-app update" (`feat/p2b-android-local-notifications`) | ADR-058: Split APKs (arm64 + arm32) with R8 minification and core library desugaring; rolling 9-day local notification planner with exact alarms and replenishment worker; Katameros pipeline (`tool/fetch_readings.js`, `/readings/<date>`); OEM battery guide & diagnostics (`/notifications/battery`); in-app updater (Range resume, SHA-256 verification, FileProvider install); Android shell (PopScope double-back exit, SharedPreferences language store, Assistant web redirect). +0 Firestore reads/writes. |
 | 7 Nov 2026 | **PR A** — "Install banner, sideload guide, notification preferences & reminders foundation" (`feat/p2a-install-prefs`) | ADR-057: `InstallBanner` (Android APK / PWA, iOS sheet), `ApkInstallGuide` 5-step modal, `/notifications` preferences page with channel-owner model, `RemindMeButton` + «تذكيراتي» list, `ReminderStore`, admin «التطبيق والإشعارات», rules for 18 new fields on `settings/features`. +0 Firestore reads / writes for visitors. |
 | 31 Oct 2026 | `6f4a0d8` Initial commit | Empty repo (Kerollosmm) |
 | 31 Oct 2026 | **PR #1** `5eb9820` — "Church portal: Flutter + Firebase app, rules, seed, CI/CD" | The whole app: public pages, next-mass/season logic, assistant, contact form, Firestore rules, seed generator + seeder, CI, deploy (live + PR previews), Seed workflow (admin by email + set-password link), Codespaces. Review rounds: server-side contact throttle, hide assistant without App Check, safe workflow inputs, tolerant SA handling, firebase-tools CLI deploy, Node 24 actions, per-occurrence season windows, DST-correct seed instants, admin lookup retry, lang query sync, `<html lang>`, compact app bar for large text, map fallback, splash failure path; CI skip of the serviceusage probe. |

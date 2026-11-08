@@ -17,6 +17,8 @@ import 'data/media_repository.dart';
 import 'data/seed_data.dart';
 import 'domain/cairo_time.dart';
 import 'data/local_notifications.dart';
+import 'data/push_messaging.dart';
+import 'router.dart';
 import 'state/notify_providers.dart';
 import 'package:workmanager/workmanager.dart';
 import 'state/providers.dart';
@@ -54,7 +56,18 @@ Future<void> _start() async {
 
   if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
     final notifier = LocalNotifier();
-    await notifier.initialize();
+    await notifier.initialize(
+      onSelectNotification: (payload) {
+        if (payload != null && payload.isNotEmpty) {
+          navigateToNotification(payload);
+        }
+      },
+    );
+    await PushMessaging.initialize(
+      onSelectRoute: (route) {
+        navigateToNotification(route);
+      },
+    );
     Workmanager().initialize(
       notificationReplenishCallbackDispatcher,
     );

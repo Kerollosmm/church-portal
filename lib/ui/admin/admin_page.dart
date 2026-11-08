@@ -15,6 +15,7 @@ import 'assistant_admin.dart';
 import 'contact_admin.dart';
 import 'collection_list.dart';
 import 'features_editor.dart';
+import 'notifications_admin.dart';
 import 'season_preset_admin.dart';
 
 /// Hidden /admin area: email/password sign-in, role check (admins/{uid}),
@@ -368,7 +369,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
       case 'seasonPreset':
         return SeasonPresetScreen(repo: repo);
       case 'app':
-        return ChurchInfoScreen(key: const ValueKey('app'), repo: repo, doc: appSettingsDoc);
+        return AppAndNotificationsScreen(key: const ValueKey('app'), repo: repo, role: widget.role);
       case 'church':
         return ChurchInfoScreen(key: const ValueKey('church'), repo: repo);
       case 'assistant':

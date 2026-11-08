@@ -149,6 +149,24 @@
   2. تعرض الصفحة فحصاً فورياً لـ: إذن الإشعارات (`POST_NOTIFICATIONS`)، إذن المنبهات الدقيقة (`SCHEDULE_EXACT_ALARM`)، استثناء توفير البطارية (Battery Optimization Exemption)، وحالة عمل مهمة التجديد الدورية (`WorkManager`).
   3. توفر الصفحة روابط مباشرة تفتح إعدادات النظام المخصصة لنوع الهاتف (Auto-start / Background Activity).
 
+### محرك إرسال الإشعارات المجدولة (Cloudflare Worker & FCM Sender — ADR-059)
+- يعمل المحرك كـ Cloudflare Worker مجدول بمؤقت زمني (`cron = ["*/15 * * * *"]`) كل ربع ساعة، ويقوم بفحص جدول الإشعارات في وثيقة `settings/notifications` وإرسال أي إشعار حان موعده إلى قنوات FCM (`all`، `web`، `app`).
+- **أسرار المحرك (Worker Secrets):**
+  - تُضبط في لوحة Cloudflare أو عبر أداة `wrangler secret put`:
+    - `FIREBASE_PROJECT_ID`: معرف مشروع فايربيس (`asafra-church-portal`).
+    - `FIREBASE_CLIENT_EMAIL`: البريد الإلكتروني لحساب الخدمة (Service Account).
+    - `FIREBASE_PRIVATE_KEY`: المفتاح الخاص لحساب الخدمة بصيغة PEM (يبدأ بـ `-----BEGIN PRIVATE KEY-----`).
+    - `SENTRY_DSN`: رابط Sentry لرصد أي أخطاء وقت التشغيل بدون جمع بيانات شخصية.
+    - `SENTRY_CRON_MONITOR_ID`: معرف مراقبة دقات المحرك في Sentry Crons للإنذار عند تعطل المهام.
+- **حدود واستهلاك الكوتا (Spark Quota Protection):**
+  - يعتمد المحرك على استعلام REST `:batchGet` يقرأ وثيقتين فقط في كل ربع ساعة، بالإضافة إلى استعلام المواسم مرة واحدة عند منتصف الليل بتوقيت القاهرة (~197 قراءة فقط يوميًا).
+  - يحدد المحرك سقف الإرسال بحد أقصى 16 إشعار FCM أو ≤ 25 طلبًا فرعيًا لكل تشغيل.
+  - لا توجد أي واجهة HTTP عامة تقبل أوامر إرسال (لا يوجد مسار `POST /trigger`) لمنع التلاعب أو استنزاف الكوتا.
+- **المسار الاحتياطي اليدوي في GitHub Actions (`.github/workflows/push-sender.yml`):**
+  - مسار يمكن تشغيله يدويًا عند الحاجة (`workflow_dispatch`) من GitHub Actions لتشغيل السكربت الاحتياطي `node tool/push_sender.js` بواسطة Node 22.
+- **مسار منع سبات المستودع (`.github/workflows/keepalive.yml`):**
+  - مسار شهري مجدول يمنع GitHub من إيقاف المسارات الدورية المجدولة تلقائيًا بسبب قلة التعديلات.
+
 ## 7. مهام تشغيلية مفتوحة (ملخص)
 
 - رفع source maps للويب ورموز Android إلى Sentry (يحتاج auth token).

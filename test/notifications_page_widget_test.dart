@@ -31,6 +31,9 @@ class FakeTestPushEnv implements PushEnv {
     permission = 'granted';
     return permission;
   }
+
+  @override
+  Future<bool> showLocalNotification(String title, String body, {String? icon, String? link}) async => true;
 }
 
 class FakeTestInstallEnv implements InstallEnv {

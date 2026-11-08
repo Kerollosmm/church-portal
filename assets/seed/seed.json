@@ -87,7 +87,9 @@
     "noteAr": "",
     "noteEn": ""
    },
-   "errorReporting": true
+   "errorReporting": true,
+   "notifyTypes": [],
+   "reminderSources": "lit,mtg,day"
   }
  },
  "alerts": {

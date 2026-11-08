@@ -225,7 +225,31 @@ The native Android app is packaged as lightweight, split release APKs for maximu
 
 ---
 
-## 8. Open Operational Tasks (Summary)
+## 8. Scheduled Notification Sender & Cloudflare Worker (ADR-059)
+
+The remote scheduled push delivery infrastructure runs as a pure Web-API Cloudflare Worker cron task (`*/15 * * * *`) delivering event notifications to FCM topics (`all`, `web`, `app`) without incurring Firestore or server maintenance costs.
+
+### Cloudflare Worker Configuration
+- **Cron Trigger:** Runs every 15 minutes (`*/15 * * * *`) without a public `POST /trigger` endpoint to prevent unauthorized invocation or quota drain.
+- **Worker Secrets (`wrangler secret put <KEY>`):**
+  - `FIREBASE_PROJECT_ID`: Firebase project ID (`asafra-church-portal`).
+  - `FIREBASE_CLIENT_EMAIL`: Service Account email with FCM and Firestore read/write permissions.
+  - `FIREBASE_PRIVATE_KEY`: Service Account private key in PEM format (starting with `-----BEGIN PRIVATE KEY-----`).
+  - `SENTRY_DSN`: Sentry DSN for error telemetry.
+  - `SENTRY_CRON_MONITOR_ID`: Sentry Cron monitor ID for heartbeat health alerts.
+
+### Spark Quota & Subrequest Budgets
+- **Firestore Reads:** Uses REST `:batchGet` requesting only `settings/features` and `settings/notifications` (2 reads per 15-minute run) + 1 season query at Cairo midnight = ~197 reads/day (well within the 50,000 daily Spark free tier).
+- **Subrequest Limits:** Capped at 16 FCM topic dispatches and ≤ 25 total subrequests per run to strictly adhere to Cloudflare Worker free tier constraints.
+- **Lease & Claims:** 120-second lease timeout with optimistic locking and exponential backoff on transient errors.
+
+### Fallback GitHub Actions Workflow (`.github/workflows/push-sender.yml`)
+- Provides manual dispatch (`workflow_dispatch`) fallback running `node tool/push_sender.js` using Node.js 22 LTS if Cloudflare Worker execution requires maintenance or debugging.
+- Paired with `.github/workflows/keepalive.yml` running monthly to prevent automated GitHub Actions schedule deactivation.
+
+---
+
+## 9. Open Operational Tasks (Summary)
 
 - Upload web source maps and Android symbols to Sentry (requires auth token).
 - In Sentry: disable client IP collection and activate server-side scrubbers.

@@ -11,6 +11,7 @@ import 'core/document_lang.dart';
 import 'core/l10n.dart';
 import 'data/error_reporting.dart';
 import 'domain/item_detail.dart';
+import 'domain/push.dart';
 import 'state/providers.dart';
 // Deferred (plan PR 3, 3.3): separate web chunks, fetched only on /admin and
 // /ask, so the public bundle excludes the admin dashboard and the AI SDK.
@@ -129,6 +130,16 @@ final routerProvider = Provider<GoRouter>((ref) {
   return buildAppRouter(ref, isWeb: isWeb);
 });
 
+final rootNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'root');
+
+void navigateToNotification(String rawLink) {
+  final safe = safeNotificationLink(rawLink);
+  final ctx = rootNavigatorKey.currentContext;
+  if (ctx != null) {
+    ctx.go(safe);
+  }
+}
+
 GoRouter buildAppRouter(Ref ref, {bool? isWeb, String initialLocation = '/'}) {
   final web = isWeb ?? _detectIsWeb();
   final localeChanges = ValueNotifier<int>(0);
@@ -139,6 +150,7 @@ GoRouter buildAppRouter(Ref ref, {bool? isWeb, String initialLocation = '/'}) {
   ref.onDispose(() => WidgetsBinding.instance.removeObserver(platformNav));
   Uri? lastSyncedUri;
   return GoRouter(
+    navigatorKey: rootNavigatorKey,
     initialLocation: initialLocation,
     refreshListenable: localeChanges,
     redirect: (context, state) {

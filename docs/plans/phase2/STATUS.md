@@ -87,14 +87,13 @@
 - [ ] Release workflow: mirror to the releases repo + retention step (newest 5 kept) — PR B §12
 
 ## PR C — Admin notification manager + FCM sender + deep links (ADR-059) · `feat/p2c-notification-manager` → B
-- [ ] `NotifyConfig`, templates, `dueNow`, dedup, `EventKey` + tests
-- [ ] Rules (`notifyTypes` ≤ 6, `reminderSources`; admin-only `settings/notifications` with `schedule` incl. `eventKey`, sender-only `status` / `sentLog` / `reminderPlan` / `remindersSent` / `health`) + emulator tests
-- [ ] Admin «الإشعارات» (types with channel labels, «ذكّرني» card, event pushes CRUD with route / event picker, status chips, sender health card, preview, test-on-device, log)
-- [ ] `tool/push_sender.js` (cron only; per-topic claim, retries ≤ 3, catch-up, 24 h expiry, health stamp, Sentry check-in), `tool/push_daily.js` (season alerts) + node tests (delivery guarantee)
-- [ ] `tool/push_reminders.js` (hourly planner, slot sender, catch-up / late-skip, prune `occurrenceDate < yesterday`) + Dart↔JS occurrence parity fixture + node tests
-- [ ] `push-sender.yml` (cron + manual dry run / test topic; concurrency group) + `keepalive.yml` (monthly `disable` → `enable` toggle)
-- [ ] Android FCM (`app_announcements_*`, `app_seasons_*` only) + data-only payload `type` / `nid` / `eventKey` + client guard + seen-set + `event:X` slot + deep links; `flutterfire_ignore_scripts` on web
-- [ ] Docs + ADR-059
+- [x] `NotifyConfig`, templates, `dueNow`, dedup, `EventKey` + tests
+- [x] Rules (`notifyTypes` ≤ 6, `reminderSources`; admin-only `settings/notifications` with `schedule` incl. `eventKey`, sender-only `status` / `sentLog` / `reminderPlan` / `remindersSent` / `health`) + emulator tests
+- [x] Admin «الإشعارات» (types with channel labels, «ذكّرني» card, event pushes CRUD with route / event picker, status chips, sender health card, preview, test-on-device, log)
+- [x] `tool/cf_push_worker.js`, `tool/push_sender.js` (cron only; per-topic claim, retries ≤ 3, catch-up, 24 h expiry, health stamp, Sentry check-in), `tool/push_daily.js` (season alerts) + node tests (delivery guarantee)
+- [x] `push-sender.yml` (manual fallback) + `keepalive.yml` (monthly workflow keepalive)
+- [x] Android FCM (`app_announcements_*`, `app_seasons_*` only) + data-only payload `type` / `nid` / `eventKey` + client guard + seen-set + `event:X` slot + deep links; `flutterfire_ignore_scripts` on web
+- [x] Docs + ADR-059 (`documentation/features/install-and-notifications.md`, `documentation/operations.md`, `documentation/en/`)
 - [ ] Draft PR # ___ · CI green · reviews done · PSI ___
 - [ ] Owner: FCM API, `push-sender` SA, `FIREBASE_SA_PUSH`, `PUSH_DRY_RUN=true`, Sentry cron monitor + `SENTRY_CRONS_URL` (optional), first `keepalive.yml` run (LAUNCH §14); recommended `production` required reviewers
 
