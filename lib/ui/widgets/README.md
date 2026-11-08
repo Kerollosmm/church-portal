@@ -1,0 +1,129 @@
+# widgets
+
+## Overview
+The `widgets` package provides the shared presentation layer, design system components, visual effects, and platform adapters for the Church Portal. It implements responsive page scaffolding (`app_shell.dart`, `common.dart`), church branding and seals (`coptic_cross.dart`), liturgical cards and schedule displays (`cards.dart`, `today_widgets.dart`), stylized media presentation (`styled_image.dart`, `item_image.dart`), deferred-loaded installation guides and reminder sheets (`apk_install_guide.dart`, `reminder_sheet.dart`), and platform-isolated ambient graphics (`hero_ambient.dart`, `hero_video.dart`, `map_embed.dart`).
+
+## Interface
+- `apk_install_guide.dart`:
+  - `installGuideStrings`: Localized string registry for deferred install guide bottom sheets.
+  - `showApkInstallGuide(BuildContext context, {double? apkSizeMb})`: Displays interactive 5-step Android APK sideload modal.
+  - `showIosInstallSteps(BuildContext context)`: Displays iOS Home Screen installation instructions.
+  - `showAndroidInstallSteps(BuildContext context)`: Displays Android browser PWA installation instructions.
+- `app_shell.dart`:
+  - `NavItem`: Model representing navigation destination metadata (label, path, icon).
+  - `navItems`: Primary navigation list for public application pages.
+  - `askNavItem`: Navigation item for the conversational AI assistant.
+  - `serviceNavPaths`: List of route paths grouped under the services dropdown menu.
+  - `AppShell`: Master application layout scaffold with top app bar, drawer, bottom navigation, and footer.
+- `assistant_gate.dart`:
+  - `AssistantGate`: Conditional wrapper hiding assistant entry points when the AI assistant feature is toggled off.
+- `cards.dart`:
+  - `LiturgyCard`: Card displaying liturgical service times, celebrant priest, and altar information.
+  - `NextMassCard`: Prominent banner indicating the next upcoming mass based on Cairo wall-clock time.
+  - `AlertBanner`: Dismissible announcement banner for urgent church alerts.
+  - `DirectoryCard`: Quick-access directory card with icon, title, and route navigation.
+  - `ActionChipButton`: Action button chip for invoking external URLs, phone calls, or map coordinates.
+  - `DetailTapArea`: Responsive tap target wrapper for item detail navigation.
+  - `DetailsLink`: Styled text link directing user to an item's detail page.
+  - `CardImageLead`: Header image container with fallback handling for directory cards.
+  - `EdgeAccent`: Decorative border accent indicator.
+  - `whatsappGreen`, `facebookBlue`, `youtubeRed`, `instagramPink`: Palette-exempt brand color constants.
+- `common.dart`:
+  - `kMaxContentWidth`: Global maximum content layout width constant (`1200.0` px).
+  - `PageBody`: Responsive centered layout container constraining page content to `kMaxContentWidth`.
+  - `PageHeader`: Standard top banner with title, breadcrumb navigation, and action buttons.
+  - `CustomizablePageHeader`: Dynamic header supporting custom action buttons, subtitle widgets, and background styles.
+  - `PageIntro`: Balanced typography intro paragraph.
+  - `SectionTitle`: Standard section header with decorative accent line.
+  - `ResponsiveGrid`: Adaptive grid layout builder adjusting column count by viewport width.
+  - `SkeletonBox`, `SkeletonList`: Animated shimmer placeholders for loading states.
+  - `EmptyState`: Standardized empty state message and illustration.
+  - `ErrorState`: Standardized error display with retry callback.
+  - `AsyncSection<T>`: Riverpod `AsyncValue` wrapper handling loading, error, and data states automatically.
+  - `Pill`: Styled tag chip for categories and badges.
+  - `BalancedText`: Helper widget wrapping text with balanced line wrapping.
+  - `IconLine`: Single-line layout pairing an icon with text.
+  - `TimeRangeText`: Formatted time range display in Cairo wall-clock time.
+  - `Footer`: Application footer displaying church address, license, admin link, and copyright.
+  - `SteadySeedNote`: Footer indicator warning when displaying sample data.
+- `coptic_cross.dart`:
+  - `ChurchSeal`: Widget rendering the official parish seal badge.
+  - `CopticCross`: Custom-painted traditional Coptic cross widget.
+- `deferred_loader.dart`:
+  - `DeferredLoader`: Widget wrapping deferred library imports with loading indicators and error recovery.
+- `feature_gate.dart`:
+  - `FeatureGate`: Conditional widget hiding or disabling content based on active section flags.
+  - `SectionUnavailable`: Fallback screen shown when accessing a disabled feature route.
+- `golden.dart`:
+  - `ArtAssets`: Static asset path constants for church seal and artistic SVG assets.
+  - `WarmBackdrop`, `WarmPanel`: Decorative background panels with warm gradients.
+  - `SealTab`: Decorative tab displaying church seal badge.
+  - `PosterHeading`, `TitleRibbon`: Stylized headings for festive and ceremonial layouts.
+  - `HaloPortrait`, `HaloCrossFill`: Image and cross presentation wrappers with halo illumination.
+  - `LightRaysPainter`: Custom painter generating animated golden heavenly rays.
+  - `ViewportVisibility`: Mixin providing viewport intersection tracking for animations.
+  - `Reveal`: Scroll-triggered fade and slide reveal container.
+  - `LazyArt`: Viewport-aware lazy asset loader.
+  - `HeroStage`: Hero background container with layered lighting and haze animations.
+  - `TextScrim`: Gradient overlay ensuring text readability over images.
+- `hero_ambient.dart`:
+  - Conditional export routing between `hero_ambient_web.dart` and `hero_ambient_io.dart`.
+  - `HeroAmbientSpec`, `LightRay`: Physics and geometry specifications for ambient heavenly light rays.
+  - `HeroAmbientLayer`: Ambient light rays widget (DOM-backed on web, canvas-backed on IO).
+  - `heroAmbientInDom`: Platform boolean flag indicating if ambient layer is injected into DOM.
+- `hero_feather.dart`:
+  - `BottomFeather`: Custom clipper creating soft feathered bottom edge for hero headers.
+- `hero_video.dart`:
+  - Conditional export routing between `hero_video_web.dart` and `hero_video_io.dart` for background hero videos.
+  - `HeroVideo`: Platform-adaptive video background widget.
+- `install_banner.dart`:
+  - `InstallBanner`: Dismissible home screen banner prompting web app installation or APK download.
+- `item_image.dart`:
+  - `MediaLoader`: Typedef for asynchronous media byte resolver.
+  - `MediaImageView`: Memory image widget displaying inline byte photos from `media/{id}`.
+  - `ItemImage`: High-level image widget with fallback placeholders and aspect ratio enforcement.
+- `map_embed.dart`:
+  - `MapViewBuilder`: Typedef for platform-specific map embed widget builders.
+  - `ChurchMap`: Interactive or static map view showing church location on Street 45.
+  - `buildMapView`: Platform builder function (IFrame on web, fallback on native).
+- `milestone_card.dart`:
+  - `MilestoneCard`: Historical timeline card displaying church milestones and ordination anniversaries.
+- `program_details.dart`:
+  - `ProgramDetails`: Widget rendering weekly schedule tables and recurring program blocks.
+- `reminder_sheet.dart`:
+  - `reminderSheetStrings`: Localized strings dictionary for reminder configuration.
+  - `showReminderSheet`: Modal bottom sheet for configuring weekly Cairo-time notifications.
+  - `MyRemindersSection`: Management list of active user reminders.
+- `remind_me.dart`:
+  - `RemindMeButton`: Action button triggering the reminder sheet for a specific event or liturgy.
+- `safe_markdown.dart`:
+  - `SafeMarkdown`: Sanitized markdown renderer filtering raw HTML tags and unsafe schemes.
+- `styled_image.dart`:
+  - `CardCover`, `CardLead`, `HaloAvatar`, `FittedCover`, `DetailCover`: Standardized image presentation components adhering to section image styles (ADR-023).
+- `today_widgets.dart`:
+  - `TopUtilityBar` (aliased as `CopticDateStrip`): Sticky top bar displaying Coptic calendar date, fast status, and live indicators.
+  - `LiveStreamBanner`: Dynamic broadcast banner shown when church liturgy is streaming live.
+  - `TopEventCard`: Highlight card for featured feast or occasion of the day.
+- `update_banner.dart`:
+  - `UpdateBanner`: Notification prompt shown when a new PWA service worker or APK release is available.
+  - `UpdateSheet`: Modal details sheet detailing release notes and update actions.
+- Subdirectories: None
+
+## Invariants
+- `[common.dart:PageBody]`: Maximum content width is strictly capped at `kMaxContentWidth` (1200 px), while shrinking to 320 px without horizontal overflow.
+- `[feature_gate.dart:FeatureGate]`: Sections disabled in `sectionsProvider` must hide completely without rendering UI or leaking route interactions (Golden Rule 6).
+- `[item_image.dart:ItemImage]`: Image display is optional; absence of an image must render identical layout geometry without breaking card layout (Golden Rule 9).
+- `[safe_markdown.dart:SafeMarkdown]`: Markdown parsing must sanitize untrusted HTML elements and restrict URI schemes to http, https, tel, and mailto.
+- `[apk_install_guide.dart:showApkInstallGuide]`, `[reminder_sheet.dart:showReminderSheet]`: Heavy secondary bottom sheets must use deferred loading and isolated string tables to satisfy +20 KB gzip budget (Golden Rule 12).
+- `[cards.dart:whatsappGreen]`, `[cards.dart:facebookBlue]`, `[cards.dart:youtubeRed]`, `[cards.dart:instagramPink]`: Brand colors are exempted from church theme palette rules to ensure authentic external icon rendering.
+
+## Side Effects
+- `[map_embed_web.dart:buildMapView]`: Registers HTML IFrame platform view via `ui_web.platformViewRegistry` and mutates browser DOM on web.
+- `[hero_ambient_web.dart:_HeroAmbientLayerState]`: Injects and updates SVG filters and DOM nodes for web backdrop rendering.
+- `[install_banner.dart:_InstallBannerState]`: Writes dismissal flags and timestamps to `SharedPreferences` / `window.localStorage`.
+- `[update_banner.dart:_UpdateBannerState]`: Interacts with service worker update channels and Android APK update download manager.
+- `[today_widgets.dart:_PulseDotState]`, `[golden.dart:_HeroStageState]`: Allocates `AnimationController` tickers triggering continuous UI frame paints.
+- `[remind_me.dart:RemindMeButton]`: Requests system notification permissions and schedules native alarm intents via platform channels.
+
+## Verification
+- Run: `flutter test`
