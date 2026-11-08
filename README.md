@@ -141,6 +141,36 @@ Marian Feasts (Heavenly Blue)  ──► Feasts of the Theotokos
 
 ---
 
+## 🏛️ Subdirectories & System Boundaries
+
+- [`lib`](./lib/README.md): Core Flutter application architecture, pure-Dart domain logic, Riverpod state streams, Firestore data repositories, and UI presentations.
+- [`tool`](./tool/README.md): Administrative, content generation, and deployment automation tooling (seed generators, scripture/Synaxarium fetchers, sitemap generators, branding asset pipelines, Firestore seeding).
+- [`web`](./web/README.md): Web platform host shell, PWA manifest, SEO/OpenGraph metadata, liturgical splash lifecycle, early language detection, and Web Push / Service Worker bridge.
+- [`android`](./android/README.md): Android native platform shell, Gradle build configuration, platform channels for OEM battery optimization, autostart routing, and APK signature verification / installation.
+- [`ios`](./ios/README.md): Native iOS application wrapper, lifecycle delegates, SceneDelegate multi-window support, implicit Flutter engine plugin bridging, and App Store permissions.
+
+## 🔒 Global System Invariants
+
+- **Pure-Dart Domain Decoupling**: Pure business logic in `lib/domain/` with zero Flutter UI or Firebase SDK dependencies (Golden Rule 2).
+- **Timezone Sanctity (`CairoTime`)**: All calendar, schedule, season transitions, and reminder computations evaluate via Africa/Cairo wall time (UTC+2 / UTC+3 DST) (Golden Rule 2).
+- **Complete Feature Toggle Disappearance**: Any section disabled in `FeatureSettings` vanishes completely across UI, navigation, drawer, footer, assistant grounding, and sitemap (Golden Rule 6).
+- **Ecclesiastical Data Integrity**: Never invent church content; unconfirmed items remain marked `sample: true` and are scrubbed from public output (Golden Rule 1).
+- **Firestore Rules Expression Budget**: All document schemas and updates must strictly respect Firestore's 1,000-expression ceiling (ADR-020, ADR-044).
+- **Zero Hardcoded Content**: Everything configurable from `/admin` via schema-driven forms; no user-facing strings hardcoded (Golden Rule 1, 5).
+- **Optional Media**: Missing or unconfigured images never break geometry or trigger errors; inline Base64 storage in Firestore's `media/{id}` collection operates within Spark plan quotas (Golden Rule 9, ADR-017).
+- **PII-Free Telemetry**: Sentry error capture strips all form inputs, prompts, user IDs, IPs, and query strings (Golden Rule 10, ADR-034).
+
+## 🌐 Global Side Effects
+
+- **Cloud Firestore**: Real-time snapshot streams and transactional writes (`europe-west1`), with inline Base64 image storage in `media/{id}`.
+- **Firebase Authentication**: Administrative email/password sign-in and password resets.
+- **Firebase AI Logic / Google Gemini**: Grounded Q&A over church data, gated behind App Check (reCAPTCHA Enterprise / Play Integrity).
+- **Sentry**: Network error reporting and JS error interception via client-side sanitized events.
+- **Local Device Storage**: SharedPreferences (IO) and localStorage/sessionStorage (Web) for user reminders, push preferences, language choices, and prompt quotas.
+- **Operating System Services**: Native Android alarm scheduling (`AlarmManager`), notification channels (`NotificationManager`), OEM battery optimization intents, and FileProvider-based APK updates.
+
+---
+
 ## 🛠️ Developer Quickstart
 
 ### Prerequisites
