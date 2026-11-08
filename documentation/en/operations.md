@@ -216,6 +216,16 @@ The native Android app is packaged as lightweight, split release APKs for maximu
 6. The app requests `REQUEST_INSTALL_PACKAGES` permission if not already granted, and launches the Android Package Installer session via secure `FileProvider` (`${applicationId}.updates`).
 7. Forced updates are enforced if `currentBuild < minSupportedBuild`.
 
+### Mobile Performance, Native Cream Splash & Single Back Arrow (ADR-062)
+- **Native Launch Splash (`INV-SPLASH-01`):** Window launch background set to `#FBF3E4` (`@color/splash_cream`) across all Android versions (including Android 12+ Splash API via `values-v31` `windowSplashScreenBackground` and dark mode `values-night`), eliminating white or black flashes on cold start.
+- **Hero Ambient Animation Gating (`INV-PERF-01`):** Continuous ambient canvas tickers (Ken Burns, haze drift, blurred light rays) are disabled on Android native APK (`heroAmbientLoopAllowed() == false`) to eliminate scroll frame drops and preserve battery, while hardware-decoded hero video remains active. Web retains full CSS DOM animations (ADR-037).
+- **Navigation Chrome & Single Back Arrow (`INV-NAV-01`, `INV-NAV-02`):** Battery health guidance (`/notifications/battery`) renders standard `PageBody` + `PageHeader` chrome (no nested `Scaffold`), routing back to `/notifications`. Item detail pages (`ItemDetailPage`) omit the in-body back link on mobile viewports so that only `AppShell.leading` renders the single back arrow.
+
+### Mobile Performance, Native Cream Splash & Single Back Arrow (ADR-062)
+- **Native Launch Splash (`INV-SPLASH-01`):** Window launch background set to `#FBF3E4` (`@color/splash_cream`) across all Android versions (including Android 12+ Splash API via `values-v31` `windowSplashScreenBackground` and dark mode `values-night`), eliminating white or black flashes on cold start.
+- **Hero Ambient Animation Gating (`INV-PERF-01`):** Continuous ambient canvas tickers (Ken Burns, haze drift, blurred light rays) are disabled on Android native APK (`heroAmbientLoopAllowed() == false`) to eliminate scroll frame drops and preserve battery, while hardware-decoded hero video remains active. Web retains full CSS DOM animations (ADR-037).
+- **Navigation Chrome & Single Back Arrow (`INV-NAV-01`, `INV-NAV-02`):** Battery health guidance (`/notifications/battery`) renders standard `PageBody` + `PageHeader` chrome (no nested `Scaffold`), routing back to `/notifications`. Item detail pages (`ItemDetailPage`) omit the in-body back link on mobile viewports so that only `AppShell.leading` renders the single back arrow.
+
 ### OEM Battery Optimization Troubleshooting
 - Aggressive OEM battery killers (Xiaomi MIUI/HyperOS, Oppo ColorOS, Realme UI, Huawei EMUI, Samsung OneUI, Vivo Funtouch) frequently suppress background tasks and delay exact alarms.
 - Users reporting delayed or missed service reminders or daily readings notifications should be guided to the built-in diagnostic and guidance screen:

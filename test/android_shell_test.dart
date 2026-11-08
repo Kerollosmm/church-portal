@@ -65,6 +65,12 @@ void main() {
       expect(parentRouteOf('/public-services/f1'), '/public-services');
     });
 
+    test('battery route navigates to notifications (INV-NAV-01)', () {
+      expect(parentRouteOf('/notifications/battery'), '/notifications');
+      expect(parentRouteOf('/notifications/battery/'), '/notifications');
+      expect(parentRouteOf('/notifications/battery?brand=xiaomi'), '/notifications');
+    });
+
     test('subpages navigate to root home route', () {
       expect(parentRouteOf('/about'), '/');
       expect(parentRouteOf('/mass-schedule'), '/');
@@ -92,6 +98,8 @@ void main() {
               GoRoute(path: '/about', builder: (context, state) => const Text('AboutScreen')),
               GoRoute(path: '/clinics', builder: (context, state) => const Text('ClinicsScreen')),
               GoRoute(path: '/clinics/:id', builder: (context, state) => const Text('ClinicDetailScreen')),
+              GoRoute(path: '/notifications', builder: (context, state) => const Text('NotificationsScreen')),
+              GoRoute(path: '/notifications/battery', builder: (context, state) => const Text('BatteryScreen')),
             ],
           ),
         ],
@@ -125,6 +133,20 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('ClinicsScreen'), findsOneWidget);
+    });
+
+    testWidgets('battery route navigates to notifications on back press and shows tooltip', (tester) async {
+      await tester.pumpWidget(buildTestApp(initialLocation: '/notifications/battery'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('BatteryScreen'), findsOneWidget);
+      expect(find.byTooltip('العودة إلى الإشعارات'), findsOneWidget);
+
+      final popped = await tester.binding.handlePopRoute();
+      expect(popped, isTrue);
+      await tester.pumpAndSettle();
+
+      expect(find.text('NotificationsScreen'), findsOneWidget);
     });
 
     testWidgets('subpage route navigates to / on back press', (tester) async {

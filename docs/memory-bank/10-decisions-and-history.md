@@ -1818,6 +1818,29 @@ supersede them.
   `fetch_readings.js` keeps the live file for a date it cannot fetch. Verse notification / reader use the same
   seasonal choice as Home.
 
+## ADR-062 — Mobile APK scroll performance, cream launch screen, single back arrow per screen
+- **Context:** Mobile Android APK users faced three quality and performance defects:
+  1. `HeroStage` ran an unconstrained 60 s continuous ticker (`_clock.repeat()`). While the Web animates haze and ray shimmer in CSS DOM layers (`HeroAmbientLayer`, ADR-037), on Android Flutter repainted 14 blurred rays with `MaskFilter.blur` every frame, dropping frames on Home screen scrolling and opening.
+  2. The Android native launch screen hardcoded `@android:color/white` and `?android:colorBackground`, flashing a jarring white screen for 1–2 s before Flutter painted `#FBF3E4` cream. Furthermore, Android 12+ (API 31+) ignored legacy drawables and lacked `windowSplashScreenBackground`.
+  3. Redundant navigation chrome: `ItemDetailPage` unconditionally rendered an in-body `_BackLink` on phones directly beneath `AppShell`'s `AppBar` leading back arrow, showing two stacked back arrows. `NotificationHealthPage` (`/notifications/battery`) introduced a nested `Scaffold` with a custom top bar and duplicate back button, while `parentRouteOf('/notifications/battery')` returned `'/'` instead of `/notifications`.
+- **Decision:**
+  1. **`INV-PERF-01` (Hero ambient loop gate):** Add pure testable gate `heroAmbientLoopAllowed({bool isWeb, TargetPlatform? platform}) => isWeb || (platform ?? defaultTargetPlatform) != TargetPlatform.android;`. Gate `_ambient` in `_HeroStageState.didChangeDependencies()`. On the Android APK, `_ambient` is false, stopping the clock ticker, Ken Burns zoom, and haze repaints, painting rays once at `stillShimmer = 0.25` (identical to the existing reduced-motion path). The hardware-decoded hero video remains active on Android (`heroVideoAllowed` unchanged).
+  2. **`INV-SPLASH-01` (Cream launch screen across all Android versions):**
+     - Define `<color name="splash_cream">#FBF3E4</color>` in `values/colors.xml`.
+     - Update `drawable/launch_background.xml` and `drawable-v21/launch_background.xml` first item to `@color/splash_cream`.
+     - In `values/styles.xml` and `values-night/styles.xml`, set `NormalTheme` `windowBackground` to `@color/splash_cream`; switch night theme parent to `Theme.Light.NoTitleBar` to eliminate black cold-start flashes.
+     - Add `values-v31/styles.xml` and `values-night-v31/styles.xml` setting `android:windowSplashScreenBackground` to `@color/splash_cream` for Android 12+ Splash API.
+  3. **`INV-NAV-01` & `INV-NAV-02` (Unified shell chrome & single back arrow):**
+     - Extract `shellIsWide(BuildContext context)` helper (`width / textScale.clamp(1.0, 3.0) >= 1024`) from `AppShell`.
+     - In `ItemDetailPage`, render `_BackLink` only when `shellIsWide(context)` (desktop); on phones, `AppShell.leading` provides the single back arrow.
+     - In `NotificationHealthPage`, remove nested `Scaffold`, `SafeArea`, and custom top bar; adopt `PageBody` with `PageHeader`, wrap flex rows in `Expanded` to prevent mobile layout overflows down to 320 px, and register dedicated deferred strings `notificationHealthStrings` (`notifHealthTitle`, `notifHealthSubtitle`) in `initState`.
+     - Update `parentRouteOf(location)`: route normalized `/notifications/battery` to `/notifications`, with tooltip `notifications` («العودة إلى الإشعارات» / "Back to Notifications").
+- **Consequences:**
+  - Smooth 60–120 FPS Home screen scroll and opening on mobile APK with zero continuous ambient tickers.
+  - Consistent branded cream `#FBF3E4` launch experience across all Android versions (API 21 through 34+).
+  - Clean, unstacked navigation chrome adhering to single-back-arrow invariant across all viewports (320 px to 1400 px).
+  - +0 Firestore reads, writes, rules expressions, or admin schema changes.
+
 ## Timeline
 
 | When | PR / commit | What |
@@ -1886,3 +1909,4 @@ supersede them.
 Append new PRs to this table.
 | 6 Nov 2026 | **Phase 2 plans** (`docs/phase2-plans`, docs only) | ADR-056: `docs/plans/phase2/` — README (architecture, data contract, cost, decisions; revised 6 Nov 19:31–19:35: scheduled-only sender, event pushes, «ذكّرني» reminders, local verse + Katameros, keep-alive; owner decisions 19:57: APKs on a separate public releases repo, Katameros Arabic text + English refs only), HANDOFF (workflow, stacked chain, merge procedure), STATUS (checklists), PR A–E plans, LAUNCH-AND-OPERATIONS (consoles, keystore, user guidance, privacy, device tests, rollback, monitoring, runbook, launch day). No code. |
 | 7 Nov 2026 | **PR B** — "Android APK, local notifications, Katameros readings, OEM battery diagnostics, in-app update" (`feat/p2b-android-local-notifications`) | ADR-058: Split APKs (arm64 + arm32) with R8 minification and core library desugaring; rolling 9-day local notification planner with exact alarms and replenishment worker; Katameros pipeline (`tool/fetch_readings.js`, `/readings/<date>`); OEM battery guide & diagnostics (`/notifications/battery`); in-app updater (Range resume, SHA-256 verification, FileProvider install); Android shell (PopScope double-back exit, SharedPreferences language store, Assistant web redirect). +0 Firestore reads/writes. |
+| 8 Nov 2026 | **PR (fix/mobile-chrome-perf)** — "Mobile APK scroll performance, cream launch screen, single back arrow" (`fix/mobile-chrome-perf`) | ADR-062: `heroAmbientLoopAllowed` halts continuous ambient canvas repaints on Android APK (`INV-PERF-01`) while keeping hardware-decoded hero video; native launch screen `#FBF3E4` cream across API 21–34+ (`INV-SPLASH-01`); single back arrow on mobile viewports (`INV-NAV-01`, `INV-NAV-02`); `ItemDetailPage` `_BackLink` guarded by `shellIsWide(context)`; `NotificationHealthPage` adopts `PageBody` + `PageHeader` with dedicated deferred string table `notificationHealthStrings`; `parentRouteOf('/notifications/battery')` routes to `/notifications`. +0 Firestore reads/writes/rules. |
