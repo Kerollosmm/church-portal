@@ -61,7 +61,6 @@ render with `PageBody` (+ `Footer`). Content comes from Riverpod providers (hidd
   `heroMotion` off or under `flutter test`. The YouTube hero video library of PR #17 (ADR-026) was **removed in PR #25
   (ADR-036, owner request 4 Nov 2026)**; a `heroVideos` map already stored in `settings/features` is ignored.
 - **Hero ambient motion on web (ADR-037, PR #29):** the haze drift and light-ray shimmer look exactly as before but
-  run as a CSS-animated DOM layer (`HeroAmbientLayer`) instead of a per-frame Flutter repaint; the first paint is a
   run as a CSS-animated DOM layer (`HeroAmbientLayer`) instead of a per-frame Flutter repaint; see `documentation/features/performance-pagespeed.md`.
 - **Liturgical web loading screen (ADR-044, PR #35; replaces the ADR-037 static hero copy):** `web/index.html` shows,
   on the cream `#FBF3E4` ground (= `manifest.json` `background_color`), the parish seal (`assets/assets/branding/seal.png`,
