@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import '../config/app_config.dart';
 import '../domain/readings.dart';
 
 /// Manages fetching, caching, and pruning of Katameros daily readings.
@@ -16,9 +17,11 @@ class ReadingsStore {
 
   ReadingsStore({
     http.Client? client,
-    String baseUrl = 'https://maximos-domadios-church.web.app',
+    String? baseUrl,
   })  : _client = client ?? http.Client(),
-        _baseUrl = baseUrl.endsWith('/') ? baseUrl.substring(0, baseUrl.length - 1) : baseUrl;
+        _baseUrl = _trimSlash(baseUrl ?? AppConfig.dataOrigin);
+
+  static String _trimSlash(String url) => url.endsWith('/') ? url.substring(0, url.length - 1) : url;
 
   /// Loads readings for [dateIso] (YYYY-MM-DD).
   ///

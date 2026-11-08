@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart' show kReleaseMode;
+import 'package:flutter/foundation.dart' show kIsWeb, kReleaseMode;
 
 import '../domain/error_privacy.dart';
 
@@ -42,6 +42,16 @@ class AppConfig {
     final k = key.trim();
     return k.isNotEmpty && !k.startsWith('PLACEHOLDER');
   }
+
+  /// Origin the Android app reads static Hosting files from (readings,
+  /// today.json). `--dart-define=SITE_ORIGIN=…` points a test APK at the dev
+  /// channel; the web build always reads its own origin.
+  static const String siteOriginDefine =
+      String.fromEnvironment('SITE_ORIGIN', defaultValue: 'https://maximos-domadios-church.web.app');
+
+  /// Base for static data files: the page's own origin on web (dev channel,
+  /// PR previews, production), [siteOriginDefine] on Android.
+  static String get dataOrigin => kIsWeb ? Uri.base.origin : siteOriginDefine;
 
   /// Where uploaded images are stored: `firestore` (default — inline base64
   /// in `media/{id}`, works on the Spark plan) or `storage` (Cloud Storage for
