@@ -81,6 +81,11 @@ Testing on the real project: merge chain PRs into the `dev` branch (no rebase) â
 channel `dev` **and the rules to the live project**, so rules on `dev` must stay backward compatible with `main`.
 `main` stays production; final merges to `main` stay bottom-up. See `docs/DEV-ENVIRONMENT.md`.
 
+**Antigravity:** see [`.agents/`](.agents/) â€” the hark-workflow v2 plugin in `.agents/plugins/hark-workflow/` (entry
+point: skill `hw-start` or the `parent-agent`; its README has the start prompt), owner/process rules in
+`.agents/AGENTS.md`, code rules in `.agents/rules/church-portal.md`, settings in `.agents/workflow.env.example`
+(copy to `.agents/workflow.env`).
+
 ## Where to look
 
 | Need | File |

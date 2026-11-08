@@ -1,0 +1,32 @@
+{
+  "$schema": "https://antigravity.google/schemas/v1/plugin.json",
+  "name": "hark-workflow",
+  "displayName": "Hark Workflow",
+  "version": "2.0.0",
+  "description": "An engineering ship loop for Antigravity agents: plan with an owner gate, one worktree and draft PR per change, test-first code, docs in the same PR, local gate with size budget, AI review triage, green CI, owner-approved merge with a head-SHA guard, deploy and live check — 18 skills, 9 agents, Node hooks.",
+  "logo": "assets/logo.svg",
+  "suggestedPrompts": [
+    "Start with hw-start: ship this change end to end (plan, my G0 approval, worktree, tests, docs, draft PR, reviews, CI) and stop for my merge approval",
+    "Continue the open STATUS.md topic from where it stopped and tell me the next owner decision",
+    "Set up the hark workflow for this repo with hw-bootstrap (or install the church-portal profile) and open it as a draft PR"
+  ],
+  "author": {
+    "name": "Kerollos Melad",
+    "url": "https://github.com/Kerollosmm"
+  },
+  "homepage": "https://github.com/Kerollosmm/agent-workflow-kit",
+  "repository": "https://github.com/Kerollosmm/agent-workflow-kit",
+  "keywords": [
+    "antigravity",
+    "ci",
+    "code-review",
+    "documentation",
+    "firebase",
+    "flutter",
+    "memory-bank",
+    "pull-requests",
+    "subagents",
+    "workflow",
+    "worktrees"
+  ]
+}

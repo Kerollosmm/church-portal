@@ -1,0 +1,30 @@
+{
+  "hark-git-safety": {
+    "enabled": true,
+    "PreToolUse": [
+      {
+        "matcher": "run_command",
+        "hooks": [
+          { "type": "command", "command": "node ./scripts/hooks/guard_command.mjs", "timeout": 10 }
+        ]
+      }
+    ]
+  },
+  "hark-secret-guard": {
+    "enabled": true,
+    "PreToolUse": [
+      {
+        "matcher": "write_to_file|replace_file_content|multi_replace_file_content",
+        "hooks": [
+          { "type": "command", "command": "node ./scripts/hooks/guard_secrets.mjs", "timeout": 10 }
+        ]
+      }
+    ]
+  },
+  "hark-session-context": {
+    "enabled": true,
+    "SessionStart": [
+      { "type": "command", "command": "node ./scripts/hooks/session_start.mjs", "timeout": 10 }
+    ]
+  }
+}
