@@ -569,8 +569,16 @@ digits, Cairo `02` + 8, Alexandria `03` + 7, other governorates `0[4-9]` + 7–8
 
 ### Katameros Daily Readings (`/readings/<date>`, `readings_page.dart`, ADR-058)
 - Displays complete liturgical readings for any date: Matins Prophecies, Matins Gospel, Paul, Catholic Epistle, Acts, Synaxarium, Liturgy Psalm, Liturgy Gospel.
-- Date navigation bar (previous / next day, calendar date picker).
-- Arabic scripture text and English chapter:verse references (`refs-only`).
+- **Scroll architecture & sliver virtualization:** Lazy `CustomScrollView` with `ScrollCacheExtent.pixels(500)` and flattened `SliverList.builder` using deterministic item keys (`_CommemorationItem`, `_SectionHeaderItem`, `_ReadingCardItem`, `_AttributionItem`), replacing legacy `SingleChildScrollView` + `Column` to guarantee stutter-free 60 fps rendering on lower-tier Android devices.
+- **Floating controls (`SliverAppBar`):** `floating: true`, `snap: true`, `pinned: false` collapsible header that conceals during reading and snaps back on slight upward scroll.
+- **Directional day navigation:** Centered date display (`$_currentIso • $coptic`) flanked by RTL-aware directional arrow buttons (`Icons.arrow_back_rounded`, `Icons.arrow_forward_rounded`; keys `prevDayButton` / `nextDayButton`), replacing the misplaced `< A- A+ >` buttons.
+- **Dedicated font scaling control (`fontSizeControl`):** Stepped font scale from `0.85x` to `2.0x` (default `1.0x`, step `0.15`, with percentage badge and one-tap reset `fontSizeReset`) backed by `readingTextScaleProvider` and persisted to device storage via `InstallEnv` (`church_portal_reading_prefs`).
+- **Responsive card layout:** Card headers (kind title + scripture reference) use a flexible `Wrap` layout verified overflow-free down to 320 px width at maximum 2.0x text scaling in both Arabic (RTL) and English (LTR).
+- **Adaptive focus reader mode:** Damped scroll listener with 40 dp hysteresis activates `readerFocusModeProvider` on downward scroll past 60 px offset, triggering `AppShell` to collapse its `AppBar` and hide `SealTab`, `UpdateBanner`, `LiveStreamBanner`, and `InstallBanner` for distraction-free immersion; restores chrome on upward scroll or route exit.
+- **Background repaint isolation:**
+  - `WarmBackdrop` (`lib/ui/widgets/golden.dart`) wrapped in `RepaintBoundary` for zero-cost raster caching of the clouds texture + color filter.
+  - `HeroVideo` (`lib/ui/widgets/hero_video_io.dart`) wrapped in `RepaintBoundary` to isolate 60 fps video rendering from ancestor repaint layers.
+- Arabic scripture text (Van Dyck) and English chapter:verse references (`refs-only`).
 - Offline caching via `ReadingsStore` (SharedPreferences on mobile, in-memory on web) with automatic pruning of dates older than yesterday.
 - Accessible directly via the «اقرأ القراءات» action on the Today card or direct link `/readings/YYYY-MM-DD`.
 

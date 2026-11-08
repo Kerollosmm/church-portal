@@ -1795,6 +1795,14 @@ supersede them.
      - `PopScope` handles back button navigation (`parentRouteOf` maps subpages to listing/home, double back-press on `/` within 2 seconds exits the app).
      - Persistent language store on Android via `shared_preferences` (`initLanguageStore`, `PlatformLanguageStore`).
      - Assistant page on Android renders a clean external web redirect card to `https://maximos-domadios-church.web.app/ask` due to Play Integrity requirement.
+  6. **APK scroll performance & Katameros focus reader (`readings_page.dart`, `app_shell.dart`, `golden.dart`, `hero_video_io.dart`):**
+     - Lazy `CustomScrollView` with `ScrollCacheExtent.pixels(500)` and flattened `SliverList.builder` using deterministic item keys (`_CommemorationItem`, `_SectionHeaderItem`, `_ReadingCardItem`, `_AttributionItem`), replacing legacy `SingleChildScrollView` + `Column`.
+     - Inner controls in floating `SliverAppBar(floating: true, snap: true, pinned: false)`.
+     - Day navigation bar using RTL-aware directional arrow buttons (`Icons.arrow_back_rounded`, `Icons.arrow_forward_rounded`) and centered date display (`$_currentIso • $coptic`), replacing the misplaced `< A- A+ >` buttons.
+     - Dedicated Font Resize control (`0.85x` to `2.0x`, default `1.0x`, step `0.15`, with percentage badge and one-tap reset) backed by `readingTextScaleProvider` and persisted to device storage via `InstallEnv` (`church_portal_reading_prefs`).
+     - Responsive `Wrap` layout for reading card headers, verified overflow-free at 320 px width with 2.0x font scaling in both Arabic and English.
+     - Adaptive focus mode: damped scroll listener (>= 40 dp hysteresis) sets `readerFocusModeProvider = true` on downward scroll past 60 px offset, causing `AppShell` to collapse its `AppBar` and hide `SealTab`, `UpdateBanner`, `LiveStreamBanner`, and `InstallBanner` for distraction-free reading; restores chrome on upward scroll or route exit.
+     - Background repaint isolation: `WarmBackdrop` (`lib/ui/widgets/golden.dart`) and `HeroVideo` (`lib/ui/widgets/hero_video_io.dart`) wrapped in `RepaintBoundary` to isolate 60 fps rendering and texture caching from ancestor repaints.
 - **Consequences:**
   - Android users receive reliable reminders, daily verse, Katameros notifications, and offline readings with zero battery/data bloat and +0 Firestore reads/writes.
   - Sideloaded APKs self-update seamlessly from GitHub Releases or Firebase Hosting.

@@ -92,12 +92,14 @@ class _HeroVideoState extends State<HeroVideo> {
       curve: Curves.easeOut,
       child: sceneArt(
         context,
-        BottomFeather(
-          child: FittedBox(
-            fit: BoxFit.cover,
-            alignment: widget.alignment,
-            clipBehavior: Clip.hardEdge,
-            child: SizedBox(width: c.value.size.width, height: c.value.size.height, child: VideoPlayer(c)),
+        RepaintBoundary(
+          child: BottomFeather(
+            child: FittedBox(
+              fit: BoxFit.cover,
+              alignment: widget.alignment,
+              clipBehavior: Clip.hardEdge,
+              child: SizedBox(width: c.value.size.width, height: c.value.size.height, child: VideoPlayer(c)),
+            ),
           ),
         ),
       ),

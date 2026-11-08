@@ -67,20 +67,22 @@ class WarmBackdrop extends StatelessWidget {
   const WarmBackdrop({super.key});
 
   @override
-  Widget build(BuildContext context) => ExcludeSemantics(
-        child: DecoratedBox(
-          key: const Key('warmBackdrop'),
-          decoration: BoxDecoration(
-            color: context.pal.background,
-            image: DecorationImage(
-              image: const AssetImage(ArtAssets.clouds),
-              fit: BoxFit.cover,
-              // Fainter (and greyed) on a dark scene (ADR-025).
-              opacity: context.pal.textureOpacity,
-              colorFilter: context.pal.artFilter,
+  Widget build(BuildContext context) => RepaintBoundary(
+        child: ExcludeSemantics(
+          child: DecoratedBox(
+            key: const Key('warmBackdrop'),
+            decoration: BoxDecoration(
+              color: context.pal.background,
+              image: DecorationImage(
+                image: const AssetImage(ArtAssets.clouds),
+                fit: BoxFit.cover,
+                // Fainter (and greyed) on a dark scene (ADR-025).
+                opacity: context.pal.textureOpacity,
+                colorFilter: context.pal.artFilter,
+              ),
             ),
+            child: const SizedBox.expand(),
           ),
-          child: const SizedBox.expand(),
         ),
       );
 }

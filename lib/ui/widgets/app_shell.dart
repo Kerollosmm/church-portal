@@ -113,7 +113,23 @@ class _AppShellState extends ConsumerState<AppShell> {
   String get location => widget.location;
 
   @override
+  void didUpdateWidget(covariant AppShell oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.location != widget.location) {
+      if (!widget.location.startsWith('/readings')) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            ref.read(readerFocusModeProvider.notifier).setFocus(false);
+          }
+        });
+      }
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final isReadingRoute = location.startsWith('/readings');
+    final focusMode = isReadingRoute && ref.watch(readerFocusModeProvider);
     // Large system text makes the full link bar overflow: compare the width
     // in "unscaled text" units so big text switches to the compact bar.
     final textScale = MediaQuery.textScalerOf(context).scale(16) / 16;
@@ -254,8 +270,17 @@ class _AppShellState extends ConsumerState<AppShell> {
       key: _scaffoldKey,
       onEndDrawerChanged: (open) => setState(() => _drawerOpen = open),
       appBar: PreferredSize(
-        preferredSize: Size.fromHeight(topBarH + (wide ? 76.0 : 64.0)),
-        child: Column(
+        preferredSize: Size.fromHeight(focusMode ? 0.0 : (topBarH + (wide ? 76.0 : 64.0))),
+        child: AnimatedSize(
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.easeInOut,
+          child: AnimatedSlide(
+            offset: focusMode ? const Offset(0, -1.0) : Offset.zero,
+            duration: const Duration(milliseconds: 250),
+            curve: Curves.easeInOut,
+            child: focusMode
+                ? const SizedBox.shrink()
+                : Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             if (showTopBar) ...[
@@ -282,6 +307,8 @@ class _AppShellState extends ConsumerState<AppShell> {
               mainAppBar,
           ],
         ),
+          ),
+        ),
       ),
       endDrawer: wide ? null : _AppDrawer(location: location, showAsk: showAsk),
       body: Stack(children: [
@@ -289,8 +316,24 @@ class _AppShellState extends ConsumerState<AppShell> {
         // Today layer (ADR-040): while the church is streaming,
         // the live banner sits above every page.
         Column(children: [
-          if (!kIsWeb) const UpdateBanner(),
-          const LiveStreamBanner(),
+          AnimatedSize(
+            duration: const Duration(milliseconds: 250),
+            curve: Curves.easeInOut,
+            child: AnimatedSlide(
+              offset: focusMode ? const Offset(0, -1.0) : Offset.zero,
+              duration: const Duration(milliseconds: 250),
+              curve: Curves.easeInOut,
+              child: focusMode
+                  ? const SizedBox.shrink()
+                  : Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (!kIsWeb) const UpdateBanner(),
+                        const LiveStreamBanner(),
+                      ],
+                    ),
+            ),
+          ),
           Expanded(child: widget.child),
         ]),
       ]),
@@ -301,7 +344,17 @@ class _AppShellState extends ConsumerState<AppShell> {
         PositionedDirectional(
           start: tabStart,
           top: MediaQuery.paddingOf(context).top + topBarH,
-          child: Semantics(
+          child: AnimatedSlide(
+            offset: focusMode ? const Offset(0, -1.2) : Offset.zero,
+            duration: const Duration(milliseconds: 250),
+            curve: Curves.easeInOut,
+            child: AnimatedOpacity(
+              opacity: focusMode ? 0.0 : 1.0,
+              duration: const Duration(milliseconds: 250),
+              curve: Curves.easeInOut,
+              child: IgnorePointer(
+                ignoring: focusMode,
+                child: Semantics(
             link: true,
             label: '${context.tr('logoLabel')} — ${context.tr('home')}',
             excludeSemantics: true,
@@ -312,13 +365,16 @@ class _AppShellState extends ConsumerState<AppShell> {
             ),
           ),
         ),
+            ),
+          ),
+        ),
       PositionedDirectional(
         start: 0,
         end: 0,
         bottom: 0,
         // Hidden (not disposed: keeps its delay / dismiss state) while the
         // drawer is open.
-        child: Offstage(offstage: _drawerOpen, child: InstallBanner(currentPath: location)),
+        child: Offstage(offstage: _drawerOpen || focusMode, child: InstallBanner(currentPath: location)),
       ),
     ]);
 

@@ -522,3 +522,82 @@ final updateDecisionProvider = FutureProvider<UpdateDecision?>((ref) async {
   );
 });
 
+
+
+// ------------------- Reading Preferences & Focus Reader -------------------
+
+/// Primary device storage key for user reading font scale (ADR-058 / concepts brief).
+const readingFontScaleStorageKey = 'church_portal_reading_font_scale';
+
+/// Fallback / legacy device storage key for user reading preferences.
+const readingPrefsStorageKey = 'church_portal_reading_prefs';
+
+final readingTextScaleProvider =
+    NotifierProvider<ReadingTextScaleNotifier, double>(ReadingTextScaleNotifier.new);
+
+class ReadingTextScaleNotifier extends Notifier<double> {
+  static const double minScale = 0.85;
+  static const double maxScale = 2.0;
+  static const double step = 0.15;
+  Timer? _debounceTimer;
+  double? _pendingScale;
+
+  @override
+  double build() {
+    final env = ref.watch(installEnvProvider);
+    ref.onDispose(() {
+      if (_debounceTimer?.isActive ?? false) {
+        _debounceTimer!.cancel();
+        final scaleToWrite = _pendingScale;
+        if (scaleToWrite != null) {
+          try {
+            final payload = {'scale': scaleToWrite};
+            env.writeJson(readingFontScaleStorageKey, payload);
+            env.writeJson(readingPrefsStorageKey, payload);
+          } catch (_) {}
+        }
+      }
+    });
+
+    final raw = env.readJson(readingFontScaleStorageKey)?['scale'] ??
+        env.readJson(readingPrefsStorageKey)?['scale'];
+    if (raw is num && raw.isFinite) {
+      return raw.toDouble().clamp(minScale, maxScale).toDouble();
+    }
+    return 1.0;
+  }
+
+  void setScale(double next) {
+    final clamped = double.parse(next.clamp(minScale, maxScale).toStringAsFixed(2));
+    if (clamped == state) return;
+    state = clamped;
+    _pendingScale = clamped;
+    final env = ref.read(installEnvProvider);
+    _debounceTimer?.cancel();
+    _debounceTimer = Timer(const Duration(milliseconds: 400), () {
+      final scaleToWrite = _pendingScale ?? clamped;
+      try {
+        final payload = {'scale': scaleToWrite};
+        env.writeJson(readingFontScaleStorageKey, payload);
+        env.writeJson(readingPrefsStorageKey, payload);
+      } catch (_) {}
+      _pendingScale = null;
+    });
+  }
+
+  void increase() => setScale(state + step);
+  void decrease() => setScale(state - step);
+  void reset() => setScale(1.0);
+}
+
+final readerFocusModeProvider =
+    NotifierProvider<ReaderFocusModeNotifier, bool>(ReaderFocusModeNotifier.new);
+
+class ReaderFocusModeNotifier extends Notifier<bool> {
+  @override
+  bool build() => false;
+
+  void setFocus(bool active) {
+    if (state != active) state = active;
+  }
+}
