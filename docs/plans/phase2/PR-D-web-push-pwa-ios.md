@@ -35,7 +35,8 @@
 >    - Place `firebase-messaging-sw.js` and `push_client.js` in the `no-cache, no-store, must-revalidate` rule **after** `**/*.@(js|mjs|wasm)` (`firebase.json` line 85) and **verify `Cache-Control: no-cache` with `curl -I` after deploying to `dev`**. Add `"id": "/"` and `"scope": "/"` in `web/manifest.json` (safe: matches existing `"start_url": "/"`).
 > 4. **Canonical `EventKey`, 60-Day Parity Fixture & Calendar Fallbacks**:
 >    - `lib/domain/push.dart` (`sourceOf` / `isReminderSourceEnabled`) maps `season-<id>` → `'lit'` and `meeting-<id>` → `'mtg'`; `tool/push_reminders.js` must match, verified by the 60-day Dart↔JS parity fixture (`test/occurrences_parity_test.dart`) explicitly covering `season→lit`, `meeting→mtg`, `day→day`, and a **Cairo DST transition night**.
->    - Lock `remList()` in `firestore.rules` to `^$|^web_rem_(lit|meeting|day|season)-[a-z0-9-]{1,56}_(0|5|10|15|30|60|120|180|1440)_(ar|en)(,web_rem_(lit|meeting|day|season)-[a-z0-9-]{1,56}_(0|5|10|15|30|60|120|180|1440)_(ar|en)){0,29}$`.
+>    - Lock `remList()` in `firestore.rules` to `^$|^web_rem_(lit|meeting|day|season)-[a-z0-9-]{1,48}(_[0-9]{8})?_(0|5|10|15|30|60|120|180|1440)_(ar|en)(,web_rem_(lit|meeting|day|season)-[a-z0-9-]{1,48}(_[0-9]{8})?_(0|5|10|15|30|60|120|180|1440)_(ar|en)){0,29}$` (matching PR A's `reminderTopic(...)` in `lib/domain/push.dart:196-205`, which places an underscore `_<YYYYMMDD>_` on single-occurrence topics).
+>    - Flip `kPushDeliveryShipped = true` in `lib/domain/push.dart`. When computing web reminder topics (`computeWebTopicSync`), resolve `effectiveOcc = r.every ? null : (r.occurrence ?? isoDate(CairoTime.fromInstant(r.startsAt)))` because weekly liturgy/meeting `RemindMeButton` call sites pass `occurrence: null, recurring: true` even when the visitor selects «هذه المرة فقط» (`every: false`). Keep `lib/data/web_push_repository.dart` behind `deferred as web_push` in `AppShell` (loaded only when `localStorage['church_portal_push_web']` has an active token or `pendingSync == true`) so `main.dart.js` stays well under the +20 KB gzip budget.
 >    - Update `/admin` `'lit'` reminder source label to **«القداسات والصلوات وخدمات المواسم»**. Implement pure-Dart RFC 5545 `.ics` `VALARM` (`lib/domain/calendar_ics.dart`) alongside the Google Calendar URL fallback (since `.ics` download inside standalone iOS PWA may not open Apple Calendar directly on all iOS versions and not all calendar apps honor imported `VALARM` — test on real iPhone PWA), and clamp web leads whose `fireAt < now + 40 min`.
 > 5. **Live `dev` Channel Testing & `firestore.rules` Approval Gate (`deploy-dev.yml`)**:
 >    - Merging/pushing PR D to `dev` deploys `firestore.rules` + indexes to the **LIVE `asafra-church-portal` project** (`.agents/AGENTS.md` §2.3) and **strictly requires explicit owner approval beforehand**.
@@ -168,7 +169,7 @@ function validPushQueue(d) {
     && d.createdAt == request.time;
 }
 function remList() {   // '' or 1–30 topics web_rem_<key>_<lead>_<lang>
-  return '^$|^web_rem_[a-z0-9-]{1,60}_(0|5|10|15|30|60|120|180|1440)_(ar|en)(,web_rem_[a-z0-9-]{1,60}_(0|5|10|15|30|60|120|180|1440)_(ar|en)){0,29}$';
+  return '^$|^web_rem_(lit|meeting|day|season)-[a-z0-9-]{1,48}(_[0-9]{8})?_(0|5|10|15|30|60|120|180|1440)_(ar|en)(,web_rem_(lit|meeting|day|season)-[a-z0-9-]{1,48}(_[0-9]{8})?_(0|5|10|15|30|60|120|180|1440)_(ar|en)){0,29}$';
 }
 ```
 **How the client satisfies the counter without reading it** (Sentry round 2: the doc is unreadable): the batch
