@@ -887,12 +887,44 @@ class RowSendStatus {
     if (m['claimedAt'] is String) {
       claimed = DateTime.tryParse(m['claimedAt'] as String);
     }
+    TopicSendState? web;
+    if (m['web'] is Map) {
+      web = TopicSendState.fromMap(Map<String, dynamic>.from(m['web'] as Map));
+    } else if (m['webState'] is String) {
+      web = TopicSendState(state: m['webState'] as String);
+    } else if (m['topics'] is Map) {
+      final t = m['topics'] as Map;
+      final ar = t['web_announcements_ar'];
+      final en = t['web_announcements_en'];
+      if (ar == 'ok' && en == 'ok') {
+        web = const TopicSendState(state: 'ok');
+      } else if (ar != null || en != null) {
+        web = const TopicSendState(state: 'error');
+      }
+    }
+
+    TopicSendState? app;
+    if (m['app'] is Map) {
+      app = TopicSendState.fromMap(Map<String, dynamic>.from(m['app'] as Map));
+    } else if (m['appState'] is String) {
+      app = TopicSendState(state: m['appState'] as String);
+    } else if (m['topics'] is Map) {
+      final t = m['topics'] as Map;
+      final ar = t['app_announcements_ar'];
+      final en = t['app_announcements_en'];
+      if (ar == 'ok' && en == 'ok') {
+        app = const TopicSendState(state: 'ok');
+      } else if (ar != null || en != null) {
+        app = const TopicSendState(state: 'error');
+      }
+    }
+
     return RowSendStatus(
       state: m['state']?.toString() ?? 'pending',
       claimedAt: claimed,
       claimedBy: m['claimedBy']?.toString(),
-      web: m['web'] is Map ? TopicSendState.fromMap(Map<String, dynamic>.from(m['web'] as Map)) : null,
-      app: m['app'] is Map ? TopicSendState.fromMap(Map<String, dynamic>.from(m['app'] as Map)) : null,
+      web: web,
+      app: app,
       lastError: m['lastError']?.toString(),
       retryCount: m['retryCount'] is num ? (m['retryCount'] as num).toInt() : 0,
     );
@@ -918,6 +950,7 @@ class SentEntry {
   final String targets;
   final String webState;
   final String appState;
+  final String result;
   final String eventKey;
   final String link;
 
@@ -929,6 +962,7 @@ class SentEntry {
     this.targets = 'all',
     this.webState = '',
     this.appState = '',
+    this.result = '',
     this.eventKey = '',
     this.link = '/',
   });
@@ -953,6 +987,7 @@ class SentEntry {
       targets: m['targets']?.toString() ?? 'all',
       webState: m['webState']?.toString() ?? '',
       appState: m['appState']?.toString() ?? '',
+      result: m['result']?.toString() ?? '',
       eventKey: m['eventKey']?.toString() ?? '',
       link: safeNotificationLink(m['link']?.toString()),
     );
@@ -966,6 +1001,7 @@ class SentEntry {
     'targets': targets,
     'webState': webState,
     'appState': appState,
+    if (result.isNotEmpty) 'result': result,
     'eventKey': eventKey,
     'link': link,
   };
@@ -1073,6 +1109,7 @@ class NotifySchedule {
               sentAt: sent,
               webState: res,
               appState: res,
+              result: res,
               titleAr: parts[3],
             ));
           }

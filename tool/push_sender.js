@@ -336,7 +336,7 @@ export async function runPushSender(env, options = {}) {
     claimConflict,
   };
 
-  const subrequestBudget = { count: 0, max: MAX_SUBREQUESTS_PER_RUN };
+  const subrequestBudget = { count: 4, max: MAX_SUBREQUESTS_PER_RUN - 1 };
 
   if (!claimConflict) {
     // Send due event pushes
@@ -346,7 +346,6 @@ export async function runPushSender(env, options = {}) {
       const attempts = { ...(rowStatus.attempts || {}) };
 
       for (const t of neededTopics) {
-        attempts[t] = (attempts[t] || 0) + 1;
         const lang = t.endsWith('_en') ? 'en' : 'ar';
         const title = lang === 'en' && row.titleEn ? row.titleEn : row.titleAr;
         const body = lang === 'en' && row.bodyEn ? row.bodyEn : row.bodyAr;
@@ -374,6 +373,10 @@ export async function runPushSender(env, options = {}) {
           );
         }
 
+        if (!(res.status === 'retry' && res.reason === 'subrequest_cap')) {
+          attempts[t] = (attempts[t] || 0) + 1;
+        }
+
         topicsState[t] = res.status;
         resultsSummary.fcmSends++;
       }
@@ -399,9 +402,16 @@ export async function runPushSender(env, options = {}) {
         newState = 'error';
       }
 
+      const webOk = topicsState['web_announcements_ar'] === 'ok' && topicsState['web_announcements_en'] === 'ok';
+      const appOk = topicsState['app_announcements_ar'] === 'ok' && topicsState['app_announcements_en'] === 'ok';
+      const webState = webOk ? 'ok' : (topicsState['web_announcements_ar'] || topicsState['web_announcements_en'] ? 'error' : null);
+      const appState = appOk ? 'ok' : (topicsState['app_announcements_ar'] || topicsState['app_announcements_en'] ? 'error' : null);
+
       statusMap[row.id] = {
         state: newState,
         result: newState,
+        webState,
+        appState,
         claimedAt: nowIso,
         topics: topicsState,
         attempts,
@@ -467,13 +477,16 @@ export async function runPushSender(env, options = {}) {
         resultsSummary.fcmSends++;
       }
 
-      if (sentTopicsCount === seasonTopics.length) {
-        const alertResult = anyFailed ? 'partial' : 'ok';
-        const logEntry = `${alert.logKey}\x1f${nowIso}\x1f${alertResult}\x1f${alert.titleAr}\x1f${options.trigger || 'cron'}`;
+      if (sentTopicsCount === seasonTopics.length && !anyFailed) {
+        const logEntry = `${alert.logKey}\x1f${nowIso}\x1fok\x1f${alert.titleAr}\x1f${options.trigger || 'cron'}`;
         sentLog.unshift(logEntry);
         resultsSummary.dailySeasonsSent++;
       } else {
         allSeasonAlertsComplete = false;
+        if (sentTopicsCount > 0) {
+          const logEntry = `${alert.logKey}\x1f${nowIso}\x1fpartial\x1f${alert.titleAr}\x1f${options.trigger || 'cron'}`;
+          sentLog.unshift(logEntry);
+        }
       }
     }
 
@@ -501,7 +514,7 @@ export async function runPushSender(env, options = {}) {
           health,
         },
         ['status', 'sentLog', 'health'],
-        null, // unconditional final write of status/sentLog/health
+        notifUpdateTime, // optimistic lock prevents stale overwrites
         fetchImpl,
       );
     }

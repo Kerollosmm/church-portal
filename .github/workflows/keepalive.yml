@@ -20,7 +20,9 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          trap 'gh workflow enable synaxarium.yml || true' EXIT
           gh workflow disable synaxarium.yml
           sleep 5
           gh workflow enable synaxarium.yml
+          trap - EXIT
           echo "Successfully toggled synaxarium.yml keepalive."
