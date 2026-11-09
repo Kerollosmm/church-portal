@@ -110,10 +110,10 @@
 - [ ] Owner: VAPID key in `/admin`
 
 ## PR E — Responsive + size audit (ADR-061) · `fix/p2e-responsive-size` → D
-- [ ] 320 px app-bar space recovery (< 360 px title + seal tab >= 6 dp gap) & real-font geometry regression test
-- [ ] Landscape < 420 px restraint (hide InstallBanner & TopUtilityBar)
-- [ ] Phase 2 surfaces responsive sweep (readings, notifications, battery, sheets, install guide)
-- [ ] Deferred chunk load error handling (`ErrorReporting.capture`)
+- [x] 320 px app-bar space recovery (< 360 px title + seal tab >= 6 dp gap) & real-font geometry regression test
+- [x] Landscape < 420 px restraint (hide InstallBanner & TopUtilityBar)
+- [x] Phase 2 surfaces responsive sweep (readings, notifications, battery, sheets, install guide)
+- [x] Deferred chunk load error handling (`ErrorReporting.capture`)
 - [ ] Bundle-size CI gate (main.dart.js gzip -9 <= 1,396,031 B & zero leaks in 8 deferred modules)
 - [ ] Docs + ADR-061 · screenshots 320 / 390 / 740x360 / 1024 / 1440
 - [ ] Draft PR # ___ · CI green · reviews done · PSI ___

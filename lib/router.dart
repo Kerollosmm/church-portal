@@ -40,7 +40,7 @@ import 'ui/widgets/feature_gate.dart';
 /// Every public page is wrapped in a [FeatureGate]: a section switched off in
 /// `settings/features` shows "not available" instead of its content.
 NoTransitionPage<void> _page(GoRouterState s, Widget child) =>
-    NoTransitionPage(key: s.pageKey, child: FeatureGate(path: s.uri.path, child: child));
+    NoTransitionPage(key: s.pageKey, child: FeatureGate(key: ValueKey(s.uri.path), path: s.uri.path, child: child));
 
 /// Rewrites `?lang=` to match the selected language (`lang=en` for English,
 /// no parameter for Arabic, the default). Null when the URL already matches.

@@ -52,6 +52,14 @@ class _DeferredLoaderState extends State<DeferredLoader> {
   }
 
   @override
+  void didUpdateWidget(DeferredLoader oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.loadLibrary != oldWidget.loadLibrary) {
+      _future = _load();
+    }
+  }
+
+  @override
   Widget build(BuildContext context) => FutureBuilder<void>(
         future: _future,
         builder: (context, snap) {

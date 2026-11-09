@@ -20,6 +20,13 @@ class UpdateBanner extends ConsumerStatefulWidget {
     this.autoStartDownload = true,
   });
 
+  /// Displays the modal bottom sheet for in-app update installation.
+  static Future<void> showUpdateSheet(
+    BuildContext context,
+    UpdateDecision decision, {
+    bool autoStartDownload = true,
+  }) => _UpdateBannerState.showUpdateSheet(context, decision, autoStartDownload: autoStartDownload);
+
   @override
   ConsumerState<UpdateBanner> createState() => _UpdateBannerState();
 }
@@ -60,7 +67,8 @@ class _UpdateBannerState extends ConsumerState<UpdateBanner> {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         child: LayoutBuilder(
           builder: (context, constraints) {
-            final isNarrow = constraints.maxWidth < 360;
+            final textScale = MediaQuery.textScalerOf(context).scale(16) / 16;
+            final isNarrow = constraints.maxWidth < 360 || textScale >= 1.6;
 
             final contentText = Row(
               mainAxisSize: MainAxisSize.min,
@@ -82,8 +90,10 @@ class _UpdateBannerState extends ConsumerState<UpdateBanner> {
               ],
             );
 
-            final actions = Row(
-              mainAxisSize: MainAxisSize.min,
+            final actions = Wrap(
+              spacing: 6,
+              runSpacing: 4,
+              crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 FilledButton.tonal(
                   key: const Key('updateNowButton'),
@@ -100,8 +110,7 @@ class _UpdateBannerState extends ConsumerState<UpdateBanner> {
                     style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold),
                   ),
                 ),
-                if (!decision.isForced) ...[
-                  const SizedBox(width: 6),
+                if (!decision.isForced)
                   IconButton(
                     key: const Key('dismissUpdateButton'),
                     icon: const Icon(Icons.close_rounded, size: 18),
@@ -110,7 +119,6 @@ class _UpdateBannerState extends ConsumerState<UpdateBanner> {
                     visualDensity: VisualDensity.compact,
                     onPressed: () => _dismiss(decision),
                   ),
-                ],
               ],
             );
 
@@ -340,13 +348,15 @@ class _UpdateSheetState extends ConsumerState<UpdateSheet> with WidgetsBindingOb
   Widget build(BuildContext context) {
     final pal = context.pal;
     final notes = context.pick(widget.decision.notesAr, widget.decision.notesEn);
+    final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
+    final maxSheetHeight = MediaQuery.sizeOf(context).height * 0.90;
 
     return SafeArea(
       child: Center(
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 520),
+          constraints: BoxConstraints(maxWidth: 520, maxHeight: maxSheetHeight),
           child: Container(
-            margin: const EdgeInsets.all(12),
+            margin: EdgeInsets.fromLTRB(12, 12, 12, 12 + bottomInset),
             decoration: BoxDecoration(
               color: pal.surface,
               borderRadius: BorderRadius.circular(20),
@@ -490,20 +500,40 @@ class _UpdateSheetState extends ConsumerState<UpdateSheet> with WidgetsBindingOb
               borderRadius: BorderRadius.circular(4),
             ),
             const SizedBox(height: 8),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final textScale = MediaQuery.textScalerOf(context).scale(16) / 16;
+                final isNarrow = constraints.maxWidth < 280 || textScale >= 1.5;
+                final textWidget = Text(
                   '${currentMb.toStringAsFixed(1)} MB / ${totalMb.toStringAsFixed(1)} MB ($pct%)',
                   style: TextStyle(color: pal.muted, fontSize: 12.5),
-                ),
-                TextButton(
+                );
+                final cancelBtn = TextButton(
                   key: const Key('cancelDownloadButton'),
                   onPressed: _cancelDownload,
                   style: TextButton.styleFrom(foregroundColor: pal.alert),
                   child: Text(context.tr('updateCancel')),
-                ),
-              ],
+                );
+                if (isNarrow) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      textWidget,
+                      Align(
+                        alignment: AlignmentDirectional.centerEnd,
+                        child: cancelBtn,
+                      ),
+                    ],
+                  );
+                }
+                return Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    textWidget,
+                    cancelBtn,
+                  ],
+                );
+              },
             ),
           ],
         );
@@ -537,27 +567,48 @@ class _UpdateSheetState extends ConsumerState<UpdateSheet> with WidgetsBindingOb
                 style: TextStyle(color: pal.ink, fontSize: 12.5),
               ),
               const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: FilledButton.tonal(
-                      key: const Key('openSettingsButton'),
-                      onPressed: _requestPermission,
-                      child: Text(context.tr('updateOpenSettings')),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  FilledButton(
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final textScale = MediaQuery.textScalerOf(context).scale(16) / 16;
+                  final isNarrow = constraints.maxWidth < 280 || textScale >= 1.5;
+                  final settingsBtn = FilledButton.tonal(
+                    key: const Key('openSettingsButton'),
+                    onPressed: _requestPermission,
+                    child: Text(context.tr('updateOpenSettings')),
+                  );
+                  final installBtn = FilledButton(
                     key: const Key('retryInstallButton'),
                     onPressed: () {
                       if (_downloadedFilePath != null) {
                         _onDownloadComplete(_downloadedFilePath!);
                       }
                     },
-                    style: FilledButton.styleFrom(backgroundColor: pal.primary, foregroundColor: pal.onBar),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: pal.primary,
+                      foregroundColor: pal.onBar,
+                    ),
                     child: Text(context.tr('updateInstall')),
-                  ),
-                ],
+                  );
+
+                  if (isNarrow) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        settingsBtn,
+                        const SizedBox(height: 8),
+                        installBtn,
+                      ],
+                    );
+                  }
+
+                  return Row(
+                    children: [
+                      Expanded(child: settingsBtn),
+                      const SizedBox(width: 8),
+                      installBtn,
+                    ],
+                  );
+                },
               ),
             ],
           ),

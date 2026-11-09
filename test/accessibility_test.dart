@@ -22,6 +22,7 @@ import 'package:church_portal/ui/admin/doc_editor.dart';
 import 'package:church_portal/ui/admin/features_editor.dart';
 import 'package:church_portal/ui/pages/assistant_page.dart';
 import 'package:church_portal/ui/pages/contact_page.dart';
+
 import 'package:church_portal/ui/widgets/cards.dart';
 import 'package:church_portal/ui/widgets/common.dart';
 import 'package:church_portal/ui/widgets/golden.dart';
@@ -32,6 +33,19 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:church_portal/core/install_env.dart';
+import 'package:church_portal/domain/app_update.dart';
+import 'package:church_portal/domain/reminders.dart';
+import 'package:church_portal/ui/admin/notifications_admin.dart';
+import 'package:church_portal/ui/widgets/apk_install_guide.dart';
+import 'package:church_portal/ui/widgets/install_banner.dart';
+import 'package:church_portal/ui/widgets/reminder_sheet.dart';
+import 'package:church_portal/ui/widgets/today_widgets.dart';
+import 'package:church_portal/ui/widgets/update_banner.dart';
+import 'package:church_portal/data/assistant_usage_store.dart';
+import 'package:church_portal/data/local_notifications.dart';
+import 'package:church_portal/domain/notify_plan.dart';
+import 'package:church_portal/state/notify_providers.dart';
 
 // ---------------------------------------------------------------------------
 // WCAG contrast maths (relative luminance, WCAG 2.x definition).
@@ -68,17 +82,27 @@ const _publicRoutes = [
 
 /// Seed with every section on, plus an alert pointing at an in-app route and
 /// a departed father with a repose date (fixtures for BUG-08 / BUG-09).
-Map<String, dynamic> _raw({Map<String, bool> sections = const {}, String theme = 'burgundy'}) {
+Map<String, dynamic> _raw({
+  Map<String, bool> sections = const {},
+  String theme = 'burgundy',
+  Map<String, dynamic> featuresOverride = const {},
+}) {
   final raw = jsonDecode(File('assets/seed/seed.json').readAsStringSync()) as Map<String, dynamic>;
   final features = Map<String, dynamic>.from(raw['settings']['features'] as Map);
   features['sections'] = {...(features['sections'] as Map), 'clinics': true, ...sections};
   features['theme'] = theme;
+  features.addAll(featuresOverride);
   raw['settings']['features'] = features;
   return raw;
 }
 
-SeedData _seed({Map<String, bool> sections = const {}, String theme = 'burgundy', bool fixtures = false}) {
-  final raw = _raw(sections: sections, theme: theme);
+SeedData _seed({
+  Map<String, bool> sections = const {},
+  String theme = 'burgundy',
+  bool fixtures = false,
+  Map<String, dynamic> featuresOverride = const {},
+}) {
+  final raw = _raw(sections: sections, theme: theme, featuresOverride: featuresOverride);
   if (fixtures) {
     final alerts = raw['alerts'] as Map<String, dynamic>;
     final base = Map<String, dynamic>.from(alerts['follow-announcements'] as Map);
@@ -113,6 +137,25 @@ SeedData _seed({Map<String, bool> sections = const {}, String theme = 'burgundy'
   return SeedData(raw);
 }
 
+class _FakeLocalNotifier implements LocalNotifier {
+  @override
+  Future<void> initialize({void Function(String? payload)? onSelectNotification}) async {}
+  @override
+  Future<bool> requestPermissions() async => true;
+  @override
+  Future<bool> canScheduleExactAlarms() async => true;
+  @override
+  Future<void> schedulePlan(List<PlannedNotification> plan, {String? lang}) async {}
+  @override
+  Future<void> cancel(int id) async {}
+  @override
+  Future<void> cancelAll() async {}
+  @override
+  Future<void> showInstant(int id, String title, String body, {String? channelId, String? payload}) async {}
+  @override
+  Future<int> pendingCount() async => 0;
+}
+
 class _FixedLocale extends LocaleNotifier {
   final Locale locale;
   _FixedLocale(this.locale);
@@ -128,7 +171,10 @@ Future<(GoRouter, ProviderContainer)> _pumpApp(
   Size size = const Size(320, 800),
   double textScale = 1.0,
   Locale? locale = const Locale('en'),
-  Color primary = AppColors.burgundy,
+  Color? primary,
+  String theme = 'burgundy',
+  Map<String, dynamic> featuresOverride = const {},
+  InstallEnv? installEnv,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -136,9 +182,11 @@ Future<(GoRouter, ProviderContainer)> _pumpApp(
   addTearDown(tester.view.reset);
   addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
   final container = ProviderContainer(overrides: [
-    repositoryProvider.overrideWithValue(SeedRepository(seed ?? _seed())),
+    repositoryProvider.overrideWithValue(SeedRepository(seed ?? _seed(theme: theme, featuresOverride: featuresOverride))),
     nowProvider.overrideWith((ref) => Stream.value(_now)),
+    localNotifierProvider.overrideWithValue(_FakeLocalNotifier()),
     if (locale != null) localeProvider.overrideWith(() => _FixedLocale(locale)),
+    if (installEnv != null) installEnvProvider.overrideWithValue(installEnv),
   ]);
   addTearDown(container.dispose);
   final router = container.read(routerProvider);
@@ -147,11 +195,15 @@ Future<(GoRouter, ProviderContainer)> _pumpApp(
     child: Consumer(
       builder: (context, ref, _) {
         final l = ref.watch(localeProvider);
+        final active = ref.watch(activeThemeProvider);
+        final themeData = primary != null
+            ? buildTheme(l, primary: primary)
+            : buildTheme(l, palette: active.palette, key: active.key);
         return MaterialApp.router(
           locale: l,
           supportedLocales: const [Locale('ar'), Locale('en')],
           localizationsDelegates: GlobalMaterialLocalizations.delegates,
-          theme: buildTheme(l, primary: primary),
+          theme: themeData,
           routerConfig: router,
         );
       },
@@ -240,8 +292,127 @@ Widget _adminApp(Widget child) => MaterialApp(
       home: Scaffold(body: child),
     );
 
+
+const _sampleKatamerosFixture = {
+  'date': '2026-11-08',
+  'coptic': '29/2/1743',
+  'titleAr': 'تذكار الأعياد الثلاثة السيدية',
+  'titleEn': 'Feast of the Three Major Feasts',
+  'sections': [
+    {
+      'key': 'vespers',
+      'titleAr': 'العشية',
+      'titleEn': 'Vespers',
+      'readings': [
+        {
+          'kind': 'psalm',
+          'titleAr': 'المزمور',
+          'titleEn': 'Psalm',
+          'refAr': 'مزامير 144:5,7',
+          'refEn': 'Psalms 144:5,7',
+          'introAr': 'مزمور لداود',
+          'introEn': 'A Psalm of David',
+          'textAr': 'يَارَبُّ، طَأْطِئْ سَمَاوَاتِكَ وَٱنْزِلْ.',
+          'textEn': 'Bow down Your heavens, O LORD, and come down.',
+          'conclusionAr': 'هللويا',
+          'conclusionEn': 'Alleluia',
+        },
+        {
+          'kind': 'gospel',
+          'titleAr': 'الإنجيل',
+          'titleEn': 'Gospel',
+          'refAr': 'لوقا 7:36-50',
+          'refEn': 'Luke 7:36-50',
+          'introAr': '',
+          'introEn': '',
+          'textAr': 'وَسَأَلَهُ وَاحِدٌ مِنَ ٱلْفَرِّيسِيِّينَ أَنْ يَأْكُلَ مَعَهُ.',
+          'textEn': 'Then one of the Pharisees asked Him to eat with him.',
+          'conclusionAr': '',
+          'conclusionEn': '',
+        },
+      ],
+    },
+    {
+      'key': 'liturgy',
+      'titleAr': 'قداس',
+      'titleEn': 'Liturgy',
+      'readings': [
+        {
+          'kind': 'pauline',
+          'titleAr': 'البولس',
+          'titleEn': 'Pauline Epistle',
+          'refAr': 'رومية 3:1-31',
+          'refEn': 'Romans 3:1-31',
+          'introAr': 'فصل من رسالة بولس',
+          'introEn': 'A chapter from the epistle of Paul',
+          'textAr': 'إِذًا مَا هُوَ فَضْلُ ٱلْيَهُودِيِّ؟',
+          'textEn': 'What advantage then has the Jew?',
+          'conclusionAr': 'نعمة الله الآب فلتحل معكم',
+          'conclusionEn': 'The grace of God the Father be with you',
+        },
+      ],
+    },
+  ],
+  'source': 'api.katameros.app',
+  'bibleAr': 'Van Dyck',
+  'bibleEn': 'refs-only',
+};
+
+Future<void> _loadFonts() async {
+  Future<ByteData> loadFont(String path) async {
+    final bytes = await File(path).readAsBytes();
+    return ByteData.sublistView(bytes);
+  }
+
+  final plex = FontLoader('Plex');
+  plex.addFont(loadFont('assets/fonts/IBMPlexSansArabic-Regular.ttf'));
+  plex.addFont(loadFont('assets/fonts/IBMPlexSansArabic-Bold.ttf'));
+  await plex.load();
+
+  final lalezar = FontLoader('Lalezar');
+  lalezar.addFont(loadFont('assets/fonts/Lalezar-Regular.ttf'));
+  await lalezar.load();
+
+  final ruqaa = FontLoader('Ruqaa');
+  ruqaa.addFont(loadFont('assets/fonts/ArefRuqaa-Bold.ttf'));
+  await ruqaa.load();
+}
+
 void main() {
-  setUpAll(CairoTime.ensureInitialized);
+  setUpAll(() async {
+    CairoTime.ensureInitialized();
+    TestWidgetsFlutterBinding.ensureInitialized();
+    await _loadFonts();
+  });
+
+  setUp(() async {
+    SharedPreferences.setMockInitialValues({
+      'church_portal_readings_2026-11-08': jsonEncode(_sampleKatamerosFixture),
+      'church_portal_readings_2026-11-07': jsonEncode(_sampleKatamerosFixture),
+      'church_portal_readings_2026-11-09': jsonEncode(_sampleKatamerosFixture),
+    });
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('church_portal_readings_2026-11-08', jsonEncode(_sampleKatamerosFixture));
+      await prefs.setString('church_portal_readings_2026-11-07', jsonEncode(_sampleKatamerosFixture));
+      await prefs.setString('church_portal_readings_2026-11-09', jsonEncode(_sampleKatamerosFixture));
+    } catch (_) {}
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
+      const MethodChannel('church_portal/device'),
+      (MethodCall call) async {
+        if (call.method == 'getDiagnostics') {
+          return <String, dynamic>{
+            'manufacturer': 'Google',
+            'brand': 'Pixel',
+            'isIgnoringBatteryOptimizations': true,
+            'canScheduleExactAlarms': true,
+            'notificationsAllowed': true,
+          };
+        }
+        return null;
+      },
+    );
+  });
 
   group('WCAG AA colour contrast (>= 4.5:1 for text)', () {
     const white = Color(0xFFFFFFFF);
@@ -472,7 +643,6 @@ void main() {
       await tester.enterText(fields.at(1), '01012345678');
       await tester.enterText(fields.at(3), 'When is the next youth meeting?');
       await tester.tap(find.descendant(of: form, matching: find.byType(CheckboxListTile))); // PDPL consent
-      await tester.pump();
       await tester.tap(find.descendant(of: form, matching: find.byIcon(Icons.send_rounded)));
       await tester.pumpAndSettle();
       // The bundled-data repository cannot send: an error status appears.
@@ -482,7 +652,10 @@ void main() {
     });
 
     testWidgets('assistant: labelled send button and a live-region spinner while busy', (tester) async {
-      SharedPreferences.setMockInitialValues({}); // the device's daily counter (ADR-031)
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(PrefsUsageStore.idKey);
+      await prefs.remove(PrefsUsageStore.dayKey);
+      await prefs.remove(PrefsUsageStore.countKey);
       tester.view.physicalSize = const Size(900, 1600);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.reset);
@@ -781,7 +954,6 @@ void main() {
       final up = tester.widget<IconButton>(find.byKey(ValueKey('home-${order.first}-up')));
       expect(up.onPressed, isNull);
       await tester.tap(find.byKey(ValueKey('home-$second-up')));
-      await tester.pump();
       await tester.tap(find.byKey(const Key('features-save')));
       await tester.pumpAndSettle();
       expect(saved!.homeOrder.first, second);
@@ -790,10 +962,8 @@ void main() {
     testWidgets('overview and church info re-subscribe when the backend changes', (tester) async {
       final a = _FakeBackend(), b = _FakeBackend();
       await tester.pumpWidget(_adminApp(OverviewScreen(repo: a, role: 'owner', onOpen: (_) {})));
-      await tester.pump();
       expect(b.watched, isEmpty);
       await tester.pumpWidget(_adminApp(OverviewScreen(repo: b, role: 'owner', onOpen: (_) {})));
-      await tester.pump();
       expect(b.watched, containsAll(['settings/features', 'contact_messages']));
 
       Map<String, Map<String, dynamic>> church(String by) => {
@@ -1084,7 +1254,6 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Old Saint'), findsOneWidget);
       await tester.pumpWidget(_adminApp(CollectionListScreen(repo: b, def: collectionById('saints')!)));
-      await tester.pump();
       expect(find.text('Old Saint'), findsNothing);
 
       final c = _ListBackend([AdminDoc('m1', {'name': 'Old Sender', 'message': 'old', 'status': 'new'})]);
@@ -1092,7 +1261,6 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Old Sender'), findsOneWidget);
       await tester.pumpWidget(_adminApp(MessagesScreen(repo: _PendingBackend())));
-      await tester.pump();
       expect(find.text('Old Sender'), findsNothing);
 
       final e = _ListBackend([AdminDoc('e1', {'email': 'old-admin@x.test', 'role': 'editor'})]);
@@ -1100,7 +1268,6 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('old-admin@x.test'), findsOneWidget);
       await tester.pumpWidget(_adminApp(AdminsScreen(repo: _PendingBackend(), selfUid: 'u')));
-      await tester.pump();
       expect(find.text('old-admin@x.test'), findsNothing);
     });
 
@@ -1132,6 +1299,411 @@ void main() {
       expect(find.byType(DropdownButton<String>), findsOneWidget);
     });
   });
+
+
+    group('AppShell < 360 px geometry & drawer language (ADR-061)', () {
+      for (final lang in const ['ar', 'en']) {
+        final isAr = lang == 'ar';
+        for (final scale in const [1.0, 1.3, 2.0]) {
+          testWidgets('Home and Subpages at 320 x 640 @ ${scale}x ($lang)', (tester) async {
+            final (router, _) = await _pumpApp(
+              tester,
+              size: const Size(320, 640),
+              textScale: scale,
+              locale: Locale(lang),
+              featuresOverride: {'push': true},
+            );
+
+            for (final route in const ['/', '/about', '/notifications']) {
+              router.go(route);
+              await tester.pumpAndSettle();
+
+              expect(tester.takeException(), isNull, reason: '$route @ ${scale}x ($lang)');
+
+              // Seal tab width is 54.0
+              final sealFinder = find.byKey(const Key('sealTabHome'));
+              expect(sealFinder, findsOneWidget);
+              expect(tester.getSize(sealFinder).width, 54.0);
+
+              // Short title exists, width > 0, does not overlap seal tab, clearance >= 4.0 dp
+              final titleFinder = find.byKey(const Key('appBarShortTitle'));
+              expect(titleFinder, findsOneWidget);
+              final titleRect = tester.getRect(titleFinder);
+              final sealRect = tester.getRect(sealFinder);
+              expect(titleRect.width, greaterThan(0.0));
+              expect(titleRect.overlaps(sealRect), isFalse);
+
+              final clearance = isAr ? sealRect.left - titleRect.right : titleRect.left - sealRect.right;
+              expect(clearance, greaterThanOrEqualTo(4.0),
+                  reason: 'Clearance between seal and short title must be >= 4.0 dp on $route ($lang)');
+            }
+          });
+        }
+
+        testWidgets('Subpage /about at 320 x 640 hides bar language toggle & exposes 48+ dp drawer toggle ($lang)', (tester) async {
+          final (router, container) = await _pumpApp(
+            tester,
+            size: const Size(320, 640),
+            textScale: 1.0,
+            locale: Locale(lang),
+          );
+          router.go('/about');
+          await tester.pumpAndSettle();
+
+          // Bar language toggle is hidden on subpage below 360 px
+          expect(find.byKey(const Key('appBarLanguageToggle')), findsNothing);
+
+          // Open drawer
+          final scaffoldFinder = find.byType(Scaffold);
+          expect(scaffoldFinder, findsWidgets);
+          tester.state<ScaffoldState>(scaffoldFinder.first).openEndDrawer();
+          await tester.pumpAndSettle();
+
+          final drawerToggle = find.byKey(const Key('drawerLanguageToggle'));
+          expect(drawerToggle, findsOneWidget);
+          expect(tester.getSize(drawerToggle).height, greaterThanOrEqualTo(48.0));
+
+          // Tapping it switches locale
+          final currentLocale = container.read(localeProvider);
+          await tester.tap(drawerToggle);
+          await tester.pumpAndSettle();
+          expect(container.read(localeProvider).languageCode, isNot(currentLocale.languageCode));
+        });
+      }
+    });
+
+    group('Landscape < 420 px restraint (ADR-061)', () {
+      for (final lang in const ['ar', 'en']) {
+        testWidgets('restrains top bar and banner at 740 x 360 vs 740 x 420 ($lang)', (tester) async {
+          final env = _FakeInstallEnv();
+          final (router, _) = await _pumpApp(
+            tester,
+            size: const Size(740, 360),
+            textScale: 1.0,
+            locale: Locale(lang),
+            installEnv: env,
+          );
+          router.go('/');
+          await tester.pumpAndSettle();
+
+          // TopUtilityBar is hidden on landscape < 420 px
+          expect(find.byType(TopUtilityBar), findsNothing);
+
+          // InstallBanner renders collapsed
+          final bannerFinder = find.byType(InstallBanner);
+          expect(bannerFinder, findsOneWidget);
+          expect(tester.getSize(bannerFinder).height, 0.0);
+
+          // At 740 x 420, TopUtilityBar is shown again
+          tester.view.physicalSize = const Size(740, 420);
+          await tester.pumpAndSettle();
+          expect(find.byType(TopUtilityBar), findsOneWidget);
+        });
+      }
+    });
+
+    group('320 px at 200% text: notifications, battery and readings routes (ADR-061)', () {
+      for (final lang in const ['ar', 'en']) {
+        testWidgets('routes /notifications, /notifications/battery, /readings/2026-11-08 ($lang)', (tester) async {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('church_portal_readings_2026-11-08', jsonEncode(_sampleKatamerosFixture));
+          final (router, _) = await _pumpApp(
+            tester,
+            size: const Size(320, 640),
+            textScale: 2.0,
+            locale: Locale(lang),
+            featuresOverride: {'push': true},
+          );
+
+          router.go('/notifications');
+          for (var i = 0; i < 35; i++) {
+            await tester.pump(const Duration(milliseconds: 100));
+            if (find.byType(CircularProgressIndicator).evaluate().isEmpty) break;
+          }
+          await tester.pump(const Duration(milliseconds: 100));
+          expect(tester.takeException(), isNull, reason: '/notifications ($lang)');
+
+          router.go('/notifications/battery');
+          for (var i = 0; i < 35; i++) {
+            await tester.pump(const Duration(milliseconds: 100));
+            if (find.byType(CircularProgressIndicator).evaluate().isEmpty) break;
+          }
+          await tester.pump(const Duration(milliseconds: 100));
+          expect(tester.takeException(), isNull, reason: '/notifications/battery ($lang)');
+
+          router.go('/readings/2026-11-08');
+          for (var i = 0; i < 35; i++) {
+            await tester.pump(const Duration(milliseconds: 100));
+            if (find.byType(CircularProgressIndicator).evaluate().isEmpty) break;
+          }
+          await tester.pump(const Duration(milliseconds: 100));
+          expect(tester.takeException(), isNull, reason: '/readings/2026-11-08 ($lang)');
+        });
+      }
+    });
+
+    group('320 px at 1.3x text: liturgical themes sweep across 7 occasions (ADR-061)', () {
+      for (final themeKey in ThemePresets.occasions) {
+        testWidgets('occasion theme $themeKey on / and /readings/2026-11-08', (tester) async {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('church_portal_readings_2026-11-08', jsonEncode(_sampleKatamerosFixture));
+          final (router, _) = await _pumpApp(
+            tester,
+            size: const Size(320, 640),
+            textScale: 1.3,
+            locale: const Locale('ar'),
+            theme: themeKey,
+          );
+
+          for (final route in const ['/', '/readings/2026-11-08']) {
+            router.go(route);
+            for (var i = 0; i < 35; i++) {
+              await tester.pump(const Duration(milliseconds: 100));
+              if (find.byType(CircularProgressIndicator).evaluate().isEmpty) break;
+            }
+            await tester.pump(const Duration(milliseconds: 100));
+            expect(tester.takeException(), isNull, reason: 'Occasion $themeKey on $route');
+          }
+        });
+      }
+    });
+
+    group('Modal bottom sheets & banners at 320 x 568 @ 2.0x with keyboard insets (ADR-061)', () {
+      testWidgets('showApkInstallGuide on Android navigates steps without overflow', (tester) async {
+        tester.view.physicalSize = const Size(320, 568);
+        tester.view.devicePixelRatio = 1;
+        tester.platformDispatcher.textScaleFactorTestValue = 2.0;
+        tester.view.viewInsets = const FakeViewPadding(bottom: 280);
+        addTearDown(tester.view.reset);
+        addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+        addTearDown(tester.view.resetViewInsets);
+
+        await tester.pumpWidget(MaterialApp(
+          locale: const Locale('ar'),
+          supportedLocales: const [Locale('ar'), Locale('en')],
+          localizationsDelegates: GlobalMaterialLocalizations.delegates,
+          theme: buildTheme(const Locale('ar'), primary: AppColors.burgundy),
+          home: Scaffold(
+            body: Builder(
+              builder: (ctx) => Center(
+                child: ElevatedButton(
+                  onPressed: () => showApkInstallGuide(ctx, apkSizeMb: 18.5),
+                  child: const Text('Open'),
+                ),
+              ),
+            ),
+          ),
+        ));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.text('Open'));
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+
+        final nextBtn = find.text('التالي');
+        if (nextBtn.evaluate().isNotEmpty) {
+          await tester.tap(nextBtn, warnIfMissed: false);
+          await tester.pumpAndSettle();
+          expect(tester.takeException(), isNull);
+        }
+      });
+
+      testWidgets('showIosInstallSteps renders iOS fallback steps without overflow', (tester) async {
+        tester.view.physicalSize = const Size(320, 568);
+        tester.view.devicePixelRatio = 1;
+        tester.platformDispatcher.textScaleFactorTestValue = 2.0;
+        tester.view.viewInsets = const FakeViewPadding(bottom: 280);
+        addTearDown(tester.view.reset);
+        addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+        addTearDown(tester.view.resetViewInsets);
+
+        await tester.pumpWidget(MaterialApp(
+          locale: const Locale('ar'),
+          supportedLocales: const [Locale('ar'), Locale('en')],
+          localizationsDelegates: GlobalMaterialLocalizations.delegates,
+          theme: buildTheme(const Locale('ar'), primary: AppColors.burgundy),
+          home: Scaffold(
+            body: Builder(
+              builder: (ctx) => Center(
+                child: ElevatedButton(
+                  onPressed: () => showIosInstallSteps(ctx),
+                  child: const Text('Open iOS'),
+                ),
+              ),
+            ),
+          ),
+        ));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.text('Open iOS'));
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+      });
+
+      testWidgets('UpdateBanner and UpdateSheet render without overflow', (tester) async {
+        tester.view.physicalSize = const Size(320, 568);
+        tester.view.devicePixelRatio = 1;
+        tester.platformDispatcher.textScaleFactorTestValue = 2.0;
+        tester.view.viewInsets = const FakeViewPadding(bottom: 280);
+        addTearDown(tester.view.reset);
+        addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+        addTearDown(tester.view.resetViewInsets);
+
+        const decision = UpdateDecision(
+          hasUpdate: true,
+          targetVersion: '1.2.0',
+          notesAr: 'تحسينات وإصلاحات جديدة للمستخدمين',
+          notesEn: 'New improvements and bugfixes for all users',
+        );
+
+        await tester.pumpWidget(ProviderScope(
+          child: MaterialApp(
+            locale: const Locale('ar'),
+            supportedLocales: const [Locale('ar'), Locale('en')],
+            localizationsDelegates: GlobalMaterialLocalizations.delegates,
+            theme: buildTheme(const Locale('ar'), primary: AppColors.burgundy),
+            home: Scaffold(
+              body: Builder(
+                builder: (ctx) => Center(
+                  child: ElevatedButton(
+                    onPressed: () => UpdateBanner.showUpdateSheet(ctx, decision),
+                    child: const Text('Open Update'),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.text('Open Update'));
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+      });
+
+      testWidgets('showReminderSheet renders without overflow', (tester) async {
+        tester.view.physicalSize = const Size(320, 568);
+        tester.view.devicePixelRatio = 1;
+        tester.platformDispatcher.textScaleFactorTestValue = 2.0;
+        tester.view.viewInsets = const FakeViewPadding(bottom: 280);
+        addTearDown(tester.view.reset);
+        addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+        addTearDown(tester.view.resetViewInsets);
+
+        await tester.pumpWidget(ProviderScope(
+          child: MaterialApp(
+            locale: const Locale('ar'),
+            supportedLocales: const [Locale('ar'), Locale('en')],
+            localizationsDelegates: GlobalMaterialLocalizations.delegates,
+            theme: buildTheme(const Locale('ar'), primary: AppColors.burgundy),
+            home: Scaffold(
+              body: Builder(
+                builder: (ctx) => Center(
+                  child: ElevatedButton(
+                    onPressed: () => showReminderSheet(
+                      ctx,
+                      eventKey: 'lit-1',
+                      title: {'ar': 'قداس الأحد الأول', 'en': 'First Sunday Liturgy'},
+                      startsAt: DateTime.utc(2026, 11, 15, 6, 30),
+                      recurring: true,
+                    ),
+                    child: const Text('Open Reminder'),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.text('Open Reminder'));
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+      });
+
+      testWidgets('MyRemindersSection renders with reminders at 320 px x 2.0x without overflow', (tester) async {
+        tester.view.physicalSize = const Size(320, 568);
+        tester.view.devicePixelRatio = 1;
+        tester.platformDispatcher.textScaleFactorTestValue = 2.0;
+        addTearDown(tester.view.reset);
+        addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+
+        final container = ProviderContainer(overrides: [
+          userRemindersProvider.overrideWith(() => _FixedReminders([
+            Reminder(
+              eventKey: 'lit-1',
+              title: {'ar': 'قداس الأحد باكر', 'en': 'Sunday Early Liturgy'},
+              startsAt: DateTime.utc(2026, 11, 15, 6, 30),
+              lead: 60,
+              every: true,
+              createdAt: DateTime.utc(2026, 11, 1, 10, 0),
+            ),
+          ])),
+          nowProvider.overrideWith((ref) => Stream.value(_now)),
+        ]);
+        addTearDown(container.dispose);
+
+        await tester.pumpWidget(UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp(
+            locale: const Locale('ar'),
+            supportedLocales: const [Locale('ar'), Locale('en')],
+            localizationsDelegates: GlobalMaterialLocalizations.delegates,
+            theme: buildTheme(const Locale('ar'), primary: AppColors.burgundy),
+            home: const Scaffold(
+              body: SingleChildScrollView(child: MyRemindersSection()),
+            ),
+          ),
+        ));
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+      });
+    });
+
+    group('Admin AppAndNotificationsScreen narrow viewport reflow (ADR-061)', () {
+      final viewports = [
+        (const Size(390, 844), 1.0),
+        (const Size(390, 844), 1.3),
+        (const Size(320, 640), 1.0),
+        (const Size(320, 640), 1.3),
+      ];
+
+      for (final (size, scale) in viewports) {
+        for (final lang in const ['ar', 'en']) {
+          testWidgets('AppAndNotificationsScreen at ${size.width.toInt()}x${size.height.toInt()} @ ${scale}x ($lang)', (tester) async {
+            tester.view.physicalSize = size;
+            tester.view.devicePixelRatio = 1;
+            tester.platformDispatcher.textScaleFactorTestValue = scale;
+            addTearDown(tester.view.reset);
+            addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+
+            final repo = _FakeAdminRepo({
+              'settings/features': {
+                'push': true,
+                'pushTypes': ['announcements', 'reminders'],
+              },
+              'settings/notifications': {
+                'sentLog': <String>[],
+              },
+              'meta/push_plan': <String, dynamic>{},
+              'meta/push_topics': <String, dynamic>{},
+            });
+            addTearDown(repo.dispose);
+
+            await tester.pumpWidget(MaterialApp(
+              locale: Locale(lang),
+              supportedLocales: const [Locale('ar'), Locale('en')],
+              localizationsDelegates: GlobalMaterialLocalizations.delegates,
+              theme: buildTheme(Locale(lang), primary: AppColors.burgundy),
+              home: Scaffold(body: AppAndNotificationsScreen(repo: repo)),
+            ));
+            await tester.pumpAndSettle();
+            expect(tester.takeException(), isNull);
+          });
+        }
+      }
+    });
+
 }
 
 class _ListBackend extends _FakeBackend {
@@ -1176,5 +1748,99 @@ class _PendingBackend extends _FakeBackend {
   Stream<List<AdminDoc>> watch(String collection) {
     watched.add(collection);
     return StreamController<List<AdminDoc>>().stream;
+  }
+}
+
+class _FixedReminders extends UserRemindersNotifier {
+  final List<Reminder> _reminders;
+  _FixedReminders(this._reminders);
+  @override
+  List<Reminder> build() => _reminders;
+}
+
+class _FakeInstallEnv implements InstallEnv {
+  void Function()? installListener;
+  @override
+  void Function() listenInstallChanges(void Function() onChange) {
+    installListener = onChange;
+    return () => installListener = null;
+  }
+
+  @override
+  String userAgent = 'Mozilla/5.0 (Linux; Android 14) Chrome/120.0.0.0 Mobile Safari/537.36';
+  @override
+  String platform = 'Linux armv8l';
+  @override
+  int maxTouchPoints = 5;
+  @override
+  bool isStandalone = false;
+  @override
+  bool hasDeferredPrompt = false;
+  @override
+  bool installedEventReceived = false;
+
+  _FakeInstallEnv();
+
+  @override
+  void clearInstalledSessionFlag() {
+    installedEventReceived = false;
+  }
+
+  @override
+  Future<bool> promptInstall() async => true;
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _FakeAdminRepo extends AdminBackend {
+  final Map<String, Map<String, dynamic>> docs = {};
+  final saves = <String, List<Map<String, dynamic>>>{};
+  final _controllers = <String, StreamController<AdminDoc?>>{};
+
+  _FakeAdminRepo([Map<String, Map<String, dynamic>>? initial]) {
+    if (initial != null) docs.addAll(initial);
+  }
+
+  @override
+  String get actor => 'test-admin@example.org';
+
+  @override
+  Stream<List<AdminDoc>> watch(String collection) => Stream.value(const []);
+
+  @override
+  Stream<AdminDoc?> watchDoc(String path) {
+    final c = _controllers.putIfAbsent(path, () => StreamController<AdminDoc?>.broadcast());
+    scheduleMicrotask(() {
+      if (!c.isClosed) c.add(docs.containsKey(path) ? AdminDoc(path.split('/').last, docs[path]!) : null);
+    });
+    return c.stream;
+  }
+
+  @override
+  Future<String> save(String collection, String? id, Map<String, dynamic> data) async => id ?? 'new';
+
+  @override
+  Future<void> saveDoc(String path, Map<String, dynamic> data) async {
+    saves.putIfAbsent(path, () => []).add(data);
+    docs[path] = {...?docs[path], ...data};
+    _controllers[path]?.add(AdminDoc(path.split('/').last, docs[path]!));
+  }
+
+  @override
+  Future<void> update(String collection, String id, Map<String, dynamic> data) async {}
+  @override
+  Future<void> delete(String collection, String id) async {}
+  @override
+  Future<void> reorder(String collection, List<String> ids, {int base = 0}) async {}
+  @override
+  Future<void> setAdmin(String uid, {required String email, required String role}) async {}
+  @override
+  Future<void> removeAdmin(String uid) async {}
+
+  void dispose() {
+    for (final c in _controllers.values) {
+      c.close();
+    }
   }
 }

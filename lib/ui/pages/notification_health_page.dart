@@ -224,11 +224,18 @@ class _NotificationHealthPageState extends ConsumerState<NotificationHealthPage>
           // Two-minute test alarm button
           SizedBox(
             width: double.infinity,
-            child: OutlinedButton.icon(
+            child: OutlinedButton(
               key: const Key('twoMinTestButton'),
               onPressed: _scheduleTwoMinTest,
-              icon: const Icon(Icons.timer_outlined, size: 18),
-              label: Text(isAr ? 'اختبار بعد دقيقتين' : 'Test in 2 minutes'),
+              child: Wrap(
+                alignment: WrapAlignment.center,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 8,
+                children: [
+                  const Icon(Icons.timer_outlined, size: 18),
+                  Text(isAr ? 'اختبار بعد دقيقتين' : 'Test in 2 minutes'),
+                ],
+              ),
             ),
           ),
         ],

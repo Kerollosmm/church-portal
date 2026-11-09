@@ -164,13 +164,16 @@ class _ReminderConfigSheetState extends ConsumerState<_ReminderConfigSheet> {
     final hm = '${cairoStartsAt.hour.toString().padLeft(2, '0')}:${cairoStartsAt.minute.toString().padLeft(2, '0')}';
     final timeStr = context.isAr ? formatTimeArabic(hm) : formatTimeLatin(hm);
 
+    final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
+    final maxSheetHeight = MediaQuery.sizeOf(context).height * 0.90;
+
     return SafeArea(
       child: Center(
         heightFactor: 1,
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 560),
+          constraints: BoxConstraints(maxWidth: 560, maxHeight: maxSheetHeight),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            padding: EdgeInsets.fromLTRB(20, 16, 20, 16 + bottomInset),
             child: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -256,19 +259,47 @@ class _ReminderConfigSheetState extends ConsumerState<_ReminderConfigSheet> {
                   // Recurring choice
                   if (widget.recurring) ...[
                     const SizedBox(height: 10),
-                    SegmentedButton<bool>(
-                      segments: [
-                        ButtonSegment(
-                          value: false,
-                          label: Text(context.tr('remindOccurrenceSingle')),
-                        ),
-                        ButtonSegment(
-                          value: true,
-                          label: Text(context.tr('remindOccurrenceEvery')),
-                        ),
-                      ],
-                      selected: {_every},
-                      onSelectionChanged: (val) => setState(() => _every = val.first),
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        final textScale = MediaQuery.textScalerOf(context).scale(16) / 16;
+                        final isNarrow = constraints.maxWidth < 280 || textScale >= 1.4;
+                        if (isNarrow) {
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              ChoiceChip(
+                                label: Center(child: Text(context.tr('remindOccurrenceSingle'))),
+                                selected: !_every,
+                                onSelected: (sel) {
+                                  if (sel) setState(() => _every = false);
+                                },
+                              ),
+                              const SizedBox(height: 6),
+                              ChoiceChip(
+                                label: Center(child: Text(context.tr('remindOccurrenceEvery'))),
+                                selected: _every,
+                                onSelected: (sel) {
+                                  if (sel) setState(() => _every = true);
+                                },
+                              ),
+                            ],
+                          );
+                        }
+                        return SegmentedButton<bool>(
+                          segments: [
+                            ButtonSegment(
+                              value: false,
+                              label: Text(context.tr('remindOccurrenceSingle')),
+                            ),
+                            ButtonSegment(
+                              value: true,
+                              label: Text(context.tr('remindOccurrenceEvery')),
+                            ),
+                          ],
+                          selected: {_every},
+                          onSelectionChanged: (val) => setState(() => _every = val.first),
+                        );
+                      },
                     ),
                   ],
 
@@ -345,60 +376,82 @@ class _ReminderConfigSheetState extends ConsumerState<_ReminderConfigSheet> {
                   const SizedBox(height: 18),
 
                   // Buttons
-                  Row(
-                    children: [
-                      if (widget.existing != null) ...[
-                        OutlinedButton(
-                          style: OutlinedButton.styleFrom(
-                            minimumSize: const Size(48, 48),
-                            foregroundColor: pal.alert,
-                            side: BorderSide(color: pal.alert),
-                          ),
-                          onPressed: () {
-                            ref
-                                .read(userRemindersProvider.notifier)
-                                .remove(widget.eventKey, occurrence: widget.existing!.occurrence);
-                            Navigator.of(context).pop();
-                          },
-                          child: Text(context.tr('remindCancelButton')),
-                        ),
-                        const SizedBox(width: 10),
-                      ],
-                      Expanded(
-                        child: FilledButton(
-                          style: FilledButton.styleFrom(minimumSize: const Size(48, 48)),
-                          onPressed: !canSave
-                              ? null
-                              : () {
-                                  // «كل مرة» covers every occurrence: stored without one.
-                                  final reminder = Reminder(
-                                    eventKey: widget.eventKey,
-                                    occurrence: _every ? null : widget.occurrence,
-                                    lead: _selectedLead!,
-                                    every: _every,
-                                    title: widget.title,
-                                    startsAt: widget.startsAt,
-                                    createdAt: DateTime.now().toUtc(),
-                                  );
-                                  final result = ref
-                                      .read(userRemindersProvider.notifier)
-                                      .put(reminder, replacing: widget.existing);
-                                  switch (result) {
-                                    case ReminderPutResult.ok:
-                                      Navigator.of(context).pop();
-                                    case ReminderPutResult.storageError:
-                                      setState(() => _storageError = true);
-                                    case ReminderPutResult.full:
-                                      final messenger = ScaffoldMessenger.of(context);
-                                      final msg = context.tr('myRemindersMaxReached');
-                                      Navigator.of(context).pop();
-                                      messenger.showSnackBar(SnackBar(content: Text(msg)));
-                                  }
-                                },
-                          child: Text(context.tr('remindSaveButton')),
-                        ),
-                      ),
-                    ],
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final textScale = MediaQuery.textScalerOf(context).scale(16) / 16;
+                      final isNarrow = constraints.maxWidth < 280 || textScale >= 1.4;
+
+                      final cancelBtn = widget.existing != null
+                          ? OutlinedButton(
+                              style: OutlinedButton.styleFrom(
+                                minimumSize: const Size(48, 48),
+                                foregroundColor: pal.alert,
+                                side: BorderSide(color: pal.alert),
+                              ),
+                              onPressed: () {
+                                ref
+                                    .read(userRemindersProvider.notifier)
+                                    .remove(widget.eventKey, occurrence: widget.existing!.occurrence);
+                                Navigator.of(context).pop();
+                              },
+                              child: Text(context.tr('remindCancelButton')),
+                            )
+                          : null;
+
+                      final saveBtn = FilledButton(
+                        style: FilledButton.styleFrom(minimumSize: const Size(48, 48)),
+                        onPressed: !canSave
+                            ? null
+                            : () {
+                                // «كل مرة» covers every occurrence: stored without one.
+                                final reminder = Reminder(
+                                  eventKey: widget.eventKey,
+                                  occurrence: _every ? null : widget.occurrence,
+                                  lead: _selectedLead!,
+                                  every: _every,
+                                  title: widget.title,
+                                  startsAt: widget.startsAt,
+                                  createdAt: DateTime.now().toUtc(),
+                                );
+                                final result = ref
+                                    .read(userRemindersProvider.notifier)
+                                    .put(reminder, replacing: widget.existing);
+                                switch (result) {
+                                  case ReminderPutResult.ok:
+                                    Navigator.of(context).pop();
+                                  case ReminderPutResult.storageError:
+                                    setState(() => _storageError = true);
+                                  case ReminderPutResult.full:
+                                    final messenger = ScaffoldMessenger.of(context);
+                                    final msg = context.tr('myRemindersMaxReached');
+                                    Navigator.of(context).pop();
+                                    messenger.showSnackBar(SnackBar(content: Text(msg)));
+                                }
+                              },
+                        child: Text(context.tr('remindSaveButton')),
+                      );
+
+                      if (isNarrow && cancelBtn != null) {
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            saveBtn,
+                            const SizedBox(height: 8),
+                            cancelBtn,
+                          ],
+                        );
+                      }
+
+                      return Row(
+                        children: [
+                          if (cancelBtn != null) ...[
+                            cancelBtn,
+                            const SizedBox(width: 10),
+                          ],
+                          Expanded(child: saveBtn),
+                        ],
+                      );
+                    },
                   ),
                 ],
               ),
@@ -445,8 +498,11 @@ class MyRemindersSection extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 8,
+          runSpacing: 4,
           children: [
             Text(
               context.tr('myRemindersTitle'),
