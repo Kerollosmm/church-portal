@@ -234,7 +234,7 @@ The remote scheduled push delivery infrastructure runs as a pure Web-API Cloudfl
 
 ### Cloudflare Worker Configuration & KV Caching
 - **Cron Triggers:** 3 scheduled crons without a public `POST /trigger` endpoint to prevent unauthorized invocation or quota drain.
-- **KV Token Cache (`PUSH_KV`):** Uses Cloudflare KV storage to cache Google OAuth2 access tokens (L2 cache after L1 memory), reducing token minting to ~1 per hour.
+- **KV Token Cache (`PUSH_KV`):** Uses Cloudflare KV storage to cache Google OAuth2 access tokens (L2 cache after L1 memory), reducing token minting to ~1 per hour. Created via `npx wrangler kv namespace create PUSH_KV` and bound in `wrangler.toml`.
 - **Worker Deployment:** Deployed via `npx wrangler deploy` (must be executed prior to merging into `dev` or `main`).
 - **Worker Secrets (`wrangler secret put <KEY>`):**
   - `FIREBASE_PROJECT_ID`: Firebase project ID (`asafra-church-portal`).
@@ -244,7 +244,7 @@ The remote scheduled push delivery infrastructure runs as a pure Web-API Cloudfl
   - `SENTRY_CRON_MONITOR_ID`: Sentry Cron monitor ID for heartbeat health alerts.
 
 ### Spark Quota & Subrequest Budgets
-- **Firestore Reads:** Uses REST `:batchGet` requesting only `settings/features` and `settings/notifications` (2 reads per 15-minute run) + 1 season query at Cairo midnight = ~197 reads/day (well within the 50,000 daily Spark free tier).
+- **Firestore Reads:** Uses REST `:batchGet` across all 3 crons (Cron 1 ~197 reads/day for settings + midnight seasons; Cron 2 up to 4 reads/run for meta and queue batch; Cron 3 ~5 reads 4x/day for planner) = ~500–600 reads/day total (well within the 50,000 daily Spark free tier).
 - **Subrequest Limits:** Capped at 16 FCM topic dispatches and ≤ 25 total subrequests per run to strictly adhere to Cloudflare Worker free tier constraints.
 - **Lease & Claims:** 120-second lease timeout with optimistic locking and exponential backoff on transient errors.
 

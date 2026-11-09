@@ -2506,7 +2506,6 @@ describe('ADR-060: Web push rules (push_queue, meta/push_rate, meta/push_topics,
     const { batch } = pushBatch(pub, {
       rateData: {
         lastAt: serverTimestamp(),
-        lastId: 'queueDoc1234567890',
         day: getUtcDay(),
         count: 2,
       },
@@ -2529,7 +2528,6 @@ describe('ADR-060: Web push rules (push_queue, meta/push_rate, meta/push_topics,
     const { batch } = pushBatch(pub, {
       rateData: {
         lastAt: serverTimestamp(),
-        lastId: 'queueDoc1234567890',
         day: getUtcDay(),
         count: 1001,
       },

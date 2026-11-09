@@ -617,6 +617,6 @@ digits, Cairo `02` + 8, Alexandria `03` + 7, other governorates `0[4-9]` + 7–8
   - `ReminderSheet` clamps leads with `isWebLeadTooSoon` (40-minute minimum window on web) and displays honest delay copy («قد يصل التنبيه قبل الموعد بـ ١٥ دقيقة أو بعده بقليل حسب جدول الخادم») plus alternative Google Calendar and RFC 5545 `.ics` export options.
   - Zero-lead ("at service time") triggers a warning badge explaining server cron latency.
   - Cloudflare Worker Cron 3 compiles active weekly liturgies, meetings, and special day events into `meta/push_plan`.
-  - Cloudflare Worker Cron 1 sends due reminders with FCM boolean topic conditions (`'web_rem_...' in topics && !('app_...' in topics)`) so Android native devices are never sent duplicate FCM reminders for local alarms.
+  - Cloudflare Worker Cron 1 sends due reminders targeting web reminder topics (using FCM boolean topic condition `'<recurring>' in topics || '<once>' in topics` when both recurring and single-occurrence subscribers exist).
 - **IndexedDB Web Inbox:** Plain service worker stores incoming notifications in IndexedDB (max 30 items) with a visible notification guarantee. Visitors can view past notifications on `/notifications` and clear inbox history.
 

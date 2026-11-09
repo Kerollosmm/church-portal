@@ -159,7 +159,7 @@ export async function runPushQueueDrain(env, options = {}) {
       {
         day: todayUtcInt,
         count: 0,
-        lastAt: nowIso,
+        lastAt: new Date(nowIso),
         lastId: `preroll${todayUtcInt}`,
       },
       fetchImpl,
@@ -237,13 +237,19 @@ export async function runPushQueueDrain(env, options = {}) {
       if (typeof data.rem === 'string' && data.rem.trim()) {
         for (const t of data.rem.split(',')) {
           const s = t.trim();
-          if (s) remTopics.add(s);
+          if (s) {
+            remTopics.add(s);
+            dropTopics.delete(s);
+          }
         }
       }
       if (typeof data.drop === 'string' && data.drop.trim()) {
         for (const t of data.drop.split(',')) {
           const s = t.trim();
-          if (s) dropTopics.add(s);
+          if (s) {
+            dropTopics.add(s);
+            remTopics.delete(s);
+          }
         }
       }
       if (typeof data.prevToken === 'string' && data.prevToken.trim()) {

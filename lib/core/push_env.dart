@@ -23,7 +23,12 @@ abstract class PushEnv {
   Future<bool> showSwTestNotification({String? title, String? body, String? link});
   Future<List<WebInboxItem>> readInbox();
   Future<bool> clearInbox();
-  Future<bool> syncQuietHours({required bool enabled, required String start, required String end});
+  Future<bool> syncQuietHours({
+    required bool enabled,
+    required String start,
+    required String end,
+    bool remindersRespectQuietHours = true,
+  });
   String? readStorage(String key) => null;
   void writeStorage(String key, String value) {}
   Stream<String> get deepLinks;
@@ -70,8 +75,18 @@ class PlatformPushEnv extends PushEnv {
   Future<bool> clearInbox() => impl.clearInbox();
 
   @override
-  Future<bool> syncQuietHours({required bool enabled, required String start, required String end}) =>
-      impl.syncQuietHours(enabled: enabled, start: start, end: end);
+  Future<bool> syncQuietHours({
+    required bool enabled,
+    required String start,
+    required String end,
+    bool remindersRespectQuietHours = true,
+  }) =>
+      impl.syncQuietHours(
+        enabled: enabled,
+        start: start,
+        end: end,
+        remindersRespectQuietHours: remindersRespectQuietHours,
+      );
 
   @override
   String? readStorage(String key) => impl.readStorage(key);

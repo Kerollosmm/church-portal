@@ -62,7 +62,12 @@ class FakePushEnv implements PushEnv {
   }
 
   @override
-  Future<bool> syncQuietHours({required bool enabled, required String start, required String end}) async {
+  Future<bool> syncQuietHours({
+    required bool enabled,
+    required String start,
+    required String end,
+    bool remindersRespectQuietHours = true,
+  }) async {
     quietSynced = true;
     return true;
   }

@@ -157,7 +157,11 @@ async function handlePushEvent(event, selfRef = self) {
   const db = await openPushDb();
   const quiet = await getQuietSettings(db);
   const now = new Date();
-  const isQuiet = isWithinQuietHours(now, quiet);
+  let isQuiet = isWithinQuietHours(now, quiet);
+  const isReminder = rawType === 'reminder' || rawType.startsWith('web_rem_') || Boolean(data.occurrence);
+  if (isQuiet && isReminder && quiet?.remindersRespectQuietHours === false) {
+    isQuiet = false;
+  }
 
   const isDuplicate = await hasSeenNid(db, rawNid);
 

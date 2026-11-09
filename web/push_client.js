@@ -206,7 +206,7 @@ export async function clearInbox(dbOverride = null) {
   });
 }
 
-export async function setQuiet({ enabled, start, end }, dbOverride = null) {
+export async function setQuiet({ enabled, start, end, remindersRespectQuietHours }, dbOverride = null) {
   const db = dbOverride || (await openPushDb());
   if (!db) return false;
 
@@ -220,6 +220,7 @@ export async function setQuiet({ enabled, start, end }, dbOverride = null) {
           enabled: Boolean(enabled),
           start: start || '23:00',
           end: end || '07:00',
+          remindersRespectQuietHours: remindersRespectQuietHours !== false,
         },
       });
       tx.oncomplete = () => resolve(true);

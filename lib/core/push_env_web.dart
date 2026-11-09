@@ -206,6 +206,7 @@ Future<bool> syncQuietHours({
   required bool enabled,
   required String start,
   required String end,
+  bool remindersRespectQuietHours = true,
 }) async {
   try {
     final churchPush = await _ensureChurchPush();
@@ -214,6 +215,7 @@ Future<bool> syncQuietHours({
       'enabled': enabled,
       'start': start,
       'end': end,
+      'remindersRespectQuietHours': remindersRespectQuietHours,
     });
     final promise = churchPush.callMethod('setQuiet'.toJS, args) as JSPromise?;
     if (promise == null) return false;
@@ -231,27 +233,30 @@ bool _listening = false;
 void _ensureMessageListener() {
   if (_listening) return;
   _listening = true;
-  web.window.addEventListener(
-    'message',
-    (web.MessageEvent e) {
-      try {
-        final data = e.data.dartify();
-        if (data is Map) {
-          final type = data['type'] as String?;
-          if (type == 'open') {
-            final link = data['link'] as String?;
-            if (link != null && link.isNotEmpty) {
-              _deepLinksController.add(link);
-            }
-          } else if (type == 'received') {
-            _inboxEventsController.add(
-              WebInboxItem.fromJson(Map<String, dynamic>.from(data)),
-            );
+
+  void handleEvent(web.MessageEvent e) {
+    try {
+      final data = e.data.dartify();
+      if (data is Map) {
+        final type = data['type'] as String?;
+        if (type == 'open') {
+          final link = data['link'] as String?;
+          if (link != null && link.isNotEmpty) {
+            _deepLinksController.add(link);
           }
+        } else if (type == 'received') {
+          _inboxEventsController.add(
+            WebInboxItem.fromJson(Map<String, dynamic>.from(data)),
+          );
         }
-      } catch (_) {}
-    }.toJS,
-  );
+      }
+    } catch (_) {}
+  }
+
+  web.window.addEventListener('message', handleEvent.toJS);
+  try {
+    web.window.navigator.serviceWorker.addEventListener('message', handleEvent.toJS);
+  } catch (_) {}
 }
 
 Stream<String> getDeepLinks() {

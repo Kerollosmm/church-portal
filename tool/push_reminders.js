@@ -102,7 +102,8 @@ export async function decodeDayEvents(dayEventStrings = []) {
     if (parts.length < 13) continue;
 
     const date = (parts[0] || '').trim();
-    const endDate = (parts[1] || '').trim() || date;
+    let endDate = (parts[1] || '').trim() || date;
+    if (endDate < date) endDate = date;
     const start = (parts[2] || '').trim();
     const end = (parts[3] || '').trim();
     const titleAr = (parts[4] || '').trim();
@@ -204,11 +205,16 @@ export async function runPushReminderPlanner(env, options = {}) {
     const isoDateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
     const weekday = new Date(Date.UTC(year, month - 1, day)).getUTCDay() || 7; // ISO 1-7 (Mon-Sun)
 
-    // 1. Weekly liturgies matching this weekday
+    // 1. Liturgies matching this date or weekday
     for (const lit of liturgies) {
       const data = lit.data || {};
+      if (data.hidden === true) continue;
       if (data.seasonKey) continue; // Seasonal liturgies handled separately
-      if (data.weekday !== weekday) continue;
+      if (data.date) {
+        if (data.date !== isoDateStr) continue;
+      } else {
+        if (data.weekday !== weekday) continue;
+      }
       const startStr = (data.start || '').trim();
       if (!startStr) continue;
 
@@ -234,7 +240,7 @@ export async function runPushReminderPlanner(env, options = {}) {
         bodyAr: `يبدأ ${data.nameAr || 'القداس'} الساعة ${startStr} بكنيسة القديسين`,
         bodyEn: `${data.nameEn || 'Liturgy'} starts at ${startStr} at Saints Church`,
         link: `/liturgy/${lit.id}`,
-        isRecurring: true,
+        isRecurring: !data.date,
         yyyymmdd,
       });
     }
@@ -242,6 +248,7 @@ export async function runPushReminderPlanner(env, options = {}) {
     // 2. Weekly meetings matching this weekday
     for (const mtg of meetings) {
       const data = mtg.data || {};
+      if (data.hidden === true) continue;
       if (data.weekday !== weekday) continue;
       const startStr = (data.start || '').trim();
       if (!startStr) continue;

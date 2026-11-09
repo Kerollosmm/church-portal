@@ -430,7 +430,6 @@ Batch-written queue doc created by web clients subscribing or unsubscribing to p
   - `rem`: list of reminder topics, comma-separated string (`<= 2600` chars), max 30 topics matching `remList()`.
   - `drop`: list of dropped reminder topics, comma-separated string (`<= 2600` chars), max 30 topics matching `remList()`.
   - `prevToken`: optional previous token for rotation.
-  - `retries`: integer (initially 0).
   - `createdAt`: server timestamp (`== request.time`).
 - Rules: create-only, read/update/delete denied to all clients. Verified against `meta/push_rate` in the same batch.
 - Drained every 15 min by Cloudflare Worker Cron 2 via Google IID REST.

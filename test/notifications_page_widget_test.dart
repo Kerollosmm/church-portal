@@ -47,7 +47,13 @@ class FakeTestPushEnv implements PushEnv {
   @override
   Future<bool> clearInbox() async => true;
   @override
-  Future<bool> syncQuietHours({required bool enabled, required String start, required String end}) async => true;
+  Future<bool> syncQuietHours({
+    required bool enabled,
+    required String start,
+    required String end,
+    bool remindersRespectQuietHours = true,
+  }) async =>
+      true;
   @override
   String? readStorage(String key) => null;
   @override

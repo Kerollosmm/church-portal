@@ -23,7 +23,12 @@ Future<List<WebInboxItem>> readInbox() => Future.value(const []);
 
 Future<bool> clearInbox() => Future.value(false);
 
-Future<bool> syncQuietHours({required bool enabled, required String start, required String end}) =>
+Future<bool> syncQuietHours({
+  required bool enabled,
+  required String start,
+  required String end,
+  bool remindersRespectQuietHours = true,
+}) =>
     Future.value(false);
 
 final _stubStorage = <String, String>{};

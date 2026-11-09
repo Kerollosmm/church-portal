@@ -210,7 +210,7 @@ Two tabs: «الإشعارات» (`NotificationsAdminSection`, kept alive across
    `health.lastRunAt` in plain words: ok (≤ 1 h, «آخر فحص منذ …» in Cairo time), late (> 1 h), stopped (> 3 h or
    `status: error`), never run (no stamp — neutral, not red). Since ADR-060: web push subscriber stats from
    `meta/push_topics` (`activeSubscribers`), web reminder planner status from `meta/push_plan` (upcoming reminder topics
-   count and next service time in Cairo), and daily broadcast cap warning banner when 16/16 sends are used.
+   count and next service time in Cairo), and queue rate throttle cap warning banner when meta/push_topics.cronQueue.capReached is true (1,000 web opt-in batch writes/day limit reached).
 2. **Scheduled announcements** (`schedule`, ≤ 20) — numbered 5-step editor: Arabic title + body (both required, as
    the rules and `parseScheduleRow` require), English optional (collapsed); «في أقرب وقت» or Cairo date + time
    (default tomorrow 09:00; past times refused); targets «الجميع / تطبيق أندرويد فقط / المتصفح و iPhone فقط»;

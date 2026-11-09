@@ -215,6 +215,7 @@ test('inbox, clearInbox, setQuiet interact with IndexedDB stores', async () => {
     enabled: true,
     start: '22:00',
     end: '08:00',
+    remindersRespectQuietHours: true,
   });
 
   // Test inbox retrieval

@@ -551,8 +551,8 @@ export async function runPushSender(env, options = {}) {
       const leads = Array.isArray(item.leads) ? item.leads : [0, 60];
       for (const lead of leads) {
         const nominalFireMs = item.serviceStartMs - lead * 60 * 1000;
-        // Due if nominal fire time has arrived, and service hasn't ended
-        if (nominalFireMs <= nowMs && nowMs <= item.serviceStartMs) {
+        // Due if nominal fire time has arrived, and service hasn't ended > 15 min ago
+        if (nominalFireMs <= nowMs && nowMs <= item.serviceStartMs + 15 * 60 * 1000) {
           dueReminders.push({ item, lead });
         }
       }

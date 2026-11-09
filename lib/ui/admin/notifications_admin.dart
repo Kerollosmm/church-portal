@@ -898,8 +898,9 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
         Text(context.tr('nm_webHealthTitle'), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: context.pal.primaryDeep)),
         const SizedBox(height: 8),
         Builder(builder: (context) {
-          final drainAt = _asDateTime(_topicsMeta?['lastDrainAt']);
-          final drainError = _topicsMeta?['lastIidError'] as String?;
+          final cronQueue = _topicsMeta?['cronQueue'] as Map?;
+          final drainAt = _asDateTime(cronQueue?['lastDrainAt'] ?? _topicsMeta?['lastDrainAt']);
+          final drainError = (cronQueue?['lastIidError'] ?? _topicsMeta?['lastIidError']) as String?;
           final drainAge = drainAt == null ? null : DateTime.now().toUtc().difference(drainAt);
           final (Color drainColor, String drainText) = switch (drainAge) {
             null => (context.pal.muted, context.tr('nm_webHealthDrainNever')),
@@ -909,7 +910,7 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
           };
 
           final planAt = _asDateTime(_planMeta?['lastPlanAt']);
-          final capReached = _planMeta?['capReached'] == true;
+          final capReached = (cronQueue?['capReached'] ?? _planMeta?['capReached']) == true;
           final planAge = planAt == null ? null : DateTime.now().toUtc().difference(planAt);
           final (Color planColor, String planText) = switch (planAge) {
             null => (context.pal.muted, context.tr('nm_webHealthPlanNever')),
