@@ -97,6 +97,72 @@ export async function mintAccessToken(sa, fetchImpl = fetch, nowMs = Date.now())
   return json.access_token;
 }
 
+let _l1Token = null;
+let _l1ExpiresAt = 0;
+
+export function _resetL1TokenCacheForTesting() {
+  _l1Token = null;
+  _l1ExpiresAt = 0;
+}
+
+/**
+ * Two-tier Google OAuth2 access token cache (ADR-060):
+ * - L1: In-memory module cache (valid within the same isolate invocation)
+ * - L2: Cloudflare Workers KV cache (PUSH_KV binding, 55 min TTL)
+ * Fail-open: falls back to minting fresh token if KV errors or is absent.
+ *
+ * @param {object} sa Parsed Google Service Account JSON.
+ * @param {object} [env=null] Cloudflare Workers env (may contain PUSH_KV).
+ * @param {typeof fetch} [fetchImpl=fetch] Fetch implementation.
+ * @param {number} [nowMs=Date.now()] Current timestamp in ms.
+ * @returns {Promise<string>} Bearer access token.
+ */
+export async function getCachedAccessToken(sa, env = null, fetchImpl = fetch, nowMs = Date.now()) {
+  const marginMs = 5 * 60 * 1000; // 5 minute safety buffer
+
+  // Check L1 cache
+  if (_l1Token && nowMs < _l1ExpiresAt - marginMs) {
+    return _l1Token;
+  }
+
+  const kvKey = `oauth_token_${sa.client_email || 'default'}`;
+
+  // Check L2 KV cache if available
+  if (env?.PUSH_KV) {
+    try {
+      const kvVal = await env.PUSH_KV.get(kvKey, { type: 'json' });
+      if (kvVal?.token && typeof kvVal.expiresAt === 'number' && nowMs < kvVal.expiresAt - marginMs) {
+        _l1Token = kvVal.token;
+        _l1ExpiresAt = kvVal.expiresAt;
+        return _l1Token;
+      }
+    } catch (_) {
+      // Fail-open: KV read error does not block execution
+    }
+  }
+
+  // Mint new token
+  const token = await mintAccessToken(sa, fetchImpl, nowMs);
+  const expiresAt = nowMs + 3600 * 1000;
+  _l1Token = token;
+  _l1ExpiresAt = expiresAt;
+
+  // Persist to L2 KV (55 min TTL = 3300s)
+  if (env?.PUSH_KV?.put) {
+    try {
+      await env.PUSH_KV.put(
+        kvKey,
+        JSON.stringify({ token, expiresAt }),
+        { expirationTtl: 3300 },
+      );
+    } catch (_) {
+      // Fail-open: KV write error does not block execution
+    }
+  }
+
+  return token;
+}
+
 /**
  * Converts a JS value to a Firestore REST Value object.
  */
@@ -334,3 +400,140 @@ export async function listCollection(projectId, token, collectionId, fetchImpl =
     };
   });
 }
+
+/**
+ * Escapes field paths for Firestore updateMask.fieldPaths.
+ * Wraps segments containing '-' or other special chars in backticks.
+ * e.g. "topics.web_rem_lit-sun1_60_ar" -> "topics.`web_rem_lit-sun1_60_ar`"
+ *
+ * @param {string} path Field path.
+ * @returns {string} Escaped field path.
+ */
+export function escapeFieldPath(path) {
+  return path
+    .split('.')
+    .map((seg) => (/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(seg) ? seg : `\`${seg}\``))
+    .join('.');
+}
+
+/**
+ * Commits a batch of writes atomically via Firestore REST :commit endpoint.
+ *
+ * @param {string} projectId Google Cloud Project ID.
+ * @param {string} token Google OAuth2 Bearer token.
+ * @param {Array<object>} writes Firestore Write objects.
+ * @param {typeof fetch} [fetchImpl=fetch] Fetch implementation.
+ * @returns {Promise<{ writeResults: Array<object>, commitTime: string }>}
+ */
+export async function commitWrites(projectId, token, writes, fetchImpl = fetch) {
+  const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents:commit`;
+
+  const res = await fetchImpl(url, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ writes }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Firestore commit failed (${res.status}): ${text}`);
+  }
+
+  return await res.json();
+}
+
+/**
+ * Runs a structured query against Firestore via :runQuery endpoint.
+ *
+ * @param {string} projectId Google Cloud Project ID.
+ * @param {string} token Google OAuth2 Bearer token.
+ * @param {object} structuredQuery Firestore StructuredQuery object.
+ * @param {typeof fetch} [fetchImpl=fetch] Fetch implementation.
+ * @returns {Promise<Array<{ id: string, data: object, createTime: string, updateTime: string }>>}
+ */
+export async function queryCollection(projectId, token, structuredQuery, fetchImpl = fetch) {
+  const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents:runQuery`;
+
+  const res = await fetchImpl(url, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ structuredQuery }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Firestore runQuery failed (${res.status}): ${text}`);
+  }
+
+  const rawText = await res.text();
+  let items = [];
+  try {
+    const parsed = JSON.parse(rawText);
+    items = Array.isArray(parsed) ? parsed : [parsed];
+  } catch {
+    const re = /\{"document":\{.*?\},"readTime":"[^"]+"\}|\{"readTime":"[^"]+"\}/g;
+    const matches = rawText.match(re) || [];
+    for (const m of matches) {
+      try {
+        items.push(JSON.parse(m));
+      } catch {}
+    }
+  }
+
+  const results = [];
+  for (const item of items) {
+    if (item.document) {
+      const fullPath = item.document.name || '';
+      const id = fullPath.split('/').pop();
+      results.push({
+        id,
+        data: fromFirestoreFields(item.document.fields || {}),
+        createTime: item.document.createTime || null,
+        updateTime: item.document.updateTime || null,
+      });
+    }
+  }
+  return results;
+}
+
+/**
+ * Sets (creates or overwrites) a document in Firestore.
+ *
+ * @param {string} projectId Google Cloud Project ID.
+ * @param {string} token Google OAuth2 Bearer token.
+ * @param {string} docPath Relative document path.
+ * @param {object} fields Document data.
+ * @param {typeof fetch} [fetchImpl=fetch] Fetch implementation.
+ * @returns {Promise<{ data: object, updateTime: string }>}
+ */
+export async function setDocRest(projectId, token, docPath, fields, fetchImpl = fetch) {
+  const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/${docPath}`;
+  const firestoreFields = toFirestoreFields(fields);
+
+  const res = await fetchImpl(url, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ fields: firestoreFields }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Firestore setDoc failed on ${docPath} (${res.status}): ${text}`);
+  }
+
+  const json = await res.json();
+  return {
+    data: fromFirestoreFields(json.fields),
+    updateTime: json.updateTime || null,
+  };
+}
+

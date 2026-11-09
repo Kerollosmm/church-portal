@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart' show SystemNavigator, SystemUiOverlayStyle;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -6,6 +7,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../../core/l10n.dart';
 import '../../core/theme.dart';
+import '../../data/web_push_repository.dart' deferred as web_push;
 import '../../domain/features.dart';
 import '../../domain/item_detail.dart';
 import '../../state/providers.dart';
@@ -125,8 +127,48 @@ class _AppShellState extends ConsumerState<AppShell> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   bool _drawerOpen = false;
   DateTime? _lastBackPressTime;
+  StreamSubscription<String>? _deepLinksSub;
 
   String get location => widget.location;
+
+  @override
+  void initState() {
+    super.initState();
+    if (kIsWeb) {
+      _initWebPush();
+    }
+  }
+
+  void _initWebPush() {
+    final pushEnv = ref.read(pushEnvProvider);
+    _deepLinksSub = pushEnv.deepLinks.listen((link) {
+      if (mounted && link.isNotEmpty) {
+        context.go(link);
+      }
+    });
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      try {
+        final prefs = ref.read(pushPrefsProvider);
+        if (prefs.types.isNotEmpty) {
+          await web_push.loadLibrary();
+          final repo = web_push.WebPushRepository(pushEnv: pushEnv);
+          if (repo.syncedToken != null) {
+            final pushSettings = ref.read(pushSettingsProvider);
+            if (pushSettings.webReady) {
+              await repo.maybeRefreshTokenOnPushSurface(vapidKey: pushSettings.vapidKey);
+            }
+          }
+        }
+      } catch (_) {}
+    });
+  }
+
+  @override
+  void dispose() {
+    _deepLinksSub?.cancel();
+    super.dispose();
+  }
 
   @override
   void didUpdateWidget(covariant AppShell oldWidget) {
@@ -136,6 +178,14 @@ class _AppShellState extends ConsumerState<AppShell> {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) {
             ref.read(readerFocusModeProvider.notifier).setFocus(false);
+          }
+        });
+      }
+      if (widget.location.contains('from_push=1')) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            ref.invalidate(nowProvider);
+            ref.invalidate(todaySettingsProvider);
           }
         });
       }

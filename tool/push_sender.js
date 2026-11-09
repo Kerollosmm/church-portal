@@ -2,13 +2,24 @@
 // Runs every 15 minutes on Cloudflare Workers cron (*/15 * * * *) and as a Node 22 CLI fallback.
 // Zero native Node dependencies. Strictly capped at 16 FCM topic sends and <= 25 subrequests per run.
 
-import { batchGetDocs, patchDoc } from './firestore_rest.js';
+import { batchGetDocs, patchDoc, getCachedAccessToken } from './firestore_rest.js';
 import { getCairoNow, runDailySeasons } from './push_daily.js';
+import { cairoToUtc, getCairoParts } from './push_reminders.js';
 
 export const MAX_FCM_SENDS_PER_RUN = 16;
 export const MAX_SENT_LOG_SIZE = 30;
 export const CLAIM_STALE_MS = 10 * 60 * 1000; // 10 minutes
 export const EXPIRE_WINDOW_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+/**
+ * Calculates remaining seconds until 23:59:59 Africa/Cairo end of day.
+ * Floor at 300 seconds (5 minutes).
+ */
+export function secondsUntilCairoEndOfDay(nowMs) {
+  const parts = getCairoParts(new Date(nowMs));
+  const endUtc = cairoToUtc(parts.year, parts.month, parts.day, 23, 59, 59);
+  return Math.max(300, Math.floor((endUtc.getTime() - nowMs) / 1000));
+}
 
 /**
  * Checks in with Sentry Crons monitor if URL is configured (fail-open).
@@ -50,33 +61,56 @@ export function parseScheduleRow(raw) {
 }
 
 const MAX_TOPIC_ATTEMPTS = 3;
-const MAX_SUBREQUESTS_PER_RUN = 24; // Cloudflare Worker allows 25; keep 1 reserve for final commit
+// Cloudflare Worker Free Tier allows 50 external fetch subrequests and 10 ms CPU time per invocation.
+export const MAX_SUBREQUESTS_PER_RUN = 36; // Keep ample headroom under the 50 subrequest cap
 
 /**
- * Sends a data-only FCM message to a topic with automatic retry on transient errors.
+ * Sends a data-only FCM message to a topic or condition with automatic retry on transient errors.
+ *
+ * @param {string} projectId Google Cloud Project ID.
+ * @param {string} token Google OAuth2 Bearer token.
+ * @param {string|{ topic?: string, condition?: string }} target Topic or object with condition / topic.
+ * @param {object} data Message payload fields.
+ * @param {typeof fetch} [fetchImpl=fetch] Fetch implementation.
+ * @param {object|null} [subrequestBudget=null] Subrequest budget counter.
+ * @returns {Promise<{ status: string, name?: string }>}
  */
-export async function sendFcmMessage(projectId, token, topic, data, fetchImpl = fetch, subrequestBudget = null) {
+export async function sendFcmMessage(projectId, token, target, data, fetchImpl = fetch, subrequestBudget = null) {
   const url = `https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`;
-  const body = {
-    message: {
-      topic,
-      data: {
-        nid: data.nid,
-        type: data.type || 'announcements',
-        lang: data.lang || 'ar',
-        title: data.title,
-        body: data.body,
-        link: data.link,
-        eventKey: data.eventKey || '',
-        sentAt: data.sentAt,
-        ttl: '86400s',
-        urgency: 'high',
-      },
-      android: {
-        priority: 'high',
+  const isCondition = typeof target === 'object' && target !== null && Boolean(target.condition);
+  const ttlSeconds = data.ttlSeconds ? String(data.ttlSeconds) : '86400';
+
+  const message = {
+    data: {
+      nid: data.nid,
+      type: data.type || 'announcements',
+      lang: data.lang || 'ar',
+      title: data.title,
+      body: data.body,
+      link: data.link,
+      eventKey: data.eventKey || '',
+      sentAt: data.sentAt,
+      ttl: `${ttlSeconds}s`,
+      urgency: 'high',
+    },
+    android: {
+      priority: 'high',
+    },
+    webpush: {
+      headers: {
+        Urgency: 'high',
+        TTL: ttlSeconds,
       },
     },
   };
+
+  if (isCondition) {
+    message.condition = target.condition;
+  } else {
+    message.topic = typeof target === 'string' ? target : target?.topic;
+  }
+
+  const body = { message };
 
   let attempts = 0;
   const maxAttempts = 3;
@@ -179,26 +213,32 @@ export async function runPushSender(env, options = {}) {
   // Force dry-run on schedule mutations when testing with topicOverride
   const dryRun = options.dryRun || (topicOverride.length > 0);
 
-  // Mint access token
+  // Retrieve cached access token
   let token = 'test-token';
   if (options.mintToken) {
     token = await options.mintToken(sa, fetchImpl, nowMs);
   } else {
-    const { mintAccessToken } = await import('./firestore_rest.js');
-    token = await mintAccessToken(sa, fetchImpl, nowMs);
+    token = await getCachedAccessToken(sa, env, fetchImpl, nowMs);
   }
 
-  // 1 HTTP subrequest reads both settings docs (2 document reads consumed)
+  // 1 HTTP subrequest reads 4 docs (+96 reads/day = ~0.2% of Spark)
   const docs = await batchGetDocs(
     projectId,
     token,
-    ['settings/features', 'settings/notifications'],
+    [
+      'settings/features',
+      'settings/notifications',
+      'meta/push_plan',
+      'meta/push_topics',
+    ],
     fetchImpl,
   );
 
   const features = docs.get('settings/features')?.data || {};
   const notifications = docs.get('settings/notifications')?.data || {};
   let notifUpdateTime = docs.get('settings/notifications')?.updateTime || null;
+  const pushPlanDoc = docs.get('meta/push_plan')?.data || {};
+  const pushTopicsDoc = docs.get('meta/push_topics')?.data || {};
 
   // Master switch check
   if (features.push !== true) {
@@ -454,6 +494,7 @@ export async function runPushSender(env, options = {}) {
         const effectiveTopic = topicOverride || st;
 
         if (!dryRun) {
+          const ttlSeconds = String(Math.max(300, secondsUntilCairoEndOfDay(nowMs)));
           const res = await sendFcmMessage(
             projectId,
             token,
@@ -467,6 +508,7 @@ export async function runPushSender(env, options = {}) {
               link: alert.link,
               eventKey: alert.eventKey,
               sentAt: nowIso,
+              ttlSeconds,
             },
             fetchImpl,
             subrequestBudget,
@@ -494,6 +536,115 @@ export async function runPushSender(env, options = {}) {
       health.lastSeasonDate = seasonsRes.lastSeasonDate;
     }
 
+    // 3. Due web reminders from meta/push_plan.reminderPlan
+    const reminderPlan = Array.isArray(pushPlanDoc.reminderPlan) ? pushPlanDoc.reminderPlan : [];
+    const remindersSent = { ...(notifications.remindersSent || {}) };
+    const topicsMap = pushTopicsDoc.topics || null; // null if uninitialized -> fails open
+
+    // Find all due items
+    const dueReminders = [];
+    for (const item of reminderPlan) {
+      if (!item.serviceStartMs || !item.tKey) continue;
+      // Skip if service already ended > 15 min ago
+      if (nowMs > item.serviceStartMs + 15 * 60 * 1000) continue;
+
+      const leads = Array.isArray(item.leads) ? item.leads : [0, 60];
+      for (const lead of leads) {
+        const nominalFireMs = item.serviceStartMs - lead * 60 * 1000;
+        // Due if nominal fire time has arrived, and service hasn't ended > 15 min ago
+        if (nominalFireMs <= nowMs && nowMs <= item.serviceStartMs + 15 * 60 * 1000) {
+          dueReminders.push({ item, lead });
+        }
+      }
+    }
+
+    // Sort due reminders by serviceStartMs ASC (earliest upcoming service prioritized)
+    dueReminders.sort((a, b) => a.item.serviceStartMs - b.item.serviceStartMs);
+
+    let remindersSentCount = 0;
+    for (const { item, lead } of dueReminders) {
+      if (resultsSummary.fcmSends >= MAX_FCM_SENDS_PER_RUN) break;
+      if (subrequestBudget.count >= subrequestBudget.max) break;
+
+      const yyyymmdd = item.yyyymmdd || '';
+      const tKey = item.tKey;
+      const languages = Array.isArray(item.languages) ? item.languages : ['ar', 'en'];
+
+      for (const lang of languages) {
+        if (resultsSummary.fcmSends >= MAX_FCM_SENDS_PER_RUN) break;
+        if (subrequestBudget.count >= subrequestBudget.max) break;
+
+        const stampKey = `${tKey}:${yyyymmdd}:${lead}:${lang}`;
+        if (remindersSent[stampKey]) continue; // Already sent
+
+        const onceTopic = `web_rem_${tKey}_${yyyymmdd}_${lead}_${lang}`;
+        const recurringTopic = `web_rem_${tKey}_${lead}_${lang}`;
+
+        // Check topic hint in meta/push_topics
+        let hasSubscribers = true;
+        let useOnce = true;
+        let useRecurring = true;
+
+        if (topicsMap && Object.keys(topicsMap).length > 0) {
+          useOnce = Boolean(topicsMap[onceTopic]);
+          useRecurring = Boolean(topicsMap[recurringTopic]);
+          if (!useOnce && !useRecurring) {
+            hasSubscribers = false;
+          }
+        }
+
+        if (!hasSubscribers) continue;
+
+        // Target: combine once + recurring topics if both might have subscribers
+        let target;
+        if (topicOverride) {
+          target = topicOverride;
+        } else if (useOnce && useRecurring) {
+          target = { condition: `'${onceTopic}' in topics || '${recurringTopic}' in topics` };
+        } else if (useOnce) {
+          target = onceTopic;
+        } else {
+          target = recurringTopic;
+        }
+
+        const title = lang === 'en' ? item.titleEn : item.titleAr;
+        const body = lang === 'en' ? item.bodyEn : item.bodyAr;
+        const ttlSeconds = String(Math.max(300, Math.floor((item.serviceStartMs - nowMs) / 1000)));
+        const nid = `rem_${tKey}_${yyyymmdd}_${lead}_${lang}`;
+
+        let sendRes = { status: 'dry_run' };
+        if (!dryRun) {
+          sendRes = await sendFcmMessage(
+            projectId,
+            token,
+            target,
+            {
+              nid,
+              type: 'reminders',
+              lang,
+              title,
+              body,
+              link: item.link || '/',
+              eventKey: tKey,
+              sentAt: nowIso,
+              ttlSeconds,
+            },
+            fetchImpl,
+            subrequestBudget,
+          );
+        }
+
+        resultsSummary.fcmSends++;
+        if (sendRes.status === 'ok' || dryRun) {
+          // Stamp remindersSent ONLY on success
+          remindersSent[stampKey] = nowIso;
+          remindersSentCount++;
+        }
+      }
+    }
+
+    resultsSummary.remindersSent = remindersSentCount;
+
     // Cap sentLog at MAX_SENT_LOG_SIZE (30 items)
     if (sentLog.length > MAX_SENT_LOG_SIZE) {
       sentLog = sentLog.slice(0, MAX_SENT_LOG_SIZE);
@@ -504,6 +655,15 @@ export async function runPushSender(env, options = {}) {
 
     // Final state write
     if (!dryRun) {
+      // Prune remindersSent older than 7 days
+      const sevenDaysAgoMs = nowMs - 7 * 86400 * 1000;
+      for (const [k, v] of Object.entries(remindersSent)) {
+        if (typeof v === 'string') {
+          const t = new Date(v).getTime();
+          if (t && t < sevenDaysAgoMs) delete remindersSent[k];
+        }
+      }
+
       await patchDoc(
         projectId,
         token,
@@ -512,8 +672,9 @@ export async function runPushSender(env, options = {}) {
           status: statusMap,
           sentLog,
           health,
+          remindersSent,
         },
-        ['status', 'sentLog', 'health'],
+        ['status', 'sentLog', 'health', 'remindersSent'],
         notifUpdateTime, // optimistic lock prevents stale overwrites
         fetchImpl,
       );

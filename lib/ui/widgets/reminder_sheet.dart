@@ -2,10 +2,12 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 
+import '../../core/launch.dart';
 import '../../core/l10n.dart';
 import '../../core/theme.dart';
 import '../../data/reminder_store.dart';
 import '../../domain/cairo_time.dart';
+import '../../domain/calendar_ics.dart';
 import '../../domain/push.dart';
 import '../../domain/reminders.dart';
 import '../../domain/time_format.dart';
@@ -18,7 +20,16 @@ const Map<String, List<String>> reminderSheetStrings = {
   'remindLeadPast': ['(فات موعد التنبيه)', '(Reminder time has passed)'],
   'remindOccurrenceSingle': ['هذه المرة فقط', 'This time only'],
   'remindOccurrenceEvery': ['كل مرة (تكرار)', 'Every time (recurring)'],
-  'remindWebDelayNotice': ['يصل التذكير عبر الإنترنت وقد يتأخر حتى ٣٠ دقيقة تقريبًا — للتنبيه في الموعد بالضبط يمكنك استخدام «أضف إلى التقويم»', 'Online reminders may arrive up to ~30 minutes late. For exact-time alerts, you can also use "Add to calendar"'],
+  'remindWebDelayNotice': [
+    'يصل هذا التذكير عبر الإنترنت من الكنيسة، وقد يتأخر حتى ٣٠ دقيقة تقريبًا عن الموعد المختار. للتنبيه في الموعد بالضبط: «أضف إلى التقويم».',
+    'This reminder arrives online from the church and may be delayed up to ~30 minutes. For exact-time alerts: "Add to calendar".'
+  ],
+  'remindLeadZeroNotice': [
+    'قد يصل بعد بدء الخدمة بدقائق.',
+    'May arrive a few minutes after the service starts.'
+  ],
+  'remindGoogleCalendar': ['تقويم Google', 'Google Calendar'],
+  'remindDownloadIcs': ['تحميل ملف تقويم (.ics)', 'Download calendar file (.ics)'],
   'remindSaveButton': ['حفظ التذكير', 'Save reminder'],
   'remindCancelButton': ['إلغاء التذكير', 'Cancel reminder'],
   'myRemindersTitle': ['تذكيراتي', 'My reminders'],
@@ -93,8 +104,15 @@ int? initialReminderLead({
   required List<int> leads,
   required DateTime startsAt,
   required DateTime now,
+  bool recurring = false,
 }) {
-  bool ok(int lead) => !startsAt.subtract(Duration(minutes: lead)).isBefore(now);
+  bool ok(int lead) {
+    if (startsAt.subtract(Duration(minutes: lead)).isBefore(now)) return false;
+    if (kIsWeb && !recurring && isWebLeadTooSoon(startsAt: startsAt, lead: lead, now: now)) {
+      return false;
+    }
+    return true;
+  }
   if (leads.contains(preferred) && ok(preferred)) return preferred;
   final valid = leads.where(ok).toList()..sort();
   return valid.isEmpty ? null : valid.last;
@@ -110,16 +128,25 @@ class _ReminderConfigSheetState extends ConsumerState<_ReminderConfigSheet> {
     super.initState();
     final pushSettings = ref.read(pushSettingsProvider);
     final now = ref.read(nowProvider).value ?? DateTime.now();
+    _every = widget.existing?.every ?? false;
     _selectedLead = initialReminderLead(
       preferred: widget.existing?.lead ?? pushSettings.defaultLead,
       leads: pushSettings.reminderLeads,
       startsAt: widget.startsAt,
       now: now,
+      recurring: _every,
     );
-    _every = widget.existing?.every ?? false;
   }
 
-  bool _leadPast(int lead, DateTime now) => widget.startsAt.subtract(Duration(minutes: lead)).isBefore(now);
+  bool _leadPast(int lead, DateTime now) {
+    if (widget.startsAt.subtract(Duration(minutes: lead)).isBefore(now)) {
+      return true;
+    }
+    if (kIsWeb && !_every) {
+      return isWebLeadTooSoon(startsAt: widget.startsAt, lead: lead, now: now);
+    }
+    return false;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -257,9 +284,52 @@ class _ReminderConfigSheetState extends ConsumerState<_ReminderConfigSheet> {
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(color: pal.hairline),
                       ),
-                      child: Text(
-                        context.tr('remindWebDelayNotice'),
-                        style: TextStyle(fontSize: 12, color: pal.muted, height: 1.5),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Text(
+                            context.tr('remindWebDelayNotice'),
+                            style: TextStyle(fontSize: 12, color: pal.muted, height: 1.5),
+                          ),
+                          if (_selectedLead == 0) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              context.tr('remindLeadZeroNotice'),
+                              style: TextStyle(fontSize: 12, color: pal.alert, height: 1.5),
+                            ),
+                          ],
+                          const SizedBox(height: 8),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 6,
+                            children: [
+                              OutlinedButton.icon(
+                                icon: const Icon(Icons.event, size: 16),
+                                label: Text(context.tr('remindGoogleCalendar'), style: const TextStyle(fontSize: 12)),
+                                onPressed: () {
+                                  final gUrl = singleCalendarUrl(
+                                    startsAt: widget.startsAt,
+                                    title: titleText,
+                                  );
+                                  openUrl(gUrl);
+                                },
+                              ),
+                              OutlinedButton.icon(
+                                icon: const Icon(Icons.file_download_outlined, size: 16),
+                                label: Text(context.tr('remindDownloadIcs'), style: const TextStyle(fontSize: 12)),
+                                onPressed: () {
+                                  final ics = buildReminderIcs(
+                                    title: titleText,
+                                    startsAt: widget.startsAt,
+                                    leadMinutes: _selectedLead ?? 15,
+                                    recurringWeekly: _every,
+                                  );
+                                  openUrl('data:text/calendar;charset=utf-8,${Uri.encodeComponent(ics)}');
+                                },
+                              ),
+                            ],
+                          ),
+                        ],
                       ),
                     ),
 

@@ -182,7 +182,7 @@ void main() {
 
     test('reminder topics keep only FCM topic characters', () {
       expect(reminderTopic(eventKey: 'lit-1', occurrence: '2027-04-30', lead: 60, lang: 'ar'), 'web_rem_lit-1_20270430_60_ar');
-      expect(reminderTopic(eventKey: 'lit-1', occurrence: '2027/04/30T09:00', lead: 60, lang: 'en'), 'web_rem_lit-1_20270430T0900_60_en');
+      expect(reminderTopic(eventKey: 'lit-1', occurrence: '2027/04/30T09:00', lead: 60, lang: 'en'), 'web_rem_lit-1_20270430_60_en');
     });
 
     test('an explicitly empty pushTypes list offers nothing; an invalid one falls back', () {

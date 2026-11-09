@@ -180,6 +180,10 @@ Notable details:
   `SetOptions(mergeFields: <written keys>)`: untouched fields stay (legacy keys never block an edit), but a written
   map field is **replaced**, not deep-merged — a page header the admin resets disappears from `pageHeaders`, and a
   cover image switched from inline to a link loses its old `mediaId`/`w`/`h`.
+- **Web push rules (ADR-060):**
+  - `push_queue/{id}`: create-only, read/update/delete denied; validates payload (`token`, `want`, `rem`, `drop`, `retries == 0`, `createdAt == request.time`) and binds `meta/push_rate` in the same batch.
+  - `meta/push_rate`: create/update throttle (3s spacing, integer UTC day, count <= 1000). Evaluates all scalar checks before cross-document existence checks. Read/delete denied to all clients (including admins).
+  - `meta/push_topics` and `meta/push_plan`: read-only for `isAdmin()`, client write denied.
 
 ## Cloud Storage (not used — Spark)
 

@@ -131,6 +131,10 @@ All application data resides in Cloud Firestore (`europe-west1`). Read operation
 | `media/{id}` | Inlined base64 image data for uploaded photos. | Get single doc | Upload / Delete |
 | `contact_messages` | Inbound inquiries, hall bookings, and anonymous suggestions/complaints. | Create only | View, status, delete |
 | `meta/contact_rate` | Global anti-spam rate limiter for the contact form. | None | Server batch write |
+| `push_queue/{id}` | Batch-written Web Push subscription requests (ADR-060). | Create only (in batch) | None (drained by Worker) |
+| `meta/push_rate` | Global anti-spam rate limiter for push_queue batch writes (ADR-060). | None | None |
+| `meta/push_topics` | Web push active subscriber stats written by Worker Cron 2 (ADR-060). | None | Admin Read |
+| `meta/push_plan` | Compiled upcoming liturgy & meeting reminder topics (ADR-060). | None | Admin Read |
 | `admins/{uid}` | Administrator directory mapping Firebase Auth UIDs to roles (`owner`/`editor`). | None (Auth check) | Managed by Owners |
 
 ---

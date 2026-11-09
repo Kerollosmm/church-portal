@@ -1171,6 +1171,56 @@ service cloud.firestore {
         && getAfter(/databases/$(database)/documents/meta/contact_rate).data.get('lastMsgId', '') == id;
     }
 
+    // ---------------------- web push (ADR-060) -----------------------
+    match /meta/{metaDoc} {
+      allow read: if metaDoc in ['push_topics', 'push_plan'] && isAdmin();
+      allow write: if false;
+    }
+
+    match /meta/push_rate {
+      allow read, delete: if false;
+      allow create, update: if request.resource.data.keys().hasOnly(['lastAt', 'lastId', 'day', 'count'])
+        && request.resource.data.lastAt == request.time
+        && request.resource.data.lastId is string
+        && request.resource.data.lastId.matches('^[A-Za-z0-9_]{10,64}$')
+        && (resource == null || request.time > resource.data.lastAt + duration.value(3, 's'))
+        && request.resource.data.day is int
+        && request.resource.data.day == request.time.year() * 10000 + request.time.month() * 100 + request.time.day()
+        && request.resource.data.count is int
+        && request.resource.data.count >= 1 && request.resource.data.count <= 1000
+        && (resource == null || resource.data.day != request.resource.data.day
+              ? request.resource.data.count == 1
+              : request.resource.data.count == resource.data.count + 1)
+        && !exists(/databases/$(database)/documents/push_queue/$(request.resource.data.lastId))
+        && existsAfter(/databases/$(database)/documents/push_queue/$(request.resource.data.lastId));
+    }
+
+    match /push_queue/{id} {
+      allow read, update, delete: if false;
+      allow create: if validPushQueue(request.resource.data)
+        && getAfter(/databases/$(database)/documents/meta/push_rate).data.lastAt == request.time
+        && getAfter(/databases/$(database)/documents/meta/push_rate).data.get('lastId', '') == id;
+    }
+
+    function webTopics() {
+      return ['web_announcements_ar', 'web_announcements_en', 'web_seasons_ar', 'web_seasons_en'];
+    }
+
+    function remList() {
+      return '^$|^web_rem_(lit|meeting|day|season)-[a-z0-9-]{1,40}(_[0-9]{8})?_(0|5|10|15|30|60|120|180|1440)_(ar|en)(,web_rem_(lit|meeting|day|season)-[a-z0-9-]{1,40}(_[0-9]{8})?_(0|5|10|15|30|60|120|180|1440)_(ar|en)){0,29}$';
+    }
+
+    function validPushQueue(d) {
+      return d.keys().hasOnly(['token', 'prevToken', 'want', 'rem', 'drop', 'createdAt'])
+        && d.keys().hasAll(['token', 'want', 'createdAt'])
+        && d.token is string && d.token.matches('^[A-Za-z0-9:_-]{100,400}$')
+        && (!('prevToken' in d) || (d.prevToken is string && d.prevToken.matches('^[A-Za-z0-9:_-]{100,400}$')))
+        && d.want is list && d.want.size() <= 2 && d.want.hasOnly(webTopics())
+        && (!('rem' in d) || (d.rem is string && d.rem.size() <= 2600 && d.rem.matches(remList())))
+        && (!('drop' in d) || (d.drop is string && d.drop.size() <= 2600 && d.drop.matches(remList())))
+        && d.createdAt == request.time;
+    }
+
     // ------------------- contact categories (ADR-028) -------------------
     // Category ids are stable (PR #19): the four defaults keep c1…c4 and the
     // admin editor gives every new category a fresh random id ('c' + 10

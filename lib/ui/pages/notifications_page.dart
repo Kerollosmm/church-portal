@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
@@ -7,6 +9,7 @@ import '../../core/document_lang.dart';
 import '../../core/l10n.dart';
 import '../../core/push_env.dart';
 import '../../core/theme.dart';
+import '../../data/web_push_repository.dart' deferred as web_push;
 import '../../domain/features.dart';
 import '../../state/providers.dart';
 import '../widgets/common.dart';
@@ -31,6 +34,14 @@ const Map<String, List<String>> notificationsPageStrings = {
   'notificationsUnsubscribeAll': ['إيقاف كل الإشعارات', 'Turn off all notifications'],
   'notificationsUnsubscribeConfirm': ['تم إيقاف جميع الإشعارات', 'All notifications turned off'],
   'notificationsUnsupported': ['هذا المتصفح لا يدعم تلقي الإشعارات.', 'This browser does not support push notifications.'],
+  'notificationsTestButton': ['جرّب إشعارًا', 'Test notification'],
+  'notificationsTestSent': ['تم إرسال إشعار تجريبي للمتصفح', 'Test notification sent to browser'],
+  'notificationsInboxTitle': ['سجل الإشعارات المستلمة', 'Received notifications'],
+  'notificationsInboxEmpty': ['لا توجد إشعارات سابقة في هذا المتصفح.', 'No previous notifications in this browser.'],
+  'notificationsInboxClear': ['مسح السجل', 'Clear history'],
+  'notificationsCopyLink': ['نسخ الرابط للمتصفح', 'Copy link for browser'],
+  'notificationsLinkCopied': ['تم نسخ الرابط', 'Link copied'],
+  'notificationsIosFocusNote': ['على iPhone، يُرجى استخدام نمط التركيز (Focus Mode) في إعدادات الهاتف لتحديد ساعات الهدوء.', 'On iPhone, please use Focus Mode in Settings to set quiet hours.'],
 };
 
 /// The visitor's notification preferences and reminders page (`/notifications`, ADR-057).
@@ -260,6 +271,11 @@ class NotificationsPage extends ConsumerWidget {
           // My Reminders section
           const MyRemindersSection(),
 
+          if (kIsWeb) ...[
+            const SizedBox(height: 28),
+            _WebPushInboxSection(pushEnv: pushEnv),
+          ],
+
           const SizedBox(height: 32),
         ],
       );
@@ -276,11 +292,42 @@ class NotificationsPage extends ConsumerWidget {
   ) {
     switch (state) {
       case PushPermissionState.inAppBrowser:
-        return _buildAlertBox(
-          pal,
-          Icons.open_in_browser,
-          context.tr('notificationsInAppBrowser'),
-          pal.alert,
+        return Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: pal.alert.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: pal.alert.withValues(alpha: 0.4)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.open_in_browser, color: pal.alert, size: 22),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      context.tr('notificationsInAppBrowser'),
+                      style: TextStyle(fontSize: 13, color: pal.ink, height: 1.45),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                icon: const Icon(Icons.copy, size: 18),
+                label: Text(context.tr('notificationsCopyLink')),
+                onPressed: () {
+                  Clipboard.setData(const ClipboardData(text: 'https://maximos-domadios-church.web.app/notifications'));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text(context.tr('notificationsLinkCopied'))),
+                  );
+                },
+              ),
+            ],
+          ),
         );
 
       case PushPermissionState.iosNeedsInstall:
@@ -386,6 +433,13 @@ class NotificationsPage extends ConsumerWidget {
                         final res = await pushEnv.requestPermission();
                         if (res == 'granted') {
                           prefsNotifier.firstOptIn();
+                          if (kIsWeb) {
+                            try {
+                              await web_push.loadLibrary();
+                              final repo = web_push.WebPushRepository(pushEnv: pushEnv);
+                              await repo.enable(vapidKey: pushSettings.vapidKey);
+                            } catch (_) {}
+                          }
                         }
                         onPermissionChanged();
                       }
@@ -416,10 +470,35 @@ class NotificationsPage extends ConsumerWidget {
             children: [
               Icon(Icons.check_circle_outline, color: pal.success, size: 20),
               const SizedBox(width: 10),
-              Text(
-                context.tr('notificationsEnabledChip'),
-                style: TextStyle(fontWeight: FontWeight.bold, color: pal.success, fontSize: 14),
+              Expanded(
+                child: Text(
+                  context.tr('notificationsEnabledChip'),
+                  style: TextStyle(fontWeight: FontWeight.bold, color: pal.success, fontSize: 14),
+                ),
               ),
+              if (kIsWeb)
+                OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                    foregroundColor: pal.primary,
+                  ),
+                  icon: const Icon(Icons.notifications_none, size: 16),
+                  label: Text(context.tr('notificationsTestButton'), style: const TextStyle(fontSize: 12)),
+                  onPressed: () async {
+                    await pushEnv.showSwTestNotification(
+                      title: context.isAr ? 'اختبار الإشعارات' : 'Notification Test',
+                      body: context.isAr
+                          ? 'إشعار تجريبي يعمل بنجاح على هذا المتصفح'
+                          : 'Test notification received successfully on this browser',
+                      link: '/notifications',
+                    );
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text(context.tr('notificationsTestSent'))),
+                      );
+                    }
+                  },
+                ),
             ],
           ),
         );
@@ -476,3 +555,114 @@ class NotificationsPage extends ConsumerWidget {
     );
   }
 }
+
+class _WebPushInboxSection extends StatefulWidget {
+  final PushEnv pushEnv;
+  const _WebPushInboxSection({required this.pushEnv});
+
+  @override
+  State<_WebPushInboxSection> createState() => _WebPushInboxSectionState();
+}
+
+class _WebPushInboxSectionState extends State<_WebPushInboxSection> {
+  List<WebInboxItem> _items = const [];
+  bool _loading = true;
+  StreamSubscription<WebInboxItem>? _sub;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+    _sub = widget.pushEnv.inboxEvents.listen((item) {
+      if (mounted) {
+        setState(() {
+          _items = [item, ..._items];
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _sub?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    try {
+      final res = await widget.pushEnv.readInbox();
+      if (mounted) {
+        setState(() {
+          _items = res;
+          _loading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _clear() async {
+    await widget.pushEnv.clearInbox();
+    if (mounted) {
+      setState(() {
+        _items = const [];
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!kIsWeb) return const SizedBox.shrink();
+    if (_loading) return const SizedBox.shrink();
+    if (_items.isEmpty) return const SizedBox.shrink();
+
+    final pal = context.pal;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              context.tr('notificationsInboxTitle'),
+              style: AppFonts.heading(size: 18, color: pal.primaryDeep),
+            ),
+            TextButton(
+              onPressed: _clear,
+              child: Text(context.tr('notificationsInboxClear')),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        for (final item in _items)
+          Container(
+            margin: const EdgeInsets.only(bottom: 8),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: pal.surface,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: pal.hairline),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  item.title,
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: pal.ink),
+                ),
+                if (item.body.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    item.body,
+                    style: TextStyle(fontSize: 13, color: pal.muted),
+                  ),
+                ],
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+}
+

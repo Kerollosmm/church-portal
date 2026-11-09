@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 
 import { assertFails, assertSucceeds, initializeTestEnvironment } from '@firebase/rules-unit-testing';
 import {
-  Timestamp, deleteDoc, doc, getDoc, getDocs, collection, serverTimestamp, setDoc, updateDoc, writeBatch,
+  Timestamp, deleteDoc, doc, getDoc, getDocs, collection, increment, serverTimestamp, setDoc, updateDoc, writeBatch,
 } from 'firebase/firestore';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -2376,6 +2376,363 @@ describe('ADR-059: validDayEvent 17th field (DayEvent.id)', () => {
     // Non-alphanumeric rejected
     const badSymbols = [...base13, '', '', '', 'abc-defg'];
     await assertFails(setDoc(featRef(), { dayEvents: [badSymbols.join(S)] }, { merge: true }));
+  });
+});
+
+describe('ADR-060: Web push rules (push_queue, meta/push_rate, meta/push_topics, meta/push_plan)', () => {
+  const getUtcDay = (d = new Date()) =>
+    d.getUTCFullYear() * 10000 + (d.getUTCMonth() + 1) * 100 + d.getUTCDate();
+
+  const resetRate = () =>
+    env.withSecurityRulesDisabled(async (ctx) =>
+      deleteDoc(doc(ctx.firestore(), 'meta', 'push_rate'))
+    );
+
+  const seedRate = (data) =>
+    env.withSecurityRulesDisabled(async (ctx) =>
+      setDoc(doc(ctx.firestore(), 'meta', 'push_rate'), data)
+    );
+
+  const seedMeta = (metaDoc, data) =>
+    env.withSecurityRulesDisabled(async (ctx) =>
+      setDoc(doc(ctx.firestore(), 'meta', metaDoc), data)
+    );
+
+  let queueSeq = 0;
+  function pushBatch(fs, { queueData, rateData, queueId } = {}) {
+    queueSeq++;
+    const qid = queueId ?? `queueDoc${String(queueSeq).padStart(4, '0')}${Date.now()}`;
+    const batch = writeBatch(fs);
+    const qRef = doc(fs, 'push_queue', qid);
+    const rate = {
+      lastAt: serverTimestamp(),
+      lastId: qid,
+      day: getUtcDay(),
+      count: 1,
+      ...rateData,
+    };
+    // Ensure lastId matches qid unless explicitly overridden for failure tests
+    if (!rateData?.lastId) {
+      rate.lastId = qid;
+    }
+    const defaultQueue = {
+      token: 'A'.repeat(120),
+      want: ['web_announcements_ar', 'web_seasons_ar'],
+      createdAt: serverTimestamp(),
+    };
+    batch.set(qRef, queueData ?? defaultQueue);
+    batch.set(doc(fs, 'meta', 'push_rate'), rate, { merge: true });
+    return { batch, qRef };
+  }
+
+  test('valid opt-in batch with recurring and once-off topics succeeds', async () => {
+    await resetRate();
+    const pub = db(null);
+    const max30Topics = Array.from({ length: 30 }, (_, i) =>
+      `web_rem_lit-${'x'.repeat(40)}_60_ar`
+    ).join(',');
+
+    const { batch } = pushBatch(pub, {
+      queueData: {
+        token: 'token_' + 'b'.repeat(120),
+        want: ['web_announcements_ar', 'web_seasons_ar'],
+        rem: 'web_rem_lit-sun1_60_ar,web_rem_day-5d16df6bbc_20261115_15_ar',
+        drop: 'web_rem_season-pascha_1440_ar',
+        createdAt: serverTimestamp(),
+      },
+    });
+    await assertSucceeds(batch.commit());
+
+    // 30 max-length topics under size <= 2600
+    await resetRate();
+    const { batch: b30 } = pushBatch(pub, {
+      queueId: 'queueDocMax30Topics1234',
+      queueData: {
+        token: 'token_' + 'c'.repeat(120),
+        want: ['web_announcements_en'],
+        rem: max30Topics,
+        createdAt: serverTimestamp(),
+      },
+    });
+    await assertSucceeds(b30.commit());
+
+    // want: [] unsubscribe-all succeeds
+    await resetRate();
+    const { batch: bUnsub } = pushBatch(pub, {
+      queueId: 'queueDocUnsub12345678',
+      queueData: {
+        token: 'token_' + 'd'.repeat(120),
+        want: [],
+        rem: '',
+        drop: 'web_rem_lit-sun1_60_ar',
+        createdAt: serverTimestamp(),
+      },
+    });
+    await assertSucceeds(bUnsub.commit());
+  });
+
+  test('standalone push_queue or standalone meta/push_rate is denied', async () => {
+    await resetRate();
+    const pub = db(null);
+
+    // Standalone push_queue without meta/push_rate
+    await assertFails(setDoc(doc(pub, 'push_queue', 'alone1234567890'), {
+      token: 'A'.repeat(120),
+      want: ['web_announcements_ar'],
+      createdAt: serverTimestamp(),
+    }));
+
+    // Standalone meta/push_rate without creating push_queue doc
+    await assertFails(setDoc(doc(pub, 'meta', 'push_rate'), {
+      lastAt: serverTimestamp(),
+      lastId: 'nonexistent12345678',
+      day: getUtcDay(),
+      count: 1,
+    }));
+  });
+
+  test('throttle spacing: write within 3 seconds is denied', async () => {
+    await resetRate();
+    const pub = db(null);
+
+    // Seed a rate doc whose lastAt is recent (less than 3 seconds ago)
+    await seedRate({
+      lastAt: serverTimestamp(),
+      lastId: 'prev1234567890',
+      day: getUtcDay(),
+      count: 1,
+    });
+
+    const { batch } = pushBatch(pub, {
+      rateData: {
+        lastAt: serverTimestamp(),
+        day: getUtcDay(),
+        count: 2,
+      },
+    });
+    await assertFails(batch.commit());
+  });
+
+  test('daily cap: count == 1001 is denied', async () => {
+    await resetRate();
+    const pub = db(null);
+
+    const pastDate = new Date(Date.now() - 5000);
+    await seedRate({
+      lastAt: Timestamp.fromDate(pastDate),
+      lastId: 'prev1234567890',
+      day: getUtcDay(),
+      count: 1000,
+    });
+
+    const { batch } = pushBatch(pub, {
+      rateData: {
+        lastAt: serverTimestamp(),
+        day: getUtcDay(),
+        count: 1001,
+      },
+    });
+    await assertFails(batch.commit());
+  });
+
+  test('increment(1) on same UTC day is allowed without reading meta/push_rate', async () => {
+    await resetRate();
+    const pub = db(null);
+
+    const pastDate = new Date(Date.now() - 5000);
+    await seedRate({
+      lastAt: Timestamp.fromDate(pastDate),
+      lastId: 'prev1234567890',
+      day: getUtcDay(),
+      count: 5,
+    });
+
+    const { batch } = pushBatch(pub, {
+      rateData: {
+        lastAt: serverTimestamp(),
+        day: getUtcDay(),
+        count: increment(1),
+      },
+    });
+    await assertSucceeds(batch.commit());
+  });
+
+  test('UTC day rollover: increment(1) denied, literal count: 1 allowed', async () => {
+    await resetRate();
+    const pub = db(null);
+
+    const yesterdayUtcInt = 20261108; // yesterday
+    const todayUtcInt = getUtcDay(); // today
+    const pastDate = new Date(Date.now() - 5000);
+
+    await seedRate({
+      lastAt: Timestamp.fromDate(pastDate),
+      lastId: 'prev1234567890',
+      day: yesterdayUtcInt,
+      count: 42,
+    });
+
+    // increment(1) yields 43 != 1 on a new day -> denied
+    const { batch: bInc } = pushBatch(pub, {
+      rateData: {
+        lastAt: serverTimestamp(),
+        day: todayUtcInt,
+        count: increment(1),
+      },
+    });
+    await assertFails(bInc.commit());
+
+    // count: 2 on a new day -> denied
+    const { batch: bCount2 } = pushBatch(pub, {
+      rateData: {
+        lastAt: serverTimestamp(),
+        day: todayUtcInt,
+        count: 2,
+      },
+    });
+    await assertFails(bCount2.commit());
+
+    // wrong day integer -> denied
+    const { batch: bWrongDay } = pushBatch(pub, {
+      rateData: {
+        lastAt: serverTimestamp(),
+        day: 20261101,
+        count: 1,
+      },
+    });
+    await assertFails(bWrongDay.commit());
+
+    // literal count: 1 on a new day -> allowed
+    const { batch: bCount1 } = pushBatch(pub, {
+      rateData: {
+        lastAt: serverTimestamp(),
+        day: todayUtcInt,
+        count: 1,
+      },
+    });
+    await assertSucceeds(bCount1.commit());
+  });
+
+  test('invalid topics, tokens, and leads are denied', async () => {
+    await resetRate();
+    const pub = db(null);
+
+    // Malformed token
+    const { batch: bBadToken } = pushBatch(pub, {
+      queueData: {
+        token: 'short',
+        want: ['web_announcements_ar'],
+        createdAt: serverTimestamp(),
+      },
+    });
+    await assertFails(bBadToken.commit());
+
+    // Local-owned or illegal want topic
+    const { batch: bVerse } = pushBatch(pub, {
+      queueData: {
+        token: 'A'.repeat(120),
+        want: ['web_verse_daily_ar'],
+        createdAt: serverTimestamp(),
+      },
+    });
+    await assertFails(bVerse.commit());
+
+    const { batch: bAppTopic } = pushBatch(pub, {
+      queueData: {
+        token: 'A'.repeat(120),
+        want: ['app_announcements_ar'],
+        createdAt: serverTimestamp(),
+      },
+    });
+    await assertFails(bAppTopic.commit());
+
+    // Uppercase in rem
+    const { batch: bUpper } = pushBatch(pub, {
+      queueData: {
+        token: 'A'.repeat(120),
+        want: ['web_announcements_ar'],
+        rem: 'web_rem_lit-SUN1_60_ar',
+        createdAt: serverTimestamp(),
+      },
+    });
+    await assertFails(bUpper.commit());
+
+    // Suffix > 40 characters
+    const { batch: bLongSuffix } = pushBatch(pub, {
+      queueData: {
+        token: 'A'.repeat(120),
+        want: ['web_announcements_ar'],
+        rem: `web_rem_lit-${'a'.repeat(41)}_60_ar`,
+        createdAt: serverTimestamp(),
+      },
+    });
+    await assertFails(bLongSuffix.commit());
+
+    // Invalid lead (7 minutes)
+    const { batch: bBadLead } = pushBatch(pub, {
+      queueData: {
+        token: 'A'.repeat(120),
+        want: ['web_announcements_ar'],
+        rem: 'web_rem_lit-sun1_7_ar',
+        createdAt: serverTimestamp(),
+      },
+    });
+    await assertFails(bBadLead.commit());
+
+    // 31st topic in rem
+    const rem31 = Array.from({ length: 31 }, (_, i) => `web_rem_lit-${i}_60_ar`).join(',');
+    const { batch: b31 } = pushBatch(pub, {
+      queueData: {
+        token: 'A'.repeat(120),
+        want: ['web_announcements_ar'],
+        rem: rem31,
+        createdAt: serverTimestamp(),
+      },
+    });
+    await assertFails(b31.commit());
+  });
+
+  test('visitor cannot read, update, or delete push_queue or meta/push_rate', async () => {
+    const pub = db(null);
+    await assertFails(getDoc(doc(pub, 'push_queue', 'anyDoc')));
+    await assertFails(getDocs(collection(pub, 'push_queue')));
+    await assertFails(updateDoc(doc(pub, 'push_queue', 'anyDoc'), { token: 'new' }));
+    await assertFails(deleteDoc(doc(pub, 'push_queue', 'anyDoc')));
+
+    await assertFails(getDoc(doc(pub, 'meta', 'push_rate')));
+    await assertFails(deleteDoc(doc(pub, 'meta', 'push_rate')));
+  });
+
+  test('admin can read meta/push_topics & meta/push_plan; visitors cannot; admin writes denied', async () => {
+    await seedMeta('push_topics', { topics: { 'web_rem_lit-1_60_ar': true } });
+    await seedMeta('push_plan', { reminderPlan: [] });
+
+    // Admin read allowed
+    await assertSucceeds(getDoc(doc(db(EDITOR), 'meta', 'push_topics')));
+    await assertSucceeds(getDoc(doc(db(OWNER), 'meta', 'push_plan')));
+
+    // Visitor read denied
+    await assertFails(getDoc(doc(db(null), 'meta', 'push_topics')));
+    await assertFails(getDoc(doc(db(null), 'meta', 'push_plan')));
+
+    // Admin write denied
+    await assertFails(setDoc(doc(db(EDITOR), 'meta', 'push_topics'), { topics: {} }));
+    await assertFails(setDoc(doc(db(OWNER), 'meta', 'push_plan'), { reminderPlan: [] }));
+    await assertFails(deleteDoc(doc(db(OWNER), 'meta', 'push_topics')));
+  });
+
+  test('explicit read-denial: both visitors AND admins denied get on meta/push_rate and meta/contact_rate', async () => {
+    // Unauthenticated visitor
+    await assertFails(getDoc(doc(db(null), 'meta', 'push_rate')));
+    await assertFails(getDoc(doc(db(null), 'meta', 'contact_rate')));
+
+    // Editor admin
+    await assertFails(getDoc(doc(db(EDITOR), 'meta', 'push_rate')));
+    await assertFails(getDoc(doc(db(EDITOR), 'meta', 'contact_rate')));
+
+    // Owner admin
+    await assertFails(getDoc(doc(db(OWNER), 'meta', 'push_rate')));
+    await assertFails(getDoc(doc(db(OWNER), 'meta', 'contact_rate')));
   });
 });
 

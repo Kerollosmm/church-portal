@@ -1863,6 +1863,48 @@ supersede them.
     - Notification display with `event:X` slot sharing within ±60 minutes.
     - Deep linking: notification tap opens validated in-app routes via `safeNotificationLink` and `navigateToNotification(link)` on `rootNavigatorKey`.
 
+## ADR-060 — Web push, installed iPhone PWA & web reminder planner
+
+- **Context (Phase 2 PR D, 9 Nov 2026):**
+  - Visitors on web and iOS (installed PWA) need push delivery for announcements, seasons, and scheduled liturgy/meeting reminders.
+  - Safari on iOS 16.4+ requires PWA installation (`manifest.json` with `id: "/"` and `scope: "/"`, monochrome badge, `standalone` mode) before Web Push can be granted; iOS WebKit terminates workers that fail to display user-visible notifications or send silent updates.
+  - Casual visitor overhead must remain zero: 0 bytes Firebase Messaging JS, no push SW on normal visits, deferred Flutter bundle, `main.dart.js` gzip growth strictly within the +20 KB budget.
+  - Spark plan safety: no Cloud Functions, no new listeners, no polling, no Cloud Storage, max 197 Firestore reads/day across all Cloudflare Worker crons.
+- **Decision:**
+  - **Domain Logic & RFC 5545 Calendar Generator (`lib/domain/push.dart`, `lib/domain/calendar_ics.dart`):**
+    - `kPushDeliveryShipped = true`.
+    - Canonical `topicKey(rawEventKey)`: lowercase, replace non-`[a-z0-9-]` with `-`, validate `(lit|meeting|day|season)-`, cap ID part at 40 chars (`{1,40}`).
+    - `isValidWebReminderTopic`: regex `^web_rem_(lit|meeting|day|season)-[a-z0-9-]{1,40}(_[0-9]{8})?_(0|5|10|15|30|60|120|180|1440)_(ar|en)$`.
+    - `kWebReminderMinWindow = Duration(minutes: 40);`, `isWebLeadTooSoon(...)` for honest delay copy.
+    - `WebTopicPlan` and `computeWebTopicSync(...)`: want <= 2, rem <= 30 with effective occurrence calculation (`r.every ? null : (r.occurrence ?? isoDate(CairoTime.fromInstant(r.startsAt)))`), client pre-filter through `isValidWebReminderTopic`, drop capped at 30, prevToken.
+    - `WebInboxItem` with `safeNotificationLink`.
+    - `buildReminderIcs(...)` RFC 5545 generator with `VCALENDAR`, `VEVENT`, `VALARM`, Cairo TZID for weekly recurring events, line folding <= 75 octets. `singleCalendarUrl(...)` for Google Calendar one-offs.
+  - **Additive Firestore Rules & Emulator Tests (`firestore.rules`, `tool/rules_test/rules.test.mjs`):**
+    - Preserves `settings/features` <1,000 expression budget (zero edits to legacy docs).
+    - `meta/push_topics` and `meta/push_plan`: admin read-only, write denied to all clients.
+    - `meta/push_rate`: rate throttle (3s spacing, UTC integer day, count 1..1000, read/delete denied).
+    - `push_queue/{id}`: create-only with batch validation against `meta/push_rate`, size limits (`rem.size() <= 2600`, `drop.size() <= 2600`), read/update/delete denied.
+    - Emulator test suite verifies all allow and deny branches, UTC day rollover, and denied visitor/admin reads on rate docs.
+  - **Cloudflare Worker 3-Cron Pipeline (`wrangler.toml`, `tool/`):**
+    - Cron 1 (`*/15 * * * *`): sender & daily season alerts with condition reminders, per-type TTLs, and `remindersSent` stamping.
+    - Cron 2 (`7,22,37,52 * * * *`): queue drain via Google IID REST `batchAdd`/`batchRemove`, single writer of `meta/push_topics`.
+    - Cron 3 (`3 2,8,14,20 * * *`): planner reading active liturgies, meetings, and `settings/today` with `cairoToUtc` and `computeDayEventHashId`, single writer of `meta/push_plan`.
+    - L1 module cache + L2 `PUSH_KV` for Google OAuth2 access token (~1 token mint per hour).
+  - **Service Worker, Client & Hosting Config (`web/`):**
+    - `web/manifest.json`: `"id": "/"`, `"scope": "/"`, monochrome `web/icons/badge-72.png`.
+    - `firebase.json`: `no-cache` headers for `firebase-messaging-sw.js` and `push_client.js`.
+    - Plain vanilla SW (`web/firebase-messaging-sw.js`): no FCM SDK, handles raw Web Push, always shows visible notification (`silent: true` during quiet hours, never drops notifications), 30-item IndexedDB inbox, window focus/open on click.
+    - Plain client library (`web/push_client.js`): `window.churchPush` API with lazy SW registration, token management, inbox methods, quiet hours.
+  - **Dart Interop & Deferred Web Push Repository (`lib/core/`, `lib/data/`):**
+    - `PushEnv` interface with web push methods, deep links stream, inbox stream.
+    - `PushEnvWeb` implementing `PushEnv` using `dart:js_interop` / `package:web`.
+    - `WebPushRepository` with `push_queue` batch writing, 4-step deterministic retry with HTTP `Date` sync on `/data/today.json`, 10s debounce, 7-day token refresh check, and `unsubscribeAll`.
+  - **Web UI & Admin Health (`lib/ui/`):**
+    - Clamped leads in `ReminderSheet` with 40-minute minimum window, honest delay copy, zero-lead warning, Google Calendar link & `.ics` download buttons.
+    - `NotificationsPage` on web: in-app browser copy link button, Safari tab install-first card, Focus mode note, test notification button, `_WebPushInboxSection` with clear history.
+    - `AppShell`: `pushEnv.deepLinks` listener, deferred loading of `WebPushRepository` (`deferred as web_push`), `from_push=1` refresh.
+    - Admin dashboard (`notifications_admin.dart`): web push health cards (`meta/push_topics`, `meta/push_plan`), daily cap warning banner, planner delay notice.
+
 ## ADR-062 — Mobile APK scroll performance, cream launch screen, single back arrow per screen
 - **Context:** Mobile Android APK users faced three quality and performance defects:
   1. `HeroStage` ran an unconstrained 60 s continuous ticker (`_clock.repeat()`). While the Web animates haze and ray shimmer in CSS DOM layers (`HeroAmbientLayer`, ADR-037), on Android Flutter repainted 14 blurred rays with `MaskFilter.blur` every frame, dropping frames on Home screen scrolling and opening.
@@ -1891,9 +1933,6 @@ supersede them.
 
 | When | PR / commit | What |
 |---|---|---|
-| 8 Nov 2026 | **PR C** — "Admin notification manager, Cloudflare Worker FCM sender & deep links" (`feat/p2c-notification-manager`) | ADR-059: 6 notification types with templates and times in `/admin`; scheduled pushes manager (CRUD ≤ 20 rows, non-sending deletable, retry clone); `reminderSources` gating; persistent 8-char `DayEvent.id` with NFC SHA-1 fallback; Cloudflare Worker cron-only FCM sender (`*/15 * * * *`, Spark-safe ~197 reads/day) + Node 22 fallback; Android FCM background handler, 100-nid ring buffer, `event:X` slot sharing, safe deep links. |
-| 7 Nov 2026 | **PR B** — "Android APK, local notifications, Katameros readings, OEM battery diagnostics, in-app update" (`feat/p2b-android-local-notifications`) | ADR-058: Split APKs (arm64 + arm32) with R8 minification and core library desugaring; rolling 9-day local notification planner with exact alarms and replenishment worker; Katameros pipeline (`tool/fetch_readings.js`, `/readings/<date>`); OEM battery guide & diagnostics (`/notifications/battery`); in-app updater (Range resume, SHA-256 verification, FileProvider install); Android shell (PopScope double-back exit, SharedPreferences language store, Assistant web redirect). +0 Firestore reads/writes. |
-| 7 Nov 2026 | **PR A** — "Install banner, sideload guide, notification preferences & reminders foundation" (`feat/p2a-install-prefs`) | ADR-057: `InstallBanner` (Android APK / PWA, iOS sheet), `ApkInstallGuide` 5-step modal, `/notifications` preferences page with channel-owner model, `RemindMeButton` + «تذكيراتي» list, `ReminderStore`, admin «التطبيق والإشعارات», rules for 18 new fields on `settings/features`. +0 Firestore reads / writes for visitors. |
 | 31 Oct 2026 | `6f4a0d8` Initial commit | Empty repo (Kerollosmm) |
 | 31 Oct 2026 | **PR #1** `5eb9820` — "Church portal: Flutter + Firebase app, rules, seed, CI/CD" | The whole app: public pages, next-mass/season logic, assistant, contact form, Firestore rules, seed generator + seeder, CI, deploy (live + PR previews), Seed workflow (admin by email + set-password link), Codespaces. Review rounds: server-side contact throttle, hide assistant without App Check, safe workflow inputs, tolerant SA handling, firebase-tools CLI deploy, Node 24 actions, per-occurrence season windows, DST-correct seed instants, admin lookup retry, lang query sync, `<html lang>`, compact app bar for large text, map fallback, splash failure path; CI skip of the serviceusage probe. |
 | 31 Oct 2026 | **PR #2** `c42837a` — "Content: replace sample data with verified church data" | Real name/address (Qebly)/coordinates/landline/socials/bishop/history/milestones, reconciled priests, saints, activities with links, Anba Abraam, real alerts; times stay sample with page notice; no invented doctors/phones; `--force` deletes retired ids; `docs/CONTENT_SOURCES.md`. Review: unconfirmed one-offs in assistant, partner orgs labelled, new unconfirmed priests not seeded. |
@@ -1954,7 +1993,10 @@ supersede them.
 | 6 Nov 2026 | **PR #48** — "Season lists polish" (`fix/season-lists-polish`) | ADR-054: a listed undated sample states the days another season's real service replaces it («لا يُقام ٢٣ يونيو», prompt "(not on …: replaced by …)"); seasons ended before today leave /mass-schedule and the prompt; «بعد يومين» / «بعد ١١ يومًا»; preset dialog warns when a season replaces the weekly schedule for more than 3 days (defaults unchanged); the next card never repeats a service named in the «يُقام الآن» box; balanced season chip. +0 reads / writes / listeners. |
 | 6 Nov 2026 | **PR #49** — "Seasonal list empty state" (`fix/season-empty-state`) | ADR-055: /mass-schedule seasonal view with no season in effect shows «لا توجد مواسم حالية» / "No current seasons" and, when an enabled season starts later, «الموسم القادم: صوم الميلاد — يبدأ ٢٥ نوفمبر» (`nextUpcomingSeason`, `EmptyState.detail`); fixed i18n strings (not admin-configurable). +0 reads / writes / listeners. |
 | 6 Nov 2026 | **Phase 2 plans** (`docs/phase2-plans`, docs only) | ADR-056: `docs/plans/phase2/` — README (architecture, data contract, cost, decisions; revised 6 Nov 19:31–19:35: scheduled-only sender, event pushes, «ذكّرني» reminders, local verse + Katameros, keep-alive; owner decisions 19:57: APKs on a separate public releases repo, Katameros Arabic text + English refs only), HANDOFF (workflow, stacked chain, merge procedure), STATUS (checklists), PR A–E plans, LAUNCH-AND-OPERATIONS (consoles, keystore, user guidance, privacy, device tests, rollback, monitoring, runbook, launch day). No code. |
+| 7 Nov 2026 | **PR A** — "Install banner, sideload guide, notification preferences & reminders foundation" (`feat/p2a-install-prefs`) | ADR-057: `InstallBanner` (Android APK / PWA, iOS sheet), `ApkInstallGuide` 5-step modal, `/notifications` preferences page with channel-owner model, `RemindMeButton` + «تذكيراتي» list, `ReminderStore`, admin «التطبيق والإشعارات», rules for 18 new fields on `settings/features`. +0 Firestore reads / writes for visitors. |
 | 7 Nov 2026 | **PR B** — "Android APK, local notifications, Katameros readings, OEM battery diagnostics, in-app update" (`feat/p2b-android-local-notifications`) | ADR-058: Split APKs (arm64 + arm32) with R8 minification and core library desugaring; rolling 9-day local notification planner with exact alarms and replenishment worker; Katameros pipeline (`tool/fetch_readings.js`, `/readings/<date>`); OEM battery guide & diagnostics (`/notifications/battery`); in-app updater (Range resume, SHA-256 verification, FileProvider install); Android shell (PopScope double-back exit, SharedPreferences language store, Assistant web redirect). +0 Firestore reads/writes. |
 | 8 Nov 2026 | **PR (fix/mobile-chrome-perf)** — "Mobile APK scroll performance, cream launch screen, single back arrow" (`fix/mobile-chrome-perf`) | ADR-062: `heroAmbientLoopAllowed` halts continuous ambient canvas repaints on Android APK (`INV-PERF-01`) while keeping hardware-decoded hero video; native launch screen `#FBF3E4` cream across API 21–34+ (`INV-SPLASH-01`); single back arrow on mobile viewports (`INV-NAV-01`, `INV-NAV-02`); `ItemDetailPage` `_BackLink` guarded by `shellIsWide(context)`; `NotificationHealthPage` adopts `PageBody` + `PageHeader` with dedicated deferred string table `notificationHealthStrings`; `parentRouteOf('/notifications/battery')` routes to `/notifications`. +0 Firestore reads/writes/rules. |
+| 8 Nov 2026 | **PR C** — "Admin notification manager, Cloudflare Worker FCM sender & deep links" (`feat/p2c-notification-manager`) | ADR-059: 6 notification types with templates and times in `/admin`; scheduled pushes manager (CRUD ≤ 20 rows, non-sending deletable, retry clone); `reminderSources` gating; persistent 8-char `DayEvent.id` with NFC SHA-1 fallback; Cloudflare Worker cron-only FCM sender (`*/15 * * * *`, Spark-safe ~197 reads/day) + Node 22 fallback; Android FCM background handler, 100-nid ring buffer, `event:X` slot sharing, safe deep links. |
+| 9 Nov 2026 | **PR D** — "Web push, installed iPhone PWA & web reminder planner" (`feat/p2d-web-push`) | ADR-060: Zero-overhead Web Push for Safari iOS 16.4+ installed PWA and desktop/Android browsers; RFC 5545 `.ics` and Google Calendar export; Cloudflare Worker 3-cron pipeline (queue drain, reminder planner, condition FCM sender) with L2 KV token cache; additive Firestore rules for `push_queue`, `meta/push_rate`, `meta/push_topics`, `meta/push_plan`; plain vanilla SW with quiet hours and 30-item inbox; deferred `WebPushRepository` with HTTP Date sync; admin web push health cards. |
 
 <!-- Append new PRs to this table. -->
