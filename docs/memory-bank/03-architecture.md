@@ -61,7 +61,9 @@ lib/
     notify_plan.dart        PlannedNotification, notificationIdFor, buildNotificationPlan (rolling 9-day
                             window, verse/katameros/feasts, quiet hours, <= 80 alarms), needsReplenishment — ADR-058
     push.dart               NotifyTypeSpec, NotifyConfig, ScheduledNotification, TopicSendState, RowSendStatus,
-                            SentEntry, SenderHealth, NotifySchedule, safeNotificationLink — ADR-059
+                            SentEntry, SenderHealth, NotifySchedule, safeNotificationLink, topicKey, isValidWebReminderTopic,
+                            WebTopicPlan, computeWebTopicSync, WebInboxItem — ADR-059, ADR-060
+    calendar_ics.dart       buildReminderIcs (pure-Dart RFC 5545 .ics generator, Cairo TZID weekly RRULE, VALARM, 75-octet line folding), singleCalendarUrl — ADR-060
     oem_guide.dart          OemBrand, detectOemBrand (Xiaomi/Oppo/Vivo/Huawei/Samsung), OemActionInfo,
                             oemIntentTryList, getOemSteps — ADR-058
     app_update.dart         ApkManifest, UpdateDecision, checkForUpdate, shouldForceUpdate — ADR-058
@@ -80,6 +82,7 @@ lib/
                             and image_codec_io.dart (`image` package, JPEG) via conditional import
     local_notifications*.dart LocalNotifier, PlatformLocalNotifier (flutter_local_notifications wrapper, channels, exact alarms) — ADR-058
     push_messaging*.dart    PushMessaging (conditional imports: io = FirebaseMessaging background handler + 100-nid ring buffer + event:X slot sharing; stub/web = no-op) — ADR-059
+    web_push_repository.dart WebPushRepository (deferred chunk, push_queue batch writes with meta/push_rate throttle, 4-step retry with HTTP Date sync, unsubscribeAll) — ADR-060
     readings_store.dart     ReadingsStore (local caching of /data/readings/<date>.json, offline reading fallback, prune) — ADR-058
     app_updater*.dart       AppUpdater, PlatformAppUpdater (resumable streaming download, Range resume, SHA-256 validation, FileProvider install) — ADR-058
   state/providers.dart      all Riverpod providers (see below)

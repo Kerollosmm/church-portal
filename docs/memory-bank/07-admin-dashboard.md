@@ -208,7 +208,9 @@ Two tabs: «الإشعارات» (`NotificationsAdminSection`, kept alive across
 (`ChurchInfoScreen` over `appSettingsDoc`). The notifications tab is one list of cards, Arabic first:
 1. **Status** — master switch (`push`) with on/off explanation and a «متوقفة» banner; sender health from
    `health.lastRunAt` in plain words: ok (≤ 1 h, «آخر فحص منذ …» in Cairo time), late (> 1 h), stopped (> 3 h or
-   `status: error`), never run (no stamp — neutral, not red).
+   `status: error`), never run (no stamp — neutral, not red). Since ADR-060: web push subscriber stats from
+   `meta/push_topics` (`activeSubscribers`), web reminder planner status from `meta/push_plan` (upcoming reminder topics
+   count and next service time in Cairo), and daily broadcast cap warning banner when 16/16 sends are used.
 2. **Scheduled announcements** (`schedule`, ≤ 20) — numbered 5-step editor: Arabic title + body (both required, as
    the rules and `parseScheduleRow` require), English optional (collapsed); «في أقرب وقت» or Cairo date + time
    (default tomorrow 09:00; past times refused); targets «الجميع / تطبيق أندرويد فقط / المتصفح و iPhone فقط»;
@@ -225,7 +227,9 @@ Two tabs: «الإشعارات» (`NotificationsAdminSection`, kept alive across
    confirmation. Announcements have no template (their text is written per announcement). Only modified types are
    stored in `notifyTypes`.
 4. **«ذكّرني»** — source switches (`reminderSources`, stored in the fixed order `lit,mtg,day`), 1–4 lead chips
-   (inline note on the limit, not a snack bar that would cover the save bar), default lead.
+   (inline note on the limit, not a snack bar that would cover the save bar), default lead. Since ADR-060:
+   informational notice on web reminder delivery delay («تنبيهات المتصفح تعتمد على جدول الخادم كل ربع ساعة...»)
+   recommending 15–30 min lead times.
 5. **Sent log** — last 30 entries with Cairo time, kind (announcement / automatic season alert) and a result chip;
    owner-only clear with confirmation.
 6. **Technical settings** (collapsed) — VAPID key with where to find it and format validation.

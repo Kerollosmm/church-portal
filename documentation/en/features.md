@@ -220,3 +220,14 @@ This document provides a comprehensive, feature-by-feature manual for all 31 cap
   - **Android FCM Client Guard & Slot Sharing (`push_messaging_io.dart`):** Background handler dropping local-owned types (`verse_daily`, `katameros_daily`, `feasts`, `reminders`) to prevent duplicate native alarms. 100-item persistent `seen_nids` ring buffer in `SharedPreferences`. Grouped notification display (`event:X`) within ±60m window.
   - **Firestore Rules Economy:** `settings/notifications` restricted to admin with create/update validation on `schedule` rows. `settings/features` uses gated validation behind `changed.hasAny` to stay well below the 1,000-expression cap on whole-document saves.
   - **Persistent `DayEvent.id`:** 17th field in `DayEvent.storedKeys` (`[a-z0-9]{8,10}`) with NFC-normalized SHA-1 prefix fallback for legacy rows (`DayEvent.computeHashId`), ensuring parity across Dart and JS runtimes without index-based fallbacks.
+
+### 33. Web Push, Installed iPhone PWA & Web Reminder Planner (ADR-060)
+- **Zero Casual Visitor Overhead:** 0 bytes Firebase Messaging JS, no push service worker registered on normal visits, deferred bundle loading (`web_push_repository.dart` loaded via `deferred as web_push`).
+- **Safari iOS 16.4+ PWA Support:** `manifest.json` configured with `"id": "/"` and `"scope": "/"`, monochrome badge (`badge-72.png`), and standalone display mode. On iOS Safari in a browser tab, `/notifications` displays an install-first guide card explaining that iOS requires adding the app to the Home Screen before Web Push notifications can be received.
+- **In-App Browser Detection:** Detects embedded WebViews (Facebook, Instagram, Telegram) and renders an alert with a one-tap "Copy Link" button and Safari/Chrome open guidance.
+- **Focus Mode & Quiet Hours:** Plain service worker (`firebase-messaging-sw.js`) respects overnight quiet hours by adding `silent: true` without dropping notifications, ensuring compliance with WebKit's background push termination policy.
+- **Web Reminder Planner & Condition FCM Reminders:**
+  - `ReminderSheet` clamps leads with `isWebLeadTooSoon` (40-minute minimum window on web) and displays honest delay copy plus alternative Google Calendar and RFC 5545 `.ics` export options with `VALARM` and Cairo wall-time `RRULE`.
+  - Cloudflare Worker Cron 3 compiles active weekly liturgies, meetings, and special day events into `meta/push_plan`.
+  - Cloudflare Worker Cron 1 sends due reminders with FCM boolean topic conditions (`'web_rem_...' in topics && !('app_...' in topics)`) so Android native devices never receive duplicate FCM reminders for local alarms.
+- **IndexedDB Web Inbox:** Plain service worker stores incoming notifications in IndexedDB (max 30 items) with a visible notification guarantee. Visitors can view past notifications on `/notifications` and clear inbox history.

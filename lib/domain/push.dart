@@ -1,7 +1,9 @@
 // Domain logic for notification types, channels, topics, preferences, and safety (ADR-057).
 // Pure Dart: no Flutter / web imports, so it is fully unit-tested.
 
+import 'cairo_time.dart';
 import 'features.dart' show FeatureSettings;
+import 'reminders.dart' show Reminder, isoDate;
 
 /// Notification category offered to users.
 enum NotifyType {
@@ -172,13 +174,37 @@ String topicFor(NotifyType type, String lang, String platform) {
   return '${prefix}_${type.name}_$normalizedLang';
 }
 
+/// Canonical topic key for an event key (ADR-060).
+///
+/// Lowercases [rawEventKey], replaces characters outside `[a-z0-9-]` with `-`,
+/// validates known prefixes `(lit|meeting|day|season)-`, and truncates the ID part
+/// after `<prefix>-` to at most 40 characters (`{1,40}`). If prefix is invalid
+/// or ID part is empty, returns `''`.
+String topicKey(String rawEventKey) {
+  final s = rawEventKey.trim().toLowerCase().replaceAll(RegExp(r'[^a-z0-9-]'), '-');
+  final match = RegExp(r'^(lit|meeting|day|season)-(.+)$').firstMatch(s);
+  if (match == null) return '';
+  final prefix = match.group(1)!;
+  final rawId = match.group(2)!;
+  final cleanId = rawId.replaceAll(RegExp(r'[^a-z0-9-]'), '-');
+  if (cleanId.isEmpty) return '';
+  final truncatedId = cleanId.length > 40 ? cleanId.substring(0, 40) : cleanId;
+  return '$prefix-$truncatedId';
+}
+
+/// Single-topic validator matching the exact firestore.rules reminder topic schema.
+final _webReminderTopicRegex = RegExp(
+  r'^web_rem_(lit|meeting|day|season)-[a-z0-9-]{1,40}(_[0-9]{8})?_(0|5|10|15|30|60|120|180|1440)_(ar|en)$',
+);
+
+/// Whether [topic] is a syntactically valid Web Push reminder topic.
+bool isValidWebReminderTopic(String topic) => _webReminderTopicRegex.hasMatch(topic);
+
 /// Generates the dynamic per-event topic name for user event reminders on the web.
 ///
 /// Format:
 /// - Single occurrence: `web_rem_<eventKey>_<YYYYMMDD>_<lead>_<lang>`
 /// - Every time (recurring): `web_rem_<eventKey>_<lead>_<lang>`
-///
-/// Guaranteed to match FCM topic naming constraints: `[a-zA-Z0-9-_.~%]+`.
 String reminderTopic({
   required String eventKey,
   String? occurrence,
@@ -186,19 +212,36 @@ String reminderTopic({
   required String lang,
   bool every = false,
 }) {
-  final cleanKey = eventKey.replaceAll(RegExp(r'[^a-zA-Z0-9-_.~%]'), '-');
+  final tKey = topicKey(eventKey);
+  final cleanKey = tKey.isNotEmpty
+      ? tKey
+      : eventKey.trim().toLowerCase().replaceAll(RegExp(r'[^a-z0-9-]'), '-');
   final normalizedLang = lang.trim().toLowerCase() == 'en' ? 'en' : 'ar';
 
   if (every || occurrence == null || occurrence.trim().isEmpty) {
     return 'web_rem_${cleanKey}_${lead}_$normalizedLang';
   }
 
-  // FCM topics allow [a-zA-Z0-9-_.~%]; occurrences are ISO dates
-  // (2027-04-30 -> 20270430). Anything else (slashes, ':' of a timestamp)
-  // is dropped so the topic stays valid.
-  final cleanOcc = occurrence.replaceAll(RegExp(r'[^a-zA-Z0-9_.~%]'), '');
+  // Normalizes occurrence to 8-digit date YYYYMMDD.
+  final digits = occurrence.replaceAll(RegExp(r'\D'), '');
+  final cleanOcc = digits.length >= 8 ? digits.substring(0, 8) : digits;
+  if (cleanOcc.isEmpty) {
+    return 'web_rem_${cleanKey}_${lead}_$normalizedLang';
+  }
   return 'web_rem_${cleanKey}_${cleanOcc}_${lead}_$normalizedLang';
 }
+
+/// Minimum advance window for Web Push reminders (40 minutes).
+const Duration kWebReminderMinWindow = Duration(minutes: 40);
+
+/// Whether a web reminder lead fires too soon from [now] (< 40 minutes ahead).
+bool isWebLeadTooSoon({
+  required DateTime startsAt,
+  required int lead,
+  required DateTime now,
+  Duration minWindow = kWebReminderMinWindow,
+}) =>
+    startsAt.subtract(Duration(minutes: lead)).isBefore(now.add(minWindow));
 
 /// Allowed lead choices in minutes before an event.
 const allowedReminderLeads = [0, 5, 10, 15, 30, 60, 120, 180, 1440];
@@ -339,9 +382,8 @@ class PushSettings {
       );
 }
 
-/// Flipped to `true` by PR D (web push delivery). Until then no permission
-/// prompt is shown (ADR-057).
-const bool kPushDeliveryShipped = false;
+/// Flipped to `true` by PR D (web push delivery, ADR-060).
+const bool kPushDeliveryShipped = true;
 
 /// Visitor's quiet hours specification. Stored with the visitor's prefs so
 /// PR B / PR D can honour it; there is no quiet-hours UI in PR A (plan: it
@@ -1258,5 +1300,145 @@ class NotifySchedule {
       eventKey: src.eventKey,
     );
   }
+}
+
+/// Represents the computed Web Push topic plan to sync to Firestore `push_queue`.
+class WebTopicPlan {
+  final List<String> want;
+  final String rem;
+  final String drop;
+  final String? prevToken;
+
+  const WebTopicPlan({
+    required this.want,
+    this.rem = '',
+    this.drop = '',
+    this.prevToken,
+  });
+
+  Map<String, dynamic> toQueueData({
+    required String token,
+    required dynamic serverTimestamp,
+  }) {
+    final data = <String, dynamic>{
+      'token': token,
+      'want': want,
+      'createdAt': serverTimestamp,
+    };
+    if (prevToken != null && prevToken!.isNotEmpty) {
+      data['prevToken'] = prevToken;
+    }
+    if (rem.isNotEmpty) {
+      data['rem'] = rem;
+    }
+    if (drop.isNotEmpty) {
+      data['drop'] = drop;
+    }
+    return data;
+  }
+}
+
+/// Computes the Web Push topic synchronization plan based on current preferences,
+/// reminders, and previously held reminder topics (ADR-060).
+WebTopicPlan computeWebTopicSync({
+  required PushPrefs prefs,
+  required List<Reminder> currentReminders,
+  required Set<String> previousRemTopics,
+  required DateTime now,
+  String? currentToken,
+  String? previousSyncedToken,
+}) {
+  final lang = prefs.lang.trim().toLowerCase() == 'en' ? 'en' : 'ar';
+
+  // 1. Fixed web topics: announcements and seasons only (max 2)
+  final want = <String>[];
+  if (prefs.types.contains(NotifyType.announcements)) {
+    want.add('web_announcements_$lang');
+  }
+  if (prefs.types.contains(NotifyType.seasons)) {
+    want.add('web_seasons_$lang');
+  }
+
+  // 2. Reminder topics (max 30)
+  final currentRemTopics = <String>{};
+  if (prefs.types.contains(NotifyType.reminders)) {
+    for (final r in currentReminders) {
+      if (r.isExpired(now)) continue;
+      // Critical catch: weekly liturgy/meeting call sites pass occurrence: null even
+      // when selecting «هذه المرة فقط» (r.every == false).
+      final effectiveOcc = r.every
+          ? null
+          : (r.occurrence ?? isoDate(CairoTime.fromInstant(r.startsAt)));
+      final topic = reminderTopic(
+        eventKey: r.eventKey,
+        occurrence: effectiveOcc,
+        lead: r.lead,
+        lang: lang,
+        every: r.every,
+      );
+      if (isValidWebReminderTopic(topic)) {
+        currentRemTopics.add(topic);
+        if (currentRemTopics.length >= 30) break;
+      }
+    }
+  }
+
+  // 3. Drop topics: previously held reminder topics no longer wanted (capped at 30)
+  final dropTopics = previousRemTopics
+      .difference(currentRemTopics)
+      .where(isValidWebReminderTopic)
+      .take(30)
+      .toList();
+
+  final prevToken = (previousSyncedToken != null &&
+          previousSyncedToken.isNotEmpty &&
+          previousSyncedToken != currentToken)
+      ? previousSyncedToken
+      : null;
+
+  return WebTopicPlan(
+    want: want,
+    rem: currentRemTopics.join(','),
+    drop: dropTopics.join(','),
+    prevToken: prevToken,
+  );
+}
+
+/// A notification item displayed in the Web Push notification history / inbox.
+class WebInboxItem {
+  final String nid;
+  final String title;
+  final String body;
+  final String link;
+  final DateTime receivedAt;
+
+  const WebInboxItem({
+    required this.nid,
+    required this.title,
+    required this.body,
+    required this.link,
+    required this.receivedAt,
+  });
+
+  factory WebInboxItem.fromJson(Map<String, dynamic> json) {
+    final rawLink = json['link'] as String? ?? '/';
+    return WebInboxItem(
+      nid: json['nid'] as String? ?? '',
+      title: json['title'] as String? ?? '',
+      body: json['body'] as String? ?? '',
+      link: safeNotificationLink(rawLink),
+      receivedAt: json['receivedAt'] != null
+          ? DateTime.tryParse(json['receivedAt'].toString()) ?? DateTime.now()
+          : DateTime.now(),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'nid': nid,
+        'title': title,
+        'body': body,
+        'link': link,
+        'receivedAt': receivedAt.toIso8601String(),
+      };
 }
 

@@ -81,6 +81,24 @@ class _FakePushEnv extends PushEnv {
     shown++;
     return true;
   }
+  @override
+  Future<String?> enableAndGetToken({required String vapidKey, required Map<String, dynamic> firebaseConfig}) async => 'test_token';
+  @override
+  Future<String?> getWebToken({required String vapidKey, required Map<String, dynamic> firebaseConfig}) async => 'test_token';
+  @override
+  Future<bool> deleteWebToken({required Map<String, dynamic> firebaseConfig}) async => true;
+  @override
+  Future<bool> showSwTestNotification({String? title, String? body, String? link}) async => true;
+  @override
+  Future<List<WebInboxItem>> readInbox() async => const [];
+  @override
+  Future<bool> clearInbox() async => true;
+  @override
+  Future<bool> syncQuietHours({required bool enabled, required String start, required String end}) async => true;
+  @override
+  Stream<String> get deepLinks => const Stream.empty();
+  @override
+  Stream<WebInboxItem> get inboxEvents => const Stream.empty();
 }
 
 Widget _app(Widget child, {Locale locale = const Locale('ar'), double textScale = 1.0}) => MaterialApp(

@@ -34,6 +34,24 @@ class FakeTestPushEnv implements PushEnv {
 
   @override
   Future<bool> showLocalNotification(String title, String body, {String? icon, String? link}) async => true;
+  @override
+  Future<String?> enableAndGetToken({required String vapidKey, required Map<String, dynamic> firebaseConfig}) async => 'test_token';
+  @override
+  Future<String?> getWebToken({required String vapidKey, required Map<String, dynamic> firebaseConfig}) async => 'test_token';
+  @override
+  Future<bool> deleteWebToken({required Map<String, dynamic> firebaseConfig}) async => true;
+  @override
+  Future<bool> showSwTestNotification({String? title, String? body, String? link}) async => true;
+  @override
+  Future<List<WebInboxItem>> readInbox() async => const [];
+  @override
+  Future<bool> clearInbox() async => true;
+  @override
+  Future<bool> syncQuietHours({required bool enabled, required String start, required String end}) async => true;
+  @override
+  Stream<String> get deepLinks => const Stream.empty();
+  @override
+  Stream<WebInboxItem> get inboxEvents => const Stream.empty();
 }
 
 class FakeTestInstallEnv implements InstallEnv {
@@ -235,7 +253,7 @@ void main() {
     expect(find.textContaining('٠٥:٠٠'), findsNothing);
   });
 
-  testWidgets('enable button stays disabled with «قريبًا» even with a VAPID key (no delivery until PR D)', (tester) async {
+  testWidgets('enable button is enabled with valid VAPID key in PR D and triggers enableAndGetToken', (tester) async {
     final pushEnv = FakeTestPushEnv(permission: 'default');
     await tester.pumpWidget(buildTestable(
       child: const NotificationsPage(isWeb: true),
@@ -249,13 +267,14 @@ void main() {
     ));
     await tester.pumpAndSettle();
 
-    final button = tester.widget<ButtonStyleButton>(find.ancestor(
+    final buttonFinder = find.ancestor(
       of: find.text('تفعيل الإشعارات'),
       matching: find.byWidgetPredicate((w) => w is ButtonStyleButton),
-    ));
-    expect(button.onPressed, isNull);
-    expect(find.textContaining('قريبًا'), findsWidgets);
-    expect(pushEnv.requestCalls, 0);
+    );
+    final button = tester.widget<ButtonStyleButton>(buttonFinder);
+    expect(button.onPressed, isNotNull);
+    await tester.tap(buttonFinder);
+    await tester.pump();
   });
 
   testWidgets('installed iPhone on iOS < 16.4 gets the update card; the app build is never "enabled"', (tester) async {

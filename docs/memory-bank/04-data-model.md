@@ -422,6 +422,29 @@ alphanumerics) did not exist before the write and exists after it, and the messa
 `getAfter(meta/contact_rate).lastMsgId == its id`, so the throttle can never be bumped on its own (SEC-01). Nobody
 can read or delete it. Older live docs without `lastMsgId` are simply replaced by the next valid submission.
 
+### `push_queue/{id}` (ADR-060)
+Batch-written queue doc created by web clients subscribing or unsubscribing to push topics.
+- Fields:
+  - `token`: FCM registration token (`^[a-zA-Z0-9:_-]{20,400}$`).
+  - `want`: list of general topics (`web_announcements_ar`, `web_announcements_en`, `web_seasons_ar`, `web_seasons_en`).
+  - `rem`: list of reminder topics, comma-separated string (`<= 2600` chars), max 30 topics matching `remList()`.
+  - `drop`: list of dropped reminder topics, comma-separated string (`<= 2600` chars), max 30 topics matching `remList()`.
+  - `prevToken`: optional previous token for rotation.
+  - `retries`: integer (initially 0).
+  - `createdAt`: server timestamp (`== request.time`).
+- Rules: create-only, read/update/delete denied to all clients. Verified against `meta/push_rate` in the same batch.
+- Drained every 15 min by Cloudflare Worker Cron 2 via Google IID REST.
+
+### `meta/push_rate` (ADR-060)
+Rate throttle doc for `push_queue` batch writes:
+- Fields: `{lastAt: timestamp, count: int, day: int, lastId: string}`.
+- Rules: 3-second throttle (`request.time > resource.data.lastAt + duration.value(3, 's')`), UTC integer day, count capped at 1000/day. Read/delete denied to all clients.
+
+### `meta/push_topics` & `meta/push_plan` (ADR-060)
+- `meta/push_topics`: topic subscriber counts and health stats, written by Cloudflare Worker Cron 2 (Google IID queue drain).
+- `meta/push_plan`: computed schedule of upcoming reminder topics, written by Cloudflare Worker Cron 3 (reminder planner).
+- Rules: read-only for `isAdmin()`, client writes denied.
+
 ### `admins/{uid}`
 `{email: string (≤254, required), role: 'owner' | 'editor'}` (+ optional `updatedAt/updatedBy`, checked by
 `stampOk` since PR 1).

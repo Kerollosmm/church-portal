@@ -33,6 +33,9 @@ jobs:
       - name: Unit tests
         run: flutter test
 
+      - name: Tool and Web JS tests
+        run: node --test web/*.test.mjs tool/*.test.mjs
+
       - name: Build web (release)
         # Not deployed: tagged `ci` so a crash while testing this build is
         # never mistaken for production (Sentry, ADR-034).

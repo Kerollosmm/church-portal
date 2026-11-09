@@ -608,3 +608,15 @@ digits, Cairo `02` + 8, Alexandria `03` + 7, other governorates `0[4-9]` + 7–8
 - **Cloudflare Worker sender:** Runs cron `*/15 * * * *`, queries `settings/notifications` via `:batchGet`, claims due rows, mints RS256 JWT, sends up to 16 FCM messages within ≤ 25 subrequests, and commits delivery status. Spark quota protected (~197 reads/day).
 - **Client FCM guard:** Android client background handler drops any incoming FCM notification matching local types to eliminate duplicates, uses a 100-item ring buffer for idempotency, shares `event:X` notification slots within ±60 minutes, and routes taps via `safeNotificationLink`.
 
+### Web Push, Installed iPhone PWA & Web Reminder Planner (ADR-060)
+- **Zero casual visitor overhead:** Zero bytes Firebase Messaging JS, no push service worker registered on normal visits, deferred bundle loading (`web_push_repository.dart` loaded via `deferred as web_push`).
+- **Safari iOS 16.4+ PWA support:** `manifest.json` configured with `"id": "/"` and `"scope": "/"`, monochrome badge (`badge-72.png`), and standalone display mode. On iOS Safari in a browser tab, `/notifications` displays an install-first guide card explaining that iOS requires adding the app to the Home Screen before Web Push notifications can be received.
+- **In-App Browser detection:** Detects embedded WebViews (Facebook, Instagram, Telegram) and renders a prominent warning with a one-tap «نسخ الرابط» (Copy link) button and Safari/Chrome open guidance.
+- **Focus mode & quiet hours:** Plain service worker (`firebase-messaging-sw.js`) respects overnight quiet hours by adding `silent: true` without dropping notifications, ensuring compliance with WebKit's background push termination policy.
+- **Web Reminder Planner & Condition FCM Reminders:**
+  - `ReminderSheet` clamps leads with `isWebLeadTooSoon` (40-minute minimum window on web) and displays honest delay copy («قد يصل التنبيه قبل الموعد بـ ١٥ دقيقة أو بعده بقليل حسب جدول الخادم») plus alternative Google Calendar and RFC 5545 `.ics` export options.
+  - Zero-lead ("at service time") triggers a warning badge explaining server cron latency.
+  - Cloudflare Worker Cron 3 compiles active weekly liturgies, meetings, and special day events into `meta/push_plan`.
+  - Cloudflare Worker Cron 1 sends due reminders with FCM boolean topic conditions (`'web_rem_...' in topics && !('app_...' in topics)`) so Android native devices are never sent duplicate FCM reminders for local alarms.
+- **IndexedDB Web Inbox:** Plain service worker stores incoming notifications in IndexedDB (max 30 items) with a visible notification guarantee. Visitors can view past notifications on `/notifications` and clear inbox history.
+

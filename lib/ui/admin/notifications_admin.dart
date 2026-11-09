@@ -137,6 +137,29 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
   final Set<String> _reminderSources = {'lit', 'mtg', 'day'};
   final Map<NotifyType, Map<String, TextEditingController>> _typeCtrls = {};
 
+  Map<String, dynamic>? _topicsMeta;
+  Map<String, dynamic>? _planMeta;
+
+  Future<void> _loadWebHealth() async {
+    try {
+      final tDoc = await widget.repo.watchDoc('meta/push_topics').first.timeout(const Duration(seconds: 4));
+      final pDoc = await widget.repo.watchDoc('meta/push_plan').first.timeout(const Duration(seconds: 4));
+      if (mounted) {
+        setState(() {
+          _topicsMeta = tDoc?.data;
+          _planMeta = pDoc?.data;
+        });
+      }
+    } catch (_) {}
+  }
+
+  DateTime? _asDateTime(dynamic v) {
+    if (v is DateTime) return v;
+    if (v is String) return DateTime.tryParse(v);
+    if (v is int) return DateTime.fromMillisecondsSinceEpoch(v, isUtc: true);
+    return null;
+  }
+
   // ---- scheduled announcement editor ----
   bool _editorOpen = false;
   bool _editingExisting = false;
@@ -176,6 +199,7 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
     for (final c in [_draftTitleAr, _draftTitleEn, _draftBodyAr, _draftBodyEn]) {
       c.addListener(_onDraftChanged);
     }
+    _loadWebHealth();
   }
 
   void _onDraftChanged() {
@@ -870,6 +894,51 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
             ]),
           ),
         ]),
+        const Divider(height: 24),
+        Text(context.tr('nm_webHealthTitle'), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: context.pal.primaryDeep)),
+        const SizedBox(height: 8),
+        Builder(builder: (context) {
+          final drainAt = _asDateTime(_topicsMeta?['lastDrainAt']);
+          final drainError = _topicsMeta?['lastIidError'] as String?;
+          final drainAge = drainAt == null ? null : DateTime.now().toUtc().difference(drainAt);
+          final (Color drainColor, String drainText) = switch (drainAge) {
+            null => (context.pal.muted, context.tr('nm_webHealthDrainNever')),
+            final a when a > const Duration(minutes: 45) || (drainError != null && drainError.isNotEmpty) =>
+              (context.pal.goldText, context.tr('nm_webHealthDrainLate')),
+            _ => (context.pal.success, context.tr('nm_webHealthDrainOk')),
+          };
+
+          final planAt = _asDateTime(_planMeta?['lastPlanAt']);
+          final capReached = _planMeta?['capReached'] == true;
+          final planAge = planAt == null ? null : DateTime.now().toUtc().difference(planAt);
+          final (Color planColor, String planText) = switch (planAge) {
+            null => (context.pal.muted, context.tr('nm_webHealthPlanNever')),
+            final a when a > const Duration(hours: 7) =>
+              (context.pal.goldText, context.tr('nm_webHealthPlanLate')),
+            _ => (context.pal.success, context.tr('nm_webHealthPlanOk')),
+          };
+
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(children: [
+                Icon(drainColor == context.pal.success ? Icons.check_circle_outline : Icons.warning_amber_outlined, color: drainColor, size: 18),
+                const SizedBox(width: 8),
+                Expanded(child: Text(drainText, style: TextStyle(color: drainColor, fontSize: 13))),
+              ]),
+              const SizedBox(height: 6),
+              Row(children: [
+                Icon(planColor == context.pal.success ? Icons.check_circle_outline : Icons.warning_amber_outlined, color: planColor, size: 18),
+                const SizedBox(width: 8),
+                Expanded(child: Text(planText, style: TextStyle(color: planColor, fontSize: 13))),
+              ]),
+              if (capReached) ...[
+                const SizedBox(height: 8),
+                _banner(context, icon: Icons.warning_amber_rounded, color: context.pal.alert, text: context.tr('nm_webHealthCapBanner')),
+              ],
+            ],
+          );
+        }),
       ],
     );
   }
@@ -1559,6 +1628,8 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
           _banner(context, icon: Icons.info_outline, color: context.pal.goldText, text: context.tr('nm_remindersOff')),
           const SizedBox(height: 8),
         ],
+        _banner(context, icon: Icons.info_outline, color: context.pal.muted, text: context.tr('nm_webPlannerDelayNotice')),
+        const SizedBox(height: 12),
         Text(context.tr('reminderSourcesLabel'), style: const TextStyle(fontWeight: FontWeight.w600)),
         for (final s in sources)
           SwitchListTile(

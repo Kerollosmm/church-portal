@@ -443,3 +443,201 @@ describe('admin ↔ sender formats (PR #55)', () => {
     assert.equal(getSeasonsSpec({}).defaultLink, '/mass-schedule');
   });
 });
+
+describe('ADR-060: Web push delivery, condition format, and token caching', () => {
+  test('secondsUntilCairoEndOfDay calculates seconds with 300s floor', async () => {
+    const { secondsUntilCairoEndOfDay } = await import('./push_sender.js');
+    const midDay = new Date('2026-11-15T12:00:00Z').getTime();
+    const secs = secondsUntilCairoEndOfDay(midDay);
+    assert.ok(secs > 300, 'should be more than 300 seconds from noon');
+
+    // Right before midnight
+    const late = new Date('2026-11-15T21:59:58Z').getTime(); // 23:59:58 Cairo
+    assert.equal(secondsUntilCairoEndOfDay(late), 300, 'should enforce 300s floor');
+  });
+
+  test('sendFcmMessage injects webpush headers and supports condition', async () => {
+    let capturedBody = null;
+    const mockFetch = async (url, opts) => {
+      capturedBody = JSON.parse(opts.body);
+      return { ok: true, json: async () => ({ name: 'projects/p/messages/123' }) };
+    };
+
+    const target = { condition: "'web_rem_lit-sun1_60_ar' in topics || 'web_rem_lit-sun1_20261115_60_ar' in topics" };
+    const res = await sendFcmMessage(
+      'test-project',
+      'mock-token',
+      target,
+      {
+        nid: 'rem_123',
+        type: 'reminders',
+        lang: 'ar',
+        title: 'تذكير بالقداس',
+        body: 'القداس يبدأ قريبا',
+        link: '/liturgy/sun1',
+        eventKey: 'lit-sun1',
+        sentAt: '2026-11-15T06:00:00Z',
+        ttlSeconds: '1800',
+      },
+      mockFetch,
+    );
+
+    assert.equal(res.status, 'ok');
+    assert.equal(capturedBody.message.condition, target.condition);
+    assert.equal(capturedBody.message.topic, undefined);
+    assert.equal(capturedBody.message.webpush.headers.Urgency, 'high');
+    assert.equal(capturedBody.message.webpush.headers.TTL, '1800');
+    assert.equal(capturedBody.message.android.priority, 'high');
+  });
+
+  test('getCachedAccessToken utilizes L1 module cache and L2 PUSH_KV', async () => {
+    const { getCachedAccessToken, _resetL1TokenCacheForTesting } = await import('./firestore_rest.js');
+    const { generateKeyPairSync } = await import('node:crypto');
+    _resetL1TokenCacheForTesting();
+
+    const { privateKey } = generateKeyPairSync('rsa', {
+      modulusLength: 2048,
+      privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
+    });
+
+    const mockSa = {
+      client_email: 'kv-test@example.com',
+      private_key: privateKey,
+    };
+
+    let kvStore = new Map();
+    const env = {
+      PUSH_KV: {
+        get: async (k) => kvStore.get(k) || null,
+        put: async (k, v) => kvStore.set(k, JSON.parse(v)),
+      },
+    };
+
+    let fetchCount = 0;
+    const fakeFetch = async () => {
+      fetchCount++;
+      return new Response(JSON.stringify({ access_token: `token-${fetchCount}` }), { status: 200 });
+    };
+
+    const now = Date.now();
+    // 1. Initial call mints and populates L1 + L2
+    const tok1 = await getCachedAccessToken(mockSa, env, fakeFetch, now);
+    assert.equal(tok1, 'token-1');
+    assert.equal(fetchCount, 1);
+
+    // 2. Immediate call hits L1 cache (no fetch, no KV)
+    const tok2 = await getCachedAccessToken(mockSa, env, fakeFetch, now + 1000);
+    assert.equal(tok2, 'token-1');
+    assert.equal(fetchCount, 1);
+
+    // 3. Reset L1 to simulate new cold-start isolate: hits L2 PUSH_KV
+    _resetL1TokenCacheForTesting();
+    const tok3 = await getCachedAccessToken(mockSa, env, fakeFetch, now + 2000);
+    assert.equal(tok3, 'token-1');
+    assert.equal(fetchCount, 1); // Served from KV, zero network fetch!
+  });
+
+  test('runPushSender dispatches due web reminders with condition and stamps remindersSent', async () => {
+    const now = new Date('2026-11-15T07:00:00Z');
+    let capturedSends = [];
+    let patchedData = null;
+
+    const mockFetch = async (url, opts) => {
+      if (url.includes(':batchGet')) {
+        return {
+          ok: true,
+          text: async () =>
+            JSON.stringify([
+              {
+                found: {
+                  name: 'projects/p/databases/(default)/documents/settings/features',
+                  fields: { push: { booleanValue: true } },
+                },
+              },
+              {
+                found: {
+                  name: 'projects/p/databases/(default)/documents/settings/notifications',
+                  fields: {
+                    schedule: { arrayValue: { values: [] } },
+                    remindersSent: { mapValue: { fields: {} } },
+                  },
+                },
+              },
+              {
+                found: {
+                  name: 'projects/p/databases/(default)/documents/meta/push_plan',
+                  fields: {
+                    reminderPlan: {
+                      arrayValue: {
+                        values: [
+                          {
+                            mapValue: {
+                              fields: {
+                                tKey: { stringValue: 'lit-sun1' },
+                                serviceStartMs: { integerValue: String(now.getTime() + 60 * 60 * 1000) }, // 1 hour ahead
+                                leads: { arrayValue: { values: [{ integerValue: '60' }] } },
+                                languages: { arrayValue: { values: [{ stringValue: 'ar' }] } },
+                                titleAr: { stringValue: 'قداس الأحد' },
+                                titleEn: { stringValue: 'Sunday Liturgy' },
+                                bodyAr: { stringValue: 'يبدأ القداس بعد ساعة' },
+                                bodyEn: { stringValue: 'Liturgy starts in an hour' },
+                                yyyymmdd: { stringValue: '20261115' },
+                                link: { stringValue: '/liturgy/sun1' },
+                              },
+                            },
+                          },
+                        ],
+                      },
+                    },
+                  },
+                },
+              },
+              {
+                found: {
+                  name: 'projects/p/databases/(default)/documents/meta/push_topics',
+                  fields: {
+                    topics: {
+                      mapValue: {
+                        fields: {
+                          'web_rem_lit-sun1_60_ar': { booleanValue: true },
+                          'web_rem_lit-sun1_20261115_60_ar': { booleanValue: true },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            ]),
+        };
+      }
+      if (url.includes('fcm.googleapis.com')) {
+        const body = JSON.parse(opts.body);
+        capturedSends.push(body);
+        return { ok: true, json: async () => ({ name: 'msg/123' }) };
+      }
+      if (opts?.method === 'PATCH') {
+        patchedData = JSON.parse(opts.body);
+        return { ok: true, json: async () => ({ fields: {} }) };
+      }
+      return { ok: true, json: async () => ({}) };
+    };
+
+    const fakeSa = {
+      client_email: 'test@sa.test',
+      private_key: '-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQC3\n-----END PRIVATE KEY-----',
+    };
+
+    const res = await runPushSender(
+      { FIREBASE_SERVICE_ACCOUNT: JSON.stringify(fakeSa) },
+      { fetchImpl: mockFetch, now, mintToken: async () => 'mock-tok' },
+    );
+
+    assert.equal(res.status, 'success');
+    assert.equal(res.summary.remindersSent, 1);
+    assert.equal(capturedSends.length, 1);
+    assert.ok(capturedSends[0].message.condition.includes("'web_rem_lit-sun1_60_ar' in topics"));
+    assert.ok(capturedSends[0].message.condition.includes("'web_rem_lit-sun1_20261115_60_ar' in topics"));
+    assert.ok(patchedData.fields.remindersSent.mapValue.fields['lit-sun1:20261115:60:ar']);
+  });
+});
+

@@ -1,7 +1,9 @@
 {
     "name": "كنيسة القديسين مكسيموس ودوماديوس والقوي الأنبا موسى الأسود",
     "short_name": "كنيسة مكسيموس ودوماديوس",
+    "id": "/",
     "start_url": "/",
+    "scope": "/",
     "display": "standalone",
     "background_color": "#FBF3E4",
     "theme_color": "#470812",

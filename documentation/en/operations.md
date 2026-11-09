@@ -225,12 +225,17 @@ The native Android app is packaged as lightweight, split release APKs for maximu
 
 ---
 
-## 8. Scheduled Notification Sender & Cloudflare Worker (ADR-059)
+## 8. Scheduled Notification Sender & Cloudflare Worker (ADR-059 / ADR-060)
 
-The remote scheduled push delivery infrastructure runs as a pure Web-API Cloudflare Worker cron task (`*/15 * * * *`) delivering event notifications to FCM topics (`all`, `web`, `app`) without incurring Firestore or server maintenance costs.
+The remote scheduled push delivery infrastructure runs as a pure Web-API Cloudflare Worker with three scheduled crons defined in `wrangler.toml`:
+1. `*/15 * * * *` (Cron 1): Scheduled notification sender, daily seasons alert, and due reminder dispatch using FCM boolean conditions (`'web_rem_...' in topics && !('app_...' in topics)`).
+2. `7,22,37,52 * * * *` (Cron 2): Web push subscription queue drain (`push_queue`) via Google IID REST with subscriber health metrics written to `meta/push_topics`.
+3. `3 2,8,14,20 * * *` (Cron 3): Web reminder planner compiling active liturgies, meetings, and special day events into `meta/push_plan`.
 
-### Cloudflare Worker Configuration
-- **Cron Trigger:** Runs every 15 minutes (`*/15 * * * *`) without a public `POST /trigger` endpoint to prevent unauthorized invocation or quota drain.
+### Cloudflare Worker Configuration & KV Caching
+- **Cron Triggers:** 3 scheduled crons without a public `POST /trigger` endpoint to prevent unauthorized invocation or quota drain.
+- **KV Token Cache (`PUSH_KV`):** Uses Cloudflare KV storage to cache Google OAuth2 access tokens (L2 cache after L1 memory), reducing token minting to ~1 per hour.
+- **Worker Deployment:** Deployed via `npx wrangler deploy` (must be executed prior to merging into `dev` or `main`).
 - **Worker Secrets (`wrangler secret put <KEY>`):**
   - `FIREBASE_PROJECT_ID`: Firebase project ID (`asafra-church-portal`).
   - `FIREBASE_CLIENT_EMAIL`: Service Account email with FCM and Firestore read/write permissions.

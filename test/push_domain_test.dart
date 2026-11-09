@@ -1,4 +1,6 @@
+import 'package:church_portal/domain/cairo_time.dart';
 import 'package:church_portal/domain/features.dart';
+import 'package:church_portal/domain/reminders.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -287,6 +289,175 @@ void main() {
       expect(safeNotificationLink(null), '/');
       expect(safeNotificationLink(''), '/');
       expect(safeNotificationLink('   '), '/');
+    });
+  });
+
+  group('ADR-060: Web Push Domain & Sync Logic', () {
+    setUpAll(() {
+      CairoTime.ensureInitialized();
+    });
+
+    test('kPushDeliveryShipped is true', () {
+      expect(kPushDeliveryShipped, isTrue);
+    });
+
+    test('topicKey canonicalization and {1,40} length clamping', () {
+      // Valid prefixes
+      expect(topicKey('lit-sun1'), 'lit-sun1');
+      expect(topicKey('LIT-Sun1'), 'lit-sun1');
+      expect(topicKey('meeting-youth-123'), 'meeting-youth-123');
+      expect(topicKey('day-5d16df6bbc'), 'day-5d16df6bbc');
+      expect(topicKey('season-pascha'), 'season-pascha');
+
+      // Replaces non [a-z0-9-] with -
+      expect(topicKey('meeting-youth_group.sub%1'), 'meeting-youth-group-sub-1');
+
+      // Clamps ID portion to 40 chars
+      final longId = 'a' * 50;
+      final keyed = topicKey('lit-$longId');
+      expect(keyed, 'lit-${'a' * 40}');
+      expect(keyed.length, 44); // 'lit-' (4) + 40 = 44
+
+      // Invalid prefixes or empty id
+      expect(topicKey('unknown-123'), '');
+      expect(topicKey('app-lit-1'), '');
+      expect(topicKey('lit-'), '');
+      expect(topicKey(''), '');
+    });
+
+    test('isValidWebReminderTopic matches rule regex', () {
+      // Valid recurring topics
+      expect(isValidWebReminderTopic('web_rem_lit-sun1_60_ar'), isTrue);
+      expect(isValidWebReminderTopic('web_rem_meeting-youth-1_15_en'), isTrue);
+      expect(isValidWebReminderTopic('web_rem_season-pascha_1440_ar'), isTrue);
+      expect(isValidWebReminderTopic('web_rem_day-5d16df6bbc_0_en'), isTrue);
+
+      // Valid once-off topics with 8-digit date
+      expect(isValidWebReminderTopic('web_rem_lit-sun1_20261115_60_ar'), isTrue);
+      expect(isValidWebReminderTopic('web_rem_day-5d16df6bbc_20261115_15_en'), isTrue);
+
+      // Invalid: uppercase characters
+      expect(isValidWebReminderTopic('web_rem_lit-SUN1_60_ar'), isFalse);
+
+      // Invalid: bad prefix
+      expect(isValidWebReminderTopic('web_rem_other-123_60_ar'), isFalse);
+      expect(isValidWebReminderTopic('app_rem_lit-1_60_ar'), isFalse);
+
+      // Invalid: non-allowed lead
+      expect(isValidWebReminderTopic('web_rem_lit-1_7_ar'), isFalse);
+      expect(isValidWebReminderTopic('web_rem_lit-1_25_ar'), isFalse);
+
+      // Invalid: bad date format (not 8 digits)
+      expect(isValidWebReminderTopic('web_rem_lit-1_202611_60_ar'), isFalse);
+      expect(isValidWebReminderTopic('web_rem_lit-1_2026-11-15_60_ar'), isFalse);
+
+      // Invalid: suffix > 40 chars
+      expect(isValidWebReminderTopic('web_rem_lit-${'a' * 41}_60_ar'), isFalse);
+    });
+
+    test('isWebLeadTooSoon clamps lead firing within 40 minutes', () {
+      final now = DateTime.utc(2026, 11, 9, 10, 0); // 10:00
+
+      // Starts at 10:30 (in 30 min): lead 0 fires at 10:30 (< 10:40 -> too soon)
+      expect(isWebLeadTooSoon(startsAt: DateTime.utc(2026, 11, 9, 10, 30), lead: 0, now: now), isTrue);
+
+      // Starts at 11:00 (in 60 min): lead 30 fires at 10:30 (< 10:40 -> too soon)
+      expect(isWebLeadTooSoon(startsAt: DateTime.utc(2026, 11, 9, 11, 0), lead: 30, now: now), isTrue);
+
+      // Starts at 11:00: lead 15 fires at 10:45 (>= 10:40 -> not too soon)
+      expect(isWebLeadTooSoon(startsAt: DateTime.utc(2026, 11, 9, 11, 0), lead: 15, now: now), isFalse);
+
+      // Starts at 12:00: lead 60 fires at 11:00 (>= 10:40 -> not too soon)
+      expect(isWebLeadTooSoon(startsAt: DateTime.utc(2026, 11, 9, 12, 0), lead: 60, now: now), isFalse);
+    });
+
+    test('computeWebTopicSync computes want, rem, drop, prevToken and pre-filters invalid topics', () {
+      final now = CairoTime.at(2026, 11, 9, 10 * 60);
+      final prefs = PushPrefs(
+        types: {NotifyType.announcements, NotifyType.reminders},
+        lang: 'ar',
+        updatedAt: now,
+      );
+
+      final r1 = Reminder(
+        eventKey: 'lit-sun1',
+        occurrence: null,
+        lead: 60,
+        every: true, // recurring
+        title: const {'ar': 'قداس الأحد'},
+        startsAt: CairoTime.at(2026, 11, 15, 8 * 60),
+        createdAt: now,
+      );
+
+      final r2 = Reminder(
+        eventKey: 'meeting-youth',
+        occurrence: null,
+        lead: 15,
+        every: false, // weekly meeting call site passed occurrence: null with every: false
+        title: const {'ar': 'اجتماع الشباب'},
+        startsAt: CairoTime.at(2026, 11, 12, 19 * 60),
+        createdAt: now,
+      );
+
+      final r3Invalid = Reminder(
+        eventKey: 'custom-unsupported-event',
+        occurrence: '2026-11-12',
+        lead: 60,
+        every: false,
+        title: const {'ar': 'حدث خاص'},
+        startsAt: CairoTime.at(2026, 11, 12, 18 * 60),
+        createdAt: now,
+      );
+
+      final previousRemTopics = {
+        'web_rem_lit-sun1_60_ar',
+        'web_rem_day-old_20261101_15_ar',
+        'web_invalid_topic_to_drop', // Should be filtered out by isValidWebReminderTopic
+      };
+
+      final plan = computeWebTopicSync(
+        prefs: prefs,
+        currentReminders: [r1, r2, r3Invalid],
+        previousRemTopics: previousRemTopics,
+        now: now,
+        currentToken: 'new_token_123',
+        previousSyncedToken: 'old_token_000',
+      );
+
+      // want has announcements in Arabic only
+      expect(plan.want, ['web_announcements_ar']);
+
+      // rem has r1 (recurring: web_rem_lit-sun1_60_ar) and r2 (effectiveOcc: web_rem_meeting-youth_20261112_15_ar)
+      // r3Invalid is skipped because its topic fails isValidWebReminderTopic
+      expect(plan.rem.contains('web_rem_lit-sun1_60_ar'), isTrue);
+      expect(plan.rem.contains('web_rem_meeting-youth_20261112_15_ar'), isTrue);
+      expect(plan.rem.contains('custom-unsupported'), isFalse);
+
+      // drop has web_rem_day-old_20261101_15_ar (no longer wanted) and excludes web_invalid_topic_to_drop
+      expect(plan.drop, 'web_rem_day-old_20261101_15_ar');
+
+      // prevToken is passed because token changed
+      expect(plan.prevToken, 'old_token_000');
+    });
+
+    test('WebInboxItem json roundtrip and link normalization', () {
+      final item = WebInboxItem.fromJson({
+        'nid': 'ann-1',
+        'title': 'تنبيه جديد',
+        'body': 'نص التنبيه',
+        'link': 'https://malicious.com',
+        'receivedAt': '2026-11-09T10:00:00.000Z',
+      });
+
+      expect(item.nid, 'ann-1');
+      expect(item.title, 'تنبيه جديد');
+      expect(item.body, 'نص التنبيه');
+      expect(item.link, '/'); // normalized to safe root path
+      expect(item.receivedAt, DateTime.utc(2026, 11, 9, 10, 0));
+
+      final json = item.toJson();
+      expect(json['nid'], 'ann-1');
+      expect(json['link'], '/');
     });
   });
 }

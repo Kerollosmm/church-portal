@@ -1,0 +1,219 @@
+import 'dart:async';
+
+import 'package:flutter_test/flutter_test.dart';
+
+import 'package:church_portal/core/push_env.dart';
+import 'package:church_portal/data/web_push_repository.dart';
+import 'package:church_portal/domain/push.dart';
+import 'package:church_portal/domain/reminders.dart';
+
+class FakePushEnv implements PushEnv {
+  String _perm = 'granted';
+  String? tokenToReturn = 'test_token_123';
+  bool deleted = false;
+  final List<WebInboxItem> mockInbox = [];
+  bool quietSynced = false;
+
+  @override
+  bool get isSupported => true;
+
+  @override
+  String get permission => _perm;
+
+  void setPermission(String p) => _perm = p;
+
+  @override
+  Future<String> requestPermission() async => _perm;
+
+  @override
+  Future<bool> showLocalNotification(String title, String body, {String? icon, String? link}) async => true;
+
+  @override
+  Future<String?> enableAndGetToken({required String vapidKey, required Map<String, dynamic> firebaseConfig}) async =>
+      tokenToReturn;
+
+  @override
+  Future<String?> getWebToken({required String vapidKey, required Map<String, dynamic> firebaseConfig}) async =>
+      tokenToReturn;
+
+  @override
+  Future<bool> deleteWebToken({required Map<String, dynamic> firebaseConfig}) async {
+    deleted = true;
+    return true;
+  }
+
+  @override
+  Future<bool> showSwTestNotification({String? title, String? body, String? link}) async => true;
+
+  @override
+  Future<List<WebInboxItem>> readInbox() async => mockInbox;
+
+  @override
+  Future<bool> clearInbox() async {
+    mockInbox.clear();
+    return true;
+  }
+
+  @override
+  Future<bool> syncQuietHours({required bool enabled, required String start, required String end}) async {
+    quietSynced = true;
+    return true;
+  }
+
+  @override
+  Stream<String> get deepLinks => const Stream.empty();
+
+  @override
+  Stream<WebInboxItem> get inboxEvents => const Stream.empty();
+}
+
+void main() {
+  group('parseHttpDate', () {
+    test('parses standard RFC 1123 HTTP Date header', () {
+      final dt = parseHttpDate('Mon, 09 Nov 2026 12:34:56 GMT');
+      expect(dt, isNotNull);
+      expect(dt!.year, 2026);
+      expect(dt.month, 11);
+      expect(dt.day, 9);
+      expect(dt.hour, 12);
+      expect(dt.minute, 34);
+      expect(dt.second, 56);
+      expect(dt.isUtc, isTrue);
+    });
+
+    test('returns null for invalid or empty date', () {
+      expect(parseHttpDate(null), isNull);
+      expect(parseHttpDate(''), isNull);
+      expect(parseHttpDate('invalid-date'), isNull);
+    });
+  });
+
+  group('WebPushRepository', () {
+    test('enable calls pushEnv and saves token', () async {
+      final fakeEnv = FakePushEnv();
+      final repo = WebPushRepository(pushEnv: fakeEnv);
+
+      final token = await repo.enable(vapidKey: 'test_vapid');
+      expect(token, 'test_token_123');
+      expect(repo.syncedToken, 'test_token_123');
+      expect(repo.hasPendingSync, isTrue);
+    });
+
+    test('syncPreferences and flushPendingSync batch write to push_queue', () async {
+      final fakeEnv = FakePushEnv();
+      final writtenBatches = <Map<String, dynamic>>[];
+
+      final repo = WebPushRepository(
+        pushEnv: fakeEnv,
+        batchWriter: (qid, queueData, rateData, {bool isSetCount1 = false}) async {
+          writtenBatches.add({
+            'qid': qid,
+            'queueData': queueData,
+            'rateData': rateData,
+            'isSetCount1': isSetCount1,
+          });
+        },
+      );
+
+      await repo.enable(vapidKey: 'test_vapid');
+
+      final prefs = PushPrefs(
+        types: const {NotifyType.announcements, NotifyType.reminders},
+        lang: 'ar',
+        updatedAt: DateTime.now().toUtc(),
+      );
+
+      final reminders = [
+        Reminder(
+          eventKey: 'lit-first',
+          startsAt: DateTime.now().toUtc().add(const Duration(days: 2)),
+          lead: 60,
+          title: const {'ar': 'قداس باكر', 'en': 'Morning Liturgy'},
+          createdAt: DateTime.now().toUtc(),
+          every: true,
+        ),
+      ];
+
+      repo.syncPreferences(
+        prefs: prefs,
+        reminders: reminders,
+        immediate: false,
+      );
+      await repo.flushPendingSync();
+
+      expect(writtenBatches.length, 1);
+      final batch = writtenBatches.first;
+      final qData = batch['queueData'] as Map<String, dynamic>;
+      expect(qData['token'], 'test_token_123');
+      expect(qData['want'], contains('web_announcements_ar'));
+      expect(qData['rem'], contains('web_rem_lit-first_60_ar'));
+      expect(repo.hasPendingSync, isFalse);
+      expect(repo.syncedWant, contains('web_announcements_ar'));
+    });
+
+    test('deterministic retry sequence attempts rollover on rejection', () async {
+      final fakeEnv = FakePushEnv();
+      int attempt = 0;
+      final attemptsCount1 = <bool>[];
+
+      final repo = WebPushRepository(
+        pushEnv: fakeEnv,
+        fetchServerDate: () async => DateTime.utc(2026, 11, 10, 0, 1),
+        batchWriter: (qid, queueData, rateData, {bool isSetCount1 = false}) async {
+          attempt++;
+          attemptsCount1.add(isSetCount1);
+          if (attempt == 1) {
+            // Attempt 1 fails (e.g. rate limit or day rollover)
+            throw Exception('permission-denied');
+          }
+          if (attempt == 2) {
+            // Attempt 2 fails
+            throw Exception('permission-denied');
+          }
+          // Attempt 3 (rollover count: 1) succeeds!
+        },
+      );
+
+      await repo.enable(vapidKey: 'test_vapid');
+
+      repo.syncPreferences(
+        prefs: PushPrefs(
+          types: const {NotifyType.announcements},
+          lang: 'ar',
+          updatedAt: DateTime.now().toUtc(),
+        ),
+        reminders: const [],
+        immediate: false,
+      );
+
+      final success = await repo.flushPendingSync();
+      expect(success, isTrue);
+      expect(attempt, 3);
+      expect(attemptsCount1, [false, false, true]); // 3rd attempt had isSetCount1: true!
+    });
+
+    test('unsubscribeAll clears local state and deletes token', () async {
+      final fakeEnv = FakePushEnv();
+      final writtenBatches = <Map<String, dynamic>>[];
+
+      final repo = WebPushRepository(
+        pushEnv: fakeEnv,
+        batchWriter: (qid, queueData, rateData, {bool isSetCount1 = false}) async {
+          writtenBatches.add({
+            'queueData': queueData,
+          });
+        },
+      );
+
+      await repo.enable(vapidKey: 'test_vapid');
+      await repo.unsubscribeAll();
+
+      expect(fakeEnv.deleted, isTrue);
+      expect(repo.syncedToken, isNull);
+      expect(repo.syncedWant, isEmpty);
+      expect(repo.syncedRem, isEmpty);
+      expect(writtenBatches.length, 1);
+      expect(writtenBatches.first['queueData']['want'], isEmpty);
+    });
+  });
+}

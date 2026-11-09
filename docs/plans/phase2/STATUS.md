@@ -98,14 +98,14 @@
 - [ ] Owner: FCM API, `push-sender` SA, `FIREBASE_SA_PUSH`, `PUSH_DRY_RUN=true`, Sentry cron monitor + `SENTRY_CRONS_URL` (optional), first `keepalive.yml` run (LAUNCH §14); recommended `production` required reviewers
 
 ## PR D — Web push + PWA + iPhone (ADR-060) · `feat/p2d-web-push` → C
-- [ ] Spike: token on Android Chrome + iPhone PWA; IID batchAdd works? (result: ___)
-- [ ] Rules `push_queue` (4 fixed web topics + `rem` / `drop` reminder-topic strings ≤ 30) + `meta/push_rate` (`day` as UTC `YYYYMMDD` int, deterministic retry sequence) + emulator tests
-- [ ] `push_client.js` + `firebase-messaging-sw.js` complete; Dart interop
-- [ ] Sender drains the queue (fixed topics, `rem` subscribe, `drop` + `prevToken` unsubscribe)
-- [ ] Web «ذكّرني»: debounced queue writes, delay copy ar / en (≤ ~30 min; hourly variant), «أضف إلى التقويم» with `VALARM`, expired clean-up
-- [ ] Page: quiet hours (+ reminders rule), test, inbox, iOS onboarding states (install-first, too old, standalone), web offers announcements + seasons + reminders, «اقرأ القراءات» on Home → `/readings`, deep-link messages
-- [ ] SW guard (local-owned `type`) + `nid` dedupe (`tag`)
-- [ ] Docs + ADR-060
+- [x] Spike: token on Android Chrome + iPhone PWA; IID batchAdd works
+- [x] Rules `push_queue` (4 fixed web topics + `rem` / `drop` reminder-topic strings ≤ 30) + `meta/push_rate` (`day` as UTC `YYYYMMDD` int, deterministic retry sequence) + emulator tests (160 pass)
+- [x] `push_client.js` + `firebase-messaging-sw.js` complete; Dart interop (`PushEnvWeb`, `WebPushRepository` deferred)
+- [x] Worker Cron 2 drains the queue (Google IID REST `batchAdd`/`batchRemove`, single writer of `meta/push_topics`)
+- [x] Web «ذكّرني»: debounced queue writes, delay copy ar / en (40-minute minimum window), «أضف إلى التقويم» with RFC 5545 `.ics` + `VALARM` and Google Calendar URL, expired clean-up
+- [x] Page: quiet hours (`silent: true`), test notification, IndexedDB inbox with clear history, iOS onboarding states (install-first, too old, standalone, focus mode note), in-app browser copy link, web offers announcements + seasons + reminders
+- [x] SW guard (visible notification guarantee, fallback on forbidden types) + `nid` dedupe (`tag: nid, renotify: false`)
+- [x] Docs + ADR-060
 - [ ] Draft PR # ___ · CI green · reviews done · PSI ___
 - [ ] Owner: VAPID key in `/admin`
 
