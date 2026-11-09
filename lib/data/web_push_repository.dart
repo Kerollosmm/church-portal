@@ -136,14 +136,18 @@ class WebPushRepository {
     } catch (_) {}
   }
 
-  static String? _inMemoryStorage;
-
   String? _readLocalStorage() {
-    return _inMemoryStorage;
+    try {
+      return pushEnv.readStorage(storageKey);
+    } catch (_) {
+      return null;
+    }
   }
 
   void _writeLocalStorage(String value) {
-    _inMemoryStorage = value;
+    try {
+      pushEnv.writeStorage(storageKey, value);
+    } catch (_) {}
   }
 
   /// Request permission and initialize web token.
@@ -360,7 +364,7 @@ class WebPushRepository {
     required String rem,
     required String drop,
   }) async {
-    final qid = 'q_${DateTime.now().millisecondsSinceEpoch}_${math.Random().nextInt(999999)}';
+    final qid = 'q${DateTime.now().millisecondsSinceEpoch}${math.Random().nextInt(999999).toString().padLeft(6, '0')}';
 
     final queueData = <String, dynamic>{
       'token': token,
@@ -369,7 +373,6 @@ class WebPushRepository {
       'rem': rem,
       'drop': drop,
       'createdAt': FieldValue.serverTimestamp(),
-      'retryCount': 0,
     };
 
     // Attempt 1: Normal path with local UTC day and increment(1)

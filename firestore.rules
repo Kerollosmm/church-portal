@@ -1182,7 +1182,7 @@ service cloud.firestore {
       allow create, update: if request.resource.data.keys().hasOnly(['lastAt', 'lastId', 'day', 'count'])
         && request.resource.data.lastAt == request.time
         && request.resource.data.lastId is string
-        && request.resource.data.lastId.matches('^[A-Za-z0-9]{10,64}$')
+        && request.resource.data.lastId.matches('^[A-Za-z0-9_]{10,64}$')
         && (resource == null || request.time > resource.data.lastAt + duration.value(3, 's'))
         && request.resource.data.day is int
         && request.resource.data.day == request.time.year() * 10000 + request.time.month() * 100 + request.time.day()

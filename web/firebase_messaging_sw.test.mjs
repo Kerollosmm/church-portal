@@ -1,13 +1,16 @@
 // Unit tests for Firebase Messaging Service Worker (web/firebase-messaging-sw.js)
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {
+import { createRequire } from 'node:module';
+
+const require = createRequire(import.meta.url);
+const {
   sanitizeLink,
   isForbiddenWebType,
   isWithinQuietHours,
   handlePushEvent,
   handleNotificationClick,
-} from './firebase-messaging-sw.js';
+} = require('./firebase-messaging-sw.js');
 
 test('sanitizeLink rejects non-relative or dangerous paths', () => {
   assert.equal(sanitizeLink(''), '/');

@@ -24,6 +24,8 @@ abstract class PushEnv {
   Future<List<WebInboxItem>> readInbox();
   Future<bool> clearInbox();
   Future<bool> syncQuietHours({required bool enabled, required String start, required String end});
+  String? readStorage(String key) => null;
+  void writeStorage(String key, String value) {}
   Stream<String> get deepLinks;
   Stream<WebInboxItem> get inboxEvents;
 }
@@ -70,6 +72,12 @@ class PlatformPushEnv extends PushEnv {
   @override
   Future<bool> syncQuietHours({required bool enabled, required String start, required String end}) =>
       impl.syncQuietHours(enabled: enabled, start: start, end: end);
+
+  @override
+  String? readStorage(String key) => impl.readStorage(key);
+
+  @override
+  void writeStorage(String key, String value) => impl.writeStorage(key, value);
 
   @override
   Stream<String> get deepLinks => impl.getDeepLinks();

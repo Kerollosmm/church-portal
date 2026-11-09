@@ -6,7 +6,7 @@ const DB_NAME = 'church_portal_push';
 const DB_VERSION = 1;
 const INBOX_LIMIT = 30;
 
-export function sanitizeLink(raw) {
+function sanitizeLink(raw) {
   if (!raw || typeof raw !== 'string') return '/';
   const trimmed = raw.trim();
   if (!trimmed.startsWith('/') || trimmed.startsWith('//')) return '/';
@@ -14,11 +14,11 @@ export function sanitizeLink(raw) {
   return trimmed;
 }
 
-export function isForbiddenWebType(type) {
+function isForbiddenWebType(type) {
   return type === 'verse_daily' || type === 'katameros_daily' || type === 'feasts';
 }
 
-export function isWithinQuietHours(nowDate, quiet) {
+function isWithinQuietHours(nowDate, quiet) {
   if (!quiet || !quiet.enabled) return false;
   const start = quiet.start || '23:00';
   const end = quiet.end || '07:00';
@@ -37,7 +37,7 @@ export function isWithinQuietHours(nowDate, quiet) {
   return curMinutes >= startMinutes || curMinutes < endMinutes;
 }
 
-export function openPushDb() {
+function openPushDb() {
   return new Promise((resolve, reject) => {
     if (typeof indexedDB === 'undefined') {
       resolve(null);
@@ -59,7 +59,7 @@ export function openPushDb() {
   });
 }
 
-export async function getQuietSettings(db) {
+async function getQuietSettings(db) {
   if (!db) return null;
   return new Promise((resolve) => {
     try {
@@ -74,7 +74,7 @@ export async function getQuietSettings(db) {
   });
 }
 
-export async function appendInboxItem(db, item) {
+async function appendInboxItem(db, item) {
   if (!db || !item?.nid) return;
   return new Promise((resolve) => {
     try {
@@ -109,7 +109,7 @@ export async function appendInboxItem(db, item) {
   });
 }
 
-export async function hasSeenNid(db, nid) {
+async function hasSeenNid(db, nid) {
   if (!db || !nid) return false;
   return new Promise((resolve) => {
     try {
@@ -124,7 +124,7 @@ export async function hasSeenNid(db, nid) {
   });
 }
 
-export async function handlePushEvent(event, selfRef = self) {
+async function handlePushEvent(event, selfRef = self) {
   let payload = null;
   try {
     payload = event.data ? event.data.json() : null;
@@ -218,7 +218,7 @@ export async function handlePushEvent(event, selfRef = self) {
   } catch (_) {}
 }
 
-export async function handleNotificationClick(event, selfRef = self) {
+async function handleNotificationClick(event, selfRef = self) {
   event.notification.close();
   const link = sanitizeLink(event.notification?.data?.link);
 
@@ -256,4 +256,25 @@ if (typeof self !== 'undefined' && 'addEventListener' in self) {
   self.addEventListener('notificationclick', (event) => {
     event.waitUntil(handleNotificationClick(event, self));
   });
+}
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = {
+    sanitizeLink,
+    isForbiddenWebType,
+    isWithinQuietHours,
+    openPushDb,
+    getQuietSettings,
+    appendInboxItem,
+    hasSeenNid,
+    handlePushEvent,
+    handleNotificationClick,
+  };
+}
+if (typeof self !== 'undefined') {
+  self.sanitizeLink = sanitizeLink;
+  self.isForbiddenWebType = isForbiddenWebType;
+  self.isWithinQuietHours = isWithinQuietHours;
+  self.handlePushEvent = handlePushEvent;
+  self.handleNotificationClick = handleNotificationClick;
 }

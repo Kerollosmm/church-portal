@@ -13,6 +13,13 @@ class FakePushEnv implements PushEnv {
   bool deleted = false;
   final List<WebInboxItem> mockInbox = [];
   bool quietSynced = false;
+  final Map<String, String> storage = {};
+
+  @override
+  String? readStorage(String key) => storage[key];
+
+  @override
+  void writeStorage(String key, String value) => storage[key] = value;
 
   @override
   bool get isSupported => true;

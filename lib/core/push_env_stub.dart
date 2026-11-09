@@ -26,6 +26,10 @@ Future<bool> clearInbox() => Future.value(false);
 Future<bool> syncQuietHours({required bool enabled, required String start, required String end}) =>
     Future.value(false);
 
+final _stubStorage = <String, String>{};
+String? readStorage(String key) => _stubStorage[key];
+void writeStorage(String key, String value) => _stubStorage[key] = value;
+
 Stream<String> getDeepLinks() => const Stream.empty();
 
 Stream<WebInboxItem> getInboxEvents() => const Stream.empty();

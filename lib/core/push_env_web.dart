@@ -64,12 +64,35 @@ JSObject _jsObjFromMap(Map<String, dynamic> map) {
   return jsonGlobal.callMethod('parse'.toJS, jsonStr.toJS) as JSObject;
 }
 
+Future<JSObject?> _ensureChurchPush() async {
+  try {
+    final existing = globalContext['churchPush'] as JSObject?;
+    if (existing != null) return existing;
+
+    final doc = web.document;
+    final existingScript = doc.querySelector('script[src="/push_client.js"]');
+    if (existingScript == null) {
+      final script = doc.createElement('script') as web.HTMLScriptElement;
+      script.src = '/push_client.js';
+      script.type = 'module';
+      doc.head?.appendChild(script);
+    }
+
+    for (var i = 0; i < 50; i++) {
+      final cp = globalContext['churchPush'] as JSObject?;
+      if (cp != null) return cp;
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    }
+  } catch (_) {}
+  return globalContext['churchPush'] as JSObject?;
+}
+
 Future<String?> enableAndGetToken({
   required String vapidKey,
   required Map<String, dynamic> firebaseConfig,
 }) async {
   try {
-    final churchPush = globalContext['churchPush'] as JSObject?;
+    final churchPush = await _ensureChurchPush();
     if (churchPush == null) return null;
     final args = _jsObjFromMap({
       'vapidKey': vapidKey,
@@ -90,7 +113,7 @@ Future<String?> getWebToken({
   required Map<String, dynamic> firebaseConfig,
 }) async {
   try {
-    final churchPush = globalContext['churchPush'] as JSObject?;
+    final churchPush = await _ensureChurchPush();
     if (churchPush == null) return null;
     final args = _jsObjFromMap({
       'vapidKey': vapidKey,
@@ -110,7 +133,7 @@ Future<bool> deleteWebToken({
   required Map<String, dynamic> firebaseConfig,
 }) async {
   try {
-    final churchPush = globalContext['churchPush'] as JSObject?;
+    final churchPush = await _ensureChurchPush();
     if (churchPush == null) return false;
     final args = _jsObjFromMap({
       'firebaseConfig': firebaseConfig,
@@ -130,7 +153,7 @@ Future<bool> showSwTestNotification({
   String? link,
 }) async {
   try {
-    final churchPush = globalContext['churchPush'] as JSObject?;
+    final churchPush = await _ensureChurchPush();
     if (churchPush == null) return false;
     final map = <String, dynamic>{};
     if (title != null) map['title'] = title;
@@ -148,7 +171,7 @@ Future<bool> showSwTestNotification({
 
 Future<List<WebInboxItem>> readInbox() async {
   try {
-    final churchPush = globalContext['churchPush'] as JSObject?;
+    final churchPush = await _ensureChurchPush();
     if (churchPush == null) return const [];
     final promise = churchPush.callMethod('inbox'.toJS) as JSPromise?;
     if (promise == null) return const [];
@@ -168,7 +191,7 @@ Future<List<WebInboxItem>> readInbox() async {
 
 Future<bool> clearInbox() async {
   try {
-    final churchPush = globalContext['churchPush'] as JSObject?;
+    final churchPush = await _ensureChurchPush();
     if (churchPush == null) return false;
     final promise = churchPush.callMethod('clearInbox'.toJS) as JSPromise?;
     if (promise == null) return false;
@@ -185,7 +208,7 @@ Future<bool> syncQuietHours({
   required String end,
 }) async {
   try {
-    final churchPush = globalContext['churchPush'] as JSObject?;
+    final churchPush = await _ensureChurchPush();
     if (churchPush == null) return false;
     final args = _jsObjFromMap({
       'enabled': enabled,
@@ -239,4 +262,18 @@ Stream<String> getDeepLinks() {
 Stream<WebInboxItem> getInboxEvents() {
   _ensureMessageListener();
   return _inboxEventsController.stream;
+}
+
+String? readStorage(String key) {
+  try {
+    return web.window.localStorage.getItem(key);
+  } catch (_) {
+    return null;
+  }
+}
+
+void writeStorage(String key, String value) {
+  try {
+    web.window.localStorage.setItem(key, value);
+  } catch (_) {}
 }

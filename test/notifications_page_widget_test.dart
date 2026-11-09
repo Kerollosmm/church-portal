@@ -49,6 +49,10 @@ class FakeTestPushEnv implements PushEnv {
   @override
   Future<bool> syncQuietHours({required bool enabled, required String start, required String end}) async => true;
   @override
+  String? readStorage(String key) => null;
+  @override
+  void writeStorage(String key, String value) {}
+  @override
   Stream<String> get deepLinks => const Stream.empty();
   @override
   Stream<WebInboxItem> get inboxEvents => const Stream.empty();
