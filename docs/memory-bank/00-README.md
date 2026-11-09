@@ -83,6 +83,7 @@ time and date pickers, stored 24-hour (ADR-049)). **Phase 2 (notifications & mob
 | [10-decisions-and-history.md](10-decisions-and-history.md) | ADR-style key decisions and the PR timeline |
 | [11-open-tasks.md](11-open-tasks.md) | Remaining work (infra, security, content, product gaps vs. the requirements) |
 | [12-glossary.md](12-glossary.md) | Coptic/church Arabic terms ↔ the English words and keys used in code |
+| [13-hark-agent-history-and-workflow.md](13-hark-agent-history-and-workflow.md) | Agent interaction history, operating loops, Hark workflow, and detailed evolution of PR #1–#51 |
 
 Related files outside this folder:
 - [`/AGENTS.md`](../../AGENTS.md) — the short agent guide (golden rules + commands). `CLAUDE.md` and
