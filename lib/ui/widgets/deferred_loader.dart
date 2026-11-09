@@ -1,5 +1,6 @@
 import 'package:material_ui/material_ui.dart';
 
+import '../../data/error_reporting.dart';
 import '../../core/l10n.dart';
 import 'common.dart';
 
@@ -20,19 +21,33 @@ class DeferredLoader extends StatefulWidget {
   /// like `/admin`).
   final bool fullScreen;
 
-  const DeferredLoader({super.key, required this.loadLibrary, required this.builder, this.fullScreen = false});
+  /// Optional telemetry source tag for error reporting.
+  final String? source;
+
+  const DeferredLoader({
+    super.key,
+    required this.loadLibrary,
+    required this.builder,
+    this.fullScreen = false,
+    this.source,
+  });
 
   @override
   State<DeferredLoader> createState() => _DeferredLoaderState();
 }
 
 class _DeferredLoaderState extends State<DeferredLoader> {
-  late Future<void> _future = widget.loadLibrary();
+  late Future<void> _future = _load();
+
+  Future<void> _load() => widget.loadLibrary().catchError((Object e, StackTrace st) {
+        ErrorReporting.capture(e, st, section: 'deferred_chunk', source: widget.source);
+        throw e;
+      });
 
   void _retry() {
     // Block body: an arrow would hand the assigned Future back to setState.
     setState(() {
-      _future = widget.loadLibrary();
+      _future = _load();
     });
   }
 

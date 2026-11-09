@@ -9,6 +9,7 @@ import '../../core/document_lang.dart';
 import '../../core/l10n.dart';
 import '../../core/push_env.dart';
 import '../../core/theme.dart';
+import '../../data/error_reporting.dart';
 import '../../data/web_push_repository.dart' deferred as web_push;
 import '../../domain/features.dart';
 import '../../state/providers.dart';
@@ -438,7 +439,9 @@ class NotificationsPage extends ConsumerWidget {
                               await web_push.loadLibrary();
                               final repo = web_push.WebPushRepository(pushEnv: pushEnv);
                               await repo.enable(vapidKey: pushSettings.vapidKey);
-                            } catch (_) {}
+                            } catch (e, st) {
+                              ErrorReporting.capture(e, st, section: 'deferred_chunk', source: 'web_push_repository');
+                            }
                           }
                         }
                         onPermissionChanged();

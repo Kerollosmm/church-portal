@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 
+import '../../data/error_reporting.dart';
 import '../../core/l10n.dart';
 import '../../core/theme.dart';
 import '../../data/reminder_store.dart';
@@ -106,7 +107,8 @@ class RemindMeButton extends ConsumerWidget {
   }) async {
     try {
       await sheet.loadLibrary();
-    } catch (_) {
+    } catch (e, st) {
+      ErrorReporting.capture(e, st, section: 'deferred_chunk', source: 'reminder_sheet');
       return; // offline: the button simply does nothing this time
     }
     if (!context.mounted) return;
