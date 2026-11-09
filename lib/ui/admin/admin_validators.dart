@@ -1,6 +1,7 @@
 // Pure validation / conversion for the admin forms (unit-tested).
 import '../../domain/cairo_time.dart';
 import '../../domain/custom_content.dart' show BlockTypes, PageBlock, isValidSlug;
+import '../../domain/push.dart';
 import '../../domain/rules.dart' show normalizeDigits;
 import 'admin_schema.dart';
 
@@ -290,3 +291,25 @@ List<Map<String, dynamic>> splitSavePayload(Map<String, dynamic> payload) {
       if (own(k)) {k: payload[k]},
   ];
 }
+
+/// Validates a notification template string against placeholder rules and character limits.
+String? validateNotifyTemplate(String typeId, String? text, {int maxLength = 300}) {
+  if (text == null || text.trim().isEmpty) return null;
+  if (text.length > maxLength) return 'err_max_length';
+  final unknown = unknownPlaceholders(typeId, text);
+  if (unknown.isNotEmpty) return 'err_unknown_placeholder';
+  return null;
+}
+
+/// Validates a scheduled notification draft before saving.
+String? validateScheduledNotification(ScheduledNotification n) {
+  if (n.titleAr.trim().isEmpty) return 'err_title_required';
+  if (n.titleAr.length > 120 || n.titleEn.length > 120) return 'err_title_length';
+  if (n.bodyAr.length > 300 || n.bodyEn.length > 300) return 'err_body_length';
+  if (n.eventKey.isNotEmpty && !RegExp(r'^(lit|meeting|day|season)-[a-z0-9-]{1,40}$').hasMatch(n.eventKey)) {
+    return 'err_invalid_event_key';
+  }
+  if (!['all', 'web', 'app'].contains(n.targets)) return 'err_invalid_targets';
+  return null;
+}
+

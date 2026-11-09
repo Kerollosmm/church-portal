@@ -1,0 +1,41 @@
+name: Push Sender (Manual Fallback)
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run (simulate without sending or updating queue)'
+        type: boolean
+        required: true
+        default: true
+      topic_override:
+        description: 'Optional test topic override (MUST start with test_)'
+        type: string
+        required: false
+        default: ''
+
+jobs:
+  send-pushes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - name: Run push sender
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          SENTRY_CRONS_URL: ${{ secrets.SENTRY_CRONS_URL }}
+        run: |
+          ARGS=(--manual)
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            ARGS+=(--dry-run)
+          fi
+          if [ -n "${{ inputs.topic_override }}" ]; then
+            ARGS+=(--topic-override "${{ inputs.topic_override }}")
+          fi
+          node tool/push_sender.js "${ARGS[@]}"

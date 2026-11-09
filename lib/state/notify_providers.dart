@@ -2,6 +2,7 @@
 
 import 'dart:async';
 import 'dart:convert';
+import 'dart:ui' show Locale;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -9,6 +10,7 @@ import 'package:timezone/timezone.dart' as tz;
 import 'package:workmanager/workmanager.dart';
 
 import '../data/local_notifications.dart';
+import '../data/push_messaging.dart';
 import '../domain/cairo_time.dart';
 import '../domain/daily_verse.dart';
 import '../domain/features.dart';
@@ -227,18 +229,14 @@ Map<String, dynamic> snapshotFeaturesMap(FeatureSettings f) => {
       ],
     };
 
-/// Day events keep their stored position: the id (`e<index>`, part of a reminder's `day-` event
-/// key) is derived from it, so skipped invalid entries are kept as nulls.
+/// Day events keep their stored id and fields.
 List<Map<String, dynamic>?> _dayEventsForSnapshot(List<DayEvent> events) {
   final out = <Map<String, dynamic>?>[];
   for (final e in events) {
-    final index = int.tryParse(e.id.startsWith('e') ? e.id.substring(1) : '') ?? out.length;
-    while (out.length < index) {
-      out.add(null);
-    }
     final map = {
-      'date': e.date?.toIso8601String(),
-      'endDate': e.endDate?.toIso8601String(),
+      'id': e.id,
+      'date': e.date != null ? dayKey(e.date!) : null,
+      'endDate': e.endDate != null ? dayKey(e.endDate!) : null,
       'start': e.start,
       'end': e.end,
       'titleAr': e.titleAr,
@@ -246,11 +244,7 @@ List<Map<String, dynamic>?> _dayEventsForSnapshot(List<DayEvent> events) {
       'link': e.link,
       'visible': e.visible,
     };
-    if (index < out.length) {
-      out[index] = map;
-    } else {
-      out.add(map);
-    }
+    out.add(map);
   }
   return out;
 }
@@ -348,13 +342,28 @@ class NotifyPlanner {
 
   NotifyPlanner(this.ref) {
     _listen();
+    _syncSubscriptions();
   }
 
   List<PlannedNotification> get currentPlan => _currentPlan;
   bool get hasActiveDebounce => _debounceTimer?.isActive ?? false;
 
+  void _syncSubscriptions() {
+    final prefs = ref.read(pushPrefsProvider);
+    final lang = ref.read(localeProvider).languageCode;
+    PushMessaging.updateSubscriptions(prefs, lang);
+  }
+
   void _listen() {
-    ref.listen<PushPrefs>(pushPrefsProvider, (prev, next) => scheduleReplan());
+    ref.listen<PushPrefs>(pushPrefsProvider, (prev, next) {
+      scheduleReplan();
+      final lang = ref.read(localeProvider).languageCode;
+      PushMessaging.updateSubscriptions(next, lang);
+    });
+    ref.listen<Locale>(localeProvider, (prev, next) {
+      final prefs = ref.read(pushPrefsProvider);
+      PushMessaging.updateSubscriptions(prefs, next.languageCode);
+    });
     ref.listen<FeatureSettings>(featuresProvider, (prev, next) => scheduleReplan());
     ref.listen<AsyncValue<List<Liturgy>>>(liturgiesProvider, (prev, next) => scheduleReplan());
     ref.listen<List<Reminder>>(userRemindersProvider, (prev, next) => scheduleReplan());

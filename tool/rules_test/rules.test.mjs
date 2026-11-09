@@ -2114,3 +2114,217 @@ describe('install banner and push settings (ADR-057)', () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// ADR-059: Notifications manager, Cloudflare Worker FCM sender & DayEvent IDs
+// ---------------------------------------------------------------------------
+
+describe('ADR-059: settings/notifications (notification manager & FCM sender)', () => {
+  const notifRef = (uid = EDITOR) => doc(db(uid), 'settings', 'notifications');
+  const validRow = (id = 'r1', eventKey = 'lit-123') =>
+    [id, '2026-11-10T10:00:00Z', 'all', 'عظة الأحد', 'Sunday Sermon', 'تفاصيل العظة', 'Sermon details', '/', eventKey].join('\u001f');
+
+  test('anonymous read denied; admin read allowed', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'settings', 'notifications'), { schedule: [] });
+    });
+    await assertFails(getDoc(doc(db(null), 'settings', 'notifications')));
+    await assertFails(getDoc(doc(db(STRANGER), 'settings', 'notifications')));
+    await assertSucceeds(getDoc(notifRef(EDITOR)));
+    await assertSucceeds(getDoc(notifRef(OWNER)));
+  });
+
+  test('admin create/update schedule allowed with valid eventKeys (lit-, meeting-, day-, season-, or empty)', async () => {
+    const rows = [
+      validRow('r1', 'lit-123'),
+      validRow('r2', 'meeting-youth'),
+      validRow('r3', 'day-hash10char'),
+      validRow('r4', 'season-coptic-new-year'),
+      validRow('r5', ''),
+    ];
+    await assertSucceeds(setDoc(notifRef(EDITOR), { schedule: rows }));
+    await assertSucceeds(updateDoc(notifRef(EDITOR), { schedule: [validRow('r1', 'lit-456')] }));
+    await assertSucceeds(updateDoc(notifRef(EDITOR), { schedule: [] }));
+  });
+
+  test('client writes to server-only fields denied', async () => {
+    await assertFails(setDoc(notifRef(EDITOR), { status: { r1: { state: 'ok' } } }, { merge: true }));
+    await assertFails(setDoc(notifRef(EDITOR), { reminderPlan: ['p1'] }, { merge: true }));
+    await assertFails(setDoc(notifRef(EDITOR), { remindersSent: ['s1'] }, { merge: true }));
+    await assertFails(setDoc(notifRef(EDITOR), { health: { cronStatus: 'healthy' } }, { merge: true }));
+    await assertFails(setDoc(notifRef(OWNER), { status: { r1: { state: 'ok' } } }, { merge: true }));
+  });
+
+  test('sentLog: clearing allowed for owner only, appending denied for all', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'settings', 'notifications'), {
+        schedule: [],
+        sentLog: ['log1\u001f2026-11-08T10:00:00Z\u001fall\u001fTitle\u001fTitle\u001f/\u001fok\u001fok'],
+      });
+    });
+    // Non-owner (editor) cannot clear sentLog
+    await assertFails(updateDoc(notifRef(EDITOR), { sentLog: [] }));
+    // Owner can clear sentLog to empty list
+    await assertSucceeds(updateDoc(notifRef(OWNER), { sentLog: [] }));
+    // Neither owner nor editor can append or write non-empty sentLog
+    await assertFails(updateDoc(notifRef(OWNER), { sentLog: ['item1'] }));
+    await assertFails(updateDoc(notifRef(EDITOR), { sentLog: ['item1'] }));
+  });
+
+  test('schedule row limit: max 20 rows, 21 rows rejected', async () => {
+    const twenty = Array.from({ length: 20 }, (_, i) => validRow(`r${i}`, 'lit-1'));
+    await assertSucceeds(setDoc(notifRef(EDITOR), { schedule: twenty }));
+    const twentyOne = Array.from({ length: 21 }, (_, i) => validRow(`r${i}`, 'lit-1'));
+    await assertFails(setDoc(notifRef(EDITOR), { schedule: twentyOne }));
+  });
+
+  test('invalid links and targets rejected in schedule rows', async () => {
+    const badLink = ['r1', '2026-11-10T10:00:00Z', 'all', 'Title', 'Title', 'Body', 'Body', 'https://evil.com', 'lit-1'].join('\u001f');
+    const badTarget = ['r1', '2026-11-10T10:00:00Z', 'ios', 'Title', 'Title', 'Body', 'Body', '/', 'lit-1'].join('\u001f');
+    const badKey = ['r1', '2026-11-10T10:00:00Z', 'all', 'Title', 'Title', 'Body', 'Body', '/', 'unknown-123'].join('\u001f');
+    await assertFails(setDoc(notifRef(EDITOR), { schedule: [badLink] }));
+    await assertFails(setDoc(notifRef(EDITOR), { schedule: [badTarget] }));
+    await assertFails(setDoc(notifRef(EDITOR), { schedule: [badKey] }));
+  });
+});
+
+describe('ADR-059: settings/features notifyTypes & reminderSources', () => {
+  const featRef = (uid = EDITOR) => doc(db(uid), 'settings', 'features');
+  const S = '\u001f';
+  const validInstallAndPush = {
+    installPrompt: true,
+    installTitleAr: 'تطبيق الكنيسة على هاتفك',
+    installTitleEn: 'Church app on your phone',
+    installBodyAr: 'تابع القداسات والصلوات والمواسم وتلقّ التنبيهات بسهولة من هاتفك.',
+    installBodyEn: 'Follow liturgies, prayers and seasons with easy updates on your phone.',
+    installAndroidUrl: 'https://example.com/app.apk',
+    installAndroidUrl32: '/app/android/older.apk',
+    installApkVersion: '1.1.0',
+    installApkBuild: 42,
+    installApkSizeMb: 18.4,
+    installApkSize32Mb: 17.9,
+    installReshowDays: 30,
+    installRemindDays: 3,
+    push: true,
+    pushVapidKey: 'BKAGkFj27-exampleVapidKey890123456789012345678901234567890123456789012345678901234567890',
+    pushTypes: ['announcements', 'verse_daily', 'katameros_daily', 'seasons', 'feasts', 'reminders'],
+    reminderLeads: [0, 15, 60, 1440],
+    reminderDefaultLead: 60,
+  };
+
+  test('valid notifyTypes and reminderSources are accepted', async () => {
+    const validNotifyTypes = [
+      ['verse_daily', '07:00', '', 'آية اليوم', 'Verse of the Day', '{verse}', '{verse}'].join(S),
+      ['katameros_daily', '06:30', '', 'قراءات اليوم', 'Daily Katameros', '{reading}', '{reading}'].join(S),
+      ['seasons', '07:00', '3', 'المواسم الكنسية', 'Church Seasons', '{season}', '{season}'].join(S),
+      ['feasts', '07:30', '', 'أعياد ومناسبات', 'Feasts & Occasions', '{feast}', '{feast}'].join(S),
+      ['announcements', '20:00', '', 'تنبيه هام', 'Announcement', '{event}', '{event}'].join(S),
+      ['reminders', '', '', 'تذكير بموعد', 'Reminder', '{event}', '{event}'].join(S),
+    ];
+
+    await assertSucceeds(setDoc(featRef(), {
+      notifyTypes: validNotifyTypes,
+      reminderSources: 'lit,mtg,day',
+    }, { merge: true }));
+
+    await assertSucceeds(setDoc(featRef(), { reminderSources: '' }, { merge: true }));
+    await assertSucceeds(setDoc(featRef(), { reminderSources: 'lit' }, { merge: true }));
+    await assertSucceeds(setDoc(featRef(), { reminderSources: 'lit,mtg' }, { merge: true }));
+    await assertSucceeds(setDoc(featRef(), { notifyTypes: [] }, { merge: true }));
+  });
+
+  test('invalid notifyTypes and reminderSources are rejected', async () => {
+    // Bad type id
+    await assertFails(setDoc(featRef(), {
+      notifyTypes: [['bad_type', '07:00', '', 'Title', 'Title', 'Body', 'Body'].join(S)],
+    }, { merge: true }));
+
+    // Bad time
+    await assertFails(setDoc(featRef(), {
+      notifyTypes: [['verse_daily', '25:00', '', 'Title', 'Title', 'Body', 'Body'].join(S)],
+    }, { merge: true }));
+
+    // Bad daysBefore (> 14)
+    await assertFails(setDoc(featRef(), {
+      notifyTypes: [['seasons', '07:00', '15', 'Title', 'Title', 'Body', 'Body'].join(S)],
+    }, { merge: true }));
+
+    // More than 6 rows
+    const sevenRows = Array.from({ length: 7 }, () =>
+      ['verse_daily', '07:00', '', 'Title', 'Title', 'Body', 'Body'].join(S)
+    );
+    await assertFails(setDoc(featRef(), { notifyTypes: sevenRows }, { merge: true }));
+
+    // Invalid reminderSources
+    await assertFails(setDoc(featRef(), { reminderSources: 'invalid' }, { merge: true }));
+    await assertFails(setDoc(featRef(), { reminderSources: 'lit,lit' }, { merge: true }));
+    await assertFails(setDoc(featRef(), { reminderSources: 'lit,mtg,day,extra' }, { merge: true }));
+  });
+
+  test('expression budget: whole-doc save with notifyTypes, reminderSources, install and push fields', async () => {
+    const stamp = () => ({ updatedAt: serverTimestamp(), updatedBy: `${EDITOR}@x.test` });
+    const fullPayload = {
+      ...validInstallAndPush,
+      notifyTypes: [
+        ['verse_daily', '07:00', '', 'آية اليوم', 'Verse of the Day', '{verse}', '{verse}'].join(S),
+        ['seasons', '07:00', '3', 'المواسم', 'Seasons', '{season}', '{season}'].join(S),
+      ],
+      reminderSources: 'lit,mtg,day',
+      ...stamp(),
+    };
+    await assertSucceeds(setDoc(featRef(), fullPayload, { merge: true }));
+  });
+});
+
+describe('ADR-059: validDayEvent 17th field (DayEvent.id)', () => {
+  const featRef = (uid = EDITOR) => doc(db(uid), 'settings', 'features');
+  const S = '\u001f';
+
+  // Base 13 fields (ADR-039 / ADR-040)
+  const base13 = [
+    '2026-11-04', '', '19:00', '21:00', 'عنوان اليوم', 'Title En',
+    'متكلم', 'Speaker', 'موضوع', 'Topic', 'ملاحظة', 'Note', '/',
+  ];
+
+  test('13 fields (legacy without pdf/labels/id) is accepted', async () => {
+    await assertSucceeds(setDoc(featRef(), {
+      dayEvents: [base13.join(S)],
+    }, { merge: true }));
+  });
+
+  test('16 fields (with pdf and labels, without id) is accepted', async () => {
+    const ev16 = [...base13, 'https://example.com/guide.pdf', 'labelAr', 'labelEn'];
+    await assertSucceeds(setDoc(featRef(), {
+      dayEvents: [ev16.join(S)],
+    }, { merge: true }));
+  });
+
+  test('17 fields with 8-char random ID or 10-char SHA-1 hex ID is accepted', async () => {
+    const ev17Random = [...base13, 'https://example.com/guide.pdf', 'labelAr', 'labelEn', 'a1b2c3d4'];
+    const ev17Sha1 = [...base13, 'https://example.com/guide.pdf', 'labelAr', 'labelEn', '1234567890'];
+    const ev17EmptyId = [...base13, 'https://example.com/guide.pdf', 'labelAr', 'labelEn', ''];
+
+    await assertSucceeds(setDoc(featRef(), {
+      dayEvents: [ev17Random.join(S), ev17Sha1.join(S), ev17EmptyId.join(S)],
+    }, { merge: true }));
+  });
+
+  test('invalid 17th field is rejected', async () => {
+    // Uppercase rejected
+    const badUpper = [...base13, '', '', '', 'ABCDEFGH'];
+    await assertFails(setDoc(featRef(), { dayEvents: [badUpper.join(S)] }, { merge: true }));
+
+    // 7 characters rejected (< 8)
+    const badShort = [...base13, '', '', '', 'abcdefg'];
+    await assertFails(setDoc(featRef(), { dayEvents: [badShort.join(S)] }, { merge: true }));
+
+    // 11 characters rejected (> 10)
+    const badLong = [...base13, '', '', '', 'abcdefghijk'];
+    await assertFails(setDoc(featRef(), { dayEvents: [badLong.join(S)] }, { merge: true }));
+
+    // Non-alphanumeric rejected
+    const badSymbols = [...base13, '', '', '', 'abc-defg'];
+    await assertFails(setDoc(featRef(), { dayEvents: [badSymbols.join(S)] }, { merge: true }));
+  });
+});
+
+

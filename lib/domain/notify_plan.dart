@@ -188,6 +188,7 @@ List<PlannedNotification> planNotifications({
 }) {
   CairoTime.ensureInitialized();
   final cairoNow = CairoTime.fromInstant(now);
+  final notifyConfig = NotifyConfig.fromFeatures(features);
 
   final offered = features.pushSettings.offered;
   bool isLocalTypeAllowed(NotifyType type) {
@@ -207,7 +208,8 @@ List<PlannedNotification> planNotifications({
 
     // 1A. Daily verse
     if (isLocalTypeAllowed(NotifyType.verse_daily)) {
-      final vTime = prefs.verseTime ?? NotifyTypeConfig.defaultVerseTime;
+      final spec = notifyConfig.specFor(NotifyType.verse_daily);
+      final vTime = prefs.verseTime ?? (spec.time.isNotEmpty ? spec.time : NotifyTypeConfig.defaultVerseTime);
       final parsedVTime = parseHm(vTime) ?? (7 * 60);
       var vScheduledAt = CairoTime.at(dayDate.year, dayDate.month, dayDate.day, parsedVTime);
 
@@ -222,24 +224,51 @@ List<PlannedNotification> planNotifications({
         // Same choice as Home / the reading screen: fixed admin verse, else the active season's set.
         final seasonSet = features.seasonVerses.activeSet(seasons, vScheduledAt);
         final verse = resolveSeasonalVerse(verseConfig, verses, vScheduledAt, day: dayDate, seasonSet: seasonSet);
-        String titleAr = 'آية اليوم';
-        String titleEn = 'Daily Verse';
-        String bodyAr = 'آية يومية مشجعة مع قراءات اليوم';
-        String bodyEn = 'Encouraging daily verse with scripture reference';
 
+        String verseTextAr = '';
+        String verseRefAr = '';
+        String verseTextEn = '';
+        String verseRefEn = '';
         if (verse != null) {
           final arText = verse.textAr.trim();
           final arRef = verse.refAr.trim();
           final truncatedAr = arText.length > 120 ? '${arText.substring(0, 120).trimRight()}…' : arText;
-          bodyAr = arRef.isNotEmpty ? '$truncatedAr ($arRef)' : truncatedAr;
+          verseTextAr = truncatedAr;
+          verseRefAr = arRef;
 
           final enText = verse.textEn.trim().isNotEmpty ? verse.textEn.trim() : arText;
           final enRef = verse.refEn.trim().isNotEmpty
               ? verse.refEn.trim()
               : (verse.refAr.trim().isNotEmpty ? verse.refAr.trim() : '');
           final truncatedEn = enText.length > 120 ? '${enText.substring(0, 120).trimRight()}…' : enText;
-          bodyEn = enRef.isNotEmpty ? '$truncatedEn ($enRef)' : truncatedEn;
+          verseTextEn = truncatedEn;
+          verseRefEn = enRef;
         }
+
+        final verseVarsAr = {
+          'date': dateIso,
+          'verse': verseTextAr,
+          'ref': verseRefAr,
+        };
+        final verseVarsEn = {
+          'date': dateIso,
+          'verse': verseTextEn,
+          'ref': verseRefEn,
+        };
+
+        String titleAr = renderTemplate(spec.titleAr, verseVarsAr);
+        String titleEn = renderTemplate(spec.titleEn, verseVarsEn);
+        String bodyAr = renderTemplate(spec.bodyAr, verseVarsAr).trim();
+        String bodyEn = renderTemplate(spec.bodyEn, verseVarsEn).trim();
+
+        if (bodyAr.isEmpty || bodyAr == '()') {
+          bodyAr = verseRefAr.isNotEmpty ? '$verseTextAr ($verseRefAr)' : verseTextAr;
+        }
+        if (bodyEn.isEmpty || bodyEn == '()') {
+          bodyEn = verseRefEn.isNotEmpty ? '$verseTextEn ($verseRefEn)' : verseTextEn;
+        }
+        if (bodyAr.isEmpty) bodyAr = 'آية يومية مشجعة مع قراءات اليوم';
+        if (bodyEn.isEmpty) bodyEn = 'Encouraging daily verse with scripture reference';
 
         final key = 'local:verse_daily:$dateIso:verse';
         final payload = jsonEncode({'type': 'verse_daily', 'date': dateIso});
@@ -262,7 +291,8 @@ List<PlannedNotification> planNotifications({
 
     // 1B. Katameros daily readings
     if (isLocalTypeAllowed(NotifyType.katameros_daily)) {
-      final kTime = prefs.katamerosTime ?? NotifyTypeConfig.defaultKatamerosTime;
+      final spec = notifyConfig.specFor(NotifyType.katameros_daily);
+      final kTime = prefs.katamerosTime ?? (spec.time.isNotEmpty ? spec.time : NotifyTypeConfig.defaultKatamerosTime);
       final parsedKTime = parseHm(kTime) ?? (6 * 60 + 30);
       var kScheduledAt = CairoTime.at(dayDate.year, dayDate.month, dayDate.day, parsedKTime);
 
@@ -274,27 +304,47 @@ List<PlannedNotification> planNotifications({
       }
 
       if (!kScheduledAt.isBefore(now)) {
-        String titleAr = 'قراءات اليوم';
-        String titleEn = "Today's Readings";
-        String bodyAr = 'قراءات القداس اليومية بحسب طقس الكنيسة القبطية';
-        String bodyEn = 'Daily Coptic liturgical readings';
-
         final readings = cachedReadings[dateIso];
+        String readingAr = '';
+        String readingEn = '';
+        String refAr = '';
+        String refEn = '';
+
         if (readings != null) {
-          if (readings.titleAr.trim().isNotEmpty) {
-            titleAr = 'قراءات اليوم — ${readings.titleAr.trim()}';
-          }
-          if (readings.titleEn.trim().isNotEmpty) {
-            titleEn = "Today's Readings — ${readings.titleEn.trim()}";
-          }
           final gospel = readings.liturgyGospel;
           if (gospel != null && gospel.refAr.trim().isNotEmpty) {
-            bodyAr = 'إنجيل القداس: ${gospel.refAr.trim()}';
-            bodyEn = gospel.refEn.trim().isNotEmpty
+            readingAr = 'إنجيل القداس: ${gospel.refAr.trim()}';
+            refAr = gospel.refAr.trim();
+            readingEn = gospel.refEn.trim().isNotEmpty
                 ? 'Liturgy Gospel: ${gospel.refEn.trim()}'
                 : 'Liturgy Gospel: ${gospel.refAr.trim()}';
+            refEn = gospel.refEn.trim().isNotEmpty ? gospel.refEn.trim() : gospel.refAr.trim();
+          } else if (readings.titleAr.trim().isNotEmpty) {
+            readingAr = readings.titleAr.trim();
+            readingEn = readings.titleEn.trim().isNotEmpty ? readings.titleEn.trim() : readings.titleAr.trim();
           }
         }
+
+        final katVarsAr = {'date': dateIso, 'reading': readingAr, 'ref': refAr};
+        final katVarsEn = {'date': dateIso, 'reading': readingEn, 'ref': refEn};
+
+        String titleAr = renderTemplate(spec.titleAr, katVarsAr);
+        String titleEn = renderTemplate(spec.titleEn, katVarsEn);
+        if (spec.titleAr == NotifyTypeSpec.builtInDefaults[NotifyType.katameros_daily]!.titleAr &&
+            readings != null &&
+            readings.titleAr.trim().isNotEmpty) {
+          titleAr = 'قراءات اليوم — ${readings.titleAr.trim()}';
+        }
+        if (spec.titleEn == NotifyTypeSpec.builtInDefaults[NotifyType.katameros_daily]!.titleEn &&
+            readings != null &&
+            readings.titleEn.trim().isNotEmpty) {
+          titleEn = "Today's Readings — ${readings.titleEn.trim()}";
+        }
+
+        String bodyAr = renderTemplate(spec.bodyAr, katVarsAr).trim();
+        String bodyEn = renderTemplate(spec.bodyEn, katVarsEn).trim();
+        if (bodyAr.isEmpty) bodyAr = 'قراءات القداس اليومية بحسب طقس الكنيسة القبطية';
+        if (bodyEn.isEmpty) bodyEn = 'Daily Coptic liturgical readings';
 
         final key = 'local:katameros_daily:$dateIso:katameros';
         final payload = jsonEncode({'type': 'katameros_daily', 'date': dateIso});
@@ -326,7 +376,8 @@ List<PlannedNotification> planNotifications({
 
       if (feastsOnDay.isNotEmpty) {
         final feast = feastsOnDay.first;
-        final fTime = NotifyTypeConfig.defaultFeastsTime;
+        final spec = notifyConfig.specFor(NotifyType.feasts);
+        final fTime = spec.time.isNotEmpty ? spec.time : NotifyTypeConfig.defaultFeastsTime;
         final parsedFTime = parseHm(fTime) ?? (7 * 60 + 30);
         var fScheduledAt = CairoTime.at(dayDate.year, dayDate.month, dayDate.day, parsedFTime);
 
@@ -338,6 +389,23 @@ List<PlannedNotification> planNotifications({
         }
 
         if (!fScheduledAt.isBefore(now)) {
+          final feastVarsAr = {'date': dateIso, 'feast': feast.ar};
+          final feastVarsEn = {'date': dateIso, 'feast': feast.en};
+
+          String titleAr = renderTemplate(spec.titleAr, feastVarsAr);
+          String titleEn = renderTemplate(spec.titleEn, feastVarsEn);
+          if (spec.titleAr == NotifyTypeSpec.builtInDefaults[NotifyType.feasts]!.titleAr) {
+            titleAr = feast.ar;
+          }
+          if (spec.titleEn == NotifyTypeSpec.builtInDefaults[NotifyType.feasts]!.titleEn) {
+            titleEn = feast.en;
+          }
+
+          String bodyAr = renderTemplate(spec.bodyAr, feastVarsAr).trim();
+          String bodyEn = renderTemplate(spec.bodyEn, feastVarsEn).trim();
+          if (bodyAr.isEmpty) bodyAr = 'تذكار مبارك: ${feast.ar}';
+          if (bodyEn.isEmpty) bodyEn = 'Commemoration: ${feast.en}';
+
           final key = 'local:feasts:$dateIso:feast';
           final payload = jsonEncode({'type': 'feasts', 'date': dateIso});
 
@@ -346,10 +414,10 @@ List<PlannedNotification> planNotifications({
             key: key,
             type: NotifyType.feasts,
             scheduledAt: fScheduledAt,
-            titleAr: feast.ar,
-            titleEn: feast.en,
-            bodyAr: 'تذكار مبارك: ${feast.ar}',
-            bodyEn: 'Commemoration: ${feast.en}',
+            titleAr: titleAr,
+            titleEn: titleEn,
+            bodyAr: bodyAr,
+            bodyEn: bodyEn,
             payload: payload,
             exact: false,
             channelId: NotifyType.feasts.name,
@@ -640,3 +708,40 @@ bool needsReplenishment(
   }
   return remainingDays.length < minRemainingDays;
 }
+
+/// Facade for notification plan generation.
+class NotificationPlanner {
+  const NotificationPlanner._();
+
+  static List<PlannedNotification> buildPlan({
+    required DateTime now,
+    required PushPrefs prefs,
+    required FeatureSettings features,
+    required List<Reminder> reminders,
+    required DailyVerseConfig verseConfig,
+    required List<Verse> verses,
+    required List<LiturgyOccurrence> liturgies,
+    required List<MeetingOccurrence> meetings,
+    required List<ChurchEvent> dayEvents,
+    required Map<String, DayReadings> cachedReadings,
+    required List<CopticFeast> computedFeasts,
+    bool exactAlarmsAllowed = true,
+    List<Season> seasons = const [],
+  }) =>
+      planNotifications(
+        now: now,
+        prefs: prefs,
+        features: features,
+        reminders: reminders,
+        verseConfig: verseConfig,
+        verses: verses,
+        liturgies: liturgies,
+        meetings: meetings,
+        dayEvents: dayEvents,
+        cachedReadings: cachedReadings,
+        computedFeasts: computedFeasts,
+        exactAlarmsAllowed: exactAlarmsAllowed,
+        seasons: seasons,
+      );
+}
+

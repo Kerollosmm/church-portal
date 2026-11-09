@@ -11,6 +11,7 @@ abstract class PushEnv {
   bool get isSupported;
   String get permission;
   Future<String> requestPermission();
+  Future<bool> showLocalNotification(String title, String body, {String? icon, String? link});
 }
 
 /// Default platform push environment.
@@ -25,4 +26,9 @@ class PlatformPushEnv extends PushEnv {
 
   @override
   Future<String> requestPermission() => impl.requestPermission();
+
+  @override
+  Future<bool> showLocalNotification(String title, String body, {String? icon, String? link}) =>
+      impl.showLocalNotification(title, body, icon: icon, link: link);
 }
+

@@ -1,0 +1,11 @@
+# Cloudflare Workers configuration for church-portal push sender (ADR-059)
+# Cron-only sender: triggers every 15 minutes, zero public HTTP endpoints.
+name = "church-portal-push-sender"
+main = "tool/cf_push_worker.js"
+compatibility_date = "2026-11-01"
+
+[triggers]
+crons = ["*/15 * * * *"]
+
+[vars]
+FIREBASE_PROJECT_ID = "asafra-church-portal"

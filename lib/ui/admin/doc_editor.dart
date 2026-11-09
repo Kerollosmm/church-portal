@@ -13,6 +13,7 @@ import '../../domain/media.dart';
 import '../../domain/reminders.dart' show leadLabel;
 import '../../domain/rules.dart' show normalizeDigits;
 import '../../domain/time_format.dart';
+import '../../domain/today.dart' show DayEvent;
 import '../widgets/item_image.dart';
 import 'admin_schema.dart';
 import 'admin_validators.dart';
@@ -210,7 +211,17 @@ class DocEditorState extends State<DocEditor> {
 
   static Map<String, dynamic> _decodeRow(FieldDef f, String s) {
     final parts = s.split(_rowSep);
-    return {for (var i = 0; i < f.subFields.length; i++) f.subFields[i].key: i < parts.length ? parts[i] : ''};
+    final map = {for (var i = 0; i < f.subFields.length; i++) f.subFields[i].key: i < parts.length ? parts[i] : ''};
+    if (f.key == 'dayEvents') {
+      final id = map['id']?.toString().trim() ?? '';
+      if (id.isEmpty) {
+        final d = map['date']?.toString().trim() ?? '';
+        final st = map['start']?.toString().trim() ?? '';
+        final t = map['titleAr']?.toString().trim() ?? '';
+        map['id'] = DayEvent.computeHashId(d, st, t);
+      }
+    }
+    return map;
   }
 
   TextEditingController _ctrl(String text) => TextEditingController(text: text)..addListener(_markDirty);
@@ -1279,7 +1290,7 @@ class DocEditorState extends State<DocEditor> {
               padding: const EdgeInsets.all(10),
               child: Column(children: [
                 for (final sf in f.subFields)
-                  if (sf.showWhen == null || sf.showWhen!.value.contains(rows[i].values[sf.showWhen!.key]))
+                  if (!sf.hidden && (sf.showWhen == null || sf.showWhen!.value.contains(rows[i].values[sf.showWhen!.key])))
                   Padding(
                     padding: const EdgeInsets.only(bottom: 8),
                     child: switch (sf.type) {
@@ -1542,7 +1553,10 @@ class _Row {
   factory _Row.from(List<FieldDef> fields, Map data, VoidCallback onChange, {bool isNew = false}) {
     final r = _Row(fields);
     for (final f in fields) {
-      final v = data[f.key];
+      var v = data[f.key];
+      if (isNew && f.key == 'id' && f.hidden && (v == null || v.toString().trim().isEmpty)) {
+        v = DayEvent.generateRandomId();
+      }
       switch (f.type) {
         case FieldType.boolean:
           r.values[f.key] = v is bool ? v : (isNew ? f.newBool : f.missingBool);

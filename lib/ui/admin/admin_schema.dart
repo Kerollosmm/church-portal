@@ -152,6 +152,9 @@ class FieldDef {
   /// [FieldType.intChoices]: default integer values when document has none.
   final List<int> defaultIntValues;
 
+  /// Hidden field: not rendered in forms but retained in rows/data.
+  final bool hidden;
+
   const FieldDef(this.key, this.labelAr, this.labelEn, this.type,
       {this.required = false,
       this.options = const [],
@@ -180,7 +183,8 @@ class FieldDef {
       this.rowUniqueKey = '',
       this.defaultValues = const [],
       this.intOptions = const [],
-      this.defaultIntValues = const []});
+      this.defaultIntValues = const [],
+      this.hidden = false});
 
   int get effectiveMaxLength => maxLength > 0
       ? maxLength
@@ -1009,6 +1013,10 @@ const todaySettingsDoc = DocDef('settings/features', 'اليوم والبث ال
         FieldDef('attachmentLabelEn', 'نص زر الملف (إنجليزي)', 'File button text (English, blank = "Programme / booklet")',
             FieldType.text,
             maxLength: 80),
+        FieldDef('id', 'المعرف (داخلي)', 'ID (internal)', FieldType.text,
+            hidden: true,
+            maxLength: 10,
+            pattern: r'^[a-z0-9]{8,10}$'),
       ]),
   FieldDef('liveEnabled', 'شريط البث المباشر', 'Live-stream banner', FieldType.boolean,
       newBool: false,

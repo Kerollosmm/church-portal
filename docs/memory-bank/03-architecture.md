@@ -60,6 +60,8 @@ lib/
                             weeklyCalendarUrl, absoluteDetailUrl, pickRelated (PR #14, ADR-021)
     notify_plan.dart        PlannedNotification, notificationIdFor, buildNotificationPlan (rolling 9-day
                             window, verse/katameros/feasts, quiet hours, <= 80 alarms), needsReplenishment — ADR-058
+    push.dart               NotifyTypeSpec, NotifyConfig, ScheduledNotification, TopicSendState, RowSendStatus,
+                            SentEntry, SenderHealth, NotifySchedule, safeNotificationLink — ADR-059
     oem_guide.dart          OemBrand, detectOemBrand (Xiaomi/Oppo/Vivo/Huawei/Samsung), OemActionInfo,
                             oemIntentTryList, getOemSteps — ADR-058
     app_update.dart         ApkManifest, UpdateDecision, checkForUpdate, shouldForceUpdate — ADR-058
@@ -77,6 +79,7 @@ lib/
     image_processing.dart   prepareUpload/compressDecoded; codecs image_codec/image_codec_web.dart (canvas, WebP)
                             and image_codec_io.dart (`image` package, JPEG) via conditional import
     local_notifications*.dart LocalNotifier, PlatformLocalNotifier (flutter_local_notifications wrapper, channels, exact alarms) — ADR-058
+    push_messaging*.dart    PushMessaging (conditional imports: io = FirebaseMessaging background handler + 100-nid ring buffer + event:X slot sharing; stub/web = no-op) — ADR-059
     readings_store.dart     ReadingsStore (local caching of /data/readings/<date>.json, offline reading fallback, prune) — ADR-058
     app_updater*.dart       AppUpdater, PlatformAppUpdater (resumable streaming download, Range resume, SHA-256 validation, FileProvider install) — ADR-058
   state/providers.dart      all Riverpod providers (see below)
@@ -95,8 +98,13 @@ lib/
                             coptic_cross, update_banner (UpdateBanner, UpdateSheet)
   ui/admin/                 admin_page (sign-in, role check, dashboard shell), admin_schema (FieldDef,
                             CollectionDef, adminCollections, churchInfoDoc), doc_editor (generic form),
-                            collection_list, features_editor, admin_screens (overview, church info,
-                            messages, admins), admin_validators
+                            collection_list, features_editor, notifications_admin (NotificationsAdminSection,
+                            schedule CRUD, template preview, health card, sent log — ADR-059),
+                            admin_screens (overview, church info, messages, admins), admin_validators
+tool/
+  cf_push_worker.js         Cloudflare Worker cron-only sender (*/15 * * * *, pure Web-API, RS256 JWT, <= 25 subrequests) — ADR-059
+  push_sender.js            Node 22 CLI & GitHub Actions fallback sender (tool/push_sender.js --dry-run) — ADR-059
+  firestore_rest.js         Lightweight Firestore REST client for batchGet and commit transactions — ADR-059
 ```
 
 Rule of thumb: **business logic goes in `lib/domain/` as pure Dart with tests**; widgets only render and call it.
