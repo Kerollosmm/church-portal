@@ -638,13 +638,15 @@ class NotifyTypeSpec {
     ),
     NotifyType.seasons: NotifyTypeSpec(
       type: NotifyType.seasons,
-      time: '20:00',
+      // Same defaults as tool/push_daily.js DEFAULT_SEASONS_SPEC (the sender
+      // is what actually sends season alerts; the admin must show its values).
+      time: '09:00',
       daysBefore: 3,
-      titleAr: 'موسم {season}',
-      titleEn: '{season} Season',
-      bodyAr: 'يبدأ خلال {days} أيام',
-      bodyEn: 'Begins in {days} days',
-      defaultLink: '/seasons',
+      titleAr: 'موسم كنسي: {season}',
+      titleEn: 'Church Season: {season}',
+      bodyAr: 'يبدأ {season} بعد {days} أيام — بركة الموسم تشملنا جميعًا',
+      bodyEn: 'Season of {season} begins in {days} days',
+      defaultLink: '/mass-schedule',
       allowedPlaceholders: ['{season}', '{days}'],
     ),
     NotifyType.feasts: NotifyTypeSpec(
@@ -764,6 +766,60 @@ List<String> unknownPlaceholders(String typeId, String text) {
   return unknown;
 }
 
+/// `YYYY-MM-DDTHH:mm:ssZ` (UTC, whole seconds) — the only send-time format
+/// `validNotifyRow` in firestore.rules accepts. `DateTime.toIso8601String()`
+/// adds milliseconds (`.000Z`), which the rules rejected (PR #55 review).
+String scheduleIso(DateTime t) {
+  final u = t.toUtc();
+  String two(int n) => n.toString().padLeft(2, '0');
+  return '${u.year.toString().padLeft(4, '0')}-${two(u.month)}-${two(u.day)}T${two(u.hour)}:${two(u.minute)}:${two(u.second)}Z';
+}
+
+/// Plain-language name of a template placeholder, shown on the admin's
+/// insert chips instead of the raw `{key}` (PR #55 UX review).
+(String, String) placeholderLabel(String ph) => switch (ph) {
+      '{event}' => ('اسم الحدث', 'Event name'),
+      '{time}' => ('الوقت', 'Time'),
+      '{place}' => ('المكان', 'Place'),
+      '{lead}' => ('قبل كم', 'How long before'),
+      '{date}' => ('التاريخ', 'Date'),
+      '{verse}' => ('نص الآية', 'Verse text'),
+      '{ref}' => ('الشاهد (السفر والإصحاح)', 'Reference'),
+      '{reading}' => ('القراءة', 'Reading'),
+      '{season}' => ('اسم الموسم', 'Season name'),
+      '{days}' => ('عدد الأيام', 'Number of days'),
+      '{feast}' => ('اسم العيد', 'Feast name'),
+      _ => (ph, ph),
+    };
+
+/// Sample values used by the admin's template preview.
+const placeholderSamplesAr = {
+  'event': 'نهضة السيدة العذراء',
+  'time': '٧:٠٠ م',
+  'place': 'بالكنيسة الكبيرة',
+  'lead': 'بعد ساعة',
+  'date': '١٠ نوفمبر',
+  'verse': 'الرب راعيّ فلا يعوزني شيء',
+  'ref': 'مزمور ٢٣: ١',
+  'reading': 'إنجيل القداس: يوحنا ١٠: ١–١٦',
+  'season': 'صوم الميلاد',
+  'days': '٣',
+  'feast': 'رئيس الملائكة ميخائيل',
+};
+const placeholderSamplesEn = {
+  'event': 'Virgin Mary revival',
+  'time': '7:00 PM',
+  'place': 'in the main church',
+  'lead': 'in 1 hour',
+  'date': '10 Nov',
+  'verse': 'The Lord is my shepherd; I shall not want',
+  'ref': 'Psalm 23:1',
+  'reading': 'Liturgy Gospel: John 10:1–16',
+  'season': 'Nativity Fast',
+  'days': '3',
+  'feast': 'Archangel Michael',
+};
+
 /// One scheduled event push entry in settings/notifications.schedule.
 class ScheduledNotification {
   final String id;
@@ -791,7 +847,7 @@ class ScheduledNotification {
   });
 
   String toRow() {
-    final iso = atUtc.toUtc().toIso8601String();
+    final iso = scheduleIso(atUtc);
     return [
       id,
       iso,
@@ -1153,6 +1209,27 @@ class NotifySchedule {
     }
     return list;
   }
+
+  /// What the admin sees for a row (PR #55): `scheduled` (future, untouched),
+  /// `queued` (due, not yet picked up), `sending`, `ok`, `partial`, `error`,
+  /// `unconfirmed` or `expired` (> 24 h late and never sent).
+  String phaseOf(ScheduledNotification row, DateTime nowUtc) {
+    final st = status[row.id]?.state;
+    switch (st) {
+      case 'ok':
+      case 'sending':
+      case 'partial':
+      case 'error':
+      case 'unconfirmed':
+      case 'expired':
+        return st!;
+    }
+    if (isExpiredAt(row.id, nowUtc)) return 'expired';
+    return row.atUtc.isAfter(nowUtc) ? 'scheduled' : 'queued';
+  }
+
+  /// A row may be edited only while the sender has not touched it yet.
+  bool canEditRow(String id) => status[id] == null;
 
   bool canDeleteRow(String id) {
     final st = status[id]?.state;

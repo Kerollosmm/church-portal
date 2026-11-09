@@ -418,3 +418,28 @@ describe('push_sender', () => {
     assert.equal(Object.keys(patchedStatus).length, 0); // 'deletedRow' pruned!
   });
 });
+
+// PR #55: the admin screen (lib/ui/admin/notifications_admin.dart) writes
+// exactly these formats; the sender must read them.
+describe('admin ↔ sender formats (PR #55)', () => {
+  test('a row as the admin saves it (whole-second UTC, Arabic body) is parsed', () => {
+    const row = ['ab12cd34', '2026-11-10T07:00:00Z', 'app', 'نهضة العذراء', '', 'تبدأ ٧ مساءً', '', '/church-education/youth', 'meeting-youth'].join('\x1f');
+    const r = parseScheduleRow(row);
+    assert.ok(r);
+    assert.equal(r.atUtc.toISOString(), '2026-11-10T07:00:00.000Z');
+    assert.equal(r.targets, 'app');
+    assert.equal(r.eventKey, 'meeting-youth');
+  });
+
+  test('a seasons row saved by the admin (time + days before) drives the daily alert spec', () => {
+    const spec = getSeasonsSpec({ notifyTypes: [['seasons', '08:30', '2', 'موسم {season}', '', '', ''].join('\x1f')] });
+    assert.equal(spec.time, '08:30');
+    assert.equal(spec.daysBefore, 2);
+    assert.equal(spec.titleAr, 'موسم {season}');
+    assert.ok(spec.bodyAr.includes('{days}'), 'empty body falls back to the default');
+  });
+
+  test('season alerts open an existing route (no /seasons page exists)', () => {
+    assert.equal(getSeasonsSpec({}).defaultLink, '/mass-schedule');
+  });
+});

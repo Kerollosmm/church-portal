@@ -202,19 +202,35 @@ the daily / season limit. Since PR #35 a non-empty `dayEvents` list is saved in 
 write after the other keys (`separatelySavedKeys`; 20 events plus another Today key exceed the rules' 1,000-expression
 budget in one write).
 
-### App & notifications («التطبيق والإشعارات», `AppAndNotificationsScreen`, `lib/ui/admin/notifications_admin.dart`) → `settings/features` & `settings/notifications` (ADR-057, ADR-059)
+### App & notifications («التطبيق والإشعارات», `AppAndNotificationsScreen`, `lib/ui/admin/notifications_admin.dart`) → `settings/features` & `settings/notifications` (ADR-057, ADR-059; UX rework PR #55)
 
-Two-card management screen for PWA/APK install settings and push notifications:
-- **Install & APK Distribution Settings (`DocEditor` over `installSettingsDoc`):**
-  PWA prompt switches, install banner dismissal days, Android APK direct download URL, APK build number, SHA-256 checksum, file size (MB), and minimum supported build for forced updates.
-- **Push Notification Types & Templates (`NotificationsAdminSection`):**
-  Configuration for the 6 notification types (`announcements`, `verse_daily`, `katameros_daily`, `seasons`, `feasts`, `reminders`). Each type supports custom send times, lead days (for feasts/seasons/reminders), and Arabic/English title & body templates with dynamic placeholders (`{verse}`, `{ref}`, `{reading}`, `{season}`, `{days}`, `{feast}`, `{event}`, `{time}`, `{place}`, `{lead}`, `{date}`). Real-time character counters and live template preview cards. Invalid placeholders are flagged immediately. «استعادة النصوص الافتراضية» resets templates back to code defaults.
-- **Scheduled Push Broadcasts (up to 20 rows):**
-  Admin draft composer with date and time pickers, target selector (All / Android App / Web PWA), bilingual title and body inputs, in-app link selector (`/`, `/today`, `/mass-schedule`, `/seasons`, `/readings/...`), and service/event linker (`lit-...`, `meeting-...`, `day-...`, `season-...`).
-- **Schedule Management:**
-  Table displaying scheduled, pending, and completed rows with delivery status badges (`draft`, `sending`, `ok`, `partial`, `error`, `unconfirmed`, `expired`). Non-sending rows can be deleted by admins so the 20-row limit never deadlocks. Partial or errored rows provide a one-tap «نسخ لإعادة المحاولة» clone button which creates a new draft with targets automatically narrowed to the failed platform (`web` or `app`).
-- **Sender Health & Sent Log:**
-  Health status card displaying Cloudflare Worker / cron execution details: last run timestamp, version, messages sent today, Spark REST reads used today, and errors. The Sent Log displays a history of up to 100 recent broadcasts, and the Owner role can clear the log once full.
+Two tabs: «الإشعارات» (`NotificationsAdminSection`, kept alive across tab switches) and «تثبيت التطبيق»
+(`ChurchInfoScreen` over `appSettingsDoc`). The notifications tab is one list of cards, Arabic first:
+1. **Status** — master switch (`push`) with on/off explanation and a «متوقفة» banner; sender health from
+   `health.lastRunAt` in plain words: ok (≤ 1 h, «آخر فحص منذ …» in Cairo time), late (> 1 h), stopped (> 3 h or
+   `status: error`), never run (no stamp — neutral, not red).
+2. **Scheduled announcements** (`schedule`, ≤ 20) — numbered 5-step editor: Arabic title + body (both required, as
+   the rules and `parseScheduleRow` require), English optional (collapsed); «في أقرب وقت» or Cairo date + time
+   (default tomorrow 09:00; past times refused); targets «الجميع / تطبيق أندرويد فقط / المتصفح و iPhone فقط»;
+   «ماذا يفتح» picker (built-in pages, custom pages/categories, liturgies `lit-`, meetings `meeting-`, today's
+   events `day-`, seasons `season-` — one-off reads when the dialog opens; ids the rules reject open the page without
+   an `eventKey`) or a custom `/path`; phone preview ar/en; «جرّب على هذا الجهاز». Inline errors under the field.
+   Rows grouped «القادمة» / «السابقة» with icon status chips and a one-line explanation per state; «تعديل» while
+   the row has no `status` entry, «أعد الإرسال» (copy, targets narrowed) for partial / error / unconfirmed /
+   expired, «حذف» with a confirmation dialog. Saves go through `saveDocsFresh` (fresh read: an edit is refused once
+   the sender has claimed the row; the 20-row cap is checked on the fresh list).
+3. **Types offered** — one card per type with a switch (`pushTypes`), icon, description and the delivery channel in
+   words; «تعديل الوقت والنص»: time picker (no typed HH:mm), seasons «قبل بدايته بـ» 0–7, templates with
+   «أدرج» chips named in Arabic (`placeholderLabel`), live sample (`placeholderSamplesAr/En`), reset with
+   confirmation. Announcements have no template (their text is written per announcement). Only modified types are
+   stored in `notifyTypes`.
+4. **«ذكّرني»** — source switches (`reminderSources`, stored in the fixed order `lit,mtg,day`), 1–4 lead chips
+   (inline note on the limit, not a snack bar that would cover the save bar), default lead.
+5. **Sent log** — last 30 entries with Cairo time, kind (announcement / automatic season alert) and a result chip;
+   owner-only clear with confirmation.
+6. **Technical settings** (collapsed) — VAPID key with where to find it and format validation.
+Cards 1, 3, 4, 6 share the bottom bar «لديك تعديلات لم تُحفظ — حفظ الإعدادات / تراجع» (writes `settings/features`);
+loading a snapshot never marks the form dirty.
 
 ### Church info (`ChurchInfoScreen`) → `settings/church`
 (`ChurchInfoScreen` takes a `DocDef doc` — default `churchInfoDoc` — and an optional `header`; PR #19 reuses it for

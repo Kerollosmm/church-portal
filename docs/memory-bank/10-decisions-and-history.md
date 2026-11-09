@@ -1841,6 +1841,18 @@ supersede them.
     - Live template editor with placeholders (`{verse}`, `{reading}`, `{season}`, `{days}`, `{feast}`, `{event}`, `{time}`, `{place}`, `{lead}`, `{date}`), live preview, character counter, error flagging, and reset defaults.
     - Scheduled pushes manager: new push draft form, target selector (`all`, `web`, `app`), service linker for liturgical and day events, Cairo time picker, relative lead calculator, retry action for failed rows, and deletion of non-sending rows.
     - Sender health status card and recent sent log viewer.
+  - **PR #55 UX review (9 Nov 2026, owner: "not user friendly; choices not clear; not sure it works"):**
+    - Bugs fixed: schedule rows were written with millisecond timestamps (`toIso8601String()` → `.000Z`) that
+      `validNotifyRow` rejects — every save failed; now `scheduleIso()` writes `YYYY-MM-DDTHH:mm:ssZ`. Arabic body
+      was optional in the UI but required by the rules and the sender. Loading custom `notifyTypes` called
+      `setState` during build and marked the form dirty. Raw l10n keys were shown (`appSettingsTitle`,
+      `offeredTypes`, `enablePush`, `confirm`, `cleared`). Times used the device zone instead of Cairo, and the date
+      picker shifted the time by the UTC offset. Scheduled-row meta overflowed at 390 px. Selected chips had dark
+      text on the dark band. Season defaults differed between the admin (20:00, other texts) and the sender
+      (09:00) — aligned to the sender; both pointed at `/seasons`, which is not a route — now `/mass-schedule`.
+      No edit for unsent rows; delete had no confirmation; status/targets/log showed codes (`ALL`, `W:ok`).
+    - UX: card layout described in `07-admin-dashboard.md`; event/page picker instead of typing `eventKey`/paths;
+      `saveDocsFresh` for schedule writes. Data formats and rules unchanged (backward compatible).
   - **Remote FCM Sender (`tool/cf_push_worker.js`, `tool/push_sender.js`, `tool/firestore_rest.js`):**
     - Pure Web-API Cloudflare Worker cron trigger (`*/15 * * * *`, no `POST /trigger`) + Node 22 CLI fallback.
     - Token minting via Google OAuth2 service account JWT (RS256 with Web Crypto `crypto.subtle`), Firestore REST `:batchGet` (2 reads/run) + seasons query once per day = ~197 reads/day.

@@ -2187,6 +2187,58 @@ describe('ADR-059: settings/notifications (notification manager & FCM sender)', 
   });
 });
 
+describe('PR #55: writes exactly as the admin notifications screen makes them', () => {
+  const notifRef = (uid = EDITOR) => doc(db(uid), 'settings', 'notifications');
+  const featRef = (uid = EDITOR) => doc(db(uid), 'settings', 'features');
+  const S = '\u001f';
+  const stamp = (uid = EDITOR) => ({ updatedAt: serverTimestamp(), updatedBy: `${uid}@x.test` });
+  // ScheduledNotification.toRow(): id, whole-second UTC, targets, ar/en texts, link, eventKey.
+  const adminRow = (id, at = '2026-11-10T07:00:00Z') =>
+    [id, at, 'all', 'نهضة السيدة العذراء الليلة', '', 'تبدأ الساعة ٧ مساءً\nبالكنيسة الكبيرة', '', '/church-education/youth', 'meeting-youth'].join(S);
+
+  test('first save creates settings/notifications (doc absent) with the admin stamp', async () => {
+    await assertSucceeds(setDoc(notifRef(), { schedule: [adminRow('ab12cd34')], ...stamp() }, { merge: true }));
+  });
+
+  test('editing the schedule next to sender-owned status/sentLog/health succeeds', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'settings', 'notifications'), {
+        schedule: [adminRow('ab12cd34')],
+        status: { ab12cd34: { state: 'ok' } },
+        sentLog: [['ab12cd34', '2026-11-10T07:07:00.000Z', 'ok', 'x', 'cron'].join(S)],
+        health: { lastRunAt: '2026-11-10T07:07:00.000Z' },
+      });
+    });
+    await assertSucceeds(setDoc(notifRef(), { schedule: [adminRow('ab12cd34'), adminRow('ef56gh78')], ...stamp() }, { merge: true }));
+    await assertSucceeds(setDoc(notifRef(), { schedule: [adminRow('ef56gh78')], ...stamp() }, { merge: true }));
+  });
+
+  test('a send time with milliseconds (old client format) or an empty Arabic body is rejected', async () => {
+    await assertFails(setDoc(notifRef(), { schedule: [adminRow('ab12cd34', '2026-11-10T07:00:00.000Z')] }, { merge: true }));
+    const noBody = ['ab12cd34', '2026-11-10T07:00:00Z', 'all', 'عنوان', '', '', '', '/', ''].join(S);
+    await assertFails(setDoc(notifRef(), { schedule: [noBody] }, { merge: true }));
+  });
+
+  test('settings save from the notifications tab (all keys, one seasons template) succeeds', async () => {
+    await assertSucceeds(setDoc(featRef(), {
+      push: false,
+      pushVapidKey: '',
+      pushTypes: ['announcements', 'seasons', 'reminders'],
+      reminderLeads: [0, 15, 60, 1440],
+      reminderDefaultLead: 60,
+      reminderSources: 'lit,mtg',
+      notifyTypes: [['seasons', '08:30', '2', 'موسم كنسي: {season}', 'Church Season: {season}', 'يبدأ {season} بعد {days} أيام', 'Season of {season} begins in {days} days'].join(S)],
+      ...stamp(),
+    }, { merge: true }));
+    // Every type customised at once (6 rows), each at max lengths.
+    const types = ['announcements', 'verse_daily', 'katameros_daily', 'seasons', 'feasts', 'reminders'];
+    await assertSucceeds(setDoc(featRef(), {
+      notifyTypes: types.map((t) => [t, t === 'announcements' || t === 'reminders' ? '' : '07:00', t === 'seasons' ? '7' : '', 'ع'.repeat(120), 'e'.repeat(120), 'ن'.repeat(300), 'b'.repeat(300)].join(S)),
+      ...stamp(),
+    }, { merge: true }));
+  });
+});
+
 describe('ADR-059: settings/features notifyTypes & reminderSources', () => {
   const featRef = (uid = EDITOR) => doc(db(uid), 'settings', 'features');
   const S = '\u001f';

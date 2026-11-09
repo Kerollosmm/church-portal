@@ -1,14 +1,22 @@
+// Admin notification manager (ADR-059) — widget tests, incl. the PR #55 UX
+// review: friendly labels (no raw keys), delete confirmation, inline
+// validation, rows the rules and the sender accept, and the settings save.
 import 'dart:async';
+import 'dart:io';
+
+import 'package:church_portal/core/push_env.dart';
 import 'package:church_portal/core/theme.dart';
 import 'package:church_portal/data/admin_repository.dart';
 import 'package:church_portal/domain/cairo_time.dart';
+import 'package:church_portal/domain/push.dart';
 import 'package:church_portal/ui/admin/notifications_admin.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 
+/// In-memory backend with Firestore-like top-level merge on save.
 class _FakeAdminRepo extends AdminBackend {
   final Map<String, Map<String, dynamic>> docs = {};
-  final savedDocs = <String, Map<String, dynamic>>{};
+  final saves = <String, List<Map<String, dynamic>>>{};
   final _controllers = <String, StreamController<AdminDoc?>>{};
 
   _FakeAdminRepo([Map<String, Map<String, dynamic>>? initial]) {
@@ -25,9 +33,7 @@ class _FakeAdminRepo extends AdminBackend {
   Stream<AdminDoc?> watchDoc(String path) {
     final c = _controllers.putIfAbsent(path, () => StreamController<AdminDoc?>.broadcast());
     scheduleMicrotask(() {
-      if (!c.isClosed) {
-        c.add(docs.containsKey(path) ? AdminDoc(path.split('/').last, docs[path]!) : null);
-      }
+      if (!c.isClosed) c.add(docs.containsKey(path) ? AdminDoc(path.split('/').last, docs[path]!) : null);
     });
     return c.stream;
   }
@@ -37,19 +43,12 @@ class _FakeAdminRepo extends AdminBackend {
 
   @override
   Future<void> saveDoc(String path, Map<String, dynamic> data) async {
-    savedDocs[path] = data;
-    docs[path] = data;
-    if (_controllers.containsKey(path) && !_controllers[path]!.isClosed) {
-      _controllers[path]!.add(AdminDoc(path.split('/').last, data));
-    }
+    saves.putIfAbsent(path, () => []).add(data);
+    docs[path] = {...?docs[path], ...data};
+    _controllers[path]?.add(AdminDoc(path.split('/').last, docs[path]!));
   }
 
-  @override
-  Future<void> saveDocs(Map<String, Map<String, dynamic>> writes) async {
-    for (final e in writes.entries) {
-      await saveDoc(e.key, e.value);
-    }
-  }
+  Map<String, dynamic>? lastSave(String path) => saves[path]?.last;
 
   @override
   Future<void> update(String collection, String id, Map<String, dynamic> data) async {}
@@ -69,6 +68,21 @@ class _FakeAdminRepo extends AdminBackend {
   }
 }
 
+class _FakePushEnv extends PushEnv {
+  int shown = 0;
+  @override
+  bool get isSupported => true;
+  @override
+  String get permission => 'granted';
+  @override
+  Future<String> requestPermission() async => 'granted';
+  @override
+  Future<bool> showLocalNotification(String title, String body, {String? icon, String? link}) async {
+    shown++;
+    return true;
+  }
+}
+
 Widget _app(Widget child, {Locale locale = const Locale('ar'), double textScale = 1.0}) => MaterialApp(
       locale: locale,
       supportedLocales: const [Locale('ar'), Locale('en')],
@@ -80,190 +94,274 @@ Widget _app(Widget child, {Locale locale = const Locale('ar'), double textScale 
       ),
     );
 
+String _iso(DateTime d) => scheduleIso(d);
+const _s = '\u001f';
+
+/// `validNotifyRow`'s regex, read from firestore.rules (so this test breaks if
+/// the rule and the client drift apart).
+RegExp _rulesRowRegex() {
+  final rules = File('firestore.rules').readAsStringSync();
+  final fn = rules.substring(rules.indexOf('function validNotifyRow('));
+  final m = RegExp(r"s\.matches\('(.+?)'\);").firstMatch(fn)!;
+  final pattern = m.group(1)!.replaceAll(r'\\', r'\').replaceAll(r'\x1f', '\u001f');
+  return RegExp(pattern);
+}
+
 void main() {
   setUpAll(CairoTime.ensureInitialized);
 
-  group('AppAndNotificationsScreen (ADR-059)', () {
-    late _FakeAdminRepo repo;
+  late _FakeAdminRepo repo;
+  final now = DateTime.now().toUtc();
 
-    setUp(() {
-      repo = _FakeAdminRepo({
+  Map<String, Map<String, dynamic>> seed({Map<String, dynamic>? health, List<String>? notifyTypes}) => {
         'settings/features': {
           'push': true,
-          'pushVapidKey': 'test_vapid_key',
-          'pushTypes': ['announcements', 'verse_daily'],
+          'pushVapidKey': '',
+          'pushTypes': ['announcements', 'verse_daily', 'reminders'],
           'reminderLeads': [0, 15, 60],
           'reminderDefaultLead': 60,
           'reminderSources': 'lit,mtg,day',
-          'notifyTypes': <String>[],
+          'notifyTypes': notifyTypes ?? <String>[],
         },
         'settings/notifications': {
           'schedule': [
-            'row1\u001f2026-11-10T10:00:00Z\u001fall\u001fعظة الأحد\u001fSunday Sermon\u001fتفاصيل العظة\u001fSermon details\u001f/\u001flit-123',
+            ['row1', _iso(now.subtract(const Duration(hours: 3))), 'all', 'عظة الأحد', 'Sunday Sermon', 'تفاصيل العظة', 'Sermon details', '/', 'lit-123'].join(_s),
+            ['row2', _iso(now.add(const Duration(days: 2))), 'all', 'نهضة العذراء', '', 'تبدأ ٧ مساءً', '', '/mass-schedule', ''].join(_s),
           ],
           'status': {
-            'row1': {
-              'state': 'error',
-              'updatedAt': '2026-11-08T12:00:00Z',
-              'error': 'FCM send failed',
-            },
+            'row1': {'state': 'error', 'appState': 'error', 'webState': 'error'},
           },
           'sentLog': [
-            'log1\u001f2026-11-08T09:00:00Z\u001fall\u001fتنبيه تجريبي\u001fTest alert\u001f/\u001fok\u001fok',
+            ['row1', _iso(now.subtract(const Duration(hours: 3))), 'error', 'عظة الأحد', 'cron'].join(_s),
           ],
-          'health': {
-            'cronStatus': 'healthy',
-            'lastRunAt': '2026-11-08T10:00:00Z',
-            'lastSuccessAt': '2026-11-08T10:00:00Z',
-            'totalSent24h': 5,
-            'errors24h': 0,
-          },
+          'health': health ?? {'lastRunAt': _iso(now.subtract(const Duration(minutes: 10)))},
         },
-      });
-    });
+      };
 
-    tearDown(() {
-      repo.dispose();
-    });
+  setUp(() => repo = _FakeAdminRepo(seed()));
+  tearDown(() => repo.dispose());
 
-    testWidgets('responsive layout at 320px (200% text scale), 390px, and 1280px', (tester) async {
-      final sizes = [
-        const Size(320, 800),
-        const Size(390, 844),
-        const Size(1280, 900),
-      ];
+  Future<void> pump(WidgetTester tester, {Size size = const Size(1000, 4000), String role = 'owner', PushEnv? env, double textScale = 1}) async {
+    tester.view.physicalSize = size;
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(const SizedBox());
+    await tester.pumpWidget(_app(
+      env == null
+          ? AppAndNotificationsScreen(repo: repo, role: role)
+          : NotificationsAdminSection(repo: repo, role: role, pushEnv: env),
+      textScale: textScale,
+    ));
+    await tester.pumpAndSettle();
+  }
 
-      for (final size in sizes) {
-        tester.view.physicalSize = size;
-        tester.view.devicePixelRatio = 1.0;
+  Future<void> tapKey(WidgetTester tester, String key) async {
+    final f = find.byKey(ValueKey(key));
+    // The save bar is not in the list; ensureVisible would scroll the
+    // surrounding TabBarView instead.
+    if (!key.endsWith('-settings')) await tester.ensureVisible(f);
+    await tester.pumpAndSettle();
+    await tester.tap(f);
+    await tester.pumpAndSettle();
+  }
 
-        await tester.pumpWidget(_app(
-          AppAndNotificationsScreen(repo: repo, role: 'owner'),
-          textScale: size.width == 320 ? 2.0 : 1.0,
-        ));
-        await tester.pumpAndSettle();
-
-        expect(find.byType(TabBar), findsOneWidget);
-        expect(find.byType(NotificationsAdminSection), findsOneWidget);
-        expect(tester.takeException(), isNull, reason: 'No layout exceptions at ${size.width}px');
-      }
-
-      addTearDown(tester.view.reset);
-    });
-
-    testWidgets('tab switching between Notifications and App Settings', (tester) async {
-      tester.view.physicalSize = const Size(800, 1000);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.reset);
-
-      await tester.pumpWidget(_app(AppAndNotificationsScreen(repo: repo, role: 'owner')));
-      await tester.pumpAndSettle();
-
-      // Initially on Notifications tab
+  testWidgets('no layout errors at 320 px (200% text), 390 px and 1280 px', (tester) async {
+    for (final (size, scale) in [(const Size(320, 3000), 2.0), (const Size(390, 3000), 1.0), (const Size(1280, 2400), 1.0)]) {
+      await pump(tester, size: size, textScale: scale);
       expect(find.byType(NotificationsAdminSection), findsOneWidget);
+      expect(tester.takeException(), isNull, reason: 'no overflow at ${size.width}px');
+    }
+  });
 
-      // Switch to App Settings tab
-      final appTab = find.byIcon(Icons.install_mobile_outlined);
-      expect(appTab, findsOneWidget);
-      await tester.tap(appTab);
-      await tester.pumpAndSettle();
+  testWidgets('every label is plain text: no raw l10n keys, stored codes or W:/A: markers', (tester) async {
+    await pump(tester);
+    final raw = RegExp(r'^(nm_|err_)|^[a-z]+[A-Z][A-Za-z]+$|^[WA]:|^(ALL|APP|WEB)$|^(lit|mtg|day)$');
+    final texts = tester.widgetList<Text>(find.byType(Text)).map((t) => t.data ?? '').where((s) => s.isNotEmpty);
+    final bad = texts.where(raw.hasMatch).toList();
+    expect(bad, isEmpty);
+    expect(find.text('الإشعارات'), findsWidgets);
+    expect(find.text('تثبيت التطبيق'), findsOneWidget);
+    expect(find.text('تشغيل الإشعارات'), findsOneWidget);
+    expect(find.text('خدمة الإرسال تعمل'), findsOneWidget);
+    // Friendly status names and the explanation of what to do.
+    expect(find.text('فشل'), findsWidgets);
+    expect(find.text('مجدول'), findsOneWidget);
+    expect(find.textContaining('أعد الإرسال'), findsWidgets);
+    expect(find.text('الجميع'), findsWidgets);
+  });
 
-      // App install doc editor is visible
-      expect(find.byKey(const ValueKey('app-install-doc')), findsOneWidget);
+  testWidgets('sender status: never run / stopped are explained, not shown as an error code', (tester) async {
+    repo = _FakeAdminRepo(seed(health: {}));
+    await pump(tester);
+    expect(find.text('خدمة الإرسال لم تعمل بعد'), findsOneWidget);
+    repo = _FakeAdminRepo(seed(health: {'lastRunAt': _iso(now.subtract(const Duration(hours: 5)))}));
+    await pump(tester);
+    expect(find.text('خدمة الإرسال متوقفة'), findsOneWidget);
+  });
 
-      // Switch back to Notifications tab
-      final notifTab = find.byIcon(Icons.notifications_active_outlined);
-      expect(notifTab, findsOneWidget);
-      await tester.tap(notifTab);
-      await tester.pumpAndSettle();
+  testWidgets('delete asks for confirmation; cancel keeps the row, confirm removes only it', (tester) async {
+    await pump(tester);
+    await tapKey(tester, 'delete-row2');
+    expect(find.text('حذف هذا الإعلان؟'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('confirm-cancel')));
+    await tester.pumpAndSettle();
+    expect(repo.lastSave('settings/notifications'), isNull);
 
-      expect(find.byType(NotificationsAdminSection), findsOneWidget);
-    });
+    await tapKey(tester, 'delete-row2');
+    await tester.tap(find.byKey(const ValueKey('confirm-ok')));
+    await tester.pumpAndSettle();
+    final saved = repo.lastSave('settings/notifications')!['schedule'] as List;
+    expect(saved, hasLength(1));
+    expect((saved.single as String).split(_s).first, 'row1');
+    expect(find.text('تم الحذف.'), findsOneWidget);
+  });
 
-    testWidgets('expanding notification type card, inserting placeholder chip, and reset defaults', (tester) async {
-      tester.view.physicalSize = const Size(1000, 3000);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.reset);
+  testWidgets('new announcement: inline validation for missing Arabic title and body', (tester) async {
+    await pump(tester);
+    await tapKey(tester, 'addScheduledPush');
+    await tapKey(tester, 'save-push');
+    expect(find.text('اكتب عنوان الإشعار بالعربي.'), findsOneWidget);
+    expect(repo.lastSave('settings/notifications'), isNull);
 
-      await tester.pumpWidget(_app(AppAndNotificationsScreen(repo: repo, role: 'owner')));
-      await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const ValueKey('draft-titleAr')), 'قداس عيد الملاك');
+    await tapKey(tester, 'save-push');
+    expect(find.text('اكتب نص الإشعار بالعربي.'), findsOneWidget, reason: 'rules and sender both require the Arabic body');
+    expect(repo.lastSave('settings/notifications'), isNull);
+  });
 
-      // Tap the expansion tile for verse_daily
-      final verseTile = find.descendant(
-        of: find.byKey(const ValueKey('type_verse_daily')),
-        matching: find.text('آية اليوم'),
-      );
-      expect(verseTile, findsOneWidget);
-      await tester.tap(verseTile);
-      await tester.pumpAndSettle();
+  testWidgets('new announcement saved as a row the rules regex and the sender accept', (tester) async {
+    await pump(tester);
+    await tapKey(tester, 'addScheduledPush');
+    // Default is a set time (tomorrow 9 AM Cairo), shown in words.
+    expect(find.byKey(const ValueKey('when-summary')), findsOneWidget);
+    await tester.enterText(find.byKey(const ValueKey('draft-titleAr')), 'قداس عيد الملاك');
+    await tester.enterText(find.byKey(const ValueKey('draft-bodyAr')), 'القداس غدًا الساعة ٦ صباحًا');
+    await tapKey(tester, 'target-app');
+    // Preview mirrors the text.
+    expect(find.descendant(of: find.byKey(const ValueKey('push-preview')), matching: find.text('قداس عيد الملاك')), findsOneWidget);
+    await tapKey(tester, 'save-push');
 
-      // Find a placeholder chip for verse_daily e.g. '{ref}'
-      final chipRef = find.widgetWithText(ActionChip, '{ref}');
-      expect(chipRef, findsWidgets);
+    final rows = (repo.lastSave('settings/notifications')!['schedule'] as List).cast<String>();
+    expect(rows, hasLength(3));
+    final added = rows.last;
+    expect(_rulesRowRegex().hasMatch(added), isTrue, reason: added);
+    expect(added.split(_s)[1], matches(RegExp(r'^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$')), reason: 'no milliseconds');
+    final parsed = ScheduledNotification.fromRow(added)!;
+    expect(parsed.targets, 'app');
+    final c = CairoTime.fromInstant(parsed.atUtc);
+    expect((c.hour, c.minute), (9, 0), reason: 'default send time is 9:00 Cairo');
+    expect(find.byKey(const ValueKey('push-editor')), findsNothing);
+  });
 
-      await tester.tap(chipRef.first);
-      await tester.pumpAndSettle();
+  testWidgets('the old millisecond timestamp is what the rules rejected', (tester) async {
+    final re = _rulesRowRegex();
+    final base = ['r1', 'T', 'all', 'عنوان', '', 'نص', '', '/', ''];
+    String row(String t) => (List.of(base)..[1] = t).join(_s);
+    expect(re.hasMatch(row('2026-11-10T10:00:00Z')), isTrue);
+    expect(re.hasMatch(row(DateTime.utc(2026, 11, 10, 10).toIso8601String())), isFalse);
+    expect(re.hasMatch(ScheduledNotification(id: 'r1', atUtc: DateTime.utc(2026, 11, 10, 10, 0, 0, 123), titleAr: 'ع', bodyAr: 'ن').toRow()), isTrue);
+  });
 
-      // Bottom bar with Save button should now be visible (dirty)
-      expect(find.text('تعديلات غير محفوظة'), findsOneWidget);
-      expect(find.text('حفظ'), findsOneWidget);
+  testWidgets('a scheduled row can be edited; a failed row offers «أعد الإرسال» instead', (tester) async {
+    await pump(tester);
+    expect(find.byKey(const ValueKey('edit-row2')), findsOneWidget);
+    expect(find.byKey(const ValueKey('edit-row1')), findsNothing);
+    expect(find.byKey(const ValueKey('retry-row1')), findsOneWidget);
 
-      // Tap Reset Defaults button
-      final resetBtn = find.widgetWithText(TextButton, 'استعادة النص الافتراضي');
-      expect(resetBtn, findsWidgets);
-      await tester.tap(resetBtn.first);
-      await tester.pumpAndSettle();
+    await tapKey(tester, 'edit-row2');
+    expect(find.text('تعديل الإعلان'), findsOneWidget);
+    await tester.enterText(find.byKey(const ValueKey('draft-titleAr')), 'نهضة العذراء — معدّلة');
+    await tapKey(tester, 'save-push');
+    final rows = (repo.lastSave('settings/notifications')!['schedule'] as List).cast<String>();
+    expect(rows, hasLength(2), reason: 'edited in place, not added');
+    expect(rows.firstWhere((r) => r.startsWith('row2')).split(_s)[3], 'نهضة العذراء — معدّلة');
 
-      expect(tester.takeException(), isNull);
-    });
+    await tapKey(tester, 'retry-row1');
+    expect(find.text('إعلان جديد'), findsWidgets);
+    expect(tester.widget<TextField>(find.byKey(const ValueKey('draft-titleAr'))).controller!.text, 'عظة الأحد');
+  });
 
-    testWidgets('scheduled notification row: clone for retry', (tester) async {
-      tester.view.physicalSize = const Size(1000, 3000);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.reset);
+  testWidgets('settings: friendly switches save pushTypes, sources and leads; unknown placeholder blocks save', (tester) async {
+    await pump(tester);
+    expect(find.byKey(const ValueKey('save-settings')), findsNothing, reason: 'loading stored settings never marks the form dirty');
 
-      await tester.pumpWidget(_app(AppAndNotificationsScreen(repo: repo, role: 'owner')));
-      await tester.pumpAndSettle();
+    await tapKey(tester, 'offer-katameros_daily');
+    await tapKey(tester, 'src-day');
+    await tapKey(tester, 'lead-1440');
+    await tapKey(tester, 'lead-30');
+    expect(find.text('يمكن اختيار ٤ مدد على الأكثر. ألغِ واحدة أولًا.'), findsOneWidget);
+    await tapKey(tester, 'save-settings');
 
-      // Scroll down to the scheduled pushes section
-      await tester.drag(find.byType(ListView), const Offset(0, -900));
-      await tester.pumpAndSettle();
+    final saved = repo.lastSave('settings/features')!;
+    expect(saved['pushTypes'], ['announcements', 'verse_daily', 'katameros_daily', 'reminders']);
+    expect(saved['reminderSources'], 'lit,mtg');
+    expect(saved['reminderLeads'], [0, 15, 60, 1440]);
+    expect(saved['notifyTypes'], isEmpty, reason: 'unchanged templates are not stored');
 
-      // Verify the scheduled row "عظة الأحد" is displayed
-      expect(find.text('عظة الأحد'), findsOneWidget);
+    await tapKey(tester, 'customize-verse_daily');
+    final title = find.descendant(of: find.byKey(const ValueKey('type_verse_daily')), matching: find.byType(TextField)).first;
+    await tester.enterText(title, 'آية {bogus}');
+    await tester.pumpAndSettle();
+    expect(find.textContaining('{bogus}'), findsWidgets);
+    final before = repo.saves['settings/features']!.length;
+    await tapKey(tester, 'save-settings');
+    expect(repo.saves['settings/features']!.length, before, reason: 'invalid template not saved');
+  });
 
-      // Test cloning row for retry
-      final cloneBtn = find.widgetWithText(TextButton, 'نسخ لإعادة الإرسال');
-      expect(cloneBtn, findsOneWidget);
-      await tester.tap(cloneBtn);
-      await tester.pumpAndSettle();
+  testWidgets('customised templates load without marking dirty and the placeholder chips are named', (tester) async {
+    repo = _FakeAdminRepo(seed(notifyTypes: [
+      ['seasons', '08:00', '2', 'موسم {season}', '', '', ''].join(_s),
+    ]));
+    await pump(tester);
+    expect(tester.takeException(), isNull);
+    expect(find.byKey(const ValueKey('save-settings')), findsNothing);
+    expect(find.textContaining('٨:٠٠'), findsWidgets);
+    await tapKey(tester, 'customize-seasons');
+    expect(find.text('اسم الموسم'), findsWidgets);
+    expect(find.text('{season}'), findsNothing);
+  });
 
-      // Verify draft form is open with the cloned title
-      expect(find.text('إضافة إشعار مجدول'), findsOneWidget);
-      expect(find.text('عظة الأحد'), findsWidgets);
-    });
+  testWidgets('clear log (owner) asks first; editors do not see it', (tester) async {
+    await pump(tester);
+    await tapKey(tester, 'clear-log');
+    expect(find.text('مسح السجل'), findsWidgets);
+    await tester.tap(find.byKey(const ValueKey('confirm-ok')));
+    await tester.pumpAndSettle();
+    expect(repo.lastSave('settings/notifications'), {'sentLog': <String>[]});
 
-    testWidgets('scheduled notification row: delete non-sending row', (tester) async {
-      tester.view.physicalSize = const Size(1000, 3000);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.reset);
+    await pump(tester, role: 'editor');
+    expect(find.byKey(const ValueKey('clear-log')), findsNothing);
+  });
 
-      await tester.pumpWidget(_app(AppAndNotificationsScreen(repo: repo, role: 'owner')));
-      await tester.pumpAndSettle();
+  testWidgets('test on this device uses the draft text', (tester) async {
+    final env = _FakePushEnv();
+    await pump(tester, env: env);
+    await tapKey(tester, 'addScheduledPush');
+    await tapKey(tester, 'test-device');
+    expect(env.shown, 1);
+  });
 
-      // Scroll down to the scheduled pushes section
-      await tester.drag(find.byType(ListView), const Offset(0, -900));
-      await tester.pumpAndSettle();
+  testWidgets('tab switching between Notifications and App install', (tester) async {
+    await pump(tester, size: const Size(800, 1000));
+    await tester.tap(find.byIcon(Icons.install_mobile_outlined));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('app-install-doc')), findsOneWidget);
+    await tester.tap(find.byIcon(Icons.notifications_active_outlined));
+    await tester.pumpAndSettle();
+    expect(find.byType(NotificationsAdminSection), findsOneWidget);
+  });
 
-      final deleteBtn = find.widgetWithText(TextButton, 'حذف');
-      expect(deleteBtn, findsOneWidget);
-      await tester.tap(deleteBtn);
-      await tester.pumpAndSettle();
-
-      // Verify saveDoc was called for settings/notifications with schedule having 0 rows
-      expect(repo.savedDocs['settings/notifications'], isNotNull);
-      final savedSchedule = repo.savedDocs['settings/notifications']!['schedule'] as List;
-      expect(savedSchedule, isEmpty);
-    });
+  test('season defaults shown in the admin are the ones the sender uses (tool/push_daily.js)', () {
+    final js = File('tool/push_daily.js').readAsStringSync();
+    final block = js.substring(js.indexOf('DEFAULT_SEASONS_SPEC = {'), js.indexOf('};', js.indexOf('DEFAULT_SEASONS_SPEC = {')));
+    String field(String k) => RegExp("$k: '([^']*)'").firstMatch(block)!.group(1)!;
+    final d = NotifyTypeSpec.builtInDefaults[NotifyType.seasons]!;
+    expect(d.time, field('time'));
+    expect(d.titleAr, field('titleAr'));
+    expect(d.titleEn, field('titleEn'));
+    expect(d.bodyAr, field('bodyAr'));
+    expect(d.bodyEn, field('bodyEn'));
+    expect(d.defaultLink, field('defaultLink'));
+    expect('${d.daysBefore}', RegExp(r'daysBefore: (\d+)').firstMatch(block)!.group(1));
   });
 }
