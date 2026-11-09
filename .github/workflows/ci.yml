@@ -47,6 +47,9 @@ jobs:
           if [ -n "$SENTRY_DSN" ]; then DEFINES+=(--dart-define=SENTRY_DSN="$SENTRY_DSN"); fi
           flutter build web --release "${DEFINES[@]}"
 
+      - name: Check web bundle size & deferred chunk isolation
+        run: node tool/check_web_bundle.mjs build/web
+
       - name: Fingerprint icon fonts (cache busting, PR #23)
         run: python3 tool/fingerprint_icon_fonts.py build/web
 

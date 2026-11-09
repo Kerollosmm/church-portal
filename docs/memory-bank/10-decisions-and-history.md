@@ -1904,6 +1904,35 @@ supersede them.
     - `NotificationsPage` on web: in-app browser copy link button, Safari tab install-first card, Focus mode note, test notification button, `_WebPushInboxSection` with clear history.
     - `AppShell`: `pushEnv.deepLinks` listener, deferred loading of `WebPushRepository` (`deferred as web_push`), `from_push=1` refresh.
     - Admin dashboard (`notifications_admin.dart`): web push health cards (`meta/push_topics`, `meta/push_plan`), daily cap warning banner, planner delay notice.
+## ADR-061 — Phase 2 responsive layout polish, OpenType font retention & deferred bundle guard
+
+- **Context (Phase 2 PR E, 9 Nov 2026):**
+  - Following Phase 2 PRs A–D and ADR-062, an end-to-end audit of responsive layout, extreme font scaling (up to 200%), soft-keyboard interactions, font subsetting vs OpenType preservation, and web bundle isolation was executed.
+  - A real-phone report noted horizontal overflow on narrow viewports (< 360 px / 320 px) in `AppShell` header chrome and modal bottom sheets with the soft keyboard open.
+  - Subsetting fonts via `pyftsubset` was explored but posed severe risks of breaking Arabic `GSUB`/`GPOS` OpenType typographic features, cursive shaping, and tashkeel diacritics in liturgical Katameros readings (`/readings/:date`) and free-form admin notifications, whereas mobile APK sizes (arm64 15.0 MB, arm32 14.6 MB) already sit comfortably below the 20 MB / 18 MB budget limits.
+  - Secondary web modules must be strictly deferred with zero leaks into the entry bundle, guarded by CI.
+- **Decision:**
+  1. **OpenType Font Retention (Drop `pyftsubset`):** Keep full OpenType Arabic fonts (`IBMPlexSansArabic`, `Lalezar`, `ArefRuqaa`) unsubsetted in `assets/fonts/` (and verified in `build/web/assets/assets/fonts/` with sizes 120–135 KB > 20 KB threshold) to preserve all Arabic ligatures, cursive joins, and diacritics. Split APK sizes (~15.0 MB arm64, ~14.6 MB arm32) already meet the release budget.
+  2. **`AppShell` < 360 px Space Recovery:**
+     - Clamped `SealTab` width to 54 dp (height 70 dp) on viewports < 360 px, while retaining 62×80 dp on wider screens.
+     - Title typography uses `appShort` (15 pt, 2-line `height: 1.15`), and when `showBack && width < 360`, the language toggle (`EN / ع`) is moved from the `AppBar` actions into `_AppDrawer` as `drawerLanguageToggle`, guaranteeing at least 130 dp title width and >= 4 dp clearance between title and seal.
+  3. **Landscape < 420 px Restraint:** Both `InstallBanner` and `TopUtilityBar` are hidden when viewport height < 420 px in landscape orientation, reserving precious vertical screen space for page content.
+  4. **Dynamic Intrinsic `ReadingsPage` Header & Text Clamping:**
+     - Replace rigid fixed-height headers in `ReadingsPage` with dynamic intrinsic `SliverToBoxAdapter` headers, wrapping controls on narrow screens and clamping UI control scale <= 1.5x.
+     - Body reading text scale is clamped to `(osScale * readerScale).clamp(0.85, 2.5)`, eliminating catastrophic 4.0x double multiplication.
+  5. **Modal Bottom Sheets Hardening:**
+     - Hardened `ApkInstallGuide`, `UpdateSheet`, and `ReminderSheet` with `isScrollControlled: true`, `MediaQuery.viewInsetsOf(context).bottom` soft-keyboard padding, vertical height clamping, and narrow button stacking (`Wrap` / `Column`).
+  6. **Deferred Loading Telemetry & Sibling Routing:**
+     - In `AppShell` and `DeferredLoader`, sibling route transitions on deferred routes use `ValueKey(state.uri.path)` and `didUpdateWidget` reloading.
+     - All deferred `loadLibrary()` failures are captured via `ErrorReporting.capture(..., section: 'deferred_chunk')`.
+  7. **Web Bundle CI Guard & Lighthouse Audit:**
+     - Added `tool/check_web_bundle.mjs` (tested via `tool/check_web_bundle.test.mjs`) to `.github/workflows/ci.yml`.
+     - Empirically measured release bundle: `main.dart.js` raw `5,048,032 B` (~4.81 MB), `gzip -9` `1,374,520 B` (~1.31 MB), with `+21,511 B` headroom against the `1,396,031 B` ceiling.
+     - Verified 22 deferred `.part.js` chunks (min 6 required) and 100% isolation of all 8 deferred modules (`ui/admin/admin_page.dart`, `ui/pages/assistant_page.dart`, `ui/pages/notifications_page.dart`, `ui/pages/readings_page.dart`, `ui/pages/notification_health_page.dart`, `ui/widgets/apk_install_guide.dart`, `data/web_push_repository.dart`, `ui/widgets/reminder_sheet.dart`) with 0 appearances in `main.dart.js.map`.
+     - Added non-blocking informational `lighthouse` job to `.github/workflows/deploy.yml` auditing PR preview URLs without creating extra preview channels.
+- **Cost:**
+  - `+0` Firestore reads, writes, listeners, or rules expressions. Seed JSON and admin schema unchanged.
+
 ## ADR-062 — Mobile APK scroll performance, cream launch screen, single back arrow per screen
 - **Context:** Mobile Android APK users faced three quality and performance defects:
   1. `HeroStage` ran an unconstrained 60 s continuous ticker (`_clock.repeat()`). While the Web animates haze and ray shimmer in CSS DOM layers (`HeroAmbientLayer`, ADR-037), on Android Flutter repainted 14 blurred rays with `MaskFilter.blur` every frame, dropping frames on Home screen scrolling and opening.
@@ -1996,5 +2025,7 @@ supersede them.
 | 8 Nov 2026 | **fix/mobile-chrome-perf** — "Mobile APK scroll performance, cream launch screen, single back arrow" (`fix/mobile-chrome-perf`) | ADR-062: `heroAmbientLoopAllowed` halts continuous ambient canvas repaints on Android APK (`INV-PERF-01`) while keeping hardware-decoded hero video; native launch screen `#FBF3E4` cream across API 21–34+ (`INV-SPLASH-01`); single back arrow on mobile viewports (`INV-NAV-01`, `INV-NAV-02`); `ItemDetailPage` `_BackLink` guarded by `shellIsWide(context)`; `NotificationHealthPage` adopts `PageBody` + `PageHeader` with dedicated deferred string table `notificationHealthStrings`; `parentRouteOf('/notifications/battery')` routes to `/notifications`. +0 Firestore reads/writes/rules. |
 | 8 Nov 2026 | **PR C** — "Admin notification manager, Cloudflare Worker FCM sender & deep links" (`feat/p2c-notification-manager`) | ADR-059: 6 notification types with templates and times in `/admin`; scheduled pushes manager (CRUD ≤ 20 rows, non-sending deletable, retry clone); `reminderSources` gating; persistent 8-char `DayEvent.id` with NFC SHA-1 fallback; Cloudflare Worker cron-only FCM sender (`*/15 * * * *`, Spark-safe ~197 reads/day) + Node 22 fallback; Android FCM background handler, 100-nid ring buffer, `event:X` slot sharing, safe deep links. |
 | 9 Nov 2026 | **PR D** — "Web push, installed iPhone PWA & web reminder planner" (`feat/p2d-web-push`) | ADR-060: Zero-overhead Web Push for Safari iOS 16.4+ installed PWA and desktop/Android browsers; RFC 5545 `.ics` and Google Calendar export; Cloudflare Worker 3-cron pipeline (queue drain, reminder planner, condition FCM sender) with L2 KV token cache; additive Firestore rules for `push_queue`, `meta/push_rate`, `meta/push_topics`, `meta/push_plan`; plain vanilla SW with quiet hours and 30-item inbox; deferred `WebPushRepository` with HTTP Date sync; admin web push health cards. |
+
+| 9 Nov 2026 | **PR E** — "Phase 2 responsive polish, OpenType font retention & deferred bundle guard" (`fix/p2e-responsive-size`) | ADR-061: AppShell < 360 px space recovery (54 dp seal tab, drawer language toggle on subpages, >= 130 dp title width, >= 4 dp seal clearance); landscape < 420 px banner/bar suppression; ReadingsPage dynamic intrinsic header & clamped reader scaling (0.85..2.5x); modal sheets soft-keyboard viewInsets padding; full OpenType font retention (pyftsubset dropped to protect GSUB/GPOS Arabic ligatures & tashkeel); 8 deferred modules verified isolated with 0 leaks in main.dart.js.map; tool/check_web_bundle.mjs in ci.yml (main.dart.js raw 5,048,032 B, gzip 1,374,520 B <= 1,396,031 B ceiling, 22 part chunks) + informational lighthouse audit in deploy.yml. +0 Firestore reads/writes/rules. |
 
 <!-- Append new PRs to this table. -->

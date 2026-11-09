@@ -36,9 +36,13 @@ sequenceDiagram
 2. **Automated PR Gate (`ci.yml`):**
    - Flutter analyze (0 warnings/errors required).
    - Full test suite execution (`flutter test`).
+   - Tool and web JS unit tests (`node --test web/*.test.mjs tool/*.test.mjs`).
+   - Release web build verification with source maps.
+   - Web bundle size & deferred isolation guard (`node tool/check_web_bundle.mjs build/web`): asserts `main.dart.js` `gzip -9 <= 1,396,031 B`, >= 6 part chunks, zero sourcemap leaks from 8 deferred modules, and OpenType font integrity.
    - Seed validation: verifies `assets/seed/seed.json` matches `tool/gen_seed.py` output byte-for-byte.
    - Firestore security rules testing in the local Firebase emulator (`tool/rules_test`).
 3. **PR Preview Channel (`deploy.yml`):** Automatically builds and deploys an ephemeral preview channel at `https://maximos-domadios-church--pr-<number>-<hash>.web.app` (active for 7 days).
+   - Runs informational non-blocking Lighthouse audit on the deployed preview URL and `/notifications` (`treosh/lighthouse-ci-action@v12`, 0 extra preview channels).
 4. **Squash-Merge to `main`:** Squash-merging automatically triggers the production release in `deploy.yml`:
    - Deploys Firestore security rules and composite indexes.
    - Executes `tool/build_sitemap.sh` to generate `sitemap.xml` directly from Firestore (falls back to static sitemap if Firestore is unreachable).
@@ -160,6 +164,7 @@ The portal integrates Sentry for privacy-first technical error reporting on Web 
 | **Visitor reaches 3 questions limit** | Per-device daily question cap reached (resets at Cairo midnight). | The visitor must wait until midnight Africa/Cairo time, or an admin can raise the limit in `/admin` → **AI Assistant** → **Max questions per device per day**. |
 | **Custom section or page displays "Section Unavailable"** | Document `visible` flag is `false` or the custom slug does not match. | Verify in `/admin` that the custom section/page has visibility set to true and that the URL slug matches the link. |
 | **Icons appear blank or corrupted after a new deployment** | User browser cached an outdated web font version. | The CI pipeline's `tool/fingerprint_icon_fonts.py` step fingerprints font assets. Perform a hard refresh (Ctrl+F5) in the browser. |
+| **CI build fails at "Check web bundle size & deferred chunk isolation"** | `main.dart.js` exceeded gzip ceiling (1,396,031 B) or a deferred module leaked into `main.dart.js.map`. | Ensure all 8 secondary modules are imported with `deferred as`. Run `node tool/check_web_bundle.mjs build/web` locally to inspect diagnostics. |
 | **"Another admin modified this document" warning** | Concurrent edit detected via optimistic concurrency control (`updatedAt` check). | Click **Reload** to fetch the latest server version, then re-apply changes. |
 | **Hero video does not play** | Visitor enabled reduced-motion or data-saver, or `heroMotion` is turned off. | This is expected accessibility behavior; the hero displays a static high-resolution poster or painting instead. (YouTube hero video was removed in PR #25). |
 | **Top utility bar live badge does not appear on Home page** | Intentional default behavior (`liveBadgeHideOnHome: true`). | The Home page displays the prominent red live stream banner instead. Other sub-pages display the compact live badge. To display both on Home, toggle off **Hide live badge on Home when banner is showing** in `/admin` → **Today & Live Stream**. |

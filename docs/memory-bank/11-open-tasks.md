@@ -10,7 +10,7 @@ Status as of 6 Nov 2026 (ADR-056 Phase 2 plan; ADR-055 / PR #49; ADR-054 / PR #4
 3. Sentry project privacy: *Prevent Storing of IP Addresses* + server-side data scrubbers → *Error tracking — Sentry*.
 4. Android assistant needs release signing + Play Integrity registration → *Infrastructure & security*.
 5. ~~Custom sections / pages are not in the sitemap~~ (PR #30: generated from Firestore at deploy, ADR-038); still not named in the assistant's allowed topics → *Custom sections*.
-6. 320 px overflow reported on a real phone → *Infrastructure & security* (320 px item).
+6. ~~320 px overflow reported on a real phone~~ — fixed in Phase 2 PR E (ADR-061): AppShell < 360 px space recovery (54 dp seal tab, drawer language toggle on subpages, >= 130 dp title width, >= 4 dp seal clearance), modal sheets keyboard insets padding, and real OpenType font loading in accessibility tests → *Infrastructure & security* (320 px item).
 7. CI rebuild of the eBible verse asset (source-fidelity check) → *Verse of the day*.
 8. Server-side assistant limit (the 3/day limit is client-side only) → *Assistant follow-ups*.
 9. **Live check 4 Nov 2026 — owner items (not code):** (a) `settings/church.nameAr` reads «…الأنبا موسى **الابيض**»
@@ -84,7 +84,7 @@ the owner approves the whole chain.
 - [x] PR B — Android APK + local notifications (ADR-058)
 - [x] PR C — admin notification manager + FCM sender + deep links (ADR-059)
 - [x] PR D — web push + PWA + iPhone (ADR-060)
-- [ ] PR E — responsive + size audit (ADR-061; includes the 320 px app-bar item below)
+- [x] PR E — responsive + size audit (ADR-061; includes the 320 px app-bar item below)
 - [ ] Owner: keystore + secrets, FCM API + `push-sender` service account, VAPID key, Android developer verification
       before 2027 (`docs/plans/phase2/LAUNCH-AND-OPERATIONS.md`)
 - [x] Owner decisions 6 Nov 2026 19:57 (README §8): **#6** APKs on GitHub Releases of a separate public repo
@@ -147,12 +147,11 @@ the owner approves the whole chain.
 - [ ] **Custom domain (optional)**: if the church buys a domain, add it to Hosting site `maximos-domadios-church`
       (console → Hosting → Add custom domain), add it to Auth authorized domains, and update OG/robots/
       sitemap URLs and the redirect destination in `firebase.json` (ADR-018).
-- [ ] **320 px overflow (reopened 4 Nov 2026, owner):** the automated sweep in `test/accessibility_test.dart` renders
-      every public route at 320 px × 200 % text without overflow, but it uses the Flutter **test font**; the owner
-      still lists 320 px overflow as open. Check on a real 320 px phone (or Chrome device mode at 320 px) with the
-      bundled **IBM Plex Sans Arabic** / Lalezar / Aref Ruqaa fonts, find the overflowing widget (hero, verse, app bar,
-      cards) and add a regression test that loads the real fonts. (Earlier fix: BUG-11 #1, highlight buttons move to
-      the drawer below 360 px.)
+- [x] **320 px overflow (reopened 4 Nov 2026, owner — fixed in PR E / ADR-061):** `test/accessibility_test.dart`
+      now loads the real bundled OpenType fonts (`IBMPlexSansArabic`, `Lalezar`, `ArefRuqaa`) via `FontLoader` and
+      verifies `< 360 px` `AppShell` geometry (54 dp seal tab, drawer language toggle on subpages, >= 130 dp title width,
+      >= 4 dp seal clearance) alongside 320 px × 200 % route sweeps with 0 overflows. Full OpenType font retention
+      preserves Arabic ligatures and tashkeel diacritics without subsetting.
 - [ ] Ask the church office to update the admin-editable English name (`settings/church.nameEn`, currently "Church of
       Saints Maximus & Domadius and the Strong Anba Moussa the Black") if they prefer "St. Maximus & Domadius and
       St. Moses the Black Church" — not changed by the seed to avoid overwriting admin edits.

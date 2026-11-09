@@ -168,3 +168,46 @@ No new dependencies added to `pubspec.yaml`. Tooling uses existing Node.js built
 ## ١٤. ما يفعله المالك (Owner steps)
 
 None. Everything is automated and validated via CI and local tests.
+
+
+## ١٥. نتائج تدقيق الحزم الحقيقية المقاسة (Measured Production Web Bundle & Chunks Audit)
+
+- **Main Bundle (`main.dart.js`):**
+  - Raw Size: `5,048,032 B` (4.81 MB)
+  - Gzip (-9) Size: `1,374,520 B` (1.31 MB)
+  - Ceiling Budget: `1,396,031 B` (1.33 MB)
+  - Headroom: `+21,511 B` (+21.01 KB) [PASS]
+
+- **Deferred Part Chunks (22 chunks emitted, min 6 required):**
+
+| Chunk File | Raw Size | Gzip (-9) Size | Sourcemap | Contained Modules / Coverage |
+|---|---|---|---|---|
+| `main.dart.js_1.part.js` | 2,559 B | 1,289 B | YES | `data/web_push_repository.dart` |
+| `main.dart.js_2.part.js` | 27,019 B | 8,369 B | YES | `ui/pages/notifications_page.dart`, `ui/widgets/reminder_sheet.dart` |
+| `main.dart.js_3.part.js` | 430,561 B | 112,198 B | NO | Shared framework deferred support |
+| `main.dart.js_4.part.js` | 346 B | 256 B | YES | Deferred auxiliary helper |
+| `main.dart.js_5.part.js` | 398 B | 291 B | YES | Deferred auxiliary helper |
+| `main.dart.js_6.part.js` | 739 B | 430 B | YES | Deferred auxiliary helper |
+| `main.dart.js_7.part.js` | 4,682 B | 1,591 B | YES | Deferred auxiliary helper |
+| `main.dart.js_8.part.js` | 471 B | 276 B | YES | Deferred auxiliary helper |
+| `main.dart.js_9.part.js` | 20,528 B | 6,056 B | YES | `ui/pages/notification_health_page.dart` |
+| `main.dart.js_10.part.js` | 9,703 B | 3,808 B | YES | Deferred auxiliary helper |
+| `main.dart.js_11.part.js` | 24,795 B | 8,553 B | YES | `ui/pages/readings_page.dart` |
+| `main.dart.js_12.part.js` | 400 B | 297 B | YES | Deferred auxiliary helper |
+| `main.dart.js_13.part.js` | 359 B | 267 B | YES | Deferred auxiliary helper |
+| `main.dart.js_14.part.js` | 359 B | 271 B | YES | Deferred auxiliary helper |
+| `main.dart.js_15.part.js` | 123,177 B | 42,808 B | YES | `ui/pages/assistant_page.dart` |
+| `main.dart.js_16.part.js` | 6,120 B | 2,357 B | YES | Deferred auxiliary helper |
+| `main.dart.js_17.part.js` | 523,613 B | 140,431 B | YES | `ui/admin/admin_page.dart` |
+| `main.dart.js_18.part.js` | 377 B | 285 B | YES | Deferred auxiliary helper |
+| `main.dart.js_19.part.js` | 419 B | 299 B | YES | Deferred auxiliary helper |
+| `main.dart.js_20.part.js` | 20,333 B | 6,119 B | YES | `ui/widgets/apk_install_guide.dart` |
+| `main.dart.js_21.part.js` | 6,786 B | 3,116 B | YES | Deferred auxiliary helper |
+| `main.dart.js_22.part.js` | 41,859 B | 14,131 B | YES | `ui/widgets/reminder_sheet.dart` |
+
+- **OpenType Font Retention:**
+  - `IBMPlexSansArabic-Regular.ttf`: 131,828 B
+  - `IBMPlexSansArabic-Bold.ttf`: 135,248 B
+  - `Lalezar-Regular.ttf`: 127,868 B
+  - `ArefRuqaa-Bold.ttf`: 120,124 B
+  - All fonts retained intact (> 120 KB each > 20 KB floor), preserving Arabic ligatures (`GSUB`/`GPOS`) and tashkeel diacritics.

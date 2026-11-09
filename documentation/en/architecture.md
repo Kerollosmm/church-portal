@@ -97,10 +97,15 @@ Routing is implemented with `go_router` using Flutter's `PathUrlStrategy` for cl
 | `/priest/:slug`, `/saint/:slug`, etc. | `ItemDetailPage` | Follows the parent section's feature gate. |
 | `/ask` | `AssistantPage` | **Deferred chunk.** Gated by `Sections.assistant` and `settings/church.assistantEnabled`. |
 | `/admin` | `AdminPage` | **Deferred chunk.** Hidden from search engines (`noindex`). Requires authentication. |
+| `/notifications` | `NotificationsPage` | **Deferred chunk.** Push preferences and quiet hours management. |
+| `/notifications/battery` | `NotificationHealthPage` | **Deferred chunk.** OEM battery optimization diagnostics. |
+| `/readings/:date` | `ReadingsPage` | **Deferred chunk.** Katameros scripture reader with clamped scaling. |
 
 ### Architectural Guardrails
 - **`FeatureGate` Wrapper:** Every public view is wrapped by `FeatureGate`. If an admin toggles a section off, the view immediately renders a friendly "Section Currently Unavailable" message with a button returning to Home.
-- **Code Splitting (Deferred Loading):** The `/admin` dashboard and `/ask` assistant views are loaded as separate JavaScript bundles via `DeferredLoader`. Standard visitors browsing mass times never download admin or AI logic libraries, keeping initial bundle size minimal.
+- **Code Splitting & Deferred Module Isolation (ADR-061):** Exactly 8 secondary modules are loaded as deferred JavaScript chunks (`deferred as`) via `DeferredLoader` (`admin_page`, `assistant_page`, `notifications_page`, `readings_page`, `notification_health_page`, `apk_install_guide`, `web_push_repository`, `reminder_sheet`). Standard visitors browsing mass times never download admin, assistant AI SDKs, or secondary tools. Sibling route transitions refresh via `ValueKey(state.uri.path)`. All chunk loading failures are reported via `ErrorReporting.capture(..., section: 'deferred_chunk')`.
+- **Bundle Size & Sourcemap CI Guard:** `tool/check_web_bundle.mjs` runs in CI (`ci.yml`), enforcing `main.dart.js` `gzip -9 <= 1,396,031 B` (measured `1,374,520 B` with `+21,511 B` headroom), verifying zero sourcemap leaks from any deferred module, and ensuring full OpenType font retention (`IBMPlexSansArabic`, `Lalezar`, `ArefRuqaa` > 20 KB each) to preserve Arabic ligatures and diacritics.
+- **Responsive Layout & Text Scaling Invariants:** `AppShell` space recovery on `< 360 px` viewports (54 dp seal tab, 2-line title, drawer language toggle on subpages with Back), landscape `< 420 px` height suppression of install and top utility banners, and scripture body text scale clamping `(osScale * readerScale).clamp(0.85, 2.5)` eliminating runaway 4.0x magnification.
 - **Bilingual URL Sync:** The active language state is reflected in the URL via `?lang=en` (English) or root path (Arabic default). Switching languages maintains current scroll positions and URL fragments.
 
 ---
