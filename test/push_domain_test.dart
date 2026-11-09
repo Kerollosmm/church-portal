@@ -11,13 +11,13 @@ void main() {
       expect(cfg.specFor(NotifyType.verse_daily).time, '07:00');
       expect(cfg.specFor(NotifyType.katameros_daily).time, '06:30');
       expect(cfg.specFor(NotifyType.feasts).time, '07:30');
-      expect(cfg.specFor(NotifyType.seasons).time, '20:00');
+      expect(cfg.specFor(NotifyType.seasons).time, '09:00');
       expect(cfg.specFor(NotifyType.seasons).daysBefore, 3);
 
       // Built-in links
       expect(cfg.specFor(NotifyType.verse_daily).defaultLink, '/');
       expect(cfg.specFor(NotifyType.katameros_daily).defaultLink, '/today');
-      expect(cfg.specFor(NotifyType.seasons).defaultLink, '/seasons');
+      expect(cfg.specFor(NotifyType.seasons).defaultLink, '/mass-schedule');
       expect(cfg.specFor(NotifyType.reminders).defaultLink, '/mass-schedule');
     });
 
@@ -81,11 +81,11 @@ void main() {
   group('ScheduledNotification & NotifySchedule', () {
     test('ScheduledNotification parses 9-field serialized format', () {
       const serialized =
-          'row1\u001f2026-11-08T19:00:00.000Z\u001fall\u001fعنوان\u001fTitle\u001fنص\u001fBody\u001f/contact\u001flit-123';
+          'row1\u001f2026-11-08T19:00:00Z\u001fall\u001fعنوان\u001fTitle\u001fنص\u001fBody\u001f/contact\u001flit-123';
       final row = ScheduledNotification.fromRow(serialized)!;
 
       expect(row.id, 'row1');
-      expect(row.atUtc, DateTime.parse('2026-11-08T19:00:00.000Z'));
+      expect(row.atUtc, DateTime.parse('2026-11-08T19:00:00Z'));
       expect(row.targets, 'all');
       expect(row.titleAr, 'عنوان');
       expect(row.titleEn, 'Title');
@@ -99,7 +99,7 @@ void main() {
 
     test('ScheduledNotification handles safeNotificationLink fallback on external or malformed URL', () {
       const bad =
-          'row1\u001f2026-11-08T19:00:00.000Z\u001fall\u001fعنوان\u001fTitle\u001fنص\u001fBody\u001fhttps://malicious.site/phish\u001f';
+          'row1\u001f2026-11-08T19:00:00Z\u001fall\u001fعنوان\u001fTitle\u001fنص\u001fBody\u001fhttps://malicious.site/phish\u001f';
       final row = ScheduledNotification.fromRow(bad)!;
       expect(row.link, '/');
     });

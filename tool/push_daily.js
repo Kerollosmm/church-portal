@@ -14,7 +14,8 @@ export const DEFAULT_SEASONS_SPEC = {
   titleEn: 'Church Season: {season}',
   bodyAr: 'يبدأ {season} بعد {days} أيام — بركة الموسم تشملنا جميعًا',
   bodyEn: 'Season of {season} begins in {days} days',
-  defaultLink: '/seasons',
+  // '/seasons' is not a route (404); season pushes open the schedule page.
+  defaultLink: '/mass-schedule',
 };
 
 /**
@@ -185,7 +186,7 @@ export async function runDailySeasons(
     }
 
     const nid = `season:${s.id}:${startDateIso}`;
-    const link = seasonsSpec.defaultLink || '/seasons';
+    const link = seasonsSpec.defaultLink || '/mass-schedule';
     const eventKey = `season-${s.id}`;
 
     alerts.push({

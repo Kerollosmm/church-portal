@@ -1,4 +1,8 @@
-// Administrative control plane for notifications, FCM scheduling, and app settings (ADR-059).
+// Admin control plane for notifications (ADR-059): sender status, scheduled
+// church announcements, what visitors may subscribe to (types, times, texts),
+// the «ذكّرني» options and the sent log. Rewritten for clarity in the PR #55
+// UX review: plain Arabic first (English second), friendly names instead of
+// stored keys, Cairo times, confirmations and inline validation.
 library;
 
 import 'dart:async';
@@ -9,17 +13,19 @@ import '../../core/push_env.dart';
 import '../../core/theme.dart';
 import '../../data/admin_repository.dart';
 import '../../domain/cairo_time.dart';
-import '../../domain/features.dart';
-import '../../domain/models.dart' show parseHm;
+import '../../domain/custom_content.dart' show builtInLinkTargets, customPagePath, categoryPath, isValidSlug;
+import '../../domain/features.dart' show FeatureSettings;
+import '../../domain/item_detail.dart' show DetailKind, detailPathFor;
 import '../../domain/push.dart';
-import '../../domain/reminders.dart' show leadLabel;
+import '../../domain/reminders.dart' show EventKey, leadLabel;
+import '../../domain/rules.dart' show toArabicDigits;
 import '../../domain/time_format.dart';
 import '../../domain/today.dart';
 import 'admin_schema.dart';
 import 'admin_screens.dart';
 import 'admin_validators.dart';
 
-/// Admin screen combining Notifications manager and App Install settings.
+/// Admin screen combining the notifications manager and the app-install settings.
 class AppAndNotificationsScreen extends StatefulWidget {
   final AdminBackend repo;
   final String role;
@@ -30,13 +36,7 @@ class AppAndNotificationsScreen extends StatefulWidget {
 }
 
 class _AppAndNotificationsScreenState extends State<AppAndNotificationsScreen> with SingleTickerProviderStateMixin {
-  late final TabController _tabController;
-
-  @override
-  void initState() {
-    super.initState();
-    _tabController = TabController(length: 2, vsync: this);
-  }
+  late final TabController _tabController = TabController(length: 2, vsync: this);
 
   @override
   void dispose() {
@@ -57,14 +57,8 @@ class _AppAndNotificationsScreenState extends State<AppAndNotificationsScreen> w
             unselectedLabelColor: context.pal.muted,
             indicatorColor: context.pal.primary,
             tabs: [
-              Tab(
-                icon: const Icon(Icons.notifications_active_outlined),
-                text: context.tr('adminNotificationsTitle'),
-              ),
-              Tab(
-                icon: const Icon(Icons.install_mobile_outlined),
-                text: context.tr('appSettingsTitle'),
-              ),
+              Tab(icon: const Icon(Icons.notifications_active_outlined), text: context.tr('nm_tabNotifications')),
+              Tab(icon: const Icon(Icons.install_mobile_outlined), text: context.tr('nm_tabInstall')),
             ],
           ),
         ),
@@ -82,61 +76,94 @@ class _AppAndNotificationsScreenState extends State<AppAndNotificationsScreen> w
   }
 }
 
-/// Notification Manager screen tab: types, templates, reminders config, scheduled FCM pushes, and sent log.
+/// Types that have a send time the admin sets (the user may still pick their
+/// own time on the phone for verse / Katameros).
+const _timedTypes = {NotifyType.verse_daily, NotifyType.katameros_daily, NotifyType.feasts, NotifyType.seasons};
+
+/// Types whose text templates are used somewhere. Announcements are written
+/// one by one in «إعلانات مجدولة», so their template is not offered.
+bool _hasTemplate(NotifyType t) => t != NotifyType.announcements;
+
+IconData _typeIcon(NotifyType t) => switch (t) {
+      NotifyType.announcements => Icons.campaign_outlined,
+      NotifyType.verse_daily => Icons.menu_book_outlined,
+      NotifyType.katameros_daily => Icons.auto_stories_outlined,
+      NotifyType.seasons => Icons.event_outlined,
+      NotifyType.feasts => Icons.celebration_outlined,
+      NotifyType.reminders => Icons.alarm_outlined,
+    };
+
+/// One link the scheduled-push picker offers.
+class _LinkChoice {
+  final String path, labelAr, labelEn, group, eventKey;
+  const _LinkChoice(this.path, this.labelAr, this.labelEn, this.group, {this.eventKey = ''});
+}
+
+/// Notification manager tab.
 class NotificationsAdminSection extends StatefulWidget {
   final AdminBackend repo;
   final String role;
-  const NotificationsAdminSection({super.key, required this.repo, this.role = 'editor'});
+
+  /// Device notification test (injectable for tests).
+  final PushEnv pushEnv;
+  const NotificationsAdminSection({super.key, required this.repo, this.role = 'editor', this.pushEnv = const PlatformPushEnv()});
 
   @override
   State<NotificationsAdminSection> createState() => _NotificationsAdminSectionState();
 }
 
-class _NotificationsAdminSectionState extends State<NotificationsAdminSection> {
+class _NotificationsAdminSectionState extends State<NotificationsAdminSection> with AutomaticKeepAliveClientMixin {
+  // Keep unsaved edits when the admin switches to the «تثبيت التطبيق» tab.
+  @override
+  bool get wantKeepAlive => true;
+
   late final Stream<AdminDoc?> _featuresStream = widget.repo.watchDoc('settings/features');
   late final Stream<AdminDoc?> _notificationsStream = widget.repo.watchDoc('settings/notifications');
 
-  // Form states
+  // ---- settings/features form (saved with the bottom bar) ----
   bool _saving = false;
   bool _dirty = false;
+  bool _populating = false;
+  AdminDoc? _lastFeatures;
+  Map<String, dynamic> _featuresData = const {};
+  bool _showErrors = false;
+  String? _leadsNote;
 
   bool _pushEnabled = false;
   final TextEditingController _vapidCtrl = TextEditingController();
-  final Set<NotifyType> _offeredTypes = Set.from(NotifyType.values);
+  final Set<NotifyType> _offeredTypes = Set.of(NotifyType.values);
   final Set<int> _reminderLeads = {0, 15, 60, 1440};
   int _reminderDefaultLead = 60;
   final Set<String> _reminderSources = {'lit', 'mtg', 'day'};
-
-  // Per-type editable controllers: type -> {time, daysBefore, titleAr, titleEn, bodyAr, bodyEn}
   final Map<NotifyType, Map<String, TextEditingController>> _typeCtrls = {};
 
-  // Scheduled Notification draft
-  bool _isCreatingPush = false;
-  String? _draftId;
-  DateTime? _draftAtUtc;
-  bool _draftEarliest = false;
+  // ---- scheduled announcement editor ----
+  bool _editorOpen = false;
+  bool _editingExisting = false;
+  String _draftId = '';
+  bool _draftSoon = false;
+  DateTime _draftDay = DateTime(2026);
+  int _draftMinutes = 19 * 60;
   String _draftTargets = 'all';
+  String _draftLink = '/';
+  String _draftLinkLabelAr = 'الرئيسية';
+  String _draftLinkLabelEn = 'Home';
+  String _draftEventKey = '';
+  String? _draftError;
+  bool _previewEnglish = false;
   final TextEditingController _draftTitleAr = TextEditingController();
   final TextEditingController _draftTitleEn = TextEditingController();
   final TextEditingController _draftBodyAr = TextEditingController();
   final TextEditingController _draftBodyEn = TextEditingController();
-  final TextEditingController _draftLink = TextEditingController(text: '/');
-  final TextEditingController _draftEventKey = TextEditingController();
-
-  final PushEnv _pushEnv = const PlatformPushEnv();
 
   @override
   void initState() {
     super.initState();
-    _initTypeControllers();
-  }
-
-  void _initTypeControllers() {
     for (final type in NotifyType.values) {
       final def = NotifyTypeSpec.builtInDefaults[type]!;
       _typeCtrls[type] = {
         'time': TextEditingController(text: def.time),
-        'daysBefore': TextEditingController(text: def.daysBefore > 0 ? def.daysBefore.toString() : ''),
+        'daysBefore': TextEditingController(text: '${def.daysBefore}'),
         'titleAr': TextEditingController(text: def.titleAr),
         'titleEn': TextEditingController(text: def.titleEn),
         'bodyAr': TextEditingController(text: def.bodyAr),
@@ -146,10 +173,18 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> {
         c.addListener(_markDirty);
       }
     }
+    for (final c in [_draftTitleAr, _draftTitleEn, _draftBodyAr, _draftBodyEn]) {
+      c.addListener(_onDraftChanged);
+    }
+  }
+
+  void _onDraftChanged() {
+    if (mounted) setState(() => _draftError = null);
   }
 
   void _markDirty() {
-    if (!_dirty && mounted) setState(() => _dirty = true);
+    if (_populating || _dirty || !mounted) return;
+    setState(() => _dirty = true);
   }
 
   @override
@@ -160,330 +195,526 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> {
         c.dispose();
       }
     }
-    _draftTitleAr.dispose();
-    _draftTitleEn.dispose();
-    _draftBodyAr.dispose();
-    _draftBodyEn.dispose();
-    _draftLink.dispose();
-    _draftEventKey.dispose();
+    for (final c in [_draftTitleAr, _draftTitleEn, _draftBodyAr, _draftBodyEn]) {
+      c.dispose();
+    }
     super.dispose();
   }
 
-  void _populateFeatures(Map<String, dynamic>? data) {
-    if (data == null) return;
-    _pushEnabled = data['push'] == true;
-    _vapidCtrl.text = data['pushVapidKey']?.toString() ?? '';
+  // ---------------------------------------------------------------------------
+  // settings/features: load + save
+  // ---------------------------------------------------------------------------
 
-    final rawTypes = data['pushTypes'];
-    if (rawTypes is List) {
-      _offeredTypes.clear();
-      for (final t in rawTypes) {
-        final parsed = NotifyType.tryParse(t?.toString());
-        if (parsed != null) _offeredTypes.add(parsed);
+  /// Copies the stored settings into the form. Runs only for a new snapshot
+  /// and never while the admin has unsaved edits; controller listeners are
+  /// muted so loading never marks the form dirty (the old screen called
+  /// setState during build here).
+  void _populateFeatures(AdminDoc? doc) {
+    if (identical(doc, _lastFeatures) || _dirty) return;
+    _lastFeatures = doc;
+    final data = doc?.data ?? const <String, dynamic>{};
+    _featuresData = data;
+    final s = PushSettings.fromMap(data);
+    _populating = true;
+    try {
+      _pushEnabled = s.enabled;
+      _vapidCtrl.text = s.vapidKey;
+      _offeredTypes
+        ..clear()
+        ..addAll(data['pushTypes'] is List ? s.offered : NotifyType.values);
+      _reminderLeads
+        ..clear()
+        ..addAll(s.reminderLeads);
+      _reminderDefaultLead = s.defaultLead;
+      _reminderSources
+        ..clear()
+        ..addAll(s.reminderSources);
+      final cfg = NotifyConfig.fromFeatures(FeatureSettings.fromMap(data));
+      for (final type in NotifyType.values) {
+        final spec = cfg.specFor(type);
+        final c = _typeCtrls[type]!;
+        c['time']!.text = spec.time;
+        c['daysBefore']!.text = '${spec.daysBefore}';
+        c['titleAr']!.text = spec.titleAr;
+        c['titleEn']!.text = spec.titleEn;
+        c['bodyAr']!.text = spec.bodyAr;
+        c['bodyEn']!.text = spec.bodyEn;
+      }
+    } finally {
+      _populating = false;
+    }
+  }
+
+  /// First problem in the settings form (l10n key), or null.
+  String? _settingsProblem() {
+    if (!isValidVapidKey(_vapidCtrl.text.trim())) return 'nm_errVapid';
+    for (final type in NotifyType.values) {
+      final c = _typeCtrls[type]!;
+      if (!isValidHm(c['time']!.text.trim())) return 'nm_errTime';
+      for (final k in ['titleAr', 'titleEn', 'bodyAr', 'bodyEn']) {
+        final t = c[k]!.text;
+        if (unknownPlaceholders(type.name, t).isNotEmpty) return 'err_unknown_placeholder';
+        if (t.contains('\u001f') || t.contains('\u001e')) return 'err_bad_char';
       }
     }
-
-    final rawLeads = data['reminderLeads'];
-    if (rawLeads is List) {
-      _reminderLeads.clear();
-      for (final l in rawLeads) {
-        if (l is num && allowedReminderLeads.contains(l.toInt())) {
-          _reminderLeads.add(l.toInt());
-        }
-      }
-    }
-
-    if (data['reminderDefaultLead'] is num) {
-      _reminderDefaultLead = (data['reminderDefaultLead'] as num).toInt();
-    }
-
-    final rawSources = data['reminderSources'];
-    if (rawSources is String) {
-      _reminderSources.clear();
-      _reminderSources.addAll(rawSources.split(',').map((s) => s.trim()).where(PushSettings.allReminderSources.contains));
-    }
-
-    final rawNotifyTypes = data['notifyTypes'];
-    if (rawNotifyTypes is List) {
-      for (final row in rawNotifyTypes) {
-        if (row is! String) continue;
-        final parts = row.split('\u001f');
-        if (parts.isEmpty) continue;
-        final type = NotifyType.tryParse(parts[0]);
-        if (type == null) continue;
-        final map = _typeCtrls[type];
-        if (map == null) continue;
-
-        if (parts.length > 1 && parts[1].isNotEmpty) map['time']!.text = parts[1];
-        if (parts.length > 2 && parts[2].isNotEmpty) map['daysBefore']!.text = parts[2];
-        if (parts.length > 3 && parts[3].isNotEmpty) map['titleAr']!.text = parts[3];
-        if (parts.length > 4 && parts[4].isNotEmpty) map['titleEn']!.text = parts[4];
-        if (parts.length > 5 && parts[5].isNotEmpty) map['bodyAr']!.text = parts[5];
-        if (parts.length > 6 && parts[6].isNotEmpty) map['bodyEn']!.text = parts[6];
-      }
-    }
+    return null;
   }
 
   Future<void> _saveSettings() async {
+    final problem = _settingsProblem();
+    if (problem != null) {
+      setState(() => _showErrors = true);
+      _snack(context.tr(problem), error: true);
+      return;
+    }
     setState(() => _saving = true);
     try {
-      final notifyTypesList = <String>[];
+      final rows = <String>[];
       for (final type in NotifyType.values) {
         final c = _typeCtrls[type]!;
         final def = NotifyTypeSpec.builtInDefaults[type]!;
-        final time = c['time']!.text.trim();
-        final days = c['daysBefore']!.text.trim();
-        final titleAr = c['titleAr']!.text.trim();
-        final titleEn = c['titleEn']!.text.trim();
-        final bodyAr = c['bodyAr']!.text.trim();
-        final bodyEn = c['bodyEn']!.text.trim();
-
-        final isModified = time != def.time ||
-            days != (def.daysBefore > 0 ? def.daysBefore.toString() : '') ||
-            titleAr != def.titleAr ||
-            titleEn != def.titleEn ||
-            bodyAr != def.bodyAr ||
-            bodyEn != def.bodyEn;
-
-        if (isModified) {
-          notifyTypesList.add([
-            type.name,
-            time,
-            days,
-            titleAr,
-            titleEn,
-            bodyAr,
-            bodyEn,
-          ].join('\u001f'));
+        String v(String k) => c[k]!.text.trim();
+        final days = type == NotifyType.seasons ? v('daysBefore') : '';
+        final modified = v('time') != def.time ||
+            (type == NotifyType.seasons && days != '${def.daysBefore}') ||
+            v('titleAr') != def.titleAr ||
+            v('titleEn') != def.titleEn ||
+            v('bodyAr') != def.bodyAr ||
+            v('bodyEn') != def.bodyEn;
+        if (modified) {
+          rows.add([type.name, v('time'), days, v('titleAr'), v('titleEn'), v('bodyAr'), v('bodyEn')].join('\u001f'));
         }
       }
-
-      final payload = {
+      final leads = _reminderLeads.toList()..sort();
+      await widget.repo.saveDoc('settings/features', {
         'push': _pushEnabled,
         'pushVapidKey': _vapidCtrl.text.trim(),
-        'pushTypes': _offeredTypes.map((t) => t.name).toList(),
-        'reminderLeads': _reminderLeads.toList()..sort(),
-        'reminderDefaultLead': _reminderDefaultLead,
-        'reminderSources': _reminderSources.toList().join(','),
-        'notifyTypes': notifyTypesList,
-      };
-
-      await widget.repo.saveDoc('settings/features', payload);
-      if (mounted) {
-        setState(() => _dirty = false);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(context.tr('saved'))));
-      }
+        'pushTypes': [for (final t in NotifyType.values) if (_offeredTypes.contains(t)) t.name],
+        'reminderLeads': leads,
+        'reminderDefaultLead': leads.contains(_reminderDefaultLead) ? _reminderDefaultLead : leads.first,
+        'reminderSources': [for (final s in const ['lit', 'mtg', 'day']) if (_reminderSources.contains(s)) s].join(','),
+        'notifyTypes': rows,
+      });
+      if (!mounted) return;
+      setState(() {
+        _dirty = false;
+        _showErrors = false;
+      });
+      _snack(context.tr('nm_settingsSaved'));
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString()), backgroundColor: context.pal.alert));
-      }
+      if (mounted) _snack(context.tr('nm_saveFailed', {'e': '$e'}), error: true);
     } finally {
       if (mounted) setState(() => _saving = false);
     }
   }
 
-  Future<void> _saveScheduledPush(NotifySchedule scheduleDoc) async {
-    final titleAr = _draftTitleAr.text.trim();
-    if (titleAr.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(context.tr('err_title_required'))));
-      return;
-    }
+  Future<void> _discardSettings() async {
+    final ok = await _confirm(
+      title: context.tr('nm_discardTitle'),
+      body: context.tr('nm_discardBody'),
+      action: context.tr('nm_discard'),
+    );
+    if (!ok || !mounted) return;
+    setState(() {
+      _dirty = false;
+      _showErrors = false;
+      final doc = _lastFeatures;
+      _lastFeatures = null;
+      _populateFeatures(doc);
+    });
+  }
 
-    DateTime atUtc;
-    if (_draftEarliest || _draftAtUtc == null) {
-      atUtc = DateTime.now().toUtc();
-    } else {
-      atUtc = _draftAtUtc!;
-    }
+  // ---------------------------------------------------------------------------
+  // settings/notifications: scheduled announcements
+  // ---------------------------------------------------------------------------
 
+  void _openEditor({ScheduledNotification? row, bool retry = false}) {
+    final now = CairoTime.now();
+    setState(() {
+      _editorOpen = true;
+      _editingExisting = row != null && !retry;
+      _draftError = null;
+      _previewEnglish = false;
+      _draftId = _editingExisting ? row!.id : DayEvent.generateRandomId();
+      if (row != null && !retry) {
+        final c = CairoTime.fromInstant(row.atUtc);
+        _draftSoon = false;
+        _draftDay = DateTime(c.year, c.month, c.day);
+        _draftMinutes = c.hour * 60 + c.minute;
+      } else {
+        // New: tomorrow 9 AM Cairo is a sane default; a retry goes out soon.
+        final t = DateTime(now.year, now.month, now.day + 1);
+        _draftSoon = retry;
+        _draftDay = t;
+        _draftMinutes = 9 * 60;
+      }
+      _draftTargets = row?.targets ?? 'all';
+      _draftTitleAr.text = row?.titleAr ?? '';
+      _draftTitleEn.text = row?.titleEn ?? '';
+      _draftBodyAr.text = row?.bodyAr ?? '';
+      _draftBodyEn.text = row?.bodyEn ?? '';
+      _draftLink = row?.link ?? '/';
+      _draftEventKey = row?.eventKey ?? '';
+      _draftLinkLabelAr = _linkName(_draftLink);
+      if (_draftEventKey.isNotEmpty) _draftLinkLabelAr = '$_draftLinkLabelAr${context.tr('nm_linkedEventSuffix')}';
+      _draftLinkLabelEn = _draftLinkLabelAr;
+      if (retry && row != null) {
+        _draftTargets = _retryTargets(row);
+      }
+      _draftTitleAr.selection = TextSelection.collapsed(offset: _draftTitleAr.text.length);
+    });
+  }
+
+  NotifySchedule _schedule = const NotifySchedule();
+
+  String _retryTargets(ScheduledNotification row) =>
+      _schedule.cloneDraftForRetry(row, row.id, row.atUtc).targets;
+
+  LinkTargetLike? _knownLink(String path) {
+    for (final t in builtInLinkTargets) {
+      if (t.path == path) return LinkTargetLike(t.labelAr, t.labelEn);
+    }
+    return null;
+  }
+
+  /// Friendly name of a stored link for the row cards; unknown paths are
+  /// shown left-to-right isolated so RTL text does not scramble them.
+  String _linkName(String path) {
+    final named = _knownLink(path);
+    if (named != null) return context.pick(named.labelAr, named.labelEn);
+    if (path.startsWith('/church-education/')) return context.tr('nm_meetingPage');
+    if (path.startsWith('/page/') || path.startsWith('/section/')) return context.tr('nm_customPage', {'p': '\u2066$path\u2069'});
+    return '\u2066$path\u2069';
+  }
+
+  DateTime get _draftAtUtc => _draftSoon
+      ? DateTime.now().toUtc()
+      : CairoTime.at(_draftDay.year, _draftDay.month, _draftDay.day, _draftMinutes).toUtc();
+
+  Future<void> _saveDraft() async {
     final row = ScheduledNotification(
-      id: _draftId ?? DayEvent.generateRandomId(),
-      atUtc: atUtc,
+      id: _draftId,
+      atUtc: _draftAtUtc,
       targets: _draftTargets,
-      titleAr: titleAr,
+      titleAr: _draftTitleAr.text.trim(),
       titleEn: _draftTitleEn.text.trim(),
       bodyAr: _draftBodyAr.text.trim(),
       bodyEn: _draftBodyEn.text.trim(),
-      link: safeNotificationLink(_draftLink.text),
-      eventKey: _draftEventKey.text.trim(),
+      link: safeNotificationLink(_draftLink),
+      eventKey: _draftEventKey,
     );
-
     final err = validateScheduledNotification(row);
     if (err != null) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(context.tr(err))));
+      setState(() => _draftError = err);
       return;
     }
-
+    if (!_draftSoon && !row.atUtc.isAfter(DateTime.now().toUtc())) {
+      setState(() => _draftError = 'nm_errPast');
+      return;
+    }
     setState(() => _saving = true);
     try {
-      final updatedList = List<ScheduledNotification>.from(scheduleDoc.schedule);
-      if (_draftId != null) {
-        final idx = updatedList.indexWhere((r) => r.id == _draftId);
-        if (idx >= 0) {
-          updatedList[idx] = row;
+      await widget.repo.saveDocsFresh(['settings/notifications'], (current) {
+        final fresh = NotifySchedule.fromDoc(current['settings/notifications']);
+        final list = List<ScheduledNotification>.of(fresh.schedule);
+        final idx = list.indexWhere((r) => r.id == row.id);
+        if (_editingExisting) {
+          if (idx < 0) throw _UserFacing('nm_errRowGone');
+          if (!fresh.canEditRow(row.id)) throw _UserFacing('nm_errAlreadySending');
+          list[idx] = row;
         } else {
-          updatedList.add(row);
+          if (list.length >= 20) throw _UserFacing('nm_errFull');
+          list.add(row);
         }
-      } else {
-        if (updatedList.length >= 20) {
-          throw Exception('Max 20 scheduled notifications allowed');
-        }
-        updatedList.add(row);
-      }
-
-      final payload = {
-        'schedule': updatedList.map((r) => r.toRow()).toList(),
-      };
-      await widget.repo.saveDoc('settings/notifications', payload);
-
-      if (mounted) {
-        setState(() {
-          _isCreatingPush = false;
-          _draftId = null;
-          _draftTitleAr.clear();
-          _draftTitleEn.clear();
-          _draftBodyAr.clear();
-          _draftBodyEn.clear();
-          _draftLink.text = '/';
-          _draftEventKey.clear();
-        });
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(context.tr('saved'))));
-      }
+        return {
+          'settings/notifications': {'schedule': [for (final r in list) r.toRow()]},
+        };
+      });
+      if (!mounted) return;
+      setState(() => _editorOpen = false);
+      _snack(context.tr(_draftSoon ? 'nm_savedSoon' : 'nm_savedAt', {'when': _whenText(row.atUtc)}));
+    } on _UserFacing catch (e) {
+      if (mounted) setState(() => _draftError = e.key);
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString()), backgroundColor: context.pal.alert));
-      }
+      if (mounted) _snack(context.tr('nm_saveFailed', {'e': '$e'}), error: true);
     } finally {
       if (mounted) setState(() => _saving = false);
     }
   }
 
-  Future<void> _deleteScheduledPush(NotifySchedule scheduleDoc, String id) async {
-    if (!scheduleDoc.canDeleteRow(id)) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(context.tr('err_cannot_delete_sending'))));
+  Future<void> _deleteRow(ScheduledNotification row) async {
+    if (!_schedule.canDeleteRow(row.id)) {
+      _snack(context.tr('err_cannot_delete_sending'), error: true);
       return;
     }
-
+    final phase = _schedule.phaseOf(row, DateTime.now().toUtc());
+    final ok = await _confirm(
+      title: context.tr('nm_deleteTitle'),
+      body: '«${row.titleAr}»\n\n${context.tr(phase == 'scheduled' || phase == 'queued' ? 'nm_deleteBodyPending' : 'nm_deleteBodyDone')}',
+      action: context.tr('deleteRow'),
+      destructive: true,
+    );
+    if (!ok || !mounted) return;
     setState(() => _saving = true);
     try {
-      final updatedList = scheduleDoc.schedule.where((r) => r.id != id).toList();
-      final payload = {
-        'schedule': updatedList.map((r) => r.toRow()).toList(),
-      };
-      await widget.repo.saveDoc('settings/notifications', payload);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(context.tr('deleted'))));
-      }
+      await widget.repo.saveDocsFresh(['settings/notifications'], (current) {
+        final fresh = NotifySchedule.fromDoc(current['settings/notifications']);
+        if (!fresh.canDeleteRow(row.id)) throw _UserFacing('err_cannot_delete_sending');
+        return {
+          'settings/notifications': {
+            'schedule': [for (final r in fresh.schedule) if (r.id != row.id) r.toRow()],
+          },
+        };
+      });
+      if (!mounted) return;
+      if (_editorOpen && _draftId == row.id) setState(() => _editorOpen = false);
+      _snack(context.tr('nm_deleted'));
+    } on _UserFacing catch (e) {
+      if (mounted) _snack(context.tr(e.key), error: true);
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString()), backgroundColor: context.pal.alert));
-      }
+      if (mounted) _snack(context.tr('nm_saveFailed', {'e': '$e'}), error: true);
     } finally {
       if (mounted) setState(() => _saving = false);
     }
   }
 
   Future<void> _clearSentLog() async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(context.tr('clearSentLog')),
-        content: Text(context.tr('clearLogConfirm')),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(context.tr('cancel'))),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(context.tr('confirm'))),
-        ],
-      ),
+    final ok = await _confirm(
+      title: context.tr('clearSentLog'),
+      body: context.tr('clearLogConfirm'),
+      action: context.tr('clearSentLog'),
+      destructive: true,
     );
-    if (ok != true) return;
-
+    if (!ok || !mounted) return;
     setState(() => _saving = true);
     try {
-      await widget.repo.saveDoc('settings/notifications', {'sentLog': []});
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(context.tr('cleared'))));
-      }
+      await widget.repo.saveDoc('settings/notifications', {'sentLog': <String>[]});
+      if (mounted) _snack(context.tr('nm_logCleared'));
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString()), backgroundColor: context.pal.alert));
-      }
+      if (mounted) _snack(context.tr('nm_saveFailed', {'e': '$e'}), error: true);
     } finally {
       if (mounted) setState(() => _saving = false);
     }
   }
 
-  Future<void> _testNotificationOnDevice() async {
-    final title = _draftTitleAr.text.trim().isNotEmpty ? _draftTitleAr.text.trim() : 'إشعار تجريبي من كنيسة القديسين';
-    final body = _draftBodyAr.text.trim().isNotEmpty ? _draftBodyAr.text.trim() : 'هذا اختبار فوري للإشعارات على جهازك';
-    final ok = await _pushEnv.showLocalNotification(title, body, icon: '/icons/Icon-192.png');
+  Future<void> _testOnDevice() async {
+    final title = _draftTitleAr.text.trim().isNotEmpty ? _draftTitleAr.text.trim() : context.tr('nm_testTitle');
+    final body = _draftBodyAr.text.trim().isNotEmpty ? _draftBodyAr.text.trim() : context.tr('nm_testBody');
+    final ok = await widget.pushEnv.showLocalNotification(title, body, icon: '/icons/Icon-192.png');
     if (!mounted) return;
     if (ok) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(context.tr('deviceTestSuccess'))));
+      _snack(context.tr('deviceTestSuccess'));
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(_pushEnv.isSupported ? context.tr('deviceTestPermDenied') : context.tr('deviceTestUnsupported')),
-        backgroundColor: context.pal.alert,
-      ));
+      _snack(context.tr(widget.pushEnv.isSupported ? 'deviceTestPermDenied' : 'deviceTestUnsupported'), error: true);
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // Link / event picker
+  // ---------------------------------------------------------------------------
+
+  Future<List<AdminDoc>> _read(String collection) async {
+    try {
+      return await widget.repo.watch(collection).first.timeout(const Duration(seconds: 10));
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  /// One-off reads when the picker opens (no listener stays open).
+  Future<List<_LinkChoice>> _loadLinkChoices() async {
+    final results = await Future.wait([
+      _read('pages'),
+      _read('categories'),
+      _read('liturgies'),
+      _read('meetings'),
+      _read('seasons'),
+    ]);
+    String s(AdminDoc d, String k) => '${d.data[k] ?? ''}'.trim();
+    final out = <_LinkChoice>[
+      for (final t in builtInLinkTargets) _LinkChoice(t.path, t.labelAr, t.labelEn, 'pages'),
+      for (final p in results[0])
+        if (isValidSlug(s(p, 'slug'))) _LinkChoice(customPagePath(s(p, 'slug')), s(p, 'titleAr'), s(p, 'titleEn'), 'pages'),
+      for (final c in results[1])
+        if (isValidSlug(s(c, 'slug'))) _LinkChoice(categoryPath(s(c, 'slug')), s(c, 'nameAr'), s(c, 'nameEn'), 'pages'),
+    ];
+    void addEvent(String group, String path, String key, String ar, String en) {
+      if (ar.isEmpty && en.isEmpty) return;
+      // Only ids the rules accept become an event link; others still open the page.
+      out.add(_LinkChoice(path, ar.isEmpty ? en : ar, en.isEmpty ? ar : en, group, eventKey: isValidPushEventKey(key) ? key : ''));
+    }
+
+    for (final d in results[2]) {
+      addEvent('liturgies', '/mass-schedule', EventKey.liturgy(d.id), s(d, 'nameAr'), s(d, 'nameEn'));
+    }
+    for (final d in results[3]) {
+      addEvent('meetings', detailPathFor(DetailKind.meeting, d.id), EventKey.meeting(d.id), s(d, 'nameAr'), s(d, 'nameEn'));
+    }
+    for (final d in results[4]) {
+      addEvent('seasons', '/mass-schedule', EventKey.seasonService(d.id), s(d, 'nameAr'), s(d, 'nameEn'));
+    }
+    for (final e in DayEvent.listFrom(_featuresData['dayEvents'])) {
+      addEvent('dayEvents', '/', EventKey.dayEvent(e.id), e.titleAr, e.titleEn);
+    }
+    return out;
+  }
+
+  Future<void> _pickLink() async {
+    final picked = await showDialog<_LinkChoice>(
+      context: context,
+      builder: (ctx) => _LinkPickerDialog(load: _loadLinkChoices),
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      _draftLink = picked.path;
+      _draftEventKey = picked.eventKey;
+      _draftLinkLabelAr = picked.labelAr;
+      _draftLinkLabelEn = picked.labelEn;
+      _draftError = null;
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Small helpers
+  // ---------------------------------------------------------------------------
+
+  void _snack(String text, {bool error = false}) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(text),
+      backgroundColor: error ? context.pal.alert : null,
+    ));
+  }
+
+  Future<bool> _confirm({required String title, required String body, required String action, bool destructive = false}) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(title),
+        content: Text(body),
+        actions: [
+          TextButton(key: const ValueKey('confirm-cancel'), onPressed: () => Navigator.pop(ctx, false), child: Text(context.tr('cancel'))),
+          FilledButton(
+            key: const ValueKey('confirm-ok'),
+            style: destructive ? FilledButton.styleFrom(backgroundColor: context.pal.alert, foregroundColor: context.pal.onPrimary) : null,
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(action),
+          ),
+        ],
+      ),
+    );
+    return ok == true;
+  }
+
+  String _digits(String s) => context.isAr ? toArabicDigits(s) : s;
+
+  String _hmText(int minutes) {
+    final hm = '${(minutes ~/ 60).toString().padLeft(2, '0')}:${(minutes % 60).toString().padLeft(2, '0')}';
+    return context.isAr ? formatTimeArabic(hm) : formatTimeLatin(hm);
+  }
+
+  /// «الثلاثاء ١٠ نوفمبر، ٧:٠٠ م» in Cairo time.
+  String _whenText(DateTime utc) {
+    final c = CairoTime.fromInstant(utc);
+    final day = '${weekdayName(c.weekday, arabic: context.isAr)} ${formatDayMonth(DateTime(c.year, c.month, c.day), arabic: context.isAr)}';
+    return '$day${context.isAr ? '،' : ','} ${_hmText(c.hour * 60 + c.minute)}';
+  }
+
+  /// «منذ ١٢ دقيقة» / «12 min ago».
+  String _ago(DateTime utc) {
+    final d = DateTime.now().toUtc().difference(utc);
+    if (d.inMinutes < 1) return context.tr('nm_justNow');
+    String unit(int n, String one, String two, String few, String many) {
+      if (!context.isAr) return '';
+      if (n == 1) return one;
+      if (n == 2) return two;
+      return '${toArabicDigits('$n')} ${n <= 10 ? few : many}';
+    }
+
+    if (d.inMinutes < 60) {
+      final n = d.inMinutes;
+      return context.isAr ? 'منذ ${unit(n, 'دقيقة', 'دقيقتين', 'دقائق', 'دقيقة')}' : '$n min ago';
+    }
+    if (d.inHours < 48) {
+      final n = d.inHours;
+      return context.isAr ? 'منذ ${unit(n, 'ساعة', 'ساعتين', 'ساعات', 'ساعة')}' : '$n h ago';
+    }
+    final n = d.inDays;
+    return context.isAr ? 'منذ ${unit(n, 'يوم', 'يومين', 'أيام', 'يومًا')}' : '$n days ago';
+  }
+
+  Widget _chip({
+    Key? key,
+    required String label,
+    required bool selected,
+    required ValueChanged<bool> onSelected,
+    IconData? icon,
+    bool filter = false,
+  }) {
+    final style = TextStyle(color: selected ? context.pal.onBar : context.pal.primary, fontWeight: FontWeight.w600);
+    final avatar = icon == null ? null : Icon(icon, size: 18, color: selected ? context.pal.onBar : context.pal.primary);
+    return filter
+        ? FilterChip(
+            key: key,
+            label: Text(label),
+            avatar: selected ? null : avatar,
+            selected: selected,
+            checkmarkColor: context.pal.onBar,
+            labelStyle: style,
+            materialTapTargetSize: MaterialTapTargetSize.padded,
+            onSelected: onSelected,
+          )
+        : ChoiceChip(
+            key: key,
+            label: Text(label),
+            avatar: avatar,
+            selected: selected,
+            showCheckmark: false,
+            labelStyle: style,
+            materialTapTargetSize: MaterialTapTargetSize.padded,
+            onSelected: onSelected,
+          );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Build
+  // ---------------------------------------------------------------------------
+
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     return StreamBuilder<AdminDoc?>(
       stream: _featuresStream,
       builder: (context, featSnap) {
-        if (featSnap.hasData && featSnap.data != null && !_dirty) {
-          _populateFeatures(featSnap.data!.data);
-        }
-
+        if (featSnap.connectionState != ConnectionState.waiting) _populateFeatures(featSnap.data);
         return StreamBuilder<AdminDoc?>(
           stream: _notificationsStream,
           builder: (context, notifSnap) {
-            final notifyDoc = NotifySchedule.fromDoc(notifSnap.data?.data);
-
+            _schedule = NotifySchedule.fromDoc(notifSnap.data?.data);
             return Scaffold(
               backgroundColor: context.pal.background,
               body: Center(
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 760),
                   child: ListView(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+                    key: const ValueKey('notifications-admin-list'),
+                    padding: const EdgeInsets.fromLTRB(12, 16, 12, 40),
                     children: [
-                      _buildHeaderCard(context, notifyDoc.health),
+                      _statusCard(context),
                       const SizedBox(height: 16),
-                      _buildNotificationTypesSection(context),
+                      _scheduledSection(context),
                       const SizedBox(height: 16),
-                      _buildRemindMeSection(context),
+                      _typesSection(context),
                       const SizedBox(height: 16),
-                      _buildScheduledPushesSection(context, notifyDoc),
+                      _remindSection(context),
                       const SizedBox(height: 16),
-                      _buildSentLogSection(context, notifyDoc),
-                      const SizedBox(height: 40),
+                      _sentLogSection(context),
+                      const SizedBox(height: 16),
+                      _advancedSection(context),
                     ],
                   ),
                 ),
               ),
-              bottomNavigationBar: _dirty
-                  ? Container(
-                      color: context.pal.surface,
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                      child: SafeArea(
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(context.tr('unsavedChanges'), style: TextStyle(color: context.pal.alert, fontWeight: FontWeight.bold)),
-                            ElevatedButton(
-                              onPressed: _saving ? null : _saveSettings,
-                              style: ElevatedButton.styleFrom(backgroundColor: context.pal.primary),
-                              child: _saving
-                                  ? SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: context.pal.onPrimary))
-                                  : Text(context.tr('save'), style: TextStyle(color: context.pal.onPrimary)),
-                            ),
-                          ],
-                        ),
-                      ),
-                    )
-                  : null,
+              bottomNavigationBar: _dirty ? _saveBar(context) : null,
             );
           },
         );
@@ -491,845 +722,1108 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> {
     );
   }
 
-  Widget _buildHeaderCard(BuildContext context, SenderHealth health) {
-    Color healthColor;
-    String healthText;
-    IconData healthIcon;
+  Widget _saveBar(BuildContext context) => Material(
+        color: context.pal.surface,
+        elevation: 8,
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            child: Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 12,
+              runSpacing: 8,
+              children: [
+                Row(mainAxisSize: MainAxisSize.min, children: [
+                  Icon(Icons.edit_note, color: context.pal.goldText),
+                  const SizedBox(width: 6),
+                  Flexible(child: Text(context.tr('nm_unsaved'), style: const TextStyle(fontWeight: FontWeight.bold))),
+                ]),
+                Wrap(spacing: 8, children: [
+                  TextButton(
+                    key: const ValueKey('discard-settings'),
+                    onPressed: _saving ? null : _discardSettings,
+                    child: Text(context.tr('nm_discard')),
+                  ),
+                  FilledButton.icon(
+                    key: const ValueKey('save-settings'),
+                    onPressed: _saving ? null : _saveSettings,
+                    icon: _saving
+                        ? SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: context.pal.onPrimary))
+                        : const Icon(Icons.save_outlined),
+                    label: Text(context.tr('nm_saveSettings')),
+                  ),
+                ]),
+              ],
+            ),
+          ),
+        ),
+      );
 
-    final lastRun = health.lastRunAt;
-    final now = DateTime.now().toUtc();
-    final diff = lastRun != null ? now.difference(lastRun) : null;
+  // ---- section scaffolding ----
 
-    if (lastRun == null || diff == null || diff > const Duration(hours: 3) || health.status == 'error') {
-      healthColor = context.pal.alert;
-      healthText = context.tr('senderHealthError');
-      healthIcon = Icons.error_outline;
-    } else if (diff > const Duration(hours: 1)) {
-      healthColor = context.pal.goldText;
-      healthText = context.tr('senderHealthDegraded');
-      healthIcon = Icons.warning_amber_outlined;
-    } else {
-      healthColor = context.pal.success;
-      healthText = context.tr('senderHealthOk');
-      healthIcon = Icons.check_circle_outline;
-    }
-
+  Widget _section(BuildContext context,
+      {required Key key, required IconData icon, required String title, String? subtitle, Widget? trailing, required List<Widget> children}) {
     return Card(
+      key: key,
+      margin: EdgeInsets.zero,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(healthIcon, color: healthColor, size: 28),
+                CircleAvatar(
+                  radius: 18,
+                  backgroundColor: context.pal.primary.withValues(alpha: 0.12),
+                  child: Icon(icon, color: context.pal.primary, size: 20),
+                ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(healthText, style: TextStyle(color: healthColor, fontWeight: FontWeight.bold, fontSize: 16)),
-                      if (lastRun != null)
-                        Text(
-                          context.tr('lastSenderRun', {'time': '${lastRun.toLocal().hour.toString().padLeft(2, '0')}:${lastRun.toLocal().minute.toString().padLeft(2, '0')}'}),
-                          style: TextStyle(color: context.pal.muted, fontSize: 12),
-                        ),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(title, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+                    if (subtitle != null) ...[
+                      const SizedBox(height: 2),
+                      Text(subtitle, style: TextStyle(color: context.pal.muted, fontSize: 13, height: 1.4)),
                     ],
-                  ),
+                  ]),
                 ),
               ],
             ),
-            const Divider(height: 24),
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              title: Text(context.tr('enablePush'), style: const TextStyle(fontWeight: FontWeight.bold)),
-              subtitle: Text(context.tr('adminNotificationsHint')),
-              value: _pushEnabled,
-              onChanged: (v) => setState(() {
-                _pushEnabled = v;
-                _markDirty();
-              }),
-            ),
+            if (trailing != null) ...[const SizedBox(height: 12), trailing],
             const SizedBox(height: 12),
-            TextField(
-              controller: _vapidCtrl,
-              decoration: InputDecoration(
-                labelText: 'VAPID Public Key (Web Push)',
-                helperText: 'Required for web browser and iOS PWA push notifications (80-100 chars)',
-                border: const OutlineInputBorder(),
-              ),
-              onChanged: (_) => _markDirty(),
-            ),
-            const SizedBox(height: 16),
-            Text(context.tr('offeredTypes'), style: const TextStyle(fontWeight: FontWeight.w600)),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: NotifyType.values.map((t) {
-                final selected = _offeredTypes.contains(t);
-                return FilterChip(
-                  label: Text(t.labelAr),
-                  selected: selected,
-                  onSelected: (on) => setState(() {
-                    if (on) {
-                      _offeredTypes.add(t);
-                    } else {
-                      _offeredTypes.remove(t);
-                    }
-                    _markDirty();
-                  }),
-                );
-              }).toList(),
-            ),
+            ...children,
           ],
         ),
       ),
     );
   }
 
-  Widget _buildNotificationTypesSection(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+  Widget _banner(BuildContext context, {required IconData icon, required Color color, required String text, Key? key}) => Container(
+        key: key,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.10),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: color.withValues(alpha: 0.35)),
+        ),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Icon(icon, color: color, size: 20),
+          const SizedBox(width: 8),
+          Expanded(child: Text(text, style: TextStyle(color: context.pal.ink, height: 1.45))),
+        ]),
+      );
+
+  // ---- 1. status ----
+
+  Widget _statusCard(BuildContext context) {
+    final health = _schedule.health;
+    final last = health.lastRunAt;
+    final age = last == null ? null : DateTime.now().toUtc().difference(last);
+    final (Color color, IconData icon, String title, String detail) = switch (age) {
+      null => (context.pal.muted, Icons.hourglass_empty, context.tr('nm_senderNever'), context.tr('nm_senderNeverHint')),
+      final a when a > const Duration(hours: 3) || health.status == 'error' =>
+        (context.pal.alert, Icons.error_outline, context.tr('nm_senderStopped'), context.tr('nm_senderStoppedHint')),
+      final a when a > const Duration(hours: 1) =>
+        (context.pal.goldText, Icons.warning_amber_outlined, context.tr('nm_senderLate'), context.tr('nm_senderLateHint')),
+      _ => (context.pal.success, Icons.check_circle_outline, context.tr('nm_senderOk'), context.tr('nm_senderOkHint')),
+    };
+    return _section(
+      context,
+      key: const ValueKey('nm-status'),
+      icon: Icons.notifications_active_outlined,
+      title: context.tr('nm_statusTitle'),
+      subtitle: context.tr('nm_statusSubtitle'),
+      children: [
+        SwitchListTile(
+          key: const ValueKey('push-master-switch'),
+          contentPadding: EdgeInsets.zero,
+          title: Text(context.tr('nm_masterSwitch'), style: const TextStyle(fontWeight: FontWeight.bold)),
+          subtitle: Text(context.tr(_pushEnabled ? 'nm_masterOnHint' : 'nm_masterOffHint')),
+          value: _pushEnabled,
+          onChanged: (v) => setState(() {
+            _pushEnabled = v;
+            _markDirty();
+          }),
+        ),
+        if (!_pushEnabled) ...[
+          const SizedBox(height: 4),
+          _banner(context,
+              key: const ValueKey('push-off-banner'), icon: Icons.notifications_off_outlined, color: context.pal.goldText, text: context.tr('nm_pushOffBanner')),
+        ],
+        const Divider(height: 28),
+        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Icon(icon, color: color, size: 26),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(title, key: const ValueKey('sender-health'), style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 15)),
+              if (last != null)
+                Text(context.tr('nm_lastCheck', {'ago': _ago(last), 'when': _whenText(last)}),
+                    style: TextStyle(color: context.pal.muted, fontSize: 12.5)),
+              const SizedBox(height: 4),
+              Text(detail, style: TextStyle(fontSize: 13, color: context.pal.ink, height: 1.4)),
+              if (health.lastError != null && health.lastError!.isNotEmpty && age != null && age > const Duration(hours: 1))
+                Text(context.tr('nm_lastError', {'e': health.lastError!}), style: TextStyle(fontSize: 12, color: context.pal.alert)),
+            ]),
+          ),
+        ]),
+      ],
+    );
+  }
+
+  // ---- 2. scheduled announcements ----
+
+  Widget _scheduledSection(BuildContext context) {
+    final now = DateTime.now().toUtc();
+    final rows = List<ScheduledNotification>.of(_schedule.schedule);
+    final pending = rows.where((r) => const {'scheduled', 'queued', 'sending'}.contains(_schedule.phaseOf(r, now))).toList()
+      ..sort((a, b) => a.atUtc.compareTo(b.atUtc));
+    final done = rows.where((r) => !pending.contains(r)).toList()..sort((a, b) => b.atUtc.compareTo(a.atUtc));
+    final full = rows.length >= 20;
+    return _section(
+      context,
+      key: const ValueKey('nm-scheduled'),
+      icon: Icons.campaign_outlined,
+      title: context.tr('nm_scheduledTitle'),
+      subtitle: context.tr('nm_scheduledSubtitle'),
+      trailing: Wrap(
+        crossAxisAlignment: WrapCrossAlignment.center,
+        spacing: 12,
+        runSpacing: 8,
+        children: [
+          FilledButton.icon(
+            key: const ValueKey('addScheduledPush'),
+            icon: const Icon(Icons.add),
+            label: Text(context.tr('addScheduledPush')),
+            onPressed: full || _editorOpen ? null : () => _openEditor(),
+          ),
+          Text(context.tr('nm_countOf20', {'n': _digits('${rows.length}')}), style: TextStyle(color: context.pal.muted, fontSize: 12.5)),
+        ],
+      ),
+      children: [
+        if (full) ...[
+          _banner(context, icon: Icons.info_outline, color: context.pal.goldText, text: context.tr('nm_fullHint')),
+          const SizedBox(height: 8),
+        ],
+        if (_editorOpen) _editor(context),
+        if (rows.isEmpty && !_editorOpen)
+          Padding(
+            key: const ValueKey('schedule-empty'),
+            padding: const EdgeInsets.symmetric(vertical: 18),
+            child: Column(children: [
+              Icon(Icons.outbox_outlined, size: 36, color: context.pal.muted),
+              const SizedBox(height: 6),
+              Text(context.tr('emptySchedule'), textAlign: TextAlign.center, style: TextStyle(color: context.pal.muted)),
+            ]),
+          ),
+        if (pending.isNotEmpty) _subhead(context, context.tr('nm_upcoming')),
+        for (final r in pending) _rowCard(context, r),
+        if (done.isNotEmpty) _subhead(context, context.tr('nm_past')),
+        for (final r in done) _rowCard(context, r),
+      ],
+    );
+  }
+
+  Widget _subhead(BuildContext context, String text) => Padding(
+        padding: const EdgeInsets.only(top: 10, bottom: 4),
+        child: Text(text, style: TextStyle(fontWeight: FontWeight.bold, color: context.pal.muted, fontSize: 13)),
+      );
+
+  (String, Color, IconData) _phaseLook(String phase) => switch (phase) {
+        'scheduled' => (context.tr('statusScheduled'), context.pal.primary, Icons.schedule),
+        'queued' => (context.tr('statusQueued'), context.pal.primary, Icons.hourglass_top),
+        'sending' => (context.tr('statusSending'), context.pal.goldText, Icons.send_outlined),
+        'ok' => (context.tr('statusSent'), context.pal.success, Icons.check_circle_outline),
+        'partial' => (context.tr('statusPartial'), context.pal.goldText, Icons.rule),
+        'unconfirmed' => (context.tr('statusUnconfirmed'), context.pal.alert, Icons.help_outline),
+        'expired' => (context.tr('statusExpired'), context.pal.muted, Icons.event_busy_outlined),
+        _ => (context.tr('statusError'), context.pal.alert, Icons.error_outline),
+      };
+
+  (String, IconData) _targetLook(String t) => switch (t) {
+        'app' => (context.tr('pushTargetApp'), Icons.android),
+        'web' => (context.tr('pushTargetWeb'), Icons.language),
+        _ => (context.tr('pushTargetAll'), Icons.devices),
+      };
+
+  Widget _meta(BuildContext context, IconData icon, String text) => Row(mainAxisSize: MainAxisSize.min, children: [
+        Icon(icon, size: 15, color: context.pal.muted),
+        const SizedBox(width: 4),
+        Flexible(child: Text(text, style: TextStyle(fontSize: 12.5, color: context.pal.muted), overflow: TextOverflow.ellipsis)),
+      ]);
+
+  Widget _rowCard(BuildContext context, ScheduledNotification row) {
+    final now = DateTime.now().toUtc();
+    final phase = _schedule.phaseOf(row, now);
+    final (label, color, icon) = _phaseLook(phase);
+    final (tLabel, tIcon) = _targetLook(row.targets);
+    final linkText = _linkName(row.link);
+    final canEdit = _schedule.canEditRow(row.id) && !_editorOpen;
+    final canRetry = const {'partial', 'error', 'unconfirmed', 'expired'}.contains(phase) && !_editorOpen && _schedule.schedule.length < 20;
+    final explain = context.tr('nm_phase_$phase');
+    return Container(
+      key: ValueKey('row-${row.id}'),
+      margin: const EdgeInsets.symmetric(vertical: 5),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: context.pal.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: BorderDirectional(start: BorderSide(color: color, width: 4)),
+        boxShadow: [BoxShadow(color: context.pal.shadow(0.06), blurRadius: 6, offset: const Offset(0, 2))],
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Wrap(
+          spacing: 8,
+          runSpacing: 6,
+          crossAxisAlignment: WrapCrossAlignment.center,
           children: [
-            Text(context.tr('notifyTypesSection'), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 12),
-            ...NotifyType.values.map((t) => _buildTypeCard(context, t)),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(color: color.withValues(alpha: 0.14), borderRadius: BorderRadius.circular(20)),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                Icon(icon, size: 14, color: color),
+                const SizedBox(width: 4),
+                Text(label, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 12)),
+              ]),
+            ),
+            Text(_whenText(row.atUtc), style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
           ],
         ),
+        const SizedBox(height: 6),
+        Text(row.titleAr, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+        if (row.bodyAr.isNotEmpty) Text(row.bodyAr, style: TextStyle(color: context.pal.muted, fontSize: 13), maxLines: 3, overflow: TextOverflow.ellipsis),
+        const SizedBox(height: 6),
+        Wrap(spacing: 14, runSpacing: 4, children: [
+          _meta(context, tIcon, tLabel),
+          _meta(context, row.eventKey.isNotEmpty ? Icons.event_available_outlined : Icons.open_in_new, context.tr('nm_opens', {'page': linkText})),
+          if (row.titleEn.isNotEmpty) _meta(context, Icons.translate, context.tr('nm_hasEnglish')),
+        ]),
+        if (explain != 'nm_phase_$phase') ...[
+          const SizedBox(height: 6),
+          Text(explain, style: TextStyle(fontSize: 12.5, color: color == context.pal.muted ? context.pal.muted : context.pal.ink)),
+        ],
+        Align(
+          alignment: AlignmentDirectional.centerEnd,
+          child: Wrap(spacing: 4, children: [
+            if (canEdit)
+              TextButton.icon(
+                key: ValueKey('edit-${row.id}'),
+                icon: const Icon(Icons.edit_outlined, size: 18),
+                label: Text(context.tr('nm_edit')),
+                onPressed: () => _openEditor(row: row),
+              ),
+            if (canRetry)
+              TextButton.icon(
+                key: ValueKey('retry-${row.id}'),
+                icon: const Icon(Icons.replay, size: 18),
+                label: Text(context.tr('cloneForRetry')),
+                onPressed: () => _openEditor(row: row, retry: true),
+              ),
+            if (_schedule.canDeleteRow(row.id))
+              TextButton.icon(
+                key: ValueKey('delete-${row.id}'),
+                icon: Icon(Icons.delete_outline, size: 18, color: context.pal.alert),
+                label: Text(context.tr('deleteRow'), style: TextStyle(color: context.pal.alert)),
+                onPressed: _saving ? null : () => _deleteRow(row),
+              ),
+          ]),
+        ),
+      ]),
+    );
+  }
+
+  Widget _step(BuildContext context, String n, String title, {String? hint}) => Padding(
+        padding: const EdgeInsets.only(top: 14, bottom: 8),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          CircleAvatar(
+            radius: 12,
+            backgroundColor: context.pal.primary,
+            child: Text(n, style: TextStyle(color: context.pal.onPrimary, fontSize: 12, fontWeight: FontWeight.bold)),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+              if (hint != null) Text(hint, style: TextStyle(fontSize: 12.5, color: context.pal.muted, height: 1.4)),
+            ]),
+          ),
+        ]),
+      );
+
+  Widget _editor(BuildContext context) {
+    final err = _draftError;
+    String? fieldErr(Set<String> keys) => err != null && keys.contains(err) ? context.tr(err) : null;
+    return Padding(
+      key: const ValueKey('push-editor'),
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Material(
+      color: context.pal.background,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: context.pal.primary.withValues(alpha: 0.45), width: 1.5),
+      ),
+      child: Padding(
+      padding: const EdgeInsets.all(14),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Row(children: [
+          Expanded(
+            child: Text(context.tr(_editingExisting ? 'nm_editTitle' : 'nm_newTitle'),
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          ),
+          IconButton(
+            key: const ValueKey('editor-close'),
+            tooltip: context.tr('cancel'),
+            icon: const Icon(Icons.close),
+            onPressed: () => setState(() => _editorOpen = false),
+          ),
+        ]),
+        // Step 1: text
+        _step(context, _digits('1'), context.tr('nm_stepText'), hint: context.tr('nm_stepTextHint')),
+        TextField(
+          key: const ValueKey('draft-titleAr'),
+          controller: _draftTitleAr,
+          maxLength: 120,
+          decoration: InputDecoration(
+            labelText: context.tr('nm_titleArLabel'),
+            hintText: context.tr('nm_titleArHint'),
+            errorText: fieldErr({'err_title_required', 'err_title_length'}),
+          ),
+        ),
+        const SizedBox(height: 4),
+        TextField(
+          key: const ValueKey('draft-bodyAr'),
+          controller: _draftBodyAr,
+          maxLength: 300,
+          minLines: 2,
+          maxLines: 4,
+          decoration: InputDecoration(
+            labelText: context.tr('nm_bodyArLabel'),
+            hintText: context.tr('nm_bodyArHint'),
+            errorText: fieldErr({'err_body_required', 'err_body_length'}),
+          ),
+        ),
+        Theme(
+          data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+          child: ExpansionTile(
+            key: const ValueKey('draft-english'),
+            tilePadding: EdgeInsets.zero,
+            initiallyExpanded: _draftTitleEn.text.isNotEmpty || _draftBodyEn.text.isNotEmpty,
+            leading: const Icon(Icons.translate),
+            title: Text(context.tr('nm_englishOptional')),
+            subtitle: Text(context.tr('nm_englishOptionalHint'), style: TextStyle(fontSize: 12, color: context.pal.muted)),
+            children: [
+              TextField(
+                key: const ValueKey('draft-titleEn'),
+                controller: _draftTitleEn,
+                maxLength: 120,
+                textDirection: TextDirection.ltr,
+                decoration: InputDecoration(labelText: context.tr('nm_titleEnLabel')),
+              ),
+              TextField(
+                key: const ValueKey('draft-bodyEn'),
+                controller: _draftBodyEn,
+                maxLength: 300,
+                minLines: 2,
+                maxLines: 4,
+                textDirection: TextDirection.ltr,
+                decoration: InputDecoration(labelText: context.tr('nm_bodyEnLabel')),
+              ),
+            ],
+          ),
+        ),
+        // Step 2: when
+        _step(context, _digits('2'), context.tr('nm_stepWhen'), hint: context.tr('nm_stepWhenHint')),
+        Wrap(spacing: 8, runSpacing: 8, children: [
+          _chip(
+            key: const ValueKey('when-soon'),
+            label: context.tr('sendAtEarliest'),
+            icon: Icons.bolt,
+            selected: _draftSoon,
+            onSelected: (_) => setState(() => _draftSoon = true),
+          ),
+          _chip(
+            key: const ValueKey('when-at'),
+            label: context.tr('nm_whenAt'),
+            icon: Icons.event,
+            selected: !_draftSoon,
+            onSelected: (_) => setState(() => _draftSoon = false),
+          ),
+        ]),
+        if (!_draftSoon) ...[
+          const SizedBox(height: 10),
+          Wrap(spacing: 8, runSpacing: 8, children: [
+            OutlinedButton.icon(
+              key: const ValueKey('pick-date'),
+              icon: const Icon(Icons.calendar_today, size: 18),
+              label: Text('${weekdayName(_draftDay.weekday, arabic: context.isAr)} ${formatDate(_draftDay, arabic: context.isAr)}'),
+              onPressed: () async {
+                final today = CairoTime.now();
+                final first = DateTime(today.year, today.month, today.day);
+                final picked = await showDatePicker(
+                  context: context,
+                  initialDate: _draftDay.isBefore(first) ? first : _draftDay,
+                  firstDate: first,
+                  lastDate: first.add(const Duration(days: 120)),
+                );
+                if (picked != null) setState(() => _draftDay = DateTime(picked.year, picked.month, picked.day));
+              },
+            ),
+            OutlinedButton.icon(
+              key: const ValueKey('pick-time'),
+              icon: const Icon(Icons.access_time, size: 18),
+              label: Text(_hmText(_draftMinutes)),
+              onPressed: () async {
+                final picked = await showTimePicker(
+                  context: context,
+                  initialTime: TimeOfDay(hour: _draftMinutes ~/ 60, minute: _draftMinutes % 60),
+                );
+                if (picked != null) setState(() => _draftMinutes = picked.hour * 60 + picked.minute);
+              },
+            ),
+          ]),
+          const SizedBox(height: 6),
+          Text(
+            context.tr('nm_whenSummary', {'when': _whenText(_draftAtUtc)}),
+            key: const ValueKey('when-summary'),
+            style: TextStyle(fontSize: 12.5, color: fieldErr({'nm_errPast'}) != null ? context.pal.alert : context.pal.muted),
+          ),
+          if (fieldErr({'nm_errPast'}) != null)
+            Text(context.tr('nm_errPast'), style: TextStyle(color: context.pal.alert, fontSize: 12.5)),
+        ],
+        // Step 3: who
+        _step(context, _digits('3'), context.tr('nm_stepWho'), hint: context.tr('nm_stepWhoHint')),
+        Wrap(spacing: 8, runSpacing: 8, children: [
+          for (final t in const ['all', 'app', 'web'])
+            _chip(
+              key: ValueKey('target-$t'),
+              label: _targetLook(t).$1,
+              icon: _targetLook(t).$2,
+              selected: _draftTargets == t,
+              onSelected: (_) => setState(() => _draftTargets = t),
+            ),
+        ]),
+        // Step 4: link
+        _step(context, _digits('4'), context.tr('nm_stepLink'), hint: context.tr('nm_stepLinkHint')),
+        InkWell(
+          key: const ValueKey('pick-link'),
+          borderRadius: BorderRadius.circular(10),
+          onTap: _pickLink,
+          child: InputDecorator(
+            decoration: InputDecoration(
+              labelText: context.tr('deepLinkTarget'),
+              errorText: fieldErr({'err_bad_link', 'err_invalid_event_key'}),
+              suffixIcon: const Icon(Icons.arrow_drop_down),
+            ),
+            child: Row(children: [
+              Icon(_draftEventKey.isNotEmpty ? Icons.event_available_outlined : Icons.web_outlined, size: 18, color: context.pal.primary),
+              const SizedBox(width: 8),
+              Expanded(child: Text(context.pick(_draftLinkLabelAr, _draftLinkLabelEn), overflow: TextOverflow.ellipsis)),
+            ]),
+          ),
+        ),
+        // Step 5: preview
+        _step(context, _digits('5'), context.tr('previewCardTitle')),
+        Wrap(spacing: 8, children: [
+          _chip(label: 'عربي', selected: !_previewEnglish, onSelected: (_) => setState(() => _previewEnglish = false)),
+          _chip(label: 'English', selected: _previewEnglish, onSelected: (_) => setState(() => _previewEnglish = true)),
+        ]),
+        const SizedBox(height: 8),
+        _preview(context),
+        if (err != null && fieldErr({'err_title_required', 'err_title_length', 'err_body_required', 'err_body_length', 'nm_errPast', 'err_bad_link', 'err_invalid_event_key'}) == null) ...[
+          const SizedBox(height: 10),
+          _banner(context, key: const ValueKey('draft-error'), icon: Icons.error_outline, color: context.pal.alert, text: context.tr(err)),
+        ],
+        const SizedBox(height: 14),
+        Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            OutlinedButton.icon(
+              key: const ValueKey('test-device'),
+              icon: const Icon(Icons.phone_android_outlined),
+              label: Text(context.tr('testOnDevice')),
+              onPressed: _testOnDevice,
+            ),
+            Wrap(spacing: 8, children: [
+              TextButton(onPressed: () => setState(() => _editorOpen = false), child: Text(context.tr('cancel'))),
+              FilledButton.icon(
+                key: const ValueKey('save-push'),
+                icon: _saving
+                    ? SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: context.pal.onPrimary))
+                    : const Icon(Icons.check),
+                label: Text(context.tr(_editingExisting ? 'nm_saveChanges' : 'nm_schedule')),
+                onPressed: _saving ? null : _saveDraft,
+              ),
+            ]),
+          ],
+        ),
+      ]),
+      ),
       ),
     );
   }
 
-  Widget _buildTypeCard(BuildContext context, NotifyType type) {
+  Widget _preview(BuildContext context) {
+    final en = _previewEnglish;
+    String pick(TextEditingController enC, TextEditingController arC) => en && enC.text.trim().isNotEmpty ? enC.text.trim() : arC.text.trim();
+    final title = pick(_draftTitleEn, _draftTitleAr);
+    final body = pick(_draftBodyEn, _draftBodyAr);
+    return Directionality(
+      textDirection: en ? TextDirection.ltr : TextDirection.rtl,
+      child: Container(
+        key: const ValueKey('push-preview'),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: context.pal.surface,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [BoxShadow(color: context.pal.shadow(0.10), blurRadius: 10, offset: const Offset(0, 3))],
+        ),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          CircleAvatar(radius: 18, backgroundColor: context.pal.primary, child: Icon(Icons.church, color: context.pal.onPrimary, size: 20)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                Expanded(
+                  child: Text(en ? 'Sts Maximus & Domadius Church' : 'كنيسة القديسين مكسيموس ودوماديوس',
+                      maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11.5, color: context.pal.muted)),
+                ),
+                Text(en ? 'now' : 'الآن', style: TextStyle(fontSize: 11, color: context.pal.muted)),
+              ]),
+              const SizedBox(height: 3),
+              Text(title.isEmpty ? context.tr('nm_previewTitle') : title,
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: title.isEmpty ? context.pal.muted : context.pal.ink)),
+              Text(body.isEmpty ? context.tr('nm_previewBody') : body,
+                  maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 13, color: context.pal.muted)),
+            ]),
+          ),
+        ]),
+      ),
+    );
+  }
+
+  // ---- 3. types ----
+
+  Widget _typesSection(BuildContext context) {
+    return _section(
+      context,
+      key: const ValueKey('nm-types'),
+      icon: Icons.tune,
+      title: context.tr('notifyTypesSection'),
+      subtitle: context.tr('nm_typesSubtitle'),
+      children: [
+        if (_offeredTypes.isEmpty)
+          _banner(context, icon: Icons.info_outline, color: context.pal.goldText, text: context.tr('nm_noTypesOffered')),
+        for (final t in NotifyType.values) _typeTile(context, t),
+      ],
+    );
+  }
+
+  Widget _typeTile(BuildContext context, NotifyType type) {
     final ctrls = _typeCtrls[type]!;
     final def = NotifyTypeSpec.builtInDefaults[type]!;
-    final channelBadge = switch (type) {
-      NotifyType.announcements => context.tr('channelBadgeRemote'),
-      NotifyType.seasons => context.tr('channelBadgeRemote'),
+    final offered = _offeredTypes.contains(type);
+    final how = switch (type) {
+      NotifyType.announcements || NotifyType.seasons => context.tr('channelBadgeRemote'),
       NotifyType.reminders => context.tr('channelBadgeHybrid'),
       _ => context.tr('channelBadgeLocal'),
     };
-
-    return ExpansionTile(
+    final time = ctrls['time']!.text.trim();
+    final summary = [
+      if (_timedTypes.contains(type) && isValidHm(time) && time.isNotEmpty) context.tr('nm_atTime', {'t': context.isAr ? formatTimeArabic(time) : formatTimeLatin(time)}),
+      if (type == NotifyType.seasons) _daysLabel(int.tryParse(ctrls['daysBefore']!.text.trim()) ?? def.daysBefore),
+    ].join(' · ');
+    return Padding(
       key: ValueKey('type_${type.name}'),
-      leading: Icon(Icons.tune_outlined, color: context.pal.primary),
-      title: Row(
-        children: [
-          Expanded(child: Text(type.labelAr, style: const TextStyle(fontWeight: FontWeight.bold))),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-            decoration: BoxDecoration(
-              color: context.pal.primary.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Text(channelBadge, style: TextStyle(fontSize: 11, color: context.pal.primary, fontWeight: FontWeight.bold)),
-          ),
-        ],
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Material(
+      color: context.pal.surface,
+      clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: offered ? context.pal.primary.withValues(alpha: 0.35) : context.pal.hairline),
       ),
-      subtitle: Text(type.descriptionAr, style: TextStyle(fontSize: 12, color: context.pal.muted)),
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              if (type == NotifyType.verse_daily || type == NotifyType.katameros_daily || type == NotifyType.feasts || type == NotifyType.seasons)
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: ctrls['time'],
-                        decoration: InputDecoration(
-                          labelText: 'وقت الإرسال الافتراضي (HH:mm)',
-                          hintText: def.time,
-                          border: const OutlineInputBorder(),
-                        ),
-                      ),
-                    ),
-                    if (type == NotifyType.seasons) ...[
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: TextField(
-                          controller: ctrls['daysBefore'],
-                          decoration: InputDecoration(
-                            labelText: 'قبل الموعد بـ (أيام)',
-                            hintText: def.daysBefore.toString(),
-                            border: const OutlineInputBorder(),
-                          ),
-                          keyboardType: TextInputType.number,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              const SizedBox(height: 12),
-              _buildTemplateField(
-                context,
-                label: 'عنوان الإشعار (عربي)',
-                controller: ctrls['titleAr']!,
-                typeId: type.name,
-                placeholders: def.allowedPlaceholders,
-              ),
-              const SizedBox(height: 8),
-              _buildTemplateField(
-                context,
-                label: 'نص الإشعار (عربي)',
-                controller: ctrls['bodyAr']!,
-                typeId: type.name,
-                placeholders: def.allowedPlaceholders,
-                multiline: true,
-              ),
-              const SizedBox(height: 12),
-              _buildTemplateField(
-                context,
-                label: 'Title Template (English)',
-                controller: ctrls['titleEn']!,
-                typeId: type.name,
-                placeholders: def.allowedPlaceholders,
-              ),
-              const SizedBox(height: 8),
-              _buildTemplateField(
-                context,
-                label: 'Body Template (English)',
-                controller: ctrls['bodyEn']!,
-                typeId: type.name,
-                placeholders: def.allowedPlaceholders,
-                multiline: true,
-              ),
-              const SizedBox(height: 8),
-              Align(
-                alignment: AlignmentDirectional.centerEnd,
-                child: TextButton.icon(
-                  icon: const Icon(Icons.restart_alt, size: 16),
-                  label: Text(context.tr('resetToDefault')),
-                  onPressed: () {
-                    ctrls['time']!.text = def.time;
-                    ctrls['daysBefore']!.text = def.daysBefore > 0 ? def.daysBefore.toString() : '';
-                    ctrls['titleAr']!.text = def.titleAr;
-                    ctrls['titleEn']!.text = def.titleEn;
-                    ctrls['bodyAr']!.text = def.bodyAr;
-                    ctrls['bodyEn']!.text = def.bodyEn;
-                    _markDirty();
-                  },
-                ),
-              ),
-            ],
+      child: Column(children: [
+        SwitchListTile(
+          key: ValueKey('offer-${type.name}'),
+          secondary: Icon(_typeIcon(type), color: offered ? context.pal.primary : context.pal.muted),
+          title: Text(context.pick(type.labelAr, type.labelEn), style: const TextStyle(fontWeight: FontWeight.bold)),
+          subtitle: Text(
+            '${context.pick(type.descriptionAr, type.descriptionEn)}\n$how${summary.isEmpty ? '' : ' · $summary'}',
+            style: TextStyle(fontSize: 12.5, color: context.pal.muted, height: 1.4),
           ),
+          isThreeLine: true,
+          value: offered,
+          onChanged: (on) => setState(() {
+            on ? _offeredTypes.add(type) : _offeredTypes.remove(type);
+            _markDirty();
+          }),
         ),
-      ],
+        if (type == NotifyType.announcements)
+          Padding(
+            padding: const EdgeInsetsDirectional.fromSTEB(16, 0, 16, 12),
+            child: Text(context.tr('nm_announcementsNote'), style: TextStyle(fontSize: 12.5, color: context.pal.muted)),
+          ),
+        if (_hasTemplate(type))
+          Theme(
+            data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+            child: ExpansionTile(
+              key: ValueKey('customize-${type.name}'),
+              tilePadding: const EdgeInsetsDirectional.only(start: 16, end: 12),
+              childrenPadding: const EdgeInsetsDirectional.fromSTEB(16, 0, 16, 12),
+              title: Text(context.tr(_timedTypes.contains(type) ? 'nm_customizeTimeText' : 'nm_customizeText'),
+                  style: TextStyle(fontSize: 13.5, color: context.pal.primary, fontWeight: FontWeight.w600)),
+              children: [_typeEditor(context, type)],
+            ),
+          ),
+      ]),
+      ),
     );
   }
 
-  Widget _buildTemplateField(
-    BuildContext context, {
-    required String label,
-    required TextEditingController controller,
-    required String typeId,
-    required List<String> placeholders,
-    bool multiline = false,
-  }) {
-    final unknown = unknownPlaceholders(typeId, controller.text);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        TextField(
-          controller: controller,
-          maxLines: multiline ? 3 : 1,
-          decoration: InputDecoration(
-            labelText: label,
-            errorText: unknown.isNotEmpty ? context.tr('err_unknown_placeholder') : null,
-            border: const OutlineInputBorder(),
-            counterText: '${controller.text.length} / ${multiline ? 300 : 120}',
+  String _daysLabel(int d) => d == 0 ? context.tr('nm_daysSame') : context.tr('nm_daysBefore', {'n': context.isAr ? context.dayCount(d) : '$d'});
+
+  Widget _typeEditor(BuildContext context, NotifyType type) {
+    final ctrls = _typeCtrls[type]!;
+    final def = NotifyTypeSpec.builtInDefaults[type]!;
+    final time = ctrls['time']!.text.trim();
+    final timeBad = !isValidHm(time);
+    final days = int.tryParse(ctrls['daysBefore']!.text.trim()) ?? def.daysBefore;
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      if (_timedTypes.contains(type)) ...[
+        Wrap(spacing: 12, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
+          OutlinedButton.icon(
+            key: ValueKey('time-${type.name}'),
+            icon: const Icon(Icons.access_time, size: 18),
+            label: Text(time.isEmpty || timeBad
+                ? context.tr('nm_pickTime')
+                : context.tr('nm_sendTimeBtn', {'t': context.isAr ? formatTimeArabic(time) : formatTimeLatin(time)})),
+            onPressed: () async {
+              final parts = isValidHm(time) && time.isNotEmpty ? time.split(':') : def.time.split(':');
+              final picked = await showTimePicker(
+                context: context,
+                initialTime: TimeOfDay(hour: int.parse(parts[0]), minute: int.parse(parts[1])),
+              );
+              if (picked != null) {
+                ctrls['time']!.text = '${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}';
+                setState(() {});
+              }
+            },
+          ),
+          if (type == NotifyType.seasons)
+            DropdownButton<int>(
+              key: const ValueKey('daysBefore-seasons'),
+              value: days.clamp(0, 7),
+              items: [for (var d = 0; d <= 7; d++) DropdownMenuItem(value: d, child: Text(_daysLabel(d)))],
+              onChanged: (v) {
+                if (v == null) return;
+                ctrls['daysBefore']!.text = '$v';
+                setState(() {});
+              },
+            ),
+        ]),
+        if (timeBad && _showErrors) Text(context.tr('nm_errTime'), style: TextStyle(color: context.pal.alert, fontSize: 12.5)),
+        Padding(
+          padding: const EdgeInsets.only(top: 4, bottom: 10),
+          child: Text(
+            context.tr(type == NotifyType.seasons
+                ? 'nm_seasonsTimeHint'
+                : (type == NotifyType.feasts ? 'nm_feastTimeHint' : 'nm_userTimeHint')),
+            style: TextStyle(fontSize: 12.5, color: context.pal.muted, height: 1.4),
           ),
         ),
-        if (placeholders.isNotEmpty) ...[
-          const SizedBox(height: 4),
-          Wrap(
-            spacing: 6,
-            runSpacing: 4,
-            children: placeholders.map((ph) {
-              return ActionChip(
-                label: Text(ph, style: const TextStyle(fontSize: 11)),
-                padding: EdgeInsets.zero,
+      ],
+      _templateField(context, type, ctrls['titleAr']!, context.tr('nm_tplTitleAr'), 120),
+      _templateField(context, type, ctrls['bodyAr']!, context.tr('nm_tplBodyAr'), 300, multiline: true),
+      _templateField(context, type, ctrls['titleEn']!, context.tr('nm_tplTitleEn'), 120, ltr: true),
+      _templateField(context, type, ctrls['bodyEn']!, context.tr('nm_tplBodyEn'), 300, multiline: true, ltr: true),
+      _templateSample(context, type),
+      Align(
+        alignment: AlignmentDirectional.centerEnd,
+        child: TextButton.icon(
+          key: ValueKey('reset-${type.name}'),
+          icon: const Icon(Icons.restart_alt, size: 18),
+          label: Text(context.tr('resetToDefault')),
+          onPressed: () async {
+            final ok = await _confirm(
+              title: context.tr('resetToDefault'),
+              body: context.tr('nm_resetBody', {'type': context.pick(type.labelAr, type.labelEn)}),
+              action: context.tr('resetToDefault'),
+            );
+            if (!ok) return;
+            ctrls['time']!.text = def.time;
+            ctrls['daysBefore']!.text = '${def.daysBefore}';
+            ctrls['titleAr']!.text = def.titleAr;
+            ctrls['titleEn']!.text = def.titleEn;
+            ctrls['bodyAr']!.text = def.bodyAr;
+            ctrls['bodyEn']!.text = def.bodyEn;
+            setState(() {});
+          },
+        ),
+      ),
+    ]);
+  }
+
+  Widget _templateField(BuildContext context, NotifyType type, TextEditingController c, String label, int max,
+      {bool multiline = false, bool ltr = false}) {
+    final placeholders = NotifyTypeSpec.builtInDefaults[type]!.allowedPlaceholders;
+    final unknown = unknownPlaceholders(type.name, c.text);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        TextField(
+          controller: c,
+          maxLength: max,
+          minLines: multiline ? 2 : 1,
+          maxLines: multiline ? 4 : 1,
+          textDirection: ltr ? TextDirection.ltr : null,
+          onChanged: (_) => setState(() {}),
+          decoration: InputDecoration(
+            labelText: label,
+            helperText: context.tr('nm_tplEmptyHint'),
+            errorText: unknown.isEmpty ? null : context.tr('nm_errUnknownPh', {'ph': unknown.join('، ')}),
+            errorMaxLines: 3,
+          ),
+        ),
+        if (placeholders.isNotEmpty)
+          Wrap(spacing: 6, runSpacing: 4, crossAxisAlignment: WrapCrossAlignment.center, children: [
+            Text(context.tr('nm_insert'), style: TextStyle(fontSize: 12, color: context.pal.muted)),
+            for (final ph in placeholders)
+              ActionChip(
+                key: ValueKey('ph-${type.name}-$ph'),
+                avatar: Icon(Icons.add, size: 14, color: context.pal.primary),
+                label: Text(context.pick(placeholderLabel(ph).$1, placeholderLabel(ph).$2), style: const TextStyle(fontSize: 12)),
+                tooltip: ph,
                 onPressed: () {
-                  final text = controller.text;
-                  final sel = controller.selection;
+                  final text = c.text;
+                  final sel = c.selection;
                   if (sel.isValid && sel.start >= 0) {
-                    final next = text.replaceRange(sel.start, sel.end, ph);
-                    controller.value = TextEditingValue(
-                      text: next,
+                    c.value = TextEditingValue(
+                      text: text.replaceRange(sel.start, sel.end, ph),
                       selection: TextSelection.collapsed(offset: sel.start + ph.length),
                     );
                   } else {
-                    controller.text = '$text$ph';
+                    c.text = '$text$ph';
                   }
-                  _markDirty();
+                  setState(() {});
                 },
-              );
-            }).toList(),
-          ),
+              ),
+          ]),
+      ]),
+    );
+  }
+
+  Widget _templateSample(BuildContext context, NotifyType type) {
+    final c = _typeCtrls[type]!;
+    final ar = context.isAr;
+    final vars = ar ? placeholderSamplesAr : placeholderSamplesEn;
+    final title = renderTemplate(c[ar ? 'titleAr' : 'titleEn']!.text, vars);
+    final body = renderTemplate(c[ar ? 'bodyAr' : 'bodyEn']!.text, vars);
+    return Container(
+      key: ValueKey('sample-${type.name}'),
+      margin: const EdgeInsets.only(top: 4),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(color: context.pal.surfaceAlt.withValues(alpha: 0.5), borderRadius: BorderRadius.circular(10)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(context.tr('nm_sampleLabel'), style: TextStyle(fontSize: 11.5, color: context.pal.muted)),
+        const SizedBox(height: 2),
+        Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+        Text(body, style: TextStyle(color: context.pal.muted, fontSize: 13)),
+      ]),
+    );
+  }
+
+  // ---- 4. «ذكّرني» ----
+
+  Widget _remindSection(BuildContext context) {
+    final remindersOn = _offeredTypes.contains(NotifyType.reminders);
+    final sources = [
+      ('lit', Icons.church_outlined, 'srcLiturgies', 'nm_srcLiturgiesHint'),
+      ('mtg', Icons.groups_outlined, 'srcMeetings', 'nm_srcMeetingsHint'),
+      ('day', Icons.today_outlined, 'srcDayEvents', 'nm_srcDayHint'),
+    ];
+    final leads = _reminderLeads.toList()..sort();
+    return _section(
+      context,
+      key: const ValueKey('nm-remind'),
+      icon: Icons.alarm_outlined,
+      title: context.tr('notifyRemindersCard'),
+      subtitle: context.tr('nm_remindSubtitle'),
+      children: [
+        if (!remindersOn) ...[
+          _banner(context, icon: Icons.info_outline, color: context.pal.goldText, text: context.tr('nm_remindersOff')),
+          const SizedBox(height: 8),
         ],
+        Text(context.tr('reminderSourcesLabel'), style: const TextStyle(fontWeight: FontWeight.w600)),
+        for (final s in sources)
+          SwitchListTile(
+            key: ValueKey('src-${s.$1}'),
+            contentPadding: EdgeInsets.zero,
+            secondary: Icon(s.$2, color: context.pal.primary),
+            title: Text(context.tr(s.$3)),
+            subtitle: Text(context.tr(s.$4), style: TextStyle(fontSize: 12.5, color: context.pal.muted)),
+            value: _reminderSources.contains(s.$1),
+            onChanged: (on) => setState(() {
+              on ? _reminderSources.add(s.$1) : _reminderSources.remove(s.$1);
+              _markDirty();
+            }),
+          ),
+        const Divider(height: 24),
+        Text(context.tr('nm_leadsLabel'), style: const TextStyle(fontWeight: FontWeight.w600)),
+        Text(context.tr('nm_leadsHint'), style: TextStyle(fontSize: 12.5, color: context.pal.muted)),
+        const SizedBox(height: 8),
+        Wrap(spacing: 8, runSpacing: 8, children: [
+          for (final m in allowedReminderLeads)
+            _chip(
+              key: ValueKey('lead-$m'),
+              filter: true,
+              label: leadLabel(m, context.isAr ? 'ar' : 'en'),
+              selected: _reminderLeads.contains(m),
+              onSelected: (on) {
+                // Inline note, not a snack bar: a snack bar would cover the
+                // save bar at the bottom of the screen.
+                if (on && _reminderLeads.length >= 4) {
+                  setState(() => _leadsNote = 'nm_leadsMax');
+                  return;
+                }
+                if (!on && _reminderLeads.length <= 1) {
+                  setState(() => _leadsNote = 'nm_leadsMin');
+                  return;
+                }
+                setState(() {
+                  _leadsNote = null;
+                  on ? _reminderLeads.add(m) : _reminderLeads.remove(m);
+                  if (!_reminderLeads.contains(_reminderDefaultLead)) _reminderDefaultLead = (_reminderLeads.toList()..sort()).first;
+                  _markDirty();
+                });
+              },
+            ),
+        ]),
+        if (_leadsNote != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text(context.tr(_leadsNote!), key: const ValueKey('leads-note'), style: TextStyle(color: context.pal.alert, fontSize: 12.5)),
+          ),
+        const SizedBox(height: 14),
+        DropdownButtonFormField<int>(
+          key: ValueKey('default-lead-${leads.join(',')}'),
+          initialValue: leads.contains(_reminderDefaultLead) ? _reminderDefaultLead : leads.first,
+          isExpanded: true,
+          decoration: InputDecoration(labelText: context.tr('nm_defaultLead'), helperText: context.tr('nm_defaultLeadHint'), helperMaxLines: 2),
+          items: [for (final m in leads) DropdownMenuItem(value: m, child: Text(leadLabel(m, context.isAr ? 'ar' : 'en')))],
+          onChanged: (v) {
+            if (v == null) return;
+            setState(() => _reminderDefaultLead = v);
+            _markDirty();
+          },
+        ),
       ],
     );
   }
 
-  Widget _buildRemindMeSection(BuildContext context) {
+  // ---- 5. sent log ----
+
+  Widget _sentLogSection(BuildContext context) {
+    final log = _schedule.sentLog.take(30).toList();
+    return _section(
+      context,
+      key: const ValueKey('nm-log'),
+      icon: Icons.history,
+      title: context.tr('sentLogSection'),
+      subtitle: context.tr('nm_logSubtitle'),
+      trailing: widget.role == 'owner' && log.isNotEmpty
+          ? Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: TextButton.icon(
+                key: const ValueKey('clear-log'),
+                icon: Icon(Icons.delete_sweep_outlined, size: 18, color: context.pal.alert),
+                label: Text(context.tr('clearSentLog'), style: TextStyle(color: context.pal.alert)),
+                onPressed: _saving ? null : _clearSentLog,
+              ),
+            )
+          : null,
+      children: [
+        if (log.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            child: Text(context.tr('emptySentLog'), textAlign: TextAlign.center, style: TextStyle(color: context.pal.muted)),
+          ),
+        for (final e in log) _logRow(context, e),
+      ],
+    );
+  }
+
+  Widget _logRow(BuildContext context, SentEntry e) {
+    final state = e.result.isNotEmpty ? e.result : (e.webState == 'error' || e.appState == 'error' ? 'error' : 'ok');
+    final (label, color, icon) = _phaseLook(switch (state) { 'ok' || 'partial' || 'unconfirmed' || 'expired' => state, _ => 'error' });
+    final season = e.id.startsWith('season:');
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Icon(season ? Icons.event_outlined : Icons.campaign_outlined, size: 20, color: context.pal.muted),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(e.titleAr.isEmpty ? '—' : e.titleAr, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5)),
+            Text(
+              '${_whenText(e.sentAt)} · ${context.tr(season ? 'nm_logSeason' : 'nm_logAnnouncement')}',
+              style: TextStyle(fontSize: 12, color: context.pal.muted),
+            ),
+          ]),
+        ),
+        const SizedBox(width: 8),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          decoration: BoxDecoration(color: color.withValues(alpha: 0.14), borderRadius: BorderRadius.circular(20)),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(icon, size: 13, color: color),
+            const SizedBox(width: 3),
+            Text(label, style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: color)),
+          ]),
+        ),
+      ]),
+    );
+  }
+
+  // ---- 6. advanced ----
+
+  Widget _advancedSection(BuildContext context) {
+    final bad = !isValidVapidKey(_vapidCtrl.text.trim());
     return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+      key: const ValueKey('nm-advanced'),
+      margin: EdgeInsets.zero,
+      child: Theme(
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          initiallyExpanded: bad && _showErrors,
+          leading: Icon(Icons.settings_outlined, color: context.pal.muted),
+          title: Text(context.tr('nm_advanced'), style: const TextStyle(fontWeight: FontWeight.bold)),
+          subtitle: Text(context.tr('nm_advancedHint'), style: TextStyle(fontSize: 12.5, color: context.pal.muted)),
+          childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
           children: [
-            Text(context.tr('notifyRemindersCard'), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 12),
-            Text(context.tr('reminderSourcesLabel'), style: const TextStyle(fontWeight: FontWeight.w600)),
-            CheckboxListTile(
-              contentPadding: EdgeInsets.zero,
-              title: Text(context.tr('srcLiturgies')),
-              value: _reminderSources.contains('lit'),
-              onChanged: (on) => setState(() {
-                if (on == true) {
-                  _reminderSources.add('lit');
-                } else {
-                  _reminderSources.remove('lit');
-                }
-                _markDirty();
-              }),
-            ),
-            CheckboxListTile(
-              contentPadding: EdgeInsets.zero,
-              title: Text(context.tr('srcMeetings')),
-              value: _reminderSources.contains('mtg'),
-              onChanged: (on) => setState(() {
-                if (on == true) {
-                  _reminderSources.add('mtg');
-                } else {
-                  _reminderSources.remove('mtg');
-                }
-                _markDirty();
-              }),
-            ),
-            CheckboxListTile(
-              contentPadding: EdgeInsets.zero,
-              title: Text(context.tr('srcDayEvents')),
-              value: _reminderSources.contains('day'),
-              onChanged: (on) => setState(() {
-                if (on == true) {
-                  _reminderSources.add('day');
-                } else {
-                  _reminderSources.remove('day');
-                }
-                _markDirty();
-              }),
-            ),
-            const Divider(height: 24),
-            Text('مدد التذكير المتاحة للمستخدم («ذكّرني قبل...»):', style: const TextStyle(fontWeight: FontWeight.w600)),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: allowedReminderLeads.map((m) {
-                final label = leadLabel(m, 'ar');
-                final sel = _reminderLeads.contains(m);
-                return FilterChip(
-                  label: Text(label),
-                  selected: sel,
-                  onSelected: (on) => setState(() {
-                    if (on) {
-                      if (_reminderLeads.length < 4) _reminderLeads.add(m);
-                    } else {
-                      if (_reminderLeads.length > 1) {
-                        _reminderLeads.remove(m);
-                        if (!_reminderLeads.contains(_reminderDefaultLead)) {
-                          _reminderDefaultLead = _reminderLeads.first;
-                        }
-                      }
-                    }
-                    _markDirty();
-                  }),
-                );
-              }).toList(),
-            ),
-            const SizedBox(height: 12),
-            DropdownButtonFormField<int>(
-              initialValue: _reminderLeads.contains(_reminderDefaultLead) ? _reminderDefaultLead : _reminderLeads.first,
-              decoration: const InputDecoration(labelText: 'المدة الافتراضية للتذكير', border: OutlineInputBorder()),
-              items: _reminderLeads.map((m) => DropdownMenuItem(value: m, child: Text(leadLabel(m, 'ar')))).toList(),
-              onChanged: (v) {
-                if (v != null) {
-                  setState(() => _reminderDefaultLead = v);
-                  _markDirty();
-                }
-              },
+            TextField(
+              key: const ValueKey('vapid'),
+              controller: _vapidCtrl,
+              textDirection: TextDirection.ltr,
+              onChanged: (_) => setState(_markDirty),
+              decoration: InputDecoration(
+                labelText: context.tr('nm_vapidLabel'),
+                helperText: context.tr('nm_vapidHint'),
+                helperMaxLines: 4,
+                errorText: bad ? context.tr('nm_errVapid') : null,
+                errorMaxLines: 3,
+              ),
             ),
           ],
         ),
       ),
     );
   }
-
-  Widget _buildScheduledPushesSection(BuildContext context, NotifySchedule scheduleDoc) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Wrap(
-              alignment: WrapAlignment.spaceBetween,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                Text('${context.tr('scheduledPushesSection')} (${scheduleDoc.schedule.length}/20)', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                ElevatedButton.icon(
-                  icon: const Icon(Icons.add),
-                  label: Text(context.tr('addScheduledPush')),
-                  onPressed: scheduleDoc.schedule.length >= 20 || _isCreatingPush
-                      ? null
-                      : () => setState(() {
-                            _isCreatingPush = true;
-                            _draftId = null;
-                            _draftAtUtc = DateTime.now().toUtc().add(const Duration(hours: 1));
-                            _draftEarliest = false;
-                            _draftTargets = 'all';
-                            _draftTitleAr.clear();
-                            _draftTitleEn.clear();
-                            _draftBodyAr.clear();
-                            _draftBodyEn.clear();
-                            _draftLink.text = '/';
-                            _draftEventKey.clear();
-                          }),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            if (_isCreatingPush) _buildPushDraftEditor(context, scheduleDoc),
-            if (scheduleDoc.schedule.isEmpty && !_isCreatingPush)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 20),
-                child: Center(child: Text(context.tr('emptySchedule'), style: TextStyle(color: context.pal.muted))),
-              ),
-            ...scheduleDoc.schedule.map((row) => _buildScheduleRowCard(context, scheduleDoc, row)),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPushDraftEditor(BuildContext context, NotifySchedule scheduleDoc) {
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 12),
-      child: Material(
-        color: context.pal.surface,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-          side: BorderSide(color: context.pal.primary.withValues(alpha: 0.3)),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(_draftId == null ? context.tr('addScheduledPush') : 'تعديل الإشعار المجدول', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                  IconButton(
-                    icon: const Icon(Icons.close),
-                    onPressed: () => setState(() => _isCreatingPush = false),
-                  ),
-                ],
-              ),
-          const SizedBox(height: 12),
-          CheckboxListTile(
-            contentPadding: EdgeInsets.zero,
-            title: Text(context.tr('sendAtEarliest')),
-            value: _draftEarliest,
-            onChanged: (on) => setState(() => _draftEarliest = on == true),
-          ),
-          if (!_draftEarliest) ...[
-            Text('${context.tr('sendAtLabel')}:', style: const TextStyle(fontWeight: FontWeight.w600)),
-            const SizedBox(height: 6),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                OutlinedButton.icon(
-                  icon: const Icon(Icons.calendar_today, size: 18),
-                  label: Text(_draftAtUtc == null ? 'اختر التاريخ' : dayKey(CairoTime.calendarDate(_draftAtUtc!))),
-                  onPressed: () async {
-                    final picked = await showDatePicker(
-                      context: context,
-                      initialDate: _draftAtUtc ?? DateTime.now(),
-                      firstDate: DateTime.now().subtract(const Duration(days: 1)),
-                      lastDate: DateTime.now().add(const Duration(days: 90)),
-                    );
-                    if (picked != null) {
-                      setState(() {
-                        final curTime = _draftAtUtc != null ? parseHm('${_draftAtUtc!.hour}:${_draftAtUtc!.minute}') ?? 720 : 720;
-                        _draftAtUtc = CairoTime.at(picked.year, picked.month, picked.day, curTime).toUtc();
-                      });
-                    }
-                  },
-                ),
-                OutlinedButton.icon(
-                  icon: const Icon(Icons.access_time, size: 18),
-                  label: Text(_draftAtUtc == null ? 'اختر الوقت' : formatTimeArabic('${_draftAtUtc!.toLocal().hour.toString().padLeft(2, '0')}:${_draftAtUtc!.toLocal().minute.toString().padLeft(2, '0')}')),
-                  onPressed: () async {
-                    final picked = await showTimePicker(
-                      context: context,
-                      initialTime: TimeOfDay(hour: _draftAtUtc?.toLocal().hour ?? 12, minute: _draftAtUtc?.toLocal().minute ?? 0),
-                    );
-                    if (picked != null) {
-                      setState(() {
-                        final cur = _draftAtUtc ?? DateTime.now();
-                        _draftAtUtc = CairoTime.at(cur.year, cur.month, cur.day, picked.hour * 60 + picked.minute).toUtc();
-                      });
-                    }
-                  },
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-          ],
-          Wrap(
-            crossAxisAlignment: WrapCrossAlignment.center,
-            spacing: 6,
-            runSpacing: 6,
-            children: [
-              const Text('المنصة:', style: TextStyle(fontWeight: FontWeight.w600)),
-              ChoiceChip(
-                label: Text(context.tr('pushTargetAll')),
-                selected: _draftTargets == 'all',
-                onSelected: (on) { if (on) setState(() => _draftTargets = 'all'); },
-              ),
-              ChoiceChip(
-                label: Text(context.tr('pushTargetApp')),
-                selected: _draftTargets == 'app',
-                onSelected: (on) { if (on) setState(() => _draftTargets = 'app'); },
-              ),
-              ChoiceChip(
-                label: Text(context.tr('pushTargetWeb')),
-                selected: _draftTargets == 'web',
-                onSelected: (on) { if (on) setState(() => _draftTargets = 'web'); },
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _draftTitleAr,
-            decoration: const InputDecoration(labelText: 'العنوان (عربي) *', border: OutlineInputBorder()),
-            onChanged: (_) => setState(() {}),
-          ),
-          const SizedBox(height: 8),
-          TextField(
-            controller: _draftBodyAr,
-            maxLines: 2,
-            decoration: const InputDecoration(labelText: 'نص الرسالة (عربي)', border: OutlineInputBorder()),
-            onChanged: (_) => setState(() {}),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _draftTitleEn,
-            decoration: const InputDecoration(labelText: 'Title (English)', border: OutlineInputBorder()),
-            onChanged: (_) => setState(() {}),
-          ),
-          const SizedBox(height: 8),
-          TextField(
-            controller: _draftBodyEn,
-            maxLines: 2,
-            decoration: const InputDecoration(labelText: 'Message Body (English)', border: OutlineInputBorder()),
-            onChanged: (_) => setState(() {}),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _draftLink,
-            decoration: InputDecoration(
-              labelText: context.tr('deepLinkTarget'),
-              hintText: '/mass-schedule',
-              border: const OutlineInputBorder(),
-            ),
-          ),
-          const SizedBox(height: 8),
-          TextField(
-            controller: _draftEventKey,
-            decoration: InputDecoration(
-              labelText: context.tr('linkToEvent'),
-              hintText: 'lit-xxx, meeting-xxx, day-xxx',
-              border: const OutlineInputBorder(),
-            ),
-          ),
-          const SizedBox(height: 16),
-          // Live Preview Card
-          Text(context.tr('previewCardTitle'), style: const TextStyle(fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
-          _buildLiveNotificationPreview(context),
-          const SizedBox(height: 16),
-          Wrap(
-            alignment: WrapAlignment.spaceBetween,
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              OutlinedButton.icon(
-                icon: const Icon(Icons.devices_outlined),
-                label: Text(context.tr('testOnDevice')),
-                onPressed: _testNotificationOnDevice,
-              ),
-              ElevatedButton.icon(
-                icon: const Icon(Icons.save),
-                label: Text(context.tr('save')),
-                onPressed: () => _saveScheduledPush(scheduleDoc),
-              ),
-            ],
-          ),
-        ],
-      ),
-    ),
-  ),
-);
 }
 
-  Widget _buildLiveNotificationPreview(BuildContext context) {
-    final title = _draftTitleAr.text.trim().isNotEmpty ? _draftTitleAr.text.trim() : 'عنوان الإشعار';
-    final body = _draftBodyAr.text.trim().isNotEmpty ? _draftBodyAr.text.trim() : 'نص الإشعار يظهر هنا بوضوح للمستخدم عند استلام التنبيه.';
+/// A friendly name for a stored link.
+class LinkTargetLike {
+  final String labelAr, labelEn;
+  const LinkTargetLike(this.labelAr, this.labelEn);
+}
 
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: context.pal.background,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(color: context.pal.shadow(0.08), blurRadius: 10, offset: const Offset(0, 4)),
-        ],
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(
-              color: context.pal.primary,
-              shape: BoxShape.circle,
-            ),
-            child: Icon(Icons.church, color: context.pal.onPrimary, size: 22),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text('كنيسة القديسين مكسيموس ودوماديوس', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: context.pal.primary)),
-                    Text('الآن', style: TextStyle(fontSize: 11, color: context.pal.muted)),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                const SizedBox(height: 2),
-                Text(body, style: TextStyle(fontSize: 13, color: context.pal.muted), maxLines: 2, overflow: TextOverflow.ellipsis),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
+class _UserFacing implements Exception {
+  final String key;
+  _UserFacing(this.key);
+}
+
+/// «اختر ما يفتح عند الضغط»: site pages, then events grouped by kind, then a
+/// custom in-app path.
+class _LinkPickerDialog extends StatefulWidget {
+  final Future<List<_LinkChoice>> Function() load;
+  const _LinkPickerDialog({required this.load});
+
+  @override
+  State<_LinkPickerDialog> createState() => _LinkPickerDialogState();
+}
+
+class _LinkPickerDialogState extends State<_LinkPickerDialog> {
+  late final Future<List<_LinkChoice>> _future = widget.load();
+  final _custom = TextEditingController();
+  String? _customErr;
+
+  @override
+  void dispose() {
+    _custom.dispose();
+    super.dispose();
   }
 
-  Widget _buildScheduleRowCard(BuildContext context, NotifySchedule scheduleDoc, ScheduledNotification row) {
-    final rowStatus = scheduleDoc.status[row.id];
-    final isExpired = scheduleDoc.isExpiredAt(row.id, DateTime.now().toUtc());
+  static const _groups = [
+    ('pages', Icons.web_outlined, 'nm_grpPages'),
+    ('liturgies', Icons.church_outlined, 'nm_grpLiturgies'),
+    ('meetings', Icons.groups_outlined, 'nm_grpMeetings'),
+    ('dayEvents', Icons.today_outlined, 'nm_grpDayEvents'),
+    ('seasons', Icons.event_outlined, 'nm_grpSeasons'),
+  ];
 
-    String statusLabel;
-    Color statusColor;
-
-    if (rowStatus?.state == 'ok') {
-      statusLabel = context.tr('statusSent');
-      statusColor = context.pal.success;
-    } else if (rowStatus?.state == 'sending') {
-      statusLabel = context.tr('statusSending');
-      statusColor = context.pal.goldText;
-    } else if (rowStatus?.state == 'partial') {
-      statusLabel = context.tr('statusPartial');
-      statusColor = context.pal.barDeep;
-    } else if (rowStatus?.state == 'error') {
-      statusLabel = context.tr('statusError');
-      statusColor = context.pal.alert;
-    } else if (rowStatus?.state == 'unconfirmed') {
-      statusLabel = context.tr('statusUnconfirmed');
-      statusColor = context.pal.alert;
-    } else if (isExpired) {
-      statusLabel = context.tr('statusExpired');
-      statusColor = context.pal.muted;
-    } else if (!row.atUtc.isAfter(DateTime.now().toUtc())) {
-      statusLabel = context.tr('statusQueued');
-      statusColor = context.pal.primary;
-    } else {
-      statusLabel = context.tr('statusScheduled');
-      statusColor = context.pal.primary;
-    }
-
-    final canDelete = scheduleDoc.canDeleteRow(row.id);
-    final canClone = rowStatus?.state == 'partial' ||
-        rowStatus?.state == 'error' ||
-        rowStatus?.state == 'unconfirmed' ||
-        isExpired;
-
-    return Card(
-      margin: const EdgeInsets.symmetric(vertical: 6),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: Text(
-                    row.titleAr,
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(context.tr('nm_pickLinkTitle')),
+      contentPadding: const EdgeInsets.fromLTRB(8, 12, 8, 0),
+      content: SizedBox(
+        width: 480,
+        child: FutureBuilder<List<_LinkChoice>>(
+          future: _future,
+          builder: (context, snap) {
+            if (!snap.hasData) return const SizedBox(height: 120, child: Center(child: CircularProgressIndicator()));
+            final all = snap.data!;
+            return ListView(shrinkWrap: true, children: [
+              for (final g in _groups)
+                if (all.any((c) => c.group == g.$1)) ...[
+                  Padding(
+                    padding: const EdgeInsetsDirectional.fromSTEB(12, 10, 12, 4),
+                    child: Text(context.tr(g.$3), style: TextStyle(fontWeight: FontWeight.bold, color: context.pal.primary)),
                   ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(color: statusColor.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(12)),
-                  child: Text(statusLabel, style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 12)),
-                ),
-              ],
-            ),
-            if (row.bodyAr.isNotEmpty) ...[
-              const SizedBox(height: 4),
-              Text(row.bodyAr, style: TextStyle(color: context.pal.muted, fontSize: 13)),
-            ],
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Icon(Icons.schedule, size: 14, color: context.pal.muted),
-                const SizedBox(width: 4),
-                Text(
-                  '${dayKey(CairoTime.calendarDate(row.atUtc))} ${row.atUtc.toLocal().hour.toString().padLeft(2, '0')}:${row.atUtc.toLocal().minute.toString().padLeft(2, '0')}',
-                  style: TextStyle(fontSize: 12, color: context.pal.muted),
-                ),
-                const SizedBox(width: 12),
-                Icon(Icons.link, size: 14, color: context.pal.muted),
-                const SizedBox(width: 4),
-                Text(row.link, style: TextStyle(fontSize: 12, color: context.pal.muted)),
-                const Spacer(),
-                Text(row.targets.toUpperCase(), style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: context.pal.primary)),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Wrap(
-              alignment: WrapAlignment.end,
-              spacing: 8,
-              children: [
-                if (canClone)
-                  TextButton.icon(
-                    icon: const Icon(Icons.copy, size: 16),
-                    label: Text(context.tr('cloneForRetry')),
-                    onPressed: () {
-                      final cloned = scheduleDoc.cloneDraftForRetry(row, DayEvent.generateRandomId(), DateTime.now().toUtc().add(const Duration(hours: 1)));
-                      setState(() {
-                        _isCreatingPush = true;
-                        _draftId = cloned.id;
-                        _draftAtUtc = cloned.atUtc;
-                        _draftTargets = cloned.targets;
-                        _draftTitleAr.text = cloned.titleAr;
-                        _draftTitleEn.text = cloned.titleEn;
-                        _draftBodyAr.text = cloned.bodyAr;
-                        _draftBodyEn.text = cloned.bodyEn;
-                        _draftLink.text = cloned.link;
-                        _draftEventKey.text = cloned.eventKey;
-                      });
-                    },
-                  ),
-                if (canDelete)
-                  TextButton.icon(
-                    icon: Icon(Icons.delete_outline, size: 16, color: context.pal.alert),
-                    label: Text(context.tr('deleteRow'), style: TextStyle(color: context.pal.alert)),
-                    onPressed: () => _deleteScheduledPush(scheduleDoc, row.id),
-                  ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSentLogSection(BuildContext context, NotifySchedule scheduleDoc) {
-    final log = scheduleDoc.sentLog.take(30).toList();
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(context.tr('sentLogSection'), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                if (widget.role == 'owner')
-                  TextButton.icon(
-                    icon: Icon(Icons.clear_all, size: 16, color: context.pal.alert),
-                    label: Text(context.tr('clearSentLog'), style: TextStyle(color: context.pal.alert)),
-                    onPressed: log.isEmpty ? null : _clearSentLog,
-                  ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            if (log.isEmpty)
+                  for (final c in all.where((c) => c.group == g.$1))
+                    ListTile(
+                      key: ValueKey('link-${c.group}-${c.path}-${c.eventKey}'),
+                      dense: true,
+                      leading: Icon(g.$2, size: 20),
+                      title: Text(context.pick(c.labelAr, c.labelEn)),
+                      subtitle: c.group == 'pages' ? null : Text(context.tr(c.eventKey.isEmpty ? 'nm_opensPageOnly' : 'nm_opensEvent')),
+                      onTap: () => Navigator.pop(context, c),
+                    ),
+                ],
               Padding(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                child: Center(child: Text(context.tr('emptySentLog'), style: TextStyle(color: context.pal.muted))),
-              ),
-            ...log.map((entry) {
-              final resultColor = entry.webState == 'error' || entry.appState == 'error'
-                  ? context.pal.alert
-                  : (entry.webState == 'partial' || entry.appState == 'partial' ? context.pal.goldText : context.pal.success);
-
-              return Container(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                decoration: BoxDecoration(border: Border(bottom: BorderSide(color: context.pal.surfaceAlt.withValues(alpha: 0.5)))),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(entry.titleAr, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                          Text(
-                            '${dayKey(CairoTime.calendarDate(entry.sentAt))} ${entry.sentAt.toLocal().hour.toString().padLeft(2, '0')}:${entry.sentAt.toLocal().minute.toString().padLeft(2, '0')} (${entry.targets})',
-                            style: TextStyle(fontSize: 11, color: context.pal.muted),
-                          ),
-                        ],
-                      ),
+                padding: const EdgeInsets.all(12),
+                child: TextField(
+                  key: const ValueKey('custom-link'),
+                  controller: _custom,
+                  textDirection: TextDirection.ltr,
+                  decoration: InputDecoration(
+                    labelText: context.tr('nm_customLink'),
+                    hintText: '/page/donations',
+                    errorText: _customErr,
+                    suffixIcon: IconButton(
+                      icon: const Icon(Icons.check),
+                      onPressed: () {
+                        final v = _custom.text.trim();
+                        if (!validNotificationLink(v) || safeNotificationLink(v) != v) {
+                          setState(() => _customErr = context.tr('err_bad_link'));
+                          return;
+                        }
+                        Navigator.pop(context, _LinkChoice(v, v, v, 'custom'));
+                      },
                     ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(color: resultColor.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(8)),
-                      child: Text(
-                        entry.webState.isNotEmpty ? 'W:${entry.webState}' : (entry.appState.isNotEmpty ? 'A:${entry.appState}' : 'OK'),
-                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: resultColor),
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
-              );
-            }),
-          ],
+              ),
+            ]);
+          },
         ),
       ),
+      actions: [TextButton(onPressed: () => Navigator.pop(context), child: Text(context.tr('cancel')))],
     );
   }
 }

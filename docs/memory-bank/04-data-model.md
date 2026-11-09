@@ -236,7 +236,7 @@ Added in ADR-059 for scheduled remote push notifications and sender state tracki
 
 | Field | Type / Rule | Description |
 |---|---|---|
-| `schedule` | list ≤ 20 of strings | Rows: `id␟atUtcIso␟targets␟titleAr␟titleEn␟bodyAr␟bodyEn␟link␟eventKey` (9 U+001F fields). `targets` is `'all'`, `'app'`, or `'web'`. `link` is `/...` or empty. `eventKey` is empty or `(lit\|meeting\|day\|season)-[a-z0-9-]{1,40}`. Client writable by admins. |
+| `schedule` | list ≤ 20 of strings | Rows: `id␟atUtcIso␟targets␟titleAr␟titleEn␟bodyAr␟bodyEn␟link␟eventKey` (9 U+001F fields; `atUtcIso` = `YYYY-MM-DDTHH:mm:ssZ`, whole seconds, no milliseconds — `scheduleIso()`; titleAr 1–120 and bodyAr 1–300 required). `targets` is `'all'`, `'app'`, or `'web'`. `link` is `/...` or empty. `eventKey` is empty or `(lit\|meeting\|day\|season)-[a-z0-9-]{1,40}`. Client writable by admins. |
 | `status` | map `<rowId, rowStatus>` | Per-row delivery status: `{state: 'draft'\|'sending'\|'ok'\|'partial'\|'error'\|'unconfirmed'\|'expired', result, claimedAt: ISO, topics: {<topic>: 'ok'\|'error'\|'unconfirmed'}}`. Server/sender only (client write rejected). |
 | `sentLog` | list ≤ 30 strings (or maps) | History log entries: sender writes serialized strings `id␟sentAt␟result␟titleAr␟trigger` (capped at 30 items); Dart parser handles both strings and map objects. Clear allowed for owner only (`size() == 0`). |
 | `health` | map | Sender health stats: `{lastRunAt, lastError, lastSeasonDate, sentToday, sparkReadsToday}`. Server/sender only. |
