@@ -364,3 +364,8 @@ the owner approves the whole chain.
       tappable top-bar badge (admin switch «إخفاء شارة البث في الرئيسية عند ظهور الشريط», default on).
 - [ ] Owner (ADR-044): the HTML loading screen is always cream; on a dark theme (Holy Week) it switches to charcoal when
       the app appears. Optional: remember the last theme's ground in `localStorage` and paint the screen with it.
+
+## Mobile Performance, Native Splash & Navigation Chrome (ADR-062, 8 Nov 2026)
+- [x] **Hero ambient loops on APK (`INV-PERF-01`)**: `heroAmbientLoopAllowed` halts 60 s canvas tickers and blurred ray repaints on Android APK, eliminating Home screen frame drops; hardware-decoded video preserved.
+- [x] **Native Android splash cream (`INV-SPLASH-01`)**: `#FBF3E4` (`splash_cream`) applied across `launch_background.xml` (API 21+) and `styles.xml` (including `values-v31` Android 12+ Splash API) in light and dark mode, eliminating the cold start white flash.
+- [x] **Single back arrow & unified shell (`INV-NAV-01`, `INV-NAV-02`)**: `AppShell.leading` provides single back arrow on mobile viewports; in-body `_BackLink` on `ItemDetailPage` shown only on desktop (`shellIsWide`); `NotificationHealthPage` unified to `PageBody` + `PageHeader` with parent routing back to `/notifications`.

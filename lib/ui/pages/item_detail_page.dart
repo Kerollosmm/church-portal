@@ -481,8 +481,8 @@ class _DetailView extends ConsumerWidget {
       key: const Key('itemDetailPage'),
       header: _header(context, e, cover),
       children: [
-        _BackLink(parent: parent),
-        const SizedBox(height: 4),
+        // Phones get the shell's Back arrow (INV-NAV-02); desktop keeps this link.
+        if (shellIsWide(context)) ...[_BackLink(parent: parent), const SizedBox(height: 4)],
         if (e.pills.isNotEmpty)
           Padding(
             padding: const EdgeInsets.only(bottom: 10),

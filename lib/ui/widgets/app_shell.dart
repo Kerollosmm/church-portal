@@ -67,8 +67,23 @@ const askNavItem = NavItem('ask', '/ask', Icons.auto_awesome_rounded);
 /// (`/clinics/<id>`, `/about/priests/<id>`…) returns to the page listing it
 /// (milestones: About, or Home when the admin lists them on Home only,
 /// ADR-052); every other route goes Home.
-String parentRouteOf(String location, [FeatureSettings features = FeatureSettings.defaults]) =>
-    parseDetailPath(location)?.$1.parentPathIn(features) ?? '/';
+/// Whether the shell shows the full desktop link bar (no phone Back arrow).
+/// Compared in unscaled-text units so large system text gets the compact bar.
+bool shellIsWide(BuildContext context) {
+  final textScale = MediaQuery.textScalerOf(context).scale(16) / 16;
+  return MediaQuery.sizeOf(context).width / textScale.clamp(1.0, 3.0) >= 1024;
+}
+
+/// Where the phone Back arrow goes from [location]: an item detail page
+/// (`/clinics/<id>`, `/about/priests/<id>`…) returns to the page listing it
+/// (milestones: About, or Home when the admin lists them on Home only,
+/// ADR-052); every other route goes Home.
+String parentRouteOf(String location, [FeatureSettings features = FeatureSettings.defaults]) {
+  final path = Uri.tryParse(location)?.path ?? location;
+  final norm = path.endsWith('/') && path.length > 1 ? path.substring(0, path.length - 1) : path;
+  if (norm == '/notifications/battery') return '/notifications';
+  return parseDetailPath(location)?.$1.parentPathIn(features) ?? '/';
+}
 
 /// l10n key naming the page [parentRoute] (for "Back to …").
 String _parentLabelKey(String parentRoute) => switch (parentRoute) {
@@ -77,6 +92,7 @@ String _parentLabelKey(String parentRoute) => switch (parentRoute) {
       '/clinics' => 'clinics',
       '/public-services' => 'publicServices',
       '/about' => 'about',
+      '/notifications' => 'notifications',
       _ => 'home',
     };
 
@@ -184,7 +200,7 @@ class _AppShellState extends ConsumerState<AppShell> {
     // in "unscaled text" units so big text switches to the compact bar.
     final textScale = MediaQuery.textScalerOf(context).scale(16) / 16;
     final width = MediaQuery.sizeOf(context).width;
-    final wide = width / textScale.clamp(1.0, 3.0) >= 1024;
+    final wide = shellIsWide(context);
     // Subpages on phones get a 1-tap Back-to-Home arrow: every in-app link is
     // a sibling route (context.go), so there is nothing to pop, and installed
     // PWAs have no browser back button.

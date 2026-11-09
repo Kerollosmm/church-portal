@@ -360,7 +360,7 @@ chunks are fetched relative to `<base href>`).
 
 - `navItems`: home, massSchedule, clinics, education, activities, publicServices, about, contact; `askNavItem` added
   when `assistantVisibleProvider`. `visibleNavItems(f, showAsk:)` filters by `f.routeEnabled(path)`.
-- Wide layout when `width / textScale ≥ 1024` (large system text forces the compact bar): text links
+- Wide layout evaluated via `shellIsWide(BuildContext context)` (`width / textScale.clamp(1.0, 3.0) >= 1024`; large system text forces the compact bar): text links
   (home/about/education), a **Services** popup (activities, public services, contact, ask), gold **Mass times**
   highlight button, language toggle (`EN` / `ع`).
 - Narrow: compact 48×48 dp **Mass times** `IconButton` (`_HighlightButton`), language toggle, ☰ opens an **end
@@ -376,8 +376,14 @@ chunks are fetched relative to `<base href>`).
   sibling `context.go`, so there is nothing to pop, and installed PWAs have no browser back button. On an item
   detail page the arrow is parent-aware (PR #13): `parentRouteOf(location)` (pure, `app_shell.dart`) returns
   `DetailKind.parentPath` — `/church-education`, `/church-activities`, `/clinics`, `/public-services`, `/about`
-  (priests, saints) or `/` (milestones: their cards live on Home) — shown as `Key('backParent')` with the tooltip
+  (priests, saints), `/notifications` (for `/notifications/battery`, ADR-062) or `/` (milestones: their cards live on Home) — shown as `Key('backParent')` with the tooltip
   «العودة إلى …» (`backToLabel`); every other route keeps `Key('backHome')` → `/`.
+- **Navigation Invariants (ADR-062):**
+  - **`INV-NAV-01`**: Only `AppShell` manages `Scaffold` chrome for routed public pages. `NotificationHealthPage` renders `PageBody` + `PageHeader` without an inner `Scaffold`.
+  - **`INV-NAV-02`**: Exactly one back arrow on mobile viewports (`AppShell.leading`). In-body `_BackLink` on `ItemDetailPage` is shown only when `shellIsWide(context)` is true (desktop).
+- **Mobile Performance & Native Splash Invariants (ADR-062):**
+  - **`INV-PERF-01`**: Zero continuous ambient tickers in `HeroStage` on Android APK (`heroAmbientLoopAllowed() == false`). Hardware-accelerated hero video decoder remains active.
+  - **`INV-SPLASH-01`**: Native Android launch window background locked to cream `#FBF3E4` (`@color/splash_cream`) across drawables and styles (including `values-v31` Android 12+ Splash API).
 - **Today layer (PR #31, ADR-039/040):** the shell body is `Column[CopticDateStrip(location), LiveStreamBanner,
   Expanded(page)]` over the `WarmBackdrop` (`lib/ui/widgets/today_widgets.dart`): the Coptic date strip
   (`copticStrip` all / home / off) and, while live, the red «بث مباشر الآن من الكنيسة» bar, on every page.

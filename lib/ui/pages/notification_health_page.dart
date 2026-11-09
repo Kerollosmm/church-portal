@@ -1,12 +1,18 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../../core/l10n.dart';
 import '../../core/theme.dart';
 import '../../domain/oem_guide.dart';
 import '../../state/notify_providers.dart';
+import '../widgets/common.dart';
+
+/// Strings only this deferred chunk uses (registered before it builds).
+const Map<String, List<String>> notificationHealthStrings = {
+  'notifHealthTitle': ['إذا لم تصلك الإشعارات', 'Notification Health & Battery'],
+  'notifHealthSubtitle': ['فحص البطارية وإعدادات النظام', 'Battery saver & system diagnostics'],
+};
 
 /// Screen for OEM battery saver guidance and notification diagnostics (`/notifications/battery`, ADR-058 / §3.6).
 class NotificationHealthPage extends ConsumerStatefulWidget {
@@ -31,6 +37,7 @@ class _NotificationHealthPageState extends ConsumerState<NotificationHealthPage>
   @override
   void initState() {
     super.initState();
+    registerStrings(notificationHealthStrings);
     _runDiagnostics();
   }
 
@@ -112,68 +119,18 @@ class _NotificationHealthPageState extends ConsumerState<NotificationHealthPage>
     final pal = context.pal;
     final isAr = context.isAr;
 
-    return Scaffold(
-      backgroundColor: pal.background,
-      body: SafeArea(
-        child: Column(
-          children: [
-            // Top Bar
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: pal.surface,
-                border: Border(bottom: BorderSide(color: pal.hairline)),
-              ),
-              child: Row(
-                children: [
-                  IconButton(
-                    icon: Icon(Icons.arrow_back_rounded, color: pal.primary),
-                    tooltip: isAr ? 'الرجوع' : 'Back',
-                    onPressed: () {
-                      if (context.canPop()) {
-                        context.pop();
-                      } else {
-                        context.go('/notifications');
-                      }
-                    },
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      isAr ? 'إذا لم تصلك الإشعارات' : 'Notification Health & Battery',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: pal.primary,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            // Content
-            Expanded(
-              child: _isLoading
-                  ? Center(child: CircularProgressIndicator(color: pal.primary))
-                  : SingleChildScrollView(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          // Diagnostics Card («افحص الإشعارات»)
-                          _buildDiagnosticsCard(pal, isAr),
-                          const SizedBox(height: 20),
-
-                          // Brand Guidance Section
-                          _buildBrandGuidance(pal, isAr),
-                        ],
-                      ),
-                    ),
-            ),
-          ],
-        ),
+    return PageBody(
+      header: PageHeader(
+        title: context.tr('notifHealthTitle'),
+        subtitle: context.tr('notifHealthSubtitle'),
       ),
+      children: _isLoading
+          ? [Center(child: Padding(padding: const EdgeInsets.all(40), child: CircularProgressIndicator(color: pal.primary)))]
+          : [
+              _buildDiagnosticsCard(pal, isAr),
+              const SizedBox(height: 20),
+              _buildBrandGuidance(pal, isAr),
+            ],
     );
   }
 
@@ -193,9 +150,11 @@ class _NotificationHealthPageState extends ConsumerState<NotificationHealthPage>
             children: [
               Icon(Icons.health_and_safety_rounded, color: pal.primary, size: 22),
               const SizedBox(width: 8),
-              Text(
-                isAr ? 'فحص حالة الإشعارات' : 'Notification Health Check',
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: pal.primary),
+              Expanded(
+                child: Text(
+                  isAr ? 'فحص حالة الإشعارات' : 'Notification Health Check',
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: pal.primary),
+                ),
               ),
             ],
           ),
@@ -239,10 +198,13 @@ class _NotificationHealthPageState extends ConsumerState<NotificationHealthPage>
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                isAr ? 'الإشعارات المجدولة حاليًا' : 'Scheduled Alarms',
-                style: TextStyle(fontSize: 13.5, color: pal.ink),
+              Expanded(
+                child: Text(
+                  isAr ? 'الإشعارات المجدولة حاليًا' : 'Scheduled Alarms',
+                  style: TextStyle(fontSize: 13.5, color: pal.ink),
+                ),
               ),
+              const SizedBox(width: 8),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
                 decoration: BoxDecoration(
@@ -338,9 +300,11 @@ class _NotificationHealthPageState extends ConsumerState<NotificationHealthPage>
                 children: [
                   Icon(Icons.phone_android_rounded, color: pal.primary, size: 20),
                   const SizedBox(width: 8),
-                  Text(
+                  Expanded(
+                    child: Text(
                     '${isAr ? "نوع هاتفك:" : "Detected device:"} ${_detectedBrand.displayName}',
                     style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: pal.primary),
+                    ),
                   ),
                 ],
               ),
