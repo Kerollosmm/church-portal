@@ -474,4 +474,73 @@ void main() {
       expect(fileContent, contains('RepaintBoundary'));
     });
   });
+  group('320 px at 2.0x OS text scale + 2.0x reader scale (ADR-061)', () {
+    for (final lang in const ['ar', 'en']) {
+      testWidgets('Katameros tab at 320x640 with simultaneous 2.0x scales ($lang)', (tester) async {
+        tester.view.physicalSize = const Size(320, 640);
+        tester.view.devicePixelRatio = 1.0;
+        tester.platformDispatcher.textScaleFactorTestValue = 2.0;
+        addTearDown(tester.view.reset);
+        addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+
+        final env = FakeInstallEnv(storage: {
+          readingFontScaleStorageKey: {'scale': 2.0},
+        });
+
+        await tester.pumpWidget(buildTestWidget(
+          installEnv: env,
+          dateIso: '2026-11-08',
+          locale: Locale(lang),
+        ));
+        await tester.pumpAndSettle();
+
+        expect(tester.takeException(), isNull);
+
+        // Header controls scale factor is clamped <= 1.5
+        final fontCtrl = tester.element(find.byKey(const Key('fontSizeControl')));
+        final headerScaler = MediaQuery.textScalerOf(fontCtrl);
+        expect(headerScaler.scale(16) / 16, lessThanOrEqualTo(1.5));
+
+        // Scroll down to bring reading card into view in SliverList
+        await tester.drag(find.byType(CustomScrollView), const Offset(0, -300));
+        await tester.pumpAndSettle();
+
+        // Reading card body textScaler is clamped to 2.5 (from 2.0 * 2.0 = 4.0)
+        final itemTitle = lang == 'ar' ? 'المزمور' : 'Psalm';
+        final cardElement = tester.element(find.text(itemTitle).first);
+        expect(MediaQuery.textScalerOf(cardElement), const TextScaler.linear(2.5));
+      });
+
+      testWidgets('Verse tab at 320x640 with simultaneous 2.0x scales ($lang)', (tester) async {
+        tester.view.physicalSize = const Size(320, 640);
+        tester.view.devicePixelRatio = 1.0;
+        tester.platformDispatcher.textScaleFactorTestValue = 2.0;
+        addTearDown(tester.view.reset);
+        addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+
+        final env = FakeInstallEnv(storage: {
+          readingFontScaleStorageKey: {'scale': 2.0},
+        });
+
+        await tester.pumpWidget(buildTestWidget(
+          installEnv: env,
+          dateIso: '2026-11-08',
+          initialTab: 'verse',
+          locale: Locale(lang),
+        ));
+        await tester.pumpAndSettle();
+
+        expect(tester.takeException(), isNull);
+
+        // Header controls scale factor is clamped <= 1.5
+        final fontCtrl = tester.element(find.byKey(const Key('fontSizeControl')));
+        final headerScaler = MediaQuery.textScalerOf(fontCtrl);
+        expect(headerScaler.scale(16) / 16, lessThanOrEqualTo(1.5));
+
+        // Verse tab body textScaler is clamped to 2.5
+        final verseBody = tester.element(find.byType(SingleChildScrollView));
+        expect(MediaQuery.textScalerOf(verseBody), const TextScaler.linear(2.5));
+      });
+    }
+  });
 }

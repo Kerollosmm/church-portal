@@ -9,6 +9,7 @@ import '../../core/document_lang.dart';
 import '../../core/l10n.dart';
 import '../../core/push_env.dart';
 import '../../core/theme.dart';
+import '../../data/error_reporting.dart';
 import '../../data/web_push_repository.dart' deferred as web_push;
 import '../../domain/features.dart';
 import '../../state/providers.dart';
@@ -438,7 +439,9 @@ class NotificationsPage extends ConsumerWidget {
                               await web_push.loadLibrary();
                               final repo = web_push.WebPushRepository(pushEnv: pushEnv);
                               await repo.enable(vapidKey: pushSettings.vapidKey);
-                            } catch (_) {}
+                            } catch (e, st) {
+                              ErrorReporting.capture(e, st, section: 'deferred_chunk', source: 'web_push_repository');
+                            }
                           }
                         }
                         onPermissionChanged();
@@ -466,40 +469,69 @@ class NotificationsPage extends ConsumerWidget {
             borderRadius: BorderRadius.circular(14),
             border: Border.all(color: pal.success.withValues(alpha: 0.4)),
           ),
-          child: Row(
-            children: [
-              Icon(Icons.check_circle_outline, color: pal.success, size: 20),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  context.tr('notificationsEnabledChip'),
-                  style: TextStyle(fontWeight: FontWeight.bold, color: pal.success, fontSize: 14),
-                ),
-              ),
-              if (kIsWeb)
-                OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
-                    visualDensity: VisualDensity.compact,
-                    foregroundColor: pal.primary,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final textScale = MediaQuery.textScalerOf(context).scale(16) / 16;
+              final isNarrow = constraints.maxWidth < 320 || textScale >= 1.4;
+              final textItem = Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.check_circle_outline, color: pal.success, size: 20),
+                  const SizedBox(width: 10),
+                  Flexible(
+                    child: Text(
+                      context.tr('notificationsEnabledChip'),
+                      style: TextStyle(fontWeight: FontWeight.bold, color: pal.success, fontSize: 14),
+                    ),
                   ),
-                  icon: const Icon(Icons.notifications_none, size: 16),
-                  label: Text(context.tr('notificationsTestButton'), style: const TextStyle(fontSize: 12)),
-                  onPressed: () async {
-                    await pushEnv.showSwTestNotification(
-                      title: context.isAr ? 'اختبار الإشعارات' : 'Notification Test',
-                      body: context.isAr
-                          ? 'إشعار تجريبي يعمل بنجاح على هذا المتصفح'
-                          : 'Test notification received successfully on this browser',
-                      link: '/notifications',
-                    );
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text(context.tr('notificationsTestSent'))),
-                      );
-                    }
-                  },
-                ),
-            ],
+                ],
+              );
+              final testBtn = kIsWeb
+                  ? OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        visualDensity: VisualDensity.compact,
+                        foregroundColor: pal.primary,
+                      ),
+                      icon: const Icon(Icons.notifications_none, size: 16),
+                      label: Text(context.tr('notificationsTestButton'), style: const TextStyle(fontSize: 12)),
+                      onPressed: () async {
+                        await pushEnv.showSwTestNotification(
+                          title: context.isAr ? 'اختبار الإشعارات' : 'Notification Test',
+                          body: context.isAr
+                              ? 'إشعار تجريبي يعمل بنجاح على هذا المتصفح'
+                              : 'Test notification received successfully on this browser',
+                          link: '/notifications',
+                        );
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text(context.tr('notificationsTestSent'))),
+                          );
+                        }
+                      },
+                    )
+                  : null;
+
+              if (isNarrow && testBtn != null) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    textItem,
+                    const SizedBox(height: 8),
+                    Align(
+                      alignment: AlignmentDirectional.centerEnd,
+                      child: testBtn,
+                    ),
+                  ],
+                );
+              }
+
+              return Row(
+                children: [
+                  Expanded(child: textItem),
+                  ?testBtn,
+                ],
+              );
+            },
           ),
         );
     }
@@ -621,8 +653,11 @@ class _WebPushInboxSectionState extends State<_WebPushInboxSection> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 8,
+          runSpacing: 4,
           children: [
             Text(
               context.tr('notificationsInboxTitle'),

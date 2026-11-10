@@ -194,6 +194,8 @@ jobs:
     if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
     needs: build
     runs-on: ubuntu-latest
+    outputs:
+      preview_url: ${{ steps.deploy.outputs.url }}
     permissions:
       contents: read
       pull-requests: write
@@ -292,3 +294,22 @@ jobs:
             } else {
               await github.rest.issues.createComment({ owner, repo, issue_number, body });
             }
+
+
+  lighthouse:
+    name: Lighthouse audit (informational)
+    needs: preview
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && needs.preview.outputs.preview_url != ''
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v5
+      - name: Audit preview URL with Lighthouse
+        uses: treosh/lighthouse-ci-action@v12
+        with:
+          urls: |
+            ${{ needs.preview.outputs.preview_url }}
+            ${{ needs.preview.outputs.preview_url }}/notifications
+          runs: 3
+          uploadArtifacts: true
+          temporaryPublicStorage: false

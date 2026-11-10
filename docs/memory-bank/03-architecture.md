@@ -343,18 +343,19 @@ indexable:)`, which applies the spec through the conditional import (`document_l
 `errorBuilder` (`indexable: false`). `?lang=` sync (`_syncLangQuery`, `resolveLangSync`'s `lang=ar` branch) keeps
 the URL `#fragment`.
 
-**Deferred routes** (PR 3 of the review plan): `router.dart` imports `ui/admin/admin_page.dart deferred as admin_page`
-and `ui/pages/assistant_page.dart deferred as assistant_page`; the routes build
-`DeferredLoader(loadLibrary: x.loadLibrary, builder: (_) => x.Page())`, so dart2js emits them as separate
-`main.dart.js_*.part.js` chunks fetched only on the first visit to `/admin` or `/ask` (the AI SDK `firebase_ai` is
-imported only by `assistant_page.dart`). `/ask` is wrapped in `AssistantGate` (`ui/widgets/assistant_gate.dart`,
-eager): it waits for `settings/church`, shows «المساعد غير متاح حاليًا» **without** fetching the chunk when
-`assistantVisibleProvider` is false, and only then builds the `DeferredLoader` (CodeRabbit review). `DeferredLoader` shows a spinner (live region «جارٍ تحميل الصفحة…») and an
-`ErrorState` with Retry if the chunk download fails (a retry in flight shows the spinner again). Only the page code is deferred: anything also imported eagerly
-(e.g. `data/admin_repository.dart`, used by `providers.dart`/`main.dart`, and shared widgets) stays in the main
-bundle. Never import `admin_page.dart` / `assistant_page.dart` (or a library only they need) eagerly elsewhere in
-`lib/`, or the split silently disappears; tests may import them directly. Path URL strategy is unaffected (the
-chunks are fetched relative to `<base href>`).
+**Deferred modules & isolation** (PR 3, ADR-058, ADR-060, ADR-061):
+To protect the web initial load budget (`main.dart.js` gzip -9 ceiling <= 1,396,031 B), exactly 8 secondary modules are deferred (`deferred as`):
+1. `ui/admin/admin_page.dart` (`admin_page`): full admin dashboard (Firebase Auth, schema editors, Firestore writes).
+2. `ui/pages/assistant_page.dart` (`assistant_page`): AI assistant interface & `firebase_ai` SDK (gated behind `AssistantGate`).
+3. `ui/pages/notifications_page.dart` (`notifications_page`): notification channel & reminder preferences.
+4. `ui/pages/readings_page.dart` (`readings_page`): liturgical Katameros day reader (`/readings/:date`).
+5. `ui/pages/notification_health_page.dart` (`health_page`): OEM battery optimization diagnostics (`/notifications/battery`).
+6. `ui/widgets/apk_install_guide.dart` (`apk_guide`): 5-step Android APK sideloading walkthrough bottom sheet.
+7. `data/web_push_repository.dart` (`web_push`): web push token sync & Firestore queue batch writer.
+8. `ui/widgets/reminder_sheet.dart` (`reminder_sheet`): reminder picker modal bottom sheet with `.ics` & calendar export.
+
+The routes build `DeferredLoader(loadLibrary: x.loadLibrary, builder: (_) => x.Page())` with `ValueKey(state.uri.path)` to reload on sibling path transitions via `didUpdateWidget`. `DeferredLoader` shows a live-region accessible spinner («جارٍ تحميل الصفحة…») and an `ErrorState` with Retry on network failure. All chunk loading failures report telemetry via `ErrorReporting.capture(e, st, section: 'deferred_chunk')`.
+Deferred isolation is mechanically enforced in CI via `node tool/check_web_bundle.mjs build/web`, which parses `main.dart.js.map` to assert 0 sourcemap leaks from any of the 8 deferred modules, verifies at least 6 `.part.js` chunks (22 emitted in production), and checks OpenType font integrity.
 
 ## App shell & navigation (`lib/ui/widgets/app_shell.dart`)
 
@@ -366,7 +367,10 @@ chunks are fetched relative to `<base href>`).
 - Narrow: compact 48×48 dp **Mass times** `IconButton` (`_HighlightButton`), language toggle, ☰ opens an **end
   drawer** (`_AppDrawer`). Below **360 px**, at **≥ 150 % text**, or on a subpage below **400 px** (the Back arrow
   takes another 48 dp) the Mass button is dropped from the bar (it is in the drawer) so the title keeps a
-  readable width.
+  readable width. On viewports `< 360 px` (ADR-061), `SealTab` scales down to `54×70 dp` (from `64×80 dp`), the title typography
+  uses 15 pt 2-line `appShort` (`height: 1.15`), and when `showBack && width < 360`, the language toggle (`EN` / `ع`) moves from the
+  `AppBar` into `_AppDrawer` as `drawerLanguageToggle`, guaranteeing a `>= 130 dp` readable title slot and `>= 6 dp` seal clearance.
+  In short landscape orientations (`height < 420`, `kLandscapeShortHeight`, ADR-061), both `TopUtilityBar` and `InstallBanner` are hidden to preserve vertical reading space.
 - **No Clinics action in the app bar** (owner request, 4 Nov 2026), at any width or section state. It used to be a
   compact `local_hospital_rounded` button on phones, shown when `featuresReady && !wide && !collapseHighlights &&
   routeEnabled('/clinics')` — the same `sections.clinics` switch as the page, no separate condition. With the section

@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 
+import '../../data/error_reporting.dart';
 import '../../core/install_env.dart';
 import '../../core/l10n.dart';
 import '../../core/launch.dart';
@@ -105,6 +106,7 @@ class _InstallBannerState extends ConsumerState<InstallBanner> {
   @override
   Widget build(BuildContext context) {
     if (_dismissedThisSession) return const SizedBox.shrink();
+    if (MediaQuery.sizeOf(context).height < kLandscapeShortHeight) return const SizedBox.shrink();
 
     final isContentReady = ref.watch(contentReadyProvider);
     if (!isContentReady || !_readyToDisplay) return const SizedBox.shrink();
@@ -234,7 +236,8 @@ class _InstallBannerState extends ConsumerState<InstallBanner> {
   Future<void> _guide(BuildContext context, Future<void> Function(BuildContext) show) async {
     try {
       await guide.loadLibrary();
-    } catch (_) {
+    } catch (e, st) {
+      ErrorReporting.capture(e, st, section: 'deferred_chunk', source: 'apk_install_guide');
       return;
     }
     if (context.mounted) await show(context);
@@ -325,22 +328,40 @@ class _InstallBannerState extends ConsumerState<InstallBanner> {
         return const SizedBox.shrink();
     }
 
+    final laterButton = TextButton(
+      style: TextButton.styleFrom(
+        minimumSize: const Size(48, 48),
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+      ),
+      onPressed: () => _dismiss(days: settings.remindDays, env: env),
+      child: Text(context.tr('installLater')),
+    );
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Row(
-          children: [
-            Expanded(child: primaryButton),
-            const SizedBox(width: 10),
-            TextButton(
-              style: TextButton.styleFrom(
-                minimumSize: const Size(48, 48),
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-              ),
-              onPressed: () => _dismiss(days: settings.remindDays, env: env),
-              child: Text(context.tr('installLater')),
-            ),
-          ],
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final textScale = MediaQuery.textScalerOf(context).scale(16) / 16;
+            final stack = constraints.maxWidth < 260 || textScale >= 1.6;
+            if (stack) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  primaryButton,
+                  const SizedBox(height: 6),
+                  laterButton,
+                ],
+              );
+            }
+            return Row(
+              children: [
+                Expanded(child: primaryButton),
+                const SizedBox(width: 10),
+                laterButton,
+              ],
+            );
+          },
         ),
         if (action == InstallAction.apk && settings.androidUrl32.isNotEmpty)
           Padding(

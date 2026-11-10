@@ -283,19 +283,26 @@ class _ReadingsPageState extends ConsumerState<ReadingsPage> {
         ? _readings!.coptic
         : CopticDate.fromGregorian(_currentDate).format(arabic: isAr);
 
+    final osScale = MediaQuery.textScalerOf(context).scale(16) / 16;
+    final effectiveBodyScale = (osScale * textScale).clamp(0.85, 2.5);
+
     return Material(
       color: Colors.transparent,
       child: SafeArea(
         bottom: false,
         child: _selectedTab == 0
-            ? _buildKatamerosTab(pal, isAr, textScale, coptic)
-            : _buildVerseTab(verse, pal, isAr, textScale, coptic),
+            ? _buildKatamerosTab(pal, isAr, textScale, coptic, effectiveBodyScale)
+            : _buildVerseTab(verse, pal, isAr, textScale, coptic, effectiveBodyScale),
       ),
     );
   }
 
-  Widget _buildHeader(OccasionColors pal, bool isAr, double textScale, String coptic) {
-    return Container(
+  Widget _buildHeader(BuildContext context, OccasionColors pal, bool isAr, double textScale, String coptic) {
+    return MediaQuery(
+      data: MediaQuery.of(context).copyWith(
+        textScaler: MediaQuery.textScalerOf(context).clamp(maxScaleFactor: 1.5),
+      ),
+      child: Container(
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
       color: pal.background,
       child: Column(
@@ -309,8 +316,9 @@ class _ReadingsPageState extends ConsumerState<ReadingsPage> {
           _buildControlsRow(pal, isAr, textScale),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildDayNavBar(OccasionColors pal, bool isAr, String coptic) {
     return Container(
@@ -423,17 +431,23 @@ class _ReadingsPageState extends ConsumerState<ReadingsPage> {
   }
 
   Widget _buildControlsRow(OccasionColors pal, bool isAr, double textScale) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        _buildFontSizeControl(pal, isAr, textScale),
-        IconButton(
-          key: const Key('shareReadingButton'),
-          tooltip: isAr ? 'مشاركة' : 'Share',
-          icon: Icon(Icons.share_rounded, color: pal.primary),
-          onPressed: _shareReading,
-        ),
-      ],
+    return SizedBox(
+      width: double.infinity,
+      child: Wrap(
+        alignment: WrapAlignment.spaceBetween,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        spacing: 8,
+        runSpacing: 6,
+        children: [
+          _buildFontSizeControl(pal, isAr, textScale),
+          IconButton(
+            key: const Key('shareReadingButton'),
+            tooltip: isAr ? 'مشاركة' : 'Share',
+            icon: Icon(Icons.share_rounded, color: pal.primary),
+            onPressed: _shareReading,
+          ),
+        ],
+      ),
     );
   }
 
@@ -489,18 +503,15 @@ class _ReadingsPageState extends ConsumerState<ReadingsPage> {
     );
   }
 
-  Widget _buildKatamerosTab(OccasionColors pal, bool isAr, double textScale, String coptic) {
-    final sliverHeader = SliverAppBar(
-      automaticallyImplyLeading: false,
-      floating: true,
-      snap: true,
-      pinned: false,
-      elevation: 0,
-      scrolledUnderElevation: 0,
-      backgroundColor: pal.background,
-      toolbarHeight: 148,
-      titleSpacing: 0,
-      title: _buildHeader(pal, isAr, textScale, coptic),
+  Widget _buildKatamerosTab(
+    OccasionColors pal,
+    bool isAr,
+    double textScale,
+    String coptic,
+    double effectiveBodyScale,
+  ) {
+    final sliverHeader = SliverToBoxAdapter(
+      child: _buildHeader(context, pal, isAr, textScale, coptic),
     );
 
     if (_isLoading) {
@@ -541,10 +552,17 @@ class _ReadingsPageState extends ConsumerState<ReadingsPage> {
                       style: TextStyle(fontSize: 14, color: pal.ink, height: 1.5),
                     ),
                     const SizedBox(height: 16),
-                    ElevatedButton.icon(
+                    ElevatedButton(
                       onPressed: () => _loadReadings(forceFetch: true),
-                      icon: const Icon(Icons.refresh_rounded),
-                      label: Text(isAr ? 'إعادة المحاولة' : 'Retry'),
+                      child: Wrap(
+                        alignment: WrapAlignment.center,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        spacing: 8,
+                        children: [
+                          const Icon(Icons.refresh_rounded),
+                          Text(isAr ? 'إعادة المحاولة' : 'Retry'),
+                        ],
+                      ),
                     ),
                   ],
                 ),
@@ -570,7 +588,12 @@ class _ReadingsPageState extends ConsumerState<ReadingsPage> {
               itemCount: items.length,
               itemBuilder: (context, index) {
                 final item = items[index];
-                return _buildKatamerosItemWidget(item, pal, isAr, textScale);
+                return MediaQuery(
+                  data: MediaQuery.of(context).copyWith(
+                    textScaler: TextScaler.linear(effectiveBodyScale),
+                  ),
+                  child: _buildKatamerosItemWidget(item, pal, isAr),
+                );
               },
             ),
           ),
@@ -579,7 +602,7 @@ class _ReadingsPageState extends ConsumerState<ReadingsPage> {
     );
   }
 
-  Widget _buildKatamerosItemWidget(_KatamerosItem item, OccasionColors pal, bool isAr, double textScale) {
+  Widget _buildKatamerosItemWidget(_KatamerosItem item, OccasionColors pal, bool isAr) {
     return KeyedSubtree(
       key: item.key,
       child: switch (item) {
@@ -607,7 +630,7 @@ class _ReadingsPageState extends ConsumerState<ReadingsPage> {
                   Text(
                     title,
                     style: TextStyle(
-                      fontSize: 15 * textScale,
+                      fontSize: 15,
                       fontWeight: FontWeight.bold,
                       color: pal.primary,
                       height: 1.4,
@@ -638,7 +661,7 @@ class _ReadingsPageState extends ConsumerState<ReadingsPage> {
           ),
         _ReadingCardItem(:final reading) => Padding(
             padding: const EdgeInsets.only(bottom: 10),
-            child: _buildReadingCard(reading, pal, isAr, textScale),
+            child: _buildReadingCard(reading, pal, isAr),
           ),
         _AttributionItem() => Padding(
             padding: const EdgeInsets.symmetric(vertical: 12),
@@ -652,7 +675,7 @@ class _ReadingsPageState extends ConsumerState<ReadingsPage> {
     );
   }
 
-  Widget _buildReadingCard(ReadingItem item, OccasionColors pal, bool isAr, double textScale) {
+  Widget _buildReadingCard(ReadingItem item, OccasionColors pal, bool isAr) {
     final ref = item.reference(isAr);
     final text = item.text(isAr);
 
@@ -676,7 +699,7 @@ class _ReadingsPageState extends ConsumerState<ReadingsPage> {
               Text(
                 item.title(isAr),
                 style: TextStyle(
-                  fontSize: 14.5 * textScale,
+                  fontSize: 14.5,
                   fontWeight: FontWeight.bold,
                   color: pal.primary,
                 ),
@@ -692,7 +715,7 @@ class _ReadingsPageState extends ConsumerState<ReadingsPage> {
                   child: Text(
                     ref,
                     style: TextStyle(
-                      fontSize: 12 * textScale,
+                      fontSize: 12,
                       fontWeight: FontWeight.w600,
                       color: pal.ink,
                     ),
@@ -707,7 +730,7 @@ class _ReadingsPageState extends ConsumerState<ReadingsPage> {
             Text(
               item.intro(isAr),
               style: TextStyle(
-                fontSize: 13 * textScale,
+                fontSize: 13,
                 fontStyle: FontStyle.italic,
                 color: pal.muted,
                 height: 1.4,
@@ -721,7 +744,7 @@ class _ReadingsPageState extends ConsumerState<ReadingsPage> {
             Text(
               text,
               style: TextStyle(
-                fontSize: 14.5 * textScale,
+                fontSize: 14.5,
                 height: 1.6,
                 color: pal.ink,
               ),
@@ -734,7 +757,7 @@ class _ReadingsPageState extends ConsumerState<ReadingsPage> {
             Text(
               item.conclusion(isAr),
               style: TextStyle(
-                fontSize: 13 * textScale,
+                fontSize: 13,
                 fontStyle: FontStyle.italic,
                 color: pal.muted,
                 height: 1.4,
@@ -746,16 +769,28 @@ class _ReadingsPageState extends ConsumerState<ReadingsPage> {
     );
   }
 
-  Widget _buildVerseTab(Verse? verse, OccasionColors pal, bool isAr, double textScale, String coptic) {
+  Widget _buildVerseTab(
+    Verse? verse,
+    OccasionColors pal,
+    bool isAr,
+    double textScale,
+    String coptic,
+    double effectiveBodyScale,
+  ) {
     if (verse == null) {
       return Column(
         children: [
-          _buildHeader(pal, isAr, textScale, coptic),
+          _buildHeader(context, pal, isAr, textScale, coptic),
           Expanded(
-            child: Center(
-              child: Text(
-                isAr ? 'لا توجد آية محددة لهذا اليوم' : 'No verse available for this day',
-                style: TextStyle(fontSize: 14, color: pal.muted),
+            child: MediaQuery(
+              data: MediaQuery.of(context).copyWith(
+                textScaler: TextScaler.linear(effectiveBodyScale),
+              ),
+              child: Center(
+                child: Text(
+                  isAr ? 'لا توجد آية محددة لهذا اليوم' : 'No verse available for this day',
+                  style: TextStyle(fontSize: 14, color: pal.muted),
+                ),
               ),
             ),
           ),
@@ -767,61 +802,73 @@ class _ReadingsPageState extends ConsumerState<ReadingsPage> {
 
     return Column(
       children: [
-        _buildHeader(pal, isAr, textScale, coptic),
+        _buildHeader(context, pal, isAr, textScale, coptic),
         Expanded(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(20),
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 600),
-                child: Container(
-                  padding: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(
-                    color: pal.panel,
-                    borderRadius: BorderRadius.circular(kPanelRadius),
-                    border: Border.all(color: pal.ornamentLine),
-                    boxShadow: pal.panelShadow,
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      Icon(Icons.format_quote_rounded, size: 36, color: pal.primary),
-                      const SizedBox(height: 12),
-                      Text(
-                        disp.text,
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 18 * textScale,
-                          height: 1.7,
-                          fontWeight: FontWeight.bold,
-                          color: pal.primary,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: pal.surface,
-                          borderRadius: BorderRadius.circular(999),
-                          border: Border.all(color: pal.hairline),
-                        ),
-                        child: Text(
-                          disp.ref,
+          child: MediaQuery(
+            data: MediaQuery.of(context).copyWith(
+              textScaler: TextScaler.linear(effectiveBodyScale),
+            ),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(20),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 600),
+                  child: Container(
+                    padding: const EdgeInsets.all(24),
+                    decoration: BoxDecoration(
+                      color: pal.panel,
+                      borderRadius: BorderRadius.circular(kPanelRadius),
+                      border: Border.all(color: pal.ornamentLine),
+                      boxShadow: pal.panelShadow,
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Icon(Icons.format_quote_rounded, size: 36, color: pal.primary),
+                        const SizedBox(height: 12),
+                        Text(
+                          disp.text,
+                          textAlign: TextAlign.center,
                           style: TextStyle(
-                            fontSize: 13 * textScale,
-                            fontWeight: FontWeight.w600,
-                            color: pal.ink,
+                            fontSize: 18.5,
+                            height: 1.7,
+                            fontWeight: FontWeight.bold,
+                            color: pal.primary,
                           ),
                         ),
-                      ),
-                      const SizedBox(height: 24),
-                      OutlinedButton.icon(
-                        onPressed: _shareReading,
-                        icon: const Icon(Icons.share_rounded, size: 16),
-                        label: Text(isAr ? 'مشاركة الآية' : 'Share verse'),
-                      ),
-                    ],
+                        const SizedBox(height: 16),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: pal.surface,
+                            borderRadius: BorderRadius.circular(999),
+                            border: Border.all(color: pal.hairline),
+                          ),
+                          child: Text(
+                            disp.ref,
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: pal.ink,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        OutlinedButton(
+                          onPressed: _shareReading,
+                          child: Wrap(
+                            alignment: WrapAlignment.center,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            spacing: 8,
+                            children: [
+                              const Icon(Icons.share_rounded, size: 16),
+                              Text(isAr ? 'مشاركة الآية' : 'Share verse'),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),

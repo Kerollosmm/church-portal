@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:material_ui/material_ui.dart';
 
 import '../../core/l10n.dart';
@@ -90,14 +92,19 @@ class _ApkInstallGuideSheetState extends State<_ApkInstallGuideSheet> {
     final pal = context.pal;
     final hasPositiveSize = widget.apkSizeMb != null && widget.apkSizeMb! > 0;
     final sizeStr = hasPositiveSize ? widget.apkSizeMb!.toStringAsFixed(1) : '';
+    final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
+    final maxSheetHeight = MediaQuery.sizeOf(context).height * 0.90;
+    final availableHeight = math.max(0.0, MediaQuery.sizeOf(context).height - bottomInset);
+    final pageViewHeight = (availableHeight * 0.50).clamp(180.0, 380.0);
+    final isCompactHeight = availableHeight < 560;
 
     return SafeArea(
       child: Center(
         heightFactor: 1,
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 560),
+          constraints: BoxConstraints(maxWidth: 560, maxHeight: maxSheetHeight),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            padding: EdgeInsets.fromLTRB(20, 16, 20, 16 + bottomInset),
             child: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -172,7 +179,7 @@ class _ApkInstallGuideSheetState extends State<_ApkInstallGuideSheet> {
 
                   // PageView for the 5 steps
                   SizedBox(
-                    height: 380,
+                    height: pageViewHeight,
                     child: PageView.builder(
                       controller: _pageController,
                       itemCount: _totalSteps,
@@ -187,7 +194,7 @@ class _ApkInstallGuideSheetState extends State<_ApkInstallGuideSheet> {
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
                               // Screenshot frame / placeholder
-                              _buildStepImage(ctx, pal, stepNum),
+                              _buildStepImage(ctx, pal, stepNum, compact: isCompactHeight),
 
                               const SizedBox(height: 14),
 
@@ -271,40 +278,63 @@ class _ApkInstallGuideSheetState extends State<_ApkInstallGuideSheet> {
                   const SizedBox(height: 16),
 
                   // Navigation buttons
-                  Row(
-                    children: [
-                      if (_currentStep > 0)
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed: () => _goTo(_currentStep - 1),
-                            style: OutlinedButton.styleFrom(
-                              minimumSize: const Size(48, 48),
-                            ),
-                            child: Text(context.tr('apkGuidePrev')),
-                          ),
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final textScale = MediaQuery.textScalerOf(context).scale(16) / 16;
+                      final isNarrow = constraints.maxWidth < 310 || textScale >= 1.5;
+                      final prevBtn = _currentStep > 0
+                          ? OutlinedButton(
+                              onPressed: () => _goTo(_currentStep - 1),
+                              style: OutlinedButton.styleFrom(
+                                minimumSize: const Size(48, 48),
+                              ),
+                              child: Text(context.tr('apkGuidePrev')),
+                            )
+                          : null;
+                      final nextBtn = FilledButton(
+                        onPressed: () {
+                          if (_currentStep < _totalSteps - 1) {
+                            _goTo(_currentStep + 1);
+                          } else {
+                            Navigator.of(context).pop();
+                          }
+                        },
+                        style: FilledButton.styleFrom(
+                          minimumSize: const Size(48, 48),
                         ),
-                      if (_currentStep > 0) const SizedBox(width: 12),
-                      Expanded(
-                        flex: 2,
-                        child: FilledButton(
-                          onPressed: () {
-                            if (_currentStep < _totalSteps - 1) {
-                              _goTo(_currentStep + 1);
-                            } else {
-                              Navigator.of(context).pop();
-                            }
-                          },
-                          style: FilledButton.styleFrom(
-                            minimumSize: const Size(48, 48),
-                          ),
-                          child: Text(
-                            _currentStep < _totalSteps - 1
-                                ? context.tr('apkGuideNext')
-                                : context.tr('apkGuideDone'),
-                          ),
+                        child: Text(
+                          _currentStep < _totalSteps - 1
+                              ? context.tr('apkGuideNext')
+                              : context.tr('apkGuideDone'),
                         ),
-                      ),
-                    ],
+                      );
+
+                      if (isNarrow) {
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            nextBtn,
+                            if (prevBtn != null) ...[
+                              const SizedBox(height: 8),
+                              prevBtn,
+                            ],
+                          ],
+                        );
+                      }
+
+                      return Row(
+                        children: [
+                          if (prevBtn != null) ...[
+                            Expanded(child: prevBtn),
+                            const SizedBox(width: 12),
+                          ],
+                          Expanded(
+                            flex: prevBtn != null ? 2 : 1,
+                            child: nextBtn,
+                          ),
+                        ],
+                      );
+                    },
                   ),
                 ],
               ),
@@ -315,13 +345,13 @@ class _ApkInstallGuideSheetState extends State<_ApkInstallGuideSheet> {
     );
   }
 
-  Widget _buildStepImage(BuildContext context, dynamic pal, int stepNum) {
+  Widget _buildStepImage(BuildContext context, dynamic pal, int stepNum, {bool compact = false}) {
     final lang = context.isAr ? 'ar' : 'en';
     // Served from Hosting's root (`web/` is only the source folder).
     final imageUrl = '/install-guide/android-$stepNum-$lang.webp';
 
     return Container(
-      height: 180,
+      height: compact ? 120.0 : 180.0,
       decoration: BoxDecoration(
         color: pal.surfaceAlt,
         borderRadius: BorderRadius.circular(12),
@@ -408,18 +438,22 @@ Future<void> _showInstallSteps(
   final pal = context.pal;
   return showModalBottomSheet<void>(
     context: context,
+    isScrollControlled: true,
     backgroundColor: pal.surface,
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
     ),
-    builder: (ctx) => SafeArea(
-      child: Center(
-        heightFactor: 1,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 560),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-            child: SingleChildScrollView(
+    builder: (ctx) {
+      final bottomInset = MediaQuery.viewInsetsOf(ctx).bottom;
+      final maxSheetHeight = MediaQuery.sizeOf(ctx).height * 0.88;
+      return SafeArea(
+        child: Center(
+          heightFactor: 1,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: 560, maxHeight: maxSheetHeight),
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(20, 16, 20, 16 + bottomInset),
+              child: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -488,8 +522,8 @@ Future<void> _showInstallSteps(
             ),
           ),
         ),
-      ),
-    ),
+      ));
+    },
   );
 }
 

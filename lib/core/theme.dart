@@ -107,6 +107,10 @@ class AppFonts {
 /// Panel / card radius (soft rounded, like the posters' boxes).
 const double kPanelRadius = 20;
 
+/// Viewport height threshold below which compact landscape mode applies (ADR-061).
+/// Suppresses top utility bar and install banner to preserve vertical reading space.
+const double kLandscapeShortHeight = 420.0;
+
 /// Spacing scale (logical px). Use these instead of ad-hoc numbers so cards,
 /// grids and sections share one rhythm.
 class Space {

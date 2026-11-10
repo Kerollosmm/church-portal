@@ -7,6 +7,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../../core/l10n.dart';
 import '../../core/theme.dart';
+import '../../data/error_reporting.dart';
 import '../../data/web_push_repository.dart' deferred as web_push;
 import '../../domain/features.dart';
 import '../../domain/item_detail.dart';
@@ -160,7 +161,9 @@ class _AppShellState extends ConsumerState<AppShell> {
             }
           }
         }
-      } catch (_) {}
+      } catch (e, st) {
+        ErrorReporting.capture(e, st, section: 'deferred_chunk', source: 'web_push_repository');
+      }
     });
   }
 
@@ -198,9 +201,12 @@ class _AppShellState extends ConsumerState<AppShell> {
     final focusMode = isReadingRoute && ref.watch(readerFocusModeProvider);
     // Large system text makes the full link bar overflow: compare the width
     // in "unscaled text" units so big text switches to the compact bar.
-    final textScale = MediaQuery.textScalerOf(context).scale(16) / 16;
-    final width = MediaQuery.sizeOf(context).width;
+    final size = MediaQuery.sizeOf(context);
+    final width = size.width;
+    final height = size.height;
     final wide = shellIsWide(context);
+    final isLandscapeShort = height < kLandscapeShortHeight;
+    final textScale = MediaQuery.textScalerOf(context).scale(16) / 16;
     // Subpages on phones get a 1-tap Back-to-Home arrow: every in-app link is
     // a sibling route (context.go), so there is nothing to pop, and installed
     // PWAs have no browser back button.
@@ -225,7 +231,7 @@ class _AppShellState extends ConsumerState<AppShell> {
     // The badge hides on Home while the live banner shows there (ADR-044).
     final liveBadge =
         ref.watch(nowProvider.select((n) => todaySettings.liveBadgeOn(n.value ?? DateTime.now(), location)));
-    final showTopBar = ready && (TopUtilityBar.shownOn(todaySettings.copticStrip, location) || liveBadge);
+    final showTopBar = ready && !isLandscapeShort && (TopUtilityBar.shownOn(todaySettings.copticStrip, location) || liveBadge);
     final topBarH = showTopBar ? TopUtilityBar.heightFor(context) : 0.0;
     // No Clinics shortcut in the bar (owner request, 4 Nov 2026): clinics stay
     // reachable from the drawer / Services menu and Home when their section is on.
@@ -234,15 +240,19 @@ class _AppShellState extends ConsumerState<AppShell> {
     final fullName = settings == null ? context.tr('appName') : context.pick(settings.nameAr, settings.nameEn);
     final primary = context.pal.primary;
     // The hanging seal tab (start corner, after the Back arrow on phones).
-    final tabW = wide ? 88.0 : 64.0;
-    final tabH = wide ? 108.0 : 80.0;
+    final ultraNarrow = !wide && width < 360;
+    final hideBarLang = showBack && ultraNarrow;
+    final tabW = wide ? 88.0 : (ultraNarrow ? 54.0 : 64.0);
+    final tabH = wide ? 108.0 : (ultraNarrow ? 70.0 : 80.0);
     final tabStart = (showBack ? 48.0 : 0.0) + (wide ? 24.0 : 6.0);
-    final tabSpace = tabW + (wide ? 12.0 : 8.0) - (wide ? 0 : (showBack ? 0 : 6));
+    final titleSpacingVal = wide ? 24.0 : (showBack ? 0.0 : 6.0);
+    final leadingEnd = showBack ? 48.0 : 0.0;
+    final tabSpace = (tabStart + tabW + (wide ? 12.0 : 6.0)) - (leadingEnd + titleSpacingVal);
 
     final mainAppBar = AppBar(
       primary: !showTopBar,
       toolbarHeight: wide ? 76 : 64,
-      titleSpacing: wide ? 24 : (showBack ? 0 : 6),
+      titleSpacing: titleSpacingVal,
       leadingWidth: showBack ? 48 : null,
       shape: Border(bottom: BorderSide(color: context.pal.ornament.withValues(alpha: 0.35))),
       leading: showBack
@@ -260,7 +270,7 @@ class _AppShellState extends ConsumerState<AppShell> {
           // The seal hangs in the tab at the start corner: the title keeps
           // its room. Wide bars with many entries (or very large text)
           // leave little width: the name then disappears, never overflows.
-          if (c.maxWidth < tabSpace + 70) return SizedBox(width: c.maxWidth.clamp(0, tabSpace));
+          if (c.maxWidth < tabSpace + 56) return SizedBox(width: c.maxWidth.clamp(0, tabSpace));
           return Row(mainAxisSize: MainAxisSize.min, children: [
             SizedBox(width: tabSpace),
             // The full name is long: on wide screens show it under the short
@@ -268,9 +278,10 @@ class _AppShellState extends ConsumerState<AppShell> {
             Flexible(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
                 Text(context.tr('appShort'),
+                    key: const Key('appBarShortTitle'),
                     maxLines: wide ? 1 : 2,
                     overflow: TextOverflow.ellipsis,
-                    style: displayStyle(context, size: wide ? 23 : 17, color: primary, height: 1.25)),
+                    style: displayStyle(context, size: wide ? 23 : (ultraNarrow ? 15 : 17), color: primary, height: ultraNarrow ? 1.15 : 1.25)),
                 if (wide)
                   Text(fullName,
                       maxLines: 1,
@@ -301,15 +312,18 @@ class _AppShellState extends ConsumerState<AppShell> {
           ),
           const SizedBox(width: 8),
         ],
-        IconButton(
-          tooltip: context.tr('language'),
-          onPressed: () => ref.read(localeProvider.notifier).toggle(),
-          style: IconButton.styleFrom(
-              backgroundColor: context.pal.surface, side: BorderSide(color: context.pal.hairline, width: 1.5)),
-          icon: Text(context.isAr ? 'EN' : 'ع',
-              style: TextStyle(fontWeight: FontWeight.w700, color: context.pal.goldText, fontSize: 15)),
-        ),
-        const SizedBox(width: 6),
+        if (!hideBarLang) ...[
+          IconButton(
+            key: const Key('appBarLanguageToggle'),
+            tooltip: context.tr('language'),
+            onPressed: () => ref.read(localeProvider.notifier).toggle(),
+            style: IconButton.styleFrom(
+                backgroundColor: context.pal.surface, side: BorderSide(color: context.pal.hairline, width: 1.5)),
+            icon: Text(context.isAr ? 'EN' : 'ع',
+                style: TextStyle(fontWeight: FontWeight.w700, color: context.pal.goldText, fontSize: 15)),
+          ),
+          const SizedBox(width: 6),
+        ],
         if (showMass) ...[
           _HighlightButton(
             label: context.tr('massSchedule'),
@@ -706,6 +720,31 @@ class _AppDrawer extends ConsumerWidget {
             const SizedBox(height: 6),
             if (church.isNotEmpty) group(context.tr('navChurch'), church),
             if (services.isNotEmpty) group(context.tr('churchServices'), services),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              child: ListTile(
+                key: const Key('drawerLanguageToggle'),
+                minTileHeight: 48,
+                leading: Icon(Icons.language_rounded, color: primary, size: 22),
+                title: Text(context.tr('language'), style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+                trailing: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: context.pal.surface,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: context.pal.hairline, width: 1.5),
+                  ),
+                  child: Text(
+                    context.isAr ? 'EN' : 'ع',
+                    style: TextStyle(fontWeight: FontWeight.w700, color: context.pal.goldText, fontSize: 13),
+                  ),
+                ),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  ref.read(localeProvider.notifier).toggle();
+                },
+              ),
+            ),
             const SizedBox(height: 16),
           ]),
         ),

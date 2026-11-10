@@ -40,7 +40,7 @@ import 'ui/widgets/feature_gate.dart';
 /// Every public page is wrapped in a [FeatureGate]: a section switched off in
 /// `settings/features` shows "not available" instead of its content.
 NoTransitionPage<void> _page(GoRouterState s, Widget child) =>
-    NoTransitionPage(key: s.pageKey, child: FeatureGate(path: s.uri.path, child: child));
+    NoTransitionPage(key: s.pageKey, child: FeatureGate(key: ValueKey(s.uri.path), path: s.uri.path, child: child));
 
 /// Rewrites `?lang=` to match the selected language (`lang=en` for English,
 /// no parameter for Arabic, the default). Null when the URL already matches.
@@ -194,6 +194,7 @@ GoRouter buildAppRouter(Ref ref, {bool? isWeb, String initialLocation = '/'}) {
               pageBuilder: (c, s) => _page(
                   s,
                   DeferredLoader(
+                    source: 'notifications_page',
                     loadLibrary: notifications_page.loadLibrary,
                     builder: (_) => notifications_page.NotificationsPage(),
                   ))),
@@ -212,6 +213,7 @@ GoRouter buildAppRouter(Ref ref, {bool? isWeb, String initialLocation = '/'}) {
             pageBuilder: (c, s) => _page(
               s,
               DeferredLoader(
+                source: 'notification_health_page',
                 loadLibrary: health_page.loadLibrary,
                 builder: (_) => health_page.NotificationHealthPage(),
               ),
@@ -222,6 +224,7 @@ GoRouter buildAppRouter(Ref ref, {bool? isWeb, String initialLocation = '/'}) {
             pageBuilder: (c, s) => _page(
               s,
               DeferredLoader(
+                source: 'readings_page',
                 loadLibrary: readings_page.loadLibrary,
                 builder: (_) => readings_page.ReadingsPage(
                   dateIso: s.pathParameters['date'] ?? '',
@@ -247,6 +250,7 @@ GoRouter buildAppRouter(Ref ref, {bool? isWeb, String initialLocation = '/'}) {
                 // The chunk is fetched only when the assistant is actually on.
                 AssistantGate(
                   builder: (_) => DeferredLoader(
+                    source: 'assistant_page',
                     loadLibrary: assistant_page.loadLibrary,
                     builder: (_) => assistant_page.AssistantPage(isWeb: web),
                   ),
@@ -266,6 +270,7 @@ GoRouter buildAppRouter(Ref ref, {bool? isWeb, String initialLocation = '/'}) {
           return Theme(
             data: buildTheme(Localizations.localeOf(c)),
             child: DeferredLoader(
+              source: 'admin_page',
               loadLibrary: admin_page.loadLibrary,
               builder: (_) => admin_page.AdminPage(),
               fullScreen: true,

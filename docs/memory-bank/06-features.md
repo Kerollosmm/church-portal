@@ -597,7 +597,6 @@ digits, Cairo `02` + 8, Alexandria `03` + 7, other governorates `0[4-9]` + 7–8
 ### Android Native Shell (`app_shell.dart`, `router.dart`, ADR-058)
 - Route `/admin` is completely compiled out when `!isWeb`.
 - `PopScope` intercepts device back buttons: detail routes return to parent listing (`parentRouteOf`), `/notifications/battery` returns to `/notifications` (ADR-062), subpages return to `/`, and pressing back on `/` shows a toast «اضغط مرة أخرى للخروج من التطبيق» exiting if tapped again within 2 seconds.
-
 - Single back arrow invariant (`INV-NAV-02`, ADR-062): phone viewports display exactly one back arrow located in `AppShell.leading`; `ItemDetailPage` hides its in-body back link on mobile and only displays it on desktop (`shellIsWide(context)` >= 1024 unscaled text width).
 - Assistant page on Android native displays a clean redirect card with a button opening the web assistant at `https://maximos-domadios-church.web.app/ask` in the external browser.
 

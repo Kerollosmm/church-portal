@@ -195,10 +195,12 @@ This document provides a comprehensive, feature-by-feature manual for all 31 cap
 ### 29. Web Performance & PageSpeed Optimization
 - **Visitor Experience:** Instantaneous initial paint (≤ 0.8s) and smooth 60fps scrolling across mobile and desktop devices.
 - **Technical Implementation:** Employs static HTML loading shells, CSS-animated ambient layers, font fingerprinting, and deferred JavaScript execution to achieve 90+ PageSpeed ratings.
+- **ADR-061 Web Bundle & Deferred Guard:** Exactly 8 secondary modules are deferred (`.part.js`), mechanically verified in CI by `tool/check_web_bundle.mjs` against `main.dart.js.map` with `gzip -9 <= 1,396,031 B` ceiling (measured `1,374,520 B` with `+21,511 B` headroom). OpenType fonts (`IBMPlexSansArabic`, `Lalezar`, `ArefRuqaa`) are retained intact (> 20 KB each) to preserve Arabic ligatures and tashkeel diacritics.
 
 ### 30. Accessibility & WCAG 2.2 AA Compliance
 - **Visitor Experience:** Full compatibility with screen readers (TalkBack, VoiceOver), high-contrast text modes, large text scaling (up to 200%), and keyboard navigation.
 - **Technical Implementation:** Strict adherence to 48dp minimum touch targets, automated color luminance contrast verification, and explicit accessibility semantic labels.
+- **ADR-061 Responsive Invariants:** Verified with real bundled OpenType fonts via `FontLoader` down to 320 px × 200% text scale without overflow; `AppShell` recovers space on `< 360 px` viewports with a 54 dp seal tab and drawer language toggle on subpages; landscape viewports `< 420 px` suppress utility banners; and Katameros body reading scaling is clamped to `(osScale * readerScale).clamp(0.85, 2.5)` eliminating 4.0x text runaway.
 
 ### 31. Android Native Application & Play Integrity
 - **Visitor Experience:** Native Android APK installable on mobile devices with adaptive launch icons and hardware back-button navigation.
