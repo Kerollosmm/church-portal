@@ -3,7 +3,8 @@
 Welcome to the comprehensive English documentation for the **Church Portal** of the Coptic Orthodox Church of Saints Maximus & Domadius and the Strong Anba Moussa the Black (End of Street 45, El-Asafra Qebly, Montaza, Alexandria, Egypt).
 
 > **Arabic Documentation / التوثيق بالعربية:** For the original Arabic manual, see [`documentation/README.md`](../README.md).  
-> **Agent & Architecture Memory Bank:** For deep internal architectural records, decision logs, and specifications for coding agents, see [`docs/memory-bank/00-README.md`](../../docs/memory-bank/00-README.md).
+> **Agent & Architecture Memory Bank:** For deep internal architectural records, decision logs, and specifications for coding agents, see [`docs/memory-bank/00-README.md`](../../docs/memory-bank/00-README.md).  
+> **Android APK Releases:** For official standalone Android APK downloads, see [GitHub Releases (`Kerollosmm/church-portal`)](https://github.com/Kerollosmm/church-portal/releases).
 
 ---
 

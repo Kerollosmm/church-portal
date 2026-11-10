@@ -18,10 +18,11 @@
 [![GitHub Actions](https://img.shields.io/badge/CI%2FCD-Automated-2088FF?style=for-the-badge&logo=github-actions&logoColor=white)](https://github.com/features/actions)
 [![PWA](https://img.shields.io/badge/PWA-Ready-5A0FC8?style=for-the-badge&logo=pwa&logoColor=white)](https://web.dev/progressive-web-apps/)
 [![Accessibility](https://img.shields.io/badge/WCAG-2.2_AA_Compliant-005A9C?style=for-the-badge)](https://www.w3.org/WAI/standards-guidelines/wcag/)
+[![Android APK](https://img.shields.io/badge/Android-APK_Download-3DDC84?style=for-the-badge&logo=android&logoColor=white)](https://github.com/Kerollosmm/church-portal/releases)
 
 ---
 
-**[🌐 Live Portal](https://maximos-domadios-church.web.app)** • **[📖 English Documentation](documentation/en/README.md)** • **[📜 الدليل العربي](documentation/README.md)** • **[🧠 Memory Bank](docs/memory-bank/00-README.md)** • **[🔒 Hidden Admin (`/admin`)](https://maximos-domadios-church.web.app/admin)**
+**[🌐 Live Portal](https://maximos-domadios-church.web.app)** • **[📲 Download Android APK](https://github.com/Kerollosmm/church-portal/releases)** • **[📖 English Documentation](documentation/en/README.md)** • **[📜 الدليل العربي](documentation/README.md)** • **[🧠 Memory Bank](docs/memory-bank/00-README.md)** • **[🔒 Hidden Admin (`/admin`)](https://maximos-domadios-church.web.app/admin)**
 
 </div>
 
@@ -38,6 +39,22 @@ Engineered with **Flutter Web and Android**, it delivers an **Arabic-first (RTL)
 - **Immediate Visitor Answers:** Liturgy schedules, "Happening Now" status, live streaming badges, Coptic calendar feasts, charity clinics, priest directories, and emergency contact channels answer visitor questions in seconds.
 - **Empowered Non-Technical Admins:** Parish servants manage nearly 100% of the site's content, announcement banners, season presets, and theme adjustments via `/admin` without writing code or redeploying.
 - **Offline & First-Load Resilience:** If Firebase is unreachable or unconfigured, the application gracefully falls back to bundled seed data (`assets/seed/seed.json`) without crashing.
+
+---
+
+## 📲 Android Application & APK Download
+
+In addition to the Web Portal, an official standalone Android application is distributed directly via GitHub Releases:
+
+- **📥 Latest Release:** **[Download APK from GitHub Releases](https://github.com/Kerollosmm/church-portal/releases)**
+- **Architecture Flavors:**
+  - `church-portal-arm64.apk` — **64-bit ARM (`arm64-v8a`)** for modern devices (~18 MB).
+  - `church-portal-arm32.apk` — **32-bit ARM (`armeabi-v7a`)** for older devices (~16 MB).
+- **Core Mobile Capabilities:**
+  - 🔔 **Offline Local Notifications (ADR-058):** Daily verses (07:00 AM), Katameros daily readings (06:30 AM), feast announcements, and user reminders («ذكّرني») scheduled 9 days ahead with zero server polling.
+  - 📖 **Complete Katameros Reader (`/readings/<date>`):** Offline readings reader with Cairo liturgical calendar integration, adjustable font sizes, and adaptive focus mode.
+  - 🔄 **In-App Seamless Updater:** Automatic background update notifications with SHA-256 certificate verification and resumable downloads.
+  - 🔋 **OEM Battery Diagnostics (`/notifications/battery`):** Built-in settings guides for Samsung, Xiaomi, Oppo, Realme, and Huawei to ensure reminders fire reliably.
 
 ---
 
