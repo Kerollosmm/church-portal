@@ -8,6 +8,7 @@
 
 - الموقع المباشر: <https://maximos-domadios-church.web.app>
   (الرابط القديم `asafra-church-portal.web.app` يحوّل تلقائيًا إلى الرابط الجديد).
+- تحميل تطبيق أندرويد (APK): <https://github.com/Kerollosmm/church-portal/releases>
 - لوحة التحكم المخفية: <https://maximos-domadios-church.web.app/admin>
 - مشروع Firebase: `asafra-church-portal` (خطة Spark المجانية).
 - المستودع: `Kerollosmm/church-portal`.
