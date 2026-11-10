@@ -205,7 +205,7 @@ class _AppShellState extends ConsumerState<AppShell> {
     final width = size.width;
     final height = size.height;
     final wide = shellIsWide(context);
-    final isLandscapeShort = height < 420;
+    final isLandscapeShort = height < kLandscapeShortHeight;
     final textScale = MediaQuery.textScalerOf(context).scale(16) / 16;
     // Subpages on phones get a 1-tap Back-to-Home arrow: every in-app link is
     // a sibling route (context.go), so there is nothing to pop, and installed

@@ -367,7 +367,10 @@ Deferred isolation is mechanically enforced in CI via `node tool/check_web_bundl
 - Narrow: compact 48×48 dp **Mass times** `IconButton` (`_HighlightButton`), language toggle, ☰ opens an **end
   drawer** (`_AppDrawer`). Below **360 px**, at **≥ 150 % text**, or on a subpage below **400 px** (the Back arrow
   takes another 48 dp) the Mass button is dropped from the bar (it is in the drawer) so the title keeps a
-  readable width.
+  readable width. On viewports `< 360 px` (ADR-061), `SealTab` scales down to `54×70 dp` (from `64×80 dp`), the title typography
+  uses 15 pt 2-line `appShort` (`height: 1.15`), and when `showBack && width < 360`, the language toggle (`EN` / `ع`) moves from the
+  `AppBar` into `_AppDrawer` as `drawerLanguageToggle`, guaranteeing a `>= 130 dp` readable title slot and `>= 6 dp` seal clearance.
+  In short landscape orientations (`height < 420`, `kLandscapeShortHeight`, ADR-061), both `TopUtilityBar` and `InstallBanner` are hidden to preserve vertical reading space.
 - **No Clinics action in the app bar** (owner request, 4 Nov 2026), at any width or section state. It used to be a
   compact `local_hospital_rounded` button on phones, shown when `featuresReady && !wide && !collapseHighlights &&
   routeEnabled('/clinics')` — the same `sections.clinics` switch as the page, no separate condition. With the section

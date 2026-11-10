@@ -106,7 +106,7 @@ class _InstallBannerState extends ConsumerState<InstallBanner> {
   @override
   Widget build(BuildContext context) {
     if (_dismissedThisSession) return const SizedBox.shrink();
-    if (MediaQuery.sizeOf(context).height < 420) return const SizedBox.shrink();
+    if (MediaQuery.sizeOf(context).height < kLandscapeShortHeight) return const SizedBox.shrink();
 
     final isContentReady = ref.watch(contentReadyProvider);
     if (!isContentReady || !_readyToDisplay) return const SizedBox.shrink();

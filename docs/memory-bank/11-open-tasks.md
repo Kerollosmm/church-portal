@@ -10,7 +10,7 @@ Status as of 6 Nov 2026 (ADR-056 Phase 2 plan; ADR-055 / PR #49; ADR-054 / PR #4
 3. Sentry project privacy: *Prevent Storing of IP Addresses* + server-side data scrubbers → *Error tracking — Sentry*.
 4. Android assistant needs release signing + Play Integrity registration → *Infrastructure & security*.
 5. ~~Custom sections / pages are not in the sitemap~~ (PR #30: generated from Firestore at deploy, ADR-038); still not named in the assistant's allowed topics → *Custom sections*.
-6. ~~320 px overflow reported on a real phone~~ — fixed in Phase 2 PR E (ADR-061): AppShell < 360 px space recovery (54 dp seal tab, drawer language toggle on subpages, >= 130 dp title width, >= 4 dp seal clearance), modal sheets keyboard insets padding, and real OpenType font loading in accessibility tests → *Infrastructure & security* (320 px item).
+6. ~~320 px overflow reported on a real phone~~ — fixed in Phase 2 PR E (ADR-061): AppShell < 360 px space recovery (54 dp seal tab, drawer language toggle on subpages, >= 130 dp title width, >= 6 dp seal clearance), modal sheets keyboard insets padding, and real OpenType font loading in accessibility tests → *Infrastructure & security* (320 px item).
 7. CI rebuild of the eBible verse asset (source-fidelity check) → *Verse of the day*.
 8. Server-side assistant limit (the 3/day limit is client-side only) → *Assistant follow-ups*.
 9. **Live check 4 Nov 2026 — owner items (not code):** (a) `settings/church.nameAr` reads «…الأنبا موسى **الابيض**»
@@ -150,7 +150,7 @@ the owner approves the whole chain.
 - [x] **320 px overflow (reopened 4 Nov 2026, owner — fixed in PR E / ADR-061):** `test/accessibility_test.dart`
       now loads the real bundled OpenType fonts (`IBMPlexSansArabic`, `Lalezar`, `ArefRuqaa`) via `FontLoader` and
       verifies `< 360 px` `AppShell` geometry (54 dp seal tab, drawer language toggle on subpages, >= 130 dp title width,
-      >= 4 dp seal clearance) alongside 320 px × 200 % route sweeps with 0 overflows. Full OpenType font retention
+      >= 6 dp seal clearance) alongside 320 px × 200 % route sweeps with 0 overflows. Full OpenType font retention
       preserves Arabic ligatures and tashkeel diacritics without subsetting.
 - [ ] Ask the church office to update the admin-editable English name (`settings/church.nameEn`, currently "Church of
       Saints Maximus & Domadius and the Strong Anba Moussa the Black") if they prefer "St. Maximus & Domadius and

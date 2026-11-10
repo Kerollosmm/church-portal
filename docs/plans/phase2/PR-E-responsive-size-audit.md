@@ -97,9 +97,9 @@ Every public page, Phase 2 surface (`/readings/:date`, `/notifications`, `/notif
 
 ### Tests:
 - `test/accessibility_test.dart`
+- `test/readings_page_test.dart`
 - `test/deferred_loader_test.dart`
-- `test/install_banner_test.dart`
-- `test/android_shell_test.dart`
+- `tool/check_web_bundle.test.mjs`
 
 ### Documentation:
 - `docs/plans/phase2/PR-E-responsive-size-audit.md`

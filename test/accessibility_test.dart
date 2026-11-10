@@ -1325,17 +1325,39 @@ void main() {
               expect(sealFinder, findsOneWidget);
               expect(tester.getSize(sealFinder).width, 54.0);
 
-              // Short title exists, width > 0, does not overlap seal tab, clearance >= 4.0 dp
+              // Short title exists, width >= 80.0, does not overlap seal tab, clearance >= 5.9 dp (6.0 dp by design)
               final titleFinder = find.byKey(const Key('appBarShortTitle'));
               expect(titleFinder, findsOneWidget);
               final titleRect = tester.getRect(titleFinder);
               final sealRect = tester.getRect(sealFinder);
-              expect(titleRect.width, greaterThan(0.0));
+              expect(titleRect.width, greaterThanOrEqualTo(80.0),
+                  reason: 'Short title readable width must be >= 80.0 dp on $route ($lang)');
               expect(titleRect.overlaps(sealRect), isFalse);
 
               final clearance = isAr ? sealRect.left - titleRect.right : titleRect.left - sealRect.right;
-              expect(clearance, greaterThanOrEqualTo(4.0),
-                  reason: 'Clearance between seal and short title must be >= 4.0 dp on $route ($lang)');
+              expect(clearance, greaterThanOrEqualTo(5.9),
+                  reason: 'Clearance between seal and short title must be >= 6.0 dp (with 0.1 tolerance) on $route ($lang)');
+
+              // Unobstructed horizontal title slot width before trailing AppBar action button is >= 130.0 dp
+              final langFinder = find.byKey(const Key('appBarLanguageToggle'));
+              final menuFinder = find.byIcon(Icons.menu_rounded);
+              expect(menuFinder, findsOneWidget);
+              final Rect trailingActionRect;
+              if (langFinder.evaluate().isNotEmpty) {
+                final langRect = tester.getRect(langFinder);
+                final menuRect = tester.getRect(menuFinder);
+                trailingActionRect = isAr
+                    ? (langRect.right > menuRect.right ? langRect : menuRect)
+                    : (langRect.left < menuRect.left ? langRect : menuRect);
+              } else {
+                trailingActionRect = tester.getRect(menuFinder);
+              }
+
+              final unobstructedTitleSlotWidth = isAr
+                  ? titleRect.right - trailingActionRect.right
+                  : trailingActionRect.left - titleRect.left;
+              expect(unobstructedTitleSlotWidth, greaterThanOrEqualTo(130.0),
+                  reason: 'Unobstructed title slot width before trailing action must be >= 130.0 dp on $route ($lang)');
             }
           });
         }

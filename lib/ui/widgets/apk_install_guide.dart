@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:material_ui/material_ui.dart';
 
 import '../../core/l10n.dart';
@@ -92,7 +94,7 @@ class _ApkInstallGuideSheetState extends State<_ApkInstallGuideSheet> {
     final sizeStr = hasPositiveSize ? widget.apkSizeMb!.toStringAsFixed(1) : '';
     final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
     final maxSheetHeight = MediaQuery.sizeOf(context).height * 0.90;
-    final availableHeight = MediaQuery.sizeOf(context).height - bottomInset;
+    final availableHeight = math.max(0.0, MediaQuery.sizeOf(context).height - bottomInset);
     final pageViewHeight = (availableHeight * 0.50).clamp(180.0, 380.0);
     final isCompactHeight = availableHeight < 560;
 

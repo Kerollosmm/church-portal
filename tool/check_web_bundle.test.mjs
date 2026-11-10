@@ -172,3 +172,20 @@ test('checkWebBundle fails when a required font file is truncated below minimum 
   assert.equal(result.fontIntegrity.passed, false);
   assert.ok(result.errors.some((e) => e.includes('Font file truncated: ArefRuqaa-Bold.ttf')));
 });
+
+test('checkWebBundle handles null and non-string entries in sourcemap sources without throwing', (t) => {
+  const dir = createSyntheticBuild(t);
+  const mainMapPath = path.join(dir, 'main.dart.js.map');
+  const mainMap = JSON.parse(fs.readFileSync(mainMapPath, 'utf8'));
+  mainMap.sources.push(null, undefined, 12345, { bad: true });
+  fs.writeFileSync(mainMapPath, JSON.stringify(mainMap));
+
+  const pMapPath = path.join(dir, 'main.dart.js_1.part.js.map');
+  const pMap = JSON.parse(fs.readFileSync(pMapPath, 'utf8'));
+  pMap.sources.unshift(null, 42);
+  fs.writeFileSync(pMapPath, JSON.stringify(pMap));
+
+  const result = checkWebBundle(dir);
+  assert.equal(result.success, true);
+  assert.equal(result.deferredIsolation.passed, true);
+});

@@ -195,12 +195,12 @@ export function checkWebBundle(buildDir, options = {}) {
 
       for (const mod of deferredModules) {
         const normMod = mod.replace(/\\/g, '/');
-        const matchesInMain = mainSources.filter((s) => s.replace(/\\/g, '/').includes(normMod));
+        const matchesInMain = mainSources.filter((s) => typeof s === 'string' && s.replace(/\\/g, '/').includes(normMod));
         const leakedInMain = matchesInMain.length > 0;
 
         const partChunks = [];
         for (const [pMapFile, sources] of Object.entries(partMaps)) {
-          if (sources.some((s) => s.replace(/\\/g, '/').includes(normMod))) {
+          if (sources.some((s) => typeof s === 'string' && s.replace(/\\/g, '/').includes(normMod))) {
             partChunks.push(pMapFile);
           }
         }
