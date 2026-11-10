@@ -13,7 +13,8 @@ crons = ["*/15 * * * *", "7,22,37,52 * * * *", "3 2,8,14,20 * * *"]
 [vars]
 FIREBASE_PROJECT_ID = "asafra-church-portal"
 
-# Optional Cloudflare KV binding for two-tier OAuth2 access token cache (ADR-060):
-# [[kv_namespaces]]
-# binding = "PUSH_KV"
-# id = "<kv_namespace_id>"
+# Cloudflare KV binding for two-tier OAuth2 access token cache (ADR-060):
+[[kv_namespaces]]
+binding = "PUSH_KV"
+id = "18bc1b3202a2495e89e28bf67ee390da"
+
