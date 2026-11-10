@@ -19,9 +19,10 @@ Branding: the parish seal in `assets/branding/` — regenerate every icon with `
 1. **Never invent church content** (times, names, phones, doctors, photos). Unverified data stays `sample: true`;
    sources go in `docs/CONTENT_SOURCES.md`.
 2. **Business logic is pure Dart in `lib/domain/`** with unit tests. All time logic goes through `CairoTime`
-   (Africa/Cairo); weekdays are ISO 1–7; times are `"HH:mm"`.
+   (Africa/Cairo); weekdays are ISO 1–7; times are `"HH:mm"`. Recurring reminders («كل مرة») never expire and roll forward weekly in Cairo time; lead times must clamp to valid future intervals.
 3. **A field change touches four places together**: model (`lib/domain/models.dart` / `features.dart`), admin schema
    (`lib/ui/admin/admin_schema.dart`), `firestore.rules`, seed (`tool/gen_seed.py`) — plus tests.
+   **Firestore rules budget (1,000 expressions):** Keep new feature keys out of the legacy allow-list on large settings docs (`settings/features`); branch on `changed.hasOnly(legacyKeys)` so standard saves never evaluate new schemas. Use `'key' in changed` rather than `changed.hasAny(['key'])`. Always include worst-case whole-doc emulator tests.
 4. **The seed is generated**: edit `tool/gen_seed.py`, run `python3 tool/gen_seed.py`, commit `assets/seed/seed.json`
    and `tool/known_seed_ids.json`/`retired_seed_ids.json`. Removing a seeded id ⇒ add it to `retired`.
 5. **Strings** go in `lib/core/l10n.dart` (`[ar, en]`); content renders with `context.pick(ar, en)`; import widgets
@@ -41,6 +42,7 @@ Branding: the parish seal in `assets/branding/` — regenerate every icon with `
    `operations.md`, index in `documentation/README.md`) — in the same PR, like the memory bank. Write it in simple
    Arabic; keep code identifiers, paths and collection / field names in English; use the real admin labels from the
    code (`admin_page.dart`, `admin_schema.dart`, `lib/core/l10n.dart`).
+12. **Deferred imports for secondary UI:** Multi-step guides (e.g. sideload install guides), heavy bottom sheets, and secondary preference pages must use deferred loading (`deferred as ...`) with dedicated string tables to keep bundle growth within the +20 KB gzip budget.
 
 ## Commands
 
@@ -55,11 +57,25 @@ cd tool/rules_test && npm ci && npm test    # Firestore rules tests in the emula
 cd tool && npm install && node seed_firestore.js --dry-run
 ```
 
-## Workflow
+## Workflow (Hark Workflow — Mandatory & Auto-Enabled)
 
-Branch from up-to-date `main` → change + tests + memory-bank update + `documentation/` update → PR → comment `@coderabbitai review` → CI
-(`ci.yml`: analyze/test/build/seed-diff + rules emulator; `deploy.yml`: build + preview channel `pr-<n>`) green →
-squash-merge → `main` auto-deploys Hosting + Firestore rules.
+This repository strictly follows the **Hark Workflow (`hark-workflow`)** engineering loop for all development tasks. Agents must automatically adopt the `orchestrator` persona and trigger the corresponding skill without requiring explicit reminders:
+
+- **Features / Changes**: Use the `/ship-change` skill end-to-end.
+- **Bug Fixes**: Use the `/fix-bug` skill (reproduction test first → identify root cause → fix cause → verify fix → regression locked).
+- **Documentation**: Use the `/docs-sync` skill (keep `docs/memory-bank`, `documentation/`, and ADR in sync in the same PR).
+- **PR Review Loop**: Use the `/pr-review-loop` skill (`@coderabbitai review`, `@sentry review`, resolve threads).
+- **Release Verification**: Use the `/verify-release` skill (verify CI on head SHA, squash-merge, monitor deploy jobs, verify live HTTP 200 and bundle strings).
+
+### The Strict Execution Pipeline:
+1. **Intake & Acceptance Plan**: Restate goal; verify against `AGENTS.md`, `.agents/rules/project-rules.md`, and memory bank; initialize `.work/<branch>/status.md` with checkable acceptance criteria before touching code.
+2. **Branch**: Isolated branch (`feat/`, `fix/`, `docs/`, `chore/`) or `git worktree`. Never commit or push directly to `main`. Never force-push.
+3. **Test-First Implementation**: Pure business logic in `lib/domain/` with unit tests; UI responsive across 320/400/1400 px; RTL/LTR and switch states covered.
+4. **Local Gate**: Must pass `scripts/verify.sh` locally before push (`verify.sh --quick` runs on every commit via hook).
+5. **Docs in Same PR**: Update `docs/memory-bank/`, `documentation/` (Arabic), and add an ADR (`scripts/new_adr.sh`).
+6. **PR Review & Merge**: Open draft PR, run review bot triage, verify CI on head SHA, squash-merge.
+7. **Deploy Verification & Smoke**: Verify deploy workflow run on merge SHA, live HTTP 200, and JS bundle regex assertions (`verify_deploy.sh`).
+8. **Owner Report**: Submit concise report in `.work/<branch>/status.md` using the standard reporting format.
 
 ## Where to look
 

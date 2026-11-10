@@ -305,6 +305,15 @@ void main() {
     expect(find.byKey(const Key('footerSig-facebook')), findsNothing);
   });
 
+  test('heroAmbientLoopAllowed truth table (INV-PERF-01)', () {
+    expect(heroAmbientLoopAllowed(isWeb: false, platform: TargetPlatform.android), isFalse);
+    expect(heroAmbientLoopAllowed(isWeb: true, platform: TargetPlatform.android), isTrue);
+    expect(heroAmbientLoopAllowed(isWeb: false, platform: TargetPlatform.iOS), isTrue);
+    expect(heroAmbientLoopAllowed(isWeb: false, platform: TargetPlatform.windows), isTrue);
+    expect(heroAmbientLoopAllowed(isWeb: false, platform: TargetPlatform.macOS), isTrue);
+    expect(heroAmbientLoopAllowed(isWeb: false, platform: TargetPlatform.linux), isTrue);
+  });
+
   testWidgets('motion gating: tests, reduced motion and the admin switch keep the stage still', (tester) async {
     late BuildContext ctx;
     await tester.pumpWidget(MediaQuery(

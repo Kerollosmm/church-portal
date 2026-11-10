@@ -7,10 +7,12 @@ import '../../core/document_lang.dart';
 import '../../core/l10n.dart';
 import '../../core/launch.dart';
 import '../../core/theme.dart';
+import '../../domain/cairo_time.dart';
 import '../../domain/features.dart';
 import '../../domain/image_style.dart';
 import '../../domain/item_detail.dart';
 import '../../domain/models.dart';
+import '../../domain/reminders.dart';
 import '../../domain/rules.dart';
 import '../../domain/time_format.dart';
 import '../../state/providers.dart';
@@ -21,6 +23,7 @@ import '../widgets/feature_gate.dart';
 import '../widgets/golden.dart';
 import '../widgets/item_image.dart';
 import '../widgets/program_details.dart';
+import '../widgets/remind_me.dart';
 import 'activities_page.dart' show activityIcon;
 import 'clinics_page.dart' show ClinicCard;
 import 'education_page.dart' show meetingGroupOf, stageLabels;
@@ -175,6 +178,10 @@ class _Entry {
   final List<int> calendarDays;
   final String start, end;
 
+  /// Both-language title saved with a reminder (ADR-057), so «تذكيراتي»
+  /// follows the visitor's language later.
+  final Map<String, String> reminderTitle;
+
   /// Happens at the church (meetings, activities, clinics, services): the
   /// page offers directions to the church.
   final bool onSite;
@@ -201,6 +208,7 @@ class _Entry {
     this.calendarDays = const [],
     this.start = '',
     this.end = '',
+    this.reminderTitle = const {},
     this.onSite = false,
     this.officeFallback = false,
     this.whatsappFromPhone = false,
@@ -229,6 +237,7 @@ class _Entry {
             ..._programFacts(context, m.program, features.programOptions, hasPlace: m.hallAr.isNotEmpty || m.hallEn.isNotEmpty),
           ],
           calendarDays: [if (m.weekday != null) m.weekday!],
+          reminderTitle: {'ar': m.nameAr, 'en': m.nameEn},
           start: m.start,
           end: m.end,
           onSite: true,
@@ -269,6 +278,7 @@ class _Entry {
             if (c.start.isNotEmpty) _Fact.widget(Icons.schedule_rounded, context.tr('factTime'), TimeRangeText(c.start, c.end)),
           ],
           calendarDays: c.days,
+          reminderTitle: {'ar': c.specialtyAr, 'en': c.specialtyEn},
           start: c.start,
           end: c.end,
           onSite: true,
@@ -471,8 +481,8 @@ class _DetailView extends ConsumerWidget {
       key: const Key('itemDetailPage'),
       header: _header(context, e, cover),
       children: [
-        _BackLink(parent: parent),
-        const SizedBox(height: 4),
+        // Phones get the shell's Back arrow (INV-NAV-02); desktop keeps this link.
+        if (shellIsWide(context)) ...[_BackLink(parent: parent), const SizedBox(height: 4)],
         if (e.pills.isNotEmpty)
           Padding(
             padding: const EdgeInsets.only(bottom: 10),
@@ -612,6 +622,30 @@ class _DetailView extends ConsumerWidget {
           color: context.pal.bar,
           onTap: () => openUrl(calendar),
         ),
+      if (e.calendarDays.isNotEmpty && e.start.isNotEmpty)
+        Builder(builder: (c) {
+          // The earliest coming session over all the item's weekdays (a
+          // clinic may run on several days); today's counts until it starts.
+          final cNow = CairoTime.fromInstant(now);
+          final sm = parseHm(e.start) ?? 0;
+          DateTime? target;
+          for (final weekday in e.calendarDays) {
+            final daysAhead = (weekday - cNow.weekday + 7) % 7;
+            var t = CairoTime.at(cNow.year, cNow.month, cNow.day + daysAhead, sm);
+            if (t.isBefore(cNow)) t = CairoTime.at(cNow.year, cNow.month, cNow.day + daysAhead + 7, sm);
+            if (target == null || t.isBefore(target)) target = t;
+          }
+          final key = switch (kind) {
+            DetailKind.meeting => EventKey.meeting(id),
+            _ => EventKey.custom(kind.name, id),
+          };
+          return RemindMeButton(
+            eventKey: key,
+            title: e.reminderTitle.isNotEmpty ? e.reminderTitle : {'ar': e.title, 'en': e.title},
+            startsAt: target!,
+            recurring: true,
+          );
+        }),
       if (e.onSite && settings != null && _hasDestination(settings))
         ActionChipButton(
           key: const Key('detailDirections'),

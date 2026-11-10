@@ -207,7 +207,9 @@ Existence of `settings/church` = "database is seeded" (see `03-architecture.md`)
   | `liveLabelAr`, `liveLabelEn` | string ≤ 120 | `''` = «بث مباشر الآن من الكنيسة» / "Live now from the church" |
   | `liveEndsAt` | timestamp / null | none (automatic switch-off) |
   | `liveBadgeHideOnHome` | bool (PR #35, ADR-044; validated in the live gate of `validFeatures`) | true (Home shows only the banner while live) |
-  | `dayEvents` | list ≤ 20 of strings `date␟endDate␟start␟end␟titleAr␟titleEn␟speakerAr␟speakerEn␟topicAr␟topicEn␟noteAr␟noteEn␟link[␟attachmentUrl␟attachmentLabelAr␟attachmentLabelEn]` (U+001F; the 3 trailing fields are optional — PR #38, ADR-045: https PDF link and its button texts ≤ 80; date `YYYY-MM-DD` required, endDate optional, times `''`/HH:mm, titleAr 1–300, texts ≤ 300, notes ≤ 500, link `''` / path / http(s)) | `[]` |
+  | `dayEvents` | list ≤ 20 of strings `date␟endDate␟start␟end␟titleAr␟titleEn␟speakerAr␟speakerEn␟topicAr␟topicEn␟noteAr␟noteEn␟link[␟attachmentUrl␟attachmentLabelAr␟attachmentLabelEn[␟id]]` (U+001F; trailing attachment fields and optional 17th `id` field `[a-z0-9]{8,10}` — PR #38 / ADR-045 / ADR-059; date `YYYY-MM-DD` required, endDate optional, times `''`/HH:mm, titleAr 1–300, texts ≤ 300, notes ≤ 500, link `''` / path / http(s)) | `[]` |
+  | `notifyTypes` | list ≤ 6 of strings `id␟time␟daysBefore␟titleAr␟titleEn␟bodyAr␟bodyEn` (ADR-059; 6 fixed types: `announcements, verse_daily, katameros_daily, seasons, feasts, reminders`) | `[]` (built-in defaults apply) |
+  | `reminderSources` | comma-separated string of enabled sources (ADR-059; subset of `lit,mtg,day`) | `'lit,mtg,day'` |
   | `venues` | list ≤ 12 of strings `key␟labelAr␟labelEn` (key `[a-z0-9_-]{1,30}`, labelAr 1–80, labelEn ≤ 80) — PR #32, ADR-041 | missing / empty = `main` الكنيسة الكبرى, `lower` القاعة السفلية, `services` مبنى الخدمات |
   | `audiences` | same format — PR #32, ADR-041 | missing / empty = `general` عام, `youth` شباب, `children` أطفال |
   | `seasonVerses` | list ≤ 40 of strings `seasonKey␟textAr␟refAr`, optionally `␟textEn␟refEn` (ADR-047; season key of `validSeason`, text 1–500, ref ≤ 60, textEn ≤ 500, refEn ≤ 60) — PR #33, ADR-042 | missing / empty = the general daily list always |
@@ -227,6 +229,22 @@ Existence of `settings/church` = "database is seeded" (see `03-architecture.md`)
   `theme: burgundy` on purpose (it exercises the legacy mapping).
 - `imageStyles` (PR #15, ADR-023): map `collection → avatar|card|banner`, keys limited to the 9 image collections;
   missing key = built-in default. Written only once an admin sets one (saves keep working against older rules).
+
+## `settings/notifications` — `NotifySchedule` (`lib/domain/push.dart`)
+
+Added in ADR-059 for scheduled remote push notifications and sender state tracking:
+
+| Field | Type / Rule | Description |
+|---|---|---|
+| `schedule` | list ≤ 20 of strings | Rows: `id␟atUtcIso␟targets␟titleAr␟titleEn␟bodyAr␟bodyEn␟link␟eventKey` (9 U+001F fields; `atUtcIso` = `YYYY-MM-DDTHH:mm:ssZ`, whole seconds, no milliseconds — `scheduleIso()`; titleAr 1–120 and bodyAr 1–300 required). `targets` is `'all'`, `'app'`, or `'web'`. `link` is `/...` or empty. `eventKey` is empty or `(lit\|meeting\|day\|season)-[a-z0-9-]{1,40}`. Client writable by admins. |
+| `status` | map `<rowId, rowStatus>` | Per-row delivery status: `{state: 'draft'\|'sending'\|'ok'\|'partial'\|'error'\|'unconfirmed'\|'expired', result, claimedAt: ISO, topics: {<topic>: 'ok'\|'error'\|'unconfirmed'}}`. Server/sender only (client write rejected). |
+| `sentLog` | list ≤ 30 strings (or maps) | History log entries: sender writes serialized strings `id␟sentAt␟result␟titleAr␟trigger` (capped at 30 items); Dart parser handles both strings and map objects. Clear allowed for owner only (`size() == 0`). |
+| `health` | map | Sender health stats: `{lastRunAt, lastError, lastSeasonDate, sentToday, sparkReadsToday}`. Server/sender only. |
+| `reminderPlan` | map | Internal daily reminder planner state. Server/sender only. |
+| `remindersSent` | map | Set of processed reminder occurrences. Server/sender only. |
+| `updatedAt`, `updatedBy` | stampOk | Audit timestamps. |
+
+Rules: Read restricted to `isAdmin()` (`allow read: if docId != 'notifications' || isAdmin();`). Client writes to server fields (`status`, `reminderPlan`, `remindersSent`, `health`) rejected.
 
 ## Content collections
 
@@ -403,6 +421,28 @@ only advance when `request.time > lastAt + 10 s` (PR 1; was 20 s). The rules req
 alphanumerics) did not exist before the write and exists after it, and the message create requires
 `getAfter(meta/contact_rate).lastMsgId == its id`, so the throttle can never be bumped on its own (SEC-01). Nobody
 can read or delete it. Older live docs without `lastMsgId` are simply replaced by the next valid submission.
+
+### `push_queue/{id}` (ADR-060)
+Batch-written queue doc created by web clients subscribing or unsubscribing to push topics.
+- Fields:
+  - `token`: FCM registration token (`^[a-zA-Z0-9:_-]{20,400}$`).
+  - `want`: list of general topics (`web_announcements_ar`, `web_announcements_en`, `web_seasons_ar`, `web_seasons_en`).
+  - `rem`: list of reminder topics, comma-separated string (`<= 2600` chars), max 30 topics matching `remList()`.
+  - `drop`: list of dropped reminder topics, comma-separated string (`<= 2600` chars), max 30 topics matching `remList()`.
+  - `prevToken`: optional previous token for rotation.
+  - `createdAt`: server timestamp (`== request.time`).
+- Rules: create-only, read/update/delete denied to all clients. Verified against `meta/push_rate` in the same batch.
+- Drained every 15 min by Cloudflare Worker Cron 2 via Google IID REST.
+
+### `meta/push_rate` (ADR-060)
+Rate throttle doc for `push_queue` batch writes:
+- Fields: `{lastAt: timestamp, count: int, day: int, lastId: string}`.
+- Rules: 3-second throttle (`request.time > resource.data.lastAt + duration.value(3, 's')`), UTC integer day, count capped at 1000/day. Read/delete denied to all clients.
+
+### `meta/push_topics` & `meta/push_plan` (ADR-060)
+- `meta/push_topics`: topic subscriber counts and health stats, written by Cloudflare Worker Cron 2 (Google IID queue drain).
+- `meta/push_plan`: computed schedule of upcoming reminder topics, written by Cloudflare Worker Cron 3 (reminder planner).
+- Rules: read-only for `isAdmin()`, client writes denied.
 
 ### `admins/{uid}`
 `{email: string (≤254, required), role: 'owner' | 'editor'}` (+ optional `updatedAt/updatedBy`, checked by

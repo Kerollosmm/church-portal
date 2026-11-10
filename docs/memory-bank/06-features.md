@@ -61,7 +61,6 @@ render with `PageBody` (+ `Footer`). Content comes from Riverpod providers (hidd
   `heroMotion` off or under `flutter test`. The YouTube hero video library of PR #17 (ADR-026) was **removed in PR #25
   (ADR-036, owner request 4 Nov 2026)**; a `heroVideos` map already stored in `settings/features` is ignored.
 - **Hero ambient motion on web (ADR-037, PR #29):** the haze drift and light-ray shimmer look exactly as before but
-  run as a CSS-animated DOM layer (`HeroAmbientLayer`) instead of a per-frame Flutter repaint; the first paint is a
   run as a CSS-animated DOM layer (`HeroAmbientLayer`) instead of a per-frame Flutter repaint; see `documentation/features/performance-pagespeed.md`.
 - **Liturgical web loading screen (ADR-044, PR #35; replaces the ADR-037 static hero copy):** `web/index.html` shows,
   on the cream `#FBF3E4` ground (= `manifest.json` `background_color`), the parish seal (`assets/assets/branding/seal.png`,
@@ -566,3 +565,59 @@ digits, Cairo `02` + 8, Alexandria `03` + 7, other governorates `0[4-9]` + 7–8
 ### Time formatting (`time_format.dart`)
 `formatTimeLatin("06:30")` → `06:30 AM`; `formatTimeArabic` → `٠٦:٣٠ ص` (ص/م); weekday names AR/EN (ISO index);
 `formatDate` → `6 يناير 2027` (Arabic digits) / `6 Jan 2027`; `formatLooseDate` for priest dates.
+
+### Katameros Daily Readings (`/readings/<date>`, `readings_page.dart`, ADR-058)
+- Displays complete liturgical readings for any date: Matins Prophecies, Matins Gospel, Paul, Catholic Epistle, Acts, Synaxarium, Liturgy Psalm, Liturgy Gospel.
+- **Scroll architecture & sliver virtualization:** Lazy `CustomScrollView` with `ScrollCacheExtent.pixels(500)` and flattened `SliverList.builder` using deterministic item keys (`_CommemorationItem`, `_SectionHeaderItem`, `_ReadingCardItem`, `_AttributionItem`), replacing legacy `SingleChildScrollView` + `Column` to guarantee stutter-free 60 fps rendering on lower-tier Android devices.
+- **Intrinsic controls header (`SliverToBoxAdapter`, ADR-061):** Dynamic intrinsic-height header wrapping day navigation and font scaling controls onto separate lines on narrow mobile viewports, clamping UI controls scale <= 1.5x while reader body text scale clamps to 0.85x–2.5x, replacing legacy rigid headers and eliminating 4.0x double text multiplication overflow.
+- **Directional day navigation:** Centered date display (`$_currentIso • $coptic`) flanked by RTL-aware directional arrow buttons (`Icons.arrow_back_rounded`, `Icons.arrow_forward_rounded`; keys `prevDayButton` / `nextDayButton`), replacing the misplaced `< A- A+ >` buttons.
+- **Dedicated font scaling control (`fontSizeControl`):** Stepped font scale from `0.85x` to `2.0x` (default `1.0x`, step `0.15`, with percentage badge and one-tap reset `fontSizeReset`) backed by `readingTextScaleProvider` and persisted to device storage via `InstallEnv` (`church_portal_reading_prefs`).
+- **Responsive card layout:** Card headers (kind title + scripture reference) use a flexible `Wrap` layout verified overflow-free down to 320 px width at maximum 2.0x text scaling in both Arabic (RTL) and English (LTR).
+- **Adaptive focus reader mode:** Damped scroll listener with 40 dp hysteresis activates `readerFocusModeProvider` on downward scroll past 60 px offset, triggering `AppShell` to collapse its `AppBar` and hide `SealTab`, `UpdateBanner`, `LiveStreamBanner`, and `InstallBanner` for distraction-free immersion; restores chrome on upward scroll or route exit.
+- **Background repaint isolation:**
+  - `WarmBackdrop` (`lib/ui/widgets/golden.dart`) wrapped in `RepaintBoundary` for zero-cost raster caching of the clouds texture + color filter.
+  - `HeroVideo` (`lib/ui/widgets/hero_video_io.dart`) wrapped in `RepaintBoundary` to isolate 60 fps video rendering from ancestor repaint layers.
+- Arabic scripture text (Van Dyck) and English chapter:verse references (`refs-only`).
+- Offline caching via `ReadingsStore` (SharedPreferences on mobile, in-memory on web) with automatic pruning of dates older than yesterday.
+- Accessible directly via the «اقرأ القراءات» action on the Today card or direct link `/readings/YYYY-MM-DD`.
+
+### Notification Health & OEM Guidance (`/notifications/battery`, `notification_health_page.dart`, ADR-058, ADR-062)
+- Screen uses unified `PageBody` + `PageHeader` (ADR-062, `INV-NAV-01`; no nested `Scaffold` or custom top bar) with localized strings registered via dedicated deferred string table `notificationHealthStrings`. `parentRouteOf('/notifications/battery')` routes back to `/notifications` with tooltip «العودة إلى الإشعارات» / "Back to Notifications".
+- Diagnostic check for Android background delivery: notification permissions, exact alarms capability, battery optimization exemption, and background replenishment worker recency (< 48 hours).
+- OEM vendor detection (Xiaomi/Redmi/POCO, Oppo/Realme/OnePlus, Vivo/iQOO, Huawei/Honor, Samsung, Other).
+- Step-by-step guidance tailored to the user's phone brand with one-click intent launcher buttons (`church_portal/device` platform channel) falling back to App Info settings.
+
+### In-App Update Banner (`UpdateBanner`, `UpdateSheet`, `app_updater.dart`, ADR-058)
+- Native Android app fetches `/app/android/version.json` when `installApkBuild` > its own build.
+- If a newer build is published (`installApkBuild > currentBuild`), a dismissable bottom banner appears.
+- If `currentBuild < minSupportedBuild`, the update is mandatory and non-dismissable.
+- Tapping «تحديث الآن» opens `UpdateSheet` displaying Arabic release notes, file size, download progress bar with speed/percentage, and triggers APK installation via Android `FileProvider`.
+- Streaming download supports HTTP `Range` resume on network dropouts and verifies SHA-256 hash before renaming `.apk.part` to `.apk`.
+
+### Android Native Shell (`app_shell.dart`, `router.dart`, ADR-058)
+- Route `/admin` is completely compiled out when `!isWeb`.
+- `PopScope` intercepts device back buttons: detail routes return to parent listing (`parentRouteOf`), `/notifications/battery` returns to `/notifications` (ADR-062), subpages return to `/`, and pressing back on `/` shows a toast «اضغط مرة أخرى للخروج من التطبيق» exiting if tapped again within 2 seconds.
+- Single back arrow invariant (`INV-NAV-02`, ADR-062): phone viewports display exactly one back arrow located in `AppShell.leading`; `ItemDetailPage` hides its in-body back link on mobile and only displays it on desktop (`shellIsWide(context)` >= 1024 unscaled text width).
+- Assistant page on Android native displays a clean redirect card with a button opening the web assistant at `https://maximos-domadios-church.web.app/ask` in the external browser.
+
+### Admin Notification Manager & Remote FCM Push (ADR-059)
+- **Administrative control plane:** `/admin` → «التطبيق والإشعارات» provides full configuration for the 6 notification types (`announcements`, `verse_daily`, `katameros_daily`, `seasons`, `feasts`, `reminders`).
+- **Template management:** Admin can configure custom send times, lead days, and Arabic/English title/body templates with dynamic placeholders (`{verse}`, `{ref}`, `{reading}`, `{season}`, `{days}`, `{feast}`, `{event}`, `{time}`, `{place}`, `{lead}`, `{date}`). Live character counters and placeholder validation prevent invalid drafts.
+- **Schedule queue:** Admins can draft and schedule up to 20 remote push broadcasts targeting `'all'`, `'app'`, or `'web'` with deep links (`/liturgies`, `/readings/...`, etc.).
+- **Deletable non-sending rows:** Non-sending rows (`draft`, `ok`, `partial`, `error`, `unconfirmed`, `expired`) can be deleted at any time so the 20-row limit never deadlocks.
+- **Retry cloning:** Partial or errored rows can be cloned into new drafts with targets automatically narrowed to the failed platform (`web` or `app`).
+- **Cloudflare Worker sender:** Runs cron `*/15 * * * *`, queries `settings/notifications` via `:batchGet`, claims due rows, mints RS256 JWT, sends up to 16 FCM messages within ≤ 25 subrequests, and commits delivery status. Spark quota protected (~197 reads/day).
+- **Client FCM guard:** Android client background handler drops any incoming FCM notification matching local types to eliminate duplicates, uses a 100-item ring buffer for idempotency, shares `event:X` notification slots within ±60 minutes, and routes taps via `safeNotificationLink`.
+
+### Web Push, Installed iPhone PWA & Web Reminder Planner (ADR-060)
+- **Zero casual visitor overhead:** Zero bytes Firebase Messaging JS, no push service worker registered on normal visits, deferred bundle loading (`web_push_repository.dart` loaded via `deferred as web_push`).
+- **Safari iOS 16.4+ PWA support:** `manifest.json` configured with `"id": "/"` and `"scope": "/"`, monochrome badge (`badge-72.png`), and standalone display mode. On iOS Safari in a browser tab, `/notifications` displays an install-first guide card explaining that iOS requires adding the app to the Home Screen before Web Push notifications can be received.
+- **In-App Browser detection:** Detects embedded WebViews (Facebook, Instagram, Telegram) and renders a prominent warning with a one-tap «نسخ الرابط» (Copy link) button and Safari/Chrome open guidance.
+- **Focus mode & quiet hours:** Plain service worker (`firebase-messaging-sw.js`) respects overnight quiet hours by adding `silent: true` without dropping notifications, ensuring compliance with WebKit's background push termination policy.
+- **Web Reminder Planner & Condition FCM Reminders:**
+  - `ReminderSheet` clamps leads with `isWebLeadTooSoon` (40-minute minimum window on web) and displays honest delay copy («قد يصل التنبيه قبل الموعد بـ ١٥ دقيقة أو بعده بقليل حسب جدول الخادم») plus alternative Google Calendar and RFC 5545 `.ics` export options.
+  - Zero-lead ("at service time") triggers a warning badge explaining server cron latency.
+  - Cloudflare Worker Cron 3 compiles active weekly liturgies, meetings, and special day events into `meta/push_plan`.
+  - Cloudflare Worker Cron 1 sends due reminders targeting web reminder topics (using FCM boolean topic condition `'<recurring>' in topics || '<once>' in topics` when both recurring and single-occurrence subscribers exist).
+- **IndexedDB Web Inbox:** Plain service worker stores incoming notifications in IndexedDB (max 30 items) with a visible notification guarantee. Visitors can view past notifications on `/notifications` and clear inbox history.
+

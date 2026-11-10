@@ -5,7 +5,7 @@
 | Concern | Choice (file) |
 |---|---|
 | UI | Flutter, Material 3. Widgets are imported from **`package:material_ui/material_ui.dart`** (pub package `material_ui ^1.9.0`), not `package:flutter/material.dart` — follow that convention. |
-| Platforms | Web (primary, Firebase Hosting) + Android (`com.asafrachurch.church_portal`). iOS project exists, Firebase iOS app **not registered** (placeholders). |
+| Platforms | Web (primary, Firebase Hosting) + Android (`com.asafrachurch.church_portal`, split APKs arm64/arm32, ADR-058). iOS project exists, Firebase iOS app **not registered** (placeholders). |
 | SDK | Dart `^3.13.7` (`pubspec.yaml`); README: built with Flutter 3.47 / Dart 3.13, stable channel |
 | State | `flutter_riverpod ^3.4.3` (`lib/state/providers.dart`) |
 | Routing | `go_router ^18.1.2` (`lib/router.dart`), **path URL strategy** (`usePathUrlStrategy()` in `main.dart`) |
@@ -58,6 +58,16 @@ lib/
     item_detail.dart        DetailKind (basePath/parentPath/collection), detailPathFor, parseDetailPath,
                             detailStateFor (detail-page gating), itemSocialsShown (PR #13, ADR-020),
                             weeklyCalendarUrl, absoluteDetailUrl, pickRelated (PR #14, ADR-021)
+    notify_plan.dart        PlannedNotification, notificationIdFor, buildNotificationPlan (rolling 9-day
+                            window, verse/katameros/feasts, quiet hours, <= 80 alarms), needsReplenishment — ADR-058
+    push.dart               NotifyTypeSpec, NotifyConfig, ScheduledNotification, TopicSendState, RowSendStatus,
+                            SentEntry, SenderHealth, NotifySchedule, safeNotificationLink, topicKey, isValidWebReminderTopic,
+                            WebTopicPlan, computeWebTopicSync, WebInboxItem — ADR-059, ADR-060
+    calendar_ics.dart       buildReminderIcs (pure-Dart RFC 5545 .ics generator, Cairo TZID weekly RRULE, VALARM, 75-octet line folding), singleCalendarUrl — ADR-060
+    oem_guide.dart          OemBrand, detectOemBrand (Xiaomi/Oppo/Vivo/Huawei/Samsung), OemActionInfo,
+                            oemIntentTryList, getOemSteps — ADR-058
+    app_update.dart         ApkManifest, UpdateDecision, checkForUpdate, shouldForceUpdate — ADR-058
+    readings.dart           DayReadings, ReadingSection, ReadingPassage, parseKatamerosDay, formatCopticDay — ADR-058
   data/
     firebase_bootstrap.dart bootstrapFirebase() -> FirebaseStatus{available, appCheckActive (= configured)}; ensureAppCheckActivated() (lazy, ADR-037)
     app_check_providers.dart selectAppCheckPlan (reCAPTCHA Enterprise web / Play Integrity / App Attest / debug) — PR #19
@@ -70,23 +80,34 @@ lib/
                             (Blaze stub), MediaCache (in-memory LRU), EncodedImage
     image_processing.dart   prepareUpload/compressDecoded; codecs image_codec/image_codec_web.dart (canvas, WebP)
                             and image_codec_io.dart (`image` package, JPEG) via conditional import
+    local_notifications*.dart LocalNotifier, PlatformLocalNotifier (flutter_local_notifications wrapper, channels, exact alarms) — ADR-058
+    push_messaging*.dart    PushMessaging (conditional imports: io = FirebaseMessaging background handler + 100-nid ring buffer + event:X slot sharing; stub/web = no-op) — ADR-059
+    web_push_repository.dart WebPushRepository (deferred chunk, push_queue batch writes with meta/push_rate throttle, 4-step retry with HTTP Date sync, unsubscribeAll) — ADR-060
+    readings_store.dart     ReadingsStore (local caching of /data/readings/<date>.json, offline reading fallback, prune) — ADR-058
+    app_updater*.dart       AppUpdater, PlatformAppUpdater (resumable streaming download, Range resume, SHA-256 validation, FileProvider install) — ADR-058
   state/providers.dart      all Riverpod providers (see below)
+  state/notify_providers.dart localNotifierProvider, notifyPlannerProvider (debounced planner, WorkManager replenishment worker) — ADR-058
   core/                     theme.dart (AppColors, buildTheme), l10n.dart (_strings, tr/pick/isAr),
                             launch.dart (openUrl, callPhone, openWhatsApp, maps URLs), document_lang*.dart,
-                            locale_storage*.dart (LanguageStore: localStorage on web, no-op elsewhere)
+                            locale_storage*.dart (LanguageStore: localStorage on web, SharedPreferences on IO, ADR-058)
   ui/pages/                 one file per public route; item_detail_page.dart (ItemDetailPage) serves the 7 detail
-                            routes
+                            routes; readings_page.dart (/readings/<date>); notification_health_page.dart (/notifications/battery)
   ui/widgets/               item_image (ItemImage, MediaImageView, showImageViewer), app_shell, cards (LiturgyCard, NextMassCard, AlertBanner, DirectoryCard,
                             ActionChipButton, cardDetailPath, DetailTapArea, DetailsLink, CardImageLead), common
                             (PageBody, PageHeader, CustomizablePageHeader, PageIntro, SectionTitle, ResponsiveGrid,
                             Skeleton*, EmptyState, ErrorState, AsyncSection, PendingConfirmationNote,
                             SampleBadge, Pill, IconLine, TimeRangeText, Footer), feature_gate, map_embed*,
                             deferred_loader (DeferredLoader: spinner → page, retry on chunk failure), assistant_gate,
-                            coptic_cross
+                            coptic_cross, update_banner (UpdateBanner, UpdateSheet)
   ui/admin/                 admin_page (sign-in, role check, dashboard shell), admin_schema (FieldDef,
                             CollectionDef, adminCollections, churchInfoDoc), doc_editor (generic form),
-                            collection_list, features_editor, admin_screens (overview, church info,
-                            messages, admins), admin_validators
+                            collection_list, features_editor, notifications_admin (NotificationsAdminSection,
+                            schedule CRUD, template preview, health card, sent log — ADR-059),
+                            admin_screens (overview, church info, messages, admins), admin_validators
+tool/
+  cf_push_worker.js         Cloudflare Worker cron-only sender (*/15 * * * *, pure Web-API, RS256 JWT, <= 25 subrequests) — ADR-059
+  push_sender.js            Node 22 CLI & GitHub Actions fallback sender (tool/push_sender.js --dry-run) — ADR-059
+  firestore_rest.js         Lightweight Firestore REST client for batchGet and commit transactions — ADR-059
 ```
 
 Rule of thumb: **business logic goes in `lib/domain/` as pure Dart with tests**; widgets only render and call it.
@@ -271,7 +292,7 @@ flowchart LR
   `refreshListenable` is a `ValueNotifier` bumped by `ref.listen(localeProvider)` so redirects re-run on a language
   change without rebuilding the router.
 - A `ShellRoute` wraps all public pages in `AppShell(location, child)`; each page is built by `_page(state, child)` =
-  `NoTransitionPage(child: FeatureGate(path: s.uri.path, child: child))`.
+  `NoTransitionPage(child: FeatureGate(key: ValueKey(s.uri.path), path: s.uri.path, child: child))`.
 
 | Route | Widget | Gate (`routeSections` in `features.dart`) |
 |---|---|---|
@@ -322,30 +343,34 @@ indexable:)`, which applies the spec through the conditional import (`document_l
 `errorBuilder` (`indexable: false`). `?lang=` sync (`_syncLangQuery`, `resolveLangSync`'s `lang=ar` branch) keeps
 the URL `#fragment`.
 
-**Deferred routes** (PR 3 of the review plan): `router.dart` imports `ui/admin/admin_page.dart deferred as admin_page`
-and `ui/pages/assistant_page.dart deferred as assistant_page`; the routes build
-`DeferredLoader(loadLibrary: x.loadLibrary, builder: (_) => x.Page())`, so dart2js emits them as separate
-`main.dart.js_*.part.js` chunks fetched only on the first visit to `/admin` or `/ask` (the AI SDK `firebase_ai` is
-imported only by `assistant_page.dart`). `/ask` is wrapped in `AssistantGate` (`ui/widgets/assistant_gate.dart`,
-eager): it waits for `settings/church`, shows «المساعد غير متاح حاليًا» **without** fetching the chunk when
-`assistantVisibleProvider` is false, and only then builds the `DeferredLoader` (CodeRabbit review). `DeferredLoader` shows a spinner (live region «جارٍ تحميل الصفحة…») and an
-`ErrorState` with Retry if the chunk download fails (a retry in flight shows the spinner again). Only the page code is deferred: anything also imported eagerly
-(e.g. `data/admin_repository.dart`, used by `providers.dart`/`main.dart`, and shared widgets) stays in the main
-bundle. Never import `admin_page.dart` / `assistant_page.dart` (or a library only they need) eagerly elsewhere in
-`lib/`, or the split silently disappears; tests may import them directly. Path URL strategy is unaffected (the
-chunks are fetched relative to `<base href>`).
+**Deferred modules & isolation** (PR 3, ADR-058, ADR-060, ADR-061):
+To protect the web initial load budget (`main.dart.js` gzip -9 ceiling <= 1,396,031 B), exactly 8 secondary modules are deferred (`deferred as`):
+1. `ui/admin/admin_page.dart` (`admin_page`): full admin dashboard (Firebase Auth, schema editors, Firestore writes).
+2. `ui/pages/assistant_page.dart` (`assistant_page`): AI assistant interface & `firebase_ai` SDK (gated behind `AssistantGate`).
+3. `ui/pages/notifications_page.dart` (`notifications_page`): notification channel & reminder preferences.
+4. `ui/pages/readings_page.dart` (`readings_page`): liturgical Katameros day reader (`/readings/:date`).
+5. `ui/pages/notification_health_page.dart` (`health_page`): OEM battery optimization diagnostics (`/notifications/battery`).
+6. `ui/widgets/apk_install_guide.dart` (`apk_guide`): 5-step Android APK sideloading walkthrough bottom sheet.
+7. `data/web_push_repository.dart` (`web_push`): web push token sync & Firestore queue batch writer.
+8. `ui/widgets/reminder_sheet.dart` (`reminder_sheet`): reminder picker modal bottom sheet with `.ics` & calendar export.
+
+The routes build `DeferredLoader(loadLibrary: x.loadLibrary, builder: (_) => x.Page())`. Sibling path transitions (e.g. between `/readings/date1` and `/readings/date2`) recreate the routed page subtree via `key: ValueKey(s.uri.path)` on `FeatureGate` in `_page` (`lib/router.dart`), with `DeferredLoader.didUpdateWidget` serving as an in-place fallback if a parent preserves the loader state. `DeferredLoader` shows a live-region accessible spinner («جارٍ تحميل الصفحة…») and an `ErrorState` with Retry on network failure. All chunk loading failures report telemetry via `ErrorReporting.capture(e, st, section: 'deferred_chunk')`.
+Deferred isolation is mechanically enforced in CI via `node tool/check_web_bundle.mjs build/web`, which parses `main.dart.js.map` to assert 0 sourcemap leaks from any of the 8 deferred modules, verifies at least 6 `.part.js` chunks (22 emitted in production), and checks OpenType font integrity.
 
 ## App shell & navigation (`lib/ui/widgets/app_shell.dart`)
 
 - `navItems`: home, massSchedule, clinics, education, activities, publicServices, about, contact; `askNavItem` added
   when `assistantVisibleProvider`. `visibleNavItems(f, showAsk:)` filters by `f.routeEnabled(path)`.
-- Wide layout when `width / textScale ≥ 1024` (large system text forces the compact bar): text links
+- Wide layout evaluated via `shellIsWide(BuildContext context)` (`width / textScale.clamp(1.0, 3.0) >= 1024`; large system text forces the compact bar): text links
   (home/about/education), a **Services** popup (activities, public services, contact, ask), gold **Mass times**
   highlight button, language toggle (`EN` / `ع`).
 - Narrow: compact 48×48 dp **Mass times** `IconButton` (`_HighlightButton`), language toggle, ☰ opens an **end
   drawer** (`_AppDrawer`). Below **360 px**, at **≥ 150 % text**, or on a subpage below **400 px** (the Back arrow
   takes another 48 dp) the Mass button is dropped from the bar (it is in the drawer) so the title keeps a
-  readable width.
+  readable width. On viewports `< 360 px` (ADR-061), `SealTab` scales down to `54×70 dp` (from `64×80 dp`), the title typography
+  uses 15 pt 2-line `appShort` (`height: 1.15`), and when `showBack && width < 360`, the language toggle (`EN` / `ع`) moves from the
+  `AppBar` into `_AppDrawer` as `drawerLanguageToggle`, guaranteeing a `>= 130 dp` readable title slot and `>= 6 dp` seal clearance.
+  In short landscape orientations (`height < 420`, `kLandscapeShortHeight`, ADR-061), both `TopUtilityBar` and `InstallBanner` are hidden to preserve vertical reading space.
 - **No Clinics action in the app bar** (owner request, 4 Nov 2026), at any width or section state. It used to be a
   compact `local_hospital_rounded` button on phones, shown when `featuresReady && !wide && !collapseHighlights &&
   routeEnabled('/clinics')` — the same `sections.clinics` switch as the page, no separate condition. With the section
@@ -355,8 +380,14 @@ chunks are fetched relative to `<base href>`).
   sibling `context.go`, so there is nothing to pop, and installed PWAs have no browser back button. On an item
   detail page the arrow is parent-aware (PR #13): `parentRouteOf(location)` (pure, `app_shell.dart`) returns
   `DetailKind.parentPath` — `/church-education`, `/church-activities`, `/clinics`, `/public-services`, `/about`
-  (priests, saints) or `/` (milestones: their cards live on Home) — shown as `Key('backParent')` with the tooltip
+  (priests, saints), `/notifications` (for `/notifications/battery`, ADR-062) or `/` (milestones: their cards live on Home) — shown as `Key('backParent')` with the tooltip
   «العودة إلى …» (`backToLabel`); every other route keeps `Key('backHome')` → `/`.
+- **Navigation Invariants (ADR-062):**
+  - **`INV-NAV-01`**: Only `AppShell` manages `Scaffold` chrome for routed public pages. `NotificationHealthPage` renders `PageBody` + `PageHeader` without an inner `Scaffold`.
+  - **`INV-NAV-02`**: Exactly one back arrow on mobile viewports (`AppShell.leading`). In-body `_BackLink` on `ItemDetailPage` is shown only when `shellIsWide(context)` is true (desktop).
+- **Mobile Performance & Native Splash Invariants (ADR-062):**
+  - **`INV-PERF-01`**: Zero continuous ambient tickers in `HeroStage` on Android APK (`heroAmbientLoopAllowed() == false`). Hardware-accelerated hero video decoder remains active.
+  - **`INV-SPLASH-01`**: Native Android launch window background locked to cream `#FBF3E4` (`@color/splash_cream`) across drawables and styles (including `values-v31` Android 12+ Splash API).
 - **Today layer (PR #31, ADR-039/040):** the shell body is `Column[CopticDateStrip(location), LiveStreamBanner,
   Expanded(page)]` over the `WarmBackdrop` (`lib/ui/widgets/today_widgets.dart`): the Coptic date strip
   (`copticStrip` all / home / off) and, while live, the red «بث مباشر الآن من الكنيسة» bar, on every page.

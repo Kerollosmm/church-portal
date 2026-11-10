@@ -15,6 +15,7 @@ import 'assistant_admin.dart';
 import 'contact_admin.dart';
 import 'collection_list.dart';
 import 'features_editor.dart';
+import 'notifications_admin.dart';
 import 'season_preset_admin.dart';
 
 /// Hidden /admin area: email/password sign-in, role check (admins/{uid}),
@@ -307,6 +308,7 @@ List<AdminDest> adminDestinations(String role) => [
   const AdminDest('today', Icons.today_outlined, 'اليوم والبث المباشر', 'Today & live stream'),
   const AdminDest('seasonSettings', Icons.celebration_outlined, 'إعدادات المواسم', 'Season settings'),
   const AdminDest('seasonPreset', Icons.checklist_rounded, 'تجهيز الموسم', 'Season preparation'),
+  const AdminDest('app', Icons.install_mobile_outlined, 'التطبيق والإشعارات', 'App & notifications'),
   const AdminDest('church', Icons.church_outlined, 'بيانات الكنيسة', 'Church info'),
   const AdminDest('assistant', Icons.smart_toy_outlined, 'المساعد الذكي', 'AI assistant'),
   for (final c in adminCollections) AdminDest(c.id, adminIcon(c.icon), c.labelAr, c.labelEn),
@@ -366,6 +368,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
         return ChurchInfoScreen(key: const ValueKey('seasonSettings'), repo: repo, doc: seasonSettingsDoc);
       case 'seasonPreset':
         return SeasonPresetScreen(repo: repo);
+      case 'app':
+        return AppAndNotificationsScreen(key: const ValueKey('app'), repo: repo, role: widget.role);
       case 'church':
         return ChurchInfoScreen(key: const ValueKey('church'), repo: repo);
       case 'assistant':

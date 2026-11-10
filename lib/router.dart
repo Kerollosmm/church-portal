@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -10,6 +11,7 @@ import 'core/document_lang.dart';
 import 'core/l10n.dart';
 import 'data/error_reporting.dart';
 import 'domain/item_detail.dart';
+import 'domain/push.dart';
 import 'state/providers.dart';
 // Deferred (plan PR 3, 3.3): separate web chunks, fetched only on /admin and
 // /ask, so the public bundle excludes the admin dashboard and the AI SDK.
@@ -25,7 +27,10 @@ import 'ui/pages/education_page.dart';
 import 'ui/pages/home_page.dart';
 import 'ui/pages/item_detail_page.dart';
 import 'ui/pages/mass_schedule_page.dart';
+import 'ui/pages/notifications_page.dart' deferred as notifications_page;
 import 'ui/pages/public_services_page.dart';
+import 'ui/pages/readings_page.dart' deferred as readings_page;
+import 'ui/pages/notification_health_page.dart' deferred as health_page;
 import 'ui/widgets/app_shell.dart';
 import 'ui/widgets/assistant_gate.dart';
 import 'ui/widgets/common.dart';
@@ -35,7 +40,7 @@ import 'ui/widgets/feature_gate.dart';
 /// Every public page is wrapped in a [FeatureGate]: a section switched off in
 /// `settings/features` shows "not available" instead of its content.
 NoTransitionPage<void> _page(GoRouterState s, Widget child) =>
-    NoTransitionPage(key: s.pageKey, child: FeatureGate(path: s.uri.path, child: child));
+    NoTransitionPage(key: s.pageKey, child: FeatureGate(key: ValueKey(s.uri.path), path: s.uri.path, child: child));
 
 /// Rewrites `?lang=` to match the selected language (`lang=en` for English,
 /// no parameter for Arabic, the default). Null when the URL already matches.
@@ -112,21 +117,41 @@ class _PlatformRouteObserver with WidgetsBindingObserver {
   }
 }
 
+bool _detectIsWeb() {
+  if (kIsWeb) return true;
+  return !const bool.fromEnvironment('dart.vm.product') &&
+      WidgetsBinding.instance.runtimeType.toString().contains('TestWidgetsFlutterBinding');
+}
+
+final isWebProvider = Provider<bool>((ref) => _detectIsWeb());
+
 final routerProvider = Provider<GoRouter>((ref) {
-  // Re-run redirects (URL lang sync) when the language is toggled, without
-  // rebuilding the router itself.
+  final isWeb = ref.watch(isWebProvider);
+  return buildAppRouter(ref, isWeb: isWeb);
+});
+
+final rootNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'root');
+
+void navigateToNotification(String rawLink) {
+  final safe = safeNotificationLink(rawLink);
+  final ctx = rootNavigatorKey.currentContext;
+  if (ctx != null) {
+    ctx.go(safe);
+  }
+}
+
+GoRouter buildAppRouter(Ref ref, {bool? isWeb, String initialLocation = '/'}) {
+  final web = isWeb ?? _detectIsWeb();
   final localeChanges = ValueNotifier<int>(0);
   ref.listen(localeProvider, (_, _) => localeChanges.value++);
   ref.onDispose(localeChanges.dispose);
   final platformNav = _PlatformRouteObserver();
   WidgetsBinding.instance.addObserver(platformNav);
   ref.onDispose(() => WidgetsBinding.instance.removeObserver(platformNav));
-  // Last URL the redirect accepted as-is. The same URL again means a refresh
-  // (the language changed, the location did not): the URL follows the
-  // language, like a toggle.
   Uri? lastSyncedUri;
   return GoRouter(
-    initialLocation: '/',
+    navigatorKey: rootNavigatorKey,
+    initialLocation: initialLocation,
     refreshListenable: localeChanges,
     redirect: (context, state) {
       final notifier = ref.read(localeProvider.notifier);
@@ -163,6 +188,16 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(path: '/public-services', pageBuilder: (c, s) => _page(s, const PublicServicesPage())),
           GoRoute(path: '/contact', pageBuilder: (c, s) => _page(s, const ContactPage())),
+          GoRoute(
+              path: '/notifications',
+              // Own web chunk (ADR-057 size budget): fetched only on a visit.
+              pageBuilder: (c, s) => _page(
+                  s,
+                  DeferredLoader(
+                    source: 'notifications_page',
+                    loadLibrary: notifications_page.loadLibrary,
+                    builder: (_) => notifications_page.NotificationsPage(),
+                  ))),
           // Admin-defined categories and custom pages (ADR-027). Not behind a
           // section switch: each has its own `visible` flag.
           GoRoute(
@@ -172,6 +207,32 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/page/:slug',
             pageBuilder: (c, s) => _page(s, CustomPageView(slug: s.pathParameters['slug'] ?? '')),
+          ),
+          GoRoute(
+            path: '/notifications/battery',
+            pageBuilder: (c, s) => _page(
+              s,
+              DeferredLoader(
+                source: 'notification_health_page',
+                loadLibrary: health_page.loadLibrary,
+                builder: (_) => health_page.NotificationHealthPage(),
+              ),
+            ),
+          ),
+          GoRoute(
+            path: '/readings/:date',
+            pageBuilder: (c, s) => _page(
+              s,
+              DeferredLoader(
+                source: 'readings_page',
+                loadLibrary: readings_page.loadLibrary,
+                builder: (_) => readings_page.ReadingsPage(
+                  dateIso: s.pathParameters['date'] ?? '',
+                  initialTab: s.uri.queryParameters['tab'],
+                ),
+              ),
+
+            ),
           ),
           // Shareable item detail pages (ADR-020). FeatureGate gates each like
           // its section (prefix-aware `routeEnabled`: `/about/priests/<id>`
@@ -189,15 +250,19 @@ final routerProvider = Provider<GoRouter>((ref) {
                 // The chunk is fetched only when the assistant is actually on.
                 AssistantGate(
                   builder: (_) => DeferredLoader(
+                    source: 'assistant_page',
                     loadLibrary: assistant_page.loadLibrary,
-                    builder: (_) => assistant_page.AssistantPage(),
+                    builder: (_) => assistant_page.AssistantPage(isWeb: web),
                   ),
                 )),
           ),
         ],
       ),
-      GoRoute(
-        path: AppConfig.adminPath,
+      // `kIsWeb || !dart.vm.product` is a compile-time constant: in a release APK it is false, so the
+      // admin dashboard is tree-shaken out (PR B §3.1); tests (debug VM) can still pass isWeb: true.
+      if (web && (kIsWeb || !const bool.fromEnvironment('dart.vm.product')))
+        GoRoute(
+          path: AppConfig.adminPath,
         builder: (c, s) {
           setDocumentRouteMeta(path: s.uri.path, indexable: false);
           // The dashboard keeps the Golden hour palette whatever occasion
@@ -205,6 +270,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           return Theme(
             data: buildTheme(Localizations.localeOf(c)),
             child: DeferredLoader(
+              source: 'admin_page',
               loadLibrary: admin_page.loadLibrary,
               builder: (_) => admin_page.AdminPage(),
               fullScreen: true,
@@ -228,4 +294,5 @@ final routerProvider = Provider<GoRouter>((ref) {
       );
     },
   );
-});
+}
+

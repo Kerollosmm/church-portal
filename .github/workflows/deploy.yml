@@ -73,10 +73,32 @@ jobs:
         # publish (the app then uses its stored copy / computed feast list).
         continue-on-error: true
         run: |
-          mkdir -p build/web/data
+          mkdir -p build/web/data/readings build/web/app/android
           node tool/fetch_synaxarium.js build/web/data/today.json \
             || curl -sf --max-time 20 https://maximos-domadios-church.web.app/data/today.json -o build/web/data/today.json \
             || echo "::warning::no /data/today.json in this build (the app falls back to its computed feast list)"
+          node tool/fetch_readings.js build/web/data/readings --days=9 --previous-url https://maximos-domadios-church.web.app/data/readings/ \
+            || echo "::warning::no readings in this build"
+      - name: Keep the live Android release files (PR B §3.3 / §12)
+        # A code deploy replaces the whole Hosting version: carry the in-app update manifest (and the
+        # APKs when they are hosted on Firebase) over, or the app would stop seeing the release. A
+        # missing manifest is fine only before the first release; a failed copy of an existing one
+        # stops the deploy.
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          mkdir -p build/web/app/android
+          base=https://maximos-domadios-church.web.app/app/android
+          code=$(curl -s -o build/web/app/android/version.json -w '%{http_code}' --max-time 30 "$base/version.json" || echo 000)
+          if [ "$code" = "404" ]; then
+            rm -f build/web/app/android/version.json; echo "no Android release published yet"
+          elif [ "$code" != "200" ] || ! python3 -c 'import json,sys; json.load(open(sys.argv[1]))' build/web/app/android/version.json; then
+            echo "::error::could not preserve /app/android/version.json (HTTP $code)"; exit 1
+          fi
+          if [ "${{ vars.APK_HOST }}" = "firebase" ] && [ -f build/web/app/android/version.json ]; then
+            for f in church-portal-arm64.apk church-portal-arm32.apk; do
+              curl -sf --max-time 300 "$base/$f" -o "build/web/app/android/$f" || { echo "::error::could not preserve $f"; exit 1; }
+            done
+          fi
       - name: Remove key
         if: always()
         run: rm -f "$RUNNER_TEMP/sa.json"
@@ -172,6 +194,8 @@ jobs:
     if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
     needs: build
     runs-on: ubuntu-latest
+    outputs:
+      preview_url: ${{ steps.deploy.outputs.url }}
     permissions:
       contents: read
       pull-requests: write
@@ -194,9 +218,38 @@ jobs:
           CHANNEL: pr-${{ github.event.pull_request.number }}
         run: |
           set -euo pipefail
+
+          # Prune old preview channels if channel quota is approached (Spark plan limit is 10 channels)
+          python3 - <<'PRUNE_PY'
+          import json, os, subprocess
+          site = "maximos-domadios-church"
+          proj = os.environ.get("FIREBASE_PROJECT_ID", "asafra-church-portal")
+          try:
+              res = subprocess.run(
+                  ["npx", "--yes", "firebase-tools@latest", "hosting:channel:list", "--site", site, "--project", proj, "--json"],
+                  capture_output=True, text=True, check=True
+              )
+              raw = res.stdout
+              out = json.loads(raw[raw.find("{"):])
+              channels = out.get("result", {}).get("channels", [])
+              previews = [c for c in channels if not c.get("name", "").endswith("/live")]
+              if len(previews) >= 6:
+                  previews.sort(key=lambda c: c.get("updateTime", ""))
+                  to_delete = previews[:len(previews) - 4]
+                  for c in to_delete:
+                      cid = c["name"].split("/")[-1]
+                      print(f"Pruning old preview channel: {cid}")
+                      subprocess.run(
+                          ["npx", "--yes", "firebase-tools@latest", "hosting:channel:delete", cid, "--site", site, "--project", proj, "--force"],
+                          check=False
+                      )
+          except Exception as e:
+              print(f"Notice: preview channel prune check: {e}")
+          PRUNE_PY
+
           npx --yes firebase-tools@latest hosting:channel:deploy "$CHANNEL" --only app \
-            --expires 7d --project "$FIREBASE_PROJECT_ID" --non-interactive --json > "$RUNNER_TEMP/deploy.json" \
-            || { cat "$RUNNER_TEMP/deploy.json"; exit 1; }
+            --expires 7d --project "$FIREBASE_PROJECT_ID" --non-interactive --json > "$RUNNER_TEMP/deploy.json"
+
           python3 - "$RUNNER_TEMP/deploy.json" <<'PY'
           import json, os, sys
           text = open(sys.argv[1], encoding="utf-8").read()
@@ -241,3 +294,23 @@ jobs:
             } else {
               await github.rest.issues.createComment({ owner, repo, issue_number, body });
             }
+
+
+  lighthouse:
+    name: Lighthouse audit (informational)
+    needs: preview
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && needs.preview.outputs.preview_url != ''
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    permissions:
+      contents: read
+    steps:
+      - name: Audit preview URL with Lighthouse
+        uses: treosh/lighthouse-ci-action@v12
+        with:
+          urls: |
+            ${{ needs.preview.outputs.preview_url }}
+            ${{ needs.preview.outputs.preview_url }}/notifications
+          runs: 3
+          uploadArtifacts: true
+          temporaryPublicStorage: false

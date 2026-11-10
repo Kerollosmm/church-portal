@@ -1,0 +1,20 @@
+# Cloudflare Workers configuration for church-portal push sender (ADR-059, ADR-060)
+# 3 dedicated cron triggers (zero public HTTP endpoints):
+# 1. Delivery Cron: */15 * * * * (runs push_sender.js)
+# 2. Queue Drain Cron: 7,22,37,52 * * * * (runs push_queue.js)
+# 3. Reminder Planner Cron: 3 2,8,14,20 * * * (runs push_reminders.js)
+name = "church-portal-push-sender"
+main = "tool/cf_push_worker.js"
+compatibility_date = "2026-11-01"
+
+[triggers]
+crons = ["*/15 * * * *", "7,22,37,52 * * * *", "3 2,8,14,20 * * *"]
+
+[vars]
+FIREBASE_PROJECT_ID = "asafra-church-portal"
+
+# Cloudflare KV binding for two-tier OAuth2 access token cache (ADR-060):
+[[kv_namespaces]]
+binding = "PUSH_KV"
+id = "18bc1b3202a2495e89e28bf67ee390da"
+

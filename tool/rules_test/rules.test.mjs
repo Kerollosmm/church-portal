@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 
 import { assertFails, assertSucceeds, initializeTestEnvironment } from '@firebase/rules-unit-testing';
 import {
-  Timestamp, deleteDoc, doc, getDoc, getDocs, collection, serverTimestamp, setDoc, updateDoc, writeBatch,
+  Timestamp, deleteDoc, doc, getDoc, getDocs, collection, increment, serverTimestamp, setDoc, updateDoc, writeBatch,
 } from 'firebase/firestore';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -1972,3 +1972,768 @@ describe('ADR-051: season keys, replaceDates, exceptional seasons', () => {
     await assertFails(setDoc(doc(db(STRANGER), 'settings', 'assistant'), { exceptionalSeasons: [] }));
   });
 });
+
+describe('install banner and push settings (ADR-057)', () => {
+  const featuresRef = () => doc(db(EDITOR), 'settings', 'features');
+  const validInstallAndPush = {
+    installPrompt: true,
+    installTitleAr: 'تطبيق الكنيسة على هاتفك',
+    installTitleEn: 'Church app on your phone',
+    installBodyAr: 'تابع القداسات والصلوات والمواسم وتلقّ التنبيهات بسهولة من هاتفك.',
+    installBodyEn: 'Follow liturgies, prayers and seasons with easy updates on your phone.',
+    installAndroidUrl: 'https://example.com/app.apk',
+    installAndroidUrl32: '/app/android/older.apk',
+    installApkVersion: '1.1.0',
+    installApkBuild: 42,
+    installApkSizeMb: 18.4,
+    installApkSize32Mb: 17.9,
+    installReshowDays: 30,
+    installRemindDays: 3,
+    push: true,
+    pushVapidKey: 'BKAGkFj27-exampleVapidKey890123456789012345678901234567890123456789012345678901234567890',
+    pushTypes: ['announcements', 'verse_daily', 'katameros_daily', 'seasons', 'feasts', 'reminders'],
+    reminderLeads: [0, 15, 60, 1440],
+    reminderDefaultLead: 60,
+  };
+
+  test('admin can save valid install and push settings', async () => {
+    await assertSucceeds(setDoc(featuresRef(), validInstallAndPush, { merge: true }));
+  });
+
+  test('stranger cannot write install or push settings', async () => {
+    await assertFails(setDoc(doc(db(STRANGER), 'settings', 'features'), validInstallAndPush, { merge: true }));
+  });
+
+  test('rejects invalid install fields', async () => {
+    const badCases = [
+      { installAndroidUrl: 'javascript:alert(1)' },
+      { installAndroidUrl32: '//evil.com/phish' },
+      { installApkVersion: '1.x' },
+      { installApkBuild: -1 },
+      { installApkBuild: 1000000 },
+      { installApkSizeMb: 500 },
+      { installApkSize32Mb: -1 },
+      { installReshowDays: 400 },
+      { installRemindDays: 0 },
+      { installRemindDays: 61 },
+    ];
+    for (const bad of badCases) {
+      await assertFails(setDoc(featuresRef(), bad, { merge: true }), JSON.stringify(bad));
+    }
+  });
+
+  test('rejects invalid push fields', async () => {
+    const badCases = [
+      { pushVapidKey: 'with spaces in the middle 8901234567890123456789012345678901234567890123456789012345678901234567890' },
+      { pushVapidKey: 'too-short' },
+      { pushTypes: ['announcements', 'occasions'] }, // retired occasions type
+      { pushTypes: ['announcements', 'announcements'] }, // duplicate type
+      { pushTypes: ['announcements', 'unknown_type'] },
+      { reminderLeads: [7] }, // not in allowed set
+      { reminderLeads: [0, 15, 60, 120, 180] }, // more than 4 items
+      { reminderLeads: [15, 15] }, // duplicate lead
+      { reminderDefaultLead: 99 }, // not in reminderLeads
+    ];
+    for (const bad of badCases) {
+      await assertFails(setDoc(featuresRef(), bad, { merge: true }), JSON.stringify(bad));
+    }
+  });
+
+  test('pageHeaders allows notifications page override and handles all 9 pages at max lengths', async () => {
+    const pageHeader = () => ({
+      titleAr: 'ت'.repeat(200),
+      titleEn: 't'.repeat(200),
+      subtitleAr: 'س'.repeat(300),
+      subtitleEn: 's'.repeat(300),
+      introAr: 'م'.repeat(1500),
+      introEn: 'i'.repeat(1500),
+    });
+
+    const allNineHeaders = {
+      about: pageHeader(),
+      schedule: pageHeader(),
+      education: pageHeader(),
+      activities: pageHeader(),
+      clinics: pageHeader(),
+      services: pageHeader(),
+      contact: pageHeader(),
+      ask: pageHeader(),
+      notifications: pageHeader(),
+    };
+
+    // Incremental update of notifications only
+    await assertSucceeds(setDoc(featuresRef(), {
+      pageHeaders: { notifications: pageHeader() },
+    }, { merge: true }));
+
+    // Unrelated update (e.g. heroMotion) still succeeds
+    await assertSucceeds(setDoc(featuresRef(), {
+      heroMotion: false,
+    }, { merge: true }));
+  });
+
+  test('fresh create of settings/features with all 9 page headers at max lengths (expression cap)', async () => {
+    const pageHeader = () => ({
+      titleAr: 'ت'.repeat(200), titleEn: 't'.repeat(200),
+      subtitleAr: 'س'.repeat(300), subtitleEn: 's'.repeat(300),
+      introAr: 'م'.repeat(1500), introEn: 'i'.repeat(1500),
+    });
+    const keys = ['about', 'schedule', 'education', 'activities', 'clinics', 'services', 'contact', 'ask', 'notifications'];
+    // No earlier write in this test: the document does not exist yet (create).
+    await assertSucceeds(setDoc(featuresRef(), {
+      pageHeaders: Object.fromEntries(keys.map((k) => [k, pageHeader()])),
+      heroMotion: true,
+    }));
+  });
+
+  test('whole-document saves: worst-case page headers next to stored ADR-057 fields, and the App screen save next to stored headers', async () => {
+    const pageHeader = (t = 't') => ({
+      titleAr: 'ت'.repeat(200), titleEn: t.repeat(200),
+      subtitleAr: 'س'.repeat(300), subtitleEn: 's'.repeat(300),
+      introAr: 'م'.repeat(1500), introEn: 'i'.repeat(1500),
+    });
+    const keys = ['about', 'schedule', 'education', 'activities', 'clinics', 'services', 'contact', 'ask', 'notifications'];
+    const headers = (t) => Object.fromEntries(keys.map((k) => [k, pageHeader(t)]));
+    const stamp = () => ({ updatedAt: serverTimestamp(), updatedBy: `${EDITOR}@x.test` });
+    // Admin «App & notifications» screen: every ADR-057 field at once.
+    await assertSucceeds(setDoc(featuresRef(), { ...validInstallAndPush, ...stamp() }));
+    // Page-headers screen on that document: all 9 headers rewritten at max
+    // length, the ADR-057 fields unchanged (they cost nothing then).
+    await assertSucceeds(setDoc(featuresRef(), { pageHeaders: headers('a'), ...stamp() }, { merge: true }));
+    await assertSucceeds(setDoc(featuresRef(), { pageHeaders: headers('b'), ...stamp() }, { merge: true }));
+    // App screen again, with the worst-case headers stored and unchanged.
+    await assertSucceeds(setDoc(featuresRef(), { ...validInstallAndPush, installApkBuild: 43, reminderDefaultLead: 15, ...stamp() }, { merge: true }));
+  });
+
+  test('reminderDefaultLead may be cleared to null; unknown keys still rejected next to ADR-057 keys', async () => {
+    await assertSucceeds(setDoc(featuresRef(), validInstallAndPush, { merge: true }));
+    await assertSucceeds(setDoc(featuresRef(), { reminderDefaultLead: null }, { merge: true }));
+    await assertFails(setDoc(featuresRef(), { installPrompt: true, bogusKey: 1 }, { merge: true }));
+    await assertFails(setDoc(featuresRef(), { pushTypes: 'announcements' }, { merge: true }));
+    await assertFails(setDoc(featuresRef(), { reminderLeads: null }, { merge: true }));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ADR-059: Notifications manager, Cloudflare Worker FCM sender & DayEvent IDs
+// ---------------------------------------------------------------------------
+
+describe('ADR-059: settings/notifications (notification manager & FCM sender)', () => {
+  const notifRef = (uid = EDITOR) => doc(db(uid), 'settings', 'notifications');
+  const validRow = (id = 'r1', eventKey = 'lit-123') =>
+    [id, '2026-11-10T10:00:00Z', 'all', 'عظة الأحد', 'Sunday Sermon', 'تفاصيل العظة', 'Sermon details', '/', eventKey].join('\u001f');
+
+  test('anonymous read denied; admin read allowed', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'settings', 'notifications'), { schedule: [] });
+    });
+    await assertFails(getDoc(doc(db(null), 'settings', 'notifications')));
+    await assertFails(getDoc(doc(db(STRANGER), 'settings', 'notifications')));
+    await assertSucceeds(getDoc(notifRef(EDITOR)));
+    await assertSucceeds(getDoc(notifRef(OWNER)));
+  });
+
+  test('admin create/update schedule allowed with valid eventKeys (lit-, meeting-, day-, season-, or empty)', async () => {
+    const rows = [
+      validRow('r1', 'lit-123'),
+      validRow('r2', 'meeting-youth'),
+      validRow('r3', 'day-hash10char'),
+      validRow('r4', 'season-coptic-new-year'),
+      validRow('r5', ''),
+    ];
+    await assertSucceeds(setDoc(notifRef(EDITOR), { schedule: rows }));
+    await assertSucceeds(updateDoc(notifRef(EDITOR), { schedule: [validRow('r1', 'lit-456')] }));
+    await assertSucceeds(updateDoc(notifRef(EDITOR), { schedule: [] }));
+  });
+
+  test('client writes to server-only fields denied', async () => {
+    await assertFails(setDoc(notifRef(EDITOR), { status: { r1: { state: 'ok' } } }, { merge: true }));
+    await assertFails(setDoc(notifRef(EDITOR), { reminderPlan: ['p1'] }, { merge: true }));
+    await assertFails(setDoc(notifRef(EDITOR), { remindersSent: ['s1'] }, { merge: true }));
+    await assertFails(setDoc(notifRef(EDITOR), { health: { cronStatus: 'healthy' } }, { merge: true }));
+    await assertFails(setDoc(notifRef(OWNER), { status: { r1: { state: 'ok' } } }, { merge: true }));
+  });
+
+  test('sentLog: clearing allowed for owner only, appending denied for all', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'settings', 'notifications'), {
+        schedule: [],
+        sentLog: ['log1\u001f2026-11-08T10:00:00Z\u001fall\u001fTitle\u001fTitle\u001f/\u001fok\u001fok'],
+      });
+    });
+    // Non-owner (editor) cannot clear sentLog
+    await assertFails(updateDoc(notifRef(EDITOR), { sentLog: [] }));
+    // Owner can clear sentLog to empty list
+    await assertSucceeds(updateDoc(notifRef(OWNER), { sentLog: [] }));
+    // Neither owner nor editor can append or write non-empty sentLog
+    await assertFails(updateDoc(notifRef(OWNER), { sentLog: ['item1'] }));
+    await assertFails(updateDoc(notifRef(EDITOR), { sentLog: ['item1'] }));
+  });
+
+  test('schedule row limit: max 20 rows, 21 rows rejected', async () => {
+    const twenty = Array.from({ length: 20 }, (_, i) => validRow(`r${i}`, 'lit-1'));
+    await assertSucceeds(setDoc(notifRef(EDITOR), { schedule: twenty }));
+    const twentyOne = Array.from({ length: 21 }, (_, i) => validRow(`r${i}`, 'lit-1'));
+    await assertFails(setDoc(notifRef(EDITOR), { schedule: twentyOne }));
+  });
+
+  test('invalid links and targets rejected in schedule rows', async () => {
+    const badLink = ['r1', '2026-11-10T10:00:00Z', 'all', 'Title', 'Title', 'Body', 'Body', 'https://evil.com', 'lit-1'].join('\u001f');
+    const badTarget = ['r1', '2026-11-10T10:00:00Z', 'ios', 'Title', 'Title', 'Body', 'Body', '/', 'lit-1'].join('\u001f');
+    const badKey = ['r1', '2026-11-10T10:00:00Z', 'all', 'Title', 'Title', 'Body', 'Body', '/', 'unknown-123'].join('\u001f');
+    await assertFails(setDoc(notifRef(EDITOR), { schedule: [badLink] }));
+    await assertFails(setDoc(notifRef(EDITOR), { schedule: [badTarget] }));
+    await assertFails(setDoc(notifRef(EDITOR), { schedule: [badKey] }));
+  });
+});
+
+describe('PR #55: writes exactly as the admin notifications screen makes them', () => {
+  const notifRef = (uid = EDITOR) => doc(db(uid), 'settings', 'notifications');
+  const featRef = (uid = EDITOR) => doc(db(uid), 'settings', 'features');
+  const S = '\u001f';
+  const stamp = (uid = EDITOR) => ({ updatedAt: serverTimestamp(), updatedBy: `${uid}@x.test` });
+  // ScheduledNotification.toRow(): id, whole-second UTC, targets, ar/en texts, link, eventKey.
+  const adminRow = (id, at = '2026-11-10T07:00:00Z') =>
+    [id, at, 'all', 'نهضة السيدة العذراء الليلة', '', 'تبدأ الساعة ٧ مساءً\nبالكنيسة الكبيرة', '', '/church-education/youth', 'meeting-youth'].join(S);
+
+  test('first save creates settings/notifications (doc absent) with the admin stamp', async () => {
+    await assertSucceeds(setDoc(notifRef(), { schedule: [adminRow('ab12cd34')], ...stamp() }, { merge: true }));
+  });
+
+  test('editing the schedule next to sender-owned status/sentLog/health succeeds', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'settings', 'notifications'), {
+        schedule: [adminRow('ab12cd34')],
+        status: { ab12cd34: { state: 'ok' } },
+        sentLog: [['ab12cd34', '2026-11-10T07:07:00.000Z', 'ok', 'x', 'cron'].join(S)],
+        health: { lastRunAt: '2026-11-10T07:07:00.000Z' },
+      });
+    });
+    await assertSucceeds(setDoc(notifRef(), { schedule: [adminRow('ab12cd34'), adminRow('ef56gh78')], ...stamp() }, { merge: true }));
+    await assertSucceeds(setDoc(notifRef(), { schedule: [adminRow('ef56gh78')], ...stamp() }, { merge: true }));
+  });
+
+  test('a send time with milliseconds (old client format) or an empty Arabic body is rejected', async () => {
+    await assertFails(setDoc(notifRef(), { schedule: [adminRow('ab12cd34', '2026-11-10T07:00:00.000Z')] }, { merge: true }));
+    const noBody = ['ab12cd34', '2026-11-10T07:00:00Z', 'all', 'عنوان', '', '', '', '/', ''].join(S);
+    await assertFails(setDoc(notifRef(), { schedule: [noBody] }, { merge: true }));
+  });
+
+  test('settings save from the notifications tab (all keys, one seasons template) succeeds', async () => {
+    await assertSucceeds(setDoc(featRef(), {
+      push: false,
+      pushVapidKey: '',
+      pushTypes: ['announcements', 'seasons', 'reminders'],
+      reminderLeads: [0, 15, 60, 1440],
+      reminderDefaultLead: 60,
+      reminderSources: 'lit,mtg',
+      notifyTypes: [['seasons', '08:30', '2', 'موسم كنسي: {season}', 'Church Season: {season}', 'يبدأ {season} بعد {days} أيام', 'Season of {season} begins in {days} days'].join(S)],
+      ...stamp(),
+    }, { merge: true }));
+    // Every type customised at once (6 rows), each at max lengths.
+    const types = ['announcements', 'verse_daily', 'katameros_daily', 'seasons', 'feasts', 'reminders'];
+    await assertSucceeds(setDoc(featRef(), {
+      notifyTypes: types.map((t) => [t, t === 'announcements' || t === 'reminders' ? '' : '07:00', t === 'seasons' ? '7' : '', 'ع'.repeat(120), 'e'.repeat(120), 'ن'.repeat(300), 'b'.repeat(300)].join(S)),
+      ...stamp(),
+    }, { merge: true }));
+  });
+});
+
+describe('ADR-059: settings/features notifyTypes & reminderSources', () => {
+  const featRef = (uid = EDITOR) => doc(db(uid), 'settings', 'features');
+  const S = '\u001f';
+  const validInstallAndPush = {
+    installPrompt: true,
+    installTitleAr: 'تطبيق الكنيسة على هاتفك',
+    installTitleEn: 'Church app on your phone',
+    installBodyAr: 'تابع القداسات والصلوات والمواسم وتلقّ التنبيهات بسهولة من هاتفك.',
+    installBodyEn: 'Follow liturgies, prayers and seasons with easy updates on your phone.',
+    installAndroidUrl: 'https://example.com/app.apk',
+    installAndroidUrl32: '/app/android/older.apk',
+    installApkVersion: '1.1.0',
+    installApkBuild: 42,
+    installApkSizeMb: 18.4,
+    installApkSize32Mb: 17.9,
+    installReshowDays: 30,
+    installRemindDays: 3,
+    push: true,
+    pushVapidKey: 'BKAGkFj27-exampleVapidKey890123456789012345678901234567890123456789012345678901234567890',
+    pushTypes: ['announcements', 'verse_daily', 'katameros_daily', 'seasons', 'feasts', 'reminders'],
+    reminderLeads: [0, 15, 60, 1440],
+    reminderDefaultLead: 60,
+  };
+
+  test('valid notifyTypes and reminderSources are accepted', async () => {
+    const validNotifyTypes = [
+      ['verse_daily', '07:00', '', 'آية اليوم', 'Verse of the Day', '{verse}', '{verse}'].join(S),
+      ['katameros_daily', '06:30', '', 'قراءات اليوم', 'Daily Katameros', '{reading}', '{reading}'].join(S),
+      ['seasons', '07:00', '3', 'المواسم الكنسية', 'Church Seasons', '{season}', '{season}'].join(S),
+      ['feasts', '07:30', '', 'أعياد ومناسبات', 'Feasts & Occasions', '{feast}', '{feast}'].join(S),
+      ['announcements', '20:00', '', 'تنبيه هام', 'Announcement', '{event}', '{event}'].join(S),
+      ['reminders', '', '', 'تذكير بموعد', 'Reminder', '{event}', '{event}'].join(S),
+    ];
+
+    await assertSucceeds(setDoc(featRef(), {
+      notifyTypes: validNotifyTypes,
+      reminderSources: 'lit,mtg,day',
+    }, { merge: true }));
+
+    await assertSucceeds(setDoc(featRef(), { reminderSources: '' }, { merge: true }));
+    await assertSucceeds(setDoc(featRef(), { reminderSources: 'lit' }, { merge: true }));
+    await assertSucceeds(setDoc(featRef(), { reminderSources: 'lit,mtg' }, { merge: true }));
+    await assertSucceeds(setDoc(featRef(), { notifyTypes: [] }, { merge: true }));
+  });
+
+  test('invalid notifyTypes and reminderSources are rejected', async () => {
+    // Bad type id
+    await assertFails(setDoc(featRef(), {
+      notifyTypes: [['bad_type', '07:00', '', 'Title', 'Title', 'Body', 'Body'].join(S)],
+    }, { merge: true }));
+
+    // Bad time
+    await assertFails(setDoc(featRef(), {
+      notifyTypes: [['verse_daily', '25:00', '', 'Title', 'Title', 'Body', 'Body'].join(S)],
+    }, { merge: true }));
+
+    // Bad daysBefore (> 14)
+    await assertFails(setDoc(featRef(), {
+      notifyTypes: [['seasons', '07:00', '15', 'Title', 'Title', 'Body', 'Body'].join(S)],
+    }, { merge: true }));
+
+    // More than 6 rows
+    const sevenRows = Array.from({ length: 7 }, () =>
+      ['verse_daily', '07:00', '', 'Title', 'Title', 'Body', 'Body'].join(S)
+    );
+    await assertFails(setDoc(featRef(), { notifyTypes: sevenRows }, { merge: true }));
+
+    // Invalid reminderSources
+    await assertFails(setDoc(featRef(), { reminderSources: 'invalid' }, { merge: true }));
+    await assertFails(setDoc(featRef(), { reminderSources: 'lit,lit' }, { merge: true }));
+    await assertFails(setDoc(featRef(), { reminderSources: 'lit,mtg,day,extra' }, { merge: true }));
+  });
+
+  test('expression budget: whole-doc save with notifyTypes, reminderSources, install and push fields', async () => {
+    const stamp = () => ({ updatedAt: serverTimestamp(), updatedBy: `${EDITOR}@x.test` });
+    const fullPayload = {
+      ...validInstallAndPush,
+      notifyTypes: [
+        ['verse_daily', '07:00', '', 'آية اليوم', 'Verse of the Day', '{verse}', '{verse}'].join(S),
+        ['seasons', '07:00', '3', 'المواسم', 'Seasons', '{season}', '{season}'].join(S),
+      ],
+      reminderSources: 'lit,mtg,day',
+      ...stamp(),
+    };
+    await assertSucceeds(setDoc(featRef(), fullPayload, { merge: true }));
+  });
+});
+
+describe('ADR-059: validDayEvent 17th field (DayEvent.id)', () => {
+  const featRef = (uid = EDITOR) => doc(db(uid), 'settings', 'features');
+  const S = '\u001f';
+
+  // Base 13 fields (ADR-039 / ADR-040)
+  const base13 = [
+    '2026-11-04', '', '19:00', '21:00', 'عنوان اليوم', 'Title En',
+    'متكلم', 'Speaker', 'موضوع', 'Topic', 'ملاحظة', 'Note', '/',
+  ];
+
+  test('13 fields (legacy without pdf/labels/id) is accepted', async () => {
+    await assertSucceeds(setDoc(featRef(), {
+      dayEvents: [base13.join(S)],
+    }, { merge: true }));
+  });
+
+  test('16 fields (with pdf and labels, without id) is accepted', async () => {
+    const ev16 = [...base13, 'https://example.com/guide.pdf', 'labelAr', 'labelEn'];
+    await assertSucceeds(setDoc(featRef(), {
+      dayEvents: [ev16.join(S)],
+    }, { merge: true }));
+  });
+
+  test('17 fields with 8-char random ID or 10-char SHA-1 hex ID is accepted', async () => {
+    const ev17Random = [...base13, 'https://example.com/guide.pdf', 'labelAr', 'labelEn', 'a1b2c3d4'];
+    const ev17Sha1 = [...base13, 'https://example.com/guide.pdf', 'labelAr', 'labelEn', '1234567890'];
+    const ev17EmptyId = [...base13, 'https://example.com/guide.pdf', 'labelAr', 'labelEn', ''];
+
+    await assertSucceeds(setDoc(featRef(), {
+      dayEvents: [ev17Random.join(S), ev17Sha1.join(S), ev17EmptyId.join(S)],
+    }, { merge: true }));
+  });
+
+  test('invalid 17th field is rejected', async () => {
+    // Uppercase rejected
+    const badUpper = [...base13, '', '', '', 'ABCDEFGH'];
+    await assertFails(setDoc(featRef(), { dayEvents: [badUpper.join(S)] }, { merge: true }));
+
+    // 7 characters rejected (< 8)
+    const badShort = [...base13, '', '', '', 'abcdefg'];
+    await assertFails(setDoc(featRef(), { dayEvents: [badShort.join(S)] }, { merge: true }));
+
+    // 11 characters rejected (> 10)
+    const badLong = [...base13, '', '', '', 'abcdefghijk'];
+    await assertFails(setDoc(featRef(), { dayEvents: [badLong.join(S)] }, { merge: true }));
+
+    // Non-alphanumeric rejected
+    const badSymbols = [...base13, '', '', '', 'abc-defg'];
+    await assertFails(setDoc(featRef(), { dayEvents: [badSymbols.join(S)] }, { merge: true }));
+  });
+});
+
+describe('ADR-060: Web push rules (push_queue, meta/push_rate, meta/push_topics, meta/push_plan)', () => {
+  const getUtcDay = (d = new Date()) =>
+    d.getUTCFullYear() * 10000 + (d.getUTCMonth() + 1) * 100 + d.getUTCDate();
+
+  const resetRate = () =>
+    env.withSecurityRulesDisabled(async (ctx) =>
+      deleteDoc(doc(ctx.firestore(), 'meta', 'push_rate'))
+    );
+
+  const seedRate = (data) =>
+    env.withSecurityRulesDisabled(async (ctx) =>
+      setDoc(doc(ctx.firestore(), 'meta', 'push_rate'), data)
+    );
+
+  const seedMeta = (metaDoc, data) =>
+    env.withSecurityRulesDisabled(async (ctx) =>
+      setDoc(doc(ctx.firestore(), 'meta', metaDoc), data)
+    );
+
+  let queueSeq = 0;
+  function pushBatch(fs, { queueData, rateData, queueId } = {}) {
+    queueSeq++;
+    const qid = queueId ?? `queueDoc${String(queueSeq).padStart(4, '0')}${Date.now()}`;
+    const batch = writeBatch(fs);
+    const qRef = doc(fs, 'push_queue', qid);
+    const rate = {
+      lastAt: serverTimestamp(),
+      lastId: qid,
+      day: getUtcDay(),
+      count: 1,
+      ...rateData,
+    };
+    // Ensure lastId matches qid unless explicitly overridden for failure tests
+    if (!rateData?.lastId) {
+      rate.lastId = qid;
+    }
+    const defaultQueue = {
+      token: 'A'.repeat(120),
+      want: ['web_announcements_ar', 'web_seasons_ar'],
+      createdAt: serverTimestamp(),
+    };
+    batch.set(qRef, queueData ?? defaultQueue);
+    batch.set(doc(fs, 'meta', 'push_rate'), rate, { merge: true });
+    return { batch, qRef };
+  }
+
+  test('valid opt-in batch with recurring and once-off topics succeeds', async () => {
+    await resetRate();
+    const pub = db(null);
+    const max30Topics = Array.from({ length: 30 }, (_, i) =>
+      `web_rem_lit-${'x'.repeat(40)}_60_ar`
+    ).join(',');
+
+    const { batch } = pushBatch(pub, {
+      queueData: {
+        token: 'token_' + 'b'.repeat(120),
+        want: ['web_announcements_ar', 'web_seasons_ar'],
+        rem: 'web_rem_lit-sun1_60_ar,web_rem_day-5d16df6bbc_20261115_15_ar',
+        drop: 'web_rem_season-pascha_1440_ar',
+        createdAt: serverTimestamp(),
+      },
+    });
+    await assertSucceeds(batch.commit());
+
+    // 30 max-length topics under size <= 2600
+    await resetRate();
+    const { batch: b30 } = pushBatch(pub, {
+      queueId: 'queueDocMax30Topics1234',
+      queueData: {
+        token: 'token_' + 'c'.repeat(120),
+        want: ['web_announcements_en'],
+        rem: max30Topics,
+        createdAt: serverTimestamp(),
+      },
+    });
+    await assertSucceeds(b30.commit());
+
+    // want: [] unsubscribe-all succeeds
+    await resetRate();
+    const { batch: bUnsub } = pushBatch(pub, {
+      queueId: 'queueDocUnsub12345678',
+      queueData: {
+        token: 'token_' + 'd'.repeat(120),
+        want: [],
+        rem: '',
+        drop: 'web_rem_lit-sun1_60_ar',
+        createdAt: serverTimestamp(),
+      },
+    });
+    await assertSucceeds(bUnsub.commit());
+  });
+
+  test('standalone push_queue or standalone meta/push_rate is denied', async () => {
+    await resetRate();
+    const pub = db(null);
+
+    // Standalone push_queue without meta/push_rate
+    await assertFails(setDoc(doc(pub, 'push_queue', 'alone1234567890'), {
+      token: 'A'.repeat(120),
+      want: ['web_announcements_ar'],
+      createdAt: serverTimestamp(),
+    }));
+
+    // Standalone meta/push_rate without creating push_queue doc
+    await assertFails(setDoc(doc(pub, 'meta', 'push_rate'), {
+      lastAt: serverTimestamp(),
+      lastId: 'nonexistent12345678',
+      day: getUtcDay(),
+      count: 1,
+    }));
+  });
+
+  test('throttle spacing: write within 3 seconds is denied', async () => {
+    await resetRate();
+    const pub = db(null);
+
+    // Seed a rate doc whose lastAt is recent (less than 3 seconds ago)
+    await seedRate({
+      lastAt: serverTimestamp(),
+      lastId: 'prev1234567890',
+      day: getUtcDay(),
+      count: 1,
+    });
+
+    const { batch } = pushBatch(pub, {
+      rateData: {
+        lastAt: serverTimestamp(),
+        day: getUtcDay(),
+        count: 2,
+      },
+    });
+    await assertFails(batch.commit());
+  });
+
+  test('daily cap: count == 1001 is denied', async () => {
+    await resetRate();
+    const pub = db(null);
+
+    const pastDate = new Date(Date.now() - 5000);
+    await seedRate({
+      lastAt: Timestamp.fromDate(pastDate),
+      lastId: 'prev1234567890',
+      day: getUtcDay(),
+      count: 1000,
+    });
+
+    const { batch } = pushBatch(pub, {
+      rateData: {
+        lastAt: serverTimestamp(),
+        day: getUtcDay(),
+        count: 1001,
+      },
+    });
+    await assertFails(batch.commit());
+  });
+
+  test('increment(1) on same UTC day is allowed without reading meta/push_rate', async () => {
+    await resetRate();
+    const pub = db(null);
+
+    const pastDate = new Date(Date.now() - 5000);
+    await seedRate({
+      lastAt: Timestamp.fromDate(pastDate),
+      lastId: 'prev1234567890',
+      day: getUtcDay(),
+      count: 5,
+    });
+
+    const { batch } = pushBatch(pub, {
+      rateData: {
+        lastAt: serverTimestamp(),
+        day: getUtcDay(),
+        count: increment(1),
+      },
+    });
+    await assertSucceeds(batch.commit());
+  });
+
+  test('UTC day rollover: increment(1) denied, literal count: 1 allowed', async () => {
+    await resetRate();
+    const pub = db(null);
+
+    const yesterdayUtcInt = 20261108; // yesterday
+    const todayUtcInt = getUtcDay(); // today
+    const pastDate = new Date(Date.now() - 5000);
+
+    await seedRate({
+      lastAt: Timestamp.fromDate(pastDate),
+      lastId: 'prev1234567890',
+      day: yesterdayUtcInt,
+      count: 42,
+    });
+
+    // increment(1) yields 43 != 1 on a new day -> denied
+    const { batch: bInc } = pushBatch(pub, {
+      rateData: {
+        lastAt: serverTimestamp(),
+        day: todayUtcInt,
+        count: increment(1),
+      },
+    });
+    await assertFails(bInc.commit());
+
+    // count: 2 on a new day -> denied
+    const { batch: bCount2 } = pushBatch(pub, {
+      rateData: {
+        lastAt: serverTimestamp(),
+        day: todayUtcInt,
+        count: 2,
+      },
+    });
+    await assertFails(bCount2.commit());
+
+    // wrong day integer -> denied
+    const { batch: bWrongDay } = pushBatch(pub, {
+      rateData: {
+        lastAt: serverTimestamp(),
+        day: 20261101,
+        count: 1,
+      },
+    });
+    await assertFails(bWrongDay.commit());
+
+    // literal count: 1 on a new day -> allowed
+    const { batch: bCount1 } = pushBatch(pub, {
+      rateData: {
+        lastAt: serverTimestamp(),
+        day: todayUtcInt,
+        count: 1,
+      },
+    });
+    await assertSucceeds(bCount1.commit());
+  });
+
+  test('invalid topics, tokens, and leads are denied', async () => {
+    await resetRate();
+    const pub = db(null);
+
+    // Malformed token
+    const { batch: bBadToken } = pushBatch(pub, {
+      queueData: {
+        token: 'short',
+        want: ['web_announcements_ar'],
+        createdAt: serverTimestamp(),
+      },
+    });
+    await assertFails(bBadToken.commit());
+
+    // Local-owned or illegal want topic
+    const { batch: bVerse } = pushBatch(pub, {
+      queueData: {
+        token: 'A'.repeat(120),
+        want: ['web_verse_daily_ar'],
+        createdAt: serverTimestamp(),
+      },
+    });
+    await assertFails(bVerse.commit());
+
+    const { batch: bAppTopic } = pushBatch(pub, {
+      queueData: {
+        token: 'A'.repeat(120),
+        want: ['app_announcements_ar'],
+        createdAt: serverTimestamp(),
+      },
+    });
+    await assertFails(bAppTopic.commit());
+
+    // Uppercase in rem
+    const { batch: bUpper } = pushBatch(pub, {
+      queueData: {
+        token: 'A'.repeat(120),
+        want: ['web_announcements_ar'],
+        rem: 'web_rem_lit-SUN1_60_ar',
+        createdAt: serverTimestamp(),
+      },
+    });
+    await assertFails(bUpper.commit());
+
+    // Suffix > 40 characters
+    const { batch: bLongSuffix } = pushBatch(pub, {
+      queueData: {
+        token: 'A'.repeat(120),
+        want: ['web_announcements_ar'],
+        rem: `web_rem_lit-${'a'.repeat(41)}_60_ar`,
+        createdAt: serverTimestamp(),
+      },
+    });
+    await assertFails(bLongSuffix.commit());
+
+    // Invalid lead (7 minutes)
+    const { batch: bBadLead } = pushBatch(pub, {
+      queueData: {
+        token: 'A'.repeat(120),
+        want: ['web_announcements_ar'],
+        rem: 'web_rem_lit-sun1_7_ar',
+        createdAt: serverTimestamp(),
+      },
+    });
+    await assertFails(bBadLead.commit());
+
+    // 31st topic in rem
+    const rem31 = Array.from({ length: 31 }, (_, i) => `web_rem_lit-${i}_60_ar`).join(',');
+    const { batch: b31 } = pushBatch(pub, {
+      queueData: {
+        token: 'A'.repeat(120),
+        want: ['web_announcements_ar'],
+        rem: rem31,
+        createdAt: serverTimestamp(),
+      },
+    });
+    await assertFails(b31.commit());
+  });
+
+  test('visitor cannot read, update, or delete push_queue or meta/push_rate', async () => {
+    const pub = db(null);
+    await assertFails(getDoc(doc(pub, 'push_queue', 'anyDoc')));
+    await assertFails(getDocs(collection(pub, 'push_queue')));
+    await assertFails(updateDoc(doc(pub, 'push_queue', 'anyDoc'), { token: 'new' }));
+    await assertFails(deleteDoc(doc(pub, 'push_queue', 'anyDoc')));
+
+    await assertFails(getDoc(doc(pub, 'meta', 'push_rate')));
+    await assertFails(deleteDoc(doc(pub, 'meta', 'push_rate')));
+  });
+
+  test('admin can read meta/push_topics & meta/push_plan; visitors cannot; admin writes denied', async () => {
+    await seedMeta('push_topics', { topics: { 'web_rem_lit-1_60_ar': true } });
+    await seedMeta('push_plan', { reminderPlan: [] });
+
+    // Admin read allowed
+    await assertSucceeds(getDoc(doc(db(EDITOR), 'meta', 'push_topics')));
+    await assertSucceeds(getDoc(doc(db(OWNER), 'meta', 'push_plan')));
+
+    // Visitor read denied
+    await assertFails(getDoc(doc(db(null), 'meta', 'push_topics')));
+    await assertFails(getDoc(doc(db(null), 'meta', 'push_plan')));
+
+    // Admin write denied
+    await assertFails(setDoc(doc(db(EDITOR), 'meta', 'push_topics'), { topics: {} }));
+    await assertFails(setDoc(doc(db(OWNER), 'meta', 'push_plan'), { reminderPlan: [] }));
+    await assertFails(deleteDoc(doc(db(OWNER), 'meta', 'push_topics')));
+  });
+
+  test('explicit read-denial: both visitors AND admins denied get on meta/push_rate and meta/contact_rate', async () => {
+    // Unauthenticated visitor
+    await assertFails(getDoc(doc(db(null), 'meta', 'push_rate')));
+    await assertFails(getDoc(doc(db(null), 'meta', 'contact_rate')));
+
+    // Editor admin
+    await assertFails(getDoc(doc(db(EDITOR), 'meta', 'push_rate')));
+    await assertFails(getDoc(doc(db(EDITOR), 'meta', 'contact_rate')));
+
+    // Owner admin
+    await assertFails(getDoc(doc(db(OWNER), 'meta', 'push_rate')));
+    await assertFails(getDoc(doc(db(OWNER), 'meta', 'contact_rate')));
+  });
+});
+
+

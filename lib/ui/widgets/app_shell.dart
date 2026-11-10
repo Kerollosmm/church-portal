@@ -1,17 +1,23 @@
-import 'package:flutter/services.dart' show SystemUiOverlayStyle;
+import 'dart:async';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/services.dart' show SystemNavigator, SystemUiOverlayStyle;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../../core/l10n.dart';
 import '../../core/theme.dart';
+import '../../data/error_reporting.dart';
+import '../../data/web_push_repository.dart' deferred as web_push;
 import '../../domain/features.dart';
 import '../../domain/item_detail.dart';
 import '../../state/providers.dart';
 import '../pages/category_page.dart' show categoryIcon;
 import 'coptic_cross.dart';
 import 'golden.dart';
+import 'install_banner.dart';
 import 'today_widgets.dart';
+import 'update_banner.dart';
 
 class NavItem {
   final String key;
@@ -62,8 +68,23 @@ const askNavItem = NavItem('ask', '/ask', Icons.auto_awesome_rounded);
 /// (`/clinics/<id>`, `/about/priests/<id>`…) returns to the page listing it
 /// (milestones: About, or Home when the admin lists them on Home only,
 /// ADR-052); every other route goes Home.
-String parentRouteOf(String location, [FeatureSettings features = FeatureSettings.defaults]) =>
-    parseDetailPath(location)?.$1.parentPathIn(features) ?? '/';
+/// Whether the shell shows the full desktop link bar (no phone Back arrow).
+/// Compared in unscaled-text units so large system text gets the compact bar.
+bool shellIsWide(BuildContext context) {
+  final textScale = MediaQuery.textScalerOf(context).scale(16) / 16;
+  return MediaQuery.sizeOf(context).width / textScale.clamp(1.0, 3.0) >= 1024;
+}
+
+/// Where the phone Back arrow goes from [location]: an item detail page
+/// (`/clinics/<id>`, `/about/priests/<id>`…) returns to the page listing it
+/// (milestones: About, or Home when the admin lists them on Home only,
+/// ADR-052); every other route goes Home.
+String parentRouteOf(String location, [FeatureSettings features = FeatureSettings.defaults]) {
+  final path = Uri.tryParse(location)?.path ?? location;
+  final norm = path.endsWith('/') && path.length > 1 ? path.substring(0, path.length - 1) : path;
+  if (norm == '/notifications/battery') return '/notifications';
+  return parseDetailPath(location)?.$1.parentPathIn(features) ?? '/';
+}
 
 /// l10n key naming the page [parentRoute] (for "Back to …").
 String _parentLabelKey(String parentRoute) => switch (parentRoute) {
@@ -72,6 +93,7 @@ String _parentLabelKey(String parentRoute) => switch (parentRoute) {
       '/clinics' => 'clinics',
       '/public-services' => 'publicServices',
       '/about' => 'about',
+      '/notifications' => 'notifications',
       _ => 'home',
     };
 
@@ -103,17 +125,97 @@ class AppShell extends ConsumerStatefulWidget {
 }
 
 class _AppShellState extends ConsumerState<AppShell> {
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   bool _drawerOpen = false;
+  DateTime? _lastBackPressTime;
+  StreamSubscription<String>? _deepLinksSub;
 
   String get location => widget.location;
 
   @override
+  void initState() {
+    super.initState();
+    if (kIsWeb) {
+      _initWebPush();
+    }
+  }
+
+  void _initWebPush() {
+    final pushEnv = ref.read(pushEnvProvider);
+    _deepLinksSub = pushEnv.deepLinks.listen((link) {
+      if (mounted && link.isNotEmpty) {
+        context.go(link);
+      }
+    });
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      try {
+        final prefs = ref.read(pushPrefsProvider);
+        if (prefs.types.isNotEmpty) {
+          try {
+            await web_push.loadLibrary();
+          } catch (e, st) {
+            ErrorReporting.capture(e, st, section: 'deferred_chunk', source: 'web_push_repository');
+            return;
+          }
+          try {
+            final repo = web_push.WebPushRepository(pushEnv: pushEnv);
+            if (repo.syncedToken != null) {
+              final pushSettings = ref.read(pushSettingsProvider);
+              if (pushSettings.webReady) {
+                await repo.maybeRefreshTokenOnPushSurface(vapidKey: pushSettings.vapidKey);
+              }
+            }
+          } catch (e, st) {
+            ErrorReporting.capture(e, st, section: 'notifications', source: 'web_push_refresh');
+          }
+        }
+      } catch (e, st) {
+        ErrorReporting.capture(e, st, section: 'notifications', source: 'app_shell_post_frame');
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _deepLinksSub?.cancel();
+    super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(covariant AppShell oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.location != widget.location) {
+      if (!widget.location.startsWith('/readings')) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            ref.read(readerFocusModeProvider.notifier).setFocus(false);
+          }
+        });
+      }
+      if (widget.location.contains('from_push=1')) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            ref.invalidate(nowProvider);
+            ref.invalidate(todaySettingsProvider);
+          }
+        });
+      }
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final isReadingRoute = location.startsWith('/readings');
+    final focusMode = isReadingRoute && ref.watch(readerFocusModeProvider);
     // Large system text makes the full link bar overflow: compare the width
     // in "unscaled text" units so big text switches to the compact bar.
+    final size = MediaQuery.sizeOf(context);
+    final width = size.width;
+    final height = size.height;
+    final wide = shellIsWide(context);
+    final isLandscapeShort = height < kLandscapeShortHeight;
     final textScale = MediaQuery.textScalerOf(context).scale(16) / 16;
-    final width = MediaQuery.sizeOf(context).width;
-    final wide = width / textScale.clamp(1.0, 3.0) >= 1024;
     // Subpages on phones get a 1-tap Back-to-Home arrow: every in-app link is
     // a sibling route (context.go), so there is nothing to pop, and installed
     // PWAs have no browser back button.
@@ -138,7 +240,7 @@ class _AppShellState extends ConsumerState<AppShell> {
     // The badge hides on Home while the live banner shows there (ADR-044).
     final liveBadge =
         ref.watch(nowProvider.select((n) => todaySettings.liveBadgeOn(n.value ?? DateTime.now(), location)));
-    final showTopBar = ready && (TopUtilityBar.shownOn(todaySettings.copticStrip, location) || liveBadge);
+    final showTopBar = ready && !isLandscapeShort && (TopUtilityBar.shownOn(todaySettings.copticStrip, location) || liveBadge);
     final topBarH = showTopBar ? TopUtilityBar.heightFor(context) : 0.0;
     // No Clinics shortcut in the bar (owner request, 4 Nov 2026): clinics stay
     // reachable from the drawer / Services menu and Home when their section is on.
@@ -147,15 +249,19 @@ class _AppShellState extends ConsumerState<AppShell> {
     final fullName = settings == null ? context.tr('appName') : context.pick(settings.nameAr, settings.nameEn);
     final primary = context.pal.primary;
     // The hanging seal tab (start corner, after the Back arrow on phones).
-    final tabW = wide ? 88.0 : 64.0;
-    final tabH = wide ? 108.0 : 80.0;
+    final ultraNarrow = !wide && width < 360;
+    final hideBarLang = showBack && ultraNarrow;
+    final tabW = wide ? 88.0 : (ultraNarrow ? 54.0 : 64.0);
+    final tabH = wide ? 108.0 : (ultraNarrow ? 70.0 : 80.0);
     final tabStart = (showBack ? 48.0 : 0.0) + (wide ? 24.0 : 6.0);
-    final tabSpace = tabW + (wide ? 12.0 : 8.0) - (wide ? 0 : (showBack ? 0 : 6));
+    final titleSpacingVal = wide ? 24.0 : (showBack ? 0.0 : 6.0);
+    final leadingEnd = showBack ? 48.0 : 0.0;
+    final tabSpace = (tabStart + tabW + (wide ? 12.0 : 6.0)) - (leadingEnd + titleSpacingVal);
 
     final mainAppBar = AppBar(
       primary: !showTopBar,
       toolbarHeight: wide ? 76 : 64,
-      titleSpacing: wide ? 24 : (showBack ? 0 : 6),
+      titleSpacing: titleSpacingVal,
       leadingWidth: showBack ? 48 : null,
       shape: Border(bottom: BorderSide(color: context.pal.ornament.withValues(alpha: 0.35))),
       leading: showBack
@@ -173,7 +279,7 @@ class _AppShellState extends ConsumerState<AppShell> {
           // The seal hangs in the tab at the start corner: the title keeps
           // its room. Wide bars with many entries (or very large text)
           // leave little width: the name then disappears, never overflows.
-          if (c.maxWidth < tabSpace + 70) return SizedBox(width: c.maxWidth.clamp(0, tabSpace));
+          if (c.maxWidth < tabSpace + 56) return SizedBox(width: c.maxWidth.clamp(0, tabSpace));
           return Row(mainAxisSize: MainAxisSize.min, children: [
             SizedBox(width: tabSpace),
             // The full name is long: on wide screens show it under the short
@@ -181,9 +287,10 @@ class _AppShellState extends ConsumerState<AppShell> {
             Flexible(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
                 Text(context.tr('appShort'),
+                    key: const Key('appBarShortTitle'),
                     maxLines: wide ? 1 : 2,
                     overflow: TextOverflow.ellipsis,
-                    style: displayStyle(context, size: wide ? 23 : 17, color: primary, height: 1.25)),
+                    style: displayStyle(context, size: wide ? 23 : (ultraNarrow ? 15 : 17), color: primary, height: ultraNarrow ? 1.15 : 1.25)),
                 if (wide)
                   Text(fullName,
                       maxLines: 1,
@@ -214,15 +321,18 @@ class _AppShellState extends ConsumerState<AppShell> {
           ),
           const SizedBox(width: 8),
         ],
-        IconButton(
-          tooltip: context.tr('language'),
-          onPressed: () => ref.read(localeProvider.notifier).toggle(),
-          style: IconButton.styleFrom(
-              backgroundColor: context.pal.surface, side: BorderSide(color: context.pal.hairline, width: 1.5)),
-          icon: Text(context.isAr ? 'EN' : 'ع',
-              style: TextStyle(fontWeight: FontWeight.w700, color: context.pal.goldText, fontSize: 15)),
-        ),
-        const SizedBox(width: 6),
+        if (!hideBarLang) ...[
+          IconButton(
+            key: const Key('appBarLanguageToggle'),
+            tooltip: context.tr('language'),
+            onPressed: () => ref.read(localeProvider.notifier).toggle(),
+            style: IconButton.styleFrom(
+                backgroundColor: context.pal.surface, side: BorderSide(color: context.pal.hairline, width: 1.5)),
+            icon: Text(context.isAr ? 'EN' : 'ع',
+                style: TextStyle(fontWeight: FontWeight.w700, color: context.pal.goldText, fontSize: 15)),
+          ),
+          const SizedBox(width: 6),
+        ],
         if (showMass) ...[
           _HighlightButton(
             label: context.tr('massSchedule'),
@@ -246,10 +356,20 @@ class _AppShellState extends ConsumerState<AppShell> {
     );
 
     final scaffold = Scaffold(
+      key: _scaffoldKey,
       onEndDrawerChanged: (open) => setState(() => _drawerOpen = open),
       appBar: PreferredSize(
-        preferredSize: Size.fromHeight(topBarH + (wide ? 76.0 : 64.0)),
-        child: Column(
+        preferredSize: Size.fromHeight(focusMode ? 0.0 : (topBarH + (wide ? 76.0 : 64.0))),
+        child: AnimatedSize(
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.easeInOut,
+          child: AnimatedSlide(
+            offset: focusMode ? const Offset(0, -1.0) : Offset.zero,
+            duration: const Duration(milliseconds: 250),
+            curve: Curves.easeInOut,
+            child: focusMode
+                ? const SizedBox.shrink()
+                : Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             if (showTopBar) ...[
@@ -276,6 +396,8 @@ class _AppShellState extends ConsumerState<AppShell> {
               mainAppBar,
           ],
         ),
+          ),
+        ),
       ),
       endDrawer: wide ? null : _AppDrawer(location: location, showAsk: showAsk),
       body: Stack(children: [
@@ -283,18 +405,45 @@ class _AppShellState extends ConsumerState<AppShell> {
         // Today layer (ADR-040): while the church is streaming,
         // the live banner sits above every page.
         Column(children: [
-          const LiveStreamBanner(),
+          AnimatedSize(
+            duration: const Duration(milliseconds: 250),
+            curve: Curves.easeInOut,
+            child: AnimatedSlide(
+              offset: focusMode ? const Offset(0, -1.0) : Offset.zero,
+              duration: const Duration(milliseconds: 250),
+              curve: Curves.easeInOut,
+              child: focusMode
+                  ? const SizedBox.shrink()
+                  : Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (!kIsWeb) const UpdateBanner(),
+                        const LiveStreamBanner(),
+                      ],
+                    ),
+            ),
+          ),
           Expanded(child: widget.child),
         ]),
       ]),
     );
-    return Stack(children: [
+    final content = Stack(children: [
       scaffold,
       if (!_drawerOpen)
         PositionedDirectional(
           start: tabStart,
           top: MediaQuery.paddingOf(context).top + topBarH,
-          child: Semantics(
+          child: AnimatedSlide(
+            offset: focusMode ? const Offset(0, -1.2) : Offset.zero,
+            duration: const Duration(milliseconds: 250),
+            curve: Curves.easeInOut,
+            child: AnimatedOpacity(
+              opacity: focusMode ? 0.0 : 1.0,
+              duration: const Duration(milliseconds: 250),
+              curve: Curves.easeInOut,
+              child: IgnorePointer(
+                ignoring: focusMode,
+                child: Semantics(
             link: true,
             label: '${context.tr('logoLabel')} — ${context.tr('home')}',
             excludeSemantics: true,
@@ -305,7 +454,49 @@ class _AppShellState extends ConsumerState<AppShell> {
             ),
           ),
         ),
+            ),
+          ),
+        ),
+      PositionedDirectional(
+        start: 0,
+        end: 0,
+        bottom: 0,
+        // Hidden (not disposed: keeps its delay / dismiss state) while the
+        // drawer is open.
+        child: Offstage(offstage: _drawerOpen || focusMode, child: InstallBanner(currentPath: location)),
+      ),
     ]);
+
+    if (kIsWeb) return content;
+
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        if (_drawerOpen || (_scaffoldKey.currentState?.isEndDrawerOpen ?? false)) {
+          _scaffoldKey.currentState?.closeEndDrawer();
+          setState(() => _drawerOpen = false);
+          return;
+        }
+        if (location != '/') {
+          context.go(parentRouteOf(location, ref.read(featuresProvider)));
+          return;
+        }
+        final now = DateTime.now();
+        if (_lastBackPressTime != null && now.difference(_lastBackPressTime!) <= const Duration(seconds: 2)) {
+          SystemNavigator.pop();
+        } else {
+          _lastBackPressTime = now;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(context.tr('exitAppConfirm')),
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
+      },
+      child: content,
+    );
   }
 
   Widget _navItemText(BuildContext context, NavItem item) {
@@ -456,9 +647,11 @@ class _AppDrawer extends ConsumerWidget {
     final settings = ref.watch(settingsProvider).value;
     final primary = context.pal.primary;
     final custom = customNavItems(ref);
+    final pushOn = ref.watch(pushSettingsProvider.select((p) => p.enabled));
     final church = [
       for (final i in items) if (!serviceNavPaths.contains(i.path) && i.path != '/ask') i,
       ...custom.pages,
+      if (pushOn) const NavItem('notifications', '/notifications', Icons.notifications_outlined),
     ];
     final services = [
       for (final i in items) if (serviceNavPaths.contains(i.path) || i.path == '/ask') i,
@@ -536,6 +729,31 @@ class _AppDrawer extends ConsumerWidget {
             const SizedBox(height: 6),
             if (church.isNotEmpty) group(context.tr('navChurch'), church),
             if (services.isNotEmpty) group(context.tr('churchServices'), services),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              child: ListTile(
+                key: const Key('drawerLanguageToggle'),
+                minTileHeight: 48,
+                leading: Icon(Icons.language_rounded, color: primary, size: 22),
+                title: Text(context.tr('language'), style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+                trailing: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: context.pal.surface,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: context.pal.hairline, width: 1.5),
+                  ),
+                  child: Text(
+                    context.isAr ? 'EN' : 'ع',
+                    style: TextStyle(fontWeight: FontWeight.w700, color: context.pal.goldText, fontSize: 13),
+                  ),
+                ),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  ref.read(localeProvider.notifier).toggle();
+                },
+              ),
+            ),
             const SizedBox(height: 16),
           ]),
         ),

@@ -61,7 +61,8 @@ images on Hosting (ADR-046); PR #40 English verse of the day — bundled public-
 documentation suite in `documentation/en/`, comprehensive project README overhaul with framework logos, and cross-references (ADR-048);
 PR #42 season card timing — «يُقام الآن» names the services running now in other halls, overnight services and cross-midnight parallels,
 a readable seasonal switch on every theme, the day-to-night handover tested minute by minute, admin 12-hour (AM/PM)
-time and date pickers, stored 24-hour (ADR-049)).
+time and date pickers, stored 24-hour (ADR-049)). **Phase 2 (notifications & mobile apps)** is planned in
+[`docs/plans/phase2/`](../plans/phase2/README.md) (ADR-056; start with `HANDOFF.md` and `STATUS.md`; PR A ADR-057 install banner & prefs, PR B ADR-058 Android APK & local alarms, PR C ADR-059 notification manager, Cloudflare Worker FCM sender & deep links).
 
 > **Golden rule:** read this folder before changing anything, and update it in the same PR as every change that
 > alters behaviour, data shape, rules, workflows, content status or open tasks.

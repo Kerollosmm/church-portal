@@ -1,7 +1,7 @@
 # 11 — Open tasks
 
 Tick items off (or delete them) in the PR that completes them, and add new ones as you discover them.
-Status as of 6 Nov 2026 (ADR-055 / PR #49; ADR-054 / PR #48; ADR-053 / PR #47; PR #44 / ADR-051; PR #45 / ADR-050; PR #42 / ADR-049; PR #40 / ADR-047; PR #39 / ADR-046; PR #38 / ADR-045; PR #35 / ADR-044; PR #37 / ADR-043; PR #33 / ADR-042; PR #32 / ADR-041; PR #31 / ADR-039–040; PR #30 / ADR-038; PR #25 re-checked against `d60261d`; earlier: PR #7–#24).
+Status as of 6 Nov 2026 (ADR-056 Phase 2 plan; ADR-055 / PR #49; ADR-054 / PR #48; ADR-053 / PR #47; PR #44 / ADR-051; PR #45 / ADR-050; PR #42 / ADR-049; PR #40 / ADR-047; PR #39 / ADR-046; PR #38 / ADR-045; PR #35 / ADR-044; PR #37 / ADR-043; PR #33 / ADR-042; PR #32 / ADR-041; PR #31 / ADR-039–040; PR #30 / ADR-038; PR #25 re-checked against `d60261d`; earlier: PR #7–#24).
 
 ## Top open items (owner's list, 4 Nov 2026 — details in the sections below)
 
@@ -10,7 +10,7 @@ Status as of 6 Nov 2026 (ADR-055 / PR #49; ADR-054 / PR #48; ADR-053 / PR #47; P
 3. Sentry project privacy: *Prevent Storing of IP Addresses* + server-side data scrubbers → *Error tracking — Sentry*.
 4. Android assistant needs release signing + Play Integrity registration → *Infrastructure & security*.
 5. ~~Custom sections / pages are not in the sitemap~~ (PR #30: generated from Firestore at deploy, ADR-038); still not named in the assistant's allowed topics → *Custom sections*.
-6. 320 px overflow reported on a real phone → *Infrastructure & security* (320 px item).
+6. ~~320 px overflow reported on a real phone~~ — fixed in Phase 2 PR E (ADR-061): AppShell < 360 px space recovery (54 dp seal tab, drawer language toggle on subpages, >= 130 dp title width, >= 6 dp seal clearance), modal sheets keyboard insets padding, and real OpenType font loading in accessibility tests → *Infrastructure & security* (320 px item).
 7. CI rebuild of the eBible verse asset (source-fidelity check) → *Verse of the day*.
 8. Server-side assistant limit (the 3/day limit is client-side only) → *Assistant follow-ups*.
 9. **Live check 4 Nov 2026 — owner items (not code):** (a) `settings/church.nameAr` reads «…الأنبا موسى **الابيض**»
@@ -75,6 +75,29 @@ Status as of 6 Nov 2026 (ADR-055 / PR #49; ADR-054 / PR #48; ADR-053 / PR #47; P
     «لا توجد مواسم حالية» + «الموسم القادم: … — يبدأ …» (round-4 empty screen). **Owner:** visual approval of the PR
     preview before merge.
 
+## Phase 2 — notifications & mobile apps (ADR-056, plan in `docs/plans/phase2/`)
+
+Progress is tracked in [`docs/plans/phase2/STATUS.md`](../plans/phase2/STATUS.md); the chain is merged only after
+the owner approves the whole chain.
+
+- [x] PR A — install banner + notification preferences (ADR-057)
+- [x] PR B — Android APK + local notifications (ADR-058)
+- [x] PR C — admin notification manager + FCM sender + deep links (ADR-059)
+- [x] PR D — web push + PWA + iPhone (ADR-060)
+- [x] PR E — responsive + size audit (ADR-061; includes the 320 px app-bar item below)
+- [ ] Owner: keystore + secrets, FCM API + `push-sender` service account, VAPID key, Android developer verification
+      before 2027 (`docs/plans/phase2/LAUNCH-AND-OPERATIONS.md`)
+- [x] Owner decisions 6 Nov 2026 19:57 (README §8): **#6** APKs on GitHub Releases of a separate public repo
+      `Kerollosmm/church-portal-apk`, manifest on Hosting; **#17** Katameros = Arabic Van Dyck full text + English
+      references only (no NKJV), daily file ≤ ~20–25 KB.
+- [ ] At PR B time: create the public repo `Kerollosmm/church-portal-apk` (owner, or the agent with the owner's
+      approval), fine-grained `RELEASES_REPO_TOKEN` (that repo only, Contents: Read and write) as a main-repo Actions
+      secret, variables `APK_HOST=releases-repo` + `APK_BASE_URL`; retention = newest 5 releases (PR B §12 / §15)
+- [ ] Owner decisions on the plan (README §8): launch types / default times (#9), web «ذكّرني» design
+      (#12), web pushes = event pushes + seasons + reminders (#13), seasons via FCM on the APK (#14), repo visibility
+      (#15), exact alarms for APK reminders (#16), reminders in quiet hours (#18). (The urgent instant-dispatch token was removed from the plan on 6 Nov 19:31.)
+- [ ] After PR C: Sentry cron monitor `push-sender` + `keepalive.yml` first run (LAUNCH §14)
+
 ## Infrastructure & security (owner: developer)
 
 - [ ] **Re-save the service-account secret** `FIREBASE_SERVICE_ACCOUNT_ASAFRA_CHURCH_PORTAL` with only the JSON key
@@ -95,7 +118,7 @@ Status as of 6 Nov 2026 (ADR-055 / PR #49; ADR-054 / PR #48; ADR-053 / PR #47; P
       Play Console → App integrity). **Debug APKs:** run once, copy the debug token from logcat ("Enter this debug
       secret into the allow list…") into App Check → Apps → ⋮ → Manage debug tokens (or build with
       `--dart-define=APPCHECK_DEBUG_TOKEN=<uuid>` registered there). Until then Android assistant requests are refused.
-- [ ] **`production` environment required reviewers** (Settings → Environments) so live deploys, rules deploys
+- [ ] **`production` environment required reviewers** (recommended hygiene; no Phase 2 dependency since 6 Nov 19:31) (Settings → Environments) so live deploys, rules deploys
       (`deploy-rules` uses the environment since PR 1) and the Seed workflow (`force` can overwrite production data)
       need approval.
 - [ ] **iOS**: register the iOS app (bundle `com.asafrachurch.churchPortal`), `flutterfire configure`, replace the
@@ -124,12 +147,11 @@ Status as of 6 Nov 2026 (ADR-055 / PR #49; ADR-054 / PR #48; ADR-053 / PR #47; P
 - [ ] **Custom domain (optional)**: if the church buys a domain, add it to Hosting site `maximos-domadios-church`
       (console → Hosting → Add custom domain), add it to Auth authorized domains, and update OG/robots/
       sitemap URLs and the redirect destination in `firebase.json` (ADR-018).
-- [ ] **320 px overflow (reopened 4 Nov 2026, owner):** the automated sweep in `test/accessibility_test.dart` renders
-      every public route at 320 px × 200 % text without overflow, but it uses the Flutter **test font**; the owner
-      still lists 320 px overflow as open. Check on a real 320 px phone (or Chrome device mode at 320 px) with the
-      bundled **IBM Plex Sans Arabic** / Lalezar / Aref Ruqaa fonts, find the overflowing widget (hero, verse, app bar,
-      cards) and add a regression test that loads the real fonts. (Earlier fix: BUG-11 #1, highlight buttons move to
-      the drawer below 360 px.)
+- [x] **320 px overflow (reopened 4 Nov 2026, owner — fixed in PR E / ADR-061):** `test/accessibility_test.dart`
+      now loads the real bundled OpenType fonts (`IBMPlexSansArabic`, `Lalezar`, `ArefRuqaa`) via `FontLoader` and
+      verifies `< 360 px` `AppShell` geometry (54 dp seal tab, drawer language toggle on subpages, >= 130 dp title width,
+      >= 6 dp seal clearance) alongside 320 px × 200 % route sweeps with 0 overflows. Full OpenType font retention
+      preserves Arabic ligatures and tashkeel diacritics without subsetting.
 - [ ] Ask the church office to update the admin-editable English name (`settings/church.nameEn`, currently "Church of
       Saints Maximus & Domadius and the Strong Anba Moussa the Black") if they prefer "St. Maximus & Domadius and
       St. Moses the Black Church" — not changed by the seed to avoid overwriting admin edits.
@@ -341,3 +363,8 @@ Status as of 6 Nov 2026 (ADR-055 / PR #49; ADR-054 / PR #48; ADR-053 / PR #47; P
       tappable top-bar badge (admin switch «إخفاء شارة البث في الرئيسية عند ظهور الشريط», default on).
 - [ ] Owner (ADR-044): the HTML loading screen is always cream; on a dark theme (Holy Week) it switches to charcoal when
       the app appears. Optional: remember the last theme's ground in `localStorage` and paint the screen with it.
+
+## Mobile Performance, Native Splash & Navigation Chrome (ADR-062, 8 Nov 2026)
+- [x] **Hero ambient loops on APK (`INV-PERF-01`)**: `heroAmbientLoopAllowed` halts 60 s canvas tickers and blurred ray repaints on Android APK, eliminating Home screen frame drops; hardware-decoded video preserved.
+- [x] **Native Android splash cream (`INV-SPLASH-01`)**: `#FBF3E4` (`splash_cream`) applied across `launch_background.xml` (API 21+) and `styles.xml` (including `values-v31` Android 12+ Splash API) in light and dark mode, eliminating the cold start white flash.
+- [x] **Single back arrow & unified shell (`INV-NAV-01`, `INV-NAV-02`)**: `AppShell.leading` provides single back arrow on mobile viewports; in-body `_BackLink` on `ItemDetailPage` shown only on desktop (`shellIsWide`); `NotificationHealthPage` unified to `PageBody` + `PageHeader` with parent routing back to `/notifications`.

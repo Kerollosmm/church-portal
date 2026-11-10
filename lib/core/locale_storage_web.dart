@@ -1,5 +1,7 @@
 import 'package:web/web.dart' as web;
 
+Future<void> initLanguageStore() async {}
+
 // localStorage throws (SecurityError) when storage is blocked, e.g. some
 // privacy modes or third-party contexts: treat that as "nothing saved".
 String? readLanguage(String key) {

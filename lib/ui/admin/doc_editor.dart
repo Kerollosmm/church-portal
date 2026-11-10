@@ -10,8 +10,10 @@ import '../../data/image_processing.dart';
 import '../../data/media_repository.dart';
 import '../../domain/cairo_time.dart';
 import '../../domain/media.dart';
+import '../../domain/reminders.dart' show leadLabel;
 import '../../domain/rules.dart' show normalizeDigits;
 import '../../domain/time_format.dart';
+import '../../domain/today.dart' show DayEvent;
 import '../widgets/item_image.dart';
 import 'admin_schema.dart';
 import 'admin_validators.dart';
@@ -168,6 +170,11 @@ class DocEditorState extends State<DocEditor> {
           for (final o in (v is List ? v : f.defaultValues))
             if (o is String && f.options.contains(o)) o,
         };
+      case FieldType.intChoices:
+        _values[f.key] = <int>{
+          for (final o in (v is List ? v : f.defaultIntValues))
+            if (o is int && f.intOptions.contains(o)) o,
+        };
       case FieldType.dateList:
         _values[f.key] = <String>{
           for (final o in (v is List ? v : const []))
@@ -204,7 +211,17 @@ class DocEditorState extends State<DocEditor> {
 
   static Map<String, dynamic> _decodeRow(FieldDef f, String s) {
     final parts = s.split(_rowSep);
-    return {for (var i = 0; i < f.subFields.length; i++) f.subFields[i].key: i < parts.length ? parts[i] : ''};
+    final map = {for (var i = 0; i < f.subFields.length; i++) f.subFields[i].key: i < parts.length ? parts[i] : ''};
+    if (f.key == 'dayEvents') {
+      final id = map['id']?.toString().trim() ?? '';
+      if (id.isEmpty) {
+        final d = map['date']?.toString().trim() ?? '';
+        final st = map['start']?.toString().trim() ?? '';
+        final t = map['titleAr']?.toString().trim() ?? '';
+        map['id'] = DayEvent.computeHashId(d, st, t);
+      }
+    }
+    return map;
   }
 
   TextEditingController _ctrl(String text) => TextEditingController(text: text)..addListener(_markDirty);
@@ -252,6 +269,8 @@ class DocEditorState extends State<DocEditor> {
           out[f.key] = (_values[f.key] as Set<int>).toList()..sort();
         case FieldType.choices:
           out[f.key] = [for (final o in f.options) if ((_values[f.key] as Set<String>).contains(o)) o];
+        case FieldType.intChoices:
+          out[f.key] = [for (final o in f.intOptions) if ((_values[f.key] as Set<int>).contains(o)) o];
         case FieldType.dateList:
           out[f.key] = (_values[f.key] as Set<String>).toList()..sort();
         case FieldType.objectList:
@@ -724,6 +743,36 @@ class DocEditorState extends State<DocEditor> {
                   sel ? set.add(o) : set.remove(o);
                   _dirty = true;
                 }),
+              ),
+          ]),
+        );
+      case FieldType.intChoices:
+        final set = _values[f.key] as Set<int>;
+        return InputDecorator(
+          key: ValueKey('field-${f.key}'),
+          decoration: InputDecoration(
+            labelText: label,
+            helperText: context.pick(f.hintAr, f.hintEn).isEmpty ? null : context.pick(f.hintAr, f.hintEn),
+            helperMaxLines: 4,
+          ),
+          child: Wrap(spacing: 6, runSpacing: 6, children: [
+            for (final o in f.intOptions)
+              FilterChip(
+                key: ValueKey('choice-${f.key}-$o'),
+                label: Text(leadLabel(o, context.isAr ? 'ar' : 'en')),
+                selected: set.contains(o),
+                checkmarkColor: context.pal.onBar,
+                labelStyle: TextStyle(
+                  color: set.contains(o) ? context.pal.onBar : context.pal.primary,
+                  fontWeight: FontWeight.w600,
+                ),
+                onSelected: (sel) {
+                  if (sel && f.maxRows > 0 && set.length >= f.maxRows) return;
+                  setState(() {
+                    sel ? set.add(o) : set.remove(o);
+                    _dirty = true;
+                  });
+                },
               ),
           ]),
         );
@@ -1241,7 +1290,7 @@ class DocEditorState extends State<DocEditor> {
               padding: const EdgeInsets.all(10),
               child: Column(children: [
                 for (final sf in f.subFields)
-                  if (sf.showWhen == null || sf.showWhen!.value.contains(rows[i].values[sf.showWhen!.key]))
+                  if (!sf.hidden && (sf.showWhen == null || sf.showWhen!.value.contains(rows[i].values[sf.showWhen!.key])))
                   Padding(
                     padding: const EdgeInsets.only(bottom: 8),
                     child: switch (sf.type) {
@@ -1504,7 +1553,10 @@ class _Row {
   factory _Row.from(List<FieldDef> fields, Map data, VoidCallback onChange, {bool isNew = false}) {
     final r = _Row(fields);
     for (final f in fields) {
-      final v = data[f.key];
+      var v = data[f.key];
+      if (isNew && f.key == 'id' && f.hidden && (v == null || v.toString().trim().isEmpty)) {
+        v = DayEvent.generateRandomId();
+      }
       switch (f.type) {
         case FieldType.boolean:
           r.values[f.key] = v is bool ? v : (isNew ? f.newBool : f.missingBool);

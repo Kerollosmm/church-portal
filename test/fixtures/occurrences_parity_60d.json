@@ -1,0 +1,212 @@
+[
+  {
+    "rawEventKey": "lit-fri1",
+    "topicKey": "lit-fri1",
+    "source": "lit",
+    "cairoDate": "2027-04-02",
+    "start": "06:30",
+    "startsAtUtc": "2027-04-02T04:30:00.000Z",
+    "isRecurring": true,
+    "yyyymmdd": "20270402"
+  },
+  {
+    "rawEventKey": "meeting-youth",
+    "topicKey": "meeting-youth",
+    "source": "mtg",
+    "cairoDate": "2027-04-02",
+    "start": "19:00",
+    "startsAtUtc": "2027-04-02T17:00:00.000Z",
+    "isRecurring": true,
+    "yyyymmdd": "20270402"
+  },
+  {
+    "rawEventKey": "lit-fri1",
+    "topicKey": "lit-fri1",
+    "source": "lit",
+    "cairoDate": "2027-04-09",
+    "start": "06:30",
+    "startsAtUtc": "2027-04-09T04:30:00.000Z",
+    "isRecurring": true,
+    "yyyymmdd": "20270409"
+  },
+  {
+    "rawEventKey": "meeting-youth",
+    "topicKey": "meeting-youth",
+    "source": "mtg",
+    "cairoDate": "2027-04-09",
+    "start": "19:00",
+    "startsAtUtc": "2027-04-09T17:00:00.000Z",
+    "isRecurring": true,
+    "yyyymmdd": "20270409"
+  },
+  {
+    "rawEventKey": "lit-fri1",
+    "topicKey": "lit-fri1",
+    "source": "lit",
+    "cairoDate": "2027-04-16",
+    "start": "06:30",
+    "startsAtUtc": "2027-04-16T04:30:00.000Z",
+    "isRecurring": true,
+    "yyyymmdd": "20270416"
+  },
+  {
+    "rawEventKey": "meeting-youth",
+    "topicKey": "meeting-youth",
+    "source": "mtg",
+    "cairoDate": "2027-04-16",
+    "start": "19:00",
+    "startsAtUtc": "2027-04-16T17:00:00.000Z",
+    "isRecurring": true,
+    "yyyymmdd": "20270416"
+  },
+  {
+    "rawEventKey": "day-youth-revival",
+    "topicKey": "day-youth-revival",
+    "source": "day",
+    "cairoDate": "2027-04-20",
+    "start": "18:00",
+    "startsAtUtc": "2027-04-20T16:00:00.000Z",
+    "isRecurring": false,
+    "yyyymmdd": "20270420"
+  },
+  {
+    "rawEventKey": "lit-fri1",
+    "topicKey": "lit-fri1",
+    "source": "lit",
+    "cairoDate": "2027-04-23",
+    "start": "06:30",
+    "startsAtUtc": "2027-04-23T04:30:00.000Z",
+    "isRecurring": true,
+    "yyyymmdd": "20270423"
+  },
+  {
+    "rawEventKey": "meeting-youth",
+    "topicKey": "meeting-youth",
+    "source": "mtg",
+    "cairoDate": "2027-04-23",
+    "start": "19:00",
+    "startsAtUtc": "2027-04-23T17:00:00.000Z",
+    "isRecurring": true,
+    "yyyymmdd": "20270423"
+  },
+  {
+    "rawEventKey": "season-pascha",
+    "topicKey": "season-pascha",
+    "source": "lit",
+    "cairoDate": "2027-04-29",
+    "start": "09:00",
+    "startsAtUtc": "2027-04-29T07:00:00.000Z",
+    "isRecurring": false,
+    "yyyymmdd": "20270429"
+  },
+  {
+    "rawEventKey": "lit-fri1",
+    "topicKey": "lit-fri1",
+    "source": "lit",
+    "cairoDate": "2027-04-30",
+    "start": "06:30",
+    "startsAtUtc": "2027-04-30T03:30:00.000Z",
+    "isRecurring": true,
+    "yyyymmdd": "20270430"
+  },
+  {
+    "rawEventKey": "meeting-youth",
+    "topicKey": "meeting-youth",
+    "source": "mtg",
+    "cairoDate": "2027-04-30",
+    "start": "19:00",
+    "startsAtUtc": "2027-04-30T16:00:00.000Z",
+    "isRecurring": true,
+    "yyyymmdd": "20270430"
+  },
+  {
+    "rawEventKey": "lit-fri1",
+    "topicKey": "lit-fri1",
+    "source": "lit",
+    "cairoDate": "2027-05-07",
+    "start": "06:30",
+    "startsAtUtc": "2027-05-07T03:30:00.000Z",
+    "isRecurring": true,
+    "yyyymmdd": "20270507"
+  },
+  {
+    "rawEventKey": "meeting-youth",
+    "topicKey": "meeting-youth",
+    "source": "mtg",
+    "cairoDate": "2027-05-07",
+    "start": "19:00",
+    "startsAtUtc": "2027-05-07T16:00:00.000Z",
+    "isRecurring": true,
+    "yyyymmdd": "20270507"
+  },
+  {
+    "rawEventKey": "lit-fri1",
+    "topicKey": "lit-fri1",
+    "source": "lit",
+    "cairoDate": "2027-05-14",
+    "start": "06:30",
+    "startsAtUtc": "2027-05-14T03:30:00.000Z",
+    "isRecurring": true,
+    "yyyymmdd": "20270514"
+  },
+  {
+    "rawEventKey": "meeting-youth",
+    "topicKey": "meeting-youth",
+    "source": "mtg",
+    "cairoDate": "2027-05-14",
+    "start": "19:00",
+    "startsAtUtc": "2027-05-14T16:00:00.000Z",
+    "isRecurring": true,
+    "yyyymmdd": "20270514"
+  },
+  {
+    "rawEventKey": "day-0070836e69",
+    "topicKey": "day-0070836e69",
+    "source": "day",
+    "cairoDate": "2027-05-15",
+    "start": "17:30",
+    "startsAtUtc": "2027-05-15T14:30:00.000Z",
+    "isRecurring": false,
+    "yyyymmdd": "20270515"
+  },
+  {
+    "rawEventKey": "lit-fri1",
+    "topicKey": "lit-fri1",
+    "source": "lit",
+    "cairoDate": "2027-05-21",
+    "start": "06:30",
+    "startsAtUtc": "2027-05-21T03:30:00.000Z",
+    "isRecurring": true,
+    "yyyymmdd": "20270521"
+  },
+  {
+    "rawEventKey": "meeting-youth",
+    "topicKey": "meeting-youth",
+    "source": "mtg",
+    "cairoDate": "2027-05-21",
+    "start": "19:00",
+    "startsAtUtc": "2027-05-21T16:00:00.000Z",
+    "isRecurring": true,
+    "yyyymmdd": "20270521"
+  },
+  {
+    "rawEventKey": "lit-fri1",
+    "topicKey": "lit-fri1",
+    "source": "lit",
+    "cairoDate": "2027-05-28",
+    "start": "06:30",
+    "startsAtUtc": "2027-05-28T03:30:00.000Z",
+    "isRecurring": true,
+    "yyyymmdd": "20270528"
+  },
+  {
+    "rawEventKey": "meeting-youth",
+    "topicKey": "meeting-youth",
+    "source": "mtg",
+    "cairoDate": "2027-05-28",
+    "start": "19:00",
+    "startsAtUtc": "2027-05-28T16:00:00.000Z",
+    "isRecurring": true,
+    "yyyymmdd": "20270528"
+  }
+]

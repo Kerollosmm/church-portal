@@ -54,6 +54,15 @@ shrink "$T/round.png" 192 "$W/icons/Icon-192.png"
 shrink "$T/round.png" 512 "$W/icons/Icon-512.png"
 onbg 180 94 white "$W/icons/apple-touch-icon.png"
 for s in 192 512; do onbg "$s" 78 "$BG" "$W/icons/Icon-maskable-$s.png"; done
+# Web push notification badge: 72x72 monochrome white silhouette on transparency
+python3 - <<'PY'
+from PIL import Image
+im = Image.open('web/icons/Icon-192.png').convert('RGBA').resize((72, 72), Image.Resampling.LANCZOS)
+r, g, b, a = im.split()
+white = Image.new('L', (72, 72), 255)
+badge = Image.merge('RGBA', (white, white, white, a))
+badge.save('web/icons/badge-72.png', 'PNG')
+PY
 shrink "$T/round.png" 540 "$T/og_seal.png"
 magick -size 1200x630 xc:"$BG" "$T/og_seal.png" -gravity center -composite -strip -quality 88 "$W/og-image.jpg"
 

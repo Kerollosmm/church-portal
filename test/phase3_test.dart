@@ -229,10 +229,10 @@ void main() {
       expect(init('https://x/?lang=fr', null), const Locale('ar'));
     });
 
-    test('the platform store is a no-op off the web', () {
+    test('the platform store persists the language on mobile / IO (ADR-058)', () {
       const store = PlatformLanguageStore();
       store.write('en');
-      expect(store.read(), isNull);
+      expect(store.read(), 'en');
       expect(languageStorageKey, 'church_portal_lang');
     });
 

@@ -52,7 +52,7 @@ wanted settings and message deletion owner-only; the implementation deliberately
 
 ## Navigation (`adminDestinations(role)`)
 
-`overview` → `features` → `church` → `assistant` (AI assistant, PR #19) → one entry per `adminCollections` item (alerts, seasons, liturgies, meetings,
+`overview` → `features` → `today` → `seasonSettings` → `seasonPreset` → `app` (App & notifications, ADR-057, ADR-059) → `church` → `assistant` (AI assistant, PR #19) → one entry per `adminCollections` item (alerts, seasons, liturgies, meetings,
 clinics, facilities, activities, priests, departedPriests, saints, milestones, **categories** (Custom sections),
 **entries** (Section items), **pages** (Custom pages) — PR #18) → `messages` → `contactCats` (Contact form types,
 PR #18) → `admins` (owners only).
@@ -201,6 +201,40 @@ ADR-044) «إخفاء شارة البث في الرئيسية عند ظهور ا
 the daily / season limit. Since PR #35 a non-empty `dayEvents` list is saved in its own
 write after the other keys (`separatelySavedKeys`; 20 events plus another Today key exceed the rules' 1,000-expression
 budget in one write).
+
+### App & notifications («التطبيق والإشعارات», `AppAndNotificationsScreen`, `lib/ui/admin/notifications_admin.dart`) → `settings/features` & `settings/notifications` (ADR-057, ADR-059; UX rework PR #55)
+
+Two tabs: «الإشعارات» (`NotificationsAdminSection`, kept alive across tab switches) and «تثبيت التطبيق»
+(`ChurchInfoScreen` over `appSettingsDoc`). The notifications tab is one list of cards, Arabic first:
+1. **Status** — master switch (`push`) with on/off explanation and a «متوقفة» banner; sender health from
+   `health.lastRunAt` in plain words: ok (≤ 1 h, «آخر فحص منذ …» in Cairo time), late (> 1 h), stopped (> 3 h or
+   `status: error`), never run (no stamp — neutral, not red). Since ADR-060: web push subscriber stats from
+   `meta/push_topics` (`activeSubscribers`), web reminder planner status from `meta/push_plan` (upcoming reminder topics
+   count and next service time in Cairo), and queue rate throttle cap warning banner when meta/push_topics.cronQueue.capReached is true (1,000 web opt-in batch writes/day limit reached).
+2. **Scheduled announcements** (`schedule`, ≤ 20) — numbered 5-step editor: Arabic title + body (both required, as
+   the rules and `parseScheduleRow` require), English optional (collapsed); «في أقرب وقت» or Cairo date + time
+   (default tomorrow 09:00; past times refused); targets «الجميع / تطبيق أندرويد فقط / المتصفح و iPhone فقط»;
+   «ماذا يفتح» picker (built-in pages, custom pages/categories, liturgies `lit-`, meetings `meeting-`, today's
+   events `day-`, seasons `season-` — one-off reads when the dialog opens; ids the rules reject open the page without
+   an `eventKey`) or a custom `/path`; phone preview ar/en; «جرّب على هذا الجهاز». Inline errors under the field.
+   Rows grouped «القادمة» / «السابقة» with icon status chips and a one-line explanation per state; «تعديل» while
+   the row has no `status` entry, «أعد الإرسال» (copy, targets narrowed) for partial / error / unconfirmed /
+   expired, «حذف» with a confirmation dialog. Saves go through `saveDocsFresh` (fresh read: an edit is refused once
+   the sender has claimed the row; the 20-row cap is checked on the fresh list).
+3. **Types offered** — one card per type with a switch (`pushTypes`), icon, description and the delivery channel in
+   words; «تعديل الوقت والنص»: time picker (no typed HH:mm), seasons «قبل بدايته بـ» 0–7, templates with
+   «أدرج» chips named in Arabic (`placeholderLabel`), live sample (`placeholderSamplesAr/En`), reset with
+   confirmation. Announcements have no template (their text is written per announcement). Only modified types are
+   stored in `notifyTypes`.
+4. **«ذكّرني»** — source switches (`reminderSources`, stored in the fixed order `lit,mtg,day`), 1–4 lead chips
+   (inline note on the limit, not a snack bar that would cover the save bar), default lead. Since ADR-060:
+   informational notice on web reminder delivery delay («تنبيهات المتصفح تعتمد على جدول الخادم كل ربع ساعة...»)
+   recommending 15–30 min lead times.
+5. **Sent log** — last 30 entries with Cairo time, kind (announcement / automatic season alert) and a result chip;
+   owner-only clear with confirmation.
+6. **Technical settings** (collapsed) — VAPID key with where to find it and format validation.
+Cards 1, 3, 4, 6 share the bottom bar «لديك تعديلات لم تُحفظ — حفظ الإعدادات / تراجع» (writes `settings/features`);
+loading a snapshot never marks the form dirty.
 
 ### Church info (`ChurchInfoScreen`) → `settings/church`
 (`ChurchInfoScreen` takes a `DocDef doc` — default `churchInfoDoc` — and an optional `header`; PR #19 reuses it for

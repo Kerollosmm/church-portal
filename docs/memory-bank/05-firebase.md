@@ -69,13 +69,18 @@ Helpers:
   must be non-empty strings.
 - `keysAllowed(allowed)` — **create**: all keys ∈ allowed; **update**: only *changed* keys ∈ allowed
   (`diff().affectedKeys()`), so legacy fields already in a doc never block an edit.
+- **Rules 1,000-Expression Budget (ADR-057, ADR-059):** On large settings documents (`settings/features`), evaluating 50+
+  keys in an allow-list or nested objects like 9 page headers hits Firestore's 1,000-expression ceiling. Rules solve
+  this via **Fast-path branching**: `changed.hasOnly(legacyFeatureKeys()) ? validLegacyFeatures(...) : (validInstallPush(...) && validLegacyFeatures(...))`.
+  Writes touching only legacy keys never allocate or evaluate the new schemas. In addition, single-key checks use the
+  primitive `'key' in set` operator (1 expression) instead of `set.hasAny(['key'])`. In `validInstallPush`, `validInstallSettings` and `validPushSettings` are gated behind `!changed.hasAny(...)` checks to short-circuit, and `validPushCore` uses single `.join('\u001f').matches(...)` regexes to check sets of types in 2 expressions instead of 36 expressions.
 
 Match blocks:
 
 | Path | read | create / update | delete |
 |---|---|---|---|
 | `/{col}/{docId}` for `alerts, seasons, liturgies, meetings, activities, clinics, facilities, priests, milestones, saints, categories, entries, pages` | **public** | `isAdmin() && validContent(col, data)` → `common` + per-collection `validAlert/validSeason/validLiturgy/validMeeting/validActivity/validClinic/validFacility/validPriest/validMilestone/validSaint/validCategory/validEntry/validPage` (allow-list + types/sizes; see `04-data-model.md`). PR #18 (ADR-027): `slugOk` (`[a-z0-9]+(-[a-z0-9]+)*` ≤ 60), category icon list, entry `categoryId` id-shaped (existence not required), page header checked on create / header change, `validBlocks` (≤ 20, unrolled) → `validPageBlock` = **one regex on one string** per block | `isAdmin()` |
-| `/settings/{docId}` | **public** | `isAdmin()` and (`church` → `validChurch`, `features` → `validFeatures`, `contact` → `validContactSettings`: `categories` map of 1–12 entries keyed by a stable id `c[0-9a-z]{1,15}` (`contactIdOk`; PR #19 — keys read by position in `contactCatAt`, each added / changed entry one string checked by two regexes in `validContactCat` — ADR-028), `assistant` → `validAssistant` (PR #19, ADR-029: keys ⊆ model, instructions, topics, refusalAr/En, welcomeAr/En, suggestionsAr/En, showSuggestions (bool), faithReplyAr/En (≤ 300), sourceDomains (≤ 300, `[a-z0-9., -]*`), mentionUnconfirmed (bool), perDay (null / int 1–100) — all PR #21; perSession kept as a legacy key, maxChars, perMinute, perSession + stamps; `model` '' or `gemini-[a-z0-9][a-z0-9.-]{0,52}` ≤ 60; texts 4000 / 2000 / 500 / 300; null or int 50–1000 / 1–20 / 1–200; `stampOk`)); any other doc id denied | **never** |
+| `/settings/{docId}` | **public** (except `docId == 'notifications'` which is `isAdmin()` only) | `isAdmin()` and (`church` → `validChurch`, `features` → `validFeatures`, `contact` → `validContactSettings`, `assistant` → `validAssistant`, `notifications` → `validNotifications`: allows schedule ≤ 20 rows, forbids client writes to status/health/reminders, allows owner to clear sentLog); any other doc id denied | **never** |
 | `/media/{mediaId}` | **get: public** (by id); **list: `isAdmin()` only** (PR 1, SEC-02) | `isAdmin() && validMedia(data)`: keys ⊆ `dataBase64, contentType, w, h, bytes, createdAt, createdBy, refs`; required `dataBase64` (4–950,000 chars), `contentType` ∈ jpeg/webp/png, `createdAt` (== `request.time`, or unchanged), `createdBy` (token email/uid, or unchanged); `bytes` ≤ 700,000; `w/h` 1–10000; `refs` list ≤ 20 | `isAdmin()` |
 | `/admins/{uid}` | own doc, or any doc if `isOwner()` | `isOwner()` **and** `uid != caller` (cannot change yourself → an owner always remains); keys ⊆ `email, role, updatedAt, updatedBy`; email required ≤254; role ∈ owner/editor; `stampOk` (PR 1, SEC-03) | `isOwner() && uid != caller` |
 | `/meta/contact_rate` | never | keys ⊆ `lastAt, lastMsgId`; `lastAt == request.time`; `lastMsgId` string 10–64 alphanumerics; `!exists(contact_messages/lastMsgId)` **and** `existsAfter(contact_messages/lastMsgId)` (so it is only writable in the same batch as a NEW message — SEC-01); and (new doc or `request.time > lastAt + 10 s`) | never |
@@ -175,6 +180,10 @@ Notable details:
   `SetOptions(mergeFields: <written keys>)`: untouched fields stay (legacy keys never block an edit), but a written
   map field is **replaced**, not deep-merged — a page header the admin resets disappears from `pageHeaders`, and a
   cover image switched from inline to a link loses its old `mediaId`/`w`/`h`.
+- **Web push rules (ADR-060):**
+  - `push_queue/{id}`: create-only, read/update/delete denied; validates payload (`token`, `want`, `rem`, `drop`, `retries == 0`, `createdAt == request.time`) and binds `meta/push_rate` in the same batch.
+  - `meta/push_rate`: create/update throttle (3s spacing, integer UTC day, count <= 1000). Evaluates all scalar checks before cross-document existence checks. Read/delete denied to all clients (including admins).
+  - `meta/push_topics` and `meta/push_plan`: read-only for `isAdmin()`, client write denied.
 
 ## Cloud Storage (not used — Spark)
 

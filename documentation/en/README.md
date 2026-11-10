@@ -35,7 +35,8 @@ This English documentation suite is structured into four primary guides:
 |---|---|
 | [**Architecture Guide**](architecture.md) | Technical blueprint: Flutter layers, Riverpod 3 state management, Firebase infrastructure, Firestore data models, security rules, and performance optimizations. |
 | [**Operations & Deployment Runbook**](operations.md) | Operator guide: CI/CD deployment workflows, environment secrets, safe Firestore database seeding, admin onboarding, Sentry error monitoring, and troubleshooting common issues. |
-| [**Master Feature Reference**](features.md) | In-depth breakdown of all 31 portal features: what visitors see, exact `/admin` controls and field labels, technical models, and limitations. |
+| [**Master Feature Reference**](features.md) | In-depth breakdown of all 32 portal features: what visitors see, exact `/admin` controls and field labels, technical models, and limitations. |
+| [**Phase 2 plan**](../../docs/plans/phase2/README.md) | Notifications & mobile apps (ADR-056): architecture, stacked PR chain A–E, handoff workflow, launch & operations. Plan only — not implemented yet. |
 | [**Root README**](../../README.md) | High-level repository landing page, quickstart commands, and architectural summary. |
 
 ---

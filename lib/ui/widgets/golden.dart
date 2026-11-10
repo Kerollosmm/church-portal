@@ -53,6 +53,13 @@ class ArtAssets {
 bool ambientMotionOn(BuildContext context, {bool adminOn = true}) =>
     adminOn && !MotionEnv.isTest && !MediaQuery.disableAnimationsOf(context);
 
+/// Whether HeroStage may run its Flutter-painted ambient loops (Ken Burns,
+/// haze drift, ray shimmer). Off in the Android APK: a 60 s ticker repainting
+/// 14 blurred rays every frame drops frames on phones (ADR-062). The web
+/// animates the same layers in CSS (ADR-037) and is unaffected.
+bool heroAmbientLoopAllowed({bool isWeb = kIsWeb, TargetPlatform? platform}) =>
+    isWeb || (platform ?? defaultTargetPlatform) != TargetPlatform.android;
+
 /// Whether the hero video may load and play: ambient motion is on, the visitor
 /// did not ask to save data, and the platform plays it (web, Android, iOS).
 bool heroVideoAllowed(BuildContext context, {required bool adminOn}) {
@@ -67,20 +74,22 @@ class WarmBackdrop extends StatelessWidget {
   const WarmBackdrop({super.key});
 
   @override
-  Widget build(BuildContext context) => ExcludeSemantics(
-        child: DecoratedBox(
-          key: const Key('warmBackdrop'),
-          decoration: BoxDecoration(
-            color: context.pal.background,
-            image: DecorationImage(
-              image: const AssetImage(ArtAssets.clouds),
-              fit: BoxFit.cover,
-              // Fainter (and greyed) on a dark scene (ADR-025).
-              opacity: context.pal.textureOpacity,
-              colorFilter: context.pal.artFilter,
+  Widget build(BuildContext context) => RepaintBoundary(
+        child: ExcludeSemantics(
+          child: DecoratedBox(
+            key: const Key('warmBackdrop'),
+            decoration: BoxDecoration(
+              color: context.pal.background,
+              image: DecorationImage(
+                image: const AssetImage(ArtAssets.clouds),
+                fit: BoxFit.cover,
+                // Fainter (and greyed) on a dark scene (ADR-025).
+                opacity: context.pal.textureOpacity,
+                colorFilter: context.pal.artFilter,
+              ),
             ),
+            child: const SizedBox.expand(),
           ),
-          child: const SizedBox.expand(),
         ),
       );
 }
@@ -523,7 +532,7 @@ class _HeroStageState extends State<HeroStage> with SingleTickerProviderStateMix
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _ambient = ambientMotionOn(context, adminOn: widget.motion);
+    _ambient = ambientMotionOn(context, adminOn: widget.motion) && heroAmbientLoopAllowed();
     _videoOn = widget.video != null && heroVideoAllowed(context, adminOn: widget.motion);
     // Decode the still before it is needed (no pop-in, no flash on swaps).
     precacheImage(AssetImage(_still), context).ignore();

@@ -528,7 +528,7 @@ class HaloText extends StatelessWidget {
   final TextAlign? textAlign;
   final TextDirection? textDirection;
   const HaloText(this.text,
-      {super.key, required this.style, required this.ground, this.outline = 2.5, this.textAlign, this.textDirection});
+      {super.key, required this.style, required this.ground, this.outline = 3.0, this.textAlign, this.textDirection});
 
   @override
   Widget build(BuildContext context) {

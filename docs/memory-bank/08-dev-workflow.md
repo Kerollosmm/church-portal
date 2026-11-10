@@ -32,7 +32,9 @@ python3 tool/fingerprint_icon_fonts.py build/web   # content-hashed icon font na
 | Static analysis | `flutter analyze` (lints: `package:flutter_lints/flutter.yaml`; excludes build/android/ios/web) |
 | Unit + widget tests | `flutter test` (`test/domain_test.dart`, `features_test.dart`, `feature_gate_test.dart`, `admin_test.dart`, `seed_test.dart`, `media_test.dart`, `occasion_theme_test.dart` — every preset's contrast on panels / cards / scene / hero scrim / bars incl. the dark Holy Week scene and the hero verse, random admin palettes auto-corrected, legacy `burgundy`, Coptic Easter 1900–2099 + known years, Cairo-midnight switching, a stored legacy `heroVideos` map being ignored (ADR-036), and a rendered-text contrast walk of the public pages per preset; `occasion_admin_test.dart` — theme / video editors and save writes; `accessibility_test.dart` — WCAG contrast maths, 320 px × 200 % overflow sweep of every public route (ar + en), theme-preset propagation, semantics, `?lang=` sync, admin fixes; `phase3_test.dart` — PDPL consent, canonical + JSON-LD vs seed, `DeferredLoader` (load, retry) + deferred `/admin`/`/ask` and `AssistantGate` (no chunk while the assistant is off), saved-language precedence/persistence via a fake `LanguageStore`; `assistant_test.dart` (PR #19) — prompt scope / guardrails / new grounding, refusal swap, limits, history and model fallback with a fake `AssistantModel`, App Check provider selection, assistant settings, stable contact category ids, `/ask` with a fake model; `error_reporting_test.dart` (PR #24) — Sentry off without a DSN, DSN / environment / release resolution, `beforeSend` scrubbing (no user / IP / cookies / query strings / form or question text), the admin switch (off → nothing reaches a recording transport; events wait for the switch), assistant / content capture hooks, the Error reports card and owner-only test button). In a proxied sandbox set `NO_PROXY=127.0.0.1,localhost` or the test runner cannot reach its local websocket. |
 | Regenerate seed | `python3 tool/gen_seed.py` → writes `assets/seed/seed.json`, `tool/known_seed_ids.json`, `tool/retired_seed_ids.json` (commit all three) |
+| Bundle & deferred guard | `node tool/check_web_bundle.mjs build/web` (verifies release web bundle size ceiling `gzip -9 <= 1,396,031 B`, >= 6 part chunks (observed: 22), 8 deferred modules isolated with zero sourcemap leaks, and OpenType font integrity — ADR-061) |
 | Rules tests (emulator, Java 11+) | `cd tool/rules_test && npm ci && npm test` (runs `firebase emulators:exec --only firestore --project demo-church-portal`) |
+| Push sender tests (Node 22) | `node --test tool/push_sender.test.mjs` (RS256 minting, batchGet claim/retry, FCM limits, Spark budget) |
 | Seed preview | `cd tool && npm install && node seed_firestore.js --dry-run` |
 | Deploy (manual) | `flutter build web --release [--dart-define=RECAPTCHA_SITE_KEY=…] && bash tool/build_sitemap.sh build/web/sitemap.xml && python3 tool/fingerprint_icon_fonts.py build/web && firebase deploy` (the sitemap step keeps the static `web/sitemap.xml` with a warning when `GOOGLE_APPLICATION_CREDENTIALS` is not set) (or `--only hosting`, `--only firestore:rules,firestore:indexes`) |
 
@@ -78,7 +80,7 @@ Runs in the **`production` environment** with the service-account secret. Inputs
 Job **analyze-test-build** (ubuntu, 30 min): checkout → `subosito/flutter-action@v2` (stable, cached) →
 `flutter --version` → `flutter pub get` → `flutter analyze` → `flutter test` → `flutter build web --release`
 (Sentry defines: `SENTRY_ENVIRONMENT=ci`, `GIT_SHA`, `APP_VERSION`, `SENTRY_DSN` when the variable is set) →
-`python3 tool/fingerprint_icon_fonts.py build/web` → validate `seed.json` parses (node) → **`python3 tool/gen_seed.py` and `git diff --exit-code`** on `seed.json`,
+`node tool/check_web_bundle.mjs build/web` (ADR-061: asserts main.dart.js gzip -9 <= 1,396,031 B, >= 6 part chunks, zero sourcemap leaks of 8 deferred modules, and OpenType font integrity) → `python3 tool/fingerprint_icon_fonts.py build/web` → validate `seed.json` parses (node) → **`python3 tool/gen_seed.py` and `git diff --exit-code`** on `seed.json`,
 `retired_seed_ids.json`, `known_seed_ids.json` (fails if you hand-edited the JSON or forgot to regenerate).
 Job **firestore-rules** (15 min): Java Temurin 21 + Node 22 → `npm ci` in `tool/rules_test` → `npm test` (emulator).
 
@@ -90,8 +92,7 @@ Job **firestore-rules** (15 min): Java Temurin 21 + Node 22 → `npm ci` in `too
    **sitemap from Firestore (PR #30, ADR-038):** Node 22 → `firebase-credentials` (`continue-on-error`) →
    `tool/build_sitemap.sh build/web/sitemap.xml` (read-only export + `dart run tool/gen_sitemap.dart` + XML check;
    any failure = `::warning::` and the static `web/sitemap.xml`) → remove key →
-   `tool/fingerprint_icon_fonts.py` → artifact `web-build`
-   (3 days).
+   `tool/fingerprint_icon_fonts.py` → artifact `web-build` (3 days) → **preview** job (deploys PR channel) → informational **lighthouse** audit (`treosh/lighthouse-ci-action@v12`, auditing preview URL and `/notifications` without creating extra channels).
 2. **deploy-live** (push to main, needs build **and deploy-rules** since PR #24 — a new app may write fields the
    old rules reject, so the rules go live first; environment `production`, URL the live site): download artifact →
    Node 22 → `./.github/actions/firebase-credentials` → `npx firebase-tools@latest deploy --only hosting:app,hosting:legacy-redirect`

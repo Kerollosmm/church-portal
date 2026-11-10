@@ -3,6 +3,10 @@
 // commemoration published by a scheduled GitHub Action
 // (`calendar/synaxarium`) and the live-stream banner. Pure Dart.
 
+import 'dart:convert';
+import 'dart:math';
+import 'package:crypto/crypto.dart';
+
 import 'cairo_time.dart';
 import 'coptic_calendar.dart';
 import 'coptic_feasts.dart';
@@ -10,6 +14,80 @@ import 'media.dart';
 import 'features.dart' show Hideable;
 import 'models.dart' show Liturgy, Season, parseDate, parseHm;
 import 'schedule.dart';
+
+int _combiningClass(int codeUnit) {
+  switch (codeUnit) {
+    case 0x064B: return 27; // FATHATAN
+    case 0x064C: return 28; // DAMMATAN
+    case 0x064D: return 29; // KASRATAN
+    case 0x064E: return 30; // FATHA
+    case 0x064F: return 31; // DAMMA
+    case 0x0650: return 32; // KASRA
+    case 0x0651: return 33; // SHADDA
+    case 0x0652: return 34; // SUKUN
+    case 0x0670: return 35; // SUPERSCRIPT ALEF
+    case 0x0655: return 220; // HAMZA BELOW
+    case 0x0656: return 220; // SUBSCRIPT ALEF
+    case 0x065C: return 220; // VOWEL SIGN DOT BELOW
+    case 0x065F: return 220; // WAVY HAMZA BELOW
+    case 0x0653: return 230; // MADDAH ABOVE
+    case 0x0654: return 230; // HAMZA ABOVE
+    case 0x0657: return 230; // INVERTED DAMMA
+    case 0x0658: return 230; // NOON GHUNNA
+    case 0x0659: return 230; // ZWARAKAY
+    case 0x065A: return 230; // VOWEL SIGN SMALL V ABOVE
+    case 0x065B: return 230; // VOWEL SIGN INVERTED SMALL V ABOVE
+    case 0x065D: return 230; // REVERSED DAMMA
+    case 0x065E: return 230; // FATHA WITH TWO DOTS
+    default: return 0;
+  }
+}
+
+/// Normalizes Arabic text to Unicode NFC equivalence.
+String nfcNormalizeArabic(String input) {
+  if (input.isEmpty) return input;
+  final s = input
+      .replaceAll('\u0627\u0653', '\u0622')
+      .replaceAll('\u0627\u0654', '\u0623')
+      .replaceAll('\u0648\u0654', '\u0624')
+      .replaceAll('\u0627\u0655', '\u0625')
+      .replaceAll('\u064A\u0654', '\u0626')
+      .replaceAll('\u0647\u0654', '\u06C0');
+
+  final runes = s.runes.toList();
+  final buf = StringBuffer();
+  final markBuffer = <int>[];
+
+  void flushMarks() {
+    if (markBuffer.isEmpty) return;
+    if (markBuffer.length > 1) {
+      final indexed = markBuffer.asMap().entries.toList()
+        ..sort((a, b) {
+          final ca = _combiningClass(a.value);
+          final cb = _combiningClass(b.value);
+          final cmp = ca.compareTo(cb);
+          return cmp != 0 ? cmp : a.key.compareTo(b.key);
+        });
+      for (final e in indexed) {
+        buf.writeCharCode(e.value);
+      }
+    } else {
+      buf.writeCharCode(markBuffer.first);
+    }
+    markBuffer.clear();
+  }
+
+  for (final r in runes) {
+    if (_combiningClass(r) > 0) {
+      markBuffer.add(r);
+    } else {
+      flushMarks();
+      buf.writeCharCode(r);
+    }
+  }
+  flushMarks();
+  return buf.toString();
+}
 
 String _str(Object? v) => v is String ? v : (v == null ? '' : v.toString());
 bool _bool(Object? v, bool def) => v is bool ? v : def;
@@ -231,15 +309,38 @@ class DayEvent implements Hideable {
     'topicAr', 'topicEn', 'noteAr', 'noteEn', 'link',
     // ADR-045: optional trailing fields; a 13-field string (before) stays valid.
     'attachmentUrl', 'attachmentLabelAr', 'attachmentLabelEn',
+    // ADR-059: persistent id (8-char random or 10-char SHA-1 hex prefix).
+    'id',
   ];
   static const sep = '\u001f';
+
+  /// Computes the 10-character lowercase hex SHA-1 prefix of the normalized event data.
+  static String computeHashId(String date, String start, String titleAr) {
+    final raw = '${date.trim()}\u001f${start.trim()}\u001f${nfcNormalizeArabic(titleAr.trim())}';
+    final digest = sha1.convert(utf8.encode(raw));
+    return digest.toString().substring(0, 10);
+  }
+
+  /// Generates a random 8-character [a-z0-9]{8} ID for new events.
+  static String generateRandomId([Random? rng]) {
+    const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+    final r = rng ?? Random();
+    return List.generate(8, (_) => chars[r.nextInt(chars.length)]).join();
+  }
 
   /// Max events in `settings/features.dayEvents` (firestore.rules).
   static const maxEvents = 20;
 
   /// One event of `settings/features.dayEvents`: an encoded string (or,
   /// tolerantly, a map). Invalid entries return null.
-  static DayEvent? fromStored(int index, Object? v) {
+  /// Tolerates both `fromStored(index, raw)` and `fromStored(raw, [index])`.
+  static DayEvent? fromStored(Object? vOrIndex, [Object? raw]) {
+    int order = 0;
+    Object? v = vOrIndex;
+    if (vOrIndex is int && raw != null) {
+      order = vOrIndex;
+      v = raw;
+    }
     Map<String, dynamic>? m;
     if (v is String) {
       final parts = v.split(sep);
@@ -253,7 +354,17 @@ class DayEvent implements Hideable {
       m = v.cast<String, dynamic>();
     }
     if (m == null) return null;
-    final e = DayEvent.fromMap('e$index', {...m, 'order': index});
+
+    final dateStr = (m['date'] is DateTime ? dayKey(m['date'] as DateTime) : _str(m['date'])).trim();
+    final startStr = _str(m['start']).trim();
+    final titleAr = _str(m['titleAr']).trim();
+
+    String id = _str(m['id']).trim();
+    if (!RegExp(r'^[a-z0-9]{8,10}$').hasMatch(id)) {
+      id = computeHashId(dateStr, startStr, titleAr);
+    }
+
+    final e = DayEvent.fromMap(id, {...m, 'id': id, 'order': order});
     return e.titleAr.trim().isEmpty || e.firstDay == null ? null : e;
   }
 
@@ -301,6 +412,30 @@ class DayEvent implements Hideable {
     final f = firstDay, l = lastDay;
     if (f == null || l == null || titleAr.trim().isEmpty) return false;
     return !day.isBefore(f) && !day.isAfter(l);
+  }
+
+  /// Date (UTC midnight) of the occurrence a «ذكّرني» on this event's card
+  /// is for at [now]: an [overnight] occurrence that started yesterday and is
+  /// still running after midnight; else today while today is a start day and
+  /// today's session has not ended; else tomorrow (the next day's session of
+  /// a multi-day event, or the eve the card shows ahead).
+  DateTime reminderDay(DateTime now) {
+    final c = CairoTime.fromInstant(now);
+    final today = DateTime.utc(c.year, c.month, c.day);
+    final f = firstDay, l = lastDay;
+    if (f == null || l == null) return today;
+    final lastStart = overnight ? l.subtract(const Duration(days: 1)) : l;
+    bool startDay(DateTime d) => !d.isBefore(f) && !d.isAfter(lastStart);
+    final e = parseHm(end);
+    if (overnight && e != null && c.hour * 60 + c.minute < e) {
+      final y = today.subtract(const Duration(days: 1));
+      if (startDay(y)) return y;
+    }
+    // A multi-day event runs as one session a day: once today's (non-
+    // overnight) session has ended, the next one is tomorrow's.
+    final todayDone = !overnight && e != null && c.hour * 60 + c.minute >= e;
+    if (startDay(today) && !todayDone && !endedAt(now)) return today;
+    return today.add(const Duration(days: 1));
   }
 
   /// Has it finished at [now] ([end] passed on its [lastDay]; no end time =

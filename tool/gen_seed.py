@@ -74,7 +74,9 @@ settings = {
     "pageHeaders": {},
     "footer": {"showPhones": True, "showSocials": True, "showQuickLinks": True, "noteAr": "", "noteEn": ""},
     # PR #24 (ADR-034): error reports to Sentry, on by default (admin switch).
-    "errorReporting": True
+    "errorReporting": True,
+    "notifyTypes": [],
+    "reminderSources": "lit,mtg,day"
   }
 }
 

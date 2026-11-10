@@ -36,9 +36,13 @@ sequenceDiagram
 2. **Automated PR Gate (`ci.yml`):**
    - Flutter analyze (0 warnings/errors required).
    - Full test suite execution (`flutter test`).
+   - Tool and web JS unit tests (`node --test web/*.test.mjs tool/*.test.mjs`).
+   - Release web build verification with source maps.
+   - Web bundle size & deferred isolation guard (`node tool/check_web_bundle.mjs build/web`): asserts `main.dart.js` `gzip -9 <= 1,396,031 B`, >= 6 part chunks, zero sourcemap leaks from 8 deferred modules, and OpenType font integrity.
    - Seed validation: verifies `assets/seed/seed.json` matches `tool/gen_seed.py` output byte-for-byte.
    - Firestore security rules testing in the local Firebase emulator (`tool/rules_test`).
 3. **PR Preview Channel (`deploy.yml`):** Automatically builds and deploys an ephemeral preview channel at `https://maximos-domadios-church--pr-<number>-<hash>.web.app` (active for 7 days).
+   - Runs informational non-blocking Lighthouse audit on the deployed preview URL and `/notifications` (`treosh/lighthouse-ci-action@v12`, 0 extra preview channels).
 4. **Squash-Merge to `main`:** Squash-merging automatically triggers the production release in `deploy.yml`:
    - Deploys Firestore security rules and composite indexes.
    - Executes `tool/build_sitemap.sh` to generate `sitemap.xml` directly from Firestore (falls back to static sitemap if Firestore is unreachable).
@@ -160,6 +164,112 @@ The portal integrates Sentry for privacy-first technical error reporting on Web 
 | **Visitor reaches 3 questions limit** | Per-device daily question cap reached (resets at Cairo midnight). | The visitor must wait until midnight Africa/Cairo time, or an admin can raise the limit in `/admin` → **AI Assistant** → **Max questions per device per day**. |
 | **Custom section or page displays "Section Unavailable"** | Document `visible` flag is `false` or the custom slug does not match. | Verify in `/admin` that the custom section/page has visibility set to true and that the URL slug matches the link. |
 | **Icons appear blank or corrupted after a new deployment** | User browser cached an outdated web font version. | The CI pipeline's `tool/fingerprint_icon_fonts.py` step fingerprints font assets. Perform a hard refresh (Ctrl+F5) in the browser. |
+| **CI build fails at "Check web bundle size & deferred chunk isolation"** | `main.dart.js` exceeded gzip ceiling (1,396,031 B) or a deferred module leaked into `main.dart.js.map`. | Ensure all 8 secondary modules are imported with `deferred as`. Run `node tool/check_web_bundle.mjs build/web` locally to inspect diagnostics. |
 | **"Another admin modified this document" warning** | Concurrent edit detected via optimistic concurrency control (`updatedAt` check). | Click **Reload** to fetch the latest server version, then re-apply changes. |
 | **Hero video does not play** | Visitor enabled reduced-motion or data-saver, or `heroMotion` is turned off. | This is expected accessibility behavior; the hero displays a static high-resolution poster or painting instead. (YouTube hero video was removed in PR #25). |
 | **Top utility bar live badge does not appear on Home page** | Intentional default behavior (`liveBadgeHideOnHome: true`). | The Home page displays the prominent red live stream banner instead. Other sub-pages display the compact live badge. To display both on Home, toggle off **Hide live badge on Home when banner is showing** in `/admin` → **Today & Live Stream**. |
+| **Android notifications delayed or missed** | OEM aggressive battery managers (MIUI/ColorOS/OneUI) killing background tasks. | Direct user to the in-app Battery Guidance screen (`/notifications/battery`) to whitelist the app from battery optimization and enable autostart. |
+
+---
+
+## 7. Android APK Packaging, Releases, and In-App Updates (ADR-058)
+
+The native Android app is packaged as lightweight, split release APKs for maximum download efficiency and zero server-side push overhead (+0 Firestore reads/writes on Spark).
+
+### Automated CI/CD Workflow (`.github/workflows/android.yml`)
+- **Triggers:**
+  - Automated release: Triggered whenever a tag matching `apk-v*` is pushed (e.g., `apk-v1.0.0+1`).
+  - Manual testing: Triggered via `workflow_dispatch` on any branch.
+  - Pull requests modifying Android assets or native code (`lib/**`, `android/**`, `pubspec.*`, `assets/**`, `.github/workflows/android.yml`).
+- **Split APK Generation:** Produces two architecture-specific APK binaries:
+  - `church-portal-arm64.apk` (`app-arm64-v8a-release.apk`) for modern 64-bit devices.
+  - `church-portal-arm32.apk` (`app-armeabi-v7a-release.apk`) for older 32-bit devices.
+- **Strict Size Budget Enforcement:** Build steps strictly assert binary limits prior to upload:
+  - ARM64: `< 20 MB` (`20,971,520` bytes limit).
+  - ARM32: `< 18 MB` (`18,874,368` bytes limit).
+  Any size regression fails the CI pipeline before artifacts are released.
+- **R8 Shrinking & Java 17 Desugaring:**
+  - Uses full code minification (`isMinifyEnabled = true`) and resource stripping (`isShrinkResources = true`).
+  - Implements core library desugaring via `com.android.tools:desugar_jdk_libs:2.1.5` on Java 17 target compatibility to support modern `java.time` APIs on older Android OS levels (minSdk 21).
+
+### Keystore & Release Signing
+- **Production Secrets:** Configured in GitHub Repository Secrets:
+  - `ANDROID_KEYSTORE_BASE64`: Base64-encoded `release.jks` keystore.
+  - `ANDROID_KEYSTORE_PASSWORD` / `KEYSTORE_PASSWORD`: Keystore password.
+  - `ANDROID_KEY_ALIAS` / `KEY_ALIAS`: Key alias.
+  - `ANDROID_KEY_PASSWORD` / `KEY_PASSWORD`: Key private password.
+- **Automated Debug Fallback:** In pull requests, manual dispatch runs, or local builds without signing secrets, Gradle automatically falls back to the default Android debug signing config (`signingConfigs.debug`). Tagged release builds (`apk-v*`) strictly require the production secrets and fail immediately if they are missing to prevent distributing unsigned binaries.
+
+### Release & Update Manifest (`version.json`)
+- Post-build step executes `tool/make_apk_manifest.mjs` against generated APKs:
+  - Computes byte sizes and cryptographic SHA-256 hashes.
+  - Ingests version code, version name, minSupportedBuild, and release notes in Arabic and English.
+  - Publishes `version.json` to Firebase Hosting under `/app/android/version.json`; every code deploy (`deploy.yml`) carries the live copy over so a release never disappears. `minSupportedBuild` comes from the `APK_MIN_SUPPORTED_BUILD` repository variable (default 1); `certSha256` from `apksigner`.
+  - Configured with strict edge cache headers in `firebase.json` (`no-cache, no-store, must-revalidate`) ensuring devices immediately discover new releases.
+
+### Katameros Daily Readings Pipeline (`.github/workflows/synaxarium.yml`)
+- Runs automatically every night at Cairo midnight (00:00 Cairo time / 22:10 UTC, with liturgical eve refresh at 16:10 UTC).
+- Executes `node tool/fetch_readings.js "$RUNNER_TEMP/readings" --days=9 --previous-url …/data/readings/` to fetch the rolling window (yesterday … +9 days; a date that fails keeps the live file) of Coptic Katameros scripture readings with full Arabic text (Van Dyck) and English reference citations (`refs-only`, target `< 25 KB` uncompressed per day).
+- Deploys static files to `/data/readings/{date}.json` and `/data/today.json` directly to Firebase Hosting via `tool/publish_hosting_file.js` with zero Firestore reads/writes.
+
+### In-App Update Verification & Installation Flow
+1. When `installApkBuild` (admin) is greater than the app's build, the app fetches `/app/android/version.json`.
+2. When `manifest.build > currentBuild`, a persistent update banner prompts the user.
+3. Resumable downloading leverages HTTP `Range` headers to survive flaky network connections.
+4. The downloaded APK's SHA-256 checksum is validated against the manifest.
+5. The package signature is verified against the installed app's signing certificate using `PackageManager` before invoking the installer.
+6. The app requests `REQUEST_INSTALL_PACKAGES` permission if not already granted, and launches the Android Package Installer session via secure `FileProvider` (`${applicationId}.updates`).
+7. Forced updates are enforced if `currentBuild < minSupportedBuild`.
+
+### Mobile Performance, Native Cream Splash & Single Back Arrow (ADR-062)
+- **Native Launch Splash (`INV-SPLASH-01`):** Window launch background set to `#FBF3E4` (`@color/splash_cream`) across all Android versions (including Android 12+ Splash API via `values-v31` `windowSplashScreenBackground` and dark mode `values-night`), eliminating white or black flashes on cold start.
+- **Hero Ambient Animation Gating (`INV-PERF-01`):** Continuous ambient canvas tickers (Ken Burns, haze drift, blurred light rays) are disabled on Android native APK (`heroAmbientLoopAllowed() == false`) to eliminate scroll frame drops and preserve battery, while hardware-decoded hero video remains active. Web retains full CSS DOM animations (ADR-037).
+- **Navigation Chrome & Single Back Arrow (`INV-NAV-01`, `INV-NAV-02`):** Battery health guidance (`/notifications/battery`) renders standard `PageBody` + `PageHeader` chrome (no nested `Scaffold`), routing back to `/notifications`. Item detail pages (`ItemDetailPage`) omit the in-body back link on mobile viewports so that only `AppShell.leading` renders the single back arrow.
+
+### OEM Battery Optimization Troubleshooting
+- Aggressive OEM battery killers (Xiaomi MIUI/HyperOS, Oppo ColorOS, Realme UI, Huawei EMUI, Samsung OneUI, Vivo Funtouch) frequently suppress background tasks and delay exact alarms.
+- Users reporting delayed or missed service reminders or daily readings notifications should be guided to the built-in diagnostic and guidance screen:
+  - Route: `/notifications/battery` (accessible from `/notifications` preferences).
+  - Diagnostic checks: Notification permission (`POST_NOTIFICATIONS`), Exact alarm permission (`SCHEDULE_EXACT_ALARM`), Battery optimization ignore status (`REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`), and WorkManager periodic replenishment freshness.
+  - Provides vendor-specific quick-launch intent actions for OEM autostart and background power management settings.
+
+---
+
+## 8. Scheduled Notification Sender & Cloudflare Worker (ADR-059 / ADR-060)
+
+The remote scheduled push delivery infrastructure runs as a pure Web-API Cloudflare Worker with three scheduled crons defined in `wrangler.toml`:
+1. `*/15 * * * *` (Cron 1): Scheduled notification sender, daily seasons alert, and due reminder dispatch using FCM boolean conditions (`'web_rem_...' in topics && !('app_...' in topics)`).
+2. `7,22,37,52 * * * *` (Cron 2): Web push subscription queue drain (`push_queue`) via Google IID REST with subscriber health metrics written to `meta/push_topics`.
+3. `3 2,8,14,20 * * *` (Cron 3): Web reminder planner compiling active liturgies, meetings, and special day events into `meta/push_plan`.
+
+### Cloudflare Worker Configuration & KV Caching
+- **Cron Triggers:** 3 scheduled crons without a public `POST /trigger` endpoint to prevent unauthorized invocation or quota drain.
+- **KV Token Cache (`PUSH_KV`):** Uses Cloudflare KV storage to cache Google OAuth2 access tokens (L2 cache after L1 memory), reducing token minting to ~1 per hour. Created via `npx wrangler kv namespace create PUSH_KV` and bound in `wrangler.toml`.
+- **Worker Deployment:** Deployed via `npx wrangler deploy` (must be executed prior to merging into `dev` or `main`).
+- **Worker Secrets (`wrangler secret put <KEY>`):**
+  - `FIREBASE_PROJECT_ID`: Firebase project ID (`asafra-church-portal`).
+  - `FIREBASE_CLIENT_EMAIL`: Service Account email with FCM and Firestore read/write permissions.
+  - `FIREBASE_PRIVATE_KEY`: Service Account private key in PEM format (starting with `-----BEGIN PRIVATE KEY-----`).
+  - `SENTRY_DSN`: Sentry DSN for error telemetry.
+  - `SENTRY_CRON_MONITOR_ID`: Sentry Cron monitor ID for heartbeat health alerts.
+
+### Spark Quota & Subrequest Budgets
+- **Firestore Reads:** Uses REST `:batchGet` across all 3 crons (Cron 1 ~197 reads/day for settings + midnight seasons; Cron 2 up to 4 reads/run for meta and queue batch; Cron 3 ~5 reads 4x/day for planner) = ~500–600 reads/day total (well within the 50,000 daily Spark free tier).
+- **Subrequest Limits:** Capped at 16 FCM topic dispatches and ≤ 25 total subrequests per run to strictly adhere to Cloudflare Worker free tier constraints.
+- **Lease & Claims:** 120-second lease timeout with optimistic locking and exponential backoff on transient errors.
+
+### Fallback GitHub Actions Workflow (`.github/workflows/push-sender.yml`)
+- Provides manual dispatch (`workflow_dispatch`) fallback running `node tool/push_sender.js` using Node.js 22 LTS if Cloudflare Worker execution requires maintenance or debugging.
+- Paired with `.github/workflows/keepalive.yml` running monthly to prevent automated GitHub Actions schedule deactivation.
+
+---
+
+## 9. Open Operational Tasks (Summary)
+
+- Upload web source maps and Android symbols to Sentry (requires auth token).
+- In Sentry: disable client IP collection and activate server-side scrubbers.
+- Production signing & Play Integrity registration for Android APK.
+- Server-side rate limiter for the AI Assistant.
+- Configure required reviewers for GitHub `production` environment.
+- Complete task tracker: [`docs/memory-bank/11-open-tasks.md`](../../docs/memory-bank/11-open-tasks.md).
+

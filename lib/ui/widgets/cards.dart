@@ -9,6 +9,7 @@ import '../../domain/cairo_time.dart';
 import '../../domain/features.dart';
 import '../../domain/item_detail.dart';
 import '../../domain/models.dart';
+import '../../domain/reminders.dart';
 import '../../domain/rules.dart';
 import '../../domain/schedule.dart';
 import '../../domain/today.dart';
@@ -17,10 +18,40 @@ import '../../state/providers.dart';
 import 'common.dart';
 import 'item_image.dart';
 import 'program_details.dart';
+import 'remind_me.dart';
 import 'styled_image.dart';
 
 export 'program_details.dart' show ProgramDetails, parallelSummary, parallelThenLine;
 export 'styled_image.dart';
+
+/// The occurrence a liturgy card's «ذكّرني» is for, or null when there is
+/// none to remind of. [skipToday]: today's service is replaced by a season
+/// service (the card's «لا يقام اليوم»): a dated service then has no
+/// occurrence, a weekly one points at a later week. [heldOn] (the schedule
+/// page's season-aware check, by Cairo start of day) skips weeks a season
+/// replaces too; none held in the next 12 weeks = null.
+DateTime? nextLiturgyOccurrence(Liturgy l, DateTime now, {bool skipToday = false, bool Function(DateTime day)? heldOn}) {
+  if (l.date != null) {
+    if (skipToday) return null;
+    final c = CairoTime.calendarDate(l.date!);
+    return CairoTime.at(c.year, c.month, c.day, l.startMinutes ?? 0);
+  }
+  final cNow = CairoTime.fromInstant(now);
+  final weekday = l.weekday ?? 7;
+  var daysAhead = (weekday - cNow.weekday + 7) % 7;
+  var target = CairoTime.at(cNow.year, cNow.month, cNow.day + daysAhead, l.startMinutes ?? 0);
+  if (target.isBefore(cNow) || (skipToday && daysAhead == 0)) {
+    daysAhead += 7;
+    target = CairoTime.at(cNow.year, cNow.month, cNow.day + daysAhead, l.startMinutes ?? 0);
+  }
+  if (heldOn == null) return target;
+  for (var w = 0; w < 12; w++) {
+    if (heldOn(CairoTime.startOfDay(target))) return target;
+    daysAhead += 7;
+    target = CairoTime.at(cNow.year, cNow.month, cNow.day + daysAhead, l.startMinutes ?? 0);
+  }
+  return null;
+}
 
 /// Card for one liturgy on the schedule page.
 class LiturgyCard extends StatelessWidget {
@@ -36,6 +67,10 @@ class LiturgyCard extends StatelessWidget {
   /// marked «لا يُقام اليوم» so the weekly tab never contradicts the home
   /// card (ADR-050).
   final bool notHeldToday;
+
+  /// Season-aware "is this service held on that day" for the reminder's
+  /// next occurrence (Cairo start of day); null = every week.
+  final bool Function(DateTime day)? heldOn;
   const LiturgyCard(
       {super.key,
       required this.liturgy,
@@ -43,6 +78,7 @@ class LiturgyCard extends StatelessWidget {
       this.showDate = false,
       this.parallelText = '',
       this.notHeldToday = false,
+      this.heldOn,
       this.notHeldOn = ''});
 
   /// The days a listed season sample is not held (ADR-054), already
@@ -102,6 +138,17 @@ class LiturgyCard extends StatelessWidget {
               IconLine(Icons.place_outlined, context.pick(l.placeAr, l.placeEn)),
               IconLine(Icons.people_outline, context.pick(l.audienceAr, l.audienceEn)),
               ProgramDetails(l.program, parallelText: parallelText),
+              if (nextLiturgyOccurrence(l, CairoTime.now(), skipToday: notHeldToday, heldOn: heldOn) case final next?)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: RemindMeButton(
+                    eventKey: EventKey.liturgy(l.id),
+                    occurrence: l.date != null ? isoDate(CairoTime.calendarDate(l.date!)) : null,
+                    title: {'ar': l.nameAr, 'en': l.nameEn},
+                    startsAt: next,
+                    recurring: l.date == null,
+                  ),
+                ),
             ]),
           ),
         ]),
@@ -332,6 +379,16 @@ class NextMassCard extends ConsumerWidget {
       children.add(IconLine(Icons.place_outlined, context.pick(n.liturgy.placeAr, n.liturgy.placeEn)));
       children.add(IconLine(Icons.people_outline, context.pick(n.liturgy.audienceAr, n.liturgy.audienceEn)));
       children.add(ProgramDetails(n.liturgy.program, parallelText: parallelText, parallelThen: parallelThen));
+      children.add(Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: RemindMeButton(
+          eventKey: EventKey.liturgy(n.liturgy.id),
+          occurrence: n.liturgy.date != null ? isoDate(CairoTime.calendarDate(n.liturgy.date!)) : null,
+          title: {'ar': n.liturgy.nameAr, 'en': n.liturgy.nameEn},
+          startsAt: n.start,
+          recurring: n.liturgy.date == null,
+        ),
+      ));
     }
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: children);
   }

@@ -45,6 +45,9 @@ enum FieldType {
   /// Up to [FieldDef.maxRows] calendar dates stored as sorted 'YYYY-MM-DD'
   /// strings, edited as chips (ADR-051: a season's `replaceDates`).
   dateList,
+
+  /// Several integer options stored as a list of ints (e.g. reminder leads).
+  intChoices,
 }
 
 /// Where a field sits in the editor: [basic] is always open at the top; the
@@ -143,6 +146,15 @@ class FieldDef {
   /// with (match the reader's default).
   final List<String> defaultValues;
 
+  /// [FieldType.intChoices]: integer options available to select.
+  final List<int> intOptions;
+
+  /// [FieldType.intChoices]: default integer values when document has none.
+  final List<int> defaultIntValues;
+
+  /// Hidden field: not rendered in forms but retained in rows/data.
+  final bool hidden;
+
   const FieldDef(this.key, this.labelAr, this.labelEn, this.type,
       {this.required = false,
       this.options = const [],
@@ -169,7 +181,10 @@ class FieldDef {
       this.pattern = '',
       this.rowNotBefore,
       this.rowUniqueKey = '',
-      this.defaultValues = const []});
+      this.defaultValues = const [],
+      this.intOptions = const [],
+      this.defaultIntValues = const [],
+      this.hidden = false});
 
   int get effectiveMaxLength => maxLength > 0
       ? maxLength
@@ -998,6 +1013,10 @@ const todaySettingsDoc = DocDef('settings/features', 'اليوم والبث ال
         FieldDef('attachmentLabelEn', 'نص زر الملف (إنجليزي)', 'File button text (English, blank = "Programme / booklet")',
             FieldType.text,
             maxLength: 80),
+        FieldDef('id', 'المعرف (داخلي)', 'ID (internal)', FieldType.text,
+            hidden: true,
+            maxLength: 10,
+            pattern: r'^[a-z0-9]{8,10}$'),
       ]),
   FieldDef('liveEnabled', 'شريط البث المباشر', 'Live-stream banner', FieldType.boolean,
       newBool: false,
@@ -1088,3 +1107,98 @@ String encodeRowFields(FieldDef f, Map<String, dynamic> row, [String sep = '\u00
   }
   return parts.join(sep);
 }
+
+/// /admin → "App & notifications" (ADR-057): top-level keys of settings/features
+/// (no extra document or listener).
+const appSettingsDoc = DocDef('settings/features', 'التطبيق والإشعارات', 'App & notifications', [
+  // App install banner
+  FieldDef('installPrompt', 'تفعيل شريط التثبيت', 'Enable install banner', FieldType.boolean,
+      missingBool: true,
+      newBool: true,
+      hintAr: 'يظهر للزوار على الهواتف المحمولة لتثبيت التطبيق أو تحميله.',
+      hintEn: 'Shows to mobile visitors to install or download the app.'),
+  FieldDef('installTitleAr', 'عنوان شريط التثبيت (عربي)', 'Banner title (Arabic)', FieldType.text,
+      maxLength: 120,
+      hintAr: 'فارغ = تطبيق الكنيسة على هاتفك',
+      hintEn: 'Blank = default title'),
+  FieldDef('installTitleEn', 'عنوان شريط التثبيت (إنجليزي)', 'Banner title (English)', FieldType.text,
+      maxLength: 120,
+      hintAr: 'فارغ = Church app on your phone',
+      hintEn: 'Blank = default English title'),
+  FieldDef('installBodyAr', 'نص شريط التثبيت (عربي)', 'Banner text (Arabic)', FieldType.multiline,
+      maxLength: 300,
+      hintAr: 'فارغ = ثبّت التطبيق للوصول السريع ومتابعة المواعيد والصلوات',
+      hintEn: 'Blank = default description'),
+  FieldDef('installBodyEn', 'نص شريط التثبيت (إنجليزي)', 'Banner text (English)', FieldType.multiline,
+      maxLength: 300,
+      hintAr: 'فارغ = Install for quick access to mass times and church services',
+      hintEn: 'Blank = default English description'),
+  FieldDef('installAndroidUrl', 'رابط تحميل ملف APK (64-bit)', 'Android APK download URL (64-bit)', FieldType.url,
+      allowPath: true,
+      maxLength: 500,
+      hintAr: 'رابط ملف الـ APK الأساسي. فارغ = يعرض الشريط زر التثبيت عبر المتصفح (PWA).',
+      hintEn: 'Main APK download URL. Blank = banner shows browser PWA install prompt.'),
+  FieldDef('installAndroidUrl32', 'رابط APK للهواتف القديمة (32-bit، اختياري)', 'Older phones APK URL (32-bit, optional)', FieldType.url,
+      allowPath: true,
+      maxLength: 500,
+      hintAr: 'رابط ملف APK للأجهزة القديمة (armeabi-v7a). يظهر كرابط فرعي «هاتف قديم؟».',
+      hintEn: 'APK URL for older devices (armeabi-v7a). Appears as sub-link "Older phone?".'),
+  FieldDef('installApkVersion', 'رقم إصدار APK المعروض', 'Displayed APK version', FieldType.text,
+      maxLength: 20,
+      pattern: r'[0-9]+([.][0-9]+){0,3}',
+      hintAr: 'مثل 1.1.0 (يظهر على زر التحميل).',
+      hintEn: 'E.g. 1.1.0 (shown on the download button).'),
+  FieldDef('installApkBuild', 'رقم بناء APK الداخلي', 'Internal APK build number', FieldType.integer,
+      min: 0,
+      max: 999999,
+      hintAr: 'رقم البناء الرقمي للتطبيق (مثل 12).',
+      hintEn: 'Internal numeric build number (e.g. 12).'),
+  FieldDef('installApkSizeMb', 'حجم ملف APK الأساسي (ميجابايت)', 'Main APK file size (MB)', FieldType.decimal,
+      min: 0,
+      max: 200,
+      hintAr: 'حجم ملف التحميل بالميجابايت (مثل 18.4).',
+      hintEn: 'Download file size in MB (e.g. 18.4).'),
+  FieldDef('installApkSize32Mb', 'حجم ملف APK القديم (ميجابايت)', 'Older phone APK file size (MB)', FieldType.decimal,
+      min: 0,
+      max: 200,
+      hintAr: 'حجم ملف الأجهزة القديمة بالميجابايت (مثل 16.2).',
+      hintEn: 'Older device file size in MB (e.g. 16.2).'),
+  FieldDef('installReshowDays', 'أيام إعادة العرض بعد الإغلاق ✕', 'Reshow after close ✕ (days)', FieldType.integer,
+      min: 0,
+      max: 365,
+      hintAr: 'عدد الأيام قبل إعادة ظهور الشريط بعد إغلاقه بزر ✕ (0 = لا يظهر ثانيةً). الافتراضي 30.',
+      hintEn: 'Days before banner reappears after closed with ✕ (0 = never again). Default 30.'),
+  FieldDef('installRemindDays', 'أيام الإخفاء عند الضغط على «لاحقًا»', 'Hide duration after "Later" (days)', FieldType.integer,
+      min: 1,
+      max: 60,
+      hintAr: 'عدد الأيام قبل إعادة ظهور الشريط بعد الضغط على «لاحقًا». الافتراضي 3.',
+      hintEn: 'Days before banner reappears after tapping "Later". Default 3.'),
+
+  // Notifications (experimental)
+  FieldDef('push', 'تفعيل الإشعارات (المفتاح العام)', 'Enable notifications (master switch)', FieldType.boolean,
+      missingBool: false,
+      newBool: false,
+      hintAr: 'المفتاح الرئيسي: عند إيقافه تختفي صفحة الإشعارات وزر «ذكّرني» في كل مكان.',
+      hintEn: 'Master switch: when off, the notifications page and "Remind me" buttons disappear everywhere.'),
+  FieldDef('pushVapidKey', 'مفتاح Web Push VAPID Key', 'Web Push VAPID Key', FieldType.text,
+      maxLength: 100,
+      pattern: r'[A-Za-z0-9_-]{80,100}',
+      hintAr: 'المفتاح العام لـ Web Push من إعدادات Firebase Console. فارغ = قيد التجهيز.',
+      hintEn: 'Web Push public key from Firebase Console settings. Blank = coming soon.'),
+  FieldDef('pushTypes', 'أنواع الإشعارات المعروضة', 'Offered notification types', FieldType.choices,
+      options: ['announcements', 'verse_daily', 'katameros_daily', 'seasons', 'feasts', 'reminders'],
+      defaultValues: ['announcements', 'verse_daily', 'katameros_daily', 'seasons', 'feasts', 'reminders'],
+      hintAr: 'الأنواع التي يراها الزائر في صفحة الإشعارات. على الويب يُعرض منها: الإعلانات، المواسم، التذكيرات.',
+      hintEn: 'Types visible to visitors on the notifications page. On the web: announcements, seasons, reminders.'),
+  FieldDef('reminderLeads', 'خيارات مدد التذكير المتاحة', 'Offered reminder lead times', FieldType.intChoices,
+      intOptions: [0, 5, 10, 15, 30, 60, 120, 180, 1440],
+      defaultIntValues: [0, 15, 60, 1440],
+      maxRows: 4,
+      hintAr: 'المدد التي تظهر في قائمة التذكير (اختر حتى 4 مدد).',
+      hintEn: 'Lead times offered in the reminder sheet (choose up to 4).'),
+  FieldDef('reminderDefaultLead', 'مدة التذكير المحددة افتراضيًا', 'Default reminder lead time (minutes)', FieldType.integer,
+      min: 0,
+      max: 1440,
+      hintAr: 'المدة المختارة مسبقًا في قائمة التذكير (يجب أن تكون إحدى المدد المختارة أعلاه، الافتراضي 60 دقيقة).',
+      hintEn: 'Lead time pre-selected in the sheet (must be one of the choices selected above, default 60 min).'),
+]);

@@ -61,4 +61,10 @@ tool/node_modules/
 sa.json
 .env
 .env.*
+android/key.properties
+*.jks
+*.keystore
 .work/
+lh-*.json
+tmp-lh/
+

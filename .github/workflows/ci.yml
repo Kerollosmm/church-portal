@@ -33,6 +33,9 @@ jobs:
       - name: Unit tests
         run: flutter test
 
+      - name: Tool and Web JS tests
+        run: node --test web/*.test.mjs tool/*.test.mjs
+
       - name: Build web (release)
         # Not deployed: tagged `ci` so a crash while testing this build is
         # never mistaken for production (Sentry, ADR-034).
@@ -43,6 +46,9 @@ jobs:
           DEFINES=(--source-maps --dart-define=SENTRY_ENVIRONMENT=ci --dart-define=GIT_SHA="$GITHUB_SHA" --dart-define=APP_VERSION="$APP_VERSION")
           if [ -n "$SENTRY_DSN" ]; then DEFINES+=(--dart-define=SENTRY_DSN="$SENTRY_DSN"); fi
           flutter build web --release "${DEFINES[@]}"
+
+      - name: Check web bundle size & deferred chunk isolation
+        run: node tool/check_web_bundle.mjs build/web
 
       - name: Fingerprint icon fonts (cache busting, PR #23)
         run: python3 tool/fingerprint_icon_fonts.py build/web

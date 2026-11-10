@@ -1,6 +1,7 @@
 // Pure validation / conversion for the admin forms (unit-tested).
 import '../../domain/cairo_time.dart';
 import '../../domain/custom_content.dart' show BlockTypes, PageBlock, isValidSlug;
+import '../../domain/push.dart';
 import '../../domain/rules.dart' show normalizeDigits;
 import 'admin_schema.dart';
 
@@ -203,6 +204,10 @@ String? validateDocument(CollectionDef? def, Map<String, dynamic> data) {
   }
   final s = data['startsAt'], e = data['endsAt'];
   if (s is DateTime && e is DateTime && !e.isAfter(s)) return 'endBeforeStart';
+  // App & notifications (ADR-057): the default lead must be one of the
+  // offered leads (firestore.rules denies the save otherwise).
+  final leads = data['reminderLeads'], lead = data['reminderDefaultLead'];
+  if (lead is int && leads is List && !leads.contains(lead)) return 'reminderDefaultLeadNotOffered';
   // Custom page blocks (firestore.rules validPageBlock): an image needs an
   // https picture link.
   final blocks = data['blocks'];
@@ -286,3 +291,46 @@ List<Map<String, dynamic>> splitSavePayload(Map<String, dynamic> payload) {
       if (own(k)) {k: payload[k]},
   ];
 }
+
+/// Validates a notification template string against placeholder rules and character limits.
+String? validateNotifyTemplate(String typeId, String? text, {int maxLength = 300}) {
+  if (text == null || text.trim().isEmpty) return null;
+  if (text.length > maxLength) return 'err_max_length';
+  final unknown = unknownPlaceholders(typeId, text);
+  if (unknown.isNotEmpty) return 'err_unknown_placeholder';
+  return null;
+}
+
+/// Validates a scheduled notification draft before saving: the same limits
+/// as `validNotifyRow` in firestore.rules and `parseScheduleRow` in
+/// tool/push_sender.js (Arabic title AND body are required by both).
+/// Returns an l10n key, or null.
+String? validateScheduledNotification(ScheduledNotification n) {
+  bool sep(String s) => s.contains('\u001f');
+  if (n.titleAr.trim().isEmpty) return 'err_title_required';
+  if (n.bodyAr.trim().isEmpty) return 'err_body_required';
+  if (n.titleAr.length > 120 || n.titleEn.length > 120) return 'err_title_length';
+  if (n.bodyAr.length > 300 || n.bodyEn.length > 300) return 'err_body_length';
+  if (sep(n.titleAr) || sep(n.titleEn) || sep(n.bodyAr) || sep(n.bodyEn)) return 'err_bad_char';
+  if (!validNotificationLink(n.link)) return 'err_bad_link';
+  if (n.eventKey.isNotEmpty && !isValidPushEventKey(n.eventKey)) {
+    return 'err_invalid_event_key';
+  }
+  if (!['all', 'web', 'app'].contains(n.targets)) return 'err_invalid_targets';
+  if (!RegExp(r'^[a-z0-9_-]{1,24}$').hasMatch(n.id)) return 'err_invalid_id';
+  return null;
+}
+
+/// An in-app path the rules accept for a scheduled push: `/` or `/…` with no
+/// spaces, at most 201 characters.
+bool validNotificationLink(String link) =>
+    link == '/' || RegExp(r'^/[^\s\u001f]{1,200}$').hasMatch(link);
+
+/// `lit-` / `meeting-` / `day-` / `season-` + lowercase id (firestore.rules).
+bool isValidPushEventKey(String key) => RegExp(r'^(lit|meeting|day|season)-[a-z0-9-]{1,40}$').hasMatch(key);
+
+/// `HH:mm` (24 h) or empty.
+bool isValidHm(String s) => s.isEmpty || RegExp(r'^([01]\d|2[0-3]):[0-5]\d$').hasMatch(s);
+
+/// The Web Push public key: empty or 80–100 URL-safe base64 characters.
+bool isValidVapidKey(String s) => s.isEmpty || RegExp(r'^[A-Za-z0-9_-]{80,100}$').hasMatch(s);

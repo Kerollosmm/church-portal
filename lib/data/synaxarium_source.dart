@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../config/app_config.dart';
 import '../domain/today.dart';
 
 /// Loads `/data/today.json` (ADR-040): the day's Katameros commemoration
@@ -26,7 +27,8 @@ class SynaxariumSource {
   /// The live site (Android has no relative origin).
   static const liveUrl = 'https://maximos-domadios-church.web.app/data/today.json';
 
-  static Uri get url => kIsWeb ? Uri.base.resolve('/data/today.json') : Uri.parse(liveUrl);
+  static Uri get url =>
+      kIsWeb ? Uri.base.resolve('/data/today.json') : Uri.parse('${AppConfig.siteOriginDefine}/data/today.json');
 
   /// The commemoration data covering [date] when possible.
   Future<SynaxariumData> load(DateTime date) async {

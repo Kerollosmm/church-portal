@@ -75,8 +75,10 @@
 | سرعة الموقع ونتائج PageSpeed | [features/performance-pagespeed.md](features/performance-pagespeed.md) |
 | سهولة الوصول | [features/accessibility.md](features/accessibility.md) |
 | تطبيق Android | [features/android-app.md](features/android-app.md) |
+| تثبيت التطبيق وتفضيلات الإشعارات والتذكيرات | [features/install-and-notifications.md](features/install-and-notifications.md) |
 | البنية العامة | [architecture.md](architecture.md) |
 | التشغيل والنشر والمشاكل الشائعة | [operations.md](operations.md) |
+| **خطة المرحلة الثانية: الإشعارات وتطبيقات الهاتف** (خطة فقط، لم تُنفَّذ بعد) | [../docs/plans/phase2/README.md](../docs/plans/phase2/README.md) |
 
 ## العلاقة مع «بنك الذاكرة»
 
