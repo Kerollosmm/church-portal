@@ -302,8 +302,9 @@ jobs:
     if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && needs.preview.outputs.preview_url != ''
     runs-on: ubuntu-latest
     continue-on-error: true
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v5
       - name: Audit preview URL with Lighthouse
         uses: treosh/lighthouse-ci-action@v12
         with:

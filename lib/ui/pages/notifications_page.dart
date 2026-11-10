@@ -437,10 +437,16 @@ class NotificationsPage extends ConsumerWidget {
                           if (kIsWeb) {
                             try {
                               await web_push.loadLibrary();
+                            } catch (e, st) {
+                              ErrorReporting.capture(e, st, section: 'deferred_chunk', source: 'web_push_repository');
+                              onPermissionChanged();
+                              return;
+                            }
+                            try {
                               final repo = web_push.WebPushRepository(pushEnv: pushEnv);
                               await repo.enable(vapidKey: pushSettings.vapidKey);
                             } catch (e, st) {
-                              ErrorReporting.capture(e, st, section: 'deferred_chunk', source: 'web_push_repository');
+                              ErrorReporting.capture(e, st, section: 'notifications', source: 'web_push_enable');
                             }
                           }
                         }

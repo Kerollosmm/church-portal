@@ -292,7 +292,7 @@ flowchart LR
   `refreshListenable` is a `ValueNotifier` bumped by `ref.listen(localeProvider)` so redirects re-run on a language
   change without rebuilding the router.
 - A `ShellRoute` wraps all public pages in `AppShell(location, child)`; each page is built by `_page(state, child)` =
-  `NoTransitionPage(child: FeatureGate(path: s.uri.path, child: child))`.
+  `NoTransitionPage(child: FeatureGate(key: ValueKey(s.uri.path), path: s.uri.path, child: child))`.
 
 | Route | Widget | Gate (`routeSections` in `features.dart`) |
 |---|---|---|
@@ -354,7 +354,7 @@ To protect the web initial load budget (`main.dart.js` gzip -9 ceiling <= 1,396,
 7. `data/web_push_repository.dart` (`web_push`): web push token sync & Firestore queue batch writer.
 8. `ui/widgets/reminder_sheet.dart` (`reminder_sheet`): reminder picker modal bottom sheet with `.ics` & calendar export.
 
-The routes build `DeferredLoader(loadLibrary: x.loadLibrary, builder: (_) => x.Page())` with `ValueKey(state.uri.path)` to reload on sibling path transitions via `didUpdateWidget`. `DeferredLoader` shows a live-region accessible spinner («جارٍ تحميل الصفحة…») and an `ErrorState` with Retry on network failure. All chunk loading failures report telemetry via `ErrorReporting.capture(e, st, section: 'deferred_chunk')`.
+The routes build `DeferredLoader(loadLibrary: x.loadLibrary, builder: (_) => x.Page())`. Sibling path transitions (e.g. between `/readings/date1` and `/readings/date2`) recreate the routed page subtree via `key: ValueKey(s.uri.path)` on `FeatureGate` in `_page` (`lib/router.dart`), with `DeferredLoader.didUpdateWidget` serving as an in-place fallback if a parent preserves the loader state. `DeferredLoader` shows a live-region accessible spinner («جارٍ تحميل الصفحة…») and an `ErrorState` with Retry on network failure. All chunk loading failures report telemetry via `ErrorReporting.capture(e, st, section: 'deferred_chunk')`.
 Deferred isolation is mechanically enforced in CI via `node tool/check_web_bundle.mjs build/web`, which parses `main.dart.js.map` to assert 0 sourcemap leaks from any of the 8 deferred modules, verifies at least 6 `.part.js` chunks (22 emitted in production), and checks OpenType font integrity.
 
 ## App shell & navigation (`lib/ui/widgets/app_shell.dart`)

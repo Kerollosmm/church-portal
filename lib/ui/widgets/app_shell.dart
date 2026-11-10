@@ -152,17 +152,26 @@ class _AppShellState extends ConsumerState<AppShell> {
       try {
         final prefs = ref.read(pushPrefsProvider);
         if (prefs.types.isNotEmpty) {
-          await web_push.loadLibrary();
-          final repo = web_push.WebPushRepository(pushEnv: pushEnv);
-          if (repo.syncedToken != null) {
-            final pushSettings = ref.read(pushSettingsProvider);
-            if (pushSettings.webReady) {
-              await repo.maybeRefreshTokenOnPushSurface(vapidKey: pushSettings.vapidKey);
+          try {
+            await web_push.loadLibrary();
+          } catch (e, st) {
+            ErrorReporting.capture(e, st, section: 'deferred_chunk', source: 'web_push_repository');
+            return;
+          }
+          try {
+            final repo = web_push.WebPushRepository(pushEnv: pushEnv);
+            if (repo.syncedToken != null) {
+              final pushSettings = ref.read(pushSettingsProvider);
+              if (pushSettings.webReady) {
+                await repo.maybeRefreshTokenOnPushSurface(vapidKey: pushSettings.vapidKey);
+              }
             }
+          } catch (e, st) {
+            ErrorReporting.capture(e, st, section: 'notifications', source: 'web_push_refresh');
           }
         }
       } catch (e, st) {
-        ErrorReporting.capture(e, st, section: 'deferred_chunk', source: 'web_push_repository');
+        ErrorReporting.capture(e, st, section: 'notifications', source: 'app_shell_post_frame');
       }
     });
   }
