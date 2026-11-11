@@ -207,10 +207,12 @@ The native Android app is packaged as lightweight, split release APKs for maximu
   - Publishes `version.json` to Firebase Hosting under `/app/android/version.json`; every code deploy (`deploy.yml`) carries the live copy over so a release never disappears. `minSupportedBuild` comes from the `APK_MIN_SUPPORTED_BUILD` repository variable (default 1); `certSha256` from `apksigner`.
   - Configured with strict edge cache headers in `firebase.json` (`no-cache, no-store, must-revalidate`) ensuring devices immediately discover new releases.
 
-### Katameros Daily Readings Pipeline (`.github/workflows/synaxarium.yml`)
-- Runs automatically every night at Cairo midnight (00:00 Cairo time / 22:10 UTC, with liturgical eve refresh at 16:10 UTC).
-- Executes `node tool/fetch_readings.js "$RUNNER_TEMP/readings" --days=9 --previous-url …/data/readings/` to fetch the rolling window (yesterday … +9 days; a date that fails keeps the live file) of Coptic Katameros scripture readings with full Arabic text (Van Dyck) and English reference citations (`refs-only`, target `< 25 KB` uncompressed per day).
-- Deploys static files to `/data/readings/{date}.json` and `/data/today.json` directly to Firebase Hosting via `tool/publish_hosting_file.js` with zero Firestore reads/writes.
+### Katameros Daily Readings & Synaxarium Synchronization (ADR-063)
+- Migrated from GitHub Actions (`synaxarium.yml`) into the Cloudflare Worker via Cron 4:
+  - `0 16 * * *` (Cron 4): Runs daily at 18:00 Cairo time (16:00 UTC) corresponding to the liturgical day rollover at eve.
+  - Invokes `syncDailyReadingsAndSynaxarium` (`tool/readings_syncer.js`) using pure Web-standard APIs (`fetch` and Web Crypto) with zero native Node.js dependencies.
+  - Dual persistence: writes normalized Coptic lectionary readings and Synaxarium commemorations to Firestore REST path `readings/<YYYY-MM-DD>` authenticated via Google OAuth2 service account bearer token, and caches in Cloudflare KV under `reading:<YYYY-MM-DD>` with a 7-day TTL.
+  - Idempotent: Skips duplicate API fetches and writes when data is already fresh in KV unless force-synced.
 
 ### In-App Update Verification & Installation Flow
 1. When `installApkBuild` (admin) is greater than the app's build, the app fetches `/app/android/version.json`.
@@ -235,12 +237,13 @@ The native Android app is packaged as lightweight, split release APKs for maximu
 
 ---
 
-## 8. Scheduled Notification Sender & Cloudflare Worker (ADR-059 / ADR-060)
+## 8. Scheduled Notification Sender & Cloudflare Worker (ADR-059, ADR-060, ADR-063)
 
-The remote scheduled push delivery infrastructure runs as a pure Web-API Cloudflare Worker with three scheduled crons defined in `wrangler.toml`:
+The remote scheduled push delivery and readings synchronization infrastructure runs as a pure Web-API Cloudflare Worker with four scheduled crons defined in `wrangler.toml`:
 1. `*/15 * * * *` (Cron 1): Scheduled notification sender, daily seasons alert, and due reminder dispatch using FCM boolean conditions (`'web_rem_...' in topics && !('app_...' in topics)`).
 2. `7,22,37,52 * * * *` (Cron 2): Web push subscription queue drain (`push_queue`) via Google IID REST with subscriber health metrics written to `meta/push_topics`.
 3. `3 2,8,14,20 * * *` (Cron 3): Web reminder planner compiling active liturgies, meetings, and special day events into `meta/push_plan`.
+4. `0 16 * * *` (Cron 4): Daily Katameros lectionary & Synaxarium synchronization at 18:00 Cairo liturgical rollover (Firestore REST + KV).
 
 ### Cloudflare Worker Configuration & KV Caching
 - **Cron Triggers:** 3 scheduled crons without a public `POST /trigger` endpoint to prevent unauthorized invocation or quota drain.
