@@ -1,12 +1,14 @@
-// Cloudflare Worker cron-only entrypoint for push sender (ADR-059, ADR-060).
-// 3 dedicated cron triggers (zero public HTTP endpoints):
+// Cloudflare Worker cron-only entrypoint for push sender & readings syncer (ADR-059, ADR-060, ADR-063).
+// 4 dedicated cron triggers (zero public HTTP endpoints):
 // 1. Delivery Cron: */15 * * * * (runs push_sender.js)
 // 2. Queue Drain Cron: 7,22,37,52 * * * * (runs push_queue.js)
 // 3. Reminder Planner Cron: 3 2,8,14,20 * * * (runs push_reminders.js)
+// 4. Daily Readings Sync Cron: 0 16 * * * (runs readings_syncer.js at 6:00 PM Cairo rollover)
 
 import { runPushSender } from './push_sender.js';
 import { runPushQueueDrain } from './push_queue.js';
 import { runPushReminderPlanner } from './push_reminders.js';
+import { syncDailyReadingsAndSynaxarium } from './readings_syncer.js';
 
 export default {
   async scheduled(event, env, ctx) {
@@ -20,6 +22,9 @@ export default {
     } else if (cron === '3 2,8,14,20 * * *') {
       runner = runPushReminderPlanner(env, ctx);
       section = 'push_reminder_planner';
+    } else if (cron === '0 16 * * *') {
+      runner = syncDailyReadingsAndSynaxarium(env);
+      section = 'readings_syncer';
     } else {
       // Default to delivery sender: */15 * * * *
       runner = runPushSender(env, { trigger: 'cron' });
@@ -46,4 +51,3 @@ export default {
     );
   },
 };
-

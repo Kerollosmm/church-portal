@@ -105,7 +105,8 @@ lib/
                             schedule CRUD, template preview, health card, sent log — ADR-059),
                             admin_screens (overview, church info, messages, admins), admin_validators
 tool/
-  cf_push_worker.js         Cloudflare Worker cron-only sender (*/15 * * * *, pure Web-API, RS256 JWT, <= 25 subrequests) — ADR-059
+  cf_push_worker.js         Cloudflare Worker cron-only sender & readings syncer (4 crons, pure Web-API, RS256 JWT, <= 25 subrequests) — ADR-059, ADR-060, ADR-063
+  readings_syncer.js        Daily Katameros & Synaxarium ingestion module (pure Web-API, 18:00 Cairo rollover, Firestore REST + PUSH_KV) — ADR-063
   push_sender.js            Node 22 CLI & GitHub Actions fallback sender (tool/push_sender.js --dry-run) — ADR-059
   firestore_rest.js         Lightweight Firestore REST client for batchGet and commit transactions — ADR-059
 ```
