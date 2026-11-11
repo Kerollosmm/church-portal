@@ -1338,26 +1338,25 @@ void main() {
               expect(clearance, greaterThanOrEqualTo(5.9),
                   reason: 'Clearance between seal and short title must be >= 6.0 dp (with 0.1 tolerance) on $route ($lang)');
 
+              // On mobile viewports (< 600 px), the AppBar language toggle is absent from the AppBar on both Home and subpages.
+              expect(find.byKey(const Key('appBarLanguageToggle')), findsNothing,
+                  reason: 'AppBar language toggle must be omitted on mobile viewports (< 600 px) on $route ($lang)');
+
               // Unobstructed horizontal title slot width before trailing AppBar action button is >= 130.0 dp
-              final langFinder = find.byKey(const Key('appBarLanguageToggle'));
               final menuFinder = find.byIcon(Icons.menu_rounded);
               expect(menuFinder, findsOneWidget);
-              final Rect trailingActionRect;
-              if (langFinder.evaluate().isNotEmpty) {
-                final langRect = tester.getRect(langFinder);
-                final menuRect = tester.getRect(menuFinder);
-                trailingActionRect = isAr
-                    ? (langRect.right > menuRect.right ? langRect : menuRect)
-                    : (langRect.left < menuRect.left ? langRect : menuRect);
-              } else {
-                trailingActionRect = tester.getRect(menuFinder);
-              }
+              final trailingActionRect = tester.getRect(menuFinder);
 
               final unobstructedTitleSlotWidth = isAr
                   ? titleRect.right - trailingActionRect.right
                   : trailingActionRect.left - titleRect.left;
               expect(unobstructedTitleSlotWidth, greaterThanOrEqualTo(130.0),
                   reason: 'Unobstructed title slot width before trailing action must be >= 130.0 dp on $route ($lang)');
+
+              // AppBar and SealTab are wrapped with RepaintBoundary
+              final appBarFinder = find.byType(AppBar);
+              expect(find.ancestor(of: appBarFinder, matching: find.byType(RepaintBoundary)), findsWidgets);
+              expect(find.ancestor(of: sealFinder, matching: find.byType(RepaintBoundary)), findsWidgets);
             }
           });
         }
@@ -1372,7 +1371,7 @@ void main() {
           router.go('/about');
           await tester.pumpAndSettle();
 
-          // Bar language toggle is hidden on subpage below 360 px
+          // Bar language toggle is hidden on mobile viewports (< 600 px)
           expect(find.byKey(const Key('appBarLanguageToggle')), findsNothing);
 
           // Open drawer
@@ -1391,6 +1390,23 @@ void main() {
           await tester.pumpAndSettle();
           expect(container.read(localeProvider).languageCode, isNot(currentLocale.languageCode));
         });
+
+        for (final size in const [Size(600, 800), Size(1024, 768)]) {
+          testWidgets('Desktop viewports at ${size.width.toInt()} x ${size.height.toInt()} show bar language toggle ($lang)', (tester) async {
+            final (router, _) = await _pumpApp(
+              tester,
+              size: size,
+              textScale: 1.0,
+              locale: Locale(lang),
+            );
+            for (final route in const ['/', '/about']) {
+              router.go(route);
+              await tester.pumpAndSettle();
+              expect(find.byKey(const Key('appBarLanguageToggle')), findsOneWidget,
+                  reason: 'AppBar language toggle must be present on desktop viewports (>= 600 px) on $route ($lang)');
+            }
+          });
+        }
       }
     });
 

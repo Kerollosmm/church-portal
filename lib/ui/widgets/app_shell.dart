@@ -250,7 +250,11 @@ class _AppShellState extends ConsumerState<AppShell> {
     final primary = context.pal.primary;
     // The hanging seal tab (start corner, after the Back arrow on phones).
     final ultraNarrow = !wide && width < 360;
-    final hideBarLang = showBack && ultraNarrow;
+    // On mobile viewports (< 600 px), omit the language toggle from the AppBar
+    // to reclaim horizontal space for the church title. The language toggle
+    // is already available in the navigation drawer. On desktop (width >= 600),
+    // keep it visible in the AppBar actions.
+    final showBarLang = width >= 600;
     final tabW = wide ? 88.0 : (ultraNarrow ? 54.0 : 64.0);
     final tabH = wide ? 108.0 : (ultraNarrow ? 70.0 : 80.0);
     final tabStart = (showBack ? 48.0 : 0.0) + (wide ? 24.0 : 6.0);
@@ -321,7 +325,7 @@ class _AppShellState extends ConsumerState<AppShell> {
           ),
           const SizedBox(width: 8),
         ],
-        if (!hideBarLang) ...[
+        if (showBarLang) ...[
           IconButton(
             key: const Key('appBarLanguageToggle'),
             tooltip: context.tr('language'),
@@ -360,16 +364,17 @@ class _AppShellState extends ConsumerState<AppShell> {
       onEndDrawerChanged: (open) => setState(() => _drawerOpen = open),
       appBar: PreferredSize(
         preferredSize: Size.fromHeight(focusMode ? 0.0 : (topBarH + (wide ? 76.0 : 64.0))),
-        child: AnimatedSize(
-          duration: const Duration(milliseconds: 250),
-          curve: Curves.easeInOut,
-          child: AnimatedSlide(
-            offset: focusMode ? const Offset(0, -1.0) : Offset.zero,
+        child: RepaintBoundary(
+          child: AnimatedSize(
             duration: const Duration(milliseconds: 250),
             curve: Curves.easeInOut,
-            child: focusMode
-                ? const SizedBox.shrink()
-                : Column(
+            child: AnimatedSlide(
+              offset: focusMode ? const Offset(0, -1.0) : Offset.zero,
+              duration: const Duration(milliseconds: 250),
+              curve: Curves.easeInOut,
+              child: focusMode
+                  ? const SizedBox.shrink()
+                  : Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             if (showTopBar) ...[
@@ -396,6 +401,7 @@ class _AppShellState extends ConsumerState<AppShell> {
               mainAppBar,
           ],
         ),
+            ),
           ),
         ),
       ),
@@ -433,27 +439,29 @@ class _AppShellState extends ConsumerState<AppShell> {
         PositionedDirectional(
           start: tabStart,
           top: MediaQuery.paddingOf(context).top + topBarH,
-          child: AnimatedSlide(
-            offset: focusMode ? const Offset(0, -1.2) : Offset.zero,
-            duration: const Duration(milliseconds: 250),
-            curve: Curves.easeInOut,
-            child: AnimatedOpacity(
-              opacity: focusMode ? 0.0 : 1.0,
+          child: RepaintBoundary(
+            child: AnimatedSlide(
+              offset: focusMode ? const Offset(0, -1.2) : Offset.zero,
               duration: const Duration(milliseconds: 250),
               curve: Curves.easeInOut,
-              child: IgnorePointer(
-                ignoring: focusMode,
-                child: Semantics(
-            link: true,
-            label: '${context.tr('logoLabel')} — ${context.tr('home')}',
-            excludeSemantics: true,
-            child: GestureDetector(
-              key: const Key('sealTabHome'),
-              onTap: () => context.go('/'),
-              child: MouseRegion(cursor: SystemMouseCursors.click, child: SealTab(width: tabW, height: tabH)),
-            ),
-          ),
-        ),
+              child: AnimatedOpacity(
+                opacity: focusMode ? 0.0 : 1.0,
+                duration: const Duration(milliseconds: 250),
+                curve: Curves.easeInOut,
+                child: IgnorePointer(
+                  ignoring: focusMode,
+                  child: Semantics(
+                    link: true,
+                    label: '${context.tr('logoLabel')} — ${context.tr('home')}',
+                    excludeSemantics: true,
+                    child: GestureDetector(
+                      key: const Key('sealTabHome'),
+                      onTap: () => context.go('/'),
+                      child: MouseRegion(cursor: SystemMouseCursors.click, child: SealTab(width: tabW, height: tabH)),
+                    ),
+                  ),
+                ),
+              ),
             ),
           ),
         ),
