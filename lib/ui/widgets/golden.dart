@@ -53,12 +53,24 @@ class ArtAssets {
 bool ambientMotionOn(BuildContext context, {bool adminOn = true}) =>
     adminOn && !MotionEnv.isTest && !MediaQuery.disableAnimationsOf(context);
 
-/// Whether HeroStage may run its Flutter-painted ambient loops (Ken Burns,
-/// haze drift, ray shimmer). Off in the Android APK: a 60 s ticker repainting
-/// 14 blurred rays every frame drops frames on phones (ADR-062). The web
-/// animates the same layers in CSS (ADR-037) and is unaffected.
-bool heroAmbientLoopAllowed({bool isWeb = kIsWeb, TargetPlatform? platform}) =>
-    isWeb || (platform ?? defaultTargetPlatform) != TargetPlatform.android;
+/// Whether HeroStage may run its ambient loops (Ken Burns, haze drift, ray shimmer).
+/// Off on mobile platforms (Android, iOS) and mobile viewports (< 600 px):
+/// continuous tickers and canvas/DOM repaints drop frames on phones and mobile browsers.
+/// Desktop web (width >= 1024) remains fully animated.
+bool heroAmbientLoopAllowed({
+  bool isWeb = kIsWeb,
+  TargetPlatform? platform,
+  double? width,
+}) {
+  final p = platform ?? defaultTargetPlatform;
+  if (p == TargetPlatform.android || p == TargetPlatform.iOS) {
+    return false;
+  }
+  if (width != null && width < 600) {
+    return false;
+  }
+  return true;
+}
 
 /// Whether the hero video may load and play: ambient motion is on, the visitor
 /// did not ask to save data, and the platform plays it (web, Android, iOS).
@@ -414,7 +426,10 @@ class _RevealState extends State<Reveal> with SingleTickerProviderStateMixin, Vi
 
   @override
   void didChangeDependencies() {
-    _static = !ambientMotionOn(context);
+    final size = MediaQuery.sizeOf(context);
+    final platform = Theme.of(context).platform;
+    final allowLoops = heroAmbientLoopAllowed(isWeb: kIsWeb, platform: platform, width: size.width);
+    _static = !ambientMotionOn(context) || !allowLoops;
     if (_static) _c.value = 1;
     super.didChangeDependencies();
   }
@@ -532,7 +547,10 @@ class _HeroStageState extends State<HeroStage> with SingleTickerProviderStateMix
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _ambient = ambientMotionOn(context, adminOn: widget.motion) && heroAmbientLoopAllowed();
+    final size = MediaQuery.sizeOf(context);
+    final platform = Theme.of(context).platform;
+    _ambient = ambientMotionOn(context, adminOn: widget.motion) &&
+        heroAmbientLoopAllowed(isWeb: kIsWeb, platform: platform, width: size.width);
     _videoOn = widget.video != null && heroVideoAllowed(context, adminOn: widget.motion);
     // Decode the still before it is needed (no pop-in, no flash on swaps).
     precacheImage(AssetImage(_still), context).ignore();
@@ -644,16 +662,23 @@ class _HeroStageState extends State<HeroStage> with SingleTickerProviderStateMix
             RepaintBoundary(
               child: sceneArt(
                   context,
-                  _feather(AnimatedBuilder(
-                    animation: _clock,
-                    builder: (context, _) => CustomPaint(
-                      painter: LightRaysPainter(
-                          shimmer: _ambient
-                              ? _clock.value * (HeroAmbientSpec.clock.inMilliseconds / HeroAmbientSpec.shimmerCycle.inMilliseconds) % 1
-                              : HeroAmbientSpec.stillShimmer,
-                          strength: widget.rays),
-                    ),
-                  ))),
+                  _feather(_ambient
+                      ? AnimatedBuilder(
+                          animation: _clock,
+                          builder: (context, _) => CustomPaint(
+                            painter: LightRaysPainter(
+                                shimmer: _clock.value *
+                                        (HeroAmbientSpec.clock.inMilliseconds /
+                                            HeroAmbientSpec.shimmerCycle.inMilliseconds) %
+                                    1,
+                                strength: widget.rays),
+                          ),
+                        )
+                      : CustomPaint(
+                          painter: LightRaysPainter(
+                              shimmer: HeroAmbientSpec.stillShimmer,
+                              strength: widget.rays),
+                        ))),
             ),
           // Season wash (ADR-050): a still gradient above every layer.
           if (tintColors != null)
