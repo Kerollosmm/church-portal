@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, visibleForTesting;
 import 'package:http/http.dart' as http;
 
 import '../core/push_env.dart';
@@ -69,6 +69,7 @@ DateTime? parseHttpDate(String? raw) {
 /// push_queue & meta/push_rate, local state persistence, and deterministic retry.
 class WebPushRepository {
   static const String storageKey = 'church_portal_push_web';
+  static const int maxRetryAttempts = 5;
 
   /// Optional debug batch writer hook for tests.
   static BatchWriterFn? debugBatchWriter;
@@ -78,9 +79,14 @@ class WebPushRepository {
   final BatchWriterFn? _batchWriter;
   final Future<DateTime> Function()? _fetchServerDate;
   final http.Client? _httpClient;
+  final bool enableRetryTimer;
+  final Duration retryBaseDelay;
 
   Timer? _debounceTimer;
+  Timer? _retryTimer;
   Future<bool>? _currentFlush;
+  int _retryAttempts = 0;
+  bool _disposed = false;
 
   String? _syncedToken;
   List<String> _syncedWant = const [];
@@ -99,10 +105,15 @@ class WebPushRepository {
     BatchWriterFn? batchWriter,
     this._fetchServerDate,
     this._httpClient,
+    this.enableRetryTimer = kIsWeb,
+    this.retryBaseDelay = const Duration(seconds: 15),
   })  : pushEnv = pushEnv ?? const PlatformPushEnv(),
         _batchWriter = batchWriter ?? debugBatchWriter {
     _loadState();
   }
+
+  @visibleForTesting
+  int get pendingRetryAttempts => _retryAttempts;
 
   bool get isSupported => pushEnv.isSupported;
   String get permission => pushEnv.permission;
@@ -209,8 +220,10 @@ class WebPushRepository {
 
     _pendingSync = true;
     _saveState();
+    _retryAttempts = 0;
 
     _debounceTimer?.cancel();
+    _retryTimer?.cancel();
     if (immediate) {
       return await flushPendingSync();
     } else {
@@ -221,9 +234,25 @@ class WebPushRepository {
     }
   }
 
+  /// Resumes a persisted pending sync after reload or page re-entry.
+  Future<bool> resumePendingSync({
+    required PushPrefs prefs,
+    required List<Reminder> reminders,
+  }) async {
+    if (!_pendingSync || _syncedToken == null) {
+      return true;
+    }
+    return syncPreferences(
+      prefs: prefs,
+      reminders: reminders,
+      immediate: true,
+    );
+  }
+
   /// Flush pending sync immediately with serialization queue.
   Future<bool> flushPendingSync() async {
     _debounceTimer?.cancel();
+    _retryTimer?.cancel();
     final prevFlush = _currentFlush;
     final completer = Completer<bool>();
     _currentFlush = completer.future;
@@ -235,9 +264,17 @@ class WebPushRepository {
         } catch (_) {}
       }
       final result = await _executeFlush();
+      if (result) {
+        _retryAttempts = 0;
+      } else if (_pendingSync && _syncedToken != null && _lastPrefs != null) {
+        _scheduleRetry();
+      }
       completer.complete(result);
       return result;
     } catch (e) {
+      if (_pendingSync && _syncedToken != null && _lastPrefs != null) {
+        _scheduleRetry();
+      }
       completer.complete(false);
       return false;
     } finally {
@@ -245,6 +282,20 @@ class WebPushRepository {
         _currentFlush = null;
       }
     }
+  }
+
+  void _scheduleRetry() {
+    if (!enableRetryTimer || _disposed || !_pendingSync) return;
+    if (_retryAttempts >= maxRetryAttempts) return;
+    _retryTimer?.cancel();
+    final multiplier = 1 << _retryAttempts;
+    final maxMs = const Duration(minutes: 4).inMilliseconds;
+    final delayMs = math.min(maxMs, retryBaseDelay.inMilliseconds * multiplier);
+    _retryAttempts++;
+    _retryTimer = Timer(Duration(milliseconds: delayMs), () {
+      if (_disposed || !_pendingSync) return;
+      unawaited(flushPendingSync());
+    });
   }
 
   Future<bool> _executeFlush() async {
@@ -530,4 +581,11 @@ class WebPushRepository {
     required String end,
   }) =>
       pushEnv.syncQuietHours(enabled: enabled, start: start, end: end);
+
+  /// Cancels any active debounce or retry timers owned by this repository.
+  void dispose() {
+    _disposed = true;
+    _debounceTimer?.cancel();
+    _retryTimer?.cancel();
+  }
 }

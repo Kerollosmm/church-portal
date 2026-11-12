@@ -129,6 +129,7 @@ class _AppShellState extends ConsumerState<AppShell> {
   bool _drawerOpen = false;
   DateTime? _lastBackPressTime;
   StreamSubscription<String>? _deepLinksSub;
+  dynamic _webPushRepo;
 
   String get location => widget.location;
 
@@ -151,7 +152,8 @@ class _AppShellState extends ConsumerState<AppShell> {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       try {
         final prefs = ref.read(pushPrefsProvider);
-        if (prefs.types.isNotEmpty) {
+        final hasPending = pushEnv.readStorage('church_portal_push_web')?.contains('"pendingSync":true') ?? false;
+        if (prefs.types.isNotEmpty || hasPending) {
           try {
             await web_push.loadLibrary();
           } catch (e, st) {
@@ -160,7 +162,14 @@ class _AppShellState extends ConsumerState<AppShell> {
           }
           try {
             final repo = web_push.WebPushRepository(pushEnv: pushEnv);
+            _webPushRepo = repo;
             if (repo.syncedToken != null) {
+              if (hasPending && mounted) {
+                await repo.resumePendingSync(
+                  prefs: prefs,
+                  reminders: ref.read(userRemindersProvider),
+                );
+              }
               final pushSettings = ref.read(pushSettingsProvider);
               if (pushSettings.webReady) {
                 await repo.maybeRefreshTokenOnPushSurface(vapidKey: pushSettings.vapidKey);
@@ -179,6 +188,7 @@ class _AppShellState extends ConsumerState<AppShell> {
   @override
   void dispose() {
     _deepLinksSub?.cancel();
+    _webPushRepo?.dispose();
     super.dispose();
   }
 

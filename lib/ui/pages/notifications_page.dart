@@ -11,6 +11,7 @@ import '../../core/theme.dart';
 import '../../data/error_reporting.dart';
 import '../../data/web_push_repository.dart' deferred as web_push;
 import '../../domain/features.dart';
+import '../../domain/reminders.dart';
 import '../../state/providers.dart';
 import '../widgets/common.dart';
 import '../widgets/reminder_sheet.dart';
@@ -81,6 +82,37 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
   PushEnv? _webPushEnv;
   Future<bool>? _syncInFlight;
 
+  @override
+  void initState() {
+    super.initState();
+    final isWeb = widget.isWeb ?? kIsWeb;
+    if (isWeb) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !context.mounted) return;
+        final pushEnv = ref.read(pushEnvProvider);
+        final hasPending = pushEnv.readStorage('church_portal_push_web')?.contains('"pendingSync":true') ?? false;
+        if (!hasPending) return;
+        final pushSettings = ref.read(pushSettingsProvider);
+        if (!pushSettings.webReady) return;
+        unawaited(_syncWebPush(context, ref, pushEnv, pushSettings, isWeb: true));
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    final pending = _syncInFlight;
+    final repo = _webPushRepo;
+    if (pending != null) {
+      pending.whenComplete(() {
+        if (repo != null) repo.dispose();
+      });
+    } else if (repo != null) {
+      repo.dispose();
+    }
+    super.dispose();
+  }
+
   dynamic _repoFor(PushEnv pushEnv) {
     if (_webPushRepo == null || !identical(_webPushEnv, pushEnv)) {
       _webPushEnv = pushEnv;
@@ -101,13 +133,16 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
     // then never claim notifications are on.
     if (!isWeb) return PushPermissionState.unsupported;
 
+    if (osInfo.os == InstallOs.ios && iosTooOldForPush(userAgent)) {
+      // iOS < 16.4 has no web push at all, installed or not.
+      return PushPermissionState.iosTooOld;
+    }
+
     if (osInfo.inAppBrowser) {
       return PushPermissionState.inAppBrowser;
     }
 
     if (osInfo.os == InstallOs.ios) {
-      // iOS < 16.4 has no web push at all, installed or not.
-      if (iosTooOldForPush(userAgent)) return PushPermissionState.iosTooOld;
       if (!isStandalone) {
         return PushPermissionState.iosNeedsInstall;
       }
@@ -117,7 +152,7 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
     }
 
     if (!pushEnv.isSupported) {
-      return osInfo.inAppBrowser ? PushPermissionState.inAppBrowser : PushPermissionState.unsupported;
+      return PushPermissionState.unsupported;
     }
 
     final p = permission;
@@ -137,6 +172,8 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
     }
   }
 
+  String _currentLang(BuildContext context) => context.isAr ? 'ar' : 'en';
+
   Future<bool> _syncWebPush(
     BuildContext context,
     WidgetRef ref,
@@ -146,7 +183,11 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
     bool isWeb = kIsWeb,
   }) {
     if (!isWeb) return Future.value(true);
-    final currentLang = context.isAr ? 'ar' : 'en';
+    // Capture fallback snapshots synchronously before any await so unmounting
+    // mid-flight never aborts the server sync or touches a disposed WidgetRef.
+    final fallbackLang = _currentLang(context);
+    final PushPrefs fallbackPrefs = overridePrefs ?? ref.read(pushPrefsProvider);
+    final List<Reminder> fallbackReminders = ref.read(userRemindersProvider);
     final prev = _syncInFlight;
     final next = () async {
       if (prev != null) {
@@ -154,13 +195,13 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
           await prev;
         } catch (_) {}
       }
-      if (!mounted || !context.mounted) return false;
       return _syncWebPushSerialized(
-        context,
         ref,
         pushEnv,
         pushSettings,
-        currentLang: currentLang,
+        fallbackLang: fallbackLang,
+        fallbackPrefs: fallbackPrefs,
+        fallbackReminders: fallbackReminders,
         overridePrefs: overridePrefs,
       );
     }();
@@ -171,22 +212,25 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
   }
 
   Future<bool> _syncWebPushSerialized(
-    BuildContext context,
     WidgetRef ref,
     PushEnv pushEnv,
     PushSettings pushSettings, {
-    required String currentLang,
+    required String fallbackLang,
+    required PushPrefs fallbackPrefs,
+    required List<Reminder> fallbackReminders,
     PushPrefs? overridePrefs,
   }) async {
     try {
       await web_push.loadLibrary();
       if (!kIsWeb && web_push.WebPushRepository.debugBatchWriter == null) return true;
-      if (!mounted) return false;
       final repo = _repoFor(pushEnv);
-      PushPrefs prefs = overridePrefs ?? ref.read(pushPrefsProvider);
-      if (prefs.lang != currentLang) {
-        ref.read(pushPrefsProvider.notifier).setLang(currentLang);
-        prefs = prefs.copyWith(lang: currentLang);
+      final liveLang = mounted && context.mounted ? _currentLang(context) : fallbackLang;
+      PushPrefs prefs = overridePrefs ?? (mounted ? ref.read(pushPrefsProvider) : fallbackPrefs);
+      if (prefs.lang != liveLang) {
+        if (mounted) {
+          ref.read(pushPrefsProvider.notifier).setLang(liveLang);
+        }
+        prefs = prefs.copyWith(lang: liveLang);
       }
 
       if (repo.syncedToken == null) {
@@ -195,7 +239,7 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
         }
         final token = await repo.enable(vapidKey: pushSettings.vapidKey);
         if (token == null) {
-          if (context.mounted) {
+          if (mounted && context.mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text(context.tr('notificationsRegisterFailed')),
@@ -205,20 +249,21 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
           }
           return false;
         }
-        if (!mounted) return false;
         // Reconcile against any opt-out / toggle changes made while enable() ran.
         if (overridePrefs == null) {
-          prefs = ref.read(pushPrefsProvider);
-          if (prefs.lang != currentLang) {
-            ref.read(pushPrefsProvider.notifier).setLang(currentLang);
-            prefs = prefs.copyWith(lang: currentLang);
+          final postEnableLang = mounted && context.mounted ? _currentLang(context) : liveLang;
+          prefs = mounted ? ref.read(pushPrefsProvider) : fallbackPrefs;
+          if (prefs.lang != postEnableLang) {
+            if (mounted) {
+              ref.read(pushPrefsProvider.notifier).setLang(postEnableLang);
+            }
+            prefs = prefs.copyWith(lang: postEnableLang);
           }
         }
       }
 
       if (repo.syncedToken != null) {
-        if (!mounted) return false;
-        final reminders = ref.read(userRemindersProvider);
+        final reminders = mounted ? ref.read(userRemindersProvider) : fallbackReminders;
         return (await repo.syncPreferences(
               prefs: prefs,
               reminders: reminders,

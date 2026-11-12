@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 
@@ -324,6 +325,84 @@ void main() {
       expect(writes.last['want'], isEmpty);
       expect(writes.last['rem'], '');
       expect(writes.last['drop'], isNotEmpty);
+    });
+
+    test('resumePendingSync flushes stored pendingSync opt-out on new repository instance', () async {
+      final fakeEnv = FakePushEnv();
+      fakeEnv.storage[WebPushRepository.storageKey] = jsonEncode({
+        'syncedToken': 'tok_saved',
+        'syncedWant': ['announcements', 'lang_ar'],
+        'syncedRem': <String>[],
+        'pendingSync': true,
+      });
+      final writes = <Map<String, dynamic>>[];
+      final now = DateTime.now().toUtc();
+      final repo = WebPushRepository(
+        pushEnv: fakeEnv,
+        fetchServerDate: () async => now,
+        batchWriter: (qid, queueData, rateData, {bool isSetCount1 = false}) async {
+          writes.add(Map<String, dynamic>.from(queueData));
+        },
+      );
+      addTearDown(repo.dispose);
+
+      expect(repo.hasPendingSync, isTrue);
+      final ok = await repo.resumePendingSync(
+        prefs: PushPrefs(types: const {}, lang: 'ar', updatedAt: now),
+        reminders: const [],
+      );
+      expect(ok, isTrue);
+      expect(repo.hasPendingSync, isFalse);
+      expect(writes.length, 1);
+      expect(writes.single['want'], isEmpty);
+      expect(writes.single['drop'], isEmpty); // prevWant is not stored locally, rem only
+    });
+
+    test('enableRetryTimer retries failed flush with backoff and clears pendingSync once healthy', () async {
+      final fakeEnv = FakePushEnv();
+      var failWrites = true;
+      var writeAttempts = 0;
+      final recovered = Completer<void>();
+      final now = DateTime.now().toUtc();
+      final repo = WebPushRepository(
+        pushEnv: fakeEnv,
+        fetchServerDate: () async => now,
+        enableRetryTimer: true,
+        retryBaseDelay: const Duration(milliseconds: 15),
+        batchWriter: (qid, queueData, rateData, {bool isSetCount1 = false}) async {
+          writeAttempts++;
+          if (failWrites) {
+            throw StateError('transient network error');
+          }
+          if (!recovered.isCompleted) {
+            recovered.complete();
+          }
+        },
+      );
+      addTearDown(repo.dispose);
+
+      await repo.enable(vapidKey: 'test_vapid');
+      final firstResult = await repo.syncPreferences(
+        prefs: PushPrefs(
+          types: const {NotifyType.announcements},
+          lang: 'ar',
+          updatedAt: now,
+        ),
+        reminders: const [],
+        immediate: true,
+      );
+      expect(firstResult, isFalse);
+      expect(repo.hasPendingSync, isTrue);
+      expect(repo.pendingRetryAttempts, 1);
+
+      // Heal server before the scheduled backoff timer fires.
+      failWrites = false;
+      await recovered.future.timeout(const Duration(seconds: 2));
+      await Future<void>.delayed(const Duration(milliseconds: 30));
+
+      expect(writeAttempts, greaterThanOrEqualTo(2));
+      expect(repo.hasPendingSync, isFalse);
+      expect(repo.pendingRetryAttempts, 0);
     });
   });
 }

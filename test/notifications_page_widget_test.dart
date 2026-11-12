@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:church_portal/core/install_env.dart';
 import 'package:church_portal/core/push_env.dart';
@@ -1012,6 +1013,8 @@ void main() {
     await tester.pump();
 
     enableCompleter.complete('test_token');
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 10));
     await tester.pumpAndSettle();
 
     expect(writes, isEmpty);
@@ -1044,6 +1047,166 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('تعذّر مزامنة الإشعارات مع الخادم؛ ستتم إعادة المحاولة تلقائيًا.'), findsOneWidget);
+  });
+
+  testWidgets('iOS < 16.4 inside in-app browser resolves to iosTooOld instead of inAppBrowser', (tester) async {
+    final installEnv = FakeTestInstallEnv(
+      userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 15_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/19G71 [FBAN/FBIOS;WhatsApp]',
+      isStandalone: false,
+    );
+    final pushEnv = FakeTestPushEnv(isSupported: false, permission: 'unsupported');
+
+    await tester.pumpWidget(buildTestable(
+      child: const NotificationsPage(isWeb: true),
+      pushSettings: const PushSettings(
+        enabled: true,
+        offered: [NotifyType.announcements],
+        vapidKey: 'test_vapid_key_01234567890123456789012345678901234567890123456789012345678901234567890123456789',
+      ),
+      pushEnv: pushEnv,
+      installEnv: installEnv,
+    ));
+    await tester.pumpAndSettle();
+
+    expect(find.text('يتطلب تلقي الإشعارات على iPhone تحديث نظام iOS إلى الإصدار 16.4 أو أحدث.'), findsOneWidget);
+    expect(find.text('نسخ الرابط للمتصفح'), findsNothing);
+  });
+
+  testWidgets('toggling switch while language changes mid-flight applies post-wait locale', (tester) async {
+    final writes = <Map<String, dynamic>>[];
+    web_push.WebPushRepository.debugBatchWriter = (qid, queueData, rateData, {bool isSetCount1 = false}) async {
+      writes.add(Map<String, dynamic>.from(queueData));
+    };
+    addTearDown(() => web_push.WebPushRepository.debugBatchWriter = null);
+
+    final enableCompleter = Completer<String?>();
+    final pushEnv = _DelayedEnablePushEnv(enableCompleter);
+    final installEnv = FakeTestInstallEnv();
+    final localeNotifier = ValueNotifier<Locale>(const Locale('ar'));
+    addTearDown(localeNotifier.dispose);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          repositoryProvider.overrideWithValue(SeedRepository(SeedData(const {}))),
+          nowProvider.overrideWith((ref) => Stream.value(CairoTime.at(2026, 11, 6, 12 * 60).toUtc())),
+          featuresStreamProvider.overrideWith((ref) => Stream.value(FeatureSettings.defaults)),
+          pushSettingsProvider.overrideWithValue(const PushSettings(
+            enabled: true,
+            offered: [NotifyType.announcements],
+            vapidKey: 'test_vapid_key_01234567890123456789012345678901234567890123456789012345678901234567890123456789',
+          )),
+          pushEnvProvider.overrideWithValue(pushEnv),
+          installEnvProvider.overrideWithValue(installEnv),
+          userRemindersProvider.overrideWith(() => _FakeRemindersNotifier(const [])),
+        ],
+        child: ValueListenableBuilder<Locale>(
+          valueListenable: localeNotifier,
+          builder: (_, loc, _) => MaterialApp(
+            locale: loc,
+            supportedLocales: const [Locale('ar'), Locale('en')],
+            localizationsDelegates: GlobalMaterialLocalizations.delegates,
+            theme: buildTheme(loc),
+            home: const Scaffold(body: NotificationsPage(isWeb: true)),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('تنويهات وأخبار'));
+    await tester.pump();
+
+    localeNotifier.value = const Locale('en');
+    await tester.pump();
+
+    enableCompleter.complete('test_token');
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 10));
+    await tester.pumpAndSettle();
+
+    expect(writes, hasLength(1));
+    expect(writes.single['want'], contains('web_announcements_en'));
+    expect(writes.single['want'], isNot(contains('web_announcements_ar')));
+  });
+
+  testWidgets('unmounting NotificationsPage mid-sync still completes sync and persists pendingSync on failure',
+      (tester) async {
+    var wroteOnce = false;
+    web_push.WebPushRepository.debugBatchWriter = (qid, queueData, rateData, {bool isSetCount1 = false}) async {
+      wroteOnce = true;
+      throw StateError('offline');
+    };
+    addTearDown(() => web_push.WebPushRepository.debugBatchWriter = null);
+
+    final enableCompleter = Completer<String?>();
+    final pushEnv = _DelayedEnablePushEnv(enableCompleter);
+    final installEnv = FakeTestInstallEnv();
+
+    await tester.pumpWidget(buildTestable(
+      child: const NotificationsPage(isWeb: true),
+      pushSettings: const PushSettings(
+        enabled: true,
+        offered: [NotifyType.announcements],
+        vapidKey: 'test_vapid_key_01234567890123456789012345678901234567890123456789012345678901234567890123456789',
+      ),
+      pushEnv: pushEnv,
+      installEnv: installEnv,
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('تنويهات وأخبار'));
+    await tester.pump();
+
+    // Unmount NotificationsPage while enable() is still pending.
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+
+    enableCompleter.complete('test_token');
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 10));
+    await tester.pumpAndSettle();
+
+    expect(wroteOnce, isTrue);
+    final saved = jsonDecode(pushEnv.storage[web_push.WebPushRepository.storageKey]!) as Map<String, dynamic>;
+    expect(saved['pendingSync'], isTrue);
+  });
+
+  testWidgets('reopening NotificationsPage resumes persisted pendingSync automatically', (tester) async {
+    final writes = <Map<String, dynamic>>[];
+    web_push.WebPushRepository.debugBatchWriter = (qid, queueData, rateData, {bool isSetCount1 = false}) async {
+      writes.add(Map<String, dynamic>.from(queueData));
+    };
+    addTearDown(() => web_push.WebPushRepository.debugBatchWriter = null);
+
+    final pushEnv = FakeTestPushEnv(
+      permission: 'granted',
+      storage: {
+        web_push.WebPushRepository.storageKey: jsonEncode({
+          'syncedToken': 'tok_saved',
+          'syncedWant': ['announcements', 'lang_ar'],
+          'syncedRem': <String>[],
+          'pendingSync': true,
+        }),
+      },
+    );
+    final installEnv = FakeTestInstallEnv();
+
+    await tester.pumpWidget(buildTestable(
+      child: const NotificationsPage(isWeb: true),
+      pushSettings: const PushSettings(
+        enabled: true,
+        offered: [NotifyType.announcements],
+        vapidKey: 'test_vapid_key_01234567890123456789012345678901234567890123456789012345678901234567890123456789',
+      ),
+      pushEnv: pushEnv,
+      installEnv: installEnv,
+    ));
+    await tester.pumpAndSettle();
+
+    expect(writes, hasLength(1));
+    final saved = jsonDecode(pushEnv.storage[web_push.WebPushRepository.storageKey]!) as Map<String, dynamic>;
+    expect(saved['pendingSync'], isFalse);
   });
 }
 
