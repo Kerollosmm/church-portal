@@ -31,9 +31,11 @@ const Map<String, List<String>> notificationsPageStrings = {
   'notificationsExplainerBody': ['اختر التنبيهات التي تهمك لتصلك مواعيد القداسات، تنبيهات مواسم الصوم وأسبوع الآلام، والتذكيرات التي تحددها بنفسك. لا نجمع أي بيانات شخصية ويمكنك إيقاف الإشعارات في أي وقت.', 'Choose the updates you care about: mass schedules, fasting seasons & Holy Week alerts, and reminders you set yourself. No personal data is collected and you can disable notifications at any time.'],
   'notificationsExplainerTitle': ['إشعارات وتنبيهات الكنيسة', 'Church notifications & alerts'],
   'notificationsInAppBrowser': ['أنت تفتح الموقع من داخل تطبيق (مثل Facebook أو WhatsApp). للحصول على أفضل تجربة وتفعيل التنبيهات، افتح الموقع في متصفح Safari أو Chrome.', 'You are viewing this site inside an app (such as Facebook or WhatsApp). To enable notifications, open the link in Safari or Chrome.'],
+  'notificationsInAppOpenBrowser': ['أنت تفتح الموقع من داخل تطبيق. انسخ الرابط وافتحه في متصفحك الأساسي لتفعيل الإشعارات.', 'You are in an in-app browser. Copy the link and open in Chrome or Safari to enable notifications.'],
   'notificationsInboxClear': ['مسح السجل', 'Clear history'],
   'notificationsInboxEmpty': ['لا توجد إشعارات سابقة في هذا المتصفح.', 'No previous notifications in this browser.'],
   'notificationsInboxTitle': ['سجل الإشعارات المستلمة', 'Received notifications'],
+  'notificationsIosAddFirst': ['لتفعيل الإشعارات على iPhone، أضف الموقع أولاً إلى الشاشة الرئيسية.', 'To enable notifications on iPhone, add the site to your Home Screen first.'],
   'notificationsIosFocusNote': ['على iPhone، يُرجى استخدام نمط التركيز (Focus Mode) في إعدادات الهاتف لتحديد ساعات الهدوء.', 'On iPhone, please use Focus Mode in Settings to set quiet hours.'],
   'notificationsIosNeedsInstallBody': ['على iPhone تعمل الإشعارات من iOS 16.4 فأحدث، بعد إضافة الموقع إلى الشاشة الرئيسية. اضغط زر المشاركة ثم «إضافة إلى الشاشة الرئيسية»، ثم افتح التطبيق من الشاشة الرئيسية لتفعيل الإشعارات.', 'On iPhone, notifications need iOS 16.4 or later and the site added to your Home Screen. Tap the Share button, select "Add to Home Screen", then open the app from your home screen to enable notifications.'],
   'notificationsIosNeedsInstallTitle': ['لتفعيل الإشعارات على iPhone', 'To enable notifications on iPhone'],
@@ -94,6 +96,33 @@ class NotificationsPage extends ConsumerWidget {
     if (p == 'granted') return PushPermissionState.granted;
     if (p == 'denied') return PushPermissionState.denied;
     return PushPermissionState.defaultState;
+  }
+
+  Future<void> _syncWebPush(
+    WidgetRef ref,
+    PushEnv pushEnv,
+    PushSettings pushSettings, {
+    PushPrefs? overridePrefs,
+  }) async {
+    if (!kIsWeb) return;
+    try {
+      await web_push.loadLibrary();
+      final repo = web_push.WebPushRepository(pushEnv: pushEnv);
+      if (repo.syncedToken == null) {
+        await repo.enable(vapidKey: pushSettings.vapidKey);
+      }
+      if (repo.syncedToken != null) {
+        final PushPrefs prefs = overridePrefs ?? ref.read(pushPrefsProvider);
+        final reminders = ref.read(userRemindersProvider);
+        repo.syncPreferences(
+          prefs: prefs,
+          reminders: reminders,
+          immediate: true,
+        );
+      }
+    } catch (e, st) {
+      ErrorReporting.capture(e, st, section: 'notifications', source: 'web_push_sync');
+    }
   }
 
   @override
@@ -189,10 +218,18 @@ class NotificationsPage extends ConsumerWidget {
           const SizedBox(height: 16),
 
           // Status & Permission card
-          _buildStatusCard(context, pal, permState, pushSettings, pushEnv, prefsNotifier,
-              // Re-read the browser permission so a denial shows the
-              // blocked-permission steps right away.
-              () => ref.invalidate(pushPermissionProvider)),
+          _buildStatusCard(
+            context,
+            pal,
+            permState,
+            pushSettings,
+            pushEnv,
+            prefsNotifier,
+            ref,
+            // Re-read the browser permission so a denial shows the
+            // blocked-permission steps right away.
+            () => ref.invalidate(pushPermissionProvider),
+          ),
 
           const SizedBox(height: 20),
 
@@ -250,11 +287,21 @@ class NotificationsPage extends ConsumerWidget {
                   foregroundColor: pal.alert,
                   side: BorderSide(color: pal.alert),
                 ),
-                onPressed: () {
+                onPressed: () async {
                   prefsNotifier.clearAll();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text(context.tr('notificationsUnsubscribeConfirm'))),
-                  );
+                  if (kIsWeb) {
+                    await _syncWebPush(
+                      ref,
+                      pushEnv,
+                      pushSettings,
+                      overridePrefs: PushPrefs(types: const {}, updatedAt: DateTime.now().toUtc()),
+                    );
+                  }
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(context.tr('notificationsUnsubscribeConfirm'))),
+                    );
+                  }
                 },
                 child: Text(context.tr('notificationsUnsubscribeAll')),
               ),
@@ -283,6 +330,7 @@ class NotificationsPage extends ConsumerWidget {
     PushSettings pushSettings,
     PushEnv pushEnv,
     PushPrefsNotifier prefsNotifier,
+    WidgetRef ref,
     VoidCallback onPermissionChanged,
   ) {
     switch (state) {
@@ -474,19 +522,7 @@ class NotificationsPage extends ConsumerWidget {
                         if (res == 'granted') {
                           prefsNotifier.firstOptIn();
                           if (kIsWeb) {
-                            try {
-                              await web_push.loadLibrary();
-                            } catch (e, st) {
-                              ErrorReporting.capture(e, st, section: 'deferred_chunk', source: 'web_push_repository');
-                              onPermissionChanged();
-                              return;
-                            }
-                            try {
-                              final repo = web_push.WebPushRepository(pushEnv: pushEnv);
-                              await repo.enable(vapidKey: pushSettings.vapidKey);
-                            } catch (e, st) {
-                              ErrorReporting.capture(e, st, section: 'notifications', source: 'web_push_enable');
-                            }
+                            await _syncWebPush(ref, pushEnv, pushSettings);
                           }
                         }
                         onPermissionChanged();
@@ -646,18 +682,34 @@ class NotificationsPage extends ConsumerWidget {
       value: isSelected,
       onChanged: (turnOn) async {
         if (turnOn && permState != PushPermissionState.granted) {
+          if (permState == PushPermissionState.iosNeedsInstall) {
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(context.tr('notificationsIosAddFirst')),
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+            }
+            return;
+          }
+          if (permState == PushPermissionState.inAppBrowser) {
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(context.tr('notificationsInAppOpenBrowser')),
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+            }
+            return;
+          }
           final res = await pushEnv.requestPermission();
           if (res == 'granted') {
-            if (kIsWeb) {
-              try {
-                await web_push.loadLibrary();
-                final repo = web_push.WebPushRepository(pushEnv: pushEnv);
-                await repo.enable(vapidKey: pushSettings.vapidKey);
-              } catch (e, st) {
-                ErrorReporting.capture(e, st, section: 'notifications', source: 'web_push_enable');
-              }
-            }
             prefsNotifier.toggleType(type);
+            if (kIsWeb) {
+              await _syncWebPush(ref, pushEnv, pushSettings);
+            }
             ref.invalidate(pushPermissionProvider);
           } else {
             ref.invalidate(pushPermissionProvider);
@@ -674,6 +726,9 @@ class NotificationsPage extends ConsumerWidget {
           }
         } else {
           prefsNotifier.toggleType(type);
+          if (kIsWeb && permState == PushPermissionState.granted) {
+            await _syncWebPush(ref, pushEnv, pushSettings);
+          }
         }
       },
       title: Text(

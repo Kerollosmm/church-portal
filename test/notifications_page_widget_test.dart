@@ -20,11 +20,14 @@ class FakeTestPushEnv implements PushEnv {
   @override
   String permission;
   int requestCalls = 0;
+  int enableCalls = 0;
+  final Map<String, String> storage;
 
   FakeTestPushEnv({
     this.isSupported = true,
     this.permission = 'default',
-  });
+    Map<String, String>? storage,
+  }) : storage = storage ?? {};
 
   @override
   Future<String> requestPermission() async {
@@ -36,7 +39,10 @@ class FakeTestPushEnv implements PushEnv {
   @override
   Future<bool> showLocalNotification(String title, String body, {String? icon, String? link}) async => true;
   @override
-  Future<String?> enableAndGetToken({required String vapidKey, required Map<String, dynamic> firebaseConfig}) async => 'test_token';
+  Future<String?> enableAndGetToken({required String vapidKey, required Map<String, dynamic> firebaseConfig}) async {
+    enableCalls++;
+    return 'test_token';
+  }
   @override
   Future<String?> getWebToken({required String vapidKey, required Map<String, dynamic> firebaseConfig}) async => 'test_token';
   @override
@@ -56,9 +62,11 @@ class FakeTestPushEnv implements PushEnv {
   }) async =>
       true;
   @override
-  String? readStorage(String key) => null;
+  String? readStorage(String key) => storage[key];
   @override
-  void writeStorage(String key, String value) {}
+  void writeStorage(String key, String value) {
+    storage[key] = value;
+  }
   @override
   Stream<String> get deepLinks => const Stream.empty();
   @override
@@ -302,8 +310,11 @@ void main() {
     final button = tester.widget<ButtonStyleButton>(buttonFinder);
     expect(button.onPressed, isNotNull);
     expect(find.byIcon(Icons.notifications_active), findsWidgets);
+    expect(pushEnv.requestCalls, 0);
     await tester.tap(buttonFinder);
-    await tester.pump();
+    await tester.pumpAndSettle();
+    expect(pushEnv.requestCalls, 1);
+    expect(find.text('الإشعارات مفعلة'), findsOneWidget);
   });
 
   testWidgets('PushPermissionState.denied renders recheck button and clicking invokes onPermissionChanged', (tester) async {
@@ -504,6 +515,110 @@ void main() {
 
     expect(pushEnv.requestCalls, 1);
     expect(find.text('الإشعارات غير مفعلة. يُرجى السماح بالإشعارات من إعدادات المتصفح أو النظام.'), findsOneWidget);
+    expect(find.text('إيقاف كل الإشعارات'), findsNothing);
+  });
+
+  testWidgets('toggling switch when iosNeedsInstall displays SnackBar without requesting permission', (tester) async {
+    tester.view.physicalSize = const Size(1200, 2000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    final pushEnv = FakeTestPushEnv();
+    final installEnv = FakeTestInstallEnv(
+      userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 Safari/604.1',
+      platform: 'iPhone',
+      isStandalone: false,
+    );
+
+    await tester.pumpWidget(buildTestable(
+      child: const NotificationsPage(isWeb: true),
+      pushSettings: const PushSettings(
+        enabled: true,
+        offered: [NotifyType.announcements],
+        vapidKey: 'test_vapid_key_01234567890123456789012345678901234567890123456789012345678901234567890123456789',
+      ),
+      pushEnv: pushEnv,
+      installEnv: installEnv,
+    ));
+    await tester.pumpAndSettle();
+
+    expect(pushEnv.requestCalls, 0);
+
+    // Tap switch
+    await tester.tap(find.text('تنويهات وأخبار'));
+    await tester.pumpAndSettle();
+
+    expect(pushEnv.requestCalls, 0);
+    expect(find.text('لتفعيل الإشعارات على iPhone، أضف الموقع أولاً إلى الشاشة الرئيسية.'), findsOneWidget);
+    expect(find.text('إيقاف كل الإشعارات'), findsNothing);
+  });
+
+  testWidgets('toggling switch when inAppBrowser displays SnackBar without requesting permission', (tester) async {
+    tester.view.physicalSize = const Size(1200, 2000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    final pushEnv = FakeTestPushEnv();
+    final installEnv = FakeTestInstallEnv(
+      userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) Mobile/15E148 [FBAN/FBIOS;FBDV/iPhone14,2;]',
+      platform: 'iPhone',
+      isStandalone: false,
+    );
+
+    await tester.pumpWidget(buildTestable(
+      child: const NotificationsPage(isWeb: true),
+      pushSettings: const PushSettings(
+        enabled: true,
+        offered: [NotifyType.announcements],
+        vapidKey: 'test_vapid_key_01234567890123456789012345678901234567890123456789012345678901234567890123456789',
+      ),
+      pushEnv: pushEnv,
+      installEnv: installEnv,
+    ));
+    await tester.pumpAndSettle();
+
+    expect(pushEnv.requestCalls, 0);
+
+    // Tap switch
+    await tester.tap(find.text('تنويهات وأخبار'));
+    await tester.pumpAndSettle();
+
+    expect(pushEnv.requestCalls, 0);
+    expect(find.text('أنت تفتح الموقع من داخل تطبيق. انسخ الرابط وافتحه في متصفحك الأساسي لتفعيل الإشعارات.'), findsOneWidget);
+    expect(find.text('إيقاف كل الإشعارات'), findsNothing);
+  });
+
+  testWidgets('tapping unsubscribe all confirms all turned off and clears preferences', (tester) async {
+    tester.view.physicalSize = const Size(1200, 2000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    final pushEnv = FakeTestPushEnv(permission: 'granted');
+    final installEnv = FakeTestInstallEnv();
+
+    await tester.pumpWidget(buildTestable(
+      child: const NotificationsPage(isWeb: true),
+      pushSettings: const PushSettings(
+        enabled: true,
+        offered: [NotifyType.announcements, NotifyType.reminders],
+        vapidKey: 'test_vapid_key_01234567890123456789012345678901234567890123456789012345678901234567890123456789',
+      ),
+      pushEnv: pushEnv,
+      installEnv: installEnv,
+    ));
+    await tester.pumpAndSettle();
+
+    // Turn on a type
+    await tester.tap(find.text('تنويهات وأخبار'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('إيقاف كل الإشعارات'), findsOneWidget);
+
+    // Tap unsubscribe all
+    await tester.tap(find.text('إيقاف كل الإشعارات'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('تم إيقاف جميع الإشعارات'), findsOneWidget);
     expect(find.text('إيقاف كل الإشعارات'), findsNothing);
   });
 }
