@@ -137,6 +137,30 @@ void main() {
       expect(res.inAppBrowser, isTrue);
     });
 
+    test('Telegram in-app browser on Android', () {
+      const ua =
+          'Mozilla/5.0 (Linux; Android 14; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.6261.64 Mobile Safari/537.36 Telegram-Android/10.9.1';
+      final res = detectInstallOs(userAgent: ua, platform: 'Linux armv8l');
+      expect(res.os, InstallOs.android);
+      expect(res.inAppBrowser, isTrue);
+    });
+
+    test('Telegram in-app browser on iOS', () {
+      const ua =
+          'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 Telegram/10.9.1';
+      final res = detectInstallOs(userAgent: ua, platform: 'iPhone', maxTouchPoints: 5);
+      expect(res.os, InstallOs.ios);
+      expect(res.inAppBrowser, isTrue);
+    });
+
+    test('Generic Android WebView (; wv token)', () {
+      const ua =
+          'Mozilla/5.0 (Linux; U; Android 13; en-us; SM-A536B Build/TP1A.220624.014; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/115.0.5790.166 Mobile Safari/537.36';
+      final res = detectInstallOs(userAgent: ua, platform: 'Linux armv8l');
+      expect(res.os, InstallOs.android);
+      expect(res.inAppBrowser, isTrue);
+    });
+
     test('Unknown or bot UA', () {
       const ua = 'curl/8.4.0';
       final res = detectInstallOs(userAgent: ua, platform: '');
