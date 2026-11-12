@@ -14,7 +14,7 @@ import 'package:church_portal/state/providers.dart';
 import 'package:church_portal/ui/pages/notifications_page.dart';
 import 'package:church_portal/ui/widgets/remind_me.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart' show MethodCall, SystemChannels;
+import 'package:flutter/services.dart' show MethodCall, PlatformException, SystemChannels;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
@@ -1207,6 +1207,192 @@ void main() {
     expect(writes, hasLength(1));
     final saved = jsonDecode(pushEnv.storage[web_push.WebPushRepository.storageKey]!) as Map<String, dynamic>;
     expect(saved['pendingSync'], isFalse);
+  });
+
+  testWidgets('rapid switch toggles after registration coalesce into one debounced write', (tester) async {
+    final writes = <Map<String, dynamic>>[];
+    web_push.WebPushRepository.debugBatchWriter = (qid, queueData, rateData, {bool isSetCount1 = false}) async {
+      writes.add(Map<String, dynamic>.from(queueData));
+    };
+    addTearDown(() => web_push.WebPushRepository.debugBatchWriter = null);
+
+    final pushEnv = FakeTestPushEnv(
+      permission: 'granted',
+      storage: {
+        web_push.WebPushRepository.storageKey: jsonEncode({
+          'syncedToken': 'tok_saved',
+          'syncedWant': <String>[],
+          'syncedRem': <String>[],
+          'pendingSync': false,
+        }),
+      },
+    );
+    final installEnv = FakeTestInstallEnv();
+
+    await tester.pumpWidget(buildTestable(
+      child: const NotificationsPage(isWeb: true),
+      pushSettings: const PushSettings(
+        enabled: true,
+        offered: [NotifyType.announcements, NotifyType.seasons],
+        vapidKey: 'test_vapid_key_01234567890123456789012345678901234567890123456789012345678901234567890123456789',
+      ),
+      pushEnv: pushEnv,
+      installEnv: installEnv,
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('تنويهات وأخبار'));
+    await tester.pump();
+    await tester.tap(find.text('مواسم وأعياد خاصة'));
+    await tester.pump();
+
+    // Debounced toggles should persist pending state without immediate server burst.
+    expect(writes, isEmpty);
+
+    await tester.pump(const Duration(seconds: 10));
+    await tester.pumpAndSettle();
+
+    expect(writes, hasLength(1));
+    final want = (writes.single['want'] as List).cast<String>();
+    expect(want, containsAll(['web_announcements_ar', 'web_seasons_ar']));
+  });
+
+  testWidgets('turning switch off after permission revoked still syncs when syncedToken exists', (tester) async {
+    tester.view.physicalSize = const Size(1200, 2000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    final writes = <Map<String, dynamic>>[];
+    web_push.WebPushRepository.debugBatchWriter = (qid, queueData, rateData, {bool isSetCount1 = false}) async {
+      writes.add(Map<String, dynamic>.from(queueData));
+    };
+    addTearDown(() => web_push.WebPushRepository.debugBatchWriter = null);
+
+    final pushEnv = FakeTestPushEnv(
+      permission: 'denied',
+      storage: {
+        web_push.WebPushRepository.storageKey: jsonEncode({
+          'syncedToken': 'tok_saved',
+          'syncedWant': ['web_announcements_ar', 'web_seasons_ar'],
+          'syncedRem': <String>[],
+          'pendingSync': false,
+        }),
+      },
+    );
+    final installEnv = FakeTestInstallEnv(
+      storage: {
+        'church_portal_push': {
+          'types': ['announcements', 'seasons'],
+          'lang': 'ar',
+          'updatedAt': '2026-11-12T00:00:00.000Z',
+        },
+      },
+    );
+
+    await tester.pumpWidget(buildTestable(
+      child: const NotificationsPage(isWeb: true),
+      pushSettings: const PushSettings(
+        enabled: true,
+        offered: [NotifyType.announcements, NotifyType.seasons],
+        vapidKey: 'test_vapid_key_01234567890123456789012345678901234567890123456789012345678901234567890123456789',
+      ),
+      pushEnv: pushEnv,
+      installEnv: installEnv,
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('تنويهات وأخبار'));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 10));
+    await tester.pumpAndSettle();
+
+    expect(pushEnv.requestCalls, 0);
+    expect(pushEnv.enableCalls, 0);
+    expect(writes, hasLength(1));
+    expect((writes.single['want'] as List).cast<String>(), ['web_seasons_ar']);
+  });
+
+  testWidgets('clipboard failure reveals manual link fallback and preview URL strips query/fragment', (tester) async {
+    expect(
+      NotificationsPage.shareableNotificationsUrlForUri(
+        Uri.parse('https://maximos-domadios-church--pr-60.web.app/notifications?fbclid=1#top'),
+      ),
+      'https://maximos-domadios-church--pr-60.web.app/notifications',
+    );
+
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, (MethodCall call) async {
+      if (call.method == 'Clipboard.setData') {
+        throw PlatformException(code: 'copy_failed');
+      }
+      return null;
+    });
+    addTearDown(() => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, null));
+
+    final pushEnv = FakeTestPushEnv();
+    final installEnv = FakeTestInstallEnv(
+      userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) Mobile/15E148 Telegram/10.9.1',
+      platform: 'iPhone',
+      isStandalone: false,
+    );
+
+    await tester.pumpWidget(buildTestable(
+      child: const NotificationsPage(isWeb: true),
+      pushSettings: const PushSettings(
+        enabled: true,
+        offered: [NotifyType.announcements],
+        vapidKey: 'test_vapid_key_01234567890123456789012345678901234567890123456789012345678901234567890123456789',
+      ),
+      pushEnv: pushEnv,
+      installEnv: installEnv,
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('نسخ الرابط للمتصفح'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('تم نسخ الرابط'), findsNothing);
+    expect(find.text('تعذّر النسخ التلقائي — انسخ الرابط يدويًا:'), findsOneWidget);
+    expect(find.byType(SelectableText), findsOneWidget);
+  });
+
+  testWidgets('opening NotificationsPage with pendingSync and missing token never triggers enable or requestPermission',
+      (tester) async {
+    final pushEnv = FakeTestPushEnv(
+      permission: 'default',
+      storage: {
+        web_push.WebPushRepository.storageKey: jsonEncode({
+          'syncedToken': null,
+          'pendingSync': true,
+        }),
+      },
+    );
+    final installEnv = FakeTestInstallEnv(
+      storage: {
+        'church_portal_push': {
+          'types': ['announcements'],
+          'lang': 'ar',
+          'updatedAt': '2026-11-12T00:00:00.000Z',
+        },
+      },
+    );
+
+    await tester.pumpWidget(buildTestable(
+      child: const NotificationsPage(isWeb: true),
+      pushSettings: const PushSettings(
+        enabled: true,
+        offered: [NotifyType.announcements],
+        vapidKey: 'test_vapid_key_01234567890123456789012345678901234567890123456789012345678901234567890123456789',
+      ),
+      pushEnv: pushEnv,
+      installEnv: installEnv,
+    ));
+    await tester.pumpAndSettle();
+
+    expect(pushEnv.requestCalls, 0);
+    expect(pushEnv.enableCalls, 0);
   });
 }
 

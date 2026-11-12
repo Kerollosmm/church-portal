@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import '../domain/push.dart';
 import 'push_env_stub.dart'
@@ -6,6 +7,40 @@ import 'push_env_stub.dart'
 
 /// Storage key in localStorage for notification preferences.
 const pushStorageKey = 'church_portal_push';
+
+/// Storage key in localStorage for Web Push token & topic sync state.
+const webPushStorageKey = 'church_portal_push_web';
+
+/// Parsed summary of persisted Web Push storage state.
+class WebPushStorageState {
+  final String? syncedToken;
+  final bool pendingSync;
+
+  const WebPushStorageState({this.syncedToken, this.pendingSync = false});
+}
+
+/// Parses [webPushStorageKey] from [env] safely using `jsonDecode`.
+WebPushStorageState? readWebPushStorageState(PushEnv env) {
+  final raw = env.readStorage(webPushStorageKey);
+  if (raw == null || raw.isEmpty) return null;
+  try {
+    final decoded = jsonDecode(raw);
+    if (decoded is! Map<String, dynamic>) return null;
+    final token = decoded['syncedToken'];
+    return WebPushStorageState(
+      syncedToken: token is String && token.isNotEmpty ? token : null,
+      pendingSync: decoded['pendingSync'] == true,
+    );
+  } catch (_) {
+    return null;
+  }
+}
+
+/// Returns `true` when persisted Web Push state has both a token and pending sync.
+bool hasPendingWebPushSync(PushEnv env) {
+  final state = readWebPushStorageState(env);
+  return state != null && state.pendingSync && state.syncedToken != null;
+}
 
 /// Abstraction over browser push notification capabilities.
 abstract class PushEnv {

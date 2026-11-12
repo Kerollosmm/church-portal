@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../../core/l10n.dart';
+import '../../core/push_env.dart' show hasPendingWebPushSync;
 import '../../core/theme.dart';
 import '../../data/error_reporting.dart';
 import '../../data/web_push_repository.dart' deferred as web_push;
@@ -152,7 +153,7 @@ class _AppShellState extends ConsumerState<AppShell> {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       try {
         final prefs = ref.read(pushPrefsProvider);
-        final hasPending = pushEnv.readStorage('church_portal_push_web')?.contains('"pendingSync":true') ?? false;
+        final hasPending = hasPendingWebPushSync(pushEnv);
         if (prefs.types.isNotEmpty || hasPending) {
           try {
             await web_push.loadLibrary();
@@ -161,10 +162,10 @@ class _AppShellState extends ConsumerState<AppShell> {
             return;
           }
           try {
-            final repo = web_push.WebPushRepository(pushEnv: pushEnv);
+            final repo = web_push.WebPushRepository.sharedFor(pushEnv);
             _webPushRepo = repo;
             if (repo.syncedToken != null) {
-              if (hasPending && mounted) {
+              if (hasPending && mounted && (pushEnv.permission == 'granted' || prefs.types.isEmpty)) {
                 await repo.resumePendingSync(
                   prefs: prefs,
                   reminders: ref.read(userRemindersProvider),

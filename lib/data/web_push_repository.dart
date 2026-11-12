@@ -68,10 +68,27 @@ DateTime? parseHttpDate(String? raw) {
 /// Repository responsible for Web Push subscriptions, synchronization with Firestore
 /// push_queue & meta/push_rate, local state persistence, and deterministic retry.
 class WebPushRepository {
-  static const String storageKey = 'church_portal_push_web';
-  static const int maxRetryAttempts = 5;
+  static const String storageKey = webPushStorageKey;
+  static const int maxRetryAttempts = 3;
+
+  static WebPushRepository? _sharedInstance;
+  static PushEnv? _sharedEnv;
+
+  /// Returns a shared repository coordinated for [env] so [AppShell] and
+  /// [NotificationsPage] serialize flushes and localStorage writes safely.
+  static WebPushRepository sharedFor(PushEnv env) {
+    final existing = _sharedInstance;
+    if (existing != null && !existing._disposed && identical(_sharedEnv, env)) {
+      return existing;
+    }
+    final created = WebPushRepository(pushEnv: env);
+    _sharedInstance = created;
+    _sharedEnv = env;
+    return created;
+  }
 
   /// Optional debug batch writer hook for tests.
+  @visibleForTesting
   static BatchWriterFn? debugBatchWriter;
 
   final PushEnv pushEnv;
@@ -114,6 +131,9 @@ class WebPushRepository {
 
   @visibleForTesting
   int get pendingRetryAttempts => _retryAttempts;
+
+  /// Whether this repository has a configured Firestore/debug write sink.
+  bool get canWriteInEnvironment => kIsWeb || _firestore != null || _batchWriter != null;
 
   bool get isSupported => pushEnv.isSupported;
   String get permission => pushEnv.permission;
@@ -234,13 +254,22 @@ class WebPushRepository {
     }
   }
 
-  /// Resumes a persisted pending sync after reload or page re-entry.
+  /// Resumes a persisted pending sync after reload or page re-entry without
+  /// prompting for browser permission.
   Future<bool> resumePendingSync({
     required PushPrefs prefs,
     required List<Reminder> reminders,
   }) async {
+    if (_currentFlush != null) {
+      try {
+        await _currentFlush;
+      } catch (_) {}
+    }
     if (!_pendingSync || _syncedToken == null) {
-      return true;
+      return !_pendingSync || _syncedToken == null;
+    }
+    if (pushEnv.permission != 'granted' && prefs.types.isNotEmpty) {
+      return false;
     }
     return syncPreferences(
       prefs: prefs,

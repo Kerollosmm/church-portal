@@ -404,5 +404,60 @@ void main() {
       expect(repo.hasPendingSync, isFalse);
       expect(repo.pendingRetryAttempts, 0);
     });
+
+    test('concurrent resumePendingSync on sharedFor executes only a single write', () async {
+      final fakeEnv = FakePushEnv();
+      fakeEnv.storage[WebPushRepository.storageKey] = jsonEncode({
+        'syncedToken': 'tok_shared',
+        'syncedWant': ['announcements', 'lang_ar'],
+        'syncedRem': <String>[],
+        'pendingSync': true,
+      });
+      final writes = <Map<String, dynamic>>[];
+      WebPushRepository.debugBatchWriter = (qid, queueData, rateData, {bool isSetCount1 = false}) async {
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        writes.add(Map<String, dynamic>.from(queueData));
+      };
+      addTearDown(() => WebPushRepository.debugBatchWriter = null);
+
+      final now = DateTime.now().toUtc();
+      final repoA = WebPushRepository.sharedFor(fakeEnv);
+      final repoB = WebPushRepository.sharedFor(fakeEnv);
+      addTearDown(repoA.dispose);
+      expect(identical(repoA, repoB), isTrue);
+
+      final prefs = PushPrefs(types: const {NotifyType.seasons}, lang: 'ar', updatedAt: now);
+      final results = await Future.wait([
+        repoA.resumePendingSync(prefs: prefs, reminders: const []),
+        repoB.resumePendingSync(prefs: prefs, reminders: const []),
+      ]);
+      expect(results, [true, true]);
+      expect(writes, hasLength(1));
+      expect(writes.single['want'], ['web_seasons_ar']);
+    });
+
+    test('resumePendingSync skips without prompting when token is missing or permission denied with types', () async {
+      final fakeEnv = FakePushEnv();
+      fakeEnv.setPermission('default');
+      fakeEnv.storage[WebPushRepository.storageKey] = jsonEncode({
+        'syncedToken': null,
+        'pendingSync': true,
+      });
+      var writeCalls = 0;
+      final now = DateTime.now().toUtc();
+      final repo = WebPushRepository(
+        pushEnv: fakeEnv,
+        batchWriter: (qid, queueData, rateData, {bool isSetCount1 = false}) async {
+          writeCalls++;
+        },
+      );
+      addTearDown(repo.dispose);
+
+      await repo.resumePendingSync(
+        prefs: PushPrefs(types: const {NotifyType.announcements}, lang: 'ar', updatedAt: now),
+        reminders: const [],
+      );
+      expect(writeCalls, 0);
+    });
   });
 }

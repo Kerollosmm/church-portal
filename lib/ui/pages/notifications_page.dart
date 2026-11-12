@@ -26,7 +26,12 @@ const Map<String, List<String>> notificationsPageStrings = {
   'notificationsBlockedIos': ['من إعدادات الهاتف ← الإشعارات ← كنيسة مكسيموس ودوماديوس ← السماح بالإشعارات', 'Go to iPhone Settings → Notifications → Church App → Allow Notifications'],
   'notificationsBlockedTitle': ['الإشعارات محظورة في متصفحك', 'Notifications are blocked in your browser'],
   'notificationsComingSoon': ['خدمة الإشعارات عبر المتصفح قادمة قريبًا', 'Web push notifications are coming soon'],
+  'notificationsCopyFailed': ['تعذّر النسخ التلقائي — انسخ الرابط يدويًا:', 'Auto-copy blocked — copy link manually:'],
   'notificationsCopyLink': ['نسخ الرابط للمتصفح', 'Copy link for browser'],
+  'notificationsPermissionDisabled': [
+    'الإشعارات غير مفعلة. يُرجى السماح بالإشعارات من إعدادات المتصفح أو النظام.',
+    'Notifications disabled. Please allow notifications in device or browser settings.',
+  ],
   'notificationsEnableButton': ['تفعيل الإشعارات', 'Enable notifications'],
   'notificationsEnabledChip': ['الإشعارات مفعلة', 'Notifications enabled'],
   'notificationsExplainerBody': ['اختر التنبيهات التي تهمك لتصلك مواعيد القداسات، تنبيهات مواسم الصوم وأسبوع الآلام، والتذكيرات التي تحددها بنفسك. لا نجمع أي بيانات شخصية ويمكنك إيقاف الإشعارات في أي وقت.', 'Choose the updates you care about: mass schedules, fasting seasons & Holy Week alerts, and reminders you set yourself. No personal data is collected and you can disable notifications at any time.'],
@@ -73,6 +78,23 @@ class NotificationsPage extends ConsumerStatefulWidget {
   @visibleForTesting
   static Future<void> preloadWebPushForTest() => web_push.loadLibrary();
 
+  /// Returns a shareable notifications URL matching the active web deployment
+  /// (preview channel or prod) without query parameters or URL fragments.
+  @visibleForTesting
+  static String shareableNotificationsUrlForUri(Uri base) {
+    if ((base.scheme == 'http' || base.scheme == 'https') && base.host.isNotEmpty) {
+      final path = base.path.isEmpty ? '/notifications' : base.path;
+      return Uri(
+        scheme: base.scheme,
+        userInfo: base.userInfo,
+        host: base.host,
+        port: base.hasPort ? base.port : null,
+        path: path,
+      ).toString();
+    }
+    return 'https://maximos-domadios-church.web.app/notifications';
+  }
+
   @override
   ConsumerState<NotificationsPage> createState() => _NotificationsPageState();
 }
@@ -81,34 +103,47 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
   dynamic _webPushRepo;
   PushEnv? _webPushEnv;
   Future<bool>? _syncInFlight;
+  bool _copyFailed = false;
 
   @override
   void initState() {
     super.initState();
     final isWeb = widget.isWeb ?? kIsWeb;
     if (isWeb) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
         if (!mounted || !context.mounted) return;
         final pushEnv = ref.read(pushEnvProvider);
-        final hasPending = pushEnv.readStorage('church_portal_push_web')?.contains('"pendingSync":true') ?? false;
-        if (!hasPending) return;
+        final state = readWebPushStorageState(pushEnv);
+        if (state == null || !state.pendingSync || state.syncedToken == null) return;
+        final prefs = ref.read(pushPrefsProvider);
+        if (pushEnv.permission != 'granted' && prefs.types.isNotEmpty) return;
         final pushSettings = ref.read(pushSettingsProvider);
         if (!pushSettings.webReady) return;
-        unawaited(_syncWebPush(context, ref, pushEnv, pushSettings, isWeb: true));
+        try {
+          await web_push.loadLibrary();
+          final repo = _repoFor(pushEnv);
+          if (!repo.canWriteInEnvironment) return;
+          final reminders = mounted ? ref.read(userRemindersProvider) : <Reminder>[];
+          await repo.resumePendingSync(prefs: prefs, reminders: reminders);
+        } catch (e, st) {
+          ErrorReporting.capture(e, st, section: 'notifications', source: 'web_push_resume');
+        }
       });
     }
   }
 
   @override
   void dispose() {
-    final pending = _syncInFlight;
-    final repo = _webPushRepo;
-    if (pending != null) {
-      pending.whenComplete(() {
-        if (repo != null) repo.dispose();
-      });
-    } else if (repo != null) {
-      repo.dispose();
+    if (!kIsWeb) {
+      final pending = _syncInFlight;
+      final repo = _webPushRepo;
+      if (pending != null) {
+        pending.whenComplete(() {
+          if (repo != null) repo.dispose();
+        });
+      } else if (repo != null) {
+        repo.dispose();
+      }
     }
     super.dispose();
   }
@@ -116,7 +151,7 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
   dynamic _repoFor(PushEnv pushEnv) {
     if (_webPushRepo == null || !identical(_webPushEnv, pushEnv)) {
       _webPushEnv = pushEnv;
-      _webPushRepo = web_push.WebPushRepository(pushEnv: pushEnv);
+      _webPushRepo = web_push.WebPushRepository.sharedFor(pushEnv);
     }
     return _webPushRepo;
   }
@@ -222,8 +257,9 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
   }) async {
     try {
       await web_push.loadLibrary();
-      if (!kIsWeb && web_push.WebPushRepository.debugBatchWriter == null) return true;
       final repo = _repoFor(pushEnv);
+      if (!repo.canWriteInEnvironment) return true;
+      final hadTokenBefore = repo.syncedToken != null;
       final liveLang = mounted && context.mounted ? _currentLang(context) : fallbackLang;
       PushPrefs prefs = overridePrefs ?? (mounted ? ref.read(pushPrefsProvider) : fallbackPrefs);
       if (prefs.lang != liveLang) {
@@ -264,10 +300,11 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
 
       if (repo.syncedToken != null) {
         final reminders = mounted ? ref.read(userRemindersProvider) : fallbackReminders;
+        final immediate = !hadTokenBefore || prefs.types.isEmpty;
         return (await repo.syncPreferences(
               prefs: prefs,
               reminders: reminders,
-              immediate: true,
+              immediate: immediate,
             )) ==
             true;
       }
@@ -529,18 +566,37 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
               OutlinedButton.icon(
                 icon: const Icon(Icons.copy, size: 18),
                 label: Text(context.tr('notificationsCopyLink')),
-                onPressed: () {
-                  Clipboard.setData(const ClipboardData(text: 'https://maximos-domadios-church.web.app/notifications'));
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(context.tr('notificationsLinkCopied')),
-                        behavior: SnackBarBehavior.floating,
-                      ),
-                    );
+                onPressed: () async {
+                  final url = NotificationsPage.shareableNotificationsUrlForUri(Uri.base);
+                  try {
+                    await Clipboard.setData(ClipboardData(text: url));
+                    if (mounted) setState(() => _copyFailed = false);
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(context.tr('notificationsLinkCopied')),
+                          behavior: SnackBarBehavior.floating,
+                        ),
+                      );
+                    }
+                  } catch (_) {
+                    if (mounted) setState(() => _copyFailed = true);
                   }
                 },
               ),
+              if (_copyFailed) ...[
+                const SizedBox(height: 10),
+                Text(
+                  context.tr('notificationsCopyFailed'),
+                  style: TextStyle(fontSize: 12.5, color: pal.muted),
+                ),
+                const SizedBox(height: 4),
+                SelectableText(
+                  NotificationsPage.shareableNotificationsUrlForUri(Uri.base),
+                  textDirection: TextDirection.ltr,
+                  style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: pal.primaryDeep),
+                ),
+              ],
             ],
           ),
         );
@@ -905,9 +961,7 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
               if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text(context.isAr
-                        ? 'الإشعارات غير مفعلة. يُرجى السماح بالإشعارات من إعدادات المتصفح أو النظام.'
-                        : 'Notifications disabled. Please allow notifications in device or browser settings.'),
+                    content: Text(context.tr('notificationsPermissionDisabled')),
                     behavior: SnackBarBehavior.floating,
                   ),
                 );
@@ -919,7 +973,9 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
           }
         } else {
           prefsNotifier.toggleType(type);
-          if (isWeb && permState == PushPermissionState.granted && context.mounted) {
+          if (isWeb &&
+              (permState == PushPermissionState.granted || readWebPushStorageState(pushEnv)?.syncedToken != null) &&
+              context.mounted) {
             final syncOk = await _syncWebPush(context, ref, pushEnv, pushSettings, isWeb: isWeb);
             if (!mounted || !context.mounted) return;
             _showSyncErrorIfNeeded(context, syncOk);
