@@ -232,7 +232,7 @@ Two tabs: «الإشعارات» (`NotificationsAdminSection`, kept alive across
    recommending 15–30 min lead times.
 5. **Sent log** — last 30 entries with Cairo time, kind (announcement / automatic season alert) and a result chip;
    owner-only clear with confirmation.
-6. **Technical settings** (collapsed) — VAPID key with where to find it and format validation.
+6. **Technical settings** (collapsed) — VAPID public key with where to find it and format validation. A non-empty value wins over the deploy variable `WEB_PUSH_VAPID_KEY`. Leaving it empty uses that variable when the build had one (ADR-066). Turning off «تشغيل الإشعارات» hides the public page immediately.
 Cards 1, 3, 4, 6 share the bottom bar «لديك تعديلات لم تُحفظ — حفظ الإعدادات / تراجع» (writes `settings/features`);
 loading a snapshot never marks the form dirty.
 

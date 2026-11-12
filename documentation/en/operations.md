@@ -78,6 +78,7 @@ Configure these settings in **GitHub Repository → Settings → Secrets and var
 | `RECAPTCHA_SITE_KEY` | Variable | Public reCAPTCHA Enterprise site key ("church-portal-web") required for production builds to enable App Check and the AI Assistant. |
 | `FIREBASE_WEB_API_KEY` | Secret / Variable | Optional. Extracted automatically from `lib/firebase_options.dart` if omitted. Used only for sending password reset emails to newly seeded admins. |
 | `SENTRY_DSN` | Variable | Optional. A public fallback DSN is already embedded in `AppConfig.sentryDsn`. |
+| `WEB_PUSH_VAPID_KEY` | Variable (public, not a secret) | Public Web Push key. `deploy.yml` passes it as `--dart-define=WEB_PUSH_VAPID_KEY` when set. Used only when `/admin` left `pushVapidKey` empty (ADR-066). Never put the private key here. |
 | `SENTRY_AUTH_TOKEN` | Secret | Optional. Reserved for future release source-map uploads. |
 
 ### Firebase API Key Security
@@ -169,6 +170,7 @@ The portal integrates Sentry for privacy-first technical error reporting on Web 
 | **Hero video does not play** | Visitor enabled reduced-motion or data-saver, or `heroMotion` is turned off. | This is expected accessibility behavior; the hero displays a static high-resolution poster or painting instead. (YouTube hero video was removed in PR #25). |
 | **Top utility bar live badge does not appear on Home page** | Intentional default behavior (`liveBadgeHideOnHome: true`). | The Home page displays the prominent red live stream banner instead. Other sub-pages display the compact live badge. To display both on Home, toggle off **Hide live badge on Home when banner is showing** in `/admin` → **Today & Live Stream**. |
 | **Android notifications delayed or missed** | OEM aggressive battery managers (MIUI/ColorOS/OneUI) killing background tasks. | Direct user to the in-app Battery Guidance screen (`/notifications/battery`) to whitelist the app from battery optimization and enable autostart. |
+| **“Allow browser notifications” is disabled and says browser notifications are not set up** | `settings/features.push` is on and both `pushVapidKey` and `WEB_PUSH_VAPID_KEY` are empty. | Paste the **public** key from Firebase Console → Project settings → Cloud Messaging → Web Push certificates into `/admin` → Notifications → Technical settings, and save. Or set repository variable `WEB_PUSH_VAPID_KEY` and redeploy. |
 
 ---
 

@@ -39,10 +39,20 @@ jobs:
           SENTRY_DSN: ${{ vars.SENTRY_DSN || '' }}
           SENTRY_ENVIRONMENT: ${{ github.event_name == 'push' && 'production' || 'preview' }}
           GIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          # Public Web Push key only (ADR-066). Never a private key: this value
+          # is compiled into the public web bundle. Used when
+          # settings/features.pushVapidKey is empty.
+          WEB_PUSH_VAPID_KEY: ${{ vars.WEB_PUSH_VAPID_KEY || '' }}
         run: |
           APP_VERSION=$(sed -n 's/^version: *//p' pubspec.yaml | head -1)
           DEFINES=(--source-maps --dart-define=SENTRY_ENVIRONMENT="$SENTRY_ENVIRONMENT" --dart-define=GIT_SHA="$GIT_SHA" --dart-define=APP_VERSION="$APP_VERSION")
           if [ -n "$SENTRY_DSN" ]; then DEFINES+=(--dart-define=SENTRY_DSN="$SENTRY_DSN"); fi
+          if [ -n "$WEB_PUSH_VAPID_KEY" ]; then
+            echo "::notice::Web Push: building with WEB_PUSH_VAPID_KEY (public key; value not printed)"
+            DEFINES+=(--dart-define=WEB_PUSH_VAPID_KEY="$WEB_PUSH_VAPID_KEY")
+          elif [ "${{ github.event_name }}" = "push" ]; then
+            echo "::warning::WEB_PUSH_VAPID_KEY repository variable is empty. Browser notifications stay off until the public key is saved in /admin (pushVapidKey) or this variable is set and the site is redeployed."
+          fi
           echo "::notice::Sentry: environment=$SENTRY_ENVIRONMENT release=church-portal@$APP_VERSION+${GIT_SHA:0:7}"
           if [ -n "$RECAPTCHA_SITE_KEY" ]; then
             echo "::notice::App Check: building with RECAPTCHA_SITE_KEY (reCAPTCHA Enterprise)"

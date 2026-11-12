@@ -19,7 +19,7 @@ python3 tool/fingerprint_icon_fonts.py build/web   # content-hashed icon font na
 - Sentry (PR #24, ADR-034): debug runs report nothing unless you pass `--dart-define=SENTRY_DSN=<dsn>` (environment
   `debug`); release builds report to the project DSN unless `--dart-define=SENTRY_DSN=` (empty) switches it off.
   CI adds `SENTRY_ENVIRONMENT` (`production` / `preview` / `ci`), `GIT_SHA` and `APP_VERSION` (from `pubspec.yaml`).
-- Useful `--dart-define`s: `RECAPTCHA_SITE_KEY=…`, `GEMINI_MODEL=…`, `APPCHECK_DEBUG=true`,
+- Useful `--dart-define`s: `RECAPTCHA_SITE_KEY=…`, `WEB_PUSH_VAPID_KEY=…` (public Web Push key, ADR-066), `GEMINI_MODEL=…`, `APPCHECK_DEBUG=true`,
   `APPCHECK_DEBUG_TOKEN=<uuid>` (debug builds use the App Check debug provider automatically),
   `MEDIA_BACKEND=firestore|storage` (where uploaded images go; `storage` needs Blaze + the steps in ADR-017).
 - Android: `flutter run -d <device>`; release builds are still **signed with the debug key**
@@ -123,6 +123,7 @@ Normalises the service-account secret (first JSON object only, validates, `$RUNN
 | `FIREBASE_SERVICE_ACCOUNT_ASAFRA_CHURCH_PORTAL` | secret | build (read-only sitemap export), deploy-live, deploy-rules, preview, seed |
 | `RECAPTCHA_SITE_KEY` | repository **variable** (optional, not set yet) | live web build |
 | `SENTRY_DSN` | repository **variable** (optional, not set — PR #24) | web builds in `ci.yml` / `deploy.yml` pass it as `--dart-define=SENTRY_DSN` when set; otherwise release builds use the public DSN constant `AppConfig.sentryDefaultDsn` (ADR-034) |
+| `WEB_PUSH_VAPID_KEY` | repository **variable** (public key, not a secret) | `deploy.yml` passes `--dart-define=WEB_PUSH_VAPID_KEY` when set. Used only when `settings/features.pushVapidKey` is empty (ADR-066). A live deploy with the variable empty prints a warning and leaves the allow button disabled until the key is saved in `/admin`. |
 | Environment `production` | GitHub environment | deploy-live, seed — add **required reviewers** (open task) |
 
 ## PR process

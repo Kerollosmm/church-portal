@@ -79,6 +79,13 @@ class AppConfig {
   static const String gitSha = String.fromEnvironment('GIT_SHA');
   static String? get sentryRelease => buildSentryRelease(appVersion, gitSha);
 
+  /// Public Web Push key (Firebase Console → Project settings → Cloud Messaging
+  /// → Web Push certificates → Key pair). Repository variable
+  /// `WEB_PUSH_VAPID_KEY`, passed as `--dart-define=WEB_PUSH_VAPID_KEY`. Used
+  /// only when `settings/features.pushVapidKey` is empty. The private key must
+  /// never be put here: it would be compiled into the public web bundle.
+  static const String webPushVapidKey = String.fromEnvironment('WEB_PUSH_VAPID_KEY');
+
   /// Hidden admin route.
   static const String adminPath = '/admin';
 }

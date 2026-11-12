@@ -85,8 +85,9 @@ the owner approves the whole chain.
 - [x] PR C — admin notification manager + FCM sender + deep links (ADR-059)
 - [x] PR D — web push + PWA + iPhone (ADR-060)
 - [x] PR E — responsive + size audit (ADR-061; includes the 320 px app-bar item below)
-- [ ] Owner: keystore + secrets, FCM API + `push-sender` service account, VAPID key, Android developer verification
-      before 2027 (`docs/plans/phase2/LAUNCH-AND-OPERATIONS.md`)
+- [ ] Owner: keystore + secrets, FCM API + `push-sender` service account, Android developer verification
+      before 2027 (`docs/plans/phase2/LAUNCH-AND-OPERATIONS.md`). The Web Push **public** key is ADR-066
+      (repository variable `WEB_PUSH_VAPID_KEY`, or paste it in `/admin`).
 - [x] Owner decisions 6 Nov 2026 19:57 (README §8): **#6** APKs on GitHub Releases of a separate public repo
       `Kerollosmm/church-portal-apk`, manifest on Hosting; **#17** Katameros = Arabic Van Dyck full text + English
       references only (no NKJV), daily file ≤ ~20–25 KB.
@@ -385,3 +386,10 @@ the owner approves the whole chain.
 - [x] **In-app browser mitigation**: Comprehensive detection for restricted WebViews (Telegram, WhatsApp, Facebook, Instagram, TikTok, Android `; wv`) displaying an advisory banner with a one-tap «نسخ الرابط للمتصفح» (Copy link) button with clipboard confirmation.
 - [x] **iOS 16.4+ standalone transition**: Visual 3-step "Add to Home Screen" guide on standard Safari tabs, transitioning seamlessly to expose permission card and interactive switches when launched from the Home Screen (`isStandalone == true`).
 - [x] **Denied permission recovery**: Step-by-step browser site settings instructions (padlock icon in Chrome, Safari site settings) and a «التحقق من الإذن مجددًا» / "Check permission again" button to re-evaluate permissions without reloading.
+
+## Web Push public key on production (ADR-066, 12 Nov 2026)
+- [x] **Gate:** «السماح بإشعارات المتصفح» stays disabled, with «إشعارات المتصفح غير مُعدّة على الموقع بعد», when `push` is on and neither `settings/features.pushVapidKey` nor a valid `WEB_PUSH_VAPID_KEY` is present. `isSupported()` false is a different card.
+- [ ] **Owner:** set the public key, then the next deploy of `main` picks it up if it is not already saved in `/admin`.
+  1. Firebase Console → project `asafra-church-portal` → Project settings → Cloud Messaging → Web Push certificates. If there is no key pair, Generate key pair. Copy the **public** key (about 80–100 letters, digits, `-` and `_`). Do not copy the private key.
+  2. Either paste that public key in `/admin` → «الإشعارات» → «إعدادات تقنية» → «مفتاح إشعارات المتصفح (VAPID public key)» and press «حفظ الإعدادات» (works on the current site, no rebuild), **or** add GitHub repository **variable** (not a secret) `WEB_PUSH_VAPID_KEY` at Settings → Secrets and variables → Actions → Variables, then redeploy `main`.
+  3. A non-empty admin field wins over the variable. To turn browser notifications off immediately, turn off «تشغيل الإشعارات». Clearing only the admin field leaves the baked-in variable in effect until the next deploy without it.

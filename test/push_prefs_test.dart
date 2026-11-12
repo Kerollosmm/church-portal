@@ -1,4 +1,6 @@
-import 'package:church_portal/domain/push.dart';
+import 'package:church_portal/domain/features.dart';
+import 'package:church_portal/state/providers.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -196,6 +198,38 @@ void main() {
 
       expect(s.reminderLeads, [0, 15, 60, 1440]);
       expect(s.defaultLead, 60);
+    });
+  });
+
+  group('pushSettingsProvider vapid fallback (ADR-066)', () {
+    PushSettings read({required String stored, required String buildTime, bool enabled = true}) {
+      final container = ProviderContainer(overrides: [
+        featuresProvider.overrideWithValue(FeatureSettings(
+          pushSettings: PushSettings(enabled: enabled, vapidKey: stored),
+        )),
+        webPushVapidKeyProvider.overrideWithValue(buildTime),
+      ]);
+      addTearDown(container.dispose);
+      return container.read(pushSettingsProvider);
+    }
+
+    test('empty admin key uses a valid build-time public key', () {
+      final key = 'B' * 87;
+      final s = read(stored: '', buildTime: key);
+      expect(s.vapidKey, key);
+      expect(s.canRequestPermission, isTrue);
+    });
+
+    test('empty admin key and empty build-time key stay disabled', () {
+      final s = read(stored: '', buildTime: '');
+      expect(s.vapidKey, isEmpty);
+      expect(s.canRequestPermission, isFalse);
+    });
+
+    test('a saved admin key is not replaced by the build-time key', () {
+      final s = read(stored: 'from-admin', buildTime: 'E' * 90);
+      expect(s.vapidKey, 'from-admin');
+      expect(s.canRequestPermission, isTrue);
     });
   });
 }

@@ -301,6 +301,41 @@ void main() {
       expect(kPushDeliveryShipped, isTrue);
     });
 
+    test('production gate: push on with an empty key cannot request permission', () {
+      const stored = PushSettings(enabled: true, vapidKey: '');
+      expect(stored.webReady, isFalse);
+      expect(stored.canRequestPermission, isFalse);
+      expect(identical(stored.withBuildTimeVapid(''), stored), isTrue);
+      expect(stored.withBuildTimeVapid('too-short').canRequestPermission, isFalse);
+      expect(stored.withBuildTimeVapid('-----BEGIN PRIVATE KEY-----').vapidKey, isEmpty);
+    });
+
+    test('build-time public key fills an empty admin key and enables the button', () {
+      final buildKey = 'B' * 87;
+      expect(isWebPushVapidPublicKey(buildKey), isTrue);
+      const stored = PushSettings(enabled: true, vapidKey: '  ');
+      final resolved = stored.withBuildTimeVapid('  $buildKey  ');
+      expect(resolved.vapidKey, buildKey);
+      expect(resolved.webReady, isTrue);
+      expect(resolved.canRequestPermission, isTrue);
+    });
+
+    test('a saved admin key wins over the build-time key, even when short', () {
+      final buildKey = 'C' * 80;
+      const stored = PushSettings(enabled: true, vapidKey: 'k');
+      final resolved = stored.withBuildTimeVapid(buildKey);
+      expect(identical(resolved, stored), isTrue);
+      expect(resolved.vapidKey, 'k');
+      expect(resolved.canRequestPermission, isTrue);
+    });
+
+    test('push off stays off even when a public key is available', () {
+      final buildKey = 'D' * 88;
+      final resolved = const PushSettings(enabled: false).withBuildTimeVapid(buildKey);
+      expect(resolved.vapidKey, buildKey);
+      expect(resolved.canRequestPermission, isFalse);
+    });
+
     test('topicKey canonicalization and {1,40} length clamping', () {
       // Valid prefixes
       expect(topicKey('lit-sun1'), 'lit-sun1');

@@ -63,8 +63,8 @@ const Map<String, List<String>> _notificationsAdminStrings = {
     'Write an announcement (revival, liturgy, meeting…) and choose when it goes out; it reaches everyone who turned on “Announcements”.',
   ],
   'nm_vapidHint': [
-    'من Firebase Console ← Project settings ← Cloud Messaging ← Web Push certificates. اتركه فارغًا إن لم يتوفر بعد (لن تعمل إشعارات المتصفح و iPhone بدونه).',
-    'From Firebase Console → Project settings → Cloud Messaging → Web Push certificates. Leave empty if not available yet (browser & iPhone push need it).',
+    'من Firebase Console ← Project settings ← Cloud Messaging ← Web Push certificates — المفتاح العام فقط. إن تُرك فارغًا يُستخدم مفتاح النشر WEB_PUSH_VAPID_KEY إن وُجد. لإيقاف إشعارات المتصفح فورًا أوقف «تشغيل الإشعارات».',
+    'From Firebase Console → Project settings → Cloud Messaging → Web Push certificates — the public key only. If left empty, the deploy key WEB_PUSH_VAPID_KEY is used when set. To turn browser notifications off immediately, turn off “Notifications on”.',
   ],
   'nm_errVapid': [
     'المفتاح غير صحيح: يجب أن يكون ٨٠–١٠٠ حرف إنجليزي/رقم أو - و _ فقط (انسخه كاملًا).',
@@ -1859,7 +1859,7 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
               decoration: InputDecoration(
                 labelText: context.tr('nm_vapidLabel'),
                 helperText: context.tr('nm_vapidHint'),
-                helperMaxLines: 4,
+                helperMaxLines: 6,
                 errorText: bad ? context.tr('nm_errVapid') : null,
                 errorMaxLines: 3,
               ),

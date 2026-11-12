@@ -586,8 +586,9 @@ digits, Cairo `02` + 8, Alexandria `03` + 7, other governorates `0[4-9]` + 7–8
 ### Notification Preferences & Reminders (`/notifications`, `notifications_page.dart`, ADR-057, ADR-064, ADR-065)
 - Screen manages user notification channel subscriptions (`announcements`, `verse_daily`, `katameros_daily`, `seasons`, `feasts`) and personal reminders (`RemindMeButton`, «تذكيراتي»).
 - **Streamlined flow (ADR-064):** Persistent OEM battery optimization card («حالة الإشعارات وتحسين البطارية») has been removed from `notifications_page.dart`, allowing the screen to flow directly from the overall status banner to channel preferences and reminders without clutter.
-- **Explicit Web Push Permission Prompt (ADR-065):**
+- **Explicit Web Push Permission Prompt (ADR-065, ADR-066):**
   - On web viewports when `permission == 'default'`, a dedicated primary action card is rendered with an explicit «السماح بإشعارات المتصفح» / "Allow browser notifications" button.
+  - The button is enabled only when `PushSettings.canRequestPermission` is true: delivery has shipped and `webReady` (notifications on, and a public VAPID key). The key is `settings/features.pushVapidKey` when that field is non-empty; otherwise the deploy-time `WEB_PUSH_VAPID_KEY` (ADR-066). With neither, the button stays disabled and the caption is «إشعارات المتصفح غير مُعدّة على الموقع بعد». `isSupported() == false` is a different card (`notificationsUnsupported`), not this caption.
   - Zero automatic `Notification.requestPermission()` calls are made on initial page load (adheres strictly to user-gesture browser security policies).
   - Toggling any notification channel switch while unpermitted prompts for permission reactively in the tap handler before activating the switch.
   - Granting permission retrieves the FCM web registration token via `WebPushRepository` and immediately flushes active topics to Firestore `push_queue`.

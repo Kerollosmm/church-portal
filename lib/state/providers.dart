@@ -10,6 +10,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import '../data/app_updater.dart';
 import '../domain/app_update.dart';
 
+import '../config/app_config.dart';
 import '../core/content_ready.dart';
 import '../core/install_env.dart';
 import '../core/locale_storage.dart';
@@ -377,9 +378,17 @@ final installSettingsProvider = Provider<InstallSettings>((ref) {
   return ref.watch(featuresProvider.select((f) => f.install));
 });
 
-/// Push notifications settings (ADR-057).
+/// Public Web Push key baked in with `--dart-define=WEB_PUSH_VAPID_KEY`.
+/// Empty when the deploy did not pass one. Overridden in tests.
+final webPushVapidKeyProvider = Provider<String>((ref) => AppConfig.webPushVapidKey);
+
+/// Push notifications settings (ADR-057, ADR-066).
+///
+/// The key saved in `/admin` wins. When that field is empty, the deploy-time
+/// public key fills it so the allow button can enable without a second save.
 final pushSettingsProvider = Provider<PushSettings>((ref) {
-  return ref.watch(featuresProvider.select((f) => f.pushSettings));
+  final stored = ref.watch(featuresProvider.select((f) => f.pushSettings));
+  return stored.withBuildTimeVapid(ref.watch(webPushVapidKeyProvider));
 });
 
 /// Install environment provider (overridable in tests).

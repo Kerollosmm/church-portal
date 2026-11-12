@@ -246,6 +246,24 @@ bool isWebLeadTooSoon({
 /// Allowed lead choices in minutes before an event.
 const allowedReminderLeads = [0, 5, 10, 15, 30, 60, 120, 180, 1440];
 
+/// Firebase Web Push public key: 80–100 URL-safe characters.
+/// A PEM private key or a short placeholder does not match.
+bool isWebPushVapidPublicKey(String s) => RegExp(r'^[A-Za-z0-9_-]{80,100}$').hasMatch(s.trim());
+
+/// The key the browser uses to subscribe.
+///
+/// A non-empty key saved in `/admin` (`settings/features.pushVapidKey`) wins,
+/// including a short test value. When that field is empty, [buildTime] is used
+/// only if it is a public key of the shape above — a missing deploy variable,
+/// or a private key pasted by mistake, leaves the allow button disabled.
+String resolveWebPushVapidKey({required String stored, required String buildTime}) {
+  final fromAdmin = stored.trim();
+  if (fromAdmin.isNotEmpty) return fromAdmin;
+  final fromBuild = buildTime.trim();
+  if (isWebPushVapidPublicKey(fromBuild)) return fromBuild;
+  return '';
+}
+
 /// Admin push & notifications settings (settings/features).
 class PushSettings {
   final bool enabled;
@@ -284,10 +302,25 @@ class PushSettings {
 
   bool get webReady => enabled && vapidKey.trim().isNotEmpty;
 
-  /// Whether the «فعّل الإشعارات» button may ask the browser for permission.
-  /// False until a delivery path ships (PR D web push), whatever the VAPID
-  /// key: asking for a permission nothing uses yet would burn the one-time
-  /// browser prompt. The button stays disabled with «قريبًا» until then.
+  /// Copy whose [vapidKey] includes the deploy-time public key when the admin
+  /// field is empty. Returns this instance when nothing changes.
+  PushSettings withBuildTimeVapid(String buildTime) {
+    final resolved = resolveWebPushVapidKey(stored: vapidKey, buildTime: buildTime);
+    if (resolved == vapidKey) return this;
+    return PushSettings(
+      enabled: enabled,
+      vapidKey: resolved,
+      offered: offered,
+      reminderLeads: reminderLeads,
+      defaultLead: defaultLead,
+      reminderSources: reminderSources,
+    );
+  }
+
+  /// Whether «السماح بإشعارات المتصفح» may ask the browser for permission.
+  /// Delivery has shipped (`kPushDeliveryShipped`). The button stays disabled
+  /// until [webReady]: notifications are on and a public VAPID key is present
+  /// (saved in `/admin`, or the deploy-time key when that field is empty).
   bool get canRequestPermission => kPushDeliveryShipped && webReady;
 
   factory PushSettings.fromMap(Map<String, dynamic>? m) {

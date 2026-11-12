@@ -1981,6 +1981,16 @@ supersede them.
   - Modern, uncluttered `/notifications` page with reactive permission handshakes.
   - +0 Firestore reads, writes, rules expressions, or admin schema changes.
 
+## ADR-066 — Web Push allow button needs a public key, supplied at deploy when `/admin` is empty
+
+- **Context:** On production (`main` at `9f5c87b`, Hosting `https://maximos-domadios-church.web.app`) the Notifications page showed «السماح بإشعارات المتصفح» disabled, with «خدمة الإشعارات عبر المتصفح قادمة قريبًا». Live `settings/features` had `push: true` and `pushVapidKey: ""`. `canRequestPermission` is `kPushDeliveryShipped && webReady`, and `webReady` is `enabled && vapidKey` non-empty. Delivery is shipped (`kPushDeliveryShipped` is true). The button is disabled only because the public key is missing. `isSupported()` is not this gate: a false result renders the unsupported card, not this caption. `/firebase-messaging-sw.js` and `/push_client.js` both answer HTTP 200. The deploy workflow passed no VAPID `--dart-define` because the app only read `pushVapidKey`.
+- **Decision:**
+  1. A non-empty key saved in `/admin` still wins (the church office can paste or rotate it with no rebuild, including the short values tests use).
+  2. When that field is empty, `pushSettingsProvider` fills a deploy-time public key from repository variable `WEB_PUSH_VAPID_KEY` (`--dart-define=WEB_PUSH_VAPID_KEY` in `deploy.yml`). The value is used only when it matches `^[A-Za-z0-9_-]{80,100}$`, so a private key or a placeholder cannot enable the button. The variable is public (it is compiled into the web bundle); the private key stays in Firebase.
+  3. The disabled caption now says the site is not set up yet, which is the remaining case (push on, no usable key).
+  4. Immediate off switch stays «تشغيل الإشعارات» (`push: false`), which hides the page. Clearing the admin key no longer disables new opt-ins while `WEB_PUSH_VAPID_KEY` is baked into the build; unset the variable and redeploy to drop that fallback.
+- **Cost:** +0 Firestore reads, writes, listeners, or rules expressions. No new field.
+
 ## Timeline
 
 | When | PR / commit | What |
@@ -2060,5 +2070,6 @@ supersede them.
 | 12 Nov 2026 | **feat/web-push-permission-prompt** — "Explicit Web Push permission prompt, topic queuing & mobile browser guidance" (`feat/web-push-permission-prompt`) | ADR-065: Explicit user-gesture Web Push permission prompt card (`permission == 'default'`); zero permission requests on page load; switch-level reactive permission handshake triggering Web Push registration and immediate topic synchronization to Firestore `push_queue` via `WebPushRepository`; comprehensive in-app browser detection (Telegram, WhatsApp, Facebook, Instagram, TikTok, Android `; wv`) with one-tap «نسخ الرابط للمتصفح» clipboard action; iOS Safari 3-step home screen installation guide transitioning seamlessly to permission card upon standalone launch (`isStandalone == true`); denied permission guide with browser site settings instructions and re-check button. +0 Firestore rules / +0 new collections. |
 
 | 13 Nov 2026 | **chore/apk-v1.0.1** — "Prepare Android release 1.0.1" | `pubspec.yaml` `1.0.0+1` → `1.0.1+2` (build rises so the in-app updater offers it). `android/app/build.gradle.kts` still takes `versionName` / `versionCode` from Flutter. Arabic notes in `android/RELEASE_NOTES.md` cover, since tag `apk-v1.0.0`: clearer church name with language in the drawer (ADR-064), smoother home scrolling, notification permission when a type is turned on, and the evening Katameros / Synaxarium refresh (ADR-063). Web-only push onboarding is omitted. Tag `apk-v1.0.1` is not created here. |
+| 12 Nov 2026 | **fix web push allow button** (`cursor/fix-web-push-vapid-gate-f75a`) | ADR-066: production `push: true` with empty `pushVapidKey` left «السماح بإشعارات المتصفح» disabled. `isSupported()` was not the gate. Deploy now passes repository variable `WEB_PUSH_VAPID_KEY` when `pushVapidKey` is empty; a saved admin key still wins. +0 Firestore. |
 
 <!-- Append new PRs to this table. -->

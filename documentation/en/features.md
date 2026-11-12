@@ -225,6 +225,7 @@ This document provides a comprehensive, feature-by-feature manual for all 31 cap
 
 ### 33. Web Push, Installed iPhone PWA & Web Reminder Planner (ADR-060)
 - **Zero Casual Visitor Overhead:** 0 bytes Firebase Messaging JS, no push service worker registered on normal visits, deferred bundle loading (`web_push_repository.dart` loaded via `deferred as web_push`).
+- **Public key required (ADR-066):** «السماح بإشعارات المتصفح» is enabled only when notifications are on and a public VAPID key is available. The key saved in `/admin` (`pushVapidKey`) wins. When that field is empty, the web build uses repository variable `WEB_PUSH_VAPID_KEY`. With neither, the button stays disabled and the caption says browser notifications are not set up on this site yet.
 - **Safari iOS 16.4+ PWA Support:** `manifest.json` configured with `"id": "/"` and `"scope": "/"`, monochrome badge (`badge-72.png`), and standalone display mode. On iOS Safari in a browser tab, `/notifications` displays an install-first guide card explaining that iOS requires adding the app to the Home Screen before Web Push notifications can be received.
 - **In-App Browser Detection:** Detects embedded WebViews (Facebook, Instagram, Telegram) and renders an alert with a one-tap "Copy Link" button and Safari/Chrome open guidance.
 - **Focus Mode & Quiet Hours:** Plain service worker (`firebase-messaging-sw.js`) respects overnight quiet hours by adding `silent: true` without dropping notifications, ensuring compliance with WebKit's background push termination policy.

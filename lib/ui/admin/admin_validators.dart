@@ -333,4 +333,4 @@ bool isValidPushEventKey(String key) => RegExp(r'^(lit|meeting|day|season)-[a-z0
 bool isValidHm(String s) => s.isEmpty || RegExp(r'^([01]\d|2[0-3]):[0-5]\d$').hasMatch(s);
 
 /// The Web Push public key: empty or 80–100 URL-safe base64 characters.
-bool isValidVapidKey(String s) => s.isEmpty || RegExp(r'^[A-Za-z0-9_-]{80,100}$').hasMatch(s);
+bool isValidVapidKey(String s) => s.isEmpty || isWebPushVapidPublicKey(s);

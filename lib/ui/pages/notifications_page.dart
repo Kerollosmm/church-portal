@@ -25,7 +25,7 @@ const Map<String, List<String>> notificationsPageStrings = {
   'notificationsBlockedChrome': ['اضغط أيقونة 🔒 بجوار عنوان الموقع ← الأذونات ← الإشعارات ← سماح', 'Tap the 🔒 icon next to the address bar → Permissions → Notifications → Allow'],
   'notificationsBlockedIos': ['من إعدادات الهاتف ← الإشعارات ← كنيسة مكسيموس ودوماديوس ← السماح بالإشعارات', 'Go to iPhone Settings → Notifications → Church App → Allow Notifications'],
   'notificationsBlockedTitle': ['الإشعارات محظورة في متصفحك', 'Notifications are blocked in your browser'],
-  'notificationsComingSoon': ['خدمة الإشعارات عبر المتصفح قادمة قريبًا', 'Web push notifications are coming soon'],
+  'notificationsComingSoon': ['إشعارات المتصفح غير مُعدّة على الموقع بعد', 'Browser notifications are not set up on this site yet'],
   'notificationsCopyFailed': ['تعذّر النسخ التلقائي — انسخ الرابط يدويًا:', 'Auto-copy blocked — copy link manually:'],
   'notificationsCopyLink': ['نسخ الرابط للمتصفح', 'Copy link for browser'],
   'notificationsPermissionDisabled': [

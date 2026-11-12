@@ -327,6 +327,31 @@ void main() {
     expect(find.text('الإشعارات مفعلة'), findsOneWidget);
   });
 
+  testWidgets('allow button stays disabled when push is on but no VAPID key is configured', (tester) async {
+    final pushEnv = FakeTestPushEnv(permission: 'default');
+    await tester.pumpWidget(buildTestable(
+      child: const NotificationsPage(isWeb: true),
+      pushSettings: const PushSettings(
+        enabled: true,
+        offered: [NotifyType.announcements],
+        vapidKey: '',
+      ),
+      pushEnv: pushEnv,
+      installEnv: FakeTestInstallEnv(),
+    ));
+    await tester.pumpAndSettle();
+
+    final buttonFinder = find.ancestor(
+      of: find.text('السماح بإشعارات المتصفح'),
+      matching: find.byWidgetPredicate((w) => w is ButtonStyleButton),
+    );
+    final button = tester.widget<ButtonStyleButton>(buttonFinder);
+    expect(button.onPressed, isNull);
+    expect(find.text('إشعارات المتصفح غير مُعدّة على الموقع بعد'), findsOneWidget);
+    expect(find.text('خدمة الإشعارات عبر المتصفح قادمة قريبًا'), findsNothing);
+    expect(pushEnv.requestCalls, 0);
+  });
+
   testWidgets('PushPermissionState.denied renders recheck button and clicking invokes onPermissionChanged', (tester) async {
     final pushEnv = FakeTestPushEnv(permission: 'denied');
     await tester.pumpWidget(buildTestable(
