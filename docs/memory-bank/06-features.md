@@ -61,7 +61,9 @@ render with `PageBody` (+ `Footer`). Content comes from Riverpod providers (hidd
   `heroMotion` off or under `flutter test`. The YouTube hero video library of PR #17 (ADR-026) was **removed in PR #25
   (ADR-036, owner request 4 Nov 2026)**; a `heroVideos` map already stored in `settings/features` is ignored.
 - **Hero ambient motion on web (ADR-037, PR #29):** the haze drift and light-ray shimmer look exactly as before but
-  run as a CSS-animated DOM layer (`HeroAmbientLayer`) instead of a per-frame Flutter repaint; see `documentation/features/performance-pagespeed.md`.
+  run as a CSS-animated DOM layer (`HeroAmbientLayer`) on desktop web (>= 1024 px) instead of a per-frame Flutter repaint; see `documentation/features/performance-pagespeed.md`.
+  On mobile platforms (Android, iOS) and mobile viewports (< 600 px), all continuous ambient tickers, Ken Burns scaling, haze drift, and DOM layers are disabled (`heroAmbientLoopAllowed() == false`, `INV-PERF-01`, ADR-062, ADR-064), falling back to static artwork (`ArtAssets.heroTall` / `ArtAssets.heroWide`) with `RepaintBoundary` isolation.
+  Similarly, continuous tickers in `_PulseDot` (1100 ms) and `SkeletonBox` (900 ms) are silenced on mobile, and `Reveal` renders child immediately without `saveLayer` opacity overhead.
 - **Liturgical web loading screen (ADR-044, PR #35; replaces the ADR-037 static hero copy):** `web/index.html` shows,
   on the cream `#FBF3E4` ground (= `manifest.json` `background_color`), the parish seal (`assets/assets/branding/seal.png`,
   the same 27 KB file the app's `ChurchSeal` loads, 104 px, decorative `alt=""`) with a slow scale pulse, the church
@@ -580,6 +582,12 @@ digits, Cairo `02` + 8, Alexandria `03` + 7, other governorates `0[4-9]` + 7–8
 - Arabic scripture text (Van Dyck) and English chapter:verse references (`refs-only`).
 - Offline caching via `ReadingsStore` (SharedPreferences on mobile, in-memory on web) with automatic pruning of dates older than yesterday.
 - Accessible directly via the «اقرأ القراءات» action on the Today card or direct link `/readings/YYYY-MM-DD`.
+
+### Notification Preferences & Reminders (`/notifications`, `notifications_page.dart`, ADR-057, ADR-064)
+- Screen manages user notification channel subscriptions (`announcements`, `verse_daily`, `katameros_daily`, `seasons`, `feasts`) and personal reminders (`RemindMeButton`, «تذكيراتي»).
+- **Streamlined flow (ADR-064):** Persistent OEM battery optimization card («حالة الإشعارات وتحسين البطارية») has been removed from `notifications_page.dart`, allowing the screen to flow directly from the overall status banner to channel preferences and reminders without clutter.
+- **Reactive permission handshake:** Toggling any notification channel switch reactively prompts for native notification permissions (`LocalNotifier.requestPermissions()` on mobile, Web Push registration on web) if not already granted.
+- Standalone OEM battery health diagnostics remain available on the dedicated route `/notifications/battery` (`notification_health_page.dart`, ADR-058, ADR-062).
 
 ### Notification Health & OEM Guidance (`/notifications/battery`, `notification_health_page.dart`, ADR-058, ADR-062)
 - Screen uses unified `PageBody` + `PageHeader` (ADR-062, `INV-NAV-01`; no nested `Scaffold` or custom top bar) with localized strings registered via dedicated deferred string table `notificationHealthStrings`. `parentRouteOf('/notifications/battery')` routes back to `/notifications` with tooltip «العودة إلى الإشعارات» / "Back to Notifications".

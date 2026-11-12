@@ -348,9 +348,9 @@ the URL `#fragment`.
 To protect the web initial load budget (`main.dart.js` gzip -9 ceiling <= 1,396,031 B), exactly 8 secondary modules are deferred (`deferred as`):
 1. `ui/admin/admin_page.dart` (`admin_page`): full admin dashboard (Firebase Auth, schema editors, Firestore writes).
 2. `ui/pages/assistant_page.dart` (`assistant_page`): AI assistant interface & `firebase_ai` SDK (gated behind `AssistantGate`).
-3. `ui/pages/notifications_page.dart` (`notifications_page`): notification channel & reminder preferences.
+3. `ui/pages/notifications_page.dart` (`notifications_page`): streamlined notification channel & reminder preferences (OEM battery card removed; native permissions requested reactively on switch toggle).
 4. `ui/pages/readings_page.dart` (`readings_page`): liturgical Katameros day reader (`/readings/:date`).
-5. `ui/pages/notification_health_page.dart` (`health_page`): OEM battery optimization diagnostics (`/notifications/battery`).
+5. `ui/pages/notification_health_page.dart` (`health_page`): standalone OEM battery optimization diagnostics (`/notifications/battery`).
 6. `ui/widgets/apk_install_guide.dart` (`apk_guide`): 5-step Android APK sideloading walkthrough bottom sheet.
 7. `data/web_push_repository.dart` (`web_push`): web push token sync & Firestore queue batch writer.
 8. `ui/widgets/reminder_sheet.dart` (`reminder_sheet`): reminder picker modal bottom sheet with `.ics` & calendar export.
@@ -365,12 +365,14 @@ Deferred isolation is mechanically enforced in CI via `node tool/check_web_bundl
 - Wide layout evaluated via `shellIsWide(BuildContext context)` (`width / textScale.clamp(1.0, 3.0) >= 1024`; large system text forces the compact bar): text links
   (home/about/education), a **Services** popup (activities, public services, contact, ask), gold **Mass times**
   highlight button, language toggle (`EN` / `ع`).
-- Narrow: compact 48×48 dp **Mass times** `IconButton` (`_HighlightButton`), language toggle, ☰ opens an **end
-  drawer** (`_AppDrawer`). Below **360 px**, at **≥ 150 % text**, or on a subpage below **400 px** (the Back arrow
-  takes another 48 dp) the Mass button is dropped from the bar (it is in the drawer) so the title keeps a
-  readable width. On viewports `< 360 px` (ADR-061), `SealTab` scales down to `54×70 dp` (from `64×80 dp`), the title typography
-  uses 15 pt 2-line `appShort` (`height: 1.15`), and when `showBack && width < 360`, the language toggle (`EN` / `ع`) moves from the
-  `AppBar` into `_AppDrawer` as `drawerLanguageToggle`, guaranteeing a `>= 130 dp` readable title slot and `>= 6 dp` seal clearance.
+- Narrow: compact 48×48 dp **Mass times** `IconButton` (`_HighlightButton`), ☰ opens an **end
+  drawer** (`_AppDrawer`). On mobile viewports (`width < 600`, ADR-064, `INV-APPBAR-01`), the language toggle (`appBarLanguageToggle`)
+  is omitted from `AppBar.actions`, freeing ~54 dp of horizontal space so the church title has ample room without collision with
+  the seal tab, with the language toggle accessible in `_AppDrawer` as `drawerLanguageToggle`. Desktop viewports (`width >= 600`)
+  retain the `AppBar` language toggle. Below **360 px**, at **≥ 150 % text**, or on a subpage below **400 px** (the Back arrow
+  takes another 48 dp) the Mass button is dropped from the bar (it is in the drawer) so the title keeps a readable width.
+  On viewports `< 360 px` (ADR-061), `SealTab` scales down to `54×70 dp` (from `64×80 dp`), the title typography
+  uses 15 pt 2-line `appShort` (`height: 1.15`), guaranteeing a `>= 130 dp` readable title slot and `>= 6 dp` seal clearance.
   In short landscape orientations (`height < 420`, `kLandscapeShortHeight`, ADR-061), both `TopUtilityBar` and `InstallBanner` are hidden to preserve vertical reading space.
 - **No Clinics action in the app bar** (owner request, 4 Nov 2026), at any width or section state. It used to be a
   compact `local_hospital_rounded` button on phones, shown when `featuresReady && !wide && !collapseHighlights &&
@@ -383,11 +385,12 @@ Deferred isolation is mechanically enforced in CI via `node tool/check_web_bundl
   `DetailKind.parentPath` — `/church-education`, `/church-activities`, `/clinics`, `/public-services`, `/about`
   (priests, saints), `/notifications` (for `/notifications/battery`, ADR-062) or `/` (milestones: their cards live on Home) — shown as `Key('backParent')` with the tooltip
   «العودة إلى …» (`backToLabel`); every other route keeps `Key('backHome')` → `/`.
-- **Navigation Invariants (ADR-062):**
+- **Navigation & Layout Invariants (ADR-062, ADR-064):**
+  - **`INV-APPBAR-01`**: On mobile viewports (`width < 600`), `appBarLanguageToggle` is omitted from `AppBar.actions`, ensuring church short title (`appShort`) has >= 130 dp unobstructed width and >= 6 dp clearance from the seal tab. `_AppDrawer` provides `drawerLanguageToggle`. Desktop viewports (`width >= 600`) retain `appBarLanguageToggle`.
   - **`INV-NAV-01`**: Only `AppShell` manages `Scaffold` chrome for routed public pages. `NotificationHealthPage` renders `PageBody` + `PageHeader` without an inner `Scaffold`.
   - **`INV-NAV-02`**: Exactly one back arrow on mobile viewports (`AppShell.leading`). In-body `_BackLink` on `ItemDetailPage` is shown only when `shellIsWide(context)` is true (desktop).
-- **Mobile Performance & Native Splash Invariants (ADR-062):**
-  - **`INV-PERF-01`**: Zero continuous ambient tickers in `HeroStage` on Android APK (`heroAmbientLoopAllowed() == false`). Hardware-accelerated hero video decoder remains active.
+- **Mobile Performance & Native Splash Invariants (ADR-062, ADR-064):**
+  - **`INV-PERF-01`**: Zero continuous ambient tickers in `HeroStage` on mobile platforms (Android, iOS) and mobile viewports (`width < 600`) (`heroAmbientLoopAllowed() == false`). Ken Burns transforms, haze drifts, and DOM-embedded CSS animation views (`HeroAmbientLayer`) are disabled on mobile, cleanly degrading to static high-resolution artwork (`ArtAssets.heroTall` / `ArtAssets.heroWide`) with `RepaintBoundary` isolation. Continuous 1100 ms ticker in `_PulseDot` and 900 ms shimmer ticker in `SkeletonBox` are silenced on mobile. Scroll-triggered `Reveal` renders child immediately on mobile without `Opacity` / `saveLayer` raster overhead. Hardware-accelerated hero video decoder remains active.
   - **`INV-SPLASH-01`**: Native Android launch window background locked to cream `#FBF3E4` (`@color/splash_cream`) across drawables and styles (including `values-v31` Android 12+ Splash API).
 - **Today layer (PR #31, ADR-039/040):** the shell body is `Column[CopticDateStrip(location), LiveStreamBanner,
   Expanded(page)]` over the `WarmBackdrop` (`lib/ui/widgets/today_widgets.dart`): the Coptic date strip
