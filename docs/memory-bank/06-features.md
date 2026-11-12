@@ -61,7 +61,9 @@ render with `PageBody` (+ `Footer`). Content comes from Riverpod providers (hidd
   `heroMotion` off or under `flutter test`. The YouTube hero video library of PR #17 (ADR-026) was **removed in PR #25
   (ADR-036, owner request 4 Nov 2026)**; a `heroVideos` map already stored in `settings/features` is ignored.
 - **Hero ambient motion on web (ADR-037, PR #29):** the haze drift and light-ray shimmer look exactly as before but
-  run as a CSS-animated DOM layer (`HeroAmbientLayer`) instead of a per-frame Flutter repaint; see `documentation/features/performance-pagespeed.md`.
+  run as a CSS-animated DOM layer (`HeroAmbientLayer`) on desktop web (>= 1024 px) instead of a per-frame Flutter repaint; see `documentation/features/performance-pagespeed.md`.
+  On mobile platforms (Android, iOS) and mobile viewports (< 600 px), all continuous ambient tickers, Ken Burns scaling, haze drift, and DOM layers are disabled (`heroAmbientLoopAllowed() == false`, `INV-PERF-01`, ADR-062, ADR-064), falling back to static artwork (`ArtAssets.heroTall` / `ArtAssets.heroWide`) with `RepaintBoundary` isolation.
+  Similarly, continuous tickers in `_PulseDot` (1100 ms) and `SkeletonBox` (900 ms) are silenced on mobile, and `Reveal` renders child immediately without `saveLayer` opacity overhead.
 - **Liturgical web loading screen (ADR-044, PR #35; replaces the ADR-037 static hero copy):** `web/index.html` shows,
   on the cream `#FBF3E4` ground (= `manifest.json` `background_color`), the parish seal (`assets/assets/branding/seal.png`,
   the same 27 KB file the app's `ChurchSeal` loads, 104 px, decorative `alt=""`) with a slow scale pulse, the church
@@ -580,6 +582,25 @@ digits, Cairo `02` + 8, Alexandria `03` + 7, other governorates `0[4-9]` + 7–8
 - Arabic scripture text (Van Dyck) and English chapter:verse references (`refs-only`).
 - Offline caching via `ReadingsStore` (SharedPreferences on mobile, in-memory on web) with automatic pruning of dates older than yesterday.
 - Accessible directly via the «اقرأ القراءات» action on the Today card or direct link `/readings/YYYY-MM-DD`.
+
+### Notification Preferences & Reminders (`/notifications`, `notifications_page.dart`, ADR-057, ADR-064, ADR-065)
+- Screen manages user notification channel subscriptions (`announcements`, `verse_daily`, `katameros_daily`, `seasons`, `feasts`) and personal reminders (`RemindMeButton`, «تذكيراتي»).
+- **Streamlined flow (ADR-064):** Persistent OEM battery optimization card («حالة الإشعارات وتحسين البطارية») has been removed from `notifications_page.dart`, allowing the screen to flow directly from the overall status banner to channel preferences and reminders without clutter.
+- **Explicit Web Push Permission Prompt (ADR-065):**
+  - On web viewports when `permission == 'default'`, a dedicated primary action card is rendered with an explicit «السماح بإشعارات المتصفح» / "Allow browser notifications" button.
+  - Zero automatic `Notification.requestPermission()` calls are made on initial page load (adheres strictly to user-gesture browser security policies).
+  - Toggling any notification channel switch while unpermitted prompts for permission reactively in the tap handler before activating the switch.
+  - Granting permission retrieves the FCM web registration token via `WebPushRepository` and immediately flushes active topics to Firestore `push_queue`.
+  - Toggling switches or clearing notifications triggers `_syncWebPush` to keep topic state aligned.
+- **In-App Browser & WebView Mitigation (ADR-065):**
+  - Detects restricted in-app browser WebViews (Telegram, WhatsApp, Facebook, Instagram, TikTok, and Android `; wv`).
+  - Displays a high-visibility warning card detailing that in-app browsers do not support push notifications, equipped with a one-tap «نسخ الرابط للمتصفح» (Copy link) button and clipboard feedback.
+- **iOS Safari PWA & Standalone Transition (ADR-065):**
+  - In a standard Safari browser tab on iOS, Web Push is blocked prior to PWA installation; the screen renders a 3-step "Add to Home Screen" visual guide.
+  - Once launched from the Home Screen (`isStandalone == true`), the page seamlessly transitions to expose the Web Push permission prompt card and channel switches.
+- **Denied Permission Recovery (ADR-065):**
+  - When `permission == 'denied'`, the screen displays a browser site settings guide (padlock / site settings instructions) and an «إعادة فحص الإذن» / "Re-check permission" button to re-evaluate without reloading.
+- Standalone OEM battery health diagnostics remain available on the dedicated route `/notifications/battery` (`notification_health_page.dart`, ADR-058, ADR-062).
 
 ### Notification Health & OEM Guidance (`/notifications/battery`, `notification_health_page.dart`, ADR-058, ADR-062)
 - Screen uses unified `PageBody` + `PageHeader` (ADR-062, `INV-NAV-01`; no nested `Scaffold` or custom top bar) with localized strings registered via dedicated deferred string table `notificationHealthStrings`. `parentRouteOf('/notifications/battery')` routes back to `/notifications` with tooltip «العودة إلى الإشعارات» / "Back to Notifications".

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 
@@ -146,7 +147,7 @@ void main() {
         ),
       ];
 
-      repo.syncPreferences(
+      await repo.syncPreferences(
         prefs: prefs,
         reminders: reminders,
         immediate: false,
@@ -188,7 +189,7 @@ void main() {
 
       await repo.enable(vapidKey: 'test_vapid');
 
-      repo.syncPreferences(
+      await repo.syncPreferences(
         prefs: PushPrefs(
           types: const {NotifyType.announcements},
           lang: 'ar',
@@ -202,6 +203,56 @@ void main() {
       expect(success, isTrue);
       expect(attempt, 3);
       expect(attemptsCount1, [false, false, true]); // 3rd attempt had isSetCount1: true!
+    });
+
+    test('syncPreferences returns true when syncedToken is null and types empty, false if types not empty', () async {
+      final fakeEnv = FakePushEnv();
+      final repo = WebPushRepository(pushEnv: fakeEnv);
+
+      final okEmpty = await repo.syncPreferences(
+        prefs: PushPrefs(types: const {}, updatedAt: DateTime.now().toUtc()),
+        reminders: const [],
+      );
+      expect(okEmpty, isTrue);
+
+      final notOkNonEmpty = await repo.syncPreferences(
+        prefs: PushPrefs(types: const {NotifyType.announcements}, updatedAt: DateTime.now().toUtc()),
+        reminders: const [],
+      );
+      expect(notOkNonEmpty, isFalse);
+    });
+
+    test('concurrent calls to flushPendingSync serialize safely via queue', () async {
+      final fakeEnv = FakePushEnv();
+      final order = <int>[];
+
+      final repo = WebPushRepository(
+        pushEnv: fakeEnv,
+        batchWriter: (qid, queueData, rateData, {bool isSetCount1 = false}) async {
+          order.add(1);
+          await Future.delayed(const Duration(milliseconds: 20));
+          order.add(2);
+        },
+      );
+
+      await repo.enable(vapidKey: 'test_vapid');
+
+      await repo.syncPreferences(
+        prefs: PushPrefs(
+          types: const {NotifyType.announcements},
+          lang: 'ar',
+          updatedAt: DateTime.now().toUtc(),
+        ),
+        reminders: const [],
+        immediate: false,
+      );
+
+      final f1 = repo.flushPendingSync();
+      final f2 = repo.flushPendingSync();
+      final results = await Future.wait([f1, f2]);
+
+      expect(results, [true, true]);
+      expect(order, [1, 2]); // First completed and cleared pending sync before second ran
     });
 
     test('unsubscribeAll clears local state and deletes token', () async {
@@ -226,6 +277,187 @@ void main() {
       expect(repo.syncedRem, isEmpty);
       expect(writtenBatches.length, 1);
       expect(writtenBatches.first['queueData']['want'], isEmpty);
+    });
+
+    test('syncPreferences with empty PushPrefs queues want: [], rem: empty, drop: previous topics', () async {
+      final fakeEnv = FakePushEnv();
+      final writes = <Map<String, dynamic>>[];
+      final now = DateTime.now().toUtc();
+      final repo = WebPushRepository(
+        pushEnv: fakeEnv,
+        fetchServerDate: () async => now,
+        batchWriter: (qid, queueData, rateData, {bool isSetCount1 = false}) async {
+          writes.add(Map<String, dynamic>.from(queueData));
+        },
+      );
+
+      await repo.enable(vapidKey: 'test_vapid');
+      final reminder = Reminder(
+        eventKey: 'lit-1',
+        lead: 15,
+        every: false,
+        title: const {'ar': 'قداس', 'en': 'Liturgy'},
+        startsAt: now.add(const Duration(hours: 2)),
+        createdAt: now,
+      );
+      final okOn = await repo.syncPreferences(
+        prefs: PushPrefs(
+          types: const {NotifyType.announcements, NotifyType.reminders},
+          lang: 'ar',
+          updatedAt: now,
+        ),
+        reminders: [reminder],
+        immediate: true,
+      );
+      expect(okOn, isTrue);
+      expect(writes.last['rem'], isNotEmpty);
+
+      final okEmpty = await repo.syncPreferences(
+        prefs: PushPrefs(
+          types: const {},
+          lang: 'ar',
+          updatedAt: now.add(const Duration(seconds: 1)),
+        ),
+        reminders: const [],
+        immediate: true,
+      );
+      expect(okEmpty, isTrue);
+      expect(writes.last['want'], isEmpty);
+      expect(writes.last['rem'], '');
+      expect(writes.last['drop'], isNotEmpty);
+    });
+
+    test('resumePendingSync flushes stored pendingSync opt-out on new repository instance', () async {
+      final fakeEnv = FakePushEnv();
+      fakeEnv.storage[WebPushRepository.storageKey] = jsonEncode({
+        'syncedToken': 'tok_saved',
+        'syncedWant': ['announcements', 'lang_ar'],
+        'syncedRem': <String>[],
+        'pendingSync': true,
+      });
+      final writes = <Map<String, dynamic>>[];
+      final now = DateTime.now().toUtc();
+      final repo = WebPushRepository(
+        pushEnv: fakeEnv,
+        fetchServerDate: () async => now,
+        batchWriter: (qid, queueData, rateData, {bool isSetCount1 = false}) async {
+          writes.add(Map<String, dynamic>.from(queueData));
+        },
+      );
+      addTearDown(repo.dispose);
+
+      expect(repo.hasPendingSync, isTrue);
+      final ok = await repo.resumePendingSync(
+        prefs: PushPrefs(types: const {}, lang: 'ar', updatedAt: now),
+        reminders: const [],
+      );
+      expect(ok, isTrue);
+      expect(repo.hasPendingSync, isFalse);
+      expect(writes.length, 1);
+      expect(writes.single['want'], isEmpty);
+      expect(writes.single['drop'], isEmpty); // prevWant is not stored locally, rem only
+    });
+
+    test('enableRetryTimer retries failed flush with backoff and clears pendingSync once healthy', () async {
+      final fakeEnv = FakePushEnv();
+      var failWrites = true;
+      var writeAttempts = 0;
+      final recovered = Completer<void>();
+      final now = DateTime.now().toUtc();
+      final repo = WebPushRepository(
+        pushEnv: fakeEnv,
+        fetchServerDate: () async => now,
+        enableRetryTimer: true,
+        retryBaseDelay: const Duration(milliseconds: 15),
+        batchWriter: (qid, queueData, rateData, {bool isSetCount1 = false}) async {
+          writeAttempts++;
+          if (failWrites) {
+            throw StateError('transient network error');
+          }
+          if (!recovered.isCompleted) {
+            recovered.complete();
+          }
+        },
+      );
+      addTearDown(repo.dispose);
+
+      await repo.enable(vapidKey: 'test_vapid');
+      final firstResult = await repo.syncPreferences(
+        prefs: PushPrefs(
+          types: const {NotifyType.announcements},
+          lang: 'ar',
+          updatedAt: now,
+        ),
+        reminders: const [],
+        immediate: true,
+      );
+      expect(firstResult, isFalse);
+      expect(repo.hasPendingSync, isTrue);
+      expect(repo.pendingRetryAttempts, 1);
+
+      // Heal server before the scheduled backoff timer fires.
+      failWrites = false;
+      await recovered.future.timeout(const Duration(seconds: 2));
+      await Future<void>.delayed(const Duration(milliseconds: 30));
+
+      expect(writeAttempts, greaterThanOrEqualTo(2));
+      expect(repo.hasPendingSync, isFalse);
+      expect(repo.pendingRetryAttempts, 0);
+    });
+
+    test('concurrent resumePendingSync on sharedFor executes only a single write', () async {
+      final fakeEnv = FakePushEnv();
+      fakeEnv.storage[WebPushRepository.storageKey] = jsonEncode({
+        'syncedToken': 'tok_shared',
+        'syncedWant': ['announcements', 'lang_ar'],
+        'syncedRem': <String>[],
+        'pendingSync': true,
+      });
+      final writes = <Map<String, dynamic>>[];
+      WebPushRepository.debugBatchWriter = (qid, queueData, rateData, {bool isSetCount1 = false}) async {
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        writes.add(Map<String, dynamic>.from(queueData));
+      };
+      addTearDown(() => WebPushRepository.debugBatchWriter = null);
+
+      final now = DateTime.now().toUtc();
+      final repoA = WebPushRepository.sharedFor(fakeEnv);
+      final repoB = WebPushRepository.sharedFor(fakeEnv);
+      addTearDown(repoA.dispose);
+      expect(identical(repoA, repoB), isTrue);
+
+      final prefs = PushPrefs(types: const {NotifyType.seasons}, lang: 'ar', updatedAt: now);
+      final results = await Future.wait([
+        repoA.resumePendingSync(prefs: prefs, reminders: const []),
+        repoB.resumePendingSync(prefs: prefs, reminders: const []),
+      ]);
+      expect(results, [true, true]);
+      expect(writes, hasLength(1));
+      expect(writes.single['want'], ['web_seasons_ar']);
+    });
+
+    test('resumePendingSync skips without prompting when token is missing or permission denied with types', () async {
+      final fakeEnv = FakePushEnv();
+      fakeEnv.setPermission('default');
+      fakeEnv.storage[WebPushRepository.storageKey] = jsonEncode({
+        'syncedToken': null,
+        'pendingSync': true,
+      });
+      var writeCalls = 0;
+      final now = DateTime.now().toUtc();
+      final repo = WebPushRepository(
+        pushEnv: fakeEnv,
+        batchWriter: (qid, queueData, rateData, {bool isSetCount1 = false}) async {
+          writeCalls++;
+        },
+      );
+      addTearDown(repo.dispose);
+
+      await repo.resumePendingSync(
+        prefs: PushPrefs(types: const {NotifyType.announcements}, lang: 'ar', updatedAt: now),
+        reminders: const [],
+      );
+      expect(writeCalls, 0);
     });
   });
 }

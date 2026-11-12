@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart' show kIsWeb, visibleForTesting;
 import 'package:http/http.dart' as http;
 
 import '../core/push_env.dart';
@@ -67,15 +68,42 @@ DateTime? parseHttpDate(String? raw) {
 /// Repository responsible for Web Push subscriptions, synchronization with Firestore
 /// push_queue & meta/push_rate, local state persistence, and deterministic retry.
 class WebPushRepository {
-  static const String storageKey = 'church_portal_push_web';
+  static const String storageKey = webPushStorageKey;
+  static const int maxRetryAttempts = 3;
+
+  static WebPushRepository? _sharedInstance;
+  static PushEnv? _sharedEnv;
+
+  /// Returns a shared repository coordinated for [env] so [AppShell] and
+  /// [NotificationsPage] serialize flushes and localStorage writes safely.
+  static WebPushRepository sharedFor(PushEnv env) {
+    final existing = _sharedInstance;
+    if (existing != null && !existing._disposed && identical(_sharedEnv, env)) {
+      return existing;
+    }
+    final created = WebPushRepository(pushEnv: env);
+    _sharedInstance = created;
+    _sharedEnv = env;
+    return created;
+  }
+
+  /// Optional debug batch writer hook for tests.
+  @visibleForTesting
+  static BatchWriterFn? debugBatchWriter;
 
   final PushEnv pushEnv;
   final FirebaseFirestore? _firestore;
   final BatchWriterFn? _batchWriter;
   final Future<DateTime> Function()? _fetchServerDate;
   final http.Client? _httpClient;
+  final bool enableRetryTimer;
+  final Duration retryBaseDelay;
 
   Timer? _debounceTimer;
+  Timer? _retryTimer;
+  Future<bool>? _currentFlush;
+  int _retryAttempts = 0;
+  bool _disposed = false;
 
   String? _syncedToken;
   List<String> _syncedWant = const [];
@@ -91,12 +119,21 @@ class WebPushRepository {
   WebPushRepository({
     PushEnv? pushEnv,
     this._firestore,
-    this._batchWriter,
+    BatchWriterFn? batchWriter,
     this._fetchServerDate,
     this._httpClient,
-  })  : pushEnv = pushEnv ?? const PlatformPushEnv() {
+    this.enableRetryTimer = kIsWeb,
+    this.retryBaseDelay = const Duration(seconds: 15),
+  })  : pushEnv = pushEnv ?? const PlatformPushEnv(),
+        _batchWriter = batchWriter ?? debugBatchWriter {
     _loadState();
   }
+
+  @visibleForTesting
+  int get pendingRetryAttempts => _retryAttempts;
+
+  /// Whether this repository has a configured Firestore/debug write sink.
+  bool get canWriteInEnvironment => kIsWeb || _firestore != null || _batchWriter != null;
 
   bool get isSupported => pushEnv.isSupported;
   String get permission => pushEnv.permission;
@@ -170,15 +207,17 @@ class WebPushRepository {
   }
 
   /// Update preferences and schedule debounced sync.
-  void syncPreferences({
+  Future<bool> syncPreferences({
     required PushPrefs prefs,
     required List<Reminder> reminders,
     bool immediate = false,
-  }) {
+  }) async {
     _lastPrefs = prefs;
     _lastReminders = List.from(reminders);
 
-    if (_syncedToken == null) return;
+    if (_syncedToken == null) {
+      return prefs.types.isEmpty;
+    }
 
     final plan = computeWebTopicSync(
       prefs: prefs,
@@ -196,25 +235,99 @@ class WebPushRepository {
     final remEqual = remList.length == _syncedRem.length &&
         remList.toSet().containsAll(_syncedRem);
     if (wantEqual && remEqual && !_pendingSync) {
-      return;
+      return true;
     }
 
     _pendingSync = true;
     _saveState();
+    _retryAttempts = 0;
 
     _debounceTimer?.cancel();
+    _retryTimer?.cancel();
     if (immediate) {
-      flushPendingSync();
+      return await flushPendingSync();
     } else {
       _debounceTimer = Timer(const Duration(seconds: 10), () {
         flushPendingSync();
       });
+      return true;
     }
   }
 
-  /// Flush pending sync immediately.
+  /// Resumes a persisted pending sync after reload or page re-entry without
+  /// prompting for browser permission.
+  Future<bool> resumePendingSync({
+    required PushPrefs prefs,
+    required List<Reminder> reminders,
+  }) async {
+    if (_currentFlush != null) {
+      try {
+        await _currentFlush;
+      } catch (_) {}
+    }
+    if (!_pendingSync || _syncedToken == null) {
+      return !_pendingSync || _syncedToken == null;
+    }
+    if (pushEnv.permission != 'granted' && prefs.types.isNotEmpty) {
+      return false;
+    }
+    return syncPreferences(
+      prefs: prefs,
+      reminders: reminders,
+      immediate: true,
+    );
+  }
+
+  /// Flush pending sync immediately with serialization queue.
   Future<bool> flushPendingSync() async {
     _debounceTimer?.cancel();
+    _retryTimer?.cancel();
+    final prevFlush = _currentFlush;
+    final completer = Completer<bool>();
+    _currentFlush = completer.future;
+
+    try {
+      if (prevFlush != null) {
+        try {
+          await prevFlush;
+        } catch (_) {}
+      }
+      final result = await _executeFlush();
+      if (result) {
+        _retryAttempts = 0;
+      } else if (_pendingSync && _syncedToken != null && _lastPrefs != null) {
+        _scheduleRetry();
+      }
+      completer.complete(result);
+      return result;
+    } catch (e) {
+      if (_pendingSync && _syncedToken != null && _lastPrefs != null) {
+        _scheduleRetry();
+      }
+      completer.complete(false);
+      return false;
+    } finally {
+      if (_currentFlush == completer.future) {
+        _currentFlush = null;
+      }
+    }
+  }
+
+  void _scheduleRetry() {
+    if (!enableRetryTimer || _disposed || !_pendingSync) return;
+    if (_retryAttempts >= maxRetryAttempts) return;
+    _retryTimer?.cancel();
+    final multiplier = 1 << _retryAttempts;
+    final maxMs = const Duration(minutes: 4).inMilliseconds;
+    final delayMs = math.min(maxMs, retryBaseDelay.inMilliseconds * multiplier);
+    _retryAttempts++;
+    _retryTimer = Timer(Duration(milliseconds: delayMs), () {
+      if (_disposed || !_pendingSync) return;
+      unawaited(flushPendingSync());
+    });
+  }
+
+  Future<bool> _executeFlush() async {
     if (_syncedToken == null || _lastPrefs == null) {
       return false;
     }
@@ -227,6 +340,15 @@ class WebPushRepository {
       previousSyncedToken: null,
       currentToken: _syncedToken!,
     );
+
+    final remList = plan.rem.split(',').where((s) => s.isNotEmpty).toList();
+    final wantEqual = plan.want.length == _syncedWant.length &&
+        plan.want.toSet().containsAll(_syncedWant);
+    final remEqual = remList.length == _syncedRem.length &&
+        remList.toSet().containsAll(_syncedRem);
+    if (wantEqual && remEqual && !_pendingSync) {
+      return true;
+    }
 
     final success = await _executeRetryWrite(
       token: _syncedToken!,
@@ -314,6 +436,11 @@ class WebPushRepository {
     Map<String, dynamic>? firebaseConfig,
   }) async {
     _debounceTimer?.cancel();
+    if (_currentFlush != null) {
+      try {
+        await _currentFlush;
+      } catch (_) {}
+    }
     final oldToken = _syncedToken;
     final heldRem = List<String>.from(_syncedRem);
 
@@ -387,6 +514,8 @@ class WebPushRepository {
         'lastId': qid,
       }, isSetCount1: false);
       return true;
+    } on UnsupportedError {
+      return false;
     } catch (_) {}
 
     // First rejection: Sync authoritative server date from HTTP header
@@ -448,7 +577,17 @@ class WebPushRepository {
       return;
     }
 
-    final firestore = _firestore ?? FirebaseFirestore.instance;
+    if (!kIsWeb && _firestore == null) {
+      throw UnsupportedError('Firestore is not available for web push in VM environment without injection');
+    }
+
+    FirebaseFirestore firestore;
+    try {
+      firestore = _firestore ?? FirebaseFirestore.instance;
+    } catch (_) {
+      throw UnsupportedError('Firestore is not available');
+    }
+
     final batch = firestore.batch();
     final qRef = firestore.collection('push_queue').doc(qid);
     final rateRef = firestore.collection('meta').doc('push_rate');
@@ -471,4 +610,11 @@ class WebPushRepository {
     required String end,
   }) =>
       pushEnv.syncQuietHours(enabled: enabled, start: start, end: end);
+
+  /// Cancels any active debounce or retry timers owned by this repository.
+  void dispose() {
+    _disposed = true;
+    _debounceTimer?.cancel();
+    _retryTimer?.cancel();
+  }
 }

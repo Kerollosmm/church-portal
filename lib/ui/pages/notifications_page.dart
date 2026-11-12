@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../../core/document_lang.dart';
@@ -12,6 +11,7 @@ import '../../core/theme.dart';
 import '../../data/error_reporting.dart';
 import '../../data/web_push_repository.dart' deferred as web_push;
 import '../../domain/features.dart';
+import '../../domain/reminders.dart';
 import '../../state/providers.dart';
 import '../widgets/common.dart';
 import '../widgets/reminder_sheet.dart';
@@ -19,36 +19,142 @@ import '../widgets/reminder_sheet.dart';
 /// Strings only this deferred chunk uses (registered before it builds).
 const Map<String, List<String>> notificationsPageStrings = {
   'adminPushTypesLabel': ['أنواع الإشعارات المتاحة للمستخدمين', 'Notification types offered to visitors'],
+  'notificationsAllowBrowserButton': ['السماح بإشعارات المتصفح', 'Allow browser notifications'],
+  'notificationsAllowPromptBody': ['اضغط على الزر أدناه للسماح للمتصفح بإرسال إشعارات وتنبيهات الكنيسة عند نشر التنبيهات ومواعيد القداسات.', 'Tap below to allow your browser to deliver church updates, schedules, and reminders.'],
+  'notificationsAllowPromptTitle': ['تفعيل إشعارات المتصفح', 'Enable browser notifications'],
   'notificationsBlockedChrome': ['اضغط أيقونة 🔒 بجوار عنوان الموقع ← الأذونات ← الإشعارات ← سماح', 'Tap the 🔒 icon next to the address bar → Permissions → Notifications → Allow'],
   'notificationsBlockedIos': ['من إعدادات الهاتف ← الإشعارات ← كنيسة مكسيموس ودوماديوس ← السماح بالإشعارات', 'Go to iPhone Settings → Notifications → Church App → Allow Notifications'],
   'notificationsBlockedTitle': ['الإشعارات محظورة في متصفحك', 'Notifications are blocked in your browser'],
   'notificationsComingSoon': ['خدمة الإشعارات عبر المتصفح قادمة قريبًا', 'Web push notifications are coming soon'],
+  'notificationsCopyFailed': ['تعذّر النسخ التلقائي — انسخ الرابط يدويًا:', 'Auto-copy blocked — copy link manually:'],
+  'notificationsCopyLink': ['نسخ الرابط للمتصفح', 'Copy link for browser'],
+  'notificationsPermissionDisabled': [
+    'الإشعارات غير مفعلة. يُرجى السماح بالإشعارات من إعدادات المتصفح أو النظام.',
+    'Notifications disabled. Please allow notifications in device or browser settings.',
+  ],
   'notificationsEnableButton': ['تفعيل الإشعارات', 'Enable notifications'],
   'notificationsEnabledChip': ['الإشعارات مفعلة', 'Notifications enabled'],
   'notificationsExplainerBody': ['اختر التنبيهات التي تهمك لتصلك مواعيد القداسات، تنبيهات مواسم الصوم وأسبوع الآلام، والتذكيرات التي تحددها بنفسك. لا نجمع أي بيانات شخصية ويمكنك إيقاف الإشعارات في أي وقت.', 'Choose the updates you care about: mass schedules, fasting seasons & Holy Week alerts, and reminders you set yourself. No personal data is collected and you can disable notifications at any time.'],
   'notificationsExplainerTitle': ['إشعارات وتنبيهات الكنيسة', 'Church notifications & alerts'],
   'notificationsInAppBrowser': ['أنت تفتح الموقع من داخل تطبيق (مثل Facebook أو WhatsApp). للحصول على أفضل تجربة وتفعيل التنبيهات، افتح الموقع في متصفح Safari أو Chrome.', 'You are viewing this site inside an app (such as Facebook or WhatsApp). To enable notifications, open the link in Safari or Chrome.'],
+  'notificationsInAppOpenBrowser': ['أنت تفتح الموقع من داخل تطبيق. انسخ الرابط وافتحه في متصفحك الأساسي لتفعيل الإشعارات.', 'You are in an in-app browser. Copy the link and open in Chrome or Safari to enable notifications.'],
+  'notificationsInboxClear': ['مسح السجل', 'Clear history'],
+  'notificationsInboxEmpty': ['لا توجد إشعارات سابقة في هذا المتصفح.', 'No previous notifications in this browser.'],
+  'notificationsInboxTitle': ['سجل الإشعارات المستلمة', 'Received notifications'],
+  'notificationsIosAddFirst': ['لتفعيل الإشعارات على iPhone، أضف الموقع أولاً إلى الشاشة الرئيسية.', 'To enable notifications on iPhone, add the site to your Home Screen first.'],
+  'notificationsIosFocusNote': ['على iPhone، يُرجى استخدام نمط التركيز (Focus Mode) في إعدادات الهاتف لتحديد ساعات الهدوء.', 'On iPhone, please use Focus Mode in Settings to set quiet hours.'],
   'notificationsIosNeedsInstallBody': ['على iPhone تعمل الإشعارات من iOS 16.4 فأحدث، بعد إضافة الموقع إلى الشاشة الرئيسية. اضغط زر المشاركة ثم «إضافة إلى الشاشة الرئيسية»، ثم افتح التطبيق من الشاشة الرئيسية لتفعيل الإشعارات.', 'On iPhone, notifications need iOS 16.4 or later and the site added to your Home Screen. Tap the Share button, select "Add to Home Screen", then open the app from your home screen to enable notifications.'],
   'notificationsIosNeedsInstallTitle': ['لتفعيل الإشعارات على iPhone', 'To enable notifications on iPhone'],
+  'notificationsIosStep1': ['اضغط زر المشاركة (Share) في أسفل شاشة Safari', 'Tap the Share button at the bottom of Safari'],
+  'notificationsIosStep2': ['اختر «إضافة إلى الشاشة الرئيسية» (Add to Home Screen)', 'Select "Add to Home Screen"'],
+  'notificationsIosStep3': ['افتح التطبيق من الشاشة الرئيسية لتفعيل التنبيهات', 'Open the app from your Home Screen to enable notifications'],
   'notificationsIosTooOld': ['يتطلب تلقي الإشعارات على iPhone تحديث نظام iOS إلى الإصدار 16.4 أو أحدث.', 'Web push notifications on iPhone require iOS 16.4 or later.'],
+  'notificationsLinkCopied': ['تم نسخ الرابط', 'Link copied'],
   'notificationsQuietNoteWeb': ['آية اليوم وقراءات القطمارس والأعياد متوفرة مباشرة في الصفحة الرئيسية.', 'Daily verse, Katameros readings, and feast commemorations are available directly on the home page.'],
-  'notificationsUnsubscribeAll': ['إيقاف كل الإشعارات', 'Turn off all notifications'],
-  'notificationsUnsubscribeConfirm': ['تم إيقاف جميع الإشعارات', 'All notifications turned off'],
-  'notificationsUnsupported': ['هذا المتصفح لا يدعم تلقي الإشعارات.', 'This browser does not support push notifications.'],
+  'notificationsRecheckButton': ['التحقق من الإذن مجددًا', 'Check permission again'],
+  'notificationsRegisterFailed': ['تعذّر تسجيل إشعارات المتصفح حاليًا، يُرجى المحاولة لاحقًا.', 'Could not register browser notifications at this time. Please try again later.'],
   'notificationsTestButton': ['جرّب إشعارًا', 'Test notification'],
   'notificationsTestSent': ['تم إرسال إشعار تجريبي للمتصفح', 'Test notification sent to browser'],
-  'notificationsInboxTitle': ['سجل الإشعارات المستلمة', 'Received notifications'],
-  'notificationsInboxEmpty': ['لا توجد إشعارات سابقة في هذا المتصفح.', 'No previous notifications in this browser.'],
-  'notificationsInboxClear': ['مسح السجل', 'Clear history'],
-  'notificationsCopyLink': ['نسخ الرابط للمتصفح', 'Copy link for browser'],
-  'notificationsLinkCopied': ['تم نسخ الرابط', 'Link copied'],
-  'notificationsIosFocusNote': ['على iPhone، يُرجى استخدام نمط التركيز (Focus Mode) في إعدادات الهاتف لتحديد ساعات الهدوء.', 'On iPhone, please use Focus Mode in Settings to set quiet hours.'],
+  'notificationsUnsubscribeAll': ['إيقاف كل الإشعارات', 'Turn off all notifications'],
+  'notificationsUnsubscribeConfirm': ['تم إيقاف جميع الإشعارات', 'All notifications turned off'],
+  'notificationsUnsubscribeFailed': [
+    'تعذّر حفظ إيقاف الإشعارات على الخادم؛ ستتم إعادة المحاولة تلقائيًا.',
+    'Could not save opt-out on server; it will retry automatically.',
+  ],
+  'notificationsSyncFailed': [
+    'تعذّر مزامنة الإشعارات مع الخادم؛ ستتم إعادة المحاولة تلقائيًا.',
+    'Could not sync notifications with server; it will retry automatically.',
+  ],
+  'notificationsUnsupported': ['هذا المتصفح لا يدعم تلقي الإشعارات.', 'This browser does not support push notifications.'],
 };
 
 /// The visitor's notification preferences and reminders page (`/notifications`, ADR-057).
-class NotificationsPage extends ConsumerWidget {
+class NotificationsPage extends ConsumerStatefulWidget {
   final bool? isWeb;
   const NotificationsPage({super.key, this.isWeb});
+
+  /// Preloads the deferred web-push library outside `FakeAsync` test zones
+  /// so Dart VM deferred loading does not stall across `testWidgets` cases.
+  @visibleForTesting
+  static Future<void> preloadWebPushForTest() => web_push.loadLibrary();
+
+  /// Returns a shareable notifications URL matching the active web deployment
+  /// (preview channel or prod) without query parameters or URL fragments.
+  @visibleForTesting
+  static String shareableNotificationsUrlForUri(Uri base) {
+    if ((base.scheme == 'http' || base.scheme == 'https') && base.host.isNotEmpty) {
+      final path = base.path.isEmpty ? '/notifications' : base.path;
+      return Uri(
+        scheme: base.scheme,
+        userInfo: base.userInfo,
+        host: base.host,
+        port: base.hasPort ? base.port : null,
+        path: path,
+      ).toString();
+    }
+    return 'https://maximos-domadios-church.web.app/notifications';
+  }
+
+  @override
+  ConsumerState<NotificationsPage> createState() => _NotificationsPageState();
+}
+
+class _NotificationsPageState extends ConsumerState<NotificationsPage> {
+  dynamic _webPushRepo;
+  PushEnv? _webPushEnv;
+  Future<bool>? _syncInFlight;
+  bool _copyFailed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final isWeb = widget.isWeb ?? kIsWeb;
+    if (isWeb) {
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        if (!mounted || !context.mounted) return;
+        final pushEnv = ref.read(pushEnvProvider);
+        final state = readWebPushStorageState(pushEnv);
+        if (state == null || !state.pendingSync || state.syncedToken == null) return;
+        final prefs = ref.read(pushPrefsProvider);
+        if (pushEnv.permission != 'granted' && prefs.types.isNotEmpty) return;
+        final pushSettings = ref.read(pushSettingsProvider);
+        if (!pushSettings.webReady) return;
+        try {
+          await web_push.loadLibrary();
+          final repo = _repoFor(pushEnv);
+          if (!repo.canWriteInEnvironment) return;
+          final reminders = mounted ? ref.read(userRemindersProvider) : <Reminder>[];
+          await repo.resumePendingSync(prefs: prefs, reminders: reminders);
+        } catch (e, st) {
+          ErrorReporting.capture(e, st, section: 'notifications', source: 'web_push_resume');
+        }
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    if (!kIsWeb) {
+      final pending = _syncInFlight;
+      final repo = _webPushRepo;
+      if (pending != null) {
+        pending.whenComplete(() {
+          if (repo != null) repo.dispose();
+        });
+      } else if (repo != null) {
+        repo.dispose();
+      }
+    }
+    super.dispose();
+  }
+
+  dynamic _repoFor(PushEnv pushEnv) {
+    if (_webPushRepo == null || !identical(_webPushEnv, pushEnv)) {
+      _webPushEnv = pushEnv;
+      _webPushRepo = web_push.WebPushRepository.sharedFor(pushEnv);
+    }
+    return _webPushRepo;
+  }
 
   PushPermissionState _resolveState({
     required InstallOsInfo osInfo,
@@ -62,13 +168,16 @@ class NotificationsPage extends ConsumerWidget {
     // then never claim notifications are on.
     if (!isWeb) return PushPermissionState.unsupported;
 
+    if (osInfo.os == InstallOs.ios && iosTooOldForPush(userAgent)) {
+      // iOS < 16.4 has no web push at all, installed or not.
+      return PushPermissionState.iosTooOld;
+    }
+
     if (osInfo.inAppBrowser) {
       return PushPermissionState.inAppBrowser;
     }
 
     if (osInfo.os == InstallOs.ios) {
-      // iOS < 16.4 has no web push at all, installed or not.
-      if (iosTooOldForPush(userAgent)) return PushPermissionState.iosTooOld;
       if (!isStandalone) {
         return PushPermissionState.iosNeedsInstall;
       }
@@ -87,8 +196,127 @@ class NotificationsPage extends ConsumerWidget {
     return PushPermissionState.defaultState;
   }
 
+  void _showSyncErrorIfNeeded(BuildContext context, bool syncOk) {
+    if (!syncOk && _webPushRepo?.syncedToken != null && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(context.tr('notificationsSyncFailed')),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  String _currentLang(BuildContext context) => context.isAr ? 'ar' : 'en';
+
+  Future<bool> _syncWebPush(
+    BuildContext context,
+    WidgetRef ref,
+    PushEnv pushEnv,
+    PushSettings pushSettings, {
+    PushPrefs? overridePrefs,
+    bool isWeb = kIsWeb,
+  }) {
+    if (!isWeb) return Future.value(true);
+    // Capture fallback snapshots synchronously before any await so unmounting
+    // mid-flight never aborts the server sync or touches a disposed WidgetRef.
+    final fallbackLang = _currentLang(context);
+    final PushPrefs fallbackPrefs = overridePrefs ?? ref.read(pushPrefsProvider);
+    final List<Reminder> fallbackReminders = ref.read(userRemindersProvider);
+    final prev = _syncInFlight;
+    final next = () async {
+      if (prev != null) {
+        try {
+          await prev;
+        } catch (_) {}
+      }
+      return _syncWebPushSerialized(
+        ref,
+        pushEnv,
+        pushSettings,
+        fallbackLang: fallbackLang,
+        fallbackPrefs: fallbackPrefs,
+        fallbackReminders: fallbackReminders,
+        overridePrefs: overridePrefs,
+      );
+    }();
+    _syncInFlight = next;
+    return next.whenComplete(() {
+      if (identical(_syncInFlight, next)) _syncInFlight = null;
+    });
+  }
+
+  Future<bool> _syncWebPushSerialized(
+    WidgetRef ref,
+    PushEnv pushEnv,
+    PushSettings pushSettings, {
+    required String fallbackLang,
+    required PushPrefs fallbackPrefs,
+    required List<Reminder> fallbackReminders,
+    PushPrefs? overridePrefs,
+  }) async {
+    try {
+      await web_push.loadLibrary();
+      final repo = _repoFor(pushEnv);
+      if (!repo.canWriteInEnvironment) return true;
+      final hadTokenBefore = repo.syncedToken != null;
+      final liveLang = mounted && context.mounted ? _currentLang(context) : fallbackLang;
+      PushPrefs prefs = overridePrefs ?? (mounted ? ref.read(pushPrefsProvider) : fallbackPrefs);
+      if (prefs.lang != liveLang) {
+        if (mounted) {
+          ref.read(pushPrefsProvider.notifier).setLang(liveLang);
+        }
+        prefs = prefs.copyWith(lang: liveLang);
+      }
+
+      if (repo.syncedToken == null) {
+        if (prefs.types.isEmpty) {
+          return true;
+        }
+        final token = await repo.enable(vapidKey: pushSettings.vapidKey);
+        if (token == null) {
+          if (mounted && context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(context.tr('notificationsRegisterFailed')),
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          }
+          return false;
+        }
+        // Reconcile against any opt-out / toggle changes made while enable() ran.
+        if (overridePrefs == null) {
+          final postEnableLang = mounted && context.mounted ? _currentLang(context) : liveLang;
+          prefs = mounted ? ref.read(pushPrefsProvider) : fallbackPrefs;
+          if (prefs.lang != postEnableLang) {
+            if (mounted) {
+              ref.read(pushPrefsProvider.notifier).setLang(postEnableLang);
+            }
+            prefs = prefs.copyWith(lang: postEnableLang);
+          }
+        }
+      }
+
+      if (repo.syncedToken != null) {
+        final reminders = mounted ? ref.read(userRemindersProvider) : fallbackReminders;
+        final immediate = !hadTokenBefore || prefs.types.isEmpty;
+        return (await repo.syncPreferences(
+              prefs: prefs,
+              reminders: reminders,
+              immediate: immediate,
+            )) ==
+            true;
+      }
+      return false;
+    } catch (e, st) {
+      ErrorReporting.capture(e, st, section: 'notifications', source: 'web_push_sync');
+      return false;
+    }
+  }
+
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     registerStrings(notificationsPageStrings);
     setDocumentRouteMeta(
       path: '/notifications',
@@ -119,7 +347,7 @@ class NotificationsPage extends ConsumerWidget {
       maxTouchPoints: installEnv.maxTouchPoints,
     );
 
-    final web = isWeb ?? kIsWeb;
+    final web = widget.isWeb ?? kIsWeb;
     final permState = _resolveState(
       osInfo: osInfo,
       userAgent: installEnv.userAgent,
@@ -180,35 +408,19 @@ class NotificationsPage extends ConsumerWidget {
           const SizedBox(height: 16),
 
           // Status & Permission card
-          _buildStatusCard(context, pal, permState, pushSettings, pushEnv, prefsNotifier,
-              // Re-read the browser permission so a denial shows the
-              // blocked-permission steps right away.
-              () => ref.invalidate(pushPermissionProvider)),
-
-          if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) ...[
-            const SizedBox(height: 16),
-            Material(
-              color: pal.surface,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-                side: BorderSide(color: pal.hairline),
-              ),
-              clipBehavior: Clip.antiAlias,
-              child: ListTile(
-                leading: Icon(Icons.battery_charging_full_outlined, color: pal.goldText),
-                title: Text(
-                  context.isAr ? 'حالة الإشعارات وتحسين البطارية' : 'Notification Health & Battery Guide',
-                  style: TextStyle(fontWeight: FontWeight.w600, color: pal.primaryDeep),
-                ),
-                subtitle: Text(
-                  context.isAr ? 'دليل استثناء التطبيق من توفير الطاقة' : 'OEM battery optimization guide & diagnostics',
-                  style: TextStyle(fontSize: 13, color: pal.muted),
-                ),
-                trailing: Icon(Icons.chevron_right_rounded, color: pal.muted),
-                onTap: () => context.push('/notifications/battery'),
-              ),
-            ),
-          ],
+          _buildStatusCard(
+            context,
+            pal,
+            permState,
+            pushSettings,
+            pushEnv,
+            prefsNotifier,
+            ref,
+            // Re-read the browser permission so a denial shows the
+            // blocked-permission steps right away.
+            () => ref.invalidate(pushPermissionProvider),
+            isWeb: web,
+          ),
 
           const SizedBox(height: 20),
 
@@ -230,7 +442,18 @@ class NotificationsPage extends ConsumerWidget {
               children: [
                 for (int i = 0; i < availableTypes.length; i++) ...[
                   if (i > 0) Divider(height: 1, color: pal.hairline),
-                  _buildTypeTile(context, pal, availableTypes[i], prefs, prefsNotifier),
+                  _buildTypeTile(
+                    context,
+                    pal,
+                    availableTypes[i],
+                    prefs,
+                    prefsNotifier,
+                    permState,
+                    pushEnv,
+                    pushSettings,
+                    ref,
+                    isWeb: web,
+                  ),
                 ],
               ],
             ),
@@ -256,11 +479,32 @@ class NotificationsPage extends ConsumerWidget {
                   foregroundColor: pal.alert,
                   side: BorderSide(color: pal.alert),
                 ),
-                onPressed: () {
+                onPressed: () async {
                   prefsNotifier.clearAll();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text(context.tr('notificationsUnsubscribeConfirm'))),
-                  );
+                  var ok = true;
+                  if (web) {
+                    ok = await _syncWebPush(
+                      context,
+                      ref,
+                      pushEnv,
+                      pushSettings,
+                      overridePrefs: PushPrefs(
+                        types: const {},
+                        lang: context.isAr ? 'ar' : 'en',
+                        updatedAt: DateTime.now().toUtc(),
+                      ),
+                      isWeb: web,
+                    );
+                  }
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          context.tr(ok ? 'notificationsUnsubscribeConfirm' : 'notificationsUnsubscribeFailed'),
+                        ),
+                      ),
+                    );
+                  }
                 },
                 child: Text(context.tr('notificationsUnsubscribeAll')),
               ),
@@ -289,8 +533,10 @@ class NotificationsPage extends ConsumerWidget {
     PushSettings pushSettings,
     PushEnv pushEnv,
     PushPrefsNotifier prefsNotifier,
-    VoidCallback onPermissionChanged,
-  ) {
+    WidgetRef ref,
+    VoidCallback onPermissionChanged, {
+    required bool isWeb,
+  }) {
     switch (state) {
       case PushPermissionState.inAppBrowser:
         return Container(
@@ -320,13 +566,37 @@ class NotificationsPage extends ConsumerWidget {
               OutlinedButton.icon(
                 icon: const Icon(Icons.copy, size: 18),
                 label: Text(context.tr('notificationsCopyLink')),
-                onPressed: () {
-                  Clipboard.setData(const ClipboardData(text: 'https://maximos-domadios-church.web.app/notifications'));
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text(context.tr('notificationsLinkCopied'))),
-                  );
+                onPressed: () async {
+                  final url = NotificationsPage.shareableNotificationsUrlForUri(Uri.base);
+                  try {
+                    await Clipboard.setData(ClipboardData(text: url));
+                    if (mounted) setState(() => _copyFailed = false);
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(context.tr('notificationsLinkCopied')),
+                          behavior: SnackBarBehavior.floating,
+                        ),
+                      );
+                    }
+                  } catch (_) {
+                    if (mounted) setState(() => _copyFailed = true);
+                  }
                 },
               ),
+              if (_copyFailed) ...[
+                const SizedBox(height: 10),
+                Text(
+                  context.tr('notificationsCopyFailed'),
+                  style: TextStyle(fontSize: 12.5, color: pal.muted),
+                ),
+                const SizedBox(height: 4),
+                SelectableText(
+                  NotificationsPage.shareableNotificationsUrlForUri(Uri.base),
+                  textDirection: TextDirection.ltr,
+                  style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: pal.primaryDeep),
+                ),
+              ],
             ],
           ),
         );
@@ -356,6 +626,27 @@ class NotificationsPage extends ConsumerWidget {
               Text(
                 context.tr('notificationsIosNeedsInstallBody'),
                 style: TextStyle(fontSize: 13, color: pal.muted, height: 1.5),
+              ),
+              const SizedBox(height: 12),
+              _buildIosStep(
+                context,
+                pal,
+                icon: Icons.ios_share,
+                text: context.tr('notificationsIosStep1'),
+              ),
+              const SizedBox(height: 8),
+              _buildIosStep(
+                context,
+                pal,
+                icon: Icons.add_box_outlined,
+                text: context.tr('notificationsIosStep2'),
+              ),
+              const SizedBox(height: 8),
+              _buildIosStep(
+                context,
+                pal,
+                icon: Icons.open_in_new,
+                text: context.tr('notificationsIosStep3'),
               ),
             ],
           ),
@@ -408,6 +699,12 @@ class NotificationsPage extends ConsumerWidget {
                 context.tr('notificationsBlockedIos'),
                 style: TextStyle(fontSize: 12.5, color: pal.ink, height: 1.4),
               ),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                icon: const Icon(Icons.refresh, size: 18),
+                label: Text(context.tr('notificationsRecheckButton')),
+                onPressed: onPermissionChanged,
+              ),
             ],
           ),
         );
@@ -423,33 +720,49 @@ class NotificationsPage extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              Row(
+                children: [
+                  Icon(Icons.notifications_active_outlined, color: pal.goldText, size: 22),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      context.tr('notificationsAllowPromptTitle'),
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: pal.primaryDeep),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                context.tr('notificationsAllowPromptBody'),
+                style: TextStyle(fontSize: 13.5, color: pal.muted, height: 1.5),
+              ),
+              const SizedBox(height: 14),
               FilledButton.icon(
                 icon: const Icon(Icons.notifications_active),
-                label: Text(context.tr('notificationsEnableButton')),
+                label: Text(context.tr('notificationsAllowBrowserButton')),
                 style: FilledButton.styleFrom(
                   minimumSize: const Size(48, 48),
                 ),
                 onPressed: pushSettings.canRequestPermission
                     ? () async {
                         final res = await pushEnv.requestPermission();
+                        if (!mounted) return;
                         if (res == 'granted') {
                           prefsNotifier.firstOptIn();
-                          if (kIsWeb) {
-                            try {
-                              await web_push.loadLibrary();
-                            } catch (e, st) {
-                              ErrorReporting.capture(e, st, section: 'deferred_chunk', source: 'web_push_repository');
-                              onPermissionChanged();
-                              return;
-                            }
-                            try {
-                              final repo = web_push.WebPushRepository(pushEnv: pushEnv);
-                              await repo.enable(vapidKey: pushSettings.vapidKey);
-                            } catch (e, st) {
-                              ErrorReporting.capture(e, st, section: 'notifications', source: 'web_push_enable');
-                            }
+                          if (isWeb && context.mounted) {
+                            final syncOk = await _syncWebPush(
+                              context,
+                              ref,
+                              pushEnv,
+                              pushSettings,
+                              isWeb: isWeb,
+                            );
+                            if (!mounted || !context.mounted) return;
+                            _showSyncErrorIfNeeded(context, syncOk);
                           }
                         }
+                        if (!mounted) return;
                         onPermissionChanged();
                       }
                     : null,
@@ -567,20 +880,108 @@ class NotificationsPage extends ConsumerWidget {
     );
   }
 
+  Widget _buildIosStep(
+    BuildContext context,
+    dynamic pal, {
+    required IconData icon,
+    required String text,
+  }) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 18, color: pal.primary),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            text,
+            style: TextStyle(fontSize: 12.5, color: pal.ink, height: 1.4),
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildTypeTile(
     BuildContext context,
     dynamic pal,
     NotifyType type,
     PushPrefs prefs,
     PushPrefsNotifier prefsNotifier,
-  ) {
+    PushPermissionState permState,
+    PushEnv pushEnv,
+    PushSettings pushSettings,
+    WidgetRef ref, {
+    required bool isWeb,
+  }) {
     final isSelected = prefs.types.contains(type);
     final title = context.isAr ? type.labelAr : type.labelEn;
     final desc = context.isAr ? type.descriptionAr : type.descriptionEn;
 
     return SwitchListTile(
       value: isSelected,
-      onChanged: (_) => prefsNotifier.toggleType(type),
+      onChanged: (turnOn) async {
+        if (turnOn && permState != PushPermissionState.granted) {
+          if (isWeb) {
+            if (!pushSettings.canRequestPermission) return;
+            if (permState == PushPermissionState.iosNeedsInstall) {
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(context.tr('notificationsIosAddFirst')),
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+              }
+              return;
+            }
+            if (permState == PushPermissionState.inAppBrowser) {
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(context.tr('notificationsInAppOpenBrowser')),
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+              }
+              return;
+            }
+            final res = await pushEnv.requestPermission();
+            if (!mounted) return;
+            if (res == 'granted') {
+              prefsNotifier.toggleType(type);
+              var syncOk = true;
+              if (context.mounted) {
+                syncOk = await _syncWebPush(context, ref, pushEnv, pushSettings, isWeb: isWeb);
+              }
+              if (!mounted || !context.mounted) return;
+              ref.invalidate(pushPermissionProvider);
+              _showSyncErrorIfNeeded(context, syncOk);
+            } else {
+              ref.invalidate(pushPermissionProvider);
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(context.tr('notificationsPermissionDisabled')),
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+              }
+            }
+          } else {
+            // Native platforms: toggle type directly!
+            prefsNotifier.toggleType(type);
+          }
+        } else {
+          prefsNotifier.toggleType(type);
+          if (isWeb &&
+              (permState == PushPermissionState.granted || readWebPushStorageState(pushEnv)?.syncedToken != null) &&
+              context.mounted) {
+            final syncOk = await _syncWebPush(context, ref, pushEnv, pushSettings, isWeb: isWeb);
+            if (!mounted || !context.mounted) return;
+            _showSyncErrorIfNeeded(context, syncOk);
+          }
+        }
+      },
       title: Text(
         title,
         style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14.5, color: pal.ink),

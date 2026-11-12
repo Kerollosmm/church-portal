@@ -25,6 +25,77 @@ import 'admin_schema.dart';
 import 'admin_screens.dart';
 import 'admin_validators.dart';
 
+const Map<String, List<String>> _notificationsAdminStrings = {
+  'nm_statusSubtitle': [
+    'شغّل أو أوقف كل الإشعارات، وتأكد أن خدمة الإرسال تعمل.',
+    'Turn all notifications on or off and check the sending service.',
+  ],
+  'nm_masterOnHint': [
+    'مفعّلة: يرى الزوار خيارات الإشعارات وتُرسل الإعلانات المجدولة.',
+    'On: visitors see notification options and scheduled announcements are sent.',
+  ],
+  'nm_masterOffHint': [
+    'متوقفة: لن يُرسل أي إشعار ولن تظهر خيارات الإشعارات للزوار.',
+    'Off: nothing is sent and visitors do not see notification options.',
+  ],
+  'nm_pushOffBanner': [
+    'الإشعارات متوقفة الآن. يمكنك تجهيز الإعلانات والنصوص، لكن لن يُرسل شيء حتى تشغّلها وتضغط «حفظ الإعدادات».',
+    'Notifications are off. You can prepare announcements and texts, but nothing is sent until you turn them on and press “Save settings”.',
+  ],
+  'nm_senderOkHint': [
+    'تفحص الخدمة كل ١٥ دقيقة؛ الإعلان المجدول يصل عادةً خلال ١٥–٣٠ دقيقة من موعده.',
+    'It checks every 15 minutes; a scheduled announcement usually arrives 15–30 minutes after its time.',
+  ],
+  'nm_senderLateHint': [
+    'لم تعمل منذ أكثر من ساعة. لا شيء مفقود — سترسل ما فاتها عند أول تشغيل. إن استمر التأخير أبلغ المسؤول التقني.',
+    'It has not run for over an hour. Nothing is lost — it catches up on its next run. Tell the technical admin if this continues.',
+  ],
+  'nm_senderStoppedHint': [
+    'لم تعمل منذ أكثر من ٣ ساعات، فلن تُرسل الإعلانات. أبلغ المسؤول التقني (راجع دليل التشغيل: مُرسِل الإشعارات).',
+    'It has not run for over 3 hours, so announcements are not going out. Tell the technical admin (operations guide: push sender).',
+  ],
+  'nm_senderNeverHint': [
+    'لم تُسجَّل أي دورة إرسال حتى الآن. يجهّزها المسؤول التقني مرة واحدة (دليل التشغيل)؛ حتى ذلك الحين تُحفظ الإعلانات ولا تُرسل.',
+    'No sending run has been recorded yet. The technical admin sets it up once (operations guide); until then announcements are saved but not sent.',
+  ],
+  'nm_scheduledSubtitle': [
+    'اكتب إعلانًا (نهضة، قداس، اجتماع…) واختر موعد إرساله؛ يصل كإشعار لكل من فعّل «تنويهات وأخبار».',
+    'Write an announcement (revival, liturgy, meeting…) and choose when it goes out; it reaches everyone who turned on “Announcements”.',
+  ],
+  'nm_vapidHint': [
+    'من Firebase Console ← Project settings ← Cloud Messaging ← Web Push certificates. اتركه فارغًا إن لم يتوفر بعد (لن تعمل إشعارات المتصفح و iPhone بدونه).',
+    'From Firebase Console → Project settings → Cloud Messaging → Web Push certificates. Leave empty if not available yet (browser & iPhone push need it).',
+  ],
+  'nm_errVapid': [
+    'المفتاح غير صحيح: يجب أن يكون ٨٠–١٠٠ حرف إنجليزي/رقم أو - و _ فقط (انسخه كاملًا).',
+    'Invalid key: 80–100 letters, digits, - or _ (copy it whole).',
+  ],
+  'nm_errPast': [
+    'هذا الموعد مرّ بالفعل. اختر موعدًا قادمًا أو «في أقرب وقت».',
+    'That time has passed. Pick a future time or “As soon as possible”.',
+  ],
+  'nm_errFull': [
+    'القائمة ممتلئة (٢٠). احذف إعلانًا قديمًا أولًا.',
+    'The list is full (20). Delete an old one first.',
+  ],
+  'nm_webHealthCapBanner': [
+    'تنبيه: وصلت تذكيرات اليوم إلى الحد الأقصى (١٠٠٠ تذكير) — قد لا تصل بعض التذكيرات الإضافية اليوم.',
+    'Warning: Daily reminder limit reached (1,000 reminders) — additional reminders may not be sent today.',
+  ],
+  'nm_webPlannerDelayNotice': [
+    'ملاحظة: تعديلات منتصف اليوم على القداسات والصلوات تستغرق نحو ساعتين إلى ٦ ساعات لتنعكس في تذكيرات المتصفح (يعمل المجدول ٤ مرات يوميًا: ٢:٠٣ و ٨:٠٣ و ١٤:٠٣ و ٢٠:٠٣ بتوقيت القاهرة).',
+    'Note: Mid-day edits to liturgies take ~2–6 hours to reflect in browser reminders (the planner runs 4 times daily at 02:03, 08:03, 14:03, 20:03 Cairo time).',
+  ],
+  'nm_errRowGone': [
+    'حُذف هذا الإعلان من جهاز آخر. أغلق المحرر وأعد المحاولة.',
+    'This announcement was deleted elsewhere. Close the editor and try again.',
+  ],
+  'nm_errAlreadySending': [
+    'بدأ إرسال هذا الإعلان بالفعل فلا يمكن تعديله. استخدم «أعد الإرسال» إن لزم.',
+    'Sending already started, so it cannot be edited. Use “Send again” if needed.',
+  ],
+};
+
 /// Admin screen combining the notifications manager and the app-install settings.
 class AppAndNotificationsScreen extends StatefulWidget {
   final AdminBackend repo;
@@ -46,6 +117,7 @@ class _AppAndNotificationsScreenState extends State<AppAndNotificationsScreen> w
 
   @override
   Widget build(BuildContext context) {
+    registerStrings(_notificationsAdminStrings);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -706,6 +778,7 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
   @override
   Widget build(BuildContext context) {
     super.build(context);
+    registerStrings(_notificationsAdminStrings);
     return StreamBuilder<AdminDoc?>(
       stream: _featuresStream,
       builder: (context, featSnap) {

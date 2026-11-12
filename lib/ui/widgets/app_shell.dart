@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../../core/l10n.dart';
+import '../../core/push_env.dart' show hasPendingWebPushSync;
 import '../../core/theme.dart';
 import '../../data/error_reporting.dart';
 import '../../data/web_push_repository.dart' deferred as web_push;
@@ -129,6 +130,7 @@ class _AppShellState extends ConsumerState<AppShell> {
   bool _drawerOpen = false;
   DateTime? _lastBackPressTime;
   StreamSubscription<String>? _deepLinksSub;
+  dynamic _webPushRepo;
 
   String get location => widget.location;
 
@@ -151,7 +153,8 @@ class _AppShellState extends ConsumerState<AppShell> {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       try {
         final prefs = ref.read(pushPrefsProvider);
-        if (prefs.types.isNotEmpty) {
+        final hasPending = hasPendingWebPushSync(pushEnv);
+        if (prefs.types.isNotEmpty || hasPending) {
           try {
             await web_push.loadLibrary();
           } catch (e, st) {
@@ -159,8 +162,15 @@ class _AppShellState extends ConsumerState<AppShell> {
             return;
           }
           try {
-            final repo = web_push.WebPushRepository(pushEnv: pushEnv);
+            final repo = web_push.WebPushRepository.sharedFor(pushEnv);
+            _webPushRepo = repo;
             if (repo.syncedToken != null) {
+              if (hasPending && mounted && (pushEnv.permission == 'granted' || prefs.types.isEmpty)) {
+                await repo.resumePendingSync(
+                  prefs: prefs,
+                  reminders: ref.read(userRemindersProvider),
+                );
+              }
               final pushSettings = ref.read(pushSettingsProvider);
               if (pushSettings.webReady) {
                 await repo.maybeRefreshTokenOnPushSurface(vapidKey: pushSettings.vapidKey);
@@ -179,6 +189,7 @@ class _AppShellState extends ConsumerState<AppShell> {
   @override
   void dispose() {
     _deepLinksSub?.cancel();
+    _webPushRepo?.dispose();
     super.dispose();
   }
 
@@ -186,16 +197,13 @@ class _AppShellState extends ConsumerState<AppShell> {
   void didUpdateWidget(covariant AppShell oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.location != widget.location) {
-      if (!widget.location.startsWith('/readings')) {
+      final clearFocus = !widget.location.startsWith('/readings');
+      final fromPush = widget.location.contains('from_push=1');
+      if (clearFocus || fromPush) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) {
-            ref.read(readerFocusModeProvider.notifier).setFocus(false);
-          }
-        });
-      }
-      if (widget.location.contains('from_push=1')) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) {
+          if (!mounted) return;
+          if (clearFocus) ref.read(readerFocusModeProvider.notifier).setFocus(false);
+          if (fromPush) {
             ref.invalidate(nowProvider);
             ref.invalidate(todaySettingsProvider);
           }
@@ -203,6 +211,8 @@ class _AppShellState extends ConsumerState<AppShell> {
       }
     }
   }
+
+  void _goHome() => context.go('/');
 
   @override
   Widget build(BuildContext context) {
@@ -250,7 +260,11 @@ class _AppShellState extends ConsumerState<AppShell> {
     final primary = context.pal.primary;
     // The hanging seal tab (start corner, after the Back arrow on phones).
     final ultraNarrow = !wide && width < 360;
-    final hideBarLang = showBack && ultraNarrow;
+    // On mobile viewports (< 600 px), omit the language toggle from the AppBar
+    // to reclaim horizontal space for the church title. The language toggle
+    // is already available in the navigation drawer. On desktop (width >= 600),
+    // keep it visible in the AppBar actions.
+    final showBarLang = width >= 600;
     final tabW = wide ? 88.0 : (ultraNarrow ? 54.0 : 64.0);
     final tabH = wide ? 108.0 : (ultraNarrow ? 70.0 : 80.0);
     final tabStart = (showBack ? 48.0 : 0.0) + (wide ? 24.0 : 6.0);
@@ -321,7 +335,7 @@ class _AppShellState extends ConsumerState<AppShell> {
           ),
           const SizedBox(width: 8),
         ],
-        if (!hideBarLang) ...[
+        if (showBarLang) ...[
           IconButton(
             key: const Key('appBarLanguageToggle'),
             tooltip: context.tr('language'),
@@ -370,32 +384,32 @@ class _AppShellState extends ConsumerState<AppShell> {
             child: focusMode
                 ? const SizedBox.shrink()
                 : Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (showTopBar) ...[
-              // The status-bar inset above the bar takes the bar's colour, and
-              // the status-bar icons contrast with it (light on the dark title
-              // band; the AppBar's own style sits lower and follows its light
-              // background — Sentry review on PR #35).
-              AnnotatedRegion<SystemUiOverlayStyle>(
-                value: statusBarStyleOn(context.pal.bar),
-                child: ColoredBox(
-                  color: context.pal.bar,
-                  child: SafeArea(
-                    bottom: false,
-                    child: TopUtilityBar(location: location),
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (showTopBar) ...[
+                        // The status-bar inset above the bar takes the bar's colour, and
+                        // the status-bar icons contrast with it (light on the dark title
+                        // band; the AppBar's own style sits lower and follows its light
+                        // background — Sentry review on PR #35).
+                        AnnotatedRegion<SystemUiOverlayStyle>(
+                          value: statusBarStyleOn(context.pal.bar),
+                          child: ColoredBox(
+                            color: context.pal.bar,
+                            child: SafeArea(
+                              bottom: false,
+                              child: TopUtilityBar(location: location),
+                            ),
+                          ),
+                        ),
+                        SafeArea(
+                          top: false,
+                          bottom: false,
+                          child: mainAppBar,
+                        ),
+                      ] else
+                        mainAppBar,
+                    ],
                   ),
-                ),
-              ),
-              SafeArea(
-                top: false,
-                bottom: false,
-                child: mainAppBar,
-              ),
-            ] else
-              mainAppBar,
-          ],
-        ),
           ),
         ),
       ),
@@ -433,27 +447,30 @@ class _AppShellState extends ConsumerState<AppShell> {
         PositionedDirectional(
           start: tabStart,
           top: MediaQuery.paddingOf(context).top + topBarH,
-          child: AnimatedSlide(
-            offset: focusMode ? const Offset(0, -1.2) : Offset.zero,
-            duration: const Duration(milliseconds: 250),
-            curve: Curves.easeInOut,
-            child: AnimatedOpacity(
-              opacity: focusMode ? 0.0 : 1.0,
+          child: RepaintBoundary(
+            child: AnimatedSlide(
+              offset: focusMode ? const Offset(0, -1.2) : Offset.zero,
               duration: const Duration(milliseconds: 250),
               curve: Curves.easeInOut,
-              child: IgnorePointer(
-                ignoring: focusMode,
-                child: Semantics(
-            link: true,
-            label: '${context.tr('logoLabel')} — ${context.tr('home')}',
-            excludeSemantics: true,
-            child: GestureDetector(
-              key: const Key('sealTabHome'),
-              onTap: () => context.go('/'),
-              child: MouseRegion(cursor: SystemMouseCursors.click, child: SealTab(width: tabW, height: tabH)),
-            ),
-          ),
-        ),
+              child: AnimatedOpacity(
+                opacity: focusMode ? 0.0 : 1.0,
+                duration: const Duration(milliseconds: 250),
+                curve: Curves.easeInOut,
+                child: IgnorePointer(
+                  ignoring: focusMode,
+                  child: Semantics(
+                    link: true,
+                    label: '${context.tr('logoLabel')} — ${context.tr('home')}',
+                    excludeSemantics: true,
+                    onTap: _goHome,
+                    child: GestureDetector(
+                      key: const Key('sealTabHome'),
+                      onTap: _goHome,
+                      child: MouseRegion(cursor: SystemMouseCursors.click, child: SealTab(width: tabW, height: tabH)),
+                    ),
+                  ),
+                ),
+              ),
             ),
           ),
         ),

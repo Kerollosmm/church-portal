@@ -1956,6 +1956,31 @@ supersede them.
   - Clean, unstacked navigation chrome adhering to single-back-arrow invariant across all viewports (320 px to 1400 px).
   - +0 Firestore reads, writes, rules expressions, or admin schema changes.
 
+## ADR-064 — Mobile performance optimization, AppBar header cleanup & notification stream
+- **Context:**
+  1. **AppBar Header Crowding on Mobile Viewports (< 600 px):** On narrow screens (320–390 px), displaying `appBarLanguageToggle` in `AppBar.actions` alongside the navigation drawer toggle (`_DrawerButton`) and the church seal tab (`SealTab`) compressed the church title (`appShort`), risking visual collisions or unwanted truncation. The drawer already provides a natural home for the language toggle on mobile devices (`drawerLanguageToggle`).
+  2. **Continuous Animation Tickers & Compositing Overhead on Mobile:** Several continuous animation tickers and compositing layers degraded scroll and battery performance on mobile devices (Android APK and mobile web browsers):
+     - Continuous 60s background tickers (`_clock.repeat()`), Ken Burns scaling transforms, and haze drifts in `HeroStage`, along with DOM-embedded CSS animation views (`HeroAmbientLayer`) on mobile web.
+     - Continuous 1100 ms repeating ticker in `_PulseDot` (`lib/ui/widgets/today_widgets.dart`).
+     - Continuous 900 ms shimmer ticker in `SkeletonBox` (`lib/ui/widgets/common.dart`).
+     - Per-scroll `Opacity` animation layers in `Reveal` (`lib/ui/widgets/golden.dart`) triggering expensive GPU `saveLayer` raster passes during rapid scrolling.
+  3. **Cluttered Notification Preferences Flow:** On `/notifications` (`notifications_page.dart`), the persistent OEM battery optimization guide card («حالة الإشعارات وتحسين البطارية - دليل استثناء التطبيق من توفير الطاقة») was displayed constantly at the top of preferences, adding noise for regular visitors and web users. In addition, notification channel switches required reactive permission prompting when enabled.
+- **Decision:**
+  1. **`INV-APPBAR-01` (Mobile AppBar Language Switcher Cleanup):** Omit `appBarLanguageToggle` from `AppBar.actions` on all viewports `< 600 px`. This reclaims ~54 dp horizontal space, guaranteeing the church short title (`appShort`) has >= 130 dp unobstructed width and >= 6 dp clearance from the seal tab across 320, 360, and 390 px widths. The drawer language toggle (`drawerLanguageToggle`) in `_AppDrawer` serves as the mobile language entrypoint. Desktop viewports (`width >= 600`) retain `appBarLanguageToggle`.
+  2. **Expanded `INV-PERF-01` (Mobile Continuous Tickers & Compositing Bypass):**
+     - Extend `heroAmbientLoopAllowed({bool isWeb, TargetPlatform? platform, double? width})` to evaluate `TargetPlatform.iOS` and narrow viewports (`width < 600`), stopping `_clock` continuous ticker, Ken Burns scaling, haze drift, and `HeroAmbientLayer` DOM views on mobile devices/viewports, cleanly falling back to static high-resolution artwork (`ArtAssets.heroTall` / `ArtAssets.heroWide`) with `RepaintBoundary` isolation.
+     - Silence continuous tickers in `_PulseDot` (1100 ms) and `SkeletonBox` (900 ms) on mobile platforms and viewports (< 600 px), rendering static indicators/placeholders.
+     - Bypass scroll-triggered `Reveal` opacity transitions on mobile, rendering the child immediately to eliminate GPU `saveLayer` raster penalties.
+  3. **Streamlined `/notifications` Screen & Permission Flow:**
+     - Remove the persistent OEM battery optimization card from `notifications_page.dart`. The screen flows directly from the status card to notification preferences and reminder toggles.
+     - Standardize reactive native permission prompting when toggling notification switches if permissions have not yet been granted.
+     - Standalone OEM diagnostics remain accessible at `/notifications/battery` (`notification_health_page.dart`).
+- **Consequences:**
+  - Zero header collision on mobile devices; clean, readable typography for the church name with generous breathing room.
+  - Substantially reduced mobile CPU/GPU utilization, zero background frame drops from ambient tickers, eliminated `saveLayer` raster thrashing during fast scrolls.
+  - Modern, uncluttered `/notifications` page with reactive permission handshakes.
+  - +0 Firestore reads, writes, rules expressions, or admin schema changes.
+
 ## Timeline
 
 | When | PR / commit | What |
@@ -2029,5 +2054,9 @@ supersede them.
 | 9 Nov 2026 | **PR E** — "Phase 2 responsive polish, OpenType font retention & deferred bundle guard" (`fix/p2e-responsive-size`) | ADR-061: AppShell < 360 px space recovery (54 dp seal tab, drawer language toggle on subpages, >= 130 dp title width, >= 6 dp seal clearance); landscape < 420 px banner/bar suppression; ReadingsPage dynamic intrinsic header & clamped reader scaling (0.85..2.5x); modal sheets soft-keyboard viewInsets padding; full OpenType font retention (pyftsubset dropped to protect GSUB/GPOS Arabic ligatures & tashkeel); 8 deferred modules verified isolated with 0 leaks in main.dart.js.map; tool/check_web_bundle.mjs in ci.yml (main.dart.js raw 5,048,032 B, gzip 1,374,520 B <= 1,396,031 B ceiling, 22 part chunks) + informational lighthouse audit in deploy.yml. +0 Firestore reads/writes/rules. |
 
 | 11 Nov 2026 | **feat/cf-worker-readings-sync** — "Migrate Katameros & Synaxarium daily ingestion to Cloudflare Worker" (`feat/cf-worker-readings-sync`) | ADR-063: Migrated daily Coptic lectionary readings and Synaxarium commemoration synchronization from scheduled GitHub Actions (`synaxarium.yml`, `keepalive.yml`) into Cloudflare Worker (`church-portal-push-sender`) via Cron 4 (`0 16 * * *`, 18:00 Cairo liturgical rollover). Pure Web-standard module (`tool/readings_syncer.js`) with zero Node dependencies; dual-persistence to Firestore REST `readings/<YYYY-MM-DD>` via OAuth2 service account bearer token and `PUSH_KV` cache (`reading:<YYYY-MM-DD>`, 7-day TTL); idempotency check skipping duplicate writes; unit tests `tool/readings_syncer.test.mjs`. +0 new collections / +0 client changes. |
+
+| 12 Nov 2026 | **fix/mobile-perf-appbar-cleanup** — "Mobile performance optimization, AppBar header cleanup & notification stream" (`fix/mobile-perf-appbar-cleanup`) | ADR-064: `appBarLanguageToggle` omitted on mobile viewports (< 600 px) to reclaim ~54 dp horizontal space for church short title (`INV-APPBAR-01`); `INV-PERF-01` expanded to silence continuous tickers (`HeroStage` 60s, `_PulseDot` 1100ms, `SkeletonBox` 900ms), Ken Burns zoom, and `HeroAmbientLayer` DOM views on mobile platforms/viewports (< 600 px), and bypass `Reveal` `saveLayer` opacity costs; `/notifications` streamlined by removing persistent OEM battery card with reactive native permission prompting on toggle. +0 Firestore reads/writes/rules. |
+
+| 12 Nov 2026 | **feat/web-push-permission-prompt** — "Explicit Web Push permission prompt, topic queuing & mobile browser guidance" (`feat/web-push-permission-prompt`) | ADR-065: Explicit user-gesture Web Push permission prompt card (`permission == 'default'`); zero permission requests on page load; switch-level reactive permission handshake triggering Web Push registration and immediate topic synchronization to Firestore `push_queue` via `WebPushRepository`; comprehensive in-app browser detection (Telegram, WhatsApp, Facebook, Instagram, TikTok, Android `; wv`) with one-tap «نسخ الرابط للمتصفح» clipboard action; iOS Safari 3-step home screen installation guide transitioning seamlessly to permission card upon standalone launch (`isStandalone == true`); denied permission guide with browser site settings instructions and re-check button. +0 Firestore rules / +0 new collections. |
 
 <!-- Append new PRs to this table. -->

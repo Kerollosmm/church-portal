@@ -307,11 +307,16 @@ void main() {
 
   test('heroAmbientLoopAllowed truth table (INV-PERF-01)', () {
     expect(heroAmbientLoopAllowed(isWeb: false, platform: TargetPlatform.android), isFalse);
-    expect(heroAmbientLoopAllowed(isWeb: true, platform: TargetPlatform.android), isTrue);
-    expect(heroAmbientLoopAllowed(isWeb: false, platform: TargetPlatform.iOS), isTrue);
+    expect(heroAmbientLoopAllowed(isWeb: true, platform: TargetPlatform.android), isFalse);
+    expect(heroAmbientLoopAllowed(isWeb: false, platform: TargetPlatform.iOS), isFalse);
+    expect(heroAmbientLoopAllowed(isWeb: true, platform: TargetPlatform.iOS), isFalse);
+    expect(heroAmbientLoopAllowed(width: 320), isFalse);
+    expect(heroAmbientLoopAllowed(width: 599), isFalse);
     expect(heroAmbientLoopAllowed(isWeb: false, platform: TargetPlatform.windows), isTrue);
     expect(heroAmbientLoopAllowed(isWeb: false, platform: TargetPlatform.macOS), isTrue);
     expect(heroAmbientLoopAllowed(isWeb: false, platform: TargetPlatform.linux), isTrue);
+    expect(heroAmbientLoopAllowed(isWeb: true, platform: TargetPlatform.windows, width: 1024), isTrue);
+    expect(heroAmbientLoopAllowed(isWeb: true, platform: TargetPlatform.macOS, width: 1440), isTrue);
   });
 
   testWidgets('motion gating: tests, reduced motion and the admin switch keep the stage still', (tester) async {

@@ -11,6 +11,7 @@ import '../../domain/reminders.dart';
 import '../../domain/today.dart';
 import '../../state/providers.dart';
 import 'common.dart';
+import 'golden.dart' show mobileMotionSuppressed;
 import 'program_details.dart';
 import 'remind_me.dart';
 
@@ -233,7 +234,7 @@ class _PulseDotState extends State<_PulseDot> with SingleTickerProviderStateMixi
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (MediaQuery.disableAnimationsOf(context)) {
+    if (mobileMotionSuppressed(context)) {
       _c.stop();
       _c.value = 1;
     } else if (!_c.isAnimating) {
