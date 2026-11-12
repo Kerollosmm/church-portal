@@ -321,7 +321,7 @@ the owner approves the whole chain.
 - [ ] **Android symbols**: release APKs are not obfuscated yet; when `--obfuscate --split-debug-info` (and R8 /
       ProGuard mappings) are turned on, upload the Dart symbols + mapping with `sentry_dart_plugin` / `sentry-cli`
       (same auth token). There is no Android CI build yet: build with
-      `flutter build apk --release --dart-define=SENTRY_ENVIRONMENT=production --dart-define=GIT_SHA=$(git rev-parse HEAD) --dart-define=APP_VERSION=1.0.0+1`.
+      `flutter build apk --release --dart-define=SENTRY_ENVIRONMENT=production --dart-define=GIT_SHA=$(git rev-parse HEAD) --dart-define=APP_VERSION=1.0.1+2`.
 - [ ] **DSN as a repo variable**: the agent's GitHub API has no Actions-variables endpoint, so release builds use the
       public DSN constant in `AppConfig.sentryDefaultDsn`. Optional: add the repository variable `SENTRY_DSN`
       (Settings → Secrets and variables → Actions → Variables); `ci.yml` / `deploy.yml` already pass it when set.
@@ -373,6 +373,11 @@ the owner approves the whole chain.
 - [x] **Mobile AppBar language toggle omission (`INV-APPBAR-01`)**: Omit `appBarLanguageToggle` on mobile viewports (< 600 px), reclaiming ~54 dp horizontal space so church short title (`appShort`) has >= 130 dp unobstructed width and >= 6 dp seal clearance across 320/360/390 px widths; language toggle accessible in drawer (`drawerLanguageToggle`). Desktop viewports (>= 600 px) retain the AppBar toggle.
 - [x] **Expanded mobile performance tickers bypass (`INV-PERF-01`)**: Disable continuous 60s background tickers (`_clock.repeat()`), Ken Burns scaling transforms, haze drifts, and DOM-embedded CSS animation views (`HeroAmbientLayer`) on mobile platforms (Android, iOS) and mobile viewports (< 600 px), falling back to static high-resolution artwork (`ArtAssets.heroTall` / `ArtAssets.heroWide`) with `RepaintBoundary` isolation. Stop continuous tickers on `_PulseDot` (1100 ms) and `SkeletonBox` (900 ms) on mobile. Bypass scroll-triggered `Reveal` opacity layers on mobile to eliminate `saveLayer` raster overhead.
 - [x] **Streamline `/notifications` page**: Remove persistent OEM battery optimization card («حالة الإشعارات وتحسين البطارية») from `notifications_page.dart` so preferences flow directly from status card to notification types. Trigger native permission requests reactively upon switch toggle. Standalone diagnostics remain available at `/notifications/battery`.
+
+## Android APK 1.0.1 (prepared, not tagged)
+
+- [x] `pubspec.yaml` is `1.0.1+2` (version name `1.0.1`, build `2`) so an installed `1.0.0+1` offers the update. Notes: `android/RELEASE_NOTES.md`. Gradle reads `flutter.versionName` / `flutter.versionCode`; `tool/make_apk_manifest.mjs` reads the same pubspec line.
+- [ ] Push tag `apk-v1.0.1` only after this version is on `main`. That tag publishes the signed APKs and `version.json`. Do not tag from the version PR itself.
 
 ## Explicit Web Push Permission Prompt, Topic Queuing & Mobile Browser Guidance (ADR-065, 12 Nov 2026)
 - [x] **Web Push permission prompt card & zero page-load prompt**: Explicit primary action card rendered when `permission == 'default'` on web viewports with «السماح بإشعارات المتصفح» / "Allow browser notifications" button; zero automatic permission requests on initial page load (strict user-gesture compliance).
