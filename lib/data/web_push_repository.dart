@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:http/http.dart' as http;
 
 import '../core/push_env.dart';
@@ -69,6 +70,9 @@ DateTime? parseHttpDate(String? raw) {
 class WebPushRepository {
   static const String storageKey = 'church_portal_push_web';
 
+  /// Optional debug batch writer hook for tests.
+  static BatchWriterFn? debugBatchWriter;
+
   final PushEnv pushEnv;
   final FirebaseFirestore? _firestore;
   final BatchWriterFn? _batchWriter;
@@ -76,6 +80,7 @@ class WebPushRepository {
   final http.Client? _httpClient;
 
   Timer? _debounceTimer;
+  Future<bool>? _currentFlush;
 
   String? _syncedToken;
   List<String> _syncedWant = const [];
@@ -91,10 +96,11 @@ class WebPushRepository {
   WebPushRepository({
     PushEnv? pushEnv,
     this._firestore,
-    this._batchWriter,
+    BatchWriterFn? batchWriter,
     this._fetchServerDate,
     this._httpClient,
-  })  : pushEnv = pushEnv ?? const PlatformPushEnv() {
+  })  : pushEnv = pushEnv ?? const PlatformPushEnv(),
+        _batchWriter = batchWriter ?? debugBatchWriter {
     _loadState();
   }
 
@@ -170,15 +176,17 @@ class WebPushRepository {
   }
 
   /// Update preferences and schedule debounced sync.
-  void syncPreferences({
+  Future<bool> syncPreferences({
     required PushPrefs prefs,
     required List<Reminder> reminders,
     bool immediate = false,
-  }) {
+  }) async {
     _lastPrefs = prefs;
     _lastReminders = List.from(reminders);
 
-    if (_syncedToken == null) return;
+    if (_syncedToken == null) {
+      return prefs.types.isEmpty;
+    }
 
     final plan = computeWebTopicSync(
       prefs: prefs,
@@ -196,7 +204,7 @@ class WebPushRepository {
     final remEqual = remList.length == _syncedRem.length &&
         remList.toSet().containsAll(_syncedRem);
     if (wantEqual && remEqual && !_pendingSync) {
-      return;
+      return true;
     }
 
     _pendingSync = true;
@@ -204,17 +212,42 @@ class WebPushRepository {
 
     _debounceTimer?.cancel();
     if (immediate) {
-      flushPendingSync();
+      return await flushPendingSync();
     } else {
       _debounceTimer = Timer(const Duration(seconds: 10), () {
         flushPendingSync();
       });
+      return true;
     }
   }
 
-  /// Flush pending sync immediately.
+  /// Flush pending sync immediately with serialization queue.
   Future<bool> flushPendingSync() async {
     _debounceTimer?.cancel();
+    final prevFlush = _currentFlush;
+    final completer = Completer<bool>();
+    _currentFlush = completer.future;
+
+    try {
+      if (prevFlush != null) {
+        try {
+          await prevFlush;
+        } catch (_) {}
+      }
+      final result = await _executeFlush();
+      completer.complete(result);
+      return result;
+    } catch (e) {
+      completer.complete(false);
+      return false;
+    } finally {
+      if (_currentFlush == completer.future) {
+        _currentFlush = null;
+      }
+    }
+  }
+
+  Future<bool> _executeFlush() async {
     if (_syncedToken == null || _lastPrefs == null) {
       return false;
     }
@@ -227,6 +260,15 @@ class WebPushRepository {
       previousSyncedToken: null,
       currentToken: _syncedToken!,
     );
+
+    final remList = plan.rem.split(',').where((s) => s.isNotEmpty).toList();
+    final wantEqual = plan.want.length == _syncedWant.length &&
+        plan.want.toSet().containsAll(_syncedWant);
+    final remEqual = remList.length == _syncedRem.length &&
+        remList.toSet().containsAll(_syncedRem);
+    if (wantEqual && remEqual && !_pendingSync) {
+      return true;
+    }
 
     final success = await _executeRetryWrite(
       token: _syncedToken!,
@@ -314,6 +356,11 @@ class WebPushRepository {
     Map<String, dynamic>? firebaseConfig,
   }) async {
     _debounceTimer?.cancel();
+    if (_currentFlush != null) {
+      try {
+        await _currentFlush;
+      } catch (_) {}
+    }
     final oldToken = _syncedToken;
     final heldRem = List<String>.from(_syncedRem);
 
@@ -387,6 +434,8 @@ class WebPushRepository {
         'lastId': qid,
       }, isSetCount1: false);
       return true;
+    } on UnsupportedError {
+      return false;
     } catch (_) {}
 
     // First rejection: Sync authoritative server date from HTTP header
@@ -448,7 +497,17 @@ class WebPushRepository {
       return;
     }
 
-    final firestore = _firestore ?? FirebaseFirestore.instance;
+    if (!kIsWeb && _firestore == null) {
+      throw UnsupportedError('Firestore is not available for web push in VM environment without injection');
+    }
+
+    FirebaseFirestore firestore;
+    try {
+      firestore = _firestore ?? FirebaseFirestore.instance;
+    } catch (_) {
+      throw UnsupportedError('Firestore is not available');
+    }
+
     final batch = firestore.batch();
     final qRef = firestore.collection('push_queue').doc(qid);
     final rateRef = firestore.collection('meta').doc('push_rate');

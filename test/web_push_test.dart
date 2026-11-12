@@ -146,7 +146,7 @@ void main() {
         ),
       ];
 
-      repo.syncPreferences(
+      await repo.syncPreferences(
         prefs: prefs,
         reminders: reminders,
         immediate: false,
@@ -188,7 +188,7 @@ void main() {
 
       await repo.enable(vapidKey: 'test_vapid');
 
-      repo.syncPreferences(
+      await repo.syncPreferences(
         prefs: PushPrefs(
           types: const {NotifyType.announcements},
           lang: 'ar',
@@ -202,6 +202,56 @@ void main() {
       expect(success, isTrue);
       expect(attempt, 3);
       expect(attemptsCount1, [false, false, true]); // 3rd attempt had isSetCount1: true!
+    });
+
+    test('syncPreferences returns true when syncedToken is null and types empty, false if types not empty', () async {
+      final fakeEnv = FakePushEnv();
+      final repo = WebPushRepository(pushEnv: fakeEnv);
+
+      final okEmpty = await repo.syncPreferences(
+        prefs: PushPrefs(types: const {}, updatedAt: DateTime.now().toUtc()),
+        reminders: const [],
+      );
+      expect(okEmpty, isTrue);
+
+      final notOkNonEmpty = await repo.syncPreferences(
+        prefs: PushPrefs(types: const {NotifyType.announcements}, updatedAt: DateTime.now().toUtc()),
+        reminders: const [],
+      );
+      expect(notOkNonEmpty, isFalse);
+    });
+
+    test('concurrent calls to flushPendingSync serialize safely via queue', () async {
+      final fakeEnv = FakePushEnv();
+      final order = <int>[];
+
+      final repo = WebPushRepository(
+        pushEnv: fakeEnv,
+        batchWriter: (qid, queueData, rateData, {bool isSetCount1 = false}) async {
+          order.add(1);
+          await Future.delayed(const Duration(milliseconds: 20));
+          order.add(2);
+        },
+      );
+
+      await repo.enable(vapidKey: 'test_vapid');
+
+      await repo.syncPreferences(
+        prefs: PushPrefs(
+          types: const {NotifyType.announcements},
+          lang: 'ar',
+          updatedAt: DateTime.now().toUtc(),
+        ),
+        reminders: const [],
+        immediate: false,
+      );
+
+      final f1 = repo.flushPendingSync();
+      final f2 = repo.flushPendingSync();
+      final results = await Future.wait([f1, f2]);
+
+      expect(results, [true, true]);
+      expect(order, [1, 2]); // First completed and cleared pending sync before second ran
     });
 
     test('unsubscribeAll clears local state and deletes token', () async {
@@ -226,6 +276,54 @@ void main() {
       expect(repo.syncedRem, isEmpty);
       expect(writtenBatches.length, 1);
       expect(writtenBatches.first['queueData']['want'], isEmpty);
+    });
+
+    test('syncPreferences with empty PushPrefs queues want: [], rem: empty, drop: previous topics', () async {
+      final fakeEnv = FakePushEnv();
+      final writes = <Map<String, dynamic>>[];
+      final now = DateTime.now().toUtc();
+      final repo = WebPushRepository(
+        pushEnv: fakeEnv,
+        fetchServerDate: () async => now,
+        batchWriter: (qid, queueData, rateData, {bool isSetCount1 = false}) async {
+          writes.add(Map<String, dynamic>.from(queueData));
+        },
+      );
+
+      await repo.enable(vapidKey: 'test_vapid');
+      final reminder = Reminder(
+        eventKey: 'lit-1',
+        lead: 15,
+        every: false,
+        title: const {'ar': 'قداس', 'en': 'Liturgy'},
+        startsAt: now.add(const Duration(hours: 2)),
+        createdAt: now,
+      );
+      final okOn = await repo.syncPreferences(
+        prefs: PushPrefs(
+          types: const {NotifyType.announcements, NotifyType.reminders},
+          lang: 'ar',
+          updatedAt: now,
+        ),
+        reminders: [reminder],
+        immediate: true,
+      );
+      expect(okOn, isTrue);
+      expect(writes.last['rem'], isNotEmpty);
+
+      final okEmpty = await repo.syncPreferences(
+        prefs: PushPrefs(
+          types: const {},
+          lang: 'ar',
+          updatedAt: now.add(const Duration(seconds: 1)),
+        ),
+        reminders: const [],
+        immediate: true,
+      );
+      expect(okEmpty, isTrue);
+      expect(writes.last['want'], isEmpty);
+      expect(writes.last['rem'], '');
+      expect(writes.last['drop'], isNotEmpty);
     });
   });
 }

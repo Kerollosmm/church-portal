@@ -46,17 +46,43 @@ const Map<String, List<String>> notificationsPageStrings = {
   'notificationsLinkCopied': ['تم نسخ الرابط', 'Link copied'],
   'notificationsQuietNoteWeb': ['آية اليوم وقراءات القطمارس والأعياد متوفرة مباشرة في الصفحة الرئيسية.', 'Daily verse, Katameros readings, and feast commemorations are available directly on the home page.'],
   'notificationsRecheckButton': ['التحقق من الإذن مجددًا', 'Check permission again'],
+  'notificationsRegisterFailed': ['تعذّر تسجيل إشعارات المتصفح حاليًا، يُرجى المحاولة لاحقًا.', 'Could not register browser notifications at this time. Please try again later.'],
   'notificationsTestButton': ['جرّب إشعارًا', 'Test notification'],
   'notificationsTestSent': ['تم إرسال إشعار تجريبي للمتصفح', 'Test notification sent to browser'],
   'notificationsUnsubscribeAll': ['إيقاف كل الإشعارات', 'Turn off all notifications'],
   'notificationsUnsubscribeConfirm': ['تم إيقاف جميع الإشعارات', 'All notifications turned off'],
+  'notificationsUnsubscribeFailed': [
+    'تعذّر حفظ إيقاف الإشعارات على الخادم؛ ستتم إعادة المحاولة تلقائيًا.',
+    'Could not save opt-out on server; it will retry automatically.',
+  ],
   'notificationsUnsupported': ['هذا المتصفح لا يدعم تلقي الإشعارات.', 'This browser does not support push notifications.'],
 };
 
 /// The visitor's notification preferences and reminders page (`/notifications`, ADR-057).
-class NotificationsPage extends ConsumerWidget {
+class NotificationsPage extends ConsumerStatefulWidget {
   final bool? isWeb;
   const NotificationsPage({super.key, this.isWeb});
+
+  /// Preloads the deferred web-push library outside `FakeAsync` test zones
+  /// so Dart VM deferred loading does not stall across `testWidgets` cases.
+  @visibleForTesting
+  static Future<void> preloadWebPushForTest() => web_push.loadLibrary();
+
+  @override
+  ConsumerState<NotificationsPage> createState() => _NotificationsPageState();
+}
+
+class _NotificationsPageState extends ConsumerState<NotificationsPage> {
+  dynamic _webPushRepo;
+  PushEnv? _webPushEnv;
+
+  dynamic _repoFor(PushEnv pushEnv) {
+    if (_webPushRepo == null || !identical(_webPushEnv, pushEnv)) {
+      _webPushEnv = pushEnv;
+      _webPushRepo = web_push.WebPushRepository(pushEnv: pushEnv);
+    }
+    return _webPushRepo;
+  }
 
   PushPermissionState _resolveState({
     required InstallOsInfo osInfo,
@@ -86,10 +112,7 @@ class NotificationsPage extends ConsumerWidget {
     }
 
     if (!pushEnv.isSupported) {
-      if (osInfo.inAppBrowser || osInfo.os == InstallOs.android || osInfo.os == InstallOs.ios) {
-        return PushPermissionState.inAppBrowser;
-      }
-      return PushPermissionState.unsupported;
+      return osInfo.inAppBrowser ? PushPermissionState.inAppBrowser : PushPermissionState.unsupported;
     }
 
     final p = permission;
@@ -98,35 +121,64 @@ class NotificationsPage extends ConsumerWidget {
     return PushPermissionState.defaultState;
   }
 
-  Future<void> _syncWebPush(
+  Future<bool> _syncWebPush(
+    BuildContext context,
     WidgetRef ref,
     PushEnv pushEnv,
     PushSettings pushSettings, {
     PushPrefs? overridePrefs,
+    bool isWeb = kIsWeb,
   }) async {
-    if (!kIsWeb) return;
+    if (!isWeb) return true;
+    final currentLang = context.isAr ? 'ar' : 'en';
     try {
       await web_push.loadLibrary();
-      final repo = web_push.WebPushRepository(pushEnv: pushEnv);
+      if (!kIsWeb && web_push.WebPushRepository.debugBatchWriter == null) return true;
+      if (!mounted) return false;
+      final repo = _repoFor(pushEnv);
+      PushPrefs prefs = overridePrefs ?? ref.read(pushPrefsProvider);
+      if (prefs.lang != currentLang) {
+        ref.read(pushPrefsProvider.notifier).setLang(currentLang);
+        prefs = prefs.copyWith(lang: currentLang);
+      }
+
       if (repo.syncedToken == null) {
-        await repo.enable(vapidKey: pushSettings.vapidKey);
+        if (prefs.types.isEmpty) {
+          return true;
+        }
+        final token = await repo.enable(vapidKey: pushSettings.vapidKey);
+        if (token == null) {
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(context.tr('notificationsRegisterFailed')),
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          }
+          return false;
+        }
       }
+
       if (repo.syncedToken != null) {
-        final PushPrefs prefs = overridePrefs ?? ref.read(pushPrefsProvider);
+        if (!mounted) return false;
         final reminders = ref.read(userRemindersProvider);
-        repo.syncPreferences(
-          prefs: prefs,
-          reminders: reminders,
-          immediate: true,
-        );
+        return (await repo.syncPreferences(
+              prefs: prefs,
+              reminders: reminders,
+              immediate: true,
+            )) ==
+            true;
       }
+      return false;
     } catch (e, st) {
       ErrorReporting.capture(e, st, section: 'notifications', source: 'web_push_sync');
+      return false;
     }
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     registerStrings(notificationsPageStrings);
     setDocumentRouteMeta(
       path: '/notifications',
@@ -157,7 +209,7 @@ class NotificationsPage extends ConsumerWidget {
       maxTouchPoints: installEnv.maxTouchPoints,
     );
 
-    final web = isWeb ?? kIsWeb;
+    final web = widget.isWeb ?? kIsWeb;
     final permState = _resolveState(
       osInfo: osInfo,
       userAgent: installEnv.userAgent,
@@ -229,6 +281,7 @@ class NotificationsPage extends ConsumerWidget {
             // Re-read the browser permission so a denial shows the
             // blocked-permission steps right away.
             () => ref.invalidate(pushPermissionProvider),
+            isWeb: web,
           ),
 
           const SizedBox(height: 20),
@@ -261,6 +314,7 @@ class NotificationsPage extends ConsumerWidget {
                     pushEnv,
                     pushSettings,
                     ref,
+                    isWeb: web,
                   ),
                 ],
               ],
@@ -289,17 +343,28 @@ class NotificationsPage extends ConsumerWidget {
                 ),
                 onPressed: () async {
                   prefsNotifier.clearAll();
-                  if (kIsWeb) {
-                    await _syncWebPush(
+                  var ok = true;
+                  if (web) {
+                    ok = await _syncWebPush(
+                      context,
                       ref,
                       pushEnv,
                       pushSettings,
-                      overridePrefs: PushPrefs(types: const {}, updatedAt: DateTime.now().toUtc()),
+                      overridePrefs: PushPrefs(
+                        types: const {},
+                        lang: context.isAr ? 'ar' : 'en',
+                        updatedAt: DateTime.now().toUtc(),
+                      ),
+                      isWeb: web,
                     );
                   }
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text(context.tr('notificationsUnsubscribeConfirm'))),
+                      SnackBar(
+                        content: Text(
+                          context.tr(ok ? 'notificationsUnsubscribeConfirm' : 'notificationsUnsubscribeFailed'),
+                        ),
+                      ),
                     );
                   }
                 },
@@ -331,8 +396,9 @@ class NotificationsPage extends ConsumerWidget {
     PushEnv pushEnv,
     PushPrefsNotifier prefsNotifier,
     WidgetRef ref,
-    VoidCallback onPermissionChanged,
-  ) {
+    VoidCallback onPermissionChanged, {
+    required bool isWeb,
+  }) {
     switch (state) {
       case PushPermissionState.inAppBrowser:
         return Container(
@@ -526,9 +592,6 @@ class NotificationsPage extends ConsumerWidget {
                         final res = await pushEnv.requestPermission();
                         if (res == 'granted') {
                           prefsNotifier.firstOptIn();
-                          if (kIsWeb) {
-                            await _syncWebPush(ref, pushEnv, pushSettings);
-                          }
                         }
                         onPermissionChanged();
                       }
@@ -677,8 +740,9 @@ class NotificationsPage extends ConsumerWidget {
     PushPermissionState permState,
     PushEnv pushEnv,
     PushSettings pushSettings,
-    WidgetRef ref,
-  ) {
+    WidgetRef ref, {
+    required bool isWeb,
+  }) {
     final isSelected = prefs.types.contains(type);
     final title = context.isAr ? type.labelAr : type.labelEn;
     final desc = context.isAr ? type.descriptionAr : type.descriptionEn;
@@ -687,52 +751,58 @@ class NotificationsPage extends ConsumerWidget {
       value: isSelected,
       onChanged: (turnOn) async {
         if (turnOn && permState != PushPermissionState.granted) {
-          if (permState == PushPermissionState.iosNeedsInstall) {
-            if (context.mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(context.tr('notificationsIosAddFirst')),
-                  behavior: SnackBarBehavior.floating,
-                ),
-              );
+          if (isWeb) {
+            if (!pushSettings.canRequestPermission) return;
+            if (permState == PushPermissionState.iosNeedsInstall) {
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(context.tr('notificationsIosAddFirst')),
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+              }
+              return;
             }
-            return;
-          }
-          if (permState == PushPermissionState.inAppBrowser) {
-            if (context.mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(context.tr('notificationsInAppOpenBrowser')),
-                  behavior: SnackBarBehavior.floating,
-                ),
-              );
+            if (permState == PushPermissionState.inAppBrowser) {
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(context.tr('notificationsInAppOpenBrowser')),
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+              }
+              return;
             }
-            return;
-          }
-          final res = await pushEnv.requestPermission();
-          if (res == 'granted') {
-            prefsNotifier.toggleType(type);
-            if (kIsWeb) {
-              await _syncWebPush(ref, pushEnv, pushSettings);
+            final res = await pushEnv.requestPermission();
+            if (res == 'granted') {
+              prefsNotifier.toggleType(type);
+              if (context.mounted) {
+                await _syncWebPush(context, ref, pushEnv, pushSettings, isWeb: isWeb);
+              }
+              ref.invalidate(pushPermissionProvider);
+            } else {
+              ref.invalidate(pushPermissionProvider);
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(context.isAr
+                        ? 'الإشعارات غير مفعلة. يُرجى السماح بالإشعارات من إعدادات المتصفح أو النظام.'
+                        : 'Notifications disabled. Please allow notifications in device or browser settings.'),
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+              }
             }
-            ref.invalidate(pushPermissionProvider);
           } else {
-            ref.invalidate(pushPermissionProvider);
-            if (context.mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(context.isAr
-                      ? 'الإشعارات غير مفعلة. يُرجى السماح بالإشعارات من إعدادات المتصفح أو النظام.'
-                      : 'Notifications disabled. Please allow notifications in device or browser settings.'),
-                  behavior: SnackBarBehavior.floating,
-                ),
-              );
-            }
+            // Native platforms: toggle type directly!
+            prefsNotifier.toggleType(type);
           }
         } else {
           prefsNotifier.toggleType(type);
-          if (kIsWeb && permState == PushPermissionState.granted) {
-            await _syncWebPush(ref, pushEnv, pushSettings);
+          if (isWeb && permState == PushPermissionState.granted && context.mounted) {
+            await _syncWebPush(context, ref, pushEnv, pushSettings, isWeb: isWeb);
           }
         }
       },

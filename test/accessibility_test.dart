@@ -1320,10 +1320,15 @@ void main() {
 
               expect(tester.takeException(), isNull, reason: '$route @ ${scale}x ($lang)');
 
-              // Seal tab width is 54.0
+              // Seal tab width is 54.0 and provides an accessible Home link with tap action
               final sealFinder = find.byKey(const Key('sealTabHome'));
               expect(sealFinder, findsOneWidget);
               expect(tester.getSize(sealFinder).width, 54.0);
+              final sealSemantics = tester.widget<Semantics>(
+                find.ancestor(of: sealFinder, matching: find.byType(Semantics)).first,
+              );
+              expect(sealSemantics.properties.link, isTrue);
+              expect(sealSemantics.properties.onTap, isNotNull);
 
               // Short title exists, width >= 80.0, does not overlap seal tab, clearance >= 5.9 dp (6.0 dp by design)
               final titleFinder = find.byKey(const Key('appBarShortTitle'));

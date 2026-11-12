@@ -13,6 +13,11 @@ import 'reminder_sheet.dart' deferred as sheet;
 
 /// Button that lets visitors set a custom reminder for an event or liturgy (ADR-057).
 class RemindMeButton extends ConsumerWidget {
+  /// Preloads the deferred reminder sheet outside `FakeAsync` test zones
+  /// so Dart VM deferred loading completes reliably across widget tests.
+  @visibleForTesting
+  static Future<void> preloadSheetForTest() => sheet.loadLibrary();
+
   final String eventKey;
   final String? occurrence;
   final Map<String, String> title;

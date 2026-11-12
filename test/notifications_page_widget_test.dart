@@ -3,6 +3,7 @@ import 'package:church_portal/core/push_env.dart';
 import 'package:church_portal/core/theme.dart';
 import 'package:church_portal/data/content_repository.dart';
 import 'package:church_portal/data/seed_data.dart';
+import 'package:church_portal/data/web_push_repository.dart' as web_push;
 import 'package:church_portal/domain/cairo_time.dart';
 import 'package:church_portal/domain/features.dart';
 import 'package:church_portal/domain/reminders.dart';
@@ -145,6 +146,11 @@ class _FakeRemindersNotifier extends UserRemindersNotifier {
 }
 
 void main() {
+  setUpAll(() async {
+    await NotificationsPage.preloadWebPushForTest();
+    await RemindMeButton.preloadSheetForTest();
+  });
+
   setUpAll(() {
     CairoTime.ensureInitialized();
   });
@@ -522,7 +528,10 @@ void main() {
   testWidgets('toggling switch when iosNeedsInstall displays SnackBar without requesting permission', (tester) async {
     tester.view.physicalSize = const Size(1200, 2000);
     tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.reset);
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
 
     final pushEnv = FakeTestPushEnv();
     final installEnv = FakeTestInstallEnv(
@@ -557,7 +566,10 @@ void main() {
   testWidgets('toggling switch when inAppBrowser displays SnackBar without requesting permission', (tester) async {
     tester.view.physicalSize = const Size(1200, 2000);
     tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.reset);
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
 
     final pushEnv = FakeTestPushEnv();
     final installEnv = FakeTestInstallEnv(
@@ -592,7 +604,10 @@ void main() {
   testWidgets('tapping unsubscribe all confirms all turned off and clears preferences', (tester) async {
     tester.view.physicalSize = const Size(1200, 2000);
     tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.reset);
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
 
     final pushEnv = FakeTestPushEnv(permission: 'granted');
     final installEnv = FakeTestInstallEnv();
@@ -626,7 +641,10 @@ void main() {
   testWidgets('In-app browser displays copy link button and copies link to clipboard', (tester) async {
     tester.view.physicalSize = const Size(1200, 2000);
     tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.reset);
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
 
     String? copiedText;
     tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, (MethodCall methodCall) async {
@@ -667,7 +685,10 @@ void main() {
   testWidgets('iOS Safari installed PWA (isStandalone: true) exposes permission prompt card and switches', (tester) async {
     tester.view.physicalSize = const Size(1200, 2000);
     tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.reset);
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
 
     final pushEnv = FakeTestPushEnv(permission: 'default', isSupported: true);
     final installEnv = FakeTestInstallEnv(
@@ -715,5 +736,215 @@ void main() {
 
     // Crucial check: 0 permission calls on load
     expect(pushEnv.requestCalls, 0);
+  });
+
+  testWidgets('Switch toggling on native (isWeb: false) directly enables switch without permission gate', (tester) async {
+    tester.view.physicalSize = const Size(1200, 2000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    final pushEnv = FakeTestPushEnv(permission: 'default');
+    final installEnv = FakeTestInstallEnv();
+
+    await tester.pumpWidget(buildTestable(
+      child: const NotificationsPage(isWeb: false),
+      pushSettings: const PushSettings(
+        enabled: true,
+        offered: [NotifyType.announcements],
+      ),
+      pushEnv: pushEnv,
+      installEnv: installEnv,
+    ));
+    await tester.pumpAndSettle();
+
+    expect(pushEnv.requestCalls, 0);
+
+    // Tap switch on native: toggles directly without permission gate
+    await tester.tap(find.text('تنويهات وأخبار'));
+    await tester.pumpAndSettle();
+
+    expect(pushEnv.requestCalls, 0);
+    expect(find.text('إيقاف كل الإشعارات'), findsOneWidget);
+  });
+
+  testWidgets('Switch toggling on Web when canRequestPermission is false does not request permission and stays off', (tester) async {
+    tester.view.physicalSize = const Size(1200, 2000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    final pushEnv = FakeTestPushEnv(permission: 'default');
+    final installEnv = FakeTestInstallEnv();
+
+    await tester.pumpWidget(buildTestable(
+      child: const NotificationsPage(isWeb: true),
+      pushSettings: const PushSettings(
+        enabled: true,
+        offered: [NotifyType.announcements],
+        vapidKey: '', // canRequestPermission is false
+      ),
+      pushEnv: pushEnv,
+      installEnv: installEnv,
+    ));
+    await tester.pumpAndSettle();
+
+    expect(pushEnv.requestCalls, 0);
+
+    // Tap switch when gate closed: does not call requestPermission, switch stays off
+    await tester.tap(find.text('تنويهات وأخبار'));
+    await tester.pumpAndSettle();
+
+    expect(pushEnv.requestCalls, 0);
+    expect(find.text('إيقاف كل الإشعارات'), findsNothing);
+  });
+
+  testWidgets('Unsubscribe all does not trigger permission request when syncedToken is null', (tester) async {
+    tester.view.physicalSize = const Size(1200, 2000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    final pushEnv = FakeTestPushEnv(permission: 'default');
+    final installEnv = FakeTestInstallEnv(
+      storage: {
+        'church_portal_push': {
+          'types': ['announcements'],
+          'lang': 'ar',
+          'updatedAt': '2026-11-12T00:00:00.000Z',
+        },
+      },
+    );
+
+    await tester.pumpWidget(buildTestable(
+      child: const NotificationsPage(isWeb: true),
+      pushSettings: const PushSettings(
+        enabled: true,
+        offered: [NotifyType.announcements],
+        vapidKey: 'test_vapid_key_01234567890123456789012345678901234567890123456789012345678901234567890123456789',
+      ),
+      pushEnv: pushEnv,
+      installEnv: installEnv,
+    ));
+    await tester.pumpAndSettle();
+
+    expect(find.text('إيقاف كل الإشعارات'), findsOneWidget);
+    expect(pushEnv.requestCalls, 0);
+    expect(pushEnv.enableCalls, 0);
+
+    // Tap unsubscribe all when syncedToken is null: must not request permission or enable
+    await tester.tap(find.text('إيقاف كل الإشعارات'));
+    await tester.pumpAndSettle();
+
+    expect(pushEnv.requestCalls, 0);
+    expect(pushEnv.enableCalls, 0);
+    expect(find.text('تم إيقاف جميع الإشعارات'), findsOneWidget);
+    expect(find.text('إيقاف كل الإشعارات'), findsNothing);
+  });
+
+  testWidgets('Active locale language is passed into synced topics', (tester) async {
+    final pushEnv = FakeTestPushEnv(permission: 'granted');
+    final installEnv = FakeTestInstallEnv();
+
+    final capturedBatches = <Map<String, dynamic>>[];
+    web_push.WebPushRepository.debugBatchWriter = (qid, queueData, rateData, {bool isSetCount1 = false}) async {
+      capturedBatches.add(queueData);
+    };
+    addTearDown(() => web_push.WebPushRepository.debugBatchWriter = null);
+
+    await tester.pumpWidget(buildTestable(
+      child: const NotificationsPage(isWeb: true),
+      locale: const Locale('en'),
+      pushSettings: const PushSettings(
+        enabled: true,
+        offered: [NotifyType.announcements],
+        vapidKey: 'test_vapid_key_01234567890123456789012345678901234567890123456789012345678901234567890123456789',
+      ),
+      pushEnv: pushEnv,
+      installEnv: installEnv,
+    ));
+    await tester.pumpAndSettle();
+
+    // Tap switch in English locale
+    await tester.tap(find.text('Announcements & news'));
+    await tester.pumpAndSettle();
+
+    expect(capturedBatches.isNotEmpty, isTrue);
+    final want = (capturedBatches.first['want'] as List).cast<String>();
+    expect(want, contains('web_announcements_en'));
+    expect(want.any((t) => t.endsWith('_ar')), isFalse);
+  });
+
+  testWidgets('clearAll reuses repository and shows confirmation SnackBar when web sync succeeds', (tester) async {
+    final writes = <Map<String, dynamic>>[];
+    web_push.WebPushRepository.debugBatchWriter = (qid, queueData, rateData, {bool isSetCount1 = false}) async {
+      writes.add(Map<String, dynamic>.from(queueData));
+    };
+    addTearDown(() => web_push.WebPushRepository.debugBatchWriter = null);
+
+    final pushEnv = FakeTestPushEnv(permission: 'granted');
+    final installEnv = FakeTestInstallEnv();
+
+    await tester.pumpWidget(buildTestable(
+      child: const NotificationsPage(isWeb: true),
+      pushSettings: const PushSettings(
+        enabled: true,
+        offered: [NotifyType.announcements],
+        vapidKey: 'test_vapid_key_01234567890123456789012345678901234567890123456789012345678901234567890123456789',
+      ),
+      pushEnv: pushEnv,
+      installEnv: installEnv,
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('تنويهات وأخبار'));
+    await tester.pumpAndSettle();
+    expect(writes.length, 1);
+    expect((writes.last['want'] as List).cast<String>(), contains('web_announcements_ar'));
+
+    await tester.tap(find.text('إيقاف كل الإشعارات'));
+    await tester.pumpAndSettle();
+    expect(writes.length, 2);
+    expect(writes.last['want'], isEmpty);
+    expect(find.text('تم إيقاف جميع الإشعارات'), findsOneWidget);
+  });
+
+  testWidgets('clearAll shows error SnackBar instead of confirmation when web sync fails', (tester) async {
+    var failWrites = false;
+    web_push.WebPushRepository.debugBatchWriter = (qid, queueData, rateData, {bool isSetCount1 = false}) async {
+      if (failWrites) throw UnsupportedError('write refused');
+    };
+    addTearDown(() => web_push.WebPushRepository.debugBatchWriter = null);
+
+    final pushEnv = FakeTestPushEnv(permission: 'granted');
+    final installEnv = FakeTestInstallEnv();
+
+    await tester.pumpWidget(buildTestable(
+      child: const NotificationsPage(isWeb: true),
+      pushSettings: const PushSettings(
+        enabled: true,
+        offered: [NotifyType.announcements],
+        vapidKey: 'test_vapid_key_01234567890123456789012345678901234567890123456789012345678901234567890123456789',
+      ),
+      pushEnv: pushEnv,
+      installEnv: installEnv,
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('تنويهات وأخبار'));
+    await tester.pumpAndSettle();
+
+    failWrites = true;
+    await tester.tap(find.text('إيقاف كل الإشعارات'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('تم إيقاف جميع الإشعارات'), findsNothing);
+    expect(find.text('تعذّر حفظ إيقاف الإشعارات على الخادم؛ ستتم إعادة المحاولة تلقائيًا.'), findsOneWidget);
   });
 }

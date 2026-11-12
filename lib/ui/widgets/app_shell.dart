@@ -454,6 +454,7 @@ class _AppShellState extends ConsumerState<AppShell> {
                     link: true,
                     label: '${context.tr('logoLabel')} — ${context.tr('home')}',
                     excludeSemantics: true,
+                    onTap: () => context.go('/'),
                     child: GestureDetector(
                       key: const Key('sealTabHome'),
                       onTap: () => context.go('/'),
