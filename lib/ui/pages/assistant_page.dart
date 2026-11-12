@@ -26,6 +26,21 @@ import '../../state/providers.dart';
 import '../widgets/common.dart';
 import '../widgets/safe_markdown.dart';
 
+const Map<String, List<String>> _assistantStrings = {
+  'askHint': ['اكتب سؤالك… مثل: متى قداس الجمعة؟', 'Type your question… e.g. When is the Friday liturgy?'],
+  'askDisclaimer': ['إجابات آلية قد تحتوي أخطاء — تأكد بالاتصال بالكنيسة.', 'Automated answers may contain mistakes — confirm by calling the church.'],
+  'askError': ['تعذّر الحصول على إجابة الآن. حاول مرة أخرى.', 'Could not get an answer right now. Please try again.'],
+  'askSlowDown': [
+    'أرسلت أسئلة كثيرة في وقت قصير. انتظر دقيقة ثم حاول مرة أخرى.',
+    'You sent several questions in a short time. Please wait a minute and try again.',
+  ],
+  'askDayLimit': [
+    'وصلت إلى حد الأسئلة اليومي ({n}) على هذا الجهاز. يتجدد بعد منتصف الليل. وللاستفسار يسعدنا تواصلك عبر [صفحة تواصل معنا](/contact).',
+    "You've reached today's limit of {n} questions on this device. It resets at midnight. Meanwhile, we're happy to help via the [contact page](/contact).",
+  ],
+  'askTooLong': ['السؤال طويل جدًا (الحد الأقصى {n} حرفًا).', 'The question is too long (at most {n} characters).'],
+};
+
 class _Msg {
   final bool user;
   final String text;
@@ -364,6 +379,7 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
 
   @override
   Widget build(BuildContext context) {
+    registerStrings(_assistantStrings);
     final visible = ref.watch(assistantVisibleProvider);
     final settings = ref.watch(settingsProvider);
     if (visible && _isWeb) _watchGrounding();

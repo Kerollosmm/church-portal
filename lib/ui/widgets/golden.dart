@@ -63,18 +63,14 @@ bool heroAmbientLoopAllowed({
   double? width,
 }) {
   final p = platform ?? defaultTargetPlatform;
-  if (p == TargetPlatform.android || p == TargetPlatform.iOS) {
-    return false;
-  }
-  if (width != null && width < 600) {
-    return false;
-  }
-  return true;
+  return p != TargetPlatform.android &&
+      p != TargetPlatform.iOS &&
+      (width == null || width >= 600);
 }
 
 /// True when reduced motion or a mobile platform/viewport should freeze ambient motion.
-bool mobileMotionSuppressed(BuildContext context, {bool adminOn = true}) =>
-    !ambientMotionOn(context, adminOn: adminOn) ||
+bool mobileMotionSuppressed(BuildContext context) =>
+    !ambientMotionOn(context) ||
     !heroAmbientLoopAllowed(
       platform: Theme.of(context).platform,
       width: MediaQuery.sizeOf(context).width,
@@ -552,7 +548,7 @@ class _HeroStageState extends State<HeroStage> with SingleTickerProviderStateMix
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _ambient = !mobileMotionSuppressed(context, adminOn: widget.motion);
+    _ambient = widget.motion && !mobileMotionSuppressed(context);
     _videoOn = widget.video != null && heroVideoAllowed(context, adminOn: widget.motion);
     // Decode the still before it is needed (no pop-in, no flash on swaps).
     precacheImage(AssetImage(_still), context).ignore();
@@ -599,10 +595,6 @@ class _HeroStageState extends State<HeroStage> with SingleTickerProviderStateMix
   }
 
   Widget _feather(Widget child) => widget.fadeBottom ? BottomFeather(child: child) : child;
-
-  Widget _raysLayer(double shimmer) => CustomPaint(
-        painter: LightRaysPainter(shimmer: shimmer, strength: widget.rays),
-      );
 
   @override
   Widget build(BuildContext context) {
@@ -667,21 +659,17 @@ class _HeroStageState extends State<HeroStage> with SingleTickerProviderStateMix
           if (widget.rays > 0 && !_domAmbient)
             RepaintBoundary(
               child: sceneArt(
-                context,
-                _feather(
-                  _ambient
-                      ? AnimatedBuilder(
-                          animation: _clock,
-                          builder: (context, _) => _raysLayer(
-                            _clock.value *
-                                    (HeroAmbientSpec.clock.inMilliseconds /
-                                        HeroAmbientSpec.shimmerCycle.inMilliseconds) %
-                                1,
-                          ),
-                        )
-                      : _raysLayer(HeroAmbientSpec.stillShimmer),
-                ),
-              ),
+                  context,
+                  _feather(AnimatedBuilder(
+                    animation: _clock,
+                    builder: (context, _) => CustomPaint(
+                      painter: LightRaysPainter(
+                          shimmer: _ambient
+                              ? _clock.value * (HeroAmbientSpec.clock.inMilliseconds / HeroAmbientSpec.shimmerCycle.inMilliseconds) % 1
+                              : HeroAmbientSpec.stillShimmer,
+                          strength: widget.rays),
+                    ),
+                  ))),
             ),
           // Season wash (ADR-050): a still gradient above every layer.
           if (tintColors != null)

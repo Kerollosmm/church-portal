@@ -335,27 +335,19 @@ class _SkeletonBoxState extends State<SkeletonBox> with SingleTickerProviderStat
     super.dispose();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    if (_static) {
-      return Container(
+  Widget _box(Color? color) => Container(
         height: widget.height,
         width: widget.width,
-        decoration: BoxDecoration(color: context.pal.surfaceAlt, borderRadius: BorderRadius.circular(widget.radius)),
+        decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(widget.radius)),
       );
-    }
-    return AnimatedBuilder(
-      animation: _c,
-      builder: (_, _) => Container(
-        height: widget.height,
-        width: widget.width,
-        decoration: BoxDecoration(
-          color: Color.lerp(context.pal.surfaceAlt, context.pal.surface, _c.value),
-          borderRadius: BorderRadius.circular(widget.radius),
-        ),
-      ),
-    );
-  }
+
+  @override
+  Widget build(BuildContext context) => _static
+      ? _box(context.pal.surfaceAlt)
+      : AnimatedBuilder(
+          animation: _c,
+          builder: (_, _) => _box(Color.lerp(context.pal.surfaceAlt, context.pal.surface, _c.value)),
+        );
 }
 
 /// A list of card-shaped skeletons.

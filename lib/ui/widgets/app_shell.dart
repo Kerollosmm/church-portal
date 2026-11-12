@@ -186,16 +186,13 @@ class _AppShellState extends ConsumerState<AppShell> {
   void didUpdateWidget(covariant AppShell oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.location != widget.location) {
-      if (!widget.location.startsWith('/readings')) {
+      final clearFocus = !widget.location.startsWith('/readings');
+      final fromPush = widget.location.contains('from_push=1');
+      if (clearFocus || fromPush) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) {
-            ref.read(readerFocusModeProvider.notifier).setFocus(false);
-          }
-        });
-      }
-      if (widget.location.contains('from_push=1')) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) {
+          if (!mounted) return;
+          if (clearFocus) ref.read(readerFocusModeProvider.notifier).setFocus(false);
+          if (fromPush) {
             ref.invalidate(nowProvider);
             ref.invalidate(todaySettingsProvider);
           }
@@ -203,6 +200,8 @@ class _AppShellState extends ConsumerState<AppShell> {
       }
     }
   }
+
+  void _goHome() => context.go('/');
 
   @override
   Widget build(BuildContext context) {
@@ -364,44 +363,42 @@ class _AppShellState extends ConsumerState<AppShell> {
       onEndDrawerChanged: (open) => setState(() => _drawerOpen = open),
       appBar: PreferredSize(
         preferredSize: Size.fromHeight(focusMode ? 0.0 : (topBarH + (wide ? 76.0 : 64.0))),
-        child: RepaintBoundary(
-          child: AnimatedSize(
+        child: AnimatedSize(
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.easeInOut,
+          child: AnimatedSlide(
+            offset: focusMode ? const Offset(0, -1.0) : Offset.zero,
             duration: const Duration(milliseconds: 250),
             curve: Curves.easeInOut,
-            child: AnimatedSlide(
-              offset: focusMode ? const Offset(0, -1.0) : Offset.zero,
-              duration: const Duration(milliseconds: 250),
-              curve: Curves.easeInOut,
-              child: focusMode
-                  ? const SizedBox.shrink()
-                  : Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (showTopBar) ...[
-              // The status-bar inset above the bar takes the bar's colour, and
-              // the status-bar icons contrast with it (light on the dark title
-              // band; the AppBar's own style sits lower and follows its light
-              // background — Sentry review on PR #35).
-              AnnotatedRegion<SystemUiOverlayStyle>(
-                value: statusBarStyleOn(context.pal.bar),
-                child: ColoredBox(
-                  color: context.pal.bar,
-                  child: SafeArea(
-                    bottom: false,
-                    child: TopUtilityBar(location: location),
+            child: focusMode
+                ? const SizedBox.shrink()
+                : Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (showTopBar) ...[
+                        // The status-bar inset above the bar takes the bar's colour, and
+                        // the status-bar icons contrast with it (light on the dark title
+                        // band; the AppBar's own style sits lower and follows its light
+                        // background — Sentry review on PR #35).
+                        AnnotatedRegion<SystemUiOverlayStyle>(
+                          value: statusBarStyleOn(context.pal.bar),
+                          child: ColoredBox(
+                            color: context.pal.bar,
+                            child: SafeArea(
+                              bottom: false,
+                              child: TopUtilityBar(location: location),
+                            ),
+                          ),
+                        ),
+                        SafeArea(
+                          top: false,
+                          bottom: false,
+                          child: mainAppBar,
+                        ),
+                      ] else
+                        mainAppBar,
+                    ],
                   ),
-                ),
-              ),
-              SafeArea(
-                top: false,
-                bottom: false,
-                child: mainAppBar,
-              ),
-            ] else
-              mainAppBar,
-          ],
-        ),
-            ),
           ),
         ),
       ),
@@ -450,20 +447,17 @@ class _AppShellState extends ConsumerState<AppShell> {
                 curve: Curves.easeInOut,
                 child: IgnorePointer(
                   ignoring: focusMode,
-                  child: () {
-                    void goHome() => context.go('/');
-                    return Semantics(
-                      link: true,
-                      label: '${context.tr('logoLabel')} — ${context.tr('home')}',
-                      excludeSemantics: true,
-                      onTap: goHome,
-                      child: GestureDetector(
-                        key: const Key('sealTabHome'),
-                        onTap: goHome,
-                        child: MouseRegion(cursor: SystemMouseCursors.click, child: SealTab(width: tabW, height: tabH)),
-                      ),
-                    );
-                  }(),
+                  child: Semantics(
+                    link: true,
+                    label: '${context.tr('logoLabel')} — ${context.tr('home')}',
+                    excludeSemantics: true,
+                    onTap: _goHome,
+                    child: GestureDetector(
+                      key: const Key('sealTabHome'),
+                      onTap: _goHome,
+                      child: MouseRegion(cursor: SystemMouseCursors.click, child: SealTab(width: tabW, height: tabH)),
+                    ),
+                  ),
                 ),
               ),
             ),
