@@ -18,30 +18,37 @@ import '../widgets/reminder_sheet.dart';
 /// Strings only this deferred chunk uses (registered before it builds).
 const Map<String, List<String>> notificationsPageStrings = {
   'adminPushTypesLabel': ['أنواع الإشعارات المتاحة للمستخدمين', 'Notification types offered to visitors'],
+  'notificationsAllowBrowserButton': ['السماح بإشعارات المتصفح', 'Allow browser notifications'],
+  'notificationsAllowPromptBody': ['اضغط على الزر أدناه للسماح للمتصفح بإرسال إشعارات وتنبيهات الكنيسة عند نشر التنبيهات ومواعيد القداسات.', 'Tap below to allow your browser to deliver church updates, schedules, and reminders.'],
+  'notificationsAllowPromptTitle': ['تفعيل إشعارات المتصفح', 'Enable browser notifications'],
   'notificationsBlockedChrome': ['اضغط أيقونة 🔒 بجوار عنوان الموقع ← الأذونات ← الإشعارات ← سماح', 'Tap the 🔒 icon next to the address bar → Permissions → Notifications → Allow'],
   'notificationsBlockedIos': ['من إعدادات الهاتف ← الإشعارات ← كنيسة مكسيموس ودوماديوس ← السماح بالإشعارات', 'Go to iPhone Settings → Notifications → Church App → Allow Notifications'],
   'notificationsBlockedTitle': ['الإشعارات محظورة في متصفحك', 'Notifications are blocked in your browser'],
   'notificationsComingSoon': ['خدمة الإشعارات عبر المتصفح قادمة قريبًا', 'Web push notifications are coming soon'],
+  'notificationsCopyLink': ['نسخ الرابط للمتصفح', 'Copy link for browser'],
   'notificationsEnableButton': ['تفعيل الإشعارات', 'Enable notifications'],
   'notificationsEnabledChip': ['الإشعارات مفعلة', 'Notifications enabled'],
   'notificationsExplainerBody': ['اختر التنبيهات التي تهمك لتصلك مواعيد القداسات، تنبيهات مواسم الصوم وأسبوع الآلام، والتذكيرات التي تحددها بنفسك. لا نجمع أي بيانات شخصية ويمكنك إيقاف الإشعارات في أي وقت.', 'Choose the updates you care about: mass schedules, fasting seasons & Holy Week alerts, and reminders you set yourself. No personal data is collected and you can disable notifications at any time.'],
   'notificationsExplainerTitle': ['إشعارات وتنبيهات الكنيسة', 'Church notifications & alerts'],
   'notificationsInAppBrowser': ['أنت تفتح الموقع من داخل تطبيق (مثل Facebook أو WhatsApp). للحصول على أفضل تجربة وتفعيل التنبيهات، افتح الموقع في متصفح Safari أو Chrome.', 'You are viewing this site inside an app (such as Facebook or WhatsApp). To enable notifications, open the link in Safari or Chrome.'],
+  'notificationsInboxClear': ['مسح السجل', 'Clear history'],
+  'notificationsInboxEmpty': ['لا توجد إشعارات سابقة في هذا المتصفح.', 'No previous notifications in this browser.'],
+  'notificationsInboxTitle': ['سجل الإشعارات المستلمة', 'Received notifications'],
+  'notificationsIosFocusNote': ['على iPhone، يُرجى استخدام نمط التركيز (Focus Mode) في إعدادات الهاتف لتحديد ساعات الهدوء.', 'On iPhone, please use Focus Mode in Settings to set quiet hours.'],
   'notificationsIosNeedsInstallBody': ['على iPhone تعمل الإشعارات من iOS 16.4 فأحدث، بعد إضافة الموقع إلى الشاشة الرئيسية. اضغط زر المشاركة ثم «إضافة إلى الشاشة الرئيسية»، ثم افتح التطبيق من الشاشة الرئيسية لتفعيل الإشعارات.', 'On iPhone, notifications need iOS 16.4 or later and the site added to your Home Screen. Tap the Share button, select "Add to Home Screen", then open the app from your home screen to enable notifications.'],
   'notificationsIosNeedsInstallTitle': ['لتفعيل الإشعارات على iPhone', 'To enable notifications on iPhone'],
+  'notificationsIosStep1': ['اضغط زر المشاركة (Share) في أسفل شاشة Safari', 'Tap the Share button at the bottom of Safari'],
+  'notificationsIosStep2': ['اختر «إضافة إلى الشاشة الرئيسية» (Add to Home Screen)', 'Select "Add to Home Screen"'],
+  'notificationsIosStep3': ['افتح التطبيق من الشاشة الرئيسية لتفعيل التنبيهات', 'Open the app from your Home Screen to enable notifications'],
   'notificationsIosTooOld': ['يتطلب تلقي الإشعارات على iPhone تحديث نظام iOS إلى الإصدار 16.4 أو أحدث.', 'Web push notifications on iPhone require iOS 16.4 or later.'],
+  'notificationsLinkCopied': ['تم نسخ الرابط', 'Link copied'],
   'notificationsQuietNoteWeb': ['آية اليوم وقراءات القطمارس والأعياد متوفرة مباشرة في الصفحة الرئيسية.', 'Daily verse, Katameros readings, and feast commemorations are available directly on the home page.'],
+  'notificationsRecheckButton': ['التحقق من الإذن مجددًا', 'Check permission again'],
+  'notificationsTestButton': ['جرّب إشعارًا', 'Test notification'],
+  'notificationsTestSent': ['تم إرسال إشعار تجريبي للمتصفح', 'Test notification sent to browser'],
   'notificationsUnsubscribeAll': ['إيقاف كل الإشعارات', 'Turn off all notifications'],
   'notificationsUnsubscribeConfirm': ['تم إيقاف جميع الإشعارات', 'All notifications turned off'],
   'notificationsUnsupported': ['هذا المتصفح لا يدعم تلقي الإشعارات.', 'This browser does not support push notifications.'],
-  'notificationsTestButton': ['جرّب إشعارًا', 'Test notification'],
-  'notificationsTestSent': ['تم إرسال إشعار تجريبي للمتصفح', 'Test notification sent to browser'],
-  'notificationsInboxTitle': ['سجل الإشعارات المستلمة', 'Received notifications'],
-  'notificationsInboxEmpty': ['لا توجد إشعارات سابقة في هذا المتصفح.', 'No previous notifications in this browser.'],
-  'notificationsInboxClear': ['مسح السجل', 'Clear history'],
-  'notificationsCopyLink': ['نسخ الرابط للمتصفح', 'Copy link for browser'],
-  'notificationsLinkCopied': ['تم نسخ الرابط', 'Link copied'],
-  'notificationsIosFocusNote': ['على iPhone، يُرجى استخدام نمط التركيز (Focus Mode) في إعدادات الهاتف لتحديد ساعات الهدوء.', 'On iPhone, please use Focus Mode in Settings to set quiet hours.'],
 };
 
 /// The visitor's notification preferences and reminders page (`/notifications`, ADR-057).
@@ -77,6 +84,9 @@ class NotificationsPage extends ConsumerWidget {
     }
 
     if (!pushEnv.isSupported) {
+      if (osInfo.inAppBrowser || osInfo.os == InstallOs.android || osInfo.os == InstallOs.ios) {
+        return PushPermissionState.inAppBrowser;
+      }
       return PushPermissionState.unsupported;
     }
 
@@ -341,6 +351,27 @@ class NotificationsPage extends ConsumerWidget {
                 context.tr('notificationsIosNeedsInstallBody'),
                 style: TextStyle(fontSize: 13, color: pal.muted, height: 1.5),
               ),
+              const SizedBox(height: 12),
+              _buildIosStep(
+                context,
+                pal,
+                icon: Icons.ios_share,
+                text: context.tr('notificationsIosStep1'),
+              ),
+              const SizedBox(height: 8),
+              _buildIosStep(
+                context,
+                pal,
+                icon: Icons.add_box_outlined,
+                text: context.tr('notificationsIosStep2'),
+              ),
+              const SizedBox(height: 8),
+              _buildIosStep(
+                context,
+                pal,
+                icon: Icons.open_in_new,
+                text: context.tr('notificationsIosStep3'),
+              ),
             ],
           ),
         );
@@ -392,6 +423,12 @@ class NotificationsPage extends ConsumerWidget {
                 context.tr('notificationsBlockedIos'),
                 style: TextStyle(fontSize: 12.5, color: pal.ink, height: 1.4),
               ),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                icon: const Icon(Icons.refresh, size: 18),
+                label: Text(context.tr('notificationsRecheckButton')),
+                onPressed: onPermissionChanged,
+              ),
             ],
           ),
         );
@@ -407,9 +444,27 @@ class NotificationsPage extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              Row(
+                children: [
+                  Icon(Icons.notifications_active_outlined, color: pal.goldText, size: 22),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      context.tr('notificationsAllowPromptTitle'),
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: pal.primaryDeep),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                context.tr('notificationsAllowPromptBody'),
+                style: TextStyle(fontSize: 13.5, color: pal.muted, height: 1.5),
+              ),
+              const SizedBox(height: 14),
               FilledButton.icon(
                 icon: const Icon(Icons.notifications_active),
-                label: Text(context.tr('notificationsEnableButton')),
+                label: Text(context.tr('notificationsAllowBrowserButton')),
                 style: FilledButton.styleFrom(
                   minimumSize: const Size(48, 48),
                 ),
@@ -548,6 +603,27 @@ class NotificationsPage extends ConsumerWidget {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildIosStep(
+    BuildContext context,
+    dynamic pal, {
+    required IconData icon,
+    required String text,
+  }) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 18, color: pal.primary),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            text,
+            style: TextStyle(fontSize: 12.5, color: pal.ink, height: 1.4),
+          ),
+        ),
+      ],
     );
   }
 

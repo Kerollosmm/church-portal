@@ -289,14 +289,65 @@ void main() {
     ));
     await tester.pumpAndSettle();
 
+    expect(find.text('تفعيل إشعارات المتصفح'), findsOneWidget);
+    expect(
+      find.text('اضغط على الزر أدناه للسماح للمتصفح بإرسال إشعارات وتنبيهات الكنيسة عند نشر التنبيهات ومواعيد القداسات.'),
+      findsOneWidget,
+    );
+
     final buttonFinder = find.ancestor(
-      of: find.text('تفعيل الإشعارات'),
+      of: find.text('السماح بإشعارات المتصفح'),
       matching: find.byWidgetPredicate((w) => w is ButtonStyleButton),
     );
     final button = tester.widget<ButtonStyleButton>(buttonFinder);
     expect(button.onPressed, isNotNull);
+    expect(find.byIcon(Icons.notifications_active), findsWidgets);
     await tester.tap(buttonFinder);
     await tester.pump();
+  });
+
+  testWidgets('PushPermissionState.denied renders recheck button and clicking invokes onPermissionChanged', (tester) async {
+    final pushEnv = FakeTestPushEnv(permission: 'denied');
+    await tester.pumpWidget(buildTestable(
+      child: const NotificationsPage(isWeb: true),
+      pushSettings: const PushSettings(enabled: true),
+      pushEnv: pushEnv,
+      installEnv: FakeTestInstallEnv(),
+    ));
+    await tester.pumpAndSettle();
+
+    expect(find.text('التحقق من الإذن مجددًا'), findsOneWidget);
+
+    pushEnv.permission = 'granted';
+    await tester.tap(find.text('التحقق من الإذن مجددًا'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('الإشعارات مفعلة'), findsOneWidget);
+  });
+
+  testWidgets('PushPermissionState.iosNeedsInstall renders 3-step guide', (tester) async {
+    final pushEnv = FakeTestPushEnv();
+    final installEnv = FakeTestInstallEnv(
+      userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 Safari/604.1',
+      platform: 'iPhone',
+      isStandalone: false,
+    );
+
+    await tester.pumpWidget(buildTestable(
+      child: const NotificationsPage(isWeb: true),
+      pushSettings: const PushSettings(enabled: true),
+      pushEnv: pushEnv,
+      installEnv: installEnv,
+    ));
+    await tester.pumpAndSettle();
+
+    expect(find.text('لتفعيل الإشعارات على iPhone'), findsOneWidget);
+    expect(find.text('اضغط زر المشاركة (Share) في أسفل شاشة Safari'), findsOneWidget);
+    expect(find.text('اختر «إضافة إلى الشاشة الرئيسية» (Add to Home Screen)'), findsOneWidget);
+    expect(find.text('افتح التطبيق من الشاشة الرئيسية لتفعيل التنبيهات'), findsOneWidget);
+    expect(find.byIcon(Icons.ios_share), findsOneWidget);
+    expect(find.byIcon(Icons.add_box_outlined), findsOneWidget);
+    expect(find.byIcon(Icons.open_in_new), findsOneWidget);
   });
 
   testWidgets('installed iPhone on iOS < 16.4 gets the update card; the app build is never "enabled"', (tester) async {
