@@ -233,7 +233,10 @@ class _PulseDotState extends State<_PulseDot> with SingleTickerProviderStateMixi
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (MediaQuery.disableAnimationsOf(context)) {
+    final p = Theme.of(context).platform;
+    final w = MediaQuery.sizeOf(context).width;
+    final isMobile = p == TargetPlatform.android || p == TargetPlatform.iOS || w < 600;
+    if (MediaQuery.disableAnimationsOf(context) || isMobile) {
       _c.stop();
       _c.value = 1;
     } else if (!_c.isAnimating) {

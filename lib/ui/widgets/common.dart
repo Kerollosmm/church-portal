@@ -320,8 +320,10 @@ class _SkeletonBoxState extends State<SkeletonBox> with SingleTickerProviderStat
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // Reduced motion (OS setting): no pulsing, a static placeholder instead.
-    if (MediaQuery.disableAnimationsOf(context)) {
+    final p = Theme.of(context).platform;
+    final w = MediaQuery.sizeOf(context).width;
+    final isMobile = p == TargetPlatform.android || p == TargetPlatform.iOS || w < 600;
+    if (MediaQuery.disableAnimationsOf(context) || isMobile) {
       _c.stop();
     } else if (!_c.isAnimating) {
       _c.repeat(reverse: true);
@@ -336,7 +338,10 @@ class _SkeletonBoxState extends State<SkeletonBox> with SingleTickerProviderStat
 
   @override
   Widget build(BuildContext context) {
-    if (MediaQuery.disableAnimationsOf(context)) {
+    final p = Theme.of(context).platform;
+    final w = MediaQuery.sizeOf(context).width;
+    final isMobile = p == TargetPlatform.android || p == TargetPlatform.iOS || w < 600;
+    if (MediaQuery.disableAnimationsOf(context) || isMobile) {
       return Container(
         height: widget.height,
         width: widget.width,
