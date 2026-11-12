@@ -72,6 +72,14 @@ bool heroAmbientLoopAllowed({
   return true;
 }
 
+/// True when reduced motion or a mobile platform/viewport should freeze ambient motion.
+bool mobileMotionSuppressed(BuildContext context, {bool adminOn = true}) =>
+    !ambientMotionOn(context, adminOn: adminOn) ||
+    !heroAmbientLoopAllowed(
+      platform: Theme.of(context).platform,
+      width: MediaQuery.sizeOf(context).width,
+    );
+
 /// Whether the hero video may load and play: ambient motion is on, the visitor
 /// did not ask to save data, and the platform plays it (web, Android, iOS).
 bool heroVideoAllowed(BuildContext context, {required bool adminOn}) {
@@ -426,10 +434,7 @@ class _RevealState extends State<Reveal> with SingleTickerProviderStateMixin, Vi
 
   @override
   void didChangeDependencies() {
-    final size = MediaQuery.sizeOf(context);
-    final platform = Theme.of(context).platform;
-    final allowLoops = heroAmbientLoopAllowed(isWeb: kIsWeb, platform: platform, width: size.width);
-    _static = !ambientMotionOn(context) || !allowLoops;
+    _static = mobileMotionSuppressed(context);
     if (_static) _c.value = 1;
     super.didChangeDependencies();
   }
@@ -547,10 +552,7 @@ class _HeroStageState extends State<HeroStage> with SingleTickerProviderStateMix
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final size = MediaQuery.sizeOf(context);
-    final platform = Theme.of(context).platform;
-    _ambient = ambientMotionOn(context, adminOn: widget.motion) &&
-        heroAmbientLoopAllowed(isWeb: kIsWeb, platform: platform, width: size.width);
+    _ambient = !mobileMotionSuppressed(context, adminOn: widget.motion);
     _videoOn = widget.video != null && heroVideoAllowed(context, adminOn: widget.motion);
     // Decode the still before it is needed (no pop-in, no flash on swaps).
     precacheImage(AssetImage(_still), context).ignore();
@@ -597,6 +599,10 @@ class _HeroStageState extends State<HeroStage> with SingleTickerProviderStateMix
   }
 
   Widget _feather(Widget child) => widget.fadeBottom ? BottomFeather(child: child) : child;
+
+  Widget _raysLayer(double shimmer) => CustomPaint(
+        painter: LightRaysPainter(shimmer: shimmer, strength: widget.rays),
+      );
 
   @override
   Widget build(BuildContext context) {
@@ -661,24 +667,21 @@ class _HeroStageState extends State<HeroStage> with SingleTickerProviderStateMix
           if (widget.rays > 0 && !_domAmbient)
             RepaintBoundary(
               child: sceneArt(
-                  context,
-                  _feather(_ambient
+                context,
+                _feather(
+                  _ambient
                       ? AnimatedBuilder(
                           animation: _clock,
-                          builder: (context, _) => CustomPaint(
-                            painter: LightRaysPainter(
-                                shimmer: _clock.value *
-                                        (HeroAmbientSpec.clock.inMilliseconds /
-                                            HeroAmbientSpec.shimmerCycle.inMilliseconds) %
-                                    1,
-                                strength: widget.rays),
+                          builder: (context, _) => _raysLayer(
+                            _clock.value *
+                                    (HeroAmbientSpec.clock.inMilliseconds /
+                                        HeroAmbientSpec.shimmerCycle.inMilliseconds) %
+                                1,
                           ),
                         )
-                      : CustomPaint(
-                          painter: LightRaysPainter(
-                              shimmer: HeroAmbientSpec.stillShimmer,
-                              strength: widget.rays),
-                        ))),
+                      : _raysLayer(HeroAmbientSpec.stillShimmer),
+                ),
+              ),
             ),
           // Season wash (ADR-050): a still gradient above every layer.
           if (tintColors != null)

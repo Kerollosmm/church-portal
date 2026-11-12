@@ -69,15 +69,17 @@ InstallOsInfo detectInstallOs({
   final plat = platform;
 
   // In-app browsers: Facebook, Instagram, WhatsApp, Line, WeChat, Telegram, TikTok, WebViews.
-  final isInApp = ua.contains('FBAN') ||
-      ua.contains('FBAV') ||
-      ua.contains('Instagram') ||
-      ua.contains('WhatsApp') ||
-      ua.contains('Line/') ||
-      ua.contains('MicroMessenger') ||
-      ua.contains('Telegram') ||
-      ua.contains('; wv') ||
-      ua.contains('ByteLocale');
+  final isInApp = const [
+    'FBAN',
+    'FBAV',
+    'Instagram',
+    'WhatsApp',
+    'Line/',
+    'MicroMessenger',
+    'Telegram',
+    '; wv',
+    'ByteLocale',
+  ].any(ua.contains);
 
   // Android
   if (ua.contains('Android')) {

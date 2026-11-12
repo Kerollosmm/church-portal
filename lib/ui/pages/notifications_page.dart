@@ -55,6 +55,10 @@ const Map<String, List<String>> notificationsPageStrings = {
     'تعذّر حفظ إيقاف الإشعارات على الخادم؛ ستتم إعادة المحاولة تلقائيًا.',
     'Could not save opt-out on server; it will retry automatically.',
   ],
+  'notificationsSyncFailed': [
+    'تعذّر مزامنة الإشعارات مع الخادم؛ ستتم إعادة المحاولة تلقائيًا.',
+    'Could not sync notifications with server; it will retry automatically.',
+  ],
   'notificationsUnsupported': ['هذا المتصفح لا يدعم تلقي الإشعارات.', 'This browser does not support push notifications.'],
 };
 
@@ -75,6 +79,7 @@ class NotificationsPage extends ConsumerStatefulWidget {
 class _NotificationsPageState extends ConsumerState<NotificationsPage> {
   dynamic _webPushRepo;
   PushEnv? _webPushEnv;
+  Future<bool>? _syncInFlight;
 
   dynamic _repoFor(PushEnv pushEnv) {
     if (_webPushRepo == null || !identical(_webPushEnv, pushEnv)) {
@@ -121,6 +126,17 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
     return PushPermissionState.defaultState;
   }
 
+  void _showSyncErrorIfNeeded(BuildContext context, bool syncOk) {
+    if (!syncOk && _webPushRepo?.syncedToken != null && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(context.tr('notificationsSyncFailed')),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
   Future<bool> _syncWebPush(
     BuildContext context,
     WidgetRef ref,
@@ -128,9 +144,40 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
     PushSettings pushSettings, {
     PushPrefs? overridePrefs,
     bool isWeb = kIsWeb,
-  }) async {
-    if (!isWeb) return true;
+  }) {
+    if (!isWeb) return Future.value(true);
     final currentLang = context.isAr ? 'ar' : 'en';
+    final prev = _syncInFlight;
+    final next = () async {
+      if (prev != null) {
+        try {
+          await prev;
+        } catch (_) {}
+      }
+      if (!mounted || !context.mounted) return false;
+      return _syncWebPushSerialized(
+        context,
+        ref,
+        pushEnv,
+        pushSettings,
+        currentLang: currentLang,
+        overridePrefs: overridePrefs,
+      );
+    }();
+    _syncInFlight = next;
+    return next.whenComplete(() {
+      if (identical(_syncInFlight, next)) _syncInFlight = null;
+    });
+  }
+
+  Future<bool> _syncWebPushSerialized(
+    BuildContext context,
+    WidgetRef ref,
+    PushEnv pushEnv,
+    PushSettings pushSettings, {
+    required String currentLang,
+    PushPrefs? overridePrefs,
+  }) async {
     try {
       await web_push.loadLibrary();
       if (!kIsWeb && web_push.WebPushRepository.debugBatchWriter == null) return true;
@@ -157,6 +204,15 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
             );
           }
           return false;
+        }
+        if (!mounted) return false;
+        // Reconcile against any opt-out / toggle changes made while enable() ran.
+        if (overridePrefs == null) {
+          prefs = ref.read(pushPrefsProvider);
+          if (prefs.lang != currentLang) {
+            ref.read(pushPrefsProvider.notifier).setLang(currentLang);
+            prefs = prefs.copyWith(lang: currentLang);
+          }
         }
       }
 
@@ -590,9 +646,22 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
                 onPressed: pushSettings.canRequestPermission
                     ? () async {
                         final res = await pushEnv.requestPermission();
+                        if (!mounted) return;
                         if (res == 'granted') {
                           prefsNotifier.firstOptIn();
+                          if (isWeb && context.mounted) {
+                            final syncOk = await _syncWebPush(
+                              context,
+                              ref,
+                              pushEnv,
+                              pushSettings,
+                              isWeb: isWeb,
+                            );
+                            if (!mounted || !context.mounted) return;
+                            _showSyncErrorIfNeeded(context, syncOk);
+                          }
                         }
+                        if (!mounted) return;
                         onPermissionChanged();
                       }
                     : null,
@@ -776,12 +845,16 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
               return;
             }
             final res = await pushEnv.requestPermission();
+            if (!mounted) return;
             if (res == 'granted') {
               prefsNotifier.toggleType(type);
+              var syncOk = true;
               if (context.mounted) {
-                await _syncWebPush(context, ref, pushEnv, pushSettings, isWeb: isWeb);
+                syncOk = await _syncWebPush(context, ref, pushEnv, pushSettings, isWeb: isWeb);
               }
+              if (!mounted || !context.mounted) return;
               ref.invalidate(pushPermissionProvider);
+              _showSyncErrorIfNeeded(context, syncOk);
             } else {
               ref.invalidate(pushPermissionProvider);
               if (context.mounted) {
@@ -802,7 +875,9 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
         } else {
           prefsNotifier.toggleType(type);
           if (isWeb && permState == PushPermissionState.granted && context.mounted) {
-            await _syncWebPush(context, ref, pushEnv, pushSettings, isWeb: isWeb);
+            final syncOk = await _syncWebPush(context, ref, pushEnv, pushSettings, isWeb: isWeb);
+            if (!mounted || !context.mounted) return;
+            _showSyncErrorIfNeeded(context, syncOk);
           }
         }
       },

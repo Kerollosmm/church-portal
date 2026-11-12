@@ -450,17 +450,20 @@ class _AppShellState extends ConsumerState<AppShell> {
                 curve: Curves.easeInOut,
                 child: IgnorePointer(
                   ignoring: focusMode,
-                  child: Semantics(
-                    link: true,
-                    label: '${context.tr('logoLabel')} — ${context.tr('home')}',
-                    excludeSemantics: true,
-                    onTap: () => context.go('/'),
-                    child: GestureDetector(
-                      key: const Key('sealTabHome'),
-                      onTap: () => context.go('/'),
-                      child: MouseRegion(cursor: SystemMouseCursors.click, child: SealTab(width: tabW, height: tabH)),
-                    ),
-                  ),
+                  child: () {
+                    void goHome() => context.go('/');
+                    return Semantics(
+                      link: true,
+                      label: '${context.tr('logoLabel')} — ${context.tr('home')}',
+                      excludeSemantics: true,
+                      onTap: goHome,
+                      child: GestureDetector(
+                        key: const Key('sealTabHome'),
+                        onTap: goHome,
+                        child: MouseRegion(cursor: SystemMouseCursors.click, child: SealTab(width: tabW, height: tabH)),
+                      ),
+                    );
+                  }(),
                 ),
               ),
             ),

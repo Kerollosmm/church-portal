@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:church_portal/core/install_env.dart';
 import 'package:church_portal/core/push_env.dart';
 import 'package:church_portal/core/theme.dart';
@@ -947,4 +949,111 @@ void main() {
     expect(find.text('تم إيقاف جميع الإشعارات'), findsNothing);
     expect(find.text('تعذّر حفظ إيقاف الإشعارات على الخادم؛ ستتم إعادة المحاولة تلقائيًا.'), findsOneWidget);
   });
+
+  testWidgets('primary permission button registers token and syncs opted-in topics', (tester) async {
+    final writes = <Map<String, dynamic>>[];
+    web_push.WebPushRepository.debugBatchWriter = (qid, queueData, rateData, {bool isSetCount1 = false}) async {
+      writes.add(Map<String, dynamic>.from(queueData));
+    };
+    addTearDown(() => web_push.WebPushRepository.debugBatchWriter = null);
+
+    final pushEnv = FakeTestPushEnv(permission: 'default');
+    final installEnv = FakeTestInstallEnv();
+
+    await tester.pumpWidget(buildTestable(
+      child: const NotificationsPage(isWeb: true),
+      pushSettings: const PushSettings(
+        enabled: true,
+        offered: [NotifyType.announcements],
+        vapidKey: 'test_vapid_key_01234567890123456789012345678901234567890123456789012345678901234567890123456789',
+      ),
+      pushEnv: pushEnv,
+      installEnv: installEnv,
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('السماح بإشعارات المتصفح'));
+    await tester.pumpAndSettle();
+
+    expect(pushEnv.requestCalls, 1);
+    expect(pushEnv.enableCalls, 1);
+    expect(writes, isNotEmpty);
+    expect((writes.last['want'] as List).cast<String>(), contains('web_announcements_ar'));
+  });
+
+  testWidgets('concurrent clearAll while enable is pending reconciles to empty server topics', (tester) async {
+    final enableCompleter = Completer<String?>();
+    final writes = <Map<String, dynamic>>[];
+    web_push.WebPushRepository.debugBatchWriter = (qid, queueData, rateData, {bool isSetCount1 = false}) async {
+      writes.add(Map<String, dynamic>.from(queueData));
+    };
+    addTearDown(() => web_push.WebPushRepository.debugBatchWriter = null);
+
+    final pushEnv = _DelayedEnablePushEnv(enableCompleter);
+    final installEnv = FakeTestInstallEnv();
+
+    await tester.pumpWidget(buildTestable(
+      child: const NotificationsPage(isWeb: true),
+      pushSettings: const PushSettings(
+        enabled: true,
+        offered: [NotifyType.announcements],
+        vapidKey: 'test_vapid_key_01234567890123456789012345678901234567890123456789012345678901234567890123456789',
+      ),
+      pushEnv: pushEnv,
+      installEnv: installEnv,
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('تنويهات وأخبار'));
+    await tester.pump();
+
+    expect(find.text('إيقاف كل الإشعارات'), findsOneWidget);
+    await tester.tap(find.text('إيقاف كل الإشعارات'));
+    await tester.pump();
+
+    enableCompleter.complete('test_token');
+    await tester.pumpAndSettle();
+
+    expect(writes, isEmpty);
+    expect(find.text('تم إيقاف جميع الإشعارات'), findsOneWidget);
+    expect(find.text('إيقاف كل الإشعارات'), findsNothing);
+  });
+
+  testWidgets('toggling switch shows sync error SnackBar when web sync fails', (tester) async {
+    web_push.WebPushRepository.debugBatchWriter = (qid, queueData, rateData, {bool isSetCount1 = false}) async {
+      throw UnsupportedError('write refused');
+    };
+    addTearDown(() => web_push.WebPushRepository.debugBatchWriter = null);
+
+    final pushEnv = FakeTestPushEnv(permission: 'granted');
+    final installEnv = FakeTestInstallEnv();
+
+    await tester.pumpWidget(buildTestable(
+      child: const NotificationsPage(isWeb: true),
+      pushSettings: const PushSettings(
+        enabled: true,
+        offered: [NotifyType.announcements],
+        vapidKey: 'test_vapid_key_01234567890123456789012345678901234567890123456789012345678901234567890123456789',
+      ),
+      pushEnv: pushEnv,
+      installEnv: installEnv,
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('تنويهات وأخبار'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('تعذّر مزامنة الإشعارات مع الخادم؛ ستتم إعادة المحاولة تلقائيًا.'), findsOneWidget);
+  });
+}
+
+class _DelayedEnablePushEnv extends FakeTestPushEnv {
+  final Completer<String?> _completer;
+  _DelayedEnablePushEnv(this._completer) : super(permission: 'granted');
+
+  @override
+  Future<String?> enableAndGetToken({required String vapidKey, required Map<String, dynamic> firebaseConfig}) {
+    enableCalls++;
+    return _completer.future;
+  }
 }

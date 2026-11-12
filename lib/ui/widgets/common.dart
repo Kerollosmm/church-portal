@@ -316,14 +316,13 @@ class SkeletonBox extends StatefulWidget {
 
 class _SkeletonBoxState extends State<SkeletonBox> with SingleTickerProviderStateMixin {
   late final AnimationController _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 900));
+  bool _static = false;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final p = Theme.of(context).platform;
-    final w = MediaQuery.sizeOf(context).width;
-    final isMobile = p == TargetPlatform.android || p == TargetPlatform.iOS || w < 600;
-    if (MediaQuery.disableAnimationsOf(context) || isMobile) {
+    _static = mobileMotionSuppressed(context);
+    if (_static) {
       _c.stop();
     } else if (!_c.isAnimating) {
       _c.repeat(reverse: true);
@@ -338,10 +337,7 @@ class _SkeletonBoxState extends State<SkeletonBox> with SingleTickerProviderStat
 
   @override
   Widget build(BuildContext context) {
-    final p = Theme.of(context).platform;
-    final w = MediaQuery.sizeOf(context).width;
-    final isMobile = p == TargetPlatform.android || p == TargetPlatform.iOS || w < 600;
-    if (MediaQuery.disableAnimationsOf(context) || isMobile) {
+    if (_static) {
       return Container(
         height: widget.height,
         width: widget.width,
