@@ -10,6 +10,7 @@ import 'package:church_portal/state/providers.dart';
 import 'package:church_portal/ui/pages/notifications_page.dart';
 import 'package:church_portal/ui/widgets/remind_me.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart' show MethodCall, SystemChannels;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
@@ -620,5 +621,82 @@ void main() {
 
     expect(find.text('تم إيقاف جميع الإشعارات'), findsOneWidget);
     expect(find.text('إيقاف كل الإشعارات'), findsNothing);
+  });
+
+  testWidgets('In-app browser displays copy link button and copies link to clipboard', (tester) async {
+    tester.view.physicalSize = const Size(1200, 2000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    String? copiedText;
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, (MethodCall methodCall) async {
+      if (methodCall.method == 'Clipboard.setData') {
+        copiedText = (methodCall.arguments as Map)['text'] as String?;
+      }
+      return null;
+    });
+
+    final pushEnv = FakeTestPushEnv();
+    final installEnv = FakeTestInstallEnv(
+      userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) Mobile/15E148 Telegram/10.9.1',
+      platform: 'iPhone',
+      isStandalone: false,
+    );
+
+    await tester.pumpWidget(buildTestable(
+      child: const NotificationsPage(isWeb: true),
+      pushSettings: const PushSettings(
+        enabled: true,
+        offered: [NotifyType.announcements],
+        vapidKey: 'test_vapid_key_01234567890123456789012345678901234567890123456789012345678901234567890123456789',
+      ),
+      pushEnv: pushEnv,
+      installEnv: installEnv,
+    ));
+    await tester.pumpAndSettle();
+
+    expect(find.text('نسخ الرابط للمتصفح'), findsOneWidget);
+
+    await tester.tap(find.text('نسخ الرابط للمتصفح'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('تم نسخ الرابط'), findsOneWidget);
+    expect(copiedText, 'https://maximos-domadios-church.web.app/notifications');
+  });
+
+  testWidgets('iOS Safari installed PWA (isStandalone: true) exposes permission prompt card and switches', (tester) async {
+    tester.view.physicalSize = const Size(1200, 2000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    final pushEnv = FakeTestPushEnv(permission: 'default', isSupported: true);
+    final installEnv = FakeTestInstallEnv(
+      userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 Safari/604.1',
+      platform: 'iPhone',
+      isStandalone: true,
+    );
+
+    await tester.pumpWidget(buildTestable(
+      child: const NotificationsPage(isWeb: true),
+      pushSettings: const PushSettings(
+        enabled: true,
+        offered: [NotifyType.announcements, NotifyType.reminders],
+        vapidKey: 'test_vapid_key_01234567890123456789012345678901234567890123456789012345678901234567890123456789',
+      ),
+      pushEnv: pushEnv,
+      installEnv: installEnv,
+    ));
+    await tester.pumpAndSettle();
+
+    expect(find.text('لتفعيل الإشعارات على iPhone'), findsNothing);
+    expect(find.text('السماح بإشعارات المتصفح'), findsOneWidget);
+    expect(find.text('تنويهات وأخبار'), findsOneWidget);
+
+    expect(pushEnv.requestCalls, 0);
+    await tester.tap(find.text('السماح بإشعارات المتصفح'));
+    await tester.pumpAndSettle();
+
+    expect(pushEnv.requestCalls, 1);
+    expect(find.text('الإشعارات مفعلة'), findsOneWidget);
   });
 }

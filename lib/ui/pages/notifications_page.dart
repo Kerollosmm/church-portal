@@ -364,9 +364,14 @@ class NotificationsPage extends ConsumerWidget {
                 label: Text(context.tr('notificationsCopyLink')),
                 onPressed: () {
                   Clipboard.setData(const ClipboardData(text: 'https://maximos-domadios-church.web.app/notifications'));
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text(context.tr('notificationsLinkCopied'))),
-                  );
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(context.tr('notificationsLinkCopied')),
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
+                  }
                 },
               ),
             ],
