@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../../core/document_lang.dart';
@@ -185,31 +184,6 @@ class NotificationsPage extends ConsumerWidget {
               // blocked-permission steps right away.
               () => ref.invalidate(pushPermissionProvider)),
 
-          if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) ...[
-            const SizedBox(height: 16),
-            Material(
-              color: pal.surface,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-                side: BorderSide(color: pal.hairline),
-              ),
-              clipBehavior: Clip.antiAlias,
-              child: ListTile(
-                leading: Icon(Icons.battery_charging_full_outlined, color: pal.goldText),
-                title: Text(
-                  context.isAr ? 'حالة الإشعارات وتحسين البطارية' : 'Notification Health & Battery Guide',
-                  style: TextStyle(fontWeight: FontWeight.w600, color: pal.primaryDeep),
-                ),
-                subtitle: Text(
-                  context.isAr ? 'دليل استثناء التطبيق من توفير الطاقة' : 'OEM battery optimization guide & diagnostics',
-                  style: TextStyle(fontSize: 13, color: pal.muted),
-                ),
-                trailing: Icon(Icons.chevron_right_rounded, color: pal.muted),
-                onTap: () => context.push('/notifications/battery'),
-              ),
-            ),
-          ],
-
           const SizedBox(height: 20),
 
           // Per-type toggles section
@@ -230,7 +204,17 @@ class NotificationsPage extends ConsumerWidget {
               children: [
                 for (int i = 0; i < availableTypes.length; i++) ...[
                   if (i > 0) Divider(height: 1, color: pal.hairline),
-                  _buildTypeTile(context, pal, availableTypes[i], prefs, prefsNotifier),
+                  _buildTypeTile(
+                    context,
+                    pal,
+                    availableTypes[i],
+                    prefs,
+                    prefsNotifier,
+                    permState,
+                    pushEnv,
+                    pushSettings,
+                    ref,
+                  ),
                 ],
               ],
             ),
@@ -573,6 +557,10 @@ class NotificationsPage extends ConsumerWidget {
     NotifyType type,
     PushPrefs prefs,
     PushPrefsNotifier prefsNotifier,
+    PushPermissionState permState,
+    PushEnv pushEnv,
+    PushSettings pushSettings,
+    WidgetRef ref,
   ) {
     final isSelected = prefs.types.contains(type);
     final title = context.isAr ? type.labelAr : type.labelEn;
@@ -580,7 +568,38 @@ class NotificationsPage extends ConsumerWidget {
 
     return SwitchListTile(
       value: isSelected,
-      onChanged: (_) => prefsNotifier.toggleType(type),
+      onChanged: (turnOn) async {
+        if (turnOn && permState != PushPermissionState.granted) {
+          final res = await pushEnv.requestPermission();
+          if (res == 'granted') {
+            if (kIsWeb) {
+              try {
+                await web_push.loadLibrary();
+                final repo = web_push.WebPushRepository(pushEnv: pushEnv);
+                await repo.enable(vapidKey: pushSettings.vapidKey);
+              } catch (e, st) {
+                ErrorReporting.capture(e, st, section: 'notifications', source: 'web_push_enable');
+              }
+            }
+            prefsNotifier.toggleType(type);
+            ref.invalidate(pushPermissionProvider);
+          } else {
+            ref.invalidate(pushPermissionProvider);
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(context.isAr
+                      ? 'الإشعارات غير مفعلة. يُرجى السماح بالإشعارات من إعدادات المتصفح أو النظام.'
+                      : 'Notifications disabled. Please allow notifications in device or browser settings.'),
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+            }
+          }
+        } else {
+          prefsNotifier.toggleType(type);
+        }
+      },
       title: Text(
         title,
         style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14.5, color: pal.ink),

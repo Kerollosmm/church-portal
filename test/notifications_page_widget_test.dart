@@ -9,6 +9,7 @@ import 'package:church_portal/domain/reminders.dart';
 import 'package:church_portal/state/providers.dart';
 import 'package:church_portal/ui/pages/notifications_page.dart';
 import 'package:church_portal/ui/widgets/remind_me.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
@@ -113,6 +114,17 @@ class FakeTestInstallEnv implements InstallEnv {
 class _FailingInstallEnv extends FakeTestInstallEnv {
   @override
   void writeJson(String key, Map<String, dynamic> data) => throw StateError('QuotaExceededError');
+}
+
+class _DenyingPushEnv extends FakeTestPushEnv {
+  _DenyingPushEnv() : super(permission: 'default');
+
+  @override
+  Future<String> requestPermission() async {
+    requestCalls++;
+    permission = 'denied';
+    return 'denied';
+  }
 }
 
 class _FakeRemindersNotifier extends UserRemindersNotifier {
@@ -353,5 +365,94 @@ void main() {
     expect(find.byKey(const Key('remindSheetError')), findsOneWidget);
     expect(find.textContaining('تعذّر حفظ التذكير'), findsOneWidget);
     expect(find.text('حفظ التذكير'), findsOneWidget); // still open
+  });
+
+  testWidgets('OEM battery optimization card is not rendered on /notifications (Web & Android)', (tester) async {
+    final pushEnv = FakeTestPushEnv(permission: 'granted');
+    final installEnv = FakeTestInstallEnv();
+
+    // 1. Web environment
+    await tester.pumpWidget(buildTestable(
+      child: const NotificationsPage(isWeb: true),
+      pushSettings: const PushSettings(enabled: true),
+      pushEnv: pushEnv,
+      installEnv: installEnv,
+    ));
+    await tester.pumpAndSettle();
+
+    expect(find.text('حالة الإشعارات وتحسين البطارية'), findsNothing);
+    expect(find.text('Notification Health & Battery Guide'), findsNothing);
+    expect(find.text('دليل استثناء التطبيق من توفير الطاقة'), findsNothing);
+
+    // 2. Android environment
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    try {
+      await tester.pumpWidget(buildTestable(
+        child: const NotificationsPage(isWeb: false),
+        pushSettings: const PushSettings(enabled: true),
+        pushEnv: pushEnv,
+        installEnv: installEnv,
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.text('حالة الإشعارات وتحسين البطارية'), findsNothing);
+      expect(find.text('Notification Health & Battery Guide'), findsNothing);
+      expect(find.text('دليل استثناء التطبيق من توفير الطاقة'), findsNothing);
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
+  });
+
+  testWidgets('toggling switch when unpermitted invokes requestPermission and enables switch if granted', (tester) async {
+    final pushEnv = FakeTestPushEnv(permission: 'default');
+    final installEnv = FakeTestInstallEnv();
+
+    await tester.pumpWidget(buildTestable(
+      child: const NotificationsPage(isWeb: true),
+      pushSettings: const PushSettings(
+        enabled: true,
+        offered: [NotifyType.announcements],
+        vapidKey: 'test_vapid_key_01234567890123456789012345678901234567890123456789012345678901234567890123456789',
+      ),
+      pushEnv: pushEnv,
+      installEnv: installEnv,
+    ));
+    await tester.pumpAndSettle();
+
+    expect(pushEnv.requestCalls, 0);
+
+    // Tap the switch
+    await tester.tap(find.text('تنويهات وأخبار'));
+    await tester.pumpAndSettle();
+
+    expect(pushEnv.requestCalls, 1);
+    expect(find.text('إيقاف كل الإشعارات'), findsOneWidget);
+  });
+
+  testWidgets('toggling switch when unpermitted displays SnackBar and keeps switch off if denied', (tester) async {
+    final pushEnv = _DenyingPushEnv();
+    final installEnv = FakeTestInstallEnv();
+
+    await tester.pumpWidget(buildTestable(
+      child: const NotificationsPage(isWeb: true),
+      pushSettings: const PushSettings(
+        enabled: true,
+        offered: [NotifyType.announcements],
+        vapidKey: 'test_vapid_key_01234567890123456789012345678901234567890123456789012345678901234567890123456789',
+      ),
+      pushEnv: pushEnv,
+      installEnv: installEnv,
+    ));
+    await tester.pumpAndSettle();
+
+    expect(pushEnv.requestCalls, 0);
+
+    // Tap the switch
+    await tester.tap(find.text('تنويهات وأخبار'));
+    await tester.pumpAndSettle();
+
+    expect(pushEnv.requestCalls, 1);
+    expect(find.text('الإشعارات غير مفعلة. يُرجى السماح بالإشعارات من إعدادات المتصفح أو النظام.'), findsOneWidget);
+    expect(find.text('إيقاف كل الإشعارات'), findsNothing);
   });
 }
