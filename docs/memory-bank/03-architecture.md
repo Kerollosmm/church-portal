@@ -358,6 +358,17 @@ To protect the web initial load budget (`main.dart.js` gzip -9 ceiling <= 1,396,
 The routes build `DeferredLoader(loadLibrary: x.loadLibrary, builder: (_) => x.Page())`. Sibling path transitions (e.g. between `/readings/date1` and `/readings/date2`) recreate the routed page subtree via `key: ValueKey(s.uri.path)` on `FeatureGate` in `_page` (`lib/router.dart`), with `DeferredLoader.didUpdateWidget` serving as an in-place fallback if a parent preserves the loader state. `DeferredLoader` shows a live-region accessible spinner («جارٍ تحميل الصفحة…») and an `ErrorState` with Retry on network failure. All chunk loading failures report telemetry via `ErrorReporting.capture(e, st, section: 'deferred_chunk')`.
 Deferred isolation is mechanically enforced in CI via `node tool/check_web_bundle.mjs build/web`, which parses `main.dart.js.map` to assert 0 sourcemap leaks from any of the 8 deferred modules, verifies at least 6 `.part.js` chunks (22 emitted in production), and checks OpenType font integrity.
 
+**Web Push Permission Architecture & Guidance (ADR-065):**
+- **User-Gesture Requirement:** Strict enforcement of zero automatic `Notification.requestPermission()` calls on initial page load. Browser notification permission is requested exclusively via user interactions: either by clicking the primary action card («السماح بإشعارات المتصفح» / "Allow browser notifications") when `permission == 'default'`, or reactively when the visitor toggles any notification channel switch.
+- **Topic Queuing & Synchronization (`WebPushRepository`):**
+  When permission is granted, `WebPushRepository` (deferred as `web_push`) retrieves the FCM web registration token and immediately flushes active channel topic subscriptions (`want`, `rem`, `drop`) into a Firestore `push_queue` batch document validated against `meta/push_rate`. Switch toggles or «إيقاف كل الإشعارات» (unsubscribe all) trigger `_syncWebPush` to keep topic state aligned.
+- **In-App Browser & WebView Mitigation:**
+  Embedded WebViews (Telegram, WhatsApp, Facebook, Instagram, TikTok, Android `; wv`) detect environments where Service Workers and PushManager APIs are blocked or volatile. `NotificationsPage` presents a high-visibility warning banner with a one-tap «نسخ الرابط للمتصفح» (Copy link) button and instructions to open the portal in standard Chrome or Safari.
+- **iOS 16.4+ Standalone PWA Transition:**
+  In standard Safari browser tabs on iOS, Web Push is unavailable prior to Home Screen installation; the page displays a 3-step visual "Add to Home Screen" guide. Once launched from the Home Screen (`isStandalone == true`), the page seamlessly switches to display the Web Push permission card and interactive switches.
+- **Denied Permission Recovery:**
+  When `permission == 'denied'`, the page displays browser site settings steps (clicking the padlock / tune icon in Chrome or site settings in Safari) along with an «إعادة فحص الإذن» / "Re-check permission" button to re-evaluate permission state without requiring a full browser refresh.
+
 ## App shell & navigation (`lib/ui/widgets/app_shell.dart`)
 
 - `navItems`: home, massSchedule, clinics, education, activities, publicServices, about, contact; `askNavItem` added

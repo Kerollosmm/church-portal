@@ -699,4 +699,21 @@ void main() {
     expect(pushEnv.requestCalls, 1);
     expect(find.text('الإشعارات مفعلة'), findsOneWidget);
   });
+
+  testWidgets('NotificationsPage never requests permission automatically on load', (tester) async {
+    final pushEnv = FakeTestPushEnv(permission: 'default');
+    await tester.pumpWidget(buildTestable(
+      child: const NotificationsPage(isWeb: true),
+      pushSettings: const PushSettings(
+        enabled: true,
+        vapidKey: 'test_vapid_key_0123456789012345678901234567890123456789',
+      ),
+      pushEnv: pushEnv,
+      installEnv: FakeTestInstallEnv(),
+    ));
+    await tester.pumpAndSettle();
+
+    // Crucial check: 0 permission calls on load
+    expect(pushEnv.requestCalls, 0);
+  });
 }

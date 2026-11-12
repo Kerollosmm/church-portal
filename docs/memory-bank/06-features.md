@@ -583,10 +583,23 @@ digits, Cairo `02` + 8, Alexandria `03` + 7, other governorates `0[4-9]` + 7–8
 - Offline caching via `ReadingsStore` (SharedPreferences on mobile, in-memory on web) with automatic pruning of dates older than yesterday.
 - Accessible directly via the «اقرأ القراءات» action on the Today card or direct link `/readings/YYYY-MM-DD`.
 
-### Notification Preferences & Reminders (`/notifications`, `notifications_page.dart`, ADR-057, ADR-064)
+### Notification Preferences & Reminders (`/notifications`, `notifications_page.dart`, ADR-057, ADR-064, ADR-065)
 - Screen manages user notification channel subscriptions (`announcements`, `verse_daily`, `katameros_daily`, `seasons`, `feasts`) and personal reminders (`RemindMeButton`, «تذكيراتي»).
 - **Streamlined flow (ADR-064):** Persistent OEM battery optimization card («حالة الإشعارات وتحسين البطارية») has been removed from `notifications_page.dart`, allowing the screen to flow directly from the overall status banner to channel preferences and reminders without clutter.
-- **Reactive permission handshake:** Toggling any notification channel switch reactively prompts for native notification permissions (`LocalNotifier.requestPermissions()` on mobile, Web Push registration on web) if not already granted.
+- **Explicit Web Push Permission Prompt (ADR-065):**
+  - On web viewports when `permission == 'default'`, a dedicated primary action card is rendered with an explicit «السماح بإشعارات المتصفح» / "Allow browser notifications" button.
+  - Zero automatic `Notification.requestPermission()` calls are made on initial page load (adheres strictly to user-gesture browser security policies).
+  - Toggling any notification channel switch while unpermitted prompts for permission reactively in the tap handler before activating the switch.
+  - Granting permission retrieves the FCM web registration token via `WebPushRepository` and immediately flushes active topics to Firestore `push_queue`.
+  - Toggling switches or clearing notifications triggers `_syncWebPush` to keep topic state aligned.
+- **In-App Browser & WebView Mitigation (ADR-065):**
+  - Detects restricted in-app browser WebViews (Telegram, WhatsApp, Facebook, Instagram, TikTok, and Android `; wv`).
+  - Displays a high-visibility warning card detailing that in-app browsers do not support push notifications, equipped with a one-tap «نسخ الرابط للمتصفح» (Copy link) button and clipboard feedback.
+- **iOS Safari PWA & Standalone Transition (ADR-065):**
+  - In a standard Safari browser tab on iOS, Web Push is blocked prior to PWA installation; the screen renders a 3-step "Add to Home Screen" visual guide.
+  - Once launched from the Home Screen (`isStandalone == true`), the page seamlessly transitions to expose the Web Push permission prompt card and channel switches.
+- **Denied Permission Recovery (ADR-065):**
+  - When `permission == 'denied'`, the screen displays a browser site settings guide (padlock / site settings instructions) and an «إعادة فحص الإذن» / "Re-check permission" button to re-evaluate without reloading.
 - Standalone OEM battery health diagnostics remain available on the dedicated route `/notifications/battery` (`notification_health_page.dart`, ADR-058, ADR-062).
 
 ### Notification Health & OEM Guidance (`/notifications/battery`, `notification_health_page.dart`, ADR-058, ADR-062)
