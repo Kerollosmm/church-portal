@@ -39,6 +39,19 @@ that is still outstanding.
 - [ ] Before adding any editor account, the owner reviews what an editor can see (donation accounts, visitors'
       phones).
 
+## فحص من البيانات العامة (Check from the public data — 13 November 2026)
+
+Read without signing in, from the publicly readable Firestore documents. It shows what a visitor's app receives;
+it cannot see the admin-only sent log.
+
+| # | What the public data shows | Verdict |
+|---|---|---|
+| 1 | Not visible: the sent log is in `settings/notifications`, readable by admins only | **owner must check in the panel** |
+| 2 | `liveEnabled` is `false` and `liveUrl` is empty | stream is off — **looks resolved**; owner confirms |
+| 3 | Still marked as sample data: 41 of 45 masses, 1 of 11 priests, 4 of 5 places (12 November: 47, 4, 4) | **open** — the owner decides item by item |
+| 4 | Two visible pages exist: «التبرعات» (`/page/donations`) and «مبنى الكنيسة الجديد» (`/page/kiman-building-donations`) | pages exist — **office confirms the account details are the real ones** |
+| 5 | `nameEn` is "Church of Saints Maximus & Domadius and the Strong Anba Moussa the Black" | **differs** from the planned "Church of the Saints Maximus and Domadius" — owner says which is right |
+
 ## معايير القبول (Acceptance criteria)
 
 - The offensive notification no longer appears in the log, and its delivery status is written down.

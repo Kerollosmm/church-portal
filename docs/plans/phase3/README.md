@@ -34,6 +34,7 @@ fear of breaking something. The report is built on a hands-on trial of the live 
 | [STAGE-1-safety-and-custom-pages.md](STAGE-1-safety-and-custom-pages.md) | «المرحلة 1 — الأمان والصفحات المخصصة» — items 6–17 |
 | [STAGE-2-clarity-and-fewer-steps.md](STAGE-2-clarity-and-fewer-steps.md) | «المرحلة 2 — الوضوح وتقليل الخطوات» — items 18–29 |
 | [STAGE-3-remaining.md](STAGE-3-remaining.md) | «المرحلة 3 — الباقي» — items 30–35 |
+| [DESIGN-NOTE-item-28-sitemap.md](DESIGN-NOTE-item-28-sitemap.md) | design note for item 28 (sitemap without a deploy) and its recommendation |
 | [STATUS.md](STATUS.md) | one checklist for all 35 items and every gate (tick as you go) |
 
 ## ٣. من يستخدم اللوحة (Who uses the panel)
@@ -172,6 +173,18 @@ One switch in the settings: «النسخة الإنجليزية». Only the owne
 | Removed from the plan: tour, «؟» button, full change log (the help line and «آخر تعديل» are enough) | اتشال — 12 November |
 | E-mail invitation of admins | مؤجلة — 12 November |
 
+### قرارات المالك بعد التقرير (Owner decisions after the report — Kerollos, 13 November 2026)
+
+These answer the open points of §١٥. They are the owner's instructions, not statements of the report.
+
+| # | Decision | Where it lands |
+|---|---|---|
+| D1 | **Automatic sign-out after 30 minutes without use** on a shared device. Pointer input and keyboard input both reset the clock. A warning prompt shows **60 seconds** before sign-out. «افتكرني» stays for a personal device | item 13 (P1-13) |
+| D2 | **Owner-only screens are enforced twice:** hidden from non-owner editors in the menu, **and** writes to message types, the assistant settings and the season settings are blocked for non-owners in the Firestore rules. Reads stay allowed where the site or the forms need them | item 18 (P2-18 + P2-18R) |
+| D3 | **Item 28:** a short design note first, on the existing Cloudflare Worker + Firestore REST API reached from Firebase Hosting. If it is more than a small addition, the item is deferred and the sitemap stays generated at deploy time | [DESIGN-NOTE-item-28-sitemap.md](DESIGN-NOTE-item-28-sitemap.md) |
+| D4 | **Item 32 is left out for now**, to stay focused on the admin simplification and the trial with a real servant | Stage 3 |
+| D5 | **Target: 2–3 weeks in total** across the stages, because the shared schema / editor changes cover 14 screens at once and several tasks are already partly done. Stage 1 (items 6–17) starts once items 1–5 are verified | §١١, §١٤ |
+
 ## ١١. خريطة المراحل (Stage map)
 
 The unified work list (last reviewed 13 November 2026 against the current code after PR #70,
@@ -179,12 +192,12 @@ The unified work list (last reviewed 13 November 2026 against the current code a
 live data, 28 open tasks in the code, 8 done or removed, 1 deferred by decision. No simplification code has changed
 since 12 November; the three stages have not started. The older trial report stays where it is, unedited.
 
-| Stage | Items | Objective | Start gate | End gate | Estimate (planning estimate) |
+| Stage | Items | Objective | Start gate | End gate | Target (owner's target D5, split per stage as a planning estimate) |
 |---|---|---|---|---|---|
 | **0 — النهارده** | 1–5 | fix the live data by hand | owner signed in to `/admin` | G0 | one working session of the owner + office follow-up |
-| **1 — الأمان والصفحات المخصصة** | 6–17 | nothing is lost, nothing is sent by mistake; custom pages in fewer steps | G0 passed | G1 | 2–4 weeks |
-| **2 — الوضوح وتقليل الخطوات** | 18–29 | 7 menu groups, new home, open fields, inbox, English switch | G1 passed | G2 | 2–4 weeks |
-| **3 — الباقي** | 30–35 | church info, message types, optional items, trial, deferred invite | G2 passed | G3 = ready for normal use | 1–2 weeks |
+| **1 — الأمان والصفحات المخصصة** | 6–17 | nothing is lost, nothing is sent by mistake; custom pages in fewer steps | G0 passed | G1 | about 1 week |
+| **2 — الوضوح وتقليل الخطوات** | 18–29 | 7 menu groups, new home, open fields, inbox, English switch | G1 passed | G2 | about 1 week |
+| **3 — الباقي** | 30–35 | church info, message types, optional items, trial, deferred invite | G2 passed | G3 = ready for normal use | 2–4 days |
 
 Categories used in the list: **خطة التبسيط** · **الصفحات المخصصة** · **تحسينات أخرى**. Priority 1 before 2, then 3.
 Infrastructure items such as Sentry, Android and the domain stay in `docs/memory-bank/11-open-tasks.md`.
@@ -227,8 +240,11 @@ Acceptance of the whole phase = S1–S5 all met at gate G3, on the Spark plan wi
   the existing page editor.
 - Item 23 («محتاج انتباهك») lists items missing English only once item 27's switch exists.
 - Item 33's trial depends on Stage 1 being live; the report repeats the trial after every stage.
-- Total **(planning estimate)**: 5–10 weeks of one implementer lane with review, after G0. The report gives sizes
-  only; it sets no dates.
+- Total: **2–3 weeks** across the stages after G0 — the owner's target (D5, 13 November). The report gives sizes
+  only; it sets no dates. The trial sessions at G1 and G2 depend on a servant being available and are the part
+  most likely to stretch the target.
+- Item 18's menu regrouping ships together with its rules change (P2-18R), so no screen is hidden in the menu
+  while still writable in the rules.
 
 ## ١٥. ملاحظات حل التعارض (Conflict-resolution notes)
 
@@ -237,16 +253,16 @@ Acceptance of the whole phase = S1–S5 all met at gate G3, on the Spark plan wi
 | C1 | The «المراحل» section lists "quick wins (S) → safety and clarity (M) → new home (M)", while the unified list orders the same work as safety first (items 6–17), then clarity (18–29), then the rest (30–35) | The unified list is the later review (13 November) and calls itself the single work list; it governs order. The S/M sizes stay as size hints |
 | C2 | "25 → 7 groups", yet the target menu shows the seven groups plus «الإعدادات (للمالك)» | Build it as drawn: seven groups for every admin, plus the owner-only settings group |
 | C3 | Delete is described as "confirmation with the name, **or** a bin with undo" (§٧ table), as "deleted at once with 10-second undo" (decision), and as "undo, and the confirmation names the item" (item 8) | Item delete = immediate with a 10-second «اتمسح · تراجع» that names the item; confirmations that remain (section delete, send to everyone, apply season, clear log) name the item |
-| C4 | Automatic sign-out is a range, 15–30 minutes, not one value | One configurable constant; the owner picks the value at the Stage 1 start gate |
+| C4 | Automatic sign-out is a range, 15–30 minutes, not one value | **Resolved (D1):** 30 minutes, reset by pointer and keyboard input, 60-second warning, «افتكرني» kept |
 | C5 | Item 17 has priority 2 but sits inside Stage 1 (items 6–17) | Schedule it last in Stage 1; it may move to Stage 2 without blocking G1 |
-| C6 | "Settings and admins stay owner-only as they are", while only the admins screen is owner-only today and the menu moves message types, the assistant and season settings into «الإعدادات (للمالك)» | Group visibility follows the target menu. The only rules change the report states is `admins.active`; the owner confirms before item 18 starts whether the moved screens also become owner-only in the rules |
-| C7 | Item 28 wants the sitemap updated without waiting for a deploy, under "Spark only, 0 servers", and names no mechanism | Start the item with a short design note limited to what already exists; no new paid service. The owner approves the note before code |
+| C6 | "Settings and admins stay owner-only as they are", while only the admins screen is owner-only today and the menu moves message types, the assistant and season settings into «الإعدادات (للمالك)» | Group visibility follows the target menu. The only rules change the report states is `admins.active`; **Resolved (D2):** both — hidden in the menu and non-owner writes blocked in the rules for message types, assistant settings and season settings; reads unchanged |
+| C7 | Item 28 wants the sitemap updated without waiting for a deploy, under "Spark only, 0 servers", and names no mechanism | **Design note written (D3):** [DESIGN-NOTE-item-28-sitemap.md](DESIGN-NOTE-item-28-sitemap.md). Its finding: the Worker route is more than a small addition, so by D3 the item is deferred and the deploy-time sitemap stays |
 | C8 | The trial session is "after the first stage" and repeated after every stage, while item 33 has priority 3 | A trial runs at every stage gate; item 33 in Stage 3 is the final recorded session plus the 320px check |
-| C9 | The report gives sizes (S/M/L) but no durations or dates | Durations in this plan are planning estimates for the owner to confirm |
+| C9 | The report gives sizes (S/M/L) but no durations or dates | **Resolved (D5):** the owner's target is 2–3 weeks in total; the per-stage split is a planning estimate |
 
 ## ١٦. خارج النطاق (Out of scope)
 
-Onboarding tour · «؟» button · full change log · Blaze plan · any new server · e-mail invitation of admins
+Item 32 (left out by the owner, D4) · item 28's live sitemap (deferred, D3) · onboarding tour · «؟» button · full change log · Blaze plan · any new server · e-mail invitation of admins
 (deferred; Cloudflare Worker if ever needed) · infrastructure items kept in `docs/memory-bank/11-open-tasks.md`.
 
 ## ١٧. المصادر (Sources)

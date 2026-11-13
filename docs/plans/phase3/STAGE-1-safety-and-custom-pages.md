@@ -8,9 +8,9 @@ masses, the save bar, stopping an admin, automatic slug, the donations template 
 |---|---|
 | **Items** | 6–17 of the unified list (all priority 1, except item 17 which is priority 2 — README §١٥ C5) |
 | **Owner** | Implementer (smaller model, one packet at a time) · Reviewer · Owner for the gates |
-| **Start gate** | G0 passed · owner has chosen the automatic sign-out value within 15–30 minutes (C4) |
+| **Start gate** | G0 passed (items 1–5 verified) · sign-out value chosen: 30 minutes (README §١٠ D1) |
 | **End gate (G1)** | all packets merged and live · trial session with a servant who has never seen the panel, six tasks without help, stops recorded |
-| **Estimate (planning estimate)** | 2–4 weeks: 5 small + 7 medium packets |
+| **Target** | about 1 week of the owner's 2–3 week total (README §١٠ D5): 5 small + 7 medium packets |
 | **PRs (proposed)** | 3A (6, 7, 8, 11) → 3B (9, 10) → 3C (12, 13) → 3D (14, 15, 16, 17) |
 
 Names marked **(proposed)** are for the implementer and reviewer to keep consistent across packets; the report
@@ -148,14 +148,16 @@ Report item: #13 · خطة التبسيط · Priority 1 · decided, not built ·
   dashboard); test `test/admin_test.dart`.
 - **Interface (proposed):**
   `class SessionPolicy { const SessionPolicy({required this.idleLimit, required this.warnBefore}); bool shouldWarn(Duration idle); bool shouldSignOut(Duration idle); }`
-  — pure Dart. `idleLimit` is the value the owner picked within 15–30 minutes (C4). A widget around
-  `AdminDashboard` resets the idle clock on any pointer or key event, shows a warning before the limit, then signs
-  out.
+  — pure Dart. **Decided values (D1):** `idleLimit` = 30 minutes, `warnBefore` = 60 seconds. A widget around
+  `AdminDashboard` resets the idle clock on **both** pointer and keyboard input, shows a warning prompt 60 seconds
+  before the limit (so at 29 minutes idle) with a way to stay signed in, then signs out.
 - **Login:** a «افتكرني» checkbox. Ticked = personal device: the session persists and no idle sign-out runs.
   Unticked = shared office device: idle sign-out applies.
-- **Tests:** `shouldWarn` / `shouldSignOut` at the boundaries · activity resets the clock · with «افتكرني» ticked
+- **Tests:** `shouldWarn` / `shouldSignOut` at the boundaries (29:00 warns, 30:00 signs out) · a pointer event and
+  a key event each reset the clock · input during the warning cancels it · activity resets the clock · with «افتكرني» ticked
   no sign-out happens · at the limit with a dirty form the unsaved-edits warning is shown before sign-out.
-- **Acceptance:** an unattended office device signs itself out after the chosen time, after a warning.
+- **Acceptance:** an unattended shared device signs itself out after 30 minutes without use, 60 seconds after a
+  warning; a personal device with «افتكرني» ticked stays signed in.
 
 ---
 

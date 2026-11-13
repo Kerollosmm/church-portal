@@ -8,22 +8,26 @@
 - **Baseline:** the report's last review, 13 November 2026 (Africa/Cairo), against the code after PR #70.
 - **Counts:** 5 fixes on live data · 28 open tasks in the code · 8 done or removed · 1 deferred by decision.
 - **Code:** no simplification code has changed since 12 November; the three stages have not started.
-- **Next action:** Stage 0 — the owner opens the live panel (items 1–3) and hands items 4–5 to the office.
+- **Next action:** Stage 0 — the owner confirms items 1, 3 and 5 (see the public-data check in
+  [STAGE-0-live-data.md](STAGE-0-live-data.md)); Stage 1 starts as soon as G0 is ticked.
+- **Target:** 2–3 weeks in total across the stages (owner, 13 November).
 
 ## قرارات مفتوحة للمالك (Open points for the owner — README §١٥)
 
-- [ ] C4 — automatic sign-out value within 15–30 minutes (before Stage 1)
-- [ ] C6 — do the screens moved under «الإعدادات (للمالك)» also become owner-only in the rules? (before Stage 2)
-- [ ] C7 — approve the design note for item 28 (inside Stage 2)
-- [ ] Item 32 — build the optional part or not (before Stage 3)
+All answered by the owner on 13 November 2026 (README §١٠, D1–D5).
+
+- [x] C4 — 30 minutes without use, reset by pointer and keyboard input, 60-second warning, «افتكرني» kept
+- [x] C6 — both: hidden in the menu and non-owner writes blocked in the rules (packet P2-18R)
+- [x] C7 — design note written: [DESIGN-NOTE-item-28-sitemap.md](DESIGN-NOTE-item-28-sitemap.md); outcome: item 28 deferred
+- [x] Item 32 — left out for now
 
 ## المرحلة 0 — النهارده ([STAGE-0-live-data.md](STAGE-0-live-data.md))
 
 - [ ] 1 — offensive trial notification deleted from «سجل ما أُرسل»; delivery to devices confirmed or ruled out
-- [ ] 2 — stream switched off, or link set in «اليوم والبث»
-- [ ] 3 — visible sample data reviewed (47 masses, 4 priests, 4 places unconfirmed on 12 November)
-- [ ] 4 — donations page for the new building (office)
-- [ ] 5 — `nameEn` corrected to "Church of the Saints Maximus and Domadius" (office)
+- [ ] 2 — stream switched off, or link set in «اليوم والبث» — public data on 13 November: stream off; owner confirms
+- [ ] 3 — visible sample data reviewed (47 masses, 4 priests, 4 places unconfirmed on 12 November; 41, 1, 4 on 13 November)
+- [ ] 4 — donations page for the new building (office) — public data on 13 November: the page exists; office confirms the details
+- [ ] 5 — `nameEn` corrected to "Church of the Saints Maximus and Domadius" (office) — public data on 13 November: a different, longer name; owner says which is right
 - [ ] **G0**
 
 ## المرحلة 1 — الأمان والصفحات المخصصة ([STAGE-1-safety-and-custom-pages.md](STAGE-1-safety-and-custom-pages.md))
@@ -35,7 +39,7 @@
 - [ ] 10 — preview before «يحل محل قداسات اليوم المعتادة» (P1-10)
 - [ ] 11 — fixed bottom save bar (P1-11)
 - [ ] 12 — «نشط / موقوف» on every admin, optional end date (P1-12)
-- [ ] 13 — automatic sign-out on the office device, «افتكرني» on a personal device (P1-13)
+- [ ] 13 — automatic sign-out after 30 minutes with a 60-second warning, «افتكرني» on a personal device (P1-13)
 - [ ] 14 — automatic slug from the Arabic title (P1-14)
 - [ ] 15 — ready «صفحة تبرعات» template (P1-15)
 - [ ] 16 — one screen for sections and their items (P1-16)
@@ -45,7 +49,7 @@
 
 ## المرحلة 2 — الوضوح وتقليل الخطوات ([STAGE-2-clarity-and-fewer-steps.md](STAGE-2-clarity-and-fewer-steps.md))
 
-- [ ] 18 — menu from 25 entries to 7 groups (P2-18)
+- [ ] 18 — menu from 25 entries to 7 groups (P2-18) · owner-only writes in the rules (P2-18R)
 - [ ] 19 — title and help line on every screen (P2-19)
 - [ ] 20 — serving and departed priests merged with a filter (P2-20)
 - [ ] 21 — «متقدم» for the owner; no duplicated switches (P2-21)
@@ -55,7 +59,7 @@
 - [ ] 25 — inbox opens on «محتاجة رد», with WhatsApp and «تمّت» (P2-25)
 - [ ] 26 — picker for the priests' dates; labels without HH:mm (P2-26)
 - [ ] 27 — error summary above the form (P2-27a) · «النسخة الإنجليزية» switch (P2-27b)
-- [ ] 28 — sitemap updates when a page or section is added (P2-28)
+- [x] 28 — sitemap updates when a page or section is added (P2-28): design note done, **deferred** — sitemap stays generated at deploy time
 - [ ] 29 — the assistant names visible sections and pages as topics (P2-29)
 - [ ] Trial session after Stage 2 — date, servant, time taken, stops:
 - [ ] **G2**
@@ -64,7 +68,7 @@
 
 - [ ] 30 — church info split; clearer coordinates; notice priority explained (P3-30)
 - [ ] 31 — message types: clearer save, confirm before removal, «إعادة كجديدة» harder to hit (P3-31)
-- [ ] 32 — one menu order for built-in and custom sections; item detail pages (optional) (P3-32)
+- [x] 32 — one menu order for built-in and custom sections; item detail pages (optional): **left out** by the owner, 13 November (no work)
 - [ ] 33 — trial session with a real servant; panel at 320px; retest of the page jump / lost letters
 - [ ] 34 — e-mail invitation of admins: **deferred** (no work)
 - [ ] 35 — at least two owner accounts; photo of Abouna Domadius copied locally if it depends on YouTube (office)
