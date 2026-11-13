@@ -268,7 +268,8 @@ App target settings:
   content-hashed. A later header sets them to `Cache-Control: no-cache` (revalidate with ETag). Without it,
   a browser keeps an old `main.dart.js` beside a new part file and `/ask` and `/readings` throw
   `DeferredLoadException` (`part main.dart.js_N.part.js not loaded`). `DeferredLoader` reloads the tab once
-  per session when that exception fires, then shows the existing retry card.
+  per session only for that hash mismatch, then shows the existing retry card. A network
+  `DeferredLoadException` does not reload.
   **Icon fonts are fingerprinted (PR #23):** `flutter build web` tree-shakes `MaterialIcons-Regular.otf` /
   `CupertinoIcons.ttf` to the icons in use but keeps one file name, so the 7-day font cache kept an old subset and
   icons added later (the PR #18 admin menu entries) drew as blank space. `tool/fingerprint_icon_fonts.py` (run by

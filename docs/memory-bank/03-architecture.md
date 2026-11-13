@@ -97,7 +97,7 @@ lib/
                             (PageBody, PageHeader, CustomizablePageHeader, PageIntro, SectionTitle, ResponsiveGrid,
                             Skeleton*, EmptyState, ErrorState, AsyncSection, PendingConfirmationNote,
                             SampleBadge, Pill, IconLine, TimeRangeText, Footer), feature_gate, map_embed*,
-                            deferred_loader (DeferredLoader: spinner → page, one web reload on DeferredLoadException, then retry), assistant_gate,
+                            deferred_loader (DeferredLoader: spinner → page, one web reload when a deferred part hash mismatches, then retry), assistant_gate,
                             coptic_cross, update_banner (UpdateBanner, UpdateSheet)
   ui/admin/                 admin_page (sign-in, role check, dashboard shell), admin_schema (FieldDef,
                             CollectionDef, adminCollections, churchInfoDoc), doc_editor (generic form),

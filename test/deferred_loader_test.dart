@@ -67,9 +67,14 @@ void main() {
   });
 
   test('a stale deferred part reloads once per tab', () {
-    const mismatch = 'part main.dart.js_15.part.js not loaded';
+    const mismatch = 'Loading https://maximos-domadios-church.web.app/main.dart.js_15.part.js failed: '
+        'Success callback invoked but part main.dart.js_15.part.js not loaded.';
     expect(shouldReloadDeferredChunk(DeferredLoadException(mismatch), null), isTrue);
     expect(shouldReloadDeferredChunk(DeferredLoadException(mismatch), '1'), isFalse);
+    expect(
+      shouldReloadDeferredChunk(DeferredLoadException('Loading https://x/main.dart.js_15.part.js failed: Failed to fetch'), null),
+      isFalse,
+    );
     expect(shouldReloadDeferredChunk(Exception('network'), null), isFalse);
   });
 

@@ -43,9 +43,9 @@ class _DeferredLoaderState extends State<DeferredLoader> {
   late Future<void> _future = _load();
 
   Future<void> _load() => widget.loadLibrary().catchError((Object e, StackTrace st) {
-        // Web only: a stale cached main.dart.js and a new part (or the reverse)
-        // throw DeferredLoadException. One reload fetches a matching pair.
-        // The future stays pending so the spinner holds until navigation.
+        // Web only: the script arrived but its hash does not match ("not loaded").
+        // One reload fetches a matching pair. A network failure stays on the
+        // retry card. The future stays pending so the spinner holds until navigation.
         if (reloadStaleDeferredChunk(e)) return Completer<void>().future;
         ErrorReporting.capture(e, st, section: 'deferred_chunk', source: widget.source);
         throw e;
