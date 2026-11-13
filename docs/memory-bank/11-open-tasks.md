@@ -8,7 +8,7 @@ Status as of 6 Nov 2026 (ADR-056 Phase 2 plan; ADR-055 / PR #49; ADR-054 / PR #4
 1. ~~Footer note «تعرض البيانات المحفوظة مع التطبيق» shows on the live site while Firestore works~~ — fixed in PR #30 (ADR-038) → *Live data follow-ups*.
 2. Sentry web source maps + Android symbols need a Sentry auth token → *Error tracking — Sentry*.
 3. Sentry project privacy: *Prevent Storing of IP Addresses* + server-side data scrubbers → *Error tracking — Sentry*.
-4. Android assistant needs release signing + Play Integrity registration → *Infrastructure & security*.
+4. Android assistant needs the Worker secret, deploy, and `ASSISTANT_WORKER_URL` → *Infrastructure & security*.
 5. ~~Custom sections / pages are not in the sitemap~~ (PR #30: generated from Firestore at deploy, ADR-038); still not named in the assistant's allowed topics → *Custom sections*.
 6. ~~320 px overflow reported on a real phone~~ — fixed in Phase 2 PR E (ADR-061): AppShell < 360 px space recovery (54 dp seal tab, drawer language toggle on subpages, >= 130 dp title width, >= 6 dp seal clearance), modal sheets keyboard insets padding, and real OpenType font loading in accessibility tests → *Infrastructure & security* (320 px item).
 7. CI rebuild of the eBible verse asset (source-fidelity check) → *Verse of the day*.
@@ -109,14 +109,14 @@ the owner approves the whole chain.
 - [ ] Optional: set a Gemini **request quota** for Firebase AI Logic (console). On Spark the Developer API free tier
       is rate-limited and never billed. Do not enforce App Check on Firestore while Android release has no Play
       Integrity registration.
-- [ ] **Android App Check for the in-app assistant (owner):** the chat UI is in the APK. Release questions need Play
-      Integrity. (1) Firebase → Project settings → Android app `com.asafrachurch.church_portal` → Add fingerprint
-      SHA-256 `8E:51:05:11:68:24:6D:44:A6:6D:11:46:2D:32:68:24:30:2A:90:15:76:16:13:D9:93:EE:7D:D2:D0:B9:75:54`
-      (the release key since apk-v1.0.1; do not create a new keystore). (2) App Check → Apps → Android → **Play
-      Integrity** → Register. (3) Play Console → App integrity → link the Cloud project. Play Integrity attests apps
-      that are on Play, so put the APK on an internal testing track. **Debug APKs:** copy the logcat debug token
-      ("Enter this debug secret into the allow list…") into App Check → Manage debug tokens. Do not enforce App
-      Check on Firestore.
+- [ ] **Android assistant Worker (owner, no paid plan):** the sideloaded APK does not use Play Integrity.
+      (1) Create a free Gemini API key at <https://aistudio.google.com/apikey> (Gemini Developer API, not a
+      Firebase key). (2) From the repo root, `npx wrangler secret put GEMINI_API_KEY` and paste that key.
+      (3) `npx wrangler deploy` (Worker `church-portal-push-sender`, existing `PUSH_KV`). (4) GitHub → Settings →
+      Variables → `ASSISTANT_WORKER_URL` = the printed URL plus `/assistant`
+      (shape `https://church-portal-push-sender.<account>.workers.dev/assistant`). The next APK build passes it
+      as `--dart-define=ASSISTANT_WORKER_URL`. Do not commit the key. Do not enforce App Check on Firestore.
+      Do not turn on Workers Paid. The on-device limit (default 3 questions per Cairo day) stays in the app.
 - [ ] **`production` environment required reviewers** (recommended hygiene; no Phase 2 dependency since 6 Nov 19:31) (Settings → Environments) so live deploys, rules deploys
       (`deploy-rules` uses the environment since PR 1) and the Seed workflow (`force` can overwrite production data)
       need approval.

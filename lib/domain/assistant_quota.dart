@@ -2,10 +2,10 @@
 //
 // The counter lives on the device (shared_preferences: localStorage on web,
 // SharedPreferences on Android) under a random device id, and resets at
-// Africa/Cairo midnight. It is a fair-use limit, not a security boundary:
-// clearing site / app data starts a new device id and a fresh count, and
-// Firebase AI Logic is called straight from the client, so nothing on the
-// server can gate the call without Cloud Functions.
+// Africa/Cairo midnight. [AssistantConversation] checks it before every model
+// call, including the Android Worker path. Clearing site / app data starts a
+// new device id. The Worker adds a separate daily ceiling so a modified APK
+// cannot send unlimited questions; it does not replace this counter.
 
 import 'dart:math';
 

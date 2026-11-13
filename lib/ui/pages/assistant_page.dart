@@ -4,7 +4,7 @@ import 'package:material_ui/material_ui.dart';
 import '../../config/app_config.dart';
 import '../../core/l10n.dart';
 import '../../core/theme.dart';
-import '../../data/assistant_model.dart';
+import '../../data/assistant_backend.dart';
 import '../../data/assistant_usage_store.dart';
 import '../../data/error_reporting.dart';
 import '../../domain/assistant_context.dart';
@@ -46,10 +46,10 @@ class _Msg {
   const _Msg(this.user, this.text, {this.error = false});
 }
 
-/// The model behind the assistant (Firebase AI Logic). Overridden in tests
-/// with a fake. Declared here, in the deferred /ask chunk, so `firebase_ai`
-/// stays out of the main bundle.
-final assistantModelProvider = Provider<AssistantModel>((ref) => const FirebaseAssistantModel());
+/// The model behind the assistant. Web: Firebase AI Logic. Android: the
+/// Cloudflare Worker. Overridden in tests with a fake. Declared here, in the
+/// deferred /ask chunk, so `firebase_ai` stays out of the main bundle.
+final assistantModelProvider = Provider<AssistantModel>((ref) => createAssistantModel());
 
 /// This device's daily question counter (ADR-031): shared_preferences
 /// (localStorage on web). Overridden in tests with a [MemoryUsageStore].
