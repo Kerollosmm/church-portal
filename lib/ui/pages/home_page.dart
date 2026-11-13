@@ -332,8 +332,9 @@ class _PatronsTeaser extends ConsumerWidget {
                           painting,
                           fit: BoxFit.cover,
                           alignment: const Alignment(0, -0.6),
+                          // Width only: both axes would decode the 720×894 portrait
+                          // into a square and squash the face before the crop.
                           cacheWidth: (halo * MediaQuery.devicePixelRatioOf(context)).round().clamp(1, 720),
-                          cacheHeight: (halo * MediaQuery.devicePixelRatioOf(context)).round().clamp(1, 894),
                         ),
                 ),
               ),
