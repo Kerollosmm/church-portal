@@ -47,7 +47,7 @@ Engineered with **Flutter Web and Android**, it delivers an **Arabic-first (RTL)
 In addition to the Web Portal, an official standalone Android application is distributed directly via GitHub Releases:
 
 - **📥 Latest Release:** **[Download APK from GitHub Releases](https://github.com/Kerollosmm/church-portal/releases)**
-- **Version:** `1.0.1` (build `2`) in `pubspec.yaml` (`1.0.1+2`). The link above stays the latest published `apk-v*` release (`apk-v1.0.0`) until tag `apk-v1.0.1` is pushed. The higher build number is what lets the in-app updater offer this release.
+- **Version:** `1.0.2` (build `3`) in `pubspec.yaml` (`1.0.2+3`). The link above stays the latest published `apk-v*` release (`apk-v1.0.1`) until tag `apk-v1.0.2` is pushed. The higher build number is what lets the in-app updater offer this release.
 - **Architecture Flavors:**
   - `church-portal-arm64.apk` — **64-bit ARM (`arm64-v8a`)** for modern devices (~18 MB).
   - `church-portal-arm32.apk` — **32-bit ARM (`armeabi-v7a`)** for older devices (~16 MB).

@@ -178,8 +178,8 @@ The native Android app is packaged as lightweight, split release APKs for maximu
 
 ### Automated CI/CD Workflow (`.github/workflows/android.yml`)
 - **Triggers:**
-  - Automated release: Triggered whenever a tag matching `apk-v*` is pushed (e.g., `apk-v1.0.0`).
-  - Prepared version: `pubspec.yaml` is `1.0.1+2` (version name `1.0.1`, build `2`). The higher build is what the in-app updater compares. Tag `apk-v1.0.1` is not pushed with the version bump; the public download stays the latest published `apk-v*` release (`apk-v1.0.0`) until that tag is pushed.
+  - Automated release: Triggered whenever a tag matching `apk-v*` is pushed (e.g., `apk-v1.0.1`).
+  - Prepared version: `pubspec.yaml` is `1.0.2+3` (version name `1.0.2`, build `3`). The higher build is what the in-app updater compares. Tag `apk-v1.0.2` is not pushed with the version bump; the public download stays the latest published `apk-v*` release (`apk-v1.0.1`) until that tag is pushed.
   - Manual testing: Triggered via `workflow_dispatch` on any branch.
   - Pull requests modifying Android assets or native code (`lib/**`, `android/**`, `pubspec.*`, `assets/**`, `.github/workflows/android.yml`).
 - **Split APK Generation:** Produces two architecture-specific APK binaries:
