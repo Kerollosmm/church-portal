@@ -59,11 +59,12 @@ Current: delete asks a generic confirmation; postponed undo is not built.
 - **Interface (proposed):**
   `class PendingDelete { PendingDelete({Duration window = const Duration(seconds: 10)}); void schedule(String id, Future<void> Function() commit); bool undo(String id); Future<void> flush(); }`
   The row disappears at once, a bar shows «اتمسح · تراجع» with the item's name for 10 seconds, and the real delete
-  (including the item's media cleanup) runs when the window ends. `flush()` runs on leaving the screen.
+  (including the item's media cleanup) runs when the window ends. `flush()` runs on leaving the screen **and on
+  `beforeunload`** (tab close or browser Back) when «تراجع» was not pressed — owner decision, 13 November.
 - **Behaviour fixed by the report:** item delete (priest, service, notice, page) = immediate + undo. The section
   delete keeps its explanatory confirmation and now names the section. No server is involved.
 - **Tests:** deleting hides the row and calls no backend delete before 10 s · «تراجع» restores the row and no
-  delete is ever sent · after 10 s exactly one delete is sent · leaving the screen commits the pending delete ·
+  delete is ever sent · after 10 s exactly one delete is sent · leaving the screen commits the pending delete · `beforeunload` commits the pending delete ·
   the bar text contains the item's title.
 - **Acceptance:** an item deleted by mistake is back with one press within 10 seconds, with its images intact.
 
@@ -228,7 +229,9 @@ technical.
 
 ## مخاطر تستحق المراجعة (Review focus)
 
-1. A tab closed during the 10-second window: the item must stay (delete not sent), never half-deleted.
+1. A tab closed during the 10-second window: the pending delete is sent on `beforeunload` (owner decision,
+   13 November). The browser does not wait for it to finish, so check the item is never left half-deleted
+   (document gone but media kept, or the reverse).
 2. A stopped admin with the dashboard already open: the live role stream must lock the dashboard at once.
 3. Idle sign-out while a form is dirty: the work is not dropped silently.
 4. Two admins: one deletes with undo pending while the other edits the same item.

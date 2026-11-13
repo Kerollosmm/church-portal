@@ -20,7 +20,7 @@ opening the panel and checking by hand. They rest on the trial of 12 November.
 | 2 | Switch the stream off, or put the link in «اليوم والبث» | تحسينات أخرى | needs live check | The switch was on and the link empty. The panel still gives no automatic warning when this happens |
 | 3 | Review the visible sample data (masses, priests and places still «غير مؤكد») | تحسينات أخرى | needs live check | 12 November: 47 masses, 4 priests and 4 places still unconfirmed. The public «بيانات غير مؤكدة» switch can show them all at once |
 | 4 | Create the donations page for the new building (account / InstaPay / wallet) | الصفحات المخصصة | office task | Open in the memory bank. The ready template in the panel is not built yet (item 15) |
-| 5 | Correct the church's English name in the church info | تحسينات أخرى | office task | Memory bank: the `nameEn` field needs correcting to "Church of the Saints Maximus and Domadius" |
+| 5 | Correct the church's English name in the church info | تحسينات أخرى | office task | Memory bank: the `nameEn` field needs correcting. **Owner decision, 13 November:** the live name "Church of Saints Maximus & Domadius and the Strong Anba Moussa the Black" is canonical and stays; nothing to change |
 
 Also from the report: donation account numbers and visitors' phone numbers are visible to every admin. That is
 natural for the owner, but take care before adding editors. And prepare the seasons and notices for after 2027 if
@@ -35,7 +35,7 @@ that is still outstanding.
       leave it marked. Decide whether the public «بيانات غير مؤكدة» switch stays on.
 - [ ] **4.** Office: gather the real donation details and create the page with the existing page editor.
       Nothing is typed from memory or guessed.
-- [ ] **5.** Office: change `nameEn` in church info to "Church of the Saints Maximus and Domadius".
+- [x] **5.** No change: the owner keeps "Church of Saints Maximus & Domadius and the Strong Anba Moussa the Black" as the canonical English name (13 November).
 - [ ] Before adding any editor account, the owner reviews what an editor can see (donation accounts, visitors'
       phones).
 
@@ -50,7 +50,12 @@ it cannot see the admin-only sent log.
 | 2 | `liveEnabled` is `false` and `liveUrl` is empty | stream is off — **looks resolved**; owner confirms |
 | 3 | Still marked as sample data: 41 of 45 masses, 1 of 11 priests, 4 of 5 places (12 November: 47, 4, 4) | **open** — the owner decides item by item |
 | 4 | Two visible pages exist: «التبرعات» (`/page/donations`) and «مبنى الكنيسة الجديد» (`/page/kiman-building-donations`) | pages exist — **office confirms the account details are the real ones** |
-| 5 | `nameEn` is "Church of Saints Maximus & Domadius and the Strong Anba Moussa the Black" | **differs** from the planned "Church of the Saints Maximus and Domadius" — owner says which is right |
+| 5 | `nameEn` is "Church of Saints Maximus & Domadius and the Strong Anba Moussa the Black" | **resolved** — the owner confirmed this name as canonical (13 November) |
+
+## قرار المالك (Owner statement — 13 November 2026)
+
+The owner stated that items 1–5 are resolved, and G0 is passed on that statement. Items 1, 3 and 4 cannot be
+checked without signing in, so they rest on the owner's word, not on the public-data check above.
 
 ## معايير القبول (Acceptance criteria)
 

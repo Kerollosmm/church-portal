@@ -8,8 +8,7 @@
 - **Baseline:** the report's last review, 13 November 2026 (Africa/Cairo), against the code after PR #70.
 - **Counts:** 5 fixes on live data · 28 open tasks in the code · 8 done or removed · 1 deferred by decision.
 - **Code:** no simplification code has changed since 12 November; the three stages have not started.
-- **Next action:** Stage 0 — the owner confirms items 1, 3 and 5 (see the public-data check in
-  [STAGE-0-live-data.md](STAGE-0-live-data.md)); Stage 1 starts as soon as G0 is ticked.
+- **Next action:** Stage 1, PR 3A (items 6, 7, 8, 11) — G0 passed on the owner's statement of 13 November.
 - **Target:** 2–3 weeks in total across the stages (owner, 13 November).
 
 ## قرارات مفتوحة للمالك (Open points for the owner — README §١٥)
@@ -23,12 +22,12 @@ All answered by the owner on 13 November 2026 (README §١٠, D1–D5).
 
 ## المرحلة 0 — النهارده ([STAGE-0-live-data.md](STAGE-0-live-data.md))
 
-- [ ] 1 — offensive trial notification deleted from «سجل ما أُرسل»; delivery to devices confirmed or ruled out
-- [ ] 2 — stream switched off, or link set in «اليوم والبث» — public data on 13 November: stream off; owner confirms
-- [ ] 3 — visible sample data reviewed (47 masses, 4 priests, 4 places unconfirmed on 12 November; 41, 1, 4 on 13 November)
-- [ ] 4 — donations page for the new building (office) — public data on 13 November: the page exists; office confirms the details
-- [ ] 5 — `nameEn` corrected to "Church of the Saints Maximus and Domadius" (office) — public data on 13 November: a different, longer name; owner says which is right
-- [ ] **G0**
+- [x] 1 — offensive trial notification deleted from «سجل ما أُرسل»; delivery to devices confirmed or ruled out
+- [x] 2 — stream switched off, or link set in «اليوم والبث» — public data on 13 November: stream off; owner confirms
+- [x] 3 — visible sample data reviewed (47 masses, 4 priests, 4 places unconfirmed on 12 November; 41, 1, 4 on 13 November)
+- [x] 4 — donations page for the new building (office) — public data on 13 November: the page exists; office confirms the details
+- [x] 5 — `nameEn` stays "Church of Saints Maximus & Domadius and the Strong Anba Moussa the Black" — the owner keeps the live name as the canonical English name (13 November); the shorter name is not used
+- [x] **G0** — the owner stated on 13 November 2026 that items 1–5 are resolved (owner's statement; items 1, 3 and 4 cannot be checked without signing in)
 
 ## المرحلة 1 — الأمان والصفحات المخصصة ([STAGE-1-safety-and-custom-pages.md](STAGE-1-safety-and-custom-pages.md))
 

@@ -154,9 +154,8 @@ the owner approves the whole chain.
       verifies `< 360 px` `AppShell` geometry (54 dp seal tab, drawer language toggle on subpages, >= 130 dp title width,
       >= 6 dp seal clearance) alongside 320 px × 200 % route sweeps with 0 overflows. Full OpenType font retention
       preserves Arabic ligatures and tashkeel diacritics without subsetting.
-- [ ] Ask the church office to update the admin-editable English name (`settings/church.nameEn`, currently "Church of
-      Saints Maximus & Domadius and the Strong Anba Moussa the Black") if they prefer "St. Maximus & Domadius and
-      St. Moses the Black Church" — not changed by the seed to avoid overwriting admin edits.
+- [x] English name settled (owner, 13 November 2026): `settings/church.nameEn` stays "Church of Saints Maximus & Domadius and the Strong Anba Moussa the Black" — the
+      canonical English name; no change by the office or the seed.
 
 ## Customization plan (PRs #11–#13, ADR-020)
 
