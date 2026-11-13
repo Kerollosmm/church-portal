@@ -176,3 +176,67 @@ test('handleNotificationClick closes notification and focuses/opens window', asy
   assert.equal(posted[0].type, 'open');
   assert.equal(posted[0].link, '/schedule');
 });
+
+test('handlePushEvent treats plural type "reminders" as reminder for quiet-hours bypass', async () => {
+  // Mock indexedDB minimal read-only quietHours store so handlePushEvent reads remindersRespectQuietHours=false
+  const prevIndexedDb = globalThis.indexedDB;
+  globalThis.indexedDB = {
+    open: () => {
+      const req = { onupgradeneeded: null, onsuccess: null, onerror: null };
+      setTimeout(() => {
+        req.onsuccess?.({
+          target: {},
+        });
+      }, 0);
+      req.result = {
+        transaction: () => ({
+          objectStore: () => ({
+            get: () => {
+              const gReq = { onsuccess: null, onerror: null, result: { value: { enabled: true, start: '00:00', end: '23:59', remindersRespectQuietHours: false } } };
+              setTimeout(() => gReq.onsuccess?.(), 0);
+              return gReq;
+            },
+            put: () => {},
+            index: () => ({ count: () => ({ onsuccess: null }) }),
+          }),
+          oncomplete: null,
+          onerror: null,
+        }),
+      };
+      return req;
+    },
+  };
+
+  try {
+    const shown = [];
+    const mockSelf = {
+      registration: {
+        showNotification: async (title, options) => shown.push({ title, options }),
+      },
+      clients: { matchAll: async () => [] },
+    };
+
+    const pushEvent = {
+      data: {
+        json: () => ({
+          data: {
+            nid: 'rem_plural_1',
+            title: 'تذكير بالقداس',
+            body: 'يبدأ بعد ساعة',
+            link: '/mass-schedule',
+            lang: 'ar',
+            type: 'reminders',
+          },
+        }),
+      },
+    };
+
+    await handlePushEvent(pushEvent, mockSelf);
+
+    assert.equal(shown.length, 1);
+    assert.equal(shown[0].options.silent, false);
+  } finally {
+    globalThis.indexedDB = prevIndexedDb;
+  }
+});
+

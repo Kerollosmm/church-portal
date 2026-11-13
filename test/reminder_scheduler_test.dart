@@ -4,6 +4,7 @@
 import 'dart:convert';
 
 import 'package:fake_async/fake_async.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -23,7 +24,9 @@ class FakeLocalNotifier implements LocalNotifier {
   bool initialized = false;
   void Function(String? payload)? selectNotificationCallback;
   bool permissionGranted = true;
+  bool notificationsEnabled = true;
   bool exactAlarmsAllowed = true;
+  String? launchPayload;
   List<PlannedNotification> scheduledPlan = [];
   final List<int> cancelledIds = [];
   bool allCancelled = false;
@@ -37,6 +40,9 @@ class FakeLocalNotifier implements LocalNotifier {
 
   @override
   Future<bool> requestPermissions() async => permissionGranted;
+
+  @override
+  Future<bool> areNotificationsEnabled() async => notificationsEnabled;
 
   @override
   Future<bool> canScheduleExactAlarms() async => exactAlarmsAllowed;
@@ -71,6 +77,9 @@ class FakeLocalNotifier implements LocalNotifier {
 
   @override
   Future<int> pendingCount() async => scheduledPlan.length;
+
+  @override
+  Future<String?> getLaunchPayload() async => launchPayload;
 }
 
 void main() {
@@ -435,6 +444,111 @@ void main() {
       expect(lastReplenish, isNotNull);
       expect(DateTime.parse(lastReplenish!).isAtSameMomentAs(now), isTrue);
     });
+
+    test('changing localeProvider updates pushPrefsProvider.lang', () async {
+      SharedPreferences.setMockInitialValues({});
+      final fakeNotifier = FakeLocalNotifier();
+
+      final container = ProviderContainer(
+        overrides: [
+          localNotifierProvider.overrideWithValue(fakeNotifier),
+          pushPrefsProvider.overrideWith(
+            () => _TestPushPrefsNotifier(PushPrefs(
+              types: {NotifyType.verse_daily},
+              lang: 'ar',
+              updatedAt: DateTime.utc(2026, 11, 8),
+            )),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      container.read(notifyPlannerProvider);
+      expect(container.read(pushPrefsProvider).lang, 'ar');
+
+      container.read(localeProvider.notifier).toggle();
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+
+      expect(container.read(localeProvider).languageCode, 'en');
+      expect(container.read(pushPrefsProvider).lang, 'en');
+    });
+
+    test('caps stored and scheduled plans to 64 on iOS and skips scheduling on Linux', () async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final fakeNotifier = FakeLocalNotifier();
+      final now = CairoTime.at(2026, 11, 8, 5 * 60);
+
+      final reminders = [
+        for (var i = 1; i <= 70; i++)
+          Reminder(
+            eventKey: 'lit-r$i',
+            lead: 0,
+            title: {'ar': 'تذكير $i', 'en': 'Reminder $i'},
+            startsAt: now.add(Duration(hours: i)),
+            createdAt: now,
+          ),
+      ];
+
+      // 1. iOS caps at 64 in both scheduledPlan and persisted storage
+      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+      try {
+        final container = ProviderContainer(
+          overrides: [
+            localNotifierProvider.overrideWithValue(fakeNotifier),
+            pushPrefsProvider.overrideWith(
+              () => _TestPushPrefsNotifier(PushPrefs(
+                types: {NotifyType.reminders},
+                lang: 'ar',
+                updatedAt: now,
+              )),
+            ),
+            userRemindersProvider.overrideWith(() => _TestUserRemindersNotifier(reminders)),
+          ],
+        );
+        addTearDown(container.dispose);
+
+        final plan = await container.read(notifyPlannerProvider).replan(now: now, prefs: prefs);
+        expect(plan.length, equals(iosPendingNotificationCap));
+        expect(fakeNotifier.scheduledPlan.length, equals(iosPendingNotificationCap));
+
+        final storedPlan = await loadStoredPlan(prefs: prefs);
+        expect(storedPlan.length, equals(iosPendingNotificationCap));
+      } finally {
+        debugDefaultTargetPlatformOverride = null;
+      }
+
+      // 2. Linux skips scheduling and removes any prior stored plan
+      fakeNotifier.scheduledPlan = [];
+      debugDefaultTargetPlatformOverride = TargetPlatform.linux;
+      try {
+        final container = ProviderContainer(
+          overrides: [
+            localNotifierProvider.overrideWithValue(fakeNotifier),
+            pushPrefsProvider.overrideWith(
+              () => _TestPushPrefsNotifier(PushPrefs(
+                types: {NotifyType.reminders},
+                lang: 'ar',
+                updatedAt: now,
+              )),
+            ),
+            userRemindersProvider.overrideWith(() => _TestUserRemindersNotifier(reminders)),
+          ],
+        );
+        addTearDown(container.dispose);
+
+        final linuxPlan = await container.read(notifyPlannerProvider).replan(now: now, prefs: prefs);
+        expect(linuxPlan, isEmpty);
+        expect(fakeNotifier.scheduledPlan, isEmpty);
+        expect(await loadStoredPlan(prefs: prefs), isEmpty);
+
+        final replenishOk = await executeReplenishmentTask(now: now, prefs: prefs, notifier: fakeNotifier);
+        expect(replenishOk, isTrue);
+        expect(fakeNotifier.scheduledPlan, isEmpty);
+      } finally {
+        debugDefaultTargetPlatformOverride = null;
+      }
+    });
   });
 }
 
@@ -444,4 +558,12 @@ class _TestPushPrefsNotifier extends PushPrefsNotifier {
 
   @override
   PushPrefs build() => _initial;
+}
+
+class _TestUserRemindersNotifier extends UserRemindersNotifier {
+  final List<Reminder> _initial;
+  _TestUserRemindersNotifier(this._initial);
+
+  @override
+  List<Reminder> build() => _initial;
 }

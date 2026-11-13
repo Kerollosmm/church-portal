@@ -583,15 +583,21 @@ digits, Cairo `02` + 8, Alexandria `03` + 7, other governorates `0[4-9]` + 7–8
 - Offline caching via `ReadingsStore` (SharedPreferences on mobile, in-memory on web) with automatic pruning of dates older than yesterday.
 - Accessible directly via the «اقرأ القراءات» action on the Today card or direct link `/readings/YYYY-MM-DD`.
 
-### Notification Preferences & Reminders (`/notifications`, `notifications_page.dart`, ADR-057, ADR-064, ADR-065)
+### Notification Preferences & Reminders (`/notifications`, `notifications_page.dart`, ADR-057, ADR-064, ADR-065, ADR-067)
 - Screen manages user notification channel subscriptions (`announcements`, `verse_daily`, `katameros_daily`, `seasons`, `feasts`) and personal reminders (`RemindMeButton`, «تذكيراتي»).
 - **Streamlined flow (ADR-064):** Persistent OEM battery optimization card («حالة الإشعارات وتحسين البطارية») has been removed from `notifications_page.dart`, allowing the screen to flow directly from the overall status banner to channel preferences and reminders without clutter.
+- **Native Multi-Platform Support (ADR-067):**
+  - `lib/core/push_env.dart` routes `dart.library.io` to `lib/core/push_env_io.dart` (`PushEnvIo`), wiring `LocalNotifier` across Android, iOS, and macOS (instead of falling through to `push_env_stub.dart`); `TargetPlatform.linux` reports `isSupported == false` (displaying `notificationsUnsupportedApp` cleanly) because `flutter_local_notifications` lacks Linux `zonedSchedule`, while `showInstant` keeps `LinuxNotificationDetails`.
+  - `_NotificationsPageState` refreshes native permission via `WidgetsBindingObserver` (`AppLifecycleState.resumed`) and initial post-frame check, exposes `openSystemSettings()` and «التحقق من الإذن مجددًا» when denied, triggers device test notifications via `showLocalNotification()`, and displays the `/notifications/battery` health link on Android only.
+  - On iOS, `capPlanForPlatform` caps scheduled & stored plans to the earliest 64 entries (`iosPendingNotificationCap`, matching `UNUserNotificationCenter`'s limit) and `NotifyPlanner` replenishes omitted entries on app resume via `AppLifecycleListener`.
+  - `AppShell` triggers native `notifyPlannerProvider.scheduleReplan(Duration(seconds: 2))` on startup and drains any queued `_pendingNotificationRoute` from cold-start local/FCM launches (`getLaunchPayload()`, `getInitialMessage()`), mapped cleanly by pure-Dart `notificationRouteFromPayload` (`/readings/<date>?tab=verse|katameros`, `/mass-schedule`, `/church-education/<id>`, or validated `/...` links).
+  - `notify_providers.dart` listens to `localeProvider` changes to keep `pushPrefsProvider.lang` in sync.
 - **Explicit Web Push Permission Prompt (ADR-065):**
   - On web viewports when `permission == 'default'`, a dedicated primary action card is rendered with an explicit «السماح بإشعارات المتصفح» / "Allow browser notifications" button.
   - Zero automatic `Notification.requestPermission()` calls are made on initial page load (adheres strictly to user-gesture browser security policies).
   - Toggling any notification channel switch while unpermitted prompts for permission reactively in the tap handler before activating the switch.
-  - Granting permission retrieves the FCM web registration token via `WebPushRepository` and immediately flushes active topics to Firestore `push_queue`.
-  - Toggling switches or clearing notifications triggers `_syncWebPush` to keep topic state aligned.
+  - Granting permission retrieves the FCM web registration token via `WebPushRepository` and immediately flushes active topics to Firestore `push_queue` while seeding `syncQuietHours(...)`.
+  - Toggling switches or clearing notifications triggers `_syncWebPush` to keep topic state aligned; `AppShell` also seeds `syncQuietHours(...)` for existing active tokens and listens reactively to reminders, locale, and `pushPrefs` on web via deferred `web_push.loadLibrary()`.
 - **In-App Browser & WebView Mitigation (ADR-065):**
   - Detects restricted in-app browser WebViews (Telegram, WhatsApp, Facebook, Instagram, TikTok, and Android `; wv`).
   - Displays a high-visibility warning card detailing that in-app browsers do not support push notifications, equipped with a one-tap «نسخ الرابط للمتصفح» (Copy link) button and clipboard feedback.
@@ -621,24 +627,25 @@ digits, Cairo `02` + 8, Alexandria `03` + 7, other governorates `0[4-9]` + 7–8
 - Single back arrow invariant (`INV-NAV-02`, ADR-062): phone viewports display exactly one back arrow located in `AppShell.leading`; `ItemDetailPage` hides its in-body back link on mobile and only displays it on desktop (`shellIsWide(context)` >= 1024 unscaled text width).
 - Assistant page on Android native displays a clean redirect card with a button opening the web assistant at `https://maximos-domadios-church.web.app/ask` in the external browser.
 
-### Admin Notification Manager & Remote FCM Push (ADR-059)
+### Admin Notification Manager & Remote FCM Push (ADR-059, ADR-067)
 - **Administrative control plane:** `/admin` → «التطبيق والإشعارات» provides full configuration for the 6 notification types (`announcements`, `verse_daily`, `katameros_daily`, `seasons`, `feasts`, `reminders`).
 - **Template management:** Admin can configure custom send times, lead days, and Arabic/English title/body templates with dynamic placeholders (`{verse}`, `{ref}`, `{reading}`, `{season}`, `{days}`, `{feast}`, `{event}`, `{time}`, `{place}`, `{lead}`, `{date}`). Live character counters and placeholder validation prevent invalid drafts.
 - **Schedule queue:** Admins can draft and schedule up to 20 remote push broadcasts targeting `'all'`, `'app'`, or `'web'` with deep links (`/liturgies`, `/readings/...`, etc.).
 - **Deletable non-sending rows:** Non-sending rows (`draft`, `ok`, `partial`, `error`, `unconfirmed`, `expired`) can be deleted at any time so the 20-row limit never deadlocks.
 - **Retry cloning:** Partial or errored rows can be cloned into new drafts with targets automatically narrowed to the failed platform (`web` or `app`).
-- **Cloudflare Worker sender:** Runs cron `*/15 * * * *`, queries `settings/notifications` via `:batchGet`, claims due rows, mints RS256 JWT, sends up to 16 FCM messages within ≤ 25 subrequests, and commits delivery status. Spark quota protected (~197 reads/day).
-- **Client FCM guard:** Android client background handler drops any incoming FCM notification matching local types to eliminate duplicates, uses a 100-item ring buffer for idempotency, shares `event:X` notification slots within ±60 minutes, and routes taps via `safeNotificationLink`.
+- **Cloudflare Worker sender:** Runs cron `*/15 * * * *`, queries `settings/notifications` via `:batchGet`, claims due rows, mints RS256 JWT, sends up to 16 FCM messages (including iOS `apns` alert payload + priority headers) within ≤ 25 subrequests, verifies `'reminders'` in `features.pushTypes` (treating explicit `[]` as disabled), and commits delivery status. Spark quota protected (~197 reads/day).
+- **Client FCM guard:** Native background handler initializes `WidgetsFlutterBinding`, Firebase, and `FlutterLocalNotificationsPlugin` when running in a headless isolate (without overwriting main-isolate tap callbacks when `plugin == null`), disables duplicate iOS foreground `aps.alert` presentation, drops incoming FCM messages matching local types to eliminate duplicates, uses a 100-item ring buffer (`seen_nids`), shares `event:X` notification slots within ±60 minutes across Android and iOS/macOS Darwin details, and routes non-empty payloads via `notificationRouteFromPayload`.
 
-### Web Push, Installed iPhone PWA & Web Reminder Planner (ADR-060)
-- **Zero casual visitor overhead:** Zero bytes Firebase Messaging JS, no push service worker registered on normal visits, deferred bundle loading (`web_push_repository.dart` loaded via `deferred as web_push`).
+### Web Push, Installed iPhone PWA & Web Reminder Planner (ADR-060, ADR-067)
+- **Zero casual visitor overhead:** 0 bytes Firebase Messaging JS, no push service worker registered on normal visits, deferred bundle loading (`web_push_repository.dart` loaded via `deferred as web_push`).
+- **Isolated SW scope & Chrome Android fallback (`web/push_client.js`, `push_env_web.dart`):** Registers `firebase-messaging-sw.js` under `FIREBASE_MESSAGING_SW_SCOPE = '/firebase-cloud-messaging-push-scope'` (avoiding collision with Flutter's `'/'` service worker) using `waitForSwActivation` (`skipWaiting()` + `clients.claim()`) and cached Firebase Messaging SDK, falls back to SW `showNotification` when `new Notification(...)` throws `TypeError` on mobile Chrome, and catches SW `getRegistration`/`register`/`showNotification` rejections in `test()` so `Notification` fallback runs cleanly.
 - **Safari iOS 16.4+ PWA support:** `manifest.json` configured with `"id": "/"` and `"scope": "/"`, monochrome badge (`badge-72.png`), and standalone display mode. On iOS Safari in a browser tab, `/notifications` displays an install-first guide card explaining that iOS requires adding the app to the Home Screen before Web Push notifications can be received.
 - **In-App Browser detection:** Detects embedded WebViews (Facebook, Instagram, Telegram) and renders a prominent warning with a one-tap «نسخ الرابط» (Copy link) button and Safari/Chrome open guidance.
-- **Focus mode & quiet hours:** Plain service worker (`firebase-messaging-sw.js`) respects overnight quiet hours by adding `silent: true` without dropping notifications, ensuring compliance with WebKit's background push termination policy.
+- **Focus mode & quiet hours:** Plain service worker (`firebase-messaging-sw.js`) respects overnight quiet hours by adding `silent: true` without dropping notifications (matching both singular `'reminder'` and plural `'reminders'` bypass), ensuring compliance with WebKit's background push termination policy.
 - **Web Reminder Planner & Condition FCM Reminders:**
   - `ReminderSheet` clamps leads with `isWebLeadTooSoon` (40-minute minimum window on web) and displays honest delay copy («قد يصل التنبيه قبل الموعد بـ ١٥ دقيقة أو بعده بقليل حسب جدول الخادم») plus alternative Google Calendar and RFC 5545 `.ics` export options.
   - Zero-lead ("at service time") triggers a warning badge explaining server cron latency.
-  - Cloudflare Worker Cron 3 compiles active weekly liturgies, meetings, and special day events into `meta/push_plan`.
+  - Cloudflare Worker Cron 3 (`tool/push_reminders.js`) compiles visible weekly liturgies, meetings, and special day events (normalizing Firestore `timestampValue` dates via `toCairoIsoDate`, filtering Cairo active seasons, and applying `undatedSuppressedOn` / `seasonHasRealServices` parity) into `meta/push_plan` with valid `/mass-schedule` and `/church-education/<id>` deep links.
   - Cloudflare Worker Cron 1 sends due reminders targeting web reminder topics (using FCM boolean topic condition `'<recurring>' in topics || '<once>' in topics` when both recurring and single-occurrence subscribers exist).
 - **IndexedDB Web Inbox:** Plain service worker stores incoming notifications in IndexedDB (max 30 items) with a visible notification guarantee. Visitors can view past notifications on `/notifications` and clear inbox history.
 

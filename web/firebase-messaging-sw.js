@@ -158,7 +158,7 @@ async function handlePushEvent(event, selfRef = self) {
   const quiet = await getQuietSettings(db);
   const now = new Date();
   let isQuiet = isWithinQuietHours(now, quiet);
-  const isReminder = rawType === 'reminder' || rawType.startsWith('web_rem_') || Boolean(data.occurrence);
+  const isReminder = rawType === 'reminder' || rawType === 'reminders' || rawType.startsWith('web_rem_') || Boolean(data.occurrence);
   if (isQuiet && isReminder && quiet?.remindersRespectQuietHours === false) {
     isQuiet = false;
   }
@@ -253,6 +253,18 @@ async function handleNotificationClick(event, selfRef = self) {
 
 // Service worker event listeners (when running inside ServiceWorkerGlobalScope)
 if (typeof self !== 'undefined' && 'addEventListener' in self) {
+  self.addEventListener('install', () => {
+    if (typeof self.skipWaiting === 'function') {
+      self.skipWaiting();
+    }
+  });
+
+  self.addEventListener('activate', (event) => {
+    if (self.clients && typeof self.clients.claim === 'function') {
+      event.waitUntil(self.clients.claim());
+    }
+  });
+
   self.addEventListener('push', (event) => {
     event.waitUntil(handlePushEvent(event, self));
   });

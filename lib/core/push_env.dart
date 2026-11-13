@@ -3,7 +3,11 @@ import 'dart:convert';
 
 import '../domain/push.dart';
 import 'push_env_stub.dart'
-    if (dart.library.js_interop) 'push_env_web.dart' as impl;
+    if (dart.library.js_interop) 'push_env_web.dart'
+    if (dart.library.io) 'push_env_io.dart' as impl;
+
+/// Initializes native notification permission storage before the first frame.
+Future<void> initPushStore() => impl.initPushStore();
 
 /// Storage key in localStorage for notification preferences.
 const pushStorageKey = 'church_portal_push';
@@ -42,13 +46,15 @@ bool hasPendingWebPushSync(PushEnv env) {
   return state != null && state.pendingSync && state.syncedToken != null;
 }
 
-/// Abstraction over browser push notification capabilities.
+/// Abstraction over push notification capabilities (Web & Native).
 abstract class PushEnv {
   const PushEnv();
 
   bool get isSupported;
   String get permission;
   Future<String> requestPermission();
+  Future<String> refreshPermission() async => permission;
+  Future<bool> openSystemSettings() async => false;
   Future<bool> showLocalNotification(String title, String body, {String? icon, String? link});
 
   // Web push extensions (ADR-060)
@@ -82,6 +88,12 @@ class PlatformPushEnv extends PushEnv {
 
   @override
   Future<String> requestPermission() => impl.requestPermission();
+
+  @override
+  Future<String> refreshPermission() => impl.refreshPermission();
+
+  @override
+  Future<bool> openSystemSettings() => impl.openSystemSettings();
 
   @override
   Future<bool> showLocalNotification(String title, String body, {String? icon, String? link}) =>

@@ -488,6 +488,11 @@ describe('ADR-060: Web push delivery, condition format, and token caching', () =
     assert.equal(capturedBody.message.webpush.headers.Urgency, 'high');
     assert.equal(capturedBody.message.webpush.headers.TTL, '1800');
     assert.equal(capturedBody.message.android.priority, 'high');
+    assert.equal(capturedBody.message.apns.headers['apns-push-type'], 'alert');
+    assert.equal(capturedBody.message.apns.headers['apns-priority'], '10');
+    assert.equal(capturedBody.message.apns.payload.aps.alert.title, 'تذكير بالقداس');
+    assert.equal(capturedBody.message.apns.payload.aps.alert.body, 'القداس يبدأ قريبا');
+    assert.equal(capturedBody.message.apns.payload.aps.sound, 'default');
   });
 
   test('getCachedAccessToken utilizes L1 module cache and L2 PUSH_KV', async () => {
@@ -638,6 +643,192 @@ describe('ADR-060: Web push delivery, condition format, and token caching', () =
     assert.ok(capturedSends[0].message.condition.includes("'web_rem_lit-sun1_60_ar' in topics"));
     assert.ok(capturedSends[0].message.condition.includes("'web_rem_lit-sun1_20261115_60_ar' in topics"));
     assert.ok(patchedData.fields.remindersSent.mapValue.fields['lit-sun1:20261115:60:ar']);
+  });
+
+  test('runPushSender skips web reminders when features.pushTypes excludes reminders', async () => {
+    const now = new Date('2026-11-15T07:00:00Z');
+    const capturedSends = [];
+
+    const mockFetch = async (url, opts) => {
+      if (url.includes(':batchGet')) {
+        return {
+          ok: true,
+          text: async () =>
+            JSON.stringify([
+              {
+                found: {
+                  name: 'projects/p/databases/(default)/documents/settings/features',
+                  fields: {
+                    push: { booleanValue: true },
+                    pushTypes: {
+                      arrayValue: {
+                        values: [{ stringValue: 'announcements' }, { stringValue: 'seasons' }],
+                      },
+                    },
+                  },
+                },
+              },
+              {
+                found: {
+                  name: 'projects/p/databases/(default)/documents/settings/notifications',
+                  fields: {
+                    schedule: { arrayValue: { values: [] } },
+                    remindersSent: { mapValue: { fields: {} } },
+                  },
+                },
+              },
+              {
+                found: {
+                  name: 'projects/p/databases/(default)/documents/meta/push_plan',
+                  fields: {
+                    reminderPlan: {
+                      arrayValue: {
+                        values: [
+                          {
+                            mapValue: {
+                              fields: {
+                                tKey: { stringValue: 'lit-sun1' },
+                                serviceStartMs: { integerValue: String(now.getTime() + 60 * 60 * 1000) },
+                                leads: { arrayValue: { values: [{ integerValue: '60' }] } },
+                                languages: { arrayValue: { values: [{ stringValue: 'ar' }] } },
+                                titleAr: { stringValue: 'قداس الأحد' },
+                                titleEn: { stringValue: 'Sunday Liturgy' },
+                                bodyAr: { stringValue: 'يبدأ القداس بعد ساعة' },
+                                bodyEn: { stringValue: 'Liturgy starts in an hour' },
+                                yyyymmdd: { stringValue: '20261115' },
+                                link: { stringValue: '/mass-schedule' },
+                              },
+                            },
+                          },
+                        ],
+                      },
+                    },
+                  },
+                },
+              },
+              {
+                found: {
+                  name: 'projects/p/databases/(default)/documents/meta/push_topics',
+                  fields: { topics: { mapValue: { fields: {} } } },
+                },
+              },
+            ]),
+        };
+      }
+      if (url.includes('fcm.googleapis.com')) {
+        capturedSends.push(JSON.parse(opts.body));
+        return { ok: true, json: async () => ({ name: 'msg/123' }) };
+      }
+      if (opts?.method === 'PATCH') {
+        return { ok: true, json: async () => ({ fields: {} }) };
+      }
+      return { ok: true, json: async () => ({}) };
+    };
+
+    const localFakeSa = {
+      client_email: 'test@sa.test',
+      private_key: '-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQC3\n-----END PRIVATE KEY-----',
+    };
+
+    const res = await runPushSender(
+      { FIREBASE_SERVICE_ACCOUNT: JSON.stringify(localFakeSa) },
+      { fetchImpl: mockFetch, now, mintToken: async () => 'mock-tok' },
+    );
+
+    assert.equal(res.status, 'success');
+    assert.equal(res.summary.remindersSent, 0);
+    assert.equal(capturedSends.length, 0);
+  });
+
+  test('runPushSender skips web reminders when features.pushTypes is explicitly empty []', async () => {
+    const now = new Date('2026-11-15T07:00:00Z');
+    const capturedSends = [];
+
+    const mockFetch = async (url, opts) => {
+      if (url.includes(':batchGet')) {
+        return {
+          ok: true,
+          text: async () =>
+            JSON.stringify([
+              {
+                found: {
+                  name: 'projects/p/databases/(default)/documents/settings/features',
+                  fields: {
+                    push: { booleanValue: true },
+                    pushTypes: { arrayValue: {} },
+                  },
+                },
+              },
+              {
+                found: {
+                  name: 'projects/p/databases/(default)/documents/settings/notifications',
+                  fields: {
+                    schedule: { arrayValue: { values: [] } },
+                    remindersSent: { mapValue: { fields: {} } },
+                  },
+                },
+              },
+              {
+                found: {
+                  name: 'projects/p/databases/(default)/documents/meta/push_plan',
+                  fields: {
+                    reminderPlan: {
+                      arrayValue: {
+                        values: [
+                          {
+                            mapValue: {
+                              fields: {
+                                tKey: { stringValue: 'lit-sun1' },
+                                serviceStartMs: { integerValue: String(now.getTime() + 60 * 60 * 1000) },
+                                leads: { arrayValue: { values: [{ integerValue: '60' }] } },
+                                languages: { arrayValue: { values: [{ stringValue: 'ar' }] } },
+                                titleAr: { stringValue: 'قداس الأحد' },
+                                titleEn: { stringValue: 'Sunday Liturgy' },
+                                bodyAr: { stringValue: 'يبدأ القداس بعد ساعة' },
+                                bodyEn: { stringValue: 'Liturgy starts in an hour' },
+                                yyyymmdd: { stringValue: '20261115' },
+                                link: { stringValue: '/mass-schedule' },
+                              },
+                            },
+                          },
+                        ],
+                      },
+                    },
+                  },
+                },
+              },
+              {
+                found: {
+                  name: 'projects/p/databases/(default)/documents/meta/push_topics',
+                  fields: { topics: { mapValue: { fields: {} } } },
+                },
+              },
+            ]),
+        };
+      }
+      if (url.includes('fcm.googleapis.com')) {
+        capturedSends.push(JSON.parse(opts.body));
+        return { ok: true, json: async () => ({ name: 'msg/123' }) };
+      }
+      if (opts?.method === 'PATCH') {
+        return { ok: true, json: async () => ({ fields: {} }) };
+      }
+      return { ok: true, json: async () => ({}) };
+    };
+
+    const localFakeSa = {
+      client_email: 'test@sa.test',
+      private_key: '-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQC3\n-----END PRIVATE KEY-----',
+    };
+
+    const res = await runPushSender(
+      { FIREBASE_SERVICE_ACCOUNT: JSON.stringify(localFakeSa) },
+      { fetchImpl: mockFetch, now, mintToken: async () => 'mock-tok' },
+    );
+
+    assert.equal(res.status, 'success');
+    assert.equal(res.summary.remindersSent, 0);
+    assert.equal(capturedSends.length, 0);
   });
 });
 

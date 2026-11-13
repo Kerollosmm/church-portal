@@ -61,8 +61,14 @@ abstract class LocalNotifier {
   /// Initializes notification plugin, callbacks, and notification channels.
   Future<void> initialize({void Function(String? payload)? onSelectNotification});
 
-  /// Requests notification permission on Android 13+ (POST_NOTIFICATIONS).
+  /// Requests notification permission on native platforms (Android 13+, iOS, macOS).
   Future<bool> requestPermissions();
+
+  /// Checks whether the OS currently permits notifications for this app.
+  Future<bool> areNotificationsEnabled();
+
+  /// Returns the notification payload that cold-launched the app, if any.
+  Future<String?> getLaunchPayload();
 
   /// Checks whether exact alarms can be scheduled (SCHEDULE_EXACT_ALARM).
   Future<bool> canScheduleExactAlarms();

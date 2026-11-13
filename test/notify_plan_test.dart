@@ -947,4 +947,89 @@ void main() {
       expect(dates, isNot(contains('2026-11-15')), reason: 'replaced day without any liturgy');
     });
   });
+
+  group('notificationRouteFromPayload', () {
+    test('maps local notification JSON payloads to valid routes', () {
+      expect(
+        notificationRouteFromPayload(jsonEncode({'type': 'verse_daily', 'date': '2026-11-08'})),
+        '/readings/2026-11-08?tab=verse',
+      );
+      expect(
+        notificationRouteFromPayload(jsonEncode({'type': 'katameros_daily', 'date': '2026-11-08'})),
+        '/readings/2026-11-08?tab=katameros',
+      );
+      expect(
+        notificationRouteFromPayload(jsonEncode({'type': 'feasts', 'date': '2026-11-08'})),
+        '/',
+      );
+      expect(
+        notificationRouteFromPayload(jsonEncode({'type': 'reminders', 'eventKey': 'lit-fri1'})),
+        '/mass-schedule',
+      );
+      expect(
+        notificationRouteFromPayload(jsonEncode({'type': 'reminders', 'eventKey': 'season-pascha'})),
+        '/mass-schedule',
+      );
+      expect(
+        notificationRouteFromPayload(jsonEncode({'type': 'reminders', 'eventKey': 'meeting-youth'})),
+        '/church-education/youth',
+      );
+      expect(
+        notificationRouteFromPayload(jsonEncode({'type': 'reminders', 'eventKey': 'day-abc123'})),
+        '/',
+      );
+    });
+
+    test('honors safe explicit link and rejects unsafe or malformed payloads', () {
+      expect(notificationRouteFromPayload('/mass-schedule'), '/mass-schedule');
+      expect(notificationRouteFromPayload(jsonEncode({'type': 'announcements', 'link': '/clinics'})), '/clinics');
+      expect(notificationRouteFromPayload(jsonEncode({'type': 'announcements', 'link': 'https://evil.test'})), '/');
+      expect(notificationRouteFromPayload('https://evil.test'), '/');
+      expect(notificationRouteFromPayload('not-valid-json'), '/');
+      expect(notificationRouteFromPayload(null), '/');
+      expect(notificationRouteFromPayload('   '), '/');
+    });
+  });
+
+  group('capPlanForPlatform', () {
+    test('filters past entries, sorts chronologically, and caps to iosPendingNotificationCap', () {
+      final now = CairoTime.at(2026, 11, 8, 8 * 60);
+      final plan = <PlannedNotification>[
+        PlannedNotification(
+          id: 999,
+          key: 'past-item',
+          type: NotifyType.reminders,
+          scheduledAt: now.subtract(const Duration(minutes: 5)),
+          titleAr: 'ماضٍ',
+          titleEn: 'Past',
+          bodyAr: '',
+          bodyEn: '',
+          channelId: NotifyType.reminders.name,
+        ),
+        for (var i = 75; i >= 1; i--)
+          PlannedNotification(
+            id: i,
+            key: 'item-$i',
+            type: NotifyType.reminders,
+            scheduledAt: now.add(Duration(minutes: i * 10)),
+            titleAr: 'تنبيه $i',
+            titleEn: 'Alert $i',
+            bodyAr: '',
+            bodyEn: '',
+            channelId: NotifyType.reminders.name,
+          ),
+      ];
+
+      final capped = capPlanForPlatform(plan, now: now, maxPending: iosPendingNotificationCap);
+      expect(capped.length, equals(iosPendingNotificationCap));
+      expect(capped.any((n) => n.key == 'past-item'), isFalse);
+      expect(capped.first.key, equals('item-1'));
+      expect(capped.last.key, equals('item-64'));
+
+      final uncapped = capPlanForPlatform(plan, now: now);
+      expect(uncapped.length, equals(75));
+      expect(uncapped.first.key, equals('item-1'));
+      expect(uncapped.last.key, equals('item-75'));
+    });
+  });
 }

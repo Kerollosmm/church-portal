@@ -34,6 +34,12 @@ class FakePushEnv implements PushEnv {
   Future<String> requestPermission() async => _perm;
 
   @override
+  Future<String> refreshPermission() async => _perm;
+
+  @override
+  Future<bool> openSystemSettings() async => false;
+
+  @override
   Future<bool> showLocalNotification(String title, String body, {String? icon, String? link}) async => true;
 
   @override

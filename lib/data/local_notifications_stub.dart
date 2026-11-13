@@ -17,6 +17,12 @@ class LocalNotifierStub implements LocalNotifier {
   Future<bool> requestPermissions() async => false;
 
   @override
+  Future<bool> areNotificationsEnabled() async => false;
+
+  @override
+  Future<String?> getLaunchPayload() async => null;
+
+  @override
   Future<bool> canScheduleExactAlarms() async => false;
 
   @override

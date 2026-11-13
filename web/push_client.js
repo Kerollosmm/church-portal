@@ -37,11 +37,37 @@ export function openPushDb() {
   });
 }
 
+export const FIREBASE_MESSAGING_SW_SCOPE = '/firebase-cloud-messaging-push-scope';
+
 let cachedMessaging = null;
 let cachedSwReg = null;
+let cachedMsgMod = null;
 
-export async function getFirebaseMessaging(firebaseConfig, customImport = null) {
-  if (cachedMessaging) return { messaging: cachedMessaging, swRegistration: cachedSwReg };
+async function waitForSwActivation(reg) {
+  if (!reg || reg.active) return reg;
+  const worker = reg.installing || reg.waiting;
+  if (!worker || worker.state === 'activated' || typeof worker.addEventListener !== 'function') {
+    return reg;
+  }
+  await new Promise((resolve) => {
+    const timer = setTimeout(resolve, 10000);
+    const onChange = () => {
+      if (worker.state === 'activated' || worker.state === 'redundant') {
+        clearTimeout(timer);
+        worker.removeEventListener('statechange', onChange);
+        resolve();
+      }
+    };
+    worker.addEventListener('statechange', onChange);
+  });
+  return reg;
+}
+
+export async function getFirebaseMessaging(firebaseConfig, customImport = null, deps = {}) {
+  const canUseCache = !customImport && !deps.navigator;
+  if (canUseCache && cachedMessaging && cachedMsgMod) {
+    return { messaging: cachedMessaging, swRegistration: cachedSwReg, msgMod: cachedMsgMod };
+  }
 
   const importer = customImport || ((url) => import(url));
   const version =
@@ -60,15 +86,19 @@ export async function getFirebaseMessaging(firebaseConfig, customImport = null) 
   const messaging = msgMod.getMessaging(app);
 
   let swRegistration = null;
-  if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
-    swRegistration = await navigator.serviceWorker.register('/firebase-messaging-sw.js', { scope: '/' });
-    if (navigator.serviceWorker.ready) {
-      await navigator.serviceWorker.ready;
-    }
+  const nav = deps.navigator || (typeof navigator !== 'undefined' ? navigator : null);
+  if (nav && 'serviceWorker' in nav && typeof nav.serviceWorker.register === 'function') {
+    swRegistration = await nav.serviceWorker.register('/firebase-messaging-sw.js', {
+      scope: FIREBASE_MESSAGING_SW_SCOPE,
+    });
+    await waitForSwActivation(swRegistration);
   }
 
-  cachedMessaging = messaging;
-  cachedSwReg = swRegistration;
+  if (canUseCache) {
+    cachedMessaging = messaging;
+    cachedSwReg = swRegistration;
+    cachedMsgMod = msgMod;
+  }
 
   return { messaging, swRegistration, msgMod };
 }
@@ -85,6 +115,7 @@ export async function enable({ vapidKey, firebaseConfig }, deps = {}) {
   const { messaging, swRegistration, msgMod } = await getFirebaseMessaging(
     firebaseConfig,
     deps.customImport,
+    deps,
   );
 
   const getTokenFn = deps.getToken || msgMod.getToken;
@@ -105,6 +136,7 @@ export async function getToken({ vapidKey, firebaseConfig }, deps = {}) {
   const { messaging, swRegistration, msgMod } = await getFirebaseMessaging(
     firebaseConfig,
     deps.customImport,
+    deps,
   );
 
   const getTokenFn = deps.getToken || msgMod.getToken;
@@ -124,6 +156,7 @@ export async function deleteToken({ firebaseConfig }, deps = {}) {
     const { messaging, msgMod } = await getFirebaseMessaging(
       firebaseConfig,
       deps.customImport,
+      deps,
     );
     const delTokenFn = deps.deleteToken || msgMod.deleteToken;
     await delTokenFn(messaging);
@@ -141,25 +174,51 @@ export async function test(options = {}, deps = {}) {
     return showNotif(options);
   }
 
-  const reg =
-    cachedSwReg ||
-    (typeof navigator !== 'undefined' && 'serviceWorker' in navigator
-      ? await navigator.serviceWorker.getRegistration('/')
-      : null);
-  if (!reg) return false;
-
   const title = options.title || 'اختبار الإشعارات';
   const body = options.body || 'هذا إشعار تجريبي من كنيسة القديسين مكسيموس ودوماديوس';
   const link = options.link || '/notifications';
 
-  await reg.showNotification(title, {
-    body,
-    icon: '/icons/Icon-192.png',
-    badge: '/icons/badge-72.png',
-    tag: `test_${Date.now()}`,
-    data: { link },
-  });
-  return true;
+  try {
+    const nav = deps.navigator || (typeof navigator !== 'undefined' ? navigator : null);
+    let reg = deps.swRegistration || cachedSwReg || null;
+    if (!reg && nav && 'serviceWorker' in nav && typeof nav.serviceWorker.getRegistration === 'function') {
+      reg =
+        (await nav.serviceWorker.getRegistration(FIREBASE_MESSAGING_SW_SCOPE)) ||
+        (await nav.serviceWorker.getRegistration('/'));
+    }
+    if (!reg && nav && 'serviceWorker' in nav && typeof nav.serviceWorker.register === 'function') {
+      reg = await nav.serviceWorker.register('/firebase-messaging-sw.js', {
+        scope: FIREBASE_MESSAGING_SW_SCOPE,
+      });
+      await waitForSwActivation(reg);
+    }
+
+    if (reg && typeof reg.showNotification === 'function') {
+      await reg.showNotification(title, {
+        body,
+        icon: '/icons/Icon-192.png',
+        badge: '/icons/badge-72.png',
+        tag: `test_${Date.now()}`,
+        data: { link },
+      });
+      return true;
+    }
+  } catch (_) {
+    // Fall back to Notification constructor if SW registration or showNotification rejects
+  }
+
+  const Notif = deps.Notification || (typeof Notification !== 'undefined' ? Notification : null);
+  try {
+    if (Notif && Notif.permission === 'granted') {
+      new Notif(title, {
+        body,
+        icon: '/icons/Icon-192.png',
+      });
+      return true;
+    }
+  } catch (_) {}
+
+  return false;
 }
 
 export async function inbox(dbOverride = null) {

@@ -4,8 +4,11 @@ import 'dart:async';
 
 import '../domain/push.dart';
 
+Future<void> initPushStore() async {}
 bool getIsSupported() => false;
 String getPermission() => 'denied';
+Future<String> refreshPermission() => Future.value('denied');
+Future<bool> openSystemSettings() => Future.value(false);
 Future<String> requestPermission() => Future.value('denied');
 Future<bool> showLocalNotification(String title, String body, {String? icon, String? link}) => Future.value(false);
 

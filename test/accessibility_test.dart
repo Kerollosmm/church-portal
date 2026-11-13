@@ -143,6 +143,8 @@ class _FakeLocalNotifier implements LocalNotifier {
   @override
   Future<bool> requestPermissions() async => true;
   @override
+  Future<bool> areNotificationsEnabled() async => true;
+  @override
   Future<bool> canScheduleExactAlarms() async => true;
   @override
   Future<void> schedulePlan(List<PlannedNotification> plan, {String? lang}) async {}
@@ -154,6 +156,8 @@ class _FakeLocalNotifier implements LocalNotifier {
   Future<void> showInstant(int id, String title, String body, {String? channelId, String? payload}) async {}
   @override
   Future<int> pendingCount() async => 0;
+  @override
+  Future<String?> getLaunchPayload() async => null;
 }
 
 class _FixedLocale extends LocaleNotifier {

@@ -67,6 +67,21 @@ export function getCairoParts(d) {
 }
 
 /**
+ * Normalizes a Firestore date string or UTC timestampValue (Cairo midnight stored as UTC)
+ * into a Cairo calendar ISO date ('YYYY-MM-DD').
+ */
+export function toCairoIsoDate(rawDate) {
+  if (typeof rawDate !== 'string') return '';
+  const trimmed = rawDate.trim();
+  if (!trimmed) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+  const ms = Date.parse(trimmed);
+  if (Number.isNaN(ms)) return '';
+  const cp = getCairoParts(new Date(ms));
+  return `${cp.year}-${String(cp.month).padStart(2, '0')}-${String(cp.day).padStart(2, '0')}`;
+}
+
+/**
  * Converts Cairo wall time to a UTC Date object, handling Cairo DST transitions accurately.
  */
 export function cairoToUtc(year, month, day, hour = 0, minute = 0) {
@@ -172,16 +187,112 @@ export async function runPushReminderPlanner(env, options = {}) {
   const features = settingsDocs.get('settings/features')?.data || {};
   const dayEvents = await decodeDayEvents(features.dayEvents || []);
 
+  const isVisible = (d) => d && d.hidden !== true && d.visible !== false;
+
+  const isSeasonActiveAtMs = (seasonData, instantMs) => {
+    if (!seasonData || seasonData.active !== true || !isVisible(seasonData)) return false;
+    if (seasonData.startsAt) {
+      const sMs = Date.parse(seasonData.startsAt);
+      if (!Number.isNaN(sMs) && instantMs < sMs) return false;
+    }
+    if (seasonData.endsAt) {
+      const eMs = Date.parse(seasonData.endsAt);
+      if (!Number.isNaN(eMs) && instantMs > eMs) return false;
+    }
+    return true;
+  };
+
+  const isSeasonActiveOnCairoDay = (seasonData, year, month, day) => {
+    if (!seasonData || seasonData.active !== true || !isVisible(seasonData)) return false;
+    const dayStartMs = cairoToUtc(year, month, day, 0, 0).getTime();
+    const nextDay = new Date(Date.UTC(year, month - 1, day + 1));
+    const dayEndMs = cairoToUtc(
+      nextDay.getUTCFullYear(),
+      nextDay.getUTCMonth() + 1,
+      nextDay.getUTCDate(),
+      0,
+      0,
+    ).getTime();
+    if (seasonData.startsAt) {
+      const sMs = Date.parse(seasonData.startsAt);
+      if (!Number.isNaN(sMs) && sMs >= dayEndMs) return false;
+    }
+    if (seasonData.endsAt) {
+      const eMs = Date.parse(seasonData.endsAt);
+      if (!Number.isNaN(eMs) && eMs < dayStartMs) return false;
+    }
+    return true;
+  };
+
+  const doesSeasonReplaceOnDay = (seasonData, isoDateStr) => {
+    if (seasonData?.replacesRegular !== false) return true;
+    return Array.isArray(seasonData?.replaceDates) && seasonData.replaceDates.includes(isoDateStr);
+  };
+
+  const seasonKeyOf = (s) => s.data?.key || s.id;
+
+  const computeServiceWindow = (data, year, month, day) => {
+    const startStr = (data?.start || '').trim();
+    if (!startStr) return null;
+    const [sh, sm] = startStr.split(':').map((x) => parseInt(x, 10));
+    if (Number.isNaN(sh) || Number.isNaN(sm)) return null;
+    const serviceStart = cairoToUtc(year, month, day, sh, sm);
+    const serviceStartMs = serviceStart.getTime();
+    const [eh, em] = (data.end || '').trim()
+      ? data.end.trim().split(':').map((x) => parseInt(x, 10))
+      : [Number.NaN, Number.NaN];
+    const endMinRaw = !Number.isNaN(eh) && !Number.isNaN(em) ? eh * 60 + em : sh * 60 + sm + 120;
+    const startMin = sh * 60 + sm;
+    const serviceEndMs = serviceStartMs + ((endMinRaw <= startMin ? endMinRaw + 1440 : endMinRaw) - startMin) * 60000;
+    return { startStr, serviceStart, serviceStartMs, serviceEndMs };
+  };
+
+  const seasonHasRealServices = (s) => {
+    const sKey = seasonKeyOf(s);
+    return liturgies.some((l) => {
+      const ld = l.data || {};
+      if (!isVisible(ld) || ld.seasonKey !== sKey || ld.sample === true) return false;
+      if (!(ld.start || '').trim()) return false;
+      const lDateIso = toCairoIsoDate(ld.date);
+      if (!lDateIso) return true;
+      const [ly, lm, lday] = lDateIso.split('-').map((x) => parseInt(x, 10));
+      if (!isSeasonActiveOnCairoDay(s.data, ly, lm, lday)) return false;
+      const win = computeServiceWindow(ld, ly, lm, lday);
+      return win != null && isSeasonActiveAtMs(s.data, win.serviceStartMs);
+    });
+  };
+
+  const undatedSuppressedOn = (s, data, dataDateIso, isoDateStr, year, month, day, startMs, endMs) => {
+    const sKey = seasonKeyOf(s);
+    if (data.seasonKey !== sKey) return false;
+    if (dataDateIso && data.sample !== true) return false;
+    if (data.sample === true && seasonHasRealServices(s)) return true;
+    for (const other of liturgies) {
+      const od = other.data || {};
+      if (!isVisible(od) || od.seasonKey !== sKey || od.sample === true) continue;
+      const oDateIso = toCairoIsoDate(od.date);
+      if (!oDateIso || oDateIso !== isoDateStr) continue;
+      if (!isSeasonActiveOnCairoDay(s.data, year, month, day)) continue;
+      const oWin = computeServiceWindow(od, year, month, day);
+      if (!oWin || !isSeasonActiveAtMs(s.data, oWin.serviceStartMs)) continue;
+      if (doesSeasonReplaceOnDay(s.data, isoDateStr)) return true;
+      if (startMs < oWin.serviceEndMs && oWin.serviceStartMs < endMs) return true;
+    }
+    return false;
+  };
+
   const activeEventKeysSet = new Set();
   const reminderPlan = [];
 
-  // Register all known active event keys
+  // Register all known active event keys (skip hidden docs)
   for (const l of liturgies) {
+    if (!isVisible(l.data || {})) continue;
     const rawKey = l.data?.seasonKey ? `season-${l.id}` : `lit-${l.id}`;
     const t = topicKey(rawKey);
     if (t) activeEventKeysSet.add(t);
   }
   for (const m of meetings) {
+    if (!isVisible(m.data || {})) continue;
     const t = topicKey(`meeting-${m.id}`);
     if (t) activeEventKeysSet.add(t);
   }
@@ -191,9 +302,6 @@ export async function runPushReminderPlanner(env, options = {}) {
   }
 
   // Plan upcoming occurrences across the next 3 days (today, tomorrow, day after)
-  const cairoNow = getCairoParts(now);
-  const nowDayMs = nowMs;
-
   for (let offset = 0; offset <= 2; offset++) {
     // Current target day in Cairo
     const targetDate = new Date(now.getTime() + offset * 86400 * 1000);
@@ -205,25 +313,114 @@ export async function runPushReminderPlanner(env, options = {}) {
     const isoDateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
     const weekday = new Date(Date.UTC(year, month - 1, day)).getUTCDay() || 7; // ISO 1-7 (Mon-Sun)
 
-    // 1. Liturgies matching this date or weekday
+    const activeSeasonsOnDay = seasons.filter((s) => isSeasonActiveOnCairoDay(s.data, year, month, day));
+    const replacingSeasons = new Set(
+      activeSeasonsOnDay.filter((s) => s.data?.replacesRegular !== false && s.data?.startsAt && s.data?.endsAt),
+    );
+    const additiveSeasonalCandidates = [];
+
+    // 1. Seasonal liturgies active on this day & matching an active season
     for (const lit of liturgies) {
       const data = lit.data || {};
-      if (data.hidden === true) continue;
-      if (data.seasonKey) continue; // Seasonal liturgies handled separately
-      if (data.date) {
-        if (data.date !== isoDateStr) continue;
+      if (!isVisible(data)) continue;
+      if (!data.seasonKey) continue;
+      const litDateIso = toCairoIsoDate(data.date);
+      if (litDateIso) {
+        if (litDateIso !== isoDateStr) continue;
+      } else if (data.weekday !== weekday) {
+        continue;
+      }
+
+      const win = computeServiceWindow(data, year, month, day);
+      if (!win) continue;
+      const { startStr, serviceStart, serviceStartMs, serviceEndMs } = win;
+
+      const matchingSeasons = activeSeasonsOnDay.filter(
+        (s) =>
+          seasonKeyOf(s) === data.seasonKey &&
+          isSeasonActiveAtMs(s.data, serviceStartMs) &&
+          !undatedSuppressedOn(s, data, litDateIso, isoDateStr, year, month, day, serviceStartMs, serviceEndMs),
+      );
+      if (matchingSeasons.length === 0) continue;
+
+      for (const s of matchingSeasons) {
+        if (doesSeasonReplaceOnDay(s.data, isoDateStr)) {
+          replacingSeasons.add(s);
+        } else {
+          additiveSeasonalCandidates.push({
+            season: s,
+            lit: data,
+            startMs: serviceStartMs,
+            endMs: serviceEndMs,
+          });
+        }
+      }
+
+      if (serviceStartMs < nowMs - 60000) continue;
+
+      const rawKey = `season-${lit.id}`;
+      const tKey = topicKey(rawKey);
+      if (!tKey) continue;
+
+      reminderPlan.push({
+        tKey,
+        startsAtUtc: serviceStart.toISOString(),
+        serviceStartMs,
+        leads: [0, 5, 10, 15, 30, 60, 120, 180, 1440],
+        languages: ['ar', 'en'],
+        titleAr: data.nameAr || 'خدمة موسمية',
+        titleEn: data.nameEn || 'Seasonal Service',
+        bodyAr: `تبدأ ${data.nameAr || 'الخدمة'} الساعة ${startStr}`,
+        bodyEn: `${data.nameEn || 'Service'} starts at ${startStr}`,
+        link: '/mass-schedule',
+        isRecurring: false,
+        yyyymmdd,
+      });
+    }
+
+    // 2. Regular liturgies matching this date or weekday (unless replaced by active season)
+    for (const lit of liturgies) {
+      const data = lit.data || {};
+      if (!isVisible(data)) continue;
+      if (data.seasonKey) continue; // Seasonal liturgies handled above
+      const litDateIso = toCairoIsoDate(data.date);
+      if (litDateIso) {
+        if (litDateIso !== isoDateStr) continue;
       } else {
         if (data.weekday !== weekday) continue;
       }
-      const startStr = (data.start || '').trim();
-      if (!startStr) continue;
-
-      const [sh, sm] = startStr.split(':').map((x) => parseInt(x, 10));
-      const serviceStart = cairoToUtc(year, month, day, sh, sm);
-      const serviceStartMs = serviceStart.getTime();
+      const win = computeServiceWindow(data, year, month, day);
+      if (!win) continue;
+      const { startStr, serviceStart, serviceStartMs, serviceEndMs } = win;
 
       // Skip services in the past
       if (serviceStartMs < nowMs - 60000) continue;
+
+      // Skip regular services superseded by an active overriding season or overlapping additive mass/service
+      let superseded = false;
+      for (const s of replacingSeasons) {
+        if (isSeasonActiveAtMs(s.data, serviceStartMs)) {
+          superseded = true;
+          break;
+        }
+      }
+      if (!superseded && additiveSeasonalCandidates.length > 0) {
+        const litType = data.type || 'mass';
+        for (const cand of additiveSeasonalCandidates) {
+          if (cand.lit.sample === true && data.sample !== true) continue;
+          const overlaps = serviceStartMs < cand.endMs && cand.startMs < serviceEndMs;
+          if (litType === 'mass' && isSeasonActiveAtMs(cand.season.data, serviceStartMs)) {
+            if (cand.lit.replacesDay === true || ((cand.lit.type || 'mass') === 'mass' && overlaps)) {
+              superseded = true;
+              break;
+            }
+          } else if ((litType === 'vespers' || litType === 'praise') && overlaps) {
+            superseded = true;
+            break;
+          }
+        }
+      }
+      if (superseded) continue;
 
       const rawKey = `lit-${lit.id}`;
       const tKey = topicKey(rawKey);
@@ -239,16 +436,16 @@ export async function runPushReminderPlanner(env, options = {}) {
         titleEn: data.nameEn || 'Divine Liturgy',
         bodyAr: `يبدأ ${data.nameAr || 'القداس'} الساعة ${startStr} بكنيسة القديسين`,
         bodyEn: `${data.nameEn || 'Liturgy'} starts at ${startStr} at Saints Church`,
-        link: `/liturgy/${lit.id}`,
-        isRecurring: !data.date,
+        link: '/mass-schedule',
+        isRecurring: !litDateIso,
         yyyymmdd,
       });
     }
 
-    // 2. Weekly meetings matching this weekday
+    // 3. Weekly meetings matching this weekday
     for (const mtg of meetings) {
       const data = mtg.data || {};
-      if (data.hidden === true) continue;
+      if (!isVisible(data)) continue;
       if (data.weekday !== weekday) continue;
       const startStr = (data.start || '').trim();
       if (!startStr) continue;
@@ -273,13 +470,13 @@ export async function runPushReminderPlanner(env, options = {}) {
         titleEn: data.nameEn || 'Church Meeting',
         bodyAr: `يبدأ ${data.nameAr || 'الاجتماع'} الساعة ${startStr}`,
         bodyEn: `${data.nameEn || 'Meeting'} starts at ${startStr}`,
-        link: `/meeting/${mtg.id}`,
+        link: `/church-education/${encodeURIComponent(mtg.id)}`,
         isRecurring: true,
         yyyymmdd,
       });
     }
 
-    // 3. Day events on this date
+    // 4. Day events on this date
     for (const de of dayEvents) {
       if (isoDateStr < de.date || isoDateStr > de.endDate) continue;
       const startStr = (de.start || '').trim() || '18:00';
@@ -304,42 +501,6 @@ export async function runPushReminderPlanner(env, options = {}) {
         bodyAr: `تبدأ «${de.titleAr}» الساعة ${startStr}`,
         bodyEn: `"${de.titleEn || de.titleAr}" starts at ${startStr}`,
         link: de.link || '/',
-        isRecurring: false,
-        yyyymmdd,
-      });
-    }
-
-    // 4. Seasonal liturgies
-    for (const lit of liturgies) {
-      const data = lit.data || {};
-      if (!data.seasonKey) continue;
-      if (data.date && data.date !== isoDateStr) continue;
-      if (!data.date && data.weekday !== weekday) continue;
-
-      const startStr = (data.start || '').trim();
-      if (!startStr) continue;
-
-      const [sh, sm] = startStr.split(':').map((x) => parseInt(x, 10));
-      const serviceStart = cairoToUtc(year, month, day, sh, sm);
-      const serviceStartMs = serviceStart.getTime();
-
-      if (serviceStartMs < nowMs - 60000) continue;
-
-      const rawKey = `season-${lit.id}`;
-      const tKey = topicKey(rawKey);
-      if (!tKey) continue;
-
-      reminderPlan.push({
-        tKey,
-        startsAtUtc: serviceStart.toISOString(),
-        serviceStartMs,
-        leads: [0, 5, 10, 15, 30, 60, 120, 180, 1440],
-        languages: ['ar', 'en'],
-        titleAr: data.nameAr || 'خدمة موسمية',
-        titleEn: data.nameEn || 'Seasonal Service',
-        bodyAr: `تبدأ ${data.nameAr || 'الخدمة'} الساعة ${startStr}`,
-        bodyEn: `${data.nameEn || 'Service'} starts at ${startStr}`,
-        link: `/liturgy/${lit.id}`,
         isRecurring: false,
         yyyymmdd,
       });

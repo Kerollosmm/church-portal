@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../../core/document_lang.dart';
@@ -21,13 +22,19 @@ const Map<String, List<String>> notificationsPageStrings = {
   'adminPushTypesLabel': ['أنواع الإشعارات المتاحة للمستخدمين', 'Notification types offered to visitors'],
   'notificationsAllowBrowserButton': ['السماح بإشعارات المتصفح', 'Allow browser notifications'],
   'notificationsAllowPromptBody': ['اضغط على الزر أدناه للسماح للمتصفح بإرسال إشعارات وتنبيهات الكنيسة عند نشر التنبيهات ومواعيد القداسات.', 'Tap below to allow your browser to deliver church updates, schedules, and reminders.'],
+  'notificationsAllowPromptBodyApp': ['اضغط على الزر أدناه للسماح للتطبيق بإرسال إشعارات الكنيسة وآية اليوم والقراءات وتذكيراتك.', 'Tap below to allow the app to deliver church updates, daily verse, readings, and your reminders.'],
   'notificationsAllowPromptTitle': ['تفعيل إشعارات المتصفح', 'Enable browser notifications'],
+  'notificationsAllowPromptTitleApp': ['تفعيل إشعارات التطبيق', 'Enable app notifications'],
+  'notificationsBatteryGuideLink': ['إذا لم تصلك الإشعارات في وقتها — فحص البطارية والإعدادات', 'Not getting notifications on time? Battery & settings check'],
+  'notificationsBlockedAndroid': ['من إعدادات الهاتف ← التطبيقات ← كنيسة مكسيموس ودوماديوس ← الإشعارات ← سماح', 'Open Device Settings → Apps → Church App → Notifications → Allow'],
   'notificationsBlockedChrome': ['اضغط أيقونة 🔒 بجوار عنوان الموقع ← الأذونات ← الإشعارات ← سماح', 'Tap the 🔒 icon next to the address bar → Permissions → Notifications → Allow'],
   'notificationsBlockedIos': ['من إعدادات الهاتف ← الإشعارات ← كنيسة مكسيموس ودوماديوس ← السماح بالإشعارات', 'Go to iPhone Settings → Notifications → Church App → Allow Notifications'],
   'notificationsBlockedTitle': ['الإشعارات محظورة في متصفحك', 'Notifications are blocked in your browser'],
+  'notificationsBlockedTitleApp': ['الإشعارات غير مفعلة لهذا التطبيق', 'Notifications are blocked for this app'],
   'notificationsComingSoon': ['خدمة الإشعارات عبر المتصفح قادمة قريبًا', 'Web push notifications are coming soon'],
   'notificationsCopyFailed': ['تعذّر النسخ التلقائي — انسخ الرابط يدويًا:', 'Auto-copy blocked — copy link manually:'],
   'notificationsCopyLink': ['نسخ الرابط للمتصفح', 'Copy link for browser'],
+  'notificationsOpenSettingsButton': ['فتح إعدادات التطبيق', 'Open app settings'],
   'notificationsPermissionDisabled': [
     'الإشعارات غير مفعلة. يُرجى السماح بالإشعارات من إعدادات المتصفح أو النظام.',
     'Notifications disabled. Please allow notifications in device or browser settings.',
@@ -55,6 +62,7 @@ const Map<String, List<String>> notificationsPageStrings = {
   'notificationsRegisterFailed': ['تعذّر تسجيل إشعارات المتصفح حاليًا، يُرجى المحاولة لاحقًا.', 'Could not register browser notifications at this time. Please try again later.'],
   'notificationsTestButton': ['جرّب إشعارًا', 'Test notification'],
   'notificationsTestSent': ['تم إرسال إشعار تجريبي للمتصفح', 'Test notification sent to browser'],
+  'notificationsTestSentApp': ['تم إرسال إشعار تجريبي على هذا الجهاز', 'Test notification sent to this device'],
   'notificationsUnsubscribeAll': ['إيقاف كل الإشعارات', 'Turn off all notifications'],
   'notificationsUnsubscribeConfirm': ['تم إيقاف جميع الإشعارات', 'All notifications turned off'],
   'notificationsUnsubscribeFailed': [
@@ -66,6 +74,10 @@ const Map<String, List<String>> notificationsPageStrings = {
     'Could not sync notifications with server; it will retry automatically.',
   ],
   'notificationsUnsupported': ['هذا المتصفح لا يدعم تلقي الإشعارات.', 'This browser does not support push notifications.'],
+  'notificationsUnsupportedApp': [
+    'الإشعارات المجدولة غير مدعومة على هذا الجهاز حاليًا.',
+    'Scheduled notifications are not supported on this device yet.',
+  ],
 };
 
 /// The visitor's notification preferences and reminders page (`/notifications`, ADR-057).
@@ -99,7 +111,7 @@ class NotificationsPage extends ConsumerStatefulWidget {
   ConsumerState<NotificationsPage> createState() => _NotificationsPageState();
 }
 
-class _NotificationsPageState extends ConsumerState<NotificationsPage> {
+class _NotificationsPageState extends ConsumerState<NotificationsPage> with WidgetsBindingObserver {
   dynamic _webPushRepo;
   PushEnv? _webPushEnv;
   Future<bool>? _syncInFlight;
@@ -108,6 +120,7 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     final isWeb = widget.isWeb ?? kIsWeb;
     if (isWeb) {
       WidgetsBinding.instance.addPostFrameCallback((_) async {
@@ -129,22 +142,32 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
           ErrorReporting.capture(e, st, section: 'notifications', source: 'web_push_resume');
         }
       });
+    } else {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _refreshNativePermission());
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && !(widget.isWeb ?? kIsWeb)) {
+      _refreshNativePermission();
+    }
+  }
+
+  Future<void> _refreshNativePermission() async {
+    if (!mounted) return;
+    final pushEnv = ref.read(pushEnvProvider);
+    final prev = ref.read(pushPermissionProvider);
+    final next = await pushEnv.refreshPermission();
+    if (!mounted) return;
+    if (next != prev) {
+      ref.invalidate(pushPermissionProvider);
     }
   }
 
   @override
   void dispose() {
-    if (!kIsWeb) {
-      final pending = _syncInFlight;
-      final repo = _webPushRepo;
-      if (pending != null) {
-        pending.whenComplete(() {
-          if (repo != null) repo.dispose();
-        });
-      } else if (repo != null) {
-        repo.dispose();
-      }
-    }
+    WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
 
@@ -164,9 +187,12 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
     required String permission,
     required bool isWeb,
   }) {
-    // The phone app's own notification permission arrives with PR B; until
-    // then never claim notifications are on.
-    if (!isWeb) return PushPermissionState.unsupported;
+    if (!isWeb) {
+      if (!pushEnv.isSupported) return PushPermissionState.unsupported;
+      if (permission == 'granted') return PushPermissionState.granted;
+      if (permission == 'denied') return PushPermissionState.denied;
+      return PushPermissionState.defaultState;
+    }
 
     if (osInfo.os == InstallOs.ios && iosTooOldForPush(userAgent)) {
       // iOS < 16.4 has no web push at all, installed or not.
@@ -215,7 +241,7 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
     PushEnv pushEnv,
     PushSettings pushSettings, {
     PushPrefs? overridePrefs,
-    bool isWeb = kIsWeb,
+    required bool isWeb,
   }) {
     if (!isWeb) return Future.value(true);
     // Capture fallback snapshots synchronously before any await so unmounting
@@ -273,6 +299,9 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
         if (prefs.types.isEmpty) {
           return true;
         }
+        if (pushSettings.vapidKey.trim().isEmpty) {
+          return false;
+        }
         final token = await repo.enable(vapidKey: pushSettings.vapidKey);
         if (token == null) {
           if (mounted && context.mounted) {
@@ -299,6 +328,14 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
       }
 
       if (repo.syncedToken != null) {
+        if (!hadTokenBefore) {
+          unawaited(pushEnv.syncQuietHours(
+            enabled: prefs.quietHoursEnabled,
+            start: prefs.quiet.from,
+            end: prefs.quiet.to,
+            remindersRespectQuietHours: prefs.remindersRespectQuietHours,
+          ));
+        }
         final reminders = mounted ? ref.read(userRemindersProvider) : fallbackReminders;
         final immediate = !hadTokenBefore || prefs.types.isEmpty;
         return (await repo.syncPreferences(
@@ -323,13 +360,14 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
       indexable: false,
     );
 
+    final web = widget.isWeb ?? kIsWeb;
     final pushSettings = ref.watch(pushSettingsProvider);
     if (!pushSettings.enabled) {
       return PageBody(
         children: [
           EmptyState(
             icon: Icons.notifications_off_outlined,
-            message: context.tr('notificationsUnsupported'),
+            message: context.tr(web ? 'notificationsUnsupported' : 'notificationsUnsupportedApp'),
           ),
         ],
       );
@@ -347,7 +385,6 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
       maxTouchPoints: installEnv.maxTouchPoints,
     );
 
-    final web = widget.isWeb ?? kIsWeb;
     final permState = _resolveState(
       osInfo: osInfo,
       userAgent: installEnv.userAgent,
@@ -416,11 +453,26 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
             pushEnv,
             prefsNotifier,
             ref,
-            // Re-read the browser permission so a denial shows the
-            // blocked-permission steps right away.
+            // Re-read the permission so a grant or denial shows right away.
             () => ref.invalidate(pushPermissionProvider),
             isWeb: web,
           ),
+
+          if (!web && defaultTargetPlatform == TargetPlatform.android)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: TextButton.icon(
+                  icon: Icon(Icons.battery_saver_outlined, size: 18, color: pal.primary),
+                  label: Text(
+                    context.tr('notificationsBatteryGuideLink'),
+                    style: TextStyle(fontSize: 13, color: pal.primary),
+                  ),
+                  onPressed: () => context.go('/notifications/battery'),
+                ),
+              ),
+            ),
 
           const SizedBox(height: 20),
 
@@ -460,7 +512,7 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
           ),
 
           // Muted note about web home-page readings
-          if (kIsWeb)
+          if (web)
             Padding(
               padding: const EdgeInsetsDirectional.only(top: 10, start: 4, end: 4),
               child: Text(
@@ -516,9 +568,9 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
           // My Reminders section
           const MyRemindersSection(),
 
-          if (kIsWeb) ...[
+          if (web) ...[
             const SizedBox(height: 28),
-            _WebPushInboxSection(pushEnv: pushEnv),
+            _WebPushInboxSection(pushEnv: pushEnv, isWeb: web),
           ],
 
           const SizedBox(height: 32),
@@ -664,7 +716,7 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
         return _buildAlertBox(
           pal,
           Icons.notifications_off_outlined,
-          context.tr('notificationsUnsupported'),
+          context.tr(isWeb ? 'notificationsUnsupported' : 'notificationsUnsupportedApp'),
           pal.muted,
         );
 
@@ -683,15 +735,17 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
                 children: [
                   Icon(Icons.block, color: pal.alert, size: 20),
                   const SizedBox(width: 8),
-                  Text(
-                    context.tr('notificationsBlockedTitle'),
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14.5, color: pal.alert),
+                  Expanded(
+                    child: Text(
+                      context.tr(isWeb ? 'notificationsBlockedTitle' : 'notificationsBlockedTitleApp'),
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14.5, color: pal.alert),
+                    ),
                   ),
                 ],
               ),
               const SizedBox(height: 8),
               Text(
-                context.tr('notificationsBlockedChrome'),
+                context.tr(isWeb ? 'notificationsBlockedChrome' : 'notificationsBlockedAndroid'),
                 style: TextStyle(fontSize: 12.5, color: pal.ink, height: 1.4),
               ),
               const SizedBox(height: 4),
@@ -700,16 +754,37 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
                 style: TextStyle(fontSize: 12.5, color: pal.ink, height: 1.4),
               ),
               const SizedBox(height: 12),
-              OutlinedButton.icon(
-                icon: const Icon(Icons.refresh, size: 18),
-                label: Text(context.tr('notificationsRecheckButton')),
-                onPressed: onPermissionChanged,
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  if (!isWeb)
+                    OutlinedButton.icon(
+                      icon: const Icon(Icons.settings_outlined, size: 18),
+                      label: Text(context.tr('notificationsOpenSettingsButton')),
+                      onPressed: () async {
+                        await pushEnv.openSystemSettings();
+                      },
+                    ),
+                  OutlinedButton.icon(
+                    icon: const Icon(Icons.refresh, size: 18),
+                    label: Text(context.tr('notificationsRecheckButton')),
+                    onPressed: () async {
+                      if (!isWeb) {
+                        await pushEnv.refreshPermission();
+                      }
+                      if (!mounted) return;
+                      onPermissionChanged();
+                    },
+                  ),
+                ],
               ),
             ],
           ),
         );
 
       case PushPermissionState.defaultState:
+        final canRequest = isWeb ? pushSettings.canRequestPermission : pushSettings.enabled;
         return Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
@@ -726,7 +801,7 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      context.tr('notificationsAllowPromptTitle'),
+                      context.tr(isWeb ? 'notificationsAllowPromptTitle' : 'notificationsAllowPromptTitleApp'),
                       style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: pal.primaryDeep),
                     ),
                   ),
@@ -734,17 +809,17 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
               ),
               const SizedBox(height: 8),
               Text(
-                context.tr('notificationsAllowPromptBody'),
+                context.tr(isWeb ? 'notificationsAllowPromptBody' : 'notificationsAllowPromptBodyApp'),
                 style: TextStyle(fontSize: 13.5, color: pal.muted, height: 1.5),
               ),
               const SizedBox(height: 14),
               FilledButton.icon(
                 icon: const Icon(Icons.notifications_active),
-                label: Text(context.tr('notificationsAllowBrowserButton')),
+                label: Text(context.tr(isWeb ? 'notificationsAllowBrowserButton' : 'notificationsEnableButton')),
                 style: FilledButton.styleFrom(
                   minimumSize: const Size(48, 48),
                 ),
-                onPressed: pushSettings.canRequestPermission
+                onPressed: canRequest
                     ? () async {
                         final res = await pushEnv.requestPermission();
                         if (!mounted) return;
@@ -767,7 +842,7 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
                       }
                     : null,
               ),
-              if (!pushSettings.canRequestPermission)
+              if (isWeb && !pushSettings.canRequestPermission)
                 Padding(
                   padding: const EdgeInsets.only(top: 8),
                   child: Text(
@@ -805,32 +880,47 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
                   ),
                 ],
               );
-              final testBtn = kIsWeb
-                  ? OutlinedButton.icon(
-                      style: OutlinedButton.styleFrom(
-                        visualDensity: VisualDensity.compact,
-                        foregroundColor: pal.primary,
-                      ),
-                      icon: const Icon(Icons.notifications_none, size: 16),
-                      label: Text(context.tr('notificationsTestButton'), style: const TextStyle(fontSize: 12)),
-                      onPressed: () async {
-                        await pushEnv.showSwTestNotification(
-                          title: context.isAr ? 'اختبار الإشعارات' : 'Notification Test',
+              final testBtn = OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                  foregroundColor: pal.primary,
+                ),
+                icon: const Icon(Icons.notifications_none, size: 16),
+                label: Text(context.tr('notificationsTestButton'), style: const TextStyle(fontSize: 12)),
+                onPressed: () async {
+                  final title = context.isAr ? 'اختبار الإشعارات' : 'Notification Test';
+                  final ok = isWeb
+                      ? await pushEnv.showSwTestNotification(
+                          title: title,
                           body: context.isAr
                               ? 'إشعار تجريبي يعمل بنجاح على هذا المتصفح'
                               : 'Test notification received successfully on this browser',
                           link: '/notifications',
+                        )
+                      : await pushEnv.showLocalNotification(
+                          title,
+                          context.isAr
+                              ? 'تم إرسال إشعار تجريبي بنجاح على هذا الجهاز'
+                              : 'Test notification sent successfully on this device',
+                          link: '/notifications',
                         );
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text(context.tr('notificationsTestSent'))),
-                          );
-                        }
-                      },
-                    )
-                  : null;
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          context.tr(
+                            ok
+                                ? (isWeb ? 'notificationsTestSent' : 'notificationsTestSentApp')
+                                : 'notificationsPermissionDisabled',
+                          ),
+                        ),
+                      ),
+                    );
+                  }
+                },
+              );
 
-              if (isNarrow && testBtn != null) {
+              if (isNarrow) {
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -847,7 +937,7 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
               return Row(
                 children: [
                   Expanded(child: textItem),
-                  ?testBtn,
+                  testBtn,
                 ],
               );
             },
@@ -968,8 +1058,33 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
               }
             }
           } else {
-            // Native platforms: toggle type directly!
-            prefsNotifier.toggleType(type);
+            if (permState == PushPermissionState.denied) {
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(context.tr('notificationsPermissionDisabled')),
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+              }
+              return;
+            }
+            final res = await pushEnv.requestPermission();
+            if (!mounted) return;
+            if (res == 'granted') {
+              prefsNotifier.toggleType(type);
+              ref.invalidate(pushPermissionProvider);
+            } else {
+              ref.invalidate(pushPermissionProvider);
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(context.tr('notificationsPermissionDisabled')),
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+              }
+            }
           }
         } else {
           prefsNotifier.toggleType(type);
@@ -997,7 +1112,8 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
 
 class _WebPushInboxSection extends StatefulWidget {
   final PushEnv pushEnv;
-  const _WebPushInboxSection({required this.pushEnv});
+  final bool isWeb;
+  const _WebPushInboxSection({required this.pushEnv, required this.isWeb});
 
   @override
   State<_WebPushInboxSection> createState() => _WebPushInboxSectionState();
@@ -1052,7 +1168,7 @@ class _WebPushInboxSectionState extends State<_WebPushInboxSection> {
 
   @override
   Widget build(BuildContext context) {
-    if (!kIsWeb) return const SizedBox.shrink();
+    if (!widget.isWeb) return const SizedBox.shrink();
     if (_loading) return const SizedBox.shrink();
     if (_items.isEmpty) return const SizedBox.shrink();
 

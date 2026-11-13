@@ -138,16 +138,16 @@ flowchart TD
    `PlatformDispatcher.onError` on Android, `runZonedGuarded` on web, and the Sentry JS / Android SDKs); without
    one `_start()` simply runs. Never throws because of Sentry.
 1. `WidgetsFlutterBinding.ensureInitialized()`, `usePathUrlStrategy()`, `CairoTime.ensureInitialized()`.
-2. `Future.wait([SeedData.load(), bootstrapFirebase()])` — both never throw.
-   - `SeedData.load()` reads `assets/seed/seed.json` (on error → empty `SeedData`).
-   - `bootstrapFirebase()`: `DefaultFirebaseOptions.currentPlatformOrNull` (null for placeholder/unsupported
-     platforms) → `Firebase.initializeApp` (10 s timeout) → Firestore `persistenceEnabled: true`,
-     `cacheSizeBytes: 40 MB`. App Check is **not** activated here (ADR-037): `ensureAppCheckActivated()` runs on the
-     assistant's first use.
-3. Repository choice: `status.available ? FirestoreRepository(db, seed) : SeedRepository(seed)`; `AdminRepository`
+2. `Future.wait([SeedData.load(), bootstrapFirebase(), initLanguageStore(), initInstallStore(), initPushStore()])` — never throw;
+   on native IO platforms `initPushStore()` preloads `SharedPreferences` and queries the OS notification permission state.
+3. On native non-web platforms (`Android`, `iOS`, `macOS`, `Linux`), `LocalNotifier().initialize()` runs before
+   `runApp`, checks `getLaunchPayload()` to queue cold-start notification routes via `navigateToNotification`, and
+   refreshes permission (`Android`, `iOS`, and `macOS` support scheduled notifications, while `Linux` skips `zonedSchedule` due to plugin limitations); on `Android`/`iOS` `PushMessaging.initialize(...)` registers foreground/background FCM handlers with foreground APNS alert banners disabled on iOS so `fln.show` never duplicates them;
+   `Workmanager` replenishment initializes on Android only (with iOS replenishing its 64-entry pending cap on app resume).
+4. Repository choice: `status.available ? FirestoreRepository(db, seed) : SeedRepository(seed)`; `AdminRepository`
    only when Firebase is available (otherwise `/admin` shows `adminUnavailable`).
-4. `ProviderScope(overrides: [firebaseStatusProvider, repositoryProvider, adminRepositoryProvider])`.
-5. `ChurchPortalApp` watches `contentReadyProvider` (`firstContentArrived`: settings, `featuresReadyProvider`, daily
+5. `ProviderScope(overrides: [firebaseStatusProvider, repositoryProvider, adminRepositoryProvider])`.
+6. `ChurchPortalApp` watches `contentReadyProvider` (`firstContentArrived`: settings, `featuresReadyProvider`, daily
    verses) and, two frames after it turns true, calls `ContentReady.signal()` → `app-content-ready` on `window`, which
    hides the `web/index.html` loading screen (ADR-038; cap 9 s after `flutter-first-frame`). `ContentReady.whenIdle`
    (signal + fade + `requestIdleCallback`, hard cap 12 s) gates the hero video source and the CSS ambient layer.
