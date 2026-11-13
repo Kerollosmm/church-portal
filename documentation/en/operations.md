@@ -179,7 +179,7 @@ The native Android app is packaged as lightweight, split release APKs for maximu
 ### Automated CI/CD Workflow (`.github/workflows/android.yml`)
 - **Triggers:**
   - Automated release: Triggered whenever a tag matching `apk-v*` is pushed (e.g., `apk-v1.0.1`).
-  - Prepared version: `pubspec.yaml` is `1.0.3+4` (version name `1.0.3`, build `4`). The latest published tag is `apk-v1.0.2` (build `3`). Tag `apk-v1.0.3` is not pushed with this change. Split APKs store versionCode as `2000+build` (arm64) and `1000+build` (arm32).
+  - Prepared version: `pubspec.yaml` is `1.0.3+4` (version name `1.0.3`, build `4`) since PR #65 (`781bf54`). The latest published tag is `apk-v1.0.2` (build `3`). Tag `apk-v1.0.3` is not pushed here; push it on the squash-merge commit of the release-notes PR. Split APKs store versionCode as `2004` (arm64) and `1004` (arm32).
   - Manual testing: Triggered via `workflow_dispatch` on any branch.
   - Pull requests modifying Android assets or native code (`lib/**`, `android/**`, `pubspec.*`, `assets/**`, `.github/workflows/android.yml`).
 - **Split APK Generation:** Produces two architecture-specific APK binaries:

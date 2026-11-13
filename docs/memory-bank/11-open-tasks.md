@@ -378,7 +378,7 @@ the owner approves the whole chain.
 ## Android APK 1.0.1 (released)
 
 - [x] `pubspec.yaml` was `1.0.1+2` (version name `1.0.1`, build `2`) so an installed `1.0.0+1` offered the update. Gradle reads `flutter.versionName` / `flutter.versionCode`; `tool/make_apk_manifest.mjs` reads the same pubspec line.
-- [x] Tag `apk-v1.0.1` pushed and GitHub release published (stays the public download until `apk-v1.0.2` is tagged).
+- [x] Tag `apk-v1.0.1` pushed and GitHub release published. `apk-v1.0.2` is published too; the public download stays `apk-v1.0.2` until `apk-v1.0.3` is tagged.
 
 ## Explicit Web Push Permission Prompt, Topic Queuing & Mobile Browser Guidance (ADR-065, 12 Nov 2026)
 - [x] **Web Push permission prompt card & zero page-load prompt**: Explicit primary action card rendered when `permission == 'default'` on web viewports with «السماح بإشعارات المتصفح» / "Allow browser notifications" button; zero automatic permission requests on initial page load (strict user-gesture compliance).
@@ -398,6 +398,7 @@ the owner approves the whole chain.
 
 ## Android APK 1.0.3 (prepared, not tagged)
 
-- [x] `pubspec.yaml` is `1.0.3+4` (version name `1.0.3`, build `4`) so an installed `1.0.2+3` offers the update. Notes: `android/RELEASE_NOTES.md` (phone hero is a still poster; in-place update when the certificate matches). Gradle reads `flutter.versionName` / `flutter.versionCode`; split APKs store arm32 as 1000+build and arm64 as 2000+build.
-- [ ] Push tag `apk-v1.0.3` only after this version is on `main`, with the same release keystore secrets. Do not tag from the version PR itself. Phones that still have apk-v1.0.0 (debug certificate) must uninstall once before this release will install.
+- [x] `pubspec.yaml` is `1.0.3+4` (version name `1.0.3`, build `4`) since PR #65 (`781bf54`). An installed `1.0.2+3` offers the update. Gradle reads `flutter.versionName` / `flutter.versionCode`; split APKs store arm32 as `1000+build` (1004) and arm64 as `2000+build` (2004).
+- [x] `android/RELEASE_NOTES.md` covers only the phone changes in PR #65: a lighter home hero with no background video and no cloud/light motion, in-place updates on the release key, the updater ABI choice, and one reinstall for anyone still on apk-v1.0.0.
+- [ ] Push tag `apk-v1.0.3` on the squash-merge commit of the release-notes PR, after it is on `main`. Do not tag `781bf54` and do not tag from the PR branch. Use the same release keystore secrets. Phones that still have apk-v1.0.0 (debug certificate) must uninstall once before this release will install.
 
