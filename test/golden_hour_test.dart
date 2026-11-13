@@ -17,7 +17,6 @@ import 'package:church_portal/ui/admin/features_editor.dart';
 import 'package:church_portal/ui/pages/home_page.dart' show HaloText;
 import 'package:church_portal/ui/widgets/common.dart';
 import 'package:church_portal/ui/widgets/golden.dart';
-import 'package:church_portal/ui/widgets/hero_video.dart';
 import 'package:flutter/rendering.dart' show RenderRepaintBoundary;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -312,17 +311,15 @@ void main() {
   });
 
   test('heroAmbientLoopAllowed truth table (INV-PERF-01)', () {
-    expect(heroAmbientLoopAllowed(isWeb: false, platform: TargetPlatform.android), isFalse);
-    expect(heroAmbientLoopAllowed(isWeb: true, platform: TargetPlatform.android), isFalse);
-    expect(heroAmbientLoopAllowed(isWeb: false, platform: TargetPlatform.iOS), isFalse);
-    expect(heroAmbientLoopAllowed(isWeb: true, platform: TargetPlatform.iOS), isFalse);
+    expect(heroAmbientLoopAllowed(platform: TargetPlatform.android), isFalse);
+    expect(heroAmbientLoopAllowed(platform: TargetPlatform.iOS), isFalse);
     expect(heroAmbientLoopAllowed(width: 320), isFalse);
     expect(heroAmbientLoopAllowed(width: 599), isFalse);
-    expect(heroAmbientLoopAllowed(isWeb: false, platform: TargetPlatform.windows), isTrue);
-    expect(heroAmbientLoopAllowed(isWeb: false, platform: TargetPlatform.macOS), isTrue);
-    expect(heroAmbientLoopAllowed(isWeb: false, platform: TargetPlatform.linux), isTrue);
-    expect(heroAmbientLoopAllowed(isWeb: true, platform: TargetPlatform.windows, width: 1024), isTrue);
-    expect(heroAmbientLoopAllowed(isWeb: true, platform: TargetPlatform.macOS, width: 1440), isTrue);
+    expect(heroAmbientLoopAllowed(platform: TargetPlatform.windows), isTrue);
+    expect(heroAmbientLoopAllowed(platform: TargetPlatform.macOS), isTrue);
+    expect(heroAmbientLoopAllowed(platform: TargetPlatform.linux), isTrue);
+    expect(heroAmbientLoopAllowed(platform: TargetPlatform.windows, width: 1024), isTrue);
+    expect(heroAmbientLoopAllowed(platform: TargetPlatform.macOS, width: 1440), isTrue);
   });
 
   test('heroVideoPlatformAllowed is desktop web only, so phones never fetch the clip', () {
@@ -444,7 +441,7 @@ void main() {
     expect(stage.motion, isTrue, reason: 'heroMotion defaults on');
     final still = tester.widget<Image>(find.descendant(of: find.byType(HeroStage), matching: find.byKey(const Key('heroStill'))));
     expect(_assetName(still.image), ArtAssets.heroPosterTall);
-    expect(find.byType(HeroVideo), findsNothing);
+    expect(find.byKey(const Key('heroStill')), findsOneWidget);
     expect(find.byKey(const Key('heroHaze')), findsNothing);
     expect(find.byWidgetPredicate((w) => w is CustomPaint && w.painter is LightRaysPainter), findsNothing);
   });

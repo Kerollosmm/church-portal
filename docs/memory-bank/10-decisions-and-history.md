@@ -2003,7 +2003,7 @@ supersede them.
   2. When `ANDROID_REQUIRE_RELEASE_SIGNING=true` (set on `apk-v*` tags) or a keystore path is set, Gradle throws instead of using `signingConfigs.debug`. The tag workflow also refuses an Android Debug certificate and refuses any certificate other than the 1.0.1/1.0.2 release SHA-256. `shippedApkAbi` / `MainActivity.supportedAbi` prefer `arm64-v8a` when the device lists it, so a later update is not the lower arm32 versionCode (1xxx vs 2xxx).
   3. `pubspec.yaml` is `1.0.3+4` so the next tag's versionCode is higher than 1.0.2. The install banner uses `assets/branding/seal.png` (the missing `seal_light.png` was requested as `assets/assets/branding/seal_light.png` on web).
 - **Consequences:**
-  - Phones do not download the hero mp4 (119,476 B tall, 246,291 B wide) and do not run the cloud/light loops. Desktop web still does.
+  - Phones do not download the hero mp4 (119,476 B tall, 246,291 B wide) and do not run the cloud/light loops. Desktop web still does. The web video and CSS ambient libraries are deferred (`hero_video.dart`, `hero_ambient.dart`); only `heroAmbientInDom` stays eager (`hero_motion_flag.dart`). The poster shows until those chunks load.
   - Users who installed apk-v1.0.0 must uninstall once, then install a release-signed APK. Users on 1.0.1 can update to 1.0.2 and later in place, as long as the same keystore stays in GitHub secrets.
   - +0 Firestore reads, writes, or rules changes.
 

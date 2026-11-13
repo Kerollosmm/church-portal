@@ -5,11 +5,13 @@ import 'package:material_ui/material_ui.dart';
 
 import '../../core/motion_env.dart';
 import '../../core/theme.dart';
+import '../../data/error_reporting.dart';
 import 'coptic_cross.dart';
-import 'hero_ambient.dart';
+import 'hero_ambient.dart' deferred as hero_dom;
 import 'hero_ambient_spec.dart';
 import 'hero_feather.dart';
-import 'hero_video.dart';
+import 'hero_motion_flag.dart';
+import 'hero_video.dart' deferred as hero_clip;
 
 export 'hero_feather.dart' show BottomFeather;
 
@@ -46,9 +48,6 @@ class ArtAssets {
         heroPoster => 1280,
         heroPosterTall => 432,
         clouds => 960,
-        nile => 1440,
-        saintMoses => 720,
-        saintMaximusDomadius => 720,
         _ => null,
       };
 
@@ -74,42 +73,28 @@ bool ambientMotionOn(BuildContext context, {bool adminOn = true}) {
 }
 
 /// Whether HeroStage may run its ambient loops (Ken Burns, haze drift, ray shimmer).
-/// Off on mobile platforms (Android, iOS) and mobile viewports (< 600 px):
-/// continuous tickers and canvas/DOM repaints drop frames on phones and mobile browsers.
-/// Desktop web (width >= 1024) remains fully animated.
-bool heroAmbientLoopAllowed({
-  bool isWeb = kIsWeb,
-  TargetPlatform? platform,
-  double? width,
-}) {
+/// Off on Android/iOS and on viewports under 600 px. A null [width] skips the
+/// width cut. Desktop web at width >= 600 stays fully animated.
+bool heroAmbientLoopAllowed({TargetPlatform? platform, double? width}) {
   final p = platform ?? defaultTargetPlatform;
-  return p != TargetPlatform.android &&
-      p != TargetPlatform.iOS &&
-      (width == null || width >= 600);
+  return p != TargetPlatform.android && p != TargetPlatform.iOS && (width == null || width >= 600);
 }
 
 /// True when reduced motion or a mobile platform/viewport should freeze ambient motion.
-bool mobileMotionSuppressed(BuildContext context) =>
-    !ambientMotionOn(context) ||
-    !heroAmbientLoopAllowed(
-      platform: Theme.of(context).platform,
-      width: MediaQuery.sizeOf(context).width,
-    );
+bool mobileMotionSuppressed(BuildContext context) {
+  final width = MediaQuery.sizeOf(context).width;
+  final platform = Theme.of(context).platform;
+  return !ambientMotionOn(context) || !heroAmbientLoopAllowed(platform: platform, width: width);
+}
 
-/// Whether this surface may decode the hero clip at all.
-///
-/// Desktop web at width >= 600 keeps the loop. Phones do not: native Android
-/// and iOS, mobile browsers (the platform is Android or iOS), and any viewport
-/// narrower than 600. The video widget is then never built, so mobile web
-/// does not request the mp4.
+/// Desktop web at width >= 600 may decode the clip. Phones never do, so the
+/// video library stays unloaded and mobile web does not request the mp4.
 bool heroVideoPlatformAllowed({
   bool isWeb = kIsWeb,
   TargetPlatform? platform,
   double? width,
-}) {
-  if (!isWeb) return false;
-  return heroAmbientLoopAllowed(isWeb: true, platform: platform, width: width);
-}
+}) =>
+    isWeb && heroAmbientLoopAllowed(platform: platform, width: width);
 
 /// Still image under (or instead of) the clip. Phones use the existing poster
 /// so the preloaded first frame stays on screen and the painting is not a
@@ -614,6 +599,11 @@ class _HeroStageState extends State<HeroStage>
   bool _videoOn = false;
   bool _phoneLike = false;
   bool _foreground = true;
+  bool _clipReady = false;
+  bool _domReady = false;
+  bool _clipLoading = false;
+  bool _domLoading = false;
+  bool _layersScheduled = false;
 
   @override
   void initState() {
@@ -642,6 +632,44 @@ class _HeroStageState extends State<HeroStage>
     // Decode the still before it is needed (no pop-in, no flash on swaps).
     precacheImage(AssetImage(_still), context).ignore();
     _sync();
+    _scheduleDesktopLayers();
+  }
+
+  /// Desktop web loads the video and CSS ambient chunks after this frame.
+  /// Until they arrive the poster (or the painting) stays. Phones never call
+  /// this, so those libraries are not downloaded.
+  void _scheduleDesktopLayers() {
+    if (_layersScheduled) return;
+    if ((!_videoOn || _clipReady) && (!_domAmbient || _domReady)) return;
+    _layersScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _layersScheduled = false;
+      if (!mounted) return;
+      _loadDesktopLayers();
+    });
+  }
+
+  void _loadDesktopLayers() {
+    if (_videoOn && !_clipReady && !_clipLoading) {
+      _clipLoading = true;
+      hero_clip.loadLibrary().then((_) {
+        if (!mounted) return;
+        setState(() => _clipReady = true);
+      }, onError: (Object e, StackTrace st) {
+        _clipLoading = false;
+        ErrorReporting.capture(e, st, section: 'deferred_chunk', source: 'hero_video');
+      });
+    }
+    if (_domAmbient && !_domReady && !_domLoading) {
+      _domLoading = true;
+      hero_dom.loadLibrary().then((_) {
+        if (!mounted) return;
+        setState(() => _domReady = true);
+      }, onError: (Object e, StackTrace st) {
+        _domLoading = false;
+        ErrorReporting.capture(e, st, section: 'deferred_chunk', source: 'hero_ambient');
+      });
+    }
   }
 
   String get _still => heroStillAsset(
@@ -736,16 +764,16 @@ class _HeroStageState extends State<HeroStage>
           ),
           // The bundled clip only: the YouTube hero video library was removed
           // (owner request, 4 Nov 2026 — ADR-036).
-          if (_videoOn && widget.video != null)
-            HeroVideo(
+          if (_videoOn && _clipReady && widget.video != null)
+            hero_clip.HeroVideo(
               key: ValueKey(widget.video),
               asset: widget.video!,
               alignment: widget.alignment,
               play: visibleInViewport && _foreground,
               cssFilter: art.artCssFilter,
             ),
-          if (_domAmbient)
-            HeroAmbientLayer(
+          if (_domAmbient && _domReady)
+            hero_dom.HeroAmbientLayer(
               key: ValueKey('ambient-${widget.rays > 0}'),
               haze: true,
               rays: widget.rays,

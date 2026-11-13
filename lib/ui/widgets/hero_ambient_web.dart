@@ -10,9 +10,6 @@ import '../../core/content_ready.dart';
 import 'hero_ambient_spec.dart';
 import 'hero_feather.dart';
 
-/// Web: the ambient layers live in the DOM and are animated with CSS.
-const bool heroAmbientInDom = true;
-
 /// The hero's gold haze drift and light-ray shimmer as one platform view
 /// (ADR-037), stacked right above the hero `<video>`:
 ///
