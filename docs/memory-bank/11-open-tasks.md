@@ -395,9 +395,13 @@ the owner approves the whole chain.
 
 - [x] `pubspec.yaml` was `1.0.2+3`. Tag `apk-v1.0.2` is on GitHub Releases (arm64 versionCode 2003, same certificate as apk-v1.0.1).
 
-## Android APK 1.0.3 (prepared, not tagged)
+## Android APK 1.0.3 (published)
 
-- [x] `pubspec.yaml` is `1.0.3+4` (version name `1.0.3`, build `4`) since PR #65 (`781bf54`). An installed `1.0.2+3` offers the update. Gradle reads `flutter.versionName` / `flutter.versionCode`; split APKs store arm32 as `1000+build` (1004) and arm64 as `2000+build` (2004).
-- [x] `android/RELEASE_NOTES.md` covers only the phone changes in PR #65: a lighter home hero with no background video and no cloud/light motion, in-place updates on the release key, the updater ABI choice, and one reinstall for anyone still on apk-v1.0.0.
-- [ ] Push tag `apk-v1.0.3` on the squash-merge commit of the release-notes PR, after it is on `main`. Do not tag `781bf54` and do not tag from the PR branch. Use the same release keystore secrets. Phones that still have apk-v1.0.0 (debug certificate) must uninstall once before this release will install.
+- [x] `pubspec.yaml` was `1.0.3+4`. Tag `apk-v1.0.3` is on GitHub Releases (arm64 versionCode 2004, arm32 versionCode 1004, same release certificate).
+
+## Android APK 1.0.4 (prepared, not tagged)
+
+- [x] `pubspec.yaml` is `1.0.4+5` (version name `1.0.4`, build `5`). An installed `1.0.3+4` offers the update. Gradle reads `flutter.versionName` / `flutter.versionCode`; split APKs store arm32 as `1000+build` (1005) and arm64 as `2000+build` (2005).
+- [x] `android/RELEASE_NOTES.md` covers the main change since `apk-v1.0.3`: «المساعد (اسأل الكنيسة) بقى شغال جوه تطبيق الأندرويد» (PR #67), plus in-place update / ABI choice and the one reinstall for anyone still on `apk-v1.0.0`.
+- [ ] Push tag `apk-v1.0.4` on the squash-merge commit of the bump PR, after it is on `main`. Do not tag from the PR branch. Use the same release keystore secrets. Phones that still have apk-v1.0.0 (debug certificate) must uninstall once before this release will install.
 
