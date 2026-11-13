@@ -8,10 +8,10 @@ assistant's topics.
 |---|---|
 | **Items** | 18–29 of the unified list (all priority 2) |
 | **Owner** | Implementer (smaller model, one packet at a time) · Reviewer · Owner for the gates |
-| **Start gate** | G1 passed · owner has answered C6 (do the screens moved under «الإعدادات (للمالك)» also become owner-only in the rules?) |
+| **Start gate** | G1 passed · C6 answered: menu and rules both (README §١٠ D2) |
 | **End gate (G2)** | all packets merged and live · the six-task trial repeated and recorded |
-| **Estimate (planning estimate)** | 2–4 weeks: 6 small + 7 medium packets |
-| **PRs (proposed)** | 3E (18, 19, 21, 23) → 3F (20, 22, 24, 26) → 3G (27) → 3H (25) → 3I (28, 29) |
+| **Target** | about 1 week of the owner's 2–3 week total (README §١٠ D5): 6 small + 7 medium packets, item 28 deferred |
+| **PRs (proposed)** | 3E (18 + 18R, 19, 21, 23) → 3F (20, 22, 24, 26) → 3G (27) → 3H (25) → 3I (29) |
 
 Any change of names in this stage changes, in the same PR, the tests that depend on element keys.
 
@@ -33,6 +33,36 @@ Current: `adminDestinations` is still a flat list; seasons / season settings / s
 - **Tests:** the groups appear in the README order with the README labels · an editor sees seven groups and no
   «الإعدادات (للمالك)» · an owner sees it · every former destination is still reachable.
 - **Acceptance:** the side menu shows 7 groups; nothing that existed is lost.
+
+### Packet P2-18R — Owner-only writes in the Firestore rules (owner decision D2)
+Owner decision of 13 November 2026 (README §١٠ D2) · ships in the same PR as P2-18 · est. M
+
+Where the three screens write today (checked in the code on 13 November):
+
+| Screen | Document | What the rules allow today |
+|---|---|---|
+| أنواع الرسائل | `settings/contact` (whole document) | any admin |
+| المساعد | `settings/assistant` (whole document) | any admin |
+| إعدادات المواسم | `settings/features`, keys `venues`, `audiences`, `seasonVerses` only | any admin |
+
+- **Files:** modify `firestore.rules` (`match /settings/{docId}`); test `tool/rules_test/rules.test.mjs`; update
+  `docs/memory-bank/05-firebase.md` and the Arabic manual in the same PR.
+- **Rule (proposed):** `settings/contact` and `settings/assistant` create / update require `isOwner()`.
+  `settings/features` stays writable by any admin, **except** that a write which changes `venues`, `audiences` or
+  `seasonVerses` requires `isOwner()`.
+- **Why key-level for seasons:** `settings/features` is shared. «اليوم والبث» and «التطبيق والإشعارات» write to
+  the same document, and editors must keep editing the stream and the section switches. Locking the whole
+  document would break task T1/T2 for editors.
+- **Reads:** unchanged. `settings/*` stays publicly readable except `notifications`: the contact form needs the
+  message types, the assistant needs its settings, and the mass / meeting / season forms need venues and
+  audiences.
+- **Budget:** the rules evaluate at most 1,000 expressions per request and `validFeatures` already works near
+  that limit; reuse its existing `changed` set for the three-key check rather than recomputing it.
+- **Tests (rules):** an active non-owner admin cannot write `settings/contact` or `settings/assistant` · the same
+  admin can still save «اليوم والبث» (a `settings/features` write that leaves the three keys untouched) · the same
+  admin is refused when the write changes `venues` · the owner can do all of them · anonymous reads of
+  `settings/contact`, `settings/assistant` and `settings/features` still succeed.
+- **Acceptance:** a non-owner editor neither sees the three screens nor can change their data by any route.
 
 ### Packet P2-19 — Title and help line on every screen
 Report item: #19 · خطة التبسيط · not started · est. S
@@ -182,11 +212,13 @@ Current: call and e-mail buttons exist; the default filter is still «جديدة
 Report item: #28 · الصفحات المخصصة · not started · est. M
 Current: PR #30 put custom pages and sections in the sitemap; it updates with each deploy only.
 
-- **Step 1 (gate, no code):** a one-page design note naming the mechanism, limited to what the project already
-  runs (README §١٥ C7). Today the sitemap is built at deploy by `tool/build_sitemap.sh` / `tool/gen_sitemap.dart`
-  from `.github/workflows/deploy.yml`. Spark only, no new server, no paid service. The owner approves it.
-- **Step 2:** implement the approved note with tests that a newly visible page appears and a hidden one does not.
-- **Acceptance:** a new visible page or section reaches the sitemap without a manual deploy.
+- **Step 1 (done, 13 November):** the design note is
+  [DESIGN-NOTE-item-28-sitemap.md](DESIGN-NOTE-item-28-sitemap.md).
+- **Outcome:** the Worker route is more than a small addition, so by the owner's rule (README §١٠ D3) the item is
+  **deferred** and the sitemap stays generated at deploy time by `tool/build_sitemap.sh` /
+  `tool/gen_sitemap.dart`. No code in this stage.
+- **If reopened:** the note lists a smaller route that reuses the existing generator; it needs the owner's
+  approval first.
 
 ### Packet P2-29 — The assistant names visible sections and pages as topics
 Report item: #29 · الصفحات المخصصة · not started · est. S

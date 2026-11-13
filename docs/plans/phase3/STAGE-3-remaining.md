@@ -6,11 +6,11 @@ invitation. This stage ends with the panel ready for normal use.
 | | |
 |---|---|
 | **Items** | 30–35 of the unified list (all priority 3) |
-| **Owner** | Implementer (30, 31, 32) · Owner + trial servant (33) · Owner (34) · Church office (35) |
+| **Owner** | Implementer (30, 31) · Owner + trial servant (33) · Owner (34) · Church office (35) |
 | **Start gate** | G2 passed |
 | **End gate (G3)** | success criteria S1–S5 of README §١٣ all met |
-| **Estimate (planning estimate)** | 1–2 weeks: 1 small + 2 medium packets, one trial session, two office tasks |
-| **PRs (proposed)** | 3J (30, 31, 32) |
+| **Target** | 2–4 days of the owner's 2–3 week total (README §١٠ D5): 1 small + 1 medium packet, one trial session, two office tasks |
+| **PRs (proposed)** | 3J (30, 31) |
 
 ---
 
@@ -44,8 +44,9 @@ Current: save is in the screen bar (`saveContactCats`) but easy to miss; removal
 Report item: #32 · الصفحات المخصصة · not started · open and optional in the memory bank · est. M
 Current: built-in sections come first today; items show their full description on the card.
 
-- **Gate first:** the report marks this optional. The owner says at the stage start gate whether to build it.
-- **If built:** one ordering across built-in and custom sections in the public menu, and an optional detail page
+- **Owner decision (13 November 2026, README §١٠ D4): left out for now.** No work in this phase; G3 does not
+  depend on it. It stays open and optional in the memory bank.
+- **If reopened later:** one ordering across built-in and custom sections in the public menu, and an optional detail page
   per section item so the card no longer carries the whole description. Follows the four-places rule (model,
   schema, rules, seed) with tests.
 
