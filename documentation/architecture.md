@@ -141,7 +141,7 @@ Firestore في المتصفح يحتفظ بنسخة محلية (cache). عند �
   - `app` → موقع `maximos-domadios-church` يقدّم `build/web` مع إعادة كل الروابط إلى `index.html`.
   - `legacy-redirect` → موقع `asafra-church-portal` يحوّل أي رابط بتحويل دائم **301** إلى
     `https://maximos-domadios-church.web.app/<نفس المسار>`.
-- الترويسات: `Cache-Control: no-cache` للصفحات، وتخزين **7 أيام** للصور والخطوط و `canvaskit`، مع ترويسات أمان
+- الترويسات: `Cache-Control: no-cache` للصفحات ولـ `main.dart.js` وأجزائه المؤجلة (`main.dart.js_*.part.js`)، وتخزين **7 أيام** للصور والخطوط و `canvaskit`، مع ترويسات أمان
   (`X-Content-Type-Options`, `Referrer-Policy`, `X-Frame-Options`, HSTS, `Permissions-Policy`). لا توجد CSP؛ إن
   أُضيفت يجب أن تسمح بـ `browser.sentry-cdn.com` و `*.ingest.de.sentry.io`.
 
