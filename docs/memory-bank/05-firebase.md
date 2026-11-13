@@ -258,11 +258,18 @@ App target settings:
   `streetAddress` prefix of `addressAr`, `geo` and `sameAs` with the seed / l10n; `telephone`, the address type,
   `addressCountry` and `url` are hard-coded in the test; `image` is not checked. If the church's facts change, update
   the seed, `web/index.html` and the hard-coded test values together.
-- Headers: `**` → `Cache-Control: no-cache` (Flutter bundles are not content-hashed, so HTML/JS must revalidate),
+- Headers: `**` → `Cache-Control: no-cache` (Flutter bundles are not content-hashed, so HTML must revalidate),
   `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `X-Frame-Options: SAMEORIGIN`,
   `Strict-Transport-Security: max-age=31536000; includeSubDomains`, `Permissions-Policy: camera=(), microphone=(),
   geolocation=()` (PR 1, SEC-05);
   images/fonts and `canvaskit/**` → `public, max-age=604800` (7 days).
+  `**/*.@(js|mjs|wasm)` → 30 days + `stale-while-revalidate` (this also covers canvaskit `.js` / `.wasm`, which stay cached).
+  **ADR-069:** `main.dart.js`, `main.dart.mjs`, `main.dart.wasm`, and `main.dart.js_*.part.js` are **not**
+  content-hashed. A later header sets them to `Cache-Control: no-cache` (revalidate with ETag). Without it,
+  a browser keeps an old `main.dart.js` beside a new part file and `/ask` and `/readings` throw
+  `DeferredLoadException` (`part main.dart.js_N.part.js not loaded`). `DeferredLoader` reloads the tab once
+  per session only for that hash mismatch, then shows the existing retry card. A network
+  `DeferredLoadException` does not reload.
   **Icon fonts are fingerprinted (PR #23):** `flutter build web` tree-shakes `MaterialIcons-Regular.otf` /
   `CupertinoIcons.ttf` to the icons in use but keeps one file name, so the 7-day font cache kept an old subset and
   icons added later (the PR #18 admin menu entries) drew as blank space. `tool/fingerprint_icon_fonts.py` (run by

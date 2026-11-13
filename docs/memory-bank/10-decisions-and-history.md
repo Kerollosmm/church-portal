@@ -2007,6 +2007,14 @@ supersede them.
   - Users who installed apk-v1.0.0 must uninstall once, then install a release-signed APK. Users on 1.0.1 can update to 1.0.2 and later in place, as long as the same keystore stays in GitHub secrets.
   - +0 Firestore reads, writes, or rules changes.
 
+## ADR-069 — Unhashed Flutter bundles revalidate; one reload on a stale deferred part
+
+- **Context:** Live `/ask` and `/readings` showed «تعذّر تحميل البيانات». Sentry `CHURCH-PORTAL-H` is `DeferredLoadException: part main.dart.js_15.part.js not loaded`. `firebase.json` gave every `js`/`mjs`/`wasm` file `public, max-age=2592000, stale-while-revalidate=86400`. `main.dart.js` and `main.dart.js_N.part.js` are not content-hashed, so after a deploy the browser can keep an old main file with a new part (or the reverse). The part hash inside the current `main.dart.js` matches the current part 15 on the server.
+- **Decision:**
+  1. After the broad js rule, `/main.dart.@(js|mjs|wasm)` and `/main.dart.js_*.part.js` use `Cache-Control: no-cache` (ETag revalidation). Images, fonts, and `canvaskit/**` stay cached.
+  2. On web, `DeferredLoader` reloads the tab once per session when the part script loads but its hash does not match (`DeferredLoadException` whose text contains `not loaded`; `sessionStorage` key `church_portal_deferred_reloaded`). A network failure of the same exception type, and a second hash failure, show the existing retry card. The reload is a conditional import; Android and tests use a stub that does not reload. `location.reload()` is enough once these files are `no-cache`: a query on the page URL would not change the part-file URL.
+- **Consequences:** A deploy no longer pairs an old cached bundle with a new part. A tab that already mixed the two reloads once instead of staying on the error card. +0 Firestore.
+
 ## Timeline
 
 | When | PR / commit | What |
@@ -2094,5 +2102,7 @@ supersede them.
 | 13 Nov 2026 | **chore/bump-android-1.0.4** — "Prepare Android release 1.0.4+5" | `pubspec.yaml` `1.0.3+4` → `1.0.4+5` (build rises so the in-app updater offers it over `1.0.3+4`; split APKs store `2005` for arm64 and `1005` for arm32). Arabic notes in `android/RELEASE_NOTES.md` cover, since tag `apk-v1.0.3`: «المساعد (اسأل الكنيسة) بقى شغال جوه تطبيق الأندرويد» (PR #67). Tag `apk-v1.0.4` is not created here. |
 
 | 13 Nov 2026 | **cursor/assistant-instruction-cap** — "Android assistant Worker accepts the real grounding prompt" | `POST /assistant` returned 400 `bad_request` before Gemini: `maxInstruction` was 24,000 and the bundled seed instruction is already ~29,085 chars. Cap is 150,000 chars and the body cap is 512 KiB. History turns allow 8,000 chars, matching the reply slice. Rate limits unchanged. A non-200 Worker status and its short error code are printed and reported (no question text). Needs `npx wrangler deploy`; the 1.0.4 APK does not need a rebuild for this cap. |
+
+| 13 Nov 2026 | **cursor/deferred-js-cache** — "Revalidate unhashed Flutter bundles" | ADR-069: `main.dart.js` and `main.dart.js_*.part.js` are `Cache-Control: no-cache` after the 30-day js rule. `DeferredLoader` reloads the web tab once on `DeferredLoadException`, then shows the retry card. Images and canvaskit stay cached. +0 Firestore. |
 
 <!-- Append new PRs to this table. -->

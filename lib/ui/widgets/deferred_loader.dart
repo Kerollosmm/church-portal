@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:material_ui/material_ui.dart';
 
 import '../../data/error_reporting.dart';
 import '../../core/l10n.dart';
 import 'common.dart';
+import 'deferred_chunk_reload.dart';
 
 /// Loads a deferred library (`import '...' deferred as x;`) before building
 /// the widget it provides, so heavy routes (the admin dashboard, the
@@ -40,6 +43,10 @@ class _DeferredLoaderState extends State<DeferredLoader> {
   late Future<void> _future = _load();
 
   Future<void> _load() => widget.loadLibrary().catchError((Object e, StackTrace st) {
+        // Web only: the script arrived but its hash does not match ("not loaded").
+        // One reload fetches a matching pair. A network failure stays on the
+        // retry card. The future stays pending so the spinner holds until navigation.
+        if (reloadStaleDeferredChunk(e)) return Completer<void>().future;
         ErrorReporting.capture(e, st, section: 'deferred_chunk', source: widget.source);
         throw e;
       });
