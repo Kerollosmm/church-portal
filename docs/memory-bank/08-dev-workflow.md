@@ -22,8 +22,12 @@ python3 tool/fingerprint_icon_fonts.py build/web   # content-hashed icon font na
 - Useful `--dart-define`s: `RECAPTCHA_SITE_KEY=…`, `GEMINI_MODEL=…`, `APPCHECK_DEBUG=true`,
   `APPCHECK_DEBUG_TOKEN=<uuid>` (debug builds use the App Check debug provider automatically),
   `MEDIA_BACKEND=firestore|storage` (where uploaded images go; `storage` needs Blaze + the steps in ADR-017).
-- Android: `flutter run -d <device>`; release builds are still **signed with the debug key**
-  (`android/app/build.gradle.kts`) — not Play-Store ready.
+- Android: `flutter run -d <device>`. A published tag (`apk-v*`) must be signed with the release
+  keystore (`ANDROID_REQUIRE_RELEASE_SIGNING=true`); Gradle refuses the debug key when that flag or a keystore
+  path is set. Local and PR release builds with no keystore still use the debug key and must not be published.
+  `applicationId` stays `com.asafrachurch.church_portal`. The stable certificate SHA-256 (since apk-v1.0.1) is
+  `8e51051168246d44a66d11462d326824302a9015761613d993ee7dd2d0b97554`. apk-v1.0.0 was the Android Debug certificate
+  and cannot be updated in place.
 
 ## Commands
 

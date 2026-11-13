@@ -159,7 +159,7 @@ flowchart TD
   (org `kerollos-0e`, project `church-portal`, EU region `ingest.de.sentry.io`); debug / profile builds and tests
   without the define report nothing. **environment** `SENTRY_ENVIRONMENT` define → `production` (main deploy),
   `preview` (PR previews), `ci` (CI build), else `production` (release) / `debug`. **release**
-  `church-portal@<APP_VERSION>+<GIT_SHA[0:7]>` (CI passes both; otherwise the SDK's `church_portal@1.0.2+3`).
+  `church-portal@<APP_VERSION>+<GIT_SHA[0:7]>` (CI passes both; otherwise the SDK's `church_portal@1.0.3+4`).
 - **Admin switch** `settings/features.errorReporting` (default on) → `errorReportingSwitchProvider` → watched in
   `ChurchPortalApp.build` → `ErrorReporting.gate.update(...)`. On Firestore the bundled seed's copy of
   `settings/features` (seeding check unanswered, or no doc) does not set it (`errorReportingSwitch`), so early events
@@ -345,7 +345,7 @@ indexable:)`, which applies the spec through the conditional import (`document_l
 the URL `#fragment`.
 
 **Deferred modules & isolation** (PR 3, ADR-058, ADR-060, ADR-061):
-To protect the web initial load budget (`main.dart.js` gzip -9 ceiling <= 1,396,031 B), exactly 8 secondary modules are deferred (`deferred as`):
+To protect the web initial load budget (`main.dart.js` gzip -9 ceiling <= 1,396,031 B), secondary modules are deferred (`deferred as`). The CI sourcemap guard still lists the original 8 (the check script is unchanged):
 1. `ui/admin/admin_page.dart` (`admin_page`): full admin dashboard (Firebase Auth, schema editors, Firestore writes).
 2. `ui/pages/assistant_page.dart` (`assistant_page`): AI assistant interface & `firebase_ai` SDK (gated behind `AssistantGate`).
 3. `ui/pages/notifications_page.dart` (`notifications_page`): streamlined notification channel & reminder preferences (OEM battery card removed; native permissions requested reactively on switch toggle).
@@ -355,8 +355,10 @@ To protect the web initial load budget (`main.dart.js` gzip -9 ceiling <= 1,396,
 7. `data/web_push_repository.dart` (`web_push`): web push token sync & Firestore queue batch writer.
 8. `ui/widgets/reminder_sheet.dart` (`reminder_sheet`): reminder picker modal bottom sheet with `.ics` & calendar export.
 
+The desktop hero also defers `ui/widgets/hero_video.dart` and `ui/widgets/hero_ambient.dart` (ADR-068). `hero_motion_flag.dart` stays in the main bundle (`heroAmbientInDom`). `HeroStage` loads those two libraries only when the desktop web hero will play; the poster stays up until the chunks arrive. Phones never load them, so mobile web does not download the mp4 or the CSS ambient layer.
+
 The routes build `DeferredLoader(loadLibrary: x.loadLibrary, builder: (_) => x.Page())`. Sibling path transitions (e.g. between `/readings/date1` and `/readings/date2`) recreate the routed page subtree via `key: ValueKey(s.uri.path)` on `FeatureGate` in `_page` (`lib/router.dart`), with `DeferredLoader.didUpdateWidget` serving as an in-place fallback if a parent preserves the loader state. `DeferredLoader` shows a live-region accessible spinner («جارٍ تحميل الصفحة…») and an `ErrorState` with Retry on network failure. All chunk loading failures report telemetry via `ErrorReporting.capture(e, st, section: 'deferred_chunk')`.
-Deferred isolation is mechanically enforced in CI via `node tool/check_web_bundle.mjs build/web`, which parses `main.dart.js.map` to assert 0 sourcemap leaks from any of the 8 deferred modules, verifies at least 6 `.part.js` chunks (22 emitted in production), and checks OpenType font integrity.
+Deferred isolation is mechanically enforced in CI via `node tool/check_web_bundle.mjs build/web`, which parses `main.dart.js.map` to assert 0 sourcemap leaks from any of the 8 listed modules, verifies at least 6 `.part.js` chunks, and checks OpenType font integrity. The hero chunks are extra part files; the guard list is unchanged.
 
 **Web Push Permission Architecture & Guidance (ADR-065):**
 - **User-Gesture Requirement:** Strict enforcement of zero automatic `Notification.requestPermission()` calls on initial page load. Browser notification permission is requested exclusively via user interactions: either by clicking the primary action card («السماح بإشعارات المتصفح» / "Allow browser notifications") when `permission == 'default'`, or reactively when the visitor toggles any notification channel switch.
@@ -401,7 +403,7 @@ Deferred isolation is mechanically enforced in CI via `node tool/check_web_bundl
   - **`INV-NAV-01`**: Only `AppShell` manages `Scaffold` chrome for routed public pages. `NotificationHealthPage` renders `PageBody` + `PageHeader` without an inner `Scaffold`.
   - **`INV-NAV-02`**: Exactly one back arrow on mobile viewports (`AppShell.leading`). In-body `_BackLink` on `ItemDetailPage` is shown only when `shellIsWide(context)` is true (desktop).
 - **Mobile Performance & Native Splash Invariants (ADR-062, ADR-064):**
-  - **`INV-PERF-01`**: Zero continuous ambient tickers in `HeroStage` on mobile platforms (Android, iOS) and mobile viewports (`width < 600`) (`heroAmbientLoopAllowed() == false`). Ken Burns transforms, haze drifts, and DOM-embedded CSS animation views (`HeroAmbientLayer`) are disabled on mobile, cleanly degrading to static high-resolution artwork (`ArtAssets.heroTall` / `ArtAssets.heroWide`) with `RepaintBoundary` isolation. Continuous 1100 ms ticker in `_PulseDot` and 900 ms shimmer ticker in `SkeletonBox` are silenced on mobile. Scroll-triggered `Reveal` renders child immediately on mobile without `Opacity` / `saveLayer` raster overhead. Hardware-accelerated hero video decoder remains active.
+  - **`INV-PERF-01` (ADR-068)**: Zero continuous ambient tickers in `HeroStage` on mobile platforms (Android, iOS) and viewports (`width < 600`) (`heroAmbientLoopAllowed() == false`). Ken Burns, haze, and `HeroAmbientLayer` stay off there. The hero video is desktop web only (`heroVideoPlatformAllowed`): the widget is not built, so mobile web does not request the mp4. Below 600 px the 14 blurred rays are omitted and the home hero is the existing poster (`hero_poster_tall.webp` / `hero_poster.webp`) in a `RepaintBoundary`. Wider Android/iOS surfaces keep one static ray paint and no decoder. Continuous tickers in `_PulseDot` and `SkeletonBox` stay off on mobile. `Reveal` skips its opacity layer on mobile. Desktop web at width >= 600 keeps the clip and the CSS ambient layer. The clock also stops when the app is paused.
   - **`INV-SPLASH-01`**: Native Android launch window background locked to cream `#FBF3E4` (`@color/splash_cream`) across drawables and styles (including `values-v31` Android 12+ Splash API).
 - **Today layer (PR #31, ADR-039/040):** the shell body is `Column[CopticDateStrip(location), LiveStreamBanner,
   Expanded(page)]` over the `WarmBackdrop` (`lib/ui/widgets/today_widgets.dart`): the Coptic date strip
@@ -460,9 +462,10 @@ Deferred isolation is mechanically enforced in CI via `node tool/check_web_bundl
   by `BottomFeather` in `hero_feather.dart` so the hero dissolves into the page — no box edges), `TextScrim`
   (elliptical radial glow bleeding past the text). `HeroVideo` (`hero_video.dart`, conditional export): web =
   native `<video muted playsinline loop>` via `HtmlElementView.fromTagName` with a CSS mask + fade-in on `playing`
-  (`hero_video_web.dart`); Android/iOS = `video_player` (`hero_video_io.dart`). `HeroStage` plays **only the bundled
-  clip** (`assets/video/hero_clouds.mp4`, `hero_clouds_tall.mp4` on phones; 9 s seamless loops since PR #33, ADR-042)
-  over its poster / painting: the PR #17
+  (`hero_video_web.dart`); Android/iOS = `video_player` (`hero_video_io.dart`), but phones do not build it
+  (ADR-068). `HeroStage` plays **only the bundled
+  clip** on desktop web (`assets/video/hero_clouds.mp4`; 9 s seamless loop since PR #33, ADR-042)
+  over its poster. Phones show the poster still (`hero_poster.webp` / `hero_poster_tall.webp`): the PR #17
   YouTube hero video library (`HeroStage(youtubeId:)`, `hero_youtube*.dart`, `youtube_player_iframe`) was **removed
   in PR #25 (ADR-036)**. Gated by `settings/features.heroMotion`
   and the visitor's reduced-motion / save-data (`lib/core/motion_env*.dart`); phones get the portrait crop.

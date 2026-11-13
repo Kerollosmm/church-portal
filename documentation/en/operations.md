@@ -179,7 +179,7 @@ The native Android app is packaged as lightweight, split release APKs for maximu
 ### Automated CI/CD Workflow (`.github/workflows/android.yml`)
 - **Triggers:**
   - Automated release: Triggered whenever a tag matching `apk-v*` is pushed (e.g., `apk-v1.0.1`).
-  - Prepared version: `pubspec.yaml` is `1.0.2+3` (version name `1.0.2`, build `3`). The higher build is what the in-app updater compares. Tag `apk-v1.0.2` is not pushed with the version bump; the public download stays the latest published `apk-v*` release (`apk-v1.0.1`) until that tag is pushed.
+  - Prepared version: `pubspec.yaml` is `1.0.3+4` (version name `1.0.3`, build `4`). The latest published tag is `apk-v1.0.2` (build `3`). Tag `apk-v1.0.3` is not pushed with this change. Split APKs store versionCode as `2000+build` (arm64) and `1000+build` (arm32).
   - Manual testing: Triggered via `workflow_dispatch` on any branch.
   - Pull requests modifying Android assets or native code (`lib/**`, `android/**`, `pubspec.*`, `assets/**`, `.github/workflows/android.yml`).
 - **Split APK Generation:** Produces two architecture-specific APK binaries:
@@ -199,7 +199,8 @@ The native Android app is packaged as lightweight, split release APKs for maximu
   - `ANDROID_KEYSTORE_PASSWORD` / `KEYSTORE_PASSWORD`: Keystore password.
   - `ANDROID_KEY_ALIAS` / `KEY_ALIAS`: Key alias.
   - `ANDROID_KEY_PASSWORD` / `KEY_PASSWORD`: Key private password.
-- **Automated Debug Fallback:** In pull requests, manual dispatch runs, or local builds without signing secrets, Gradle automatically falls back to the default Android debug signing config (`signingConfigs.debug`). Tagged release builds (`apk-v*`) strictly require the production secrets and fail immediately if they are missing to prevent distributing unsigned binaries.
+- **No debug fallback on a release tag:** `apk-v*` sets `ANDROID_REQUIRE_RELEASE_SIGNING=true`. If the keystore file, passwords, or alias are missing, Gradle fails instead of signing with the debug key. After the build, the workflow rejects an Android Debug certificate and any certificate other than SHA-256 `8e51051168246d44a66d11462d326824302a9015761613d993ee7dd2d0b97554` (the key that signed apk-v1.0.1 and apk-v1.0.2). Pull-request and local builds with no keystore still use the debug key; those APKs are not published.
+- **In-place updates:** apk-v1.0.0 was signed with the Android Debug certificate, so a later release cannot install over it. Anyone who installed 1.0.0 uninstalls once, then installs a release-signed APK. Anyone on 1.0.1 can update to 1.0.2 and later without uninstalling, as long as the same keystore stays in GitHub secrets. Do not generate a new keystore. `applicationId` stays `com.asafrachurch.church_portal`.
 
 ### Release & Update Manifest (`version.json`)
 - Post-build step executes `tool/make_apk_manifest.mjs` against generated APKs:

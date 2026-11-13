@@ -152,6 +152,22 @@ class UpdateSignatureException implements Exception {
   String toString() => 'UpdateSignatureException: $message';
 }
 
+/// Manifest key for the APK this device should download.
+///
+/// `flutter build apk --split-per-abi` sets versionCode to
+/// `abiDigit * 1000 + pubspecBuild` (arm64 → 2xxx, arm32 → 1xxx). Installing
+/// the arm32 split over an arm64 install is a downgrade, and Android refuses
+/// it. Prefer arm64 whenever that is the abi we were given; only the 32-bit
+/// names select the arm32 file.
+String shippedApkAbi(String raw) {
+  final a = raw.trim().toLowerCase();
+  if (a == 'arm64-v8a' || a == 'arm64') return 'arm64-v8a';
+  if (a == 'armeabi-v7a' || a == 'armeabi' || a == 'arm32') return 'armeabi-v7a';
+  // x86_64 emulators and an empty/unknown answer: the 64-bit split. A 32-bit
+  // phone reports armeabi-v7a, so this does not hand it a 64-bit APK.
+  return 'arm64-v8a';
+}
+
 /// Evaluates whether an update banner should be shown to the user.
 UpdateDecision decideUpdate({
   required int currentBuild,
@@ -178,9 +194,10 @@ UpdateDecision decideUpdate({
     return UpdateDecision.none;
   }
 
-  // Pick APK for device ABI
-  final asset = manifest.apks[abi] ??
-      manifest.apks['arm64-v8a'] ??
+  // Pick the split this device can install over the one it already has.
+  final key = shippedApkAbi(abi);
+  final asset = manifest.apks[key] ??
+      (key == 'armeabi-v7a' ? null : manifest.apks['arm64-v8a']) ??
       manifest.apks['armeabi-v7a'];
 
   if (asset == null || asset.url.isEmpty) {

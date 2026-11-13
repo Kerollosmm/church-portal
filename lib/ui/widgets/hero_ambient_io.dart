@@ -1,8 +1,5 @@
 import 'package:material_ui/material_ui.dart';
 
-/// Android / iOS / tests: the ambient layers are painted by Flutter.
-const bool heroAmbientInDom = false;
-
 /// Not used off the web (see `hero_ambient_web.dart`).
 class HeroAmbientLayer extends StatelessWidget {
   final bool haze;

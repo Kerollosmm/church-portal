@@ -23,6 +23,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
 
+String _assetName(ImageProvider provider) {
+  final image = provider is ResizeImage ? provider.imageProvider : provider;
+  return (image as AssetImage).assetName;
+}
+
 SeedData _seedWith(Map<String, bool> sections, {Map<String, dynamic> features = const {}}) {
   final raw = jsonDecode(File('assets/seed/seed.json').readAsStringSync()) as Map<String, dynamic>;
   final f = Map<String, dynamic>.from(raw['settings']['features'] as Map);
@@ -306,17 +311,49 @@ void main() {
   });
 
   test('heroAmbientLoopAllowed truth table (INV-PERF-01)', () {
-    expect(heroAmbientLoopAllowed(isWeb: false, platform: TargetPlatform.android), isFalse);
-    expect(heroAmbientLoopAllowed(isWeb: true, platform: TargetPlatform.android), isFalse);
-    expect(heroAmbientLoopAllowed(isWeb: false, platform: TargetPlatform.iOS), isFalse);
-    expect(heroAmbientLoopAllowed(isWeb: true, platform: TargetPlatform.iOS), isFalse);
+    expect(heroAmbientLoopAllowed(platform: TargetPlatform.android), isFalse);
+    expect(heroAmbientLoopAllowed(platform: TargetPlatform.iOS), isFalse);
     expect(heroAmbientLoopAllowed(width: 320), isFalse);
     expect(heroAmbientLoopAllowed(width: 599), isFalse);
-    expect(heroAmbientLoopAllowed(isWeb: false, platform: TargetPlatform.windows), isTrue);
-    expect(heroAmbientLoopAllowed(isWeb: false, platform: TargetPlatform.macOS), isTrue);
-    expect(heroAmbientLoopAllowed(isWeb: false, platform: TargetPlatform.linux), isTrue);
-    expect(heroAmbientLoopAllowed(isWeb: true, platform: TargetPlatform.windows, width: 1024), isTrue);
-    expect(heroAmbientLoopAllowed(isWeb: true, platform: TargetPlatform.macOS, width: 1440), isTrue);
+    expect(heroAmbientLoopAllowed(platform: TargetPlatform.windows), isTrue);
+    expect(heroAmbientLoopAllowed(platform: TargetPlatform.macOS), isTrue);
+    expect(heroAmbientLoopAllowed(platform: TargetPlatform.linux), isTrue);
+    expect(heroAmbientLoopAllowed(platform: TargetPlatform.windows, width: 1024), isTrue);
+    expect(heroAmbientLoopAllowed(platform: TargetPlatform.macOS, width: 1440), isTrue);
+  });
+
+  test('heroVideoPlatformAllowed is desktop web only, so phones never fetch the clip', () {
+    expect(heroVideoPlatformAllowed(isWeb: true, platform: TargetPlatform.windows, width: 1024), isTrue);
+    expect(heroVideoPlatformAllowed(isWeb: true, platform: TargetPlatform.macOS, width: 1440), isTrue);
+    expect(heroVideoPlatformAllowed(isWeb: true, platform: TargetPlatform.linux, width: 600), isTrue);
+    expect(heroVideoPlatformAllowed(isWeb: true, platform: TargetPlatform.windows, width: 599), isFalse);
+    expect(heroVideoPlatformAllowed(isWeb: true, platform: TargetPlatform.android, width: 1400), isFalse);
+    expect(heroVideoPlatformAllowed(isWeb: true, platform: TargetPlatform.iOS, width: 390), isFalse);
+    expect(heroVideoPlatformAllowed(isWeb: false, platform: TargetPlatform.android, width: 1400), isFalse);
+    expect(heroVideoPlatformAllowed(isWeb: false, platform: TargetPlatform.iOS, width: 800), isFalse);
+    expect(heroVideoPlatformAllowed(isWeb: false, platform: TargetPlatform.linux, width: 1400), isFalse);
+  });
+
+  test('heroStillAsset: poster on phones and under a playing clip; painting when desktop video is off', () {
+    expect(
+      heroStillAsset(image: ArtAssets.heroTall, poster: ArtAssets.heroPosterTall, videoPlaying: false, phoneLike: true),
+      ArtAssets.heroPosterTall,
+    );
+    expect(
+      heroStillAsset(image: ArtAssets.heroWide, poster: ArtAssets.heroPoster, videoPlaying: true, phoneLike: false),
+      ArtAssets.heroPoster,
+    );
+    expect(
+      heroStillAsset(image: ArtAssets.heroWide, poster: ArtAssets.heroPoster, videoPlaying: false, phoneLike: false),
+      ArtAssets.heroWide,
+    );
+    expect(heroStillAsset(image: ArtAssets.heroTall, poster: null, videoPlaying: false, phoneLike: true), ArtAssets.heroTall);
+  });
+
+  test('reduced motion covers disableAnimations and accessibleNavigation', () {
+    expect(reducedMotionRequested(const MediaQueryData(disableAnimations: true)), isTrue);
+    expect(reducedMotionRequested(const MediaQueryData(accessibleNavigation: true)), isTrue);
+    expect(reducedMotionRequested(const MediaQueryData()), isFalse);
   });
 
   testWidgets('motion gating: tests, reduced motion and the admin switch keep the stage still', (tester) async {
@@ -394,14 +431,31 @@ void main() {
     }
   });
 
-  testWidgets('hero video on phones too: portrait crop + its own poster; painting fallback stays', (tester) async {
+  testWidgets('phone home hero is a static poster: no video, haze, or blurred rays', (tester) async {
     await _pump(tester, _seedWith(const {}), size: const Size(390, 3000));
     final stage = tester.widget<HeroStage>(
         find.descendant(of: find.byKey(const Key('homeHero')), matching: find.byType(HeroStage)));
-    expect(stage.video, ArtAssets.heroVideoTall);
+    expect(stage.video, ArtAssets.heroVideoTall, reason: 'the clip stays configured for desktop widths');
     expect(stage.poster, ArtAssets.heroPosterTall);
     expect(stage.image, ArtAssets.heroTall);
     expect(stage.motion, isTrue, reason: 'heroMotion defaults on');
+    final still = tester.widget<Image>(find.descendant(of: find.byType(HeroStage), matching: find.byKey(const Key('heroStill'))));
+    expect(_assetName(still.image), ArtAssets.heroPosterTall);
+    expect(find.byKey(const Key('heroStill')), findsOneWidget);
+    expect(find.byKey(const Key('heroHaze')), findsNothing);
+    expect(find.byWidgetPredicate((w) => w is CustomPaint && w.painter is LightRaysPainter), findsNothing);
+  });
+
+  testWidgets('desktop home hero keeps the wide clip and the light rays', (tester) async {
+    await _pump(tester, _seedWith(const {}), size: const Size(1400, 3000));
+    final stage = tester.widget<HeroStage>(
+        find.descendant(of: find.byKey(const Key('homeHero')), matching: find.byType(HeroStage)));
+    expect(stage.video, ArtAssets.heroVideo);
+    expect(stage.poster, ArtAssets.heroPoster);
+    final still = tester.widget<Image>(find.descendant(of: find.byType(HeroStage), matching: find.byKey(const Key('heroStill'))));
+    // flutter test freezes motion, so the painting shows instead of the poster-under-video.
+    expect(_assetName(still.image), ArtAssets.heroWide);
+    expect(find.byWidgetPredicate((w) => w is CustomPaint && w.painter is LightRaysPainter), findsOneWidget);
   });
 
   testWidgets('hero plays only the bundled clip, even with a stored YouTube library (ADR-036)', (tester) async {

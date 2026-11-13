@@ -149,8 +149,17 @@ class MainActivity : FlutterActivity() {
                     // Dart's `Directory.systemTemp` is the code-cache dir on Android, outside it.
                     "getCacheDir" -> result.success(cacheDir.absolutePath)
                     "supportedAbi" -> {
-                        val abi = Build.SUPPORTED_ABIS.firstOrNull() ?: "universal"
-                        result.success(abi)
+                        // Flutter's split versionCode is 2xxx for arm64 and 1xxx for
+                        // arm32. A 64-bit phone must keep getting arm64, even when
+                        // the kernel lists armeabi-v7a first, or the next update
+                        // is a lower versionCode and Android rejects it.
+                        val abis = Build.SUPPORTED_ABIS.map { it.lowercase() }
+                        val pick = when {
+                            abis.any { it == "arm64-v8a" } -> "arm64-v8a"
+                            abis.any { it == "armeabi-v7a" || it == "armeabi" } -> "armeabi-v7a"
+                            else -> "arm64-v8a"
+                        }
+                        result.success(pick)
                     }
                     "canRequestPackageInstalls", "canRequestInstalls" -> {
                         val canRequest = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {

@@ -13,6 +13,8 @@ import 'hero_feather.dart';
 /// The source is set (and the download starts) only once the page is
 /// complete and idle ([ContentReady.whenIdle], ADR-038): the poster under it
 /// stays the LCP element and the video never competes with the first content.
+/// The hero stage does not build this widget on phones, so mobile web never
+/// requests the mp4 at all.
 class HeroVideo extends StatefulWidget {
   final String asset;
   final Alignment alignment;

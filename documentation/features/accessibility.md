@@ -22,7 +22,7 @@
 ## كيف تعمل تقنيًا
 
 - `test/accessibility_test.dart`: حسابات التباين، فحص كل الصفحات العامة عند 320 بكسل × 200% (عربي وإنجليزي) بالخطوط العربية الحقيقية (`FontLoader`)، هندسة شريط العنوان، الدلالات، ومزامنة اللغة. `test/occasion_theme_test.dart`: تباين كل ثيم ومسح للنصوص المرسومة. `test/image_style_layout_test.dart`: التخطيط عند 320/390/1440 بكسل.
-- الحركة: `MediaQuery.disableAnimationsOf` و `lib/core/motion_env*.dart` (`prefers-reduced-motion` و `saveData`).
+- الحركة: `MediaQuery.disableAnimations` و `accessibleNavigation` و `lib/core/motion_env*.dart` (`prefers-reduced-motion` و `saveData`). على الهاتف تتوقف حركة الواجهة والفيديو حتى بدون هذا الإعداد (ADR-068).
 - أزرار اللوحة لها `tooltip`، والرقائق المختارة بنص أبيض على الخلفية الداكنة.
 
 ## الحدود والمشاكل المعروفة

@@ -17,15 +17,25 @@ jobs:
       - run: flutter pub get
       - name: Keystore (release only)
         if: startsWith(github.ref, 'refs/tags/apk-v')
-        env: { KS: '${{ secrets.ANDROID_KEYSTORE_BASE64 }}' }
+        env:
+          KS: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          STORE_PW: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PW: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          # a release tag without the keystore secret must fail loudly (an empty secret would write a 0-byte .jks →
-          # Gradle EOFException); a debug-signed APK must never be published as a release
+          # A release tag without the keystore must fail loudly. An empty secret
+          # would write a 0-byte .jks, and a missing password used to make Gradle
+          # fall back to the debug key (a new certificate each run). Never echo
+          # the secret values.
           [ -n "$KS" ] || { echo "::error::ANDROID_KEYSTORE_BASE64 is not set — cannot sign $GITHUB_REF_NAME"; exit 1; }
+          [ -n "$STORE_PW" ] || { echo "::error::ANDROID_KEYSTORE_PASSWORD is not set — cannot sign $GITHUB_REF_NAME"; exit 1; }
+          [ -n "$ALIAS" ] || { echo "::error::ANDROID_KEY_ALIAS is not set — cannot sign $GITHUB_REF_NAME"; exit 1; }
+          [ -n "$KEY_PW" ] || { echo "::error::ANDROID_KEY_PASSWORD is not set — cannot sign $GITHUB_REF_NAME"; exit 1; }
           echo "$KS" | base64 -d > "$RUNNER_TEMP/release.jks"
           [ -s "$RUNNER_TEMP/release.jks" ] || { echo "::error::decoded keystore is empty"; exit 1; }
       - name: Build split APKs
         env:
+          ANDROID_REQUIRE_RELEASE_SIGNING: ${{ startsWith(github.ref, 'refs/tags/apk-v') && 'true' || 'false' }}
           ANDROID_KEYSTORE_PATH: ${{ startsWith(github.ref, 'refs/tags/apk-v') && format('{0}/release.jks', runner.temp) || '' }}
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
@@ -54,8 +64,27 @@ jobs:
           cd build/app/outputs/flutter-apk
           mv app-arm64-v8a-release.apk church-portal-arm64.apk
           mv app-armeabi-v7a-release.apk church-portal-arm32.apk
-          # certSha256 in the manifest = the release key's certificate (the app compares it before installing)
+          # certSha256 in the manifest = the release key's certificate (the app compares it before installing).
+          # The digest is public (it is already in version.json). It is the key used since apk-v1.0.1
+          # (CN=Maximos and Domadios Church Portal). apk-v1.0.0 was Android Debug and cannot update in place.
           APKSIGNER="$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)apksigner"
+          EXPECT_CERT=8e51051168246d44a66d11462d326824302a9015761613d993ee7dd2d0b97554
+          check_cert() {
+            local f="$1"
+            local digest subject norm
+            digest=$("$APKSIGNER" verify --print-certs "$f" | sed -n 's/.*certificate SHA-256 digest: //p' | head -1)
+            subject=$("$APKSIGNER" verify --print-certs "$f" | sed -n 's/.*certificate DN: //p' | head -1)
+            norm=$(printf '%s' "$digest" | tr -d '[:space:]:' | tr '[:upper:]' '[:lower:]')
+            echo "$f certificate $norm"
+            echo "$f DN: $subject"
+            case "$subject" in
+              *"Android Debug"*) echo "::error::$f is signed with the Android debug certificate"; exit 1 ;;
+            esac
+            [ -n "$norm" ] || { echo "::error::could not read the signing certificate of $f"; exit 1; }
+            [ "$norm" = "$EXPECT_CERT" ] || { echo "::error::$f certificate $norm is not the stable release key $EXPECT_CERT"; exit 1; }
+          }
+          check_cert church-portal-arm64.apk
+          check_cert church-portal-arm32.apk
           CERT_SHA256=$("$APKSIGNER" verify --print-certs church-portal-arm64.apk | sed -n 's/.*certificate SHA-256 digest: //p' | head -1)
           [ -n "$CERT_SHA256" ] || { echo "::error::could not read the APK signing certificate"; exit 1; }
           export CERT_SHA256

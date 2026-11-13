@@ -33,6 +33,32 @@ val storeFilePath = envOrNull("ANDROID_KEYSTORE_PATH")
     ?: keystoreProperties.getProperty("storeFile")
     ?: keystoreProperties.getProperty("STORE_FILE")
 
+// Tagged releases set this. A missing keystore must fail the build: signing
+// with the debug key (a new certificate on every CI machine) cannot update
+// an app that was signed with a different key.
+val requireReleaseSigning = envOrNull("ANDROID_REQUIRE_RELEASE_SIGNING")
+    ?.equals("true", ignoreCase = true) == true
+
+val releaseStoreFile: java.io.File? = storeFilePath?.takeUnless { it.isBlank() }?.let { path ->
+    val candidate = File(path).let { if (it.isAbsolute) it else rootProject.file(path) }
+    if (candidate.exists()) candidate else null
+}
+
+val releaseSigningReady = releaseStoreFile != null &&
+    !keyAliasValue.isNullOrBlank() &&
+    !keyPasswordValue.isNullOrBlank() &&
+    !storePasswordValue.isNullOrBlank()
+
+fun releaseSigningProblems(): List<String> {
+    val missing = mutableListOf<String>()
+    if (storeFilePath.isNullOrBlank()) missing += "ANDROID_KEYSTORE_PATH"
+    else if (releaseStoreFile == null) missing += "keystore file at ANDROID_KEYSTORE_PATH"
+    if (storePasswordValue.isNullOrBlank()) missing += "ANDROID_KEYSTORE_PASSWORD"
+    if (keyAliasValue.isNullOrBlank()) missing += "ANDROID_KEY_ALIAS"
+    if (keyPasswordValue.isNullOrBlank()) missing += "ANDROID_KEY_PASSWORD"
+    return missing
+}
+
 android {
     namespace = "com.asafrachurch.church_portal"
     compileSdk = flutter.compileSdkVersion
@@ -45,10 +71,13 @@ android {
     }
 
     defaultConfig {
+        // Stable forever. A different id installs a second app instead of updating.
         applicationId = "com.asafrachurch.church_portal"
         // sentry_flutter 10 declares minSdk 26 (Android 8.0); Flutter's default is 24.
         minSdk = maxOf(flutter.minSdkVersion, 26)
         targetSdk = flutter.targetSdkVersion
+        // pubspec `version: x.y.z+N`. `--split-per-abi` then stores
+        // arm32 as 1000+N and arm64 as 2000+N. N must rise for each published APK.
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
@@ -64,23 +93,31 @@ android {
 
     signingConfigs {
         create("release") {
-            if (!storeFilePath.isNullOrBlank() && !keyAliasValue.isNullOrBlank() && !keyPasswordValue.isNullOrBlank() && !storePasswordValue.isNullOrBlank()) {
-                val resolvedStoreFile = File(storeFilePath).let { if (it.isAbsolute) it else rootProject.file(storeFilePath) }
-                if (resolvedStoreFile.exists()) {
-                    storeFile = resolvedStoreFile
-                    storePassword = storePasswordValue
-                    keyAlias = keyAliasValue
-                    keyPassword = keyPasswordValue
-                }
+            if (releaseSigningReady) {
+                storeFile = releaseStoreFile!!
+                storePassword = storePasswordValue!!
+                keyAlias = keyAliasValue!!
+                keyPassword = keyPasswordValue!!
             }
         }
     }
 
     buildTypes {
         release {
-            signingConfig = if (signingConfigs.findByName("release")?.storeFile != null) {
+            // A path or a required release must not fall through to the debug
+            // keystore. PR and local builds with no keystore configured still
+            // use debug so they can compile; those APKs are not published.
+            val wantsReleaseKey = requireReleaseSigning || !storeFilePath.isNullOrBlank()
+            if (wantsReleaseKey && !releaseSigningReady) {
+                throw GradleException(
+                    "Release signing is required but incomplete (${releaseSigningProblems().joinToString()}). " +
+                        "Refusing to sign with the debug keystore: a different certificate cannot update the installed app."
+                )
+            }
+            signingConfig = if (releaseSigningReady) {
                 signingConfigs.getByName("release")
             } else {
+                logger.warn("Release APK is signed with the debug keystore. Do not publish it: in-place updates will fail.")
                 signingConfigs.getByName("debug")
             }
             isMinifyEnabled = true
