@@ -274,7 +274,7 @@ The remote scheduled push delivery and readings synchronization infrastructure r
 - Upload web source maps and Android symbols to Sentry (requires auth token).
 - In Sentry: disable client IP collection and activate server-side scrubbers.
 - Android assistant: set `GEMINI_API_KEY` (`npx wrangler secret put`), `npx wrangler deploy`, and GitHub variable `ASSISTANT_WORKER_URL`. Web stays on Firebase AI Logic. Do not enforce App Check on Firestore.
-- The on-device assistant limit stays in the app (default 3 questions per Cairo day). The Worker adds a free-plan ceiling on top.
+- The on-device assistant limit stays in the app (default 3 questions per Cairo day). The Worker adds a free-plan ceiling on top. The grounding instruction cap is 150,000 characters (the seed prompt alone is about 29,000). After that change lands on `main`, run `npx wrangler deploy`. The installed 1.0.4 APK does not need a rebuild for the cap.
 - Configure required reviewers for GitHub `production` environment.
 - Complete task tracker: [`docs/memory-bank/11-open-tasks.md`](../../docs/memory-bank/11-open-tasks.md).
 

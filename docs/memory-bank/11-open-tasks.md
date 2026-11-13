@@ -8,7 +8,7 @@ Status as of 6 Nov 2026 (ADR-056 Phase 2 plan; ADR-055 / PR #49; ADR-054 / PR #4
 1. ~~Footer note «تعرض البيانات المحفوظة مع التطبيق» shows on the live site while Firestore works~~ — fixed in PR #30 (ADR-038) → *Live data follow-ups*.
 2. Sentry web source maps + Android symbols need a Sentry auth token → *Error tracking — Sentry*.
 3. Sentry project privacy: *Prevent Storing of IP Addresses* + server-side data scrubbers → *Error tracking — Sentry*.
-4. Android assistant needs the Worker secret, deploy, and `ASSISTANT_WORKER_URL` → *Infrastructure & security*.
+4. Redeploy the assistant Worker so the 150k instruction cap is live (`npx wrangler deploy` on `main`). No APK rebuild for that cap → *Infrastructure & security*.
 5. ~~Custom sections / pages are not in the sitemap~~ (PR #30: generated from Firestore at deploy, ADR-038); still not named in the assistant's allowed topics → *Custom sections*.
 6. ~~320 px overflow reported on a real phone~~ — fixed in Phase 2 PR E (ADR-061): AppShell < 360 px space recovery (54 dp seal tab, drawer language toggle on subpages, >= 130 dp title width, >= 6 dp seal clearance), modal sheets keyboard insets padding, and real OpenType font loading in accessibility tests → *Infrastructure & security* (320 px item).
 7. CI rebuild of the eBible verse asset (source-fidelity check) → *Verse of the day*.
@@ -117,6 +117,8 @@ the owner approves the whole chain.
       (shape `https://church-portal-push-sender.<account>.workers.dev/assistant`). The next APK build passes it
       as `--dart-define=ASSISTANT_WORKER_URL`. Do not commit the key. Do not enforce App Check on Firestore.
       Do not turn on Workers Paid. The on-device limit (default 3 questions per Cairo day) stays in the app.
+      After the instruction-cap fix, redeploy from an updated `main`: `npx wrangler deploy`. The installed
+      1.0.4 APK already sends the full instruction; it does not need a rebuild for this cap.
 - [ ] **`production` environment required reviewers** (recommended hygiene; no Phase 2 dependency since 6 Nov 19:31) (Settings → Environments) so live deploys, rules deploys
       (`deploy-rules` uses the environment since PR 1) and the Seed workflow (`force` can overwrite production data)
       need approval.

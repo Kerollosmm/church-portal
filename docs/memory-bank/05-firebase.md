@@ -324,7 +324,10 @@ console.
   `main.dart.js` does not grow. `ASSISTANT_WORKER_URL` is a compile-time define (GitHub variable of the same
   name on the APK workflow).
 - **Worker free-plan caps** (`tool/assistant_worker.js`, one `PUSH_KV` read + one write per accepted question):
-  body ≤ 48 KB; instruction ≤ 24,000 chars; prompt ≤ 1,200; history ≤ 20 turns. Header `x-church-app` must be
+  body ≤ 512 KiB; instruction ≤ 150,000 chars (the bundled seed prompt is already ~29,000 chars
+  with 47 liturgies and no custom pages; live pages add up to 20 × 2,500). Prompt ≤ 1,200; history ≤ 20
+  turns; each turn ≤ 8,000 chars (the Worker's own reply slice, so the next question can resend it).
+  Header `x-church-app` must be
   `church-portal-android` and `x-church-device` a 32-hex device id. Per Cairo day: 400 questions globally,
   100 per device (the admin maximum — the app still enforces the real per-day number, default 3, first),
   40 per IP hash, and 20 per IP per minute. Workers Free is about 100,000 requests/day; KV free is about
