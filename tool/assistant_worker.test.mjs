@@ -91,3 +91,46 @@ test('returns the model text and counts the question', async () => {
   const saved = JSON.parse(await store.get(`asst:${cairoDayKey(new Date('2026-11-13T10:00:00Z'))}`));
   assert.equal(saved.n, 1);
 });
+
+test('accepts a grounding instruction the old 24000 cap rejected, and a reply-sized history turn', async () => {
+  let called = 0;
+  const instruction = 'خ'.repeat(29085);
+  const reply = 'ر'.repeat(ASSISTANT_LIMITS.maxTurnChars);
+  const res = await call(
+    { GEMINI_API_KEY: 'secret', PUSH_KV: kv() },
+    {
+      model: 'gemini-3.1-flash-lite',
+      instruction,
+      history: [{ user: false, text: reply }, { user: true, text: 'متى القداس؟' }],
+      prompt: '[Current Cairo time: 2026-11-13 14:41 (Friday)]\nمتى القداس؟',
+    },
+    {
+      now: new Date('2026-11-13T12:00:00Z'),
+      fetchImpl: async () => {
+        called += 1;
+        return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: 'الجمعة' }] } }] }), { status: 200 });
+      },
+    },
+  );
+  assert.equal(res.status, 200);
+  assert.equal(called, 1);
+});
+
+test('rejects an instruction past 150000 and a history turn past 8000 without calling Gemini', async () => {
+  let called = 0;
+  const fetchImpl = async () => {
+    called += 1;
+    return new Response('{}', { status: 200 });
+  };
+  const env = { GEMINI_API_KEY: 'secret', PUSH_KV: kv() };
+  const tooLong = await call(env, { ...okBody, instruction: 'x'.repeat(ASSISTANT_LIMITS.maxInstruction + 1) }, { fetchImpl });
+  assert.equal(tooLong.status, 400);
+  assert.equal(JSON.parse(await tooLong.text()).error, 'bad_request');
+  const turn = await call(
+    env,
+    { ...okBody, history: [{ user: false, text: 'y'.repeat(ASSISTANT_LIMITS.maxTurnChars + 1) }] },
+    { fetchImpl },
+  );
+  assert.equal(turn.status, 400);
+  assert.equal(called, 0);
+});

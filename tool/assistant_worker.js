@@ -8,11 +8,16 @@
 export const ASSISTANT_APP_ID = 'church-portal-android';
 
 export const ASSISTANT_LIMITS = {
-  maxBodyBytes: 48 * 1024,
-  maxInstruction: 24000,
+  // Decoded request text. The bundled seed instruction is already ~29k chars
+  // (47 liturgies, no custom pages). Live pages add up to 20 × 2,500 chars.
+  // 150k covers that with margin. 512 KiB fits that instruction plus 20 turns
+  // of 8,000 chars (the reply slice below). Workers Free allows ~100 MB bodies.
+  maxBodyBytes: 512 * 1024,
+  maxInstruction: 150000,
   maxPrompt: 1200,
   maxHistoryTurns: 20,
-  maxTurnChars: 2000,
+  /** Same as the reply slice returned below, so the next turn is accepted. */
+  maxTurnChars: 8000,
   /** Shared with the push worker's KV writes (free plan: 1,000 writes/day). */
   globalPerDay: 400,
   /** Admin maximum (`perDay` max). The app still enforces the real per-day number first. */

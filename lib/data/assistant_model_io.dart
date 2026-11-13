@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
+
 import '../config/app_config.dart';
 import '../domain/assistant_conversation.dart';
 import 'assistant_usage_store.dart';
@@ -42,7 +44,11 @@ class WorkerAssistantModel implements AssistantModel {
       })));
       final res = await req.close().timeout(const Duration(seconds: 45));
       final body = await utf8.decoder.bind(res).join();
-      if (res.statusCode != 200) throw Exception('assistant worker ${res.statusCode}');
+      if (res.statusCode != 200) {
+        final code = _workerErrorCode(body);
+        debugPrint('Assistant worker HTTP ${res.statusCode}${code.isEmpty ? '' : ' $code'}');
+        throw Exception('assistant worker ${res.statusCode}${code.isEmpty ? '' : ' $code'}');
+      }
       final decoded = jsonDecode(body);
       if (decoded is! Map || decoded['text'] is! String) return null;
       return decoded['text'] as String;
@@ -53,3 +59,13 @@ class WorkerAssistantModel implements AssistantModel {
 }
 
 AssistantModel createAssistantModel() => const WorkerAssistantModel();
+
+/// Short Worker error code only (`bad_request`, `device_cap`). Never the body.
+String _workerErrorCode(String body) {
+  try {
+    final decoded = jsonDecode(body);
+    final code = decoded is Map ? decoded['error'] : null;
+    if (code is String && RegExp(r'^[a-z_]{1,40}$').hasMatch(code)) return code;
+  } catch (_) {}
+  return '';
+}
