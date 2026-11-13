@@ -52,17 +52,19 @@
 ## كيف تعمل تقنيًا
 
 - الصفحة: `lib/ui/pages/home_page.dart` (`HomePage`, `_Hero`, `HeroVerse`, `_PatronsTeaser`).
-- الفيديو: **المقطع المدمج فقط** — `HeroStage` في `lib/ui/widgets/golden.dart` و `lib/ui/widgets/hero_video*.dart`
-  (`assets/video/hero_clouds.mp4`، و`hero_clouds_tall.mp4` للهواتف بقصّ طولي)، فوق صورته الثابتة (poster)، واللوحة المرسومة
-  عندما لا يُسمح بالفيديو. منذ PR #33 (ADR-042): المقطع الجديد المعتمد من المالك، ٩ ثوانٍ يتكرر بدون قطع ظاهر (آخر ثانية
-  تذوب في الأولى)، 1280×720 و432×768 للهاتف، بدون صوت؛ «تجهيز الموسم» يمكنه إيقاف الحركة طوال الموسم
-  ([season-preset.md](season-preset.md)).
+- الفيديو: **المقطع المدمج فقط** على سطح المكتب في المتصفح (عرض 600 بكسل أو أكثر، وليس أندرويد أو iOS) —
+  `HeroStage` في `lib/ui/widgets/golden.dart` و `lib/ui/widgets/hero_video*.dart`
+  (`assets/video/hero_clouds.mp4`، 246٬291 بايت)، فوق صورته الثابتة (poster). على الهاتف (التطبيق، متصفح الجوال،
+  أو عرض أقل من 600) لا يُبنى مشغّل الفيديو أصلًا، فلا يُنزَّل الملف (ولا `hero_clouds_tall.mp4`، 119٬476 بايت).
+  تظهر صورة الـposter الموجودة: `hero_poster_tall.webp` تحت 600 بكسل و`hero_poster.webp` فوقها. اللوحة المرسومة
+  تبقى لترويسات الصفحات التي ليس لها poster. منذ PR #33 (ADR-042): المقطع ٩ ثوانٍ يتكرر بدون قطع ظاهر، بدون صوت؛
+  «تجهيز الموسم» يمكنه إيقاف الحركة طوال الموسم ([season-preset.md](season-preset.md)). ADR-068.
 - **أُزيلت مكتبة فيديو يوتيوب** («مكتبة فيديو الواجهة (يوتيوب)») في PR #25 بطلب المالك (ADR-036): لا توجد بطاقة لها في
   اللوحة، ولا مشغّل يوتيوب في التطبيق. حقل `heroVideos` القديم إن وُجد في `settings/features` يُتجاهل ولا يُحذف، والقواعد ما
   زالت تقبله حتى لا يفشل الحفظ.
-- على الويب تُحرَّك السحب وأشعة الضوء بـ CSS في طبقة HTML فوق الفيديو (`hero_ambient_web.dart`، ADR-037) بنفس الشكل، بدل إعادة رسم Flutter لكل إطار.
+- على سطح المكتب في المتصفح تُحرَّك السحب وأشعة الضوء بـ CSS في طبقة HTML فوق الفيديو (`hero_ambient_web.dart`، ADR-037) بنفس الشكل، بدل إعادة رسم Flutter لكل إطار. على الهاتف تُلغى هذه الطبقة وأشعة `MaskFilter.blur` الأربعة عشر، وتبقى صورة الـposter ثابتة (ADR-068). الحركة تتوقف أيضًا عندما يغادر التطبيق المقدمة.
 - منذ PR #30 (ADR-038): على الويب تبقى شاشة التحميل (صورة الواجهة واسم الكنيسة) حتى تصل أول بيانات حقيقية، ثم يبدأ تحميل الفيديو وطبقة السحب والأشعة عندما يهدأ المتصفح وتظهر بتلاشٍ؛ الشكل النهائي كما هو. انظر [performance-pagespeed.md](performance-pagespeed.md).
-- الحركة تتوقف مع `prefers-reduced-motion` أو `saveData` (`lib/core/motion_env*.dart`) أو `heroMotion: false`.
+- الحركة تتوقف مع `prefers-reduced-motion` (يصل إلى Flutter كـ `MediaQuery.disableAnimations`) أو `accessibleNavigation` أو `saveData` (`lib/core/motion_env*.dart`) أو `heroMotion: false`.
 - الإعدادات في `settings/features`: `homeOrder` (ترتيب الكتل)، `homeHidden` (المخفية)، `heroTitleAr/En`،
   `heroSubtitleAr/En`، `heroMotion`، `heroShowAddress`، `bannerEnabled`، `bannerAr/En`، `bannerLink`.
   المنطق في `lib/domain/features.dart` (`HomeBlocks`، `showHomeBlock`، `visibleHomeBlocks`، `normalizeHomeOrder`).

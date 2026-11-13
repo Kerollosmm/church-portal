@@ -38,6 +38,20 @@ class ArtAssets {
   static const heroPoster = 'assets/art/hero_poster.webp';
   static const heroPosterTall = 'assets/art/hero_poster_tall.webp';
 
+  /// Intrinsic pixel width, so a decode size never upscales the bitmap.
+  static int? pixelWidth(String asset) => switch (asset) {
+        heroWide => 1920,
+        heroWideSmall => 1024,
+        heroTall => 900,
+        heroPoster => 1280,
+        heroPosterTall => 432,
+        clouds => 960,
+        nile => 1440,
+        saintMoses => 720,
+        saintMaximusDomadius => 720,
+        _ => null,
+      };
+
   /// Painted art for a patron saint id (decorative fallback when the saint
   /// has no uploaded icon), or null.
   static String? paintingForSaint(String id) => switch (id) {
@@ -47,11 +61,17 @@ class ArtAssets {
       };
 }
 
+/// OS reduced-motion or a screen reader. On the web, Flutter sets
+/// [MediaQueryData.disableAnimations] from `prefers-reduced-motion`.
+bool reducedMotionRequested(MediaQueryData mq) => mq.disableAnimations || mq.accessibleNavigation;
+
 /// Whether ambient (looping) motion may run here: not under `flutter test`,
-/// not when the OS asks for reduced motion, and only when the admin switch
-/// ([adminOn], `settings/features.heroMotion`) allows it.
-bool ambientMotionOn(BuildContext context, {bool adminOn = true}) =>
-    adminOn && !MotionEnv.isTest && !MediaQuery.disableAnimationsOf(context);
+/// not when the OS asks for reduced motion or a screen reader, and only when
+/// the admin switch ([adminOn], `settings/features.heroMotion`) allows it.
+bool ambientMotionOn(BuildContext context, {bool adminOn = true}) {
+  if (!adminOn || MotionEnv.isTest) return false;
+  return !reducedMotionRequested(MediaQuery.of(context));
+}
 
 /// Whether HeroStage may run its ambient loops (Ken Burns, haze drift, ray shimmer).
 /// Off on mobile platforms (Android, iOS) and mobile viewports (< 600 px):
@@ -76,12 +96,53 @@ bool mobileMotionSuppressed(BuildContext context) =>
       width: MediaQuery.sizeOf(context).width,
     );
 
+/// Whether this surface may decode the hero clip at all.
+///
+/// Desktop web at width >= 600 keeps the loop. Phones do not: native Android
+/// and iOS, mobile browsers (the platform is Android or iOS), and any viewport
+/// narrower than 600. The video widget is then never built, so mobile web
+/// does not request the mp4.
+bool heroVideoPlatformAllowed({
+  bool isWeb = kIsWeb,
+  TargetPlatform? platform,
+  double? width,
+}) {
+  if (!isWeb) return false;
+  return heroAmbientLoopAllowed(isWeb: true, platform: platform, width: width);
+}
+
+/// Still image under (or instead of) the clip. Phones use the existing poster
+/// so the preloaded first frame stays on screen and the painting is not a
+/// second download. Desktop with the video off keeps the painting.
+String heroStillAsset({
+  required String image,
+  String? poster,
+  required bool videoPlaying,
+  required bool phoneLike,
+}) {
+  if (videoPlaying) return (poster != null && poster.isNotEmpty) ? poster : image;
+  if (phoneLike && poster != null && poster.isNotEmpty) return poster;
+  return image;
+}
+
+/// Decode width for [asset] at this screen, or null when the screen is already
+/// at least the bitmap's width (a larger request would upscale).
+int? heroCacheWidth(BuildContext context, String asset) {
+  final cap = ArtAssets.pixelWidth(asset);
+  if (cap == null) return null;
+  final px = (MediaQuery.sizeOf(context).width * MediaQuery.devicePixelRatioOf(context)).round();
+  if (px <= 0 || px >= cap) return null;
+  return px;
+}
+
 /// Whether the hero video may load and play: ambient motion is on, the visitor
-/// did not ask to save data, and the platform plays it (web, Android, iOS).
+/// did not ask to save data, and [heroVideoPlatformAllowed] is true.
 bool heroVideoAllowed(BuildContext context, {required bool adminOn}) {
   if (!ambientMotionOn(context, adminOn: adminOn) || MotionEnv.saveData) return false;
-  if (kIsWeb) return true;
-  return defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS;
+  return heroVideoPlatformAllowed(
+    platform: Theme.of(context).platform,
+    width: MediaQuery.sizeOf(context).width,
+  );
 }
 
 /// The fixed warm backdrop behind every public page: cream wash over the gold
@@ -90,14 +151,19 @@ class WarmBackdrop extends StatelessWidget {
   const WarmBackdrop({super.key});
 
   @override
-  Widget build(BuildContext context) => RepaintBoundary(
+  Widget build(BuildContext context) {
+    final cacheW = heroCacheWidth(context, ArtAssets.clouds);
+    final ImageProvider<Object> clouds = cacheW == null
+        ? const AssetImage(ArtAssets.clouds)
+        : ResizeImage(const AssetImage(ArtAssets.clouds), width: cacheW);
+    return RepaintBoundary(
         child: ExcludeSemantics(
           child: DecoratedBox(
             key: const Key('warmBackdrop'),
             decoration: BoxDecoration(
               color: context.pal.background,
               image: DecorationImage(
-                image: const AssetImage(ArtAssets.clouds),
+                image: clouds,
                 fit: BoxFit.cover,
                 // Fainter (and greyed) on a dark scene (ADR-025).
                 opacity: context.pal.textureOpacity,
@@ -108,6 +174,7 @@ class WarmBackdrop extends StatelessWidget {
           ),
         ),
       );
+  }
 }
 
 /// Translucent warm panel (the posters' content boxes) with soft rounded
@@ -539,15 +606,37 @@ class HeroStage extends StatefulWidget {
   State<HeroStage> createState() => _HeroStageState();
 }
 
-class _HeroStageState extends State<HeroStage> with SingleTickerProviderStateMixin, ViewportVisibility<HeroStage> {
+class _HeroStageState extends State<HeroStage>
+    with SingleTickerProviderStateMixin, ViewportVisibility<HeroStage>, WidgetsBindingObserver {
   // One slow master clock (60 s); every layer derives its phase from it.
   late final AnimationController _clock = AnimationController(vsync: this, duration: HeroAmbientSpec.clock);
   bool _ambient = false;
   bool _videoOn = false;
+  bool _phoneLike = false;
+  bool _foreground = true;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    final foreground = state == AppLifecycleState.resumed;
+    if (foreground == _foreground) return;
+    _foreground = foreground;
+    _sync();
+    if ((_videoOn || _domAmbient) && mounted) setState(() {});
+  }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    // Narrow layout only. Native Android/iOS already stop the clock via
+    // heroAmbientLoopAllowed; a wide test surface (and a tablet) keeps the
+    // still rays. The video gate is separate and stays off on every phone OS.
+    _phoneLike = MediaQuery.sizeOf(context).width < 600;
     _ambient = widget.motion && !mobileMotionSuppressed(context);
     _videoOn = widget.video != null && heroVideoAllowed(context, adminOn: widget.motion);
     // Decode the still before it is needed (no pop-in, no flash on swaps).
@@ -555,7 +644,12 @@ class _HeroStageState extends State<HeroStage> with SingleTickerProviderStateMix
     _sync();
   }
 
-  String get _still => _videoOn ? (widget.poster ?? widget.image) : widget.image;
+  String get _still => heroStillAsset(
+        image: widget.image,
+        poster: widget.poster,
+        videoPlaying: _videoOn,
+        phoneLike: _phoneLike,
+      );
 
   @override
   void didUpdateWidget(covariant HeroStage old) {
@@ -577,7 +671,8 @@ class _HeroStageState extends State<HeroStage> with SingleTickerProviderStateMix
 
   /// The Flutter clock runs only for what Flutter still animates: everything
   /// off the web, and the Ken Burns of the painting (no video) on the web.
-  bool get _needsClock => _ambient && (!heroAmbientInDom || !_videoOn);
+  /// It stops when the app is not in the foreground.
+  bool get _needsClock => _foreground && _ambient && (!heroAmbientInDom || !_videoOn);
 
   void _sync() {
     final run = _needsClock && visibleInViewport;
@@ -590,6 +685,7 @@ class _HeroStageState extends State<HeroStage> with SingleTickerProviderStateMix
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _clock.dispose();
     super.dispose();
   }
@@ -598,12 +694,14 @@ class _HeroStageState extends State<HeroStage> with SingleTickerProviderStateMix
 
   @override
   Widget build(BuildContext context) {
+    final stillName = _still;
     final still = Image.asset(
-      _still,
+      stillName,
       key: const Key('heroStill'),
       fit: BoxFit.cover,
       alignment: widget.alignment,
       gaplessPlayback: true,
+      cacheWidth: heroCacheWidth(context, stillName),
       // First paint: fade in from the backdrop instead of popping in.
       frameBuilder: (context, child, frame, sync) => sync
           ? child
@@ -643,7 +741,7 @@ class _HeroStageState extends State<HeroStage> with SingleTickerProviderStateMix
               key: ValueKey(widget.video),
               asset: widget.video!,
               alignment: widget.alignment,
-              play: visibleInViewport,
+              play: visibleInViewport && _foreground,
               cssFilter: art.artCssFilter,
             ),
           if (_domAmbient)
@@ -651,12 +749,13 @@ class _HeroStageState extends State<HeroStage> with SingleTickerProviderStateMix
               key: ValueKey('ambient-${widget.rays > 0}'),
               haze: true,
               rays: widget.rays,
-              play: visibleInViewport,
+              play: visibleInViewport && _foreground,
               cssFilter: art.artCssFilter,
               clouds: ArtAssets.clouds,
             ),
           if (_ambient && !_domAmbient) RepaintBoundary(child: sceneArt(context, _feather(_HazeDrift(clock: _clock)))),
-          if (widget.rays > 0 && !_domAmbient)
+          // Phones skip the 14 blurred rays (a still MaskFilter is a large raster).
+          if (widget.rays > 0 && !_domAmbient && !_phoneLike)
             RepaintBoundary(
               child: sceneArt(
                   context,
@@ -714,8 +813,10 @@ class _HazeDrift extends StatelessWidget {
         shaderCallback: _veil,
         child: LayoutBuilder(builder: (context, c) {
           final w = c.maxWidth, h = c.maxHeight;
+          final dpr = MediaQuery.devicePixelRatioOf(context);
+          final px = w.isFinite ? (w * dpr).round().clamp(1, ArtAssets.pixelWidth(ArtAssets.clouds)!) : 960;
           Widget tile(bool mirror) {
-            final img = Image.asset(ArtAssets.clouds, fit: BoxFit.cover, gaplessPlayback: true);
+            final img = Image.asset(ArtAssets.clouds, fit: BoxFit.cover, gaplessPlayback: true, cacheWidth: px);
             return SizedBox(width: w, height: h, child: mirror ? Transform.flip(flipX: true, child: img) : img);
           }
 

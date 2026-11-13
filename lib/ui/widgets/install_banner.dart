@@ -185,7 +185,9 @@ class _InstallBannerState extends ConsumerState<InstallBanner> {
                           ),
                           clipBehavior: Clip.antiAlias,
                           child: Image.asset(
-                            'assets/branding/seal_light.png',
+                            // Parish seal. Flutter web requests assets/assets/branding/<file>.
+                            // seal_light.png does not exist, so that URL 404'd.
+                            'assets/branding/seal.png',
                             fit: BoxFit.cover,
                             errorBuilder: (ctx, err, st) =>
                                 Icon(Icons.church_outlined, color: pal.goldText, size: 24),

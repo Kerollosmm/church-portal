@@ -178,8 +178,9 @@ class _AnnouncementBanner extends StatelessWidget {
 
 /// The golden-hour hero (the posters' first panel): the painting of the
 /// church in the heavenly clouds — slow Ken Burns, drifting gold haze,
-/// shimmering sun rays and the muted cloud loop (a portrait crop on phones)
-/// crossfading in over its poster frame — with the red calligraphic welcome, the heavy maroon
+/// shimmering sun rays and the muted cloud loop on desktop web —
+/// crossfading in over its poster frame. Phones keep that poster still
+/// (no clip, no continuous light or cloud motion). With the red calligraphic welcome, the heavy maroon
 /// name on a cream scrim, the optional subtitle / address ribbon, the verse
 /// of the day and the CTAs.
 class _Hero extends ConsumerWidget {
@@ -327,7 +328,13 @@ class _PatronsTeaser extends ConsumerWidget {
                   // No uploaded icon: the painted patron (decorative) or a cross.
                   placeholder: painting == null
                       ? const HaloCrossFill()
-                      : Image.asset(painting, fit: BoxFit.cover, alignment: const Alignment(0, -0.6)),
+                      : Image.asset(
+                          painting,
+                          fit: BoxFit.cover,
+                          alignment: const Alignment(0, -0.6),
+                          cacheWidth: (halo * MediaQuery.devicePixelRatioOf(context)).round().clamp(1, 720),
+                          cacheHeight: (halo * MediaQuery.devicePixelRatioOf(context)).round().clamp(1, 894),
+                        ),
                 ),
               ),
               const SizedBox(width: 16),

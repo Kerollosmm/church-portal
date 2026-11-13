@@ -44,9 +44,9 @@ This document provides a comprehensive, feature-by-feature manual for all 31 cap
 ### 1. Home & Hero Section
 - **Visitor Experience:** Immersive "Golden Hour" poster identity with authentic Coptic typography (Lalezar display titles, Aref Ruqaa verses). On modern browsers, a subtle looping ambient cloud and light-ray shimmer runs seamlessly. Features primary call-to-action buttons ("Mass times" and "About the church"), an arcade framing patron saints, and admin-orderable content blocks.
 - **Admin Control (`/admin` → Sections & Home Page):** Customize hero title and subtitle in Arabic and English, toggle church address ribbon, toggle ambient motion/video, and rearrange or hide home blocks (Announcement banner, Urgent notices, Next-mass card, Quick contacts, Our story, Directory grid, Map).
-- **Technical Implementation:** Rendered in `lib/ui/pages/home_page.dart`. On web, the ambient atmospheric shimmer runs as a hardware-accelerated CSS DOM overlay (`HeroAmbientLayer`) to maintain PageSpeed scores ≥ 90 without Flutter canvas repaints.
+- **Technical Implementation:** Rendered in `lib/ui/pages/home_page.dart`. On desktop web, the ambient atmospheric shimmer runs as a hardware-accelerated CSS DOM overlay (`HeroAmbientLayer`). Phones (the Android/iOS app, mobile browsers, and any width under 600) show the static poster and do not download the hero video (ADR-068).
 - **Season tint (ADR-050):** on an occasion theme (Marian blue, fasting ash, Easter red…) a still wash of the theme's colours lies over the golden painting; none on the default Golden hour or dark themes. Switch: `/admin` → theme card → "Season colour on the hero picture" (`heroSeasonTint`, default on). Ken Burns, haze and rays are unchanged.
-- **Limits:** Video playback is intentionally disabled when the visitor has reduced-motion or data-saver preferences enabled.
+- **Limits:** Video playback is disabled for reduced motion (`disableAnimations`, `accessibleNavigation`, web `prefers-reduced-motion`), data-saver, and on phones. Desktop web keeps the clip.
 
 ### 2. Verse of the Day (Bilingual)
 - **Visitor Experience:** Displays an inspiring Scripture passage integrated into the hero section with haloed typography. The verse automatically rotates daily at Cairo midnight across 366 curated public-domain verses. Switching the site to English displays the authentic World English Bible (British Edition) text with English book references (ADR-047).
@@ -204,7 +204,7 @@ This document provides a comprehensive, feature-by-feature manual for all 31 cap
 
 ### 31. Android Native Application & Play Integrity
 - **Visitor Experience:** Native Android APK installable on mobile devices with adaptive launch icons and hardware back-button navigation.
-- **Technical Implementation:** Built with Flutter Android embedding. Release builds currently use debug signing; setting up a dedicated release keystore and registering its SHA-256 for Google Play Integrity App Check is an open operational task.
+- **Technical Implementation:** Built with Flutter Android embedding. Published tags are signed with the release keystore (certificate SHA-256 `8e51051168246d44a66d11462d326824302a9015761613d993ee7dd2d0b97554` since apk-v1.0.1). Registering that SHA-256 for Play Integrity remains an open task. apk-v1.0.0 was debug-signed and cannot be updated in place.
 
 ### 32. App Installation, Notification Preferences & Reminders (ADR-057, ADR-058, ADR-059, ADR-067)
 - **Visitor Experience:**

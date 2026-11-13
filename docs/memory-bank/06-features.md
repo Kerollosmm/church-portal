@@ -56,13 +56,16 @@ render with `PageBody` (+ `Footer`). Content comes from Riverpod providers (hidd
   `occasions.seasonThemes`, revivals / summer = no theme): admin range > active season > Easter dates > selected
   theme. A Holy Week season document turns the site dark from its start to its end even off the computed Easter
   dates; until the seasons list loads, the applied season preset decides (first paint already dark).
-- **Hero video:** the home hero plays the **bundled cloud clip** only (muted, looping, no controls; portrait crop on
-  phones) over its poster; the painting shows when video is not allowed. Never for reduced motion, data saver,
+- **Hero video (ADR-068):** desktop web (width >= 600, not Android/iOS) plays the **bundled cloud clip** only
+  (muted, looping, no controls) over its poster. Phones, the Android/iOS app, and mobile browsers do not build the
+  video widget, so the mp4 is not downloaded; they show the existing poster (`hero_poster_tall.webp` below 600 px,
+  `hero_poster.webp` otherwise). The painting shows when video is not allowed and there is no poster (page headers).
+  Never for reduced motion (`disableAnimations`, `accessibleNavigation`, web `prefers-reduced-motion`), data saver,
   `heroMotion` off or under `flutter test`. The YouTube hero video library of PR #17 (ADR-026) was **removed in PR #25
   (ADR-036, owner request 4 Nov 2026)**; a `heroVideos` map already stored in `settings/features` is ignored.
-- **Hero ambient motion on web (ADR-037, PR #29):** the haze drift and light-ray shimmer look exactly as before but
-  run as a CSS-animated DOM layer (`HeroAmbientLayer`) on desktop web (>= 1024 px) instead of a per-frame Flutter repaint; see `documentation/features/performance-pagespeed.md`.
-  On mobile platforms (Android, iOS) and mobile viewports (< 600 px), all continuous ambient tickers, Ken Burns scaling, haze drift, and DOM layers are disabled (`heroAmbientLoopAllowed() == false`, `INV-PERF-01`, ADR-062, ADR-064), falling back to static artwork (`ArtAssets.heroTall` / `ArtAssets.heroWide`) with `RepaintBoundary` isolation.
+- **Hero ambient motion on web (ADR-037, PR #29; phones ADR-068):** the haze drift and light-ray shimmer look exactly as before but
+  run as a CSS-animated DOM layer (`HeroAmbientLayer`) on desktop web instead of a per-frame Flutter repaint; see `documentation/features/performance-pagespeed.md`.
+  On mobile platforms (Android, iOS) and viewports (< 600 px), ambient tickers, Ken Burns, haze, and the DOM layer are off (`heroAmbientLoopAllowed() == false`, `INV-PERF-01`, ADR-062, ADR-064, ADR-068). Below 600 px the blurred rays are omitted and the home hero is the static poster in a `RepaintBoundary`. The clock also stops when the app is paused.
   Similarly, continuous tickers in `_PulseDot` (1100 ms) and `SkeletonBox` (900 ms) are silenced on mobile, and `Reveal` renders child immediately without `saveLayer` opacity overhead.
 - **Liturgical web loading screen (ADR-044, PR #35; replaces the ADR-037 static hero copy):** `web/index.html` shows,
   on the cream `#FBF3E4` ground (= `manifest.json` `background_color`), the parish seal (`assets/assets/branding/seal.png`,
@@ -72,7 +75,7 @@ render with `PageBody` (+ `Footer`). Content comes from Riverpod providers (hidd
   `role="status"` «جارٍ التحميل…» keeps the loading announcement; the failure path (30 s / script error) replaces the
   track with the reload message. The hero posters stay preloaded (plus a hidden `<img>`) so the Flutter hero paints
   from cache. It stays over the app until `app-content-ready` (ADR-038; ≤ 9 s after Flutter's first frame), then fades
-  out in 0.6 s and is removed. The hero video and CSS ambient layer start once the page is idle (`ContentReady.whenIdle`).
+  out in 0.6 s and is removed. On desktop web the hero video and CSS ambient layer start once the page is idle (`ContentReady.whenIdle`). Phones never start them (ADR-068).
   The screen is static HTML, so it is always cream / maroon whatever the occasion theme (open question for the owner:
   Holy Week goes cream → charcoal when the app appears).
 
@@ -615,7 +618,7 @@ digits, Cairo `02` + 8, Alexandria `03` + 7, other governorates `0[4-9]` + 7–8
 - Step-by-step guidance tailored to the user's phone brand with one-click intent launcher buttons (`church_portal/device` platform channel) falling back to App Info settings.
 
 ### In-App Update Banner (`UpdateBanner`, `UpdateSheet`, `app_updater.dart`, ADR-058)
-- Native Android app fetches `/app/android/version.json` when `installApkBuild` > its own build.
+- Native Android app fetches `/app/android/version.json` when `installApkBuild` > its own build. The download is the device ABI (`arm64-v8a` when the phone lists it, else `armeabi-v7a`), because those splits use versionCodes `2000+build` and `1000+build`. The package installer runs only when the APK certificate matches the installed app (ADR-068). apk-v1.0.0's debug certificate does not match later releases.
 - If a newer build is published (`installApkBuild > currentBuild`), a dismissable bottom banner appears.
 - If `currentBuild < minSupportedBuild`, the update is mandatory and non-dismissable.
 - Tapping «تحديث الآن» opens `UpdateSheet` displaying Arabic release notes, file size, download progress bar with speed/percentage, and triggers APK installation via Android `FileProvider`.

@@ -124,10 +124,11 @@ the owner approves the whole chain.
 - [ ] **iOS**: register the iOS app (bundle `com.asafrachurch.churchPortal`), `flutterfire configure`, replace the
       placeholders in `lib/firebase_options.dart`; App Attest for App Check. (`Info.plist` already has
       `NSPhotoLibraryUsageDescription` for the admin image picker.)
-- [ ] **Android release signing**: add an upload keystore + `signingConfigs.release` (currently signs release with the
-      debug key in `android/app/build.gradle.kts`); register SHA-256 for Play Integrity; consider replacing the
-      browser API key with the Android `current_key`; app label is now «كنيسة مكسيموس ودوماديوس» with seal launcher icons (PR #6);
-      Play Store listing ($25 account).
+- [ ] **Android release signing / Play**: the release keystore is already in GitHub secrets and signed apk-v1.0.1 and
+      apk-v1.0.2 (certificate SHA-256 `8e51051168246d44a66d11462d326824302a9015761613d993ee7dd2d0b97554`, ADR-068).
+      Keep that same keystore. Register its SHA-256 for Play Integrity; consider replacing the browser API key with
+      the Android `current_key`; app label is «كنيسة مكسيموس ودوماديوس» with seal launcher icons (PR #6);
+      Play Store listing ($25 account). apk-v1.0.0 was debug-signed and cannot update in place.
 - [ ] Decide **Spark vs Blaze**: business case recommends Blaze + $5/month budget alert (Spark's 360 MB/day Hosting
       and 50K reads/day can be exhausted on busy summer days).
 - [ ] Bootstrap at least **two owners** in `admins` (avoid single-person dependency); Firebase project ownership by a
@@ -321,7 +322,7 @@ the owner approves the whole chain.
 - [ ] **Android symbols**: release APKs are not obfuscated yet; when `--obfuscate --split-debug-info` (and R8 /
       ProGuard mappings) are turned on, upload the Dart symbols + mapping with `sentry_dart_plugin` / `sentry-cli`
       (same auth token). There is no Android CI build yet: build with
-      `flutter build apk --release --dart-define=SENTRY_ENVIRONMENT=production --dart-define=GIT_SHA=$(git rev-parse HEAD) --dart-define=APP_VERSION=1.0.2+3`.
+      `flutter build apk --release --dart-define=SENTRY_ENVIRONMENT=production --dart-define=GIT_SHA=$(git rev-parse HEAD) --dart-define=APP_VERSION=1.0.3+4`.
 - [ ] **DSN as a repo variable**: the agent's GitHub API has no Actions-variables endpoint, so release builds use the
       public DSN constant in `AppConfig.sentryDefaultDsn`. Optional: add the repository variable `SENTRY_DSN`
       (Settings → Secrets and variables → Actions → Variables); `ci.yml` / `deploy.yml` already pass it when set.
@@ -365,13 +366,13 @@ the owner approves the whole chain.
       the app appears. Optional: remember the last theme's ground in `localStorage` and paint the screen with it.
 
 ## Mobile Performance, Native Splash & Navigation Chrome (ADR-062, 8 Nov 2026)
-- [x] **Hero ambient loops on APK (`INV-PERF-01`)**: `heroAmbientLoopAllowed` halts 60 s canvas tickers and blurred ray repaints on Android APK, eliminating Home screen frame drops; hardware-decoded video preserved.
+- [x] **Hero ambient loops on APK (`INV-PERF-01`)**: `heroAmbientLoopAllowed` halts 60 s canvas tickers and blurred ray repaints on Android APK. ADR-068 also stops the hero video on phones; the poster stays.
 - [x] **Native Android splash cream (`INV-SPLASH-01`)**: `#FBF3E4` (`splash_cream`) applied across `launch_background.xml` (API 21+) and `styles.xml` (including `values-v31` Android 12+ Splash API) in light and dark mode, eliminating the cold start white flash.
 - [x] **Single back arrow & unified shell (`INV-NAV-01`, `INV-NAV-02`)**: `AppShell.leading` provides single back arrow on mobile viewports; in-body `_BackLink` on `ItemDetailPage` shown only on desktop (`shellIsWide`); `NotificationHealthPage` unified to `PageBody` + `PageHeader` with parent routing back to `/notifications`.
 
 ## Mobile Performance Optimization, AppBar Cleanup & Notifications Streamlining (ADR-064, 12 Nov 2026)
 - [x] **Mobile AppBar language toggle omission (`INV-APPBAR-01`)**: Omit `appBarLanguageToggle` on mobile viewports (< 600 px), reclaiming ~54 dp horizontal space so church short title (`appShort`) has >= 130 dp unobstructed width and >= 6 dp seal clearance across 320/360/390 px widths; language toggle accessible in drawer (`drawerLanguageToggle`). Desktop viewports (>= 600 px) retain the AppBar toggle.
-- [x] **Expanded mobile performance tickers bypass (`INV-PERF-01`)**: Disable continuous 60s background tickers (`_clock.repeat()`), Ken Burns scaling transforms, haze drifts, and DOM-embedded CSS animation views (`HeroAmbientLayer`) on mobile platforms (Android, iOS) and mobile viewports (< 600 px), falling back to static high-resolution artwork (`ArtAssets.heroTall` / `ArtAssets.heroWide`) with `RepaintBoundary` isolation. Stop continuous tickers on `_PulseDot` (1100 ms) and `SkeletonBox` (900 ms) on mobile. Bypass scroll-triggered `Reveal` opacity layers on mobile to eliminate `saveLayer` raster overhead.
+- [x] **Expanded mobile performance tickers bypass (`INV-PERF-01`)**: Disable continuous 60s background tickers (`_clock.repeat()`), Ken Burns scaling transforms, haze drifts, and DOM-embedded CSS animation views (`HeroAmbientLayer`) on mobile platforms (Android, iOS) and mobile viewports (< 600 px). ADR-068 also drops the hero video and the blurred rays there; the home hero is the poster. Stop continuous tickers on `_PulseDot` (1100 ms) and `SkeletonBox` (900 ms) on mobile. Bypass scroll-triggered `Reveal` opacity layers on mobile to eliminate `saveLayer` raster overhead.
 - [x] **Streamline `/notifications` page**: Remove persistent OEM battery optimization card («حالة الإشعارات وتحسين البطارية») from `notifications_page.dart` so preferences flow directly from status card to notification types. Trigger native permission requests reactively upon switch toggle. Standalone diagnostics remain available at `/notifications/battery`.
 
 ## Android APK 1.0.1 (released)
@@ -391,8 +392,12 @@ the owner approves the whole chain.
 - [x] **Isolated Web Push SW & Mobile Browser Test Delivery**: Moved `web/push_client.js` registration to `FIREBASE_MESSAGING_SW_SCOPE = '/firebase-cloud-messaging-push-scope'` with `waitForSwActivation` (`skipWaiting()` + `clients.claim()`), retained `cachedMsgMod`, fell back to SW `showNotification` on Android Chrome (`TypeError` on `new Notification`), and honored `'reminders'` plural in `firebase-messaging-sw.js` quiet hours.
 - [x] **Cold-Start Routing, iOS APNS & Worker Season Parity**: Added `notificationRouteFromPayload` + `_pendingNotificationRoute` cold-start queue, iOS/macOS `DarwinNotificationDetails` + APNS alert payload in `tool/push_sender.js`, `pushTypes` check for web reminders, `/mass-schedule` & `/church-education/<id>` links + active season filtering in `tool/push_reminders.js`, and reactive `AppShell` web sync + locale-to-prefs language sync.
 
-## Android APK 1.0.2 (prepared, not tagged)
+## Android APK 1.0.2 (published)
 
-- [x] `pubspec.yaml` is `1.0.2+3` (version name `1.0.2`, build `3`) so an installed `1.0.1+2` offers the update. Notes: `android/RELEASE_NOTES.md`. Gradle reads `flutter.versionName` / `flutter.versionCode`; `tool/make_apk_manifest.mjs` reads the same pubspec line.
-- [ ] Push tag `apk-v1.0.2` only after this version is on `main`. That tag publishes the signed APKs and `version.json`. Do not tag from the version PR itself.
+- [x] `pubspec.yaml` was `1.0.2+3`. Tag `apk-v1.0.2` is on GitHub Releases (arm64 versionCode 2003, same certificate as apk-v1.0.1).
+
+## Android APK 1.0.3 (prepared, not tagged)
+
+- [x] `pubspec.yaml` is `1.0.3+4` (version name `1.0.3`, build `4`) so an installed `1.0.2+3` offers the update. Notes: `android/RELEASE_NOTES.md` (phone hero is a still poster; in-place update when the certificate matches). Gradle reads `flutter.versionName` / `flutter.versionCode`; split APKs store arm32 as 1000+build and arm64 as 2000+build.
+- [ ] Push tag `apk-v1.0.3` only after this version is on `main`, with the same release keystore secrets. Do not tag from the version PR itself. Phones that still have apk-v1.0.0 (debug certificate) must uninstall once before this release will install.
 

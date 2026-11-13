@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:church_portal/domain/app_update.dart';
 
@@ -95,5 +97,34 @@ void main() {
       expect(arm32Decision.hasUpdate, isTrue);
       expect(arm32Decision.asset!.url, contains('church-portal-arm32.apk'));
     });
+
+    test('a 32-bit abi name does not fall through to the arm64 apk', () {
+      final decision = decideUpdate(
+        currentBuild: 1,
+        installApkBuild: 3,
+        manifest: sampleManifest,
+        abi: 'armeabi',
+      );
+      expect(decision.asset!.url, contains('church-portal-arm32.apk'));
+    });
+  });
+
+  test('shippedApkAbi keeps a 64-bit phone on the higher versionCode split', () {
+    expect(shippedApkAbi('arm64-v8a'), 'arm64-v8a');
+    expect(shippedApkAbi(' ARM64-V8A '), 'arm64-v8a');
+    expect(shippedApkAbi('armeabi-v7a'), 'armeabi-v7a');
+    expect(shippedApkAbi('armeabi'), 'armeabi-v7a');
+    expect(shippedApkAbi('x86_64'), 'arm64-v8a');
+  });
+
+  test('applicationId is stable and a release keystore cannot fall back to debug', () {
+    final gradle = File('android/app/build.gradle.kts').readAsStringSync();
+    expect(gradle, contains('applicationId = "com.asafrachurch.church_portal"'));
+    expect(gradle, contains('versionCode = flutter.versionCode'));
+    expect(gradle, contains('ANDROID_REQUIRE_RELEASE_SIGNING'));
+    expect(gradle, contains('Refusing to sign with the debug keystore'));
+    final pubspec = File('pubspec.yaml').readAsStringSync();
+    final build = RegExp(r'^version:\s*[0-9.]+\+(\d+)', multiLine: true).firstMatch(pubspec);
+    expect(int.parse(build!.group(1)!), greaterThan(3), reason: 'build must rise past the published 1.0.2+3');
   });
 }

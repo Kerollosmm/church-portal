@@ -51,7 +51,7 @@ class PlatformAppUpdater {
   Future<String> getSupportedAbi() async {
     try {
       final abi = await channel.invokeMethod<String>('supportedAbi');
-      if (abi != null && abi.isNotEmpty) return abi;
+      if (abi != null && abi.isNotEmpty) return shippedApkAbi(abi);
     } catch (_) {}
     return 'arm64-v8a';
   }
