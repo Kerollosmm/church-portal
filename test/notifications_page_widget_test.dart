@@ -26,11 +26,15 @@ class FakeTestPushEnv implements PushEnv {
   String permission;
   int requestCalls = 0;
   int enableCalls = 0;
+  int openSettingsCalls = 0;
+  int localNotifCalls = 0;
+  bool openSettingsResult;
   final Map<String, String> storage;
 
   FakeTestPushEnv({
     this.isSupported = true,
     this.permission = 'default',
+    this.openSettingsResult = true,
     Map<String, String>? storage,
   }) : storage = storage ?? {};
 
@@ -42,7 +46,19 @@ class FakeTestPushEnv implements PushEnv {
   }
 
   @override
-  Future<bool> showLocalNotification(String title, String body, {String? icon, String? link}) async => true;
+  Future<String> refreshPermission() async => permission;
+
+  @override
+  Future<bool> openSystemSettings() async {
+    openSettingsCalls++;
+    return openSettingsResult;
+  }
+
+  @override
+  Future<bool> showLocalNotification(String title, String body, {String? icon, String? link}) async {
+    localNotifCalls++;
+    return true;
+  }
   @override
   Future<String?> enableAndGetToken({required String vapidKey, required Map<String, dynamic> firebaseConfig}) async {
     enableCalls++;
@@ -371,7 +387,7 @@ void main() {
     expect(find.byIcon(Icons.open_in_new), findsOneWidget);
   });
 
-  testWidgets('installed iPhone on iOS < 16.4 gets the update card; the app build is never "enabled"', (tester) async {
+  testWidgets('installed iPhone on iOS < 16.4 gets update card; native respects device permission', (tester) async {
     await tester.pumpWidget(buildTestable(
       child: const NotificationsPage(isWeb: true),
       pushSettings: const PushSettings(enabled: true),
@@ -392,7 +408,17 @@ void main() {
       installEnv: FakeTestInstallEnv(),
     ));
     await tester.pumpAndSettle();
+    expect(find.text('الإشعارات مفعلة'), findsOneWidget);
+
+    await tester.pumpWidget(buildTestable(
+      child: const NotificationsPage(isWeb: false),
+      pushSettings: const PushSettings(enabled: true),
+      pushEnv: FakeTestPushEnv(isSupported: false),
+      installEnv: FakeTestInstallEnv(),
+    ));
+    await tester.pumpAndSettle();
     expect(find.text('الإشعارات مفعلة'), findsNothing);
+    expect(find.text('هذا المتصفح لا يدعم تلقي الإشعارات.'), findsOneWidget);
   });
 
   testWidgets('a recurring «كل مرة» reminder past its first occurrence shows its next one and is not expired', (tester) async {
@@ -741,7 +767,7 @@ void main() {
     expect(pushEnv.requestCalls, 0);
   });
 
-  testWidgets('Switch toggling on native (isWeb: false) directly enables switch without permission gate', (tester) async {
+  testWidgets('Switch toggling on native (isWeb: false) requests OS permission when default and gates on result', (tester) async {
     tester.view.physicalSize = const Size(1200, 2000);
     tester.view.devicePixelRatio = 1;
     addTearDown(() {
@@ -765,12 +791,34 @@ void main() {
 
     expect(pushEnv.requestCalls, 0);
 
-    // Tap switch on native: toggles directly without permission gate
+    // Tap switch on native with 'default' permission: requests OS permission and enables on grant
     await tester.tap(find.text('تنويهات وأخبار'));
     await tester.pumpAndSettle();
 
-    expect(pushEnv.requestCalls, 0);
+    expect(pushEnv.requestCalls, 1);
     expect(find.text('إيقاف كل الإشعارات'), findsOneWidget);
+    expect(find.text('الإشعارات مفعلة'), findsOneWidget);
+
+    // Denied OS permission keeps toggle off (unmount previous ProviderScope so state resets cleanly)
+    await tester.pumpWidget(const SizedBox.shrink());
+    final deniedEnv = _DenyingPushEnv();
+    await tester.pumpWidget(buildTestable(
+      child: const NotificationsPage(isWeb: false),
+      pushSettings: const PushSettings(
+        enabled: true,
+        offered: [NotifyType.announcements],
+      ),
+      pushEnv: deniedEnv,
+      installEnv: FakeTestInstallEnv(),
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('تنويهات وأخبار'));
+    await tester.pumpAndSettle();
+
+    expect(deniedEnv.requestCalls, 1);
+    expect(find.text('إيقاف كل الإشعارات'), findsNothing);
+    expect(find.text('الإشعارات غير مفعلة لهذا التطبيق'), findsOneWidget);
   });
 
   testWidgets('Switch toggling on Web when canRequestPermission is false does not request permission and stays off', (tester) async {
@@ -911,6 +959,8 @@ void main() {
     expect(writes.length, 1);
     expect((writes.last['want'] as List).cast<String>(), contains('web_announcements_ar'));
 
+    await tester.ensureVisible(find.text('إيقاف كل الإشعارات'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('إيقاف كل الإشعارات'));
     await tester.pumpAndSettle();
     expect(writes.length, 2);
@@ -944,6 +994,8 @@ void main() {
     await tester.pumpAndSettle();
 
     failWrites = true;
+    await tester.ensureVisible(find.text('إيقاف كل الإشعارات'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('إيقاف كل الإشعارات'));
     await tester.pumpAndSettle();
 
@@ -1009,6 +1061,8 @@ void main() {
     await tester.pump();
 
     expect(find.text('إيقاف كل الإشعارات'), findsOneWidget);
+    await tester.ensureVisible(find.text('إيقاف كل الإشعارات'));
+    await tester.pump();
     await tester.tap(find.text('إيقاف كل الإشعارات'));
     await tester.pump();
 
@@ -1393,6 +1447,84 @@ void main() {
 
     expect(pushEnv.requestCalls, 0);
     expect(pushEnv.enableCalls, 0);
+  });
+
+  testWidgets('native denied state shows open-settings & recheck controls and updates when re-granted', (tester) async {
+    final pushEnv = FakeTestPushEnv(permission: 'denied');
+    final installEnv = FakeTestInstallEnv();
+
+    await tester.pumpWidget(buildTestable(
+      child: const NotificationsPage(isWeb: false),
+      pushSettings: const PushSettings(enabled: true, offered: [NotifyType.announcements]),
+      pushEnv: pushEnv,
+      installEnv: installEnv,
+    ));
+    await tester.pumpAndSettle();
+
+    expect(find.text('الإشعارات غير مفعلة لهذا التطبيق'), findsOneWidget);
+    expect(find.text('فتح إعدادات التطبيق'), findsOneWidget);
+    expect(find.text('التحقق من الإذن مجددًا'), findsOneWidget);
+
+    await tester.tap(find.text('فتح إعدادات التطبيق'));
+    await tester.pumpAndSettle();
+    expect(pushEnv.openSettingsCalls, 1);
+
+    pushEnv.permission = 'granted';
+    await tester.tap(find.text('التحقق من الإذن مجددًا'));
+    await tester.pumpAndSettle();
+    expect(find.text('الإشعارات مفعلة'), findsOneWidget);
+  });
+
+  testWidgets('native granted state sends device test notification and displays confirmation', (tester) async {
+    final pushEnv = FakeTestPushEnv(permission: 'granted');
+    final installEnv = FakeTestInstallEnv();
+
+    await tester.pumpWidget(buildTestable(
+      child: const NotificationsPage(isWeb: false),
+      pushSettings: const PushSettings(enabled: true, offered: [NotifyType.announcements]),
+      pushEnv: pushEnv,
+      installEnv: installEnv,
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('جرّب إشعارًا'));
+    await tester.pumpAndSettle();
+
+    expect(pushEnv.localNotifCalls, 1);
+    expect(find.text('تم إرسال إشعار تجريبي على هذا الجهاز'), findsOneWidget);
+  });
+
+  testWidgets('native Android shows battery & settings health guide link while iOS does not', (tester) async {
+    final pushEnv = FakeTestPushEnv(permission: 'granted');
+    final installEnv = FakeTestInstallEnv();
+
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    try {
+      await tester.pumpWidget(buildTestable(
+        child: const NotificationsPage(isWeb: false),
+        pushSettings: const PushSettings(enabled: true, offered: [NotifyType.announcements]),
+        pushEnv: pushEnv,
+        installEnv: installEnv,
+      ));
+      await tester.pumpAndSettle();
+      expect(find.text('إذا لم تصلك الإشعارات في وقتها — فحص البطارية والإعدادات'), findsOneWidget);
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
+
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    try {
+      await tester.pumpWidget(buildTestable(
+        child: const NotificationsPage(isWeb: false),
+        pushSettings: const PushSettings(enabled: true, offered: [NotifyType.announcements]),
+        pushEnv: pushEnv,
+        installEnv: installEnv,
+      ));
+      await tester.pumpAndSettle();
+      expect(find.text('إذا لم تصلك الإشعارات في وقتها — فحص البطارية والإعدادات'), findsNothing);
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
   });
 }
 

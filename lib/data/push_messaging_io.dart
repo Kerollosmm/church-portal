@@ -1,13 +1,17 @@
 // Native (Android / IO) FCM push messaging client (ADR-059).
 
 import 'dart:async';
+import 'dart:convert';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart' show WidgetsFlutterBinding;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../domain/notify_plan.dart';
 import '../domain/push.dart';
+import '../firebase_options.dart';
 import 'local_notifications.dart';
 
 const String seenNidsKey = 'church_portal_seen_nids';
@@ -17,6 +21,15 @@ const int maxSeenNids = 100;
 /// to prevent Dart AOT compiler from tree-shaking it when running in background isolate.
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  WidgetsFlutterBinding.ensureInitialized();
+  if (Firebase.apps.isEmpty) {
+    final opts = DefaultFirebaseOptions.currentPlatformOrNull;
+    if (opts != null) {
+      try {
+        await Firebase.initializeApp(options: opts);
+      } catch (_) {}
+    }
+  }
   await PushMessaging.handleIncomingMessage(message);
 }
 
@@ -34,7 +47,7 @@ class PushMessaging {
     void Function(String route)? onSelectRoute,
   }) async {
     // 1. Client Guard: Only remote-owned types ('announcements' and 'seasons') are processed.
-    // Local types ('verse_daily', 'katameros_daily', 'feasts', 'reminders') are strictly local on Android.
+    // Local types ('verse_daily', 'katameros_daily', 'feasts', 'reminders') are strictly local on native apps.
     final type = message.data['type']?.toString().trim();
     if (type != 'announcements' && type != 'seasons') {
       return false;
@@ -99,6 +112,36 @@ class PushMessaging {
             importance: Importance.high,
           );
 
+    final effectiveSelect = onSelectRoute ?? _onSelectRoute;
+    if (plugin == null) {
+      const androidInit = AndroidInitializationSettings(notificationSmallIcon);
+      const darwinInit = DarwinInitializationSettings(
+        requestAlertPermission: false,
+        requestBadgePermission: false,
+        requestSoundPermission: false,
+      );
+      const linuxInit = LinuxInitializationSettings(defaultActionName: 'Open');
+      try {
+        await fln.initialize(
+          settings: const InitializationSettings(
+            android: androidInit,
+            iOS: darwinInit,
+            macOS: darwinInit,
+            linux: linuxInit,
+          ),
+          onDidReceiveNotificationResponse: effectiveSelect == null
+              ? null
+              : (NotificationResponse response) {
+                  final route = notificationRouteFromPayload(response.payload);
+                  if (route.isNotEmpty) effectiveSelect(route);
+                },
+        );
+        final androidPlugin =
+            fln.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+        await androidPlugin?.createNotificationChannel(channel);
+      } catch (_) {}
+    }
+
     final androidDetails = AndroidNotificationDetails(
       channel.id,
       channel.name,
@@ -108,19 +151,32 @@ class PushMessaging {
       color: notificationColor,
       icon: notificationSmallIcon,
     );
+    const darwinDetails = DarwinNotificationDetails(
+      presentAlert: true,
+      presentBanner: true,
+      presentList: true,
+      presentBadge: false,
+      presentSound: true,
+    );
+    const linuxDetails = LinuxNotificationDetails();
 
     await fln.show(
       id: notifId,
       title: title,
       body: body,
-      notificationDetails: NotificationDetails(android: androidDetails),
+      notificationDetails: NotificationDetails(
+        android: androidDetails,
+        iOS: darwinDetails,
+        macOS: darwinDetails,
+        linux: linuxDetails,
+      ),
       payload: link,
     );
 
     return true;
   }
 
-  /// Initializes Android Firebase Messaging listeners and foreground presentation.
+  /// Initializes native Firebase Messaging listeners and foreground presentation.
   static Future<void> initialize({void Function(String route)? onSelectRoute}) async {
     if (kIsWeb) return;
     _onSelectRoute = onSelectRoute;
@@ -144,18 +200,18 @@ class PushMessaging {
 
       // App opened from notification in background
       FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
-        final link = safeNotificationLink(message.data['link']?.toString());
-        if (link.isNotEmpty && link != '/') {
-          (onSelectRoute ?? _onSelectRoute)?.call(link);
+        final route = notificationRouteFromPayload(jsonEncode(message.data));
+        if (route.isNotEmpty) {
+          (onSelectRoute ?? _onSelectRoute)?.call(route);
         }
       });
 
       // App launched from terminated state via notification tap
       final initialMessage = await messaging.getInitialMessage();
       if (initialMessage != null) {
-        final link = safeNotificationLink(initialMessage.data['link']?.toString());
-        if (link.isNotEmpty && link != '/') {
-          (onSelectRoute ?? _onSelectRoute)?.call(link);
+        final route = notificationRouteFromPayload(jsonEncode(initialMessage.data));
+        if (route.isNotEmpty && route != '/') {
+          (onSelectRoute ?? _onSelectRoute)?.call(route);
         }
       }
     } catch (_) {

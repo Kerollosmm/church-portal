@@ -1,5 +1,6 @@
 // Native (Android / IO) implementation of LocalNotifier (ADR-058 / PR B).
 
+import 'package:flutter/foundation.dart' show TargetPlatform, defaultTargetPlatform;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/timezone.dart' as tz;
 
@@ -110,7 +111,74 @@ class LocalNotifierImpl implements LocalNotifier {
       final granted = await androidPlugin.requestNotificationsPermission();
       return granted ?? false;
     }
+
+    final iosPlugin =
+        _plugin.resolvePlatformSpecificImplementation<IOSFlutterLocalNotificationsPlugin>();
+    if (iosPlugin != null) {
+      final granted = await iosPlugin.requestPermissions(
+        alert: true,
+        badge: true,
+        sound: true,
+      );
+      return granted ?? false;
+    }
+
+    final macPlugin =
+        _plugin.resolvePlatformSpecificImplementation<MacOSFlutterLocalNotificationsPlugin>();
+    if (macPlugin != null) {
+      final granted = await macPlugin.requestPermissions(
+        alert: true,
+        badge: true,
+        sound: true,
+      );
+      return granted ?? false;
+    }
+
+    if (defaultTargetPlatform == TargetPlatform.linux) {
+      return true;
+    }
     return false;
+  }
+
+  @override
+  Future<bool> areNotificationsEnabled() async {
+    try {
+      final androidPlugin =
+          _plugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+      if (androidPlugin != null) {
+        return (await androidPlugin.areNotificationsEnabled()) ?? false;
+      }
+
+      final iosPlugin =
+          _plugin.resolvePlatformSpecificImplementation<IOSFlutterLocalNotificationsPlugin>();
+      if (iosPlugin != null) {
+        final perms = await iosPlugin.checkPermissions();
+        return perms?.isEnabled ?? false;
+      }
+
+      final macPlugin =
+          _plugin.resolvePlatformSpecificImplementation<MacOSFlutterLocalNotificationsPlugin>();
+      if (macPlugin != null) {
+        final perms = await macPlugin.checkPermissions();
+        return perms?.isEnabled ?? false;
+      }
+
+      if (defaultTargetPlatform == TargetPlatform.linux) {
+        return true;
+      }
+    } catch (_) {}
+    return false;
+  }
+
+  @override
+  Future<String?> getLaunchPayload() async {
+    try {
+      final details = await _plugin.getNotificationAppLaunchDetails();
+      if (details != null && details.didNotificationLaunchApp) {
+        return details.notificationResponse?.payload;
+      }
+    } catch (_) {}
+    return null;
   }
 
   @override
@@ -164,12 +232,28 @@ class LocalNotifierImpl implements LocalNotifier {
         silent: n.silent,
       );
 
+      final darwinDetails = DarwinNotificationDetails(
+        presentAlert: true,
+        presentBanner: true,
+        presentList: true,
+        presentBadge: false,
+        presentSound: !n.silent,
+      );
+      const linuxDetails = LinuxNotificationDetails();
+
+      final details = NotificationDetails(
+        android: androidDetails,
+        iOS: darwinDetails,
+        macOS: darwinDetails,
+        linux: linuxDetails,
+      );
+
       Future<void> schedule(AndroidScheduleMode mode) => _plugin.zonedSchedule(
             id: n.id,
             title: title,
             body: body,
             scheduledDate: tzDate,
-            notificationDetails: NotificationDetails(android: androidDetails),
+            notificationDetails: details,
             androidScheduleMode: mode,
             payload: n.payload ?? '',
           );
@@ -217,12 +301,25 @@ class LocalNotifierImpl implements LocalNotifier {
       playSound: channel.playSound,
       enableVibration: channel.enableVibration,
     );
+    const darwinDetails = DarwinNotificationDetails(
+      presentAlert: true,
+      presentBanner: true,
+      presentList: true,
+      presentBadge: false,
+      presentSound: true,
+    );
+    const linuxDetails = LinuxNotificationDetails();
 
     await _plugin.show(
       id: id,
       title: title,
       body: body,
-      notificationDetails: NotificationDetails(android: androidDetails),
+      notificationDetails: NotificationDetails(
+        android: androidDetails,
+        iOS: darwinDetails,
+        macOS: darwinDetails,
+        linux: linuxDetails,
+      ),
       payload: payload,
     );
   }

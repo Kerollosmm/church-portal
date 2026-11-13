@@ -947,4 +947,47 @@ void main() {
       expect(dates, isNot(contains('2026-11-15')), reason: 'replaced day without any liturgy');
     });
   });
+
+  group('notificationRouteFromPayload', () {
+    test('maps local notification JSON payloads to valid routes', () {
+      expect(
+        notificationRouteFromPayload(jsonEncode({'type': 'verse_daily', 'date': '2026-11-08'})),
+        '/readings/2026-11-08?tab=verse',
+      );
+      expect(
+        notificationRouteFromPayload(jsonEncode({'type': 'katameros_daily', 'date': '2026-11-08'})),
+        '/readings/2026-11-08?tab=katameros',
+      );
+      expect(
+        notificationRouteFromPayload(jsonEncode({'type': 'feasts', 'date': '2026-11-08'})),
+        '/',
+      );
+      expect(
+        notificationRouteFromPayload(jsonEncode({'type': 'reminders', 'eventKey': 'lit-fri1'})),
+        '/mass-schedule',
+      );
+      expect(
+        notificationRouteFromPayload(jsonEncode({'type': 'reminders', 'eventKey': 'season-pascha'})),
+        '/mass-schedule',
+      );
+      expect(
+        notificationRouteFromPayload(jsonEncode({'type': 'reminders', 'eventKey': 'meeting-youth'})),
+        '/church-education/youth',
+      );
+      expect(
+        notificationRouteFromPayload(jsonEncode({'type': 'reminders', 'eventKey': 'day-abc123'})),
+        '/',
+      );
+    });
+
+    test('honors safe explicit link and rejects unsafe or malformed payloads', () {
+      expect(notificationRouteFromPayload('/mass-schedule'), '/mass-schedule');
+      expect(notificationRouteFromPayload(jsonEncode({'type': 'announcements', 'link': '/clinics'})), '/clinics');
+      expect(notificationRouteFromPayload(jsonEncode({'type': 'announcements', 'link': 'https://evil.test'})), '/');
+      expect(notificationRouteFromPayload('https://evil.test'), '/');
+      expect(notificationRouteFromPayload('not-valid-json'), '/');
+      expect(notificationRouteFromPayload(null), '/');
+      expect(notificationRouteFromPayload('   '), '/');
+    });
+  });
 }

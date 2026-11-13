@@ -49,6 +49,7 @@ Future<void> showReminderSheet(
   required DateTime startsAt,
   bool recurring = false,
   Reminder? existing,
+  bool? isWeb,
 }) {
   registerStrings(reminderSheetStrings);
   final pal = context.pal;
@@ -66,6 +67,7 @@ Future<void> showReminderSheet(
       startsAt: startsAt,
       recurring: recurring,
       existing: existing,
+      isWeb: isWeb,
     ),
   );
 }
@@ -79,6 +81,7 @@ class _ReminderConfigSheet extends ConsumerStatefulWidget {
   final DateTime startsAt;
   final bool recurring;
   final Reminder? existing;
+  final bool? isWeb;
 
   const _ReminderConfigSheet({
     required this.eventKey,
@@ -87,6 +90,7 @@ class _ReminderConfigSheet extends ConsumerStatefulWidget {
     required this.startsAt,
     this.recurring = false,
     this.existing,
+    this.isWeb,
   });
 
   @override
@@ -105,10 +109,12 @@ int? initialReminderLead({
   required DateTime startsAt,
   required DateTime now,
   bool recurring = false,
+  bool? isWeb,
 }) {
+  final web = isWeb ?? kIsWeb;
   bool ok(int lead) {
     if (startsAt.subtract(Duration(minutes: lead)).isBefore(now)) return false;
-    if (kIsWeb && !recurring && isWebLeadTooSoon(startsAt: startsAt, lead: lead, now: now)) {
+    if (web && !recurring && isWebLeadTooSoon(startsAt: startsAt, lead: lead, now: now)) {
       return false;
     }
     return true;
@@ -135,6 +141,7 @@ class _ReminderConfigSheetState extends ConsumerState<_ReminderConfigSheet> {
       startsAt: widget.startsAt,
       now: now,
       recurring: _every,
+      isWeb: widget.isWeb,
     );
   }
 
@@ -142,7 +149,8 @@ class _ReminderConfigSheetState extends ConsumerState<_ReminderConfigSheet> {
     if (widget.startsAt.subtract(Duration(minutes: lead)).isBefore(now)) {
       return true;
     }
-    if (kIsWeb && !_every) {
+    final web = widget.isWeb ?? kIsWeb;
+    if (web && !_every) {
       return isWebLeadTooSoon(startsAt: widget.startsAt, lead: lead, now: now);
     }
     return false;
@@ -150,6 +158,7 @@ class _ReminderConfigSheetState extends ConsumerState<_ReminderConfigSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final web = widget.isWeb ?? kIsWeb;
     final pal = context.pal;
     final pushSettings = ref.watch(pushSettingsProvider);
     final leads = pushSettings.reminderLeads;
@@ -307,7 +316,7 @@ class _ReminderConfigSheetState extends ConsumerState<_ReminderConfigSheet> {
 
                   // Platform delivery line (web: may arrive ~30 min late) —
                   // shown once a delivery path exists (PR B / PR D).
-                  if (kIsWeb && kPushDeliveryShipped)
+                  if (web && kPushDeliveryShipped)
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(

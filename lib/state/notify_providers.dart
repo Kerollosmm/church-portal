@@ -362,6 +362,11 @@ class NotifyPlanner {
     });
     ref.listen<Locale>(localeProvider, (prev, next) {
       final prefs = ref.read(pushPrefsProvider);
+      if (prefs.lang != next.languageCode) {
+        Future.microtask(() {
+          ref.read(pushPrefsProvider.notifier).setLang(next.languageCode);
+        });
+      }
       PushMessaging.updateSubscriptions(prefs, next.languageCode);
     });
     ref.listen<FeatureSettings>(featuresProvider, (prev, next) => scheduleReplan());

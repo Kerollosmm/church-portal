@@ -745,3 +745,53 @@ class NotificationPlanner {
       );
 }
 
+final _isoDateRe = RegExp(r'^\d{4}-\d{2}-\d{2}$');
+
+/// Maps a local-notification payload (JSON encoded or a plain internal path)
+/// or FCM data payload into a safe in-app GoRouter route.
+String notificationRouteFromPayload(String? rawPayload) {
+  if (rawPayload == null) return '/';
+  final trimmed = rawPayload.trim();
+  if (trimmed.isEmpty) return '/';
+  if (trimmed.startsWith('/')) return safeNotificationLink(trimmed);
+
+  try {
+    final decoded = jsonDecode(trimmed);
+    if (decoded is! Map) return '/';
+    final rawLink = decoded['link']?.toString();
+    if (rawLink != null && rawLink.trim().startsWith('/')) {
+      return safeNotificationLink(rawLink);
+    }
+
+    final type = decoded['type']?.toString().trim() ?? '';
+    final date = decoded['date']?.toString().trim() ?? '';
+    final eventKey = decoded['eventKey']?.toString().trim() ?? '';
+
+    switch (type) {
+      case 'verse_daily':
+        return _isoDateRe.hasMatch(date) ? '/readings/$date?tab=verse' : '/';
+      case 'katameros_daily':
+        return _isoDateRe.hasMatch(date) ? '/readings/$date?tab=katameros' : '/';
+      case 'feasts':
+        return '/';
+      case 'reminders':
+        if (eventKey.startsWith('lit-') || eventKey.startsWith('season-')) {
+          return '/mass-schedule';
+        }
+        if (eventKey.startsWith('meeting-')) {
+          final id = eventKey.substring('meeting-'.length).trim();
+          return id.isNotEmpty ? '/church-education/${Uri.encodeComponent(id)}' : '/church-education';
+        }
+        return '/';
+      case 'seasons':
+      case 'announcements':
+        return safeNotificationLink(rawLink);
+      default:
+        return '/';
+    }
+  } catch (_) {
+    return '/';
+  }
+}
+
+

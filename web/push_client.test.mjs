@@ -2,7 +2,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  FIREBASE_MESSAGING_SW_SCOPE,
   isSupported,
+  getFirebaseMessaging,
   enable,
   getToken,
   deleteToken,
@@ -241,3 +243,64 @@ test('inbox, clearInbox, setQuiet interact with IndexedDB stores', async () => {
   assert.equal(cleared, true);
   assert.equal(mockStorage.inbox.length, 0);
 });
+
+test('getFirebaseMessaging registers SW under isolated push scope without waiting on navigator.serviceWorker.ready', async () => {
+  const registered = [];
+  const fakeReg = {
+    active: { state: 'activated' },
+  };
+  const mockNav = {
+    serviceWorker: {
+      register: async (scriptUrl, opts) => {
+        registered.push({ scriptUrl, opts });
+        return fakeReg;
+      },
+      // Simulate hanging ready promise if called
+      ready: new Promise(() => {}),
+    },
+  };
+
+  const result = await getFirebaseMessaging(
+    { apiKey: 'k' },
+    async (url) => {
+      if (url.includes('firebase-app.js')) return { getApps: () => [], initializeApp: () => ({}) };
+      return { getMessaging: () => ({ ok: true }), getToken: async () => 't' };
+    },
+    { navigator: mockNav },
+  );
+
+  assert.equal(registered.length, 1);
+  assert.equal(registered[0].scriptUrl, '/firebase-messaging-sw.js');
+  assert.deepEqual(registered[0].opts, { scope: FIREBASE_MESSAGING_SW_SCOPE });
+  assert.equal(FIREBASE_MESSAGING_SW_SCOPE, '/firebase-cloud-messaging-push-scope');
+  assert.equal(result.swRegistration, fakeReg);
+});
+
+test('test() resolves SW registration under push scope when no custom showNotification is passed', async () => {
+  const checkedScopes = [];
+  const shown = [];
+  const mockNav = {
+    serviceWorker: {
+      getRegistration: async (scope) => {
+        checkedScopes.push(scope);
+        if (scope === FIREBASE_MESSAGING_SW_SCOPE) {
+          return {
+            showNotification: async (title, opts) => shown.push({ title, opts }),
+          };
+        }
+        return null;
+      },
+    },
+  };
+
+  const ok = await pushTest(
+    { title: 'اختبار', body: 'تجربة', link: '/notifications' },
+    { isSupported: () => true, navigator: mockNav },
+  );
+
+  assert.equal(ok, true);
+  assert.deepEqual(checkedScopes, ['/firebase-cloud-messaging-push-scope']);
+  assert.equal(shown.length, 1);
+  assert.equal(shown[0].opts.data.link, '/notifications');
+});
+

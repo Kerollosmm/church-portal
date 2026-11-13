@@ -9,6 +9,7 @@ import 'package:material_ui/material_ui.dart';
 import 'app.dart';
 import 'core/install_env.dart';
 import 'core/locale_storage.dart';
+import 'core/push_env.dart';
 import 'data/admin_repository.dart';
 import 'data/content_repository.dart';
 import 'data/error_reporting.dart';
@@ -43,8 +44,13 @@ Future<void> _start() async {
   });
   CairoTime.ensureInitialized();
 
-  final results =
-      await Future.wait([SeedData.load(), bootstrapFirebase(), initLanguageStore(), initInstallStore()]);
+  final results = await Future.wait([
+    SeedData.load(),
+    bootstrapFirebase(),
+    initLanguageStore(),
+    initInstallStore(),
+    initPushStore(),
+  ]);
   final seed = results[0] as SeedData;
   final status = results[1] as FirebaseStatus;
 
@@ -54,33 +60,52 @@ Future<void> _start() async {
       status.available ? AdminRepository(FirebaseFirestore.instance, FirebaseAuth.instance) : null;
   final MediaRepository? media = admin?.media;
 
-  if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
-    final notifier = LocalNotifier();
-    await notifier.initialize(
-      onSelectNotification: (payload) {
-        if (payload != null && payload.isNotEmpty) {
-          navigateToNotification(payload);
-        }
-      },
-    );
-    await PushMessaging.initialize(
-      onSelectRoute: (route) {
-        navigateToNotification(route);
-      },
-    );
-    Workmanager().initialize(
-      notificationReplenishCallbackDispatcher,
-    );
-    Workmanager().registerPeriodicTask(
-      'church_portal_replenish_task',
-      'notificationReplenishment',
-      frequency: const Duration(hours: 24),
-      constraints: Constraints(
-        networkType: NetworkType.notRequired,
-        requiresBatteryNotLow: true,
-      ),
-      existingWorkPolicy: ExistingPeriodicWorkPolicy.keep,
-    );
+  if (!kIsWeb) {
+    final isAndroid = defaultTargetPlatform == TargetPlatform.android;
+    final isApple = defaultTargetPlatform == TargetPlatform.iOS ||
+        defaultTargetPlatform == TargetPlatform.macOS;
+    final isLinux = defaultTargetPlatform == TargetPlatform.linux;
+
+    if (isAndroid || isApple || isLinux) {
+      final notifier = LocalNotifier();
+      await notifier.initialize(
+        onSelectNotification: (payload) {
+          if (payload != null && payload.isNotEmpty) {
+            navigateToNotification(payload);
+          }
+        },
+      );
+      final launchPayload = await notifier.getLaunchPayload();
+      if (launchPayload != null && launchPayload.isNotEmpty) {
+        navigateToNotification(launchPayload);
+      }
+      // Re-check OS permission now that flutter_local_notifications is initialized.
+      await const PlatformPushEnv().refreshPermission();
+    }
+
+    if (isAndroid || defaultTargetPlatform == TargetPlatform.iOS) {
+      await PushMessaging.initialize(
+        onSelectRoute: (route) {
+          navigateToNotification(route);
+        },
+      );
+    }
+
+    if (isAndroid) {
+      Workmanager().initialize(
+        notificationReplenishCallbackDispatcher,
+      );
+      Workmanager().registerPeriodicTask(
+        'church_portal_replenish_task',
+        'notificationReplenishment',
+        frequency: const Duration(hours: 24),
+        constraints: Constraints(
+          networkType: NetworkType.notRequired,
+          requiresBatteryNotLow: true,
+        ),
+        existingWorkPolicy: ExistingPeriodicWorkPolicy.keep,
+      );
+    }
   }
 
   runApp(ProviderScope(

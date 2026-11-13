@@ -23,7 +23,9 @@ class FakeLocalNotifier implements LocalNotifier {
   bool initialized = false;
   void Function(String? payload)? selectNotificationCallback;
   bool permissionGranted = true;
+  bool notificationsEnabled = true;
   bool exactAlarmsAllowed = true;
+  String? launchPayload;
   List<PlannedNotification> scheduledPlan = [];
   final List<int> cancelledIds = [];
   bool allCancelled = false;
@@ -37,6 +39,9 @@ class FakeLocalNotifier implements LocalNotifier {
 
   @override
   Future<bool> requestPermissions() async => permissionGranted;
+
+  @override
+  Future<bool> areNotificationsEnabled() async => notificationsEnabled;
 
   @override
   Future<bool> canScheduleExactAlarms() async => exactAlarmsAllowed;
@@ -71,6 +76,9 @@ class FakeLocalNotifier implements LocalNotifier {
 
   @override
   Future<int> pendingCount() async => scheduledPlan.length;
+
+  @override
+  Future<String?> getLaunchPayload() async => launchPayload;
 }
 
 void main() {
@@ -434,6 +442,34 @@ void main() {
       final lastReplenish = prefs.getString(notifyDiagLastReplenishKey);
       expect(lastReplenish, isNotNull);
       expect(DateTime.parse(lastReplenish!).isAtSameMomentAs(now), isTrue);
+    });
+
+    test('changing localeProvider updates pushPrefsProvider.lang', () async {
+      SharedPreferences.setMockInitialValues({});
+      final fakeNotifier = FakeLocalNotifier();
+
+      final container = ProviderContainer(
+        overrides: [
+          localNotifierProvider.overrideWithValue(fakeNotifier),
+          pushPrefsProvider.overrideWith(
+            () => _TestPushPrefsNotifier(PushPrefs(
+              types: {NotifyType.verse_daily},
+              lang: 'ar',
+              updatedAt: DateTime.utc(2026, 11, 8),
+            )),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      container.read(notifyPlannerProvider);
+      expect(container.read(pushPrefsProvider).lang, 'ar');
+
+      container.read(localeProvider.notifier).toggle();
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+
+      expect(container.read(localeProvider).languageCode, 'en');
+      expect(container.read(pushPrefsProvider).lang, 'en');
     });
   });
 }

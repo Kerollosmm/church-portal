@@ -11,7 +11,7 @@ import 'core/document_lang.dart';
 import 'core/l10n.dart';
 import 'data/error_reporting.dart';
 import 'domain/item_detail.dart';
-import 'domain/push.dart';
+import 'domain/notify_plan.dart';
 import 'state/providers.dart';
 // Deferred (plan PR 3, 3.3): separate web chunks, fetched only on /admin and
 // /ask, so the public bundle excludes the admin dashboard and the AI SDK.
@@ -132,11 +132,22 @@ final routerProvider = Provider<GoRouter>((ref) {
 
 final rootNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'root');
 
-void navigateToNotification(String rawLink) {
-  final safe = safeNotificationLink(rawLink);
+String? _pendingNotificationRoute;
+
+/// Consumes and clears any notification route queued before the navigator mounted.
+String? consumePendingNotificationRoute() {
+  final route = _pendingNotificationRoute;
+  _pendingNotificationRoute = null;
+  return route;
+}
+
+void navigateToNotification(String rawPayload) {
+  final route = notificationRouteFromPayload(rawPayload);
   final ctx = rootNavigatorKey.currentContext;
   if (ctx != null) {
-    ctx.go(safe);
+    ctx.go(route);
+  } else {
+    _pendingNotificationRoute = route;
   }
 }
 

@@ -6,12 +6,16 @@ import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../../core/l10n.dart';
-import '../../core/push_env.dart' show hasPendingWebPushSync;
+import '../../core/motion_env.dart';
+import '../../core/push_env.dart' show hasPendingWebPushSync, readWebPushStorageState;
 import '../../core/theme.dart';
 import '../../data/error_reporting.dart';
 import '../../data/web_push_repository.dart' deferred as web_push;
 import '../../domain/features.dart';
 import '../../domain/item_detail.dart';
+import '../../domain/reminders.dart';
+import '../../router.dart' show consumePendingNotificationRoute;
+import '../../state/notify_providers.dart';
 import '../../state/providers.dart';
 import '../pages/category_page.dart' show categoryIcon;
 import 'coptic_cross.dart';
@@ -130,6 +134,9 @@ class _AppShellState extends ConsumerState<AppShell> {
   bool _drawerOpen = false;
   DateTime? _lastBackPressTime;
   StreamSubscription<String>? _deepLinksSub;
+  ProviderSubscription<List<Reminder>>? _remindersSub;
+  ProviderSubscription<Locale>? _localeSub;
+  ProviderSubscription<PushPrefs>? _pushPrefsSub;
   dynamic _webPushRepo;
 
   String get location => widget.location;
@@ -137,8 +144,37 @@ class _AppShellState extends ConsumerState<AppShell> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final pending = consumePendingNotificationRoute();
+      if (pending != null && context.mounted) {
+        context.go(pending);
+      }
+      if (!kIsWeb && !MotionEnv.isTest) {
+        ref.read(notifyPlannerProvider).scheduleReplan(const Duration(seconds: 2));
+      }
+    });
     if (kIsWeb) {
       _initWebPush();
+    }
+  }
+
+  Future<void> _syncWebPushState({PushPrefs? prefs, List<Reminder>? reminders}) async {
+    final pushEnv = ref.read(pushEnvProvider);
+    final hasToken = _webPushRepo?.syncedToken != null || readWebPushStorageState(pushEnv)?.syncedToken != null;
+    if (!hasToken) return;
+    try {
+      await web_push.loadLibrary();
+      if (!mounted) return;
+      final repo = web_push.WebPushRepository.sharedFor(pushEnv);
+      _webPushRepo = repo;
+      if (repo.syncedToken == null) return;
+      await repo.syncPreferences(
+        prefs: prefs ?? ref.read(pushPrefsProvider),
+        reminders: reminders ?? ref.read(userRemindersProvider),
+      );
+    } catch (e, st) {
+      ErrorReporting.capture(e, st, section: 'notifications', source: 'web_push_sync');
     }
   }
 
@@ -148,6 +184,34 @@ class _AppShellState extends ConsumerState<AppShell> {
       if (mounted && link.isNotEmpty) {
         context.go(link);
       }
+    });
+
+    _remindersSub = ref.listenManual<List<Reminder>>(userRemindersProvider, (prev, next) {
+      _syncWebPushState(reminders: next);
+    });
+
+    _localeSub = ref.listenManual<Locale>(localeProvider, (prev, next) {
+      final prefs = ref.read(pushPrefsProvider);
+      if (prefs.lang != next.languageCode) {
+        ref.read(pushPrefsProvider.notifier).setLang(next.languageCode);
+      }
+      _syncWebPushState(prefs: prefs.copyWith(lang: next.languageCode));
+    });
+
+    _pushPrefsSub = ref.listenManual<PushPrefs>(pushPrefsProvider, (prev, next) {
+      if (prev == null ||
+          prev.quietHoursEnabled != next.quietHoursEnabled ||
+          prev.quiet.from != next.quiet.from ||
+          prev.quiet.to != next.quiet.to ||
+          prev.remindersRespectQuietHours != next.remindersRespectQuietHours) {
+        unawaited(pushEnv.syncQuietHours(
+          enabled: next.quietHoursEnabled,
+          start: next.quiet.from,
+          end: next.quiet.to,
+          remindersRespectQuietHours: next.remindersRespectQuietHours,
+        ));
+      }
+      _syncWebPushState(prefs: next);
     });
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
@@ -189,6 +253,9 @@ class _AppShellState extends ConsumerState<AppShell> {
   @override
   void dispose() {
     _deepLinksSub?.cancel();
+    _remindersSub?.close();
+    _localeSub?.close();
+    _pushPrefsSub?.close();
     _webPushRepo?.dispose();
     super.dispose();
   }

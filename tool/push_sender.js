@@ -96,6 +96,21 @@ export async function sendFcmMessage(projectId, token, target, data, fetchImpl =
     android: {
       priority: 'high',
     },
+    apns: {
+      headers: {
+        'apns-push-type': 'alert',
+        'apns-priority': '10',
+      },
+      payload: {
+        aps: {
+          alert: {
+            title: data.title,
+            body: data.body,
+          },
+          sound: 'default',
+        },
+      },
+    },
     webpush: {
       headers: {
         Urgency: 'high',
@@ -537,7 +552,14 @@ export async function runPushSender(env, options = {}) {
     }
 
     // 3. Due web reminders from meta/push_plan.reminderPlan
-    const reminderPlan = Array.isArray(pushPlanDoc.reminderPlan) ? pushPlanDoc.reminderPlan : [];
+    const remindersTypeEnabled =
+      !Array.isArray(features.pushTypes) ||
+      features.pushTypes.length === 0 ||
+      features.pushTypes.includes('reminders');
+    const reminderPlan =
+      remindersTypeEnabled && Array.isArray(pushPlanDoc.reminderPlan)
+        ? pushPlanDoc.reminderPlan
+        : [];
     const remindersSent = { ...(notifications.remindersSent || {}) };
     const topicsMap = pushTopicsDoc.topics || null; // null if uninitialized -> fails open
 

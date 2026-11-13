@@ -7,6 +7,8 @@ import 'package:web/web.dart' as web;
 
 import '../domain/push.dart';
 
+Future<void> initPushStore() async {}
+
 bool getIsSupported() {
   try {
     final hasNotification = globalContext.has('Notification');
@@ -28,6 +30,10 @@ String getPermission() {
   }
 }
 
+Future<String> refreshPermission() async => getPermission();
+
+Future<bool> openSystemSettings() async => false;
+
 Future<String> requestPermission() async {
   try {
     if (!globalContext.has('Notification')) return 'denied';
@@ -45,14 +51,18 @@ Future<bool> showLocalNotification(String title, String body, {String? icon, Str
       final perm = await web.Notification.requestPermission().toDart;
       if (perm.toDart != 'granted') return false;
     }
-    web.Notification(
-      title,
-      web.NotificationOptions(
-        body: body,
-        icon: icon ?? '/icons/Icon-192.png',
-      ),
-    );
-    return true;
+    try {
+      web.Notification(
+        title,
+        web.NotificationOptions(
+          body: body,
+          icon: icon ?? '/icons/Icon-192.png',
+        ),
+      );
+      return true;
+    } catch (_) {
+      return await showSwTestNotification(title: title, body: body, link: link);
+    }
   } catch (_) {
     return false;
   }
