@@ -159,7 +159,7 @@ flowchart TD
   (org `kerollos-0e`, project `church-portal`, EU region `ingest.de.sentry.io`); debug / profile builds and tests
   without the define report nothing. **environment** `SENTRY_ENVIRONMENT` define → `production` (main deploy),
   `preview` (PR previews), `ci` (CI build), else `production` (release) / `debug`. **release**
-  `church-portal@<APP_VERSION>+<GIT_SHA[0:7]>` (CI passes both; otherwise the SDK's `church_portal@1.0.1+2`).
+  `church-portal@<APP_VERSION>+<GIT_SHA[0:7]>` (CI passes both; otherwise the SDK's `church_portal@1.0.2+3`).
 - **Admin switch** `settings/features.errorReporting` (default on) → `errorReportingSwitchProvider` → watched in
   `ChurchPortalApp.build` → `ErrorReporting.gate.update(...)`. On Firestore the bundled seed's copy of
   `settings/features` (seeding check unanswered, or no doc) does not set it (`errorReportingSwitch`), so early events
