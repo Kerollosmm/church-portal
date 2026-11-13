@@ -293,7 +293,7 @@ console.
 | Web release with key | `ReCaptchaEnterpriseProvider(AppConfig.recaptchaSiteKey)` — the key is a **reCAPTCHA Enterprise** key ("church-portal-web", site key `6LdJhw4uAAAAAI7yuMKtTRMVc_r9LdX1qPBqHMW3`, a public value); a `ReCaptchaV3Provider` would be rejected |
 | Web release without key (`PLACEHOLDER…`, empty — PR previews) | **not configured** → `appCheckActive = false` → assistant hidden |
 | Debug builds or `--dart-define=APPCHECK_DEBUG=true` | `WebDebugProvider` / `AndroidDebugProvider` / `AppleDebugProvider` (token from `APPCHECK_DEBUG_TOKEN` or SDK-generated and printed in console/logcat — register it under App Check → Manage debug tokens) |
-| Android release | `AndroidPlayIntegrityProvider` (needs the release key's SHA-256 registered — **not done yet**, no release signing key) |
+| Android release | `AndroidPlayIntegrityProvider` is still what `selectAppCheckPlan` picks. The sideloaded assistant does **not** use it: questions go to the Worker (`WorkerAssistantModel`). Play Integrity cannot attest a GitHub-sideloaded APK, and App Check stays **not** enforced on Firestore. |
 | iOS release | `AppleAppAttestWithDeviceCheckFallbackProvider` |
 
 - **Site key**: `AppConfig.recaptchaSiteKey = String.fromEnvironment('RECAPTCHA_SITE_KEY', defaultValue:
@@ -302,19 +302,35 @@ console.
   builds with it and a `::warning::` on a push build without it). The key is registered for
   `maximos-domadios-church.web.app`, `maximos-domadios-church.firebaseapp.com`, `localhost`; the web app is
   registered in App Check with the reCAPTCHA Enterprise provider.
-- **Android**: `AndroidManifest.xml` declares `android.permission.INTERNET` since PR #19 (the release manifest had
-  none). Manual steps (owner, `11-open-tasks.md`): release keystore + `signingConfigs.release`, add its SHA-256 in
-  Project settings → Android app, register Play Integrity under App Check → Apps → Android (and link the Cloud
-  project in Play Console → App integrity). Debug APKs: register the logcat debug token.
-- App Check is enforced for **Firebase AI Logic** only. Do **not** enforce it on Firestore while Android release
-  builds have no Play Integrity registration, or their public reads fail.
+- **Android assistant**: the chat is in the app (`AssistantPage`, same deferred chunk). A non-web build calls
+  `POST /assistant` on the existing Worker `church-portal-push-sender` (`tool/assistant_worker.js`) instead of
+  Firebase AI Logic, because a GitHub-sideloaded APK cannot get a Play Integrity token. Web is unchanged
+  (reCAPTCHA Enterprise, App Check Enforced on AI Logic only). Do **not** enforce App Check on Firestore.
+  Owner steps are in `11-open-tasks.md` (secret `GEMINI_API_KEY`, `npx wrangler deploy`, repo variable
+  `ASSISTANT_WORKER_URL`). Nothing here needs Workers Paid, Blaze, or Cloud Functions.
+- App Check is enforced for **Firebase AI Logic** only (the web assistant). Do **not** enforce it on Firestore.
 
 ## Firebase AI Logic — "Ask the church" assistant (ADR-014, ADR-029)
 
-- **Backend:** Gemini Developer API (`FirebaseAI.googleAI()`), free tier on Spark. `FirebaseAssistantModel`
+- **Backend (web):** Gemini Developer API (`FirebaseAI.googleAI()`), free tier on Spark. `FirebaseAssistantModel`
   (`lib/data/assistant_model.dart`) makes one stateless `generateContent` call per question: `systemInstruction`
   = the grounding prompt, contents = kept history + the question, `GenerationConfig(temperature: 0.2,
   maxOutputTokens: 1024)`, 45 s timeout. The SDK attaches the App Check token itself (`app.getService<FirebaseAppCheck>()`).
+- **Backend (Android):** the same prompt, history, temperature and token cap, sent by `WorkerAssistantModel`
+  (`lib/data/assistant_model_io.dart`) to the Worker, which calls
+  `generativelanguage.googleapis.com` with secret `GEMINI_API_KEY` (header, never logged). The instruction is
+  the one the app already built (`buildAssistantInstruction`); the Worker does not invent church facts.
+  Chosen only when `dart.library.io` is available, so the web deferred chunk still loads `firebase_ai` and
+  `main.dart.js` does not grow. `ASSISTANT_WORKER_URL` is a compile-time define (GitHub variable of the same
+  name on the APK workflow).
+- **Worker free-plan caps** (`tool/assistant_worker.js`, one `PUSH_KV` read + one write per accepted question):
+  body ≤ 48 KB; instruction ≤ 24,000 chars; prompt ≤ 1,200; history ≤ 20 turns. Header `x-church-app` must be
+  `church-portal-android` and `x-church-device` a 32-hex device id. Per Cairo day: 400 questions globally,
+  100 per device (the admin maximum — the app still enforces the real per-day number, default 3, first),
+  40 per IP hash, and 20 per IP per minute. Workers Free is about 100,000 requests/day; KV free is about
+  100,000 reads/day and **1,000 writes/day** shared with the readings/OAuth cache, so the global cap stays
+  at 400. No Durable Objects and no WAF rate-limiting (both are paid). KV is eventually consistent; a rare
+  double-count is acceptable. Gemini Developer API free tier; no Blaze.
 - **Model:** default **`gemini-3.1-flash-lite`** (`AppConfig.geminiModel`, build override `GEMINI_MODEL`):
   the cheapest stable Flash-Lite on <https://firebase.google.com/docs/ai-logic/models> that needs no Blaze
   (checked 3 Nov 2026; `gemini-3.5-flash-lite` is the newer, pricier one). Gemma is **not** supported by the AI
@@ -403,7 +419,8 @@ console.
   not configured for the build (since ADR-037 a later activation **failure** no longer hides it — the assistant shows
   its normal error). **Web release builds only:** a missing/placeholder reCAPTCHA key also hides it. Android/iOS
   release builds activate Play Integrity / App Attest without the key, so the assistant shows there when the
-  other conditions hold (requests then need the Play Integrity registration). Cost cap / quota is a console task;
+  other conditions hold. Android questions go to the Worker and do not need a Play Integrity token. Cost cap /
+  quota for the web AI Logic path is a console task;
   on Spark the Developer API free tier is rate-limited, never billed.
 
 ## Sentry (external service, PR #24, ADR-034)

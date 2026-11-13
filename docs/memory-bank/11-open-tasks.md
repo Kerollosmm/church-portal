@@ -8,7 +8,7 @@ Status as of 6 Nov 2026 (ADR-056 Phase 2 plan; ADR-055 / PR #49; ADR-054 / PR #4
 1. ~~Footer note «تعرض البيانات المحفوظة مع التطبيق» shows on the live site while Firestore works~~ — fixed in PR #30 (ADR-038) → *Live data follow-ups*.
 2. Sentry web source maps + Android symbols need a Sentry auth token → *Error tracking — Sentry*.
 3. Sentry project privacy: *Prevent Storing of IP Addresses* + server-side data scrubbers → *Error tracking — Sentry*.
-4. Android assistant needs release signing + Play Integrity registration → *Infrastructure & security*.
+4. Android assistant needs the Worker secret, deploy, and `ASSISTANT_WORKER_URL` → *Infrastructure & security*.
 5. ~~Custom sections / pages are not in the sitemap~~ (PR #30: generated from Firestore at deploy, ADR-038); still not named in the assistant's allowed topics → *Custom sections*.
 6. ~~320 px overflow reported on a real phone~~ — fixed in Phase 2 PR E (ADR-061): AppShell < 360 px space recovery (54 dp seal tab, drawer language toggle on subpages, >= 130 dp title width, >= 6 dp seal clearance), modal sheets keyboard insets padding, and real OpenType font loading in accessibility tests → *Infrastructure & security* (320 px item).
 7. CI rebuild of the eBible verse asset (source-fidelity check) → *Verse of the day*.
@@ -109,15 +109,14 @@ the owner approves the whole chain.
 - [ ] Optional: set a Gemini **request quota** for Firebase AI Logic (console). On Spark the Developer API free tier
       is rate-limited and never billed. Do not enforce App Check on Firestore while Android release has no Play
       Integrity registration.
-- [ ] **Android App Check (owner, manual — PR #19):** (1) create a release signing key (`keytool -genkey -v -keystore
-      upload-keystore.jks -keyalg RSA -keysize 2048 -validity 10000 -alias upload`) and wire `signingConfigs.release`
-      in `android/app/build.gradle.kts` (keystore + passwords outside git); (2) copy its **SHA-256** (`keytool -list -v
-      -keystore upload-keystore.jks -alias upload`; with Play App Signing use the *app signing key* SHA-256 from Play
-      Console → App integrity); (3) Firebase console → Project settings → Android app `com.asafrachurch.church_portal`
-      → Add fingerprint; (4) App Check → Apps → Android → **Play Integrity** → Register (link the Cloud project in
-      Play Console → App integrity). **Debug APKs:** run once, copy the debug token from logcat ("Enter this debug
-      secret into the allow list…") into App Check → Apps → ⋮ → Manage debug tokens (or build with
-      `--dart-define=APPCHECK_DEBUG_TOKEN=<uuid>` registered there). Until then Android assistant requests are refused.
+- [ ] **Android assistant Worker (owner, no paid plan):** the sideloaded APK does not use Play Integrity.
+      (1) Create a free Gemini API key at <https://aistudio.google.com/apikey> (Gemini Developer API, not a
+      Firebase key). (2) From the repo root, `npx wrangler secret put GEMINI_API_KEY` and paste that key.
+      (3) `npx wrangler deploy` (Worker `church-portal-push-sender`, existing `PUSH_KV`). (4) GitHub → Settings →
+      Variables → `ASSISTANT_WORKER_URL` = the printed URL plus `/assistant`
+      (shape `https://church-portal-push-sender.<account>.workers.dev/assistant`). The next APK build passes it
+      as `--dart-define=ASSISTANT_WORKER_URL`. Do not commit the key. Do not enforce App Check on Firestore.
+      Do not turn on Workers Paid. The on-device limit (default 3 questions per Cairo day) stays in the app.
 - [ ] **`production` environment required reviewers** (recommended hygiene; no Phase 2 dependency since 6 Nov 19:31) (Settings → Environments) so live deploys, rules deploys
       (`deploy-rules` uses the environment since PR 1) and the Seed workflow (`force` can overwrite production data)
       need approval.

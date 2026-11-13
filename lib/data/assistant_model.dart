@@ -53,3 +53,7 @@ class FirebaseAssistantModel implements AssistantModel {
     return r.text;
   }
 }
+
+/// Web assistant. Android uses [WorkerAssistantModel] via the conditional
+/// export in `assistant_backend.dart`.
+AssistantModel createAssistantModel() => const FirebaseAssistantModel();

@@ -50,13 +50,16 @@
 
 ## كيف تعمل تقنيًا
 
-- الصفحة `lib/ui/pages/assistant_page.dart` تُحمَّل كجزء منفصل (deferred) فقط عندما يكون المساعد مفعّلًا (`AssistantGate`)،
-  حتى لا تدخل مكتبة الذكاء الاصطناعي في حزمة الموقع العامة.
-- الاستدعاء: **Firebase AI Logic** (Gemini Developer API، مجاني ومحدود المعدل على خطة Spark) مباشرة من التطبيق
-  (`lib/data/assistant_model.dart`). يسبقه تفعيل App Check عند أول استخدام فقط (لا يُحمَّل reCAPTCHA في الصفحات العامة — ADR-037) وتسخين رمزه، ومحاولة إعادة واحدة عند فشل عابر.
-- **App Check مفروض (Enforced) على AI Logic**: الويب يستخدم **reCAPTCHA Enterprise** (مفتاح «church-portal-web»، متغير
-  المستودع `RECAPTCHA_SITE_KEY`)، و Android يستخدم **Play Integrity** (`lib/data/app_check_providers.dart`). بدون App
-  Check يختفي المساعد على الويب. نسخ المعاينة `pr-<n>` تُبنى بدون المفتاح، لذلك المساعد مخفي فيها.
+- الصفحة `lib/ui/pages/assistant_page.dart` تُحمَّل كجزء منفصل (deferred) على الويب وعلى تطبيق أندرويد، فقط عندما يكون المساعد مفعّلًا (`AssistantGate`)،
+  حتى لا تدخل مكتبة الذكاء الاصطناعي في حزمة الموقع العامة. نفس واجهة المحادثة تعمل داخل التطبيق؛ لم يعد هناك زر «فتح المساعد في المتصفح».
+- **الويب**: **Firebase AI Logic** (Gemini Developer API، مجاني على Spark) من `lib/data/assistant_model.dart`.
+  يسبقه تفعيل App Check عند أول استخدام فقط (لا يُحمَّل reCAPTCHA في الصفحات العامة — ADR-037).
+- **App Check مفروض (Enforced) على AI Logic للويب فقط**: **reCAPTCHA Enterprise** (مفتاح «church-portal-web»، متغير
+  المستودع `RECAPTCHA_SITE_KEY`). بدون App Check يختفي المساعد على الويب. نسخ المعاينة `pr-<n>` تُبنى بدون المفتاح، لذلك المساعد مخفي فيها. لا يُفعَّل App Check على Firestore.
+- **تطبيق Android** (نسخة GitHub، بدون Play Store): نفس الصفحة ونفس نص التعليمات، لكن السؤال يذهب إلى Worker
+  `church-portal-push-sender` عبر `POST /assistant` (`tool/assistant_worker.js`)، والمفتاح `GEMINI_API_KEY` سر في
+  Cloudflare وليس في التطبيق. الحد على الجهاز (3 في اليوم، أو 6 في الموسم الاستثنائي، و4 في الدقيقة) يُفحص **قبل**
+  الإرسال ولا يُلغى. العنوان يُمرَّر عند بناء الـ APK من متغير المستودع `ASSISTANT_WORKER_URL`.
 - التعليمات تُبنى في `lib/domain/assistant_context.dart` (`buildAssistantInstruction`) من البيانات الحية لكل قسم مفعّل
   فقط، مع توقيت القاهرة الحالي. الصفحة **تراقب** كل مزودات البيانات (PR #20) حتى تصل البيانات قبل أول سؤال.
 - الردود الخاصة: `[[OUT_OF_SCOPE]]` ← رسالة الاعتذار؛ `[[SOURCE_SEARCH]]` ← رد السؤال الديني + بحث
@@ -67,8 +70,9 @@
 
 ## الحدود والمشاكل المعروفة
 
-- **الحد اليومي على الجهاز فقط**: مسح بيانات الموقع يعيده، ولا يوجد حد من جهة الخادم بعد (يمكن ضبط حد AI Logic من
-  الكونسول، أو Cloud Function لاحقًا على Blaze).
-- **Android**: المساعد لن يعمل حتى يُنشأ مفتاح توقيع release ويُسجَّل SHA-256 و Play Integrity في Firebase.
+- **الحد اليومي على الجهاز**: مسح بيانات التطبيق يعيد العداد. على Android يضيف الـ Worker سقفًا إضافيًا (400 سؤال
+  في اليوم للكل، و100 للجهاز وهو أقصى ما تسمح به اللوحة) حتى لا يفرّغ تطبيق معدَّل الحصة المجانية. هذا السقف لا
+  يرفع حد الزائر العادي.
+- **Android**: المحادثة داخل التطبيق عبر الـ Worker، لا عبر Play Integrity. خطوات المالك في [operations.md](../operations.md).
 - «الموضوعات المسموح بها» الافتراضية ثابتة: لا تتضمن أسماء الأقسام المخصصة، وتذكر العيادات حتى والقسم موقوف.
 - البحث المباشر في الإنترنت (Grounding with Google Search) غير متاح على الخطة المجانية، لذلك يُستخدم رابط البحث.

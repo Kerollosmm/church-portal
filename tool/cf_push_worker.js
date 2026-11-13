@@ -1,5 +1,5 @@
-// Cloudflare Worker cron-only entrypoint for push sender & readings syncer (ADR-059, ADR-060, ADR-063).
-// 4 dedicated cron triggers (zero public HTTP endpoints):
+// Cloudflare Worker entrypoint for push sender & readings syncer (ADR-059, ADR-060, ADR-063)
+// plus POST /assistant (Workers Free). Cron triggers:
 // 1. Delivery Cron: */15 * * * * (runs push_sender.js)
 // 2. Queue Drain Cron: 7,22,37,52 * * * * (runs push_queue.js)
 // 3. Reminder Planner Cron: 3 2,8,14,20 * * * (runs push_reminders.js)
@@ -9,8 +9,13 @@ import { runPushSender } from './push_sender.js';
 import { runPushQueueDrain } from './push_queue.js';
 import { runPushReminderPlanner } from './push_reminders.js';
 import { syncDailyReadingsAndSynaxarium } from './readings_syncer.js';
+import { handleAssistantRequest } from './assistant_worker.js';
 
 export default {
+  async fetch(request, env) {
+    return handleAssistantRequest(request, env);
+  },
+
   async scheduled(event, env, ctx) {
     const cron = event.cron;
     let runner;

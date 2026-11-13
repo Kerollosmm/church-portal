@@ -308,7 +308,10 @@ false. **Replies render as safe Markdown** (PR #21, ADR-030: `lib/domain/simple_
 `tel:` and internal `/routes` are tappable (internal via go_router), no HTML / images, unpaired `*` dropped so a
 literal asterisk never shows; direction from the reply's first strong character (Arabic RTL even in the English UI);
 links keep the body colour + underline (same contrast as the text on every theme); one `SelectionArea` per bubble
-keeps select / copy. Works on web (reCAPTCHA Enterprise) and Android (Play Integrity, once registered). Details in `05-firebase.md`.
+keeps select / copy. The same chat runs in the Android app (the old «فتح المساعد في المتصفح» card is gone). Web uses Firebase AI
+Logic with reCAPTCHA Enterprise. Android sends the same instruction to the Cloudflare Worker; the device
+counter in `AssistantConversation` still runs first (default 3 per Cairo day, 6 in an exceptional season, 4 per minute).
+Details in `05-firebase.md`.
 
 ### Item detail pages (PR #13, ADR-020) — `item_detail_page.dart` `ItemDetailPage`
 - Routes: `/church-education/:id`, `/church-activities/:id`, `/clinics/:id`, `/public-services/:id`,

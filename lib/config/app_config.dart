@@ -19,6 +19,10 @@ class AppConfig {
   /// safe fallback (also used when the chosen model is rejected).
   static const String geminiModel = String.fromEnvironment('GEMINI_MODEL', defaultValue: 'gemini-3.1-flash-lite');
 
+  /// Android assistant endpoint (the Cloudflare Worker). Empty until the owner
+  /// sets the repository variable `ASSISTANT_WORKER_URL`. Web does not use it.
+  static const String assistantWorkerUrl = String.fromEnvironment('ASSISTANT_WORKER_URL');
+
   /// reCAPTCHA **Enterprise** SITE key of the web app (Firebase console →
   /// App Check → Apps → Web, provider "reCAPTCHA Enterprise"). CI passes the
   /// repository variable RECAPTCHA_SITE_KEY for live builds. PLACEHOLDER

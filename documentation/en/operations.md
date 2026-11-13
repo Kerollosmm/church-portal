@@ -248,7 +248,7 @@ The remote scheduled push delivery and readings synchronization infrastructure r
 4. `0 16 * * *` (Cron 4): Daily Katameros lectionary & Synaxarium synchronization at 18:00 Cairo liturgical rollover (Firestore REST + KV).
 
 ### Cloudflare Worker Configuration & KV Caching
-- **Cron Triggers:** 3 scheduled crons without a public `POST /trigger` endpoint to prevent unauthorized invocation or quota drain.
+- **Cron Triggers:** scheduled crons. There is no public `POST /trigger`. `POST /assistant` is the Android assistant only (Workers Free, `GEMINI_API_KEY` via `npx wrangler secret put GEMINI_API_KEY`, URL in GitHub variable `ASSISTANT_WORKER_URL`).
 - **KV Token Cache (`PUSH_KV`):** Uses Cloudflare KV storage to cache Google OAuth2 access tokens (L2 cache after L1 memory), reducing token minting to ~1 per hour. Created via `npx wrangler kv namespace create PUSH_KV` and bound in `wrangler.toml`.
 - **Worker Deployment:** Deployed via `npx wrangler deploy` (must be executed prior to merging into `dev` or `main`).
 - **Worker Secrets (`wrangler secret put <KEY>`):**
@@ -273,8 +273,8 @@ The remote scheduled push delivery and readings synchronization infrastructure r
 
 - Upload web source maps and Android symbols to Sentry (requires auth token).
 - In Sentry: disable client IP collection and activate server-side scrubbers.
-- Production signing & Play Integrity registration for Android APK.
-- Server-side rate limiter for the AI Assistant.
+- Android assistant: set `GEMINI_API_KEY` (`npx wrangler secret put`), `npx wrangler deploy`, and GitHub variable `ASSISTANT_WORKER_URL`. Web stays on Firebase AI Logic. Do not enforce App Check on Firestore.
+- The on-device assistant limit stays in the app (default 3 questions per Cairo day). The Worker adds a free-plan ceiling on top.
 - Configure required reviewers for GitHub `production` environment.
 - Complete task tracker: [`docs/memory-bank/11-open-tasks.md`](../../docs/memory-bank/11-open-tasks.md).
 
