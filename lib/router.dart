@@ -263,7 +263,7 @@ GoRouter buildAppRouter(Ref ref, {bool? isWeb, String initialLocation = '/'}) {
                   builder: (_) => DeferredLoader(
                     source: 'assistant_page',
                     loadLibrary: assistant_page.loadLibrary,
-                    builder: (_) => assistant_page.AssistantPage(isWeb: web),
+                    builder: (_) => assistant_page.AssistantPage(),
                   ),
                 )),
           ),

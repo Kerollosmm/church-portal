@@ -3,6 +3,8 @@ import 'package:church_portal/core/locale_storage_io.dart' as io;
 import 'package:church_portal/core/theme.dart';
 import 'package:church_portal/data/content_repository.dart';
 import 'package:church_portal/data/seed_data.dart';
+import 'package:church_portal/domain/assistant_quota.dart';
+import 'package:church_portal/domain/assistant_settings.dart';
 import 'package:church_portal/domain/cairo_time.dart';
 import 'package:church_portal/domain/features.dart';
 import 'package:church_portal/domain/models.dart';
@@ -220,8 +222,8 @@ void main() {
     });
   });
 
-  group('AssistantPage on non-web platforms', () {
-    testWidgets('displays external web redirect card and button', (tester) async {
+  group('AssistantPage on Android', () {
+    testWidgets('shows the same chat field as the web page', (tester) async {
       await tester.pumpWidget(ProviderScope(
         overrides: [
           repositoryProvider.overrideWithValue(SeedRepository(SeedData(const {}))),
@@ -234,27 +236,21 @@ void main() {
                 addressAr: 'الإسكندرية',
                 addressEn: 'Alexandria',
               ))),
+          assistantSettingsProvider.overrideWith((ref) => Stream.value(AssistantSettings.defaults)),
+          assistantUsageStoreProvider.overrideWith((ref) async => MemoryUsageStore()),
         ],
         child: MaterialApp(
           locale: const Locale('ar'),
           theme: buildTheme(const Locale('ar')),
           supportedLocales: const [Locale('ar'), Locale('en')],
           localizationsDelegates: GlobalMaterialLocalizations.delegates,
-          home: const Scaffold(body: AssistantPage(isWeb: false)),
+          home: const Scaffold(body: AssistantPage()),
         ),
       ));
       await tester.pumpAndSettle();
 
-      expect(find.text('مساعد الكنيسة الذكي'), findsOneWidget);
-      expect(
-        find.text('مساعد الكنيسة متاح عبر البوابة الإلكترونية على الإنترنت مع الحماية الكاملة.'),
-        findsOneWidget,
-      );
-      expect(find.text('فتح المساعد في المتصفح'), findsOneWidget);
-      expect(find.byIcon(Icons.open_in_browser_rounded), findsOneWidget);
-
-      // Interactive chat textfield should not be rendered
-      expect(find.byType(TextField), findsNothing);
+      expect(find.text('فتح المساعد في المتصفح'), findsNothing);
+      expect(find.byType(TextField), findsOneWidget);
     });
   });
 }

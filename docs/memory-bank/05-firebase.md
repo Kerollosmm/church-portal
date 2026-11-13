@@ -293,7 +293,7 @@ console.
 | Web release with key | `ReCaptchaEnterpriseProvider(AppConfig.recaptchaSiteKey)` — the key is a **reCAPTCHA Enterprise** key ("church-portal-web", site key `6LdJhw4uAAAAAI7yuMKtTRMVc_r9LdX1qPBqHMW3`, a public value); a `ReCaptchaV3Provider` would be rejected |
 | Web release without key (`PLACEHOLDER…`, empty — PR previews) | **not configured** → `appCheckActive = false` → assistant hidden |
 | Debug builds or `--dart-define=APPCHECK_DEBUG=true` | `WebDebugProvider` / `AndroidDebugProvider` / `AppleDebugProvider` (token from `APPCHECK_DEBUG_TOKEN` or SDK-generated and printed in console/logcat — register it under App Check → Manage debug tokens) |
-| Android release | `AndroidPlayIntegrityProvider` (needs the release key's SHA-256 registered — **not done yet**, no release signing key) |
+| Android release | `AndroidPlayIntegrityProvider`. The chat UI runs in the app. A release question gets a token only after the owner registers SHA-256 `8E:51:05:11:68:24:6D:44:A6:6D:11:46:2D:32:68:24:30:2A:90:15:76:16:13:D9:93:EE:7D:D2:D0:B9:75:54` (the key since apk-v1.0.1) on the Android app and turns on Play Integrity. Sideloaded builds also need the Cloud project linked from Play Console → App integrity, which means the app is on an internal Play track. |
 | iOS release | `AppleAppAttestWithDeviceCheckFallbackProvider` |
 
 - **Site key**: `AppConfig.recaptchaSiteKey = String.fromEnvironment('RECAPTCHA_SITE_KEY', defaultValue:
@@ -302,10 +302,12 @@ console.
   builds with it and a `::warning::` on a push build without it). The key is registered for
   `maximos-domadios-church.web.app`, `maximos-domadios-church.firebaseapp.com`, `localhost`; the web app is
   registered in App Check with the reCAPTCHA Enterprise provider.
-- **Android**: `AndroidManifest.xml` declares `android.permission.INTERNET` since PR #19 (the release manifest had
-  none). Manual steps (owner, `11-open-tasks.md`): release keystore + `signingConfigs.release`, add its SHA-256 in
-  Project settings → Android app, register Play Integrity under App Check → Apps → Android (and link the Cloud
-  project in Play Console → App integrity). Debug APKs: register the logcat debug token.
+- **Android**: the chat is in the app (`AssistantPage`, same deferred chunk). Release App Check is Play Integrity.
+  Manual steps (owner): (1) Firebase → Project settings → Android app `com.asafrachurch.church_portal` → Add fingerprint
+  `8E:51:05:11:68:24:6D:44:A6:6D:11:46:2D:32:68:24:30:2A:90:15:76:16:13:D9:93:EE:7D:D2:D0:B9:75:54`; (2) App Check → Apps →
+  Android → Play Integrity → Register; (3) Play Console → App integrity → link this Cloud project (the app must be on
+  an internal testing track; Play Integrity does not attest a purely sideloaded package). Debug APKs: register the
+  logcat debug token. Do not enforce App Check on Firestore.
 - App Check is enforced for **Firebase AI Logic** only. Do **not** enforce it on Firestore while Android release
   builds have no Play Integrity registration, or their public reads fail.
 

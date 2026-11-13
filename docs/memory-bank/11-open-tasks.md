@@ -109,15 +109,14 @@ the owner approves the whole chain.
 - [ ] Optional: set a Gemini **request quota** for Firebase AI Logic (console). On Spark the Developer API free tier
       is rate-limited and never billed. Do not enforce App Check on Firestore while Android release has no Play
       Integrity registration.
-- [ ] **Android App Check (owner, manual — PR #19):** (1) create a release signing key (`keytool -genkey -v -keystore
-      upload-keystore.jks -keyalg RSA -keysize 2048 -validity 10000 -alias upload`) and wire `signingConfigs.release`
-      in `android/app/build.gradle.kts` (keystore + passwords outside git); (2) copy its **SHA-256** (`keytool -list -v
-      -keystore upload-keystore.jks -alias upload`; with Play App Signing use the *app signing key* SHA-256 from Play
-      Console → App integrity); (3) Firebase console → Project settings → Android app `com.asafrachurch.church_portal`
-      → Add fingerprint; (4) App Check → Apps → Android → **Play Integrity** → Register (link the Cloud project in
-      Play Console → App integrity). **Debug APKs:** run once, copy the debug token from logcat ("Enter this debug
-      secret into the allow list…") into App Check → Apps → ⋮ → Manage debug tokens (or build with
-      `--dart-define=APPCHECK_DEBUG_TOKEN=<uuid>` registered there). Until then Android assistant requests are refused.
+- [ ] **Android App Check for the in-app assistant (owner):** the chat UI is in the APK. Release questions need Play
+      Integrity. (1) Firebase → Project settings → Android app `com.asafrachurch.church_portal` → Add fingerprint
+      SHA-256 `8E:51:05:11:68:24:6D:44:A6:6D:11:46:2D:32:68:24:30:2A:90:15:76:16:13:D9:93:EE:7D:D2:D0:B9:75:54`
+      (the release key since apk-v1.0.1; do not create a new keystore). (2) App Check → Apps → Android → **Play
+      Integrity** → Register. (3) Play Console → App integrity → link the Cloud project. Play Integrity attests apps
+      that are on Play, so put the APK on an internal testing track. **Debug APKs:** copy the logcat debug token
+      ("Enter this debug secret into the allow list…") into App Check → Manage debug tokens. Do not enforce App
+      Check on Firestore.
 - [ ] **`production` environment required reviewers** (recommended hygiene; no Phase 2 dependency since 6 Nov 19:31) (Settings → Environments) so live deploys, rules deploys
       (`deploy-rules` uses the environment since PR 1) and the Seed workflow (`force` can overwrite production data)
       need approval.
