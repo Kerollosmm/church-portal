@@ -990,4 +990,46 @@ void main() {
       expect(notificationRouteFromPayload('   '), '/');
     });
   });
+
+  group('capPlanForPlatform', () {
+    test('filters past entries, sorts chronologically, and caps to iosPendingNotificationCap', () {
+      final now = CairoTime.at(2026, 11, 8, 8 * 60);
+      final plan = <PlannedNotification>[
+        PlannedNotification(
+          id: 999,
+          key: 'past-item',
+          type: NotifyType.reminders,
+          scheduledAt: now.subtract(const Duration(minutes: 5)),
+          titleAr: 'ماضٍ',
+          titleEn: 'Past',
+          bodyAr: '',
+          bodyEn: '',
+          channelId: NotifyType.reminders.name,
+        ),
+        for (var i = 75; i >= 1; i--)
+          PlannedNotification(
+            id: i,
+            key: 'item-$i',
+            type: NotifyType.reminders,
+            scheduledAt: now.add(Duration(minutes: i * 10)),
+            titleAr: 'تنبيه $i',
+            titleEn: 'Alert $i',
+            bodyAr: '',
+            bodyEn: '',
+            channelId: NotifyType.reminders.name,
+          ),
+      ];
+
+      final capped = capPlanForPlatform(plan, now: now, maxPending: iosPendingNotificationCap);
+      expect(capped.length, equals(iosPendingNotificationCap));
+      expect(capped.any((n) => n.key == 'past-item'), isFalse);
+      expect(capped.first.key, equals('item-1'));
+      expect(capped.last.key, equals('item-64'));
+
+      final uncapped = capPlanForPlatform(plan, now: now);
+      expect(uncapped.length, equals(75));
+      expect(uncapped.first.key, equals('item-1'));
+      expect(uncapped.last.key, equals('item-75'));
+    });
+  });
 }

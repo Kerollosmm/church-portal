@@ -413,4 +413,113 @@ describe('runPushReminderPlanner workflow', () => {
     );
     assert.equal(paschaItem.mapValue.fields.link.stringValue, '/mass-schedule');
   });
+
+  test('converts timestampValue UTC dates in Cairo and suppresses overridden undated seasonal services', async () => {
+    // Tuesday 2027-01-05T12:00Z (planning Tue 2027-01-05 .. Thu 2027-01-07)
+    // Epiphany/Nativity liturgy timestamp '2027-01-05T22:00:00Z' is 2027-01-06 00:00 Cairo.
+    const now = new Date('2027-01-05T12:00:00Z');
+    let savedPlan = null;
+
+    const fakeFetch = async (url, options) => {
+      if (url.includes(':batchGet')) {
+        return new Response(
+          JSON.stringify([
+            {
+              found: {
+                name: 'projects/test-project/databases/(default)/documents/settings/features',
+                fields: {},
+              },
+            },
+          ]),
+          { status: 200 },
+        );
+      }
+      if (url.includes('/liturgies')) {
+        return new Response(
+          JSON.stringify({
+            documents: [
+              {
+                name: 'projects/test-project/databases/(default)/documents/liturgies/wed-reg',
+                fields: {
+                  weekday: { integerValue: '3' }, // Wednesday 2027-01-06
+                  start: { stringValue: '09:00' },
+                  end: { stringValue: '10:00' },
+                  nameAr: { stringValue: 'قداس الأربعاء' },
+                  nameEn: { stringValue: 'Wednesday Liturgy' },
+                },
+              },
+              {
+                name: 'projects/test-project/databases/(default)/documents/liturgies/rev-undated',
+                fields: {
+                  seasonKey: { stringValue: 'revival' },
+                  weekday: { integerValue: '3' },
+                  start: { stringValue: '07:00' },
+                  end: { stringValue: '10:00' },
+                  nameAr: { stringValue: 'نهضة أسبوعية' },
+                  nameEn: { stringValue: 'Weekly Revival' },
+                },
+              },
+              {
+                name: 'projects/test-project/databases/(default)/documents/liturgies/rev-dated',
+                fields: {
+                  seasonKey: { stringValue: 'revival' },
+                  date: { timestampValue: '2027-01-05T22:00:00Z' }, // Cairo 2027-01-06
+                  start: { stringValue: '08:00' },
+                  end: { stringValue: '09:00' },
+                  nameAr: { stringValue: 'خدمة مخصصة' },
+                  nameEn: { stringValue: 'Special Dated Service' },
+                },
+              },
+            ],
+          }),
+          { status: 200 },
+        );
+      }
+      if (url.includes('/meetings')) {
+        return new Response(JSON.stringify({ documents: [] }), { status: 200 });
+      }
+      if (url.includes('/seasons')) {
+        return new Response(
+          JSON.stringify({
+            documents: [
+              {
+                name: 'projects/test-project/databases/(default)/documents/seasons/revival',
+                fields: {
+                  key: { stringValue: 'revival' },
+                  active: { booleanValue: true },
+                  replacesRegular: { booleanValue: false },
+                  startsAt: { stringValue: '2027-01-01T00:00:00Z' },
+                  endsAt: { stringValue: '2027-01-10T23:59:59Z' },
+                },
+              },
+            ],
+          }),
+          { status: 200 },
+        );
+      }
+      if (url.includes('meta/push_plan')) {
+        savedPlan = JSON.parse(options.body);
+        return new Response(JSON.stringify({ updateTime: now.toISOString() }), { status: 200 });
+      }
+      return new Response('{}', { status: 200 });
+    };
+
+    const res = await runPushReminderPlanner(
+      {},
+      {
+        serviceAccount: mockSa,
+        now,
+        mintToken: async () => 'test-token',
+        fetchImpl: fakeFetch,
+      },
+    );
+
+    assert.equal(res.status, 'ok');
+    const plannedKeys = savedPlan.fields.reminderPlan.arrayValue.values.map(
+      (v) => `${v.mapValue.fields.tKey.stringValue}:${v.mapValue.fields.yyyymmdd.stringValue}`,
+    );
+    assert.ok(plannedKeys.includes('season-rev-dated:20270106'), 'Timestamp date must map to Cairo 2027-01-06');
+    assert.ok(!plannedKeys.includes('season-rev-undated:20270106'), 'Overlapping undated seasonal service must be suppressed');
+    assert.ok(plannedKeys.includes('lit-wed-reg:20270106'), 'Non-overlapping regular liturgy 09:00-10:00 must remain');
+  });
 });

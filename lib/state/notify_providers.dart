@@ -4,11 +4,14 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:ui' show Locale;
 
+import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart' show AppLifecycleListener;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:workmanager/workmanager.dart';
 
+import '../core/motion_env.dart';
 import '../data/local_notifications.dart';
 import '../data/push_messaging.dart';
 import '../domain/cairo_time.dart';
@@ -336,6 +339,7 @@ Future<PlannerSnapshot?> loadPlannerSnapshot({SharedPreferences? prefs}) async {
 class NotifyPlanner {
   final Ref ref;
   Timer? _debounceTimer;
+  AppLifecycleListener? _lifecycleListener;
   List<PlannedNotification> _currentPlan = const [];
   bool _isPlanning = false;
   bool _needsAnotherReplan = false;
@@ -343,6 +347,9 @@ class NotifyPlanner {
   NotifyPlanner(this.ref) {
     _listen();
     _syncSubscriptions();
+    if (!kIsWeb && !MotionEnv.isTest && defaultTargetPlatform == TargetPlatform.iOS) {
+      _lifecycleListener = AppLifecycleListener(onResume: () => scheduleReplan(Duration.zero));
+    }
   }
 
   List<PlannedNotification> get currentPlan => _currentPlan;
@@ -399,6 +406,13 @@ class NotifyPlanner {
     _isPlanning = true;
 
     try {
+      final sp = prefs ?? await SharedPreferences.getInstance();
+      if (!kIsWeb && defaultTargetPlatform == TargetPlatform.linux) {
+        await sp.remove(notifyPlanStorageKey);
+        _currentPlan = const [];
+        return const [];
+      }
+
       final effectiveNow = now ?? DateTime.now();
       CairoTime.ensureInitialized();
       final cNow = CairoTime.fromInstant(effectiveNow);
@@ -418,10 +432,9 @@ class NotifyPlanner {
       final liturgyOccurrences = computeLiturgyOccurrences(liturgies, seasons, cNow);
       final meetingOccurrences = computeMeetingOccurrences(meetings, cNow);
 
-      final sp = prefs ?? await SharedPreferences.getInstance();
       final cachedReadings = loadCachedReadingsFromStorage(sp, cNow);
 
-      final plan = planNotifications(
+      final rawPlan = planNotifications(
         now: effectiveNow,
         prefs: pushPrefs,
         features: features,
@@ -436,6 +449,9 @@ class NotifyPlanner {
         exactAlarmsAllowed: exactAllowed,
         seasons: seasons,
       );
+      final plan = (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS)
+          ? capPlanForPlatform(rawPlan, now: effectiveNow, maxPending: iosPendingNotificationCap)
+          : rawPlan;
 
       await notifier.schedulePlan(plan, lang: pushPrefs.lang);
 
@@ -468,6 +484,7 @@ class NotifyPlanner {
 
   void dispose() {
     _debounceTimer?.cancel();
+    _lifecycleListener?.dispose();
   }
 }
 
@@ -492,6 +509,10 @@ Future<bool> executeReplenishmentTask({
   // window needed refilling, so a healthy worker never shows as stale.
   await sp.setString(notifyDiagLastReplenishKey, effectiveNow.toIso8601String());
 
+  if (!kIsWeb && defaultTargetPlatform == TargetPlatform.linux) {
+    return true;
+  }
+
   final currentPlan = await loadStoredPlan(prefs: sp);
 
   // If we still have >= 4 future days scheduled, no replenishment is needed.
@@ -514,7 +535,7 @@ Future<bool> executeReplenishmentTask({
   if (notifier == null) await localNotifier.initialize();
   final exactAllowed = await localNotifier.canScheduleExactAlarms();
 
-  final newPlan = planNotifications(
+  final rawPlan = planNotifications(
     now: effectiveNow,
     prefs: snapshot.pushPrefs,
     features: snapshot.features,
@@ -529,6 +550,9 @@ Future<bool> executeReplenishmentTask({
     exactAlarmsAllowed: exactAllowed,
     seasons: snapshot.seasons,
   );
+  final newPlan = (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS)
+      ? capPlanForPlatform(rawPlan, now: effectiveNow, maxPending: iosPendingNotificationCap)
+      : rawPlan;
 
   await localNotifier.schedulePlan(newPlan, lang: snapshot.pushPrefs.lang);
 

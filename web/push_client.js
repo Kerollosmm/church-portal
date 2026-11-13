@@ -174,42 +174,49 @@ export async function test(options = {}, deps = {}) {
     return showNotif(options);
   }
 
-  const nav = deps.navigator || (typeof navigator !== 'undefined' ? navigator : null);
-  let reg = deps.swRegistration || cachedSwReg || null;
-  if (!reg && nav && 'serviceWorker' in nav && typeof nav.serviceWorker.getRegistration === 'function') {
-    reg =
-      (await nav.serviceWorker.getRegistration(FIREBASE_MESSAGING_SW_SCOPE)) ||
-      (await nav.serviceWorker.getRegistration('/'));
-  }
-  if (!reg && nav && 'serviceWorker' in nav && typeof nav.serviceWorker.register === 'function') {
-    reg = await nav.serviceWorker.register('/firebase-messaging-sw.js', {
-      scope: FIREBASE_MESSAGING_SW_SCOPE,
-    });
-    await waitForSwActivation(reg);
-  }
-
   const title = options.title || 'اختبار الإشعارات';
   const body = options.body || 'هذا إشعار تجريبي من كنيسة القديسين مكسيموس ودوماديوس';
   const link = options.link || '/notifications';
 
-  if (reg && typeof reg.showNotification === 'function') {
-    await reg.showNotification(title, {
-      body,
-      icon: '/icons/Icon-192.png',
-      badge: '/icons/badge-72.png',
-      tag: `test_${Date.now()}`,
-      data: { link },
-    });
-    return true;
+  try {
+    const nav = deps.navigator || (typeof navigator !== 'undefined' ? navigator : null);
+    let reg = deps.swRegistration || cachedSwReg || null;
+    if (!reg && nav && 'serviceWorker' in nav && typeof nav.serviceWorker.getRegistration === 'function') {
+      reg =
+        (await nav.serviceWorker.getRegistration(FIREBASE_MESSAGING_SW_SCOPE)) ||
+        (await nav.serviceWorker.getRegistration('/'));
+    }
+    if (!reg && nav && 'serviceWorker' in nav && typeof nav.serviceWorker.register === 'function') {
+      reg = await nav.serviceWorker.register('/firebase-messaging-sw.js', {
+        scope: FIREBASE_MESSAGING_SW_SCOPE,
+      });
+      await waitForSwActivation(reg);
+    }
+
+    if (reg && typeof reg.showNotification === 'function') {
+      await reg.showNotification(title, {
+        body,
+        icon: '/icons/Icon-192.png',
+        badge: '/icons/badge-72.png',
+        tag: `test_${Date.now()}`,
+        data: { link },
+      });
+      return true;
+    }
+  } catch (_) {
+    // Fall back to Notification constructor if SW registration or showNotification rejects
   }
 
-  if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-    new Notification(title, {
-      body,
-      icon: '/icons/Icon-192.png',
-    });
-    return true;
-  }
+  const Notif = deps.Notification || (typeof Notification !== 'undefined' ? Notification : null);
+  try {
+    if (Notif && Notif.permission === 'granted') {
+      new Notif(title, {
+        body,
+        icon: '/icons/Icon-192.png',
+      });
+      return true;
+    }
+  } catch (_) {}
 
   return false;
 }

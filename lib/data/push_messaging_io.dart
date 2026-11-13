@@ -37,6 +37,7 @@ class PushMessaging {
   const PushMessaging._();
 
   static void Function(String route)? _onSelectRoute;
+  static bool _initializedInMainIsolate = false;
 
   /// Handles incoming remote FCM message (both foreground and background isolates).
   /// Returns `true` if notification was accepted and presented, `false` if dropped by guard/dedup.
@@ -113,7 +114,7 @@ class PushMessaging {
           );
 
     final effectiveSelect = onSelectRoute ?? _onSelectRoute;
-    if (plugin == null) {
+    if (plugin == null && !_initializedInMainIsolate) {
       const androidInit = AndroidInitializationSettings(notificationSmallIcon);
       const darwinInit = DarwinInitializationSettings(
         requestAlertPermission: false,
@@ -132,7 +133,9 @@ class PushMessaging {
           onDidReceiveNotificationResponse: effectiveSelect == null
               ? null
               : (NotificationResponse response) {
-                  final route = notificationRouteFromPayload(response.payload);
+                  final raw = response.payload?.trim() ?? '';
+                  if (raw.isEmpty) return;
+                  final route = notificationRouteFromPayload(raw);
                   if (route.isNotEmpty) effectiveSelect(route);
                 },
         );
@@ -180,17 +183,20 @@ class PushMessaging {
   static Future<void> initialize({void Function(String route)? onSelectRoute}) async {
     if (kIsWeb) return;
     _onSelectRoute = onSelectRoute;
+    _initializedInMainIsolate = true;
     try {
       final messaging = FirebaseMessaging.instance;
 
       // Register background handler
       FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
 
-      // Foreground presentation options
+      // Foreground presentation is handled uniformly by handleIncomingMessage
+      // (with seenNids deduplication and local-type filtering); disabling iOS
+      // system foreground presentation avoids duplicate banners when aps.alert is set.
       await messaging.setForegroundNotificationPresentationOptions(
-        alert: true,
+        alert: false,
         badge: false,
-        sound: true,
+        sound: false,
       );
 
       // Foreground message listener
@@ -200,6 +206,7 @@ class PushMessaging {
 
       // App opened from notification in background
       FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
+        if (message.data.isEmpty) return;
         final route = notificationRouteFromPayload(jsonEncode(message.data));
         if (route.isNotEmpty) {
           (onSelectRoute ?? _onSelectRoute)?.call(route);
@@ -208,7 +215,7 @@ class PushMessaging {
 
       // App launched from terminated state via notification tap
       final initialMessage = await messaging.getInitialMessage();
-      if (initialMessage != null) {
+      if (initialMessage != null && initialMessage.data.isNotEmpty) {
         final route = notificationRouteFromPayload(jsonEncode(initialMessage.data));
         if (route.isNotEmpty && route != '/') {
           (onSelectRoute ?? _onSelectRoute)?.call(route);

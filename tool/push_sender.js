@@ -554,7 +554,6 @@ export async function runPushSender(env, options = {}) {
     // 3. Due web reminders from meta/push_plan.reminderPlan
     const remindersTypeEnabled =
       !Array.isArray(features.pushTypes) ||
-      features.pushTypes.length === 0 ||
       features.pushTypes.includes('reminders');
     const reminderPlan =
       remindersTypeEnabled && Array.isArray(pushPlanDoc.reminderPlan)

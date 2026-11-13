@@ -31,8 +31,7 @@ Future<void> initPushStore() async {
 bool getIsSupported() =>
     defaultTargetPlatform == TargetPlatform.android ||
     defaultTargetPlatform == TargetPlatform.iOS ||
-    defaultTargetPlatform == TargetPlatform.macOS ||
-    defaultTargetPlatform == TargetPlatform.linux;
+    defaultTargetPlatform == TargetPlatform.macOS;
 
 String getPermission() => getIsSupported() ? _cachedPermission : 'denied';
 

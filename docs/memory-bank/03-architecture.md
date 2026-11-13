@@ -142,8 +142,8 @@ flowchart TD
    on native IO platforms `initPushStore()` preloads `SharedPreferences` and queries the OS notification permission state.
 3. On native non-web platforms (`Android`, `iOS`, `macOS`, `Linux`), `LocalNotifier().initialize()` runs before
    `runApp`, checks `getLaunchPayload()` to queue cold-start notification routes via `navigateToNotification`, and
-   refreshes permission; on `Android`/`iOS` `PushMessaging.initialize(...)` registers foreground/background FCM handlers;
-   `Workmanager` replenishment initializes on Android only.
+   refreshes permission (`Android`, `iOS`, and `macOS` support scheduled notifications, while `Linux` skips `zonedSchedule` due to plugin limitations); on `Android`/`iOS` `PushMessaging.initialize(...)` registers foreground/background FCM handlers with foreground APNS alert banners disabled on iOS so `fln.show` never duplicates them;
+   `Workmanager` replenishment initializes on Android only (with iOS replenishing its 64-entry pending cap on app resume).
 4. Repository choice: `status.available ? FirestoreRepository(db, seed) : SeedRepository(seed)`; `AdminRepository`
    only when Firebase is available (otherwise `/admin` shows `adminUnavailable`).
 5. `ProviderScope(overrides: [firebaseStatusProvider, repositoryProvider, adminRepositoryProvider])`.

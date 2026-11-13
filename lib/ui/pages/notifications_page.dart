@@ -74,6 +74,10 @@ const Map<String, List<String>> notificationsPageStrings = {
     'Could not sync notifications with server; it will retry automatically.',
   ],
   'notificationsUnsupported': ['هذا المتصفح لا يدعم تلقي الإشعارات.', 'This browser does not support push notifications.'],
+  'notificationsUnsupportedApp': [
+    'الإشعارات المجدولة غير مدعومة على هذا الجهاز حاليًا.',
+    'Scheduled notifications are not supported on this device yet.',
+  ],
 };
 
 /// The visitor's notification preferences and reminders page (`/notifications`, ADR-057).
@@ -324,6 +328,14 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> with Widg
       }
 
       if (repo.syncedToken != null) {
+        if (!hadTokenBefore) {
+          unawaited(pushEnv.syncQuietHours(
+            enabled: prefs.quietHoursEnabled,
+            start: prefs.quiet.from,
+            end: prefs.quiet.to,
+            remindersRespectQuietHours: prefs.remindersRespectQuietHours,
+          ));
+        }
         final reminders = mounted ? ref.read(userRemindersProvider) : fallbackReminders;
         final immediate = !hadTokenBefore || prefs.types.isEmpty;
         return (await repo.syncPreferences(
@@ -348,13 +360,14 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> with Widg
       indexable: false,
     );
 
+    final web = widget.isWeb ?? kIsWeb;
     final pushSettings = ref.watch(pushSettingsProvider);
     if (!pushSettings.enabled) {
       return PageBody(
         children: [
           EmptyState(
             icon: Icons.notifications_off_outlined,
-            message: context.tr('notificationsUnsupported'),
+            message: context.tr(web ? 'notificationsUnsupported' : 'notificationsUnsupportedApp'),
           ),
         ],
       );
@@ -372,7 +385,6 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> with Widg
       maxTouchPoints: installEnv.maxTouchPoints,
     );
 
-    final web = widget.isWeb ?? kIsWeb;
     final permState = _resolveState(
       osInfo: osInfo,
       userAgent: installEnv.userAgent,
@@ -704,7 +716,7 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> with Widg
         return _buildAlertBox(
           pal,
           Icons.notifications_off_outlined,
-          context.tr('notificationsUnsupported'),
+          context.tr(isWeb ? 'notificationsUnsupported' : 'notificationsUnsupportedApp'),
           pal.muted,
         );
 

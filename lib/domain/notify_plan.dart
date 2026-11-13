@@ -794,4 +794,24 @@ String notificationRouteFromPayload(String? rawPayload) {
   }
 }
 
+/// iOS `UNUserNotificationCenter` allows at most 64 pending local notifications per app.
+const int iosPendingNotificationCap = 64;
+
+/// Filters out past notifications and, when [maxPending] is provided (e.g., iOS's
+/// 64-notification UNUserNotificationCenter limit), retains the earliest entries
+/// in chronological order.
+List<PlannedNotification> capPlanForPlatform(
+  List<PlannedNotification> plan, {
+  required DateTime now,
+  int? maxPending,
+}) {
+  final future = [
+    for (final n in plan)
+      if (!n.scheduledAt.isBefore(now)) n,
+  ]..sort((a, b) => a.scheduledAt.compareTo(b.scheduledAt));
+  if (maxPending == null || maxPending < 0 || future.length <= maxPending) {
+    return future;
+  }
+  return future.sublist(0, maxPending);
+}
 

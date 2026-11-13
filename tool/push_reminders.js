@@ -67,6 +67,21 @@ export function getCairoParts(d) {
 }
 
 /**
+ * Normalizes a Firestore date string or UTC timestampValue (Cairo midnight stored as UTC)
+ * into a Cairo calendar ISO date ('YYYY-MM-DD').
+ */
+export function toCairoIsoDate(rawDate) {
+  if (typeof rawDate !== 'string') return '';
+  const trimmed = rawDate.trim();
+  if (!trimmed) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+  const ms = Date.parse(trimmed);
+  if (Number.isNaN(ms)) return '';
+  const cp = getCairoParts(new Date(ms));
+  return `${cp.year}-${String(cp.month).padStart(2, '0')}-${String(cp.day).padStart(2, '0')}`;
+}
+
+/**
  * Converts Cairo wall time to a UTC Date object, handling Cairo DST transitions accurately.
  */
 export function cairoToUtc(year, month, day, hour = 0, minute = 0) {
@@ -214,6 +229,58 @@ export async function runPushReminderPlanner(env, options = {}) {
     return Array.isArray(seasonData?.replaceDates) && seasonData.replaceDates.includes(isoDateStr);
   };
 
+  const seasonKeyOf = (s) => s.data?.key || s.id;
+
+  const computeServiceWindow = (data, year, month, day) => {
+    const startStr = (data?.start || '').trim();
+    if (!startStr) return null;
+    const [sh, sm] = startStr.split(':').map((x) => parseInt(x, 10));
+    if (Number.isNaN(sh) || Number.isNaN(sm)) return null;
+    const serviceStart = cairoToUtc(year, month, day, sh, sm);
+    const serviceStartMs = serviceStart.getTime();
+    const [eh, em] = (data.end || '').trim()
+      ? data.end.trim().split(':').map((x) => parseInt(x, 10))
+      : [Number.NaN, Number.NaN];
+    const endMinRaw = !Number.isNaN(eh) && !Number.isNaN(em) ? eh * 60 + em : sh * 60 + sm + 120;
+    const startMin = sh * 60 + sm;
+    const serviceEndMs = serviceStartMs + ((endMinRaw <= startMin ? endMinRaw + 1440 : endMinRaw) - startMin) * 60000;
+    return { startStr, serviceStart, serviceStartMs, serviceEndMs };
+  };
+
+  const seasonHasRealServices = (s) => {
+    const sKey = seasonKeyOf(s);
+    return liturgies.some((l) => {
+      const ld = l.data || {};
+      if (!isVisible(ld) || ld.seasonKey !== sKey || ld.sample === true) return false;
+      if (!(ld.start || '').trim()) return false;
+      const lDateIso = toCairoIsoDate(ld.date);
+      if (!lDateIso) return true;
+      const [ly, lm, lday] = lDateIso.split('-').map((x) => parseInt(x, 10));
+      if (!isSeasonActiveOnCairoDay(s.data, ly, lm, lday)) return false;
+      const win = computeServiceWindow(ld, ly, lm, lday);
+      return win != null && isSeasonActiveAtMs(s.data, win.serviceStartMs);
+    });
+  };
+
+  const undatedSuppressedOn = (s, data, dataDateIso, isoDateStr, year, month, day, startMs, endMs) => {
+    const sKey = seasonKeyOf(s);
+    if (data.seasonKey !== sKey) return false;
+    if (dataDateIso && data.sample !== true) return false;
+    if (data.sample === true && seasonHasRealServices(s)) return true;
+    for (const other of liturgies) {
+      const od = other.data || {};
+      if (!isVisible(od) || od.seasonKey !== sKey || od.sample === true) continue;
+      const oDateIso = toCairoIsoDate(od.date);
+      if (!oDateIso || oDateIso !== isoDateStr) continue;
+      if (!isSeasonActiveOnCairoDay(s.data, year, month, day)) continue;
+      const oWin = computeServiceWindow(od, year, month, day);
+      if (!oWin || !isSeasonActiveAtMs(s.data, oWin.serviceStartMs)) continue;
+      if (doesSeasonReplaceOnDay(s.data, isoDateStr)) return true;
+      if (startMs < oWin.serviceEndMs && oWin.serviceStartMs < endMs) return true;
+    }
+    return false;
+  };
+
   const activeEventKeysSet = new Set();
   const reminderPlan = [];
 
@@ -257,28 +324,22 @@ export async function runPushReminderPlanner(env, options = {}) {
       const data = lit.data || {};
       if (!isVisible(data)) continue;
       if (!data.seasonKey) continue;
-      const litDateIso = typeof data.date === 'string' ? data.date.slice(0, 10) : '';
+      const litDateIso = toCairoIsoDate(data.date);
       if (litDateIso) {
         if (litDateIso !== isoDateStr) continue;
       } else if (data.weekday !== weekday) {
         continue;
       }
 
-      const startStr = (data.start || '').trim();
-      if (!startStr) continue;
-
-      const [sh, sm] = startStr.split(':').map((x) => parseInt(x, 10));
-      const serviceStart = cairoToUtc(year, month, day, sh, sm);
-      const serviceStartMs = serviceStart.getTime();
-      const [eh, em] = (data.end || '').trim()
-        ? data.end.trim().split(':').map((x) => parseInt(x, 10))
-        : [Number.NaN, Number.NaN];
-      const endMinRaw = !Number.isNaN(eh) && !Number.isNaN(em) ? eh * 60 + em : sh * 60 + sm + 120;
-      const startMin = sh * 60 + sm;
-      const serviceEndMs = serviceStartMs + ((endMinRaw <= startMin ? endMinRaw + 1440 : endMinRaw) - startMin) * 60000;
+      const win = computeServiceWindow(data, year, month, day);
+      if (!win) continue;
+      const { startStr, serviceStart, serviceStartMs, serviceEndMs } = win;
 
       const matchingSeasons = activeSeasonsOnDay.filter(
-        (s) => (s.data?.key || s.id) === data.seasonKey && isSeasonActiveAtMs(s.data, serviceStartMs),
+        (s) =>
+          seasonKeyOf(s) === data.seasonKey &&
+          isSeasonActiveAtMs(s.data, serviceStartMs) &&
+          !undatedSuppressedOn(s, data, litDateIso, isoDateStr, year, month, day, serviceStartMs, serviceEndMs),
       );
       if (matchingSeasons.length === 0) continue;
 
@@ -322,18 +383,15 @@ export async function runPushReminderPlanner(env, options = {}) {
       const data = lit.data || {};
       if (!isVisible(data)) continue;
       if (data.seasonKey) continue; // Seasonal liturgies handled above
-      const litDateIso = typeof data.date === 'string' ? data.date.slice(0, 10) : '';
+      const litDateIso = toCairoIsoDate(data.date);
       if (litDateIso) {
         if (litDateIso !== isoDateStr) continue;
       } else {
         if (data.weekday !== weekday) continue;
       }
-      const startStr = (data.start || '').trim();
-      if (!startStr) continue;
-
-      const [sh, sm] = startStr.split(':').map((x) => parseInt(x, 10));
-      const serviceStart = cairoToUtc(year, month, day, sh, sm);
-      const serviceStartMs = serviceStart.getTime();
+      const win = computeServiceWindow(data, year, month, day);
+      if (!win) continue;
+      const { startStr, serviceStart, serviceStartMs, serviceEndMs } = win;
 
       // Skip services in the past
       if (serviceStartMs < nowMs - 60000) continue;
@@ -347,12 +405,6 @@ export async function runPushReminderPlanner(env, options = {}) {
         }
       }
       if (!superseded && additiveSeasonalCandidates.length > 0) {
-        const [eh, em] = (data.end || '').trim()
-          ? data.end.trim().split(':').map((x) => parseInt(x, 10))
-          : [Number.NaN, Number.NaN];
-        const endMinRaw = !Number.isNaN(eh) && !Number.isNaN(em) ? eh * 60 + em : sh * 60 + sm + 120;
-        const startMin = sh * 60 + sm;
-        const serviceEndMs = serviceStartMs + ((endMinRaw <= startMin ? endMinRaw + 1440 : endMinRaw) - startMin) * 60000;
         const litType = data.type || 'mass';
         for (const cand of additiveSeasonalCandidates) {
           if (cand.lit.sample === true && data.sample !== true) continue;

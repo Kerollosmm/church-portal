@@ -229,6 +229,12 @@ class _AppShellState extends ConsumerState<AppShell> {
             final repo = web_push.WebPushRepository.sharedFor(pushEnv);
             _webPushRepo = repo;
             if (repo.syncedToken != null) {
+              unawaited(pushEnv.syncQuietHours(
+                enabled: prefs.quietHoursEnabled,
+                start: prefs.quiet.from,
+                end: prefs.quiet.to,
+                remindersRespectQuietHours: prefs.remindersRespectQuietHours,
+              ));
               if (hasPending && mounted && (pushEnv.permission == 'granted' || prefs.types.isEmpty)) {
                 await repo.resumePendingSync(
                   prefs: prefs,

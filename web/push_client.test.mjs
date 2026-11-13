@@ -304,3 +304,30 @@ test('test() resolves SW registration under push scope when no custom showNotifi
   assert.equal(shown[0].opts.data.link, '/notifications');
 });
 
+test('test() falls back to Notification constructor when serviceWorker.register rejects', async () => {
+  const constructed = [];
+  class FakeNotification {
+    static permission = 'granted';
+    constructor(title, opts) {
+      constructed.push({ title, opts });
+    }
+  }
+  const mockNav = {
+    serviceWorker: {
+      getRegistration: async () => null,
+      register: async () => {
+        throw new Error('SW registration blocked');
+      },
+    },
+  };
+
+  const ok = await pushTest(
+    { title: 'اختبار', body: 'تجربة' },
+    { isSupported: () => true, navigator: mockNav, Notification: FakeNotification },
+  );
+
+  assert.equal(ok, true);
+  assert.equal(constructed.length, 1);
+  assert.equal(constructed[0].title, 'اختبار');
+});
+

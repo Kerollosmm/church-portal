@@ -135,7 +135,7 @@ class LocalNotifierImpl implements LocalNotifier {
     }
 
     if (defaultTargetPlatform == TargetPlatform.linux) {
-      return true;
+      return false;
     }
     return false;
   }
@@ -164,7 +164,7 @@ class LocalNotifierImpl implements LocalNotifier {
       }
 
       if (defaultTargetPlatform == TargetPlatform.linux) {
-        return true;
+        return false;
       }
     } catch (_) {}
     return false;
@@ -183,6 +183,9 @@ class LocalNotifierImpl implements LocalNotifier {
 
   @override
   Future<bool> canScheduleExactAlarms() async {
+    if (defaultTargetPlatform == TargetPlatform.linux) {
+      return false;
+    }
     final androidPlugin =
         _plugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
     if (androidPlugin != null) {
@@ -202,12 +205,20 @@ class LocalNotifierImpl implements LocalNotifier {
       } catch (_) {}
     }
 
+    // flutter_local_notifications Linux backend does not support zonedSchedule.
+    if (defaultTargetPlatform == TargetPlatform.linux) {
+      return;
+    }
+
     final now = DateTime.now();
     final useEnglish = lang == 'en';
+    final effectivePlan = capPlanForPlatform(
+      plan,
+      now: now,
+      maxPending: defaultTargetPlatform == TargetPlatform.iOS ? iosPendingNotificationCap : null,
+    );
 
-    for (final n in plan) {
-      if (n.scheduledAt.isBefore(now)) continue;
-
+    for (final n in effectivePlan) {
       final tzDate = tz.TZDateTime.from(n.scheduledAt, CairoTime.location);
       final scheduleMode = n.exact
           ? AndroidScheduleMode.exactAllowWhileIdle
@@ -239,13 +250,11 @@ class LocalNotifierImpl implements LocalNotifier {
         presentBadge: false,
         presentSound: !n.silent,
       );
-      const linuxDetails = LinuxNotificationDetails();
 
       final details = NotificationDetails(
         android: androidDetails,
         iOS: darwinDetails,
         macOS: darwinDetails,
-        linux: linuxDetails,
       );
 
       Future<void> schedule(AndroidScheduleMode mode) => _plugin.zonedSchedule(

@@ -74,14 +74,17 @@ class FakeTestPushEnv implements PushEnv {
   Future<List<WebInboxItem>> readInbox() async => const [];
   @override
   Future<bool> clearInbox() async => true;
+  int syncQuietHoursCalls = 0;
   @override
   Future<bool> syncQuietHours({
     required bool enabled,
     required String start,
     required String end,
     bool remindersRespectQuietHours = true,
-  }) async =>
-      true;
+  }) async {
+    syncQuietHoursCalls++;
+    return true;
+  }
   @override
   String? readStorage(String key) => storage[key];
   @override
@@ -418,7 +421,7 @@ void main() {
     ));
     await tester.pumpAndSettle();
     expect(find.text('الإشعارات مفعلة'), findsNothing);
-    expect(find.text('هذا المتصفح لا يدعم تلقي الإشعارات.'), findsOneWidget);
+    expect(find.text('الإشعارات المجدولة غير مدعومة على هذا الجهاز حاليًا.'), findsOneWidget);
   });
 
   testWidgets('a recurring «كل مرة» reminder past its first occurrence shows its next one and is not expired', (tester) async {
@@ -1525,6 +1528,56 @@ void main() {
     } finally {
       debugDefaultTargetPlatformOverride = null;
     }
+  });
+
+  testWidgets('native unsupported platform shows non-browser scheduled notifications message', (tester) async {
+    final pushEnv = FakeTestPushEnv(isSupported: false, permission: 'unsupported');
+    final installEnv = FakeTestInstallEnv();
+
+    await tester.pumpWidget(buildTestable(
+      child: const NotificationsPage(isWeb: false),
+      pushSettings: const PushSettings(enabled: true, offered: [NotifyType.verse_daily]),
+      pushEnv: pushEnv,
+      installEnv: installEnv,
+      locale: const Locale('ar'),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.text('الإشعارات المجدولة غير مدعومة على هذا الجهاز حاليًا.'), findsOneWidget);
+
+    await tester.pumpWidget(buildTestable(
+      child: const NotificationsPage(isWeb: false),
+      pushSettings: const PushSettings(enabled: true, offered: [NotifyType.verse_daily]),
+      pushEnv: pushEnv,
+      installEnv: installEnv,
+      locale: const Locale('en'),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.text('Scheduled notifications are not supported on this device yet.'), findsOneWidget);
+  });
+
+  testWidgets('web first opt-in seeds quietHours immediately via syncQuietHours', (tester) async {
+    web_push.WebPushRepository.debugBatchWriter = (qid, queueData, rateData, {bool isSetCount1 = false}) async {};
+    addTearDown(() => web_push.WebPushRepository.debugBatchWriter = null);
+
+    final pushEnv = FakeTestPushEnv(permission: 'default');
+    final installEnv = FakeTestInstallEnv();
+
+    await tester.pumpWidget(buildTestable(
+      child: const NotificationsPage(isWeb: true),
+      pushSettings: const PushSettings(
+        enabled: true,
+        offered: [NotifyType.announcements, NotifyType.seasons],
+        vapidKey: 'test_vapid_key_01234567890123456789012345678901234567890123456789012345678901234567890123456789',
+      ),
+      pushEnv: pushEnv,
+      installEnv: installEnv,
+    ));
+    await tester.pumpAndSettle();
+    expect(pushEnv.syncQuietHoursCalls, 0);
+
+    await tester.tap(find.text('السماح بإشعارات المتصفح'));
+    await tester.pumpAndSettle();
+    expect(pushEnv.syncQuietHoursCalls, 1);
   });
 }
 
