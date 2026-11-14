@@ -284,16 +284,21 @@ For each `CollectionDef`:
   Note: `AdminRepository.save`/`saveDoc` set no timeout of their own today (the only 15 s timeout is the role read
   in `adminRole`), so this path applies to a timeout raised by a caller/backend wrapper.
 - **Add** (FAB) / tap to **edit** → full-screen `DocEditor`; **delete** in `collection_list.dart` uses a 10-second
-  reversible soft-delete buffer (`PendingDelete`, `pending_delete.dart`). Non-category items hide immediately from
-  the list (`_pendingDelete.pendingIds`) and display a 10-second `SnackBar` with «اتمسح «{n}»» (`deletedUndo`) and an
-  action «تراجع» (`undo`). Tapping undo restores the item immediately with no backend call. If the 10 seconds elapse
-  without undo, the deletion commits to `widget.repo.delete(def.name, d.id)` and cleans up orphaned media
-  (`orphanedDocMediaIds`). Pending-deletion items stay in `_lastDocs` until commit so their slugs remain reserved
-  in `takenSlugs`, and scheduling deletion captures `repo`, `def`, `media` and document data in closure. Navigating
-  away (`dispose()`) or closing/reloading the browser tab (`addBeforeUnloadFlush`)
-  synchronously flushes pending deletions so no deletion is lost. Custom categories (`categories`) remain confirmed via
-  dialog (`_deleteCategory`) because deleting a category cascades to hide member items and clear category links. A new
-  item saved in several writes keeps the id the first write created (the editor's `onSave` remembers it).
+  reversible soft-delete buffer (`PendingDelete`, `pending_delete.dart`). Non-category items immediately write Firestore
+  `deletedAt: DateTime.now().toUtc()` (allowed by `meta()` and `optTimestamp(d, 'deletedAt')` in `firestore.rules`),
+  hide immediately from the visible list (`_pendingDelete.isPending` / `isSoftDeleted`) and display a 10-second `SnackBar`
+  with «اتمسح «{n}»» (`deletedUndo`) and action «تراجع» (`undo`). The soft-deleted document immediately vanishes from
+  public collection views (`_docs` and `_col` in `FirestoreRepository`) and sitemap exports (`sitemapContentFromExport`).
+  Tapping undo restores the item immediately and sets `deletedAt: null`. If the 10 seconds elapse without undo, the deletion
+  commits to hard delete `widget.repo.delete(def.name, d.id)` and cleans up orphaned media (`removeOrphanedDocMedia`).
+  Pending-deletion items stay in `_lastDocs` until commit so their slugs remain reserved in `takenSlugs`, and scheduling
+  deletion captures `repo`, `def`, `media` and document data in closure. If the admin navigates away (`dispose()`) or closes
+  the tab, local timers are cancelled without fire-and-forget delete calls; the soft-deleted document remains hidden from
+  public views and is deterministically purged on subsequent admin opens via lazy purge (`purgeExpiredSoftDeletes`). Browser
+  `beforeunload` is strictly NOT used in `PendingDelete` and remains exclusively for `UnsavedGuard` unsaved form edits. Custom
+  categories (`categories`) remain confirmed via dialog (`_deleteCategory`) because deleting a category cascades to hide
+  member items and clear category links. A new item saved in several writes keeps the id the first write created (the editor's
+  `onSave` remembers it).
 
 | Screen id | Collection | Orderable | Has visible | Has sample | Notes |
 |---|---|---|---|---|---|
@@ -458,11 +463,12 @@ Guards uncommitted edits across all administrative exit vectors:
 
 ### 10-second undo deletion (`PendingDelete`, `pending_delete.dart`)
 Reversible soft-delete buffer for collection items in `collection_list.dart`:
-- When an item (liturgy, meeting, activity, priest, saint, milestone, custom entry, custom page, etc.) is deleted, it is hidden from the UI immediately (`_pendingDelete.pendingIds`).
+- When an item (liturgy, meeting, activity, priest, saint, milestone, custom entry, custom page, etc.) is deleted, it immediately writes `deletedAt: Timestamp` to Firestore.
+- It is hidden from the admin list immediately (`_pendingDelete.isPending` / `isSoftDeleted`) and filtered out of all public collections (`FirestoreRepository._docs` and `_col`) and sitemaps.
 - A 10-second `SnackBar` appears: «اتمسح «{n}»» (`deletedUndo`) with action «تراجع» (`undo`).
-- Tapping «تراجع» cancels the timer and restores the item without hitting Firestore.
-- When the 10 seconds expire, the deletion commits to `widget.repo.delete` and deletes unreferenced media (`orphanedDocMediaIds`).
-- **Zero data loss on exit:** disposing `CollectionListScreen` or closing the browser tab (`addBeforeUnloadFlush`) immediately flushes all pending deletions via `flush()`.
+- Tapping «تراجع» cancels the timer, restores the row, and sets `deletedAt: null` in Firestore.
+- When the 10 seconds expire, the deletion commits to hard delete `widget.repo.delete` and deletes unreferenced media (`removeOrphanedDocMedia`).
+- **Deterministic lazy purge on exit:** disposing `CollectionListScreen` cancels local timers without fire-and-forget delete calls; the soft-deleted doc is safely purged on subsequent admin open via `purgeExpiredSoftDeletes`. Browser `beforeunload` is strictly NOT used in `PendingDelete`.
 - **Category exception:** custom categories (`categories`) do not use `PendingDelete`; they require an explicit confirmation dialog due to cascading changes (hiding items in that category).
 
 ### Sticky unsaved changes bar (`UnsavedBar`, `unsaved_bar.dart`)

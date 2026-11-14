@@ -18,6 +18,21 @@ DateTime? parseDate(Object? v) {
   return null;
 }
 
+/// Whether a content document is in the soft-delete bin (`deletedAt != null`).
+bool isSoftDeleted(Map<String, dynamic>? data) => data != null && data['deletedAt'] != null;
+
+/// Whether a soft-deleted document's grace period has expired for permanent purge.
+bool isExpiredSoftDelete(
+  Map<String, dynamic>? data,
+  DateTime nowUtc, {
+  Duration grace = const Duration(seconds: 10),
+}) {
+  if (data == null) return false;
+  final v = data['deletedAt'];
+  if (v is! DateTime) return false;
+  return !nowUtc.toUtc().isBefore(v.toUtc().add(grace));
+}
+
 String _s(Object? v) => v == null ? '' : v.toString();
 String? _ns(Object? v) {
   if (v == null) return null;

@@ -758,4 +758,40 @@ void main() {
       expect(hidden, isEmpty);
     });
   });
+
+  group('soft delete', () {
+    test('isSoftDeleted returns true only when deletedAt is not null', () {
+      expect(isSoftDeleted(null), isFalse);
+      expect(isSoftDeleted(const {}), isFalse);
+      expect(isSoftDeleted({'name': 'test'}), isFalse);
+      expect(isSoftDeleted({'deletedAt': null}), isFalse);
+      expect(isSoftDeleted({'deletedAt': DateTime.utc(2026, 11, 14)}), isTrue);
+      expect(isSoftDeleted({'deletedAt': '2026-11-14T10:00:00Z'}), isTrue);
+    });
+
+    test('isExpiredSoftDelete evaluates expiry against UTC clock and grace period', () {
+      final now = DateTime.utc(2026, 11, 14, 12, 0, 0);
+      expect(isExpiredSoftDelete(null, now), isFalse);
+      expect(isExpiredSoftDelete(const {}, now), isFalse);
+      expect(isExpiredSoftDelete({'deletedAt': null}, now), isFalse);
+      expect(isExpiredSoftDelete({'deletedAt': 'invalid-date'}, now), isFalse);
+
+      // 5 seconds ago -> not expired (default grace 10s)
+      final d5sAgo = {'deletedAt': now.subtract(const Duration(seconds: 5))};
+      expect(isExpiredSoftDelete(d5sAgo, now), isFalse);
+
+      // Exactly 10 seconds ago -> expired
+      final d10sAgo = {'deletedAt': now.subtract(const Duration(seconds: 10))};
+      expect(isExpiredSoftDelete(d10sAgo, now), isTrue);
+
+      // 15 seconds ago -> expired
+      final d15sAgo = {'deletedAt': now.subtract(const Duration(seconds: 15))};
+      expect(isExpiredSoftDelete(d15sAgo, now), isTrue);
+
+      // Custom grace period (30s)
+      expect(isExpiredSoftDelete(d15sAgo, now, grace: const Duration(seconds: 30)), isFalse);
+      final d30sAgo = {'deletedAt': now.subtract(const Duration(seconds: 30))};
+      expect(isExpiredSoftDelete(d30sAgo, now, grace: const Duration(seconds: 30)), isTrue);
+    });
+  });
 }

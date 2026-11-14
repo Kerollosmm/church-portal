@@ -55,17 +55,21 @@ Report item: #8 · خطة التبسيط · Priority 1 · not started · est. M
 Current: delete asks a generic confirmation; postponed undo is not built.
 
 - **Files:** create `lib/ui/admin/pending_delete.dart`; modify `lib/ui/admin/collection_list.dart`,
-  `lib/core/l10n.dart`; test `test/admin_test.dart`.
-- **Interface (proposed):**
-  `class PendingDelete { PendingDelete({Duration window = const Duration(seconds: 10)}); void schedule(String id, Future<void> Function() commit); bool undo(String id); Future<void> flush(); }`
-  The row disappears at once, a bar shows «اتمسح · تراجع» with the item's name for 10 seconds, and the real delete
-  (including the item's media cleanup) runs when the window ends. `flush()` runs on leaving the screen **and on
-  `beforeunload`** (tab close or browser Back) when «تراجع» was not pressed — owner decision, 13 November.
+  `lib/ui/admin/admin_page.dart`, `lib/domain/models.dart`, `lib/domain/sitemap.dart`,
+  `lib/data/content_repository.dart`, `lib/core/l10n.dart`; test `test/admin_test.dart`, `test/domain_test.dart`.
+- **Interface & Architecture:**
+  `class PendingDelete { PendingDelete({Duration window = const Duration(seconds: 10)}); void schedule(String id, Future<void> Function() commit); bool undo(String id); bool isPending(String id); Set<String> get pendingIds; void dispose(); }`
+  `Future<void> purgeExpiredSoftDeletes(AdminBackend repo, CollectionDef def, Iterable<AdminDoc> docs, ...)`
+  Item delete immediately writes Firestore soft delete `deletedAt: Timestamp.now()`, which is allowed by `meta()` and validated by `optTimestamp(d, 'deletedAt')` in `firestore.rules`.
+  The document immediately disappears from public collections (`_docs` and `_col` in `FirestoreRepository` filter out `isSoftDeleted`) and sitemap exports (`sitemap.dart`).
+  On the admin list, the row is hidden immediately and a bar shows «اتمسح «[الاسم]» · تراجع» for 10 seconds.
+  Tapping «تراجع» cancels the pending commit and sets `deletedAt: null`.
+  If 10 seconds elapse, `repo.delete(def.name, id)` executes along with orphaned media cleanup (`orphanedDocMediaIds`).
+  If the admin closes the tab or navigates away during the 10 seconds, `dispose()` cancels local timers without fire-and-forget delete calls; the document remains soft-deleted in Firestore (`deletedAt != null`) and is deterministically purged on the next admin open via lazy purge (`purgeExpiredSoftDeletes`).
+  Browser `beforeunload` is strictly NOT used in `PendingDelete` and remains exclusively in `UnsavedGuard` (`P1-07`) for dirty form edits.
 - **Behaviour fixed by the report:** item delete (priest, service, notice, page) = immediate + undo. The section
   delete keeps its explanatory confirmation and now names the section. No server is involved.
-- **Tests:** deleting hides the row and calls no backend delete before 10 s · «تراجع» restores the row and no
-  delete is ever sent · after 10 s exactly one delete is sent · leaving the screen commits the pending delete · `beforeunload` commits the pending delete ·
-  the bar text contains the item's title.
+- **Tests:** deleting writes `deletedAt` and hides row immediately · public site and sitemap skip docs with `deletedAt` · «تراجع» sets `deletedAt: null` and restores row · after 10 s hard delete and media cleanup run · `purgeExpiredSoftDeletes` deletes docs with `deletedAt` older than 10 s · the bar text contains the item's title.
 - **Acceptance:** an item deleted by mistake is back with one press within 10 seconds, with its images intact.
 
 ### Packet P1-11 — Fixed bottom save bar
@@ -216,6 +220,18 @@ technical.
   screen.
 - **Acceptance:** a new editor facing an empty list knows the next press.
 
+### Packet P1-18 — Custom page placement («مكانها فين») and Featured on Home («مميزة»)
+Report item: #18a · الصفحات المخصصة · Priority 1 · not started · est. M
+Current: a page has a boolean `showInNav`, but cannot be pinned inside a section as «اعرف المزيد» or featured on the home page.
+
+- **Files:** modify `lib/domain/models.dart` (`CustomPage`), `lib/ui/admin/admin_schema.dart` (`pages` schema),
+  `firestore.rules`, `tool/gen_seed.py`, `lib/ui/pages/category_page.dart`, `lib/ui/pages/home_page.dart`; test `test/custom_content_test.dart`, `tool/rules_test`.
+- **Fields (4-places rule in PR 3D):**
+  - `placement`: string enum with `'link'` (default: «لينك بس (من تنويه أو زر)»), `'nav'` («في القائمة», synced with `showInNav`), or `'section'` («جوه قسم كـ«اعرف المزيد»» with required `categoryId` picker showing an «اعرف المزيد» card inside `/section/<slug>` `CategoryPage`). Backward compatible reader defaults to `showInNav ? 'nav' : 'link'` when `placement` is absent.
+  - `featured`: `bool`, default `false`: «مميزة (تظهر في الرئيسية)» `AdminStateSwitch`; featured pages render as cards on `HomePage` with an «اعرف المزيد» button opening `/page/<slug>` when `Sections.customPages` is on.
+- **Tests:** page reader defaults `placement` correctly from `showInNav` when missing · `'section'` requires `categoryId` · `'nav'` syncs with `showInNav` · featured cards render on home page when feature switch is on and disappear when off · rules accept new fields and reject invalid enum values or out-of-range text.
+- **Acceptance:** a servant can place a custom page inside a section or feature it on the home page with a single choice.
+
 ---
 
 ## بوابة نهاية المرحلة (End gate G1)
@@ -229,9 +245,9 @@ technical.
 
 ## مخاطر تستحق المراجعة (Review focus)
 
-1. A tab closed during the 10-second window: the pending delete is sent on `beforeunload` (owner decision,
-   13 November). The browser does not wait for it to finish, so check the item is never left half-deleted
-   (document gone but media kept, or the reverse).
+1. A tab closed during the 10-second window: the item is already soft-deleted in Firestore (`deletedAt != null`),
+   immediately invisible on the public site and sitemap, and is safely purged on the next admin open (`purgeExpiredSoftDeletes`).
+   No reliance on browser `beforeunload` for deletion commits.
 2. A stopped admin with the dashboard already open: the live role stream must lock the dashboard at once.
 3. Idle sign-out while a form is dirty: the work is not dropped silently.
 4. Two admins: one deletes with undo pending while the other edits the same item.

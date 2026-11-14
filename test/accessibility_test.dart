@@ -1763,6 +1763,17 @@ class _ListBackend extends _FakeBackend {
   @override
   MediaRepository? get media => mediaRepo;
   @override
+  Future<void> update(String collection, String id, Map<String, dynamic> data) async {
+    for (final doc in docs) {
+      if (doc.id == id) {
+        doc.data.addAll(data);
+        if (data.containsKey('deletedAt') && data['deletedAt'] == null) {
+          doc.data.remove('deletedAt');
+        }
+      }
+    }
+  }
+  @override
   Future<void> delete(String collection, String id) async => deletedIds.add('$collection/$id');
   @override
   Stream<List<AdminDoc>> watch(String collection) {
