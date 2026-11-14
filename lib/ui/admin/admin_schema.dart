@@ -155,6 +155,9 @@ class FieldDef {
   /// Hidden field: not rendered in forms but retained in rows/data.
   final bool hidden;
 
+  /// Placed inside the collapsed «متقدم» section of [DocEditor] (P1-14).
+  final bool advanced;
+
   const FieldDef(this.key, this.labelAr, this.labelEn, this.type,
       {this.required = false,
       this.options = const [],
@@ -184,7 +187,8 @@ class FieldDef {
       this.defaultValues = const [],
       this.intOptions = const [],
       this.defaultIntValues = const [],
-      this.hidden = false});
+      this.hidden = false,
+      this.advanced = false});
 
   int get effectiveMaxLength => maxLength > 0
       ? maxLength
@@ -711,7 +715,7 @@ const adminCollections = <CollectionDef>[
     'titleAr',
     'titleEn'
   ], orderable: true, icon: 'milestones', publicPath: '/'),
-  CollectionDef('categories', 'الأقسام المخصصة', 'Custom sections', [
+  CollectionDef('categories', 'الأقسام وعناصرها', 'Sections & items', [
     FieldDef('nameAr', 'اسم القسم (عربي)', 'Section name (Arabic)', FieldType.text, required: true, maxLength: 120),
     FieldDef('nameEn', 'اسم القسم (إنجليزي)', 'Section name (English)', FieldType.text, maxLength: 120),
     FieldDef('slug', 'رابط الصفحة (حروف إنجليزية صغيرة وأرقام و-)', 'Page address (lower-case latin, digits, -)',
@@ -719,6 +723,7 @@ const adminCollections = <CollectionDef>[
         required: true,
         maxLength: slugMaxLength,
         slug: true,
+        advanced: true,
         hintAr: 'تظهر الصفحة على /section/<الرابط> مثل /section/youth-trips',
         hintEn: 'The page lives at /section/<address>, e.g. /section/youth-trips'),
     FieldDef('introAr', 'مقدمة (عربي)', 'Intro (Arabic)', FieldType.multiline, maxLength: 1500),
@@ -737,10 +742,8 @@ const adminCollections = <CollectionDef>[
       orderable: true,
       icon: 'categories',
       publicPath: '/',
-      noteAr: 'الأقسام الأساسية (العيادات، الاجتماعات، الأنشطة…) تُخفى أو تُظهر من «الأقسام والصفحة الرئيسية» ويُعاد تسميتها من «عناوين الصفحات» هناك. '
-          'حذف قسم مخصص يُخفي عناصره ولا يحذفها.',
-      noteEn: 'Built-in sections (clinics, meetings, activities…) are switched on/off in "Sections & home page" and renamed in its '
-          '"Page headers". Deleting a custom section hides its items, never deletes them.'),
+      noteAr: 'هنا بتعمل أقسام جديدة للموقع وتضيف جواها العناصر. لو حذفت قسم، عناصره بتتخفي ومش بتتمسح.',
+      noteEn: 'Create custom sections for the site and add their items right underneath. Deleting a section hides its items without deleting them.'),
   CollectionDef('entries', 'عناصر الأقسام', 'Section items', [
     FieldDef('categoryId', 'القسم', 'Section', FieldType.choice, required: true, dynamicOptions: 'categories'),
     FieldDef('titleAr', 'العنوان (عربي)', 'Title (Arabic)', FieldType.text, required: true),
@@ -769,6 +772,7 @@ const adminCollections = <CollectionDef>[
         required: true,
         maxLength: slugMaxLength,
         slug: true,
+        advanced: true,
         hintAr: 'تظهر الصفحة على /page/<الرابط> مثل /page/new-building-donations',
         hintEn: 'The page lives at /page/<address>, e.g. /page/new-building-donations'),
     FieldDef('subtitleAr', 'العنوان الفرعي (عربي)', 'Subtitle (Arabic)', FieldType.text),
@@ -803,11 +807,21 @@ const adminCollections = <CollectionDef>[
           FieldDef('wallet', 'رقم المحفظة', 'Wallet number', FieldType.text,
               maxLength: blockWalletMax, showWhen: MapEntry('type', [BlockTypes.donation])),
         ]),
-    FieldDef('showInNav', 'إظهار في القائمة', 'Show in the menu', FieldType.boolean,
+    FieldDef('placement', 'مكانها فين', 'Placement', FieldType.choice,
+        options: PagePlacements.all,
+        defaultOption: PagePlacements.link,
+        hintAr: 'اختر أين تظهر الصفحة للزائرين.',
+        hintEn: 'Choose where visitors can reach this page.'),
+    FieldDef('categoryId', 'القسم', 'Section', FieldType.choice,
+        required: true,
+        dynamicOptions: 'categories',
+        nullableChoice: true,
+        showWhen: MapEntry('placement', [PagePlacements.section])),
+    FieldDef('featured', 'مميزة (تظهر في الرئيسية)', 'Featured (shown on Home)', FieldType.boolean,
         missingBool: false,
         newBool: false,
-        hintAr: 'غير ظاهرة في القائمة افتراضيًا؛ اربطها من تنويه («اعرف المزيد») أو من زر.',
-        hintEn: 'Not in the menu by default; link it from a notice ("Learn more") or a button.'),
+        hintAr: 'تظهر كبطاقة في الصفحة الرئيسية مع زر «اعرف المزيد».',
+        hintEn: 'Shown as a card on the Home page with a "Learn more" button.'),
     _orderField,
     _visibleField,
   ], [
@@ -815,6 +829,27 @@ const adminCollections = <CollectionDef>[
     'titleEn'
   ], orderable: true, icon: 'pages', publicPath: '/'),
 ];
+
+/// Pre-filled defaults for the «صفحة تبرعات» template (P1-15).
+/// Account, InstaPay, and wallet fields start empty for the church office to fill.
+Map<String, Object?> donationPageTemplate() => {
+      'titleAr': 'التبرعات والمساهمات',
+      'titleEn': 'Donations & contributions',
+      'subtitleAr': '',
+      'subtitleEn': '',
+      'placement': PagePlacements.link,
+      'featured': false,
+      'visible': true,
+      'order': 0,
+      'blocks': [
+        const PageBlock(
+          type: BlockTypes.paragraph,
+          textAr: 'بيانات المساهمة والتبرع (للعرض فقط — لا يتم أي دفع عبر الموقع).',
+          textEn: 'Donation and contribution details (display only — no payment is processed on this site).',
+        ).encode(),
+        const PageBlock(type: BlockTypes.donation).encode(),
+      ],
+    };
 
 /// settings/church: identity, contacts, socials, history.
 const churchInfoDoc = DocDef('settings/church', 'بيانات الكنيسة', 'Church info', [

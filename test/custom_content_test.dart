@@ -6,6 +6,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:church_portal/core/l10n.dart';
 import 'package:church_portal/data/admin_repository.dart';
 import 'package:church_portal/data/content_repository.dart';
 import 'package:church_portal/data/seed_data.dart';
@@ -18,6 +19,7 @@ import 'package:church_portal/router.dart';
 import 'package:church_portal/state/providers.dart';
 import 'package:church_portal/ui/admin/admin_schema.dart';
 import 'package:church_portal/ui/admin/admin_screens.dart';
+import 'package:church_portal/ui/admin/admin_strings.dart';
 import 'package:church_portal/ui/admin/admin_validators.dart';
 import 'package:church_portal/ui/admin/collection_list.dart';
 import 'package:church_portal/ui/admin/contact_admin.dart';
@@ -48,7 +50,7 @@ const _entries = [
 ];
 const _pages = [
   CustomPage(id: 'p1', slug: 'donate', titleAr: 'التبرع لمبنى الخدمات', titleEn: 'Building donations', subtitleEn: 'Help us build',
-      showInNav: true, blocks: [
+      placement: PagePlacements.nav, showInNav: true, blocks: [
         PageBlock(type: BlockTypes.heading, textAr: 'المبنى الجديد', textEn: 'The new building'),
         PageBlock(type: BlockTypes.paragraph, textAr: 'نص', textEn: 'Every gift helps.'),
         PageBlock(type: BlockTypes.button, textEn: 'Contact us', url: '/contact'),
@@ -58,6 +60,15 @@ const _pages = [
         PageBlock(type: BlockTypes.button, textEn: 'No link'), // empty: not rendered
       ]),
   CustomPage(id: 'p2', slug: 'draft', titleAr: 'مسودة', visible: false),
+  CustomPage(
+      id: 'p3',
+      slug: 'trips-faq',
+      titleAr: 'تفاصيل الرحلات',
+      titleEn: 'Trips guide',
+      subtitleEn: 'Rules & fees',
+      placement: PagePlacements.section,
+      categoryId: 'k1',
+      featured: true),
 ];
 
 /// Seed data plus custom categories / pages; records contact submissions.
@@ -115,6 +126,7 @@ class _Backend extends AdminBackend {
         _docs = {...docs};
   final Map<String, List<AdminDoc>> _lists;
   final Map<String, Map<String, dynamic>> _docs;
+  final saves = <(String, String?, Map<String, dynamic>)>[];
   final updates = <(String, String, Map<String, dynamic>)>[];
   final deletes = <(String, String)>[];
   final savedDocs = <String, Map<String, dynamic>>{};
@@ -127,7 +139,10 @@ class _Backend extends AdminBackend {
   Stream<AdminDoc?> watchDoc(String path) =>
       Stream.value(_docs[path] == null ? null : AdminDoc(path.split('/').last, _docs[path]!));
   @override
-  Future<String> save(String collection, String? id, Map<String, dynamic> data) async => id ?? 'new';
+  Future<String> save(String collection, String? id, Map<String, dynamic> data) async {
+    saves.add((collection, id, data));
+    return id ?? 'new-${saves.length}';
+  }
   @override
   Future<void> saveDoc(String path, Map<String, dynamic> data) async => savedDocs[path] = data;
   @override
@@ -207,7 +222,7 @@ void main() {
       expect(const PageBlock(type: BlockTypes.donation).isEmpty, isTrue);
       expect(const PageBlock(type: BlockTypes.heading, textEn: 'H').toMap().keys,
           ['type', 'textAr', 'textEn', 'url', 'account', 'instapay', 'wallet']);
-      expect(publicPages(_pages).map((p) => p.slug), ['donate']);
+      expect(publicPages(_pages).map((p) => p.slug), ['donate', 'trips-faq']);
     });
 
     test('link targets: custom pages, then categories, then built-in routes', () {
@@ -547,7 +562,7 @@ void main() {
       await tester.pumpWidget(_admin(CollectionListScreen(repo: b, def: collectionById('categories')!)));
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('admin-collectionNote')), findsOneWidget);
-      await tester.tap(find.byTooltip('Delete'));
+      await tester.tap(find.byKey(const ValueKey('delete-k1')));
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('deleteCategoryDialog')), findsOneWidget);
       expect(find.textContaining('items are hidden from the site, never deleted'), findsOneWidget);
@@ -632,9 +647,393 @@ void main() {
         'heading\u001fع\u001f\u001f\u001f\u001f\u001f',
         'donation\u001f\u001f\u001f\u001fCIB\u001f\u001f',
       ]);
+      await tester.tap(find.byKey(const ValueKey('group-advanced')));
+      await tester.pumpAndSettle();
       await tester.enterText(find.byKey(const ValueKey('field-slug')), 'donate-2');
       await tester.pump();
       expect(find.text('This address is already used'), findsOneWidget);
+    });
+  });
+
+  group('PR 3D (P1-14..P1-18)', () {
+    test('P1-14: slugFromTitle generates valid, unique slugs from Arabic, empty, and long titles', () {
+      final first = slugFromTitle('تبرعات المبنى الجديد', taken: const {});
+      expect(isValidSlug(first), isTrue, reason: first);
+      expect(first, isNotEmpty);
+
+      final second = slugFromTitle('تبرعات المبنى الجديد', taken: {first});
+      expect(isValidSlug(second), isTrue);
+      expect(second, isNot(first));
+      expect(second, endsWith('-2'));
+
+      final blank = slugFromTitle('   ', taken: const {});
+      expect(blank, 'page');
+      expect(isValidSlug(blank), isTrue);
+
+      final symbols = slugFromTitle('؟؟؟ *** !!!', taken: {'page', 'page-2'});
+      expect(symbols, 'page-3');
+      expect(isValidSlug(symbols), isTrue);
+
+      final longBase = slugFromTitle('أ' * 120, taken: const {});
+      expect(isValidSlug(longBase), isTrue);
+      final longDup = slugFromTitle('أ' * 120, taken: {longBase});
+      expect(isValidSlug(longDup), isTrue);
+      expect(longDup, isNot(longBase));
+    });
+
+    testWidgets('P1-14: DocEditor auto-generates slug for new pages, hides under Advanced, preserves saved slugs',
+        (tester) async {
+      tester.view.physicalSize = const Size(900, 3000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      await tester.pumpWidget(_admin(DocEditor(
+        title: 'New Page',
+        fields: collectionById('pages')!.fields,
+        def: collectionById('pages'),
+        popOnSave: false,
+        onSave: (d) async {},
+        takenSlugs: {'tbraat'},
+      )));
+      await tester.pumpAndSettle();
+
+      // Slug is tucked inside collapsed Advanced group, unseen by default.
+      expect(find.byKey(const ValueKey('groupCard-advanced')), findsOneWidget);
+      final slugFinder = find.byKey(const ValueKey('field-slug'));
+      expect(slugFinder.hitTestable(), findsNothing);
+
+      await tester.enterText(find.byKey(const ValueKey('field-titleAr')), 'تبرعات');
+      await tester.pump();
+      final newState = tester.state<DocEditorState>(find.byType(DocEditor));
+      final generated = newState.collect()['slug'] as String;
+      expect(isValidSlug(generated), isTrue);
+      expect(generated, isNot('tbraat'));
+
+      // Existing saved page: editing titleAr never alters its existing slug.
+      await tester.pumpWidget(_admin(DocEditor(
+        key: const ValueKey('saved-page'),
+        title: 'Edit Page',
+        fields: collectionById('pages')!.fields,
+        def: collectionById('pages'),
+        popOnSave: false,
+        onSave: (d) async {},
+        data: const {'slug': 'existing-slug', 'titleAr': 'قديم'},
+      )));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const ValueKey('field-titleAr')), 'عنوان مختلف تماما');
+      await tester.pump();
+      final editState = tester.state<DocEditorState>(find.byType(DocEditor));
+      expect(editState.collect()['slug'], 'existing-slug');
+    });
+
+    testWidgets('P1-14: saving with an invalid or taken slug auto-expands Advanced group', (tester) async {
+      tester.view.physicalSize = const Size(900, 3000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      await tester.pumpWidget(_admin(DocEditor(
+        title: 'Edit Page',
+        fields: collectionById('pages')!.fields,
+        def: collectionById('pages'),
+        popOnSave: false,
+        onSave: (d) async {},
+        data: const {'slug': 'Invalid Slug!', 'titleAr': 'عنوان'},
+      )));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('field-slug')).hitTestable(), findsNothing);
+
+      await tester.tap(find.byKey(const Key('editor-save')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('field-slug')).hitTestable(), findsOneWidget);
+    });
+
+    test('P1-15: donationPageTemplate has empty financial fields, no personal data, and passes validateDocument', () {
+      final tpl = donationPageTemplate();
+      final blocks = [
+        for (final raw in tpl['blocks']! as List) PageBlock.fromStored(raw)!,
+      ];
+      final donation = blocks.singleWhere((b) => b.type == BlockTypes.donation);
+      expect(donation.account, isEmpty);
+      expect(donation.instapay, isEmpty);
+      expect(donation.wallet, isEmpty);
+      expect(tpl.toString(), isNot(contains(RegExp(r'01[0-2,5]\d{8}'))));
+
+      final slug = slugFromTitle(tpl['titleAr']! as String, taken: const {});
+      final filled = {
+        ...tpl,
+        'slug': slug,
+        'blocks': [
+          for (final b in blocks)
+            b.type == BlockTypes.donation
+                ? const PageBlock(type: BlockTypes.donation, account: 'CIB 123456').encode()
+                : b.encode(),
+        ],
+      };
+      expect(validateDocument(collectionById('pages'), filled), isNull);
+    });
+
+    testWidgets('P1-15: adding a page from CollectionListScreen offers donation template and saves in <= 5 steps',
+        (tester) async {
+      tester.view.physicalSize = const Size(900, 3000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final b = _Backend();
+      await tester.pumpWidget(_admin(CollectionListScreen(repo: b, def: collectionById('pages')!)));
+      await tester.pumpAndSettle();
+
+      // Step 1: tap Add (+)
+      await tester.tap(find.byIcon(Icons.add));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('addPageDialog')), findsOneWidget);
+      expect(find.byKey(const Key('addPage-donation')), findsOneWidget);
+
+      // Step 2: choose Donations template
+      await tester.tap(find.byKey(const Key('addPage-donation')));
+      await tester.pumpAndSettle();
+
+      final state = tester.state<DocEditorState>(find.byType(DocEditor));
+      expect(state.dirty, isFalse, reason: 'initial auto-slug sync must not falsely dirty template');
+      expect(isValidSlug(state.collect()['slug'] as String), isTrue);
+
+      // Step 3: fill account field
+      await tester.enterText(find.byKey(const ValueKey('field-account')), 'NBE 999888');
+      await tester.pump();
+
+      // Step 4: tap Save
+      await tester.tap(find.byKey(const Key('editor-save')));
+      await tester.pumpAndSettle();
+
+      // splitSavePayload writes base fields then `blocks` on its own write (2 writes).
+      expect(b.saves.length, 2);
+      expect(b.saves.every((s) => s.$1 == 'pages'), isTrue);
+      final merged = {for (final s in b.saves) ...s.$3};
+      expect(isValidSlug(merged['slug'] as String), isTrue);
+      final savedBlocks = [for (final raw in merged['blocks'] as List) PageBlock.fromStored(raw)!];
+      expect(savedBlocks.any((bl) => bl.type == BlockTypes.donation && bl.account == 'NBE 999888'), isTrue);
+    });
+
+    testWidgets('P1-16 & P1-17: empty sections prompt opens editor; populated sections nest items and unassigned card',
+        (tester) async {
+      tester.view.physicalSize = const Size(900, 3000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final emptyBackend = _Backend();
+      await tester.pumpWidget(_admin(CollectionListScreen(repo: emptyBackend, def: collectionById('categories')!)));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('emptyCategories')), findsOneWidget);
+      expect(find.byKey(const Key('addFirstSectionBtn')), findsOneWidget);
+      await tester.tap(find.byKey(const Key('addFirstSectionBtn')));
+      await tester.pumpAndSettle();
+      expect(find.byType(DocEditor), findsOneWidget);
+      await tester.tap(find.byIcon(Icons.close));
+      await tester.pumpAndSettle();
+
+      // Populated sections + entries + orphan entry
+      final popBackend = _Backend(lists: {
+        'categories': [
+          AdminDoc('k1', {'nameAr': 'رحلات', 'nameEn': 'Trips', 'slug': 'trips', 'order': 10}),
+          AdminDoc('k2', {'nameAr': 'مكتبة', 'nameEn': 'Library', 'slug': 'library', 'order': 20}),
+        ],
+        'entries': [
+          AdminDoc('e1', {'categoryId': 'k1', 'titleAr': 'الإسكندرية', 'titleEn': 'Alex'}),
+          AdminDoc('e9', {'categoryId': 'deleted', 'titleAr': 'يتيمة', 'titleEn': 'Orphan'}),
+        ],
+      });
+      await tester.pumpWidget(KeyedSubtree(
+        key: const ValueKey('populated-categories'),
+        child: _admin(CollectionListScreen(repo: popBackend, def: collectionById('categories')!)),
+      ));
+      await tester.pumpAndSettle();
+
+      final k1Tile = find.byKey(const ValueKey('k1'));
+      final k2Tile = find.byKey(const ValueKey('k2'));
+      expect(k1Tile, findsOneWidget);
+      expect(k2Tile, findsOneWidget);
+      expect(find.descendant(of: k1Tile, matching: find.byKey(const ValueKey('entry-e1'))), findsOneWidget);
+      expect(find.descendant(of: k2Tile, matching: find.text('No items in this section yet')), findsOneWidget);
+      expect(find.descendant(of: find.byKey(const Key('unassignedItemsCard')), matching: find.byKey(const ValueKey('entry-e9'))),
+          findsOneWidget);
+
+      // Tap "+ Add item" inside k2 pre-selects categoryId == 'k2'
+      await tester.tap(find.byKey(const ValueKey('addEntryIn-k2')));
+      await tester.pumpAndSettle();
+      final entryEditor = tester.state<DocEditorState>(find.byType(DocEditor));
+      expect(entryEditor.collect()['categoryId'], 'k2');
+    });
+
+    testWidgets('P1-17: section/page hints and strings do not point to other screens', (tester) async {
+      registerAdminStrings();
+      late String delAr, delEn;
+      await tester.pumpWidget(MaterialApp(
+        locale: const Locale('ar'),
+        supportedLocales: const [Locale('ar'), Locale('en')],
+        localizationsDelegates: GlobalMaterialLocalizations.delegates,
+        home: Builder(builder: (c) {
+          delAr = c.tr('catDeleteConfirm', {'n': 'س', 'c': '١'});
+          return const SizedBox.shrink();
+        }),
+      ));
+      await tester.pumpWidget(MaterialApp(
+        locale: const Locale('en'),
+        supportedLocales: const [Locale('ar'), Locale('en')],
+        localizationsDelegates: GlobalMaterialLocalizations.delegates,
+        home: Builder(builder: (c) {
+          delEn = c.tr('catDeleteConfirm', {'n': 'X', 'c': '1'});
+          return const SizedBox.shrink();
+        }),
+      ));
+
+      final catDef = collectionById('categories')!;
+      final pageDef = collectionById('pages')!;
+      final checkStrings = [
+        catDef.noteAr,
+        catDef.noteEn,
+        pageDef.noteAr,
+        pageDef.noteEn,
+        for (final f in [...catDef.fields, ...pageDef.fields]) ...[f.hintAr, f.hintEn],
+        delAr,
+        delEn,
+        ...adminStrings['emptySectionsPrompt']!,
+        ...adminStrings['addFirstSection']!,
+      ];
+      for (final s in checkStrings) {
+        expect(s, isNot(contains('الأقسام والصفحة الرئيسية')));
+        expect(s, isNot(contains('عناوين الصفحات')));
+        expect(s, isNot(contains('عناصر الأقسام')));
+        expect(s, isNot(contains('Section items')));
+        expect(s, isNot(contains('Sections & home page')));
+      }
+    });
+
+    test('P1-18: CustomPage placement backward compatibility, sectionPages, and featuredPages', () {
+      final legacyNav = CustomPage.fromMap('p1', {'slug': 'a', 'titleAr': 'أ', 'showInNav': true});
+      expect(legacyNav.placement, PagePlacements.nav);
+      expect(legacyNav.inNav, isTrue);
+
+      final legacyLink = CustomPage.fromMap('p2', {'slug': 'b', 'titleAr': 'ب'});
+      expect(legacyLink.placement, PagePlacements.link);
+      expect(legacyLink.inNav, isFalse);
+
+      final badPlacement = CustomPage.fromMap('p3', {'slug': 'c', 'titleAr': 'ج', 'placement': 'unknown', 'showInNav': true});
+      expect(badPlacement.placement, PagePlacements.nav);
+
+      final inSec = CustomPage.fromMap('p4', {
+        'slug': 'd',
+        'titleAr': 'د',
+        'placement': 'section',
+        'categoryId': 'k1',
+        'featured': true,
+      });
+      final hidden = CustomPage.fromMap('p5', {
+        'slug': 'e',
+        'titleAr': 'هـ',
+        'placement': 'section',
+        'categoryId': 'k1',
+        'featured': true,
+        'visible': false,
+      });
+
+      expect(inSec.effectivePlacement, PagePlacements.section);
+      expect(inSec.categoryId, 'k1');
+      expect(sectionPages('k1', [legacyNav, inSec, hidden]).map((p) => p.id), ['p4']);
+      expect(sectionPages('k2', [legacyNav, inSec, hidden]), isEmpty);
+      expect(featuredPages([legacyNav, inSec, hidden]).map((p) => p.id), ['p4']);
+    });
+
+    testWidgets('P1-18: DocEditor syncs nav showInNav and requires categoryId for section placement', (tester) async {
+      tester.view.physicalSize = const Size(900, 3000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      Map<String, dynamic>? saved;
+      await tester.pumpWidget(_admin(DocEditor(
+        title: 'Page',
+        fields: collectionById('pages')!.fields,
+        def: collectionById('pages'),
+        popOnSave: false,
+        onSave: (d) async => saved = d,
+        data: const {'slug': 'p', 'titleAr': 'صفحة', 'showInNav': true},
+        dynamicChoices: const {
+          'categories': [('k1', 'Youth trips')],
+        },
+      )));
+      await tester.pumpAndSettle();
+
+      // Legacy showInNav: true promotes placement to nav.
+      final state = tester.state<DocEditorState>(find.byType(DocEditor));
+      expect(state.collect()['placement'], PagePlacements.nav);
+      expect(state.collect()['showInNav'], isTrue);
+      expect(find.byKey(const ValueKey('field-categoryId')), findsNothing);
+
+      // Switch to link -> showInNav becomes false
+      await tester.tap(find.byKey(const ValueKey('field-placement')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Link only (from a notice or button)').last);
+      await tester.pumpAndSettle();
+      expect(state.collect()['showInNav'], isFalse);
+
+      // Switch to section -> categoryId appears and is required before save succeeds
+      await tester.tap(find.byKey(const ValueKey('field-placement')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Inside a section ("Learn more")').last);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('field-categoryId')), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('editor-save')));
+      await tester.pumpAndSettle();
+      expect(saved, isNull, reason: 'section placement requires categoryId');
+
+      await tester.tap(find.byKey(const ValueKey('field-categoryId')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Youth trips').last);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('field-featured')));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('editor-save')));
+      await tester.pumpAndSettle();
+      expect(saved?['placement'], PagePlacements.section);
+      expect(saved?['categoryId'], 'k1');
+      expect(saved?['featured'], isTrue);
+      expect(saved?['showInNav'], isFalse);
+    });
+
+    testWidgets('P1-18: section-placed & featured pages appear on CategoryPage/HomePage and hide when customPages is off',
+        (tester) async {
+      final (router, _) = await _pump(tester, '/section/youth-trips', size: const Size(320, 3000));
+      expect(find.byKey(const Key('sectionPage-trips-faq')), findsOneWidget);
+      expect(find.text('Trips guide'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+
+      await tester.tap(find.descendant(
+        of: find.byKey(const Key('sectionPage-trips-faq')),
+        matching: find.text('Learn more'),
+      ));
+      await tester.pumpAndSettle();
+      expect(router.routerDelegate.currentConfiguration.uri.path, '/page/trips-faq');
+
+      // Featured card renders on HomePage
+      router.go('/');
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('home-featuredPages')), findsOneWidget);
+      expect(find.byKey(const Key('featuredPage-trips-faq')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+
+      // Feature switch off hides both section cards and featured home cards
+      final (routerOff, _) = await _pump(
+        tester,
+        '/section/youth-trips',
+        size: const Size(320, 3000),
+        repo: _Repo({Sections.customPages: false}),
+      );
+      expect(find.byKey(const Key('sectionPage-trips-faq')), findsNothing);
+      routerOff.go('/');
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('featuredPage-trips-faq')), findsNothing);
     });
   });
 }

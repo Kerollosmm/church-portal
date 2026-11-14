@@ -19,25 +19,15 @@ The `admin` package implements the authenticated back-office management console 
   - `SessionPolicy`: Pure Dart idle-timeout policy (30-minute idle limit, 60-second warning).
   - `AdminSessionGuard`: Activity monitor resetting the idle clock on pointer and keyboard input, showing the countdown warning banner, and running `confirmDiscardChanges` before signing out if a form is dirty.
 - `admin_schema.dart`:
-  - `FieldType`: Enumeration defining schema field types (`string`, `multiline`, `integer`, `decimal`, `boolean`, `time`, `date`, `dateTime`, `looseDate`, `url`, `phone`, `select`, `image`, `imageList`, `list`, `blocks`, `options`).
-  - `FieldGroup`: Visual grouping categories for form fields (`basic`, `program`, `details`, `media`, `contacts`).
-  - `FieldDef`: Metadata descriptor defining validation patterns, constraints, field groups, and row dependencies.
-  - `CollectionDef`: Configuration model defining schemas, sort orders, search keys, and access controls for managed collections.
-  - `DocDef`: Configuration model defining singleton configuration documents (`settings/church`, `settings/assistant`, `settings/features`).
-  - `seasonKeys`: Immutable array of all recognized liturgical season identifiers.
-  - `imageCollections`: List of collection names permitted to store and render images.
-  - `adminCollections`: Master schema registry defining all administrative collections.
-  - `churchInfoDoc`: Singleton schema definition for church contact details, address, and priest directory.
-  - `assistantSettingsDoc`: Singleton schema definition for AI assistant system prompts, feature switches, and safety limits.
-  - `todaySettingsDoc`: Singleton schema definition for live streaming banner, strip toggles, and today's featured liturgical events.
-  - `seasonSettingsDoc`: Singleton schema definition for seasonal theme overlays, color palettes, and header banners.
-  - `appSettingsDoc`: Singleton schema definition for APK updates, app version requirements, and notification intervals.
+  - Adds `donationPageTemplate()` returning pre-filled donation page defaults with empty financial fields (P1-15), marks `slug` fields as `advanced: true` (P1-14), and adds `placement` + `categoryId` (`showWhen: placement == 'section'`) + `featured` fields to `pages` (P1-18).
+  - `FieldType`, `FieldGroup`, `FieldDef`, `CollectionDef`, `DocDef`, `seasonKeys`, `imageCollections`, `adminCollections`, `churchInfoDoc`, `assistantSettingsDoc`, `todaySettingsDoc`, `seasonSettingsDoc`, `appSettingsDoc`.
 - `admin_screens.dart`:
   - `OverviewScreen`: High-level metrics dashboard displaying content collection summaries and quick action links.
   - `ChurchInfoScreen`: Dedicated administrative form for church metadata, geographic coordinates, and social media links.
   - `MessagesScreen`: Message reader and triage viewer for incoming contact form submissions.
   - `AdminsScreen`: Administrator roster listing authorized email accounts and permission levels.
 - `admin_validators.dart`:
+  - `slugFromTitle(String title, {required Set<String> taken})`: Deterministic, unique Latin slug generator from Arabic/Latin titles preserving `isValidSlug` (P1-14).
   - `isCalendarDate(int y, int m, int d)`: Pure date validation verifying calendar existence, leap years, and month boundaries.
   - `isValidDate(String v)`: String date validator checking strict `YYYY-MM-DD` calendar format.
   - `isValidDateTime(String v)`: String timestamp validator checking strict `YYYY-MM-DD HH:mm` format.
@@ -71,14 +61,14 @@ The `admin` package implements the authenticated back-office management console 
   - `AssistantSwitches`: Switch matrix controlling AI model enablement, context injection, and rate limiting.
 - `collection_list.dart`:
   - `ListFilter`: Filter enumeration for collection listing (`all`, `visible`, `hidden`, `unconfirmed`).
-  - `CollectionListScreen`: Searchable, filterable list table for browsing and managing collection items with 10-second undoable deletion (retaining pending-deleted items in `_lastDocs` for `takenSlugs` uniqueness and capturing `repo`/`def`/`media` when scheduling deletion).
+  - `CollectionListScreen`: Searchable, filterable list table for browsing and managing collection items with 10-second undoable deletion (retaining pending-deleted items in `_lastDocs` for `takenSlugs` uniqueness and capturing `repo`/`def`/`media` when scheduling deletion). Unifies `categories` + nested `entries` (P1-16/P1-17) and offers the «صفحة تبرعات جاهزة» chooser when adding a page (P1-15).
 - `confirm_named.dart`:
   - `confirmNamedAction(BuildContext context, {String? title, required String summary, required String actionLabel, bool destructive = false})`: Confirmation dialog displaying explicit name of target item or action; destructive actions use alert palette.
 - `contact_admin.dart`:
   - `ContactCategoriesScreen`: Department routing and phone directory management screen.
 - `doc_editor.dart`:
   - `ImageBytesPicker`: Typedef for asynchronous image file byte loader.
-  - `DocEditor`: Dynamic form editor generating input controls from `FieldDef` descriptors.
+  - `DocEditor`: Dynamic form editor generating input controls from `FieldDef` descriptors, hiding `advanced` fields (`slug`) inside `_advancedCard` while auto-syncing new slugs from the Arabic title (`slugFromTitle`) and syncing `placement == 'nav'` ↔ `showInNav`.
   - `DocEditorState`: State manager for document form validation, dirty tracking, image uploads, and multi-step payload saving.
 - `features_editor.dart`:
   - `FeaturesScreen`: Management screen for global feature toggles and navigation sections.

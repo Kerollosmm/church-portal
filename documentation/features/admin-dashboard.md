@@ -48,8 +48,8 @@
 | **الأنشطة والكورالات** | | [activities.md](activities.md) |
 | **الآباء الكهنة** / **الآباء المتنيحون** / **شفعاء الكنيسة** | | [about-priests-saints.md](about-priests-saints.md) |
 | **محطات تاريخية** | | [milestones.md](milestones.md) |
-| **الأقسام المخصصة** / **عناصر الأقسام** | | [custom-sections.md](custom-sections.md) |
-| **الصفحات المخصصة** | | [custom-pages.md](custom-pages.md) |
+| **الأقسام وعناصرها** | إنشاء الأقسام المخصصة وإضافة عناصرها تحت كل قسم مباشرةً (P1-16) | [custom-sections.md](custom-sections.md) |
+| **الصفحات المخصصة** | إنشاء صفحات حرة أو من قالب «صفحة تبرعات جاهزة» مع اختيار «مكانها فين» و«مميزة» (P1-14..P1-18) | [custom-pages.md](custom-pages.md) |
 | **رسائل الزوار** / **أنواع رسائل التواصل** | | [contact-form-and-inbox.md](contact-form-and-inbox.md) |
 | **المشرفون** (للمالك فقط) | قائمة المشرفين بالدور، «إضافة مشرف» (UID + بريد + دور)، حذف | [../operations.md](../operations.md) |
 

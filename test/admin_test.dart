@@ -1054,9 +1054,13 @@ void main() {
       // Open editor for a new page
       await tester.tap(find.byType(FloatingActionButton));
       await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('addPage-blank')));
+      await tester.pumpAndSettle();
       expect(find.byType(DocEditor), findsOneWidget);
 
-      // Enter the slug of the pending-deleted page
+      // Expand «متقدم» and enter the slug of the pending-deleted page
+      await tester.tap(find.byKey(const ValueKey('group-advanced')));
+      await tester.pumpAndSettle();
       await tester.enterText(find.byKey(const Key('field-slug')), 'about-church');
       await tester.pump();
 

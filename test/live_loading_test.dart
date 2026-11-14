@@ -509,7 +509,7 @@ void main() {
             repo: _Backend(), uid: 'u', email: 'admin@example.org', role: AdminRoles.owner, onSignOut: () {}, initial: 'categories'),
       ));
       await tester.pump();
-      for (final id in ['categories', 'entries', 'pages', 'contactCats']) {
+      for (final id in ['categories', 'pages', 'contactCats']) {
         final tile = find.byKey(ValueKey('nav-$id'));
         expect(tile, findsOneWidget, reason: id);
         expect(find.descendant(of: tile, matching: find.byType(Icon)), findsOneWidget, reason: id);

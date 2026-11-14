@@ -272,8 +272,10 @@ the same day with overlapping times in different venues (`parallelServices`) get
 An admin-defined category: poster header with its name, optional intro panel, then its visible items
 (`entriesOf`) as `EntryCard`s in the `ResponsiveGrid` with `CardCover` / `CardLead` (collection `entries`, the
 item's `imageStyle` else the category's), description, call / WhatsApp, and a link button (in-app path via
-`context.go`, else `openUrl`). Hidden / unknown slug → `ContentUnavailable` (`Key('categoryUnavailable')`,
-`noindex`); no items → «لا توجد عناصر في هذا القسم بعد». Gated by `Sections.customSections` (all categories and
+`context.go`, else `openUrl`), plus any visible custom pages with `placement == 'section'` (`sectionPages`) as
+`CustomPageCard`s with an «اعرف المزيد / Learn more» button (gated by `Sections.customPages`, PR 3D / P1-18). Hidden /
+unknown slug → `ContentUnavailable` (`Key('categoryUnavailable')`, `noindex`); no items and no section pages →
+«لا توجد عناصر في هذا القسم بعد». Gated by `Sections.customSections` (all categories and
 their menu entries) plus each category's own `visible`. **PR #23:** the page (and its items list) stays on the
 loading skeleton until the categories / items have loaded from the server, or 8 s pass without an answer — a cold deep link no longer
 flashes «غير متاحة» from a stale cache, and the items can no longer stay on placeholders forever (`settleFirst`,
@@ -283,14 +285,16 @@ flashes «غير متاحة» from a stale cache, and the items can no longer st
 Header (title + subtitle), optional hero `FittedCover`, then the blocks (`PageBlockView`): heading (semantic
 header), paragraph (selectable), image (https link + caption), button (`FilledButton`), text link, donation info
 (`DonationInfoCard`: bank account / InstaPay / wallet with copy buttons, notes, «للعلم فقط: لا يتم أي دفع عبر
-الموقع»). Empty blocks are skipped. Hidden / unknown → `Key('pageUnavailable')`, `noindex`. Pages are reached from
-notices («اعرف المزيد»), buttons or links, and appear in the menu only with `showInNav`. Gated by
-`Sections.customPages` plus each page's `visible`. Loading follows the same rule as `/section/<slug>` (PR #23).
+الموقع»). Empty blocks are skipped. Hidden / unknown → `Key('pageUnavailable')`, `noindex`. Placement (`placement`,
+PR 3D / P1-18): `'link'` (default, reached from notices/buttons/links), `'nav'` (synced with `showInNav`), or
+`'section'` (`categoryId`, rendered as an «اعرف المزيد» `CustomPageCard` inside `/section/<slug>`). Setting `featured`
+places a card on `HomePage` (`_FeaturedPages`, key `home-featuredPages`) whenever `Sections.customPages` is on. Gated
+by `Sections.customPages` plus each page's `visible`. Loading follows the same rule as `/section/<slug>` (PR #23).
 
 ### Menu entries for custom content (PR #18)
 `customNavItems(ref)` (`app_shell.dart`): categories with `showInNav` are appended to the "Church services" popup
-(desktop) and drawer group; pages with `showInNav` to the desktop bar (after the services menu) and the "The
-church" drawer group. `NavItem.labelAr/labelEn` carry their own labels.
+(desktop) and drawer group; pages with `inNav` (`placement == 'nav'`, or legacy `showInNav: true`) to the desktop bar
+(after the services menu) and the "The church" drawer group. `NavItem.labelAr/labelEn` carry their own labels.
 
 ### `/ask` — `assistant_page.dart` `AssistantPage`
 Chat UI with a welcome bubble (admin `welcomeAr/En`, else `askIntroText` naming only the switched-on sections —

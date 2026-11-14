@@ -67,6 +67,8 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
   final Set<String> _purging = {};
   ListFilter _filter = ListFilter.all;
   late Stream<List<AdminDoc>> _stream = widget.repo.watch(widget.def.name);
+  late Stream<List<AdminDoc>>? _entriesStream =
+      widget.def.name == 'categories' ? widget.repo.watch('entries') : null;
 
   /// The list as last shown (slug uniqueness checks in the editor).
   List<AdminDoc> _lastDocs = const [];
@@ -76,6 +78,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     super.didUpdateWidget(old);
     if (old.def.name != widget.def.name || old.repo != widget.repo) {
       _stream = widget.repo.watch(widget.def.name);
+      _entriesStream = widget.def.name == 'categories' ? widget.repo.watch('entries') : null;
     }
   }
 
@@ -89,15 +92,17 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
 
   CollectionDef get def => widget.def;
 
-  String _title(AdminDoc d) {
-    for (final k in def.titleKeys) {
+  String _title(AdminDoc d, [CollectionDef? targetDef]) {
+    final activeDef = targetDef ?? def;
+    for (final k in activeDef.titleKeys) {
       final v = d.data[k];
       if (v != null && v.toString().isNotEmpty) return v.toString();
     }
     return d.id;
   }
 
-  String _subtitle(BuildContext context, AdminDoc d) {
+  String _subtitle(BuildContext context, AdminDoc d, [CollectionDef? targetDef]) {
+    final activeDef = targetDef ?? def;
     final parts = <String>[];
     final wd = d.data['weekday'];
     if (wd is int) parts.add(weekdayName(wd, arabic: context.isAr));
@@ -108,7 +113,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     }
     for (final k in ['seasonKey', 'stage', 'category', 'type', 'specialtyEn']) {
       final v = d.data[k];
-      if (v is String && v.isNotEmpty && !def.titleKeys.contains(k)) parts.add(choiceLabel(context, v));
+      if (v is String && v.isNotEmpty && !activeDef.titleKeys.contains(k)) parts.add(choiceLabel(context, v));
     }
     if (d.data['active'] == false) parts.add('⛔ ${context.tr('inactive')}');
     for (final k in ['startsAt', 'endsAt']) {
@@ -125,7 +130,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
       backgroundColor: context.pal.background,
       floatingActionButton: FloatingActionButton.extended(
         heroTag: 'add-${def.id}',
-        onPressed: () => _openEditor(context, null),
+        onPressed: () => def.name == 'pages' ? _openNewPageChooser(context) : _openEditor(context, null),
         icon: const Icon(Icons.add),
         label: Text(context.tr('add')),
       ),
@@ -147,13 +152,68 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
           _lastDocs = all.where((d) => !isSoftDeleted(d.data) || _pendingDelete.isPending(d.id)).toList();
           final visible = all.where((d) => !isSoftDeleted(d.data) && !_pendingDelete.isPending(d.id)).toList();
           final docs = filterAdminDocs(def, visible, query: _search.text, filter: _filter);
+          _checkLazyPurge(snap.data!, def);
+
+          if (def.name == 'categories' && _entriesStream != null) {
+            return StreamBuilder<List<AdminDoc>>(
+              key: ObjectKey(_entriesStream),
+              stream: _entriesStream,
+              builder: (context, entrySnap) {
+                final entriesDef = collectionById('entries')!;
+                final rawEntries = entrySnap.data ?? const <AdminDoc>[];
+                _checkLazyPurge(rawEntries, entriesDef);
+                final visibleEntries = sortAdminDocs(
+                    entriesDef,
+                    rawEntries
+                        .where((d) => !isSoftDeleted(d.data) && !_pendingDelete.isPending(d.id))
+                        .toList());
+                final filteredEntries =
+                    filterAdminDocs(entriesDef, visibleEntries, query: _search.text, filter: _filter);
+                final hasFilter = _search.text.trim().isNotEmpty || _filter != ListFilter.all;
+                final matchingCatIds = {for (final c in docs) c.id};
+                final entriesByCat = <String, List<AdminDoc>>{};
+                final allCatIds = {for (final c in visible) c.id};
+                final unassigned = <AdminDoc>[];
+                for (final e in filteredEntries) {
+                  final cid = '${e.data['categoryId'] ?? ''}';
+                  if (allCatIds.contains(cid)) {
+                    (entriesByCat[cid] ??= []).add(e);
+                  } else {
+                    unassigned.add(e);
+                  }
+                }
+                final shownCats = hasFilter
+                    ? [
+                        for (final c in visible)
+                          if (matchingCatIds.contains(c.id) || (entriesByCat[c.id]?.isNotEmpty ?? false)) c,
+                      ]
+                    : visible;
+                final canReorder =
+                    def.orderable && !hasFilter && shownCats.length > 1;
+                return Column(children: [
+                  _toolbar(context, visible.length, shownCats.length, canReorder),
+                  Expanded(
+                    child: _categoriesBody(
+                      context,
+                      entriesDef: entriesDef,
+                      allVisibleCats: visible,
+                      shownCats: shownCats,
+                      entriesByCat: entriesByCat,
+                      unassigned: unassigned,
+                      canReorder: canReorder,
+                    ),
+                  ),
+                ]);
+              },
+            );
+          }
+
           final canReorder = def.orderable && _search.text.trim().isEmpty && _filter == ListFilter.all && docs.length > 1;
-          _checkLazyPurge(snap.data!);
           return Column(children: [
             _toolbar(context, visible.length, docs.length, canReorder),
             Expanded(
               child: docs.isEmpty
-                  ? Center(child: Text(context.tr(all.isEmpty ? 'noItems' : 'noMatches')))
+                  ? Center(child: Text(context.tr(visible.isEmpty ? 'noItems' : 'noMatches')))
                   : canReorder
                       ? ReorderableListView.builder(
                           buildDefaultDragHandles: false,
@@ -182,7 +242,8 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
             child: Text(context.pick(def.noteAr, def.noteEn),
-                key: const Key('admin-collectionNote'), style: TextStyle(color: context.pal.muted, height: 1.5)),
+                key: const Key('admin-collectionNote'),
+                style: TextStyle(color: context.pal.ink, fontSize: 15, height: 1.6)),
           ),
         Row(children: [
           Expanded(
@@ -243,6 +304,265 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     } else {
       context.go(path);
     }
+  }
+
+  Widget _categoriesBody(
+    BuildContext context, {
+    required CollectionDef entriesDef,
+    required List<AdminDoc> allVisibleCats,
+    required List<AdminDoc> shownCats,
+    required Map<String, List<AdminDoc>> entriesByCat,
+    required List<AdminDoc> unassigned,
+    required bool canReorder,
+  }) {
+    if (allVisibleCats.isEmpty && unassigned.isEmpty) {
+      return Center(
+        key: const Key('emptyCategories'),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Icon(Icons.folder_open_rounded, size: 48, color: context.pal.muted),
+            const SizedBox(height: 12),
+            Text(context.tr('emptySectionsPrompt'),
+                textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+            const SizedBox(height: 12),
+            FilledButton.icon(
+              key: const Key('addFirstSectionBtn'),
+              onPressed: () => _openEditor(context, null),
+              icon: const Icon(Icons.add),
+              label: Text(context.tr('addFirstSection')),
+            ),
+          ]),
+        ),
+      );
+    }
+    if (shownCats.isEmpty && unassigned.isEmpty) {
+      return Center(child: Text(context.tr('noMatches')));
+    }
+    if (canReorder && unassigned.isEmpty) {
+      return ReorderableListView.builder(
+        buildDefaultDragHandles: false,
+        padding: const EdgeInsets.fromLTRB(12, 4, 12, 90),
+        itemCount: shownCats.length,
+        onReorderItem: (from, to) => _reorder(context, shownCats, from, to),
+        itemBuilder: (context, i) => _categoryTile(
+          context,
+          shownCats[i],
+          entriesDef: entriesDef,
+          entries: entriesByCat[shownCats[i].id] ?? const [],
+          dragIndex: i,
+          docs: shownCats,
+        ),
+      );
+    }
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(12, 4, 12, 90),
+      children: [
+        if (allVisibleCats.isEmpty)
+          Card(
+            key: const Key('emptyCategories'),
+            margin: const EdgeInsets.only(bottom: 10),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(children: [
+                Text(context.tr('emptySectionsPrompt'),
+                    textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.w700)),
+                const SizedBox(height: 10),
+                FilledButton.icon(
+                  key: const Key('addFirstSectionBtn'),
+                  onPressed: () => _openEditor(context, null),
+                  icon: const Icon(Icons.add),
+                  label: Text(context.tr('addFirstSection')),
+                ),
+              ]),
+            ),
+          ),
+        if (canReorder)
+          ReorderableListView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            buildDefaultDragHandles: false,
+            itemCount: shownCats.length,
+            onReorderItem: (from, to) => _reorder(context, shownCats, from, to),
+            itemBuilder: (context, i) => _categoryTile(
+              context,
+              shownCats[i],
+              entriesDef: entriesDef,
+              entries: entriesByCat[shownCats[i].id] ?? const [],
+              dragIndex: i,
+              docs: shownCats,
+            ),
+          )
+        else
+          for (final c in shownCats)
+            _categoryTile(context, c, entriesDef: entriesDef, entries: entriesByCat[c.id] ?? const []),
+        if (unassigned.isNotEmpty) _unassignedCard(context, entriesDef, unassigned),
+      ],
+    );
+  }
+
+  Widget _categoryTile(
+    BuildContext context,
+    AdminDoc d, {
+    required CollectionDef entriesDef,
+    required List<AdminDoc> entries,
+    int? dragIndex,
+    List<AdminDoc>? docs,
+  }) {
+    final hidden = d.data['visible'] == false;
+    final updated = d.updatedAt;
+    final narrow = MediaQuery.sizeOf(context).width < 600;
+    final itemPath = itemPublicPathFor(def, d.id, d.data, english: !context.isAr);
+    final moves = <Widget>[
+      if (dragIndex != null && docs != null) ...[
+        IconButton(
+          key: ValueKey('moveUp-${d.id}'),
+          tooltip: context.tr('moveUp'),
+          icon: const Icon(Icons.arrow_upward),
+          onPressed: dragIndex == 0 ? null : () => _reorder(context, docs, dragIndex, dragIndex - 1),
+        ),
+        IconButton(
+          key: ValueKey('moveDown-${d.id}'),
+          tooltip: context.tr('moveDown'),
+          icon: const Icon(Icons.arrow_downward),
+          onPressed: dragIndex == docs.length - 1 ? null : () => _reorder(context, docs, dragIndex, dragIndex + 1),
+        ),
+      ],
+    ];
+    final openItem = itemPath == null
+        ? null
+        : IconButton(
+            key: ValueKey('openItem-${d.id}'),
+            tooltip: context.tr('openItemOnSite'),
+            icon: const Icon(Icons.open_in_new_rounded),
+            onPressed: () => _openOnSite(context, itemPath),
+          );
+    return Card(
+      key: ValueKey(d.id),
+      margin: const EdgeInsets.only(bottom: 10),
+      color: hidden ? context.pal.surfaceAlt.withValues(alpha: 0.7) : context.pal.surface,
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        ListTile(
+          leading: dragIndex != null
+              ? ReorderableDragStartListener(index: dragIndex, child: const Icon(Icons.drag_indicator))
+              : null,
+          title: Wrap(
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 6,
+            runSpacing: 4,
+            children: [
+              Text(_title(d),
+                  style: TextStyle(
+                      fontWeight: FontWeight.w800, color: hidden ? context.pal.muted : context.pal.ink)),
+              _Tag(context.tr(hidden ? 'hidden' : 'visibleTag'),
+                  hidden ? context.pal.muted : context.pal.success),
+            ],
+          ),
+          subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            if (updated != null)
+              Text(
+                context.tr('updatedBy', {'t': fmtDateTime(updated), 'u': d.updatedBy.isEmpty ? '—' : d.updatedBy}),
+                style: TextStyle(fontSize: 11, color: context.pal.muted),
+              ),
+            if (narrow && (moves.isNotEmpty || openItem != null)) Wrap(children: [...moves, ?openItem]),
+          ]),
+          onTap: () => _openEditor(context, d),
+          trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+            if (!narrow) ...moves,
+            if (!narrow && openItem != null) openItem,
+            IconButton(
+              tooltip: context.tr(hidden ? 'show' : 'hide'),
+              icon: Icon(hidden ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                  color: hidden ? context.pal.muted : context.pal.success),
+              onPressed: () => _setVisible(context, d, hidden),
+            ),
+            IconButton(
+              key: ValueKey('delete-${d.id}'),
+              tooltip: context.tr('delete'),
+              icon: Icon(Icons.delete_outline, color: context.pal.alert),
+              onPressed: () => _deleteCategory(d),
+            ),
+          ]),
+        ),
+        const Divider(height: 1),
+        if (entries.isEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
+            child: Text(context.tr('sectionEmptyItems'), style: TextStyle(color: context.pal.muted, fontSize: 13)),
+          )
+        else
+          for (final e in entries) _entryRow(context, entriesDef, e),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 4, 12, 10),
+          child: Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: OutlinedButton.icon(
+              key: ValueKey('addEntryIn-${d.id}'),
+              onPressed: () => _openEditor(context, null, targetDef: entriesDef, extraDefaults: {'categoryId': d.id}),
+              icon: const Icon(Icons.add),
+              label: Text(context.tr('addSectionItem')),
+            ),
+          ),
+        ),
+      ]),
+    );
+  }
+
+  Widget _unassignedCard(BuildContext context, CollectionDef entriesDef, List<AdminDoc> entries) {
+    return Card(
+      key: const Key('unassignedItemsCard'),
+      margin: const EdgeInsets.only(bottom: 10),
+      color: context.pal.surfaceAlt,
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+          child: Text(context.tr('unassignedItems'),
+              style: TextStyle(fontWeight: FontWeight.w800, color: context.pal.primary)),
+        ),
+        const Divider(height: 1),
+        for (final e in entries) _entryRow(context, entriesDef, e),
+      ]),
+    );
+  }
+
+  Widget _entryRow(BuildContext context, CollectionDef entriesDef, AdminDoc e) {
+    final hidden = e.data['visible'] == false;
+    final unconfirmed = e.data['sample'] == true;
+    final sub = _subtitle(context, e, entriesDef);
+    return ListTile(
+      key: ValueKey('entry-${e.id}'),
+      dense: true,
+      contentPadding: const EdgeInsetsDirectional.only(start: 20, end: 8),
+      leading: Icon(Icons.subdirectory_arrow_left_rounded, size: 18, color: context.pal.muted),
+      title: Wrap(
+        crossAxisAlignment: WrapCrossAlignment.center,
+        spacing: 6,
+        runSpacing: 4,
+        children: [
+          Text(_title(e, entriesDef),
+              style: TextStyle(fontWeight: FontWeight.w600, color: hidden ? context.pal.muted : context.pal.ink)),
+          _Tag(context.tr(hidden ? 'hidden' : 'visibleTag'),
+              hidden ? context.pal.muted : context.pal.success),
+          if (unconfirmed) _Tag(context.tr('sampleTag'), context.pal.goldText),
+        ],
+      ),
+      subtitle: sub.isEmpty ? null : Text(sub),
+      onTap: () => _openEditor(context, e, targetDef: entriesDef),
+      trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+        IconButton(
+          tooltip: context.tr(hidden ? 'show' : 'hide'),
+          icon: Icon(hidden ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+              color: hidden ? context.pal.muted : context.pal.success),
+          onPressed: () => _setVisible(context, e, hidden, targetDef: entriesDef),
+        ),
+        IconButton(
+          key: ValueKey('deleteEntry-${e.id}'),
+          tooltip: context.tr('delete'),
+          icon: Icon(Icons.delete_outline, color: context.pal.alert),
+          onPressed: () => _deleteItem(e, targetDef: entriesDef),
+        ),
+      ]),
+    );
   }
 
   Widget _tile(BuildContext context, AdminDoc d, {int? dragIndex, List<AdminDoc>? docs}) {
@@ -340,6 +660,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
               onPressed: () => _setVisible(context, d, hidden),
             ),
           IconButton(
+            key: ValueKey('delete-${d.id}'),
             tooltip: context.tr('delete'),
             icon: Icon(Icons.delete_outline, color: context.pal.alert),
             onPressed: () => _confirmDelete(d),
@@ -349,12 +670,13 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     );
   }
 
-  Future<void> _setVisible(BuildContext context, AdminDoc d, bool visible) async {
+  Future<void> _setVisible(BuildContext context, AdminDoc d, bool visible, {CollectionDef? targetDef}) async {
+    final activeDef = targetDef ?? def;
     final messenger = ScaffoldMessenger.of(context);
     final msg = context.tr(visible ? 'nowVisible' : 'nowHidden');
     final failed = context.tr('saveFailed', {'e': '{e}'});
     try {
-      await widget.repo.update(def.name, d.id, {'visible': visible});
+      await widget.repo.update(activeDef.name, d.id, {'visible': visible});
       messenger.showSnackBar(SnackBar(content: Text(msg), duration: const Duration(seconds: 2)));
     } catch (e) {
       messenger.showSnackBar(SnackBar(content: Text(failed.replaceAll('{e}', '$e'))));
@@ -378,14 +700,14 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     }
   }
 
-  void _checkLazyPurge(List<AdminDoc> docs) {
+  void _checkLazyPurge(List<AdminDoc> docs, CollectionDef targetDef) {
     final now = DateTime.now().toUtc();
     if (docs.any((d) => isExpiredSoftDelete(d.data, now) && !_pendingDelete.isPending(d.id))) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
           purgeExpiredSoftDeletes(
             widget.repo,
-            def,
+            targetDef,
             docs,
             isLocalPending: _pendingDelete.isPending,
             purging: _purging,
@@ -404,17 +726,17 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     _deleteItem(d);
   }
 
-  Future<void> _deleteItem(AdminDoc d) async {
-    final title = _title(d);
+  Future<void> _deleteItem(AdminDoc d, {CollectionDef? targetDef}) async {
+    final activeDef = targetDef ?? def;
+    final title = _title(d, activeDef);
     final messenger = ScaffoldMessenger.of(context);
     final failedMsg = context.tr('deleteFailed', {'e': '{e}'});
     final repo = widget.repo;
-    final targetDef = def;
     final id = d.id;
     final docData = d.data;
 
     try {
-      await repo.update(targetDef.name, id, {'deletedAt': DateTime.now().toUtc()});
+      await repo.update(activeDef.name, id, {'deletedAt': DateTime.now().toUtc()});
     } catch (e) {
       messenger.showSnackBar(SnackBar(content: Text(failedMsg.replaceAll('{e}', '$e'))));
       return;
@@ -423,15 +745,15 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     if (!mounted) return;
 
     setState(() {
-      _pendingEntries[id] = (repo: repo, collection: targetDef.name, title: title);
+      _pendingEntries[id] = (repo: repo, collection: activeDef.name, title: title);
       _pendingDelete.schedule(id, () async {
         _pendingEntries.remove(id);
         try {
-          await repo.delete(targetDef.name, id);
+          await repo.delete(activeDef.name, id);
           await removeOrphanedDocMedia(repo.media, docData);
         } catch (e) {
           try {
-            await repo.update(targetDef.name, id, {'deletedAt': null});
+            await repo.update(activeDef.name, id, {'deletedAt': null});
           } catch (_) {}
           if (!mounted) return;
           setState(() {});
@@ -461,7 +783,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
                 undone.add((
                   id: pid,
                   repo: entry?.repo ?? repo,
-                  collection: entry?.collection ?? targetDef.name,
+                  collection: entry?.collection ?? activeDef.name,
                 ));
               }
             }
@@ -536,14 +858,63 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     }
   }
 
-  Future<void> _openEditor(BuildContext context, AdminDoc? d) async {
+  Future<void> _openNewPageChooser(BuildContext context) async {
+    final choice = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        key: const Key('addPageDialog'),
+        title: Text(context.tr('addPageTitle')),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Card(
+              margin: const EdgeInsets.only(bottom: 8),
+              child: ListTile(
+                key: const Key('addPage-blank'),
+                leading: Icon(Icons.article_outlined, color: context.pal.primary),
+                title: Text(context.tr('blankPageOption'), style: const TextStyle(fontWeight: FontWeight.w700)),
+                subtitle: Text(context.tr('blankPageHint')),
+                onTap: () => Navigator.pop(ctx, 'blank'),
+              ),
+            ),
+            Card(
+              child: ListTile(
+                key: const Key('addPage-donation'),
+                leading: Icon(Icons.volunteer_activism_outlined, color: context.pal.primary),
+                title: Text(context.tr('donationPageOption'), style: const TextStyle(fontWeight: FontWeight.w700)),
+                subtitle: Text(context.tr('donationPageHint')),
+                onTap: () => Navigator.pop(ctx, 'donation'),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(context.tr('cancel'))),
+        ],
+      ),
+    );
+    if (choice == null || !context.mounted) return;
+    await _openEditor(
+      context,
+      null,
+      extraDefaults: choice == 'donation' ? donationPageTemplate() : const {},
+    );
+  }
+
+  Future<void> _openEditor(
+    BuildContext context,
+    AdminDoc? d, {
+    CollectionDef? targetDef,
+    Map<String, Object?> extraDefaults = const {},
+  }) async {
+    final editDef = targetDef ?? def;
     bool usesLinks(List<FieldDef> fs) => fs.any((f) => f.linkPicker || usesLinks(f.subFields));
-    final needsCats = def.fields.any((f) => f.dynamicOptions == 'categories');
-    final needsProgram = def.fields.any((f) => f.dynamicOptions == 'venues' || f.dynamicOptions == 'audiences');
-    final needsLinks = usesLinks(def.fields);
+    final needsCats = editDef.fields.any((f) => f.dynamicOptions == 'categories');
+    final needsProgram = editDef.fields.any((f) => f.dynamicOptions == 'venues' || f.dynamicOptions == 'audiences');
+    final needsLinks = usesLinks(editDef.fields);
     final cats = needsCats || needsLinks ? await _read('categories') : const <AdminDoc>[];
     final pages = needsLinks ? await _read('pages') : const <AdminDoc>[];
-    final seasonDocs = def.name == 'liturgies' ? await _read('seasons') : const <AdminDoc>[];
+    final seasonDocs = editDef.name == 'liturgies' ? await _read('seasons') : const <AdminDoc>[];
     // Venues / audiences (ADR-041): the admin lists in settings/features
     // (defaults when none), read once when the editor opens.
     final settings = needsProgram ? await _read('settings') : const <AdminDoc>[];
@@ -555,7 +926,8 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
       return x.data['visible'] == false ? '$v ${context.tr('hiddenTag')}' : v;
     }
 
-    final catChoices = [for (final c in sortAdminDocs(def, cats)) (c.id, name(c, 'nameAr', 'nameEn'))];
+    final catDef = collectionById('categories') ?? editDef;
+    final catChoices = [for (final c in sortAdminDocs(catDef, cats)) (c.id, name(c, 'nameAr', 'nameEn'))];
     final targets = [
       for (final t in linkTargets(
         pages: [for (final p in pages) (slug: '${p.data['slug'] ?? ''}', titleAr: name(p, 'titleAr', 'titleEn'), titleEn: name(p, 'titleAr', 'titleEn'))],
@@ -563,54 +935,72 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
       ))
         (t.path, context.pick(t.labelAr, t.labelEn)),
     ];
-    final taken = {
-      for (final x in _lastDocs)
-        if (x.id != d?.id && x.data['slug'] is String) x.data['slug'] as String,
-    };
+    final taken = editDef.name == def.name
+        ? {
+            for (final x in _lastDocs)
+              if (x.id != d?.id && x.data['slug'] is String) x.data['slug'] as String,
+          }
+        : const <String>{};
     final seasons = [
       for (final s in seasonDocs)
         if (!isSoftDeleted(s.data)) Season.fromMap(s.id, s.data),
     ];
     List<(String, String)> optChoices(List<ProgramOption> l) => [for (final o in l) (o.key, context.pick(o.labelAr, o.labelEn))];
-    _pushEditor(context, d,
-        dynamicChoices: {
-          'categories': catChoices,
-          // The item's own key stays selectable even if the admin list no
-          // longer holds it (a default key, Sentry review).
-          'venues': optChoices(ProgramOptions.withUsed(
-              programOpts.venues, ['${d?.data['venue'] ?? ''}'], programOpts.venue)),
-          'audiences': optChoices(ProgramOptions.withUsed(
-              programOpts.audiences, ['${d?.data['audience'] ?? ''}'], programOpts.audience)),
-        }, linkTargets: needsLinks ? targets : const [], takenSlugs: taken, seasons: seasons);
+    _pushEditor(
+      context,
+      d,
+      editDef: editDef,
+      extraDefaults: extraDefaults,
+      dynamicChoices: {
+        'categories': catChoices,
+        // The item's own key stays selectable even if the admin list no
+        // longer holds it (a default key, Sentry review).
+        'venues': optChoices(ProgramOptions.withUsed(
+            programOpts.venues, ['${d?.data['venue'] ?? ''}'], programOpts.venue)),
+        'audiences': optChoices(ProgramOptions.withUsed(
+            programOpts.audiences, ['${d?.data['audience'] ?? ''}'], programOpts.audience)),
+      },
+      linkTargets: needsLinks ? targets : const [],
+      takenSlugs: taken,
+      seasons: seasons,
+    );
   }
 
-  void _pushEditor(BuildContext context, AdminDoc? d,
-      {Map<String, List<(String, String)>> dynamicChoices = const {},
-      List<(String, String)> linkTargets = const [],
-      Set<String> takenSlugs = const {},
-      List<Season> seasons = const []}) {
-    final label = context.pick(def.labelAr, def.labelEn);
+  void _pushEditor(
+    BuildContext context,
+    AdminDoc? d, {
+    required CollectionDef editDef,
+    Map<String, Object?> extraDefaults = const {},
+    Map<String, List<(String, String)>> dynamicChoices = const {},
+    List<(String, String)> linkTargets = const [],
+    Set<String> takenSlugs = const {},
+    List<Season> seasons = const [],
+  }) {
+    final label = context.pick(editDef.labelAr, editDef.labelEn);
+    final editorTitle = '${context.tr(d == null ? 'add' : 'edit')} — $label';
     // The editor may save in several writes (gallery / extraFields go on
     // their own): the first one creates a new document, the rest merge into it.
     var id = d?.id;
     Navigator.of(context).push(MaterialPageRoute<void>(
       fullscreenDialog: true,
       builder: (_) => DocEditor(
-        title: '${context.tr(d == null ? 'add' : 'edit')} — $label',
-        fields: def.fields,
-        def: def,
+        title: editorTitle,
+        fields: editDef.fields,
+        def: editDef,
         data: d?.data,
         docId: d?.id,
-        newDefaults: def.newDefaults,
-        onSave: (data) async => id = await widget.repo.save(def.name, id, data),
+        newDefaults: {...editDef.newDefaults, ...extraDefaults},
+        onSave: (data) async => id = await widget.repo.save(editDef.name, id, data),
         media: widget.repo.media,
         dynamicChoices: dynamicChoices,
         linkTargets: linkTargets,
         takenSlugs: takenSlugs,
-        existingDocs: [
-          for (final x in _lastDocs)
-            if (!isSoftDeleted(x.data) && !_pendingDelete.isPending(x.id)) x,
-        ],
+        existingDocs: editDef.name == def.name
+            ? [
+                for (final x in _lastDocs)
+                  if (!isSoftDeleted(x.data) && !_pendingDelete.isPending(x.id)) x,
+              ]
+            : const [],
         seasons: seasons,
       ),
     ));

@@ -1537,6 +1537,71 @@ describe('ADR-027: custom categories, their items and custom pages', () => {
     await assertFails(updateDoc(doc(ed, 'pages', 'big'), { blocks: [block({ type: 'nope' })] }));
   });
 
+  test('P1-18: pages placement, categoryId, featured validation and worst-case 20-blocks budget', async () => {
+    const ed = db(EDITOR);
+    const stamp = () => ({ updatedAt: serverTimestamp(), updatedBy: `${EDITOR}@x.test` });
+
+    // Valid placements and featured flags on create
+    await assertSucceeds(setDoc(doc(ed, 'pages', 'p-link'), page({ placement: 'link', categoryId: '', featured: false })));
+    await assertSucceeds(setDoc(doc(ed, 'pages', 'p-nav'), page({ slug: 'nav-page', placement: 'nav', showInNav: true, featured: true })));
+    await assertSucceeds(setDoc(doc(ed, 'pages', 'p-sec'), page({
+      slug: 'sec-page', placement: 'section', categoryId: 'youth_1-cat', featured: true,
+    })));
+
+    // Backward compatibility: legacy doc without placement/categoryId/featured, then partial updates
+    await assertSucceeds(setDoc(doc(ed, 'pages', 'p-legacy'), page({ slug: 'legacy-page' })));
+    await assertSucceeds(updateDoc(doc(ed, 'pages', 'p-legacy'), {
+      placement: 'section', categoryId: 'k1', showInNav: false, featured: true, ...stamp(),
+    }));
+    await assertSucceeds(updateDoc(doc(ed, 'pages', 'p-legacy'), {
+      placement: 'nav', categoryId: '', showInNav: true, featured: false, ...stamp(),
+    }));
+    await assertSucceeds(updateDoc(doc(ed, 'pages', 'p-legacy'), {
+      blocks: [block({ textAr: 'تحديث' })], ...stamp(),
+    }));
+
+    // Worst-case 20-blocks create and update with placement, categoryId, featured, and stamps
+    const types = ['heading', 'paragraph', 'image', 'button', 'link', 'donation'];
+    const full = Array.from({ length: 20 }, (_, i) => block({
+      type: types[i % 6],
+      textAr: 'ن'.repeat(4000),
+      textEn: 'e'.repeat(4000),
+      url: types[i % 6] === 'image' ? 'https://example.org/' + 'p'.repeat(470) : (i % 2 ? '/page/x' : 'https://example.org/give'),
+      account: 'a'.repeat(120), instapay: 'i'.repeat(80), wallet: '0'.repeat(30),
+    }));
+    await assertSucceeds(setDoc(doc(ed, 'pages', 'p-big-sec'), page({
+      slug: 'big-sec', placement: 'section', categoryId: 'cat-1', featured: true, blocks: full, ...stamp(),
+    })));
+    await assertSucceeds(updateDoc(doc(ed, 'pages', 'p-big-sec'), { blocks: full, ...stamp() }));
+
+    // Reject invalid placement, categoryId, and featured on create
+    for (const bad of [
+      { placement: 'home' },
+      { placement: '' },
+      { placement: null },
+      { placement: 1 },
+      { placement: 'section' },
+      { placement: 'section', categoryId: '' },
+      { placement: 'section', categoryId: 'a/b' },
+      { placement: 'section', categoryId: null },
+      { placement: 'section', categoryId: 'a'.repeat(129) },
+      { placement: 'link', categoryId: 'a/b' },
+      { categoryId: 'a b' },
+      { categoryId: 123 },
+      { featured: 1 },
+      { featured: 'true' },
+      { featured: null },
+    ]) {
+      await assertFails(setDoc(doc(ed, 'pages', 'p-bad'), page(bad)), JSON.stringify(bad));
+    }
+
+    // Reject invalid updates against stored state
+    await assertFails(updateDoc(doc(ed, 'pages', 'p-link'), { placement: 'section' })); // missing categoryId
+    await assertFails(updateDoc(doc(ed, 'pages', 'p-sec'), { categoryId: '' })); // clearing categoryId while section
+    await assertFails(updateDoc(doc(ed, 'pages', 'p-link'), { placement: 'home' }));
+    await assertFails(updateDoc(doc(ed, 'pages', 'p-link'), { featured: 1 }));
+  });
+
   test('the two custom-content section switches are known keys', async () => {
     await assertSucceeds(setDoc(doc(db(EDITOR), 'settings', 'features'), { sections: { customSections: false, customPages: true } }));
   });

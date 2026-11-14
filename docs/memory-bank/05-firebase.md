@@ -164,7 +164,9 @@ Notable details:
   stored lists re-checked only when changed) and `pageHeaders`/`footer`. PR #12 adds "admin editor save paths": the
   real write sequence of `DocEditor` (max-size create, then the 8-photo gallery, then 15 rows, on all 7
   collections; an every-field edit; both lists in one write denied) and of `FeaturesScreen` (whole document, then
-  `pageHeaders` alone; the combined first save is denied; a reset page is removed). 54 tests.
+  `pageHeaders` alone; the combined first save is denied; a reset page is removed). 54 tests. PR 3D (`P1-18`) adds
+  `pages` validation for `placement` (`link` | `nav` | `section`), `categoryId` (required `[A-Za-z0-9_-]{1,128}`
+  for `section`), `featured` bool, and a worst-case 20-block budget test (40 suites, 171 tests).
 - **Expression budget (measured in PR #11):** Firestore evaluates at most **1,000 expressions per request**, shared by
   every `match` block the path hits (that is why `validContent` keeps its `col in [...]` early exit: without it
   `settings/church` writes ran out). Literals, field reads and `+` all count; an unrolled list item costs ~10. The

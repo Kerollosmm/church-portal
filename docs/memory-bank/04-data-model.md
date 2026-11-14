@@ -348,8 +348,11 @@ else the category's), `visible`, `order`, `sample`. Not seeded.
 
 ### `pages/{auto-id}` — `CustomPage` (PR #18; Hideable, orderable)
 `slug` (**req**, as above; public page `/page/<slug>`), `titleAr` (**req**, ≤ 200, not blank), `titleEn` (≤ 200),
-`subtitleAr/En` (≤ 300), `image` (optional hero), `showInNav` (bool, missing = **false**: pages are off the menu
-by default), `visible`, `order`, `blocks` (≤ 20, saved in their own write). **Each block is one string**:
+`subtitleAr/En` (≤ 300), `image` (optional hero), `placement` (`'link'` | `'nav'` | `'section'`, PR 3D / P1-18 —
+absent falls back to `showInNav ? 'nav' : 'link'`), `categoryId` (string `[A-Za-z0-9_-]{1,128}` required when
+`placement == 'section'`, `{0,128}` otherwise), `showInNav` (bool synced with `placement == 'nav'`, missing = **false**:
+pages are off the menu by default), `featured` (bool, default `false` — shows a «اعرف المزيد» card on `HomePage`),
+`visible`, `order`, `blocks` (≤ 20, saved in their own write). **Each block is one string**:
 `type␟textAr␟textEn␟url␟account␟instapay␟wallet` (U+001F, `PageBlock.encode` / `fromStored`; maps are still read
 tolerantly). Types: `heading`, `paragraph` (texts ≤ 4000), `image` (`url` = https picture link, texts = caption),
 `button` / `link` (texts = label, `url` = in-app path or http(s) URL), `donation` (`account` ≤ 120, `instapay` ≤ 80,

@@ -7,6 +7,7 @@ import '../../core/l10n.dart';
 import '../../core/launch.dart';
 import '../../core/theme.dart';
 import '../../domain/custom_content.dart';
+import '../../domain/features.dart' show Sections;
 import '../../domain/rules.dart';
 import '../../state/providers.dart';
 import '../widgets/cards.dart';
@@ -83,13 +84,70 @@ class CategoryPage extends ConsumerWidget {
               retry: entriesProvider,
               builder: (context, all) {
                 final items = entriesOf(c.id, all);
-                if (items.isEmpty) return EmptyState(message: context.tr('categoryEmpty'));
-                return ResponsiveGrid(children: [for (final e in items) EntryCard(entry: e, category: c)]);
+                final f = ref.watch(featuresProvider);
+                final sPages = f.enabled(Sections.customPages)
+                    ? sectionPages(c.id, ref.watch(customPagesProvider).value ?? const [])
+                    : const <CustomPage>[];
+                if (items.isEmpty && sPages.isEmpty) return EmptyState(message: context.tr('categoryEmpty'));
+                return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                  if (items.isNotEmpty)
+                    ResponsiveGrid(children: [for (final e in items) EntryCard(entry: e, category: c)]),
+                  if (sPages.isNotEmpty) ...[
+                    if (items.isNotEmpty) const SizedBox(height: 16),
+                    ResponsiveGrid(children: [
+                      for (final p in sPages) CustomPageCard(key: Key('sectionPage-${p.slug}'), page: p),
+                    ]),
+                  ],
+                ]);
               },
             ),
           ],
         );
       },
+    );
+  }
+}
+
+/// Card linking to a custom page (used in section pages and featured home cards).
+class CustomPageCard extends StatelessWidget {
+  final CustomPage page;
+  const CustomPageCard({super.key, required this.page});
+
+  @override
+  Widget build(BuildContext context) {
+    final p = page;
+    final title = context.pick(p.titleAr, p.titleEn);
+    final sub = context.pick(p.subtitleAr, p.subtitleEn);
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: Padding(
+        padding: const EdgeInsets.all(Space.card),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(color: context.pal.surfaceAlt, borderRadius: BorderRadius.circular(4)),
+              child: Icon(Icons.article_rounded, color: context.pal.primary),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(title, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16, height: 1.4)),
+            ),
+          ]),
+          if (sub.isNotEmpty) ...[
+            const SizedBox(height: Space.s),
+            Text(sub, style: const TextStyle(height: 1.6)),
+          ],
+          const SizedBox(height: 10),
+          ActionChipButton(
+            icon: Icons.open_in_new_rounded,
+            label: context.tr('learnMore'),
+            semanticLabel: actionSemanticLabel(context.tr('learnMore'), title),
+            color: context.pal.bar,
+            onTap: () => context.go(p.path),
+          ),
+        ]),
+      ),
     );
   }
 }

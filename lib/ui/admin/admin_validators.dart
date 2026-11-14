@@ -1,9 +1,49 @@
 // Pure validation / conversion for the admin forms (unit-tested).
 import '../../domain/cairo_time.dart';
-import '../../domain/custom_content.dart' show BlockTypes, PageBlock, isValidSlug;
+import '../../domain/custom_content.dart' show BlockTypes, PageBlock, isValidSlug, slugMaxLength;
 import '../../domain/push.dart';
 import '../../domain/rules.dart' show normalizeDigits;
 import 'admin_schema.dart';
+
+const _arabicSlugMap = <String, String>{
+  'ا': 'a', 'أ': 'a', 'إ': 'a', 'آ': 'a', 'ى': 'a',
+  'ب': 'b', 'ت': 't', 'ة': 't', 'ث': 'th',
+  'ج': 'g', 'ح': 'h', 'خ': 'kh',
+  'د': 'd', 'ذ': 'dh', 'ر': 'r', 'ز': 'z',
+  'س': 's', 'ش': 'sh', 'ص': 's', 'ض': 'd',
+  'ط': 't', 'ظ': 'z', 'ع': 'a', 'غ': 'gh',
+  'ف': 'f', 'ق': 'q', 'ك': 'k', 'ل': 'l',
+  'م': 'm', 'ن': 'n', 'ه': 'h', 'و': 'w', 'ؤ': 'w',
+  'ي': 'y', 'ئ': 'y', 'ء': '',
+};
+
+String _fitSlug(String s, int maxLen) {
+  var out = s.length > maxLen ? s.substring(0, maxLen) : s;
+  out = out.replaceAll(RegExp(r'^-+|-+$'), '');
+  return out.isEmpty ? 'page' : out;
+}
+
+/// Deterministic URL slug generated from an Arabic or Latin [title], always
+/// satisfying [isValidSlug] and unique against [taken] (P1-14).
+String slugFromTitle(String title, {required Set<String> taken}) {
+  final normalized = normalizeDigits(title).replaceAll(RegExp(r'[\u0640\u064B-\u065F\u0670]'), '');
+  final buf = StringBuffer();
+  for (final rune in normalized.runes) {
+    final ch = String.fromCharCode(rune);
+    buf.write(_arabicSlugMap[ch] ?? ch.toLowerCase());
+  }
+  final cleaned = buf
+      .toString()
+      .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
+      .replaceAll(RegExp(r'^-+|-+$'), '');
+  final base = _fitSlug(cleaned.isEmpty ? 'page' : cleaned, slugMaxLength);
+  if (!taken.contains(base)) return base;
+  for (var n = 2;; n++) {
+    final suffix = '-$n';
+    final candidate = '${_fitSlug(base, slugMaxLength - suffix.length)}$suffix';
+    if (!taken.contains(candidate)) return candidate;
+  }
+}
 
 final timeRe = RegExp(r'^([01]\d|2[0-3]):[0-5]\d$');
 final dateTimeRe = RegExp(r'^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})$');

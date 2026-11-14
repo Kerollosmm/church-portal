@@ -51,7 +51,7 @@ class NavItem {
     ],
     pages: [
       for (final p in pages)
-        if (p.showInNav)
+        if (p.inNav)
           NavItem('page-${p.slug}', p.path, Icons.article_rounded, labelAr: p.titleAr, labelEn: p.titleEn),
     ],
   );

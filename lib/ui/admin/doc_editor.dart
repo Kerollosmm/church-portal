@@ -10,6 +10,7 @@ import '../../data/admin_repository.dart';
 import '../../data/image_processing.dart';
 import '../../data/media_repository.dart';
 import '../../domain/cairo_time.dart';
+import '../../domain/custom_content.dart' show PagePlacements;
 import '../../domain/media.dart';
 import '../../domain/models.dart';
 import '../../domain/reminders.dart' show leadLabel;
@@ -113,6 +114,7 @@ class DocEditorState extends State<DocEditor> {
   final Map<String, List<_Row>> _rows = {};
   bool _saving = false;
   bool _dirty = false;
+  bool _initializing = false;
   int _resetEpoch = 0;
 
   /// Image fields with a picked, compressed file waiting to be uploaded on save.
@@ -138,6 +140,10 @@ class DocEditorState extends State<DocEditor> {
     for (final g in FieldGroup.values)
       if (g != FieldGroup.basic) g: ExpansibleController(),
   };
+  final ExpansibleController _advancedCtl = ExpansibleController();
+
+  bool _slugEdited = false;
+  bool _syncingSlug = false;
 
   /// The document exists: an existing one, or a new one whose first write
   /// succeeded (later writes then send only what changed).
@@ -149,15 +155,59 @@ class DocEditorState extends State<DocEditor> {
   bool get dirty => _dirty;
   bool get saving => _saving;
 
+  bool _isFieldShown(FieldDef f) =>
+      !f.hidden && (f.showWhen == null || f.showWhen!.value.contains(_values[f.showWhen!.key]));
+
   @override
   void initState() {
     super.initState();
-    final data = {...?widget.data};
-    if (isNew) data.addAll(widget.newDefaults);
-    for (final f in widget.fields) {
-      _init(f, data[f.key]);
+    _initializing = true;
+    try {
+      final data = {...?widget.data};
+      if (isNew) data.addAll(widget.newDefaults);
+      if (widget.fields.any((f) => f.key == 'placement') &&
+          (data['placement'] == null || '${data['placement']}'.isEmpty) &&
+          data['showInNav'] == true) {
+        data['placement'] = PagePlacements.nav;
+      }
+      for (final f in widget.fields) {
+        _init(f, data[f.key]);
+      }
+      _setupAutoSlug();
+      _initialValues = collect();
+    } finally {
+      _initializing = false;
     }
-    _initialValues = collect();
+  }
+
+  void _setupAutoSlug() {
+    _slugEdited = false;
+    _syncingSlug = false;
+    if (!isNew) return;
+    final slugCtrl = _text['slug'];
+    if (slugCtrl == null) return;
+    final titleKey = _text.containsKey('nameAr')
+        ? 'nameAr'
+        : (_text.containsKey('titleAr') ? 'titleAr' : null);
+    if (titleKey == null) return;
+    final titleCtrl = _text[titleKey]!;
+    slugCtrl.addListener(() {
+      if (!_syncingSlug) _slugEdited = true;
+    });
+    void sync() {
+      if (!isNew || _slugEdited) return;
+      final rawTitle = titleCtrl.text.trim();
+      final next = rawTitle.isEmpty ? '' : slugFromTitle(rawTitle, taken: widget.takenSlugs);
+      if (slugCtrl.text != next) {
+        _syncingSlug = true;
+        slugCtrl.text = next;
+        _syncingSlug = false;
+      }
+    }
+    titleCtrl.addListener(sync);
+    if (slugCtrl.text.trim().isEmpty && titleCtrl.text.trim().isNotEmpty) {
+      sync();
+    }
   }
 
   void _init(FieldDef f, Object? v) {
@@ -243,7 +293,7 @@ class DocEditorState extends State<DocEditor> {
   TextEditingController _ctrl(String text) => TextEditingController(text: text)..addListener(_markDirty);
 
   void _markDirty() {
-    if (!_dirty && mounted) setState(() => _dirty = true);
+    if (!_initializing && !_dirty && mounted) setState(() => _dirty = true);
   }
 
   @override
@@ -264,6 +314,7 @@ class DocEditorState extends State<DocEditor> {
     for (final c in _groupCtl.values) {
       c.dispose();
     }
+    _advancedCtl.dispose();
     super.dispose();
   }
 
@@ -276,6 +327,10 @@ class DocEditorState extends State<DocEditor> {
   Map<String, dynamic> collect() {
     final out = <String, dynamic>{};
     for (final f in widget.fields) {
+      if (f.showWhen != null && !_isFieldShown(f)) {
+        out[f.key] = f.type == FieldType.choice ? '' : null;
+        continue;
+      }
       switch (f.type) {
         case FieldType.boolean:
         case FieldType.weekday:
@@ -307,6 +362,9 @@ class DocEditorState extends State<DocEditor> {
           out[f.key] = parseFieldValue(f, _text[f.key]!.text);
       }
     }
+    if (out.containsKey('placement')) {
+      out['showInNav'] = out['placement'] == PagePlacements.nav;
+    }
     return out;
   }
 
@@ -322,23 +380,41 @@ class DocEditorState extends State<DocEditor> {
 
   bool get _hasPendingUploads => _pending.isNotEmpty || _gallery.values.any((l) => l.any((g) => g.pending != null));
 
-  /// Opens every collapsed group holding an invalid field, so its error is
-  /// never hidden in a closed card. Returns true when one was opened.
+  /// Opens every collapsed group (and «متقدم») holding an invalid field, so its
+  /// error is never hidden in a closed card. Returns true when one was opened.
   bool _openInvalidGroups() {
     final bad = <FieldGroup>{};
+    var badAdvanced = false;
     for (final f in widget.fields) {
-      if (f.group == FieldGroup.basic) continue;
+      if (!_isFieldShown(f)) continue;
       final c = _text[f.key];
-      if (c != null && f.type != FieldType.image && validateFieldValue(f, c.text) != null) bad.add(f.group);
+      final textBad = c != null &&
+          f.type != FieldType.image &&
+          (validateFieldValue(f, c.text) != null || (f.slug && widget.takenSlugs.contains(c.text.trim())));
+      final choiceBad = f.type == FieldType.choice &&
+          f.required &&
+          (_values[f.key] == null || '${_values[f.key]}'.isEmpty);
+      var rowBad = false;
       for (final r in _rows[f.key] ?? const <_Row>[]) {
-        if (validateRowAnyOf(f, {for (final e in r.text.entries) e.key: e.value.text}) != null) bad.add(f.group);
+        if (validateRowAnyOf(f, {for (final e in r.text.entries) e.key: e.value.text}) != null) rowBad = true;
         for (final sf in f.subFields) {
           final rc = r.text[sf.key];
-          if (rc != null && validateFieldValue(sf, rc.text) != null) bad.add(f.group);
+          if (rc != null && validateFieldValue(sf, rc.text) != null) rowBad = true;
+        }
+      }
+      if (textBad || choiceBad || rowBad) {
+        if (f.group == FieldGroup.basic && f.advanced) {
+          badAdvanced = true;
+        } else if (f.group != FieldGroup.basic) {
+          bad.add(f.group);
         }
       }
     }
     var opened = false;
+    if (badAdvanced && !_advancedCtl.isExpanded) {
+      _advancedCtl.expand();
+      opened = true;
+    }
     for (final g in bad) {
       final c = _groupCtl[g]!;
       if (!c.isExpanded) {
@@ -501,8 +577,14 @@ class DocEditorState extends State<DocEditor> {
     _gallery.clear();
     _pending.clear();
     _processing = null;
-    for (final f in widget.fields) {
-      _init(f, _initialValues[f.key]);
+    _initializing = true;
+    try {
+      for (final f in widget.fields) {
+        _init(f, _initialValues[f.key]);
+      }
+      _setupAutoSlug();
+    } finally {
+      _initializing = false;
     }
     setState(() => _dirty = false);
   }
@@ -666,6 +748,7 @@ class DocEditorState extends State<DocEditor> {
         labelText: _label(f),
         helperText: hint.isEmpty ? null : hint,
         helperMaxLines: reading == null ? 3 : 4,
+        helperStyle: hint.isEmpty ? null : TextStyle(fontSize: 13.5, color: context.pal.muted, height: 1.4),
         suffixIcon: _pickerSuffix(f, c) ?? (f.linkPicker && widget.linkTargets.isNotEmpty
             ? IconButton(
                 key: ValueKey('linkPick-${f.key}'),
@@ -718,6 +801,7 @@ class DocEditorState extends State<DocEditor> {
       'active' => (context.tr('switch_active'), context.tr('switch_stopped')),
       'replacesDay' => (context.tr('switch_replaces_on'), context.tr('switch_replaces_off')),
       'showInNav' => (context.tr('switch_nav_on'), context.tr('switch_nav_off')),
+      'featured' => (context.tr('switch_featured_on'), context.tr('switch_featured_off')),
       _ => (context.tr('switch_enabled'), context.tr('switch_disabled')),
     };
   }
@@ -996,12 +1080,15 @@ class DocEditorState extends State<DocEditor> {
             labelText: label,
             helperText: context.pick(f.hintAr, f.hintEn).isEmpty ? null : context.pick(f.hintAr, f.hintEn),
             helperMaxLines: 4,
+            helperStyle: context.pick(f.hintAr, f.hintEn).isEmpty
+                ? null
+                : TextStyle(fontSize: 13.5, color: context.pal.muted, height: 1.4),
           ),
           validator: (v) => f.required && (v == null || v.isEmpty) ? context.tr('required') : null,
           items: [
             if (f.nullableChoice) const DropdownMenuItem<String?>(value: null, child: Text('—')),
             for (final o in {...f.options, if (_values[f.key] != null) _values[f.key] as String})
-              DropdownMenuItem<String?>(value: o, child: Text(choiceLabel(context, o))),
+              DropdownMenuItem<String?>(value: o, child: Text(fieldChoiceLabel(context, f, o))),
           ],
           onChanged: (v) => setState(() {
             _values[f.key] = v;
@@ -1598,10 +1685,35 @@ class DocEditorState extends State<DocEditor> {
     );
   }
 
+  Widget _advancedCard(List<FieldDef> fields) {
+    return Card(
+      key: const ValueKey('groupCard-advanced'),
+      margin: const EdgeInsets.only(bottom: 12),
+      clipBehavior: Clip.antiAlias,
+      child: ExpansionTile(
+        key: const ValueKey('group-advanced'),
+        controller: _advancedCtl,
+        maintainState: true,
+        leading: Icon(Icons.tune_rounded, color: context.pal.primary),
+        title: Text(context.tr('advancedGroup'),
+            style: TextStyle(fontWeight: FontWeight.w800, color: context.pal.primary)),
+        childrenPadding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
+        expandedCrossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (final f in fields) Padding(padding: const EdgeInsets.only(bottom: 12), child: _field(f)),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     registerAdminStrings();
     final embedded = !widget.popOnSave;
+    final advancedFields = [
+      for (final f in widget.fields)
+        if (f.group == FieldGroup.basic && f.advanced && _isFieldShown(f)) f,
+    ];
     return UnsavedGuard(
       dirty: _dirty,
       handlePop: widget.popOnSave,
@@ -1640,10 +1752,12 @@ class DocEditorState extends State<DocEditor> {
                       child: SelectableText('ID: ${widget.docId}', style: TextStyle(color: context.pal.muted)),
                     ),
                   for (final f in widget.fields)
-                    if (f.group == FieldGroup.basic)
+                    if (f.group == FieldGroup.basic && !f.advanced && _isFieldShown(f))
                       Padding(padding: const EdgeInsets.only(bottom: 12), child: _field(f)),
+                  if (advancedFields.isNotEmpty) _advancedCard(advancedFields),
                   for (final g in FieldGroup.values)
-                    if (g != FieldGroup.basic && widget.fields.any((f) => f.group == g)) _groupCard(g),
+                    if (g != FieldGroup.basic && widget.fields.any((f) => f.group == g && _isFieldShown(f)))
+                      _groupCard(g),
                   const SizedBox(height: 8),
                   FilledButton.icon(
                     key: const Key('editor-save'),
@@ -1794,4 +1908,11 @@ String choiceLabel(BuildContext context, String key) {
   final k = 'opt_$key';
   final t = context.tr(k);
   return t == k ? key : t;
+}
+
+/// Option label scoped to [f.key] first (`opt_<field>_<option>`), falling back to [choiceLabel].
+String fieldChoiceLabel(BuildContext context, FieldDef f, String key) {
+  final scopedKey = 'opt_${f.key}_$key';
+  final scoped = context.tr(scopedKey);
+  return scoped == scopedKey ? choiceLabel(context, key) : scoped;
 }

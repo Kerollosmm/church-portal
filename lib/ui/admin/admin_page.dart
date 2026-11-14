@@ -480,7 +480,8 @@ List<AdminDest> adminDestinations(String role) => [
   const AdminDest('app', Icons.install_mobile_outlined, 'التطبيق والإشعارات', 'App & notifications'),
   const AdminDest('church', Icons.church_outlined, 'بيانات الكنيسة', 'Church info'),
   const AdminDest('assistant', Icons.smart_toy_outlined, 'المساعد الذكي', 'AI assistant'),
-  for (final c in adminCollections) AdminDest(c.id, adminIcon(c.icon), c.labelAr, c.labelEn),
+  for (final c in adminCollections)
+    if (c.id != 'entries') AdminDest(c.id, adminIcon(c.icon), c.labelAr, c.labelEn),
   const AdminDest('messages', Icons.mail_outline, 'رسائل الزوار', 'Contact messages'),
   const AdminDest('contactCats', Icons.forum_outlined, 'أنواع رسائل التواصل', 'Contact form types'),
   if (role == AdminRoles.owner) const AdminDest('admins', Icons.admin_panel_settings_outlined, 'المشرفون', 'Admins'),
@@ -513,7 +514,7 @@ class AdminDashboard extends StatefulWidget {
 class _AdminDashboardState extends State<AdminDashboard> {
   final UnsavedGuardRegistry _unsaved = UnsavedGuardRegistry();
   final List<StreamSubscription> _purgeSubs = [];
-  late String _current = widget.initial;
+  late String _current = widget.initial == 'entries' ? 'categories' : widget.initial;
 
   @override
   void initState() {
@@ -546,12 +547,13 @@ class _AdminDashboardState extends State<AdminDashboard> {
   }
 
   Future<void> _open(String id) async {
-    if (id == _current) return;
+    final target = id == 'entries' ? 'categories' : id;
+    if (target == _current) return;
     if (_unsaved.isDirty) {
       final discard = await confirmDiscardChanges(context);
       if (!discard || !mounted) return;
     }
-    if (mounted) setState(() => _current = id);
+    if (mounted) setState(() => _current = target);
   }
 
   Future<void> _handleNavTap(String id, bool inDrawer) async {
@@ -617,7 +619,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
             ? AdminsScreen(repo: repo, selfUid: widget.uid)
             : Center(child: Text(context.tr('ownerOnly')));
     }
-    final def = collectionById(_current);
+    final def = collectionById(_current == 'entries' ? 'categories' : _current);
     if (def == null) return OverviewScreen(repo: repo, role: widget.role, onOpen: _open);
     return CollectionListScreen(key: ValueKey(def.id), repo: repo, def: def);
   }

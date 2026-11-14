@@ -6,9 +6,9 @@
 ## الوضع الحالي (Current state)
 
 - **Baseline:** the report's last review, 13 November 2026 (Africa/Cairo), against the code after PR #70.
-- **Counts:** 5 fixes on live data · 28 open tasks in the code · 8 done or removed · 1 deferred by decision.
-- **Code:** PR 3A (`feat/p3a-safe-actions`, items 6, 7, 8, 11), PR 3B (`feat/p3b-written-state`, items 9, 10), and PR 3C (`feat/p3c-admin-status-session`, items 12, 13) implemented on Stage 1.
-- **Next action:** Stage 1, PR 3D (items 14, 15, 16, 17, 18a).
+- **Counts:** 5 fixes on live data · 23 open tasks in the code · 13 done or removed · 1 deferred by decision.
+- **Code:** PR 3A (`feat/p3a-safe-actions`, items 6, 7, 8, 11), PR 3B (`feat/p3b-written-state`, items 9, 10), PR 3C (`feat/p3c-admin-status-session`, items 12, 13), and PR 3D (`feat/p3d-custom-pages`, items 14, 15, 16, 17, 18a) implemented on Stage 1.
+- **Next action:** Stage 2, PR 3E (items 18 / P2-18 + P2-18R, 19, 20, 21, 22, 23).
 - **Target:** 2–3 weeks in total across the stages (owner, 13 November).
 
 ## قرارات مفتوحة للمالك (Open points for the owner — README §١٥)
@@ -39,11 +39,11 @@ All answered by the owner on 13 November 2026 (README §١٠, D1–D5).
 - [x] 11 — fixed bottom save bar (P1-11) · PR 3A (`feat/p3a-safe-actions`)
 - [x] 12 — «نشط / موقوف» on every admin, optional end date (P1-12) · PR 3C (`feat/p3c-admin-status-session`)
 - [x] 13 — automatic sign-out after 30 minutes with a 60-second warning, «افتكرني» on a personal device (P1-13) · PR 3C (`feat/p3c-admin-status-session`)
-- [ ] 14 — automatic slug from the Arabic title (P1-14)
-- [ ] 15 — ready «صفحة تبرعات» template (P1-15)
-- [ ] 16 — one screen for sections and their items (P1-16)
-- [ ] 17 — clearer empty state and hints (P1-17)
-- [ ] 18a — custom page placement («مكانها فين») and featured on home («مميزة») (P1-18)
+- [x] 14 — automatic slug from the Arabic title (P1-14) · PR 3D (`feat/p3d-custom-pages`)
+- [x] 15 — ready «صفحة تبرعات» template (P1-15) · PR 3D (`feat/p3d-custom-pages`)
+- [x] 16 — one screen for sections and their items (P1-16) · PR 3D (`feat/p3d-custom-pages`)
+- [x] 17 — clearer empty state and hints (P1-17) · PR 3D (`feat/p3d-custom-pages`)
+- [x] 18a — custom page placement («مكانها فين») and featured on home («مميزة») (P1-18) · PR 3D (`feat/p3d-custom-pages`)
 - [ ] Trial session after Stage 1 — date, servant, time taken, stops:
 - [ ] **G1**
 

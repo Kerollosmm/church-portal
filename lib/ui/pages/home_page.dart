@@ -5,6 +5,7 @@ import 'package:material_ui/material_ui.dart';
 import '../../core/l10n.dart';
 import '../../core/launch.dart';
 import '../../core/theme.dart';
+import '../../domain/custom_content.dart';
 import '../../domain/daily_verse.dart';
 import '../../domain/features.dart';
 import '../../domain/item_detail.dart';
@@ -18,6 +19,7 @@ import '../widgets/map_embed.dart';
 import '../widgets/milestone_card.dart';
 import '../widgets/golden.dart';
 import '../widgets/today_widgets.dart';
+import 'category_page.dart' show CustomPageCard;
 
 class HomePage extends ConsumerWidget {
   const HomePage({super.key});
@@ -64,6 +66,7 @@ class HomePage extends ConsumerWidget {
     }
 
     if (!patronsPlaced) children.add(const KeyedSubtree(key: ValueKey('home-patrons'), child: _PatronsTeaser()));
+    children.add(const KeyedSubtree(key: ValueKey('home-featuredPages'), child: _FeaturedPages()));
     return PageBody(
       header: _Hero(settings: settings.value, features: features),
       children: children,
@@ -122,6 +125,24 @@ class HomePage extends ConsumerWidget {
         ]);
     }
     return const SizedBox.shrink();
+  }
+}
+
+class _FeaturedPages extends ConsumerWidget {
+  const _FeaturedPages();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final f = ref.watch(featuresProvider);
+    if (!f.enabled(Sections.customPages)) return const SizedBox.shrink();
+    final pages = featuredPages(ref.watch(customPagesProvider).value ?? const []);
+    if (pages.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 16),
+      child: ResponsiveGrid(children: [
+        for (final p in pages) CustomPageCard(key: Key('featuredPage-${p.slug}'), page: p),
+      ]),
+    );
   }
 }
 

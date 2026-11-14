@@ -255,12 +255,10 @@ service cloud.firestore {
     // ------------------------------- content -------------------------------
     function validContent(col, d) {
       let changed = changedKeys(d);
-      // `col in` stops other paths (settings/..., media/...) early: this match
-      // also sees them and every request shares one expression budget. The
-      // detail-page collections come first (their writes are the heaviest).
-      return col in ['meetings', 'activities', 'clinics', 'facilities', 'priests', 'milestones', 'saints', 'alerts',
-                     'seasons', 'liturgies', 'categories', 'entries', 'pages']
-        && common(d, changed) && (
+      // `match /{col}/{docId}` gates `col` before `isAdmin()` so non-content
+      // paths never pay `isAdmin()` or `changedKeys(d)`. Detail-page
+      // collections come first (their writes are the heaviest).
+      return common(d, changed) && (
         (col == 'meetings' && validMeeting(d, changed))
         || (col == 'activities' && validActivity(d, changed))
         || (col == 'clinics' && validClinic(d, changed))
@@ -315,28 +313,41 @@ service cloud.firestore {
     // pages/{id}: a custom page. The header fields are checked when a write
     // creates the page or changes one of them; the blocks when they change
     // (their own write, like gallery / extraFields: expression budget).
+    function validPagePlacement(d) {
+      let p = d.get('placement', 'link');
+      let c = d.get('categoryId', '');
+      return p in ['link', 'nav', 'section']
+        && c is string
+        && c.matches(p == 'section' ? '[A-Za-z0-9_-]{1,128}' : '[A-Za-z0-9_-]{0,128}');
+    }
+
+    function validPageHeaderFields(d) {
+      let o = d.titleAr + '\u001f' + d.get('titleEn', '') + '\u001f' + d.get('subtitleAr', '') + '\u001f' + d.get('subtitleEn', '');
+      return slugOk(d) && d.get('showInNav', false) is bool
+        && o.matches('[^\\x1f]*[^\\s\\x1f][^\\x1f]*\\x1f[\\s\\S]*')
+        && o.matches('[^\\x1f]{1,200}\\x1f[^\\x1f]{0,200}\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{0,300}');
+    }
+
     function validPage(d, changed) {
-      return changed.hasOnly(['slug', 'titleAr', 'titleEn', 'subtitleAr', 'subtitleEn', 'image', 'blocks', 'showInNav']
-                             .concat(meta()))
+      return changed.hasOnly(['slug', 'titleAr', 'titleEn', 'subtitleAr', 'subtitleEn', 'image', 'blocks', 'showInNav',
+                              'placement', 'categoryId', 'featured'].concat(meta()))
         && ((resource != null && !changed.hasAny(['slug', 'titleAr', 'titleEn', 'subtitleAr', 'subtitleEn', 'showInNav']))
-            || (slugOk(d) && d.get('showInNav', false) is bool
-                && (d.titleAr + '\u001f' + d.get('titleEn', '') + '\u001f' + d.get('subtitleAr', '') + '\u001f' + d.get('subtitleEn', ''))
-                     .matches('[^\\x1f]*[^\\s\\x1f][^\\x1f]*\\x1f[\\s\\S]*')
-                && (d.titleAr + '\u001f' + d.get('titleEn', '') + '\u001f' + d.get('subtitleAr', '') + '\u001f' + d.get('subtitleEn', ''))
-                     .matches('[^\\x1f]{1,200}\\x1f[^\\x1f]{0,200}\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{0,300}')))
+            || validPageHeaderFields(d))
+        && (!('featured' in changed) || d.get('featured', false) is bool)
+        && ((!('placement' in changed) && !('categoryId' in changed)) || validPagePlacement(d))
         && (!('blocks' in changed) || validBlocks(d));
     }
 
     // Up to 20 blocks (unrolled: rules have no loops).
     function validBlocks(d) {
-      return optList(d, 'blocks', 20)
-        && (d.get('blocks', null) == null || blockItems(d.blocks, d.blocks.size()));
+      let b = d.get('blocks', null);
+      return b == null || (b is list && b.size() <= 20 && blockItems(b, b.size()));
     }
     function blockItems(b, n) {
-      return (n <= 0 || (validPageBlock(b[0]) && (n <= 1 || (validPageBlock(b[1]) && (n <= 2 || (validPageBlock(b[2]) && (n <= 3 || (validPageBlock(b[3]) && (n <= 4 || (validPageBlock(b[4]) && true))))))))))
-        && (n <= 5 || (validPageBlock(b[5]) && (n <= 6 || (validPageBlock(b[6]) && (n <= 7 || (validPageBlock(b[7]) && (n <= 8 || (validPageBlock(b[8]) && (n <= 9 || (validPageBlock(b[9]) && true))))))))))
-        && (n <= 10 || (validPageBlock(b[10]) && (n <= 11 || (validPageBlock(b[11]) && (n <= 12 || (validPageBlock(b[12]) && (n <= 13 || (validPageBlock(b[13]) && (n <= 14 || (validPageBlock(b[14]) && true))))))))))
-        && (n <= 15 || (validPageBlock(b[15]) && (n <= 16 || (validPageBlock(b[16]) && (n <= 17 || (validPageBlock(b[17]) && (n <= 18 || (validPageBlock(b[18]) && (n <= 19 || (validPageBlock(b[19]) && true))))))))));
+      return (n <= 0 || (validPageBlock(b[0]) && (n <= 1 || (validPageBlock(b[1]) && (n <= 2 || (validPageBlock(b[2]) && (n <= 3 || (validPageBlock(b[3]) && (n <= 4 || validPageBlock(b[4]))))))))))
+        && (n <= 5 || (validPageBlock(b[5]) && (n <= 6 || (validPageBlock(b[6]) && (n <= 7 || (validPageBlock(b[7]) && (n <= 8 || (validPageBlock(b[8]) && (n <= 9 || validPageBlock(b[9]))))))))))
+        && (n <= 10 || (validPageBlock(b[10]) && (n <= 11 || (validPageBlock(b[11]) && (n <= 12 || (validPageBlock(b[12]) && (n <= 13 || (validPageBlock(b[13]) && (n <= 14 || validPageBlock(b[14]))))))))))
+        && (n <= 15 || (validPageBlock(b[15]) && (n <= 16 || (validPageBlock(b[16]) && (n <= 17 || (validPageBlock(b[17]) && (n <= 18 || (validPageBlock(b[18]) && (n <= 19 || validPageBlock(b[19]))))))))));
     }
     // A block is ONE string: type, textAr, textEn, url, account, instapay,
     // wallet joined by U+001F (lib/domain/custom_content.dart PageBlock.encode;

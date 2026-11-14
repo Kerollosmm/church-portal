@@ -53,10 +53,10 @@ wanted settings and message deletion owner-only; the implementation deliberately
 
 ## Navigation (`adminDestinations(role)`)
 
-`overview` → `features` → `today` → `seasonSettings` → `seasonPreset` → `app` (App & notifications, ADR-057, ADR-059) → `church` → `assistant` (AI assistant, PR #19) → one entry per `adminCollections` item (alerts, seasons, liturgies, meetings,
-clinics, facilities, activities, priests, departedPriests, saints, milestones, **categories** (Custom sections),
-**entries** (Section items), **pages** (Custom pages) — PR #18) → `messages` → `contactCats` (Contact form types,
-PR #18) → `admins` (owners only).
+`overview` → `features` → `today` → `seasonSettings` → `seasonPreset` → `app` (App & notifications, ADR-057, ADR-059) → `church` → `assistant` (AI assistant, PR #19) → one entry per `adminCollections` item except `entries` (alerts, seasons, liturgies, meetings,
+clinics, facilities, activities, priests, departedPriests, saints, milestones, **categories** («الأقسام وعناصرها» — unified sections & nested items since PR 3D / P1-16),
+**pages** («الصفحات المخصصة», with «صفحة تبرعات جاهزة» template since PR 3D / P1-15) — PR #18) → `messages` → `contactCats` (Contact form types,
+PR #18) → `admins` (owners only). Deep links to `'entries'` redirect to `'categories'`.
 The **Clinics** screen («العيادات») stays in the menu although the owner deleted the 11 placeholder clinics (3 Nov 2026) and
 switched the clinics section off (4 Nov 2026) — it is where real clinics would be added before switching the
 section back on.
