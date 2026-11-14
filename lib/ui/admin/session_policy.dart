@@ -108,6 +108,7 @@ class _AdminSessionGuardState extends State<AdminSessionGuard> {
   void _onGlobalPointer(PointerEvent event) {
     if (event is PointerDownEvent ||
         event is PointerMoveEvent ||
+        event is PointerHoverEvent ||
         event is PointerSignalEvent ||
         event is PointerPanZoomStartEvent) {
       _recordActivity();
@@ -195,81 +196,83 @@ class _AdminSessionGuardState extends State<AdminSessionGuard> {
         behavior: HitTestBehavior.translucent,
         onPointerDown: (_) => _recordActivity(),
         onPointerMove: (_) => _recordActivity(),
+        onPointerHover: (_) => _recordActivity(),
         onPointerSignal: (_) => _recordActivity(),
         child: widget.child,
       ),
     );
-    if (!widget.enabled || !_warning) return content;
-
+    final showBanner = widget.enabled && _warning;
     final secs = context.isAr ? toArabicDigits('$_secondsLeft') : '$_secondsLeft';
     return Stack(
+      fit: StackFit.passthrough,
       children: [
         content,
-        Positioned(
-          top: 8,
-          left: 12,
-          right: 12,
-          child: SafeArea(
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 560),
-                child: Material(
-                  key: const ValueKey('session-idle-warning'),
-                  elevation: 6,
-                  borderRadius: BorderRadius.circular(12),
-                  color: context.pal.surface,
-                  child: Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: context.pal.alert, width: 1.5),
-                    ),
-                    child: Wrap(
-                      spacing: 12,
-                      runSpacing: 8,
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      alignment: WrapAlignment.spaceBetween,
-                      children: [
-                        ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 360),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.timer_outlined, color: context.pal.alert),
-                              const SizedBox(width: 10),
-                              Flexible(
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      context.tr('sessionWarnTitle', {'s': secs}),
-                                      style: TextStyle(fontWeight: FontWeight.w800, color: context.pal.alert),
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      context.tr('sessionWarnBody'),
-                                      style: TextStyle(fontSize: 13, color: context.pal.ink),
-                                    ),
-                                  ],
+        if (showBanner)
+          Positioned(
+            top: 8,
+            left: 12,
+            right: 12,
+            child: SafeArea(
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 560),
+                  child: Material(
+                    key: const ValueKey('session-idle-warning'),
+                    elevation: 6,
+                    borderRadius: BorderRadius.circular(12),
+                    color: context.pal.surface,
+                    child: Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: context.pal.alert, width: 1.5),
+                      ),
+                      child: Wrap(
+                        spacing: 12,
+                        runSpacing: 8,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        alignment: WrapAlignment.spaceBetween,
+                        children: [
+                          ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 360),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.timer_outlined, color: context.pal.alert),
+                                const SizedBox(width: 10),
+                                Flexible(
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        context.tr('sessionWarnTitle', {'s': secs}),
+                                        style: TextStyle(fontWeight: FontWeight.w800, color: context.pal.alert),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        context.tr('sessionWarnBody'),
+                                        style: TextStyle(fontSize: 13, color: context.pal.ink),
+                                      ),
+                                    ],
+                                  ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
-                        ),
-                        FilledButton(
-                          key: const ValueKey('session-stay-btn'),
-                          onPressed: _recordActivity,
-                          child: Text(context.tr('staySignedIn')),
-                        ),
-                      ],
+                          FilledButton(
+                            key: const ValueKey('session-stay-btn'),
+                            onPressed: _recordActivity,
+                            child: Text(context.tr('staySignedIn')),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
               ),
             ),
           ),
-        ),
       ],
     );
   }

@@ -50,18 +50,29 @@ extension AdminDocStatusExt on AdminDoc {
 extension AdminBackendStatusExt on AdminBackend {
   Future<void> setAdminStatus(
     String uid, {
-    required bool active,
+    bool? active,
     DateTime? expiresAt,
     bool clearExpiresAt = false,
   }) {
-    final patch = <String, dynamic>{'active': active};
-    if (clearExpiresAt) {
-      patch['expiresAt'] = null;
-    } else if (expiresAt != null) {
-      patch['expiresAt'] = expiresAt;
-    }
+    final patch = <String, dynamic>{
+      'active': ?active,
+      if (clearExpiresAt) 'expiresAt': null else 'expiresAt': ?expiresAt,
+    };
+    if (patch.isEmpty) return Future.value();
     if (this is AdminRepository) return saveDoc('admins/$uid', patch);
     return update('admins', uid, patch);
+  }
+
+  Future<void> setAdminRole(AdminDoc a, String role) async {
+    final email = '${a.data['email'] ?? ''}'.trim();
+    if (role == AdminRoles.owner && a.expiresAt != null && this is AdminRepository) {
+      await saveDoc('admins/${a.id}', {'email': email, 'role': role, 'expiresAt': null});
+      return;
+    }
+    await setAdmin(a.id, email: email, role: role);
+    if (role == AdminRoles.owner && a.expiresAt != null) {
+      await setAdminStatus(a.id, clearExpiresAt: true);
+    }
   }
 }
 

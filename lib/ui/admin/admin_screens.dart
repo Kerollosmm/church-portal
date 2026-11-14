@@ -812,7 +812,7 @@ class _AdminsScreenState extends State<AdminsScreen> {
                 value: role,
                 onChanged: self
                     ? null
-                    : (v) => v == null ? null : _guard(context, () => widget.repo.setAdmin(a.id, email: '${a.data['email'] ?? ''}', role: v)),
+                    : (v) => v == null ? null : _guard(context, () => widget.repo.setAdminRole(a, v)),
                 items: [
                   for (final r in AdminRoles.all)
                     DropdownMenuItem(value: r, child: Text(context.tr('role_$r'), overflow: TextOverflow.ellipsis)),
@@ -826,18 +826,19 @@ class _AdminsScreenState extends State<AdminsScreen> {
               offLabel: context.tr('stoppedStatus'),
               onChanged: self ? null : (next) => _toggleActive(context, a, next),
             ),
-            ActionChip(
-              key: ValueKey('admin-expiry-${a.id}'),
-              avatar: Icon(Icons.event_outlined, size: 18, color: expired ? context.pal.alert : context.pal.primary),
-              label: Text(
-                expiresAt == null
-                    ? context.tr('adminNoExpiry')
-                    : context.tr(expired ? 'adminExpiredOn' : 'adminExpiresOn', {'d': expiryStr}),
-                overflow: TextOverflow.ellipsis,
-                style: expired ? TextStyle(color: context.pal.alert, fontWeight: FontWeight.w700) : null,
+            if (role != AdminRoles.owner || expiresAt != null)
+              ActionChip(
+                key: ValueKey('admin-expiry-${a.id}'),
+                avatar: Icon(Icons.event_outlined, size: 18, color: expired ? context.pal.alert : context.pal.primary),
+                label: Text(
+                  expiresAt == null
+                      ? context.tr('adminNoExpiry')
+                      : context.tr(expired ? 'adminExpiredOn' : 'adminExpiresOn', {'d': expiryStr}),
+                  overflow: TextOverflow.ellipsis,
+                  style: expired ? TextStyle(color: context.pal.alert, fontWeight: FontWeight.w700) : null,
+                ),
+                onPressed: (self || role == AdminRoles.owner) ? null : () => _pickExpiry(context, a),
               ),
-              onPressed: self ? null : () => _pickExpiry(context, a),
-            ),
             if (expiresAt != null && !self)
               IconButton(
                 key: ValueKey('admin-clear-expiry-${a.id}'),
@@ -845,7 +846,7 @@ class _AdminsScreenState extends State<AdminsScreen> {
                 icon: const Icon(Icons.close, size: 18),
                 onPressed: () => _guard(
                   context,
-                  () => widget.repo.setAdminStatus(a.id, active: active, clearExpiresAt: true),
+                  () => widget.repo.setAdminStatus(a.id, clearExpiresAt: true),
                 ),
               ),
             IconButton(
@@ -898,7 +899,7 @@ class _AdminsScreenState extends State<AdminsScreen> {
     final endOfDayUtc = CairoTime.at(picked.year, picked.month, picked.day, 23 * 60 + 59)
         .toUtc()
         .add(const Duration(seconds: 59));
-    await _guard(context, () => widget.repo.setAdminStatus(a.id, active: a.active, expiresAt: endOfDayUtc));
+    await _guard(context, () => widget.repo.setAdminStatus(a.id, expiresAt: endOfDayUtc));
   }
 
   Future<void> _guard(BuildContext context, Future<void> Function() op) async {
