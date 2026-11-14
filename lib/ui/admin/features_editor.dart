@@ -8,6 +8,8 @@ import '../../domain/features.dart';
 import '../../domain/image_style.dart';
 import 'admin_validators.dart';
 import 'occasion_editor.dart';
+import 'unsaved_bar.dart';
+import 'unsaved_guard.dart';
 
 /// Section on/off switches + home layout (settings/features).
 class FeaturesScreen extends StatefulWidget {
@@ -228,6 +230,8 @@ class FeaturesEditorState extends State<FeaturesEditor> {
     for (final p in CustomizablePages.all) p: ExpansibleController(),
   };
   final _formKey = GlobalKey<FormState>();
+  late FeatureSettings _savedBaseline = widget.initial;
+  int _resetGen = 0;
   bool _dirty = false;
   bool _saving = false;
 
@@ -318,14 +322,49 @@ class FeaturesEditorState extends State<FeaturesEditor> {
     final failed = context.tr('saveFailed', {'e': '{e}'});
     setState(() => _saving = true);
     try {
-      await widget.onSave(collect());
+      final collected = collect();
+      await widget.onSave(collected);
       messenger.showSnackBar(SnackBar(content: Text(ok)));
-      if (mounted) setState(() => _dirty = false);
+      if (mounted) {
+        setState(() {
+          _savedBaseline = collected;
+          _dirty = false;
+        });
+      }
     } catch (e) {
       messenger.showSnackBar(SnackBar(content: Text(failed.replaceAll('{e}', '$e'))));
     } finally {
       if (mounted) setState(() => _saving = false);
     }
+  }
+
+  Future<void> _cancelEdits() async {
+    final discard = await confirmDiscardChanges(context);
+    if (!discard || !mounted) return;
+    setState(() {
+      f = _savedBaseline;
+      _t['heroTitleAr']!.text = _savedBaseline.heroTitleAr;
+      _t['heroTitleEn']!.text = _savedBaseline.heroTitleEn;
+      _t['heroSubtitleAr']!.text = _savedBaseline.heroSubtitleAr;
+      _t['heroSubtitleEn']!.text = _savedBaseline.heroSubtitleEn;
+      _t['bannerAr']!.text = _savedBaseline.bannerAr;
+      _t['bannerEn']!.text = _savedBaseline.bannerEn;
+      _t['bannerLink']!.text = _savedBaseline.bannerLink;
+      _t['footerNoteAr']!.text = _savedBaseline.footer.noteAr;
+      _t['footerNoteEn']!.text = _savedBaseline.footer.noteEn;
+      _t['verseTextAr']!.text = _savedBaseline.dailyVerse.textAr;
+      _t['verseRefAr']!.text = _savedBaseline.dailyVerse.refAr;
+      _t['verseTextEn']!.text = _savedBaseline.dailyVerse.textEn;
+      _t['verseRefEn']!.text = _savedBaseline.dailyVerse.refEn;
+      for (final p in CustomizablePages.all) {
+        final header = _savedBaseline.pageHeader(p).toMap();
+        for (final e in _pages[p]!.entries) {
+          e.value.text = (header[e.key] as String?) ?? '';
+        }
+      }
+      _resetGen++;
+      _dirty = false;
+    });
   }
 
   Future<void> _sendTestError() async {
@@ -400,20 +439,29 @@ class FeaturesEditorState extends State<FeaturesEditor> {
   @override
   Widget build(BuildContext context) {
     final order = f.homeOrder;
-    return Scaffold(
-      backgroundColor: context.pal.background,
-      floatingActionButton: FloatingActionButton.extended(
-        key: const Key('features-save'),
-        heroTag: 'features-save',
-        backgroundColor: _dirty ? context.pal.primary : context.pal.muted,
-        foregroundColor: context.pal.onBar,
-        onPressed: _saving ? null : _save,
-        icon: _saving
-            ? SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2, color: context.pal.onBar))
-            : const Icon(Icons.save),
-        label: Text(context.tr(_dirty ? 'saveChanges' : 'save')),
-      ),
-      body: Form(
+    return UnsavedGuard(
+      dirty: dirty,
+      handlePop: false,
+      child: Scaffold(
+        backgroundColor: context.pal.background,
+        floatingActionButton: FloatingActionButton.extended(
+          key: const Key('features-save'),
+          heroTag: 'features-save',
+          backgroundColor: _dirty ? context.pal.primary : context.pal.muted,
+          foregroundColor: context.pal.onBar,
+          onPressed: _saving ? null : _save,
+          icon: _saving
+              ? SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2, color: context.pal.onBar))
+              : const Icon(Icons.save),
+          label: Text(context.tr(_dirty ? 'saveChanges' : 'save')),
+        ),
+        bottomNavigationBar: UnsavedBar(
+          dirty: dirty,
+          saving: _saving,
+          onSave: _save,
+          onCancel: _cancelEdits,
+        ),
+        body: Form(
         key: _formKey,
         child: Center(
           child: ConstrainedBox(
@@ -586,7 +634,10 @@ class FeaturesEditorState extends State<FeaturesEditor> {
               ], hint: context.tr('imageDisplayHint')),
               _card(context.tr('themeColor'), Icons.palette_outlined, [
                 OccasionThemeEditor(
-                    value: f, onChanged: (edit) => _set(edit(f)), activeSeasonKeys: widget.activeSeasonKeys),
+                    key: ValueKey('theme-editor-$_resetGen'),
+                    value: f,
+                    onChanged: (edit) => _set(edit(f)),
+                    activeSeasonKeys: widget.activeSeasonKeys),
                 // The season theme's wash over the hero painting (ADR-050).
                 SwitchListTile(
                   key: const ValueKey('features-heroSeasonTint'),
@@ -621,6 +672,7 @@ class FeaturesEditorState extends State<FeaturesEditor> {
           ),
         ),
       ),
+    ),
     );
   }
 

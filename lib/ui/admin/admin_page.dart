@@ -17,6 +17,7 @@ import 'collection_list.dart';
 import 'features_editor.dart';
 import 'notifications_admin.dart';
 import 'season_preset_admin.dart';
+import 'unsaved_guard.dart';
 
 /// Hidden /admin area: email/password sign-in, role check (admins/{uid}),
 /// then the dashboard.
@@ -338,9 +339,45 @@ class AdminDashboard extends StatefulWidget {
 }
 
 class _AdminDashboardState extends State<AdminDashboard> {
+  final UnsavedGuardRegistry _unsaved = UnsavedGuardRegistry();
   late String _current = widget.initial;
 
-  void _open(String id) => setState(() => _current = id);
+  @override
+  void dispose() {
+    _unsaved.dispose();
+    super.dispose();
+  }
+
+  Future<void> _open(String id) async {
+    if (id == _current) return;
+    if (_unsaved.isDirty) {
+      final discard = await confirmDiscardChanges(context);
+      if (!discard || !mounted) return;
+    }
+    if (mounted) setState(() => _current = id);
+  }
+
+  Future<void> _handleNavTap(String id, bool inDrawer) async {
+    if (id == _current) {
+      if (inDrawer) Navigator.of(context).pop();
+      return;
+    }
+    if (_unsaved.isDirty) {
+      final discard = await confirmDiscardChanges(context);
+      if (!discard || !mounted) return;
+    }
+    if (inDrawer && mounted) Navigator.of(context).pop();
+    if (mounted) setState(() => _current = id);
+  }
+
+  Future<void> _handleSignOut(bool inDrawer) async {
+    if (_unsaved.isDirty) {
+      final discard = await confirmDiscardChanges(context);
+      if (!discard || !mounted) return;
+    }
+    if (inDrawer && mounted) Navigator.of(context).pop();
+    widget.onSignOut();
+  }
 
   Widget _screen() {
     final repo = widget.repo;
@@ -440,17 +477,14 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 selectedColor: context.pal.primary,
                 selectedTileColor: context.pal.ornament.withValues(alpha: 0.22),
                 shape: const RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(10))),
-                onTap: () {
-                  if (inDrawer) Navigator.of(context).pop();
-                  _open(d.id);
-                },
+                onTap: () => _handleNavTap(d.id, inDrawer),
               ),
             const Divider(),
             ListTile(
               dense: true,
               leading: Icon(Icons.logout, color: context.pal.alert),
               title: Text(context.tr('signOut')),
-              onTap: widget.onSignOut,
+              onTap: () => _handleSignOut(inDrawer),
             ),
           ],
         ),
@@ -463,7 +497,9 @@ class _AdminDashboardState extends State<AdminDashboard> {
     final wide = MediaQuery.sizeOf(context).width >= 1000;
     final dest = adminDestinations(widget.role)
         .firstWhere((d) => d.id == _current, orElse: () => adminDestinations(widget.role).first);
-    return Scaffold(
+    return UnsavedGuardScope(
+      registry: _unsaved,
+      child: Scaffold(
       appBar: AppBar(
         title: Row(
           children: [
@@ -492,6 +528,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
               ],
             )
           : _screen(),
+      ),
     );
   }
 }

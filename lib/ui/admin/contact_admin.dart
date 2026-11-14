@@ -5,6 +5,8 @@ import '../../core/theme.dart';
 import '../../data/admin_repository.dart';
 import '../../domain/contact_categories.dart';
 import 'doc_editor.dart' show choiceLabel;
+import 'unsaved_bar.dart';
+import 'unsaved_guard.dart';
 
 /// Admin editor of the contact-form categories (`settings/contact`, ADR-028):
 /// add, rename, reorder, hide or delete types, choose their behaviour
@@ -21,6 +23,7 @@ class ContactCategoriesScreen extends StatefulWidget {
 class _ContactCategoriesScreenState extends State<ContactCategoriesScreen> {
   late Stream<AdminDoc?> _stream = widget.repo.watchDoc('settings/contact');
   List<ContactCategory>? _cats;
+  List<ContactCategory>? _savedCats;
 
   /// Ids removed in this editor: a category added afterwards never reuses
   /// one (its old messages keep their own label / "Other" box).
@@ -59,7 +62,12 @@ class _ContactCategoriesScreenState extends State<ContactCategoriesScreen> {
     try {
       await widget.repo.saveDoc('settings/contact', ContactSettings(_renumbered()).toMap());
       messenger.showSnackBar(SnackBar(content: Text(saved)));
-      if (mounted) setState(() => _dirty = false);
+      if (mounted) {
+        setState(() {
+          _savedCats = _cats != null ? [..._cats!] : null;
+          _dirty = false;
+        });
+      }
     } catch (e) {
       messenger.showSnackBar(SnackBar(content: Text(failed.replaceAll('{e}', '$e'))));
     } finally {
@@ -67,38 +75,61 @@ class _ContactCategoriesScreenState extends State<ContactCategoriesScreen> {
     }
   }
 
+  Future<void> _cancelEdits() async {
+    final discard = await confirmDiscardChanges(context);
+    if (!discard || !mounted) return;
+    setState(() {
+      if (_savedCats != null) {
+        _cats = [..._savedCats!];
+      }
+      _gen++;
+      _dirty = false;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: context.pal.background,
-      floatingActionButton: _cats == null
-          ? null
-          : FloatingActionButton.extended(
-              key: const Key('saveContactCats'),
-              onPressed: _saving || !_dirty ? null : _save,
-              icon: const Icon(Icons.save_outlined),
-              label: Text(context.tr('save')),
-            ),
-      body: StreamBuilder<AdminDoc?>(
-        key: ObjectKey(_stream),
-        stream: _stream,
-        builder: (context, snap) {
-          if (snap.hasError) {
-            return Center(child: Padding(padding: const EdgeInsets.all(24), child: Text('${snap.error}')));
-          }
-          if (snap.connectionState == ConnectionState.waiting && _cats == null) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          // First load (or a remote change while nothing is edited here).
-          if (_cats == null || !_dirty) {
-            final next = ContactSettings.fromMap(snap.data?.data).categories;
-            if (_cats == null || !_same(_cats!, next)) {
-              _cats = [...next];
-              _gen++;
+    return UnsavedGuard(
+      dirty: _dirty,
+      handlePop: false,
+      child: Scaffold(
+        backgroundColor: context.pal.background,
+        floatingActionButton: _cats == null
+            ? null
+            : FloatingActionButton.extended(
+                key: const Key('saveContactCats'),
+                onPressed: _saving || !_dirty ? null : _save,
+                icon: const Icon(Icons.save_outlined),
+                label: Text(context.tr('save')),
+              ),
+        bottomNavigationBar: UnsavedBar(
+          dirty: _dirty,
+          saving: _saving,
+          onSave: _save,
+          onCancel: _cancelEdits,
+        ),
+        body: StreamBuilder<AdminDoc?>(
+          key: ObjectKey(_stream),
+          stream: _stream,
+          builder: (context, snap) {
+            if (snap.hasError) {
+              return Center(child: Padding(padding: const EdgeInsets.all(24), child: Text('${snap.error}')));
             }
-          }
-          return _editor(context);
-        },
+            if (snap.connectionState == ConnectionState.waiting && _cats == null) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            // First load (or a remote change while nothing is edited here).
+            if (_cats == null || !_dirty) {
+              final next = ContactSettings.fromMap(snap.data?.data).categories;
+              if (_cats == null || !_same(_cats!, next)) {
+                _cats = [...next];
+                _savedCats = [...next];
+                _gen++;
+              }
+            }
+            return _editor(context);
+          },
+        ),
       ),
     );
   }

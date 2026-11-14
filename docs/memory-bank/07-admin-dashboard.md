@@ -1,7 +1,8 @@
 # 07 — Admin dashboard (`/admin`)
 
 Code: `lib/ui/admin/` — `admin_page.dart`, `admin_schema.dart`, `doc_editor.dart`, `collection_list.dart`,
-`features_editor.dart`, `admin_screens.dart`, `admin_validators.dart`; data access `lib/data/admin_repository.dart`.
+`features_editor.dart`, `admin_screens.dart`, `admin_validators.dart`, `confirm_named.dart`, `unsaved_guard.dart`,
+`pending_delete.dart`, `unsaved_bar.dart`; data access `lib/data/admin_repository.dart`.
 Tests: `test/admin_test.dart`; server rules: `firestore.rules` + `tool/rules_test`.
 
 ## How to sign in
@@ -219,7 +220,15 @@ Two tabs: «الإشعارات» (`NotificationsAdminSection`, kept alive across
    an `eventKey`) or a custom `/path`; phone preview ar/en; «جرّب على هذا الجهاز». Inline errors under the field.
    Rows grouped «القادمة» / «السابقة» with icon status chips and a one-line explanation per state; «تعديل» while
    the row has no `status` entry, «أعد الإرسال» (copy, targets narrowed) for partial / error / unconfirmed /
-   expired, «حذف» with a confirmation dialog. Saves go through `saveDocsFresh` (fresh read: an edit is refused once
+   expired, «حذف» with a confirmation dialog. Saving an announcement that targets everyone (`_draftTargets == 'all'`)
+   or is sent soon (`_draftSoon == true`) triggers a named confirmation dialog (`confirmNamedAction`, `confirm_named.dart`)
+   matching recipients and timing: send-all soon («هيتبعت لكل المشتركين دلوقتي: {t}», `nm_confirmSendAllSummary`, `nm_sendToAllBtn`),
+   targeted soon («هيتبعت ({target}) دلوقتي: {t}», `nm_confirmSendTargetSoonSummary`, `nm_sendNowBtn`), scheduled all
+   («هيتبعت لكل المشتركين {when}: {t}», `nm_confirmScheduleAllSummary`, `nm_confirmScheduleBtn`), or scheduled targeted
+   («هيتبعت ({target}) {when}: {t}», `nm_confirmScheduleTargetSummary`, `nm_confirmScheduleBtn`), followed by a post-await
+   past-time recheck.
+   Closing an open draft with unsaved text (`_closeDraft`, `ValueKey('draft-cancel')` / `ValueKey('editor-close')`) prompts
+   `confirmDiscardChanges`. Saves go through `saveDocsFresh` (fresh read: an edit is refused once
    the sender has claimed the row; the 20-row cap is checked on the fresh list).
 3. **Types offered** — one card per type with a switch (`pushTypes`), icon, description and the delivery channel in
    words; «تعديل الوقت والنص»: time picker (no typed HH:mm), seasons «قبل بدايته بـ» 0–7, templates with
@@ -274,9 +283,17 @@ For each `CollectionDef`:
   **kept** — Firestore may still commit the queued write pointing at them; any other error deletes them (BUG-13).
   Note: `AdminRepository.save`/`saveDoc` set no timeout of their own today (the only 15 s timeout is the role read
   in `adminRole`), so this path applies to a timeout raised by a caller/backend wrapper.
-- **Add** (FAB) / tap to **edit** → full-screen `DocEditor`; **delete** with confirmation dialog (also deletes the
-  item's inline cover and gallery `media` docs, `orphanedDocMediaIds`). A new item saved in several writes keeps the id
-  the first write created (the editor's `onSave` remembers it).
+- **Add** (FAB) / tap to **edit** → full-screen `DocEditor`; **delete** in `collection_list.dart` uses a 10-second
+  reversible soft-delete buffer (`PendingDelete`, `pending_delete.dart`). Non-category items hide immediately from
+  the list (`_pendingDelete.pendingIds`) and display a 10-second `SnackBar` with «اتمسح «{n}»» (`deletedUndo`) and an
+  action «تراجع» (`undo`). Tapping undo restores the item immediately with no backend call. If the 10 seconds elapse
+  without undo, the deletion commits to `widget.repo.delete(def.name, d.id)` and cleans up orphaned media
+  (`orphanedDocMediaIds`). Pending-deletion items stay in `_lastDocs` until commit so their slugs remain reserved
+  in `takenSlugs`, and scheduling deletion captures `repo`, `def`, `media` and document data in closure. Navigating
+  away (`dispose()`) or closing/reloading the browser tab (`addBeforeUnloadFlush`)
+  synchronously flushes pending deletions so no deletion is lost. Custom categories (`categories`) remain confirmed via
+  dialog (`_deleteCategory`) because deleting a category cascades to hide member items and clear category links. A new
+  item saved in several writes keeps the id the first write created (the editor's `onSave` remembers it).
 
 | Screen id | Collection | Orderable | Has visible | Has sample | Notes |
 |---|---|---|---|---|---|
@@ -377,7 +394,8 @@ are general inquiries (c1). Status chips **open** (default, `status == new`) / d
 «مُرسِل مجهول»), time, type / occasion / 📅 date chips, message, phone (call), email (`mailto:`), internal notes.
 Bookings get a **status dropdown** new → contacted → confirmed / declined (`bookingStatus-<id>`); other messages
 **Mark handled / Mark new**. **Notes** (`notes-<id>`, `_NotesDialog`, ≤ 2000 → `adminNotes`), copy, delete with
-confirmation. The overview's "new messages" counts `status == new`.
+named confirmation (`confirmNamedAction`, `_delete`: names sender or «مُرسِل مجهول» with alert-colored action «حذف»).
+The overview's "new messages" counts `status == new`.
 
 ### Contact form types (`ContactCategoriesScreen`, `contact_admin.dart`) → `settings/contact` (PR #18)
 Cards per type (code defaults until saved): Arabic / English name, behaviour (general / booking / complaint /
@@ -413,11 +431,45 @@ link. **Deleting a category** (`_deleteCategory`): confirmation naming how many 
 on each visible entry → delete the category. "Open on site" for a category / page row opens its slug route.
 
 ### Admins (`AdminsScreen`, owners only) → `admins`
-List with role dropdown (owner/editor) and remove button — disabled for yourself ("(you)"); since PR #12 they wrap
+List with role dropdown (owner/editor) and remove button — disabled for yourself ("(you)"). Removing an admin
+prompts with named confirmation (`confirmNamedAction`, displaying the admin's email and alert-styled «إزالة المشرف»).
+Since PR #12 they wrap
 under the UID (the role menu ellipsizes) so nothing overflows at 320 px / 200 %. **Add admin** dialog: UID
 (validated by `isValidAdminUid`: 1–128 chars, no `/`; copy it from Firebase console → Authentication → Users), email,
 role. The Auth user itself must be created in the console (or via the Seed workflow) first. Since PR #10
 `setAdmin` stamps `admins/{uid}` with `updatedAt`/`updatedBy` (`_stamp`), like every other admin write.
+
+## Safe actions & unsaved edits architecture (PR 3A)
+
+Implemented in Stage 1 of the admin panel simplification (PR 3A, items 6, 7, 8, 11):
+
+### Named confirmation dialog (`confirmNamedAction`, `confirm_named.dart`)
+Standard modal dialog replacing vague confirmation prompts by explicitly naming the target action or item in its summary text:
+- **Push broadcast:** sending a draft announcement to «الجميع» (`_draftTargets == 'all'`) or «في أقرب وقت» (`_draftSoon == true`) in `notifications_admin.dart` prompts with summary «هيتبعت لكل المشتركين دلوقتي: {t}» (`nm_confirmSendAllSummary`) and confirm action «ابعت للكل» (`nm_sendToAllBtn`).
+- **Messages delete:** deleting a visitor message in `MessagesScreen` names the sender (or «مُرسِل مجهول») with alert-styled «حذف» button (`destructive: true`).
+- **Admins remove:** removing an administrator in `AdminsScreen` names the admin's email with alert-styled «إزالة المشرف».
+
+### Unsaved changes protection (`UnsavedGuard`, `unsaved_guard.dart`)
+Guards uncommitted edits across all administrative exit vectors:
+- **Dialog:** `confirmDiscardChanges` prompts «لديك تعديلات غير محفوظة. هل تريد تجاهلها؟» (`discardChanges`) with primary `FilledButton` «متابعة التعديل» (`discard-keep`, returns false) and `TextButton` «تجاهل» (`discard-confirm`, returns true).
+- **In-app navigation:** `UnsavedGuard` wraps forms in a `PopScope(canPop: !handlePop || !dirty)`. Embedded tabs (`_open`, `_handleNavTap` in `AdminDashboard`) check `UnsavedGuardRegistry.isDirty` and prompt before switching destinations or logging out (`_handleSignOut`).
+- **Web tab close & reload:** on web platforms (`unsaved_guard_web.dart`), `addDirtyToken()` registers a browser `beforeunload` event handler so closing the tab or reloading shows the native leave confirmation prompt.
+- **Announcement draft:** closing or cancelling an open announcement editor (`_closeDraft`) checks dirty draft state and asks confirmation.
+
+### 10-second undo deletion (`PendingDelete`, `pending_delete.dart`)
+Reversible soft-delete buffer for collection items in `collection_list.dart`:
+- When an item (liturgy, meeting, activity, priest, saint, milestone, custom entry, custom page, etc.) is deleted, it is hidden from the UI immediately (`_pendingDelete.pendingIds`).
+- A 10-second `SnackBar` appears: «اتمسح «{n}»» (`deletedUndo`) with action «تراجع» (`undo`).
+- Tapping «تراجع» cancels the timer and restores the item without hitting Firestore.
+- When the 10 seconds expire, the deletion commits to `widget.repo.delete` and deletes unreferenced media (`orphanedDocMediaIds`).
+- **Zero data loss on exit:** disposing `CollectionListScreen` or closing the browser tab (`addBeforeUnloadFlush`) immediately flushes all pending deletions via `flush()`.
+- **Category exception:** custom categories (`categories`) do not use `PendingDelete`; they require an explicit confirmation dialog due to cascading changes (hiding items in that category).
+
+### Sticky unsaved changes bar (`UnsavedBar`, `unsaved_bar.dart`)
+Bottom bar anchored to the bottom of the viewport whenever an editor is dirty:
+- Shows message (`unsavedBarText`: «فيه تعديلات مش محفوظة» or custom label such as `nm_unsaved`: «لديك تعديلات لم تُحفظ») and action buttons «حفظ» / `save` and «تراجع» / `cancel`.
+- Responsive layout via `Wrap` prevents overflow at 320 px viewport width and 200% text scaling.
+- Integrated across `DocEditor` (standalone bottom navigation bar), `FeaturesEditor`, `ContactCategoriesScreen`, and `NotificationsAdminSection`.
 
 ## Gotchas for agents
 

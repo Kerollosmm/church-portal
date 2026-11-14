@@ -1,10 +1,14 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:church_portal/core/theme.dart';
 import 'package:church_portal/data/admin_repository.dart';
+import 'package:church_portal/data/media_repository.dart';
 import 'package:church_portal/domain/cairo_time.dart';
 import 'package:church_portal/domain/features.dart';
+import 'package:church_portal/domain/media.dart';
 import 'package:church_portal/ui/admin/admin_page.dart';
 import 'package:church_portal/ui/admin/admin_schema.dart';
 import 'package:church_portal/ui/admin/admin_screens.dart';
@@ -12,6 +16,9 @@ import 'package:church_portal/ui/admin/admin_validators.dart';
 import 'package:church_portal/ui/admin/collection_list.dart';
 import 'package:church_portal/ui/admin/doc_editor.dart';
 import 'package:church_portal/ui/admin/features_editor.dart';
+import 'package:church_portal/ui/admin/pending_delete.dart';
+import 'package:church_portal/ui/admin/unsaved_bar.dart';
+import 'package:church_portal/ui/admin/unsaved_guard.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -786,4 +793,469 @@ void main() {
       expect(find.byKey(const Key('imageUploadBtn')), findsOneWidget);
     });
   });
+
+  group('confirmDiscardChanges', () {
+    testWidgets('shows «متابعة التعديل» as FilledButton and «تجاهل» as TextButton', (tester) async {
+      bool? result;
+      await tester.pumpWidget(_app(Builder(
+        builder: (ctx) => TextButton(
+          onPressed: () async => result = await confirmDiscardChanges(ctx),
+          child: const Text('Open'),
+        ),
+      )));
+      await tester.tap(find.text('Open'));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('discard-keep')), findsOneWidget);
+      expect(find.byKey(const ValueKey('discard-confirm')), findsOneWidget);
+      expect(tester.widget<FilledButton>(find.byKey(const ValueKey('discard-keep'))), isNotNull);
+      expect(tester.widget<TextButton>(find.byKey(const ValueKey('discard-confirm'))), isNotNull);
+
+      await tester.tap(find.byKey(const ValueKey('discard-keep')));
+      await tester.pumpAndSettle();
+      expect(result, isFalse);
+
+      await tester.tap(find.text('Open'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('discard-confirm')));
+      await tester.pumpAndSettle();
+      expect(result, isTrue);
+    });
+  });
+
+  group('UnsavedGuard', () {
+    testWidgets('in DocEditor intercepts pop when dirty and asks to discard', (tester) async {
+      final def = collectionById('priests')!;
+      await tester.pumpWidget(_app(Builder(builder: (context) {
+        return ElevatedButton(
+          onPressed: () {
+            Navigator.of(context).push(MaterialPageRoute(
+              builder: (_) => DocEditor(
+                title: 'Priest',
+                fields: def.fields,
+                def: def,
+                popOnSave: true,
+                onSave: (_) async {},
+              ),
+            ));
+          },
+          child: const Text('Open'),
+        );
+      })));
+      await tester.tap(find.text('Open'));
+      await tester.pumpAndSettle();
+      expect(find.byType(DocEditor), findsOneWidget);
+
+      // Make dirty
+      await tester.enterText(find.byKey(const Key('field-name')), 'Fr. Test');
+      await tester.pump();
+
+      // Attempt to pop
+      final nav = tester.state<NavigatorState>(find.byType(Navigator));
+      nav.maybePop();
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('discard-keep')), findsOneWidget);
+      // Tap keep editing -> remains on page
+      await tester.tap(find.byKey(const ValueKey('discard-keep')));
+      await tester.pumpAndSettle();
+      expect(find.byType(DocEditor), findsOneWidget);
+
+      // Attempt to pop again and confirm discard
+      nav.maybePop();
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('discard-confirm')));
+      await tester.pumpAndSettle();
+      expect(find.byType(DocEditor), findsNothing);
+    });
+
+    testWidgets('side menu switch in AdminDashboard asks if dirty', (tester) async {
+      tester.view.physicalSize = const Size(1200, 2500);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final repo = _TestAdminBackend(initialDocs: {
+        'settings/church': {'nameAr': 'كنيسة'},
+      });
+      await tester.pumpWidget(_app(AdminDashboard(
+        repo: repo,
+        uid: 'u1',
+        email: 'test@church.org',
+        role: AdminRoles.owner,
+        onSignOut: () {},
+        initial: 'church',
+      )));
+      await tester.pumpAndSettle();
+
+      // Make dirty
+      await tester.enterText(find.byKey(const Key('field-nameAr')), 'كنيسة جديدة');
+      await tester.pump();
+
+      // Tap another nav item (e.g. Priests)
+      await tester.tap(find.byKey(const ValueKey('nav-priests')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('discard-keep')), findsOneWidget);
+      // Cancel -> remains on church
+      await tester.tap(find.byKey(const ValueKey('discard-keep')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('field-nameAr')), findsOneWidget);
+
+      // Tap again and discard -> switches to Priests
+      await tester.tap(find.byKey(const ValueKey('nav-priests')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('discard-confirm')));
+      await tester.pumpAndSettle();
+      expect(find.byType(CollectionListScreen), findsOneWidget);
+    });
+  });
+
+  group('PendingDelete', () {
+    test('schedule, undo within window, expiry and flush', () async {
+      final pd = PendingDelete(window: const Duration(milliseconds: 100));
+      int commits = 0;
+      pd.schedule('item1', () async => commits++);
+      expect(pd.hasPending, isTrue);
+      expect(pd.pendingIds, {'item1'});
+
+      // Undo removes and cancels commit
+      expect(pd.undo('item1'), isTrue);
+      expect(pd.hasPending, isFalse);
+      expect(pd.pendingIds, isEmpty);
+      await Future<void>.delayed(const Duration(milliseconds: 150));
+      expect(commits, 0);
+
+      // Expiry runs commit
+      pd.schedule('item2', () async => commits++);
+      await Future<void>.delayed(const Duration(milliseconds: 150));
+      expect(commits, 1);
+      expect(pd.hasPending, isFalse);
+
+      // Flush commits immediately
+      pd.schedule('item3', () async => commits++);
+      expect(pd.hasPending, isTrue);
+      await pd.flush();
+      expect(commits, 2);
+      expect(pd.hasPending, isFalse);
+
+      // debugTriggerBeforeUnload flushes
+      pd.schedule('item4', () async => commits++);
+      expect(pd.hasPending, isTrue);
+      debugTriggerBeforeUnload();
+      await Future<void>.delayed(Duration.zero);
+      expect(commits, 3);
+      expect(pd.hasPending, isFalse);
+      pd.dispose();
+    });
+
+    testWidgets('CollectionListScreen 10s undo SnackBar, undo restores row, expiry commits, dispose flushes', (tester) async {
+      tester.view.physicalSize = const Size(800, 1000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final repo = _TestAdminBackend(initialCollections: {
+        'saints': [
+          AdminDoc('s1', {'nameAr': 'مارمرقس', 'order': 10}),
+          AdminDoc('s2', {'nameAr': 'مارجرجس', 'order': 20}),
+        ],
+      });
+      final def = collectionById('saints')!;
+      await tester.pumpWidget(_app(
+        CollectionListScreen(repo: repo, def: def),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.text('مارمرقس'), findsOneWidget);
+
+      // Delete s1
+      await tester.tap(find.byIcon(Icons.delete_outline).first);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+
+      // Immediately hidden
+      expect(find.text('مارمرقس'), findsNothing);
+      expect(repo.deletedIds, isEmpty);
+      expect(find.text('اتمسح «مارمرقس»'), findsOneWidget);
+      expect(find.byType(SnackBarAction), findsOneWidget);
+
+      // Tap Undo -> restores row
+      await tester.tap(find.byType(SnackBarAction));
+      await tester.pump();
+      expect(find.text('مارمرقس'), findsOneWidget);
+      expect(repo.deletedIds, isEmpty);
+
+      // Delete s1 again and wait 10s -> commits
+      await tester.tap(find.byIcon(Icons.delete_outline).first);
+      await tester.pump();
+      expect(find.text('مارمرقس'), findsNothing);
+      await tester.pump(const Duration(seconds: 10));
+      await tester.pumpAndSettle();
+      expect(repo.deletedIds, contains('saints/s1'));
+
+      // Delete s2 and unmount/dispose -> flushes
+      await tester.tap(find.byIcon(Icons.delete_outline).first);
+      await tester.pump();
+      expect(repo.deletedIds.contains('saints/s2'), isFalse);
+      // Unmount CollectionListScreen
+      await tester.pumpWidget(_app(
+        const SizedBox.shrink(),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+      expect(repo.deletedIds, contains('saints/s2'));
+    });
+
+    testWidgets('CollectionListScreen pending-delete item slug remains in takenSlugs for new docs', (tester) async {
+      tester.view.physicalSize = const Size(800, 1000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final repo = _TestAdminBackend(initialCollections: {
+        'pages': [
+          AdminDoc('p1', {'titleAr': 'عن الكنيسة', 'slug': 'about-church', 'visible': true}),
+        ],
+      });
+      final def = collectionById('pages')!;
+      await tester.pumpWidget(_app(
+        CollectionListScreen(repo: repo, def: def),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.text('عن الكنيسة'), findsOneWidget);
+
+      // Delete p1 (starts 10s undo window)
+      await tester.tap(find.byIcon(Icons.delete_outline).first);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(find.text('عن الكنيسة'), findsNothing);
+
+      // Open editor for a new page
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pumpAndSettle();
+      expect(find.byType(DocEditor), findsOneWidget);
+
+      // Enter the slug of the pending-deleted page
+      await tester.enterText(find.byKey(const Key('field-slug')), 'about-church');
+      await tester.pump();
+
+      // Should be rejected as already taken
+      expect(find.text('هذا الرابط مستخدم بالفعل'), findsOneWidget);
+    });
+
+    testWidgets('PendingDelete in CollectionListScreen captures original repo and def on commit', (tester) async {
+      tester.view.physicalSize = const Size(800, 1000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final repo1 = _TestAdminBackend(initialCollections: {
+        'saints': [
+          AdminDoc('s1', {'nameAr': 'مارمرقس', 'order': 10}),
+        ],
+      });
+      final repo2 = _TestAdminBackend();
+      final defSaints = collectionById('saints')!;
+      final defPriests = collectionById('priests')!;
+
+      await tester.pumpWidget(_app(
+        CollectionListScreen(repo: repo1, def: defSaints),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      // Delete s1
+      await tester.tap(find.byIcon(Icons.delete_outline).first);
+      await tester.pump();
+
+      // Swap widget to repo2 / defPriests before commit
+      await tester.pumpWidget(_app(
+        CollectionListScreen(repo: repo2, def: defPriests),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      // Unmount CollectionListScreen, triggering dispose and flush
+      await tester.pumpWidget(_app(
+        const SizedBox.shrink(),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      // s1 commit in dispose should have deleted from original repo1 and defSaints
+      expect(repo1.deletedIds, contains('saints/s1'));
+      expect(repo2.deletedIds, isEmpty);
+    });
+  });
+
+  group('UnsavedBar', () {
+    testWidgets('hidden when clean, shown on edit in DocEditor, FeaturesEditor, ContactCategoriesScreen', (tester) async {
+      final def = collectionById('priests')!;
+      await tester.pumpWidget(_app(DocEditor(
+        title: 'Priest',
+        fields: def.fields,
+        def: def,
+        popOnSave: false,
+        onSave: (_) async {},
+      )));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('unsaved-bar')), findsNothing);
+
+      await tester.enterText(find.byKey(const Key('field-name')), 'Fr. New');
+      await tester.pump();
+      expect(find.byKey(const ValueKey('unsaved-bar')), findsOneWidget);
+
+      // Cancel reverts to clean
+      await tester.tap(find.byKey(const ValueKey('unsaved-bar-cancel')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('discard-confirm')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('unsaved-bar')), findsNothing);
+    });
+
+    testWidgets('UnsavedBar at 320 px in RTL Arabic & LTR English: zero overflow', (tester) async {
+      tester.view.physicalSize = const Size(320, 800);
+      tester.view.devicePixelRatio = 1;
+      tester.platformDispatcher.textScaleFactorTestValue = 2.0;
+      addTearDown(tester.view.reset);
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+
+      for (final locale in const [Locale('ar'), Locale('en')]) {
+        await tester.pumpWidget(_app(
+          Scaffold(
+            bottomNavigationBar: UnsavedBar(
+              dirty: true,
+              onSave: () {},
+              onCancel: () {},
+            ),
+          ),
+          locale: locale,
+        ));
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+        expect(find.byKey(const ValueKey('unsaved-bar')), findsOneWidget);
+      }
+    });
+
+    testWidgets('delayed prepareImage completing after discard does not restore image or re-mark dirty', (tester) async {
+      tester.view.physicalSize = const Size(1200, 3000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final fields = [
+        FieldDef('name', 'الاسم', 'Name', FieldType.text),
+        FieldDef('photo', 'الصورة', 'Photo', FieldType.image),
+      ];
+      final completer = Completer<EncodedImage>();
+      final mediaRepo = _TestMediaRepo();
+
+      await tester.pumpWidget(_app(DocEditor(
+        title: 'Item',
+        fields: fields,
+        popOnSave: false,
+        media: mediaRepo,
+        pickImage: () async => Uint8List.fromList([1, 2, 3, 4]),
+        prepareImage: (_) => completer.future,
+        onSave: (_) async {},
+      )));
+      await tester.pumpAndSettle();
+
+      // Edit a field so UnsavedBar is shown
+      await tester.enterText(find.byKey(const Key('field-name')), 'Fr. Test');
+      await tester.pump();
+      expect(find.byKey(const ValueKey('unsaved-bar')), findsOneWidget);
+
+      // Start image upload; pick completes and prepareImage is awaiting
+      await tester.tap(find.byKey(const Key('imageUploadBtn')));
+      await tester.pump();
+
+      // Cancel edits via UnsavedBar and confirm discard
+      await tester.tap(find.byKey(const ValueKey('unsaved-bar-cancel')));
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.tap(find.byKey(const ValueKey('discard-confirm')));
+      await tester.pumpAndSettle();
+
+      // Form is now reset and clean
+      expect(find.byKey(const ValueKey('unsaved-bar')), findsNothing);
+
+      // Delayed image preparation completes after discard
+      completer.complete(EncodedImage(Uint8List(100), 'image/jpeg', 100, 100));
+      await tester.pumpAndSettle();
+
+      // Verify delayed preparation did not restore dirty or show unsaved bar or set pending preview
+      expect(find.byKey(const ValueKey('unsaved-bar')), findsNothing);
+      expect(find.byKey(const Key('imagePreviewPending')), findsNothing);
+    });
+  });
+}
+
+class _TestAdminBackend extends AdminBackend {
+  final Map<String, List<AdminDoc>> collections = {};
+  final Map<String, Map<String, dynamic>> docs = {};
+  final List<String> deletedIds = [];
+  final List<String> savedPaths = [];
+
+  _TestAdminBackend({
+    Map<String, List<AdminDoc>>? initialCollections,
+    Map<String, Map<String, dynamic>>? initialDocs,
+  }) {
+    if (initialCollections != null) collections.addAll(initialCollections);
+    if (initialDocs != null) docs.addAll(initialDocs);
+  }
+
+  @override
+  String get actor => 'admin@church.org';
+
+  @override
+  Stream<List<AdminDoc>> watch(String collection) {
+    return Stream.value(collections[collection] ?? const []);
+  }
+
+  @override
+  Stream<AdminDoc?> watchDoc(String path) {
+    final d = docs[path];
+    return Stream.value(d == null ? null : AdminDoc(path.split('/').last, d));
+  }
+
+  @override
+  Future<void> delete(String collection, String id) async {
+    deletedIds.add('$collection/$id');
+    collections[collection]?.removeWhere((doc) => doc.id == id);
+  }
+
+  @override
+  Future<String> save(String collection, String? id, Map<String, dynamic> data) async => id ?? 'new';
+
+  @override
+  Future<void> update(String collection, String id, Map<String, dynamic> data) async {}
+
+  @override
+  Future<void> reorder(String collection, List<String> ids, {int base = 0}) async {}
+
+  @override
+  Future<void> setAdmin(String uid, {required String email, required String role}) async {}
+
+  @override
+  Future<void> removeAdmin(String uid) async {}
+
+  @override
+  Future<void> saveDoc(String path, Map<String, dynamic> data) async {
+    savedPaths.add(path);
+    docs[path] = data;
+  }
+}
+
+class _TestMediaRepo implements MediaRepository {
+  @override
+  String get source => 'firestore';
+
+  @override
+  Future<Uint8List?> load(String mediaId) async => null;
+
+  @override
+  Future<MediaImage> upload(EncodedImage img, {String alt = ''}) async =>
+      const MediaImage(source: 'firestore', mediaId: 'm1');
+
+  @override
+  Future<void> delete(String mediaId) async {}
 }

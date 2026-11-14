@@ -98,6 +98,15 @@ the owner approves the whole chain.
       (#15), exact alarms for APK reminders (#16), reminders in quiet hours (#18). (The urgent instant-dispatch token was removed from the plan on 6 Nov 19:31.)
 - [ ] After PR C: Sentry cron monitor `push-sender` + `keepalive.yml` first run (LAUNCH §14)
 
+## Phase 3 — Admin panel simplification (plan in `docs/plans/phase3/`)
+
+Progress tracked in [`docs/plans/phase3/STATUS.md`](../plans/phase3/STATUS.md). Stage 1 underway.
+
+- [x] PR 3A — Safe actions (`feat/p3a-safe-actions`, items 6, 7, 8, 11; ADR-070): `confirmNamedAction`, `UnsavedGuard` + `beforeunload`, `PendingDelete` (10s undo), `UnsavedBar`
+- [ ] PR 3B — Written state (items 9, 10): `AdminStateSwitch` («ظاهر / مخفي», «مفعّل / مقفول») and preview before `replacesDay`
+- [ ] PR 3C — Admin status & session (items 12, 13): `active`/`expiresAt` on admins + rules, auto sign-out after 30 minutes
+- [ ] PR 3D — Custom pages flow (items 14, 15, 16, 17): auto slug, donations template, unified sections screen, clearer hints
+
 ## Infrastructure & security (owner: developer)
 
 - [ ] **Re-save the service-account secret** `FIREBASE_SERVICE_ACCOUNT_ASAFRA_CHURCH_PORTAL` with only the JSON key

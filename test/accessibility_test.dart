@@ -1093,7 +1093,9 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.byTooltip('Delete').first);
       await tester.pumpAndSettle();
-      await tester.tap(find.descendant(of: find.byType(AlertDialog), matching: find.byType(FilledButton)));
+      expect(find.text('St A'), findsNothing);
+      expect(repo.deletedIds, isEmpty);
+      await tester.pump(const Duration(seconds: 10));
       await tester.pumpAndSettle();
       expect(repo.deletedIds, ['saints/s']);
       expect(media.deleted..sort(), ['cover1', 'g1', 'g2']);

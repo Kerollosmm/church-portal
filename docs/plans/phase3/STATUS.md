@@ -7,8 +7,8 @@
 
 - **Baseline:** the report's last review, 13 November 2026 (Africa/Cairo), against the code after PR #70.
 - **Counts:** 5 fixes on live data · 28 open tasks in the code · 8 done or removed · 1 deferred by decision.
-- **Code:** no simplification code has changed since 12 November; the three stages have not started.
-- **Next action:** Stage 1, PR 3A (items 6, 7, 8, 11) — G0 passed on the owner's statement of 13 November.
+- **Code:** PR 3A (`feat/p3a-safe-actions`, items 6, 7, 8, 11) implemented on Stage 1.
+- **Next action:** Stage 1, PR 3B (items 9, 10).
 - **Target:** 2–3 weeks in total across the stages (owner, 13 November).
 
 ## قرارات مفتوحة للمالك (Open points for the owner — README §١٥)
@@ -31,12 +31,12 @@ All answered by the owner on 13 November 2026 (README §١٠, D1–D5).
 
 ## المرحلة 1 — الأمان والصفحات المخصصة ([STAGE-1-safety-and-custom-pages.md](STAGE-1-safety-and-custom-pages.md))
 
-- [ ] 6 — confirmation before sending to everyone / «دلوقتي» (P1-06)
-- [ ] 7 — «متابعة التعديل» prominent; browser Back, tab close and announcement «إلغاء» warn (P1-07)
-- [ ] 8 — 10-second undo after delete; confirmations name the item (P1-08)
+- [x] 6 — confirmation before sending to everyone / «دلوقتي» (P1-06) · PR 3A (`feat/p3a-safe-actions`)
+- [x] 7 — «متابعة التعديل» prominent; browser Back, tab close and announcement «إلغاء» warn (P1-07) · PR 3A (`feat/p3a-safe-actions`)
+- [x] 8 — 10-second undo after delete; confirmations name the item (P1-08) · PR 3A (`feat/p3a-safe-actions`)
 - [ ] 9 — state word next to every switch and on every row (P1-09)
 - [ ] 10 — preview before «يحل محل قداسات اليوم المعتادة» (P1-10)
-- [ ] 11 — fixed bottom save bar (P1-11)
+- [x] 11 — fixed bottom save bar (P1-11) · PR 3A (`feat/p3a-safe-actions`)
 - [ ] 12 — «نشط / موقوف» on every admin, optional end date (P1-12)
 - [ ] 13 — automatic sign-out after 30 minutes with a 60-second warning, «افتكرني» on a personal device (P1-13)
 - [ ] 14 — automatic slug from the Arabic title (P1-14)
