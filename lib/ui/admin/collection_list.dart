@@ -7,7 +7,6 @@ import '../../core/launch.dart';
 import '../../core/theme.dart';
 import '../../data/admin_repository.dart';
 import '../../domain/item_detail.dart';
-import '../../domain/program.dart';
 import '../../domain/time_format.dart';
 import '../../domain/cairo_time.dart';
 import '../../domain/custom_content.dart';
