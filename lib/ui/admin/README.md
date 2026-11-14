@@ -62,7 +62,9 @@ The `admin` package implements the authenticated back-office management console 
   - `AssistantSwitches`: Switch matrix controlling AI model enablement, context injection, and rate limiting.
 - `collection_list.dart`:
   - `ListFilter`: Filter enumeration for collection listing (`all`, `visible`, `hidden`, `unconfirmed`).
-  - `CollectionListScreen`: Searchable, filterable list table for browsing and managing collection items.
+  - `CollectionListScreen`: Searchable, filterable list table for browsing and managing collection items with 10-second undoable deletion (retaining pending-deleted items in `_lastDocs` for `takenSlugs` uniqueness and capturing `repo`/`def`/`media` when scheduling deletion).
+- `confirm_named.dart`:
+  - `confirmNamedAction(BuildContext context, {String? title, required String summary, required String actionLabel, bool destructive = false})`: Confirmation dialog displaying explicit name of target item or action; destructive actions use alert palette.
 - `contact_admin.dart`:
   - `ContactCategoriesScreen`: Department routing and phone directory management screen.
 - `doc_editor.dart`:
@@ -75,8 +77,18 @@ The `admin` package implements the authenticated back-office management console 
   - `FeaturesEditorState`: State handler managing feature toggle mutations.
 - `occasion_editor.dart`:
   - `OccasionThemeEditor`: Visual seasonal theme editor for previewing and customizing church banner artwork and color schemes.
+- `pending_delete.dart`:
+  - `PendingDelete`: 10-second soft-delete buffer scheduling async deletion commit while immediately hiding items in UI, supporting undo and flushing on dispose or web `beforeunload`.
 - `season_preset_admin.dart`:
   - `SeasonPresetScreen`: Administrative screen for selecting, previewing, and activating liturgical season presets.
+- `unsaved_bar.dart`:
+  - `UnsavedBar`: Pinned bottom bar displaying dirty state («فيه تعديلات مش محفوظة») and action buttons (Save / Cancel), reflowing with `Wrap` for 320 px and 200% text scale.
+- `unsaved_guard.dart` (with `unsaved_guard_stub.dart` and `unsaved_guard_web.dart`):
+  - `confirmDiscardChanges(BuildContext context)`: Dialog prompting user before discarding unsaved edits with prominent `FilledButton` «متابعة التعديل» and `TextButton` «تجاهل».
+  - `UnsavedGuardRegistry`: Change notifier tracking dirty tokens across embedded admin tabs.
+  - `UnsavedGuardScope`: Inherited notifier exposing `UnsavedGuardRegistry` down the widget tree.
+  - `UnsavedGuard`: Widget wrapping form views with `PopScope` and synchronizing with web `beforeunload`.
+  - `addDirtyToken()`, `removeDirtyToken()`, `addBeforeUnloadFlush(VoidCallback callback)`: Cross-platform web hooks for browser unload protection.
 - Subdirectories: None
 
 ## Invariants
@@ -87,6 +99,10 @@ The `admin` package implements the authenticated back-office management console 
 - `[admin_validators.dart:validateDocument]`: Liturgy entries are allowed to cross midnight (e.g. midnight praise), but all other events must enforce that end time/date is after start time/date.
 - `[admin_validators.dart:parseFieldValue]`: All time values must be normalized to Cairo wall-time strings (`HH:mm`), and dates to `YYYY-MM-DD` or UTC instants.
 - `[admin_page.dart:AdminPage]`: Unauthenticated users must be intercepted by `_AdminCheck` and prevented from accessing dashboard tabs.
+- `[confirm_named.dart:confirmNamedAction]`: Push notifications targeting all subscribers or immediate dispatch (matching recipients and timing with dedicated summaries and action labels, plus post-await past-time check), visitor message deletions, and administrator removals must explicitly name the target item/action in a confirmation dialog before proceeding.
+- `[unsaved_guard.dart:UnsavedGuard]`: Unsaved administrative edits must intercept back-navigation, dashboard destination changes, logout, and browser window close/refresh; the default dialog action button must be «متابعة التعديل».
+- `[pending_delete.dart:PendingDelete]`: Collection item deletions must immediately hide from the view with a 10-second grace window allowing undo (reserving slugs in `takenSlugs` until deletion commits), and must flush commits synchronously on widget disposal or browser `beforeunload`.
+- `[unsaved_bar.dart:UnsavedBar]`: Editing forms with uncommitted edits must render a sticky bottom save bar without overflowing at 320 px or 200% text scaling.
 
 ## Side Effects
 - `[doc_editor.dart:DocEditorState]`: Mutates documents in Cloud Firestore collections and writes uploaded image bytes into the `media/{id}` collection on the Spark plan.
@@ -94,6 +110,7 @@ The `admin` package implements the authenticated back-office management console 
 - `[messages_screen.dart:_MessagesScreenState]`: Updates message document status flags (`read`, `archived`) in Firestore.
 - `[features_editor.dart:FeaturesEditorState]`: Overwrites global feature flags in `settings/features`.
 - `[season_preset_admin.dart:_SeasonPresetScreenState]`: Replaces seasonal configuration fields in `settings/features` when applying liturgical presets.
+- `[pending_delete.dart:PendingDelete]`: Commits document deletion to Firestore (`repo.delete`) and deletes unreferenced media documents after the 10-second grace window expires or upon flush.
 
 ## Verification
 - Run: `flutter test`

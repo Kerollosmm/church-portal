@@ -24,8 +24,19 @@ import '../../domain/today.dart';
 import 'admin_schema.dart';
 import 'admin_screens.dart';
 import 'admin_validators.dart';
+import 'confirm_named.dart';
+import 'unsaved_bar.dart';
+import 'unsaved_guard.dart';
 
 const Map<String, List<String>> _notificationsAdminStrings = {
+  'nm_confirmSendAllSummary': [
+    'هيتبعت لكل المشتركين دلوقتي: {t}',
+    'Will be sent to all subscribers now: {t}',
+  ],
+  'nm_sendToAllBtn': [
+    'ابعت للكل',
+    'Send to all',
+  ],
   'nm_statusSubtitle': [
     'شغّل أو أوقف كل الإشعارات، وتأكد أن خدمة الإرسال تعمل.',
     'Turn all notifications on or off and check the sending service.',
@@ -251,6 +262,39 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
   final TextEditingController _draftBodyAr = TextEditingController();
   final TextEditingController _draftBodyEn = TextEditingController();
 
+  String _initialDraftTitleAr = '';
+  String _initialDraftTitleEn = '';
+  String _initialDraftBodyAr = '';
+  String _initialDraftBodyEn = '';
+  String _initialDraftTargets = 'all';
+  bool _initialDraftSoon = false;
+  DateTime _initialDraftDay = DateTime(2026);
+  int _initialDraftMinutes = 19 * 60;
+  String _initialDraftLink = '/';
+  String _initialDraftEventKey = '';
+
+  bool get _isDraftDirty {
+    if (!_editorOpen) return false;
+    return _draftTitleAr.text != _initialDraftTitleAr ||
+        _draftTitleEn.text != _initialDraftTitleEn ||
+        _draftBodyAr.text != _initialDraftBodyAr ||
+        _draftBodyEn.text != _initialDraftBodyEn ||
+        _draftTargets != _initialDraftTargets ||
+        _draftSoon != _initialDraftSoon ||
+        _draftDay != _initialDraftDay ||
+        _draftMinutes != _initialDraftMinutes ||
+        _draftLink != _initialDraftLink ||
+        _draftEventKey != _initialDraftEventKey;
+  }
+
+  Future<void> _closeDraft() async {
+    if (_isDraftDirty) {
+      final discard = await confirmDiscardChanges(context);
+      if (!discard || !mounted) return;
+    }
+    setState(() => _editorOpen = false);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -405,11 +449,7 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
   }
 
   Future<void> _discardSettings() async {
-    final ok = await _confirm(
-      title: context.tr('nm_discardTitle'),
-      body: context.tr('nm_discardBody'),
-      action: context.tr('nm_discard'),
-    );
+    final ok = await confirmDiscardChanges(context);
     if (!ok || !mounted) return;
     setState(() {
       _dirty = false;
@@ -458,6 +498,16 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
         _draftTargets = _retryTargets(row);
       }
       _draftTitleAr.selection = TextSelection.collapsed(offset: _draftTitleAr.text.length);
+      _initialDraftTitleAr = _draftTitleAr.text;
+      _initialDraftTitleEn = _draftTitleEn.text;
+      _initialDraftBodyAr = _draftBodyAr.text;
+      _initialDraftBodyEn = _draftBodyEn.text;
+      _initialDraftTargets = _draftTargets;
+      _initialDraftSoon = _draftSoon;
+      _initialDraftDay = _draftDay;
+      _initialDraftMinutes = _draftMinutes;
+      _initialDraftLink = _draftLink;
+      _initialDraftEventKey = _draftEventKey;
     });
   }
 
@@ -503,6 +553,37 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
     if (err != null) {
       setState(() => _draftError = err);
       return;
+    }
+    if (!_draftSoon && !row.atUtc.isAfter(DateTime.now().toUtc())) {
+      setState(() => _draftError = 'nm_errPast');
+      return;
+    }
+    if (_draftTargets == 'all' || _draftSoon) {
+      final String summary;
+      final String actionLabel;
+      if (_draftTargets == 'all' && _draftSoon) {
+        summary = context.tr('nm_confirmSendAllSummary', {'t': row.titleAr});
+        actionLabel = context.tr('nm_sendToAllBtn');
+      } else if (_draftSoon) {
+        final target = _targetLook(row.targets).$1;
+        summary = context.tr('nm_confirmSendTargetSoonSummary', {'target': target, 't': row.titleAr});
+        actionLabel = context.tr('nm_sendNowBtn');
+      } else {
+        final when = _whenText(row.atUtc);
+        if (_draftTargets == 'all') {
+          summary = context.tr('nm_confirmScheduleAllSummary', {'when': when, 't': row.titleAr});
+        } else {
+          final target = _targetLook(row.targets).$1;
+          summary = context.tr('nm_confirmScheduleTargetSummary', {'target': target, 'when': when, 't': row.titleAr});
+        }
+        actionLabel = context.tr('nm_confirmScheduleBtn');
+      }
+      final confirmed = await confirmNamedAction(
+        context,
+        summary: summary,
+        actionLabel: actionLabel,
+      );
+      if (!confirmed || !mounted) return;
     }
     if (!_draftSoon && !row.atUtc.isAfter(DateTime.now().toUtc())) {
       setState(() => _draftError = 'nm_errPast');
@@ -682,23 +763,13 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
   }
 
   Future<bool> _confirm({required String title, required String body, required String action, bool destructive = false}) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(title),
-        content: Text(body),
-        actions: [
-          TextButton(key: const ValueKey('confirm-cancel'), onPressed: () => Navigator.pop(ctx, false), child: Text(context.tr('cancel'))),
-          FilledButton(
-            key: const ValueKey('confirm-ok'),
-            style: destructive ? FilledButton.styleFrom(backgroundColor: context.pal.alert, foregroundColor: context.pal.onPrimary) : null,
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text(action),
-          ),
-        ],
-      ),
+    return confirmNamedAction(
+      context,
+      title: title,
+      summary: body,
+      actionLabel: action,
+      destructive: destructive,
     );
-    return ok == true;
   }
 
   String _digits(String s) => context.isAr ? toArabicDigits(s) : s;
@@ -787,75 +858,51 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
           stream: _notificationsStream,
           builder: (context, notifSnap) {
             _schedule = NotifySchedule.fromDoc(notifSnap.data?.data);
-            return Scaffold(
-              backgroundColor: context.pal.background,
-              body: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 760),
-                  child: ListView(
-                    key: const ValueKey('notifications-admin-list'),
-                    padding: const EdgeInsets.fromLTRB(12, 16, 12, 40),
-                    children: [
-                      _statusCard(context),
-                      const SizedBox(height: 16),
-                      _scheduledSection(context),
-                      const SizedBox(height: 16),
-                      _typesSection(context),
-                      const SizedBox(height: 16),
-                      _remindSection(context),
-                      const SizedBox(height: 16),
-                      _sentLogSection(context),
-                      const SizedBox(height: 16),
-                      _advancedSection(context),
-                    ],
+            return UnsavedGuard(
+              dirty: _dirty || _isDraftDirty,
+              handlePop: false,
+              child: Scaffold(
+                backgroundColor: context.pal.background,
+                body: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 760),
+                    child: ListView(
+                      key: const ValueKey('notifications-admin-list'),
+                      padding: const EdgeInsets.fromLTRB(12, 16, 12, 40),
+                      children: [
+                        _statusCard(context),
+                        const SizedBox(height: 16),
+                        _scheduledSection(context),
+                        const SizedBox(height: 16),
+                        _typesSection(context),
+                        const SizedBox(height: 16),
+                        _remindSection(context),
+                        const SizedBox(height: 16),
+                        _sentLogSection(context),
+                        const SizedBox(height: 16),
+                        _advancedSection(context),
+                      ],
+                    ),
                   ),
                 ),
+                bottomNavigationBar: UnsavedBar(
+                  dirty: _dirty,
+                  saving: _saving,
+                  onSave: _saveSettings,
+                  onCancel: _discardSettings,
+                  saveKey: const ValueKey('save-settings'),
+                  cancelKey: const ValueKey('discard-settings'),
+                  message: context.tr('nm_unsaved'),
+                  saveLabel: context.tr('nm_saveSettings'),
+                  cancelLabel: context.tr('nm_discard'),
+                ),
               ),
-              bottomNavigationBar: _dirty ? _saveBar(context) : null,
             );
           },
         );
       },
     );
   }
-
-  Widget _saveBar(BuildContext context) => Material(
-        color: context.pal.surface,
-        elevation: 8,
-        child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            child: Wrap(
-              alignment: WrapAlignment.spaceBetween,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              spacing: 12,
-              runSpacing: 8,
-              children: [
-                Row(mainAxisSize: MainAxisSize.min, children: [
-                  Icon(Icons.edit_note, color: context.pal.goldText),
-                  const SizedBox(width: 6),
-                  Flexible(child: Text(context.tr('nm_unsaved'), style: const TextStyle(fontWeight: FontWeight.bold))),
-                ]),
-                Wrap(spacing: 8, children: [
-                  TextButton(
-                    key: const ValueKey('discard-settings'),
-                    onPressed: _saving ? null : _discardSettings,
-                    child: Text(context.tr('nm_discard')),
-                  ),
-                  FilledButton.icon(
-                    key: const ValueKey('save-settings'),
-                    onPressed: _saving ? null : _saveSettings,
-                    icon: _saving
-                        ? SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: context.pal.onPrimary))
-                        : const Icon(Icons.save_outlined),
-                    label: Text(context.tr('nm_saveSettings')),
-                  ),
-                ]),
-              ],
-            ),
-          ),
-        ),
-      );
 
   // ---- section scaffolding ----
 
@@ -1220,7 +1267,7 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
             key: const ValueKey('editor-close'),
             tooltip: context.tr('cancel'),
             icon: const Icon(Icons.close),
-            onPressed: () => setState(() => _editorOpen = false),
+            onPressed: _closeDraft,
           ),
         ]),
         // Step 1: text
@@ -1393,7 +1440,11 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
               onPressed: _testOnDevice,
             ),
             Wrap(spacing: 8, children: [
-              TextButton(onPressed: () => setState(() => _editorOpen = false), child: Text(context.tr('cancel'))),
+              TextButton(
+                key: const ValueKey('draft-cancel'),
+                onPressed: _closeDraft,
+                child: Text(context.tr('cancel')),
+              ),
               FilledButton.icon(
                 key: const ValueKey('save-push'),
                 icon: _saving

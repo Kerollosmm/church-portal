@@ -17,6 +17,8 @@ import '../../domain/today.dart' show DayEvent;
 import '../widgets/item_image.dart';
 import 'admin_schema.dart';
 import 'admin_validators.dart';
+import 'unsaved_bar.dart';
+import 'unsaved_guard.dart';
 
 /// Picks an image file and returns its bytes (null = cancelled).
 typedef ImageBytesPicker = Future<Uint8List?> Function();
@@ -98,6 +100,7 @@ class DocEditorState extends State<DocEditor> {
   final Map<String, List<_Row>> _rows = {};
   bool _saving = false;
   bool _dirty = false;
+  int _resetEpoch = 0;
 
   /// Image fields with a picked, compressed file waiting to be uploaded on save.
   final Map<String, EncodedImage> _pending = {};
@@ -461,17 +464,45 @@ class DocEditorState extends State<DocEditor> {
 
   Future<bool> _confirmDiscard() async {
     if (!_dirty) return true;
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        content: Text(context.tr('discardChanges')),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(context.tr('keepEditing'))),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(context.tr('discard'))),
-        ],
-      ),
-    );
-    return ok == true;
+    return confirmDiscardChanges(context);
+  }
+
+  void _resetToInitial() {
+    _resetEpoch++;
+    for (final c in _text.values) {
+      c.dispose();
+    }
+    for (final rows in _rows.values) {
+      for (final r in rows) {
+        r.dispose();
+      }
+    }
+    for (final list in _gallery.values) {
+      for (final g in list) {
+        g.alt.dispose();
+      }
+    }
+    _text.clear();
+    _values.clear();
+    _rows.clear();
+    _gallery.clear();
+    _pending.clear();
+    _processing = null;
+    for (final f in widget.fields) {
+      _init(f, _initialValues[f.key]);
+    }
+    setState(() => _dirty = false);
+  }
+
+  Future<void> _handleCancel() async {
+    if (widget.popOnSave) {
+      Navigator.of(context).maybePop();
+    } else {
+      final discard = await _confirmDiscard();
+      if (discard && mounted) {
+        _resetToInitial();
+      }
+    }
   }
 
   String _label(FieldDef f) => context.pick(f.labelAr, f.labelEn) + (f.required ? ' *' : '');
@@ -485,6 +516,7 @@ class DocEditorState extends State<DocEditor> {
   static bool _picked(FieldType t) => t == FieldType.time || t == FieldType.date || t == FieldType.dateTime;
 
   Future<void> _pick(FieldDef f, TextEditingController c) async {
+    final epoch = _resetEpoch;
     final now = CairoTime.now();
     Future<(int, int)?> time((int, int)? current) async {
       final init = current ?? (f.type == FieldType.time ? (18, 0) : (now.hour, now.minute));
@@ -517,7 +549,7 @@ class DocEditorState extends State<DocEditor> {
 
     if (f.type == FieldType.time) {
       final t = await time(parseFieldTime(c.text));
-      if (t != null && mounted) c.text = formatPickedTime(t.$1, t.$2);
+      if (t != null && mounted && epoch == _resetEpoch) c.text = formatPickedTime(t.$1, t.$2);
       return;
     }
     final cur = parseFieldDateTime(c.text);
@@ -530,13 +562,13 @@ class DocEditorState extends State<DocEditor> {
       lastDate: last,
       helpText: _label(f),
     );
-    if (d == null || !mounted) return;
+    if (d == null || !mounted || epoch != _resetEpoch) return;
     if (f.type == FieldType.date) {
       c.text = formatPickedDate(d.year, d.month, d.day);
       return;
     }
     final t = await time(cur == null ? null : (cur.$4, cur.$5));
-    if (t == null || !mounted) return;
+    if (t == null || !mounted || epoch != _resetEpoch) return;
     c.text = formatPickedDateTime(d.year, d.month, d.day, t.$1, t.$2);
   }
 
@@ -644,6 +676,7 @@ class DocEditorState extends State<DocEditor> {
 
   /// "Pick a page…": custom pages, categories and built-in routes.
   Future<void> _pickLink(TextEditingController c) async {
+    final epoch = _resetEpoch;
     final picked = await showDialog<String>(
       context: context,
       builder: (ctx) => SimpleDialog(
@@ -661,7 +694,7 @@ class DocEditorState extends State<DocEditor> {
         ],
       ),
     );
-    if (picked == null || !mounted) return;
+    if (picked == null || !mounted || epoch != _resetEpoch) return;
     c.text = picked;
   }
 
@@ -857,6 +890,7 @@ class DocEditorState extends State<DocEditor> {
             avatar: Icon(Icons.add_rounded, size: 18, color: context.pal.primary),
             label: Text(context.tr('addDate')),
             onPressed: () async {
+              final epoch = _resetEpoch;
               final now = CairoTime.now();
               final picked = await showDatePicker(
                 context: context,
@@ -866,7 +900,7 @@ class DocEditorState extends State<DocEditor> {
                 lastDate: DateTime(2099, 12, 31),
                 helpText: label,
               );
-              if (picked == null || !mounted) return;
+              if (picked == null || !mounted || epoch != _resetEpoch) return;
               setState(() {
                 set.add(formatPickedDate(picked.year, picked.month, picked.day));
                 _dirty = true;
@@ -891,8 +925,9 @@ class DocEditorState extends State<DocEditor> {
       _pickFromDevice(f.key, (enc) => _gallery[f.key]!.add(_GalleryEntry(null, enc, _ctrl(''))));
 
   Future<void> _addGalleryUrl(FieldDef f) async {
+    final epoch = _resetEpoch;
     final url = await showDialog<String>(context: context, builder: (_) => const _ImageUrlDialog(initial: ''));
-    if (url == null || !mounted) return;
+    if (url == null || !mounted || epoch != _resetEpoch) return;
     setState(() {
       _gallery[f.key]!.add(_GalleryEntry(MediaImage.url(url), null, _ctrl('')));
       _dirty = true;
@@ -905,16 +940,21 @@ class DocEditorState extends State<DocEditor> {
     final messenger = ScaffoldMessenger.maybeOf(context);
     String msg(String k) => context.tr(k);
     final tooLarge = msg('imageTooLarge'), invalid = msg('imageInvalid'), empty = msg('imageEmpty');
+    final epoch = _resetEpoch;
     final Uint8List? bytes;
     try {
       bytes = await widget.pickImage();
     } catch (e) {
-      messenger?.showSnackBar(SnackBar(content: Text(invalid)));
+      if (mounted && epoch == _resetEpoch) {
+        messenger?.showSnackBar(SnackBar(content: Text(invalid)));
+      }
       return;
     }
-    if (bytes == null || !mounted) return;
+    if (bytes == null || !mounted || epoch != _resetEpoch) return;
     if (bytes.isEmpty) {
-      messenger?.showSnackBar(SnackBar(content: Text(empty)));
+      if (mounted && epoch == _resetEpoch) {
+        messenger?.showSnackBar(SnackBar(content: Text(empty)));
+      }
       return;
     }
     setState(() => _processing = key);
@@ -922,27 +962,32 @@ class DocEditorState extends State<DocEditor> {
       final enc = await widget.prepareImage(bytes);
       final err = validateMediaBytes(enc.length);
       if (err != null) throw const ImageTooLargeException();
-      if (!mounted) return;
+      if (!mounted || epoch != _resetEpoch) return;
       setState(() {
         onReady(enc);
         _dirty = true;
       });
     } on ImageTooLargeException {
-      messenger?.showSnackBar(SnackBar(content: Text(tooLarge)));
+      if (mounted && epoch == _resetEpoch) {
+        messenger?.showSnackBar(SnackBar(content: Text(tooLarge)));
+      }
     } catch (_) {
-      messenger?.showSnackBar(SnackBar(content: Text(invalid)));
+      if (mounted && epoch == _resetEpoch) {
+        messenger?.showSnackBar(SnackBar(content: Text(invalid)));
+      }
     } finally {
-      if (mounted) setState(() => _processing = null);
+      if (mounted && _processing == key) setState(() => _processing = null);
     }
   }
 
   Future<void> _askImageUrl(FieldDef f) async {
     final current = MediaImage.fromMap(_values[f.key]);
+    final epoch = _resetEpoch;
     final url = await showDialog<String>(
       context: context,
       builder: (_) => _ImageUrlDialog(initial: current?.source == MediaSource.url ? current!.url : ''),
     );
-    if (url == null || !mounted) return;
+    if (url == null || !mounted || epoch != _resetEpoch) return;
     setState(() {
       _pending.remove(f.key);
       _values[f.key] = MediaImage.url(url).toMap();
@@ -1399,30 +1444,29 @@ class DocEditorState extends State<DocEditor> {
   @override
   Widget build(BuildContext context) {
     final embedded = !widget.popOnSave;
-    return PopScope(
-      canPop: embedded || !_dirty,
-      onPopInvokedWithResult: (didPop, _) async {
-        if (didPop) return;
-        final nav = Navigator.of(context);
-        if (await _confirmDiscard() && mounted) {
-          setState(() => _dirty = false);
-          nav.pop();
-        }
-      },
+    return UnsavedGuard(
+      dirty: _dirty && !_saving,
+      handlePop: widget.popOnSave,
       child: Scaffold(
         backgroundColor: context.pal.background,
         appBar: embedded
             ? null
             : AppBar(
-          title: Text(widget.title),
-          actions: [
-            TextButton(
-              key: const Key('editor-save-top'),
-              onPressed: _saving ? null : save,
-              child: Text(context.tr('save'),
-                  style: TextStyle(color: context.pal.onPrimaryAccent, fontWeight: FontWeight.w800)),
-            ),
-          ],
+                title: Text(widget.title),
+                actions: [
+                  TextButton(
+                    key: const Key('editor-save-top'),
+                    onPressed: _saving ? null : save,
+                    child: Text(context.tr('save'),
+                        style: TextStyle(color: context.pal.onPrimaryAccent, fontWeight: FontWeight.w800)),
+                  ),
+                ],
+              ),
+        bottomNavigationBar: UnsavedBar(
+          dirty: _dirty && !_saving,
+          saving: _saving,
+          onSave: save,
+          onCancel: _handleCancel,
         ),
         body: Form(
           key: _formKey,

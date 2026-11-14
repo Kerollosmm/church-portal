@@ -296,6 +296,7 @@ void main() {
     expect(find.text('تعديل الإعلان'), findsOneWidget);
     await tester.enterText(find.byKey(const ValueKey('draft-titleAr')), 'نهضة العذراء — معدّلة');
     await tapKey(tester, 'save-push');
+    await tapKey(tester, 'confirm-ok');
     final rows = (repo.lastSave('settings/notifications')!['schedule'] as List).cast<String>();
     expect(rows, hasLength(2), reason: 'edited in place, not added');
     expect(rows.firstWhere((r) => r.startsWith('row2')).split(_s)[3], 'نهضة العذراء — معدّلة');
@@ -373,6 +374,82 @@ void main() {
     await tester.tap(find.byIcon(Icons.notifications_active_outlined));
     await tester.pumpAndSettle();
     expect(find.byType(NotificationsAdminSection), findsOneWidget);
+  });
+
+  testWidgets('send-to-everyone / «دلوقتي» prompts confirmNamedAction with title', (tester) async {
+    await pump(tester);
+    await tapKey(tester, 'addScheduledPush');
+    await tester.enterText(find.byKey(const ValueKey('draft-titleAr')), 'نهضة القديسين');
+    await tester.enterText(find.byKey(const ValueKey('draft-bodyAr')), 'تفاصيل النهضة');
+    // Select when-soon for immediate send
+    await tapKey(tester, 'when-soon');
+    await tapKey(tester, 'save-push');
+    expect(find.text('هيتبعت لكل المشتركين دلوقتي: نهضة القديسين'), findsOneWidget);
+    expect(find.text('ابعت للكل'), findsOneWidget);
+    expect(find.byKey(const ValueKey('confirm-ok')), findsOneWidget);
+    expect(find.byKey(const ValueKey('confirm-cancel')), findsOneWidget);
+
+    // Cancel doesn't save
+    await tapKey(tester, 'confirm-cancel');
+    expect(repo.lastSave('settings/notifications'), isNull);
+
+    // Confirm saves once
+    await tapKey(tester, 'save-push');
+    await tapKey(tester, 'confirm-ok');
+    expect(repo.lastSave('settings/notifications'), isNotNull);
+  });
+
+  testWidgets('future scheduled announcement to all shows scheduled confirmation with date', (tester) async {
+    await pump(tester);
+    await tapKey(tester, 'addScheduledPush');
+    await tester.enterText(find.byKey(const ValueKey('draft-titleAr')), 'قداس العيد');
+    await tester.enterText(find.byKey(const ValueKey('draft-bodyAr')), 'تفاصيل القداس');
+    // Default is tomorrow 9:00 AM (not soon), targets: all
+    await tapKey(tester, 'save-push');
+    expect(find.textContaining('هيتبعت لكل المشتركين'), findsOneWidget);
+    expect(find.textContaining('دلوقتي'), findsNothing);
+    expect(find.text('تأكيد الجدولة'), findsOneWidget);
+    await tapKey(tester, 'confirm-cancel');
+    expect(repo.lastSave('settings/notifications'), isNull);
+  });
+
+  testWidgets('immediate send targeted to app shows target-specific confirmation', (tester) async {
+    await pump(tester);
+    await tapKey(tester, 'addScheduledPush');
+    await tester.enterText(find.byKey(const ValueKey('draft-titleAr')), 'تنبيه للتطبيق');
+    await tester.enterText(find.byKey(const ValueKey('draft-bodyAr')), 'خاص بالتطبيق');
+    await tapKey(tester, 'when-soon');
+    await tapKey(tester, 'target-app');
+    await tapKey(tester, 'save-push');
+    expect(find.text('هيتبعت (تطبيق أندرويد فقط) دلوقتي: تنبيه للتطبيق'), findsOneWidget);
+    expect(find.text('إرسال الآن'), findsOneWidget);
+    await tapKey(tester, 'confirm-cancel');
+    expect(repo.lastSave('settings/notifications'), isNull);
+  });
+
+  testWidgets('cancelling or closing a dirty draft prompts discardChanges; clean draft closes immediately', (tester) async {
+    await pump(tester);
+    // Clean draft opens and closes immediately with editor-close
+    await tapKey(tester, 'addScheduledPush');
+    expect(find.byKey(const ValueKey('draft-titleAr')), findsOneWidget);
+    await tapKey(tester, 'editor-close');
+    expect(find.byKey(const ValueKey('draft-titleAr')), findsNothing);
+
+    // Dirty draft with draft-cancel prompts confirmDiscardChanges
+    await tapKey(tester, 'addScheduledPush');
+    await tester.enterText(find.byKey(const ValueKey('draft-titleAr')), 'تعديل جديد');
+    await tapKey(tester, 'draft-cancel');
+    expect(find.byKey(const ValueKey('discard-keep')), findsOneWidget);
+    expect(find.byKey(const ValueKey('discard-confirm')), findsOneWidget);
+
+    // Keeping editing leaves draft open
+    await tapKey(tester, 'discard-keep');
+    expect(find.byKey(const ValueKey('draft-titleAr')), findsOneWidget);
+
+    // Confirming discard closes draft
+    await tapKey(tester, 'editor-close');
+    await tapKey(tester, 'discard-confirm');
+    expect(find.byKey(const ValueKey('draft-titleAr')), findsNothing);
   });
 
   test('season defaults shown in the admin are the ones the sender uses (tool/push_daily.js)', () {

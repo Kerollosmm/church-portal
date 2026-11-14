@@ -11,6 +11,7 @@ import '../../domain/contact_categories.dart';
 import '../../domain/features.dart';
 import 'admin_schema.dart';
 import 'admin_validators.dart';
+import 'confirm_named.dart';
 import 'doc_editor.dart';
 
 /// Dashboard home: counts, quick links, latest edits.
@@ -621,7 +622,15 @@ class _MessagesScreenState extends State<MessagesScreen> {
   }
 
   Future<void> _delete(BuildContext context, AdminDoc d) async {
-    final ok = await confirmDialog(context, context.tr('confirmDeleteMessage'));
+    final m = d.data;
+    final anonymous = m['anonymous'] == true || (m['name'] as String?)?.trim().isEmpty != false;
+    final sender = anonymous ? context.tr('anonymousSender') : '${m['name'] ?? ''}'.trim();
+    final ok = await confirmNamedAction(
+      context,
+      summary: '«$sender»\n\n${context.tr('confirmDeleteMessage')}',
+      actionLabel: context.tr('delete'),
+      destructive: true,
+    );
     if (!ok || !context.mounted) return;
     final messenger = ScaffoldMessenger.of(context);
     final deleted = context.tr('deleted');
@@ -794,8 +803,14 @@ class _AdminsScreenState extends State<AdminsScreen> {
             onPressed: self
                 ? null
                 : () async {
-                    if (await confirmDialog(context, context.tr('confirmRemoveAdmin'), action: context.tr('removeAdmin')) &&
-                        context.mounted) {
+                    final email = a.data['email'] ?? a.id;
+                    final ok = await confirmNamedAction(
+                      context,
+                      summary: '$email\n\n${context.tr('confirmRemoveAdmin')}',
+                      actionLabel: context.tr('removeAdmin'),
+                      destructive: true,
+                    );
+                    if (ok && context.mounted) {
                       await _guard(context, () => widget.repo.removeAdmin(a.id));
                     }
                   },

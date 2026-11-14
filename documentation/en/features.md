@@ -161,6 +161,11 @@ This document provides a comprehensive, feature-by-feature manual for all 31 cap
 ### 22. Administrative Dashboard (`/admin`)
 - **Visitor Experience:** Invisible to regular visitors and blocked from search engine indexing (`noindex`).
 - **Admin Control:** Comprehensive management portal with responsive desktop sidebar and mobile navigation drawer. Provides audit timestamps (`updatedAt`, `updatedBy`) on every save.
+- **Safety Features (PR 3A / ADR-070):**
+  - **Sticky Unsaved Bar (`UnsavedBar`):** Pinned bottom bar displaying unsaved modifications with Save and Cancel buttons; responsive at 320 px and 200% text scaling.
+  - **Unsaved Changes Guard (`UnsavedGuard`):** Intercepts back navigation, menu drawer navigation, sign out, and web browser tab closing (`beforeunload`), with prominent "Keep editing" primary button.
+  - **Reversible Item Deletion (`PendingDelete`):** 10-second soft-delete undo buffer with SnackBar («اتمسح» / "Undo"); flushes immediately on screen disposal or browser tab close.
+  - **Named Confirmation Dialogs (`confirmNamedAction`):** Explicitly names affected items/actions for broadcasts ("Send to all"), message deletions, and admin removals.
 - **Technical Implementation:** Authenticated via Firebase Auth. Protected by Firestore security rules checking role assignments in `admins/{uid}`.
 
 ### 23. Section Feature Toggles

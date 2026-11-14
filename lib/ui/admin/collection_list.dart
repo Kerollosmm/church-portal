@@ -15,6 +15,7 @@ import '../../domain/custom_content.dart';
 import 'admin_schema.dart';
 import 'admin_validators.dart';
 import 'doc_editor.dart';
+import 'pending_delete.dart';
 
 enum ListFilter { all, visible, hidden, unconfirmed }
 
@@ -61,6 +62,7 @@ class CollectionListScreen extends StatefulWidget {
 
 class _CollectionListScreenState extends State<CollectionListScreen> {
   final _search = TextEditingController();
+  final _pendingDelete = PendingDelete();
   ListFilter _filter = ListFilter.all;
   late Stream<List<AdminDoc>> _stream = widget.repo.watch(widget.def.name);
 
@@ -77,6 +79,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
 
   @override
   void dispose() {
+    _pendingDelete.dispose();
     _search.dispose();
     super.dispose();
   }
@@ -132,12 +135,17 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
             return Center(child: Padding(padding: const EdgeInsets.all(24), child: Text('${snap.error}')));
           }
           if (!snap.hasData) return const Center(child: CircularProgressIndicator());
-          final all = sortAdminDocs(def, snap.data!.where((d) => def.matches(d.data)).toList());
+          final all = sortAdminDocs(
+              def,
+              snap.data!
+                  .where((d) => def.matches(d.data))
+                  .toList());
           _lastDocs = all;
-          final docs = filterAdminDocs(def, all, query: _search.text, filter: _filter);
+          final visible = all.where((d) => !_pendingDelete.pendingIds.contains(d.id)).toList();
+          final docs = filterAdminDocs(def, visible, query: _search.text, filter: _filter);
           final canReorder = def.orderable && _search.text.trim().isEmpty && _filter == ListFilter.all && docs.length > 1;
           return Column(children: [
-            _toolbar(context, all.length, docs.length, canReorder),
+            _toolbar(context, visible.length, docs.length, canReorder),
             Expanded(
               child: docs.isEmpty
                   ? Center(child: Text(context.tr(all.isEmpty ? 'noItems' : 'noMatches')))
@@ -354,39 +362,49 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     }
   }
 
-  Future<void> _confirmDelete(BuildContext context, AdminDoc d) async {
-    if (def.name == 'categories') return _deleteCategory(context, d);
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(_title(d)),
-        content: Text(context.tr('confirmDelete')),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(context.tr('cancel'))),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: context.pal.alert),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text(context.tr('delete')),
-          ),
-        ],
+  void _confirmDelete(BuildContext context, AdminDoc d) {
+    final def = widget.def;
+    if (def.name == 'categories') {
+      _deleteCategory(context, d);
+      return;
+    }
+    final title = _title(d);
+    final messenger = ScaffoldMessenger.of(context);
+    final failedMsg = context.tr('deleteFailed', {'e': '{e}'});
+    final repo = widget.repo;
+    final media = repo.media;
+    final docData = d.data;
+    setState(() {
+      _pendingDelete.schedule(d.id, () async {
+        try {
+          await repo.delete(def.name, d.id);
+          if (media != null) {
+            await Future.wait([
+              for (final id in orphanedDocMediaIds(docData, null))
+                media.delete(id).catchError((Object _) {}),
+            ]);
+          }
+        } catch (e) {
+          messenger.showSnackBar(SnackBar(content: Text(failedMsg.replaceAll('{e}', '$e'))));
+        }
+      });
+    });
+
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        duration: const Duration(seconds: 10),
+        content: Text(context.tr('deletedUndo', {'n': title})),
+        action: SnackBarAction(
+          label: context.tr('undo'),
+          onPressed: () {
+            if (_pendingDelete.undo(d.id)) {
+              setState(() {});
+            }
+          },
+        ),
       ),
     );
-    if (ok != true || !context.mounted) return;
-    final messenger = ScaffoldMessenger.of(context);
-    final deleted = context.tr('deleted');
-    final failedMsg = context.tr('deleteFailed', {'e': '{e}'});
-    try {
-      await widget.repo.delete(def.name, d.id);
-      // Best effort: the deleted item's inline cover image and gallery photos
-      // are no longer referenced.
-      final media = widget.repo.media;
-      for (final id in orphanedDocMediaIds(d.data, null)) {
-        media?.delete(id).catchError((Object _) {});
-      }
-      messenger.showSnackBar(SnackBar(content: Text(deleted)));
-    } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text(failedMsg.replaceAll('{e}', '$e'))));
-    }
   }
 
   /// Deleting a custom category hides its items (visible: false) first and
