@@ -159,8 +159,12 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
               key: ObjectKey(_entriesStream),
               stream: _entriesStream,
               builder: (context, entrySnap) {
+                if (entrySnap.hasError) {
+                  return Center(child: Padding(padding: const EdgeInsets.all(24), child: Text('${entrySnap.error}')));
+                }
+                if (!entrySnap.hasData) return const Center(child: CircularProgressIndicator());
                 final entriesDef = collectionById('entries')!;
-                final rawEntries = entrySnap.data ?? const <AdminDoc>[];
+                final rawEntries = entrySnap.data!;
                 _checkLazyPurge(rawEntries, entriesDef);
                 final visibleEntries = sortAdminDocs(
                     entriesDef,
@@ -171,8 +175,15 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
                     filterAdminDocs(entriesDef, visibleEntries, query: _search.text, filter: _filter);
                 final hasFilter = _search.text.trim().isNotEmpty || _filter != ListFilter.all;
                 final matchingCatIds = {for (final c in docs) c.id};
+                final allEntriesByCat = <String, List<AdminDoc>>{};
                 final entriesByCat = <String, List<AdminDoc>>{};
                 final allCatIds = {for (final c in visible) c.id};
+                for (final e in visibleEntries) {
+                  final cid = '${e.data['categoryId'] ?? ''}';
+                  if (allCatIds.contains(cid)) {
+                    (allEntriesByCat[cid] ??= []).add(e);
+                  }
+                }
                 final unassigned = <AdminDoc>[];
                 for (final e in filteredEntries) {
                   final cid = '${e.data['categoryId'] ?? ''}';
@@ -191,7 +202,8 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
                 final canReorder =
                     def.orderable && !hasFilter && shownCats.length > 1;
                 return Column(children: [
-                  _toolbar(context, visible.length, shownCats.length, canReorder),
+                  _toolbar(context, visible.length, shownCats.length, canReorder,
+                      showUnconfirmed: entriesDef.hasSample),
                   Expanded(
                     child: _categoriesBody(
                       context,
@@ -199,6 +211,8 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
                       allVisibleCats: visible,
                       shownCats: shownCats,
                       entriesByCat: entriesByCat,
+                      allEntriesByCat: allEntriesByCat,
+                      hasFilter: hasFilter,
                       unassigned: unassigned,
                       canReorder: canReorder,
                     ),
@@ -234,7 +248,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     );
   }
 
-  Widget _toolbar(BuildContext context, int total, int shown, bool canReorder) {
+  Widget _toolbar(BuildContext context, int total, int shown, bool canReorder, {bool showUnconfirmed = false}) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -277,7 +291,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
         const SizedBox(height: 8),
         Wrap(spacing: 6, runSpacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: [
           for (final f in ListFilter.values)
-            if ((f != ListFilter.unconfirmed || def.hasSample) &&
+            if ((f != ListFilter.unconfirmed || def.hasSample || showUnconfirmed) &&
                 ((f != ListFilter.visible && f != ListFilter.hidden) || def.hasVisible))
               ChoiceChip(
                 label: Text(context.tr('filter_${f.name}')),
@@ -312,6 +326,8 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     required List<AdminDoc> allVisibleCats,
     required List<AdminDoc> shownCats,
     required Map<String, List<AdminDoc>> entriesByCat,
+    required Map<String, List<AdminDoc>> allEntriesByCat,
+    required bool hasFilter,
     required List<AdminDoc> unassigned,
     required bool canReorder,
   }) {
@@ -350,6 +366,8 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
           shownCats[i],
           entriesDef: entriesDef,
           entries: entriesByCat[shownCats[i].id] ?? const [],
+          hasAnyEntries: allEntriesByCat[shownCats[i].id]?.isNotEmpty ?? false,
+          hasFilter: hasFilter,
           dragIndex: i,
           docs: shownCats,
         ),
@@ -389,13 +407,22 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
               shownCats[i],
               entriesDef: entriesDef,
               entries: entriesByCat[shownCats[i].id] ?? const [],
+              hasAnyEntries: allEntriesByCat[shownCats[i].id]?.isNotEmpty ?? false,
+              hasFilter: hasFilter,
               dragIndex: i,
               docs: shownCats,
             ),
           )
         else
           for (final c in shownCats)
-            _categoryTile(context, c, entriesDef: entriesDef, entries: entriesByCat[c.id] ?? const []),
+            _categoryTile(
+              context,
+              c,
+              entriesDef: entriesDef,
+              entries: entriesByCat[c.id] ?? const [],
+              hasAnyEntries: allEntriesByCat[c.id]?.isNotEmpty ?? false,
+              hasFilter: hasFilter,
+            ),
         if (unassigned.isNotEmpty) _unassignedCard(context, entriesDef, unassigned),
       ],
     );
@@ -406,6 +433,8 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     AdminDoc d, {
     required CollectionDef entriesDef,
     required List<AdminDoc> entries,
+    bool hasAnyEntries = false,
+    bool hasFilter = false,
     int? dragIndex,
     List<AdminDoc>? docs,
   }) {
@@ -488,7 +517,10 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
         if (entries.isEmpty)
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
-            child: Text(context.tr('sectionEmptyItems'), style: TextStyle(color: context.pal.muted, fontSize: 13)),
+            child: Text(
+              context.tr(hasFilter && hasAnyEntries ? 'noMatches' : 'sectionEmptyItems'),
+              style: TextStyle(color: context.pal.muted, fontSize: 13),
+            ),
           )
         else
           for (final e in entries) _entryRow(context, entriesDef, e),

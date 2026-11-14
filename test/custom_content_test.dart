@@ -24,6 +24,7 @@ import 'package:church_portal/ui/admin/admin_validators.dart';
 import 'package:church_portal/ui/admin/collection_list.dart';
 import 'package:church_portal/ui/admin/contact_admin.dart';
 import 'package:church_portal/ui/admin/doc_editor.dart';
+import 'package:church_portal/ui/widgets/common.dart';
 import 'package:church_portal/ui/widgets/feature_gate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -92,7 +93,8 @@ class _English extends LocaleNotifier {
   Locale build() => const Locale('en');
 }
 
-Future<(GoRouter, _Repo)> _pump(WidgetTester tester, String path, {Size size = const Size(420, 3000), _Repo? repo}) async {
+Future<(GoRouter, _Repo)> _pump(WidgetTester tester, String path,
+    {Size size = const Size(420, 3000), _Repo? repo, bool settle = true}) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
@@ -113,9 +115,18 @@ Future<(GoRouter, _Repo)> _pump(WidgetTester tester, String path, {Size size = c
       routerConfig: router,
     ),
   ));
-  await tester.pumpAndSettle();
+  if (settle) {
+    await tester.pumpAndSettle();
+  } else {
+    await tester.pump();
+  }
   router.go(path);
-  await tester.pumpAndSettle();
+  if (settle) {
+    await tester.pumpAndSettle();
+  } else {
+    await tester.pump();
+    await tester.pump();
+  }
   return (router, r);
 }
 
@@ -1035,5 +1046,148 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('featuredPage-trips-faq')), findsNothing);
     });
+
+    testWidgets('PR #77 review fixes: persisted partial save locks auto-slug; categories loading/error/filter/unconfirmed; category page loading/error',
+        (tester) async {
+      tester.view.physicalSize = const Size(900, 3000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      // 1. doc_editor: partial chunked save sets _persisted = true; editing titleAr
+      // before retry must not mutate the persisted slug.
+      var saveCalls = 0;
+      await tester.pumpWidget(_admin(DocEditor(
+        title: 'New Page',
+        fields: collectionById('pages')!.fields,
+        def: collectionById('pages'),
+        popOnSave: false,
+        onSave: (d) async {
+          saveCalls++;
+          if (saveCalls == 2) throw StateError('blocks write failed');
+        },
+        newDefaults: const {
+          'titleAr': 'عنوان أول',
+          'blocks': ['paragraph\u001fنص\u001f\u001f\u001f\u001f\u001f'],
+        },
+      )));
+      await tester.pumpAndSettle();
+      final docState = tester.state<DocEditorState>(find.byType(DocEditor));
+      final initialSlug = docState.collect()['slug'] as String;
+      expect(isValidSlug(initialSlug), isTrue);
+
+      await docState.save();
+      await tester.pumpAndSettle();
+      expect(saveCalls, 2);
+
+      await tester.enterText(find.byKey(const ValueKey('field-titleAr')), 'عنوان مختلف تماما');
+      await tester.pump();
+      expect(docState.collect()['slug'], initialSlug);
+
+      // 2. collection_list: entries stream loading & error states
+      final entriesCtrl = StreamController<List<AdminDoc>>.broadcast();
+      addTearDown(entriesCtrl.close);
+      final loadingBackend = _StreamEntriesBackend(
+        cats: [AdminDoc('k1', {'nameAr': 'رحلات', 'nameEn': 'Trips', 'slug': 'trips', 'order': 10})],
+        entriesStream: entriesCtrl.stream,
+      );
+      await tester.pumpWidget(_admin(CollectionListScreen(repo: loadingBackend, def: collectionById('categories')!)));
+      await tester.pump();
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      expect(find.byKey(const Key('emptyCategories')), findsNothing);
+
+      entriesCtrl.addError('entries load boom');
+      await tester.pump();
+      expect(find.textContaining('entries load boom'), findsOneWidget);
+
+      // 3. collection_list: Unconfirmed filter chip shown for entries.hasSample &
+      // filter-hidden entries render noMatches instead of sectionEmptyItems.
+      final filterBackend = _Backend(lists: {
+        'categories': [
+          AdminDoc('k1', {'nameAr': 'رحلات', 'nameEn': 'Trips', 'slug': 'trips', 'order': 10}),
+          AdminDoc('k2', {'nameAr': 'مكتبة', 'nameEn': 'Library', 'slug': 'library', 'order': 20}),
+        ],
+        'entries': [
+          AdminDoc('e1', {'categoryId': 'k1', 'titleAr': 'الإسكندرية', 'titleEn': 'Alex', 'sample': false}),
+          AdminDoc('e2', {'categoryId': 'k2', 'titleAr': 'كتاب', 'titleEn': 'Book', 'sample': true}),
+        ],
+      });
+      await tester.pumpWidget(KeyedSubtree(
+        key: const ValueKey('cat-filters'),
+        child: _admin(CollectionListScreen(repo: filterBackend, def: collectionById('categories')!)),
+      ));
+      await tester.pumpAndSettle();
+
+      // Search for k1's title ("Trips") which does not match entry e1 ("Alex").
+      await tester.enterText(find.byKey(const Key('admin-search')), 'Trips');
+      await tester.pump();
+      final k1Tile = find.byKey(const ValueKey('k1'));
+      expect(k1Tile, findsOneWidget);
+      expect(find.descendant(of: k1Tile, matching: find.text('No matching items')), findsOneWidget);
+      expect(find.descendant(of: k1Tile, matching: find.text('No items in this section yet')), findsNothing);
+
+      await tester.enterText(find.byKey(const Key('admin-search')), '');
+      await tester.pump();
+
+      // Unconfirmed chip must appear and filter down to k2 + e2.
+      final unconfirmedChip = find.widgetWithText(ChoiceChip, 'Unconfirmed');
+      expect(unconfirmedChip, findsOneWidget);
+      await tester.tap(unconfirmedChip);
+      await tester.pump();
+      expect(find.byKey(const ValueKey('k1')), findsNothing);
+      expect(find.byKey(const ValueKey('k2')), findsOneWidget);
+      expect(find.byKey(const ValueKey('entry-e2')), findsOneWidget);
+
+      // 4. CategoryPage: loading & error states for customPagesProvider
+      final pagesCtrl = StreamController<List<CustomPage>>.broadcast();
+      addTearDown(pagesCtrl.close);
+      final customPagesRepo = _ControlledPagesRepo(pagesCtrl.stream, entries: const []);
+      await _pump(tester, '/section/youth-trips', repo: customPagesRepo, settle: false);
+      await tester.pump();
+      expect(find.text('No content in this section yet'), findsNothing);
+      expect(find.byType(SkeletonList), findsOneWidget);
+
+      pagesCtrl.addError(StateError('pages boom'));
+      await tester.pump();
+      expect(find.byType(ErrorState), findsOneWidget);
+      expect(find.text('No content in this section yet'), findsNothing);
+    });
+
+    testWidgets('PR #77 review fix: CategoryPage keeps loaded entries visible when customPagesProvider errors',
+        (tester) async {
+      final pagesCtrl2 = StreamController<List<CustomPage>>.broadcast();
+      addTearDown(pagesCtrl2.close);
+      final mixedRepo = _ControlledPagesRepo(pagesCtrl2.stream, entries: _entries);
+      await _pump(tester, '/section/youth-trips', repo: mixedRepo, settle: false);
+      await tester.pump();
+      expect(find.byKey(const Key('entry-e1')), findsOneWidget);
+      pagesCtrl2.addError(StateError('pages boom 2'));
+      await tester.pump();
+      expect(find.byKey(const Key('entry-e1')), findsOneWidget);
+      expect(find.byType(ErrorState), findsOneWidget);
+    });
   });
 }
+
+class _StreamEntriesBackend extends _Backend {
+  final Stream<List<AdminDoc>> entriesStream;
+  _StreamEntriesBackend({required List<AdminDoc> cats, required this.entriesStream})
+      : super(lists: {'categories': cats});
+
+  @override
+  Stream<List<AdminDoc>> watch(String collection) =>
+      collection == 'entries' ? entriesStream : super.watch(collection);
+}
+
+class _ControlledPagesRepo extends _Repo {
+  final Stream<List<CustomPage>> _pagesStream;
+  final List<CategoryEntry> _customEntries;
+  _ControlledPagesRepo(this._pagesStream, {required List<CategoryEntry> entries})
+      : _customEntries = entries;
+
+  @override
+  Stream<List<CategoryEntry>> entries() => Stream.value(_customEntries);
+
+  @override
+  Stream<List<CustomPage>> pages() => _pagesStream;
+}
+

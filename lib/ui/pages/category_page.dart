@@ -85,10 +85,20 @@ class CategoryPage extends ConsumerWidget {
               builder: (context, all) {
                 final items = entriesOf(c.id, all);
                 final f = ref.watch(featuresProvider);
-                final sPages = f.enabled(Sections.customPages)
-                    ? sectionPages(c.id, ref.watch(customPagesProvider).value ?? const [])
-                    : const <CustomPage>[];
-                if (items.isEmpty && sPages.isEmpty) return EmptyState(message: context.tr('categoryEmpty'));
+                final pagesAsync = f.enabled(Sections.customPages) ? ref.watch(customPagesProvider) : null;
+                final pagesList = pagesAsync?.value;
+                final sPages = pagesList != null ? sectionPages(c.id, pagesList) : const <CustomPage>[];
+                if (items.isEmpty && sPages.isEmpty) {
+                  if (pagesAsync != null && pagesList == null) {
+                    if (pagesAsync.hasError) {
+                      return ErrorState(onRetry: () => ref.invalidate(customPagesProvider));
+                    }
+                    if (pagesAsync.isLoading) {
+                      return const SkeletonList(count: 2);
+                    }
+                  }
+                  return EmptyState(message: context.tr('categoryEmpty'));
+                }
                 return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                   if (items.isNotEmpty)
                     ResponsiveGrid(children: [for (final e in items) EntryCard(entry: e, category: c)]),
@@ -97,6 +107,13 @@ class CategoryPage extends ConsumerWidget {
                     ResponsiveGrid(children: [
                       for (final p in sPages) CustomPageCard(key: Key('sectionPage-${p.slug}'), page: p),
                     ]),
+                  ],
+                  if (pagesAsync != null && pagesList == null && pagesAsync.hasError) ...[
+                    if (items.isNotEmpty || sPages.isNotEmpty) const SizedBox(height: 16),
+                    ErrorState(onRetry: () => ref.invalidate(customPagesProvider)),
+                  ] else if (pagesAsync != null && pagesList == null && pagesAsync.isLoading) ...[
+                    if (items.isNotEmpty || sPages.isNotEmpty) const SizedBox(height: 16),
+                    const SkeletonList(count: 1),
                   ],
                 ]);
               },

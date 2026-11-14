@@ -183,7 +183,7 @@ class DocEditorState extends State<DocEditor> {
   void _setupAutoSlug() {
     _slugEdited = false;
     _syncingSlug = false;
-    if (!isNew) return;
+    if (!isNew || _persisted) return;
     final slugCtrl = _text['slug'];
     if (slugCtrl == null) return;
     final titleKey = _text.containsKey('nameAr')
@@ -195,7 +195,7 @@ class DocEditorState extends State<DocEditor> {
       if (!_syncingSlug) _slugEdited = true;
     });
     void sync() {
-      if (!isNew || _slugEdited) return;
+      if (!isNew || _persisted || _slugEdited) return;
       final rawTitle = titleCtrl.text.trim();
       final next = rawTitle.isEmpty ? '' : slugFromTitle(rawTitle, taken: widget.takenSlugs);
       if (slugCtrl.text != next) {
