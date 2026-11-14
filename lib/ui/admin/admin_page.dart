@@ -13,6 +13,7 @@ import '../../state/providers.dart';
 import '../widgets/coptic_cross.dart';
 import 'admin_schema.dart';
 import 'admin_screens.dart';
+import 'admin_strings.dart';
 import 'assistant_admin.dart';
 import 'contact_admin.dart';
 import 'collection_list.dart';
@@ -29,6 +30,7 @@ class AdminPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    registerAdminStrings();
     final repo = ref.watch(adminRepositoryProvider);
     if (repo == null) return _AdminFrame(child: Center(child: Text(context.tr('adminUnavailable'))));
     return StreamBuilder<User?>(
@@ -530,6 +532,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
   @override
   Widget build(BuildContext context) {
+    registerAdminStrings();
     final wide = MediaQuery.sizeOf(context).width >= 1000;
     final dest = adminDestinations(widget.role)
         .firstWhere((d) => d.id == _current, orElse: () => adminDestinations(widget.role).first);

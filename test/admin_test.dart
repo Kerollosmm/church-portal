@@ -1660,6 +1660,71 @@ void main() {
       expect(find.textContaining('مفيش قداسات معتادة مسجلة'), findsOneWidget);
     });
 
+    testWidgets('DocEditor replacesDayPreview explains when replacing liturgy is hidden and ignores soft-deleted masses',
+        (tester) async {
+      tester.view.physicalSize = const Size(800, 1200);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final liturgyDef = collectionById('liturgies')!;
+      final existingDocs = [
+        AdminDoc('fri-active', {
+          'type': 'mass',
+          'nameAr': 'قداس الجمعة النشط',
+          'weekday': 5,
+          'start': '07:00',
+          'end': '09:00',
+          'visible': true,
+          'replacesDay': false,
+        }),
+        AdminDoc('fri-deleted', {
+          'type': 'mass',
+          'nameAr': 'قداس الجمعة المحذوف',
+          'weekday': 5,
+          'start': '09:30',
+          'end': '11:00',
+          'visible': true,
+          'replacesDay': false,
+          'deletedAt': DateTime.utc(2026, 11, 5),
+        }),
+      ];
+
+      await tester.pumpWidget(_app(
+        DocEditor(
+          title: 'قداس',
+          fields: liturgyDef.fields,
+          data: {
+            'type': 'mass',
+            'nameAr': 'قداس مخفي',
+            'date': '2026-11-06',
+            'start': '07:00',
+            'end': '09:00',
+            'visible': false,
+            'replacesDay': true,
+          },
+          existingDocs: existingDocs,
+          onSave: (_) async {},
+        ),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      // Hidden replacing liturgy shows dedicated explanation instead of empty-day copy.
+      expect(find.byKey(const ValueKey('replacesDayPreview')), findsOneWidget);
+      expect(find.textContaining('القداس مخفي حاليًا'), findsOneWidget);
+      expect(find.textContaining('قداس الجمعة النشط'), findsNothing);
+
+      // Toggle visible ON -> active mass shows, soft-deleted mass stays excluded.
+      final listScrollable = find.byType(Scrollable).first;
+      final visibleFinder = find.byKey(const ValueKey('field-visible'));
+      await tester.scrollUntilVisible(visibleFinder, 200, scrollable: listScrollable);
+      await tester.tap(visibleFinder);
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(find.byKey(const ValueKey('replacesDayPreview')), -200, scrollable: listScrollable);
+      expect(find.textContaining('قداس الجمعة النشط'), findsOneWidget);
+      expect(find.textContaining('قداس الجمعة المحذوف'), findsNothing);
+    });
+
     testWidgets('AdminStateSwitch merges semantics, keeps single focus stop, and dims when disabled', (tester) async {
       final semHandle = tester.ensureSemantics();
       try {

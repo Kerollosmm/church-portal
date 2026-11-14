@@ -248,7 +248,13 @@ List<LiturgyOccurrence> occurrencesForDay({
     }
     if (o.liturgy.type == 'mass' && !o.liturgy.replacesDay) {
       for (final l in liturgies) {
-        if (l.seasonKey == null && l.id != o.liturgy.id && l.visible && l.replacesDay && _matchesDay(l, dayStart)) {
+        if (l.seasonKey == null &&
+            l.id != o.liturgy.id &&
+            l.visible &&
+            l.replacesDay &&
+            l.type == 'mass' &&
+            l.startMinutes != null &&
+            _matchesDay(l, dayStart)) {
           if (!l.sample || o.liturgy.sample) return true;
         }
       }
@@ -303,6 +309,7 @@ List<Liturgy> regularSupersededOn({
 ///
 /// Returns an empty list when:
 /// * `!replacing.visible` or `!replacing.replacesDay`
+/// * [replacing] has no start time or (when non-seasonal) is not a `mass`
 /// * [replacing] has neither [Liturgy.date] nor [Liturgy.weekday]
 /// * [replacing.seasonKey] is set, and no matching season in [seasons] is
 ///   active on that day / time window (matching [occurrencesForDay]).
@@ -320,6 +327,8 @@ List<Liturgy> liturgiesHiddenBy(
   Iterable<Season> seasons = const [],
 }) {
   if (!replacing.visible || !replacing.replacesDay) return const [];
+  if (replacing.startMinutes == null) return const [];
+  if (replacing.seasonKey == null && replacing.type != 'mass') return const [];
 
   final date = replacing.date != null ? CairoTime.calendarDate(replacing.date!) : null;
   final weekday = date != null ? date.weekday : replacing.weekday;
@@ -348,7 +357,7 @@ List<Liturgy> liturgiesHiddenBy(
         for (final s in matching)
           if (s.startsAt == null ||
               s.endsAt == null ||
-              _seasonCoversWeekday(s, weekday))
+              _seasonCoversWeekdayTimes(s, weekday, replacing.startMinutes, replacing.startMinutes))
             s,
       ];
       if (activeMatchingSeasons.isEmpty) return const [];
@@ -381,6 +390,11 @@ List<Liturgy> liturgiesHiddenBy(
       } else if (l.weekday != weekday) {
         continue;
       }
+      if (replacing.seasonKey != null) {
+        if (!activeMatchingSeasons.any((s) => _seasonCoversWeekdayTimes(s, weekday, replacing.startMinutes, l.startMinutes!))) {
+          continue;
+        }
+      }
     }
     matches.add(l);
   }
@@ -396,13 +410,29 @@ List<Liturgy> liturgiesHiddenBy(
   return matches;
 }
 
-bool _seasonCoversWeekday(Season s, int weekday) {
-  var cur = CairoTime.calendarDate(s.startsAt!);
-  final end = CairoTime.calendarDate(s.endsAt!);
-  for (var i = 0; i < 7 && !cur.isAfter(end); i++) {
-    final d = CairoTime.at(cur.year, cur.month, cur.day);
-    if (d.weekday == weekday && isSeasonActiveOnDay(s, d)) return true;
-    cur = cur.add(const Duration(days: 1));
+bool _seasonCoversWeekdayTimes(Season s, int weekday, int? minA, int? minB) {
+  if (!s.active) return false;
+  if (s.startsAt == null || s.endsAt == null) return true;
+  final startCal = CairoTime.calendarDate(s.startsAt!);
+  final endCal = CairoTime.calendarDate(s.endsAt!);
+  final offset = (weekday - startCal.weekday + 7) % 7;
+  final first = startCal.add(Duration(days: offset));
+  if (first.isAfter(endCal)) return false;
+
+  bool coversAt(DateTime cal, int? m) {
+    final day = CairoTime.at(cal.year, cal.month, cal.day);
+    if (m == null) return isSeasonActiveOnDay(s, day);
+    return isSeasonActiveAt(s, CairoTime.at(cal.year, cal.month, cal.day, m));
+  }
+
+  bool both(DateTime cal) => coversAt(cal, minA) && coversAt(cal, minB);
+  if (both(first)) return true;
+  final second = first.add(const Duration(days: 7));
+  if (!second.isAfter(endCal) && both(second)) return true;
+  final totalWeeks = endCal.difference(first).inDays ~/ 7;
+  if (totalWeeks >= 2) {
+    final last = first.add(Duration(days: totalWeeks * 7));
+    if (both(last)) return true;
   }
   return false;
 }

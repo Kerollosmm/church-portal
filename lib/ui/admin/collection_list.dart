@@ -12,6 +12,7 @@ import '../../domain/cairo_time.dart';
 import '../../domain/custom_content.dart';
 import '../../domain/models.dart';
 import 'admin_schema.dart';
+import 'admin_strings.dart';
 import 'admin_validators.dart';
 import 'doc_editor.dart';
 import 'pending_delete.dart';
@@ -119,6 +120,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
 
   @override
   Widget build(BuildContext context) {
+    registerAdminStrings();
     return Scaffold(
       backgroundColor: context.pal.background,
       floatingActionButton: FloatingActionButton.extended(
@@ -605,7 +607,10 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
         dynamicChoices: dynamicChoices,
         linkTargets: linkTargets,
         takenSlugs: takenSlugs,
-        existingDocs: _lastDocs,
+        existingDocs: [
+          for (final x in _lastDocs)
+            if (!isSoftDeleted(x.data) && !_pendingDelete.isPending(x.id)) x,
+        ],
         seasons: seasons,
       ),
     ));

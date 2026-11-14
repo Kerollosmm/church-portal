@@ -19,6 +19,7 @@ import '../../domain/time_format.dart';
 import '../../domain/today.dart' show DayEvent;
 import '../widgets/item_image.dart';
 import 'admin_schema.dart';
+import 'admin_strings.dart';
 import 'admin_validators.dart';
 import 'state_switch.dart';
 import 'unsaved_bar.dart';
@@ -747,7 +748,10 @@ class DocEditorState extends State<DocEditor> {
       sample: _values['sample'] == true,
     );
 
-    final allLiturgies = [for (final d in widget.existingDocs) Liturgy.fromMap(d.id, d.data)];
+    final allLiturgies = [
+      for (final d in widget.existingDocs)
+        if (!isSoftDeleted(d.data)) Liturgy.fromMap(d.id, d.data),
+    ];
     final hiddenLiturgies = liturgiesHiddenBy(replacing, allLiturgies, seasons: widget.seasons);
 
     final String heading;
@@ -763,9 +767,14 @@ class DocEditorState extends State<DocEditor> {
       heading = context.tr('replacesPreviewHeadingFallback');
     }
 
-    final emptyNote = (replacing.date == null && replacing.weekday == null)
-        ? context.tr('replacesPreviewNoDay')
-        : context.tr('replacesPreviewEmpty');
+    final String emptyNote;
+    if (!replacing.visible) {
+      emptyNote = context.tr('replacesPreviewHidden');
+    } else if (replacing.date == null && replacing.weekday == null) {
+      emptyNote = context.tr('replacesPreviewNoDay');
+    } else {
+      emptyNote = context.tr('replacesPreviewEmpty');
+    }
 
     return Card(
       key: const ValueKey('replacesDayPreview'),
@@ -1591,6 +1600,7 @@ class DocEditorState extends State<DocEditor> {
 
   @override
   Widget build(BuildContext context) {
+    registerAdminStrings();
     final embedded = !widget.popOnSave;
     return UnsavedGuard(
       dirty: _dirty,

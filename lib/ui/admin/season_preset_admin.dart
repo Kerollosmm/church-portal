@@ -11,6 +11,7 @@ import '../../domain/models.dart';
 import '../../domain/season_preset.dart';
 import '../../domain/time_format.dart';
 import '../widgets/common.dart' show localDigits;
+import 'admin_strings.dart';
 import 'doc_editor.dart' show choiceLabel;
 
 /// /admin → «تجهيز الموسم» / "Season preparation" (ADR-042): the owner's
@@ -366,6 +367,7 @@ class _SeasonPresetScreenState extends State<SeasonPresetScreen> {
 
   @override
   Widget build(BuildContext context) {
+    registerAdminStrings();
     return StreamBuilder<List<AdminDoc>>(
       key: ObjectKey(_seasons),
       stream: _seasons,

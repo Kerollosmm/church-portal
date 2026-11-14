@@ -868,6 +868,72 @@ void main() {
           .toList();
       expect(hidden.map((l) => l.id).toList(), actuallyHiddenIds);
     });
+
+    test('non-mass or missing-startTime replacesDay does not hide regular masses', () {
+      final vespersRep = Liturgy(
+        id: 'vespers_rep',
+        type: 'vespers',
+        nameAr: 'عشية',
+        nameEn: 'Vespers',
+        date: DateTime(2026, 11, 6),
+        start: '18:00',
+        end: '19:00',
+        replacesDay: true,
+      );
+      final missingStartRep = Liturgy(
+        id: 'no_start_rep',
+        type: 'mass',
+        nameAr: 'قداس بدون وقت',
+        nameEn: 'No start time',
+        date: DateTime(2026, 11, 6),
+        start: '',
+        end: '',
+        replacesDay: true,
+      );
+      final targetDay = CairoTime.at(2026, 11, 6);
+
+      expect(liturgiesHiddenBy(vespersRep, regularMasses), isEmpty);
+      expect(liturgiesHiddenBy(missingStartRep, regularMasses), isEmpty);
+
+      final occ = occurrencesForDay(
+        liturgies: [...regularMasses, vespersRep, missingStartRep],
+        seasons: const [],
+        day: targetDay,
+        dayOffset: 0,
+      );
+      expect(occ.map((o) => o.liturgy.id), containsAll(['m1', 'm2']));
+    });
+
+    test('undated seasonal replacesDay respects season time windows on that weekday', () {
+      const undatedSeasonalRep = Liturgy(
+        id: 'undated_season_rep',
+        type: 'mass',
+        nameAr: 'قداس جمعة موسمي',
+        nameEn: 'Undated seasonal Friday mass',
+        weekday: 5,
+        start: '12:00',
+        end: '14:00',
+        seasonKey: 'lent',
+        replacesDay: true,
+      );
+      final windowedSeason = Season(
+        id: 's_win',
+        key: 'lent',
+        nameAr: 'الصوم',
+        nameEn: 'Lent',
+        active: true,
+        replacesRegular: false,
+        startsAt: cairo(2026, 11, 6, 8, 0),
+        endsAt: cairo(2026, 11, 6, 23, 0),
+      );
+      final hidden = liturgiesHiddenBy(
+        undatedSeasonalRep,
+        [...regularMasses, undatedSeasonalRep],
+        seasons: [windowedSeason],
+      );
+      // m1 (06:30) is before season startsAt (08:00), so stays visible; m2 (09:00) is inside window so hidden.
+      expect(hidden.map((l) => l.id), ['m2']);
+    });
   });
 
   group('admin doc expiry', () {

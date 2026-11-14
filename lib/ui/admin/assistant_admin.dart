@@ -7,6 +7,7 @@ import '../../data/admin_repository.dart';
 import '../../domain/features.dart';
 import 'admin_schema.dart';
 import 'admin_screens.dart';
+import 'admin_strings.dart';
 import 'state_switch.dart';
 
 /// /admin → AI assistant (ADR-029): the on / off switches (the existing
@@ -17,8 +18,10 @@ class AssistantAdminScreen extends StatelessWidget {
   const AssistantAdminScreen({super.key, required this.repo});
 
   @override
-  Widget build(BuildContext context) =>
-      ChurchInfoScreen(repo: repo, doc: assistantSettingsDoc, header: AssistantSwitches(repo: repo));
+  Widget build(BuildContext context) {
+    registerAdminStrings();
+    return ChurchInfoScreen(repo: repo, doc: assistantSettingsDoc, header: AssistantSwitches(repo: repo));
+  }
 }
 
 /// The two switches the public assistant needs (both on), written as
@@ -73,6 +76,7 @@ class _AssistantSwitchesState extends State<AssistantSwitches> {
 
   @override
   Widget build(BuildContext context) {
+    registerAdminStrings();
     return StreamBuilder<AdminDoc?>(
       key: ObjectKey(_church),
       stream: _church,

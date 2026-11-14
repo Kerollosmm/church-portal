@@ -4,6 +4,7 @@ import '../../core/l10n.dart';
 import '../../core/theme.dart';
 import '../../data/admin_repository.dart';
 import '../../domain/contact_categories.dart';
+import 'admin_strings.dart';
 import 'doc_editor.dart' show choiceLabel;
 import 'state_switch.dart';
 import 'unsaved_bar.dart';
@@ -90,6 +91,7 @@ class _ContactCategoriesScreenState extends State<ContactCategoriesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    registerAdminStrings();
     return UnsavedGuard(
       dirty: _dirty,
       handlePop: false,

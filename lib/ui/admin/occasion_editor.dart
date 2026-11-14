@@ -5,6 +5,7 @@ import '../../core/theme.dart';
 import '../../domain/cairo_time.dart';
 import '../../domain/features.dart';
 import '../../domain/occasion_theme.dart';
+import 'admin_strings.dart';
 import 'state_switch.dart';
 
 /// Admin → Settings → "Site theme & occasions" (ADR-025): the selected
@@ -127,6 +128,7 @@ class _OccasionThemeEditorState extends State<OccasionThemeEditor> {
 
   @override
   Widget build(BuildContext context) {
+    registerAdminStrings();
     final today = _today;
     final now = f.themeOn(today, activeSeasonKeys: widget.activeSeasonKeys);
     final easter = o.easterRanges(today.year);

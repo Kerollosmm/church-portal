@@ -23,6 +23,7 @@ import '../../domain/time_format.dart';
 import '../../domain/today.dart';
 import 'admin_schema.dart';
 import 'admin_screens.dart';
+import 'admin_strings.dart';
 import 'admin_validators.dart';
 import 'confirm_named.dart';
 import 'state_switch.dart';
@@ -122,6 +123,7 @@ class _AppAndNotificationsScreenState extends State<AppAndNotificationsScreen> w
   @override
   Widget build(BuildContext context) {
     registerStrings(_notificationsAdminStrings);
+    registerAdminStrings();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -843,6 +845,7 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
   Widget build(BuildContext context) {
     super.build(context);
     registerStrings(_notificationsAdminStrings);
+    registerAdminStrings();
     return StreamBuilder<AdminDoc?>(
       stream: _featuresStream,
       builder: (context, featSnap) {

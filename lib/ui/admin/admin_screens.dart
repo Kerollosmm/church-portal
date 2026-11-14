@@ -10,6 +10,7 @@ import '../../data/admin_repository.dart';
 import '../../domain/contact_categories.dart';
 import '../../domain/features.dart';
 import 'admin_schema.dart';
+import 'admin_strings.dart';
 import 'admin_validators.dart';
 import 'confirm_named.dart';
 import 'doc_editor.dart';
@@ -85,6 +86,7 @@ class _OverviewScreenState extends State<OverviewScreen> {
 
   @override
   Widget build(BuildContext context) {
+    registerAdminStrings();
     final onOpen = widget.onOpen;
     final messages = _docs['contact_messages'];
     final newMessages = messages?.where((d) => messageIsOpen(d.data)).length ?? 0;
@@ -294,6 +296,7 @@ class _ChurchInfoScreenState extends State<ChurchInfoScreen> {
 
   @override
   Widget build(BuildContext context) {
+    registerAdminStrings();
     return StreamBuilder<AdminDoc?>(
       // A new stream (another backend) gets a fresh StreamBuilder: a reused one
       // keeps the old backend's last snapshot while waiting, and that stale
@@ -390,6 +393,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    registerAdminStrings();
     return Scaffold(
       backgroundColor: context.pal.background,
       body: StreamBuilder<AdminDoc?>(
@@ -736,6 +740,7 @@ class _AdminsScreenState extends State<AdminsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    registerAdminStrings();
     return Scaffold(
       backgroundColor: context.pal.background,
       floatingActionButton: FloatingActionButton.extended(
