@@ -4,16 +4,20 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/l10n.dart';
 import '../../core/theme.dart';
 import '../../data/admin_repository.dart';
 import '../../data/error_reporting.dart';
+import '../../domain/cairo_time.dart';
 import '../../state/providers.dart';
 import '../widgets/coptic_cross.dart';
+import 'admin_access.dart';
 import 'admin_schema.dart';
 import 'admin_screens.dart';
 import 'admin_strings.dart';
+import 'admin_validators.dart';
 import 'assistant_admin.dart';
 import 'contact_admin.dart';
 import 'collection_list.dart';
@@ -21,15 +25,54 @@ import 'features_editor.dart';
 import 'notifications_admin.dart';
 import 'pending_delete.dart';
 import 'season_preset_admin.dart';
+import 'session_policy.dart';
 import 'unsaved_guard.dart';
+
+const _rememberMePrefKey = 'admin_remember_me';
 
 /// Hidden /admin area: email/password sign-in, role check (admins/{uid}),
 /// then the dashboard.
-class AdminPage extends ConsumerWidget {
+class AdminPage extends ConsumerStatefulWidget {
   const AdminPage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<AdminPage> createState() => _AdminPageState();
+}
+
+class _AdminPageState extends ConsumerState<AdminPage> {
+  bool _rememberMe = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadRememberMe();
+  }
+
+  Future<void> _loadRememberMe() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final saved = prefs.getBool(_rememberMePrefKey) ?? false;
+      if (mounted && saved != _rememberMe) {
+        setState(() => _rememberMe = saved);
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _setRememberMe(bool value) async {
+    if (mounted) setState(() => _rememberMe = value);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_rememberMePrefKey, value);
+    } catch (_) {}
+  }
+
+  Future<void> _handleSignOut(AdminRepository repo) async {
+    await _setRememberMe(false);
+    await repo.signOut();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     registerAdminStrings();
     final repo = ref.watch(adminRepositoryProvider);
     if (repo == null) return _AdminFrame(child: Center(child: Text(context.tr('adminUnavailable'))));
@@ -40,8 +83,26 @@ class AdminPage extends ConsumerWidget {
           return const _AdminFrame(child: Center(child: CircularProgressIndicator()));
         }
         final user = snap.data;
-        if (user == null) return _AdminFrame(child: _LoginForm(repo: repo));
-        return _AdminCheck(key: ValueKey(user.uid), repo: repo, user: user);
+        if (user == null) {
+          return _AdminFrame(
+            child: AdminLoginForm(
+              onSignIn: repo.signInWithPersistence,
+              onResetPassword: repo.sendPasswordReset,
+              initialRememberMe: _rememberMe,
+              onRememberMeSignedIn: _setRememberMe,
+            ),
+          );
+        }
+        return AdminCheckGate(
+          key: ValueKey(user.uid),
+          repo: repo,
+          uid: user.uid,
+          email: user.email ?? '',
+          loadAccess: () => repo.adminAccess(user.uid),
+          accessChanges: repo.accessChanges(user.uid),
+          rememberMe: _rememberMe,
+          onSignOut: () => _handleSignOut(repo),
+        );
       },
     );
   }
@@ -88,25 +149,78 @@ class LanguageToggle extends ConsumerWidget {
 }
 
 /// Checks admins/{uid}; a failed lookup shows a retry action instead of the
-/// "not admin" screen.
-class _AdminCheck extends StatefulWidget {
-  final AdminRepository repo;
-  final User user;
-  const _AdminCheck({super.key, required this.repo, required this.user});
+/// "not admin" screen, and paused/expired accounts see a clear status message.
+class AdminCheckGate extends StatefulWidget {
+  final AdminBackend repo;
+  final String uid;
+  final String email;
+  final Future<AdminAccess> Function() loadAccess;
+  final Stream<AdminAccess> accessChanges;
+  final bool rememberMe;
+  final VoidCallback onSignOut;
+  const AdminCheckGate({
+    super.key,
+    required this.repo,
+    required this.uid,
+    required this.email,
+    required this.loadAccess,
+    required this.accessChanges,
+    required this.rememberMe,
+    required this.onSignOut,
+  });
 
   @override
-  State<_AdminCheck> createState() => _AdminCheckState();
+  State<AdminCheckGate> createState() => _AdminCheckGateState();
 }
 
-class _AdminCheckState extends State<_AdminCheck> {
-  late Future<String?> _future = widget.repo.adminRole(widget.user.uid);
-  late final Stream<String?> _roleStream = widget.repo.roleChanges(widget.user.uid);
+class _AdminCheckGateState extends State<AdminCheckGate> {
+  late Future<AdminAccess> _future = widget.loadAccess();
+  Timer? _expiryTimer;
+  DateTime? _scheduledExpiry;
+  bool _timerExpired = false;
+
+  @override
+  void didUpdateWidget(covariant AdminCheckGate oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.uid != widget.uid || oldWidget.loadAccess != widget.loadAccess) {
+      _future = widget.loadAccess();
+      _scheduledExpiry = null;
+      _timerExpired = false;
+      _expiryTimer?.cancel();
+      _expiryTimer = null;
+    }
+  }
+
+  @override
+  void dispose() {
+    _expiryTimer?.cancel();
+    super.dispose();
+  }
+
+  void _ensureExpiryTimer(AdminAccess access) {
+    final target = access.isAllowed ? access.expiresAt : null;
+    if (target == _scheduledExpiry) return;
+    _scheduledExpiry = target;
+    _timerExpired = false;
+    _expiryTimer?.cancel();
+    _expiryTimer = null;
+    if (target == null) return;
+    final remaining = target.toUtc().difference(DateTime.now().toUtc());
+    if (remaining <= Duration.zero) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(() => _timerExpired = true);
+      });
+      return;
+    }
+    _expiryTimer = Timer(remaining, () {
+      if (mounted) setState(() => _timerExpired = true);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
-    final repo = widget.repo;
-    final user = widget.user;
-    return FutureBuilder<String?>(
+    registerAdminStrings();
+    return FutureBuilder<AdminAccess>(
       future: _future,
       builder: (context, adm) {
         if (adm.connectionState != ConnectionState.done) {
@@ -126,10 +240,10 @@ class _AdminCheckState extends State<_AdminCheck> {
                     spacing: 8,
                     children: [
                       FilledButton(
-                        onPressed: () => setState(() => _future = repo.adminRole(user.uid)),
+                        onPressed: () => setState(() => _future = widget.loadAccess()),
                         child: Text(context.tr('retry')),
                       ),
-                      OutlinedButton(onPressed: repo.signOut, child: Text(context.tr('signOut'))),
+                      OutlinedButton(onPressed: widget.onSignOut, child: Text(context.tr('signOut'))),
                     ],
                   ),
                 ],
@@ -137,58 +251,91 @@ class _AdminCheckState extends State<_AdminCheck> {
             ),
           );
         }
-        // Live role after the authoritative server check: a demoted or
-        // removed admin loses the owner screens (or the dashboard) at once.
-        return StreamBuilder<String?>(
-          stream: _roleStream,
+        // Live access after the authoritative server check: a demoted, stopped,
+        // expired, or removed admin loses access at once.
+        return StreamBuilder<AdminAccess>(
+          stream: widget.accessChanges,
           initialData: adm.data,
-          builder: (context, live) => _forRole(context, live.hasError ? adm.data : live.data),
+          builder: (context, live) {
+            final current = (live.hasError ? adm.data : live.data) ?? const AdminAccess(status: AdminAccountStatus.none);
+            return _forAccess(context, current);
+          },
         );
       },
     );
   }
 
-  Widget _forRole(BuildContext context, String? role) {
-    final repo = widget.repo;
-    final user = widget.user;
-    if (role == null) {
+  Widget _forAccess(BuildContext context, AdminAccess rawAccess) {
+    var access = rawAccess;
+    if (access.isAllowed &&
+        access.expiresAt != null &&
+        (_timerExpired || !DateTime.now().toUtc().isBefore(access.expiresAt!.toUtc()))) {
+      access = AdminAccess(role: access.role, status: AdminAccountStatus.expired, expiresAt: access.expiresAt);
+    }
+    _ensureExpiryTimer(access);
+
+    if (!access.isAllowed) {
+      final (IconData icon, String message) = switch (access.status) {
+        AdminAccountStatus.stopped => (Icons.pause_circle_outline, context.tr('adminStoppedAccount')),
+        AdminAccountStatus.expired => (
+            Icons.event_busy_outlined,
+            access.expiresAt == null
+                ? context.tr('adminExpiredAccount')
+                : '${context.tr('adminExpiredAccount')} (${fmtDate(CairoTime.fromInstant(access.expiresAt!))})'
+          ),
+        _ => (Icons.lock_outline, context.tr('notAdmin')),
+      };
       return _AdminFrame(
         child: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.lock_outline, size: 48, color: context.pal.alert),
-              const SizedBox(height: 8),
-              Text(context.tr('notAdmin')),
-              Text(user.email ?? '', style: TextStyle(color: context.pal.muted)),
-              const SizedBox(height: 12),
-              OutlinedButton(onPressed: repo.signOut, child: Text(context.tr('signOut'))),
-            ],
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, size: 48, color: context.pal.alert),
+                const SizedBox(height: 8),
+                Text(message, textAlign: TextAlign.center),
+                Text(widget.email, style: TextStyle(color: context.pal.muted)),
+                const SizedBox(height: 12),
+                OutlinedButton(onPressed: widget.onSignOut, child: Text(context.tr('signOut'))),
+              ],
+            ),
           ),
         ),
       );
     }
     return AdminDashboard(
-      repo: repo,
-      uid: user.uid,
-      email: user.email ?? user.uid,
-      role: role,
-      onSignOut: repo.signOut,
+      repo: widget.repo,
+      uid: widget.uid,
+      email: widget.email.isEmpty ? widget.uid : widget.email,
+      role: access.role!,
+      rememberMe: widget.rememberMe,
+      onSignOut: widget.onSignOut,
     );
   }
 }
 
-class _LoginForm extends StatefulWidget {
-  final AdminRepository repo;
-  const _LoginForm({required this.repo});
+class AdminLoginForm extends StatefulWidget {
+  final Future<void> Function(String email, String password, {bool rememberMe}) onSignIn;
+  final Future<bool> Function(String email) onResetPassword;
+  final bool initialRememberMe;
+  final ValueChanged<bool>? onRememberMeSignedIn;
+  const AdminLoginForm({
+    super.key,
+    required this.onSignIn,
+    required this.onResetPassword,
+    this.initialRememberMe = false,
+    this.onRememberMeSignedIn,
+  });
 
   @override
-  State<_LoginForm> createState() => _LoginFormState();
+  State<AdminLoginForm> createState() => _AdminLoginFormState();
 }
 
-class _LoginFormState extends State<_LoginForm> {
+class _AdminLoginFormState extends State<AdminLoginForm> {
   final _email = TextEditingController();
   final _password = TextEditingController();
+  late bool _rememberMe = widget.initialRememberMe;
   bool _busy = false;
   String? _error;
 
@@ -202,12 +349,14 @@ class _LoginFormState extends State<_LoginForm> {
   Future<void> _signIn() async {
     if (_busy) return; // Enter pressed while a sign-in is pending
     final failed = context.tr('signInFailed');
+    final remember = _rememberMe;
     setState(() {
       _busy = true;
       _error = null;
     });
     try {
-      await widget.repo.signIn(_email.text, _password.text);
+      await widget.onSignIn(_email.text, _password.text, rememberMe: remember);
+      widget.onRememberMeSignedIn?.call(remember);
     } catch (_) {
       if (mounted) setState(() => _error = failed);
     } finally {
@@ -227,7 +376,7 @@ class _LoginFormState extends State<_LoginForm> {
     }
     var ok = false;
     try {
-      ok = await widget.repo.sendPasswordReset(email);
+      ok = await widget.onResetPassword(email);
     } catch (_) {
       ok = false;
     }
@@ -236,6 +385,7 @@ class _LoginFormState extends State<_LoginForm> {
 
   @override
   Widget build(BuildContext context) {
+    registerAdminStrings();
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 400),
@@ -254,6 +404,7 @@ class _LoginFormState extends State<_LoginForm> {
                   ),
                   const SizedBox(height: 16),
                   TextField(
+                    key: const ValueKey('login-email'),
                     controller: _email,
                     keyboardType: TextInputType.emailAddress,
                     textDirection: TextDirection.ltr,
@@ -262,6 +413,7 @@ class _LoginFormState extends State<_LoginForm> {
                   ),
                   const SizedBox(height: 12),
                   TextField(
+                    key: const ValueKey('login-password'),
                     controller: _password,
                     obscureText: true,
                     textDirection: TextDirection.ltr,
@@ -272,13 +424,24 @@ class _LoginFormState extends State<_LoginForm> {
                       prefixIcon: const Icon(Icons.lock_outline),
                     ),
                   ),
+                  const SizedBox(height: 8),
+                  CheckboxListTile(
+                    key: const ValueKey('login-remember-me'),
+                    value: _rememberMe,
+                    controlAffinity: ListTileControlAffinity.leading,
+                    contentPadding: EdgeInsets.zero,
+                    dense: true,
+                    title: Text(context.tr('rememberMe')),
+                    onChanged: _busy ? null : (v) => setState(() => _rememberMe = v ?? false),
+                  ),
                   if (_error != null)
                     Padding(
                       padding: const EdgeInsets.only(top: 10),
                       child: Text(_error!, style: TextStyle(color: context.pal.alert)),
                     ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 12),
                   FilledButton(
+                    key: const ValueKey('login-submit'),
                     onPressed: _busy ? null : _signIn,
                     child: _busy
                         ? SizedBox.square(
@@ -329,6 +492,8 @@ class AdminDashboard extends StatefulWidget {
   final String uid, email, role;
   final VoidCallback onSignOut;
   final String initial;
+  final bool rememberMe;
+  final SessionPolicy sessionPolicy;
   const AdminDashboard({
     super.key,
     required this.repo,
@@ -337,6 +502,8 @@ class AdminDashboard extends StatefulWidget {
     required this.role,
     required this.onSignOut,
     this.initial = 'overview',
+    this.rememberMe = false,
+    this.sessionPolicy = const SessionPolicy(),
   });
 
   @override
@@ -538,53 +705,59 @@ class _AdminDashboardState extends State<AdminDashboard> {
         .firstWhere((d) => d.id == _current, orElse: () => adminDestinations(widget.role).first);
     return UnsavedGuardScope(
       registry: _unsaved,
-      child: ListenableBuilder(
-        listenable: _unsaved,
-        builder: (context, child) => PopScope(
-          canPop: !_unsaved.isDirty,
-          onPopInvokedWithResult: (didPop, result) async {
-            if (didPop) return;
-            final discard = await confirmDiscardChanges(context);
-            if (discard && context.mounted) {
-              final nav = Navigator.of(context);
-              if (nav.canPop()) nav.pop(result);
-            }
-          },
-          child: child!,
-        ),
-        child: Scaffold(
-          appBar: AppBar(
-            title: Row(
-              children: [
-                const ChurchSeal(size: 28),
-                const SizedBox(width: 8),
-                Flexible(
-                  child: Text(
-                    '${context.tr('admin')} — ${context.pick(dest.labelAr, dest.labelEn)}',
-                    overflow: TextOverflow.ellipsis,
+      child: AdminSessionGuard(
+        enabled: !widget.rememberMe,
+        policy: widget.sessionPolicy,
+        unsaved: _unsaved,
+        onSignOut: widget.onSignOut,
+        child: ListenableBuilder(
+          listenable: _unsaved,
+          builder: (context, child) => PopScope(
+            canPop: !_unsaved.isDirty,
+            onPopInvokedWithResult: (didPop, result) async {
+              if (didPop) return;
+              final discard = await confirmDiscardChanges(context);
+              if (discard && context.mounted) {
+                final nav = Navigator.of(context);
+                if (nav.canPop()) nav.pop(result);
+              }
+            },
+            child: child!,
+          ),
+          child: Scaffold(
+            appBar: AppBar(
+              title: Row(
+                children: [
+                  const ChurchSeal(size: 28),
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Text(
+                      '${context.tr('admin')} — ${context.pick(dest.labelAr, dest.labelEn)}',
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
+                ],
+              ),
+              actions: [
+                IconButton(
+                  tooltip: context.tr('openSite'),
+                  icon: const Icon(Icons.public),
+                  onPressed: _handleOpenSite,
                 ),
+                const LanguageToggle(),
               ],
             ),
-            actions: [
-              IconButton(
-                tooltip: context.tr('openSite'),
-                icon: const Icon(Icons.public),
-                onPressed: _handleOpenSite,
-              ),
-              const LanguageToggle(),
-            ],
+            drawer: wide ? null : Drawer(child: _nav(context, inDrawer: true)),
+            body: wide
+                ? Row(
+                    children: [
+                      SizedBox(width: 270, child: _nav(context, inDrawer: false)),
+                      const VerticalDivider(width: 1),
+                      Expanded(child: _screen()),
+                    ],
+                  )
+                : _screen(),
           ),
-          drawer: wide ? null : Drawer(child: _nav(context, inDrawer: true)),
-          body: wide
-              ? Row(
-                  children: [
-                    SizedBox(width: 270, child: _nav(context, inDrawer: false)),
-                    const VerticalDivider(width: 1),
-                    Expanded(child: _screen()),
-                  ],
-                )
-              : _screen(),
         ),
       ),
     );

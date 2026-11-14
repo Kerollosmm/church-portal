@@ -7,8 +7,8 @@
 
 - **Baseline:** the report's last review, 13 November 2026 (Africa/Cairo), against the code after PR #70.
 - **Counts:** 5 fixes on live data · 28 open tasks in the code · 8 done or removed · 1 deferred by decision.
-- **Code:** PR 3A (`feat/p3a-safe-actions`, items 6, 7, 8, 11) and PR 3B (`feat/p3b-written-state`, items 9, 10) implemented on Stage 1.
-- **Next action:** Stage 1, PR 3C (items 12, 13).
+- **Code:** PR 3A (`feat/p3a-safe-actions`, items 6, 7, 8, 11), PR 3B (`feat/p3b-written-state`, items 9, 10), and PR 3C (`feat/p3c-admin-status-session`, items 12, 13) implemented on Stage 1.
+- **Next action:** Stage 1, PR 3D (items 14, 15, 16, 17, 18a).
 - **Target:** 2–3 weeks in total across the stages (owner, 13 November).
 
 ## قرارات مفتوحة للمالك (Open points for the owner — README §١٥)
@@ -37,8 +37,8 @@ All answered by the owner on 13 November 2026 (README §١٠, D1–D5).
 - [x] 9 — state word next to every switch and on every row (P1-09) · PR 3B (`feat/p3b-written-state`)
 - [x] 10 — preview before «يحل محل قداسات اليوم المعتادة» (P1-10) · PR 3B (`feat/p3b-written-state`)
 - [x] 11 — fixed bottom save bar (P1-11) · PR 3A (`feat/p3a-safe-actions`)
-- [ ] 12 — «نشط / موقوف» on every admin, optional end date (P1-12)
-- [ ] 13 — automatic sign-out after 30 minutes with a 60-second warning, «افتكرني» on a personal device (P1-13)
+- [x] 12 — «نشط / موقوف» on every admin, optional end date (P1-12) · PR 3C (`feat/p3c-admin-status-session`)
+- [x] 13 — automatic sign-out after 30 minutes with a 60-second warning, «افتكرني» on a personal device (P1-13) · PR 3C (`feat/p3c-admin-status-session`)
 - [ ] 14 — automatic slug from the Arabic title (P1-14)
 - [ ] 15 — ready «صفحة تبرعات» template (P1-15)
 - [ ] 16 — one screen for sections and their items (P1-16)

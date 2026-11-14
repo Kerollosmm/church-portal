@@ -31,6 +31,27 @@ const Map<String, List<String>> adminStrings = {
     'القداس مخفي حاليًا — مش هيستبدل أي قداسات لحد ما يتفعل ظهوره',
     'Hidden right now — will not replace regular masses until shown',
   ],
+  // Admin status & session policy (PR 3C / Packets P1-12, P1-13)
+  'activeStatus': ['نشط', 'Active'],
+  'stoppedStatus': ['موقوف', 'Stopped'],
+  'pauseAdmin': ['إيقاف المشرف', 'Pause admin'],
+  'resumeAdmin': ['تفعيل المشرف', 'Re-enable admin'],
+  'confirmPauseAdmin': [
+    'إيقاف هذا المشرف مؤقتًا؟ لن يتمكن من التعديل حتى يُعاد تفعيله.',
+    'Pause this admin? They will not be able to edit until re-enabled.'
+  ],
+  'confirmResumeAdmin': ['إعادة تفعيل صلاحية هذا المشرف؟', 'Re-enable this admin\'s access?'],
+  'adminExpiresAt': ['تاريخ انتهاء الصلاحية (اختياري)', 'End date (optional)'],
+  'adminNoExpiry': ['بدون تاريخ انتهاء', 'No end date'],
+  'adminExpiresOn': ['ينتهي في {d}', 'Ends on {d}'],
+  'adminExpiredOn': ['انتهى في {d}', 'Expired on {d}'],
+  'clearEndDate': ['إزالة تاريخ الانتهاء', 'Clear end date'],
+  'adminStoppedAccount': ['تم إيقاف هذا الحساب مؤقتًا من مالك اللوحة.', 'This admin account is currently paused by an owner.'],
+  'adminExpiredAccount': ['انتهت صلاحية هذا الحساب المؤقت.', 'This temporary admin access has expired.'],
+  'rememberMe': ['افتكرني (جهاز شخصي)', 'Remember me (personal device)'],
+  'sessionWarnTitle': ['هتخرج تلقائيًا بعد {s} ثانية', 'Signing out in {s} seconds'],
+  'sessionWarnBody': ['مفيش نشاط بقالك شوية. عايز تفضل مسجّل؟', 'No activity for a while. Stay signed in?'],
+  'staySignedIn': ['خليك مسجّل', 'Stay signed in'],
 };
 
 /// Idempotently registers [adminStrings] in the runtime localization table.

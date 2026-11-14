@@ -7,13 +7,16 @@ import '../../core/l10n.dart';
 import '../../core/launch.dart';
 import '../../core/theme.dart';
 import '../../data/admin_repository.dart';
+import '../../domain/cairo_time.dart';
 import '../../domain/contact_categories.dart';
 import '../../domain/features.dart';
+import 'admin_access.dart';
 import 'admin_schema.dart';
 import 'admin_strings.dart';
 import 'admin_validators.dart';
 import 'confirm_named.dart';
 import 'doc_editor.dart';
+import 'state_switch.dart';
 
 /// Dashboard home: counts, quick links, latest edits.
 class OverviewScreen extends StatefulWidget {
@@ -777,53 +780,125 @@ class _AdminsScreenState extends State<AdminsScreen> {
   Widget _tile(BuildContext context, AdminDoc a) {
     final self = a.id == widget.selfUid;
     final role = a.data['role'] == AdminRoles.owner ? AdminRoles.owner : AdminRoles.editor;
+    final active = a.active;
+    final expiresAt = a.expiresAt;
+    final nowUtc = DateTime.now().toUtc();
+    final expired = expiresAt != null && !nowUtc.isBefore(expiresAt.toUtc());
+    final inactive = !active || expired;
+    final expiryStr = expiresAt == null ? '' : fmtDate(CairoTime.fromInstant(expiresAt));
     return Card(
+      key: ValueKey('admin-card-${a.id}'),
       margin: const EdgeInsets.only(bottom: 8),
       child: ListTile(
-        leading: Icon(role == AdminRoles.owner ? Icons.workspace_premium_outlined : Icons.edit_note,
-            color: context.pal.primary),
-        title: Text('${a.data['email'] ?? ''}${self ? ' (${context.tr('you')})' : ''}', textDirection: TextDirection.ltr),
-        // The role menu and remove button wrap under the UID (phones / large text).
+        leading: Icon(
+          role == AdminRoles.owner ? Icons.workspace_premium_outlined : Icons.edit_note,
+          color: inactive ? context.pal.muted : context.pal.primary,
+        ),
+        title: Text(
+          '${a.data['email'] ?? ''}${self ? ' (${context.tr('you')})' : ''}',
+          textDirection: TextDirection.ltr,
+          style: inactive ? TextStyle(color: context.pal.muted) : null,
+        ),
+        // The role menu, status switch, expiry picker and remove button wrap cleanly (phones / large text).
         subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           SelectableText('UID: ${a.id}', style: const TextStyle(fontSize: 11)),
-          Wrap(spacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
-          // Long role labels ellipsize instead of overflowing at 320 px / 200%.
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 280),
-            child: DropdownButton<String>(
-            isExpanded: true,
-            value: role,
-            onChanged: self
-                ? null
-                : (v) => v == null ? null : _guard(context, () => widget.repo.setAdmin(a.id, email: '${a.data['email'] ?? ''}', role: v)),
-            items: [
-              for (final r in AdminRoles.all)
-                DropdownMenuItem(value: r, child: Text(context.tr('role_$r'), overflow: TextOverflow.ellipsis)),
-            ],
-          ),
-          ),
-          IconButton(
-            tooltip: context.tr('removeAdmin'),
-            icon: Icon(Icons.person_remove_outlined, color: self ? context.pal.muted : context.pal.alert),
-            onPressed: self
-                ? null
-                : () async {
-                    final email = a.data['email'] ?? a.id;
-                    final ok = await confirmNamedAction(
-                      context,
-                      summary: '$email\n\n${context.tr('confirmRemoveAdmin')}',
-                      actionLabel: context.tr('removeAdmin'),
-                      destructive: true,
-                    );
-                    if (ok && context.mounted) {
-                      await _guard(context, () => widget.repo.removeAdmin(a.id));
-                    }
-                  },
-          ),
+          const SizedBox(height: 6),
+          Wrap(spacing: 8, runSpacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: [
+            // Long role labels ellipsize instead of overflowing at 320 px / 200%.
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 260),
+              child: DropdownButton<String>(
+                isExpanded: true,
+                value: role,
+                onChanged: self
+                    ? null
+                    : (v) => v == null ? null : _guard(context, () => widget.repo.setAdmin(a.id, email: '${a.data['email'] ?? ''}', role: v)),
+                items: [
+                  for (final r in AdminRoles.all)
+                    DropdownMenuItem(value: r, child: Text(context.tr('role_$r'), overflow: TextOverflow.ellipsis)),
+                ],
+              ),
+            ),
+            AdminStateSwitch(
+              key: ValueKey('admin-active-${a.id}'),
+              value: active,
+              onLabel: context.tr('activeStatus'),
+              offLabel: context.tr('stoppedStatus'),
+              onChanged: self ? null : (next) => _toggleActive(context, a, next),
+            ),
+            ActionChip(
+              key: ValueKey('admin-expiry-${a.id}'),
+              avatar: Icon(Icons.event_outlined, size: 18, color: expired ? context.pal.alert : context.pal.primary),
+              label: Text(
+                expiresAt == null
+                    ? context.tr('adminNoExpiry')
+                    : context.tr(expired ? 'adminExpiredOn' : 'adminExpiresOn', {'d': expiryStr}),
+                overflow: TextOverflow.ellipsis,
+                style: expired ? TextStyle(color: context.pal.alert, fontWeight: FontWeight.w700) : null,
+              ),
+              onPressed: self ? null : () => _pickExpiry(context, a),
+            ),
+            if (expiresAt != null && !self)
+              IconButton(
+                key: ValueKey('admin-clear-expiry-${a.id}'),
+                tooltip: context.tr('clearEndDate'),
+                icon: const Icon(Icons.close, size: 18),
+                onPressed: () => _guard(
+                  context,
+                  () => widget.repo.setAdminStatus(a.id, active: active, clearExpiresAt: true),
+                ),
+              ),
+            IconButton(
+              tooltip: context.tr('removeAdmin'),
+              icon: Icon(Icons.person_remove_outlined, color: self ? context.pal.muted : context.pal.alert),
+              onPressed: self
+                  ? null
+                  : () async {
+                      final email = a.data['email'] ?? a.id;
+                      final ok = await confirmNamedAction(
+                        context,
+                        summary: '$email\n\n${context.tr('confirmRemoveAdmin')}',
+                        actionLabel: context.tr('removeAdmin'),
+                        destructive: true,
+                      );
+                      if (ok && context.mounted) {
+                        await _guard(context, () => widget.repo.removeAdmin(a.id));
+                      }
+                    },
+            ),
           ]),
         ]),
       ),
     );
+  }
+
+  Future<void> _toggleActive(BuildContext context, AdminDoc a, bool next) async {
+    final email = '${a.data['email'] ?? a.id}';
+    final ok = await confirmNamedAction(
+      context,
+      summary: '$email\n\n${context.tr(next ? 'confirmResumeAdmin' : 'confirmPauseAdmin')}',
+      actionLabel: context.tr(next ? 'resumeAdmin' : 'pauseAdmin'),
+      destructive: !next,
+    );
+    if (ok && context.mounted) {
+      await _guard(context, () => widget.repo.setAdminStatus(a.id, active: next));
+    }
+  }
+
+  Future<void> _pickExpiry(BuildContext context, AdminDoc a) async {
+    final existing = a.expiresAt;
+    final initial = existing != null ? CairoTime.fromInstant(existing) : CairoTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: DateTime(initial.year, initial.month, initial.day),
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2100),
+    );
+    if (picked == null || !context.mounted) return;
+    final endOfDayUtc = CairoTime.at(picked.year, picked.month, picked.day, 23 * 60 + 59)
+        .toUtc()
+        .add(const Duration(seconds: 59));
+    await _guard(context, () => widget.repo.setAdminStatus(a.id, active: a.active, expiresAt: endOfDayUtc));
   }
 
   Future<void> _guard(BuildContext context, Future<void> Function() op) async {

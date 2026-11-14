@@ -5,10 +5,19 @@ The `admin` package implements the authenticated back-office management console 
 
 ## Interface
 - `admin_page.dart`:
-  - `AdminPage`: Top-level authenticated entry point widget managing authentication state check, language switcher, and responsive dashboard navigation.
+  - `AdminPage`: Top-level authenticated entry point widget managing authentication state check, «افتكرني» persistence, language switcher, and responsive dashboard navigation.
+  - `AdminCheckGate`: Verifies `admins/{uid}` server access, streams live status/expiry changes, and locks paused or expired accounts immediately.
+  - `AdminLoginForm`: Email/password login form with «افتكرني (جهاز شخصي)» personal-device toggle and password reset.
   - `LanguageToggle`: Bilingual toggle button switching the admin workspace between Arabic (RTL) and English (LTR).
   - `AdminDest`: Value object representing an administrative navigation destination (tab label, icon, and screen builder).
-  - `AdminDashboard`: Responsive administration dashboard scaffold managing navigation rail, drawer, and tab content switching.
+  - `AdminDashboard`: Responsive administration dashboard scaffold managing navigation rail, drawer, `AdminSessionGuard`, and tab content switching.
+- `admin_access.dart`:
+  - `AdminAccountStatus`, `AdminAccess`, `evaluateAdminAccess`, and deferred repository/doc extensions (`AdminDocStatusExt`, `AdminBackendStatusExt`, `AdminRepositoryAccessExt`) kept out of `main.dart.js`.
+- `admin_strings.dart`:
+  - `adminStrings`, `registerAdminStrings()`: Deferred admin-only localization table kept out of `main.dart.js`.
+- `session_policy.dart`:
+  - `SessionPolicy`: Pure Dart idle-timeout policy (30-minute idle limit, 60-second warning).
+  - `AdminSessionGuard`: Activity monitor resetting the idle clock on pointer and keyboard input, showing the countdown warning banner, and running `confirmDiscardChanges` before signing out if a form is dirty.
 - `admin_schema.dart`:
   - `FieldType`: Enumeration defining schema field types (`string`, `multiline`, `integer`, `decimal`, `boolean`, `time`, `date`, `dateTime`, `looseDate`, `url`, `phone`, `select`, `image`, `imageList`, `list`, `blocks`, `options`).
   - `FieldGroup`: Visual grouping categories for form fields (`basic`, `program`, `details`, `media`, `contacts`).

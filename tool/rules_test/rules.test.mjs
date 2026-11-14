@@ -358,6 +358,247 @@ describe('admins', () => {
   });
 });
 
+describe('P1-12: admin active / expiresAt access control', () => {
+  const futureTs = () => Timestamp.fromMillis(Date.now() + 86_400_000);
+  const pastTs = () => Timestamp.fromMillis(Date.now() - 86_400_000);
+  const setAdmin = (uid, data) => env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), 'admins', uid), data);
+  });
+
+  test('stopped editor (active: false) reads own admin doc, cannot write content or read contact_messages', async () => {
+    await setAdmin(EDITOR, { email: 'editor@x.test', role: 'editor', active: false });
+    const ed = db(EDITOR);
+    await assertSucceeds(getDoc(doc(ed, 'admins', EDITOR)));
+    await assertFails(updateDoc(doc(ed, 'clinics', 'c1'), { visible: false }));
+    await assertFails(setDoc(doc(ed, 'clinics', 'new1'), {
+      specialty: 'dental', specialtyAr: 'الأسنان', doctorName: 'د. مينا',
+    }));
+    await assertFails(deleteDoc(doc(ed, 'clinics', 'c1')));
+    await assertFails(getDoc(doc(ed, 'contact_messages', 'm1')));
+    await assertFails(getDocs(collection(ed, 'contact_messages')));
+    await assertFails(updateDoc(doc(ed, 'contact_messages', 'm1'), { status: 'handled' }));
+  });
+
+  test('expired editor (expiresAt in the past) reads own admin doc, cannot write content or read contact_messages', async () => {
+    await setAdmin(EDITOR, { email: 'editor@x.test', role: 'editor', active: true, expiresAt: pastTs() });
+    const ed = db(EDITOR);
+    await assertSucceeds(getDoc(doc(ed, 'admins', EDITOR)));
+    await assertFails(updateDoc(doc(ed, 'clinics', 'c1'), { visible: false }));
+    await assertFails(getDoc(doc(ed, 'contact_messages', 'm1')));
+    await assertFails(getDocs(collection(ed, 'contact_messages')));
+  });
+
+  test('active editor with future expiresAt or expiresAt: null can write content and read contact_messages', async () => {
+    await setAdmin(EDITOR, { email: 'editor@x.test', role: 'editor', active: true, expiresAt: futureTs() });
+    const ed = db(EDITOR);
+    await assertSucceeds(updateDoc(doc(ed, 'clinics', 'c1'), { visible: false }));
+    await assertSucceeds(getDoc(doc(ed, 'contact_messages', 'm1')));
+    await assertSucceeds(getDocs(collection(ed, 'contact_messages')));
+
+    await setAdmin(EDITOR, { email: 'editor@x.test', role: 'editor', active: true, expiresAt: null });
+    await assertSucceeds(updateDoc(doc(ed, 'clinics', 'c1'), { visible: true }));
+    await assertSucceeds(getDocs(collection(ed, 'contact_messages')));
+  });
+
+  test('re-enabling (active: true, expiresAt: null) restores editor access', async () => {
+    await setAdmin(EDITOR, { email: 'editor@x.test', role: 'editor', active: false, expiresAt: pastTs() });
+    const ed = db(EDITOR);
+    const own = db(OWNER);
+    await assertFails(updateDoc(doc(ed, 'clinics', 'c1'), { visible: false }));
+
+    await assertSucceeds(updateDoc(doc(own, 'admins', EDITOR), {
+      active: true, expiresAt: null, updatedAt: serverTimestamp(), updatedBy: `${OWNER}@x.test`,
+    }));
+    await assertSucceeds(updateDoc(doc(ed, 'clinics', 'c1'), { visible: false }));
+    await assertSucceeds(getDocs(collection(ed, 'contact_messages')));
+  });
+
+  test('stopped or expired owner cannot write settings/features or manage other admins', async () => {
+    const own = db(OWNER);
+
+    await setAdmin(OWNER, { email: 'owner@x.test', role: 'owner', active: false });
+    await assertSucceeds(getDoc(doc(own, 'admins', OWNER)));
+    await assertFails(getDocs(collection(own, 'admins')));
+    await assertFails(setDoc(doc(own, 'settings', 'features'), { theme: 'navy' }));
+    await assertFails(setDoc(doc(own, 'admins', 'new-uid'), { email: 'n@x.test', role: 'editor' }));
+    await assertFails(updateDoc(doc(own, 'admins', EDITOR), { active: false }));
+    await assertFails(deleteDoc(doc(own, 'admins', EDITOR)));
+
+    await setAdmin(OWNER, { email: 'owner@x.test', role: 'owner', active: true, expiresAt: pastTs() });
+    await assertSucceeds(getDoc(doc(own, 'admins', OWNER)));
+    await assertFails(getDocs(collection(own, 'admins')));
+    await assertFails(setDoc(doc(own, 'settings', 'features'), { theme: 'navy' }));
+    await assertFails(setDoc(doc(own, 'admins', 'new-uid'), { email: 'n@x.test', role: 'editor' }));
+    await assertFails(updateDoc(doc(own, 'admins', EDITOR), { active: false }));
+    await assertFails(deleteDoc(doc(own, 'admins', EDITOR)));
+  });
+
+  test('editor cannot change active or expiresAt on any admin doc', async () => {
+    const ed = db(EDITOR);
+    await assertFails(updateDoc(doc(ed, 'admins', EDITOR), { active: false }));
+    await assertFails(updateDoc(doc(ed, 'admins', EDITOR), { expiresAt: futureTs() }));
+    await assertFails(setDoc(doc(ed, 'admins', EDITOR), { email: 'editor@x.test', role: 'editor', active: false }));
+    await assertFails(updateDoc(doc(ed, 'admins', OWNER), { active: false }));
+    await assertFails(setDoc(doc(ed, 'admins', 'other-uid'), {
+      email: 'other@x.test', role: 'editor', active: true, expiresAt: null,
+    }));
+  });
+
+  test('owner cannot set active: false or expiresAt on their own admins/OWNER doc', async () => {
+    const own = db(OWNER);
+    await assertFails(updateDoc(doc(own, 'admins', OWNER), { active: false }));
+    await assertFails(updateDoc(doc(own, 'admins', OWNER), { active: true }));
+    await assertFails(updateDoc(doc(own, 'admins', OWNER), { expiresAt: futureTs() }));
+    await assertFails(updateDoc(doc(own, 'admins', OWNER), { expiresAt: null }));
+    await assertFails(setDoc(doc(own, 'admins', OWNER), {
+      email: 'owner@x.test', role: 'owner', active: false, expiresAt: pastTs(),
+    }));
+  });
+
+  test('owner can set/update active and expiresAt on other admin docs; invalid types fail', async () => {
+    const own = db(OWNER);
+    const stamp = () => ({ updatedAt: serverTimestamp(), updatedBy: `${OWNER}@x.test` });
+
+    // Create with active + timestamp expiresAt
+    await assertSucceeds(setDoc(doc(own, 'admins', 'temp-ed'), {
+      email: 'temp@x.test', role: 'editor', active: true, expiresAt: futureTs(), ...stamp(),
+    }));
+    // Update to paused (active: false) and clear expiresAt to null
+    await assertSucceeds(updateDoc(doc(own, 'admins', 'temp-ed'), {
+      active: false, expiresAt: null, ...stamp(),
+    }));
+    // Update existing editor doc with future expiresAt
+    await assertSucceeds(updateDoc(doc(own, 'admins', EDITOR), {
+      active: true, expiresAt: futureTs(), ...stamp(),
+    }));
+
+    // Invalid types fail
+    await assertFails(setDoc(doc(own, 'admins', 'bad1'), {
+      email: 'b1@x.test', role: 'editor', active: 'yes',
+    }));
+    await assertFails(setDoc(doc(own, 'admins', 'bad2'), {
+      email: 'b2@x.test', role: 'editor', active: null,
+    }));
+    await assertFails(setDoc(doc(own, 'admins', 'bad3'), {
+      email: 'b3@x.test', role: 'editor', expiresAt: '2030-01-01',
+    }));
+    await assertFails(updateDoc(doc(own, 'admins', EDITOR), { expiresAt: 123456789 }));
+  });
+
+  test('worst-case whole-document rules budget: active editor with future expiresAt saves full settings/features and saints', async () => {
+    await setAdmin(EDITOR, { email: 'editor@x.test', role: 'editor', active: true, expiresAt: futureTs() });
+    const ed = db(EDITOR);
+    const stamp = () => ({ updatedAt: serverTimestamp(), updatedBy: `${EDITOR}@x.test` });
+    const featRef = doc(ed, 'settings', 'features');
+
+    // 1. Full seeded settings/features create
+    await assertSucceeds(setDoc(featRef, { ...convert(seed.settings.features), ...stamp() }));
+
+    // 2. Full legacy/toggle/today/live/dailyVerse/imageStyles/footer save
+    await assertSucceeds(setDoc(featRef, {
+      ...convert(seed.settings.features),
+      heroTitleAr: 'أهلًا بكم',
+      heroTitleEn: 'Welcome',
+      heroSubtitleAr: 'كنيسة القديسين',
+      heroSubtitleEn: 'Saints Church',
+      bannerEnabled: true,
+      bannerAr: 'إعلان',
+      bannerEn: 'Notice',
+      bannerLink: '/clinics',
+      heroMotion: true,
+      heroSeasonTint: true,
+      heroShowAddress: false,
+      aboutMilestones: true,
+      copticStrip: 'all',
+      dayStartMode: 'fixed',
+      dayStartsAt: '05:00',
+      topEvent: true,
+      commemoration: true,
+      topEventServices: true,
+      liveEnabled: true,
+      liveUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+      liveLabelAr: 'بث مباشر للقداس',
+      liveLabelEn: 'Live Liturgy',
+      liveEndsAt: futureTs(),
+      liveBadgeHideOnHome: false,
+      weddingBookingOff: false,
+      dailyVerse: { mode: 'daily', textAr: 'الرب نوري', refAr: 'مز ٢٧: ١', textEn: 'The Lord is my light', refEn: 'Ps 27:1' },
+      imageStyles: { priests: 'avatar', saints: 'card', activities: 'banner' },
+      ...stamp(),
+    }));
+
+    // 3. Full App & Push save (ADR-057/059) merged onto that stored full settings/features doc
+    await assertSucceeds(setDoc(featRef, {
+      installPrompt: true,
+      installTitleAr: 'تطبيق الكنيسة',
+      installTitleEn: 'Church App',
+      installBodyAr: 'تابع القداسات والمواسم',
+      installBodyEn: 'Follow liturgies and seasons',
+      installAndroidUrl: 'https://example.org/app.apk',
+      installAndroidUrl32: '/app/older.apk',
+      installApkVersion: '1.2.0',
+      installApkBuild: 45,
+      installApkSizeMb: 18.5,
+      installApkSize32Mb: 17.2,
+      installReshowDays: 30,
+      installRemindDays: 3,
+      push: true,
+      pushVapidKey: 'B'.repeat(88),
+      pushTypes: ['announcements', 'verse_daily', 'katameros_daily', 'seasons', 'feasts', 'reminders'],
+      reminderLeads: [0, 15, 60, 1440],
+      reminderDefaultLead: 60,
+      notifyTypes: [
+        ['verse_daily', '07:00', '', 'آية اليوم', 'Verse of the Day', '{verse}', '{verse}'].join('\u001f'),
+        ['seasons', '07:00', '3', 'المواسم', 'Seasons', '{season}', '{season}'].join('\u001f'),
+      ],
+      reminderSources: 'lit,mtg,day',
+      ...stamp(),
+    }, { merge: true }));
+
+    // Full saints document save (max lengths + split gallery & extraFields updates)
+    const img = (i) => ({ source: 'inline', mediaId: `m${i}`, alt: 'a'.repeat(300), w: 800, h: 600 });
+    const field = (i) => ({ titleAr: 'ع'.repeat(150), titleEn: 't'.repeat(150), valueAr: 'ق'.repeat(2000), valueEn: `${i}`.repeat(2000).slice(0, 2000) });
+    const fullSaintScalars = {
+      nameAr: 'الأنبا موسى الأسود',
+      nameEn: 'St. Moses the Black',
+      bioAr: 'س'.repeat(5000),
+      bioEn: 'b'.repeat(5000),
+      feastCopticAr: '٢٤ بؤونة',
+      feastCopticEn: '24 Paona',
+      feastGregorianAr: '١ يوليو',
+      feastGregorian: '1 July',
+      detailsEnabled: true,
+      showDetailImages: true,
+      showContacts: true,
+      showSocials: true,
+      detailsAr: 'ت'.repeat(10000),
+      detailsEn: 'd'.repeat(10000),
+      image: { source: 'url', url: 'https://img.example.org/cover.jpg', alt: 'cover', w: 800, h: 600 },
+      contactPhone: '01012345678',
+      whatsapp: '01012345678',
+      whatsappUrl: 'https://whatsapp.com/channel/x',
+      facebookUrl: 'https://facebook.com/x',
+      youtubeUrl: 'https://youtube.com/@x',
+      instagramUrl: 'https://instagram.com/x',
+      externalUrl: 'https://forms.example.org/register',
+      externalLabelAr: 'ن'.repeat(80),
+      externalLabelEn: 'Register',
+      contactNoteAr: 'م'.repeat(500),
+      contactNoteEn: 'Call us',
+      visible: true,
+      sample: false,
+      order: 1,
+      gallery: [],
+      extraFields: [],
+      ...stamp(),
+    };
+    const saintRef = doc(ed, 'saints', 'worst-case-saint');
+    await assertSucceeds(setDoc(saintRef, fullSaintScalars));
+    await assertSucceeds(updateDoc(saintRef, { gallery: Array.from({ length: 8 }, (_, i) => img(i)), ...stamp() }));
+    await assertSucceeds(updateDoc(saintRef, { extraFields: Array.from({ length: 15 }, (_, i) => field(i)), ...stamp() }));
+  });
+});
+
 describe('SEC-01: contact throttle cannot be pinged on its own', () => {
   test('standalone writes to meta/contact_rate are rejected', async () => {
     const pub = db(null);

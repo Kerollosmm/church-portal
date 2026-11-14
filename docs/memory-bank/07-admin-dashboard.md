@@ -1,6 +1,6 @@
 # 07 — Admin dashboard (`/admin`)
 
-Code: `lib/ui/admin/` — `admin_page.dart`, `admin_schema.dart`, `doc_editor.dart`, `collection_list.dart`,
+Code: `lib/ui/admin/` — `admin_page.dart`, `admin_access.dart`, `admin_schema.dart`, `doc_editor.dart`, `collection_list.dart`,
 `features_editor.dart`, `admin_screens.dart`, `admin_validators.dart`, `confirm_named.dart`, `unsaved_guard.dart`,
 `pending_delete.dart`, `unsaved_bar.dart`; data access `lib/data/admin_repository.dart`.
 Tests: `test/admin_test.dart`; server rules: `firestore.rules` + `tool/rules_test`.
@@ -511,3 +511,14 @@ Bottom bar anchored to the bottom of the viewport whenever an editor is dirty:
   - «موقوف» when `active == false`.
   - «منتهي» when an announcement, event, notice or dated item's date/endDate/endsAt is in the past in Cairo time.
   - «بيانات تجريبية» when `sample == true`.
+
+### Admin active/expiry status & 30-minute idle session policy (PR 3C, Packets P1-12 & P1-13)
+- **Temporary pause & optional end date (`AdminsScreen`, `AdminCheckGate`, `AdminAccess`):**
+  - Each row in `AdminsScreen` renders an `AdminStateSwitch` («نشط / موقوف») toggled with `confirmNamedAction` confirmation (never on yourself), plus an optional end-date picker (`adminExpiresAt`) and «إزالة تاريخ الانتهاء» clear button. `admins/{uid}` stores `active` (missing = true) and `expiresAt` (timestamp, nullable).
+  - `evaluateAdminAccess(data, now)` in `lib/data/admin_repository.dart` classifies access as `active`, `stopped`, `expired`, or `none`.
+  - `AdminCheckGate` (`lib/ui/admin/admin_page.dart`) streams live `accessChanges` and schedules an exact expiry `Timer` for `expiresAt` so an open dashboard immediately locks out on pause, expiry, or removal, showing «تم إيقاف هذا الحساب مؤقتًا» or «انتهت صلاحية هذا الحساب المؤقت» with Sign out (never deleting `admins/{uid}`). `didUpdateWidget` resets `_future` and the timer when `uid` or `loadAccess` changes.
+- **Remember me & 30-minute idle sign-out (`SessionPolicy`, `AdminSessionGuard`, `lib/ui/admin/session_policy.dart`):**
+  - `AdminLoginForm` includes «افتكرني (جهاز شخصي)» (`login-remember-me`, persisted via `SharedPreferences` `admin_remember_me`, cleared on sign-out).
+  - When unticked (shared office device), `AdminSessionGuard` wraps `AdminDashboard`, resetting the idle timer (`SessionPolicy`: 30 minutes limit, 60-second warning) on both pointer events (`PointerDownEvent`/`PointerMoveEvent`/`PointerSignalEvent`/`PointerPanZoomStartEvent`) and keyboard input (`HardwareKeyboard` + `Focus`).
+  - At 29 minutes idle, an alert banner (`session-idle-warning`) counts down with «خليك مسجّل» (`session-stay-btn`). At 30 minutes, if `unsaved.isDirty` is true, `confirmDiscardChanges` runs before signing out; choosing «متابعة التعديل» resets the idle clock instead of losing unsaved work.
+- **Deferred admin copy (`admin_strings.dart`):** Admin-only strings live in `lib/ui/admin/admin_strings.dart` and register lazily via `registerAdminStrings()` so `main.dart.js` stays within the public bundle ceiling.

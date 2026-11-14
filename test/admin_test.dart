@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 import 'dart:ui' show Tristate;
 
 import 'package:church_portal/core/theme.dart';
@@ -10,6 +9,7 @@ import 'package:church_portal/data/media_repository.dart';
 import 'package:church_portal/domain/cairo_time.dart';
 import 'package:church_portal/domain/features.dart';
 import 'package:church_portal/domain/models.dart';
+import 'package:church_portal/ui/admin/admin_access.dart';
 import 'package:church_portal/ui/admin/admin_page.dart';
 import 'package:church_portal/ui/admin/admin_schema.dart';
 import 'package:church_portal/ui/admin/admin_screens.dart';
@@ -18,9 +18,12 @@ import 'package:church_portal/ui/admin/collection_list.dart';
 import 'package:church_portal/ui/admin/doc_editor.dart';
 import 'package:church_portal/ui/admin/features_editor.dart';
 import 'package:church_portal/ui/admin/pending_delete.dart';
+import 'package:church_portal/ui/admin/session_policy.dart';
 import 'package:church_portal/ui/admin/state_switch.dart';
 import 'package:church_portal/ui/admin/unsaved_bar.dart';
 import 'package:church_portal/ui/admin/unsaved_guard.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -1777,6 +1780,418 @@ void main() {
       }
     });
   });
+
+  group('PR 3C: P1-12 admin status & optional expiry', () {
+    test('evaluateAdminAccess handles active, stopped, expired, and none', () {
+      final now = DateTime.utc(2026, 11, 14, 12, 0);
+      expect(evaluateAdminAccess(null, now).status, AdminAccountStatus.none);
+      expect(evaluateAdminAccess(null, now).isAllowed, isFalse);
+
+      final missingFlags = evaluateAdminAccess({'email': 'e@x.org', 'role': 'editor'}, now);
+      expect(missingFlags.status, AdminAccountStatus.active);
+      expect(missingFlags.role, AdminRoles.editor);
+      expect(missingFlags.isAllowed, isTrue);
+
+      final ownerActive = evaluateAdminAccess({'role': 'owner', 'active': true}, now);
+      expect(ownerActive.status, AdminAccountStatus.active);
+      expect(ownerActive.role, AdminRoles.owner);
+      expect(ownerActive.isAllowed, isTrue);
+
+      final stoppedWithFuture = evaluateAdminAccess({
+        'role': 'editor',
+        'active': false,
+        'expiresAt': now.add(const Duration(days: 3)),
+      }, now);
+      expect(stoppedWithFuture.status, AdminAccountStatus.stopped);
+      expect(stoppedWithFuture.isAllowed, isFalse);
+
+      final futureExpiry = evaluateAdminAccess({
+        'role': 'editor',
+        'active': true,
+        'expiresAt': now.add(const Duration(seconds: 1)),
+      }, now);
+      expect(futureExpiry.status, AdminAccountStatus.active);
+      expect(futureExpiry.isAllowed, isTrue);
+
+      final exactExpiry = evaluateAdminAccess({
+        'role': 'editor',
+        'active': true,
+        'expiresAt': now,
+      }, now);
+      expect(exactExpiry.status, AdminAccountStatus.expired);
+      expect(exactExpiry.isAllowed, isFalse);
+
+      final pastExpiry = evaluateAdminAccess({
+        'role': 'editor',
+        'expiresAt': now.subtract(const Duration(minutes: 5)),
+      }, now);
+      expect(pastExpiry.status, AdminAccountStatus.expired);
+      expect(pastExpiry.isAllowed, isFalse);
+    });
+
+    testWidgets('AdminsScreen displays active/stopped switches, confirms toggles, clears expiry, and fits 320px at 200%', (tester) async {
+      tester.view.physicalSize = const Size(320, 900);
+      tester.view.devicePixelRatio = 1;
+      tester.platformDispatcher.textScaleFactorTestValue = 2.0;
+      addTearDown(tester.view.reset);
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+
+      final ctrl = StreamController<List<AdminDoc>>.broadcast();
+      addTearDown(ctrl.close);
+
+      final futureDate = DateTime.utc(2099, 5, 20, 20, 59, 59);
+      final pastDate = DateTime.utc(2020, 1, 1, 21, 59, 59);
+      final repo = _ReactiveAdminBackend(
+        controller: ctrl,
+        initialCollections: {
+          'admins': [
+            AdminDoc('own', {'email': 'owner@church.org', 'role': 'owner', 'active': true}),
+            AdminDoc('ed1', {
+              'email': 'active@church.org',
+              'role': 'editor',
+              'active': true,
+              'expiresAt': futureDate,
+            }),
+            AdminDoc('ed2', {
+              'email': 'paused@church.org',
+              'role': 'editor',
+              'active': false,
+              'expiresAt': pastDate,
+            }),
+          ],
+        },
+      );
+
+      await tester.pumpWidget(_app(
+        AdminsScreen(repo: repo, selfUid: 'own'),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      // Zero layout overflow at 320 px x 200%
+      expect(tester.takeException(), isNull);
+
+      // Check cards in alphabetical order: active@ (ed1) -> owner@ (own) -> paused@ (ed2)
+      final outerScroll = find.byType(Scrollable).first;
+      await tester.scrollUntilVisible(find.byKey(const ValueKey('admin-active-ed1')), 200, scrollable: outerScroll);
+      await tester.pumpAndSettle();
+      expect(
+        find.descendant(of: find.byKey(const ValueKey('admin-active-ed1')), matching: find.text('نشط')),
+        findsOneWidget,
+      );
+
+      // Self switches and expiry picker are disabled (own comes after ed1)
+      await tester.scrollUntilVisible(find.byKey(const ValueKey('admin-active-own')), 200, scrollable: outerScroll);
+      await tester.pumpAndSettle();
+      final ownSwitch = tester.widget<AdminStateSwitch>(find.byKey(const ValueKey('admin-active-own')));
+      expect(ownSwitch.onChanged, isNull);
+      final ownExpiry = tester.widget<ActionChip>(find.byKey(const ValueKey('admin-expiry-own')));
+      expect(ownExpiry.onPressed, isNull);
+
+      // ed2 (paused@) comes after own
+      await tester.scrollUntilVisible(find.byKey(const ValueKey('admin-active-ed2')), 200, scrollable: outerScroll);
+      await tester.pumpAndSettle();
+      expect(
+        find.descendant(of: find.byKey(const ValueKey('admin-active-ed2')), matching: find.text('موقوف')),
+        findsOneWidget,
+      );
+
+      // Scroll back up to ed1 and tap active switch
+      await tester.scrollUntilVisible(find.byKey(const ValueKey('admin-active-ed1')), -200, scrollable: outerScroll);
+      await tester.pumpAndSettle();
+      await tester.tap(find.descendant(of: find.byKey(const ValueKey('admin-active-ed1')), matching: find.byType(Switch)));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('active@church.org'), findsWidgets);
+      expect(find.text('إيقاف المشرف'), findsOneWidget);
+
+      // Cancelling leaves active unchanged
+      await tester.tap(find.text('إلغاء'));
+      await tester.pumpAndSettle();
+      expect(
+        find.descendant(of: find.byKey(const ValueKey('admin-active-ed1')), matching: find.text('نشط')),
+        findsOneWidget,
+      );
+
+      // Confirming pauses the admin
+      await tester.tap(find.descendant(of: find.byKey(const ValueKey('admin-active-ed1')), matching: find.byType(Switch)));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('إيقاف المشرف'));
+      await tester.pumpAndSettle();
+      expect(
+        find.descendant(of: find.byKey(const ValueKey('admin-active-ed1')), matching: find.text('موقوف')),
+        findsOneWidget,
+      );
+
+      // Clearing ed1 expiry removes expiresAt
+      await tester.ensureVisible(find.byKey(const ValueKey('admin-clear-expiry-ed1')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('admin-clear-expiry-ed1')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('admin-clear-expiry-ed1')), findsNothing);
+    });
+
+    testWidgets('AdminCheckGate blocks stopped/expired admins, revokes live, and locks when expiresAt passes', (tester) async {
+      final repo = _TestAdminBackend();
+      var signedOut = 0;
+
+      // 1. Stopped admin
+      await tester.pumpWidget(ProviderScope(
+        child: _app(
+          AdminCheckGate(
+            repo: repo,
+            uid: 'u1',
+            email: 'stopped@church.org',
+            loadAccess: () async => const AdminAccess(role: 'editor', status: AdminAccountStatus.stopped),
+            accessChanges: const Stream.empty(),
+            rememberMe: false,
+            onSignOut: () => signedOut++,
+          ),
+          locale: const Locale('ar'),
+        ),
+      ));
+      await tester.pumpAndSettle();
+      expect(find.text('تم إيقاف هذا الحساب مؤقتًا من مالك اللوحة.'), findsOneWidget);
+      await tester.tap(find.text('تسجيل الخروج'));
+      expect(signedOut, 1);
+
+      // 2. Expired admin
+      await tester.pumpWidget(ProviderScope(
+        child: _app(
+          AdminCheckGate(
+            repo: repo,
+            uid: 'u2',
+            email: 'exp@church.org',
+            loadAccess: () async => AdminAccess(
+              role: 'editor',
+              status: AdminAccountStatus.expired,
+              expiresAt: DateTime.utc(2020, 1, 1),
+            ),
+            accessChanges: const Stream.empty(),
+            rememberMe: false,
+            onSignOut: () {},
+          ),
+          locale: const Locale('ar'),
+        ),
+      ));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('انتهت صلاحية هذا الحساب المؤقت.'), findsOneWidget);
+
+      // 3. Live revocation via accessChanges while dashboard is open
+      final liveCtrl = StreamController<AdminAccess>.broadcast();
+      addTearDown(liveCtrl.close);
+      await tester.pumpWidget(ProviderScope(
+        child: _app(
+          AdminCheckGate(
+            repo: repo,
+            uid: 'u3',
+            email: 'live@church.org',
+            loadAccess: () async => const AdminAccess(role: 'editor', status: AdminAccountStatus.active),
+            accessChanges: liveCtrl.stream,
+            rememberMe: true, // keep idle timer off in this test
+            onSignOut: () {},
+          ),
+          locale: const Locale('ar'),
+        ),
+      ));
+      await tester.pumpAndSettle();
+      expect(find.byType(AdminDashboard), findsOneWidget);
+
+      liveCtrl.add(const AdminAccess(role: 'editor', status: AdminAccountStatus.stopped));
+      await tester.pumpAndSettle();
+      expect(find.byType(AdminDashboard), findsNothing);
+      expect(find.text('تم إيقاف هذا الحساب مؤقتًا من مالك اللوحة.'), findsOneWidget);
+
+      // 4. Expiry timer locks open dashboard once expiresAt elapses
+      final soon = DateTime.now().toUtc().add(const Duration(seconds: 5));
+      await tester.pumpWidget(ProviderScope(
+        child: _app(
+          AdminCheckGate(
+            repo: repo,
+            uid: 'u4',
+            email: 'timer@church.org',
+            loadAccess: () async => AdminAccess(role: 'editor', status: AdminAccountStatus.active, expiresAt: soon),
+            accessChanges: const Stream.empty(),
+            rememberMe: true,
+            onSignOut: () {},
+          ),
+          locale: const Locale('ar'),
+        ),
+      ));
+      await tester.pumpAndSettle();
+      expect(find.byType(AdminDashboard), findsOneWidget);
+
+      await tester.pump(const Duration(seconds: 6));
+      await tester.pumpAndSettle();
+      expect(find.byType(AdminDashboard), findsNothing);
+      expect(find.textContaining('انتهت صلاحية هذا الحساب المؤقت.'), findsOneWidget);
+    });
+  });
+
+  group('PR 3C: P1-13 session idle policy & remember me', () {
+    test('SessionPolicy boundaries match 30-minute idle limit and 60-second warning', () {
+      const policy = SessionPolicy();
+      expect(policy.idleLimit, const Duration(minutes: 30));
+      expect(policy.warnBefore, const Duration(seconds: 60));
+      expect(policy.warnAt, const Duration(minutes: 29));
+
+      expect(policy.shouldWarn(const Duration(minutes: 28, seconds: 59)), isFalse);
+      expect(policy.shouldSignOut(const Duration(minutes: 28, seconds: 59)), isFalse);
+
+      expect(policy.shouldWarn(const Duration(minutes: 29)), isTrue);
+      expect(policy.shouldSignOut(const Duration(minutes: 29)), isFalse);
+
+      expect(policy.shouldWarn(const Duration(minutes: 29, seconds: 59)), isTrue);
+      expect(policy.shouldSignOut(const Duration(minutes: 29, seconds: 59)), isFalse);
+
+      expect(policy.shouldWarn(const Duration(minutes: 30)), isFalse);
+      expect(policy.shouldSignOut(const Duration(minutes: 30)), isTrue);
+
+      expect(policy.shouldSignOut(const Duration(minutes: 31)), isTrue);
+    });
+
+    testWidgets('AdminLoginForm passes rememberMe state on sign in', (tester) async {
+      bool? capturedRemember;
+      await tester.pumpWidget(_app(
+        Scaffold(
+          body: AdminLoginForm(
+            onSignIn: (email, password, {rememberMe = false}) async {
+              capturedRemember = rememberMe;
+            },
+            onResetPassword: (_) async => true,
+          ),
+        ),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      // Default unticked
+      final cb = tester.widget<CheckboxListTile>(find.byKey(const ValueKey('login-remember-me')));
+      expect(cb.value, isFalse);
+
+      await tester.enterText(find.byKey(const ValueKey('login-email')), 'a@church.org');
+      await tester.enterText(find.byKey(const ValueKey('login-password')), 'secret123');
+      await tester.tap(find.byKey(const ValueKey('login-submit')));
+      await tester.pumpAndSettle();
+      expect(capturedRemember, isFalse);
+
+      // Ticked -> passes rememberMe: true
+      await tester.tap(find.byKey(const ValueKey('login-remember-me')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('login-submit')));
+      await tester.pumpAndSettle();
+      expect(capturedRemember, isTrue);
+    });
+
+    testWidgets('AdminSessionGuard warns at warnAt, signs out at limit, resets on pointer/key/button, skips when disabled', (tester) async {
+      final unsaved = UnsavedGuardRegistry();
+      var signedOut = 0;
+
+      Widget buildGuard({required bool enabled, Locale locale = const Locale('ar')}) => _app(
+            Scaffold(
+              body: AdminSessionGuard(
+                enabled: enabled,
+                unsaved: unsaved,
+                onSignOut: () => signedOut++,
+                child: const Center(child: Text('Dashboard Content')),
+              ),
+            ),
+            locale: locale,
+          );
+
+      // 1. Enabled -> warns at 29m, pointer move/down resets timer and dismisses warning
+      await tester.pumpWidget(buildGuard(enabled: true));
+      await tester.pump(const Duration(minutes: 28, seconds: 59));
+      expect(find.byKey(const ValueKey('session-idle-warning')), findsNothing);
+      expect(signedOut, 0);
+
+      await tester.pump(const Duration(seconds: 2)); // 29:01 idle
+      expect(find.byKey(const ValueKey('session-idle-warning')), findsOneWidget);
+
+      // Pointer event cancels warning & resets clock
+      await tester.tap(find.text('Dashboard Content'));
+      await tester.pump();
+      expect(find.byKey(const ValueKey('session-idle-warning')), findsNothing);
+
+      // Still signed in 20 minutes after tap (because clock reset)
+      await tester.pump(const Duration(minutes: 20));
+      expect(find.byKey(const ValueKey('session-idle-warning')), findsNothing);
+      expect(signedOut, 0);
+
+      // Advance remaining 9m to trigger warning again, then test key reset
+      await tester.pump(const Duration(minutes: 9));
+      expect(find.byKey(const ValueKey('session-idle-warning')), findsOneWidget);
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.space);
+      await tester.pump();
+      expect(find.byKey(const ValueKey('session-idle-warning')), findsNothing);
+
+      // Advance to warning again, tap Stay Signed In button
+      await tester.pump(const Duration(minutes: 29));
+      expect(find.byKey(const ValueKey('session-idle-warning')), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('session-stay-btn')));
+      await tester.pump();
+      expect(find.byKey(const ValueKey('session-idle-warning')), findsNothing);
+      expect(signedOut, 0);
+
+      // Now let it hit full 30 minutes idle -> signs out
+      await tester.pump(const Duration(minutes: 30));
+      expect(signedOut, 1);
+
+      // 2. Disabled (Remember me ticked) -> past 30 minutes does not warn or sign out
+      signedOut = 0;
+      await tester.pumpWidget(buildGuard(enabled: false));
+      await tester.pump(const Duration(minutes: 45));
+      expect(find.byKey(const ValueKey('session-idle-warning')), findsNothing);
+      expect(signedOut, 0);
+    });
+
+    testWidgets('AdminSessionGuard asks before signing out when form is dirty and warning fits 320px at 200%', (tester) async {
+      tester.view.physicalSize = const Size(320, 600);
+      tester.view.devicePixelRatio = 1;
+      tester.platformDispatcher.textScaleFactorTestValue = 2.0;
+      addTearDown(tester.view.reset);
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+
+      final unsaved = UnsavedGuardRegistry()..register('doc-1');
+      var signedOut = 0;
+
+      await tester.pumpWidget(_app(
+        Scaffold(
+          body: AdminSessionGuard(
+            enabled: true,
+            unsaved: unsaved,
+            onSignOut: () => signedOut++,
+            child: const Center(child: Text('Dirty Form')),
+          ),
+        ),
+        locale: const Locale('ar'),
+      ));
+
+      // Trigger warning at 320px x 200% and verify zero overflow
+      await tester.pump(const Duration(minutes: 29));
+      expect(find.byKey(const ValueKey('session-idle-warning')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+
+      // Advance past 30m limit -> shows unsaved edits confirmation instead of signing out immediately
+      await tester.pump(const Duration(minutes: 1));
+      await tester.pumpAndSettle();
+      expect(signedOut, 0);
+      expect(find.text('متابعة التعديل'), findsOneWidget);
+
+      // Choosing «متابعة التعديل» keeps user signed in and resets timer
+      await tester.tap(find.text('متابعة التعديل'));
+      await tester.pumpAndSettle();
+      expect(signedOut, 0);
+
+      // Let 30m elapse again and choose «تجاهل» -> signs out
+      await tester.pump(const Duration(minutes: 30));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('تجاهل'));
+      await tester.pumpAndSettle();
+      expect(signedOut, 1);
+    });
+  });
 }
 
 class _TestAdminBackend extends AdminBackend {
@@ -1828,6 +2243,9 @@ class _TestAdminBackend extends AdminBackend {
           if (data.containsKey('deletedAt') && data['deletedAt'] == null) {
             doc.data.remove('deletedAt');
           }
+          if (data.containsKey('expiresAt') && data['expiresAt'] == null) {
+            doc.data.remove('expiresAt');
+          }
         }
       }
     }
@@ -1846,6 +2264,31 @@ class _TestAdminBackend extends AdminBackend {
   Future<void> saveDoc(String path, Map<String, dynamic> data) async {
     savedPaths.add(path);
     docs[path] = data;
+  }
+}
+
+class _ReactiveAdminBackend extends _TestAdminBackend {
+  final StreamController<List<AdminDoc>> controller;
+
+  _ReactiveAdminBackend({
+    required this.controller,
+    super.initialCollections,
+  });
+
+  @override
+  Stream<List<AdminDoc>> watch(String collection) async* {
+    yield [for (final d in collections[collection] ?? const <AdminDoc>[]) AdminDoc(d.id, Map<String, dynamic>.from(d.data))];
+    yield* controller.stream;
+  }
+
+  @override
+  Future<void> update(String collection, String id, Map<String, dynamic> data) async {
+    await super.update(collection, id, data);
+    if (!controller.isClosed) {
+      controller.add([
+        for (final d in collections[collection] ?? const <AdminDoc>[]) AdminDoc(d.id, Map<String, dynamic>.from(d.data)),
+      ]);
+    }
   }
 }
 

@@ -26,8 +26,16 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function adminDocActive(d) {
+      return d.get('active', true) != false
+        && (d.get('expiresAt', null) == null
+            || (d.expiresAt is timestamp && request.time < d.expiresAt));
+    }
+
     function isAdmin() {
-      return signedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+      return signedIn()
+        && exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+        && adminDocActive(get(/databases/$(database)/documents/admins/$(request.auth.uid)).data);
     }
 
     function isOwner() {
@@ -554,10 +562,14 @@ service cloud.firestore {
       allow read: if col in ['alerts', 'seasons', 'liturgies', 'meetings', 'activities',
                              'clinics', 'facilities', 'priests', 'milestones', 'saints',
                              'categories', 'entries', 'pages'];
-      allow create, update: if isAdmin() && validContent(col, request.resource.data);
-      allow delete: if isAdmin() && col in ['alerts', 'seasons', 'liturgies', 'meetings', 'activities',
-                                            'clinics', 'facilities', 'priests', 'milestones', 'saints',
-                                            'categories', 'entries', 'pages'];
+      allow create, update: if col in ['alerts', 'seasons', 'liturgies', 'meetings', 'activities',
+                                       'clinics', 'facilities', 'priests', 'milestones', 'saints',
+                                       'categories', 'entries', 'pages']
+        && isAdmin() && validContent(col, request.resource.data);
+      allow delete: if col in ['alerts', 'seasons', 'liturgies', 'meetings', 'activities',
+                               'clinics', 'facilities', 'priests', 'milestones', 'saints',
+                               'categories', 'entries', 'pages']
+        && isAdmin();
     }
 
     // ------------------------------- settings -------------------------------
@@ -690,25 +702,9 @@ service cloud.firestore {
               'heroSeasonTint', 'updatedAt', 'updatedBy'];
     }
 
-    function allFeatureKeys() {
-      return ['updatedAt', 'updatedBy',
-              'installPrompt', 'installTitleAr', 'installTitleEn', 'installBodyAr', 'installBodyEn',
-              'installAndroidUrl', 'installAndroidUrl32', 'installApkVersion', 'installApkBuild',
-              'installApkSizeMb', 'installApkSize32Mb', 'installReshowDays', 'installRemindDays',
-              'push', 'pushVapidKey', 'pushTypes', 'reminderLeads', 'reminderDefaultLead',
-              'notifyTypes', 'reminderSources',
-              'sections', 'homeOrder', 'homeHidden', 'heroTitleAr', 'heroTitleEn', 'heroSubtitleAr',
-              'heroSubtitleEn', 'bannerEnabled', 'bannerAr', 'bannerEn', 'bannerLink', 'theme',
-              'pageHeaders', 'footer', 'heroMotion', 'heroShowAddress', 'aboutMilestones', 'imageStyles', 'dailyVerse', 'occasions', 'themeColors',
-              'heroVideos', 'errorReporting', 'copticStrip', 'dayStartMode', 'dayStartsAt', 'topEvent',
-              'commemoration', 'topEventServices', 'liveEnabled', 'liveUrl', 'liveLabelAr', 'liveLabelEn', 'liveEndsAt',
-              'liveBadgeHideOnHome', 'dayEvents', 'venues', 'audiences', 'seasonVerses', 'seasonPreset', 'weddingBookingOff',
-              'heroSeasonTint'];
-    }
-
     // Only reached when the write changes a key outside the legacy list.
     function validInstallPush(d, changed) {
-      return changed.hasOnly(allFeatureKeys())
+      return changed.hasOnly(legacyFeatureKeys().concat(installPushKeys()))
         && validInstallSettings(d, changed) && validPushSettings(d, changed);
     }
 
@@ -793,9 +789,11 @@ service cloud.firestore {
               && d.homeHidden.hasOnly(['banner', 'alerts', 'nextMass', 'quickContacts', 'milestones', 'directory', 'map'])))
         && (!changed.hasAny(['heroTitleAr', 'heroTitleEn', 'heroSubtitleAr', 'heroSubtitleEn', 'bannerEnabled', 'bannerAr',
                              'bannerEn'])
-            || (str(d, 'heroTitleAr', 200) && str(d, 'heroTitleEn', 200)
-                && str(d, 'heroSubtitleAr', 300) && str(d, 'heroSubtitleEn', 300)
-                && d.get('bannerEnabled', false) is bool && str(d, 'bannerAr', 500) && str(d, 'bannerEn', 500)))
+            || (d.get('bannerEnabled', false) is bool
+                && (d.get('heroTitleAr', '') + '\u001f' + d.get('heroTitleEn', '') + '\u001f'
+                    + d.get('heroSubtitleAr', '') + '\u001f' + d.get('heroSubtitleEn', '') + '\u001f'
+                    + d.get('bannerAr', '') + '\u001f' + d.get('bannerEn', ''))
+                   .matches('[^\\x1f]{0,200}\\x1f[^\\x1f]{0,200}\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{0,500}\\x1f[^\\x1f]{0,500}')))
         && (!('bannerLink' in changed) || optUrlOrPath(d, 'bannerLink', 500))
         && (!('theme' in changed) || d.get('theme', 'goldenHour') in ['goldenHour', 'holyWeek', 'resurrection', 'nativity', 'epiphany', 'fasting', 'marian', 'navy', 'green', 'brown', 'purple', 'burgundy'])
         && (!('occasions' in changed) || !('occasions' in d) || validOccasions(d.occasions))
@@ -1081,14 +1079,14 @@ service cloud.firestore {
       let changed = old is map ? h.diff(old).affectedKeys() : h.keys().toSet();
       return h is map
         && h.keys().hasOnly(['about', 'schedule', 'education', 'activities', 'clinics', 'services', 'contact', 'ask', 'notifications'])
-        && (!changed.hasAny(['about']) || !('about' in h) || validPageHeader(h.about))
-        && (!changed.hasAny(['schedule']) || !('schedule' in h) || validPageHeader(h.schedule))
-        && (!changed.hasAny(['education']) || !('education' in h) || validPageHeader(h.education))
-        && (!changed.hasAny(['activities']) || !('activities' in h) || validPageHeader(h.activities))
-        && (!changed.hasAny(['clinics']) || !('clinics' in h) || validPageHeader(h.clinics))
-        && (!changed.hasAny(['services']) || !('services' in h) || validPageHeader(h.services))
-        && (!changed.hasAny(['contact']) || !('contact' in h) || validPageHeader(h.contact))
-        && (!changed.hasAny(['ask']) || !('ask' in h) || validPageHeader(h.ask))
+        && (!('about' in changed) || !('about' in h) || validPageHeader(h.about))
+        && (!('schedule' in changed) || !('schedule' in h) || validPageHeader(h.schedule))
+        && (!('education' in changed) || !('education' in h) || validPageHeader(h.education))
+        && (!('activities' in changed) || !('activities' in h) || validPageHeader(h.activities))
+        && (!('clinics' in changed) || !('clinics' in h) || validPageHeader(h.clinics))
+        && (!('services' in changed) || !('services' in h) || validPageHeader(h.services))
+        && (!('contact' in changed) || !('contact' in h) || validPageHeader(h.contact))
+        && (!('ask' in changed) || !('ask' in h) || validPageHeader(h.ask))
         // Notifications page (ADR-057): `in` on the set, the cheapest gate.
         && (!('notifications' in changed) || !('notifications' in h) || validPageHeader(h.notifications));
     }
@@ -1128,12 +1126,14 @@ service cloud.firestore {
     // -------------------------------- admins --------------------------------
     match /admins/{uid} {
       allow read: if signedIn() && (request.auth.uid == uid || isOwner());
-      // Owners manage OTHER admins only: an owner can never demote or remove
-      // themselves, so the project always keeps at least one owner.
+      // Owners manage OTHER admins only: an owner can never stop, expire,
+      // demote or remove themselves, so the project always keeps at least one owner.
       allow create, update: if isOwner() && request.auth.uid != uid
-        && request.resource.data.keys().hasOnly(['email', 'role', 'updatedAt', 'updatedBy'])
+        && request.resource.data.keys().hasOnly(['email', 'role', 'active', 'expiresAt', 'updatedAt', 'updatedBy'])
         && reqString(request.resource.data, 'email', 254)
         && request.resource.data.role in ['owner', 'editor']
+        && optBool(request.resource.data, 'active')
+        && optTimestamp(request.resource.data, 'expiresAt')
         && stampOk(request.resource.data);
       allow delete: if isOwner() && request.auth.uid != uid;
     }
