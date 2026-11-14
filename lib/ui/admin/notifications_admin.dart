@@ -30,14 +30,6 @@ import 'unsaved_bar.dart';
 import 'unsaved_guard.dart';
 
 const Map<String, List<String>> _notificationsAdminStrings = {
-  'nm_confirmSendAllSummary': [
-    'هيتبعت لكل المشتركين دلوقتي: {t}',
-    'Will be sent to all subscribers now: {t}',
-  ],
-  'nm_sendToAllBtn': [
-    'ابعت للكل',
-    'Send to all',
-  ],
   'nm_statusSubtitle': [
     'شغّل أو أوقف كل الإشعارات، وتأكد أن خدمة الإرسال تعمل.',
     'Turn all notifications on or off and check the sending service.',

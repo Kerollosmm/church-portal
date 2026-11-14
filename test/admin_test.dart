@@ -1226,6 +1226,83 @@ void main() {
       expect(find.byKey(const ValueKey('unsaved-bar')), findsNothing);
       expect(find.byKey(const Key('imagePreviewPending')), findsNothing);
     });
+
+    testWidgets('DocEditor keeps UnsavedGuard dirty while save() is in flight', (tester) async {
+      final saveCompleter = Completer<void>();
+      final fields = [FieldDef('name', 'الاسم', 'Name', FieldType.text)];
+      final reg = UnsavedGuardRegistry();
+      addTearDown(reg.dispose);
+
+      await tester.pumpWidget(_app(UnsavedGuardScope(
+        registry: reg,
+        child: DocEditor(
+          title: 'Item',
+          fields: fields,
+          popOnSave: false,
+          onSave: (_) => saveCompleter.future,
+        ),
+      )));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.byKey(const Key('field-name')), 'Fr. Test');
+      await tester.pump();
+      expect(reg.isDirty, isTrue);
+
+      await tester.tap(find.byKey(const ValueKey('unsaved-bar-save')));
+      await tester.pump();
+      // Still dirty in UnsavedGuard while save is awaiting completion
+      expect(reg.isDirty, isTrue);
+
+      saveCompleter.complete();
+      await tester.pumpAndSettle();
+      expect(reg.isDirty, isFalse);
+    });
+
+    testWidgets('CollectionListScreen multi-delete preserves Undo all and failed delete restores row', (tester) async {
+      tester.view.physicalSize = const Size(800, 1000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final repo = _TestAdminBackend(initialCollections: {
+        'saints': [
+          AdminDoc('s1', {'nameAr': 'مارمرقس', 'order': 10}),
+          AdminDoc('s2', {'nameAr': 'مارجرجس', 'order': 20}),
+        ],
+      });
+      final def = collectionById('saints')!;
+      await tester.pumpWidget(_app(
+        CollectionListScreen(repo: repo, def: def),
+        locale: const Locale('en'),
+      ));
+      await tester.pumpAndSettle();
+
+      // Delete first, then second -> combined "Undo all" action
+      await tester.tap(find.byIcon(Icons.delete_outline).first);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.tap(find.byIcon(Icons.delete_outline).first);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+
+      expect(find.text('مارمرقس'), findsNothing);
+      expect(find.text('مارجرجس'), findsNothing);
+      expect(find.text('Undo all'), findsOneWidget);
+
+      await tester.tap(find.text('Undo all'));
+      await tester.pumpAndSettle();
+      expect(find.text('مارمرقس'), findsOneWidget);
+      expect(find.text('مارجرجس'), findsOneWidget);
+      expect(repo.deletedIds, isEmpty);
+
+      // Failed hard-delete restores row visibility cleanly
+      repo.failDelete = true;
+      await tester.tap(find.byIcon(Icons.delete_outline).first);
+      await tester.pump();
+      expect(find.text('مارمرقس'), findsNothing);
+      await tester.pump(const Duration(seconds: 10));
+      await tester.pumpAndSettle();
+      expect(find.text('مارمرقس'), findsOneWidget);
+    });
   });
 
   group('AdminStateSwitch and written states (P1-09 & P1-10)', () {
@@ -1526,6 +1603,7 @@ class _TestAdminBackend extends AdminBackend {
   final Map<String, Map<String, dynamic>> docs = {};
   final List<String> deletedIds = [];
   final List<String> savedPaths = [];
+  bool failDelete = false;
 
   _TestAdminBackend({
     Map<String, List<AdminDoc>>? initialCollections,
@@ -1551,6 +1629,7 @@ class _TestAdminBackend extends AdminBackend {
 
   @override
   Future<void> delete(String collection, String id) async {
+    if (failDelete) throw StateError('delete blocked');
     deletedIds.add('$collection/$id');
     collections[collection]?.removeWhere((doc) => doc.id == id);
   }

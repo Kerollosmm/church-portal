@@ -62,6 +62,7 @@ class CollectionListScreen extends StatefulWidget {
 class _CollectionListScreenState extends State<CollectionListScreen> {
   final _search = TextEditingController();
   final _pendingDelete = PendingDelete();
+  final Map<String, ({AdminBackend repo, String collection, String title})> _pendingEntries = {};
   final Set<String> _purging = {};
   ListFilter _filter = ListFilter.all;
   late Stream<List<AdminDoc>> _stream = widget.repo.watch(widget.def.name);
@@ -80,6 +81,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
   @override
   void dispose() {
     _pendingDelete.dispose();
+    _pendingEntries.clear();
     _search.dispose();
     super.dispose();
   }
@@ -419,29 +421,53 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     if (!mounted) return;
 
     setState(() {
+      _pendingEntries[id] = (repo: repo, collection: targetDef.name, title: title);
       _pendingDelete.schedule(id, () async {
+        _pendingEntries.remove(id);
         try {
           await repo.delete(targetDef.name, id);
           await removeOrphanedDocMedia(repo.media, docData);
         } catch (e) {
+          try {
+            await repo.update(targetDef.name, id, {'deletedAt': null});
+          } catch (_) {}
           if (!mounted) return;
+          setState(() {});
           messenger.showSnackBar(SnackBar(content: Text(failedMsg.replaceAll('{e}', '$e'))));
         }
       });
     });
 
-    messenger.hideCurrentSnackBar();
+    final pendingCount = _pendingDelete.pendingIds.length;
+    final snackText = pendingCount > 1
+        ? context.tr('deletedMultiUndo', {'n': '$pendingCount', 'last': title})
+        : context.tr('deletedUndo', {'n': title});
+    final actionLabel = context.tr(pendingCount > 1 ? 'undoAll' : 'undo');
+    messenger.removeCurrentSnackBar();
     messenger.showSnackBar(
       SnackBar(
         duration: const Duration(seconds: 10),
-        content: Text(context.tr('deletedUndo', {'n': title})),
+        content: Text(snackText),
         action: SnackBarAction(
-          label: context.tr('undo'),
+          label: actionLabel,
           onPressed: () async {
-            if (_pendingDelete.undo(id)) {
-              if (mounted) setState(() {});
+            final ids = _pendingDelete.pendingIds.toList();
+            final undone = <({String id, AdminBackend repo, String collection})>[];
+            for (final pid in ids) {
+              if (_pendingDelete.undo(pid)) {
+                final entry = _pendingEntries.remove(pid);
+                undone.add((
+                  id: pid,
+                  repo: entry?.repo ?? repo,
+                  collection: entry?.collection ?? targetDef.name,
+                ));
+              }
+            }
+            if (undone.isEmpty) return;
+            if (mounted) setState(() {});
+            for (final item in undone) {
               try {
-                await repo.update(targetDef.name, id, {'deletedAt': null});
+                await item.repo.update(item.collection, item.id, {'deletedAt': null});
               } catch (e) {
                 if (!mounted) return;
                 messenger.showSnackBar(SnackBar(content: Text(failedMsg.replaceAll('{e}', '$e'))));

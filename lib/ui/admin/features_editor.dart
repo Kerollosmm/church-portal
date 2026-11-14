@@ -441,7 +441,7 @@ class FeaturesEditorState extends State<FeaturesEditor> {
   Widget build(BuildContext context) {
     final order = f.homeOrder;
     return UnsavedGuard(
-      dirty: dirty,
+      dirty: _dirty,
       handlePop: false,
       child: Scaffold(
         backgroundColor: context.pal.background,
@@ -457,7 +457,7 @@ class FeaturesEditorState extends State<FeaturesEditor> {
           label: Text(context.tr(_dirty ? 'saveChanges' : 'save')),
         ),
         bottomNavigationBar: UnsavedBar(
-          dirty: dirty,
+          dirty: _dirty,
           saving: _saving,
           onSave: _save,
           onCancel: _cancelEdits,

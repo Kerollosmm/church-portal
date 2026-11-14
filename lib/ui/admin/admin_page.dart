@@ -520,6 +520,14 @@ class _AdminDashboardState extends State<AdminDashboard> {
     );
   }
 
+  Future<void> _handleOpenSite() async {
+    if (_unsaved.isDirty) {
+      final discard = await confirmDiscardChanges(context);
+      if (!discard || !mounted) return;
+    }
+    if (mounted) context.go('/');
+  }
+
   @override
   Widget build(BuildContext context) {
     final wide = MediaQuery.sizeOf(context).width >= 1000;
@@ -527,35 +535,54 @@ class _AdminDashboardState extends State<AdminDashboard> {
         .firstWhere((d) => d.id == _current, orElse: () => adminDestinations(widget.role).first);
     return UnsavedGuardScope(
       registry: _unsaved,
-      child: Scaffold(
-      appBar: AppBar(
-        title: Row(
-          children: [
-            const ChurchSeal(size: 28),
-            const SizedBox(width: 8),
-            Flexible(
-              child: Text(
-                '${context.tr('admin')} — ${context.pick(dest.labelAr, dest.labelEn)}',
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
+      child: ListenableBuilder(
+        listenable: _unsaved,
+        builder: (context, child) => PopScope(
+          canPop: !_unsaved.isDirty,
+          onPopInvokedWithResult: (didPop, result) async {
+            if (didPop) return;
+            final discard = await confirmDiscardChanges(context);
+            if (discard && context.mounted) {
+              final nav = Navigator.of(context);
+              if (nav.canPop()) nav.pop(result);
+            }
+          },
+          child: child!,
         ),
-        actions: [
-          IconButton(tooltip: context.tr('openSite'), icon: const Icon(Icons.public), onPressed: () => context.go('/')),
-          const LanguageToggle(),
-        ],
-      ),
-      drawer: wide ? null : Drawer(child: _nav(context, inDrawer: true)),
-      body: wide
-          ? Row(
+        child: Scaffold(
+          appBar: AppBar(
+            title: Row(
               children: [
-                SizedBox(width: 270, child: _nav(context, inDrawer: false)),
-                const VerticalDivider(width: 1),
-                Expanded(child: _screen()),
+                const ChurchSeal(size: 28),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    '${context.tr('admin')} — ${context.pick(dest.labelAr, dest.labelEn)}',
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
               ],
-            )
-          : _screen(),
+            ),
+            actions: [
+              IconButton(
+                tooltip: context.tr('openSite'),
+                icon: const Icon(Icons.public),
+                onPressed: _handleOpenSite,
+              ),
+              const LanguageToggle(),
+            ],
+          ),
+          drawer: wide ? null : Drawer(child: _nav(context, inDrawer: true)),
+          body: wide
+              ? Row(
+                  children: [
+                    SizedBox(width: 270, child: _nav(context, inDrawer: false)),
+                    const VerticalDivider(width: 1),
+                    Expanded(child: _screen()),
+                  ],
+                )
+              : _screen(),
+        ),
       ),
     );
   }
