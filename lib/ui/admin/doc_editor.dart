@@ -976,7 +976,7 @@ class DocEditorState extends State<DocEditor> {
         messenger?.showSnackBar(SnackBar(content: Text(invalid)));
       }
     } finally {
-      if (mounted && _processing == key) setState(() => _processing = null);
+      if (mounted && epoch == _resetEpoch && _processing == key) setState(() => _processing = null);
     }
   }
 
@@ -1445,7 +1445,7 @@ class DocEditorState extends State<DocEditor> {
   Widget build(BuildContext context) {
     final embedded = !widget.popOnSave;
     return UnsavedGuard(
-      dirty: _dirty && !_saving,
+      dirty: _dirty,
       handlePop: widget.popOnSave,
       child: Scaffold(
         backgroundColor: context.pal.background,
@@ -1463,7 +1463,7 @@ class DocEditorState extends State<DocEditor> {
                 ],
               ),
         bottomNavigationBar: UnsavedBar(
-          dirty: _dirty && !_saving,
+          dirty: _dirty,
           saving: _saving,
           onSave: save,
           onCancel: _handleCancel,
