@@ -108,6 +108,7 @@ service cloud.firestore {
       return d.keys().size() <= 80
         && (!changed.hasAny(['visible', 'sample', 'order'])
             || (optBool(d, 'visible') && optBool(d, 'sample') && optInt(d, 'order', -100000, 100000)))
+        && (!('deletedAt' in changed) || optTimestamp(d, 'deletedAt'))
         && (!('image' in changed) || d.get('image', null) == null || validImage(d.image))
         // Image display style (ADR-023): absent / null = the section default.
         && (!('imageStyle' in changed) || d.get('imageStyle', null) in [null, 'avatar', 'card', 'banner'])
@@ -144,7 +145,7 @@ service cloud.firestore {
         && s.matches('[^\\x1f]*\\x1f[^\\x1f]{0,500}\\x1f[\\s\\S]*');
     }
     function meta() {
-      return ['visible', 'sample', 'order', 'updatedAt', 'updatedBy'];
+      return ['visible', 'sample', 'order', 'deletedAt', 'updatedAt', 'updatedBy'];
     }
 
     // ---- optional item detail page (meetings, activities, clinics,

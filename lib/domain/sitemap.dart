@@ -130,7 +130,8 @@ List<T> _exported<T>(Map<String, dynamic> export, String name, T Function(String
   return [
     for (final d in raw)
       if (d is Map && d['id'] is String)
-        f(d['id'] as String, Map<String, dynamic>.from((d['data'] as Map?) ?? const {})),
+        if (!isSoftDeleted(d['data'] is Map ? Map<String, dynamic>.from(d['data'] as Map) : null))
+          f(d['id'] as String, Map<String, dynamic>.from((d['data'] as Map?) ?? const {})),
   ];
 }
 

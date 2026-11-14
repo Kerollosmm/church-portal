@@ -123,6 +123,32 @@ describe('admin content', () => {
     await assertSucceeds(deleteDoc(ref));
   });
 
+  test('soft delete with deletedAt: Timestamp allowed, undo with null allowed, bad type and non-admin denied', async () => {
+    const ed = db(EDITOR);
+    const pub = db(null);
+    const stranger = db(STRANGER);
+    const ref = doc(ed, 'clinics', 'c1');
+
+    // 1. Soft-delete by setting deletedAt to a valid Timestamp succeeds
+    await assertSucceeds(updateDoc(ref, { deletedAt: serverTimestamp() }));
+
+    // 2. Undo soft-delete by clearing deletedAt to null succeeds
+    await assertSucceeds(updateDoc(ref, { deletedAt: null }));
+
+    // 3. Bad type for deletedAt (e.g. string or number) fails
+    await assertFails(updateDoc(ref, { deletedAt: '2026-11-14' }));
+    await assertFails(updateDoc(ref, { deletedAt: 12345678 }));
+
+    // 4. Non-admin / visitor cannot write or clear deletedAt
+    await assertFails(updateDoc(doc(pub, 'clinics', 'c1'), { deletedAt: serverTimestamp() }));
+    await assertFails(updateDoc(doc(stranger, 'clinics', 'c1'), { deletedAt: serverTimestamp() }));
+
+    // 5. Worst-case whole-doc rules budget check: whole document update with deletedAt
+    const fullClinic = convert(seed.clinics['dental-1']);
+    await assertSucceeds(setDoc(ref, { ...fullClinic, deletedAt: serverTimestamp() }));
+    await assertSucceeds(setDoc(ref, { ...fullClinic, deletedAt: null }));
+  });
+
   test('rejects unknown keys, bad types and bad times', async () => {
     const ed = db(EDITOR);
     await assertFails(updateDoc(doc(ed, 'clinics', 'c1'), { hacked: true }));

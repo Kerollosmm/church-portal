@@ -33,7 +33,7 @@ All answered by the owner on 13 November 2026 (README §١٠, D1–D5).
 
 - [x] 6 — confirmation before sending to everyone / «دلوقتي» (P1-06) · PR 3A (`feat/p3a-safe-actions`)
 - [x] 7 — «متابعة التعديل» prominent; browser Back, tab close and announcement «إلغاء» warn (P1-07) · PR 3A (`feat/p3a-safe-actions`)
-- [x] 8 — 10-second undo after delete; confirmations name the item (P1-08) · PR 3A (`feat/p3a-safe-actions`)
+- [x] 8 — 10-second undo after delete; confirmations name the item (P1-08) · PR 3A (`feat/p3a-safe-actions`) — upgraded to Firestore `deletedAt` soft delete + 10s undo + lazy purge on admin open
 - [ ] 9 — state word next to every switch and on every row (P1-09)
 - [ ] 10 — preview before «يحل محل قداسات اليوم المعتادة» (P1-10)
 - [x] 11 — fixed bottom save bar (P1-11) · PR 3A (`feat/p3a-safe-actions`)
@@ -43,6 +43,7 @@ All answered by the owner on 13 November 2026 (README §١٠, D1–D5).
 - [ ] 15 — ready «صفحة تبرعات» template (P1-15)
 - [ ] 16 — one screen for sections and their items (P1-16)
 - [ ] 17 — clearer empty state and hints (P1-17)
+- [ ] 18a — custom page placement («مكانها فين») and featured on home («مميزة») (P1-18)
 - [ ] Trial session after Stage 1 — date, servant, time taken, stops:
 - [ ] **G1**
 

@@ -8,7 +8,7 @@ import 'package:church_portal/data/admin_repository.dart';
 import 'package:church_portal/data/media_repository.dart';
 import 'package:church_portal/domain/cairo_time.dart';
 import 'package:church_portal/domain/features.dart';
-import 'package:church_portal/domain/media.dart';
+import 'package:church_portal/domain/models.dart';
 import 'package:church_portal/ui/admin/admin_page.dart';
 import 'package:church_portal/ui/admin/admin_schema.dart';
 import 'package:church_portal/ui/admin/admin_screens.dart';
@@ -911,17 +911,19 @@ void main() {
   });
 
   group('PendingDelete', () {
-    test('schedule, undo within window, expiry and flush', () async {
+    test('schedule, undo within window, expiry, flush and dispose', () async {
       final pd = PendingDelete(window: const Duration(milliseconds: 100));
       int commits = 0;
       pd.schedule('item1', () async => commits++);
       expect(pd.hasPending, isTrue);
       expect(pd.pendingIds, {'item1'});
+      expect(pd.isPending('item1'), isTrue);
 
       // Undo removes and cancels commit
       expect(pd.undo('item1'), isTrue);
       expect(pd.hasPending, isFalse);
       expect(pd.pendingIds, isEmpty);
+      expect(pd.isPending('item1'), isFalse);
       await Future<void>.delayed(const Duration(milliseconds: 150));
       expect(commits, 0);
 
@@ -938,17 +940,16 @@ void main() {
       expect(commits, 2);
       expect(pd.hasPending, isFalse);
 
-      // debugTriggerBeforeUnload flushes
+      // Dispose cancels local timers without committing
       pd.schedule('item4', () async => commits++);
       expect(pd.hasPending, isTrue);
-      debugTriggerBeforeUnload();
-      await Future<void>.delayed(Duration.zero);
-      expect(commits, 3);
-      expect(pd.hasPending, isFalse);
       pd.dispose();
+      expect(pd.hasPending, isFalse);
+      await Future<void>.delayed(const Duration(milliseconds: 150));
+      expect(commits, 2);
     });
 
-    testWidgets('CollectionListScreen 10s undo SnackBar, undo restores row, expiry commits, dispose flushes', (tester) async {
+    testWidgets('CollectionListScreen 10s undo SnackBar, soft-delete immediately, undo restores row, expiry commits, lazy purge on dispose', (tester) async {
       tester.view.physicalSize = const Size(800, 1000);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.reset);
@@ -968,24 +969,26 @@ void main() {
 
       expect(find.text('مارمرقس'), findsOneWidget);
 
-      // Delete s1
+      // Delete s1: immediately marked with deletedAt, hidden from UI
       await tester.tap(find.byIcon(Icons.delete_outline).first);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 500));
 
-      // Immediately hidden
+      // Immediately hidden and soft-deleted
       expect(find.text('مارمرقس'), findsNothing);
       expect(repo.deletedIds, isEmpty);
+      expect(isSoftDeleted(repo.collections['saints']!.firstWhere((d) => d.id == 's1').data), isTrue);
       expect(find.text('اتمسح «مارمرقس»'), findsOneWidget);
       expect(find.byType(SnackBarAction), findsOneWidget);
 
-      // Tap Undo -> restores row
+      // Tap Undo -> restores row and clears deletedAt
       await tester.tap(find.byType(SnackBarAction));
       await tester.pump();
       expect(find.text('مارمرقس'), findsOneWidget);
+      expect(isSoftDeleted(repo.collections['saints']!.firstWhere((d) => d.id == 's1').data), isFalse);
       expect(repo.deletedIds, isEmpty);
 
-      // Delete s1 again and wait 10s -> commits
+      // Delete s1 again and wait 10s -> commits hard delete
       await tester.tap(find.byIcon(Icons.delete_outline).first);
       await tester.pump();
       expect(find.text('مارمرقس'), findsNothing);
@@ -993,16 +996,28 @@ void main() {
       await tester.pumpAndSettle();
       expect(repo.deletedIds, contains('saints/s1'));
 
-      // Delete s2 and unmount/dispose -> flushes
+      // Delete s2 and unmount/dispose -> cancels local timers, doc remains soft-deleted, lazy purge purges it
       await tester.tap(find.byIcon(Icons.delete_outline).first);
       await tester.pump();
       expect(repo.deletedIds.contains('saints/s2'), isFalse);
+      expect(isSoftDeleted(repo.collections['saints']!.firstWhere((d) => d.id == 's2').data), isTrue);
+
       // Unmount CollectionListScreen
       await tester.pumpWidget(_app(
         const SizedBox.shrink(),
         locale: const Locale('ar'),
       ));
       await tester.pumpAndSettle();
+      // Dispose cancels without running fire-and-forget delete
+      expect(repo.deletedIds.contains('saints/s2'), isFalse);
+
+      // Lazy purge on expired soft delete purges it deterministically
+      await purgeExpiredSoftDeletes(
+        repo,
+        def,
+        repo.collections['saints']!,
+        clock: () => DateTime.now().toUtc().add(const Duration(seconds: 15)),
+      );
       expect(repo.deletedIds, contains('saints/s2'));
     });
 
@@ -1075,16 +1090,40 @@ void main() {
       ));
       await tester.pumpAndSettle();
 
-      // Unmount CollectionListScreen, triggering dispose and flush
-      await tester.pumpWidget(_app(
-        const SizedBox.shrink(),
-        locale: const Locale('ar'),
-      ));
+      // Wait 10s for scheduled commit on original repo1 and defSaints
+      await tester.pump(const Duration(seconds: 10));
       await tester.pumpAndSettle();
 
-      // s1 commit in dispose should have deleted from original repo1 and defSaints
+      // s1 commit should have deleted from original repo1 and defSaints
       expect(repo1.deletedIds, contains('saints/s1'));
       expect(repo2.deletedIds, isEmpty);
+    });
+
+    test('purgeExpiredSoftDeletes purges only expired docs, respects isLocalPending and purging set', () async {
+      final now = DateTime.utc(2026, 11, 14, 12, 0, 0);
+      final repo = _TestAdminBackend(initialCollections: {
+        'saints': [
+          AdminDoc('fresh', {'nameAr': 'مارمرقس', 'deletedAt': now.subtract(const Duration(seconds: 4))}),
+          AdminDoc('expired', {'nameAr': 'مارجرجس', 'deletedAt': now.subtract(const Duration(seconds: 12))}),
+          AdminDoc('pending', {'nameAr': 'الأنبا أنطونيوس', 'deletedAt': now.subtract(const Duration(seconds: 15))}),
+          AdminDoc('in_flight', {'nameAr': 'الأنبا بولا', 'deletedAt': now.subtract(const Duration(seconds: 20))}),
+        ],
+      });
+      final def = collectionById('saints')!;
+      final purging = <String>{'in_flight'};
+
+      await purgeExpiredSoftDeletes(
+        repo,
+        def,
+        repo.collections['saints']!,
+        clock: () => now,
+        isLocalPending: (id) => id == 'pending',
+        purging: purging,
+      );
+
+      // Only 'expired' was purged
+      expect(repo.deletedIds, ['saints/expired']);
+      expect(repo.collections['saints']!.map((d) => d.id), containsAll(['fresh', 'pending', 'in_flight']));
     });
   });
 
@@ -1227,7 +1266,19 @@ class _TestAdminBackend extends AdminBackend {
   Future<String> save(String collection, String? id, Map<String, dynamic> data) async => id ?? 'new';
 
   @override
-  Future<void> update(String collection, String id, Map<String, dynamic> data) async {}
+  Future<void> update(String collection, String id, Map<String, dynamic> data) async {
+    final list = collections[collection];
+    if (list != null) {
+      for (final doc in list) {
+        if (doc.id == id) {
+          doc.data.addAll(data);
+          if (data.containsKey('deletedAt') && data['deletedAt'] == null) {
+            doc.data.remove('deletedAt');
+          }
+        }
+      }
+    }
+  }
 
   @override
   Future<void> reorder(String collection, List<String> ids, {int base = 0}) async {}

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -16,6 +18,7 @@ import 'contact_admin.dart';
 import 'collection_list.dart';
 import 'features_editor.dart';
 import 'notifications_admin.dart';
+import 'pending_delete.dart';
 import 'season_preset_admin.dart';
 import 'unsaved_guard.dart';
 
@@ -340,10 +343,35 @@ class AdminDashboard extends StatefulWidget {
 
 class _AdminDashboardState extends State<AdminDashboard> {
   final UnsavedGuardRegistry _unsaved = UnsavedGuardRegistry();
+  final List<StreamSubscription> _purgeSubs = [];
   late String _current = widget.initial;
 
   @override
+  void initState() {
+    super.initState();
+    _purgeExpiredSoftDeletes();
+  }
+
+  void _purgeExpiredSoftDeletes() {
+    for (final def in adminCollections) {
+      final sub = widget.repo.watch(def.name).take(1).listen(
+        (docs) {
+          if (mounted) {
+            purgeExpiredSoftDeletes(widget.repo, def, docs);
+          }
+        },
+        onError: (Object _) {},
+      );
+      _purgeSubs.add(sub);
+    }
+  }
+
+  @override
   void dispose() {
+    for (final sub in _purgeSubs) {
+      sub.cancel();
+    }
+    _purgeSubs.clear();
     _unsaved.dispose();
     super.dispose();
   }
