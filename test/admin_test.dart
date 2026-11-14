@@ -1444,6 +1444,80 @@ void main() {
         findsOneWidget,
       );
     });
+
+    testWidgets('DocEditor replacesDayPreview updates when date text field changes after _dirty is true', (tester) async {
+      tester.view.physicalSize = const Size(800, 1200);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final liturgyDef = collectionById('liturgies')!;
+      final existingDocs = [
+        AdminDoc('fri', {
+          'type': 'mass',
+          'nameAr': 'قداس الجمعة',
+          'weekday': 5, // Friday
+          'start': '07:00',
+          'end': '09:00',
+          'visible': true,
+          'replacesDay': false,
+        }),
+        AdminDoc('sat', {
+          'type': 'mass',
+          'nameAr': 'قداس السبت',
+          'weekday': 6, // Saturday
+          'start': '08:00',
+          'end': '10:00',
+          'visible': true,
+          'replacesDay': false,
+        }),
+      ];
+
+      final initialValues = {
+        'type': 'mass',
+        'nameAr': 'قداس استثنائي',
+        'date': '2026-11-06', // Friday
+        'start': '07:00',
+        'end': '09:00',
+        'visible': true,
+        'replacesDay': false,
+      };
+
+      await tester.pumpWidget(_app(
+        DocEditor(
+          title: 'قداس',
+          fields: liturgyDef.fields,
+          data: initialValues,
+          existingDocs: existingDocs,
+          onSave: (_) async {},
+        ),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      // Toggle replacesDay on -> marks _dirty = true and reveals preview
+      await tester.tap(find.byKey(const ValueKey('field-replacesDay')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('replacesDayPreview')), findsOneWidget);
+      expect(find.textContaining('قداس الجمعة'), findsOneWidget);
+      expect(find.textContaining('قداس السبت'), findsNothing);
+
+      // Now date controller changes to 2026-11-07 (Saturday) while _dirty is already true
+      final dateField = find.byKey(const ValueKey('field-date'));
+      tester.widget<TextFormField>(dateField).controller!.text = '2026-11-07';
+      await tester.pumpAndSettle();
+
+      // ListenableBuilder updates preview immediately: shows Saturday mass, not Friday mass
+      expect(find.textContaining('قداس السبت'), findsOneWidget);
+      expect(find.textContaining('قداس الجمعة'), findsNothing);
+
+      // Change date to a weekday with no regular masses (e.g. 2026-11-09 Monday)
+      tester.widget<TextFormField>(dateField).controller!.text = '2026-11-09';
+      await tester.pumpAndSettle();
+      expect(find.textContaining('قداس الجمعة'), findsNothing);
+      expect(find.textContaining('قداس السبت'), findsNothing);
+      expect(find.textContaining('مفيش قداسات معتادة مسجلة'), findsOneWidget);
+    });
   });
 }
 

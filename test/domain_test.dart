@@ -757,6 +757,38 @@ void main() {
       final hidden = liturgiesHiddenBy(sampleRep, regularMasses);
       expect(hidden, isEmpty);
     });
+
+    test('two replacesDay: true masses on the same date do not hide each other', () {
+      final feast1 = Liturgy(
+        id: 'feast1',
+        type: 'mass',
+        nameAr: 'قداس العيد الأول',
+        nameEn: 'First feast mass',
+        date: DateTime(2026, 11, 6),
+        start: '06:00',
+        end: '08:00',
+        replacesDay: true,
+      );
+      final feast2 = Liturgy(
+        id: 'feast2',
+        type: 'mass',
+        nameAr: 'قداس العيد الثاني',
+        nameEn: 'Second feast mass',
+        date: DateTime(2026, 11, 6),
+        start: '08:30',
+        end: '10:30',
+        replacesDay: true,
+      );
+      final all = [...regularMasses, feast1, feast2];
+
+      final hiddenByFeast1 = liturgiesHiddenBy(feast1, all);
+      expect(hiddenByFeast1.map((l) => l.id), ['m1', 'm2']);
+      expect(hiddenByFeast1.any((l) => l.id == 'feast2'), isFalse);
+
+      final hiddenByFeast2 = liturgiesHiddenBy(feast2, all);
+      expect(hiddenByFeast2.map((l) => l.id), ['m1', 'm2']);
+      expect(hiddenByFeast2.any((l) => l.id == 'feast1'), isFalse);
+    });
   });
 
   group('soft delete', () {

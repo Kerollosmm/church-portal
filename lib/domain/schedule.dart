@@ -325,6 +325,7 @@ List<Liturgy> liturgiesHiddenBy(Liturgy replacing, Iterable<Liturgy> all) {
   for (final l in all) {
     if (l.id == replacing.id) continue;
     if (!l.visible) continue;
+    if (l.replacesDay) continue;
     if (l.seasonKey != null) continue;
     if (l.type != 'mass') continue;
     if (l.startMinutes == null) continue;

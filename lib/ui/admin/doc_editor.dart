@@ -843,7 +843,13 @@ class DocEditorState extends State<DocEditor> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               sw,
-              _replacesDayPreview(context),
+              ListenableBuilder(
+                listenable: Listenable.merge([
+                  for (final k in const ['date', 'start', 'end', 'nameAr', 'nameEn', 'type'])
+                    if (_text[k] != null) _text[k]!,
+                ]),
+                builder: (context, _) => _replacesDayPreview(context),
+              ),
             ],
           );
         }
