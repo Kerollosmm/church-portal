@@ -41,11 +41,40 @@ class AdminPage extends ConsumerStatefulWidget {
 
 class _AdminPageState extends ConsumerState<AdminPage> {
   bool _rememberMe = false;
+  AdminRepository? _repo;
+  Stream<User?>? _authStream;
+  String? _accessUid;
+  Stream<AdminAccess>? _accessStream;
+  Future<AdminAccess> Function()? _loadAccess;
+  VoidCallback? _onSignOut;
 
   @override
   void initState() {
     super.initState();
     _loadRememberMe();
+  }
+
+  void _syncRepo(AdminRepository? repo) {
+    if (identical(repo, _repo)) return;
+    _repo = repo;
+    _authStream = repo?.authChanges();
+    _accessUid = null;
+    _accessStream = null;
+    _loadAccess = null;
+    _onSignOut = repo == null ? null : () => _handleSignOut(repo);
+  }
+
+  void _syncUser(AdminRepository repo, String uid) {
+    if (_accessUid == uid && _accessStream != null && _loadAccess != null) return;
+    _accessUid = uid;
+    _loadAccess = () => repo.adminAccess(uid);
+    _accessStream = repo.accessChanges(uid);
+  }
+
+  void _clearUser() {
+    _accessUid = null;
+    _accessStream = null;
+    _loadAccess = null;
   }
 
   Future<void> _loadRememberMe() async {
@@ -75,15 +104,17 @@ class _AdminPageState extends ConsumerState<AdminPage> {
   Widget build(BuildContext context) {
     registerAdminStrings();
     final repo = ref.watch(adminRepositoryProvider);
+    _syncRepo(repo);
     if (repo == null) return _AdminFrame(child: Center(child: Text(context.tr('adminUnavailable'))));
     return StreamBuilder<User?>(
-      stream: repo.authChanges(),
+      stream: _authStream,
       builder: (context, snap) {
         if (snap.connectionState == ConnectionState.waiting) {
           return const _AdminFrame(child: Center(child: CircularProgressIndicator()));
         }
         final user = snap.data;
         if (user == null) {
+          _clearUser();
           return _AdminFrame(
             child: AdminLoginForm(
               onSignIn: repo.signInWithPersistence,
@@ -93,15 +124,16 @@ class _AdminPageState extends ConsumerState<AdminPage> {
             ),
           );
         }
+        _syncUser(repo, user.uid);
         return AdminCheckGate(
           key: ValueKey(user.uid),
           repo: repo,
           uid: user.uid,
           email: user.email ?? '',
-          loadAccess: () => repo.adminAccess(user.uid),
-          accessChanges: repo.accessChanges(user.uid),
+          loadAccess: _loadAccess!,
+          accessChanges: _accessStream!,
           rememberMe: _rememberMe,
-          onSignOut: () => _handleSignOut(repo),
+          onSignOut: _onSignOut!,
         );
       },
     );
@@ -174,18 +206,26 @@ class AdminCheckGate extends StatefulWidget {
 }
 
 class _AdminCheckGateState extends State<AdminCheckGate> {
+  static const _maxTimerDelay = Duration(days: 24);
   late Future<AdminAccess> _future = widget.loadAccess();
   Timer? _expiryTimer;
   DateTime? _scheduledExpiry;
-  bool _timerExpired = false;
+  DateTime? _expiredForTarget;
+  AdminAccess? _lastLiveAccess;
+  int _expiryGen = 0;
 
   @override
   void didUpdateWidget(covariant AdminCheckGate oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.uid != widget.uid || oldWidget.loadAccess != widget.loadAccess) {
+    if (oldWidget.uid != widget.uid ||
+        oldWidget.loadAccess != widget.loadAccess ||
+        oldWidget.accessChanges != widget.accessChanges ||
+        oldWidget.repo != widget.repo) {
       _future = widget.loadAccess();
       _scheduledExpiry = null;
-      _timerExpired = false;
+      _expiredForTarget = null;
+      _lastLiveAccess = null;
+      _expiryGen++;
       _expiryTimer?.cancel();
       _expiryTimer = null;
     }
@@ -193,29 +233,76 @@ class _AdminCheckGateState extends State<AdminCheckGate> {
 
   @override
   void dispose() {
+    _expiryGen++;
     _expiryTimer?.cancel();
     super.dispose();
   }
 
   void _ensureExpiryTimer(AdminAccess access) {
-    final target = access.isAllowed ? access.expiresAt : null;
+    final target = access.isAllowed ? access.expiresAt?.toUtc() : null;
     if (target == _scheduledExpiry) return;
     _scheduledExpiry = target;
-    _timerExpired = false;
+    if (_expiredForTarget != target) _expiredForTarget = null;
     _expiryTimer?.cancel();
     _expiryTimer = null;
+    final gen = ++_expiryGen;
     if (target == null) return;
-    final remaining = target.toUtc().difference(DateTime.now().toUtc());
+    final remaining = target.difference(DateTime.now().toUtc());
+    _scheduleExpiryStep(target, gen, remaining);
+  }
+
+  void _scheduleExpiryStep(DateTime targetUtc, int gen, Duration remaining) {
+    if (!mounted || gen != _expiryGen || _scheduledExpiry != targetUtc) return;
     if (remaining <= Duration.zero) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) setState(() => _timerExpired = true);
+        if (mounted && gen == _expiryGen && _scheduledExpiry == targetUtc) {
+          setState(() => _expiredForTarget = targetUtc);
+        }
       });
       return;
     }
-    _expiryTimer = Timer(remaining, () {
-      if (mounted) setState(() => _timerExpired = true);
+    // Cap each Timer step at 24 days so 32-bit JS setTimeout never overflows (~24.8 days).
+    final isChunk = remaining > _maxTimerDelay;
+    final step = isChunk ? _maxTimerDelay : remaining;
+    _expiryTimer = Timer(step, () {
+      if (!mounted || gen != _expiryGen || _scheduledExpiry != targetUtc) return;
+      if (!isChunk) {
+        setState(() => _expiredForTarget = targetUtc);
+        return;
+      }
+      final wallRemaining = targetUtc.difference(DateTime.now().toUtc());
+      final trackedRemaining = remaining - _maxTimerDelay;
+      final nextRemaining = wallRemaining < trackedRemaining ? wallRemaining : trackedRemaining;
+      _scheduleExpiryStep(targetUtc, gen, nextRemaining);
     });
   }
+
+  Widget _errorScreen(BuildContext context) => _AdminFrame(
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.cloud_off_rounded, size: 48, color: context.pal.alert),
+              const SizedBox(height: 8),
+              Text(context.tr('adminCheckFailed'), textAlign: TextAlign.center),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                children: [
+                  FilledButton(
+                    onPressed: () => setState(() {
+                      _lastLiveAccess = null;
+                      _future = widget.loadAccess();
+                    }),
+                    child: Text(context.tr('retry')),
+                  ),
+                  OutlinedButton(onPressed: widget.onSignOut, child: Text(context.tr('signOut'))),
+                ],
+              ),
+            ],
+          ),
+        ),
+      );
 
   @override
   Widget build(BuildContext context) {
@@ -227,29 +314,7 @@ class _AdminCheckGateState extends State<AdminCheckGate> {
           return const _AdminFrame(child: Center(child: CircularProgressIndicator()));
         }
         if (adm.hasError) {
-          return _AdminFrame(
-            child: Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.cloud_off_rounded, size: 48, color: context.pal.alert),
-                  const SizedBox(height: 8),
-                  Text(context.tr('adminCheckFailed'), textAlign: TextAlign.center),
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 8,
-                    children: [
-                      FilledButton(
-                        onPressed: () => setState(() => _future = widget.loadAccess()),
-                        child: Text(context.tr('retry')),
-                      ),
-                      OutlinedButton(onPressed: widget.onSignOut, child: Text(context.tr('signOut'))),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          );
+          return _errorScreen(context);
         }
         // Live access after the authoritative server check: a demoted, stopped,
         // expired, or removed admin loses access at once.
@@ -257,7 +322,17 @@ class _AdminCheckGateState extends State<AdminCheckGate> {
           stream: widget.accessChanges,
           initialData: adm.data,
           builder: (context, live) {
-            final current = (live.hasError ? adm.data : live.data) ?? const AdminAccess(status: AdminAccountStatus.none);
+            if (!live.hasError &&
+                (live.connectionState == ConnectionState.active || live.connectionState == ConnectionState.done) &&
+                live.hasData) {
+              _lastLiveAccess = live.data;
+            }
+            if (live.hasError) {
+              final retained = _lastLiveAccess;
+              if (retained == null) return _errorScreen(context);
+              return _forAccess(context, retained);
+            }
+            final current = live.data ?? _lastLiveAccess ?? adm.data ?? const AdminAccess(status: AdminAccountStatus.none);
             return _forAccess(context, current);
           },
         );
@@ -267,9 +342,9 @@ class _AdminCheckGateState extends State<AdminCheckGate> {
 
   Widget _forAccess(BuildContext context, AdminAccess rawAccess) {
     var access = rawAccess;
-    if (access.isAllowed &&
-        access.expiresAt != null &&
-        (_timerExpired || !DateTime.now().toUtc().isBefore(access.expiresAt!.toUtc()))) {
+    final targetUtc = access.isAllowed ? access.expiresAt?.toUtc() : null;
+    final firedForTarget = targetUtc != null && _expiredForTarget == targetUtc;
+    if (access.isAllowed && targetUtc != null && (firedForTarget || !DateTime.now().toUtc().isBefore(targetUtc))) {
       access = AdminAccess(role: access.role, status: AdminAccountStatus.expired, expiresAt: access.expiresAt);
     }
     _ensureExpiryTimer(access);

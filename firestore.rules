@@ -1127,13 +1127,17 @@ service cloud.firestore {
     match /admins/{uid} {
       allow read: if signedIn() && (request.auth.uid == uid || isOwner());
       // Owners manage OTHER admins only: an owner can never stop, expire,
-      // demote or remove themselves, so the project always keeps at least one owner.
+      // demote or remove themselves, and owners cannot have expiresAt, so the
+      // project always keeps at least one owner.
       allow create, update: if isOwner() && request.auth.uid != uid
         && request.resource.data.keys().hasOnly(['email', 'role', 'active', 'expiresAt', 'updatedAt', 'updatedBy'])
         && reqString(request.resource.data, 'email', 254)
         && request.resource.data.role in ['owner', 'editor']
         && optBool(request.resource.data, 'active')
         && optTimestamp(request.resource.data, 'expiresAt')
+        && (request.resource.data.role != 'owner'
+            || !('expiresAt' in request.resource.data)
+            || request.resource.data.expiresAt == null)
         && stampOk(request.resource.data);
       allow delete: if isOwner() && request.auth.uid != uid;
     }

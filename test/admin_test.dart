@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:ui' show Tristate;
+import 'dart:ui' show PointerDeviceKind, Tristate;
 
 import 'package:church_portal/core/theme.dart';
 import 'package:church_portal/data/admin_repository.dart';
@@ -1880,13 +1880,12 @@ void main() {
         findsOneWidget,
       );
 
-      // Self switches and expiry picker are disabled (own comes after ed1)
+      // Self switches and expiry picker are hidden/disabled (own comes after ed1)
       await tester.scrollUntilVisible(find.byKey(const ValueKey('admin-active-own')), 200, scrollable: outerScroll);
       await tester.pumpAndSettle();
       final ownSwitch = tester.widget<AdminStateSwitch>(find.byKey(const ValueKey('admin-active-own')));
       expect(ownSwitch.onChanged, isNull);
-      final ownExpiry = tester.widget<ActionChip>(find.byKey(const ValueKey('admin-expiry-own')));
-      expect(ownExpiry.onPressed, isNull);
+      expect(find.byKey(const ValueKey('admin-expiry-own')), findsNothing);
 
       // ed2 (paused@) comes after own
       await tester.scrollUntilVisible(find.byKey(const ValueKey('admin-active-ed2')), 200, scrollable: outerScroll);
@@ -1923,15 +1922,79 @@ void main() {
         findsOneWidget,
       );
 
-      // Clearing ed1 expiry removes expiresAt
+      // Clearing ed1 expiry removes expiresAt without sending an 'active' field
+      repo.updates.clear();
       await tester.ensureVisible(find.byKey(const ValueKey('admin-clear-expiry-ed1')));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('admin-clear-expiry-ed1')));
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('admin-clear-expiry-ed1')), findsNothing);
+      expect(repo.updates, isNotEmpty);
+      expect(repo.updates.last.data.containsKey('active'), isFalse);
+      expect(repo.updates.last.data['expiresAt'], isNull);
     });
 
-    testWidgets('AdminCheckGate blocks stopped/expired admins, revokes live, and locks when expiresAt passes', (tester) async {
+    testWidgets('AdminsScreen hides expiry picker for owners, allows clearing legacy owner expiry, and clears expiresAt on promotion', (tester) async {
+      final ctrl = StreamController<List<AdminDoc>>.broadcast();
+      addTearDown(ctrl.close);
+
+      final futureDate = DateTime.utc(2099, 5, 20, 20, 59, 59);
+      final repo = _ReactiveAdminBackend(
+        controller: ctrl,
+        initialCollections: {
+          'admins': [
+            AdminDoc('own', {'email': 'a-own@church.org', 'role': 'owner', 'active': true}),
+            AdminDoc('own2', {'email': 'b-own2@church.org', 'role': 'owner', 'active': true}),
+            AdminDoc('own3', {
+              'email': 'c-legacy-owner@church.org',
+              'role': 'owner',
+              'active': true,
+              'expiresAt': futureDate,
+            }),
+            AdminDoc('ed1', {
+              'email': 'd-ed@church.org',
+              'role': 'editor',
+              'active': true,
+              'expiresAt': futureDate,
+            }),
+          ],
+        },
+      );
+
+      await tester.pumpWidget(_app(
+        AdminsScreen(repo: repo, selfUid: 'own'),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      // Another owner without expiresAt has no expiry chip
+      expect(find.byKey(const ValueKey('admin-expiry-own2')), findsNothing);
+
+      // Legacy owner with expiresAt disables setting expiry, but still allows clearing it
+      final legacyChip = tester.widget<ActionChip>(find.byKey(const ValueKey('admin-expiry-own3')));
+      expect(legacyChip.onPressed, isNull);
+      await tester.ensureVisible(find.byKey(const ValueKey('admin-clear-expiry-own3')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('admin-clear-expiry-own3')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('admin-expiry-own3')), findsNothing);
+      expect(repo.updates.last.data.containsKey('active'), isFalse);
+
+      // Promoting an editor who has expiresAt to owner clears expiresAt cleanly
+      repo.updates.clear();
+      repo.setAdminCalls.clear();
+      await tester.ensureVisible(find.text('محرر'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('محرر'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('مالك (يدير المشرفين)').last);
+      await tester.pumpAndSettle();
+      expect(repo.setAdminCalls.last.uid, 'ed1');
+      expect(repo.setAdminCalls.last.role, 'owner');
+      expect(repo.updates.any((u) => u.id == 'ed1' && u.data.containsKey('expiresAt') && u.data['expiresAt'] == null), isTrue);
+    });
+
+    testWidgets('AdminCheckGate blocks stopped/expired admins, revokes live, handles stream errors, chunks >24d timers, and unlocks when expiry is extended', (tester) async {
       final repo = _TestAdminBackend();
       var signedOut = 0;
 
@@ -1977,7 +2040,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.textContaining('انتهت صلاحية هذا الحساب المؤقت.'), findsOneWidget);
 
-      // 3. Live revocation via accessChanges while dashboard is open
+      // 3. Live revocation via accessChanges while dashboard is open; stream error preserves last live decision
       final liveCtrl = StreamController<AdminAccess>.broadcast();
       addTearDown(liveCtrl.close);
       await tester.pumpWidget(ProviderScope(
@@ -2002,7 +2065,38 @@ void main() {
       expect(find.byType(AdminDashboard), findsNothing);
       expect(find.text('تم إيقاف هذا الحساب مؤقتًا من مالك اللوحة.'), findsOneWidget);
 
-      // 4. Expiry timer locks open dashboard once expiresAt elapses
+      // Stream error after live stopped decision must NOT revert to initial active loadAccess
+      liveCtrl.addError(StateError('network blip'));
+      await tester.pumpAndSettle();
+      expect(find.byType(AdminDashboard), findsNothing);
+      expect(find.text('تم إيقاف هذا الحساب مؤقتًا من مالك اللوحة.'), findsOneWidget);
+
+      // Stream error before any live decision shows retry error screen instead of stale initialData
+      final errCtrl = StreamController<AdminAccess>.broadcast();
+      addTearDown(errCtrl.close);
+      await tester.pumpWidget(ProviderScope(
+        child: _app(
+          AdminCheckGate(
+            repo: repo,
+            uid: 'u3-err',
+            email: 'err@church.org',
+            loadAccess: () async => const AdminAccess(role: 'editor', status: AdminAccountStatus.active),
+            accessChanges: errCtrl.stream,
+            rememberMe: true,
+            onSignOut: () {},
+          ),
+          locale: const Locale('ar'),
+        ),
+      ));
+      await tester.pumpAndSettle();
+      errCtrl.addError(StateError('stream denied'));
+      await tester.pumpAndSettle();
+      expect(find.byType(AdminDashboard), findsNothing);
+      expect(find.text('إعادة المحاولة'), findsOneWidget);
+
+      // 4. Expiry timer locks open dashboard once expiresAt elapses, and unlocks when extended
+      final timerCtrl = StreamController<AdminAccess>.broadcast();
+      addTearDown(timerCtrl.close);
       final soon = DateTime.now().toUtc().add(const Duration(seconds: 5));
       await tester.pumpWidget(ProviderScope(
         child: _app(
@@ -2011,7 +2105,7 @@ void main() {
             uid: 'u4',
             email: 'timer@church.org',
             loadAccess: () async => AdminAccess(role: 'editor', status: AdminAccountStatus.active, expiresAt: soon),
-            accessChanges: const Stream.empty(),
+            accessChanges: timerCtrl.stream,
             rememberMe: true,
             onSignOut: () {},
           ),
@@ -2022,6 +2116,40 @@ void main() {
       expect(find.byType(AdminDashboard), findsOneWidget);
 
       await tester.pump(const Duration(seconds: 6));
+      await tester.pumpAndSettle();
+      expect(find.byType(AdminDashboard), findsNothing);
+      expect(find.textContaining('انتهت صلاحية هذا الحساب المؤقت.'), findsOneWidget);
+
+      // Extending expiresAt to a later timestamp unlocks immediately
+      final extended = DateTime.now().toUtc().add(const Duration(hours: 2));
+      timerCtrl.add(AdminAccess(role: 'editor', status: AdminAccountStatus.active, expiresAt: extended));
+      await tester.pumpAndSettle();
+      expect(find.byType(AdminDashboard), findsOneWidget);
+
+      // 5. >30-day expiresAt does NOT prematurely lock at 25 days, and locks after full 30 days
+      final monthAhead = DateTime.now().toUtc().add(const Duration(days: 30));
+      await tester.pumpWidget(ProviderScope(
+        child: _app(
+          AdminCheckGate(
+            repo: repo,
+            uid: 'u5',
+            email: 'month@church.org',
+            loadAccess: () async => AdminAccess(role: 'editor', status: AdminAccountStatus.active, expiresAt: monthAhead),
+            accessChanges: const Stream.empty(),
+            rememberMe: true,
+            onSignOut: () {},
+          ),
+          locale: const Locale('ar'),
+        ),
+      ));
+      await tester.pumpAndSettle();
+      expect(find.byType(AdminDashboard), findsOneWidget);
+
+      await tester.pump(const Duration(days: 25));
+      await tester.pumpAndSettle();
+      expect(find.byType(AdminDashboard), findsOneWidget);
+
+      await tester.pump(const Duration(days: 6));
       await tester.pumpAndSettle();
       expect(find.byType(AdminDashboard), findsNothing);
       expect(find.textContaining('انتهت صلاحية هذا الحساب المؤقت.'), findsOneWidget);
@@ -2083,7 +2211,7 @@ void main() {
       expect(capturedRemember, isTrue);
     });
 
-    testWidgets('AdminSessionGuard warns at warnAt, signs out at limit, resets on pointer/key/button, skips when disabled', (tester) async {
+    testWidgets('AdminSessionGuard warns at warnAt, signs out at limit, resets on pointer/hover/key/button, preserves child state, and skips when disabled', (tester) async {
       final unsaved = UnsavedGuardRegistry();
       var signedOut = 0;
 
@@ -2093,22 +2221,48 @@ void main() {
                 enabled: enabled,
                 unsaved: unsaved,
                 onSignOut: () => signedOut++,
-                child: const Center(child: Text('Dashboard Content')),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: const [
+                    Text('Dashboard Content'),
+                    TextField(key: ValueKey('guard-draft-input')),
+                  ],
+                ),
               ),
             ),
             locale: locale,
           );
 
-      // 1. Enabled -> warns at 29m, pointer move/down resets timer and dismisses warning
+      // 1. Enabled -> warns at 29m, preserves child TextField state, pointer/hover/key reset timer
       await tester.pumpWidget(buildGuard(enabled: true));
+      await tester.enterText(find.byKey(const ValueKey('guard-draft-input')), 'draft note');
       await tester.pump(const Duration(minutes: 28, seconds: 59));
       expect(find.byKey(const ValueKey('session-idle-warning')), findsNothing);
       expect(signedOut, 0);
 
       await tester.pump(const Duration(seconds: 2)); // 29:01 idle
       expect(find.byKey(const ValueKey('session-idle-warning')), findsOneWidget);
+      // Child TextField text is preserved across warning mount
+      expect(
+        tester.widget<EditableText>(find.descendant(of: find.byKey(const ValueKey('guard-draft-input')), matching: find.byType(EditableText))).controller.text,
+        'draft note',
+      );
 
-      // Pointer event cancels warning & resets clock
+      // Pointer hover (without mouse button pressed) resets timer & dismisses warning
+      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await mouse.addPointer(location: Offset.zero);
+      addTearDown(mouse.removePointer);
+      await mouse.moveTo(tester.getCenter(find.text('Dashboard Content')));
+      await tester.pump();
+      expect(find.byKey(const ValueKey('session-idle-warning')), findsNothing);
+      expect(
+        tester.widget<EditableText>(find.descendant(of: find.byKey(const ValueKey('guard-draft-input')), matching: find.byType(EditableText))).controller.text,
+        'draft note',
+      );
+
+      // Trigger warning again, then test tap reset
+      await tester.pump(const Duration(minutes: 29));
+      expect(find.byKey(const ValueKey('session-idle-warning')), findsOneWidget);
       await tester.tap(find.text('Dashboard Content'));
       await tester.pump();
       expect(find.byKey(const ValueKey('session-idle-warning')), findsNothing);
@@ -2199,6 +2353,8 @@ class _TestAdminBackend extends AdminBackend {
   final Map<String, Map<String, dynamic>> docs = {};
   final List<String> deletedIds = [];
   final List<String> savedPaths = [];
+  final List<({String collection, String id, Map<String, dynamic> data})> updates = [];
+  final List<({String uid, String email, String role})> setAdminCalls = [];
   bool failDelete = false;
 
   _TestAdminBackend({
@@ -2235,6 +2391,7 @@ class _TestAdminBackend extends AdminBackend {
 
   @override
   Future<void> update(String collection, String id, Map<String, dynamic> data) async {
+    updates.add((collection: collection, id: id, data: Map<String, dynamic>.from(data)));
     final list = collections[collection];
     if (list != null) {
       for (final doc in list) {
@@ -2255,7 +2412,18 @@ class _TestAdminBackend extends AdminBackend {
   Future<void> reorder(String collection, List<String> ids, {int base = 0}) async {}
 
   @override
-  Future<void> setAdmin(String uid, {required String email, required String role}) async {}
+  Future<void> setAdmin(String uid, {required String email, required String role}) async {
+    setAdminCalls.add((uid: uid, email: email, role: role));
+    final list = collections['admins'];
+    if (list != null) {
+      for (final doc in list) {
+        if (doc.id == uid) {
+          doc.data['email'] = email;
+          doc.data['role'] = role;
+        }
+      }
+    }
+  }
 
   @override
   Future<void> removeAdmin(String uid) async {}
@@ -2287,6 +2455,16 @@ class _ReactiveAdminBackend extends _TestAdminBackend {
     if (!controller.isClosed) {
       controller.add([
         for (final d in collections[collection] ?? const <AdminDoc>[]) AdminDoc(d.id, Map<String, dynamic>.from(d.data)),
+      ]);
+    }
+  }
+
+  @override
+  Future<void> setAdmin(String uid, {required String email, required String role}) async {
+    await super.setAdmin(uid, email: email, role: role);
+    if (!controller.isClosed) {
+      controller.add([
+        for (final d in collections['admins'] ?? const <AdminDoc>[]) AdminDoc(d.id, Map<String, dynamic>.from(d.data)),
       ]);
     }
   }

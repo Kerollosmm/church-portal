@@ -485,6 +485,44 @@ describe('P1-12: admin active / expiresAt access control', () => {
     await assertFails(updateDoc(doc(own, 'admins', EDITOR), { expiresAt: 123456789 }));
   });
 
+  test('owners cannot have a non-null expiresAt; clearing legacy expiresAt or promoting with null is allowed', async () => {
+    const own = db(OWNER);
+    const stamp = () => ({ updatedAt: serverTimestamp(), updatedBy: `${OWNER}@x.test` });
+
+    // Creating another owner with a non-null expiresAt is denied
+    await assertFails(setDoc(doc(own, 'admins', 'other-owner'), {
+      email: 'o2@x.test', role: 'owner', active: true, expiresAt: futureTs(), ...stamp(),
+    }));
+    // Creating another owner without expiresAt or with expiresAt: null is allowed
+    await assertSucceeds(setDoc(doc(own, 'admins', 'other-owner'), {
+      email: 'o2@x.test', role: 'owner', active: true, expiresAt: null, ...stamp(),
+    }));
+    // Updating another owner to set a non-null expiresAt is denied
+    await assertFails(updateDoc(doc(own, 'admins', 'other-owner'), {
+      expiresAt: futureTs(), ...stamp(),
+    }));
+
+    // Clearing a legacy expiresAt on an existing owner (expiresAt: null) is allowed
+    await setAdmin('legacy-owner', {
+      email: 'legacy@x.test', role: 'owner', active: true, expiresAt: futureTs(),
+    });
+    await assertSucceeds(updateDoc(doc(own, 'admins', 'legacy-owner'), {
+      expiresAt: null, ...stamp(),
+    }));
+
+    // Promoting an editor who has expiresAt to owner without clearing expiresAt is denied
+    await setAdmin('exp-editor', {
+      email: 'exped@x.test', role: 'editor', active: true, expiresAt: futureTs(),
+    });
+    await assertFails(updateDoc(doc(own, 'admins', 'exp-editor'), {
+      role: 'owner', ...stamp(),
+    }));
+    // Promoting that editor to owner while clearing expiresAt to null is allowed
+    await assertSucceeds(updateDoc(doc(own, 'admins', 'exp-editor'), {
+      role: 'owner', expiresAt: null, ...stamp(),
+    }));
+  });
+
   test('worst-case whole-document rules budget: active editor with future expiresAt saves full settings/features and saints', async () => {
     await setAdmin(EDITOR, { email: 'editor@x.test', role: 'editor', active: true, expiresAt: futureTs() });
     const ed = db(EDITOR);
