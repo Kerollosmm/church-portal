@@ -6,17 +6,21 @@ import 'package:material_ui/material_ui.dart';
 
 import '../../core/l10n.dart';
 import '../../core/theme.dart';
+import '../../data/admin_repository.dart';
 import '../../data/image_processing.dart';
 import '../../data/media_repository.dart';
 import '../../domain/cairo_time.dart';
 import '../../domain/media.dart';
+import '../../domain/models.dart';
 import '../../domain/reminders.dart' show leadLabel;
 import '../../domain/rules.dart' show normalizeDigits;
+import '../../domain/schedule.dart' show liturgiesHiddenBy;
 import '../../domain/time_format.dart';
 import '../../domain/today.dart' show DayEvent;
 import '../widgets/item_image.dart';
 import 'admin_schema.dart';
 import 'admin_validators.dart';
+import 'state_switch.dart';
 import 'unsaved_bar.dart';
 import 'unsaved_guard.dart';
 
@@ -69,6 +73,9 @@ class DocEditor extends StatefulWidget {
   /// Slugs other documents of this collection already use (ADR-027).
   final Set<String> takenSlugs;
 
+  /// Existing collection documents for live cross-document previews.
+  final List<AdminDoc> existingDocs;
+
   const DocEditor({
     super.key,
     required this.title,
@@ -85,6 +92,7 @@ class DocEditor extends StatefulWidget {
     this.dynamicChoices = const {},
     this.linkTargets = const [],
     this.takenSlugs = const {},
+    this.existingDocs = const [],
   });
 
   @override
@@ -159,9 +167,9 @@ class DocEditorState extends State<DocEditor> {
       case FieldType.phone:
         _text[f.key] = _ctrl(v?.toString() ?? '');
       case FieldType.dateTime:
-        _text[f.key] = _ctrl(v is DateTime ? fmtDateTime(v) : '');
+        _text[f.key] = _ctrl(v is DateTime ? fmtDateTime(v) : (v is String ? v : ''));
       case FieldType.date:
-        _text[f.key] = _ctrl(v is DateTime ? fmtDate(v) : '');
+        _text[f.key] = _ctrl(v is DateTime ? fmtDate(v) : (v is String ? v : ''));
       case FieldType.boolean:
         _values[f.key] = v is bool ? v : (isNew ? f.newBool : f.missingBool);
       case FieldType.weekday:
@@ -698,23 +706,148 @@ class DocEditorState extends State<DocEditor> {
     c.text = picked;
   }
 
+  (String on, String off) _switchLabels(BuildContext context, FieldDef f) {
+    return switch (f.key) {
+      'visible' => (context.tr('switch_visible'), context.tr('switch_hidden')),
+      'sample' => (context.tr('switch_sample'), context.tr('switch_confirmed')),
+      'active' => (context.tr('switch_active'), context.tr('switch_stopped')),
+      'replacesDay' => (context.tr('switch_replaces_on'), context.tr('switch_replaces_off')),
+      'showInNav' => (context.tr('switch_nav_on'), context.tr('switch_nav_off')),
+      _ => (context.tr('switch_enabled'), context.tr('switch_disabled')),
+    };
+  }
+
+  Widget _replacesDayPreview(BuildContext context) {
+    final rawDate = _text['date']?.text.trim();
+    final parsedDate = (rawDate != null && rawDate.isNotEmpty) ? parseDate(rawDate) : null;
+    final rawWeekday = _values['weekday'];
+    final weekday = rawWeekday is int ? rawWeekday : null;
+
+    final replacing = Liturgy(
+      id: widget.docId ?? 'draft',
+      type: _values['type'] is String && (_values['type'] as String).isNotEmpty
+          ? _values['type'] as String
+          : (_text['type']?.text.trim().isNotEmpty == true ? _text['type']!.text.trim() : 'mass'),
+      nameAr: _text['nameAr']?.text.trim() ?? '',
+      nameEn: _text['nameEn']?.text.trim() ?? '',
+      weekday: weekday,
+      date: parsedDate,
+      start: _text['start']?.text.trim() ?? '',
+      end: _text['end']?.text.trim() ?? '',
+      seasonKey: _values['seasonKey'] is String ? _values['seasonKey'] as String : null,
+      replacesDay: true,
+      visible: _values['visible'] != false,
+      sample: _values['sample'] == true,
+    );
+
+    final allLiturgies = [for (final d in widget.existingDocs) Liturgy.fromMap(d.id, d.data)];
+    final hiddenLiturgies = liturgiesHiddenBy(replacing, allLiturgies);
+
+    final String heading;
+    if (replacing.date != null) {
+      final d = CairoTime.calendarDate(replacing.date!);
+      final w = weekdayName(d.weekday, arabic: context.isAr);
+      final dt = formatDate(d, arabic: context.isAr);
+      heading = context.tr('replacesPreviewHeadingDate', {'d': '$w $dt'});
+    } else if (replacing.weekday != null) {
+      final w = weekdayName(replacing.weekday, arabic: context.isAr);
+      heading = context.tr('replacesPreviewHeadingWeekday', {'w': w});
+    } else {
+      heading = context.tr('replacesPreviewHeadingFallback');
+    }
+
+    final emptyNote = (replacing.date == null && replacing.weekday == null)
+        ? context.tr('replacesPreviewNoDay')
+        : context.tr('replacesPreviewEmpty');
+
+    return Card(
+      key: const ValueKey('replacesDayPreview'),
+      color: context.pal.surfaceAlt.withValues(alpha: 0.5),
+      margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(10),
+        side: BorderSide(color: context.pal.goldText.withValues(alpha: 0.3)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.info_outline, size: 18, color: context.pal.goldText),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    heading,
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                      color: context.pal.ink,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            if (hiddenLiturgies.isEmpty)
+              Text(emptyNote, style: TextStyle(color: context.pal.muted, fontSize: 12))
+            else
+              for (final l in hiddenLiturgies)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 2),
+                  child: Row(
+                    children: [
+                      const Text('• ', style: TextStyle(fontWeight: FontWeight.bold)),
+                      Expanded(
+                        child: Text(
+                          context.pick(l.nameAr, l.nameEn),
+                          style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w500),
+                        ),
+                      ),
+                      Text(
+                        context.isAr ? formatRangeArabic(l.start, l.end) : formatRangeLatin(l.start, l.end),
+                        style: TextStyle(fontSize: 12, color: context.pal.muted),
+                      ),
+                    ],
+                  ),
+                ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _field(FieldDef f) {
     final label = _label(f);
     switch (f.type) {
       case FieldType.boolean:
         // The field's hint under the switch (e.g. `replacesDay`, ADR-050).
         final hint = context.pick(f.hintAr, f.hintEn);
-        return SwitchListTile(
+        final (onLabel, offLabel) = _switchLabels(context, f);
+        final sw = AdminStateSwitch(
           key: ValueKey('field-${f.key}'),
           contentPadding: const EdgeInsetsDirectional.only(start: 4),
           title: Text(label),
           subtitle: hint.isEmpty ? null : Text(hint),
           value: _values[f.key] as bool,
+          onLabel: onLabel,
+          offLabel: offLabel,
           onChanged: (v) => setState(() {
             _values[f.key] = v;
             _dirty = true;
           }),
         );
+        if (f.key == 'replacesDay' && _values['replacesDay'] == true) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              sw,
+              _replacesDayPreview(context),
+            ],
+          );
+        }
+        return sw;
       case FieldType.weekday:
         return DropdownButtonFormField<int?>(
           key: ValueKey('field-${f.key}'),
@@ -1339,10 +1472,12 @@ class DocEditorState extends State<DocEditor> {
                   Padding(
                     padding: const EdgeInsets.only(bottom: 8),
                     child: switch (sf.type) {
-                      FieldType.boolean => SwitchListTile(
+                      FieldType.boolean => AdminStateSwitch(
                           contentPadding: EdgeInsets.zero,
                           title: Text(_label(sf)),
                           value: rows[i].values[sf.key] as bool,
+                          onLabel: _switchLabels(context, sf).$1,
+                          offLabel: _switchLabels(context, sf).$2,
                           onChanged: (v) => setState(() {
                             rows[i].values[sf.key] = v;
                             _dirty = true;

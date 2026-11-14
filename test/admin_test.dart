@@ -17,6 +17,7 @@ import 'package:church_portal/ui/admin/collection_list.dart';
 import 'package:church_portal/ui/admin/doc_editor.dart';
 import 'package:church_portal/ui/admin/features_editor.dart';
 import 'package:church_portal/ui/admin/pending_delete.dart';
+import 'package:church_portal/ui/admin/state_switch.dart';
 import 'package:church_portal/ui/admin/unsaved_bar.dart';
 import 'package:church_portal/ui/admin/unsaved_guard.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -1185,6 +1186,224 @@ void main() {
       // Verify delayed preparation did not restore dirty or show unsaved bar or set pending preview
       expect(find.byKey(const ValueKey('unsaved-bar')), findsNothing);
       expect(find.byKey(const Key('imagePreviewPending')), findsNothing);
+    });
+  });
+
+  group('AdminStateSwitch and written states (P1-09 & P1-10)', () {
+    test('zero raw SwitchListTile across lib/ui/admin/', () {
+      final adminDir = Directory('lib/ui/admin');
+      final dartFiles = adminDir.listSync(recursive: true).whereType<File>().where((f) => f.path.endsWith('.dart'));
+      for (final file in dartFiles) {
+        final content = file.readAsStringSync();
+        expect(
+          content.contains('SwitchListTile'),
+          isFalse,
+          reason: '${file.path} still contains SwitchListTile, must use AdminStateSwitch',
+        );
+      }
+    });
+
+    testWidgets('AdminStateSwitch at 320 px x 200% text scale in RTL Arabic and LTR English', (tester) async {
+      tester.view.physicalSize = const Size(320, 800);
+      tester.view.devicePixelRatio = 1;
+      tester.platformDispatcher.textScaleFactorTestValue = 2.0;
+      addTearDown(() {
+        tester.view.reset();
+        tester.platformDispatcher.clearTextScaleFactorTestValue();
+      });
+
+      bool switchVal = true;
+      // RTL Arabic
+      await tester.pumpWidget(_app(
+        Scaffold(
+          body: StatefulBuilder(
+            builder: (context, setState) => AdminStateSwitch(
+              value: switchVal,
+              onLabel: 'مفعّل',
+              offLabel: 'مقفول',
+              title: const Text('الخدمة التفاعلية'),
+              subtitle: const Text('وصف تفصيلي للخدمة'),
+              onChanged: (v) => setState(() => switchVal = v),
+            ),
+          ),
+        ),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.text('مفعّل'), findsOneWidget);
+      expect(find.text('مقفول'), findsNothing);
+
+      // Tap to toggle off
+      await tester.tap(find.byType(Switch));
+      await tester.pumpAndSettle();
+
+      expect(switchVal, isFalse);
+      expect(find.text('مقفول'), findsOneWidget);
+      expect(find.text('مفعّل'), findsNothing);
+
+      // LTR English
+      switchVal = true;
+      await tester.pumpWidget(_app(
+        Scaffold(
+          body: StatefulBuilder(
+            builder: (context, setState) => AdminStateSwitch(
+              value: switchVal,
+              onLabel: 'Active',
+              offLabel: 'Paused',
+              title: const Text('Interactive Service'),
+              onChanged: (v) => setState(() => switchVal = v),
+            ),
+          ),
+        ),
+        locale: const Locale('en'),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Active'), findsOneWidget);
+      expect(find.text('Paused'), findsNothing);
+
+      await tester.tap(find.byType(Switch));
+      await tester.pumpAndSettle();
+
+      expect(switchVal, isFalse);
+      expect(find.text('Paused'), findsOneWidget);
+      expect(find.text('Active'), findsNothing);
+    });
+
+    testWidgets('CollectionListScreen displays written status tags (ظاهر, مخفي, موقوف, منتهي, بيانات تجريبية)', (tester) async {
+      tester.view.physicalSize = const Size(800, 1200);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final repo = _TestAdminBackend(initialCollections: {
+        'liturgies': [
+          AdminDoc('l1', {
+            'type': 'mass',
+            'nameAr': 'قداس الأحد',
+            'visible': false,
+            'sample': true,
+            'active': true,
+          }),
+          AdminDoc('l2', {
+            'type': 'mass',
+            'nameAr': 'قداس الجمعة',
+            'visible': true,
+            'sample': false,
+            'active': true,
+          }),
+          AdminDoc('l3', {
+            'type': 'mass',
+            'nameAr': 'قداس الأربعاء',
+            'visible': false,
+            'sample': false,
+            'active': false,
+          }),
+          AdminDoc('l4', {
+            'type': 'mass',
+            'nameAr': 'قداس منتهي',
+            'date': '2020-01-01',
+            'visible': true,
+          }),
+        ],
+        'alerts': [
+          AdminDoc('a1', {
+            'title': 'تنويه منتهي',
+            'endsAt': '2020-01-01 12:00',
+            'visible': true,
+          }),
+        ],
+      });
+
+      // 1. Liturgies collection
+      await tester.pumpWidget(_app(
+        CollectionListScreen(repo: repo, def: collectionById('liturgies')!),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      // l1 has visible: false -> مخفي, sample: true -> بيانات تجريبية
+      expect(find.text('مخفي'), findsWidgets);
+      expect(find.text('بيانات تجريبية'), findsOneWidget);
+
+      // l2 has visible: true -> ظاهر
+      expect(find.text('ظاهر'), findsWidgets);
+
+      // l3 has active: false -> موقوف
+      expect(find.text('موقوف'), findsOneWidget);
+
+      // l4 has past date -> منتهي
+      expect(find.text('منتهي'), findsOneWidget);
+
+      // 2. Alerts collection with past endsAt -> منتهي
+      await tester.pumpWidget(_app(
+        CollectionListScreen(repo: repo, def: collectionById('alerts')!),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.text('منتهي'), findsOneWidget);
+    });
+
+    testWidgets('DocEditor liturgy replacesDay preview renders overridden regular masses with 12-hour Cairo times', (tester) async {
+      tester.view.physicalSize = const Size(800, 1200);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final liturgyDef = collectionById('liturgies')!;
+      final existingDocs = [
+        AdminDoc('reg1', {
+          'type': 'mass',
+          'nameAr': 'قداس باكر',
+          'weekday': 5, // Friday
+          'start': '07:00',
+          'end': '09:00',
+          'visible': true,
+          'replacesDay': false,
+        }),
+      ];
+
+      final initialValues = {
+        'type': 'mass',
+        'nameAr': 'قداس عيد الميلاد',
+        'date': '2026-12-25', // Friday
+        'start': '00:00',
+        'end': '03:00',
+        'visible': true,
+        'replacesDay': false,
+      };
+
+      await tester.pumpWidget(_app(
+        DocEditor(
+          title: 'قداس',
+          fields: liturgyDef.fields,
+          data: initialValues,
+          existingDocs: existingDocs,
+          onSave: (_) async {},
+        ),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      // Initially replacesDay is false -> preview card is not present
+      expect(find.byKey(const ValueKey('replacesDayPreview')), findsNothing);
+
+      // Toggle replacesDay on
+      await tester.tap(find.byKey(const ValueKey('field-replacesDay')));
+      await tester.pumpAndSettle();
+
+      // Preview card is now visible
+      expect(find.byKey(const ValueKey('replacesDayPreview')), findsOneWidget);
+      // Overridden regular mass is listed
+      expect(find.textContaining('قداس باكر'), findsOneWidget);
+      // Cairo 12-hour formatted time with Arabic period indicator
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('replacesDayPreview')),
+          matching: find.textContaining('٠٧:٠٠ ص'),
+        ),
+        findsOneWidget,
+      );
     });
   });
 }

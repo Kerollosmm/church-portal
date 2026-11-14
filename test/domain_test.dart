@@ -627,4 +627,135 @@ void main() {
       expect(parseHm('25:00'), isNull);
     });
   });
+
+  group('liturgiesHiddenBy', () {
+    final regularMasses = [
+      const Liturgy(id: 'm1', type: 'mass', nameAr: 'قداس 1', nameEn: 'Mass 1', weekday: 5, start: '06:00', end: '08:00'),
+      const Liturgy(id: 'm2', type: 'mass', nameAr: 'قداس 2', nameEn: 'Mass 2', weekday: 5, start: '08:30', end: '10:30'),
+      const Liturgy(id: 'sat', type: 'mass', nameAr: 'قداس السبت', nameEn: 'Sat Mass', weekday: 6, start: '07:00', end: '09:00'),
+      const Liturgy(id: 'vespers', type: 'vespers', nameAr: 'عشية', nameEn: 'Vespers', weekday: 5, start: '18:00', end: '19:00'),
+    ];
+
+    test('replacesDay: false returns empty list', () {
+      final rep = Liturgy(
+        id: 'feast',
+        type: 'mass',
+        nameAr: 'قداس العيد',
+        nameEn: 'Feast mass',
+        date: DateTime(2026, 11, 6), // Friday
+        start: '07:00',
+        end: '09:00',
+        replacesDay: false,
+      );
+      expect(liturgiesHiddenBy(rep, regularMasses), isEmpty);
+    });
+
+    test('visible: false returns empty list', () {
+      final rep = Liturgy(
+        id: 'feast',
+        type: 'mass',
+        nameAr: 'قداس العيد',
+        nameEn: 'Feast mass',
+        date: DateTime(2026, 11, 6), // Friday
+        start: '07:00',
+        end: '09:00',
+        replacesDay: true,
+        visible: false,
+      );
+      expect(liturgiesHiddenBy(rep, regularMasses), isEmpty);
+    });
+
+    test('one-off feast mass on weekday hides that weekday regular masses of same type, not others', () {
+      final rep = Liturgy(
+        id: 'feast',
+        type: 'mass',
+        nameAr: 'قداس العيد',
+        nameEn: 'Feast mass',
+        date: DateTime(2026, 11, 6), // Friday (weekday 5)
+        start: '07:00',
+        end: '09:00',
+        replacesDay: true,
+      );
+      final hidden = liturgiesHiddenBy(rep, regularMasses);
+      expect(hidden.map((l) => l.id), ['m1', 'm2']);
+    });
+
+    test('preview list matches exactly what occurrencesForDay hides for the same data', () {
+      final rep = Liturgy(
+        id: 'feast',
+        type: 'mass',
+        nameAr: 'قداس العيد',
+        nameEn: 'Feast mass',
+        date: DateTime(2026, 11, 6), // Friday
+        start: '07:00',
+        end: '09:00',
+        replacesDay: true,
+      );
+      final targetDay = CairoTime.at(rep.date!.year, rep.date!.month, rep.date!.day);
+      final allWithReplacing = [...regularMasses, rep];
+
+      final occWithReplace = occurrencesForDay(
+        liturgies: allWithReplacing,
+        seasons: const [],
+        day: targetDay,
+        dayOffset: 0,
+      );
+      final repWithoutReplace = Liturgy(
+        id: rep.id,
+        type: rep.type,
+        nameAr: rep.nameAr,
+        nameEn: rep.nameEn,
+        date: rep.date,
+        start: rep.start,
+        end: rep.end,
+        replacesDay: false,
+      );
+      final occWithoutReplace = occurrencesForDay(
+        liturgies: [...regularMasses, repWithoutReplace],
+        seasons: const [],
+        day: targetDay,
+        dayOffset: 0,
+      );
+
+      final hiddenByFunc = liturgiesHiddenBy(rep, allWithReplacing);
+
+      final actuallyHiddenIds = occWithoutReplace
+          .where((occ) => !occWithReplace.any((o) => o.liturgy.id == occ.liturgy.id))
+          .map((occ) => occ.liturgy.id)
+          .toList();
+
+      expect(hiddenByFunc.map((l) => l.id).toList(), actuallyHiddenIds);
+    });
+
+    test('weekday replacing mass hides other masses on that weekday', () {
+      const repWeekday = Liturgy(
+        id: 'rep_fri',
+        type: 'mass',
+        nameAr: 'قداس جمعة بديل',
+        nameEn: 'Alt Friday mass',
+        weekday: 5,
+        start: '07:00',
+        end: '10:00',
+        replacesDay: true,
+      );
+      final hidden = liturgiesHiddenBy(repWeekday, regularMasses);
+      expect(hidden.map((l) => l.id), ['m1', 'm2']);
+    });
+
+    test('sample replacing liturgy does not hide non-sample regular masses', () {
+      final sampleRep = Liturgy(
+        id: 'sample_feast',
+        type: 'mass',
+        nameAr: 'قداس تجريبي',
+        nameEn: 'Sample feast',
+        date: DateTime(2026, 11, 6),
+        start: '07:00',
+        end: '09:00',
+        replacesDay: true,
+        sample: true,
+      );
+      final hidden = liturgiesHiddenBy(sampleRep, regularMasses);
+      expect(hidden, isEmpty);
+    });
+  });
 }

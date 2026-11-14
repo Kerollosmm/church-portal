@@ -12,6 +12,7 @@ import 'package:church_portal/domain/features.dart';
 import 'package:church_portal/router.dart';
 import 'package:church_portal/state/providers.dart';
 import 'package:church_portal/ui/admin/features_editor.dart';
+import 'package:church_portal/ui/admin/state_switch.dart';
 import 'package:church_portal/ui/widgets/milestone_card.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -174,7 +175,7 @@ void main() {
     // Right under the milestones section switch.
     expect(tester.getTopLeft(sw).dy, greaterThan(tester.getTopLeft(find.byKey(const ValueKey('section-milestones'))).dy));
     expect(tester.getTopLeft(sw).dy, lessThan(tester.getTopLeft(find.byKey(const ValueKey('section-saints'))).dy));
-    expect(tester.widget<SwitchListTile>(sw).value, isTrue);
+    expect(tester.widget<AdminStateSwitch>(sw).value, isTrue);
     await tester.ensureVisible(sw);
     await tester.tap(sw);
     await tester.pump();
@@ -184,6 +185,6 @@ void main() {
 
     await tester.pumpWidget(app(const FeatureSettings(sections: {'milestones': false})));
     await tester.pumpAndSettle();
-    expect(tester.widget<SwitchListTile>(find.byKey(const ValueKey('features-aboutMilestones'))).onChanged, isNull);
+    expect(tester.widget<AdminStateSwitch>(find.byKey(const ValueKey('features-aboutMilestones'))).onChanged, isNull);
   });
 }

@@ -246,6 +246,13 @@ List<LiturgyOccurrence> occurrencesForDay({
           if (services.any((x) => mayReplace(x, o) && overlaps(o, x))) return true;
       }
     }
+    if (o.liturgy.type == 'mass' && !o.liturgy.replacesDay) {
+      for (final l in liturgies) {
+        if (l.seasonKey == null && l.id != o.liturgy.id && l.visible && l.replacesDay && _matchesDay(l, dayStart)) {
+          if (!l.sample || o.liturgy.sample) return true;
+        }
+      }
+    }
     return false;
   }
 
@@ -289,6 +296,63 @@ List<Liturgy> regularSupersededOn({
     for (final l in liturgies)
       if (l.seasonKey == null && _matchesDay(l, dayStart) && l.startMinutes != null && !kept.contains(l.id)) l,
   ];
+}
+
+/// The regular masses that [replacing] hides when [Liturgy.replacesDay] is
+/// true (the admin preview for «يحل محل قداسات اليوم المعتادة», ADR-050).
+///
+/// Returns an empty list when:
+/// * `!replacing.visible` or `!replacing.replacesDay`
+/// * [replacing] has neither [Liturgy.date] nor [Liturgy.weekday]
+///
+/// When active, matches the exact replacement rule of [occurrencesForDay] on
+/// the Cairo calendar day (or weekday) of [replacing]:
+/// * Only regular masses (`seasonKey == null && type == 'mass'`) are replaced.
+/// * Only visible services are returned.
+/// * A `sample: true` service never replaces real regular services (ADR-050).
+///
+/// Sorted by start time, then real before sample, then order.
+List<Liturgy> liturgiesHiddenBy(Liturgy replacing, Iterable<Liturgy> all) {
+  if (!replacing.visible || !replacing.replacesDay) return const [];
+
+  final date = replacing.date != null ? CairoTime.calendarDate(replacing.date!) : null;
+  final weekday = date != null ? date.weekday : replacing.weekday;
+  if (weekday == null) return const [];
+
+  final dayStart = date != null ? CairoTime.at(date.year, date.month, date.day) : null;
+
+  final matches = <Liturgy>[];
+  for (final l in all) {
+    if (l.id == replacing.id) continue;
+    if (!l.visible) continue;
+    if (l.seasonKey != null) continue;
+    if (l.type != 'mass') continue;
+    if (l.startMinutes == null) continue;
+
+    // A sample never takes the place of a real service (ADR-050).
+    if (replacing.sample && !l.sample) continue;
+
+    if (dayStart != null) {
+      if (!_matchesDay(l, dayStart)) continue;
+    } else {
+      if (l.date != null) {
+        if (CairoTime.calendarDate(l.date!).weekday != weekday) continue;
+      } else if (l.weekday != weekday) {
+        continue;
+      }
+    }
+    matches.add(l);
+  }
+
+  matches.sort((a, b) {
+    final sa = a.startMinutes ?? 0;
+    final sb = b.startMinutes ?? 0;
+    final c = sa.compareTo(sb);
+    if (c != 0) return c;
+    final s = (a.sample ? 1 : 0).compareTo(b.sample ? 1 : 0);
+    return s != 0 ? s : a.order.compareTo(b.order);
+  });
+  return matches;
 }
 
 /// Next-mass smart card logic (see SPEC "Business rules").

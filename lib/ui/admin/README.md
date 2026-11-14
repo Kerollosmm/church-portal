@@ -81,6 +81,8 @@ The `admin` package implements the authenticated back-office management console 
   - `PendingDelete`: 10-second soft-delete buffer scheduling async deletion commit while immediately hiding items in UI, supporting undo and flushing on dispose or web `beforeunload`.
 - `season_preset_admin.dart`:
   - `SeasonPresetScreen`: Administrative screen for selecting, previewing, and activating liturgical season presets.
+- `state_switch.dart`:
+  - `AdminStateSwitch`: Standard switch widget replacing raw `Switch` / `SwitchListTile` across all `/admin` screens. Displays an explicit written state pill (`onLabel` / `offLabel`) so state is never conveyed by color alone, wrapping responsively for 320 px and 200% text scaling.
 - `unsaved_bar.dart`:
   - `UnsavedBar`: Pinned bottom bar displaying dirty state («فيه تعديلات مش محفوظة») and action buttons (Save / Cancel), reflowing with `Wrap` for 320 px and 200% text scale.
 - `unsaved_guard.dart` (with `unsaved_guard_stub.dart` and `unsaved_guard_web.dart`):
@@ -103,6 +105,8 @@ The `admin` package implements the authenticated back-office management console 
 - `[unsaved_guard.dart:UnsavedGuard]`: Unsaved administrative edits must intercept back-navigation, dashboard destination changes, logout, and browser window close/refresh; the default dialog action button must be «متابعة التعديل».
 - `[pending_delete.dart:PendingDelete]`: Collection item deletions must immediately hide from the view with a 10-second grace window allowing undo (reserving slugs in `takenSlugs` until deletion commits), and must flush commits synchronously on widget disposal or browser `beforeunload`.
 - `[unsaved_bar.dart:UnsavedBar]`: Editing forms with uncommitted edits must render a sticky bottom save bar without overflowing at 320 px or 200% text scaling.
+- `[state_switch.dart:AdminStateSwitch]`: All switches across `/admin` must present an explicit written state badge pill (`onLabel` / `offLabel`) rather than relying on toggle color alone, without overflowing at 320 px and 200% text scaling.
+- `[doc_editor.dart:_replacesDayPreview]`: When `replacesDay` is enabled in `DocEditor`, an inline preview card must display all regular masses superseded on that day computed by pure helper `liturgiesHiddenBy`, formatted with 12-hour Cairo time.
 
 ## Side Effects
 - `[doc_editor.dart:DocEditorState]`: Mutates documents in Cloud Firestore collections and writes uploaded image bytes into the `media/{id}` collection on the Spark plan.

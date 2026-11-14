@@ -8,6 +8,7 @@ import '../../domain/features.dart';
 import '../../domain/image_style.dart';
 import 'admin_validators.dart';
 import 'occasion_editor.dart';
+import 'state_switch.dart';
 import 'unsaved_bar.dart';
 import 'unsaved_guard.dart';
 
@@ -492,22 +493,26 @@ class FeaturesEditorState extends State<FeaturesEditor> {
                   ),
                 ]),
                 for (final s in Sections.all) ...[
-                  SwitchListTile(
+                  AdminStateSwitch(
                     key: ValueKey('section-$s'),
                     contentPadding: const EdgeInsetsDirectional.only(start: 4),
                     title: Text(context.pick(Sections.labels[s]![0], Sections.labels[s]![1])),
                     value: f.enabled(s),
+                    onLabel: context.tr('switch_enabled'),
+                    offLabel: context.tr('switch_disabled'),
                     onChanged: (v) => _set(f.copyWith(sections: {...f.sections, s: v})),
                   ),
                   // Where the milestones show (ADR-052): also on the About
                   // page; the home block has its own switch in the home layout.
                   if (s == Sections.milestones)
-                    SwitchListTile(
+                    AdminStateSwitch(
                       key: const ValueKey('features-aboutMilestones'),
                       contentPadding: const EdgeInsetsDirectional.only(start: 28),
                       title: Text(context.tr('aboutMilestonesSwitch')),
                       subtitle: Text(context.tr('aboutMilestonesHint')),
                       value: f.aboutMilestones,
+                      onLabel: context.tr('switch_enabled'),
+                      offLabel: context.tr('switch_disabled'),
                       onChanged: f.enabled(Sections.milestones) ? (v) => _set(f.copyWith(aboutMilestones: v)) : null,
                     ),
                 ],
@@ -529,29 +534,35 @@ class FeaturesEditorState extends State<FeaturesEditor> {
                 _text('heroTitleEn', context.tr('heroTitleEn'), maxLength: 200),
                 _text('heroSubtitleAr', context.tr('heroSubtitleAr'), maxLength: 300),
                 _text('heroSubtitleEn', context.tr('heroSubtitleEn'), maxLength: 300),
-                SwitchListTile(
+                AdminStateSwitch(
                   key: const ValueKey('features-heroMotion'),
                   contentPadding: const EdgeInsetsDirectional.only(start: 4),
                   title: Text(context.tr('heroMotion')),
                   subtitle: Text(context.tr('heroMotionHint')),
                   value: f.heroMotion,
+                  onLabel: context.tr('switch_enabled'),
+                  offLabel: context.tr('switch_disabled'),
                   onChanged: (v) => _set(f.copyWith(heroMotion: v)),
                 ),
-                SwitchListTile(
+                AdminStateSwitch(
                   key: const ValueKey('features-heroShowAddress'),
                   contentPadding: const EdgeInsetsDirectional.only(start: 4),
                   title: Text(context.tr('heroShowAddress')),
                   subtitle: Text(context.tr('heroShowAddressHint')),
                   value: f.heroShowAddress,
+                  onLabel: context.tr('switch_visible'),
+                  offLabel: context.tr('switch_hidden'),
                   onChanged: (v) => _set(f.copyWith(heroShowAddress: v)),
                 ),
               ], hint: context.tr('heroTextsHint')),
               _card(context.tr('dailyVerseTitle'), Icons.menu_book_rounded, [
-                SwitchListTile(
+                AdminStateSwitch(
                   key: const ValueKey('features-dailyVerse-enabled'),
                   contentPadding: const EdgeInsetsDirectional.only(start: 4),
                   title: Text(context.tr('dailyVerseShow')),
                   value: f.enabled(Sections.dailyVerse),
+                  onLabel: context.tr('switch_visible'),
+                  offLabel: context.tr('switch_hidden'),
                   onChanged: (v) => _set(f.copyWith(sections: {...f.sections, Sections.dailyVerse: v})),
                 ),
                 Wrap(spacing: 10, runSpacing: 10, children: [
@@ -576,11 +587,13 @@ class FeaturesEditorState extends State<FeaturesEditor> {
                 for (final p in CustomizablePages.all) _pageTile(context, p),
               ], hint: context.tr('pageHeadersHint')),
               _card(context.tr('announcementBanner'), Icons.campaign_outlined, [
-                SwitchListTile(
+                AdminStateSwitch(
                   key: const ValueKey('features-bannerEnabled'),
                   contentPadding: const EdgeInsetsDirectional.only(start: 4),
                   title: Text(context.tr('showBanner')),
                   value: f.bannerEnabled,
+                  onLabel: context.tr('switch_visible'),
+                  offLabel: context.tr('switch_hidden'),
                   onChanged: (v) => _set(f.copyWith(bannerEnabled: v)),
                 ),
                 _text('bannerAr', context.tr('bannerAr'), maxLength: 500),
@@ -594,11 +607,13 @@ class FeaturesEditorState extends State<FeaturesEditor> {
                   ('showQuickLinks', 'footerShowQuickLinks', f.footer.showQuickLinks,
                       (bool v) => _setFooter(showQuickLinks: v)),
                 ])
-                  SwitchListTile(
+                  AdminStateSwitch(
                     key: ValueKey('footer-$k'),
                     contentPadding: const EdgeInsetsDirectional.only(start: 4),
                     title: Text(context.tr(label)),
                     value: v,
+                    onLabel: context.tr('switch_visible'),
+                    offLabel: context.tr('switch_hidden'),
                     onChanged: set,
                   ),
                 _text('footerNoteAr', context.tr('footerNoteAr'),
@@ -639,22 +654,26 @@ class FeaturesEditorState extends State<FeaturesEditor> {
                     onChanged: (edit) => _set(edit(f)),
                     activeSeasonKeys: widget.activeSeasonKeys),
                 // The season theme's wash over the hero painting (ADR-050).
-                SwitchListTile(
+                AdminStateSwitch(
                   key: const ValueKey('features-heroSeasonTint'),
                   contentPadding: const EdgeInsetsDirectional.only(start: 4),
                   title: Text(context.tr('heroSeasonTint')),
                   subtitle: Text(context.tr('heroSeasonTintHint')),
                   value: f.heroSeasonTint,
+                  onLabel: context.tr('switch_enabled'),
+                  offLabel: context.tr('switch_disabled'),
                   onChanged: (v) => _set(f.copyWith(heroSeasonTint: v)),
                 ),
               ], hint: context.tr('themeHint')),
               _card(context.tr('errorReportingTitle'), Icons.bug_report_outlined, [
-                SwitchListTile(
+                AdminStateSwitch(
                   key: const ValueKey('features-errorReporting'),
                   contentPadding: const EdgeInsetsDirectional.only(start: 4),
                   title: Text(context.tr('errorReporting')),
                   subtitle: Text(context.tr('errorReportingHint')),
                   value: f.errorReporting,
+                  onLabel: context.tr('switch_enabled'),
+                  offLabel: context.tr('switch_disabled'),
                   onChanged: (v) => _set(f.copyWith(errorReporting: v)),
                 ),
                 if (widget.onSendTestError != null)
@@ -766,8 +785,10 @@ class FeaturesEditorState extends State<FeaturesEditor> {
     final offNote = sectionOff
         ? Text(context.tr('blockSectionOff'), style: TextStyle(color: context.pal.alert, fontSize: 12))
         : null;
-    final toggle = Switch(
+    final toggle = AdminStateSwitch(
       value: shown,
+      onLabel: context.tr('switch_visible'),
+      offLabel: context.tr('switch_hidden'),
       onChanged: (v) => _set(f.copyWith(homeHidden: v ? ({...f.homeHidden}..remove(b)) : {...f.homeHidden, b})),
     );
     // Narrow screens: the move buttons get their own row under the title so
@@ -781,10 +802,18 @@ class FeaturesEditorState extends State<FeaturesEditor> {
       subtitle: narrow
           ? Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
               ?offNote,
-              Row(mainAxisSize: MainAxisSize.min, children: moveButtons),
+              Wrap(
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 8,
+                runSpacing: 4,
+                children: [
+                  Row(mainAxisSize: MainAxisSize.min, children: moveButtons),
+                  toggle,
+                ],
+              ),
             ])
           : offNote,
-      trailing: narrow ? toggle : Row(mainAxisSize: MainAxisSize.min, children: [...moveButtons, toggle]),
+      trailing: narrow ? null : Row(mainAxisSize: MainAxisSize.min, children: [...moveButtons, toggle]),
     );
   }
 }

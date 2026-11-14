@@ -8,6 +8,7 @@ import '../../core/theme.dart';
 import '../../data/admin_repository.dart';
 import '../../domain/item_detail.dart';
 import '../../domain/media.dart';
+import '../../domain/models.dart' show parseDate;
 import '../../domain/program.dart';
 import '../../domain/time_format.dart';
 import '../../domain/cairo_time.dart';
@@ -243,6 +244,8 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
   Widget _tile(BuildContext context, AdminDoc d, {int? dragIndex, List<AdminDoc>? docs}) {
     final hidden = d.data['visible'] == false;
     final unconfirmed = d.data['sample'] == true;
+    final stopped = d.data.containsKey('active') && d.data['active'] == false;
+    final expired = _isExpired(def, d.data);
     final sub = _subtitle(context, d);
     final updated = d.updatedAt;
     final narrow = MediaQuery.sizeOf(context).width < 600;
@@ -284,16 +287,25 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
         leading: dragIndex != null
             ? ReorderableDragStartListener(index: dragIndex, child: const Icon(Icons.drag_indicator))
             : null,
-        title: Row(children: [
-          Flexible(
-            child: Text(_title(d),
-                overflow: TextOverflow.ellipsis,
+        title: Wrap(
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 6,
+          runSpacing: 4,
+          children: [
+            Text(_title(d),
                 style: TextStyle(
                     fontWeight: FontWeight.w700, color: hidden ? context.pal.muted : context.pal.ink)),
-          ),
-          if (hidden) _Tag(context.tr('hidden'), context.pal.muted),
-          if (unconfirmed) _Tag(context.tr('unconfirmed'), context.pal.goldText),
-        ]),
+            if (def.hasVisible)
+              _Tag(context.tr(hidden ? 'hidden' : 'visibleTag'),
+                  hidden ? context.pal.muted : context.pal.success),
+            if (stopped)
+              _Tag(context.tr('stoppedTag'), context.pal.alert),
+            if (expired)
+              _Tag(context.tr('expiredTag'), context.pal.muted),
+            if (unconfirmed)
+              _Tag(context.tr('sampleTag'), context.pal.goldText),
+          ],
+        ),
         subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           // Own line: the title row keeps its width on phones.
           if (details)
@@ -525,8 +537,41 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
         dynamicChoices: dynamicChoices,
         linkTargets: linkTargets,
         takenSlugs: takenSlugs,
+        existingDocs: _lastDocs,
       ),
     ));
+  }
+
+  bool _isExpired(CollectionDef def, Map<String, dynamic> data) {
+    final now = CairoTime.now();
+    final todayStart = CairoTime.startOfDay(now);
+
+    if (data['endsAt'] != null) {
+      final end = parseDate(data['endsAt']);
+      if (end != null && end.isBefore(now)) return true;
+    }
+
+    if (data['endDate'] != null && '${data['endDate']}'.trim().isNotEmpty) {
+      final end = parseDate(data['endDate']);
+      if (end != null) {
+        final cal = CairoTime.calendarDate(end);
+        final calStart = CairoTime.at(cal.year, cal.month, cal.day);
+        if (calStart.isBefore(todayStart)) return true;
+      }
+    }
+
+    if (const {'events', 'liturgies', 'announcements', 'notices'}.contains(def.name)) {
+      if (data['endDate'] == null && data['endsAt'] == null && data['date'] != null) {
+        final d = parseDate(data['date']);
+        if (d != null) {
+          final cal = CairoTime.calendarDate(d);
+          final calStart = CairoTime.at(cal.year, cal.month, cal.day);
+          if (calStart.isBefore(todayStart)) return true;
+        }
+      }
+    }
+
+    return false;
   }
 }
 

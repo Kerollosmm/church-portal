@@ -25,6 +25,7 @@ import 'admin_schema.dart';
 import 'admin_screens.dart';
 import 'admin_validators.dart';
 import 'confirm_named.dart';
+import 'state_switch.dart';
 import 'unsaved_bar.dart';
 import 'unsaved_guard.dart';
 
@@ -981,12 +982,14 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
       title: context.tr('nm_statusTitle'),
       subtitle: context.tr('nm_statusSubtitle'),
       children: [
-        SwitchListTile(
+        AdminStateSwitch(
           key: const ValueKey('push-master-switch'),
           contentPadding: EdgeInsets.zero,
           title: Text(context.tr('nm_masterSwitch'), style: const TextStyle(fontWeight: FontWeight.bold)),
           subtitle: Text(context.tr(_pushEnabled ? 'nm_masterOnHint' : 'nm_masterOffHint')),
           value: _pushEnabled,
+          onLabel: context.tr('switch_enabled'),
+          offLabel: context.tr('switch_disabled'),
           onChanged: (v) => setState(() {
             _pushEnabled = v;
             _markDirty();
@@ -1543,7 +1546,7 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
         side: BorderSide(color: offered ? context.pal.primary.withValues(alpha: 0.35) : context.pal.hairline),
       ),
       child: Column(children: [
-        SwitchListTile(
+        AdminStateSwitch(
           key: ValueKey('offer-${type.name}'),
           secondary: Icon(_typeIcon(type), color: offered ? context.pal.primary : context.pal.muted),
           title: Text(context.pick(type.labelAr, type.labelEn), style: const TextStyle(fontWeight: FontWeight.bold)),
@@ -1553,6 +1556,8 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
           ),
           isThreeLine: true,
           value: offered,
+          onLabel: context.tr('switch_enabled'),
+          offLabel: context.tr('switch_disabled'),
           onChanged: (on) => setState(() {
             on ? _offeredTypes.add(type) : _offeredTypes.remove(type);
             _markDirty();
@@ -1757,13 +1762,15 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
         const SizedBox(height: 12),
         Text(context.tr('reminderSourcesLabel'), style: const TextStyle(fontWeight: FontWeight.w600)),
         for (final s in sources)
-          SwitchListTile(
+          AdminStateSwitch(
             key: ValueKey('src-${s.$1}'),
             contentPadding: EdgeInsets.zero,
             secondary: Icon(s.$2, color: context.pal.primary),
             title: Text(context.tr(s.$3)),
             subtitle: Text(context.tr(s.$4), style: TextStyle(fontSize: 12.5, color: context.pal.muted)),
             value: _reminderSources.contains(s.$1),
+            onLabel: context.tr('switch_enabled'),
+            offLabel: context.tr('switch_disabled'),
             onChanged: (on) => setState(() {
               on ? _reminderSources.add(s.$1) : _reminderSources.remove(s.$1);
               _markDirty();

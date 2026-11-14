@@ -5,6 +5,7 @@ import '../../core/theme.dart';
 import '../../data/admin_repository.dart';
 import '../../domain/contact_categories.dart';
 import 'doc_editor.dart' show choiceLabel;
+import 'state_switch.dart';
 import 'unsaved_bar.dart';
 import 'unsaved_guard.dart';
 
@@ -219,18 +220,22 @@ class _ContactCategoriesScreenState extends State<ContactCategoriesScreen> {
                         anonymous: ContactKinds.anonymousCapable.contains(v) && cats[i].anonymous,
                         subtypes: v == ContactKinds.booking ? cats[i].subtypes : const [])),
           ),
-          SwitchListTile(
+          AdminStateSwitch(
             contentPadding: EdgeInsets.zero,
             title: Text(context.tr('catShownOnForm')),
             value: c.on,
+            onLabel: context.tr('switch_visible'),
+            offLabel: context.tr('switch_hidden'),
             onChanged: (v) => _edit(i, cats[i].copyWith(on: v)),
           ),
           if (ContactKinds.anonymousCapable.contains(c.kind))
-            SwitchListTile(
+            AdminStateSwitch(
               key: ValueKey('catAnon-${c.slot}'),
               contentPadding: EdgeInsets.zero,
               title: Text(context.tr('catAllowAnon')),
               value: c.anonymous,
+              onLabel: context.tr('switch_enabled'),
+              offLabel: context.tr('switch_disabled'),
               onChanged: (v) => _edit(i, cats[i].copyWith(anonymous: v)),
             ),
           if (c.isBooking) ...[

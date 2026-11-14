@@ -489,4 +489,19 @@ Bottom bar anchored to the bottom of the viewport whenever an editor is dirty:
 - Liturgy form: **«يحل محل قداسات اليوم المعتادة (قداس العيد)»** (`replacesDay`, default off, hint under it). Off: in a
   season that does not replace the regular schedule, a seasonal mass hides only the regular mass at the same time;
   on: a feast liturgy hides every regular mass of that day.
+- **Override live preview (PR 3B, Packet P1-10):** When editing a liturgy with `replacesDay: true`, `DocEditor` renders
+  an inline card showing the date/weekday heading and every regular mass overridden by it via `liturgiesHiddenBy`
+  (matching `occurrencesForDay` semantics exactly), formatted with 12-hour Cairo time (e.g. «٠٧:٠٠ ص – ٠٩:٠٠ ص»).
 - «الأقسام والصفحة الرئيسية» → theme card: switch **«لون الموسم على صورة الواجهة»** (`heroSeasonTint`, default on).
+
+### Written-state switches & row status badges (PR 3B, Packet P1-09)
+- **`AdminStateSwitch` (`lib/ui/admin/state_switch.dart`):** Standard switch across all `/admin` screens replacing raw
+  `Switch` / `SwitchListTile`. Renders an explicit written state badge pill (`onLabel` / `offLabel`) alongside the toggle
+  (e.g. «ظاهر / مخفي», «مفعّل / مقفول», «نشط / موقوف», «بيانات تجريبية / مؤكد») so sighted users and screen readers see the
+  state without relying on colour alone. Uses responsive `Wrap` layouts to eliminate `RenderFlex` overflow at 320 px viewport
+  width and 200% text scaling.
+- **Explicit row status tags (`collection_list.dart`):** List item titles display explicit tags:
+  - «ظاهر» / «مخفي» for collections with visibility.
+  - «موقوف» when `active == false`.
+  - «منتهي» when an announcement, event, notice or dated item's date/endDate/endsAt is in the past in Cairo time.
+  - «بيانات تجريبية» when `sample == true`.

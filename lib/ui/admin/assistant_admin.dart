@@ -7,6 +7,7 @@ import '../../data/admin_repository.dart';
 import '../../domain/features.dart';
 import 'admin_schema.dart';
 import 'admin_screens.dart';
+import 'state_switch.dart';
 
 /// /admin → AI assistant (ADR-029): the on / off switches (the existing
 /// "Ask the church" section switch and Church info's "Enable the AI
@@ -89,11 +90,13 @@ class _AssistantSwitchesState extends State<AssistantSwitches> {
             child: Padding(
               padding: const EdgeInsets.symmetric(vertical: 4),
               child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                SwitchListTile(
+                AdminStateSwitch(
                   key: const Key('assistantSectionSwitch'),
                   title: Text(context.tr('assistantSectionSwitch')),
                   subtitle: Text(context.tr('assistantSectionSwitchHint')),
                   value: sectionOn,
+                  onLabel: context.tr('switch_visible'),
+                  offLabel: context.tr('switch_hidden'),
                   // Only `sections.assistant` is written (a field-path update),
                   // so another admin's concurrent change to a different section
                   // is never reverted by a stale map.
@@ -105,11 +108,13 @@ class _AssistantSwitchesState extends State<AssistantSwitches> {
                           : _update('settings', 'features', {'sections.${Sections.assistant}': v})
                       : null,
                 ),
-                SwitchListTile(
+                AdminStateSwitch(
                   key: const Key('assistantEnabledSwitch'),
                   title: Text(context.tr('assistantEnabledSwitch')),
                   subtitle: Text(context.tr('assistantEnabledSwitchHint')),
                   value: enabled,
+                  onLabel: context.tr('switch_enabled'),
+                  offLabel: context.tr('switch_disabled'),
                   onChanged: church.data == null || !ready
                       ? null
                       : (v) => _save('settings/church', {'assistantEnabled': v}),
