@@ -655,7 +655,14 @@ void main() {
       expect(find.byKey(const ValueKey('field-detailsAr')), findsOneWidget);
       await tester.tap(find.byKey(const ValueKey('field-detailsEnabled')));
       await tester.pumpAndSettle();
-      expect(find.text('Off'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('field-detailsEnabled')),
+          matching: find.text('Off'),
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('Off'), findsNWidgets(2));
       await expand(tester, 'contacts');
       await tester.enterText(find.byKey(const ValueKey('field-youtubeUrl')), 'https://youtube.com/@church');
       await tester.pumpAndSettle();

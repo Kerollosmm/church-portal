@@ -304,6 +304,8 @@ List<Liturgy> regularSupersededOn({
 /// Returns an empty list when:
 /// * `!replacing.visible` or `!replacing.replacesDay`
 /// * [replacing] has neither [Liturgy.date] nor [Liturgy.weekday]
+/// * [replacing.seasonKey] is set, and no matching season in [seasons] is
+///   active on that day / time window (matching [occurrencesForDay]).
 ///
 /// When active, matches the exact replacement rule of [occurrencesForDay] on
 /// the Cairo calendar day (or weekday) of [replacing]:
@@ -312,7 +314,11 @@ List<Liturgy> regularSupersededOn({
 /// * A `sample: true` service never replaces real regular services (ADR-050).
 ///
 /// Sorted by start time, then real before sample, then order.
-List<Liturgy> liturgiesHiddenBy(Liturgy replacing, Iterable<Liturgy> all) {
+List<Liturgy> liturgiesHiddenBy(
+  Liturgy replacing,
+  Iterable<Liturgy> all, {
+  Iterable<Season> seasons = const [],
+}) {
   if (!replacing.visible || !replacing.replacesDay) return const [];
 
   final date = replacing.date != null ? CairoTime.calendarDate(replacing.date!) : null;
@@ -320,6 +326,36 @@ List<Liturgy> liturgiesHiddenBy(Liturgy replacing, Iterable<Liturgy> all) {
   if (weekday == null) return const [];
 
   final dayStart = date != null ? CairoTime.at(date.year, date.month, date.day) : null;
+
+  final List<Season> activeMatchingSeasons;
+  if (replacing.seasonKey != null) {
+    final matching = seasons.where((s) => s.key == replacing.seasonKey && s.active).toList();
+    if (matching.isEmpty) return const [];
+    if (dayStart != null) {
+      final repStart = replacing.startMinutes != null
+          ? CairoTime.at(dayStart.year, dayStart.month, dayStart.day, replacing.startMinutes!)
+          : dayStart;
+      activeMatchingSeasons = [
+        for (final s in matching)
+          if (isSeasonActiveOnDay(s, dayStart) &&
+              (replacing.startMinutes == null || isSeasonActiveAt(s, repStart)) &&
+              !undatedSuppressedOn(s, replacing, all, dayStart))
+            s,
+      ];
+      if (activeMatchingSeasons.isEmpty) return const [];
+    } else {
+      activeMatchingSeasons = [
+        for (final s in matching)
+          if (s.startsAt == null ||
+              s.endsAt == null ||
+              _seasonCoversWeekday(s, weekday))
+            s,
+      ];
+      if (activeMatchingSeasons.isEmpty) return const [];
+    }
+  } else {
+    activeMatchingSeasons = const [];
+  }
 
   final matches = <Liturgy>[];
   for (final l in all) {
@@ -335,6 +371,10 @@ List<Liturgy> liturgiesHiddenBy(Liturgy replacing, Iterable<Liturgy> all) {
 
     if (dayStart != null) {
       if (!_matchesDay(l, dayStart)) continue;
+      if (replacing.seasonKey != null) {
+        final candStart = CairoTime.at(dayStart.year, dayStart.month, dayStart.day, l.startMinutes!);
+        if (!activeMatchingSeasons.any((s) => isSeasonActiveAt(s, candStart))) continue;
+      }
     } else {
       if (l.date != null) {
         if (CairoTime.calendarDate(l.date!).weekday != weekday) continue;
@@ -354,6 +394,17 @@ List<Liturgy> liturgiesHiddenBy(Liturgy replacing, Iterable<Liturgy> all) {
     return s != 0 ? s : a.order.compareTo(b.order);
   });
   return matches;
+}
+
+bool _seasonCoversWeekday(Season s, int weekday) {
+  var cur = CairoTime.calendarDate(s.startsAt!);
+  final end = CairoTime.calendarDate(s.endsAt!);
+  for (var i = 0; i < 7 && !cur.isAfter(end); i++) {
+    final d = CairoTime.at(cur.year, cur.month, cur.day);
+    if (d.weekday == weekday && isSeasonActiveOnDay(s, d)) return true;
+    cur = cur.add(const Duration(days: 1));
+  }
+  return false;
 }
 
 /// Next-mass smart card logic (see SPEC "Business rules").

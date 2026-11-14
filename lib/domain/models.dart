@@ -2,6 +2,7 @@
 // business logic stays unit-testable. The data layer normalises Firestore
 // values (Timestamp -> DateTime) before calling the `fromMap` factories.
 
+import 'cairo_time.dart';
 import 'features.dart';
 import 'media.dart';
 import 'pending_text.dart';
@@ -31,6 +32,47 @@ bool isExpiredSoftDelete(
   final v = data['deletedAt'];
   if (v is! DateTime) return false;
   return !nowUtc.toUtc().isBefore(v.toUtc().add(grace));
+}
+
+/// Whether a content document's scheduled date/end time has already passed
+/// relative to [nowCairo] (used for the admin "Expired" status tag).
+///
+/// Recurring liturgies (which use `weekday` without a fixed `date`) never
+/// expire.
+bool isExpiredAdminDoc(
+  String collectionName,
+  Map<String, dynamic> data,
+  DateTime nowCairo,
+) {
+  final now = CairoTime.fromInstant(nowCairo);
+  final todayStart = CairoTime.startOfDay(now);
+
+  if (data['endsAt'] != null) {
+    final end = parseDate(data['endsAt']);
+    if (end != null && end.isBefore(now)) return true;
+  }
+
+  if (data['endDate'] != null && '${data['endDate']}'.trim().isNotEmpty) {
+    final end = parseDate(data['endDate']);
+    if (end != null) {
+      final cal = CairoTime.calendarDate(end);
+      final calStart = CairoTime.at(cal.year, cal.month, cal.day);
+      if (calStart.isBefore(todayStart)) return true;
+    }
+  }
+
+  if (const {'events', 'liturgies', 'announcements', 'notices'}.contains(collectionName)) {
+    if (data['endDate'] == null && data['endsAt'] == null && data['date'] != null) {
+      final d = parseDate(data['date']);
+      if (d != null) {
+        final cal = CairoTime.calendarDate(d);
+        final calStart = CairoTime.at(cal.year, cal.month, cal.day);
+        if (calStart.isBefore(todayStart)) return true;
+      }
+    }
+  }
+
+  return false;
 }
 
 String _s(Object? v) => v == null ? '' : v.toString();

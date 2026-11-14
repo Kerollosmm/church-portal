@@ -789,6 +789,111 @@ void main() {
       expect(hiddenByFeast2.map((l) => l.id), ['m1', 'm2']);
       expect(hiddenByFeast2.any((l) => l.id == 'feast1'), isFalse);
     });
+
+    test('inactive seasonal replacement does not hide regular masses (parity with occurrencesForDay)', () {
+      final seasonalRep = Liturgy(
+        id: 'season_feast',
+        type: 'mass',
+        nameAr: 'قداس عيد موسمي',
+        nameEn: 'Seasonal feast',
+        date: DateTime(2026, 11, 6), // Friday
+        start: '07:00',
+        end: '10:00',
+        seasonKey: 'advent',
+        replacesDay: true,
+      );
+      const inactiveSeason = Season(
+        id: 's1',
+        key: 'advent',
+        nameAr: 'الميلاد',
+        nameEn: 'Advent',
+        active: false,
+        replacesRegular: false,
+      );
+      final allWithSeasonal = [...regularMasses, seasonalRep];
+      final hidden = liturgiesHiddenBy(seasonalRep, allWithSeasonal, seasons: const [inactiveSeason]);
+      expect(hidden, isEmpty);
+
+      final occ = occurrencesForDay(
+        liturgies: allWithSeasonal,
+        seasons: const [inactiveSeason],
+        day: CairoTime.at(2026, 11, 6),
+        dayOffset: 0,
+      );
+      expect(occ.map((o) => o.liturgy.id), containsAll(['m1', 'm2']));
+    });
+
+    test('active seasonal replacement respects season time windows (parity with occurrencesForDay)', () {
+      final seasonalRep = Liturgy(
+        id: 'season_midday',
+        type: 'mass',
+        nameAr: 'قداس موسمي',
+        nameEn: 'Seasonal feast',
+        date: DateTime(2026, 11, 6), // Friday
+        start: '12:00',
+        end: '14:00',
+        seasonKey: 'lent',
+        replacesDay: true,
+      );
+      // Season starts at 08:00 Cairo: m1 (06:30) is BEFORE startsAt so stays visible; m2 (09:00) is inside window so hidden.
+      final windowedSeason = Season(
+        id: 's2',
+        key: 'lent',
+        nameAr: 'الصوم',
+        nameEn: 'Lent',
+        active: true,
+        replacesRegular: false,
+        startsAt: cairo(2026, 11, 6, 8, 0),
+        endsAt: cairo(2026, 11, 6, 23, 0),
+      );
+      final allWithSeasonal = [...regularMasses, seasonalRep];
+      final hidden = liturgiesHiddenBy(seasonalRep, allWithSeasonal, seasons: [windowedSeason]);
+      expect(hidden.map((l) => l.id), ['m2']);
+
+      final occWithoutReplace = occurrencesForDay(
+        liturgies: regularMasses,
+        seasons: [windowedSeason],
+        day: CairoTime.at(2026, 11, 6),
+        dayOffset: 0,
+      );
+      final occWithReplace = occurrencesForDay(
+        liturgies: allWithSeasonal,
+        seasons: [windowedSeason],
+        day: CairoTime.at(2026, 11, 6),
+        dayOffset: 0,
+      );
+      final actuallyHiddenIds = occWithoutReplace
+          .where((o) => !occWithReplace.any((w) => w.liturgy.id == o.liturgy.id))
+          .map((o) => o.liturgy.id)
+          .toList();
+      expect(hidden.map((l) => l.id).toList(), actuallyHiddenIds);
+    });
+  });
+
+  group('admin doc expiry', () {
+    test('isExpiredAdminDoc handles endsAt instant, endDate date-only, single-date docs, and recurring liturgies', () {
+      final nowCairo = CairoTime.at(2026, 11, 14, 14 * 60); // 14:00 Cairo = 12:00 UTC
+
+      // endsAt instant expiry
+      expect(isExpiredAdminDoc('seasons', {'endsAt': cairo(2026, 11, 14, 13, 59)}, nowCairo), isTrue);
+      expect(isExpiredAdminDoc('seasons', {'endsAt': cairo(2026, 11, 14, 14, 1)}, nowCairo), isFalse);
+
+      // endDate date-only expiry (yesterday expired, today not expired)
+      expect(isExpiredAdminDoc('events', {'endDate': '2026-11-13'}, nowCairo), isTrue);
+      expect(isExpiredAdminDoc('events', {'endDate': '2026-11-14'}, nowCairo), isFalse);
+
+      // Single-date docs in events/liturgies/announcements/notices without endDate/endsAt
+      for (final col in ['events', 'liturgies', 'announcements', 'notices']) {
+        expect(isExpiredAdminDoc(col, {'date': '2026-11-13'}, nowCairo), isTrue, reason: col);
+        expect(isExpiredAdminDoc(col, {'date': '2026-11-14'}, nowCairo), isFalse, reason: col);
+      }
+
+      // Non-dated collections do not expire from `date`
+      expect(isExpiredAdminDoc('saints', {'date': '2026-11-13'}, nowCairo), isFalse);
+
+      // Recurring liturgies (weekday only, no date) never expire
+      expect(isExpiredAdminDoc('liturgies', {'weekday': 5, 'start': '07:00'}, nowCairo), isFalse);
+    });
   });
 
   group('soft delete', () {

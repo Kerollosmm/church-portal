@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
+import 'dart:ui' show Tristate;
 
 import 'package:church_portal/core/theme.dart';
 import 'package:church_portal/data/admin_repository.dart';
@@ -1438,18 +1439,28 @@ void main() {
       ));
       await tester.pumpAndSettle();
 
+      Finder inRow(String id, String text) => find.descendant(
+            of: find.byKey(ValueKey(id)),
+            matching: find.text(text),
+          );
+
       // l1 has visible: false -> مخفي, sample: true -> بيانات تجريبية
-      expect(find.text('مخفي'), findsWidgets);
-      expect(find.text('بيانات تجريبية'), findsOneWidget);
+      expect(inRow('l1', 'مخفي'), findsOneWidget);
+      expect(inRow('l1', 'ظاهر'), findsNothing);
+      expect(inRow('l1', 'بيانات تجريبية'), findsOneWidget);
 
       // l2 has visible: true -> ظاهر
-      expect(find.text('ظاهر'), findsWidgets);
+      expect(inRow('l2', 'ظاهر'), findsOneWidget);
+      expect(inRow('l2', 'مخفي'), findsNothing);
+      expect(inRow('l2', 'بيانات تجريبية'), findsNothing);
 
       // l3 has active: false -> موقوف
-      expect(find.text('موقوف'), findsOneWidget);
+      expect(inRow('l3', 'مخفي'), findsOneWidget);
+      expect(inRow('l3', 'موقوف'), findsOneWidget);
 
       // l4 has past date -> منتهي
-      expect(find.text('منتهي'), findsOneWidget);
+      expect(inRow('l4', 'ظاهر'), findsOneWidget);
+      expect(inRow('l4', 'منتهي'), findsOneWidget);
 
       // 2. Alerts collection with past endsAt -> منتهي
       await tester.pumpWidget(_app(
@@ -1458,7 +1469,7 @@ void main() {
       ));
       await tester.pumpAndSettle();
 
-      expect(find.text('منتهي'), findsOneWidget);
+      expect(inRow('a1', 'منتهي'), findsOneWidget);
     });
 
     testWidgets('DocEditor liturgy replacesDay preview renders overridden regular masses with 12-hour Cairo times', (tester) async {
@@ -1594,6 +1605,111 @@ void main() {
       expect(find.textContaining('قداس الجمعة'), findsNothing);
       expect(find.textContaining('قداس السبت'), findsNothing);
       expect(find.textContaining('مفيش قداسات معتادة مسجلة'), findsOneWidget);
+    });
+
+    testWidgets('DocEditor replacesDayPreview omits regular masses when seasonal liturgy belongs to inactive season', (tester) async {
+      tester.view.physicalSize = const Size(800, 1200);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final liturgyDef = collectionById('liturgies')!;
+      final existingDocs = [
+        AdminDoc('fri', {
+          'type': 'mass',
+          'nameAr': 'قداس الجمعة',
+          'weekday': 5,
+          'start': '07:00',
+          'end': '09:00',
+          'visible': true,
+          'replacesDay': false,
+        }),
+      ];
+
+      await tester.pumpWidget(_app(
+        DocEditor(
+          title: 'قداس',
+          fields: liturgyDef.fields,
+          data: {
+            'type': 'mass',
+            'nameAr': 'قداس موسمي',
+            'date': '2026-11-06', // Friday
+            'start': '07:00',
+            'end': '09:00',
+            'seasonKey': 'lent',
+            'visible': true,
+            'replacesDay': true,
+          },
+          existingDocs: existingDocs,
+          seasons: const [
+            Season(
+              id: 's1',
+              key: 'lent',
+              nameAr: 'الصوم',
+              nameEn: 'Lent',
+              active: false,
+            ),
+          ],
+          onSave: (_) async {},
+        ),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('replacesDayPreview')), findsOneWidget);
+      expect(find.textContaining('قداس الجمعة'), findsNothing);
+      expect(find.textContaining('مفيش قداسات معتادة مسجلة'), findsOneWidget);
+    });
+
+    testWidgets('AdminStateSwitch merges semantics, keeps single focus stop, and dims when disabled', (tester) async {
+      final semHandle = tester.ensureSemantics();
+      try {
+        await tester.pumpWidget(_app(
+          Column(
+            children: [
+              AdminStateSwitch(
+                key: const ValueKey('enabled-sw'),
+                value: true,
+                onLabel: 'Shown',
+                offLabel: 'Hidden',
+                title: const Text('Visible on site'),
+                subtitle: const Text('Controls public visibility'),
+                onChanged: (_) {},
+              ),
+              const AdminStateSwitch(
+                key: ValueKey('disabled-sw'),
+                value: false,
+                onLabel: 'Shown',
+                offLabel: 'Hidden',
+                title: Text('Locked setting'),
+                subtitle: Text('Disabled hint'),
+                onChanged: null,
+              ),
+            ],
+          ),
+        ));
+        await tester.pumpAndSettle();
+
+        // Single merged semantic node combines title and switch state
+        final enabledFinder = find.byKey(const ValueKey('enabled-sw'));
+        final sem = tester.getSemantics(find.descendant(of: enabledFinder, matching: find.byType(Switch)));
+        expect(sem.label, contains('Visible on site'));
+        expect(sem.flagsCollection.isToggled, Tristate.isTrue);
+
+        // InkWell does not register an extra keyboard focus target
+        final inkWell = tester.widget<InkWell>(find.descendant(of: enabledFinder, matching: find.byType(InkWell)));
+        expect(inkWell.canRequestFocus, isFalse);
+        expect(inkWell.excludeFromSemantics, isTrue);
+
+        // Disabled branch dims title, subtitle, and badge with Theme.disabledColor
+        final disabledFinder = find.byKey(const ValueKey('disabled-sw'));
+        final disabledThemeColor = Theme.of(tester.element(disabledFinder)).disabledColor;
+        final badgeText = tester.widget<Text>(find.descendant(of: disabledFinder, matching: find.text('Hidden')));
+        expect(badgeText.style?.color, disabledThemeColor);
+        final titleStyle = DefaultTextStyle.of(tester.element(find.text('Locked setting'))).style;
+        expect(titleStyle.color, disabledThemeColor);
+      } finally {
+        semHandle.dispose();
+      }
     });
   });
 }

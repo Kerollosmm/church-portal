@@ -41,33 +41,46 @@ class AdminStateSwitch extends StatelessWidget {
   Widget build(BuildContext context) {
     final stateWord = value ? onLabel : offLabel;
     final isInteractive = onChanged != null;
+    final disabledColor = Theme.of(context).disabledColor;
 
-    final badge = Semantics(
-      label: semanticLabel ?? stateWord,
-      child: Container(
-        key: const ValueKey('state-badge'),
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-        decoration: BoxDecoration(
-          color: value
-              ? context.pal.primary.withValues(alpha: 0.12)
-              : context.pal.muted.withValues(alpha: 0.10),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: value
-                ? context.pal.primary.withValues(alpha: 0.35)
-                : context.pal.hairline,
-          ),
-        ),
-        child: Text(
-          stateWord,
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            color: value ? context.pal.primary : context.pal.muted,
-          ),
+    final badgeTextColor = isInteractive
+        ? (value ? context.pal.primary : context.pal.muted)
+        : disabledColor;
+    final badgeBgColor = isInteractive
+        ? (value
+            ? context.pal.primary.withValues(alpha: 0.12)
+            : context.pal.muted.withValues(alpha: 0.10))
+        : context.pal.muted.withValues(alpha: 0.06);
+    final badgeBorderColor = isInteractive
+        ? (value
+            ? context.pal.primary.withValues(alpha: 0.35)
+            : context.pal.hairline)
+        : context.pal.hairline.withValues(alpha: 0.6);
+
+    final badgeBox = Container(
+      key: const ValueKey('state-badge'),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: badgeBgColor,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: badgeBorderColor),
+      ),
+      child: Text(
+        stateWord,
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          color: badgeTextColor,
         ),
       ),
     );
+
+    final badge = semanticLabel != null
+        ? Semantics(
+            label: semanticLabel,
+            child: ExcludeSemantics(child: badgeBox),
+          )
+        : ExcludeSemantics(child: badgeBox);
 
     final switchWidget = Switch(
       key: switchKey,
@@ -88,91 +101,109 @@ class AdminStateSwitch extends StatelessWidget {
     if (title == null && subtitle == null && secondary == null) {
       return Material(
         type: MaterialType.transparency,
-        child: Padding(
-          padding: contentPadding ?? EdgeInsets.zero,
-          child: controlGroup,
+        child: MergeSemantics(
+          child: Padding(
+            padding: contentPadding ?? EdgeInsets.zero,
+            child: controlGroup,
+          ),
         ),
       );
     }
 
+    final baseTitleStyle = Theme.of(context).textTheme.titleMedium ??
+        TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: context.pal.ink);
+    final baseSubtitleStyle = Theme.of(context).textTheme.bodySmall?.copyWith(color: context.pal.muted) ??
+        TextStyle(fontSize: 12.5, color: context.pal.muted, height: 1.35);
+
+    final effectiveSecondary = secondary == null
+        ? null
+        : IconTheme.merge(
+            data: IconThemeData(color: isInteractive ? null : disabledColor),
+            child: secondary!,
+          );
+
     return Material(
       type: MaterialType.transparency,
-      child: InkWell(
-        onTap: isInteractive ? () => onChanged!(!value) : null,
-        borderRadius: BorderRadius.circular(8),
-        child: Padding(
-          padding: contentPadding ?? const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final textScale = MediaQuery.textScalerOf(context).scale(1);
-              final isCompact = constraints.maxWidth < 420 || textScale > 1.2;
+      child: MergeSemantics(
+        child: InkWell(
+          onTap: isInteractive ? () => onChanged!(!value) : null,
+          canRequestFocus: false,
+          excludeFromSemantics: true,
+          borderRadius: BorderRadius.circular(8),
+          child: Padding(
+            padding: contentPadding ?? const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final textScale = MediaQuery.textScalerOf(context).scale(1);
+                final isCompact = constraints.maxWidth < 420 || textScale > 1.2;
 
-              final titleColumn = Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (title != null)
-                    DefaultTextStyle(
-                      style: Theme.of(context).textTheme.titleMedium ??
-                          TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: context.pal.ink),
-                      child: title!,
-                    ),
-                  if (subtitle != null) ...[
-                    const SizedBox(height: 2),
-                    DefaultTextStyle(
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(color: context.pal.muted) ??
-                          TextStyle(fontSize: 12.5, color: context.pal.muted, height: 1.35),
-                      child: subtitle!,
-                    ),
-                  ],
-                ],
-              );
-
-              if (isCompact) {
-                return Column(
+                final titleColumn = Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (secondary != null) ...[
-                          secondary!,
-                          const SizedBox(width: 12),
-                        ],
-                        Expanded(child: titleColumn),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      alignment: WrapAlignment.spaceBetween,
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      spacing: 8,
-                      runSpacing: 6,
-                      children: [
-                        badge,
-                        switchWidget,
-                      ],
-                    ),
+                    if (title != null)
+                      DefaultTextStyle(
+                        style: isInteractive ? baseTitleStyle : baseTitleStyle.copyWith(color: disabledColor),
+                        child: title!,
+                      ),
+                    if (subtitle != null) ...[
+                      const SizedBox(height: 2),
+                      DefaultTextStyle(
+                        style: isInteractive
+                            ? baseSubtitleStyle
+                            : baseSubtitleStyle.copyWith(color: disabledColor),
+                        child: subtitle!,
+                      ),
+                    ],
                   ],
                 );
-              }
 
-              return Row(
-                crossAxisAlignment: isThreeLine ? CrossAxisAlignment.start : CrossAxisAlignment.center,
-                children: [
-                  if (secondary != null) ...[
-                    secondary!,
+                if (isCompact) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (effectiveSecondary != null) ...[
+                            effectiveSecondary,
+                            const SizedBox(width: 12),
+                          ],
+                          Expanded(child: titleColumn),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        alignment: WrapAlignment.spaceBetween,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        spacing: 8,
+                        runSpacing: 6,
+                        children: [
+                          badge,
+                          switchWidget,
+                        ],
+                      ),
+                    ],
+                  );
+                }
+
+                return Row(
+                  crossAxisAlignment: isThreeLine ? CrossAxisAlignment.start : CrossAxisAlignment.center,
+                  children: [
+                    if (effectiveSecondary != null) ...[
+                      effectiveSecondary,
+                      const SizedBox(width: 12),
+                    ],
+                    Expanded(child: titleColumn),
                     const SizedBox(width: 12),
+                    badge,
+                    const SizedBox(width: 8),
+                    switchWidget,
                   ],
-                  Expanded(child: titleColumn),
-                  const SizedBox(width: 12),
-                  badge,
-                  const SizedBox(width: 8),
-                  switchWidget,
-                ],
-              );
-            },
+                );
+              },
+            ),
           ),
         ),
       ),

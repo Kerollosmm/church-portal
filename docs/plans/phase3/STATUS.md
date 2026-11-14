@@ -7,8 +7,8 @@
 
 - **Baseline:** the report's last review, 13 November 2026 (Africa/Cairo), against the code after PR #70.
 - **Counts:** 5 fixes on live data · 28 open tasks in the code · 8 done or removed · 1 deferred by decision.
-- **Code:** PR 3A (`feat/p3a-safe-actions`, items 6, 7, 8, 11) implemented on Stage 1.
-- **Next action:** Stage 1, PR 3B (items 9, 10).
+- **Code:** PR 3A (`feat/p3a-safe-actions`, items 6, 7, 8, 11) and PR 3B (`feat/p3b-written-state`, items 9, 10) implemented on Stage 1.
+- **Next action:** Stage 1, PR 3C (items 12, 13).
 - **Target:** 2–3 weeks in total across the stages (owner, 13 November).
 
 ## قرارات مفتوحة للمالك (Open points for the owner — README §١٥)

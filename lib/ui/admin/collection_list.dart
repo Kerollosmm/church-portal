@@ -541,6 +541,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     final needsLinks = usesLinks(def.fields);
     final cats = needsCats || needsLinks ? await _read('categories') : const <AdminDoc>[];
     final pages = needsLinks ? await _read('pages') : const <AdminDoc>[];
+    final seasonDocs = def.name == 'liturgies' ? await _read('seasons') : const <AdminDoc>[];
     // Venues / audiences (ADR-041): the admin lists in settings/features
     // (defaults when none), read once when the editor opens.
     final settings = needsProgram ? await _read('settings') : const <AdminDoc>[];
@@ -564,6 +565,10 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
       for (final x in _lastDocs)
         if (x.id != d?.id && x.data['slug'] is String) x.data['slug'] as String,
     };
+    final seasons = [
+      for (final s in seasonDocs)
+        if (!isSoftDeleted(s.data)) Season.fromMap(s.id, s.data),
+    ];
     List<(String, String)> optChoices(List<ProgramOption> l) => [for (final o in l) (o.key, context.pick(o.labelAr, o.labelEn))];
     _pushEditor(context, d,
         dynamicChoices: {
@@ -574,13 +579,14 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
               programOpts.venues, ['${d?.data['venue'] ?? ''}'], programOpts.venue)),
           'audiences': optChoices(ProgramOptions.withUsed(
               programOpts.audiences, ['${d?.data['audience'] ?? ''}'], programOpts.audience)),
-        }, linkTargets: needsLinks ? targets : const [], takenSlugs: taken);
+        }, linkTargets: needsLinks ? targets : const [], takenSlugs: taken, seasons: seasons);
   }
 
   void _pushEditor(BuildContext context, AdminDoc? d,
       {Map<String, List<(String, String)>> dynamicChoices = const {},
       List<(String, String)> linkTargets = const [],
-      Set<String> takenSlugs = const {}}) {
+      Set<String> takenSlugs = const {},
+      List<Season> seasons = const []}) {
     final label = context.pick(def.labelAr, def.labelEn);
     // The editor may save in several writes (gallery / extraFields go on
     // their own): the first one creates a new document, the rest merge into it.
@@ -600,41 +606,13 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
         linkTargets: linkTargets,
         takenSlugs: takenSlugs,
         existingDocs: _lastDocs,
+        seasons: seasons,
       ),
     ));
   }
 
-  bool _isExpired(CollectionDef def, Map<String, dynamic> data) {
-    final now = CairoTime.now();
-    final todayStart = CairoTime.startOfDay(now);
-
-    if (data['endsAt'] != null) {
-      final end = parseDate(data['endsAt']);
-      if (end != null && end.isBefore(now)) return true;
-    }
-
-    if (data['endDate'] != null && '${data['endDate']}'.trim().isNotEmpty) {
-      final end = parseDate(data['endDate']);
-      if (end != null) {
-        final cal = CairoTime.calendarDate(end);
-        final calStart = CairoTime.at(cal.year, cal.month, cal.day);
-        if (calStart.isBefore(todayStart)) return true;
-      }
-    }
-
-    if (const {'events', 'liturgies', 'announcements', 'notices'}.contains(def.name)) {
-      if (data['endDate'] == null && data['endsAt'] == null && data['date'] != null) {
-        final d = parseDate(data['date']);
-        if (d != null) {
-          final cal = CairoTime.calendarDate(d);
-          final calStart = CairoTime.at(cal.year, cal.month, cal.day);
-          if (calStart.isBefore(todayStart)) return true;
-        }
-      }
-    }
-
-    return false;
-  }
+  bool _isExpired(CollectionDef def, Map<String, dynamic> data) =>
+      isExpiredAdminDoc(def.name, data, CairoTime.now());
 }
 
 /// [def]'s public page, with `?lang=en` when the dashboard is in English.

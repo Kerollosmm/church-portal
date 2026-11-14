@@ -76,6 +76,9 @@ class DocEditor extends StatefulWidget {
   /// Existing collection documents for live cross-document previews.
   final List<AdminDoc> existingDocs;
 
+  /// Active/inactive seasons so seasonal liturgies preview override accurately.
+  final List<Season> seasons;
+
   const DocEditor({
     super.key,
     required this.title,
@@ -93,6 +96,7 @@ class DocEditor extends StatefulWidget {
     this.linkTargets = const [],
     this.takenSlugs = const {},
     this.existingDocs = const [],
+    this.seasons = const [],
   });
 
   @override
@@ -723,6 +727,9 @@ class DocEditorState extends State<DocEditor> {
     final rawWeekday = _values['weekday'];
     final weekday = rawWeekday is int ? rawWeekday : null;
 
+    final rawSeasonKey = _values['seasonKey'];
+    final seasonKey = rawSeasonKey is String && rawSeasonKey.isNotEmpty ? rawSeasonKey : null;
+
     final replacing = Liturgy(
       id: widget.docId ?? 'draft',
       type: _values['type'] is String && (_values['type'] as String).isNotEmpty
@@ -734,14 +741,14 @@ class DocEditorState extends State<DocEditor> {
       date: parsedDate,
       start: _text['start']?.text.trim() ?? '',
       end: _text['end']?.text.trim() ?? '',
-      seasonKey: _values['seasonKey'] is String ? _values['seasonKey'] as String : null,
+      seasonKey: seasonKey,
       replacesDay: true,
       visible: _values['visible'] != false,
       sample: _values['sample'] == true,
     );
 
     final allLiturgies = [for (final d in widget.existingDocs) Liturgy.fromMap(d.id, d.data)];
-    final hiddenLiturgies = liturgiesHiddenBy(replacing, allLiturgies);
+    final hiddenLiturgies = liturgiesHiddenBy(replacing, allLiturgies, seasons: widget.seasons);
 
     final String heading;
     if (replacing.date != null) {
