@@ -112,6 +112,7 @@ Progress tracked in [`docs/plans/phase3/STATUS.md`](../plans/phase3/STATUS.md). 
 - [x] PR 3H — Inbox WhatsApp & one-tap Done (`feat/p3h-inbox`, item 25): default «محتاجة رد» filter, mobile-only WhatsApp chip, one-tap «تمّت»
 - [x] PR 3I — Assistant custom section/page topics (`feat/p3i-sitemap-assistant`, item 29; item 28 deferred): appends visible custom sections and pages to `Allowed topics:`
 - [x] PR 3J — Remaining UI polish (`feat/p3j-remaining`, items 30, 31; ADR-071; item 32 left out, item 34 deferred): collapsible church-info groups + coord/priority hints, `msgMore` overflow menu for «إعادة كجديدة», `ContactCategoriesScreen` `UnsavedBar` + named delete confirm + dirty-gated FAB
+- [x] PR #83 QA fixes — Preview QA hardening (`feat/p3j-remaining`, ADR-072): rules normalization for nullable `categoryId` & `contact_messages` soft-delete undo; persistent save-failure banner; web popstate dirty guard for browser back; inbox 10s soft-delete undo & lazy purge; notice priority un-collapsed; ChurchInfo/Features save echo guard; Overview multi-section unconfirmed breakdown; owner self-row active badge; notifications chip contrast; MapInteractionGuard scroll shield; ContactForm slot reset & autofill finish; and public route redirects (/activities, /priests, /notices, /donations).
 
 ## Infrastructure & security (owner: developer)
 

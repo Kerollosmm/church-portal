@@ -316,10 +316,20 @@ flowchart LR
 | `/section/:slug` | `CategoryPage` (PR #18) | customSections (+ the category's own `visible`) |
 | `/page/:slug` | `CustomPageView` (PR #18) | customPages (+ the page's own `visible`) |
 | `/admin` (`AppConfig.adminPath`) | `admin_page.AdminPage` (deferred, `fullScreen` placeholder) | outside the shell, not gated, not linked anywhere public |
+| `/activities` | redirect → `/church-activities` (query preserved) | — |
+| `/priests` | redirect → `/about` (query preserved) | — |
+| `/notices` | redirect → `/notifications` (query preserved) | — |
+| `/donations` | redirect → `/page/donations` (query preserved) | — |
 | anything else | `errorBuilder` → `AppShell` + "Page not found" + Back home | — |
 
 `FeatureGate` shows a spinner (`Key('featuresLoading')`) until `featuresReadyProvider`, then the page or
 `SectionUnavailable` («هذا القسم غير متاح حاليًا» + Back to home).
+
+**Public Redirects (PR #83):** Canonical shortcuts redirect cleanly with query strings preserved: `/activities` → `/church-activities`, `/priests` → `/about`, `/notices` → `/notifications`, and `/donations` → `/page/donations`.
+
+**Header Responsive Adaptivity (`AppShell`, `app_shell.dart`):** On mid-desktop viewports (~905 px–1150 px), `AppShell` computes a dynamic maximum navigation width (`maxNavWidth = (width - titleSpacingVal - minTitleSlot - otherActionsWidth).clamp(200.0, width * 0.6)`) and scales title size down to 19 px below 1150 px, guaranteeing the start tab seal and church name maintain at least 200 px of readable breathing room without starvation or overflow.
+
+**Map Interaction Guard (`MapInteractionGuard`, `map_embed.dart`, `map_embed_web.dart`):** On web, the keyless Google Maps iframe is initially set to `pointer-events: none` and `tabIndex = -1` covered by an interact shield (`Key('mapInteractShield')`, «اضغط للتفاعل مع الخريطة» / `mapTapToInteract`). Page wheel, touch, and Home/End/PageUp keyboard scrolling pass freely over the map until clicked. Clicking unlocks map interaction and displays a floating lock button (`Key('mapLockScrollBtn')`, «قفل الخريطة للتمرير» / `mapLockScroll`), with automatic re-locking when the mouse leaves the map bounds.
 
 **Item detail pages** (PR #13, ADR-020): the 7 routes above are generated from `DetailKind.values`
 (`'${kind.basePath}/:id'`, flat routes inside the `ShellRoute`, so the list page is not built underneath).

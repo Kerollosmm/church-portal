@@ -2038,6 +2038,36 @@ supersede them.
   4. **Deferred bundle hygiene:** All new admin copy lives in `lib/ui/admin/admin_strings.dart`, reusing `SimpleDialog` (`doc_editor.dart`) and already-bundled icons (`Icons.history_edu_outlined`, `Icons.refresh`) so `PopupMenuButton` cross-chunk dispatch isn't hoisted into `main.dart.js` (`1,395,750 B` gzip, `+281 B` headroom).
 - **Consequences:** Shorter initial scroll depth on church info, clear coordinate/priority guidance, safer message-type editing/deletion, zero schema or `firestore.rules` changes, and preserved public `main.dart.js` gzip budget headroom.
 
+## ADR-072 (PR 3J / PR #83 preview QA fixes) — Admin preview QA hardening: persistent save error banner, web popstate dirty guard, inbox soft-delete undo, and map scroll shield
+
+- **Context:** Live preview QA review of PR #83 (`feat/p3j-remaining`) identified twelve UX, resilience, and rules edge cases before merging the Phase 3 chain:
+  1. Firestore rules rejected new custom pages when `categoryId` was explicitly `null` for link/nav placements (`validPagePlacement`).
+  2. In `DocEditor`, save failures (validation, permission-denied, or network errors) only triggered transient SnackBars, risking silent failures if an admin looked away.
+  3. On web, browser Back did not invoke `confirmDiscardChanges` when a form was dirty, silently discarding unsaved input.
+  4. In `MessagesScreen`, message deletion was permanent and lacked parity with the 10-second soft-delete undo pattern of other collections (`PendingDelete`).
+  5. In `alerts` (`admin_schema.dart`), notice `priority` was hidden inside collapsed «خيارات متقدمة».
+  6. In `FeaturesEditor` and `ChurchInfoScreen`, local write echos and failed-save rollbacks falsely triggered the `stale` (`updatedElsewhere`) banner.
+  7. In `OverviewScreen`, unconfirmed data attention count did not show a breakdown when spanning multiple sections; sample switches lacked clear distinction from confirmed switches; and the signed-in owner's row in `AdminsScreen` showed a confusing disabled switch.
+  8. In `NotificationsAdmin`, filter chips had weak contrast when active and retained past-time errors after switching to «في أقرب وقت».
+  9. In `AppShell`, mid-width desktop viewports (~905px–1150px) could starve the header title and seal.
+  10. In `ChurchMap`, the Google Maps iframe on web intercepted mouse wheel and keyboard scrolling before the user deliberately intended to interact with the map.
+  11. In `ContactPage`, submitting a message did not reset the selected message-type dropdown and left autofill open.
+  12. Public routes `/activities`, `/priests`, `/notices`, and `/donations` returned 404 instead of clean canonical redirects.
+- **Decision:**
+  1. **Rules normalization & soft-delete undo (`firestore.rules`):** Updated `validPagePlacement` to normalize `null` `categoryId` to `''` for non-section placements. Updated `contact_messages` update rule to allow admins to set `deletedAt` (`optTimestamp`), supporting 10-second soft-delete undo and lazy purge.
+  2. **Persistent save error banner (`doc_editor.dart`):** Added a persistent inline card (`Key('editor-save-error')`) at the top of `DocEditor` that smoothly scrolls into view on save failure, cleared only upon retry or editing.
+  3. **Web browser back dirty guard (`unsaved_guard_web.dart`):** Implemented history sentinel state (`_pushSentinel`) and capture-phase `popstate` event listener so browser Back triggers `confirmDiscardChanges` and repushes sentinel if cancelled.
+  4. **Inbox soft-delete undo (`admin_screens.dart`):** Wired `MessagesScreen` deletion to `PendingDelete` writing `deletedAt`, a 10s `SnackBar` with «اتمسح «...» · تراجع», and lazy purge on open.
+  5. **Notice priority visibility (`admin_schema.dart`):** Removed `advanced: true` from `alerts.priority`.
+  6. **Save echo guard (`features_editor.dart`, `admin_screens.dart`):** Gated `stale` checks with `!saving` on `FeaturesScreen` and `ChurchInfoScreen`.
+  7. **Clarity polish:** Added multi-section breakdown in `OverviewScreen` (`att_unconfirmedBreakdown`), updated `switch_sample` to `'غير مؤكد (تجريبي)'`, and replaced owner's disabled switch with `'حسابك (نشط)'` (`selfActiveTag`).
+  8. **Notification chip contrast & validation:** Set `selectedColor: context.pal.bar` on `ChoiceChip`/`FilterChip` and auto-cleared `nm_errPast` on «في أقرب وقت».
+  9. **Header responsive dynamic width (`app_shell.dart`):** Capped desktop nav width dynamically (`maxNavWidth`) and scaled title font down to 19px below 1150px.
+  10. **Map click-to-interact shield (`map_embed.dart`, `map_embed_web.dart`):** Wrapped web iframe in `MapInteractionGuard` with click-to-interact overlay (`mapTapToInteract`: «اضغط للتفاعل مع الخريطة»), lock button (`mapLockScroll`: «قفل الخريطة للتمرير»), and mouse-exit auto-relock.
+  11. **Contact form reset (`contact_page.dart`):** Reset `_slot` to `null`, re-keyed category dropdown via `_resetCount`, and called `TextInput.finishAutofillContext(shouldSave: true)`.
+  12. **Public route redirects (`router.dart`):** Added `GoRoute` redirects for `/activities` → `/church-activities`, `/priests` → `/about`, `/notices` → `/notifications`, and `/donations` → `/page/donations` with query preservation.
+- **Consequences:** All preview QA edge cases resolved with 0 regressions, all test suites passing, and zero disruption to production rules budget.
+
 ## Timeline
 
 | When | PR / commit | What |
@@ -2135,5 +2165,6 @@ supersede them.
 | 15 Nov 2026 | **PR 3H** — "Inbox opens on Needs reply, WhatsApp chip safety, and one-tap Done" (`feat/p3h-inbox`) | Stage 2 PR 3H (P2-25): `MessagesScreen` opens filtered on «محتاجة رد» / `Needs reply` (`msg_new`), adds `msgWhatsApp-<id>` `ActionChip` gated strictly by pure Dart `usableWhatsappLink` (`lib/domain/rules.dart`: valid Egyptian mobile `01[0125]...` only, rejecting empty, malformed, landline, and hotline numbers), and updates `markHandled` to one-tap «تمّت» / `Done` (`msgToggleStatus-<id>`) removing handled items from the default view. |
 | 15 Nov 2026 | **PR 3I** — "Assistant names visible custom sections and pages in allowed topics (P2-29)" (`feat/p3i-sitemap-assistant`) | Stage 2 PR 3I (P2-29; P2-28 deferred per `DESIGN-NOTE-item-28-sitemap.md`): `buildAssistantInstruction` (`lib/domain/assistant_context.dart`) appends visible usable custom sections (`publicCategories` when `Sections.customSections` is on) and custom pages (`publicPages` when `Sections.customPages` is on) under `Allowed topics:`; hidden/invalid-slug items and off-section names never appear, and empty/all-hidden custom content preserves baseline output. |
 | 15 Nov 2026 | **PR 3J** — "Split church info, hints, overflow markNew, and contact-type save/delete polish (P3-30, P3-31)" (`feat/p3j-remaining`) | Stage 3 PR 3J (ADR-071; completes Phase 3 code changes with P3-32 left out & P3-34 deferred): `churchInfoDoc` splits secondary fields into collapsible `location`/`contacts`/`hero`/`history` cards while saving identical flat keys on `settings/church`, `_pills` counts non-empty `objectList` rows, coordinate/`alerts.priority` gain plain AR/EN hints, `MessagesScreen` moves `markNew` into `msgMore-<id>` overflow menu (`Flexible` 320px/200% clean) away from `msgToggleStatus-<id>` and red Delete, and `ContactCategoriesScreen` adds `confirmNamedAction` on type deletion + `UnsavedBar` + dirty-highlighted `saveContactCats` FAB. |
+| 15 Nov 2026 | **PR #83 QA fixes** — "Admin preview QA hardening: persistent save error banner, web popstate dirty guard, inbox soft-delete undo, and map scroll shield" (`feat/p3j-remaining`) | ADR-072: Resolves 12 preview findings across `b2da189`, `fcb55c7`, `534dedd`, `9e0602c`. Normalizes nullable page `categoryId` in `validPagePlacement`; allows `deletedAt` updates for admin soft-delete undo/lazy purge on `contact_messages`; adds persistent inline `editor-save-error` in `DocEditor`; captures web `popstate` for Browser Back in `UnsavedGuard`; surfaces `alerts.priority` outside collapsed advanced; guards against false `updatedElsewhere` during save rollbacks; adds unconfirmed items section breakdown in `OverviewScreen` and clarifies sample switch to «غير مؤكد (تجريبي)»; shows non-switch active badge on signed-in owner row; enhances notification chip contrast; adds `MapInteractionGuard` to prevent iframe scroll hijacking; resets category dropdown and finishes autofill on contact submit; and adds clean canonical redirects for `/activities`, `/priests`, `/notices`, and `/donations`. |
 
 <!-- Append new PRs to this table. -->

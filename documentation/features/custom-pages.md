@@ -31,7 +31,8 @@
 ## كيف تعمل تقنيًا
 
 - الصفحة: `lib/ui/pages/custom_page.dart` (`CustomPageView`، `PageBlockView`، `DonationInfoCard`)، وبطاقة الصفحة `CustomPageCard` في `lib/ui/pages/category_page.dart` (للقسم وللصفحة الرئيسية `HomePage`). النموذج: `CustomPage`, `PagePlacements` و `BlockTypes` في `lib/domain/custom_content.dart` (حتى 20 فقرة، نص الفقرة حتى 4000 حرف).
-- مجموعة `pages`: `titleAr/En`، `slug`، `subtitleAr/En`، `image`، `blocks` (كل فقرة مخزنة كنص واحد مفصول بالحرف `\u001f` حتى تبقى قواعد الأمان في حدودها)، `placement`، `categoryId`، `showInNav` (متزامن مع `placement == 'nav'`)، `featured`، `order`، `visible`.
+- مجموعة `pages`: `titleAr/En`، `slug`، `subtitleAr/En`، `image`، `blocks` (كل فقرة مخزنة كنص واحد مفصول بالحرف `\u001f` حتى تبقى قواعد الأمان في حدودها)، `placement`، `categoryId`، `showInNav` (متزامن مع `placement == 'nav'`)، `featured`، `order`، `visible`. في قواعد الأمان (`validPagePlacement`)، يُعامل حقل `categoryId` الصريح كـ `null` تلقائيًا كنص فارغ `''` لأماكن الظهور `link` و `nav` لضمان صحة التحقق وعدم رفض الحفظ.
+- التحويل التلقائي: الرابط المختصر `/donations` يُعاد توجيهه مباشرة إلى صفحة التبرعات `/page/donations` مع الحفاظ على المعاملات.
 - نفس منطق التحميل الآمن للأقسام المخصصة (`settleFirst`، PR #23؛ ومنذ PR #30 تظهر «غير متاحة» لرابط خطأ خلال ~13 ثانية كحد أقصى بدل 15–24). الصفحة محكومة بـ `customPages` + `visible`.
 - المساعد الذكي يقرأ الصفحات المخصصة (حتى 20 صفحة، حتى 2500 حرف لكل صفحة) بما فيها بيانات التبرع.
 

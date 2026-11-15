@@ -25,7 +25,7 @@ render with `PageBody` (+ `Footer`). Content comes from Riverpod providers (hidd
   | `quickContacts` | `_QuickContacts` (first 3 phones, call + WhatsApp for mobiles) | contactInfo |
   | `milestones` | "Our story" `MilestoneCard` grid (`lib/ui/widgets/milestone_card.dart`, shared with `/about`, ADR-052; icon by `icon`, year in local digits) | milestones |
   | `directory` | `DirectoryCard` grid from `_directory` (mass, clinics, education, activities, services, about, contact) + "Ask the church" when visible; cards for disabled routes are skipped | — |
-  | `map` | `ChurchMap` (iframe + Open in Maps + Directions) | contactInfo |
+  | `map` | `ChurchMap` (iframe + Open in Maps + Directions; protected by `MapInteractionGuard` click-to-interact shield on web) | contactInfo |
   On wide screens (≥ 900 px) adjacent `nextMass` + `quickContacts` share a row.
 
 - **Hero ribbon (PR #22, ADR-032):** under the hero title, a `TitleRibbon` (key `heroRibbon`) shows the admin's
@@ -531,7 +531,7 @@ for evening revivals.
 
 ### Alerts (`visibleAlerts`, `lib/domain/rules.dart`)
 Shown only when `active` and now ∈ `[startsAt, endsAt]` (open-ended if null); sorted by `priority` desc, then most
-recent `startsAt`. Links: a single leading `/` = in-app route (`context.go`), `//…` or scheme = external.
+recent `startsAt`. In `admin_schema.dart`, `priority` (0–1000, higher shows first) is directly accessible in the basic form fields (not collapsed in advanced). Links: a single leading `/` = in-app route (`context.go`), `//…` or scheme = external. Public shortcut `/notices` redirects to `/notifications`.
 
 ### Clinics
 `isClinicAvailableToday` (Cairo weekday ∈ days and active); `filterClinics` ordering as above; phones normalised for
@@ -572,6 +572,7 @@ digits, Cairo `02` + 8, Alexandria `03` + 7, other governorates `0[4-9]` + 7–8
   and no reply is possible (`anonymousHint`), and the notice / consent switch to `privacyNoticeAnon` /
   `consentLabelAnon` (only the message text is stored; same Firebase disclosure). The anonymous payload is
   `{category, kind, anonymous: true, message}` only (`validateContactForm`).
+- **Post-submit reset:** After a successful send, `ContactForm` clears all controllers, resets `_slot` to `null` (re-keying `KeyedSubtree` via `_resetCount` to reset the category dropdown to default), unticks consent, and completes autofill via `TextInput.finishAutofillContext(shouldSave: true)`.
 - Not implemented yet: retention clean-up (12 months).
 
 ### Time formatting (`time_format.dart`)
