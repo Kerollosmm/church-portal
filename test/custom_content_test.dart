@@ -652,8 +652,18 @@ void main() {
       // Open remove confirmation for c1 (index 0), then simulate remote reorder [c2, c1].
       await tester.tap(find.byKey(const ValueKey('removeCat-c1')));
       await tester.pumpAndSettle();
-      ctrl.add(AdminDoc('contact', ContactSettings(const [c2, c1]).toMap()));
+      ctrl.add(AdminDoc(
+        'contact',
+        ContactSettings([
+          c2.copyWith(order: 10),
+          c1.copyWith(order: 20),
+        ]).toMap(),
+      ));
       await tester.pumpAndSettle();
+      expect(
+        tester.getTopLeft(find.byKey(const ValueKey('contactCat-c2'))).dy,
+        lessThan(tester.getTopLeft(find.byKey(const ValueKey('contactCat-c1'))).dy),
+      );
 
       await tester.tap(find.byKey(const ValueKey('confirm-ok')));
       await tester.pumpAndSettle();

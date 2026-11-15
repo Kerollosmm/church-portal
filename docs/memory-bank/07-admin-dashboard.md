@@ -321,6 +321,7 @@ For each `CollectionDef`:
   `endsAt` after `startsAt`.
 - New docs write all collected values (+ `newDefaults`); **existing docs write only changed fields**
   (`changedFields`, deep compare) with merge — never overwriting another admin's concurrent edits to other fields.
+- **Hidden EN drafts exclusion (PR 3G, P2-27b):** When `englishEnabled` is false, `DocEditor.collect` preserves `_initialValues[f.key]` for top-level English fields (`f.lang == 'en'`) and `_Row.collect` preserves `initial[f.key]` for object-list rows, so typed or pre-existing English drafts in hidden fields are excluded from the collected payload and never overwrite stored data or trigger validation errors.
 - **Top-of-form layout, Field groups & Advanced options (PR #12, PR 3F / P2-24):** `FieldDef.group` — `basic` fields stay open at the top, and on item/service collections (`priests`, `meetings`, `clinics`, `facilities`, `activities`, `categories`) cover `image` and primary phone (`contactPhone` / `bookingPhone` / `phone`) sit open at the top of `basic` (`saints` and `milestones` keep `_plainContactsGroup`). Secondary fields (English names/descriptions, `order`, `slug`, secondary links, `imageStyle`) carry `advanced: true` and sit in the collapsed **«خيارات متقدمة» (`advancedGroup`)** card (`maintainState: true`); on Save, `_openInvalidGroups()` expands any closed `FieldGroup` or `advancedGroup` containing an invalid field before `_formKey.currentState!.validate()`. On the 7 detail collections
   `details` (**«صفحة التفاصيل والحقول الإضافية»**: «إظهار صفحة التفاصيل / Show the detail page» switch — **on by default** since PR #14 (missing field = on, new items saved with `true`; hint explains that tapping the card opens the full page and that switching it off hides the page and the «التفاصيل» link), details AR/EN ≤ 10,000, up to
   15 *extra fields* rows title AR / title EN ≤ 150 — a title in **either** language is required, checked per row
@@ -392,7 +393,7 @@ The overview's "new messages" counts `status == new`.
 Cards per type (code defaults until saved): Arabic / English name, behaviour (general / booking / complaint /
 suggestion), shown on the form, allow anonymous (complaint / suggestion only), booking occasions (Arabic /
 English rows, ≤ 8, keys kept stable — `newSubtypeKey`), move up / down, remove (at least one stays, confirmed via
-`confirmNamedAction` naming the category or «نوع بدون اسم» / "Unnamed type"), **Add a
+`confirmNamedAction` naming the category or «نوع بدون اسم» / "Unnamed type", explicitly warning that existing messages move to «أخرى / نوع محذوف» / "Other / deleted type" and are not deleted; deletion removes safely by stable slot identifier to prevent RangeError during concurrent updates, PR 3J / P3-31), **Add a
 message type** (≤ 12; since PR #19 a fresh stable id from `ContactSettings.newId`, never an id removed in the
 editor — `_retired` — so old messages of a deleted type are never re-labelled). Any edit sets dirty state, reveals the
 sticky `UnsavedBar` (`unsaved-bar-save` / `unsaved-bar-cancel`), and shows the `saveContactCats` primary-highlighted FAB.
