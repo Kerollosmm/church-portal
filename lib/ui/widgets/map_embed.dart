@@ -126,7 +126,7 @@ class _MapInteractionGuardState extends State<MapInteractionGuard> {
                   behavior: HitTestBehavior.opaque,
                   onTap: () => _setActive(true),
                   child: Container(
-                    color: Colors.black.withValues(alpha: 0.08),
+                    color: context.pal.shadow(0.08),
                     alignment: Alignment.center,
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
