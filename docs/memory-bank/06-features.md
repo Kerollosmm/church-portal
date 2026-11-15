@@ -315,7 +315,7 @@ links keep the body colour + underline (same contrast as the text on every theme
 keeps select / copy. The same chat runs in the Android app (the old «فتح المساعد في المتصفح» card is gone). Web uses Firebase AI
 Logic with reCAPTCHA Enterprise. Android sends the same instruction to the Cloudflare Worker; the device
 counter in `AssistantConversation` still runs first (default 3 per Cairo day, 6 in an exceptional season, 4 per minute).
-Details in `05-firebase.md`.
+**Allowed topics & grounding:** only switched-on built-in topics plus visible usable custom sections (`Sections.customSections`) and custom pages (`Sections.customPages`) are listed under `Allowed topics:` in `buildAssistantInstruction` (PR 3I / P2-29); hidden or disabled ones never appear. Details in `05-firebase.md`.
 
 ### Item detail pages (PR #13, ADR-020) — `item_detail_page.dart` `ItemDetailPage`
 - Routes: `/church-education/:id`, `/church-activities/:id`, `/clinics/:id`, `/public-services/:id`,

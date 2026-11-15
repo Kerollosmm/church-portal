@@ -59,6 +59,18 @@ String buildAssistantInstruction({
   for (final t in assistant.topicsFor(f.enabled)) {
     b.writeln('- $t');
   }
+  // P2-29: visible custom sections and pages appear as allowed topics while
+  // their sections are switched on; hidden or unusable ones never appear.
+  if (f.enabled(Sections.customSections)) {
+    for (final c in publicCategories(categories).take(_maxCustomCategories)) {
+      b.writeln('- ${_bi(c.nameAr.trim(), c.nameEn.trim())}');
+    }
+  }
+  if (f.enabled(Sections.customPages)) {
+    for (final p in publicPages(pages).take(_maxCustomPages)) {
+      b.writeln('- ${_bi(p.titleAr.trim(), p.titleEn.trim())}');
+    }
+  }
   b.writeln('- The Coptic Orthodox faith: saints, rites and sacraments, feasts and fasts, hymns, the Bible, '
       'the church calendar and church history');
   final off = [

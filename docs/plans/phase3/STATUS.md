@@ -7,8 +7,8 @@
 
 - **Baseline:** the report's last review, 13 November 2026 (Africa/Cairo), against the code after PR #70.
 - **Counts:** 5 fixes on live data · 23 open tasks in the code · 13 done or removed · 1 deferred by decision.
-- **Code:** Stage 1 (PR 3A `feat/p3a-safe-actions`, PR 3B `feat/p3b-written-state`, PR 3C `feat/p3c-admin-status-session`, PR 3D `feat/p3d-custom-pages`) and Stage 2 PR 3E (`feat/p3e-menu-home`: P2-18, P2-18R, P2-19, P2-21, P2-23) + PR 3F (`feat/p3f-forms`: P2-20, P2-22, P2-24, P2-26) + PR 3G (`feat/p3g-english-switch`: P2-27a, P2-27b) + PR 3H (`feat/p3h-inbox`: P2-25) implemented.
-- **Next action:** Stage 2, PR 3I (item 29: the assistant names visible sections and pages as topics; item 28 stays deferred).
+- **Code:** Stage 1 (PR 3A `feat/p3a-safe-actions`, PR 3B `feat/p3b-written-state`, PR 3C `feat/p3c-admin-status-session`, PR 3D `feat/p3d-custom-pages`) and Stage 2 PR 3E (`feat/p3e-menu-home`: P2-18, P2-18R, P2-19, P2-21, P2-23) + PR 3F (`feat/p3f-forms`: P2-20, P2-22, P2-24, P2-26) + PR 3G (`feat/p3g-english-switch`: P2-27a, P2-27b) + PR 3H (`feat/p3h-inbox`: P2-25) + PR 3I (`feat/p3i-sitemap-assistant`: P2-29, P2-28 deferred) implemented.
+- **Next action:** Stage 3, PR 3J (items 30 & 31: split church info, clearer coordinates, notice priority explanation, message types save/confirm/overflow).
 - **Target:** 2–3 weeks in total across the stages (owner, 13 November).
 
 ## قرارات مفتوحة للمالك (Open points for the owner — README §١٥)
@@ -60,7 +60,7 @@ All answered by the owner on 13 November 2026 (README §١٠, D1–D5).
 - [x] 26 — picker for the priests' dates; labels without HH:mm (P2-26) · PR 3F (`feat/p3f-forms`)
 - [x] 27 — error summary above the form (P2-27a) · «النسخة الإنجليزية» switch (P2-27b) · PR 3G (`feat/p3g-english-switch`)
 - [x] 28 — sitemap updates when a page or section is added (P2-28): design note done, **deferred** — sitemap stays generated at deploy time
-- [ ] 29 — the assistant names visible sections and pages as topics (P2-29)
+- [x] 29 — the assistant names visible sections and pages as topics (P2-29) · PR 3I (`feat/p3i-sitemap-assistant`)
 - [ ] Trial session after Stage 2 — date, servant, time taken, stops:
 - [ ] **G2**
 
