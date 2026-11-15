@@ -88,3 +88,18 @@ List<AttentionItem> attentionItems({
       ),
   ];
 }
+
+/// Returns true when at least one Arabic/English field pair in [data] has
+/// non-empty Arabic text and empty or missing English text (P2-27b).
+bool docMissingEnglish(
+  Map<String, dynamic> data,
+  List<(String arKey, String enKey)> pairs,
+) {
+  for (final (arKey, enKey) in pairs) {
+    final ar = data[arKey]?.toString().trim() ?? '';
+    if (ar.isEmpty) continue;
+    final en = data[enKey]?.toString().trim() ?? '';
+    if (en.isEmpty) return true;
+  }
+  return false;
+}

@@ -2478,6 +2478,38 @@ describe('P2-18R: owner-only writes for settings (contact, assistant, venues, au
   });
 });
 
+describe('P2-27b: englishEnabled owner-only switch on settings/features', () => {
+  test('owner can toggle englishEnabled; editor cannot create or change it, and non-bool is rejected', async () => {
+    const ed = db(EDITOR);
+    const own = db(OWNER);
+    const refOwn = doc(own, 'settings', 'features');
+    const refEd = doc(ed, 'settings', 'features');
+    const stamp = (uid) => ({ updatedAt: serverTimestamp(), updatedBy: `${uid}@x.test` });
+
+    // Non-owner editor cannot create with englishEnabled set
+    await assertFails(setDoc(refEd, { ...convert(seed.settings.features), englishEnabled: false }));
+
+    // Owner creates with englishEnabled: false and toggles back to true
+    await assertSucceeds(setDoc(refOwn, { ...convert(seed.settings.features), englishEnabled: false, ...stamp(OWNER) }));
+    await assertSucceeds(updateDoc(refOwn, { englishEnabled: true, ...stamp(OWNER) }));
+    await assertSucceeds(updateDoc(refOwn, { englishEnabled: false, ...stamp(OWNER) }));
+
+    // Non-bool rejected even for owner
+    for (const bad of ['no', 0, null, []]) {
+      await assertFails(updateDoc(refOwn, { englishEnabled: bad, ...stamp(OWNER) }));
+    }
+
+    // Non-owner editor cannot change englishEnabled (alone or bundled with other valid keys)
+    await assertFails(updateDoc(refEd, { englishEnabled: true, ...stamp(EDITOR) }));
+    await assertFails(setDoc(refEd, { englishEnabled: true, liveEnabled: true, ...stamp(EDITOR) }, { merge: true }));
+
+    // Non-owner editor can still save other settings when englishEnabled is omitted from mergeFields
+    await assertSucceeds(setDoc(refEd, { liveEnabled: true, ...stamp(EDITOR) }, {
+      mergeFields: ['liveEnabled', 'updatedAt', 'updatedBy'],
+    }));
+  });
+});
+
 describe('install banner and push settings (ADR-057)', () => {
   const featuresRef = (uid = EDITOR) => doc(db(uid), 'settings', 'features');
   const validEditorInstallAndPush = {

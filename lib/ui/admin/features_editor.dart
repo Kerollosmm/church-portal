@@ -20,7 +20,16 @@ class FeaturesScreen extends StatefulWidget {
 
   /// Keys of the church seasons active now (ADR-043; "theme in force").
   final List<String> activeSeasonKeys;
-  const FeaturesScreen({super.key, required this.repo, this.activeSeasonKeys = const []});
+
+  /// Owner-only controls such as toggling the English version (P2-27b).
+  final bool isOwner;
+
+  const FeaturesScreen({
+    super.key,
+    required this.repo,
+    this.activeSeasonKeys = const [],
+    this.isOwner = true,
+  });
 
   @override
   State<FeaturesScreen> createState() => _FeaturesScreenState();
@@ -99,6 +108,7 @@ class _FeaturesScreenState extends State<FeaturesScreen> {
               updatedAt: doc?.updatedAt,
               updatedBy: doc?.updatedBy ?? '',
               activeSeasonKeys: widget.activeSeasonKeys,
+              isOwner: widget.isOwner,
               onSave: (f) async {
                 for (final w in featuresSaveWrites(f, doc?.data)) {
                   await widget.repo.saveDoc('settings/features', w);
@@ -132,6 +142,9 @@ List<Map<String, dynamic>> featuresSaveWrites(FeatureSettings next, Map<String, 
   final writeColors = (stored != null && stored.containsKey('themeColors'))
       ? !sameValue(colors, storedF.occasions.colorsToMap())
       : (colors as Map).isNotEmpty;
+  // Owner-only switch (P2-27b): never write it when unchanged so editors
+  // saving sections/layout do not hit the owner-only rule check.
+  if (next.englishEnabled == storedF.englishEnabled) base.remove('englishEnabled');
   // heroMotion (ADR-022) is written only once it differs from the default or
   // is already stored, so saves keep working against rules that predate it.
   if (next.heroMotion && (stored == null || !stored.containsKey('heroMotion'))) base.remove('heroMotion');
@@ -170,6 +183,7 @@ class FeaturesEditor extends StatefulWidget {
   final DateTime? updatedAt;
   final String updatedBy;
   final Future<void> Function(FeatureSettings) onSave;
+  final bool isOwner;
 
   const FeaturesEditor({
     super.key,
@@ -179,6 +193,7 @@ class FeaturesEditor extends StatefulWidget {
     this.updatedAt,
     this.updatedBy = '',
     this.activeSeasonKeys = const [],
+    this.isOwner = true,
   });
 
   /// See [FeaturesScreen.activeSeasonKeys].
@@ -293,7 +308,9 @@ class FeaturesEditorState extends State<FeaturesEditor> {
   /// Opens every collapsed page row holding a too-long field.
   void _openInvalidPages() {
     for (final p in CustomizablePages.all) {
-      final bad = _pages[p]!.entries.any((e) => e.value.text.trim().length > pageFieldMax[e.key]!);
+      final bad = _pages[p]!.entries.any(
+            (e) => (f.englishEnabled || !e.key.endsWith('En')) && e.value.text.trim().length > pageFieldMax[e.key]!,
+          );
       if (bad && !_pageCtl[p]!.isExpanded) _pageCtl[p]!.expand();
     }
   }
@@ -504,6 +521,17 @@ class FeaturesEditorState extends State<FeaturesEditor> {
                       onChanged: f.enabled(Sections.milestones) ? (v) => _set(f.copyWith(aboutMilestones: v)) : null,
                     ),
                 ],
+                if (widget.isOwner)
+                  AdminStateSwitch(
+                    key: const ValueKey('features-englishEnabled'),
+                    contentPadding: const EdgeInsetsDirectional.only(start: 4),
+                    title: Text(context.tr('englishEnabledSwitch')),
+                    subtitle: Text(context.tr('englishEnabledHint')),
+                    value: f.englishEnabled,
+                    onLabel: context.tr('switch_enabled'),
+                    offLabel: context.tr('switch_disabled'),
+                    onChanged: (v) => _set(f.copyWith(englishEnabled: v)),
+                  ),
               ], hint: context.tr('sectionsHint')),
               _card(context.tr('homeLayout'), Icons.dashboard_customize_outlined, [
                 ReorderableListView(
@@ -519,9 +547,9 @@ class FeaturesEditorState extends State<FeaturesEditor> {
               ], hint: context.tr('homeLayoutHint')),
               _card(context.tr('heroTexts'), Icons.title_rounded, [
                 _text('heroTitleAr', context.tr('heroTitleAr'), maxLength: 200),
-                _text('heroTitleEn', context.tr('heroTitleEn'), maxLength: 200),
+                if (f.englishEnabled) _text('heroTitleEn', context.tr('heroTitleEn'), maxLength: 200),
                 _text('heroSubtitleAr', context.tr('heroSubtitleAr'), maxLength: 300),
-                _text('heroSubtitleEn', context.tr('heroSubtitleEn'), maxLength: 300),
+                if (f.englishEnabled) _text('heroSubtitleEn', context.tr('heroSubtitleEn'), maxLength: 300),
                 AdminStateSwitch(
                   key: const ValueKey('features-heroMotion'),
                   contentPadding: const EdgeInsetsDirectional.only(start: 4),
@@ -567,8 +595,10 @@ class FeaturesEditorState extends State<FeaturesEditor> {
                   _text('verseTextAr', context.tr('dailyVerseText'),
                       maxLength: DailyVerseConfig.maxText, lines: 3, required: true),
                   _text('verseRefAr', context.tr('dailyVerseRef'), maxLength: DailyVerseConfig.maxRef),
-                  _text('verseTextEn', context.tr('dailyVerseTextEn'), maxLength: DailyVerseConfig.maxText, lines: 3),
-                  _text('verseRefEn', context.tr('dailyVerseRefEn'), maxLength: DailyVerseConfig.maxRef),
+                  if (f.englishEnabled) ...[
+                    _text('verseTextEn', context.tr('dailyVerseTextEn'), maxLength: DailyVerseConfig.maxText, lines: 3),
+                    _text('verseRefEn', context.tr('dailyVerseRefEn'), maxLength: DailyVerseConfig.maxRef),
+                  ],
                 ],
               ], hint: context.tr('dailyVerseHint')),
               _card(context.tr('pageHeadersTitle'), Icons.view_headline_rounded, [
@@ -585,7 +615,7 @@ class FeaturesEditorState extends State<FeaturesEditor> {
                   onChanged: (v) => _set(f.copyWith(bannerEnabled: v)),
                 ),
                 _text('bannerAr', context.tr('bannerAr'), maxLength: 500),
-                _text('bannerEn', context.tr('bannerEn'), maxLength: 500),
+                if (f.englishEnabled) _text('bannerEn', context.tr('bannerEn'), maxLength: 500),
                 _text('bannerLink', context.tr('bannerLink'), maxLength: 500, url: true),
               ]),
               _card(context.tr('footerTitle'), Icons.call_to_action_outlined, [
@@ -606,8 +636,9 @@ class FeaturesEditorState extends State<FeaturesEditor> {
                   ),
                 _text('footerNoteAr', context.tr('footerNoteAr'),
                     maxLength: footerNoteMax, fieldKey: const ValueKey('footer-noteAr'), lines: 2),
-                _text('footerNoteEn', context.tr('footerNoteEn'),
-                    maxLength: footerNoteMax, fieldKey: const ValueKey('footer-noteEn'), lines: 2),
+                if (f.englishEnabled)
+                  _text('footerNoteEn', context.tr('footerNoteEn'),
+                      maxLength: footerNoteMax, fieldKey: const ValueKey('footer-noteEn'), lines: 2),
               ], hint: context.tr('footerHint')),
               _card(context.tr('imageDisplay'), Icons.photo_size_select_large_rounded, [
                 for (final c in ImageStyles.collections)
@@ -697,10 +728,11 @@ class FeaturesEditorState extends State<FeaturesEditor> {
               : null,
           children: [
             for (final e in ctrls.entries)
-              _text('page-$p-${e.key}', context.tr('page_${e.key}'),
-                  maxLength: pageFieldMax[e.key]!,
-                  controller: e.value,
-                  lines: e.key.startsWith('intro') ? 3 : 1),
+              if (f.englishEnabled || !e.key.endsWith('En'))
+                _text('page-$p-${e.key}', context.tr('page_${e.key}'),
+                    maxLength: pageFieldMax[e.key]!,
+                    controller: e.value,
+                    lines: e.key.startsWith('intro') ? 3 : 1),
             if (customized)
               Align(
                 alignment: AlignmentDirectional.centerEnd,

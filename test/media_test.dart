@@ -694,6 +694,9 @@ void main() {
       await tester.tap(find.byKey(const Key('editor-save')));
       await tester.pumpAndSettle();
       expect(calls, isEmpty);
+      expect(find.byKey(const Key('editor-error-summary')), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('error-summary-youtubeUrl')));
+      await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('field-youtubeUrl')), findsOneWidget);
       expect(find.text('Invalid link (must start with https://)'), findsOneWidget);
       expect(find.byKey(const ValueKey('field-detailsAr')), findsNothing, reason: 'valid groups stay closed');

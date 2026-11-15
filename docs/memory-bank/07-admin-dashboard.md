@@ -45,10 +45,10 @@ flowchart TD
 | Sections & home page (`settings/features`), Today & live stream | ✔ | ✔ |
 | Church info (`settings/church`) | ✔ | ✔ |
 | Contact messages: read, mark handled/new, delete | ✔ | ✔ |
-| Owner-only settings: **Admins**, **Contact form types** (`settings/contact`), **AI assistant** (`settings/assistant`), **Season settings** (`venues`, `audiences`, `seasonVerses` in `settings/features`), and **Advanced** (Sentry switch/test, App Check status, VAPID key/queues, APK install settings) | ✘ («ownerOnly» + blocked in `firestore.rules`) | ✔ |
+| Owner-only settings: **Admins**, **Contact form types** (`settings/contact`), **AI assistant** (`settings/assistant`), **Season settings** (`venues`, `audiences`, `seasonVerses` in `settings/features`), **English version switch** (`englishEnabled` in `settings/features`), and **Advanced** (Sentry switch/test, App Check status, VAPID key/queues, APK install settings) | ✘ («ownerOnly» + blocked in `firestore.rules`) | ✔ |
 | Change or remove **themselves** | ✘ | ✘ (UI + rules) → an owner always remains |
 
-The same matrix is enforced server-side by `firestore.rules` (`isAdmin()` vs `isOwner()`, P2-18R).
+The same matrix is enforced server-side by `firestore.rules` (`isAdmin()` vs `isOwner()`, P2-18R, P2-27b).
 
 ## Navigation (`adminDestinations(role)`, PR 3E / P2-18)
 
@@ -75,11 +75,12 @@ signed-in email + role and Sign out.
 ## Screens
 
 ### Overview (`OverviewScreen`, `admin_screens.dart`, PR 3E / P2-23)
-Starts with `AdminScreenHeader`, then **«محتاج انتباهك» (`attention-section` / `attention-all-clear`)** powered by pure Dart `attentionItems(...)` (`lib/domain/attention.dart`) from existing already-watched streams (zero extra Firestore reads): open visitor messages → alerts expiring within 48 hours → unconfirmed (`sample: true`) docs → live stream switched on without a link → missing English translations (when enabled). Each row navigates to its target screen on tap. Below it sit the **6 quick task buttons (`quick-tasks`)** for tasks T1–T6 (`task-schedules`, `task-announcement`, `task-inbox`, `task-service`, `task-priest`, `task-donations`), the compact **Sections summary** card («ملخص الأقسام» + «افتح في الموقع»), and the **8 latest edits** (title, `updatedAt`, `updatedBy`). If the screen is rebuilt with a different backend (`widget.repo`), `didUpdateWidget` cancels and re-subscribes every stream (BUG-18).
+Starts with `AdminScreenHeader`, then **«محتاج انتباهك» (`attention-section` / `attention-all-clear`)** powered by pure Dart `attentionItems(...)` (`lib/domain/attention.dart`) from existing already-watched streams (zero extra Firestore reads): open visitor messages → alerts expiring within 48 hours → unconfirmed (`sample: true`) docs → live stream switched on without a link → missing English translations (counted across `adminCollections` via `englishFieldPairs` + `docMissingEnglish` only when `englishEnabled` is true). Each row navigates to its target screen on tap. Below it sit the **6 quick task buttons (`quick-tasks`)** for tasks T1–T6 (`task-schedules`, `task-announcement`, `task-inbox`, `task-service`, `task-priest`, `task-donations`), the compact **Sections summary** card («ملخص الأقسام» + «افتح في الموقع»), and the **8 latest edits** (title, `updatedAt`, `updatedBy`). If the screen is rebuilt with a different backend (`widget.repo`), `didUpdateWidget` cancels and re-subscribes every stream (BUG-18).
 
 ### Sections & home page (`FeaturesScreen` / `FeaturesEditor`, `features_editor.dart`) → `settings/features`
 - Switch each of the 19 sections on/off (PR #16 added «آية اليوم» / Verse of the day, PR #18 «الأقسام المخصصة» / Custom sections and «الصفحات المخصصة» / Custom pages) (+ "enable all"); labels from `Sections.labels`. **«الصور» /
-  Images**, hides every optional item image site-wide (default on).
+  Images**, hides every optional item image site-wide (default on). For owners (`isOwner`), a separate **«النسخة الإنجليزية»** switch (`ValueKey('features-englishEnabled')`, `settings/features.englishEnabled`, default on) controls the public EN button and hides all `lang: 'en'` fields/subfields across `DocEditor` and `FeaturesEditor` while preserving stored English values across Arabic-only edits (`featuresSaveWrites` omits `englishEnabled` when unchanged so editors never trigger the owner-only rule).
+- **Form error summary banner (`DocEditor`, PR 3G / P2-27a):** When `save()` fails validation, a sticky top banner (`Key('editor-error-summary')`, Arabic dual/pluralized count e.g. «فيه حقلين محتاجين تصحيح») lists every invalid shown field—including fields inside collapsed `ExpansionTile` groups or `advanced` cards; tapping any entry (`ValueKey('error-summary-<id>')`) expands its card if closed, scrolls it into view, and focuses the field; fixing errors clears the summary automatically.
 - **Home layout**: drag to reorder the 7 blocks — or tap **Move up / Move down** (`ValueKey('home-<block>-up|down')`,
   WCAG 2.5.7 single-pointer alternative) — show/hide each; a block whose section is off is flagged
   («blockSectionOff»). Below 600 px the move buttons sit in the tile's subtitle row and only the switch stays

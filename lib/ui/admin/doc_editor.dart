@@ -83,6 +83,9 @@ class DocEditor extends StatefulWidget {
   /// Active/inactive seasons so seasonal liturgies preview override accurately.
   final List<Season> seasons;
 
+  /// Whether English translation fields are shown in the form (P2-27b).
+  final bool englishEnabled;
+
   const DocEditor({
     super.key,
     required this.title,
@@ -102,6 +105,7 @@ class DocEditor extends StatefulWidget {
     this.takenSlugs = const {},
     this.existingDocs = const [],
     this.seasons = const [],
+    this.englishEnabled = true,
   });
 
   @override
@@ -110,15 +114,22 @@ class DocEditor extends StatefulWidget {
 
 class DocEditorState extends State<DocEditor> {
   final _formKey = GlobalKey<FormState>();
+  final _scroll = ScrollController();
   final Map<String, TextEditingController> _text = {};
   final Map<String, dynamic> _values = {};
+  final Map<String, GlobalKey> _fieldKeys = {};
+  final Map<String, FocusNode> _focusNodes = {};
 
   /// objectList rows: field key -> rows of (subKey -> controller / value).
   final Map<String, List<_Row>> _rows = {};
   bool _saving = false;
   bool _dirty = false;
+  bool _showErrorSummary = false;
   bool _initializing = false;
   int _resetEpoch = 0;
+  _FieldErrorEntry? _pendingErrorFocus;
+  int _pendingFocusSteps = 0;
+  double? _lastMaxScrollExtent;
 
   /// Image fields with a picked, compressed file waiting to be uploaded on save.
   final Map<String, EncodedImage> _pending = {};
@@ -138,7 +149,7 @@ class DocEditorState extends State<DocEditor> {
   /// [FieldType.imageList] fields: photos in display order.
   final Map<String, List<_GalleryEntry>> _gallery = {};
 
-  /// Collapsible group cards (opened when they hold an invalid field).
+  /// Collapsible group cards (opened when an error entry is tapped).
   final Map<FieldGroup, ExpansibleController> _groupCtl = {
     for (final g in FieldGroup.values)
       if (g != FieldGroup.basic) g: ExpansibleController(),
@@ -158,8 +169,18 @@ class DocEditorState extends State<DocEditor> {
   bool get dirty => _dirty;
   bool get saving => _saving;
 
+  GlobalKey _fieldKey(String id) => _fieldKeys.putIfAbsent(id, () => GlobalKey());
+  FocusNode _focusNode(String id) => _focusNodes.putIfAbsent(id, () => FocusNode());
+
   bool _isFieldShown(FieldDef f) =>
-      !f.hidden && (f.showWhen == null || f.showWhen!.value.contains(_values[f.showWhen!.key]));
+      !f.hidden &&
+      (widget.englishEnabled || f.lang != 'en') &&
+      (f.showWhen == null || f.showWhen!.value.contains(_values[f.showWhen!.key]));
+
+  bool _isSubFieldShown(FieldDef sf, _Row row) =>
+      !sf.hidden &&
+      (widget.englishEnabled || sf.lang != 'en') &&
+      (sf.showWhen == null || sf.showWhen!.value.contains(row.values[sf.showWhen!.key]));
 
   @override
   void initState() {
@@ -296,13 +317,30 @@ class DocEditorState extends State<DocEditor> {
   TextEditingController _ctrl(String text) => TextEditingController(text: text)..addListener(_markDirty);
 
   void _markDirty() {
-    if (!_initializing && !_dirty && mounted) setState(() => _dirty = true);
+    if (!_initializing && mounted && (!_dirty || _showErrorSummary)) {
+      setState(() {
+        _dirty = true;
+        if (_showErrorSummary && _collectErrors().isEmpty) {
+          _showErrorSummary = false;
+        }
+      });
+    }
+  }
+
+  void _syncErrorSummaryAfterChange() {
+    if (_showErrorSummary && _collectErrors().isEmpty) {
+      _showErrorSummary = false;
+    }
   }
 
   @override
   void dispose() {
+    _scroll.dispose();
     for (final c in _text.values) {
       c.dispose();
+    }
+    for (final n in _focusNodes.values) {
+      n.dispose();
     }
     for (final rows in _rows.values) {
       for (final r in rows) {
@@ -330,7 +368,7 @@ class DocEditorState extends State<DocEditor> {
   Map<String, dynamic> collect() {
     final out = <String, dynamic>{};
     for (final f in widget.fields) {
-      if (f.showWhen != null && !_isFieldShown(f)) {
+      if (f.showWhen != null && !f.showWhen!.value.contains(_values[f.showWhen!.key])) {
         out[f.key] = f.type == FieldType.choice ? '' : null;
         continue;
       }
@@ -383,49 +421,197 @@ class DocEditorState extends State<DocEditor> {
 
   bool get _hasPendingUploads => _pending.isNotEmpty || _gallery.values.any((l) => l.any((g) => g.pending != null));
 
-  /// Opens every collapsed group (and «متقدم») holding an invalid field, so its
-  /// error is never hidden in a closed card. Returns true when one was opened.
-  bool _openInvalidGroups() {
-    final bad = <FieldGroup>{};
-    var badAdvanced = false;
-    for (final f in widget.fields) {
-      if (!_isFieldShown(f)) continue;
+  String _plainLabel(FieldDef f) => context.pick(f.labelAr, f.labelEn);
+
+  /// Collects all invalid currently-shown fields in form order (including those
+  /// inside collapsed advanced/group cards so they appear in the error summary).
+  List<_FieldErrorEntry> _collectErrors() {
+    final out = <_FieldErrorEntry>[];
+    final ordered = <FieldDef>[
+      for (final f in widget.fields)
+        if (f.group == FieldGroup.basic && !f.advanced && _isFieldShown(f)) f,
+      for (final f in widget.fields)
+        if (f.group == FieldGroup.basic && f.advanced && _isFieldShown(f)) f,
+      for (final g in FieldGroup.values)
+        if (g != FieldGroup.basic)
+          for (final f in widget.fields)
+            if (f.group == g && _isFieldShown(f)) f,
+    ];
+    for (final f in ordered) {
+      final group = f.group == FieldGroup.basic ? null : f.group;
+      final advanced = f.group == FieldGroup.basic && f.advanced;
+      if (f.type == FieldType.objectList) {
+        final rows = _rows[f.key] ?? const <_Row>[];
+        for (var i = 0; i < rows.length; i++) {
+          final r = rows[i];
+          final rowMap = {for (final e in r.text.entries) e.key: e.value.text};
+          for (final sf in f.subFields) {
+            if (!_isSubFieldShown(sf, r)) continue;
+            var bad = false;
+            if (sf.type == FieldType.choice) {
+              bad = sf.required && (r.values[sf.key] == null || '${r.values[sf.key]}'.isEmpty);
+            } else if (sf.type != FieldType.boolean && sf.type != FieldType.image && sf.type != FieldType.imageList) {
+              final rc = r.text[sf.key];
+              final fieldBad = rc != null && validateFieldValue(sf, rc.text) != null;
+              final anyOfBad =
+                  f.rowRequireAnyOf.isNotEmpty && f.rowRequireAnyOf.first == sf.key && validateRowAnyOf(f, rowMap) != null;
+              final orderBad = f.rowNotBefore?.key == sf.key && validateRowOrder(f, rowMap) != null;
+              final uniqueBad = f.rowUniqueKey == sf.key &&
+                  validateRowUnique(f, [for (final x in rows) x.text[sf.key]?.text ?? ''], i) != null;
+              bad = fieldBad || anyOfBad || orderBad || uniqueBad;
+            }
+            if (bad) {
+              out.add(_FieldErrorEntry(
+                id: '${f.key}-$i-${sf.key}',
+                label: '${_plainLabel(f)} (${i + 1}) — ${_plainLabel(sf)}',
+                group: group,
+                advanced: advanced,
+                fieldKey: r.keyFor(sf.key),
+                focusNode: r.focusFor(sf.key),
+              ));
+            }
+          }
+        }
+        continue;
+      }
+      if (f.type == FieldType.choice) {
+        if (f.required && (_values[f.key] == null || '${_values[f.key]}'.isEmpty)) {
+          out.add(_FieldErrorEntry(
+            id: f.key,
+            label: _plainLabel(f),
+            group: group,
+            advanced: advanced,
+            fieldKey: _fieldKey(f.key),
+            focusNode: _focusNode(f.key),
+          ));
+        }
+        continue;
+      }
       final c = _text[f.key];
-      final textBad = c != null &&
+      if (c != null &&
           f.type != FieldType.image &&
-          (validateFieldValue(f, c.text) != null || (f.slug && widget.takenSlugs.contains(c.text.trim())));
-      final choiceBad = f.type == FieldType.choice &&
-          f.required &&
-          (_values[f.key] == null || '${_values[f.key]}'.isEmpty);
-      var rowBad = false;
-      for (final r in _rows[f.key] ?? const <_Row>[]) {
-        if (validateRowAnyOf(f, {for (final e in r.text.entries) e.key: e.value.text}) != null) rowBad = true;
-        for (final sf in f.subFields) {
-          final rc = r.text[sf.key];
-          if (rc != null && validateFieldValue(sf, rc.text) != null) rowBad = true;
-        }
-      }
-      if (textBad || choiceBad || rowBad) {
-        if (f.group == FieldGroup.basic && f.advanced) {
-          badAdvanced = true;
-        } else if (f.group != FieldGroup.basic) {
-          bad.add(f.group);
-        }
+          (validateFieldValue(f, c.text) != null || (f.slug && widget.takenSlugs.contains(c.text.trim())))) {
+        out.add(_FieldErrorEntry(
+          id: f.key,
+          label: _plainLabel(f),
+          group: group,
+          advanced: advanced,
+          fieldKey: _fieldKey(f.key),
+          focusNode: _focusNode(f.key),
+        ));
       }
     }
-    var opened = false;
-    if (badAdvanced && !_advancedCtl.isExpanded) {
+    return out;
+  }
+
+  void _applyErrorFocus(_FieldErrorEntry entry, {required bool animate}) {
+    if (!mounted) return;
+    _formKey.currentState?.validate();
+    final ctx = entry.fieldKey.currentContext;
+    if (ctx != null) {
+      Scrollable.ensureVisible(
+        ctx,
+        duration: animate ? const Duration(milliseconds: 200) : Duration.zero,
+        alignment: 0.25,
+      );
+    }
+    if (entry.focusNode.canRequestFocus) {
+      entry.focusNode.requestFocus();
+    }
+  }
+
+  void _focusErrorEntry(_FieldErrorEntry entry) {
+    var expanded = false;
+    if (entry.advanced && !_advancedCtl.isExpanded) {
       _advancedCtl.expand();
-      opened = true;
-    }
-    for (final g in bad) {
-      final c = _groupCtl[g]!;
-      if (!c.isExpanded) {
-        c.expand();
-        opened = true;
+      expanded = true;
+    } else if (entry.group != null) {
+      final ctl = _groupCtl[entry.group];
+      if (ctl != null && !ctl.isExpanded) {
+        ctl.expand();
+        expanded = true;
       }
     }
-    return opened;
+    if (expanded) {
+      _pendingErrorFocus = entry;
+      _pendingFocusSteps = 20;
+      _lastMaxScrollExtent = _scroll.hasClients ? _scroll.position.maxScrollExtent : null;
+      setState(() {});
+    } else {
+      _pendingErrorFocus = null;
+      _pendingFocusSteps = 0;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _applyErrorFocus(entry, animate: !expanded);
+    });
+  }
+
+  Widget _errorSummaryCard(BuildContext context, List<_FieldErrorEntry> errors) {
+    final n = errors.length;
+    final title = switch (n) {
+      1 => context.tr('errSummaryOne'),
+      2 => context.tr('errSummaryTwo'),
+      >= 3 && <= 10 => context.tr('errSummaryFew', {'n': '$n'}),
+      _ => context.tr('errSummaryMany', {'n': '$n'}),
+    };
+    return Semantics(
+      liveRegion: true,
+      child: Card(
+        key: const Key('editor-error-summary'),
+        color: context.pal.alert.withValues(alpha: 0.08),
+        margin: const EdgeInsets.only(bottom: 14),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(color: context.pal.alert.withValues(alpha: 0.5)),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.error_outline, color: context.pal.alert, size: 20),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: TextStyle(color: context.pal.alert, fontWeight: FontWeight.w800),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              for (final e in errors)
+                InkWell(
+                  key: ValueKey('error-summary-${e.id}'),
+                  borderRadius: BorderRadius.circular(8),
+                  onTap: () => _focusErrorEntry(e),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+                    child: Row(
+                      children: [
+                        Icon(Icons.arrow_forward_rounded, size: 16, color: context.pal.alert),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            e.label,
+                            style: TextStyle(
+                              color: context.pal.ink,
+                              fontWeight: FontWeight.w600,
+                              decoration: TextDecoration.underline,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   /// Validates and saves. Returns true on success (visible for tests).
@@ -437,17 +623,15 @@ class DocEditorState extends State<DocEditor> {
   /// that fails leaves the earlier ones saved; a retry sends only the rest.
   Future<bool> save() async {
     if (_saving || _processing != null) return false;
-    final openedCollapsed = _openInvalidGroups();
-    if (openedCollapsed) {
-      setState(() {});
+    final errors = _collectErrors();
+    final valid = _formKey.currentState!.validate();
+    if (!valid || errors.isNotEmpty) {
+      setState(() => _showErrorSummary = true);
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _formKey.currentState?.validate();
+        if (mounted && _scroll.hasClients) {
+          _scroll.animateTo(0, duration: const Duration(milliseconds: 200), curve: Curves.easeOut);
+        }
       });
-    }
-    if (!_formKey.currentState!.validate() || openedCollapsed) {
-      if (openedCollapsed) {
-        ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(content: Text(context.tr('checkHighlighted'))));
-      }
       return false;
     }
     var data = collect();
@@ -520,6 +704,7 @@ class DocEditorState extends State<DocEditor> {
       setState(() {
         _saving = false;
         _dirty = false;
+        _showErrorSummary = false;
       });
       // The admin may have closed the editor while the write was pending:
       // only pop if this editor is still the top route.
@@ -587,6 +772,7 @@ class DocEditorState extends State<DocEditor> {
     _gallery.clear();
     _pending.clear();
     _processing = null;
+    _showErrorSummary = false;
     _initializing = true;
     try {
       for (final f in widget.fields) {
@@ -732,18 +918,19 @@ class DocEditorState extends State<DocEditor> {
     );
   }
 
-  Widget _textField(FieldDef f, TextEditingController c, {String? Function()? rowError}) {
+  Widget _textField(FieldDef f, TextEditingController c, {String? Function()? rowError, FocusNode? focusNode}) {
     if (f.type == FieldType.time || f.type == FieldType.dateTime) {
       // Rebuilds with the value so the 12-hour reading follows each pick.
       return ValueListenableBuilder<TextEditingValue>(
         valueListenable: c,
-        builder: (context, v, _) => _textFieldBody(f, c, rowError, _pickedReading(f, v.text)),
+        builder: (context, v, _) => _textFieldBody(f, c, rowError, _pickedReading(f, v.text), focusNode),
       );
     }
-    return _textFieldBody(f, c, rowError, null);
+    return _textFieldBody(f, c, rowError, null, focusNode);
   }
 
-  Widget _textFieldBody(FieldDef f, TextEditingController c, String? Function()? rowError, String? reading) {
+  Widget _textFieldBody(
+      FieldDef f, TextEditingController c, String? Function()? rowError, String? reading, FocusNode? focusNode) {
     final picked = _picked(f.type);
     final ltr = switch (f.type) {
       FieldType.text || FieldType.multiline => false,
@@ -755,6 +942,7 @@ class DocEditorState extends State<DocEditor> {
     return TextFormField(
       key: ValueKey('field-${f.key}'),
       controller: c,
+      focusNode: focusNode,
       readOnly: picked,
       onTap: picked ? () => _pick(f, c) : null,
       minLines: f.type == FieldType.multiline ? 3 : 1,
@@ -947,7 +1135,12 @@ class DocEditorState extends State<DocEditor> {
     );
   }
 
-  Widget _field(FieldDef f) {
+  Widget _field(FieldDef f) => KeyedSubtree(
+        key: _fieldKey(f.key),
+        child: _fieldBody(f),
+      );
+
+  Widget _fieldBody(FieldDef f) {
     final label = _label(f);
     switch (f.type) {
       case FieldType.boolean:
@@ -1084,6 +1277,7 @@ class DocEditorState extends State<DocEditor> {
         final cur = _values[f.key] as String?;
         return DropdownButtonFormField<String?>(
           key: ValueKey('field-${f.key}'),
+          focusNode: _focusNode(f.key),
           isExpanded: true,
           initialValue: cur,
           decoration: InputDecoration(labelText: label),
@@ -1098,11 +1292,13 @@ class DocEditorState extends State<DocEditor> {
           onChanged: (v) => setState(() {
             _values[f.key] = v;
             _dirty = true;
+            _syncErrorSummaryAfterChange();
           }),
         );
       case FieldType.choice:
         return DropdownButtonFormField<String?>(
           key: ValueKey('field-${f.key}'),
+          focusNode: _focusNode(f.key),
           isExpanded: true, // long labels ellipsize at 320 px / 200% text
           initialValue: _values[f.key] as String?,
           decoration: InputDecoration(
@@ -1122,6 +1318,7 @@ class DocEditorState extends State<DocEditor> {
           onChanged: (v) => setState(() {
             _values[f.key] = v;
             _dirty = true;
+            _syncErrorSummaryAfterChange();
           }),
         );
       case FieldType.objectList:
@@ -1131,7 +1328,7 @@ class DocEditorState extends State<DocEditor> {
       case FieldType.imageList:
         return _galleryEditor(f);
       default:
-        return _textField(f, _text[f.key]!);
+        return _textField(f, _text[f.key]!, focusNode: _focusNode(f.key));
     }
   }
 
@@ -1606,57 +1803,63 @@ class DocEditorState extends State<DocEditor> {
               padding: const EdgeInsets.all(10),
               child: Column(children: [
                 for (final sf in f.subFields)
-                  if (!sf.hidden && (sf.showWhen == null || sf.showWhen!.value.contains(rows[i].values[sf.showWhen!.key])))
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: switch (sf.type) {
-                      FieldType.boolean => AdminStateSwitch(
-                          contentPadding: EdgeInsets.zero,
-                          title: Text(_label(sf)),
-                          value: rows[i].values[sf.key] as bool,
-                          onLabel: _switchLabels(context, sf).$1,
-                          offLabel: _switchLabels(context, sf).$2,
-                          onChanged: (v) => setState(() {
-                            rows[i].values[sf.key] = v;
-                            _dirty = true;
-                          }),
-                        ),
-                      FieldType.choice => DropdownButtonFormField<String>(
-                          isExpanded: true,
-                          initialValue: rows[i].values[sf.key] as String?,
-                          decoration: InputDecoration(labelText: _label(sf)),
-                          items: [
-                            for (final o in sf.options)
-                              DropdownMenuItem(value: o, child: Text(choiceLabel(context, o))),
-                          ],
-                          onChanged: (v) => setState(() {
-                            rows[i].values[sf.key] = v;
-                            _dirty = true;
-                          }),
-                        ),
-                      _ => _textField(sf, rows[i].text[sf.key]!,
-                          rowError: f.rowRequireAnyOf.isNotEmpty && f.rowRequireAnyOf.first == sf.key
-                              ? () {
-                                  final err = validateRowAnyOf(f, {
-                                    for (final e in rows[i].text.entries) e.key: e.value.text,
-                                  });
-                                  return err == null ? null : context.tr(err);
-                                }
-                              : f.rowNotBefore?.key == sf.key
-                                  ? () {
-                                      final err = validateRowOrder(f, {
-                                        for (final e in rows[i].text.entries) e.key: e.value.text,
-                                      });
-                                      return err == null ? null : context.tr(err);
-                                    }
-                                  : f.rowUniqueKey == sf.key
-                                      ? () {
-                                          final err = validateRowUnique(
-                                              f, [for (final r in rows) r.text[sf.key]?.text ?? ''], i);
-                                          return err == null ? null : context.tr(err);
-                                        }
-                                      : null),
-                    },
+                  if (_isSubFieldShown(sf, rows[i]))
+                  KeyedSubtree(
+                    key: rows[i].keyFor(sf.key),
+                    child: Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: switch (sf.type) {
+                        FieldType.boolean => AdminStateSwitch(
+                            contentPadding: EdgeInsets.zero,
+                            title: Text(_label(sf)),
+                            value: rows[i].values[sf.key] as bool,
+                            onLabel: _switchLabels(context, sf).$1,
+                            offLabel: _switchLabels(context, sf).$2,
+                            onChanged: (v) => setState(() {
+                              rows[i].values[sf.key] = v;
+                              _dirty = true;
+                            }),
+                          ),
+                        FieldType.choice => DropdownButtonFormField<String>(
+                            focusNode: rows[i].focusFor(sf.key),
+                            isExpanded: true,
+                            initialValue: rows[i].values[sf.key] as String?,
+                            decoration: InputDecoration(labelText: _label(sf)),
+                            items: [
+                              for (final o in sf.options)
+                                DropdownMenuItem(value: o, child: Text(choiceLabel(context, o))),
+                            ],
+                            onChanged: (v) => setState(() {
+                              rows[i].values[sf.key] = v;
+                              _dirty = true;
+                              _syncErrorSummaryAfterChange();
+                            }),
+                          ),
+                        _ => _textField(sf, rows[i].text[sf.key]!,
+                            focusNode: rows[i].focusFor(sf.key),
+                            rowError: f.rowRequireAnyOf.isNotEmpty && f.rowRequireAnyOf.first == sf.key
+                                ? () {
+                                    final err = validateRowAnyOf(f, {
+                                      for (final e in rows[i].text.entries) e.key: e.value.text,
+                                    });
+                                    return err == null ? null : context.tr(err);
+                                  }
+                                : f.rowNotBefore?.key == sf.key
+                                    ? () {
+                                        final err = validateRowOrder(f, {
+                                          for (final e in rows[i].text.entries) e.key: e.value.text,
+                                        });
+                                        return err == null ? null : context.tr(err);
+                                      }
+                                    : f.rowUniqueKey == sf.key
+                                        ? () {
+                                            final err = validateRowUnique(
+                                                f, [for (final r in rows) r.text[sf.key]?.text ?? ''], i);
+                                            return err == null ? null : context.tr(err);
+                                          }
+                                        : null),
+                      },
+                    ),
                   ),
                 // Wrap: at 320 px / 200% text the buttons flow onto two lines.
                 Wrap(
@@ -1689,6 +1892,7 @@ class DocEditorState extends State<DocEditor> {
                     onPressed: () => setState(() {
                       rows.removeAt(i).dispose();
                       _dirty = true;
+                      _syncErrorSummaryAfterChange();
                     }),
                     icon: Icon(Icons.delete_outline, color: context.pal.alert),
                     label: Text(context.tr('remove'), style: TextStyle(color: context.pal.alert)),
@@ -1743,6 +1947,7 @@ class DocEditorState extends State<DocEditor> {
       for (final f in widget.fields)
         if (f.group == FieldGroup.basic && f.advanced && _isFieldShown(f)) f,
     ];
+    final summaryErrors = _showErrorSummary ? _collectErrors() : const <_FieldErrorEntry>[];
     return UnsavedGuard(
       dirty: _dirty,
       handlePop: widget.popOnSave,
@@ -1772,39 +1977,63 @@ class DocEditorState extends State<DocEditor> {
           child: Center(
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 760),
-              child: ListView(
-                padding: const EdgeInsets.all(16),
-                children: [
-                  if (embedded && (widget.title.isNotEmpty || widget.help.isNotEmpty))
-                    AdminScreenHeader(
-                      title: widget.title,
-                      help: widget.help,
-                      padding: const EdgeInsets.only(bottom: 12),
-                    ),
-                  if (widget.docId != null)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: SelectableText('ID: ${widget.docId}', style: TextStyle(color: context.pal.muted)),
-                    ),
-                  for (final f in widget.fields)
-                    if (f.group == FieldGroup.basic && !f.advanced && _isFieldShown(f))
-                      Padding(padding: const EdgeInsets.only(bottom: 12), child: _field(f)),
-                  if (advancedFields.isNotEmpty) _advancedCard(advancedFields),
-                  for (final g in FieldGroup.values)
-                    if (g != FieldGroup.basic && widget.fields.any((f) => f.group == g && _isFieldShown(f)))
-                      _groupCard(g),
-                  const SizedBox(height: 8),
-                  FilledButton.icon(
-                    key: const Key('editor-save'),
-                    onPressed: _saving ? null : save,
-                    icon: _saving
-                        ? SizedBox.square(
-                            dimension: 18, child: CircularProgressIndicator(strokeWidth: 2, color: context.pal.onBar))
-                        : const Icon(Icons.save),
-                    label: Text(context.tr('save')),
+              child: NotificationListener<ScrollMetricsNotification>(
+                onNotification: (n) {
+                  final target = _pendingErrorFocus;
+                  if (target == null) return false;
+                  if (_lastMaxScrollExtent == n.metrics.maxScrollExtent) return false;
+                  _lastMaxScrollExtent = n.metrics.maxScrollExtent;
+                  if (_pendingFocusSteps <= 0) {
+                    _pendingErrorFocus = null;
+                    return false;
+                  }
+                  _pendingFocusSteps--;
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (_pendingErrorFocus == target) {
+                      _applyErrorFocus(target, animate: false);
+                    }
+                  });
+                  return false;
+                },
+                child: SingleChildScrollView(
+                  controller: _scroll,
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (embedded && (widget.title.isNotEmpty || widget.help.isNotEmpty))
+                        AdminScreenHeader(
+                          title: widget.title,
+                          help: widget.help,
+                          padding: const EdgeInsets.only(bottom: 12),
+                        ),
+                      if (widget.docId != null)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: SelectableText('ID: ${widget.docId}', style: TextStyle(color: context.pal.muted)),
+                        ),
+                      if (summaryErrors.isNotEmpty) _errorSummaryCard(context, summaryErrors),
+                      for (final f in widget.fields)
+                        if (f.group == FieldGroup.basic && !f.advanced && _isFieldShown(f))
+                          Padding(padding: const EdgeInsets.only(bottom: 12), child: _field(f)),
+                      if (advancedFields.isNotEmpty) _advancedCard(advancedFields),
+                      for (final g in FieldGroup.values)
+                        if (g != FieldGroup.basic && widget.fields.any((f) => f.group == g && _isFieldShown(f)))
+                          _groupCard(g),
+                      const SizedBox(height: 8),
+                      FilledButton.icon(
+                        key: const Key('editor-save'),
+                        onPressed: _saving ? null : save,
+                        icon: _saving
+                            ? SizedBox.square(
+                                dimension: 18, child: CircularProgressIndicator(strokeWidth: 2, color: context.pal.onBar))
+                            : const Icon(Icons.save),
+                        label: Text(context.tr('save')),
+                      ),
+                      const SizedBox(height: 40),
+                    ],
                   ),
-                  const SizedBox(height: 40),
-                ],
+                ),
               ),
             ),
           ),
@@ -1812,6 +2041,23 @@ class DocEditorState extends State<DocEditor> {
       ),
     );
   }
+}
+
+class _FieldErrorEntry {
+  final String id;
+  final String label;
+  final FieldGroup? group;
+  final bool advanced;
+  final GlobalKey fieldKey;
+  final FocusNode focusNode;
+  const _FieldErrorEntry({
+    required this.id,
+    required this.label,
+    required this.fieldKey,
+    required this.focusNode,
+    this.group,
+    this.advanced = false,
+  });
 }
 
 /// Asks for an https image link (owns its controller, so it is disposed
@@ -1898,8 +2144,13 @@ class _Pill extends StatelessWidget {
 class _Row {
   final Map<String, TextEditingController> text = {};
   final Map<String, Object?> values = {};
+  final Map<String, FocusNode> focus = {};
+  final Map<String, GlobalKey> keys = {};
   final List<FieldDef> fields;
   _Row(this.fields);
+
+  FocusNode focusFor(String k) => focus.putIfAbsent(k, () => FocusNode());
+  GlobalKey keyFor(String k) => keys.putIfAbsent(k, () => GlobalKey());
 
   factory _Row.from(List<FieldDef> fields, Map data, VoidCallback onChange, {bool isNew = false}) {
     final r = _Row(fields);
@@ -1934,6 +2185,9 @@ class _Row {
   void dispose() {
     for (final c in text.values) {
       c.dispose();
+    }
+    for (final f in focus.values) {
+      f.dispose();
     }
   }
 }

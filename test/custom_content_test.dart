@@ -757,6 +757,9 @@ void main() {
 
       await tester.tap(find.byKey(const Key('editor-save')));
       await tester.pumpAndSettle();
+      expect(find.byKey(const Key('editor-error-summary')), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('error-summary-slug')));
+      await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('field-slug')).hitTestable(), findsOneWidget);
     });
 

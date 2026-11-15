@@ -2835,6 +2835,7 @@ void main() {
           'alerts': [
             AdminDoc('a1', {
               'titleAr': 'تنويه',
+              'titleEn': 'Notice',
               'visible': true,
               'active': true,
               'endsAt': fixedNow.add(const Duration(days: 5)),
@@ -2913,6 +2914,7 @@ void main() {
           'alerts': [
             AdminDoc('a1', {
               'titleAr': 'تنويه',
+              'titleEn': 'Notice',
               'visible': true,
               'active': true,
               'endsAt': endsAt,
@@ -3135,7 +3137,7 @@ void main() {
       expect(find.descendant(of: find.byKey(const ValueKey('groupCard-advanced')), matching: find.text('خيارات متقدمة')),
           findsOneWidget);
 
-      // Put invalid input into advanced field while closed -> save opens the card and blocks save.
+      // Put invalid input into advanced field while closed -> save shows error summary; tapping summary opens the card.
       await tester.pumpWidget(_app(
         DocEditor(
           key: const ValueKey('priest-bad-adv'),
@@ -3153,6 +3155,9 @@ void main() {
       await tester.tap(find.byKey(const Key('editor-save')));
       await tester.pumpAndSettle();
       expect(saved, isNull);
+      expect(find.byKey(const Key('editor-error-summary')), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('error-summary-order')));
+      await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('field-order')).hitTestable(), findsOneWidget);
 
       // Valid values under closed advanced card still save without needing to expand it.
@@ -3194,6 +3199,334 @@ void main() {
         ));
         await tester.pumpAndSettle();
         expect(tester.takeException(), isNull, reason: 'locale=${locale.languageCode}');
+      }
+    });
+  });
+
+  group('PR 3G: P2-27a & P2-27b — error summary banner & English switch', () {
+    testWidgets('P2-27a: two invalid fields show summary of 2, tap opens card + focuses field, fixing clears summary',
+        (tester) async {
+      tester.view.physicalSize = const Size(800, 1400);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final priestDef = collectionById('priests')!;
+      Map<String, dynamic>? saved;
+      await tester.pumpWidget(_app(
+        DocEditor(
+          key: const ValueKey('err-summary-editor'),
+          title: 'الآباء',
+          fields: priestDef.fields,
+          def: priestDef,
+          popOnSave: false,
+          data: const {'name': '', 'rank': 'priest', 'status': 'serving', 'order': 'not-int'},
+          onSave: (d) async => saved = d,
+        ),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('editor-save')));
+      await tester.pumpAndSettle();
+
+      expect(saved, isNull);
+      expect(find.byKey(const Key('editor-error-summary')), findsOneWidget);
+      expect(find.text('فيه حقلين محتاجين تصحيح'), findsOneWidget);
+      expect(find.byKey(const ValueKey('error-summary-name')), findsOneWidget);
+      expect(find.byKey(const ValueKey('error-summary-order')), findsOneWidget);
+
+      // Tapping the order entry expands the closed advanced card and focuses field-order.
+      await tester.tap(find.byKey(const ValueKey('error-summary-order')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('field-order')).hitTestable(), findsOneWidget);
+      final orderFocus = FocusManager.instance.primaryFocus;
+      expect(orderFocus, isNotNull);
+      expect(
+        find.ancestor(of: find.byWidgetPredicate((w) => w is Focus && w.focusNode == orderFocus), matching: find.byKey(const ValueKey('field-order'))),
+        findsOneWidget,
+      );
+
+      // Fixing both invalid fields clears the error summary automatically.
+      await tester.enterText(find.byKey(const ValueKey('field-order')), '5');
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('editor-error-summary')), findsOneWidget);
+      expect(find.text('فيه حقل واحد محتاج تصحيح'), findsOneWidget);
+
+      await tester.ensureVisible(find.byKey(const ValueKey('field-name')));
+      await tester.enterText(find.byKey(const ValueKey('field-name')), 'أبونا يوحنا');
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('editor-error-summary')), findsNothing);
+    });
+
+    testWidgets('P2-27b: FeaturesEditor shows englishEnabled switch for owner only and saves only when changed',
+        (tester) async {
+      tester.view.physicalSize = const Size(1000, 3200);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      FeatureSettings? saved;
+      await tester.pumpWidget(_app(
+        Scaffold(
+          body: FeaturesEditor(
+            key: const ValueKey('feat-editor-role'),
+            initial: FeatureSettings.defaults,
+            isOwner: false,
+            onSave: (f) async => saved = f,
+          ),
+        ),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('features-englishEnabled')), findsNothing);
+
+      await tester.pumpWidget(_app(
+        Scaffold(
+          body: FeaturesEditor(
+            key: const ValueKey('feat-owner-role'),
+            initial: FeatureSettings.defaults,
+            isOwner: true,
+            onSave: (f) async => saved = f,
+          ),
+        ),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+      final swFinder = find.byKey(const ValueKey('features-englishEnabled'));
+      expect(swFinder, findsOneWidget);
+      expect(tester.widget<AdminStateSwitch>(swFinder).value, isTrue);
+
+      await tester.ensureVisible(swFinder);
+      await tester.tap(swFinder);
+      await tester.pumpAndSettle();
+      expect(tester.widget<AdminStateSwitch>(swFinder).value, isFalse);
+
+      // English text fields in FeaturesEditor disappear when englishEnabled is toggled off.
+      expect(find.text('عنوان الصفحة الرئيسية (إنجليزي)'), findsNothing);
+
+      await tester.tap(find.byKey(const Key('features-save')));
+      await tester.pumpAndSettle();
+      expect(saved?.englishEnabled, isFalse);
+
+      // featuresSaveWrites omits englishEnabled when unchanged from stored doc (safe for editors).
+      final editorWrites = featuresSaveWrites(
+        FeatureSettings.defaults.copyWith(theme: 'navy'),
+        FeatureSettings.defaults.toMap(),
+      );
+      expect(editorWrites.first.containsKey('englishEnabled'), isFalse);
+
+      final ownerWrites = featuresSaveWrites(
+        FeatureSettings.defaults.copyWith(englishEnabled: false),
+        FeatureSettings.defaults.toMap(),
+      );
+      expect(ownerWrites.first['englishEnabled'], isFalse);
+    });
+
+    testWidgets('P2-27b: DocEditor(englishEnabled: false) hides EN fields, saves Arabic-only, & preserves stored EN',
+        (tester) async {
+      tester.view.physicalSize = const Size(1000, 3200);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      Map<String, dynamic>? saved;
+      final existingChurch = <String, dynamic>{
+        'nameAr': 'كنيسة القديسين',
+        'nameEn': 'St. Maximus Church',
+        'addressAr': 'شارع ٤٥، العصافرة',
+        'verseAr': 'الرب نوري',
+        'verseEn': 'The Lord is my light',
+        'verseRefAr': 'مز ٢٧: ١',
+        'verseRef': 'Ps 27:1',
+        'phones': [
+          {'labelAr': 'المكتب', 'labelEn': 'Office', 'number': '035368888'},
+        ],
+        'altars': [
+          {'nameAr': 'مذبح العذراء', 'nameEn': 'St. Mary Altar'},
+        ],
+      };
+
+      // 1. Arabic-only new church info doc saves even though nameEn is marked required in schema.
+      await tester.pumpWidget(_app(
+        DocEditor(
+          key: const ValueKey('church-ar-only'),
+          title: churchInfoDoc.labelAr,
+          fields: churchInfoDoc.fields,
+          popOnSave: false,
+          englishEnabled: false,
+          onSave: (d) async => saved = d,
+        ),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('field-nameEn')), findsNothing);
+      expect(find.byKey(const ValueKey('field-verseEn')), findsNothing);
+      expect(find.byKey(const ValueKey('field-verseRef')), findsNothing);
+
+      await tester.enterText(find.byKey(const ValueKey('field-nameAr')), 'كنيسة العصافرة');
+      await tester.enterText(find.byKey(const ValueKey('field-addressAr')), 'شارع ٤٥، العصافرة');
+      await tester.tap(find.byKey(const Key('editor-save')));
+      await tester.pumpAndSettle();
+      expect(saved, isNotNull);
+      expect(saved!['nameAr'], 'كنيسة العصافرة');
+
+      // 2. Editing an existing doc while englishEnabled is false preserves stored EN fields & subfields untouched.
+      saved = null;
+      await tester.pumpWidget(_app(
+        DocEditor(
+          key: const ValueKey('church-preserve-en'),
+          title: churchInfoDoc.labelAr,
+          fields: churchInfoDoc.fields,
+          data: existingChurch,
+          popOnSave: false,
+          englishEnabled: false,
+          onSave: (d) async => saved = d,
+        ),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('field-nameEn')), findsNothing);
+      expect(find.text('Office'), findsNothing);
+      expect(find.text('St. Mary Altar'), findsNothing);
+
+      await tester.enterText(find.byKey(const ValueKey('field-nameAr')).first, 'كنيسة القديسين الجديدة');
+      await tester.tap(find.byKey(const Key('editor-save')));
+      await tester.pumpAndSettle();
+      expect(saved, {'nameAr': 'كنيسة القديسين الجديدة'});
+
+      // 3. Reopening with englishEnabled: true restores stored English values.
+      await tester.pumpWidget(_app(
+        DocEditor(
+          key: const ValueKey('church-restored-en'),
+          title: churchInfoDoc.labelAr,
+          fields: churchInfoDoc.fields,
+          data: {...existingChurch, ...?saved},
+          popOnSave: false,
+          englishEnabled: true,
+          onSave: (_) async {},
+        ),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('field-nameEn')), findsNWidgets(2));
+      expect(find.text('St. Maximus Church'), findsOneWidget);
+      expect(find.text('The Lord is my light'), findsOneWidget);
+      expect(find.text('Office'), findsOneWidget);
+      expect(find.text('St. Mary Altar'), findsOneWidget);
+    });
+
+    testWidgets('P2-27b: OverviewScreen counts missing English only when englishEnabled is true', (tester) async {
+      final opened = <String>[];
+      final cols = <String, List<AdminDoc>>{
+        'liturgies': [
+          AdminDoc('l1', {'nameAr': 'قداس أول', 'nameEn': '', 'sample': false}),
+        ],
+      };
+
+      final repoOn = _TestAdminBackend(
+        initialDocs: {
+          'settings/features': {'liveEnabled': false, 'englishEnabled': true},
+        },
+        initialCollections: cols,
+      );
+      await tester.pumpWidget(_app(
+        OverviewScreen(
+          key: const ValueKey('ov-en-on'),
+          repo: repoOn,
+          role: AdminRoles.editor,
+          onOpen: opened.add,
+          now: () => DateTime.utc(2026, 11, 14, 12, 0),
+        ),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+      final tile = find.byKey(const ValueKey('attention-missingEnglish'));
+      expect(tile, findsOneWidget);
+      await tester.tap(tile);
+      expect(opened, ['liturgies']);
+
+      final repoOff = _TestAdminBackend(
+        initialDocs: {
+          'settings/features': {'liveEnabled': false, 'englishEnabled': false},
+        },
+        initialCollections: cols,
+      );
+      await tester.pumpWidget(_app(
+        OverviewScreen(
+          key: const ValueKey('ov-en-off'),
+          repo: repoOff,
+          role: AdminRoles.editor,
+          onOpen: (_) {},
+          now: () => DateTime.utc(2026, 11, 14, 12, 0),
+        ),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('attention-missingEnglish')), findsNothing);
+      expect(find.byKey(const ValueKey('attention-all-clear')), findsOneWidget);
+    });
+
+    testWidgets('P2-27a/b: 320px at 200% RTL/LTR without overflow & Criterion S3 check for non-owner', (tester) async {
+      tester.view.physicalSize = const Size(320, 6000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      tester.platformDispatcher.textScaleFactorTestValue = 2.0;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+
+      final priestDef = collectionById('priests')!;
+      for (final locale in [const Locale('ar'), const Locale('en')]) {
+        await tester.pumpWidget(_app(
+          DocEditor(
+            key: ValueKey('err-320-${locale.languageCode}'),
+            title: priestDef.labelAr,
+            fields: priestDef.fields,
+            def: priestDef,
+            popOnSave: false,
+            englishEnabled: false,
+            data: const {'name': '', 'rank': 'priest', 'status': 'serving', 'order': 'bad'},
+            onSave: (_) async {},
+          ),
+          locale: locale,
+        ));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('editor-save')));
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('editor-error-summary')), findsOneWidget);
+        expect(tester.takeException(), isNull, reason: 'DocEditor summary locale=${locale.languageCode}');
+
+        await tester.pumpWidget(_app(
+          Scaffold(
+            body: FeaturesEditor(
+              key: ValueKey('feat-320-${locale.languageCode}'),
+              initial: FeatureSettings.defaults,
+              isOwner: true,
+              onSave: (_) async {},
+            ),
+          ),
+          locale: locale,
+        ));
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull, reason: 'FeaturesEditor locale=${locale.languageCode}');
+      }
+
+      // Criterion S3: no technical English terms in Arabic non-owner FeaturesEditor or DocEditor.
+      tester.platformDispatcher.clearTextScaleFactorTestValue();
+      await tester.pumpWidget(_app(
+        Scaffold(
+          body: FeaturesEditor(
+            key: const ValueKey('feat-s3'),
+            initial: FeatureSettings.defaults.copyWith(englishEnabled: false),
+            isOwner: false,
+            onSave: (_) async {},
+          ),
+        ),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+      final allText = tester
+          .widgetList<Text>(find.byType(Text))
+          .map((t) => t.data ?? t.textSpan?.toPlainText() ?? '')
+          .join(' ');
+      for (final banned in ['Firebase', 'UID', 'App Check', 'Sentry', 'APK', 'HH:mm']) {
+        expect(allText, isNot(contains(banned)));
       }
     });
   });

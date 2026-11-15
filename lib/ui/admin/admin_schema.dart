@@ -158,6 +158,10 @@ class FieldDef {
   /// Placed inside the collapsed «متقدم» section of [DocEditor] (P1-14).
   final bool advanced;
 
+  /// Language tag for optional translation fields (e.g. 'en' when controlled
+  /// by settings/features.englishEnabled; P2-27b).
+  final String lang;
+
   const FieldDef(this.key, this.labelAr, this.labelEn, this.type,
       {this.required = false,
       this.options = const [],
@@ -188,7 +192,8 @@ class FieldDef {
       this.intOptions = const [],
       this.defaultIntValues = const [],
       this.hidden = false,
-      this.advanced = false});
+      this.advanced = false,
+      this.lang = ''});
 
   int get effectiveMaxLength => maxLength > 0
       ? maxLength
@@ -326,7 +331,7 @@ const _detailsGroup = [
   FieldDef('detailsAr', 'التفاصيل (عربي)', 'Details (Arabic)', FieldType.multiline,
       maxLength: 10000, group: FieldGroup.details),
   FieldDef('detailsEn', 'التفاصيل (إنجليزي)', 'Details (English)', FieldType.multiline,
-      maxLength: 10000, group: FieldGroup.details),
+      maxLength: 10000, group: FieldGroup.details, lang: 'en'),
   FieldDef('extraFields', 'حقول إضافية (عنوان: قيمة)', 'Extra fields (title: value)', FieldType.objectList,
       maxRows: 15,
       group: FieldGroup.details,
@@ -334,9 +339,9 @@ const _detailsGroup = [
       rowRequireAnyOf: ['titleAr', 'titleEn'],
       subFields: [
         FieldDef('titleAr', 'العنوان (عربي)', 'Title (Arabic)', FieldType.text, maxLength: 150),
-        FieldDef('titleEn', 'العنوان (إنجليزي)', 'Title (English)', FieldType.text, maxLength: 150),
+        FieldDef('titleEn', 'العنوان (إنجليزي)', 'Title (English)', FieldType.text, maxLength: 150, lang: 'en'),
         FieldDef('valueAr', 'القيمة (عربي)', 'Value (Arabic)', FieldType.multiline, maxLength: 2000),
-        FieldDef('valueEn', 'القيمة (إنجليزي)', 'Value (English)', FieldType.multiline, maxLength: 2000),
+        FieldDef('valueEn', 'القيمة (إنجليزي)', 'Value (English)', FieldType.multiline, maxLength: 2000, lang: 'en'),
       ]),
 ];
 
@@ -387,12 +392,12 @@ const _contactTail = [
   FieldDef('externalLabelAr', 'نص زر الرابط (عربي)', 'Link button text (Arabic)', FieldType.text,
       maxLength: 80, group: FieldGroup.contacts),
   FieldDef('externalLabelEn', 'نص زر الرابط (إنجليزي)', 'Link button text (English)', FieldType.text,
-      maxLength: 80, group: FieldGroup.contacts),
+      maxLength: 80, group: FieldGroup.contacts, lang: 'en'),
   FieldDef('contactNoteAr', 'طريقة التواصل / التسجيل (عربي)', 'How to contact / register (Arabic)', FieldType.multiline,
       maxLength: 500, group: FieldGroup.contacts),
   FieldDef('contactNoteEn', 'طريقة التواصل / التسجيل (إنجليزي)', 'How to contact / register (English)',
       FieldType.multiline,
-      maxLength: 500, group: FieldGroup.contacts),
+      maxLength: 500, group: FieldGroup.contacts, lang: 'en'),
 ];
 
 /// Contacts for milestones and saints (no top-level phone field).
@@ -432,8 +437,8 @@ const _priestFields = [
   FieldDef('bioAr', 'نبذة (عربي)', 'Bio (Arabic)', FieldType.multiline),
   _visibleField,
   _sampleField,
-  FieldDef('nameEn', 'الاسم (إنجليزي)', 'Name (English)', FieldType.text, advanced: true),
-  FieldDef('bioEn', 'نبذة (إنجليزي)', 'Bio (English)', FieldType.multiline, advanced: true),
+  FieldDef('nameEn', 'الاسم (إنجليزي)', 'Name (English)', FieldType.text, advanced: true, lang: 'en'),
+  FieldDef('bioEn', 'نبذة (إنجليزي)', 'Bio (English)', FieldType.multiline, advanced: true, lang: 'en'),
   _orderField,
   ..._detailsGroup,
   ..._mediaExtraGroup, // image replaces the legacy photoUrl text field (still read as a fallback)
@@ -450,13 +455,14 @@ const _programGroup = [
       hintAr: 'مثل: نيافة الأنبا … أو القمص … (يظهر في البطاقة وصفحة التفاصيل)',
       hintEn: 'E.g. His Grace Bishop … or Fr … (shown on the card and the detail page)'),
   FieldDef('speakerEn', 'المتكلم / الواعظ (إنجليزي)', 'Speaker / preacher (English)', FieldType.text,
-      maxLength: 200, group: FieldGroup.program),
+      maxLength: 200, group: FieldGroup.program, lang: 'en'),
   FieldDef('topicAr', 'الموضوع / عنوان العظة (عربي)', 'Topic / sermon title (Arabic)', FieldType.text,
       maxLength: 300, group: FieldGroup.program),
   FieldDef('topicEn', 'الموضوع / عنوان العظة (إنجليزي)', 'Topic / sermon title (English)', FieldType.text,
-      maxLength: 300, group: FieldGroup.program),
+      maxLength: 300, group: FieldGroup.program, lang: 'en'),
   FieldDef('choirAr', 'فريق الكورال (عربي)', 'Choir (Arabic)', FieldType.text, maxLength: 200, group: FieldGroup.program),
-  FieldDef('choirEn', 'فريق الكورال (إنجليزي)', 'Choir (English)', FieldType.text, maxLength: 200, group: FieldGroup.program),
+  FieldDef('choirEn', 'فريق الكورال (إنجليزي)', 'Choir (English)', FieldType.text,
+      maxLength: 200, group: FieldGroup.program, lang: 'en'),
   FieldDef('venue', 'المكان / القاعة', 'Venue / hall', FieldType.choice,
       dynamicOptions: 'venues', nullableChoice: true, group: FieldGroup.program,
       hintAr: 'القائمة من «إعدادات المواسم». صلوات في نفس الوقت بأماكن مختلفة تظهر معًا («وفي نفس الوقت: …»).',
@@ -474,7 +480,7 @@ const _programGroup = [
       maxLength: 80, group: FieldGroup.program),
   FieldDef('attachmentLabelEn', 'نص زر الملف (إنجليزي)', 'File button text (English, blank = "Programme / booklet")',
       FieldType.text,
-      maxLength: 80, group: FieldGroup.program),
+      maxLength: 80, group: FieldGroup.program, lang: 'en'),
 ];
 
 const adminCollections = <CollectionDef>[
@@ -486,8 +492,9 @@ const adminCollections = <CollectionDef>[
     FieldDef('startsAt', 'يبدأ', 'Starts', FieldType.dateTime),
     FieldDef('endsAt', 'ينتهي', 'Ends', FieldType.dateTime),
     _visibleField,
-    FieldDef('titleEn', 'العنوان (إنجليزي)', 'Title (English)', FieldType.text, advanced: true),
-    FieldDef('bodyEn', 'النص (إنجليزي)', 'Body (English)', FieldType.multiline, maxLength: 1000, advanced: true),
+    FieldDef('titleEn', 'العنوان (إنجليزي)', 'Title (English)', FieldType.text, advanced: true, lang: 'en'),
+    FieldDef('bodyEn', 'النص (إنجليزي)', 'Body (English)', FieldType.multiline,
+        maxLength: 1000, advanced: true, lang: 'en'),
     FieldDef('priority', 'الأولوية (الأعلى يظهر أولًا)', 'Priority (higher shows first)', FieldType.integer,
         min: 0, max: 1000, advanced: true),
     FieldDef('link', 'رابط «اعرف المزيد» (صفحة، قسم أو رابط خارجي)', '"Learn more" link (a page, a section or an external URL)',
@@ -532,7 +539,7 @@ const adminCollections = <CollectionDef>[
         hintAr: 'للموسم الإضافي فقط (المفتاح أعلاه مغلق): في هذه الأيام تُخفى القداسات والصلوات العادية التي تبدأ داخل الموسم، مثل ليلة العيد. باقي الأيام يبقى الجدول العادي.',
         hintEn: 'Additive seasons only (the switch above off): on these days the regular services starting inside the season are hidden, e.g. the feast night. Every other day keeps the regular schedule.'),
     _imageField,
-    FieldDef('nameEn', 'الاسم (إنجليزي)', 'Name (English)', FieldType.text, advanced: true),
+    FieldDef('nameEn', 'الاسم (إنجليزي)', 'Name (English)', FieldType.text, advanced: true, lang: 'en'),
     _imageStyleFieldFlat,
     ..._programGroup,
   ], [
@@ -566,9 +573,10 @@ const adminCollections = <CollectionDef>[
             'not replace the regular schedule.'),
     _visibleField,
     _sampleField,
-    FieldDef('nameEn', 'الاسم (إنجليزي)', 'Name (English)', FieldType.text, advanced: true),
-    FieldDef('placeEn', 'المكان (إنجليزي)', 'Place (English)', FieldType.text, advanced: true),
-    FieldDef('audienceEn', 'الفئة/ملاحظات (إنجليزي)', 'Audience/notes (English)', FieldType.text, advanced: true),
+    FieldDef('nameEn', 'الاسم (إنجليزي)', 'Name (English)', FieldType.text, advanced: true, lang: 'en'),
+    FieldDef('placeEn', 'المكان (إنجليزي)', 'Place (English)', FieldType.text, advanced: true, lang: 'en'),
+    FieldDef('audienceEn', 'الفئة/ملاحظات (إنجليزي)', 'Audience/notes (English)', FieldType.text,
+        advanced: true, lang: 'en'),
     _orderField,
     ..._programGroup,
   ], [
@@ -598,8 +606,8 @@ const adminCollections = <CollectionDef>[
     FieldDef('notes', 'ملاحظات', 'Notes', FieldType.text),
     _visibleField,
     _sampleField,
-    FieldDef('nameEn', 'الاسم (إنجليزي)', 'Name (English)', FieldType.text, advanced: true),
-    FieldDef('hallEn', 'القاعة (إنجليزي)', 'Hall (English)', FieldType.text, advanced: true),
+    FieldDef('nameEn', 'الاسم (إنجليزي)', 'Name (English)', FieldType.text, advanced: true, lang: 'en'),
+    FieldDef('hallEn', 'القاعة (إنجليزي)', 'Hall (English)', FieldType.text, advanced: true, lang: 'en'),
     _orderField,
     ..._programGroup,
     ..._detailsGroup,
@@ -634,8 +642,8 @@ const adminCollections = <CollectionDef>[
     FieldDef('active', 'مُفعّلة', 'Active', FieldType.boolean, missingBool: true), // Clinic.fromMap: absent = active
     _visibleField,
     _sampleField,
-    FieldDef('specialtyEn', 'التخصص (إنجليزي)', 'Specialty (English)', FieldType.text, advanced: true),
-    FieldDef('degreeEn', 'الدرجة العلمية (إنجليزي)', 'Degree (English)', FieldType.text, advanced: true),
+    FieldDef('specialtyEn', 'التخصص (إنجليزي)', 'Specialty (English)', FieldType.text, advanced: true, lang: 'en'),
+    FieldDef('degreeEn', 'الدرجة العلمية (إنجليزي)', 'Degree (English)', FieldType.text, advanced: true, lang: 'en'),
     _orderField,
     ..._detailsGroup,
     ..._mediaExtraGroup,
@@ -666,9 +674,10 @@ const adminCollections = <CollectionDef>[
     FieldDef('descAr', 'الوصف (عربي)', 'Description (Arabic)', FieldType.multiline, maxLength: 2000),
     _visibleField,
     _sampleField,
-    FieldDef('nameEn', 'الاسم (إنجليزي)', 'Name (English)', FieldType.text, advanced: true),
-    FieldDef('hoursEn', 'المواعيد (إنجليزي)', 'Hours (English)', FieldType.text, advanced: true),
-    FieldDef('descEn', 'الوصف (إنجليزي)', 'Description (English)', FieldType.multiline, maxLength: 2000, advanced: true),
+    FieldDef('nameEn', 'الاسم (إنجليزي)', 'Name (English)', FieldType.text, advanced: true, lang: 'en'),
+    FieldDef('hoursEn', 'المواعيد (إنجليزي)', 'Hours (English)', FieldType.text, advanced: true, lang: 'en'),
+    FieldDef('descEn', 'الوصف (إنجليزي)', 'Description (English)', FieldType.multiline,
+        maxLength: 2000, advanced: true, lang: 'en'),
     _orderField,
     ..._detailsGroup,
     ..._mediaExtraGroup,
@@ -702,9 +711,10 @@ const adminCollections = <CollectionDef>[
     FieldDef('descAr', 'الوصف (عربي)', 'Description (Arabic)', FieldType.multiline, maxLength: 2000),
     _visibleField,
     _sampleField,
-    FieldDef('titleEn', 'العنوان (إنجليزي)', 'Title (English)', FieldType.text, advanced: true),
-    FieldDef('scheduleEn', 'المواعيد (إنجليزي)', 'Schedule (English)', FieldType.text, advanced: true),
-    FieldDef('descEn', 'الوصف (إنجليزي)', 'Description (English)', FieldType.multiline, maxLength: 2000, advanced: true),
+    FieldDef('titleEn', 'العنوان (إنجليزي)', 'Title (English)', FieldType.text, advanced: true, lang: 'en'),
+    FieldDef('scheduleEn', 'المواعيد (إنجليزي)', 'Schedule (English)', FieldType.text, advanced: true, lang: 'en'),
+    FieldDef('descEn', 'الوصف (إنجليزي)', 'Description (English)', FieldType.multiline,
+        maxLength: 2000, advanced: true, lang: 'en'),
     _orderField,
     ..._detailsGroup,
     ..._mediaExtraGroup,
@@ -739,11 +749,12 @@ const adminCollections = <CollectionDef>[
     FieldDef('feastCopticAr', 'العيد بالتقويم القبطي (عربي)', 'Coptic feast (Arabic)', FieldType.text),
     FieldDef('feastGregorianAr', 'العيد بالتقويم الميلادي (عربي)', 'Gregorian feast (Arabic)', FieldType.text),
     _visibleField,
-    FieldDef('nameEn', 'الاسم (إنجليزي)', 'Name (English)', FieldType.text, advanced: true),
-    FieldDef('bioEn', 'السيرة (إنجليزي)', 'Life (English)', FieldType.multiline, advanced: true),
-    FieldDef('feastCopticEn', 'العيد بالتقويم القبطي (إنجليزي)', 'Coptic feast (English)', FieldType.text, advanced: true),
+    FieldDef('nameEn', 'الاسم (إنجليزي)', 'Name (English)', FieldType.text, advanced: true, lang: 'en'),
+    FieldDef('bioEn', 'السيرة (إنجليزي)', 'Life (English)', FieldType.multiline, advanced: true, lang: 'en'),
+    FieldDef('feastCopticEn', 'العيد بالتقويم القبطي (إنجليزي)', 'Coptic feast (English)', FieldType.text,
+        advanced: true, lang: 'en'),
     FieldDef('feastGregorian', 'العيد بالتقويم الميلادي (إنجليزي)', 'Gregorian feast (English)', FieldType.text,
-        advanced: true),
+        advanced: true, lang: 'en'),
     _orderField,
     ..._detailsGroup,
     ..._mediaExtraGroup,
@@ -765,8 +776,9 @@ const adminCollections = <CollectionDef>[
     FieldDef('icon', 'الأيقونة', 'Icon', FieldType.choice,
         options: ['church', 'people', 'altar', 'pope', 'star'], defaultOption: 'star'),
     _visibleField,
-    FieldDef('titleEn', 'العنوان (إنجليزي)', 'Title (English)', FieldType.text, advanced: true),
-    FieldDef('descEn', 'الوصف (إنجليزي)', 'Description (English)', FieldType.multiline, maxLength: 2000, advanced: true),
+    FieldDef('titleEn', 'العنوان (إنجليزي)', 'Title (English)', FieldType.text, advanced: true, lang: 'en'),
+    FieldDef('descEn', 'الوصف (إنجليزي)', 'Description (English)', FieldType.multiline,
+        maxLength: 2000, advanced: true, lang: 'en'),
     _orderField,
     ..._detailsGroup,
     ..._mediaExtraGroup,
@@ -795,8 +807,10 @@ const adminCollections = <CollectionDef>[
         advanced: true,
         hintAr: 'تظهر الصفحة على /section/<الرابط> مثل /section/youth-trips',
         hintEn: 'The page lives at /section/<address>, e.g. /section/youth-trips'),
-    FieldDef('nameEn', 'اسم القسم (إنجليزي)', 'Section name (English)', FieldType.text, maxLength: 120, advanced: true),
-    FieldDef('introEn', 'مقدمة (إنجليزي)', 'Intro (English)', FieldType.multiline, maxLength: 1500, advanced: true),
+    FieldDef('nameEn', 'اسم القسم (إنجليزي)', 'Section name (English)', FieldType.text,
+        maxLength: 120, advanced: true, lang: 'en'),
+    FieldDef('introEn', 'مقدمة (إنجليزي)', 'Intro (English)', FieldType.multiline,
+        maxLength: 1500, advanced: true, lang: 'en'),
     FieldDef('imageStyle', 'طريقة عرض صور العناصر', 'Image display of its items', FieldType.choice,
         options: ImageStyles.all, nullableChoice: true, advanced: true),
     _orderField,
@@ -819,14 +833,15 @@ const adminCollections = <CollectionDef>[
     FieldDef('descAr', 'الوصف (عربي)', 'Description (Arabic)', FieldType.multiline, maxLength: 2000),
     _visibleField,
     _sampleField,
-    FieldDef('titleEn', 'العنوان (إنجليزي)', 'Title (English)', FieldType.text, advanced: true),
-    FieldDef('descEn', 'الوصف (إنجليزي)', 'Description (English)', FieldType.multiline, maxLength: 2000, advanced: true),
+    FieldDef('titleEn', 'العنوان (إنجليزي)', 'Title (English)', FieldType.text, advanced: true, lang: 'en'),
+    FieldDef('descEn', 'الوصف (إنجليزي)', 'Description (English)', FieldType.multiline,
+        maxLength: 2000, advanced: true, lang: 'en'),
     FieldDef('externalUrl', 'رابط (صفحة أو رابط خارجي)', 'Link (a page or an external URL)', FieldType.url,
         allowPath: true, linkPicker: true, advanced: true),
     FieldDef('externalLabelAr', 'نص زر الرابط (عربي)', 'Link button text (Arabic)', FieldType.text,
         maxLength: 80, advanced: true),
     FieldDef('externalLabelEn', 'نص زر الرابط (إنجليزي)', 'Link button text (English)', FieldType.text,
-        maxLength: 80, advanced: true),
+        maxLength: 80, advanced: true, lang: 'en'),
     _imageStyleFieldFlat,
     _orderField,
   ], [
@@ -856,6 +871,7 @@ const adminCollections = <CollectionDef>[
               hintEn: 'Image: caption. Button / link: its text. Donation: notes.'),
           FieldDef('textEn', 'النص (إنجليزي)', 'Text (English)', FieldType.multiline,
               maxLength: blockTextMax,
+              lang: 'en',
               showWhen: MapEntry('type', [BlockTypes.heading, BlockTypes.paragraph, BlockTypes.image, BlockTypes.button,
                 BlockTypes.link, BlockTypes.donation])),
           FieldDef('url', 'الرابط', 'Link', FieldType.url,
@@ -895,8 +911,10 @@ const adminCollections = <CollectionDef>[
         advanced: true,
         hintAr: 'تظهر الصفحة على /page/<الرابط> مثل /page/new-building-donations',
         hintEn: 'The page lives at /page/<address>, e.g. /page/new-building-donations'),
-    FieldDef('titleEn', 'العنوان (إنجليزي)', 'Title (English)', FieldType.text, maxLength: 200, advanced: true),
-    FieldDef('subtitleEn', 'العنوان الفرعي (إنجليزي)', 'Subtitle (English)', FieldType.text, advanced: true),
+    FieldDef('titleEn', 'العنوان (إنجليزي)', 'Title (English)', FieldType.text,
+        maxLength: 200, advanced: true, lang: 'en'),
+    FieldDef('subtitleEn', 'العنوان الفرعي (إنجليزي)', 'Subtitle (English)', FieldType.text,
+        advanced: true, lang: 'en'),
     _orderField,
   ], [
     'titleAr',
@@ -908,6 +926,28 @@ const adminCollections = <CollectionDef>[
       helpAr: 'صفحات مستقلة مثل التبرعات أو التعليمات؛ اكتبها أو اختر قالبًا.',
       helpEn: 'Standalone pages like donations or guides; write from scratch or use a template.'),
 ];
+
+/// Pairs `(arKey, enKey)` of top-level translated fields in [fields] (P2-27b).
+List<(String arKey, String enKey)> englishFieldPairs(List<FieldDef> fields) {
+  final keys = {for (final f in fields) f.key};
+  final pairs = <(String, String)>[];
+  for (final f in fields) {
+    if (f.lang != 'en') continue;
+    String? arKey;
+    if (f.key.endsWith('En')) {
+      final stem = f.key.substring(0, f.key.length - 2);
+      if (keys.contains('${stem}Ar')) {
+        arKey = '${stem}Ar';
+      } else if (keys.contains(stem)) {
+        arKey = stem;
+      }
+    } else if (keys.contains('${f.key}Ar')) {
+      arKey = '${f.key}Ar';
+    }
+    if (arKey != null) pairs.add((arKey, f.key));
+  }
+  return pairs;
+}
 
 /// Pre-filled defaults for the «صفحة تبرعات» template (P1-15).
 /// Account, InstaPay, and wallet fields start empty for the church office to fill.
@@ -937,13 +977,14 @@ const churchInfoDoc = DocDef(
   'Church info',
   [
     FieldDef('nameAr', 'اسم الكنيسة (عربي)', 'Church name (Arabic)', FieldType.text, required: true),
-    FieldDef('nameEn', 'اسم الكنيسة (إنجليزي)', 'Church name (English)', FieldType.text, required: true),
+    FieldDef('nameEn', 'اسم الكنيسة (إنجليزي)', 'Church name (English)', FieldType.text, required: true, lang: 'en'),
     FieldDef('bishopAr', 'الأسقف (عربي)', 'Bishop (Arabic)', FieldType.text),
-    FieldDef('bishopEn', 'الأسقف (إنجليزي)', 'Bishop (English)', FieldType.text),
+    FieldDef('bishopEn', 'الأسقف (إنجليزي)', 'Bishop (English)', FieldType.text, lang: 'en'),
     FieldDef('addressAr', 'العنوان (عربي)', 'Address (Arabic)', FieldType.text, required: true),
-    FieldDef('addressEn', 'العنوان (إنجليزي)', 'Address (English)', FieldType.text),
+    FieldDef('addressEn', 'العنوان (إنجليزي)', 'Address (English)', FieldType.text, lang: 'en'),
     FieldDef('transportAr', 'المواصلات (عربي)', 'Getting here (Arabic)', FieldType.multiline, maxLength: 2000),
-    FieldDef('transportEn', 'المواصلات (إنجليزي)', 'Getting here (English)', FieldType.multiline, maxLength: 2000),
+    FieldDef('transportEn', 'المواصلات (إنجليزي)', 'Getting here (English)', FieldType.multiline,
+        maxLength: 2000, lang: 'en'),
     FieldDef('lat', 'خط العرض', 'Latitude', FieldType.decimal, min: -90, max: 90),
     FieldDef('lng', 'خط الطول', 'Longitude', FieldType.decimal, min: -180, max: 180),
     FieldDef('mapsQuery', 'بحث الخريطة (مثل 31.26,30.01)', 'Map query (e.g. 31.26,30.01)', FieldType.text,
@@ -951,7 +992,7 @@ const churchInfoDoc = DocDef(
     FieldDef('mapsUrl', 'رابط خرائط جوجل', 'Google Maps link', FieldType.url),
     FieldDef('phones', 'أرقام التليفون', 'Phone numbers', FieldType.objectList, subFields: [
       FieldDef('labelAr', 'الوصف (عربي)', 'Label (Arabic)', FieldType.text, required: true, maxLength: 80),
-      FieldDef('labelEn', 'الوصف (إنجليزي)', 'Label (English)', FieldType.text, maxLength: 80),
+      FieldDef('labelEn', 'الوصف (إنجليزي)', 'Label (English)', FieldType.text, maxLength: 80, lang: 'en'),
       FieldDef('number', 'الرقم', 'Number', FieldType.phone, required: true),
       FieldDef('isMobile', 'موبايل (واتساب)', 'Mobile (WhatsApp)', FieldType.boolean, newBool: false),
     ]),
@@ -961,15 +1002,15 @@ const churchInfoDoc = DocDef(
     FieldDef('youtube', 'يوتيوب', 'YouTube', FieldType.url),
     FieldDef('instagram', 'إنستغرام', 'Instagram', FieldType.url),
     FieldDef('verseAr', 'الآية (عربي)', 'Verse (Arabic)', FieldType.text),
-    FieldDef('verseEn', 'الآية (إنجليزي)', 'Verse (English)', FieldType.text),
+    FieldDef('verseEn', 'الآية (إنجليزي)', 'Verse (English)', FieldType.text, lang: 'en'),
     FieldDef('verseRefAr', 'الشاهد (عربي)', 'Verse reference (Arabic)', FieldType.text, maxLength: 60),
-    FieldDef('verseRef', 'الشاهد (إنجليزي)', 'Verse reference (English)', FieldType.text, maxLength: 60),
+    FieldDef('verseRef', 'الشاهد (إنجليزي)', 'Verse reference (English)', FieldType.text, maxLength: 60, lang: 'en'),
     FieldDef('heroImageUrl', 'صورة الواجهة (رابط)', 'Hero image URL', FieldType.url),
     FieldDef('historyAr', 'التاريخ (عربي)', 'History (Arabic)', FieldType.multiline, maxLength: 8000),
-    FieldDef('historyEn', 'التاريخ (إنجليزي)', 'History (English)', FieldType.multiline, maxLength: 8000),
+    FieldDef('historyEn', 'التاريخ (إنجليزي)', 'History (English)', FieldType.multiline, maxLength: 8000, lang: 'en'),
     FieldDef('altars', 'المذابح', 'Altars', FieldType.objectList, subFields: [
       FieldDef('nameAr', 'الاسم (عربي)', 'Name (Arabic)', FieldType.text, required: true, maxLength: 120),
-      FieldDef('nameEn', 'الاسم (إنجليزي)', 'Name (English)', FieldType.text, maxLength: 120),
+      FieldDef('nameEn', 'الاسم (إنجليزي)', 'Name (English)', FieldType.text, maxLength: 120, lang: 'en'),
       FieldDef('kind', 'النوع', 'Kind', FieldType.choice, options: ['main', 'second', 'annex'], defaultOption: 'annex'),
     ]),
     FieldDef('sample', 'بيانات غير مؤكدة', 'Unconfirmed data', FieldType.boolean, newBool: false),
@@ -1002,11 +1043,11 @@ const assistantSettingsDoc = DocDef(
   FieldDef('refusalAr', 'رسالة الاعتذار عن الأسئلة الأخرى (عربي)', 'Refusal message (Arabic)', FieldType.multiline,
       maxLength: AssistantLimits.textMax),
   FieldDef('refusalEn', 'رسالة الاعتذار عن الأسئلة الأخرى (إنجليزي)', 'Refusal message (English)', FieldType.multiline,
-      maxLength: AssistantLimits.textMax),
+      maxLength: AssistantLimits.textMax, lang: 'en'),
   FieldDef('welcomeAr', 'رسالة الترحيب (عربي)', 'Welcome text (Arabic)', FieldType.multiline,
       maxLength: AssistantLimits.textMax),
   FieldDef('welcomeEn', 'رسالة الترحيب (إنجليزي)', 'Welcome text (English)', FieldType.multiline,
-      maxLength: AssistantLimits.textMax),
+      maxLength: AssistantLimits.textMax, lang: 'en'),
   FieldDef('showSuggestions', 'إظهار الأسئلة المقترحة', 'Show suggested questions', FieldType.boolean,
       newBool: false,
       hintAr: 'مغلق افتراضيًا. عند التفعيل تظهر الأسئلة المكتوبة أدناه فقط (لا توجد أسئلة افتراضية).',
@@ -1016,7 +1057,8 @@ const assistantSettingsDoc = DocDef(
       maxLength: AssistantLimits.suggestionsMax),
   FieldDef('suggestionsEn', 'أسئلة مقترحة (إنجليزي، سؤال في كل سطر، حتى 3)', 'Suggested questions (English, one per line, up to 3)',
       FieldType.multiline,
-      maxLength: AssistantLimits.suggestionsMax),
+      maxLength: AssistantLimits.suggestionsMax,
+      lang: 'en'),
   FieldDef('sourceDomains', 'مصادر الأسئلة الدينية (نطاقات)', 'Sources for faith questions (domains)', FieldType.text,
       maxLength: AssistantLimits.sourceDomainsMax,
       pattern: r'[a-z0-9.\-]+([ ,]+[a-z0-9.\-]+)*',
@@ -1030,6 +1072,7 @@ const assistantSettingsDoc = DocDef(
   FieldDef('faithReplyEn', 'رد الأسئلة الدينية غير الموجودة في البيانات (إنجليزي)', 'Reply for faith questions not in the data (English)',
       FieldType.multiline,
       maxLength: AssistantLimits.faithReplyMax,
+      lang: 'en',
       hintAr: 'اتركه فارغًا للنص الافتراضي (إنجليزي).',
       hintEn: 'Shown before the search and contact links. Blank = default: ${AssistantSettings.defaultFaithReplyEn}'),
   FieldDef('mentionUnconfirmed', 'ذكر علامة "غير مؤكد"', 'Mention unconfirmed flags', FieldType.boolean,
@@ -1122,13 +1165,13 @@ const todaySettingsDoc = DocDef(
         FieldDef('start', 'من', 'From', FieldType.time),
         FieldDef('end', 'إلى', 'To', FieldType.time),
         FieldDef('titleAr', 'العنوان (عربي)', 'Title (Arabic)', FieldType.text, required: true),
-        FieldDef('titleEn', 'العنوان (إنجليزي)', 'Title (English)', FieldType.text),
+        FieldDef('titleEn', 'العنوان (إنجليزي)', 'Title (English)', FieldType.text, lang: 'en'),
         FieldDef('speakerAr', 'المتكلم (عربي)', 'Speaker (Arabic)', FieldType.text),
-        FieldDef('speakerEn', 'المتكلم (إنجليزي)', 'Speaker (English)', FieldType.text),
+        FieldDef('speakerEn', 'المتكلم (إنجليزي)', 'Speaker (English)', FieldType.text, lang: 'en'),
         FieldDef('topicAr', 'الموضوع (عربي)', 'Topic (Arabic)', FieldType.text),
-        FieldDef('topicEn', 'الموضوع (إنجليزي)', 'Topic (English)', FieldType.text),
+        FieldDef('topicEn', 'الموضوع (إنجليزي)', 'Topic (English)', FieldType.text, lang: 'en'),
         FieldDef('noteAr', 'ملاحظة (عربي)', 'Note (Arabic)', FieldType.multiline, maxLength: 500),
-        FieldDef('noteEn', 'ملاحظة (إنجليزي)', 'Note (English)', FieldType.multiline, maxLength: 500),
+        FieldDef('noteEn', 'ملاحظة (إنجليزي)', 'Note (English)', FieldType.multiline, maxLength: 500, lang: 'en'),
         FieldDef('link', 'رابط «اعرف المزيد» (اختياري)', '"Learn more" link (optional)', FieldType.url, allowPath: true),
         // ADR-045: the event's programme / PDF gets its own labelled button.
         FieldDef('attachmentUrl', 'رابط ملف PDF (Google Drive، اختياري)', 'PDF link (Google Drive, optional)', FieldType.url,
@@ -1140,7 +1183,8 @@ const todaySettingsDoc = DocDef(
             maxLength: 80),
         FieldDef('attachmentLabelEn', 'نص زر الملف (إنجليزي)', 'File button text (English, blank = "Programme / booklet")',
             FieldType.text,
-            maxLength: 80),
+            maxLength: 80,
+            lang: 'en'),
         FieldDef('id', 'المعرف (داخلي)', 'ID (internal)', FieldType.text,
             hidden: true,
             maxLength: 10,
@@ -1156,6 +1200,7 @@ const todaySettingsDoc = DocDef(
       maxLength: 120),
   FieldDef('liveLabelEn', 'نص الشريط (إنجليزي)', 'Banner text (English, blank = "Live now from the church")', FieldType.text,
       maxLength: 120,
+      lang: 'en',
       hintAr: 'يظهر في الصفحات الإنجليزية فقط. فارغ = "Live now from the church" (لا يظهر النص العربي في الصفحات الإنجليزية).',
       hintEn: 'Shown on the English pages only. Blank = "Live now from the church" (the Arabic text never shows on English pages).'),
   FieldDef('liveEndsAt', 'إيقاف تلقائي (اختياري)', 'Switch off automatically at (optional)', FieldType.dateTime,
@@ -1181,7 +1226,7 @@ const _optionRowFields = [
       hintAr: 'لا تغيّره بعد استخدامه: القداسات والاجتماعات تحفظ المفتاح.',
       hintEn: 'Do not change it once used: services and meetings store the key.'),
   FieldDef('labelAr', 'الاسم (عربي)', 'Name (Arabic)', FieldType.text, required: true, maxLength: 80),
-  FieldDef('labelEn', 'الاسم (إنجليزي)', 'Name (English)', FieldType.text, maxLength: 80),
+  FieldDef('labelEn', 'الاسم (إنجليزي)', 'Name (English)', FieldType.text, maxLength: 80, lang: 'en'),
 ];
 
 /// /admin → "Season settings" (ADR-041): top-level keys of
@@ -1224,10 +1269,11 @@ const seasonSettingsDoc = DocDef(
             maxLength: SeasonVerses.maxRef),
         // ADR-047: optional English for the English site (else it shows the Arabic).
         FieldDef('textEn', 'نص الآية بالإنجليزية (اختياري)', 'Verse text in English (optional)', FieldType.multiline,
-            maxLength: SeasonVerses.maxText),
+            maxLength: SeasonVerses.maxText, lang: 'en'),
         FieldDef('refEn', 'الشاهد بالإنجليزية (اختياري، مثل John 3:16)', 'English reference (optional, e.g. John 3:16)',
             FieldType.text,
-            maxLength: SeasonVerses.maxRef),
+            maxLength: SeasonVerses.maxRef,
+            lang: 'en'),
       ]),
   ],
   helpAr: 'تعديل القاعات والفئات وآيات المواسم المخصصة (للمالك فقط).',
@@ -1258,6 +1304,7 @@ const _installFields = <FieldDef>[
       hintEn: 'Blank = default title'),
   FieldDef('installTitleEn', 'عنوان شريط التثبيت (إنجليزي)', 'Banner title (English)', FieldType.text,
       maxLength: 120,
+      lang: 'en',
       hintAr: 'فارغ = Church app on your phone',
       hintEn: 'Blank = default English title'),
   FieldDef('installBodyAr', 'نص شريط التثبيت (عربي)', 'Banner text (Arabic)', FieldType.multiline,
@@ -1266,6 +1313,7 @@ const _installFields = <FieldDef>[
       hintEn: 'Blank = default description'),
   FieldDef('installBodyEn', 'نص شريط التثبيت (إنجليزي)', 'Banner text (English)', FieldType.multiline,
       maxLength: 300,
+      lang: 'en',
       hintAr: 'فارغ = Install for quick access to mass times and church services',
       hintEn: 'Blank = default English description'),
   FieldDef('installAndroidUrl', 'رابط تحميل ملف APK (64-bit)', 'Android APK download URL (64-bit)', FieldType.url,

@@ -718,7 +718,7 @@ service cloud.firestore {
               'installAndroidUrl', 'installAndroidUrl32', 'installApkVersion', 'installApkBuild',
               'installApkSizeMb', 'installApkSize32Mb', 'installReshowDays', 'installRemindDays',
               'push', 'pushVapidKey', 'pushTypes', 'reminderLeads', 'reminderDefaultLead',
-              'notifyTypes', 'reminderSources'];
+              'notifyTypes', 'reminderSources', 'englishEnabled'];
     }
 
     function legacyFeatureKeys() {
@@ -813,6 +813,7 @@ service cloud.firestore {
       return (!changed.hasAny(['venues', 'audiences', 'seasonVerses', 'errorReporting', 'pushVapidKey',
                                'installAndroidUrl', 'installAndroidUrl32']) || hasOwnerRole())
         && (changed.hasOnly(legacy) || validInstallPush(d, changed, legacy))
+        && (!('englishEnabled' in changed) || (hasOwnerRole() && optBool(d, 'englishEnabled')))
         && (!('sections' in changed) || !('sections' in d) || validSections(d.sections))
         && (!('homeOrder' in changed) || !('homeOrder' in d) || (d.homeOrder is list && d.homeOrder.size() <= 7
               && d.homeOrder.hasOnly(['banner', 'alerts', 'nextMass', 'quickContacts', 'milestones', 'directory', 'map'])))

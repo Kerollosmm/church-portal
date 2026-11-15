@@ -237,6 +237,16 @@ const Map<String, List<String>> adminStrings = {
   'looseDateYearOnly': ['سنة فقط (بدون شهر)', 'Year only (no month)'],
   'looseDateDayNone': ['بدون يوم', 'No day'],
   'looseDateHint': ['اكتب السنة أو اختر من التقويم', 'Type a year or pick from the calendar'],
+  // Phase 3G: error summary banner & English toggle (P2-27a, P2-27b)
+  'errSummaryOne': ['فيه حقل واحد محتاج تصحيح', '1 field needs fixing'],
+  'errSummaryTwo': ['فيه حقلين محتاجين تصحيح', '2 fields need fixing'],
+  'errSummaryFew': ['فيه {n} حقول محتاجة تصحيح', '{n} fields need fixing'],
+  'errSummaryMany': ['فيه {n} حقل محتاج تصحيح', '{n} fields need fixing'],
+  'englishEnabledSwitch': ['النسخة الإنجليزية', 'English version'],
+  'englishEnabledHint': [
+    'عند الإيقاف تختفي الحقول الإنجليزية في لوحة الإدارة وزر اللغة من الموقع دون مسح البيانات الإنجليزية المحفوظة.',
+    'When off, English fields in admin forms and the public language button are hidden without deleting stored English text.',
+  ],
 };
 
 /// Idempotently registers [adminStrings] in the runtime localization table.

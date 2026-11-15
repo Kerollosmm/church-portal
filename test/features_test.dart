@@ -3,9 +3,11 @@ import 'dart:io';
 
 import 'package:church_portal/data/seed_data.dart';
 import 'package:church_portal/domain/assistant_context.dart';
+import 'package:church_portal/domain/attention.dart';
 import 'package:church_portal/domain/cairo_time.dart';
 import 'package:church_portal/domain/features.dart';
 import 'package:church_portal/domain/models.dart';
+import 'package:church_portal/ui/admin/admin_schema.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -323,6 +325,42 @@ void main() {
       expect(t, isNot(contains('## Public services')));
       expect(t, isNot(contains('Facebook: ')));
       expect(t, contains('## Weekly liturgy schedule'));
+    });
+  });
+
+  group('englishEnabled & missing English helpers (P2-27b)', () {
+    test('englishEnabled defaults true, parses tolerantly, and round-trips through toMap/copyWith/effectiveAt', () {
+      expect(FeatureSettings.defaults.englishEnabled, isTrue);
+      expect(FeatureSettings.fromMap(null).englishEnabled, isTrue);
+      expect(FeatureSettings.fromMap(const {'englishEnabled': 'nope'}).englishEnabled, isTrue);
+
+      final off = FeatureSettings.fromMap(const {'englishEnabled': false});
+      expect(off.englishEnabled, isFalse);
+      expect(off.toMap()['englishEnabled'], isFalse);
+      expect(FeatureSettings.fromMap(off.toMap()).englishEnabled, isFalse);
+      expect(off.copyWith(theme: 'navy').englishEnabled, isFalse);
+      expect(off.copyWith(englishEnabled: true).englishEnabled, isTrue);
+      expect(off.effectiveAt(CairoTime.at(2026, 11, 1, 600)).englishEnabled, isFalse);
+    });
+
+    test('seed ships englishEnabled true', () {
+      final seed = SeedData(jsonDecode(File('assets/seed/seed.json').readAsStringSync()) as Map<String, dynamic>);
+      expect(seed.features.englishEnabled, isTrue);
+      expect(seed.raw['settings']['features']['englishEnabled'], isTrue);
+    });
+
+    test('englishFieldPairs & docMissingEnglish detect missing English when Arabic is filled', () {
+      final liturgyPairs = englishFieldPairs(collectionById('liturgies')!.fields);
+      expect(liturgyPairs, contains(('nameAr', 'nameEn')));
+      expect(docMissingEnglish({'nameAr': 'قداس', 'nameEn': ''}, liturgyPairs), isTrue);
+      expect(docMissingEnglish({'nameAr': 'قداس', 'nameEn': 'Liturgy'}, liturgyPairs), isFalse);
+      expect(docMissingEnglish({'nameAr': '', 'nameEn': ''}, liturgyPairs), isFalse);
+
+      final saintPairs = englishFieldPairs(collectionById('saints')!.fields);
+      expect(saintPairs, contains(('feastGregorianAr', 'feastGregorian')));
+
+      final priestPairs = englishFieldPairs(collectionById('priests')!.fields);
+      expect(priestPairs, contains(('name', 'nameEn')));
     });
   });
 }

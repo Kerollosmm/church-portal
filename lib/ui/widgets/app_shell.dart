@@ -336,8 +336,8 @@ class _AppShellState extends ConsumerState<AppShell> {
     // On mobile viewports (< 600 px), omit the language toggle from the AppBar
     // to reclaim horizontal space for the church title. The language toggle
     // is already available in the navigation drawer. On desktop (width >= 600),
-    // keep it visible in the AppBar actions.
-    final showBarLang = width >= 600;
+    // keep it visible in the AppBar actions when the English site is enabled.
+    final showBarLang = width >= 600 && features.englishEnabled;
     final tabW = wide ? 88.0 : (ultraNarrow ? 54.0 : 64.0);
     final tabH = wide ? 108.0 : (ultraNarrow ? 70.0 : 80.0);
     final tabStart = (showBack ? 48.0 : 0.0) + (wide ? 24.0 : 6.0);
@@ -486,7 +486,7 @@ class _AppShellState extends ConsumerState<AppShell> {
           ),
         ),
       ),
-      endDrawer: wide ? null : _AppDrawer(location: location, showAsk: showAsk),
+      endDrawer: wide ? null : _AppDrawer(location: location, showAsk: showAsk, showLang: features.englishEnabled),
       body: Stack(children: [
         const Positioned.fill(child: WarmBackdrop()),
         // Today layer (ADR-040): while the church is streaming,
@@ -729,7 +729,8 @@ class _HighlightButton extends StatelessWidget {
 class _AppDrawer extends ConsumerWidget {
   final String location;
   final bool showAsk;
-  const _AppDrawer({required this.location, required this.showAsk});
+  final bool showLang;
+  const _AppDrawer({required this.location, required this.showAsk, this.showLang = true});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -819,31 +820,32 @@ class _AppDrawer extends ConsumerWidget {
             const SizedBox(height: 6),
             if (church.isNotEmpty) group(context.tr('navChurch'), church),
             if (services.isNotEmpty) group(context.tr('churchServices'), services),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-              child: ListTile(
-                key: const Key('drawerLanguageToggle'),
-                minTileHeight: 48,
-                leading: Icon(Icons.language_rounded, color: primary, size: 22),
-                title: Text(context.tr('language'), style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
-                trailing: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: context.pal.surface,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: context.pal.hairline, width: 1.5),
+            if (showLang)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                child: ListTile(
+                  key: const Key('drawerLanguageToggle'),
+                  minTileHeight: 48,
+                  leading: Icon(Icons.language_rounded, color: primary, size: 22),
+                  title: Text(context.tr('language'), style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+                  trailing: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: context.pal.surface,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: context.pal.hairline, width: 1.5),
+                    ),
+                    child: Text(
+                      context.isAr ? 'EN' : 'ع',
+                      style: TextStyle(fontWeight: FontWeight.w700, color: context.pal.goldText, fontSize: 13),
+                    ),
                   ),
-                  child: Text(
-                    context.isAr ? 'EN' : 'ع',
-                    style: TextStyle(fontWeight: FontWeight.w700, color: context.pal.goldText, fontSize: 13),
-                  ),
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    ref.read(localeProvider.notifier).toggle();
+                  },
                 ),
-                onTap: () {
-                  Navigator.of(context).pop();
-                  ref.read(localeProvider.notifier).toggle();
-                },
               ),
-            ),
             const SizedBox(height: 16),
           ]),
         ),

@@ -172,14 +172,21 @@ class _OverviewScreenState extends State<OverviewScreen> {
     final alertsList = _currentAlerts();
     var unconfirmed = 0;
     String? unconfirmedTarget;
+    var missingEnglish = 0;
+    String? missingEnglishTarget;
     for (final c in adminCollections) {
       final list = _docs[c.name];
       if (list == null) continue;
+      final pairs = f.englishEnabled ? englishFieldPairs(c.fields) : const <(String, String)>[];
       for (final d in list) {
         if (!c.matches(d.data) || isSoftDeleted(d.data)) continue;
         if (d.data['sample'] == true) {
           unconfirmed++;
           unconfirmedTarget ??= c.id;
+        }
+        if (f.englishEnabled && docMissingEnglish(d.data, pairs)) {
+          missingEnglish++;
+          missingEnglishTarget ??= c.id;
         }
       }
     }
@@ -190,10 +197,11 @@ class _OverviewScreenState extends State<OverviewScreen> {
       unconfirmed: unconfirmed,
       streamOn: f.today.liveEnabled,
       streamUrl: f.today.liveUrl,
-      englishOn: false,
-      missingEnglish: 0,
+      englishOn: f.englishEnabled,
+      missingEnglish: missingEnglish,
       now: currentNow,
       unconfirmedTarget: unconfirmedTarget ?? 'liturgies',
+      missingEnglishTarget: missingEnglishTarget ?? 'liturgies',
     );
     final hasError = _failed.isNotEmpty;
     final ready = !hasError && _featuresLoaded && _watchedNames.every(_docs.containsKey);
@@ -502,6 +510,29 @@ class ChurchInfoScreen extends StatefulWidget {
 
 class _ChurchInfoScreenState extends State<ChurchInfoScreen> {
   late Stream<AdminDoc?> _stream = widget.repo.watchDoc(widget.doc.path);
+  StreamSubscription<AdminDoc?>? _featuresSub;
+  bool _englishEnabled = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _bindFeatures();
+  }
+
+  void _bindFeatures() {
+    _featuresSub?.cancel();
+    _featuresSub = null;
+    _englishEnabled = true;
+    if (widget.doc.path == 'settings/features') return;
+    _featuresSub = widget.repo.watchDoc('settings/features').listen(
+      (d) {
+        if (!mounted) return;
+        final next = FeatureSettings.fromMap(d?.data).englishEnabled;
+        if (next != _englishEnabled) setState(() => _englishEnabled = next);
+      },
+      onError: (_) {},
+    );
+  }
 
   @override
   void didUpdateWidget(covariant ChurchInfoScreen oldWidget) {
@@ -517,8 +548,16 @@ class _ChurchInfoScreenState extends State<ChurchInfoScreen> {
       _shown = null;
       _loaded = false;
       _editorKey = GlobalKey<DocEditorState>();
+      _bindFeatures();
     }
   }
+
+  @override
+  void dispose() {
+    _featuresSub?.cancel();
+    super.dispose();
+  }
+
   GlobalKey<DocEditorState> _editorKey = GlobalKey<DocEditorState>();
   AdminDoc? _shown;
   bool _loaded = false;
@@ -552,6 +591,9 @@ class _ChurchInfoScreenState extends State<ChurchInfoScreen> {
         }
         final stale = changed && dirty;
         final doc = _shown;
+        final englishEnabled = widget.doc.path == 'settings/features'
+            ? FeatureSettings.fromMap(doc?.data).englishEnabled
+            : _englishEnabled;
         final title = widget.showHeader ? context.pick(widget.doc.labelAr, widget.doc.labelEn) : '';
         final help = widget.showHeader ? context.pick(widget.doc.helpAr, widget.doc.helpEn) : '';
         return Column(children: [
@@ -591,6 +633,7 @@ class _ChurchInfoScreenState extends State<ChurchInfoScreen> {
               fields: widget.doc.fields,
               data: doc?.data ?? const {},
               popOnSave: false,
+              englishEnabled: englishEnabled,
               onSave: (data) => widget.repo.saveDoc(widget.doc.path, data),
             ),
           ),

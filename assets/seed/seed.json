@@ -88,6 +88,7 @@
     "noteEn": ""
    },
    "errorReporting": true,
+   "englishEnabled": true,
    "notifyTypes": [],
    "reminderSources": "lit,mtg,day"
   }

@@ -148,7 +148,7 @@ Notable details:
   pages ⊆ the 8 `CustomizablePages`, each changed entry exactly the 6 keys with 200/300/1500 caps). Every group is
   checked only when changed (the editor saves the whole doc).
 - `validChurch`: phones/altars lists ≤ 20; `nameAr` required; `coordinatesApproximate` optional bool (PR 1).
-- **Owner-only settings & admin management (P2-18R):** Editors and owners share content, inbox, media, and standard settings (`settings/church`, `settings/notifications` schedules, and standard `settings/features` switches/today/live/headers) rights; **`admins/*` management, `settings/contact`, `settings/assistant`, and changing `settings/features.{venues, audiences, seasonVerses}` require `isOwner()`** (gated on `changed` keys in `validFeatures` so editor saves of untouched `settings/features` fields never evaluate `isOwner()`). Public reads of `settings/contact`, `settings/assistant`, and `settings/features` remain unchanged.
+- **Owner-only settings & admin management (P2-18R, P2-27b):** Editors and owners share content, inbox, media, and standard settings (`settings/church`, `settings/notifications` schedules, and standard `settings/features` switches/today/live/headers) rights; **`admins/*` management, `settings/contact`, `settings/assistant`, and changing `settings/features.{venues, audiences, seasonVerses, englishEnabled}` require `isOwner()`** (gated on `changed` keys in `validFeatures` so editor saves of untouched `settings/features` fields never evaluate `isOwner()`; `englishEnabled` also sits in `installPushKeys()` outside `legacyFeatureKeys()` to preserve the expression budget). Public reads of `settings/contact`, `settings/assistant`, and `settings/features` remain unchanged.
 - Tests: `tool/rules_test/rules.test.mjs` (Node test runner + `@firebase/rules-unit-testing` in the Firestore
   emulator, project `demo-church-portal`): public read/no write, non-admin denied, contact create + throttle,
   every seed doc valid, clinic create/hide/reorder/delete, unknown keys/bad types/bad times rejected, stamps,
@@ -166,7 +166,7 @@ Notable details:
   collections; an every-field edit; both lists in one write denied) and of `FeaturesScreen` (whole document, then
   `pageHeaders` alone; the combined first save is denied; a reset page is removed). 54 tests. PR 3D (`P1-18`) adds
   `pages` validation for `placement` (`link` | `nav` | `section`), `categoryId` (required `[A-Za-z0-9_-]{1,128}`
-  for `section`), `featured` bool, and a worst-case 20-block budget test. P2-18R adds owner-only tests for `settings/contact`, `settings/assistant`, and `settings/features.{venues, audiences, seasonVerses}` (including editor denial, editor Today/live/section saves with those keys untouched, worst-case owner budget, and anonymous reads).
+  for `section`), `featured` bool, and a worst-case 20-block budget test. P2-18R adds owner-only tests for `settings/contact`, `settings/assistant`, and `settings/features.{venues, audiences, seasonVerses}` (including editor denial, editor Today/live/section saves with those keys untouched, worst-case owner budget, and anonymous reads), and P2-27b adds owner-only/type-check/editor-save tests for `settings/features.englishEnabled`.
 - **Expression budget (measured in PR #11):** Firestore evaluates at most **1,000 expressions per request**, shared by
   every `match` block the path hits (that is why `validContent` keeps its `col in [...]` early exit: without it
   `settings/church` writes ran out). Literals, field reads and `+` all count; an unrolled list item costs ~10. The

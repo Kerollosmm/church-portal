@@ -727,6 +727,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
         return Consumer(
           builder: (context, ref, _) => FeaturesScreen(
             repo: repo,
+            isOwner: _isOwner,
             activeSeasonKeys: [
               for (final k in ref.watch(activeSeasonKeysProvider).split(','))
                 if (k.isNotEmpty) k,

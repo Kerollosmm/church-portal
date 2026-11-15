@@ -161,6 +161,7 @@ Existence of `settings/church` = "database is seeded" (see `03-architecture.md`)
 | Field | Type | Default / parsing |
 |---|---|---|
 | `sections` | map `<sectionKey, bool>` | missing key = **on**; non-bool values ignored. Keys = `Sections.all`: `schedule, meetings, clinics, services, history, milestones, saints, priests, departedPriests, activities, alerts, contactInfo, socials, contactForm, assistant, media` (`media` = show optional item images; not a page) |
+| `englishEnabled` | bool, default **true** (PR 3G, P2-27b) | owner-only switch controlling the public language toggle and `lang: 'en'` admin form fields; seeded `true` |
 | `homeOrder` | list of block keys | `normalizeHomeOrder`: unknown/duplicate dropped, missing appended in default order. Blocks (`HomeBlocks.defaultOrder`): `banner, alerts, nextMass, quickContacts, milestones, directory, map` |
 | `homeHidden` | list of block keys | unknown keys dropped |
 | `heroTitleAr/En` | string ≤ 200 | empty → church name |

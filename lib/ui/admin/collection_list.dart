@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
@@ -10,6 +12,7 @@ import '../../domain/item_detail.dart';
 import '../../domain/time_format.dart';
 import '../../domain/cairo_time.dart';
 import '../../domain/custom_content.dart';
+import '../../domain/features.dart';
 import '../../domain/models.dart';
 import 'admin_schema.dart';
 import 'admin_strings.dart';
@@ -88,9 +91,30 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
   late Stream<List<AdminDoc>> _stream = widget.repo.watch(widget.def.name);
   late Stream<List<AdminDoc>>? _entriesStream =
       widget.def.name == 'categories' ? widget.repo.watch('entries') : null;
+  StreamSubscription<AdminDoc?>? _featuresSub;
+  bool _englishEnabled = true;
 
   /// The list as last shown (slug uniqueness checks in the editor).
   List<AdminDoc> _lastDocs = const [];
+
+  @override
+  void initState() {
+    super.initState();
+    _bindFeatures();
+  }
+
+  void _bindFeatures() {
+    _featuresSub?.cancel();
+    _englishEnabled = true;
+    _featuresSub = widget.repo.watchDoc('settings/features').listen(
+      (d) {
+        if (!mounted) return;
+        final next = FeatureSettings.fromMap(d?.data).englishEnabled;
+        if (next != _englishEnabled) setState(() => _englishEnabled = next);
+      },
+      onError: (_) {},
+    );
+  }
 
   @override
   void didUpdateWidget(covariant CollectionListScreen old) {
@@ -99,6 +123,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
       _stream = widget.repo.watch(widget.def.name);
       _entriesStream = widget.def.name == 'categories' ? widget.repo.watch('entries') : null;
     }
+    if (old.repo != widget.repo) _bindFeatures();
     if (old.def.id != widget.def.id || old.def.name != widget.def.name) {
       _priestFilter = PriestStatusFilter.all;
     }
@@ -106,6 +131,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
 
   @override
   void dispose() {
+    _featuresSub?.cancel();
     _pendingDelete.dispose();
     _pendingEntries.clear();
     _search.dispose();
@@ -1181,6 +1207,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
               ]
             : const [],
         seasons: seasons,
+        englishEnabled: _englishEnabled,
       ),
     ));
   }

@@ -276,4 +276,26 @@ void main() {
     expect(find.text('Call • Book'), findsOneWidget);
     expect(find.text('Dr Mina'), findsOneWidget);
   });
+
+  group('englishEnabled gate (P2-27b)', () {
+    testWidgets('desktop appBar language toggle shows when on and hides when off', (tester) async {
+      await _pump(tester, _seedWith(const {}, extra: {'englishEnabled': true}), size: const Size(1400, 2400));
+      expect(find.byKey(const Key('appBarLanguageToggle')), findsOneWidget);
+
+      await _pump(tester, _seedWith(const {}, extra: {'englishEnabled': false}), size: const Size(1400, 2400));
+      expect(find.byKey(const Key('appBarLanguageToggle')), findsNothing);
+    });
+
+    testWidgets('mobile drawer language toggle shows when on and hides when off', (tester) async {
+      await _pump(tester, _seedWith(const {}, extra: {'englishEnabled': true}), size: const Size(400, 1600));
+      await tester.tap(find.byTooltip('Menu'));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('drawerLanguageToggle')), findsOneWidget);
+
+      await _pump(tester, _seedWith(const {}, extra: {'englishEnabled': false}), size: const Size(400, 1600));
+      await tester.tap(find.byTooltip('Menu'));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('drawerLanguageToggle')), findsNothing);
+    });
+  });
 }
