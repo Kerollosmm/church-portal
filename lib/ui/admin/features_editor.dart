@@ -75,8 +75,9 @@ class _FeaturesScreenState extends State<FeaturesScreen> {
         final latest = snap.data;
         final changed = !_loaded || latest?.updatedAt != _shown?.updatedAt || (latest == null) != (_shown == null);
         final editor = _editorKey.currentState;
+        final saving = editor?.saving ?? false;
         final dirty = editor?.dirty ?? false;
-        if (changed && !dirty) {
+        if (changed && !dirty && !saving) {
           // The snapshot of our own save keeps the form and its scroll position.
           final echo =
               _loaded && editor != null && isEchoOfEditor(_shown?.data ?? const {}, latest?.data, editor.collect().toMap());
@@ -84,7 +85,7 @@ class _FeaturesScreenState extends State<FeaturesScreen> {
           _shown = latest;
           _loaded = true;
         }
-        final stale = changed && dirty;
+        final stale = changed && dirty && !saving;
         final doc = _shown;
         return Column(children: [
           if (stale)
@@ -247,8 +248,9 @@ class FeaturesEditorState extends State<FeaturesEditor> {
   bool _dirty = false;
   bool _saving = false;
 
-  /// Unsaved local edits (a save in flight counts as saved).
-  bool get dirty => _dirty && !_saving;
+  /// Unsaved local edits.
+  bool get dirty => _dirty;
+  bool get saving => _saving;
 
   @override
   void dispose() {

@@ -20,6 +20,7 @@ import 'admin_strings.dart';
 import 'admin_validators.dart';
 import 'confirm_named.dart';
 import 'doc_editor.dart';
+import 'pending_delete.dart';
 import 'screen_header.dart';
 import 'state_switch.dart';
 
@@ -174,6 +175,7 @@ class _OverviewScreenState extends State<OverviewScreen> {
     final alertsList = _currentAlerts();
     var unconfirmed = 0;
     String? unconfirmedTarget;
+    final unconfirmedByCollection = <String, ({int count, String label})>{};
     var missingEnglish = 0;
     String? missingEnglishTarget;
     for (final c in adminCollections) {
@@ -185,12 +187,23 @@ class _OverviewScreenState extends State<OverviewScreen> {
         if (d.data['sample'] == true) {
           unconfirmed++;
           unconfirmedTarget ??= c.id;
+          final existing = unconfirmedByCollection[c.id];
+          unconfirmedByCollection[c.id] = (
+            count: (existing?.count ?? 0) + 1,
+            label: context.pick(c.labelAr, c.labelEn),
+          );
         }
         if (f.englishEnabled && docMissingEnglish(d.data, pairs)) {
           missingEnglish++;
           missingEnglishTarget ??= c.id;
         }
       }
+    }
+    String? unconfirmedSubtitle;
+    if (unconfirmedByCollection.length > 1) {
+      final sorted = unconfirmedByCollection.values.toList()..sort((a, b) => b.count.compareTo(a.count));
+      final top = sorted.first;
+      unconfirmedSubtitle = context.tr('att_unconfirmedBreakdown', {'c': '${top.count}', 'sec': top.label});
     }
     final currentNow = widget.now?.call() ?? DateTime.now();
     final attention = attentionItems(
@@ -236,7 +249,12 @@ class _OverviewScreenState extends State<OverviewScreen> {
               children: [
                 for (var i = 0; i < attention.length; i++) ...[
                   if (i > 0) const Divider(height: 1),
-                  _attentionTile(context, attention[i], onOpen),
+                  _attentionTile(
+                    context,
+                    attention[i],
+                    onOpen,
+                    subtitle: attention[i].kind == AttentionKind.unconfirmedData ? unconfirmedSubtitle : null,
+                  ),
                 ],
               ],
             ),
@@ -399,7 +417,7 @@ class _OverviewScreenState extends State<OverviewScreen> {
     );
   }
 
-  Widget _attentionTile(BuildContext context, AttentionItem item, void Function(String) onOpen) {
+  Widget _attentionTile(BuildContext context, AttentionItem item, void Function(String) onOpen, {String? subtitle}) {
     final (IconData icon, Color color, String label) = switch (item.kind) {
       AttentionKind.newMessages => (
           Icons.mail_outline,
@@ -431,6 +449,7 @@ class _OverviewScreenState extends State<OverviewScreen> {
       key: ValueKey('attention-${item.kind.name}'),
       leading: Icon(icon, color: color),
       title: Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
+      subtitle: subtitle == null ? null : Text(subtitle, style: TextStyle(color: context.pal.muted, fontSize: 12)),
       trailing: const Icon(Icons.chevron_right),
       onTap: () => onOpen(item.targetScreenId),
     );
@@ -581,8 +600,9 @@ class _ChurchInfoScreenState extends State<ChurchInfoScreen> {
         final latest = snap.data;
         final changed = !_loaded || latest?.updatedAt != _shown?.updatedAt || (latest == null) != (_shown == null);
         final editor = _editorKey.currentState;
-        final dirty = editor != null && editor.dirty && !editor.saving;
-        if (changed && !dirty) {
+        final saving = editor?.saving ?? false;
+        final dirty = editor?.dirty ?? false;
+        if (changed && !dirty && !saving) {
           // The snapshot of our own save (only metadata or the values the form
           // already holds changed) keeps the form and its scroll position.
           final echo =
@@ -591,7 +611,7 @@ class _ChurchInfoScreenState extends State<ChurchInfoScreen> {
           _shown = latest;
           _loaded = true;
         }
-        final stale = changed && dirty;
+        final stale = changed && dirty && !saving;
         final doc = _shown;
         final englishEnabled = widget.doc.path == 'settings/features'
             ? FeatureSettings.fromMap(doc?.data).englishEnabled
@@ -661,8 +681,34 @@ class MessagesScreen extends StatefulWidget {
 class _MessagesScreenState extends State<MessagesScreen> {
   String _filter = 'new';
   String _box = 'all';
+  final _pendingDelete = PendingDelete();
+  final Set<String> _purging = {};
+  static const _messagesDef = CollectionDef('contact_messages', '', '', [], []);
   late Stream<List<AdminDoc>> _stream = widget.repo.watch('contact_messages');
   late Stream<AdminDoc?> _config = widget.repo.watchDoc('settings/contact');
+
+  @override
+  void dispose() {
+    _pendingDelete.dispose();
+    super.dispose();
+  }
+
+  void _checkLazyPurge(List<AdminDoc> docs) {
+    final now = DateTime.now().toUtc();
+    if (docs.any((d) => isExpiredSoftDelete(d.data, now) && !_pendingDelete.isPending(d.id))) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          purgeExpiredSoftDeletes(
+            widget.repo,
+            _messagesDef,
+            docs,
+            isLocalPending: _pendingDelete.isPending,
+            purging: _purging,
+          );
+        }
+      });
+    }
+  }
 
   @override
   void didUpdateWidget(covariant MessagesScreen oldWidget) {
@@ -704,7 +750,9 @@ class _MessagesScreenState extends State<MessagesScreen> {
   }
 
   Widget _body(BuildContext context, ContactSettings cfg, List<AdminDoc> docs) {
-    final all = [...docs]..sort((a, b) {
+    _checkLazyPurge(docs);
+    final visible = docs.where((d) => !isSoftDeleted(d.data) && !_pendingDelete.isPending(d.id)).toList();
+    final all = [...visible]..sort((a, b) {
         final ta = a.data['createdAt'], tb = b.data['createdAt'];
         if (ta is DateTime && tb is DateTime) return tb.compareTo(ta);
         return ta is DateTime ? -1 : (tb is DateTime ? 1 : 0);
@@ -980,14 +1028,58 @@ class _MessagesScreenState extends State<MessagesScreen> {
     );
     if (!ok || !context.mounted) return;
     final messenger = ScaffoldMessenger.of(context);
-    final deleted = context.tr('deleted');
-    final failed = context.tr('deleteFailed', {'e': '{e}'});
+    final failedMsg = context.tr('deleteFailed', {'e': '{e}'});
+    final id = d.id;
+
+    final undoText = context.tr('deletedUndo', {'n': sender});
+    final undoLabel = context.tr('undo');
+
     try {
-      await widget.repo.delete('contact_messages', d.id);
-      messenger.showSnackBar(SnackBar(content: Text(deleted)));
+      await widget.repo.update('contact_messages', id, {'deletedAt': DateTime.now().toUtc()});
     } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text(failed.replaceAll('{e}', '$e'))));
+      messenger.showSnackBar(SnackBar(content: Text(failedMsg.replaceAll('{e}', '$e'))));
+      return;
     }
+
+    if (!mounted) return;
+
+    setState(() {
+      _pendingDelete.schedule(id, () async {
+        try {
+          await widget.repo.delete('contact_messages', id);
+        } catch (e) {
+          try {
+            await widget.repo.update('contact_messages', id, {'deletedAt': null});
+          } catch (_) {}
+          if (!mounted) return;
+          setState(() {});
+          messenger.showSnackBar(SnackBar(content: Text(failedMsg.replaceAll('{e}', '$e'))));
+        }
+      });
+    });
+
+    messenger.removeCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        duration: const Duration(seconds: 10),
+        content: Text(undoText),
+        action: SnackBarAction(
+          label: undoLabel,
+          onPressed: () async {
+            if (_pendingDelete.undo(id)) {
+              if (mounted) setState(() {});
+              try {
+                await widget.repo.update('contact_messages', id, {'deletedAt': null});
+              } catch (e) {
+                if (mounted) {
+                  messenger.showSnackBar(SnackBar(content: Text(failedMsg.replaceAll('{e}', '$e'))));
+                }
+              }
+            }
+          },
+        ),
+      ),
+    );
   }
 }
 
@@ -1164,13 +1256,40 @@ class _AdminsScreenState extends State<AdminsScreen> {
                 ],
               ),
             ),
-            AdminStateSwitch(
-              key: ValueKey('admin-active-${a.id}'),
-              value: active,
-              onLabel: context.tr('activeStatus'),
-              offLabel: context.tr('stoppedStatus'),
-              onChanged: self ? null : (next) => _toggleActive(context, a, next),
-            ),
+            if (self)
+              Container(
+                key: ValueKey('admin-self-active-${a.id}'),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: context.pal.primary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: context.pal.primary.withValues(alpha: 0.3)),
+                ),
+                child: Wrap(
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 6,
+                  runSpacing: 2,
+                  children: [
+                    Icon(Icons.verified_user_outlined, size: 16, color: context.pal.primary),
+                    Text(
+                      context.tr('selfActiveTag'),
+                      style: TextStyle(
+                        color: context.pal.primary,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            else
+              AdminStateSwitch(
+                key: ValueKey('admin-active-${a.id}'),
+                value: active,
+                onLabel: context.tr('activeStatus'),
+                offLabel: context.tr('stoppedStatus'),
+                onChanged: (next) => _toggleActive(context, a, next),
+              ),
             if (role != AdminRoles.owner || expiresAt != null)
               ActionChip(
                 key: ValueKey('admin-expiry-${a.id}'),

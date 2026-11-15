@@ -298,4 +298,34 @@ void main() {
       expect(find.byKey(const Key('drawerLanguageToggle')), findsNothing);
     });
   });
+
+  group('public legacy route redirects', () {
+    testWidgets('/activities redirects to /church-activities', (tester) async {
+      final router = await _pump(tester, _seedWith(const {'activities': true}));
+      router.go('/activities');
+      await tester.pumpAndSettle();
+      expect(router.routerDelegate.currentConfiguration.uri.path, '/church-activities');
+    });
+
+    testWidgets('/priests redirects to /about', (tester) async {
+      final router = await _pump(tester, _seedWith(const {'priests': true}));
+      router.go('/priests');
+      await tester.pumpAndSettle();
+      expect(router.routerDelegate.currentConfiguration.uri.path, '/about');
+    });
+
+    testWidgets('/notices redirects to /notifications', (tester) async {
+      final router = await _pump(tester, _seedWith(const {'alerts': true}));
+      router.go('/notices');
+      await tester.pumpAndSettle();
+      expect(router.routerDelegate.currentConfiguration.uri.path, '/notifications');
+    });
+
+    testWidgets('/donations redirects to /page/donations', (tester) async {
+      final router = await _pump(tester, _seedWith(const {}));
+      router.go('/donations');
+      await tester.pumpAndSettle();
+      expect(router.routerDelegate.currentConfiguration.uri.path, '/page/donations');
+    });
+  });
 }

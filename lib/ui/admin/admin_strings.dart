@@ -15,7 +15,7 @@ const Map<String, List<String>> adminStrings = {
   'switch_disabled': ['مقفول', 'Off'],
   'switch_active': ['نشط', 'Active'],
   'switch_stopped': ['موقوف', 'Stopped'],
-  'switch_sample': ['بيانات تجريبية', 'Sample'],
+  'switch_sample': ['غير مؤكد (تجريبي)', 'Unconfirmed (sample)'],
   'switch_confirmed': ['مؤكد', 'Confirmed'],
   'switch_replaces_on': ['يحل محل قداسات اليوم', 'Replaces masses'],
   'switch_replaces_off': ['لا يحل محل اليوم', 'Does not replace'],
@@ -33,6 +33,7 @@ const Map<String, List<String>> adminStrings = {
   ],
   // Admin status & session policy (PR 3C / Packets P1-12, P1-13)
   'activeStatus': ['نشط', 'Active'],
+  'selfActiveTag': ['حسابك (نشط)', 'Your account (active)'],
   'stoppedStatus': ['موقوف', 'Stopped'],
   'pauseAdmin': ['إيقاف المشرف', 'Pause admin'],
   'resumeAdmin': ['تفعيل المشرف', 'Re-enable admin'],
@@ -212,6 +213,7 @@ const Map<String, List<String>> adminStrings = {
     '{n} عنصر معروض كـ«بيانات تجريبية» ومحتاج تأكيد',
     '{n} item(s) still marked "Sample" needing confirmation',
   ],
+  'att_unconfirmedBreakdown': ['منها {c} في {sec}', 'Includes {c} in {sec}'],
   'att_streamWithoutLink': [
     'البث المباشر شغال بدون رابط — أضف الرابط أو أوقف الشريط',
     'Live stream banner is on with no link — add a link or turn it off',

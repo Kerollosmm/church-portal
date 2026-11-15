@@ -1905,11 +1905,12 @@ void main() {
         findsOneWidget,
       );
 
-      // Self switches and expiry picker are hidden/disabled (own comes after ed1)
-      await tester.scrollUntilVisible(find.byKey(const ValueKey('admin-active-own')), 200, scrollable: outerScroll);
+      // Self active status renders styled badge instead of disabled switch
+      await tester.scrollUntilVisible(find.byKey(const ValueKey('admin-self-active-own')), 200, scrollable: outerScroll);
       await tester.pumpAndSettle();
-      final ownSwitch = tester.widget<AdminStateSwitch>(find.byKey(const ValueKey('admin-active-own')));
-      expect(ownSwitch.onChanged, isNull);
+      expect(find.byKey(const ValueKey('admin-self-active-own')), findsOneWidget);
+      expect(find.text('حسابك (نشط)'), findsOneWidget);
+      expect(find.byKey(const ValueKey('admin-active-own')), findsNothing);
       expect(find.byKey(const ValueKey('admin-expiry-own')), findsNothing);
 
       // ed2 (paused@) comes after own
@@ -4017,8 +4018,6 @@ void main() {
         locale: const Locale('ar'),
       ));
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('group-advanced')));
-      await tester.pumpAndSettle();
       final priorityHint = alertsDef.fields.firstWhere((f) => f.key == 'priority').hintAr;
       expect(find.textContaining(priorityHint), findsOneWidget);
     });
@@ -4135,6 +4134,299 @@ void main() {
       expect(find.byKey(const ValueKey('msgMore-m-done')), findsOneWidget);
       expect(find.byTooltip('Delete'), findsOneWidget);
       expect(tester.takeException(), isNull);
+    });
+
+    group('Phase 3J Remaining Implementer Tests', () {
+      testWidgets('DocEditor displays persistent Key(editor-save-error) banner on save failure and clears on edit or dismiss',
+          (tester) async {
+        tester.view.physicalSize = const Size(1200, 1600);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.reset);
+
+        final alertsDef = adminCollections.firstWhere((c) => c.name == 'alerts');
+        var shouldFail = true;
+        await tester.pumpWidget(MaterialApp(
+          supportedLocales: const [Locale('ar'), Locale('en')],
+          localizationsDelegates: GlobalMaterialLocalizations.delegates,
+          locale: const Locale('ar'),
+          home: Scaffold(
+            body: DocEditor(
+              key: const ValueKey('alerts-editor'),
+              title: alertsDef.labelAr,
+              fields: alertsDef.fields,
+              def: alertsDef,
+              popOnSave: true,
+              onSave: (_) async {
+                if (shouldFail) throw StateError('Firestore write error');
+              },
+            ),
+          ),
+        ));
+        await tester.pumpAndSettle();
+
+        // Enter required title so form is valid but save will call onSave and fail
+        await tester.enterText(find.byType(TextFormField).first, 'Notice Title');
+        await tester.pumpAndSettle();
+
+        // Tap top save button
+        await tester.tap(find.byKey(const Key('editor-save-top')));
+        await tester.pumpAndSettle();
+
+        // Persistent error banner is shown
+        expect(find.byKey(const Key('editor-save-error')), findsOneWidget);
+        expect(
+          find.descendant(
+            of: find.byKey(const Key('editor-save-error')),
+            matching: find.textContaining('Firestore write error'),
+          ),
+          findsOneWidget,
+        );
+
+        // Editing a field clears the error banner
+        await tester.enterText(find.byType(TextFormField).first, 'Notice Title Updated');
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('editor-save-error')), findsNothing);
+
+        // Save again to trigger failure again
+        await tester.tap(find.byKey(const Key('editor-save-top')));
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('editor-save-error')), findsOneWidget);
+
+        // Tapping close icon on the banner dismisses it
+        await tester.tap(find.descendant(of: find.byKey(const Key('editor-save-error')), matching: find.byIcon(Icons.close)));
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('editor-save-error')), findsNothing);
+      });
+
+      testWidgets('UnsavedGuard intercepts browser back via debugSimulatePopState when dirty', (tester) async {
+        var discarded = false;
+        await tester.pumpWidget(MaterialApp(
+          supportedLocales: const [Locale('ar'), Locale('en')],
+          localizationsDelegates: GlobalMaterialLocalizations.delegates,
+          locale: const Locale('ar'),
+          home: Scaffold(
+            body: UnsavedGuard(
+              dirty: true,
+              handlePop: false,
+              onBrowserBackDiscard: () => discarded = true,
+              child: const Text('Dirty Form Content'),
+            ),
+          ),
+        ));
+        await tester.pumpAndSettle();
+
+        // Simulate popstate
+        final future = debugSimulatePopState();
+        await tester.pumpAndSettle();
+
+        // Dialog is visible with keepEditing and discard
+        expect(find.byKey(const ValueKey('discard-keep')), findsOneWidget);
+        expect(find.byKey(const ValueKey('discard-confirm')), findsOneWidget);
+
+        // Tap keep editing
+        await tester.tap(find.byKey(const ValueKey('discard-keep')));
+        await tester.pumpAndSettle();
+        final keepResult = await future;
+        expect(keepResult, isFalse);
+        expect(discarded, isFalse);
+
+        // Simulate popstate again and confirm discard
+        final futureDiscard = debugSimulatePopState();
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const ValueKey('discard-confirm')));
+        await tester.pumpAndSettle();
+        final discardResult = await futureDiscard;
+        expect(discardResult, isTrue);
+        expect(discarded, isTrue);
+      });
+
+      testWidgets('MessagesScreen soft-deletes, hides, offers 10s undo and restores on undo', (tester) async {
+        final doc = AdminDoc('msg-1', {
+          'name': 'Test Sender',
+          'message': 'Test message content',
+          'createdAt': DateTime.utc(2026, 11, 15, 12),
+          'status': 'new',
+        });
+        final repo = _TestAdminBackend(initialCollections: {
+          'contact_messages': [doc],
+        });
+
+        await tester.pumpWidget(_app(MessagesScreen(repo: repo), locale: const Locale('ar')));
+        await tester.pumpAndSettle();
+
+        expect(find.text('Test Sender'), findsOneWidget);
+
+        // Tap delete icon
+        await tester.tap(find.byTooltip('حذف'));
+        await tester.pumpAndSettle();
+
+        // Confirm dialog
+        await tester.tap(find.byKey(const ValueKey('confirm-ok')));
+        await tester.pumpAndSettle();
+
+        // Soft delete: deletedAt written in repo.updates, message hidden from view immediately
+        expect(repo.updates.any((u) => u.id == 'msg-1' && u.data.containsKey('deletedAt')), isTrue);
+        expect(find.text('Test Sender'), findsNothing);
+
+        // Undo snackbar is visible
+        expect(find.text('تراجع'), findsOneWidget);
+
+        // Tap undo
+        await tester.tap(find.text('تراجع'));
+        await tester.pumpAndSettle();
+
+        // Restoration: deletedAt: null written, message restored
+        expect(repo.updates.any((u) => u.id == 'msg-1' && u.data['deletedAt'] == null), isTrue);
+        expect(find.text('Test Sender'), findsOneWidget);
+      });
+
+      testWidgets('MessagesScreen commits hard delete after 10s grace window', (tester) async {
+        final doc = AdminDoc('msg-2', {
+          'name': 'Expiring Sender',
+          'message': 'Expiring message content',
+          'createdAt': DateTime.utc(2026, 11, 15, 12),
+          'status': 'new',
+        });
+        final repo = _TestAdminBackend(initialCollections: {
+          'contact_messages': [doc],
+        });
+
+        await tester.pumpWidget(_app(MessagesScreen(repo: repo), locale: const Locale('ar')));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.byTooltip('حذف'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const ValueKey('confirm-ok')));
+        await tester.pumpAndSettle();
+
+        // Advance past 10-second timer
+        await tester.pump(const Duration(seconds: 11));
+        await tester.pumpAndSettle();
+
+        expect(repo.deletedIds, contains('contact_messages/msg-2'));
+      });
+
+      testWidgets('FeaturesScreen never shows updatedElsewhere banner on failed save with rollback', (tester) async {
+        final initialDoc = AdminDoc('features', {
+          'updatedAt': DateTime.utc(2026, 11, 1, 10),
+          'sections': {'clinics': true},
+        });
+        final backend = _FailingRollbackSaveBackend(initialDocs: {
+          'settings/features': initialDoc.data,
+        });
+
+        await tester.pumpWidget(_app(
+          FeaturesScreen(repo: backend),
+          locale: const Locale('ar'),
+        ));
+        await tester.pumpAndSettle();
+
+        // Mark form dirty by changing a switch
+        await tester.tap(find.byType(Switch).first);
+        await tester.pumpAndSettle();
+
+        // Save
+        await tester.tap(find.byKey(const Key('features-save')));
+        await tester.pumpAndSettle();
+
+        // Verify updatedElsewhere banner is NEVER shown
+        expect(find.text('تم تعديل هذه البيانات في مكان آخر'), findsNothing);
+        expect(find.byType(MaterialBanner), findsNothing);
+      });
+
+      testWidgets('OverviewScreen shows breakdown subtitle when sample items span multiple collections',
+          (tester) async {
+        final backend = _TestAdminBackend(initialCollections: {
+          'liturgies': [
+            for (var i = 0; i < 45; i++)
+              AdminDoc('lit-$i', {
+                'type': 'liturgy',
+                'sample': true,
+                'nameAr': 'قداس تجريبي',
+                'weekday': 1,
+              }),
+          ],
+          'priests': [
+            AdminDoc('pr-1', {
+              'status': 'serving',
+              'sample': true,
+              'nameAr': 'أب كاهن',
+            }),
+          ],
+        }, initialDocs: {
+          'settings/features': {
+            'sections': {'liturgies': true, 'priests': true},
+          },
+        });
+
+        await tester.pumpWidget(_app(
+          OverviewScreen(repo: backend, role: AdminRoles.owner, onOpen: (_) {}),
+          locale: const Locale('ar'),
+        ));
+        await tester.pumpAndSettle();
+
+        expect(find.byKey(const ValueKey('attention-unconfirmedData')), findsOneWidget);
+        expect(find.textContaining('منها 45 في القداسات'), findsOneWidget);
+      });
+
+      testWidgets('OverviewScreen shows breakdown subtitle in English when sample items span multiple collections',
+          (tester) async {
+        final backend = _TestAdminBackend(initialCollections: {
+          'liturgies': [
+            for (var i = 0; i < 10; i++)
+              AdminDoc('lit-$i', {
+                'type': 'liturgy',
+                'sample': true,
+                'nameAr': 'قداس تجريبي',
+                'nameEn': 'Sample mass',
+                'weekday': 1,
+              }),
+          ],
+          'priests': [
+            AdminDoc('pr-1', {
+              'status': 'serving',
+              'sample': true,
+              'nameAr': 'أب كاهن',
+              'nameEn': 'Sample priest',
+            }),
+          ],
+        }, initialDocs: {
+          'settings/features': {
+            'sections': {'liturgies': true, 'priests': true},
+          },
+        });
+
+        await tester.pumpWidget(_app(
+          OverviewScreen(repo: backend, role: AdminRoles.owner, onOpen: (_) {}),
+          locale: const Locale('en'),
+        ));
+        await tester.pumpAndSettle();
+
+        expect(find.byKey(const ValueKey('attention-unconfirmedData')), findsOneWidget);
+        expect(find.textContaining('Includes 10 in Liturgies'), findsOneWidget);
+      });
+
+      testWidgets('DocEditor displays updated switch_sample label', (tester) async {
+        final litDef = adminCollections.firstWhere((c) => c.name == 'liturgies');
+        await tester.pumpWidget(MaterialApp(
+          supportedLocales: const [Locale('ar'), Locale('en')],
+          localizationsDelegates: GlobalMaterialLocalizations.delegates,
+          locale: const Locale('ar'),
+          home: Scaffold(
+            body: DocEditor(
+              key: const ValueKey('liturgies-editor'),
+              title: litDef.labelAr,
+              fields: litDef.fields,
+              def: litDef,
+              popOnSave: true,
+              data: const {'sample': true},
+              onSave: (_) async {},
+            ),
+          ),
+        ));
+        await tester.pumpAndSettle();
+        expect(find.text('غير مؤكد (تجريبي)'), findsWidgets);
+      });
     });
   });
 }
@@ -4340,6 +4632,41 @@ class _ControllableOverviewBackend extends _TestAdminBackend {
       return alertsStream();
     }
     return super.watch(collection);
+  }
+}
+
+class _FailingRollbackSaveBackend extends _TestAdminBackend {
+  final Map<String, StreamController<AdminDoc?>> _docControllers = {};
+  bool failSave = true;
+
+  _FailingRollbackSaveBackend({super.initialDocs});
+
+  @override
+  Stream<AdminDoc?> watchDoc(String path) {
+    final c = _docControllers.putIfAbsent(path, () => StreamController<AdminDoc?>.broadcast());
+    scheduleMicrotask(() {
+      if (!c.isClosed) {
+        final d = docs[path];
+        c.add(d == null ? null : AdminDoc(path.split('/').last, Map<String, dynamic>.from(d)));
+      }
+    });
+    return c.stream;
+  }
+
+  @override
+  Future<void> saveDoc(String path, Map<String, dynamic> data) async {
+    savedPaths.add(path);
+    final c = _docControllers[path];
+    if (failSave) {
+      final original = docs[path];
+      if (c != null && !c.isClosed) {
+        c.add(AdminDoc(path.split('/').last, {...?original, ...data, 'updatedAt': null}));
+      }
+      if (c != null && !c.isClosed) {
+        c.add(original == null ? null : AdminDoc(path.split('/').last, Map<String, dynamic>.from(original)));
+      }
+      throw StateError('Firestore save failed');
+    }
   }
 }
 

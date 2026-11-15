@@ -498,7 +498,6 @@ const adminCollections = <CollectionDef>[
     FieldDef('priority', 'الأولوية (الأعلى يظهر أولًا)', 'Priority (higher shows first)', FieldType.integer,
         min: 0,
         max: 1000,
-        advanced: true,
         hintAr: 'الرقم الأكبر يظهر أولًا في أعلى الصفحة (مثلًا ١٠ يظهر قبل ١). الافتراضي ٠، ومن ٠ إلى ١٠٠٠.',
         hintEn: 'Larger numbers show first at the top of the page (e.g. 10 shows before 1). Default is 0, from 0 to 1000.'),
     FieldDef('link', 'رابط «اعرف المزيد» (صفحة، قسم أو رابط خارجي)', '"Learn more" link (a page, a section or an external URL)',

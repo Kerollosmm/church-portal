@@ -209,6 +209,14 @@ GoRouter buildAppRouter(Ref ref, {bool? isWeb, String initialLocation = '/'}) {
           GoRoute(path: '/church-education', pageBuilder: (c, s) => _page(s, const EducationPage())),
           GoRoute(path: '/church-activities', pageBuilder: (c, s) => _page(s, const ActivitiesPage())),
           GoRoute(
+            path: '/activities',
+            redirect: (_, s) => s.uri.hasQuery ? '/church-activities?${s.uri.query}' : '/church-activities',
+          ),
+          GoRoute(
+            path: '/priests',
+            redirect: (_, s) => s.uri.hasQuery ? '/about?${s.uri.query}' : '/about',
+          ),
+          GoRoute(
             path: '/clinics',
             pageBuilder: (c, s) => _page(s, ClinicsPage(initialSpecialty: s.uri.queryParameters['specialty'])),
           ),
@@ -224,6 +232,14 @@ GoRouter buildAppRouter(Ref ref, {bool? isWeb, String initialLocation = '/'}) {
                     loadLibrary: notifications_page.loadLibrary,
                     builder: (_) => notifications_page.NotificationsPage(),
                   ))),
+          GoRoute(
+            path: '/notices',
+            redirect: (_, s) => s.uri.hasQuery ? '/notifications?${s.uri.query}' : '/notifications',
+          ),
+          GoRoute(
+            path: '/donations',
+            redirect: (_, s) => s.uri.hasQuery ? '/page/donations?${s.uri.query}' : '/page/donations',
+          ),
           // Admin-defined categories and custom pages (ADR-027). Not behind a
           // section switch: each has its own `visible` flag.
           GoRoute(

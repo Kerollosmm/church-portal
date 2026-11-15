@@ -131,6 +131,7 @@ class DocEditorState extends State<DocEditor> {
   int _pendingFocusSteps = 0;
   double? _lastMaxScrollExtent;
   Timer? _errorFocusTimer;
+  String? _saveError;
 
   /// Image fields with a picked, compressed file waiting to be uploaded on save.
   final Map<String, EncodedImage> _pending = {};
@@ -336,9 +337,10 @@ class DocEditorState extends State<DocEditor> {
 
   void _markDirty() {
     if (!_initializing) _clearPendingErrorFocus();
-    if (!_initializing && mounted && (!_dirty || _showErrorSummary)) {
+    if (!_initializing && mounted && (!_dirty || _showErrorSummary || _saveError != null)) {
       setState(() {
         _dirty = true;
+        _saveError = null;
         if (_showErrorSummary && _collectErrors().isEmpty) {
           _showErrorSummary = false;
         }
@@ -576,6 +578,41 @@ class DocEditorState extends State<DocEditor> {
     });
   }
 
+  Widget _saveErrorBanner(BuildContext context, String error) {
+    return Semantics(
+      liveRegion: true,
+      child: Card(
+        key: const Key('editor-save-error'),
+        color: context.pal.alert.withValues(alpha: 0.08),
+        margin: const EdgeInsets.only(bottom: 14),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(color: context.pal.alert.withValues(alpha: 0.5)),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          child: Row(
+            children: [
+              Icon(Icons.error_outline, color: context.pal.alert, size: 20),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  error,
+                  style: TextStyle(color: context.pal.alert, fontWeight: FontWeight.w700),
+                ),
+              ),
+              IconButton(
+                icon: Icon(Icons.close, color: context.pal.alert, size: 18),
+                onPressed: () => setState(() => _saveError = null),
+                tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _errorSummaryCard(BuildContext context, List<_FieldErrorEntry> errors) {
     final n = errors.length;
     final title = switch (n) {
@@ -653,6 +690,7 @@ class DocEditorState extends State<DocEditor> {
   /// that fails leaves the earlier ones saved; a retry sends only the rest.
   Future<bool> save() async {
     if (_saving || _processing != null) return false;
+    setState(() => _saveError = null);
     final errors = _collectErrors();
     final valid = _formKey.currentState!.validate();
     if (!valid || errors.isNotEmpty) {
@@ -669,7 +707,14 @@ class DocEditorState extends State<DocEditor> {
     final messenger = ScaffoldMessenger.maybeOf(context);
     final docErr = validateDocument(widget.def, data);
     if (docErr != null) {
-      messenger?.showSnackBar(SnackBar(content: Text(context.tr(docErr))));
+      final msg = context.tr(docErr);
+      messenger?.showSnackBar(SnackBar(content: Text(msg)));
+      setState(() => _saveError = msg);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _scroll.hasClients) {
+          _scroll.animateTo(0, duration: const Duration(milliseconds: 200), curve: Curves.easeOut);
+        }
+      });
       return false;
     }
     final savedMsg = context.tr('saved');
@@ -736,6 +781,7 @@ class DocEditorState extends State<DocEditor> {
         _saving = false;
         _dirty = false;
         _showErrorSummary = false;
+        _saveError = null;
       });
       // The admin may have closed the editor while the write was pending:
       // only pop if this editor is still the top route.
@@ -762,8 +808,17 @@ class DocEditorState extends State<DocEditor> {
           ..image = null;
       }
       if (mounted) {
-        messenger?.showSnackBar(SnackBar(content: Text(context.tr('saveFailed', {'e': '$e'}))));
-        setState(() => _saving = false);
+        final errText = context.tr('saveFailed', {'e': '$e'});
+        messenger?.showSnackBar(SnackBar(content: Text(errText)));
+        setState(() {
+          _saving = false;
+          _saveError = errText;
+        });
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && _scroll.hasClients) {
+            _scroll.animateTo(0, duration: const Duration(milliseconds: 200), curve: Curves.easeOut);
+          }
+        });
       }
       return false;
     }
@@ -804,6 +859,7 @@ class DocEditorState extends State<DocEditor> {
     _pending.clear();
     _processing = null;
     _showErrorSummary = false;
+    _saveError = null;
     _initializing = true;
     try {
       for (final f in widget.fields) {
@@ -1189,6 +1245,7 @@ class DocEditorState extends State<DocEditor> {
           onChanged: (v) => setState(() {
             _values[f.key] = v;
             _dirty = true;
+            _saveError = null;
           }),
         );
         if (f.key == 'replacesDay' && _values['replacesDay'] == true) {
@@ -1221,6 +1278,7 @@ class DocEditorState extends State<DocEditor> {
           onChanged: (v) => setState(() {
             _values[f.key] = v;
             _dirty = true;
+            _saveError = null;
           }),
         );
       case FieldType.weekdays:
@@ -1240,6 +1298,7 @@ class DocEditorState extends State<DocEditor> {
                 onSelected: (sel) => setState(() {
                   sel ? set.add(d) : set.remove(d);
                   _dirty = true;
+                  _saveError = null;
                 }),
               ),
           ]),
@@ -2064,6 +2123,7 @@ class DocEditorState extends State<DocEditor> {
                           padding: const EdgeInsets.only(bottom: 12),
                           child: SelectableText('ID: ${widget.docId}', style: TextStyle(color: context.pal.muted)),
                         ),
+                      if (_saveError != null) _saveErrorBanner(context, _saveError!),
                       if (summaryErrors.isNotEmpty) _errorSummaryCard(context, summaryErrors),
                       for (final f in widget.fields)
                         if (f.group == FieldGroup.basic && !f.advanced && _isFieldShown(f))

@@ -4,12 +4,20 @@ import 'package:material_ui/material_ui.dart';
 import '../../core/l10n.dart';
 import 'unsaved_guard_stub.dart' if (dart.library.js_interop) 'unsaved_guard_web.dart' as impl;
 
+typedef DiscardHandler = Future<bool> Function();
+
 void addDirtyToken() => impl.registerDirtyToken();
 void removeDirtyToken() => impl.unregisterDirtyToken();
 VoidCallback addBeforeUnloadFlush(VoidCallback callback) => impl.addBeforeUnloadFlush(callback);
 
+void registerDiscardHandler(DiscardHandler handler) => impl.registerDiscardHandler(handler);
+void unregisterDiscardHandler(DiscardHandler handler) => impl.unregisterDiscardHandler(handler);
+
 @visibleForTesting
 void debugTriggerBeforeUnload() => impl.debugTriggerBeforeUnload();
+
+@visibleForTesting
+Future<bool> debugSimulatePopState() => impl.debugSimulatePopState();
 
 /// Prompts the user before discarding unsaved edits.
 ///
@@ -105,12 +113,14 @@ class UnsavedGuard extends StatefulWidget {
   final bool dirty;
   final Widget child;
   final bool handlePop;
+  final VoidCallback? onBrowserBackDiscard;
 
   const UnsavedGuard({
     super.key,
     required this.dirty,
     required this.child,
     this.handlePop = true,
+    this.onBrowserBackDiscard,
   });
 
   @override
@@ -120,6 +130,7 @@ class UnsavedGuard extends StatefulWidget {
 class _UnsavedGuardState extends State<UnsavedGuard> {
   UnsavedGuardRegistry? _registry;
   bool _registeredDirty = false;
+  DiscardHandler? _discardHandler;
 
   @override
   void didChangeDependencies() {
@@ -156,15 +167,41 @@ class _UnsavedGuardState extends State<UnsavedGuard> {
     if (dirty) {
       addDirtyToken();
       _registry?.register(this);
+      _discardHandler = _handlePopDiscard;
+      registerDiscardHandler(_discardHandler!);
     } else {
+      if (_discardHandler != null) {
+        unregisterDiscardHandler(_discardHandler!);
+        _discardHandler = null;
+      }
       removeDirtyToken();
       _registry?.unregister(this);
     }
   }
 
+  Future<bool> _handlePopDiscard() async {
+    if (!mounted) return true;
+    final discard = await confirmDiscardChanges(context);
+    if (discard && mounted) {
+      if (widget.handlePop) {
+        final nav = Navigator.of(context);
+        if (nav.canPop()) {
+          nav.pop();
+        }
+      } else {
+        widget.onBrowserBackDiscard?.call();
+      }
+    }
+    return discard;
+  }
+
   @override
   void dispose() {
     if (_registeredDirty) {
+      if (_discardHandler != null) {
+        unregisterDiscardHandler(_discardHandler!);
+        _discardHandler = null;
+      }
       removeDirtyToken();
       _registry?.unregister(this);
       _registeredDirty = false;
