@@ -151,6 +151,17 @@ describe('admin content', () => {
     await assertSucceeds(setDoc(ref, { ...fullClinic, deletedAt: null }));
   });
 
+  test('owner can soft-delete, restore, and hard-delete a priest', async () => {
+    const own = db(OWNER);
+    const ref = doc(own, 'priests', 'p-owner-del');
+    const stamp = { updatedAt: serverTimestamp(), updatedBy: `${OWNER}@x.test` };
+
+    await assertSucceeds(setDoc(ref, { ...convert(seed.priests.bemwa), ...stamp }));
+    await assertSucceeds(updateDoc(ref, { deletedAt: Timestamp.now(), ...stamp }));
+    await assertSucceeds(updateDoc(ref, { deletedAt: null, ...stamp }));
+    await assertSucceeds(deleteDoc(ref));
+  });
+
   test('rejects unknown keys, bad types and bad times', async () => {
     const ed = db(EDITOR);
     await assertFails(updateDoc(doc(ed, 'clinics', 'c1'), { hacked: true }));
@@ -1655,6 +1666,74 @@ describe('ADR-027: custom categories, their items and custom pages', () => {
     await assertFails(updateDoc(doc(ed, 'pages', 'p-link'), { featured: 1 }));
   });
 
+  test('owner creates blank and donation-template custom pages, including categoryId: null with placement: link', async () => {
+    const own = db(OWNER);
+    const stamp = () => ({ updatedAt: serverTimestamp(), updatedBy: `${OWNER}@x.test` });
+
+    // 1. Blank custom page (placement: 'link', categoryId: '', featured: false)
+    await assertSucceeds(setDoc(doc(own, 'pages', 'p-blank'), {
+      slug: 'blank-guide',
+      titleAr: 'دليل الزائر',
+      titleEn: '',
+      subtitleAr: '',
+      subtitleEn: '',
+      placement: 'link',
+      categoryId: '',
+      showInNav: false,
+      featured: false,
+      visible: true,
+      order: 10,
+      ...stamp(),
+    }));
+
+    // 2. categoryId: null (emitted by DocEditor nullableChoice) with placement: 'link' succeeds;
+    //    categoryId: null with placement: 'section' remains rejected.
+    await assertSucceeds(setDoc(doc(own, 'pages', 'p-null-cat'), {
+      slug: 'null-cat-link',
+      titleAr: 'صفحة عامة',
+      titleEn: '',
+      subtitleAr: '',
+      subtitleEn: '',
+      placement: 'link',
+      categoryId: null,
+      showInNav: false,
+      featured: false,
+      visible: true,
+      order: 20,
+      ...stamp(),
+    }));
+    await assertFails(updateDoc(doc(own, 'pages', 'p-null-cat'), { placement: 'section', ...stamp() }));
+
+    // 3. Donation-template page: DocEditor splitSavePayload sends base write (with categoryId: null)
+    //    followed by a separate blocks chunk write via mergeFields.
+    const donationRef = doc(own, 'pages', 'p-donation');
+    await assertSucceeds(setDoc(donationRef, {
+      slug: 'new-building-donations',
+      titleAr: 'التبرعات والمساهمات',
+      titleEn: 'Donations & contributions',
+      subtitleAr: '',
+      subtitleEn: '',
+      placement: 'link',
+      categoryId: null,
+      showInNav: false,
+      featured: false,
+      visible: true,
+      order: 0,
+      ...stamp(),
+    }));
+    await assertSucceeds(setDoc(donationRef, {
+      blocks: [
+        block({
+          type: 'paragraph',
+          textAr: 'بيانات المساهمة والتبرع (للعرض فقط — لا يتم أي دفع عبر الموقع).',
+          textEn: 'Donation and contribution details (display only — no payment is processed on this site).',
+        }),
+        block({ type: 'donation' }),
+      ],
+      ...stamp(),
+    }, { mergeFields: ['blocks', 'updatedAt', 'updatedBy'] }));
+  });
+
   test('the two custom-content section switches are known keys', async () => {
     await assertSucceeds(setDoc(doc(db(EDITOR), 'settings', 'features'), { sections: { customSections: false, customPages: true } }));
   });
@@ -1787,6 +1866,32 @@ describe('ADR-028: contact categories, bookings and anonymous messages', () => {
     await assertFails(updateDoc(doc(ed, 'contact_messages', 'm1'), { status: 'archived' }));
     await assertFails(updateDoc(doc(ed, 'contact_messages', 'm1'), { category: 'c2' }));
     await assertFails(updateDoc(doc(db(STRANGER), 'contact_messages', 'm1'), { adminNotes: 'x' }));
+  });
+
+  test('admins soft-delete, restore (deletedAt: null), and hard-delete contact_messages; visitors denied', async () => {
+    const ed = db(EDITOR);
+    const pub = db(null);
+    const stranger = db(STRANGER);
+    const ref = doc(ed, 'contact_messages', 'm1');
+    const stamp = () => ({ updatedAt: serverTimestamp(), updatedBy: `${EDITOR}@x.test` });
+
+    // Soft-delete with Timestamp and restore with null (10-second Undo)
+    await assertSucceeds(updateDoc(ref, { deletedAt: Timestamp.now(), ...stamp() }));
+    await assertSucceeds(updateDoc(ref, { deletedAt: null, ...stamp() }));
+
+    // Bad deletedAt type or modifying immutable message fields fails
+    await assertFails(updateDoc(ref, { deletedAt: '2026-11-15', ...stamp() }));
+    await assertFails(updateDoc(ref, { deletedAt: Timestamp.now(), message: 'tampered', ...stamp() }));
+
+    // Public visitors and non-admins cannot read, soft-delete, restore, or hard-delete
+    await assertFails(getDoc(doc(pub, 'contact_messages', 'm1')));
+    await assertFails(updateDoc(doc(pub, 'contact_messages', 'm1'), { deletedAt: Timestamp.now() }));
+    await assertFails(deleteDoc(doc(pub, 'contact_messages', 'm1')));
+    await assertFails(updateDoc(doc(stranger, 'contact_messages', 'm1'), { deletedAt: Timestamp.now() }));
+    await assertFails(deleteDoc(doc(stranger, 'contact_messages', 'm1')));
+
+    // Admin hard-delete succeeds
+    await assertSucceeds(deleteDoc(ref));
   });
 });
 
@@ -2507,6 +2612,65 @@ describe('P2-27b: englishEnabled owner-only switch on settings/features', () => 
     await assertSucceeds(setDoc(refEd, { liveEnabled: true, ...stamp(EDITOR) }, {
       mergeFields: ['liveEnabled', 'updatedAt', 'updatedBy'],
     }));
+  });
+
+  test('owner toggles englishEnabled on a full existing FeaturesScreen document; editor denied', async () => {
+    const ed = db(EDITOR);
+    const own = db(OWNER);
+    const refOwn = doc(own, 'settings', 'features');
+    const refEd = doc(ed, 'settings', 'features');
+    const stamp = (uid) => ({ updatedAt: serverTimestamp(), updatedBy: `${uid}@x.test` });
+
+    // Seed a full existing settings/features document (seed + extra fields)
+    const fullExisting = {
+      ...convert(seed.settings.features),
+      heroMotion: true,
+      heroSeasonTint: true,
+      heroShowAddress: false,
+      aboutMilestones: true,
+      occasions: { auto: false, easter: true, resurrectionDays: 7, schedule: {}, followSeason: true },
+      themeColors: {},
+      installPrompt: false,
+      push: false,
+      englishEnabled: true,
+    };
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'settings', 'features'), fullExisting);
+    });
+
+    // Payload matching FeaturesScreen / featuresSaveWrites base write
+    const basePayload = (englishEnabled, uid) => ({
+      sections: fullExisting.sections,
+      homeOrder: fullExisting.homeOrder,
+      homeHidden: fullExisting.homeHidden,
+      heroTitleAr: fullExisting.heroTitleAr,
+      heroTitleEn: fullExisting.heroTitleEn,
+      heroSubtitleAr: fullExisting.heroSubtitleAr,
+      heroSubtitleEn: fullExisting.heroSubtitleEn,
+      bannerEnabled: fullExisting.bannerEnabled,
+      bannerAr: fullExisting.bannerAr,
+      bannerEn: fullExisting.bannerEn,
+      bannerLink: fullExisting.bannerLink,
+      theme: fullExisting.theme,
+      footer: fullExisting.footer,
+      heroMotion: true,
+      heroSeasonTint: true,
+      heroShowAddress: false,
+      aboutMilestones: true,
+      errorReporting: true,
+      englishEnabled,
+      ...stamp(uid),
+    });
+
+    const offPayload = basePayload(false, OWNER);
+    await assertSucceeds(setDoc(refOwn, offPayload, { mergeFields: Object.keys(offPayload) }));
+
+    const onPayload = basePayload(true, OWNER);
+    await assertSucceeds(setDoc(refOwn, onPayload, { mergeFields: Object.keys(onPayload) }));
+
+    // Editor cannot toggle englishEnabled even with the full FeaturesScreen payload
+    const edOffPayload = basePayload(false, EDITOR);
+    await assertFails(setDoc(refEd, edOffPayload, { mergeFields: Object.keys(edOffPayload) }));
   });
 });
 

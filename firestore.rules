@@ -318,7 +318,8 @@ service cloud.firestore {
     // (their own write, like gallery / extraFields: expression budget).
     function validPagePlacement(d) {
       let p = d.get('placement', 'link');
-      let c = d.get('categoryId', '');
+      let rawC = d.get('categoryId', '');
+      let c = rawC == null ? '' : rawC;
       return p in ['link', 'nav', 'section']
         && c is string
         && c.matches(p == 'section' ? '[A-Za-z0-9_-]{1,128}' : '[A-Za-z0-9_-]{0,128}');
@@ -1199,16 +1200,22 @@ service cloud.firestore {
     match /contact_messages/{id} {
       allow read, delete: if isAdmin();
       // Admins change the status (new / handled; bookings: new / contacted /
-      // confirmed / declined) and internal notes (<= 2000 chars) only.
-      allow update: if isAdmin()
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'adminNotes', 'updatedAt', 'updatedBy'])
-        && request.resource.data.status in ['new', 'handled', 'contacted', 'confirmed', 'declined']
-        && (!('adminNotes' in request.resource.data)
-            || (request.resource.data.adminNotes is string && request.resource.data.adminNotes.size() <= 2000))
-        && stampOk(request.resource.data);
+      // confirmed / declined), internal notes (<= 2000 chars), and soft-delete
+      // timestamp (deletedAt) only.
+      allow update: if isAdmin() && validContactMessageUpdate(request.resource.data);
       allow create: if validContactMessage(request.resource.data)
         && getAfter(/databases/$(database)/documents/meta/contact_rate).data.lastAt == request.time
         && getAfter(/databases/$(database)/documents/meta/contact_rate).data.get('lastMsgId', '') == id;
+    }
+
+    function validContactMessageUpdate(d) {
+      let changed = d.diff(resource.data).affectedKeys();
+      return changed.hasOnly(['status', 'adminNotes', 'deletedAt', 'updatedAt', 'updatedBy'])
+        && d.status in ['new', 'handled', 'contacted', 'confirmed', 'declined']
+        && (!('adminNotes' in d)
+            || (d.adminNotes is string && d.adminNotes.size() <= 2000))
+        && (!('deletedAt' in changed) || optTimestamp(d, 'deletedAt'))
+        && stampOk(d);
     }
 
     // ---------------------- web push (ADR-060) -----------------------
