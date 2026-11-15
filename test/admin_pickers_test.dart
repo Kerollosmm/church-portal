@@ -347,5 +347,30 @@ void main() {
       expect(saved?['ordinationDate'], '2009-03-08');
       expect(saved?['hegumenDate'], '1995');
     });
+
+    testWidgets('looseDate picker preserves Feb 29 while typing a different leap year', (tester) async {
+      final def = collectionById('priests')!;
+      await _pump(
+        tester,
+        DocEditor(
+          title: 'كاهن',
+          fields: def.fields,
+          def: def,
+          popOnSave: false,
+          data: const {'name': 'أبونا مينا', 'rank': 'priest', 'status': 'serving', 'ordinationDate': '2000-02-29'},
+          onSave: (_) async {},
+        ),
+        locale: const Locale('en'),
+      );
+      await tester.tap(find.byKey(const ValueKey('pick-ordinationDate')));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const ValueKey('looseDate-year')), '200');
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const ValueKey('looseDate-year')), '2004');
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('looseDate-ok')));
+      await tester.pumpAndSettle();
+      expect(_text(tester, 'ordinationDate'), '2004-02-29');
+    });
   });
 }

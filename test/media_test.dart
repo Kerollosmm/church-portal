@@ -640,6 +640,25 @@ void main() {
       expect(find.text('3 fields'), findsOneWidget);
       expect(find.text('4 photos'), findsOneWidget);
       expect(find.text('1 filled'), findsOneWidget);
+      await tester.pumpWidget(editor(media: _FakeMedia(), data: {
+        'nameAr': 'القديس',
+        'image': {'source': 'url', 'url': 'https://img.example.org/cover.jpg'},
+      }));
+      await tester.pumpAndSettle();
+      expect(find.text('Cover image'), findsOneWidget);
+      expect(find.text('No photos'), findsNothing);
+      await tester.pumpWidget(editor(media: _FakeMedia(), data: {
+        'nameAr': 'القديس',
+        'detailsEnabled': true,
+        'extraFields': [
+          for (var i = 0; i < 3; i++) {'titleAr': 'عنوان $i', 'titleEn': '', 'valueAr': 'قيمة', 'valueEn': ''},
+        ],
+        'gallery': [
+          for (var i = 0; i < 4; i++) {'source': 'url', 'url': 'https://img.example.org/$i.jpg'},
+        ],
+        'whatsapp': '01012345678',
+      }));
+      await tester.pumpAndSettle();
       await expand(tester, 'details');
       expect(find.byKey(const ValueKey('field-detailsAr')), findsOneWidget);
       await tester.tap(find.byKey(const ValueKey('field-detailsEnabled')));

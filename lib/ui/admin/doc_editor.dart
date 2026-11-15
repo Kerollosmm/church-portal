@@ -1441,7 +1441,7 @@ class DocEditorState extends State<DocEditor> {
           ];
         case FieldGroup.media:
           final photos = [for (final f in fields) if (f.type == FieldType.imageList) ..._gallery[f.key]!].length;
-          final cover = fields.any(
+          final cover = widget.fields.any(
               (f) => f.type == FieldType.image && (_pending.containsKey(f.key) || MediaImage.fromMap(_values[f.key]) != null));
           return [
             if (photos > 0) context.tr('pillPhotos', {'n': '$photos'}),
@@ -2002,8 +2002,8 @@ class _LooseDatePickerDialogState extends State<_LooseDatePickerDialog> {
       }
       return;
     }
-    if (_day != null) {
-      final y = _parsedYear() ?? widget.defaultYear;
+    final y = _parsedYear();
+    if (y != null && _day != null) {
       final maxD = daysInMonth(y, _month!);
       if (_day! > maxD) {
         _day = maxD;
@@ -2015,13 +2015,14 @@ class _LooseDatePickerDialogState extends State<_LooseDatePickerDialog> {
   void _ok() {
     if (!(_formKey.currentState?.validate() ?? false)) return;
     final y = _parsedYear()!;
-    Navigator.pop(context, formatLooseDateValue(y, _month, _day));
+    final day = (_month == null || _day == null) ? null : _day!.clamp(1, daysInMonth(y, _month!));
+    Navigator.pop(context, formatLooseDateValue(y, _month, day));
   }
 
   @override
   Widget build(BuildContext context) {
     final ar = context.isAr;
-    final y = _parsedYear() ?? widget.defaultYear;
+    final y = _parsedYear() ?? 2000;
     final maxDay = _month == null ? 0 : daysInMonth(y, _month!);
     return AlertDialog(
       title: Text(widget.title),
