@@ -1,8 +1,6 @@
 import 'package:material_ui/material_ui.dart';
 
-import '../../config/app_config.dart';
 import '../../core/l10n.dart';
-import '../../core/theme.dart';
 import '../../data/admin_repository.dart';
 import '../../domain/features.dart';
 import 'admin_schema.dart';
@@ -122,13 +120,6 @@ class _AssistantSwitchesState extends State<AssistantSwitches> {
                   onChanged: church.data == null || !ready
                       ? null
                       : (v) => _save('settings/church', {'assistantEnabled': v}),
-                ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-                  child: Text(
-                    context.tr('assistantStatusNote', {'m': AppConfig.geminiModel}),
-                    style: TextStyle(fontSize: 12, color: context.pal.muted),
-                  ),
                 ),
               ]),
             ),

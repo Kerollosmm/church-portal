@@ -7,23 +7,33 @@ import '../../core/l10n.dart';
 import '../../core/launch.dart';
 import '../../core/theme.dart';
 import '../../data/admin_repository.dart';
+import '../../domain/attention.dart';
 import '../../domain/cairo_time.dart';
 import '../../domain/contact_categories.dart';
 import '../../domain/features.dart';
+import '../../domain/models.dart';
 import 'admin_access.dart';
 import 'admin_schema.dart';
 import 'admin_strings.dart';
 import 'admin_validators.dart';
 import 'confirm_named.dart';
 import 'doc_editor.dart';
+import 'screen_header.dart';
 import 'state_switch.dart';
 
-/// Dashboard home: counts, quick links, latest edits.
+/// Dashboard home: "Needs your attention" summary, 6 quick task buttons, latest edits.
 class OverviewScreen extends StatefulWidget {
   final AdminBackend repo;
   final String role;
   final void Function(String screenId) onOpen;
-  const OverviewScreen({super.key, required this.repo, required this.role, required this.onOpen});
+  final DateTime Function()? now;
+  const OverviewScreen({
+    super.key,
+    required this.repo,
+    required this.role,
+    required this.onOpen,
+    this.now,
+  });
 
   @override
   State<OverviewScreen> createState() => _OverviewScreenState();
@@ -92,61 +102,180 @@ class _OverviewScreenState extends State<OverviewScreen> {
     registerAdminStrings();
     final onOpen = widget.onOpen;
     final messages = _docs['contact_messages'];
-    final newMessages = messages?.where((d) => messageIsOpen(d.data)).length ?? 0;
+    final newMessages = (messages ?? const <AdminDoc>[])
+        .where((d) => !isSoftDeleted(d.data) && messageIsOpen(d.data))
+        .length;
     final f = FeatureSettings.fromMap(_features?.data);
+    final alertsList = [
+      for (final d in _docs['alerts'] ?? const <AdminDoc>[])
+        if (!isSoftDeleted(d.data)) Alert.fromMap(d.id, d.data),
+    ];
+    var unconfirmed = 0;
+    String? unconfirmedTarget;
+    for (final c in adminCollections) {
+      final list = _docs[c.name];
+      if (list == null) continue;
+      for (final d in list) {
+        if (!c.matches(d.data) || isSoftDeleted(d.data)) continue;
+        if (d.data['sample'] == true) {
+          unconfirmed++;
+          unconfirmedTarget ??= c.id;
+        }
+      }
+    }
+    final currentNow = widget.now?.call() ?? DateTime.now();
+    final attention = attentionItems(
+      newMessages: newMessages,
+      alerts: alertsList,
+      unconfirmed: unconfirmed,
+      streamOn: f.today.liveEnabled,
+      streamUrl: f.today.liveUrl,
+      englishOn: false,
+      missingEnglish: 0,
+      now: currentNow,
+      unconfirmedTarget: unconfirmedTarget ?? 'liturgies',
+    );
+    final ready = _featuresLoaded && (messages != null || _failed.contains('contact_messages'));
+
     final edited = <(String, AdminDoc)>[
       for (final e in _docs.entries)
         if (e.key != 'contact_messages')
           for (final d in e.value ?? const <AdminDoc>[])
-            if (d.updatedAt != null) (e.key, d),
+            if (d.updatedAt != null && !isSoftDeleted(d.data)) (e.key, d),
     ]..sort((a, b) => b.$2.updatedAt!.compareTo(a.$2.updatedAt!));
+
     return Scaffold(
       backgroundColor: context.pal.background,
       body: ListView(padding: const EdgeInsets.all(16), children: [
-        Text(context.tr('overviewTitle'),
-            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: context.pal.primary)),
-        const SizedBox(height: 4),
-        Text(context.tr('overviewHint'), style: TextStyle(color: context.pal.muted)),
+        AdminScreenHeader(
+          title: context.tr('overviewTitle'),
+          help: context.tr('help_overview'),
+        ),
         const SizedBox(height: 16),
-        Wrap(spacing: 12, runSpacing: 12, children: [
-          _StatCard(
-            icon: Icons.mail_outline,
-            label: context.tr('newMessages'),
-            value: _failed.contains('contact_messages') ? '—' : (messages == null ? '…' : '$newMessages'),
-            color: newMessages > 0 ? context.pal.alert : context.pal.primary,
-            onTap: () => onOpen('messages'),
+        Text(
+          context.tr('attentionTitle'),
+          style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+        ),
+        const SizedBox(height: 8),
+        if (attention.isNotEmpty)
+          Card(
+            key: const ValueKey('attention-section'),
+            margin: EdgeInsets.zero,
+            child: Column(
+              children: [
+                for (var i = 0; i < attention.length; i++) ...[
+                  if (i > 0) const Divider(height: 1),
+                  _attentionTile(context, attention[i], onOpen),
+                ],
+              ],
+            ),
+          )
+        else if (ready)
+          Card(
+            key: const ValueKey('attention-all-clear'),
+            margin: EdgeInsets.zero,
+            color: context.pal.surfaceAlt,
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Row(
+                children: [
+                  Icon(Icons.check_circle_outline, color: context.pal.success),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      context.tr('attentionAllClear'),
+                      style: TextStyle(color: context.pal.success, fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          )
+        else
+          const Card(
+            margin: EdgeInsets.zero,
+            child: Padding(
+              padding: EdgeInsets.all(14),
+              child: LinearProgressIndicator(),
+            ),
           ),
-          _StatCard(
-            icon: Icons.toggle_on_outlined,
-            label: context.tr('sectionsOn'),
-            value: _failed.contains('settings/features')
-                ? '—'
-                : (_featuresLoaded ? '${Sections.all.length - f.disabledCount}/${Sections.all.length}' : '…'),
+        const SizedBox(height: 20),
+        Text(
+          context.tr('quickTasksTitle'),
+          style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          key: const ValueKey('quick-tasks'),
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            _taskButton(
+              context,
+              key: const ValueKey('task-schedules'),
+              icon: Icons.access_time_outlined,
+              label: context.tr('task_schedules'),
+              onTap: () => onOpen('liturgies'),
+            ),
+            _taskButton(
+              context,
+              key: const ValueKey('task-announcement'),
+              icon: Icons.campaign_outlined,
+              label: context.tr('task_announcement'),
+              onTap: () => onOpen('app'),
+            ),
+            _taskButton(
+              context,
+              key: const ValueKey('task-inbox'),
+              icon: Icons.mark_email_unread_outlined,
+              label: context.tr('task_inbox'),
+              onTap: () => onOpen('messages'),
+            ),
+            _taskButton(
+              context,
+              key: const ValueKey('task-service'),
+              icon: Icons.volunteer_activism_outlined,
+              label: context.tr('task_service'),
+              onTap: () => onOpen('facilities'),
+            ),
+            _taskButton(
+              context,
+              key: const ValueKey('task-priest'),
+              icon: Icons.person_add_alt_1_outlined,
+              label: context.tr('task_priest'),
+              onTap: () => onOpen('priests'),
+            ),
+            _taskButton(
+              context,
+              key: const ValueKey('task-donations'),
+              icon: Icons.article_outlined,
+              label: context.tr('task_donations'),
+              onTap: () => onOpen('pages'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 20),
+        Card(
+          key: const ValueKey('sections-summary'),
+          margin: EdgeInsets.zero,
+          child: ListTile(
+            leading: Icon(Icons.toggle_on_outlined, color: context.pal.primary),
+            title: Text(context.tr('sectionsSummary'), style: const TextStyle(fontWeight: FontWeight.w700)),
+            subtitle: Text(
+              _failed.contains('settings/features')
+                  ? '—'
+                  : (_featuresLoaded
+                      ? '${context.tr('sectionsOn')}: ${Sections.all.length - f.disabledCount}/${Sections.all.length}'
+                      : '…'),
+            ),
+            trailing: TextButton.icon(
+              icon: const Icon(Icons.open_in_new, size: 18),
+              label: Text(context.tr('openSite')),
+              onPressed: () => openUrl(Uri.base.resolve('/').toString()),
+            ),
             onTap: () => onOpen('features'),
           ),
-          for (final c in adminCollections) _countCard(context, c),
-        ]),
-        const SizedBox(height: 20),
-        Text(context.tr('quickLinks'), style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
-        const SizedBox(height: 8),
-        Wrap(spacing: 8, runSpacing: 8, children: [
-          ActionChip(
-              avatar: const Icon(Icons.church_outlined, size: 18),
-              label: Text(context.tr('churchInfo')),
-              onPressed: () => onOpen('church')),
-          ActionChip(
-              avatar: const Icon(Icons.toggle_on_outlined, size: 18),
-              label: Text(context.tr('featuresAndHome')),
-              onPressed: () => onOpen('features')),
-          ActionChip(
-              avatar: const Icon(Icons.campaign_outlined, size: 18),
-              label: Text(context.tr('alertsShort')),
-              onPressed: () => onOpen('alerts')),
-          ActionChip(
-              avatar: const Icon(Icons.open_in_new, size: 18),
-              label: Text(context.tr('openSite')),
-              onPressed: () => openUrl(Uri.base.resolve('/').toString())),
-        ]),
+        ),
         const SizedBox(height: 20),
         Text(context.tr('recentEdits'), style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
         const SizedBox(height: 8),
@@ -168,23 +297,56 @@ class _OverviewScreenState extends State<OverviewScreen> {
     );
   }
 
-  Widget _countCard(BuildContext context, CollectionDef def) {
-    final all = _docs[def.name];
-    final docs = (all ?? const <AdminDoc>[]).where((d) => def.matches(d.data)).toList();
-    final hidden = docs.where((d) => d.data['visible'] == false).length;
-    final pending = docs.where((d) => d.data['sample'] == true).length;
-    final sub = [
-      if (hidden > 0) '${context.tr('hidden')}: $hidden',
-      if (pending > 0) '${context.tr('unconfirmed')}: $pending',
-    ].join(' • ');
-    return _StatCard(
-      icon: adminIcon(def.icon),
-      label: context.pick(def.labelAr, def.labelEn),
-      value: _failed.contains(def.name) ? '—' : (all == null ? '…' : '${docs.length}'),
-      sub: sub.isEmpty ? null : sub,
-      onTap: () => widget.onOpen(def.id),
+  Widget _attentionTile(BuildContext context, AttentionItem item, void Function(String) onOpen) {
+    final (IconData icon, Color color, String label) = switch (item.kind) {
+      AttentionKind.newMessages => (
+          Icons.mail_outline,
+          context.pal.alert,
+          context.tr('att_newMessages', {'n': '${item.count}'}),
+        ),
+      AttentionKind.expiringAlerts => (
+          Icons.campaign_outlined,
+          context.pal.goldText,
+          context.tr('att_expiringAlerts', {'n': '${item.count}'}),
+        ),
+      AttentionKind.unconfirmedData => (
+          Icons.fact_check_outlined,
+          context.pal.goldText,
+          context.tr('att_unconfirmedData', {'n': '${item.count}'}),
+        ),
+      AttentionKind.streamWithoutLink => (
+          Icons.live_tv_outlined,
+          context.pal.alert,
+          context.tr('att_streamWithoutLink'),
+        ),
+      AttentionKind.missingEnglish => (
+          Icons.translate_outlined,
+          context.pal.primary,
+          context.tr('att_missingEnglish', {'n': '${item.count}'}),
+        ),
+    };
+    return ListTile(
+      key: ValueKey('attention-${item.kind.name}'),
+      leading: Icon(icon, color: color),
+      title: Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
+      trailing: const Icon(Icons.chevron_right),
+      onTap: () => onOpen(item.targetScreenId),
     );
   }
+
+  Widget _taskButton(
+    BuildContext context, {
+    required Key key,
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) =>
+      FilledButton.tonalIcon(
+        key: key,
+        onPressed: onTap,
+        icon: Icon(icon, size: 18),
+        label: Text(label),
+      );
 
   static String _iconFor(String col) {
     for (final c in adminCollections) {
@@ -200,44 +362,6 @@ class _OverviewScreenState extends State<OverviewScreen> {
     }
     return d.id;
   }
-}
-
-class _StatCard extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String value;
-  final String? sub;
-  final VoidCallback onTap;
-  final Color? color;
-  const _StatCard(
-      {required this.icon,
-      required this.label,
-      required this.value,
-      required this.onTap,
-      this.sub,
-      this.color});
-
-  @override
-  Widget build(BuildContext context) => SizedBox(
-        width: 190,
-        child: Card(
-          child: InkWell(
-            borderRadius: BorderRadius.circular(16),
-            onTap: onTap,
-            child: Padding(
-              padding: const EdgeInsets.all(14),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Icon(icon, color: color ?? context.pal.primary),
-                const SizedBox(height: 6),
-                Text(value, style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: color ?? context.pal.primary)),
-                Text(label,
-                    maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600)),
-                if (sub != null) Text(sub!, style: TextStyle(color: context.pal.muted, fontSize: 12)),
-              ]),
-            ),
-          ),
-        ),
-      );
 }
 
 IconData adminIcon(String name) => switch (name) {
@@ -268,7 +392,17 @@ class ChurchInfoScreen extends StatefulWidget {
 
   /// Optional widget above the form (e.g. the assistant's status card).
   final Widget? header;
-  const ChurchInfoScreen({super.key, required this.repo, this.doc = churchInfoDoc, this.header});
+
+  /// Whether to render the screen title and one-line help header (P2-19).
+  final bool showHeader;
+
+  const ChurchInfoScreen({
+    super.key,
+    required this.repo,
+    this.doc = churchInfoDoc,
+    this.header,
+    this.showHeader = true,
+  });
 
   @override
   State<ChurchInfoScreen> createState() => _ChurchInfoScreenState();
@@ -326,7 +460,15 @@ class _ChurchInfoScreenState extends State<ChurchInfoScreen> {
         }
         final stale = changed && dirty;
         final doc = _shown;
+        final title = widget.showHeader ? context.pick(widget.doc.labelAr, widget.doc.labelEn) : '';
+        final help = widget.showHeader ? context.pick(widget.doc.helpAr, widget.doc.helpEn) : '';
         return Column(children: [
+          if (widget.showHeader && widget.header != null)
+            AdminScreenHeader(
+              title: title,
+              help: help,
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+            ),
           ?widget.header,
           if (stale)
             MaterialBanner(
@@ -352,7 +494,8 @@ class _ChurchInfoScreenState extends State<ChurchInfoScreen> {
           Expanded(
             child: DocEditor(
               key: _editorKey,
-              title: context.pick(widget.doc.labelAr, widget.doc.labelEn),
+              title: widget.showHeader && widget.header == null ? title : '',
+              help: widget.showHeader && widget.header == null ? help : '',
               fields: widget.doc.fields,
               data: doc?.data ?? const {},
               popOnSave: false,
@@ -456,32 +599,50 @@ class _MessagesScreenState extends State<MessagesScreen> {
           labelStyle: TextStyle(color: selected ? context.pal.onBar : context.pal.primary),
           onSelected: (_) => onTap(),
         );
-    return Column(children: [
-      Padding(
-        padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
-        child: Wrap(spacing: 6, runSpacing: 6, children: [
-          for (final b in boxes)
-            chip(b.$1, open(b.$1) > 0 ? '${b.$2} (${open(b.$1)})' : b.$2, box == b.$1, () => setState(() => _box = b.$1),
-                key: ValueKey('box-${b.$1}')),
-        ]),
-      ),
-      Padding(
-        padding: const EdgeInsets.all(12),
-        child: Wrap(spacing: 6, children: [
-          for (final f in ['new', 'handled', 'all'])
-            chip(f, context.tr('msg_$f'), _filter == f, () => setState(() => _filter = f), key: ValueKey('filter-$f')),
-        ]),
-      ),
-      Expanded(
-        child: list.isEmpty
-            ? Center(child: Text(context.tr('noMessages')))
-            : ListView.builder(
-                padding: const EdgeInsets.fromLTRB(12, 0, 12, 40),
-                itemCount: list.length,
-                itemBuilder: (context, i) => _message(context, cfg, list[i]),
+    return CustomScrollView(
+      slivers: [
+        SliverToBoxAdapter(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              AdminScreenHeader(
+                title: context.tr('messagesTitle'),
+                help: context.tr('help_messages'),
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
               ),
-      ),
-    ]);
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+                child: Wrap(spacing: 6, runSpacing: 6, children: [
+                  for (final b in boxes)
+                    chip(b.$1, open(b.$1) > 0 ? '${b.$2} (${open(b.$1)})' : b.$2, box == b.$1, () => setState(() => _box = b.$1),
+                        key: ValueKey('box-${b.$1}')),
+                ]),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(12),
+                child: Wrap(spacing: 6, children: [
+                  for (final f in ['new', 'handled', 'all'])
+                    chip(f, context.tr('msg_$f'), _filter == f, () => setState(() => _filter = f), key: ValueKey('filter-$f')),
+                ]),
+              ),
+            ],
+          ),
+        ),
+        if (list.isEmpty)
+          SliverFillRemaining(
+            hasScrollBody: false,
+            child: Center(child: Text(context.tr('noMessages'))),
+          )
+        else
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 40),
+            sliver: SliverList.builder(
+              itemCount: list.length,
+              itemBuilder: (context, i) => _message(context, cfg, list[i]),
+            ),
+          ),
+      ],
+    );
   }
 
   Widget _message(BuildContext context, ContactSettings cfg, AdminDoc d) {
@@ -762,6 +923,11 @@ class _AdminsScreenState extends State<AdminsScreen> {
           if (!snap.hasData) return const Center(child: CircularProgressIndicator());
           final admins = [...snap.data!]..sort((a, b) => '${a.data['email']}'.compareTo('${b.data['email']}'));
           return ListView(padding: const EdgeInsets.fromLTRB(12, 12, 12, 90), children: [
+            AdminScreenHeader(
+              title: context.tr('adminsTitle'),
+              help: context.tr('help_admins'),
+              padding: const EdgeInsets.fromLTRB(4, 4, 4, 10),
+            ),
             Card(
               color: context.pal.surfaceAlt,
               child: Padding(

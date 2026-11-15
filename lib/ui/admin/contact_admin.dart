@@ -6,6 +6,7 @@ import '../../data/admin_repository.dart';
 import '../../domain/contact_categories.dart';
 import 'admin_strings.dart';
 import 'doc_editor.dart' show choiceLabel;
+import 'screen_header.dart';
 import 'state_switch.dart';
 import 'unsaved_bar.dart';
 import 'unsaved_guard.dart';
@@ -152,6 +153,11 @@ class _ContactCategoriesScreenState extends State<ContactCategoriesScreen> {
     return Form(
       key: _form,
       child: ListView(padding: const EdgeInsets.fromLTRB(12, 12, 12, 96), children: [
+        AdminScreenHeader(
+          title: context.tr('contactCatsTitle'),
+          help: context.tr('help_contactCats'),
+          padding: const EdgeInsets.only(bottom: 8),
+        ),
         Text(context.tr('contactCatsHint'), style: TextStyle(color: context.pal.muted, height: 1.6)),
         const SizedBox(height: 12),
         for (var i = 0; i < cats.length; i++) _card(context, i, cats[i]),

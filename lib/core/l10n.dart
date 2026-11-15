@@ -181,13 +181,13 @@ const Map<String, List<String>> _strings = {
   'askTitle': ['اسأل الكنيسة', 'Ask the church'],
   'assistantSectionSwitch': ['قسم «اسأل الكنيسة» ظاهر', '"Ask the church" section shown'],
   'assistantSectionSwitchHint': [
-    'نفس مفتاح القسم في «الأقسام والصفحة الرئيسية».',
-    'The same switch as in "Sections & home page".'
+    'إظهار أو إخفاء قسم «اسأل الكنيسة» في الموقع.',
+    'Show or hide the "Ask the church" section on the site.'
   ],
   'assistantEnabledSwitch': ['تفعيل المساعد الذكي', 'Enable the AI assistant'],
   'assistantEnabledSwitchHint': [
-    'نفس الخيار في «بيانات الكنيسة». يظهر المساعد للزوار عند تشغيل المفتاحين معًا.',
-    'The same option as in "Church info". Visitors see the assistant when both switches are on.'
+    'التشغيل الكلي للمساعد. يظهر للزوار عند تشغيل المفتاحين معًا.',
+    'Master switch for the assistant. Visitors see it when both switches are on.'
   ],
   'assistantStatusNote': [
     'يحتاج المساعد أيضًا إلى App Check (مفتاح reCAPTCHA Enterprise على الويب، Play Integrity على أندرويد). النموذج الافتراضي: {m}. يجيب فقط عن الكنيسة وخدماتها من بيانات الموقع، ويعتذر عن أي سؤال آخر.',
@@ -357,7 +357,7 @@ const Map<String, List<String>> _strings = {
   'tooLong': ['النص أطول من المسموح', 'Too long'],
   'invalidUrl': ['رابط غير صحيح (يبدأ بـ https://)', 'Invalid link (must start with https://)'],
   'invalidPhone': ['رقم غير صحيح (5–15 رقمًا)', 'Invalid number (5–15 digits)'],
-  'invalidTime': ['الوقت بصيغة HH:mm مثل 06:30', 'Use HH:mm, e.g. 06:30'],
+  'invalidTime': ['الوقت غير صحيح، مثال 06:30', 'Invalid time, e.g. 06:30'],
   'invalidDate': ['تاريخ غير صحيح', 'Invalid date'],
   'outOfRange': ['القيمة خارج النطاق المسموح', 'Value out of range'],
   'endBeforeStart': ['وقت الانتهاء يجب أن يكون بعد البداية', 'The end must be after the start'],

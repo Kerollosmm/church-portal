@@ -1,4 +1,5 @@
 import 'package:church_portal/domain/assistant_context.dart';
+import 'package:church_portal/domain/attention.dart';
 import 'package:church_portal/domain/cairo_time.dart';
 import 'package:church_portal/domain/features.dart';
 import 'package:church_portal/domain/models.dart';
@@ -995,6 +996,159 @@ void main() {
       expect(isExpiredSoftDelete(d15sAgo, now, grace: const Duration(seconds: 30)), isFalse);
       final d30sAgo = {'deletedAt': now.subtract(const Duration(seconds: 30))};
       expect(isExpiredSoftDelete(d30sAgo, now, grace: const Duration(seconds: 30)), isTrue);
+    });
+  });
+
+  group('attentionItems (P2-23)', () {
+    final now = DateTime.utc(2026, 11, 14, 12, 0);
+
+    Alert mkAlert(
+      String id, {
+      bool visible = true,
+      bool active = true,
+      DateTime? endsAt,
+    }) =>
+        Alert(
+          id: id,
+          titleAr: 'تنويه $id',
+          titleEn: 'Notice $id',
+          visible: visible,
+          active: active,
+          endsAt: endsAt,
+        );
+
+    test('returns empty list when nothing needs attention', () {
+      expect(
+        attentionItems(
+          newMessages: 0,
+          alerts: [
+            mkAlert('later', endsAt: now.add(const Duration(hours: 49))),
+            mkAlert('past', endsAt: now.subtract(const Duration(minutes: 1))),
+            mkAlert('hidden', visible: false, endsAt: now.add(const Duration(hours: 10))),
+            mkAlert('inactive', active: false, endsAt: now.add(const Duration(hours: 10))),
+            mkAlert('no-end'),
+          ],
+          unconfirmed: 0,
+          streamOn: true,
+          streamUrl: 'https://youtube.com/watch?v=123',
+          englishOn: true,
+          missingEnglish: 0,
+          now: now,
+        ),
+        isEmpty,
+      );
+    });
+
+    test('triggers each AttentionKind individually with expected count and target', () {
+      final msgOnly = attentionItems(
+        newMessages: 3,
+        alerts: const [],
+        unconfirmed: 0,
+        streamOn: false,
+        streamUrl: '',
+        englishOn: false,
+        missingEnglish: 0,
+        now: now,
+      );
+      expect(msgOnly.map((e) => (e.kind, e.count, e.targetScreenId)),
+          [(AttentionKind.newMessages, 3, 'messages')]);
+
+      final alertsOnly = attentionItems(
+        newMessages: 0,
+        alerts: [
+          mkAlert('at-now', endsAt: now),
+          mkAlert('at-48h', endsAt: now.add(const Duration(hours: 48))),
+          mkAlert('hidden', visible: false, endsAt: now.add(const Duration(hours: 1))),
+          mkAlert('inactive', active: false, endsAt: now.add(const Duration(hours: 1))),
+          mkAlert('past', endsAt: now.subtract(const Duration(seconds: 1))),
+          mkAlert('too-far', endsAt: now.add(const Duration(hours: 48, seconds: 1))),
+          mkAlert('no-end'),
+        ],
+        unconfirmed: 0,
+        streamOn: false,
+        streamUrl: '',
+        englishOn: false,
+        missingEnglish: 0,
+        now: now,
+      );
+      expect(alertsOnly.map((e) => (e.kind, e.count, e.targetScreenId)),
+          [(AttentionKind.expiringAlerts, 2, 'alerts')]);
+
+      final sampleOnly = attentionItems(
+        newMessages: 0,
+        alerts: const [],
+        unconfirmed: 4,
+        streamOn: false,
+        streamUrl: '',
+        englishOn: false,
+        missingEnglish: 0,
+        now: now,
+        unconfirmedTarget: 'priests',
+      );
+      expect(sampleOnly.map((e) => (e.kind, e.count, e.targetScreenId)),
+          [(AttentionKind.unconfirmedData, 4, 'priests')]);
+
+      final streamBlank = attentionItems(
+        newMessages: 0,
+        alerts: const [],
+        unconfirmed: 0,
+        streamOn: true,
+        streamUrl: '   ',
+        englishOn: false,
+        missingEnglish: 0,
+        now: now,
+      );
+      expect(streamBlank.map((e) => (e.kind, e.count, e.targetScreenId)),
+          [(AttentionKind.streamWithoutLink, 1, 'today')]);
+
+      // Stream off with empty URL -> no alert; stream on with valid URL -> no alert.
+      expect(
+        attentionItems(
+          newMessages: 0,
+          alerts: const [],
+          unconfirmed: 0,
+          streamOn: false,
+          streamUrl: '',
+          englishOn: false,
+          missingEnglish: 5, // ignored because englishOn is false
+          now: now,
+        ),
+        isEmpty,
+      );
+
+      final englishOnly = attentionItems(
+        newMessages: 0,
+        alerts: const [],
+        unconfirmed: 0,
+        streamOn: false,
+        streamUrl: '',
+        englishOn: true,
+        missingEnglish: 5,
+        now: now,
+        missingEnglishTarget: 'saints',
+      );
+      expect(englishOnly.map((e) => (e.kind, e.count, e.targetScreenId)),
+          [(AttentionKind.missingEnglish, 5, 'saints')]);
+    });
+
+    test('maintains exact priority ordering when all five items apply', () {
+      final items = attentionItems(
+        newMessages: 2,
+        alerts: [mkAlert('soon', endsAt: now.add(const Duration(hours: 6)))],
+        unconfirmed: 7,
+        streamOn: true,
+        streamUrl: '',
+        englishOn: true,
+        missingEnglish: 4,
+        now: now,
+      );
+      expect(items.map((e) => e.kind), [
+        AttentionKind.newMessages,
+        AttentionKind.expiringAlerts,
+        AttentionKind.unconfirmedData,
+        AttentionKind.streamWithoutLink,
+        AttentionKind.missingEnglish,
+      ]);
     });
   });
 }

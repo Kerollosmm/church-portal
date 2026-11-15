@@ -38,9 +38,12 @@ service cloud.firestore {
         && adminDocActive(get(/databases/$(database)/documents/admins/$(request.auth.uid)).data);
     }
 
+    function hasOwnerRole() {
+      return get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.get('role', '') == 'owner';
+    }
+
     function isOwner() {
-      return isAdmin()
-        && get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.get('role', '') == 'owner';
+      return isAdmin() && hasOwnerRole();
     }
 
     // ---- field helpers (absent or null is accepted for optional fields) ----
@@ -584,14 +587,29 @@ service cloud.firestore {
     }
 
     // ------------------------------- settings -------------------------------
-    match /settings/{docId} {
-      allow read: if docId != 'notifications' || isAdmin();
-      allow create, update: if isAdmin()
-        && ((docId == 'church' && validChurch(request.resource.data))
-            || (docId == 'features' && validFeatures(request.resource.data))
-            || (docId == 'contact' && validContactSettings(request.resource.data))
-            || (docId == 'assistant' && validAssistant(request.resource.data))
-            || (docId == 'notifications' && validNotifications(request.resource.data)));
+    match /settings/church {
+      allow read: if true;
+      allow create, update: if isAdmin() && validChurch(request.resource.data);
+      allow delete: if false;
+    }
+    match /settings/features {
+      allow read: if true;
+      allow create, update: if isAdmin() && validFeatures(request.resource.data);
+      allow delete: if false;
+    }
+    match /settings/contact {
+      allow read: if true;
+      allow create, update: if isOwner() && validContactSettings(request.resource.data);
+      allow delete: if false;
+    }
+    match /settings/assistant {
+      allow read: if true;
+      allow create, update: if isOwner() && validAssistant(request.resource.data);
+      allow delete: if false;
+    }
+    match /settings/notifications {
+      allow read: if isAdmin();
+      allow create, update: if isAdmin() && validNotifications(request.resource.data);
       allow delete: if false;
     }
 
@@ -674,7 +692,7 @@ service cloud.firestore {
       return changed.hasOnly(['schedule', 'status', 'sentLog', 'reminderPlan', 'remindersSent', 'health',
                               'updatedAt', 'updatedBy'])
         && (!('schedule' in changed) || validNotifySchedule(d))
-        && (!('sentLog' in changed) || (isOwner() && d.get('sentLog', []).size() == 0))
+        && (!('sentLog' in changed) || (hasOwnerRole() && d.get('sentLog', []).size() == 0))
         && !changed.hasAny(['status', 'reminderPlan', 'remindersSent', 'health'])
         && (!changed.hasAny(['updatedAt', 'updatedBy']) || stampOk(d));
     }
@@ -714,8 +732,8 @@ service cloud.firestore {
     }
 
     // Only reached when the write changes a key outside the legacy list.
-    function validInstallPush(d, changed) {
-      return changed.hasOnly(legacyFeatureKeys().concat(installPushKeys()))
+    function validInstallPush(d, changed, legacy) {
+      return changed.hasOnly(legacy.concat(installPushKeys()))
         && validInstallSettings(d, changed) && validPushSettings(d, changed);
     }
 
@@ -779,9 +797,8 @@ service cloud.firestore {
       return (!changed.hasAny(['push', 'pushVapidKey', 'pushTypes', 'reminderLeads', 'reminderDefaultLead'])
               || validPushCore(d))
         && (!('notifyTypes' in changed) || validNotifyTypes(d.get('notifyTypes', [])))
-        && (!('reminderSources' in changed) || d.get('reminderSources', '') in [
-          '', 'lit', 'mtg', 'day', 'lit,mtg', 'lit,day', 'mtg,lit', 'mtg,day', 'day,lit', 'day,mtg',
-          'lit,mtg,day', 'lit,day,mtg', 'mtg,lit,day', 'mtg,day,lit', 'day,lit,mtg', 'day,mtg,lit']);
+        && (!('reminderSources' in changed)
+            || d.get('reminderSources', '').matches('^(|lit|mtg|day|lit,mtg|lit,day|mtg,lit|mtg,day|day,lit|day,mtg|lit,mtg,day|lit,day,mtg|mtg,lit,day|mtg,day,lit|day,lit,mtg|day,mtg,lit)$'));
     }
 
     function validFeatures(d) {
@@ -792,7 +809,8 @@ service cloud.firestore {
       // saves recalculating affectedKeys; ADR-057 keys are checked only when
       // a non-legacy key changes.
       let changed = changedKeys(d);
-      return (changed.hasOnly(legacyFeatureKeys()) || validInstallPush(d, changed))
+      let legacy = legacyFeatureKeys();
+      return (changed.hasOnly(legacy) || validInstallPush(d, changed, legacy))
         && (!('sections' in changed) || !('sections' in d) || validSections(d.sections))
         && (!('homeOrder' in changed) || !('homeOrder' in d) || (d.homeOrder is list && d.homeOrder.size() <= 7
               && d.homeOrder.hasOnly(['banner', 'alerts', 'nextMass', 'quickContacts', 'milestones', 'directory', 'map'])))
@@ -806,7 +824,9 @@ service cloud.firestore {
                     + d.get('bannerAr', '') + '\u001f' + d.get('bannerEn', ''))
                    .matches('[^\\x1f]{0,200}\\x1f[^\\x1f]{0,200}\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{0,500}\\x1f[^\\x1f]{0,500}')))
         && (!('bannerLink' in changed) || optUrlOrPath(d, 'bannerLink', 500))
-        && (!('theme' in changed) || d.get('theme', 'goldenHour') in ['goldenHour', 'holyWeek', 'resurrection', 'nativity', 'epiphany', 'fasting', 'marian', 'navy', 'green', 'brown', 'purple', 'burgundy'])
+        && (!('theme' in changed)
+            || (d.get('theme', 'goldenHour') is string
+                && d.get('theme', 'goldenHour').matches('^(goldenHour|holyWeek|resurrection|nativity|epiphany|fasting|marian|navy|green|brown|purple|burgundy)$')))
         && (!('occasions' in changed) || !('occasions' in d) || validOccasions(d.occasions))
         && (!('themeColors' in changed) || !('themeColors' in d) || validThemeColors(d.themeColors))
         && (!('heroVideos' in changed) || !('heroVideos' in d) || validHeroVideos(d.heroVideos))
@@ -829,13 +849,12 @@ service cloud.firestore {
             || (optBool(d, 'liveEnabled') && optHttpUrl(d, 'liveUrl', 500) && str(d, 'liveLabelAr', 120)
                 && str(d, 'liveLabelEn', 120) && optTimestamp(d, 'liveEndsAt') && optBool(d, 'liveBadgeHideOnHome')))
         && (!('dayEvents' in changed) || validDayEvents(d))
+        && ((!('venues' in changed) && !('audiences' in changed) && !('seasonVerses' in changed)) || hasOwnerRole())
         && (!('venues' in changed) || validProgramOptions(d, 'venues'))
         && (!('audiences' in changed) || validProgramOptions(d, 'audiences'))
-        && (!changed.hasAny(['seasonVerses', 'seasonPreset', 'weddingBookingOff'])
-            || ((!('seasonVerses' in changed) || validSeasonVerses(d))
-                && (!('seasonPreset' in changed) || d.get('seasonPreset', null) == null
-                    || validSeasonPreset(d.seasonPreset))
-                && optBool(d, 'weddingBookingOff')))
+        && (!('seasonVerses' in changed) || validSeasonVerses(d))
+        && (!('seasonPreset' in changed) || d.get('seasonPreset', null) == null || validSeasonPreset(d.seasonPreset))
+        && (!('weddingBookingOff' in changed) || optBool(d, 'weddingBookingOff'))
         && (!changed.hasAny(['updatedAt', 'updatedBy']) || stampOk(d));
     }
 
@@ -843,10 +862,11 @@ service cloud.firestore {
     // strings, checked as one joined string (one regex).
     // ADR-047: each row may end with an optional ␟textEn␟refEn tail.
     function validSeasonVerses(d) {
-      return d.get('seasonVerses', null) == null
-        || (d.seasonVerses is list && d.seasonVerses.size() <= 40
-            && (d.seasonVerses.size() == 0
-                || d.seasonVerses.join('\u001e').matches(
+      let v = d.get('seasonVerses', null);
+      return v == null
+        || (v is list && v.size() <= 40
+            && (v.size() == 0
+                || v.join('\u001e').matches(
                      '(holy_week|pascha|nativity|epiphany|marian|fast|revival_maximus|revival_moses|summer|apostles|nayrouz|kiahk|great_lent)\x1f[^\x1f\x1e]{1,500}\x1f[^\x1f\x1e]{0,60}(\x1f[^\x1f\x1e]{0,500}\x1f[^\x1f\x1e]{0,60})?'
                      + '(\x1e(holy_week|pascha|nativity|epiphany|marian|fast|revival_maximus|revival_moses|summer|apostles|nayrouz|kiahk|great_lent)\x1f[^\x1f\x1e]{1,500}\x1f[^\x1f\x1e]{0,60}(\x1f[^\x1f\x1e]{0,500}\x1f[^\x1f\x1e]{0,60})?){0,39}')));
     }
@@ -885,10 +905,11 @@ service cloud.firestore {
     }
 
     function validProgramOptions(d, k) {
-      return d.get(k, null) == null
-        || (d[k] is list && d[k].size() <= 12
-            && (d[k].size() == 0
-                || d[k].join('\u001e').matches('[a-z0-9_-]{1,30}\x1f[^\x1f\x1e]{1,80}\x1f[^\x1f\x1e]{0,80}(\x1e[a-z0-9_-]{1,30}\x1f[^\x1f\x1e]{1,80}\x1f[^\x1f\x1e]{0,80}){0,11}')));
+      let v = d.get(k, null);
+      return v == null
+        || (v is list && v.size() <= 12
+            && (v.size() == 0
+                || v.join('\u001e').matches('[a-z0-9_-]{1,30}\x1f[^\x1f\x1e]{1,80}\x1f[^\x1f\x1e]{0,80}(\x1e[a-z0-9_-]{1,30}\x1f[^\x1f\x1e]{1,80}\x1f[^\x1f\x1e]{0,80}){0,11}')));
     }
 
     // Church events of the day (ADR-040): up to 20, each ONE string
@@ -1089,17 +1110,18 @@ service cloud.firestore {
       let old = resource == null ? {} : resource.data.get('pageHeaders', {});
       let changed = old is map ? h.diff(old).affectedKeys() : h.keys().toSet();
       return h is map
-        && h.keys().hasOnly(['about', 'schedule', 'education', 'activities', 'clinics', 'services', 'contact', 'ask', 'notifications'])
-        && (!('about' in changed) || !('about' in h) || validPageHeader(h.about))
-        && (!('schedule' in changed) || !('schedule' in h) || validPageHeader(h.schedule))
-        && (!('education' in changed) || !('education' in h) || validPageHeader(h.education))
-        && (!('activities' in changed) || !('activities' in h) || validPageHeader(h.activities))
-        && (!('clinics' in changed) || !('clinics' in h) || validPageHeader(h.clinics))
-        && (!('services' in changed) || !('services' in h) || validPageHeader(h.services))
-        && (!('contact' in changed) || !('contact' in h) || validPageHeader(h.contact))
-        && (!('ask' in changed) || !('ask' in h) || validPageHeader(h.ask))
-        // Notifications page (ADR-057): `in` on the set, the cheapest gate.
-        && (!('notifications' in changed) || !('notifications' in h) || validPageHeader(h.notifications));
+        && ((h.size() == 0 && (!(old is map) || old.size() == 0))
+            || (h.keys().hasOnly(['about', 'schedule', 'education', 'activities', 'clinics', 'services', 'contact', 'ask', 'notifications'])
+                && (!('about' in changed) || !('about' in h) || validPageHeader(h.about))
+                && (!('schedule' in changed) || !('schedule' in h) || validPageHeader(h.schedule))
+                && (!('education' in changed) || !('education' in h) || validPageHeader(h.education))
+                && (!('activities' in changed) || !('activities' in h) || validPageHeader(h.activities))
+                && (!('clinics' in changed) || !('clinics' in h) || validPageHeader(h.clinics))
+                && (!('services' in changed) || !('services' in h) || validPageHeader(h.services))
+                && (!('contact' in changed) || !('contact' in h) || validPageHeader(h.contact))
+                && (!('ask' in changed) || !('ask' in h) || validPageHeader(h.ask))
+                // Notifications page (ADR-057): `in` on the set, the cheapest gate.
+                && (!('notifications' in changed) || !('notifications' in h) || validPageHeader(h.notifications))));
     }
     // Exactly the 6 keys (the admin form always writes all six: size 6 and
     // each one read), all strings; titles <= 200, subtitles <= 300, intros

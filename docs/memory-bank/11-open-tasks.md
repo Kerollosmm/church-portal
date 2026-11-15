@@ -100,12 +100,13 @@ the owner approves the whole chain.
 
 ## Phase 3 — Admin panel simplification (plan in `docs/plans/phase3/`)
 
-Progress tracked in [`docs/plans/phase3/STATUS.md`](../plans/phase3/STATUS.md). Stage 1 underway.
+Progress tracked in [`docs/plans/phase3/STATUS.md`](../plans/phase3/STATUS.md). Stage 2 underway.
 
 - [x] PR 3A — Safe actions (`feat/p3a-safe-actions`, items 6, 7, 8, 11; ADR-070): `confirmNamedAction`, `UnsavedGuard` + `beforeunload`, `PendingDelete` (10s undo), `UnsavedBar`
-- [ ] PR 3B — Written state (items 9, 10): `AdminStateSwitch` («ظاهر / مخفي», «مفعّل / مقفول») and preview before `replacesDay`
-- [ ] PR 3C — Admin status & session (items 12, 13): `active`/`expiresAt` on admins + rules, auto sign-out after 30 minutes
-- [ ] PR 3D — Custom pages flow (items 14, 15, 16, 17): auto slug, donations template, unified sections screen, clearer hints
+- [x] PR 3B — Written state (`feat/p3b-written-state`, items 9, 10): `AdminStateSwitch` («ظاهر / مخفي», «مفعّل / مقفول») and preview before `replacesDay`
+- [x] PR 3C — Admin status & session (`feat/p3c-admin-status-session`, items 12, 13): `active`/`expiresAt` on admins + rules, auto sign-out after 30 minutes
+- [x] PR 3D — Custom pages flow (`feat/p3d-custom-pages`, items 14, 15, 16, 17, 18a): auto slug, donations template, unified sections screen, clearer hints, page placement & featured toggle
+- [x] PR 3E — Menu grouping, screen help, owner advanced & new home (`feat/p3e-menu-home`, items 18/18R, 19, 21, 23): 7 editor groups + owner-only 8th group + owner-only rules (`settings/contact`, `settings/assistant`, `venues`/`audiences`/`seasonVerses`), `SeasonsHubScreen`, `AdminScreenHeader`, `AdvancedOwnerScreen`, `OverviewScreen` attention + T1–T6 quick tasks
 
 ## Infrastructure & security (owner: developer)
 

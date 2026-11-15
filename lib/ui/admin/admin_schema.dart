@@ -229,6 +229,9 @@ class CollectionDef {
   /// Public route showing this content (for "open on site" links).
   final String publicPath;
 
+  /// Optional 1-line screen help shown under the title (P2-19).
+  final String helpAr, helpEn;
+
   /// Optional note shown above the list (e.g. where built-in sections are managed).
   final String noteAr, noteEn;
 
@@ -240,6 +243,8 @@ class CollectionDef {
       this.newDefaults = const {},
       this.icon = 'list',
       this.publicPath = '/',
+      this.helpAr = '',
+      this.helpEn = '',
       this.noteAr = '',
       this.noteEn = ''})
       : id = id ?? name;
@@ -265,8 +270,9 @@ class CollectionDef {
 class DocDef {
   final String path;
   final String labelAr, labelEn;
+  final String helpAr, helpEn;
   final List<FieldDef> fields;
-  const DocDef(this.path, this.labelAr, this.labelEn, this.fields);
+  const DocDef(this.path, this.labelAr, this.labelEn, this.fields, {this.helpAr = '', this.helpEn = ''});
 }
 
 /// Every season key (ADR-051: [SeasonKeys.all], mirrored by firestore.rules
@@ -482,7 +488,11 @@ const adminCollections = <CollectionDef>[
   ], [
     'titleAr',
     'titleEn'
-  ], icon: 'alerts', publicPath: '/'),
+  ],
+      icon: 'alerts',
+      publicPath: '/',
+      helpAr: 'التنويهات العاجلة اللي بتظهر في أعلى الصفحة الرئيسية.',
+      helpEn: 'Urgent notices shown at the top of the home page.'),
   CollectionDef('seasons', 'المواسم', 'Seasons', [
     // Services match their season by exact key: re-keying a season alone
     // loses its services (CodeRabbit on PR #44).
@@ -515,15 +525,19 @@ const adminCollections = <CollectionDef>[
   ], [
     'nameAr',
     'key'
-  ], icon: 'seasons', publicPath: '/mass-schedule'),
+  ],
+      icon: 'seasons',
+      publicPath: '/mass-schedule',
+      helpAr: 'مواسم الكنيسة وبرامجها ومواعيدها الخاصة، وتجهيز الموسم.',
+      helpEn: 'Church seasons, special programmes, dates, and season preparation.'),
   CollectionDef('liturgies', 'القداسات والصلوات', 'Liturgies', [
     FieldDef('type', 'النوع', 'Type', FieldType.choice, required: true, options: ['mass', 'vespers', 'praise', 'other']),
     FieldDef('nameAr', 'الاسم (عربي)', 'Name (Arabic)', FieldType.text, required: true),
     FieldDef('nameEn', 'الاسم (إنجليزي)', 'Name (English)', FieldType.text),
     FieldDef('weekday', 'يوم الأسبوع (للجدول الأسبوعي)', 'Weekday (weekly schedule)', FieldType.weekday),
     FieldDef('date', 'تاريخ محدد (لمرة واحدة)', 'One-off date', FieldType.date),
-    FieldDef('start', 'من (HH:mm)', 'From (HH:mm)', FieldType.time, required: true),
-    FieldDef('end', 'إلى (HH:mm)', 'To (HH:mm)', FieldType.time),
+    FieldDef('start', 'من', 'From', FieldType.time, required: true),
+    FieldDef('end', 'إلى', 'To', FieldType.time),
     FieldDef('placeAr', 'المكان (عربي)', 'Place (Arabic)', FieldType.text),
     FieldDef('placeEn', 'المكان (إنجليزي)', 'Place (English)', FieldType.text),
     FieldDef('audienceAr', 'الفئة/ملاحظات (عربي)', 'Audience/notes (Arabic)', FieldType.text),
@@ -547,10 +561,15 @@ const adminCollections = <CollectionDef>[
   ], [
     'nameAr',
     'start'
-  ], requireAnyOf: [
-    'weekday',
-    'date'
-  ], icon: 'liturgies', publicPath: '/mass-schedule'),
+  ],
+      requireAnyOf: [
+        'weekday',
+        'date'
+      ],
+      icon: 'liturgies',
+      publicPath: '/mass-schedule',
+      helpAr: 'هنا مواعيد القداسات والصلوات الأسبوعية والموسمية. التعديل بيظهر على الموقع على طول.',
+      helpEn: 'Weekly and seasonal masses and prayers. Edits appear on the site right away.'),
   CollectionDef('meetings', 'الاجتماعات', 'Meetings', [
     FieldDef('stage', 'المرحلة', 'Stage', FieldType.choice, required: true, options: [
       'angels', 'primary', 'preparatory', 'secondary', 'youth', 'university', 'graduates', //
@@ -559,8 +578,8 @@ const adminCollections = <CollectionDef>[
     FieldDef('nameAr', 'الاسم (عربي)', 'Name (Arabic)', FieldType.text, required: true),
     FieldDef('nameEn', 'الاسم (إنجليزي)', 'Name (English)', FieldType.text),
     FieldDef('weekday', 'اليوم', 'Weekday', FieldType.weekday),
-    FieldDef('start', 'من (HH:mm)', 'From (HH:mm)', FieldType.time),
-    FieldDef('end', 'إلى (HH:mm)', 'To (HH:mm)', FieldType.time),
+    FieldDef('start', 'من', 'From', FieldType.time),
+    FieldDef('end', 'إلى', 'To', FieldType.time),
     FieldDef('hallAr', 'القاعة (عربي)', 'Hall (Arabic)', FieldType.text),
     FieldDef('hallEn', 'القاعة (إنجليزي)', 'Hall (English)', FieldType.text),
     FieldDef('notes', 'ملاحظات', 'Notes', FieldType.text),
@@ -582,7 +601,11 @@ const adminCollections = <CollectionDef>[
   ], [
     'nameAr',
     'stage'
-  ], icon: 'meetings', publicPath: '/church-education'),
+  ],
+      icon: 'meetings',
+      publicPath: '/church-education',
+      helpAr: 'اجتماعات مدارس الأحد والشباب والأسرة حسب المرحلة.',
+      helpEn: 'Sunday school, youth, and family meetings grouped by stage.'),
   CollectionDef('clinics', 'العيادات', 'Clinics', [
     FieldDef('specialty', 'مفتاح التخصص (إنجليزي، مثل dental)', 'Specialty key (e.g. dental)', FieldType.text,
         required: true, maxLength: 40),
@@ -592,8 +615,8 @@ const adminCollections = <CollectionDef>[
     FieldDef('degreeAr', 'الدرجة العلمية (عربي)', 'Degree (Arabic)', FieldType.text),
     FieldDef('degreeEn', 'الدرجة العلمية (إنجليزي)', 'Degree (English)', FieldType.text),
     FieldDef('days', 'أيام العيادة', 'Clinic days', FieldType.weekdays),
-    FieldDef('start', 'من (HH:mm)', 'From (HH:mm)', FieldType.time),
-    FieldDef('end', 'إلى (HH:mm)', 'To (HH:mm)', FieldType.time),
+    FieldDef('start', 'من', 'From', FieldType.time),
+    FieldDef('end', 'إلى', 'To', FieldType.time),
     FieldDef('active', 'مُفعّلة', 'Active', FieldType.boolean, missingBool: true), // Clinic.fromMap: absent = active
     _orderField,
     _visibleField,
@@ -612,7 +635,12 @@ const adminCollections = <CollectionDef>[
   ], [
     'doctorName',
     'specialtyAr'
-  ], orderable: true, icon: 'clinics', publicPath: '/clinics'),
+  ],
+      orderable: true,
+      icon: 'clinics',
+      publicPath: '/clinics',
+      helpAr: 'عيادات الكنيسة وأطباء كل تخصص ومواعيدهم.',
+      helpEn: 'Church clinics, doctors by specialty, and clinic hours.'),
   CollectionDef('facilities', 'الخدمات العامة', 'Public services', [
     FieldDef('type', 'النوع', 'Type', FieldType.choice,
         options: ['service', 'nursery', 'employment', 'halls', 'other'], defaultOption: 'other'),
@@ -639,7 +667,12 @@ const adminCollections = <CollectionDef>[
   ], [
     'nameAr',
     'nameEn'
-  ], orderable: true, icon: 'services', publicPath: '/public-services'),
+  ],
+      orderable: true,
+      icon: 'services',
+      publicPath: '/public-services',
+      helpAr: 'الخدمات العامة والحضانة والقاعات ومواعيدها وتليفوناتها.',
+      helpEn: 'Public services, nursery, halls, hours, and contact numbers.'),
   CollectionDef('activities', 'الأنشطة والكورالات', 'Activities', [
     FieldDef('category', 'التصنيف', 'Category', FieldType.choice,
         options: ['service', 'choir', 'hymns', 'youth', 'servants', 'media', 'drama', 'scouts', 'deacons', 'bible', //
@@ -670,16 +703,28 @@ const adminCollections = <CollectionDef>[
   ], [
     'titleAr',
     'titleEn'
-  ], orderable: true, icon: 'activities', publicPath: '/church-activities'),
+  ],
+      orderable: true,
+      icon: 'activities',
+      publicPath: '/church-activities',
+      helpAr: 'الأنشطة والكورالات والكشافة والخدمات المختلفة.',
+      helpEn: 'Activities, choirs, scouts, and parish ministries.'),
   CollectionDef('priests', 'الآباء الكهنة', 'Priests', _priestFields, ['name', 'nameEn'],
-      filter: MapEntry('status', 'serving'), orderable: true, icon: 'priests', publicPath: '/about'),
+      filter: MapEntry('status', 'serving'),
+      orderable: true,
+      icon: 'priests',
+      publicPath: '/about',
+      helpAr: 'الآباء الكهنة الخدام في الكنيسة وسيرتهم وتواصلهم.',
+      helpEn: 'Serving priests in the church, bios, and contact info.'),
   CollectionDef('priests', 'الآباء المتنيحون', 'Departed fathers', _priestFields, ['name', 'nameEn'],
       id: 'departedPriests',
       filter: MapEntry('status', 'departed'),
       newDefaults: {'status': 'departed'},
       orderable: true,
       icon: 'departed',
-      publicPath: '/about'),
+      publicPath: '/about',
+      helpAr: 'الآباء الكهنة المتنيحون وتاريخ خدمتهم ونياحتهم.',
+      helpEn: 'Departed fathers, their ministry, and departure dates.'),
   CollectionDef('saints', 'شفعاء الكنيسة', 'Patron saints', [
     FieldDef('nameAr', 'الاسم (عربي)', 'Name (Arabic)', FieldType.text, required: true),
     FieldDef('nameEn', 'الاسم (إنجليزي)', 'Name (English)', FieldType.text),
@@ -697,7 +742,12 @@ const adminCollections = <CollectionDef>[
   ], [
     'nameAr',
     'nameEn'
-  ], orderable: true, icon: 'saints', publicPath: '/about'),
+  ],
+      orderable: true,
+      icon: 'saints',
+      publicPath: '/about',
+      helpAr: 'شفعاء الكنيسة وسيرهم وأعيادهم.',
+      helpEn: 'Patron saints of the church, lives, and feast days.'),
   CollectionDef('milestones', 'محطات تاريخية', 'Milestones', [
     FieldDef('titleAr', 'العنوان (عربي)', 'Title (Arabic)', FieldType.text, required: true),
     FieldDef('titleEn', 'العنوان (إنجليزي)', 'Title (English)', FieldType.text),
@@ -714,7 +764,12 @@ const adminCollections = <CollectionDef>[
   ], [
     'titleAr',
     'titleEn'
-  ], orderable: true, icon: 'milestones', publicPath: '/'),
+  ],
+      orderable: true,
+      icon: 'milestones',
+      publicPath: '/',
+      helpAr: 'المحطات التاريخية في مسيرة الكنيسة.',
+      helpEn: 'Historical milestones in the life of the church.'),
   CollectionDef('categories', 'الأقسام وعناصرها', 'Sections & items', [
     FieldDef('nameAr', 'اسم القسم (عربي)', 'Section name (Arabic)', FieldType.text, required: true, maxLength: 120),
     FieldDef('nameEn', 'اسم القسم (إنجليزي)', 'Section name (English)', FieldType.text, maxLength: 120),
@@ -742,6 +797,8 @@ const adminCollections = <CollectionDef>[
       orderable: true,
       icon: 'categories',
       publicPath: '/',
+      helpAr: 'أنشئ أقسامًا جديدة للموقع وأضف عناصرها تحت كل قسم.',
+      helpEn: 'Create custom site sections and add their items underneath.',
       noteAr: 'هنا بتعمل أقسام جديدة للموقع وتضيف جواها العناصر. لو حذفت قسم، عناصره بتتخفي ومش بتتمسح.',
       noteEn: 'Create custom sections for the site and add their items right underneath. Deleting a section hides its items without deleting them.'),
   CollectionDef('entries', 'عناصر الأقسام', 'Section items', [
@@ -763,7 +820,12 @@ const adminCollections = <CollectionDef>[
   ], [
     'titleAr',
     'titleEn'
-  ], orderable: true, icon: 'entries', publicPath: '/'),
+  ],
+      orderable: true,
+      icon: 'entries',
+      publicPath: '/',
+      helpAr: 'عناصر الأقسام المخصصة التي أنشأتها للموقع.',
+      helpEn: 'Items inside the custom sections you created.'),
   CollectionDef('pages', 'الصفحات المخصصة', 'Custom pages', [
     FieldDef('titleAr', 'العنوان (عربي)', 'Title (Arabic)', FieldType.text, required: true, maxLength: 200),
     FieldDef('titleEn', 'العنوان (إنجليزي)', 'Title (English)', FieldType.text, maxLength: 200),
@@ -827,7 +889,12 @@ const adminCollections = <CollectionDef>[
   ], [
     'titleAr',
     'titleEn'
-  ], orderable: true, icon: 'pages', publicPath: '/'),
+  ],
+      orderable: true,
+      icon: 'pages',
+      publicPath: '/',
+      helpAr: 'صفحات مستقلة مثل التبرعات أو التعليمات؛ اكتبها أو اختر قالبًا.',
+      helpEn: 'Standalone pages like donations or guides; write from scratch or use a template.'),
 ];
 
 /// Pre-filled defaults for the «صفحة تبرعات» template (P1-15).
@@ -852,54 +919,61 @@ Map<String, Object?> donationPageTemplate() => {
     };
 
 /// settings/church: identity, contacts, socials, history.
-const churchInfoDoc = DocDef('settings/church', 'بيانات الكنيسة', 'Church info', [
-  FieldDef('nameAr', 'اسم الكنيسة (عربي)', 'Church name (Arabic)', FieldType.text, required: true),
-  FieldDef('nameEn', 'اسم الكنيسة (إنجليزي)', 'Church name (English)', FieldType.text, required: true),
-  FieldDef('bishopAr', 'الأسقف (عربي)', 'Bishop (Arabic)', FieldType.text),
-  FieldDef('bishopEn', 'الأسقف (إنجليزي)', 'Bishop (English)', FieldType.text),
-  FieldDef('addressAr', 'العنوان (عربي)', 'Address (Arabic)', FieldType.text, required: true),
-  FieldDef('addressEn', 'العنوان (إنجليزي)', 'Address (English)', FieldType.text),
-  FieldDef('transportAr', 'المواصلات (عربي)', 'Getting here (Arabic)', FieldType.multiline, maxLength: 2000),
-  FieldDef('transportEn', 'المواصلات (إنجليزي)', 'Getting here (English)', FieldType.multiline, maxLength: 2000),
-  FieldDef('lat', 'خط العرض', 'Latitude', FieldType.decimal, min: -90, max: 90),
-  FieldDef('lng', 'خط الطول', 'Longitude', FieldType.decimal, min: -180, max: 180),
-  FieldDef('mapsQuery', 'بحث الخريطة (مثل 31.26,30.01)', 'Map query (e.g. 31.26,30.01)', FieldType.text,
-      maxLength: 200),
-  FieldDef('mapsUrl', 'رابط خرائط جوجل', 'Google Maps link', FieldType.url),
-  FieldDef('phones', 'أرقام التليفون', 'Phone numbers', FieldType.objectList, subFields: [
-    FieldDef('labelAr', 'الوصف (عربي)', 'Label (Arabic)', FieldType.text, required: true, maxLength: 80),
-    FieldDef('labelEn', 'الوصف (إنجليزي)', 'Label (English)', FieldType.text, maxLength: 80),
-    FieldDef('number', 'الرقم', 'Number', FieldType.phone, required: true),
-    FieldDef('isMobile', 'موبايل (واتساب)', 'Mobile (WhatsApp)', FieldType.boolean, newBool: false),
-  ]),
-  FieldDef('whatsapp', 'رقم واتساب', 'WhatsApp number', FieldType.phone),
-  FieldDef('whatsappChannel', 'قناة واتساب', 'WhatsApp channel', FieldType.url),
-  FieldDef('facebook', 'فيسبوك', 'Facebook', FieldType.url),
-  FieldDef('youtube', 'يوتيوب', 'YouTube', FieldType.url),
-  FieldDef('instagram', 'إنستغرام', 'Instagram', FieldType.url),
-  FieldDef('verseAr', 'الآية (عربي)', 'Verse (Arabic)', FieldType.text),
-  FieldDef('verseEn', 'الآية (إنجليزي)', 'Verse (English)', FieldType.text),
-  FieldDef('verseRefAr', 'الشاهد (عربي)', 'Verse reference (Arabic)', FieldType.text, maxLength: 60),
-  FieldDef('verseRef', 'الشاهد (إنجليزي)', 'Verse reference (English)', FieldType.text, maxLength: 60),
-  FieldDef('heroImageUrl', 'صورة الواجهة (رابط)', 'Hero image URL', FieldType.url),
-  FieldDef('historyAr', 'التاريخ (عربي)', 'History (Arabic)', FieldType.multiline, maxLength: 8000),
-  FieldDef('historyEn', 'التاريخ (إنجليزي)', 'History (English)', FieldType.multiline, maxLength: 8000),
-  FieldDef('altars', 'المذابح', 'Altars', FieldType.objectList, subFields: [
-    FieldDef('nameAr', 'الاسم (عربي)', 'Name (Arabic)', FieldType.text, required: true, maxLength: 120),
-    FieldDef('nameEn', 'الاسم (إنجليزي)', 'Name (English)', FieldType.text, maxLength: 120),
-    FieldDef('kind', 'النوع', 'Kind', FieldType.choice, options: ['main', 'second', 'annex'], defaultOption: 'annex'),
-  ]),
-  FieldDef('assistantEnabled', 'تفعيل المساعد الذكي (يتطلب App Check)', 'Enable the AI assistant (needs App Check)',
-      FieldType.boolean,
-      newBool: false),
-  FieldDef('sample', 'بيانات غير مؤكدة', 'Unconfirmed data', FieldType.boolean, newBool: false),
-]);
+const churchInfoDoc = DocDef(
+  'settings/church',
+  'بيانات الكنيسة',
+  'Church info',
+  [
+    FieldDef('nameAr', 'اسم الكنيسة (عربي)', 'Church name (Arabic)', FieldType.text, required: true),
+    FieldDef('nameEn', 'اسم الكنيسة (إنجليزي)', 'Church name (English)', FieldType.text, required: true),
+    FieldDef('bishopAr', 'الأسقف (عربي)', 'Bishop (Arabic)', FieldType.text),
+    FieldDef('bishopEn', 'الأسقف (إنجليزي)', 'Bishop (English)', FieldType.text),
+    FieldDef('addressAr', 'العنوان (عربي)', 'Address (Arabic)', FieldType.text, required: true),
+    FieldDef('addressEn', 'العنوان (إنجليزي)', 'Address (English)', FieldType.text),
+    FieldDef('transportAr', 'المواصلات (عربي)', 'Getting here (Arabic)', FieldType.multiline, maxLength: 2000),
+    FieldDef('transportEn', 'المواصلات (إنجليزي)', 'Getting here (English)', FieldType.multiline, maxLength: 2000),
+    FieldDef('lat', 'خط العرض', 'Latitude', FieldType.decimal, min: -90, max: 90),
+    FieldDef('lng', 'خط الطول', 'Longitude', FieldType.decimal, min: -180, max: 180),
+    FieldDef('mapsQuery', 'بحث الخريطة (مثل 31.26,30.01)', 'Map query (e.g. 31.26,30.01)', FieldType.text,
+        maxLength: 200),
+    FieldDef('mapsUrl', 'رابط خرائط جوجل', 'Google Maps link', FieldType.url),
+    FieldDef('phones', 'أرقام التليفون', 'Phone numbers', FieldType.objectList, subFields: [
+      FieldDef('labelAr', 'الوصف (عربي)', 'Label (Arabic)', FieldType.text, required: true, maxLength: 80),
+      FieldDef('labelEn', 'الوصف (إنجليزي)', 'Label (English)', FieldType.text, maxLength: 80),
+      FieldDef('number', 'الرقم', 'Number', FieldType.phone, required: true),
+      FieldDef('isMobile', 'موبايل (واتساب)', 'Mobile (WhatsApp)', FieldType.boolean, newBool: false),
+    ]),
+    FieldDef('whatsapp', 'رقم واتساب', 'WhatsApp number', FieldType.phone),
+    FieldDef('whatsappChannel', 'قناة واتساب', 'WhatsApp channel', FieldType.url),
+    FieldDef('facebook', 'فيسبوك', 'Facebook', FieldType.url),
+    FieldDef('youtube', 'يوتيوب', 'YouTube', FieldType.url),
+    FieldDef('instagram', 'إنستغرام', 'Instagram', FieldType.url),
+    FieldDef('verseAr', 'الآية (عربي)', 'Verse (Arabic)', FieldType.text),
+    FieldDef('verseEn', 'الآية (إنجليزي)', 'Verse (English)', FieldType.text),
+    FieldDef('verseRefAr', 'الشاهد (عربي)', 'Verse reference (Arabic)', FieldType.text, maxLength: 60),
+    FieldDef('verseRef', 'الشاهد (إنجليزي)', 'Verse reference (English)', FieldType.text, maxLength: 60),
+    FieldDef('heroImageUrl', 'صورة الواجهة (رابط)', 'Hero image URL', FieldType.url),
+    FieldDef('historyAr', 'التاريخ (عربي)', 'History (Arabic)', FieldType.multiline, maxLength: 8000),
+    FieldDef('historyEn', 'التاريخ (إنجليزي)', 'History (English)', FieldType.multiline, maxLength: 8000),
+    FieldDef('altars', 'المذابح', 'Altars', FieldType.objectList, subFields: [
+      FieldDef('nameAr', 'الاسم (عربي)', 'Name (Arabic)', FieldType.text, required: true, maxLength: 120),
+      FieldDef('nameEn', 'الاسم (إنجليزي)', 'Name (English)', FieldType.text, maxLength: 120),
+      FieldDef('kind', 'النوع', 'Kind', FieldType.choice, options: ['main', 'second', 'annex'], defaultOption: 'annex'),
+    ]),
+    FieldDef('sample', 'بيانات غير مؤكدة', 'Unconfirmed data', FieldType.boolean, newBool: false),
+  ],
+  helpAr: 'اسم الكنيسة والعنوان وأرقام التليفون والسوشيال ميديا والتاريخ.',
+  helpEn: 'Church name, address, phone numbers, social links, and history.',
+);
 
 /// settings/assistant (ADR-029): model, persona, topics, refusal / welcome
 /// texts, suggestions and the client-side limits. Blank = code default
-/// (AssistantSettings). On / off stays with the "Ask the church" section
-/// switch and Church info → "Enable the AI assistant".
-const assistantSettingsDoc = DocDef('settings/assistant', 'المساعد الذكي', 'AI assistant', [
+/// (AssistantSettings). Controlled exclusively by owners under Settings → AI assistant.
+const assistantSettingsDoc = DocDef(
+  'settings/assistant',
+  'المساعد الذكي',
+  'AI assistant',
+  [
   FieldDef('model', 'النموذج (اتركه فارغًا للافتراضي)', 'Model (blank = default)', FieldType.text,
       maxLength: AssistantLimits.modelMax,
       pattern: r'gemini-[a-z0-9][a-z0-9.\-]{0,52}',
@@ -973,7 +1047,10 @@ const assistantSettingsDoc = DocDef('settings/assistant', 'المساعد الذ
       defaultValues: exceptionalSeasonKeys,
       hintAr: 'الافتراضي: أسبوع الآلام، القيامة، الميلاد، النهضتان، الصوم الكبير، كيهك، مواسم السيدة العذراء. ألغِ الكل ليبقى الحد اليومي العادي في كل المواسم.',
       hintEn: 'Default: Holy Week, Pascha, the Nativity, both revivals, Great Lent, Kiahk and the Marian seasons. Untick all to keep the ordinary daily limit in every season.'),
-]);
+  ],
+  helpAr: 'تخصيص رد المساعد الذكي، النطاق، الأسئلة المقترحة والحدود اليومية (للمالك فقط).',
+  helpEn: 'Customize AI assistant instructions, allowed topics, suggestions, and daily limits (owner only).',
+);
 
 CollectionDef? collectionById(String id) {
   for (final c in adminCollections) {
@@ -986,7 +1063,11 @@ CollectionDef? collectionById(String id) {
 /// settings/features (no extra document or listener for visitors). The
 /// generic form writes only the keys it changed, so the Sections & home page
 /// editor and this screen never overwrite each other.
-const todaySettingsDoc = DocDef('settings/features', 'اليوم والبث المباشر', 'Today & live stream', [
+const todaySettingsDoc = DocDef(
+  'settings/features',
+  'اليوم والبث المباشر',
+  'Today & live stream',
+  [
   FieldDef('copticStrip', 'شريط التاريخ القبطي', 'Coptic date strip', FieldType.choice,
       options: ['all', 'home', 'off'],
       defaultOption: 'all',
@@ -997,9 +1078,9 @@ const todaySettingsDoc = DocDef('settings/features', 'اليوم والبث ال
       defaultOption: 'fixed',
       hintAr: 'اليوم الكنسي يبدأ مساء اليوم السابق: بعد هذا الوقت يتحول التاريخ القبطي وآية اليوم إلى اليوم التالي («ليلة الخميس»). «ساعة ثابتة» (الافتراضي ١٨:٠٠) أو «غروب الشمس» محسوبًا لموقع الكنيسة.',
       hintEn: 'The liturgical day starts the evening before: after this time the Coptic date and the verse of the day move to the next day ("Eve of Thursday"). A fixed time (default 18:00) or sunset computed for the church\'s location.'),
-  FieldDef('dayStartsAt', 'الساعة الثابتة (HH:mm، فارغ = 18:00)', 'Fixed time (HH:mm, blank = 18:00)', FieldType.time,
-      hintAr: 'تُستخدم مع «ساعة ثابتة». 00:00 = منتصف الليل (اليوم المدني).',
-      hintEn: 'Used with "fixed time". 00:00 = midnight (the civil day).'),
+  FieldDef('dayStartsAt', 'الساعة الثابتة (فارغ = ٦:٠٠ م)', 'Fixed time (blank = 6:00 PM)', FieldType.time,
+      hintAr: 'تُستخدم مع «ساعة ثابتة». ١٢:٠٠ ص = منتصف الليل (اليوم المدني).',
+      hintEn: 'Used with "fixed time". 12:00 AM = midnight (the civil day).'),
   FieldDef('topEvent', 'بطاقة «حدث اليوم» في الرئيسية', 'Home "Today\'s event" card', FieldType.boolean,
       missingBool: true,
       newBool: true,
@@ -1024,10 +1105,10 @@ const todaySettingsDoc = DocDef('settings/features', 'اليوم والبث ال
       hintAr: 'مثل «الليلة الرابعة من نهضة الشفعاء» أو «بصخة ليلة الأربعاء». يتصدر الحدث الصفحة الرئيسية في يومه (وفي المساء يظهر حدث الليلة التالية بعد انتهاء حدث اليوم). احذف الأحداث القديمة لتوفير مكان.',
       hintEn: 'E.g. "Fourth night of the patrons\' revival" or "Pascha of Wednesday eve". It leads the home page on its day (in the evening, the next night\'s event after today\'s has ended). Delete old events to make room.',
       subFields: [
-        FieldDef('date', 'التاريخ (YYYY-MM-DD)', 'Date (YYYY-MM-DD)', FieldType.date, required: true),
+        FieldDef('date', 'التاريخ', 'Date', FieldType.date, required: true),
         FieldDef('endDate', 'حتى تاريخ (اختياري)', 'Until (optional)', FieldType.date),
-        FieldDef('start', 'من (HH:mm)', 'From (HH:mm)', FieldType.time),
-        FieldDef('end', 'إلى (HH:mm)', 'To (HH:mm)', FieldType.time),
+        FieldDef('start', 'من', 'From', FieldType.time),
+        FieldDef('end', 'إلى', 'To', FieldType.time),
         FieldDef('titleAr', 'العنوان (عربي)', 'Title (Arabic)', FieldType.text, required: true),
         FieldDef('titleEn', 'العنوان (إنجليزي)', 'Title (English)', FieldType.text),
         FieldDef('speakerAr', 'المتكلم (عربي)', 'Speaker (Arabic)', FieldType.text),
@@ -1074,7 +1155,10 @@ const todaySettingsDoc = DocDef('settings/features', 'اليوم والبث ال
       newBool: true,
       hintAr: 'أثناء البث تظهر في الرئيسية الشريط الأحمر وحده (فيه زر «شاهد البث»)، وفي باقي الصفحات شارة «مباشر» صغيرة أعلى الصفحة تفتح البث. أوقفه لإظهار الاثنين في الرئيسية أيضًا.',
       hintEn: 'While live, Home shows only the red banner (with its "Watch live" button); every other page shows a small "Live" badge in the top bar that opens the stream. Turn off to show both on Home too.'),
-]);
+  ],
+  helpAr: 'إعدادات التاريخ القبطي وأحداث الكنيسة وشريط البث المباشر في الرئيسية.',
+  helpEn: 'Coptic date strip, church events by date, and the home live-stream banner.',
+);
 
 const _optionRowFields = [
   FieldDef('key', 'المفتاح (حروف إنجليزية صغيرة وأرقام، مثل lower)', 'Key (lower-case latin & digits, e.g. lower)',
@@ -1091,7 +1175,11 @@ const _optionRowFields = [
 /// /admin → "Season settings" (ADR-041): top-level keys of
 /// settings/features (no extra document or listener). Venues and audiences
 /// offered by the programme fields of liturgies, meetings and seasons.
-const seasonSettingsDoc = DocDef('settings/features', 'إعدادات المواسم', 'Season settings', [
+const seasonSettingsDoc = DocDef(
+  'settings/features',
+  'إعدادات المواسم',
+  'Season settings',
+  [
   FieldDef('venues', 'الأماكن / القاعات (حتى 12)', 'Venues / halls (up to 12)', FieldType.objectList,
       maxRows: ProgramOptions.max,
       encodedRows: true,
@@ -1129,7 +1217,10 @@ const seasonSettingsDoc = DocDef('settings/features', 'إعدادات الموا
             FieldType.text,
             maxLength: SeasonVerses.maxRef),
       ]),
-]);
+  ],
+  helpAr: 'تعديل القاعات والفئات وآيات المواسم المخصصة (للمالك فقط).',
+  helpEn: 'Manage venues, audiences, and custom season verses (owner only).',
+);
 
 /// [FieldDef.encodedRows]: the row's sub-field values in order, joined by
 /// [sep] (U+001F); an all-empty optional tail ([FieldDef.encodedOptionalTail])
@@ -1143,10 +1234,7 @@ String encodeRowFields(FieldDef f, Map<String, dynamic> row, [String sep = '\u00
   return parts.join(sep);
 }
 
-/// /admin → "App & notifications" (ADR-057): top-level keys of settings/features
-/// (no extra document or listener).
-const appSettingsDoc = DocDef('settings/features', 'التطبيق والإشعارات', 'App & notifications', [
-  // App install banner
+const _installFields = <FieldDef>[
   FieldDef('installPrompt', 'تفعيل شريط التثبيت', 'Enable install banner', FieldType.boolean,
       missingBool: true,
       newBool: true,
@@ -1208,32 +1296,56 @@ const appSettingsDoc = DocDef('settings/features', 'التطبيق والإشع�
       max: 60,
       hintAr: 'عدد الأيام قبل إعادة ظهور الشريط بعد الضغط على «لاحقًا». الافتراضي 3.',
       hintEn: 'Days before banner reappears after tapping "Later". Default 3.'),
+];
 
-  // Notifications (experimental)
-  FieldDef('push', 'تفعيل الإشعارات (المفتاح العام)', 'Enable notifications (master switch)', FieldType.boolean,
-      missingBool: false,
-      newBool: false,
-      hintAr: 'المفتاح الرئيسي: عند إيقافه تختفي صفحة الإشعارات وزر «ذكّرني» في كل مكان.',
-      hintEn: 'Master switch: when off, the notifications page and "Remind me" buttons disappear everywhere.'),
-  FieldDef('pushVapidKey', 'مفتاح Web Push VAPID Key', 'Web Push VAPID Key', FieldType.text,
-      maxLength: 100,
-      pattern: r'[A-Za-z0-9_-]{80,100}',
-      hintAr: 'المفتاح العام لـ Web Push من إعدادات Firebase Console. فارغ = قيد التجهيز.',
-      hintEn: 'Web Push public key from Firebase Console settings. Blank = coming soon.'),
-  FieldDef('pushTypes', 'أنواع الإشعارات المعروضة', 'Offered notification types', FieldType.choices,
-      options: ['announcements', 'verse_daily', 'katameros_daily', 'seasons', 'feasts', 'reminders'],
-      defaultValues: ['announcements', 'verse_daily', 'katameros_daily', 'seasons', 'feasts', 'reminders'],
-      hintAr: 'الأنواع التي يراها الزائر في صفحة الإشعارات. على الويب يُعرض منها: الإعلانات، المواسم، التذكيرات.',
-      hintEn: 'Types visible to visitors on the notifications page. On the web: announcements, seasons, reminders.'),
-  FieldDef('reminderLeads', 'خيارات مدد التذكير المتاحة', 'Offered reminder lead times', FieldType.intChoices,
-      intOptions: [0, 5, 10, 15, 30, 60, 120, 180, 1440],
-      defaultIntValues: [0, 15, 60, 1440],
-      maxRows: 4,
-      hintAr: 'المدد التي تظهر في قائمة التذكير (اختر حتى 4 مدد).',
-      hintEn: 'Lead times offered in the reminder sheet (choose up to 4).'),
-  FieldDef('reminderDefaultLead', 'مدة التذكير المحددة افتراضيًا', 'Default reminder lead time (minutes)', FieldType.integer,
-      min: 0,
-      max: 1440,
-      hintAr: 'المدة المختارة مسبقًا في قائمة التذكير (يجب أن تكون إحدى المدد المختارة أعلاه، الافتراضي 60 دقيقة).',
-      hintEn: 'Lead time pre-selected in the sheet (must be one of the choices selected above, default 60 min).'),
-]);
+/// /admin → "Advanced" → "App install & APK" (owner-only tab, P2-21).
+const appInstallDoc = DocDef(
+  'settings/features',
+  'تثبيت التطبيق وAPK',
+  'App install & APK',
+  _installFields,
+  helpAr: 'إعدادات شريط تثبيت التطبيق وروابط ملف الأندرويد (APK).',
+  helpEn: 'App install banner and Android APK download links.',
+);
+
+/// /admin → "App & notifications" (ADR-057): top-level keys of settings/features
+/// (no extra document or listener). Kept with all 18 schema fields for
+/// validation/tests.
+const appSettingsDoc = DocDef(
+  'settings/features',
+  'التطبيق والإشعارات',
+  'App & notifications',
+  [
+    ..._installFields,
+
+    // Notifications (experimental)
+    FieldDef('push', 'تفعيل الإشعارات (المفتاح العام)', 'Enable notifications (master switch)', FieldType.boolean,
+        missingBool: false,
+        newBool: false,
+        hintAr: 'المفتاح الرئيسي: عند إيقافه تختفي صفحة الإشعارات وزر «ذكّرني» في كل مكان.',
+        hintEn: 'Master switch: when off, the notifications page and "Remind me" buttons disappear everywhere.'),
+    FieldDef('pushVapidKey', 'مفتاح Web Push VAPID Key', 'Web Push VAPID Key', FieldType.text,
+        maxLength: 100,
+        pattern: r'[A-Za-z0-9_-]{80,100}',
+        hintAr: 'المفتاح العام لـ Web Push من إعدادات Firebase Console. فارغ = قيد التجهيز.',
+        hintEn: 'Web Push public key from Firebase Console settings. Blank = coming soon.'),
+    FieldDef('pushTypes', 'أنواع الإشعارات المعروضة', 'Offered notification types', FieldType.choices,
+        options: ['announcements', 'verse_daily', 'katameros_daily', 'seasons', 'feasts', 'reminders'],
+        defaultValues: ['announcements', 'verse_daily', 'katameros_daily', 'seasons', 'feasts', 'reminders'],
+        hintAr: 'الأنواع التي يراها الزائر في صفحة الإشعارات. على الويب يُعرض منها: الإعلانات، المواسم، التذكيرات.',
+        hintEn: 'Types visible to visitors on the notifications page. On the web: announcements, seasons, reminders.'),
+    FieldDef('reminderLeads', 'خيارات مدد التذكير المتاحة', 'Offered reminder lead times', FieldType.intChoices,
+        intOptions: [0, 5, 10, 15, 30, 60, 120, 180, 1440],
+        defaultIntValues: [0, 15, 60, 1440],
+        maxRows: 4,
+        hintAr: 'المدد التي تظهر في قائمة التذكير (اختر حتى 4 مدد).',
+        hintEn: 'Lead times offered in the reminder sheet (choose up to 4).'),
+    FieldDef('reminderDefaultLead', 'مدة التذكير المحددة افتراضيًا', 'Default reminder lead time (minutes)', FieldType.integer,
+        min: 0,
+        max: 1440,
+        hintAr: 'المدة المختارة مسبقًا في قائمة التذكير (يجب أن تكون إحدى المدد المختارة أعلاه، الافتراضي 60 دقيقة).',
+        hintEn: 'Lead time pre-selected in the sheet (must be one of the choices selected above, default 60 min).'),
+  ],
+  helpAr: 'إعداد الإعلانات المجدولة والإشعارات وشريط التثبيت.',
+  helpEn: 'Configure scheduled announcements, notifications, and app install settings.',
+);

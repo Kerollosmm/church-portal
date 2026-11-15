@@ -16,6 +16,7 @@ import 'admin_strings.dart';
 import 'admin_validators.dart';
 import 'doc_editor.dart';
 import 'pending_delete.dart';
+import 'screen_header.dart';
 
 enum ListFilter { all, visible, hidden, unconfirmed }
 
@@ -54,7 +55,8 @@ List<AdminDoc> filterAdminDocs(CollectionDef def, List<AdminDoc> docs, {String q
 class CollectionListScreen extends StatefulWidget {
   final AdminBackend repo;
   final CollectionDef def;
-  const CollectionListScreen({super.key, required this.repo, required this.def});
+  final bool showHeader;
+  const CollectionListScreen({super.key, required this.repo, required this.def, this.showHeader = true});
 
   @override
   State<CollectionListScreen> createState() => _CollectionListScreenState();
@@ -201,10 +203,20 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
                     : visible;
                 final canReorder =
                     def.orderable && !hasFilter && shownCats.length > 1;
-                return Column(children: [
-                  _toolbar(context, visible.length, shownCats.length, canReorder,
-                      showUnconfirmed: entriesDef.hasSample),
-                  Expanded(
+                return CustomScrollView(slivers: [
+                  if (widget.showHeader)
+                    SliverToBoxAdapter(
+                      child: AdminScreenHeader(
+                        title: context.pick(def.labelAr, def.labelEn),
+                        help: context.pick(def.helpAr, def.helpEn),
+                        padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+                      ),
+                    ),
+                  SliverToBoxAdapter(
+                    child: _toolbar(context, visible.length, shownCats.length, canReorder,
+                        showUnconfirmed: entriesDef.hasSample),
+                  ),
+                  SliverToBoxAdapter(
                     child: _categoriesBody(
                       context,
                       entriesDef: entriesDef,
@@ -223,25 +235,46 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
           }
 
           final canReorder = def.orderable && _search.text.trim().isEmpty && _filter == ListFilter.all && docs.length > 1;
-          return Column(children: [
-            _toolbar(context, visible.length, docs.length, canReorder),
-            Expanded(
-              child: docs.isEmpty
-                  ? Center(child: Text(context.tr(visible.isEmpty ? 'noItems' : 'noMatches')))
-                  : canReorder
-                      ? ReorderableListView.builder(
-                          buildDefaultDragHandles: false,
-                          padding: const EdgeInsets.fromLTRB(12, 4, 12, 90),
-                          itemCount: docs.length,
-                          onReorderItem: (from, to) => _reorder(context, docs, from, to),
-                          itemBuilder: (context, i) => _tile(context, docs[i], dragIndex: i, docs: docs),
-                        )
-                      : ListView.builder(
-                          padding: const EdgeInsets.fromLTRB(12, 4, 12, 90),
-                          itemCount: docs.length,
-                          itemBuilder: (context, i) => _tile(context, docs[i]),
-                        ),
-            ),
+          return CustomScrollView(slivers: [
+            if (widget.showHeader)
+              SliverToBoxAdapter(
+                child: AdminScreenHeader(
+                  title: context.pick(def.labelAr, def.labelEn),
+                  help: context.pick(def.helpAr, def.helpEn),
+                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+                ),
+              ),
+            SliverToBoxAdapter(child: _toolbar(context, visible.length, docs.length, canReorder)),
+            if (docs.isEmpty)
+              SliverFillRemaining(
+                hasScrollBody: false,
+                child: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 24, 12, 90),
+                    child: Text(context.tr(visible.isEmpty ? 'noItems' : 'noMatches')),
+                  ),
+                ),
+              )
+            else if (canReorder)
+              SliverToBoxAdapter(
+                child: ReorderableListView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  buildDefaultDragHandles: false,
+                  padding: const EdgeInsets.fromLTRB(12, 4, 12, 90),
+                  itemCount: docs.length,
+                  onReorderItem: (from, to) => _reorder(context, docs, from, to),
+                  itemBuilder: (context, i) => _tile(context, docs[i], dragIndex: i, docs: docs),
+                ),
+              )
+            else
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(12, 4, 12, 90),
+                sliver: SliverList.builder(
+                  itemCount: docs.length,
+                  itemBuilder: (context, i) => _tile(context, docs[i]),
+                ),
+              ),
           ]);
         },
       ),
@@ -357,6 +390,8 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     }
     if (canReorder && unassigned.isEmpty) {
       return ReorderableListView.builder(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
         buildDefaultDragHandles: false,
         padding: const EdgeInsets.fromLTRB(12, 4, 12, 90),
         itemCount: shownCats.length,
@@ -374,6 +409,8 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
       );
     }
     return ListView(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(12, 4, 12, 90),
       children: [
         if (allVisibleCats.isEmpty)

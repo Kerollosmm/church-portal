@@ -383,9 +383,10 @@ void main() {
       await tester.pumpAndSettle();
     }
 
-    test('listed in the dashboard for every role', () {
+    test('listed in the dashboard for every role under merged seasons', () {
       for (final role in ['editor', 'owner']) {
-        expect(adminDestinations(role).map((d) => d.id), contains('seasonPreset'));
+        expect(adminDestinations(role).map((d) => d.id), contains('seasons'));
+        expect(adminDestinations(role).map((d) => d.id), isNot(contains('seasonPreset')));
       }
     });
 

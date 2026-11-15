@@ -22,6 +22,7 @@ import '../widgets/item_image.dart';
 import 'admin_schema.dart';
 import 'admin_strings.dart';
 import 'admin_validators.dart';
+import 'screen_header.dart';
 import 'state_switch.dart';
 import 'unsaved_bar.dart';
 import 'unsaved_guard.dart';
@@ -38,6 +39,7 @@ Future<Uint8List?> pickImageFromDevice() async {
 /// and for the church-info document.
 class DocEditor extends StatefulWidget {
   final String title;
+  final String help;
   final List<FieldDef> fields;
 
   /// Existing data (null = new document).
@@ -84,6 +86,7 @@ class DocEditor extends StatefulWidget {
   const DocEditor({
     super.key,
     required this.title,
+    this.help = '',
     required this.fields,
     required this.onSave,
     this.data,
@@ -1746,6 +1749,12 @@ class DocEditorState extends State<DocEditor> {
               child: ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
+                  if (embedded && (widget.title.isNotEmpty || widget.help.isNotEmpty))
+                    AdminScreenHeader(
+                      title: widget.title,
+                      help: widget.help,
+                      padding: const EdgeInsets.only(bottom: 12),
+                    ),
                   if (widget.docId != null)
                     Padding(
                       padding: const EdgeInsets.only(bottom: 12),

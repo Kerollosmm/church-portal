@@ -81,7 +81,7 @@ Match blocks:
 | Path | read | create / update | delete |
 |---|---|---|---|
 | `/{col}/{docId}` for `alerts, seasons, liturgies, meetings, activities, clinics, facilities, priests, milestones, saints, categories, entries, pages` | **public** | `col in [...] && isAdmin() && validContent(col, data)` (PR 3C checks `col in [...]` before `isAdmin()` so `/settings/*` writes don't evaluate `isAdmin()` twice) → `common` + per-collection allow-lists | `col in [...] && isAdmin()` |
-| `/settings/{docId}` | **public** (except `docId == 'notifications'` which is `isAdmin()` only) | `isAdmin()` and (`church` → `validChurch`, `features` → `validFeatures`, `contact` → `validContactSettings`, `assistant` → `validAssistant`, `notifications` → `validNotifications`: allows schedule ≤ 20 rows, forbids client writes to status/health/reminders, allows owner to clear sentLog); any other doc id denied | **never** |
+| `/settings/{docId}` | **public** (except `docId == 'notifications'` which is `isAdmin()` only) | `isAdmin()` and (`church` → `validChurch`, `features` → `validFeatures`, `contact` → `isOwner() && validContactSettings`, `assistant` → `isOwner() && validAssistant`, `notifications` → `validNotifications`: allows schedule ≤ 20 rows, forbids client writes to status/health/reminders, allows owner to clear sentLog); any other doc id denied | **never** |
 | `/media/{mediaId}` | **get: public** (by id); **list: `isAdmin()` only** (PR 1, SEC-02) | `isAdmin() && validMedia(data)`: keys ⊆ `dataBase64, contentType, w, h, bytes, createdAt, createdBy, refs`; required `dataBase64` (4–950,000 chars), `contentType` ∈ jpeg/webp/png, `createdAt` (== `request.time`, or unchanged), `createdBy` (token email/uid, or unchanged); `bytes` ≤ 700,000; `w/h` 1–10000; `refs` list ≤ 20 | `isAdmin()` |
 | `/admins/{uid}` | own doc, or any doc if `isOwner()` | `isOwner()` **and** `uid != caller` (cannot change yourself → an owner always remains); keys ⊆ `email, role, active, expiresAt, updatedAt, updatedBy`; email required ≤254; role ∈ owner/editor; `active` optional bool (absent = active); `expiresAt` optional timestamp (`role == 'owner'` must omit `expiresAt` or set `null`); `stampOk` (PR 1, SEC-03; PR 3C, P1-12) | `isOwner() && uid != caller` |
 | `/meta/contact_rate` | never | keys ⊆ `lastAt, lastMsgId`; `lastAt == request.time`; `lastMsgId` string 10–64 alphanumerics; `!exists(contact_messages/lastMsgId)` **and** `existsAfter(contact_messages/lastMsgId)` (so it is only writable in the same batch as a NEW message — SEC-01); and (new doc or `request.time > lastAt + 10 s`) | never |
@@ -148,7 +148,7 @@ Notable details:
   pages ⊆ the 8 `CustomizablePages`, each changed entry exactly the 6 keys with 200/300/1500 caps). Every group is
   checked only when changed (the editor saves the whole doc).
 - `validChurch`: phones/altars lists ≤ 20; `nameAr` required; `coordinatesApproximate` optional bool (PR 1).
-- **Editors and owners have the same content/settings/inbox rights**; only `admins/*` management is owner-only.
+- **Owner-only settings & admin management (P2-18R):** Editors and owners share content, inbox, media, and standard settings (`settings/church`, `settings/notifications` schedules, and standard `settings/features` switches/today/live/headers) rights; **`admins/*` management, `settings/contact`, `settings/assistant`, and changing `settings/features.{venues, audiences, seasonVerses}` require `isOwner()`** (gated on `changed` keys in `validFeatures` so editor saves of untouched `settings/features` fields never evaluate `isOwner()`). Public reads of `settings/contact`, `settings/assistant`, and `settings/features` remain unchanged.
 - Tests: `tool/rules_test/rules.test.mjs` (Node test runner + `@firebase/rules-unit-testing` in the Firestore
   emulator, project `demo-church-portal`): public read/no write, non-admin denied, contact create + throttle,
   every seed doc valid, clinic create/hide/reorder/delete, unknown keys/bad types/bad times rejected, stamps,
@@ -166,7 +166,7 @@ Notable details:
   collections; an every-field edit; both lists in one write denied) and of `FeaturesScreen` (whole document, then
   `pageHeaders` alone; the combined first save is denied; a reset page is removed). 54 tests. PR 3D (`P1-18`) adds
   `pages` validation for `placement` (`link` | `nav` | `section`), `categoryId` (required `[A-Za-z0-9_-]{1,128}`
-  for `section`), `featured` bool, and a worst-case 20-block budget test (40 suites, 171 tests).
+  for `section`), `featured` bool, and a worst-case 20-block budget test. P2-18R adds owner-only tests for `settings/contact`, `settings/assistant`, and `settings/features.{venues, audiences, seasonVerses}` (including editor denial, editor Today/live/section saves with those keys untouched, worst-case owner budget, and anonymous reads).
 - **Expression budget (measured in PR #11):** Firestore evaluates at most **1,000 expressions per request**, shared by
   every `match` block the path hits (that is why `validContent` keeps its `col in [...]` early exit: without it
   `settings/church` writes ran out). Literals, field reads and `+` all count; an unrolled list item costs ~10. The

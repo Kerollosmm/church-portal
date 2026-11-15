@@ -9,6 +9,7 @@ import '../../domain/image_style.dart';
 import 'admin_strings.dart';
 import 'admin_validators.dart';
 import 'occasion_editor.dart';
+import 'screen_header.dart';
 import 'state_switch.dart';
 import 'unsaved_bar.dart';
 import 'unsaved_guard.dart';
@@ -17,12 +18,9 @@ import 'unsaved_guard.dart';
 class FeaturesScreen extends StatefulWidget {
   final AdminBackend repo;
 
-  /// Owner only (ADR-034): sends one harmless test error to Sentry; returns
-  /// false when reporting is not active in this build. Null hides the button.
-  final Future<bool> Function()? onSendTestError;
   /// Keys of the church seasons active now (ADR-043; "theme in force").
   final List<String> activeSeasonKeys;
-  const FeaturesScreen({super.key, required this.repo, this.onSendTestError, this.activeSeasonKeys = const []});
+  const FeaturesScreen({super.key, required this.repo, this.activeSeasonKeys = const []});
 
   @override
   State<FeaturesScreen> createState() => _FeaturesScreenState();
@@ -100,7 +98,6 @@ class _FeaturesScreenState extends State<FeaturesScreen> {
               exists: doc != null,
               updatedAt: doc?.updatedAt,
               updatedBy: doc?.updatedBy ?? '',
-              onSendTestError: widget.onSendTestError,
               activeSeasonKeys: widget.activeSeasonKeys,
               onSave: (f) async {
                 for (final w in featuresSaveWrites(f, doc?.data)) {
@@ -174,13 +171,10 @@ class FeaturesEditor extends StatefulWidget {
   final String updatedBy;
   final Future<void> Function(FeatureSettings) onSave;
 
-  /// See [FeaturesScreen.onSendTestError].
-  final Future<bool> Function()? onSendTestError;
   const FeaturesEditor({
     super.key,
     required this.initial,
     required this.onSave,
-    this.onSendTestError,
     this.exists = true,
     this.updatedAt,
     this.updatedBy = '',
@@ -370,23 +364,6 @@ class FeaturesEditorState extends State<FeaturesEditor> {
     });
   }
 
-  Future<void> _sendTestError() async {
-    final send = widget.onSendTestError;
-    if (send == null) return;
-    final messenger = ScaffoldMessenger.maybeOf(context);
-    final sentText = context.tr('testErrorSent');
-    final offText = context.tr('testErrorInactive');
-    bool ok;
-    try {
-      ok = await send();
-    } catch (_) {
-      ok = false;
-    }
-    messenger
-      ?..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(ok ? sentText : offText)));
-  }
-
   Widget _card(String title, IconData icon, List<Widget> children, {String? hint}) => Card(
         margin: const EdgeInsets.only(bottom: 14),
         child: Padding(
@@ -471,6 +448,11 @@ class FeaturesEditorState extends State<FeaturesEditor> {
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 820),
             child: ListView(padding: const EdgeInsets.fromLTRB(16, 16, 16, 100), children: [
+              AdminScreenHeader(
+                title: context.tr('featuresAndHome'),
+                help: context.tr('help_features'),
+                padding: const EdgeInsets.only(bottom: 12),
+              ),
               if (!widget.exists)
                 Card(
                   color: context.pal.surfaceAlt,
@@ -491,11 +473,14 @@ class FeaturesEditorState extends State<FeaturesEditor> {
               _card(context.tr('sectionsTitle'), Icons.toggle_on_outlined, [
                 Wrap(spacing: 8, children: [
                   TextButton(
-                    onPressed: () => _set(f.copyWith(sections: {for (final s in Sections.all) s: true})),
+                    onPressed: () => _set(f.copyWith(
+                      sections: {for (final s in Sections.all) s: s == Sections.assistant ? f.enabled(s) : true},
+                    )),
                     child: Text(context.tr('enableAll')),
                   ),
                 ]),
-                for (final s in Sections.all) ...[
+                for (final s in Sections.all)
+                  if (s != Sections.assistant) ...[
                   AdminStateSwitch(
                     key: ValueKey('section-$s'),
                     contentPadding: const EdgeInsetsDirectional.only(start: 4),
@@ -668,28 +653,6 @@ class FeaturesEditorState extends State<FeaturesEditor> {
                   onChanged: (v) => _set(f.copyWith(heroSeasonTint: v)),
                 ),
               ], hint: context.tr('themeHint')),
-              _card(context.tr('errorReportingTitle'), Icons.bug_report_outlined, [
-                AdminStateSwitch(
-                  key: const ValueKey('features-errorReporting'),
-                  contentPadding: const EdgeInsetsDirectional.only(start: 4),
-                  title: Text(context.tr('errorReporting')),
-                  subtitle: Text(context.tr('errorReportingHint')),
-                  value: f.errorReporting,
-                  onLabel: context.tr('switch_enabled'),
-                  offLabel: context.tr('switch_disabled'),
-                  onChanged: (v) => _set(f.copyWith(errorReporting: v)),
-                ),
-                if (widget.onSendTestError != null)
-                  Align(
-                    alignment: AlignmentDirectional.centerStart,
-                    child: OutlinedButton.icon(
-                      key: const ValueKey('features-sendTestError'),
-                      icon: const Icon(Icons.send_outlined),
-                      label: Text(context.tr('sendTestError')),
-                      onPressed: _sendTestError,
-                    ),
-                  ),
-              ]),
             ]),
           ),
         ),

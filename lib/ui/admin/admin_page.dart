@@ -9,8 +9,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/l10n.dart';
 import '../../core/theme.dart';
 import '../../data/admin_repository.dart';
-import '../../data/error_reporting.dart';
 import '../../domain/cairo_time.dart';
+import '../../domain/contact_categories.dart';
+import '../../domain/models.dart';
 import '../../state/providers.dart';
 import '../widgets/coptic_cross.dart';
 import 'admin_access.dart';
@@ -18,6 +19,7 @@ import 'admin_schema.dart';
 import 'admin_screens.dart';
 import 'admin_strings.dart';
 import 'admin_validators.dart';
+import 'advanced_owner_screen.dart';
 import 'assistant_admin.dart';
 import 'contact_admin.dart';
 import 'collection_list.dart';
@@ -537,30 +539,76 @@ class _AdminLoginFormState extends State<AdminLoginForm> {
   }
 }
 
+/// Sidebar / drawer navigation group (P2-18).
+enum AdminGroup {
+  home,
+  schedule,
+  announcements,
+  church,
+  services,
+  pages,
+  messages,
+  ownerSettings,
+}
+
 /// One admin destination (sidebar / drawer entry).
 class AdminDest {
   final String id;
   final IconData icon;
   final String labelAr, labelEn;
-  const AdminDest(this.id, this.icon, this.labelAr, this.labelEn);
+  final AdminGroup group;
+  const AdminDest(
+    this.id,
+    this.icon,
+    this.labelAr,
+    this.labelEn, {
+    this.group = AdminGroup.home,
+  });
 }
 
-/// Destinations shown to [role] (owners also get "Admins").
+/// Destinations shown to [role] across 7 editor groups + owner settings (P2-18).
 List<AdminDest> adminDestinations(String role) => [
-  const AdminDest('overview', Icons.dashboard_outlined, 'نظرة عامة', 'Overview'),
-  const AdminDest('features', Icons.toggle_on_outlined, 'الأقسام والصفحة الرئيسية', 'Sections & home page'),
-  const AdminDest('today', Icons.today_outlined, 'اليوم والبث المباشر', 'Today & live stream'),
-  const AdminDest('seasonSettings', Icons.celebration_outlined, 'إعدادات المواسم', 'Season settings'),
-  const AdminDest('seasonPreset', Icons.checklist_rounded, 'تجهيز الموسم', 'Season preparation'),
-  const AdminDest('app', Icons.install_mobile_outlined, 'التطبيق والإشعارات', 'App & notifications'),
-  const AdminDest('church', Icons.church_outlined, 'بيانات الكنيسة', 'Church info'),
-  const AdminDest('assistant', Icons.smart_toy_outlined, 'المساعد الذكي', 'AI assistant'),
-  for (final c in adminCollections)
-    if (c.id != 'entries') AdminDest(c.id, adminIcon(c.icon), c.labelAr, c.labelEn),
-  const AdminDest('messages', Icons.mail_outline, 'رسائل الزوار', 'Contact messages'),
-  const AdminDest('contactCats', Icons.forum_outlined, 'أنواع رسائل التواصل', 'Contact form types'),
-  if (role == AdminRoles.owner) const AdminDest('admins', Icons.admin_panel_settings_outlined, 'المشرفون', 'Admins'),
-];
+      const AdminDest('overview', Icons.dashboard_outlined, 'الرئيسية', 'Overview', group: AdminGroup.home),
+      // Schedule
+      AdminDest('liturgies', adminIcon('liturgies'), 'القداسات والصلوات', 'Liturgies', group: AdminGroup.schedule),
+      AdminDest('meetings', adminIcon('meetings'), 'الاجتماعات', 'Meetings', group: AdminGroup.schedule),
+      const AdminDest('today', Icons.today_outlined, 'اليوم والبث', 'Today & live stream', group: AdminGroup.schedule),
+      AdminDest('seasons', adminIcon('seasons'), 'المواسم', 'Seasons', group: AdminGroup.schedule),
+      // Announcements
+      AdminDest('alerts', adminIcon('alerts'), 'التنويهات', 'Notices', group: AdminGroup.announcements),
+      const AdminDest('app', Icons.notifications_active_outlined, 'الإعلانات والإشعارات', 'Announcements & notifications',
+          group: AdminGroup.announcements),
+      // Church
+      AdminDest('priests', adminIcon('priests'), 'الآباء الكهنة', 'Priests', group: AdminGroup.church),
+      AdminDest('departedPriests', adminIcon('departed'), 'الآباء المتنيحون', 'Departed fathers',
+          group: AdminGroup.church),
+      AdminDest('saints', adminIcon('saints'), 'شفعاء الكنيسة', 'Patron saints', group: AdminGroup.church),
+      AdminDest('milestones', adminIcon('milestones'), 'محطات تاريخية', 'Milestones', group: AdminGroup.church),
+      const AdminDest('church', Icons.church_outlined, 'بيانات الكنيسة', 'Church info', group: AdminGroup.church),
+      // Services & activities
+      AdminDest('facilities', adminIcon('services'), 'الخدمات العامة', 'Public services', group: AdminGroup.services),
+      AdminDest('activities', adminIcon('activities'), 'الأنشطة والكورالات', 'Activities', group: AdminGroup.services),
+      AdminDest('clinics', adminIcon('clinics'), 'العيادات', 'Clinics', group: AdminGroup.services),
+      // Pages
+      const AdminDest('features', Icons.toggle_on_outlined, 'الأقسام والرئيسية', 'Sections & home',
+          group: AdminGroup.pages),
+      AdminDest('pages', adminIcon('pages'), 'الصفحات المخصصة', 'Custom pages', group: AdminGroup.pages),
+      AdminDest('categories', adminIcon('categories'), 'الأقسام المخصصة', 'Custom sections', group: AdminGroup.pages),
+      // Messages
+      const AdminDest('messages', Icons.mail_outline, 'رسائل الزوار', 'Contact messages', group: AdminGroup.messages),
+      // Owner settings
+      if (role == AdminRoles.owner) ...[
+        const AdminDest('admins', Icons.admin_panel_settings_outlined, 'المشرفون', 'Admins',
+            group: AdminGroup.ownerSettings),
+        const AdminDest('contactCats', Icons.forum_outlined, 'أنواع رسائل التواصل', 'Contact form types',
+            group: AdminGroup.ownerSettings),
+        const AdminDest('assistant', Icons.smart_toy_outlined, 'المساعد الذكي', 'AI assistant',
+            group: AdminGroup.ownerSettings),
+        const AdminDest('seasonSettings', Icons.celebration_outlined, 'إعدادات المواسم', 'Season settings',
+            group: AdminGroup.ownerSettings),
+        const AdminDest('advanced', Icons.tune_outlined, 'متقدم', 'Advanced', group: AdminGroup.ownerSettings),
+      ],
+    ];
 
 /// Responsive dashboard: sidebar on desktop, drawer on mobile.
 class AdminDashboard extends StatefulWidget {
@@ -590,11 +638,20 @@ class _AdminDashboardState extends State<AdminDashboard> {
   final UnsavedGuardRegistry _unsaved = UnsavedGuardRegistry();
   final List<StreamSubscription> _purgeSubs = [];
   late String _current = widget.initial == 'entries' ? 'categories' : widget.initial;
+  late Stream<List<AdminDoc>> _messagesStream = widget.repo.watch('contact_messages');
 
   @override
   void initState() {
     super.initState();
     _purgeExpiredSoftDeletes();
+  }
+
+  @override
+  void didUpdateWidget(covariant AdminDashboard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.repo != oldWidget.repo) {
+      _messagesStream = widget.repo.watch('contact_messages');
+    }
   }
 
   void _purgeExpiredSoftDeletes() {
@@ -653,6 +710,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
     widget.onSignOut();
   }
 
+  bool get _isOwner => widget.role == AdminRoles.owner;
+
+  Widget _ownerOnly() => Center(child: Text(context.tr('ownerOnly')));
+
   Widget _screen() {
     final repo = widget.repo;
     switch (_current) {
@@ -662,8 +723,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
         return Consumer(
           builder: (context, ref, _) => FeaturesScreen(
             repo: repo,
-            // Owner only (ADR-034): one harmless test event to check Sentry.
-            onSendTestError: widget.role == AdminRoles.owner ? ErrorReporting.sendTestEvent : null,
             activeSeasonKeys: [
               for (final k in ref.watch(activeSeasonKeysProvider).split(','))
                 if (k.isNotEmpty) k,
@@ -676,23 +735,35 @@ class _AdminDashboardState extends State<AdminDashboard> {
       case 'today':
         return ChurchInfoScreen(key: const ValueKey('today'), repo: repo, doc: todaySettingsDoc);
       case 'seasonSettings':
-        return ChurchInfoScreen(key: const ValueKey('seasonSettings'), repo: repo, doc: seasonSettingsDoc);
+        return _isOwner
+            ? ChurchInfoScreen(key: const ValueKey('seasonSettings'), repo: repo, doc: seasonSettingsDoc)
+            : _ownerOnly();
+      case 'seasons':
+        return SeasonsHubScreen(key: const ValueKey('seasons'), repo: repo, initialTab: 0);
       case 'seasonPreset':
-        return SeasonPresetScreen(repo: repo);
+        return SeasonsHubScreen(key: const ValueKey('seasons-preset'), repo: repo, initialTab: 1);
       case 'app':
         return AppAndNotificationsScreen(key: const ValueKey('app'), repo: repo, role: widget.role);
       case 'church':
         return ChurchInfoScreen(key: const ValueKey('church'), repo: repo);
       case 'assistant':
-        return AssistantAdminScreen(repo: repo);
+        return _isOwner ? AssistantAdminScreen(repo: repo) : _ownerOnly();
       case 'messages':
         return MessagesScreen(repo: repo);
       case 'contactCats':
-        return ContactCategoriesScreen(repo: repo);
+        return _isOwner ? ContactCategoriesScreen(repo: repo) : _ownerOnly();
       case 'admins':
-        return widget.role == AdminRoles.owner
-            ? AdminsScreen(repo: repo, selfUid: widget.uid)
-            : Center(child: Text(context.tr('ownerOnly')));
+        return _isOwner ? AdminsScreen(repo: repo, selfUid: widget.uid) : _ownerOnly();
+      case 'advanced':
+        return _isOwner
+            ? Consumer(
+                builder: (context, ref, _) => AdvancedOwnerScreen(
+                  key: const ValueKey('advanced'),
+                  repo: repo,
+                  appCheckActive: ref.watch(firebaseStatusProvider).appCheckActive,
+                ),
+              )
+            : _ownerOnly();
     }
     final def = collectionById(_current == 'entries' ? 'categories' : _current);
     if (def == null) return OverviewScreen(repo: repo, role: widget.role, onOpen: _open);
@@ -736,23 +807,39 @@ class _AdminDashboardState extends State<AdminDashboard> {
               ),
             ),
             const Divider(),
-            for (final d in dests)
-              ListTile(
-                key: ValueKey('nav-${d.id}'),
-                dense: true,
-                leading: Icon(d.icon),
-                title: Text(context.pick(d.labelAr, d.labelEn), style: const TextStyle(fontWeight: FontWeight.w600)),
-                selected: _current == d.id,
-                // Same colours for every entry: burgundy icons, ink labels;
-                // the selected one gets a gold highlight and a burgundy
-                // label (icon and text alike).
-                iconColor: context.pal.primary,
-                textColor: context.pal.ink,
-                selectedColor: context.pal.primary,
-                selectedTileColor: context.pal.ornament.withValues(alpha: 0.22),
-                shape: const RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(10))),
-                onTap: () => _handleNavTap(d.id, inDrawer),
-              ),
+            for (final g in AdminGroup.values)
+              if (dests.any((d) => d.group == g)) ...[
+                Padding(
+                  key: ValueKey('nav-group-${g.name}'),
+                  padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
+                  child: Text(
+                    context.tr('grp_${g.name}'),
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                      color: context.pal.muted,
+                    ),
+                  ),
+                ),
+                for (final d in dests.where((d) => d.group == g))
+                  ListTile(
+                    key: ValueKey('nav-${d.id}'),
+                    dense: true,
+                    leading: Icon(d.icon),
+                    title: Text(context.pick(d.labelAr, d.labelEn), style: const TextStyle(fontWeight: FontWeight.w600)),
+                    trailing: d.id == 'messages' ? _messagesBadge(context) : null,
+                    selected: _current == d.id || (d.id == 'seasons' && _current == 'seasonPreset'),
+                    // Same colours for every entry: burgundy icons, ink labels;
+                    // the selected one gets a gold highlight and a burgundy
+                    // label (icon and text alike).
+                    iconColor: context.pal.primary,
+                    textColor: context.pal.ink,
+                    selectedColor: context.pal.primary,
+                    selectedTileColor: context.pal.ornament.withValues(alpha: 0.22),
+                    shape: const RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(10))),
+                    onTap: () => _handleNavTap(d.id, inDrawer),
+                  ),
+              ],
             const Divider(),
             ListTile(
               dense: true,
@@ -766,6 +853,33 @@ class _AdminDashboardState extends State<AdminDashboard> {
     );
   }
 
+  Widget _messagesBadge(BuildContext context) => StreamBuilder<List<AdminDoc>>(
+        key: ObjectKey(_messagesStream),
+        stream: _messagesStream,
+        builder: (context, snap) {
+          final unread = (snap.data ?? const <AdminDoc>[])
+              .where((d) => !isSoftDeleted(d.data) && messageIsOpen(d.data))
+              .length;
+          if (unread <= 0) return const SizedBox.shrink();
+          return Container(
+            key: const ValueKey('nav-messages-badge'),
+            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+            decoration: BoxDecoration(
+              color: context.pal.alert,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              '$unread',
+              style: TextStyle(
+                color: context.pal.onBar,
+                fontSize: 11.5,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          );
+        },
+      );
+
   Future<void> _handleOpenSite() async {
     if (_unsaved.isDirty) {
       final discard = await confirmDiscardChanges(context);
@@ -778,8 +892,9 @@ class _AdminDashboardState extends State<AdminDashboard> {
   Widget build(BuildContext context) {
     registerAdminStrings();
     final wide = MediaQuery.sizeOf(context).width >= 1000;
+    final resolvedId = _current == 'seasonPreset' ? 'seasons' : _current;
     final dest = adminDestinations(widget.role)
-        .firstWhere((d) => d.id == _current, orElse: () => adminDestinations(widget.role).first);
+        .firstWhere((d) => d.id == resolvedId, orElse: () => adminDestinations(widget.role).first);
     return UnsavedGuardScope(
       registry: _unsaved,
       child: AdminSessionGuard(

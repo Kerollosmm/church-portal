@@ -1725,7 +1725,7 @@ describe('ADR-028: contact categories, bookings and anonymous messages', () => {
   });
 
   test('stored categories replace the defaults: switched-off and missing slots are refused', async () => {
-    await assertSucceeds(setDoc(doc(db(EDITOR), 'settings', 'contact'), { categories: cats }));
+    await assertSucceeds(setDoc(doc(db(OWNER), 'settings', 'contact'), { categories: cats }));
     const pub = db(null);
     await assertSucceeds(send(pub, booking));
     await reset();
@@ -1735,7 +1735,7 @@ describe('ADR-028: contact categories, bookings and anonymous messages', () => {
   });
 
   test('admins edit settings/contact; shapes are validated; 12 full categories fit in one write', async () => {
-    const ref = doc(db(EDITOR), 'settings', 'contact');
+    const ref = doc(db(OWNER), 'settings', 'contact');
     const many = Object.fromEntries(Array.from({ length: 12 }, (_, i) => [`c${i + 1}`, enc({
       labelAr: 'ن'.repeat(80), labelEn: 'e'.repeat(80), kind: 'booking', on: true, anon: false, order: i,
       subtypes: Array.from({ length: 8 }, (_, j) => `type${j}|${'ع'.repeat(60)}|${'e'.repeat(60)}`),
@@ -1792,7 +1792,7 @@ describe('PR #19: stable contact category ids (never re-label old messages)', ()
   const prayer = enc({ kind: 'general', on: true, anon: false, order: 30, labelAr: 'طلب صلاة', labelEn: 'Prayer request' });
 
   test('random ids save and receive messages; a deleted id is refused, its replacement has a new id', async () => {
-    const ref = doc(db(EDITOR), 'settings', 'contact');
+    const ref = doc(db(OWNER), 'settings', 'contact');
     await assertSucceeds(setDoc(ref, { categories: { c1, ck3j9x2ab7q: visit } }));
     const pub = db(null);
     await assertSucceeds(send(pub, general('ck3j9x2ab7q')));
@@ -1807,7 +1807,7 @@ describe('PR #19: stable contact category ids (never re-label old messages)', ()
   });
 
   test('12 full categories with random ids fit in one write; an edit validates only what changed', async () => {
-    const ref = doc(db(EDITOR), 'settings', 'contact');
+    const ref = doc(db(OWNER), 'settings', 'contact');
     const full = (i) => enc({
       labelAr: 'ن'.repeat(80), labelEn: 'e'.repeat(80), kind: 'booking', on: true, anon: false, order: i,
       subtypes: Array.from({ length: 8 }, (_, j) => `type${j}|${'ع'.repeat(60)}|${'e'.repeat(60)}`),
@@ -1835,16 +1835,16 @@ describe('ADR-029: assistant settings (settings/assistant)', () => {
   };
 
   test('everyone reads; admins save every field at its maximum, blanks and nulls (= defaults)', async () => {
-    const ref = doc(db(EDITOR), 'settings', 'assistant');
+    const ref = doc(db(OWNER), 'settings', 'assistant');
     await assertSucceeds(setDoc(ref, full));
     await assertSucceeds(getDoc(doc(db(null), 'settings', 'assistant')));
     await assertSucceeds(setDoc(ref, { model: '', instructions: '', topics: '', maxChars: null, perMinute: null, perSession: null }));
-    await assertSucceeds(setDoc(ref, { model: 'gemini-3.5-flash-lite', updatedAt: serverTimestamp(), updatedBy: `${EDITOR}@x.test` }, { merge: true }));
+    await assertSucceeds(setDoc(ref, { model: 'gemini-3.5-flash-lite', updatedAt: serverTimestamp(), updatedBy: `${OWNER}@x.test` }, { merge: true }));
     await assertSucceeds(updateDoc(ref, { maxChars: 50, perMinute: 1, perSession: 1 }));
   });
 
   test('model ids, lengths, number ranges and unknown keys are validated', async () => {
-    const ref = doc(db(EDITOR), 'settings', 'assistant');
+    const ref = doc(db(OWNER), 'settings', 'assistant');
     for (const bad of [
       { model: 'gpt-4o' }, { model: 'Gemini-3' }, { model: 'gemini 3' }, { model: 'gemini-' }, { model: 'gemma-3-27b' },
       { model: 'gemini-' + 'a'.repeat(60) }, { model: 3 }, { model: null },
@@ -1875,7 +1875,7 @@ describe('ADR-029: assistant settings (settings/assistant)', () => {
   test('visitors and non-admins cannot change it; it can never be deleted', async () => {
     await assertFails(setDoc(doc(db(null), 'settings', 'assistant'), { model: 'gemini-3.1-flash-lite' }));
     await assertFails(setDoc(doc(db(STRANGER), 'settings', 'assistant'), { model: 'gemini-3.1-flash-lite' }));
-    await assertSucceeds(setDoc(doc(db(EDITOR), 'settings', 'assistant'), { model: '' }));
+    await assertSucceeds(setDoc(doc(db(OWNER), 'settings', 'assistant'), { model: '' }));
     await assertFails(deleteDoc(doc(db(OWNER), 'settings', 'assistant')));
   });
 });
@@ -2019,7 +2019,7 @@ describe('ADR-041: programme details (speaker, topic, choir, venue, audience, Dr
   });
 
   test('venues / audiences: up to 12 encoded rows each', async () => {
-    const ref = doc(db(EDITOR), 'settings', 'features');
+    const ref = doc(db(OWNER), 'settings', 'features');
     const row = (k, ar = 'القاعة', en = '') => [k, ar, en].join(S);
     await assertSucceeds(setDoc(ref, { theme: 'burgundy', venues: [row('main', 'الكنيسة الكبرى', 'Main church'), row('lower')],
       audiences: [row('general', 'عام', 'Everyone')] }));
@@ -2091,7 +2091,7 @@ describe('ADR-042: season preset, season verses, wedding switch, assistant seaso
   });
 
   test('season verses: up to 40 encoded rows of a known season', async () => {
-    const ref = doc(db(EDITOR), 'settings', 'features');
+    const ref = doc(db(OWNER), 'settings', 'features');
     const row = (k, t = 'هوذا حمل الله', r = 'يو 1: 29') => [k, t, r].join(S);
     await assertSucceeds(setDoc(ref, { seasonVerses: [row('holy_week'), row('pascha', 'المسيح قام', '')] }));
     await assertSucceeds(updateDoc(ref, { seasonVerses: Array.from({ length: 40 }, () => row('summer', 'آ'.repeat(500), 'ر'.repeat(60))) }));
@@ -2106,7 +2106,7 @@ describe('ADR-042: season preset, season verses, wedding switch, assistant seaso
   });
 
   test('assistant perDaySeason 1..100', async () => {
-    const ref = doc(db(EDITOR), 'settings', 'assistant');
+    const ref = doc(db(OWNER), 'settings', 'assistant');
     await assertSucceeds(setDoc(ref, { perDay: 3, perDaySeason: 6 }));
     await assertSucceeds(updateDoc(ref, { perDaySeason: 100 }));
     await assertSucceeds(updateDoc(ref, { perDaySeason: null }));
@@ -2178,8 +2178,8 @@ describe('ADR-043: season-following theme, season theme map, preset theme item, 
     const ed = db(EDITOR);
     for (const k of ['epiphany', 'marian', 'fast']) {
       await assertSucceeds(setDoc(doc(ed, 'seasons', k), { key: k, nameAr: 'موسم', active: true }), k);
-      await assertSucceeds(setDoc(ref(), { seasonVerses: [[k, 'آية', ''].join('\u001f')] }), `${k} verse`);
-      await assertSucceeds(setDoc(ref(), { seasonPreset: { ...preset, seasonKey: k } }), `${k} preset`);
+      await assertSucceeds(setDoc(doc(db(OWNER), 'settings', 'features'), { seasonVerses: [[k, 'آية', ''].join('\u001f')] }), `${k} verse`);
+      await assertSucceeds(setDoc(ref(), { seasonPreset: { ...preset, seasonKey: k } }, { merge: true }), `${k} preset`);
     }
     await assertFails(setDoc(doc(ed, 'seasons', 'lent'), { key: 'lent', nameAr: 'موسم', active: true }));
   });
@@ -2243,15 +2243,16 @@ describe('ADR-047: English text for the fixed verse and the season verses', () =
   });
 
   test('season verses: rows with or without the ␟textEn␟refEn tail; 40 full rows fit', async () => {
+    const ownerRef = () => doc(db(OWNER), 'settings', 'features');
     const row = (k, en = 'Behold, the Lamb of God', er = 'John 1:29') => [k, 'هوذا حمل الله', 'يو 1: 29', en, er].join(S);
-    await assertSucceeds(setDoc(ref(), { seasonVerses: [row('holy_week'), ['pascha', 'المسيح قام', ''].join(S), row('pascha', '', '')] }));
-    await assertSucceeds(updateDoc(ref(), { seasonVerses: Array.from({ length: 40 },
+    await assertSucceeds(setDoc(ownerRef(), { seasonVerses: [row('holy_week'), ['pascha', 'المسيح قام', ''].join(S), row('pascha', '', '')] }));
+    await assertSucceeds(updateDoc(ownerRef(), { seasonVerses: Array.from({ length: 40 },
       () => ['summer', 'آ'.repeat(500), 'ر'.repeat(60), 'e'.repeat(500), 'r'.repeat(60)].join(S)) }));
     for (const bad of [
       [row('holy_week', 'e'.repeat(501))], [row('holy_week', 'x', 'r'.repeat(61))], [row('holy_week') + S + 'x'],
       [['holy_week', 'آية', '', 'only English text'].join(S)],
     ]) {
-      await assertFails(updateDoc(ref(), { seasonVerses: bad }), JSON.stringify(bad).slice(0, 60));
+      await assertFails(updateDoc(ownerRef(), { seasonVerses: bad }), JSON.stringify(bad).slice(0, 60));
     }
   });
 });
@@ -2274,8 +2275,8 @@ describe('ADR-051: season keys, replaceDates, exceptional seasons', () => {
     for (const k of [...NEW, 'fast']) {
       await assertSucceeds(setDoc(doc(ed, 'seasons', k), { key: k, nameAr: 'موسم', active: true }), k);
       await assertSucceeds(setDoc(doc(ed, 'liturgies', `l-${k}`), { type: 'mass', nameAr: 'قداس', start: '07:00', seasonKey: k }), `${k} liturgy`);
-      await assertSucceeds(setDoc(features(), { seasonVerses: [[k, 'آية', ''].join('\u001f')] }), `${k} verse`);
-      await assertSucceeds(setDoc(features(), { seasonPreset: preset(k) }), `${k} preset`);
+      await assertSucceeds(setDoc(doc(db(OWNER), 'settings', 'features'), { seasonVerses: [[k, 'آية', ''].join('\u001f')] }), `${k} verse`);
+      await assertSucceeds(setDoc(features(), { seasonPreset: preset(k) }, { merge: true }), `${k} preset`);
     }
     for (const bad of ['cross', 'lent', 'Apostles', 'great-lent']) {
       await assertFails(setDoc(doc(ed, 'seasons', 'x'), { key: bad, nameAr: 'موسم' }), bad);
@@ -2329,7 +2330,7 @@ describe('ADR-051: season keys, replaceDates, exceptional seasons', () => {
   });
 
   test('assistant exceptionalSeasons: a list of known season keys (empty = none)', async () => {
-    const ref = doc(db(EDITOR), 'settings', 'assistant');
+    const ref = doc(db(OWNER), 'settings', 'assistant');
     await assertSucceeds(setDoc(ref, { perDay: 3, perDaySeason: 6,
       exceptionalSeasons: ['holy_week', 'pascha', 'nativity', 'revival_maximus', 'revival_moses', 'great_lent', 'kiahk', 'marian'] }));
     await assertSucceeds(updateDoc(ref, { exceptionalSeasons: [] }));
@@ -2340,6 +2341,125 @@ describe('ADR-051: season keys, replaceDates, exceptional seasons', () => {
       await assertFails(updateDoc(ref, { exceptionalSeasons: bad }), JSON.stringify(bad));
     }
     await assertFails(setDoc(doc(db(STRANGER), 'settings', 'assistant'), { exceptionalSeasons: [] }));
+  });
+});
+
+describe('P2-18R: owner-only writes for settings (contact, assistant, venues, audiences, seasonVerses)', () => {
+  const S = '\u001f';
+  const venueRow = (k, ar = 'القاعة', en = 'Hall') => [k, ar, en].join(S);
+  const verseRow = (k = 'summer', ar = 'الرب نوري', r = 'مز ٢٧: ١', en = 'The Lord is my light', er = 'Ps 27:1') =>
+    [k, ar, r, en, er].join(S);
+  const validCategories = { c1: ['general', '1', '0', '10', 'استفسار عام', 'General inquiry', ''].join(S) };
+
+  test('active non-owner editor cannot create or update settings/contact or settings/assistant', async () => {
+    const ed = db(EDITOR);
+    const own = db(OWNER);
+    const stamp = (uid) => ({ updatedAt: serverTimestamp(), updatedBy: `${uid}@x.test` });
+
+    await assertFails(setDoc(doc(ed, 'settings', 'contact'), { categories: validCategories }));
+    await assertFails(setDoc(doc(ed, 'settings', 'assistant'), { model: 'gemini-3.1-flash-lite' }));
+
+    await assertSucceeds(setDoc(doc(own, 'settings', 'contact'), { categories: validCategories, ...stamp(OWNER) }));
+    await assertSucceeds(setDoc(doc(own, 'settings', 'assistant'), { model: '', ...stamp(OWNER) }));
+
+    await assertFails(updateDoc(doc(ed, 'settings', 'contact'), { categories: validCategories, ...stamp(EDITOR) }));
+    await assertFails(updateDoc(doc(ed, 'settings', 'assistant'), { maxChars: 500, ...stamp(EDITOR) }));
+  });
+
+  test('active non-owner editor cannot change venues, audiences, or seasonVerses on settings/features', async () => {
+    const ed = db(EDITOR);
+    const own = db(OWNER);
+    const stamp = (uid) => ({ updatedAt: serverTimestamp(), updatedBy: `${uid}@x.test` });
+
+    // Create attempts by editor
+    await assertFails(setDoc(doc(ed, 'settings', 'features'), { venues: [venueRow('main')] }));
+    await assertFails(setDoc(doc(ed, 'settings', 'features'), { audiences: [venueRow('youth')] }));
+    await assertFails(setDoc(doc(ed, 'settings', 'features'), { seasonVerses: [verseRow()] }));
+
+    // Seed stored settings/features with owner-only fields already populated
+    await assertSucceeds(setDoc(doc(own, 'settings', 'features'), {
+      ...convert(seed.settings.features),
+      venues: [venueRow('main')],
+      audiences: [venueRow('general')],
+      seasonVerses: [verseRow()],
+      ...stamp(OWNER),
+    }));
+
+    // Update attempts by editor changing any of the three keys are denied
+    await assertFails(updateDoc(doc(ed, 'settings', 'features'), { venues: [], ...stamp(EDITOR) }));
+    await assertFails(updateDoc(doc(ed, 'settings', 'features'), { audiences: [], ...stamp(EDITOR) }));
+    await assertFails(updateDoc(doc(ed, 'settings', 'features'), { seasonVerses: [], ...stamp(EDITOR) }));
+    await assertFails(setDoc(doc(ed, 'settings', 'features'), {
+      venues: [venueRow('other')], liveEnabled: true, ...stamp(EDITOR),
+    }, { merge: true }));
+  });
+
+  test('active non-owner editor can still save Today, live stream, and section switches when owner-only keys are untouched', async () => {
+    const ed = db(EDITOR);
+    const own = db(OWNER);
+    const stamp = (uid) => ({ updatedAt: serverTimestamp(), updatedBy: `${uid}@x.test` });
+
+    await assertSucceeds(setDoc(doc(own, 'settings', 'features'), {
+      ...convert(seed.settings.features),
+      venues: [venueRow('main')],
+      audiences: [venueRow('general')],
+      seasonVerses: [verseRow()],
+      ...stamp(OWNER),
+    }));
+
+    // Today & live stream update
+    await assertSucceeds(updateDoc(doc(ed, 'settings', 'features'), {
+      copticStrip: 'home',
+      dayStartMode: 'fixed',
+      dayStartsAt: '05:30',
+      topEvent: true,
+      commemoration: true,
+      topEventServices: true,
+      liveEnabled: true,
+      liveUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+      liveLabelAr: 'بث مباشر',
+      liveLabelEn: 'Live',
+      ...stamp(EDITOR),
+    }));
+
+    // Section switches update
+    await assertSucceeds(updateDoc(doc(ed, 'settings', 'features'), {
+      'sections.assistant': false,
+      'sections.contactForm': true,
+      ...stamp(EDITOR),
+    }));
+  });
+
+  test('owner writes settings/contact, settings/assistant, and worst-case venues/audiences/seasonVerses under budget', async () => {
+    const own = db(OWNER);
+    const stamp = () => ({ updatedAt: serverTimestamp(), updatedBy: `${OWNER}@x.test` });
+
+    await assertSucceeds(setDoc(doc(own, 'settings', 'contact'), { categories: validCategories, ...stamp() }));
+    await assertSucceeds(setDoc(doc(own, 'settings', 'assistant'), {
+      model: 'gemini-3.1-flash-lite', maxChars: 1000, perMinute: 20, perDay: 100, perDaySeason: 100, perSession: 200,
+      ...stamp(),
+    }));
+
+    // Worst-case whole-doc save with 12 max-length venues, 12 max-length audiences, and 40 max-length seasonVerses
+    await assertSucceeds(setDoc(doc(own, 'settings', 'features'), {
+      ...convert(seed.settings.features),
+      venues: Array.from({ length: 12 }, (_, i) => venueRow(`v${i}`, 'ق'.repeat(80), 'e'.repeat(80))),
+      audiences: Array.from({ length: 12 }, (_, i) => venueRow(`a${i}`, 'ج'.repeat(80), 'g'.repeat(80))),
+      seasonVerses: Array.from({ length: 40 }, () => verseRow('summer', 'آ'.repeat(500), 'ر'.repeat(60), 'e'.repeat(500), 'r'.repeat(60))),
+      ...stamp(),
+    }));
+  });
+
+  test('anonymous reads of settings/contact, settings/assistant, and settings/features still succeed', async () => {
+    const own = db(OWNER);
+    await assertSucceeds(setDoc(doc(own, 'settings', 'contact'), { categories: validCategories }));
+    await assertSucceeds(setDoc(doc(own, 'settings', 'assistant'), { model: '' }));
+    await assertSucceeds(setDoc(doc(own, 'settings', 'features'), convert(seed.settings.features)));
+
+    const pub = db(null);
+    await assertSucceeds(getDoc(doc(pub, 'settings', 'contact')));
+    await assertSucceeds(getDoc(doc(pub, 'settings', 'assistant')));
+    await assertSucceeds(getDoc(doc(pub, 'settings', 'features')));
   });
 });
 

@@ -21,11 +21,10 @@ import '../../domain/reminders.dart' show EventKey, leadLabel;
 import '../../domain/rules.dart' show toArabicDigits;
 import '../../domain/time_format.dart';
 import '../../domain/today.dart';
-import 'admin_schema.dart';
-import 'admin_screens.dart';
 import 'admin_strings.dart';
 import 'admin_validators.dart';
 import 'confirm_named.dart';
+import 'screen_header.dart';
 import 'state_switch.dart';
 import 'unsaved_bar.dart';
 import 'unsaved_guard.dart';
@@ -101,24 +100,12 @@ const Map<String, List<String>> _notificationsAdminStrings = {
   ],
 };
 
-/// Admin screen combining the notifications manager and the app-install settings.
-class AppAndNotificationsScreen extends StatefulWidget {
+/// Admin screen for scheduled announcements and visitor notifications
+/// (the APK install settings live under owner-only Advanced, P2-21).
+class AppAndNotificationsScreen extends StatelessWidget {
   final AdminBackend repo;
   final String role;
   const AppAndNotificationsScreen({super.key, required this.repo, this.role = 'editor'});
-
-  @override
-  State<AppAndNotificationsScreen> createState() => _AppAndNotificationsScreenState();
-}
-
-class _AppAndNotificationsScreenState extends State<AppAndNotificationsScreen> with SingleTickerProviderStateMixin {
-  late final TabController _tabController = TabController(length: 2, vsync: this);
-
-  @override
-  void dispose() {
-    _tabController.dispose();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -127,27 +114,13 @@ class _AppAndNotificationsScreenState extends State<AppAndNotificationsScreen> w
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Material(
-          color: context.pal.background,
-          child: TabBar(
-            controller: _tabController,
-            labelColor: context.pal.primary,
-            unselectedLabelColor: context.pal.muted,
-            indicatorColor: context.pal.primary,
-            tabs: [
-              Tab(icon: const Icon(Icons.notifications_active_outlined), text: context.tr('nm_tabNotifications')),
-              Tab(icon: const Icon(Icons.install_mobile_outlined), text: context.tr('nm_tabInstall')),
-            ],
-          ),
+        AdminScreenHeader(
+          title: context.tr('appNotificationsTitle'),
+          help: context.tr('help_app'),
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
         ),
         Expanded(
-          child: TabBarView(
-            controller: _tabController,
-            children: [
-              NotificationsAdminSection(repo: widget.repo, role: widget.role),
-              ChurchInfoScreen(key: const ValueKey('app-install-doc'), repo: widget.repo, doc: appSettingsDoc),
-            ],
-          ),
+          child: NotificationsAdminSection(repo: repo, role: role),
         ),
       ],
     );
@@ -177,21 +150,30 @@ class _LinkChoice {
   const _LinkChoice(this.path, this.labelAr, this.labelEn, this.group, {this.eventKey = ''});
 }
 
-/// Notification manager tab.
+/// Notification manager section.
 class NotificationsAdminSection extends StatefulWidget {
   final AdminBackend repo;
   final String role;
 
+  /// When true, renders technical owner-only controls (VAPID key, queue drain
+  /// health). Off by default so ordinary editors only see announcements & types.
+  final bool showTechnical;
+
   /// Device notification test (injectable for tests).
   final PushEnv pushEnv;
-  const NotificationsAdminSection({super.key, required this.repo, this.role = 'editor', this.pushEnv = const PlatformPushEnv()});
+  const NotificationsAdminSection({
+    super.key,
+    required this.repo,
+    this.role = 'editor',
+    this.showTechnical = false,
+    this.pushEnv = const PlatformPushEnv(),
+  });
 
   @override
   State<NotificationsAdminSection> createState() => _NotificationsAdminSectionState();
 }
 
 class _NotificationsAdminSectionState extends State<NotificationsAdminSection> with AutomaticKeepAliveClientMixin {
-  // Keep unsaved edits when the admin switches to the «تثبيت التطبيق» tab.
   @override
   bool get wantKeepAlive => true;
 
@@ -291,6 +273,14 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
   }
 
   @override
+  void didUpdateWidget(covariant NotificationsAdminSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!oldWidget.showTechnical && widget.showTechnical) {
+      _loadWebHealth();
+    }
+  }
+
+  @override
   void initState() {
     super.initState();
     for (final type in NotifyType.values) {
@@ -310,7 +300,7 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
     for (final c in [_draftTitleAr, _draftTitleEn, _draftBodyAr, _draftBodyEn]) {
       c.addListener(_onDraftChanged);
     }
-    _loadWebHealth();
+    if (widget.showTechnical) _loadWebHealth();
   }
 
   void _onDraftChanged() {
@@ -382,7 +372,7 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
 
   /// First problem in the settings form (l10n key), or null.
   String? _settingsProblem() {
-    if (!isValidVapidKey(_vapidCtrl.text.trim())) return 'nm_errVapid';
+    if (widget.showTechnical && !isValidVapidKey(_vapidCtrl.text.trim())) return 'nm_errVapid';
     for (final type in NotifyType.values) {
       final c = _typeCtrls[type]!;
       if (!isValidHm(c['time']!.text.trim())) return 'nm_errTime';
@@ -875,8 +865,10 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
                         _remindSection(context),
                         const SizedBox(height: 16),
                         _sentLogSection(context),
-                        const SizedBox(height: 16),
-                        _advancedSection(context),
+                        if (widget.showTechnical) ...[
+                          const SizedBox(height: 16),
+                          _advancedSection(context),
+                        ],
                       ],
                     ),
                   ),
@@ -1012,52 +1004,54 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
             ]),
           ),
         ]),
-        const Divider(height: 24),
-        Text(context.tr('nm_webHealthTitle'), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: context.pal.primaryDeep)),
-        const SizedBox(height: 8),
-        Builder(builder: (context) {
-          final cronQueue = _topicsMeta?['cronQueue'] as Map?;
-          final drainAt = _asDateTime(cronQueue?['lastDrainAt'] ?? _topicsMeta?['lastDrainAt']);
-          final drainError = (cronQueue?['lastIidError'] ?? _topicsMeta?['lastIidError']) as String?;
-          final drainAge = drainAt == null ? null : DateTime.now().toUtc().difference(drainAt);
-          final (Color drainColor, String drainText) = switch (drainAge) {
-            null => (context.pal.muted, context.tr('nm_webHealthDrainNever')),
-            final a when a > const Duration(minutes: 45) || (drainError != null && drainError.isNotEmpty) =>
-              (context.pal.goldText, context.tr('nm_webHealthDrainLate')),
-            _ => (context.pal.success, context.tr('nm_webHealthDrainOk')),
-          };
+        if (widget.showTechnical) ...[
+          const Divider(height: 24),
+          Text(context.tr('nm_webHealthTitle'), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: context.pal.primaryDeep)),
+          const SizedBox(height: 8),
+          Builder(builder: (context) {
+            final cronQueue = _topicsMeta?['cronQueue'] as Map?;
+            final drainAt = _asDateTime(cronQueue?['lastDrainAt'] ?? _topicsMeta?['lastDrainAt']);
+            final drainError = (cronQueue?['lastIidError'] ?? _topicsMeta?['lastIidError']) as String?;
+            final drainAge = drainAt == null ? null : DateTime.now().toUtc().difference(drainAt);
+            final (Color drainColor, String drainText) = switch (drainAge) {
+              null => (context.pal.muted, context.tr('nm_webHealthDrainNever')),
+              final a when a > const Duration(minutes: 45) || (drainError != null && drainError.isNotEmpty) =>
+                (context.pal.goldText, context.tr('nm_webHealthDrainLate')),
+              _ => (context.pal.success, context.tr('nm_webHealthDrainOk')),
+            };
 
-          final planAt = _asDateTime(_planMeta?['lastPlanAt']);
-          final capReached = (cronQueue?['capReached'] ?? _planMeta?['capReached']) == true;
-          final planAge = planAt == null ? null : DateTime.now().toUtc().difference(planAt);
-          final (Color planColor, String planText) = switch (planAge) {
-            null => (context.pal.muted, context.tr('nm_webHealthPlanNever')),
-            final a when a > const Duration(hours: 7) =>
-              (context.pal.goldText, context.tr('nm_webHealthPlanLate')),
-            _ => (context.pal.success, context.tr('nm_webHealthPlanOk')),
-          };
+            final planAt = _asDateTime(_planMeta?['lastPlanAt']);
+            final capReached = (cronQueue?['capReached'] ?? _planMeta?['capReached']) == true;
+            final planAge = planAt == null ? null : DateTime.now().toUtc().difference(planAt);
+            final (Color planColor, String planText) = switch (planAge) {
+              null => (context.pal.muted, context.tr('nm_webHealthPlanNever')),
+              final a when a > const Duration(hours: 7) =>
+                (context.pal.goldText, context.tr('nm_webHealthPlanLate')),
+              _ => (context.pal.success, context.tr('nm_webHealthPlanOk')),
+            };
 
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(children: [
-                Icon(drainColor == context.pal.success ? Icons.check_circle_outline : Icons.warning_amber_outlined, color: drainColor, size: 18),
-                const SizedBox(width: 8),
-                Expanded(child: Text(drainText, style: TextStyle(color: drainColor, fontSize: 13))),
-              ]),
-              const SizedBox(height: 6),
-              Row(children: [
-                Icon(planColor == context.pal.success ? Icons.check_circle_outline : Icons.warning_amber_outlined, color: planColor, size: 18),
-                const SizedBox(width: 8),
-                Expanded(child: Text(planText, style: TextStyle(color: planColor, fontSize: 13))),
-              ]),
-              if (capReached) ...[
-                const SizedBox(height: 8),
-                _banner(context, icon: Icons.warning_amber_rounded, color: context.pal.alert, text: context.tr('nm_webHealthCapBanner')),
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(children: [
+                  Icon(drainColor == context.pal.success ? Icons.check_circle_outline : Icons.warning_amber_outlined, color: drainColor, size: 18),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text(drainText, style: TextStyle(color: drainColor, fontSize: 13))),
+                ]),
+                const SizedBox(height: 6),
+                Row(children: [
+                  Icon(planColor == context.pal.success ? Icons.check_circle_outline : Icons.warning_amber_outlined, color: planColor, size: 18),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text(planText, style: TextStyle(color: planColor, fontSize: 13))),
+                ]),
+                if (capReached) ...[
+                  const SizedBox(height: 8),
+                  _banner(context, icon: Icons.warning_amber_rounded, color: context.pal.alert, text: context.tr('nm_webHealthCapBanner')),
+                ],
               ],
-            ],
-          );
-        }),
+            );
+          }),
+        ],
       ],
     );
   }

@@ -14,10 +14,14 @@ import 'package:church_portal/ui/admin/admin_page.dart';
 import 'package:church_portal/ui/admin/admin_schema.dart';
 import 'package:church_portal/ui/admin/admin_screens.dart';
 import 'package:church_portal/ui/admin/admin_validators.dart';
+import 'package:church_portal/ui/admin/advanced_owner_screen.dart';
 import 'package:church_portal/ui/admin/collection_list.dart';
+import 'package:church_portal/ui/admin/contact_admin.dart';
 import 'package:church_portal/ui/admin/doc_editor.dart';
 import 'package:church_portal/ui/admin/features_editor.dart';
+import 'package:church_portal/ui/admin/notifications_admin.dart';
 import 'package:church_portal/ui/admin/pending_delete.dart';
+import 'package:church_portal/ui/admin/season_preset_admin.dart';
 import 'package:church_portal/ui/admin/session_policy.dart';
 import 'package:church_portal/ui/admin/state_switch.dart';
 import 'package:church_portal/ui/admin/unsaved_bar.dart';
@@ -2348,6 +2352,446 @@ void main() {
       await tester.tap(find.text('تجاهل'));
       await tester.pumpAndSettle();
       expect(signedOut, 1);
+    });
+  });
+
+  group('PR 3E: P2-18 grouped navigation, badge, season hub & owner guards', () {
+    testWidgets('shows 7 editor groups (19 entries) for editor and all 8 groups (24 entries) for owner', (tester) async {
+      tester.view.physicalSize = const Size(1280, 2600);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final editorDests = adminDestinations(AdminRoles.editor);
+      final ownerDests = adminDestinations(AdminRoles.owner);
+      expect(editorDests, hasLength(19));
+      expect(ownerDests, hasLength(24));
+      expect(ownerDests.map((d) => d.icon).toSet(), hasLength(24));
+      expect(editorDests.any((d) => d.group == AdminGroup.ownerSettings), isFalse);
+
+      final repo = _TestAdminBackend();
+      await tester.pumpWidget(ProviderScope(
+        child: _app(
+          AdminDashboard(
+            repo: repo,
+            uid: 'u-editor',
+            email: 'editor@church.org',
+            role: AdminRoles.editor,
+            onSignOut: () {},
+          ),
+          locale: const Locale('ar'),
+        ),
+      ));
+      await tester.pumpAndSettle();
+
+      for (final g in AdminGroup.values.where((g) => g != AdminGroup.ownerSettings)) {
+        expect(find.byKey(ValueKey('nav-group-${g.name}')), findsOneWidget, reason: g.name);
+      }
+      expect(find.byKey(const ValueKey('nav-group-ownerSettings')), findsNothing);
+      for (final d in editorDests) {
+        expect(find.byKey(ValueKey('nav-${d.id}')), findsOneWidget, reason: d.id);
+      }
+
+      // Now mount as owner and verify 8th group appears with all 5 owner destinations.
+      await tester.pumpWidget(ProviderScope(
+        child: _app(
+          AdminDashboard(
+            repo: repo,
+            uid: 'u-owner',
+            email: 'owner@church.org',
+            role: AdminRoles.owner,
+            onSignOut: () {},
+          ),
+          locale: const Locale('ar'),
+        ),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('nav-group-ownerSettings')), findsOneWidget);
+      for (final d in ownerDests) {
+        expect(find.byKey(ValueKey('nav-${d.id}')), findsOneWidget, reason: d.id);
+      }
+    });
+
+    testWidgets('nav-messages-badge shows open message count and hides when zero', (tester) async {
+      tester.view.physicalSize = const Size(1280, 2600);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final repoWithMsgs = _TestAdminBackend(initialCollections: {
+        'contact_messages': [
+          AdminDoc('m1', {'status': 'new', 'message': 'first'}),
+          AdminDoc('m2', {'status': 'new', 'message': 'second'}),
+          AdminDoc('m3', {'status': 'done', 'message': 'closed'}),
+          AdminDoc('m4', {'status': 'new', 'message': 'trashed', 'deletedAt': DateTime.utc(2026, 11, 14)}),
+        ],
+      });
+
+      await tester.pumpWidget(ProviderScope(
+        child: _app(
+          AdminDashboard(
+            repo: repoWithMsgs,
+            uid: 'u1',
+            email: 'a@church.org',
+            role: AdminRoles.editor,
+            onSignOut: () {},
+          ),
+          locale: const Locale('ar'),
+        ),
+      ));
+      await tester.pumpAndSettle();
+
+      final badge = find.byKey(const ValueKey('nav-messages-badge'));
+      expect(badge, findsOneWidget);
+      expect(find.descendant(of: badge, matching: find.text('2')), findsOneWidget);
+
+      // Zero open messages -> badge is hidden.
+      final emptyRepo = _TestAdminBackend(initialCollections: {
+        'contact_messages': [
+          AdminDoc('m1', {'status': 'done', 'message': 'closed'}),
+        ],
+      });
+      await tester.pumpWidget(ProviderScope(
+        child: _app(
+          AdminDashboard(
+            repo: emptyRepo,
+            uid: 'u2',
+            email: 'b@church.org',
+            role: AdminRoles.editor,
+            onSignOut: () {},
+          ),
+          locale: const Locale('ar'),
+        ),
+      ));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('nav-messages-badge')), findsNothing);
+    });
+
+    testWidgets('seasonPreset deep link opens SeasonsHubScreen on preset tab & editor is blocked from owner screens',
+        (tester) async {
+      tester.view.physicalSize = const Size(1280, 2400);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final repo = _TestAdminBackend();
+      await tester.pumpWidget(ProviderScope(
+        child: _app(
+          AdminDashboard(
+            repo: repo,
+            uid: 'u1',
+            email: 'e@church.org',
+            role: AdminRoles.editor,
+            initial: 'seasonPreset',
+            onSignOut: () {},
+          ),
+          locale: const Locale('ar'),
+        ),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(SeasonsHubScreen), findsOneWidget);
+      expect(find.byKey(const ValueKey('seasons-tab-list')), findsOneWidget);
+      expect(find.byKey(const ValueKey('seasons-tab-preset')), findsOneWidget);
+      expect(find.byType(SeasonPresetScreen), findsOneWidget);
+
+      // Owner-only destinations reject non-owner editors.
+      for (final ownerScreen in ['admins', 'contactCats', 'assistant', 'seasonSettings', 'advanced']) {
+        await tester.pumpWidget(ProviderScope(
+          child: _app(
+            AdminDashboard(
+              key: ValueKey('dash-$ownerScreen'),
+              repo: repo,
+              uid: 'u1',
+              email: 'e@church.org',
+              role: AdminRoles.editor,
+              initial: ownerScreen,
+              onSignOut: () {},
+            ),
+            locale: const Locale('ar'),
+          ),
+        ));
+        await tester.pumpAndSettle();
+        expect(find.text('هذه الصفحة للمالك فقط'), findsOneWidget, reason: ownerScreen);
+      }
+    });
+  });
+
+  group('PR 3E: P2-19 screen title and one-line help headers', () {
+    test('every CollectionDef and settings DocDef has non-empty helpAr and helpEn', () {
+      for (final c in adminCollections) {
+        expect(c.helpAr.trim(), isNotEmpty, reason: '${c.id}.helpAr');
+        expect(c.helpEn.trim(), isNotEmpty, reason: '${c.id}.helpEn');
+      }
+      for (final doc in [
+        churchInfoDoc,
+        todaySettingsDoc,
+        seasonSettingsDoc,
+        assistantSettingsDoc,
+        appSettingsDoc,
+        appInstallDoc,
+      ]) {
+        expect(doc.helpAr.trim(), isNotEmpty, reason: '${doc.path} (${doc.labelEn}).helpAr');
+        expect(doc.helpEn.trim(), isNotEmpty, reason: '${doc.path} (${doc.labelEn}).helpEn');
+      }
+    });
+
+    testWidgets('every admin screen renders screen-title and screen-help cleanly at 320px and 200% text',
+        (tester) async {
+      tester.view.physicalSize = const Size(320, 640);
+      tester.view.devicePixelRatio = 1;
+      tester.platformDispatcher.textScaleFactorTestValue = 2.0;
+      addTearDown(tester.view.reset);
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+
+      final repo = _TestAdminBackend();
+      final screens = <String, Widget Function()>{
+        'overview': () => OverviewScreen(repo: repo, role: AdminRoles.editor, onOpen: (_) {}),
+        'liturgies': () => CollectionListScreen(repo: repo, def: collectionById('liturgies')!),
+        'church': () => ChurchInfoScreen(repo: repo),
+        'features': () => FeaturesScreen(repo: repo),
+        'app': () => AppAndNotificationsScreen(repo: repo, role: AdminRoles.editor),
+        'seasons': () => SeasonsHubScreen(repo: repo),
+        'messages': () => MessagesScreen(repo: repo),
+        'contactCats': () => ContactCategoriesScreen(repo: repo),
+        'admins': () => AdminsScreen(repo: repo, selfUid: 'self-uid'),
+        'advanced': () => AdvancedOwnerScreen(repo: repo, onSendTestError: () async => true),
+      };
+
+      for (final locale in [const Locale('ar'), const Locale('en')]) {
+        for (final entry in screens.entries) {
+          await tester.pumpWidget(_app(Scaffold(body: entry.value()), locale: locale));
+          await tester.pumpAndSettle();
+
+          expect(
+            find.byKey(const Key('screen-title')),
+            findsOneWidget,
+            reason: '${entry.key} (${locale.languageCode}) title',
+          );
+          expect(
+            find.byKey(const Key('screen-help')),
+            findsOneWidget,
+            reason: '${entry.key} (${locale.languageCode}) help',
+          );
+          expect(
+            tester.takeException(),
+            isNull,
+            reason: '${entry.key} (${locale.languageCode}) overflow/exception',
+          );
+        }
+      }
+    });
+  });
+
+  group('PR 3E: P2-21 owner advanced screen & criterion S3 editor copy', () {
+    testWidgets('non-owner editor screens never render Firebase, UID, App Check, Sentry, APK, or HH:mm',
+        (tester) async {
+      tester.view.physicalSize = const Size(1280, 2400);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final repo = _TestAdminBackend(initialCollections: {
+        'liturgies': [AdminDoc('l1', {'titleAr': 'قداس الجمعة', 'weekday': 5, 'start': '07:00', 'end': '09:00'})],
+        'contact_messages': [AdminDoc('m1', {'status': 'new', 'name': 'زائر', 'message': 'سلام'})],
+      });
+      final forbidden = RegExp(r'\b(Firebase|UID|App Check|Sentry|APK|HH:mm)\b');
+
+      for (final locale in [const Locale('ar'), const Locale('en')]) {
+        for (final d in adminDestinations(AdminRoles.editor)) {
+          await tester.pumpWidget(ProviderScope(
+            child: _app(
+              AdminDashboard(
+                key: ValueKey('s3-${locale.languageCode}-${d.id}'),
+                repo: repo,
+                uid: 'u1',
+                email: 'editor@church.org',
+                role: AdminRoles.editor,
+                initial: d.id,
+                onSignOut: () {},
+              ),
+              locale: locale,
+            ),
+          ));
+          await tester.pumpAndSettle();
+
+          for (final w in tester.widgetList<Text>(find.byType(Text))) {
+            final text = w.data ?? '';
+            expect(
+              forbidden.hasMatch(text),
+              isFalse,
+              reason: 'Forbidden technical term in editor screen "${d.id}" (${locale.languageCode}): "$text"',
+            );
+          }
+          expect(find.byType(FeaturesScreen).evaluate().length <= 1, isTrue);
+          expect(tester.takeException(), isNull, reason: '${d.id} (${locale.languageCode})');
+        }
+      }
+    });
+
+    testWidgets('AdvancedOwnerScreen shows App Check status, validates & saves VAPID, queue cap banner, and APK tab',
+        (tester) async {
+      tester.view.physicalSize = const Size(900, 1400);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final repo = _TestAdminBackend(initialDocs: {
+        'settings/features': {'errorReporting': true},
+        'meta/push_topics': {
+          'cronQueue': {'capReached': true},
+        },
+        'meta/push_plan': {
+          'lastPlanAt': DateTime.now().toUtc().toIso8601String(),
+        },
+      });
+
+      await tester.pumpWidget(_app(
+        Scaffold(
+          body: AdvancedOwnerScreen(
+            repo: repo,
+            appCheckActive: true,
+            onSendTestError: () async => true,
+          ),
+        ),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('adv-app-check')), findsOneWidget);
+      expect(find.text('مفعّل ✓'), findsOneWidget);
+      expect(find.byKey(const ValueKey('adv-vapid-queues')), findsOneWidget);
+      // Cap reached banner appears when cronQueue.capReached == true
+      expect(find.textContaining('١٠٠٠ تذكير'), findsOneWidget);
+
+      // Invalid VAPID key shows validation error without saving
+      await tester.enterText(find.byKey(const ValueKey('vapid')), 'short-bad-key');
+      await tester.tap(find.byKey(const ValueKey('adv-save-vapid')));
+      await tester.pumpAndSettle();
+      expect(repo.savedPaths, isNot(contains('settings/features')));
+      expect(find.textContaining('٨٠–١٠٠'), findsOneWidget);
+
+      // Valid VAPID key saves to settings/features
+      final validKey = 'B' * 87;
+      await tester.enterText(find.byKey(const ValueKey('vapid')), validKey);
+      await tester.tap(find.byKey(const ValueKey('adv-save-vapid')));
+      await tester.pumpAndSettle();
+      expect(repo.savedPaths, contains('settings/features'));
+      expect(repo.docs['settings/features']?['pushVapidKey'], validKey);
+
+      // Switch to APK tab -> displays app-install-doc
+      await tester.tap(find.byKey(const ValueKey('adv-tab-apk')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('app-install-doc')), findsOneWidget);
+    });
+  });
+
+  group('PR 3E: P2-23 OverviewScreen attention section and quick tasks', () {
+    testWidgets('shows attention-section items and routes on tap, and triggers all 6 quick task buttons',
+        (tester) async {
+      tester.view.physicalSize = const Size(900, 1400);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final fixedNow = DateTime.utc(2026, 11, 14, 12, 0);
+      final repo = _TestAdminBackend(
+        initialDocs: {
+          'settings/features': {'liveEnabled': true, 'liveUrl': ''},
+        },
+        initialCollections: {
+          'contact_messages': [
+            AdminDoc('m1', {'status': 'new', 'message': 'hi'}),
+          ],
+          'alerts': [
+            AdminDoc('a1', {
+              'titleAr': 'تنويه',
+              'visible': true,
+              'active': true,
+              'endsAt': fixedNow.add(const Duration(hours: 12)),
+            }),
+          ],
+          'priests': [
+            AdminDoc('p1', {'nameAr': 'أبونا', 'sample': true}),
+          ],
+        },
+      );
+
+      final opened = <String>[];
+      await tester.pumpWidget(_app(
+        OverviewScreen(
+          repo: repo,
+          role: AdminRoles.editor,
+          onOpen: opened.add,
+          now: () => fixedNow,
+        ),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('attention-section')), findsOneWidget);
+      expect(find.byKey(const ValueKey('attention-all-clear')), findsNothing);
+      expect(find.byKey(const ValueKey('attention-newMessages')), findsOneWidget);
+      expect(find.byKey(const ValueKey('attention-expiringAlerts')), findsOneWidget);
+      expect(find.byKey(const ValueKey('attention-unconfirmedData')), findsOneWidget);
+      expect(find.byKey(const ValueKey('attention-streamWithoutLink')), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('attention-newMessages')));
+      await tester.tap(find.byKey(const ValueKey('attention-expiringAlerts')));
+      await tester.tap(find.byKey(const ValueKey('attention-unconfirmedData')));
+      await tester.tap(find.byKey(const ValueKey('attention-streamWithoutLink')));
+      expect(opened, ['messages', 'alerts', 'priests', 'today']);
+
+      opened.clear();
+      const quickTargets = [
+        ('task-schedules', 'liturgies'),
+        ('task-announcement', 'app'),
+        ('task-inbox', 'messages'),
+        ('task-service', 'facilities'),
+        ('task-priest', 'priests'),
+        ('task-donations', 'pages'),
+      ];
+      for (final (btnKey, target) in quickTargets) {
+        final finder = find.byKey(ValueKey(btnKey));
+        await tester.ensureVisible(finder);
+        await tester.tap(finder);
+        await tester.pump();
+        expect(opened.last, target, reason: btnKey);
+      }
+    });
+
+    testWidgets('shows attention-all-clear when nothing needs attention', (tester) async {
+      final fixedNow = DateTime.utc(2026, 11, 14, 12, 0);
+      final repo = _TestAdminBackend(
+        initialDocs: {
+          'settings/features': {'liveEnabled': false, 'liveUrl': ''},
+        },
+        initialCollections: {
+          'contact_messages': [
+            AdminDoc('m1', {'status': 'done', 'message': 'ok'}),
+          ],
+          'alerts': [
+            AdminDoc('a1', {
+              'titleAr': 'تنويه',
+              'visible': true,
+              'active': true,
+              'endsAt': fixedNow.add(const Duration(days: 5)),
+            }),
+          ],
+          'priests': [
+            AdminDoc('p1', {'nameAr': 'أبونا', 'sample': false}),
+          ],
+        },
+      );
+
+      await tester.pumpWidget(_app(
+        OverviewScreen(
+          repo: repo,
+          role: AdminRoles.editor,
+          onOpen: (_) {},
+          now: () => fixedNow,
+        ),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('attention-all-clear')), findsOneWidget);
+      expect(find.byKey(const ValueKey('attention-section')), findsNothing);
     });
   });
 }

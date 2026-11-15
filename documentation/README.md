@@ -66,7 +66,7 @@
 | الخريطة والاتجاهات | [features/map-and-directions.md](features/map-and-directions.md) |
 | الصور والوسائط | [features/images-and-media.md](features/images-and-media.md) |
 | المساعد الذكي «اسأل الكنيسة» `/ask` | [features/assistant.md](features/assistant.md) |
-| لوحة التحكم `/admin` (الدخول، الصلاحيات، كل الشاشات) | [features/admin-dashboard.md](features/admin-dashboard.md) |
+| لوحة التحكم `/admin` (الدخول، الصلاحيات، المجموعات السبع، الرئيسية والمهام، شاشات المالك) | [features/admin-dashboard.md](features/admin-dashboard.md) |
 | تشغيل وإيقاف الأقسام | [features/feature-toggles.md](features/feature-toggles.md) |
 | عناوين الصفحات وتذييل الموقع | [features/page-headers-and-footer.md](features/page-headers-and-footer.md) |
 | تقارير الأخطاء (Sentry) والخصوصية | [features/error-reporting-sentry.md](features/error-reporting-sentry.md) |

@@ -42,42 +42,40 @@ flowchart TD
 | Capability | Editor | Owner |
 |---|---|---|
 | All content collections (CRUD, hide/show, reorder) | ✔ | ✔ |
-| Sections & home page (`settings/features`) | ✔ | ✔ |
+| Sections & home page (`settings/features`), Today & live stream | ✔ | ✔ |
 | Church info (`settings/church`) | ✔ | ✔ |
 | Contact messages: read, mark handled/new, delete | ✔ | ✔ |
-| **Admins** screen: add / change role / remove **other** admins | ✘ ("ownerOnly") | ✔ |
+| Owner-only settings: **Admins**, **Contact form types** (`settings/contact`), **AI assistant** (`settings/assistant`), **Season settings** (`venues`, `audiences`, `seasonVerses` in `settings/features`), and **Advanced** (Sentry switch/test, App Check status, VAPID key/queues, APK install settings) | ✘ («ownerOnly» + blocked in `firestore.rules`) | ✔ |
 | Change or remove **themselves** | ✘ | ✘ (UI + rules) → an owner always remains |
 
-The same matrix is enforced server-side by `firestore.rules` (`isAdmin()` vs `isOwner()`). Note: the business case
-wanted settings and message deletion owner-only; the implementation deliberately grants them to editors (ADR-011).
+The same matrix is enforced server-side by `firestore.rules` (`isAdmin()` vs `isOwner()`, P2-18R).
 
-## Navigation (`adminDestinations(role)`)
+## Navigation (`adminDestinations(role)`, PR 3E / P2-18)
 
-`overview` → `features` → `today` → `seasonSettings` → `seasonPreset` → `app` (App & notifications, ADR-057, ADR-059) → `church` → `assistant` (AI assistant, PR #19) → one entry per `adminCollections` item except `entries` (alerts, seasons, liturgies, meetings,
-clinics, facilities, activities, priests, departedPriests, saints, milestones, **categories** («الأقسام وعناصرها» — unified sections & nested items since PR 3D / P1-16),
-**pages** («الصفحات المخصصة», with «صفحة تبرعات جاهزة» template since PR 3D / P1-15) — PR #18) → `messages` → `contactCats` (Contact form types,
-PR #18) → `admins` (owners only). Deep links to `'entries'` redirect to `'categories'`.
+Grouped under `AdminGroup` headers (`nav-group-<name>`): **7 editor groups** (`19` entries) plus an **8th owner-only group** (`ownerSettings`, `5` entries, `24` unique icons total):
+1. **Home (`home`)**: `overview` («الرئيسية»)
+2. **Schedule (`schedule`)**: `liturgies`, `meetings`, `today`, `seasons` (merged `SeasonsHubScreen` with tabs «قائمة المواسم» / «تجهيز الموسم»; deep links to `'seasonPreset'` open tab 1)
+3. **Announcements (`announcements`)**: `alerts`, `app` (`AppAndNotificationsScreen` — announcements & notification types; technical VAPID/queues/APK moved to owner `advanced`)
+4. **Church (`church`)**: `priests`, `departedPriests`, `saints`, `milestones`, `church`
+5. **Services & activities (`services`)**: `facilities`, `activities`, `clinics`
+6. **Pages (`pages`)**: `features`, `pages` («الصفحات المخصصة», with «صفحة تبرعات جاهزة» template since PR 3D), `categories` («الأقسام المخصصة» — unified sections & nested items since PR 3D)
+7. **Messages (`messages`)**: `messages` (shows unread inbox count badge `nav-messages-badge` when > 0)
+8. **Settings (owner only, `ownerSettings`)**: `admins`, `contactCats`, `assistant`, `seasonSettings`, `advanced` (`AdvancedOwnerScreen` with tabs `System & queues` and `App install & APK`).
+
+Deep links to `'entries'` redirect to `'categories'`, and `'seasonPreset'` routes to `SeasonsHubScreen(initialTab: 1)`.
 The **Clinics** screen («العيادات») stays in the menu although the owner deleted the 11 placeholder clinics (3 Nov 2026) and
 switched the clinics section off (4 Nov 2026) — it is where real clinics would be added before switching the
 section back on.
-Every entry has its own icon (`adminIcon`; the assistant uses `smart_toy_outlined` since PR #23 so it no longer
-shares saints' `auto_awesome_outlined`). The nav is a `Material` (not a coloured `Container`, which hid the tiles'
+Every entry has its own icon (`adminIcon`), and every screen displays an `AdminScreenHeader` (`Key('screen-title')` + `Key('screen-help')`, P2-19) wrapping cleanly at 320 px / 200% text. The nav is a `Material` (not a coloured `Container`, which hid the tiles'
 ink), so the selected entry shows the gold highlight; icons are burgundy, labels ink, and the selected entry's icon
-and label are both burgundy (`ListTile.iconColor/textColor/selectedColor`, PR #23). The PR #18 entries (custom
-sections, section items, custom pages, contact form types) drew without icons on phones that had cached an older
-tree-shaken icon font for 7 days — fixed by fingerprinting the icon fonts (05-firebase, Hosting headers).
+and label are both burgundy (`ListTile.iconColor/textColor/selectedColor`, PR #23).
 The app bar shows "Admin — <screen>", a 🌐 button to the public site and the language toggle; the nav shows the
 signed-in email + role and Sign out.
 
 ## Screens
 
-### Overview (`OverviewScreen`, `admin_screens.dart`)
-Live counts per collection (respecting each screen's filter, e.g. serving vs departed priests) with hidden /
-unconfirmed sub-counts, **new messages** (status ≠ handled, red when > 0), **sections on** (`N/16`), quick links
-(church info, sections & home, alerts, open site) and the **8 latest edits** (title, `updatedAt`, `updatedBy`). A
-failed stream shows "—". If the screen is rebuilt with a different backend (`widget.repo`), `didUpdateWidget`
-cancels and re-subscribes every stream (BUG-18; `ChurchInfoScreen` does the same, and since PR #10 so do
-`FeaturesScreen` — which also resets its shown version and editor key — `MessagesScreen` and `AdminsScreen`).
+### Overview (`OverviewScreen`, `admin_screens.dart`, PR 3E / P2-23)
+Starts with `AdminScreenHeader`, then **«محتاج انتباهك» (`attention-section` / `attention-all-clear`)** powered by pure Dart `attentionItems(...)` (`lib/domain/attention.dart`) from existing already-watched streams (zero extra Firestore reads): open visitor messages → alerts expiring within 48 hours → unconfirmed (`sample: true`) docs → live stream switched on without a link → missing English translations (when enabled). Each row navigates to its target screen on tap. Below it sit the **6 quick task buttons (`quick-tasks`)** for tasks T1–T6 (`task-schedules`, `task-announcement`, `task-inbox`, `task-service`, `task-priest`, `task-donations`), the compact **Sections summary** card («ملخص الأقسام» + «افتح في الموقع»), and the **8 latest edits** (title, `updatedAt`, `updatedBy`). If the screen is rebuilt with a different backend (`widget.repo`), `didUpdateWidget` cancels and re-subscribes every stream (BUG-18).
 
 ### Sections & home page (`FeaturesScreen` / `FeaturesEditor`, `features_editor.dart`) → `settings/features`
 - Switch each of the 19 sections on/off (PR #16 added «آية اليوم» / Verse of the day, PR #18 «الأقسام المخصصة» / Custom sections and «الصفحات المخصصة» / Custom pages) (+ "enable all"); labels from `Sections.labels`. **«الصور» /
@@ -129,11 +127,7 @@ cancels and re-subscribes every stream (BUG-18; `ChurchInfoScreen` does the same
   **"Show address in hero"** switch (`ValueKey('features-heroShowAddress')`, `heroShowAddress`, default off): the
   address ribbon under the hero title when no subtitle is set.
 
-- **Error reports** card (PR #24, ADR-034), last card of the page: switch **"Send error reports (Sentry)"**
-  (`ValueKey('features-errorReporting')`, `settings/features.errorReporting`, default on; off = the web / Android app
-  sends nothing). **Owners** also see **"Send test error"** (`ValueKey('features-sendTestError')`): one harmless
-  `StateError('Test error from /admin (ignore)')` tagged `section: admin`, `test: true`; a snackbar says whether it
-  was sent (not sent when the build has no DSN or the switch is off).
+- **Error reports (`settings/features.errorReporting`):** Moved in PR 3E (P2-21) to the owner-only **«متقدم» (`AdvancedOwnerScreen`, `lib/ui/admin/advanced_owner_screen.dart`)** screen (alongside App Check status, Web Push VAPID key + queue health, and the **App install & APK** tab `appInstallDoc`). `FeaturesEditor` no longer shows Sentry controls or the duplicated assistant switch. Each `AdminScreenHeader` renders `Key('screen-title')` + `Key('screen-help')` (`lib/ui/admin/screen_header.dart`) across all 14 `adminCollections`, single docs, and custom admin screens.
 
 - **Verse of the day** card (PR #16, ADR-024; since PR #17 it controls the **hero** verse): "Show the verse of the day" switch (same flag as the
   `dailyVerse` section toggle), mode chips "A different verse

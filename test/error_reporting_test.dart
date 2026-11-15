@@ -3,6 +3,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:church_portal/data/admin_repository.dart';
 import 'package:church_portal/data/content_repository.dart';
 import 'package:church_portal/data/error_reporting.dart';
 import 'package:church_portal/domain/assistant_conversation.dart';
@@ -11,6 +12,7 @@ import 'package:church_portal/domain/cairo_time.dart';
 import 'package:church_portal/domain/error_privacy.dart';
 import 'package:church_portal/domain/features.dart';
 import 'package:church_portal/state/providers.dart';
+import 'package:church_portal/ui/admin/advanced_owner_screen.dart';
 import 'package:church_portal/ui/admin/features_editor.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -315,37 +317,47 @@ void main() {
       }
     });
 
-    testWidgets('the admin switch and the owner-only test button', (tester) async {
+    testWidgets('Sentry controls live on owner-only AdvancedOwnerScreen, not FeaturesEditor', (tester) async {
       tester.view.physicalSize = const Size(1200, 9000);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.reset);
-      FeatureSettings? saved;
-      var tested = 0;
-      Widget app({Future<bool> Function()? onTest}) => MaterialApp(
-            locale: const Locale('en'),
-            supportedLocales: const [Locale('ar'), Locale('en')],
-            localizationsDelegates: GlobalMaterialLocalizations.delegates,
-            home: Scaffold(
-              body: FeaturesEditor(
-                  initial: FeatureSettings.defaults, onSave: (f) async => saved = f, onSendTestError: onTest),
-            ),
-          );
-      await tester.pumpWidget(app());
+
+      await tester.pumpWidget(MaterialApp(
+        locale: const Locale('en'),
+        supportedLocales: const [Locale('ar'), Locale('en')],
+        localizationsDelegates: GlobalMaterialLocalizations.delegates,
+        home: Scaffold(
+          body: FeaturesEditor(initial: FeatureSettings.defaults, onSave: (_) async {}),
+        ),
+      ));
       await tester.pumpAndSettle();
-      expect(find.byKey(const ValueKey('features-sendTestError')), findsNothing, reason: 'editors: no test button');
+      expect(find.byKey(const ValueKey('features-errorReporting')), findsNothing);
+      expect(find.byKey(const ValueKey('features-sendTestError')), findsNothing);
+
+      final repo = _FakeSentryRepo({'settings/features': {'errorReporting': true}});
+      var tested = 0;
+      await tester.pumpWidget(MaterialApp(
+        locale: const Locale('en'),
+        supportedLocales: const [Locale('ar'), Locale('en')],
+        localizationsDelegates: GlobalMaterialLocalizations.delegates,
+        home: Scaffold(
+          body: AdvancedOwnerScreen(
+            repo: repo,
+            onSendTestError: () async {
+              tested++;
+              return true;
+            },
+          ),
+        ),
+      ));
+      await tester.pumpAndSettle();
+
       final sw = find.byKey(const ValueKey('features-errorReporting'));
       await tester.ensureVisible(sw);
       await tester.tap(sw);
-      await tester.pump();
-      await tester.tap(find.byKey(const Key('features-save')));
       await tester.pumpAndSettle();
-      expect(saved!.errorReporting, isFalse);
+      expect(repo.lastSave('settings/features')?['errorReporting'], isFalse);
 
-      await tester.pumpWidget(app(onTest: () async {
-        tested++;
-        return true;
-      }));
-      await tester.pumpAndSettle();
       final btn = find.byKey(const ValueKey('features-sendTestError'));
       await tester.ensureVisible(btn);
       await tester.tap(btn);
@@ -428,3 +440,50 @@ void main() {
     });
   });
 }
+
+class _FakeSentryRepo extends AdminBackend {
+  final Map<String, Map<String, dynamic>> docs;
+  final saves = <String, List<Map<String, dynamic>>>{};
+  final _ctrls = <String, StreamController<AdminDoc?>>{};
+
+  _FakeSentryRepo([Map<String, Map<String, dynamic>>? initial]) : docs = {...?initial};
+
+  @override
+  String get actor => 'owner@church.org';
+
+  @override
+  Stream<List<AdminDoc>> watch(String collection) => Stream.value(const []);
+
+  @override
+  Stream<AdminDoc?> watchDoc(String path) {
+    final c = _ctrls.putIfAbsent(path, () => StreamController<AdminDoc?>.broadcast());
+    scheduleMicrotask(() {
+      if (!c.isClosed) c.add(docs.containsKey(path) ? AdminDoc(path.split('/').last, docs[path]!) : null);
+    });
+    return c.stream;
+  }
+
+  @override
+  Future<String> save(String collection, String? id, Map<String, dynamic> data) async => id ?? 'new';
+
+  @override
+  Future<void> saveDoc(String path, Map<String, dynamic> data) async {
+    saves.putIfAbsent(path, () => []).add(data);
+    docs[path] = {...?docs[path], ...data};
+    _ctrls[path]?.add(AdminDoc(path.split('/').last, docs[path]!));
+  }
+
+  Map<String, dynamic>? lastSave(String path) => saves[path]?.last;
+
+  @override
+  Future<void> update(String collection, String id, Map<String, dynamic> data) async {}
+  @override
+  Future<void> delete(String collection, String id) async {}
+  @override
+  Future<void> reorder(String collection, List<String> ids, {int base = 0}) async {}
+  @override
+  Future<void> setAdmin(String uid, {required String email, required String role}) async {}
+  @override
+  Future<void> removeAdmin(String uid) async {}
+}
+

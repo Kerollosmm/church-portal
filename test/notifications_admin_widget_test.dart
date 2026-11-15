@@ -203,8 +203,10 @@ void main() {
     final texts = tester.widgetList<Text>(find.byType(Text)).map((t) => t.data ?? '').where((s) => s.isNotEmpty);
     final bad = texts.where(raw.hasMatch).toList();
     expect(bad, isEmpty);
-    expect(find.text('الإشعارات'), findsWidgets);
-    expect(find.text('تثبيت التطبيق'), findsOneWidget);
+    expect(find.byKey(const Key('screen-title')), findsOneWidget);
+    expect(find.byKey(const Key('screen-help')), findsOneWidget);
+    expect(find.text('الإعلانات والإشعارات'), findsOneWidget);
+    expect(find.byKey(const ValueKey('nm-advanced')), findsNothing);
     expect(find.text('تشغيل الإشعارات'), findsOneWidget);
     expect(find.text('خدمة الإرسال تعمل'), findsOneWidget);
     // Friendly status names and the explanation of what to do.
@@ -366,13 +368,10 @@ void main() {
     expect(env.shown, 1);
   });
 
-  testWidgets('tab switching between Notifications and App install', (tester) async {
+  testWidgets('AppAndNotificationsScreen excludes technical VAPID/APK controls', (tester) async {
     await pump(tester, size: const Size(800, 1000));
-    await tester.tap(find.byIcon(Icons.install_mobile_outlined));
-    await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('app-install-doc')), findsOneWidget);
-    await tester.tap(find.byIcon(Icons.notifications_active_outlined));
-    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('app-install-doc')), findsNothing);
+    expect(find.byKey(const ValueKey('nm-advanced')), findsNothing);
     expect(find.byType(NotificationsAdminSection), findsOneWidget);
   });
 
