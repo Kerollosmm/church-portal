@@ -345,6 +345,15 @@ class _AppShellState extends ConsumerState<AppShell> {
     final leadingEnd = showBack ? 48.0 : 0.0;
     final tabSpace = (tabStart + tabW + (wide ? 12.0 : 6.0)) - (leadingEnd + titleSpacingVal);
 
+    // Dynamic nav max width so that AppBar.title is guaranteed enough width
+    // for tabSpace + readable title slot across 1024px–1400px, avoiding clipping or starvation.
+    final otherActionsWidth =
+        (showBarLang ? 54.0 : 0.0) + (showMass ? (wide ? 166.0 : 54.0) : 0.0) + (wide ? 32.0 : 10.0);
+    final minTitleSlot = tabSpace + 200.0;
+    final maxNavWidth = wide
+        ? (width - titleSpacingVal - minTitleSlot - otherActionsWidth).clamp(200.0, width * 0.6)
+        : 0.0;
+
     final mainAppBar = AppBar(
       primary: !showTopBar,
       toolbarHeight: wide ? 76 : 64,
@@ -366,7 +375,7 @@ class _AppShellState extends ConsumerState<AppShell> {
           // The seal hangs in the tab at the start corner: the title keeps
           // its room. Wide bars with many entries (or very large text)
           // leave little width: the name then disappears, never overflows.
-          if (c.maxWidth < tabSpace + 56) return SizedBox(width: c.maxWidth.clamp(0, tabSpace));
+          if (c.maxWidth < tabSpace + 36) return SizedBox(width: c.maxWidth.clamp(0, tabSpace));
           return Row(mainAxisSize: MainAxisSize.min, children: [
             SizedBox(width: tabSpace),
             // The full name is long: on wide screens show it under the short
@@ -377,7 +386,10 @@ class _AppShellState extends ConsumerState<AppShell> {
                     key: const Key('appBarShortTitle'),
                     maxLines: wide ? 1 : 2,
                     overflow: TextOverflow.ellipsis,
-                    style: displayStyle(context, size: wide ? 23 : (ultraNarrow ? 15 : 17), color: primary, height: ultraNarrow ? 1.15 : 1.25)),
+                    style: displayStyle(context,
+                        size: wide ? (width < 1150 ? 19 : 23) : (ultraNarrow ? 15 : 17),
+                        color: primary,
+                        height: ultraNarrow ? 1.15 : 1.25)),
                 if (wide)
                   Text(fullName,
                       maxLines: 1,
@@ -390,10 +402,11 @@ class _AppShellState extends ConsumerState<AppShell> {
       ),
       actions: [
         if (wide) ...[
-          // Capped and scrollable: very large text or long labels never
-          // overflow the bar (the title then falls back to the seal).
+          // Capped dynamically so AppBar.title maintains sufficient width:
+          // SingleChildScrollView ensures very large text or long labels
+          // never overflow the bar.
           ConstrainedBox(
-            constraints: BoxConstraints(maxWidth: width * 0.6),
+            constraints: BoxConstraints(maxWidth: maxNavWidth),
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: Row(mainAxisSize: MainAxisSize.min, children: [

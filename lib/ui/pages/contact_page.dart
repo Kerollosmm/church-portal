@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/services.dart' show TextInput;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -177,6 +178,7 @@ class _ContactFormState extends ConsumerState<ContactForm> {
 
   /// Chosen category slot (ADR-028); null = the first visible one.
   String? _slot;
+  int _resetCount = 0;
   bool _anonymous = false;
   String _bookingType = '';
   bool _sending = false;
@@ -296,8 +298,11 @@ class _ContactFormState extends ConsumerState<ContactForm> {
         _message.clear();
         _date.clear();
         _bookingType = '';
+        _slot = null;
+        _resetCount++;
         _anonymous = false;
         _consented = false; // each message needs its own consent
+        TextInput.finishAutofillContext(shouldSave: true);
       }
     });
   }
@@ -357,7 +362,7 @@ class _ContactFormState extends ConsumerState<ContactForm> {
               // ADR-028) arrives or changes: a form field keeps its first
               // value, so a default type must not stay selected (PR #23).
               KeyedSubtree(
-                key: ValueKey('contactCats-${[for (final c in cats) c.slot].join(',')}'),
+                key: ValueKey('contactCats-$_resetCount-${[for (final c in cats) c.slot].join(',')}'),
                 child: DropdownButtonFormField<String>(
                   key: const Key('contactCategory'),
                   isExpanded: true,

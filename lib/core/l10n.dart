@@ -95,6 +95,8 @@ const Map<String, List<String>> _strings = {
   'openInMaps': ['افتح في خرائط جوجل', 'Open in Google Maps'],
   'directions': ['الاتجاهات (GPS)', 'Directions (GPS)'],
   'location': ['موقع الكنيسة', 'Church location'],
+  'mapTapToInteract': ['اضغط للتفاعل مع الخريطة', 'Click to interact with map'],
+  'mapLockScroll': ['قفل الخريطة للتمرير', 'Lock map for scrolling'],
   'ourStory': ['قصتنا', 'Our story'],
   'directory': ['دليل الخدمات', 'Service directory'],
   'friday': ['الجمعة', 'Friday'],
