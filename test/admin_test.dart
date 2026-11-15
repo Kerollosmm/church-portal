@@ -3508,6 +3508,8 @@ void main() {
       await tester.pumpAndSettle();
 
       await tester.enterText(find.byKey(const ValueKey('field-nameEn')), 'X' * 350);
+      await tester.tap(find.byKey(const ValueKey('group-contacts')));
+      await tester.pumpAndSettle();
       await tester.enterText(find.byKey(const ValueKey('field-labelEn')).first, 'Draft Office');
       await tester.pumpAndSettle();
 

@@ -86,6 +86,7 @@ class _ContactCategoriesScreenState extends State<ContactCategoriesScreen> {
       if (_savedCats != null) {
         _cats = [..._savedCats!];
       }
+      _retired.clear();
       _gen++;
       _dirty = false;
     });
@@ -93,6 +94,7 @@ class _ContactCategoriesScreenState extends State<ContactCategoriesScreen> {
 
   Future<void> _confirmRemoveCategory(int i) async {
     final c = _cats![i];
+    final slot = c.slot;
     final raw = context.pick(c.labelAr.trim(), c.labelEn.trim()).trim();
     final name = raw.isEmpty ? context.tr('unnamedContactType') : raw;
     final ok = await confirmNamedAction(
@@ -101,9 +103,11 @@ class _ContactCategoriesScreenState extends State<ContactCategoriesScreen> {
       actionLabel: context.tr('remove'),
       destructive: true,
     );
-    if (!ok || !mounted) return;
+    if (!ok || !mounted || _cats == null) return;
+    final idx = _cats!.indexWhere((item) => item.slot == slot);
+    if (idx < 0 || _cats!.length <= 1) return;
     setState(() {
-      _retired.add(_cats!.removeAt(i).slot);
+      _retired.add(_cats!.removeAt(idx).slot);
       _dirty = true;
     });
   }

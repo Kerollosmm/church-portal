@@ -632,6 +632,55 @@ void main() {
       }
     });
 
+    testWidgets(
+        'P3-31: remote snapshot during remove confirmation removes by slot without RangeError',
+        (tester) async {
+      tester.view.physicalSize = const Size(800, 3000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      const c1 = ContactCategory(slot: 'c1', labelAr: 'استفسار', labelEn: 'Inquiry', order: 10);
+      const c2 = ContactCategory(slot: 'c2', labelAr: 'اقتراح', labelEn: 'Suggestion', order: 20);
+      final ctrl = StreamController<AdminDoc?>.broadcast();
+      addTearDown(ctrl.close);
+      final repo = _StreamContactBackend(ctrl.stream);
+
+      await tester.pumpWidget(_admin(ContactCategoriesScreen(key: const Key('cats-remote-reorder'), repo: repo)));
+      ctrl.add(AdminDoc('contact', ContactSettings(const [c1, c2]).toMap()));
+      await tester.pumpAndSettle();
+
+      // Open remove confirmation for c1 (index 0), then simulate remote reorder [c2, c1].
+      await tester.tap(find.byKey(const ValueKey('removeCat-c1')));
+      await tester.pumpAndSettle();
+      ctrl.add(AdminDoc('contact', ContactSettings(const [c2, c1]).toMap()));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('confirm-ok')));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(find.byKey(const ValueKey('contactCat-c1')), findsNothing);
+      expect(find.byKey(const ValueKey('contactCat-c2')), findsOneWidget);
+
+      // Second scenario: remote snapshot already deleted c1 leaving only 1 category [c2].
+      final ctrl2 = StreamController<AdminDoc?>.broadcast();
+      addTearDown(ctrl2.close);
+      final repo2 = _StreamContactBackend(ctrl2.stream);
+
+      await tester.pumpWidget(_admin(ContactCategoriesScreen(key: const Key('cats-remote-gone'), repo: repo2)));
+      ctrl2.add(AdminDoc('contact', ContactSettings(const [c1, c2]).toMap()));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('removeCat-c1')));
+      await tester.pumpAndSettle();
+      ctrl2.add(AdminDoc('contact', ContactSettings(const [c2]).toMap()));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('confirm-ok')));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(find.byKey(const ValueKey('contactCat-c2')), findsOneWidget);
+    });
+
     testWidgets('deleting a custom category hides its items (confirm dialog), then deletes it', (tester) async {
       final b = _Backend(lists: {
         'categories': [AdminDoc('k1', {'nameAr': 'رحلات', 'nameEn': 'Trips', 'slug': 'trips', 'order': 10})],
@@ -1252,6 +1301,14 @@ class _StreamEntriesBackend extends _Backend {
   @override
   Stream<List<AdminDoc>> watch(String collection) =>
       collection == 'entries' ? entriesStream : super.watch(collection);
+}
+
+class _StreamContactBackend extends _Backend {
+  final Stream<AdminDoc?> contactStream;
+  _StreamContactBackend(this.contactStream);
+
+  @override
+  Stream<AdminDoc?> watchDoc(String path) => path == 'settings/contact' ? contactStream : super.watchDoc(path);
 }
 
 class _ControlledPagesRepo extends _Repo {

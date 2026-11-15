@@ -252,8 +252,8 @@ const Map<String, List<String>> adminStrings = {
   'groupHero': ['الواجهة والآية', 'Hero & verse'],
   'groupHistory': ['التاريخ والمذابح', 'History & altars'],
   'confirmDeleteContactType': [
-    'هل تريد حذف نوع الرسالة «{name}»؟ الرسائل القديمة ستحتفظ بوصفها ولن تُحذف.',
-    'Remove message type "{name}"? Existing messages keep their label and are not deleted.',
+    'هل تريد حذف نوع الرسالة «{name}»؟ الرسائل القديمة ستظهر تحت «أخرى / نوع محذوف» ولن تُحذف.',
+    'Remove message type "{name}"? Existing messages move to "Other / deleted type" and are not deleted.',
   ],
   'unnamedContactType': ['نوع بدون اسم', 'Unnamed type'],
   'moreActions': ['خيارات إضافية', 'More actions'],
