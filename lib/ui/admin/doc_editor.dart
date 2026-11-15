@@ -1605,13 +1605,19 @@ class DocEditorState extends State<DocEditor> {
     FieldGroup.program: 'groupProgram',
     FieldGroup.details: 'groupDetails',
     FieldGroup.media: 'groupMedia',
+    FieldGroup.location: 'groupLocation',
     FieldGroup.contacts: 'groupContacts',
+    FieldGroup.hero: 'groupHero',
+    FieldGroup.history: 'groupHistory',
   };
   static const _groupIcons = {
     FieldGroup.program: Icons.campaign_outlined,
     FieldGroup.details: Icons.article_outlined,
     FieldGroup.media: Icons.photo_library_outlined,
+    FieldGroup.location: Icons.place_outlined,
     FieldGroup.contacts: Icons.contact_phone_outlined,
+    FieldGroup.hero: Icons.auto_stories_outlined,
+    FieldGroup.history: Icons.history_edu_outlined,
   };
 
   /// A collapsible card for one detail-page group. Collapsed fields stay
@@ -1660,11 +1666,16 @@ class DocEditorState extends State<DocEditor> {
             if (photos == 0 && !cover) context.tr('pillNoPhotos'),
           ];
         case FieldGroup.program:
+        case FieldGroup.location:
         case FieldGroup.contacts:
+        case FieldGroup.hero:
+        case FieldGroup.history:
         case FieldGroup.basic:
           final n = [
             for (final f in fields)
               if (_text[f.key] case final TextEditingController c when c.text.trim().isNotEmpty)
+                f
+              else if (f.type == FieldType.objectList && (_rows[f.key]?.isNotEmpty ?? false))
                 f
               // A chosen venue / audience counts too (CodeRabbit review on PR #32).
               else if (f.type == FieldType.choice && '${_values[f.key] ?? ''}'.isNotEmpty && g == FieldGroup.program)
@@ -1680,9 +1691,15 @@ class DocEditorState extends State<DocEditor> {
         );
     // Text counts follow typing (the form only rebuilds on its first edit).
     final controllers = [for (final f in fields) ?_text[f.key]];
-    return g == FieldGroup.contacts || g == FieldGroup.program
-        ? ListenableBuilder(listenable: Listenable.merge(controllers), builder: (_, _) => wrap())
-        : wrap();
+    return switch (g) {
+      FieldGroup.program ||
+      FieldGroup.location ||
+      FieldGroup.contacts ||
+      FieldGroup.hero ||
+      FieldGroup.history =>
+        ListenableBuilder(listenable: Listenable.merge(controllers), builder: (_, _) => wrap()),
+      _ => wrap(),
+    };
   }
 
   Widget _galleryEditor(FieldDef f) {

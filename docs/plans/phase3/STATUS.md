@@ -7,8 +7,8 @@
 
 - **Baseline:** the report's last review, 13 November 2026 (Africa/Cairo), against the code after PR #70.
 - **Counts:** 5 fixes on live data · 23 open tasks in the code · 13 done or removed · 1 deferred by decision.
-- **Code:** Stage 1 (PR 3A `feat/p3a-safe-actions`, PR 3B `feat/p3b-written-state`, PR 3C `feat/p3c-admin-status-session`, PR 3D `feat/p3d-custom-pages`) and Stage 2 PR 3E (`feat/p3e-menu-home`: P2-18, P2-18R, P2-19, P2-21, P2-23) + PR 3F (`feat/p3f-forms`: P2-20, P2-22, P2-24, P2-26) + PR 3G (`feat/p3g-english-switch`: P2-27a, P2-27b) + PR 3H (`feat/p3h-inbox`: P2-25) + PR 3I (`feat/p3i-sitemap-assistant`: P2-29, P2-28 deferred) implemented.
-- **Next action:** Stage 3, PR 3J (items 30 & 31: split church info, clearer coordinates, notice priority explanation, message types save/confirm/overflow).
+- **Code:** Stage 1 (PR 3A `feat/p3a-safe-actions`, PR 3B `feat/p3b-written-state`, PR 3C `feat/p3c-admin-status-session`, PR 3D `feat/p3d-custom-pages`), Stage 2 (PR 3E `feat/p3e-menu-home`, PR 3F `feat/p3f-forms`, PR 3G `feat/p3g-english-switch`, PR 3H `feat/p3h-inbox`, PR 3I `feat/p3i-sitemap-assistant`; item 28 deferred), and Stage 3 PR 3J (`feat/p3j-remaining`: P3-30, P3-31; item 32 left out, item 34 deferred) implemented.
+- **Next action:** Review and verify the stacked PR chain (PR 3A–3J), run servant trial sessions (`G1`–`G3`, item 33), and complete owner/office item 35 before merging.
 - **Target:** 2–3 weeks in total across the stages (owner, 13 November).
 
 ## قرارات مفتوحة للمالك (Open points for the owner — README §١٥)
@@ -66,8 +66,8 @@ All answered by the owner on 13 November 2026 (README §١٠, D1–D5).
 
 ## المرحلة 3 — الباقي ([STAGE-3-remaining.md](STAGE-3-remaining.md))
 
-- [ ] 30 — church info split; clearer coordinates; notice priority explained (P3-30)
-- [ ] 31 — message types: clearer save, confirm before removal, «إعادة كجديدة» harder to hit (P3-31)
+- [x] 30 — church info split; clearer coordinates; notice priority explained (P3-30) · PR 3J (`feat/p3j-remaining`)
+- [x] 31 — message types: clearer save, confirm before removal, «إعادة كجديدة» harder to hit (P3-31) · PR 3J (`feat/p3j-remaining`)
 - [x] 32 — one menu order for built-in and custom sections; item detail pages (optional): **left out** by the owner, 13 November (no work)
 - [ ] 33 — trial session with a real servant; panel at 320px; retest of the page jump / lost letters
 - [ ] 34 — e-mail invitation of admins: **deferred** (no work)

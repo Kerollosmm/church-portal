@@ -5,6 +5,7 @@ import '../../core/theme.dart';
 import '../../data/admin_repository.dart';
 import '../../domain/contact_categories.dart';
 import 'admin_strings.dart';
+import 'confirm_named.dart';
 import 'doc_editor.dart' show choiceLabel;
 import 'screen_header.dart';
 import 'state_switch.dart';
@@ -90,6 +91,23 @@ class _ContactCategoriesScreenState extends State<ContactCategoriesScreen> {
     });
   }
 
+  Future<void> _confirmRemoveCategory(int i) async {
+    final c = _cats![i];
+    final raw = context.pick(c.labelAr.trim(), c.labelEn.trim()).trim();
+    final name = raw.isEmpty ? context.tr('unnamedContactType') : raw;
+    final ok = await confirmNamedAction(
+      context,
+      summary: context.tr('confirmDeleteContactType', {'name': name}),
+      actionLabel: context.tr('remove'),
+      destructive: true,
+    );
+    if (!ok || !mounted) return;
+    setState(() {
+      _retired.add(_cats!.removeAt(i).slot);
+      _dirty = true;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     registerAdminStrings();
@@ -98,11 +116,13 @@ class _ContactCategoriesScreenState extends State<ContactCategoriesScreen> {
       handlePop: false,
       child: Scaffold(
         backgroundColor: context.pal.background,
-        floatingActionButton: _cats == null
+        floatingActionButton: _cats == null || !_dirty
             ? null
             : FloatingActionButton.extended(
                 key: const Key('saveContactCats'),
-                onPressed: _saving || !_dirty ? null : _save,
+                backgroundColor: context.pal.primary,
+                foregroundColor: context.pal.onPrimary,
+                onPressed: _saving ? null : _save,
                 icon: const Icon(Icons.save_outlined),
                 label: Text(context.tr('save')),
               ),
@@ -326,12 +346,7 @@ class _ContactCategoriesScreenState extends State<ContactCategoriesScreen> {
             ]),
             TextButton.icon(
               key: ValueKey('removeCat-${c.slot}'),
-              onPressed: cats.length <= 1
-                  ? null
-                  : () => setState(() {
-                        _retired.add(cats.removeAt(i).slot);
-                        _dirty = true;
-                      }),
+              onPressed: cats.length <= 1 ? null : () => _confirmRemoveCategory(i),
               icon: Icon(Icons.delete_outline, color: context.pal.alert),
               label: Text(context.tr('remove'), style: TextStyle(color: context.pal.alert)),
             ),

@@ -243,11 +243,13 @@ loading a snapshot never marks the form dirty.
 ### Church info (`ChurchInfoScreen`) → `settings/church`
 (`ChurchInfoScreen` takes a `DocDef doc` — default `churchInfoDoc` — and an optional `header`; PR #19 reuses it for
 `settings/assistant`.)
-`DocEditor` over `churchInfoDoc` fields: names, bishop, address, transport, lat/lng (ranges), map query, Maps link,
-**phones** (object list: label AR/EN, number, mobile/WhatsApp — ≤ 20 rows), WhatsApp number/channel, Facebook,
-YouTube, Instagram, verse + references, hero image URL, history AR/EN (≤ 8000), **altars** (object list: name AR/EN,
-kind main/second/annex), `assistantEnabled`, `sample`. Same "updated elsewhere → reload" banner, and the same
-own-save rule (no scroll jump to the top after Save, BUG-12).
+`DocEditor` over `churchInfoDoc` fields (saving identical flat keys on `settings/church`): basic identity (`nameAr`/`nameEn`, `bishopAr`/`bishopEn`, `addressAr`/`addressEn`, `sample`) stays open at the top (`FieldGroup.basic`), while secondary sections sit in four collapsible `ExpansionTile` cards (`maintainState: true`, PR 3J / P3-30):
+- **Location & map (`FieldGroup.location`)**: `transportAr`/`transportEn`, `lat`/`lng` (with degree hints and ranges), `mapsQuery` (with search hint), `mapsUrl`.
+- **Contact & links (`FieldGroup.contacts`)**: `phones` (`objectList` ≤ 20 rows), `whatsapp`, `whatsappChannel`, `facebook`, `youtube`, `instagram`.
+- **Front banner & verse (`FieldGroup.hero`)**: `verseAr`/`verseEn`, `verseRefAr`/`verseRef`, `heroImageUrl`.
+- **History & altars (`FieldGroup.history`)**: `historyAr`/`historyEn` (≤ 8000), `altars` (`objectList`).
+
+Live pills under each group count both non-empty text controllers and non-empty `objectList` rows (`phones`, `altars`). Same "updated elsewhere → reload" banner, and the same own-save rule (no scroll jump to the top after Save, BUG-12). In `alerts`, `priority` (`0–1000`, default `0`) explains in plain words that larger numbers appear first.
 
 ### Content lists (`CollectionListScreen`, `collection_list.dart`)
 For each `CollectionDef`:
@@ -327,7 +329,7 @@ For each `CollectionDef`:
   `showSocials`, WhatsApp, WhatsApp group/channel, Facebook, YouTube, Instagram, external link `externalUrl`/`link`, button text AR/EN ≤ 80 and how-to-contact notes AR/EN ≤ 500) are `ExpansionTile` cards (`ValueKey('group-<g>')`,
   `maintainState: true` so collapsed fields still validate and save) with live pills («مفعّل / Enabled», «3 حقول /
   3 fields», «4 صور / 4 photos», «2 مُعبّأ / 2 filled»). Save with an invalid field in a closed card opens that card.
-  Liturgies, seasons, alerts and church info keep their basic layout (with English/`order`/secondary fields under «خيارات متقدمة»).
+  Liturgies, seasons and alerts keep their basic layout (with English/`order`/secondary fields under «خيارات متقدمة», and a clear helper on `alerts.priority`), while `churchInfoDoc` splits its secondary fields across four collapsible cards (`location`, `contacts`, `hero`, `history`).
 - **Split saves (PR #12, `splitSavePayload`):** the editor writes everything else first (it creates a new doc), then
   a non-empty `gallery`, then non-empty `extraFields` — one write with both full lists exceeds the rules' 1,000-
   expression cap. If a later write fails, the earlier ones stay saved, the form stays dirty and a retry sends only
@@ -381,18 +383,20 @@ Newest first (`createdAt`). PR #18 (ADR-028): **box chips** (`box-<id>`) — All
 `anonymous: true`), and "Other / deleted type" when a message's slot no longer exists; messages without a category
 are general inquiries (c1). Status chips **«محتاجة رد» / Needs reply** (default, `status == new`) / **«تمت متابعتها» / Handled** / **«الكل» / All**. Each card: name (or
 «مُرسِل مجهول»), time, type / occasion / 📅 date chips, message, phone call (`msgCall-<id>`), WhatsApp (`msgWhatsApp-<id>`, shown only when `usableWhatsappLink(phone)` returns a valid `wa.me` mobile link — never for missing, malformed, or landline numbers), email (`mailto:`), internal notes.
-Bookings get a **status dropdown** new → contacted → confirmed / declined (`bookingStatus-<id>`); other messages
-get one-tap **«تمّت» / Done** (`msgToggleStatus-<id>`, immediately removing the message from the default «محتاجة رد» filter) or **Mark new**. **Notes** (`notes-<id>`, `_NotesDialog`, ≤ 2000 → `adminNotes`), copy, delete with
+Bookings get a **status dropdown** new → contacted → confirmed / declined (`bookingStatus-<id>`); other open messages
+get one-tap **«تمّت» / Done** (`msgToggleStatus-<id>`, immediately removing the message from the default «محتاجة رد» filter). For handled non-booking messages, **«إعادة كجديدة» / Mark new** (`msgMarkNew-<id>`) sits inside an overflow dialog (`IconButton` `ValueKey('msgMore-<id>')` → `SimpleDialogOption` `ValueKey('msgMarkNew-<id>')`, label wrapped in `Flexible`) away from «تمّت» and the red Delete icon (`delete`). **Notes** (`notes-<id>`, `_NotesDialog`, ≤ 2000 → `adminNotes`), copy, delete with
 named confirmation (`confirmNamedAction`, `_delete`: names sender or «مُرسِل مجهول» with alert-colored action «حذف»).
 The overview's "new messages" counts `status == new`.
 
-### Contact form types (`ContactCategoriesScreen`, `contact_admin.dart`) → `settings/contact` (PR #18)
+### Contact form types (`ContactCategoriesScreen`, `contact_admin.dart`) → `settings/contact` (PR #18, PR 3J / P3-31)
 Cards per type (code defaults until saved): Arabic / English name, behaviour (general / booking / complaint /
 suggestion), shown on the form, allow anonymous (complaint / suggestion only), booking occasions (Arabic /
-English rows, ≤ 8, keys kept stable — `newSubtypeKey`), move up / down, remove (at least one stays), **Add a
+English rows, ≤ 8, keys kept stable — `newSubtypeKey`), move up / down, remove (at least one stays, confirmed via
+`confirmNamedAction` naming the category or «نوع بدون اسم» / "Unnamed type"), **Add a
 message type** (≤ 12; since PR #19 a fresh stable id from `ContactSettings.newId`, never an id removed in the
-editor — `_retired` — so old messages of a deleted type are never re-labelled). **Save** writes the whole
-`categories` map (`saveDoc`, one string per id, `order` renumbered 10, 20…).
+editor — `_retired` — so old messages of a deleted type are never re-labelled). Any edit sets dirty state, reveals the
+sticky `UnsavedBar` (`unsaved-bar-save` / `unsaved-bar-cancel`), and shows the `saveContactCats` primary-highlighted FAB.
+**Save** writes the whole `categories` map (`saveDoc`, one string per id, `order` renumbered 10, 20…).
 
 ### AI assistant (`AssistantAdminScreen`, `assistant_admin.dart`) → `settings/assistant` (PR #19, ADR-029)
 Top card `AssistantSwitches`: **"Ask the church" section shown** (`assistantSectionSwitch`, a field-path `update` of

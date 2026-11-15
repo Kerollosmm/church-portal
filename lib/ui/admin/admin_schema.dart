@@ -51,9 +51,9 @@ enum FieldType {
 }
 
 /// Where a field sits in the editor: [basic] is always open at the top; the
-/// detail-page groups are collapsible cards below it. [program]: speaker,
+/// other groups are collapsible cards below it. [program]: speaker,
 /// topic, choir, venue, audience and PDF link (ADR-041).
-enum FieldGroup { basic, program, details, media, contacts }
+enum FieldGroup { basic, program, details, media, location, contacts, hero, history }
 
 class FieldDef {
   final String key;
@@ -496,7 +496,11 @@ const adminCollections = <CollectionDef>[
     FieldDef('bodyEn', 'النص (إنجليزي)', 'Body (English)', FieldType.multiline,
         maxLength: 1000, advanced: true, lang: 'en'),
     FieldDef('priority', 'الأولوية (الأعلى يظهر أولًا)', 'Priority (higher shows first)', FieldType.integer,
-        min: 0, max: 1000, advanced: true),
+        min: 0,
+        max: 1000,
+        advanced: true,
+        hintAr: 'الرقم الأكبر يظهر أولًا في أعلى الصفحة (مثلًا ١٠ يظهر قبل ١). الافتراضي ٠، ومن ٠ إلى ١٠٠٠.',
+        hintEn: 'Larger numbers show first at the top of the page (e.g. 10 shows before 1). Default is 0, from 0 to 1000.'),
     FieldDef('link', 'رابط «اعرف المزيد» (صفحة، قسم أو رابط خارجي)', '"Learn more" link (a page, a section or an external URL)',
         FieldType.url,
         allowPath: true,
@@ -970,7 +974,7 @@ Map<String, Object?> donationPageTemplate() => {
       ],
     };
 
-/// settings/church: identity, contacts, socials, history.
+/// settings/church: identity, location, contacts, hero, history.
 const churchInfoDoc = DocDef(
   'settings/church',
   'بيانات الكنيسة',
@@ -982,38 +986,60 @@ const churchInfoDoc = DocDef(
     FieldDef('bishopEn', 'الأسقف (إنجليزي)', 'Bishop (English)', FieldType.text, lang: 'en'),
     FieldDef('addressAr', 'العنوان (عربي)', 'Address (Arabic)', FieldType.text, required: true),
     FieldDef('addressEn', 'العنوان (إنجليزي)', 'Address (English)', FieldType.text, lang: 'en'),
-    FieldDef('transportAr', 'المواصلات (عربي)', 'Getting here (Arabic)', FieldType.multiline, maxLength: 2000),
+    FieldDef('sample', 'بيانات غير مؤكدة', 'Unconfirmed data', FieldType.boolean, newBool: false),
+    // Location & map group
+    FieldDef('transportAr', 'المواصلات (عربي)', 'Getting here (Arabic)', FieldType.multiline,
+        maxLength: 2000, group: FieldGroup.location),
     FieldDef('transportEn', 'المواصلات (إنجليزي)', 'Getting here (English)', FieldType.multiline,
-        maxLength: 2000, lang: 'en'),
-    FieldDef('lat', 'خط العرض', 'Latitude', FieldType.decimal, min: -90, max: 90),
-    FieldDef('lng', 'خط الطول', 'Longitude', FieldType.decimal, min: -180, max: 180),
+        maxLength: 2000, lang: 'en', group: FieldGroup.location),
+    FieldDef('lat', 'خط العرض', 'Latitude', FieldType.decimal,
+        min: -90,
+        max: 90,
+        group: FieldGroup.location,
+        hintAr: 'رقم عشري مثل 31.265 — انسخه من خرائط جوجل عند الضغط مطوّلًا على موقع الكنيسة (الرقم الأول).',
+        hintEn: 'Decimal number like 31.265 — copy the first number when long-pressing the church on Google Maps.'),
+    FieldDef('lng', 'خط الطول', 'Longitude', FieldType.decimal,
+        min: -180,
+        max: 180,
+        group: FieldGroup.location,
+        hintAr: 'رقم عشري مثل 30.012 — انسخه من خرائط جوجل (الرقم الثاني بعد الفاصلة).',
+        hintEn: 'Decimal number like 30.012 — copy the second number after the comma on Google Maps.'),
     FieldDef('mapsQuery', 'بحث الخريطة (مثل 31.26,30.01)', 'Map query (e.g. 31.26,30.01)', FieldType.text,
-        maxLength: 200),
-    FieldDef('mapsUrl', 'رابط خرائط جوجل', 'Google Maps link', FieldType.url),
-    FieldDef('phones', 'أرقام التليفون', 'Phone numbers', FieldType.objectList, subFields: [
+        maxLength: 200,
+        group: FieldGroup.location,
+        hintAr: 'اختياري: اكتب الإحداثيات أو اسم الشارع لو لم تعثر الخريطة على العنوان تلقائيًا، مثل: 31.26,30.01',
+        hintEn: 'Optional: search text or coordinates if the map cannot locate the address automatically, e.g. 31.26,30.01'),
+    FieldDef('mapsUrl', 'رابط خرائط جوجل', 'Google Maps link', FieldType.url, group: FieldGroup.location),
+    // Contacts & social links group
+    FieldDef('phones', 'أرقام التليفون', 'Phone numbers', FieldType.objectList, group: FieldGroup.contacts, subFields: [
       FieldDef('labelAr', 'الوصف (عربي)', 'Label (Arabic)', FieldType.text, required: true, maxLength: 80),
       FieldDef('labelEn', 'الوصف (إنجليزي)', 'Label (English)', FieldType.text, maxLength: 80, lang: 'en'),
       FieldDef('number', 'الرقم', 'Number', FieldType.phone, required: true),
       FieldDef('isMobile', 'موبايل (واتساب)', 'Mobile (WhatsApp)', FieldType.boolean, newBool: false),
     ]),
-    FieldDef('whatsapp', 'رقم واتساب', 'WhatsApp number', FieldType.phone),
-    FieldDef('whatsappChannel', 'قناة واتساب', 'WhatsApp channel', FieldType.url),
-    FieldDef('facebook', 'فيسبوك', 'Facebook', FieldType.url),
-    FieldDef('youtube', 'يوتيوب', 'YouTube', FieldType.url),
-    FieldDef('instagram', 'إنستغرام', 'Instagram', FieldType.url),
-    FieldDef('verseAr', 'الآية (عربي)', 'Verse (Arabic)', FieldType.text),
-    FieldDef('verseEn', 'الآية (إنجليزي)', 'Verse (English)', FieldType.text, lang: 'en'),
-    FieldDef('verseRefAr', 'الشاهد (عربي)', 'Verse reference (Arabic)', FieldType.text, maxLength: 60),
-    FieldDef('verseRef', 'الشاهد (إنجليزي)', 'Verse reference (English)', FieldType.text, maxLength: 60, lang: 'en'),
-    FieldDef('heroImageUrl', 'صورة الواجهة (رابط)', 'Hero image URL', FieldType.url),
-    FieldDef('historyAr', 'التاريخ (عربي)', 'History (Arabic)', FieldType.multiline, maxLength: 8000),
-    FieldDef('historyEn', 'التاريخ (إنجليزي)', 'History (English)', FieldType.multiline, maxLength: 8000, lang: 'en'),
-    FieldDef('altars', 'المذابح', 'Altars', FieldType.objectList, subFields: [
+    FieldDef('whatsapp', 'رقم واتساب', 'WhatsApp number', FieldType.phone, group: FieldGroup.contacts),
+    FieldDef('whatsappChannel', 'قناة واتساب', 'WhatsApp channel', FieldType.url, group: FieldGroup.contacts),
+    FieldDef('facebook', 'فيسبوك', 'Facebook', FieldType.url, group: FieldGroup.contacts),
+    FieldDef('youtube', 'يوتيوب', 'YouTube', FieldType.url, group: FieldGroup.contacts),
+    FieldDef('instagram', 'إنستغرام', 'Instagram', FieldType.url, group: FieldGroup.contacts),
+    // Hero & verse group
+    FieldDef('verseAr', 'الآية (عربي)', 'Verse (Arabic)', FieldType.text, group: FieldGroup.hero),
+    FieldDef('verseEn', 'الآية (إنجليزي)', 'Verse (English)', FieldType.text, lang: 'en', group: FieldGroup.hero),
+    FieldDef('verseRefAr', 'الشاهد (عربي)', 'Verse reference (Arabic)', FieldType.text,
+        maxLength: 60, group: FieldGroup.hero),
+    FieldDef('verseRef', 'الشاهد (إنجليزي)', 'Verse reference (English)', FieldType.text,
+        maxLength: 60, lang: 'en', group: FieldGroup.hero),
+    FieldDef('heroImageUrl', 'صورة الواجهة (رابط)', 'Hero image URL', FieldType.url, group: FieldGroup.hero),
+    // History & altars group
+    FieldDef('historyAr', 'التاريخ (عربي)', 'History (Arabic)', FieldType.multiline,
+        maxLength: 8000, group: FieldGroup.history),
+    FieldDef('historyEn', 'التاريخ (إنجليزي)', 'History (English)', FieldType.multiline,
+        maxLength: 8000, lang: 'en', group: FieldGroup.history),
+    FieldDef('altars', 'المذابح', 'Altars', FieldType.objectList, group: FieldGroup.history, subFields: [
       FieldDef('nameAr', 'الاسم (عربي)', 'Name (Arabic)', FieldType.text, required: true, maxLength: 120),
       FieldDef('nameEn', 'الاسم (إنجليزي)', 'Name (English)', FieldType.text, maxLength: 120, lang: 'en'),
       FieldDef('kind', 'النوع', 'Kind', FieldType.choice, options: ['main', 'second', 'annex'], defaultOption: 'annex'),
     ]),
-    FieldDef('sample', 'بيانات غير مؤكدة', 'Unconfirmed data', FieldType.boolean, newBool: false),
   ],
   helpAr: 'اسم الكنيسة والعنوان وأرقام التليفون والسوشيال ميديا والتاريخ.',
   helpEn: 'Church name, address, phone numbers, social links, and history.',

@@ -236,8 +236,16 @@ void main() {
 
     test('imageList type, field groups and the image collections', () {
       expect(FieldType.values, contains(FieldType.imageList));
-      expect(FieldGroup.values,
-          [FieldGroup.basic, FieldGroup.program, FieldGroup.details, FieldGroup.media, FieldGroup.contacts]);
+      expect(FieldGroup.values, [
+        FieldGroup.basic,
+        FieldGroup.program,
+        FieldGroup.details,
+        FieldGroup.media,
+        FieldGroup.location,
+        FieldGroup.contacts,
+        FieldGroup.hero,
+        FieldGroup.history,
+      ]);
       expect(const FieldDef('x', 'x', 'x', FieldType.text).group, FieldGroup.basic);
       expect(imageCollections,
           ['alerts', 'seasons', 'meetings', 'activities', 'clinics', 'facilities', 'priests', 'milestones', 'saints',
@@ -3407,6 +3415,12 @@ void main() {
         locale: const Locale('ar'),
       ));
       await tester.pumpAndSettle();
+      for (final gKey in const ['group-contacts', 'group-hero', 'group-history']) {
+        final tile = find.byKey(ValueKey(gKey));
+        await tester.ensureVisible(tile);
+        await tester.tap(tile);
+        await tester.pumpAndSettle();
+      }
       expect(find.byKey(const ValueKey('field-nameEn')), findsNWidgets(2));
       expect(find.text('St. Maximus Church'), findsOneWidget);
       expect(find.text('The Lord is my light'), findsOneWidget);
@@ -3818,6 +3832,262 @@ void main() {
           }
         }
       }
+    });
+  });
+
+  group('PR 3J: P3-30 & P3-31 — church info split, hints & inbox mark-new overflow', () {
+    test('P3-30: churchInfoDoc splits fields across basic/location/contacts/hero/history and adds coordinate & priority hints',
+        () {
+      const expectedKeys = {
+        'nameAr',
+        'nameEn',
+        'bishopAr',
+        'bishopEn',
+        'addressAr',
+        'addressEn',
+        'sample',
+        'transportAr',
+        'transportEn',
+        'lat',
+        'lng',
+        'mapsQuery',
+        'mapsUrl',
+        'phones',
+        'whatsapp',
+        'whatsappChannel',
+        'facebook',
+        'youtube',
+        'instagram',
+        'verseAr',
+        'verseEn',
+        'verseRefAr',
+        'verseRef',
+        'heroImageUrl',
+        'historyAr',
+        'historyEn',
+        'altars',
+      };
+      final actualKeys = churchInfoDoc.fields.map((f) => f.key).toList();
+      expect(actualKeys.toSet(), expectedKeys);
+      expect(actualKeys.length, expectedKeys.length);
+
+      expect(
+        churchInfoDoc.fields.where((f) => f.group == FieldGroup.basic).map((f) => f.key).toSet(),
+        {'nameAr', 'nameEn', 'bishopAr', 'bishopEn', 'addressAr', 'addressEn', 'sample'},
+      );
+      expect(
+        churchInfoDoc.fields.where((f) => f.group == FieldGroup.location).map((f) => f.key).toSet(),
+        {'transportAr', 'transportEn', 'lat', 'lng', 'mapsQuery', 'mapsUrl'},
+      );
+      expect(
+        churchInfoDoc.fields.where((f) => f.group == FieldGroup.contacts).map((f) => f.key).toSet(),
+        {'phones', 'whatsapp', 'whatsappChannel', 'facebook', 'youtube', 'instagram'},
+      );
+      expect(
+        churchInfoDoc.fields.where((f) => f.group == FieldGroup.hero).map((f) => f.key).toSet(),
+        {'verseAr', 'verseEn', 'verseRefAr', 'verseRef', 'heroImageUrl'},
+      );
+      expect(
+        churchInfoDoc.fields.where((f) => f.group == FieldGroup.history).map((f) => f.key).toSet(),
+        {'historyAr', 'historyEn', 'altars'},
+      );
+
+      for (final key in ['lat', 'lng', 'mapsQuery']) {
+        final f = churchInfoDoc.fields.firstWhere((field) => field.key == key);
+        expect(f.hintAr.trim(), isNotEmpty, reason: 'churchInfoDoc.$key.hintAr');
+        expect(f.hintEn.trim(), isNotEmpty, reason: 'churchInfoDoc.$key.hintEn');
+      }
+
+      final alertsDef = collectionById('alerts')!;
+      final priorityField = alertsDef.fields.firstWhere((f) => f.key == 'priority');
+      expect(priorityField.hintAr, contains('الأكبر'));
+      expect(priorityField.hintEn.toLowerCase(), contains('before'));
+    });
+
+    testWidgets('P3-30: split church info saves identical flat keys and displays coordinate & priority hints',
+        (tester) async {
+      tester.view.physicalSize = const Size(900, 3200);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      Map<String, dynamic>? saved;
+      await tester.pumpWidget(_app(
+        DocEditor(
+          title: churchInfoDoc.labelAr,
+          fields: churchInfoDoc.fields,
+          popOnSave: false,
+          onSave: (d) async => saved = d,
+        ),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      // Basic identity fields remain open at top; grouped sections sit in collapsed cards.
+      expect(find.byKey(const ValueKey('field-nameAr')), findsOneWidget);
+      expect(find.byKey(const ValueKey('field-addressAr')), findsOneWidget);
+      expect(find.byKey(const ValueKey('groupCard-location')), findsOneWidget);
+      expect(find.byKey(const ValueKey('groupCard-contacts')), findsOneWidget);
+      expect(find.byKey(const ValueKey('groupCard-hero')), findsOneWidget);
+      expect(find.byKey(const ValueKey('groupCard-history')), findsOneWidget);
+
+      await tester.enterText(find.byKey(const ValueKey('field-nameAr')), 'كنيسة مكسيموس ودوماديوس');
+      await tester.enterText(find.byKey(const ValueKey('field-nameEn')), 'St. Maximus Church');
+      await tester.enterText(find.byKey(const ValueKey('field-addressAr')), 'شارع ٤٥، العصافرة قبلي');
+
+      await tester.tap(find.byKey(const ValueKey('group-location')));
+      await tester.pumpAndSettle();
+      final latHint = churchInfoDoc.fields.firstWhere((f) => f.key == 'lat').hintAr;
+      expect(find.textContaining(latHint), findsOneWidget);
+      await tester.enterText(find.byKey(const ValueKey('field-lat')), '31.265');
+      await tester.enterText(find.byKey(const ValueKey('field-lng')), '30.012');
+
+      await tester.tap(find.byKey(const ValueKey('group-contacts')));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const ValueKey('field-whatsapp')), '01012345678');
+
+      await tester.tap(find.byKey(const Key('editor-save')));
+      await tester.pumpAndSettle();
+
+      expect(saved, isNotNull);
+      expect(saved!['nameAr'], 'كنيسة مكسيموس ودوماديوس');
+      expect(saved!['nameEn'], 'St. Maximus Church');
+      expect(saved!['addressAr'], 'شارع ٤٥، العصافرة قبلي');
+      expect(saved!['lat'], 31.265);
+      expect(saved!['lng'], 30.012);
+      expect(saved!['whatsapp'], '01012345678');
+
+      // Alert priority hint appears cleanly in Arabic when advanced options open.
+      final alertsDef = collectionById('alerts')!;
+      await tester.pumpWidget(_app(
+        DocEditor(
+          key: const ValueKey('alerts-editor'),
+          title: alertsDef.labelAr,
+          fields: alertsDef.fields,
+          def: alertsDef,
+          popOnSave: false,
+          onSave: (_) async {},
+        ),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('group-advanced')));
+      await tester.pumpAndSettle();
+      final priorityHint = alertsDef.fields.firstWhere((f) => f.key == 'priority').hintAr;
+      expect(find.textContaining(priorityHint), findsOneWidget);
+    });
+
+    testWidgets('P3-30: ChurchInfoScreen renders cleanly at 320 px / 200% in RTL & LTR without S3 jargon',
+        (tester) async {
+      tester.view.physicalSize = const Size(320, 3200);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      tester.platformDispatcher.textScaleFactorTestValue = 2.0;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+
+      final repo = _TestAdminBackend(initialDocs: {
+        'settings/church': {
+          'nameAr': 'كنيسة القديسين',
+          'nameEn': 'Saints Church',
+          'addressAr': 'شارع ٤٥',
+          'phones': [
+            {'labelAr': 'المكتب', 'labelEn': 'Office', 'number': '035368888'},
+          ],
+          'altars': [
+            {'nameAr': 'مذبح العذراء', 'nameEn': 'St. Mary Altar', 'kind': 'main'},
+          ],
+        },
+      });
+
+      for (final locale in [const Locale('ar'), const Locale('en')]) {
+        await tester.pumpWidget(_app(ChurchInfoScreen(repo: repo), locale: locale));
+        await tester.pumpAndSettle();
+        for (final g in ['group-location', 'group-contacts', 'group-hero', 'group-history']) {
+          final tile = find.byKey(ValueKey(g));
+          await tester.ensureVisible(tile);
+          await tester.tap(tile);
+          await tester.pumpAndSettle();
+        }
+        expect(tester.takeException(), isNull, reason: 'ChurchInfoScreen 320px locale=${locale.languageCode}');
+        if (locale.languageCode == 'ar') {
+          final allText = tester
+              .widgetList<Text>(find.byType(Text))
+              .map((t) => t.data ?? t.textSpan?.toPlainText() ?? '')
+              .join(' ');
+          for (final banned in ['Firebase', 'UID', 'App Check', 'Sentry', 'APK', 'HH:mm']) {
+            expect(allText, isNot(contains(banned)));
+          }
+        }
+      }
+    });
+
+    testWidgets(
+        'P3-31: handled message puts markNew in overflow menu away from Done, keeps Delete tooltip, renders at 320px/200%',
+        (tester) async {
+      tester.view.physicalSize = const Size(320, 2400);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      tester.platformDispatcher.textScaleFactorTestValue = 2.0;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+
+      final repo = _TestAdminBackend(initialCollections: {
+        'contact_messages': [
+          AdminDoc('m-open', {
+            'name': 'زائر جديد',
+            'message': 'استفسار',
+            'status': 'new',
+            'createdAt': DateTime.utc(2026, 11, 14, 9),
+          }),
+          AdminDoc('m-done', {
+            'name': 'زائر تمت متابعته',
+            'message': 'رسالة منتهية',
+            'status': 'handled',
+            'createdAt': DateTime.utc(2026, 11, 13, 9),
+          }),
+        ],
+      });
+
+      await tester.pumpWidget(_app(MessagesScreen(repo: repo), locale: const Locale('ar')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('msgToggleStatus-m-open')), findsOneWidget);
+      expect(find.byKey(const ValueKey('msgMore-m-open')), findsNothing);
+
+      await tester.tap(find.byKey(const ValueKey('filter-handled')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('msgToggleStatus-m-done')), findsNothing);
+      expect(find.byKey(const ValueKey('msgMarkNew-m-done')), findsNothing);
+      expect(find.byKey(const ValueKey('msgMore-m-done')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+
+      await tester.tap(find.byKey(const ValueKey('msgMore-m-done')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('msgMarkNew-m-done')), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('msgMarkNew-m-done')));
+      await tester.pumpAndSettle();
+
+      expect(repo.updates.last.id, 'm-done');
+      expect(repo.updates.last.data, {'status': 'new'});
+      expect(tester.takeException(), isNull);
+
+      // Verify English mode as well and Delete tooltip invariant.
+      final enRepo = _TestAdminBackend(initialCollections: {
+        'contact_messages': [
+          AdminDoc('m-done', {
+            'name': 'Handled Visitor',
+            'message': 'Finished note',
+            'status': 'handled',
+            'createdAt': DateTime.utc(2026, 11, 13, 9),
+          }),
+        ],
+      });
+      await tester.pumpWidget(_app(MessagesScreen(repo: enRepo), locale: const Locale('en')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('filter-handled')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('msgMore-m-done')), findsOneWidget);
+      expect(find.byTooltip('Delete'), findsOneWidget);
+      expect(tester.takeException(), isNull);
     });
   });
 }

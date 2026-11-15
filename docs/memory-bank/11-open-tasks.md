@@ -100,13 +100,18 @@ the owner approves the whole chain.
 
 ## Phase 3 — Admin panel simplification (plan in `docs/plans/phase3/`)
 
-Progress tracked in [`docs/plans/phase3/STATUS.md`](../plans/phase3/STATUS.md). Stage 2 underway.
+Progress tracked in [`docs/plans/phase3/STATUS.md`](../plans/phase3/STATUS.md). Code complete across Stages 1–3 (`PR 3A`–`3J` stacked, awaiting bot/CI sign-off, owner merge approval, trial sessions `G1`–`G3` / item 33, and office item 35).
 
 - [x] PR 3A — Safe actions (`feat/p3a-safe-actions`, items 6, 7, 8, 11; ADR-070): `confirmNamedAction`, `UnsavedGuard` + `beforeunload`, `PendingDelete` (10s undo), `UnsavedBar`
 - [x] PR 3B — Written state (`feat/p3b-written-state`, items 9, 10): `AdminStateSwitch` («ظاهر / مخفي», «مفعّل / مقفول») and preview before `replacesDay`
 - [x] PR 3C — Admin status & session (`feat/p3c-admin-status-session`, items 12, 13): `active`/`expiresAt` on admins + rules, auto sign-out after 30 minutes
 - [x] PR 3D — Custom pages flow (`feat/p3d-custom-pages`, items 14, 15, 16, 17, 18a): auto slug, donations template, unified sections screen, clearer hints, page placement & featured toggle
 - [x] PR 3E — Menu grouping, screen help, owner advanced & new home (`feat/p3e-menu-home`, items 18/18R, 19, 21, 23): 7 editor groups + owner-only 8th group + owner-only rules (`settings/contact`, `settings/assistant`, `venues`/`audiences`/`seasonVerses`), `SeasonsHubScreen`, `AdminScreenHeader`, `AdvancedOwnerScreen`, `OverviewScreen` attention + T1–T6 quick tasks
+- [x] PR 3F — Forms & priests merge (`feat/p3f-forms`, items 20, 22, 24, 26): merged priests screen with filter & isolated `reorderBase`, row-tap edit / separated delete / `openItem`, top-of-form cover & phone + `advanced` group, `looseDate` picker
+- [x] PR 3G — Form error summary & English switch (`feat/p3g-english-switch`, items 27a, 27b): top `editor-error-summary` banner jumping to invalid fields, owner-only `englishEnabled` switch hiding `lang: 'en'` inputs while keeping stored values & hiding public toggle
+- [x] PR 3H — Inbox WhatsApp & one-tap Done (`feat/p3h-inbox`, item 25): default «محتاجة رد» filter, mobile-only WhatsApp chip, one-tap «تمّت»
+- [x] PR 3I — Assistant custom section/page topics (`feat/p3i-sitemap-assistant`, item 29; item 28 deferred): appends visible custom sections and pages to `Allowed topics:`
+- [x] PR 3J — Remaining UI polish (`feat/p3j-remaining`, items 30, 31; ADR-071; item 32 left out, item 34 deferred): collapsible church-info groups + coord/priority hints, `msgMore` overflow menu for «إعادة كجديدة», `ContactCategoriesScreen` `UnsavedBar` + named delete confirm + dirty-gated FAB
 
 ## Infrastructure & security (owner: developer)
 

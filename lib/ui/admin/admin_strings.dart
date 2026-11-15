@@ -247,6 +247,16 @@ const Map<String, List<String>> adminStrings = {
     'عند الإيقاف تختفي الحقول الإنجليزية في لوحة الإدارة وزر اللغة من الموقع دون مسح البيانات الإنجليزية المحفوظة.',
     'When off, English fields in admin forms and the public language button are hidden without deleting stored English text.',
   ],
+  // Phase 3J: split church info groups & message types safety (P3-30, P3-31)
+  'groupLocation': ['الموقع والخريطة', 'Location & map'],
+  'groupHero': ['الواجهة والآية', 'Hero & verse'],
+  'groupHistory': ['التاريخ والمذابح', 'History & altars'],
+  'confirmDeleteContactType': [
+    'هل تريد حذف نوع الرسالة «{name}»؟ الرسائل القديمة ستحتفظ بوصفها ولن تُحذف.',
+    'Remove message type "{name}"? Existing messages keep their label and are not deleted.',
+  ],
+  'unnamedContactType': ['نوع بدون اسم', 'Unnamed type'],
+  'moreActions': ['خيارات إضافية', 'More actions'],
 };
 
 /// Idempotently registers [adminStrings] in the runtime localization table.

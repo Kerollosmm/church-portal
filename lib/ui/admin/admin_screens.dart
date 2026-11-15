@@ -888,13 +888,15 @@ class _MessagesScreenState extends State<MessagesScreen> {
                   onChanged: (v) => v == null ? null : _update(context, d, {'status': v}),
                 ),
               ])
-            else
+            else if (open)
               TextButton.icon(
                 key: ValueKey('msgToggleStatus-${d.id}'),
-                onPressed: () => _update(context, d, {'status': open ? MessageStatus.handled : MessageStatus.newMsg}),
-                icon: Icon(open ? Icons.check_circle_outline : Icons.undo),
-                label: Text(context.tr(open ? 'markHandled' : 'markNew')),
-              ),
+                onPressed: () => _update(context, d, {'status': MessageStatus.handled}),
+                icon: const Icon(Icons.check_circle_outline),
+                label: Text(context.tr('markHandled')),
+              )
+            else
+              const SizedBox.shrink(),
             Row(mainAxisSize: MainAxisSize.min, children: [
               IconButton(
                 key: ValueKey('notes-${d.id}'),
@@ -913,6 +915,36 @@ class _MessagesScreenState extends State<MessagesScreen> {
                 icon: Icon(Icons.delete_outline, color: context.pal.alert),
                 onPressed: () => _delete(context, d),
               ),
+              if (!booking && !open)
+                IconButton(
+                  key: ValueKey('msgMore-${d.id}'),
+                  tooltip: context.tr('moreActions'),
+                  icon: const Icon(Icons.more_vert),
+                  onPressed: () async {
+                    final action = await showDialog<String>(
+                      context: context,
+                      builder: (ctx) => SimpleDialog(
+                        title: Text(ctx.tr('moreActions')),
+                        children: [
+                          SimpleDialogOption(
+                            key: ValueKey('msgMarkNew-${d.id}'),
+                            onPressed: () => Navigator.pop(ctx, 'markNew'),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.refresh, size: 18),
+                                const SizedBox(width: 8),
+                                Flexible(child: Text(ctx.tr('markNew'))),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (action == 'markNew' && context.mounted) {
+                      await _update(context, d, {'status': MessageStatus.newMsg});
+                    }
+                  },
+                ),
             ]),
           ]),
         ]),

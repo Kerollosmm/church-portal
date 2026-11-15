@@ -168,8 +168,8 @@ class _Backend extends AdminBackend {
   Future<void> removeAdmin(String uid) async {}
 }
 
-Widget _admin(Widget child) => MaterialApp(
-      locale: const Locale('en'),
+Widget _admin(Widget child, {Locale locale = const Locale('en')}) => MaterialApp(
+      locale: locale,
       supportedLocales: const [Locale('ar'), Locale('en')],
       localizationsDelegates: GlobalMaterialLocalizations.delegates,
       home: Scaffold(body: child),
@@ -540,6 +540,8 @@ void main() {
       // re-labelled.
       await tester.tap(find.byKey(const ValueKey('removeCat-c4')));
       await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('confirm-ok')));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('addContactCat')));
       await tester.pumpAndSettle();
       final labelKeys = find.byWidgetPredicate((w) {
@@ -559,6 +561,75 @@ void main() {
       expect(saved.bySlot(newId)!.labelAr, 'شكر');
       expect(saved.bySlot('c4'), isNull);
       expect(cats['c2'], 'booking\u001f1\u001f0\u001f20\u001fحجز قاعة\u001fHall booking\u001fwedding|فرح|Wedding\u001econdolence|عزاء|Condolence');
+    });
+
+    testWidgets(
+        'P3-31: ContactCategoriesScreen shows UnsavedBar on edits, confirms deletion by name, cancel keeps it, 320px/200% clean',
+        (tester) async {
+      tester.view.physicalSize = const Size(320, 6000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      tester.platformDispatcher.textScaleFactorTestValue = 2.0;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+
+      for (final locale in [const Locale('ar'), const Locale('en')]) {
+        final b = _Backend();
+        await tester.pumpWidget(
+          _admin(ContactCategoriesScreen(key: ValueKey('cats-${locale.languageCode}'), repo: b), locale: locale),
+        );
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+
+        // No UnsavedBar before edits.
+        expect(find.byKey(const Key('unsaved-bar')), findsNothing);
+
+        // Removing a type opens a confirmation naming it; cancelling preserves it cleanly.
+        await tester.tap(find.byKey(const ValueKey('removeCat-c4')));
+        await tester.pumpAndSettle();
+        expect(find.byType(AlertDialog), findsOneWidget);
+        expect(find.textContaining(locale.languageCode == 'ar' ? 'اقتراح' : 'Suggestion'), findsWidgets);
+
+        await tester.tap(find.byKey(const ValueKey('confirm-cancel')));
+        await tester.pumpAndSettle();
+        expect(find.byKey(const ValueKey('contactCat-c4')), findsOneWidget);
+        expect(find.byKey(const Key('unsaved-bar')), findsNothing);
+
+        // Confirming removes the type and surfaces UnsavedBar.
+        await tester.tap(find.byKey(const ValueKey('removeCat-c4')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const ValueKey('confirm-ok')));
+        await tester.pumpAndSettle();
+
+        expect(find.byKey(const ValueKey('contactCat-c4')), findsNothing);
+        expect(find.byKey(const Key('unsaved-bar')), findsOneWidget);
+        expect(find.byKey(const Key('unsaved-bar-save')), findsOneWidget);
+        expect(tester.takeException(), isNull, reason: 'ContactCategoriesScreen 320px locale=${locale.languageCode}');
+
+        // Saving through UnsavedBar writes settings/contact and clears dirty state.
+        await tester.tap(find.byKey(const Key('unsaved-bar-save')));
+        await tester.pumpAndSettle();
+        expect(b.savedDocs.containsKey('settings/contact'), isTrue);
+        expect(find.byKey(const Key('unsaved-bar')), findsNothing);
+        await tester.pump(const Duration(seconds: 5));
+        await tester.pumpAndSettle();
+
+        // Ordinary field edit also surfaces UnsavedBar and S3 jargon never appears in Arabic.
+        final c1Ar = find.byWidgetPredicate(
+          (w) => w.key is ValueKey<String> && (w.key! as ValueKey<String>).value.startsWith('catLabelAr-c1-'),
+        );
+        await tester.enterText(c1Ar, 'استفسار عام محدث');
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('unsaved-bar')), findsOneWidget);
+        if (locale.languageCode == 'ar') {
+          final allText = tester
+              .widgetList<Text>(find.byType(Text))
+              .map((t) => t.data ?? t.textSpan?.toPlainText() ?? '')
+              .join(' ');
+          for (final banned in ['Firebase', 'UID', 'App Check', 'Sentry', 'APK', 'HH:mm']) {
+            expect(allText, isNot(contains(banned)));
+          }
+        }
+      }
     });
 
     testWidgets('deleting a custom category hides its items (confirm dialog), then deletes it', (tester) async {
