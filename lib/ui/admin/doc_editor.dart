@@ -140,6 +140,7 @@ class DocEditorState extends State<DocEditor> {
 
   /// Values as loaded: only fields that differ from these are saved.
   late Map<String, dynamic> _initialValues;
+  bool _hasInitialValues = false;
 
   /// The values before the first attempt of a save that has not completed
   /// yet. A failed later chunk advances [_initialValues] past a cover the
@@ -200,8 +201,17 @@ class DocEditorState extends State<DocEditor> {
       }
       _setupAutoSlug();
       _initialValues = collect();
+      _hasInitialValues = true;
     } finally {
       _initializing = false;
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant DocEditor oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.englishEnabled != widget.englishEnabled && _showErrorSummary) {
+      _syncErrorSummaryAfterChange();
     }
   }
 
@@ -382,6 +392,10 @@ class DocEditorState extends State<DocEditor> {
         out[f.key] = f.type == FieldType.choice ? '' : null;
         continue;
       }
+      if (_hasInitialValues && !widget.englishEnabled && f.lang == 'en') {
+        out[f.key] = _initialValues[f.key];
+        continue;
+      }
       switch (f.type) {
         case FieldType.boolean:
         case FieldType.weekday:
@@ -397,7 +411,10 @@ class DocEditorState extends State<DocEditor> {
           out[f.key] = (_values[f.key] as Set<String>).toList()..sort();
         case FieldType.objectList:
           out[f.key] = [
-            for (final r in _rows[f.key]!) f.encodedRows ? _encodeRow(f, r.collect()) : r.collect(),
+            for (final r in _rows[f.key]!)
+              f.encodedRows
+                  ? _encodeRow(f, r.collect(englishEnabled: widget.englishEnabled))
+                  : r.collect(englishEnabled: widget.englishEnabled),
           ];
         case FieldType.image:
           out[f.key] = _collectImage(f.key);
@@ -2164,6 +2181,7 @@ class _Row {
   final Map<String, Object?> values = {};
   final Map<String, FocusNode> focus = {};
   final Map<String, GlobalKey> keys = {};
+  final Map<String, dynamic> initial = {};
   final List<FieldDef> fields;
   _Row(this.fields);
 
@@ -2188,16 +2206,19 @@ class _Row {
           r.text[f.key] = TextEditingController(text: v?.toString() ?? '')..addListener(onChange);
       }
     }
+    r.initial.addAll(r.collect());
     return r;
   }
 
-  Map<String, dynamic> collect() => {
+  Map<String, dynamic> collect({bool englishEnabled = true}) => {
         for (final f in fields)
-          f.key: switch (f.type) {
-            FieldType.boolean || FieldType.choice => values[f.key],
-            FieldType.phone => normalizePhoneInput(text[f.key]!.text.trim()),
-            _ => text[f.key]!.text.trim(),
-          },
+          f.key: (!englishEnabled && f.lang == 'en')
+              ? initial[f.key]
+              : switch (f.type) {
+                  FieldType.boolean || FieldType.choice => values[f.key],
+                  FieldType.phone => normalizePhoneInput(text[f.key]!.text.trim()),
+                  _ => text[f.key]!.text.trim(),
+                },
       };
 
   void dispose() {

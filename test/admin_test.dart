@@ -3463,6 +3463,51 @@ void main() {
       expect(saved, {'nameAr': 'اجتماع الشباب الجديد'});
     });
 
+    testWidgets('P2-27b: DocEditor.collect excludes hidden EN drafts when englishEnabled flips false',
+        (tester) async {
+      tester.view.physicalSize = const Size(1000, 3200);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      Map<String, dynamic>? saved;
+      Widget buildEditor(bool en) => _app(
+            DocEditor(
+              key: const ValueKey('church-en-flip'),
+              title: churchInfoDoc.labelAr,
+              fields: churchInfoDoc.fields,
+              data: const {
+                'nameAr': 'كنيسة',
+                'nameEn': 'St. Maximus',
+                'addressAr': 'شارع ٤٥',
+                'phones': [
+                  {'number': '01223344556', 'labelAr': 'المكتب', 'labelEn': 'Office'},
+                ],
+              },
+              popOnSave: false,
+              englishEnabled: en,
+              onSave: (d) async => saved = d,
+            ),
+            locale: const Locale('ar'),
+          );
+
+      await tester.pumpWidget(buildEditor(true));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.byKey(const ValueKey('field-nameEn')), 'X' * 350);
+      await tester.enterText(find.byKey(const ValueKey('field-labelEn')).first, 'Draft Office');
+      await tester.pumpAndSettle();
+
+      await tester.pumpWidget(buildEditor(false));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('field-nameEn')), findsNothing);
+      await tester.enterText(find.byKey(const ValueKey('field-nameAr')), 'كنيسة محدثة');
+      await tester.tap(find.byKey(const Key('editor-save')));
+      await tester.pumpAndSettle();
+
+      expect(saved, {'nameAr': 'كنيسة محدثة'});
+    });
+
     testWidgets('P2-27a: pending error focus clears after expansion/edit so subsequent typing keeps focus',
         (tester) async {
       tester.view.physicalSize = const Size(1000, 900);
