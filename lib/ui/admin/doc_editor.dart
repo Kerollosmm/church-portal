@@ -14,7 +14,7 @@ import '../../domain/custom_content.dart' show PagePlacements;
 import '../../domain/media.dart';
 import '../../domain/models.dart';
 import '../../domain/reminders.dart' show leadLabel;
-import '../../domain/rules.dart' show normalizeDigits;
+import '../../domain/rules.dart' show normalizeDigits, toArabicDigits;
 import '../../domain/schedule.dart' show liturgiesHiddenBy;
 import '../../domain/time_format.dart';
 import '../../domain/today.dart' show DayEvent;
@@ -437,8 +437,15 @@ class DocEditorState extends State<DocEditor> {
   /// that fails leaves the earlier ones saved; a retry sends only the rest.
   Future<bool> save() async {
     if (_saving || _processing != null) return false;
-    if (!_formKey.currentState!.validate()) {
-      if (_openInvalidGroups()) {
+    final openedCollapsed = _openInvalidGroups();
+    if (openedCollapsed) {
+      setState(() {});
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _formKey.currentState?.validate();
+      });
+    }
+    if (!_formKey.currentState!.validate() || openedCollapsed) {
+      if (openedCollapsed) {
         ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(content: Text(context.tr('checkHighlighted'))));
       }
       return false;
@@ -670,6 +677,22 @@ class DocEditorState extends State<DocEditor> {
     c.text = formatPickedDateTime(d.year, d.month, d.day, t.$1, t.$2);
   }
 
+  /// Year + optional Arabic/English month + optional day picker for
+  /// [FieldType.looseDate]; manual typing remains enabled on the field.
+  Future<void> _pickLooseDate(FieldDef f, TextEditingController c) async {
+    final epoch = _resetEpoch;
+    final picked = await showDialog<String>(
+      context: context,
+      builder: (_) => _LooseDatePickerDialog(
+        title: _label(f),
+        initial: parseLooseDate(c.text),
+        defaultYear: CairoTime.now().year,
+      ),
+    );
+    if (picked == null || !mounted || epoch != _resetEpoch) return;
+    c.text = picked;
+  }
+
   /// The friendly 12-hour reading of a picked time / date-time field, shown
   /// under it: "٠٦:٣٠ م" / "06:30 PM", with the date first for date-times;
   /// null when blank or not a valid value (the field then shows its hint).
@@ -687,7 +710,8 @@ class DocEditorState extends State<DocEditor> {
   }
 
   Widget? _pickerSuffix(FieldDef f, TextEditingController c) {
-    if (!_picked(f.type)) return null;
+    final isLoose = f.type == FieldType.looseDate;
+    if (!_picked(f.type) && !isLoose) return null;
     return ValueListenableBuilder<TextEditingValue>(
       valueListenable: c,
       builder: (context, v, _) => Row(mainAxisSize: MainAxisSize.min, children: [
@@ -702,7 +726,7 @@ class DocEditorState extends State<DocEditor> {
           key: ValueKey('pick-${f.key}'),
           tooltip: context.tr(f.type == FieldType.time ? 'pickTime' : 'pickDate'),
           icon: Icon(f.type == FieldType.time ? Icons.access_time_rounded : Icons.calendar_month_rounded),
-          onPressed: () => _pick(f, c),
+          onPressed: () => isLoose ? _pickLooseDate(f, c) : _pick(f, c),
         ),
       ]),
     );
@@ -725,7 +749,9 @@ class DocEditorState extends State<DocEditor> {
       FieldType.text || FieldType.multiline => false,
       _ => true,
     };
-    final hint = [reading ?? '', context.pick(f.hintAr, f.hintEn)].where((s) => s.isNotEmpty).join('\n');
+    final fieldHint = context.pick(f.hintAr, f.hintEn);
+    final looseHint = f.type == FieldType.looseDate && fieldHint.isEmpty ? context.tr('looseDateHint') : '';
+    final hint = [reading ?? '', fieldHint, looseHint].where((s) => s.isNotEmpty).join('\n');
     return TextFormField(
       key: ValueKey('field-${f.key}'),
       controller: c,
@@ -1698,7 +1724,7 @@ class DocEditorState extends State<DocEditor> {
         controller: _advancedCtl,
         maintainState: true,
         leading: Icon(Icons.tune_rounded, color: context.pal.primary),
-        title: Text(context.tr('advancedGroup'),
+        title: Text(context.tr('advancedOptions'),
             style: TextStyle(fontWeight: FontWeight.w800, color: context.pal.primary)),
         childrenPadding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
         expandedCrossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1924,4 +1950,147 @@ String fieldChoiceLabel(BuildContext context, FieldDef f, String key) {
   final scopedKey = 'opt_${f.key}_$key';
   final scoped = context.tr(scopedKey);
   return scoped == scopedKey ? choiceLabel(context, key) : scoped;
+}
+
+class _LooseDatePickerDialog extends StatefulWidget {
+  final String title;
+  final ({int year, int? month, int? day})? initial;
+  final int defaultYear;
+
+  const _LooseDatePickerDialog({
+    required this.title,
+    required this.initial,
+    required this.defaultYear,
+  });
+
+  @override
+  State<_LooseDatePickerDialog> createState() => _LooseDatePickerDialogState();
+}
+
+class _LooseDatePickerDialogState extends State<_LooseDatePickerDialog> {
+  final _formKey = GlobalKey<FormState>();
+  final _dayKey = GlobalKey<FormFieldState<int?>>();
+  late final TextEditingController _yearCtrl;
+  int? _month;
+  int? _day;
+
+  @override
+  void initState() {
+    super.initState();
+    _yearCtrl = TextEditingController(text: '${widget.initial?.year ?? widget.defaultYear}');
+    _month = widget.initial?.month;
+    _day = widget.initial?.day;
+  }
+
+  @override
+  void dispose() {
+    _yearCtrl.dispose();
+    super.dispose();
+  }
+
+  int? _parsedYear() {
+    final y = int.tryParse(normalizeDigits(_yearCtrl.text.trim()));
+    if (y == null || y < 1000 || y > 9999) return null;
+    return y;
+  }
+
+  void _syncDayBounds() {
+    if (_month == null) {
+      if (_day != null) {
+        _day = null;
+        _dayKey.currentState?.didChange(null);
+      }
+      return;
+    }
+    if (_day != null) {
+      final y = _parsedYear() ?? widget.defaultYear;
+      final maxD = daysInMonth(y, _month!);
+      if (_day! > maxD) {
+        _day = maxD;
+        _dayKey.currentState?.didChange(_day);
+      }
+    }
+  }
+
+  void _ok() {
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+    final y = _parsedYear()!;
+    Navigator.pop(context, formatLooseDateValue(y, _month, _day));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ar = context.isAr;
+    final y = _parsedYear() ?? widget.defaultYear;
+    final maxDay = _month == null ? 0 : daysInMonth(y, _month!);
+    return AlertDialog(
+      title: Text(widget.title),
+      content: SingleChildScrollView(
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              TextFormField(
+                key: const ValueKey('looseDate-year'),
+                controller: _yearCtrl,
+                textDirection: TextDirection.ltr,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  labelText: context.tr('looseDateYear'),
+                  hintText: '${widget.defaultYear}',
+                ),
+                validator: (_) => _parsedYear() == null ? context.tr('invalidDate') : null,
+                onChanged: (_) => setState(_syncDayBounds),
+                onFieldSubmitted: (_) => _ok(),
+              ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<int?>(
+                key: const ValueKey('looseDate-month'),
+                isExpanded: true,
+                initialValue: _month,
+                decoration: InputDecoration(labelText: context.tr('looseDateMonth')),
+                items: [
+                  DropdownMenuItem<int?>(value: null, child: Text(context.tr('looseDateYearOnly'))),
+                  for (var m = 1; m <= 12; m++)
+                    DropdownMenuItem<int?>(
+                      value: m,
+                      child: Text(ar ? monthNamesAr[m] : fullMonthNamesEn[m]),
+                    ),
+                ],
+                onChanged: (v) => setState(() {
+                  _month = v;
+                  _syncDayBounds();
+                }),
+              ),
+              if (_month != null) ...[
+                const SizedBox(height: 12),
+                DropdownButtonFormField<int?>(
+                  key: _dayKey,
+                  isExpanded: true,
+                  initialValue: _day,
+                  decoration: InputDecoration(labelText: context.tr('looseDateDay')),
+                  items: [
+                    DropdownMenuItem<int?>(value: null, child: Text(context.tr('looseDateDayNone'))),
+                    for (var d = 1; d <= maxDay; d++)
+                      DropdownMenuItem<int?>(
+                        key: ValueKey('looseDate-day-$d'),
+                        value: d,
+                        child: Text(ar ? toArabicDigits('$d') : '$d'),
+                      ),
+                  ],
+                  onChanged: (v) => setState(() => _day = v),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: Text(context.tr('cancel'))),
+        FilledButton(key: const ValueKey('looseDate-ok'), onPressed: _ok, child: Text(context.tr('ok'))),
+      ],
+    );
+  }
 }

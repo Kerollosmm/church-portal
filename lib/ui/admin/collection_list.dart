@@ -20,6 +20,13 @@ import 'screen_header.dart';
 
 enum ListFilter { all, visible, hidden, unconfirmed }
 
+enum PriestStatusFilter { all, serving, departed }
+
+String priestStatus(Map<String, dynamic> data) {
+  final s = data['status']?.toString() ?? '';
+  return s.isEmpty ? 'serving' : s;
+}
+
 /// Sorted for display: orderable collections by `order`, others by
 /// order/weekday then start time, then id.
 List<AdminDoc> sortAdminDocs(CollectionDef def, List<AdminDoc> docs) {
@@ -35,12 +42,21 @@ List<AdminDoc> sortAdminDocs(CollectionDef def, List<AdminDoc> docs) {
   return list;
 }
 
-/// Docs that match the screen filter, the list filter and the search text.
-List<AdminDoc> filterAdminDocs(CollectionDef def, List<AdminDoc> docs, {String query = '', ListFilter filter = ListFilter.all}) {
+/// Docs that match the screen filter, the list filter, optional priest status filter, and the search text.
+List<AdminDoc> filterAdminDocs(
+  CollectionDef def,
+  List<AdminDoc> docs, {
+  String query = '',
+  ListFilter filter = ListFilter.all,
+  PriestStatusFilter statusFilter = PriestStatusFilter.all,
+}) {
   final q = query.trim().toLowerCase();
   return [
     for (final d in docs)
       if (def.matches(d.data) &&
+          (def.name != 'priests' ||
+              statusFilter == PriestStatusFilter.all ||
+              priestStatus(d.data) == statusFilter.name) &&
           switch (filter) {
             ListFilter.all => true,
             ListFilter.visible => d.data['visible'] != false,
@@ -68,6 +84,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
   final Map<String, ({AdminBackend repo, String collection, String title})> _pendingEntries = {};
   final Set<String> _purging = {};
   ListFilter _filter = ListFilter.all;
+  PriestStatusFilter _priestFilter = PriestStatusFilter.all;
   late Stream<List<AdminDoc>> _stream = widget.repo.watch(widget.def.name);
   late Stream<List<AdminDoc>>? _entriesStream =
       widget.def.name == 'categories' ? widget.repo.watch('entries') : null;
@@ -81,6 +98,9 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     if (old.def.name != widget.def.name || old.repo != widget.repo) {
       _stream = widget.repo.watch(widget.def.name);
       _entriesStream = widget.def.name == 'categories' ? widget.repo.watch('entries') : null;
+    }
+    if (old.def.id != widget.def.id || old.def.name != widget.def.name) {
+      _priestFilter = PriestStatusFilter.all;
     }
   }
 
@@ -132,7 +152,16 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
       backgroundColor: context.pal.background,
       floatingActionButton: FloatingActionButton.extended(
         heroTag: 'add-${def.id}',
-        onPressed: () => def.name == 'pages' ? _openNewPageChooser(context) : _openEditor(context, null),
+        onPressed: () {
+          if (def.name == 'pages') {
+            _openNewPageChooser(context);
+          } else {
+            final extra = def.name == 'priests' && _priestFilter != PriestStatusFilter.all
+                ? <String, Object?>{'status': _priestFilter.name}
+                : const <String, Object?>{};
+            _openEditor(context, null, extraDefaults: extra);
+          }
+        },
         icon: const Icon(Icons.add),
         label: Text(context.tr('add')),
       ),
@@ -153,7 +182,13 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
                   .toList());
           _lastDocs = all.where((d) => !isSoftDeleted(d.data) || _pendingDelete.isPending(d.id)).toList();
           final visible = all.where((d) => !isSoftDeleted(d.data) && !_pendingDelete.isPending(d.id)).toList();
-          final docs = filterAdminDocs(def, visible, query: _search.text, filter: _filter);
+          final docs = filterAdminDocs(
+            def,
+            visible,
+            query: _search.text,
+            filter: _filter,
+            statusFilter: def.name == 'priests' ? _priestFilter : PriestStatusFilter.all,
+          );
           _checkLazyPurge(snap.data!, def);
 
           if (def.name == 'categories' && _entriesStream != null) {
@@ -321,6 +356,24 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
             onPressed: () => _openOnSite(context),
           ),
         ]),
+        if (def.name == 'priests') ...[
+          const SizedBox(height: 8),
+          Wrap(spacing: 6, runSpacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: [
+            for (final s in PriestStatusFilter.values)
+              ChoiceChip(
+                key: ValueKey('priestFilter-${s.name}'),
+                label: Text(switch (s) {
+                  PriestStatusFilter.all => context.tr('filter_all'),
+                  PriestStatusFilter.serving => context.tr('opt_serving'),
+                  PriestStatusFilter.departed => context.tr('opt_departed'),
+                }),
+                selected: _priestFilter == s,
+                showCheckmark: false,
+                labelStyle: TextStyle(color: _priestFilter == s ? context.pal.onBar : context.pal.primary),
+                onSelected: (_) => setState(() => _priestFilter = s),
+              ),
+          ]),
+        ],
         const SizedBox(height: 8),
         Wrap(spacing: 6, runSpacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: [
           for (final f in ListFilter.values)
@@ -465,6 +518,26 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     );
   }
 
+  Widget _namedDeleteButton(BuildContext context, {required Key key, required VoidCallback onPressed}) => Tooltip(
+        message: context.tr('delete'),
+        child: TextButton.icon(
+          key: key,
+          onPressed: onPressed,
+          icon: Icon(Icons.delete_outline, color: context.pal.alert, size: 18),
+          label: Text(context.tr('delete'), style: TextStyle(color: context.pal.alert)),
+        ),
+      );
+
+  Widget _openOnSiteButton(BuildContext context, AdminDoc d, String itemPath) => Tooltip(
+        message: context.tr('openItemOnSite'),
+        child: TextButton.icon(
+          key: ValueKey('openItem-${d.id}'),
+          onPressed: () => _openOnSite(context, itemPath),
+          icon: const Icon(Icons.open_in_new_rounded, size: 18),
+          label: Text(context.tr('openOnSite')),
+        ),
+      );
+
   Widget _categoryTile(
     BuildContext context,
     AdminDoc d, {
@@ -495,14 +568,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
         ),
       ],
     ];
-    final openItem = itemPath == null
-        ? null
-        : IconButton(
-            key: ValueKey('openItem-${d.id}'),
-            tooltip: context.tr('openItemOnSite'),
-            icon: const Icon(Icons.open_in_new_rounded),
-            onPressed: () => _openOnSite(context, itemPath),
-          );
+    final openItem = itemPath == null ? null : _openOnSiteButton(context, d, itemPath);
     return Card(
       key: ValueKey(d.id),
       margin: const EdgeInsets.only(bottom: 10),
@@ -530,23 +596,17 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
                 context.tr('updatedBy', {'t': fmtDateTime(updated), 'u': d.updatedBy.isEmpty ? '—' : d.updatedBy}),
                 style: TextStyle(fontSize: 11, color: context.pal.muted),
               ),
-            if (narrow && (moves.isNotEmpty || openItem != null)) Wrap(children: [...moves, ?openItem]),
+            if (narrow && moves.isNotEmpty) Wrap(children: moves),
           ]),
           onTap: () => _openEditor(context, d),
           trailing: Row(mainAxisSize: MainAxisSize.min, children: [
             if (!narrow) ...moves,
-            if (!narrow && openItem != null) openItem,
             IconButton(
+              key: ValueKey('visibility-${d.id}'),
               tooltip: context.tr(hidden ? 'show' : 'hide'),
               icon: Icon(hidden ? Icons.visibility_off_outlined : Icons.visibility_outlined,
                   color: hidden ? context.pal.muted : context.pal.success),
               onPressed: () => _setVisible(context, d, hidden),
-            ),
-            IconButton(
-              key: ValueKey('delete-${d.id}'),
-              tooltip: context.tr('delete'),
-              icon: Icon(Icons.delete_outline, color: context.pal.alert),
-              onPressed: () => _deleteCategory(d),
             ),
           ]),
         ),
@@ -563,14 +623,32 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
           for (final e in entries) _entryRow(context, entriesDef, e),
         Padding(
           padding: const EdgeInsets.fromLTRB(12, 4, 12, 10),
-          child: Align(
-            alignment: AlignmentDirectional.centerStart,
-            child: OutlinedButton.icon(
-              key: ValueKey('addEntryIn-${d.id}'),
-              onPressed: () => _openEditor(context, null, targetDef: entriesDef, extraDefaults: {'categoryId': d.id}),
-              icon: const Icon(Icons.add),
-              label: Text(context.tr('addSectionItem')),
-            ),
+          child: Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 8,
+            runSpacing: 4,
+            children: [
+              OutlinedButton.icon(
+                key: ValueKey('addEntryIn-${d.id}'),
+                onPressed: () => _openEditor(context, null, targetDef: entriesDef, extraDefaults: {'categoryId': d.id}),
+                icon: const Icon(Icons.add),
+                label: Text(context.tr('addSectionItem')),
+              ),
+              Wrap(
+                spacing: 4,
+                runSpacing: 4,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  ?openItem,
+                  _namedDeleteButton(
+                    context,
+                    key: ValueKey('delete-${d.id}'),
+                    onPressed: () => _deleteCategory(d),
+                  ),
+                ],
+              ),
+            ],
           ),
         ),
       ]),
@@ -598,40 +676,46 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     final hidden = e.data['visible'] == false;
     final unconfirmed = e.data['sample'] == true;
     final sub = _subtitle(context, e, entriesDef);
-    return ListTile(
-      key: ValueKey('entry-${e.id}'),
-      dense: true,
-      contentPadding: const EdgeInsetsDirectional.only(start: 20, end: 8),
-      leading: Icon(Icons.subdirectory_arrow_left_rounded, size: 18, color: context.pal.muted),
-      title: Wrap(
-        crossAxisAlignment: WrapCrossAlignment.center,
-        spacing: 6,
-        runSpacing: 4,
-        children: [
-          Text(_title(e, entriesDef),
-              style: TextStyle(fontWeight: FontWeight.w600, color: hidden ? context.pal.muted : context.pal.ink)),
-          _Tag(context.tr(hidden ? 'hidden' : 'visibleTag'),
-              hidden ? context.pal.muted : context.pal.success),
-          if (unconfirmed) _Tag(context.tr('sampleTag'), context.pal.goldText),
-        ],
-      ),
-      subtitle: sub.isEmpty ? null : Text(sub),
-      onTap: () => _openEditor(context, e, targetDef: entriesDef),
-      trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-        IconButton(
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      ListTile(
+        key: ValueKey('entry-${e.id}'),
+        dense: true,
+        contentPadding: const EdgeInsetsDirectional.only(start: 20, end: 8),
+        leading: Icon(Icons.subdirectory_arrow_left_rounded, size: 18, color: context.pal.muted),
+        title: Wrap(
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 6,
+          runSpacing: 4,
+          children: [
+            Text(_title(e, entriesDef),
+                style: TextStyle(fontWeight: FontWeight.w600, color: hidden ? context.pal.muted : context.pal.ink)),
+            _Tag(context.tr(hidden ? 'hidden' : 'visibleTag'),
+                hidden ? context.pal.muted : context.pal.success),
+            if (unconfirmed) _Tag(context.tr('sampleTag'), context.pal.goldText),
+          ],
+        ),
+        subtitle: sub.isEmpty ? null : Text(sub),
+        onTap: () => _openEditor(context, e, targetDef: entriesDef),
+        trailing: IconButton(
+          key: ValueKey('visibilityEntry-${e.id}'),
           tooltip: context.tr(hidden ? 'show' : 'hide'),
           icon: Icon(hidden ? Icons.visibility_off_outlined : Icons.visibility_outlined,
               color: hidden ? context.pal.muted : context.pal.success),
           onPressed: () => _setVisible(context, e, hidden, targetDef: entriesDef),
         ),
-        IconButton(
-          key: ValueKey('deleteEntry-${e.id}'),
-          tooltip: context.tr('delete'),
-          icon: Icon(Icons.delete_outline, color: context.pal.alert),
-          onPressed: () => _deleteItem(e, targetDef: entriesDef),
+      ),
+      Padding(
+        padding: const EdgeInsetsDirectional.fromSTEB(44, 0, 8, 4),
+        child: Align(
+          alignment: AlignmentDirectional.centerEnd,
+          child: _namedDeleteButton(
+            context,
+            key: ValueKey('deleteEntry-${e.id}'),
+            onPressed: () => _deleteItem(e, targetDef: entriesDef),
+          ),
         ),
-      ]),
-    );
+      ),
+    ]);
   }
 
   Widget _tile(BuildContext context, AdminDoc d, {int? dragIndex, List<AdminDoc>? docs}) {
@@ -639,12 +723,21 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     final unconfirmed = d.data['sample'] == true;
     final stopped = d.data.containsKey('active') && d.data['active'] == false;
     final expired = _isExpired(def, d.data);
+    final isDepartedPriest = def.name == 'priests' && priestStatus(d.data) == 'departed';
     final sub = _subtitle(context, d);
     final updated = d.updatedAt;
     final narrow = MediaQuery.sizeOf(context).width < 600;
     // Missing = on (PR #14), but only collections with detail routes have pages.
     final details = detailKindForCollection(def.name) != null && d.data['detailsEnabled'] != false;
     final itemPath = itemPublicPathFor(def, d.id, d.data, english: !context.isAr);
+    final sameGroupUp = dragIndex != null &&
+        docs != null &&
+        dragIndex > 0 &&
+        (def.name != 'priests' || priestStatus(docs[dragIndex - 1].data) == priestStatus(d.data));
+    final sameGroupDown = dragIndex != null &&
+        docs != null &&
+        dragIndex < docs.length - 1 &&
+        (def.name != 'priests' || priestStatus(docs[dragIndex + 1].data) == priestStatus(d.data));
     // Single-tap alternative to dragging (WCAG 2.5.7).
     final moves = <Widget>[
       if (dragIndex != null && docs != null) ...[
@@ -652,90 +745,102 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
           key: ValueKey('moveUp-${d.id}'),
           tooltip: context.tr('moveUp'),
           icon: const Icon(Icons.arrow_upward),
-          onPressed: dragIndex == 0 ? null : () => _reorder(context, docs, dragIndex, dragIndex - 1),
+          onPressed: !sameGroupUp ? null : () => _reorder(context, docs, dragIndex, dragIndex - 1),
         ),
         IconButton(
           key: ValueKey('moveDown-${d.id}'),
           tooltip: context.tr('moveDown'),
           icon: const Icon(Icons.arrow_downward),
-          onPressed: dragIndex == docs.length - 1 ? null : () => _reorder(context, docs, dragIndex, dragIndex + 1),
+          onPressed: !sameGroupDown ? null : () => _reorder(context, docs, dragIndex, dragIndex + 1),
         ),
       ],
     ];
     // The item's own detail page when it has one (else the toolbar's
     // "open on site" shows the collection page).
-    final openItem = itemPath == null
-        ? null
-        : IconButton(
-            key: ValueKey('openItem-${d.id}'),
-            tooltip: context.tr('openItemOnSite'),
-            icon: const Icon(Icons.open_in_new_rounded),
-            onPressed: () => _openOnSite(context, itemPath),
-          );
+    final openItem = itemPath == null ? null : _openOnSiteButton(context, d, itemPath);
     return Card(
       key: ValueKey(d.id),
       margin: const EdgeInsets.only(bottom: 8),
       color: hidden ? context.pal.surfaceAlt.withValues(alpha: 0.7) : context.pal.surface,
-      child: ListTile(
-        leading: dragIndex != null
-            ? ReorderableDragStartListener(index: dragIndex, child: const Icon(Icons.drag_indicator))
-            : null,
-        title: Wrap(
-          crossAxisAlignment: WrapCrossAlignment.center,
-          spacing: 6,
-          runSpacing: 4,
-          children: [
-            Text(_title(d),
-                style: TextStyle(
-                    fontWeight: FontWeight.w700, color: hidden ? context.pal.muted : context.pal.ink)),
-            if (def.hasVisible)
-              _Tag(context.tr(hidden ? 'hidden' : 'visibleTag'),
-                  hidden ? context.pal.muted : context.pal.success),
-            if (stopped)
-              _Tag(context.tr('stoppedTag'), context.pal.alert),
-            if (expired)
-              _Tag(context.tr('expiredTag'), context.pal.muted),
-            if (unconfirmed)
-              _Tag(context.tr('sampleTag'), context.pal.goldText),
-          ],
-        ),
-        subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          // Own line: the title row keeps its width on phones.
-          if (details)
-            Padding(
-              padding: const EdgeInsets.only(top: 2, bottom: 2),
-              child: _Tag(context.tr('detailPageBadge'), context.pal.primary, margin: EdgeInsetsDirectional.zero),
-            ),
-          if (sub.isNotEmpty) Text(sub),
-          if (updated != null)
-            Text(
-              context.tr('updatedBy', {'t': fmtDateTime(updated), 'u': d.updatedBy.isEmpty ? '—' : d.updatedBy}),
-              style: TextStyle(fontSize: 11, color: context.pal.muted),
-            ),
-          // Phones: the move buttons (and the item's page link, which every
-          // item has since PR #14) get their own row so the title keeps its width.
-          if (narrow && (moves.isNotEmpty || openItem != null))
-            Wrap(children: [...moves, ?openItem]),
-        ]),
-        onTap: () => _openEditor(context, d),
-        trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-          if (!narrow) ...moves,
-          if (!narrow && openItem != null) openItem,
-          if (def.hasVisible)
-            IconButton(
-              tooltip: context.tr(hidden ? 'show' : 'hide'),
-              icon: Icon(hidden ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                  color: hidden ? context.pal.muted : context.pal.success),
-              onPressed: () => _setVisible(context, d, hidden),
-            ),
-          IconButton(
-            key: ValueKey('delete-${d.id}'),
-            tooltip: context.tr('delete'),
-            icon: Icon(Icons.delete_outline, color: context.pal.alert),
-            onPressed: () => _confirmDelete(d),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        ListTile(
+          leading: dragIndex != null
+              ? ReorderableDragStartListener(index: dragIndex, child: const Icon(Icons.drag_indicator))
+              : null,
+          title: Wrap(
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 6,
+            runSpacing: 4,
+            children: [
+              Text(_title(d),
+                  style: TextStyle(
+                      fontWeight: FontWeight.w700, color: hidden ? context.pal.muted : context.pal.ink)),
+              if (def.hasVisible)
+                _Tag(context.tr(hidden ? 'hidden' : 'visibleTag'),
+                    hidden ? context.pal.muted : context.pal.success),
+              if (isDepartedPriest)
+                _Tag(context.tr('opt_departed'), context.pal.muted),
+              if (stopped)
+                _Tag(context.tr('stoppedTag'), context.pal.alert),
+              if (expired)
+                _Tag(context.tr('expiredTag'), context.pal.muted),
+              if (unconfirmed)
+                _Tag(context.tr('sampleTag'), context.pal.goldText),
+            ],
           ),
-        ]),
-      ),
+          subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            // Own line: the title row keeps its width on phones.
+            if (details)
+              Padding(
+                padding: const EdgeInsets.only(top: 2, bottom: 2),
+                child: _Tag(context.tr('detailPageBadge'), context.pal.primary, margin: EdgeInsetsDirectional.zero),
+              ),
+            if (sub.isNotEmpty) Text(sub),
+            if (updated != null)
+              Text(
+                context.tr('updatedBy', {'t': fmtDateTime(updated), 'u': d.updatedBy.isEmpty ? '—' : d.updatedBy}),
+                style: TextStyle(fontSize: 11, color: context.pal.muted),
+              ),
+            // Phones: the move buttons get their own row so the title keeps its width.
+            if (narrow && moves.isNotEmpty) Wrap(children: moves),
+          ]),
+          onTap: () => _openEditor(context, d),
+          trailing: (!narrow && moves.isNotEmpty) || def.hasVisible
+              ? Row(mainAxisSize: MainAxisSize.min, children: [
+                  if (!narrow) ...moves,
+                  if (def.hasVisible)
+                    IconButton(
+                      key: ValueKey('visibility-${d.id}'),
+                      tooltip: context.tr(hidden ? 'show' : 'hide'),
+                      icon: Icon(hidden ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                          color: hidden ? context.pal.muted : context.pal.success),
+                      onPressed: () => _setVisible(context, d, hidden),
+                    ),
+                ])
+              : null,
+        ),
+        const Divider(height: 1),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(8, 2, 8, 4),
+          child: SizedBox(
+            width: double.infinity,
+            child: Wrap(
+              alignment: openItem != null ? WrapAlignment.spaceBetween : WrapAlignment.end,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 8,
+              runSpacing: 4,
+              children: [
+                ?openItem,
+                _namedDeleteButton(
+                  context,
+                  key: ValueKey('delete-${d.id}'),
+                  onPressed: () => _confirmDelete(d),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ]),
     );
   }
 
@@ -753,16 +858,21 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
   }
 
   Future<void> _reorder(BuildContext context, List<AdminDoc> docs, int from, int to) async {
-    // onReorderItem already adjusts [to] for the removed item.
-    final ids = [for (final d in docs) d.id];
-    ids.insert(to, ids.removeAt(from));
+    final list = [...docs];
+    final moved = list.removeAt(from);
+    list.insert(to, moved);
+    final movedStatus = def.name == 'priests' ? priestStatus(moved.data) : null;
+    // Serving and departed priests share the `priests` collection: keep
+    // each status group in its own order range (0+ vs 1000+) and never mix.
+    final ids = [
+      for (final d in list)
+        if (movedStatus == null || priestStatus(d.data) == movedStatus) d.id,
+    ];
     final messenger = ScaffoldMessenger.of(context);
     final ok = context.tr('orderSaved');
     final failed = context.tr('saveFailed', {'e': '{e}'});
     try {
-      // Serving and departed priests share the `priests` collection: departed
-      // fathers are numbered from 1000 so the two lists never collide.
-      await widget.repo.reorder(def.name, ids, base: reorderBase(def));
+      await widget.repo.reorder(def.name, ids, base: reorderBase(def, status: movedStatus));
       messenger.showSnackBar(SnackBar(content: Text(ok), duration: const Duration(seconds: 2)));
     } catch (e) {
       messenger.showSnackBar(SnackBar(content: Text(failed.replaceAll('{e}', '$e'))));
@@ -1105,7 +1215,8 @@ String? itemPublicPathFor(CollectionDef def, String id, Map<String, dynamic> dat
 }
 
 /// First `order` value minus 10 for [def]'s reorder (BUG-13).
-int reorderBase(CollectionDef def) => def.id == 'departedPriests' ? 1000 : 0;
+int reorderBase(CollectionDef def, {String? status}) =>
+    (def.id == 'departedPriests' || status == 'departed') ? 1000 : 0;
 
 class _Tag extends StatelessWidget {
   final String text;

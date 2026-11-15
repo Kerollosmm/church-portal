@@ -580,8 +580,6 @@ List<AdminDest> adminDestinations(String role) => [
           group: AdminGroup.announcements),
       // Church
       AdminDest('priests', adminIcon('priests'), 'الآباء الكهنة', 'Priests', group: AdminGroup.church),
-      AdminDest('departedPriests', adminIcon('departed'), 'الآباء المتنيحون', 'Departed fathers',
-          group: AdminGroup.church),
       AdminDest('saints', adminIcon('saints'), 'شفعاء الكنيسة', 'Patron saints', group: AdminGroup.church),
       AdminDest('milestones', adminIcon('milestones'), 'محطات تاريخية', 'Milestones', group: AdminGroup.church),
       const AdminDest('church', Icons.church_outlined, 'بيانات الكنيسة', 'Church info', group: AdminGroup.church),
@@ -634,10 +632,16 @@ class AdminDashboard extends StatefulWidget {
   State<AdminDashboard> createState() => _AdminDashboardState();
 }
 
+String _normalizeAdminDest(String id) => switch (id) {
+      'entries' => 'categories',
+      'departedPriests' => 'priests',
+      _ => id,
+    };
+
 class _AdminDashboardState extends State<AdminDashboard> {
   final UnsavedGuardRegistry _unsaved = UnsavedGuardRegistry();
   final List<StreamSubscription> _purgeSubs = [];
-  late String _current = widget.initial == 'entries' ? 'categories' : widget.initial;
+  late String _current = _normalizeAdminDest(widget.initial);
   late Stream<List<AdminDoc>> _messagesStream = widget.repo.watch('contact_messages');
 
   @override
@@ -679,7 +683,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
   }
 
   Future<void> _open(String id) async {
-    final target = id == 'entries' ? 'categories' : id;
+    final target = _normalizeAdminDest(id);
     if (target == _current) return;
     if (_unsaved.isDirty) {
       final discard = await confirmDiscardChanges(context);
@@ -765,7 +769,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
               )
             : _ownerOnly();
     }
-    final def = collectionById(_current == 'entries' ? 'categories' : _current);
+    final def = collectionById(_normalizeAdminDest(_current));
     if (def == null) return OverviewScreen(repo: repo, role: widget.role, onOpen: _open);
     return CollectionListScreen(key: ValueKey(def.id), repo: repo, def: def);
   }

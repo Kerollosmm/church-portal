@@ -151,13 +151,17 @@ void main() {
       expect(keys, containsAll(['instagram', 'bishopAr', 'bishopEn', 'phones', 'altars', 'lat', 'lng', 'facebook']));
     });
 
-    test('departed-fathers screen filters priests by status (missing = serving)', () {
-      final departed = collectionById('departedPriests')!;
-      final serving = collectionById('priests')!;
-      expect(departed.matches({'status': 'departed'}), isTrue);
-      expect(departed.matches({'status': 'serving'}), isFalse);
-      expect(serving.matches(const {}), isTrue);
-      expect(departed.newDefaults['status'], 'departed');
+    test('priests collection includes serving & departed; departedPriests is merged', () {
+      expect(collectionById('departedPriests'), isNull);
+      final priests = collectionById('priests')!;
+      expect(priests.matches({'status': 'departed'}), isTrue);
+      expect(priests.matches({'status': 'serving'}), isTrue);
+      expect(priests.matches(const {}), isTrue);
+      expect(priests.fields.firstWhere((f) => f.key == 'status').defaultOption, 'serving');
+      expect(priestStatus({'status': 'departed'}), 'departed');
+      expect(priestStatus(const {}), 'serving');
+      expect(reorderBase(priests), 0);
+      expect(reorderBase(priests, status: 'departed'), 1000);
     });
 
     test('firestore.rules allow-lists cover every admin field and every seed key', () {
@@ -264,7 +268,7 @@ void main() {
         expect(extra.rowRequireAnyOf, ['titleAr', 'titleEn'], reason: c.id);
         expect(extra.subFields.skip(2).map((f) => f.type), everyElement(FieldType.multiline));
 
-        expect(fd(c, 'image').group, FieldGroup.media, reason: c.id);
+        expect(fd(c, 'image').group, FieldGroup.basic, reason: c.id);
         final show = fd(c, 'showDetailImages');
         expect([show.group, show.missingBool, show.newBool], [FieldGroup.media, true, true], reason: c.id);
         final gallery = fd(c, 'gallery');
@@ -278,7 +282,10 @@ void main() {
         // doubles as the primary phone / external link (ItemDetails.fromMap).
         final phone = switch (c.name) { 'clinics' => 'bookingPhone', 'facilities' => 'phone', _ => 'contactPhone' };
         final link = c.name == 'activities' ? 'link' : 'externalUrl';
-        for (final k in [phone, 'whatsapp', 'whatsappUrl', 'facebookUrl', 'youtubeUrl', 'instagramUrl', link,
+        final phoneGroup =
+            ['saints', 'milestones'].contains(c.name) ? FieldGroup.contacts : FieldGroup.basic;
+        expect(fd(c, phone).group, phoneGroup, reason: '${c.id}.$phone');
+        for (final k in ['whatsapp', 'whatsappUrl', 'facebookUrl', 'youtubeUrl', 'instagramUrl', link,
           'externalLabelAr', 'externalLabelEn', 'contactNoteAr', 'contactNoteEn']) {
           expect(fd(c, k).group, FieldGroup.contacts, reason: '${c.id}.$k');
         }
@@ -370,7 +377,7 @@ void main() {
       expect(path('c1', 'clinics', on, english: true), '/clinics/c1?lang=en');
       expect(path('f1', 'facilities', on), '/public-services/f1');
       expect(path('p1', 'priests', on), '/about/priests/p1');
-      expect(path('p2', 'departedPriests', on), '/about/priests/p2');
+      expect(path('p2', 'priests', {...on, 'status': 'departed'}), '/about/priests/p2');
       expect(path('s1', 'saints', on), '/about/saints/s1');
       expect(path('h1', 'milestones', on), '/about/milestones/h1');
       // Untouched items (no field) have a page since PR #14.
@@ -441,10 +448,11 @@ void main() {
       await tester.enterText(find.byKey(const ValueKey('field-specialty')), 'dental');
       await tester.enterText(find.byKey(const ValueKey('field-specialtyAr')), 'الأسنان');
       await tester.enterText(find.byKey(const ValueKey('field-doctorName')), 'د. مينا');
-      // The booking phone sits in the collapsible "Contacts & links" group (PR #12).
-      await tester.tap(find.byKey(const ValueKey('group-contacts')));
-      await tester.pumpAndSettle();
+      // Primary phone sits at the top in the open basic section (P2-24);
+      // order sits inside the collapsible "Advanced options" card.
       await tester.enterText(find.byKey(const ValueKey('field-bookingPhone')), '010 1234 5678');
+      await tester.tap(find.byKey(const ValueKey('group-advanced')));
+      await tester.pumpAndSettle();
       await tester.enterText(find.byKey(const ValueKey('field-order')), 'abc'); // invalid
       await tester.tap(find.byKey(const Key('editor-save')));
       await tester.pumpAndSettle();
@@ -2356,16 +2364,16 @@ void main() {
   });
 
   group('PR 3E: P2-18 grouped navigation, badge, season hub & owner guards', () {
-    testWidgets('shows 7 editor groups (19 entries) for editor and all 8 groups (24 entries) for owner', (tester) async {
+    testWidgets('shows 7 editor groups (18 entries) for editor and all 8 groups (23 entries) for owner', (tester) async {
       tester.view.physicalSize = const Size(1280, 2600);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.reset);
 
       final editorDests = adminDestinations(AdminRoles.editor);
       final ownerDests = adminDestinations(AdminRoles.owner);
-      expect(editorDests, hasLength(19));
-      expect(ownerDests, hasLength(24));
-      expect(ownerDests.map((d) => d.icon).toSet(), hasLength(24));
+      expect(editorDests, hasLength(18));
+      expect(ownerDests, hasLength(23));
+      expect(ownerDests.map((d) => d.icon).toSet(), hasLength(23));
       expect(editorDests.any((d) => d.group == AdminGroup.ownerSettings), isFalse);
 
       final repo = _TestAdminBackend();
@@ -2941,6 +2949,254 @@ void main() {
       expect(find.byKey(const ValueKey('attention-all-clear')), findsOneWidget);
     });
   });
+
+  group('PR 3F: P2-20, P2-22, P2-24 — priests merge, row actions & top-of-form layout', () {
+    testWidgets('P2-20: serving/departed filter chips, defaulted add, isolated reorder ranges, & legacy dest',
+        (tester) async {
+      tester.view.physicalSize = const Size(1200, 2200);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final repo = _TestAdminBackend(initialCollections: {
+        'priests': [
+          AdminDoc('s1', {'name': 'أبونا مينا', 'rank': 'priest', 'order': 10, 'visible': true}), // missing=serving
+          AdminDoc('s2', {'name': 'أبونا بشوي', 'rank': 'priest', 'status': 'serving', 'order': 20, 'visible': true}),
+          AdminDoc('d1', {'name': 'أبونا مرقس', 'rank': 'hegumen', 'status': 'departed', 'order': 1010, 'visible': true}),
+          AdminDoc('d2', {'name': 'أبونا بولس', 'rank': 'priest', 'status': 'departed', 'order': 1020, 'visible': true}),
+        ],
+      });
+      await tester.pumpWidget(_app(
+        CollectionListScreen(repo: repo, def: collectionById('priests')!),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      // Default 'all' shows all 4, and blocks moving across groups.
+      expect(find.text('أبونا مينا'), findsOneWidget);
+      expect(find.text('أبونا مرقس'), findsOneWidget);
+      expect(tester.widget<IconButton>(find.byKey(const ValueKey('moveDown-s2'))).onPressed, isNull);
+      expect(tester.widget<IconButton>(find.byKey(const ValueKey('moveUp-d1'))).onPressed, isNull);
+
+      // Reordering s2 up in 'all' view only sends serving IDs with base 0.
+      await tester.tap(find.byKey(const ValueKey('moveUp-s2')));
+      await tester.pumpAndSettle();
+      expect(repo.reorderCalls.last.collection, 'priests');
+      expect(repo.reorderCalls.last.ids, ['s2', 's1']);
+      expect(repo.reorderCalls.last.base, 0);
+
+      // Serving filter shows only serving priests.
+      await tester.tap(find.byKey(const ValueKey('priestFilter-serving')));
+      await tester.pumpAndSettle();
+      expect(find.text('أبونا مينا'), findsOneWidget);
+      expect(find.text('أبونا بشوي'), findsOneWidget);
+      expect(find.text('أبونا مرقس'), findsNothing);
+
+      // Departed filter shows only departed priests, reorders with base 1000 only departed IDs.
+      await tester.tap(find.byKey(const ValueKey('priestFilter-departed')));
+      await tester.pumpAndSettle();
+      expect(find.text('أبونا مينا'), findsNothing);
+      expect(find.text('أبونا مرقس'), findsOneWidget);
+      expect(find.text('أبونا بولس'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('moveDown-d1')));
+      await tester.pumpAndSettle();
+      expect(repo.reorderCalls.last.collection, 'priests');
+      expect(repo.reorderCalls.last.ids, ['d2', 'd1']);
+      expect(repo.reorderCalls.last.base, 1000);
+
+      // Adding under departed filter defaults status to 'departed' on save.
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const ValueKey('field-name')), 'أبونا يوسف');
+      await tester.tap(find.byKey(const Key('editor-save')));
+      await tester.pumpAndSettle();
+      expect(repo.savedDocs.last.data['status'], 'departed');
+
+      // Deep linking legacy 'departedPriests' destination normalizes to 'priests'.
+      await tester.pumpWidget(ProviderScope(
+        child: _app(
+          AdminDashboard(
+            repo: repo,
+            uid: 'u-ed',
+            email: 'editor@church.org',
+            role: AdminRoles.editor,
+            onSignOut: () {},
+            initial: 'departedPriests',
+          ),
+          locale: const Locale('ar'),
+        ),
+      ));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('priestFilter-departed')), findsOneWidget);
+    });
+
+    testWidgets('P2-22: row tap opens editor, openItem uses external-link icon, delete is separated & named',
+        (tester) async {
+      tester.view.physicalSize = const Size(1200, 2000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final repo = _TestAdminBackend(initialCollections: {
+        'priests': [
+          AdminDoc('p1', {'name': 'أبونا مينا', 'rank': 'priest', 'status': 'serving', 'visible': true}),
+        ],
+        'categories': [
+          AdminDoc('cat1', {'nameAr': 'قسم الشباب', 'slug': 'youth', 'visible': true, 'order': 10}),
+        ],
+        'entries': [
+          AdminDoc('e1', {'categoryId': 'cat1', 'titleAr': 'اجتماع الخدام', 'visible': true, 'order': 10}),
+        ],
+      });
+
+      await tester.pumpWidget(_app(
+        CollectionListScreen(repo: repo, def: collectionById('priests')!),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      // openItem-<id> uses open_in_new_rounded and has a clear Arabic label/tooltip.
+      final openBtn = find.byKey(const ValueKey('openItem-p1'));
+      expect(openBtn, findsOneWidget);
+      expect(find.descendant(of: openBtn, matching: find.byIcon(Icons.open_in_new_rounded)), findsOneWidget);
+      expect(find.descendant(of: openBtn, matching: find.text('عرض بالموقع')), findsOneWidget);
+
+      // Delete has visible text label and sits in bottom row, vertically below visibility eye icon.
+      final visFinder = find.byKey(const ValueKey('visibility-p1'));
+      final delFinder = find.byKey(const ValueKey('delete-p1'));
+      expect(find.descendant(of: delFinder, matching: find.text('حذف')), findsOneWidget);
+      expect(tester.getTopLeft(delFinder).dy, greaterThan(tester.getBottomLeft(visFinder).dy));
+
+      // Tapping the row opens DocEditor.
+      await tester.tap(find.text('أبونا مينا'));
+      await tester.pumpAndSettle();
+      expect(find.byType(DocEditor), findsOneWidget);
+      await tester.tap(find.byType(CloseButton));
+      await tester.pumpAndSettle();
+
+      // Categories & sub-entries also separate delete from visibility, and category uses open_in_new_rounded.
+      await tester.pumpWidget(_app(
+        CollectionListScreen(repo: repo, def: collectionById('categories')!),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+      final visEntry = find.byKey(const ValueKey('visibilityEntry-e1'));
+      final delEntry = find.byKey(const ValueKey('deleteEntry-e1'));
+      final openCat = find.byKey(const ValueKey('openItem-cat1'));
+      expect(find.descendant(of: openCat, matching: find.byIcon(Icons.open_in_new_rounded)), findsOneWidget);
+      expect(find.descendant(of: delEntry, matching: find.text('حذف')), findsOneWidget);
+      expect(tester.getTopLeft(delEntry).dy, greaterThanOrEqualTo(tester.getBottomLeft(visEntry).dy));
+    });
+
+    testWidgets('P2-24: phone & photo open at top; advanced card validates while closed & renders cleanly at 320px/200%',
+        (tester) async {
+      tester.view.physicalSize = const Size(1200, 3000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      // 1. Facilities: phone field is visible immediately without tapping any ExpansionTile.
+      final facDef = collectionById('facilities')!;
+      await tester.pumpWidget(_app(
+        DocEditor(
+            key: const ValueKey('fac-new'),
+            title: 'Facility',
+            fields: facDef.fields,
+            def: facDef,
+            popOnSave: false,
+            onSave: (_) async {}),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('field-phone')), findsOneWidget);
+      expect(find.byKey(const Key('imageUploadBtn')), findsOneWidget);
+
+      // 2. Priests: photo, name, rank are top fields above groupCard-advanced; Arabic title is "خيارات متقدمة".
+      final priestDef = collectionById('priests')!;
+      Map<String, dynamic>? saved;
+      await tester.pumpWidget(_app(
+        DocEditor(
+          key: const ValueKey('priest-layout'),
+          title: 'Priest',
+          fields: priestDef.fields,
+          def: priestDef,
+          popOnSave: false,
+          data: const {'name': 'أبونا مينا', 'rank': 'priest', 'status': 'serving'},
+          onSave: (d) async => saved = d,
+        ),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      final photoY = tester.getTopLeft(find.byKey(const Key('imageUploadBtn'))).dy;
+      final nameY = tester.getTopLeft(find.byKey(const ValueKey('field-name'))).dy;
+      final rankY = tester.getTopLeft(find.byKey(const ValueKey('field-rank'))).dy;
+      final advCardY = tester.getTopLeft(find.byKey(const ValueKey('groupCard-advanced'))).dy;
+      expect(photoY, lessThan(nameY));
+      expect(nameY, lessThan(rankY));
+      expect(rankY, lessThan(advCardY));
+      expect(find.descendant(of: find.byKey(const ValueKey('groupCard-advanced')), matching: find.text('خيارات متقدمة')),
+          findsOneWidget);
+
+      // Put invalid input into advanced field while closed -> save opens the card and blocks save.
+      await tester.pumpWidget(_app(
+        DocEditor(
+          key: const ValueKey('priest-bad-adv'),
+          title: 'Priest',
+          fields: priestDef.fields,
+          def: priestDef,
+          popOnSave: false,
+          data: const {'name': 'أبونا مينا', 'rank': 'priest', 'status': 'serving', 'order': 'bad'},
+          onSave: (d) async => saved = d,
+        ),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('field-order')).hitTestable(), findsNothing);
+      await tester.tap(find.byKey(const Key('editor-save')));
+      await tester.pumpAndSettle();
+      expect(saved, isNull);
+      expect(find.byKey(const ValueKey('field-order')).hitTestable(), findsOneWidget);
+
+      // Valid values under closed advanced card still save without needing to expand it.
+      saved = null;
+      await tester.pumpWidget(_app(
+        DocEditor(
+          key: const ValueKey('priest-valid-adv'),
+          title: 'Priest',
+          fields: priestDef.fields,
+          def: priestDef,
+          popOnSave: false,
+          data: const {'name': 'أبونا مينا', 'rank': 'priest', 'status': 'serving', 'nameEn': 'Fr. Mina', 'order': 15},
+          onSave: (d) async => saved = d,
+        ),
+        locale: const Locale('en'),
+      ));
+      await tester.pumpAndSettle();
+      expect(find.descendant(of: find.byKey(const ValueKey('groupCard-advanced')), matching: find.text('Advanced options')),
+          findsOneWidget);
+      await tester.enterText(find.byKey(const ValueKey('field-contactPhone')), '01012345678');
+      await tester.tap(find.byKey(const Key('editor-save')));
+      await tester.pumpAndSettle();
+      expect(saved, {'contactPhone': '01012345678'});
+
+      // 3. Narrow 320px at 200% text in both RTL & LTR without overflow.
+      tester.view.physicalSize = const Size(320, 6000);
+      tester.platformDispatcher.textScaleFactorTestValue = 2.0;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      for (final locale in [const Locale('ar'), const Locale('en')]) {
+        await tester.pumpWidget(_app(
+          DocEditor(
+              key: ValueKey('priest-320-${locale.languageCode}'),
+              title: 'Priest',
+              fields: priestDef.fields,
+              def: priestDef,
+              popOnSave: false,
+              onSave: (_) async {}),
+          locale: locale,
+        ));
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull, reason: 'locale=${locale.languageCode}');
+      }
+    });
+  });
 }
 
 class _TestAdminBackend extends AdminBackend {
@@ -2948,6 +3204,8 @@ class _TestAdminBackend extends AdminBackend {
   final Map<String, Map<String, dynamic>> docs = {};
   final List<String> deletedIds = [];
   final List<String> savedPaths = [];
+  final List<({String collection, String? id, Map<String, dynamic> data})> savedDocs = [];
+  final List<({String collection, List<String> ids, int base})> reorderCalls = [];
   final List<({String collection, String id, Map<String, dynamic> data})> updates = [];
   final List<({String uid, String email, String role})> setAdminCalls = [];
   bool failDelete = false;
@@ -2982,7 +3240,10 @@ class _TestAdminBackend extends AdminBackend {
   }
 
   @override
-  Future<String> save(String collection, String? id, Map<String, dynamic> data) async => id ?? 'new';
+  Future<String> save(String collection, String? id, Map<String, dynamic> data) async {
+    savedDocs.add((collection: collection, id: id, data: Map<String, dynamic>.from(data)));
+    return id ?? 'new';
+  }
 
   @override
   Future<void> update(String collection, String id, Map<String, dynamic> data) async {
@@ -3004,7 +3265,9 @@ class _TestAdminBackend extends AdminBackend {
   }
 
   @override
-  Future<void> reorder(String collection, List<String> ids, {int base = 0}) async {}
+  Future<void> reorder(String collection, List<String> ids, {int base = 0}) async {
+    reorderCalls.add((collection: collection, ids: List<String>.from(ids), base: base));
+  }
 
   @override
   Future<void> setAdmin(String uid, {required String email, required String role}) async {

@@ -117,6 +117,32 @@ bool isValidLooseDate(String v) {
   return isCalendarDate(y, mo, int.parse(m[3]!));
 }
 
+/// Days in Gregorian calendar [month] (1–12) of [year].
+int daysInMonth(int year, int month) => DateTime.utc(year, month + 1, 0).day;
+
+/// Parses a `looseDate` string (`YYYY`, `YYYY-MM`, or `YYYY-MM-DD`, including
+/// Arabic-Indic digits) into parts; returns null when blank or invalid.
+({int year, int? month, int? day})? parseLooseDate(String raw) {
+  final v = normalizeDigits(raw.trim());
+  if (!isValidLooseDate(v)) return null;
+  final m = _looseDateRe.firstMatch(v)!;
+  return (
+    year: int.parse(m[1]!),
+    month: m[2] == null ? null : int.parse(m[2]!),
+    day: m[3] == null ? null : int.parse(m[3]!),
+  );
+}
+
+/// Formats `YYYY`, `YYYY-MM`, or `YYYY-MM-DD` from [looseDate] picker parts.
+String formatLooseDateValue(int year, [int? month, int? day]) {
+  final y = year.clamp(1000, 9999).toString().padLeft(4, '0');
+  if (month == null) return y;
+  final m = month.clamp(1, 12);
+  if (day == null) return '$y-${two(m)}';
+  final d = day.clamp(1, daysInMonth(year.clamp(1000, 9999), m));
+  return '$y-${two(m)}-${two(d)}';
+}
+
 /// http(s) URL with a host; with [allowPath] also an in-app path like /clinics.
 bool isValidUrl(String v, {bool allowPath = false}) {
   if (allowPath && v.startsWith('/') && !v.startsWith('//')) return !v.contains(' ');

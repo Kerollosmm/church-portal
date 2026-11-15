@@ -599,6 +599,8 @@ void main() {
       )));
       await tester.pumpAndSettle();
       await tester.enterText(find.byKey(const ValueKey('field-titleAr')), 'تنويه');
+      await tester.tap(find.byKey(const ValueKey('group-advanced')));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('linkPick-link')));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('linkTarget-/page/donate')));

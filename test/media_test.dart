@@ -453,12 +453,6 @@ void main() {
           onSave: (d) async => onSaved(d),
         ));
 
-    // The cover image sits in the collapsible "Photos & gallery" group (PR #12).
-    Future<void> openMedia(WidgetTester tester) async {
-      await tester.tap(find.byKey(const ValueKey('group-media')));
-      await tester.pumpAndSettle();
-    }
-
     testWidgets('is optional, uploads a picked image on save', (tester) async {
       tester.view.physicalSize = const Size(1200, 3200);
       tester.view.devicePixelRatio = 1;
@@ -476,7 +470,6 @@ void main() {
       saved = null;
       await tester.pumpWidget(editor(media: media, onSaved: (d) => saved = d));
       await tester.enterText(find.byKey(const ValueKey('field-nameAr')), 'القديس');
-      await openMedia(tester);
       await tester.tap(find.byKey(const Key('imageUploadBtn')));
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('imagePreviewPending')), findsOneWidget);
@@ -503,7 +496,6 @@ void main() {
         onSaved: (d) => saved = d,
       ));
       await tester.pumpAndSettle();
-      await openMedia(tester);
       await tester.tap(find.byKey(const Key('imageUrlBtn')));
       await tester.pumpAndSettle();
       await tester.enterText(find.byKey(const Key('imageUrlInput')), 'http://insecure.example.org/a.jpg');
@@ -536,7 +528,6 @@ void main() {
         onSaved: (d) => saved = d,
       ));
       await tester.pumpAndSettle();
-      await openMedia(tester);
       await tester.tap(find.byKey(const Key('imageRemoveBtn')));
       await tester.pumpAndSettle();
       expect(find.text('No image (optional)'), findsOneWidget);
@@ -559,7 +550,6 @@ void main() {
         onSave: (d) async => throw StateError('permission-denied'),
       )));
       await tester.enterText(find.byKey(const ValueKey('field-nameAr')), 'القديس');
-      await openMedia(tester);
       await tester.tap(find.byKey(const Key('imageUploadBtn')));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('editor-save')));
@@ -582,7 +572,6 @@ void main() {
         prepareImage: (_) async => throw const ImageTooLargeException(),
         onSave: (d) async {},
       )));
-      await openMedia(tester);
       await tester.tap(find.byKey(const Key('imageUploadBtn')));
       await tester.pumpAndSettle();
       expect(find.textContaining('Image too large'), findsOneWidget);
@@ -790,6 +779,7 @@ void main() {
         ],
       }));
       await tester.pumpAndSettle();
+      await expand(tester, 'advanced');
       await tester.enterText(find.byKey(const ValueKey('field-nameEn')), 'St Moses');
       await expand(tester, 'details');
       await tester.enterText(find.byKey(const ValueKey('field-detailsAr')), 'جديد');
@@ -855,6 +845,7 @@ void main() {
         },
       ));
       await tester.pumpAndSettle();
+      await expand(tester, 'advanced');
       await tester.enterText(find.byKey(const ValueKey('field-nameEn')), 'St Moses');
       await expand(tester, 'media');
       await tester.tap(find.byKey(const Key('galleryUploadBtn')));

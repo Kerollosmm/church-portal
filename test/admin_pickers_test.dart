@@ -5,6 +5,7 @@
 // instant. The field shows the friendly 12-hour reading under it.
 import 'package:church_portal/domain/cairo_time.dart';
 import 'package:church_portal/ui/admin/admin_schema.dart';
+import 'package:church_portal/ui/admin/admin_strings.dart';
 import 'package:church_portal/ui/admin/admin_validators.dart';
 import 'package:church_portal/ui/admin/doc_editor.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -254,6 +255,97 @@ void main() {
       final row = (saved?['dayEvents'] as List).single as String;
       final parts = row.split('\u001f');
       expect(parts.take(4).toList(), ['2027-04-30', '', '18:00', '21:00']);
+    });
+  });
+
+  group('PR 3F (P2-26): looseDate picker & labels without HH:mm', () {
+    test('parseLooseDate and formatLooseDateValue handle year, year-month, full dates, and Arabic digits', () {
+      expect(daysInMonth(2024, 2), 29);
+      expect(daysInMonth(2025, 2), 28);
+      expect(parseLooseDate(''), isNull);
+      expect(parseLooseDate('95'), isNull);
+      expect(parseLooseDate('1995'), (year: 1995, month: null, day: null));
+      expect(parseLooseDate('١٩٩٥'), (year: 1995, month: null, day: null));
+      expect(parseLooseDate('2009-03'), (year: 2009, month: 3, day: null));
+      expect(parseLooseDate('٢٠٠٩-٠٣-٠٨'), (year: 2009, month: 3, day: 8));
+      expect(parseLooseDate('2025-02-29'), isNull);
+
+      expect(formatLooseDateValue(1995), '1995');
+      expect(formatLooseDateValue(2009, 3), '2009-03');
+      expect(formatLooseDateValue(2009, 3, 8), '2009-03-08');
+      expect(formatLooseDateValue(2025, 2, 31), '2025-02-28');
+    });
+
+    test('no admin field label, hint, or string exposes "HH:mm"', () {
+      for (final def in adminCollections) {
+        for (final f in def.fields) {
+          expect(f.labelAr, isNot(contains('HH:mm')), reason: '${def.id}.${f.key}');
+          expect(f.labelEn, isNot(contains('HH:mm')), reason: '${def.id}.${f.key}');
+          expect(f.hintAr, isNot(contains('HH:mm')), reason: '${def.id}.${f.key}');
+          expect(f.hintEn, isNot(contains('HH:mm')), reason: '${def.id}.${f.key}');
+          for (final sf in f.subFields) {
+            expect(sf.labelAr, isNot(contains('HH:mm')), reason: '${def.id}.${f.key}.${sf.key}');
+            expect(sf.labelEn, isNot(contains('HH:mm')), reason: '${def.id}.${f.key}.${sf.key}');
+          }
+        }
+      }
+      for (final doc in [churchInfoDoc, todaySettingsDoc, seasonSettingsDoc, appSettingsDoc]) {
+        for (final f in doc.fields) {
+          expect(f.labelAr, isNot(contains('HH:mm')), reason: '${doc.path}.${f.key}');
+          expect(f.labelEn, isNot(contains('HH:mm')), reason: '${doc.path}.${f.key}');
+          expect(f.hintAr, isNot(contains('HH:mm')), reason: '${doc.path}.${f.key}');
+          expect(f.hintEn, isNot(contains('HH:mm')), reason: '${doc.path}.${f.key}');
+        }
+      }
+      for (final e in adminStrings.entries) {
+        expect(e.value[0], isNot(contains('HH:mm')), reason: e.key);
+        expect(e.value[1], isNot(contains('HH:mm')), reason: e.key);
+      }
+    });
+
+    testWidgets('priests looseDate shows Arabic months in picker, supports year-only & manual typing', (tester) async {
+      final def = collectionById('priests')!;
+      Map<String, dynamic>? saved;
+      await _pump(
+        tester,
+        DocEditor(
+          title: 'كاهن',
+          fields: def.fields,
+          def: def,
+          popOnSave: false,
+          data: const {'name': 'أبونا مينا', 'rank': 'priest', 'status': 'serving'},
+          onSave: (d) async => saved = {...?saved, ...d},
+        ),
+        locale: const Locale('ar'),
+      );
+
+      // looseDate remains directly editable (not readOnly), unlike strict time/date fields.
+      final ordField = tester.widget<TextField>(
+          find.descendant(of: find.byKey(const ValueKey('field-ordinationDate')), matching: find.byType(TextField)));
+      expect(ordField.readOnly, isFalse);
+
+      // Open the picker and choose Year + Arabic Month + Day.
+      await tester.tap(find.byKey(const ValueKey('pick-ordinationDate')));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const ValueKey('looseDate-year')), '2009');
+      await tester.tap(find.byKey(const ValueKey('looseDate-month')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('مارس').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(DropdownButtonFormField<int?>, 'بدون يوم'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('٨').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('looseDate-ok')));
+      await tester.pumpAndSettle();
+      expect(_text(tester, 'ordinationDate'), '2009-03-08');
+
+      // Typing a bare year still validates & saves cleanly.
+      await tester.enterText(find.byKey(const ValueKey('field-hegumenDate')), '1995');
+      await tester.tap(find.byKey(const Key('editor-save')));
+      await tester.pumpAndSettle();
+      expect(saved?['ordinationDate'], '2009-03-08');
+      expect(saved?['hegumenDate'], '1995');
     });
   });
 }

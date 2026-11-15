@@ -229,6 +229,14 @@ const Map<String, List<String>> adminStrings = {
   'task_priest': ['أضف كاهن', 'Add a priest'],
   'task_donations': ['صفحة تبرعات', 'Donations page'],
   'sectionsSummary': ['ملخص الأقسام', 'Sections summary'],
+  // Phase 3F: advanced options card & looseDate picker (P2-24, P2-26)
+  'advancedOptions': ['خيارات متقدمة', 'Advanced options'],
+  'looseDateYear': ['السنة', 'Year'],
+  'looseDateMonth': ['الشهر (اختياري)', 'Month (optional)'],
+  'looseDateDay': ['اليوم (اختياري)', 'Day (optional)'],
+  'looseDateYearOnly': ['سنة فقط (بدون شهر)', 'Year only (no month)'],
+  'looseDateDayNone': ['بدون يوم', 'No day'],
+  'looseDateHint': ['اكتب السنة أو اختر من التقويم', 'Type a year or pick from the calendar'],
 };
 
 /// Idempotently registers [adminStrings] in the runtime localization table.

@@ -52,17 +52,17 @@ The same matrix is enforced server-side by `firestore.rules` (`isAdmin()` vs `is
 
 ## Navigation (`adminDestinations(role)`, PR 3E / P2-18)
 
-Grouped under `AdminGroup` headers (`nav-group-<name>`): **7 editor groups** (`19` entries) plus an **8th owner-only group** (`ownerSettings`, `5` entries, `24` unique icons total):
+Grouped under `AdminGroup` headers (`nav-group-<name>`): **7 editor groups** (`18` entries) plus an **8th owner-only group** (`ownerSettings`, `5` entries, `23` unique entries total):
 1. **Home (`home`)**: `overview` («الرئيسية»)
 2. **Schedule (`schedule`)**: `liturgies`, `meetings`, `today`, `seasons` (merged `SeasonsHubScreen` with tabs «قائمة المواسم» / «تجهيز الموسم»; deep links to `'seasonPreset'` open tab 1)
 3. **Announcements (`announcements`)**: `alerts`, `app` (`AppAndNotificationsScreen` — announcements & notification types; technical VAPID/queues/APK moved to owner `advanced`)
-4. **Church (`church`)**: `priests`, `departedPriests`, `saints`, `milestones`, `church`
+4. **Church (`church`)**: `priests` (unified serving + departed priests with «الكل / يخدم / متنيح» filter, P2-20), `saints`, `milestones`, `church`
 5. **Services & activities (`services`)**: `facilities`, `activities`, `clinics`
 6. **Pages (`pages`)**: `features`, `pages` («الصفحات المخصصة», with «صفحة تبرعات جاهزة» template since PR 3D), `categories` («الأقسام المخصصة» — unified sections & nested items since PR 3D)
 7. **Messages (`messages`)**: `messages` (shows unread inbox count badge `nav-messages-badge` when > 0)
 8. **Settings (owner only, `ownerSettings`)**: `admins`, `contactCats`, `assistant`, `seasonSettings`, `advanced` (`AdvancedOwnerScreen` with tabs `System & queues` and `App install & APK`).
 
-Deep links to `'entries'` redirect to `'categories'`, and `'seasonPreset'` routes to `SeasonsHubScreen(initialTab: 1)`.
+Deep links to `'entries'` redirect to `'categories'`, `'departedPriests'` redirect to `'priests'`, and `'seasonPreset'` routes to `SeasonsHubScreen(initialTab: 1)`.
 The **Clinics** screen («العيادات») stays in the menu although the owner deleted the 11 placeholder clinics (3 Nov 2026) and
 switched the clinics section off (4 Nov 2026) — it is where real clinics would be added before switching the
 section back on.
@@ -252,26 +252,19 @@ own-save rule (no scroll jump to the top after Save, BUG-12).
 For each `CollectionDef`:
 - Live list (`repo.watch(collection)`) filtered by the screen filter (`def.matches`), sorted by `sortAdminDocs`
   (orderable: by `order`; others by `order`/weekday, then start, then id).
-- **Search** (all string values + id) and filter chips **all / visible / hidden / unconfirmed**; "showing N of M".
+- **Search** (all string values + id) and filter chips **all / visible / hidden / unconfirmed**; "showing N of M". On **Priests (`priests`)**, an extra status filter row **«الكل / يخدم / متنيح»** (`priestFilter-all/serving/departed`) lets editors filter serving vs departed fathers; tapping **Add** while filtered to «متنيح» defaults `status: 'departed'`.
 - **Open on site** (`Key('admin-openOnSite')`, «عرض بالموقع»): opens `CollectionDef.publicPath` (e.g. `/clinics`,
   `+ ?lang=en` when the dashboard is in English — `publicPathFor`) in a new tab on web (`Uri.base.resolve`), or
   navigates there on mobile.
 - Tile: title (`titleKeys`), subtitle (weekday, date, time range, season/stage/category/type/specialty labels,
-  ⛔ inactive, start/end), tags *Hidden* / *Unconfirmed*, "updated by … at …". Since PR #12 an item whose detail page is on (since PR #14: unless
-  `detailsEnabled` is explicitly `false`) shows a **«صفحة تفاصيل / Detail page»** badge (own line under the title), and when it is also
-  visible an **Open detail page on site** icon (`ValueKey('openItem-<id>')`, `itemPublicPathFor`: e.g.
-  `/clinics/<id>`, `/about/saints/<id>`; built from `detailPathFor` — the public routes exist since PR #13). On
-  phones (< 600 px) that icon sits in the row under the subtitle with the move buttons (PR #14), so the title keeps
-  its width now that almost every row has it.
+  ⛔ inactive, start/end), tags *Hidden* / *Unconfirmed* / *Departed*, "updated by … at …". Tapping the row opens `DocEditor`; bottom action bar holds **«عرض بالموقع»** (`ValueKey('openItem-<id>')`, external-link icon `Icons.open_in_new_rounded`) when visible with a detail page, and a clearly named **«حذف» / «Delete»** button (`ValueKey('delete-<id>')` / `deleteEntry-<id>`) separated vertically from the top-right 👁 visibility toggle across `_tile`, `_categoryTile`, and `_entryRow`.
 - The list `StreamBuilder` is keyed by `ObjectKey(_stream)` (also on Messages and Admins, PR #12): after a backend
   switch the old list is never shown while the new one loads.
 - 👁 **hide/show** (`update(visible)`) — only when the collection has a `visible` field (not seasons).
-- **Drag to reorder** — or tap **Move up / Move down** on each tile (`ValueKey('moveUp-<id>')`, WCAG 2.5.7; under
-  600 px they sit in their own row under the subtitle so the title keeps its width) —
+- **Drag to reorder** — or tap **Move up / Move down** on each tile (`ValueKey('moveUp-<id>')`, WCAG 2.5.7) —
   (`reorder(collection, ids, base:)` → `order` = base + 10, 20, 30… in one batch) for orderable collections — clinics,
-  facilities, activities, priests, departed fathers, saints, milestones — and only when search is empty, filter = all
-  and > 1 item. **Departed fathers use base 1000** (`reorderBase(def)`: 1010, 1020…) because they share the
-  `priests` collection with serving priests, so the two lists never get colliding `order` values (BUG-13).
+  facilities, activities, priests, saints, milestones — and only when search is empty, filter = all
+  and > 1 item. Serving and departed priests never cross-reorder; **departed fathers use base 1000** (`reorderBase(def, status: 'departed')`: 1010, 1020…) and `_reorder` sends only that status group's IDs, so the two groups keep non-colliding `order` ranges inside `priests` (BUG-13, P2-20).
   Liturgies and meetings use the numeric **Order** field instead.
 - `DocEditor.save`: when `onSave` fails with a **`TimeoutException`** the images uploaded for the document are
   **kept** — Firestore may still commit the queued write pointing at them; any other error deletes them (BUG-13).
@@ -303,41 +296,37 @@ For each `CollectionDef`:
 | clinics | clinics | ✔ | ✔ | ✔ | `active` missing = true |
 | facilities | facilities | ✔ | ✔ | ✔ | "Public services" |
 | activities | activities | ✔ | ✔ | ✔ | category choice |
-| priests | priests (status = serving) | ✔ | ✔ | ✔ | missing status = serving |
-| departedPriests | priests (status = departed) | ✔ | ✔ | ✔ | new docs start with `status: departed` |
+| priests | priests | ✔ | ✔ | ✔ | unified serving & departed (`status`: `serving`/`departed`, missing = serving; filter chips; separate `0+` / `1000+` order ranges) |
 | saints | saints | ✔ | ✔ | – | |
 | milestones | milestones | ✔ | ✔ | – | icon choice |
 
 `CollectionDef.publicPath` drives the **Open on site** button.
 
 ### Generic form (`DocEditor`, `doc_editor.dart`)
-- Field widgets by `FieldType`: text, multiline, integer, decimal, boolean, time (HH:mm), weekday, weekdays (chips),
+- Field widgets by `FieldType`: text, multiline, integer, decimal, boolean, time (stored 24h `"HH:mm"`, UI labels free of `HH:mm`), weekday, weekdays (chips),
   dateTime / date (Cairo), looseDate, choice (labels via `choiceLabel`/`opt_*`), url, phone, objectList, **image**.
-- **Pickers (ADR-049):** time / date / dateTime fields (also inside rows) are read-only with a clock / calendar
+- **Pickers (ADR-049, P2-26):** time / date / dateTime fields (also inside rows) are read-only with a clock / calendar
   suffix (`pick-<key>`; optional fields also `clear-<key>`); time = `showTimePicker` in 12-hour AM/PM mode (ص/م in Arabic,
   `alwaysUse24HourFormat: false`), stored strictly 24-hour `HH:mm`, the field's helper shows the 12-hour reading
   (`formatTimeArabic/Latin`, «٠٦:٣٠ م» / "06:30 PM"; date-times also the date);
-  date = `showDatePicker` (2000–2100), `YYYY-MM-DD`; dateTime = date then time, `YYYY-MM-DD HH:mm` Cairo. Formatters
+  date = `showDatePicker` (2000–2100), `YYYY-MM-DD`; dateTime = date then time, `YYYY-MM-DD HH:mm` Cairo; **`looseDate`** (priests' `ordinationDate`, `hegumenDate`, `departedDate`) stays manually editable (accepting year alone like `1995`, `YYYY-MM`, or `YYYY-MM-DD`) AND provides a calendar picker (`_LooseDatePickerDialog` using `monthNamesAr` / `fullMonthNamesEn`, `daysInMonth`, `parseLooseDate`, `formatLooseDateValue`). Formatters
   `formatPickedTime/Date/DateTime`, prefill `parseFieldTime/DateTime` in `admin_validators.dart`. Stored types unchanged.
-- Validation (`admin_validators.dart` `validateFieldValue`): required, max length (`effectiveMaxLength`), `HH:mm`,
+- Validation (`admin_validators.dart` `validateFieldValue`): required, max length (`effectiveMaxLength`), 24h time validation,
   real calendar dates (rejects 2027-02-30), loose dates, numeric ranges (Arabic digits accepted), URLs (`https://…`
   or in-app path where `allowPath`), phones (`^\+?[0-9]{5,15}$` after normalising). Cross-field
   `validateDocument`: `requireAnyOf` (weekday or date → «needWeekdayOrDate»), end after start (except liturgies),
   `endsAt` after `startsAt`.
 - New docs write all collected values (+ `newDefaults`); **existing docs write only changed fields**
   (`changedFields`, deep compare) with merge — never overwriting another admin's concurrent edits to other fields.
-- **Field groups (PR #12):** `FieldDef.group` — `basic` fields stay open at the top; on the 7 detail collections
+- **Top-of-form layout, Field groups & Advanced options (PR #12, PR 3F / P2-24):** `FieldDef.group` — `basic` fields stay open at the top, and on item/service collections (`priests`, `meetings`, `clinics`, `facilities`, `activities`, `categories`) cover `image` and primary phone (`contactPhone` / `bookingPhone` / `phone`) sit open at the top of `basic` (`saints` and `milestones` keep `_plainContactsGroup`). Secondary fields (English names/descriptions, `order`, `slug`, secondary links, `imageStyle`) carry `advanced: true` and sit in the collapsed **«خيارات متقدمة» (`advancedGroup`)** card (`maintainState: true`); on Save, `_openInvalidGroups()` expands any closed `FieldGroup` or `advancedGroup` containing an invalid field before `_formKey.currentState!.validate()`. On the 7 detail collections
   `details` (**«صفحة التفاصيل والحقول الإضافية»**: «إظهار صفحة التفاصيل / Show the detail page» switch — **on by default** since PR #14 (missing field = on, new items saved with `true`; hint explains that tapping the card opens the full page and that switching it off hides the page and the «التفاصيل» link), details AR/EN ≤ 10,000, up to
   15 *extra fields* rows title AR / title EN ≤ 150 — a title in **either** language is required, checked per row
   by `FieldDef.rowRequireAnyOf` + `validateRowAnyOf` («أدخل عنوانًا بالعربية أو بالإنجليزية», like rules'
-  `validExtraField`) — / value AR/EN ≤ 2000), `media` (**«الصور ومعرض
-  الصور»**: cover `image`, `showDetailImages`, `gallery`) and `contacts` (**«التواصل والروابط»**: `showContacts`,
-  `showSocials`, the collection's own phone — `contactPhone`, clinics `bookingPhone`, facilities `phone` — WhatsApp,
-  WhatsApp group/channel, Facebook, YouTube, Instagram, the external link — `externalUrl`, activities `link` — its
-  button text AR/EN ≤ 80 and how-to-contact notes AR/EN ≤ 500) are `ExpansionTile` cards (`ValueKey('group-<g>')`,
+  `validExtraField`) — / value AR/EN ≤ 2000), `media` (**«معرض الصور الإضافية»**: `showDetailImages`, `gallery`) and `contacts` (**«التواصل والروابط»**: `showContacts`,
+  `showSocials`, WhatsApp, WhatsApp group/channel, Facebook, YouTube, Instagram, external link `externalUrl`/`link`, button text AR/EN ≤ 80 and how-to-contact notes AR/EN ≤ 500) are `ExpansionTile` cards (`ValueKey('group-<g>')`,
   `maintainState: true` so collapsed fields still validate and save) with live pills («مفعّل / Enabled», «3 حقول /
   3 fields», «4 صور / 4 photos», «2 مُعبّأ / 2 filled»). Save with an invalid field in a closed card opens that card.
-  Liturgies, seasons, alerts and church info stay a flat form.
+  Liturgies, seasons, alerts and church info keep their basic layout (with English/`order`/secondary fields under «خيارات متقدمة»).
 - **Split saves (PR #12, `splitSavePayload`):** the editor writes everything else first (it creates a new doc), then
   a non-empty `gallery`, then non-empty `extraFields` — one write with both full lists exceeds the rules' 1,000-
   expression cap. If a later write fails, the earlier ones stay saved, the form stays dirty and a retry sends only

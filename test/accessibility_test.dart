@@ -865,7 +865,7 @@ void main() {
 
   group('admin (BUG-12, BUG-13, BUG-18, WCAG 2.5.7)', () {
     test('departed fathers are numbered from 1000', () {
-      expect(reorderBase(collectionById('departedPriests')!), 1000);
+      expect(reorderBase(collectionById('priests')!, status: 'departed'), 1000);
       expect(reorderBase(collectionById('priests')!), 0);
     });
 
@@ -1062,7 +1062,9 @@ void main() {
         AdminDoc('a', {'name': 'Fr. A', 'status': 'departed', 'order': 1010}),
         AdminDoc('b', {'name': 'Fr. B', 'status': 'departed', 'order': 1020}),
       ]);
-      await tester.pumpWidget(_adminApp(CollectionListScreen(repo: repo, def: collectionById('departedPriests')!)));
+      await tester.pumpWidget(_adminApp(CollectionListScreen(repo: repo, def: collectionById('priests')!)));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('priestFilter-departed')));
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('admin-openOnSite')), findsOneWidget);
       expect(tester.widget<IconButton>(find.byKey(const ValueKey('moveUp-a'))).onPressed, isNull);
