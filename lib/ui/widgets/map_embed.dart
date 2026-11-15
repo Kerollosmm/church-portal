@@ -133,11 +133,15 @@ class _MapInteractionGuardState extends State<MapInteractionGuard> {
             Positioned.fill(
               child: MouseRegion(
                 cursor: SystemMouseCursors.click,
-                child: GestureDetector(
-                  key: const Key('mapInteractShield'),
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () => _setActive(true),
-                  child: Container(
+                child: FocusableActionDetector(
+                  actions: <Type, Action<Intent>>{
+                    ActivateIntent: CallbackAction<ActivateIntent>(onInvoke: (_) => _setActive(true)),
+                  },
+                  child: GestureDetector(
+                    key: const Key('mapInteractShield'),
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => _setActive(true),
+                    child: Container(
                     color: context.pal.shadow(0.08),
                     alignment: Alignment.center,
                     child: Container(
@@ -169,6 +173,7 @@ class _MapInteractionGuardState extends State<MapInteractionGuard> {
                 ),
               ),
             ),
+          ),
           if (_active)
             PositionedDirectional(
               top: 12,
