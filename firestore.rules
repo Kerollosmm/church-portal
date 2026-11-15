@@ -274,8 +274,12 @@ service cloud.firestore {
         || (col == 'liturgies' && validLiturgy(d))
         || (col == 'categories' && validCategory(d, changed))
         || (col == 'entries' && validEntry(d, changed))
-        || (col == 'pages' && validPage(d, changed))
       );
+    }
+
+    function validPageDoc(d) {
+      let changed = changedKeys(d);
+      return common(d, changed) && validPage(d, changed);
     }
 
     // ------------- admin-defined categories, items & pages (ADR-027) -------------
@@ -318,11 +322,9 @@ service cloud.firestore {
     // (their own write, like gallery / extraFields: expression budget).
     function validPagePlacement(d) {
       let p = d.get('placement', 'link');
-      let rawC = d.get('categoryId', '');
-      let c = rawC == null ? '' : rawC;
+      let c = d.get('categoryId', '');
       return p in ['link', 'nav', 'section']
-        && c is string
-        && c.matches(p == 'section' ? '[A-Za-z0-9_-]{1,128}' : '[A-Za-z0-9_-]{0,128}');
+        && (p != 'section' && c == null || (c is string && c.matches(p == 'section' ? '[A-Za-z0-9_-]{1,128}' : '[A-Za-z0-9_-]{0,128}')));
     }
 
     function validPageHeaderFields(d) {
@@ -334,7 +336,8 @@ service cloud.firestore {
 
     function validPage(d, changed) {
       return changed.hasOnly(['slug', 'titleAr', 'titleEn', 'subtitleAr', 'subtitleEn', 'image', 'blocks', 'showInNav',
-                              'placement', 'categoryId', 'featured'].concat(meta()))
+                              'placement', 'categoryId', 'featured',
+                              'visible', 'sample', 'order', 'deletedAt', 'updatedAt', 'updatedBy'])
         && ((resource != null && !changed.hasAny(['slug', 'titleAr', 'titleEn', 'subtitleAr', 'subtitleEn', 'showInNav']))
             || validPageHeaderFields(d))
         && (!('featured' in changed) || d.get('featured', false) is bool)
@@ -361,8 +364,8 @@ service cloud.firestore {
     // https link); donation account <= 120, InstaPay <= 80, wallet <= 30;
     // the whole block <= 9000. Display only: nothing is processed.
     function validPageBlock(b) {
-      return b is string && b.size() <= 9000
-        && b.matches('(image\\x1f[^\\x1f]{0,1000}[^\\x1f]{0,1000}[^\\x1f]{0,1000}[^\\x1f]{0,1000}\\x1f[^\\x1f]{0,1000}[^\\x1f]{0,1000}[^\\x1f]{0,1000}[^\\x1f]{0,1000}\\x1fhttps://[^/ \\x1f]+[.][^/ \\x1f]+([/?#][^ \\x1f]*)?|(heading|paragraph|button|link|donation)\\x1f[^\\x1f]{0,1000}[^\\x1f]{0,1000}[^\\x1f]{0,1000}[^\\x1f]{0,1000}\\x1f[^\\x1f]{0,1000}[^\\x1f]{0,1000}[^\\x1f]{0,1000}[^\\x1f]{0,1000}\\x1f(|/([^/ \\x1f][^ \\x1f]*)?|[Hh][Tt][Tt][Pp][Ss]?://[^/ \\x1f]+[.][^/ \\x1f]+([/?#][^ \\x1f]*)?))\\x1f[^\\x1f]{0,120}\\x1f[^\\x1f]{0,80}\\x1f[^\\x1f]{0,30}');
+      return b is string
+        && b.matches('(image\\x1f(([^\\x1f]{1000}){0,3}[^\\x1f]{0,1000})\\x1f(([^\\x1f]{1000}){0,3}[^\\x1f]{0,1000})\\x1fhttps://[^/ \\x1f]+[.][^/ \\x1f]+([/?#][^ \\x1f]*)?|(heading|paragraph|button|link|donation)\\x1f(([^\\x1f]{1000}){0,3}[^\\x1f]{0,1000})\\x1f(([^\\x1f]{1000}){0,3}[^\\x1f]{0,1000})\\x1f(|/([^/ \\x1f][^ \\x1f]*)?|[Hh][Tt][Tt][Pp][Ss]?://[^/ \\x1f]+[.][^/ \\x1f]+([/?#][^ \\x1f]*)?))\\x1f[^\\x1f]{0,120}\\x1f[^\\x1f]{0,80}\\x1f[^\\x1f]{0,30}');
     }
 
     // ---- optional programme details (ADR-041): liturgies, meetings, seasons.
@@ -576,15 +579,21 @@ service cloud.firestore {
     match /{col}/{docId} {
       allow read: if col in ['alerts', 'seasons', 'liturgies', 'meetings', 'activities',
                              'clinics', 'facilities', 'priests', 'milestones', 'saints',
-                             'categories', 'entries', 'pages'];
+                             'categories', 'entries'];
       allow create, update: if col in ['alerts', 'seasons', 'liturgies', 'meetings', 'activities',
                                        'clinics', 'facilities', 'priests', 'milestones', 'saints',
-                                       'categories', 'entries', 'pages']
+                                       'categories', 'entries']
         && isAdmin() && validContent(col, request.resource.data);
       allow delete: if col in ['alerts', 'seasons', 'liturgies', 'meetings', 'activities',
                                'clinics', 'facilities', 'priests', 'milestones', 'saints',
-                               'categories', 'entries', 'pages']
+                               'categories', 'entries']
         && isAdmin();
+    }
+
+    match /pages/{docId} {
+      allow read: if true;
+      allow create, update: if isAdmin() && validPageDoc(request.resource.data);
+      allow delete: if isAdmin();
     }
 
     // ------------------------------- settings -------------------------------

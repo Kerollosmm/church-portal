@@ -42,6 +42,9 @@ import 'ui/widgets/feature_gate.dart';
 NoTransitionPage<void> _page(GoRouterState s, Widget child) =>
     NoTransitionPage(key: s.pageKey, child: FeatureGate(key: ValueKey(s.uri.path), path: s.uri.path, child: child));
 
+String _redirectWithQuery(String target, GoRouterState s) =>
+    s.uri.hasQuery ? '$target?${s.uri.query}' : target;
+
 /// Rewrites `?lang=` to match the selected language (`lang=en` for English,
 /// no parameter for Arabic, the default). Null when the URL already matches.
 String? _syncLangQuery(Uri uri, bool english) {
@@ -208,14 +211,8 @@ GoRouter buildAppRouter(Ref ref, {bool? isWeb, String initialLocation = '/'}) {
           GoRoute(path: '/mass-schedule', pageBuilder: (c, s) => _page(s, const MassSchedulePage())),
           GoRoute(path: '/church-education', pageBuilder: (c, s) => _page(s, const EducationPage())),
           GoRoute(path: '/church-activities', pageBuilder: (c, s) => _page(s, const ActivitiesPage())),
-          GoRoute(
-            path: '/activities',
-            redirect: (_, s) => s.uri.hasQuery ? '/church-activities?${s.uri.query}' : '/church-activities',
-          ),
-          GoRoute(
-            path: '/priests',
-            redirect: (_, s) => s.uri.hasQuery ? '/about?${s.uri.query}' : '/about',
-          ),
+          GoRoute(path: '/activities', redirect: (_, s) => _redirectWithQuery('/church-activities', s)),
+          GoRoute(path: '/priests', redirect: (_, s) => _redirectWithQuery('/about', s)),
           GoRoute(
             path: '/clinics',
             pageBuilder: (c, s) => _page(s, ClinicsPage(initialSpecialty: s.uri.queryParameters['specialty'])),
@@ -232,14 +229,8 @@ GoRouter buildAppRouter(Ref ref, {bool? isWeb, String initialLocation = '/'}) {
                     loadLibrary: notifications_page.loadLibrary,
                     builder: (_) => notifications_page.NotificationsPage(),
                   ))),
-          GoRoute(
-            path: '/notices',
-            redirect: (_, s) => s.uri.hasQuery ? '/notifications?${s.uri.query}' : '/notifications',
-          ),
-          GoRoute(
-            path: '/donations',
-            redirect: (_, s) => s.uri.hasQuery ? '/page/donations?${s.uri.query}' : '/page/donations',
-          ),
+          GoRoute(path: '/notices', redirect: (_, s) => _redirectWithQuery('/notifications', s)),
+          GoRoute(path: '/donations', redirect: (_, s) => _redirectWithQuery('/page/donations', s)),
           // Admin-defined categories and custom pages (ADR-027). Not behind a
           // section switch: each has its own `visible` flag.
           GoRoute(

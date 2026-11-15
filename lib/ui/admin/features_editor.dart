@@ -77,15 +77,15 @@ class _FeaturesScreenState extends State<FeaturesScreen> {
         final editor = _editorKey.currentState;
         final saving = editor?.saving ?? false;
         final dirty = editor?.dirty ?? false;
-        if (changed && !dirty && !saving) {
+        final echo =
+            _loaded && editor != null && isEchoOfEditor(_shown?.data ?? const {}, latest?.data, editor.collect().toMap());
+        if (changed && (!dirty && !saving || echo)) {
           // The snapshot of our own save keeps the form and its scroll position.
-          final echo =
-              _loaded && editor != null && isEchoOfEditor(_shown?.data ?? const {}, latest?.data, editor.collect().toMap());
           if (_loaded && !echo) _editorKey = GlobalKey<FeaturesEditorState>();
           _shown = latest;
           _loaded = true;
         }
-        final stale = changed && dirty && !saving;
+        final stale = changed && (dirty || saving) && !echo;
         final doc = _shown;
         return Column(children: [
           if (stale)

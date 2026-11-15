@@ -47,6 +47,7 @@ Widget buildMapView(BuildContext context, String embedUrl, Widget fallback) {
     });
   }
   return MapInteractionGuard(
+    resetToken: embedUrl,
     onActiveChanged: (active) {
       final iframe = _iframes[viewType];
       if (iframe != null) {

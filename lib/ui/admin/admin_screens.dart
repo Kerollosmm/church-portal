@@ -602,16 +602,16 @@ class _ChurchInfoScreenState extends State<ChurchInfoScreen> {
         final editor = _editorKey.currentState;
         final saving = editor?.saving ?? false;
         final dirty = editor?.dirty ?? false;
-        if (changed && !dirty && !saving) {
+        final echo =
+            _loaded && editor != null && isEchoOfEditor(_shown?.data ?? const {}, latest?.data, editor.collect());
+        if (changed && (!dirty && !saving || echo)) {
           // The snapshot of our own save (only metadata or the values the form
           // already holds changed) keeps the form and its scroll position.
-          final echo =
-              _loaded && editor != null && isEchoOfEditor(_shown?.data ?? const {}, latest?.data, editor.collect());
           if (_loaded && !echo) _editorKey = GlobalKey<DocEditorState>();
           _shown = latest;
           _loaded = true;
         }
-        final stale = changed && dirty && !saving;
+        final stale = changed && (dirty || saving) && !echo;
         final doc = _shown;
         final englishEnabled = widget.doc.path == 'settings/features'
             ? FeatureSettings.fromMap(doc?.data).englishEnabled
@@ -686,10 +686,18 @@ class _MessagesScreenState extends State<MessagesScreen> {
   static const _messagesDef = CollectionDef('contact_messages', '', '', [], []);
   late Stream<List<AdminDoc>> _stream = widget.repo.watch('contact_messages');
   late Stream<AdminDoc?> _config = widget.repo.watchDoc('settings/contact');
+  ScaffoldMessengerState? _messenger;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _messenger = ScaffoldMessenger.maybeOf(context);
+  }
 
   @override
   void dispose() {
     _pendingDelete.dispose();
+    _messenger?.removeCurrentSnackBar();
     super.dispose();
   }
 
@@ -1067,6 +1075,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
           label: undoLabel,
           onPressed: () async {
             if (_pendingDelete.undo(id)) {
+              messenger.removeCurrentSnackBar();
               if (mounted) setState(() {});
               try {
                 await widget.repo.update('contact_messages', id, {'deletedAt': null});

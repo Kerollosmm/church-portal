@@ -376,6 +376,54 @@ void main() {
       expect(find.byKey(const Key('mapInteractShield')), findsOneWidget);
     });
 
+    testWidgets('MapInteractionGuard resets to inactive when resetToken changes', (tester) async {
+      final activeEvents = <bool>[];
+      var token = 'token-1';
+
+      await tester.pumpWidget(
+        MaterialApp(
+          locale: const Locale('ar'),
+          supportedLocales: const [Locale('ar'), Locale('en')],
+          localizationsDelegates: GlobalMaterialLocalizations.delegates,
+          theme: buildTheme(const Locale('ar')),
+          home: StatefulBuilder(
+            builder: (context, setState) => Scaffold(
+              body: Center(
+                child: SizedBox(
+                  width: 400,
+                  height: 300,
+                  child: MapInteractionGuard(
+                    resetToken: token,
+                    onActiveChanged: activeEvents.add,
+                    child: const ColoredBox(color: Colors.blue),
+                  ),
+                ),
+              ),
+              floatingActionButton: FloatingActionButton(
+                onPressed: () => setState(() => token = 'token-2'),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Tap to activate
+      await tester.tap(find.byKey(const Key('mapInteractShield')));
+      await tester.pumpAndSettle();
+      expect(activeEvents.last, isTrue);
+      expect(find.byKey(const Key('mapLockScrollBtn')), findsOneWidget);
+
+      // Change resetToken
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pumpAndSettle();
+
+      // Should automatically reset to inactive
+      expect(activeEvents.last, isFalse);
+      expect(find.byKey(const Key('mapInteractShield')), findsOneWidget);
+      expect(find.byKey(const Key('mapLockScrollBtn')), findsNothing);
+    });
+
     testWidgets('ChurchMap integrates cleanly with MapInteractionGuard mapView', (tester) async {
       const settings = ChurchSettings(
         nameAr: 'كنيسة القديسين',

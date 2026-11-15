@@ -80,12 +80,14 @@ class MapInteractionGuard extends StatefulWidget {
   final Widget child;
   final ValueChanged<bool>? onActiveChanged;
   final bool initialActive;
+  final Object? resetToken;
 
   const MapInteractionGuard({
     super.key,
     required this.child,
     this.onActiveChanged,
     this.initialActive = false,
+    this.resetToken,
   });
 
   @override
@@ -99,6 +101,16 @@ class _MapInteractionGuardState extends State<MapInteractionGuard> {
   void initState() {
     super.initState();
     _active = widget.initialActive;
+  }
+
+  @override
+  void didUpdateWidget(covariant MapInteractionGuard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.resetToken != oldWidget.resetToken) {
+      _setActive(widget.initialActive);
+    } else if (widget.initialActive != oldWidget.initialActive && widget.initialActive != _active) {
+      _setActive(widget.initialActive);
+    }
   }
 
   void _setActive(bool value) {
