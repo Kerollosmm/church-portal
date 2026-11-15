@@ -121,6 +121,15 @@ String whatsappLink(String raw, {String? text}) {
   return '$base?text=${Uri.encodeComponent(text)}';
 }
 
+/// Returns a `https://wa.me/...` link only when [raw] normalizes to an
+/// Egyptian mobile (`01[0125]...`), or `null` for missing / landline /
+/// malformed strings so UI controls never render a broken WhatsApp link.
+String? usableWhatsappLink(String raw, {String? text}) {
+  final n = normalizeEgyptianPhone(raw);
+  if (n == null || !RegExp(r'^01[0125]\d{8}$').hasMatch(n)) return null;
+  return whatsappLink(n, text: text);
+}
+
 String telLink(String raw) {
   final s = normalizeDigits(raw).replaceAll(RegExp(r'[^\d+]'), '');
   return 'tel:$s';

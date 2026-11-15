@@ -578,6 +578,21 @@ void main() {
       expect(isEgyptianMobile('03 555 1234'), isFalse);
       expect(isEgyptianMobile(''), isFalse);
     });
+    test('usableWhatsappLink accepts valid Egyptian mobiles and rejects malformed/landline numbers', () {
+      expect(usableWhatsappLink('0101 234 5678'), 'https://wa.me/201012345678');
+      expect(usableWhatsappLink('+20 111-234-5678'), 'https://wa.me/201112345678');
+      expect(usableWhatsappLink('00201234567890'), 'https://wa.me/201234567890');
+      expect(usableWhatsappLink('٠١٥١٢٣٤٥٦٧٨'), 'https://wa.me/201512345678');
+      expect(usableWhatsappLink('01012345678', text: 'hi'), 'https://wa.me/201012345678?text=hi');
+      expect(usableWhatsappLink(''), isNull);
+      expect(usableWhatsappLink('   '), isNull);
+      expect(usableWhatsappLink('abc'), isNull);
+      expect(usableWhatsappLink('123'), isNull);
+      expect(usableWhatsappLink('010123'), isNull);
+      expect(usableWhatsappLink('010abc12345'), isNull);
+      expect(usableWhatsappLink('03 555 1234'), isNull); // landline
+      expect(usableWhatsappLink('19123'), isNull); // hotline
+    });
     test('errors', () {
       final v = validateContactForm(const ContactFormInput(name: 'M', message: 'hey'));
       expect(v.isValid, isFalse);

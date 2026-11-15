@@ -12,6 +12,8 @@ import '../../domain/cairo_time.dart';
 import '../../domain/contact_categories.dart';
 import '../../domain/features.dart';
 import '../../domain/models.dart';
+import '../../domain/rules.dart' show usableWhatsappLink;
+import '../widgets/cards.dart' show whatsappGreen;
 import 'admin_access.dart';
 import 'admin_schema.dart';
 import 'admin_strings.dart';
@@ -787,6 +789,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
     final open = messageIsOpen(m);
     final created = m['createdAt'];
     final phone = (m['phone'] ?? '').toString();
+    final waUrl = usableWhatsappLink(phone);
     final email = (m['email'] ?? '').toString();
     final notes = (m['adminNotes'] ?? '').toString();
     final cat = cfg.bySlot(m['category'] is String ? m['category'] as String : 'c1');
@@ -841,9 +844,17 @@ class _MessagesScreenState extends State<MessagesScreen> {
           Wrap(spacing: 8, runSpacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: [
             if (phone.isNotEmpty)
               ActionChip(
+                key: ValueKey('msgCall-${d.id}'),
                 avatar: const Icon(Icons.call, size: 16),
                 label: Text(phone, textDirection: TextDirection.ltr),
                 onPressed: () => callPhone(phone),
+              ),
+            if (waUrl != null)
+              ActionChip(
+                key: ValueKey('msgWhatsApp-${d.id}'),
+                avatar: const Icon(Icons.chat_rounded, size: 16, color: whatsappGreen),
+                label: Text(context.tr('whatsapp')),
+                onPressed: () => openUrl(waUrl),
               ),
             if (email.isNotEmpty)
               ActionChip(
@@ -879,6 +890,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
               ])
             else
               TextButton.icon(
+                key: ValueKey('msgToggleStatus-${d.id}'),
                 onPressed: () => _update(context, d, {'status': open ? MessageStatus.handled : MessageStatus.newMsg}),
                 icon: Icon(open ? Icons.check_circle_outline : Icons.undo),
                 label: Text(context.tr(open ? 'markHandled' : 'markNew')),

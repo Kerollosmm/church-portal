@@ -3695,6 +3695,131 @@ void main() {
       }
     });
   });
+
+  group('PR 3H: P2-25 Inbox (MessagesScreen)', () {
+    testWidgets('opens filtered on «محتاجة رد», shows WhatsApp only for usable phones, and «تمّت» removes from default view',
+        (tester) async {
+      tester.view.physicalSize = const Size(1000, 1800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final ctrl = StreamController<List<AdminDoc>>.broadcast();
+      addTearDown(ctrl.close);
+      final repo = _ReactiveAdminBackend(
+        controller: ctrl,
+        initialCollections: {
+          'contact_messages': [
+            AdminDoc('m-mobile', {
+              'name': 'بيشوي',
+              'phone': '01012345678',
+              'message': 'استفسار عن موعد',
+              'status': 'new',
+            }),
+            AdminDoc('m-no-phone', {
+              'name': 'مريم',
+              'email': 'mary@example.org',
+              'message': 'رسالة بالبريد فقط',
+              'status': 'new',
+            }),
+            AdminDoc('m-bad-phone', {
+              'name': 'كيرلس',
+              'phone': 'abc-123',
+              'message': 'رقم غير صالح',
+              'status': 'new',
+            }),
+            AdminDoc('m-landline', {
+              'name': 'يوحنا',
+              'phone': '03 555 1234',
+              'message': 'تليفون أرضي',
+              'status': 'new',
+            }),
+            AdminDoc('m-handled', {
+              'name': 'سارة',
+              'phone': '01212345678',
+              'message': 'رسالة منتهية',
+              'status': 'handled',
+            }),
+          ],
+        },
+      );
+
+      await tester.pumpWidget(_app(MessagesScreen(repo: repo), locale: const Locale('ar')));
+      await tester.pumpAndSettle();
+
+      // Default filter is «محتاجة رد» and only open messages are visible.
+      final newChip = tester.widget<ChoiceChip>(find.byKey(const ValueKey('filter-new')));
+      expect(newChip.selected, isTrue);
+      expect(find.text('محتاجة رد'), findsOneWidget);
+      expect(find.byKey(const ValueKey('m-mobile')), findsOneWidget);
+      expect(find.byKey(const ValueKey('m-no-phone')), findsOneWidget);
+      expect(find.byKey(const ValueKey('m-bad-phone')), findsOneWidget);
+      expect(find.byKey(const ValueKey('m-landline')), findsOneWidget);
+      expect(find.byKey(const ValueKey('m-handled')), findsNothing);
+
+      // Call, WhatsApp and «تمّت» are visible in the same step for a valid mobile.
+      expect(find.byKey(const ValueKey('msgCall-m-mobile')), findsOneWidget);
+      expect(find.byKey(const ValueKey('msgWhatsApp-m-mobile')), findsOneWidget);
+      expect(find.byKey(const ValueKey('msgToggleStatus-m-mobile')), findsOneWidget);
+      expect(find.descendant(of: find.byKey(const ValueKey('m-mobile')), matching: find.text('تمّت')), findsOneWidget);
+
+      // Missing, malformed, and landline phones never get a WhatsApp chip.
+      expect(find.byKey(const ValueKey('msgWhatsApp-m-no-phone')), findsNothing);
+      expect(find.byKey(const ValueKey('msgWhatsApp-m-bad-phone')), findsNothing);
+      expect(find.byKey(const ValueKey('msgWhatsApp-m-landline')), findsNothing);
+
+      // One tap on «تمّت» marks handled and removes it from «محتاجة رد».
+      await tester.tap(find.byKey(const ValueKey('msgToggleStatus-m-mobile')));
+      await tester.pumpAndSettle();
+      expect(repo.collections['contact_messages']!.firstWhere((d) => d.id == 'm-mobile').data['status'], 'handled');
+      expect(find.byKey(const ValueKey('m-mobile')), findsNothing);
+
+      // Switching to handled shows the completed message.
+      await tester.tap(find.byKey(const ValueKey('filter-handled')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('m-mobile')), findsOneWidget);
+      expect(find.byKey(const ValueKey('m-handled')), findsOneWidget);
+    });
+
+    testWidgets('MessagesScreen renders cleanly at 320 px / 200% in RTL & LTR and respects S3', (tester) async {
+      tester.view.physicalSize = const Size(320, 2000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      tester.platformDispatcher.textScaleFactorTestValue = 2.0;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+
+      final repo = _TestAdminBackend(initialCollections: {
+        'contact_messages': [
+          AdminDoc('m1', {
+            'name': 'زائر برقم طويل',
+            'phone': '+20 101 234 5678',
+            'email': 'visitor@example.org',
+            'message': 'أحتاج التواصل مع المكتب الكنسي',
+            'status': 'new',
+            'createdAt': DateTime.utc(2026, 11, 14, 10, 30),
+          }),
+        ],
+      });
+
+      for (final locale in [const Locale('ar'), const Locale('en')]) {
+        await tester.pumpWidget(_app(MessagesScreen(repo: repo), locale: locale));
+        await tester.pumpAndSettle();
+        expect(find.byKey(const ValueKey('msgWhatsApp-m1')), findsOneWidget);
+        expect(tester.takeException(), isNull, reason: 'MessagesScreen 320px locale=${locale.languageCode}');
+        if (locale.languageCode == 'en') {
+          expect(find.text('Needs reply'), findsOneWidget);
+          expect(find.text('Done'), findsOneWidget);
+        } else {
+          final allText = tester
+              .widgetList<Text>(find.byType(Text))
+              .map((t) => t.data ?? t.textSpan?.toPlainText() ?? '')
+              .join(' ');
+          for (final banned in ['Firebase', 'UID', 'App Check', 'Sentry', 'APK', 'HH:mm']) {
+            expect(allText, isNot(contains(banned)));
+          }
+        }
+      }
+    });
+  });
 }
 
 class _TestAdminBackend extends AdminBackend {

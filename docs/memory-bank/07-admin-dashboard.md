@@ -379,10 +379,10 @@ and the Images section are on.
 Newest first (`createdAt`). PR #18 (ADR-028): **box chips** (`box-<id>`) — All, one per contact type of
 `settings/contact` (code defaults when missing; open count in brackets), **Anonymous box** (`inboxBoxOf`:
 `anonymous: true`), and "Other / deleted type" when a message's slot no longer exists; messages without a category
-are general inquiries (c1). Status chips **open** (default, `status == new`) / done / all. Each card: name (or
-«مُرسِل مجهول»), time, type / occasion / 📅 date chips, message, phone (call), email (`mailto:`), internal notes.
+are general inquiries (c1). Status chips **«محتاجة رد» / Needs reply** (default, `status == new`) / **«تمت متابعتها» / Handled** / **«الكل» / All**. Each card: name (or
+«مُرسِل مجهول»), time, type / occasion / 📅 date chips, message, phone call (`msgCall-<id>`), WhatsApp (`msgWhatsApp-<id>`, shown only when `usableWhatsappLink(phone)` returns a valid `wa.me` mobile link — never for missing, malformed, or landline numbers), email (`mailto:`), internal notes.
 Bookings get a **status dropdown** new → contacted → confirmed / declined (`bookingStatus-<id>`); other messages
-**Mark handled / Mark new**. **Notes** (`notes-<id>`, `_NotesDialog`, ≤ 2000 → `adminNotes`), copy, delete with
+get one-tap **«تمّت» / Done** (`msgToggleStatus-<id>`, immediately removing the message from the default «محتاجة رد» filter) or **Mark new**. **Notes** (`notes-<id>`, `_NotesDialog`, ≤ 2000 → `adminNotes`), copy, delete with
 named confirmation (`confirmNamedAction`, `_delete`: names sender or «مُرسِل مجهول» with alert-colored action «حذف»).
 The overview's "new messages" counts `status == new`.
 
