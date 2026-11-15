@@ -256,6 +256,55 @@ void main() {
       await tester.pumpAndSettle();
       expect(store.writes, ['en', 'ar']);
     });
+
+    test('resolveLangSync locks public routes to Arabic and strips ?lang= when englishEnabled is false', () {
+      final deep = resolveLangSync(Uri.parse('/clinics?lang=en&specialty=dental#top'),
+          english: true, englishEnabled: false);
+      expect(deep.english, isFalse);
+      expect(deep.redirect, '/clinics?specialty=dental#top');
+
+      final toggled = resolveLangSync(Uri.parse('/about#altars'),
+          english: true, englishEnabled: false, userToggled: true);
+      expect(toggled.english, isFalse);
+      expect(toggled.redirect, isNull);
+    });
+
+    testWidgets('saved English choice and ?lang=en fall back to Arabic when englishEnabled is false', (tester) async {
+      final raw = jsonDecode(File('assets/seed/seed.json').readAsStringSync()) as Map<String, dynamic>;
+      ((raw['settings'] as Map<String, dynamic>)['features'] as Map<String, dynamic>)['englishEnabled'] = false;
+      final store = _MemoryStore('en');
+      tester.view.physicalSize = const Size(1200, 3000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final container = ProviderContainer(overrides: [
+        repositoryProvider.overrideWithValue(SeedRepository(SeedData(raw))),
+        nowProvider.overrideWith((ref) => Stream.value(CairoTime.at(2026, 11, 1, 12 * 60).toUtc())),
+        languageStoreProvider.overrideWithValue(store),
+      ]);
+      addTearDown(container.dispose);
+      final router = container.read(routerProvider);
+      await tester.pumpWidget(UncontrolledProviderScope(
+        container: container,
+        child: Consumer(builder: (context, ref, _) {
+          final l = ref.watch(localeProvider);
+          return MaterialApp.router(
+            locale: l,
+            supportedLocales: const [Locale('ar'), Locale('en')],
+            localizationsDelegates: GlobalMaterialLocalizations.delegates,
+            routerConfig: router,
+          );
+        }),
+      ));
+      await tester.pumpAndSettle();
+      expect(container.read(localeProvider), const Locale('ar'));
+      expect(router.routerDelegate.currentConfiguration.uri.queryParameters.containsKey('lang'), isFalse);
+
+      router.go('/about?lang=en');
+      await tester.pumpAndSettle();
+      expect(container.read(localeProvider), const Locale('ar'));
+      expect(router.routerDelegate.currentConfiguration.uri.toString(), '/about');
+    });
   });
 
   group('PR #10: per-route canonical / noindex, URL fragments, sitemap', () {

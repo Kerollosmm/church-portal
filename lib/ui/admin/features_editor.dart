@@ -263,45 +263,49 @@ class FeaturesEditorState extends State<FeaturesEditor> {
         _dirty = true;
       });
 
-  FeatureSettings collect() => f.copyWith(
-        heroTitleAr: _t['heroTitleAr']!.text.trim(),
-        heroTitleEn: _t['heroTitleEn']!.text.trim(),
-        heroSubtitleAr: _t['heroSubtitleAr']!.text.trim(),
-        heroSubtitleEn: _t['heroSubtitleEn']!.text.trim(),
-        bannerAr: _t['bannerAr']!.text.trim(),
-        bannerEn: _t['bannerEn']!.text.trim(),
-        bannerLink: _t['bannerLink']!.text.trim(),
-        pageHeaders: {
-          for (final p in CustomizablePages.all)
-            if (_pageCustom(p) case final PageCustom c when !c.isEmpty) p: c,
-        },
-        footer: FooterConfig(
-          showPhones: f.footer.showPhones,
-          showSocials: f.footer.showSocials,
-          showQuickLinks: f.footer.showQuickLinks,
-          noteAr: _t['footerNoteAr']!.text.trim(),
-          noteEn: _t['footerNoteEn']!.text.trim(),
-        ),
-        // Daily mode hides (and so does not validate) the fixed-verse fields:
-        // save them cleared so an over-long hidden draft cannot fail the save.
-        dailyVerse: f.dailyVerse.mode == DailyVerseConfig.fixed
-            ? f.dailyVerse.copyWith(
-                textAr: _t['verseTextAr']!.text.trim(),
-                refAr: _t['verseRefAr']!.text.trim(),
-                textEn: _t['verseTextEn']!.text.trim(),
-                refEn: _t['verseRefEn']!.text.trim())
-            : const DailyVerseConfig(),
-      );
+  FeatureSettings collect() {
+    final baseHeaderEn = f.englishEnabled ? null : _savedBaseline;
+    return f.copyWith(
+      heroTitleAr: _t['heroTitleAr']!.text.trim(),
+      heroTitleEn: baseHeaderEn != null ? baseHeaderEn.heroTitleEn : _t['heroTitleEn']!.text.trim(),
+      heroSubtitleAr: _t['heroSubtitleAr']!.text.trim(),
+      heroSubtitleEn: baseHeaderEn != null ? baseHeaderEn.heroSubtitleEn : _t['heroSubtitleEn']!.text.trim(),
+      bannerAr: _t['bannerAr']!.text.trim(),
+      bannerEn: baseHeaderEn != null ? baseHeaderEn.bannerEn : _t['bannerEn']!.text.trim(),
+      bannerLink: _t['bannerLink']!.text.trim(),
+      pageHeaders: {
+        for (final p in CustomizablePages.all)
+          if (_pageCustom(p) case final PageCustom c when !c.isEmpty) p: c,
+      },
+      footer: FooterConfig(
+        showPhones: f.footer.showPhones,
+        showSocials: f.footer.showSocials,
+        showQuickLinks: f.footer.showQuickLinks,
+        noteAr: _t['footerNoteAr']!.text.trim(),
+        noteEn: baseHeaderEn != null ? baseHeaderEn.footer.noteEn : _t['footerNoteEn']!.text.trim(),
+      ),
+      // Daily mode hides (and so does not validate) the fixed-verse fields:
+      // save them cleared so an over-long hidden draft cannot fail the save.
+      dailyVerse: f.dailyVerse.mode == DailyVerseConfig.fixed
+          ? f.dailyVerse.copyWith(
+              textAr: _t['verseTextAr']!.text.trim(),
+              refAr: _t['verseRefAr']!.text.trim(),
+              textEn: baseHeaderEn != null ? baseHeaderEn.dailyVerse.textEn : _t['verseTextEn']!.text.trim(),
+              refEn: baseHeaderEn != null ? baseHeaderEn.dailyVerse.refEn : _t['verseRefEn']!.text.trim())
+          : const DailyVerseConfig(),
+    );
+  }
 
   PageCustom _pageCustom(String p) {
     String v(String k) => _pages[p]![k]!.text.trim();
+    final saved = f.englishEnabled ? null : _savedBaseline.pageHeader(p);
     return PageCustom(
       titleAr: v('titleAr'),
-      titleEn: v('titleEn'),
+      titleEn: saved != null ? saved.titleEn : v('titleEn'),
       subtitleAr: v('subtitleAr'),
-      subtitleEn: v('subtitleEn'),
+      subtitleEn: saved != null ? saved.subtitleEn : v('subtitleEn'),
       introAr: v('introAr'),
-      introEn: v('introEn'),
+      introEn: saved != null ? saved.introEn : v('introEn'),
     );
   }
 
@@ -700,7 +704,8 @@ class FeaturesEditorState extends State<FeaturesEditor> {
     return ListenableBuilder(
       listenable: Listenable.merge(ctrls.values.toList()),
       builder: (context, _) {
-        final customized = ctrls.values.any((c) => c.text.trim().isNotEmpty);
+        final customized =
+            ctrls.entries.any((e) => (f.englishEnabled || !e.key.endsWith('En')) && e.value.text.trim().isNotEmpty);
         return ExpansionTile(
           key: ValueKey('page-$p'),
           controller: _pageCtl[p],
@@ -739,8 +744,10 @@ class FeaturesEditorState extends State<FeaturesEditor> {
                 child: TextButton.icon(
                   key: ValueKey('pageReset-$p'),
                   onPressed: () => setState(() {
-                    for (final c in ctrls.values) {
-                      c.clear();
+                    for (final e in ctrls.entries) {
+                      if (f.englishEnabled || !e.key.endsWith('En')) {
+                        e.value.clear();
+                      }
                     }
                     _dirty = true;
                   }),

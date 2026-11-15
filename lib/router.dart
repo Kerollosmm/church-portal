@@ -60,6 +60,15 @@ String? _syncLangQuery(Uri uri, bool english) {
   ).toString();
 }
 
+String _withoutLangQuery(Uri uri) {
+  final qp = Map<String, String>.from(uri.queryParameters)..remove('lang');
+  return Uri(
+    path: uri.path.isEmpty ? '/' : uri.path,
+    queryParameters: qp.isEmpty ? null : qp,
+    fragment: uri.hasFragment ? uri.fragment : null,
+  ).toString();
+}
+
 /// What the router does about `?lang=` for one navigation.
 class LangSync {
   /// Location to redirect to (null = keep the URL).
@@ -71,6 +80,8 @@ class LangSync {
 }
 
 /// Bidirectional `?lang=` sync (BUG-07):
+/// - [englishEnabled] == false (P2-27b): public routes are locked to Arabic
+///   and any `?lang=` query parameter is stripped back to the canonical URL.
 /// - [userToggled] (EN/ع button): the URL follows the language.
 /// - an explicit `lang=en` / `lang=ar` (deep link, shared or in-app link,
 ///   Back/Forward): the language follows the URL.
@@ -79,19 +90,17 @@ class LangSync {
 ///   (`context.go('/clinics')`) English is kept and `lang=en` added.
 /// Arabic stays the canonical, parameter-free URL.
 LangSync resolveLangSync(Uri uri,
-    {required bool english, bool userToggled = false, bool fromPlatform = false}) {
+    {required bool english, bool englishEnabled = true, bool userToggled = false, bool fromPlatform = false}) {
+  if (!englishEnabled) {
+    final redirect = uri.queryParameters.containsKey('lang') ? _withoutLangQuery(uri) : null;
+    return LangSync(english: english ? false : null, redirect: redirect);
+  }
   if (userToggled) return LangSync(redirect: _syncLangQuery(uri, english));
   final q = uri.queryParameters['lang'];
   if (q == 'en') return LangSync(english: english ? null : true);
   if (q == 'ar') {
     // Arabic is the default: drop the explicit parameter (canonical URL).
-    final qp = Map<String, String>.from(uri.queryParameters)..remove('lang');
-    final canonical = Uri(
-      path: uri.path.isEmpty ? '/' : uri.path,
-      queryParameters: qp.isEmpty ? null : qp,
-      fragment: uri.hasFragment ? uri.fragment : null,
-    ).toString();
-    return LangSync(english: english ? false : null, redirect: canonical);
+    return LangSync(english: english ? false : null, redirect: _withoutLangQuery(uri));
   }
   if (english && fromPlatform) return const LangSync(english: false);
   return LangSync(redirect: _syncLangQuery(uri, english));
@@ -155,6 +164,9 @@ GoRouter buildAppRouter(Ref ref, {bool? isWeb, String initialLocation = '/'}) {
   final web = isWeb ?? _detectIsWeb();
   final localeChanges = ValueNotifier<int>(0);
   ref.listen(localeProvider, (_, _) => localeChanges.value++);
+  ref.listen<bool>(featuresProvider.select((f) => f.englishEnabled), (_, enabled) {
+    if (!enabled) localeChanges.value++;
+  });
   ref.onDispose(localeChanges.dispose);
   final platformNav = _PlatformRouteObserver();
   WidgetsBinding.instance.addObserver(platformNav);
@@ -167,12 +179,15 @@ GoRouter buildAppRouter(Ref ref, {bool? isWeb, String initialLocation = '/'}) {
     redirect: (context, state) {
       final notifier = ref.read(localeProvider.notifier);
       final english = ref.read(localeProvider).languageCode == 'en';
+      final isAdminRoute = state.uri.path == AppConfig.adminPath;
+      final englishEnabled = isAdminRoute || ref.read(featuresProvider).englishEnabled;
       final toggled = notifier.consumeUserChange();
       // The page an error report is tagged with (path only, ADR-034).
       ErrorReporting.route = state.uri.path;
       final r = resolveLangSync(
         state.uri,
         english: english,
+        englishEnabled: englishEnabled,
         userToggled: toggled || state.uri == lastSyncedUri,
         fromPlatform: platformNav.consume(),
       );

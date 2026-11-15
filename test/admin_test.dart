@@ -7,6 +7,7 @@ import 'package:church_portal/core/theme.dart';
 import 'package:church_portal/data/admin_repository.dart';
 import 'package:church_portal/data/media_repository.dart';
 import 'package:church_portal/domain/cairo_time.dart';
+import 'package:church_portal/domain/daily_verse.dart';
 import 'package:church_portal/domain/features.dart';
 import 'package:church_portal/domain/models.dart';
 import 'package:church_portal/ui/admin/admin_access.dart';
@@ -3411,6 +3412,170 @@ void main() {
       expect(find.text('The Lord is my light'), findsOneWidget);
       expect(find.text('Office'), findsOneWidget);
       expect(find.text('St. Mary Altar'), findsOneWidget);
+    });
+
+    testWidgets('P2-27b: _groupCard excludes EN fields so invalid stored EN does not block Arabic save',
+        (tester) async {
+      tester.view.physicalSize = const Size(1000, 3200);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      Map<String, dynamic>? saved;
+      final meetingsDef = collectionById('meetings')!;
+      await tester.pumpWidget(_app(
+        DocEditor(
+          key: const ValueKey('meeting-ar-only-groups'),
+          title: meetingsDef.labelAr,
+          fields: meetingsDef.fields,
+          def: meetingsDef,
+          data: {
+            'stage': 'youth',
+            'nameAr': 'اجتماع الشباب',
+            'speakerEn': 'S' * 250, // > 200 max when English enabled
+            'detailsEn': 'D' * 10050, // > 10000 max when English enabled
+            'contactNoteEn': 'N' * 600, // > 500 max when English enabled
+          },
+          popOnSave: false,
+          englishEnabled: false,
+          onSave: (d) async => saved = d,
+        ),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      // Grouped English fields must not be mounted inside group cards (even after expanding them).
+      for (final gKey in const ['group-program', 'group-details', 'group-contacts']) {
+        final tile = find.byKey(ValueKey(gKey));
+        await tester.ensureVisible(tile);
+        await tester.tap(tile);
+        await tester.pumpAndSettle();
+      }
+      expect(find.byKey(const ValueKey('field-speakerEn')), findsNothing);
+      expect(find.byKey(const ValueKey('field-detailsEn')), findsNothing);
+      expect(find.byKey(const ValueKey('field-contactNoteEn')), findsNothing);
+
+      final nameAr = find.byKey(const ValueKey('field-nameAr'));
+      await tester.ensureVisible(nameAr);
+      await tester.enterText(nameAr, 'اجتماع الشباب الجديد');
+      await tester.tap(find.byKey(const Key('editor-save')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('editor-error-summary')), findsNothing);
+      expect(saved, {'nameAr': 'اجتماع الشباب الجديد'});
+    });
+
+    testWidgets('P2-27a: pending error focus clears after expansion/edit so subsequent typing keeps focus',
+        (tester) async {
+      tester.view.physicalSize = const Size(1000, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final meetingsDef = collectionById('meetings')!;
+      await tester.pumpWidget(_app(
+        DocEditor(
+          key: const ValueKey('meeting-focus-clear'),
+          title: meetingsDef.labelAr,
+          fields: meetingsDef.fields,
+          def: meetingsDef,
+          data: const {'stage': 'youth', 'nameAr': 'اجتماع', 'contactPhone': 'bad'},
+          popOnSave: false,
+          englishEnabled: false,
+          onSave: (_) async {},
+        ),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      final saveBtn = find.byKey(const Key('editor-save'));
+      await tester.ensureVisible(saveBtn);
+      await tester.tap(saveBtn);
+      await tester.pumpAndSettle();
+      final errEntry = find.byKey(const ValueKey('error-summary-contactPhone'));
+      expect(errEntry, findsOneWidget);
+
+      await tester.ensureVisible(errEntry);
+      await tester.tap(errEntry);
+      await tester.pumpAndSettle();
+
+      // Now focus nameAr and type multiline/long text; focus must stay on nameAr.
+      final nameField = find.byKey(const ValueKey('field-nameAr'));
+      await tester.ensureVisible(nameField);
+      await tester.tap(nameField);
+      await tester.pump();
+      await tester.enterText(nameField, 'اجتماع محدث');
+      await tester.pumpAndSettle();
+      final editable = tester.widget<EditableText>(
+        find.descendant(of: nameField, matching: find.byType(EditableText)),
+      );
+      expect(editable.focusNode.hasFocus, isTrue);
+    });
+
+    testWidgets('P2-27b: FeaturesEditor preserves stored EN fields and pageReset clears only AR when englishEnabled is false',
+        (tester) async {
+      tester.view.physicalSize = const Size(1000, 3200);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      FeatureSettings? saved;
+      final initial = FeatureSettings.defaults.copyWith(
+        heroTitleAr: 'كنيستنا',
+        heroTitleEn: 'Our Church',
+        bannerAr: 'أهلا',
+        bannerEn: 'Welcome',
+        footer: const FooterConfig(noteAr: 'ملحوظة', noteEn: 'Footer note'),
+        dailyVerse: const DailyVerseConfig(
+          mode: DailyVerseConfig.fixed,
+          textAr: 'آية',
+          refAr: 'مرجع',
+          textEn: 'Verse EN',
+          refEn: 'Ref EN',
+        ),
+        pageHeaders: const {
+          'about': PageCustom(titleAr: 'عن الكنيسة', titleEn: 'About Church'),
+        },
+      );
+
+      await tester.pumpWidget(_app(
+        Scaffold(
+          body: FeaturesEditor(
+            key: const ValueKey('feat-preserve-en'),
+            initial: initial,
+            isOwner: true,
+            onSave: (v) async => saved = v,
+          ),
+        ),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      // User edits EN hero title draft, then turns English off and resets the 'about' page header.
+      await tester.enterText(find.byKey(const ValueKey('features-heroTitleEn')), 'Changed Draft');
+      final swFinder = find.byKey(const ValueKey('features-englishEnabled'));
+      await tester.ensureVisible(swFinder);
+      await tester.tap(swFinder);
+      await tester.pumpAndSettle();
+
+      final aboutTile = find.byKey(const ValueKey('page-about'));
+      await tester.ensureVisible(aboutTile);
+      await tester.tap(aboutTile);
+      await tester.pumpAndSettle();
+      final resetBtn = find.byKey(const ValueKey('pageReset-about'));
+      await tester.ensureVisible(resetBtn);
+      await tester.tap(resetBtn);
+      await tester.pumpAndSettle();
+
+      final saveBtn = find.byKey(const Key('features-save'));
+      await tester.ensureVisible(saveBtn);
+      await tester.tap(saveBtn);
+      await tester.pumpAndSettle();
+
+      expect(saved, isNotNull);
+      expect(saved!.englishEnabled, isFalse);
+      expect(saved!.heroTitleEn, 'Our Church');
+      expect(saved!.bannerEn, 'Welcome');
+      expect(saved!.footer.noteEn, 'Footer note');
+      expect(saved!.dailyVerse.textEn, 'Verse EN');
+      expect(saved!.pageHeader('about').titleAr, isEmpty);
+      expect(saved!.pageHeader('about').titleEn, 'About Church');
     });
 
     testWidgets('P2-27b: OverviewScreen counts missing English only when englishEnabled is true', (tester) async {

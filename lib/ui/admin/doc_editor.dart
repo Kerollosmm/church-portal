@@ -130,6 +130,7 @@ class DocEditorState extends State<DocEditor> {
   _FieldErrorEntry? _pendingErrorFocus;
   int _pendingFocusSteps = 0;
   double? _lastMaxScrollExtent;
+  Timer? _errorFocusTimer;
 
   /// Image fields with a picked, compressed file waiting to be uploaded on save.
   final Map<String, EncodedImage> _pending = {};
@@ -316,7 +317,15 @@ class DocEditorState extends State<DocEditor> {
 
   TextEditingController _ctrl(String text) => TextEditingController(text: text)..addListener(_markDirty);
 
+  void _clearPendingErrorFocus() {
+    _errorFocusTimer?.cancel();
+    _errorFocusTimer = null;
+    _pendingErrorFocus = null;
+    _pendingFocusSteps = 0;
+  }
+
   void _markDirty() {
+    if (!_initializing) _clearPendingErrorFocus();
     if (!_initializing && mounted && (!_dirty || _showErrorSummary)) {
       setState(() {
         _dirty = true;
@@ -335,6 +344,7 @@ class DocEditorState extends State<DocEditor> {
 
   @override
   void dispose() {
+    _errorFocusTimer?.cancel();
     _scroll.dispose();
     for (final c in _text.values) {
       c.dispose();
@@ -533,13 +543,16 @@ class DocEditorState extends State<DocEditor> {
       }
     }
     if (expanded) {
+      _clearPendingErrorFocus();
       _pendingErrorFocus = entry;
       _pendingFocusSteps = 20;
       _lastMaxScrollExtent = _scroll.hasClients ? _scroll.position.maxScrollExtent : null;
+      _errorFocusTimer = Timer(const Duration(milliseconds: 350), () {
+        if (mounted) _clearPendingErrorFocus();
+      });
       setState(() {});
     } else {
-      _pendingErrorFocus = null;
-      _pendingFocusSteps = 0;
+      _clearPendingErrorFocus();
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _applyErrorFocus(entry, animate: !expanded);
@@ -626,6 +639,7 @@ class DocEditorState extends State<DocEditor> {
     final errors = _collectErrors();
     final valid = _formKey.currentState!.validate();
     if (!valid || errors.isNotEmpty) {
+      _clearPendingErrorFocus();
       setState(() => _showErrorSummary = true);
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted && _scroll.hasClients) {
@@ -1603,7 +1617,7 @@ class DocEditorState extends State<DocEditor> {
   /// A collapsible card for one detail-page group. Collapsed fields stay
   /// mounted (maintainState) so the form still validates and collects them.
   Widget _groupCard(FieldGroup g) {
-    final fields = [for (final f in widget.fields) if (f.group == g) f];
+    final fields = [for (final f in widget.fields) if (f.group == g && _isFieldShown(f)) f];
     return Card(
       key: ValueKey('groupCard-${g.name}'),
       margin: const EdgeInsets.only(bottom: 12),
@@ -1890,7 +1904,11 @@ class DocEditorState extends State<DocEditor> {
                   ]),
                   TextButton.icon(
                     onPressed: () => setState(() {
-                      rows.removeAt(i).dispose();
+                      final removed = rows.removeAt(i);
+                      if (_pendingErrorFocus != null && removed.focus.values.contains(_pendingErrorFocus!.focusNode)) {
+                        _clearPendingErrorFocus();
+                      }
+                      removed.dispose();
                       _dirty = true;
                       _syncErrorSummaryAfterChange();
                     }),
@@ -1984,7 +2002,7 @@ class DocEditorState extends State<DocEditor> {
                   if (_lastMaxScrollExtent == n.metrics.maxScrollExtent) return false;
                   _lastMaxScrollExtent = n.metrics.maxScrollExtent;
                   if (_pendingFocusSteps <= 0) {
-                    _pendingErrorFocus = null;
+                    _clearPendingErrorFocus();
                     return false;
                   }
                   _pendingFocusSteps--;
