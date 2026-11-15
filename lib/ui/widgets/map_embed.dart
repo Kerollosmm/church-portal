@@ -72,3 +72,113 @@ class ChurchMap extends StatelessWidget {
         ),
       );
 }
+
+/// Wraps a map view with click-to-interact protection:
+/// When inactive, scroll and wheel events pass through freely.
+/// Tapping unlocks interactivity, displaying a lock button to relock.
+class MapInteractionGuard extends StatefulWidget {
+  final Widget child;
+  final ValueChanged<bool>? onActiveChanged;
+  final bool initialActive;
+
+  const MapInteractionGuard({
+    super.key,
+    required this.child,
+    this.onActiveChanged,
+    this.initialActive = false,
+  });
+
+  @override
+  State<MapInteractionGuard> createState() => _MapInteractionGuardState();
+}
+
+class _MapInteractionGuardState extends State<MapInteractionGuard> {
+  late bool _active;
+
+  @override
+  void initState() {
+    super.initState();
+    _active = widget.initialActive;
+  }
+
+  void _setActive(bool value) {
+    if (_active == value) return;
+    setState(() => _active = value);
+    widget.onActiveChanged?.call(value);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onExit: (_) {
+        if (_active) _setActive(false);
+      },
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          widget.child,
+          if (!_active)
+            Positioned.fill(
+              child: MouseRegion(
+                cursor: SystemMouseCursors.click,
+                child: GestureDetector(
+                  key: const Key('mapInteractShield'),
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => _setActive(true),
+                  child: Container(
+                    color: Colors.black.withValues(alpha: 0.08),
+                    alignment: Alignment.center,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: context.pal.bar,
+                        borderRadius: BorderRadius.circular(999),
+                        boxShadow: [
+                          BoxShadow(color: context.pal.shadow(0.4), blurRadius: 10, offset: const Offset(0, 3)),
+                        ],
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.touch_app_rounded, color: context.pal.onBar, size: 20),
+                          const SizedBox(width: 8),
+                          Text(
+                            context.tr('mapTapToInteract'),
+                            style: TextStyle(
+                              color: context.pal.onBar,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          if (_active)
+            PositionedDirectional(
+              top: 12,
+              end: 12,
+              child: FilledButton.icon(
+                key: const Key('mapLockScrollBtn'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: context.pal.bar,
+                  foregroundColor: context.pal.onBar,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  elevation: 4,
+                ),
+                onPressed: () => _setActive(false),
+                icon: const Icon(Icons.lock_outline_rounded, size: 16),
+                label: Text(
+                  context.tr('mapLockScroll'),
+                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}

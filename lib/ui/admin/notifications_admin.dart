@@ -810,6 +810,8 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
             label: Text(label),
             avatar: selected ? null : avatar,
             selected: selected,
+            selectedColor: context.pal.bar,
+            side: BorderSide.none,
             checkmarkColor: context.pal.onBar,
             labelStyle: style,
             materialTapTargetSize: MaterialTapTargetSize.padded,
@@ -820,6 +822,8 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
             label: Text(label),
             avatar: avatar,
             selected: selected,
+            selectedColor: context.pal.bar,
+            side: BorderSide.none,
             showCheckmark: false,
             labelStyle: style,
             materialTapTargetSize: MaterialTapTargetSize.padded,
@@ -1324,14 +1328,20 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
             label: context.tr('sendAtEarliest'),
             icon: Icons.bolt,
             selected: _draftSoon,
-            onSelected: (_) => setState(() => _draftSoon = true),
+            onSelected: (_) => setState(() {
+              _draftSoon = true;
+              if (_draftError == 'nm_errPast') _draftError = null;
+            }),
           ),
           _chip(
             key: const ValueKey('when-at'),
             label: context.tr('nm_whenAt'),
             icon: Icons.event,
             selected: !_draftSoon,
-            onSelected: (_) => setState(() => _draftSoon = false),
+            onSelected: (_) => setState(() {
+              _draftSoon = false;
+              if (_draftError == 'nm_errPast') _draftError = null;
+            }),
           ),
         ]),
         if (!_draftSoon) ...[
