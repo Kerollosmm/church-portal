@@ -10,6 +10,7 @@ import 'admin_strings.dart';
 import 'admin_validators.dart';
 import 'screen_header.dart';
 import 'state_switch.dart';
+import 'unsaved_guard.dart';
 
 /// Owner-only «متقدم» screen (P2-21): Sentry error reporting switch & test,
 /// App Check status, VAPID push key + Web Push queue drain health, and
@@ -35,6 +36,7 @@ class _AdvancedOwnerScreenState extends State<AdvancedOwnerScreen> with SingleTi
   late Stream<AdminDoc?> _featuresStream = widget.repo.watchDoc('settings/features');
 
   final TextEditingController _vapidCtrl = TextEditingController();
+  String _storedVapid = '';
   bool _vapidInitialized = false;
   bool _vapidDirty = false;
   bool _savingSentry = false;
@@ -55,6 +57,7 @@ class _AdvancedOwnerScreenState extends State<AdvancedOwnerScreen> with SingleTi
     super.didUpdateWidget(oldWidget);
     if (widget.repo != oldWidget.repo) {
       _featuresStream = widget.repo.watchDoc('settings/features');
+      _storedVapid = '';
       _vapidInitialized = false;
       _vapidDirty = false;
       _vapidError = null;
@@ -134,7 +137,16 @@ class _AdvancedOwnerScreenState extends State<AdvancedOwnerScreen> with SingleTi
     try {
       await widget.repo.saveDoc('settings/features', {'pushVapidKey': key});
       if (mounted) {
-        setState(() => _vapidDirty = false);
+        final stillMatches = _vapidCtrl.text.trim() == key;
+        setState(() {
+          _storedVapid = key;
+          if (stillMatches) {
+            if (_vapidCtrl.text != key) _vapidCtrl.text = key;
+            _vapidDirty = false;
+          } else {
+            _vapidDirty = true;
+          }
+        });
         messenger
           ?..hideCurrentSnackBar()
           ..showSnackBar(SnackBar(content: Text(savedText)));
@@ -182,50 +194,54 @@ class _AdvancedOwnerScreenState extends State<AdvancedOwnerScreen> with SingleTi
   @override
   Widget build(BuildContext context) {
     registerAdminStrings();
-    return NestedScrollView(
-      headerSliverBuilder: (context, _) => [
-        SliverToBoxAdapter(
-          child: AdminScreenHeader(
-            title: context.tr('advancedGroup'),
-            help: context.tr('help_advanced'),
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-          ),
-        ),
-        SliverToBoxAdapter(
-          child: Material(
-            color: context.pal.background,
-            child: TabBar(
-              controller: _tabs,
-              labelColor: context.pal.primary,
-              unselectedLabelColor: context.pal.muted,
-              indicatorColor: context.pal.primary,
-              tabs: [
-                Tab(
-                  key: const ValueKey('adv-tab-system'),
-                  icon: const Icon(Icons.tune_outlined),
-                  text: context.tr('adv_tabSystem'),
-                ),
-                Tab(
-                  key: const ValueKey('adv-tab-apk'),
-                  icon: const Icon(Icons.install_mobile_outlined),
-                  text: context.tr('adv_tabApk'),
-                ),
-              ],
+    return UnsavedGuard(
+      dirty: _vapidDirty,
+      handlePop: false,
+      child: NestedScrollView(
+        headerSliverBuilder: (context, _) => [
+          SliverToBoxAdapter(
+            child: AdminScreenHeader(
+              title: context.tr('advancedGroup'),
+              help: context.tr('help_advanced'),
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
             ),
           ),
-        ),
-      ],
-      body: TabBarView(
-        controller: _tabs,
-        children: [
-          _buildSystemTab(context),
-          ChurchInfoScreen(
-            key: const ValueKey('app-install-doc'),
-            repo: widget.repo,
-            doc: appInstallDoc,
-            showHeader: false,
+          SliverToBoxAdapter(
+            child: Material(
+              color: context.pal.background,
+              child: TabBar(
+                controller: _tabs,
+                labelColor: context.pal.primary,
+                unselectedLabelColor: context.pal.muted,
+                indicatorColor: context.pal.primary,
+                tabs: [
+                  Tab(
+                    key: const ValueKey('adv-tab-system'),
+                    icon: const Icon(Icons.tune_outlined),
+                    text: context.tr('adv_tabSystem'),
+                  ),
+                  Tab(
+                    key: const ValueKey('adv-tab-apk'),
+                    icon: const Icon(Icons.install_mobile_outlined),
+                    text: context.tr('adv_tabApk'),
+                  ),
+                ],
+              ),
+            ),
           ),
         ],
+        body: TabBarView(
+          controller: _tabs,
+          children: [
+            _buildSystemTab(context),
+            ChurchInfoScreen(
+              key: const ValueKey('app-install-doc'),
+              repo: widget.repo,
+              doc: appInstallDoc,
+              showHeader: false,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -244,6 +260,7 @@ class _AdvancedOwnerScreenState extends State<AdvancedOwnerScreen> with SingleTi
         final data = snap.data?.data ?? const <String, dynamic>{};
         final errorReporting = data['errorReporting'] != false;
         final storedVapid = data['pushVapidKey'] is String ? (data['pushVapidKey'] as String).trim() : '';
+        _storedVapid = storedVapid;
         if (!_vapidInitialized || !_vapidDirty) {
           if (_vapidCtrl.text != storedVapid) _vapidCtrl.text = storedVapid;
           _vapidInitialized = true;
@@ -352,9 +369,10 @@ class _AdvancedOwnerScreenState extends State<AdvancedOwnerScreen> with SingleTi
                         TextField(
                           key: const ValueKey('vapid'),
                           controller: _vapidCtrl,
+                          enabled: !_savingVapid,
                           textDirection: TextDirection.ltr,
-                          onChanged: (_) => setState(() {
-                            _vapidDirty = true;
+                          onChanged: (v) => setState(() {
+                            _vapidDirty = v.trim() != _storedVapid;
                             _vapidError = null;
                           }),
                           decoration: InputDecoration(

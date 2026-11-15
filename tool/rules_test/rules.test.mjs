@@ -97,12 +97,14 @@ describe('public', () => {
 describe('admin content', () => {
   test('every seed document passes validation', async () => {
     const ed = db(EDITOR);
+    const own = db(OWNER);
     for (const [col, docs] of Object.entries(seed)) {
       for (const [id, data] of Object.entries(docs)) {
         // settings only accepts its known ids, so those are written in place.
         const target = col === 'settings' ? id : `seedcheck-${id}`;
+        const writer = (col === 'settings' && id === 'features') ? own : ed;
         try {
-          await assertSucceeds(setDoc(doc(ed, col, target), convert(data)));
+          await assertSucceeds(setDoc(doc(writer, col, target), convert(data)));
         } catch (e) {
           throw new Error(`${col}/${id} rejected: ${e.message}`);
         }
@@ -529,8 +531,12 @@ describe('P1-12: admin active / expiresAt access control', () => {
     const stamp = () => ({ updatedAt: serverTimestamp(), updatedBy: `${EDITOR}@x.test` });
     const featRef = doc(ed, 'settings', 'features');
 
-    // 1. Full seeded settings/features create
-    await assertSucceeds(setDoc(featRef, { ...convert(seed.settings.features), ...stamp() }));
+    // 1. Full seeded settings/features create (contains owner-only errorReporting)
+    await assertSucceeds(setDoc(doc(db(OWNER), 'settings', 'features'), {
+      ...convert(seed.settings.features),
+      updatedAt: serverTimestamp(),
+      updatedBy: `${OWNER}@x.test`,
+    }));
 
     // 2. Full legacy/toggle/today/live/dailyVerse/imageStyles/footer save
     await assertSucceeds(setDoc(featRef, {
@@ -565,15 +571,15 @@ describe('P1-12: admin active / expiresAt access control', () => {
       ...stamp(),
     }));
 
-    // 3. Full App & Push save (ADR-057/059) merged onto that stored full settings/features doc
-    await assertSucceeds(setDoc(featRef, {
+    // 3. Full App & Push save (ADR-057/059) merged onto that stored full settings/features doc:
+    //    first as EDITOR (without owner-only installAndroidUrl/installAndroidUrl32/pushVapidKey),
+    //    then as OWNER with all owner-only install/push keys included.
+    const editorAppPush = {
       installPrompt: true,
       installTitleAr: 'تطبيق الكنيسة',
       installTitleEn: 'Church App',
       installBodyAr: 'تابع القداسات والمواسم',
       installBodyEn: 'Follow liturgies and seasons',
-      installAndroidUrl: 'https://example.org/app.apk',
-      installAndroidUrl32: '/app/older.apk',
       installApkVersion: '1.2.0',
       installApkBuild: 45,
       installApkSizeMb: 18.5,
@@ -581,7 +587,6 @@ describe('P1-12: admin active / expiresAt access control', () => {
       installReshowDays: 30,
       installRemindDays: 3,
       push: true,
-      pushVapidKey: 'B'.repeat(88),
       pushTypes: ['announcements', 'verse_daily', 'katameros_daily', 'seasons', 'feasts', 'reminders'],
       reminderLeads: [0, 15, 60, 1440],
       reminderDefaultLead: 60,
@@ -590,7 +595,15 @@ describe('P1-12: admin active / expiresAt access control', () => {
         ['seasons', '07:00', '3', 'المواسم', 'Seasons', '{season}', '{season}'].join('\u001f'),
       ],
       reminderSources: 'lit,mtg,day',
-      ...stamp(),
+    };
+    await assertSucceeds(setDoc(featRef, { ...editorAppPush, ...stamp() }, { merge: true }));
+    await assertSucceeds(setDoc(doc(db(OWNER), 'settings', 'features'), {
+      ...editorAppPush,
+      installAndroidUrl: 'https://example.org/app.apk',
+      installAndroidUrl32: '/app/older.apk',
+      pushVapidKey: 'B'.repeat(88),
+      updatedAt: serverTimestamp(),
+      updatedBy: `${OWNER}@x.test`,
     }, { merge: true }));
 
     // Full saints document save (max lengths + split gallery & extraFields updates)
@@ -1284,14 +1297,16 @@ describe('ADR-052: milestones on the About page (settings/features.aboutMileston
 });
 
 describe('ADR-034: error reporting switch (settings/features.errorReporting)', () => {
-  test('admins switch error reports on and off; only a bool is accepted', async () => {
-    const ref = doc(db(EDITOR), 'settings', 'features');
+  test('owners switch error reports on and off; only a bool is accepted; editors are denied', async () => {
+    const ref = doc(db(OWNER), 'settings', 'features');
     await assertSucceeds(setDoc(ref, { theme: 'burgundy', errorReporting: false }));
     await assertSucceeds(setDoc(ref, { theme: 'burgundy', errorReporting: true }));
     await assertSucceeds(updateDoc(ref, { errorReporting: false }));
     for (const v of ['off', 0, null, { on: true }, [true]]) {
       await assertFails(setDoc(ref, { errorReporting: v }), JSON.stringify(v));
     }
+    await assertFails(setDoc(doc(db(EDITOR), 'settings', 'features'), { errorReporting: true }));
+    await assertFails(updateDoc(doc(db(EDITOR), 'settings', 'features'), { errorReporting: true }));
   });
 
   test('visitors cannot change it', async () => {
@@ -2464,15 +2479,13 @@ describe('P2-18R: owner-only writes for settings (contact, assistant, venues, au
 });
 
 describe('install banner and push settings (ADR-057)', () => {
-  const featuresRef = () => doc(db(EDITOR), 'settings', 'features');
-  const validInstallAndPush = {
+  const featuresRef = (uid = EDITOR) => doc(db(uid), 'settings', 'features');
+  const validEditorInstallAndPush = {
     installPrompt: true,
     installTitleAr: 'تطبيق الكنيسة على هاتفك',
     installTitleEn: 'Church app on your phone',
     installBodyAr: 'تابع القداسات والصلوات والمواسم وتلقّ التنبيهات بسهولة من هاتفك.',
     installBodyEn: 'Follow liturgies, prayers and seasons with easy updates on your phone.',
-    installAndroidUrl: 'https://example.com/app.apk',
-    installAndroidUrl32: '/app/android/older.apk',
     installApkVersion: '1.1.0',
     installApkBuild: 42,
     installApkSizeMb: 18.4,
@@ -2480,14 +2493,20 @@ describe('install banner and push settings (ADR-057)', () => {
     installReshowDays: 30,
     installRemindDays: 3,
     push: true,
-    pushVapidKey: 'BKAGkFj27-exampleVapidKey890123456789012345678901234567890123456789012345678901234567890',
     pushTypes: ['announcements', 'verse_daily', 'katameros_daily', 'seasons', 'feasts', 'reminders'],
     reminderLeads: [0, 15, 60, 1440],
     reminderDefaultLead: 60,
   };
+  const validInstallAndPush = {
+    ...validEditorInstallAndPush,
+    installAndroidUrl: 'https://example.com/app.apk',
+    installAndroidUrl32: '/app/android/older.apk',
+    pushVapidKey: 'BKAGkFj27-exampleVapidKey890123456789012345678901234567890123456789012345678901234567890',
+  };
 
-  test('admin can save valid install and push settings', async () => {
-    await assertSucceeds(setDoc(featuresRef(), validInstallAndPush, { merge: true }));
+  test('owner can save full valid install and push settings; editor can save non-owner fields', async () => {
+    await assertSucceeds(setDoc(featuresRef(OWNER), validInstallAndPush, { merge: true }));
+    await assertSucceeds(setDoc(featuresRef(EDITOR), validEditorInstallAndPush, { merge: true }));
   });
 
   test('stranger cannot write install or push settings', async () => {
@@ -2495,9 +2514,14 @@ describe('install banner and push settings (ADR-057)', () => {
   });
 
   test('rejects invalid install fields', async () => {
-    const badCases = [
+    const ownerBadCases = [
       { installAndroidUrl: 'javascript:alert(1)' },
       { installAndroidUrl32: '//evil.com/phish' },
+    ];
+    for (const bad of ownerBadCases) {
+      await assertFails(setDoc(featuresRef(OWNER), bad, { merge: true }), JSON.stringify(bad));
+    }
+    const badCases = [
       { installApkVersion: '1.x' },
       { installApkBuild: -1 },
       { installApkBuild: 1000000 },
@@ -2513,9 +2537,14 @@ describe('install banner and push settings (ADR-057)', () => {
   });
 
   test('rejects invalid push fields', async () => {
-    const badCases = [
+    const ownerBadCases = [
       { pushVapidKey: 'with spaces in the middle 8901234567890123456789012345678901234567890123456789012345678901234567890' },
       { pushVapidKey: 'too-short' },
+    ];
+    for (const bad of ownerBadCases) {
+      await assertFails(setDoc(featuresRef(OWNER), bad, { merge: true }), JSON.stringify(bad));
+    }
+    const badCases = [
       { pushTypes: ['announcements', 'occasions'] }, // retired occasions type
       { pushTypes: ['announcements', 'announcements'] }, // duplicate type
       { pushTypes: ['announcements', 'unknown_type'] },
@@ -2584,19 +2613,19 @@ describe('install banner and push settings (ADR-057)', () => {
     });
     const keys = ['about', 'schedule', 'education', 'activities', 'clinics', 'services', 'contact', 'ask', 'notifications'];
     const headers = (t) => Object.fromEntries(keys.map((k) => [k, pageHeader(t)]));
-    const stamp = () => ({ updatedAt: serverTimestamp(), updatedBy: `${EDITOR}@x.test` });
-    // Admin «App & notifications» screen: every ADR-057 field at once.
-    await assertSucceeds(setDoc(featuresRef(), { ...validInstallAndPush, ...stamp() }));
+    const stamp = (uid = EDITOR) => ({ updatedAt: serverTimestamp(), updatedBy: `${uid}@x.test` });
+    // Owner seeds full ADR-057 fields at once.
+    await assertSucceeds(setDoc(featuresRef(OWNER), { ...validInstallAndPush, ...stamp(OWNER) }));
     // Page-headers screen on that document: all 9 headers rewritten at max
     // length, the ADR-057 fields unchanged (they cost nothing then).
     await assertSucceeds(setDoc(featuresRef(), { pageHeaders: headers('a'), ...stamp() }, { merge: true }));
     await assertSucceeds(setDoc(featuresRef(), { pageHeaders: headers('b'), ...stamp() }, { merge: true }));
-    // App screen again, with the worst-case headers stored and unchanged.
-    await assertSucceeds(setDoc(featuresRef(), { ...validInstallAndPush, installApkBuild: 43, reminderDefaultLead: 15, ...stamp() }, { merge: true }));
+    // Editor App & notifications save (excluding owner-only keys) with worst-case headers stored and unchanged.
+    await assertSucceeds(setDoc(featuresRef(), { ...validEditorInstallAndPush, installApkBuild: 43, reminderDefaultLead: 15, ...stamp() }, { merge: true }));
   });
 
   test('reminderDefaultLead may be cleared to null; unknown keys still rejected next to ADR-057 keys', async () => {
-    await assertSucceeds(setDoc(featuresRef(), validInstallAndPush, { merge: true }));
+    await assertSucceeds(setDoc(featuresRef(), validEditorInstallAndPush, { merge: true }));
     await assertSucceeds(setDoc(featuresRef(), { reminderDefaultLead: null }, { merge: true }));
     await assertFails(setDoc(featuresRef(), { installPrompt: true, bogusKey: 1 }, { merge: true }));
     await assertFails(setDoc(featuresRef(), { pushTypes: 'announcements' }, { merge: true }));
@@ -2712,13 +2741,23 @@ describe('PR #55: writes exactly as the admin notifications screen makes them', 
   test('settings save from the notifications tab (all keys, one seasons template) succeeds', async () => {
     await assertSucceeds(setDoc(featRef(), {
       push: false,
-      pushVapidKey: '',
       pushTypes: ['announcements', 'seasons', 'reminders'],
       reminderLeads: [0, 15, 60, 1440],
       reminderDefaultLead: 60,
       reminderSources: 'lit,mtg',
       notifyTypes: [['seasons', '08:30', '2', 'موسم كنسي: {season}', 'Church Season: {season}', 'يبدأ {season} بعد {days} أيام', 'Season of {season} begins in {days} days'].join(S)],
       ...stamp(),
+    }, { merge: true }));
+    await assertSucceeds(setDoc(doc(db(OWNER), 'settings', 'features'), {
+      push: false,
+      pushVapidKey: '',
+      pushTypes: ['announcements', 'seasons', 'reminders'],
+      reminderLeads: [0, 15, 60, 1440],
+      reminderDefaultLead: 60,
+      reminderSources: 'lit,mtg',
+      notifyTypes: [['seasons', '08:30', '2', 'موسم كنسي: {season}', 'Church Season: {season}', 'يبدأ {season} بعد {days} أيام', 'Season of {season} begins in {days} days'].join(S)],
+      updatedAt: serverTimestamp(),
+      updatedBy: `${OWNER}@x.test`,
     }, { merge: true }));
     // Every type customised at once (6 rows), each at max lengths.
     const types = ['announcements', 'verse_daily', 'katameros_daily', 'seasons', 'feasts', 'reminders'];
@@ -2803,7 +2842,7 @@ describe('ADR-059: settings/features notifyTypes & reminderSources', () => {
   });
 
   test('expression budget: whole-doc save with notifyTypes, reminderSources, install and push fields', async () => {
-    const stamp = () => ({ updatedAt: serverTimestamp(), updatedBy: `${EDITOR}@x.test` });
+    const stamp = (uid = OWNER) => ({ updatedAt: serverTimestamp(), updatedBy: `${uid}@x.test` });
     const fullPayload = {
       ...validInstallAndPush,
       notifyTypes: [
@@ -2811,9 +2850,11 @@ describe('ADR-059: settings/features notifyTypes & reminderSources', () => {
         ['seasons', '07:00', '3', 'المواسم', 'Seasons', '{season}', '{season}'].join(S),
       ],
       reminderSources: 'lit,mtg,day',
-      ...stamp(),
+      ...stamp(OWNER),
     };
-    await assertSucceeds(setDoc(featRef(), fullPayload, { merge: true }));
+    await assertSucceeds(setDoc(featRef(OWNER), fullPayload, { merge: true }));
+    const { installAndroidUrl, installAndroidUrl32, pushVapidKey, ...editorPayload } = fullPayload;
+    await assertSucceeds(setDoc(featRef(EDITOR), { ...editorPayload, ...stamp(EDITOR) }, { merge: true }));
   });
 });
 

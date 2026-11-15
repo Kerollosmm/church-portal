@@ -2680,6 +2680,65 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('app-install-doc')), findsOneWidget);
     });
+
+    testWidgets('AdvancedOwnerScreen registers VAPID edits with UnsavedGuard and preserves edits during pending save',
+        (tester) async {
+      tester.view.physicalSize = const Size(1280, 1400);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final repo = _SlowSaveBackend(initialDocs: {
+        'settings/features': {'errorReporting': true, 'pushVapidKey': ''},
+      });
+      await tester.pumpWidget(ProviderScope(
+        child: _app(
+          AdminDashboard(
+            repo: repo,
+            uid: 'u-own',
+            email: 'owner@church.org',
+            role: AdminRoles.owner,
+            initial: 'advanced',
+            onSignOut: () {},
+          ),
+          locale: const Locale('ar'),
+        ),
+      ));
+      await tester.pumpAndSettle();
+
+      final draftKey = 'A' * 87;
+      await tester.enterText(find.byKey(const ValueKey('vapid')), draftKey);
+      await tester.pump();
+
+      // Navigating to another destination while VAPID is dirty prompts confirmDiscardChanges
+      await tester.tap(find.byKey(const ValueKey('nav-overview')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('discard-keep')), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('discard-keep')));
+      await tester.pumpAndSettle();
+      expect(tester.widget<TextField>(find.byKey(const ValueKey('vapid'))).controller!.text, draftKey);
+
+      // Start saving -> TextField disables while save is pending
+      repo.holdNextSave();
+      await tester.tap(find.byKey(const ValueKey('adv-save-vapid')));
+      await tester.pump();
+      expect(tester.widget<TextField>(find.byKey(const ValueKey('vapid'))).enabled, isFalse);
+
+      // Simulate an edit arriving while save is in flight -> dirty stays true and text is not clobbered
+      final newerKey = 'C' * 87;
+      tester.widget<TextField>(find.byKey(const ValueKey('vapid'))).controller!.text = newerKey;
+      repo.releaseNextSave();
+      await tester.pumpAndSettle();
+      expect(tester.widget<TextField>(find.byKey(const ValueKey('vapid'))).controller!.text, newerKey);
+      expect(tester.widget<TextField>(find.byKey(const ValueKey('vapid'))).enabled, isTrue);
+
+      // Save the newer key cleanly -> UnsavedGuard clears so navigation proceeds without prompt
+      await tester.tap(find.byKey(const ValueKey('adv-save-vapid')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('nav-overview')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('discard-keep')), findsNothing);
+      expect(find.byKey(const ValueKey('quick-tasks')), findsOneWidget);
+    });
   });
 
   group('PR 3E: P2-23 OverviewScreen attention section and quick tasks', () {
@@ -2792,6 +2851,94 @@ void main() {
 
       expect(find.byKey(const ValueKey('attention-all-clear')), findsOneWidget);
       expect(find.byKey(const ValueKey('attention-section')), findsNothing);
+    });
+
+    testWidgets('waits for all streams before all-clear and offers retry when any stream fails', (tester) async {
+      final alertsCtrl = StreamController<List<AdminDoc>>.broadcast();
+      addTearDown(alertsCtrl.close);
+      final repo = _ControllableOverviewBackend(
+        alertsStream: () => alertsCtrl.stream,
+        initialDocs: {
+          'settings/features': {'liveEnabled': false, 'liveUrl': ''},
+        },
+      );
+
+      await tester.pumpWidget(_app(
+        OverviewScreen(
+          repo: repo,
+          role: AdminRoles.editor,
+          onOpen: (_) {},
+          now: () => DateTime.utc(2026, 11, 14, 12, 0),
+        ),
+        locale: const Locale('ar'),
+      ));
+      await tester.pump();
+
+      // Alerts stream has not emitted yet -> loading indicator shown, NOT all-clear
+      expect(find.byKey(const ValueKey('attention-all-clear')), findsNothing);
+      expect(find.byKey(const ValueKey('attention-loading')), findsOneWidget);
+
+      // Stream error -> shows retryable error state instead of all-clear or infinite loading
+      alertsCtrl.addError(StateError('permission-denied'));
+      await tester.pump();
+      expect(find.byKey(const ValueKey('attention-all-clear')), findsNothing);
+      expect(find.byKey(const ValueKey('attention-loading')), findsNothing);
+      expect(find.byKey(const ValueKey('attention-error')), findsOneWidget);
+
+      // Retry with a healthy alerts stream -> transitions to all-clear
+      repo.useEmptyAlerts = true;
+      await tester.tap(find.byKey(const ValueKey('attention-retry')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('attention-error')), findsNothing);
+      expect(find.byKey(const ValueKey('attention-all-clear')), findsOneWidget);
+    });
+
+    testWidgets('refreshes time-based alert attention automatically as time crosses 48h and expiry boundaries',
+        (tester) async {
+      var fakeNow = DateTime.utc(2026, 11, 14, 12, 0);
+      final endsAt = fakeNow.add(const Duration(hours: 48, seconds: 30));
+      final repo = _TestAdminBackend(
+        initialDocs: {
+          'settings/features': {'liveEnabled': false, 'liveUrl': ''},
+        },
+        initialCollections: {
+          'alerts': [
+            AdminDoc('a1', {
+              'titleAr': 'تنويه',
+              'visible': true,
+              'active': true,
+              'endsAt': endsAt,
+            }),
+          ],
+        },
+      );
+
+      await tester.pumpWidget(_app(
+        OverviewScreen(
+          repo: repo,
+          role: AdminRoles.editor,
+          onOpen: (_) {},
+          now: () => fakeNow,
+        ),
+        locale: const Locale('ar'),
+      ));
+      await tester.pump();
+
+      // 30s outside the 48h window -> all clear
+      expect(find.byKey(const ValueKey('attention-all-clear')), findsOneWidget);
+      expect(find.byKey(const ValueKey('attention-expiringAlerts')), findsNothing);
+
+      // Advance 1 minute -> enters 48h window without any Firestore snapshot arriving
+      fakeNow = fakeNow.add(const Duration(minutes: 1));
+      await tester.pump(const Duration(minutes: 1));
+      expect(find.byKey(const ValueKey('attention-expiringAlerts')), findsOneWidget);
+      expect(find.byKey(const ValueKey('attention-all-clear')), findsNothing);
+
+      // Advance past endsAt -> warning expires automatically
+      fakeNow = endsAt.add(const Duration(seconds: 5));
+      await tester.pump(const Duration(minutes: 1));
+      expect(find.byKey(const ValueKey('attention-expiringAlerts')), findsNothing);
+      expect(find.byKey(const ValueKey('attention-all-clear')), findsOneWidget);
     });
   });
 }
@@ -2932,3 +3079,64 @@ class _TestMediaRepo implements MediaRepository {
   @override
   Future<void> delete(String mediaId) async {}
 }
+
+class _SlowSaveBackend extends _TestAdminBackend {
+  Completer<void>? _pending;
+  final Map<String, StreamController<AdminDoc?>> _docControllers = {};
+
+  _SlowSaveBackend({super.initialDocs});
+
+  void holdNextSave() {
+    _pending = Completer<void>();
+  }
+
+  void releaseNextSave() {
+    _pending?.complete();
+    _pending = null;
+  }
+
+  @override
+  Stream<AdminDoc?> watchDoc(String path) {
+    final c = _docControllers.putIfAbsent(path, () => StreamController<AdminDoc?>.broadcast());
+    scheduleMicrotask(() {
+      if (!c.isClosed) {
+        final d = docs[path];
+        c.add(d == null ? null : AdminDoc(path.split('/').last, Map<String, dynamic>.from(d)));
+      }
+    });
+    return c.stream;
+  }
+
+  @override
+  Future<void> saveDoc(String path, Map<String, dynamic> data) async {
+    final pending = _pending;
+    if (pending != null) {
+      await pending.future;
+    }
+    savedPaths.add(path);
+    docs[path] = {...?docs[path], ...data};
+    final c = _docControllers[path];
+    if (c != null && !c.isClosed) {
+      c.add(AdminDoc(path.split('/').last, Map<String, dynamic>.from(docs[path]!)));
+    }
+  }
+}
+
+class _ControllableOverviewBackend extends _TestAdminBackend {
+  final Stream<List<AdminDoc>> Function() alertsStream;
+  bool useEmptyAlerts = false;
+
+  _ControllableOverviewBackend({
+    required this.alertsStream,
+    super.initialDocs,
+  });
+
+  @override
+  Stream<List<AdminDoc>> watch(String collection) {
+    if (collection == 'alerts' && !useEmptyAlerts) {
+      return alertsStream();
+    }
+    return super.watch(collection);
+  }
+}
+

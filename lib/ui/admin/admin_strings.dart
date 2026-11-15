@@ -217,6 +217,10 @@ const Map<String, List<String>> adminStrings = {
     'Live stream banner is on with no link — add a link or turn it off',
   ],
   'att_missingEnglish': ['{n} عنصر ناقص ترجمته الإنجليزية', '{n} item(s) missing English text'],
+  'attentionLoadError': [
+    'تعذّر تحميل بعض التنبيهات. اضغط لإعادة المحاولة.',
+    'Could not load some status items. Tap to try again.',
+  ],
   'quickTasksTitle': ['المهام السريعة', 'Quick tasks'],
   'task_schedules': ['عدّل المواعيد', 'Edit schedules'],
   'task_announcement': ['+ إعلان', '+ Announcement'],

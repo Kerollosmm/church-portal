@@ -320,6 +320,7 @@ void main() {
     await tapKey(tester, 'save-settings');
 
     final saved = repo.lastSave('settings/features')!;
+    expect(saved.containsKey('pushVapidKey'), isFalse, reason: 'showTechnical=false omits owner-only pushVapidKey');
     expect(saved['pushTypes'], ['announcements', 'verse_daily', 'katameros_daily', 'reminders']);
     expect(saved['reminderSources'], 'lit,mtg');
     expect(saved['reminderLeads'], [0, 15, 60, 1440]);

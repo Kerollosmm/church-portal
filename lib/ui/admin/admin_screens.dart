@@ -40,17 +40,26 @@ class OverviewScreen extends StatefulWidget {
 }
 
 class _OverviewScreenState extends State<OverviewScreen> {
+  static final Set<String> _watchedNames = {
+    for (final c in adminCollections) c.name,
+    'contact_messages',
+  };
+  static const _maxRefreshInterval = Duration(minutes: 1);
+  static const _minRefreshDelay = Duration(milliseconds: 50);
+
   /// Latest docs per collection (null = still loading / failed).
   final Map<String, List<AdminDoc>?> _docs = {};
   final Set<String> _failed = {};
   AdminDoc? _features;
   bool _featuresLoaded = false;
   final List<StreamSubscription<Object?>> _subs = [];
+  Timer? _refreshTimer;
 
   @override
   void initState() {
     super.initState();
     _subscribe();
+    _rescheduleRefresh();
   }
 
   @override
@@ -65,6 +74,7 @@ class _OverviewScreenState extends State<OverviewScreen> {
       _featuresLoaded = false;
       _subscribe();
     }
+    _rescheduleRefresh();
   }
 
   void _cancel() {
@@ -72,13 +82,20 @@ class _OverviewScreenState extends State<OverviewScreen> {
       s.cancel();
     }
     _subs.clear();
+    _refreshTimer?.cancel();
+    _refreshTimer = null;
   }
 
   void _subscribe() {
-    final names = {for (final c in adminCollections) c.name, 'contact_messages'};
-    for (final n in names) {
+    for (final n in _watchedNames) {
       _subs.add(widget.repo.watch(n).listen(
-            (d) => setState(() => _docs[n] = d),
+            (d) {
+              setState(() {
+                _docs[n] = d;
+                _failed.remove(n);
+              });
+              if (n == 'alerts') _rescheduleRefresh();
+            },
             onError: (_) => setState(() => _failed.add(n)),
           ));
     }
@@ -86,9 +103,55 @@ class _OverviewScreenState extends State<OverviewScreen> {
           (d) => setState(() {
             _features = d;
             _featuresLoaded = true;
+            _failed.remove('settings/features');
           }),
           onError: (_) => setState(() => _failed.add('settings/features')),
         ));
+  }
+
+  void _retry() {
+    _cancel();
+    setState(() {
+      _docs.clear();
+      _failed.clear();
+      _features = null;
+      _featuresLoaded = false;
+    });
+    _subscribe();
+    _rescheduleRefresh();
+  }
+
+  List<Alert> _currentAlerts() => [
+        for (final d in _docs['alerts'] ?? const <AdminDoc>[])
+          if (!isSoftDeleted(d.data)) Alert.fromMap(d.id, d.data),
+      ];
+
+  void _rescheduleRefresh() {
+    _refreshTimer?.cancel();
+    _refreshTimer = null;
+    if (!mounted) return;
+    final nowUtc = (widget.now?.call() ?? DateTime.now()).toUtc();
+    var delay = _maxRefreshInterval;
+    for (final a in _currentAlerts()) {
+      final ends = a.endsAt?.toUtc();
+      if (!a.visible || !a.active || ends == null) continue;
+      final enterWindow = ends.subtract(const Duration(hours: 48));
+      if (enterWindow.isAfter(nowUtc)) {
+        final d = enterWindow.difference(nowUtc);
+        if (d < delay) delay = d;
+      }
+      final expireAt = ends.add(const Duration(milliseconds: 1));
+      if (expireAt.isAfter(nowUtc)) {
+        final d = expireAt.difference(nowUtc);
+        if (d < delay) delay = d;
+      }
+    }
+    if (delay < _minRefreshDelay) delay = _minRefreshDelay;
+    _refreshTimer = Timer(delay, () {
+      if (!mounted) return;
+      setState(() {});
+      _rescheduleRefresh();
+    });
   }
 
   @override
@@ -106,10 +169,7 @@ class _OverviewScreenState extends State<OverviewScreen> {
         .where((d) => !isSoftDeleted(d.data) && messageIsOpen(d.data))
         .length;
     final f = FeatureSettings.fromMap(_features?.data);
-    final alertsList = [
-      for (final d in _docs['alerts'] ?? const <AdminDoc>[])
-        if (!isSoftDeleted(d.data)) Alert.fromMap(d.id, d.data),
-    ];
+    final alertsList = _currentAlerts();
     var unconfirmed = 0;
     String? unconfirmedTarget;
     for (final c in adminCollections) {
@@ -135,7 +195,8 @@ class _OverviewScreenState extends State<OverviewScreen> {
       now: currentNow,
       unconfirmedTarget: unconfirmedTarget ?? 'liturgies',
     );
-    final ready = _featuresLoaded && (messages != null || _failed.contains('contact_messages'));
+    final hasError = _failed.isNotEmpty;
+    final ready = !hasError && _featuresLoaded && _watchedNames.every(_docs.containsKey);
 
     final edited = <(String, AdminDoc)>[
       for (final e in _docs.entries)
@@ -157,7 +218,7 @@ class _OverviewScreenState extends State<OverviewScreen> {
           style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
         ),
         const SizedBox(height: 8),
-        if (attention.isNotEmpty)
+        if (attention.isNotEmpty) ...[
           Card(
             key: const ValueKey('attention-section'),
             margin: EdgeInsets.zero,
@@ -169,8 +230,38 @@ class _OverviewScreenState extends State<OverviewScreen> {
                 ],
               ],
             ),
+          ),
+          if (hasError) const SizedBox(height: 8),
+        ],
+        if (hasError)
+          Card(
+            key: const ValueKey('attention-error'),
+            margin: EdgeInsets.zero,
+            color: context.pal.surfaceAlt,
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Row(
+                children: [
+                  Icon(Icons.error_outline, color: context.pal.alert),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      context.tr('attentionLoadError'),
+                      style: TextStyle(color: context.pal.alert, fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  TextButton.icon(
+                    key: const ValueKey('attention-retry'),
+                    onPressed: _retry,
+                    icon: const Icon(Icons.refresh, size: 18),
+                    label: Text(context.tr('retry')),
+                  ),
+                ],
+              ),
+            ),
           )
-        else if (ready)
+        else if (attention.isEmpty && ready)
           Card(
             key: const ValueKey('attention-all-clear'),
             margin: EdgeInsets.zero,
@@ -191,8 +282,9 @@ class _OverviewScreenState extends State<OverviewScreen> {
               ),
             ),
           )
-        else
+        else if (attention.isEmpty)
           const Card(
+            key: ValueKey('attention-loading'),
             margin: EdgeInsets.zero,
             child: Padding(
               padding: EdgeInsets.all(14),

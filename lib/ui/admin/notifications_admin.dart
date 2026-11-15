@@ -413,7 +413,7 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
       final leads = _reminderLeads.toList()..sort();
       await widget.repo.saveDoc('settings/features', {
         'push': _pushEnabled,
-        'pushVapidKey': _vapidCtrl.text.trim(),
+        if (widget.showTechnical) 'pushVapidKey': _vapidCtrl.text.trim(),
         'pushTypes': [for (final t in NotifyType.values) if (_offeredTypes.contains(t)) t.name],
         'reminderLeads': leads,
         'reminderDefaultLead': leads.contains(_reminderDefaultLead) ? _reminderDefaultLead : leads.first,

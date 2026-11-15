@@ -810,7 +810,9 @@ service cloud.firestore {
       // a non-legacy key changes.
       let changed = changedKeys(d);
       let legacy = legacyFeatureKeys();
-      return (changed.hasOnly(legacy) || validInstallPush(d, changed, legacy))
+      return (!changed.hasAny(['venues', 'audiences', 'seasonVerses', 'errorReporting', 'pushVapidKey',
+                               'installAndroidUrl', 'installAndroidUrl32']) || hasOwnerRole())
+        && (changed.hasOnly(legacy) || validInstallPush(d, changed, legacy))
         && (!('sections' in changed) || !('sections' in d) || validSections(d.sections))
         && (!('homeOrder' in changed) || !('homeOrder' in d) || (d.homeOrder is list && d.homeOrder.size() <= 7
               && d.homeOrder.hasOnly(['banner', 'alerts', 'nextMass', 'quickContacts', 'milestones', 'directory', 'map'])))
@@ -849,7 +851,6 @@ service cloud.firestore {
             || (optBool(d, 'liveEnabled') && optHttpUrl(d, 'liveUrl', 500) && str(d, 'liveLabelAr', 120)
                 && str(d, 'liveLabelEn', 120) && optTimestamp(d, 'liveEndsAt') && optBool(d, 'liveBadgeHideOnHome')))
         && (!('dayEvents' in changed) || validDayEvents(d))
-        && ((!('venues' in changed) && !('audiences' in changed) && !('seasonVerses' in changed)) || hasOwnerRole())
         && (!('venues' in changed) || validProgramOptions(d, 'venues'))
         && (!('audiences' in changed) || validProgramOptions(d, 'audiences'))
         && (!('seasonVerses' in changed) || validSeasonVerses(d))
