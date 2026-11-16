@@ -73,6 +73,9 @@ const Map<String, List<String>> adminStrings = {
   'opt_placement_section': ['جوه قسم كـ«اعرف المزيد»', 'Inside a section ("Learn more")'],
   'switch_featured_on': ['مميزة في الرئيسية', 'Featured on Home'],
   'switch_featured_off': ['عادية', 'Standard'],
+  'emptyBlockSnippet': ['(فارغ)', '(empty)'],
+  'collapseBlock': ['طي الفقرة', 'Collapse block'],
+  'expandBlock': ['توسيع الفقرة', 'Expand block'],
   // Season preparation (ADR-042, deferred out of main.dart.js)
   'presetIntro': ['قبل الموسم: اختر الموسم وما تريد تغييره، ثم اضغط «تطبيق». تُحفظ القيم الحالية، ويمكنك استرجاعها بزر واحد. عند انتهاء الموسم يرجع الموقع للزوار تلقائيًا للوضع العادي.',
       'Before a season: pick it and what to change, then press "Apply". The current values are saved and one button restores them. When the season ends the site returns to normal for visitors on its own.'],

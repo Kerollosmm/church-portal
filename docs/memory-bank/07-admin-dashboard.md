@@ -343,6 +343,18 @@ For each `CollectionDef`:
   is still deleted after the retry completes.
 - Choice / weekday dropdowns are `isExpanded` (long labels ellipsize at 320 px / 200 %); object-list row actions
   (move up/down, remove) are a `Wrap`.
+- **Collapsible object-list rows (`FieldDef.collapsibleRows`, PR #83 ADR-073):** On fields with `collapsibleRows: true`
+  (used on `pages.blocks` «محتوى الصفحة (حتى 20 فقرة)»), rows render as compact single-open collapsible cards with
+  snippet previews (`_blockSnippet`: reads first non-empty among `textAr`, `textEn`, `account`, `instapay`, `wallet`, `url`,
+  or `context.tr('emptyBlockSnippet')` / `(فارغ)`). Tapping expand/collapse («توسيع الفقرة» / «طي الفقرة», `expandBlock` /
+  `collapseBlock`) toggles `_expandedRow[f.key]`. Adding a row (`+ إضافة`) automatically expands the new block. The ready
+  donation template automatically opens on the empty donation details row. When validation fails, clicking an error entry in
+  `editor-error-summary` (`_jumpToError`) detects if the invalid field is within a collapsed row, expands that row automatically,
+  scrolls it into view, and sets focus.
+- **Section category preservation across placements (`DocEditor.collect`, PR #83 ADR-073):** When saving a custom page
+  whose `placement` is `'link'` or `'nav'` (where `categoryId` is hidden by `showWhen`), `DocEditor.collect` preserves
+  `_values['categoryId']` rather than blanking it. Switching `placement` back to `'section'` restores the previously
+  chosen section without re-selection, while public filtering (`sectionPages`) still strictly requires `placement == 'section'`.
 - Every save stamps `updatedAt` (server time) and `updatedBy` (email) via `AdminRepository._stamp`.
 - Boolean defaults: `missingBool` (value assumed when an existing doc lacks the field, e.g. `visible` = true,
   clinic `active` = true) vs `newBool` (value for new docs, e.g. `sample` = false).

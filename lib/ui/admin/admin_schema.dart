@@ -162,6 +162,10 @@ class FieldDef {
   /// by settings/features.englishEnabled; P2-27b).
   final String lang;
 
+  /// [FieldType.objectList]: whether only one row is expanded at a time
+  /// while other rows show a compact summary (ADR-027 custom page blocks).
+  final bool collapsibleRows;
+
   const FieldDef(this.key, this.labelAr, this.labelEn, this.type,
       {this.required = false,
       this.options = const [],
@@ -193,7 +197,8 @@ class FieldDef {
       this.defaultIntValues = const [],
       this.hidden = false,
       this.advanced = false,
-      this.lang = ''});
+      this.lang = '',
+      this.collapsibleRows = false});
 
   int get effectiveMaxLength => maxLength > 0
       ? maxLength
@@ -863,6 +868,7 @@ const adminCollections = <CollectionDef>[
     FieldDef('blocks', 'محتوى الصفحة (حتى 20 فقرة)', 'Page content (up to 20 blocks)', FieldType.objectList,
         maxRows: pageMaxBlocks,
         encodedRows: true,
+        collapsibleRows: true,
         subFields: [
           FieldDef('type', 'نوع الفقرة', 'Block type', FieldType.choice,
               options: BlockTypes.all, defaultOption: BlockTypes.paragraph),

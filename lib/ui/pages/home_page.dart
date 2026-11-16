@@ -34,12 +34,19 @@ class HomePage extends ConsumerWidget {
     // The verse of the day lives in the hero ([HeroVerse]). The top event of
     // the day (church event > feast / commemoration, ADR-040) leads the page.
     final children = <Widget>[const KeyedSubtree(key: ValueKey('home-topEvent'), child: TopEventCard())];
-    // The patrons teaser (not admin-orderable yet: a new home block needs a
-    // settings/features rules change) sits before the first "discover" block.
+    // The patrons teaser and featured custom pages (not admin-orderable yet:
+    // a new home block needs a settings/features rules change) sit before the
+    // first "discover" block.
+    var featuredPlaced = false;
     var patronsPlaced = false;
     for (var i = 0; i < blocks.length; i++) {
       final b = blocks[i];
-      if (!patronsPlaced && (b == HomeBlocks.milestones || b == HomeBlocks.directory || b == HomeBlocks.map)) {
+      final isDiscovery = b == HomeBlocks.milestones || b == HomeBlocks.directory || b == HomeBlocks.map;
+      if (!featuredPlaced && isDiscovery) {
+        children.add(const KeyedSubtree(key: ValueKey('home-featuredPages'), child: _FeaturedPages()));
+        featuredPlaced = true;
+      }
+      if (!patronsPlaced && isDiscovery) {
         children.add(const KeyedSubtree(key: ValueKey('home-patrons'), child: _PatronsTeaser()));
         patronsPlaced = true;
       }
@@ -65,8 +72,10 @@ class HomePage extends ConsumerWidget {
       children.add(KeyedSubtree(key: ValueKey('home-$b'), child: _block(context, ref, b, settings.value, features)));
     }
 
+    if (!featuredPlaced) {
+      children.add(const KeyedSubtree(key: ValueKey('home-featuredPages'), child: _FeaturedPages()));
+    }
     if (!patronsPlaced) children.add(const KeyedSubtree(key: ValueKey('home-patrons'), child: _PatronsTeaser()));
-    children.add(const KeyedSubtree(key: ValueKey('home-featuredPages'), child: _FeaturedPages()));
     return PageBody(
       header: _Hero(settings: settings.value, features: features),
       children: children,
@@ -139,9 +148,15 @@ class _FeaturedPages extends ConsumerWidget {
     if (pages.isEmpty) return const SizedBox.shrink();
     return Padding(
       padding: const EdgeInsets.only(top: 16),
-      child: ResponsiveGrid(children: [
-        for (final p in pages) CustomPageCard(key: Key('featuredPage-${p.slug}'), page: p),
-      ]),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SectionTitle(context.tr('featuredPagesTitle')),
+          ResponsiveGrid(children: [
+            for (final p in pages) CustomPageCard(key: Key('featuredPage-${p.slug}'), page: p),
+          ]),
+        ],
+      ),
     );
   }
 }

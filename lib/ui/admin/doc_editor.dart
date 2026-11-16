@@ -10,7 +10,7 @@ import '../../data/admin_repository.dart';
 import '../../data/image_processing.dart';
 import '../../data/media_repository.dart';
 import '../../domain/cairo_time.dart';
-import '../../domain/custom_content.dart' show PagePlacements;
+import '../../domain/custom_content.dart' show BlockTypes, PagePlacements;
 import '../../domain/media.dart';
 import '../../domain/models.dart';
 import '../../domain/reminders.dart' show leadLabel;
@@ -159,6 +159,9 @@ class DocEditorState extends State<DocEditor> {
   };
   final ExpansibleController _advancedCtl = ExpansibleController();
 
+  /// [FieldDef.collapsibleRows]: index of the currently expanded row for each field key.
+  final Map<String, int?> _expandedRow = {};
+
   bool _slugEdited = false;
   bool _syncingSlug = false;
 
@@ -294,6 +297,18 @@ class DocEditorState extends State<DocEditor> {
             else if (f.encodedRows && r is String)
               _Row.from(f.subFields, _decodeRow(f, r), _markDirty),
         ];
+        if (f.collapsibleRows) {
+          final rList = _rows[f.key]!;
+          if (rList.isNotEmpty) {
+            final donationIdx = rList.indexWhere((r) {
+              final type = r.values['type'] ?? r.text['type']?.text;
+              return type == BlockTypes.donation;
+            });
+            _expandedRow[f.key] = donationIdx >= 0 ? donationIdx : 0;
+          } else {
+            _expandedRow[f.key] = null;
+          }
+        }
       case FieldType.image:
         final img = MediaImage.fromMap(v);
         _values[f.key] = img?.toMap();
@@ -391,7 +406,11 @@ class DocEditorState extends State<DocEditor> {
     final out = <String, dynamic>{};
     for (final f in widget.fields) {
       if (f.showWhen != null && !f.showWhen!.value.contains(_values[f.showWhen!.key])) {
-        out[f.key] = f.type == FieldType.choice ? '' : null;
+        if (f.key == 'categoryId') {
+          out[f.key] = _values['categoryId'] ?? '';
+        } else {
+          out[f.key] = f.type == FieldType.choice ? '' : null;
+        }
         continue;
       }
       if (_hasInitialValues && !widget.englishEnabled && f.lang == 'en') {
@@ -559,6 +578,21 @@ class DocEditorState extends State<DocEditor> {
       if (ctl != null && !ctl.isExpanded) {
         ctl.expand();
         expanded = true;
+      }
+    }
+    for (final f in widget.fields) {
+      if (f.collapsibleRows) {
+        final rows = _rows[f.key] ?? const <_Row>[];
+        for (var idx = 0; idx < rows.length; idx++) {
+          if (rows[idx].focus.values.contains(entry.focusNode) ||
+              rows[idx].keys.values.contains(entry.fieldKey)) {
+            if (_expandedRow[f.key] != idx) {
+              _expandedRow[f.key] = idx;
+              expanded = true;
+            }
+            break;
+          }
+        }
       }
     }
     if (expanded) {
@@ -1896,122 +1930,280 @@ class DocEditorState extends State<DocEditor> {
     );
   }
 
+  String _blockSnippet(_Row row) {
+    for (final k in ['textAr', 'textEn', 'account', 'instapay', 'wallet', 'url']) {
+      final t = row.text[k]?.text.trim() ?? '';
+      if (t.isNotEmpty) return t;
+    }
+    return '';
+  }
+
   Widget _objectList(FieldDef f) {
     final rows = _rows[f.key]!;
     return InputDecorator(
       decoration: InputDecoration(labelText: _label(f)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         for (var i = 0; i < rows.length; i++)
-          Card(
-            key: ObjectKey(rows[i]),
-            color: context.pal.background,
-            margin: const EdgeInsets.only(bottom: 8),
-            child: Padding(
-              padding: const EdgeInsets.all(10),
-              child: Column(children: [
-                for (final sf in f.subFields)
-                  if (_isSubFieldShown(sf, rows[i]))
-                  KeyedSubtree(
-                    key: rows[i].keyFor(sf.key),
-                    child: Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: switch (sf.type) {
-                        FieldType.boolean => AdminStateSwitch(
-                            contentPadding: EdgeInsets.zero,
-                            title: Text(_label(sf)),
-                            value: rows[i].values[sf.key] as bool,
-                            onLabel: _switchLabels(context, sf).$1,
-                            offLabel: _switchLabels(context, sf).$2,
-                            onChanged: (v) => setState(() {
-                              rows[i].values[sf.key] = v;
-                              _dirty = true;
-                            }),
-                          ),
-                        FieldType.choice => DropdownButtonFormField<String>(
-                            focusNode: rows[i].focusFor(sf.key),
-                            isExpanded: true,
-                            initialValue: rows[i].values[sf.key] as String?,
-                            decoration: InputDecoration(labelText: _label(sf)),
-                            items: [
-                              for (final o in sf.options)
-                                DropdownMenuItem(value: o, child: Text(choiceLabel(context, o))),
-                            ],
-                            onChanged: (v) => setState(() {
-                              rows[i].values[sf.key] = v;
-                              _dirty = true;
-                              _syncErrorSummaryAfterChange();
-                            }),
-                          ),
-                        _ => _textField(sf, rows[i].text[sf.key]!,
-                            focusNode: rows[i].focusFor(sf.key),
-                            rowError: f.rowRequireAnyOf.isNotEmpty && f.rowRequireAnyOf.first == sf.key
-                                ? () {
-                                    final err = validateRowAnyOf(f, {
-                                      for (final e in rows[i].text.entries) e.key: e.value.text,
-                                    });
-                                    return err == null ? null : context.tr(err);
-                                  }
-                                : f.rowNotBefore?.key == sf.key
-                                    ? () {
-                                        final err = validateRowOrder(f, {
-                                          for (final e in rows[i].text.entries) e.key: e.value.text,
-                                        });
-                                        return err == null ? null : context.tr(err);
-                                      }
-                                    : f.rowUniqueKey == sf.key
-                                        ? () {
-                                            final err = validateRowUnique(
-                                                f, [for (final r in rows) r.text[sf.key]?.text ?? ''], i);
-                                            return err == null ? null : context.tr(err);
-                                          }
-                                        : null),
-                      },
-                    ),
-                  ),
-                // Wrap: at 320 px / 200% text the buttons flow onto two lines.
-                Wrap(
-                    alignment: WrapAlignment.spaceBetween,
-                    crossAxisAlignment: WrapCrossAlignment.center,
+          if (f.collapsibleRows && _expandedRow[f.key] != i)
+            Card(
+              key: ObjectKey(rows[i]),
+              color: context.pal.background,
+              margin: const EdgeInsets.only(bottom: 8),
+              child: InkWell(
+                onTap: () => setState(() => _expandedRow[f.key] = i),
+                borderRadius: BorderRadius.circular(12),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  child: Row(
                     children: [
-                  Row(mainAxisSize: MainAxisSize.min, children: [
-                  IconButton(
-                    tooltip: context.tr('moveUp'),
-                    onPressed: i == 0
-                        ? null
-                        : () => setState(() {
-                              rows.insert(i - 1, rows.removeAt(i));
-                              _dirty = true;
-                            }),
-                    icon: const Icon(Icons.arrow_upward),
+                      Text(
+                        '${i + 1}.',
+                        style: TextStyle(fontWeight: FontWeight.bold, color: context.pal.muted),
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: context.pal.surfaceAlt,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          choiceLabel(context, (rows[i].values['type'] ?? rows[i].text['type']?.text ?? BlockTypes.paragraph).toString()),
+                          style: TextStyle(fontSize: 12, color: context.pal.primary, fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Builder(builder: (context) {
+                          final snippet = _blockSnippet(rows[i]);
+                          return Text(
+                            snippet.isEmpty ? context.tr('emptyBlockSnippet') : snippet,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: snippet.isEmpty ? context.pal.muted : context.pal.ink,
+                              fontStyle: snippet.isEmpty ? FontStyle.italic : FontStyle.normal,
+                            ),
+                          );
+                        }),
+                      ),
+                      IconButton(
+                        tooltip: context.tr('moveUp'),
+                        icon: const Icon(Icons.arrow_upward, size: 20),
+                        onPressed: i == 0
+                            ? null
+                            : () => setState(() {
+                                  final moved = rows.removeAt(i);
+                                  rows.insert(i - 1, moved);
+                                  if (_expandedRow[f.key] == i) {
+                                    _expandedRow[f.key] = i - 1;
+                                  } else if (_expandedRow[f.key] == i - 1) {
+                                    _expandedRow[f.key] = i;
+                                  }
+                                  _dirty = true;
+                                }),
+                      ),
+                      IconButton(
+                        tooltip: context.tr('moveDown'),
+                        icon: const Icon(Icons.arrow_downward, size: 20),
+                        onPressed: i == rows.length - 1
+                            ? null
+                            : () => setState(() {
+                                  final moved = rows.removeAt(i);
+                                  rows.insert(i + 1, moved);
+                                  if (_expandedRow[f.key] == i) {
+                                    _expandedRow[f.key] = i + 1;
+                                  } else if (_expandedRow[f.key] == i + 1) {
+                                    _expandedRow[f.key] = i;
+                                  }
+                                  _dirty = true;
+                                }),
+                      ),
+                      IconButton(
+                        tooltip: context.tr('remove'),
+                        icon: Icon(Icons.delete_outline, color: context.pal.alert, size: 20),
+                        onPressed: () => setState(() {
+                          final removed = rows.removeAt(i);
+                          if (_pendingErrorFocus != null && removed.focus.values.contains(_pendingErrorFocus!.focusNode)) {
+                            _clearPendingErrorFocus();
+                          }
+                          removed.dispose();
+                          if (_expandedRow[f.key] == i) {
+                            _expandedRow[f.key] = null;
+                          } else if (_expandedRow[f.key] != null && _expandedRow[f.key]! > i) {
+                            _expandedRow[f.key] = _expandedRow[f.key]! - 1;
+                          }
+                          _dirty = true;
+                          _syncErrorSummaryAfterChange();
+                        }),
+                      ),
+                      IconButton(
+                        tooltip: context.tr('expandBlock'),
+                        icon: const Icon(Icons.expand_more, size: 20),
+                        onPressed: () => setState(() => _expandedRow[f.key] = i),
+                      ),
+                    ],
                   ),
-                  IconButton(
-                    tooltip: context.tr('moveDown'),
-                    onPressed: i == rows.length - 1
-                        ? null
-                        : () => setState(() {
-                              rows.insert(i + 1, rows.removeAt(i));
-                              _dirty = true;
-                            }),
-                    icon: const Icon(Icons.arrow_downward),
-                  ),
+                ),
+              ),
+            )
+          else
+            Card(
+              key: ObjectKey(rows[i]),
+              color: context.pal.background,
+              margin: const EdgeInsets.only(bottom: 8),
+              child: Padding(
+                padding: const EdgeInsets.all(10),
+                child: Column(children: [
+                  if (f.collapsibleRows)
+                    InkWell(
+                      onTap: () => setState(() => _expandedRow[f.key] = null),
+                      borderRadius: BorderRadius.circular(8),
+                      child: Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Row(
+                          children: [
+                            Text(
+                              '${i + 1}.',
+                              style: TextStyle(fontWeight: FontWeight.bold, color: context.pal.muted),
+                            ),
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: context.pal.surfaceAlt,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Text(
+                                choiceLabel(context, (rows[i].values['type'] ?? rows[i].text['type']?.text ?? BlockTypes.paragraph).toString()),
+                                style: TextStyle(fontSize: 12, color: context.pal.primary, fontWeight: FontWeight.w600),
+                              ),
+                            ),
+                            const Spacer(),
+                            IconButton(
+                              tooltip: context.tr('collapseBlock'),
+                              icon: const Icon(Icons.expand_less, size: 20),
+                              onPressed: () => setState(() => _expandedRow[f.key] = null),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  for (final sf in f.subFields)
+                    if (_isSubFieldShown(sf, rows[i]))
+                    KeyedSubtree(
+                      key: rows[i].keyFor(sf.key),
+                      child: Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: switch (sf.type) {
+                          FieldType.boolean => AdminStateSwitch(
+                              contentPadding: EdgeInsets.zero,
+                              title: Text(_label(sf)),
+                              value: rows[i].values[sf.key] as bool,
+                              onLabel: _switchLabels(context, sf).$1,
+                              offLabel: _switchLabels(context, sf).$2,
+                              onChanged: (v) => setState(() {
+                                rows[i].values[sf.key] = v;
+                                _dirty = true;
+                              }),
+                            ),
+                          FieldType.choice => DropdownButtonFormField<String>(
+                              focusNode: rows[i].focusFor(sf.key),
+                              isExpanded: true,
+                              initialValue: rows[i].values[sf.key] as String?,
+                              decoration: InputDecoration(labelText: _label(sf)),
+                              items: [
+                                for (final o in sf.options)
+                                  DropdownMenuItem(value: o, child: Text(choiceLabel(context, o))),
+                              ],
+                              onChanged: (v) => setState(() {
+                                rows[i].values[sf.key] = v;
+                                _dirty = true;
+                                _syncErrorSummaryAfterChange();
+                              }),
+                            ),
+                          _ => _textField(sf, rows[i].text[sf.key]!,
+                              focusNode: rows[i].focusFor(sf.key),
+                              rowError: f.rowRequireAnyOf.isNotEmpty && f.rowRequireAnyOf.first == sf.key
+                                  ? () {
+                                      final err = validateRowAnyOf(f, {
+                                        for (final e in rows[i].text.entries) e.key: e.value.text,
+                                      });
+                                      return err == null ? null : context.tr(err);
+                                    }
+                                  : f.rowNotBefore?.key == sf.key
+                                      ? () {
+                                          final err = validateRowOrder(f, {
+                                            for (final e in rows[i].text.entries) e.key: e.value.text,
+                                          });
+                                          return err == null ? null : context.tr(err);
+                                        }
+                                      : f.rowUniqueKey == sf.key
+                                          ? () {
+                                              final err = validateRowUnique(
+                                                  f, [for (final r in rows) r.text[sf.key]?.text ?? ''], i);
+                                              return err == null ? null : context.tr(err);
+                                            }
+                                          : null),
+                        },
+                      ),
+                    ),
+                  // Wrap: at 320 px / 200% text the buttons flow onto two lines.
+                  Wrap(
+                      alignment: WrapAlignment.spaceBetween,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                    Row(mainAxisSize: MainAxisSize.min, children: [
+                    IconButton(
+                      tooltip: context.tr('moveUp'),
+                      onPressed: i == 0
+                          ? null
+                          : () => setState(() {
+                                final moved = rows.removeAt(i);
+                                rows.insert(i - 1, moved);
+                                if (f.collapsibleRows) _expandedRow[f.key] = i - 1;
+                                _dirty = true;
+                              }),
+                      icon: const Icon(Icons.arrow_upward),
+                    ),
+                    IconButton(
+                      tooltip: context.tr('moveDown'),
+                      onPressed: i == rows.length - 1
+                          ? null
+                          : () => setState(() {
+                                final moved = rows.removeAt(i);
+                                rows.insert(i + 1, moved);
+                                if (f.collapsibleRows) _expandedRow[f.key] = i + 1;
+                                _dirty = true;
+                              }),
+                      icon: const Icon(Icons.arrow_downward),
+                    ),
+                    ]),
+                    TextButton.icon(
+                      onPressed: () => setState(() {
+                        final removed = rows.removeAt(i);
+                        if (_pendingErrorFocus != null && removed.focus.values.contains(_pendingErrorFocus!.focusNode)) {
+                          _clearPendingErrorFocus();
+                        }
+                        removed.dispose();
+                        if (f.collapsibleRows) {
+                          if (_expandedRow[f.key] == i) {
+                            _expandedRow[f.key] = null;
+                          } else if (_expandedRow[f.key] != null && _expandedRow[f.key]! > i) {
+                            _expandedRow[f.key] = _expandedRow[f.key]! - 1;
+                          }
+                        }
+                        _dirty = true;
+                        _syncErrorSummaryAfterChange();
+                      }),
+                      icon: Icon(Icons.delete_outline, color: context.pal.alert),
+                      label: Text(context.tr('remove'), style: TextStyle(color: context.pal.alert)),
+                    ),
                   ]),
-                  TextButton.icon(
-                    onPressed: () => setState(() {
-                      final removed = rows.removeAt(i);
-                      if (_pendingErrorFocus != null && removed.focus.values.contains(_pendingErrorFocus!.focusNode)) {
-                        _clearPendingErrorFocus();
-                      }
-                      removed.dispose();
-                      _dirty = true;
-                      _syncErrorSummaryAfterChange();
-                    }),
-                    icon: Icon(Icons.delete_outline, color: context.pal.alert),
-                    label: Text(context.tr('remove'), style: TextStyle(color: context.pal.alert)),
-                  ),
                 ]),
-              ]),
+              ),
             ),
-          ),
         Align(
           alignment: AlignmentDirectional.centerStart,
           child: OutlinedButton.icon(
@@ -2019,6 +2211,9 @@ class DocEditorState extends State<DocEditor> {
                 ? null
                 : () => setState(() {
                       rows.add(_Row.from(f.subFields, const {}, _markDirty, isNew: true));
+                      if (f.collapsibleRows) {
+                        _expandedRow[f.key] = rows.length - 1;
+                      }
                       _dirty = true;
                     }),
             icon: const Icon(Icons.add),

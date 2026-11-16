@@ -13,9 +13,14 @@ render with `PageBody` (+ `Footer`). Content comes from Riverpod providers (hidd
   if About is off) — each only if its route is enabled. End column = the **arcade**: the first two `saints` in
   gold-leaf `ArchFrame`s (the admin `heroImageUrl` takes the large arch), tapping opens the saint page; no image /
   saints or images off → arches hold the drawn Coptic cross. A plaster "ledge" closes the hero.
+- **Featured pages** (`_FeaturedPages`, key `home-featuredPages`): placed in the discovery zone before the first of
+  `milestones`/`directory`/`map`, ahead of `_PatronsTeaser`. Displays a `SectionTitle` with `'featuredPagesTitle'`
+  («صفحات مميزة» / "Featured pages") and a `ResponsiveGrid` of `CustomPageCard`s for all visible pages with `featured: true`
+  (when `Sections.customPages` is on; returns `SizedBox.shrink()` when empty). `ViewportVisibility` and `_RevealState`
+  in `golden.dart` ignore 0-height unhydrated children and listen to `SizeChangedLayoutNotification` via
+  `SizeChangedLayoutNotifier`, ensuring dynamically loaded async lists reveal to `opacity: 1` without requiring extra scroll.
 - **Patrons teaser** (`_PatronsTeaser`, key `home-patrons`): placed before the first of milestones/directory/map
-  (not yet an admin-orderable block: that needs a `settings/features` rules change, PR-18 of the UX plan). Two saint
-  cards (small arch, name, 3 lines of the life, «التفاصيل»), hidden when `saints` or `/about` is off.
+  (directly after `_FeaturedPages`). Two saint cards (small arch, name, 3 lines of the life, «التفاصيل»), hidden when `saints` or `/about` is off.
 - Then the **home blocks** in `features.visibleHomeBlocks` order (admin-reorderable/hideable):
   | Block | Widget | Needs section |
   |---|---|---|
@@ -273,7 +278,8 @@ An admin-defined category: poster header with its name, optional intro panel, th
 (`entriesOf`) as `EntryCard`s in the `ResponsiveGrid` with `CardCover` / `CardLead` (collection `entries`, the
 item's `imageStyle` else the category's), description, call / WhatsApp, and a link button (in-app path via
 `context.go`, else `openUrl`), plus any visible custom pages with `placement == 'section'` (`sectionPages`) as
-`CustomPageCard`s with an «اعرف المزيد / Learn more» button (gated by `Sections.customPages`, PR 3D / P1-18). Hidden /
+`CustomPageCard`s with a `CardCover` (collection `'pages'`, respecting `Sections.media`), title, subtitle, and an
+«اعرف المزيد / Learn more» button (gated by `Sections.customPages`, PR 3D / P1-18). Hidden /
 unknown slug → `ContentUnavailable` (`Key('categoryUnavailable')`, `noindex`); no items and no section pages →
 «لا توجد عناصر في هذا القسم بعد». Gated by `Sections.customSections` (all categories and
 their menu entries) plus each category's own `visible`. **PR #23:** the page (and its items list) stays on the
@@ -282,14 +288,19 @@ flashes «غير متاحة» from a stale cache, and the items can no longer st
 8 s patience then the cache; see 03-architecture).
 
 ### `/page/<slug>` — `custom_page.dart` `CustomPageView` (PR #18, ADR-027)
-Header (title + subtitle), optional hero `FittedCover`, then the blocks (`PageBlockView`): heading (semantic
-header), paragraph (selectable), image (https link + caption), button (`FilledButton`), text link, donation info
-(`DonationInfoCard`: bank account / InstaPay / wallet with copy buttons, notes, «للعلم فقط: لا يتم أي دفع عبر
-الموقع»). Empty blocks are skipped. Hidden / unknown → `Key('pageUnavailable')`, `noindex`. Placement (`placement`,
-PR 3D / P1-18): `'link'` (default, reached from notices/buttons/links), `'nav'` (synced with `showInNav`), or
-`'section'` (`categoryId`, rendered as an «اعرف المزيد» `CustomPageCard` inside `/section/<slug>`). Setting `featured`
-places a card on `HomePage` (`_FeaturedPages`, key `home-featuredPages`) whenever `Sections.customPages` is on. Gated
-by `Sections.customPages` plus each page's `visible`. Loading follows the same rule as `/section/<slug>` (PR #23).
+Header (title + subtitle), then a centered reading column constrained to `maxWidth: 700` containing the optional hero
+`FittedCover` (aspect ratio 16/7, `maxHeight: 420`) and the blocks (`PageBlockView`): heading (`BlockTypes.heading`,
+semantic header, `fontSize: 26`, `fontWeight: FontWeight.w800`, line height 1.45, `top: 12` spacing when following
+another block or hero, `bottom: 16`), paragraph (`BlockTypes.paragraph`, selectable, `fontSize: 16`, line height 1.8),
+image (https link + caption), button (`FilledButton`), text link, donation info (`DonationInfoCard`: bank account /
+InstaPay / wallet with copy buttons, notes, «للعلم فقط: لا يتم أي دفع عبر الموقع»). Empty blocks are skipped. Hidden /
+unknown → `Key('pageUnavailable')`, `noindex`. Placement (`placement`, PR 3D / P1-18): `'link'` (default, reached from
+notices/buttons/links), `'nav'` (synced with `showInNav`), or `'section'` (`categoryId`, rendered as an «اعرف المزيد»
+`CustomPageCard` inside `/section/<slug>`). `DocEditor.collect()` retains `categoryId` across `'link'` and `'nav'` saves so
+switching placement back retains the category, while `sectionPages` strictly checks `placement == 'section'`. Setting
+`featured` places a card on `HomePage` (`_FeaturedPages`, key `home-featuredPages`) under section title «صفحات مميزة»
+before discovery blocks whenever `Sections.customPages` is on. Gated by `Sections.customPages` plus each page's
+`visible`. Loading follows the same rule as `/section/<slug>` (PR #23).
 
 ### Menu entries for custom content (PR #18)
 `customNavItems(ref)` (`app_shell.dart`): categories with `showInNav` are appended to the "Church services" popup

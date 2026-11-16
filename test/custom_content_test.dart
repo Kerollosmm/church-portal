@@ -13,7 +13,8 @@ import 'package:church_portal/data/seed_data.dart';
 import 'package:church_portal/domain/cairo_time.dart';
 import 'package:church_portal/domain/contact_categories.dart';
 import 'package:church_portal/domain/custom_content.dart';
-import 'package:church_portal/domain/features.dart' show Sections;
+import 'package:church_portal/domain/features.dart' show FeatureSettings, Sections;
+import 'package:church_portal/domain/media.dart';
 import 'package:church_portal/domain/rules.dart';
 import 'package:church_portal/router.dart';
 import 'package:church_portal/state/providers.dart';
@@ -24,8 +25,10 @@ import 'package:church_portal/ui/admin/admin_validators.dart';
 import 'package:church_portal/ui/admin/collection_list.dart';
 import 'package:church_portal/ui/admin/contact_admin.dart';
 import 'package:church_portal/ui/admin/doc_editor.dart';
+import 'package:church_portal/ui/pages/category_page.dart' show CustomPageCard;
 import 'package:church_portal/ui/widgets/common.dart';
 import 'package:church_portal/ui/widgets/feature_gate.dart';
+import 'package:church_portal/ui/widgets/golden.dart' show Reveal;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
@@ -1299,6 +1302,306 @@ void main() {
       await tester.pump();
       expect(find.byKey(const Key('entry-e1')), findsOneWidget);
       expect(find.byType(ErrorState), findsOneWidget);
+    });
+
+    test('UX fix: CustomPage with stored categoryId and link/nav placement never appears in sectionPages', () {
+      final pageMatchingExisting = CustomPage.fromMap('p-link-1', {
+        'slug': 'link-1',
+        'titleAr': 'رابط',
+        'placement': PagePlacements.link,
+        'categoryId': 'k1',
+      });
+      final pageMatchingDeleted = CustomPage.fromMap('p-link-2', {
+        'slug': 'link-2',
+        'titleAr': 'رابط مع قسم محذوف',
+        'placement': PagePlacements.link,
+        'categoryId': 'deleted-category-999',
+      });
+      final pageNavWithCategory = CustomPage.fromMap('p-nav-1', {
+        'slug': 'nav-1',
+        'titleAr': 'قائمة',
+        'placement': PagePlacements.nav,
+        'categoryId': 'k1',
+      });
+
+      expect(sectionPages('k1', [pageMatchingExisting, pageMatchingDeleted, pageNavWithCategory]), isEmpty);
+      expect(sectionPages('deleted-category-999', [pageMatchingExisting, pageMatchingDeleted, pageNavWithCategory]), isEmpty);
+    });
+
+    testWidgets('UX fix: DocEditor preserves categoryId when switching to link, and re-selects it when switching back to section', (tester) async {
+      tester.view.physicalSize = const Size(900, 3000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      Map<String, dynamic>? saved;
+      await tester.pumpWidget(_admin(DocEditor(
+        title: 'Edit Page',
+        fields: collectionById('pages')!.fields,
+        def: collectionById('pages'),
+        popOnSave: false,
+        onSave: (d) async => saved = d,
+        data: const {
+          'slug': 'trips-page',
+          'titleAr': 'صفحة رحلات',
+          'placement': 'section',
+          'categoryId': 'k1',
+        },
+        dynamicChoices: const {
+          'categories': [('k1', 'Youth trips'), ('k2', 'Library')],
+        },
+      )));
+      await tester.pumpAndSettle();
+
+      final state = tester.state<DocEditorState>(find.byType(DocEditor));
+      expect(state.collect()['categoryId'], 'k1');
+
+      // Switch placement to 'link'
+      await tester.tap(find.byKey(const ValueKey('field-placement')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Link only (from a notice or button)').last);
+      await tester.pumpAndSettle();
+
+      // categoryId field is hidden in UI
+      expect(find.byKey(const ValueKey('field-categoryId')), findsNothing);
+
+      // Save -> payload preserves categoryId: 'k1'
+      await tester.tap(find.byKey(const Key('editor-save')));
+      await tester.pumpAndSettle();
+      expect(saved?['placement'], PagePlacements.link);
+      expect(state.collect()['categoryId'], 'k1');
+
+      // Switch placement back to 'section' -> categoryId appears and is still 'k1'
+      await tester.tap(find.byKey(const ValueKey('field-placement')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Inside a section ("Learn more")').last);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('field-categoryId')), findsOneWidget);
+      expect(state.collect()['categoryId'], 'k1');
+
+      // Reopen editor with saved data where placement is 'link' and categoryId is 'k1'
+      await tester.pumpWidget(_admin(DocEditor(
+        title: 'Reopened Page',
+        fields: collectionById('pages')!.fields,
+        def: collectionById('pages'),
+        popOnSave: false,
+        onSave: (d) async {},
+        data: const {
+          'slug': 'trips-page',
+          'titleAr': 'صفحة رحلات',
+          'placement': 'link',
+          'categoryId': 'k1',
+        },
+        dynamicChoices: const {
+          'categories': [('k1', 'Youth trips'), ('k2', 'Library')],
+        },
+      )));
+      await tester.pumpAndSettle();
+
+      final reopenedState = tester.state<DocEditorState>(find.byType(DocEditor));
+      expect(reopenedState.collect()['categoryId'], 'k1');
+      await tester.tap(find.byKey(const ValueKey('field-placement')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Inside a section ("Learn more")').last);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('field-categoryId')), findsOneWidget);
+      expect(reopenedState.collect()['categoryId'], 'k1');
+    });
+
+    testWidgets('UX fix: HomePage featured pages placement under SectionTitle and Reveal transitions to opacity 1 when customPagesProvider loads', (tester) async {
+      tester.view.physicalSize = const Size(1200, 3000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final pagesCtrl = StreamController<List<CustomPage>>.broadcast();
+      addTearDown(pagesCtrl.close);
+      final asyncRepo = _ControlledPagesRepo(pagesCtrl.stream, entries: const []);
+
+      await _pump(tester, '/', size: const Size(1200, 3000), repo: asyncRepo, settle: true);
+
+      // Initially custom pages are not loaded, so featured pages are hidden (SizedBox.shrink)
+      expect(find.byKey(const Key('featuredPage-featured-guide')), findsNothing);
+      expect(find.byKey(const ValueKey('home-patrons')), findsOneWidget);
+
+      // Now emit pages with a featured page
+      pagesCtrl.add([
+        const CustomPage(
+          id: 'p-feat',
+          slug: 'featured-guide',
+          titleAr: 'دليل مميز',
+          titleEn: 'Featured guide',
+          featured: true,
+        ),
+      ]);
+      await tester.pump();
+      await tester.pumpAndSettle();
+
+      // Featured pages block is now present
+      expect(find.byKey(const Key('featuredPage-featured-guide')), findsOneWidget);
+      expect(find.text('Featured pages'), findsOneWidget);
+
+      // Verify placement order: featuredPages comes BEFORE patrons / discovery
+      final featuredTop = tester.getTopLeft(find.byKey(const ValueKey('home-featuredPages'))).dy;
+      final patronsTop = tester.getTopLeft(find.byKey(const ValueKey('home-patrons'))).dy;
+      expect(featuredTop, lessThan(patronsTop));
+
+      // Verify Reveal opacity is 1
+      final reveal = find.ancestor(of: find.byKey(const ValueKey('home-featuredPages')), matching: find.byType(Reveal));
+      expect(reveal, findsOneWidget);
+      final opacities = tester.widgetList<Opacity>(find.descendant(of: reveal, matching: find.byType(Opacity)));
+      expect(opacities, isNotEmpty);
+      expect(opacities.first.opacity, 1.0);
+    });
+
+    testWidgets('UX fix: CustomPageCard renders CardCover when image is present and media is on, hides when off or image null', (tester) async {
+      const pageWithImage = CustomPage(
+        id: 'p-img',
+        slug: 'img-page',
+        titleAr: 'صفحة بصورة',
+        titleEn: 'Image page',
+        image: MediaImage.url('https://example.com/pic.webp'),
+      );
+      const pageNoImage = CustomPage(
+        id: 'p-no-img',
+        slug: 'no-img-page',
+        titleAr: 'صفحة بلا صورة',
+        titleEn: 'No image page',
+      );
+
+      // Media ON: pageWithImage has CardCover, pageNoImage has no CardCover
+      await tester.pumpWidget(ProviderScope(
+        overrides: [
+          featuresProvider.overrideWithValue(FeatureSettings.fromMap(const {
+            'sections': {Sections.media: true},
+          })),
+        ],
+        child: const MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: Column(
+                children: [
+                  CustomPageCard(page: pageWithImage),
+                  CustomPageCard(page: pageNoImage),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('cardCover')), findsOneWidget);
+
+      // Media OFF: CardCover is not rendered
+      await tester.pumpWidget(ProviderScope(
+        overrides: [
+          featuresProvider.overrideWithValue(FeatureSettings.fromMap(const {
+            'sections': {Sections.media: false},
+          })),
+        ],
+        child: const MaterialApp(
+          home: Scaffold(
+            body: CustomPageCard(page: pageWithImage),
+          ),
+        ),
+      ));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('cardCover')), findsNothing);
+    });
+
+    testWidgets('UX fix: CustomPageView constrains hero and blocks to maxWidth 700 on 1280px width, heading fontSize >= 24', (tester) async {
+      tester.view.physicalSize = const Size(1280, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final pagesWithHero = [
+        const CustomPage(
+          id: 'p-wide',
+          slug: 'wide-page',
+          titleAr: 'صفحة مقال',
+          titleEn: 'Article page',
+          image: MediaImage.url('https://example.com/hero.webp'),
+          blocks: [
+            PageBlock(type: BlockTypes.heading, textAr: 'عنوان رئيسي', textEn: 'Main heading'),
+            PageBlock(type: BlockTypes.paragraph, textAr: 'فقرة أولى', textEn: 'First paragraph'),
+          ],
+        ),
+      ];
+      final repo = _ControlledPagesRepo(Stream.value(pagesWithHero), entries: const []);
+
+      await _pump(tester, '/page/wide-page', size: const Size(1280, 800), repo: repo);
+      await tester.pumpAndSettle();
+
+      final constrainedFinder = find.byWidgetPredicate((w) => w is ConstrainedBox && w.constraints.maxWidth == 700);
+      expect(constrainedFinder, findsOneWidget);
+
+      final heroFinder = find.byKey(const Key('pageHero'));
+      expect(heroFinder, findsOneWidget);
+      expect(tester.getSize(heroFinder).width, lessThanOrEqualTo(700));
+
+      final headingText = tester.widget<Text>(find.text('Main heading'));
+      expect(headingText.style?.fontSize, greaterThanOrEqualTo(24));
+    });
+
+    testWidgets('UX fix: DocEditor collapsible blocks only mounts one expanded block at a time, supports add/switch/error auto-expand', (tester) async {
+      tester.view.physicalSize = const Size(900, 3000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      await tester.pumpWidget(_admin(DocEditor(
+        title: 'Blocks Test',
+        fields: collectionById('pages')!.fields,
+        def: collectionById('pages'),
+        popOnSave: false,
+        onSave: (d) async {},
+        data: const {
+          'slug': 'test-blocks',
+          'titleAr': 'تجربة الفقرات',
+          'blocks': [
+            'heading\u001fع1\u001fH1\u001f\u001f\u001f\u001f',
+            'paragraph\u001fف2\u001fP2\u001f\u001f\u001f\u001f',
+            'link\u001f\u001f\u001fnot-a-valid-url\u001f\u001f\u001f',
+          ],
+        },
+      )));
+      await tester.pumpAndSettle();
+
+      // Only 1 row expanded at a time: initially row 0 is expanded
+      expect(find.byType(DropdownButtonFormField<String>), findsOneWidget);
+      expect(find.text('ع1'), findsOneWidget);
+      // Collapsed rows show summaries
+      expect(find.text('ف2'), findsOneWidget);
+      expect(find.text('not-a-valid-url'), findsOneWidget);
+
+      // Tap on row 1 (paragraph) summary to expand it
+      await tester.tap(find.text('ف2'));
+      await tester.pumpAndSettle();
+
+      // Now row 1 is expanded, still only 1 DropdownButtonFormField mounted
+      expect(find.byType(DropdownButtonFormField<String>), findsOneWidget);
+
+      // Tap Add row (+)
+      await tester.tap(find.widgetWithText(OutlinedButton, 'Add row'));
+      await tester.pumpAndSettle();
+
+      // New row (row 3) is automatically expanded
+      expect(find.byType(DropdownButtonFormField<String>), findsOneWidget);
+
+      // Switch back to row 0
+      await tester.tap(find.text('ع1'));
+      await tester.pumpAndSettle();
+
+      // Try saving -> invalid block error summary appears because collapsed block 3 has invalid url
+      await tester.tap(find.byKey(const Key('editor-save')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('editor-error-summary')), findsOneWidget);
+
+      // Tap the error link for block 3 -> auto expands row 2 (which is currently collapsed)
+      final errorLink = find.textContaining('(3)');
+      expect(errorLink, findsWidgets);
+      await tester.tap(errorLink.first);
+      await tester.pumpAndSettle();
+      // DropdownButtonFormField is mounted for block 3
+      expect(find.byType(DropdownButtonFormField<String>), findsOneWidget);
     });
   });
 }

@@ -587,6 +587,7 @@ const Map<String, List<String>> _strings = {
   'heroMotionHint': ['سحب متحركة وأشعة ضوء وفيديو قصير في الواجهة. لا يعمل أبدًا لمن فعّل «تقليل الحركة» أو «توفير البيانات».',
       'Drifting clouds, light rays and a short looping video in the hero. Never plays for visitors with reduced motion or data saver on.'],
   // ---- Categories, custom pages & contact categories (ADR-027, ADR-028)
+  'featuredPagesTitle': ['صفحات مميزة', 'Featured pages'],
   'categoryEmpty': ['لا توجد عناصر في هذا القسم بعد', 'Nothing in this section yet'],
   'donationTitle': ['بيانات التبرع', 'Donation details'],
   'donationAccount': ['الحساب البنكي', 'Bank account'],

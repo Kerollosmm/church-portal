@@ -137,33 +137,39 @@ class CustomPageCard extends StatelessWidget {
     final sub = context.pick(p.subtitleAr, p.subtitleEn);
     return Card(
       clipBehavior: Clip.antiAlias,
-      child: Padding(
-        padding: const EdgeInsets.all(Space.card),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(color: context.pal.surfaceAlt, borderRadius: BorderRadius.circular(4)),
-              child: Icon(Icons.article_rounded, color: context.pal.primary),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(title, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16, height: 1.4)),
-            ),
-          ]),
-          if (sub.isNotEmpty) ...[
-            const SizedBox(height: Space.s),
-            Text(sub, style: const TextStyle(height: 1.6)),
-          ],
-          const SizedBox(height: 10),
-          ActionChipButton(
-            icon: Icons.open_in_new_rounded,
-            label: context.tr('learnMore'),
-            semanticLabel: actionSemanticLabel(context.tr('learnMore'), title),
-            color: context.pal.bar,
-            onTap: () => context.go(p.path),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          CardCover(collection: 'pages', itemStyle: '', image: p.image, label: title),
+          Padding(
+            padding: const EdgeInsets.all(Space.card),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(color: context.pal.surfaceAlt, borderRadius: BorderRadius.circular(4)),
+                  child: Icon(Icons.article_rounded, color: context.pal.primary),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(title, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16, height: 1.4)),
+                ),
+              ]),
+              if (sub.isNotEmpty) ...[
+                const SizedBox(height: Space.s),
+                Text(sub, style: const TextStyle(height: 1.6)),
+              ],
+              const SizedBox(height: 10),
+              ActionChipButton(
+                icon: Icons.open_in_new_rounded,
+                label: context.tr('learnMore'),
+                semanticLabel: actionSemanticLabel(context.tr('learnMore'), title),
+                color: context.pal.bar,
+                onTap: () => context.go(p.path),
+              ),
+            ]),
           ),
-        ]),
+        ],
       ),
     );
   }

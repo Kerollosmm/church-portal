@@ -3,7 +3,9 @@
 ## ماذا تقدم للزائر
 
 أقسام جديدة ينشئها المشرف بنفسه بدون مبرمج (مثل «رحلات الشباب» أو «خدمة إخوة الرب»). لكل قسم صفحة على
-`/section/<الرابط>` بعنوان القسم ومقدمة اختيارية ثم بطاقات عناصره (عنوان، وصف، صورة، اتصال/واتساب، وزر رابط).
+`/section/<الرابط>` بعنوان القسم ومقدمة اختيارية ثم بطاقات عناصره (عنوان، وصف، صورة، اتصال/واتساب، وزر رابط)،
+بالإضافة إلى أي صفحات مخصصة وُضعت «جوه قسم كـ«اعرف المزيد»» حيث تظهر كبطاقات `CustomPageCard` مع صورة الواجهة
+وعنوان الصفحة ووصفها وزر «اعرف المزيد».
 القسم يمكن أن يظهر في القائمة تحت **«خدمات الكنيسة»** (القائمة المنسدلة على الكمبيوتر ومجموعة الخدمات في القائمة
 الجانبية).
 
@@ -22,7 +24,7 @@
 
 ## كيف تعمل تقنيًا
 
-- الصفحة: `lib/ui/pages/category_page.dart`. النماذج: `lib/domain/custom_content.dart` (`CustomCategory`،
+- الصفحة: `lib/ui/pages/category_page.dart` (`CategoryPage`, `EntryCard`, وبطاقة الصفحات التابعة للقسم `CustomPageCard` مع صورة الغلاف `CardCover(collection: 'pages')`). النماذج: `lib/domain/custom_content.dart` (`CustomCategory`،
   `CategoryEntry`، `isValidSlug` — حتى 60 حرفًا).
 - المجموعات: `categories` (`nameAr/En`، `slug`، `introAr/En`، `icon`، `imageStyle`، `showInNav`، `order`، `visible`)
   و `entries` (`categoryId`، `titleAr/En`، `descAr/En`، `contactPhone`، `externalUrl`، `externalLabelAr/En`، `image`…).
