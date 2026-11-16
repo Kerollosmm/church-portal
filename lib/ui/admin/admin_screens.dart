@@ -1061,9 +1061,10 @@ class _MessagesScreenState extends State<MessagesScreen> {
     });
 
     messenger.removeCurrentSnackBar();
-    _undoSnackBarController = messenger.showSnackBar(
+    final undoController = messenger.showSnackBar(
       SnackBar(
         duration: const Duration(seconds: 10),
+        persist: false,
         content: Text(undoText),
         action: SnackBarAction(
           label: undoLabel,
@@ -1084,6 +1085,12 @@ class _MessagesScreenState extends State<MessagesScreen> {
         ),
       ),
     );
+    _undoSnackBarController = undoController;
+    undoController.closed.then((_) {
+      if (identical(_undoSnackBarController, undoController)) {
+        _undoSnackBarController = null;
+      }
+    });
   }
 }
 

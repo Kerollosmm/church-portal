@@ -247,6 +247,7 @@ class FeaturesEditorState extends State<FeaturesEditor> {
   int _resetGen = 0;
   bool _dirty = false;
   bool _saving = false;
+  bool _pendingReset = false;
 
   /// Unsaved local edits.
   bool get dirty => _dirty;
@@ -354,11 +355,21 @@ class FeaturesEditorState extends State<FeaturesEditor> {
     } catch (e) {
       messenger.showSnackBar(SnackBar(content: Text(failed.replaceAll('{e}', '$e'))));
     } finally {
-      if (mounted) setState(() => _saving = false);
+      if (mounted) {
+        setState(() => _saving = false);
+        if (_pendingReset) {
+          _pendingReset = false;
+          _resetForm();
+        }
+      }
     }
   }
 
   void _resetForm() {
+    if (_saving) {
+      _pendingReset = true;
+      return;
+    }
     setState(() {
       f = _savedBaseline;
       _t['heroTitleAr']!.text = _savedBaseline.heroTitleAr;

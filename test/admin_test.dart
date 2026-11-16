@@ -4349,6 +4349,176 @@ void main() {
         expect(find.text('Different Screen'), findsOneWidget);
       });
 
+      testWidgets('MessagesScreen clears undo controller reference when snackbar closes', (tester) async {
+        final doc = AdminDoc('msg-closed', {
+          'name': 'Sender Closed',
+          'message': 'Message to delete',
+          'createdAt': DateTime.utc(2026, 11, 15, 12),
+          'status': 'new',
+        });
+        final repo = _TestAdminBackend(initialCollections: {
+          'contact_messages': [doc],
+        });
+
+        await tester.pumpWidget(_app(
+          MessagesScreen(repo: repo),
+          locale: const Locale('ar'),
+        ));
+        await tester.pumpAndSettle();
+
+        // Delete message -> undo snackbar appears
+        await tester.tap(find.byTooltip('حذف'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const ValueKey('confirm-ok')));
+        await tester.pumpAndSettle();
+
+        expect(find.text('تراجع'), findsOneWidget);
+
+        // Advance clock past the 10-second duration so the snackbar closes
+        await tester.pump(const Duration(seconds: 10));
+        await tester.pump(const Duration(milliseconds: 750));
+        await tester.pumpAndSettle();
+        expect(find.text('تراجع'), findsNothing);
+
+        // Disposing MessagesScreen now does not throw or call close on closed controller
+        await tester.pumpWidget(_app(
+          const Scaffold(body: Text('Closed Screen')),
+          locale: const Locale('ar'),
+        ));
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+      });
+
+      testWidgets('FeaturesEditor defers browser back discard until active save completes', (tester) async {
+        final completer = Completer<void>();
+        final doc = AdminDoc('features', {
+          'sections': {'clinics': true},
+          'bannerAr': 'Initial Banner',
+        });
+        final repo = _DelayedSaveBackend(completer.future, initialDocs: {
+          'settings/features': doc.data,
+        });
+
+        await tester.pumpWidget(_app(
+          FeaturesScreen(repo: repo),
+          locale: const Locale('ar'),
+        ));
+        await tester.pumpAndSettle();
+
+        // Toggle section switch to make form dirty
+        await tester.tap(find.byType(Switch).first);
+        await tester.pumpAndSettle();
+        expect(find.byKey(const ValueKey('unsaved-bar')), findsOneWidget);
+
+        // Trigger Save -> save is in flight
+        await tester.tap(find.byKey(const Key('features-save')));
+        await tester.pump();
+
+        // Simulate browser back discard while save is in flight
+        final futureDiscard = debugSimulatePopState();
+        await tester.pump(const Duration(milliseconds: 100));
+        await tester.pump(const Duration(milliseconds: 100));
+
+        expect(find.byKey(const ValueKey('discard-confirm')), findsOneWidget);
+        await tester.tap(find.byKey(const ValueKey('discard-confirm')));
+        await tester.pump(const Duration(milliseconds: 100));
+
+        // Complete save
+        completer.complete();
+        await tester.pumpAndSettle();
+
+        final result = await futureDiscard;
+        expect(result, isTrue);
+
+        // After delayed save finishes, deferred reset restores resulting baseline and clears dirty
+        expect(find.byKey(const ValueKey('unsaved-bar')), findsNothing);
+      });
+
+      testWidgets('DocEditor defers browser back discard until active save completes', (tester) async {
+        final completer = Completer<void>();
+        var savedTitle = '';
+        await tester.pumpWidget(_app(
+          DocEditor(
+            title: 'Custom Item',
+            fields: const [
+              FieldDef('nameAr', 'الاسم', 'Name', FieldType.text, required: true),
+            ],
+            data: const {'nameAr': 'Item Initial'},
+            popOnSave: false,
+            onSave: (chunk) async {
+              savedTitle = chunk['nameAr'] as String? ?? '';
+              await completer.future;
+            },
+          ),
+          locale: const Locale('ar'),
+        ));
+        await tester.pumpAndSettle();
+
+        // Edit text field
+        await tester.enterText(find.byType(TextField).first, 'Item Edited');
+        await tester.pumpAndSettle();
+        expect(find.byKey(const ValueKey('unsaved-bar')), findsOneWidget);
+
+        // Tap save -> in flight
+        await tester.tap(find.byKey(const Key('editor-save')));
+        await tester.pump();
+
+        // Trigger popstate discard while save is in flight
+        final futureDiscard = debugSimulatePopState();
+        await tester.pump(const Duration(milliseconds: 100));
+        await tester.pump(const Duration(milliseconds: 100));
+
+        expect(find.byKey(const ValueKey('discard-confirm')), findsOneWidget);
+        await tester.tap(find.byKey(const ValueKey('discard-confirm')));
+        await tester.pump(const Duration(milliseconds: 100));
+
+        // Complete the save
+        completer.complete();
+        await tester.pumpAndSettle();
+
+        final result = await futureDiscard;
+        expect(result, isTrue);
+        expect(savedTitle, 'Item Edited');
+        expect(find.byKey(const ValueKey('unsaved-bar')), findsNothing);
+      });
+
+      testWidgets('NotificationsAdmin discards open draft and resets on browser back discard', (tester) async {
+        final repo = _TestAdminBackend(initialDocs: {
+          'settings/notifications': {'schedule': []},
+        });
+
+        await tester.pumpWidget(_app(
+          NotificationsAdminSection(
+            repo: repo,
+          ),
+          locale: const Locale('ar'),
+        ));
+        await tester.pumpAndSettle();
+
+        // Tap add announcement to open draft editor
+        await tester.tap(find.byKey(const ValueKey('addScheduledPush')));
+        await tester.pumpAndSettle();
+
+        // Enter text in draft title to make draft dirty
+        await tester.enterText(find.byKey(const ValueKey('draft-titleAr')), 'Draft Title');
+        await tester.pumpAndSettle();
+        expect(find.byKey(const ValueKey('push-editor')), findsOneWidget);
+
+        // Simulate browser back discard
+        final futureDiscard = debugSimulatePopState();
+        await tester.pumpAndSettle();
+
+        expect(find.byKey(const ValueKey('discard-confirm')), findsOneWidget);
+        await tester.tap(find.byKey(const ValueKey('discard-confirm')));
+        await tester.pumpAndSettle();
+
+        final result = await futureDiscard;
+        expect(result, isTrue);
+
+        // Draft was closed and dirty state cleared
+        expect(find.byKey(const ValueKey('push-editor')), findsNothing);
+      });
+
       testWidgets('MessagesScreen soft-deletes, hides, offers 10s undo and restores on undo', (tester) async {
         final doc = AdminDoc('msg-1', {
           'name': 'Test Sender',
@@ -4779,3 +4949,45 @@ class _FailingRollbackSaveBackend extends _TestAdminBackend {
   }
 }
 
+
+class _DelayedSaveBackend extends _TestAdminBackend {
+  final Future<void> delay;
+  final Map<String, StreamController<AdminDoc?>> _docControllers = {};
+
+  _DelayedSaveBackend(this.delay, {super.initialDocs});
+
+  @override
+  Stream<AdminDoc?> watchDoc(String path) {
+    final c = _docControllers.putIfAbsent(path, () => StreamController<AdminDoc?>.broadcast());
+    scheduleMicrotask(() {
+      if (!c.isClosed) {
+        final d = docs[path];
+        c.add(d == null ? null : AdminDoc(path.split('/').last, Map<String, dynamic>.from(d)));
+      }
+    });
+    return c.stream;
+  }
+
+  @override
+  Future<void> saveDoc(String path, Map<String, dynamic> data) async {
+    await delay;
+    savedPaths.add(path);
+    docs[path] = {...?docs[path], ...data};
+    final c = _docControllers[path];
+    if (c != null && !c.isClosed) {
+      c.add(AdminDoc(path.split('/').last, Map<String, dynamic>.from(docs[path]!)));
+    }
+  }
+
+  @override
+  Future<void> update(String collection, String id, Map<String, dynamic> data) async {
+    await delay;
+    final path = '$collection/$id';
+    savedPaths.add(path);
+    docs[path] = {...?docs[path], ...data};
+    final c = _docControllers[path];
+    if (c != null && !c.isClosed) {
+      c.add(AdminDoc(id, Map<String, dynamic>.from(docs[path]!)));
+    }
+  }
+}

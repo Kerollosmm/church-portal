@@ -124,6 +124,7 @@ class DocEditorState extends State<DocEditor> {
   final Map<String, List<_Row>> _rows = {};
   bool _saving = false;
   bool _dirty = false;
+  bool _pendingReset = false;
   bool _showErrorSummary = false;
   bool _initializing = false;
   int _resetEpoch = 0;
@@ -817,6 +818,10 @@ class DocEditorState extends State<DocEditor> {
         _showErrorSummary = false;
         _saveError = null;
       });
+      if (_pendingReset) {
+        _pendingReset = false;
+        _resetToInitial();
+      }
       // The admin may have closed the editor while the write was pending:
       // only pop if this editor is still the top route.
       if (widget.popOnSave && (route?.isCurrent ?? false)) nav.pop();
@@ -848,6 +853,10 @@ class DocEditorState extends State<DocEditor> {
           _saving = false;
           _saveError = errText;
         });
+        if (_pendingReset) {
+          _pendingReset = false;
+          _resetToInitial();
+        }
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted && _scroll.hasClients) {
             _scroll.animateTo(0, duration: const Duration(milliseconds: 200), curve: Curves.easeOut);
@@ -872,6 +881,10 @@ class DocEditorState extends State<DocEditor> {
   }
 
   void _resetToInitial() {
+    if (_saving) {
+      _pendingReset = true;
+      return;
+    }
     _resetEpoch++;
     for (final c in _text.values) {
       c.dispose();

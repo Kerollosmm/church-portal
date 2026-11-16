@@ -334,8 +334,8 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
   /// and never while the admin has unsaved edits; controller listeners are
   /// muted so loading never marks the form dirty (the old screen called
   /// setState during build here).
-  void _populateFeatures(AdminDoc? doc) {
-    if (identical(doc, _lastFeatures) || _dirty) return;
+  void _populateFeatures(AdminDoc? doc, {bool force = false}) {
+    if (!force && (identical(doc, _lastFeatures) || _dirty)) return;
     _lastFeatures = doc;
     final data = doc?.data ?? const <String, dynamic>{};
     _featuresData = data;
@@ -439,8 +439,15 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
       _showErrors = false;
       final doc = _lastFeatures;
       _lastFeatures = null;
-      _populateFeatures(doc);
+      _populateFeatures(doc, force: true);
     });
+  }
+
+  void _discardAllOnBrowserBack() {
+    _resetSettingsForm();
+    if (_editorOpen) {
+      setState(() => _editorOpen = false);
+    }
   }
 
   Future<void> _discardSettings() async {
@@ -855,7 +862,7 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
             return UnsavedGuard(
               dirty: _dirty || _isDraftDirty,
               handlePop: false,
-              onBrowserBackDiscard: _resetSettingsForm,
+              onBrowserBackDiscard: _discardAllOnBrowserBack,
               child: Scaffold(
                 backgroundColor: context.pal.background,
                 body: Center(
