@@ -15,12 +15,14 @@ render with `PageBody` (+ `Footer`). Content comes from Riverpod providers (hidd
   saints or images off → arches hold the drawn Coptic cross. A plaster "ledge" closes the hero.
 - **Featured pages** (`_FeaturedPages`, key `home-featuredPages`): placed in the discovery zone before the first of
   `milestones`/`directory`/`map`, ahead of `_PatronsTeaser`. Displays a `SectionTitle` with `'featuredPagesTitle'`
-  («صفحات مميزة» / "Featured pages") and a `ResponsiveGrid` of `CustomPageCard`s for all visible usable pages with `featured: true`,
+  («صفحات مميزة» / "Featured pages"). When `pages.length == 1`, renders centered in `ConstrainedBox(maxWidth: 560)`;
+  when `pages.length > 1`, uses `ResponsiveGrid` of `CustomPageCard`s for all visible usable pages with `featured: true`,
   sorted by `order` ascending, then `updatedAt` descending (newest first, non-null before null), then original index on ties,
   with duplicate slugs deduplicated via `featuredPages` (`lib/domain/custom_content.dart`; returns `SizedBox.shrink()` when empty,
-  when `Sections.customPages` is on). `ViewportVisibility` and `_RevealState`
-  in `golden.dart` ignore 0-height unhydrated children and listen to `SizeChangedLayoutNotification` via
-  `SizeChangedLayoutNotifier`, ensuring dynamically loaded async lists reveal to `opacity: 1` without requiring extra scroll.
+  when `Sections.customPages` is on). `ViewportVisibility` and `_RevealState` in `golden.dart` ignore 0-height unhydrated children
+  and listen to `SizeChangedLayoutNotification` via `SizeChangedLayoutNotifier`, ensuring dynamically loaded async lists reveal
+  to `opacity: 1` without requiring extra scroll. `_RevealState.viewportLead` is `20` (instead of `-40`), preventing blank
+  viewport gaps above revealed sections.
 - **Patrons teaser** (`_PatronsTeaser`, key `home-patrons`): placed before the first of milestones/directory/map
   (directly after `_FeaturedPages`). Two saint cards (small arch, name, 3 lines of the life, «التفاصيل»), hidden when `saints` or `/about` is off.
 - Then the **home blocks** in `features.visibleHomeBlocks` order (admin-reorderable/hideable):

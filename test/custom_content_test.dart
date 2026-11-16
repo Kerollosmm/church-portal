@@ -1773,6 +1773,128 @@ void main() {
       expect(find.text('1.'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
+
+    testWidgets('Single featured page renders centered with ConstrainedBox(maxWidth: 560); multiple use ResponsiveGrid', (tester) async {
+      final pagesCtrl = StreamController<List<CustomPage>>.broadcast();
+      addTearDown(pagesCtrl.close);
+      final asyncRepo = _ControlledPagesRepo(pagesCtrl.stream, entries: const []);
+
+      await _pump(tester, '/', size: const Size(1280, 800), repo: asyncRepo, settle: true);
+
+      final p1 = CustomPage(
+        id: 'p1',
+        slug: 'page-one',
+        titleAr: 'صفحة أولى',
+        titleEn: 'Page One',
+        placement: PagePlacements.section,
+        categoryId: 'k1',
+        featured: true,
+        visible: true,
+        updatedAt: DateTime(2026, 11, 10, 10, 0),
+      );
+
+      // Emit single featured page
+      pagesCtrl.add([p1]);
+      await tester.pump();
+      await tester.pumpAndSettle();
+
+      // On 1280x800, scroll down to bring featured pages into viewport
+      await tester.drag(find.byType(CustomScrollView), const Offset(0, -500));
+      await tester.pumpAndSettle();
+
+      final featuredFinder = find.byKey(const ValueKey('home-featuredPages'));
+      expect(featuredFinder, findsOneWidget);
+      final singleCardFinder = find.byKey(Key('featuredPage-${p1.slug}'));
+      expect(singleCardFinder, findsOneWidget);
+
+      // Should not be in ResponsiveGrid
+      expect(find.descendant(of: featuredFinder, matching: find.byType(ResponsiveGrid)), findsNothing);
+
+      // Card is inside Center and ConstrainedBox with maxWidth == 560
+      final constrainedBoxFinder = find.ancestor(of: singleCardFinder, matching: find.byType(ConstrainedBox)).first;
+      expect(tester.widget<ConstrainedBox>(constrainedBoxFinder).constraints.maxWidth, 560);
+      expect(find.ancestor(of: singleCardFinder, matching: find.byType(Center)), findsWidgets);
+
+      // Now emit 2 featured pages
+      final p2 = CustomPage(
+        id: 'p2',
+        slug: 'page-two',
+        titleAr: 'صفحة ثانية',
+        titleEn: 'Page Two',
+        placement: PagePlacements.section,
+        categoryId: 'k1',
+        featured: true,
+        visible: true,
+        updatedAt: DateTime(2026, 11, 12, 10, 0),
+      );
+      pagesCtrl.add([p1, p2]);
+      await tester.pump();
+      await tester.pumpAndSettle();
+
+      expect(find.descendant(of: featuredFinder, matching: find.byType(ResponsiveGrid)), findsOneWidget);
+      expect(find.byKey(Key('featuredPage-${p1.slug}')), findsOneWidget);
+      expect(find.byKey(Key('featuredPage-${p2.slug}')), findsOneWidget);
+    });
+
+    testWidgets('Reveal viewportLead (+20) reveals item when top <= screen + 20', (tester) async {
+      tester.view.physicalSize = const Size(800, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      // Item placed at top = 810 (below 800px viewport, but within +20 lead of 820)
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ThemeData(platform: TargetPlatform.macOS),
+          home: const Scaffold(
+            body: SingleChildScrollView(
+              child: Column(
+                children: [
+                  SizedBox(height: 810),
+                  Reveal(
+                    key: ValueKey('reveal-near'),
+                    child: SizedBox(width: 200, height: 100),
+                  ),
+                  SizedBox(height: 500),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+
+      final nearState = tester.state(find.byKey(const ValueKey('reveal-near')));
+      expect((nearState as dynamic).viewportLead, 20.0);
+      expect((nearState as dynamic).visibleInViewport, isTrue);
+
+      // Now verify that if top is at 830 (beyond screen + 20 = 820), it is not visible
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ThemeData(platform: TargetPlatform.macOS),
+          home: const Scaffold(
+            body: SingleChildScrollView(
+              child: Column(
+                children: [
+                  SizedBox(height: 830),
+                  Reveal(
+                    key: ValueKey('reveal-far'),
+                    child: SizedBox(width: 200, height: 100),
+                  ),
+                  SizedBox(height: 500),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+
+      final farState = tester.state(find.byKey(const ValueKey('reveal-far')));
+      expect((farState as dynamic).visibleInViewport, isFalse);
+    });
   });
 }
 

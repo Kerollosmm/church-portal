@@ -128,13 +128,13 @@ This document provides a comprehensive, feature-by-feature manual for all 31 cap
 - **Technical Implementation:** Implemented in `lib/ui/pages/item_detail_page.dart`. Generates canonical URLs and dynamic Open Graph meta tags.
 
 ### 16. Custom Sections (`/section/:slug`)
-- **Visitor Experience:** Dynamic dedicated sections (e.g., Youth Summer Trips, Spiritual Conventions) appearing seamlessly in the navigation bar and drawer menu.
-- **Admin Control (`/admin` → Custom Sections):** Create custom sections with custom slugs, bilingual titles, menu visibility switches, and associated entries.
-- **Technical Implementation:** Stored across `categories` and `entries` collections with prefix-aware route resolution.
+- **Visitor Experience:** Dynamic dedicated sections (e.g., Youth Summer Trips, Spiritual Conventions) appearing seamlessly in the navigation bar and drawer menu. Empty sections with 0 visible entries and 0 visible section pages are automatically omitted from public navigation.
+- **Admin Control (`/admin` → Custom Sections):** Create custom sections with custom slugs, bilingual titles, menu visibility switches, and associated entries. Category cards display linked section pages (`placement == 'section'`) with a «صفحة» / `'Page'` tag, visibility toggle, and tap-to-edit alongside entries. Categories with 0 visible items/pages display an `'emptyHiddenFromVisitors'` badge («فاضي، مش ظاهر للزوار»), and the empty state message («مفيش عناصر في القسم ده لسه») only appears when both entries and section pages are empty.
+- **Technical Implementation:** Stored across `categories` and `entries` collections with prefix-aware route resolution. Category emptiness is unified via `isCategoryNonEmpty` (`custom_content.dart`) shared across public navigation (`publicNonEmptyCategories`) and Admin `CollectionListScreen`.
 
 ### 17. Custom Page Builder (`/page/:slug`) & Donations
-- **Visitor Experience:** Content-rich custom pages formatted with headings, text paragraphs, banners, external links, and official church donation information (Bank accounts, InstaPay handles, electronic wallets).
-- **Admin Control (`/admin` → Custom Pages):** Visual block-based editor to assemble layouts without HTML knowledge.
+- **Visitor Experience:** Content-rich custom pages formatted with headings, text paragraphs, banners, external links, and official church donation information (Bank accounts, InstaPay handles, electronic wallets), rendered in a centered 700px reading width with 26px headings. Featured pages can appear on the Home screen under «صفحات مميزة» (centered in `ConstrainedBox(maxWidth: 560)` when single; `ResponsiveGrid` when multiple) with `SizeChangedLayoutNotifier` async hydration reveal and `_RevealState.viewportLead` tuned to 20 to eliminate blank viewport gaps.
+- **Admin Control (`/admin` → Custom Pages):** Visual block-based editor to assemble layouts without HTML knowledge, featuring single-open collapsible block cards with formatted snippets, ready-made donation template, and placement options (`link`, `nav`, `section`) retaining `categoryId` across non-section saves.
 - **Technical Implementation:** Stored in `pages` collection. Validated to prevent arbitrary script execution.
 
 ### 18. Contact Form, Inbound Inbox & Anonymous Messages
@@ -200,7 +200,7 @@ This document provides a comprehensive, feature-by-feature manual for all 31 cap
 ### 29. Web Performance & PageSpeed Optimization
 - **Visitor Experience:** Instantaneous initial paint (≤ 0.8s) and smooth 60fps scrolling across mobile and desktop devices.
 - **Technical Implementation:** Employs static HTML loading shells, CSS-animated ambient layers, font fingerprinting, and deferred JavaScript execution to achieve 90+ PageSpeed ratings.
-- **ADR-061 Web Bundle & Deferred Guard:** Exactly 8 secondary modules are deferred (`.part.js`), mechanically verified in CI by `tool/check_web_bundle.mjs` against `main.dart.js.map` with `gzip -9 <= 1,399,000 B` ceiling (measured `1,375,786 B` with `+23,214 B` headroom). OpenType fonts (`IBMPlexSansArabic`, `Lalezar`, `ArefRuqaa`) are retained intact (> 20 KB each) to preserve Arabic ligatures and tashkeel diacritics.
+- **ADR-061 Web Bundle & Deferred Guard:** Exactly 8 secondary modules are deferred (`.part.js`), mechanically verified in CI by `tool/check_web_bundle.mjs` against `main.dart.js.map` with `gzip -9 <= 1,399,000 B` ceiling (measured `1,375,961 B` with `+23,039 B` headroom). OpenType fonts (`IBMPlexSansArabic`, `Lalezar`, `ArefRuqaa`) are retained intact (> 20 KB each) to preserve Arabic ligatures and tashkeel diacritics.
 
 ### 30. Accessibility & WCAG 2.2 AA Compliance
 - **Visitor Experience:** Full compatibility with screen readers (TalkBack, VoiceOver), high-contrast text modes, large text scaling (up to 200%), and keyboard navigation.

@@ -239,27 +239,50 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
                     }
                     if (!pageSnap.hasData) return const Center(child: CircularProgressIndicator());
                     final entriesDef = collectionById('entries')!;
+                    final pagesDef = collectionById('pages')!;
                     final rawEntries = entrySnap.data!;
                     _checkLazyPurge(rawEntries, entriesDef);
                     final rawPages = pageSnap.data!;
-                    final visibleEntries = sortAdminDocs(
-                        entriesDef,
-                        rawEntries
-                            .where((d) => !isSoftDeleted(d.data) && !_pendingDelete.isPending(d.id))
-                            .toList());
+                    _checkLazyPurge(rawPages, pagesDef);
+                    final unsoftEntries = rawEntries
+                        .where((d) => !isSoftDeleted(d.data) && !_pendingDelete.isPending(d.id))
+                        .toList();
+                    final unsoftPages = rawPages
+                        .where((d) => !isSoftDeleted(d.data) && !_pendingDelete.isPending(d.id))
+                        .toList();
+
+                    final domainEntries = [
+                      for (final e in unsoftEntries) CategoryEntry.fromMap(e.id, e.data),
+                    ];
+                    final domainPages = [
+                      for (final p in unsoftPages) CustomPage.fromMap(p.id, p.data),
+                    ];
+
+                    final visibleEntries = sortAdminDocs(entriesDef, unsoftEntries);
                     final filteredEntries =
                         filterAdminDocs(entriesDef, visibleEntries, query: _search.text, filter: _filter);
+
+                    final rawSectionPages = [
+                      for (final p in unsoftPages)
+                        if (CustomPage.fromMap(p.id, p.data).effectivePlacement == PagePlacements.section)
+                          p,
+                    ];
+                    final visibleSectionPages = sortAdminDocs(pagesDef, rawSectionPages);
+                    final filteredSectionPages =
+                        filterAdminDocs(pagesDef, visibleSectionPages, query: _search.text, filter: _filter);
+
                     final hasFilter = _search.text.trim().isNotEmpty || _filter != ListFilter.all;
                     final matchingCatIds = {for (final c in docs) c.id};
-                    final allEntriesByCat = <String, List<AdminDoc>>{};
-                    final entriesByCat = <String, List<AdminDoc>>{};
                     final allCatIds = {for (final c in visible) c.id};
+
+                    final allEntriesByCat = <String, List<AdminDoc>>{};
                     for (final e in visibleEntries) {
                       final cid = '${e.data['categoryId'] ?? ''}';
                       if (allCatIds.contains(cid)) {
                         (allEntriesByCat[cid] ??= []).add(e);
                       }
                     }
+                    final entriesByCat = <String, List<AdminDoc>>{};
                     final unassigned = <AdminDoc>[];
                     for (final e in filteredEntries) {
                       final cid = '${e.data['categoryId'] ?? ''}';
@@ -269,29 +292,34 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
                         unassigned.add(e);
                       }
                     }
-                    final sectionPagesByCat = <String, List<AdminDoc>>{};
-                    for (final p in rawPages) {
-                      if (isSoftDeleted(p.data) || _pendingDelete.isPending(p.id)) continue;
+
+                    final allSectionPagesByCat = <String, List<AdminDoc>>{};
+                    for (final p in visibleSectionPages) {
                       final cid = '${p.data['categoryId'] ?? ''}';
-                      if (cid.isNotEmpty && allCatIds.contains(cid)) {
-                        final page = CustomPage.fromMap(p.id, p.data);
-                        if (page.visible &&
-                            page.isUsable &&
-                            page.effectivePlacement == PagePlacements.section) {
-                          (sectionPagesByCat[cid] ??= []).add(p);
-                        }
+                      if (allCatIds.contains(cid)) {
+                        (allSectionPagesByCat[cid] ??= []).add(p);
                       }
                     }
+                    final sectionPagesByCat = <String, List<AdminDoc>>{};
+                    for (final p in filteredSectionPages) {
+                      final cid = '${p.data['categoryId'] ?? ''}';
+                      if (allCatIds.contains(cid)) {
+                        (sectionPagesByCat[cid] ??= []).add(p);
+                      }
+                    }
+
                     final emptyCatIds = <String>{
                       for (final c in visible)
-                        if (!(allEntriesByCat[c.id] ?? const []).any((e) => e.data['visible'] != false) &&
-                            (sectionPagesByCat[c.id]?.isEmpty ?? true))
+                        if (!isCategoryNonEmpty(CustomCategory.fromMap(c.id, c.data), domainEntries, domainPages))
                           c.id,
                     };
                     final shownCats = hasFilter
                         ? [
                             for (final c in visible)
-                              if (matchingCatIds.contains(c.id) || (entriesByCat[c.id]?.isNotEmpty ?? false)) c,
+                              if (matchingCatIds.contains(c.id) ||
+                                  (entriesByCat[c.id]?.isNotEmpty ?? false) ||
+                                  (sectionPagesByCat[c.id]?.isNotEmpty ?? false))
+                                c,
                           ]
                         : visible;
                     final canReorder =
@@ -313,10 +341,13 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
                         child: _categoriesBody(
                           context,
                           entriesDef: entriesDef,
+                          pagesDef: pagesDef,
                           allVisibleCats: visible,
                           shownCats: shownCats,
                           entriesByCat: entriesByCat,
                           allEntriesByCat: allEntriesByCat,
+                          sectionPagesByCat: sectionPagesByCat,
+                          allSectionPagesByCat: allSectionPagesByCat,
                           hasFilter: hasFilter,
                           unassigned: unassigned,
                           canReorder: canReorder,
@@ -470,10 +501,13 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
   Widget _categoriesBody(
     BuildContext context, {
     required CollectionDef entriesDef,
+    required CollectionDef pagesDef,
     required List<AdminDoc> allVisibleCats,
     required List<AdminDoc> shownCats,
     required Map<String, List<AdminDoc>> entriesByCat,
     required Map<String, List<AdminDoc>> allEntriesByCat,
+    required Map<String, List<AdminDoc>> sectionPagesByCat,
+    required Map<String, List<AdminDoc>> allSectionPagesByCat,
     required bool hasFilter,
     required List<AdminDoc> unassigned,
     required bool canReorder,
@@ -515,8 +549,11 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
           context,
           shownCats[i],
           entriesDef: entriesDef,
+          pagesDef: pagesDef,
           entries: entriesByCat[shownCats[i].id] ?? const [],
+          sectionPages: sectionPagesByCat[shownCats[i].id] ?? const [],
           hasAnyEntries: allEntriesByCat[shownCats[i].id]?.isNotEmpty ?? false,
+          hasAnyPages: allSectionPagesByCat[shownCats[i].id]?.isNotEmpty ?? false,
           hasFilter: hasFilter,
           dragIndex: i,
           docs: shownCats,
@@ -559,8 +596,11 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
               context,
               shownCats[i],
               entriesDef: entriesDef,
+              pagesDef: pagesDef,
               entries: entriesByCat[shownCats[i].id] ?? const [],
+              sectionPages: sectionPagesByCat[shownCats[i].id] ?? const [],
               hasAnyEntries: allEntriesByCat[shownCats[i].id]?.isNotEmpty ?? false,
+              hasAnyPages: allSectionPagesByCat[shownCats[i].id]?.isNotEmpty ?? false,
               hasFilter: hasFilter,
               dragIndex: i,
               docs: shownCats,
@@ -573,8 +613,11 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
               context,
               c,
               entriesDef: entriesDef,
+              pagesDef: pagesDef,
               entries: entriesByCat[c.id] ?? const [],
+              sectionPages: sectionPagesByCat[c.id] ?? const [],
               hasAnyEntries: allEntriesByCat[c.id]?.isNotEmpty ?? false,
+              hasAnyPages: allSectionPagesByCat[c.id]?.isNotEmpty ?? false,
               hasFilter: hasFilter,
               isEmptyHidden: emptyCatIds.contains(c.id),
             ),
@@ -607,8 +650,11 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     BuildContext context,
     AdminDoc d, {
     required CollectionDef entriesDef,
+    required CollectionDef pagesDef,
     required List<AdminDoc> entries,
+    required List<AdminDoc> sectionPages,
     bool hasAnyEntries = false,
+    bool hasAnyPages = false,
     bool hasFilter = false,
     int? dragIndex,
     List<AdminDoc>? docs,
@@ -679,16 +725,18 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
           ]),
         ),
         const Divider(height: 1),
-        if (entries.isEmpty)
+        if (entries.isEmpty && sectionPages.isEmpty)
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
             child: Text(
-              context.tr(hasFilter && hasAnyEntries ? 'noMatches' : 'sectionEmptyItems'),
+              context.tr(hasFilter && (hasAnyEntries || hasAnyPages) ? 'noMatches' : 'sectionEmptyItems'),
               style: TextStyle(color: context.pal.muted, fontSize: 13),
             ),
           )
-        else
+        else ...[
           for (final e in entries) _entryRow(context, entriesDef, e),
+          for (final p in sectionPages) _sectionPageRow(context, pagesDef, p),
+        ],
         Padding(
           padding: const EdgeInsets.fromLTRB(12, 4, 12, 10),
           child: Wrap(
@@ -720,6 +768,38 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
           ),
         ),
       ]),
+    );
+  }
+
+  Widget _sectionPageRow(BuildContext context, CollectionDef pagesDef, AdminDoc p) {
+    final hidden = p.data['visible'] == false;
+    final sub = _subtitle(context, p, pagesDef);
+    return ListTile(
+      key: Key('sectionPageRow-${p.id}'),
+      dense: true,
+      contentPadding: const EdgeInsetsDirectional.only(start: 20, end: 8),
+      leading: Icon(Icons.description_outlined, size: 18, color: context.pal.muted),
+      title: Wrap(
+        crossAxisAlignment: WrapCrossAlignment.center,
+        spacing: 6,
+        runSpacing: 4,
+        children: [
+          Text(_title(p, pagesDef),
+              style: TextStyle(fontWeight: FontWeight.w600, color: hidden ? context.pal.muted : context.pal.ink)),
+          _Tag(context.tr('pageTag'), context.pal.primary),
+          _Tag(context.tr(hidden ? 'hidden' : 'visibleTag'),
+              hidden ? context.pal.muted : context.pal.success),
+        ],
+      ),
+      subtitle: sub.isEmpty ? null : Text(sub),
+      onTap: () => _openEditor(context, p, targetDef: pagesDef),
+      trailing: IconButton(
+        key: ValueKey('visibilitySectionPage-${p.id}'),
+        tooltip: context.tr(hidden ? 'show' : 'hide'),
+        icon: Icon(hidden ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+            color: hidden ? context.pal.muted : context.pal.success),
+        onPressed: () => _setVisible(context, p, hidden, targetDef: pagesDef),
+      ),
     );
   }
 

@@ -152,9 +152,20 @@ class _FeaturedPages extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           SectionTitle(context.tr('featuredPagesTitle')),
-          ResponsiveGrid(children: [
-            for (final p in pages) CustomPageCard(key: Key('featuredPage-${p.slug}'), page: p),
-          ]),
+          if (pages.length == 1)
+            Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 560),
+                child: CustomPageCard(
+                  key: Key('featuredPage-${pages.first.slug}'),
+                  page: pages.first,
+                ),
+              ),
+            )
+          else
+            ResponsiveGrid(children: [
+              for (final p in pages) CustomPageCard(key: Key('featuredPage-${p.slug}'), page: p),
+            ]),
         ],
       ),
     );

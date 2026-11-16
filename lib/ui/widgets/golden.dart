@@ -492,7 +492,7 @@ class _RevealState extends State<Reveal> with SingleTickerProviderStateMixin, Vi
   }
 
   @override
-  double get viewportLead => -40;
+  double get viewportLead => 20;
 
   @override
   void onViewportVisibility(bool visible) {

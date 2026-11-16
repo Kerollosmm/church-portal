@@ -5,6 +5,7 @@ import '../../core/l10n.dart';
 /// `main.dart.js` so public visitors do not download it (Golden Rule 12).
 const Map<String, List<String>> adminStrings = {
   'visibleTag': ['ظاهر', 'Visible'],
+  'pageTag': ['صفحة', 'Page'],
   'stoppedTag': ['موقوف', 'Stopped'],
   'expiredTag': ['منتهي', 'Expired'],
   'sampleTag': ['بيانات تجريبية', 'Sample'],

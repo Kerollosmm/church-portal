@@ -3208,6 +3208,91 @@ void main() {
       expect(find.descendant(of: pageCard, matching: find.text('فاضي، مش ظاهر للزوار')), findsNothing);
     });
 
+    testWidgets('CollectionListScreen(categories) unifies category emptiness and displays linked section pages', (tester) async {
+      tester.view.physicalSize = const Size(800, 1400);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final repo = _TestAdminBackend(initialCollections: {
+        'categories': [
+          AdminDoc('cat-church', {
+            'nameAr': 'كنيسه',
+            'nameEn': 'Church',
+            'slug': 'church',
+            'order': 10,
+            'visible': true,
+          }),
+          AdminDoc('cat-hidden-page', {
+            'nameAr': 'قسم صفحة مخفية',
+            'nameEn': 'Section Hidden Page',
+            'slug': 'hidden-page-cat',
+            'order': 20,
+            'visible': true,
+          }),
+          AdminDoc('cat-empty', {
+            'nameAr': 'قسم فارغ تماما',
+            'nameEn': 'Empty Section',
+            'slug': 'empty-cat',
+            'order': 30,
+            'visible': true,
+          }),
+        ],
+        'entries': [],
+        'pages': [
+          AdminDoc('p-donations', {
+            'categoryId': 'cat-church',
+            'titleAr': 'التبرعات',
+            'titleEn': 'Donations',
+            'slug': 'donations',
+            'placement': 'section',
+            'visible': true,
+          }),
+          AdminDoc('p-hidden', {
+            'categoryId': 'cat-hidden-page',
+            'titleAr': 'صفحة خاصة',
+            'titleEn': 'Private Page',
+            'slug': 'private',
+            'placement': 'section',
+            'visible': false,
+          }),
+        ],
+      });
+
+      await tester.pumpWidget(_app(
+        CollectionListScreen(repo: repo, def: collectionById('categories')!),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      final churchCard = find.byKey(const ValueKey('cat-church'));
+      final hiddenPageCard = find.byKey(const ValueKey('cat-hidden-page'));
+      final emptyCard = find.byKey(const ValueKey('cat-empty'));
+
+      // 1. cat-church with 0 entries and 1 visible placement == 'section' page ("التبرعات"):
+      // renders "التبرعات" row inside "كنيسه"
+      expect(find.descendant(of: churchCard, matching: find.byKey(const Key('sectionPageRow-p-donations'))), findsOneWidget);
+      expect(find.descendant(of: churchCard, matching: find.text('التبرعات')), findsOneWidget);
+      expect(find.descendant(of: churchCard, matching: find.text('صفحة')), findsOneWidget);
+      // hides "مفيش عناصر في القسم ده لسه"
+      expect(find.descendant(of: churchCard, matching: find.text('مفيش عناصر في القسم ده لسه')), findsNothing);
+      // hides "فاضي، مش ظاهر للزوار" chip
+      expect(find.descendant(of: churchCard, matching: find.text('فاضي، مش ظاهر للزوار')), findsNothing);
+
+      // 2. cat-hidden-page with 0 entries and 1 hidden (visible: false) placement == 'section' page:
+      // still shows the page row in Admin
+      expect(find.descendant(of: hiddenPageCard, matching: find.byKey(const Key('sectionPageRow-p-hidden'))), findsOneWidget);
+      expect(find.descendant(of: hiddenPageCard, matching: find.text('صفحة خاصة')), findsOneWidget);
+      // hides sectionEmptyItems
+      expect(find.descendant(of: hiddenPageCard, matching: find.text('مفيش عناصر في القسم ده لسه')), findsNothing);
+      // STILL shows "فاضي، مش ظاهر للزوار" chip (matching isCategoryNonEmpty!)
+      expect(find.descendant(of: hiddenPageCard, matching: find.text('فاضي، مش ظاهر للزوار')), findsOneWidget);
+
+      // 3. cat-empty with 0 entries and 0 section pages:
+      // shows both "فاضي، مش ظاهر للزوار" and sectionEmptyItems
+      expect(find.descendant(of: emptyCard, matching: find.text('فاضي، مش ظاهر للزوار')), findsOneWidget);
+      expect(find.descendant(of: emptyCard, matching: find.text('مفيش عناصر في القسم ده لسه')), findsOneWidget);
+    });
+
     testWidgets('AdminLoginPage uses emailLabel from l10n in Arabic and English', (tester) async {
       await tester.pumpWidget(_app(
         Scaffold(

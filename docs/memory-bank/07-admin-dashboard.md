@@ -431,8 +431,13 @@ questions per device per day** (1–100, default 3; replaced "per visit"). Blank
 ### Custom sections, items and pages (PR #18, ADR-027)
 Generic `CollectionListScreen`s for `categories` (note above the list: built-ins are switched in Sections & home
 page and renamed in Page headers), `entries` and `pages`. In `categories`, `CollectionListScreen` streams both `entries` and
-`pages` (`_entriesStream`, `_pagesStream`) and displays a badge tag **«فاضي، مش ظاهر للزوار»** (`context.tr('emptyHiddenFromVisitors')`)
-on categories with 0 visible entries and 0 visible section pages, clarifying why it is omitted from visitor navigation. Editor helpers (`DocEditor`): `FieldDef.slug`
+`pages` (`_entriesStream`, `_pagesStream`). Emptiness logic is unified via `isCategoryNonEmpty` (`custom_content.dart`) shared
+by both visitor nav (`publicNonEmptyCategories`) and Admin `CollectionListScreen` (`categories`), displaying a badge tag
+**«فاضي، مش ظاهر للزوار»** (`context.tr('emptyHiddenFromVisitors')`) on categories with 0 visible entries and 0 visible section pages,
+clarifying why it is omitted from visitor navigation. Admin `CollectionListScreen` (`categories`) now lists linked section pages
+(`placement == 'section'`, `_sectionPageRow` with `pageTag` «صفحة» / `'Page'`, visibility badge/toggle, and tap-to-edit)
+alongside entries within the category card, and only shows `'sectionEmptyItems'` («مفيش عناصر في القسم ده لسه») when BOTH
+entries and section pages are empty. Editor helpers (`DocEditor`): `FieldDef.slug`
 (`invalidSlug`, and `slugTaken` against the other docs of the list), `FieldDef.dynamicOptions: 'categories'` (the
 entry's section dropdown, loaded when the editor opens; a deleted category shows «قسم محذوف أو غير محدد»),
 `FieldDef.linkPicker` («اختيار صفحة…» on alert / entry / block links: custom pages, custom categories, built-in
