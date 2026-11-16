@@ -1943,12 +1943,17 @@ class DocEditorState extends State<DocEditor> {
     );
   }
 
-  String _blockSnippet(_Row row) {
-    for (final k in ['textAr', 'textEn', 'account', 'instapay', 'wallet', 'url']) {
-      final t = row.text[k]?.text.trim() ?? '';
-      if (t.isNotEmpty) return t;
-    }
-    return '';
+  String? _blockSnippet(_Row row) {
+    final type = (row.values['type'] ?? row.text['type']?.text ?? BlockTypes.paragraph).toString();
+    return blockSnippetSummary(
+      type: type,
+      textAr: row.text['textAr']?.text ?? (row.values['textAr']?.toString() ?? ''),
+      textEn: row.text['textEn']?.text ?? (row.values['textEn']?.toString() ?? ''),
+      url: row.text['url']?.text ?? (row.values['url']?.toString() ?? ''),
+      account: row.text['account']?.text ?? (row.values['account']?.toString() ?? ''),
+      instapay: row.text['instapay']?.text ?? (row.values['instapay']?.toString() ?? ''),
+      wallet: row.text['wallet']?.text ?? (row.values['wallet']?.toString() ?? ''),
+    );
   }
 
   Widget _objectList(FieldDef f) {
@@ -1996,14 +2001,16 @@ class DocEditorState extends State<DocEditor> {
                           Expanded(
                             child: Builder(builder: (context) {
                               final snippet = _blockSnippet(rows[i]);
+                              if (snippet == null) return const SizedBox.shrink();
+                              final isEmpty = snippet.isEmpty;
                               return Text(
-                                snippet.isEmpty ? context.tr('emptyBlockSnippet') : snippet,
+                                isEmpty ? context.tr('emptyBlockSnippet') : '· $snippet',
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
                                   fontSize: 13,
-                                  color: snippet.isEmpty ? context.pal.muted : context.pal.ink,
-                                  fontStyle: snippet.isEmpty ? FontStyle.italic : FontStyle.normal,
+                                  color: isEmpty ? context.pal.muted : context.pal.ink,
+                                  fontStyle: isEmpty ? FontStyle.italic : FontStyle.normal,
                                 ),
                               );
                             }),
@@ -2703,4 +2710,73 @@ class _LooseDatePickerDialogState extends State<_LooseDatePickerDialog> {
       ],
     );
   }
+}
+
+/// Extracts and formats the preview snippet for a collapsed block in doc editor.
+/// Returns:
+/// - `null` when snippet should be suppressed entirely (image block with URL but empty caption).
+/// - `''` when block is empty (should show `(فاضي)`).
+/// - non-empty String when a snippet is available (caller prefixes with `'· '`).
+@visibleForTesting
+String? blockSnippetSummary({
+  required String type,
+  String textAr = '',
+  String textEn = '',
+  String url = '',
+  String account = '',
+  String instapay = '',
+  String wallet = '',
+}) {
+  String raw = '';
+  if (type == BlockTypes.image) {
+    if (textAr.trim().isNotEmpty) {
+      raw = textAr;
+    } else if (textEn.trim().isNotEmpty) {
+      raw = textEn;
+    } else if (url.trim().isNotEmpty) {
+      return null;
+    } else {
+      return '';
+    }
+  } else if (type == BlockTypes.button || type == BlockTypes.link) {
+    if (textAr.trim().isNotEmpty) {
+      raw = textAr;
+    } else if (textEn.trim().isNotEmpty) {
+      raw = textEn;
+    } else if (url.trim().isNotEmpty) {
+      raw = url;
+    }
+  } else if (type == BlockTypes.heading || type == BlockTypes.paragraph) {
+    if (textAr.trim().isNotEmpty) {
+      raw = textAr;
+    } else if (textEn.trim().isNotEmpty) {
+      raw = textEn;
+    }
+  } else if (type == BlockTypes.donation) {
+    if (textAr.trim().isNotEmpty) {
+      raw = textAr;
+    } else if (textEn.trim().isNotEmpty) {
+      raw = textEn;
+    } else if (account.trim().isNotEmpty) {
+      raw = account;
+    } else if (instapay.trim().isNotEmpty) {
+      raw = instapay;
+    } else if (wallet.trim().isNotEmpty) {
+      raw = wallet;
+    }
+  } else {
+    for (final v in [textAr, textEn, account, instapay, wallet, url]) {
+      if (v.trim().isNotEmpty) {
+        raw = v;
+        break;
+      }
+    }
+  }
+
+  final collapsed = raw.replaceAll(RegExp(r'\s+'), ' ').trim();
+  if (collapsed.isEmpty) return '';
+  if (collapsed.length > 40) {
+    return '${collapsed.substring(0, 40)}…';
+  }
+  return collapsed;
 }

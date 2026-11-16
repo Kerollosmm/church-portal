@@ -11,6 +11,7 @@ import '../../core/push_env.dart' show hasPendingWebPushSync, readWebPushStorage
 import '../../core/theme.dart';
 import '../../data/error_reporting.dart';
 import '../../data/web_push_repository.dart' deferred as web_push;
+import '../../domain/custom_content.dart';
 import '../../domain/features.dart';
 import '../../domain/item_detail.dart';
 import '../../domain/reminders.dart';
@@ -42,8 +43,18 @@ class NavItem {
 ({List<NavItem> categories, List<NavItem> pages}) customNavItems(WidgetRef ref) {
   final f = ref.watch(featuresProvider);
   // Each list follows its section switch (Sections.customSections / customPages).
-  final cats = f.enabled(Sections.customSections) ? ref.watch(categoriesProvider).value ?? const [] : const [];
-  final pages = f.enabled(Sections.customPages) ? ref.watch(customPagesProvider).value ?? const [] : const [];
+  final rawCats = f.enabled(Sections.customSections)
+      ? ref.watch(categoriesProvider).value ?? const <CustomCategory>[]
+      : const <CustomCategory>[];
+  final pages = f.enabled(Sections.customPages)
+      ? ref.watch(customPagesProvider).value ?? const <CustomPage>[]
+      : const <CustomPage>[];
+  final entries = f.enabled(Sections.customSections)
+      ? ref.watch(entriesProvider).value ?? const <CategoryEntry>[]
+      : const <CategoryEntry>[];
+  final cats = f.enabled(Sections.customSections)
+      ? publicNonEmptyCategories(rawCats, entries, pages)
+      : const <CustomCategory>[];
   return (
     categories: [
       for (final c in cats)

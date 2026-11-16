@@ -42,8 +42,9 @@ lib/
     media.dart              MediaImage (optional `image` map), MediaLimits, isValidImageUrl, fitWithin,
                             orphanedMediaIds
     custom_content.dart     CustomCategory, CategoryEntry, CustomPage, PageBlock (encode/fromStored), BlockTypes,
-                            isValidSlug, publicCategories/publicPages, entriesOf, entryIdsToHide, linkTargets
-                            (PR #18, ADR-027)
+                            isValidSlug, publicCategories/publicPages, entriesOf, entryIdsToHide, linkTargets,
+                            isCategoryNonEmpty, publicNonEmptyCategories, featuredPages
+                            (PR #18, ADR-027, ADR-073)
     contact_categories.dart ContactSettings (defaults), ContactCategory (encode/fromStored), ContactKinds,
                             MessageStatus, inboxBoxOf, messageIsOpen (PR #18, ADR-028); stable random ids
                             newContactCategoryId / ContactSettings.newId (PR #19)

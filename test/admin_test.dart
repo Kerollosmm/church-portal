@@ -7,6 +7,7 @@ import 'package:church_portal/core/theme.dart';
 import 'package:church_portal/data/admin_repository.dart';
 import 'package:church_portal/data/media_repository.dart';
 import 'package:church_portal/domain/cairo_time.dart';
+import 'package:church_portal/domain/custom_content.dart';
 import 'package:church_portal/domain/daily_verse.dart';
 import 'package:church_portal/domain/features.dart';
 import 'package:church_portal/domain/models.dart';
@@ -3096,6 +3097,141 @@ void main() {
       expect(find.descendant(of: openCat, matching: find.byIcon(Icons.open_in_new_rounded)), findsOneWidget);
       expect(find.descendant(of: delEntry, matching: find.text('حذف')), findsOneWidget);
       expect(tester.getTopLeft(delEntry).dy, greaterThanOrEqualTo(tester.getBottomLeft(visEntry).dy));
+    });
+
+    test('blockSnippetSummary: extracts and formats preview snippet per BlockType', () {
+      // 1. Image
+      // Caption present -> returns truncated caption
+      expect(blockSnippetSummary(type: BlockTypes.image, textAr: 'صورة تجربة'), 'صورة تجربة');
+      expect(blockSnippetSummary(type: BlockTypes.image, textEn: 'Test image'), 'Test image');
+      // Caption empty, url present -> returns null (suppressed)
+      expect(blockSnippetSummary(type: BlockTypes.image, url: 'https://example.com/a.jpg'), isNull);
+      // Caption empty, url empty -> returns '' (empty)
+      expect(blockSnippetSummary(type: BlockTypes.image), '');
+
+      // 2. Button and Link: textAr / textEn first, then url
+      expect(blockSnippetSummary(type: BlockTypes.button, textAr: 'زر تجربة', url: '/home'), 'زر تجربة');
+      expect(blockSnippetSummary(type: BlockTypes.button, url: '/contact'), '/contact');
+      expect(blockSnippetSummary(type: BlockTypes.button), '');
+
+      expect(blockSnippetSummary(type: BlockTypes.link, textEn: 'Link label', url: 'https://example.com'), 'Link label');
+      expect(blockSnippetSummary(type: BlockTypes.link, url: 'https://example.com'), 'https://example.com');
+      expect(blockSnippetSummary(type: BlockTypes.link), '');
+
+      // 3. Heading and Paragraph: textAr / textEn only
+      expect(blockSnippetSummary(type: BlockTypes.heading, textAr: 'عنوان رئيسي'), 'عنوان رئيسي');
+      expect(blockSnippetSummary(type: BlockTypes.heading, url: 'https://ignored.com'), '');
+
+      expect(blockSnippetSummary(type: BlockTypes.paragraph, textEn: 'Paragraph body'), 'Paragraph body');
+      expect(blockSnippetSummary(type: BlockTypes.paragraph), '');
+
+      // 4. Donation: textAr, textEn, account, instapay, wallet
+      expect(blockSnippetSummary(type: BlockTypes.donation, textAr: 'ملاحظات التبرع'), 'ملاحظات التبرع');
+      expect(blockSnippetSummary(type: BlockTypes.donation, account: '123456789'), '123456789');
+      expect(blockSnippetSummary(type: BlockTypes.donation, instapay: 'user@instapay'), 'user@instapay');
+      expect(blockSnippetSummary(type: BlockTypes.donation, wallet: '01012345678'), '01012345678');
+      expect(blockSnippetSummary(type: BlockTypes.donation), '');
+
+      // 5. Whitespace collapsing and 40-character truncation
+      const multiLine = '   السطر الأول \n\n  السطر    الثاني \t  ';
+      expect(blockSnippetSummary(type: BlockTypes.paragraph, textAr: multiLine), 'السطر الأول السطر الثاني');
+
+      const longText = 'هذا نص طويل جداً جداً جداً جداً جداً جداً جداً جداً يتعدى أربعين حرفاً بالتأكيد';
+      final truncated = blockSnippetSummary(type: BlockTypes.paragraph, textAr: longText);
+      expect(truncated, isNotNull);
+      expect(truncated!.endsWith('…'), isTrue);
+      expect(truncated.substring(0, 40), longText.substring(0, 40));
+    });
+
+    testWidgets('CollectionListScreen displays "فاضي، مش ظاهر للزوار" chip for categories without visible entries or visible section pages', (tester) async {
+      tester.view.physicalSize = const Size(800, 1200);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final repo = _TestAdminBackend(initialCollections: {
+        'categories': [
+          AdminDoc('cat-empty', {
+            'nameAr': 'قسم فارغ',
+            'nameEn': 'Empty Section',
+            'slug': 'empty-cat',
+            'order': 10,
+            'visible': true,
+          }),
+          AdminDoc('cat-with-entry', {
+            'nameAr': 'قسم فيه عناصر',
+            'nameEn': 'With Entries',
+            'slug': 'with-entries',
+            'order': 20,
+            'visible': true,
+          }),
+          AdminDoc('cat-with-page', {
+            'nameAr': 'قسم فيه صفحة',
+            'nameEn': 'With Section Page',
+            'slug': 'with-page',
+            'order': 30,
+            'visible': true,
+          }),
+        ],
+        'entries': [
+          AdminDoc('e1', {
+            'categoryId': 'cat-with-entry',
+            'titleAr': 'عنصر 1',
+            'visible': true,
+          }),
+        ],
+        'pages': [
+          AdminDoc('p1', {
+            'categoryId': 'cat-with-page',
+            'titleAr': 'صفحة قسم',
+            'slug': 'page-sec',
+            'placement': 'section',
+            'visible': true,
+          }),
+        ],
+      });
+
+      await tester.pumpWidget(_app(
+        CollectionListScreen(repo: repo, def: collectionById('categories')!),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      // "فاضي، مش ظاهر للزوار" tag appears on cat-empty, but NOT on cat-with-entry or cat-with-page
+      expect(find.text('فاضي، مش ظاهر للزوار'), findsOneWidget);
+      final emptyCard = find.byKey(const ValueKey('cat-empty'));
+      expect(find.descendant(of: emptyCard, matching: find.text('فاضي، مش ظاهر للزوار')), findsOneWidget);
+
+      final entryCard = find.byKey(const ValueKey('cat-with-entry'));
+      expect(find.descendant(of: entryCard, matching: find.text('فاضي، مش ظاهر للزوار')), findsNothing);
+
+      final pageCard = find.byKey(const ValueKey('cat-with-page'));
+      expect(find.descendant(of: pageCard, matching: find.text('فاضي، مش ظاهر للزوار')), findsNothing);
+    });
+
+    testWidgets('AdminLoginPage uses emailLabel from l10n in Arabic and English', (tester) async {
+      await tester.pumpWidget(_app(
+        Scaffold(
+          body: AdminLoginForm(
+            onSignIn: (email, password, {rememberMe = false}) async {},
+            onResetPassword: (_) async => true,
+          ),
+        ),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+      expect(find.text('البريد الإلكتروني'), findsOneWidget);
+
+      await tester.pumpWidget(_app(
+        Scaffold(
+          body: AdminLoginForm(
+            onSignIn: (email, password, {rememberMe = false}) async {},
+            onResetPassword: (_) async => true,
+          ),
+        ),
+        locale: const Locale('en'),
+      ));
+      await tester.pumpAndSettle();
+      expect(find.text('Email'), findsOneWidget);
     });
 
     testWidgets('P2-24: phone & photo open at top; advanced card validates while closed & renders cleanly at 320px/200%',

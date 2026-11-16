@@ -15,8 +15,10 @@ render with `PageBody` (+ `Footer`). Content comes from Riverpod providers (hidd
   saints or images off → arches hold the drawn Coptic cross. A plaster "ledge" closes the hero.
 - **Featured pages** (`_FeaturedPages`, key `home-featuredPages`): placed in the discovery zone before the first of
   `milestones`/`directory`/`map`, ahead of `_PatronsTeaser`. Displays a `SectionTitle` with `'featuredPagesTitle'`
-  («صفحات مميزة» / "Featured pages") and a `ResponsiveGrid` of `CustomPageCard`s for all visible pages with `featured: true`
-  (when `Sections.customPages` is on; returns `SizedBox.shrink()` when empty). `ViewportVisibility` and `_RevealState`
+  («صفحات مميزة» / "Featured pages") and a `ResponsiveGrid` of `CustomPageCard`s for all visible usable pages with `featured: true`,
+  sorted by `order` ascending, then `updatedAt` descending (newest first, non-null before null), then original index on ties,
+  with duplicate slugs deduplicated via `featuredPages` (`lib/domain/custom_content.dart`; returns `SizedBox.shrink()` when empty,
+  when `Sections.customPages` is on). `ViewportVisibility` and `_RevealState`
   in `golden.dart` ignore 0-height unhydrated children and listen to `SizeChangedLayoutNotification` via
   `SizeChangedLayoutNotifier`, ensuring dynamically loaded async lists reveal to `opacity: 1` without requiring extra scroll.
 - **Patrons teaser** (`_PatronsTeaser`, key `home-patrons`): placed before the first of milestones/directory/map
@@ -298,12 +300,12 @@ unknown → `Key('pageUnavailable')`, `noindex`. Placement (`placement`, PR 3D /
 notices/buttons/links), `'nav'` (synced with `showInNav`), or `'section'` (`categoryId`, rendered as an «اعرف المزيد»
 `CustomPageCard` inside `/section/<slug>`). `DocEditor.collect()` retains `categoryId` across `'link'` and `'nav'` saves so
 switching placement back retains the category, while `sectionPages` strictly checks `placement == 'section'`. Setting
-`featured` places a card on `HomePage` (`_FeaturedPages`, key `home-featuredPages`) under section title «صفحات مميزة»
-before discovery blocks whenever `Sections.customPages` is on. Gated by `Sections.customPages` plus each page's
+`featured` (admin hint «هتظهر في «صفحات مميزة» في الرئيسية مهما كان مكانها») places a card on `HomePage`
+(`_FeaturedPages`, key `home-featuredPages`) under section title «صفحات مميزة» before discovery blocks whenever `Sections.customPages` is on (sorted via `featuredPages`). Gated by `Sections.customPages` plus each page's
 `visible`. Loading follows the same rule as `/section/<slug>` (PR #23).
 
 ### Menu entries for custom content (PR #18)
-`customNavItems(ref)` (`app_shell.dart`): categories with `showInNav` are appended to the "Church services" popup
+`customNavItems(ref)` (`app_shell.dart`): categories with `showInNav` are filtered via `publicNonEmptyCategories` (checking `isCategoryNonEmpty` so empty sections with 0 visible entries and 0 section pages are omitted from visitor navigation) and appended to the "Church services" popup
 (desktop) and drawer group; pages with `inNav` (`placement == 'nav'`, or legacy `showInNav: true`) to the desktop bar
 (after the services menu) and the "The church" drawer group. `NavItem.labelAr/labelEn` carry their own labels.
 

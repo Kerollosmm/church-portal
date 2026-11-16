@@ -91,6 +91,8 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
   late Stream<List<AdminDoc>> _stream = widget.repo.watch(widget.def.name);
   late Stream<List<AdminDoc>>? _entriesStream =
       widget.def.name == 'categories' ? widget.repo.watch('entries') : null;
+  late Stream<List<AdminDoc>>? _pagesStream =
+      widget.def.name == 'categories' ? widget.repo.watch('pages') : null;
   StreamSubscription<AdminDoc?>? _featuresSub;
   bool _englishEnabled = true;
 
@@ -122,6 +124,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     if (old.def.name != widget.def.name || old.repo != widget.repo) {
       _stream = widget.repo.watch(widget.def.name);
       _entriesStream = widget.def.name == 'categories' ? widget.repo.watch('entries') : null;
+      _pagesStream = widget.def.name == 'categories' ? widget.repo.watch('pages') : null;
     }
     if (old.repo != widget.repo) _bindFeatures();
     if (old.def.id != widget.def.id || old.def.name != widget.def.name) {
@@ -217,7 +220,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
           );
           _checkLazyPurge(snap.data!, def);
 
-          if (def.name == 'categories' && _entriesStream != null) {
+          if (def.name == 'categories' && _entriesStream != null && _pagesStream != null) {
             return StreamBuilder<List<AdminDoc>>(
               key: ObjectKey(_entriesStream),
               stream: _entriesStream,
@@ -226,71 +229,103 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
                   return Center(child: Padding(padding: const EdgeInsets.all(24), child: Text('${entrySnap.error}')));
                 }
                 if (!entrySnap.hasData) return const Center(child: CircularProgressIndicator());
-                final entriesDef = collectionById('entries')!;
-                final rawEntries = entrySnap.data!;
-                _checkLazyPurge(rawEntries, entriesDef);
-                final visibleEntries = sortAdminDocs(
-                    entriesDef,
-                    rawEntries
-                        .where((d) => !isSoftDeleted(d.data) && !_pendingDelete.isPending(d.id))
-                        .toList());
-                final filteredEntries =
-                    filterAdminDocs(entriesDef, visibleEntries, query: _search.text, filter: _filter);
-                final hasFilter = _search.text.trim().isNotEmpty || _filter != ListFilter.all;
-                final matchingCatIds = {for (final c in docs) c.id};
-                final allEntriesByCat = <String, List<AdminDoc>>{};
-                final entriesByCat = <String, List<AdminDoc>>{};
-                final allCatIds = {for (final c in visible) c.id};
-                for (final e in visibleEntries) {
-                  final cid = '${e.data['categoryId'] ?? ''}';
-                  if (allCatIds.contains(cid)) {
-                    (allEntriesByCat[cid] ??= []).add(e);
-                  }
-                }
-                final unassigned = <AdminDoc>[];
-                for (final e in filteredEntries) {
-                  final cid = '${e.data['categoryId'] ?? ''}';
-                  if (allCatIds.contains(cid)) {
-                    (entriesByCat[cid] ??= []).add(e);
-                  } else {
-                    unassigned.add(e);
-                  }
-                }
-                final shownCats = hasFilter
-                    ? [
-                        for (final c in visible)
-                          if (matchingCatIds.contains(c.id) || (entriesByCat[c.id]?.isNotEmpty ?? false)) c,
-                      ]
-                    : visible;
-                final canReorder =
-                    def.orderable && !hasFilter && shownCats.length > 1;
-                return CustomScrollView(slivers: [
-                  if (widget.showHeader)
-                    SliverToBoxAdapter(
-                      child: AdminScreenHeader(
-                        title: context.pick(def.labelAr, def.labelEn),
-                        help: context.pick(def.helpAr, def.helpEn),
-                        padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+                return StreamBuilder<List<AdminDoc>>(
+                  key: ObjectKey(_pagesStream),
+                  stream: _pagesStream,
+                  builder: (context, pageSnap) {
+                    if (pageSnap.hasError) {
+                      return Center(
+                          child: Padding(padding: const EdgeInsets.all(24), child: Text('${pageSnap.error}')));
+                    }
+                    if (!pageSnap.hasData) return const Center(child: CircularProgressIndicator());
+                    final entriesDef = collectionById('entries')!;
+                    final rawEntries = entrySnap.data!;
+                    _checkLazyPurge(rawEntries, entriesDef);
+                    final rawPages = pageSnap.data!;
+                    final visibleEntries = sortAdminDocs(
+                        entriesDef,
+                        rawEntries
+                            .where((d) => !isSoftDeleted(d.data) && !_pendingDelete.isPending(d.id))
+                            .toList());
+                    final filteredEntries =
+                        filterAdminDocs(entriesDef, visibleEntries, query: _search.text, filter: _filter);
+                    final hasFilter = _search.text.trim().isNotEmpty || _filter != ListFilter.all;
+                    final matchingCatIds = {for (final c in docs) c.id};
+                    final allEntriesByCat = <String, List<AdminDoc>>{};
+                    final entriesByCat = <String, List<AdminDoc>>{};
+                    final allCatIds = {for (final c in visible) c.id};
+                    for (final e in visibleEntries) {
+                      final cid = '${e.data['categoryId'] ?? ''}';
+                      if (allCatIds.contains(cid)) {
+                        (allEntriesByCat[cid] ??= []).add(e);
+                      }
+                    }
+                    final unassigned = <AdminDoc>[];
+                    for (final e in filteredEntries) {
+                      final cid = '${e.data['categoryId'] ?? ''}';
+                      if (allCatIds.contains(cid)) {
+                        (entriesByCat[cid] ??= []).add(e);
+                      } else {
+                        unassigned.add(e);
+                      }
+                    }
+                    final sectionPagesByCat = <String, List<AdminDoc>>{};
+                    for (final p in rawPages) {
+                      if (isSoftDeleted(p.data) || _pendingDelete.isPending(p.id)) continue;
+                      final cid = '${p.data['categoryId'] ?? ''}';
+                      if (cid.isNotEmpty && allCatIds.contains(cid)) {
+                        final page = CustomPage.fromMap(p.id, p.data);
+                        if (page.visible &&
+                            page.isUsable &&
+                            page.effectivePlacement == PagePlacements.section) {
+                          (sectionPagesByCat[cid] ??= []).add(p);
+                        }
+                      }
+                    }
+                    final emptyCatIds = <String>{
+                      for (final c in visible)
+                        if (!(allEntriesByCat[c.id] ?? const []).any((e) => e.data['visible'] != false) &&
+                            (sectionPagesByCat[c.id]?.isEmpty ?? true))
+                          c.id,
+                    };
+                    final shownCats = hasFilter
+                        ? [
+                            for (final c in visible)
+                              if (matchingCatIds.contains(c.id) || (entriesByCat[c.id]?.isNotEmpty ?? false)) c,
+                          ]
+                        : visible;
+                    final canReorder =
+                        def.orderable && !hasFilter && shownCats.length > 1;
+                    return CustomScrollView(slivers: [
+                      if (widget.showHeader)
+                        SliverToBoxAdapter(
+                          child: AdminScreenHeader(
+                            title: context.pick(def.labelAr, def.labelEn),
+                            help: context.pick(def.helpAr, def.helpEn),
+                            padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+                          ),
+                        ),
+                      SliverToBoxAdapter(
+                        child: _toolbar(context, visible.length, shownCats.length, canReorder,
+                            showUnconfirmed: entriesDef.hasSample),
                       ),
-                    ),
-                  SliverToBoxAdapter(
-                    child: _toolbar(context, visible.length, shownCats.length, canReorder,
-                        showUnconfirmed: entriesDef.hasSample),
-                  ),
-                  SliverToBoxAdapter(
-                    child: _categoriesBody(
-                      context,
-                      entriesDef: entriesDef,
-                      allVisibleCats: visible,
-                      shownCats: shownCats,
-                      entriesByCat: entriesByCat,
-                      allEntriesByCat: allEntriesByCat,
-                      hasFilter: hasFilter,
-                      unassigned: unassigned,
-                      canReorder: canReorder,
-                    ),
-                  ),
-                ]);
+                      SliverToBoxAdapter(
+                        child: _categoriesBody(
+                          context,
+                          entriesDef: entriesDef,
+                          allVisibleCats: visible,
+                          shownCats: shownCats,
+                          entriesByCat: entriesByCat,
+                          allEntriesByCat: allEntriesByCat,
+                          hasFilter: hasFilter,
+                          unassigned: unassigned,
+                          canReorder: canReorder,
+                          emptyCatIds: emptyCatIds,
+                        ),
+                      ),
+                    ]);
+                  },
+                );
               },
             );
           }
@@ -442,6 +477,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     required bool hasFilter,
     required List<AdminDoc> unassigned,
     required bool canReorder,
+    Set<String> emptyCatIds = const {},
   }) {
     if (allVisibleCats.isEmpty && unassigned.isEmpty) {
       return Center(
@@ -484,6 +520,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
           hasFilter: hasFilter,
           dragIndex: i,
           docs: shownCats,
+          isEmptyHidden: emptyCatIds.contains(shownCats[i].id),
         ),
       );
     }
@@ -527,6 +564,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
               hasFilter: hasFilter,
               dragIndex: i,
               docs: shownCats,
+              isEmptyHidden: emptyCatIds.contains(shownCats[i].id),
             ),
           )
         else
@@ -538,6 +576,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
               entries: entriesByCat[c.id] ?? const [],
               hasAnyEntries: allEntriesByCat[c.id]?.isNotEmpty ?? false,
               hasFilter: hasFilter,
+              isEmptyHidden: emptyCatIds.contains(c.id),
             ),
         if (unassigned.isNotEmpty) _unassignedCard(context, entriesDef, unassigned),
       ],
@@ -573,6 +612,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     bool hasFilter = false,
     int? dragIndex,
     List<AdminDoc>? docs,
+    bool isEmptyHidden = false,
   }) {
     final hidden = d.data['visible'] == false;
     final updated = d.updatedAt;
@@ -614,6 +654,8 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
                       fontWeight: FontWeight.w800, color: hidden ? context.pal.muted : context.pal.ink)),
               _Tag(context.tr(hidden ? 'hidden' : 'visibleTag'),
                   hidden ? context.pal.muted : context.pal.success),
+              if (isEmptyHidden)
+                _Tag(context.tr('emptyHiddenFromVisitors'), context.pal.muted),
             ],
           ),
           subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

@@ -73,7 +73,8 @@ const Map<String, List<String>> adminStrings = {
   'opt_placement_section': ['جوه قسم كـ«اعرف المزيد»', 'Inside a section ("Learn more")'],
   'switch_featured_on': ['مميزة في الرئيسية', 'Featured on Home'],
   'switch_featured_off': ['عادية', 'Standard'],
-  'emptyBlockSnippet': ['(فارغ)', '(empty)'],
+  'emptyBlockSnippet': ['(فاضي)', '(empty)'],
+  'emptyHiddenFromVisitors': ['فاضي، مش ظاهر للزوار', 'Empty, hidden from visitors'],
   'collapseBlock': ['طي الفقرة', 'Collapse block'],
   'expandBlock': ['توسيع الفقرة', 'Expand block'],
   // Season preparation (ADR-042, deferred out of main.dart.js)
@@ -262,6 +263,7 @@ const Map<String, List<String>> adminStrings = {
   ],
   'unnamedContactType': ['نوع بدون اسم', 'Unnamed type'],
   'moreActions': ['خيارات إضافية', 'More actions'],
+  'emailLabel': ['البريد الإلكتروني', 'Email'],
 };
 
 /// Idempotently registers [adminStrings] in the runtime localization table.

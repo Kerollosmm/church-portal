@@ -486,7 +486,7 @@ class _AdminLoginFormState extends State<AdminLoginForm> {
                     keyboardType: TextInputType.emailAddress,
                     textDirection: TextDirection.ltr,
                     autofillHints: const [AutofillHints.email],
-                    decoration: const InputDecoration(labelText: 'Email', prefixIcon: Icon(Icons.email_outlined)),
+                    decoration: InputDecoration(labelText: context.tr('emailLabel'), prefixIcon: const Icon(Icons.email_outlined)),
                   ),
                   const SizedBox(height: 12),
                   TextField(

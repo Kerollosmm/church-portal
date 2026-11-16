@@ -419,6 +419,33 @@ void main() {
       expect(find.text('Building donations'), findsOneWidget);
     });
 
+    testWidgets('menu hides empty category with showInNav: true, while direct route renders EmptyState', (tester) async {
+      const emptyCat = CustomCategory(
+        id: 'k-empty',
+        slug: 'empty-cat',
+        nameAr: 'قسم فارغ',
+        nameEn: 'Empty Section',
+        order: 5,
+        showInNav: true,
+      );
+      final repo = _ControlledPagesRepo(
+        Stream.value(_pages),
+        cats: [..._cats, emptyCat],
+        entries: _entries,
+      );
+      final (router, _) = await _pump(tester, '/', repo: repo);
+      await tester.tap(find.byTooltip('Menu'));
+      await tester.pumpAndSettle();
+      expect(find.text('Youth trips'), findsOneWidget);
+      expect(find.text('Empty Section'), findsNothing, reason: 'empty category is hidden from menu');
+
+      router.go('/section/empty-cat');
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('category-empty-cat')), findsOneWidget);
+      expect(find.byType(EmptyState), findsOneWidget);
+      expect(find.text('Nothing in this section yet'), findsOneWidget);
+    });
+
     testWidgets('section switches: custom sections / pages off → not available and out of the menu', (tester) async {
       final (router, _) = await _pump(tester, '/section/youth-trips',
           repo: _Repo({Sections.customSections: false, Sections.customPages: false}));
@@ -1092,6 +1119,103 @@ void main() {
       expect(featuredPages([legacyNav, inSec, hidden]).map((p) => p.id), ['p4']);
     });
 
+    test('featuredPages sorting: order first, then updatedAt newest-first, then null updatedAt last, ties keep original index', () {
+      final p1 = CustomPage.fromMap('p1', {
+        'slug': 'p1',
+        'titleAr': 'Page 1',
+        'featured': true,
+        'order': 10,
+        'updatedAt': '2026-11-10T10:00:00Z',
+      });
+      final p2 = CustomPage.fromMap('p2', {
+        'slug': 'p2',
+        'titleAr': 'Page 2',
+        'featured': true,
+        'order': 0,
+        'updatedAt': '2026-11-05T10:00:00Z',
+      });
+      final p3 = CustomPage.fromMap('p3', {
+        'slug': 'p3',
+        'titleAr': 'Page 3',
+        'featured': true,
+        'order': 0,
+        'updatedAt': DateTime(2026, 11, 15, 10, 0),
+      });
+      final p4 = CustomPage.fromMap('p4', {
+        'slug': 'p4',
+        'titleAr': 'Page 4',
+        'featured': true,
+        'order': 0,
+      });
+      final p5 = CustomPage.fromMap('p5', {
+        'slug': 'p5',
+        'titleAr': 'Page 5',
+        'featured': true,
+        'order': 0,
+      });
+
+      // p3 (order 0, 2026-11-15) > p2 (order 0, 2026-11-05) > p4 (order 0, null) > p5 (order 0, null) > p1 (order 10)
+      final sorted = featuredPages([p1, p4, p2, p5, p3]);
+      expect(sorted.map((p) => p.id), ['p3', 'p2', 'p4', 'p5', 'p1']);
+    });
+
+    test('isCategoryNonEmpty and publicNonEmptyCategories filter empty categories and non-section pages', () {
+      const catWithEntry = CustomCategory(id: 'c1', slug: 'c1', nameAr: 'قسم 1', order: 10);
+      const catWithSectionPage = CustomCategory(id: 'c2', slug: 'c2', nameAr: 'قسم 2', order: 20);
+      const catEmpty = CustomCategory(id: 'c3', slug: 'c3', nameAr: 'قسم فارغ', order: 30);
+      const catWithHiddenEntry = CustomCategory(id: 'c4', slug: 'c4', nameAr: 'قسم 4', order: 40);
+      const catWithNonSectionPage = CustomCategory(id: 'c5', slug: 'c5', nameAr: 'قسم 5', order: 50);
+
+      final entries = [
+        CategoryEntry.fromMap('e1', {'categoryId': 'c1', 'titleAr': 'عنصر 1', 'visible': true}),
+        CategoryEntry.fromMap('e2', {'categoryId': 'c4', 'titleAr': 'عنصر مخفي', 'visible': false}),
+      ];
+
+      final pages = [
+        CustomPage.fromMap('p1', {
+          'slug': 'page-sec',
+          'titleAr': 'صفحة قسم',
+          'categoryId': 'c2',
+          'placement': 'section',
+          'visible': true,
+        }),
+        CustomPage.fromMap('p2', {
+          'slug': 'page-sec-hidden',
+          'titleAr': 'صفحة قسم مخفية',
+          'categoryId': 'c3',
+          'placement': 'section',
+          'visible': false,
+        }),
+        CustomPage.fromMap('p3', {
+          'slug': 'page-link',
+          'titleAr': 'صفحة رابط',
+          'categoryId': 'c5',
+          'placement': 'link',
+          'visible': true,
+        }),
+        CustomPage.fromMap('p4', {
+          'slug': 'page-nav',
+          'titleAr': 'صفحة قائمة',
+          'categoryId': 'c5',
+          'placement': 'nav',
+          'visible': true,
+        }),
+      ];
+
+      expect(isCategoryNonEmpty(catWithEntry, entries, pages), isTrue);
+      expect(isCategoryNonEmpty(catWithSectionPage, entries, pages), isTrue);
+      expect(isCategoryNonEmpty(catEmpty, entries, pages), isFalse);
+      expect(isCategoryNonEmpty(catWithHiddenEntry, entries, pages), isFalse);
+      expect(isCategoryNonEmpty(catWithNonSectionPage, entries, pages), isFalse);
+
+      final result = publicNonEmptyCategories(
+        [catWithEntry, catWithSectionPage, catEmpty, catWithHiddenEntry, catWithNonSectionPage],
+        entries,
+        pages,
+      );
+      expect(result.map((c) => c.id), ['c1', 'c2']);
+    });
+
     testWidgets('P1-18: DocEditor syncs nav showInNav and requires categoryId for section placement', (tester) async {
       tester.view.physicalSize = const Size(900, 3000);
       tester.view.devicePixelRatio = 1;
@@ -1569,12 +1693,12 @@ void main() {
       // Only 1 row expanded at a time: initially row 0 is expanded
       expect(find.byType(DropdownButtonFormField<String>), findsOneWidget);
       expect(find.text('ع1'), findsOneWidget);
-      // Collapsed rows show summaries
-      expect(find.text('ف2'), findsOneWidget);
-      expect(find.text('not-a-valid-url'), findsOneWidget);
+      // Collapsed rows show summaries (formatted with '· ' prefix)
+      expect(find.text('· ف2'), findsOneWidget);
+      expect(find.text('· not-a-valid-url'), findsOneWidget);
 
       // Tap on row 1 (paragraph) summary to expand it
-      await tester.tap(find.text('ف2'));
+      await tester.tap(find.text('· ف2'));
       await tester.pumpAndSettle();
 
       // Now row 1 is expanded, still only 1 DropdownButtonFormField mounted
@@ -1588,7 +1712,7 @@ void main() {
       expect(find.byType(DropdownButtonFormField<String>), findsOneWidget);
 
       // Switch back to row 0
-      await tester.tap(find.text('ع1'));
+      await tester.tap(find.text('· ع1'));
       await tester.pumpAndSettle();
 
       // Try saving -> invalid block error summary appears because collapsed block 3 has invalid url
@@ -1673,8 +1797,13 @@ class _StreamContactBackend extends _Backend {
 class _ControlledPagesRepo extends _Repo {
   final Stream<List<CustomPage>> _pagesStream;
   final List<CategoryEntry> _customEntries;
-  _ControlledPagesRepo(this._pagesStream, {required List<CategoryEntry> entries})
-      : _customEntries = entries;
+  final List<CustomCategory>? _customCats;
+  _ControlledPagesRepo(this._pagesStream, {required List<CategoryEntry> entries, List<CustomCategory>? cats})
+      : _customEntries = entries,
+        _customCats = cats;
+
+  @override
+  Stream<List<CustomCategory>> categories() => Stream.value(_customCats ?? _cats);
 
   @override
   Stream<List<CategoryEntry>> entries() => Stream.value(_customEntries);

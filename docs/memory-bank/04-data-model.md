@@ -352,8 +352,8 @@ else the category's), `visible`, `order`, `sample`. Not seeded.
 `subtitleAr/En` (≤ 300), `image` (optional hero), `placement` (`'link'` | `'nav'` | `'section'`, PR 3D / P1-18 —
 absent falls back to `showInNav ? 'nav' : 'link'`), `categoryId` (string `[A-Za-z0-9_-]{1,128}` required when
 `placement == 'section'`, `{0,128}` otherwise), `showInNav` (bool synced with `placement == 'nav'`, missing = **false**:
-pages are off the menu by default), `featured` (bool, default `false` — shows a «اعرف المزيد» card on `HomePage`),
-`visible`, `order`, `blocks` (≤ 20, saved in their own write). **Each block is one string**:
+pages are off the menu by default), `featured` (bool, default `false` — shows a «اعرف المزيد» card on `HomePage`, hint «هتظهر في «صفحات مميزة» في الرئيسية مهما كان مكانها»; sorted by `order` asc, `updatedAt` desc, unique slug),
+`updatedAt` (parsed `DateTime?`, stamped on admin saves), `visible`, `order`, `blocks` (≤ 20, saved in their own write). **Each block is one string**:
 `type␟textAr␟textEn␟url␟account␟instapay␟wallet` (U+001F, `PageBlock.encode` / `fromStored`; maps are still read
 tolerantly). Types: `heading`, `paragraph` (texts ≤ 4000), `image` (`url` = https picture link, texts = caption),
 `button` / `link` (texts = label, `url` = in-app path or http(s) URL), `donation` (`account` ≤ 120, `instapay` ≤ 80,

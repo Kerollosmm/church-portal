@@ -33,7 +33,8 @@ flowchart TD
 ```
 
 - `adminRole(uid)` reads `admins/{uid}` **from the server** (`Source.server`) so a cold cache never shows "not admin";
-  network errors show Retry instead of a misleading denial.
+  network errors show Retry instead of a misleading denial. The login form `AdminLoginForm` localizes the email field
+  label via `context.tr('emailLabel')` («البريد الإلكتروني» / "Email").
 - `roleChanges(uid)` then streams the role live: a demoted owner loses the Admins screen, a removed admin loses the
   dashboard immediately. Cache-only "missing" snapshots are skipped.
 
@@ -345,13 +346,13 @@ For each `CollectionDef`:
   (move up/down, remove) are a `Wrap`.
 - **Collapsible object-list rows (`FieldDef.collapsibleRows`, PR #83 ADR-073):** On fields with `collapsibleRows: true`
   (used on `pages.blocks` «محتوى الصفحة (حتى 20 فقرة)»), rows render as compact single-open collapsible cards with
-  snippet previews (`_blockSnippet`: reads first non-empty among `textAr`, `textEn`, `account`, `instapay`, `wallet`, `url`,
-  or `context.tr('emptyBlockSnippet')` / `(فارغ)`). Tapping expand/collapse («توسيع الفقرة» / «طي الفقرة», `expandBlock` /
+  snippet previews formatted via `blockSnippetSummary` (prefixed with `'· '`, reads first non-empty among `textAr`, `textEn`, `account`, `instapay`, `wallet`, `url`, suppresses snippet when an image has a URL but no caption, or displays `context.tr('emptyBlockSnippet')` / `(فاضي)` when empty, truncated to 40 characters). Tapping expand/collapse («توسيع الفقرة» / «طي الفقرة», `expandBlock` /
   `collapseBlock`) toggles `_expandedRow[f.key]`. Adding a row (`+ إضافة`) automatically expands the new block. The ready
   donation template automatically opens on the empty donation details row. When validation fails, clicking an error entry in
   `editor-error-summary` (`_jumpToError`) detects if the invalid field is within a collapsed row, expands that row automatically,
   scrolls it into view, and sets focus.
-- **Section category preservation across placements (`DocEditor.collect`, PR #83 ADR-073):** When saving a custom page
+- **Featured pages hint & category preservation across placements (`admin_schema.dart`, `DocEditor.collect`, PR #83 ADR-073):**
+  The `featured` switch hint is explicitly «هتظهر في «صفحات مميزة» في الرئيسية مهما كان مكانها» (`hintEn`: 'Appears in "Featured pages" on Home regardless of its placement'). When saving a custom page
   whose `placement` is `'link'` or `'nav'` (where `categoryId` is hidden by `showWhen`), `DocEditor.collect` preserves
   `_values['categoryId']` rather than blanking it. Switching `placement` back to `'section'` restores the previously
   chosen section without re-selection, while public filtering (`sectionPages`) still strictly requires `placement == 'section'`.
@@ -429,7 +430,9 @@ questions per device per day** (1–100, default 3; replaced "per visit"). Blank
 
 ### Custom sections, items and pages (PR #18, ADR-027)
 Generic `CollectionListScreen`s for `categories` (note above the list: built-ins are switched in Sections & home
-page and renamed in Page headers), `entries` and `pages`. Editor helpers (`DocEditor`): `FieldDef.slug`
+page and renamed in Page headers), `entries` and `pages`. In `categories`, `CollectionListScreen` streams both `entries` and
+`pages` (`_entriesStream`, `_pagesStream`) and displays a badge tag **«فاضي، مش ظاهر للزوار»** (`context.tr('emptyHiddenFromVisitors')`)
+on categories with 0 visible entries and 0 visible section pages, clarifying why it is omitted from visitor navigation. Editor helpers (`DocEditor`): `FieldDef.slug`
 (`invalidSlug`, and `slugTaken` against the other docs of the list), `FieldDef.dynamicOptions: 'categories'` (the
 entry's section dropdown, loaded when the editor opens; a deleted category shows «قسم محذوف أو غير محدد»),
 `FieldDef.linkPicker` («اختيار صفحة…» on alert / entry / block links: custom pages, custom categories, built-in
