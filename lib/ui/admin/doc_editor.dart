@@ -1954,94 +1954,120 @@ class DocEditorState extends State<DocEditor> {
                 borderRadius: BorderRadius.circular(12),
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                  child: Row(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Text(
-                        '${i + 1}.',
-                        style: TextStyle(fontWeight: FontWeight.bold, color: context.pal.muted),
-                      ),
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: context.pal.surfaceAlt,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Text(
-                          choiceLabel(context, (rows[i].values['type'] ?? rows[i].text['type']?.text ?? BlockTypes.paragraph).toString()),
-                          style: TextStyle(fontSize: 12, color: context.pal.primary, fontWeight: FontWeight.w600),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Builder(builder: (context) {
-                          final snippet = _blockSnippet(rows[i]);
-                          return Text(
-                            snippet.isEmpty ? context.tr('emptyBlockSnippet') : snippet,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: snippet.isEmpty ? context.pal.muted : context.pal.ink,
-                              fontStyle: snippet.isEmpty ? FontStyle.italic : FontStyle.normal,
+                      Row(
+                        children: [
+                          Text(
+                            '${i + 1}.',
+                            style: TextStyle(fontWeight: FontWeight.bold, color: context.pal.muted),
+                          ),
+                          const SizedBox(width: 8),
+                          Flexible(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: context.pal.surfaceAlt,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Text(
+                                choiceLabel(context, (rows[i].values['type'] ?? rows[i].text['type']?.text ?? BlockTypes.paragraph).toString()),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(fontSize: 12, color: context.pal.primary, fontWeight: FontWeight.w600),
+                              ),
                             ),
-                          );
-                        }),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Builder(builder: (context) {
+                              final snippet = _blockSnippet(rows[i]);
+                              return Text(
+                                snippet.isEmpty ? context.tr('emptyBlockSnippet') : snippet,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: snippet.isEmpty ? context.pal.muted : context.pal.ink,
+                                  fontStyle: snippet.isEmpty ? FontStyle.italic : FontStyle.normal,
+                                ),
+                              );
+                            }),
+                          ),
+                        ],
                       ),
-                      IconButton(
-                        tooltip: context.tr('moveUp'),
-                        icon: const Icon(Icons.arrow_upward, size: 20),
-                        onPressed: i == 0
-                            ? null
-                            : () => setState(() {
-                                  final moved = rows.removeAt(i);
-                                  rows.insert(i - 1, moved);
+                      const SizedBox(height: 4),
+                      Wrap(
+                        alignment: WrapAlignment.spaceBetween,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                tooltip: context.tr('moveUp'),
+                                icon: const Icon(Icons.arrow_upward, size: 20),
+                                onPressed: i == 0
+                                    ? null
+                                    : () => setState(() {
+                                          final moved = rows.removeAt(i);
+                                          rows.insert(i - 1, moved);
+                                          if (_expandedRow[f.key] == i) {
+                                            _expandedRow[f.key] = i - 1;
+                                          } else if (_expandedRow[f.key] == i - 1) {
+                                            _expandedRow[f.key] = i;
+                                          }
+                                          _dirty = true;
+                                        }),
+                              ),
+                              IconButton(
+                                tooltip: context.tr('moveDown'),
+                                icon: const Icon(Icons.arrow_downward, size: 20),
+                                onPressed: i == rows.length - 1
+                                    ? null
+                                    : () => setState(() {
+                                          final moved = rows.removeAt(i);
+                                          rows.insert(i + 1, moved);
+                                          if (_expandedRow[f.key] == i) {
+                                            _expandedRow[f.key] = i + 1;
+                                          } else if (_expandedRow[f.key] == i + 1) {
+                                            _expandedRow[f.key] = i;
+                                          }
+                                          _dirty = true;
+                                        }),
+                              ),
+                            ],
+                          ),
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                tooltip: context.tr('remove'),
+                                icon: Icon(Icons.delete_outline, color: context.pal.alert, size: 20),
+                                onPressed: () => setState(() {
+                                  final removed = rows.removeAt(i);
+                                  if (_pendingErrorFocus != null && removed.focus.values.contains(_pendingErrorFocus!.focusNode)) {
+                                    _clearPendingErrorFocus();
+                                  }
+                                  removed.dispose();
                                   if (_expandedRow[f.key] == i) {
-                                    _expandedRow[f.key] = i - 1;
-                                  } else if (_expandedRow[f.key] == i - 1) {
-                                    _expandedRow[f.key] = i;
+                                    _expandedRow[f.key] = null;
+                                  } else if (_expandedRow[f.key] != null && _expandedRow[f.key]! > i) {
+                                    _expandedRow[f.key] = _expandedRow[f.key]! - 1;
                                   }
                                   _dirty = true;
+                                  _syncErrorSummaryAfterChange();
                                 }),
-                      ),
-                      IconButton(
-                        tooltip: context.tr('moveDown'),
-                        icon: const Icon(Icons.arrow_downward, size: 20),
-                        onPressed: i == rows.length - 1
-                            ? null
-                            : () => setState(() {
-                                  final moved = rows.removeAt(i);
-                                  rows.insert(i + 1, moved);
-                                  if (_expandedRow[f.key] == i) {
-                                    _expandedRow[f.key] = i + 1;
-                                  } else if (_expandedRow[f.key] == i + 1) {
-                                    _expandedRow[f.key] = i;
-                                  }
-                                  _dirty = true;
-                                }),
-                      ),
-                      IconButton(
-                        tooltip: context.tr('remove'),
-                        icon: Icon(Icons.delete_outline, color: context.pal.alert, size: 20),
-                        onPressed: () => setState(() {
-                          final removed = rows.removeAt(i);
-                          if (_pendingErrorFocus != null && removed.focus.values.contains(_pendingErrorFocus!.focusNode)) {
-                            _clearPendingErrorFocus();
-                          }
-                          removed.dispose();
-                          if (_expandedRow[f.key] == i) {
-                            _expandedRow[f.key] = null;
-                          } else if (_expandedRow[f.key] != null && _expandedRow[f.key]! > i) {
-                            _expandedRow[f.key] = _expandedRow[f.key]! - 1;
-                          }
-                          _dirty = true;
-                          _syncErrorSummaryAfterChange();
-                        }),
-                      ),
-                      IconButton(
-                        tooltip: context.tr('expandBlock'),
-                        icon: const Icon(Icons.expand_more, size: 20),
-                        onPressed: () => setState(() => _expandedRow[f.key] = i),
+                              ),
+                              IconButton(
+                                tooltip: context.tr('expandBlock'),
+                                icon: const Icon(Icons.expand_more, size: 20),
+                                onPressed: () => setState(() => _expandedRow[f.key] = i),
+                              ),
+                            ],
+                          ),
+                        ],
                       ),
                     ],
                   ),
@@ -2069,15 +2095,19 @@ class DocEditorState extends State<DocEditor> {
                               style: TextStyle(fontWeight: FontWeight.bold, color: context.pal.muted),
                             ),
                             const SizedBox(width: 8),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: context.pal.surfaceAlt,
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: Text(
-                                choiceLabel(context, (rows[i].values['type'] ?? rows[i].text['type']?.text ?? BlockTypes.paragraph).toString()),
-                                style: TextStyle(fontSize: 12, color: context.pal.primary, fontWeight: FontWeight.w600),
+                            Flexible(
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: context.pal.surfaceAlt,
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Text(
+                                  choiceLabel(context, (rows[i].values['type'] ?? rows[i].text['type']?.text ?? BlockTypes.paragraph).toString()),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(fontSize: 12, color: context.pal.primary, fontWeight: FontWeight.w600),
+                                ),
                               ),
                             ),
                             const Spacer(),
@@ -2257,6 +2287,7 @@ class DocEditorState extends State<DocEditor> {
     return UnsavedGuard(
       dirty: _dirty,
       handlePop: widget.popOnSave,
+      onBrowserBackDiscard: widget.popOnSave ? null : _resetToInitial,
       child: Scaffold(
         backgroundColor: context.pal.background,
         appBar: embedded

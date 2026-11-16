@@ -433,9 +433,7 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
     }
   }
 
-  Future<void> _discardSettings() async {
-    final ok = await confirmDiscardChanges(context);
-    if (!ok || !mounted) return;
+  void _resetSettingsForm() {
     setState(() {
       _dirty = false;
       _showErrors = false;
@@ -443,6 +441,12 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
       _lastFeatures = null;
       _populateFeatures(doc);
     });
+  }
+
+  Future<void> _discardSettings() async {
+    final ok = await confirmDiscardChanges(context);
+    if (!ok || !mounted) return;
+    _resetSettingsForm();
   }
 
   // ---------------------------------------------------------------------------
@@ -851,6 +855,7 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
             return UnsavedGuard(
               dirty: _dirty || _isDraftDirty,
               handlePop: false,
+              onBrowserBackDiscard: _resetSettingsForm,
               child: Scaffold(
                 backgroundColor: context.pal.background,
                 body: Center(

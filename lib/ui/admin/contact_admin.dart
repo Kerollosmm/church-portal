@@ -79,9 +79,7 @@ class _ContactCategoriesScreenState extends State<ContactCategoriesScreen> {
     }
   }
 
-  Future<void> _cancelEdits() async {
-    final discard = await confirmDiscardChanges(context);
-    if (!discard || !mounted) return;
+  void _resetForm() {
     setState(() {
       if (_savedCats != null) {
         _cats = [..._savedCats!];
@@ -90,6 +88,12 @@ class _ContactCategoriesScreenState extends State<ContactCategoriesScreen> {
       _gen++;
       _dirty = false;
     });
+  }
+
+  Future<void> _cancelEdits() async {
+    final discard = await confirmDiscardChanges(context);
+    if (!discard || !mounted) return;
+    _resetForm();
   }
 
   Future<void> _confirmRemoveCategory(int i) async {
@@ -118,6 +122,7 @@ class _ContactCategoriesScreenState extends State<ContactCategoriesScreen> {
     return UnsavedGuard(
       dirty: _dirty,
       handlePop: false,
+      onBrowserBackDiscard: _resetForm,
       child: Scaffold(
         backgroundColor: context.pal.background,
         floatingActionButton: _cats == null || !_dirty

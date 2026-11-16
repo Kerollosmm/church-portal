@@ -358,9 +358,7 @@ class FeaturesEditorState extends State<FeaturesEditor> {
     }
   }
 
-  Future<void> _cancelEdits() async {
-    final discard = await confirmDiscardChanges(context);
-    if (!discard || !mounted) return;
+  void _resetForm() {
     setState(() {
       f = _savedBaseline;
       _t['heroTitleAr']!.text = _savedBaseline.heroTitleAr;
@@ -385,6 +383,12 @@ class FeaturesEditorState extends State<FeaturesEditor> {
       _resetGen++;
       _dirty = false;
     });
+  }
+
+  Future<void> _cancelEdits() async {
+    final discard = await confirmDiscardChanges(context);
+    if (!discard || !mounted) return;
+    _resetForm();
   }
 
   Widget _card(String title, IconData icon, List<Widget> children, {String? hint}) => Card(
@@ -446,6 +450,7 @@ class FeaturesEditorState extends State<FeaturesEditor> {
     return UnsavedGuard(
       dirty: _dirty,
       handlePop: false,
+      onBrowserBackDiscard: _resetForm,
       child: Scaffold(
         backgroundColor: context.pal.background,
         floatingActionButton: FloatingActionButton.extended(

@@ -686,18 +686,12 @@ class _MessagesScreenState extends State<MessagesScreen> {
   static const _messagesDef = CollectionDef('contact_messages', '', '', [], []);
   late Stream<List<AdminDoc>> _stream = widget.repo.watch('contact_messages');
   late Stream<AdminDoc?> _config = widget.repo.watchDoc('settings/contact');
-  ScaffoldMessengerState? _messenger;
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _messenger = ScaffoldMessenger.maybeOf(context);
-  }
+  ScaffoldFeatureController<SnackBar, SnackBarClosedReason>? _undoSnackBarController;
 
   @override
   void dispose() {
     _pendingDelete.dispose();
-    _messenger?.removeCurrentSnackBar();
+    _undoSnackBarController?.close();
     super.dispose();
   }
 
@@ -1067,13 +1061,14 @@ class _MessagesScreenState extends State<MessagesScreen> {
     });
 
     messenger.removeCurrentSnackBar();
-    messenger.showSnackBar(
+    _undoSnackBarController = messenger.showSnackBar(
       SnackBar(
         duration: const Duration(seconds: 10),
         content: Text(undoText),
         action: SnackBarAction(
           label: undoLabel,
           onPressed: () async {
+            _undoSnackBarController = null;
             if (_pendingDelete.undo(id)) {
               messenger.removeCurrentSnackBar();
               if (mounted) setState(() {});

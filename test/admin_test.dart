@@ -4240,6 +4240,115 @@ void main() {
         expect(discarded, isTrue);
       });
 
+      testWidgets('FeaturesEditor resets dirty state on browser back discard via onBrowserBackDiscard', (tester) async {
+        final doc = AdminDoc('features', {
+          'sections': {'clinics': true},
+        });
+        final repo = _TestAdminBackend(initialDocs: {
+          'settings/features': doc.data,
+        });
+
+        await tester.pumpWidget(_app(
+          FeaturesScreen(repo: repo),
+          locale: const Locale('ar'),
+        ));
+        await tester.pumpAndSettle();
+
+        // Mutate a switch to make form dirty
+        await tester.tap(find.byType(Switch).first);
+        await tester.pumpAndSettle();
+        expect(find.byKey(const ValueKey('unsaved-bar')), findsOneWidget);
+
+        // Simulate browser back (popstate)
+        final futureDiscard = debugSimulatePopState();
+        await tester.pumpAndSettle();
+
+        // Discard dialog is displayed -> tap discard
+        expect(find.byKey(const ValueKey('discard-confirm')), findsOneWidget);
+        await tester.tap(find.byKey(const ValueKey('discard-confirm')));
+        await tester.pumpAndSettle();
+
+        final result = await futureDiscard;
+        expect(result, isTrue);
+
+        // Form was cleanly reset and dirty flag cleared
+        expect(find.byKey(const ValueKey('unsaved-bar')), findsNothing);
+      });
+
+      testWidgets('ContactCategoriesScreen resets dirty state on browser back discard via onBrowserBackDiscard', (tester) async {
+        final doc = AdminDoc('contact', {
+          'categories': [
+            {'slot': 'c1', 'nameAr': 'استفسار عام', 'nameEn': 'General Inquiry', 'order': 10},
+          ],
+        });
+        final repo = _TestAdminBackend(initialDocs: {
+          'settings/contact': doc.data,
+        });
+
+        await tester.pumpWidget(_app(
+          ContactCategoriesScreen(repo: repo),
+          locale: const Locale('ar'),
+        ));
+        await tester.pumpAndSettle();
+
+        // Edit category name to make dirty
+        await tester.enterText(find.byType(TextField).first, 'تعديل الاستفسار');
+        await tester.pumpAndSettle();
+        expect(find.byKey(const ValueKey('unsaved-bar')), findsOneWidget);
+
+        // Simulate browser back (popstate)
+        final futureDiscard = debugSimulatePopState();
+        await tester.pumpAndSettle();
+
+        // Discard dialog is displayed -> tap discard
+        expect(find.byKey(const ValueKey('discard-confirm')), findsOneWidget);
+        await tester.tap(find.byKey(const ValueKey('discard-confirm')));
+        await tester.pumpAndSettle();
+
+        final result = await futureDiscard;
+        expect(result, isTrue);
+
+        // Form reset and dirty flag cleared
+        expect(find.byKey(const ValueKey('unsaved-bar')), findsNothing);
+        expect(find.text('استفسار عام'), findsWidgets);
+      });
+
+      testWidgets('MessagesScreen.dispose() closes undo snackbar via controller without removing unrelated snackbars', (tester) async {
+        final doc = AdminDoc('msg-dispose', {
+          'name': 'Sender Dispose',
+          'message': 'Message to delete',
+          'createdAt': DateTime.utc(2026, 11, 15, 12),
+          'status': 'new',
+        });
+        final repo = _TestAdminBackend(initialCollections: {
+          'contact_messages': [doc],
+        });
+
+        await tester.pumpWidget(_app(
+          MessagesScreen(repo: repo),
+          locale: const Locale('ar'),
+        ));
+        await tester.pumpAndSettle();
+
+        // Delete message -> undo snackbar appears
+        await tester.tap(find.byTooltip('حذف'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const ValueKey('confirm-ok')));
+        await tester.pumpAndSettle();
+
+        expect(find.text('تراجع'), findsOneWidget);
+
+        // Replace MessagesScreen with another widget, triggering dispose()
+        await tester.pumpWidget(_app(
+          const Scaffold(body: Text('Different Screen')),
+          locale: const Locale('ar'),
+        ));
+        await tester.pumpAndSettle();
+
+        expect(tester.takeException(), isNull);
+        expect(find.text('Different Screen'), findsOneWidget);
+      });
+
       testWidgets('MessagesScreen soft-deletes, hides, offers 10s undo and restores on undo', (tester) async {
         final doc = AdminDoc('msg-1', {
           'name': 'Test Sender',

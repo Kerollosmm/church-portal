@@ -355,7 +355,7 @@ indexable:)`, which applies the spec through the conditional import (`document_l
 the URL `#fragment`.
 
 **Deferred modules & isolation** (PR 3, ADR-058, ADR-060, ADR-061):
-To protect the web initial load budget (`main.dart.js` gzip -9 ceiling <= 1,396,031 B), secondary modules are deferred (`deferred as`). The CI sourcemap guard still lists the original 8 (the check script is unchanged):
+To protect the web initial load budget (`main.dart.js` gzip -9 ceiling <= 1,399,000 B), secondary modules are deferred (`deferred as`). The CI sourcemap guard still lists the original 8 (the check script is unchanged):
 1. `ui/admin/admin_page.dart` (`admin_page`): full admin dashboard (Firebase Auth, schema editors, Firestore writes).
 2. `ui/pages/assistant_page.dart` (`assistant_page`): AI assistant interface & `firebase_ai` SDK (gated behind `AssistantGate`).
 3. `ui/pages/notifications_page.dart` (`notifications_page`): streamlined notification channel & reminder preferences (OEM battery card removed; native permissions requested reactively on switch toggle).

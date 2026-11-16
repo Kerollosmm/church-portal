@@ -1380,6 +1380,7 @@ void main() {
 
       // Reopen editor with saved data where placement is 'link' and categoryId is 'k1'
       await tester.pumpWidget(_admin(DocEditor(
+        key: const ValueKey('reopened-doc-editor'),
         title: 'Reopened Page',
         fields: collectionById('pages')!.fields,
         def: collectionById('pages'),
@@ -1602,6 +1603,51 @@ void main() {
       await tester.pumpAndSettle();
       // DropdownButtonFormField is mounted for block 3
       expect(find.byType(DropdownButtonFormField<String>), findsOneWidget);
+    });
+
+    testWidgets('UX fix: DocEditor collapsed block rows wrap action buttons and do not overflow at 320px with 200% text scale', (tester) async {
+      tester.view.physicalSize = const Size(320, 1000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      await tester.pumpWidget(
+        MediaQuery(
+          data: const MediaQueryData(
+            size: Size(320, 1000),
+            textScaler: TextScaler.linear(2.0),
+          ),
+          child: _admin(DocEditor(
+            title: 'Narrow Blocks',
+            fields: collectionById('pages')!.fields,
+            def: collectionById('pages'),
+            popOnSave: false,
+            onSave: (d) async {},
+            data: const {
+              'slug': 'narrow-blocks',
+              'titleAr': 'فقرات شاشة ضيقة',
+              'blocks': [
+                'headingعنوان طويل للفقرة الأولى في شاشة ضيقةH1',
+                'paragraphنص تجريبي طويل جدًا للفقرة الثانية للتأكد من عدم وجود أي تجاوز للشاشةP2',
+              ],
+            },
+          )),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Row 0 is expanded by default; row 1 is collapsed.
+      expect(find.text('2.'), findsOneWidget);
+      // Collapsed row 1 action buttons (moveUp, moveDown, remove, expandBlock) are present without overflow errors.
+      expect(tester.takeException(), isNull);
+
+      // Tap on row 1 to expand it, which collapses row 0.
+      await tester.ensureVisible(find.text('2.'));
+      await tester.tap(find.text('2.'));
+      await tester.pumpAndSettle();
+
+      // Now row 0 is collapsed.
+      expect(find.text('1.'), findsOneWidget);
+      expect(tester.takeException(), isNull);
     });
   });
 }

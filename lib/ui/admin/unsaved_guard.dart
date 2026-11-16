@@ -188,8 +188,13 @@ class _UnsavedGuardState extends State<UnsavedGuard> {
         if (nav.canPop()) {
           nav.pop();
         }
+      } else if (widget.onBrowserBackDiscard != null) {
+        widget.onBrowserBackDiscard!.call();
       } else {
-        widget.onBrowserBackDiscard?.call();
+        final nav = Navigator.of(context);
+        if (nav.canPop()) {
+          nav.pop();
+        }
       }
     }
     return discard;

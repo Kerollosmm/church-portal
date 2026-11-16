@@ -191,12 +191,21 @@ class _AdvancedOwnerScreenState extends State<AdvancedOwnerScreen> with SingleTi
         ),
       );
 
+  void _resetVapid() {
+    setState(() {
+      _vapidCtrl.text = _storedVapid;
+      _vapidDirty = false;
+      _vapidError = null;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     registerAdminStrings();
     return UnsavedGuard(
       dirty: _vapidDirty,
       handlePop: false,
+      onBrowserBackDiscard: _resetVapid,
       child: NestedScrollView(
         headerSliverBuilder: (context, _) => [
           SliverToBoxAdapter(
