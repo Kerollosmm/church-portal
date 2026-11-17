@@ -1,5 +1,5 @@
 // Pure Web-API FCM push sender and scheduler for church-portal (ADR-059).
-// Runs every 15 minutes on Cloudflare Workers cron (*/15 * * * *) and as a Node 22 CLI fallback.
+// Runs every minute on Cloudflare Workers cron (* * * * *) and as a Node 22 CLI fallback.
 // Zero native Node dependencies. Strictly capped at 16 FCM topic sends and <= 25 subrequests per run.
 
 import { batchGetDocs, patchDoc, getCachedAccessToken } from './firestore_rest.js';
