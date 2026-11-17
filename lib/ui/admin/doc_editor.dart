@@ -312,8 +312,13 @@ class DocEditorState extends State<DocEditor> {
         }
       case FieldType.image:
         final img = MediaImage.fromMap(v);
-        _values[f.key] = img?.toMap();
-        _text[f.key] = _ctrl(img?.alt ?? '');
+        // A stored image whose link is not usable any more (e.g. an old doc):
+        // keep the raw map so the save is blocked with a clear error instead
+        // of dropping the image silently. No data is changed; the doc is only
+        // fixed when the admin picks a new link or removes the image.
+        _values[f.key] = img?.toMap() ??
+            (v is Map && v['url'] is String && (v['url'] as String).trim().isNotEmpty ? Map<String, dynamic>.from(v) : null);
+        _text[f.key] = _ctrl(img?.alt ?? (v is Map && v['alt'] is String ? v['alt'] as String : ''));
       case FieldType.imageList:
         _gallery[f.key] = [
           for (final e in (v is List ? v : const []))
@@ -460,10 +465,19 @@ class DocEditorState extends State<DocEditor> {
 
   /// The `image` map with the edited alt text (null = no image). A picked file
   /// that is not uploaded yet is a `pending` marker (replaced on save).
+  /// A stored image whose link is not usable any more is kept as its raw map
+  /// so [validateDocument] blocks the save with a clear error instead of
+  /// dropping the image silently.
   Map<String, dynamic>? _collectImage(String key) {
     final alt = _text[key]!.text.trim();
     if (_pending.containsKey(key)) return {'source': MediaSource.inline, 'pending': true, if (alt.isNotEmpty) 'alt': alt};
-    return MediaImage.fromMap(_values[key])?.copyWith(alt: alt).toMap();
+    final raw = _values[key];
+    final img = MediaImage.fromMap(raw);
+    if (img != null) return img.copyWith(alt: alt).toMap();
+    if (raw is Map && raw['url'] is String && (raw['url'] as String).trim().isNotEmpty) {
+      return {...Map<String, dynamic>.from(raw), if (alt.isNotEmpty) 'alt': alt};
+    }
+    return null;
   }
 
   Iterable<FieldDef> get _imageFields => widget.fields.where((f) => f.type == FieldType.image);
@@ -532,6 +546,25 @@ class DocEditorState extends State<DocEditor> {
           out.add(_FieldErrorEntry(
             id: f.key,
             label: _plainLabel(f),
+            group: group,
+            advanced: advanced,
+            fieldKey: _fieldKey(f.key),
+            focusNode: _focusNode(f.key),
+          ));
+        }
+        continue;
+      }
+      if (f.type == FieldType.image) {
+        // A stored cover link that is not usable any more: block the save and
+        // point at the field, where the admin can fix the link or remove the
+        // image. The image itself is never dropped silently.
+        // A staged replacement upload makes the stored link irrelevant: the
+        // save uploads it first and replaces the stored value, so it must
+        // not block the save (CodeRabbit + Sentry review on PR #86).
+        if (invalidImageUrl(_values[f.key]) != null && !_pending.containsKey(f.key)) {
+          out.add(_FieldErrorEntry(
+            id: f.key,
+            label: '${_plainLabel(f)} — ${context.tr('invalidCoverImage')}',
             group: group,
             advanced: advanced,
             fieldKey: _fieldKey(f.key),
@@ -1149,6 +1182,28 @@ class DocEditorState extends State<DocEditor> {
     c.text = picked;
   }
 
+  /// One dropdown option: its label, plus its one-line hint underneath when
+  /// the field defines one (`opt_<field>_<option>_hint`), so each choice
+  /// explains itself while picking.
+  Widget _choiceOptionChild(FieldDef f, String option) {
+    final hint = fieldChoiceHint(context, f, option);
+    final label = Text(fieldChoiceLabel(context, f, option));
+    if (hint.isEmpty) return label;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        label,
+        Text(
+          hint,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(fontSize: 12, color: context.pal.muted),
+        ),
+      ],
+    );
+  }
+
   (String on, String off) _switchLabels(BuildContext context, FieldDef f) {
     return switch (f.key) {
       'visible' => (context.tr('switch_visible'), context.tr('switch_hidden')),
@@ -1437,6 +1492,17 @@ class DocEditorState extends State<DocEditor> {
           }),
         );
       case FieldType.choice:
+        // The closed button is 24 px tall (`DropdownButtonFormField`
+        // defaults to `isDense`), so a two-line option cannot render there:
+        // when a field defines per-option hints, the closed button shows
+        // the plain one-line label while the open menu shows label + hint.
+        final choiceItems = <DropdownMenuItem<String?>>[
+          if (f.nullableChoice) const DropdownMenuItem<String?>(value: null, child: Text('—')),
+          for (final o in {...f.options, if (_values[f.key] != null) _values[f.key] as String})
+            DropdownMenuItem<String?>(value: o, child: _choiceOptionChild(f, o)),
+        ];
+        final hasChoiceHints =
+            f.options.any((o) => fieldChoiceHint(context, f, o).isNotEmpty);
         return DropdownButtonFormField<String?>(
           key: ValueKey('field-${f.key}'),
           focusNode: _focusNode(f.key),
@@ -1451,11 +1517,15 @@ class DocEditorState extends State<DocEditor> {
                 : TextStyle(fontSize: 13.5, color: context.pal.muted, height: 1.4),
           ),
           validator: (v) => f.required && (v == null || v.isEmpty) ? context.tr('required') : null,
-          items: [
-            if (f.nullableChoice) const DropdownMenuItem<String?>(value: null, child: Text('—')),
-            for (final o in {...f.options, if (_values[f.key] != null) _values[f.key] as String})
-              DropdownMenuItem<String?>(value: o, child: Text(fieldChoiceLabel(context, f, o))),
-          ],
+          items: choiceItems,
+          selectedItemBuilder: hasChoiceHints
+              ? (context) => [
+                    for (final item in choiceItems)
+                      item.value == null
+                          ? const Text('—')
+                          : Text(fieldChoiceLabel(context, f, item.value!)),
+                  ]
+              : null,
           onChanged: (v) => setState(() {
             _values[f.key] = v;
             _dirty = true;
@@ -1591,10 +1661,13 @@ class DocEditorState extends State<DocEditor> {
 
   Future<void> _askImageUrl(FieldDef f) async {
     final current = MediaImage.fromMap(_values[f.key]);
+    // A stored link that is not usable any more is offered back for editing,
+    // so fixing it does not mean retyping it from scratch.
+    final initial = current?.source == MediaSource.url ? current!.url : (invalidImageUrl(_values[f.key]) ?? '');
     final epoch = _resetEpoch;
     final url = await showDialog<String>(
       context: context,
-      builder: (_) => _ImageUrlDialog(initial: current?.source == MediaSource.url ? current!.url : ''),
+      builder: (_) => _ImageUrlDialog(initial: initial),
     );
     if (url == null || !mounted || epoch != _resetEpoch) return;
     setState(() {
@@ -1613,8 +1686,12 @@ class DocEditorState extends State<DocEditor> {
   Widget _imageEditor(FieldDef f) {
     final pending = _pending[f.key];
     final current = MediaImage.fromMap(_values[f.key]);
+    // A stored link that is not usable any more: the field shows the error
+    // (not an empty placeholder) and keeps both fixes available — a new link
+    // or removing the image.
+    final invalidUrl = current == null ? invalidImageUrl(_values[f.key]) : null;
     final busy = _processing == f.key;
-    final hasImage = pending != null || current != null;
+    final hasImage = pending != null || current != null || invalidUrl != null;
     final placeholder = Icon(Icons.image_outlined, size: 40, color: context.pal.muted);
     final Widget preview = pending != null
         ? Image.memory(pending.bytes, key: const Key('imagePreviewPending'), fit: BoxFit.cover)
@@ -1630,12 +1707,13 @@ class DocEditorState extends State<DocEditor> {
                 'h': '${pending.h}',
                 'kb': kb.toStringAsFixed(0)
               })}'
-            : current == null
-                ? context.tr('imageNone')
-                : (current.isRemote ? current.url : 'media/${current.mediaId}');
+            : invalidUrl != null
+                ? context.tr('invalidCoverImage')
+                : current == null
+                    ? context.tr('imageNone')
+                    : (current.isRemote ? current.url : 'media/${current.mediaId}');
     // Narrow screens or large text: preview above the status and buttons.
-    final stack = MediaQuery.sizeOf(context).width < 420 || MediaQuery.textScalerOf(context).scale(16) / 16 >= 1.5;
-    final previewBox = ClipRRect(
+    final stack = MediaQuery.sizeOf(context).width < 420 || MediaQuery.textScalerOf(context).scale(16) / 16 >= 1.5;    final previewBox = ClipRRect(
       borderRadius: BorderRadius.circular(12),
       child: Container(
         width: 96,
@@ -1645,11 +1723,13 @@ class DocEditorState extends State<DocEditor> {
       ),
     );
     final controls = Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      // A staged replacement means the stored bad link is no longer the
+      // state: the status shows the pending upload, not the error.
       Text(status,
           key: const Key('imageStatus'),
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
-          style: TextStyle(color: context.pal.muted, fontSize: 12)),
+          style: TextStyle(color: invalidUrl != null && pending == null ? context.pal.alert : context.pal.muted, fontSize: 12, fontWeight: invalidUrl != null && pending == null ? FontWeight.w700 : null)),
       const SizedBox(height: 8),
       Wrap(spacing: 8, runSpacing: 8, children: [
         OutlinedButton.icon(
@@ -2579,6 +2659,14 @@ String fieldChoiceLabel(BuildContext context, FieldDef f, String key) {
   final scopedKey = 'opt_${f.key}_$key';
   final scoped = context.tr(scopedKey);
   return scoped == scopedKey ? choiceLabel(context, key) : scoped;
+}
+
+/// Per-option one-line hint (`opt_<field>_<option>_hint`), or '' when the
+/// field defines none for this option.
+String fieldChoiceHint(BuildContext context, FieldDef f, String key) {
+  final hintKey = 'opt_${f.key}_${key}_hint';
+  final hint = context.tr(hintKey);
+  return hint == hintKey ? '' : hint;
 }
 
 class _LooseDatePickerDialog extends StatefulWidget {

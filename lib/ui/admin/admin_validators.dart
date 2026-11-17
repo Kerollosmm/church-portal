@@ -3,6 +3,7 @@ import 'package:firebase_core/firebase_core.dart';
 
 import '../../domain/cairo_time.dart';
 import '../../domain/custom_content.dart' show BlockTypes, PageBlock, isValidSlug, slugMaxLength;
+import '../../domain/media.dart' show MediaSource, isValidImageUrl;
 import '../../domain/push.dart';
 import '../../domain/rules.dart' show normalizeDigits;
 import 'admin_schema.dart';
@@ -269,6 +270,19 @@ String? validateHeadingBlock(Map<String, String> row, String blockType) {
   return null;
 }
 
+/// The stored image map's URL when it is set but not a usable image link
+/// (e.g. an old doc saved before validation), or null when there is no
+/// image or the link is fine. A bad link must block the save with a clear
+/// error, never be dropped silently.
+String? invalidImageUrl(Object? image) {
+  if (image is! Map) return null;
+  final source = image['source'];
+  if (source != MediaSource.url && source != MediaSource.storage) return null;
+  final url = image['url'];
+  if (url is! String || url.trim().isEmpty) return null;
+  return isValidImageUrl(url) ? null : url.trim();
+}
+
 String? validateDocument(CollectionDef? def, Map<String, dynamic> data) {
   if (def != null && def.requireAnyOf.isNotEmpty && def.requireAnyOf.every((k) => data[k] == null || data[k] == '')) {
     return 'needWeekdayOrDate';
@@ -296,6 +310,9 @@ String? validateDocument(CollectionDef? def, Map<String, dynamic> data) {
       }
     }
   }
+  // A cover image with a bad link blocks the save (old docs may carry one);
+  // it is never dropped silently.
+  if (invalidImageUrl(data['image']) != null) return 'invalidCoverImage';
   return null;
 }
 

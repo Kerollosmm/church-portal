@@ -69,9 +69,12 @@ const Map<String, List<String>> adminStrings = {
   'addSectionItem': ['إضافة عنصر', 'Add item'],
   'sectionEmptyItems': ['مفيش عناصر في القسم ده لسه', 'No items in this section yet'],
   'unassignedItems': ['عناصر بدون قسم', 'Unassigned items'],
-  'opt_placement_link': ['لينك بس (من تنويه أو زر)', 'Link only (from a notice or button)'],
-  'opt_placement_nav': ['في القائمة', 'In the menu'],
-  'opt_placement_section': ['جوه قسم كـ«اعرف المزيد»', 'Inside a section ("Learn more")'],
+  'opt_placement_link': ['لينك بس', 'Link only'],
+  'opt_placement_link_hint': ['الصفحة ليها لينك، ومش ظاهرة في القوايم.', 'The page has a link, and is not shown in menus.'],
+  'opt_placement_nav': ['في القايمة', 'In the menu'],
+  'opt_placement_nav_hint': ['تظهر في قايمة الموقع.', 'Shown in the site menu.'],
+  'opt_placement_section': ['جوه قسم', 'Inside a section'],
+  'opt_placement_section_hint': ['تظهر جوه قسم تختاره.', 'Shown inside a section you choose.'],
   'switch_featured_on': ['مميزة في الرئيسية', 'Featured on Home'],
   'switch_featured_off': ['عادية', 'Standard'],
   'emptyBlockSnippet': ['(فاضي)', '(empty)'],
@@ -266,6 +269,13 @@ const Map<String, List<String>> adminStrings = {
   'moreActions': ['خيارات إضافية', 'More actions'],
   'emailLabel': ['البريد الإلكتروني', 'Email'],
   'blockHeadingRequired': ['عنوان الفقرة (عربي) مطلوب.', 'Heading text (Arabic) is required.'],
+  // Phase 4 PR1: a cover image with a bad link blocks the save (never dropped
+  // silently); the message names both fixes so the admin can choose.
+  'invalidCoverImage': ['لينك الصورة مش صالح — صلّح اللينك أو امسح الصورة.', 'Invalid image link — fix the link or remove the image.'],
+  // Phase 4 PR1: neutral wording for list deletes (page = feminine, section /
+  // item = masculine); `deletedUndo` in l10n.dart stays for the inbox.
+  'deletedItemUndo': ['تم مسح «{n}»', 'Deleted "{n}"'],
+  'deletedItemMultiUndo': ['تم مسح {n} عناصر (آخرهم «{last}»)', 'Deleted {n} items (latest: "{last}")'],
 };
 
 /// Idempotently registers [adminStrings] in the runtime localization table.

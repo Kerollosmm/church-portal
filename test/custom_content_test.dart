@@ -1245,14 +1245,14 @@ void main() {
       // Switch to link -> showInNav becomes false
       await tester.tap(find.byKey(const ValueKey('field-placement')));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Link only (from a notice or button)').last);
+      await tester.tap(find.text('Link only').last);
       await tester.pumpAndSettle();
       expect(state.collect()['showInNav'], isFalse);
 
       // Switch to section -> categoryId appears and is required before save succeeds
       await tester.tap(find.byKey(const ValueKey('field-placement')));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Inside a section ("Learn more")').last);
+      await tester.tap(find.text('Inside a section').last);
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('field-categoryId')), findsOneWidget);
 
@@ -1483,7 +1483,7 @@ void main() {
       // Switch placement to 'link'
       await tester.tap(find.byKey(const ValueKey('field-placement')));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Link only (from a notice or button)').last);
+      await tester.tap(find.text('Link only').last);
       await tester.pumpAndSettle();
 
       // categoryId field is hidden in UI
@@ -1498,7 +1498,7 @@ void main() {
       // Switch placement back to 'section' -> categoryId appears and is still 'k1'
       await tester.tap(find.byKey(const ValueKey('field-placement')));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Inside a section ("Learn more")').last);
+      await tester.tap(find.text('Inside a section').last);
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('field-categoryId')), findsOneWidget);
       expect(state.collect()['categoryId'], 'k1');
@@ -1527,7 +1527,7 @@ void main() {
       expect(reopenedState.collect()['categoryId'], 'k1');
       await tester.tap(find.byKey(const ValueKey('field-placement')));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Inside a section ("Learn more")').last);
+      await tester.tap(find.text('Inside a section').last);
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('field-categoryId')), findsOneWidget);
       expect(reopenedState.collect()['categoryId'], 'k1');
