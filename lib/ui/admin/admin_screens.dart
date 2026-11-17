@@ -1014,7 +1014,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
     try {
       await widget.repo.update('contact_messages', d.id, data);
     } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text(failed.replaceAll('{e}', '$e'))));
+      messenger.showSnackBar(SnackBar(content: Text(failed.replaceAll('{e}', formatAdminError(e)))));
     }
   }
 
@@ -1039,7 +1039,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
     try {
       await widget.repo.update('contact_messages', id, {'deletedAt': DateTime.now().toUtc()});
     } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text(failedMsg.replaceAll('{e}', '$e'))));
+      messenger.showSnackBar(SnackBar(content: Text(failedMsg.replaceAll('{e}', formatAdminError(e)))));
       return;
     }
 
@@ -1055,7 +1055,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
           } catch (_) {}
           if (!mounted) return;
           setState(() {});
-          messenger.showSnackBar(SnackBar(content: Text(failedMsg.replaceAll('{e}', '$e'))));
+          messenger.showSnackBar(SnackBar(content: Text(failedMsg.replaceAll('{e}', formatAdminError(e)))));
         }
       });
     });
@@ -1077,7 +1077,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                 await widget.repo.update('contact_messages', id, {'deletedAt': null});
               } catch (e) {
                 if (mounted) {
-                  messenger.showSnackBar(SnackBar(content: Text(failedMsg.replaceAll('{e}', '$e'))));
+                  messenger.showSnackBar(SnackBar(content: Text(failedMsg.replaceAll('{e}', formatAdminError(e)))));
                 }
               }
             }
@@ -1385,7 +1385,7 @@ class _AdminsScreenState extends State<AdminsScreen> {
       await op();
       messenger.showSnackBar(SnackBar(content: Text(ok)));
     } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text(failed.replaceAll('{e}', '$e'))));
+      messenger.showSnackBar(SnackBar(content: Text(failed.replaceAll('{e}', formatAdminError(e)))));
     }
   }
 

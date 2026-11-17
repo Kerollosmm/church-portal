@@ -1550,6 +1550,106 @@ describe('ADR-027: custom categories, their items and custom pages', () => {
     await assertFails(setDoc(doc(ed, 'categories', 'kx'), noSlug));
   });
 
+  test('categories: DocEditor + AdminRepository exact create payload, variants, admin roles, edit and soft-delete', async () => {
+    const editorCreatePayload = (uid, overrides = {}) => ({
+      nameAr: 'رحلات الشباب',
+      introAr: '',
+      icon: 'star',
+      showInNav: true,
+      visible: true,
+      slug: 'rhlat-alshbab',
+      nameEn: '',
+      introEn: '',
+      order: null,
+      updatedAt: serverTimestamp(),
+      updatedBy: `${uid}@x.test`,
+      ...overrides,
+    });
+
+    // 1. Exact new-category create payload from DocEditor.save() + AdminRepository.save()
+    //    (auto-generated doc id, imageStyle stripped on !_persisted, order: null).
+    const ed = db(EDITOR);
+    const createdRef = doc(collection(ed, 'categories'));
+    await assertSucceeds(setDoc(createdRef, editorCreatePayload(EDITOR)));
+
+    // 2. Variants: englishEnabled: false (empty '' or omitted optional keys), imageStyle: null / valid values,
+    //    integer order (including bounds), multiline intros (up to 1500 chars), showInNav/visible: false.
+    await assertSucceeds(setDoc(doc(collection(ed, 'categories')), editorCreatePayload(EDITOR, {
+      slug: 'cat-img-null', imageStyle: null, order: 10, showInNav: false, visible: false,
+    })));
+    await assertSucceeds(setDoc(doc(collection(ed, 'categories')), editorCreatePayload(EDITOR, {
+      slug: 'cat-multiline',
+      introAr: 'السطر الأول\nالسطر الثاني\n' + 'أ'.repeat(1470),
+      introEn: 'Line 1\nLine 2\n' + 'e'.repeat(1480),
+      nameAr: 'أ'.repeat(120),
+      nameEn: 'e'.repeat(120),
+      imageStyle: 'card',
+      order: -100000,
+    })));
+    await assertSucceeds(setDoc(doc(collection(ed, 'categories')), {
+      nameAr: 'قسم مختصر',
+      slug: 's'.repeat(60),
+      visible: true,
+      order: 100000,
+      updatedAt: serverTimestamp(),
+      updatedBy: `${EDITOR}@x.test`,
+    }));
+
+    // All 12 CategoryIcons are accepted.
+    for (const icon of ['star', 'church', 'people', 'heart', 'book', 'music', 'medical', 'school', 'event', 'volunteer', 'donate', 'info']) {
+      await assertSucceeds(setDoc(doc(ed, 'categories', `icon-${icon}`), editorCreatePayload(EDITOR, {
+        slug: `cat-${icon}`, icon,
+      })), icon);
+    }
+
+    // Invalid order bounds/types and mismatched updatedBy fail.
+    await assertFails(setDoc(doc(ed, 'categories', 'bad-order-hi'), editorCreatePayload(EDITOR, { order: 100001 })));
+    await assertFails(setDoc(doc(ed, 'categories', 'bad-order-str'), editorCreatePayload(EDITOR, { order: '10' })));
+    await assertFails(setDoc(doc(ed, 'categories', 'bad-stamp'), editorCreatePayload(EDITOR, { updatedBy: 'wrong@x.test' })));
+
+    // 3. Editor vs Owner with explicit active: true / missing active, and token without email (uid fallback).
+    const own = db(OWNER);
+    await assertSucceeds(setDoc(doc(collection(own, 'categories')), editorCreatePayload(OWNER, { slug: 'owner-missing-active' })));
+
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const f = ctx.firestore();
+      await setDoc(doc(f, 'admins', EDITOR), { email: 'editor@x.test', role: 'editor', active: true, expiresAt: null });
+      await setDoc(doc(f, 'admins', OWNER), { email: 'owner@x.test', role: 'owner', active: true });
+      await setDoc(doc(f, 'admins', 'uid-only-admin'), { email: 'uid-only@x.test', role: 'editor', active: true });
+    });
+    await assertSucceeds(setDoc(doc(collection(ed, 'categories')), editorCreatePayload(EDITOR, { slug: 'editor-active-true' })));
+    await assertSucceeds(setDoc(doc(collection(own, 'categories')), editorCreatePayload(OWNER, { slug: 'owner-active-true' })));
+
+    const noEmailDb = env.authenticatedContext('uid-only-admin', {}).firestore();
+    await assertSucceeds(setDoc(doc(collection(noEmailDb, 'categories')), {
+      ...editorCreatePayload('uid-only-admin'),
+      slug: 'uid-only-cat',
+      updatedBy: 'uid-only-admin',
+    }));
+
+    // 4. Edit follow-up via mergeFields (as AdminRepository._merge sends), soft-delete, restore, and hard delete.
+    await assertSucceeds(setDoc(createdRef, {
+      introAr: 'سطر 1\nسطر 2',
+      imageStyle: 'banner',
+      order: 20,
+      showInNav: false,
+      visible: false,
+      updatedAt: serverTimestamp(),
+      updatedBy: `${EDITOR}@x.test`,
+    }, { mergeFields: ['introAr', 'imageStyle', 'order', 'showInNav', 'visible', 'updatedAt', 'updatedBy'] }));
+    await assertSucceeds(setDoc(createdRef, {
+      deletedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+      updatedBy: `${EDITOR}@x.test`,
+    }, { mergeFields: ['deletedAt', 'updatedAt', 'updatedBy'] }));
+    await assertSucceeds(setDoc(createdRef, {
+      deletedAt: null,
+      updatedAt: serverTimestamp(),
+      updatedBy: `${EDITOR}@x.test`,
+    }, { mergeFields: ['deletedAt', 'updatedAt', 'updatedBy'] }));
+    await assertSucceeds(deleteDoc(createdRef));
+  });
+
   test('items: category id, title, phone, link and sizes are validated', async () => {
     const ed = db(EDITOR);
     await assertSucceeds(setDoc(doc(ed, 'entries', 'ok1'), entry({ externalUrl: 'https://example.org/x?y=1' })));

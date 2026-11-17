@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' show PointerDeviceKind, Tristate;
 
+import 'package:firebase_core/firebase_core.dart';
+
 import 'package:church_portal/core/theme.dart';
 import 'package:church_portal/data/admin_repository.dart';
 import 'package:church_portal/data/media_repository.dart';
@@ -56,6 +58,62 @@ void main() {
   setUpAll(CairoTime.ensureInitialized);
 
   group('field validation', () {
+    test('validateHeadingBlock and heading in validateDocument', () {
+      expect(validateHeadingBlock({'textAr': ''}, BlockTypes.heading), 'required');
+      expect(validateHeadingBlock({'textAr': '   '}, BlockTypes.heading), 'required');
+      expect(validateHeadingBlock({'textAr': 'عنوان'}, BlockTypes.heading), isNull);
+      expect(validateHeadingBlock({'textAr': ''}, BlockTypes.paragraph), isNull);
+
+      final pagesDef = collectionById('pages')!;
+      expect(
+        validateDocument(pagesDef, {
+          'blocks': [
+            {'type': 'heading', 'textAr': ''}
+          ]
+        }),
+        'blockHeadingRequired',
+      );
+      expect(
+        validateDocument(pagesDef, {
+          'blocks': [
+            {'type': 'heading', 'textAr': 'عنوان'}
+          ]
+        }),
+        isNull,
+      );
+    });
+
+    test('formatAdminError handles FirebaseException and generic errors', () {
+      final fbe = FirebaseException(
+        plugin: 'cloud_firestore',
+        code: 'permission-denied',
+        message: 'Missing or insufficient permissions.',
+      );
+      expect(formatAdminError(fbe), '[permission-denied] Missing or insufficient permissions.');
+
+      final codeOnly = FirebaseException(
+        plugin: 'cloud_firestore',
+        code: 'permission-denied',
+        message: null,
+      );
+      expect(formatAdminError(codeOnly), '[permission-denied]');
+
+      final msgOnly = FirebaseException(
+        plugin: 'cloud_firestore',
+        code: '',
+        message: 'Something went wrong',
+      );
+      expect(formatAdminError(msgOnly), 'Something went wrong');
+
+      final emptyFbe = FirebaseException(
+        plugin: 'cloud_firestore',
+        code: '',
+        message: '',
+      );
+      expect(formatAdminError(emptyFbe), '[cloud_firestore]');
+
+      expect(formatAdminError(Exception('custom error')), 'Exception: custom error');
+    });
     test('required and length', () {
       expect(validateFieldValue(_f(FieldType.text, required: true), '  '), 'required');
       expect(validateFieldValue(_f(FieldType.text), ''), isNull);
@@ -4929,6 +4987,191 @@ void main() {
       });
     });
   });
+
+  group('PR #83 follow-up fixes and regressions', () {
+    testWidgets('CollectionListScreen(categories) creates a new category from scratch (englishEnabled: false and true)', (tester) async {
+      tester.view.physicalSize = const Size(800, 1400);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      for (final englishEnabled in [false, true]) {
+        final repo = _TestAdminBackend(
+          initialCollections: {
+            'categories': [],
+            'entries': [],
+            'pages': [],
+          },
+          initialDocs: {
+            'settings/features': {'englishEnabled': englishEnabled},
+          },
+        );
+
+        await tester.pumpWidget(_app(
+          CollectionListScreen(repo: repo, def: collectionById('categories')!),
+          locale: const Locale('ar'),
+        ));
+        await tester.pumpAndSettle();
+
+        // Tap Add
+        await tester.tap(find.byType(FloatingActionButton));
+        await tester.pumpAndSettle();
+
+        // Fill Arabic name
+        await tester.enterText(find.byKey(const ValueKey('field-nameAr')), 'رحلات الشباب');
+        await tester.pumpAndSettle();
+
+        // Tap Save
+        await tester.tap(find.byKey(const Key('editor-save-top')));
+        await tester.pumpAndSettle();
+
+        expect(tester.takeException(), isNull);
+        expect(repo.savedDocs, isNotEmpty);
+        final saved = repo.savedDocs.last.data;
+
+        expect(saved['nameAr'], 'رحلات الشباب');
+        expect(saved['slug'], 'rhlat-alshbab');
+        expect(saved['icon'], 'star');
+        expect(saved['showInNav'], isTrue);
+        expect(saved['visible'], isTrue);
+        expect(saved['order'], isNull);
+        expect(saved['nameEn'], '');
+        expect(saved['introEn'], '');
+        expect(saved['introAr'], '');
+        expect(saved.containsKey('imageStyle'), isFalse);
+      }
+    });
+
+    testWidgets('DocEditor surfaces Firebase error code when repo.save throws FirebaseException', (tester) async {
+      tester.view.physicalSize = const Size(800, 1400);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final repo = _PermissionDeniedBackend();
+      final catDef = collectionById('categories')!;
+
+      await tester.pumpWidget(_app(
+        Scaffold(
+          body: DocEditor(
+            title: 'إضافة فسم',
+            fields: catDef.fields,
+            def: catDef,
+            popOnSave: true,
+            onSave: (data) => repo.save('categories', null, data),
+            newDefaults: const {
+              'nameAr': 'قسم ممنوع',
+            },
+          ),
+        ),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('editor-save-top')));
+      await tester.pumpAndSettle();
+
+      final errorBanner = find.byKey(const Key('editor-save-error'));
+      expect(errorBanner, findsOneWidget);
+      expect(find.descendant(of: errorBanner, matching: find.textContaining('permission-denied')), findsOneWidget);
+
+      expect(find.byType(SnackBar), findsOneWidget);
+      expect(find.descendant(of: find.byType(SnackBar), matching: find.textContaining('permission-denied')), findsOneWidget);
+    });
+
+    testWidgets('CollectionListScreen Undo SnackBar auto-dismisses after 10 seconds cleanly', (tester) async {
+      tester.view.physicalSize = const Size(800, 1400);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final repo = _TestAdminBackend(initialCollections: {
+        'liturgies': [
+          AdminDoc('lit-1', {
+            'titleAr': 'قداس الأحد',
+            'weekday': 7,
+            'start': '06:30',
+            'end': '08:30',
+            'visible': true,
+          }),
+        ],
+      });
+
+      await tester.pumpWidget(_app(
+        CollectionListScreen(repo: repo, def: collectionById('liturgies')!),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      final deleteBtn = find.byKey(const ValueKey('delete-lit-1'));
+      expect(deleteBtn, findsOneWidget);
+      await tester.tap(deleteBtn);
+      await tester.pumpAndSettle();
+
+      expect(find.byType(SnackBar), findsOneWidget);
+      expect(find.widgetWithText(SnackBarAction, 'تراجع'), findsOneWidget);
+
+      await tester.pump(const Duration(seconds: 10));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(SnackBar), findsNothing);
+      expect(find.widgetWithText(SnackBarAction, 'تراجع'), findsNothing);
+      expect(find.text('تراجع'), findsNothing);
+    });
+
+    testWidgets('Empty heading block validation fails, summary expands collapsed block on tap, filling text allows save to succeed', (tester) async {
+      tester.view.physicalSize = const Size(900, 3000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      Map<String, dynamic>? saved;
+      final pagesDef = collectionById('pages')!;
+      await tester.pumpWidget(_app(
+        Scaffold(
+          body: DocEditor(
+            title: 'صفحة جد،دة',
+            fields: pagesDef.fields,
+            def: pagesDef,
+            popOnSave: true,
+            onSave: (d) async => saved = d,
+            newDefaults: const {
+              'titleAr': 'صفحة تجريبية',
+              'blocks': [
+                'heading',
+                'paragraphفقرة نصية',
+              ],
+            },
+          ),
+        ),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      // Tap Save -> fails because heading textAr is empty
+      await tester.tap(find.byKey(const Key('editor-save-top')));
+      await tester.pumpAndSettle();
+
+      expect(saved, isNull);
+      final errorSummary = find.byKey(const Key('editor-error-summary'));
+      expect(errorSummary, findsOneWidget);
+
+      // Tap the error entry in summary
+      final errorEntry = find.descendant(of: errorSummary, matching: find.byType(InkWell)).first;
+      await tester.tap(errorEntry);
+      await tester.pumpAndSettle();
+
+      // Heading block (row 0) should now be expanded!
+      final textArFields = find.byKey(const ValueKey('field-textAr'));
+      expect(textArFields, findsWidgets);
+      await tester.enterText(textArFields.first, 'عنوان رئيسي');
+      await tester.pumpAndSettle();
+
+      // Tap Save again -> should succeed!
+      await tester.tap(find.byKey(const Key('editor-save-top')));
+      await tester.pumpAndSettle();
+
+      expect(saved, isNotNull);
+      final savedBlocks = saved!['blocks'] as List;
+      expect(savedBlocks.first, contains('عنوان رئيسي'));
+    });
+  });
 }
 
 class _TestAdminBackend extends AdminBackend {
@@ -5210,5 +5453,17 @@ class _DelayedSaveBackend extends _TestAdminBackend {
     if (c != null && !c.isClosed) {
       c.add(AdminDoc(id, Map<String, dynamic>.from(docs[path]!)));
     }
+  }
+}
+
+class _PermissionDeniedBackend extends _TestAdminBackend {
+
+  @override
+  Future<String> save(String collection, String? id, Map<String, dynamic> data) async {
+    throw FirebaseException(
+      plugin: 'cloud_firestore',
+      code: 'permission-denied',
+      message: 'Missing or insufficient permissions.',
+    );
   }
 }

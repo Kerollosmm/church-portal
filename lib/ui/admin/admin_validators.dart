@@ -1,4 +1,6 @@
 // Pure validation / conversion for the admin forms (unit-tested).
+import 'package:firebase_core/firebase_core.dart';
+
 import '../../domain/cairo_time.dart';
 import '../../domain/custom_content.dart' show BlockTypes, PageBlock, isValidSlug, slugMaxLength;
 import '../../domain/push.dart';
@@ -259,6 +261,14 @@ String? validateRowUnique(FieldDef list, List<String> values, int index) {
   return null;
 }
 
+/// Validates a heading block in custom pages: Arabic heading text is required.
+String? validateHeadingBlock(Map<String, String> row, String blockType) {
+  if (blockType == BlockTypes.heading && (row['textAr'] ?? '').trim().isEmpty) {
+    return 'required';
+  }
+  return null;
+}
+
 String? validateDocument(CollectionDef? def, Map<String, dynamic> data) {
   if (def != null && def.requireAnyOf.isNotEmpty && def.requireAnyOf.every((k) => data[k] == null || data[k] == '')) {
     return 'needWeekdayOrDate';
@@ -275,12 +285,15 @@ String? validateDocument(CollectionDef? def, Map<String, dynamic> data) {
   final leads = data['reminderLeads'], lead = data['reminderDefaultLead'];
   if (lead is int && leads is List && !leads.contains(lead)) return 'reminderDefaultLeadNotOffered';
   // Custom page blocks (firestore.rules validPageBlock): an image needs an
-  // https picture link.
+  // https picture link; a heading block requires Arabic heading text.
   final blocks = data['blocks'];
   if (blocks is List) {
     for (final raw in blocks) {
       final b = PageBlock.fromStored(raw);
-      if (b != null && b.type == BlockTypes.image && !b.url.startsWith('https://')) return 'blockImageUrl';
+      if (b != null) {
+        if (b.type == BlockTypes.heading && b.textAr.trim().isEmpty) return 'blockHeadingRequired';
+        if (b.type == BlockTypes.image && !b.url.startsWith('https://')) return 'blockImageUrl';
+      }
     }
   }
   return null;
@@ -400,3 +413,24 @@ bool isValidHm(String s) => s.isEmpty || RegExp(r'^([01]\d|2[0-3]):[0-5]\d$').ha
 
 /// The Web Push public key: empty or 80–100 URL-safe base64 characters.
 bool isValidVapidKey(String s) => s.isEmpty || RegExp(r'^[A-Za-z0-9_-]{80,100}$').hasMatch(s);
+
+/// Formats an error for administrative error displays, surfacing structured
+/// Firebase error codes (e.g. `[permission-denied]`) instead of raw/opaque strings.
+String formatAdminError(Object error) {
+  if (error is FirebaseException) {
+    final code = error.code.trim();
+    final message = (error.message ?? '').trim();
+    if (code.isNotEmpty && message.isNotEmpty) {
+      return '[$code] $message';
+    }
+    if (code.isNotEmpty) {
+      return '[$code]';
+    }
+    if (message.isNotEmpty) {
+      return message;
+    }
+    final plugin = error.plugin.trim();
+    return plugin.isNotEmpty ? '[$plugin]' : '[firebase_error]';
+  }
+  return '$error';
+}

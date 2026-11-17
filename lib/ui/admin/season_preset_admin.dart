@@ -12,6 +12,7 @@ import '../../domain/season_preset.dart';
 import '../../domain/time_format.dart';
 import '../widgets/common.dart' show localDigits;
 import 'admin_schema.dart';
+import 'admin_validators.dart';
 import 'admin_strings.dart';
 import 'collection_list.dart';
 import 'doc_editor.dart' show choiceLabel;
@@ -316,7 +317,7 @@ class _SeasonPresetScreenState extends State<SeasonPresetScreen> {
     final done = context.tr('saved');
     final conflict = context.tr('presetConflict');
     final replaceChanged = context.tr('presetReplaceChanged');
-    String failed(Object e) => context.tr('saveFailed', {'e': '$e'});
+    String failed(Object e) => context.tr('saveFailed', {'e': formatAdminError(e)});
     setState(() => _saving = true);
     try {
       final seasonPath = 'seasons/$seasonId';

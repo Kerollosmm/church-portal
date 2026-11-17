@@ -95,6 +95,8 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
       widget.def.name == 'categories' ? widget.repo.watch('pages') : null;
   StreamSubscription<AdminDoc?>? _featuresSub;
   bool _englishEnabled = true;
+  ScaffoldFeatureController<SnackBar, SnackBarClosedReason>? _undoSnackBarController;
+  Timer? _undoSnackBarTimer;
 
   /// The list as last shown (slug uniqueness checks in the editor).
   List<AdminDoc> _lastDocs = const [];
@@ -134,6 +136,8 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
 
   @override
   void dispose() {
+    _undoSnackBarTimer?.cancel();
+    _undoSnackBarController = null;
     _featuresSub?.cancel();
     _pendingDelete.dispose();
     _pendingEntries.clear();
@@ -1001,7 +1005,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
       await widget.repo.update(activeDef.name, d.id, {'visible': visible});
       messenger.showSnackBar(SnackBar(content: Text(msg), duration: const Duration(seconds: 2)));
     } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text(failed.replaceAll('{e}', '$e'))));
+      messenger.showSnackBar(SnackBar(content: Text(failed.replaceAll('{e}', formatAdminError(e)))));
     }
   }
 
@@ -1023,7 +1027,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
       await widget.repo.reorder(def.name, ids, base: reorderBase(def, status: movedStatus));
       messenger.showSnackBar(SnackBar(content: Text(ok), duration: const Duration(seconds: 2)));
     } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text(failed.replaceAll('{e}', '$e'))));
+      messenger.showSnackBar(SnackBar(content: Text(failed.replaceAll('{e}', formatAdminError(e)))));
     }
   }
 
@@ -1065,7 +1069,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     try {
       await repo.update(activeDef.name, id, {'deletedAt': DateTime.now().toUtc()});
     } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text(failedMsg.replaceAll('{e}', '$e'))));
+      messenger.showSnackBar(SnackBar(content: Text(failedMsg.replaceAll('{e}', formatAdminError(e)))));
       return;
     }
 
@@ -1084,7 +1088,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
           } catch (_) {}
           if (!mounted) return;
           setState(() {});
-          messenger.showSnackBar(SnackBar(content: Text(failedMsg.replaceAll('{e}', '$e'))));
+          messenger.showSnackBar(SnackBar(content: Text(failedMsg.replaceAll('{e}', formatAdminError(e)))));
         }
       });
     });
@@ -1094,14 +1098,23 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
         ? context.tr('deletedMultiUndo', {'n': '$pendingCount', 'last': title})
         : context.tr('deletedUndo', {'n': title});
     final actionLabel = context.tr(pendingCount > 1 ? 'undoAll' : 'undo');
+    _undoSnackBarTimer?.cancel();
+    _undoSnackBarTimer = null;
+    _undoSnackBarController?.close();
+    _undoSnackBarController = null;
     messenger.removeCurrentSnackBar();
-    messenger.showSnackBar(
+    final undoController = messenger.showSnackBar(
       SnackBar(
         duration: const Duration(seconds: 10),
+        persist: false,
         content: Text(snackText),
         action: SnackBarAction(
           label: actionLabel,
           onPressed: () async {
+            _undoSnackBarTimer?.cancel();
+            _undoSnackBarTimer = null;
+            _undoSnackBarController = null;
+            messenger.removeCurrentSnackBar();
             final ids = _pendingDelete.pendingIds.toList();
             final undone = <({String id, AdminBackend repo, String collection})>[];
             for (final pid in ids) {
@@ -1121,13 +1134,27 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
                 await item.repo.update(item.collection, item.id, {'deletedAt': null});
               } catch (e) {
                 if (!mounted) return;
-                messenger.showSnackBar(SnackBar(content: Text(failedMsg.replaceAll('{e}', '$e'))));
+                messenger.showSnackBar(SnackBar(content: Text(failedMsg.replaceAll('{e}', formatAdminError(e)))));
               }
             }
           },
         ),
       ),
     );
+    _undoSnackBarController = undoController;
+    undoController.closed.then((_) {
+      if (identical(_undoSnackBarController, undoController)) {
+        _undoSnackBarController = null;
+        _undoSnackBarTimer?.cancel();
+        _undoSnackBarTimer = null;
+      }
+    });
+    _undoSnackBarTimer = Timer(const Duration(seconds: 10), () {
+      if (!mounted) return;
+      _undoSnackBarController?.close();
+      _undoSnackBarController = null;
+      ScaffoldMessenger.maybeOf(context)?.removeCurrentSnackBar();
+    });
   }
 
   /// Deleting a custom category hides its items (visible: false) first and
@@ -1141,7 +1168,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
       entries = await widget.repo.watch('entries').first.timeout(const Duration(seconds: 15));
     } catch (e) {
       if (!mounted) return;
-      messenger.showSnackBar(SnackBar(content: Text(failedMsg.replaceAll('{e}', '$e'))));
+      messenger.showSnackBar(SnackBar(content: Text(failedMsg.replaceAll('{e}', formatAdminError(e)))));
       return;
     }
     final inCat = entries.where((e) => e.data['categoryId'] == d.id).length;
@@ -1171,7 +1198,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
       messenger.showSnackBar(SnackBar(content: Text(deletedMsg)));
     } catch (e) {
       if (!mounted) return;
-      messenger.showSnackBar(SnackBar(content: Text(failedMsg.replaceAll('{e}', '$e'))));
+      messenger.showSnackBar(SnackBar(content: Text(failedMsg.replaceAll('{e}', formatAdminError(e)))));
     }
   }
 

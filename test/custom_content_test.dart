@@ -6,6 +6,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+
 import 'package:church_portal/core/l10n.dart';
 import 'package:church_portal/data/admin_repository.dart';
 import 'package:church_portal/data/content_repository.dart';
@@ -1894,6 +1895,221 @@ void main() {
 
       final farState = tester.state(find.byKey(const ValueKey('reveal-far')));
       expect((farState as dynamic).visibleInViewport, isFalse);
+    });
+
+    testWidgets('CustomPageCard renders CardCover/FittedCover when image map is present on narrow 320px Home and /section/<slug> with zero overflow', (tester) async {
+      const coverPage = CustomPage(
+        id: 'p-cover',
+        slug: 'cover-page',
+        titleAr: 'صفحة بغلاف',
+        titleEn: 'Page with cover',
+        subtitleAr: 'وصف الغلاف',
+        subtitleEn: 'Cover description',
+        placement: PagePlacements.section,
+        categoryId: 'k1',
+        featured: true,
+        visible: true,
+        image: MediaImage(
+          source: MediaSource.url,
+          url: 'https://example.org/cover.jpg',
+          alt: 'غلاف',
+        ),
+      );
+
+      final customRepo = _ControlledPagesRepo(
+        Stream.value([coverPage]),
+        entries: const [],
+        cats: const [
+          CustomCategory(id: 'k1', slug: 'youth-trips', nameAr: 'رحلات الشباب', nameEn: 'Youth trips', visible: true),
+        ],
+      );
+
+      // 1. Narrow 320px on Home: featured page card renders CardCover/FittedCover with zero layout overflow
+      final (homeRouter, _) = await _pump(tester, '/', size: const Size(320, 3000), repo: customRepo);
+      expect(find.byKey(const Key('featuredPage-cover-page')), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('featuredPage-cover-page')),
+          matching: find.byKey(const Key('cardCover')),
+        ),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+
+      // 2. Narrow 320px on /section/<slug>: section page card renders CardCover/FittedCover with zero layout overflow
+      homeRouter.go('/section/youth-trips');
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('sectionPage-cover-page')), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('sectionPage-cover-page')),
+          matching: find.byKey(const Key('cardCover')),
+        ),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('Checklist 13 & 14 E2E: empty category hidden from menu and renders EmptyState + admin chip; linking section page shows it and clears chip; unlinking/hiding reverts to empty', (tester) async {
+      tester.view.physicalSize = const Size(800, 1400);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      var currentPages = <CustomPage>[];
+      final pagesCtrl = StreamController<List<CustomPage>>.broadcast();
+      addTearDown(pagesCtrl.close);
+
+      Stream<List<CustomPage>> pagesStream() async* {
+        yield currentPages;
+        yield* pagesCtrl.stream;
+      }
+
+      const testCat = CustomCategory(
+        id: 'cat-special',
+        slug: 'special-activities',
+        nameAr: 'أنشطة خاصة',
+        nameEn: 'Special activities',
+        visible: true,
+      );
+
+      final repo = _ControlledPagesRepo(
+        pagesStream(),
+        entries: const [],
+        cats: const [testCat],
+      );
+
+      const linkedPage = CustomPage(
+        id: 'page-camp',
+        slug: 'summer-camp',
+        titleAr: 'معسكر الصيف',
+        titleEn: 'Summer camp',
+        placement: PagePlacements.section,
+        categoryId: 'cat-special',
+        visible: true,
+      );
+
+      const hiddenPage = CustomPage(
+        id: 'page-camp',
+        slug: 'summer-camp',
+        titleAr: 'معسكر الصيف',
+        titleEn: 'Summer camp',
+        placement: PagePlacements.section,
+        categoryId: 'cat-special',
+        visible: false,
+      );
+
+      // ==========================================
+      // PART A: PUBLIC PORTAL BEHAVIOR (/section/<slug> & public menu)
+      // ==========================================
+
+      // A.1 Newly created empty category:
+      // Menu hides category
+      expect(publicNonEmptyCategories([testCat], const [], const []).any((c) => c.id == 'cat-special'), isFalse);
+      // /section/<slug> renders EmptyState
+      await _pump(tester, '/section/special-activities', size: const Size(800, 1400), repo: repo);
+      expect(find.byType(EmptyState), findsOneWidget);
+      expect(find.byType(CustomPageCard), findsNothing);
+
+      // A.2 Linking a visible page with placement: 'section':
+      // Menu shows category
+      expect(publicNonEmptyCategories([testCat], const [], [linkedPage]).any((c) => c.id == 'cat-special'), isTrue);
+      // /section/<slug> displays page card
+      currentPages = [linkedPage];
+      pagesCtrl.add(currentPages);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('sectionPage-summer-camp')), findsOneWidget);
+      expect(find.byType(EmptyState), findsNothing);
+
+      // A.3 Unlinking or hiding/deleting the page:
+      // Menu hides category again
+      expect(publicNonEmptyCategories([testCat], const [], [hiddenPage]).any((c) => c.id == 'cat-special'), isFalse);
+      // /section/<slug> renders EmptyState again
+      currentPages = [hiddenPage];
+      pagesCtrl.add(currentPages);
+      await tester.pumpAndSettle();
+      expect(find.byType(EmptyState), findsOneWidget);
+      expect(find.byType(CustomPageCard), findsNothing);
+
+      // ==========================================
+      // PART B: ADMIN COLLECTION LIST BEHAVIOR (chip appearance & disappearance)
+      // ==========================================
+
+      // B.1 Empty category -> shows chip
+      final adminRepoEmpty = _Backend(lists: {
+        'categories': [
+          AdminDoc('cat-special', {
+            'nameAr': 'أنشطة خاصة',
+            'nameEn': 'Special activities',
+            'slug': 'special-activities',
+            'order': 10,
+            'visible': true,
+          }),
+        ],
+        'entries': const [],
+        'pages': const [],
+      });
+      await tester.pumpWidget(_admin(CollectionListScreen(repo: adminRepoEmpty, def: collectionById('categories')!), locale: const Locale('ar')));
+      await tester.pumpAndSettle();
+      final catCardEmpty = find.byKey(const ValueKey('cat-special'));
+      expect(catCardEmpty, findsOneWidget);
+      expect(find.descendant(of: catCardEmpty, matching: find.text('فاضي، مش ظاهر للزوار')), findsOneWidget);
+
+      // B.2 Linking visible section page -> chip disappears
+      final adminRepoLinked = _Backend(lists: {
+        'categories': [
+          AdminDoc('cat-special', {
+            'nameAr': 'أنشطة خاصة',
+            'nameEn': 'Special activities',
+            'slug': 'special-activities',
+            'order': 10,
+            'visible': true,
+          }),
+        ],
+        'entries': const [],
+        'pages': [
+          AdminDoc('page-camp', {
+            'categoryId': 'cat-special',
+            'titleAr': 'معسكر الصيف',
+            'titleEn': 'Summer camp',
+            'slug': 'summer-camp',
+            'placement': 'section',
+            'visible': true,
+          }),
+        ],
+      });
+      await tester.pumpWidget(_admin(CollectionListScreen(repo: adminRepoLinked, def: collectionById('categories')!), locale: const Locale('ar')));
+      await tester.pumpAndSettle();
+      final catCardLinked = find.byKey(const ValueKey('cat-special'));
+      expect(find.descendant(of: catCardLinked, matching: find.text('فاضي، مش ظاهر للزوار')), findsNothing);
+      expect(find.descendant(of: catCardLinked, matching: find.byKey(const Key('sectionPageRow-page-camp'))), findsOneWidget);
+
+      // B.3 Page hidden -> chip reappears
+      final adminRepoHidden = _Backend(lists: {
+        'categories': [
+          AdminDoc('cat-special', {
+            'nameAr': 'أنشطة خاصة',
+            'nameEn': 'Special activities',
+            'slug': 'special-activities',
+            'order': 10,
+            'visible': true,
+          }),
+        ],
+        'entries': const [],
+        'pages': [
+          AdminDoc('page-camp', {
+            'categoryId': 'cat-special',
+            'titleAr': 'معسكر الصيف',
+            'titleEn': 'Summer camp',
+            'slug': 'summer-camp',
+            'placement': 'section',
+            'visible': false,
+          }),
+        ],
+      });
+      await tester.pumpWidget(_admin(CollectionListScreen(repo: adminRepoHidden, def: collectionById('categories')!), locale: const Locale('ar')));
+      await tester.pumpAndSettle();
+      final catCardReverted = find.byKey(const ValueKey('cat-special'));
+      expect(find.descendant(of: catCardReverted, matching: find.text('فاضي، مش ظاهر للزوار')), findsOneWidget);
     });
   });
 }

@@ -283,7 +283,7 @@ An admin-defined category: poster header with its name, optional intro panel, th
 item's `imageStyle` else the category's), description, call / WhatsApp, and a link button (in-app path via
 `context.go`, else `openUrl`), plus any visible custom pages with `placement == 'section'` (`sectionPages`) as
 `CustomPageCard`s with a `CardCover` (collection `'pages'`, respecting `Sections.media`), title, subtitle, and an
-«اعرف المزيد / Learn more» button (gated by `Sections.customPages`, PR 3D / P1-18). Hidden /
+«اعرف المزيد / Learn more» button (gated by `Sections.customPages`, PR 3D / P1-18). Widget tests in `test/custom_content_test.dart` verify `CustomPageCard` (`CardCover`) and `CustomPageView` (`FittedCover`) render at 320 px Home and `/section/<slug>` with zero overflow, confirming no legacy image field fallback was added and fonts are untouched per owner directive. Hidden /
 unknown slug → `ContentUnavailable` (`Key('categoryUnavailable')`, `noindex`); no items and no section pages →
 «لا توجد عناصر في هذا القسم بعد». Gated by `Sections.customSections` (all categories and
 their menu entries) plus each category's own `visible`. **PR #23:** the page (and its items list) stays on the
@@ -294,7 +294,7 @@ flashes «غير متاحة» from a stale cache, and the items can no longer st
 ### `/page/<slug>` — `custom_page.dart` `CustomPageView` (PR #18, ADR-027)
 Header (title + subtitle), then a centered reading column constrained to `maxWidth: 700` containing the optional hero
 `FittedCover` (aspect ratio 16/7, `maxHeight: 420`) and the blocks (`PageBlockView`): heading (`BlockTypes.heading`,
-semantic header, `fontSize: 26`, `fontWeight: FontWeight.w800`, line height 1.45, `top: 12` spacing when following
+semantic header, Arabic heading text strictly required via `validateHeadingBlock` and `validateDocument` with `'blockHeadingRequired'`, `fontSize: 26`, `fontWeight: FontWeight.w800`, line height 1.45, `top: 12` spacing when following
 another block or hero, `bottom: 16`), paragraph (`BlockTypes.paragraph`, selectable, `fontSize: 16`, line height 1.8),
 image (https link + caption), button (`FilledButton`), text link, donation info (`DonationInfoCard`: bank account /
 InstaPay / wallet with copy buttons, notes, «للعلم فقط: لا يتم أي دفع عبر الموقع»). Empty blocks are skipped. Hidden /

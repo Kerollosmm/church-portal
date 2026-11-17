@@ -507,7 +507,11 @@ class DocEditorState extends State<DocEditor> {
               final orderBad = f.rowNotBefore?.key == sf.key && validateRowOrder(f, rowMap) != null;
               final uniqueBad = f.rowUniqueKey == sf.key &&
                   validateRowUnique(f, [for (final x in rows) x.text[sf.key]?.text ?? ''], i) != null;
-              bad = fieldBad || anyOfBad || orderBad || uniqueBad;
+              final headingBad = f.key == 'blocks' &&
+                  sf.key == 'textAr' &&
+                  r.values['type'] == BlockTypes.heading &&
+                  (rc?.text ?? '').trim().isEmpty;
+              bad = fieldBad || anyOfBad || orderBad || uniqueBad || headingBad;
             }
             if (bad) {
               out.add(_FieldErrorEntry(
@@ -847,7 +851,7 @@ class DocEditorState extends State<DocEditor> {
           ..image = null;
       }
       if (mounted) {
-        final errText = context.tr('saveFailed', {'e': '$e'});
+        final errText = context.tr('saveFailed', {'e': formatAdminError(e)});
         messenger?.showSnackBar(SnackBar(content: Text(errText)));
         setState(() {
           _saving = false;
@@ -2195,7 +2199,16 @@ class DocEditorState extends State<DocEditor> {
                                                   f, [for (final r in rows) r.text[sf.key]?.text ?? ''], i);
                                               return err == null ? null : context.tr(err);
                                             }
-                                          : null),
+                                          : f.key == 'blocks' &&
+                                                  sf.key == 'textAr' &&
+                                                  rows[i].values['type'] == BlockTypes.heading
+                                              ? () {
+                                                  final err = validateHeadingBlock({
+                                                    for (final e in rows[i].text.entries) e.key: e.value.text,
+                                                  }, rows[i].values['type'] as String? ?? '');
+                                                  return err == null ? null : context.tr(err);
+                                                }
+                                              : null),
                         },
                       ),
                     ),

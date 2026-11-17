@@ -265,6 +265,7 @@ const Map<String, List<String>> adminStrings = {
   'unnamedContactType': ['نوع بدون اسم', 'Unnamed type'],
   'moreActions': ['خيارات إضافية', 'More actions'],
   'emailLabel': ['البريد الإلكتروني', 'Email'],
+  'blockHeadingRequired': ['عنوان الفقرة (عربي) مطلوب.', 'Heading text (Arabic) is required.'],
 };
 
 /// Idempotently registers [adminStrings] in the runtime localization table.
