@@ -13,9 +13,18 @@ render with `PageBody` (+ `Footer`). Content comes from Riverpod providers (hidd
   if About is off) — each only if its route is enabled. End column = the **arcade**: the first two `saints` in
   gold-leaf `ArchFrame`s (the admin `heroImageUrl` takes the large arch), tapping opens the saint page; no image /
   saints or images off → arches hold the drawn Coptic cross. A plaster "ledge" closes the hero.
+- **Featured pages** (`_FeaturedPages`, key `home-featuredPages`): placed in the discovery zone before the first of
+  `milestones`/`directory`/`map`, ahead of `_PatronsTeaser`. Displays a `SectionTitle` with `'featuredPagesTitle'`
+  («صفحات مميزة» / "Featured pages"). When `pages.length == 1`, renders centered in `ConstrainedBox(maxWidth: 560)`;
+  when `pages.length > 1`, uses `ResponsiveGrid` of `CustomPageCard`s for all visible usable pages with `featured: true`,
+  sorted by `order` ascending, then `updatedAt` descending (newest first, non-null before null), then original index on ties,
+  with duplicate slugs deduplicated via `featuredPages` (`lib/domain/custom_content.dart`; returns `SizedBox.shrink()` when empty,
+  when `Sections.customPages` is on). `ViewportVisibility` and `_RevealState` in `golden.dart` ignore 0-height unhydrated children
+  and listen to `SizeChangedLayoutNotification` via `SizeChangedLayoutNotifier`, ensuring dynamically loaded async lists reveal
+  to `opacity: 1` without requiring extra scroll. `_RevealState.viewportLead` is `20` (instead of `-40`), preventing blank
+  viewport gaps above revealed sections.
 - **Patrons teaser** (`_PatronsTeaser`, key `home-patrons`): placed before the first of milestones/directory/map
-  (not yet an admin-orderable block: that needs a `settings/features` rules change, PR-18 of the UX plan). Two saint
-  cards (small arch, name, 3 lines of the life, «التفاصيل»), hidden when `saints` or `/about` is off.
+  (directly after `_FeaturedPages`). Two saint cards (small arch, name, 3 lines of the life, «التفاصيل»), hidden when `saints` or `/about` is off.
 - Then the **home blocks** in `features.visibleHomeBlocks` order (admin-reorderable/hideable):
   | Block | Widget | Needs section |
   |---|---|---|
@@ -25,7 +34,7 @@ render with `PageBody` (+ `Footer`). Content comes from Riverpod providers (hidd
   | `quickContacts` | `_QuickContacts` (first 3 phones, call + WhatsApp for mobiles) | contactInfo |
   | `milestones` | "Our story" `MilestoneCard` grid (`lib/ui/widgets/milestone_card.dart`, shared with `/about`, ADR-052; icon by `icon`, year in local digits) | milestones |
   | `directory` | `DirectoryCard` grid from `_directory` (mass, clinics, education, activities, services, about, contact) + "Ask the church" when visible; cards for disabled routes are skipped | — |
-  | `map` | `ChurchMap` (iframe + Open in Maps + Directions) | contactInfo |
+  | `map` | `ChurchMap` (iframe + Open in Maps + Directions; protected by `MapInteractionGuard` click-to-interact shield on web) | contactInfo |
   On wide screens (≥ 900 px) adjacent `nextMass` + `quickContacts` share a row.
 
 - **Hero ribbon (PR #22, ADR-032):** under the hero title, a `TitleRibbon` (key `heroRibbon`) shows the admin's
@@ -272,25 +281,35 @@ the same day with overlapping times in different venues (`parallelServices`) get
 An admin-defined category: poster header with its name, optional intro panel, then its visible items
 (`entriesOf`) as `EntryCard`s in the `ResponsiveGrid` with `CardCover` / `CardLead` (collection `entries`, the
 item's `imageStyle` else the category's), description, call / WhatsApp, and a link button (in-app path via
-`context.go`, else `openUrl`). Hidden / unknown slug → `ContentUnavailable` (`Key('categoryUnavailable')`,
-`noindex`); no items → «لا توجد عناصر في هذا القسم بعد». Gated by `Sections.customSections` (all categories and
+`context.go`, else `openUrl`), plus any visible custom pages with `placement == 'section'` (`sectionPages`) as
+`CustomPageCard`s with a `CardCover` (collection `'pages'`, respecting `Sections.media`), title, subtitle, and an
+«اعرف المزيد / Learn more» button (gated by `Sections.customPages`, PR 3D / P1-18). Widget tests in `test/custom_content_test.dart` verify `CustomPageCard` (`CardCover`) and `CustomPageView` (`FittedCover`) render at 320 px Home and `/section/<slug>` with zero overflow, confirming no legacy image field fallback was added and fonts are untouched per owner directive. Hidden /
+unknown slug → `ContentUnavailable` (`Key('categoryUnavailable')`, `noindex`); no items and no section pages →
+«لا توجد عناصر في هذا القسم بعد». Gated by `Sections.customSections` (all categories and
 their menu entries) plus each category's own `visible`. **PR #23:** the page (and its items list) stays on the
 loading skeleton until the categories / items have loaded from the server, or 8 s pass without an answer — a cold deep link no longer
 flashes «غير متاحة» from a stale cache, and the items can no longer stay on placeholders forever (`settleFirst`,
 8 s patience then the cache; see 03-architecture).
 
 ### `/page/<slug>` — `custom_page.dart` `CustomPageView` (PR #18, ADR-027)
-Header (title + subtitle), optional hero `FittedCover`, then the blocks (`PageBlockView`): heading (semantic
-header), paragraph (selectable), image (https link + caption), button (`FilledButton`), text link, donation info
-(`DonationInfoCard`: bank account / InstaPay / wallet with copy buttons, notes, «للعلم فقط: لا يتم أي دفع عبر
-الموقع»). Empty blocks are skipped. Hidden / unknown → `Key('pageUnavailable')`, `noindex`. Pages are reached from
-notices («اعرف المزيد»), buttons or links, and appear in the menu only with `showInNav`. Gated by
-`Sections.customPages` plus each page's `visible`. Loading follows the same rule as `/section/<slug>` (PR #23).
+Header (title + subtitle), then a centered reading column constrained to `maxWidth: 700` containing the optional hero
+`FittedCover` (aspect ratio 16/7, `maxHeight: 420`) and the blocks (`PageBlockView`): heading (`BlockTypes.heading`,
+semantic header, Arabic heading text strictly required via `validateHeadingBlock` and `validateDocument` with `'blockHeadingRequired'`, `fontSize: 26`, `fontWeight: FontWeight.w800`, line height 1.45, `top: 12` spacing when following
+another block or hero, `bottom: 16`), paragraph (`BlockTypes.paragraph`, selectable, `fontSize: 16`, line height 1.8),
+image (https link + caption), button (`FilledButton`), text link, donation info (`DonationInfoCard`: bank account /
+InstaPay / wallet with copy buttons, notes, «للعلم فقط: لا يتم أي دفع عبر الموقع»). Empty blocks are skipped. Hidden /
+unknown → `Key('pageUnavailable')`, `noindex`. Placement (`placement`, PR 3D / P1-18): `'link'` (default, reached from
+notices/buttons/links), `'nav'` (synced with `showInNav`), or `'section'` (`categoryId`, rendered as an «اعرف المزيد»
+`CustomPageCard` inside `/section/<slug>`). `DocEditor.collect()` retains `categoryId` across `'link'` and `'nav'` saves so
+switching placement back retains the category, while `sectionPages` strictly checks `placement == 'section'`. Setting
+`featured` (admin hint «هتظهر في «صفحات مميزة» في الرئيسية مهما كان مكانها») places a card on `HomePage`
+(`_FeaturedPages`, key `home-featuredPages`) under section title «صفحات مميزة» before discovery blocks whenever `Sections.customPages` is on (sorted via `featuredPages`). Gated by `Sections.customPages` plus each page's
+`visible`. Loading follows the same rule as `/section/<slug>` (PR #23).
 
 ### Menu entries for custom content (PR #18)
-`customNavItems(ref)` (`app_shell.dart`): categories with `showInNav` are appended to the "Church services" popup
-(desktop) and drawer group; pages with `showInNav` to the desktop bar (after the services menu) and the "The
-church" drawer group. `NavItem.labelAr/labelEn` carry their own labels.
+`customNavItems(ref)` (`app_shell.dart`): categories with `showInNav` are filtered via `publicNonEmptyCategories` (checking `isCategoryNonEmpty` so empty sections with 0 visible entries and 0 section pages are omitted from visitor navigation) and appended to the "Church services" popup
+(desktop) and drawer group; pages with `inNav` (`placement == 'nav'`, or legacy `showInNav: true`) to the desktop bar
+(after the services menu) and the "The church" drawer group. `NavItem.labelAr/labelEn` carry their own labels.
 
 ### `/ask` — `assistant_page.dart` `AssistantPage`
 Chat UI with a welcome bubble (admin `welcomeAr/En`, else `askIntroText` naming only the switched-on sections —
@@ -311,7 +330,7 @@ links keep the body colour + underline (same contrast as the text on every theme
 keeps select / copy. The same chat runs in the Android app (the old «فتح المساعد في المتصفح» card is gone). Web uses Firebase AI
 Logic with reCAPTCHA Enterprise. Android sends the same instruction to the Cloudflare Worker; the device
 counter in `AssistantConversation` still runs first (default 3 per Cairo day, 6 in an exceptional season, 4 per minute).
-Details in `05-firebase.md`.
+**Allowed topics & grounding:** only switched-on built-in topics plus visible usable custom sections (`Sections.customSections`) and custom pages (`Sections.customPages`) are listed under `Allowed topics:` in `buildAssistantInstruction` (PR 3I / P2-29); hidden or disabled ones never appear. Details in `05-firebase.md`.
 
 ### Item detail pages (PR #13, ADR-020) — `item_detail_page.dart` `ItemDetailPage`
 - Routes: `/church-education/:id`, `/church-activities/:id`, `/clinics/:id`, `/public-services/:id`,
@@ -527,7 +546,7 @@ for evening revivals.
 
 ### Alerts (`visibleAlerts`, `lib/domain/rules.dart`)
 Shown only when `active` and now ∈ `[startsAt, endsAt]` (open-ended if null); sorted by `priority` desc, then most
-recent `startsAt`. Links: a single leading `/` = in-app route (`context.go`), `//…` or scheme = external.
+recent `startsAt`. In `admin_schema.dart`, `priority` (0–1000, higher shows first) is directly accessible in the basic form fields (not collapsed in advanced). Links: a single leading `/` = in-app route (`context.go`), `//…` or scheme = external. Public shortcut `/notices` redirects to `/notifications`.
 
 ### Clinics
 `isClinicAvailableToday` (Cairo weekday ∈ days and active); `filterClinics` ordering as above; phones normalised for
@@ -568,6 +587,7 @@ digits, Cairo `02` + 8, Alexandria `03` + 7, other governorates `0[4-9]` + 7–8
   and no reply is possible (`anonymousHint`), and the notice / consent switch to `privacyNoticeAnon` /
   `consentLabelAnon` (only the message text is stored; same Firebase disclosure). The anonymous payload is
   `{category, kind, anonymous: true, message}` only (`validateContactForm`).
+- **Post-submit reset:** After a successful send, `ContactForm` clears all controllers, resets `_slot` to `null` (re-keying `KeyedSubtree` via `_resetCount` to reset the category dropdown to default), unticks consent, and completes autofill via `TextInput.finishAutofillContext(shouldSave: true)`.
 - Not implemented yet: retention clean-up (12 months).
 
 ### Time formatting (`time_format.dart`)

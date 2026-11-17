@@ -453,12 +453,6 @@ void main() {
           onSave: (d) async => onSaved(d),
         ));
 
-    // The cover image sits in the collapsible "Photos & gallery" group (PR #12).
-    Future<void> openMedia(WidgetTester tester) async {
-      await tester.tap(find.byKey(const ValueKey('group-media')));
-      await tester.pumpAndSettle();
-    }
-
     testWidgets('is optional, uploads a picked image on save', (tester) async {
       tester.view.physicalSize = const Size(1200, 3200);
       tester.view.devicePixelRatio = 1;
@@ -476,7 +470,6 @@ void main() {
       saved = null;
       await tester.pumpWidget(editor(media: media, onSaved: (d) => saved = d));
       await tester.enterText(find.byKey(const ValueKey('field-nameAr')), 'القديس');
-      await openMedia(tester);
       await tester.tap(find.byKey(const Key('imageUploadBtn')));
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('imagePreviewPending')), findsOneWidget);
@@ -503,7 +496,6 @@ void main() {
         onSaved: (d) => saved = d,
       ));
       await tester.pumpAndSettle();
-      await openMedia(tester);
       await tester.tap(find.byKey(const Key('imageUrlBtn')));
       await tester.pumpAndSettle();
       await tester.enterText(find.byKey(const Key('imageUrlInput')), 'http://insecure.example.org/a.jpg');
@@ -536,7 +528,6 @@ void main() {
         onSaved: (d) => saved = d,
       ));
       await tester.pumpAndSettle();
-      await openMedia(tester);
       await tester.tap(find.byKey(const Key('imageRemoveBtn')));
       await tester.pumpAndSettle();
       expect(find.text('No image (optional)'), findsOneWidget);
@@ -559,7 +550,6 @@ void main() {
         onSave: (d) async => throw StateError('permission-denied'),
       )));
       await tester.enterText(find.byKey(const ValueKey('field-nameAr')), 'القديس');
-      await openMedia(tester);
       await tester.tap(find.byKey(const Key('imageUploadBtn')));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('editor-save')));
@@ -582,7 +572,6 @@ void main() {
         prepareImage: (_) async => throw const ImageTooLargeException(),
         onSave: (d) async {},
       )));
-      await openMedia(tester);
       await tester.tap(find.byKey(const Key('imageUploadBtn')));
       await tester.pumpAndSettle();
       expect(find.textContaining('Image too large'), findsOneWidget);
@@ -651,11 +640,37 @@ void main() {
       expect(find.text('3 fields'), findsOneWidget);
       expect(find.text('4 photos'), findsOneWidget);
       expect(find.text('1 filled'), findsOneWidget);
+      await tester.pumpWidget(editor(media: _FakeMedia(), data: {
+        'nameAr': 'القديس',
+        'image': {'source': 'url', 'url': 'https://img.example.org/cover.jpg'},
+      }));
+      await tester.pumpAndSettle();
+      expect(find.text('Cover image'), findsOneWidget);
+      expect(find.text('No photos'), findsNothing);
+      await tester.pumpWidget(editor(media: _FakeMedia(), data: {
+        'nameAr': 'القديس',
+        'detailsEnabled': true,
+        'extraFields': [
+          for (var i = 0; i < 3; i++) {'titleAr': 'عنوان $i', 'titleEn': '', 'valueAr': 'قيمة', 'valueEn': ''},
+        ],
+        'gallery': [
+          for (var i = 0; i < 4; i++) {'source': 'url', 'url': 'https://img.example.org/$i.jpg'},
+        ],
+        'whatsapp': '01012345678',
+      }));
+      await tester.pumpAndSettle();
       await expand(tester, 'details');
       expect(find.byKey(const ValueKey('field-detailsAr')), findsOneWidget);
       await tester.tap(find.byKey(const ValueKey('field-detailsEnabled')));
       await tester.pumpAndSettle();
-      expect(find.text('Off'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('field-detailsEnabled')),
+          matching: find.text('Off'),
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('Off'), findsNWidgets(2));
       await expand(tester, 'contacts');
       await tester.enterText(find.byKey(const ValueKey('field-youtubeUrl')), 'https://youtube.com/@church');
       await tester.pumpAndSettle();
@@ -679,6 +694,9 @@ void main() {
       await tester.tap(find.byKey(const Key('editor-save')));
       await tester.pumpAndSettle();
       expect(calls, isEmpty);
+      expect(find.byKey(const Key('editor-error-summary')), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('error-summary-youtubeUrl')));
+      await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('field-youtubeUrl')), findsOneWidget);
       expect(find.text('Invalid link (must start with https://)'), findsOneWidget);
       expect(find.byKey(const ValueKey('field-detailsAr')), findsNothing, reason: 'valid groups stay closed');
@@ -783,6 +801,7 @@ void main() {
         ],
       }));
       await tester.pumpAndSettle();
+      await expand(tester, 'advanced');
       await tester.enterText(find.byKey(const ValueKey('field-nameEn')), 'St Moses');
       await expand(tester, 'details');
       await tester.enterText(find.byKey(const ValueKey('field-detailsAr')), 'جديد');
@@ -848,6 +867,7 @@ void main() {
         },
       ));
       await tester.pumpAndSettle();
+      await expand(tester, 'advanced');
       await tester.enterText(find.byKey(const ValueKey('field-nameEn')), 'St Moses');
       await expand(tester, 'media');
       await tester.tap(find.byKey(const Key('galleryUploadBtn')));

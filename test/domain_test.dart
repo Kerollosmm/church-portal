@@ -1,4 +1,5 @@
 import 'package:church_portal/domain/assistant_context.dart';
+import 'package:church_portal/domain/attention.dart';
 import 'package:church_portal/domain/cairo_time.dart';
 import 'package:church_portal/domain/features.dart';
 import 'package:church_portal/domain/models.dart';
@@ -577,6 +578,21 @@ void main() {
       expect(isEgyptianMobile('03 555 1234'), isFalse);
       expect(isEgyptianMobile(''), isFalse);
     });
+    test('usableWhatsappLink accepts valid Egyptian mobiles and rejects malformed/landline numbers', () {
+      expect(usableWhatsappLink('0101 234 5678'), 'https://wa.me/201012345678');
+      expect(usableWhatsappLink('+20 111-234-5678'), 'https://wa.me/201112345678');
+      expect(usableWhatsappLink('00201234567890'), 'https://wa.me/201234567890');
+      expect(usableWhatsappLink('٠١٥١٢٣٤٥٦٧٨'), 'https://wa.me/201512345678');
+      expect(usableWhatsappLink('01012345678', text: 'hi'), 'https://wa.me/201012345678?text=hi');
+      expect(usableWhatsappLink(''), isNull);
+      expect(usableWhatsappLink('   '), isNull);
+      expect(usableWhatsappLink('abc'), isNull);
+      expect(usableWhatsappLink('123'), isNull);
+      expect(usableWhatsappLink('010123'), isNull);
+      expect(usableWhatsappLink('010abc12345'), isNull);
+      expect(usableWhatsappLink('03 555 1234'), isNull); // landline
+      expect(usableWhatsappLink('19123'), isNull); // hotline
+    });
     test('errors', () {
       final v = validateContactForm(const ContactFormInput(name: 'M', message: 'hey'));
       expect(v.isValid, isFalse);
@@ -625,6 +641,529 @@ void main() {
       final s = Season.fromMap('s', {'key': 'summer', 'startsAt': '2026-06-15T00:00:00+03:00', 'active': true});
       expect(s.startsAt, DateTime.utc(2026, 6, 14, 21));
       expect(parseHm('25:00'), isNull);
+    });
+  });
+
+  group('liturgiesHiddenBy', () {
+    final regularMasses = [
+      const Liturgy(id: 'm1', type: 'mass', nameAr: 'قداس 1', nameEn: 'Mass 1', weekday: 5, start: '06:00', end: '08:00'),
+      const Liturgy(id: 'm2', type: 'mass', nameAr: 'قداس 2', nameEn: 'Mass 2', weekday: 5, start: '08:30', end: '10:30'),
+      const Liturgy(id: 'sat', type: 'mass', nameAr: 'قداس السبت', nameEn: 'Sat Mass', weekday: 6, start: '07:00', end: '09:00'),
+      const Liturgy(id: 'vespers', type: 'vespers', nameAr: 'عشية', nameEn: 'Vespers', weekday: 5, start: '18:00', end: '19:00'),
+    ];
+
+    test('replacesDay: false returns empty list', () {
+      final rep = Liturgy(
+        id: 'feast',
+        type: 'mass',
+        nameAr: 'قداس العيد',
+        nameEn: 'Feast mass',
+        date: DateTime(2026, 11, 6), // Friday
+        start: '07:00',
+        end: '09:00',
+        replacesDay: false,
+      );
+      expect(liturgiesHiddenBy(rep, regularMasses), isEmpty);
+    });
+
+    test('visible: false returns empty list', () {
+      final rep = Liturgy(
+        id: 'feast',
+        type: 'mass',
+        nameAr: 'قداس العيد',
+        nameEn: 'Feast mass',
+        date: DateTime(2026, 11, 6), // Friday
+        start: '07:00',
+        end: '09:00',
+        replacesDay: true,
+        visible: false,
+      );
+      expect(liturgiesHiddenBy(rep, regularMasses), isEmpty);
+    });
+
+    test('one-off feast mass on weekday hides that weekday regular masses of same type, not others', () {
+      final rep = Liturgy(
+        id: 'feast',
+        type: 'mass',
+        nameAr: 'قداس العيد',
+        nameEn: 'Feast mass',
+        date: DateTime(2026, 11, 6), // Friday (weekday 5)
+        start: '07:00',
+        end: '09:00',
+        replacesDay: true,
+      );
+      final hidden = liturgiesHiddenBy(rep, regularMasses);
+      expect(hidden.map((l) => l.id), ['m1', 'm2']);
+    });
+
+    test('preview list matches exactly what occurrencesForDay hides for the same data', () {
+      final rep = Liturgy(
+        id: 'feast',
+        type: 'mass',
+        nameAr: 'قداس العيد',
+        nameEn: 'Feast mass',
+        date: DateTime(2026, 11, 6), // Friday
+        start: '07:00',
+        end: '09:00',
+        replacesDay: true,
+      );
+      final targetDay = CairoTime.at(rep.date!.year, rep.date!.month, rep.date!.day);
+      final allWithReplacing = [...regularMasses, rep];
+
+      final occWithReplace = occurrencesForDay(
+        liturgies: allWithReplacing,
+        seasons: const [],
+        day: targetDay,
+        dayOffset: 0,
+      );
+      final repWithoutReplace = Liturgy(
+        id: rep.id,
+        type: rep.type,
+        nameAr: rep.nameAr,
+        nameEn: rep.nameEn,
+        date: rep.date,
+        start: rep.start,
+        end: rep.end,
+        replacesDay: false,
+      );
+      final occWithoutReplace = occurrencesForDay(
+        liturgies: [...regularMasses, repWithoutReplace],
+        seasons: const [],
+        day: targetDay,
+        dayOffset: 0,
+      );
+
+      final hiddenByFunc = liturgiesHiddenBy(rep, allWithReplacing);
+
+      final actuallyHiddenIds = occWithoutReplace
+          .where((occ) => !occWithReplace.any((o) => o.liturgy.id == occ.liturgy.id))
+          .map((occ) => occ.liturgy.id)
+          .toList();
+
+      expect(hiddenByFunc.map((l) => l.id).toList(), actuallyHiddenIds);
+    });
+
+    test('weekday replacing mass hides other masses on that weekday', () {
+      const repWeekday = Liturgy(
+        id: 'rep_fri',
+        type: 'mass',
+        nameAr: 'قداس جمعة بديل',
+        nameEn: 'Alt Friday mass',
+        weekday: 5,
+        start: '07:00',
+        end: '10:00',
+        replacesDay: true,
+      );
+      final hidden = liturgiesHiddenBy(repWeekday, regularMasses);
+      expect(hidden.map((l) => l.id), ['m1', 'm2']);
+    });
+
+    test('sample replacing liturgy does not hide non-sample regular masses', () {
+      final sampleRep = Liturgy(
+        id: 'sample_feast',
+        type: 'mass',
+        nameAr: 'قداس تجريبي',
+        nameEn: 'Sample feast',
+        date: DateTime(2026, 11, 6),
+        start: '07:00',
+        end: '09:00',
+        replacesDay: true,
+        sample: true,
+      );
+      final hidden = liturgiesHiddenBy(sampleRep, regularMasses);
+      expect(hidden, isEmpty);
+    });
+
+    test('two replacesDay: true masses on the same date do not hide each other', () {
+      final feast1 = Liturgy(
+        id: 'feast1',
+        type: 'mass',
+        nameAr: 'قداس العيد الأول',
+        nameEn: 'First feast mass',
+        date: DateTime(2026, 11, 6),
+        start: '06:00',
+        end: '08:00',
+        replacesDay: true,
+      );
+      final feast2 = Liturgy(
+        id: 'feast2',
+        type: 'mass',
+        nameAr: 'قداس العيد الثاني',
+        nameEn: 'Second feast mass',
+        date: DateTime(2026, 11, 6),
+        start: '08:30',
+        end: '10:30',
+        replacesDay: true,
+      );
+      final all = [...regularMasses, feast1, feast2];
+
+      final hiddenByFeast1 = liturgiesHiddenBy(feast1, all);
+      expect(hiddenByFeast1.map((l) => l.id), ['m1', 'm2']);
+      expect(hiddenByFeast1.any((l) => l.id == 'feast2'), isFalse);
+
+      final hiddenByFeast2 = liturgiesHiddenBy(feast2, all);
+      expect(hiddenByFeast2.map((l) => l.id), ['m1', 'm2']);
+      expect(hiddenByFeast2.any((l) => l.id == 'feast1'), isFalse);
+    });
+
+    test('inactive seasonal replacement does not hide regular masses (parity with occurrencesForDay)', () {
+      final seasonalRep = Liturgy(
+        id: 'season_feast',
+        type: 'mass',
+        nameAr: 'قداس عيد موسمي',
+        nameEn: 'Seasonal feast',
+        date: DateTime(2026, 11, 6), // Friday
+        start: '07:00',
+        end: '10:00',
+        seasonKey: 'advent',
+        replacesDay: true,
+      );
+      const inactiveSeason = Season(
+        id: 's1',
+        key: 'advent',
+        nameAr: 'الميلاد',
+        nameEn: 'Advent',
+        active: false,
+        replacesRegular: false,
+      );
+      final allWithSeasonal = [...regularMasses, seasonalRep];
+      final hidden = liturgiesHiddenBy(seasonalRep, allWithSeasonal, seasons: const [inactiveSeason]);
+      expect(hidden, isEmpty);
+
+      final occ = occurrencesForDay(
+        liturgies: allWithSeasonal,
+        seasons: const [inactiveSeason],
+        day: CairoTime.at(2026, 11, 6),
+        dayOffset: 0,
+      );
+      expect(occ.map((o) => o.liturgy.id), containsAll(['m1', 'm2']));
+    });
+
+    test('active seasonal replacement respects season time windows (parity with occurrencesForDay)', () {
+      final seasonalRep = Liturgy(
+        id: 'season_midday',
+        type: 'mass',
+        nameAr: 'قداس موسمي',
+        nameEn: 'Seasonal feast',
+        date: DateTime(2026, 11, 6), // Friday
+        start: '12:00',
+        end: '14:00',
+        seasonKey: 'lent',
+        replacesDay: true,
+      );
+      // Season starts at 08:00 Cairo: m1 (06:30) is BEFORE startsAt so stays visible; m2 (09:00) is inside window so hidden.
+      final windowedSeason = Season(
+        id: 's2',
+        key: 'lent',
+        nameAr: 'الصوم',
+        nameEn: 'Lent',
+        active: true,
+        replacesRegular: false,
+        startsAt: cairo(2026, 11, 6, 8, 0),
+        endsAt: cairo(2026, 11, 6, 23, 0),
+      );
+      final allWithSeasonal = [...regularMasses, seasonalRep];
+      final hidden = liturgiesHiddenBy(seasonalRep, allWithSeasonal, seasons: [windowedSeason]);
+      expect(hidden.map((l) => l.id), ['m2']);
+
+      final occWithoutReplace = occurrencesForDay(
+        liturgies: regularMasses,
+        seasons: [windowedSeason],
+        day: CairoTime.at(2026, 11, 6),
+        dayOffset: 0,
+      );
+      final occWithReplace = occurrencesForDay(
+        liturgies: allWithSeasonal,
+        seasons: [windowedSeason],
+        day: CairoTime.at(2026, 11, 6),
+        dayOffset: 0,
+      );
+      final actuallyHiddenIds = occWithoutReplace
+          .where((o) => !occWithReplace.any((w) => w.liturgy.id == o.liturgy.id))
+          .map((o) => o.liturgy.id)
+          .toList();
+      expect(hidden.map((l) => l.id).toList(), actuallyHiddenIds);
+    });
+
+    test('non-mass or missing-startTime replacesDay does not hide regular masses', () {
+      final vespersRep = Liturgy(
+        id: 'vespers_rep',
+        type: 'vespers',
+        nameAr: 'عشية',
+        nameEn: 'Vespers',
+        date: DateTime(2026, 11, 6),
+        start: '18:00',
+        end: '19:00',
+        replacesDay: true,
+      );
+      final missingStartRep = Liturgy(
+        id: 'no_start_rep',
+        type: 'mass',
+        nameAr: 'قداس بدون وقت',
+        nameEn: 'No start time',
+        date: DateTime(2026, 11, 6),
+        start: '',
+        end: '',
+        replacesDay: true,
+      );
+      final targetDay = CairoTime.at(2026, 11, 6);
+
+      expect(liturgiesHiddenBy(vespersRep, regularMasses), isEmpty);
+      expect(liturgiesHiddenBy(missingStartRep, regularMasses), isEmpty);
+
+      final occ = occurrencesForDay(
+        liturgies: [...regularMasses, vespersRep, missingStartRep],
+        seasons: const [],
+        day: targetDay,
+        dayOffset: 0,
+      );
+      expect(occ.map((o) => o.liturgy.id), containsAll(['m1', 'm2']));
+    });
+
+    test('undated seasonal replacesDay respects season time windows on that weekday', () {
+      const undatedSeasonalRep = Liturgy(
+        id: 'undated_season_rep',
+        type: 'mass',
+        nameAr: 'قداس جمعة موسمي',
+        nameEn: 'Undated seasonal Friday mass',
+        weekday: 5,
+        start: '12:00',
+        end: '14:00',
+        seasonKey: 'lent',
+        replacesDay: true,
+      );
+      final windowedSeason = Season(
+        id: 's_win',
+        key: 'lent',
+        nameAr: 'الصوم',
+        nameEn: 'Lent',
+        active: true,
+        replacesRegular: false,
+        startsAt: cairo(2026, 11, 6, 8, 0),
+        endsAt: cairo(2026, 11, 6, 23, 0),
+      );
+      final hidden = liturgiesHiddenBy(
+        undatedSeasonalRep,
+        [...regularMasses, undatedSeasonalRep],
+        seasons: [windowedSeason],
+      );
+      // m1 (06:30) is before season startsAt (08:00), so stays visible; m2 (09:00) is inside window so hidden.
+      expect(hidden.map((l) => l.id), ['m2']);
+    });
+  });
+
+  group('admin doc expiry', () {
+    test('isExpiredAdminDoc handles endsAt instant, endDate date-only, single-date docs, and recurring liturgies', () {
+      final nowCairo = CairoTime.at(2026, 11, 14, 14 * 60); // 14:00 Cairo = 12:00 UTC
+
+      // endsAt instant expiry
+      expect(isExpiredAdminDoc('seasons', {'endsAt': cairo(2026, 11, 14, 13, 59)}, nowCairo), isTrue);
+      expect(isExpiredAdminDoc('seasons', {'endsAt': cairo(2026, 11, 14, 14, 1)}, nowCairo), isFalse);
+
+      // endDate date-only expiry (yesterday expired, today not expired)
+      expect(isExpiredAdminDoc('events', {'endDate': '2026-11-13'}, nowCairo), isTrue);
+      expect(isExpiredAdminDoc('events', {'endDate': '2026-11-14'}, nowCairo), isFalse);
+
+      // Single-date docs in events/liturgies/announcements/notices without endDate/endsAt
+      for (final col in ['events', 'liturgies', 'announcements', 'notices']) {
+        expect(isExpiredAdminDoc(col, {'date': '2026-11-13'}, nowCairo), isTrue, reason: col);
+        expect(isExpiredAdminDoc(col, {'date': '2026-11-14'}, nowCairo), isFalse, reason: col);
+      }
+
+      // Non-dated collections do not expire from `date`
+      expect(isExpiredAdminDoc('saints', {'date': '2026-11-13'}, nowCairo), isFalse);
+
+      // Recurring liturgies (weekday only, no date) never expire
+      expect(isExpiredAdminDoc('liturgies', {'weekday': 5, 'start': '07:00'}, nowCairo), isFalse);
+    });
+  });
+
+  group('soft delete', () {
+    test('isSoftDeleted returns true only when deletedAt is not null', () {
+      expect(isSoftDeleted(null), isFalse);
+      expect(isSoftDeleted(const {}), isFalse);
+      expect(isSoftDeleted({'name': 'test'}), isFalse);
+      expect(isSoftDeleted({'deletedAt': null}), isFalse);
+      expect(isSoftDeleted({'deletedAt': DateTime.utc(2026, 11, 14)}), isTrue);
+      expect(isSoftDeleted({'deletedAt': '2026-11-14T10:00:00Z'}), isTrue);
+    });
+
+    test('isExpiredSoftDelete evaluates expiry against UTC clock and grace period', () {
+      final now = DateTime.utc(2026, 11, 14, 12, 0, 0);
+      expect(isExpiredSoftDelete(null, now), isFalse);
+      expect(isExpiredSoftDelete(const {}, now), isFalse);
+      expect(isExpiredSoftDelete({'deletedAt': null}, now), isFalse);
+      expect(isExpiredSoftDelete({'deletedAt': 'invalid-date'}, now), isFalse);
+
+      // 5 seconds ago -> not expired (default grace 10s)
+      final d5sAgo = {'deletedAt': now.subtract(const Duration(seconds: 5))};
+      expect(isExpiredSoftDelete(d5sAgo, now), isFalse);
+
+      // Exactly 10 seconds ago -> expired
+      final d10sAgo = {'deletedAt': now.subtract(const Duration(seconds: 10))};
+      expect(isExpiredSoftDelete(d10sAgo, now), isTrue);
+
+      // 15 seconds ago -> expired
+      final d15sAgo = {'deletedAt': now.subtract(const Duration(seconds: 15))};
+      expect(isExpiredSoftDelete(d15sAgo, now), isTrue);
+
+      // Custom grace period (30s)
+      expect(isExpiredSoftDelete(d15sAgo, now, grace: const Duration(seconds: 30)), isFalse);
+      final d30sAgo = {'deletedAt': now.subtract(const Duration(seconds: 30))};
+      expect(isExpiredSoftDelete(d30sAgo, now, grace: const Duration(seconds: 30)), isTrue);
+    });
+  });
+
+  group('attentionItems (P2-23)', () {
+    final now = DateTime.utc(2026, 11, 14, 12, 0);
+
+    Alert mkAlert(
+      String id, {
+      bool visible = true,
+      bool active = true,
+      DateTime? endsAt,
+    }) =>
+        Alert(
+          id: id,
+          titleAr: 'تنويه $id',
+          titleEn: 'Notice $id',
+          visible: visible,
+          active: active,
+          endsAt: endsAt,
+        );
+
+    test('returns empty list when nothing needs attention', () {
+      expect(
+        attentionItems(
+          newMessages: 0,
+          alerts: [
+            mkAlert('later', endsAt: now.add(const Duration(hours: 49))),
+            mkAlert('past', endsAt: now.subtract(const Duration(minutes: 1))),
+            mkAlert('hidden', visible: false, endsAt: now.add(const Duration(hours: 10))),
+            mkAlert('inactive', active: false, endsAt: now.add(const Duration(hours: 10))),
+            mkAlert('no-end'),
+          ],
+          unconfirmed: 0,
+          streamOn: true,
+          streamUrl: 'https://youtube.com/watch?v=123',
+          englishOn: true,
+          missingEnglish: 0,
+          now: now,
+        ),
+        isEmpty,
+      );
+    });
+
+    test('triggers each AttentionKind individually with expected count and target', () {
+      final msgOnly = attentionItems(
+        newMessages: 3,
+        alerts: const [],
+        unconfirmed: 0,
+        streamOn: false,
+        streamUrl: '',
+        englishOn: false,
+        missingEnglish: 0,
+        now: now,
+      );
+      expect(msgOnly.map((e) => (e.kind, e.count, e.targetScreenId)),
+          [(AttentionKind.newMessages, 3, 'messages')]);
+
+      final alertsOnly = attentionItems(
+        newMessages: 0,
+        alerts: [
+          mkAlert('at-now', endsAt: now),
+          mkAlert('at-48h', endsAt: now.add(const Duration(hours: 48))),
+          mkAlert('hidden', visible: false, endsAt: now.add(const Duration(hours: 1))),
+          mkAlert('inactive', active: false, endsAt: now.add(const Duration(hours: 1))),
+          mkAlert('past', endsAt: now.subtract(const Duration(seconds: 1))),
+          mkAlert('too-far', endsAt: now.add(const Duration(hours: 48, seconds: 1))),
+          mkAlert('no-end'),
+        ],
+        unconfirmed: 0,
+        streamOn: false,
+        streamUrl: '',
+        englishOn: false,
+        missingEnglish: 0,
+        now: now,
+      );
+      expect(alertsOnly.map((e) => (e.kind, e.count, e.targetScreenId)),
+          [(AttentionKind.expiringAlerts, 2, 'alerts')]);
+
+      final sampleOnly = attentionItems(
+        newMessages: 0,
+        alerts: const [],
+        unconfirmed: 4,
+        streamOn: false,
+        streamUrl: '',
+        englishOn: false,
+        missingEnglish: 0,
+        now: now,
+        unconfirmedTarget: 'priests',
+      );
+      expect(sampleOnly.map((e) => (e.kind, e.count, e.targetScreenId)),
+          [(AttentionKind.unconfirmedData, 4, 'priests')]);
+
+      final streamBlank = attentionItems(
+        newMessages: 0,
+        alerts: const [],
+        unconfirmed: 0,
+        streamOn: true,
+        streamUrl: '   ',
+        englishOn: false,
+        missingEnglish: 0,
+        now: now,
+      );
+      expect(streamBlank.map((e) => (e.kind, e.count, e.targetScreenId)),
+          [(AttentionKind.streamWithoutLink, 1, 'today')]);
+
+      // Stream off with empty URL -> no alert; stream on with valid URL -> no alert.
+      expect(
+        attentionItems(
+          newMessages: 0,
+          alerts: const [],
+          unconfirmed: 0,
+          streamOn: false,
+          streamUrl: '',
+          englishOn: false,
+          missingEnglish: 5, // ignored because englishOn is false
+          now: now,
+        ),
+        isEmpty,
+      );
+
+      final englishOnly = attentionItems(
+        newMessages: 0,
+        alerts: const [],
+        unconfirmed: 0,
+        streamOn: false,
+        streamUrl: '',
+        englishOn: true,
+        missingEnglish: 5,
+        now: now,
+        missingEnglishTarget: 'saints',
+      );
+      expect(englishOnly.map((e) => (e.kind, e.count, e.targetScreenId)),
+          [(AttentionKind.missingEnglish, 5, 'saints')]);
+    });
+
+    test('maintains exact priority ordering when all five items apply', () {
+      final items = attentionItems(
+        newMessages: 2,
+        alerts: [mkAlert('soon', endsAt: now.add(const Duration(hours: 6)))],
+        unconfirmed: 7,
+        streamOn: true,
+        streamUrl: '',
+        englishOn: true,
+        missingEnglish: 4,
+        now: now,
+      );
+      expect(items.map((e) => e.kind), [
+        AttentionKind.newMessages,
+        AttentionKind.expiringAlerts,
+        AttentionKind.unconfirmedData,
+        AttentionKind.streamWithoutLink,
+        AttentionKind.missingEnglish,
+      ]);
     });
   });
 }

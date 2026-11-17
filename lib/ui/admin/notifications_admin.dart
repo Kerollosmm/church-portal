@@ -21,9 +21,13 @@ import '../../domain/reminders.dart' show EventKey, leadLabel;
 import '../../domain/rules.dart' show toArabicDigits;
 import '../../domain/time_format.dart';
 import '../../domain/today.dart';
-import 'admin_schema.dart';
-import 'admin_screens.dart';
+import 'admin_strings.dart';
 import 'admin_validators.dart';
+import 'confirm_named.dart';
+import 'screen_header.dart';
+import 'state_switch.dart';
+import 'unsaved_bar.dart';
+import 'unsaved_guard.dart';
 
 const Map<String, List<String>> _notificationsAdminStrings = {
   'nm_statusSubtitle': [
@@ -96,52 +100,27 @@ const Map<String, List<String>> _notificationsAdminStrings = {
   ],
 };
 
-/// Admin screen combining the notifications manager and the app-install settings.
-class AppAndNotificationsScreen extends StatefulWidget {
+/// Admin screen for scheduled announcements and visitor notifications
+/// (the APK install settings live under owner-only Advanced, P2-21).
+class AppAndNotificationsScreen extends StatelessWidget {
   final AdminBackend repo;
   final String role;
   const AppAndNotificationsScreen({super.key, required this.repo, this.role = 'editor'});
 
   @override
-  State<AppAndNotificationsScreen> createState() => _AppAndNotificationsScreenState();
-}
-
-class _AppAndNotificationsScreenState extends State<AppAndNotificationsScreen> with SingleTickerProviderStateMixin {
-  late final TabController _tabController = TabController(length: 2, vsync: this);
-
-  @override
-  void dispose() {
-    _tabController.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
     registerStrings(_notificationsAdminStrings);
+    registerAdminStrings();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Material(
-          color: context.pal.background,
-          child: TabBar(
-            controller: _tabController,
-            labelColor: context.pal.primary,
-            unselectedLabelColor: context.pal.muted,
-            indicatorColor: context.pal.primary,
-            tabs: [
-              Tab(icon: const Icon(Icons.notifications_active_outlined), text: context.tr('nm_tabNotifications')),
-              Tab(icon: const Icon(Icons.install_mobile_outlined), text: context.tr('nm_tabInstall')),
-            ],
-          ),
+        AdminScreenHeader(
+          title: context.tr('appNotificationsTitle'),
+          help: context.tr('help_app'),
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
         ),
         Expanded(
-          child: TabBarView(
-            controller: _tabController,
-            children: [
-              NotificationsAdminSection(repo: widget.repo, role: widget.role),
-              ChurchInfoScreen(key: const ValueKey('app-install-doc'), repo: widget.repo, doc: appSettingsDoc),
-            ],
-          ),
+          child: NotificationsAdminSection(repo: repo, role: role),
         ),
       ],
     );
@@ -171,21 +150,30 @@ class _LinkChoice {
   const _LinkChoice(this.path, this.labelAr, this.labelEn, this.group, {this.eventKey = ''});
 }
 
-/// Notification manager tab.
+/// Notification manager section.
 class NotificationsAdminSection extends StatefulWidget {
   final AdminBackend repo;
   final String role;
 
+  /// When true, renders technical owner-only controls (VAPID key, queue drain
+  /// health). Off by default so ordinary editors only see announcements & types.
+  final bool showTechnical;
+
   /// Device notification test (injectable for tests).
   final PushEnv pushEnv;
-  const NotificationsAdminSection({super.key, required this.repo, this.role = 'editor', this.pushEnv = const PlatformPushEnv()});
+  const NotificationsAdminSection({
+    super.key,
+    required this.repo,
+    this.role = 'editor',
+    this.showTechnical = false,
+    this.pushEnv = const PlatformPushEnv(),
+  });
 
   @override
   State<NotificationsAdminSection> createState() => _NotificationsAdminSectionState();
 }
 
 class _NotificationsAdminSectionState extends State<NotificationsAdminSection> with AutomaticKeepAliveClientMixin {
-  // Keep unsaved edits when the admin switches to the «تثبيت التطبيق» tab.
   @override
   bool get wantKeepAlive => true;
 
@@ -251,6 +239,47 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
   final TextEditingController _draftBodyAr = TextEditingController();
   final TextEditingController _draftBodyEn = TextEditingController();
 
+  String _initialDraftTitleAr = '';
+  String _initialDraftTitleEn = '';
+  String _initialDraftBodyAr = '';
+  String _initialDraftBodyEn = '';
+  String _initialDraftTargets = 'all';
+  bool _initialDraftSoon = false;
+  DateTime _initialDraftDay = DateTime(2026);
+  int _initialDraftMinutes = 19 * 60;
+  String _initialDraftLink = '/';
+  String _initialDraftEventKey = '';
+
+  bool get _isDraftDirty {
+    if (!_editorOpen) return false;
+    return _draftTitleAr.text != _initialDraftTitleAr ||
+        _draftTitleEn.text != _initialDraftTitleEn ||
+        _draftBodyAr.text != _initialDraftBodyAr ||
+        _draftBodyEn.text != _initialDraftBodyEn ||
+        _draftTargets != _initialDraftTargets ||
+        _draftSoon != _initialDraftSoon ||
+        _draftDay != _initialDraftDay ||
+        _draftMinutes != _initialDraftMinutes ||
+        _draftLink != _initialDraftLink ||
+        _draftEventKey != _initialDraftEventKey;
+  }
+
+  Future<void> _closeDraft() async {
+    if (_isDraftDirty) {
+      final discard = await confirmDiscardChanges(context);
+      if (!discard || !mounted) return;
+    }
+    setState(() => _editorOpen = false);
+  }
+
+  @override
+  void didUpdateWidget(covariant NotificationsAdminSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!oldWidget.showTechnical && widget.showTechnical) {
+      _loadWebHealth();
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -271,7 +300,7 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
     for (final c in [_draftTitleAr, _draftTitleEn, _draftBodyAr, _draftBodyEn]) {
       c.addListener(_onDraftChanged);
     }
-    _loadWebHealth();
+    if (widget.showTechnical) _loadWebHealth();
   }
 
   void _onDraftChanged() {
@@ -305,8 +334,8 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
   /// and never while the admin has unsaved edits; controller listeners are
   /// muted so loading never marks the form dirty (the old screen called
   /// setState during build here).
-  void _populateFeatures(AdminDoc? doc) {
-    if (identical(doc, _lastFeatures) || _dirty) return;
+  void _populateFeatures(AdminDoc? doc, {bool force = false}) {
+    if (!force && (identical(doc, _lastFeatures) || _dirty)) return;
     _lastFeatures = doc;
     final data = doc?.data ?? const <String, dynamic>{};
     _featuresData = data;
@@ -343,7 +372,7 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
 
   /// First problem in the settings form (l10n key), or null.
   String? _settingsProblem() {
-    if (!isValidVapidKey(_vapidCtrl.text.trim())) return 'nm_errVapid';
+    if (widget.showTechnical && !isValidVapidKey(_vapidCtrl.text.trim())) return 'nm_errVapid';
     for (final type in NotifyType.values) {
       final c = _typeCtrls[type]!;
       if (!isValidHm(c['time']!.text.trim())) return 'nm_errTime';
@@ -384,7 +413,7 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
       final leads = _reminderLeads.toList()..sort();
       await widget.repo.saveDoc('settings/features', {
         'push': _pushEnabled,
-        'pushVapidKey': _vapidCtrl.text.trim(),
+        if (widget.showTechnical) 'pushVapidKey': _vapidCtrl.text.trim(),
         'pushTypes': [for (final t in NotifyType.values) if (_offeredTypes.contains(t)) t.name],
         'reminderLeads': leads,
         'reminderDefaultLead': leads.contains(_reminderDefaultLead) ? _reminderDefaultLead : leads.first,
@@ -404,20 +433,27 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
     }
   }
 
-  Future<void> _discardSettings() async {
-    final ok = await _confirm(
-      title: context.tr('nm_discardTitle'),
-      body: context.tr('nm_discardBody'),
-      action: context.tr('nm_discard'),
-    );
-    if (!ok || !mounted) return;
+  void _resetSettingsForm() {
     setState(() {
       _dirty = false;
       _showErrors = false;
       final doc = _lastFeatures;
       _lastFeatures = null;
-      _populateFeatures(doc);
+      _populateFeatures(doc, force: true);
     });
+  }
+
+  void _discardAllOnBrowserBack() {
+    _resetSettingsForm();
+    if (_editorOpen) {
+      setState(() => _editorOpen = false);
+    }
+  }
+
+  Future<void> _discardSettings() async {
+    final ok = await confirmDiscardChanges(context);
+    if (!ok || !mounted) return;
+    _resetSettingsForm();
   }
 
   // ---------------------------------------------------------------------------
@@ -458,6 +494,16 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
         _draftTargets = _retryTargets(row);
       }
       _draftTitleAr.selection = TextSelection.collapsed(offset: _draftTitleAr.text.length);
+      _initialDraftTitleAr = _draftTitleAr.text;
+      _initialDraftTitleEn = _draftTitleEn.text;
+      _initialDraftBodyAr = _draftBodyAr.text;
+      _initialDraftBodyEn = _draftBodyEn.text;
+      _initialDraftTargets = _draftTargets;
+      _initialDraftSoon = _draftSoon;
+      _initialDraftDay = _draftDay;
+      _initialDraftMinutes = _draftMinutes;
+      _initialDraftLink = _draftLink;
+      _initialDraftEventKey = _draftEventKey;
     });
   }
 
@@ -503,6 +549,37 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
     if (err != null) {
       setState(() => _draftError = err);
       return;
+    }
+    if (!_draftSoon && !row.atUtc.isAfter(DateTime.now().toUtc())) {
+      setState(() => _draftError = 'nm_errPast');
+      return;
+    }
+    if (_draftTargets == 'all' || _draftSoon) {
+      final String summary;
+      final String actionLabel;
+      if (_draftTargets == 'all' && _draftSoon) {
+        summary = context.tr('nm_confirmSendAllSummary', {'t': row.titleAr});
+        actionLabel = context.tr('nm_sendToAllBtn');
+      } else if (_draftSoon) {
+        final target = _targetLook(row.targets).$1;
+        summary = context.tr('nm_confirmSendTargetSoonSummary', {'target': target, 't': row.titleAr});
+        actionLabel = context.tr('nm_sendNowBtn');
+      } else {
+        final when = _whenText(row.atUtc);
+        if (_draftTargets == 'all') {
+          summary = context.tr('nm_confirmScheduleAllSummary', {'when': when, 't': row.titleAr});
+        } else {
+          final target = _targetLook(row.targets).$1;
+          summary = context.tr('nm_confirmScheduleTargetSummary', {'target': target, 'when': when, 't': row.titleAr});
+        }
+        actionLabel = context.tr('nm_confirmScheduleBtn');
+      }
+      final confirmed = await confirmNamedAction(
+        context,
+        summary: summary,
+        actionLabel: actionLabel,
+      );
+      if (!confirmed || !mounted) return;
     }
     if (!_draftSoon && !row.atUtc.isAfter(DateTime.now().toUtc())) {
       setState(() => _draftError = 'nm_errPast');
@@ -682,23 +759,13 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
   }
 
   Future<bool> _confirm({required String title, required String body, required String action, bool destructive = false}) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(title),
-        content: Text(body),
-        actions: [
-          TextButton(key: const ValueKey('confirm-cancel'), onPressed: () => Navigator.pop(ctx, false), child: Text(context.tr('cancel'))),
-          FilledButton(
-            key: const ValueKey('confirm-ok'),
-            style: destructive ? FilledButton.styleFrom(backgroundColor: context.pal.alert, foregroundColor: context.pal.onPrimary) : null,
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text(action),
-          ),
-        ],
-      ),
+    return confirmNamedAction(
+      context,
+      title: title,
+      summary: body,
+      actionLabel: action,
+      destructive: destructive,
     );
-    return ok == true;
   }
 
   String _digits(String s) => context.isAr ? toArabicDigits(s) : s;
@@ -754,6 +821,8 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
             label: Text(label),
             avatar: selected ? null : avatar,
             selected: selected,
+            selectedColor: context.pal.bar,
+            side: BorderSide.none,
             checkmarkColor: context.pal.onBar,
             labelStyle: style,
             materialTapTargetSize: MaterialTapTargetSize.padded,
@@ -764,6 +833,8 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
             label: Text(label),
             avatar: avatar,
             selected: selected,
+            selectedColor: context.pal.bar,
+            side: BorderSide.none,
             showCheckmark: false,
             labelStyle: style,
             materialTapTargetSize: MaterialTapTargetSize.padded,
@@ -779,6 +850,7 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
   Widget build(BuildContext context) {
     super.build(context);
     registerStrings(_notificationsAdminStrings);
+    registerAdminStrings();
     return StreamBuilder<AdminDoc?>(
       stream: _featuresStream,
       builder: (context, featSnap) {
@@ -787,75 +859,54 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
           stream: _notificationsStream,
           builder: (context, notifSnap) {
             _schedule = NotifySchedule.fromDoc(notifSnap.data?.data);
-            return Scaffold(
-              backgroundColor: context.pal.background,
-              body: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 760),
-                  child: ListView(
-                    key: const ValueKey('notifications-admin-list'),
-                    padding: const EdgeInsets.fromLTRB(12, 16, 12, 40),
-                    children: [
-                      _statusCard(context),
-                      const SizedBox(height: 16),
-                      _scheduledSection(context),
-                      const SizedBox(height: 16),
-                      _typesSection(context),
-                      const SizedBox(height: 16),
-                      _remindSection(context),
-                      const SizedBox(height: 16),
-                      _sentLogSection(context),
-                      const SizedBox(height: 16),
-                      _advancedSection(context),
-                    ],
+            return UnsavedGuard(
+              dirty: _dirty || _isDraftDirty,
+              handlePop: false,
+              onBrowserBackDiscard: _discardAllOnBrowserBack,
+              child: Scaffold(
+                backgroundColor: context.pal.background,
+                body: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 760),
+                    child: ListView(
+                      key: const ValueKey('notifications-admin-list'),
+                      padding: const EdgeInsets.fromLTRB(12, 16, 12, 40),
+                      children: [
+                        _statusCard(context),
+                        const SizedBox(height: 16),
+                        _scheduledSection(context),
+                        const SizedBox(height: 16),
+                        _typesSection(context),
+                        const SizedBox(height: 16),
+                        _remindSection(context),
+                        const SizedBox(height: 16),
+                        _sentLogSection(context),
+                        if (widget.showTechnical) ...[
+                          const SizedBox(height: 16),
+                          _advancedSection(context),
+                        ],
+                      ],
+                    ),
                   ),
                 ),
+                bottomNavigationBar: UnsavedBar(
+                  dirty: _dirty,
+                  saving: _saving,
+                  onSave: _saveSettings,
+                  onCancel: _discardSettings,
+                  saveKey: const ValueKey('save-settings'),
+                  cancelKey: const ValueKey('discard-settings'),
+                  message: context.tr('nm_unsaved'),
+                  saveLabel: context.tr('nm_saveSettings'),
+                  cancelLabel: context.tr('nm_discard'),
+                ),
               ),
-              bottomNavigationBar: _dirty ? _saveBar(context) : null,
             );
           },
         );
       },
     );
   }
-
-  Widget _saveBar(BuildContext context) => Material(
-        color: context.pal.surface,
-        elevation: 8,
-        child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            child: Wrap(
-              alignment: WrapAlignment.spaceBetween,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              spacing: 12,
-              runSpacing: 8,
-              children: [
-                Row(mainAxisSize: MainAxisSize.min, children: [
-                  Icon(Icons.edit_note, color: context.pal.goldText),
-                  const SizedBox(width: 6),
-                  Flexible(child: Text(context.tr('nm_unsaved'), style: const TextStyle(fontWeight: FontWeight.bold))),
-                ]),
-                Wrap(spacing: 8, children: [
-                  TextButton(
-                    key: const ValueKey('discard-settings'),
-                    onPressed: _saving ? null : _discardSettings,
-                    child: Text(context.tr('nm_discard')),
-                  ),
-                  FilledButton.icon(
-                    key: const ValueKey('save-settings'),
-                    onPressed: _saving ? null : _saveSettings,
-                    icon: _saving
-                        ? SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: context.pal.onPrimary))
-                        : const Icon(Icons.save_outlined),
-                    label: Text(context.tr('nm_saveSettings')),
-                  ),
-                ]),
-              ],
-            ),
-          ),
-        ),
-      );
 
   // ---- section scaffolding ----
 
@@ -934,12 +985,14 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
       title: context.tr('nm_statusTitle'),
       subtitle: context.tr('nm_statusSubtitle'),
       children: [
-        SwitchListTile(
+        AdminStateSwitch(
           key: const ValueKey('push-master-switch'),
           contentPadding: EdgeInsets.zero,
           title: Text(context.tr('nm_masterSwitch'), style: const TextStyle(fontWeight: FontWeight.bold)),
           subtitle: Text(context.tr(_pushEnabled ? 'nm_masterOnHint' : 'nm_masterOffHint')),
           value: _pushEnabled,
+          onLabel: context.tr('switch_enabled'),
+          offLabel: context.tr('switch_disabled'),
           onChanged: (v) => setState(() {
             _pushEnabled = v;
             _markDirty();
@@ -967,52 +1020,54 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
             ]),
           ),
         ]),
-        const Divider(height: 24),
-        Text(context.tr('nm_webHealthTitle'), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: context.pal.primaryDeep)),
-        const SizedBox(height: 8),
-        Builder(builder: (context) {
-          final cronQueue = _topicsMeta?['cronQueue'] as Map?;
-          final drainAt = _asDateTime(cronQueue?['lastDrainAt'] ?? _topicsMeta?['lastDrainAt']);
-          final drainError = (cronQueue?['lastIidError'] ?? _topicsMeta?['lastIidError']) as String?;
-          final drainAge = drainAt == null ? null : DateTime.now().toUtc().difference(drainAt);
-          final (Color drainColor, String drainText) = switch (drainAge) {
-            null => (context.pal.muted, context.tr('nm_webHealthDrainNever')),
-            final a when a > const Duration(minutes: 45) || (drainError != null && drainError.isNotEmpty) =>
-              (context.pal.goldText, context.tr('nm_webHealthDrainLate')),
-            _ => (context.pal.success, context.tr('nm_webHealthDrainOk')),
-          };
+        if (widget.showTechnical) ...[
+          const Divider(height: 24),
+          Text(context.tr('nm_webHealthTitle'), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: context.pal.primaryDeep)),
+          const SizedBox(height: 8),
+          Builder(builder: (context) {
+            final cronQueue = _topicsMeta?['cronQueue'] as Map?;
+            final drainAt = _asDateTime(cronQueue?['lastDrainAt'] ?? _topicsMeta?['lastDrainAt']);
+            final drainError = (cronQueue?['lastIidError'] ?? _topicsMeta?['lastIidError']) as String?;
+            final drainAge = drainAt == null ? null : DateTime.now().toUtc().difference(drainAt);
+            final (Color drainColor, String drainText) = switch (drainAge) {
+              null => (context.pal.muted, context.tr('nm_webHealthDrainNever')),
+              final a when a > const Duration(minutes: 45) || (drainError != null && drainError.isNotEmpty) =>
+                (context.pal.goldText, context.tr('nm_webHealthDrainLate')),
+              _ => (context.pal.success, context.tr('nm_webHealthDrainOk')),
+            };
 
-          final planAt = _asDateTime(_planMeta?['lastPlanAt']);
-          final capReached = (cronQueue?['capReached'] ?? _planMeta?['capReached']) == true;
-          final planAge = planAt == null ? null : DateTime.now().toUtc().difference(planAt);
-          final (Color planColor, String planText) = switch (planAge) {
-            null => (context.pal.muted, context.tr('nm_webHealthPlanNever')),
-            final a when a > const Duration(hours: 7) =>
-              (context.pal.goldText, context.tr('nm_webHealthPlanLate')),
-            _ => (context.pal.success, context.tr('nm_webHealthPlanOk')),
-          };
+            final planAt = _asDateTime(_planMeta?['lastPlanAt']);
+            final capReached = (cronQueue?['capReached'] ?? _planMeta?['capReached']) == true;
+            final planAge = planAt == null ? null : DateTime.now().toUtc().difference(planAt);
+            final (Color planColor, String planText) = switch (planAge) {
+              null => (context.pal.muted, context.tr('nm_webHealthPlanNever')),
+              final a when a > const Duration(hours: 7) =>
+                (context.pal.goldText, context.tr('nm_webHealthPlanLate')),
+              _ => (context.pal.success, context.tr('nm_webHealthPlanOk')),
+            };
 
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(children: [
-                Icon(drainColor == context.pal.success ? Icons.check_circle_outline : Icons.warning_amber_outlined, color: drainColor, size: 18),
-                const SizedBox(width: 8),
-                Expanded(child: Text(drainText, style: TextStyle(color: drainColor, fontSize: 13))),
-              ]),
-              const SizedBox(height: 6),
-              Row(children: [
-                Icon(planColor == context.pal.success ? Icons.check_circle_outline : Icons.warning_amber_outlined, color: planColor, size: 18),
-                const SizedBox(width: 8),
-                Expanded(child: Text(planText, style: TextStyle(color: planColor, fontSize: 13))),
-              ]),
-              if (capReached) ...[
-                const SizedBox(height: 8),
-                _banner(context, icon: Icons.warning_amber_rounded, color: context.pal.alert, text: context.tr('nm_webHealthCapBanner')),
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(children: [
+                  Icon(drainColor == context.pal.success ? Icons.check_circle_outline : Icons.warning_amber_outlined, color: drainColor, size: 18),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text(drainText, style: TextStyle(color: drainColor, fontSize: 13))),
+                ]),
+                const SizedBox(height: 6),
+                Row(children: [
+                  Icon(planColor == context.pal.success ? Icons.check_circle_outline : Icons.warning_amber_outlined, color: planColor, size: 18),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text(planText, style: TextStyle(color: planColor, fontSize: 13))),
+                ]),
+                if (capReached) ...[
+                  const SizedBox(height: 8),
+                  _banner(context, icon: Icons.warning_amber_rounded, color: context.pal.alert, text: context.tr('nm_webHealthCapBanner')),
+                ],
               ],
-            ],
-          );
-        }),
+            );
+          }),
+        ],
       ],
     );
   }
@@ -1220,7 +1275,7 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
             key: const ValueKey('editor-close'),
             tooltip: context.tr('cancel'),
             icon: const Icon(Icons.close),
-            onPressed: () => setState(() => _editorOpen = false),
+            onPressed: _closeDraft,
           ),
         ]),
         // Step 1: text
@@ -1285,14 +1340,20 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
             label: context.tr('sendAtEarliest'),
             icon: Icons.bolt,
             selected: _draftSoon,
-            onSelected: (_) => setState(() => _draftSoon = true),
+            onSelected: (_) => setState(() {
+              _draftSoon = true;
+              if (_draftError == 'nm_errPast') _draftError = null;
+            }),
           ),
           _chip(
             key: const ValueKey('when-at'),
             label: context.tr('nm_whenAt'),
             icon: Icons.event,
             selected: !_draftSoon,
-            onSelected: (_) => setState(() => _draftSoon = false),
+            onSelected: (_) => setState(() {
+              _draftSoon = false;
+              if (_draftError == 'nm_errPast') _draftError = null;
+            }),
           ),
         ]),
         if (!_draftSoon) ...[
@@ -1393,7 +1454,11 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
               onPressed: _testOnDevice,
             ),
             Wrap(spacing: 8, children: [
-              TextButton(onPressed: () => setState(() => _editorOpen = false), child: Text(context.tr('cancel'))),
+              TextButton(
+                key: const ValueKey('draft-cancel'),
+                onPressed: _closeDraft,
+                child: Text(context.tr('cancel')),
+              ),
               FilledButton.icon(
                 key: const ValueKey('save-push'),
                 icon: _saving
@@ -1492,7 +1557,7 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
         side: BorderSide(color: offered ? context.pal.primary.withValues(alpha: 0.35) : context.pal.hairline),
       ),
       child: Column(children: [
-        SwitchListTile(
+        AdminStateSwitch(
           key: ValueKey('offer-${type.name}'),
           secondary: Icon(_typeIcon(type), color: offered ? context.pal.primary : context.pal.muted),
           title: Text(context.pick(type.labelAr, type.labelEn), style: const TextStyle(fontWeight: FontWeight.bold)),
@@ -1502,6 +1567,8 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
           ),
           isThreeLine: true,
           value: offered,
+          onLabel: context.tr('switch_enabled'),
+          offLabel: context.tr('switch_disabled'),
           onChanged: (on) => setState(() {
             on ? _offeredTypes.add(type) : _offeredTypes.remove(type);
             _markDirty();
@@ -1706,13 +1773,15 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
         const SizedBox(height: 12),
         Text(context.tr('reminderSourcesLabel'), style: const TextStyle(fontWeight: FontWeight.w600)),
         for (final s in sources)
-          SwitchListTile(
+          AdminStateSwitch(
             key: ValueKey('src-${s.$1}'),
             contentPadding: EdgeInsets.zero,
             secondary: Icon(s.$2, color: context.pal.primary),
             title: Text(context.tr(s.$3)),
             subtitle: Text(context.tr(s.$4), style: TextStyle(fontSize: 12.5, color: context.pal.muted)),
             value: _reminderSources.contains(s.$1),
+            onLabel: context.tr('switch_enabled'),
+            offLabel: context.tr('switch_disabled'),
             onChanged: (on) => setState(() {
               on ? _reminderSources.add(s.$1) : _reminderSources.remove(s.$1);
               _markDirty();

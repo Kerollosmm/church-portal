@@ -6,7 +6,7 @@
 - زر **«افتح في خرائط جوجل»** وزر **«الاتجاهات (GPS)»** (يفتح الملاحة بالسيارة إلى الكنيسة).
 - زر «الاتجاهات» يظهر أيضًا في صفحات تفاصيل الأنشطة التي تُقام في الكنيسة.
 - على الويب تظهر الخريطة المضمّنة دائمًا (لا يوجد اكتشاف لفشل تحميلها؛ زرّا «افتح في خرائط جوجل» و«الاتجاهات» تحتها
-  يعملان في كل الأحوال). في تطبيق Android تظهر بطاقة موقع ثابتة بدل الخريطة المضمّنة، مع نفس الزرّين.
+  يعملان في كل الأحوال). والخريطة مزودة بحاجز تفاعل ذكي (`MapInteractionGuard`) يمنع احتجاز عجلة التمرير أو أزرار لوحة المفاتيح: افتراضيًا يمر التمرير بسلاسة فوق الخريطة وتظهر لافتة **«اضغط للتفاعل مع الخريطة»**؛ والضغط عليها يفتح التفاعل ويُظهر زر **«قفل الخريطة للتمرير»**، مع إعادة القفل تلقائيًا بمجرد خروج مؤشر الفأرة من مساحة الخريطة. في تطبيق Android تظهر بطاقة موقع ثابتة بدل الخريطة المضمّنة، مع نفس الزرّين.
 
 ## التحكم من لوحة التحكم
 
@@ -16,8 +16,8 @@
 
 ## كيف تعمل تقنيًا
 
-- `ChurchMap` في `lib/ui/widgets/map_embed.dart`، والروابط في `lib/core/launch.dart`. الخريطة على الويب `iframe` بدون مفتاح API:
-  `maps.google.com/maps?q=<mapsQuery>&output=embed&hl=<ar|en>` (`map_embed_web.dart`)، وعلى غير الويب
+- `ChurchMap` في `lib/ui/widgets/map_embed.dart` ملفوفة بـ `MapInteractionGuard`، والروابط في `lib/core/launch.dart`. الخريطة على الويب `iframe` بدون مفتاح API:
+  `maps.google.com/maps?q=<mapsQuery>&output=embed&hl=<ar|en>` (`map_embed_web.dart`) مع `pointer-events: none` افتراضيًا لعدم حجب التمرير، وعلى غير الويب
   `map_embed_stub.dart` يعرض بطاقة.
 - الروابط: `mapsSearchUrl` و `mapsDirectionsUrl` (`travelmode=driving`).
 - البيانات في `settings/church`: `mapsQuery`، `lat`، `lng`، `mapsUrl`، `addressAr/En`، `transportAr/En`.

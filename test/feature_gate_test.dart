@@ -276,4 +276,56 @@ void main() {
     expect(find.text('Call • Book'), findsOneWidget);
     expect(find.text('Dr Mina'), findsOneWidget);
   });
+
+  group('englishEnabled gate (P2-27b)', () {
+    testWidgets('desktop appBar language toggle shows when on and hides when off', (tester) async {
+      await _pump(tester, _seedWith(const {}, extra: {'englishEnabled': true}), size: const Size(1400, 2400));
+      expect(find.byKey(const Key('appBarLanguageToggle')), findsOneWidget);
+
+      await _pump(tester, _seedWith(const {}, extra: {'englishEnabled': false}), size: const Size(1400, 2400));
+      expect(find.byKey(const Key('appBarLanguageToggle')), findsNothing);
+    });
+
+    testWidgets('mobile drawer language toggle shows when on and hides when off', (tester) async {
+      await _pump(tester, _seedWith(const {}, extra: {'englishEnabled': true}), size: const Size(400, 1600));
+      await tester.tap(find.byTooltip('Menu'));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('drawerLanguageToggle')), findsOneWidget);
+
+      await _pump(tester, _seedWith(const {}, extra: {'englishEnabled': false}), size: const Size(400, 1600));
+      await tester.tap(find.byTooltip('Menu'));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('drawerLanguageToggle')), findsNothing);
+    });
+  });
+
+  group('public legacy route redirects', () {
+    testWidgets('/activities redirects to /church-activities', (tester) async {
+      final router = await _pump(tester, _seedWith(const {'activities': true}));
+      router.go('/activities');
+      await tester.pumpAndSettle();
+      expect(router.routerDelegate.currentConfiguration.uri.path, '/church-activities');
+    });
+
+    testWidgets('/priests redirects to /about', (tester) async {
+      final router = await _pump(tester, _seedWith(const {'priests': true}));
+      router.go('/priests');
+      await tester.pumpAndSettle();
+      expect(router.routerDelegate.currentConfiguration.uri.path, '/about');
+    });
+
+    testWidgets('/notices redirects to /notifications', (tester) async {
+      final router = await _pump(tester, _seedWith(const {'alerts': true}));
+      router.go('/notices');
+      await tester.pumpAndSettle();
+      expect(router.routerDelegate.currentConfiguration.uri.path, '/notifications');
+    });
+
+    testWidgets('/donations redirects to /page/donations', (tester) async {
+      final router = await _pump(tester, _seedWith(const {}));
+      router.go('/donations');
+      await tester.pumpAndSettle();
+      expect(router.routerDelegate.currentConfiguration.uri.path, '/page/donations');
+    });
+  });
 }

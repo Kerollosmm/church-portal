@@ -1,9 +1,51 @@
 // Pure validation / conversion for the admin forms (unit-tested).
+import 'package:firebase_core/firebase_core.dart';
+
 import '../../domain/cairo_time.dart';
-import '../../domain/custom_content.dart' show BlockTypes, PageBlock, isValidSlug;
+import '../../domain/custom_content.dart' show BlockTypes, PageBlock, isValidSlug, slugMaxLength;
 import '../../domain/push.dart';
 import '../../domain/rules.dart' show normalizeDigits;
 import 'admin_schema.dart';
+
+const _arabicSlugMap = <String, String>{
+  'ا': 'a', 'أ': 'a', 'إ': 'a', 'آ': 'a', 'ى': 'a',
+  'ب': 'b', 'ت': 't', 'ة': 't', 'ث': 'th',
+  'ج': 'g', 'ح': 'h', 'خ': 'kh',
+  'د': 'd', 'ذ': 'dh', 'ر': 'r', 'ز': 'z',
+  'س': 's', 'ش': 'sh', 'ص': 's', 'ض': 'd',
+  'ط': 't', 'ظ': 'z', 'ع': 'a', 'غ': 'gh',
+  'ف': 'f', 'ق': 'q', 'ك': 'k', 'ل': 'l',
+  'م': 'm', 'ن': 'n', 'ه': 'h', 'و': 'w', 'ؤ': 'w',
+  'ي': 'y', 'ئ': 'y', 'ء': '',
+};
+
+String _fitSlug(String s, int maxLen) {
+  var out = s.length > maxLen ? s.substring(0, maxLen) : s;
+  out = out.replaceAll(RegExp(r'^-+|-+$'), '');
+  return out.isEmpty ? 'page' : out;
+}
+
+/// Deterministic URL slug generated from an Arabic or Latin [title], always
+/// satisfying [isValidSlug] and unique against [taken] (P1-14).
+String slugFromTitle(String title, {required Set<String> taken}) {
+  final normalized = normalizeDigits(title).replaceAll(RegExp(r'[\u0640\u064B-\u065F\u0670]'), '');
+  final buf = StringBuffer();
+  for (final rune in normalized.runes) {
+    final ch = String.fromCharCode(rune);
+    buf.write(_arabicSlugMap[ch] ?? ch.toLowerCase());
+  }
+  final cleaned = buf
+      .toString()
+      .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
+      .replaceAll(RegExp(r'^-+|-+$'), '');
+  final base = _fitSlug(cleaned.isEmpty ? 'page' : cleaned, slugMaxLength);
+  if (!taken.contains(base)) return base;
+  for (var n = 2;; n++) {
+    final suffix = '-$n';
+    final candidate = '${_fitSlug(base, slugMaxLength - suffix.length)}$suffix';
+    if (!taken.contains(candidate)) return candidate;
+  }
+}
 
 final timeRe = RegExp(r'^([01]\d|2[0-3]):[0-5]\d$');
 final dateTimeRe = RegExp(r'^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})$');
@@ -75,6 +117,32 @@ bool isValidLooseDate(String v) {
   final mo = int.parse(m[2]!);
   if (m[3] == null) return mo >= 1 && mo <= 12;
   return isCalendarDate(y, mo, int.parse(m[3]!));
+}
+
+/// Days in Gregorian calendar [month] (1–12) of [year].
+int daysInMonth(int year, int month) => DateTime.utc(year, month + 1, 0).day;
+
+/// Parses a `looseDate` string (`YYYY`, `YYYY-MM`, or `YYYY-MM-DD`, including
+/// Arabic-Indic digits) into parts; returns null when blank or invalid.
+({int year, int? month, int? day})? parseLooseDate(String raw) {
+  final v = normalizeDigits(raw.trim());
+  if (!isValidLooseDate(v)) return null;
+  final m = _looseDateRe.firstMatch(v)!;
+  return (
+    year: int.parse(m[1]!),
+    month: m[2] == null ? null : int.parse(m[2]!),
+    day: m[3] == null ? null : int.parse(m[3]!),
+  );
+}
+
+/// Formats `YYYY`, `YYYY-MM`, or `YYYY-MM-DD` from [looseDate] picker parts.
+String formatLooseDateValue(int year, [int? month, int? day]) {
+  final y = year.clamp(1000, 9999).toString().padLeft(4, '0');
+  if (month == null) return y;
+  final m = month.clamp(1, 12);
+  if (day == null) return '$y-${two(m)}';
+  final d = day.clamp(1, daysInMonth(year.clamp(1000, 9999), m));
+  return '$y-${two(m)}-${two(d)}';
 }
 
 /// http(s) URL with a host; with [allowPath] also an in-app path like /clinics.
@@ -193,6 +261,14 @@ String? validateRowUnique(FieldDef list, List<String> values, int index) {
   return null;
 }
 
+/// Validates a heading block in custom pages: Arabic heading text is required.
+String? validateHeadingBlock(Map<String, String> row, String blockType) {
+  if (blockType == BlockTypes.heading && (row['textAr'] ?? '').trim().isEmpty) {
+    return 'required';
+  }
+  return null;
+}
+
 String? validateDocument(CollectionDef? def, Map<String, dynamic> data) {
   if (def != null && def.requireAnyOf.isNotEmpty && def.requireAnyOf.every((k) => data[k] == null || data[k] == '')) {
     return 'needWeekdayOrDate';
@@ -209,12 +285,15 @@ String? validateDocument(CollectionDef? def, Map<String, dynamic> data) {
   final leads = data['reminderLeads'], lead = data['reminderDefaultLead'];
   if (lead is int && leads is List && !leads.contains(lead)) return 'reminderDefaultLeadNotOffered';
   // Custom page blocks (firestore.rules validPageBlock): an image needs an
-  // https picture link.
+  // https picture link; a heading block requires Arabic heading text.
   final blocks = data['blocks'];
   if (blocks is List) {
     for (final raw in blocks) {
       final b = PageBlock.fromStored(raw);
-      if (b != null && b.type == BlockTypes.image && !b.url.startsWith('https://')) return 'blockImageUrl';
+      if (b != null) {
+        if (b.type == BlockTypes.heading && b.textAr.trim().isEmpty) return 'blockHeadingRequired';
+        if (b.type == BlockTypes.image && !b.url.startsWith('https://')) return 'blockImageUrl';
+      }
     }
   }
   return null;
@@ -334,3 +413,24 @@ bool isValidHm(String s) => s.isEmpty || RegExp(r'^([01]\d|2[0-3]):[0-5]\d$').ha
 
 /// The Web Push public key: empty or 80–100 URL-safe base64 characters.
 bool isValidVapidKey(String s) => s.isEmpty || RegExp(r'^[A-Za-z0-9_-]{80,100}$').hasMatch(s);
+
+/// Formats an error for administrative error displays, surfacing structured
+/// Firebase error codes (e.g. `[permission-denied]`) instead of raw/opaque strings.
+String formatAdminError(Object error) {
+  if (error is FirebaseException) {
+    final code = error.code.trim();
+    final message = (error.message ?? '').trim();
+    if (code.isNotEmpty && message.isNotEmpty) {
+      return '[$code] $message';
+    }
+    if (code.isNotEmpty) {
+      return '[$code]';
+    }
+    if (message.isNotEmpty) {
+      return message;
+    }
+    final plugin = error.plugin.trim();
+    return plugin.isNotEmpty ? '[$plugin]' : '[firebase_error]';
+  }
+  return '$error';
+}

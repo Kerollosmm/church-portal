@@ -15,6 +15,11 @@ import 'media.dart';
 String _s(Object? v) => v is String ? v : (v == null ? '' : v.toString());
 bool _b(Object? v, bool def) => v is bool ? v : def;
 int _i(Object? v) => v is int ? v : (v is num ? v.toInt() : 0);
+DateTime? _dateTime(Object? v) {
+  if (v is DateTime) return v;
+  if (v is String && v.isNotEmpty) return DateTime.tryParse(v);
+  return null;
+}
 
 /// URL slugs: lower-case latin letters / digits joined by single hyphens.
 const slugMaxLength = 60;
@@ -266,16 +271,27 @@ class PageBlock {
       };
 }
 
+/// Where a custom page is placed on the public site (P1-18).
+class PagePlacements {
+  PagePlacements._();
+  static const link = 'link';
+  static const nav = 'nav';
+  static const section = 'section';
+  static const all = [link, nav, section];
+}
+
 /// An admin-built page (`/page/<slug>`).
 class CustomPage implements Hideable {
   final String id, slug, titleAr, titleEn, subtitleAr, subtitleEn;
   final MediaImage? image;
   final List<PageBlock> blocks;
-  final bool showInNav;
+  final String placement, categoryId;
+  final bool showInNav, featured;
   @override
   final bool visible;
   @override
   final int order;
+  final DateTime? updatedAt;
 
   const CustomPage({
     required this.id,
@@ -286,12 +302,19 @@ class CustomPage implements Hideable {
     this.subtitleEn = '',
     this.image,
     this.blocks = const [],
+    this.placement = '',
+    this.categoryId = '',
     this.showInNav = false,
+    this.featured = false,
     this.visible = true,
     this.order = 0,
+    this.updatedAt,
   });
 
   factory CustomPage.fromMap(String id, Map<String, dynamic> m) {
+    final nav = _b(m['showInNav'], false);
+    final rawP = _s(m['placement']);
+    final p = PagePlacements.all.contains(rawP) ? rawP : (nav ? PagePlacements.nav : PagePlacements.link);
     final raw = m['blocks'];
     return CustomPage(
       id: id,
@@ -302,13 +325,23 @@ class CustomPage implements Hideable {
       subtitleEn: _s(m['subtitleEn']),
       image: MediaImage.fromMap(m['image']),
       blocks: raw is List ? [for (final b in raw) ?PageBlock.fromStored(b)] : const [],
-      // Off by default: a page is reached from notices / links unless the
-      // admin puts it in the menu.
-      showInNav: _b(m['showInNav'], false),
+      placement: p,
+      categoryId: _s(m['categoryId']),
+      // Off by default: a page is reached from notices / links unless placed in nav.
+      showInNav: p == PagePlacements.nav,
+      featured: _b(m['featured'], false),
       visible: _b(m['visible'], true),
       order: _i(m['order']),
+      updatedAt: _dateTime(m['updatedAt']),
     );
   }
+
+  /// Resolved placement, preserving backward compatibility for const fixtures
+  /// constructed with only [showInNav].
+  String get effectivePlacement =>
+      PagePlacements.all.contains(placement) ? placement : (showInNav ? PagePlacements.nav : PagePlacements.link);
+
+  bool get inNav => effectivePlacement == PagePlacements.nav;
 
   String get path => customPagePath(slug);
   bool get isUsable => isValidSlug(slug) && (titleAr.trim().isNotEmpty || titleEn.trim().isNotEmpty);
@@ -327,6 +360,66 @@ List<CustomPage> publicPages(Iterable<CustomPage> all) {
       if (seen.add(e.value.slug)) e.value,
   ];
 }
+
+/// Visible usable custom pages placed inside custom category [categoryId].
+List<CustomPage> sectionPages(String categoryId, Iterable<CustomPage> all) => [
+      for (final p in publicPages(all))
+        if (p.effectivePlacement == PagePlacements.section && p.categoryId == categoryId) p,
+    ];
+
+/// Visible usable custom pages featured on the home page, sorted by `order`
+/// ascending, then `updatedAt` descending (newest first, non-null before null),
+/// then original index on ties. Slugs are deduplicated (first wins).
+List<CustomPage> featuredPages(Iterable<CustomPage> all) {
+  final indexed = all
+      .toList()
+      .asMap()
+      .entries
+      .where((e) => e.value.visible && e.value.isUsable && e.value.featured)
+      .toList()
+    ..sort((a, b) {
+      final pA = a.value;
+      final pB = b.value;
+      final o = pA.order.compareTo(pB.order);
+      if (o != 0) return o;
+      final uA = pA.updatedAt;
+      final uB = pB.updatedAt;
+      if (uA != null && uB != null) {
+        final u = uB.compareTo(uA);
+        if (u != 0) return u;
+      } else if (uA != null) {
+        return -1;
+      } else if (uB != null) {
+        return 1;
+      }
+      return a.key.compareTo(b.key);
+    });
+  final seen = <String>{};
+  return [
+    for (final e in indexed)
+      if (seen.add(e.value.slug)) e.value,
+  ];
+}
+
+/// True when [category] has at least one visible entry or at least one visible section page.
+bool isCategoryNonEmpty(
+  CustomCategory category,
+  Iterable<CategoryEntry> entries,
+  Iterable<CustomPage> pages,
+) =>
+    entriesOf(category.id, entries).isNotEmpty ||
+    sectionPages(category.id, pages).isNotEmpty;
+
+/// Public categories that have at least one visible entry or visible section page.
+List<CustomCategory> publicNonEmptyCategories(
+  Iterable<CustomCategory> categories,
+  Iterable<CategoryEntry> entries,
+  Iterable<CustomPage> pages,
+) =>
+    [
+      for (final c in publicCategories(categories))
+        if (isCategoryNonEmpty(c, entries, pages)) c,
+    ];
 
 /// A link button target an admin can pick (notices' "Learn more", page
 /// buttons): an in-app path or an external URL.

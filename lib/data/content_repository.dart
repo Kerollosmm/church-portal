@@ -504,7 +504,10 @@ class FirestoreRepository implements ContentRepository {
   static const customFallbackDelay = Duration(seconds: 13);
 
   List<T> _docs<T>(QuerySnapshot<Map<String, dynamic>> snap, T Function(String, Map<String, dynamic>) f) =>
-      snap.docs.map((d) => f(d.id, normalizeDoc(d.data()))).toList();
+      snap.docs
+          .where((d) => !isSoftDeleted(d.data()))
+          .map((d) => f(d.id, normalizeDoc(d.data())))
+          .toList();
 
   /// Admin-defined collections (categories, entries, pages; ADR-027): there
   /// is no bundled copy, so a cache-only or fallback empty list must not be
@@ -535,7 +538,10 @@ class FirestoreRepository implements ContentRepository {
           {int Function(T a, T b)? sort}) =>
       _guard(name, () {
         return db.collection(name).snapshots().map((snap) {
-          final list = snap.docs.map((d) => f(d.id, normalizeDoc(d.data()))).toList();
+          final list = snap.docs
+              .where((d) => !isSoftDeleted(d.data()))
+              .map((d) => f(d.id, normalizeDoc(d.data())))
+              .toList();
           if (sort != null) list.sort(sort);
           return list;
         });

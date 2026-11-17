@@ -26,13 +26,24 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function adminDocActive(d) {
+      return d.get('active', true) != false
+        && (d.get('expiresAt', null) == null
+            || (d.expiresAt is timestamp && request.time < d.expiresAt));
+    }
+
     function isAdmin() {
-      return signedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+      return signedIn()
+        && exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+        && adminDocActive(get(/databases/$(database)/documents/admins/$(request.auth.uid)).data);
+    }
+
+    function hasOwnerRole() {
+      return get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.get('role', '') == 'owner';
     }
 
     function isOwner() {
-      return isAdmin()
-        && get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.get('role', '') == 'owner';
+      return isAdmin() && hasOwnerRole();
     }
 
     // ---- field helpers (absent or null is accepted for optional fields) ----
@@ -108,6 +119,7 @@ service cloud.firestore {
       return d.keys().size() <= 80
         && (!changed.hasAny(['visible', 'sample', 'order'])
             || (optBool(d, 'visible') && optBool(d, 'sample') && optInt(d, 'order', -100000, 100000)))
+        && (!('deletedAt' in changed) || optTimestamp(d, 'deletedAt'))
         && (!('image' in changed) || d.get('image', null) == null || validImage(d.image))
         // Image display style (ADR-023): absent / null = the section default.
         && (!('imageStyle' in changed) || d.get('imageStyle', null) in [null, 'avatar', 'card', 'banner'])
@@ -144,7 +156,7 @@ service cloud.firestore {
         && s.matches('[^\\x1f]*\\x1f[^\\x1f]{0,500}\\x1f[\\s\\S]*');
     }
     function meta() {
-      return ['visible', 'sample', 'order', 'updatedAt', 'updatedBy'];
+      return ['visible', 'sample', 'order', 'deletedAt', 'updatedAt', 'updatedBy'];
     }
 
     // ---- optional item detail page (meetings, activities, clinics,
@@ -246,12 +258,10 @@ service cloud.firestore {
     // ------------------------------- content -------------------------------
     function validContent(col, d) {
       let changed = changedKeys(d);
-      // `col in` stops other paths (settings/..., media/...) early: this match
-      // also sees them and every request shares one expression budget. The
-      // detail-page collections come first (their writes are the heaviest).
-      return col in ['meetings', 'activities', 'clinics', 'facilities', 'priests', 'milestones', 'saints', 'alerts',
-                     'seasons', 'liturgies', 'categories', 'entries', 'pages']
-        && common(d, changed) && (
+      // `match /{col}/{docId}` gates `col` before `isAdmin()` so non-content
+      // paths never pay `isAdmin()` or `changedKeys(d)`. Detail-page
+      // collections come first (their writes are the heaviest).
+      return common(d, changed) && (
         (col == 'meetings' && validMeeting(d, changed))
         || (col == 'activities' && validActivity(d, changed))
         || (col == 'clinics' && validClinic(d, changed))
@@ -264,8 +274,12 @@ service cloud.firestore {
         || (col == 'liturgies' && validLiturgy(d))
         || (col == 'categories' && validCategory(d, changed))
         || (col == 'entries' && validEntry(d, changed))
-        || (col == 'pages' && validPage(d, changed))
       );
+    }
+
+    function validPageDoc(d) {
+      let changed = changedKeys(d);
+      return common(d, changed) && validPage(d, changed);
     }
 
     // ------------- admin-defined categories, items & pages (ADR-027) -------------
@@ -306,28 +320,41 @@ service cloud.firestore {
     // pages/{id}: a custom page. The header fields are checked when a write
     // creates the page or changes one of them; the blocks when they change
     // (their own write, like gallery / extraFields: expression budget).
+    function validPagePlacement(d) {
+      let p = d.get('placement', 'link');
+      let c = d.get('categoryId', '');
+      return p in ['link', 'nav', 'section']
+        && (p != 'section' && c == null || (c is string && c.matches(p == 'section' ? '[A-Za-z0-9_-]{1,128}' : '[A-Za-z0-9_-]{0,128}')));
+    }
+
+    function validPageHeaderFields(d) {
+      let o = d.titleAr + '\u001f' + d.get('titleEn', '') + '\u001f' + d.get('subtitleAr', '') + '\u001f' + d.get('subtitleEn', '');
+      return slugOk(d) && d.get('showInNav', false) is bool
+        && o.matches('[^\\x1f]*[^\\s\\x1f][^\\x1f]*\\x1f[\\s\\S]*')
+        && o.matches('[^\\x1f]{1,200}\\x1f[^\\x1f]{0,200}\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{0,300}');
+    }
+
     function validPage(d, changed) {
-      return changed.hasOnly(['slug', 'titleAr', 'titleEn', 'subtitleAr', 'subtitleEn', 'image', 'blocks', 'showInNav']
-                             .concat(meta()))
+      return changed.hasOnly(['slug', 'titleAr', 'titleEn', 'subtitleAr', 'subtitleEn', 'image', 'blocks', 'showInNav',
+                              'placement', 'categoryId', 'featured',
+                              'visible', 'sample', 'order', 'deletedAt', 'updatedAt', 'updatedBy'])
         && ((resource != null && !changed.hasAny(['slug', 'titleAr', 'titleEn', 'subtitleAr', 'subtitleEn', 'showInNav']))
-            || (slugOk(d) && d.get('showInNav', false) is bool
-                && (d.titleAr + '\u001f' + d.get('titleEn', '') + '\u001f' + d.get('subtitleAr', '') + '\u001f' + d.get('subtitleEn', ''))
-                     .matches('[^\\x1f]*[^\\s\\x1f][^\\x1f]*\\x1f[\\s\\S]*')
-                && (d.titleAr + '\u001f' + d.get('titleEn', '') + '\u001f' + d.get('subtitleAr', '') + '\u001f' + d.get('subtitleEn', ''))
-                     .matches('[^\\x1f]{1,200}\\x1f[^\\x1f]{0,200}\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{0,300}')))
+            || validPageHeaderFields(d))
+        && (!('featured' in changed) || d.get('featured', false) is bool)
+        && ((!('placement' in changed) && !('categoryId' in changed)) || validPagePlacement(d))
         && (!('blocks' in changed) || validBlocks(d));
     }
 
     // Up to 20 blocks (unrolled: rules have no loops).
     function validBlocks(d) {
-      return optList(d, 'blocks', 20)
-        && (d.get('blocks', null) == null || blockItems(d.blocks, d.blocks.size()));
+      let b = d.get('blocks', null);
+      return b == null || (b is list && b.size() <= 20 && blockItems(b, b.size()));
     }
     function blockItems(b, n) {
-      return (n <= 0 || (validPageBlock(b[0]) && (n <= 1 || (validPageBlock(b[1]) && (n <= 2 || (validPageBlock(b[2]) && (n <= 3 || (validPageBlock(b[3]) && (n <= 4 || (validPageBlock(b[4]) && true))))))))))
-        && (n <= 5 || (validPageBlock(b[5]) && (n <= 6 || (validPageBlock(b[6]) && (n <= 7 || (validPageBlock(b[7]) && (n <= 8 || (validPageBlock(b[8]) && (n <= 9 || (validPageBlock(b[9]) && true))))))))))
-        && (n <= 10 || (validPageBlock(b[10]) && (n <= 11 || (validPageBlock(b[11]) && (n <= 12 || (validPageBlock(b[12]) && (n <= 13 || (validPageBlock(b[13]) && (n <= 14 || (validPageBlock(b[14]) && true))))))))))
-        && (n <= 15 || (validPageBlock(b[15]) && (n <= 16 || (validPageBlock(b[16]) && (n <= 17 || (validPageBlock(b[17]) && (n <= 18 || (validPageBlock(b[18]) && (n <= 19 || (validPageBlock(b[19]) && true))))))))));
+      return (n <= 0 || (validPageBlock(b[0]) && (n <= 1 || (validPageBlock(b[1]) && (n <= 2 || (validPageBlock(b[2]) && (n <= 3 || (validPageBlock(b[3]) && (n <= 4 || validPageBlock(b[4]))))))))))
+        && (n <= 5 || (validPageBlock(b[5]) && (n <= 6 || (validPageBlock(b[6]) && (n <= 7 || (validPageBlock(b[7]) && (n <= 8 || (validPageBlock(b[8]) && (n <= 9 || validPageBlock(b[9]))))))))))
+        && (n <= 10 || (validPageBlock(b[10]) && (n <= 11 || (validPageBlock(b[11]) && (n <= 12 || (validPageBlock(b[12]) && (n <= 13 || (validPageBlock(b[13]) && (n <= 14 || validPageBlock(b[14]))))))))))
+        && (n <= 15 || (validPageBlock(b[15]) && (n <= 16 || (validPageBlock(b[16]) && (n <= 17 || (validPageBlock(b[17]) && (n <= 18 || (validPageBlock(b[18]) && (n <= 19 || validPageBlock(b[19]))))))))));
     }
     // A block is ONE string: type, textAr, textEn, url, account, instapay,
     // wallet joined by U+001F (lib/domain/custom_content.dart PageBlock.encode;
@@ -337,8 +364,8 @@ service cloud.firestore {
     // https link); donation account <= 120, InstaPay <= 80, wallet <= 30;
     // the whole block <= 9000. Display only: nothing is processed.
     function validPageBlock(b) {
-      return b is string && b.size() <= 9000
-        && b.matches('(image\\x1f[^\\x1f]{0,1000}[^\\x1f]{0,1000}[^\\x1f]{0,1000}[^\\x1f]{0,1000}\\x1f[^\\x1f]{0,1000}[^\\x1f]{0,1000}[^\\x1f]{0,1000}[^\\x1f]{0,1000}\\x1fhttps://[^/ \\x1f]+[.][^/ \\x1f]+([/?#][^ \\x1f]*)?|(heading|paragraph|button|link|donation)\\x1f[^\\x1f]{0,1000}[^\\x1f]{0,1000}[^\\x1f]{0,1000}[^\\x1f]{0,1000}\\x1f[^\\x1f]{0,1000}[^\\x1f]{0,1000}[^\\x1f]{0,1000}[^\\x1f]{0,1000}\\x1f(|/([^/ \\x1f][^ \\x1f]*)?|[Hh][Tt][Tt][Pp][Ss]?://[^/ \\x1f]+[.][^/ \\x1f]+([/?#][^ \\x1f]*)?))\\x1f[^\\x1f]{0,120}\\x1f[^\\x1f]{0,80}\\x1f[^\\x1f]{0,30}');
+      return b is string
+        && b.matches('(image\\x1f(([^\\x1f]{1000}){0,3}[^\\x1f]{0,1000})\\x1f(([^\\x1f]{1000}){0,3}[^\\x1f]{0,1000})\\x1fhttps://[^/ \\x1f]+[.][^/ \\x1f]+([/?#][^ \\x1f]*)?|(heading|paragraph|button|link|donation)\\x1f(([^\\x1f]{1000}){0,3}[^\\x1f]{0,1000})\\x1f(([^\\x1f]{1000}){0,3}[^\\x1f]{0,1000})\\x1f(|/([^/ \\x1f][^ \\x1f]*)?|[Hh][Tt][Tt][Pp][Ss]?://[^/ \\x1f]+[.][^/ \\x1f]+([/?#][^ \\x1f]*)?))\\x1f[^\\x1f]{0,120}\\x1f[^\\x1f]{0,80}\\x1f[^\\x1f]{0,30}');
     }
 
     // ---- optional programme details (ADR-041): liturgies, meetings, seasons.
@@ -552,22 +579,47 @@ service cloud.firestore {
     match /{col}/{docId} {
       allow read: if col in ['alerts', 'seasons', 'liturgies', 'meetings', 'activities',
                              'clinics', 'facilities', 'priests', 'milestones', 'saints',
-                             'categories', 'entries', 'pages'];
-      allow create, update: if isAdmin() && validContent(col, request.resource.data);
-      allow delete: if isAdmin() && col in ['alerts', 'seasons', 'liturgies', 'meetings', 'activities',
-                                            'clinics', 'facilities', 'priests', 'milestones', 'saints',
-                                            'categories', 'entries', 'pages'];
+                             'categories', 'entries'];
+      allow create, update: if col in ['alerts', 'seasons', 'liturgies', 'meetings', 'activities',
+                                       'clinics', 'facilities', 'priests', 'milestones', 'saints',
+                                       'categories', 'entries']
+        && isAdmin() && validContent(col, request.resource.data);
+      allow delete: if col in ['alerts', 'seasons', 'liturgies', 'meetings', 'activities',
+                               'clinics', 'facilities', 'priests', 'milestones', 'saints',
+                               'categories', 'entries']
+        && isAdmin();
+    }
+
+    match /pages/{docId} {
+      allow read: if true;
+      allow create, update: if isAdmin() && validPageDoc(request.resource.data);
+      allow delete: if isAdmin();
     }
 
     // ------------------------------- settings -------------------------------
-    match /settings/{docId} {
-      allow read: if docId != 'notifications' || isAdmin();
-      allow create, update: if isAdmin()
-        && ((docId == 'church' && validChurch(request.resource.data))
-            || (docId == 'features' && validFeatures(request.resource.data))
-            || (docId == 'contact' && validContactSettings(request.resource.data))
-            || (docId == 'assistant' && validAssistant(request.resource.data))
-            || (docId == 'notifications' && validNotifications(request.resource.data)));
+    match /settings/church {
+      allow read: if true;
+      allow create, update: if isAdmin() && validChurch(request.resource.data);
+      allow delete: if false;
+    }
+    match /settings/features {
+      allow read: if true;
+      allow create, update: if isAdmin() && validFeatures(request.resource.data);
+      allow delete: if false;
+    }
+    match /settings/contact {
+      allow read: if true;
+      allow create, update: if isOwner() && validContactSettings(request.resource.data);
+      allow delete: if false;
+    }
+    match /settings/assistant {
+      allow read: if true;
+      allow create, update: if isOwner() && validAssistant(request.resource.data);
+      allow delete: if false;
+    }
+    match /settings/notifications {
+      allow read: if isAdmin();
+      allow create, update: if isAdmin() && validNotifications(request.resource.data);
       allow delete: if false;
     }
 
@@ -650,7 +702,7 @@ service cloud.firestore {
       return changed.hasOnly(['schedule', 'status', 'sentLog', 'reminderPlan', 'remindersSent', 'health',
                               'updatedAt', 'updatedBy'])
         && (!('schedule' in changed) || validNotifySchedule(d))
-        && (!('sentLog' in changed) || (isOwner() && d.get('sentLog', []).size() == 0))
+        && (!('sentLog' in changed) || (hasOwnerRole() && d.get('sentLog', []).size() == 0))
         && !changed.hasAny(['status', 'reminderPlan', 'remindersSent', 'health'])
         && (!changed.hasAny(['updatedAt', 'updatedBy']) || stampOk(d));
     }
@@ -676,7 +728,7 @@ service cloud.firestore {
               'installAndroidUrl', 'installAndroidUrl32', 'installApkVersion', 'installApkBuild',
               'installApkSizeMb', 'installApkSize32Mb', 'installReshowDays', 'installRemindDays',
               'push', 'pushVapidKey', 'pushTypes', 'reminderLeads', 'reminderDefaultLead',
-              'notifyTypes', 'reminderSources'];
+              'notifyTypes', 'reminderSources', 'englishEnabled'];
     }
 
     function legacyFeatureKeys() {
@@ -689,25 +741,9 @@ service cloud.firestore {
               'heroSeasonTint', 'updatedAt', 'updatedBy'];
     }
 
-    function allFeatureKeys() {
-      return ['updatedAt', 'updatedBy',
-              'installPrompt', 'installTitleAr', 'installTitleEn', 'installBodyAr', 'installBodyEn',
-              'installAndroidUrl', 'installAndroidUrl32', 'installApkVersion', 'installApkBuild',
-              'installApkSizeMb', 'installApkSize32Mb', 'installReshowDays', 'installRemindDays',
-              'push', 'pushVapidKey', 'pushTypes', 'reminderLeads', 'reminderDefaultLead',
-              'notifyTypes', 'reminderSources',
-              'sections', 'homeOrder', 'homeHidden', 'heroTitleAr', 'heroTitleEn', 'heroSubtitleAr',
-              'heroSubtitleEn', 'bannerEnabled', 'bannerAr', 'bannerEn', 'bannerLink', 'theme',
-              'pageHeaders', 'footer', 'heroMotion', 'heroShowAddress', 'aboutMilestones', 'imageStyles', 'dailyVerse', 'occasions', 'themeColors',
-              'heroVideos', 'errorReporting', 'copticStrip', 'dayStartMode', 'dayStartsAt', 'topEvent',
-              'commemoration', 'topEventServices', 'liveEnabled', 'liveUrl', 'liveLabelAr', 'liveLabelEn', 'liveEndsAt',
-              'liveBadgeHideOnHome', 'dayEvents', 'venues', 'audiences', 'seasonVerses', 'seasonPreset', 'weddingBookingOff',
-              'heroSeasonTint'];
-    }
-
     // Only reached when the write changes a key outside the legacy list.
-    function validInstallPush(d, changed) {
-      return changed.hasOnly(allFeatureKeys())
+    function validInstallPush(d, changed, legacy) {
+      return changed.hasOnly(legacy.concat(installPushKeys()))
         && validInstallSettings(d, changed) && validPushSettings(d, changed);
     }
 
@@ -771,9 +807,8 @@ service cloud.firestore {
       return (!changed.hasAny(['push', 'pushVapidKey', 'pushTypes', 'reminderLeads', 'reminderDefaultLead'])
               || validPushCore(d))
         && (!('notifyTypes' in changed) || validNotifyTypes(d.get('notifyTypes', [])))
-        && (!('reminderSources' in changed) || d.get('reminderSources', '') in [
-          '', 'lit', 'mtg', 'day', 'lit,mtg', 'lit,day', 'mtg,lit', 'mtg,day', 'day,lit', 'day,mtg',
-          'lit,mtg,day', 'lit,day,mtg', 'mtg,lit,day', 'mtg,day,lit', 'day,lit,mtg', 'day,mtg,lit']);
+        && (!('reminderSources' in changed)
+            || d.get('reminderSources', '').matches('^(|lit|mtg|day|lit,mtg|lit,day|mtg,lit|mtg,day|day,lit|day,mtg|lit,mtg,day|lit,day,mtg|mtg,lit,day|mtg,day,lit|day,lit,mtg|day,mtg,lit)$'));
     }
 
     function validFeatures(d) {
@@ -784,7 +819,11 @@ service cloud.firestore {
       // saves recalculating affectedKeys; ADR-057 keys are checked only when
       // a non-legacy key changes.
       let changed = changedKeys(d);
-      return (changed.hasOnly(legacyFeatureKeys()) || validInstallPush(d, changed))
+      let legacy = legacyFeatureKeys();
+      return (!changed.hasAny(['venues', 'audiences', 'seasonVerses', 'errorReporting', 'pushVapidKey',
+                               'installAndroidUrl', 'installAndroidUrl32']) || hasOwnerRole())
+        && (changed.hasOnly(legacy) || validInstallPush(d, changed, legacy))
+        && (!('englishEnabled' in changed) || (hasOwnerRole() && optBool(d, 'englishEnabled')))
         && (!('sections' in changed) || !('sections' in d) || validSections(d.sections))
         && (!('homeOrder' in changed) || !('homeOrder' in d) || (d.homeOrder is list && d.homeOrder.size() <= 7
               && d.homeOrder.hasOnly(['banner', 'alerts', 'nextMass', 'quickContacts', 'milestones', 'directory', 'map'])))
@@ -792,11 +831,15 @@ service cloud.firestore {
               && d.homeHidden.hasOnly(['banner', 'alerts', 'nextMass', 'quickContacts', 'milestones', 'directory', 'map'])))
         && (!changed.hasAny(['heroTitleAr', 'heroTitleEn', 'heroSubtitleAr', 'heroSubtitleEn', 'bannerEnabled', 'bannerAr',
                              'bannerEn'])
-            || (str(d, 'heroTitleAr', 200) && str(d, 'heroTitleEn', 200)
-                && str(d, 'heroSubtitleAr', 300) && str(d, 'heroSubtitleEn', 300)
-                && d.get('bannerEnabled', false) is bool && str(d, 'bannerAr', 500) && str(d, 'bannerEn', 500)))
+            || (d.get('bannerEnabled', false) is bool
+                && (d.get('heroTitleAr', '') + '\u001f' + d.get('heroTitleEn', '') + '\u001f'
+                    + d.get('heroSubtitleAr', '') + '\u001f' + d.get('heroSubtitleEn', '') + '\u001f'
+                    + d.get('bannerAr', '') + '\u001f' + d.get('bannerEn', ''))
+                   .matches('[^\\x1f]{0,200}\\x1f[^\\x1f]{0,200}\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{0,300}\\x1f[^\\x1f]{0,500}\\x1f[^\\x1f]{0,500}')))
         && (!('bannerLink' in changed) || optUrlOrPath(d, 'bannerLink', 500))
-        && (!('theme' in changed) || d.get('theme', 'goldenHour') in ['goldenHour', 'holyWeek', 'resurrection', 'nativity', 'epiphany', 'fasting', 'marian', 'navy', 'green', 'brown', 'purple', 'burgundy'])
+        && (!('theme' in changed)
+            || (d.get('theme', 'goldenHour') is string
+                && d.get('theme', 'goldenHour').matches('^(goldenHour|holyWeek|resurrection|nativity|epiphany|fasting|marian|navy|green|brown|purple|burgundy)$')))
         && (!('occasions' in changed) || !('occasions' in d) || validOccasions(d.occasions))
         && (!('themeColors' in changed) || !('themeColors' in d) || validThemeColors(d.themeColors))
         && (!('heroVideos' in changed) || !('heroVideos' in d) || validHeroVideos(d.heroVideos))
@@ -821,11 +864,9 @@ service cloud.firestore {
         && (!('dayEvents' in changed) || validDayEvents(d))
         && (!('venues' in changed) || validProgramOptions(d, 'venues'))
         && (!('audiences' in changed) || validProgramOptions(d, 'audiences'))
-        && (!changed.hasAny(['seasonVerses', 'seasonPreset', 'weddingBookingOff'])
-            || ((!('seasonVerses' in changed) || validSeasonVerses(d))
-                && (!('seasonPreset' in changed) || d.get('seasonPreset', null) == null
-                    || validSeasonPreset(d.seasonPreset))
-                && optBool(d, 'weddingBookingOff')))
+        && (!('seasonVerses' in changed) || validSeasonVerses(d))
+        && (!('seasonPreset' in changed) || d.get('seasonPreset', null) == null || validSeasonPreset(d.seasonPreset))
+        && (!('weddingBookingOff' in changed) || optBool(d, 'weddingBookingOff'))
         && (!changed.hasAny(['updatedAt', 'updatedBy']) || stampOk(d));
     }
 
@@ -833,10 +874,11 @@ service cloud.firestore {
     // strings, checked as one joined string (one regex).
     // ADR-047: each row may end with an optional ␟textEn␟refEn tail.
     function validSeasonVerses(d) {
-      return d.get('seasonVerses', null) == null
-        || (d.seasonVerses is list && d.seasonVerses.size() <= 40
-            && (d.seasonVerses.size() == 0
-                || d.seasonVerses.join('\u001e').matches(
+      let v = d.get('seasonVerses', null);
+      return v == null
+        || (v is list && v.size() <= 40
+            && (v.size() == 0
+                || v.join('\u001e').matches(
                      '(holy_week|pascha|nativity|epiphany|marian|fast|revival_maximus|revival_moses|summer|apostles|nayrouz|kiahk|great_lent)\x1f[^\x1f\x1e]{1,500}\x1f[^\x1f\x1e]{0,60}(\x1f[^\x1f\x1e]{0,500}\x1f[^\x1f\x1e]{0,60})?'
                      + '(\x1e(holy_week|pascha|nativity|epiphany|marian|fast|revival_maximus|revival_moses|summer|apostles|nayrouz|kiahk|great_lent)\x1f[^\x1f\x1e]{1,500}\x1f[^\x1f\x1e]{0,60}(\x1f[^\x1f\x1e]{0,500}\x1f[^\x1f\x1e]{0,60})?){0,39}')));
     }
@@ -875,10 +917,11 @@ service cloud.firestore {
     }
 
     function validProgramOptions(d, k) {
-      return d.get(k, null) == null
-        || (d[k] is list && d[k].size() <= 12
-            && (d[k].size() == 0
-                || d[k].join('\u001e').matches('[a-z0-9_-]{1,30}\x1f[^\x1f\x1e]{1,80}\x1f[^\x1f\x1e]{0,80}(\x1e[a-z0-9_-]{1,30}\x1f[^\x1f\x1e]{1,80}\x1f[^\x1f\x1e]{0,80}){0,11}')));
+      let v = d.get(k, null);
+      return v == null
+        || (v is list && v.size() <= 12
+            && (v.size() == 0
+                || v.join('\u001e').matches('[a-z0-9_-]{1,30}\x1f[^\x1f\x1e]{1,80}\x1f[^\x1f\x1e]{0,80}(\x1e[a-z0-9_-]{1,30}\x1f[^\x1f\x1e]{1,80}\x1f[^\x1f\x1e]{0,80}){0,11}')));
     }
 
     // Church events of the day (ADR-040): up to 20, each ONE string
@@ -1079,17 +1122,18 @@ service cloud.firestore {
       let old = resource == null ? {} : resource.data.get('pageHeaders', {});
       let changed = old is map ? h.diff(old).affectedKeys() : h.keys().toSet();
       return h is map
-        && h.keys().hasOnly(['about', 'schedule', 'education', 'activities', 'clinics', 'services', 'contact', 'ask', 'notifications'])
-        && (!changed.hasAny(['about']) || !('about' in h) || validPageHeader(h.about))
-        && (!changed.hasAny(['schedule']) || !('schedule' in h) || validPageHeader(h.schedule))
-        && (!changed.hasAny(['education']) || !('education' in h) || validPageHeader(h.education))
-        && (!changed.hasAny(['activities']) || !('activities' in h) || validPageHeader(h.activities))
-        && (!changed.hasAny(['clinics']) || !('clinics' in h) || validPageHeader(h.clinics))
-        && (!changed.hasAny(['services']) || !('services' in h) || validPageHeader(h.services))
-        && (!changed.hasAny(['contact']) || !('contact' in h) || validPageHeader(h.contact))
-        && (!changed.hasAny(['ask']) || !('ask' in h) || validPageHeader(h.ask))
-        // Notifications page (ADR-057): `in` on the set, the cheapest gate.
-        && (!('notifications' in changed) || !('notifications' in h) || validPageHeader(h.notifications));
+        && ((h.size() == 0 && (!(old is map) || old.size() == 0))
+            || (h.keys().hasOnly(['about', 'schedule', 'education', 'activities', 'clinics', 'services', 'contact', 'ask', 'notifications'])
+                && (!('about' in changed) || !('about' in h) || validPageHeader(h.about))
+                && (!('schedule' in changed) || !('schedule' in h) || validPageHeader(h.schedule))
+                && (!('education' in changed) || !('education' in h) || validPageHeader(h.education))
+                && (!('activities' in changed) || !('activities' in h) || validPageHeader(h.activities))
+                && (!('clinics' in changed) || !('clinics' in h) || validPageHeader(h.clinics))
+                && (!('services' in changed) || !('services' in h) || validPageHeader(h.services))
+                && (!('contact' in changed) || !('contact' in h) || validPageHeader(h.contact))
+                && (!('ask' in changed) || !('ask' in h) || validPageHeader(h.ask))
+                // Notifications page (ADR-057): `in` on the set, the cheapest gate.
+                && (!('notifications' in changed) || !('notifications' in h) || validPageHeader(h.notifications))));
     }
     // Exactly the 6 keys (the admin form always writes all six: size 6 and
     // each one read), all strings; titles <= 200, subtitles <= 300, intros
@@ -1127,12 +1171,18 @@ service cloud.firestore {
     // -------------------------------- admins --------------------------------
     match /admins/{uid} {
       allow read: if signedIn() && (request.auth.uid == uid || isOwner());
-      // Owners manage OTHER admins only: an owner can never demote or remove
-      // themselves, so the project always keeps at least one owner.
+      // Owners manage OTHER admins only: an owner can never stop, expire,
+      // demote or remove themselves, and owners cannot have expiresAt, so the
+      // project always keeps at least one owner.
       allow create, update: if isOwner() && request.auth.uid != uid
-        && request.resource.data.keys().hasOnly(['email', 'role', 'updatedAt', 'updatedBy'])
+        && request.resource.data.keys().hasOnly(['email', 'role', 'active', 'expiresAt', 'updatedAt', 'updatedBy'])
         && reqString(request.resource.data, 'email', 254)
         && request.resource.data.role in ['owner', 'editor']
+        && optBool(request.resource.data, 'active')
+        && optTimestamp(request.resource.data, 'expiresAt')
+        && (request.resource.data.role != 'owner'
+            || !('expiresAt' in request.resource.data)
+            || request.resource.data.expiresAt == null)
         && stampOk(request.resource.data);
       allow delete: if isOwner() && request.auth.uid != uid;
     }
@@ -1159,16 +1209,22 @@ service cloud.firestore {
     match /contact_messages/{id} {
       allow read, delete: if isAdmin();
       // Admins change the status (new / handled; bookings: new / contacted /
-      // confirmed / declined) and internal notes (<= 2000 chars) only.
-      allow update: if isAdmin()
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'adminNotes', 'updatedAt', 'updatedBy'])
-        && request.resource.data.status in ['new', 'handled', 'contacted', 'confirmed', 'declined']
-        && (!('adminNotes' in request.resource.data)
-            || (request.resource.data.adminNotes is string && request.resource.data.adminNotes.size() <= 2000))
-        && stampOk(request.resource.data);
+      // confirmed / declined), internal notes (<= 2000 chars), and soft-delete
+      // timestamp (deletedAt) only.
+      allow update: if isAdmin() && validContactMessageUpdate(request.resource.data);
       allow create: if validContactMessage(request.resource.data)
         && getAfter(/databases/$(database)/documents/meta/contact_rate).data.lastAt == request.time
         && getAfter(/databases/$(database)/documents/meta/contact_rate).data.get('lastMsgId', '') == id;
+    }
+
+    function validContactMessageUpdate(d) {
+      let changed = d.diff(resource.data).affectedKeys();
+      return changed.hasOnly(['status', 'adminNotes', 'deletedAt', 'updatedAt', 'updatedBy'])
+        && d.status in ['new', 'handled', 'contacted', 'confirmed', 'declined']
+        && (!('adminNotes' in d)
+            || (d.adminNotes is string && d.adminNotes.size() <= 2000))
+        && (!('deletedAt' in changed) || optTimestamp(d, 'deletedAt'))
+        && stampOk(d);
     }
 
     // ---------------------- web push (ADR-060) -----------------------

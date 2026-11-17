@@ -13,7 +13,9 @@ Read [README.md](README.md) first.
 - Every design choice is already made in the report (§٤–§١٠ of the README). The model implements; it does not
   decide.
 
-## ٢. تقسيم المكوّنات (Component approach)
+## ٢. تقسيم المكوّنات والتنفيذ المتسلسل (Component approach & sequential execution)
+
+PRs touching shared files (`collection_list.dart`, `doc_editor.dart`, `admin_schema.dart`) execute **strictly sequentially** in stack order (`3A` → `3B` → `3C` → ... → `3J`). Shared foundation components (`UnsavedGuard`, `PendingDelete`, `UnsavedBar` in 3A; `AdminStateSwitch` in 3B) land first at the base of the stack to eliminate merge conflicts across downstream PRs.
 
 Each stage file lists **packets**. A packet is one report item (or one half of it) and builds one small component
 with a stated interface. Shared components come first so that later packets only consume them.

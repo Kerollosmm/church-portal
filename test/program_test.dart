@@ -305,7 +305,8 @@ void main() {
     });
 
     test('Season settings screen: venues / audiences rows match the stored format and the rules', () {
-      expect(adminDestinations(AdminRoles.editor).map((d) => d.id), contains('seasonSettings'));
+      expect(adminDestinations(AdminRoles.owner).map((d) => d.id), contains('seasonSettings'));
+      expect(adminDestinations(AdminRoles.editor).map((d) => d.id), isNot(contains('seasonSettings')));
       expect(seasonSettingsDoc.path, 'settings/features');
       final block = rules.substring(rules.indexOf('function validFeatures('), rules.indexOf('function validProgramOptions('));
       // Only the venue / audience lists here; the season verse sets (ADR-042) have their own format and limits.

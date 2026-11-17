@@ -11,6 +11,7 @@ import '../../core/push_env.dart' show hasPendingWebPushSync, readWebPushStorage
 import '../../core/theme.dart';
 import '../../data/error_reporting.dart';
 import '../../data/web_push_repository.dart' deferred as web_push;
+import '../../domain/custom_content.dart';
 import '../../domain/features.dart';
 import '../../domain/item_detail.dart';
 import '../../domain/reminders.dart';
@@ -42,8 +43,18 @@ class NavItem {
 ({List<NavItem> categories, List<NavItem> pages}) customNavItems(WidgetRef ref) {
   final f = ref.watch(featuresProvider);
   // Each list follows its section switch (Sections.customSections / customPages).
-  final cats = f.enabled(Sections.customSections) ? ref.watch(categoriesProvider).value ?? const [] : const [];
-  final pages = f.enabled(Sections.customPages) ? ref.watch(customPagesProvider).value ?? const [] : const [];
+  final rawCats = f.enabled(Sections.customSections)
+      ? ref.watch(categoriesProvider).value ?? const <CustomCategory>[]
+      : const <CustomCategory>[];
+  final pages = f.enabled(Sections.customPages)
+      ? ref.watch(customPagesProvider).value ?? const <CustomPage>[]
+      : const <CustomPage>[];
+  final entries = f.enabled(Sections.customSections)
+      ? ref.watch(entriesProvider).value ?? const <CategoryEntry>[]
+      : const <CategoryEntry>[];
+  final cats = f.enabled(Sections.customSections)
+      ? publicNonEmptyCategories(rawCats, entries, pages)
+      : const <CustomCategory>[];
   return (
     categories: [
       for (final c in cats)
@@ -51,7 +62,7 @@ class NavItem {
     ],
     pages: [
       for (final p in pages)
-        if (p.showInNav)
+        if (p.inNav)
           NavItem('page-${p.slug}', p.path, Icons.article_rounded, labelAr: p.titleAr, labelEn: p.titleEn),
     ],
   );
@@ -336,14 +347,23 @@ class _AppShellState extends ConsumerState<AppShell> {
     // On mobile viewports (< 600 px), omit the language toggle from the AppBar
     // to reclaim horizontal space for the church title. The language toggle
     // is already available in the navigation drawer. On desktop (width >= 600),
-    // keep it visible in the AppBar actions.
-    final showBarLang = width >= 600;
+    // keep it visible in the AppBar actions when the English site is enabled.
+    final showBarLang = width >= 600 && features.englishEnabled;
     final tabW = wide ? 88.0 : (ultraNarrow ? 54.0 : 64.0);
     final tabH = wide ? 108.0 : (ultraNarrow ? 70.0 : 80.0);
     final tabStart = (showBack ? 48.0 : 0.0) + (wide ? 24.0 : 6.0);
     final titleSpacingVal = wide ? 24.0 : (showBack ? 0.0 : 6.0);
     final leadingEnd = showBack ? 48.0 : 0.0;
     final tabSpace = (tabStart + tabW + (wide ? 12.0 : 6.0)) - (leadingEnd + titleSpacingVal);
+
+    // Dynamic nav max width so that AppBar.title is guaranteed enough width
+    // for tabSpace + readable title slot across 1024px–1400px, avoiding clipping or starvation.
+    final otherActionsWidth =
+        (showBarLang ? 54.0 : 0.0) + (showMass ? (wide ? 166.0 : 54.0) : 0.0) + (wide ? 32.0 : 10.0);
+    final minTitleSlot = tabSpace + 200.0;
+    final maxNavWidth = wide
+        ? (width - titleSpacingVal - minTitleSlot - otherActionsWidth).clamp(200.0, width * 0.6)
+        : 0.0;
 
     final mainAppBar = AppBar(
       primary: !showTopBar,
@@ -366,7 +386,7 @@ class _AppShellState extends ConsumerState<AppShell> {
           // The seal hangs in the tab at the start corner: the title keeps
           // its room. Wide bars with many entries (or very large text)
           // leave little width: the name then disappears, never overflows.
-          if (c.maxWidth < tabSpace + 56) return SizedBox(width: c.maxWidth.clamp(0, tabSpace));
+          if (c.maxWidth < tabSpace + 36) return SizedBox(width: c.maxWidth.clamp(0, tabSpace));
           return Row(mainAxisSize: MainAxisSize.min, children: [
             SizedBox(width: tabSpace),
             // The full name is long: on wide screens show it under the short
@@ -377,7 +397,10 @@ class _AppShellState extends ConsumerState<AppShell> {
                     key: const Key('appBarShortTitle'),
                     maxLines: wide ? 1 : 2,
                     overflow: TextOverflow.ellipsis,
-                    style: displayStyle(context, size: wide ? 23 : (ultraNarrow ? 15 : 17), color: primary, height: ultraNarrow ? 1.15 : 1.25)),
+                    style: displayStyle(context,
+                        size: wide ? (width < 1150 ? 19 : 23) : (ultraNarrow ? 15 : 17),
+                        color: primary,
+                        height: ultraNarrow ? 1.15 : 1.25)),
                 if (wide)
                   Text(fullName,
                       maxLines: 1,
@@ -390,10 +413,11 @@ class _AppShellState extends ConsumerState<AppShell> {
       ),
       actions: [
         if (wide) ...[
-          // Capped and scrollable: very large text or long labels never
-          // overflow the bar (the title then falls back to the seal).
+          // Capped dynamically so AppBar.title maintains sufficient width:
+          // SingleChildScrollView ensures very large text or long labels
+          // never overflow the bar.
           ConstrainedBox(
-            constraints: BoxConstraints(maxWidth: width * 0.6),
+            constraints: BoxConstraints(maxWidth: maxNavWidth),
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: Row(mainAxisSize: MainAxisSize.min, children: [
@@ -486,7 +510,7 @@ class _AppShellState extends ConsumerState<AppShell> {
           ),
         ),
       ),
-      endDrawer: wide ? null : _AppDrawer(location: location, showAsk: showAsk),
+      endDrawer: wide ? null : _AppDrawer(location: location, showAsk: showAsk, showLang: features.englishEnabled),
       body: Stack(children: [
         const Positioned.fill(child: WarmBackdrop()),
         // Today layer (ADR-040): while the church is streaming,
@@ -729,7 +753,8 @@ class _HighlightButton extends StatelessWidget {
 class _AppDrawer extends ConsumerWidget {
   final String location;
   final bool showAsk;
-  const _AppDrawer({required this.location, required this.showAsk});
+  final bool showLang;
+  const _AppDrawer({required this.location, required this.showAsk, this.showLang = true});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -819,31 +844,32 @@ class _AppDrawer extends ConsumerWidget {
             const SizedBox(height: 6),
             if (church.isNotEmpty) group(context.tr('navChurch'), church),
             if (services.isNotEmpty) group(context.tr('churchServices'), services),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-              child: ListTile(
-                key: const Key('drawerLanguageToggle'),
-                minTileHeight: 48,
-                leading: Icon(Icons.language_rounded, color: primary, size: 22),
-                title: Text(context.tr('language'), style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
-                trailing: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: context.pal.surface,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: context.pal.hairline, width: 1.5),
+            if (showLang)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                child: ListTile(
+                  key: const Key('drawerLanguageToggle'),
+                  minTileHeight: 48,
+                  leading: Icon(Icons.language_rounded, color: primary, size: 22),
+                  title: Text(context.tr('language'), style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+                  trailing: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: context.pal.surface,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: context.pal.hairline, width: 1.5),
+                    ),
+                    child: Text(
+                      context.isAr ? 'EN' : 'ع',
+                      style: TextStyle(fontWeight: FontWeight.w700, color: context.pal.goldText, fontSize: 13),
+                    ),
                   ),
-                  child: Text(
-                    context.isAr ? 'EN' : 'ع',
-                    style: TextStyle(fontWeight: FontWeight.w700, color: context.pal.goldText, fontSize: 13),
-                  ),
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    ref.read(localeProvider.notifier).toggle();
+                  },
                 ),
-                onTap: () {
-                  Navigator.of(context).pop();
-                  ref.read(localeProvider.notifier).toggle();
-                },
               ),
-            ),
             const SizedBox(height: 16),
           ]),
         ),

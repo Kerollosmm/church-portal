@@ -7,35 +7,62 @@ import '../../core/l10n.dart';
 import '../../core/launch.dart';
 import '../../core/theme.dart';
 import '../../data/admin_repository.dart';
+import '../../domain/attention.dart';
+import '../../domain/cairo_time.dart';
 import '../../domain/contact_categories.dart';
 import '../../domain/features.dart';
+import '../../domain/models.dart';
+import '../../domain/rules.dart' show usableWhatsappLink;
+import '../widgets/cards.dart' show whatsappGreen;
+import 'admin_access.dart';
 import 'admin_schema.dart';
+import 'admin_strings.dart';
 import 'admin_validators.dart';
+import 'confirm_named.dart';
 import 'doc_editor.dart';
+import 'pending_delete.dart';
+import 'screen_header.dart';
+import 'state_switch.dart';
 
-/// Dashboard home: counts, quick links, latest edits.
+/// Dashboard home: "Needs your attention" summary, 6 quick task buttons, latest edits.
 class OverviewScreen extends StatefulWidget {
   final AdminBackend repo;
   final String role;
   final void Function(String screenId) onOpen;
-  const OverviewScreen({super.key, required this.repo, required this.role, required this.onOpen});
+  final DateTime Function()? now;
+  const OverviewScreen({
+    super.key,
+    required this.repo,
+    required this.role,
+    required this.onOpen,
+    this.now,
+  });
 
   @override
   State<OverviewScreen> createState() => _OverviewScreenState();
 }
 
 class _OverviewScreenState extends State<OverviewScreen> {
+  static final Set<String> _watchedNames = {
+    for (final c in adminCollections) c.name,
+    'contact_messages',
+  };
+  static const _maxRefreshInterval = Duration(minutes: 1);
+  static const _minRefreshDelay = Duration(milliseconds: 50);
+
   /// Latest docs per collection (null = still loading / failed).
   final Map<String, List<AdminDoc>?> _docs = {};
   final Set<String> _failed = {};
   AdminDoc? _features;
   bool _featuresLoaded = false;
   final List<StreamSubscription<Object?>> _subs = [];
+  Timer? _refreshTimer;
 
   @override
   void initState() {
     super.initState();
     _subscribe();
+    _rescheduleRefresh();
   }
 
   @override
@@ -50,6 +77,7 @@ class _OverviewScreenState extends State<OverviewScreen> {
       _featuresLoaded = false;
       _subscribe();
     }
+    _rescheduleRefresh();
   }
 
   void _cancel() {
@@ -57,13 +85,20 @@ class _OverviewScreenState extends State<OverviewScreen> {
       s.cancel();
     }
     _subs.clear();
+    _refreshTimer?.cancel();
+    _refreshTimer = null;
   }
 
   void _subscribe() {
-    final names = {for (final c in adminCollections) c.name, 'contact_messages'};
-    for (final n in names) {
+    for (final n in _watchedNames) {
       _subs.add(widget.repo.watch(n).listen(
-            (d) => setState(() => _docs[n] = d),
+            (d) {
+              setState(() {
+                _docs[n] = d;
+                _failed.remove(n);
+              });
+              if (n == 'alerts') _rescheduleRefresh();
+            },
             onError: (_) => setState(() => _failed.add(n)),
           ));
     }
@@ -71,9 +106,55 @@ class _OverviewScreenState extends State<OverviewScreen> {
           (d) => setState(() {
             _features = d;
             _featuresLoaded = true;
+            _failed.remove('settings/features');
           }),
           onError: (_) => setState(() => _failed.add('settings/features')),
         ));
+  }
+
+  void _retry() {
+    _cancel();
+    setState(() {
+      _docs.clear();
+      _failed.clear();
+      _features = null;
+      _featuresLoaded = false;
+    });
+    _subscribe();
+    _rescheduleRefresh();
+  }
+
+  List<Alert> _currentAlerts() => [
+        for (final d in _docs['alerts'] ?? const <AdminDoc>[])
+          if (!isSoftDeleted(d.data)) Alert.fromMap(d.id, d.data),
+      ];
+
+  void _rescheduleRefresh() {
+    _refreshTimer?.cancel();
+    _refreshTimer = null;
+    if (!mounted) return;
+    final nowUtc = (widget.now?.call() ?? DateTime.now()).toUtc();
+    var delay = _maxRefreshInterval;
+    for (final a in _currentAlerts()) {
+      final ends = a.endsAt?.toUtc();
+      if (!a.visible || !a.active || ends == null) continue;
+      final enterWindow = ends.subtract(const Duration(hours: 48));
+      if (enterWindow.isAfter(nowUtc)) {
+        final d = enterWindow.difference(nowUtc);
+        if (d < delay) delay = d;
+      }
+      final expireAt = ends.add(const Duration(milliseconds: 1));
+      if (expireAt.isAfter(nowUtc)) {
+        final d = expireAt.difference(nowUtc);
+        if (d < delay) delay = d;
+      }
+    }
+    if (delay < _minRefreshDelay) delay = _minRefreshDelay;
+    _refreshTimer = Timer(delay, () {
+      if (!mounted) return;
+      setState(() {});
+      _rescheduleRefresh();
+    });
   }
 
   @override
@@ -84,63 +165,237 @@ class _OverviewScreenState extends State<OverviewScreen> {
 
   @override
   Widget build(BuildContext context) {
+    registerAdminStrings();
     final onOpen = widget.onOpen;
     final messages = _docs['contact_messages'];
-    final newMessages = messages?.where((d) => messageIsOpen(d.data)).length ?? 0;
+    final newMessages = (messages ?? const <AdminDoc>[])
+        .where((d) => !isSoftDeleted(d.data) && messageIsOpen(d.data))
+        .length;
     final f = FeatureSettings.fromMap(_features?.data);
+    final alertsList = _currentAlerts();
+    var unconfirmed = 0;
+    String? unconfirmedTarget;
+    final unconfirmedByCollection = <String, ({int count, String label})>{};
+    var missingEnglish = 0;
+    String? missingEnglishTarget;
+    for (final c in adminCollections) {
+      final list = _docs[c.name];
+      if (list == null) continue;
+      final pairs = f.englishEnabled ? englishFieldPairs(c.fields) : const <(String, String)>[];
+      for (final d in list) {
+        if (!c.matches(d.data) || isSoftDeleted(d.data)) continue;
+        if (d.data['sample'] == true) {
+          unconfirmed++;
+          unconfirmedTarget ??= c.id;
+          final existing = unconfirmedByCollection[c.id];
+          unconfirmedByCollection[c.id] = (
+            count: (existing?.count ?? 0) + 1,
+            label: context.pick(c.labelAr, c.labelEn),
+          );
+        }
+        if (f.englishEnabled && docMissingEnglish(d.data, pairs)) {
+          missingEnglish++;
+          missingEnglishTarget ??= c.id;
+        }
+      }
+    }
+    String? unconfirmedSubtitle;
+    if (unconfirmedByCollection.length > 1) {
+      final sorted = unconfirmedByCollection.values.toList()..sort((a, b) => b.count.compareTo(a.count));
+      final top = sorted.first;
+      unconfirmedSubtitle = context.tr('att_unconfirmedBreakdown', {'c': '${top.count}', 'sec': top.label});
+    }
+    final currentNow = widget.now?.call() ?? DateTime.now();
+    final attention = attentionItems(
+      newMessages: newMessages,
+      alerts: alertsList,
+      unconfirmed: unconfirmed,
+      streamOn: f.today.liveEnabled,
+      streamUrl: f.today.liveUrl,
+      englishOn: f.englishEnabled,
+      missingEnglish: missingEnglish,
+      now: currentNow,
+      unconfirmedTarget: unconfirmedTarget ?? 'liturgies',
+      missingEnglishTarget: missingEnglishTarget ?? 'liturgies',
+    );
+    final hasError = _failed.isNotEmpty;
+    final ready = !hasError && _featuresLoaded && _watchedNames.every(_docs.containsKey);
+
     final edited = <(String, AdminDoc)>[
       for (final e in _docs.entries)
         if (e.key != 'contact_messages')
           for (final d in e.value ?? const <AdminDoc>[])
-            if (d.updatedAt != null) (e.key, d),
+            if (d.updatedAt != null && !isSoftDeleted(d.data)) (e.key, d),
     ]..sort((a, b) => b.$2.updatedAt!.compareTo(a.$2.updatedAt!));
+
     return Scaffold(
       backgroundColor: context.pal.background,
       body: ListView(padding: const EdgeInsets.all(16), children: [
-        Text(context.tr('overviewTitle'),
-            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: context.pal.primary)),
-        const SizedBox(height: 4),
-        Text(context.tr('overviewHint'), style: TextStyle(color: context.pal.muted)),
+        AdminScreenHeader(
+          title: context.tr('overviewTitle'),
+          help: context.tr('help_overview'),
+        ),
         const SizedBox(height: 16),
-        Wrap(spacing: 12, runSpacing: 12, children: [
-          _StatCard(
-            icon: Icons.mail_outline,
-            label: context.tr('newMessages'),
-            value: _failed.contains('contact_messages') ? '—' : (messages == null ? '…' : '$newMessages'),
-            color: newMessages > 0 ? context.pal.alert : context.pal.primary,
-            onTap: () => onOpen('messages'),
+        Text(
+          context.tr('attentionTitle'),
+          style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+        ),
+        const SizedBox(height: 8),
+        if (attention.isNotEmpty) ...[
+          Card(
+            key: const ValueKey('attention-section'),
+            margin: EdgeInsets.zero,
+            child: Column(
+              children: [
+                for (var i = 0; i < attention.length; i++) ...[
+                  if (i > 0) const Divider(height: 1),
+                  _attentionTile(
+                    context,
+                    attention[i],
+                    onOpen,
+                    subtitle: attention[i].kind == AttentionKind.unconfirmedData ? unconfirmedSubtitle : null,
+                  ),
+                ],
+              ],
+            ),
           ),
-          _StatCard(
-            icon: Icons.toggle_on_outlined,
-            label: context.tr('sectionsOn'),
-            value: _failed.contains('settings/features')
-                ? '—'
-                : (_featuresLoaded ? '${Sections.all.length - f.disabledCount}/${Sections.all.length}' : '…'),
+          if (hasError) const SizedBox(height: 8),
+        ],
+        if (hasError)
+          Card(
+            key: const ValueKey('attention-error'),
+            margin: EdgeInsets.zero,
+            color: context.pal.surfaceAlt,
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Row(
+                children: [
+                  Icon(Icons.error_outline, color: context.pal.alert),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      context.tr('attentionLoadError'),
+                      style: TextStyle(color: context.pal.alert, fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  TextButton.icon(
+                    key: const ValueKey('attention-retry'),
+                    onPressed: _retry,
+                    icon: const Icon(Icons.refresh, size: 18),
+                    label: Text(context.tr('retry')),
+                  ),
+                ],
+              ),
+            ),
+          )
+        else if (attention.isEmpty && ready)
+          Card(
+            key: const ValueKey('attention-all-clear'),
+            margin: EdgeInsets.zero,
+            color: context.pal.surfaceAlt,
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Row(
+                children: [
+                  Icon(Icons.check_circle_outline, color: context.pal.success),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      context.tr('attentionAllClear'),
+                      style: TextStyle(color: context.pal.success, fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          )
+        else if (attention.isEmpty)
+          const Card(
+            key: ValueKey('attention-loading'),
+            margin: EdgeInsets.zero,
+            child: Padding(
+              padding: EdgeInsets.all(14),
+              child: LinearProgressIndicator(),
+            ),
+          ),
+        const SizedBox(height: 20),
+        Text(
+          context.tr('quickTasksTitle'),
+          style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          key: const ValueKey('quick-tasks'),
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            _taskButton(
+              context,
+              key: const ValueKey('task-schedules'),
+              icon: Icons.access_time_outlined,
+              label: context.tr('task_schedules'),
+              onTap: () => onOpen('liturgies'),
+            ),
+            _taskButton(
+              context,
+              key: const ValueKey('task-announcement'),
+              icon: Icons.campaign_outlined,
+              label: context.tr('task_announcement'),
+              onTap: () => onOpen('app'),
+            ),
+            _taskButton(
+              context,
+              key: const ValueKey('task-inbox'),
+              icon: Icons.mark_email_unread_outlined,
+              label: context.tr('task_inbox'),
+              onTap: () => onOpen('messages'),
+            ),
+            _taskButton(
+              context,
+              key: const ValueKey('task-service'),
+              icon: Icons.volunteer_activism_outlined,
+              label: context.tr('task_service'),
+              onTap: () => onOpen('facilities'),
+            ),
+            _taskButton(
+              context,
+              key: const ValueKey('task-priest'),
+              icon: Icons.person_add_alt_1_outlined,
+              label: context.tr('task_priest'),
+              onTap: () => onOpen('priests'),
+            ),
+            _taskButton(
+              context,
+              key: const ValueKey('task-donations'),
+              icon: Icons.article_outlined,
+              label: context.tr('task_donations'),
+              onTap: () => onOpen('pages'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 20),
+        Card(
+          key: const ValueKey('sections-summary'),
+          margin: EdgeInsets.zero,
+          child: ListTile(
+            leading: Icon(Icons.toggle_on_outlined, color: context.pal.primary),
+            title: Text(context.tr('sectionsSummary'), style: const TextStyle(fontWeight: FontWeight.w700)),
+            subtitle: Text(
+              _failed.contains('settings/features')
+                  ? '—'
+                  : (_featuresLoaded
+                      ? '${context.tr('sectionsOn')}: ${Sections.all.length - f.disabledCount}/${Sections.all.length}'
+                      : '…'),
+            ),
+            trailing: TextButton.icon(
+              icon: const Icon(Icons.open_in_new, size: 18),
+              label: Text(context.tr('openSite')),
+              onPressed: () => openUrl(Uri.base.resolve('/').toString()),
+            ),
             onTap: () => onOpen('features'),
           ),
-          for (final c in adminCollections) _countCard(context, c),
-        ]),
-        const SizedBox(height: 20),
-        Text(context.tr('quickLinks'), style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
-        const SizedBox(height: 8),
-        Wrap(spacing: 8, runSpacing: 8, children: [
-          ActionChip(
-              avatar: const Icon(Icons.church_outlined, size: 18),
-              label: Text(context.tr('churchInfo')),
-              onPressed: () => onOpen('church')),
-          ActionChip(
-              avatar: const Icon(Icons.toggle_on_outlined, size: 18),
-              label: Text(context.tr('featuresAndHome')),
-              onPressed: () => onOpen('features')),
-          ActionChip(
-              avatar: const Icon(Icons.campaign_outlined, size: 18),
-              label: Text(context.tr('alertsShort')),
-              onPressed: () => onOpen('alerts')),
-          ActionChip(
-              avatar: const Icon(Icons.open_in_new, size: 18),
-              label: Text(context.tr('openSite')),
-              onPressed: () => openUrl(Uri.base.resolve('/').toString())),
-        ]),
+        ),
         const SizedBox(height: 20),
         Text(context.tr('recentEdits'), style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
         const SizedBox(height: 8),
@@ -162,23 +417,57 @@ class _OverviewScreenState extends State<OverviewScreen> {
     );
   }
 
-  Widget _countCard(BuildContext context, CollectionDef def) {
-    final all = _docs[def.name];
-    final docs = (all ?? const <AdminDoc>[]).where((d) => def.matches(d.data)).toList();
-    final hidden = docs.where((d) => d.data['visible'] == false).length;
-    final pending = docs.where((d) => d.data['sample'] == true).length;
-    final sub = [
-      if (hidden > 0) '${context.tr('hidden')}: $hidden',
-      if (pending > 0) '${context.tr('unconfirmed')}: $pending',
-    ].join(' • ');
-    return _StatCard(
-      icon: adminIcon(def.icon),
-      label: context.pick(def.labelAr, def.labelEn),
-      value: _failed.contains(def.name) ? '—' : (all == null ? '…' : '${docs.length}'),
-      sub: sub.isEmpty ? null : sub,
-      onTap: () => widget.onOpen(def.id),
+  Widget _attentionTile(BuildContext context, AttentionItem item, void Function(String) onOpen, {String? subtitle}) {
+    final (IconData icon, Color color, String label) = switch (item.kind) {
+      AttentionKind.newMessages => (
+          Icons.mail_outline,
+          context.pal.alert,
+          context.tr('att_newMessages', {'n': '${item.count}'}),
+        ),
+      AttentionKind.expiringAlerts => (
+          Icons.campaign_outlined,
+          context.pal.goldText,
+          context.tr('att_expiringAlerts', {'n': '${item.count}'}),
+        ),
+      AttentionKind.unconfirmedData => (
+          Icons.fact_check_outlined,
+          context.pal.goldText,
+          context.tr('att_unconfirmedData', {'n': '${item.count}'}),
+        ),
+      AttentionKind.streamWithoutLink => (
+          Icons.live_tv_outlined,
+          context.pal.alert,
+          context.tr('att_streamWithoutLink'),
+        ),
+      AttentionKind.missingEnglish => (
+          Icons.translate_outlined,
+          context.pal.primary,
+          context.tr('att_missingEnglish', {'n': '${item.count}'}),
+        ),
+    };
+    return ListTile(
+      key: ValueKey('attention-${item.kind.name}'),
+      leading: Icon(icon, color: color),
+      title: Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
+      subtitle: subtitle == null ? null : Text(subtitle, style: TextStyle(color: context.pal.muted, fontSize: 12)),
+      trailing: const Icon(Icons.chevron_right),
+      onTap: () => onOpen(item.targetScreenId),
     );
   }
+
+  Widget _taskButton(
+    BuildContext context, {
+    required Key key,
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) =>
+      FilledButton.tonalIcon(
+        key: key,
+        onPressed: onTap,
+        icon: Icon(icon, size: 18),
+        label: Text(label),
+      );
 
   static String _iconFor(String col) {
     for (final c in adminCollections) {
@@ -194,44 +483,6 @@ class _OverviewScreenState extends State<OverviewScreen> {
     }
     return d.id;
   }
-}
-
-class _StatCard extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String value;
-  final String? sub;
-  final VoidCallback onTap;
-  final Color? color;
-  const _StatCard(
-      {required this.icon,
-      required this.label,
-      required this.value,
-      required this.onTap,
-      this.sub,
-      this.color});
-
-  @override
-  Widget build(BuildContext context) => SizedBox(
-        width: 190,
-        child: Card(
-          child: InkWell(
-            borderRadius: BorderRadius.circular(16),
-            onTap: onTap,
-            child: Padding(
-              padding: const EdgeInsets.all(14),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Icon(icon, color: color ?? context.pal.primary),
-                const SizedBox(height: 6),
-                Text(value, style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: color ?? context.pal.primary)),
-                Text(label,
-                    maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600)),
-                if (sub != null) Text(sub!, style: TextStyle(color: context.pal.muted, fontSize: 12)),
-              ]),
-            ),
-          ),
-        ),
-      );
 }
 
 IconData adminIcon(String name) => switch (name) {
@@ -262,7 +513,17 @@ class ChurchInfoScreen extends StatefulWidget {
 
   /// Optional widget above the form (e.g. the assistant's status card).
   final Widget? header;
-  const ChurchInfoScreen({super.key, required this.repo, this.doc = churchInfoDoc, this.header});
+
+  /// Whether to render the screen title and one-line help header (P2-19).
+  final bool showHeader;
+
+  const ChurchInfoScreen({
+    super.key,
+    required this.repo,
+    this.doc = churchInfoDoc,
+    this.header,
+    this.showHeader = true,
+  });
 
   @override
   State<ChurchInfoScreen> createState() => _ChurchInfoScreenState();
@@ -270,6 +531,29 @@ class ChurchInfoScreen extends StatefulWidget {
 
 class _ChurchInfoScreenState extends State<ChurchInfoScreen> {
   late Stream<AdminDoc?> _stream = widget.repo.watchDoc(widget.doc.path);
+  StreamSubscription<AdminDoc?>? _featuresSub;
+  bool _englishEnabled = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _bindFeatures();
+  }
+
+  void _bindFeatures() {
+    _featuresSub?.cancel();
+    _featuresSub = null;
+    _englishEnabled = true;
+    if (widget.doc.path == 'settings/features') return;
+    _featuresSub = widget.repo.watchDoc('settings/features').listen(
+      (d) {
+        if (!mounted) return;
+        final next = FeatureSettings.fromMap(d?.data).englishEnabled;
+        if (next != _englishEnabled) setState(() => _englishEnabled = next);
+      },
+      onError: (_) {},
+    );
+  }
 
   @override
   void didUpdateWidget(covariant ChurchInfoScreen oldWidget) {
@@ -285,14 +569,23 @@ class _ChurchInfoScreenState extends State<ChurchInfoScreen> {
       _shown = null;
       _loaded = false;
       _editorKey = GlobalKey<DocEditorState>();
+      _bindFeatures();
     }
   }
+
+  @override
+  void dispose() {
+    _featuresSub?.cancel();
+    super.dispose();
+  }
+
   GlobalKey<DocEditorState> _editorKey = GlobalKey<DocEditorState>();
   AdminDoc? _shown;
   bool _loaded = false;
 
   @override
   Widget build(BuildContext context) {
+    registerAdminStrings();
     return StreamBuilder<AdminDoc?>(
       // A new stream (another backend) gets a fresh StreamBuilder: a reused one
       // keeps the old backend's last snapshot while waiting, and that stale
@@ -307,19 +600,31 @@ class _ChurchInfoScreenState extends State<ChurchInfoScreen> {
         final latest = snap.data;
         final changed = !_loaded || latest?.updatedAt != _shown?.updatedAt || (latest == null) != (_shown == null);
         final editor = _editorKey.currentState;
-        final dirty = editor != null && editor.dirty && !editor.saving;
-        if (changed && !dirty) {
+        final saving = editor?.saving ?? false;
+        final dirty = editor?.dirty ?? false;
+        final echo =
+            _loaded && editor != null && isEchoOfEditor(_shown?.data ?? const {}, latest?.data, editor.collect());
+        if (changed && (!dirty && !saving || echo)) {
           // The snapshot of our own save (only metadata or the values the form
           // already holds changed) keeps the form and its scroll position.
-          final echo =
-              _loaded && editor != null && isEchoOfEditor(_shown?.data ?? const {}, latest?.data, editor.collect());
           if (_loaded && !echo) _editorKey = GlobalKey<DocEditorState>();
           _shown = latest;
           _loaded = true;
         }
-        final stale = changed && dirty;
+        final stale = changed && (dirty || saving) && !echo;
         final doc = _shown;
+        final englishEnabled = widget.doc.path == 'settings/features'
+            ? FeatureSettings.fromMap(doc?.data).englishEnabled
+            : _englishEnabled;
+        final title = widget.showHeader ? context.pick(widget.doc.labelAr, widget.doc.labelEn) : '';
+        final help = widget.showHeader ? context.pick(widget.doc.helpAr, widget.doc.helpEn) : '';
         return Column(children: [
+          if (widget.showHeader && widget.header != null)
+            AdminScreenHeader(
+              title: title,
+              help: help,
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+            ),
           ?widget.header,
           if (stale)
             MaterialBanner(
@@ -345,10 +650,12 @@ class _ChurchInfoScreenState extends State<ChurchInfoScreen> {
           Expanded(
             child: DocEditor(
               key: _editorKey,
-              title: context.pick(widget.doc.labelAr, widget.doc.labelEn),
+              title: widget.showHeader && widget.header == null ? title : '',
+              help: widget.showHeader && widget.header == null ? help : '',
               fields: widget.doc.fields,
               data: doc?.data ?? const {},
               popOnSave: false,
+              englishEnabled: englishEnabled,
               onSave: (data) => widget.repo.saveDoc(widget.doc.path, data),
             ),
           ),
@@ -374,8 +681,36 @@ class MessagesScreen extends StatefulWidget {
 class _MessagesScreenState extends State<MessagesScreen> {
   String _filter = 'new';
   String _box = 'all';
+  final _pendingDelete = PendingDelete();
+  final Set<String> _purging = {};
+  static const _messagesDef = CollectionDef('contact_messages', '', '', [], []);
   late Stream<List<AdminDoc>> _stream = widget.repo.watch('contact_messages');
   late Stream<AdminDoc?> _config = widget.repo.watchDoc('settings/contact');
+  ScaffoldFeatureController<SnackBar, SnackBarClosedReason>? _undoSnackBarController;
+
+  @override
+  void dispose() {
+    _pendingDelete.dispose();
+    _undoSnackBarController?.close();
+    super.dispose();
+  }
+
+  void _checkLazyPurge(List<AdminDoc> docs) {
+    final now = DateTime.now().toUtc();
+    if (docs.any((d) => isExpiredSoftDelete(d.data, now) && !_pendingDelete.isPending(d.id))) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          purgeExpiredSoftDeletes(
+            widget.repo,
+            _messagesDef,
+            docs,
+            isLocalPending: _pendingDelete.isPending,
+            purging: _purging,
+          );
+        }
+      });
+    }
+  }
 
   @override
   void didUpdateWidget(covariant MessagesScreen oldWidget) {
@@ -389,6 +724,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    registerAdminStrings();
     return Scaffold(
       backgroundColor: context.pal.background,
       body: StreamBuilder<AdminDoc?>(
@@ -416,7 +752,9 @@ class _MessagesScreenState extends State<MessagesScreen> {
   }
 
   Widget _body(BuildContext context, ContactSettings cfg, List<AdminDoc> docs) {
-    final all = [...docs]..sort((a, b) {
+    _checkLazyPurge(docs);
+    final visible = docs.where((d) => !isSoftDeleted(d.data) && !_pendingDelete.isPending(d.id)).toList();
+    final all = [...visible]..sort((a, b) {
         final ta = a.data['createdAt'], tb = b.data['createdAt'];
         if (ta is DateTime && tb is DateTime) return tb.compareTo(ta);
         return ta is DateTime ? -1 : (tb is DateTime ? 1 : 0);
@@ -448,32 +786,50 @@ class _MessagesScreenState extends State<MessagesScreen> {
           labelStyle: TextStyle(color: selected ? context.pal.onBar : context.pal.primary),
           onSelected: (_) => onTap(),
         );
-    return Column(children: [
-      Padding(
-        padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
-        child: Wrap(spacing: 6, runSpacing: 6, children: [
-          for (final b in boxes)
-            chip(b.$1, open(b.$1) > 0 ? '${b.$2} (${open(b.$1)})' : b.$2, box == b.$1, () => setState(() => _box = b.$1),
-                key: ValueKey('box-${b.$1}')),
-        ]),
-      ),
-      Padding(
-        padding: const EdgeInsets.all(12),
-        child: Wrap(spacing: 6, children: [
-          for (final f in ['new', 'handled', 'all'])
-            chip(f, context.tr('msg_$f'), _filter == f, () => setState(() => _filter = f), key: ValueKey('filter-$f')),
-        ]),
-      ),
-      Expanded(
-        child: list.isEmpty
-            ? Center(child: Text(context.tr('noMessages')))
-            : ListView.builder(
-                padding: const EdgeInsets.fromLTRB(12, 0, 12, 40),
-                itemCount: list.length,
-                itemBuilder: (context, i) => _message(context, cfg, list[i]),
+    return CustomScrollView(
+      slivers: [
+        SliverToBoxAdapter(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              AdminScreenHeader(
+                title: context.tr('messagesTitle'),
+                help: context.tr('help_messages'),
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
               ),
-      ),
-    ]);
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+                child: Wrap(spacing: 6, runSpacing: 6, children: [
+                  for (final b in boxes)
+                    chip(b.$1, open(b.$1) > 0 ? '${b.$2} (${open(b.$1)})' : b.$2, box == b.$1, () => setState(() => _box = b.$1),
+                        key: ValueKey('box-${b.$1}')),
+                ]),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(12),
+                child: Wrap(spacing: 6, children: [
+                  for (final f in ['new', 'handled', 'all'])
+                    chip(f, context.tr('msg_$f'), _filter == f, () => setState(() => _filter = f), key: ValueKey('filter-$f')),
+                ]),
+              ),
+            ],
+          ),
+        ),
+        if (list.isEmpty)
+          SliverFillRemaining(
+            hasScrollBody: false,
+            child: Center(child: Text(context.tr('noMessages'))),
+          )
+        else
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 40),
+            sliver: SliverList.builder(
+              itemCount: list.length,
+              itemBuilder: (context, i) => _message(context, cfg, list[i]),
+            ),
+          ),
+      ],
+    );
   }
 
   Widget _message(BuildContext context, ContactSettings cfg, AdminDoc d) {
@@ -483,6 +839,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
     final open = messageIsOpen(m);
     final created = m['createdAt'];
     final phone = (m['phone'] ?? '').toString();
+    final waUrl = usableWhatsappLink(phone);
     final email = (m['email'] ?? '').toString();
     final notes = (m['adminNotes'] ?? '').toString();
     final cat = cfg.bySlot(m['category'] is String ? m['category'] as String : 'c1');
@@ -537,9 +894,17 @@ class _MessagesScreenState extends State<MessagesScreen> {
           Wrap(spacing: 8, runSpacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: [
             if (phone.isNotEmpty)
               ActionChip(
+                key: ValueKey('msgCall-${d.id}'),
                 avatar: const Icon(Icons.call, size: 16),
                 label: Text(phone, textDirection: TextDirection.ltr),
                 onPressed: () => callPhone(phone),
+              ),
+            if (waUrl != null)
+              ActionChip(
+                key: ValueKey('msgWhatsApp-${d.id}'),
+                avatar: const Icon(Icons.chat_rounded, size: 16, color: whatsappGreen),
+                label: Text(context.tr('whatsapp')),
+                onPressed: () => openUrl(waUrl),
               ),
             if (email.isNotEmpty)
               ActionChip(
@@ -573,12 +938,15 @@ class _MessagesScreenState extends State<MessagesScreen> {
                   onChanged: (v) => v == null ? null : _update(context, d, {'status': v}),
                 ),
               ])
-            else
+            else if (open)
               TextButton.icon(
-                onPressed: () => _update(context, d, {'status': open ? MessageStatus.handled : MessageStatus.newMsg}),
-                icon: Icon(open ? Icons.check_circle_outline : Icons.undo),
-                label: Text(context.tr(open ? 'markHandled' : 'markNew')),
-              ),
+                key: ValueKey('msgToggleStatus-${d.id}'),
+                onPressed: () => _update(context, d, {'status': MessageStatus.handled}),
+                icon: const Icon(Icons.check_circle_outline),
+                label: Text(context.tr('markHandled')),
+              )
+            else
+              const SizedBox.shrink(),
             Row(mainAxisSize: MainAxisSize.min, children: [
               IconButton(
                 key: ValueKey('notes-${d.id}'),
@@ -597,6 +965,36 @@ class _MessagesScreenState extends State<MessagesScreen> {
                 icon: Icon(Icons.delete_outline, color: context.pal.alert),
                 onPressed: () => _delete(context, d),
               ),
+              if (!booking && !open)
+                IconButton(
+                  key: ValueKey('msgMore-${d.id}'),
+                  tooltip: context.tr('moreActions'),
+                  icon: const Icon(Icons.more_vert),
+                  onPressed: () async {
+                    final action = await showDialog<String>(
+                      context: context,
+                      builder: (ctx) => SimpleDialog(
+                        title: Text(ctx.tr('moreActions')),
+                        children: [
+                          SimpleDialogOption(
+                            key: ValueKey('msgMarkNew-${d.id}'),
+                            onPressed: () => Navigator.pop(ctx, 'markNew'),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.refresh, size: 18),
+                                const SizedBox(width: 8),
+                                Flexible(child: Text(ctx.tr('markNew'))),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (action == 'markNew' && context.mounted) {
+                      await _update(context, d, {'status': MessageStatus.newMsg});
+                    }
+                  },
+                ),
             ]),
           ]),
         ]),
@@ -616,22 +1014,83 @@ class _MessagesScreenState extends State<MessagesScreen> {
     try {
       await widget.repo.update('contact_messages', d.id, data);
     } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text(failed.replaceAll('{e}', '$e'))));
+      messenger.showSnackBar(SnackBar(content: Text(failed.replaceAll('{e}', formatAdminError(e)))));
     }
   }
 
   Future<void> _delete(BuildContext context, AdminDoc d) async {
-    final ok = await confirmDialog(context, context.tr('confirmDeleteMessage'));
+    final m = d.data;
+    final anonymous = m['anonymous'] == true || (m['name'] as String?)?.trim().isEmpty != false;
+    final sender = anonymous ? context.tr('anonymousSender') : '${m['name'] ?? ''}'.trim();
+    final ok = await confirmNamedAction(
+      context,
+      summary: '«$sender»\n\n${context.tr('confirmDeleteMessage')}',
+      actionLabel: context.tr('delete'),
+      destructive: true,
+    );
     if (!ok || !context.mounted) return;
     final messenger = ScaffoldMessenger.of(context);
-    final deleted = context.tr('deleted');
-    final failed = context.tr('deleteFailed', {'e': '{e}'});
+    final failedMsg = context.tr('deleteFailed', {'e': '{e}'});
+    final id = d.id;
+
+    final undoText = context.tr('deletedUndo', {'n': sender});
+    final undoLabel = context.tr('undo');
+
     try {
-      await widget.repo.delete('contact_messages', d.id);
-      messenger.showSnackBar(SnackBar(content: Text(deleted)));
+      await widget.repo.update('contact_messages', id, {'deletedAt': DateTime.now().toUtc()});
     } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text(failed.replaceAll('{e}', '$e'))));
+      messenger.showSnackBar(SnackBar(content: Text(failedMsg.replaceAll('{e}', formatAdminError(e)))));
+      return;
     }
+
+    if (!mounted) return;
+
+    setState(() {
+      _pendingDelete.schedule(id, () async {
+        try {
+          await widget.repo.delete('contact_messages', id);
+        } catch (e) {
+          try {
+            await widget.repo.update('contact_messages', id, {'deletedAt': null});
+          } catch (_) {}
+          if (!mounted) return;
+          setState(() {});
+          messenger.showSnackBar(SnackBar(content: Text(failedMsg.replaceAll('{e}', formatAdminError(e)))));
+        }
+      });
+    });
+
+    messenger.removeCurrentSnackBar();
+    final undoController = messenger.showSnackBar(
+      SnackBar(
+        duration: const Duration(seconds: 10),
+        persist: false,
+        content: Text(undoText),
+        action: SnackBarAction(
+          label: undoLabel,
+          onPressed: () async {
+            _undoSnackBarController = null;
+            if (_pendingDelete.undo(id)) {
+              messenger.removeCurrentSnackBar();
+              if (mounted) setState(() {});
+              try {
+                await widget.repo.update('contact_messages', id, {'deletedAt': null});
+              } catch (e) {
+                if (mounted) {
+                  messenger.showSnackBar(SnackBar(content: Text(failedMsg.replaceAll('{e}', formatAdminError(e)))));
+                }
+              }
+            }
+          },
+        ),
+      ),
+    );
+    _undoSnackBarController = undoController;
+    undoController.closed.then((_) {
+      if (identical(_undoSnackBarController, undoController)) {
+        _undoSnackBarController = null;
+      }
+    });
   }
 }
 
@@ -727,6 +1186,7 @@ class _AdminsScreenState extends State<AdminsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    registerAdminStrings();
     return Scaffold(
       backgroundColor: context.pal.background,
       floatingActionButton: FloatingActionButton.extended(
@@ -745,6 +1205,11 @@ class _AdminsScreenState extends State<AdminsScreen> {
           if (!snap.hasData) return const Center(child: CircularProgressIndicator());
           final admins = [...snap.data!]..sort((a, b) => '${a.data['email']}'.compareTo('${b.data['email']}'));
           return ListView(padding: const EdgeInsets.fromLTRB(12, 12, 12, 90), children: [
+            AdminScreenHeader(
+              title: context.tr('adminsTitle'),
+              help: context.tr('help_admins'),
+              padding: const EdgeInsets.fromLTRB(4, 4, 4, 10),
+            ),
             Card(
               color: context.pal.surfaceAlt,
               child: Padding(
@@ -763,47 +1228,153 @@ class _AdminsScreenState extends State<AdminsScreen> {
   Widget _tile(BuildContext context, AdminDoc a) {
     final self = a.id == widget.selfUid;
     final role = a.data['role'] == AdminRoles.owner ? AdminRoles.owner : AdminRoles.editor;
+    final active = a.active;
+    final expiresAt = a.expiresAt;
+    final nowUtc = DateTime.now().toUtc();
+    final expired = expiresAt != null && !nowUtc.isBefore(expiresAt.toUtc());
+    final inactive = !active || expired;
+    final expiryStr = expiresAt == null ? '' : fmtDate(CairoTime.fromInstant(expiresAt));
     return Card(
+      key: ValueKey('admin-card-${a.id}'),
       margin: const EdgeInsets.only(bottom: 8),
       child: ListTile(
-        leading: Icon(role == AdminRoles.owner ? Icons.workspace_premium_outlined : Icons.edit_note,
-            color: context.pal.primary),
-        title: Text('${a.data['email'] ?? ''}${self ? ' (${context.tr('you')})' : ''}', textDirection: TextDirection.ltr),
-        // The role menu and remove button wrap under the UID (phones / large text).
+        leading: Icon(
+          role == AdminRoles.owner ? Icons.workspace_premium_outlined : Icons.edit_note,
+          color: inactive ? context.pal.muted : context.pal.primary,
+        ),
+        title: Text(
+          '${a.data['email'] ?? ''}${self ? ' (${context.tr('you')})' : ''}',
+          textDirection: TextDirection.ltr,
+          style: inactive ? TextStyle(color: context.pal.muted) : null,
+        ),
+        // The role menu, status switch, expiry picker and remove button wrap cleanly (phones / large text).
         subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           SelectableText('UID: ${a.id}', style: const TextStyle(fontSize: 11)),
-          Wrap(spacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
-          // Long role labels ellipsize instead of overflowing at 320 px / 200%.
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 280),
-            child: DropdownButton<String>(
-            isExpanded: true,
-            value: role,
-            onChanged: self
-                ? null
-                : (v) => v == null ? null : _guard(context, () => widget.repo.setAdmin(a.id, email: '${a.data['email'] ?? ''}', role: v)),
-            items: [
-              for (final r in AdminRoles.all)
-                DropdownMenuItem(value: r, child: Text(context.tr('role_$r'), overflow: TextOverflow.ellipsis)),
-            ],
-          ),
-          ),
-          IconButton(
-            tooltip: context.tr('removeAdmin'),
-            icon: Icon(Icons.person_remove_outlined, color: self ? context.pal.muted : context.pal.alert),
-            onPressed: self
-                ? null
-                : () async {
-                    if (await confirmDialog(context, context.tr('confirmRemoveAdmin'), action: context.tr('removeAdmin')) &&
-                        context.mounted) {
-                      await _guard(context, () => widget.repo.removeAdmin(a.id));
-                    }
-                  },
-          ),
+          const SizedBox(height: 6),
+          Wrap(spacing: 8, runSpacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: [
+            // Long role labels ellipsize instead of overflowing at 320 px / 200%.
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 260),
+              child: DropdownButton<String>(
+                isExpanded: true,
+                value: role,
+                onChanged: self
+                    ? null
+                    : (v) => v == null ? null : _guard(context, () => widget.repo.setAdminRole(a, v)),
+                items: [
+                  for (final r in AdminRoles.all)
+                    DropdownMenuItem(value: r, child: Text(context.tr('role_$r'), overflow: TextOverflow.ellipsis)),
+                ],
+              ),
+            ),
+            if (self)
+              Container(
+                key: ValueKey('admin-self-active-${a.id}'),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: context.pal.primary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: context.pal.primary.withValues(alpha: 0.3)),
+                ),
+                child: Wrap(
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 6,
+                  runSpacing: 2,
+                  children: [
+                    Icon(Icons.verified_user_outlined, size: 16, color: context.pal.primary),
+                    Text(
+                      context.tr('selfActiveTag'),
+                      style: TextStyle(
+                        color: context.pal.primary,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            else
+              AdminStateSwitch(
+                key: ValueKey('admin-active-${a.id}'),
+                value: active,
+                onLabel: context.tr('activeStatus'),
+                offLabel: context.tr('stoppedStatus'),
+                onChanged: (next) => _toggleActive(context, a, next),
+              ),
+            if (role != AdminRoles.owner || expiresAt != null)
+              ActionChip(
+                key: ValueKey('admin-expiry-${a.id}'),
+                avatar: Icon(Icons.event_outlined, size: 18, color: expired ? context.pal.alert : context.pal.primary),
+                label: Text(
+                  expiresAt == null
+                      ? context.tr('adminNoExpiry')
+                      : context.tr(expired ? 'adminExpiredOn' : 'adminExpiresOn', {'d': expiryStr}),
+                  overflow: TextOverflow.ellipsis,
+                  style: expired ? TextStyle(color: context.pal.alert, fontWeight: FontWeight.w700) : null,
+                ),
+                onPressed: (self || role == AdminRoles.owner) ? null : () => _pickExpiry(context, a),
+              ),
+            if (expiresAt != null && !self)
+              IconButton(
+                key: ValueKey('admin-clear-expiry-${a.id}'),
+                tooltip: context.tr('clearEndDate'),
+                icon: const Icon(Icons.close, size: 18),
+                onPressed: () => _guard(
+                  context,
+                  () => widget.repo.setAdminStatus(a.id, clearExpiresAt: true),
+                ),
+              ),
+            IconButton(
+              tooltip: context.tr('removeAdmin'),
+              icon: Icon(Icons.person_remove_outlined, color: self ? context.pal.muted : context.pal.alert),
+              onPressed: self
+                  ? null
+                  : () async {
+                      final email = a.data['email'] ?? a.id;
+                      final ok = await confirmNamedAction(
+                        context,
+                        summary: '$email\n\n${context.tr('confirmRemoveAdmin')}',
+                        actionLabel: context.tr('removeAdmin'),
+                        destructive: true,
+                      );
+                      if (ok && context.mounted) {
+                        await _guard(context, () => widget.repo.removeAdmin(a.id));
+                      }
+                    },
+            ),
           ]),
         ]),
       ),
     );
+  }
+
+  Future<void> _toggleActive(BuildContext context, AdminDoc a, bool next) async {
+    final email = '${a.data['email'] ?? a.id}';
+    final ok = await confirmNamedAction(
+      context,
+      summary: '$email\n\n${context.tr(next ? 'confirmResumeAdmin' : 'confirmPauseAdmin')}',
+      actionLabel: context.tr(next ? 'resumeAdmin' : 'pauseAdmin'),
+      destructive: !next,
+    );
+    if (ok && context.mounted) {
+      await _guard(context, () => widget.repo.setAdminStatus(a.id, active: next));
+    }
+  }
+
+  Future<void> _pickExpiry(BuildContext context, AdminDoc a) async {
+    final existing = a.expiresAt;
+    final initial = existing != null ? CairoTime.fromInstant(existing) : CairoTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: DateTime(initial.year, initial.month, initial.day),
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2100),
+    );
+    if (picked == null || !context.mounted) return;
+    final endOfDayUtc = CairoTime.at(picked.year, picked.month, picked.day, 23 * 60 + 59)
+        .toUtc()
+        .add(const Duration(seconds: 59));
+    await _guard(context, () => widget.repo.setAdminStatus(a.id, expiresAt: endOfDayUtc));
   }
 
   Future<void> _guard(BuildContext context, Future<void> Function() op) async {
@@ -814,7 +1385,7 @@ class _AdminsScreenState extends State<AdminsScreen> {
       await op();
       messenger.showSnackBar(SnackBar(content: Text(ok)));
     } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text(failed.replaceAll('{e}', '$e'))));
+      messenger.showSnackBar(SnackBar(content: Text(failed.replaceAll('{e}', formatAdminError(e)))));
     }
   }
 

@@ -11,7 +11,81 @@ import '../../domain/models.dart';
 import '../../domain/season_preset.dart';
 import '../../domain/time_format.dart';
 import '../widgets/common.dart' show localDigits;
+import 'admin_schema.dart';
+import 'admin_validators.dart';
+import 'admin_strings.dart';
+import 'collection_list.dart';
 import 'doc_editor.dart' show choiceLabel;
+import 'screen_header.dart';
+
+/// Combined «المواسم» screen merging the seasons list and pre-season preset
+/// checklist into two tabs (P2-18).
+class SeasonsHubScreen extends StatefulWidget {
+  final AdminBackend repo;
+  final int initialTab;
+  final DateTime Function()? now;
+  const SeasonsHubScreen({super.key, required this.repo, this.initialTab = 0, this.now});
+
+  @override
+  State<SeasonsHubScreen> createState() => _SeasonsHubScreenState();
+}
+
+class _SeasonsHubScreenState extends State<SeasonsHubScreen> with SingleTickerProviderStateMixin {
+  late final TabController _tabs = TabController(length: 2, vsync: this, initialIndex: widget.initialTab.clamp(0, 1));
+
+  @override
+  void didUpdateWidget(covariant SeasonsHubScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.initialTab != widget.initialTab) {
+      final target = widget.initialTab.clamp(0, 1);
+      if (_tabs.index != target) _tabs.animateTo(target);
+    }
+  }
+
+  @override
+  void dispose() {
+    _tabs.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    registerAdminStrings();
+    final def = collectionById('seasons')!;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        AdminScreenHeader(
+          title: context.pick(def.labelAr, def.labelEn),
+          help: context.pick(def.helpAr, def.helpEn),
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+        ),
+        Material(
+          color: context.pal.background,
+          child: TabBar(
+            controller: _tabs,
+            labelColor: context.pal.primary,
+            unselectedLabelColor: context.pal.muted,
+            indicatorColor: context.pal.primary,
+            tabs: [
+              Tab(key: const ValueKey('seasons-tab-list'), text: context.tr('tab_seasonsList')),
+              Tab(key: const ValueKey('seasons-tab-preset'), text: context.tr('tab_seasonPreset')),
+            ],
+          ),
+        ),
+        Expanded(
+          child: TabBarView(
+            controller: _tabs,
+            children: [
+              CollectionListScreen(key: const ValueKey('seasons-list'), repo: widget.repo, def: def, showHeader: false),
+              SeasonPresetScreen(key: const ValueKey('seasons-preset'), repo: widget.repo, now: widget.now, showHeader: false),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
 
 /// /admin → «تجهيز الموسم» / "Season preparation" (ADR-042): the owner's
 /// pre-season checklist as one explicit, confirmed action, and its
@@ -24,7 +98,8 @@ class SeasonPresetScreen extends StatefulWidget {
 
   /// The clock (tests pin it).
   final DateTime Function()? now;
-  const SeasonPresetScreen({super.key, required this.repo, this.now});
+  final bool showHeader;
+  const SeasonPresetScreen({super.key, required this.repo, this.now, this.showHeader = true});
 
   @override
   State<SeasonPresetScreen> createState() => _SeasonPresetScreenState();
@@ -242,7 +317,7 @@ class _SeasonPresetScreenState extends State<SeasonPresetScreen> {
     final done = context.tr('saved');
     final conflict = context.tr('presetConflict');
     final replaceChanged = context.tr('presetReplaceChanged');
-    String failed(Object e) => context.tr('saveFailed', {'e': '$e'});
+    String failed(Object e) => context.tr('saveFailed', {'e': formatAdminError(e)});
     setState(() => _saving = true);
     try {
       final seasonPath = 'seasons/$seasonId';
@@ -366,6 +441,7 @@ class _SeasonPresetScreenState extends State<SeasonPresetScreen> {
 
   @override
   Widget build(BuildContext context) {
+    registerAdminStrings();
     return StreamBuilder<List<AdminDoc>>(
       key: ObjectKey(_seasons),
       stream: _seasons,
@@ -386,6 +462,12 @@ class _SeasonPresetScreenState extends State<SeasonPresetScreen> {
           return ListView(
             padding: const EdgeInsets.all(12),
             children: [
+              if (widget.showHeader)
+                AdminScreenHeader(
+                  title: context.tr('tab_seasonPreset'),
+                  help: context.tr('help_seasonPreset'),
+                  padding: const EdgeInsets.only(bottom: 12),
+                ),
               Text(context.tr('presetIntro'), style: TextStyle(color: context.pal.muted)),
               const SizedBox(height: 12),
               if (preset != null)

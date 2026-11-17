@@ -865,7 +865,7 @@ void main() {
 
   group('admin (BUG-12, BUG-13, BUG-18, WCAG 2.5.7)', () {
     test('departed fathers are numbered from 1000', () {
-      expect(reorderBase(collectionById('departedPriests')!), 1000);
+      expect(reorderBase(collectionById('priests')!, status: 'departed'), 1000);
       expect(reorderBase(collectionById('priests')!), 0);
     });
 
@@ -1062,7 +1062,9 @@ void main() {
         AdminDoc('a', {'name': 'Fr. A', 'status': 'departed', 'order': 1010}),
         AdminDoc('b', {'name': 'Fr. B', 'status': 'departed', 'order': 1020}),
       ]);
-      await tester.pumpWidget(_adminApp(CollectionListScreen(repo: repo, def: collectionById('departedPriests')!)));
+      await tester.pumpWidget(_adminApp(CollectionListScreen(repo: repo, def: collectionById('priests')!)));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('priestFilter-departed')));
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('admin-openOnSite')), findsOneWidget);
       expect(tester.widget<IconButton>(find.byKey(const ValueKey('moveUp-a'))).onPressed, isNull);
@@ -1093,7 +1095,9 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.byTooltip('Delete').first);
       await tester.pumpAndSettle();
-      await tester.tap(find.descendant(of: find.byType(AlertDialog), matching: find.byType(FilledButton)));
+      expect(find.text('St A'), findsNothing);
+      expect(repo.deletedIds, isEmpty);
+      await tester.pump(const Duration(seconds: 10));
       await tester.pumpAndSettle();
       expect(repo.deletedIds, ['saints/s']);
       expect(media.deleted..sort(), ['cover1', 'g1', 'g2']);
@@ -1760,6 +1764,17 @@ class _ListBackend extends _FakeBackend {
   _ListBackend(this.docs, {this.mediaRepo});
   @override
   MediaRepository? get media => mediaRepo;
+  @override
+  Future<void> update(String collection, String id, Map<String, dynamic> data) async {
+    for (final doc in docs) {
+      if (doc.id == id) {
+        doc.data.addAll(data);
+        if (data.containsKey('deletedAt') && data['deletedAt'] == null) {
+          doc.data.remove('deletedAt');
+        }
+      }
+    }
+  }
   @override
   Future<void> delete(String collection, String id) async => deletedIds.add('$collection/$id');
   @override

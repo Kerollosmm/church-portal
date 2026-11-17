@@ -6,19 +6,30 @@ import '../../data/admin_repository.dart';
 import '../../domain/daily_verse.dart';
 import '../../domain/features.dart';
 import '../../domain/image_style.dart';
+import 'admin_strings.dart';
 import 'admin_validators.dart';
 import 'occasion_editor.dart';
+import 'screen_header.dart';
+import 'state_switch.dart';
+import 'unsaved_bar.dart';
+import 'unsaved_guard.dart';
 
 /// Section on/off switches + home layout (settings/features).
 class FeaturesScreen extends StatefulWidget {
   final AdminBackend repo;
 
-  /// Owner only (ADR-034): sends one harmless test error to Sentry; returns
-  /// false when reporting is not active in this build. Null hides the button.
-  final Future<bool> Function()? onSendTestError;
   /// Keys of the church seasons active now (ADR-043; "theme in force").
   final List<String> activeSeasonKeys;
-  const FeaturesScreen({super.key, required this.repo, this.onSendTestError, this.activeSeasonKeys = const []});
+
+  /// Owner-only controls such as toggling the English version (P2-27b).
+  final bool isOwner;
+
+  const FeaturesScreen({
+    super.key,
+    required this.repo,
+    this.activeSeasonKeys = const [],
+    this.isOwner = true,
+  });
 
   @override
   State<FeaturesScreen> createState() => _FeaturesScreenState();
@@ -49,6 +60,7 @@ class _FeaturesScreenState extends State<FeaturesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    registerAdminStrings();
     return StreamBuilder<AdminDoc?>(
       // A new stream (another backend) gets a fresh StreamBuilder: a reused one
       // keeps the old backend's last snapshot while waiting, and that stale
@@ -63,16 +75,17 @@ class _FeaturesScreenState extends State<FeaturesScreen> {
         final latest = snap.data;
         final changed = !_loaded || latest?.updatedAt != _shown?.updatedAt || (latest == null) != (_shown == null);
         final editor = _editorKey.currentState;
+        final saving = editor?.saving ?? false;
         final dirty = editor?.dirty ?? false;
-        if (changed && !dirty) {
+        final echo =
+            _loaded && editor != null && isEchoOfEditor(_shown?.data ?? const {}, latest?.data, editor.collect().toMap());
+        if (changed && (!dirty && !saving || echo)) {
           // The snapshot of our own save keeps the form and its scroll position.
-          final echo =
-              _loaded && editor != null && isEchoOfEditor(_shown?.data ?? const {}, latest?.data, editor.collect().toMap());
           if (_loaded && !echo) _editorKey = GlobalKey<FeaturesEditorState>();
           _shown = latest;
           _loaded = true;
         }
-        final stale = changed && dirty;
+        final stale = changed && (dirty || saving) && !echo;
         final doc = _shown;
         return Column(children: [
           if (stale)
@@ -95,8 +108,8 @@ class _FeaturesScreenState extends State<FeaturesScreen> {
               exists: doc != null,
               updatedAt: doc?.updatedAt,
               updatedBy: doc?.updatedBy ?? '',
-              onSendTestError: widget.onSendTestError,
               activeSeasonKeys: widget.activeSeasonKeys,
+              isOwner: widget.isOwner,
               onSave: (f) async {
                 for (final w in featuresSaveWrites(f, doc?.data)) {
                   await widget.repo.saveDoc('settings/features', w);
@@ -130,6 +143,9 @@ List<Map<String, dynamic>> featuresSaveWrites(FeatureSettings next, Map<String, 
   final writeColors = (stored != null && stored.containsKey('themeColors'))
       ? !sameValue(colors, storedF.occasions.colorsToMap())
       : (colors as Map).isNotEmpty;
+  // Owner-only switch (P2-27b): never write it when unchanged so editors
+  // saving sections/layout do not hit the owner-only rule check.
+  if (next.englishEnabled == storedF.englishEnabled) base.remove('englishEnabled');
   // heroMotion (ADR-022) is written only once it differs from the default or
   // is already stored, so saves keep working against rules that predate it.
   if (next.heroMotion && (stored == null || !stored.containsKey('heroMotion'))) base.remove('heroMotion');
@@ -168,18 +184,17 @@ class FeaturesEditor extends StatefulWidget {
   final DateTime? updatedAt;
   final String updatedBy;
   final Future<void> Function(FeatureSettings) onSave;
+  final bool isOwner;
 
-  /// See [FeaturesScreen.onSendTestError].
-  final Future<bool> Function()? onSendTestError;
   const FeaturesEditor({
     super.key,
     required this.initial,
     required this.onSave,
-    this.onSendTestError,
     this.exists = true,
     this.updatedAt,
     this.updatedBy = '',
     this.activeSeasonKeys = const [],
+    this.isOwner = true,
   });
 
   /// See [FeaturesScreen.activeSeasonKeys].
@@ -228,11 +243,15 @@ class FeaturesEditorState extends State<FeaturesEditor> {
     for (final p in CustomizablePages.all) p: ExpansibleController(),
   };
   final _formKey = GlobalKey<FormState>();
+  late FeatureSettings _savedBaseline = widget.initial;
+  int _resetGen = 0;
   bool _dirty = false;
   bool _saving = false;
+  bool _pendingReset = false;
 
-  /// Unsaved local edits (a save in flight counts as saved).
-  bool get dirty => _dirty && !_saving;
+  /// Unsaved local edits.
+  bool get dirty => _dirty;
+  bool get saving => _saving;
 
   @override
   void dispose() {
@@ -247,52 +266,58 @@ class FeaturesEditorState extends State<FeaturesEditor> {
         _dirty = true;
       });
 
-  FeatureSettings collect() => f.copyWith(
-        heroTitleAr: _t['heroTitleAr']!.text.trim(),
-        heroTitleEn: _t['heroTitleEn']!.text.trim(),
-        heroSubtitleAr: _t['heroSubtitleAr']!.text.trim(),
-        heroSubtitleEn: _t['heroSubtitleEn']!.text.trim(),
-        bannerAr: _t['bannerAr']!.text.trim(),
-        bannerEn: _t['bannerEn']!.text.trim(),
-        bannerLink: _t['bannerLink']!.text.trim(),
-        pageHeaders: {
-          for (final p in CustomizablePages.all)
-            if (_pageCustom(p) case final PageCustom c when !c.isEmpty) p: c,
-        },
-        footer: FooterConfig(
-          showPhones: f.footer.showPhones,
-          showSocials: f.footer.showSocials,
-          showQuickLinks: f.footer.showQuickLinks,
-          noteAr: _t['footerNoteAr']!.text.trim(),
-          noteEn: _t['footerNoteEn']!.text.trim(),
-        ),
-        // Daily mode hides (and so does not validate) the fixed-verse fields:
-        // save them cleared so an over-long hidden draft cannot fail the save.
-        dailyVerse: f.dailyVerse.mode == DailyVerseConfig.fixed
-            ? f.dailyVerse.copyWith(
-                textAr: _t['verseTextAr']!.text.trim(),
-                refAr: _t['verseRefAr']!.text.trim(),
-                textEn: _t['verseTextEn']!.text.trim(),
-                refEn: _t['verseRefEn']!.text.trim())
-            : const DailyVerseConfig(),
-      );
+  FeatureSettings collect() {
+    final baseHeaderEn = f.englishEnabled ? null : _savedBaseline;
+    return f.copyWith(
+      heroTitleAr: _t['heroTitleAr']!.text.trim(),
+      heroTitleEn: baseHeaderEn != null ? baseHeaderEn.heroTitleEn : _t['heroTitleEn']!.text.trim(),
+      heroSubtitleAr: _t['heroSubtitleAr']!.text.trim(),
+      heroSubtitleEn: baseHeaderEn != null ? baseHeaderEn.heroSubtitleEn : _t['heroSubtitleEn']!.text.trim(),
+      bannerAr: _t['bannerAr']!.text.trim(),
+      bannerEn: baseHeaderEn != null ? baseHeaderEn.bannerEn : _t['bannerEn']!.text.trim(),
+      bannerLink: _t['bannerLink']!.text.trim(),
+      pageHeaders: {
+        for (final p in CustomizablePages.all)
+          if (_pageCustom(p) case final PageCustom c when !c.isEmpty) p: c,
+      },
+      footer: FooterConfig(
+        showPhones: f.footer.showPhones,
+        showSocials: f.footer.showSocials,
+        showQuickLinks: f.footer.showQuickLinks,
+        noteAr: _t['footerNoteAr']!.text.trim(),
+        noteEn: baseHeaderEn != null ? baseHeaderEn.footer.noteEn : _t['footerNoteEn']!.text.trim(),
+      ),
+      // Daily mode hides (and so does not validate) the fixed-verse fields:
+      // save them cleared so an over-long hidden draft cannot fail the save.
+      dailyVerse: f.dailyVerse.mode == DailyVerseConfig.fixed
+          ? f.dailyVerse.copyWith(
+              textAr: _t['verseTextAr']!.text.trim(),
+              refAr: _t['verseRefAr']!.text.trim(),
+              textEn: baseHeaderEn != null ? baseHeaderEn.dailyVerse.textEn : _t['verseTextEn']!.text.trim(),
+              refEn: baseHeaderEn != null ? baseHeaderEn.dailyVerse.refEn : _t['verseRefEn']!.text.trim())
+          : const DailyVerseConfig(),
+    );
+  }
 
   PageCustom _pageCustom(String p) {
     String v(String k) => _pages[p]![k]!.text.trim();
+    final saved = f.englishEnabled ? null : _savedBaseline.pageHeader(p);
     return PageCustom(
       titleAr: v('titleAr'),
-      titleEn: v('titleEn'),
+      titleEn: saved != null ? saved.titleEn : v('titleEn'),
       subtitleAr: v('subtitleAr'),
-      subtitleEn: v('subtitleEn'),
+      subtitleEn: saved != null ? saved.subtitleEn : v('subtitleEn'),
       introAr: v('introAr'),
-      introEn: v('introEn'),
+      introEn: saved != null ? saved.introEn : v('introEn'),
     );
   }
 
   /// Opens every collapsed page row holding a too-long field.
   void _openInvalidPages() {
     for (final p in CustomizablePages.all) {
-      final bad = _pages[p]!.entries.any((e) => e.value.text.trim().length > pageFieldMax[e.key]!);
+      final bad = _pages[p]!.entries.any(
+            (e) => (f.englishEnabled || !e.key.endsWith('En')) && e.value.text.trim().length > pageFieldMax[e.key]!,
+          );
       if (bad && !_pageCtl[p]!.isExpanded) _pageCtl[p]!.expand();
     }
   }
@@ -318,31 +343,63 @@ class FeaturesEditorState extends State<FeaturesEditor> {
     final failed = context.tr('saveFailed', {'e': '{e}'});
     setState(() => _saving = true);
     try {
-      await widget.onSave(collect());
+      final collected = collect();
+      await widget.onSave(collected);
       messenger.showSnackBar(SnackBar(content: Text(ok)));
-      if (mounted) setState(() => _dirty = false);
+      if (mounted) {
+        setState(() {
+          _savedBaseline = collected;
+          _dirty = false;
+        });
+      }
     } catch (e) {
       messenger.showSnackBar(SnackBar(content: Text(failed.replaceAll('{e}', '$e'))));
     } finally {
-      if (mounted) setState(() => _saving = false);
+      if (mounted) {
+        setState(() => _saving = false);
+        if (_pendingReset) {
+          _pendingReset = false;
+          _resetForm();
+        }
+      }
     }
   }
 
-  Future<void> _sendTestError() async {
-    final send = widget.onSendTestError;
-    if (send == null) return;
-    final messenger = ScaffoldMessenger.maybeOf(context);
-    final sentText = context.tr('testErrorSent');
-    final offText = context.tr('testErrorInactive');
-    bool ok;
-    try {
-      ok = await send();
-    } catch (_) {
-      ok = false;
+  void _resetForm() {
+    if (_saving) {
+      _pendingReset = true;
+      return;
     }
-    messenger
-      ?..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(ok ? sentText : offText)));
+    setState(() {
+      f = _savedBaseline;
+      _t['heroTitleAr']!.text = _savedBaseline.heroTitleAr;
+      _t['heroTitleEn']!.text = _savedBaseline.heroTitleEn;
+      _t['heroSubtitleAr']!.text = _savedBaseline.heroSubtitleAr;
+      _t['heroSubtitleEn']!.text = _savedBaseline.heroSubtitleEn;
+      _t['bannerAr']!.text = _savedBaseline.bannerAr;
+      _t['bannerEn']!.text = _savedBaseline.bannerEn;
+      _t['bannerLink']!.text = _savedBaseline.bannerLink;
+      _t['footerNoteAr']!.text = _savedBaseline.footer.noteAr;
+      _t['footerNoteEn']!.text = _savedBaseline.footer.noteEn;
+      _t['verseTextAr']!.text = _savedBaseline.dailyVerse.textAr;
+      _t['verseRefAr']!.text = _savedBaseline.dailyVerse.refAr;
+      _t['verseTextEn']!.text = _savedBaseline.dailyVerse.textEn;
+      _t['verseRefEn']!.text = _savedBaseline.dailyVerse.refEn;
+      for (final p in CustomizablePages.all) {
+        final header = _savedBaseline.pageHeader(p).toMap();
+        for (final e in _pages[p]!.entries) {
+          e.value.text = (header[e.key] as String?) ?? '';
+        }
+      }
+      _resetGen++;
+      _dirty = false;
+    });
+  }
+
+  Future<void> _cancelEdits() async {
+    final discard = await confirmDiscardChanges(context);
+    if (!discard || !mounted) return;
+    _resetForm();
   }
 
   Widget _card(String title, IconData icon, List<Widget> children, {String? hint}) => Card(
@@ -399,26 +456,42 @@ class FeaturesEditorState extends State<FeaturesEditor> {
 
   @override
   Widget build(BuildContext context) {
+    registerAdminStrings();
     final order = f.homeOrder;
-    return Scaffold(
-      backgroundColor: context.pal.background,
-      floatingActionButton: FloatingActionButton.extended(
-        key: const Key('features-save'),
-        heroTag: 'features-save',
-        backgroundColor: _dirty ? context.pal.primary : context.pal.muted,
-        foregroundColor: context.pal.onBar,
-        onPressed: _saving ? null : _save,
-        icon: _saving
-            ? SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2, color: context.pal.onBar))
-            : const Icon(Icons.save),
-        label: Text(context.tr(_dirty ? 'saveChanges' : 'save')),
-      ),
-      body: Form(
+    return UnsavedGuard(
+      dirty: _dirty,
+      handlePop: false,
+      onBrowserBackDiscard: _resetForm,
+      child: Scaffold(
+        backgroundColor: context.pal.background,
+        floatingActionButton: FloatingActionButton.extended(
+          key: const Key('features-save'),
+          heroTag: 'features-save',
+          backgroundColor: _dirty ? context.pal.primary : context.pal.muted,
+          foregroundColor: context.pal.onBar,
+          onPressed: _saving ? null : _save,
+          icon: _saving
+              ? SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2, color: context.pal.onBar))
+              : const Icon(Icons.save),
+          label: Text(context.tr(_dirty ? 'saveChanges' : 'save')),
+        ),
+        bottomNavigationBar: UnsavedBar(
+          dirty: _dirty,
+          saving: _saving,
+          onSave: _save,
+          onCancel: _cancelEdits,
+        ),
+        body: Form(
         key: _formKey,
         child: Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 820),
             child: ListView(padding: const EdgeInsets.fromLTRB(16, 16, 16, 100), children: [
+              AdminScreenHeader(
+                title: context.tr('featuresAndHome'),
+                help: context.tr('help_features'),
+                padding: const EdgeInsets.only(bottom: 12),
+              ),
               if (!widget.exists)
                 Card(
                   color: context.pal.surfaceAlt,
@@ -439,30 +512,48 @@ class FeaturesEditorState extends State<FeaturesEditor> {
               _card(context.tr('sectionsTitle'), Icons.toggle_on_outlined, [
                 Wrap(spacing: 8, children: [
                   TextButton(
-                    onPressed: () => _set(f.copyWith(sections: {for (final s in Sections.all) s: true})),
+                    onPressed: () => _set(f.copyWith(
+                      sections: {for (final s in Sections.all) s: s == Sections.assistant ? f.enabled(s) : true},
+                    )),
                     child: Text(context.tr('enableAll')),
                   ),
                 ]),
-                for (final s in Sections.all) ...[
-                  SwitchListTile(
+                for (final s in Sections.all)
+                  if (s != Sections.assistant) ...[
+                  AdminStateSwitch(
                     key: ValueKey('section-$s'),
                     contentPadding: const EdgeInsetsDirectional.only(start: 4),
                     title: Text(context.pick(Sections.labels[s]![0], Sections.labels[s]![1])),
                     value: f.enabled(s),
+                    onLabel: context.tr('switch_enabled'),
+                    offLabel: context.tr('switch_disabled'),
                     onChanged: (v) => _set(f.copyWith(sections: {...f.sections, s: v})),
                   ),
                   // Where the milestones show (ADR-052): also on the About
                   // page; the home block has its own switch in the home layout.
                   if (s == Sections.milestones)
-                    SwitchListTile(
+                    AdminStateSwitch(
                       key: const ValueKey('features-aboutMilestones'),
                       contentPadding: const EdgeInsetsDirectional.only(start: 28),
                       title: Text(context.tr('aboutMilestonesSwitch')),
                       subtitle: Text(context.tr('aboutMilestonesHint')),
                       value: f.aboutMilestones,
+                      onLabel: context.tr('switch_enabled'),
+                      offLabel: context.tr('switch_disabled'),
                       onChanged: f.enabled(Sections.milestones) ? (v) => _set(f.copyWith(aboutMilestones: v)) : null,
                     ),
                 ],
+                if (widget.isOwner)
+                  AdminStateSwitch(
+                    key: const ValueKey('features-englishEnabled'),
+                    contentPadding: const EdgeInsetsDirectional.only(start: 4),
+                    title: Text(context.tr('englishEnabledSwitch')),
+                    subtitle: Text(context.tr('englishEnabledHint')),
+                    value: f.englishEnabled,
+                    onLabel: context.tr('switch_enabled'),
+                    offLabel: context.tr('switch_disabled'),
+                    onChanged: (v) => _set(f.copyWith(englishEnabled: v)),
+                  ),
               ], hint: context.tr('sectionsHint')),
               _card(context.tr('homeLayout'), Icons.dashboard_customize_outlined, [
                 ReorderableListView(
@@ -478,32 +569,38 @@ class FeaturesEditorState extends State<FeaturesEditor> {
               ], hint: context.tr('homeLayoutHint')),
               _card(context.tr('heroTexts'), Icons.title_rounded, [
                 _text('heroTitleAr', context.tr('heroTitleAr'), maxLength: 200),
-                _text('heroTitleEn', context.tr('heroTitleEn'), maxLength: 200),
+                if (f.englishEnabled) _text('heroTitleEn', context.tr('heroTitleEn'), maxLength: 200),
                 _text('heroSubtitleAr', context.tr('heroSubtitleAr'), maxLength: 300),
-                _text('heroSubtitleEn', context.tr('heroSubtitleEn'), maxLength: 300),
-                SwitchListTile(
+                if (f.englishEnabled) _text('heroSubtitleEn', context.tr('heroSubtitleEn'), maxLength: 300),
+                AdminStateSwitch(
                   key: const ValueKey('features-heroMotion'),
                   contentPadding: const EdgeInsetsDirectional.only(start: 4),
                   title: Text(context.tr('heroMotion')),
                   subtitle: Text(context.tr('heroMotionHint')),
                   value: f.heroMotion,
+                  onLabel: context.tr('switch_enabled'),
+                  offLabel: context.tr('switch_disabled'),
                   onChanged: (v) => _set(f.copyWith(heroMotion: v)),
                 ),
-                SwitchListTile(
+                AdminStateSwitch(
                   key: const ValueKey('features-heroShowAddress'),
                   contentPadding: const EdgeInsetsDirectional.only(start: 4),
                   title: Text(context.tr('heroShowAddress')),
                   subtitle: Text(context.tr('heroShowAddressHint')),
                   value: f.heroShowAddress,
+                  onLabel: context.tr('switch_visible'),
+                  offLabel: context.tr('switch_hidden'),
                   onChanged: (v) => _set(f.copyWith(heroShowAddress: v)),
                 ),
               ], hint: context.tr('heroTextsHint')),
               _card(context.tr('dailyVerseTitle'), Icons.menu_book_rounded, [
-                SwitchListTile(
+                AdminStateSwitch(
                   key: const ValueKey('features-dailyVerse-enabled'),
                   contentPadding: const EdgeInsetsDirectional.only(start: 4),
                   title: Text(context.tr('dailyVerseShow')),
                   value: f.enabled(Sections.dailyVerse),
+                  onLabel: context.tr('switch_visible'),
+                  offLabel: context.tr('switch_hidden'),
                   onChanged: (v) => _set(f.copyWith(sections: {...f.sections, Sections.dailyVerse: v})),
                 ),
                 Wrap(spacing: 10, runSpacing: 10, children: [
@@ -520,23 +617,27 @@ class FeaturesEditorState extends State<FeaturesEditor> {
                   _text('verseTextAr', context.tr('dailyVerseText'),
                       maxLength: DailyVerseConfig.maxText, lines: 3, required: true),
                   _text('verseRefAr', context.tr('dailyVerseRef'), maxLength: DailyVerseConfig.maxRef),
-                  _text('verseTextEn', context.tr('dailyVerseTextEn'), maxLength: DailyVerseConfig.maxText, lines: 3),
-                  _text('verseRefEn', context.tr('dailyVerseRefEn'), maxLength: DailyVerseConfig.maxRef),
+                  if (f.englishEnabled) ...[
+                    _text('verseTextEn', context.tr('dailyVerseTextEn'), maxLength: DailyVerseConfig.maxText, lines: 3),
+                    _text('verseRefEn', context.tr('dailyVerseRefEn'), maxLength: DailyVerseConfig.maxRef),
+                  ],
                 ],
               ], hint: context.tr('dailyVerseHint')),
               _card(context.tr('pageHeadersTitle'), Icons.view_headline_rounded, [
                 for (final p in CustomizablePages.all) _pageTile(context, p),
               ], hint: context.tr('pageHeadersHint')),
               _card(context.tr('announcementBanner'), Icons.campaign_outlined, [
-                SwitchListTile(
+                AdminStateSwitch(
                   key: const ValueKey('features-bannerEnabled'),
                   contentPadding: const EdgeInsetsDirectional.only(start: 4),
                   title: Text(context.tr('showBanner')),
                   value: f.bannerEnabled,
+                  onLabel: context.tr('switch_visible'),
+                  offLabel: context.tr('switch_hidden'),
                   onChanged: (v) => _set(f.copyWith(bannerEnabled: v)),
                 ),
                 _text('bannerAr', context.tr('bannerAr'), maxLength: 500),
-                _text('bannerEn', context.tr('bannerEn'), maxLength: 500),
+                if (f.englishEnabled) _text('bannerEn', context.tr('bannerEn'), maxLength: 500),
                 _text('bannerLink', context.tr('bannerLink'), maxLength: 500, url: true),
               ]),
               _card(context.tr('footerTitle'), Icons.call_to_action_outlined, [
@@ -546,17 +647,20 @@ class FeaturesEditorState extends State<FeaturesEditor> {
                   ('showQuickLinks', 'footerShowQuickLinks', f.footer.showQuickLinks,
                       (bool v) => _setFooter(showQuickLinks: v)),
                 ])
-                  SwitchListTile(
+                  AdminStateSwitch(
                     key: ValueKey('footer-$k'),
                     contentPadding: const EdgeInsetsDirectional.only(start: 4),
                     title: Text(context.tr(label)),
                     value: v,
+                    onLabel: context.tr('switch_visible'),
+                    offLabel: context.tr('switch_hidden'),
                     onChanged: set,
                   ),
                 _text('footerNoteAr', context.tr('footerNoteAr'),
                     maxLength: footerNoteMax, fieldKey: const ValueKey('footer-noteAr'), lines: 2),
-                _text('footerNoteEn', context.tr('footerNoteEn'),
-                    maxLength: footerNoteMax, fieldKey: const ValueKey('footer-noteEn'), lines: 2),
+                if (f.englishEnabled)
+                  _text('footerNoteEn', context.tr('footerNoteEn'),
+                      maxLength: footerNoteMax, fieldKey: const ValueKey('footer-noteEn'), lines: 2),
               ], hint: context.tr('footerHint')),
               _card(context.tr('imageDisplay'), Icons.photo_size_select_large_rounded, [
                 for (final c in ImageStyles.collections)
@@ -586,41 +690,27 @@ class FeaturesEditorState extends State<FeaturesEditor> {
               ], hint: context.tr('imageDisplayHint')),
               _card(context.tr('themeColor'), Icons.palette_outlined, [
                 OccasionThemeEditor(
-                    value: f, onChanged: (edit) => _set(edit(f)), activeSeasonKeys: widget.activeSeasonKeys),
+                    key: ValueKey('theme-editor-$_resetGen'),
+                    value: f,
+                    onChanged: (edit) => _set(edit(f)),
+                    activeSeasonKeys: widget.activeSeasonKeys),
                 // The season theme's wash over the hero painting (ADR-050).
-                SwitchListTile(
+                AdminStateSwitch(
                   key: const ValueKey('features-heroSeasonTint'),
                   contentPadding: const EdgeInsetsDirectional.only(start: 4),
                   title: Text(context.tr('heroSeasonTint')),
                   subtitle: Text(context.tr('heroSeasonTintHint')),
                   value: f.heroSeasonTint,
+                  onLabel: context.tr('switch_enabled'),
+                  offLabel: context.tr('switch_disabled'),
                   onChanged: (v) => _set(f.copyWith(heroSeasonTint: v)),
                 ),
               ], hint: context.tr('themeHint')),
-              _card(context.tr('errorReportingTitle'), Icons.bug_report_outlined, [
-                SwitchListTile(
-                  key: const ValueKey('features-errorReporting'),
-                  contentPadding: const EdgeInsetsDirectional.only(start: 4),
-                  title: Text(context.tr('errorReporting')),
-                  subtitle: Text(context.tr('errorReportingHint')),
-                  value: f.errorReporting,
-                  onChanged: (v) => _set(f.copyWith(errorReporting: v)),
-                ),
-                if (widget.onSendTestError != null)
-                  Align(
-                    alignment: AlignmentDirectional.centerStart,
-                    child: OutlinedButton.icon(
-                      key: const ValueKey('features-sendTestError'),
-                      icon: const Icon(Icons.send_outlined),
-                      label: Text(context.tr('sendTestError')),
-                      onPressed: _sendTestError,
-                    ),
-                  ),
-              ]),
             ]),
           ),
         ),
       ),
+    ),
     );
   }
 
@@ -632,7 +722,8 @@ class FeaturesEditorState extends State<FeaturesEditor> {
     return ListenableBuilder(
       listenable: Listenable.merge(ctrls.values.toList()),
       builder: (context, _) {
-        final customized = ctrls.values.any((c) => c.text.trim().isNotEmpty);
+        final customized =
+            ctrls.entries.any((e) => (f.englishEnabled || !e.key.endsWith('En')) && e.value.text.trim().isNotEmpty);
         return ExpansionTile(
           key: ValueKey('page-$p'),
           controller: _pageCtl[p],
@@ -660,18 +751,21 @@ class FeaturesEditorState extends State<FeaturesEditor> {
               : null,
           children: [
             for (final e in ctrls.entries)
-              _text('page-$p-${e.key}', context.tr('page_${e.key}'),
-                  maxLength: pageFieldMax[e.key]!,
-                  controller: e.value,
-                  lines: e.key.startsWith('intro') ? 3 : 1),
+              if (f.englishEnabled || !e.key.endsWith('En'))
+                _text('page-$p-${e.key}', context.tr('page_${e.key}'),
+                    maxLength: pageFieldMax[e.key]!,
+                    controller: e.value,
+                    lines: e.key.startsWith('intro') ? 3 : 1),
             if (customized)
               Align(
                 alignment: AlignmentDirectional.centerEnd,
                 child: TextButton.icon(
                   key: ValueKey('pageReset-$p'),
                   onPressed: () => setState(() {
-                    for (final c in ctrls.values) {
-                      c.clear();
+                    for (final e in ctrls.entries) {
+                      if (f.englishEnabled || !e.key.endsWith('En')) {
+                        e.value.clear();
+                      }
                     }
                     _dirty = true;
                   }),
@@ -714,8 +808,10 @@ class FeaturesEditorState extends State<FeaturesEditor> {
     final offNote = sectionOff
         ? Text(context.tr('blockSectionOff'), style: TextStyle(color: context.pal.alert, fontSize: 12))
         : null;
-    final toggle = Switch(
+    final toggle = AdminStateSwitch(
       value: shown,
+      onLabel: context.tr('switch_visible'),
+      offLabel: context.tr('switch_hidden'),
       onChanged: (v) => _set(f.copyWith(homeHidden: v ? ({...f.homeHidden}..remove(b)) : {...f.homeHidden, b})),
     );
     // Narrow screens: the move buttons get their own row under the title so
@@ -729,10 +825,18 @@ class FeaturesEditorState extends State<FeaturesEditor> {
       subtitle: narrow
           ? Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
               ?offNote,
-              Row(mainAxisSize: MainAxisSize.min, children: moveButtons),
+              Wrap(
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 8,
+                runSpacing: 4,
+                children: [
+                  Row(mainAxisSize: MainAxisSize.min, children: moveButtons),
+                  toggle,
+                ],
+              ),
             ])
           : offNote,
-      trailing: narrow ? toggle : Row(mainAxisSize: MainAxisSize.min, children: [...moveButtons, toggle]),
+      trailing: narrow ? null : Row(mainAxisSize: MainAxisSize.min, children: [...moveButtons, toggle]),
     );
   }
 }

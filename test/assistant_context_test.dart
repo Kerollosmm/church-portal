@@ -1,5 +1,6 @@
 import 'package:church_portal/domain/assistant_context.dart';
 import 'package:church_portal/domain/cairo_time.dart';
+import 'package:church_portal/domain/custom_content.dart';
 import 'package:church_portal/domain/features.dart';
 import 'package:church_portal/domain/models.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -39,6 +40,8 @@ String _build({
   List<Clinic>? clinics,
   List<Meeting>? meetings,
   List<Activity>? activities,
+  List<CustomCategory> categories = const [],
+  List<CustomPage> pages = const [],
 }) =>
     buildAssistantInstruction(
       settings: _settings,
@@ -51,6 +54,8 @@ String _build({
       priests: [Priest.fromMap('p', {'name': 'أبونا يوسف', ...d})],
       saints: [Saint.fromMap('s', {'nameAr': 'الأنبا موسى', ...d})],
       milestones: milestones,
+      categories: categories,
+      pages: pages,
       now: CairoTime.at(2026, 11, 2, 600),
       features: f,
     );
@@ -182,6 +187,96 @@ void main() {
       expect(sig({..._details(), 'detailsEn': 'edited'}), isNot(on));
       // A disabled page still tracks the contact / link toggles of the item's own fields.
       expect(sig(_details(enabled: false, contacts: false)), isNot(sig(_details(enabled: false))));
+    });
+  });
+
+  group('custom section and page topics (P2-29)', () {
+    final cats = [
+      CustomCategory.fromMap('c-vis', {
+        'slug': 'scouts',
+        'nameAr': 'الكشافة',
+        'nameEn': 'Scouts',
+        'visible': true,
+      }),
+      CustomCategory.fromMap('c-hid', {
+        'slug': 'hidden-cat',
+        'nameAr': 'قسم مخفي',
+        'nameEn': 'Hidden Category',
+        'visible': false,
+      }),
+      CustomCategory.fromMap('c-bad', {
+        'slug': 'INVALID SLUG',
+        'nameAr': 'قسم غير صالح',
+        'nameEn': 'Bad Slug Category',
+        'visible': true,
+      }),
+    ];
+    final pages = [
+      CustomPage.fromMap('p-vis', {
+        'slug': 'building-fund',
+        'titleAr': 'صندوق المبنى',
+        'titleEn': 'Building Fund',
+        'visible': true,
+      }),
+      CustomPage.fromMap('p-hid', {
+        'slug': 'draft-page',
+        'titleAr': 'صفحة مسودة',
+        'titleEn': 'Draft Page',
+        'visible': false,
+      }),
+      CustomPage.fromMap('p-bad', {
+        'slug': 'Bad Slug!',
+        'titleAr': 'صفحة غير صالحة',
+        'titleEn': 'Invalid Slug Page',
+        'visible': true,
+      }),
+    ];
+
+    String allowedTopicsBlock(String prompt) {
+      final start = prompt.indexOf('Allowed topics:');
+      final end = prompt.indexOf('If a question is about anything else');
+      expect(start, isNonNegative);
+      expect(end, greaterThan(start));
+      return prompt.substring(start, end);
+    }
+
+    test('visible usable custom sections and pages appear in Allowed topics; hidden/unusable do not', () {
+      final topics = allowedTopicsBlock(_build(categories: cats, pages: pages));
+      expect(topics, contains('- Scouts (الكشافة)'));
+      expect(topics, contains('- Building Fund (صندوق المبنى)'));
+      expect(topics, isNot(contains('Hidden Category')));
+      expect(topics, isNot(contains('قسم مخفي')));
+      expect(topics, isNot(contains('Bad Slug Category')));
+      expect(topics, isNot(contains('Draft Page')));
+      expect(topics, isNot(contains('صفحة مسودة')));
+      expect(topics, isNot(contains('Invalid Slug Page')));
+    });
+
+    test('switched-off customSections or customPages omit their topic names from Allowed topics', () {
+      final onlyPages = allowedTopicsBlock(_build(
+        f: FeatureSettings.fromMap({'sections': {'customSections': false}}),
+        categories: cats,
+        pages: pages,
+      ));
+      expect(onlyPages, isNot(contains('Scouts')));
+      expect(onlyPages, contains('- Building Fund (صندوق المبنى)'));
+
+      final onlySections = allowedTopicsBlock(_build(
+        f: FeatureSettings.fromMap({'sections': {'customPages': false}}),
+        categories: cats,
+        pages: pages,
+      ));
+      expect(onlySections, contains('- Scouts (الكشافة)'));
+      expect(onlySections, isNot(contains('Building Fund')));
+    });
+
+    test('empty or all-hidden custom content leaves Allowed topics identical to baseline', () {
+      final baseline = _build();
+      final onlyHidden = _build(
+        categories: [cats[1], cats[2]],
+        pages: [pages[1], pages[2]],
+      );
+      expect(onlyHidden, equals(baseline));
     });
   });
 }

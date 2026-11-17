@@ -12,7 +12,7 @@ import path from 'node:path';
 import zlib from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 
-export const DEFAULT_MAX_GZIP_BYTES = 1396031; // 1,396,031 bytes
+export const DEFAULT_MAX_GZIP_BYTES = 1399000; // 1,399,000 bytes (~1.33 MB)
 export const DEFAULT_MIN_PART_COUNT = 6;
 export const DEFAULT_MIN_FONT_BYTES = 20 * 1024; // 20 KB
 

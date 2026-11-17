@@ -246,6 +246,19 @@ List<LiturgyOccurrence> occurrencesForDay({
           if (services.any((x) => mayReplace(x, o) && overlaps(o, x))) return true;
       }
     }
+    if (o.liturgy.type == 'mass' && !o.liturgy.replacesDay) {
+      for (final l in liturgies) {
+        if (l.seasonKey == null &&
+            l.id != o.liturgy.id &&
+            l.visible &&
+            l.replacesDay &&
+            l.type == 'mass' &&
+            l.startMinutes != null &&
+            _matchesDay(l, dayStart)) {
+          if (!l.sample || o.liturgy.sample) return true;
+        }
+      }
+    }
     return false;
   }
 
@@ -289,6 +302,139 @@ List<Liturgy> regularSupersededOn({
     for (final l in liturgies)
       if (l.seasonKey == null && _matchesDay(l, dayStart) && l.startMinutes != null && !kept.contains(l.id)) l,
   ];
+}
+
+/// The regular masses that [replacing] hides when [Liturgy.replacesDay] is
+/// true (the admin preview for «يحل محل قداسات اليوم المعتادة», ADR-050).
+///
+/// Returns an empty list when:
+/// * `!replacing.visible` or `!replacing.replacesDay`
+/// * [replacing] has no start time or (when non-seasonal) is not a `mass`
+/// * [replacing] has neither [Liturgy.date] nor [Liturgy.weekday]
+/// * [replacing.seasonKey] is set, and no matching season in [seasons] is
+///   active on that day / time window (matching [occurrencesForDay]).
+///
+/// When active, matches the exact replacement rule of [occurrencesForDay] on
+/// the Cairo calendar day (or weekday) of [replacing]:
+/// * Only regular masses (`seasonKey == null && type == 'mass'`) are replaced.
+/// * Only visible services are returned.
+/// * A `sample: true` service never replaces real regular services (ADR-050).
+///
+/// Sorted by start time, then real before sample, then order.
+List<Liturgy> liturgiesHiddenBy(
+  Liturgy replacing,
+  Iterable<Liturgy> all, {
+  Iterable<Season> seasons = const [],
+}) {
+  if (!replacing.visible || !replacing.replacesDay) return const [];
+  if (replacing.startMinutes == null) return const [];
+  if (replacing.seasonKey == null && replacing.type != 'mass') return const [];
+
+  final date = replacing.date != null ? CairoTime.calendarDate(replacing.date!) : null;
+  final weekday = date != null ? date.weekday : replacing.weekday;
+  if (weekday == null) return const [];
+
+  final dayStart = date != null ? CairoTime.at(date.year, date.month, date.day) : null;
+
+  final List<Season> activeMatchingSeasons;
+  if (replacing.seasonKey != null) {
+    final matching = seasons.where((s) => s.key == replacing.seasonKey && s.active).toList();
+    if (matching.isEmpty) return const [];
+    if (dayStart != null) {
+      final repStart = replacing.startMinutes != null
+          ? CairoTime.at(dayStart.year, dayStart.month, dayStart.day, replacing.startMinutes!)
+          : dayStart;
+      activeMatchingSeasons = [
+        for (final s in matching)
+          if (isSeasonActiveOnDay(s, dayStart) &&
+              (replacing.startMinutes == null || isSeasonActiveAt(s, repStart)) &&
+              !undatedSuppressedOn(s, replacing, all, dayStart))
+            s,
+      ];
+      if (activeMatchingSeasons.isEmpty) return const [];
+    } else {
+      activeMatchingSeasons = [
+        for (final s in matching)
+          if (s.startsAt == null ||
+              s.endsAt == null ||
+              _seasonCoversWeekdayTimes(s, weekday, replacing.startMinutes, replacing.startMinutes))
+            s,
+      ];
+      if (activeMatchingSeasons.isEmpty) return const [];
+    }
+  } else {
+    activeMatchingSeasons = const [];
+  }
+
+  final matches = <Liturgy>[];
+  for (final l in all) {
+    if (l.id == replacing.id) continue;
+    if (!l.visible) continue;
+    if (l.replacesDay) continue;
+    if (l.seasonKey != null) continue;
+    if (l.type != 'mass') continue;
+    if (l.startMinutes == null) continue;
+
+    // A sample never takes the place of a real service (ADR-050).
+    if (replacing.sample && !l.sample) continue;
+
+    if (dayStart != null) {
+      if (!_matchesDay(l, dayStart)) continue;
+      if (replacing.seasonKey != null) {
+        final candStart = CairoTime.at(dayStart.year, dayStart.month, dayStart.day, l.startMinutes!);
+        if (!activeMatchingSeasons.any((s) => isSeasonActiveAt(s, candStart))) continue;
+      }
+    } else {
+      if (l.date != null) {
+        if (CairoTime.calendarDate(l.date!).weekday != weekday) continue;
+      } else if (l.weekday != weekday) {
+        continue;
+      }
+      if (replacing.seasonKey != null) {
+        if (!activeMatchingSeasons.any((s) => _seasonCoversWeekdayTimes(s, weekday, replacing.startMinutes, l.startMinutes!))) {
+          continue;
+        }
+      }
+    }
+    matches.add(l);
+  }
+
+  matches.sort((a, b) {
+    final sa = a.startMinutes ?? 0;
+    final sb = b.startMinutes ?? 0;
+    final c = sa.compareTo(sb);
+    if (c != 0) return c;
+    final s = (a.sample ? 1 : 0).compareTo(b.sample ? 1 : 0);
+    return s != 0 ? s : a.order.compareTo(b.order);
+  });
+  return matches;
+}
+
+bool _seasonCoversWeekdayTimes(Season s, int weekday, int? minA, int? minB) {
+  if (!s.active) return false;
+  if (s.startsAt == null || s.endsAt == null) return true;
+  final startCal = CairoTime.calendarDate(s.startsAt!);
+  final endCal = CairoTime.calendarDate(s.endsAt!);
+  final offset = (weekday - startCal.weekday + 7) % 7;
+  final first = startCal.add(Duration(days: offset));
+  if (first.isAfter(endCal)) return false;
+
+  bool coversAt(DateTime cal, int? m) {
+    final day = CairoTime.at(cal.year, cal.month, cal.day);
+    if (m == null) return isSeasonActiveOnDay(s, day);
+    return isSeasonActiveAt(s, CairoTime.at(cal.year, cal.month, cal.day, m));
+  }
+
+  bool both(DateTime cal) => coversAt(cal, minA) && coversAt(cal, minB);
+  if (both(first)) return true;
+  final second = first.add(const Duration(days: 7));
+  if (!second.isAfter(endCal) && both(second)) return true;
+  final totalWeeks = endCal.difference(first).inDays ~/ 7;
+  if (totalWeeks >= 2) {
+    final last = first.add(Duration(days: totalWeeks * 7));
+    if (both(last)) return true;
+  }
+  return false;
 }
 
 /// Next-mass smart card logic (see SPEC "Business rules").

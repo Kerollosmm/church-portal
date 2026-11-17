@@ -448,6 +448,7 @@ mixin ViewportVisibility<T extends StatefulWidget> on State<T> {
     if (!mounted) return;
     final box = context.findRenderObject();
     if (box is! RenderBox || !box.hasSize || !box.attached) return;
+    if (box.size.height <= 0) return;
     final top = box.localToGlobal(Offset.zero).dy;
     final screen = MediaQuery.sizeOf(context).height;
     final v = top < screen + viewportLead && top + box.size.height > -viewportLead;
@@ -482,20 +483,27 @@ class _RevealState extends State<Reveal> with SingleTickerProviderStateMixin, Vi
 
   @override
   void didChangeDependencies() {
-    _static = mobileMotionSuppressed(context);
+    final width = MediaQuery.sizeOf(context).width;
+    final platform = Theme.of(context).platform;
+    _static = reducedMotionRequested(MediaQuery.of(context)) ||
+        !heroAmbientLoopAllowed(platform: platform, width: width);
     if (_static) _c.value = 1;
     super.didChangeDependencies();
   }
 
   @override
-  double get viewportLead => -40;
+  double get viewportLead => 20;
 
   @override
   void onViewportVisibility(bool visible) {
     if (visible && !_static && _c.value == 0) {
-      Future.delayed(widget.delay, () {
+      if (widget.delay == Duration.zero) {
         if (mounted) _c.forward();
-      });
+      } else {
+        Future.delayed(widget.delay, () {
+          if (mounted) _c.forward();
+        });
+      }
     }
   }
 
@@ -507,14 +515,25 @@ class _RevealState extends State<Reveal> with SingleTickerProviderStateMixin, Vi
 
   @override
   Widget build(BuildContext context) {
-    if (_static) return widget.child;
+    if (_static) return Opacity(opacity: 1, child: widget.child);
+    if (_c.value == 0) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _check());
+    }
     final curve = CurvedAnimation(parent: _c, curve: Curves.easeOutCubic);
-    return AnimatedBuilder(
-      animation: curve,
-      child: widget.child,
-      builder: (context, child) => Opacity(
-        opacity: curve.value,
-        child: Transform.translate(offset: Offset(0, 28 * (1 - curve.value)), child: child),
+    return NotificationListener<SizeChangedLayoutNotification>(
+      onNotification: (_) {
+        WidgetsBinding.instance.addPostFrameCallback((_) => _check());
+        return true;
+      },
+      child: SizeChangedLayoutNotifier(
+        child: AnimatedBuilder(
+          animation: curve,
+          child: widget.child,
+          builder: (context, child) => Opacity(
+            opacity: curve.value,
+            child: Transform.translate(offset: Offset(0, 28 * (1 - curve.value)), child: child),
+          ),
+        ),
       ),
     );
   }

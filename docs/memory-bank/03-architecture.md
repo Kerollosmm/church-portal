@@ -42,8 +42,9 @@ lib/
     media.dart              MediaImage (optional `image` map), MediaLimits, isValidImageUrl, fitWithin,
                             orphanedMediaIds
     custom_content.dart     CustomCategory, CategoryEntry, CustomPage, PageBlock (encode/fromStored), BlockTypes,
-                            isValidSlug, publicCategories/publicPages, entriesOf, entryIdsToHide, linkTargets
-                            (PR #18, ADR-027)
+                            isValidSlug, publicCategories/publicPages, entriesOf, entryIdsToHide, linkTargets,
+                            isCategoryNonEmpty, publicNonEmptyCategories, featuredPages
+                            (PR #18, ADR-027, ADR-073)
     contact_categories.dart ContactSettings (defaults), ContactCategory (encode/fromStored), ContactKinds,
                             MessageStatus, inboxBoxOf, messageIsOpen (PR #18, ADR-028); stable random ids
                             newContactCategoryId / ContactSettings.newId (PR #19)
@@ -316,10 +317,20 @@ flowchart LR
 | `/section/:slug` | `CategoryPage` (PR #18) | customSections (+ the category's own `visible`) |
 | `/page/:slug` | `CustomPageView` (PR #18) | customPages (+ the page's own `visible`) |
 | `/admin` (`AppConfig.adminPath`) | `admin_page.AdminPage` (deferred, `fullScreen` placeholder) | outside the shell, not gated, not linked anywhere public |
+| `/activities` | redirect → `/church-activities` (query preserved) | — |
+| `/priests` | redirect → `/about` (query preserved) | — |
+| `/notices` | redirect → `/notifications` (query preserved) | — |
+| `/donations` | redirect → `/page/donations` (query preserved) | — |
 | anything else | `errorBuilder` → `AppShell` + "Page not found" + Back home | — |
 
 `FeatureGate` shows a spinner (`Key('featuresLoading')`) until `featuresReadyProvider`, then the page or
 `SectionUnavailable` («هذا القسم غير متاح حاليًا» + Back to home).
+
+**Public Redirects (PR #83):** Canonical shortcuts redirect cleanly with query strings preserved: `/activities` → `/church-activities`, `/priests` → `/about`, `/notices` → `/notifications`, and `/donations` → `/page/donations`.
+
+**Header Responsive Adaptivity (`AppShell`, `app_shell.dart`):** On mid-desktop viewports (~905 px–1150 px), `AppShell` computes a dynamic maximum navigation width (`maxNavWidth = (width - titleSpacingVal - minTitleSlot - otherActionsWidth).clamp(200.0, width * 0.6)`) and scales title size down to 19 px below 1150 px, guaranteeing the start tab seal and church name maintain at least 200 px of readable breathing room without starvation or overflow.
+
+**Map Interaction Guard (`MapInteractionGuard`, `map_embed.dart`, `map_embed_web.dart`):** On web, the keyless Google Maps iframe is initially set to `pointer-events: none` and `tabIndex = -1` covered by an interact shield (`Key('mapInteractShield')`, «اضغط للتفاعل مع الخريطة» / `mapTapToInteract`). Page wheel, touch, and Home/End/PageUp keyboard scrolling pass freely over the map until clicked. Clicking unlocks map interaction and displays a floating lock button (`Key('mapLockScrollBtn')`, «قفل الخريطة للتمرير» / `mapLockScroll`), with automatic re-locking when the mouse leaves the map bounds.
 
 **Item detail pages** (PR #13, ADR-020): the 7 routes above are generated from `DetailKind.values`
 (`'${kind.basePath}/:id'`, flat routes inside the `ShellRoute`, so the list page is not built underneath).
@@ -345,7 +356,7 @@ indexable:)`, which applies the spec through the conditional import (`document_l
 the URL `#fragment`.
 
 **Deferred modules & isolation** (PR 3, ADR-058, ADR-060, ADR-061):
-To protect the web initial load budget (`main.dart.js` gzip -9 ceiling <= 1,396,031 B), secondary modules are deferred (`deferred as`). The CI sourcemap guard still lists the original 8 (the check script is unchanged):
+To protect the web initial load budget (`main.dart.js` gzip -9 ceiling <= 1,399,000 B), secondary modules are deferred (`deferred as`). The CI sourcemap guard still lists the original 8 (the check script is unchanged):
 1. `ui/admin/admin_page.dart` (`admin_page`): full admin dashboard (Firebase Auth, schema editors, Firestore writes).
 2. `ui/pages/assistant_page.dart` (`assistant_page`): AI assistant interface & `firebase_ai` SDK (gated behind `AssistantGate`).
 3. `ui/pages/notifications_page.dart` (`notifications_page`): streamlined notification channel & reminder preferences (OEM battery card removed; native permissions requested reactively on switch toggle).
@@ -382,7 +393,7 @@ Deferred isolation is mechanically enforced in CI via `node tool/check_web_bundl
   drawer** (`_AppDrawer`). On mobile viewports (`width < 600`, ADR-064, `INV-APPBAR-01`), the language toggle (`appBarLanguageToggle`)
   is omitted from `AppBar.actions`, freeing ~54 dp of horizontal space so the church title has ample room without collision with
   the seal tab, with the language toggle accessible in `_AppDrawer` as `drawerLanguageToggle`. Desktop viewports (`width >= 600`)
-  retain the `AppBar` language toggle. Below **360 px**, at **≥ 150 % text**, or on a subpage below **400 px** (the Back arrow
+  retain the `AppBar` language toggle. When `settings/features.englishEnabled` is `false` (PR 3G, `P2-27b`), both `appBarLanguageToggle` and `drawerLanguageToggle` are hidden. Below **360 px**, at **≥ 150 % text**, or on a subpage below **400 px** (the Back arrow
   takes another 48 dp) the Mass button is dropped from the bar (it is in the drawer) so the title keeps a readable width.
   On viewports `< 360 px` (ADR-061), `SealTab` scales down to `54×70 dp` (from `64×80 dp`), the title typography
   uses 15 pt 2-line `appShort` (`height: 1.15`), guaranteeing a `>= 130 dp` readable title slot and `>= 6 dp` seal clearance.

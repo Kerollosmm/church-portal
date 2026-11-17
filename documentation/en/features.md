@@ -128,13 +128,13 @@ This document provides a comprehensive, feature-by-feature manual for all 31 cap
 - **Technical Implementation:** Implemented in `lib/ui/pages/item_detail_page.dart`. Generates canonical URLs and dynamic Open Graph meta tags.
 
 ### 16. Custom Sections (`/section/:slug`)
-- **Visitor Experience:** Dynamic dedicated sections (e.g., Youth Summer Trips, Spiritual Conventions) appearing seamlessly in the navigation bar and drawer menu.
-- **Admin Control (`/admin` → Custom Sections):** Create custom sections with custom slugs, bilingual titles, menu visibility switches, and associated entries.
-- **Technical Implementation:** Stored across `categories` and `entries` collections with prefix-aware route resolution.
+- **Visitor Experience:** Dynamic dedicated sections (e.g., Youth Summer Trips, Spiritual Conventions) appearing seamlessly in the navigation bar and drawer menu. Empty sections with 0 visible entries and 0 visible section pages are automatically omitted from public navigation.
+- **Admin Control (`/admin` → Custom Sections):** Create custom sections with custom slugs, bilingual titles, menu visibility switches, and associated entries. Category creation from scratch with defaults (`order: null`, `nameEn: ''`, `introAr: ''`, `introEn: ''`, `icon: 'star'`, `showInNav: true`, `visible: true`) is verified across both `englishEnabled: false` and `true`. Category cards display linked section pages (`placement == 'section'`) with a «صفحة» / `'Page'` tag, visibility toggle, and tap-to-edit alongside entries. Categories with 0 visible items/pages display an `'emptyHiddenFromVisitors'` badge («فاضي، مش ظاهر للزوار»), and the empty state message («مفيش عناصر في القسم ده لسه») only appears when both entries and section pages are empty.
+- **Technical Implementation:** Stored across `categories` and `entries` collections with prefix-aware route resolution. Category emptiness is unified via `isCategoryNonEmpty` (`custom_content.dart`) shared across public navigation (`publicNonEmptyCategories`) and Admin `CollectionListScreen`. Verified end-to-end: empty categories stay hidden from public menus, show `EmptyState` at `/section/:slug`, and display `'emptyHiddenFromVisitors'` in admin; linking a visible section page immediately reveals the section in public menus, renders the `CustomPageCard` with `CardCover`, and removes the admin badge.
 
 ### 17. Custom Page Builder (`/page/:slug`) & Donations
-- **Visitor Experience:** Content-rich custom pages formatted with headings, text paragraphs, banners, external links, and official church donation information (Bank accounts, InstaPay handles, electronic wallets).
-- **Admin Control (`/admin` → Custom Pages):** Visual block-based editor to assemble layouts without HTML knowledge.
+- **Visitor Experience:** Content-rich custom pages formatted with headings, text paragraphs, banners, external links, and official church donation information (Bank accounts, InstaPay handles, electronic wallets), rendered in a centered 700px reading width with 26px headings. Featured pages can appear on the Home screen under «صفحات مميزة» (centered in `ConstrainedBox(maxWidth: 560)` when single; `ResponsiveGrid` when multiple) with `SizeChangedLayoutNotifier` async hydration reveal and `_RevealState.viewportLead` tuned to 20 to eliminate blank viewport gaps. Verified responsive rendering of `CustomPageCard` (`CardCover`) and `CustomPageView` (`FittedCover`) at 320 px with zero overflow, leaving fonts untouched and strictly avoiding legacy image fallback fields.
+- **Admin Control (`/admin` → Custom Pages):** Visual block-based editor to assemble layouts without HTML knowledge, featuring single-open collapsible block cards with formatted snippets, ready-made donation template, and placement options (`link`, `nav`, `section`) retaining `categoryId` across non-section saves. Heading blocks (`BlockTypes.heading`) enforce required Arabic text (`blockHeadingRequired` / «عنوان الفقرة (عربي) مطلوب.» via `validateHeadingBlock` and `validateDocument`), auto-expanding the block and focusing the Arabic heading field when tapped from the top error summary banner.
 - **Technical Implementation:** Stored in `pages` collection. Validated to prevent arbitrary script execution.
 
 ### 18. Contact Form, Inbound Inbox & Anonymous Messages
@@ -161,6 +161,12 @@ This document provides a comprehensive, feature-by-feature manual for all 31 cap
 ### 22. Administrative Dashboard (`/admin`)
 - **Visitor Experience:** Invisible to regular visitors and blocked from search engine indexing (`noindex`).
 - **Admin Control:** Comprehensive management portal with responsive desktop sidebar and mobile navigation drawer. Provides audit timestamps (`updatedAt`, `updatedBy`) on every save.
+- **Safety Features (PR 3A / ADR-070):**
+  - **Structured Error Display (`formatAdminError`):** Helper surfaces `FirebaseException.code` (e.g., `[permission-denied]`) and clear error descriptions across `DocEditor.save()`, `CollectionListScreen`, `MessagesScreen`, `AdminsScreen`, and `SeasonPresetScreen`, preventing silent failures or obscured exceptions.
+  - **Sticky Unsaved Bar (`UnsavedBar`):** Pinned bottom bar displaying unsaved modifications with Save and Cancel buttons; responsive at 320 px and 200% text scaling.
+  - **Unsaved Changes Guard (`UnsavedGuard`):** Intercepts back navigation, menu drawer navigation, sign out, and web browser tab closing (`beforeunload`), with prominent "Keep editing" primary button.
+  - **Reversible Item Deletion (`PendingDelete`):** Immediate Firestore `deletedAt` soft delete and 10-second undo buffer with SnackBar («اتمسح» / "Undo"); immediately hidden from public site and sitemaps; lazy purge on admin dashboard open (`purgeExpiredSoftDeletes`). Both the SnackBar and the 'Undo' button automatically and completely dismiss after 10 seconds via `persist: false` and a dedicated `_undoSnackBarTimer` / `_undoSnackBarController`.
+  - **Named Confirmation Dialogs (`confirmNamedAction`):** Explicitly names affected items/actions for broadcasts ("Send to all"), message deletions, and admin removals.
 - **Technical Implementation:** Authenticated via Firebase Auth. Protected by Firestore security rules checking role assignments in `admins/{uid}`.
 
 ### 23. Section Feature Toggles
@@ -195,7 +201,7 @@ This document provides a comprehensive, feature-by-feature manual for all 31 cap
 ### 29. Web Performance & PageSpeed Optimization
 - **Visitor Experience:** Instantaneous initial paint (≤ 0.8s) and smooth 60fps scrolling across mobile and desktop devices.
 - **Technical Implementation:** Employs static HTML loading shells, CSS-animated ambient layers, font fingerprinting, and deferred JavaScript execution to achieve 90+ PageSpeed ratings.
-- **ADR-061 Web Bundle & Deferred Guard:** Exactly 8 secondary modules are deferred (`.part.js`), mechanically verified in CI by `tool/check_web_bundle.mjs` against `main.dart.js.map` with `gzip -9 <= 1,396,031 B` ceiling (measured `1,374,520 B` with `+21,511 B` headroom). OpenType fonts (`IBMPlexSansArabic`, `Lalezar`, `ArefRuqaa`) are retained intact (> 20 KB each) to preserve Arabic ligatures and tashkeel diacritics.
+- **ADR-061 Web Bundle & Deferred Guard:** Exactly 8 secondary modules are deferred (`.part.js`), mechanically verified in CI by `tool/check_web_bundle.mjs` against `main.dart.js.map` with `gzip -9 <= 1,399,000 B` ceiling (measured `1,375,961 B` with `+23,039 B` headroom). OpenType fonts (`IBMPlexSansArabic`, `Lalezar`, `ArefRuqaa`) are retained intact (> 20 KB each) to preserve Arabic ligatures and tashkeel diacritics.
 
 ### 30. Accessibility & WCAG 2.2 AA Compliance
 - **Visitor Experience:** Full compatibility with screen readers (TalkBack, VoiceOver), high-contrast text modes, large text scaling (up to 200%), and keyboard navigation.

@@ -6,17 +6,26 @@ import 'package:material_ui/material_ui.dart';
 
 import '../../core/l10n.dart';
 import '../../core/theme.dart';
+import '../../data/admin_repository.dart';
 import '../../data/image_processing.dart';
 import '../../data/media_repository.dart';
 import '../../domain/cairo_time.dart';
+import '../../domain/custom_content.dart' show BlockTypes, PagePlacements;
 import '../../domain/media.dart';
+import '../../domain/models.dart';
 import '../../domain/reminders.dart' show leadLabel;
-import '../../domain/rules.dart' show normalizeDigits;
+import '../../domain/rules.dart' show normalizeDigits, toArabicDigits;
+import '../../domain/schedule.dart' show liturgiesHiddenBy;
 import '../../domain/time_format.dart';
 import '../../domain/today.dart' show DayEvent;
 import '../widgets/item_image.dart';
 import 'admin_schema.dart';
+import 'admin_strings.dart';
 import 'admin_validators.dart';
+import 'screen_header.dart';
+import 'state_switch.dart';
+import 'unsaved_bar.dart';
+import 'unsaved_guard.dart';
 
 /// Picks an image file and returns its bytes (null = cancelled).
 typedef ImageBytesPicker = Future<Uint8List?> Function();
@@ -30,6 +39,7 @@ Future<Uint8List?> pickImageFromDevice() async {
 /// and for the church-info document.
 class DocEditor extends StatefulWidget {
   final String title;
+  final String help;
   final List<FieldDef> fields;
 
   /// Existing data (null = new document).
@@ -67,9 +77,19 @@ class DocEditor extends StatefulWidget {
   /// Slugs other documents of this collection already use (ADR-027).
   final Set<String> takenSlugs;
 
+  /// Existing collection documents for live cross-document previews.
+  final List<AdminDoc> existingDocs;
+
+  /// Active/inactive seasons so seasonal liturgies preview override accurately.
+  final List<Season> seasons;
+
+  /// Whether English translation fields are shown in the form (P2-27b).
+  final bool englishEnabled;
+
   const DocEditor({
     super.key,
     required this.title,
+    this.help = '',
     required this.fields,
     required this.onSave,
     this.data,
@@ -83,6 +103,9 @@ class DocEditor extends StatefulWidget {
     this.dynamicChoices = const {},
     this.linkTargets = const [],
     this.takenSlugs = const {},
+    this.existingDocs = const [],
+    this.seasons = const [],
+    this.englishEnabled = true,
   });
 
   @override
@@ -91,13 +114,25 @@ class DocEditor extends StatefulWidget {
 
 class DocEditorState extends State<DocEditor> {
   final _formKey = GlobalKey<FormState>();
+  final _scroll = ScrollController();
   final Map<String, TextEditingController> _text = {};
   final Map<String, dynamic> _values = {};
+  final Map<String, GlobalKey> _fieldKeys = {};
+  final Map<String, FocusNode> _focusNodes = {};
 
   /// objectList rows: field key -> rows of (subKey -> controller / value).
   final Map<String, List<_Row>> _rows = {};
   bool _saving = false;
   bool _dirty = false;
+  bool _pendingReset = false;
+  bool _showErrorSummary = false;
+  bool _initializing = false;
+  int _resetEpoch = 0;
+  _FieldErrorEntry? _pendingErrorFocus;
+  int _pendingFocusSteps = 0;
+  double? _lastMaxScrollExtent;
+  Timer? _errorFocusTimer;
+  String? _saveError;
 
   /// Image fields with a picked, compressed file waiting to be uploaded on save.
   final Map<String, EncodedImage> _pending = {};
@@ -107,6 +142,7 @@ class DocEditorState extends State<DocEditor> {
 
   /// Values as loaded: only fields that differ from these are saved.
   late Map<String, dynamic> _initialValues;
+  bool _hasInitialValues = false;
 
   /// The values before the first attempt of a save that has not completed
   /// yet. A failed later chunk advances [_initialValues] past a cover the
@@ -117,11 +153,18 @@ class DocEditorState extends State<DocEditor> {
   /// [FieldType.imageList] fields: photos in display order.
   final Map<String, List<_GalleryEntry>> _gallery = {};
 
-  /// Collapsible group cards (opened when they hold an invalid field).
+  /// Collapsible group cards (opened when an error entry is tapped).
   final Map<FieldGroup, ExpansibleController> _groupCtl = {
     for (final g in FieldGroup.values)
       if (g != FieldGroup.basic) g: ExpansibleController(),
   };
+  final ExpansibleController _advancedCtl = ExpansibleController();
+
+  /// [FieldDef.collapsibleRows]: index of the currently expanded row for each field key.
+  final Map<String, int?> _expandedRow = {};
+
+  bool _slugEdited = false;
+  bool _syncingSlug = false;
 
   /// The document exists: an existing one, or a new one whose first write
   /// succeeded (later writes then send only what changed).
@@ -133,15 +176,78 @@ class DocEditorState extends State<DocEditor> {
   bool get dirty => _dirty;
   bool get saving => _saving;
 
+  GlobalKey _fieldKey(String id) => _fieldKeys.putIfAbsent(id, () => GlobalKey());
+  FocusNode _focusNode(String id) => _focusNodes.putIfAbsent(id, () => FocusNode());
+
+  bool _isFieldShown(FieldDef f) =>
+      !f.hidden &&
+      (widget.englishEnabled || f.lang != 'en') &&
+      (f.showWhen == null || f.showWhen!.value.contains(_values[f.showWhen!.key]));
+
+  bool _isSubFieldShown(FieldDef sf, _Row row) =>
+      !sf.hidden &&
+      (widget.englishEnabled || sf.lang != 'en') &&
+      (sf.showWhen == null || sf.showWhen!.value.contains(row.values[sf.showWhen!.key]));
+
   @override
   void initState() {
     super.initState();
-    final data = {...?widget.data};
-    if (isNew) data.addAll(widget.newDefaults);
-    for (final f in widget.fields) {
-      _init(f, data[f.key]);
+    _initializing = true;
+    try {
+      final data = {...?widget.data};
+      if (isNew) data.addAll(widget.newDefaults);
+      if (widget.fields.any((f) => f.key == 'placement') &&
+          (data['placement'] == null || '${data['placement']}'.isEmpty) &&
+          data['showInNav'] == true) {
+        data['placement'] = PagePlacements.nav;
+      }
+      for (final f in widget.fields) {
+        _init(f, data[f.key]);
+      }
+      _setupAutoSlug();
+      _initialValues = collect();
+      _hasInitialValues = true;
+    } finally {
+      _initializing = false;
     }
-    _initialValues = collect();
+  }
+
+  @override
+  void didUpdateWidget(covariant DocEditor oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.englishEnabled != widget.englishEnabled && _showErrorSummary) {
+      _syncErrorSummaryAfterChange();
+    }
+  }
+
+  void _setupAutoSlug() {
+    _slugEdited = false;
+    _syncingSlug = false;
+    if (!isNew || _persisted) return;
+    final slugCtrl = _text['slug'];
+    if (slugCtrl == null) return;
+    final titleKey = _text.containsKey('nameAr')
+        ? 'nameAr'
+        : (_text.containsKey('titleAr') ? 'titleAr' : null);
+    if (titleKey == null) return;
+    final titleCtrl = _text[titleKey]!;
+    slugCtrl.addListener(() {
+      if (!_syncingSlug) _slugEdited = true;
+    });
+    void sync() {
+      if (!isNew || _persisted || _slugEdited) return;
+      final rawTitle = titleCtrl.text.trim();
+      final next = rawTitle.isEmpty ? '' : slugFromTitle(rawTitle, taken: widget.takenSlugs);
+      if (slugCtrl.text != next) {
+        _syncingSlug = true;
+        slugCtrl.text = next;
+        _syncingSlug = false;
+      }
+    }
+    titleCtrl.addListener(sync);
+    if (slugCtrl.text.trim().isEmpty && titleCtrl.text.trim().isNotEmpty) {
+      sync();
+    }
   }
 
   void _init(FieldDef f, Object? v) {
@@ -156,9 +262,9 @@ class DocEditorState extends State<DocEditor> {
       case FieldType.phone:
         _text[f.key] = _ctrl(v?.toString() ?? '');
       case FieldType.dateTime:
-        _text[f.key] = _ctrl(v is DateTime ? fmtDateTime(v) : '');
+        _text[f.key] = _ctrl(v is DateTime ? fmtDateTime(v) : (v is String ? v : ''));
       case FieldType.date:
-        _text[f.key] = _ctrl(v is DateTime ? fmtDate(v) : '');
+        _text[f.key] = _ctrl(v is DateTime ? fmtDate(v) : (v is String ? v : ''));
       case FieldType.boolean:
         _values[f.key] = v is bool ? v : (isNew ? f.newBool : f.missingBool);
       case FieldType.weekday:
@@ -192,6 +298,18 @@ class DocEditorState extends State<DocEditor> {
             else if (f.encodedRows && r is String)
               _Row.from(f.subFields, _decodeRow(f, r), _markDirty),
         ];
+        if (f.collapsibleRows) {
+          final rList = _rows[f.key]!;
+          if (rList.isNotEmpty) {
+            final donationIdx = rList.indexWhere((r) {
+              final type = r.values['type'] ?? r.text['type']?.text;
+              return type == BlockTypes.donation;
+            });
+            _expandedRow[f.key] = donationIdx >= 0 ? donationIdx : 0;
+          } else {
+            _expandedRow[f.key] = null;
+          }
+        }
       case FieldType.image:
         final img = MediaImage.fromMap(v);
         _values[f.key] = img?.toMap();
@@ -226,14 +344,41 @@ class DocEditorState extends State<DocEditor> {
 
   TextEditingController _ctrl(String text) => TextEditingController(text: text)..addListener(_markDirty);
 
+  void _clearPendingErrorFocus() {
+    _errorFocusTimer?.cancel();
+    _errorFocusTimer = null;
+    _pendingErrorFocus = null;
+    _pendingFocusSteps = 0;
+  }
+
   void _markDirty() {
-    if (!_dirty && mounted) setState(() => _dirty = true);
+    if (!_initializing) _clearPendingErrorFocus();
+    if (!_initializing && mounted && (!_dirty || _showErrorSummary || _saveError != null)) {
+      setState(() {
+        _dirty = true;
+        _saveError = null;
+        if (_showErrorSummary && _collectErrors().isEmpty) {
+          _showErrorSummary = false;
+        }
+      });
+    }
+  }
+
+  void _syncErrorSummaryAfterChange() {
+    if (_showErrorSummary && _collectErrors().isEmpty) {
+      _showErrorSummary = false;
+    }
   }
 
   @override
   void dispose() {
+    _errorFocusTimer?.cancel();
+    _scroll.dispose();
     for (final c in _text.values) {
       c.dispose();
+    }
+    for (final n in _focusNodes.values) {
+      n.dispose();
     }
     for (final rows in _rows.values) {
       for (final r in rows) {
@@ -248,6 +393,7 @@ class DocEditorState extends State<DocEditor> {
     for (final c in _groupCtl.values) {
       c.dispose();
     }
+    _advancedCtl.dispose();
     super.dispose();
   }
 
@@ -260,6 +406,18 @@ class DocEditorState extends State<DocEditor> {
   Map<String, dynamic> collect() {
     final out = <String, dynamic>{};
     for (final f in widget.fields) {
+      if (f.showWhen != null && !f.showWhen!.value.contains(_values[f.showWhen!.key])) {
+        if (f.key == 'categoryId') {
+          out[f.key] = _values['categoryId'] ?? '';
+        } else {
+          out[f.key] = f.type == FieldType.choice ? '' : null;
+        }
+        continue;
+      }
+      if (_hasInitialValues && !widget.englishEnabled && f.lang == 'en') {
+        out[f.key] = _initialValues[f.key];
+        continue;
+      }
       switch (f.type) {
         case FieldType.boolean:
         case FieldType.weekday:
@@ -275,7 +433,10 @@ class DocEditorState extends State<DocEditor> {
           out[f.key] = (_values[f.key] as Set<String>).toList()..sort();
         case FieldType.objectList:
           out[f.key] = [
-            for (final r in _rows[f.key]!) f.encodedRows ? _encodeRow(f, r.collect()) : r.collect(),
+            for (final r in _rows[f.key]!)
+              f.encodedRows
+                  ? _encodeRow(f, r.collect(englishEnabled: widget.englishEnabled))
+                  : r.collect(englishEnabled: widget.englishEnabled),
           ];
         case FieldType.image:
           out[f.key] = _collectImage(f.key);
@@ -290,6 +451,9 @@ class DocEditorState extends State<DocEditor> {
         default:
           out[f.key] = parseFieldValue(f, _text[f.key]!.text);
       }
+    }
+    if (out.containsKey('placement')) {
+      out['showInNav'] = out['placement'] == PagePlacements.nav;
     }
     return out;
   }
@@ -306,31 +470,254 @@ class DocEditorState extends State<DocEditor> {
 
   bool get _hasPendingUploads => _pending.isNotEmpty || _gallery.values.any((l) => l.any((g) => g.pending != null));
 
-  /// Opens every collapsed group holding an invalid field, so its error is
-  /// never hidden in a closed card. Returns true when one was opened.
-  bool _openInvalidGroups() {
-    final bad = <FieldGroup>{};
-    for (final f in widget.fields) {
-      if (f.group == FieldGroup.basic) continue;
+  String _plainLabel(FieldDef f) => context.pick(f.labelAr, f.labelEn);
+
+  /// Collects all invalid currently-shown fields in form order (including those
+  /// inside collapsed advanced/group cards so they appear in the error summary).
+  List<_FieldErrorEntry> _collectErrors() {
+    final out = <_FieldErrorEntry>[];
+    final ordered = <FieldDef>[
+      for (final f in widget.fields)
+        if (f.group == FieldGroup.basic && !f.advanced && _isFieldShown(f)) f,
+      for (final f in widget.fields)
+        if (f.group == FieldGroup.basic && f.advanced && _isFieldShown(f)) f,
+      for (final g in FieldGroup.values)
+        if (g != FieldGroup.basic)
+          for (final f in widget.fields)
+            if (f.group == g && _isFieldShown(f)) f,
+    ];
+    for (final f in ordered) {
+      final group = f.group == FieldGroup.basic ? null : f.group;
+      final advanced = f.group == FieldGroup.basic && f.advanced;
+      if (f.type == FieldType.objectList) {
+        final rows = _rows[f.key] ?? const <_Row>[];
+        for (var i = 0; i < rows.length; i++) {
+          final r = rows[i];
+          final rowMap = {for (final e in r.text.entries) e.key: e.value.text};
+          for (final sf in f.subFields) {
+            if (!_isSubFieldShown(sf, r)) continue;
+            var bad = false;
+            if (sf.type == FieldType.choice) {
+              bad = sf.required && (r.values[sf.key] == null || '${r.values[sf.key]}'.isEmpty);
+            } else if (sf.type != FieldType.boolean && sf.type != FieldType.image && sf.type != FieldType.imageList) {
+              final rc = r.text[sf.key];
+              final fieldBad = rc != null && validateFieldValue(sf, rc.text) != null;
+              final anyOfBad =
+                  f.rowRequireAnyOf.isNotEmpty && f.rowRequireAnyOf.first == sf.key && validateRowAnyOf(f, rowMap) != null;
+              final orderBad = f.rowNotBefore?.key == sf.key && validateRowOrder(f, rowMap) != null;
+              final uniqueBad = f.rowUniqueKey == sf.key &&
+                  validateRowUnique(f, [for (final x in rows) x.text[sf.key]?.text ?? ''], i) != null;
+              final headingBad = f.key == 'blocks' &&
+                  sf.key == 'textAr' &&
+                  r.values['type'] == BlockTypes.heading &&
+                  (rc?.text ?? '').trim().isEmpty;
+              bad = fieldBad || anyOfBad || orderBad || uniqueBad || headingBad;
+            }
+            if (bad) {
+              out.add(_FieldErrorEntry(
+                id: '${f.key}-$i-${sf.key}',
+                label: '${_plainLabel(f)} (${i + 1}) — ${_plainLabel(sf)}',
+                group: group,
+                advanced: advanced,
+                fieldKey: r.keyFor(sf.key),
+                focusNode: r.focusFor(sf.key),
+              ));
+            }
+          }
+        }
+        continue;
+      }
+      if (f.type == FieldType.choice) {
+        if (f.required && (_values[f.key] == null || '${_values[f.key]}'.isEmpty)) {
+          out.add(_FieldErrorEntry(
+            id: f.key,
+            label: _plainLabel(f),
+            group: group,
+            advanced: advanced,
+            fieldKey: _fieldKey(f.key),
+            focusNode: _focusNode(f.key),
+          ));
+        }
+        continue;
+      }
       final c = _text[f.key];
-      if (c != null && f.type != FieldType.image && validateFieldValue(f, c.text) != null) bad.add(f.group);
-      for (final r in _rows[f.key] ?? const <_Row>[]) {
-        if (validateRowAnyOf(f, {for (final e in r.text.entries) e.key: e.value.text}) != null) bad.add(f.group);
-        for (final sf in f.subFields) {
-          final rc = r.text[sf.key];
-          if (rc != null && validateFieldValue(sf, rc.text) != null) bad.add(f.group);
+      if (c != null &&
+          f.type != FieldType.image &&
+          (validateFieldValue(f, c.text) != null || (f.slug && widget.takenSlugs.contains(c.text.trim())))) {
+        out.add(_FieldErrorEntry(
+          id: f.key,
+          label: _plainLabel(f),
+          group: group,
+          advanced: advanced,
+          fieldKey: _fieldKey(f.key),
+          focusNode: _focusNode(f.key),
+        ));
+      }
+    }
+    return out;
+  }
+
+  void _applyErrorFocus(_FieldErrorEntry entry, {required bool animate}) {
+    if (!mounted) return;
+    _formKey.currentState?.validate();
+    final ctx = entry.fieldKey.currentContext;
+    if (ctx != null) {
+      Scrollable.ensureVisible(
+        ctx,
+        duration: animate ? const Duration(milliseconds: 200) : Duration.zero,
+        alignment: 0.25,
+      );
+    }
+    if (entry.focusNode.canRequestFocus) {
+      entry.focusNode.requestFocus();
+    }
+  }
+
+  void _focusErrorEntry(_FieldErrorEntry entry) {
+    var expanded = false;
+    if (entry.advanced && !_advancedCtl.isExpanded) {
+      _advancedCtl.expand();
+      expanded = true;
+    } else if (entry.group != null) {
+      final ctl = _groupCtl[entry.group];
+      if (ctl != null && !ctl.isExpanded) {
+        ctl.expand();
+        expanded = true;
+      }
+    }
+    for (final f in widget.fields) {
+      if (f.collapsibleRows) {
+        final rows = _rows[f.key] ?? const <_Row>[];
+        for (var idx = 0; idx < rows.length; idx++) {
+          if (rows[idx].focus.values.contains(entry.focusNode) ||
+              rows[idx].keys.values.contains(entry.fieldKey)) {
+            if (_expandedRow[f.key] != idx) {
+              _expandedRow[f.key] = idx;
+              expanded = true;
+            }
+            break;
+          }
         }
       }
     }
-    var opened = false;
-    for (final g in bad) {
-      final c = _groupCtl[g]!;
-      if (!c.isExpanded) {
-        c.expand();
-        opened = true;
-      }
+    if (expanded) {
+      _clearPendingErrorFocus();
+      _pendingErrorFocus = entry;
+      _pendingFocusSteps = 20;
+      _lastMaxScrollExtent = _scroll.hasClients ? _scroll.position.maxScrollExtent : null;
+      _errorFocusTimer = Timer(const Duration(milliseconds: 350), () {
+        if (mounted) _clearPendingErrorFocus();
+      });
+      setState(() {});
+    } else {
+      _clearPendingErrorFocus();
     }
-    return opened;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _applyErrorFocus(entry, animate: !expanded);
+    });
+  }
+
+  Widget _saveErrorBanner(BuildContext context, String error) {
+    return Semantics(
+      liveRegion: true,
+      child: Card(
+        key: const Key('editor-save-error'),
+        color: context.pal.alert.withValues(alpha: 0.08),
+        margin: const EdgeInsets.only(bottom: 14),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(color: context.pal.alert.withValues(alpha: 0.5)),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          child: Row(
+            children: [
+              Icon(Icons.error_outline, color: context.pal.alert, size: 20),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  error,
+                  style: TextStyle(color: context.pal.alert, fontWeight: FontWeight.w700),
+                ),
+              ),
+              IconButton(
+                icon: Icon(Icons.close, color: context.pal.alert, size: 18),
+                onPressed: () => setState(() => _saveError = null),
+                tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _errorSummaryCard(BuildContext context, List<_FieldErrorEntry> errors) {
+    final n = errors.length;
+    final title = switch (n) {
+      1 => context.tr('errSummaryOne'),
+      2 => context.tr('errSummaryTwo'),
+      >= 3 && <= 10 => context.tr('errSummaryFew', {'n': '$n'}),
+      _ => context.tr('errSummaryMany', {'n': '$n'}),
+    };
+    return Semantics(
+      liveRegion: true,
+      child: Card(
+        key: const Key('editor-error-summary'),
+        color: context.pal.alert.withValues(alpha: 0.08),
+        margin: const EdgeInsets.only(bottom: 14),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(color: context.pal.alert.withValues(alpha: 0.5)),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.error_outline, color: context.pal.alert, size: 20),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: TextStyle(color: context.pal.alert, fontWeight: FontWeight.w800),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              for (final e in errors)
+                InkWell(
+                  key: ValueKey('error-summary-${e.id}'),
+                  borderRadius: BorderRadius.circular(8),
+                  onTap: () => _focusErrorEntry(e),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+                    child: Row(
+                      children: [
+                        Icon(Icons.arrow_forward_rounded, size: 16, color: context.pal.alert),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            e.label,
+                            style: TextStyle(
+                              color: context.pal.ink,
+                              fontWeight: FontWeight.w600,
+                              decoration: TextDecoration.underline,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   /// Validates and saves. Returns true on success (visible for tests).
@@ -342,17 +729,31 @@ class DocEditorState extends State<DocEditor> {
   /// that fails leaves the earlier ones saved; a retry sends only the rest.
   Future<bool> save() async {
     if (_saving || _processing != null) return false;
-    if (!_formKey.currentState!.validate()) {
-      if (_openInvalidGroups()) {
-        ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(content: Text(context.tr('checkHighlighted'))));
-      }
+    setState(() => _saveError = null);
+    final errors = _collectErrors();
+    final valid = _formKey.currentState!.validate();
+    if (!valid || errors.isNotEmpty) {
+      _clearPendingErrorFocus();
+      setState(() => _showErrorSummary = true);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _scroll.hasClients) {
+          _scroll.animateTo(0, duration: const Duration(milliseconds: 200), curve: Curves.easeOut);
+        }
+      });
       return false;
     }
     var data = collect();
     final messenger = ScaffoldMessenger.maybeOf(context);
     final docErr = validateDocument(widget.def, data);
     if (docErr != null) {
-      messenger?.showSnackBar(SnackBar(content: Text(context.tr(docErr))));
+      final msg = context.tr(docErr);
+      messenger?.showSnackBar(SnackBar(content: Text(msg)));
+      setState(() => _saveError = msg);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _scroll.hasClients) {
+          _scroll.animateTo(0, duration: const Duration(milliseconds: 200), curve: Curves.easeOut);
+        }
+      });
       return false;
     }
     final savedMsg = context.tr('saved');
@@ -418,7 +819,13 @@ class DocEditorState extends State<DocEditor> {
       setState(() {
         _saving = false;
         _dirty = false;
+        _showErrorSummary = false;
+        _saveError = null;
       });
+      if (_pendingReset) {
+        _pendingReset = false;
+        _resetToInitial();
+      }
       // The admin may have closed the editor while the write was pending:
       // only pop if this editor is still the top route.
       if (widget.popOnSave && (route?.isCurrent ?? false)) nav.pop();
@@ -444,8 +851,21 @@ class DocEditorState extends State<DocEditor> {
           ..image = null;
       }
       if (mounted) {
-        messenger?.showSnackBar(SnackBar(content: Text(context.tr('saveFailed', {'e': '$e'}))));
-        setState(() => _saving = false);
+        final errText = context.tr('saveFailed', {'e': formatAdminError(e)});
+        messenger?.showSnackBar(SnackBar(content: Text(errText)));
+        setState(() {
+          _saving = false;
+          _saveError = errText;
+        });
+        if (_pendingReset) {
+          _pendingReset = false;
+          _resetToInitial();
+        }
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && _scroll.hasClients) {
+            _scroll.animateTo(0, duration: const Duration(milliseconds: 200), curve: Curves.easeOut);
+          }
+        });
       }
       return false;
     }
@@ -461,17 +881,57 @@ class DocEditorState extends State<DocEditor> {
 
   Future<bool> _confirmDiscard() async {
     if (!_dirty) return true;
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        content: Text(context.tr('discardChanges')),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(context.tr('keepEditing'))),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(context.tr('discard'))),
-        ],
-      ),
-    );
-    return ok == true;
+    return confirmDiscardChanges(context);
+  }
+
+  void _resetToInitial() {
+    if (_saving) {
+      _pendingReset = true;
+      return;
+    }
+    _resetEpoch++;
+    for (final c in _text.values) {
+      c.dispose();
+    }
+    for (final rows in _rows.values) {
+      for (final r in rows) {
+        r.dispose();
+      }
+    }
+    for (final list in _gallery.values) {
+      for (final g in list) {
+        g.alt.dispose();
+      }
+    }
+    _text.clear();
+    _values.clear();
+    _rows.clear();
+    _gallery.clear();
+    _pending.clear();
+    _processing = null;
+    _showErrorSummary = false;
+    _saveError = null;
+    _initializing = true;
+    try {
+      for (final f in widget.fields) {
+        _init(f, _initialValues[f.key]);
+      }
+      _setupAutoSlug();
+    } finally {
+      _initializing = false;
+    }
+    setState(() => _dirty = false);
+  }
+
+  Future<void> _handleCancel() async {
+    if (widget.popOnSave) {
+      Navigator.of(context).maybePop();
+    } else {
+      final discard = await _confirmDiscard();
+      if (discard && mounted) {
+        _resetToInitial();
+      }
+    }
   }
 
   String _label(FieldDef f) => context.pick(f.labelAr, f.labelEn) + (f.required ? ' *' : '');
@@ -485,6 +945,7 @@ class DocEditorState extends State<DocEditor> {
   static bool _picked(FieldType t) => t == FieldType.time || t == FieldType.date || t == FieldType.dateTime;
 
   Future<void> _pick(FieldDef f, TextEditingController c) async {
+    final epoch = _resetEpoch;
     final now = CairoTime.now();
     Future<(int, int)?> time((int, int)? current) async {
       final init = current ?? (f.type == FieldType.time ? (18, 0) : (now.hour, now.minute));
@@ -517,7 +978,7 @@ class DocEditorState extends State<DocEditor> {
 
     if (f.type == FieldType.time) {
       final t = await time(parseFieldTime(c.text));
-      if (t != null && mounted) c.text = formatPickedTime(t.$1, t.$2);
+      if (t != null && mounted && epoch == _resetEpoch) c.text = formatPickedTime(t.$1, t.$2);
       return;
     }
     final cur = parseFieldDateTime(c.text);
@@ -530,14 +991,30 @@ class DocEditorState extends State<DocEditor> {
       lastDate: last,
       helpText: _label(f),
     );
-    if (d == null || !mounted) return;
+    if (d == null || !mounted || epoch != _resetEpoch) return;
     if (f.type == FieldType.date) {
       c.text = formatPickedDate(d.year, d.month, d.day);
       return;
     }
     final t = await time(cur == null ? null : (cur.$4, cur.$5));
-    if (t == null || !mounted) return;
+    if (t == null || !mounted || epoch != _resetEpoch) return;
     c.text = formatPickedDateTime(d.year, d.month, d.day, t.$1, t.$2);
+  }
+
+  /// Year + optional Arabic/English month + optional day picker for
+  /// [FieldType.looseDate]; manual typing remains enabled on the field.
+  Future<void> _pickLooseDate(FieldDef f, TextEditingController c) async {
+    final epoch = _resetEpoch;
+    final picked = await showDialog<String>(
+      context: context,
+      builder: (_) => _LooseDatePickerDialog(
+        title: _label(f),
+        initial: parseLooseDate(c.text),
+        defaultYear: CairoTime.now().year,
+      ),
+    );
+    if (picked == null || !mounted || epoch != _resetEpoch) return;
+    c.text = picked;
   }
 
   /// The friendly 12-hour reading of a picked time / date-time field, shown
@@ -557,7 +1034,8 @@ class DocEditorState extends State<DocEditor> {
   }
 
   Widget? _pickerSuffix(FieldDef f, TextEditingController c) {
-    if (!_picked(f.type)) return null;
+    final isLoose = f.type == FieldType.looseDate;
+    if (!_picked(f.type) && !isLoose) return null;
     return ValueListenableBuilder<TextEditingValue>(
       valueListenable: c,
       builder: (context, v, _) => Row(mainAxisSize: MainAxisSize.min, children: [
@@ -572,33 +1050,37 @@ class DocEditorState extends State<DocEditor> {
           key: ValueKey('pick-${f.key}'),
           tooltip: context.tr(f.type == FieldType.time ? 'pickTime' : 'pickDate'),
           icon: Icon(f.type == FieldType.time ? Icons.access_time_rounded : Icons.calendar_month_rounded),
-          onPressed: () => _pick(f, c),
+          onPressed: () => isLoose ? _pickLooseDate(f, c) : _pick(f, c),
         ),
       ]),
     );
   }
 
-  Widget _textField(FieldDef f, TextEditingController c, {String? Function()? rowError}) {
+  Widget _textField(FieldDef f, TextEditingController c, {String? Function()? rowError, FocusNode? focusNode}) {
     if (f.type == FieldType.time || f.type == FieldType.dateTime) {
       // Rebuilds with the value so the 12-hour reading follows each pick.
       return ValueListenableBuilder<TextEditingValue>(
         valueListenable: c,
-        builder: (context, v, _) => _textFieldBody(f, c, rowError, _pickedReading(f, v.text)),
+        builder: (context, v, _) => _textFieldBody(f, c, rowError, _pickedReading(f, v.text), focusNode),
       );
     }
-    return _textFieldBody(f, c, rowError, null);
+    return _textFieldBody(f, c, rowError, null, focusNode);
   }
 
-  Widget _textFieldBody(FieldDef f, TextEditingController c, String? Function()? rowError, String? reading) {
+  Widget _textFieldBody(
+      FieldDef f, TextEditingController c, String? Function()? rowError, String? reading, FocusNode? focusNode) {
     final picked = _picked(f.type);
     final ltr = switch (f.type) {
       FieldType.text || FieldType.multiline => false,
       _ => true,
     };
-    final hint = [reading ?? '', context.pick(f.hintAr, f.hintEn)].where((s) => s.isNotEmpty).join('\n');
+    final fieldHint = context.pick(f.hintAr, f.hintEn);
+    final looseHint = f.type == FieldType.looseDate && fieldHint.isEmpty ? context.tr('looseDateHint') : '';
+    final hint = [reading ?? '', fieldHint, looseHint].where((s) => s.isNotEmpty).join('\n');
     return TextFormField(
       key: ValueKey('field-${f.key}'),
       controller: c,
+      focusNode: focusNode,
       readOnly: picked,
       onTap: picked ? () => _pick(f, c) : null,
       minLines: f.type == FieldType.multiline ? 3 : 1,
@@ -621,6 +1103,7 @@ class DocEditorState extends State<DocEditor> {
         labelText: _label(f),
         helperText: hint.isEmpty ? null : hint,
         helperMaxLines: reading == null ? 3 : 4,
+        helperStyle: hint.isEmpty ? null : TextStyle(fontSize: 13.5, color: context.pal.muted, height: 1.4),
         suffixIcon: _pickerSuffix(f, c) ?? (f.linkPicker && widget.linkTargets.isNotEmpty
             ? IconButton(
                 key: ValueKey('linkPick-${f.key}'),
@@ -644,6 +1127,7 @@ class DocEditorState extends State<DocEditor> {
 
   /// "Pick a page…": custom pages, categories and built-in routes.
   Future<void> _pickLink(TextEditingController c) async {
+    final epoch = _resetEpoch;
     final picked = await showDialog<String>(
       context: context,
       builder: (ctx) => SimpleDialog(
@@ -661,27 +1145,176 @@ class DocEditorState extends State<DocEditor> {
         ],
       ),
     );
-    if (picked == null || !mounted) return;
+    if (picked == null || !mounted || epoch != _resetEpoch) return;
     c.text = picked;
   }
 
-  Widget _field(FieldDef f) {
+  (String on, String off) _switchLabels(BuildContext context, FieldDef f) {
+    return switch (f.key) {
+      'visible' => (context.tr('switch_visible'), context.tr('switch_hidden')),
+      'sample' => (context.tr('switch_sample'), context.tr('switch_confirmed')),
+      'active' => (context.tr('switch_active'), context.tr('switch_stopped')),
+      'replacesDay' => (context.tr('switch_replaces_on'), context.tr('switch_replaces_off')),
+      'showInNav' => (context.tr('switch_nav_on'), context.tr('switch_nav_off')),
+      'featured' => (context.tr('switch_featured_on'), context.tr('switch_featured_off')),
+      _ => (context.tr('switch_enabled'), context.tr('switch_disabled')),
+    };
+  }
+
+  Widget _replacesDayPreview(BuildContext context) {
+    final rawDate = _text['date']?.text.trim();
+    final parsedDate = (rawDate != null && rawDate.isNotEmpty) ? parseDate(rawDate) : null;
+    final rawWeekday = _values['weekday'];
+    final weekday = rawWeekday is int ? rawWeekday : null;
+
+    final rawSeasonKey = _values['seasonKey'];
+    final seasonKey = rawSeasonKey is String && rawSeasonKey.isNotEmpty ? rawSeasonKey : null;
+
+    final replacing = Liturgy(
+      id: widget.docId ?? 'draft',
+      type: _values['type'] is String && (_values['type'] as String).isNotEmpty
+          ? _values['type'] as String
+          : (_text['type']?.text.trim().isNotEmpty == true ? _text['type']!.text.trim() : 'mass'),
+      nameAr: _text['nameAr']?.text.trim() ?? '',
+      nameEn: _text['nameEn']?.text.trim() ?? '',
+      weekday: weekday,
+      date: parsedDate,
+      start: _text['start']?.text.trim() ?? '',
+      end: _text['end']?.text.trim() ?? '',
+      seasonKey: seasonKey,
+      replacesDay: true,
+      visible: _values['visible'] != false,
+      sample: _values['sample'] == true,
+    );
+
+    final allLiturgies = [
+      for (final d in widget.existingDocs)
+        if (!isSoftDeleted(d.data)) Liturgy.fromMap(d.id, d.data),
+    ];
+    final hiddenLiturgies = liturgiesHiddenBy(replacing, allLiturgies, seasons: widget.seasons);
+
+    final String heading;
+    if (replacing.date != null) {
+      final d = CairoTime.calendarDate(replacing.date!);
+      final w = weekdayName(d.weekday, arabic: context.isAr);
+      final dt = formatDate(d, arabic: context.isAr);
+      heading = context.tr('replacesPreviewHeadingDate', {'d': '$w $dt'});
+    } else if (replacing.weekday != null) {
+      final w = weekdayName(replacing.weekday, arabic: context.isAr);
+      heading = context.tr('replacesPreviewHeadingWeekday', {'w': w});
+    } else {
+      heading = context.tr('replacesPreviewHeadingFallback');
+    }
+
+    final String emptyNote;
+    if (!replacing.visible) {
+      emptyNote = context.tr('replacesPreviewHidden');
+    } else if (replacing.date == null && replacing.weekday == null) {
+      emptyNote = context.tr('replacesPreviewNoDay');
+    } else {
+      emptyNote = context.tr('replacesPreviewEmpty');
+    }
+
+    return Card(
+      key: const ValueKey('replacesDayPreview'),
+      color: context.pal.surfaceAlt.withValues(alpha: 0.5),
+      margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(10),
+        side: BorderSide(color: context.pal.goldText.withValues(alpha: 0.3)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.info_outline, size: 18, color: context.pal.goldText),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    heading,
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                      color: context.pal.ink,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            if (hiddenLiturgies.isEmpty)
+              Text(emptyNote, style: TextStyle(color: context.pal.muted, fontSize: 12))
+            else
+              for (final l in hiddenLiturgies)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 2),
+                  child: Row(
+                    children: [
+                      const Text('• ', style: TextStyle(fontWeight: FontWeight.bold)),
+                      Expanded(
+                        child: Text(
+                          context.pick(l.nameAr, l.nameEn),
+                          style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w500),
+                        ),
+                      ),
+                      Text(
+                        context.isAr ? formatRangeArabic(l.start, l.end) : formatRangeLatin(l.start, l.end),
+                        style: TextStyle(fontSize: 12, color: context.pal.muted),
+                      ),
+                    ],
+                  ),
+                ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _field(FieldDef f) => KeyedSubtree(
+        key: _fieldKey(f.key),
+        child: _fieldBody(f),
+      );
+
+  Widget _fieldBody(FieldDef f) {
     final label = _label(f);
     switch (f.type) {
       case FieldType.boolean:
         // The field's hint under the switch (e.g. `replacesDay`, ADR-050).
         final hint = context.pick(f.hintAr, f.hintEn);
-        return SwitchListTile(
+        final (onLabel, offLabel) = _switchLabels(context, f);
+        final sw = AdminStateSwitch(
           key: ValueKey('field-${f.key}'),
           contentPadding: const EdgeInsetsDirectional.only(start: 4),
           title: Text(label),
           subtitle: hint.isEmpty ? null : Text(hint),
           value: _values[f.key] as bool,
+          onLabel: onLabel,
+          offLabel: offLabel,
           onChanged: (v) => setState(() {
             _values[f.key] = v;
             _dirty = true;
+            _saveError = null;
           }),
         );
+        if (f.key == 'replacesDay' && _values['replacesDay'] == true) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              sw,
+              ListenableBuilder(
+                listenable: Listenable.merge([
+                  for (final k in const ['date', 'start', 'end', 'nameAr', 'nameEn', 'type'])
+                    if (_text[k] != null) _text[k]!,
+                ]),
+                builder: (context, _) => _replacesDayPreview(context),
+              ),
+            ],
+          );
+        }
+        return sw;
       case FieldType.weekday:
         return DropdownButtonFormField<int?>(
           key: ValueKey('field-${f.key}'),
@@ -696,6 +1329,7 @@ class DocEditorState extends State<DocEditor> {
           onChanged: (v) => setState(() {
             _values[f.key] = v;
             _dirty = true;
+            _saveError = null;
           }),
         );
       case FieldType.weekdays:
@@ -715,6 +1349,7 @@ class DocEditorState extends State<DocEditor> {
                 onSelected: (sel) => setState(() {
                   sel ? set.add(d) : set.remove(d);
                   _dirty = true;
+                  _saveError = null;
                 }),
               ),
           ]),
@@ -783,6 +1418,7 @@ class DocEditorState extends State<DocEditor> {
         final cur = _values[f.key] as String?;
         return DropdownButtonFormField<String?>(
           key: ValueKey('field-${f.key}'),
+          focusNode: _focusNode(f.key),
           isExpanded: true,
           initialValue: cur,
           decoration: InputDecoration(labelText: label),
@@ -797,27 +1433,33 @@ class DocEditorState extends State<DocEditor> {
           onChanged: (v) => setState(() {
             _values[f.key] = v;
             _dirty = true;
+            _syncErrorSummaryAfterChange();
           }),
         );
       case FieldType.choice:
         return DropdownButtonFormField<String?>(
           key: ValueKey('field-${f.key}'),
+          focusNode: _focusNode(f.key),
           isExpanded: true, // long labels ellipsize at 320 px / 200% text
           initialValue: _values[f.key] as String?,
           decoration: InputDecoration(
             labelText: label,
             helperText: context.pick(f.hintAr, f.hintEn).isEmpty ? null : context.pick(f.hintAr, f.hintEn),
             helperMaxLines: 4,
+            helperStyle: context.pick(f.hintAr, f.hintEn).isEmpty
+                ? null
+                : TextStyle(fontSize: 13.5, color: context.pal.muted, height: 1.4),
           ),
           validator: (v) => f.required && (v == null || v.isEmpty) ? context.tr('required') : null,
           items: [
             if (f.nullableChoice) const DropdownMenuItem<String?>(value: null, child: Text('—')),
             for (final o in {...f.options, if (_values[f.key] != null) _values[f.key] as String})
-              DropdownMenuItem<String?>(value: o, child: Text(choiceLabel(context, o))),
+              DropdownMenuItem<String?>(value: o, child: Text(fieldChoiceLabel(context, f, o))),
           ],
           onChanged: (v) => setState(() {
             _values[f.key] = v;
             _dirty = true;
+            _syncErrorSummaryAfterChange();
           }),
         );
       case FieldType.objectList:
@@ -827,7 +1469,7 @@ class DocEditorState extends State<DocEditor> {
       case FieldType.imageList:
         return _galleryEditor(f);
       default:
-        return _textField(f, _text[f.key]!);
+        return _textField(f, _text[f.key]!, focusNode: _focusNode(f.key));
     }
   }
 
@@ -857,6 +1499,7 @@ class DocEditorState extends State<DocEditor> {
             avatar: Icon(Icons.add_rounded, size: 18, color: context.pal.primary),
             label: Text(context.tr('addDate')),
             onPressed: () async {
+              final epoch = _resetEpoch;
               final now = CairoTime.now();
               final picked = await showDatePicker(
                 context: context,
@@ -866,7 +1509,7 @@ class DocEditorState extends State<DocEditor> {
                 lastDate: DateTime(2099, 12, 31),
                 helpText: label,
               );
-              if (picked == null || !mounted) return;
+              if (picked == null || !mounted || epoch != _resetEpoch) return;
               setState(() {
                 set.add(formatPickedDate(picked.year, picked.month, picked.day));
                 _dirty = true;
@@ -891,8 +1534,9 @@ class DocEditorState extends State<DocEditor> {
       _pickFromDevice(f.key, (enc) => _gallery[f.key]!.add(_GalleryEntry(null, enc, _ctrl(''))));
 
   Future<void> _addGalleryUrl(FieldDef f) async {
+    final epoch = _resetEpoch;
     final url = await showDialog<String>(context: context, builder: (_) => const _ImageUrlDialog(initial: ''));
-    if (url == null || !mounted) return;
+    if (url == null || !mounted || epoch != _resetEpoch) return;
     setState(() {
       _gallery[f.key]!.add(_GalleryEntry(MediaImage.url(url), null, _ctrl('')));
       _dirty = true;
@@ -905,16 +1549,21 @@ class DocEditorState extends State<DocEditor> {
     final messenger = ScaffoldMessenger.maybeOf(context);
     String msg(String k) => context.tr(k);
     final tooLarge = msg('imageTooLarge'), invalid = msg('imageInvalid'), empty = msg('imageEmpty');
+    final epoch = _resetEpoch;
     final Uint8List? bytes;
     try {
       bytes = await widget.pickImage();
     } catch (e) {
-      messenger?.showSnackBar(SnackBar(content: Text(invalid)));
+      if (mounted && epoch == _resetEpoch) {
+        messenger?.showSnackBar(SnackBar(content: Text(invalid)));
+      }
       return;
     }
-    if (bytes == null || !mounted) return;
+    if (bytes == null || !mounted || epoch != _resetEpoch) return;
     if (bytes.isEmpty) {
-      messenger?.showSnackBar(SnackBar(content: Text(empty)));
+      if (mounted && epoch == _resetEpoch) {
+        messenger?.showSnackBar(SnackBar(content: Text(empty)));
+      }
       return;
     }
     setState(() => _processing = key);
@@ -922,27 +1571,32 @@ class DocEditorState extends State<DocEditor> {
       final enc = await widget.prepareImage(bytes);
       final err = validateMediaBytes(enc.length);
       if (err != null) throw const ImageTooLargeException();
-      if (!mounted) return;
+      if (!mounted || epoch != _resetEpoch) return;
       setState(() {
         onReady(enc);
         _dirty = true;
       });
     } on ImageTooLargeException {
-      messenger?.showSnackBar(SnackBar(content: Text(tooLarge)));
+      if (mounted && epoch == _resetEpoch) {
+        messenger?.showSnackBar(SnackBar(content: Text(tooLarge)));
+      }
     } catch (_) {
-      messenger?.showSnackBar(SnackBar(content: Text(invalid)));
+      if (mounted && epoch == _resetEpoch) {
+        messenger?.showSnackBar(SnackBar(content: Text(invalid)));
+      }
     } finally {
-      if (mounted) setState(() => _processing = null);
+      if (mounted && epoch == _resetEpoch && _processing == key) setState(() => _processing = null);
     }
   }
 
   Future<void> _askImageUrl(FieldDef f) async {
     final current = MediaImage.fromMap(_values[f.key]);
+    final epoch = _resetEpoch;
     final url = await showDialog<String>(
       context: context,
       builder: (_) => _ImageUrlDialog(initial: current?.source == MediaSource.url ? current!.url : ''),
     );
-    if (url == null || !mounted) return;
+    if (url == null || !mounted || epoch != _resetEpoch) return;
     setState(() {
       _pending.remove(f.key);
       _values[f.key] = MediaImage.url(url).toMap();
@@ -1078,19 +1732,25 @@ class DocEditorState extends State<DocEditor> {
     FieldGroup.program: 'groupProgram',
     FieldGroup.details: 'groupDetails',
     FieldGroup.media: 'groupMedia',
+    FieldGroup.location: 'groupLocation',
     FieldGroup.contacts: 'groupContacts',
+    FieldGroup.hero: 'groupHero',
+    FieldGroup.history: 'groupHistory',
   };
   static const _groupIcons = {
     FieldGroup.program: Icons.campaign_outlined,
     FieldGroup.details: Icons.article_outlined,
     FieldGroup.media: Icons.photo_library_outlined,
+    FieldGroup.location: Icons.place_outlined,
     FieldGroup.contacts: Icons.contact_phone_outlined,
+    FieldGroup.hero: Icons.auto_stories_outlined,
+    FieldGroup.history: Icons.history_edu_outlined,
   };
 
   /// A collapsible card for one detail-page group. Collapsed fields stay
   /// mounted (maintainState) so the form still validates and collects them.
   Widget _groupCard(FieldGroup g) {
-    final fields = [for (final f in widget.fields) if (f.group == g) f];
+    final fields = [for (final f in widget.fields) if (f.group == g && _isFieldShown(f)) f];
     return Card(
       key: ValueKey('groupCard-${g.name}'),
       margin: const EdgeInsets.only(bottom: 12),
@@ -1125,7 +1785,7 @@ class DocEditorState extends State<DocEditor> {
           ];
         case FieldGroup.media:
           final photos = [for (final f in fields) if (f.type == FieldType.imageList) ..._gallery[f.key]!].length;
-          final cover = fields.any(
+          final cover = widget.fields.any(
               (f) => f.type == FieldType.image && (_pending.containsKey(f.key) || MediaImage.fromMap(_values[f.key]) != null));
           return [
             if (photos > 0) context.tr('pillPhotos', {'n': '$photos'}),
@@ -1133,11 +1793,16 @@ class DocEditorState extends State<DocEditor> {
             if (photos == 0 && !cover) context.tr('pillNoPhotos'),
           ];
         case FieldGroup.program:
+        case FieldGroup.location:
         case FieldGroup.contacts:
+        case FieldGroup.hero:
+        case FieldGroup.history:
         case FieldGroup.basic:
           final n = [
             for (final f in fields)
               if (_text[f.key] case final TextEditingController c when c.text.trim().isNotEmpty)
+                f
+              else if (f.type == FieldType.objectList && (_rows[f.key]?.isNotEmpty ?? false))
                 f
               // A chosen venue / audience counts too (CodeRabbit review on PR #32).
               else if (f.type == FieldType.choice && '${_values[f.key] ?? ''}'.isNotEmpty && g == FieldGroup.program)
@@ -1153,9 +1818,15 @@ class DocEditorState extends State<DocEditor> {
         );
     // Text counts follow typing (the form only rebuilds on its first edit).
     final controllers = [for (final f in fields) ?_text[f.key]];
-    return g == FieldGroup.contacts || g == FieldGroup.program
-        ? ListenableBuilder(listenable: Listenable.merge(controllers), builder: (_, _) => wrap())
-        : wrap();
+    return switch (g) {
+      FieldGroup.program ||
+      FieldGroup.location ||
+      FieldGroup.contacts ||
+      FieldGroup.hero ||
+      FieldGroup.history =>
+        ListenableBuilder(listenable: Listenable.merge(controllers), builder: (_, _) => wrap()),
+      _ => wrap(),
+    };
   }
 
   Widget _galleryEditor(FieldDef f) {
@@ -1276,109 +1947,326 @@ class DocEditorState extends State<DocEditor> {
     );
   }
 
+  String? _blockSnippet(_Row row) {
+    final type = (row.values['type'] ?? row.text['type']?.text ?? BlockTypes.paragraph).toString();
+    return blockSnippetSummary(
+      type: type,
+      textAr: row.text['textAr']?.text ?? (row.values['textAr']?.toString() ?? ''),
+      textEn: row.text['textEn']?.text ?? (row.values['textEn']?.toString() ?? ''),
+      url: row.text['url']?.text ?? (row.values['url']?.toString() ?? ''),
+      account: row.text['account']?.text ?? (row.values['account']?.toString() ?? ''),
+      instapay: row.text['instapay']?.text ?? (row.values['instapay']?.toString() ?? ''),
+      wallet: row.text['wallet']?.text ?? (row.values['wallet']?.toString() ?? ''),
+    );
+  }
+
   Widget _objectList(FieldDef f) {
     final rows = _rows[f.key]!;
     return InputDecorator(
       decoration: InputDecoration(labelText: _label(f)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         for (var i = 0; i < rows.length; i++)
-          Card(
-            key: ObjectKey(rows[i]),
-            color: context.pal.background,
-            margin: const EdgeInsets.only(bottom: 8),
-            child: Padding(
-              padding: const EdgeInsets.all(10),
-              child: Column(children: [
-                for (final sf in f.subFields)
-                  if (!sf.hidden && (sf.showWhen == null || sf.showWhen!.value.contains(rows[i].values[sf.showWhen!.key])))
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: switch (sf.type) {
-                      FieldType.boolean => SwitchListTile(
-                          contentPadding: EdgeInsets.zero,
-                          title: Text(_label(sf)),
-                          value: rows[i].values[sf.key] as bool,
-                          onChanged: (v) => setState(() {
-                            rows[i].values[sf.key] = v;
-                            _dirty = true;
-                          }),
-                        ),
-                      FieldType.choice => DropdownButtonFormField<String>(
-                          isExpanded: true,
-                          initialValue: rows[i].values[sf.key] as String?,
-                          decoration: InputDecoration(labelText: _label(sf)),
-                          items: [
-                            for (final o in sf.options)
-                              DropdownMenuItem(value: o, child: Text(choiceLabel(context, o))),
+          if (f.collapsibleRows && _expandedRow[f.key] != i)
+            Card(
+              key: ObjectKey(rows[i]),
+              color: context.pal.background,
+              margin: const EdgeInsets.only(bottom: 8),
+              child: InkWell(
+                onTap: () => setState(() => _expandedRow[f.key] = i),
+                borderRadius: BorderRadius.circular(12),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        children: [
+                          Text(
+                            '${i + 1}.',
+                            style: TextStyle(fontWeight: FontWeight.bold, color: context.pal.muted),
+                          ),
+                          const SizedBox(width: 8),
+                          Flexible(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: context.pal.surfaceAlt,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Text(
+                                choiceLabel(context, (rows[i].values['type'] ?? rows[i].text['type']?.text ?? BlockTypes.paragraph).toString()),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(fontSize: 12, color: context.pal.primary, fontWeight: FontWeight.w600),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Builder(builder: (context) {
+                              final snippet = _blockSnippet(rows[i]);
+                              if (snippet == null) return const SizedBox.shrink();
+                              final isEmpty = snippet.isEmpty;
+                              return Text(
+                                isEmpty ? context.tr('emptyBlockSnippet') : '· $snippet',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: isEmpty ? context.pal.muted : context.pal.ink,
+                                  fontStyle: isEmpty ? FontStyle.italic : FontStyle.normal,
+                                ),
+                              );
+                            }),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Wrap(
+                        alignment: WrapAlignment.spaceBetween,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                tooltip: context.tr('moveUp'),
+                                icon: const Icon(Icons.arrow_upward, size: 20),
+                                onPressed: i == 0
+                                    ? null
+                                    : () => setState(() {
+                                          final moved = rows.removeAt(i);
+                                          rows.insert(i - 1, moved);
+                                          if (_expandedRow[f.key] == i) {
+                                            _expandedRow[f.key] = i - 1;
+                                          } else if (_expandedRow[f.key] == i - 1) {
+                                            _expandedRow[f.key] = i;
+                                          }
+                                          _dirty = true;
+                                        }),
+                              ),
+                              IconButton(
+                                tooltip: context.tr('moveDown'),
+                                icon: const Icon(Icons.arrow_downward, size: 20),
+                                onPressed: i == rows.length - 1
+                                    ? null
+                                    : () => setState(() {
+                                          final moved = rows.removeAt(i);
+                                          rows.insert(i + 1, moved);
+                                          if (_expandedRow[f.key] == i) {
+                                            _expandedRow[f.key] = i + 1;
+                                          } else if (_expandedRow[f.key] == i + 1) {
+                                            _expandedRow[f.key] = i;
+                                          }
+                                          _dirty = true;
+                                        }),
+                              ),
+                            ],
+                          ),
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                tooltip: context.tr('remove'),
+                                icon: Icon(Icons.delete_outline, color: context.pal.alert, size: 20),
+                                onPressed: () => setState(() {
+                                  final removed = rows.removeAt(i);
+                                  if (_pendingErrorFocus != null && removed.focus.values.contains(_pendingErrorFocus!.focusNode)) {
+                                    _clearPendingErrorFocus();
+                                  }
+                                  removed.dispose();
+                                  if (_expandedRow[f.key] == i) {
+                                    _expandedRow[f.key] = null;
+                                  } else if (_expandedRow[f.key] != null && _expandedRow[f.key]! > i) {
+                                    _expandedRow[f.key] = _expandedRow[f.key]! - 1;
+                                  }
+                                  _dirty = true;
+                                  _syncErrorSummaryAfterChange();
+                                }),
+                              ),
+                              IconButton(
+                                tooltip: context.tr('expandBlock'),
+                                icon: const Icon(Icons.expand_more, size: 20),
+                                onPressed: () => setState(() => _expandedRow[f.key] = i),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            )
+          else
+            Card(
+              key: ObjectKey(rows[i]),
+              color: context.pal.background,
+              margin: const EdgeInsets.only(bottom: 8),
+              child: Padding(
+                padding: const EdgeInsets.all(10),
+                child: Column(children: [
+                  if (f.collapsibleRows)
+                    InkWell(
+                      onTap: () => setState(() => _expandedRow[f.key] = null),
+                      borderRadius: BorderRadius.circular(8),
+                      child: Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Row(
+                          children: [
+                            Text(
+                              '${i + 1}.',
+                              style: TextStyle(fontWeight: FontWeight.bold, color: context.pal.muted),
+                            ),
+                            const SizedBox(width: 8),
+                            Flexible(
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: context.pal.surfaceAlt,
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Text(
+                                  choiceLabel(context, (rows[i].values['type'] ?? rows[i].text['type']?.text ?? BlockTypes.paragraph).toString()),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(fontSize: 12, color: context.pal.primary, fontWeight: FontWeight.w600),
+                                ),
+                              ),
+                            ),
+                            const Spacer(),
+                            IconButton(
+                              tooltip: context.tr('collapseBlock'),
+                              icon: const Icon(Icons.expand_less, size: 20),
+                              onPressed: () => setState(() => _expandedRow[f.key] = null),
+                            ),
                           ],
-                          onChanged: (v) => setState(() {
-                            rows[i].values[sf.key] = v;
-                            _dirty = true;
-                          }),
                         ),
-                      _ => _textField(sf, rows[i].text[sf.key]!,
-                          rowError: f.rowRequireAnyOf.isNotEmpty && f.rowRequireAnyOf.first == sf.key
-                              ? () {
-                                  final err = validateRowAnyOf(f, {
-                                    for (final e in rows[i].text.entries) e.key: e.value.text,
-                                  });
-                                  return err == null ? null : context.tr(err);
-                                }
-                              : f.rowNotBefore?.key == sf.key
+                      ),
+                    ),
+                  for (final sf in f.subFields)
+                    if (_isSubFieldShown(sf, rows[i]))
+                    KeyedSubtree(
+                      key: rows[i].keyFor(sf.key),
+                      child: Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: switch (sf.type) {
+                          FieldType.boolean => AdminStateSwitch(
+                              contentPadding: EdgeInsets.zero,
+                              title: Text(_label(sf)),
+                              value: rows[i].values[sf.key] as bool,
+                              onLabel: _switchLabels(context, sf).$1,
+                              offLabel: _switchLabels(context, sf).$2,
+                              onChanged: (v) => setState(() {
+                                rows[i].values[sf.key] = v;
+                                _dirty = true;
+                              }),
+                            ),
+                          FieldType.choice => DropdownButtonFormField<String>(
+                              focusNode: rows[i].focusFor(sf.key),
+                              isExpanded: true,
+                              initialValue: rows[i].values[sf.key] as String?,
+                              decoration: InputDecoration(labelText: _label(sf)),
+                              items: [
+                                for (final o in sf.options)
+                                  DropdownMenuItem(value: o, child: Text(choiceLabel(context, o))),
+                              ],
+                              onChanged: (v) => setState(() {
+                                rows[i].values[sf.key] = v;
+                                _dirty = true;
+                                _syncErrorSummaryAfterChange();
+                              }),
+                            ),
+                          _ => _textField(sf, rows[i].text[sf.key]!,
+                              focusNode: rows[i].focusFor(sf.key),
+                              rowError: f.rowRequireAnyOf.isNotEmpty && f.rowRequireAnyOf.first == sf.key
                                   ? () {
-                                      final err = validateRowOrder(f, {
+                                      final err = validateRowAnyOf(f, {
                                         for (final e in rows[i].text.entries) e.key: e.value.text,
                                       });
                                       return err == null ? null : context.tr(err);
                                     }
-                                  : f.rowUniqueKey == sf.key
+                                  : f.rowNotBefore?.key == sf.key
                                       ? () {
-                                          final err = validateRowUnique(
-                                              f, [for (final r in rows) r.text[sf.key]?.text ?? ''], i);
+                                          final err = validateRowOrder(f, {
+                                            for (final e in rows[i].text.entries) e.key: e.value.text,
+                                          });
                                           return err == null ? null : context.tr(err);
                                         }
-                                      : null),
-                    },
-                  ),
-                // Wrap: at 320 px / 200% text the buttons flow onto two lines.
-                Wrap(
-                    alignment: WrapAlignment.spaceBetween,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                  Row(mainAxisSize: MainAxisSize.min, children: [
-                  IconButton(
-                    tooltip: context.tr('moveUp'),
-                    onPressed: i == 0
-                        ? null
-                        : () => setState(() {
-                              rows.insert(i - 1, rows.removeAt(i));
-                              _dirty = true;
-                            }),
-                    icon: const Icon(Icons.arrow_upward),
-                  ),
-                  IconButton(
-                    tooltip: context.tr('moveDown'),
-                    onPressed: i == rows.length - 1
-                        ? null
-                        : () => setState(() {
-                              rows.insert(i + 1, rows.removeAt(i));
-                              _dirty = true;
-                            }),
-                    icon: const Icon(Icons.arrow_downward),
-                  ),
+                                      : f.rowUniqueKey == sf.key
+                                          ? () {
+                                              final err = validateRowUnique(
+                                                  f, [for (final r in rows) r.text[sf.key]?.text ?? ''], i);
+                                              return err == null ? null : context.tr(err);
+                                            }
+                                          : f.key == 'blocks' &&
+                                                  sf.key == 'textAr' &&
+                                                  rows[i].values['type'] == BlockTypes.heading
+                                              ? () {
+                                                  final err = validateHeadingBlock({
+                                                    for (final e in rows[i].text.entries) e.key: e.value.text,
+                                                  }, rows[i].values['type'] as String? ?? '');
+                                                  return err == null ? null : context.tr(err);
+                                                }
+                                              : null),
+                        },
+                      ),
+                    ),
+                  // Wrap: at 320 px / 200% text the buttons flow onto two lines.
+                  Wrap(
+                      alignment: WrapAlignment.spaceBetween,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                    Row(mainAxisSize: MainAxisSize.min, children: [
+                    IconButton(
+                      tooltip: context.tr('moveUp'),
+                      onPressed: i == 0
+                          ? null
+                          : () => setState(() {
+                                final moved = rows.removeAt(i);
+                                rows.insert(i - 1, moved);
+                                if (f.collapsibleRows) _expandedRow[f.key] = i - 1;
+                                _dirty = true;
+                              }),
+                      icon: const Icon(Icons.arrow_upward),
+                    ),
+                    IconButton(
+                      tooltip: context.tr('moveDown'),
+                      onPressed: i == rows.length - 1
+                          ? null
+                          : () => setState(() {
+                                final moved = rows.removeAt(i);
+                                rows.insert(i + 1, moved);
+                                if (f.collapsibleRows) _expandedRow[f.key] = i + 1;
+                                _dirty = true;
+                              }),
+                      icon: const Icon(Icons.arrow_downward),
+                    ),
+                    ]),
+                    TextButton.icon(
+                      onPressed: () => setState(() {
+                        final removed = rows.removeAt(i);
+                        if (_pendingErrorFocus != null && removed.focus.values.contains(_pendingErrorFocus!.focusNode)) {
+                          _clearPendingErrorFocus();
+                        }
+                        removed.dispose();
+                        if (f.collapsibleRows) {
+                          if (_expandedRow[f.key] == i) {
+                            _expandedRow[f.key] = null;
+                          } else if (_expandedRow[f.key] != null && _expandedRow[f.key]! > i) {
+                            _expandedRow[f.key] = _expandedRow[f.key]! - 1;
+                          }
+                        }
+                        _dirty = true;
+                        _syncErrorSummaryAfterChange();
+                      }),
+                      icon: Icon(Icons.delete_outline, color: context.pal.alert),
+                      label: Text(context.tr('remove'), style: TextStyle(color: context.pal.alert)),
+                    ),
                   ]),
-                  TextButton.icon(
-                    onPressed: () => setState(() {
-                      rows.removeAt(i).dispose();
-                      _dirty = true;
-                    }),
-                    icon: Icon(Icons.delete_outline, color: context.pal.alert),
-                    label: Text(context.tr('remove'), style: TextStyle(color: context.pal.alert)),
-                  ),
                 ]),
-              ]),
+              ),
             ),
-          ),
         Align(
           alignment: AlignmentDirectional.centerStart,
           child: OutlinedButton.icon(
@@ -1386,6 +2274,9 @@ class DocEditorState extends State<DocEditor> {
                 ? null
                 : () => setState(() {
                       rows.add(_Row.from(f.subFields, const {}, _markDirty, isNew: true));
+                      if (f.collapsibleRows) {
+                        _expandedRow[f.key] = rows.length - 1;
+                      }
                       _dirty = true;
                     }),
             icon: const Icon(Icons.add),
@@ -1396,64 +2287,124 @@ class DocEditorState extends State<DocEditor> {
     );
   }
 
+  Widget _advancedCard(List<FieldDef> fields) {
+    return Card(
+      key: const ValueKey('groupCard-advanced'),
+      margin: const EdgeInsets.only(bottom: 12),
+      clipBehavior: Clip.antiAlias,
+      child: ExpansionTile(
+        key: const ValueKey('group-advanced'),
+        controller: _advancedCtl,
+        maintainState: true,
+        leading: Icon(Icons.tune_rounded, color: context.pal.primary),
+        title: Text(context.tr('advancedOptions'),
+            style: TextStyle(fontWeight: FontWeight.w800, color: context.pal.primary)),
+        childrenPadding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
+        expandedCrossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (final f in fields) Padding(padding: const EdgeInsets.only(bottom: 12), child: _field(f)),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    registerAdminStrings();
     final embedded = !widget.popOnSave;
-    return PopScope(
-      canPop: embedded || !_dirty,
-      onPopInvokedWithResult: (didPop, _) async {
-        if (didPop) return;
-        final nav = Navigator.of(context);
-        if (await _confirmDiscard() && mounted) {
-          setState(() => _dirty = false);
-          nav.pop();
-        }
-      },
+    final advancedFields = [
+      for (final f in widget.fields)
+        if (f.group == FieldGroup.basic && f.advanced && _isFieldShown(f)) f,
+    ];
+    final summaryErrors = _showErrorSummary ? _collectErrors() : const <_FieldErrorEntry>[];
+    return UnsavedGuard(
+      dirty: _dirty,
+      handlePop: widget.popOnSave,
+      onBrowserBackDiscard: widget.popOnSave ? null : _resetToInitial,
       child: Scaffold(
         backgroundColor: context.pal.background,
         appBar: embedded
             ? null
             : AppBar(
-          title: Text(widget.title),
-          actions: [
-            TextButton(
-              key: const Key('editor-save-top'),
-              onPressed: _saving ? null : save,
-              child: Text(context.tr('save'),
-                  style: TextStyle(color: context.pal.onPrimaryAccent, fontWeight: FontWeight.w800)),
-            ),
-          ],
+                title: Text(widget.title),
+                actions: [
+                  TextButton(
+                    key: const Key('editor-save-top'),
+                    onPressed: _saving ? null : save,
+                    child: Text(context.tr('save'),
+                        style: TextStyle(color: context.pal.onPrimaryAccent, fontWeight: FontWeight.w800)),
+                  ),
+                ],
+              ),
+        bottomNavigationBar: UnsavedBar(
+          dirty: _dirty,
+          saving: _saving,
+          onSave: save,
+          onCancel: _handleCancel,
         ),
         body: Form(
           key: _formKey,
           child: Center(
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 760),
-              child: ListView(
-                padding: const EdgeInsets.all(16),
-                children: [
-                  if (widget.docId != null)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: SelectableText('ID: ${widget.docId}', style: TextStyle(color: context.pal.muted)),
-                    ),
-                  for (final f in widget.fields)
-                    if (f.group == FieldGroup.basic)
-                      Padding(padding: const EdgeInsets.only(bottom: 12), child: _field(f)),
-                  for (final g in FieldGroup.values)
-                    if (g != FieldGroup.basic && widget.fields.any((f) => f.group == g)) _groupCard(g),
-                  const SizedBox(height: 8),
-                  FilledButton.icon(
-                    key: const Key('editor-save'),
-                    onPressed: _saving ? null : save,
-                    icon: _saving
-                        ? SizedBox.square(
-                            dimension: 18, child: CircularProgressIndicator(strokeWidth: 2, color: context.pal.onBar))
-                        : const Icon(Icons.save),
-                    label: Text(context.tr('save')),
+              child: NotificationListener<ScrollMetricsNotification>(
+                onNotification: (n) {
+                  final target = _pendingErrorFocus;
+                  if (target == null) return false;
+                  if (_lastMaxScrollExtent == n.metrics.maxScrollExtent) return false;
+                  _lastMaxScrollExtent = n.metrics.maxScrollExtent;
+                  if (_pendingFocusSteps <= 0) {
+                    _clearPendingErrorFocus();
+                    return false;
+                  }
+                  _pendingFocusSteps--;
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (_pendingErrorFocus == target) {
+                      _applyErrorFocus(target, animate: false);
+                    }
+                  });
+                  return false;
+                },
+                child: SingleChildScrollView(
+                  controller: _scroll,
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (embedded && (widget.title.isNotEmpty || widget.help.isNotEmpty))
+                        AdminScreenHeader(
+                          title: widget.title,
+                          help: widget.help,
+                          padding: const EdgeInsets.only(bottom: 12),
+                        ),
+                      if (widget.docId != null)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: SelectableText('ID: ${widget.docId}', style: TextStyle(color: context.pal.muted)),
+                        ),
+                      if (_saveError != null) _saveErrorBanner(context, _saveError!),
+                      if (summaryErrors.isNotEmpty) _errorSummaryCard(context, summaryErrors),
+                      for (final f in widget.fields)
+                        if (f.group == FieldGroup.basic && !f.advanced && _isFieldShown(f))
+                          Padding(padding: const EdgeInsets.only(bottom: 12), child: _field(f)),
+                      if (advancedFields.isNotEmpty) _advancedCard(advancedFields),
+                      for (final g in FieldGroup.values)
+                        if (g != FieldGroup.basic && widget.fields.any((f) => f.group == g && _isFieldShown(f)))
+                          _groupCard(g),
+                      const SizedBox(height: 8),
+                      FilledButton.icon(
+                        key: const Key('editor-save'),
+                        onPressed: _saving ? null : save,
+                        icon: _saving
+                            ? SizedBox.square(
+                                dimension: 18, child: CircularProgressIndicator(strokeWidth: 2, color: context.pal.onBar))
+                            : const Icon(Icons.save),
+                        label: Text(context.tr('save')),
+                      ),
+                      const SizedBox(height: 40),
+                    ],
                   ),
-                  const SizedBox(height: 40),
-                ],
+                ),
               ),
             ),
           ),
@@ -1461,6 +2412,23 @@ class DocEditorState extends State<DocEditor> {
       ),
     );
   }
+}
+
+class _FieldErrorEntry {
+  final String id;
+  final String label;
+  final FieldGroup? group;
+  final bool advanced;
+  final GlobalKey fieldKey;
+  final FocusNode focusNode;
+  const _FieldErrorEntry({
+    required this.id,
+    required this.label,
+    required this.fieldKey,
+    required this.focusNode,
+    this.group,
+    this.advanced = false,
+  });
 }
 
 /// Asks for an https image link (owns its controller, so it is disposed
@@ -1547,8 +2515,14 @@ class _Pill extends StatelessWidget {
 class _Row {
   final Map<String, TextEditingController> text = {};
   final Map<String, Object?> values = {};
+  final Map<String, FocusNode> focus = {};
+  final Map<String, GlobalKey> keys = {};
+  final Map<String, dynamic> initial = {};
   final List<FieldDef> fields;
   _Row(this.fields);
+
+  FocusNode focusFor(String k) => focus.putIfAbsent(k, () => FocusNode());
+  GlobalKey keyFor(String k) => keys.putIfAbsent(k, () => GlobalKey());
 
   factory _Row.from(List<FieldDef> fields, Map data, VoidCallback onChange, {bool isNew = false}) {
     final r = _Row(fields);
@@ -1568,21 +2542,27 @@ class _Row {
           r.text[f.key] = TextEditingController(text: v?.toString() ?? '')..addListener(onChange);
       }
     }
+    r.initial.addAll(r.collect());
     return r;
   }
 
-  Map<String, dynamic> collect() => {
+  Map<String, dynamic> collect({bool englishEnabled = true}) => {
         for (final f in fields)
-          f.key: switch (f.type) {
-            FieldType.boolean || FieldType.choice => values[f.key],
-            FieldType.phone => normalizePhoneInput(text[f.key]!.text.trim()),
-            _ => text[f.key]!.text.trim(),
-          },
+          f.key: (!englishEnabled && f.lang == 'en')
+              ? initial[f.key]
+              : switch (f.type) {
+                  FieldType.boolean || FieldType.choice => values[f.key],
+                  FieldType.phone => normalizePhoneInput(text[f.key]!.text.trim()),
+                  _ => text[f.key]!.text.trim(),
+                },
       };
 
   void dispose() {
     for (final c in text.values) {
       c.dispose();
+    }
+    for (final f in focus.values) {
+      f.dispose();
     }
   }
 }
@@ -1592,4 +2572,224 @@ String choiceLabel(BuildContext context, String key) {
   final k = 'opt_$key';
   final t = context.tr(k);
   return t == k ? key : t;
+}
+
+/// Option label scoped to [f.key] first (`opt_<field>_<option>`), falling back to [choiceLabel].
+String fieldChoiceLabel(BuildContext context, FieldDef f, String key) {
+  final scopedKey = 'opt_${f.key}_$key';
+  final scoped = context.tr(scopedKey);
+  return scoped == scopedKey ? choiceLabel(context, key) : scoped;
+}
+
+class _LooseDatePickerDialog extends StatefulWidget {
+  final String title;
+  final ({int year, int? month, int? day})? initial;
+  final int defaultYear;
+
+  const _LooseDatePickerDialog({
+    required this.title,
+    required this.initial,
+    required this.defaultYear,
+  });
+
+  @override
+  State<_LooseDatePickerDialog> createState() => _LooseDatePickerDialogState();
+}
+
+class _LooseDatePickerDialogState extends State<_LooseDatePickerDialog> {
+  final _formKey = GlobalKey<FormState>();
+  final _dayKey = GlobalKey<FormFieldState<int?>>();
+  late final TextEditingController _yearCtrl;
+  int? _month;
+  int? _day;
+
+  @override
+  void initState() {
+    super.initState();
+    _yearCtrl = TextEditingController(text: '${widget.initial?.year ?? widget.defaultYear}');
+    _month = widget.initial?.month;
+    _day = widget.initial?.day;
+  }
+
+  @override
+  void dispose() {
+    _yearCtrl.dispose();
+    super.dispose();
+  }
+
+  int? _parsedYear() {
+    final y = int.tryParse(normalizeDigits(_yearCtrl.text.trim()));
+    if (y == null || y < 1000 || y > 9999) return null;
+    return y;
+  }
+
+  void _syncDayBounds() {
+    if (_month == null) {
+      if (_day != null) {
+        _day = null;
+        _dayKey.currentState?.didChange(null);
+      }
+      return;
+    }
+    final y = _parsedYear();
+    if (y != null && _day != null) {
+      final maxD = daysInMonth(y, _month!);
+      if (_day! > maxD) {
+        _day = maxD;
+        _dayKey.currentState?.didChange(_day);
+      }
+    }
+  }
+
+  void _ok() {
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+    final y = _parsedYear()!;
+    final day = (_month == null || _day == null) ? null : _day!.clamp(1, daysInMonth(y, _month!));
+    Navigator.pop(context, formatLooseDateValue(y, _month, day));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ar = context.isAr;
+    final y = _parsedYear() ?? 2000;
+    final maxDay = _month == null ? 0 : daysInMonth(y, _month!);
+    return AlertDialog(
+      title: Text(widget.title),
+      content: SingleChildScrollView(
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              TextFormField(
+                key: const ValueKey('looseDate-year'),
+                controller: _yearCtrl,
+                textDirection: TextDirection.ltr,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  labelText: context.tr('looseDateYear'),
+                  hintText: '${widget.defaultYear}',
+                ),
+                validator: (_) => _parsedYear() == null ? context.tr('invalidDate') : null,
+                onChanged: (_) => setState(_syncDayBounds),
+                onFieldSubmitted: (_) => _ok(),
+              ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<int?>(
+                key: const ValueKey('looseDate-month'),
+                isExpanded: true,
+                initialValue: _month,
+                decoration: InputDecoration(labelText: context.tr('looseDateMonth')),
+                items: [
+                  DropdownMenuItem<int?>(value: null, child: Text(context.tr('looseDateYearOnly'))),
+                  for (var m = 1; m <= 12; m++)
+                    DropdownMenuItem<int?>(
+                      value: m,
+                      child: Text(ar ? monthNamesAr[m] : fullMonthNamesEn[m]),
+                    ),
+                ],
+                onChanged: (v) => setState(() {
+                  _month = v;
+                  _syncDayBounds();
+                }),
+              ),
+              if (_month != null) ...[
+                const SizedBox(height: 12),
+                DropdownButtonFormField<int?>(
+                  key: _dayKey,
+                  isExpanded: true,
+                  initialValue: _day,
+                  decoration: InputDecoration(labelText: context.tr('looseDateDay')),
+                  items: [
+                    DropdownMenuItem<int?>(value: null, child: Text(context.tr('looseDateDayNone'))),
+                    for (var d = 1; d <= maxDay; d++)
+                      DropdownMenuItem<int?>(
+                        key: ValueKey('looseDate-day-$d'),
+                        value: d,
+                        child: Text(ar ? toArabicDigits('$d') : '$d'),
+                      ),
+                  ],
+                  onChanged: (v) => setState(() => _day = v),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: Text(context.tr('cancel'))),
+        FilledButton(key: const ValueKey('looseDate-ok'), onPressed: _ok, child: Text(context.tr('ok'))),
+      ],
+    );
+  }
+}
+
+/// Extracts and formats the preview snippet for a collapsed block in doc editor.
+/// Returns:
+/// - `null` when snippet should be suppressed entirely (image block with URL but empty caption).
+/// - `''` when block is empty (should show `(فاضي)`).
+/// - non-empty String when a snippet is available (caller prefixes with `'· '`).
+@visibleForTesting
+String? blockSnippetSummary({
+  required String type,
+  String textAr = '',
+  String textEn = '',
+  String url = '',
+  String account = '',
+  String instapay = '',
+  String wallet = '',
+}) {
+  String raw = '';
+  if (type == BlockTypes.image) {
+    if (textAr.trim().isNotEmpty) {
+      raw = textAr;
+    } else if (textEn.trim().isNotEmpty) {
+      raw = textEn;
+    } else if (url.trim().isNotEmpty) {
+      return null;
+    } else {
+      return '';
+    }
+  } else if (type == BlockTypes.button || type == BlockTypes.link) {
+    if (textAr.trim().isNotEmpty) {
+      raw = textAr;
+    } else if (textEn.trim().isNotEmpty) {
+      raw = textEn;
+    } else if (url.trim().isNotEmpty) {
+      raw = url;
+    }
+  } else if (type == BlockTypes.heading || type == BlockTypes.paragraph) {
+    if (textAr.trim().isNotEmpty) {
+      raw = textAr;
+    } else if (textEn.trim().isNotEmpty) {
+      raw = textEn;
+    }
+  } else if (type == BlockTypes.donation) {
+    if (textAr.trim().isNotEmpty) {
+      raw = textAr;
+    } else if (textEn.trim().isNotEmpty) {
+      raw = textEn;
+    } else if (account.trim().isNotEmpty) {
+      raw = account;
+    } else if (instapay.trim().isNotEmpty) {
+      raw = instapay;
+    } else if (wallet.trim().isNotEmpty) {
+      raw = wallet;
+    }
+  } else {
+    for (final v in [textAr, textEn, account, instapay, wallet, url]) {
+      if (v.trim().isNotEmpty) {
+        raw = v;
+        break;
+      }
+    }
+  }
+
+  final collapsed = raw.replaceAll(RegExp(r'\s+'), ' ').trim();
+  if (collapsed.isEmpty) return '';
+  if (collapsed.length > 40) {
+    return '${collapsed.substring(0, 40)}…';
+  }
+  return collapsed;
 }

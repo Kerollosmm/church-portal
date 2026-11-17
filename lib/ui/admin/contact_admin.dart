@@ -4,7 +4,13 @@ import '../../core/l10n.dart';
 import '../../core/theme.dart';
 import '../../data/admin_repository.dart';
 import '../../domain/contact_categories.dart';
+import 'admin_strings.dart';
+import 'confirm_named.dart';
 import 'doc_editor.dart' show choiceLabel;
+import 'screen_header.dart';
+import 'state_switch.dart';
+import 'unsaved_bar.dart';
+import 'unsaved_guard.dart';
 
 /// Admin editor of the contact-form categories (`settings/contact`, ADR-028):
 /// add, rename, reorder, hide or delete types, choose their behaviour
@@ -21,6 +27,7 @@ class ContactCategoriesScreen extends StatefulWidget {
 class _ContactCategoriesScreenState extends State<ContactCategoriesScreen> {
   late Stream<AdminDoc?> _stream = widget.repo.watchDoc('settings/contact');
   List<ContactCategory>? _cats;
+  List<ContactCategory>? _savedCats;
 
   /// Ids removed in this editor: a category added afterwards never reuses
   /// one (its old messages keep their own label / "Other" box).
@@ -59,7 +66,12 @@ class _ContactCategoriesScreenState extends State<ContactCategoriesScreen> {
     try {
       await widget.repo.saveDoc('settings/contact', ContactSettings(_renumbered()).toMap());
       messenger.showSnackBar(SnackBar(content: Text(saved)));
-      if (mounted) setState(() => _dirty = false);
+      if (mounted) {
+        setState(() {
+          _savedCats = _cats != null ? [..._cats!] : null;
+          _dirty = false;
+        });
+      }
     } catch (e) {
       messenger.showSnackBar(SnackBar(content: Text(failed.replaceAll('{e}', '$e'))));
     } finally {
@@ -67,38 +79,90 @@ class _ContactCategoriesScreenState extends State<ContactCategoriesScreen> {
     }
   }
 
+  void _resetForm() {
+    setState(() {
+      if (_savedCats != null) {
+        _cats = [..._savedCats!];
+      }
+      _retired.clear();
+      _gen++;
+      _dirty = false;
+    });
+  }
+
+  Future<void> _cancelEdits() async {
+    final discard = await confirmDiscardChanges(context);
+    if (!discard || !mounted) return;
+    _resetForm();
+  }
+
+  Future<void> _confirmRemoveCategory(int i) async {
+    final c = _cats![i];
+    final slot = c.slot;
+    final raw = context.pick(c.labelAr.trim(), c.labelEn.trim()).trim();
+    final name = raw.isEmpty ? context.tr('unnamedContactType') : raw;
+    final ok = await confirmNamedAction(
+      context,
+      summary: context.tr('confirmDeleteContactType', {'name': name}),
+      actionLabel: context.tr('remove'),
+      destructive: true,
+    );
+    if (!ok || !mounted || _cats == null) return;
+    final idx = _cats!.indexWhere((item) => item.slot == slot);
+    if (idx < 0 || _cats!.length <= 1) return;
+    setState(() {
+      _retired.add(_cats!.removeAt(idx).slot);
+      _dirty = true;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: context.pal.background,
-      floatingActionButton: _cats == null
-          ? null
-          : FloatingActionButton.extended(
-              key: const Key('saveContactCats'),
-              onPressed: _saving || !_dirty ? null : _save,
-              icon: const Icon(Icons.save_outlined),
-              label: Text(context.tr('save')),
-            ),
-      body: StreamBuilder<AdminDoc?>(
-        key: ObjectKey(_stream),
-        stream: _stream,
-        builder: (context, snap) {
-          if (snap.hasError) {
-            return Center(child: Padding(padding: const EdgeInsets.all(24), child: Text('${snap.error}')));
-          }
-          if (snap.connectionState == ConnectionState.waiting && _cats == null) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          // First load (or a remote change while nothing is edited here).
-          if (_cats == null || !_dirty) {
-            final next = ContactSettings.fromMap(snap.data?.data).categories;
-            if (_cats == null || !_same(_cats!, next)) {
-              _cats = [...next];
-              _gen++;
+    registerAdminStrings();
+    return UnsavedGuard(
+      dirty: _dirty,
+      handlePop: false,
+      onBrowserBackDiscard: _resetForm,
+      child: Scaffold(
+        backgroundColor: context.pal.background,
+        floatingActionButton: _cats == null || !_dirty
+            ? null
+            : FloatingActionButton.extended(
+                key: const Key('saveContactCats'),
+                backgroundColor: context.pal.primary,
+                foregroundColor: context.pal.onPrimary,
+                onPressed: _saving ? null : _save,
+                icon: const Icon(Icons.save_outlined),
+                label: Text(context.tr('save')),
+              ),
+        bottomNavigationBar: UnsavedBar(
+          dirty: _dirty,
+          saving: _saving,
+          onSave: _save,
+          onCancel: _cancelEdits,
+        ),
+        body: StreamBuilder<AdminDoc?>(
+          key: ObjectKey(_stream),
+          stream: _stream,
+          builder: (context, snap) {
+            if (snap.hasError) {
+              return Center(child: Padding(padding: const EdgeInsets.all(24), child: Text('${snap.error}')));
             }
-          }
-          return _editor(context);
-        },
+            if (snap.connectionState == ConnectionState.waiting && _cats == null) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            // First load (or a remote change while nothing is edited here).
+            if (_cats == null || !_dirty) {
+              final next = ContactSettings.fromMap(snap.data?.data).categories;
+              if (_cats == null || !_same(_cats!, next)) {
+                _cats = [...next];
+                _savedCats = [...next];
+                _gen++;
+              }
+            }
+            return _editor(context);
+          },
+        ),
       ),
     );
   }
@@ -118,6 +182,11 @@ class _ContactCategoriesScreenState extends State<ContactCategoriesScreen> {
     return Form(
       key: _form,
       child: ListView(padding: const EdgeInsets.fromLTRB(12, 12, 12, 96), children: [
+        AdminScreenHeader(
+          title: context.tr('contactCatsTitle'),
+          help: context.tr('help_contactCats'),
+          padding: const EdgeInsets.only(bottom: 8),
+        ),
         Text(context.tr('contactCatsHint'), style: TextStyle(color: context.pal.muted, height: 1.6)),
         const SizedBox(height: 12),
         for (var i = 0; i < cats.length; i++) _card(context, i, cats[i]),
@@ -188,18 +257,22 @@ class _ContactCategoriesScreenState extends State<ContactCategoriesScreen> {
                         anonymous: ContactKinds.anonymousCapable.contains(v) && cats[i].anonymous,
                         subtypes: v == ContactKinds.booking ? cats[i].subtypes : const [])),
           ),
-          SwitchListTile(
+          AdminStateSwitch(
             contentPadding: EdgeInsets.zero,
             title: Text(context.tr('catShownOnForm')),
             value: c.on,
+            onLabel: context.tr('switch_visible'),
+            offLabel: context.tr('switch_hidden'),
             onChanged: (v) => _edit(i, cats[i].copyWith(on: v)),
           ),
           if (ContactKinds.anonymousCapable.contains(c.kind))
-            SwitchListTile(
+            AdminStateSwitch(
               key: ValueKey('catAnon-${c.slot}'),
               contentPadding: EdgeInsets.zero,
               title: Text(context.tr('catAllowAnon')),
               value: c.anonymous,
+              onLabel: context.tr('switch_enabled'),
+              offLabel: context.tr('switch_disabled'),
               onChanged: (v) => _edit(i, cats[i].copyWith(anonymous: v)),
             ),
           if (c.isBooking) ...[
@@ -282,12 +355,7 @@ class _ContactCategoriesScreenState extends State<ContactCategoriesScreen> {
             ]),
             TextButton.icon(
               key: ValueKey('removeCat-${c.slot}'),
-              onPressed: cats.length <= 1
-                  ? null
-                  : () => setState(() {
-                        _retired.add(cats.removeAt(i).slot);
-                        _dirty = true;
-                      }),
+              onPressed: cats.length <= 1 ? null : () => _confirmRemoveCategory(i),
               icon: Icon(Icons.delete_outline, color: context.pal.alert),
               label: Text(context.tr('remove'), style: TextStyle(color: context.pal.alert)),
             ),

@@ -41,18 +41,39 @@ class CustomPageView extends ConsumerWidget {
             final title = context.pick(p.titleAr, p.titleEn);
             final subtitle = context.pick(p.subtitleAr.trim(), p.subtitleEn.trim());
             final hero = p.image;
+            final visibleBlocks = [for (final b in p.blocks) if (!b.isEmpty) b];
             return PageBody(
               key: Key('page-${p.slug}'),
               header: PageHeader(title: title, subtitle: subtitle.isEmpty ? null : subtitle),
               children: [
-                if (hero != null)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 16),
-                    child: FittedCover(
-                        key: const Key('pageHero'), image: hero, label: title, aspectRatio: 16 / 7, maxHeight: 420),
+                Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 700),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        if (hero != null)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 16),
+                            child: FittedCover(
+                                key: const Key('pageHero'),
+                                image: hero,
+                                label: title,
+                                aspectRatio: 16 / 7,
+                                maxHeight: 420),
+                          ),
+                        for (var i = 0; i < visibleBlocks.length; i++)
+                          Padding(
+                            padding: EdgeInsets.only(
+                              top: (visibleBlocks[i].type == BlockTypes.heading && (i > 0 || hero != null)) ? 12 : 0,
+                              bottom: 16,
+                            ),
+                            child: PageBlockView(block: visibleBlocks[i]),
+                          ),
+                      ],
+                    ),
                   ),
-                for (final b in p.blocks)
-                  if (!b.isEmpty) Padding(padding: const EdgeInsets.only(bottom: 14), child: PageBlockView(block: b)),
+                ),
               ],
             );
           },
@@ -75,7 +96,7 @@ class PageBlockView extends StatelessWidget {
         return Semantics(
           header: true,
           child: Text(text,
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, height: 1.5, color: context.pal.ink)),
+              style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, height: 1.45, color: context.pal.ink)),
         );
       case BlockTypes.paragraph:
         return SelectableText(text, style: TextStyle(fontSize: 16, height: 1.8, color: context.pal.ink));

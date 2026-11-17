@@ -161,6 +161,7 @@ Existence of `settings/church` = "database is seeded" (see `03-architecture.md`)
 | Field | Type | Default / parsing |
 |---|---|---|
 | `sections` | map `<sectionKey, bool>` | missing key = **on**; non-bool values ignored. Keys = `Sections.all`: `schedule, meetings, clinics, services, history, milestones, saints, priests, departedPriests, activities, alerts, contactInfo, socials, contactForm, assistant, media` (`media` = show optional item images; not a page) |
+| `englishEnabled` | bool, default **true** (PR 3G, P2-27b) | owner-only switch controlling the public language toggle and `lang: 'en'` admin form fields; seeded `true` |
 | `homeOrder` | list of block keys | `normalizeHomeOrder`: unknown/duplicate dropped, missing appended in default order. Blocks (`HomeBlocks.defaultOrder`): `banner, alerts, nextMass, quickContacts, milestones, directory, map` |
 | `homeHidden` | list of block keys | unknown keys dropped |
 | `heroTitleAr/En` | string ≤ 200 | empty → church name |
@@ -348,8 +349,11 @@ else the category's), `visible`, `order`, `sample`. Not seeded.
 
 ### `pages/{auto-id}` — `CustomPage` (PR #18; Hideable, orderable)
 `slug` (**req**, as above; public page `/page/<slug>`), `titleAr` (**req**, ≤ 200, not blank), `titleEn` (≤ 200),
-`subtitleAr/En` (≤ 300), `image` (optional hero), `showInNav` (bool, missing = **false**: pages are off the menu
-by default), `visible`, `order`, `blocks` (≤ 20, saved in their own write). **Each block is one string**:
+`subtitleAr/En` (≤ 300), `image` (optional hero), `placement` (`'link'` | `'nav'` | `'section'`, PR 3D / P1-18 —
+absent falls back to `showInNav ? 'nav' : 'link'`), `categoryId` (string `[A-Za-z0-9_-]{1,128}` required when
+`placement == 'section'`, `{0,128}` otherwise), `showInNav` (bool synced with `placement == 'nav'`, missing = **false**:
+pages are off the menu by default), `featured` (bool, default `false` — shows a «اعرف المزيد» card on `HomePage`, hint «هتظهر في «صفحات مميزة» في الرئيسية مهما كان مكانها»; sorted by `order` asc, `updatedAt` desc, unique slug),
+`updatedAt` (parsed `DateTime?`, stamped on admin saves), `visible`, `order`, `blocks` (≤ 20, saved in their own write). **Each block is one string**:
 `type␟textAr␟textEn␟url␟account␟instapay␟wallet` (U+001F, `PageBlock.encode` / `fromStored`; maps are still read
 tolerantly). Types: `heading`, `paragraph` (texts ≤ 4000), `image` (`url` = https picture link, texts = caption),
 `button` / `link` (texts = label, `url` = in-app path or http(s) URL), `donation` (`account` ≤ 120, `instapay` ≤ 80,

@@ -97,12 +97,14 @@ describe('public', () => {
 describe('admin content', () => {
   test('every seed document passes validation', async () => {
     const ed = db(EDITOR);
+    const own = db(OWNER);
     for (const [col, docs] of Object.entries(seed)) {
       for (const [id, data] of Object.entries(docs)) {
         // settings only accepts its known ids, so those are written in place.
         const target = col === 'settings' ? id : `seedcheck-${id}`;
+        const writer = (col === 'settings' && id === 'features') ? own : ed;
         try {
-          await assertSucceeds(setDoc(doc(ed, col, target), convert(data)));
+          await assertSucceeds(setDoc(doc(writer, col, target), convert(data)));
         } catch (e) {
           throw new Error(`${col}/${id} rejected: ${e.message}`);
         }
@@ -120,6 +122,43 @@ describe('admin content', () => {
     }));
     await assertSucceeds(updateDoc(ref, { visible: false, updatedAt: serverTimestamp(), updatedBy: `${EDITOR}@x.test` }));
     await assertSucceeds(updateDoc(ref, { order: 20 }));
+    await assertSucceeds(deleteDoc(ref));
+  });
+
+  test('soft delete with deletedAt: Timestamp allowed, undo with null allowed, bad type and non-admin denied', async () => {
+    const ed = db(EDITOR);
+    const pub = db(null);
+    const stranger = db(STRANGER);
+    const ref = doc(ed, 'clinics', 'c1');
+
+    // 1. Soft-delete by setting deletedAt to a valid Timestamp succeeds
+    await assertSucceeds(updateDoc(ref, { deletedAt: serverTimestamp() }));
+
+    // 2. Undo soft-delete by clearing deletedAt to null succeeds
+    await assertSucceeds(updateDoc(ref, { deletedAt: null }));
+
+    // 3. Bad type for deletedAt (e.g. string or number) fails
+    await assertFails(updateDoc(ref, { deletedAt: '2026-11-14' }));
+    await assertFails(updateDoc(ref, { deletedAt: 12345678 }));
+
+    // 4. Non-admin / visitor cannot write or clear deletedAt
+    await assertFails(updateDoc(doc(pub, 'clinics', 'c1'), { deletedAt: serverTimestamp() }));
+    await assertFails(updateDoc(doc(stranger, 'clinics', 'c1'), { deletedAt: serverTimestamp() }));
+
+    // 5. Worst-case whole-doc rules budget check: whole document update with deletedAt
+    const fullClinic = convert(seed.clinics['dental-1']);
+    await assertSucceeds(setDoc(ref, { ...fullClinic, deletedAt: serverTimestamp() }));
+    await assertSucceeds(setDoc(ref, { ...fullClinic, deletedAt: null }));
+  });
+
+  test('owner can soft-delete, restore, and hard-delete a priest', async () => {
+    const own = db(OWNER);
+    const ref = doc(own, 'priests', 'p-owner-del');
+    const stamp = { updatedAt: serverTimestamp(), updatedBy: `${OWNER}@x.test` };
+
+    await assertSucceeds(setDoc(ref, { ...convert(seed.priests.bemwa), ...stamp }));
+    await assertSucceeds(updateDoc(ref, { deletedAt: Timestamp.now(), ...stamp }));
+    await assertSucceeds(updateDoc(ref, { deletedAt: null, ...stamp }));
     await assertSucceeds(deleteDoc(ref));
   });
 
@@ -329,6 +368,296 @@ describe('admins', () => {
     await assertFails(getDocs(collection(ed, 'admins')));
     await assertFails(setDoc(doc(ed, 'admins', 'x'), { email: 'x@x.test', role: 'editor' }));
     await assertFails(setDoc(doc(ed, 'admins', EDITOR), { email: 'editor@x.test', role: 'owner' }));
+  });
+});
+
+describe('P1-12: admin active / expiresAt access control', () => {
+  const futureTs = () => Timestamp.fromMillis(Date.now() + 86_400_000);
+  const pastTs = () => Timestamp.fromMillis(Date.now() - 86_400_000);
+  const setAdmin = (uid, data) => env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), 'admins', uid), data);
+  });
+
+  test('stopped editor (active: false) reads own admin doc, cannot write content or read contact_messages', async () => {
+    await setAdmin(EDITOR, { email: 'editor@x.test', role: 'editor', active: false });
+    const ed = db(EDITOR);
+    await assertSucceeds(getDoc(doc(ed, 'admins', EDITOR)));
+    await assertFails(updateDoc(doc(ed, 'clinics', 'c1'), { visible: false }));
+    await assertFails(setDoc(doc(ed, 'clinics', 'new1'), {
+      specialty: 'dental', specialtyAr: 'الأسنان', doctorName: 'د. مينا',
+    }));
+    await assertFails(deleteDoc(doc(ed, 'clinics', 'c1')));
+    await assertFails(getDoc(doc(ed, 'contact_messages', 'm1')));
+    await assertFails(getDocs(collection(ed, 'contact_messages')));
+    await assertFails(updateDoc(doc(ed, 'contact_messages', 'm1'), { status: 'handled' }));
+  });
+
+  test('expired editor (expiresAt in the past) reads own admin doc, cannot write content or read contact_messages', async () => {
+    await setAdmin(EDITOR, { email: 'editor@x.test', role: 'editor', active: true, expiresAt: pastTs() });
+    const ed = db(EDITOR);
+    await assertSucceeds(getDoc(doc(ed, 'admins', EDITOR)));
+    await assertFails(updateDoc(doc(ed, 'clinics', 'c1'), { visible: false }));
+    await assertFails(getDoc(doc(ed, 'contact_messages', 'm1')));
+    await assertFails(getDocs(collection(ed, 'contact_messages')));
+  });
+
+  test('active editor with future expiresAt or expiresAt: null can write content and read contact_messages', async () => {
+    await setAdmin(EDITOR, { email: 'editor@x.test', role: 'editor', active: true, expiresAt: futureTs() });
+    const ed = db(EDITOR);
+    await assertSucceeds(updateDoc(doc(ed, 'clinics', 'c1'), { visible: false }));
+    await assertSucceeds(getDoc(doc(ed, 'contact_messages', 'm1')));
+    await assertSucceeds(getDocs(collection(ed, 'contact_messages')));
+
+    await setAdmin(EDITOR, { email: 'editor@x.test', role: 'editor', active: true, expiresAt: null });
+    await assertSucceeds(updateDoc(doc(ed, 'clinics', 'c1'), { visible: true }));
+    await assertSucceeds(getDocs(collection(ed, 'contact_messages')));
+  });
+
+  test('re-enabling (active: true, expiresAt: null) restores editor access', async () => {
+    await setAdmin(EDITOR, { email: 'editor@x.test', role: 'editor', active: false, expiresAt: pastTs() });
+    const ed = db(EDITOR);
+    const own = db(OWNER);
+    await assertFails(updateDoc(doc(ed, 'clinics', 'c1'), { visible: false }));
+
+    await assertSucceeds(updateDoc(doc(own, 'admins', EDITOR), {
+      active: true, expiresAt: null, updatedAt: serverTimestamp(), updatedBy: `${OWNER}@x.test`,
+    }));
+    await assertSucceeds(updateDoc(doc(ed, 'clinics', 'c1'), { visible: false }));
+    await assertSucceeds(getDocs(collection(ed, 'contact_messages')));
+  });
+
+  test('stopped or expired owner cannot write settings/features or manage other admins', async () => {
+    const own = db(OWNER);
+
+    await setAdmin(OWNER, { email: 'owner@x.test', role: 'owner', active: false });
+    await assertSucceeds(getDoc(doc(own, 'admins', OWNER)));
+    await assertFails(getDocs(collection(own, 'admins')));
+    await assertFails(setDoc(doc(own, 'settings', 'features'), { theme: 'navy' }));
+    await assertFails(setDoc(doc(own, 'admins', 'new-uid'), { email: 'n@x.test', role: 'editor' }));
+    await assertFails(updateDoc(doc(own, 'admins', EDITOR), { active: false }));
+    await assertFails(deleteDoc(doc(own, 'admins', EDITOR)));
+
+    await setAdmin(OWNER, { email: 'owner@x.test', role: 'owner', active: true, expiresAt: pastTs() });
+    await assertSucceeds(getDoc(doc(own, 'admins', OWNER)));
+    await assertFails(getDocs(collection(own, 'admins')));
+    await assertFails(setDoc(doc(own, 'settings', 'features'), { theme: 'navy' }));
+    await assertFails(setDoc(doc(own, 'admins', 'new-uid'), { email: 'n@x.test', role: 'editor' }));
+    await assertFails(updateDoc(doc(own, 'admins', EDITOR), { active: false }));
+    await assertFails(deleteDoc(doc(own, 'admins', EDITOR)));
+  });
+
+  test('editor cannot change active or expiresAt on any admin doc', async () => {
+    const ed = db(EDITOR);
+    await assertFails(updateDoc(doc(ed, 'admins', EDITOR), { active: false }));
+    await assertFails(updateDoc(doc(ed, 'admins', EDITOR), { expiresAt: futureTs() }));
+    await assertFails(setDoc(doc(ed, 'admins', EDITOR), { email: 'editor@x.test', role: 'editor', active: false }));
+    await assertFails(updateDoc(doc(ed, 'admins', OWNER), { active: false }));
+    await assertFails(setDoc(doc(ed, 'admins', 'other-uid'), {
+      email: 'other@x.test', role: 'editor', active: true, expiresAt: null,
+    }));
+  });
+
+  test('owner cannot set active: false or expiresAt on their own admins/OWNER doc', async () => {
+    const own = db(OWNER);
+    await assertFails(updateDoc(doc(own, 'admins', OWNER), { active: false }));
+    await assertFails(updateDoc(doc(own, 'admins', OWNER), { active: true }));
+    await assertFails(updateDoc(doc(own, 'admins', OWNER), { expiresAt: futureTs() }));
+    await assertFails(updateDoc(doc(own, 'admins', OWNER), { expiresAt: null }));
+    await assertFails(setDoc(doc(own, 'admins', OWNER), {
+      email: 'owner@x.test', role: 'owner', active: false, expiresAt: pastTs(),
+    }));
+  });
+
+  test('owner can set/update active and expiresAt on other admin docs; invalid types fail', async () => {
+    const own = db(OWNER);
+    const stamp = () => ({ updatedAt: serverTimestamp(), updatedBy: `${OWNER}@x.test` });
+
+    // Create with active + timestamp expiresAt
+    await assertSucceeds(setDoc(doc(own, 'admins', 'temp-ed'), {
+      email: 'temp@x.test', role: 'editor', active: true, expiresAt: futureTs(), ...stamp(),
+    }));
+    // Update to paused (active: false) and clear expiresAt to null
+    await assertSucceeds(updateDoc(doc(own, 'admins', 'temp-ed'), {
+      active: false, expiresAt: null, ...stamp(),
+    }));
+    // Update existing editor doc with future expiresAt
+    await assertSucceeds(updateDoc(doc(own, 'admins', EDITOR), {
+      active: true, expiresAt: futureTs(), ...stamp(),
+    }));
+
+    // Invalid types fail
+    await assertFails(setDoc(doc(own, 'admins', 'bad1'), {
+      email: 'b1@x.test', role: 'editor', active: 'yes',
+    }));
+    await assertFails(setDoc(doc(own, 'admins', 'bad2'), {
+      email: 'b2@x.test', role: 'editor', active: null,
+    }));
+    await assertFails(setDoc(doc(own, 'admins', 'bad3'), {
+      email: 'b3@x.test', role: 'editor', expiresAt: '2030-01-01',
+    }));
+    await assertFails(updateDoc(doc(own, 'admins', EDITOR), { expiresAt: 123456789 }));
+  });
+
+  test('owners cannot have a non-null expiresAt; clearing legacy expiresAt or promoting with null is allowed', async () => {
+    const own = db(OWNER);
+    const stamp = () => ({ updatedAt: serverTimestamp(), updatedBy: `${OWNER}@x.test` });
+
+    // Creating another owner with a non-null expiresAt is denied
+    await assertFails(setDoc(doc(own, 'admins', 'other-owner'), {
+      email: 'o2@x.test', role: 'owner', active: true, expiresAt: futureTs(), ...stamp(),
+    }));
+    // Creating another owner without expiresAt or with expiresAt: null is allowed
+    await assertSucceeds(setDoc(doc(own, 'admins', 'other-owner'), {
+      email: 'o2@x.test', role: 'owner', active: true, expiresAt: null, ...stamp(),
+    }));
+    // Updating another owner to set a non-null expiresAt is denied
+    await assertFails(updateDoc(doc(own, 'admins', 'other-owner'), {
+      expiresAt: futureTs(), ...stamp(),
+    }));
+
+    // Clearing a legacy expiresAt on an existing owner (expiresAt: null) is allowed
+    await setAdmin('legacy-owner', {
+      email: 'legacy@x.test', role: 'owner', active: true, expiresAt: futureTs(),
+    });
+    await assertSucceeds(updateDoc(doc(own, 'admins', 'legacy-owner'), {
+      expiresAt: null, ...stamp(),
+    }));
+
+    // Promoting an editor who has expiresAt to owner without clearing expiresAt is denied
+    await setAdmin('exp-editor', {
+      email: 'exped@x.test', role: 'editor', active: true, expiresAt: futureTs(),
+    });
+    await assertFails(updateDoc(doc(own, 'admins', 'exp-editor'), {
+      role: 'owner', ...stamp(),
+    }));
+    // Promoting that editor to owner while clearing expiresAt to null is allowed
+    await assertSucceeds(updateDoc(doc(own, 'admins', 'exp-editor'), {
+      role: 'owner', expiresAt: null, ...stamp(),
+    }));
+  });
+
+  test('worst-case whole-document rules budget: active editor with future expiresAt saves full settings/features and saints', async () => {
+    await setAdmin(EDITOR, { email: 'editor@x.test', role: 'editor', active: true, expiresAt: futureTs() });
+    const ed = db(EDITOR);
+    const stamp = () => ({ updatedAt: serverTimestamp(), updatedBy: `${EDITOR}@x.test` });
+    const featRef = doc(ed, 'settings', 'features');
+
+    // 1. Full seeded settings/features create (contains owner-only errorReporting)
+    await assertSucceeds(setDoc(doc(db(OWNER), 'settings', 'features'), {
+      ...convert(seed.settings.features),
+      updatedAt: serverTimestamp(),
+      updatedBy: `${OWNER}@x.test`,
+    }));
+
+    // 2. Full legacy/toggle/today/live/dailyVerse/imageStyles/footer save
+    await assertSucceeds(setDoc(featRef, {
+      ...convert(seed.settings.features),
+      heroTitleAr: 'أهلًا بكم',
+      heroTitleEn: 'Welcome',
+      heroSubtitleAr: 'كنيسة القديسين',
+      heroSubtitleEn: 'Saints Church',
+      bannerEnabled: true,
+      bannerAr: 'إعلان',
+      bannerEn: 'Notice',
+      bannerLink: '/clinics',
+      heroMotion: true,
+      heroSeasonTint: true,
+      heroShowAddress: false,
+      aboutMilestones: true,
+      copticStrip: 'all',
+      dayStartMode: 'fixed',
+      dayStartsAt: '05:00',
+      topEvent: true,
+      commemoration: true,
+      topEventServices: true,
+      liveEnabled: true,
+      liveUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+      liveLabelAr: 'بث مباشر للقداس',
+      liveLabelEn: 'Live Liturgy',
+      liveEndsAt: futureTs(),
+      liveBadgeHideOnHome: false,
+      weddingBookingOff: false,
+      dailyVerse: { mode: 'daily', textAr: 'الرب نوري', refAr: 'مز ٢٧: ١', textEn: 'The Lord is my light', refEn: 'Ps 27:1' },
+      imageStyles: { priests: 'avatar', saints: 'card', activities: 'banner' },
+      ...stamp(),
+    }));
+
+    // 3. Full App & Push save (ADR-057/059) merged onto that stored full settings/features doc:
+    //    first as EDITOR (without owner-only installAndroidUrl/installAndroidUrl32/pushVapidKey),
+    //    then as OWNER with all owner-only install/push keys included.
+    const editorAppPush = {
+      installPrompt: true,
+      installTitleAr: 'تطبيق الكنيسة',
+      installTitleEn: 'Church App',
+      installBodyAr: 'تابع القداسات والمواسم',
+      installBodyEn: 'Follow liturgies and seasons',
+      installApkVersion: '1.2.0',
+      installApkBuild: 45,
+      installApkSizeMb: 18.5,
+      installApkSize32Mb: 17.2,
+      installReshowDays: 30,
+      installRemindDays: 3,
+      push: true,
+      pushTypes: ['announcements', 'verse_daily', 'katameros_daily', 'seasons', 'feasts', 'reminders'],
+      reminderLeads: [0, 15, 60, 1440],
+      reminderDefaultLead: 60,
+      notifyTypes: [
+        ['verse_daily', '07:00', '', 'آية اليوم', 'Verse of the Day', '{verse}', '{verse}'].join('\u001f'),
+        ['seasons', '07:00', '3', 'المواسم', 'Seasons', '{season}', '{season}'].join('\u001f'),
+      ],
+      reminderSources: 'lit,mtg,day',
+    };
+    await assertSucceeds(setDoc(featRef, { ...editorAppPush, ...stamp() }, { merge: true }));
+    await assertSucceeds(setDoc(doc(db(OWNER), 'settings', 'features'), {
+      ...editorAppPush,
+      installAndroidUrl: 'https://example.org/app.apk',
+      installAndroidUrl32: '/app/older.apk',
+      pushVapidKey: 'B'.repeat(88),
+      updatedAt: serverTimestamp(),
+      updatedBy: `${OWNER}@x.test`,
+    }, { merge: true }));
+
+    // Full saints document save (max lengths + split gallery & extraFields updates)
+    const img = (i) => ({ source: 'inline', mediaId: `m${i}`, alt: 'a'.repeat(300), w: 800, h: 600 });
+    const field = (i) => ({ titleAr: 'ع'.repeat(150), titleEn: 't'.repeat(150), valueAr: 'ق'.repeat(2000), valueEn: `${i}`.repeat(2000).slice(0, 2000) });
+    const fullSaintScalars = {
+      nameAr: 'الأنبا موسى الأسود',
+      nameEn: 'St. Moses the Black',
+      bioAr: 'س'.repeat(5000),
+      bioEn: 'b'.repeat(5000),
+      feastCopticAr: '٢٤ بؤونة',
+      feastCopticEn: '24 Paona',
+      feastGregorianAr: '١ يوليو',
+      feastGregorian: '1 July',
+      detailsEnabled: true,
+      showDetailImages: true,
+      showContacts: true,
+      showSocials: true,
+      detailsAr: 'ت'.repeat(10000),
+      detailsEn: 'd'.repeat(10000),
+      image: { source: 'url', url: 'https://img.example.org/cover.jpg', alt: 'cover', w: 800, h: 600 },
+      contactPhone: '01012345678',
+      whatsapp: '01012345678',
+      whatsappUrl: 'https://whatsapp.com/channel/x',
+      facebookUrl: 'https://facebook.com/x',
+      youtubeUrl: 'https://youtube.com/@x',
+      instagramUrl: 'https://instagram.com/x',
+      externalUrl: 'https://forms.example.org/register',
+      externalLabelAr: 'ن'.repeat(80),
+      externalLabelEn: 'Register',
+      contactNoteAr: 'م'.repeat(500),
+      contactNoteEn: 'Call us',
+      visible: true,
+      sample: false,
+      order: 1,
+      gallery: [],
+      extraFields: [],
+      ...stamp(),
+    };
+    const saintRef = doc(ed, 'saints', 'worst-case-saint');
+    await assertSucceeds(setDoc(saintRef, fullSaintScalars));
+    await assertSucceeds(updateDoc(saintRef, { gallery: Array.from({ length: 8 }, (_, i) => img(i)), ...stamp() }));
+    await assertSucceeds(updateDoc(saintRef, { extraFields: Array.from({ length: 15 }, (_, i) => field(i)), ...stamp() }));
   });
 });
 
@@ -979,14 +1308,16 @@ describe('ADR-052: milestones on the About page (settings/features.aboutMileston
 });
 
 describe('ADR-034: error reporting switch (settings/features.errorReporting)', () => {
-  test('admins switch error reports on and off; only a bool is accepted', async () => {
-    const ref = doc(db(EDITOR), 'settings', 'features');
+  test('owners switch error reports on and off; only a bool is accepted; editors are denied', async () => {
+    const ref = doc(db(OWNER), 'settings', 'features');
     await assertSucceeds(setDoc(ref, { theme: 'burgundy', errorReporting: false }));
     await assertSucceeds(setDoc(ref, { theme: 'burgundy', errorReporting: true }));
     await assertSucceeds(updateDoc(ref, { errorReporting: false }));
     for (const v of ['off', 0, null, { on: true }, [true]]) {
       await assertFails(setDoc(ref, { errorReporting: v }), JSON.stringify(v));
     }
+    await assertFails(setDoc(doc(db(EDITOR), 'settings', 'features'), { errorReporting: true }));
+    await assertFails(updateDoc(doc(db(EDITOR), 'settings', 'features'), { errorReporting: true }));
   });
 
   test('visitors cannot change it', async () => {
@@ -1219,6 +1550,106 @@ describe('ADR-027: custom categories, their items and custom pages', () => {
     await assertFails(setDoc(doc(ed, 'categories', 'kx'), noSlug));
   });
 
+  test('categories: DocEditor + AdminRepository exact create payload, variants, admin roles, edit and soft-delete', async () => {
+    const editorCreatePayload = (uid, overrides = {}) => ({
+      nameAr: 'رحلات الشباب',
+      introAr: '',
+      icon: 'star',
+      showInNav: true,
+      visible: true,
+      slug: 'rhlat-alshbab',
+      nameEn: '',
+      introEn: '',
+      order: null,
+      updatedAt: serverTimestamp(),
+      updatedBy: `${uid}@x.test`,
+      ...overrides,
+    });
+
+    // 1. Exact new-category create payload from DocEditor.save() + AdminRepository.save()
+    //    (auto-generated doc id, imageStyle stripped on !_persisted, order: null).
+    const ed = db(EDITOR);
+    const createdRef = doc(collection(ed, 'categories'));
+    await assertSucceeds(setDoc(createdRef, editorCreatePayload(EDITOR)));
+
+    // 2. Variants: englishEnabled: false (empty '' or omitted optional keys), imageStyle: null / valid values,
+    //    integer order (including bounds), multiline intros (up to 1500 chars), showInNav/visible: false.
+    await assertSucceeds(setDoc(doc(collection(ed, 'categories')), editorCreatePayload(EDITOR, {
+      slug: 'cat-img-null', imageStyle: null, order: 10, showInNav: false, visible: false,
+    })));
+    await assertSucceeds(setDoc(doc(collection(ed, 'categories')), editorCreatePayload(EDITOR, {
+      slug: 'cat-multiline',
+      introAr: 'السطر الأول\nالسطر الثاني\n' + 'أ'.repeat(1470),
+      introEn: 'Line 1\nLine 2\n' + 'e'.repeat(1480),
+      nameAr: 'أ'.repeat(120),
+      nameEn: 'e'.repeat(120),
+      imageStyle: 'card',
+      order: -100000,
+    })));
+    await assertSucceeds(setDoc(doc(collection(ed, 'categories')), {
+      nameAr: 'قسم مختصر',
+      slug: 's'.repeat(60),
+      visible: true,
+      order: 100000,
+      updatedAt: serverTimestamp(),
+      updatedBy: `${EDITOR}@x.test`,
+    }));
+
+    // All 12 CategoryIcons are accepted.
+    for (const icon of ['star', 'church', 'people', 'heart', 'book', 'music', 'medical', 'school', 'event', 'volunteer', 'donate', 'info']) {
+      await assertSucceeds(setDoc(doc(ed, 'categories', `icon-${icon}`), editorCreatePayload(EDITOR, {
+        slug: `cat-${icon}`, icon,
+      })), icon);
+    }
+
+    // Invalid order bounds/types and mismatched updatedBy fail.
+    await assertFails(setDoc(doc(ed, 'categories', 'bad-order-hi'), editorCreatePayload(EDITOR, { order: 100001 })));
+    await assertFails(setDoc(doc(ed, 'categories', 'bad-order-str'), editorCreatePayload(EDITOR, { order: '10' })));
+    await assertFails(setDoc(doc(ed, 'categories', 'bad-stamp'), editorCreatePayload(EDITOR, { updatedBy: 'wrong@x.test' })));
+
+    // 3. Editor vs Owner with explicit active: true / missing active, and token without email (uid fallback).
+    const own = db(OWNER);
+    await assertSucceeds(setDoc(doc(collection(own, 'categories')), editorCreatePayload(OWNER, { slug: 'owner-missing-active' })));
+
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const f = ctx.firestore();
+      await setDoc(doc(f, 'admins', EDITOR), { email: 'editor@x.test', role: 'editor', active: true, expiresAt: null });
+      await setDoc(doc(f, 'admins', OWNER), { email: 'owner@x.test', role: 'owner', active: true });
+      await setDoc(doc(f, 'admins', 'uid-only-admin'), { email: 'uid-only@x.test', role: 'editor', active: true });
+    });
+    await assertSucceeds(setDoc(doc(collection(ed, 'categories')), editorCreatePayload(EDITOR, { slug: 'editor-active-true' })));
+    await assertSucceeds(setDoc(doc(collection(own, 'categories')), editorCreatePayload(OWNER, { slug: 'owner-active-true' })));
+
+    const noEmailDb = env.authenticatedContext('uid-only-admin', {}).firestore();
+    await assertSucceeds(setDoc(doc(collection(noEmailDb, 'categories')), {
+      ...editorCreatePayload('uid-only-admin'),
+      slug: 'uid-only-cat',
+      updatedBy: 'uid-only-admin',
+    }));
+
+    // 4. Edit follow-up via mergeFields (as AdminRepository._merge sends), soft-delete, restore, and hard delete.
+    await assertSucceeds(setDoc(createdRef, {
+      introAr: 'سطر 1\nسطر 2',
+      imageStyle: 'banner',
+      order: 20,
+      showInNav: false,
+      visible: false,
+      updatedAt: serverTimestamp(),
+      updatedBy: `${EDITOR}@x.test`,
+    }, { mergeFields: ['introAr', 'imageStyle', 'order', 'showInNav', 'visible', 'updatedAt', 'updatedBy'] }));
+    await assertSucceeds(setDoc(createdRef, {
+      deletedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+      updatedBy: `${EDITOR}@x.test`,
+    }, { mergeFields: ['deletedAt', 'updatedAt', 'updatedBy'] }));
+    await assertSucceeds(setDoc(createdRef, {
+      deletedAt: null,
+      updatedAt: serverTimestamp(),
+      updatedBy: `${EDITOR}@x.test`,
+    }, { mergeFields: ['deletedAt', 'updatedAt', 'updatedBy'] }));
+    await assertSucceeds(deleteDoc(createdRef));
+  });
+
   test('items: category id, title, phone, link and sizes are validated', async () => {
     const ed = db(EDITOR);
     await assertSucceeds(setDoc(doc(ed, 'entries', 'ok1'), entry({ externalUrl: 'https://example.org/x?y=1' })));
@@ -1268,6 +1699,139 @@ describe('ADR-027: custom categories, their items and custom pages', () => {
     }
     await assertFails(updateDoc(doc(ed, 'pages', 'big'), { slug: 'UPPER' }));
     await assertFails(updateDoc(doc(ed, 'pages', 'big'), { blocks: [block({ type: 'nope' })] }));
+  });
+
+  test('P1-18: pages placement, categoryId, featured validation and worst-case 20-blocks budget', async () => {
+    const ed = db(EDITOR);
+    const stamp = () => ({ updatedAt: serverTimestamp(), updatedBy: `${EDITOR}@x.test` });
+
+    // Valid placements and featured flags on create
+    await assertSucceeds(setDoc(doc(ed, 'pages', 'p-link'), page({ placement: 'link', categoryId: '', featured: false })));
+    await assertSucceeds(setDoc(doc(ed, 'pages', 'p-nav'), page({ slug: 'nav-page', placement: 'nav', showInNav: true, featured: true })));
+    await assertSucceeds(setDoc(doc(ed, 'pages', 'p-sec'), page({
+      slug: 'sec-page', placement: 'section', categoryId: 'youth_1-cat', featured: true,
+    })));
+
+    // Backward compatibility: legacy doc without placement/categoryId/featured, then partial updates
+    await assertSucceeds(setDoc(doc(ed, 'pages', 'p-legacy'), page({ slug: 'legacy-page' })));
+    await assertSucceeds(updateDoc(doc(ed, 'pages', 'p-legacy'), {
+      placement: 'section', categoryId: 'k1', showInNav: false, featured: true, ...stamp(),
+    }));
+    await assertSucceeds(updateDoc(doc(ed, 'pages', 'p-legacy'), {
+      placement: 'nav', categoryId: '', showInNav: true, featured: false, ...stamp(),
+    }));
+    await assertSucceeds(updateDoc(doc(ed, 'pages', 'p-legacy'), {
+      blocks: [block({ textAr: 'تحديث' })], ...stamp(),
+    }));
+
+    // Worst-case 20-blocks create and update with placement, categoryId, featured, and stamps
+    const types = ['heading', 'paragraph', 'image', 'button', 'link', 'donation'];
+    const full = Array.from({ length: 20 }, (_, i) => block({
+      type: types[i % 6],
+      textAr: 'ن'.repeat(4000),
+      textEn: 'e'.repeat(4000),
+      url: types[i % 6] === 'image' ? 'https://example.org/' + 'p'.repeat(470) : (i % 2 ? '/page/x' : 'https://example.org/give'),
+      account: 'a'.repeat(120), instapay: 'i'.repeat(80), wallet: '0'.repeat(30),
+    }));
+    await assertSucceeds(setDoc(doc(ed, 'pages', 'p-big-sec'), page({
+      slug: 'big-sec', placement: 'section', categoryId: 'cat-1', featured: true, blocks: full, ...stamp(),
+    })));
+    await assertSucceeds(updateDoc(doc(ed, 'pages', 'p-big-sec'), { blocks: full, ...stamp() }));
+
+    // Reject invalid placement, categoryId, and featured on create
+    for (const bad of [
+      { placement: 'home' },
+      { placement: '' },
+      { placement: null },
+      { placement: 1 },
+      { placement: 'section' },
+      { placement: 'section', categoryId: '' },
+      { placement: 'section', categoryId: 'a/b' },
+      { placement: 'section', categoryId: null },
+      { placement: 'section', categoryId: 'a'.repeat(129) },
+      { placement: 'link', categoryId: 'a/b' },
+      { categoryId: 'a b' },
+      { categoryId: 123 },
+      { featured: 1 },
+      { featured: 'true' },
+      { featured: null },
+    ]) {
+      await assertFails(setDoc(doc(ed, 'pages', 'p-bad'), page(bad)), JSON.stringify(bad));
+    }
+
+    // Reject invalid updates against stored state
+    await assertFails(updateDoc(doc(ed, 'pages', 'p-link'), { placement: 'section' })); // missing categoryId
+    await assertFails(updateDoc(doc(ed, 'pages', 'p-sec'), { categoryId: '' })); // clearing categoryId while section
+    await assertFails(updateDoc(doc(ed, 'pages', 'p-link'), { placement: 'home' }));
+    await assertFails(updateDoc(doc(ed, 'pages', 'p-link'), { featured: 1 }));
+  });
+
+  test('owner creates blank and donation-template custom pages, including categoryId: null with placement: link', async () => {
+    const own = db(OWNER);
+    const stamp = () => ({ updatedAt: serverTimestamp(), updatedBy: `${OWNER}@x.test` });
+
+    // 1. Blank custom page (placement: 'link', categoryId: '', featured: false)
+    await assertSucceeds(setDoc(doc(own, 'pages', 'p-blank'), {
+      slug: 'blank-guide',
+      titleAr: 'دليل الزائر',
+      titleEn: '',
+      subtitleAr: '',
+      subtitleEn: '',
+      placement: 'link',
+      categoryId: '',
+      showInNav: false,
+      featured: false,
+      visible: true,
+      order: 10,
+      ...stamp(),
+    }));
+
+    // 2. categoryId: null (emitted by DocEditor nullableChoice) with placement: 'link' succeeds;
+    //    categoryId: null with placement: 'section' remains rejected.
+    await assertSucceeds(setDoc(doc(own, 'pages', 'p-null-cat'), {
+      slug: 'null-cat-link',
+      titleAr: 'صفحة عامة',
+      titleEn: '',
+      subtitleAr: '',
+      subtitleEn: '',
+      placement: 'link',
+      categoryId: null,
+      showInNav: false,
+      featured: false,
+      visible: true,
+      order: 20,
+      ...stamp(),
+    }));
+    await assertFails(updateDoc(doc(own, 'pages', 'p-null-cat'), { placement: 'section', ...stamp() }));
+
+    // 3. Donation-template page: DocEditor splitSavePayload sends base write (with categoryId: null)
+    //    followed by a separate blocks chunk write via mergeFields.
+    const donationRef = doc(own, 'pages', 'p-donation');
+    await assertSucceeds(setDoc(donationRef, {
+      slug: 'new-building-donations',
+      titleAr: 'التبرعات والمساهمات',
+      titleEn: 'Donations & contributions',
+      subtitleAr: '',
+      subtitleEn: '',
+      placement: 'link',
+      categoryId: null,
+      showInNav: false,
+      featured: false,
+      visible: true,
+      order: 0,
+      ...stamp(),
+    }));
+    await assertSucceeds(setDoc(donationRef, {
+      blocks: [
+        block({
+          type: 'paragraph',
+          textAr: 'بيانات المساهمة والتبرع (للعرض فقط — لا يتم أي دفع عبر الموقع).',
+          textEn: 'Donation and contribution details (display only — no payment is processed on this site).',
+        }),
+        block({ type: 'donation' }),
+      ],
+      ...stamp(),
+    }, { mergeFields: ['blocks', 'updatedAt', 'updatedBy'] }));
   });
 
   test('the two custom-content section switches are known keys', async () => {
@@ -1355,7 +1919,7 @@ describe('ADR-028: contact categories, bookings and anonymous messages', () => {
   });
 
   test('stored categories replace the defaults: switched-off and missing slots are refused', async () => {
-    await assertSucceeds(setDoc(doc(db(EDITOR), 'settings', 'contact'), { categories: cats }));
+    await assertSucceeds(setDoc(doc(db(OWNER), 'settings', 'contact'), { categories: cats }));
     const pub = db(null);
     await assertSucceeds(send(pub, booking));
     await reset();
@@ -1365,7 +1929,7 @@ describe('ADR-028: contact categories, bookings and anonymous messages', () => {
   });
 
   test('admins edit settings/contact; shapes are validated; 12 full categories fit in one write', async () => {
-    const ref = doc(db(EDITOR), 'settings', 'contact');
+    const ref = doc(db(OWNER), 'settings', 'contact');
     const many = Object.fromEntries(Array.from({ length: 12 }, (_, i) => [`c${i + 1}`, enc({
       labelAr: 'ن'.repeat(80), labelEn: 'e'.repeat(80), kind: 'booking', on: true, anon: false, order: i,
       subtypes: Array.from({ length: 8 }, (_, j) => `type${j}|${'ع'.repeat(60)}|${'e'.repeat(60)}`),
@@ -1403,6 +1967,32 @@ describe('ADR-028: contact categories, bookings and anonymous messages', () => {
     await assertFails(updateDoc(doc(ed, 'contact_messages', 'm1'), { category: 'c2' }));
     await assertFails(updateDoc(doc(db(STRANGER), 'contact_messages', 'm1'), { adminNotes: 'x' }));
   });
+
+  test('admins soft-delete, restore (deletedAt: null), and hard-delete contact_messages; visitors denied', async () => {
+    const ed = db(EDITOR);
+    const pub = db(null);
+    const stranger = db(STRANGER);
+    const ref = doc(ed, 'contact_messages', 'm1');
+    const stamp = () => ({ updatedAt: serverTimestamp(), updatedBy: `${EDITOR}@x.test` });
+
+    // Soft-delete with Timestamp and restore with null (10-second Undo)
+    await assertSucceeds(updateDoc(ref, { deletedAt: Timestamp.now(), ...stamp() }));
+    await assertSucceeds(updateDoc(ref, { deletedAt: null, ...stamp() }));
+
+    // Bad deletedAt type or modifying immutable message fields fails
+    await assertFails(updateDoc(ref, { deletedAt: '2026-11-15', ...stamp() }));
+    await assertFails(updateDoc(ref, { deletedAt: Timestamp.now(), message: 'tampered', ...stamp() }));
+
+    // Public visitors and non-admins cannot read, soft-delete, restore, or hard-delete
+    await assertFails(getDoc(doc(pub, 'contact_messages', 'm1')));
+    await assertFails(updateDoc(doc(pub, 'contact_messages', 'm1'), { deletedAt: Timestamp.now() }));
+    await assertFails(deleteDoc(doc(pub, 'contact_messages', 'm1')));
+    await assertFails(updateDoc(doc(stranger, 'contact_messages', 'm1'), { deletedAt: Timestamp.now() }));
+    await assertFails(deleteDoc(doc(stranger, 'contact_messages', 'm1')));
+
+    // Admin hard-delete succeeds
+    await assertSucceeds(deleteDoc(ref));
+  });
 });
 
 describe('PR #19: stable contact category ids (never re-label old messages)', () => {
@@ -1422,7 +2012,7 @@ describe('PR #19: stable contact category ids (never re-label old messages)', ()
   const prayer = enc({ kind: 'general', on: true, anon: false, order: 30, labelAr: 'طلب صلاة', labelEn: 'Prayer request' });
 
   test('random ids save and receive messages; a deleted id is refused, its replacement has a new id', async () => {
-    const ref = doc(db(EDITOR), 'settings', 'contact');
+    const ref = doc(db(OWNER), 'settings', 'contact');
     await assertSucceeds(setDoc(ref, { categories: { c1, ck3j9x2ab7q: visit } }));
     const pub = db(null);
     await assertSucceeds(send(pub, general('ck3j9x2ab7q')));
@@ -1437,7 +2027,7 @@ describe('PR #19: stable contact category ids (never re-label old messages)', ()
   });
 
   test('12 full categories with random ids fit in one write; an edit validates only what changed', async () => {
-    const ref = doc(db(EDITOR), 'settings', 'contact');
+    const ref = doc(db(OWNER), 'settings', 'contact');
     const full = (i) => enc({
       labelAr: 'ن'.repeat(80), labelEn: 'e'.repeat(80), kind: 'booking', on: true, anon: false, order: i,
       subtypes: Array.from({ length: 8 }, (_, j) => `type${j}|${'ع'.repeat(60)}|${'e'.repeat(60)}`),
@@ -1465,16 +2055,16 @@ describe('ADR-029: assistant settings (settings/assistant)', () => {
   };
 
   test('everyone reads; admins save every field at its maximum, blanks and nulls (= defaults)', async () => {
-    const ref = doc(db(EDITOR), 'settings', 'assistant');
+    const ref = doc(db(OWNER), 'settings', 'assistant');
     await assertSucceeds(setDoc(ref, full));
     await assertSucceeds(getDoc(doc(db(null), 'settings', 'assistant')));
     await assertSucceeds(setDoc(ref, { model: '', instructions: '', topics: '', maxChars: null, perMinute: null, perSession: null }));
-    await assertSucceeds(setDoc(ref, { model: 'gemini-3.5-flash-lite', updatedAt: serverTimestamp(), updatedBy: `${EDITOR}@x.test` }, { merge: true }));
+    await assertSucceeds(setDoc(ref, { model: 'gemini-3.5-flash-lite', updatedAt: serverTimestamp(), updatedBy: `${OWNER}@x.test` }, { merge: true }));
     await assertSucceeds(updateDoc(ref, { maxChars: 50, perMinute: 1, perSession: 1 }));
   });
 
   test('model ids, lengths, number ranges and unknown keys are validated', async () => {
-    const ref = doc(db(EDITOR), 'settings', 'assistant');
+    const ref = doc(db(OWNER), 'settings', 'assistant');
     for (const bad of [
       { model: 'gpt-4o' }, { model: 'Gemini-3' }, { model: 'gemini 3' }, { model: 'gemini-' }, { model: 'gemma-3-27b' },
       { model: 'gemini-' + 'a'.repeat(60) }, { model: 3 }, { model: null },
@@ -1505,7 +2095,7 @@ describe('ADR-029: assistant settings (settings/assistant)', () => {
   test('visitors and non-admins cannot change it; it can never be deleted', async () => {
     await assertFails(setDoc(doc(db(null), 'settings', 'assistant'), { model: 'gemini-3.1-flash-lite' }));
     await assertFails(setDoc(doc(db(STRANGER), 'settings', 'assistant'), { model: 'gemini-3.1-flash-lite' }));
-    await assertSucceeds(setDoc(doc(db(EDITOR), 'settings', 'assistant'), { model: '' }));
+    await assertSucceeds(setDoc(doc(db(OWNER), 'settings', 'assistant'), { model: '' }));
     await assertFails(deleteDoc(doc(db(OWNER), 'settings', 'assistant')));
   });
 });
@@ -1649,7 +2239,7 @@ describe('ADR-041: programme details (speaker, topic, choir, venue, audience, Dr
   });
 
   test('venues / audiences: up to 12 encoded rows each', async () => {
-    const ref = doc(db(EDITOR), 'settings', 'features');
+    const ref = doc(db(OWNER), 'settings', 'features');
     const row = (k, ar = 'القاعة', en = '') => [k, ar, en].join(S);
     await assertSucceeds(setDoc(ref, { theme: 'burgundy', venues: [row('main', 'الكنيسة الكبرى', 'Main church'), row('lower')],
       audiences: [row('general', 'عام', 'Everyone')] }));
@@ -1721,7 +2311,7 @@ describe('ADR-042: season preset, season verses, wedding switch, assistant seaso
   });
 
   test('season verses: up to 40 encoded rows of a known season', async () => {
-    const ref = doc(db(EDITOR), 'settings', 'features');
+    const ref = doc(db(OWNER), 'settings', 'features');
     const row = (k, t = 'هوذا حمل الله', r = 'يو 1: 29') => [k, t, r].join(S);
     await assertSucceeds(setDoc(ref, { seasonVerses: [row('holy_week'), row('pascha', 'المسيح قام', '')] }));
     await assertSucceeds(updateDoc(ref, { seasonVerses: Array.from({ length: 40 }, () => row('summer', 'آ'.repeat(500), 'ر'.repeat(60))) }));
@@ -1736,7 +2326,7 @@ describe('ADR-042: season preset, season verses, wedding switch, assistant seaso
   });
 
   test('assistant perDaySeason 1..100', async () => {
-    const ref = doc(db(EDITOR), 'settings', 'assistant');
+    const ref = doc(db(OWNER), 'settings', 'assistant');
     await assertSucceeds(setDoc(ref, { perDay: 3, perDaySeason: 6 }));
     await assertSucceeds(updateDoc(ref, { perDaySeason: 100 }));
     await assertSucceeds(updateDoc(ref, { perDaySeason: null }));
@@ -1808,8 +2398,8 @@ describe('ADR-043: season-following theme, season theme map, preset theme item, 
     const ed = db(EDITOR);
     for (const k of ['epiphany', 'marian', 'fast']) {
       await assertSucceeds(setDoc(doc(ed, 'seasons', k), { key: k, nameAr: 'موسم', active: true }), k);
-      await assertSucceeds(setDoc(ref(), { seasonVerses: [[k, 'آية', ''].join('\u001f')] }), `${k} verse`);
-      await assertSucceeds(setDoc(ref(), { seasonPreset: { ...preset, seasonKey: k } }), `${k} preset`);
+      await assertSucceeds(setDoc(doc(db(OWNER), 'settings', 'features'), { seasonVerses: [[k, 'آية', ''].join('\u001f')] }), `${k} verse`);
+      await assertSucceeds(setDoc(ref(), { seasonPreset: { ...preset, seasonKey: k } }, { merge: true }), `${k} preset`);
     }
     await assertFails(setDoc(doc(ed, 'seasons', 'lent'), { key: 'lent', nameAr: 'موسم', active: true }));
   });
@@ -1873,15 +2463,16 @@ describe('ADR-047: English text for the fixed verse and the season verses', () =
   });
 
   test('season verses: rows with or without the ␟textEn␟refEn tail; 40 full rows fit', async () => {
+    const ownerRef = () => doc(db(OWNER), 'settings', 'features');
     const row = (k, en = 'Behold, the Lamb of God', er = 'John 1:29') => [k, 'هوذا حمل الله', 'يو 1: 29', en, er].join(S);
-    await assertSucceeds(setDoc(ref(), { seasonVerses: [row('holy_week'), ['pascha', 'المسيح قام', ''].join(S), row('pascha', '', '')] }));
-    await assertSucceeds(updateDoc(ref(), { seasonVerses: Array.from({ length: 40 },
+    await assertSucceeds(setDoc(ownerRef(), { seasonVerses: [row('holy_week'), ['pascha', 'المسيح قام', ''].join(S), row('pascha', '', '')] }));
+    await assertSucceeds(updateDoc(ownerRef(), { seasonVerses: Array.from({ length: 40 },
       () => ['summer', 'آ'.repeat(500), 'ر'.repeat(60), 'e'.repeat(500), 'r'.repeat(60)].join(S)) }));
     for (const bad of [
       [row('holy_week', 'e'.repeat(501))], [row('holy_week', 'x', 'r'.repeat(61))], [row('holy_week') + S + 'x'],
       [['holy_week', 'آية', '', 'only English text'].join(S)],
     ]) {
-      await assertFails(updateDoc(ref(), { seasonVerses: bad }), JSON.stringify(bad).slice(0, 60));
+      await assertFails(updateDoc(ownerRef(), { seasonVerses: bad }), JSON.stringify(bad).slice(0, 60));
     }
   });
 });
@@ -1904,8 +2495,8 @@ describe('ADR-051: season keys, replaceDates, exceptional seasons', () => {
     for (const k of [...NEW, 'fast']) {
       await assertSucceeds(setDoc(doc(ed, 'seasons', k), { key: k, nameAr: 'موسم', active: true }), k);
       await assertSucceeds(setDoc(doc(ed, 'liturgies', `l-${k}`), { type: 'mass', nameAr: 'قداس', start: '07:00', seasonKey: k }), `${k} liturgy`);
-      await assertSucceeds(setDoc(features(), { seasonVerses: [[k, 'آية', ''].join('\u001f')] }), `${k} verse`);
-      await assertSucceeds(setDoc(features(), { seasonPreset: preset(k) }), `${k} preset`);
+      await assertSucceeds(setDoc(doc(db(OWNER), 'settings', 'features'), { seasonVerses: [[k, 'آية', ''].join('\u001f')] }), `${k} verse`);
+      await assertSucceeds(setDoc(features(), { seasonPreset: preset(k) }, { merge: true }), `${k} preset`);
     }
     for (const bad of ['cross', 'lent', 'Apostles', 'great-lent']) {
       await assertFails(setDoc(doc(ed, 'seasons', 'x'), { key: bad, nameAr: 'موسم' }), bad);
@@ -1959,7 +2550,7 @@ describe('ADR-051: season keys, replaceDates, exceptional seasons', () => {
   });
 
   test('assistant exceptionalSeasons: a list of known season keys (empty = none)', async () => {
-    const ref = doc(db(EDITOR), 'settings', 'assistant');
+    const ref = doc(db(OWNER), 'settings', 'assistant');
     await assertSucceeds(setDoc(ref, { perDay: 3, perDaySeason: 6,
       exceptionalSeasons: ['holy_week', 'pascha', 'nativity', 'revival_maximus', 'revival_moses', 'great_lent', 'kiahk', 'marian'] }));
     await assertSucceeds(updateDoc(ref, { exceptionalSeasons: [] }));
@@ -1973,16 +2564,224 @@ describe('ADR-051: season keys, replaceDates, exceptional seasons', () => {
   });
 });
 
+describe('P2-18R: owner-only writes for settings (contact, assistant, venues, audiences, seasonVerses)', () => {
+  const S = '\u001f';
+  const venueRow = (k, ar = 'القاعة', en = 'Hall') => [k, ar, en].join(S);
+  const verseRow = (k = 'summer', ar = 'الرب نوري', r = 'مز ٢٧: ١', en = 'The Lord is my light', er = 'Ps 27:1') =>
+    [k, ar, r, en, er].join(S);
+  const validCategories = { c1: ['general', '1', '0', '10', 'استفسار عام', 'General inquiry', ''].join(S) };
+
+  test('active non-owner editor cannot create or update settings/contact or settings/assistant', async () => {
+    const ed = db(EDITOR);
+    const own = db(OWNER);
+    const stamp = (uid) => ({ updatedAt: serverTimestamp(), updatedBy: `${uid}@x.test` });
+
+    await assertFails(setDoc(doc(ed, 'settings', 'contact'), { categories: validCategories }));
+    await assertFails(setDoc(doc(ed, 'settings', 'assistant'), { model: 'gemini-3.1-flash-lite' }));
+
+    await assertSucceeds(setDoc(doc(own, 'settings', 'contact'), { categories: validCategories, ...stamp(OWNER) }));
+    await assertSucceeds(setDoc(doc(own, 'settings', 'assistant'), { model: '', ...stamp(OWNER) }));
+
+    await assertFails(updateDoc(doc(ed, 'settings', 'contact'), { categories: validCategories, ...stamp(EDITOR) }));
+    await assertFails(updateDoc(doc(ed, 'settings', 'assistant'), { maxChars: 500, ...stamp(EDITOR) }));
+  });
+
+  test('active non-owner editor cannot change venues, audiences, or seasonVerses on settings/features', async () => {
+    const ed = db(EDITOR);
+    const own = db(OWNER);
+    const stamp = (uid) => ({ updatedAt: serverTimestamp(), updatedBy: `${uid}@x.test` });
+
+    // Create attempts by editor
+    await assertFails(setDoc(doc(ed, 'settings', 'features'), { venues: [venueRow('main')] }));
+    await assertFails(setDoc(doc(ed, 'settings', 'features'), { audiences: [venueRow('youth')] }));
+    await assertFails(setDoc(doc(ed, 'settings', 'features'), { seasonVerses: [verseRow()] }));
+
+    // Seed stored settings/features with owner-only fields already populated
+    await assertSucceeds(setDoc(doc(own, 'settings', 'features'), {
+      ...convert(seed.settings.features),
+      venues: [venueRow('main')],
+      audiences: [venueRow('general')],
+      seasonVerses: [verseRow()],
+      ...stamp(OWNER),
+    }));
+
+    // Update attempts by editor changing any of the three keys are denied
+    await assertFails(updateDoc(doc(ed, 'settings', 'features'), { venues: [], ...stamp(EDITOR) }));
+    await assertFails(updateDoc(doc(ed, 'settings', 'features'), { audiences: [], ...stamp(EDITOR) }));
+    await assertFails(updateDoc(doc(ed, 'settings', 'features'), { seasonVerses: [], ...stamp(EDITOR) }));
+    await assertFails(setDoc(doc(ed, 'settings', 'features'), {
+      venues: [venueRow('other')], liveEnabled: true, ...stamp(EDITOR),
+    }, { merge: true }));
+  });
+
+  test('active non-owner editor can still save Today, live stream, and section switches when owner-only keys are untouched', async () => {
+    const ed = db(EDITOR);
+    const own = db(OWNER);
+    const stamp = (uid) => ({ updatedAt: serverTimestamp(), updatedBy: `${uid}@x.test` });
+
+    await assertSucceeds(setDoc(doc(own, 'settings', 'features'), {
+      ...convert(seed.settings.features),
+      venues: [venueRow('main')],
+      audiences: [venueRow('general')],
+      seasonVerses: [verseRow()],
+      ...stamp(OWNER),
+    }));
+
+    // Today & live stream update
+    await assertSucceeds(updateDoc(doc(ed, 'settings', 'features'), {
+      copticStrip: 'home',
+      dayStartMode: 'fixed',
+      dayStartsAt: '05:30',
+      topEvent: true,
+      commemoration: true,
+      topEventServices: true,
+      liveEnabled: true,
+      liveUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+      liveLabelAr: 'بث مباشر',
+      liveLabelEn: 'Live',
+      ...stamp(EDITOR),
+    }));
+
+    // Section switches update
+    await assertSucceeds(updateDoc(doc(ed, 'settings', 'features'), {
+      'sections.assistant': false,
+      'sections.contactForm': true,
+      ...stamp(EDITOR),
+    }));
+  });
+
+  test('owner writes settings/contact, settings/assistant, and worst-case venues/audiences/seasonVerses under budget', async () => {
+    const own = db(OWNER);
+    const stamp = () => ({ updatedAt: serverTimestamp(), updatedBy: `${OWNER}@x.test` });
+
+    await assertSucceeds(setDoc(doc(own, 'settings', 'contact'), { categories: validCategories, ...stamp() }));
+    await assertSucceeds(setDoc(doc(own, 'settings', 'assistant'), {
+      model: 'gemini-3.1-flash-lite', maxChars: 1000, perMinute: 20, perDay: 100, perDaySeason: 100, perSession: 200,
+      ...stamp(),
+    }));
+
+    // Worst-case whole-doc save with 12 max-length venues, 12 max-length audiences, and 40 max-length seasonVerses
+    await assertSucceeds(setDoc(doc(own, 'settings', 'features'), {
+      ...convert(seed.settings.features),
+      venues: Array.from({ length: 12 }, (_, i) => venueRow(`v${i}`, 'ق'.repeat(80), 'e'.repeat(80))),
+      audiences: Array.from({ length: 12 }, (_, i) => venueRow(`a${i}`, 'ج'.repeat(80), 'g'.repeat(80))),
+      seasonVerses: Array.from({ length: 40 }, () => verseRow('summer', 'آ'.repeat(500), 'ر'.repeat(60), 'e'.repeat(500), 'r'.repeat(60))),
+      ...stamp(),
+    }));
+  });
+
+  test('anonymous reads of settings/contact, settings/assistant, and settings/features still succeed', async () => {
+    const own = db(OWNER);
+    await assertSucceeds(setDoc(doc(own, 'settings', 'contact'), { categories: validCategories }));
+    await assertSucceeds(setDoc(doc(own, 'settings', 'assistant'), { model: '' }));
+    await assertSucceeds(setDoc(doc(own, 'settings', 'features'), convert(seed.settings.features)));
+
+    const pub = db(null);
+    await assertSucceeds(getDoc(doc(pub, 'settings', 'contact')));
+    await assertSucceeds(getDoc(doc(pub, 'settings', 'assistant')));
+    await assertSucceeds(getDoc(doc(pub, 'settings', 'features')));
+  });
+});
+
+describe('P2-27b: englishEnabled owner-only switch on settings/features', () => {
+  test('owner can toggle englishEnabled; editor cannot create or change it, and non-bool is rejected', async () => {
+    const ed = db(EDITOR);
+    const own = db(OWNER);
+    const refOwn = doc(own, 'settings', 'features');
+    const refEd = doc(ed, 'settings', 'features');
+    const stamp = (uid) => ({ updatedAt: serverTimestamp(), updatedBy: `${uid}@x.test` });
+
+    // Non-owner editor cannot create with englishEnabled set
+    await assertFails(setDoc(refEd, { ...convert(seed.settings.features), englishEnabled: false }));
+
+    // Owner creates with englishEnabled: false and toggles back to true
+    await assertSucceeds(setDoc(refOwn, { ...convert(seed.settings.features), englishEnabled: false, ...stamp(OWNER) }));
+    await assertSucceeds(updateDoc(refOwn, { englishEnabled: true, ...stamp(OWNER) }));
+    await assertSucceeds(updateDoc(refOwn, { englishEnabled: false, ...stamp(OWNER) }));
+
+    // Non-bool rejected even for owner
+    for (const bad of ['no', 0, null, []]) {
+      await assertFails(updateDoc(refOwn, { englishEnabled: bad, ...stamp(OWNER) }));
+    }
+
+    // Non-owner editor cannot change englishEnabled (alone or bundled with other valid keys)
+    await assertFails(updateDoc(refEd, { englishEnabled: true, ...stamp(EDITOR) }));
+    await assertFails(setDoc(refEd, { englishEnabled: true, liveEnabled: true, ...stamp(EDITOR) }, { merge: true }));
+
+    // Non-owner editor can still save other settings when englishEnabled is omitted from mergeFields
+    await assertSucceeds(setDoc(refEd, { liveEnabled: true, ...stamp(EDITOR) }, {
+      mergeFields: ['liveEnabled', 'updatedAt', 'updatedBy'],
+    }));
+  });
+
+  test('owner toggles englishEnabled on a full existing FeaturesScreen document; editor denied', async () => {
+    const ed = db(EDITOR);
+    const own = db(OWNER);
+    const refOwn = doc(own, 'settings', 'features');
+    const refEd = doc(ed, 'settings', 'features');
+    const stamp = (uid) => ({ updatedAt: serverTimestamp(), updatedBy: `${uid}@x.test` });
+
+    // Seed a full existing settings/features document (seed + extra fields)
+    const fullExisting = {
+      ...convert(seed.settings.features),
+      heroMotion: true,
+      heroSeasonTint: true,
+      heroShowAddress: false,
+      aboutMilestones: true,
+      occasions: { auto: false, easter: true, resurrectionDays: 7, schedule: {}, followSeason: true },
+      themeColors: {},
+      installPrompt: false,
+      push: false,
+      englishEnabled: true,
+    };
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'settings', 'features'), fullExisting);
+    });
+
+    // Payload matching FeaturesScreen / featuresSaveWrites base write
+    const basePayload = (englishEnabled, uid) => ({
+      sections: fullExisting.sections,
+      homeOrder: fullExisting.homeOrder,
+      homeHidden: fullExisting.homeHidden,
+      heroTitleAr: fullExisting.heroTitleAr,
+      heroTitleEn: fullExisting.heroTitleEn,
+      heroSubtitleAr: fullExisting.heroSubtitleAr,
+      heroSubtitleEn: fullExisting.heroSubtitleEn,
+      bannerEnabled: fullExisting.bannerEnabled,
+      bannerAr: fullExisting.bannerAr,
+      bannerEn: fullExisting.bannerEn,
+      bannerLink: fullExisting.bannerLink,
+      theme: fullExisting.theme,
+      footer: fullExisting.footer,
+      heroMotion: true,
+      heroSeasonTint: true,
+      heroShowAddress: false,
+      aboutMilestones: true,
+      errorReporting: true,
+      englishEnabled,
+      ...stamp(uid),
+    });
+
+    const offPayload = basePayload(false, OWNER);
+    await assertSucceeds(setDoc(refOwn, offPayload, { mergeFields: Object.keys(offPayload) }));
+
+    const onPayload = basePayload(true, OWNER);
+    await assertSucceeds(setDoc(refOwn, onPayload, { mergeFields: Object.keys(onPayload) }));
+
+    // Editor cannot toggle englishEnabled even with the full FeaturesScreen payload
+    const edOffPayload = basePayload(false, EDITOR);
+    await assertFails(setDoc(refEd, edOffPayload, { mergeFields: Object.keys(edOffPayload) }));
+  });
+});
+
 describe('install banner and push settings (ADR-057)', () => {
-  const featuresRef = () => doc(db(EDITOR), 'settings', 'features');
-  const validInstallAndPush = {
+  const featuresRef = (uid = EDITOR) => doc(db(uid), 'settings', 'features');
+  const validEditorInstallAndPush = {
     installPrompt: true,
     installTitleAr: 'تطبيق الكنيسة على هاتفك',
     installTitleEn: 'Church app on your phone',
     installBodyAr: 'تابع القداسات والصلوات والمواسم وتلقّ التنبيهات بسهولة من هاتفك.',
     installBodyEn: 'Follow liturgies, prayers and seasons with easy updates on your phone.',
-    installAndroidUrl: 'https://example.com/app.apk',
-    installAndroidUrl32: '/app/android/older.apk',
     installApkVersion: '1.1.0',
     installApkBuild: 42,
     installApkSizeMb: 18.4,
@@ -1990,14 +2789,20 @@ describe('install banner and push settings (ADR-057)', () => {
     installReshowDays: 30,
     installRemindDays: 3,
     push: true,
-    pushVapidKey: 'BKAGkFj27-exampleVapidKey890123456789012345678901234567890123456789012345678901234567890',
     pushTypes: ['announcements', 'verse_daily', 'katameros_daily', 'seasons', 'feasts', 'reminders'],
     reminderLeads: [0, 15, 60, 1440],
     reminderDefaultLead: 60,
   };
+  const validInstallAndPush = {
+    ...validEditorInstallAndPush,
+    installAndroidUrl: 'https://example.com/app.apk',
+    installAndroidUrl32: '/app/android/older.apk',
+    pushVapidKey: 'BKAGkFj27-exampleVapidKey890123456789012345678901234567890123456789012345678901234567890',
+  };
 
-  test('admin can save valid install and push settings', async () => {
-    await assertSucceeds(setDoc(featuresRef(), validInstallAndPush, { merge: true }));
+  test('owner can save full valid install and push settings; editor can save non-owner fields', async () => {
+    await assertSucceeds(setDoc(featuresRef(OWNER), validInstallAndPush, { merge: true }));
+    await assertSucceeds(setDoc(featuresRef(EDITOR), validEditorInstallAndPush, { merge: true }));
   });
 
   test('stranger cannot write install or push settings', async () => {
@@ -2005,9 +2810,14 @@ describe('install banner and push settings (ADR-057)', () => {
   });
 
   test('rejects invalid install fields', async () => {
-    const badCases = [
+    const ownerBadCases = [
       { installAndroidUrl: 'javascript:alert(1)' },
       { installAndroidUrl32: '//evil.com/phish' },
+    ];
+    for (const bad of ownerBadCases) {
+      await assertFails(setDoc(featuresRef(OWNER), bad, { merge: true }), JSON.stringify(bad));
+    }
+    const badCases = [
       { installApkVersion: '1.x' },
       { installApkBuild: -1 },
       { installApkBuild: 1000000 },
@@ -2023,9 +2833,14 @@ describe('install banner and push settings (ADR-057)', () => {
   });
 
   test('rejects invalid push fields', async () => {
-    const badCases = [
+    const ownerBadCases = [
       { pushVapidKey: 'with spaces in the middle 8901234567890123456789012345678901234567890123456789012345678901234567890' },
       { pushVapidKey: 'too-short' },
+    ];
+    for (const bad of ownerBadCases) {
+      await assertFails(setDoc(featuresRef(OWNER), bad, { merge: true }), JSON.stringify(bad));
+    }
+    const badCases = [
       { pushTypes: ['announcements', 'occasions'] }, // retired occasions type
       { pushTypes: ['announcements', 'announcements'] }, // duplicate type
       { pushTypes: ['announcements', 'unknown_type'] },
@@ -2094,19 +2909,19 @@ describe('install banner and push settings (ADR-057)', () => {
     });
     const keys = ['about', 'schedule', 'education', 'activities', 'clinics', 'services', 'contact', 'ask', 'notifications'];
     const headers = (t) => Object.fromEntries(keys.map((k) => [k, pageHeader(t)]));
-    const stamp = () => ({ updatedAt: serverTimestamp(), updatedBy: `${EDITOR}@x.test` });
-    // Admin «App & notifications» screen: every ADR-057 field at once.
-    await assertSucceeds(setDoc(featuresRef(), { ...validInstallAndPush, ...stamp() }));
+    const stamp = (uid = EDITOR) => ({ updatedAt: serverTimestamp(), updatedBy: `${uid}@x.test` });
+    // Owner seeds full ADR-057 fields at once.
+    await assertSucceeds(setDoc(featuresRef(OWNER), { ...validInstallAndPush, ...stamp(OWNER) }));
     // Page-headers screen on that document: all 9 headers rewritten at max
     // length, the ADR-057 fields unchanged (they cost nothing then).
     await assertSucceeds(setDoc(featuresRef(), { pageHeaders: headers('a'), ...stamp() }, { merge: true }));
     await assertSucceeds(setDoc(featuresRef(), { pageHeaders: headers('b'), ...stamp() }, { merge: true }));
-    // App screen again, with the worst-case headers stored and unchanged.
-    await assertSucceeds(setDoc(featuresRef(), { ...validInstallAndPush, installApkBuild: 43, reminderDefaultLead: 15, ...stamp() }, { merge: true }));
+    // Editor App & notifications save (excluding owner-only keys) with worst-case headers stored and unchanged.
+    await assertSucceeds(setDoc(featuresRef(), { ...validEditorInstallAndPush, installApkBuild: 43, reminderDefaultLead: 15, ...stamp() }, { merge: true }));
   });
 
   test('reminderDefaultLead may be cleared to null; unknown keys still rejected next to ADR-057 keys', async () => {
-    await assertSucceeds(setDoc(featuresRef(), validInstallAndPush, { merge: true }));
+    await assertSucceeds(setDoc(featuresRef(), validEditorInstallAndPush, { merge: true }));
     await assertSucceeds(setDoc(featuresRef(), { reminderDefaultLead: null }, { merge: true }));
     await assertFails(setDoc(featuresRef(), { installPrompt: true, bogusKey: 1 }, { merge: true }));
     await assertFails(setDoc(featuresRef(), { pushTypes: 'announcements' }, { merge: true }));
@@ -2222,13 +3037,23 @@ describe('PR #55: writes exactly as the admin notifications screen makes them', 
   test('settings save from the notifications tab (all keys, one seasons template) succeeds', async () => {
     await assertSucceeds(setDoc(featRef(), {
       push: false,
-      pushVapidKey: '',
       pushTypes: ['announcements', 'seasons', 'reminders'],
       reminderLeads: [0, 15, 60, 1440],
       reminderDefaultLead: 60,
       reminderSources: 'lit,mtg',
       notifyTypes: [['seasons', '08:30', '2', 'موسم كنسي: {season}', 'Church Season: {season}', 'يبدأ {season} بعد {days} أيام', 'Season of {season} begins in {days} days'].join(S)],
       ...stamp(),
+    }, { merge: true }));
+    await assertSucceeds(setDoc(doc(db(OWNER), 'settings', 'features'), {
+      push: false,
+      pushVapidKey: '',
+      pushTypes: ['announcements', 'seasons', 'reminders'],
+      reminderLeads: [0, 15, 60, 1440],
+      reminderDefaultLead: 60,
+      reminderSources: 'lit,mtg',
+      notifyTypes: [['seasons', '08:30', '2', 'موسم كنسي: {season}', 'Church Season: {season}', 'يبدأ {season} بعد {days} أيام', 'Season of {season} begins in {days} days'].join(S)],
+      updatedAt: serverTimestamp(),
+      updatedBy: `${OWNER}@x.test`,
     }, { merge: true }));
     // Every type customised at once (6 rows), each at max lengths.
     const types = ['announcements', 'verse_daily', 'katameros_daily', 'seasons', 'feasts', 'reminders'];
@@ -2313,7 +3138,7 @@ describe('ADR-059: settings/features notifyTypes & reminderSources', () => {
   });
 
   test('expression budget: whole-doc save with notifyTypes, reminderSources, install and push fields', async () => {
-    const stamp = () => ({ updatedAt: serverTimestamp(), updatedBy: `${EDITOR}@x.test` });
+    const stamp = (uid = OWNER) => ({ updatedAt: serverTimestamp(), updatedBy: `${uid}@x.test` });
     const fullPayload = {
       ...validInstallAndPush,
       notifyTypes: [
@@ -2321,9 +3146,11 @@ describe('ADR-059: settings/features notifyTypes & reminderSources', () => {
         ['seasons', '07:00', '3', 'المواسم', 'Seasons', '{season}', '{season}'].join(S),
       ],
       reminderSources: 'lit,mtg,day',
-      ...stamp(),
+      ...stamp(OWNER),
     };
-    await assertSucceeds(setDoc(featRef(), fullPayload, { merge: true }));
+    await assertSucceeds(setDoc(featRef(OWNER), fullPayload, { merge: true }));
+    const { installAndroidUrl, installAndroidUrl32, pushVapidKey, ...editorPayload } = fullPayload;
+    await assertSucceeds(setDoc(featRef(EDITOR), { ...editorPayload, ...stamp(EDITOR) }, { merge: true }));
   });
 });
 

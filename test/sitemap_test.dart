@@ -164,5 +164,25 @@ void main() {
       expect(sitemapPaths(sitemapContentFromExport(export, seedFeatures: seedFeatures)), contains('/clinics/c1'));
       expect(() => sitemapContentFromExport({'features': null}), throwsFormatException);
     });
+
+    test('sitemapContentFromExport skips soft-deleted items with deletedAt != null', () {
+      final export = {
+        'features': {'sections': {Sections.clinics: true}},
+        'meetings': [],
+        'activities': [],
+        'clinics': [
+          {'id': 'c1', 'data': {'specialtyAr': 'أسنان'}},
+          {'id': 'c2', 'data': {'specialtyAr': 'باطنة', 'deletedAt': '2026-11-14T10:00:00.000Z'}},
+        ],
+        'facilities': [],
+        'priests': [],
+        'saints': [],
+        'milestones': [],
+        'categories': [],
+        'pages': [],
+      };
+      final content = sitemapContentFromExport(export);
+      expect(content.clinics.map((c) => c.id), ['c1']);
+    });
   });
 }

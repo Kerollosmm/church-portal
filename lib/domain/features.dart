@@ -283,6 +283,10 @@ class FeatureSettings {
   /// from the web or Android app (no personal data is sent either way).
   final bool errorReporting;
 
+  /// Whether the English version of the site and English fields in admin
+  /// editors are enabled (P2-27b). Default on; missing = on.
+  final bool englishEnabled;
+
   /// Today layer (ADR-039 / ADR-040): Coptic date strip, liturgical day,
   /// top event card, live banner. Top-level keys of this document, edited by
   /// /admin → "Today & live stream" (never written by [toMap]).
@@ -343,6 +347,7 @@ class FeatureSettings {
     this.dailyVerse = DailyVerseConfig.defaults,
     this.occasions = OccasionConfig.defaults,
     this.errorReporting = true,
+    this.englishEnabled = true,
     this.today = TodaySettings.defaults,
     this.dayEvents = const [],
     this.programOptions = ProgramOptions.defaults,
@@ -403,6 +408,7 @@ class FeatureSettings {
       dailyVerse: DailyVerseConfig.fromMap(m['dailyVerse']),
       occasions: OccasionConfig.fromMap(m['occasions'], m['themeColors']),
       errorReporting: _bool(m['errorReporting']) ?? true,
+      englishEnabled: _bool(m['englishEnabled']) ?? true,
       today: TodaySettings.fromMap(m),
       dayEvents: DayEvent.listFrom(m['dayEvents']),
       programOptions: ProgramOptions.fromMap(m),
@@ -443,6 +449,7 @@ class FeatureSettings {
         'occasions': occasions.toMap(),
         'themeColors': occasions.colorsToMap(),
         'errorReporting': errorReporting,
+        'englishEnabled': englishEnabled,
       };
 
   FeatureSettings copyWith({
@@ -468,6 +475,7 @@ class FeatureSettings {
     DailyVerseConfig? dailyVerse,
     OccasionConfig? occasions,
     bool? errorReporting,
+    bool? englishEnabled,
     InstallSettings? install,
     PushSettings? pushSettings,
     List<String>? notifyTypes,
@@ -496,6 +504,7 @@ class FeatureSettings {
         dailyVerse: dailyVerse ?? this.dailyVerse,
         occasions: occasions ?? this.occasions,
         errorReporting: errorReporting ?? this.errorReporting,
+        englishEnabled: englishEnabled ?? this.englishEnabled,
         today: today,
         dayEvents: dayEvents,
         programOptions: programOptions,
@@ -545,6 +554,7 @@ class FeatureSettings {
       dailyVerse: dailyVerse,
       occasions: occasions,
       errorReporting: errorReporting,
+      englishEnabled: englishEnabled,
       today: today,
       dayEvents: dayEvents,
       programOptions: programOptions,

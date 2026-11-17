@@ -5,6 +5,8 @@ import '../../core/theme.dart';
 import '../../domain/cairo_time.dart';
 import '../../domain/features.dart';
 import '../../domain/occasion_theme.dart';
+import 'admin_strings.dart';
+import 'state_switch.dart';
 
 /// Admin → Settings → "Site theme & occasions" (ADR-025): the selected
 /// preset (the manual override), automatic switching by Cairo date with an
@@ -126,6 +128,7 @@ class _OccasionThemeEditorState extends State<OccasionThemeEditor> {
 
   @override
   Widget build(BuildContext context) {
+    registerAdminStrings();
     final today = _today;
     final now = f.themeOn(today, activeSeasonKeys: widget.activeSeasonKeys);
     final easter = o.easterRanges(today.year);
@@ -167,12 +170,14 @@ class _OccasionThemeEditorState extends State<OccasionThemeEditor> {
           ),
         ]),
       ),
-      SwitchListTile(
+      AdminStateSwitch(
         key: const ValueKey('occasions-followSeason'),
         contentPadding: const EdgeInsetsDirectional.only(start: 4),
         title: Text(context.tr('themeFollowSeason')),
         subtitle: Text(context.tr('themeFollowSeasonHint')),
         value: o.followSeason,
+        onLabel: context.tr('switch_enabled'),
+        offLabel: context.tr('switch_disabled'),
         onChanged: (v) => _setO((o) => o.copyWith(followSeason: v)),
       ),
       if (o.followSeason)
@@ -184,22 +189,26 @@ class _OccasionThemeEditorState extends State<OccasionThemeEditor> {
           expandedCrossAxisAlignment: CrossAxisAlignment.stretch,
           children: [for (final k in SeasonThemes.seasonKeys) _seasonRow(k)],
         ),
-      SwitchListTile(
+      AdminStateSwitch(
         key: const ValueKey('occasions-auto'),
         contentPadding: const EdgeInsetsDirectional.only(start: 4),
         title: Text(context.tr('themeAuto')),
         subtitle: Text(context.tr('themeAutoHint')),
         value: o.auto,
+        onLabel: context.tr('switch_enabled'),
+        offLabel: context.tr('switch_disabled'),
         onChanged: (v) => _setO((o) => o.copyWith(auto: v)),
       ),
       if (o.auto) ...[
-        SwitchListTile(
+        AdminStateSwitch(
           key: const ValueKey('occasions-easter'),
           contentPadding: const EdgeInsetsDirectional.only(start: 4),
           title: Text(context.tr('themeEaster')),
           subtitle: Text(context.tr('themeEasterDates', {'h': span(easter[0]), 'r': span(easter[1])}),
               textDirection: TextDirection.ltr),
           value: o.easter,
+          onLabel: context.tr('switch_enabled'),
+          offLabel: context.tr('switch_disabled'),
           onChanged: (v) => _setO((o) => o.copyWith(easter: v)),
         ),
         if (o.easter)

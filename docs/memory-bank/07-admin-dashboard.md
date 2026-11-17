@@ -1,7 +1,8 @@
 # 07 — Admin dashboard (`/admin`)
 
-Code: `lib/ui/admin/` — `admin_page.dart`, `admin_schema.dart`, `doc_editor.dart`, `collection_list.dart`,
-`features_editor.dart`, `admin_screens.dart`, `admin_validators.dart`; data access `lib/data/admin_repository.dart`.
+Code: `lib/ui/admin/` — `admin_page.dart`, `admin_access.dart`, `admin_schema.dart`, `doc_editor.dart`, `collection_list.dart`,
+`features_editor.dart`, `admin_screens.dart`, `admin_validators.dart`, `confirm_named.dart`, `unsaved_guard.dart`,
+`pending_delete.dart`, `unsaved_bar.dart`; data access `lib/data/admin_repository.dart`.
 Tests: `test/admin_test.dart`; server rules: `firestore.rules` + `tool/rules_test`.
 
 ## How to sign in
@@ -32,7 +33,8 @@ flowchart TD
 ```
 
 - `adminRole(uid)` reads `admins/{uid}` **from the server** (`Source.server`) so a cold cache never shows "not admin";
-  network errors show Retry instead of a misleading denial.
+  network errors show Retry instead of a misleading denial. The login form `AdminLoginForm` localizes the email field
+  label via `context.tr('emailLabel')` («البريد الإلكتروني» / "Email").
 - `roleChanges(uid)` then streams the role live: a demoted owner loses the Admins screen, a removed admin loses the
   dashboard immediately. Cache-only "missing" snapshots are skipped.
 
@@ -41,46 +43,48 @@ flowchart TD
 | Capability | Editor | Owner |
 |---|---|---|
 | All content collections (CRUD, hide/show, reorder) | ✔ | ✔ |
-| Sections & home page (`settings/features`) | ✔ | ✔ |
+| Sections & home page (`settings/features`), Today & live stream | ✔ | ✔ |
 | Church info (`settings/church`) | ✔ | ✔ |
 | Contact messages: read, mark handled/new, delete | ✔ | ✔ |
-| **Admins** screen: add / change role / remove **other** admins | ✘ ("ownerOnly") | ✔ |
+| Owner-only settings: **Admins**, **Contact form types** (`settings/contact`), **AI assistant** (`settings/assistant`), **Season settings** (`venues`, `audiences`, `seasonVerses` in `settings/features`), **English version switch** (`englishEnabled` in `settings/features`), and **Advanced** (Sentry switch/test, App Check status, VAPID key/queues, APK install settings) | ✘ («ownerOnly» + blocked in `firestore.rules`) | ✔ |
 | Change or remove **themselves** | ✘ | ✘ (UI + rules) → an owner always remains |
 
-The same matrix is enforced server-side by `firestore.rules` (`isAdmin()` vs `isOwner()`). Note: the business case
-wanted settings and message deletion owner-only; the implementation deliberately grants them to editors (ADR-011).
+The same matrix is enforced server-side by `firestore.rules` (`isAdmin()` vs `isOwner()`, P2-18R, P2-27b).
 
-## Navigation (`adminDestinations(role)`)
+## Navigation (`adminDestinations(role)`, PR 3E / P2-18)
 
-`overview` → `features` → `today` → `seasonSettings` → `seasonPreset` → `app` (App & notifications, ADR-057, ADR-059) → `church` → `assistant` (AI assistant, PR #19) → one entry per `adminCollections` item (alerts, seasons, liturgies, meetings,
-clinics, facilities, activities, priests, departedPriests, saints, milestones, **categories** (Custom sections),
-**entries** (Section items), **pages** (Custom pages) — PR #18) → `messages` → `contactCats` (Contact form types,
-PR #18) → `admins` (owners only).
+Grouped under `AdminGroup` headers (`nav-group-<name>`): **7 editor groups** (`18` entries) plus an **8th owner-only group** (`ownerSettings`, `5` entries, `23` unique entries total):
+1. **Home (`home`)**: `overview` («الرئيسية»)
+2. **Schedule (`schedule`)**: `liturgies`, `meetings`, `today`, `seasons` (merged `SeasonsHubScreen` with tabs «قائمة المواسم» / «تجهيز الموسم»; deep links to `'seasonPreset'` open tab 1)
+3. **Announcements (`announcements`)**: `alerts`, `app` (`AppAndNotificationsScreen` — announcements & notification types; technical VAPID/queues/APK moved to owner `advanced`)
+4. **Church (`church`)**: `priests` (unified serving + departed priests with «الكل / يخدم / متنيح» filter, P2-20), `saints`, `milestones`, `church`
+5. **Services & activities (`services`)**: `facilities`, `activities`, `clinics`
+6. **Pages (`pages`)**: `features`, `pages` («الصفحات المخصصة», with «صفحة تبرعات جاهزة» template since PR 3D), `categories` («الأقسام المخصصة» — unified sections & nested items since PR 3D)
+7. **Messages (`messages`)**: `messages` (shows unread inbox count badge `nav-messages-badge` when > 0)
+8. **Settings (owner only, `ownerSettings`)**: `admins`, `contactCats`, `assistant`, `seasonSettings`, `advanced` (`AdvancedOwnerScreen` with tabs `System & queues` and `App install & APK`).
+
+Deep links to `'entries'` redirect to `'categories'`, `'departedPriests'` redirect to `'priests'`, and `'seasonPreset'` routes to `SeasonsHubScreen(initialTab: 1)`.
 The **Clinics** screen («العيادات») stays in the menu although the owner deleted the 11 placeholder clinics (3 Nov 2026) and
 switched the clinics section off (4 Nov 2026) — it is where real clinics would be added before switching the
 section back on.
-Every entry has its own icon (`adminIcon`; the assistant uses `smart_toy_outlined` since PR #23 so it no longer
-shares saints' `auto_awesome_outlined`). The nav is a `Material` (not a coloured `Container`, which hid the tiles'
+Every entry has its own icon (`adminIcon`), and every screen displays an `AdminScreenHeader` (`Key('screen-title')` + `Key('screen-help')`, P2-19) wrapping cleanly at 320 px / 200% text. The nav is a `Material` (not a coloured `Container`, which hid the tiles'
 ink), so the selected entry shows the gold highlight; icons are burgundy, labels ink, and the selected entry's icon
-and label are both burgundy (`ListTile.iconColor/textColor/selectedColor`, PR #23). The PR #18 entries (custom
-sections, section items, custom pages, contact form types) drew without icons on phones that had cached an older
-tree-shaken icon font for 7 days — fixed by fingerprinting the icon fonts (05-firebase, Hosting headers).
+and label are both burgundy (`ListTile.iconColor/textColor/selectedColor`, PR #23).
 The app bar shows "Admin — <screen>", a 🌐 button to the public site and the language toggle; the nav shows the
 signed-in email + role and Sign out.
 
 ## Screens
 
-### Overview (`OverviewScreen`, `admin_screens.dart`)
-Live counts per collection (respecting each screen's filter, e.g. serving vs departed priests) with hidden /
-unconfirmed sub-counts, **new messages** (status ≠ handled, red when > 0), **sections on** (`N/16`), quick links
-(church info, sections & home, alerts, open site) and the **8 latest edits** (title, `updatedAt`, `updatedBy`). A
-failed stream shows "—". If the screen is rebuilt with a different backend (`widget.repo`), `didUpdateWidget`
-cancels and re-subscribes every stream (BUG-18; `ChurchInfoScreen` does the same, and since PR #10 so do
-`FeaturesScreen` — which also resets its shown version and editor key — `MessagesScreen` and `AdminsScreen`).
+### Overview (`OverviewScreen`, `admin_screens.dart`, PR 3E / P2-23)
+Starts with `AdminScreenHeader`, then **«محتاج انتباهك» (`attention-section` / `attention-all-clear`)** powered by pure Dart `attentionItems(...)` (`lib/domain/attention.dart`) from existing already-watched streams (zero extra Firestore reads): open visitor messages → alerts expiring within 48 hours → unconfirmed (`sample: true`) docs → live stream switched on without a link → missing English translations (counted across `adminCollections` via `englishFieldPairs` + `docMissingEnglish` only when `englishEnabled` is true). When unconfirmed items span multiple sections, a subtitle breakdown is displayed (`att_unconfirmedBreakdown`: «منها {c} في {sec}»). In `admin_strings.dart`, sample switches use «غير مؤكد (تجريبي)» (`switch_sample`) versus «مؤكد» (`switch_confirmed`). Each attention row navigates to its target screen on tap. Below it sit the **6 quick task buttons (`quick-tasks`)** for tasks T1–T6 (`task-schedules`, `task-announcement`, `task-inbox`, `task-service`, `task-priest`, `task-donations`), the compact **Sections summary** card («ملخص الأقسام» + «افتح في الموقع»), and the **8 latest edits** (title, `updatedAt`, `updatedBy`). If the screen is rebuilt with a different backend (`widget.repo`), `didUpdateWidget` cancels and re-subscribes every stream (BUG-18).
 
 ### Sections & home page (`FeaturesScreen` / `FeaturesEditor`, `features_editor.dart`) → `settings/features`
 - Switch each of the 19 sections on/off (PR #16 added «آية اليوم» / Verse of the day, PR #18 «الأقسام المخصصة» / Custom sections and «الصفحات المخصصة» / Custom pages) (+ "enable all"); labels from `Sections.labels`. **«الصور» /
-  Images**, hides every optional item image site-wide (default on).
+  Images**, hides every optional item image site-wide (default on). For owners (`isOwner`), a separate **«النسخة الإنجليزية»** switch (`ValueKey('features-englishEnabled')`, `settings/features.englishEnabled`, default on) controls the public EN button and hides all `lang: 'en'` fields/subfields across `DocEditor` and `FeaturesEditor` while preserving stored English values across Arabic-only edits (`featuresSaveWrites` omits `englishEnabled` when unchanged so editors never trigger the owner-only rule).
+- **Save echo guard:** `FeaturesScreen` and `ChurchInfoScreen` track `saving` on the active editor; when saving is in progress, incoming Firestore pending-write local echoes or failed-save rollbacks never trip `stale` (`updatedElsewhere` banner) or overwrite form edits.
+- **Form error summary & persistent save error banner (`DocEditor`, PR 3G / P2-27a, PR #83):**
+  - When `save()` fails validation, a sticky top banner (`Key('editor-error-summary')`, Arabic dual/pluralized count e.g. «فيه حقلين محتاجين تصحيح») lists every invalid shown field—including fields inside collapsed `ExpansionTile` groups or `advanced` cards; tapping any entry (`ValueKey('error-summary-<id>')`) expands its card if closed, scrolls it into view, and focuses the field; fixing errors clears the summary automatically. Empty heading blocks (`BlockTypes.heading`) enforce required Arabic heading text (`blockHeadingRequired` / «عنوان الفقرة (عربي) مطلوب.» via `validateHeadingBlock` and `validateDocument`); tapping the error expands the block and focuses `textAr`.
+  - When `save()` fails due to document validation, server rules, or network error, a persistent inline error banner (`Key('editor-save-error')`) with `Icons.error_outline` and dismiss button appears at the very top of the form, smoothly scrolling into view (never failing silently), surfacing structured Firebase error codes via `formatAdminError(Object)` (e.g. `[permission-denied]`) along with the error description. Any form edit or re-save attempt clears the banner. The same `formatAdminError` helper formats error snackbars across `CollectionListScreen`, `MessagesScreen`, `AdminsScreen`, and `SeasonPresetScreen`.
 - **Home layout**: drag to reorder the 7 blocks — or tap **Move up / Move down** (`ValueKey('home-<block>-up|down')`,
   WCAG 2.5.7 single-pointer alternative) — show/hide each; a block whose section is off is flagged
   («blockSectionOff»). Below 600 px the move buttons sit in the tile's subtitle row and only the switch stays
@@ -128,11 +132,7 @@ cancels and re-subscribes every stream (BUG-18; `ChurchInfoScreen` does the same
   **"Show address in hero"** switch (`ValueKey('features-heroShowAddress')`, `heroShowAddress`, default off): the
   address ribbon under the hero title when no subtitle is set.
 
-- **Error reports** card (PR #24, ADR-034), last card of the page: switch **"Send error reports (Sentry)"**
-  (`ValueKey('features-errorReporting')`, `settings/features.errorReporting`, default on; off = the web / Android app
-  sends nothing). **Owners** also see **"Send test error"** (`ValueKey('features-sendTestError')`): one harmless
-  `StateError('Test error from /admin (ignore)')` tagged `section: admin`, `test: true`; a snackbar says whether it
-  was sent (not sent when the build has no DSN or the switch is off).
+- **Error reports (`settings/features.errorReporting`):** Moved in PR 3E (P2-21) to the owner-only **«متقدم» (`AdvancedOwnerScreen`, `lib/ui/admin/advanced_owner_screen.dart`)** screen (alongside App Check status, Web Push VAPID key + queue health, and the **App install & APK** tab `appInstallDoc`). `FeaturesEditor` no longer shows Sentry controls or the duplicated assistant switch. Each `AdminScreenHeader` renders `Key('screen-title')` + `Key('screen-help')` (`lib/ui/admin/screen_header.dart`) across all 14 `adminCollections`, single docs, and custom admin screens.
 
 - **Verse of the day** card (PR #16, ADR-024; since PR #17 it controls the **hero** verse): "Show the verse of the day" switch (same flag as the
   `dailyVerse` section toggle), mode chips "A different verse
@@ -213,13 +213,21 @@ Two tabs: «الإشعارات» (`NotificationsAdminSection`, kept alive across
    count and next service time in Cairo), and queue rate throttle cap warning banner when meta/push_topics.cronQueue.capReached is true (1,000 web opt-in batch writes/day limit reached).
 2. **Scheduled announcements** (`schedule`, ≤ 20) — numbered 5-step editor: Arabic title + body (both required, as
    the rules and `parseScheduleRow` require), English optional (collapsed); «في أقرب وقت» or Cairo date + time
-   (default tomorrow 09:00; past times refused); targets «الجميع / تطبيق أندرويد فقط / المتصفح و iPhone فقط»;
+   (default tomorrow 09:00; past times refused; switching to «في أقرب وقت» auto-clears past-time errors); timing and target chips use `context.pal.bar` background for high-contrast visibility; targets «الجميع / تطبيق أندرويد فقط / المتصفح و iPhone فقط»;
    «ماذا يفتح» picker (built-in pages, custom pages/categories, liturgies `lit-`, meetings `meeting-`, today's
    events `day-`, seasons `season-` — one-off reads when the dialog opens; ids the rules reject open the page without
    an `eventKey`) or a custom `/path`; phone preview ar/en; «جرّب على هذا الجهاز». Inline errors under the field.
    Rows grouped «القادمة» / «السابقة» with icon status chips and a one-line explanation per state; «تعديل» while
    the row has no `status` entry, «أعد الإرسال» (copy, targets narrowed) for partial / error / unconfirmed /
-   expired, «حذف» with a confirmation dialog. Saves go through `saveDocsFresh` (fresh read: an edit is refused once
+   expired, «حذف» with a confirmation dialog. Saving an announcement that targets everyone (`_draftTargets == 'all'`)
+   or is sent soon (`_draftSoon == true`) triggers a named confirmation dialog (`confirmNamedAction`, `confirm_named.dart`)
+   matching recipients and timing: send-all soon («هيتبعت لكل المشتركين دلوقتي: {t}», `nm_confirmSendAllSummary`, `nm_sendToAllBtn`),
+   targeted soon («هيتبعت ({target}) دلوقتي: {t}», `nm_confirmSendTargetSoonSummary`, `nm_sendNowBtn`), scheduled all
+   («هيتبعت لكل المشتركين {when}: {t}», `nm_confirmScheduleAllSummary`, `nm_confirmScheduleBtn`), or scheduled targeted
+   («هيتبعت ({target}) {when}: {t}», `nm_confirmScheduleTargetSummary`, `nm_confirmScheduleBtn`), followed by a post-await
+   past-time recheck.
+   Closing an open draft with unsaved text (`_closeDraft`, `ValueKey('draft-cancel')` / `ValueKey('editor-close')`) prompts
+   `confirmDiscardChanges`. Saves go through `saveDocsFresh` (fresh read: an edit is refused once
    the sender has claimed the row; the 20-row cap is checked on the fresh list).
 3. **Types offered** — one card per type with a switch (`pushTypes`), icon, description and the delivery channel in
    words; «تعديل الوقت والنص»: time picker (no typed HH:mm), seasons «قبل بدايته بـ» 0–7, templates with
@@ -239,89 +247,94 @@ loading a snapshot never marks the form dirty.
 ### Church info (`ChurchInfoScreen`) → `settings/church`
 (`ChurchInfoScreen` takes a `DocDef doc` — default `churchInfoDoc` — and an optional `header`; PR #19 reuses it for
 `settings/assistant`.)
-`DocEditor` over `churchInfoDoc` fields: names, bishop, address, transport, lat/lng (ranges), map query, Maps link,
-**phones** (object list: label AR/EN, number, mobile/WhatsApp — ≤ 20 rows), WhatsApp number/channel, Facebook,
-YouTube, Instagram, verse + references, hero image URL, history AR/EN (≤ 8000), **altars** (object list: name AR/EN,
-kind main/second/annex), `assistantEnabled`, `sample`. Same "updated elsewhere → reload" banner, and the same
-own-save rule (no scroll jump to the top after Save, BUG-12).
+`DocEditor` over `churchInfoDoc` fields (saving identical flat keys on `settings/church`): basic identity (`nameAr`/`nameEn`, `bishopAr`/`bishopEn`, `addressAr`/`addressEn`, `sample`) stays open at the top (`FieldGroup.basic`), while secondary sections sit in four collapsible `ExpansionTile` cards (`maintainState: true`, PR 3J / P3-30):
+- **Location & map (`FieldGroup.location`)**: `transportAr`/`transportEn`, `lat`/`lng` (with degree hints and ranges), `mapsQuery` (with search hint), `mapsUrl`.
+- **Contact & links (`FieldGroup.contacts`)**: `phones` (`objectList` ≤ 20 rows), `whatsapp`, `whatsappChannel`, `facebook`, `youtube`, `instagram`.
+- **Front banner & verse (`FieldGroup.hero`)**: `verseAr`/`verseEn`, `verseRefAr`/`verseRef`, `heroImageUrl`.
+- **History & altars (`FieldGroup.history`)**: `historyAr`/`historyEn` (≤ 8000), `altars` (`objectList`).
+
+Live pills under each group count both non-empty text controllers and non-empty `objectList` rows (`phones`, `altars`). Same "updated elsewhere → reload" banner, and the same own-save rule (no scroll jump to the top after Save, BUG-12). In `alerts`, `priority` (`0–1000`, default `0`) explains in plain words that larger numbers appear first.
 
 ### Content lists (`CollectionListScreen`, `collection_list.dart`)
 For each `CollectionDef`:
 - Live list (`repo.watch(collection)`) filtered by the screen filter (`def.matches`), sorted by `sortAdminDocs`
   (orderable: by `order`; others by `order`/weekday, then start, then id).
-- **Search** (all string values + id) and filter chips **all / visible / hidden / unconfirmed**; "showing N of M".
+- **Search** (all string values + id) and filter chips **all / visible / hidden / unconfirmed**; "showing N of M". On **Priests (`priests`)**, an extra status filter row **«الكل / يخدم / متنيح»** (`priestFilter-all/serving/departed`) lets editors filter serving vs departed fathers; tapping **Add** while filtered to «متنيح» defaults `status: 'departed'`.
 - **Open on site** (`Key('admin-openOnSite')`, «عرض بالموقع»): opens `CollectionDef.publicPath` (e.g. `/clinics`,
   `+ ?lang=en` when the dashboard is in English — `publicPathFor`) in a new tab on web (`Uri.base.resolve`), or
   navigates there on mobile.
 - Tile: title (`titleKeys`), subtitle (weekday, date, time range, season/stage/category/type/specialty labels,
-  ⛔ inactive, start/end), tags *Hidden* / *Unconfirmed*, "updated by … at …". Since PR #12 an item whose detail page is on (since PR #14: unless
-  `detailsEnabled` is explicitly `false`) shows a **«صفحة تفاصيل / Detail page»** badge (own line under the title), and when it is also
-  visible an **Open detail page on site** icon (`ValueKey('openItem-<id>')`, `itemPublicPathFor`: e.g.
-  `/clinics/<id>`, `/about/saints/<id>`; built from `detailPathFor` — the public routes exist since PR #13). On
-  phones (< 600 px) that icon sits in the row under the subtitle with the move buttons (PR #14), so the title keeps
-  its width now that almost every row has it.
+  ⛔ inactive, start/end), tags *Hidden* / *Unconfirmed* / *Departed*, "updated by … at …". Tapping the row opens `DocEditor`; bottom action bar holds **«عرض بالموقع»** (`ValueKey('openItem-<id>')`, external-link icon `Icons.open_in_new_rounded`) when visible with a detail page, and a clearly named **«حذف» / «Delete»** button (`ValueKey('delete-<id>')` / `deleteEntry-<id>`) separated vertically from the top-right 👁 visibility toggle across `_tile`, `_categoryTile`, and `_entryRow`.
 - The list `StreamBuilder` is keyed by `ObjectKey(_stream)` (also on Messages and Admins, PR #12): after a backend
   switch the old list is never shown while the new one loads.
 - 👁 **hide/show** (`update(visible)`) — only when the collection has a `visible` field (not seasons).
-- **Drag to reorder** — or tap **Move up / Move down** on each tile (`ValueKey('moveUp-<id>')`, WCAG 2.5.7; under
-  600 px they sit in their own row under the subtitle so the title keeps its width) —
+- **Drag to reorder** — or tap **Move up / Move down** on each tile (`ValueKey('moveUp-<id>')`, WCAG 2.5.7) —
   (`reorder(collection, ids, base:)` → `order` = base + 10, 20, 30… in one batch) for orderable collections — clinics,
-  facilities, activities, priests, departed fathers, saints, milestones — and only when search is empty, filter = all
-  and > 1 item. **Departed fathers use base 1000** (`reorderBase(def)`: 1010, 1020…) because they share the
-  `priests` collection with serving priests, so the two lists never get colliding `order` values (BUG-13).
+  facilities, activities, priests, saints, milestones — and only when search is empty, filter = all
+  and > 1 item. Serving and departed priests never cross-reorder; **departed fathers use base 1000** (`reorderBase(def, status: 'departed')`: 1010, 1020…) and `_reorder` sends only that status group's IDs, so the two groups keep non-colliding `order` ranges inside `priests` (BUG-13, P2-20).
   Liturgies and meetings use the numeric **Order** field instead.
 - `DocEditor.save`: when `onSave` fails with a **`TimeoutException`** the images uploaded for the document are
   **kept** — Firestore may still commit the queued write pointing at them; any other error deletes them (BUG-13).
   Note: `AdminRepository.save`/`saveDoc` set no timeout of their own today (the only 15 s timeout is the role read
   in `adminRole`), so this path applies to a timeout raised by a caller/backend wrapper.
-- **Add** (FAB) / tap to **edit** → full-screen `DocEditor`; **delete** with confirmation dialog (also deletes the
-  item's inline cover and gallery `media` docs, `orphanedDocMediaIds`). A new item saved in several writes keeps the id
-  the first write created (the editor's `onSave` remembers it).
+- **Add** (FAB) / tap to **edit** → full-screen `DocEditor`; **delete** in `collection_list.dart` uses a 10-second
+  reversible soft-delete buffer (`PendingDelete`, `pending_delete.dart`). Non-category items immediately write Firestore
+  `deletedAt: DateTime.now().toUtc()` (allowed by `meta()` and `optTimestamp(d, 'deletedAt')` in `firestore.rules`),
+  hide immediately from the visible list (`_pendingDelete.isPending` / `isSoftDeleted`) and display a 10-second `SnackBar`
+  with «اتمسح «{n}»» (`deletedUndo`) and action «تراجع» (`undo`). The soft-deleted document immediately vanishes from
+  public collection views (`_docs` and `_col` in `FirestoreRepository`) and sitemap exports (`sitemapContentFromExport`).
+  Tapping undo restores the item immediately and sets `deletedAt: null`. If the 10 seconds elapse without undo, the deletion
+  commits to hard delete `widget.repo.delete(def.name, d.id)` and cleans up orphaned media (`removeOrphanedDocMedia`).
+  Pending-deletion items stay in `_lastDocs` until commit so their slugs remain reserved in `takenSlugs`, and scheduling
+  deletion captures `repo`, `def`, `media` and document data in closure. If the admin navigates away (`dispose()`) or closes
+  the tab, local timers are cancelled without fire-and-forget delete calls; the soft-deleted document remains hidden from
+  public views and is deterministically purged on subsequent admin opens via lazy purge (`purgeExpiredSoftDeletes`). Browser
+  `beforeunload` is strictly NOT used in `PendingDelete` and remains exclusively for `UnsavedGuard` unsaved form edits. Custom
+  categories (`categories`) remain confirmed via dialog (`_deleteCategory`) because deleting a category cascades to hide
+  member items and clear category links. A new item saved in several writes keeps the id the first write created (the editor's
+  `onSave` remembers it).
 
 | Screen id | Collection | Orderable | Has visible | Has sample | Notes |
 |---|---|---|---|---|---|
-| alerts | alerts | – | ✔ | – | title, body, active, starts/ends (Cairo), priority 0–1000, link (path or URL) |
+| alerts | alerts | – | ✔ | – | title, body, active, starts/ends (Cairo), priority 0–1000 (open in basic form, not collapsed), link (path or URL) |
 | seasons | seasons | – | – | – | key choice, names, starts/ends, active |
 | liturgies | liturgies | – (order field) | ✔ | ✔ | needs weekday **or** one-off date; end may be before start (midnight); checkbox «يحل محل قداسات اليوم المعتادة (قداس العيد)» = `replacesDay` (ADR-050) |
 | meetings | meetings | – (order field) | ✔ | ✔ | stage choice |
 | clinics | clinics | ✔ | ✔ | ✔ | `active` missing = true |
 | facilities | facilities | ✔ | ✔ | ✔ | "Public services" |
 | activities | activities | ✔ | ✔ | ✔ | category choice |
-| priests | priests (status = serving) | ✔ | ✔ | ✔ | missing status = serving |
-| departedPriests | priests (status = departed) | ✔ | ✔ | ✔ | new docs start with `status: departed` |
+| priests | priests | ✔ | ✔ | ✔ | unified serving & departed (`status`: `serving`/`departed`, missing = serving; filter chips; separate `0+` / `1000+` order ranges) |
 | saints | saints | ✔ | ✔ | – | |
 | milestones | milestones | ✔ | ✔ | – | icon choice |
 
 `CollectionDef.publicPath` drives the **Open on site** button.
 
 ### Generic form (`DocEditor`, `doc_editor.dart`)
-- Field widgets by `FieldType`: text, multiline, integer, decimal, boolean, time (HH:mm), weekday, weekdays (chips),
+- Field widgets by `FieldType`: text, multiline, integer, decimal, boolean, time (stored 24h `"HH:mm"`, UI labels free of `HH:mm`), weekday, weekdays (chips),
   dateTime / date (Cairo), looseDate, choice (labels via `choiceLabel`/`opt_*`), url, phone, objectList, **image**.
-- **Pickers (ADR-049):** time / date / dateTime fields (also inside rows) are read-only with a clock / calendar
+- **Pickers (ADR-049, P2-26):** time / date / dateTime fields (also inside rows) are read-only with a clock / calendar
   suffix (`pick-<key>`; optional fields also `clear-<key>`); time = `showTimePicker` in 12-hour AM/PM mode (ص/م in Arabic,
   `alwaysUse24HourFormat: false`), stored strictly 24-hour `HH:mm`, the field's helper shows the 12-hour reading
   (`formatTimeArabic/Latin`, «٠٦:٣٠ م» / "06:30 PM"; date-times also the date);
-  date = `showDatePicker` (2000–2100), `YYYY-MM-DD`; dateTime = date then time, `YYYY-MM-DD HH:mm` Cairo. Formatters
+  date = `showDatePicker` (2000–2100), `YYYY-MM-DD`; dateTime = date then time, `YYYY-MM-DD HH:mm` Cairo; **`looseDate`** (priests' `ordinationDate`, `hegumenDate`, `departedDate`) stays manually editable (accepting year alone like `1995`, `YYYY-MM`, or `YYYY-MM-DD`) AND provides a calendar picker (`_LooseDatePickerDialog` using `monthNamesAr` / `fullMonthNamesEn`, `daysInMonth`, `parseLooseDate`, `formatLooseDateValue`). Formatters
   `formatPickedTime/Date/DateTime`, prefill `parseFieldTime/DateTime` in `admin_validators.dart`. Stored types unchanged.
-- Validation (`admin_validators.dart` `validateFieldValue`): required, max length (`effectiveMaxLength`), `HH:mm`,
+- Validation (`admin_validators.dart` `validateFieldValue`): required, max length (`effectiveMaxLength`), 24h time validation,
   real calendar dates (rejects 2027-02-30), loose dates, numeric ranges (Arabic digits accepted), URLs (`https://…`
   or in-app path where `allowPath`), phones (`^\+?[0-9]{5,15}$` after normalising). Cross-field
   `validateDocument`: `requireAnyOf` (weekday or date → «needWeekdayOrDate»), end after start (except liturgies),
   `endsAt` after `startsAt`.
 - New docs write all collected values (+ `newDefaults`); **existing docs write only changed fields**
   (`changedFields`, deep compare) with merge — never overwriting another admin's concurrent edits to other fields.
-- **Field groups (PR #12):** `FieldDef.group` — `basic` fields stay open at the top; on the 7 detail collections
+- **Hidden EN drafts exclusion (PR 3G, P2-27b):** When `englishEnabled` is false, `DocEditor.collect` preserves `_initialValues[f.key]` for top-level English fields (`f.lang == 'en'`) and `_Row.collect` preserves `initial[f.key]` for object-list rows, so typed or pre-existing English drafts in hidden fields are excluded from the collected payload and never overwrite stored data or trigger validation errors.
+- **Top-of-form layout, Field groups & Advanced options (PR #12, PR 3F / P2-24):** `FieldDef.group` — `basic` fields stay open at the top, and on item/service collections (`priests`, `meetings`, `clinics`, `facilities`, `activities`, `categories`) cover `image` and primary phone (`contactPhone` / `bookingPhone` / `phone`) sit open at the top of `basic` (`saints` and `milestones` keep `_plainContactsGroup`). Secondary fields (English names/descriptions, `order`, `slug`, secondary links, `imageStyle`) carry `advanced: true` and sit in the collapsed **«خيارات متقدمة» (`advancedGroup`)** card (`maintainState: true`); on Save, `_openInvalidGroups()` expands any closed `FieldGroup` or `advancedGroup` containing an invalid field before `_formKey.currentState!.validate()`. On the 7 detail collections
   `details` (**«صفحة التفاصيل والحقول الإضافية»**: «إظهار صفحة التفاصيل / Show the detail page» switch — **on by default** since PR #14 (missing field = on, new items saved with `true`; hint explains that tapping the card opens the full page and that switching it off hides the page and the «التفاصيل» link), details AR/EN ≤ 10,000, up to
   15 *extra fields* rows title AR / title EN ≤ 150 — a title in **either** language is required, checked per row
   by `FieldDef.rowRequireAnyOf` + `validateRowAnyOf` («أدخل عنوانًا بالعربية أو بالإنجليزية», like rules'
-  `validExtraField`) — / value AR/EN ≤ 2000), `media` (**«الصور ومعرض
-  الصور»**: cover `image`, `showDetailImages`, `gallery`) and `contacts` (**«التواصل والروابط»**: `showContacts`,
-  `showSocials`, the collection's own phone — `contactPhone`, clinics `bookingPhone`, facilities `phone` — WhatsApp,
-  WhatsApp group/channel, Facebook, YouTube, Instagram, the external link — `externalUrl`, activities `link` — its
-  button text AR/EN ≤ 80 and how-to-contact notes AR/EN ≤ 500) are `ExpansionTile` cards (`ValueKey('group-<g>')`,
+  `validExtraField`) — / value AR/EN ≤ 2000), `media` (**«معرض الصور الإضافية»**: `showDetailImages`, `gallery`) and `contacts` (**«التواصل والروابط»**: `showContacts`,
+  `showSocials`, WhatsApp, WhatsApp group/channel, Facebook, YouTube, Instagram, external link `externalUrl`/`link`, button text AR/EN ≤ 80 and how-to-contact notes AR/EN ≤ 500) are `ExpansionTile` cards (`ValueKey('group-<g>')`,
   `maintainState: true` so collapsed fields still validate and save) with live pills («مفعّل / Enabled», «3 حقول /
   3 fields», «4 صور / 4 photos», «2 مُعبّأ / 2 filled»). Save with an invalid field in a closed card opens that card.
-  Liturgies, seasons, alerts and church info stay a flat form.
+  Liturgies, seasons and alerts keep their basic layout (with English/`order`/secondary fields under «خيارات متقدمة», and a clear helper on `alerts.priority`), while `churchInfoDoc` splits its secondary fields across four collapsible cards (`location`, `contacts`, `hero`, `history`).
 - **Split saves (PR #12, `splitSavePayload`):** the editor writes everything else first (it creates a new doc), then
   a non-empty `gallery`, then non-empty `extraFields` — one write with both full lists exceeds the rules' 1,000-
   expression cap. If a later write fails, the earlier ones stay saved, the form stays dirty and a retry sends only
@@ -331,6 +344,18 @@ For each `CollectionDef`:
   is still deleted after the retry completes.
 - Choice / weekday dropdowns are `isExpanded` (long labels ellipsize at 320 px / 200 %); object-list row actions
   (move up/down, remove) are a `Wrap`.
+- **Collapsible object-list rows (`FieldDef.collapsibleRows`, PR #83 ADR-073):** On fields with `collapsibleRows: true`
+  (used on `pages.blocks` «محتوى الصفحة (حتى 20 فقرة)»), rows render as compact single-open collapsible cards with
+  snippet previews formatted via `blockSnippetSummary` (prefixed with `'· '`, reads first non-empty among `textAr`, `textEn`, `account`, `instapay`, `wallet`, `url`, suppresses snippet when an image has a URL but no caption, or displays `context.tr('emptyBlockSnippet')` / `(فاضي)` when empty, truncated to 40 characters). Tapping expand/collapse («توسيع الفقرة» / «طي الفقرة», `expandBlock` /
+  `collapseBlock`) toggles `_expandedRow[f.key]`. Adding a row (`+ إضافة`) automatically expands the new block. The ready
+  donation template automatically opens on the empty donation details row. When validation fails, clicking an error entry in
+  `editor-error-summary` (`_jumpToError`) detects if the invalid field is within a collapsed row, expands that row automatically,
+  scrolls it into view, and sets focus.
+- **Featured pages hint & category preservation across placements (`admin_schema.dart`, `DocEditor.collect`, PR #83 ADR-073):**
+  The `featured` switch hint is explicitly «هتظهر في «صفحات مميزة» في الرئيسية مهما كان مكانها» (`hintEn`: 'Appears in "Featured pages" on Home regardless of its placement'). When saving a custom page
+  whose `placement` is `'link'` or `'nav'` (where `categoryId` is hidden by `showWhen`), `DocEditor.collect` preserves
+  `_values['categoryId']` rather than blanking it. Switching `placement` back to `'section'` restores the previously
+  chosen section without re-selection, while public filtering (`sectionPages`) still strictly requires `placement == 'section'`.
 - Every save stamps `updatedAt` (server time) and `updatedBy` (email) via `AdminRepository._stamp`.
 - Boolean defaults: `missingBool` (value assumed when an existing doc lacks the field, e.g. `visible` = true,
   clinic `active` = true) vs `newBool` (value for new docs, e.g. `sample` = false).
@@ -373,19 +398,21 @@ and the Images section are on.
 Newest first (`createdAt`). PR #18 (ADR-028): **box chips** (`box-<id>`) — All, one per contact type of
 `settings/contact` (code defaults when missing; open count in brackets), **Anonymous box** (`inboxBoxOf`:
 `anonymous: true`), and "Other / deleted type" when a message's slot no longer exists; messages without a category
-are general inquiries (c1). Status chips **open** (default, `status == new`) / done / all. Each card: name (or
-«مُرسِل مجهول»), time, type / occasion / 📅 date chips, message, phone (call), email (`mailto:`), internal notes.
-Bookings get a **status dropdown** new → contacted → confirmed / declined (`bookingStatus-<id>`); other messages
-**Mark handled / Mark new**. **Notes** (`notes-<id>`, `_NotesDialog`, ≤ 2000 → `adminNotes`), copy, delete with
-confirmation. The overview's "new messages" counts `status == new`.
+are general inquiries (c1). Status chips **«محتاجة رد» / Needs reply** (default, `status == new`) / **«تمت متابعتها» / Handled** / **«الكل» / All**. Each card: name (or
+«مُرسِل مجهول»), time, type / occasion / 📅 date chips, message, phone call (`msgCall-<id>`), WhatsApp (`msgWhatsApp-<id>`, shown only when `usableWhatsappLink(phone)` returns a valid `wa.me` mobile link — never for missing, malformed, or landline numbers), email (`mailto:`), internal notes.
+Bookings get a **status dropdown** new → contacted → confirmed / declined (`bookingStatus-<id>`); other open messages
+get one-tap **«تمّت» / Done** (`msgToggleStatus-<id>`, immediately removing the message from the default «محتاجة رد» filter). For handled non-booking messages, **«إعادة كجديدة» / Mark new** (`msgMarkNew-<id>`) sits inside an overflow dialog (`IconButton` `ValueKey('msgMore-<id>')` → `SimpleDialogOption` `ValueKey('msgMarkNew-<id>')`, label wrapped in `Flexible`) away from «تمّت» and the red Delete icon (`delete`). **Notes** (`notes-<id>`, `_NotesDialog`, ≤ 2000 → `adminNotes`), copy, and **delete** with 10-second soft-delete undo (`deletedAt` timestamp written via `PendingDelete`, SnackBar «اتمسح «{n}» · تراجع», and automatic lazy purge on screen open after 10s grace period).
+The overview's "new messages" counts `status == new`.
 
-### Contact form types (`ContactCategoriesScreen`, `contact_admin.dart`) → `settings/contact` (PR #18)
+### Contact form types (`ContactCategoriesScreen`, `contact_admin.dart`) → `settings/contact` (PR #18, PR 3J / P3-31)
 Cards per type (code defaults until saved): Arabic / English name, behaviour (general / booking / complaint /
 suggestion), shown on the form, allow anonymous (complaint / suggestion only), booking occasions (Arabic /
-English rows, ≤ 8, keys kept stable — `newSubtypeKey`), move up / down, remove (at least one stays), **Add a
+English rows, ≤ 8, keys kept stable — `newSubtypeKey`), move up / down, remove (at least one stays, confirmed via
+`confirmNamedAction` naming the category or «نوع بدون اسم» / "Unnamed type", explicitly warning that existing messages move to «أخرى / نوع محذوف» / "Other / deleted type" and are not deleted; deletion removes safely by stable slot identifier to prevent RangeError during concurrent updates, PR 3J / P3-31), **Add a
 message type** (≤ 12; since PR #19 a fresh stable id from `ContactSettings.newId`, never an id removed in the
-editor — `_retired` — so old messages of a deleted type are never re-labelled). **Save** writes the whole
-`categories` map (`saveDoc`, one string per id, `order` renumbered 10, 20…).
+editor — `_retired` — so old messages of a deleted type are never re-labelled). Any edit sets dirty state, reveals the
+sticky `UnsavedBar` (`unsaved-bar-save` / `unsaved-bar-cancel`), and shows the `saveContactCats` primary-highlighted FAB.
+**Save** writes the whole `categories` map (`saveDoc`, one string per id, `order` renumbered 10, 20…).
 
 ### AI assistant (`AssistantAdminScreen`, `assistant_admin.dart`) → `settings/assistant` (PR #19, ADR-029)
 Top card `AssistantSwitches`: **"Ask the church" section shown** (`assistantSectionSwitch`, a field-path `update` of
@@ -403,21 +430,64 @@ questions per device per day** (1–100, default 3; replaced "per visit"). Blank
 
 ### Custom sections, items and pages (PR #18, ADR-027)
 Generic `CollectionListScreen`s for `categories` (note above the list: built-ins are switched in Sections & home
-page and renamed in Page headers), `entries` and `pages`. Editor helpers (`DocEditor`): `FieldDef.slug`
+page and renamed in Page headers), `entries` and `pages`. In `categories`, `CollectionListScreen` streams both `entries` and
+`pages` (`_entriesStream`, `_pagesStream`). Emptiness logic is unified via `isCategoryNonEmpty` (`custom_content.dart`) shared
+by both visitor nav (`publicNonEmptyCategories`) and Admin `CollectionListScreen` (`categories`), displaying a badge tag
+**«فاضي، مش ظاهر للزوار»** (`context.tr('emptyHiddenFromVisitors')`) on categories with 0 visible entries and 0 visible section pages,
+clarifying why it is omitted from visitor navigation. Admin `CollectionListScreen` (`categories`) now lists linked section pages
+(`placement == 'section'`, `_sectionPageRow` with `pageTag` «صفحة» / `'Page'`, visibility badge/toggle, and tap-to-edit)
+alongside entries within the category card, and only shows `'sectionEmptyItems'` («مفيش عناصر في القسم ده لسه») when BOTH
+entries and section pages are empty. Creating a new category from scratch (`CollectionListScreen(categories)` -> Add FAB -> fill Arabic name -> Save) sets default values (`order: null`, `nameEn: ''`, `introAr: ''`, `introEn: ''`, `icon: 'star'`, `showInNav: true`, `visible: true`, `slug`, `updatedAt`, `updatedBy`), verified in Firestore rules emulator (`tool/rules_test`) and Flutter widget tests across both `englishEnabled: false` and `true`. Full empty vs. linked lifecycle is verified end-to-end: newly created empty categories are hidden from visitor navigation, render `EmptyState` at `/section/<slug>`, and show the «فاضي، مش ظاهر للزوار» badge in admin; linking a visible section page (`placement == 'section'`) immediately exposes the category in visitor menus, renders `CustomPageCard` with `CardCover`, and removes the admin badge; unlinking or hiding the page reverts back to the empty state. Editor helpers (`DocEditor`): `FieldDef.slug`
 (`invalidSlug`, and `slugTaken` against the other docs of the list), `FieldDef.dynamicOptions: 'categories'` (the
 entry's section dropdown, loaded when the editor opens; a deleted category shows «قسم محذوف أو غير محدد»),
 `FieldDef.linkPicker` («اختيار صفحة…» on alert / entry / block links: custom pages, custom categories, built-in
 routes; hidden ones tagged), page `blocks` as an `objectList` with `encodedRows` (one string per row) and
 `showWhen` (only the fields of the row's block type). `validateDocument` rejects an image block without an https
-link. **Deleting a category** (`_deleteCategory`): confirmation naming how many items it holds → `visible: false`
+link, and rejects empty heading blocks (`BlockTypes.heading`) without Arabic text via `validateHeadingBlock`. **Deleting a category** (`_deleteCategory`): confirmation naming how many items it holds → `visible: false`
 on each visible entry → delete the category. "Open on site" for a category / page row opens its slug route.
 
 ### Admins (`AdminsScreen`, owners only) → `admins`
-List with role dropdown (owner/editor) and remove button — disabled for yourself ("(you)"); since PR #12 they wrap
+List with role dropdown (owner/editor) and remove button — disabled for yourself ("(you)"). Removing an admin
+prompts with named confirmation (`confirmNamedAction`, displaying the admin's email and alert-styled «إزالة المشرف»).
+Since PR #12 they wrap
 under the UID (the role menu ellipsizes) so nothing overflows at 320 px / 200 %. **Add admin** dialog: UID
 (validated by `isValidAdminUid`: 1–128 chars, no `/`; copy it from Firebase console → Authentication → Users), email,
 role. The Auth user itself must be created in the console (or via the Seed workflow) first. Since PR #10
 `setAdmin` stamps `admins/{uid}` with `updatedAt`/`updatedBy` (`_stamp`), like every other admin write.
+
+## Safe actions & unsaved edits architecture (PR 3A)
+
+Implemented in Stage 1 of the admin panel simplification (PR 3A, items 6, 7, 8, 11):
+
+### Named confirmation dialog (`confirmNamedAction`, `confirm_named.dart`)
+Standard modal dialog replacing vague confirmation prompts by explicitly naming the target action or item in its summary text:
+- **Push broadcast:** sending a draft announcement to «الجميع» (`_draftTargets == 'all'`) or «في أقرب وقت» (`_draftSoon == true`) in `notifications_admin.dart` prompts with summary «هيتبعت لكل المشتركين دلوقتي: {t}» (`nm_confirmSendAllSummary`) and confirm action «ابعت للكل» (`nm_sendToAllBtn`).
+- **Messages delete:** deleting a visitor message in `MessagesScreen` names the sender (or «مُرسِل مجهول») with alert-styled «حذف» button (`destructive: true`).
+- **Admins remove:** removing an administrator in `AdminsScreen` names the admin's email with alert-styled «إزالة المشرف».
+
+### Unsaved changes protection (`UnsavedGuard`, `unsaved_guard.dart`)
+Guards uncommitted edits across all administrative exit vectors:
+- **Dialog:** `confirmDiscardChanges` prompts «لديك تعديلات غير محفوظة. هل تريد تجاهلها؟» (`discardChanges`) with primary `FilledButton` «متابعة التعديل» (`discard-keep`, returns false) and `TextButton` «تجاهل» (`discard-confirm`, returns true).
+- **In-app navigation:** `UnsavedGuard` wraps forms in a `PopScope(canPop: !handlePop || !dirty)`. Embedded tabs (`_open`, `_handleNavTap` in `AdminDashboard`) check `UnsavedGuardRegistry.isDirty` and prompt before switching destinations or logging out (`_handleSignOut`).
+- **Web tab close, reload & browser back (PR #83):** on web platforms (`unsaved_guard_web.dart`), `addDirtyToken()` registers a browser `beforeunload` event handler (preventing accidental tab close/refresh) AND pushes a history sentinel (`_pushSentinel()`) with a capture-phase `popstate` event listener. When Browser Back is clicked while a form is dirty, `popstate` stops immediate propagation and triggers `confirmDiscardChanges`. Choosing «متابعة التعديل» repushes the sentinel; confirming discard safely pops the route. When the form is cleaned, the sentinel is cleanly popped via `history.back()`.
+- **Announcement draft:** closing or cancelling an open announcement editor (`_closeDraft`) checks dirty draft state and asks confirmation.
+
+### 10-second undo deletion (`PendingDelete`, `pending_delete.dart`)
+Reversible soft-delete buffer for collection items in `collection_list.dart`:
+- When an item (liturgy, meeting, activity, priest, saint, milestone, custom entry, custom page, etc.) is deleted, it immediately writes `deletedAt: Timestamp` to Firestore.
+- It is hidden from the admin list immediately (`_pendingDelete.isPending` / `isSoftDeleted`) and filtered out of all public collections (`FirestoreRepository._docs` and `_col`) and sitemaps.
+- A 10-second `SnackBar` appears: «اتمسح «{n}»» (`deletedUndo`) with action «تراجع» (`undo`).
+- The SnackBar is non-persistent (`persist: false`) and managed by `_undoSnackBarController` and a dedicated 10-second timer (`_undoSnackBarTimer`, cleaned up on new delete, undo tap, and `dispose`), ensuring both the SnackBar and the «تراجع» action dismiss completely after 10 seconds.
+- Tapping «تراجع» cancels the timer, restores the row, and sets `deletedAt: null` in Firestore.
+- When the 10 seconds expire, the deletion commits to hard delete `widget.repo.delete` and deletes unreferenced media (`removeOrphanedDocMedia`).
+- **Deterministic lazy purge on exit:** disposing `CollectionListScreen` cancels local timers without fire-and-forget delete calls; the soft-deleted doc is safely purged on subsequent admin open via `purgeExpiredSoftDeletes`. Browser `beforeunload` is strictly NOT used in `PendingDelete`.
+- **Category exception:** custom categories (`categories`) do not use `PendingDelete`; they require an explicit confirmation dialog due to cascading changes (hiding items in that category).
+
+### Sticky unsaved changes bar (`UnsavedBar`, `unsaved_bar.dart`)
+Bottom bar anchored to the bottom of the viewport whenever an editor is dirty:
+- Shows message (`unsavedBarText`: «فيه تعديلات مش محفوظة» or custom label such as `nm_unsaved`: «لديك تعديلات لم تُحفظ») and action buttons «حفظ» / `save` and «تراجع» / `cancel`.
+- Responsive layout via `Wrap` prevents overflow at 320 px viewport width and 200% text scaling.
+- Integrated across `DocEditor` (standalone bottom navigation bar), `FeaturesEditor`, `ContactCategoriesScreen`, and `NotificationsAdminSection`.
 
 ## Gotchas for agents
 
@@ -437,4 +507,30 @@ role. The Auth user itself must be created in the console (or via the Seed workf
 - Liturgy form: **«يحل محل قداسات اليوم المعتادة (قداس العيد)»** (`replacesDay`, default off, hint under it). Off: in a
   season that does not replace the regular schedule, a seasonal mass hides only the regular mass at the same time;
   on: a feast liturgy hides every regular mass of that day.
+- **Override live preview (PR 3B, Packet P1-10):** When editing a liturgy with `replacesDay: true`, `DocEditor` renders
+  an inline card showing the date/weekday heading and every regular mass overridden by it via `liturgiesHiddenBy`
+  (matching `occurrencesForDay` semantics exactly), formatted with 12-hour Cairo time (e.g. «٠٧:٠٠ ص – ٠٩:٠٠ ص»).
 - «الأقسام والصفحة الرئيسية» → theme card: switch **«لون الموسم على صورة الواجهة»** (`heroSeasonTint`, default on).
+
+### Written-state switches & row status badges (PR 3B, Packet P1-09)
+- **`AdminStateSwitch` (`lib/ui/admin/state_switch.dart`):** Standard switch across all `/admin` screens replacing raw
+  `Switch` / `SwitchListTile`. Renders an explicit written state badge pill (`onLabel` / `offLabel`) alongside the toggle
+  (e.g. «ظاهر / مخفي», «مفعّل / مقفول», «نشط / موقوف», «بيانات تجريبية / مؤكد») so sighted users and screen readers see the
+  state without relying on colour alone. Uses responsive `Wrap` layouts to eliminate `RenderFlex` overflow at 320 px viewport
+  width and 200% text scaling.
+- **Explicit row status tags (`collection_list.dart`):** List item titles display explicit tags:
+  - «ظاهر» / «مخفي» for collections with visibility.
+  - «موقوف» when `active == false`.
+  - «منتهي» when an announcement, event, notice or dated item's date/endDate/endsAt is in the past in Cairo time.
+  - «بيانات تجريبية» when `sample == true`.
+
+### Admin active/expiry status & 30-minute idle session policy (PR 3C, Packets P1-12 & P1-13)
+- **Temporary pause & optional end date (`AdminsScreen`, `AdminCheckGate`, `AdminAccess`):**
+  - For other admins, each row renders an `AdminStateSwitch` («نشط / موقوف») toggled with `confirmNamedAction` confirmation. For the signed-in owner's own account (`self`), it displays an explicit active badge `'حسابك (نشط)'` (`selfActiveTag` with `Icons.verified_user_outlined`) instead of a greyed-out disabled switch. Other rows also provide an optional end-date picker (`adminExpiresAt`) and «إزالة تاريخ الانتهاء» clear button. `admins/{uid}` stores `active` (missing = true) and `expiresAt` (timestamp, nullable).
+  - `evaluateAdminAccess(data, now)` in `lib/data/admin_repository.dart` classifies access as `active`, `stopped`, `expired`, or `none`.
+  - `AdminCheckGate` (`lib/ui/admin/admin_page.dart`) streams live `accessChanges` and schedules an exact expiry `Timer` for `expiresAt` so an open dashboard immediately locks out on pause, expiry, or removal, showing «تم إيقاف هذا الحساب مؤقتًا» or «انتهت صلاحية هذا الحساب المؤقت» with Sign out (never deleting `admins/{uid}`). `didUpdateWidget` resets `_future` and the timer when `uid` or `loadAccess` changes.
+- **Remember me & 30-minute idle sign-out (`SessionPolicy`, `AdminSessionGuard`, `lib/ui/admin/session_policy.dart`):**
+  - `AdminLoginForm` includes «افتكرني (جهاز شخصي)» (`login-remember-me`, persisted via `SharedPreferences` `admin_remember_me`, cleared on sign-out).
+  - When unticked (shared office device), `AdminSessionGuard` wraps `AdminDashboard`, resetting the idle timer (`SessionPolicy`: 30 minutes limit, 60-second warning) on both pointer events (`PointerDownEvent`/`PointerMoveEvent`/`PointerSignalEvent`/`PointerPanZoomStartEvent`) and keyboard input (`HardwareKeyboard` + `Focus`).
+  - At 29 minutes idle, an alert banner (`session-idle-warning`) counts down with «خليك مسجّل» (`session-stay-btn`). At 30 minutes, if `unsaved.isDirty` is true, `confirmDiscardChanges` runs before signing out; choosing «متابعة التعديل» resets the idle clock instead of losing unsaved work.
+- **Deferred admin copy (`admin_strings.dart`):** Admin-only strings live in `lib/ui/admin/admin_strings.dart` and register lazily via `registerAdminStrings()` so `main.dart.js` stays within the public bundle ceiling.
