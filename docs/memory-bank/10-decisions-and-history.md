@@ -2205,6 +2205,6 @@ supersede them.
 
 | 17 Nov 2026 | **PR #88** — "Worker delivery cron every minute (APK test)" (`chore/push-sender-every-minute`, squash `4e46909`) | Delivery Cron `*/15` → `* * * * *` (wrangler.toml + comments/docs only, no code change); live schedule applied via the Cloudflare connector at 18:03 EET (no wrangler deploy). APK test passed the same evening — pushes arrive within ~1 min. Sentry Seer flagged the shorter retry window (MEDIUM, review comment, not a failed check). |
 
-| 17 Nov 2026 | **Revert worker delivery cron to every 15 minutes** (`chore/revert-push-sender-15min`) | Reverts PR #88: Delivery Cron back to `*/15 * * * *` (code + comments + docs). NOTE: merging this PR alone does NOT change the live schedule — the live trigger must be reverted in the Cloudflare dashboard (or via the connector) separately. |
+| 17 Nov 2026 | **PR #89** — "Revert worker delivery cron to every 15 minutes" (`chore/revert-push-sender-15min`) | Reverts PR #88: Delivery Cron back to `*/15 * * * *` (code + comments + docs). NOTE: merging this PR alone does NOT change the live schedule — the live trigger must be reverted in the Cloudflare dashboard (or via the connector) separately. |
 
 <!-- Append new PRs to this table. -->
