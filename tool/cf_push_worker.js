@@ -1,6 +1,6 @@
 // Cloudflare Worker entrypoint for push sender & readings syncer (ADR-059, ADR-060, ADR-063)
 // plus POST /assistant (Workers Free). Cron triggers:
-// 1. Delivery Cron: * * * * * (runs push_sender.js) — every minute while testing the APK (was */15)
+// 1. Delivery Cron: */15 * * * * (runs push_sender.js)
 // 2. Queue Drain Cron: 7,22,37,52 * * * * (runs push_queue.js)
 // 3. Reminder Planner Cron: 3 2,8,14,20 * * * (runs push_reminders.js)
 // 4. Daily Readings Sync Cron: 0 16 * * * (runs readings_syncer.js at 6:00 PM Cairo rollover)
@@ -31,7 +31,7 @@ export default {
       runner = syncDailyReadingsAndSynaxarium(env);
       section = 'readings_syncer';
     } else {
-      // Default to delivery sender: * * * * * (any cron not matched above)
+      // Default to delivery sender: */15 * * * *
       runner = runPushSender(env, { trigger: 'cron' });
       section = 'push_sender';
     }
