@@ -281,7 +281,7 @@ For each `CollectionDef`:
   reversible soft-delete buffer (`PendingDelete`, `pending_delete.dart`). Non-category items immediately write Firestore
   `deletedAt: DateTime.now().toUtc()` (allowed by `meta()` and `optTimestamp(d, 'deletedAt')` in `firestore.rules`),
   hide immediately from the visible list (`_pendingDelete.isPending` / `isSoftDeleted`) and display a 10-second `SnackBar`
-  with «اتمسح «{n}»» (`deletedUndo`) and action «تراجع» (`undo`). The soft-deleted document immediately vanishes from
+  with «تم مسح «{n}»» (`deletedItemUndo`, neutral wording — the page is feminine, the section/item masculine; the inbox keeps `deletedUndo` «اتمسح «{n}»») and action «تراجع» (`undo`). The soft-deleted document immediately vanishes from
   public collection views (`_docs` and `_col` in `FirestoreRepository`) and sitemap exports (`sitemapContentFromExport`).
   Tapping undo restores the item immediately and sets `deletedAt: null`. If the 10 seconds elapse without undo, the deletion
   commits to hard delete `widget.repo.delete(def.name, d.id)` and cleans up orphaned media (`removeOrphanedDocMedia`).
@@ -356,6 +356,7 @@ For each `CollectionDef`:
   whose `placement` is `'link'` or `'nav'` (where `categoryId` is hidden by `showWhen`), `DocEditor.collect` preserves
   `_values['categoryId']` rather than blanking it. Switching `placement` back to `'section'` restores the previously
   chosen section without re-selection, while public filtering (`sectionPages`) still strictly requires `placement == 'section'`.
+- **Cover-image link validation & placement hints (Phase 4 PR1, ADR-074):** a stored cover image whose link is not a usable https image link is never dropped silently: `DocEditor` keeps the raw map (`_initValue` / `_collectImage`), `validateDocument` returns `invalidCoverImage` («لينك الصورة مش صالح — صلّح اللينك أو امسح الصورة.»), the save is blocked, and the error-summary entry scrolls to the image field, where the bad link is offered back for editing and «إزالة الصورة» is available. No migration: an old doc keeps its data until the admin fixes or removes the image. The `placement` dropdown shows a one-line hint under each option (`opt_placement_<option>_hint` in `admin_strings.dart`): «لينك بس» / «الصفحة ليها لينك، ومش ظاهرة في القوايم.»، «في القايمة» / «تظهر في قايمة الموقع.»، «جوه قسم» / «تظهر جوه قسم تختاره.».
 - Every save stamps `updatedAt` (server time) and `updatedBy` (email) via `AdminRepository._stamp`.
 - Boolean defaults: `missingBool` (value assumed when an existing doc lacks the field, e.g. `visible` = true,
   clinic `active` = true) vs `newBool` (value for new docs, e.g. `sample` = false).
@@ -476,7 +477,7 @@ Guards uncommitted edits across all administrative exit vectors:
 Reversible soft-delete buffer for collection items in `collection_list.dart`:
 - When an item (liturgy, meeting, activity, priest, saint, milestone, custom entry, custom page, etc.) is deleted, it immediately writes `deletedAt: Timestamp` to Firestore.
 - It is hidden from the admin list immediately (`_pendingDelete.isPending` / `isSoftDeleted`) and filtered out of all public collections (`FirestoreRepository._docs` and `_col`) and sitemaps.
-- A 10-second `SnackBar` appears: «اتمسح «{n}»» (`deletedUndo`) with action «تراجع» (`undo`).
+- A 10-second `SnackBar` appears: «تم مسح «{n}»» (`deletedItemUndo`) with action «تراجع» (`undo`).
 - The SnackBar is non-persistent (`persist: false`) and managed by `_undoSnackBarController` and a dedicated 10-second timer (`_undoSnackBarTimer`, cleaned up on new delete, undo tap, and `dispose`), ensuring both the SnackBar and the «تراجع» action dismiss completely after 10 seconds.
 - Tapping «تراجع» cancels the timer, restores the row, and sets `deletedAt: null` in Firestore.
 - When the 10 seconds expire, the deletion commits to hard delete `widget.repo.delete` and deletes unreferenced media (`removeOrphanedDocMedia`).

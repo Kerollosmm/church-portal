@@ -1095,8 +1095,8 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
 
     final pendingCount = _pendingDelete.pendingIds.length;
     final snackText = pendingCount > 1
-        ? context.tr('deletedMultiUndo', {'n': '$pendingCount', 'last': title})
-        : context.tr('deletedUndo', {'n': title});
+        ? context.tr('deletedItemMultiUndo', {'n': '$pendingCount', 'last': title})
+        : context.tr('deletedItemUndo', {'n': title});
     final actionLabel = context.tr(pendingCount > 1 ? 'undoAll' : 'undo');
     _undoSnackBarTimer?.cancel();
     _undoSnackBarTimer = null;

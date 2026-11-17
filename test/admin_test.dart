@@ -83,6 +83,39 @@ void main() {
       );
     });
 
+    test('validateDocument blocks a cover image with an invalid link', () {
+      final pagesDef = collectionById('pages')!;
+      // A usable https link is fine.
+      expect(
+        validateDocument(pagesDef, {
+          'image': {'source': 'url', 'url': 'https://example.org/cover.jpg'},
+        }),
+        isNull,
+      );
+      // http, a host without a dot, and a link with a space all block the save.
+      expect(
+        validateDocument(pagesDef, {
+          'image': {'source': 'url', 'url': 'http://example.org/cover.jpg'},
+        }),
+        'invalidCoverImage',
+      );
+      expect(
+        validateDocument(pagesDef, {
+          'image': {'source': 'url', 'url': 'https://localhost/cover.jpg'},
+        }),
+        'invalidCoverImage',
+      );
+      expect(
+        validateDocument(pagesDef, {
+          'image': {'source': 'url', 'url': 'https://example.org/cover image.jpg'},
+        }),
+        'invalidCoverImage',
+      );
+      // No image at all is fine (images are optional everywhere).
+      expect(validateDocument(pagesDef, {'image': null}), isNull);
+      expect(validateDocument(pagesDef, {}), isNull);
+    });
+
     test('formatAdminError handles FirebaseException and generic errors', () {
       final fbe = FirebaseException(
         plugin: 'cloud_firestore',
@@ -578,6 +611,117 @@ void main() {
       expect((saved!['phones'] as List).last['number'], '01012345678');
       expect(saved!.keys, ['phones']); // existing doc: only what changed
     });
+
+    testWidgets('invalid cover link blocks the save, then removing the image saves', (tester) async {
+      tester.view.physicalSize = const Size(1200, 3000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      Map<String, dynamic>? saved;
+      final def = collectionById('pages')!;
+      await tester.pumpWidget(_app(
+        DocEditor(
+          title: 'صفحة تجربة',
+          fields: def.fields,
+          def: def,
+          data: const {
+            'titleAr': 'صفحة تجربة',
+            'slug': 'tajriba',
+            'image': {'source': 'url', 'url': 'http://example.org/cover.jpg'},
+          },
+          docId: 'p1',
+          popOnSave: false,
+          onSave: (d) async => saved = d,
+        ),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      // The bad link is shown as an error in the field, not dropped silently.
+      expect(find.text('لينك الصورة مش صالح — صلّح اللينك أو امسح الصورة.'), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('editor-save')));
+      await tester.pumpAndSettle();
+      expect(saved, isNull, reason: 'an invalid cover link must block the save');
+      expect(find.byKey(const Key('editor-error-summary')), findsOneWidget);
+
+      // Tapping the error scrolls to the image field (both fixes are there).
+      await tester.tap(find.byKey(const ValueKey('error-summary-image')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('imageUrlBtn')), findsOneWidget);
+      expect(find.byKey(const Key('imageRemoveBtn')), findsOneWidget);
+
+      // «امسح الصورة» unblocks the save, and the image is gone.
+      await tester.tap(find.byKey(const Key('imageRemoveBtn')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('editor-save')));
+      await tester.pumpAndSettle();
+      expect(saved, isNotNull);
+      expect(saved!['image'], isNull);
+    });
+
+    testWidgets('an invalid cover link can be fixed from the URL dialog, then saves', (tester) async {
+      tester.view.physicalSize = const Size(1200, 3000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      Map<String, dynamic>? saved;
+      final def = collectionById('pages')!;
+      await tester.pumpWidget(_app(
+        DocEditor(
+          title: 'صفحة تجربة',
+          fields: def.fields,
+          def: def,
+          data: const {
+            'titleAr': 'صفحة تجربة',
+            'slug': 'tajriba',
+            'image': {'source': 'url', 'url': 'http://example.org/cover.jpg'},
+          },
+          docId: 'p1',
+          popOnSave: false,
+          onSave: (d) async => saved = d,
+        ),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('imageUrlBtn')));
+      await tester.pumpAndSettle();
+      // The bad link is offered back for editing.
+      expect(find.byKey(const Key('imageUrlInput')), findsOneWidget);
+      await tester.enterText(find.byKey(const Key('imageUrlInput')), 'https://example.org/cover.jpg');
+      await tester.tap(find.byKey(const Key('imageUrlOk')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('editor-save')));
+      await tester.pumpAndSettle();
+      expect(saved, isNotNull);
+      expect((saved!['image'] as Map)['url'], 'https://example.org/cover.jpg');
+    });
+
+    testWidgets('placement options show a one-line hint under each choice', (tester) async {
+      tester.view.physicalSize = const Size(390, 3000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final def = collectionById('pages')!;
+      await tester.pumpWidget(_app(
+        DocEditor(
+          title: 'صفحة تجربة',
+          fields: def.fields,
+          def: def,
+          data: const {'titleAr': 'صفحة تجربة', 'slug': 'tajriba'},
+          popOnSave: false,
+          onSave: (d) async {},
+        ),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('field-placement')));
+      await tester.pumpAndSettle();
+      expect(find.text('لينك بس'), findsWidgets);
+      expect(find.text('الصفحة ليها لينك، ومش ظاهرة في القوايم.'), findsOneWidget);
+      expect(find.text('في القايمة'), findsWidgets);
+      expect(find.text('تظهر في قايمة الموقع.'), findsOneWidget);
+      expect(find.text('جوه قسم'), findsWidgets);
+      expect(find.text('تظهر جوه قسم تختاره.'), findsOneWidget);
+    });
   });
 
   group('DocEditor edits', () {
@@ -1063,7 +1207,7 @@ void main() {
       expect(find.text('مارمرقس'), findsNothing);
       expect(repo.deletedIds, isEmpty);
       expect(isSoftDeleted(repo.collections['saints']!.firstWhere((d) => d.id == 's1').data), isTrue);
-      expect(find.text('اتمسح «مارمرقس»'), findsOneWidget);
+      expect(find.text('تم مسح «مارمرقس»'), findsOneWidget);
       expect(find.byType(SnackBarAction), findsOneWidget);
 
       // Tap Undo -> restores row and clears deletedAt
