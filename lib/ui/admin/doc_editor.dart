@@ -558,7 +558,10 @@ class DocEditorState extends State<DocEditor> {
         // A stored cover link that is not usable any more: block the save and
         // point at the field, where the admin can fix the link or remove the
         // image. The image itself is never dropped silently.
-        if (invalidImageUrl(_values[f.key]) != null) {
+        // A staged replacement upload makes the stored link irrelevant: the
+        // save uploads it first and replaces the stored value, so it must
+        // not block the save (CodeRabbit + Sentry review on PR #86).
+        if (invalidImageUrl(_values[f.key]) != null && !_pending.containsKey(f.key)) {
           out.add(_FieldErrorEntry(
             id: f.key,
             label: '${_plainLabel(f)} — ${context.tr('invalidCoverImage')}',
@@ -1710,8 +1713,7 @@ class DocEditorState extends State<DocEditor> {
                     ? context.tr('imageNone')
                     : (current.isRemote ? current.url : 'media/${current.mediaId}');
     // Narrow screens or large text: preview above the status and buttons.
-    final stack = MediaQuery.sizeOf(context).width < 420 || MediaQuery.textScalerOf(context).scale(16) / 16 >= 1.5;
-    final previewBox = ClipRRect(
+    final stack = MediaQuery.sizeOf(context).width < 420 || MediaQuery.textScalerOf(context).scale(16) / 16 >= 1.5;    final previewBox = ClipRRect(
       borderRadius: BorderRadius.circular(12),
       child: Container(
         width: 96,
@@ -1721,11 +1723,13 @@ class DocEditorState extends State<DocEditor> {
       ),
     );
     final controls = Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      // A staged replacement means the stored bad link is no longer the
+      // state: the status shows the pending upload, not the error.
       Text(status,
           key: const Key('imageStatus'),
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
-          style: TextStyle(color: invalidUrl != null ? context.pal.alert : context.pal.muted, fontSize: 12, fontWeight: invalidUrl != null ? FontWeight.w700 : null)),
+          style: TextStyle(color: invalidUrl != null && pending == null ? context.pal.alert : context.pal.muted, fontSize: 12, fontWeight: invalidUrl != null && pending == null ? FontWeight.w700 : null)),
       const SizedBox(height: 8),
       Wrap(spacing: 8, runSpacing: 8, children: [
         OutlinedButton.icon(

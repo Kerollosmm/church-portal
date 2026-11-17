@@ -12,6 +12,7 @@ import 'package:church_portal/domain/cairo_time.dart';
 import 'package:church_portal/domain/custom_content.dart';
 import 'package:church_portal/domain/daily_verse.dart';
 import 'package:church_portal/domain/features.dart';
+import 'package:church_portal/domain/media.dart';
 import 'package:church_portal/domain/models.dart';
 import 'package:church_portal/ui/admin/admin_access.dart';
 import 'package:church_portal/ui/admin/admin_page.dart';
@@ -694,6 +695,59 @@ void main() {
       await tester.pumpAndSettle();
       expect(saved, isNotNull);
       expect((saved!['image'] as Map)['url'], 'https://example.org/cover.jpg');
+    });
+
+    testWidgets('an invalid cover link can be replaced by uploading a new image, then saves', (tester) async {
+      tester.view.physicalSize = const Size(1200, 3000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      Map<String, dynamic>? saved;
+      final def = collectionById('pages')!;
+      await tester.pumpWidget(_app(
+        DocEditor(
+          title: 'صفحة تجربة',
+          fields: def.fields,
+          def: def,
+          data: const {
+            'titleAr': 'صفحة تجربة',
+            'slug': 'tajriba',
+            'image': {'source': 'url', 'url': 'http://example.org/cover.jpg'},
+          },
+          docId: 'p1',
+          popOnSave: false,
+          media: _TestMediaRepo(),
+          pickImage: () async => Uint8List.fromList([1, 2, 3, 4]),
+          // A real 1x1 PNG: the pending preview decodes these bytes.
+          prepareImage: (_) async => EncodedImage(
+                base64Decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='),
+                'image/png',
+                1,
+                1,
+              ),
+          onSave: (d) async => saved = d,
+        ),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      // The bad link blocks the save first.
+      await tester.tap(find.byKey(const Key('editor-save')));
+      await tester.pumpAndSettle();
+      expect(saved, isNull);
+      expect(find.byKey(const Key('editor-error-summary')), findsOneWidget);
+
+      // Uploading a replacement — without removing the old image first —
+      // clears the error and unblocks the save (PR #86 review).
+      await tester.tap(find.byKey(const Key('imageUploadBtn')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('imagePreviewPending')), findsOneWidget);
+      expect(find.text('لينك الصورة مش صالح — صلّح اللينك أو امسح الصورة.'), findsNothing);
+      expect(find.byKey(const Key('editor-error-summary')), findsNothing);
+
+      await tester.tap(find.byKey(const Key('editor-save')));
+      await tester.pumpAndSettle();
+      expect(saved, isNotNull);
+      expect((saved!['image'] as Map)['mediaId'], 'm1');
     });
 
     testWidgets('placement options show a one-line hint under each choice', (tester) async {
@@ -5456,7 +5510,7 @@ class _TestMediaRepo implements MediaRepository {
 
   @override
   Future<MediaImage> upload(EncodedImage img, {String alt = ''}) async =>
-      const MediaImage(source: 'firestore', mediaId: 'm1');
+      MediaImage(source: MediaSource.inline, mediaId: 'm1');
 
   @override
   Future<void> delete(String mediaId) async {}
