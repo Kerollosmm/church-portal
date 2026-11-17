@@ -424,3 +424,10 @@ Progress tracked in [`docs/plans/phase3/STATUS.md`](../plans/phase3/STATUS.md). 
 - [x] `android/RELEASE_NOTES.md` covers the main change since `apk-v1.0.3`: «المساعد (اسأل الكنيسة) بقى شغال جوه تطبيق الأندرويد» (PR #67), plus in-place update / ABI choice and the one reinstall for anyone still on `apk-v1.0.0`.
 - [ ] Push tag `apk-v1.0.4` on the squash-merge commit of the bump PR, after it is on `main`. Do not tag from the PR branch. Use the same release keystore secrets. Phones that still have apk-v1.0.0 (debug certificate) must uninstall once before this release will install.
 
+## Phase 3 — Admin-panel simplification (PR #74–#83, merged 17 Nov 2026)
+
+Progress is tracked in [`docs/plans/phase3/STATUS.md`](../plans/phase3/STATUS.md).
+
+- [x] **Stacked PR chain (PR 3A–3J) merged into `main`**: Merged via PR #83 (`d690f67440bf94d6ac1b76c71c984e064c64cba5`); PR #74 auto-merged; PRs #75–#82 closed via #83; deployed to Firebase Hosting + Firestore Rules (`Deploy to Firebase` run `44059123834`).
+- [ ] **Owner / servant follow-ups**: Trial sessions (`G1`–`G3`, item 33) and owner/office item 35 (two owner accounts; local copy of Abouna Domadius photo if it depends on YouTube). Item 32 left out; item 34 deferred.
+
