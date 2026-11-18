@@ -16,6 +16,7 @@ import 'package:church_portal/domain/contact_categories.dart';
 import 'package:church_portal/domain/custom_content.dart';
 import 'package:church_portal/domain/features.dart' show FeatureSettings, Sections;
 import 'package:church_portal/domain/media.dart';
+import 'package:church_portal/domain/models.dart';
 import 'package:church_portal/domain/rules.dart';
 import 'package:church_portal/router.dart';
 import 'package:church_portal/state/providers.dart';
@@ -97,8 +98,13 @@ class _English extends LocaleNotifier {
   Locale build() => const Locale('en');
 }
 
+class _Arabic extends LocaleNotifier {
+  @override
+  Locale build() => const Locale('ar');
+}
+
 Future<(GoRouter, _Repo)> _pump(WidgetTester tester, String path,
-    {Size size = const Size(420, 3000), _Repo? repo, bool settle = true}) async {
+    {Size size = const Size(420, 3000), _Repo? repo, bool settle = true, Locale locale = const Locale('en')}) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
@@ -106,14 +112,14 @@ Future<(GoRouter, _Repo)> _pump(WidgetTester tester, String path,
   final container = ProviderContainer(overrides: [
     repositoryProvider.overrideWithValue(r),
     nowProvider.overrideWith((ref) => Stream.value(CairoTime.at(2026, 11, 1, 12 * 60).toUtc())),
-    localeProvider.overrideWith(_English.new),
+    localeProvider.overrideWith(locale.languageCode == 'en' ? _English.new : _Arabic.new),
   ]);
   addTearDown(container.dispose);
   final router = container.read(routerProvider);
   await tester.pumpWidget(UncontrolledProviderScope(
     container: container,
     child: MaterialApp.router(
-      locale: const Locale('en'),
+      locale: locale,
       supportedLocales: const [Locale('ar'), Locale('en')],
       localizationsDelegates: GlobalMaterialLocalizations.delegates,
       routerConfig: router,
@@ -144,6 +150,7 @@ class _Backend extends AdminBackend {
   final saves = <(String, String?, Map<String, dynamic>)>[];
   final updates = <(String, String, Map<String, dynamic>)>[];
   final deletes = <(String, String)>[];
+  final watchedDocs = <String>[];
   final savedDocs = <String, Map<String, dynamic>>{};
 
   @override
@@ -151,8 +158,10 @@ class _Backend extends AdminBackend {
   @override
   Stream<List<AdminDoc>> watch(String collection) => Stream.value(_lists[collection] ?? const []);
   @override
-  Stream<AdminDoc?> watchDoc(String path) =>
-      Stream.value(_docs[path] == null ? null : AdminDoc(path.split('/').last, _docs[path]!));
+  Stream<AdminDoc?> watchDoc(String path) {
+    watchedDocs.add(path);
+    return Stream.value(_docs[path] == null ? null : AdminDoc(path.split('/').last, _docs[path]!));
+  }
   @override
   Future<String> save(String collection, String? id, Map<String, dynamic> data) async {
     saves.add((collection, id, data));
@@ -2112,6 +2121,325 @@ void main() {
       expect(find.descendant(of: catCardReverted, matching: find.text('فاضي، مش ظاهر للزوار')), findsOneWidget);
     });
   });
+
+  group('Phase 4 PR2: BuiltInSections', () {
+    test('BuiltInSections canonical keys, lookups, sectionPages, and isCategoryNonEmpty', () {
+      expect(BuiltInSections.all.map((b) => b.id), [
+        'builtin_schedule',
+        'builtin_meetings',
+        'builtin_activities',
+        'builtin_clinics',
+        'builtin_services',
+        'builtin_about',
+        'builtin_contact',
+      ]);
+      expect(BuiltInSections.byId(BuiltInSections.meetings)?.slug, 'church-education');
+      expect(BuiltInSections.byId('builtin_education'), isNull);
+      expect(BuiltInSections.byId('k1'), isNull);
+      expect(BuiltInSections.isBuiltIn('builtin_activities'), isTrue);
+      expect(BuiltInSections.isBuiltIn('k1'), isFalse);
+      expect(BuiltInSections.pathFor('builtin_clinics'), '/clinics');
+      expect(BuiltInSections.pathFor('unknown'), isNull);
+
+      expect(BuiltInSections.idForPageKey('schedule'), BuiltInSections.schedule);
+      expect(BuiltInSections.idForPageKey('education'), BuiltInSections.meetings);
+      expect(BuiltInSections.idForPageKey('meetings'), BuiltInSections.meetings);
+      expect(BuiltInSections.idForPageKey('activities'), BuiltInSections.activities);
+      expect(BuiltInSections.idForPageKey('clinics'), BuiltInSections.clinics);
+      expect(BuiltInSections.idForPageKey('services'), BuiltInSections.services);
+      expect(BuiltInSections.idForPageKey('about'), BuiltInSections.about);
+      expect(BuiltInSections.idForPageKey('contact'), BuiltInSections.contact);
+      expect(BuiltInSections.idForPageKey('ask'), isNull);
+      expect(BuiltInSections.idForPageKey('notifications'), isNull);
+
+      final actCat = BuiltInSections.byId(BuiltInSections.activities)!;
+      const visibleLinked = CustomPage(
+        id: 'p-act',
+        slug: 'summer-camp',
+        titleAr: 'معسكر',
+        titleEn: 'Camp',
+        placement: PagePlacements.section,
+        categoryId: BuiltInSections.activities,
+        visible: true,
+      );
+      const hiddenLinked = CustomPage(
+        id: 'p-act-hidden',
+        slug: 'hidden-camp',
+        titleAr: 'مخفي',
+        placement: PagePlacements.section,
+        categoryId: BuiltInSections.activities,
+        visible: false,
+      );
+      const linkOnly = CustomPage(
+        id: 'p-act-link',
+        slug: 'link-camp',
+        titleAr: 'رابط',
+        placement: PagePlacements.link,
+        categoryId: BuiltInSections.activities,
+        visible: true,
+      );
+
+      expect(sectionPages(BuiltInSections.activities, [visibleLinked, hiddenLinked, linkOnly]).map((p) => p.id), ['p-act']);
+      expect(isCategoryNonEmpty(actCat, const [], [visibleLinked, hiddenLinked, linkOnly]), isTrue);
+      expect(isCategoryNonEmpty(actCat, const [], [hiddenLinked, linkOnly]), isFalse);
+      expect(isCategoryNonEmpty(actCat, const [], const []), isFalse);
+
+      // Backward compatibility: custom category IDs behave identically
+      const customCat = CustomCategory(id: 'k1', slug: 'youth-trips', nameAr: 'رحلات');
+      expect(sectionPages('k1', _pages).map((p) => p.id), ['p3']);
+      expect(isCategoryNonEmpty(customCat, const [], _pages), isTrue);
+    });
+
+    testWidgets('DocEditor(pages) offers all 7 built-in sections + custom categories; DocEditor(entries) offers only custom categories',
+        (tester) async {
+      tester.view.physicalSize = const Size(900, 3000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final b = _Backend(lists: {
+        'categories': [
+          AdminDoc('k1', {'nameAr': 'رحلات الشباب', 'nameEn': 'Youth trips', 'slug': 'youth-trips', 'order': 10}),
+        ],
+        'pages': const [],
+        'entries': const [],
+      });
+
+      // 1. Pages editor offers all 7 built-in sections + custom category
+      await tester.pumpWidget(_admin(CollectionListScreen(repo: b, def: collectionById('pages')!)));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byIcon(Icons.add));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('addPage-blank')));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.byKey(const ValueKey('field-titleAr')), 'نادي الكنيسة');
+      await tester.pump();
+
+      await tester.tap(find.byKey(const ValueKey('field-placement')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Inside a section').last);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('field-categoryId')));
+      await tester.pumpAndSettle();
+
+      for (final sec in BuiltInSections.all) {
+        expect(find.text(sec.nameEn), findsWidgets, reason: 'Expected ${sec.id} in pages category dropdown');
+      }
+      expect(find.text('Youth trips'), findsWidgets);
+
+      await tester.tap(find.text('Activities & choirs').last);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('editor-save')));
+      await tester.pumpAndSettle();
+
+      expect(b.saves, isNotEmpty);
+      final savedPage = b.saves.first.$3;
+      expect(savedPage['placement'], PagePlacements.section);
+      expect(savedPage['categoryId'], BuiltInSections.activities);
+      expect(b.watchedDocs.where((p) => p.contains('builtin_')), isEmpty);
+      expect(b.updates.where((u) => u.$1 == 'categories' && u.$2.startsWith('builtin_')), isEmpty);
+      expect(b.deletes.where((d) => d.$1 == 'categories' && d.$2.startsWith('builtin_')), isEmpty);
+
+      // 2. Entries editor only offers custom categories (never built-in sections)
+      await tester.pumpWidget(KeyedSubtree(
+        key: const ValueKey('entries-list-check'),
+        child: _admin(CollectionListScreen(repo: b, def: collectionById('entries')!)),
+      ));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byIcon(Icons.add));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('field-categoryId')));
+      await tester.pumpAndSettle();
+      expect(find.text('Youth trips'), findsWidgets);
+      for (final sec in BuiltInSections.all) {
+        expect(find.text(sec.nameEn), findsNothing, reason: 'Entries must not offer ${sec.id}');
+      }
+    });
+
+    testWidgets('Built-in section pages render linked CustomPageCards, hide when customPages is off, and suppress EmptyState when empty',
+        (tester) async {
+      final builtInPages = [
+        for (final sec in BuiltInSections.all)
+          CustomPage(
+            id: 'page-${sec.id}',
+            slug: 'extra-${sec.slug}',
+            titleAr: 'صفحة ${sec.nameAr}',
+            titleEn: 'Extra ${sec.nameEn}',
+            subtitleAr: 'وصف مختصر',
+            subtitleEn: 'Short subtitle',
+            placement: PagePlacements.section,
+            categoryId: sec.id,
+            visible: true,
+          ),
+      ];
+
+      final repoAll = _BuiltInSectionRepo(
+        pagesList: builtInPages,
+        sections: const {Sections.clinics: true},
+      );
+
+      final (router, _) = await _pump(tester, '/church-activities', size: const Size(420, 3000), repo: repoAll);
+      expect(find.byKey(const Key('sectionPage-extra-church-activities')), findsOneWidget);
+      expect(find.text('Extra Activities & choirs'), findsOneWidget);
+
+      for (final sec in BuiltInSections.all) {
+        router.go('/${sec.slug}');
+        await tester.pumpAndSettle();
+        expect(find.byKey(Key('sectionPage-extra-${sec.slug}')), findsOneWidget, reason: '/${sec.slug}');
+        expect(tester.takeException(), isNull, reason: '/${sec.slug}');
+      }
+
+      // When customPages switch is off, CustomPageCards disappear
+      await _pump(
+        tester,
+        '/church-activities',
+        size: const Size(420, 3000),
+        repo: _BuiltInSectionRepo(pagesList: builtInPages, sections: const {Sections.customPages: false}),
+      );
+      expect(find.byKey(const Key('sectionPage-extra-church-activities')), findsNothing);
+
+      // Empty primary collection + visible linked page => shows CustomPageCard and suppresses EmptyState
+      final emptyActRepo = _BuiltInSectionRepo(
+        pagesList: builtInPages,
+        activitiesList: const [],
+        clinicsList: const [],
+        sections: const {Sections.clinics: true},
+      );
+      final (emptyRouter, _) = await _pump(tester, '/church-activities', size: const Size(420, 3000), repo: emptyActRepo);
+      expect(find.byKey(const Key('sectionPage-extra-church-activities')), findsOneWidget);
+      expect(find.byType(EmptyState), findsNothing);
+
+      emptyRouter.go('/clinics');
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('sectionPage-extra-clinics')), findsOneWidget);
+      expect(find.byType(EmptyState), findsNothing);
+
+      // Empty primary collection + hidden/unlinked page => EmptyState renders
+      final hiddenActRepo = _BuiltInSectionRepo(
+        pagesList: const [
+          CustomPage(
+            id: 'page-hidden',
+            slug: 'extra-church-activities',
+            titleAr: 'مخفي',
+            placement: PagePlacements.section,
+            categoryId: BuiltInSections.activities,
+            visible: false,
+          ),
+          CustomPage(
+            id: 'page-unlinked',
+            slug: 'extra-clinics',
+            titleAr: 'رابط',
+            placement: PagePlacements.link,
+            categoryId: BuiltInSections.clinics,
+            visible: true,
+          ),
+        ],
+        activitiesList: const [],
+        clinicsList: const [],
+        sections: const {Sections.clinics: true},
+      );
+      final (hiddenRouter, _) = await _pump(tester, '/church-activities', size: const Size(420, 3000), repo: hiddenActRepo);
+      expect(find.byKey(const Key('sectionPage-extra-church-activities')), findsNothing);
+      expect(find.byType(EmptyState), findsOneWidget);
+
+      hiddenRouter.go('/clinics');
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('sectionPage-extra-clinics')), findsNothing);
+      expect(find.byType(EmptyState), findsOneWidget);
+
+      // Responsive layout check at 320, 400, 1400 px in RTL Arabic and LTR English
+      for (final width in [320.0, 400.0, 1400.0]) {
+        for (final locale in [const Locale('ar'), const Locale('en')]) {
+          await _pump(
+            tester,
+            '/church-activities',
+            size: Size(width, 3000),
+            repo: emptyActRepo,
+            locale: locale,
+          );
+          expect(find.byKey(const Key('sectionPage-extra-church-activities')), findsOneWidget);
+          expect(tester.takeException(), isNull, reason: 'width=$width locale=${locale.languageCode}');
+        }
+      }
+    });
+
+    testWidgets('Admin CollectionListScreen(categories) shows built-in section tiles with linked pages, toggle, and edit (no delete)',
+        (tester) async {
+      tester.view.physicalSize = const Size(900, 3000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final b = _Backend(lists: {
+        'categories': const [],
+        'entries': const [],
+        'pages': [
+          AdminDoc('p-act-1', {
+            'slug': 'choir-guide',
+            'titleAr': 'دليل الكورال',
+            'titleEn': 'Choir guide',
+            'placement': 'section',
+            'categoryId': BuiltInSections.activities,
+            'visible': true,
+          }),
+        ],
+      });
+
+      await tester.pumpWidget(_admin(CollectionListScreen(repo: b, def: collectionById('categories')!), locale: const Locale('ar')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('emptyCategories')), findsNothing);
+      final actTile = find.byKey(const ValueKey(BuiltInSections.activities));
+      expect(actTile, findsOneWidget);
+      expect(find.descendant(of: actTile, matching: find.text('قسم أساسي')), findsOneWidget);
+      expect(find.descendant(of: actTile, matching: find.byKey(const Key('sectionPageRow-p-act-1'))), findsOneWidget);
+      expect(find.descendant(of: actTile, matching: find.text('صفحة')), findsOneWidget);
+      expect(find.descendant(of: actTile, matching: find.byKey(const ValueKey('openItem-${BuiltInSections.activities}'))), findsOneWidget);
+
+      // No delete, category visibility, or addEntryIn controls on built-in section
+      expect(find.byKey(const ValueKey('delete-${BuiltInSections.activities}')), findsNothing);
+      expect(find.byKey(const ValueKey('visibility-${BuiltInSections.activities}')), findsNothing);
+      expect(find.byKey(const ValueKey('addEntryIn-${BuiltInSections.activities}')), findsNothing);
+
+      // Toggle page visibility
+      await tester.tap(find.byKey(const ValueKey('visibilitySectionPage-p-act-1')));
+      await tester.pumpAndSettle();
+      expect(b.updates.single.$1, 'pages');
+      expect(b.updates.single.$2, 'p-act-1');
+      expect(b.updates.single.$3, {'visible': false});
+
+      // Tap page row opens DocEditor with built-in section pre-selected
+      await tester.tap(find.byKey(const Key('sectionPageRow-p-act-1')));
+      await tester.pumpAndSettle();
+      expect(find.byType(DocEditor), findsOneWidget);
+      final editorState = tester.state<DocEditorState>(find.byType(DocEditor));
+      expect(editorState.collect()['categoryId'], BuiltInSections.activities);
+      expect(tester.takeException(), isNull);
+    });
+  });
+}
+
+class _BuiltInSectionRepo extends _Repo {
+  final List<CustomPage> pagesList;
+  final List<Activity>? activitiesList;
+  final List<Clinic>? clinicsList;
+  _BuiltInSectionRepo({
+    required this.pagesList,
+    this.activitiesList,
+    this.clinicsList,
+    Map<String, bool> sections = const {},
+  }) : super(sections);
+
+  @override
+  Stream<List<CustomPage>> pages() => Stream.value(pagesList);
+  @override
+  Stream<List<Activity>> activities() => activitiesList == null ? super.activities() : Stream.value(activitiesList!);
+  @override
+  Stream<List<Clinic>> clinics() => clinicsList == null ? super.clinics() : Stream.value(clinicsList!);
 }
 
 class _StreamEntriesBackend extends _Backend {

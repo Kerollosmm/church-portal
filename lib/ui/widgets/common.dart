@@ -9,16 +9,27 @@ import 'package:material_ui/material_ui.dart';
 import '../../core/l10n.dart';
 import '../../core/launch.dart';
 import '../../core/theme.dart';
+import '../../domain/custom_content.dart' show BuiltInSections, CustomPage, isCategoryNonEmpty;
 import '../../domain/features.dart';
 import '../../domain/models.dart';
 import '../../domain/rules.dart';
 import '../../domain/time_format.dart';
 import '../../state/providers.dart';
+import '../pages/category_page.dart' show BuiltInSectionPages;
 import 'coptic_cross.dart';
 import 'golden.dart';
 
 /// Max width of page content (cards grid, text); wider screens centre it.
 const double kMaxContentWidth = 1200;
+
+class _PageSectionScope extends InheritedWidget {
+  final String sectionId;
+  const _PageSectionScope({required this.sectionId, required super.child});
+  static String? of(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<_PageSectionScope>()?.sectionId;
+  @override
+  bool updateShouldNotify(_PageSectionScope old) => old.sectionId != sectionId;
+}
 
 /// Scrollable page body: centred, width-capped content + footer. Each
 /// section fades and rises in the first time it scrolls into view (static
@@ -31,6 +42,15 @@ class PageBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final pad = MediaQuery.sizeOf(context).width < 600 ? 16.0 : 24.0;
+    final h = header;
+    final sid = h is CustomizablePageHeader ? BuiltInSections.idForPageKey(h.pageKey) : null;
+    final bodyColumn = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (final c in children) Reveal(child: c),
+        if (sid != null) BuiltInSectionPages(sectionId: sid),
+      ],
+    );
     return CustomScrollView(
       slivers: [
         if (header != null) SliverToBoxAdapter(child: header),
@@ -40,10 +60,7 @@ class PageBody extends StatelessWidget {
               constraints: const BoxConstraints(maxWidth: kMaxContentWidth),
               child: Padding(
                 padding: EdgeInsets.fromLTRB(pad, 20, pad, 32),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [for (final c in children) Reveal(child: c)],
-                ),
+                child: sid != null ? _PageSectionScope(sectionId: sid, child: bodyColumn) : bodyColumn,
               ),
             ),
           ),
@@ -438,7 +455,20 @@ class AsyncSection<T> extends ConsumerWidget {
     final v = ref.watch(provider);
     return v.when(
       skipLoadingOnReload: true,
-      data: (d) => (isEmpty?.call(d) ?? false) ? EmptyState(message: emptyMessage) : builder(context, d),
+      data: (d) {
+        if (isEmpty?.call(d) ?? false) {
+          final sid = _PageSectionScope.of(context);
+          if (sid != null && ref.watch(featuresProvider.select((f) => f.enabled(Sections.customPages)))) {
+            final cat = BuiltInSections.byId(sid);
+            final pages = ref.watch(customPagesProvider).value ?? const <CustomPage>[];
+            if (cat != null && isCategoryNonEmpty(cat, const [], pages)) {
+              return const SizedBox.shrink();
+            }
+          }
+          return EmptyState(message: emptyMessage);
+        }
+        return builder(context, d);
+      },
       loading: () => loading ?? const SkeletonList(),
       error: (e, _) => ErrorState(onRetry: retry == null ? null : () => ref.invalidate(retry!)),
     );

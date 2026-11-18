@@ -300,14 +300,14 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
                     final allSectionPagesByCat = <String, List<AdminDoc>>{};
                     for (final p in visibleSectionPages) {
                       final cid = '${p.data['categoryId'] ?? ''}';
-                      if (allCatIds.contains(cid)) {
+                      if (allCatIds.contains(cid) || BuiltInSections.isBuiltIn(cid)) {
                         (allSectionPagesByCat[cid] ??= []).add(p);
                       }
                     }
                     final sectionPagesByCat = <String, List<AdminDoc>>{};
                     for (final p in filteredSectionPages) {
                       final cid = '${p.data['categoryId'] ?? ''}';
-                      if (allCatIds.contains(cid)) {
+                      if (allCatIds.contains(cid) || BuiltInSections.isBuiltIn(cid)) {
                         (sectionPagesByCat[cid] ??= []).add(p);
                       }
                     }
@@ -326,6 +326,22 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
                                 c,
                           ]
                         : visible;
+                    final q = _search.text.trim().toLowerCase();
+                    final shownBuiltIns = [
+                      for (final b in BuiltInSections.all)
+                        if ((allSectionPagesByCat[b.id]?.isNotEmpty ?? false) &&
+                            (!hasFilter ||
+                                (sectionPagesByCat[b.id]?.isNotEmpty ?? false) ||
+                                (q.isNotEmpty &&
+                                    (_filter == ListFilter.all || _filter == ListFilter.visible) &&
+                                    (b.nameAr.toLowerCase().contains(q) ||
+                                        b.nameEn.toLowerCase().contains(q) ||
+                                        b.id.toLowerCase().contains(q)))))
+                          b,
+                    ];
+                    final hasAnyBuiltInPages = BuiltInSections.all.any(
+                      (b) => allSectionPagesByCat[b.id]?.isNotEmpty ?? false,
+                    );
                     final canReorder =
                         def.orderable && !hasFilter && shownCats.length > 1;
                     return CustomScrollView(slivers: [
@@ -352,6 +368,8 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
                           allEntriesByCat: allEntriesByCat,
                           sectionPagesByCat: sectionPagesByCat,
                           allSectionPagesByCat: allSectionPagesByCat,
+                          shownBuiltIns: shownBuiltIns,
+                          hasAnyBuiltInPages: hasAnyBuiltInPages,
                           hasFilter: hasFilter,
                           unassigned: unassigned,
                           canReorder: canReorder,
@@ -512,12 +530,14 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     required Map<String, List<AdminDoc>> allEntriesByCat,
     required Map<String, List<AdminDoc>> sectionPagesByCat,
     required Map<String, List<AdminDoc>> allSectionPagesByCat,
+    required List<CustomCategory> shownBuiltIns,
+    required bool hasAnyBuiltInPages,
     required bool hasFilter,
     required List<AdminDoc> unassigned,
     required bool canReorder,
     Set<String> emptyCatIds = const {},
   }) {
-    if (allVisibleCats.isEmpty && unassigned.isEmpty) {
+    if (allVisibleCats.isEmpty && unassigned.isEmpty && !hasAnyBuiltInPages) {
       return Center(
         key: const Key('emptyCategories'),
         child: Padding(
@@ -538,10 +558,10 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
         ),
       );
     }
-    if (shownCats.isEmpty && unassigned.isEmpty) {
+    if (shownCats.isEmpty && unassigned.isEmpty && shownBuiltIns.isEmpty) {
       return Center(child: Text(context.tr('noMatches')));
     }
-    if (canReorder && unassigned.isEmpty) {
+    if (canReorder && unassigned.isEmpty && shownBuiltIns.isEmpty) {
       return ReorderableListView.builder(
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
@@ -570,7 +590,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
       physics: const NeverScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(12, 4, 12, 90),
       children: [
-        if (allVisibleCats.isEmpty)
+        if (allVisibleCats.isEmpty && !hasAnyBuiltInPages)
           Card(
             key: const Key('emptyCategories'),
             margin: const EdgeInsets.only(bottom: 10),
@@ -625,6 +645,15 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
               hasFilter: hasFilter,
               isEmptyHidden: emptyCatIds.contains(c.id),
             ),
+        for (final b in shownBuiltIns)
+          _builtInCategoryTile(
+            context,
+            b,
+            pagesDef: pagesDef,
+            sectionPages: sectionPagesByCat[b.id] ?? const [],
+            hasAnyPages: allSectionPagesByCat[b.id]?.isNotEmpty ?? false,
+            hasFilter: hasFilter,
+          ),
         if (unassigned.isNotEmpty) _unassignedCard(context, entriesDef, unassigned),
       ],
     );
@@ -769,6 +798,57 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
                 ],
               ),
             ],
+          ),
+        ),
+      ]),
+    );
+  }
+
+  Widget _builtInCategoryTile(
+    BuildContext context,
+    CustomCategory b, {
+    required CollectionDef pagesDef,
+    required List<AdminDoc> sectionPages,
+    bool hasAnyPages = false,
+    bool hasFilter = false,
+  }) {
+    return Card(
+      key: ValueKey(b.id),
+      margin: const EdgeInsets.only(bottom: 10),
+      color: context.pal.surface,
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        ListTile(
+          title: Wrap(
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 6,
+            runSpacing: 4,
+            children: [
+              Text(context.pick(b.nameAr, b.nameEn),
+                  style: TextStyle(fontWeight: FontWeight.w800, color: context.pal.ink)),
+              _Tag(context.tr('builtInSectionTag'), context.pal.primary),
+            ],
+          ),
+        ),
+        const Divider(height: 1),
+        if (sectionPages.isEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
+            child: Text(
+              context.tr(hasFilter && hasAnyPages ? 'noMatches' : 'sectionEmptyItems'),
+              style: TextStyle(color: context.pal.muted, fontSize: 13),
+            ),
+          )
+        else
+          for (final p in sectionPages) _sectionPageRow(context, pagesDef, p),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 4, 12, 10),
+          child: Align(
+            alignment: AlignmentDirectional.centerEnd,
+            child: _openOnSiteButton(
+              context,
+              AdminDoc(b.id, const {}),
+              !context.isAr ? '/${b.slug}?lang=en' : '/${b.slug}',
+            ),
           ),
         ),
       ]),
@@ -1281,7 +1361,13 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     }
 
     final catDef = collectionById('categories') ?? editDef;
-    final catChoices = [for (final c in sortAdminDocs(catDef, cats)) (c.id, name(c, 'nameAr', 'nameEn'))];
+    final catChoices = [
+      if (editDef.name == 'pages')
+        for (final b in BuiltInSections.all)
+          (b.id, context.pick(b.nameAr, b.nameEn)),
+      for (final c in sortAdminDocs(catDef, cats))
+        (c.id, name(c, 'nameAr', 'nameEn')),
+    ];
     final targets = [
       for (final t in linkTargets(
         pages: [for (final p in pages) (slug: '${p.data['slug'] ?? ''}', titleAr: name(p, 'titleAr', 'titleEn'), titleEn: name(p, 'titleAr', 'titleEn'))],

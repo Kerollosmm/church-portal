@@ -300,7 +300,10 @@ image (https link + caption), button (`FilledButton`), text link, donation info 
 InstaPay / wallet with copy buttons, notes, «للعلم فقط: لا يتم أي دفع عبر الموقع»). Empty blocks are skipped. Hidden /
 unknown → `Key('pageUnavailable')`, `noindex`. Placement (`placement`, PR 3D / P1-18): `'link'` (default, reached from
 notices/buttons/links), `'nav'` (synced with `showInNav`), or `'section'` (`categoryId`, rendered as an «اعرف المزيد»
-`CustomPageCard` inside `/section/<slug>`). `DocEditor.collect()` retains `categoryId` across `'link'` and `'nav'` saves so
+`CustomPageCard` inside `/section/<slug>` — or, since Phase 4 PR2 / ADR-075, inside the linked built-in section page
+`/mass-schedule`, `/church-education`, `/church-activities`, `/clinics`, `/public-services`, `/about`, or `/contact` via
+`BuiltInSectionPages` in `PageBody` + `_PageSectionScope`, suppressing `EmptyState` via `isCategoryNonEmpty` when a
+built-in section's primary collection is empty and a visible linked custom page exists). `DocEditor.collect()` retains `categoryId` across `'link'` and `'nav'` saves so
 switching placement back retains the category, while `sectionPages` strictly checks `placement == 'section'`. Setting
 `featured` (admin hint «هتظهر في «صفحات مميزة» في الرئيسية مهما كان مكانها») places a card on `HomePage`
 (`_FeaturedPages`, key `home-featuredPages`) under section title «صفحات مميزة» before discovery blocks whenever `Sections.customPages` is on (sorted via `featuredPages`). Gated by `Sections.customPages` plus each page's

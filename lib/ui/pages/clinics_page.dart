@@ -5,6 +5,7 @@ import 'package:material_ui/material_ui.dart';
 import '../../core/l10n.dart';
 import '../../core/launch.dart';
 import '../../core/theme.dart';
+import '../../domain/custom_content.dart' show BuiltInSections, CustomPage, isCategoryNonEmpty;
 import '../../domain/features.dart';
 import '../../domain/item_detail.dart';
 import '../../domain/models.dart';
@@ -87,7 +88,17 @@ class _ClinicsPageState extends ConsumerState<ClinicsPage> {
               ),
               const SizedBox(height: 12),
               if (list.isEmpty)
-                const EmptyState(icon: Icons.medical_services_outlined)
+                if (_specialty == null &&
+                    !_todayOnly &&
+                    ref.watch(featuresProvider.select((f) => f.enabled(Sections.customPages))) &&
+                    isCategoryNonEmpty(
+                      BuiltInSections.byId(BuiltInSections.clinics)!,
+                      const [],
+                      ref.watch(customPagesProvider).value ?? const <CustomPage>[],
+                    ))
+                  const SizedBox.shrink()
+                else
+                  const EmptyState(icon: Icons.medical_services_outlined)
               else
                 ResponsiveGrid(children: [
                   for (final c in list)

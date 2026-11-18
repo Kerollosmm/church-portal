@@ -440,7 +440,12 @@ clarifying why it is omitted from visitor navigation. Admin `CollectionListScree
 alongside entries within the category card, and only shows `'sectionEmptyItems'` («مفيش عناصر في القسم ده لسه») when BOTH
 entries and section pages are empty. Creating a new category from scratch (`CollectionListScreen(categories)` -> Add FAB -> fill Arabic name -> Save) sets default values (`order: null`, `nameEn: ''`, `introAr: ''`, `introEn: ''`, `icon: 'star'`, `showInNav: true`, `visible: true`, `slug`, `updatedAt`, `updatedBy`), verified in Firestore rules emulator (`tool/rules_test`) and Flutter widget tests across both `englishEnabled: false` and `true`. Full empty vs. linked lifecycle is verified end-to-end: newly created empty categories are hidden from visitor navigation, render `EmptyState` at `/section/<slug>`, and show the «فاضي، مش ظاهر للزوار» badge in admin; linking a visible section page (`placement == 'section'`) immediately exposes the category in visitor menus, renders `CustomPageCard` with `CardCover`, and removes the admin badge; unlinking or hiding the page reverts back to the empty state. Editor helpers (`DocEditor`): `FieldDef.slug`
 (`invalidSlug`, and `slugTaken` against the other docs of the list), `FieldDef.dynamicOptions: 'categories'` (the
-entry's section dropdown, loaded when the editor opens; a deleted category shows «قسم محذوف أو غير محدد»),
+entry's section dropdown, loaded when the editor opens — on `pages` only, `BuiltInSections.all` is prepended before
+custom categories so custom pages can link to built-in sections `builtin_<key>` without touching `entries` or fetching
+`categories/builtin_*` docs, ADR-075; a deleted category shows «قسم محذوف أو غير محدد»). In `CollectionListScreen` (`categories`),
+built-in sections with linked `placement == 'section'` pages render a tile (`ValueKey('builtin_<key>')`) with badge
+**«قسم أساسي»** (`builtInSectionTag`), listing the linked page rows (`_sectionPageRow` with «صفحة» badge, visibility
+toggle, and tap-to-edit) and «عرض بالموقع» (`openItem-builtin_<key>`), with no delete or add-item button.
 `FieldDef.linkPicker` («اختيار صفحة…» on alert / entry / block links: custom pages, custom categories, built-in
 routes; hidden ones tagged), page `blocks` as an `objectList` with `encodedRows` (one string per row) and
 `showWhen` (only the fields of the row's block type). `validateDocument` rejects an image block without an https
