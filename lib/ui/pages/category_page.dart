@@ -135,7 +135,14 @@ class BuiltInSectionPages extends ConsumerWidget {
     if (!ref.watch(featuresProvider.select((f) => f.enabled(Sections.customPages)))) {
       return const SizedBox.shrink();
     }
-    final pages = ref.watch(customPagesProvider).value;
+    final pagesAsync = ref.watch(customPagesProvider);
+    if (pagesAsync.hasError && !pagesAsync.hasValue) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 16),
+        child: ErrorState(onRetry: () => ref.invalidate(customPagesProvider)),
+      );
+    }
+    final pages = pagesAsync.value;
     if (pages == null) return const SizedBox.shrink();
     final list = sectionPages(sectionId, pages);
     if (list.isEmpty) return const SizedBox.shrink();

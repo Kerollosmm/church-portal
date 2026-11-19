@@ -336,12 +336,14 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
                                     (_filter == ListFilter.all || _filter == ListFilter.visible) &&
                                     (b.nameAr.toLowerCase().contains(q) ||
                                         b.nameEn.toLowerCase().contains(q) ||
-                                        b.id.toLowerCase().contains(q)))))
+                                        b.id.toLowerCase().contains(q) ||
+                                        b.slug.toLowerCase().contains(q)))))
                           b,
                     ];
-                    final hasAnyBuiltInPages = BuiltInSections.all.any(
-                      (b) => allSectionPagesByCat[b.id]?.isNotEmpty ?? false,
-                    );
+                    final builtInWithPages = BuiltInSections.all
+                        .where((b) => allSectionPagesByCat[b.id]?.isNotEmpty ?? false)
+                        .length;
+                    final hasAnyBuiltInPages = builtInWithPages > 0;
                     final canReorder =
                         def.orderable && !hasFilter && shownCats.length > 1;
                     return CustomScrollView(slivers: [
@@ -354,8 +356,13 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
                           ),
                         ),
                       SliverToBoxAdapter(
-                        child: _toolbar(context, visible.length, shownCats.length, canReorder,
-                            showUnconfirmed: entriesDef.hasSample),
+                        child: _toolbar(
+                          context,
+                          visible.length + builtInWithPages,
+                          shownCats.length + shownBuiltIns.length,
+                          canReorder,
+                          showUnconfirmed: entriesDef.hasSample,
+                        ),
                       ),
                       SliverToBoxAdapter(
                         child: _categoriesBody(
@@ -1347,7 +1354,9 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     final needsProgram = editDef.fields.any((f) => f.dynamicOptions == 'venues' || f.dynamicOptions == 'audiences');
     final needsLinks = usesLinks(editDef.fields);
     final cats = needsCats || needsLinks ? await _read('categories') : const <AdminDoc>[];
-    final pages = needsLinks ? await _read('pages') : const <AdminDoc>[];
+    final pages = needsLinks || (editDef.name == 'pages' && editDef.name != def.name)
+        ? await _read('pages')
+        : const <AdminDoc>[];
     final seasonDocs = editDef.name == 'liturgies' ? await _read('seasons') : const <AdminDoc>[];
     // Venues / audiences (ADR-041): the admin lists in settings/features
     // (defaults when none), read once when the editor opens.
@@ -1380,7 +1389,16 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
             for (final x in _lastDocs)
               if (x.id != d?.id && x.data['slug'] is String) x.data['slug'] as String,
           }
-        : const <String>{};
+        : editDef.name == 'pages'
+            ? {
+                for (final x in pages)
+                  if (x.id != d?.id &&
+                      !isSoftDeleted(x.data) &&
+                      !_pendingDelete.isPending(x.id) &&
+                      x.data['slug'] is String)
+                    x.data['slug'] as String,
+              }
+            : const <String>{};
     final seasons = [
       for (final s in seasonDocs)
         if (!isSoftDeleted(s.data)) Season.fromMap(s.id, s.data),

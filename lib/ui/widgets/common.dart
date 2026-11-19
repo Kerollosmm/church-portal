@@ -9,7 +9,7 @@ import 'package:material_ui/material_ui.dart';
 import '../../core/l10n.dart';
 import '../../core/launch.dart';
 import '../../core/theme.dart';
-import '../../domain/custom_content.dart' show BuiltInSections, CustomPage, isCategoryNonEmpty;
+import '../../domain/custom_content.dart' show BuiltInSections, isCategoryNonEmpty;
 import '../../domain/features.dart';
 import '../../domain/models.dart';
 import '../../domain/rules.dart';
@@ -437,8 +437,10 @@ class AsyncSection<T> extends ConsumerWidget {
   final ProviderOrFamily? retry;
   final Widget Function(BuildContext context, T data) builder;
   final Widget? loading;
+  final Widget? header;
   final bool Function(T data)? isEmpty;
   final String? emptyMessage;
+  final bool suppressEmptyWithLinkedPages;
 
   const AsyncSection({
     super.key,
@@ -446,8 +448,10 @@ class AsyncSection<T> extends ConsumerWidget {
     required this.builder,
     this.retry,
     this.loading,
+    this.header,
     this.isEmpty,
     this.emptyMessage,
+    this.suppressEmptyWithLinkedPages = true,
   });
 
   @override
@@ -457,15 +461,33 @@ class AsyncSection<T> extends ConsumerWidget {
       skipLoadingOnReload: true,
       data: (d) {
         if (isEmpty?.call(d) ?? false) {
-          final sid = _PageSectionScope.of(context);
-          if (sid != null && ref.watch(featuresProvider.select((f) => f.enabled(Sections.customPages)))) {
-            final cat = BuiltInSections.byId(sid);
-            final pages = ref.watch(customPagesProvider).value ?? const <CustomPage>[];
-            if (cat != null && isCategoryNonEmpty(cat, const [], pages)) {
-              return const SizedBox.shrink();
+          if (suppressEmptyWithLinkedPages) {
+            final sid = _PageSectionScope.of(context);
+            if (sid != null && ref.watch(featuresProvider.select((f) => f.enabled(Sections.customPages)))) {
+              final pagesAsync = ref.watch(customPagesProvider);
+              final pages = pagesAsync.value;
+              if (pages == null) {
+                if (pagesAsync.isLoading) return loading ?? const SkeletonList();
+              } else {
+                final cat = BuiltInSections.byId(sid);
+                if (cat != null && isCategoryNonEmpty(cat, const [], pages)) {
+                  return const SizedBox.shrink();
+                }
+              }
             }
           }
-          return EmptyState(message: emptyMessage);
+          return header == null
+              ? EmptyState(message: emptyMessage)
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [header!, EmptyState(message: emptyMessage)],
+                );
+        }
+        if (header != null) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [header!, builder(context, d)],
+          );
         }
         return builder(context, d);
       },

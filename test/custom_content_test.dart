@@ -2420,26 +2420,389 @@ void main() {
       expect(editorState.collect()['categoryId'], BuiltInSections.activities);
       expect(tester.takeException(), isNull);
     });
+
+    testWidgets('Editing linked page from CollectionListScreen(categories) enforces takenSlugs against existing pages',
+        (tester) async {
+      tester.view.physicalSize = const Size(900, 3000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final b = _Backend(lists: {
+        'categories': const [],
+        'entries': const [],
+        'pages': [
+          AdminDoc('p-act-1', {
+            'slug': 'choir-guide',
+            'titleAr': 'دليل الكورال',
+            'titleEn': 'Choir guide',
+            'placement': 'section',
+            'categoryId': BuiltInSections.activities,
+            'visible': true,
+          }),
+          AdminDoc('p-other', {
+            'slug': 'existing-slug',
+            'titleAr': 'صفحة موجودة',
+            'titleEn': 'Existing page',
+            'placement': 'link',
+            'visible': true,
+          }),
+        ],
+      });
+
+      await tester.pumpWidget(_admin(CollectionListScreen(repo: b, def: collectionById('categories')!)));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('sectionPageRow-p-act-1')));
+      await tester.pumpAndSettle();
+      expect(find.byType(DocEditor), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('group-advanced')));
+      await tester.pumpAndSettle();
+
+      // Duplicate slug from another page is rejected.
+      await tester.enterText(find.byKey(const ValueKey('field-slug')), 'existing-slug');
+      await tester.pump();
+      expect(find.text('This address is already used'), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('editor-save')));
+      await tester.pumpAndSettle();
+      expect(b.saves, isEmpty);
+
+      // Unique slug saves cleanly.
+      await tester.enterText(find.byKey(const ValueKey('field-slug')), 'unique-choir-slug');
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('editor-save')));
+      await tester.pumpAndSettle();
+      expect(b.saves, hasLength(1));
+      expect(b.saves.single.$1, 'pages');
+      expect(b.saves.single.$2, 'p-act-1');
+      expect(b.saves.single.$3['slug'], 'unique-choir-slug');
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('CollectionListScreen(categories) counts built-in tiles, searches by slug, and fits 320px English',
+        (tester) async {
+      tester.view.physicalSize = const Size(320, 3000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final b = _Backend(lists: {
+        'categories': const [],
+        'entries': const [],
+        'pages': [
+          AdminDoc('p-act-1', {
+            'slug': 'choir-guide',
+            'titleAr': 'دليل الكورال',
+            'titleEn': 'Choir guide',
+            'placement': 'section',
+            'categoryId': BuiltInSections.activities,
+            'visible': true,
+          }),
+          AdminDoc('p-cli-1', {
+            'slug': 'clinics-guide',
+            'titleAr': 'دليل العيادات',
+            'titleEn': 'Clinics guide',
+            'placement': 'section',
+            'categoryId': BuiltInSections.clinics,
+            'visible': true,
+          }),
+        ],
+      });
+
+      await tester.pumpWidget(_admin(CollectionListScreen(repo: b, def: collectionById('categories')!)));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('2 of 2'), findsOneWidget);
+      expect(find.byKey(const ValueKey(BuiltInSections.activities)), findsOneWidget);
+      expect(find.byKey(const ValueKey(BuiltInSections.clinics)), findsOneWidget);
+      expect(tester.takeException(), isNull);
+
+      // Search by built-in section slug matches only that built-in tile.
+      await tester.enterText(find.byKey(const Key('admin-search')), 'church-activities');
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey(BuiltInSections.activities)), findsOneWidget);
+      expect(find.byKey(const ValueKey(BuiltInSections.clinics)), findsNothing);
+      expect(find.textContaining('1 of 2'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('ClinicsPage with initialSpecialty does not suppress EmptyState when filtered or empty',
+        (tester) async {
+      const linkedClinicPage = CustomPage(
+        id: 'p-cli',
+        slug: 'clinics-guide',
+        titleAr: 'دليل العيادات',
+        titleEn: 'Clinics guide',
+        placement: PagePlacements.section,
+        categoryId: BuiltInSections.clinics,
+        visible: true,
+      );
+
+      // 1. 0 clinics + initialSpecialty='dental' + linked page => still shows EmptyState + CustomPageCard.
+      await _pump(
+        tester,
+        '/clinics?specialty=dental',
+        size: const Size(420, 3000),
+        repo: _BuiltInSectionRepo(
+          pagesList: const [linkedClinicPage],
+          clinicsList: const [],
+          sections: const {Sections.clinics: true},
+        ),
+      );
+      expect(find.byType(EmptyState), findsOneWidget);
+      expect(find.byKey(const Key('sectionPage-clinics-guide')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+
+      // 2. Non-dental clinic + initialSpecialty='dental' + linked page => shows EmptyState + CustomPageCard;
+      // clearing filter shows the clinic and removes EmptyState.
+      await _pump(
+        tester,
+        '/clinics?specialty=dental',
+        size: const Size(420, 3000),
+        repo: _BuiltInSectionRepo(
+          pagesList: const [linkedClinicPage],
+          clinicsList: const [
+            Clinic(
+              id: 'c-eye',
+              specialty: 'eye',
+              specialtyAr: 'رمد',
+              specialtyEn: 'Ophthalmology',
+              doctorName: 'د. مينا',
+              active: true,
+              visible: true,
+            ),
+          ],
+          sections: const {Sections.clinics: true},
+        ),
+      );
+      expect(find.byType(EmptyState), findsOneWidget);
+      expect(find.byKey(const Key('sectionPage-clinics-guide')), findsOneWidget);
+
+      await tester.tap(find.text('All specialties'));
+      await tester.pumpAndSettle();
+      expect(find.byType(EmptyState), findsNothing);
+      expect(find.text('د. مينا'), findsOneWidget);
+      expect(find.byKey(const Key('sectionPage-clinics-guide')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('BuiltInSectionPages shows ErrorState with retry, and AsyncSection avoids EmptyState flash while loading pages',
+        (tester) async {
+      // 1. While customPagesProvider is still loading on an empty built-in section, AsyncSection shows skeleton, not EmptyState.
+      final loadingCtrl = StreamController<List<CustomPage>>.broadcast();
+      addTearDown(loadingCtrl.close);
+      await _pump(
+        tester,
+        '/church-activities',
+        size: const Size(420, 3000),
+        settle: false,
+        repo: _BuiltInSectionRepo(
+          pagesStream: loadingCtrl.stream,
+          activitiesList: const [],
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+      expect(find.byType(SkeletonList), findsOneWidget);
+      expect(find.byType(EmptyState), findsNothing);
+
+      loadingCtrl.add(const [
+        CustomPage(
+          id: 'p-act',
+          slug: 'act-guide',
+          titleAr: 'دليل الأنشطة',
+          titleEn: 'Activities guide',
+          placement: PagePlacements.section,
+          categoryId: BuiltInSections.activities,
+          visible: true,
+        ),
+      ]);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('sectionPage-act-guide')), findsOneWidget);
+      expect(find.byType(EmptyState), findsNothing);
+
+      // 2. customPagesProvider error without value renders ErrorState in BuiltInSectionPages; retry recovers.
+      var failPages = true;
+      final errorRepo = _BuiltInSectionRepo(
+        activitiesList: const [],
+        pagesProviderOverride: () => failPages
+            ? Stream<List<CustomPage>>.error(Exception('network error'))
+            : Stream.value(const [
+                CustomPage(
+                  id: 'p-act',
+                  slug: 'act-guide',
+                  titleAr: 'دليل الأنشطة',
+                  titleEn: 'Activities guide',
+                  placement: PagePlacements.section,
+                  categoryId: BuiltInSections.activities,
+                  visible: true,
+                ),
+              ]),
+      );
+      await _pump(tester, '/church-activities', size: const Size(420, 3000), repo: errorRepo);
+      expect(find.byType(ErrorState), findsOneWidget);
+
+      failPages = false;
+      await tester.tap(find.descendant(of: find.byType(ErrorState), matching: find.byIcon(Icons.refresh)));
+      await tester.pumpAndSettle();
+      expect(find.byType(ErrorState), findsNothing);
+      expect(find.byKey(const Key('sectionPage-act-guide')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('Empty AboutPage, PublicServicesPage, and MassSchedulePage suppress EmptyState and orphaned headings with linked pages',
+        (tester) async {
+      const pages = [
+        CustomPage(
+          id: 'p-about',
+          slug: 'about-guide',
+          titleAr: 'عن الكنيسة',
+          titleEn: 'About guide',
+          placement: PagePlacements.section,
+          categoryId: BuiltInSections.about,
+          visible: true,
+        ),
+        CustomPage(
+          id: 'p-services',
+          slug: 'services-guide',
+          titleAr: 'دليل الخدمات',
+          titleEn: 'Services guide',
+          placement: PagePlacements.section,
+          categoryId: BuiltInSections.services,
+          visible: true,
+        ),
+        CustomPage(
+          id: 'p-schedule',
+          slug: 'schedule-guide',
+          titleAr: 'دليل القداسات',
+          titleEn: 'Schedule guide',
+          placement: PagePlacements.section,
+          categoryId: BuiltInSections.schedule,
+          visible: true,
+        ),
+      ];
+
+      // 1. Empty AboutPage: no EmptyState and no orphaned sub-section headings.
+      await _pump(
+        tester,
+        '/about',
+        size: const Size(420, 3000),
+        repo: _BuiltInSectionRepo(
+          pagesList: pages,
+          milestonesList: const [],
+          saintsList: const [],
+          priestsList: const [],
+        ),
+      );
+      expect(find.byKey(const Key('sectionPage-about-guide')), findsOneWidget);
+      expect(find.byType(EmptyState), findsNothing);
+      expect(find.byKey(const ValueKey('about-milestones')), findsNothing);
+      expect(find.text('Patron saints'), findsNothing);
+      expect(find.text('Our priests'), findsNothing);
+
+      // 2. Partially populated AboutPage: serving priest appears without orphaned milestones/saints headings.
+      await _pump(
+        tester,
+        '/about',
+        size: const Size(420, 3000),
+        repo: _BuiltInSectionRepo(
+          pagesList: pages,
+          milestonesList: const [],
+          saintsList: const [],
+          priestsList: const [
+            Priest(id: 'pr1', name: 'أبونا يوحنا', nameEn: 'Fr. John'),
+          ],
+        ),
+      );
+      expect(find.byKey(const ValueKey('aboutCard-pr1')), findsOneWidget);
+      expect(find.text('Our priests'), findsOneWidget);
+      expect(find.byKey(const Key('sectionPage-about-guide')), findsOneWidget);
+      expect(find.byType(EmptyState), findsNothing);
+      expect(find.byKey(const ValueKey('about-milestones')), findsNothing);
+      expect(find.text('Patron saints'), findsNothing);
+
+      // 3. Empty PublicServicesPage: no orphaned facilities heading and no EmptyState.
+      await _pump(
+        tester,
+        '/public-services',
+        size: const Size(420, 3000),
+        repo: _BuiltInSectionRepo(
+          pagesList: pages,
+          facilitiesList: const [],
+          sections: const {Sections.clinics: true},
+        ),
+      );
+      expect(find.byKey(const Key('sectionPage-services-guide')), findsOneWidget);
+      expect(find.byType(EmptyState), findsNothing);
+      expect(find.text('Facilities & services'), findsNothing);
+
+      // 4. Empty MassSchedulePage: no EmptyState and no empty NextMassCard/schedule headings.
+      await _pump(
+        tester,
+        '/mass-schedule',
+        size: const Size(420, 3000),
+        repo: _BuiltInSectionRepo(
+          pagesList: pages,
+          liturgiesList: const [],
+          seasonsList: const [],
+        ),
+      );
+      expect(find.byKey(const Key('sectionPage-schedule-guide')), findsOneWidget);
+      expect(find.byType(EmptyState), findsNothing);
+      expect(find.text('Regular schedule'), findsNothing);
+      expect(find.byType(SwitchListTile), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
   });
 }
 
 class _BuiltInSectionRepo extends _Repo {
   final List<CustomPage> pagesList;
+  final Stream<List<CustomPage>>? pagesStream;
+  final Stream<List<CustomPage>> Function()? pagesProviderOverride;
   final List<Activity>? activitiesList;
   final List<Clinic>? clinicsList;
+  final List<Facility>? facilitiesList;
+  final List<Milestone>? milestonesList;
+  final List<Saint>? saintsList;
+  final List<Priest>? priestsList;
+  final List<Liturgy>? liturgiesList;
+  final List<Season>? seasonsList;
   _BuiltInSectionRepo({
-    required this.pagesList,
+    this.pagesList = const [],
+    this.pagesStream,
+    this.pagesProviderOverride,
     this.activitiesList,
     this.clinicsList,
+    this.facilitiesList,
+    this.milestonesList,
+    this.saintsList,
+    this.priestsList,
+    this.liturgiesList,
+    this.seasonsList,
     Map<String, bool> sections = const {},
   }) : super(sections);
 
   @override
-  Stream<List<CustomPage>> pages() => Stream.value(pagesList);
+  Stream<List<CustomPage>> pages() =>
+      pagesProviderOverride?.call() ?? pagesStream ?? Stream.value(pagesList);
   @override
   Stream<List<Activity>> activities() => activitiesList == null ? super.activities() : Stream.value(activitiesList!);
   @override
   Stream<List<Clinic>> clinics() => clinicsList == null ? super.clinics() : Stream.value(clinicsList!);
+  @override
+  Stream<List<Facility>> facilities() => facilitiesList == null ? super.facilities() : Stream.value(facilitiesList!);
+  @override
+  Stream<List<Milestone>> milestones() => milestonesList == null ? super.milestones() : Stream.value(milestonesList!);
+  @override
+  Stream<List<Saint>> saints() => saintsList == null ? super.saints() : Stream.value(saintsList!);
+  @override
+  Stream<List<Priest>> priests() => priestsList == null ? super.priests() : Stream.value(priestsList!);
+  @override
+  Stream<List<Liturgy>> liturgies() => liturgiesList == null ? super.liturgies() : Stream.value(liturgiesList!);
+  @override
+  Stream<List<Season>> seasons() => seasonsList == null ? super.seasons() : Stream.value(seasonsList!);
 }
 
 class _StreamEntriesBackend extends _Backend {

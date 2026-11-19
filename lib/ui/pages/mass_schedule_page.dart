@@ -3,6 +3,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../../core/l10n.dart';
 import '../../core/theme.dart';
+import '../../domain/custom_content.dart' show BuiltInSections, CustomPage, isCategoryNonEmpty;
 import '../../domain/features.dart';
 import '../../domain/image_style.dart';
 import '../../domain/cairo_time.dart';
@@ -56,6 +57,21 @@ class _MassSchedulePageState extends ConsumerState<MassSchedulePage> {
       if (activeSeasonsAt(seasonList, now).any((s) => s.replacesRegular)) _seasons = true;
     }
 
+    final loadedLits = lits.value;
+    final loadedSeasons = seasons.value;
+    final allLits = loadedLits ?? const <Liturgy>[];
+    final allSeasons = loadedSeasons ?? const <Season>[];
+    final suppressEmpty = loadedLits != null &&
+        loadedSeasons != null &&
+        loadedLits.isEmpty &&
+        loadedSeasons.isEmpty &&
+        ref.watch(featuresProvider.select((f) => f.enabled(Sections.customPages))) &&
+        isCategoryNonEmpty(
+          BuiltInSections.byId(BuiltInSections.schedule)!,
+          const [],
+          ref.watch(customPagesProvider).value ?? const <CustomPage>[],
+        );
+
     return PageBody(
       header: CustomizablePageHeader(
           pageKey: CustomizablePages.schedule,
@@ -64,45 +80,48 @@ class _MassSchedulePageState extends ConsumerState<MassSchedulePage> {
       children: [
         const PageIntro(pageKey: CustomizablePages.schedule),
         const AlertBanner(),
-        const NextMassCard(),
-        const SizedBox(height: 16),
-        Card(
-          child: SwitchListTile(
-            value: _seasons,
-            onChanged: (v) => setState(() {
-              _seasons = v;
-              // The audience chips live in the seasonal view only: never
-              // leave a hidden filter on (Sentry review).
-              _audience = '';
-              // The visitor chose: never override it with the season default.
-              _seasonDefaultApplied = true;
-            }),
-            // ON / OFF clearly apart on every theme, Holy Week's charcoal
-            // included (ADR-049): palette roles only (ADR-043).
-            activeThumbColor: context.pal.switchOnThumb,
-            activeTrackColor: context.pal.switchOnTrack,
-            inactiveThumbColor: context.pal.switchOffThumb,
-            inactiveTrackColor: context.pal.switchOffTrack,
-            trackOutlineColor: WidgetStateProperty.resolveWith(
-                (states) => states.contains(WidgetState.selected) ? context.pal.switchOnTrack : context.pal.switchOffThumb),
-            secondary: Icon(Icons.auto_awesome_rounded, color: context.pal.primary),
-            title: Text(context.tr('holySeasons'), style: const TextStyle(fontWeight: FontWeight.w800)),
-            subtitle: Text(context.tr('holySeasonsHint')),
+        if (!suppressEmpty) ...[
+          const NextMassCard(),
+          const SizedBox(height: 16),
+          Card(
+            child: SwitchListTile(
+              value: _seasons,
+              onChanged: (v) => setState(() {
+                _seasons = v;
+                // The audience chips live in the seasonal view only: never
+                // leave a hidden filter on (Sentry review).
+                _audience = '';
+                // The visitor chose: never override it with the season default.
+                _seasonDefaultApplied = true;
+              }),
+              // ON / OFF clearly apart on every theme, Holy Week's charcoal
+              // included (ADR-049): palette roles only (ADR-043).
+              activeThumbColor: context.pal.switchOnThumb,
+              activeTrackColor: context.pal.switchOnTrack,
+              inactiveThumbColor: context.pal.switchOffThumb,
+              inactiveTrackColor: context.pal.switchOffTrack,
+              trackOutlineColor: WidgetStateProperty.resolveWith(
+                  (states) => states.contains(WidgetState.selected) ? context.pal.switchOnTrack : context.pal.switchOffThumb),
+              secondary: Icon(Icons.auto_awesome_rounded, color: context.pal.primary),
+              title: Text(context.tr('holySeasons'), style: const TextStyle(fontWeight: FontWeight.w800)),
+              subtitle: Text(context.tr('holySeasonsHint')),
+            ),
           ),
-        ),
+        ],
         if (lits.isLoading || (_seasons && seasons.isLoading))
           const Padding(padding: EdgeInsets.only(top: 16), child: SkeletonList(count: 4))
         else if (lits.hasError && !lits.hasValue)
           ErrorState(onRetry: () => ref.invalidate(liturgiesProvider))
         else if (_seasons)
-          ..._seasonal(context, seasons.value ?? const [], lits.value ?? const [], now)
+          ..._seasonal(context, allSeasons, allLits, now, suppressEmpty: suppressEmpty)
         else
-          ..._weekly(context, lits.value ?? const [], seasons.value ?? const [], now),
+          ..._weekly(context, allLits, allSeasons, now, suppressEmpty: suppressEmpty),
       ],
     );
   }
 
-  List<Widget> _weekly(BuildContext context, List<Liturgy> all, List<Season> seasons, DateTime now) {
+  List<Widget> _weekly(BuildContext context, List<Liturgy> all, List<Season> seasons, DateTime now,
+      {bool suppressEmpty = false}) {
     final list = regularLiturgiesForTab(all, _tab);
     final vespers = vespersAndPraise(all, now: now);
     final special = upcomingSpecialLiturgies(all, now);
@@ -110,6 +129,15 @@ class _MassSchedulePageState extends ConsumerState<MassSchedulePage> {
     // view stays open, so their services (and feast liturgy) are listed here.
     final revivals =
         seasonalSchedule(seasons.where((s) => !s.replacesRegular && isSeasonActiveAt(s, now)), all, context: seasons);
+    if (all.isEmpty &&
+        seasons.isEmpty &&
+        suppressEmpty &&
+        revivals.isEmpty &&
+        special.isEmpty &&
+        list.isEmpty &&
+        vespers.isEmpty) {
+      return const [];
+    }
     final showWeekday = _tab == ScheduleTab.other;
     // Services at the same time in another hall, across every list shown
     // (ADR-041; Codex / CodeRabbit review on PR #32).
@@ -210,9 +238,11 @@ class _MassSchedulePageState extends ConsumerState<MassSchedulePage> {
     ];
   }
 
-  List<Widget> _seasonal(BuildContext context, List<Season> seasons, List<Liturgy> all, DateTime now) {
+  List<Widget> _seasonal(BuildContext context, List<Season> seasons, List<Liturgy> all, DateTime now,
+      {bool suppressEmpty = false}) {
     // A season that ended before today is no longer listed (ADR-054).
     final grouped = seasonalSchedule(seasons, all, now: now);
+    if (all.isEmpty && seasons.isEmpty && suppressEmpty && grouped.isEmpty) return const [];
     final opts = ref.watch(featuresProvider.select((f) => f.programOptions));
     final allSeasonal = grouped.values.expand((l) => l).toList();
     // One map for every season shown: services of two seasons can overlap.
