@@ -454,6 +454,23 @@ class AsyncSection<T> extends ConsumerWidget {
     this.suppressEmptyWithLinkedPages = true,
   });
 
+  Widget _withHeader(Widget child) => header == null
+      ? child
+      : Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [header!, child]);
+
+  bool _hasOrLoadingLinkedPages(BuildContext context, WidgetRef ref) {
+    if (!suppressEmptyWithLinkedPages) return false;
+    final sid = _PageSectionScope.of(context);
+    if (sid == null || !ref.watch(featuresProvider.select((f) => f.enabled(Sections.customPages)))) {
+      return false;
+    }
+    final pagesAsync = ref.watch(customPagesProvider);
+    final pages = pagesAsync.value;
+    if (pages == null) return pagesAsync.isLoading;
+    final cat = BuiltInSections.byId(sid);
+    return cat != null && isCategoryNonEmpty(cat, const [], pages);
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final v = ref.watch(provider);
@@ -461,38 +478,20 @@ class AsyncSection<T> extends ConsumerWidget {
       skipLoadingOnReload: true,
       data: (d) {
         if (isEmpty?.call(d) ?? false) {
-          if (suppressEmptyWithLinkedPages) {
-            final sid = _PageSectionScope.of(context);
-            if (sid != null && ref.watch(featuresProvider.select((f) => f.enabled(Sections.customPages)))) {
-              final pagesAsync = ref.watch(customPagesProvider);
-              final pages = pagesAsync.value;
-              if (pages == null) {
-                if (pagesAsync.isLoading) return loading ?? const SkeletonList();
-              } else {
-                final cat = BuiltInSections.byId(sid);
-                if (cat != null && isCategoryNonEmpty(cat, const [], pages)) {
-                  return const SizedBox.shrink();
-                }
-              }
-            }
+          if (_hasOrLoadingLinkedPages(context, ref)) {
+            return ref.watch(customPagesProvider).value == null
+                ? (loading ?? const SkeletonList())
+                : const SizedBox.shrink();
           }
-          return header == null
-              ? EmptyState(message: emptyMessage)
-              : Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [header!, EmptyState(message: emptyMessage)],
-                );
+          return _withHeader(EmptyState(message: emptyMessage));
         }
-        if (header != null) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [header!, builder(context, d)],
-          );
-        }
-        return builder(context, d);
+        return _withHeader(builder(context, d));
       },
-      loading: () => loading ?? const SkeletonList(),
-      error: (e, _) => ErrorState(onRetry: retry == null ? null : () => ref.invalidate(retry!)),
+      loading: () {
+        final skeleton = loading ?? const SkeletonList();
+        return header != null && !_hasOrLoadingLinkedPages(context, ref) ? _withHeader(skeleton) : skeleton;
+      },
+      error: (e, _) => _withHeader(ErrorState(onRetry: retry == null ? null : () => ref.invalidate(retry!))),
     );
   }
 }

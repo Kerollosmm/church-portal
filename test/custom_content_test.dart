@@ -14,7 +14,7 @@ import 'package:church_portal/data/seed_data.dart';
 import 'package:church_portal/domain/cairo_time.dart';
 import 'package:church_portal/domain/contact_categories.dart';
 import 'package:church_portal/domain/custom_content.dart';
-import 'package:church_portal/domain/features.dart' show FeatureSettings, Sections;
+import 'package:church_portal/domain/features.dart' show CustomizablePages, FeatureSettings, Sections;
 import 'package:church_portal/domain/media.dart';
 import 'package:church_portal/domain/models.dart';
 import 'package:church_portal/domain/rules.dart';
@@ -2894,8 +2894,122 @@ void main() {
       expect(find.byType(EmptyState), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
+
+    testWidgets(
+        'AsyncSection with SectionTitle preserves header on error and unlinked loading, suppresses on linked loading',
+        (tester) async {
+      tester.view.physicalSize = const Size(420, 3000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      const linkedAboutPage = CustomPage(
+        id: 'p-about',
+        slug: 'about-guide',
+        titleAr: 'عن الكنيسة',
+        titleEn: 'About guide',
+        placement: PagePlacements.section,
+        categoryId: BuiltInSections.about,
+        visible: true,
+      );
+
+      Widget harness(
+        String id, {
+        required Stream<List<String>> itemsStream,
+        required _BuiltInSectionRepo repo,
+        bool scoped = true,
+      }) =>
+          ProviderScope(
+            key: ValueKey(id),
+            overrides: [
+              repositoryProvider.overrideWithValue(repo),
+              localeProvider.overrideWith(_English.new),
+              _asyncSectionTestProvider.overrideWith((_) => itemsStream),
+            ],
+            child: MaterialApp(
+              locale: const Locale('en'),
+              supportedLocales: const [Locale('ar'), Locale('en')],
+              localizationsDelegates: GlobalMaterialLocalizations.delegates,
+              home: Scaffold(
+                body: PageBody(
+                  header: scoped
+                      ? const CustomizablePageHeader(pageKey: CustomizablePages.about, title: 'About')
+                      : const PageHeader(title: 'Plain'),
+                  children: [
+                    AsyncSection<List<String>>(
+                      provider: _asyncSectionTestProvider,
+                      retry: _asyncSectionTestProvider,
+                      header: const SectionTitle('Test Heading', key: Key('async-header')),
+                      isEmpty: (d) => d.isEmpty,
+                      builder: (_, items) => Column(children: [for (final s in items) Text(s)]),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+
+      // (a1) Provider error without linked pages preserves header + ErrorState.
+      await tester.pumpWidget(harness(
+        'err-unlinked',
+        itemsStream: Stream<List<String>>.error(Exception('boom')),
+        repo: _BuiltInSectionRepo(pagesList: const []),
+        scoped: false,
+      ));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('async-header')), findsOneWidget);
+      expect(find.byType(ErrorState), findsOneWidget);
+
+      // (a2) Provider error with linked pages STILL preserves header + ErrorState.
+      await tester.pumpWidget(harness(
+        'err-linked',
+        itemsStream: Stream<List<String>>.error(Exception('boom')),
+        repo: _BuiltInSectionRepo(pagesList: const [linkedAboutPage]),
+      ));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('async-header')), findsOneWidget);
+      expect(find.byType(ErrorState), findsOneWidget);
+
+      // (b) Loading with no linked pages preserves header + SkeletonList.
+      final unlinkedCtrl = StreamController<List<String>>.broadcast();
+      addTearDown(unlinkedCtrl.close);
+      await tester.pumpWidget(harness(
+        'load-unscoped',
+        itemsStream: unlinkedCtrl.stream,
+        repo: _BuiltInSectionRepo(pagesList: const []),
+        scoped: false,
+      ));
+      await tester.pump();
+      expect(find.byKey(const Key('async-header')), findsOneWidget);
+      expect(find.byType(SkeletonList), findsOneWidget);
+
+      await tester.pumpWidget(harness(
+        'load-scoped-empty-pages',
+        itemsStream: unlinkedCtrl.stream,
+        repo: _BuiltInSectionRepo(pagesList: const []),
+      ));
+      await tester.pump();
+      await tester.pump();
+      expect(find.byKey(const Key('async-header')), findsOneWidget);
+      expect(find.byType(SkeletonList), findsOneWidget);
+
+      // (c) Loading with a linked custom page suppresses header so empty sub-section never flashes a heading.
+      final linkedCtrl = StreamController<List<String>>.broadcast();
+      addTearDown(linkedCtrl.close);
+      await tester.pumpWidget(harness(
+        'load-linked',
+        itemsStream: linkedCtrl.stream,
+        repo: _BuiltInSectionRepo(pagesList: const [linkedAboutPage]),
+      ));
+      await tester.pump();
+      await tester.pump();
+      expect(find.byKey(const Key('async-header')), findsNothing);
+      expect(find.byType(SkeletonList), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
   });
 }
+
+final _asyncSectionTestProvider = StreamProvider<List<String>>((_) => const Stream.empty());
 
 class _BuiltInSectionRepo extends _Repo {
   final List<CustomPage> pagesList;
