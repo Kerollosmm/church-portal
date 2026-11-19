@@ -10,7 +10,7 @@ import '../../data/admin_repository.dart';
 import '../../data/image_processing.dart';
 import '../../data/media_repository.dart';
 import '../../domain/cairo_time.dart';
-import '../../domain/custom_content.dart' show BlockTypes, PagePlacements;
+import '../../domain/custom_content.dart' show BlockTypes, CustomPage, PagePlacements;
 import '../../domain/media.dart';
 import '../../domain/models.dart';
 import '../../domain/reminders.dart' show leadLabel;
@@ -22,6 +22,7 @@ import '../widgets/item_image.dart';
 import 'admin_schema.dart';
 import 'admin_strings.dart';
 import 'admin_validators.dart';
+import 'page_preview.dart';
 import 'screen_header.dart';
 import 'state_switch.dart';
 import 'unsaved_bar.dart';
@@ -2390,15 +2391,46 @@ class DocEditorState extends State<DocEditor> {
     );
   }
 
+  bool get _canPreviewPage => widget.def?.name == 'pages' && widget.popOnSave;
+
+  void _openPagePreview() {
+    final collected = collect();
+    final page = CustomPage.fromMap(widget.docId ?? 'preview', collected);
+    final pendingHero = _pending['image'];
+    final pendingAlt = _text['image']?.text.trim() ?? '';
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        fullscreenDialog: true,
+        builder: (_) => PagePreviewScreen(
+          page: page,
+          pendingHeroBytes: pendingHero?.bytes,
+          pendingHeroAlt: pendingAlt,
+          media: widget.media,
+          englishEnabled: widget.englishEnabled,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     registerAdminStrings();
     final embedded = !widget.popOnSave;
+    final narrowTopBar = MediaQuery.sizeOf(context).width < 480;
     final advancedFields = [
       for (final f in widget.fields)
         if (f.group == FieldGroup.basic && f.advanced && _isFieldShown(f)) f,
     ];
     final summaryErrors = _showErrorSummary ? _collectErrors() : const <_FieldErrorEntry>[];
+    final saveButton = FilledButton.icon(
+      key: const Key('editor-save'),
+      onPressed: _saving ? null : save,
+      icon: _saving
+          ? SizedBox.square(
+              dimension: 18, child: CircularProgressIndicator(strokeWidth: 2, color: context.pal.onBar))
+          : const Icon(Icons.save),
+      label: Text(context.tr('save')),
+    );
     return UnsavedGuard(
       dirty: _dirty,
       handlePop: widget.popOnSave,
@@ -2410,6 +2442,23 @@ class DocEditorState extends State<DocEditor> {
             : AppBar(
                 title: Text(widget.title),
                 actions: [
+                  if (_canPreviewPage)
+                    narrowTopBar
+                        ? IconButton(
+                            key: const Key('editor-preview-top'),
+                            tooltip: context.tr('previewPage'),
+                            onPressed: _saving ? null : _openPagePreview,
+                            icon: Icon(Icons.visibility_outlined, color: context.pal.onPrimaryAccent),
+                          )
+                        : TextButton.icon(
+                            key: const Key('editor-preview-top'),
+                            onPressed: _saving ? null : _openPagePreview,
+                            icon: Icon(Icons.visibility_outlined, size: 18, color: context.pal.onPrimaryAccent),
+                            label: Text(
+                              context.tr('previewPage'),
+                              style: TextStyle(color: context.pal.onPrimaryAccent, fontWeight: FontWeight.w700),
+                            ),
+                          ),
                   TextButton(
                     key: const Key('editor-save-top'),
                     onPressed: _saving ? null : save,
@@ -2474,15 +2523,24 @@ class DocEditorState extends State<DocEditor> {
                         if (g != FieldGroup.basic && widget.fields.any((f) => f.group == g && _isFieldShown(f)))
                           _groupCard(g),
                       const SizedBox(height: 8),
-                      FilledButton.icon(
-                        key: const Key('editor-save'),
-                        onPressed: _saving ? null : save,
-                        icon: _saving
-                            ? SizedBox.square(
-                                dimension: 18, child: CircularProgressIndicator(strokeWidth: 2, color: context.pal.onBar))
-                            : const Icon(Icons.save),
-                        label: Text(context.tr('save')),
-                      ),
+                      if (_canPreviewPage)
+                        Wrap(
+                          spacing: 12,
+                          runSpacing: 8,
+                          alignment: WrapAlignment.end,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            OutlinedButton.icon(
+                              key: const Key('editor-preview'),
+                              onPressed: _saving ? null : _openPagePreview,
+                              icon: const Icon(Icons.visibility_outlined),
+                              label: Text(context.tr('previewPage')),
+                            ),
+                            saveButton,
+                          ],
+                        )
+                      else
+                        saveButton,
                       const SizedBox(height: 40),
                     ],
                   ),

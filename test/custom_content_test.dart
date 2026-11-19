@@ -5,11 +5,12 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-
+import 'dart:typed_data';
 
 import 'package:church_portal/core/l10n.dart';
 import 'package:church_portal/data/admin_repository.dart';
 import 'package:church_portal/data/content_repository.dart';
+import 'package:church_portal/data/media_repository.dart';
 import 'package:church_portal/data/seed_data.dart';
 import 'package:church_portal/domain/cairo_time.dart';
 import 'package:church_portal/domain/contact_categories.dart';
@@ -27,6 +28,7 @@ import 'package:church_portal/ui/admin/admin_validators.dart';
 import 'package:church_portal/ui/admin/collection_list.dart';
 import 'package:church_portal/ui/admin/contact_admin.dart';
 import 'package:church_portal/ui/admin/doc_editor.dart';
+import 'package:church_portal/ui/admin/page_preview.dart';
 import 'package:church_portal/ui/pages/category_page.dart' show CustomPageCard;
 import 'package:church_portal/ui/pages/custom_page.dart' show PageBlockView;
 import 'package:church_portal/ui/widgets/cards.dart' show NextMassCard;
@@ -3301,6 +3303,236 @@ void main() {
       await tester.pump();
       expect(tapped, ['/mass-schedule', 'https://example.com']);
     });
+
+    testWidgets(
+      'DocEditor shows Preview action only for pages, previews unsaved edits & pending hero bytes, clears pending bytes when switching to url or removing cover, blocks links safely, and preserves dirty state',
+      (tester) async {
+        registerAdminStrings();
+        tester.view.physicalSize = const Size(1200, 1800);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.reset);
+
+        final pngBytes = base64Decode(
+          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+        );
+        final media = _FakePreviewMediaRepo(loadBytes: pngBytes);
+        final catsDef = collectionById('categories')!;
+        final pagesDef = collectionById('pages')!;
+
+        await tester.pumpWidget(_admin(
+          DocEditor(
+            title: 'Cat',
+            fields: catsDef.fields,
+            def: catsDef,
+            onSave: (_) async {},
+          ),
+        ));
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('editor-preview')), findsNothing);
+        expect(find.byKey(const Key('editor-preview-top')), findsNothing);
+
+        final saves = <Map<String, dynamic>>[];
+        await tester.pumpWidget(_admin(
+          locale: const Locale('ar'),
+          DocEditor(
+            key: const ValueKey('pages-editor'),
+            title: 'تعديل — الصفحات المخصصة',
+            fields: pagesDef.fields,
+            def: pagesDef,
+            docId: 'p1',
+            data: const {
+              'titleAr': 'صفحة أصلية',
+              'titleEn': 'Original Page',
+              'slug': 'orig-page',
+              'visible': true,
+            },
+            media: media,
+            pickImage: () async => Uint8List.fromList([1, 2, 3, 4]),
+            prepareImage: (_) async => EncodedImage(pngBytes, 'image/png', 1, 1),
+            onSave: (d) async => saves.add(d),
+          ),
+        ));
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('editor-preview')), findsOneWidget);
+        expect(find.byKey(const Key('editor-preview-top')), findsOneWidget);
+
+        await tester.enterText(find.byKey(const ValueKey('field-titleAr')), 'عنوان تجريبي غير محفوظ');
+        await tester.ensureVisible(find.widgetWithText(OutlinedButton, 'إضافة صف'));
+        await tester.tap(find.widgetWithText(OutlinedButton, 'إضافة صف'));
+        await tester.pumpAndSettle();
+
+        final typeDropdown = find.ancestor(
+          of: find.text('نوع الفقرة'),
+          matching: find.byType(DropdownButtonFormField<String>),
+        );
+        await tester.ensureVisible(typeDropdown);
+        await tester.tap(typeDropdown);
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('زر').last);
+        await tester.pumpAndSettle();
+
+        await tester.enterText(find.byKey(const ValueKey('field-textAr')), 'جدول القداسات');
+        await tester.enterText(find.byKey(const ValueKey('field-url')), '/mass-schedule');
+
+        await tester.ensureVisible(find.byKey(const Key('imageUploadBtn')));
+        await tester.tap(find.byKey(const Key('imageUploadBtn')));
+        await tester.pumpAndSettle();
+
+        await tester.ensureVisible(find.byKey(const Key('editor-preview')));
+        await tester.tap(find.byKey(const Key('editor-preview')));
+        await tester.pumpAndSettle();
+
+        expect(find.byKey(const Key('preview-unsaved-banner')), findsOneWidget);
+        expect(find.text('معاينة، مش محفوظة'), findsOneWidget);
+        expect(find.text('عنوان تجريبي غير محفوظ'), findsOneWidget);
+        expect(find.byKey(const Key('pagePreviewPendingHero')), findsOneWidget);
+
+        // Toggle preview language to English, then tap the button block: SnackBar stays in admin Arabic.
+        await tester.tap(find.byKey(const Key('preview-lang-toggle')));
+        await tester.pumpAndSettle();
+        await tester.ensureVisible(find.text('جدول القداسات'));
+        await tester.tap(find.text('جدول القداسات'));
+        await tester.pumpAndSettle();
+        expect(find.text('الرابط في المعاينة معطّل: /mass-schedule'), findsOneWidget);
+        expect(find.byKey(const Key('preview-unsaved-banner')), findsOneWidget);
+
+        // Close preview -> editor retains unsaved title and dirty state with 0 writes/uploads.
+        await tester.tap(find.byType(CloseButton));
+        await tester.pumpAndSettle();
+        expect(
+          tester.widget<TextFormField>(find.byKey(const ValueKey('field-titleAr'))).controller?.text,
+          'عنوان تجريبي غير محفوظ',
+        );
+        expect(find.byKey(const ValueKey('unsaved-bar')), findsOneWidget);
+        expect(saves, isEmpty);
+        expect(media.uploads, isEmpty);
+
+        // Switch cover image via URL dialog -> pending bytes cleared, pageHero rendered.
+        await tester.ensureVisible(find.byKey(const Key('imageUrlBtn')));
+        await tester.tap(find.byKey(const Key('imageUrlBtn')));
+        await tester.pumpAndSettle();
+        await tester.enterText(find.byKey(const Key('imageUrlInput')), 'https://example.com/new.jpg');
+        await tester.tap(find.byKey(const Key('imageUrlOk')));
+        await tester.pumpAndSettle();
+
+        await tester.ensureVisible(find.byKey(const Key('editor-preview')));
+        await tester.tap(find.byKey(const Key('editor-preview')));
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('pagePreviewPendingHero')), findsNothing);
+        expect(find.byKey(const Key('pageHero')), findsOneWidget);
+
+        // Close and remove cover image -> neither pending nor saved hero rendered.
+        await tester.tap(find.byType(CloseButton));
+        await tester.pumpAndSettle();
+        await tester.ensureVisible(find.byKey(const Key('imageRemoveBtn')));
+        await tester.tap(find.byKey(const Key('imageRemoveBtn')));
+        await tester.pumpAndSettle();
+
+        await tester.ensureVisible(find.byKey(const Key('editor-preview')));
+        await tester.tap(find.byKey(const Key('editor-preview')));
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('pagePreviewPendingHero')), findsNothing);
+        expect(find.byKey(const Key('pageHero')), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'PagePreviewScreen loads saved inline mediaId hero images via MediaRepository, respects englishEnabled toggle + Directionality, hidden badge, empty note, and fits 320/400/1400 px at 200% text scale',
+      (tester) async {
+        registerAdminStrings();
+        final pngBytes = base64Decode(
+          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+        );
+        final media = _FakePreviewMediaRepo(loadBytes: pngBytes);
+        const hiddenInlinePage = CustomPage(
+          id: 'p-inline',
+          slug: 'inline-preview',
+          titleAr: 'عنوان عربي',
+          titleEn: 'English Title',
+          visible: false,
+          image: MediaImage(source: MediaSource.inline, mediaId: 'hero1', alt: 'Alt'),
+        );
+
+        await tester.pumpWidget(_admin(
+          locale: const Locale('ar'),
+          PagePreviewScreen(page: hiddenInlinePage, media: media, englishEnabled: true),
+        ));
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+        expect(media.loadedIds, contains('hero1'));
+        expect(find.byKey(const Key('pageHero')), findsOneWidget);
+        expect(find.byKey(const Key('preview-hidden-badge')), findsOneWidget);
+        expect(find.byKey(const Key('preview-empty-content')), findsOneWidget);
+        expect(find.text('معاينة، مش محفوظة'), findsOneWidget);
+        expect(Directionality.of(tester.element(find.text('عنوان عربي'))), TextDirection.rtl);
+
+        await tester.tap(find.byKey(const Key('preview-lang-toggle')));
+        await tester.pumpAndSettle();
+        expect(find.text('معاينة، مش محفوظة'), findsOneWidget);
+        expect(Directionality.of(tester.element(find.text('English Title'))), TextDirection.ltr);
+
+        // englishEnabled: false hides switcher and forces Arabic RTL even when admin locale is EN.
+        await tester.pumpWidget(_admin(
+          locale: const Locale('en'),
+          PagePreviewScreen(
+            page: const CustomPage(
+              id: 'p-ar-only',
+              slug: 'ar-only',
+              titleAr: 'عنوان عربي فقط',
+              titleEn: 'Should Not Show',
+              visible: false,
+            ),
+            englishEnabled: false,
+          ),
+        ));
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('preview-lang-toggle')), findsNothing);
+        expect(find.text('Preview — not saved'), findsOneWidget);
+        expect(find.text('عنوان عربي فقط'), findsOneWidget);
+        expect(find.text('Should Not Show'), findsNothing);
+        expect(Directionality.of(tester.element(find.text('عنوان عربي فقط'))), TextDirection.rtl);
+
+        // Responsive check across 320px @ 200% scale, 400px, and 1400px in AR and EN.
+        final pagesDef = collectionById('pages')!;
+        for (final locale in [const Locale('ar'), const Locale('en')]) {
+          for (final spec in [
+            (size: const Size(320, 800), scale: 2.0),
+            (size: const Size(400, 900), scale: 1.0),
+            (size: const Size(1400, 900), scale: 1.0),
+          ]) {
+            tester.view.physicalSize = spec.size;
+            tester.view.devicePixelRatio = 1;
+            await tester.pumpWidget(MediaQuery(
+              data: MediaQueryData(size: spec.size, textScaler: TextScaler.linear(spec.scale)),
+              child: _admin(
+                locale: locale,
+                PagePreviewScreen(page: hiddenInlinePage, media: media, englishEnabled: true),
+              ),
+            ));
+            await tester.pumpAndSettle();
+            expect(tester.takeException(), isNull, reason: 'PagePreviewScreen ${locale.languageCode} ${spec.size}');
+
+            await tester.pumpWidget(MediaQuery(
+              data: MediaQueryData(size: spec.size, textScaler: TextScaler.linear(spec.scale)),
+              child: _admin(
+                locale: locale,
+                DocEditor(
+                  title: 'Pages',
+                  fields: pagesDef.fields,
+                  def: pagesDef,
+                  docId: 'p1',
+                  data: const {'titleAr': 'عنوان', 'slug': 'slug-1', 'visible': true},
+                  onSave: (_) async {},
+                ),
+              ),
+            ));
+            await tester.pumpAndSettle();
+            expect(tester.takeException(), isNull, reason: 'DocEditor ${locale.languageCode} ${spec.size}');
+          }
+        }
+        addTearDown(tester.view.reset);
+      },
+    );
   });
 }
 
@@ -3404,5 +3636,31 @@ class _FailSubsequentPagesReadBackend extends _Backend {
     }
     return super.watch(collection);
   }
+}
+
+class _FakePreviewMediaRepo implements MediaRepository {
+  final Uint8List? loadBytes;
+  final List<String> loadedIds = [];
+  final List<EncodedImage> uploads = [];
+
+  _FakePreviewMediaRepo({this.loadBytes});
+
+  @override
+  String get source => MediaSource.inline;
+
+  @override
+  Future<Uint8List?> load(String mediaId) async {
+    loadedIds.add(mediaId);
+    return loadBytes;
+  }
+
+  @override
+  Future<MediaImage> upload(EncodedImage img, {String alt = ''}) async {
+    uploads.add(img);
+    return MediaImage(source: MediaSource.inline, mediaId: 'uploaded-${uploads.length}', alt: alt, w: img.w, h: img.h);
+  }
+
+  @override
+  Future<void> delete(String mediaId) async {}
 }
 
