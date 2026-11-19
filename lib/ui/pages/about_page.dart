@@ -3,7 +3,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../../core/l10n.dart';
 import '../../core/theme.dart';
-import '../../domain/custom_content.dart' show BuiltInSections, isCategoryNonEmpty;
+import '../../domain/custom_content.dart' show BuiltInSections;
 import '../../domain/features.dart';
 import '../../domain/item_detail.dart';
 import '../../domain/models.dart';
@@ -22,14 +22,9 @@ class AboutPage extends ConsumerWidget {
     final f = ref.watch(featuresProvider);
     final showServing = f.enabled(Sections.priests);
     final showDeparted = f.enabled(Sections.departedPriests);
-    final pagesAsync = f.enabled(Sections.customPages) ? ref.watch(customPagesProvider) : null;
-    final waitingForPages = pagesAsync != null && pagesAsync.value == null && pagesAsync.isLoading;
-    final hasLinkedPages = pagesAsync?.value != null &&
-        isCategoryNonEmpty(
-          BuiltInSections.byId(BuiltInSections.about)!,
-          const [],
-          pagesAsync!.value!,
-        );
+    final linked = linkedBuiltInState(ref, BuiltInSections.about);
+    final waitingForPages = linked.waiting;
+    final hasLinkedPages = linked.hasPages;
     return PageBody(
       header: CustomizablePageHeader(
           pageKey: CustomizablePages.about,

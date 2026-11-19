@@ -301,7 +301,16 @@ class BuiltInSections {
     return null;
   }
 
-  static bool isBuiltIn(String id) => byId(id) != null;
+  static bool isBuiltIn(String id) => switch (id) {
+        schedule || meetings || activities || clinics || services || about || contact => true,
+        _ => false,
+      };
+
+  /// True when built-in section [id] has at least one visible section page.
+  /// Avoids [all] / [byId] so public bundles tree-shake admin section metadata.
+  static bool isNonEmpty(String id, Iterable<CustomPage> pages) =>
+      isBuiltIn(id) &&
+      isCategoryNonEmpty(CustomCategory(id: id, slug: '', nameAr: '', nameEn: ''), const [], pages);
 
   /// Public route path for built-in section [id], or null if unknown.
   static String? pathFor(String id) {

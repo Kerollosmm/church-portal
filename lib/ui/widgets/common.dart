@@ -9,7 +9,7 @@ import 'package:material_ui/material_ui.dart';
 import '../../core/l10n.dart';
 import '../../core/launch.dart';
 import '../../core/theme.dart';
-import '../../domain/custom_content.dart' show BuiltInSections, isCategoryNonEmpty;
+import '../../domain/custom_content.dart' show BuiltInSections;
 import '../../domain/features.dart';
 import '../../domain/models.dart';
 import '../../domain/rules.dart';
@@ -431,6 +431,17 @@ class ErrorState extends StatelessWidget {
   );
 }
 
+/// Loading / non-empty state of custom pages linked to built-in section [sid].
+({bool waiting, bool hasPages}) linkedBuiltInState(WidgetRef ref, String? sid) {
+  if (sid == null || !ref.watch(featuresProvider.select((f) => f.enabled(Sections.customPages)))) {
+    return (waiting: false, hasPages: false);
+  }
+  final pagesAsync = ref.watch(customPagesProvider);
+  final pages = pagesAsync.value;
+  if (pages == null) return (waiting: pagesAsync.isLoading, hasPages: false);
+  return (waiting: false, hasPages: BuiltInSections.isNonEmpty(sid, pages));
+}
+
 /// Renders an AsyncValue with skeleton / error / empty states.
 class AsyncSection<T> extends ConsumerWidget {
   final ProviderListenable<AsyncValue<T>> provider;
@@ -458,18 +469,10 @@ class AsyncSection<T> extends ConsumerWidget {
       ? child
       : Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [header!, child]);
 
-  bool _hasOrLoadingLinkedPages(BuildContext context, WidgetRef ref) {
-    if (!suppressEmptyWithLinkedPages) return false;
-    final sid = _PageSectionScope.of(context);
-    if (sid == null || !ref.watch(featuresProvider.select((f) => f.enabled(Sections.customPages)))) {
-      return false;
-    }
-    final pagesAsync = ref.watch(customPagesProvider);
-    final pages = pagesAsync.value;
-    if (pages == null) return pagesAsync.isLoading;
-    final cat = BuiltInSections.byId(sid);
-    return cat != null && isCategoryNonEmpty(cat, const [], pages);
-  }
+  ({bool waiting, bool hasPages}) _linkedState(BuildContext context, WidgetRef ref) =>
+      suppressEmptyWithLinkedPages
+          ? linkedBuiltInState(ref, _PageSectionScope.of(context))
+          : (waiting: false, hasPages: false);
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -478,18 +481,17 @@ class AsyncSection<T> extends ConsumerWidget {
       skipLoadingOnReload: true,
       data: (d) {
         if (isEmpty?.call(d) ?? false) {
-          if (_hasOrLoadingLinkedPages(context, ref)) {
-            return ref.watch(customPagesProvider).value == null
-                ? (loading ?? const SkeletonList())
-                : const SizedBox.shrink();
-          }
+          final linked = _linkedState(context, ref);
+          if (linked.waiting) return loading ?? const SkeletonList();
+          if (linked.hasPages) return const SizedBox.shrink();
           return _withHeader(EmptyState(message: emptyMessage));
         }
         return _withHeader(builder(context, d));
       },
       loading: () {
         final skeleton = loading ?? const SkeletonList();
-        return header != null && !_hasOrLoadingLinkedPages(context, ref) ? _withHeader(skeleton) : skeleton;
+        final linked = _linkedState(context, ref);
+        return header != null && !linked.waiting && !linked.hasPages ? _withHeader(skeleton) : skeleton;
       },
       error: (e, _) => _withHeader(ErrorState(onRetry: retry == null ? null : () => ref.invalidate(retry!))),
     );

@@ -3,7 +3,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../../core/l10n.dart';
 import '../../core/theme.dart';
-import '../../domain/custom_content.dart' show BuiltInSections, CustomPage, isCategoryNonEmpty;
+import '../../domain/custom_content.dart' show BuiltInSections;
 import '../../domain/features.dart';
 import '../../domain/image_style.dart';
 import '../../domain/cairo_time.dart';
@@ -61,17 +61,10 @@ class _MassSchedulePageState extends ConsumerState<MassSchedulePage> {
     final loadedSeasons = seasons.value;
     final allLits = loadedLits ?? const <Liturgy>[];
     final allSeasons = loadedSeasons ?? const <Season>[];
-    final customPagesEnabled = ref.watch(featuresProvider.select((f) => f.enabled(Sections.customPages)));
-    final pagesAsync = customPagesEnabled ? ref.watch(customPagesProvider) : null;
     final primaryEmpty = loadedLits != null && loadedSeasons != null && loadedLits.isEmpty && loadedSeasons.isEmpty;
-    final waitingForPages = primaryEmpty && pagesAsync != null && pagesAsync.value == null && pagesAsync.isLoading;
-    final suppressEmpty = primaryEmpty &&
-        customPagesEnabled &&
-        isCategoryNonEmpty(
-          BuiltInSections.byId(BuiltInSections.schedule)!,
-          const [],
-          pagesAsync?.value ?? const <CustomPage>[],
-        );
+    final linked = linkedBuiltInState(ref, BuiltInSections.schedule);
+    final waitingForPages = primaryEmpty && linked.waiting;
+    final suppressEmpty = primaryEmpty && linked.hasPages;
 
     return PageBody(
       header: CustomizablePageHeader(
@@ -113,16 +106,15 @@ class _MassSchedulePageState extends ConsumerState<MassSchedulePage> {
           const Padding(padding: EdgeInsets.only(top: 16), child: SkeletonList(count: 4))
         else if (lits.hasError && !lits.hasValue)
           ErrorState(onRetry: () => ref.invalidate(liturgiesProvider))
-        else if (_seasons)
-          ..._seasonal(context, allSeasons, allLits, now, suppressEmpty: suppressEmpty)
-        else
-          ..._weekly(context, allLits, allSeasons, now, suppressEmpty: suppressEmpty),
+        else if (!suppressEmpty && _seasons)
+          ..._seasonal(context, allSeasons, allLits, now)
+        else if (!suppressEmpty)
+          ..._weekly(context, allLits, allSeasons, now),
       ],
     );
   }
 
-  List<Widget> _weekly(BuildContext context, List<Liturgy> all, List<Season> seasons, DateTime now,
-      {bool suppressEmpty = false}) {
+  List<Widget> _weekly(BuildContext context, List<Liturgy> all, List<Season> seasons, DateTime now) {
     final list = regularLiturgiesForTab(all, _tab);
     final vespers = vespersAndPraise(all, now: now);
     final special = upcomingSpecialLiturgies(all, now);
@@ -130,15 +122,6 @@ class _MassSchedulePageState extends ConsumerState<MassSchedulePage> {
     // view stays open, so their services (and feast liturgy) are listed here.
     final revivals =
         seasonalSchedule(seasons.where((s) => !s.replacesRegular && isSeasonActiveAt(s, now)), all, context: seasons);
-    if (all.isEmpty &&
-        seasons.isEmpty &&
-        suppressEmpty &&
-        revivals.isEmpty &&
-        special.isEmpty &&
-        list.isEmpty &&
-        vespers.isEmpty) {
-      return const [];
-    }
     final showWeekday = _tab == ScheduleTab.other;
     // Services at the same time in another hall, across every list shown
     // (ADR-041; Codex / CodeRabbit review on PR #32).
@@ -239,11 +222,9 @@ class _MassSchedulePageState extends ConsumerState<MassSchedulePage> {
     ];
   }
 
-  List<Widget> _seasonal(BuildContext context, List<Season> seasons, List<Liturgy> all, DateTime now,
-      {bool suppressEmpty = false}) {
+  List<Widget> _seasonal(BuildContext context, List<Season> seasons, List<Liturgy> all, DateTime now) {
     // A season that ended before today is no longer listed (ADR-054).
     final grouped = seasonalSchedule(seasons, all, now: now);
-    if (all.isEmpty && seasons.isEmpty && suppressEmpty && grouped.isEmpty) return const [];
     final opts = ref.watch(featuresProvider.select((f) => f.programOptions));
     final allSeasonal = grouped.values.expand((l) => l).toList();
     // One map for every season shown: services of two seasons can overlap.

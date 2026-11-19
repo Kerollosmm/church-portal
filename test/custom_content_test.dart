@@ -2185,6 +2185,11 @@ void main() {
       expect(isCategoryNonEmpty(actCat, const [], [hiddenLinked, linkOnly]), isFalse);
       expect(isCategoryNonEmpty(actCat, const [], const []), isFalse);
 
+      expect(BuiltInSections.isNonEmpty(BuiltInSections.activities, [visibleLinked, hiddenLinked, linkOnly]), isTrue);
+      expect(BuiltInSections.isNonEmpty(BuiltInSections.activities, [hiddenLinked, linkOnly]), isFalse);
+      expect(BuiltInSections.isNonEmpty(BuiltInSections.activities, const []), isFalse);
+      expect(BuiltInSections.isNonEmpty('k1', _pages), isFalse);
+
       // Backward compatibility: custom category IDs behave identically
       const customCat = CustomCategory(id: 'k1', slug: 'youth-trips', nameAr: 'رحلات');
       expect(sectionPages('k1', _pages).map((p) => p.id), ['p3']);
