@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, visibleForTesting;
 import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -71,6 +71,23 @@ List<AdminDoc> filterAdminDocs(
   ];
 }
 
+/// Slugs currently reserved by other documents in the same collection
+/// (includes hidden docs and locally undoable soft-deletes; ignores
+/// non-pending soft-deletes and trims whitespace).
+@visibleForTesting
+Set<String> collectTakenSlugs(
+  Iterable<AdminDoc> docs, {
+  String? excludeId,
+  bool Function(String id)? isPendingDelete,
+}) =>
+    {
+      for (final x in docs)
+        if (x.id != excludeId &&
+            (!isSoftDeleted(x.data) || (isPendingDelete?.call(x.id) ?? false)) &&
+            x.data['slug'] is String)
+          if ((x.data['slug'] as String).trim() case final slug when slug.isNotEmpty) slug,
+    };
+
 class CollectionListScreen extends StatefulWidget {
   final AdminBackend repo;
   final CollectionDef def;
@@ -101,6 +118,10 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
   /// The list as last shown (slug uniqueness checks in the editor).
   List<AdminDoc> _lastDocs = const [];
 
+  /// Latest `pages` snapshot on the categories screen (reused by `_openEditor`
+  /// for `takenSlugs` and link targets without spawning a redundant read).
+  List<AdminDoc>? _lastPages;
+
   @override
   void initState() {
     super.initState();
@@ -124,6 +145,8 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
   void didUpdateWidget(covariant CollectionListScreen old) {
     super.didUpdateWidget(old);
     if (old.def.name != widget.def.name || old.repo != widget.repo) {
+      _lastDocs = const [];
+      _lastPages = null;
       _stream = widget.repo.watch(widget.def.name);
       _entriesStream = widget.def.name == 'categories' ? widget.repo.watch('entries') : null;
       _pagesStream = widget.def.name == 'categories' ? widget.repo.watch('pages') : null;
@@ -247,6 +270,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
                     final rawEntries = entrySnap.data!;
                     _checkLazyPurge(rawEntries, entriesDef);
                     final rawPages = pageSnap.data!;
+                    _lastPages = rawPages;
                     _checkLazyPurge(rawPages, pagesDef);
                     final unsoftEntries = rawEntries
                         .where((d) => !isSoftDeleted(d.data) && !_pendingDelete.isPending(d.id))
@@ -1354,8 +1378,9 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     final needsProgram = editDef.fields.any((f) => f.dynamicOptions == 'venues' || f.dynamicOptions == 'audiences');
     final needsLinks = usesLinks(editDef.fields);
     final cats = needsCats || needsLinks ? await _read('categories') : const <AdminDoc>[];
+    final cachedPages = def.name == 'categories' ? _lastPages : null;
     final pages = needsLinks || (editDef.name == 'pages' && editDef.name != def.name)
-        ? await _read('pages')
+        ? (cachedPages ?? await _read('pages'))
         : const <AdminDoc>[];
     final seasonDocs = editDef.name == 'liturgies' ? await _read('seasons') : const <AdminDoc>[];
     // Venues / audiences (ADR-041): the admin lists in settings/features
@@ -1379,26 +1404,37 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     ];
     final targets = [
       for (final t in linkTargets(
-        pages: [for (final p in pages) (slug: '${p.data['slug'] ?? ''}', titleAr: name(p, 'titleAr', 'titleEn'), titleEn: name(p, 'titleAr', 'titleEn'))],
-        categories: [for (final c in cats) (slug: '${c.data['slug'] ?? ''}', titleAr: name(c, 'nameAr', 'nameEn'), titleEn: name(c, 'nameAr', 'nameEn'))],
+        pages: [
+          for (final p in pages)
+            if (!isSoftDeleted(p.data))
+              (slug: '${p.data['slug'] ?? ''}', titleAr: name(p, 'titleAr', 'titleEn'), titleEn: name(p, 'titleAr', 'titleEn')),
+        ],
+        categories: [
+          for (final c in cats)
+            if (!isSoftDeleted(c.data))
+              (slug: '${c.data['slug'] ?? ''}', titleAr: name(c, 'nameAr', 'nameEn'), titleEn: name(c, 'nameAr', 'nameEn')),
+        ],
       ))
         (t.path, context.pick(t.labelAr, t.labelEn)),
     ];
-    final taken = editDef.name == def.name
-        ? {
-            for (final x in _lastDocs)
-              if (x.id != d?.id && x.data['slug'] is String) x.data['slug'] as String,
-          }
-        : editDef.name == 'pages'
-            ? {
-                for (final x in pages)
-                  if (x.id != d?.id &&
-                      !isSoftDeleted(x.data) &&
-                      !_pendingDelete.isPending(x.id) &&
-                      x.data['slug'] is String)
-                    x.data['slug'] as String,
-              }
-            : const <String>{};
+    final taken = switch (editDef.name) {
+      _ when editDef.name == def.name => collectTakenSlugs(
+          _lastDocs,
+          excludeId: d?.id,
+          isPendingDelete: _pendingDelete.isPending,
+        ),
+      'pages' => collectTakenSlugs(
+          pages,
+          excludeId: d?.id,
+          isPendingDelete: _pendingDelete.isPending,
+        ),
+      'categories' => collectTakenSlugs(
+          cats,
+          excludeId: d?.id,
+          isPendingDelete: _pendingDelete.isPending,
+        ),
+      _ => const <String>{},
+    };
     final seasons = [
       for (final s in seasonDocs)
         if (!isSoftDeleted(s.data)) Season.fromMap(s.id, s.data),

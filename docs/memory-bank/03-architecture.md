@@ -393,7 +393,8 @@ Deferred isolation is mechanically enforced in CI via `node tool/check_web_bundl
   drawer** (`_AppDrawer`). On mobile viewports (`width < 600`, ADR-064, `INV-APPBAR-01`), the language toggle (`appBarLanguageToggle`)
   is omitted from `AppBar.actions`, freeing ~54 dp of horizontal space so the church title has ample room without collision with
   the seal tab, with the language toggle accessible in `_AppDrawer` as `drawerLanguageToggle`. Desktop viewports (`width >= 600`)
-  retain the `AppBar` language toggle. When `settings/features.englishEnabled` is `false` (PR 3G, `P2-27b`), both `appBarLanguageToggle` and `drawerLanguageToggle` are hidden. Below **360 px**, at **≥ 150 % text**, or on a subpage below **400 px** (the Back arrow
+  retain the `AppBar` language toggle. Both `appBarLanguageToggle` (`showBarLang`) and `drawerLanguageToggle` (`_AppDrawer.showLang`)
+  gate on `featuresReadyProvider` (`ready && features.englishEnabled`) so the «EN» toggle never flashes on cold load when `settings/features.englishEnabled` is `false`; when `false` (PR 3G, `P2-27b`), both toggles remain hidden. Below **360 px**, at **≥ 150 % text**, or on a subpage below **400 px** (the Back arrow
   takes another 48 dp) the Mass button is dropped from the bar (it is in the drawer) so the title keeps a readable width.
   On viewports `< 360 px` (ADR-061), `SealTab` scales down to `54×70 dp` (from `64×80 dp`), the title typography
   uses 15 pt 2-line `appShort` (`height: 1.15`), guaranteeing a `>= 130 dp` readable title slot and `>= 6 dp` seal clearance.

@@ -2124,6 +2124,120 @@ void main() {
   });
 
   group('Phase 4 PR2: BuiltInSections', () {
+    test('collectTakenSlugs includes hidden and locally pending-delete docs, trims whitespace, excludes self and non-pending soft-deletes', () {
+      final docs = [
+        AdminDoc('p-self', {'slug': 'self-slug'}),
+        AdminDoc('p-hidden', {'slug': 'hidden-slug', 'visible': false}),
+        AdminDoc('p-pending', {'slug': 'pending-slug', 'deletedAt': DateTime.utc(2026, 11, 19)}),
+        AdminDoc('p-soft', {'slug': 'old-deleted', 'deletedAt': DateTime.utc(2026, 11, 18)}),
+        AdminDoc('p-ws', {'slug': '  trimmed-slug  '}),
+        AdminDoc('p-blank', {'slug': '   '}),
+      ];
+      expect(
+        collectTakenSlugs(
+          docs,
+          excludeId: 'p-self',
+          isPendingDelete: (id) => id == 'p-pending',
+        ),
+        {'hidden-slug', 'pending-slug', 'trimmed-slug'},
+      );
+    });
+
+    testWidgets(
+        'CollectionListScreen(categories) enforces takenSlugs from live pages stream even if subsequent pages read fails, blocks hidden slugs, shows slugTaken in error summary, and resets cache on repo change',
+        (tester) async {
+      tester.view.physicalSize = const Size(900, 3000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      for (final locale in [const Locale('en'), const Locale('ar')]) {
+        final pages = [
+          AdminDoc('p-act-1', {
+            'slug': 'choir-guide',
+            'titleAr': 'دليل الكورال',
+            'placement': 'section',
+            'categoryId': BuiltInSections.activities,
+            'visible': true,
+          }),
+          AdminDoc('p-hidden', {
+            'slug': 'new-building-donations',
+            'titleAr': 'مبنى الكنيسة الجديد',
+            'placement': 'link',
+            'visible': false,
+          }),
+        ];
+        final b = _FailSubsequentPagesReadBackend(lists: {
+          'categories': const [],
+          'entries': const [],
+          'pages': pages,
+        });
+
+        await tester.pumpWidget(KeyedSubtree(
+          key: ValueKey('taken-slugs-${locale.languageCode}'),
+          child: _admin(CollectionListScreen(repo: b, def: collectionById('categories')!), locale: locale),
+        ));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.byKey(const Key('sectionPageRow-p-act-1')));
+        await tester.pumpAndSettle();
+        expect(find.byType(DocEditor), findsOneWidget);
+
+        await tester.tap(find.byKey(const ValueKey('group-advanced')));
+        await tester.pumpAndSettle();
+        await tester.enterText(find.byKey(const ValueKey('field-slug')), 'new-building-donations');
+        await tester.pump();
+        await tester.tap(find.byKey(const Key('editor-save')));
+        await tester.pumpAndSettle();
+
+        expect(b.saves, isEmpty);
+        final summaryEntry = find.byKey(const ValueKey('error-summary-slug'));
+        expect(summaryEntry, findsOneWidget);
+        final expectedSlugTaken =
+            locale.languageCode == 'ar' ? 'هذا الرابط مستخدم بالفعل' : 'This address is already used';
+        expect(
+          find.descendant(of: summaryEntry, matching: find.textContaining(expectedSlugTaken)),
+          findsOneWidget,
+        );
+
+        // Restoring own slug allows saving without self-conflict.
+        await tester.enterText(find.byKey(const ValueKey('field-slug')), 'choir-guide');
+        await tester.enterText(find.byKey(const ValueKey('field-titleAr')), 'دليل الكورال المحدّث');
+        await tester.pump();
+        await tester.tap(find.byKey(const Key('editor-save')));
+        await tester.pumpAndSettle();
+        expect(b.saves, hasLength(1));
+        expect(b.saves.single.$1, 'pages');
+        expect(b.saves.single.$2, 'p-act-1');
+        expect(b.saves.single.$3['titleAr'], 'دليل الكورال المحدّث');
+
+        // Re-pump with the same widget key and a fresh repo without p-hidden;
+        // didUpdateWidget must clear _lastPages so the previously hidden slug is now free.
+        final b2 = _Backend(lists: {
+          'categories': const [],
+          'entries': const [],
+          'pages': [pages.first],
+        });
+        await tester.pumpWidget(KeyedSubtree(
+          key: ValueKey('taken-slugs-${locale.languageCode}'),
+          child: _admin(CollectionListScreen(repo: b2, def: collectionById('categories')!), locale: locale),
+        ));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.byKey(const Key('sectionPageRow-p-act-1')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const ValueKey('group-advanced')));
+        await tester.pumpAndSettle();
+        await tester.enterText(find.byKey(const ValueKey('field-slug')), 'new-building-donations');
+        await tester.pump();
+        await tester.tap(find.byKey(const Key('editor-save')));
+        await tester.pumpAndSettle();
+
+        expect(b2.saves, hasLength(1));
+        expect(b2.saves.single.$3['slug'], 'new-building-donations');
+        expect(tester.takeException(), isNull);
+      }
+    });
+
     test('BuiltInSections canonical keys, lookups, sectionPages, and isCategoryNonEmpty', () {
       expect(BuiltInSections.all.map((b) => b.id), [
         'builtin_schedule',
@@ -3098,5 +3212,21 @@ class _ControlledPagesRepo extends _Repo {
 
   @override
   Stream<List<CustomPage>> pages() => _pagesStream;
+}
+
+class _FailSubsequentPagesReadBackend extends _Backend {
+  int _pagesWatchCount = 0;
+  _FailSubsequentPagesReadBackend({super.lists});
+
+  @override
+  Stream<List<AdminDoc>> watch(String collection) {
+    if (collection == 'pages') {
+      _pagesWatchCount++;
+      if (_pagesWatchCount >= 2) {
+        return Stream<List<AdminDoc>>.error(StateError('timeout'));
+      }
+    }
+    return super.watch(collection);
+  }
 }
 

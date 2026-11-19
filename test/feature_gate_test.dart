@@ -33,22 +33,34 @@ class _PendingFeaturesRepository extends SeedRepository {
   Stream<FeatureSettings> features() => _never.stream;
 }
 
+class _ControllableFeaturesRepository extends SeedRepository {
+  _ControllableFeaturesRepository(super.seed);
+  final _ctrl = StreamController<FeatureSettings>.broadcast();
+  @override
+  Stream<FeatureSettings> features() => _ctrl.stream;
+  void emit(FeatureSettings f) => _ctrl.add(f);
+  void close() => _ctrl.close();
+}
+
 Future<GoRouter> _pump(WidgetTester tester, SeedData seed,
-    {Size size = const Size(1400, 2400), ContentRepository? repo, bool settle = true}) async {
+    {Size size = const Size(1400, 2400),
+    ContentRepository? repo,
+    bool settle = true,
+    Locale locale = const Locale('en')}) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
   final container = ProviderContainer(overrides: [
     repositoryProvider.overrideWithValue(repo ?? SeedRepository(seed)),
     nowProvider.overrideWith((ref) => Stream.value(CairoTime.at(2026, 11, 1, 12 * 60).toUtc())),
-    localeProvider.overrideWith(_EnglishLocale.new),
+    localeProvider.overrideWith(locale.languageCode == 'ar' ? _ArabicLocale.new : _EnglishLocale.new),
   ]);
   addTearDown(container.dispose);
   final router = container.read(routerProvider);
   await tester.pumpWidget(UncontrolledProviderScope(
     container: container,
     child: MaterialApp.router(
-      locale: const Locale('en'),
+      locale: locale,
       supportedLocales: const [Locale('ar'), Locale('en')],
       localizationsDelegates: GlobalMaterialLocalizations.delegates,
       routerConfig: router,
@@ -66,6 +78,11 @@ Future<GoRouter> _pump(WidgetTester tester, SeedData seed,
 class _EnglishLocale extends LocaleNotifier {
   @override
   Locale build() => const Locale('en');
+}
+
+class _ArabicLocale extends LocaleNotifier {
+  @override
+  Locale build() => const Locale('ar');
 }
 
 void main() {
@@ -296,6 +313,58 @@ void main() {
       await tester.tap(find.byTooltip('Menu'));
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('drawerLanguageToggle')), findsNothing);
+    });
+
+    testWidgets('desktop appBarLanguageToggle waits for settings/features instead of flashing during cold load',
+        (tester) async {
+      final seed = _seedWith(const {});
+      final repo = _ControllableFeaturesRepository(seed);
+      addTearDown(repo.close);
+
+      await _pump(tester, seed, repo: repo, size: const Size(1400, 2400), settle: false);
+      expect(find.byKey(const Key('appBarLanguageToggle')), findsNothing);
+
+      repo.emit(FeatureSettings.fromMap(const {'englishEnabled': false}));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('appBarLanguageToggle')), findsNothing);
+
+      repo.emit(FeatureSettings.fromMap(const {'englishEnabled': true}));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('appBarLanguageToggle')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('mobile drawerLanguageToggle waits for settings/features across 320px and 400px (AR and EN)',
+        (tester) async {
+      final seed = _seedWith(const {});
+      for (final width in [320.0, 400.0]) {
+        for (final locale in [const Locale('ar'), const Locale('en')]) {
+          final repo = _ControllableFeaturesRepository(seed);
+          addTearDown(repo.close);
+
+          await _pump(tester, seed, repo: repo, size: Size(width, 1600), settle: false, locale: locale);
+          await tester.tap(find.byIcon(Icons.menu_rounded));
+          await tester.pump();
+          await tester.pump(const Duration(milliseconds: 300));
+          expect(find.byType(Drawer), findsOneWidget, reason: 'width=$width locale=${locale.languageCode}');
+          expect(find.byKey(const Key('drawerLanguageToggle')), findsNothing,
+              reason: 'cold load width=$width locale=${locale.languageCode}');
+
+          repo.emit(FeatureSettings.fromMap(const {'englishEnabled': false}));
+          await tester.pumpAndSettle();
+          expect(find.byKey(const Key('drawerLanguageToggle')), findsNothing,
+              reason: 'off width=$width locale=${locale.languageCode}');
+
+          repo.emit(FeatureSettings.fromMap(const {'englishEnabled': true}));
+          await tester.pumpAndSettle();
+          expect(find.byKey(const Key('drawerLanguageToggle')), findsOneWidget,
+              reason: 'on width=$width locale=${locale.languageCode}');
+          expect(tester.takeException(), isNull, reason: 'width=$width locale=${locale.languageCode}');
+
+          await tester.pumpWidget(const SizedBox.shrink());
+          await tester.pumpAndSettle();
+        }
+      }
     });
   });
 
