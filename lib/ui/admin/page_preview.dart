@@ -40,6 +40,7 @@ class PagePreviewScreen extends StatefulWidget {
 }
 
 class _PagePreviewScreenState extends State<PagePreviewScreen> {
+  final _messengerKey = GlobalKey<ScaffoldMessengerState>();
   late Locale _previewLocale;
   bool _initializedLocale = false;
 
@@ -72,7 +73,7 @@ class _PagePreviewScreenState extends State<PagePreviewScreen> {
   }
 
   void _showPreviewLinkNotice(String url) {
-    final messenger = ScaffoldMessenger.maybeOf(context);
+    final messenger = _messengerKey.currentState;
     if (messenger == null) return;
     messenger
       ..hideCurrentSnackBar()
@@ -87,7 +88,9 @@ class _PagePreviewScreenState extends State<PagePreviewScreen> {
     final p = widget.page;
     final previewDir = _previewLocale.languageCode == 'ar' ? TextDirection.rtl : TextDirection.ltr;
 
-    return Scaffold(
+    return ScaffoldMessenger(
+      key: _messengerKey,
+      child: Scaffold(
       backgroundColor: context.pal.background,
       appBar: AppBar(
         title: Text(context.tr('previewPage'), overflow: TextOverflow.ellipsis),
@@ -319,6 +322,7 @@ class _PagePreviewScreenState extends State<PagePreviewScreen> {
             ),
           ),
         ],
+      ),
       ),
     );
   }

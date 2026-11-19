@@ -3952,6 +3952,83 @@ void main() {
         expect(b.saves.single.$3['visible'], isFalse);
       },
     );
+
+    testWidgets(
+      'PagePreviewScreen link notice uses a preview-local ScaffoldMessenger and keeps CollectionListScreen pending-delete Undo intact',
+      (tester) async {
+        registerAdminStrings();
+        tester.view.physicalSize = const Size(900, 1400);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.reset);
+
+        final buttonBlock = const PageBlock(
+          type: BlockTypes.button,
+          textAr: 'مواعيد القداسات',
+          textEn: 'Mass times',
+          url: '/mass-schedule',
+        ).encode();
+        final b = _ReactivePagesBackend(
+          lists: {
+            'categories': const [],
+            'pages': [
+              AdminDoc('p-a', {
+                'titleAr': 'صفحة أ',
+                'titleEn': 'Page A',
+                'slug': 'page-a',
+                'visible': true,
+                'placement': PagePlacements.link,
+                'blocks': [buttonBlock],
+              }),
+              AdminDoc('p-b', {
+                'titleAr': 'صفحة ب',
+                'slug': 'page-b',
+                'visible': true,
+              }),
+            ],
+          },
+        );
+        addTearDown(b.dispose);
+
+        await tester.pumpWidget(
+          _admin(CollectionListScreen(repo: b, def: collectionById('pages')!), locale: const Locale('ar')),
+        );
+        await tester.pumpAndSettle();
+
+        // 1. Delete page B -> Undo SnackBar active with 10s timer.
+        await tester.ensureVisible(find.byKey(const ValueKey('delete-p-b')));
+        await tester.tap(find.byKey(const ValueKey('delete-p-b')));
+        await tester.pumpAndSettle();
+        expect(find.byKey(const ValueKey('p-b')), findsNothing);
+        expect(find.byType(SnackBarAction), findsOneWidget);
+
+        // 2. Duplicate page A -> open Preview -> tap block button within 10s.
+        await tester.ensureVisible(find.byKey(const ValueKey('duplicate-p-a')));
+        await tester.tap(find.byKey(const ValueKey('duplicate-p-a')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('editor-preview-top')));
+        await tester.pumpAndSettle();
+
+        await tester.ensureVisible(find.text('مواعيد القداسات'));
+        await tester.tap(find.text('مواعيد القداسات'));
+        await tester.pumpAndSettle();
+        expect(find.text('الرابط في المعاينة معطّل: /mass-schedule'), findsOneWidget);
+
+        // 3. Close preview and duplicate editor -> page B's Undo SnackBar must still work.
+        await tester.tap(find.byType(CloseButton));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byType(CloseButton));
+        await tester.pumpAndSettle();
+
+        expect(find.byType(SnackBarAction), findsOneWidget);
+        await tester.tap(find.byType(SnackBarAction));
+        await tester.pumpAndSettle();
+        expect(b.updates.any((u) => u.$1 == 'pages' && u.$2 == 'p-b' && u.$3['deletedAt'] == null), isTrue);
+        expect(find.byKey(const ValueKey('p-b')), findsOneWidget);
+
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pumpAndSettle();
+      },
+    );
   });
 }
 
