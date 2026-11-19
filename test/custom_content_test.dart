@@ -28,6 +28,7 @@ import 'package:church_portal/ui/admin/collection_list.dart';
 import 'package:church_portal/ui/admin/contact_admin.dart';
 import 'package:church_portal/ui/admin/doc_editor.dart';
 import 'package:church_portal/ui/pages/category_page.dart' show CustomPageCard;
+import 'package:church_portal/ui/widgets/cards.dart' show NextMassCard;
 import 'package:church_portal/ui/widgets/common.dart';
 import 'package:church_portal/ui/widgets/feature_gate.dart';
 import 'package:church_portal/ui/widgets/golden.dart' show Reveal;
@@ -2752,6 +2753,145 @@ void main() {
       expect(find.byType(EmptyState), findsNothing);
       expect(find.text('Regular schedule'), findsNothing);
       expect(find.byType(SwitchListTile), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('MassSchedulePage waits on customPages loading without flashing NextMassCard or EmptyState',
+        (tester) async {
+      final loadingCtrl = StreamController<List<CustomPage>>.broadcast();
+      addTearDown(loadingCtrl.close);
+      await _pump(
+        tester,
+        '/mass-schedule',
+        size: const Size(420, 3000),
+        settle: false,
+        repo: _BuiltInSectionRepo(
+          pagesStream: loadingCtrl.stream,
+          liturgiesList: const [],
+          seasonsList: const [],
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+      expect(find.byType(SkeletonList), findsOneWidget);
+      expect(find.byType(EmptyState), findsNothing);
+      expect(find.byType(NextMassCard), findsNothing);
+      expect(find.text('No upcoming liturgies this week'), findsNothing);
+      expect(find.byType(SwitchListTile), findsNothing);
+
+      loadingCtrl.add(const [
+        CustomPage(
+          id: 'p-schedule',
+          slug: 'schedule-guide',
+          titleAr: 'دليل القداسات',
+          titleEn: 'Schedule guide',
+          placement: PagePlacements.section,
+          categoryId: BuiltInSections.schedule,
+          visible: true,
+        ),
+      ]);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('sectionPage-schedule-guide')), findsOneWidget);
+      expect(find.byType(SkeletonList), findsNothing);
+      expect(find.byType(EmptyState), findsNothing);
+      expect(find.byType(NextMassCard), findsNothing);
+      expect(find.byType(SwitchListTile), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('MassSchedulePage renders NextMassCard and EmptyState once empty customPages resolves',
+        (tester) async {
+      final emptyCtrl = StreamController<List<CustomPage>>.broadcast();
+      addTearDown(emptyCtrl.close);
+      await _pump(
+        tester,
+        '/mass-schedule',
+        size: const Size(420, 3000),
+        settle: false,
+        repo: _BuiltInSectionRepo(
+          pagesStream: emptyCtrl.stream,
+          liturgiesList: const [],
+          seasonsList: const [],
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+      expect(find.byType(SkeletonList), findsOneWidget);
+      expect(find.byType(NextMassCard), findsNothing);
+      expect(find.byType(EmptyState), findsNothing);
+
+      emptyCtrl.add(const []);
+      await tester.pumpAndSettle();
+      expect(find.byType(SkeletonList), findsNothing);
+      expect(find.byType(NextMassCard), findsOneWidget);
+      expect(find.text('No upcoming liturgies this week'), findsOneWidget);
+      expect(find.byType(SwitchListTile), findsOneWidget);
+      expect(find.byType(EmptyState), findsWidgets);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('AboutPage waits on customPages loading without flashing Priests EmptyState', (tester) async {
+      final loadingCtrl = StreamController<List<CustomPage>>.broadcast();
+      addTearDown(loadingCtrl.close);
+      await _pump(
+        tester,
+        '/about',
+        size: const Size(420, 3000),
+        settle: false,
+        repo: _BuiltInSectionRepo(
+          pagesStream: loadingCtrl.stream,
+          priestsList: const [],
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+      expect(find.byType(SkeletonList), findsOneWidget);
+      expect(find.byType(EmptyState), findsNothing);
+      expect(find.text('Our priests'), findsNothing);
+
+      loadingCtrl.add(const [
+        CustomPage(
+          id: 'p-about',
+          slug: 'about-guide',
+          titleAr: 'عن الكنيسة',
+          titleEn: 'About guide',
+          placement: PagePlacements.section,
+          categoryId: BuiltInSections.about,
+          visible: true,
+        ),
+      ]);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('sectionPage-about-guide')), findsOneWidget);
+      expect(find.byType(SkeletonList), findsNothing);
+      expect(find.byType(EmptyState), findsNothing);
+      expect(find.text('Our priests'), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('AboutPage renders Priests EmptyState once empty customPages resolves', (tester) async {
+      final emptyCtrl = StreamController<List<CustomPage>>.broadcast();
+      addTearDown(emptyCtrl.close);
+      await _pump(
+        tester,
+        '/about',
+        size: const Size(420, 3000),
+        settle: false,
+        repo: _BuiltInSectionRepo(
+          pagesStream: emptyCtrl.stream,
+          priestsList: const [],
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+      expect(find.byType(SkeletonList), findsOneWidget);
+      expect(find.byType(EmptyState), findsNothing);
+      expect(find.text('Our priests'), findsNothing);
+
+      emptyCtrl.add(const []);
+      await tester.pumpAndSettle();
+      expect(find.byType(SkeletonList), findsNothing);
+      expect(find.text('Our priests'), findsOneWidget);
+      expect(find.byType(EmptyState), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   });

@@ -61,15 +61,16 @@ class _MassSchedulePageState extends ConsumerState<MassSchedulePage> {
     final loadedSeasons = seasons.value;
     final allLits = loadedLits ?? const <Liturgy>[];
     final allSeasons = loadedSeasons ?? const <Season>[];
-    final suppressEmpty = loadedLits != null &&
-        loadedSeasons != null &&
-        loadedLits.isEmpty &&
-        loadedSeasons.isEmpty &&
-        ref.watch(featuresProvider.select((f) => f.enabled(Sections.customPages))) &&
+    final customPagesEnabled = ref.watch(featuresProvider.select((f) => f.enabled(Sections.customPages)));
+    final pagesAsync = customPagesEnabled ? ref.watch(customPagesProvider) : null;
+    final primaryEmpty = loadedLits != null && loadedSeasons != null && loadedLits.isEmpty && loadedSeasons.isEmpty;
+    final waitingForPages = primaryEmpty && pagesAsync != null && pagesAsync.value == null && pagesAsync.isLoading;
+    final suppressEmpty = primaryEmpty &&
+        customPagesEnabled &&
         isCategoryNonEmpty(
           BuiltInSections.byId(BuiltInSections.schedule)!,
           const [],
-          ref.watch(customPagesProvider).value ?? const <CustomPage>[],
+          pagesAsync?.value ?? const <CustomPage>[],
         );
 
     return PageBody(
@@ -80,7 +81,7 @@ class _MassSchedulePageState extends ConsumerState<MassSchedulePage> {
       children: [
         const PageIntro(pageKey: CustomizablePages.schedule),
         const AlertBanner(),
-        if (!suppressEmpty) ...[
+        if (!suppressEmpty && !waitingForPages) ...[
           const NextMassCard(),
           const SizedBox(height: 16),
           Card(
@@ -108,7 +109,7 @@ class _MassSchedulePageState extends ConsumerState<MassSchedulePage> {
             ),
           ),
         ],
-        if (lits.isLoading || (_seasons && seasons.isLoading))
+        if (lits.isLoading || (_seasons && seasons.isLoading) || waitingForPages)
           const Padding(padding: EdgeInsets.only(top: 16), child: SkeletonList(count: 4))
         else if (lits.hasError && !lits.hasValue)
           ErrorState(onRetry: () => ref.invalidate(liturgiesProvider))

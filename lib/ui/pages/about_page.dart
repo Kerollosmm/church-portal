@@ -3,7 +3,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../../core/l10n.dart';
 import '../../core/theme.dart';
-import '../../domain/custom_content.dart' show BuiltInSections, CustomPage, isCategoryNonEmpty;
+import '../../domain/custom_content.dart' show BuiltInSections, isCategoryNonEmpty;
 import '../../domain/features.dart';
 import '../../domain/item_detail.dart';
 import '../../domain/models.dart';
@@ -22,11 +22,13 @@ class AboutPage extends ConsumerWidget {
     final f = ref.watch(featuresProvider);
     final showServing = f.enabled(Sections.priests);
     final showDeparted = f.enabled(Sections.departedPriests);
-    final hasLinkedPages = f.enabled(Sections.customPages) &&
+    final pagesAsync = f.enabled(Sections.customPages) ? ref.watch(customPagesProvider) : null;
+    final waitingForPages = pagesAsync != null && pagesAsync.value == null && pagesAsync.isLoading;
+    final hasLinkedPages = pagesAsync?.value != null &&
         isCategoryNonEmpty(
           BuiltInSections.byId(BuiltInSections.about)!,
           const [],
-          ref.watch(customPagesProvider).value ?? const <CustomPage>[],
+          pagesAsync!.value!,
         );
     return PageBody(
       header: CustomizablePageHeader(
@@ -110,8 +112,9 @@ class AboutPage extends ConsumerWidget {
           builder: (context, priests) {
             final serving = showServing ? priests.where((p) => !p.departed).toList() : <Priest>[];
             final departed = showDeparted ? priests.where((p) => p.departed).toList() : <Priest>[];
+            if (serving.isEmpty && departed.isEmpty && waitingForPages) return const SkeletonList(count: 2);
             return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              if (showServing && (serving.isNotEmpty || !hasLinkedPages)) ...[
+              if (showServing && (serving.isNotEmpty || (!hasLinkedPages && !waitingForPages))) ...[
                 SectionTitle(context.tr('priests'), icon: Icons.person_rounded),
                 if (serving.isEmpty)
                   const EmptyState()
