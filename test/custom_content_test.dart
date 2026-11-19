@@ -3533,6 +3533,280 @@ void main() {
         addTearDown(tester.view.reset);
       },
     );
+
+    testWidgets(
+      'CollectionListScreen(pages) duplicates a page into a hidden unsaved draft with unique slug, preserves saveable new-doc state, handles pending-delete slugs & uploaded vs url images safely',
+      (tester) async {
+        registerAdminStrings();
+        tester.view.physicalSize = const Size(900, 1800);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.reset);
+
+        final encodedParagraph =
+            const PageBlock(type: BlockTypes.paragraph, textAr: 'نص التبرع', textEn: 'Donation note').encode();
+        final b = _Backend(
+          lists: {
+            'categories': const [],
+            'pages': [
+              AdminDoc('p1', {
+                'titleAr': 'صفحة تبرعات',
+                'titleEn': 'Donations Page',
+                'slug': 'donations-2026',
+                'visible': true,
+                'featured': true,
+                'placement': PagePlacements.section,
+                'categoryId': BuiltInSections.about,
+                'image': {'source': MediaSource.inline, 'mediaId': 'm1'},
+                'blocks': [encodedParagraph],
+              }),
+              AdminDoc('p2-pending', {
+                'titleAr': 'صفحة معلقة',
+                'slug': 'donations-2026-copy',
+                'visible': true,
+              }),
+              AdminDoc('p3-url', {
+                'titleAr': 'صفحة برابط صورة',
+                'titleEn': 'URL Image Page',
+                'slug': 'url-cover-page',
+                'visible': true,
+                'image': {'source': MediaSource.url, 'url': 'https://example.com/cover.jpg', 'alt': 'Cover'},
+              }),
+            ],
+          },
+        );
+
+        await tester.pumpWidget(
+          _admin(CollectionListScreen(repo: b, def: collectionById('pages')!), locale: const Locale('ar')),
+        );
+        await tester.pumpAndSettle();
+
+        // Soft-delete p2-pending so it sits in _pendingDelete with an active undo timer.
+        await tester.ensureVisible(find.byKey(const ValueKey('delete-p2-pending')));
+        await tester.tap(find.byKey(const ValueKey('delete-p2-pending')));
+        await tester.pumpAndSettle();
+        expect(find.byKey(const ValueKey('p2-pending')), findsNothing);
+
+        // Duplicate p1 -> opens hidden unsaved draft without writing yet; avoids pending-delete slug.
+        await tester.ensureVisible(find.byKey(const ValueKey('duplicate-p1')));
+        await tester.tap(find.byKey(const ValueKey('duplicate-p1')));
+        await tester.pumpAndSettle();
+
+        expect(b.saves, isEmpty);
+        expect(find.text(adminStrings['duplicateDroppedImage']![0]), findsOneWidget);
+        expect(find.byType(DocEditor), findsOneWidget);
+        expect(find.textContaining(adminStrings['duplicate']![0]), findsWidgets);
+
+        final state = tester.state<DocEditorState>(find.byType(DocEditor));
+        final collected = state.collect();
+        expect(collected['titleAr'], 'نسخة من صفحة تبرعات');
+        expect(collected['slug'], 'donations-2026-copy-2');
+        expect(collected['visible'], isFalse);
+        expect(collected['featured'], isFalse);
+        expect(collected['categoryId'], BuiltInSections.about);
+        expect(collected['image'], isNull);
+
+        // Save immediately with zero further edits -> creates a new doc in 'pages'
+        // (splitSavePayload sends base fields first with id==null, then blocks to 'new-1').
+        await tester.ensureVisible(find.byKey(const Key('editor-save')));
+        await tester.tap(find.byKey(const Key('editor-save')));
+        await tester.pumpAndSettle();
+
+        final firstCreate = b.saves.where((s) => s.$2 == null).toList();
+        expect(firstCreate, hasLength(1));
+        expect(firstCreate.single.$1, 'pages');
+        expect(firstCreate.single.$3['slug'], 'donations-2026-copy-2');
+        expect(firstCreate.single.$3['image'], isNull);
+        expect(firstCreate.single.$3['visible'], isFalse);
+        expect(firstCreate.single.$3['featured'], isFalse);
+        expect(firstCreate.single.$3['categoryId'], BuiltInSections.about);
+        expect(firstCreate.single.$3['titleAr'], 'نسخة من صفحة تبرعات');
+        expect(b.saves.any((s) => s.$1 == 'pages' && s.$2 == 'new-1' && (s.$3['blocks'] as List?)?.single == encodedParagraph), isTrue);
+        final savesAfterFirst = b.saves.length;
+
+        // Cancelling a duplicate leaves b.saves unchanged (0 additional writes).
+        await tester.ensureVisible(find.byKey(const ValueKey('duplicate-p1')));
+        await tester.tap(find.byKey(const ValueKey('duplicate-p1')));
+        await tester.pumpAndSettle();
+        expect(find.byType(DocEditor), findsOneWidget);
+        await tester.tap(find.byType(CloseButton));
+        await tester.pumpAndSettle();
+        expect(find.byType(DocEditor), findsNothing);
+        expect(b.saves, hasLength(savesAfterFirst));
+
+        // Duplicating a page with an external url cover image preserves it without dropped-image SnackBar.
+        await tester.ensureVisible(find.byKey(const ValueKey('duplicate-p3-url')));
+        await tester.tap(find.byKey(const ValueKey('duplicate-p3-url')));
+        await tester.pumpAndSettle();
+        expect(find.byType(DocEditor), findsOneWidget);
+        expect(find.text(adminStrings['duplicateDroppedImage']![0]), findsNothing);
+        final urlState = tester.state<DocEditorState>(find.byType(DocEditor));
+        expect(
+          urlState.collect()['image'],
+          {'source': MediaSource.url, 'url': 'https://example.com/cover.jpg', 'alt': 'Cover'},
+        );
+        await tester.ensureVisible(find.byKey(const Key('editor-save')));
+        await tester.tap(find.byKey(const Key('editor-save')));
+        await tester.pumpAndSettle();
+        final allCreates = b.saves.where((s) => s.$2 == null).toList();
+        expect(allCreates, hasLength(2));
+        expect(
+          allCreates.last.$3['image'],
+          {'source': MediaSource.url, 'url': 'https://example.com/cover.jpg', 'alt': 'Cover'},
+        );
+
+        // Dispose screen so PendingDelete / undo SnackBar timers cancel cleanly.
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pumpAndSettle();
+      },
+    );
+
+    testWidgets(
+      'CollectionListScreen(categories) duplicates a section page from built-in and custom section tiles using live takenSlugs and passes 320/400/1400 px & 48x48 tap-target accessibility',
+      (tester) async {
+        registerAdminStrings();
+        tester.view.physicalSize = const Size(900, 1800);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.reset);
+
+        final b = _Backend(
+          lists: {
+            'categories': [
+              AdminDoc('c1', {
+                'nameAr': 'الشباب',
+                'nameEn': 'Youth',
+                'slug': 'youth',
+                'visible': true,
+                'order': 10,
+              }),
+            ],
+            'entries': const [],
+            'pages': [
+              AdminDoc('p-builtin', {
+                'titleAr': 'دليل الكورال',
+                'titleEn': 'Choir Guide',
+                'slug': 'choir-guide',
+                'placement': PagePlacements.section,
+                'categoryId': BuiltInSections.activities,
+                'visible': true,
+              }),
+              AdminDoc('p-custom', {
+                'titleAr': 'نسخة دليل الكورال',
+                'titleEn': 'Choir Guide Copy',
+                'slug': 'choir-guide-copy',
+                'placement': PagePlacements.section,
+                'categoryId': 'c1',
+                'visible': true,
+              }),
+            ],
+          },
+        );
+
+        await tester.pumpWidget(_admin(CollectionListScreen(repo: b, def: collectionById('categories')!)));
+        await tester.pumpAndSettle();
+
+        // Duplicate from built-in section tile -> avoids both choir-guide and choir-guide-copy.
+        await tester.ensureVisible(find.byKey(const ValueKey('duplicateSectionPage-p-builtin')));
+        await tester.tap(find.byKey(const ValueKey('duplicateSectionPage-p-builtin')));
+        await tester.pumpAndSettle();
+        expect(find.byType(DocEditor), findsOneWidget);
+
+        final builtInState = tester.state<DocEditorState>(find.byType(DocEditor));
+        expect(builtInState.collect()['slug'], 'choir-guide-copy-2');
+        expect(builtInState.collect()['categoryId'], BuiltInSections.activities);
+        expect(builtInState.collect()['placement'], PagePlacements.section);
+
+        await tester.ensureVisible(find.byKey(const Key('editor-save')));
+        await tester.tap(find.byKey(const Key('editor-save')));
+        await tester.pumpAndSettle();
+        expect(b.saves, hasLength(1));
+        expect(b.saves.single.$1, 'pages');
+        expect(b.saves.single.$2, isNull);
+        expect(b.saves.single.$3['slug'], 'choir-guide-copy-2');
+        expect(b.saves.single.$3['categoryId'], BuiltInSections.activities);
+
+        // Duplicate from custom section tile -> preserves c1 and avoids existing slugs.
+        await tester.ensureVisible(find.byKey(const ValueKey('duplicateSectionPage-p-custom')));
+        await tester.tap(find.byKey(const ValueKey('duplicateSectionPage-p-custom')));
+        await tester.pumpAndSettle();
+        expect(find.byType(DocEditor), findsOneWidget);
+        final customState = tester.state<DocEditorState>(find.byType(DocEditor));
+        expect(customState.collect()['categoryId'], 'c1');
+        expect(customState.collect()['slug'], 'choir-guide-copy-2');
+        await tester.tap(find.byType(CloseButton));
+        await tester.pumpAndSettle();
+
+        // Responsive 320px @ 200% text scale, 400px, and 1400px in AR and EN + 48x48 tap targets.
+        for (final locale in [const Locale('ar'), const Locale('en')]) {
+          for (final spec in [
+            (size: const Size(320, 800), scale: 2.0),
+            (size: const Size(400, 900), scale: 1.0),
+            (size: const Size(1400, 900), scale: 1.0),
+          ]) {
+            tester.view.physicalSize = spec.size;
+            tester.view.devicePixelRatio = 1;
+
+            await tester.pumpWidget(
+              KeyedSubtree(
+                key: ValueKey('pages-dup-${locale.languageCode}-${spec.size.width}'),
+                child: MediaQuery(
+                  data: MediaQueryData(size: spec.size, textScaler: TextScaler.linear(spec.scale)),
+                  child: _admin(CollectionListScreen(repo: b, def: collectionById('pages')!), locale: locale),
+                ),
+              ),
+            );
+            await tester.pumpAndSettle();
+            final pagesScroll = find
+                .descendant(
+                  of: find.byType(CustomScrollView),
+                  matching: find.byType(Scrollable),
+                )
+                .first;
+            await tester.scrollUntilVisible(
+              find.byKey(const ValueKey('duplicate-p-builtin')),
+              300,
+              scrollable: pagesScroll,
+            );
+            await tester.pumpAndSettle();
+            expect(tester.takeException(), isNull, reason: 'pages ${locale.languageCode} ${spec.size}');
+
+            await tester.pumpWidget(
+              KeyedSubtree(
+                key: ValueKey('cats-dup-${locale.languageCode}-${spec.size.width}'),
+                child: MediaQuery(
+                  data: MediaQueryData(size: spec.size, textScaler: TextScaler.linear(spec.scale)),
+                  child: _admin(CollectionListScreen(repo: b, def: collectionById('categories')!), locale: locale),
+                ),
+              ),
+            );
+            await tester.pumpAndSettle();
+            final catsScroll = find
+                .descendant(
+                  of: find.byType(CustomScrollView),
+                  matching: find.byType(Scrollable),
+                )
+                .first;
+
+            for (final keyId in [
+              'duplicateSectionPage-p-custom',
+              'visibilitySectionPage-p-custom',
+              'duplicateSectionPage-p-builtin',
+              'visibilitySectionPage-p-builtin',
+            ]) {
+              await tester.scrollUntilVisible(
+                find.byKey(ValueKey(keyId)),
+                300,
+                scrollable: catsScroll,
+              );
+              await tester.pumpAndSettle();
+              final size = tester.getSize(find.byKey(ValueKey(keyId)));
+              expect(size.width, greaterThanOrEqualTo(48), reason: '$keyId width ${locale.languageCode} ${spec.size}');
+              expect(size.height, greaterThanOrEqualTo(48), reason: '$keyId height ${locale.languageCode} ${spec.size}');
+            }
+            expect(tester.takeException(), isNull, reason: 'categories ${locale.languageCode} ${spec.size}');
+          }
+        }
+      },
+    );
   });
 }
 
