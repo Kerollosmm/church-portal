@@ -1832,6 +1832,30 @@ describe('ADR-027: custom categories, their items and custom pages', () => {
       ],
       ...stamp(),
     }, { mergeFields: ['blocks', 'updatedAt', 'updatedBy'] }));
+
+    // 4. Phase 4 PR2: linking custom pages to built-in sections (builtin_activities, builtin_meetings)
+    //    succeeds on create/update and public read, while placement: 'section' with '' or null fails.
+    await assertSucceeds(setDoc(doc(own, 'pages', 'p-builtin-act'), {
+      slug: 'choir-details',
+      titleAr: 'تفاصيل الكورال',
+      titleEn: 'Choir details',
+      subtitleAr: '',
+      subtitleEn: '',
+      placement: 'section',
+      categoryId: 'builtin_activities',
+      showInNav: false,
+      featured: false,
+      visible: true,
+      order: 10,
+      ...stamp(),
+    }));
+    await assertSucceeds(updateDoc(doc(own, 'pages', 'p-builtin-act'), {
+      categoryId: 'builtin_meetings',
+      ...stamp(),
+    }));
+    await assertSucceeds(getDoc(doc(db(null), 'pages', 'p-builtin-act')));
+    await assertFails(updateDoc(doc(own, 'pages', 'p-builtin-act'), { categoryId: '', ...stamp() }));
+    await assertFails(updateDoc(doc(own, 'pages', 'p-builtin-act'), { categoryId: null, ...stamp() }));
   });
 
   test('the two custom-content section switches are known keys', async () => {

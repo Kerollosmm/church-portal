@@ -271,6 +271,66 @@ class PageBlock {
       };
 }
 
+/// Built-in sections a custom page (`placement == 'section'`) can link to.
+/// IDs use the `builtin_<key>` prefix with the canonical [Sections] key
+/// (`meetings` for `/church-education`, matching `settings/features.sections`).
+class BuiltInSections {
+  BuiltInSections._();
+  static const schedule = 'builtin_schedule';
+  static const meetings = 'builtin_meetings';
+  static const activities = 'builtin_activities';
+  static const clinics = 'builtin_clinics';
+  static const services = 'builtin_services';
+  static const about = 'builtin_about';
+  static const contact = 'builtin_contact';
+
+  static const all = <CustomCategory>[
+    CustomCategory(id: schedule, slug: 'mass-schedule', nameAr: 'مواعيد القداسات', nameEn: 'Mass schedule', icon: 'event'),
+    CustomCategory(id: meetings, slug: 'church-education', nameAr: 'التربية الكنسية والاجتماعات', nameEn: 'Sunday school & meetings', icon: 'school'),
+    CustomCategory(id: activities, slug: 'church-activities', nameAr: 'الأنشطة والكورالات', nameEn: 'Activities & choirs', icon: 'people'),
+    CustomCategory(id: clinics, slug: 'clinics', nameAr: 'العيادات', nameEn: 'Clinics', icon: 'medical'),
+    CustomCategory(id: services, slug: 'public-services', nameAr: 'الخدمات العامة', nameEn: 'Public services', icon: 'volunteer'),
+    CustomCategory(id: about, slug: 'about', nameAr: 'عن الكنيسة', nameEn: 'About the church', icon: 'church'),
+    CustomCategory(id: contact, slug: 'contact', nameAr: 'تواصل معنا', nameEn: 'Contact us', icon: 'info'),
+  ];
+
+  static CustomCategory? byId(String id) {
+    for (final c in all) {
+      if (c.id == id) return c;
+    }
+    return null;
+  }
+
+  static bool isBuiltIn(String id) => switch (id) {
+        schedule || meetings || activities || clinics || services || about || contact => true,
+        _ => false,
+      };
+
+  /// True when built-in section [id] has at least one visible section page.
+  /// Avoids [all] / [byId] so public bundles tree-shake admin section metadata.
+  static bool isNonEmpty(String id, Iterable<CustomPage> pages) =>
+      isBuiltIn(id) &&
+      isCategoryNonEmpty(CustomCategory(id: id, slug: '', nameAr: '', nameEn: ''), const [], pages);
+
+  /// Public route path for built-in section [id], or null if unknown.
+  static String? pathFor(String id) {
+    final c = byId(id);
+    return c == null ? null : '/${c.slug}';
+  }
+
+  /// Maps a [CustomizablePages] key to its canonical built-in section ID, or null.
+  static String? idForPageKey(String pageKey) => switch (pageKey) {
+        'schedule' => schedule,
+        'education' || 'meetings' => meetings,
+        'activities' => activities,
+        'clinics' => clinics,
+        'services' => services,
+        'about' => about,
+        'contact' => contact,
+        _ => null,
+      };
+}
+
 /// Where a custom page is placed on the public site (P1-18).
 class PagePlacements {
   PagePlacements._();
@@ -361,7 +421,8 @@ List<CustomPage> publicPages(Iterable<CustomPage> all) {
   ];
 }
 
-/// Visible usable custom pages placed inside custom category [categoryId].
+/// Visible usable custom pages placed inside custom category or built-in
+/// section [categoryId].
 List<CustomPage> sectionPages(String categoryId, Iterable<CustomPage> all) => [
       for (final p in publicPages(all))
         if (p.effectivePlacement == PagePlacements.section && p.categoryId == categoryId) p,
@@ -401,7 +462,9 @@ List<CustomPage> featuredPages(Iterable<CustomPage> all) {
   ];
 }
 
-/// True when [category] has at least one visible entry or at least one visible section page.
+/// True when [category] (either a custom category or one of
+/// [BuiltInSections.all]) has at least one visible entry or at least one
+/// visible section page.
 bool isCategoryNonEmpty(
   CustomCategory category,
   Iterable<CategoryEntry> entries,

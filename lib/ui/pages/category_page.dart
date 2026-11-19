@@ -125,6 +125,38 @@ class CategoryPage extends ConsumerWidget {
   }
 }
 
+/// Linked custom pages (`placement == 'section'`) for a built-in section page.
+class BuiltInSectionPages extends ConsumerWidget {
+  final String sectionId;
+  const BuiltInSectionPages({super.key, required this.sectionId});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (!ref.watch(featuresProvider.select((f) => f.enabled(Sections.customPages)))) {
+      return const SizedBox.shrink();
+    }
+    final pagesAsync = ref.watch(customPagesProvider);
+    if (pagesAsync.hasError && !pagesAsync.hasValue) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 16),
+        child: ErrorState(onRetry: () => ref.invalidate(customPagesProvider)),
+      );
+    }
+    final pages = pagesAsync.value;
+    if (pages == null) return const SizedBox.shrink();
+    final list = sectionPages(sectionId, pages);
+    if (list.isEmpty) return const SizedBox.shrink();
+    return Reveal(
+      child: Padding(
+        padding: const EdgeInsets.only(top: 16),
+        child: ResponsiveGrid(children: [
+          for (final p in list) CustomPageCard(key: Key('sectionPage-${p.slug}'), page: p),
+        ]),
+      ),
+    );
+  }
+}
+
 /// Card linking to a custom page (used in section pages and featured home cards).
 class CustomPageCard extends StatelessWidget {
   final CustomPage page;

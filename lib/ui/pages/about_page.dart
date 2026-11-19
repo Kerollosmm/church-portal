@@ -3,6 +3,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../../core/l10n.dart';
 import '../../core/theme.dart';
+import '../../domain/custom_content.dart' show BuiltInSections;
 import '../../domain/features.dart';
 import '../../domain/item_detail.dart';
 import '../../domain/models.dart';
@@ -21,6 +22,9 @@ class AboutPage extends ConsumerWidget {
     final f = ref.watch(featuresProvider);
     final showServing = f.enabled(Sections.priests);
     final showDeparted = f.enabled(Sections.departedPriests);
+    final linked = linkedBuiltInState(ref, BuiltInSections.about);
+    final waitingForPages = linked.waiting;
+    final hasLinkedPages = linked.hasPages;
     return PageBody(
       header: CustomizablePageHeader(
           pageKey: CustomizablePages.about,
@@ -74,30 +78,28 @@ class AboutPage extends ConsumerWidget {
         ],
         // Church milestones (ADR-052): the same cards as Home "Our story",
         // from the same milestonesProvider (no extra listener).
-        if (f.showAboutMilestones) ...[
-          SectionTitle(context.tr('churchMilestones'),
-              key: const ValueKey('about-milestones'), icon: Icons.timeline_rounded),
+        if (f.showAboutMilestones)
           AsyncSection<List<Milestone>>(
             provider: milestonesProvider,
             retry: milestonesProvider,
+            header: SectionTitle(context.tr('churchMilestones'),
+                key: const ValueKey('about-milestones'), icon: Icons.timeline_rounded),
             isEmpty: (d) => d.isEmpty,
             loading: const SkeletonList(count: 2, itemHeight: 120),
             builder: (context, items) => ResponsiveGrid(children: [
               for (final m in items) MilestoneCard(m, key: ValueKey('aboutCard-${m.id}')),
             ]),
           ),
-        ],
-        if (f.enabled(Sections.saints)) ...[
-        SectionTitle(context.tr('patronSaints'), icon: Icons.auto_awesome_rounded),
+        if (f.enabled(Sections.saints))
         AsyncSection<List<Saint>>(
           provider: saintsProvider,
           retry: saintsProvider,
+          header: SectionTitle(context.tr('patronSaints'), icon: Icons.auto_awesome_rounded),
           isEmpty: (d) => d.isEmpty,
           builder: (context, saints) => ResponsiveGrid(maxColumns: 2, minItemWidth: 340, children: [
             for (final s in saints) SaintCard(s, key: ValueKey('aboutCard-${s.id}')),
           ]),
         ),
-        ],
         if (showServing || showDeparted)
         AsyncSection<List<Priest>>(
           provider: priestsProvider,
@@ -105,8 +107,9 @@ class AboutPage extends ConsumerWidget {
           builder: (context, priests) {
             final serving = showServing ? priests.where((p) => !p.departed).toList() : <Priest>[];
             final departed = showDeparted ? priests.where((p) => p.departed).toList() : <Priest>[];
+            if (serving.isEmpty && departed.isEmpty && waitingForPages) return const SkeletonList(count: 2);
             return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              if (showServing) ...[
+              if (showServing && (serving.isNotEmpty || (!hasLinkedPages && !waitingForPages))) ...[
                 SectionTitle(context.tr('priests'), icon: Icons.person_rounded),
                 if (serving.isEmpty)
                   const EmptyState()

@@ -348,7 +348,7 @@ class _AppShellState extends ConsumerState<AppShell> {
     // to reclaim horizontal space for the church title. The language toggle
     // is already available in the navigation drawer. On desktop (width >= 600),
     // keep it visible in the AppBar actions when the English site is enabled.
-    final showBarLang = width >= 600 && features.englishEnabled;
+    final showBarLang = ready && width >= 600 && features.englishEnabled;
     final tabW = wide ? 88.0 : (ultraNarrow ? 54.0 : 64.0);
     final tabH = wide ? 108.0 : (ultraNarrow ? 70.0 : 80.0);
     final tabStart = (showBack ? 48.0 : 0.0) + (wide ? 24.0 : 6.0);
@@ -510,7 +510,7 @@ class _AppShellState extends ConsumerState<AppShell> {
           ),
         ),
       ),
-      endDrawer: wide ? null : _AppDrawer(location: location, showAsk: showAsk, showLang: features.englishEnabled),
+      endDrawer: wide ? null : _AppDrawer(location: location, showAsk: showAsk, showLang: ready && features.englishEnabled),
       body: Stack(children: [
         const Positioned.fill(child: WarmBackdrop()),
         // Today layer (ADR-040): while the church is streaming,

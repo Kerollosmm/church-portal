@@ -351,7 +351,10 @@ else the category's), `visible`, `order`, `sample`. Not seeded.
 `slug` (**req**, as above; public page `/page/<slug>`), `titleAr` (**req**, ≤ 200, not blank), `titleEn` (≤ 200),
 `subtitleAr/En` (≤ 300), `image` (optional hero), `placement` (`'link'` | `'nav'` | `'section'`, PR 3D / P1-18 —
 absent falls back to `showInNav ? 'nav' : 'link'`), `categoryId` (string `[A-Za-z0-9_-]{1,128}` required when
-`placement == 'section'`, `{0,128}` otherwise), `showInNav` (bool synced with `placement == 'nav'`, missing = **false**:
+`placement == 'section'`, `{0,128}` otherwise — either a custom `categories/{id}` doc id or one of the 7 virtual
+`BuiltInSections` ids `builtin_schedule`, `builtin_meetings`, `builtin_activities`, `builtin_clinics`,
+`builtin_services`, `builtin_about`, `builtin_contact`, ADR-075; no `categories/builtin_*` Firestore doc is ever
+created or fetched), `showInNav` (bool synced with `placement == 'nav'`, missing = **false**:
 pages are off the menu by default), `featured` (bool, default `false` — shows a «اعرف المزيد» card on `HomePage`, hint «هتظهر في «صفحات مميزة» في الرئيسية مهما كان مكانها»; sorted by `order` asc, `updatedAt` desc, unique slug),
 `updatedAt` (parsed `DateTime?`, stamped on admin saves), `visible`, `order`, `blocks` (≤ 20, saved in their own write). **Each block is one string**:
 `type␟textAr␟textEn␟url␟account␟instapay␟wallet` (U+001F, `PageBlock.encode` / `fromStored`; maps are still read

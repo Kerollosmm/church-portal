@@ -276,6 +276,8 @@ const Map<String, List<String>> adminStrings = {
   // item = masculine); `deletedUndo` in l10n.dart stays for the inbox.
   'deletedItemUndo': ['تم مسح «{n}»', 'Deleted "{n}"'],
   'deletedItemMultiUndo': ['تم مسح {n} عناصر (آخرهم «{last}»)', 'Deleted {n} items (latest: "{last}")'],
+  // Phase 4 PR2: built-in section badge in categories screen
+  'builtInSectionTag': ['قسم أساسي', 'Built-in section'],
 };
 
 /// Idempotently registers [adminStrings] in the runtime localization table.

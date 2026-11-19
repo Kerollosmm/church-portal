@@ -574,17 +574,19 @@ class DocEditorState extends State<DocEditor> {
         continue;
       }
       final c = _text[f.key];
-      if (c != null &&
-          f.type != FieldType.image &&
-          (validateFieldValue(f, c.text) != null || (f.slug && widget.takenSlugs.contains(c.text.trim())))) {
-        out.add(_FieldErrorEntry(
-          id: f.key,
-          label: _plainLabel(f),
-          group: group,
-          advanced: advanced,
-          fieldKey: _fieldKey(f.key),
-          focusNode: _focusNode(f.key),
-        ));
+      if (c != null && f.type != FieldType.image) {
+        final fieldErr = validateFieldValue(f, c.text);
+        final slugTaken = fieldErr == null && f.slug && widget.takenSlugs.contains(c.text.trim());
+        if (fieldErr != null || slugTaken) {
+          out.add(_FieldErrorEntry(
+            id: f.key,
+            label: slugTaken ? '${_plainLabel(f)} — ${context.tr('slugTaken')}' : _plainLabel(f),
+            group: group,
+            advanced: advanced,
+            fieldKey: _fieldKey(f.key),
+            focusNode: _focusNode(f.key),
+          ));
+        }
       }
     }
     return out;

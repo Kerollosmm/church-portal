@@ -9,16 +9,27 @@ import 'package:material_ui/material_ui.dart';
 import '../../core/l10n.dart';
 import '../../core/launch.dart';
 import '../../core/theme.dart';
+import '../../domain/custom_content.dart' show BuiltInSections;
 import '../../domain/features.dart';
 import '../../domain/models.dart';
 import '../../domain/rules.dart';
 import '../../domain/time_format.dart';
 import '../../state/providers.dart';
+import '../pages/category_page.dart' show BuiltInSectionPages;
 import 'coptic_cross.dart';
 import 'golden.dart';
 
 /// Max width of page content (cards grid, text); wider screens centre it.
 const double kMaxContentWidth = 1200;
+
+class _PageSectionScope extends InheritedWidget {
+  final String sectionId;
+  const _PageSectionScope({required this.sectionId, required super.child});
+  static String? of(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<_PageSectionScope>()?.sectionId;
+  @override
+  bool updateShouldNotify(_PageSectionScope old) => old.sectionId != sectionId;
+}
 
 /// Scrollable page body: centred, width-capped content + footer. Each
 /// section fades and rises in the first time it scrolls into view (static
@@ -31,6 +42,15 @@ class PageBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final pad = MediaQuery.sizeOf(context).width < 600 ? 16.0 : 24.0;
+    final h = header;
+    final sid = h is CustomizablePageHeader ? BuiltInSections.idForPageKey(h.pageKey) : null;
+    final bodyColumn = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (final c in children) Reveal(child: c),
+        if (sid != null) BuiltInSectionPages(sectionId: sid),
+      ],
+    );
     return CustomScrollView(
       slivers: [
         if (header != null) SliverToBoxAdapter(child: header),
@@ -40,10 +60,7 @@ class PageBody extends StatelessWidget {
               constraints: const BoxConstraints(maxWidth: kMaxContentWidth),
               child: Padding(
                 padding: EdgeInsets.fromLTRB(pad, 20, pad, 32),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [for (final c in children) Reveal(child: c)],
-                ),
+                child: sid != null ? _PageSectionScope(sectionId: sid, child: bodyColumn) : bodyColumn,
               ),
             ),
           ),
@@ -414,14 +431,27 @@ class ErrorState extends StatelessWidget {
   );
 }
 
+/// Loading / non-empty state of custom pages linked to built-in section [sid].
+({bool waiting, bool hasPages}) linkedBuiltInState(WidgetRef ref, String? sid) {
+  if (sid == null || !ref.watch(featuresProvider.select((f) => f.enabled(Sections.customPages)))) {
+    return (waiting: false, hasPages: false);
+  }
+  final pagesAsync = ref.watch(customPagesProvider);
+  final pages = pagesAsync.value;
+  if (pages == null) return (waiting: pagesAsync.isLoading, hasPages: false);
+  return (waiting: false, hasPages: BuiltInSections.isNonEmpty(sid, pages));
+}
+
 /// Renders an AsyncValue with skeleton / error / empty states.
 class AsyncSection<T> extends ConsumerWidget {
   final ProviderListenable<AsyncValue<T>> provider;
   final ProviderOrFamily? retry;
   final Widget Function(BuildContext context, T data) builder;
   final Widget? loading;
+  final Widget? header;
   final bool Function(T data)? isEmpty;
   final String? emptyMessage;
+  final bool suppressEmptyWithLinkedPages;
 
   const AsyncSection({
     super.key,
@@ -429,18 +459,41 @@ class AsyncSection<T> extends ConsumerWidget {
     required this.builder,
     this.retry,
     this.loading,
+    this.header,
     this.isEmpty,
     this.emptyMessage,
+    this.suppressEmptyWithLinkedPages = true,
   });
+
+  Widget _withHeader(Widget child) => header == null
+      ? child
+      : Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [header!, child]);
+
+  ({bool waiting, bool hasPages}) _linkedState(BuildContext context, WidgetRef ref) =>
+      suppressEmptyWithLinkedPages
+          ? linkedBuiltInState(ref, _PageSectionScope.of(context))
+          : (waiting: false, hasPages: false);
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final v = ref.watch(provider);
     return v.when(
       skipLoadingOnReload: true,
-      data: (d) => (isEmpty?.call(d) ?? false) ? EmptyState(message: emptyMessage) : builder(context, d),
-      loading: () => loading ?? const SkeletonList(),
-      error: (e, _) => ErrorState(onRetry: retry == null ? null : () => ref.invalidate(retry!)),
+      data: (d) {
+        if (isEmpty?.call(d) ?? false) {
+          final linked = _linkedState(context, ref);
+          if (linked.waiting) return loading ?? const SkeletonList();
+          if (linked.hasPages) return const SizedBox.shrink();
+          return _withHeader(EmptyState(message: emptyMessage));
+        }
+        return _withHeader(builder(context, d));
+      },
+      loading: () {
+        final skeleton = loading ?? const SkeletonList();
+        final linked = _linkedState(context, ref);
+        return header != null && !linked.waiting && !linked.hasPages ? _withHeader(skeleton) : skeleton;
+      },
+      error: (e, _) => _withHeader(ErrorState(onRetry: retry == null ? null : () => ref.invalidate(retry!))),
     );
   }
 }

@@ -44,10 +44,10 @@ class PublicServicesPage extends ConsumerWidget {
             onTap: () => context.go('/clinics'),
           ),
         ),
-        SectionTitle(context.tr('facilities'), icon: Icons.domain_rounded),
         AsyncSection<List<Facility>>(
           provider: facilitiesProvider,
           retry: facilitiesProvider,
+          header: SectionTitle(context.tr('facilities'), icon: Icons.domain_rounded),
           isEmpty: (d) => d.isEmpty,
           builder: (context, items) => ResponsiveGrid(children: [
             for (final f in items) _FacilityCard(f),

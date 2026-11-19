@@ -47,6 +47,7 @@ class _ClinicsPageState extends ConsumerState<ClinicsPage> {
           provider: clinicsProvider,
           retry: clinicsProvider,
           isEmpty: (d) => d.where((c) => c.active).isEmpty,
+          suppressEmptyWithLinkedPages: _specialty == null && !_todayOnly,
           loading: const SkeletonList(count: 6, itemHeight: 150),
           builder: (context, clinics) {
             // Clinics without a booking number fall back to the church

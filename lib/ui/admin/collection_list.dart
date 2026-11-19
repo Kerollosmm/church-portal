@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, visibleForTesting;
 import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -71,6 +71,23 @@ List<AdminDoc> filterAdminDocs(
   ];
 }
 
+/// Slugs currently reserved by other documents in the same collection
+/// (includes hidden docs and locally undoable soft-deletes; ignores
+/// non-pending soft-deletes and trims whitespace).
+@visibleForTesting
+Set<String> collectTakenSlugs(
+  Iterable<AdminDoc> docs, {
+  String? excludeId,
+  bool Function(String id)? isPendingDelete,
+}) =>
+    {
+      for (final x in docs)
+        if (x.id != excludeId &&
+            (!isSoftDeleted(x.data) || (isPendingDelete?.call(x.id) ?? false)) &&
+            x.data['slug'] is String)
+          if ((x.data['slug'] as String).trim() case final slug when slug.isNotEmpty) slug,
+    };
+
 class CollectionListScreen extends StatefulWidget {
   final AdminBackend repo;
   final CollectionDef def;
@@ -101,6 +118,10 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
   /// The list as last shown (slug uniqueness checks in the editor).
   List<AdminDoc> _lastDocs = const [];
 
+  /// Latest `pages` snapshot on the categories screen (reused by `_openEditor`
+  /// for `takenSlugs` and link targets without spawning a redundant read).
+  List<AdminDoc>? _lastPages;
+
   @override
   void initState() {
     super.initState();
@@ -124,6 +145,8 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
   void didUpdateWidget(covariant CollectionListScreen old) {
     super.didUpdateWidget(old);
     if (old.def.name != widget.def.name || old.repo != widget.repo) {
+      _lastDocs = const [];
+      _lastPages = null;
       _stream = widget.repo.watch(widget.def.name);
       _entriesStream = widget.def.name == 'categories' ? widget.repo.watch('entries') : null;
       _pagesStream = widget.def.name == 'categories' ? widget.repo.watch('pages') : null;
@@ -247,6 +270,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
                     final rawEntries = entrySnap.data!;
                     _checkLazyPurge(rawEntries, entriesDef);
                     final rawPages = pageSnap.data!;
+                    _lastPages = rawPages;
                     _checkLazyPurge(rawPages, pagesDef);
                     final unsoftEntries = rawEntries
                         .where((d) => !isSoftDeleted(d.data) && !_pendingDelete.isPending(d.id))
@@ -300,14 +324,14 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
                     final allSectionPagesByCat = <String, List<AdminDoc>>{};
                     for (final p in visibleSectionPages) {
                       final cid = '${p.data['categoryId'] ?? ''}';
-                      if (allCatIds.contains(cid)) {
+                      if (allCatIds.contains(cid) || BuiltInSections.isBuiltIn(cid)) {
                         (allSectionPagesByCat[cid] ??= []).add(p);
                       }
                     }
                     final sectionPagesByCat = <String, List<AdminDoc>>{};
                     for (final p in filteredSectionPages) {
                       final cid = '${p.data['categoryId'] ?? ''}';
-                      if (allCatIds.contains(cid)) {
+                      if (allCatIds.contains(cid) || BuiltInSections.isBuiltIn(cid)) {
                         (sectionPagesByCat[cid] ??= []).add(p);
                       }
                     }
@@ -326,6 +350,24 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
                                 c,
                           ]
                         : visible;
+                    final q = _search.text.trim().toLowerCase();
+                    final shownBuiltIns = [
+                      for (final b in BuiltInSections.all)
+                        if ((allSectionPagesByCat[b.id]?.isNotEmpty ?? false) &&
+                            (!hasFilter ||
+                                (sectionPagesByCat[b.id]?.isNotEmpty ?? false) ||
+                                (q.isNotEmpty &&
+                                    (_filter == ListFilter.all || _filter == ListFilter.visible) &&
+                                    (b.nameAr.toLowerCase().contains(q) ||
+                                        b.nameEn.toLowerCase().contains(q) ||
+                                        b.id.toLowerCase().contains(q) ||
+                                        b.slug.toLowerCase().contains(q)))))
+                          b,
+                    ];
+                    final builtInWithPages = BuiltInSections.all
+                        .where((b) => allSectionPagesByCat[b.id]?.isNotEmpty ?? false)
+                        .length;
+                    final hasAnyBuiltInPages = builtInWithPages > 0;
                     final canReorder =
                         def.orderable && !hasFilter && shownCats.length > 1;
                     return CustomScrollView(slivers: [
@@ -338,8 +380,13 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
                           ),
                         ),
                       SliverToBoxAdapter(
-                        child: _toolbar(context, visible.length, shownCats.length, canReorder,
-                            showUnconfirmed: entriesDef.hasSample),
+                        child: _toolbar(
+                          context,
+                          visible.length + builtInWithPages,
+                          shownCats.length + shownBuiltIns.length,
+                          canReorder,
+                          showUnconfirmed: entriesDef.hasSample,
+                        ),
                       ),
                       SliverToBoxAdapter(
                         child: _categoriesBody(
@@ -352,6 +399,8 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
                           allEntriesByCat: allEntriesByCat,
                           sectionPagesByCat: sectionPagesByCat,
                           allSectionPagesByCat: allSectionPagesByCat,
+                          shownBuiltIns: shownBuiltIns,
+                          hasAnyBuiltInPages: hasAnyBuiltInPages,
                           hasFilter: hasFilter,
                           unassigned: unassigned,
                           canReorder: canReorder,
@@ -512,12 +561,14 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     required Map<String, List<AdminDoc>> allEntriesByCat,
     required Map<String, List<AdminDoc>> sectionPagesByCat,
     required Map<String, List<AdminDoc>> allSectionPagesByCat,
+    required List<CustomCategory> shownBuiltIns,
+    required bool hasAnyBuiltInPages,
     required bool hasFilter,
     required List<AdminDoc> unassigned,
     required bool canReorder,
     Set<String> emptyCatIds = const {},
   }) {
-    if (allVisibleCats.isEmpty && unassigned.isEmpty) {
+    if (allVisibleCats.isEmpty && unassigned.isEmpty && !hasAnyBuiltInPages) {
       return Center(
         key: const Key('emptyCategories'),
         child: Padding(
@@ -538,10 +589,10 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
         ),
       );
     }
-    if (shownCats.isEmpty && unassigned.isEmpty) {
+    if (shownCats.isEmpty && unassigned.isEmpty && shownBuiltIns.isEmpty) {
       return Center(child: Text(context.tr('noMatches')));
     }
-    if (canReorder && unassigned.isEmpty) {
+    if (canReorder && unassigned.isEmpty && shownBuiltIns.isEmpty) {
       return ReorderableListView.builder(
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
@@ -570,7 +621,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
       physics: const NeverScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(12, 4, 12, 90),
       children: [
-        if (allVisibleCats.isEmpty)
+        if (allVisibleCats.isEmpty && !hasAnyBuiltInPages)
           Card(
             key: const Key('emptyCategories'),
             margin: const EdgeInsets.only(bottom: 10),
@@ -625,6 +676,15 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
               hasFilter: hasFilter,
               isEmptyHidden: emptyCatIds.contains(c.id),
             ),
+        for (final b in shownBuiltIns)
+          _builtInCategoryTile(
+            context,
+            b,
+            pagesDef: pagesDef,
+            sectionPages: sectionPagesByCat[b.id] ?? const [],
+            hasAnyPages: allSectionPagesByCat[b.id]?.isNotEmpty ?? false,
+            hasFilter: hasFilter,
+          ),
         if (unassigned.isNotEmpty) _unassignedCard(context, entriesDef, unassigned),
       ],
     );
@@ -769,6 +829,57 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
                 ],
               ),
             ],
+          ),
+        ),
+      ]),
+    );
+  }
+
+  Widget _builtInCategoryTile(
+    BuildContext context,
+    CustomCategory b, {
+    required CollectionDef pagesDef,
+    required List<AdminDoc> sectionPages,
+    bool hasAnyPages = false,
+    bool hasFilter = false,
+  }) {
+    return Card(
+      key: ValueKey(b.id),
+      margin: const EdgeInsets.only(bottom: 10),
+      color: context.pal.surface,
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        ListTile(
+          title: Wrap(
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 6,
+            runSpacing: 4,
+            children: [
+              Text(context.pick(b.nameAr, b.nameEn),
+                  style: TextStyle(fontWeight: FontWeight.w800, color: context.pal.ink)),
+              _Tag(context.tr('builtInSectionTag'), context.pal.primary),
+            ],
+          ),
+        ),
+        const Divider(height: 1),
+        if (sectionPages.isEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
+            child: Text(
+              context.tr(hasFilter && hasAnyPages ? 'noMatches' : 'sectionEmptyItems'),
+              style: TextStyle(color: context.pal.muted, fontSize: 13),
+            ),
+          )
+        else
+          for (final p in sectionPages) _sectionPageRow(context, pagesDef, p),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 4, 12, 10),
+          child: Align(
+            alignment: AlignmentDirectional.centerEnd,
+            child: _openOnSiteButton(
+              context,
+              AdminDoc(b.id, const {}),
+              !context.isAr ? '/${b.slug}?lang=en' : '/${b.slug}',
+            ),
           ),
         ),
       ]),
@@ -1267,7 +1378,10 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     final needsProgram = editDef.fields.any((f) => f.dynamicOptions == 'venues' || f.dynamicOptions == 'audiences');
     final needsLinks = usesLinks(editDef.fields);
     final cats = needsCats || needsLinks ? await _read('categories') : const <AdminDoc>[];
-    final pages = needsLinks ? await _read('pages') : const <AdminDoc>[];
+    final cachedPages = def.name == 'categories' ? _lastPages : null;
+    final pages = needsLinks || (editDef.name == 'pages' && editDef.name != def.name)
+        ? (cachedPages ?? await _read('pages'))
+        : const <AdminDoc>[];
     final seasonDocs = editDef.name == 'liturgies' ? await _read('seasons') : const <AdminDoc>[];
     // Venues / audiences (ADR-041): the admin lists in settings/features
     // (defaults when none), read once when the editor opens.
@@ -1281,20 +1395,46 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     }
 
     final catDef = collectionById('categories') ?? editDef;
-    final catChoices = [for (final c in sortAdminDocs(catDef, cats)) (c.id, name(c, 'nameAr', 'nameEn'))];
+    final catChoices = [
+      if (editDef.name == 'pages')
+        for (final b in BuiltInSections.all)
+          (b.id, context.pick(b.nameAr, b.nameEn)),
+      for (final c in sortAdminDocs(catDef, cats))
+        (c.id, name(c, 'nameAr', 'nameEn')),
+    ];
     final targets = [
       for (final t in linkTargets(
-        pages: [for (final p in pages) (slug: '${p.data['slug'] ?? ''}', titleAr: name(p, 'titleAr', 'titleEn'), titleEn: name(p, 'titleAr', 'titleEn'))],
-        categories: [for (final c in cats) (slug: '${c.data['slug'] ?? ''}', titleAr: name(c, 'nameAr', 'nameEn'), titleEn: name(c, 'nameAr', 'nameEn'))],
+        pages: [
+          for (final p in pages)
+            if (!isSoftDeleted(p.data))
+              (slug: '${p.data['slug'] ?? ''}', titleAr: name(p, 'titleAr', 'titleEn'), titleEn: name(p, 'titleAr', 'titleEn')),
+        ],
+        categories: [
+          for (final c in cats)
+            if (!isSoftDeleted(c.data))
+              (slug: '${c.data['slug'] ?? ''}', titleAr: name(c, 'nameAr', 'nameEn'), titleEn: name(c, 'nameAr', 'nameEn')),
+        ],
       ))
         (t.path, context.pick(t.labelAr, t.labelEn)),
     ];
-    final taken = editDef.name == def.name
-        ? {
-            for (final x in _lastDocs)
-              if (x.id != d?.id && x.data['slug'] is String) x.data['slug'] as String,
-          }
-        : const <String>{};
+    final taken = switch (editDef.name) {
+      _ when editDef.name == def.name => collectTakenSlugs(
+          _lastDocs,
+          excludeId: d?.id,
+          isPendingDelete: _pendingDelete.isPending,
+        ),
+      'pages' => collectTakenSlugs(
+          pages,
+          excludeId: d?.id,
+          isPendingDelete: _pendingDelete.isPending,
+        ),
+      'categories' => collectTakenSlugs(
+          cats,
+          excludeId: d?.id,
+          isPendingDelete: _pendingDelete.isPending,
+        ),
+      _ => const <String>{},
+    };
     final seasons = [
       for (final s in seasonDocs)
         if (!isSoftDeleted(s.data)) Season.fromMap(s.id, s.data),

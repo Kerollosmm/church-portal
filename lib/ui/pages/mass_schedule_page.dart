@@ -3,6 +3,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../../core/l10n.dart';
 import '../../core/theme.dart';
+import '../../domain/custom_content.dart' show BuiltInSections;
 import '../../domain/features.dart';
 import '../../domain/image_style.dart';
 import '../../domain/cairo_time.dart';
@@ -56,6 +57,15 @@ class _MassSchedulePageState extends ConsumerState<MassSchedulePage> {
       if (activeSeasonsAt(seasonList, now).any((s) => s.replacesRegular)) _seasons = true;
     }
 
+    final loadedLits = lits.value;
+    final loadedSeasons = seasons.value;
+    final allLits = loadedLits ?? const <Liturgy>[];
+    final allSeasons = loadedSeasons ?? const <Season>[];
+    final primaryEmpty = loadedLits != null && loadedSeasons != null && loadedLits.isEmpty && loadedSeasons.isEmpty;
+    final linked = linkedBuiltInState(ref, BuiltInSections.schedule);
+    final waitingForPages = primaryEmpty && linked.waiting;
+    final suppressEmpty = primaryEmpty && linked.hasPages;
+
     return PageBody(
       header: CustomizablePageHeader(
           pageKey: CustomizablePages.schedule,
@@ -64,40 +74,42 @@ class _MassSchedulePageState extends ConsumerState<MassSchedulePage> {
       children: [
         const PageIntro(pageKey: CustomizablePages.schedule),
         const AlertBanner(),
-        const NextMassCard(),
-        const SizedBox(height: 16),
-        Card(
-          child: SwitchListTile(
-            value: _seasons,
-            onChanged: (v) => setState(() {
-              _seasons = v;
-              // The audience chips live in the seasonal view only: never
-              // leave a hidden filter on (Sentry review).
-              _audience = '';
-              // The visitor chose: never override it with the season default.
-              _seasonDefaultApplied = true;
-            }),
-            // ON / OFF clearly apart on every theme, Holy Week's charcoal
-            // included (ADR-049): palette roles only (ADR-043).
-            activeThumbColor: context.pal.switchOnThumb,
-            activeTrackColor: context.pal.switchOnTrack,
-            inactiveThumbColor: context.pal.switchOffThumb,
-            inactiveTrackColor: context.pal.switchOffTrack,
-            trackOutlineColor: WidgetStateProperty.resolveWith(
-                (states) => states.contains(WidgetState.selected) ? context.pal.switchOnTrack : context.pal.switchOffThumb),
-            secondary: Icon(Icons.auto_awesome_rounded, color: context.pal.primary),
-            title: Text(context.tr('holySeasons'), style: const TextStyle(fontWeight: FontWeight.w800)),
-            subtitle: Text(context.tr('holySeasonsHint')),
+        if (!suppressEmpty && !waitingForPages) ...[
+          const NextMassCard(),
+          const SizedBox(height: 16),
+          Card(
+            child: SwitchListTile(
+              value: _seasons,
+              onChanged: (v) => setState(() {
+                _seasons = v;
+                // The audience chips live in the seasonal view only: never
+                // leave a hidden filter on (Sentry review).
+                _audience = '';
+                // The visitor chose: never override it with the season default.
+                _seasonDefaultApplied = true;
+              }),
+              // ON / OFF clearly apart on every theme, Holy Week's charcoal
+              // included (ADR-049): palette roles only (ADR-043).
+              activeThumbColor: context.pal.switchOnThumb,
+              activeTrackColor: context.pal.switchOnTrack,
+              inactiveThumbColor: context.pal.switchOffThumb,
+              inactiveTrackColor: context.pal.switchOffTrack,
+              trackOutlineColor: WidgetStateProperty.resolveWith(
+                  (states) => states.contains(WidgetState.selected) ? context.pal.switchOnTrack : context.pal.switchOffThumb),
+              secondary: Icon(Icons.auto_awesome_rounded, color: context.pal.primary),
+              title: Text(context.tr('holySeasons'), style: const TextStyle(fontWeight: FontWeight.w800)),
+              subtitle: Text(context.tr('holySeasonsHint')),
+            ),
           ),
-        ),
-        if (lits.isLoading || (_seasons && seasons.isLoading))
+        ],
+        if (lits.isLoading || (_seasons && seasons.isLoading) || waitingForPages)
           const Padding(padding: EdgeInsets.only(top: 16), child: SkeletonList(count: 4))
         else if (lits.hasError && !lits.hasValue)
           ErrorState(onRetry: () => ref.invalidate(liturgiesProvider))
-        else if (_seasons)
-          ..._seasonal(context, seasons.value ?? const [], lits.value ?? const [], now)
-        else
-          ..._weekly(context, lits.value ?? const [], seasons.value ?? const [], now),
+        else if (!suppressEmpty && _seasons)
+          ..._seasonal(context, allSeasons, allLits, now)
+        else if (!suppressEmpty)
+          ..._weekly(context, allLits, allSeasons, now),
       ],
     );
   }
