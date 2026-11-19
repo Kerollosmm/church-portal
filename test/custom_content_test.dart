@@ -4029,6 +4029,64 @@ void main() {
         await tester.pumpAndSettle();
       },
     );
+
+    testWidgets(
+      'CollectionListScreen computes duplicate slug after async editor reads so concurrent page updates do not fail Save',
+      (tester) async {
+        registerAdminStrings();
+        tester.view.physicalSize = const Size(900, 1400);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.reset);
+
+        final categoriesGate = Completer<List<AdminDoc>>();
+        final b = _ReactivePagesBackend(
+          categoriesFuture: categoriesGate.future,
+          lists: {
+            'categories': const [],
+            'pages': [
+              AdminDoc('orig', {
+                'titleAr': 'صفحة أصلية',
+                'slug': 'orig-slug',
+                'visible': true,
+                'placement': PagePlacements.link,
+              }),
+            ],
+          },
+        );
+        addTearDown(b.dispose);
+
+        await tester.pumpWidget(
+          _admin(CollectionListScreen(repo: b, def: collectionById('pages')!), locale: const Locale('ar')),
+        );
+        await tester.pumpAndSettle();
+
+        // Tap duplicate -> _openEditorBody suspends on _read('categories').
+        await tester.tap(find.byKey(const ValueKey('duplicate-orig')));
+        await tester.pump();
+
+        // Another admin/session takes 'orig-slug-copy' while categories read is still pending.
+        b.pushExternalPage('concurrent', {
+          'titleAr': 'صفحة متزامنة',
+          'slug': 'orig-slug-copy',
+          'visible': true,
+        });
+        await tester.pump();
+
+        categoriesGate.complete(const []);
+        await tester.pump(const Duration(milliseconds: 10));
+        await tester.pumpAndSettle();
+
+        expect(find.byType(DocEditor), findsOneWidget);
+        final state = tester.state<DocEditorState>(find.byType(DocEditor));
+        expect(state.collect()['slug'], 'orig-slug-copy-2');
+
+        await tester.ensureVisible(find.byKey(const Key('editor-save')));
+        await tester.tap(find.byKey(const Key('editor-save')));
+        await tester.pumpAndSettle();
+        expect(b.saves, hasLength(1));
+        expect(b.saves.single.$3['slug'], 'orig-slug-copy-2');
+      },
+    );
   });
 }
 
@@ -4163,13 +4221,17 @@ class _FakePreviewMediaRepo implements MediaRepository {
 class _ReactivePagesBackend extends _Backend {
   final _pagesCtrl = StreamController<List<AdminDoc>>.broadcast();
   final Duration? readDelay;
+  final Future<List<AdminDoc>>? categoriesFuture;
 
-  _ReactivePagesBackend({super.lists, this.readDelay});
+  _ReactivePagesBackend({super.lists, this.readDelay, this.categoriesFuture});
 
   List<AdminDoc> get _pages => _lists['pages'] ?? const [];
 
   @override
   Stream<List<AdminDoc>> watch(String collection) {
+    if (collection == 'categories' && categoriesFuture != null) {
+      return Stream.fromFuture(categoriesFuture!);
+    }
     if (collection == 'pages') {
       return (() async* {
         if (readDelay != null) await Future<void>.delayed(readDelay!);
@@ -4179,6 +4241,8 @@ class _ReactivePagesBackend extends _Backend {
     }
     return super.watch(collection);
   }
+
+  void pushExternalPage(String id, Map<String, dynamic> data) => _upsertPage(id, data);
 
   void _upsertPage(String id, Map<String, dynamic> patch) {
     final list = List<AdminDoc>.of(_pages);

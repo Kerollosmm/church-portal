@@ -1386,30 +1386,19 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
   }
 
   Future<void> _duplicatePage(
-    BuildContext context,
+    BuildContext _,
     AdminDoc source, {
     required CollectionDef pagesDef,
   }) async {
     if (_openingEditor) return;
     _openingEditor = true;
     try {
-      final allPages = def.name == 'pages' ? _lastDocs : (_lastPages ?? await _read('pages'));
-      if (!context.mounted) return;
-      final taken = collectTakenSlugs(
-        allPages,
-        excludeId: null,
-        isPendingDelete: _pendingDelete.isPending,
-      );
-      final dup = buildDuplicatePageDefaults(source.data, takenSlugs: taken);
-      final droppedNotice = dup.droppedOwnedImage ? context.tr('duplicateDroppedImage') : null;
       final editorTitle = '${context.tr('duplicate')} — ${context.pick(pagesDef.labelAr, pagesDef.labelEn)}';
       await _openEditorBody(
-        context,
         null,
         targetDef: pagesDef,
-        extraDefaults: dup.defaults,
         titleOverride: editorTitle,
-        initialNotice: droppedNotice,
+        duplicateSource: source,
       );
     } finally {
       _openingEditor = false;
@@ -1417,7 +1406,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
   }
 
   Future<void> _openEditor(
-    BuildContext context,
+    BuildContext _,
     AdminDoc? d, {
     CollectionDef? targetDef,
     Map<String, Object?> extraDefaults = const {},
@@ -1428,7 +1417,6 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     _openingEditor = true;
     try {
       await _openEditorBody(
-        context,
         d,
         targetDef: targetDef,
         extraDefaults: extraDefaults,
@@ -1441,12 +1429,12 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
   }
 
   Future<void> _openEditorBody(
-    BuildContext context,
     AdminDoc? d, {
     CollectionDef? targetDef,
     Map<String, Object?> extraDefaults = const {},
     String? titleOverride,
     String? initialNotice,
+    AdminDoc? duplicateSource,
   }) async {
     final editDef = targetDef ?? def;
     bool usesLinks(List<FieldDef> fs) => fs.any((f) => f.linkPicker || usesLinks(f.subFields));
@@ -1464,7 +1452,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     final settings = needsProgram ? await _read('settings') : const <AdminDoc>[];
     final features = settings.where((x) => x.id == 'features').firstOrNull;
     final programOpts = ProgramOptions.fromMap(features?.data ?? const {});
-    if (!context.mounted) return;
+    if (!mounted) return;
     String name(AdminDoc x, String ar, String en) {
       final v = context.pick('${x.data[ar] ?? ''}', '${x.data[en] ?? ''}');
       return x.data['visible'] == false ? '$v ${context.tr('hiddenTag')}' : v;
@@ -1511,6 +1499,13 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
         ),
       _ => const <String>{},
     };
+    var resolvedExtra = extraDefaults;
+    var resolvedNotice = initialNotice;
+    if (duplicateSource != null) {
+      final dup = buildDuplicatePageDefaults(duplicateSource.data, takenSlugs: taken);
+      resolvedExtra = {...extraDefaults, ...dup.defaults};
+      if (dup.droppedOwnedImage) resolvedNotice = context.tr('duplicateDroppedImage');
+    }
     final seasons = [
       for (final s in seasonDocs)
         if (!isSoftDeleted(s.data)) Season.fromMap(s.id, s.data),
@@ -1520,7 +1515,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
       context,
       d,
       editDef: editDef,
-      extraDefaults: extraDefaults,
+      extraDefaults: resolvedExtra,
       dynamicChoices: {
         'categories': catChoices,
         // The item's own key stays selectable even if the admin list no
@@ -1534,7 +1529,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
       takenSlugs: taken,
       seasons: seasons,
       titleOverride: titleOverride,
-      initialNotice: initialNotice,
+      initialNotice: resolvedNotice,
     );
   }
 
