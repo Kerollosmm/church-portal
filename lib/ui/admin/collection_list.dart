@@ -112,6 +112,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
       widget.def.name == 'categories' ? widget.repo.watch('pages') : null;
   StreamSubscription<AdminDoc?>? _featuresSub;
   bool _englishEnabled = true;
+  bool _openingEditor = false;
   ScaffoldFeatureController<SnackBar, SnackBarClosedReason>? _undoSnackBarController;
   Timer? _undoSnackBarTimer;
 
@@ -1389,27 +1390,29 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     AdminDoc source, {
     required CollectionDef pagesDef,
   }) async {
-    final allPages = def.name == 'pages' ? _lastDocs : (_lastPages ?? await _read('pages'));
-    if (!context.mounted) return;
-    final taken = collectTakenSlugs(
-      allPages,
-      excludeId: null,
-      isPendingDelete: _pendingDelete.isPending,
-    );
-    final dup = buildDuplicatePageDefaults(source.data, takenSlugs: taken);
-    final messenger = ScaffoldMessenger.of(context);
-    final droppedMsg = context.tr('duplicateDroppedImage');
-    final editorTitle = '${context.tr('duplicate')} — ${context.pick(pagesDef.labelAr, pagesDef.labelEn)}';
-    await _openEditor(
-      context,
-      null,
-      targetDef: pagesDef,
-      extraDefaults: dup.defaults,
-      titleOverride: editorTitle,
-    );
-    if (dup.droppedOwnedImage && context.mounted) {
-      messenger.removeCurrentSnackBar();
-      messenger.showSnackBar(SnackBar(content: Text(droppedMsg)));
+    if (_openingEditor) return;
+    _openingEditor = true;
+    try {
+      final allPages = def.name == 'pages' ? _lastDocs : (_lastPages ?? await _read('pages'));
+      if (!context.mounted) return;
+      final taken = collectTakenSlugs(
+        allPages,
+        excludeId: null,
+        isPendingDelete: _pendingDelete.isPending,
+      );
+      final dup = buildDuplicatePageDefaults(source.data, takenSlugs: taken);
+      final droppedNotice = dup.droppedOwnedImage ? context.tr('duplicateDroppedImage') : null;
+      final editorTitle = '${context.tr('duplicate')} — ${context.pick(pagesDef.labelAr, pagesDef.labelEn)}';
+      await _openEditorBody(
+        context,
+        null,
+        targetDef: pagesDef,
+        extraDefaults: dup.defaults,
+        titleOverride: editorTitle,
+        initialNotice: droppedNotice,
+      );
+    } finally {
+      _openingEditor = false;
     }
   }
 
@@ -1419,6 +1422,31 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     CollectionDef? targetDef,
     Map<String, Object?> extraDefaults = const {},
     String? titleOverride,
+    String? initialNotice,
+  }) async {
+    if (_openingEditor) return;
+    _openingEditor = true;
+    try {
+      await _openEditorBody(
+        context,
+        d,
+        targetDef: targetDef,
+        extraDefaults: extraDefaults,
+        titleOverride: titleOverride,
+        initialNotice: initialNotice,
+      );
+    } finally {
+      _openingEditor = false;
+    }
+  }
+
+  Future<void> _openEditorBody(
+    BuildContext context,
+    AdminDoc? d, {
+    CollectionDef? targetDef,
+    Map<String, Object?> extraDefaults = const {},
+    String? titleOverride,
+    String? initialNotice,
   }) async {
     final editDef = targetDef ?? def;
     bool usesLinks(List<FieldDef> fs) => fs.any((f) => f.linkPicker || usesLinks(f.subFields));
@@ -1506,6 +1534,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
       takenSlugs: taken,
       seasons: seasons,
       titleOverride: titleOverride,
+      initialNotice: initialNotice,
     );
   }
 
@@ -1519,6 +1548,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     Set<String> takenSlugs = const {},
     List<Season> seasons = const [],
     String? titleOverride,
+    String? initialNotice,
   }) {
     final label = context.pick(editDef.labelAr, editDef.labelEn);
     final editorTitle = titleOverride ?? '${context.tr(d == null ? 'add' : 'edit')} — $label';
@@ -1547,6 +1577,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
             : const [],
         seasons: seasons,
         englishEnabled: _englishEnabled,
+        initialNotice: initialNotice,
       ),
     ));
   }

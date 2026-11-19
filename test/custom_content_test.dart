@@ -3544,7 +3544,7 @@ void main() {
 
         final encodedParagraph =
             const PageBlock(type: BlockTypes.paragraph, textAr: 'نص التبرع', textEn: 'Donation note').encode();
-        final b = _Backend(
+        final b = _ReactivePagesBackend(
           lists: {
             'categories': const [],
             'pages': [
@@ -3574,25 +3574,36 @@ void main() {
             ],
           },
         );
+        addTearDown(b.dispose);
 
         await tester.pumpWidget(
           _admin(CollectionListScreen(repo: b, def: collectionById('pages')!), locale: const Locale('ar')),
         );
         await tester.pumpAndSettle();
 
-        // Soft-delete p2-pending so it sits in _pendingDelete with an active undo timer.
+        // Soft-delete p2-pending so it sits in _pendingDelete with an active undo timer & SnackBar.
         await tester.ensureVisible(find.byKey(const ValueKey('delete-p2-pending')));
         await tester.tap(find.byKey(const ValueKey('delete-p2-pending')));
         await tester.pumpAndSettle();
         expect(find.byKey(const ValueKey('p2-pending')), findsNothing);
+        expect(find.byType(SnackBar), findsOneWidget);
+        expect(find.byType(SnackBarAction), findsOneWidget);
 
         // Duplicate p1 -> opens hidden unsaved draft without writing yet; avoids pending-delete slug.
+        // Owned-image warning is shown as a dismissible in-editor notice so the Undo SnackBar stays intact.
         await tester.ensureVisible(find.byKey(const ValueKey('duplicate-p1')));
         await tester.tap(find.byKey(const ValueKey('duplicate-p1')));
         await tester.pumpAndSettle();
 
         expect(b.saves, isEmpty);
-        expect(find.text(adminStrings['duplicateDroppedImage']![0]), findsOneWidget);
+        expect(find.byKey(const Key('editor-initial-notice')), findsOneWidget);
+        expect(
+          find.descendant(
+            of: find.byKey(const Key('editor-initial-notice')),
+            matching: find.text(adminStrings['duplicateDroppedImage']![0]),
+          ),
+          findsOneWidget,
+        );
         expect(find.byType(DocEditor), findsOneWidget);
         expect(find.textContaining(adminStrings['duplicate']![0]), findsWidgets);
 
@@ -3623,21 +3634,36 @@ void main() {
         expect(b.saves.any((s) => s.$1 == 'pages' && s.$2 == 'new-1' && (s.$3['blocks'] as List?)?.single == encodedParagraph), isTrue);
         final savesAfterFirst = b.saves.length;
 
-        // Cancelling a duplicate leaves b.saves unchanged (0 additional writes).
+        // Duplicating p1 again after save computes the next free slug (-copy-3) from live pages,
+        // allows dismissing the notice banner, and cancelling leaves b.saves unchanged AND
+        // keeps the pending-delete Undo SnackBar active on CollectionListScreen.
         await tester.ensureVisible(find.byKey(const ValueKey('duplicate-p1')));
         await tester.tap(find.byKey(const ValueKey('duplicate-p1')));
         await tester.pumpAndSettle();
         expect(find.byType(DocEditor), findsOneWidget);
+        expect(tester.state<DocEditorState>(find.byType(DocEditor)).collect()['slug'], 'donations-2026-copy-3');
+        await tester.tap(find.byKey(const Key('editor-initial-notice-dismiss')));
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('editor-initial-notice')), findsNothing);
         await tester.tap(find.byType(CloseButton));
         await tester.pumpAndSettle();
         expect(find.byType(DocEditor), findsNothing);
         expect(b.saves, hasLength(savesAfterFirst));
 
-        // Duplicating a page with an external url cover image preserves it without dropped-image SnackBar.
+        // Undo SnackBar from p2-pending is still intact and functional after closing DocEditor.
+        expect(find.byType(SnackBar), findsOneWidget);
+        expect(find.byType(SnackBarAction), findsOneWidget);
+        await tester.tap(find.byType(SnackBarAction));
+        await tester.pumpAndSettle();
+        expect(b.updates.any((u) => u.$1 == 'pages' && u.$2 == 'p2-pending' && u.$3['deletedAt'] == null), isTrue);
+        expect(find.byKey(const ValueKey('p2-pending')), findsOneWidget);
+
+        // Duplicating a page with an external url cover image preserves it without dropped-image notice.
         await tester.ensureVisible(find.byKey(const ValueKey('duplicate-p3-url')));
         await tester.tap(find.byKey(const ValueKey('duplicate-p3-url')));
         await tester.pumpAndSettle();
         expect(find.byType(DocEditor), findsOneWidget);
+        expect(find.byKey(const Key('editor-initial-notice')), findsNothing);
         expect(find.text(adminStrings['duplicateDroppedImage']![0]), findsNothing);
         final urlState = tester.state<DocEditorState>(find.byType(DocEditor));
         expect(
@@ -3654,7 +3680,7 @@ void main() {
           {'source': MediaSource.url, 'url': 'https://example.com/cover.jpg', 'alt': 'Cover'},
         );
 
-        // Dispose screen so PendingDelete / undo SnackBar timers cancel cleanly.
+        // Dispose screen cleanly.
         await tester.pumpWidget(const SizedBox.shrink());
         await tester.pumpAndSettle();
       },
@@ -3668,7 +3694,7 @@ void main() {
         tester.view.devicePixelRatio = 1;
         addTearDown(tester.view.reset);
 
-        final b = _Backend(
+        final b = _ReactivePagesBackend(
           lists: {
             'categories': [
               AdminDoc('c1', {
@@ -3700,6 +3726,7 @@ void main() {
             ],
           },
         );
+        addTearDown(b.dispose);
 
         await tester.pumpWidget(_admin(CollectionListScreen(repo: b, def: collectionById('categories')!)));
         await tester.pumpAndSettle();
@@ -3724,14 +3751,14 @@ void main() {
         expect(b.saves.single.$3['slug'], 'choir-guide-copy-2');
         expect(b.saves.single.$3['categoryId'], BuiltInSections.activities);
 
-        // Duplicate from custom section tile -> preserves c1 and avoids existing slugs.
+        // Duplicate from custom section tile -> preserves c1 and avoids the newly saved choir-guide-copy-2.
         await tester.ensureVisible(find.byKey(const ValueKey('duplicateSectionPage-p-custom')));
         await tester.tap(find.byKey(const ValueKey('duplicateSectionPage-p-custom')));
         await tester.pumpAndSettle();
         expect(find.byType(DocEditor), findsOneWidget);
         final customState = tester.state<DocEditorState>(find.byType(DocEditor));
         expect(customState.collect()['categoryId'], 'c1');
-        expect(customState.collect()['slug'], 'choir-guide-copy-2');
+        expect(customState.collect()['slug'], 'choir-guide-copy-3');
         await tester.tap(find.byType(CloseButton));
         await tester.pumpAndSettle();
 
@@ -3805,6 +3832,53 @@ void main() {
             expect(tester.takeException(), isNull, reason: 'categories ${locale.languageCode} ${spec.size}');
           }
         }
+      },
+    );
+
+    testWidgets(
+      'CollectionListScreen double-tap guard prevents stacking duplicate DocEditor routes across delayed reads',
+      (tester) async {
+        registerAdminStrings();
+        tester.view.physicalSize = const Size(900, 1800);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.reset);
+
+        final b = _ReactivePagesBackend(
+          readDelay: const Duration(milliseconds: 80),
+          lists: {
+            'categories': const [],
+            'pages': [
+              AdminDoc('p1', {
+                'titleAr': 'صفحة تبرعات',
+                'slug': 'donations-2026',
+                'visible': true,
+              }),
+            ],
+          },
+        );
+        addTearDown(b.dispose);
+
+        await tester.pumpWidget(_admin(CollectionListScreen(repo: b, def: collectionById('pages')!)));
+        await tester.pump(const Duration(milliseconds: 100));
+        await tester.pumpAndSettle();
+
+        // Two rapid taps on duplicate-p1 while _read('pages') is in flight push only one DocEditor.
+        await tester.tap(find.byKey(const ValueKey('duplicate-p1')));
+        await tester.pump(const Duration(milliseconds: 10));
+        await tester.tap(find.byKey(const ValueKey('duplicate-p1')));
+        await tester.pump(const Duration(milliseconds: 100));
+        await tester.pumpAndSettle();
+
+        expect(find.byType(DocEditor), findsOneWidget);
+        await tester.tap(find.byType(CloseButton));
+        await tester.pumpAndSettle();
+        expect(find.byType(DocEditor), findsNothing);
+
+        // Sequential duplicate after closing still works.
+        await tester.tap(find.byKey(const ValueKey('duplicate-p1')));
+        await tester.pump(const Duration(milliseconds: 100));
+        await tester.pumpAndSettle();
+        expect(find.byType(DocEditor), findsOneWidget);
       },
     );
   });
@@ -3936,5 +4010,53 @@ class _FakePreviewMediaRepo implements MediaRepository {
 
   @override
   Future<void> delete(String mediaId) async {}
+}
+
+class _ReactivePagesBackend extends _Backend {
+  final _pagesCtrl = StreamController<List<AdminDoc>>.broadcast();
+  final Duration? readDelay;
+
+  _ReactivePagesBackend({super.lists, this.readDelay});
+
+  List<AdminDoc> get _pages => _lists['pages'] ?? const [];
+
+  @override
+  Stream<List<AdminDoc>> watch(String collection) {
+    if (collection == 'pages') {
+      return (() async* {
+        if (readDelay != null) await Future<void>.delayed(readDelay!);
+        yield List<AdminDoc>.of(_pages);
+        yield* _pagesCtrl.stream;
+      })();
+    }
+    return super.watch(collection);
+  }
+
+  void _upsertPage(String id, Map<String, dynamic> patch) {
+    final list = List<AdminDoc>.of(_pages);
+    final idx = list.indexWhere((d) => d.id == id);
+    if (idx >= 0) {
+      list[idx] = AdminDoc(id, {...list[idx].data, ...patch});
+    } else {
+      list.add(AdminDoc(id, {...patch}));
+    }
+    _lists['pages'] = list;
+    _pagesCtrl.add(List<AdminDoc>.of(list));
+  }
+
+  @override
+  Future<String> save(String collection, String? id, Map<String, dynamic> data) async {
+    final savedId = await super.save(collection, id, data);
+    if (collection == 'pages') _upsertPage(savedId, data);
+    return savedId;
+  }
+
+  @override
+  Future<void> update(String collection, String id, Map<String, dynamic> data) async {
+    await super.update(collection, id, data);
+    if (collection == 'pages') _upsertPage(id, data);
+  }
+
+  Future<void> dispose() => _pagesCtrl.close();
 }
 

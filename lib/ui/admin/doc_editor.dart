@@ -87,6 +87,9 @@ class DocEditor extends StatefulWidget {
   /// Whether English translation fields are shown in the form (P2-27b).
   final bool englishEnabled;
 
+  /// Optional dismissible informational notice shown at the top of the form.
+  final String? initialNotice;
+
   const DocEditor({
     super.key,
     required this.title,
@@ -107,6 +110,7 @@ class DocEditor extends StatefulWidget {
     this.existingDocs = const [],
     this.seasons = const [],
     this.englishEnabled = true,
+    this.initialNotice,
   });
 
   @override
@@ -134,6 +138,7 @@ class DocEditorState extends State<DocEditor> {
   double? _lastMaxScrollExtent;
   Timer? _errorFocusTimer;
   String? _saveError;
+  late String? _notice = widget.initialNotice;
 
   /// Image fields with a picked, compressed file waiting to be uploaded on save.
   final Map<String, EncodedImage> _pending = {};
@@ -651,6 +656,42 @@ class DocEditorState extends State<DocEditor> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _applyErrorFocus(entry, animate: !expanded);
     });
+  }
+
+  Widget _noticeBanner(BuildContext context, String notice) {
+    return Semantics(
+      liveRegion: true,
+      child: Card(
+        key: const Key('editor-initial-notice'),
+        color: context.pal.primary.withValues(alpha: 0.08),
+        margin: const EdgeInsets.only(bottom: 14),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(color: context.pal.primary.withValues(alpha: 0.35)),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          child: Row(
+            children: [
+              Icon(Icons.info_outline, color: context.pal.primary, size: 20),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  notice,
+                  style: TextStyle(color: context.pal.ink, fontWeight: FontWeight.w600),
+                ),
+              ),
+              IconButton(
+                key: const Key('editor-initial-notice-dismiss'),
+                icon: Icon(Icons.close, color: context.pal.muted, size: 18),
+                onPressed: () => setState(() => _notice = null),
+                tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   Widget _saveErrorBanner(BuildContext context, String error) {
@@ -2513,6 +2554,7 @@ class DocEditorState extends State<DocEditor> {
                           padding: const EdgeInsets.only(bottom: 12),
                           child: SelectableText('ID: ${widget.docId}', style: TextStyle(color: context.pal.muted)),
                         ),
+                      if (_notice != null && _notice!.isNotEmpty) _noticeBanner(context, _notice!),
                       if (_saveError != null) _saveErrorBanner(context, _saveError!),
                       if (summaryErrors.isNotEmpty) _errorSummaryCard(context, summaryErrors),
                       for (final f in widget.fields)
