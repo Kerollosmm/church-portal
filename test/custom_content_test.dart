@@ -28,6 +28,7 @@ import 'package:church_portal/ui/admin/collection_list.dart';
 import 'package:church_portal/ui/admin/contact_admin.dart';
 import 'package:church_portal/ui/admin/doc_editor.dart';
 import 'package:church_portal/ui/pages/category_page.dart' show CustomPageCard;
+import 'package:church_portal/ui/pages/custom_page.dart' show PageBlockView;
 import 'package:church_portal/ui/widgets/cards.dart' show NextMassCard;
 import 'package:church_portal/ui/widgets/common.dart';
 import 'package:church_portal/ui/widgets/feature_gate.dart';
@@ -3276,6 +3277,29 @@ void main() {
       final none = buildDuplicatePageDefaults({'titleAr': 'بلا صورة', 'slug': 'no-img'}, takenSlugs: const {});
       expect(none.droppedOwnedImage, isFalse);
       expect(none.defaults['image'], isNull);
+    });
+
+    testWidgets('PageBlockView delegates button and link taps to onLinkTap when provided without navigating', (tester) async {
+      final tapped = <String>[];
+      await tester.pumpWidget(_admin(
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            PageBlockView(
+              block: const PageBlock(type: BlockTypes.button, textEn: 'Mass times', url: '/mass-schedule'),
+              onLinkTap: tapped.add,
+            ),
+            PageBlockView(
+              block: const PageBlock(type: BlockTypes.link, textEn: 'External link', url: 'https://example.com'),
+              onLinkTap: tapped.add,
+            ),
+          ],
+        ),
+      ));
+      await tester.tap(find.text('Mass times'));
+      await tester.tap(find.text('External link'));
+      await tester.pump();
+      expect(tapped, ['/mass-schedule', 'https://example.com']);
     });
   });
 }

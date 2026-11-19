@@ -84,13 +84,19 @@ class CustomPageView extends ConsumerWidget {
 /// Renders one [PageBlock] with the active theme's readable colours.
 class PageBlockView extends StatelessWidget {
   final PageBlock block;
-  const PageBlockView({super.key, required this.block});
+
+  /// Optional link/button handler (defaults to [openLink]; used by admin preview
+  /// to intercept links without navigating away from `/admin`).
+  final void Function(String url)? onLinkTap;
+
+  const PageBlockView({super.key, required this.block, this.onLinkTap});
 
   @override
   Widget build(BuildContext context) {
     final b = block;
     final text = context.pick(b.textAr.trim(), b.textEn.trim());
     final primary = context.pal.primary;
+    void tapLink() => (onLinkTap ?? (u) => openLink(context, u))(b.url);
     switch (b.type) {
       case BlockTypes.heading:
         return Semantics(
@@ -113,7 +119,7 @@ class PageBlockView extends StatelessWidget {
         return Align(
           alignment: AlignmentDirectional.centerStart,
           child: FilledButton.icon(
-            onPressed: () => openLink(context, b.url),
+            onPressed: tapLink,
             icon: const Icon(Icons.arrow_forward_rounded, size: 18),
             label: Text(text.isEmpty ? context.tr('learnMore') : text),
           ),
@@ -123,7 +129,7 @@ class PageBlockView extends StatelessWidget {
           alignment: AlignmentDirectional.centerStart,
           child: TextButton.icon(
             style: TextButton.styleFrom(foregroundColor: primary),
-            onPressed: () => openLink(context, b.url),
+            onPressed: tapLink,
             icon: const Icon(Icons.open_in_new_rounded, size: 18),
             label: Text(text.isEmpty ? b.url : text,
                 style: const TextStyle(decoration: TextDecoration.underline, fontWeight: FontWeight.w700)),
