@@ -2,8 +2,9 @@
 import 'package:firebase_core/firebase_core.dart';
 
 import '../../domain/cairo_time.dart';
-import '../../domain/custom_content.dart' show BlockTypes, PageBlock, isValidSlug, slugMaxLength;
-import '../../domain/media.dart' show MediaSource, isValidImageUrl;
+import '../../domain/custom_content.dart'
+    show BlockTypes, PageBlock, PagePlacements, isValidSlug, slugMaxLength;
+import '../../domain/media.dart' show MediaImage, MediaSource, isValidImageUrl;
 import '../../domain/push.dart';
 import '../../domain/rules.dart' show normalizeDigits;
 import 'admin_schema.dart';
@@ -46,6 +47,96 @@ String slugFromTitle(String title, {required Set<String> taken}) {
     final candidate = '${_fitSlug(base, slugMaxLength - suffix.length)}$suffix';
     if (!taken.contains(candidate)) return candidate;
   }
+}
+
+/// Result of preparing unsaved defaults for duplicating a custom page.
+typedef DuplicatePageResult = ({Map<String, Object?> defaults, bool droppedOwnedImage});
+
+String _prefixedTitle(String raw, String prefix, int maxLen) {
+  final trimmed = raw.trim();
+  if (trimmed.isEmpty) return '';
+  final combined = trimmed.startsWith(prefix) ? trimmed : '$prefix$trimmed';
+  return combined.length > maxLen ? combined.substring(0, maxLen) : combined;
+}
+
+String _duplicateSlug(String rawSlug, String fallbackTitle, Set<String> taken) {
+  final trimmed = rawSlug.trim();
+  if (!isValidSlug(trimmed)) return slugFromTitle(fallbackTitle, taken: taken);
+  final stripped = trimmed.replaceFirst(RegExp(r'-copy(?:-\d+)?$'), '');
+  final stem = stripped.isEmpty ? trimmed : stripped;
+  final first = '${_fitSlug(stem, slugMaxLength - 5)}-copy';
+  if (!taken.contains(first)) return first;
+  for (var n = 2;; n++) {
+    final suffix = '-copy-$n';
+    final candidate = '${_fitSlug(stem, slugMaxLength - suffix.length)}$suffix';
+    if (!taken.contains(candidate)) return candidate;
+  }
+}
+
+/// Builds safe initial field values for duplicating a `pages` document:
+/// resets `visible` and `featured` to false, avoids double-prefixing titles,
+/// reserves a unique valid slug against [takenSlugs], deep-copies blocks, and
+/// drops uploaded/storage cover images so the original retains ownership.
+DuplicatePageResult buildDuplicatePageDefaults(
+  Map<String, dynamic> source, {
+  required Set<String> takenSlugs,
+}) {
+  final titleAr = _prefixedTitle(source['titleAr'] is String ? source['titleAr'] as String : '', 'نسخة من ', 200);
+  final titleEn = _prefixedTitle(source['titleEn'] is String ? source['titleEn'] as String : '', 'Copy of ', 200);
+  final subtitleAr = source['subtitleAr'] is String ? (source['subtitleAr'] as String).trim() : '';
+  final subtitleEn = source['subtitleEn'] is String ? (source['subtitleEn'] as String).trim() : '';
+  final rawPlacement = source['placement'] is String ? source['placement'] as String : '';
+  final placement = PagePlacements.all.contains(rawPlacement)
+      ? rawPlacement
+      : (source['showInNav'] == true ? PagePlacements.nav : PagePlacements.link);
+  final categoryId = source['categoryId'] is String ? source['categoryId'] as String : '';
+  final order = source['order'] is int
+      ? source['order'] as int
+      : (source['order'] is num ? (source['order'] as num).toInt() : 0);
+  final blocks = <dynamic>[
+    for (final b in (source['blocks'] is List ? source['blocks'] as List : const []))
+      if (b is String) b else if (b is Map) Map<String, dynamic>.from(b),
+  ];
+
+  // MediaImage.ownedMediaId only covers inline; check source explicitly so both
+  // inline and storage covers are dropped while external https URLs stay intact.
+  final rawImg = source['image'];
+  final img = MediaImage.fromMap(rawImg);
+  final Map<String, dynamic>? copiedImg;
+  final bool droppedOwnedImage;
+  if (img != null && img.source == MediaSource.url) {
+    copiedImg = img.toMap();
+    droppedOwnedImage = false;
+  } else {
+    copiedImg = null;
+    droppedOwnedImage =
+        rawImg is Map && (rawImg['source'] == MediaSource.inline || rawImg['source'] == MediaSource.storage);
+  }
+
+  final slug = _duplicateSlug(
+    source['slug'] is String ? source['slug'] as String : '',
+    titleAr.isEmpty ? titleEn : titleAr,
+    takenSlugs,
+  );
+
+  return (
+    defaults: <String, Object?>{
+      'titleAr': titleAr,
+      'titleEn': titleEn,
+      'subtitleAr': subtitleAr,
+      'subtitleEn': subtitleEn,
+      'image': copiedImg,
+      'blocks': blocks,
+      'placement': placement,
+      'categoryId': categoryId,
+      'showInNav': placement == PagePlacements.nav,
+      'featured': false,
+      'visible': false,
+      'slug': slug,
+      'order': order,
+    },
+    droppedOwnedImage: droppedOwnedImage,
+  );
 }
 
 final timeRe = RegExp(r'^([01]\d|2[0-3]):[0-5]\d$');

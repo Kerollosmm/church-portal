@@ -3126,6 +3126,158 @@ void main() {
       expect(tester.takeException(), isNull);
     });
   });
+
+  group('Phase 4 PR3: Preview & Duplicate', () {
+    test('copies content, prefixes titles without double prefix, resets visible/featured to false, preserves placement/categoryId/order, strips metadata', () {
+      final heading = const PageBlock(type: BlockTypes.heading, textAr: 'العنوان', textEn: 'Heading').encode();
+      final donation = const PageBlock(type: BlockTypes.donation, account: 'CIB 123', textAr: 'ملاحظات').encode();
+      final sourceBlocks = <dynamic>[heading, donation];
+      final source = <String, dynamic>{
+        'titleAr': 'دليل الكورال',
+        'titleEn': 'Choir Guide',
+        'subtitleAr': 'مقدمة',
+        'subtitleEn': 'Intro',
+        'slug': 'choir-guide',
+        'blocks': sourceBlocks,
+        'placement': PagePlacements.section,
+        'categoryId': BuiltInSections.activities,
+        'showInNav': false,
+        'featured': true,
+        'visible': true,
+        'order': 20,
+        'updatedAt': DateTime.utc(2026, 11, 19),
+        'updatedBy': 'admin@example.org',
+        'deletedAt': DateTime.utc(2026, 11, 19),
+      };
+
+      final res = buildDuplicatePageDefaults(source, takenSlugs: const {});
+      final d = res.defaults;
+      expect(res.droppedOwnedImage, isFalse);
+      expect(d['titleAr'], 'نسخة من دليل الكورال');
+      expect(d['titleEn'], 'Copy of Choir Guide');
+      expect(d['subtitleAr'], 'مقدمة');
+      expect(d['subtitleEn'], 'Intro');
+      expect(d['slug'], 'choir-guide-copy');
+      expect(d['blocks'], [heading, donation]);
+      (d['blocks'] as List).add('extra');
+      expect(sourceBlocks.length, 2);
+      expect(d['placement'], PagePlacements.section);
+      expect(d['categoryId'], BuiltInSections.activities);
+      expect(d['showInNav'], isFalse);
+      expect(d['featured'], isFalse);
+      expect(d['visible'], isFalse);
+      expect(d['order'], 20);
+      expect(d.containsKey('updatedAt'), isFalse);
+      expect(d.containsKey('updatedBy'), isFalse);
+      expect(d.containsKey('deletedAt'), isFalse);
+
+      // Already-prefixed page must not double-prefix; empty EN title stays empty; long titles clamp to 200.
+      final alreadyPrefixed = buildDuplicatePageDefaults({
+        'titleAr': 'نسخة من دليل الكورال',
+        'titleEn': 'Copy of Choir Guide',
+        'slug': 'choir-guide-copy',
+        'showInNav': true,
+      }, takenSlugs: const {'choir-guide-copy'});
+      expect(alreadyPrefixed.defaults['titleAr'], 'نسخة من دليل الكورال');
+      expect(alreadyPrefixed.defaults['titleEn'], 'Copy of Choir Guide');
+      expect(alreadyPrefixed.defaults['placement'], PagePlacements.nav);
+      expect(alreadyPrefixed.defaults['showInNav'], isTrue);
+
+      final blankEn = buildDuplicatePageDefaults({'titleAr': 'صفحة', 'titleEn': '', 'slug': 'page-1'}, takenSlugs: const {});
+      expect(blankEn.defaults['titleEn'], '');
+
+      final long200 = 'أ' * 200;
+      final long200En = 'A' * 200;
+      final clamped = buildDuplicatePageDefaults({'titleAr': long200, 'titleEn': long200En, 'slug': 'long'}, takenSlugs: const {});
+      expect((clamped.defaults['titleAr'] as String).length, 200);
+      expect((clamped.defaults['titleAr'] as String).startsWith('نسخة من '), isTrue);
+      expect((clamped.defaults['titleEn'] as String).length, 200);
+      expect((clamped.defaults['titleEn'] as String).startsWith('Copy of '), isTrue);
+    });
+
+    test('generates unique valid slugs across collisions, -copy-copy avoidance, 60-char boundary hyphens, and blank/invalid source slugs', () {
+      final col2 = buildDuplicatePageDefaults(
+        {'titleAr': 'دليل الكورال', 'slug': 'choir-guide'},
+        takenSlugs: const {'choir-guide', 'choir-guide-copy'},
+      );
+      expect(col2.defaults['slug'], 'choir-guide-copy-2');
+
+      final noCopyCopy = buildDuplicatePageDefaults(
+        {'titleAr': 'نسخة من دليل الكورال', 'slug': 'choir-guide-copy'},
+        takenSlugs: const {'choir-guide', 'choir-guide-copy'},
+      );
+      expect(noCopyCopy.defaults['slug'], 'choir-guide-copy-2');
+
+      final next3 = buildDuplicatePageDefaults(
+        {'titleAr': 'نسخة من دليل الكورال', 'slug': 'choir-guide-copy-2'},
+        takenSlugs: const {'choir-guide', 'choir-guide-copy', 'choir-guide-copy-2'},
+      );
+      expect(next3.defaults['slug'], 'choir-guide-copy-3');
+
+      final slug60 = 'a' * 60;
+      final res60 = buildDuplicatePageDefaults({'titleAr': 'طويل', 'slug': slug60}, takenSlugs: {slug60});
+      final s60 = res60.defaults['slug'] as String;
+      expect(isValidSlug(s60), isTrue);
+      expect(s60.length, lessThanOrEqualTo(slugMaxLength));
+      expect(s60.endsWith('-copy'), isTrue);
+      expect(s60 == slug60, isFalse);
+
+      final boundarySlug = '${'a' * 54}-bbbbb';
+      expect(boundarySlug.length, 60);
+      final resBoundary = buildDuplicatePageDefaults(
+        {'titleAr': 'حد', 'slug': boundarySlug},
+        takenSlugs: {boundarySlug},
+      );
+      expect(resBoundary.defaults['slug'], '${'a' * 54}-copy');
+      expect(isValidSlug(resBoundary.defaults['slug'] as String), isTrue);
+
+      final invalidSlug = buildDuplicatePageDefaults(
+        {'titleAr': 'حجز رحلة', 'slug': 'INVALID SLUG!'},
+        takenSlugs: const {'hgz-rhlh', 'nskh-mn-hgz-rhlh'},
+      );
+      final fallback = invalidSlug.defaults['slug'] as String;
+      expect(isValidSlug(fallback), isTrue);
+      expect(const {'hgz-rhlh', 'nskh-mn-hgz-rhlh'}.contains(fallback), isFalse);
+    });
+
+    test('copies external url cover image safely and drops owned inline/storage or invalid cover images', () {
+      final ext = buildDuplicatePageDefaults({
+        'titleAr': 'صورة خارجية',
+        'slug': 'ext-img',
+        'image': {'source': MediaSource.url, 'url': 'https://example.com/a.jpg', 'alt': 'Cover'},
+      }, takenSlugs: const {});
+      expect(ext.droppedOwnedImage, isFalse);
+      expect(ext.defaults['image'], {'source': MediaSource.url, 'url': 'https://example.com/a.jpg', 'alt': 'Cover'});
+
+      final inline = buildDuplicatePageDefaults({
+        'titleAr': 'صورة مرفوعة',
+        'slug': 'inline-img',
+        'image': {'source': MediaSource.inline, 'mediaId': 'abc123', 'alt': 'Cover'},
+      }, takenSlugs: const {});
+      expect(inline.droppedOwnedImage, isTrue);
+      expect(inline.defaults['image'], isNull);
+
+      final storage = buildDuplicatePageDefaults({
+        'titleAr': 'صورة تخزين',
+        'slug': 'storage-img',
+        'image': {'source': MediaSource.storage, 'url': 'https://example.com/a.jpg', 'mediaId': 'abc123'},
+      }, takenSlugs: const {});
+      expect(storage.droppedOwnedImage, isTrue);
+      expect(storage.defaults['image'], isNull);
+
+      final bad = buildDuplicatePageDefaults({
+        'titleAr': 'رابط فاسد',
+        'slug': 'bad-img',
+        'image': {'source': MediaSource.url, 'url': 'javascript:alert(1)'},
+      }, takenSlugs: const {});
+      expect(bad.droppedOwnedImage, isFalse);
+      expect(bad.defaults['image'], isNull);
+
+      final none = buildDuplicatePageDefaults({'titleAr': 'بلا صورة', 'slug': 'no-img'}, takenSlugs: const {});
+      expect(none.droppedOwnedImage, isFalse);
+      expect(none.defaults['image'], isNull);
+    });
+  });
 }
 
 final _asyncSectionTestProvider = StreamProvider<List<String>>((_) => const Stream.empty());
