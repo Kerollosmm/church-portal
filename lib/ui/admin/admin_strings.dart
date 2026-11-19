@@ -287,7 +287,7 @@ const Map<String, List<String>> adminStrings = {
   'previewLinkDisabled': ['الرابط في المعاينة معطّل: {url}', 'Link is disabled in preview: {url}'],
   'duplicate': ['تكرار', 'Duplicate'],
   'duplicateDroppedImage': [
-    'تم نسخ الصفحة بدون صورة الواجهة المرفوعة — يمكنك رفع صورة جديدة.',
+    'اتنسخت الصفحة من غير صورة الغلاف المرفوعة، ارفع صورة جديدة لو عايز.',
     'Duplicated without the uploaded hero image — you can upload a new one.',
   ],
 };

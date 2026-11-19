@@ -3600,7 +3600,7 @@ void main() {
         expect(
           find.descendant(
             of: find.byKey(const Key('editor-initial-notice')),
-            matching: find.text(adminStrings['duplicateDroppedImage']![0]),
+            matching: find.text('اتنسخت الصفحة من غير صورة الغلاف المرفوعة، ارفع صورة جديدة لو عايز.'),
           ),
           findsOneWidget,
         );
@@ -3879,6 +3879,77 @@ void main() {
         await tester.pump(const Duration(milliseconds: 100));
         await tester.pumpAndSettle();
         expect(find.byType(DocEditor), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'CollectionListScreen Duplicate opens DocEditor with defaults only and executes zero backend writes until Save is pressed',
+      (tester) async {
+        registerAdminStrings();
+        tester.view.physicalSize = const Size(900, 1400);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.reset);
+
+        final b = _ReactivePagesBackend(
+          lists: {
+            'categories': const [],
+            'pages': [
+              AdminDoc('orig', {
+                'titleAr': 'صفحة أصلية',
+                'titleEn': 'Original Page',
+                'slug': 'orig-slug',
+                'visible': true,
+                'featured': true,
+                'placement': PagePlacements.link,
+              }),
+            ],
+          },
+        );
+        addTearDown(b.dispose);
+
+        await tester.pumpWidget(
+          _admin(CollectionListScreen(repo: b, def: collectionById('pages')!), locale: const Locale('ar')),
+        );
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.byKey(const ValueKey('duplicate-orig')));
+        await tester.pumpAndSettle();
+
+        final editor = tester.widget<DocEditor>(find.byType(DocEditor));
+        expect(editor.data, isNull);
+        expect(editor.docId, isNull);
+        expect(editor.newDefaults['titleAr'], 'نسخة من صفحة أصلية');
+        expect(editor.newDefaults['slug'], 'orig-slug-copy');
+        expect(editor.newDefaults['visible'], isFalse);
+        expect(editor.newDefaults['featured'], isFalse);
+        expect(b.saves, isEmpty);
+        expect(b.updates, isEmpty);
+        expect(b.deletes, isEmpty);
+        expect(b.savedDocs, isEmpty);
+
+        // Editing fields and opening preview still performs zero backend writes.
+        await tester.enterText(find.byKey(const ValueKey('field-titleAr')), 'نسخة معدلة قبل الحفظ');
+        await tester.pump();
+        await tester.tap(find.byKey(const Key('editor-preview-top')));
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('preview-unsaved-banner')), findsOneWidget);
+        await tester.tap(find.byType(CloseButton));
+        await tester.pumpAndSettle();
+
+        expect(b.saves, isEmpty);
+        expect(b.updates, isEmpty);
+        expect(b.deletes, isEmpty);
+        expect(b.savedDocs, isEmpty);
+
+        // Only pressing Save persists the new document.
+        await tester.ensureVisible(find.byKey(const Key('editor-save')));
+        await tester.tap(find.byKey(const Key('editor-save')));
+        await tester.pumpAndSettle();
+        expect(b.saves, hasLength(1));
+        expect(b.saves.single.$1, 'pages');
+        expect(b.saves.single.$2, isNull);
+        expect(b.saves.single.$3['titleAr'], 'نسخة معدلة قبل الحفظ');
+        expect(b.saves.single.$3['visible'], isFalse);
       },
     );
   });
