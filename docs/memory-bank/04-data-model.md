@@ -360,7 +360,12 @@ pages are off the menu by default), `featured` (bool, default `false` — shows 
 `type␟textAr␟textEn␟url␟account␟instapay␟wallet` (U+001F, `PageBlock.encode` / `fromStored`; maps are still read
 tolerantly). Types: `heading`, `paragraph` (texts ≤ 4000), `image` (`url` = https picture link, texts = caption),
 `button` / `link` (texts = label, `url` = in-app path or http(s) URL), `donation` (`account` ≤ 120, `instapay` ≤ 80,
-`wallet` ≤ 30, texts = notes; display only). Not seeded.
+`wallet` ≤ 30, texts = notes; display only), and `list` (`BlockTypes.list`, PR 4A / ADR-079: `textAr` = 1–20 non-blank
+Arabic items ≤ `listItemMax` (200) chars each joined by U+001E `PageBlock.listSeparator`, `textEn` = `''` when all English
+items are empty or parallel items ≤ 200 chars joined by U+001E, `account` = `'bullet' | 'numbered' | ''` via
+`ListStyles`, `url`/`instapay`/`wallet` = `''`; `listBlockMaxItems = 20`, `typedef PageListItem = ({String ar, String en})`,
+helpers `PageBlock.list(...)`, `listStyle`, `listItems`, `isEmpty`; unknown block types and malformed strings still
+return `null` from `PageBlock.fromStored` and are skipped by `CustomPage.fromMap`). All 7 types are in `BlockTypes.all`. Not seeded.
 
 ## Non-content collections
 

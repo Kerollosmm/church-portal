@@ -290,6 +290,19 @@ const Map<String, List<String>> adminStrings = {
     'اتنسخت الصفحة من غير صورة الغلاف المرفوعة، ارفع صورة جديدة لو عايز.',
     'Duplicated without the uploaded hero image — you can upload a new one.',
   ],
+  // Phase 4 PR4A: custom page list block editor
+  'opt_list': ['قائمة', 'List'],
+  'listStyleLabel': ['شكل القائمة', 'List style'],
+  'opt_listStyle_bullet': ['نقاط', 'Bullets'],
+  'opt_listStyle_numbered': ['مرقّمة', 'Numbered'],
+  'listItemsLabel': ['عناصر القائمة', 'List items'],
+  'listItemArLabel': ['العنصر (عربي)', 'Item (Arabic)'],
+  'listItemEnLabel': ['العنصر (إنجليزي)', 'Item (English)'],
+  'addListItem': ['إضافة عنصر', 'Add item'],
+  'blockListEmpty': ['القائمة لازم يكون فيها عنصر واحد على الأقل.', 'List must have at least one item.'],
+  'blockListItemRequired': ['كل عنصر في القائمة لازم يكون له نص عربي.', 'Every list item needs Arabic text.'],
+  'blockListTooMany': ['الحد الأقصى للقائمة ٢٠ عنصر.', 'List can have at most 20 items.'],
+  'blockListItemTooLong': ['نص العنصر طويل عن الحد المسموح (٢٠٠ حرف).', 'List item exceeds 200 characters.'],
   // Admin-only strings moved from core/l10n.dart (ADR-077 / Golden Rule 12):
   'endDateBeforeStart': ['تاريخ النهاية قبل تاريخ البداية', 'The end date is before the start date'],
   'presetReplaceLongWarn': [

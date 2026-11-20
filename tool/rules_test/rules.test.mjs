@@ -1858,6 +1858,86 @@ describe('ADR-027: custom categories, their items and custom pages', () => {
     await assertFails(updateDoc(doc(own, 'pages', 'p-builtin-act'), { categoryId: null, ...stamp() }));
   });
 
+  test('pages: list blocks allow valid bullet/numbered/bilingual/20x200x20 worst-case and reject malformed ones', async () => {
+    const ed = db(EDITOR);
+    const listBlock = (extra = {}) => block({
+      type: 'list',
+      textAr: 'تجربة ١',
+      textEn: '',
+      url: '',
+      account: 'bullet',
+      instapay: '',
+      wallet: '',
+      ...extra,
+    });
+
+    // Allow: single-item bullet list with empty textEn and account: '' or 'bullet'
+    await assertSucceeds(setDoc(doc(ed, 'pages', 'p-list-min'), page({
+      slug: 'list-min',
+      blocks: [
+        listBlock({ account: '' }),
+        listBlock({ account: 'bullet' }),
+      ],
+    })));
+
+    // Allow: numbered list with multiple bilingual items and partial English
+    await assertSucceeds(setDoc(doc(ed, 'pages', 'p-list-num'), page({
+      slug: 'list-num',
+      blocks: [
+        listBlock({
+          account: 'numbered',
+          textAr: 'تجربة ١\u001eتجربة ٢\u001eتجربة ٣',
+          textEn: 'Item 1\u001e\u001eItem 3',
+        }),
+      ],
+    })));
+
+    // Allow: boundary single block (20 AR items x 200 'أ' + 20 EN items x 200 'e')
+    const maxAr = Array.from({ length: 20 }, () => 'أ'.repeat(200)).join('\u001e');
+    const maxEn = Array.from({ length: 20 }, () => 'e'.repeat(200)).join('\u001e');
+    const fullListBlock = listBlock({ textAr: maxAr, textEn: maxEn, account: 'numbered' });
+    await assertSucceeds(setDoc(doc(ed, 'pages', 'p-list-max-one'), page({
+      slug: 'list-max-one',
+      blocks: [fullListBlock],
+    })));
+
+    // Allow: worst-case 20-block budget test (20 full list blocks in one write)
+    const twentyFullListBlocks = Array.from({ length: 20 }, () => fullListBlock);
+    await assertSucceeds(setDoc(doc(ed, 'pages', 'p-list-max-20'), page({
+      slug: 'list-max-20',
+      blocks: twentyFullListBlocks,
+    })));
+    await assertSucceeds(updateDoc(doc(ed, 'pages', 'p-list-max-20'), {
+      blocks: twentyFullListBlocks,
+    }));
+
+    // Deny cases
+    const twentyOneAr = Array.from({ length: 21 }, (_, i) => `تجربة ${i + 1}`).join('\u001e');
+    const twentyOneEn = Array.from({ length: 21 }, (_, i) => `Item ${i + 1}`).join('\u001e');
+    for (const [label, badBlock] of [
+      ['0 items', 'list\u001f\u001f\u001f\u001fbullet\u001f\u001f'],
+      ['whitespace-only first item', 'list\u001f   \u001f\u001f\u001fbullet\u001f\u001f'],
+      ['whitespace-only second item', listBlock({ textAr: 'أ\u001e   ' })],
+      ['21 AR items', listBlock({ textAr: twentyOneAr })],
+      ['21 EN items', listBlock({ textAr: 'تجربة', textEn: twentyOneEn })],
+      ['AR item > 200 chars', listBlock({ textAr: 'أ'.repeat(201) })],
+      ['EN item > 200 chars', listBlock({ textAr: 'تجربة', textEn: 'e'.repeat(201) })],
+      ['invalid style in account', listBlock({ account: 'roman' })],
+      ['non-empty url', listBlock({ url: 'https://example.org' })],
+      ['non-empty instapay', listBlock({ instapay: 'church@instapay' })],
+      ['non-empty wallet', listBlock({ wallet: '01012345678' })],
+      ['6 slots (too few)', 'list\u001fتجربة\u001f\u001f\u001fbullet\u001f'],
+      ['8 slots (too many)', `${listBlock()}\u001fextra`],
+      ['unknown type details', block({ type: 'details', textAr: 'تجربة' })],
+      ['unknown type video', block({ type: 'video', textAr: 'تجربة' })],
+    ]) {
+      await assertFails(
+        setDoc(doc(ed, 'pages', 'p-list-bad'), page({ slug: 'list-bad', blocks: [badBlock] })),
+        label,
+      );
+    }
+  });
+
   test('the two custom-content section switches are known keys', async () => {
     await assertSucceeds(setDoc(doc(db(EDITOR), 'settings', 'features'), { sections: { customSections: false, customPages: true } }));
   });

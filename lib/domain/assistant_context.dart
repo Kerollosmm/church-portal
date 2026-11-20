@@ -631,17 +631,27 @@ void _customContent(
       var budget = _pageTextBudget;
       for (final x in p.blocks) {
         if (x.isEmpty || x.type == BlockTypes.image) continue;
-        final text = _bi(_clip(x.textAr.trim(), 400), _clip(x.textEn.trim(), 400));
-        final line = switch (x.type) {
-          BlockTypes.donation => '- Donations:'
-              '${x.account.trim().isNotEmpty ? ' account ${x.account.trim()};' : ''}'
-              '${x.instapay.trim().isNotEmpty ? ' InstaPay ${x.instapay.trim()};' : ''}'
-              '${x.wallet.trim().isNotEmpty ? ' mobile wallet ${x.wallet.trim()};' : ''}'
-              '${text.isNotEmpty ? ' $text' : ''}',
-          BlockTypes.button || BlockTypes.link => '- ${text.isNotEmpty ? text : 'Link'}: ${x.url}',
-          BlockTypes.heading => '### $text',
-          _ => text,
-        };
+        final String line;
+        if (x.type == BlockTypes.list) {
+          final items = [
+            for (final it in x.listItems)
+              _bi(_clip(it.ar, listItemMax), _clip(it.en, listItemMax)),
+          ].where((s) => s.isNotEmpty).toList();
+          if (items.isEmpty) continue;
+          line = '- ${items.join('; ')}';
+        } else {
+          final text = _bi(_clip(x.textAr.trim(), 400), _clip(x.textEn.trim(), 400));
+          line = switch (x.type) {
+            BlockTypes.donation => '- Donations:'
+                '${x.account.trim().isNotEmpty ? ' account ${x.account.trim()};' : ''}'
+                '${x.instapay.trim().isNotEmpty ? ' InstaPay ${x.instapay.trim()};' : ''}'
+                '${x.wallet.trim().isNotEmpty ? ' mobile wallet ${x.wallet.trim()};' : ''}'
+                '${text.isNotEmpty ? ' $text' : ''}',
+            BlockTypes.button || BlockTypes.link => '- ${text.isNotEmpty ? text : 'Link'}: ${x.url}',
+            BlockTypes.heading => '### $text',
+            _ => text,
+          };
+        }
         if (line.trim().isEmpty) continue;
         // Skip a block that does not fit; later short ones (donation, links)
         // may still fit the budget.

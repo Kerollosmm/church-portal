@@ -10,7 +10,8 @@ import '../../data/admin_repository.dart';
 import '../../data/image_processing.dart';
 import '../../data/media_repository.dart';
 import '../../domain/cairo_time.dart';
-import '../../domain/custom_content.dart' show BlockTypes, CustomPage, PagePlacements;
+import '../../domain/custom_content.dart'
+    show BlockTypes, CustomPage, ListStyles, PageBlock, PagePlacements, listBlockMaxItems;
 import '../../domain/media.dart';
 import '../../domain/models.dart';
 import '../../domain/reminders.dart' show leadLabel;
@@ -22,6 +23,7 @@ import '../widgets/item_image.dart';
 import 'admin_schema.dart';
 import 'admin_strings.dart';
 import 'admin_validators.dart';
+import 'block_editors.dart';
 import 'page_preview.dart';
 import 'screen_header.dart';
 import 'state_switch.dart';
@@ -492,6 +494,19 @@ class DocEditorState extends State<DocEditor> {
 
   String _plainLabel(FieldDef f) => context.pick(f.labelAr, f.labelEn);
 
+  List<ListBlockIssue> _listIssuesForRow(_Row r) => validateListBlock(
+        arItems: [for (final it in r.listItems) it.arCtrl.text],
+        enItems: widget.englishEnabled ? [for (final it in r.listItems) it.enCtrl.text] : const [],
+        style: r.listStyle,
+      );
+
+  String? _listBlockErrorText(_Row r) {
+    for (final issue in _listIssuesForRow(r)) {
+      if (issue.itemIndex == null) return context.tr(issue.code);
+    }
+    return null;
+  }
+
   /// Collects all invalid currently-shown fields in form order (including those
   /// inside collapsed advanced/group cards so they appear in the error summary).
   List<_FieldErrorEntry> _collectErrors() {
@@ -541,6 +556,33 @@ class DocEditorState extends State<DocEditor> {
                 advanced: advanced,
                 fieldKey: r.keyFor(sf.key),
                 focusNode: r.focusFor(sf.key),
+              ));
+            }
+          }
+          if (f.key == 'blocks' && r.values['type'] == BlockTypes.list) {
+            for (final issue in _listIssuesForRow(r)) {
+              final itemIdx = issue.itemIndex;
+              final GlobalKey targetKey;
+              final FocusNode targetFocus;
+              final String label;
+              if (itemIdx != null && itemIdx < r.listItems.length) {
+                final item = r.listItems[itemIdx];
+                targetKey = issue.isEn ? item.enKey : item.arKey;
+                targetFocus = issue.isEn ? item.enFocus : item.arFocus;
+                final itemLabel = context.tr(issue.isEn ? 'listItemEnLabel' : 'listItemArLabel');
+                label = '${_plainLabel(f)} (${i + 1}) — $itemLabel ${itemIdx + 1}';
+              } else {
+                targetKey = r.keyFor('list');
+                targetFocus = r.focusFor('list');
+                label = '${_plainLabel(f)} (${i + 1}) — ${context.tr(issue.code)}';
+              }
+              out.add(_FieldErrorEntry(
+                id: '${f.key}-$i-list-${itemIdx ?? 'block'}-${issue.isEn ? 'en' : 'ar'}-${issue.code}',
+                label: label,
+                group: group,
+                advanced: advanced,
+                fieldKey: targetKey,
+                focusNode: targetFocus,
               ));
             }
           }
@@ -630,8 +672,8 @@ class DocEditorState extends State<DocEditor> {
       if (f.collapsibleRows) {
         final rows = _rows[f.key] ?? const <_Row>[];
         for (var idx = 0; idx < rows.length; idx++) {
-          if (rows[idx].focus.values.contains(entry.focusNode) ||
-              rows[idx].keys.values.contains(entry.fieldKey)) {
+          if (rows[idx].ownsFocusNode(entry.focusNode) ||
+              rows[idx].ownsFieldKey(entry.fieldKey)) {
             if (_expandedRow[f.key] != idx) {
               _expandedRow[f.key] = idx;
               expanded = true;
@@ -2073,6 +2115,18 @@ class DocEditorState extends State<DocEditor> {
 
   String? _blockSnippet(_Row row) {
     final type = (row.values['type'] ?? row.text['type']?.text ?? BlockTypes.paragraph).toString();
+    if (type == BlockTypes.list) {
+      return blockSnippetSummary(
+        type: type,
+        textAr: [for (final it in row.listItems) it.arCtrl.text].join(PageBlock.listSeparator),
+        textEn: [
+          for (final it in row.listItems)
+            widget.englishEnabled ? it.enCtrl.text : it.initialEn,
+        ].join(PageBlock.listSeparator),
+        account: row.listStyle,
+        isAr: context.isAr,
+      );
+    }
     return blockSnippetSummary(
       type: type,
       textAr: row.text['textAr']?.text ?? (row.values['textAr']?.toString() ?? ''),
@@ -2081,6 +2135,7 @@ class DocEditorState extends State<DocEditor> {
       account: row.text['account']?.text ?? (row.values['account']?.toString() ?? ''),
       instapay: row.text['instapay']?.text ?? (row.values['instapay']?.toString() ?? ''),
       wallet: row.text['wallet']?.text ?? (row.values['wallet']?.toString() ?? ''),
+      isAr: context.isAr,
     );
   }
 
@@ -2195,7 +2250,7 @@ class DocEditorState extends State<DocEditor> {
                                 icon: Icon(Icons.delete_outline, color: context.pal.alert, size: 20),
                                 onPressed: () => setState(() {
                                   final removed = rows.removeAt(i);
-                                  if (_pendingErrorFocus != null && removed.focus.values.contains(_pendingErrorFocus!.focusNode)) {
+                                  if (_pendingErrorFocus != null && removed.ownsFocusNode(_pendingErrorFocus!.focusNode)) {
                                     _clearPendingErrorFocus();
                                   }
                                   removed.dispose();
@@ -2297,6 +2352,13 @@ class DocEditorState extends State<DocEditor> {
                               ],
                               onChanged: (v) => setState(() {
                                 rows[i].values[sf.key] = v;
+                                if (f.key == 'blocks' &&
+                                    sf.key == 'type' &&
+                                    v == BlockTypes.list &&
+                                    rows[i].listItems.isEmpty) {
+                                  rows[i].listStyle = ListStyles.bullet;
+                                  rows[i].listItems.add(ListItemDraft.from());
+                                }
                                 _dirty = true;
                                 _syncErrorSummaryAfterChange();
                               }),
@@ -2336,6 +2398,67 @@ class DocEditorState extends State<DocEditor> {
                         },
                       ),
                     ),
+                  if (f.key == 'blocks' && rows[i].values['type'] == BlockTypes.list)
+                    KeyedSubtree(
+                      key: rows[i].keyFor('list'),
+                      child: Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: ListBlockEditor(
+                          blockIndex: i,
+                          style: rows[i].listStyle,
+                          items: rows[i].listItems,
+                          englishEnabled: widget.englishEnabled,
+                          onStyleChanged: (style) => setState(() {
+                            rows[i].listStyle = style;
+                            _dirty = true;
+                            _syncErrorSummaryAfterChange();
+                          }),
+                          onChanged: _markDirty,
+                          onAddItem: () {
+                            if (rows[i].listItems.length >= listBlockMaxItems) return;
+                            final draft = ListItemDraft.from();
+                            setState(() {
+                              rows[i].listItems.add(draft);
+                              _dirty = true;
+                              _syncErrorSummaryAfterChange();
+                            });
+                            WidgetsBinding.instance.addPostFrameCallback((_) {
+                              if (mounted && draft.arFocus.canRequestFocus) {
+                                draft.arFocus.requestFocus();
+                              }
+                            });
+                          },
+                          onRemoveItem: (itemIdx) => setState(() {
+                            final removed = rows[i].listItems.removeAt(itemIdx);
+                            if (_pendingErrorFocus != null &&
+                                (identical(removed.arFocus, _pendingErrorFocus!.focusNode) ||
+                                    identical(removed.enFocus, _pendingErrorFocus!.focusNode))) {
+                              _clearPendingErrorFocus();
+                            }
+                            removed.dispose();
+                            _dirty = true;
+                            _syncErrorSummaryAfterChange();
+                          }),
+                          onMoveItem: (from, to) => setState(() {
+                            final moved = rows[i].listItems.removeAt(from);
+                            rows[i].listItems.insert(to, moved);
+                            _dirty = true;
+                            _syncErrorSummaryAfterChange();
+                          }),
+                          itemErrorText: _showErrorSummary
+                              ? (itemIdx, isEn) {
+                                  for (final issue in _listIssuesForRow(rows[i])) {
+                                    if (issue.itemIndex == itemIdx && issue.isEn == isEn) {
+                                      return context.tr(issue.code);
+                                    }
+                                  }
+                                  return null;
+                                }
+                              : null,
+                          blockErrorText: _showErrorSummary ? _listBlockErrorText(rows[i]) : null,
+                        ),
+                      ),
+                    ),
                   // Wrap: at 320 px / 200% text the buttons flow onto two lines.
                   Wrap(
                       alignment: WrapAlignment.spaceBetween,
@@ -2370,7 +2493,7 @@ class DocEditorState extends State<DocEditor> {
                     TextButton.icon(
                       onPressed: () => setState(() {
                         final removed = rows.removeAt(i);
-                        if (_pendingErrorFocus != null && removed.focus.values.contains(_pendingErrorFocus!.focusNode)) {
+                        if (_pendingErrorFocus != null && removed.ownsFocusNode(_pendingErrorFocus!.focusNode)) {
                           _clearPendingErrorFocus();
                         }
                         removed.dispose();
@@ -2701,10 +2824,20 @@ class _Row {
   final Map<String, GlobalKey> keys = {};
   final Map<String, dynamic> initial = {};
   final List<FieldDef> fields;
+  String listStyle = ListStyles.bullet;
+  final List<ListItemDraft> listItems = [];
   _Row(this.fields);
 
   FocusNode focusFor(String k) => focus.putIfAbsent(k, () => FocusNode());
   GlobalKey keyFor(String k) => keys.putIfAbsent(k, () => GlobalKey());
+
+  bool ownsFocusNode(FocusNode node) =>
+      focus.values.contains(node) ||
+      listItems.any((it) => identical(it.arFocus, node) || identical(it.enFocus, node));
+
+  bool ownsFieldKey(GlobalKey key) =>
+      keys.values.contains(key) ||
+      listItems.any((it) => identical(it.arKey, key) || identical(it.enKey, key));
 
   factory _Row.from(List<FieldDef> fields, Map data, VoidCallback onChange, {bool isNew = false}) {
     final r = _Row(fields);
@@ -2724,20 +2857,50 @@ class _Row {
           r.text[f.key] = TextEditingController(text: v?.toString() ?? '')..addListener(onChange);
       }
     }
+    if (fields.any((f) => f.key == 'type') && r.values['type'] == BlockTypes.list) {
+      r.listStyle = (data['account']?.toString() == ListStyles.numbered)
+          ? ListStyles.numbered
+          : ListStyles.bullet;
+      final rawAr = data['textAr']?.toString() ?? '';
+      final rawEn = data['textEn']?.toString() ?? '';
+      final arParts = rawAr.isEmpty ? const <String>[] : rawAr.split(PageBlock.listSeparator);
+      final enParts = rawEn.isEmpty ? const <String>[] : rawEn.split(PageBlock.listSeparator);
+      final count = arParts.length > enParts.length ? arParts.length : enParts.length;
+      for (var i = 0; i < count; i++) {
+        r.listItems.add(ListItemDraft.from(
+          ar: i < arParts.length ? arParts[i] : '',
+          en: i < enParts.length ? enParts[i] : '',
+        ));
+      }
+      if (isNew && r.listItems.isEmpty) {
+        r.listItems.add(ListItemDraft.from());
+      }
+    }
     r.initial.addAll(r.collect());
     return r;
   }
 
-  Map<String, dynamic> collect({bool englishEnabled = true}) => {
-        for (final f in fields)
-          f.key: (!englishEnabled && f.lang == 'en')
-              ? initial[f.key]
-              : switch (f.type) {
-                  FieldType.boolean || FieldType.choice => values[f.key],
-                  FieldType.phone => normalizePhoneInput(text[f.key]!.text.trim()),
-                  _ => text[f.key]!.text.trim(),
-                },
-      };
+  Map<String, dynamic> collect({bool englishEnabled = true}) {
+    if (values['type'] == BlockTypes.list && fields.any((f) => f.key == 'type')) {
+      return PageBlock.list(
+        items: [
+          for (final it in listItems)
+            (ar: it.arCtrl.text, en: englishEnabled ? it.enCtrl.text : it.initialEn),
+        ],
+        style: listStyle,
+      ).toMap();
+    }
+    return {
+      for (final f in fields)
+        f.key: (!englishEnabled && f.lang == 'en')
+            ? initial[f.key]
+            : switch (f.type) {
+                FieldType.boolean || FieldType.choice => values[f.key],
+                FieldType.phone => normalizePhoneInput(text[f.key]!.text.trim()),
+                _ => text[f.key]!.text.trim(),
+              },
+    };
+  }
 
   void dispose() {
     for (final c in text.values) {
@@ -2745,6 +2908,9 @@ class _Row {
     }
     for (final f in focus.values) {
       f.dispose();
+    }
+    for (final it in listItems) {
+      it.dispose();
     }
   }
 }
@@ -2915,6 +3081,15 @@ class _LooseDatePickerDialogState extends State<_LooseDatePickerDialog> {
   }
 }
 
+String _clipSnippet(String raw) {
+  final collapsed = raw.replaceAll(RegExp(r'\s+'), ' ').trim();
+  if (collapsed.isEmpty) return '';
+  if (collapsed.length > 40) {
+    return '${collapsed.substring(0, 40)}…';
+  }
+  return collapsed;
+}
+
 /// Extracts and formats the preview snippet for a collapsed block in doc editor.
 /// Returns:
 /// - `null` when snippet should be suppressed entirely (image block with URL but empty caption).
@@ -2929,7 +3104,21 @@ String? blockSnippetSummary({
   String account = '',
   String instapay = '',
   String wallet = '',
+  bool isAr = true,
 }) {
+  if (type == BlockTypes.list) {
+    final items = [
+      for (final part in textAr.split(PageBlock.listSeparator))
+        if (part.replaceAll(PageBlock.separator, '').trim().isNotEmpty)
+          part.replaceAll(PageBlock.separator, '').trim(),
+    ];
+    if (items.isEmpty) return '';
+    final first = _clipSnippet(items.first);
+    if (items.length == 1) return first;
+    final rest = items.length - 1;
+    final countStr = isAr ? toArabicDigits('$rest') : '$rest';
+    return '$first (+$countStr)';
+  }
   String raw = '';
   if (type == BlockTypes.image) {
     if (textAr.trim().isNotEmpty) {
@@ -2976,10 +3165,5 @@ String? blockSnippetSummary({
     }
   }
 
-  final collapsed = raw.replaceAll(RegExp(r'\s+'), ' ').trim();
-  if (collapsed.isEmpty) return '';
-  if (collapsed.length > 40) {
-    return '${collapsed.substring(0, 40)}…';
-  }
-  return collapsed;
+  return _clipSnippet(raw);
 }

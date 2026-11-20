@@ -12,6 +12,7 @@ import 'package:church_portal/data/admin_repository.dart';
 import 'package:church_portal/data/content_repository.dart';
 import 'package:church_portal/data/media_repository.dart';
 import 'package:church_portal/data/seed_data.dart';
+import 'package:church_portal/domain/assistant_context.dart';
 import 'package:church_portal/domain/cairo_time.dart';
 import 'package:church_portal/domain/contact_categories.dart';
 import 'package:church_portal/domain/custom_content.dart';
@@ -25,12 +26,13 @@ import 'package:church_portal/ui/admin/admin_schema.dart';
 import 'package:church_portal/ui/admin/admin_screens.dart';
 import 'package:church_portal/ui/admin/admin_strings.dart';
 import 'package:church_portal/ui/admin/admin_validators.dart';
+import 'package:church_portal/ui/admin/block_editors.dart';
 import 'package:church_portal/ui/admin/collection_list.dart';
 import 'package:church_portal/ui/admin/contact_admin.dart';
 import 'package:church_portal/ui/admin/doc_editor.dart';
 import 'package:church_portal/ui/admin/page_preview.dart';
 import 'package:church_portal/ui/pages/category_page.dart' show CustomPageCard;
-import 'package:church_portal/ui/pages/custom_page.dart' show PageBlockView;
+import 'package:church_portal/ui/pages/custom_page.dart' show CustomPageView, PageBlockView;
 import 'package:church_portal/ui/widgets/cards.dart' show NextMassCard;
 import 'package:church_portal/ui/widgets/common.dart';
 import 'package:church_portal/ui/widgets/feature_gate.dart';
@@ -289,6 +291,186 @@ void main() {
         },
       ]);
       expect(collectionById('alerts')!.fields.firstWhere((f) => f.key == 'link').linkPicker, isTrue);
+    });
+
+    test('list blocks: encode/decode round-trip, styles, and separator stripping', () {
+      final bullet = PageBlock.list(
+        items: [(ar: 'تجربة أولى', en: 'First'), (ar: 'تجربة ثانية', en: 'Second')],
+      );
+      expect(bullet.type, BlockTypes.list);
+      expect(bullet.listStyle, ListStyles.bullet);
+      expect(bullet.isEmpty, isFalse);
+      final bulletDec = PageBlock.fromStored(bullet.encode())!;
+      expect(bulletDec.toMap(), bullet.toMap());
+      expect(bulletDec.listStyle, ListStyles.bullet);
+      expect(bulletDec.listItems, [(ar: 'تجربة أولى', en: 'First'), (ar: 'تجربة ثانية', en: 'Second')]);
+
+      final numbered = PageBlock.list(
+        items: [(ar: 'تجربة أ', en: 'A'), (ar: 'تجربة ب', en: 'B')],
+        style: ListStyles.numbered,
+      );
+      expect(numbered.listStyle, ListStyles.numbered);
+      final numDec = PageBlock.fromStored(numbered.encode())!;
+      expect(numDec.toMap(), numbered.toMap());
+      expect(numDec.listStyle, ListStyles.numbered);
+      expect(numDec.listItems, [(ar: 'تجربة أ', en: 'A'), (ar: 'تجربة ب', en: 'B')]);
+
+      // Invalid/empty account resolves safely to bullet.
+      expect(
+        PageBlock.list(items: [(ar: 'تجربة ١', en: '')], style: 'invalid').listStyle,
+        ListStyles.bullet,
+      );
+      expect(
+        const PageBlock(type: BlockTypes.list, textAr: 'تجربة ١', account: '').listStyle,
+        ListStyles.bullet,
+      );
+      expect(
+        const PageBlock(type: BlockTypes.list, textAr: 'تجربة ١', account: 'roman').listStyle,
+        ListStyles.bullet,
+      );
+
+      // Separator characters (\u001f and \u001e) inside item text are stripped.
+      final dirty = PageBlock.list(
+        items: [
+          (ar: ' تجربة\u001f١\u001e ', en: ' Test\u001e1\u001f '),
+        ],
+      );
+      expect(dirty.textAr, 'تجربة١');
+      expect(dirty.textEn, 'Test1');
+      final dirtyDec = PageBlock.fromStored(dirty.encode())!;
+      expect(dirtyDec.listItems, [(ar: 'تجربة١', en: 'Test1')]);
+    });
+
+    test('list blocks: parallel EN alignment, short EN, blank items, and malformed input', () {
+      // Partial English preserves exact index alignment; all-empty EN encodes ''.
+      final partial = PageBlock.list(
+        items: [
+          (ar: 'تجربة ١', en: 'Test 1'),
+          (ar: 'تجربة ٢', en: ''),
+          (ar: 'تجربة ٣', en: 'Test 3'),
+        ],
+      );
+      expect(partial.textEn, isNotEmpty);
+      expect(PageBlock.fromStored(partial.encode())!.listItems, [
+        (ar: 'تجربة ١', en: 'Test 1'),
+        (ar: 'تجربة ٢', en: ''),
+        (ar: 'تجربة ٣', en: 'Test 3'),
+      ]);
+
+      final arOnly = PageBlock.list(
+        items: [(ar: 'تجربة ١', en: ''), (ar: 'تجربة ٢', en: '  ')],
+      );
+      expect(arOnly.textEn, '');
+      expect(PageBlock.fromStored(arOnly.encode())!.listItems, [
+        (ar: 'تجربة ١', en: ''),
+        (ar: 'تجربة ٢', en: ''),
+      ]);
+
+      // Short textEn decodes safely without RangeError.
+      const shortEn = PageBlock(
+        type: BlockTypes.list,
+        textAr: 'تجربة أ\u001eتجربة ب\u001eتجربة ج',
+        textEn: 'Only A',
+      );
+      expect(shortEn.listItems, [
+        (ar: 'تجربة أ', en: 'Only A'),
+        (ar: 'تجربة ب', en: ''),
+        (ar: 'تجربة ج', en: ''),
+      ]);
+
+      // Blank items in malformed stored strings are skipped; all-blank is empty.
+      const withBlanks = PageBlock(
+        type: BlockTypes.list,
+        textAr: ' \u001eتجربة صالحة\u001e\u001e  ',
+        textEn: 'Ignored\u001eValid\u001e\u001e',
+      );
+      expect(withBlanks.listItems, [(ar: 'تجربة صالحة', en: 'Valid')]);
+      expect(withBlanks.isEmpty, isFalse);
+
+      const allBlank = PageBlock(
+        type: BlockTypes.list,
+        textAr: ' \u001e  \u001e',
+        textEn: 'Orphan EN',
+      );
+      expect(allBlank.listItems, isEmpty);
+      expect(allBlank.isEmpty, isTrue);
+      expect(PageBlock.list(items: const []).isEmpty, isTrue);
+
+      // Backward compatibility: unknown block type and wrong slot counts drop cleanly.
+      expect(PageBlock.fromStored('list\u001fonly two'), isNull);
+      expect(PageBlock.fromStored('video\u001f\u001f\u001fhttps://x.org\u001f\u001f\u001f'), isNull);
+      final page = CustomPage.fromMap('list-compat', {
+        'slug': 'list-compat',
+        'titleAr': 'تجربة صفحة',
+        'blocks': [
+          PageBlock.list(items: [(ar: 'تجربة عنصر', en: 'Item')]).encode(),
+          'list\u001fbad',
+          {'type': 'video', 'url': 'https://x.org'},
+        ],
+      });
+      expect(page.blocks.length, 1);
+      expect(page.blocks.first.type, BlockTypes.list);
+      expect(page.blocks.first.listItems, [(ar: 'تجربة عنصر', en: 'Item')]);
+    });
+
+    test('list blocks: assistant grounding formats with "; " and omits raw \\u001e and empty lists', () {
+      final listPage = CustomPage(
+        id: 'lp1',
+        slug: 'test-list',
+        titleAr: 'تجربة قائمة',
+        titleEn: 'Test list',
+        blocks: [
+          PageBlock.list(
+            items: [
+              (ar: 'تجربة بند ١', en: 'Item 1'),
+              (ar: 'تجربة بند ٢', en: ''),
+              (ar: 'تجربة بند ٣', en: 'Item 3'),
+            ],
+            style: ListStyles.numbered,
+          ),
+          PageBlock.list(items: const []),
+        ],
+      );
+      final instr = buildAssistantInstruction(
+        settings: const ChurchSettings(nameAr: 'تجربة كنيسة', nameEn: 'Test Church', addressAr: '', addressEn: ''),
+        liturgies: const [],
+        seasons: const [],
+        clinics: const [],
+        meetings: const [],
+        activities: const [],
+        facilities: const [],
+        now: CairoTime.at(2026, 11, 2, 600),
+        pages: [listPage],
+      );
+      expect(instr, contains('- Item 1 (تجربة بند ١); تجربة بند ٢; Item 3 (تجربة بند ٣)'));
+      expect(instr.contains(PageBlock.listSeparator), isFalse);
+
+      final emptyOnlyPage = CustomPage(
+        id: 'lp2',
+        slug: 'empty-list',
+        titleAr: 'تجربة قائمة فارغة',
+        titleEn: 'Empty list',
+        blocks: [
+          const PageBlock(type: BlockTypes.list, textAr: ' \u001e '),
+          const PageBlock(type: BlockTypes.paragraph, textAr: 'تجربة فقرة', textEn: 'After empty list'),
+        ],
+      );
+      final emptyInstr = buildAssistantInstruction(
+        settings: const ChurchSettings(nameAr: 'تجربة كنيسة', nameEn: 'Test Church', addressAr: '', addressEn: ''),
+        liturgies: const [],
+        seasons: const [],
+        clinics: const [],
+        meetings: const [],
+        activities: const [],
+        facilities: const [],
+        now: CairoTime.at(2026, 11, 2, 600),
+        pages: [emptyOnlyPage],
+      );
+      expect(
+        emptyInstr,
+        contains('## Empty list (تجربة قائمة فارغة) (page /page/empty-list)\nAfter empty list (تجربة فقرة)'),
+      );
+      expect(emptyInstr.contains(PageBlock.listSeparator), isFalse);
     });
   });
 
@@ -4085,6 +4267,673 @@ void main() {
         await tester.pumpAndSettle();
         expect(b.saves, hasLength(1));
         expect(b.saves.single.$3['slug'], 'orig-slug-copy-2');
+      },
+    );
+  });
+
+  group('Phase 4 PR4A: public list block', () {
+    testWidgets('PageBlockView renders bullet list in Arabic RTL with excluded bullet semantics', (tester) async {
+      final block = PageBlock.list(
+        items: const [
+          (ar: 'تجربة أولى', en: 'First'),
+          (ar: 'تجربة ثانية', en: 'Second'),
+        ],
+        style: ListStyles.bullet,
+      );
+      await tester.pumpWidget(_admin(PageBlockView(block: block), locale: const Locale('ar')));
+      await tester.pumpAndSettle();
+
+      expect(Directionality.of(tester.element(find.text('تجربة أولى'))), TextDirection.rtl);
+      expect(find.text('•'), findsNWidgets(2));
+      expect(find.ancestor(of: find.text('•'), matching: find.byType(ExcludeSemantics)), findsNWidgets(2));
+      expect(find.text('تجربة أولى'), findsOneWidget);
+      expect(find.text('تجربة ثانية'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('PageBlockView renders numbered list with Arabic-Indic digits in AR RTL and ASCII digits in EN LTR',
+        (tester) async {
+      final block = PageBlock.list(
+        items: const [
+          (ar: 'تجربة أ', en: 'First'),
+          (ar: 'تجربة ب', en: 'Second'),
+          (ar: 'تجربة ج', en: 'Third'),
+        ],
+        style: ListStyles.numbered,
+      );
+
+      await tester.pumpWidget(_admin(PageBlockView(block: block), locale: const Locale('ar')));
+      await tester.pumpAndSettle();
+      expect(Directionality.of(tester.element(find.text('تجربة أ'))), TextDirection.rtl);
+      expect(find.text('${toArabicDigits('1')}.'), findsOneWidget);
+      expect(find.text('${toArabicDigits('2')}.'), findsOneWidget);
+      expect(find.text('${toArabicDigits('3')}.'), findsOneWidget);
+      expect(find.text('1.'), findsNothing);
+      expect(find.text('تجربة أ'), findsOneWidget);
+      expect(find.text('تجربة ب'), findsOneWidget);
+      expect(find.text('تجربة ج'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+
+      await tester.pumpWidget(_admin(PageBlockView(block: block), locale: const Locale('en')));
+      await tester.pumpAndSettle();
+      expect(Directionality.of(tester.element(find.text('First'))), TextDirection.ltr);
+      expect(find.text('1.'), findsOneWidget);
+      expect(find.text('2.'), findsOneWidget);
+      expect(find.text('3.'), findsOneWidget);
+      expect(find.text('١.'), findsNothing);
+      expect(find.text('First'), findsOneWidget);
+      expect(find.text('Second'), findsOneWidget);
+      expect(find.text('Third'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('PageBlockView falls back to Arabic text when English item text is empty', (tester) async {
+      final block = PageBlock.list(
+        items: const [
+          (ar: 'تجربة بند أول', en: 'First item'),
+          (ar: 'تجربة بند ثانٍ بلا ترجمة', en: ''),
+          (ar: 'تجربة بند ثالث', en: 'Third item'),
+        ],
+        style: ListStyles.numbered,
+      );
+      await tester.pumpWidget(_admin(PageBlockView(block: block), locale: const Locale('en')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('1.'), findsOneWidget);
+      expect(find.text('2.'), findsOneWidget);
+      expect(find.text('3.'), findsOneWidget);
+      expect(find.text('First item'), findsOneWidget);
+      expect(find.text('تجربة بند ثانٍ بلا ترجمة'), findsOneWidget);
+      expect(find.text('Third item'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('empty list block and unknown block type render SizedBox.shrink cleanly in PageBlockView and CustomPageView',
+        (tester) async {
+      await tester.pumpWidget(_admin(
+        Column(
+          children: [
+            PageBlockView(block: PageBlock.list(items: const [])),
+            const PageBlockView(block: PageBlock(type: BlockTypes.list, textAr: ' \u001e  ', textEn: 'Ignored')),
+            const PageBlockView(block: PageBlock(type: 'future_type', textAr: 'تجربة')),
+          ],
+        ),
+      ));
+      await tester.pumpAndSettle();
+
+      final views = find.byType(PageBlockView);
+      expect(views, findsNWidgets(3));
+      for (var i = 0; i < 3; i++) {
+        expect(tester.getSize(views.at(i)), Size.zero);
+        final shrink = tester.widget<SizedBox>(
+          find.descendant(of: views.at(i), matching: find.byType(SizedBox)).first,
+        );
+        expect(shrink.width, 0);
+        expect(shrink.height, 0);
+      }
+      expect(find.text('تجربة'), findsNothing);
+      expect(tester.takeException(), isNull);
+
+      final page = CustomPage(
+        id: 'p-empty-unknown',
+        slug: 'mixed-empty',
+        titleAr: 'تجربة صفحة مختلطة',
+        titleEn: 'Test mixed page',
+        blocks: [
+          PageBlock.list(items: const []),
+          const PageBlock(type: BlockTypes.list, textAr: ' \u001e '),
+          const PageBlock(type: 'future_type', textAr: 'تجربة نوع مستقبلي'),
+          const PageBlock(type: BlockTypes.paragraph, textAr: 'تجربة فقرة ظاهرة', textEn: 'Test visible paragraph'),
+        ],
+      );
+      final repo = _ControlledPagesRepo(Stream.value([page]), entries: const []);
+      await _pump(tester, '/page/mixed-empty', repo: repo);
+      expect(find.byType(CustomPageView), findsOneWidget);
+      expect(find.text('Test visible paragraph'), findsOneWidget);
+      expect(find.text('تجربة نوع مستقبلي'), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets(
+      'CustomPageView with 20-item numbered list and long wrapping text renders cleanly at 320/400/1400 px with 200% text scale in AR RTL and EN LTR',
+      (tester) async {
+        tester.platformDispatcher.textScaleFactorTestValue = 2.0;
+        addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+
+        final items = <PageListItem>[
+          for (var i = 1; i <= 20; i++)
+            (
+              ar: 'تجربة البند رقم $i مع نص عربي طويل يلتف على عدة أسطر للتحقق من عدم وجود أي تجاوز عند التكبير',
+              en: 'Test list item $i with long wrapping English copy that spans multiple lines to verify zero overflow at 200% scale',
+            ),
+        ];
+        final page = CustomPage(
+          id: 'p-list-resp',
+          slug: 'list-responsive',
+          titleAr: 'تجربة قائمة طويلة',
+          titleEn: 'Test long list',
+          blocks: [
+            PageBlock.list(items: items, style: ListStyles.numbered),
+          ],
+        );
+
+        for (final width in [320.0, 400.0, 1400.0]) {
+          for (final locale in [const Locale('ar'), const Locale('en')]) {
+            final repo = _ControlledPagesRepo(Stream.value([page]), entries: const []);
+            await _pump(
+              tester,
+              '/page/list-responsive',
+              size: Size(width, 1200),
+              repo: repo,
+              locale: locale,
+            );
+            expect(find.byType(CustomPageView), findsOneWidget, reason: 'width=$width locale=${locale.languageCode}');
+            expect(
+              MediaQuery.textScalerOf(tester.element(find.byType(CustomPageView))).scale(10),
+              20.0,
+              reason: 'width=$width locale=${locale.languageCode}',
+            );
+            expect(tester.takeException(), isNull, reason: 'width=$width locale=${locale.languageCode}');
+
+            if (locale.languageCode == 'ar') {
+              expect(find.text('${toArabicDigits('1')}.'), findsOneWidget);
+              expect(find.text('${toArabicDigits('20')}.'), findsOneWidget);
+              for (final item in items) {
+                expect(find.text(item.ar), findsOneWidget, reason: 'width=$width ar item missing');
+              }
+            } else {
+              expect(find.text('1.'), findsOneWidget);
+              expect(find.text('20.'), findsOneWidget);
+              for (final item in items) {
+                expect(find.text(item.en), findsOneWidget, reason: 'width=$width en item missing');
+              }
+            }
+          }
+        }
+      },
+    );
+  });
+
+  group('Phase 4 PR4A: admin list block editor', () {
+    testWidgets(
+      'DocEditor supports list block creation, style toggle, 20-item cap, reorder, remove, dirty/reset, and exact encoded save',
+      (tester) async {
+        registerAdminStrings();
+        tester.view.physicalSize = const Size(900, 2200);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.reset);
+
+        final pagesDef = collectionById('pages')!;
+        Map<String, dynamic>? saved;
+        await tester.pumpWidget(_admin(
+          DocEditor(
+            title: 'صفحة قائمة تجربة',
+            fields: pagesDef.fields,
+            def: pagesDef,
+            popOnSave: false,
+            data: const {'titleAr': 'تجربة صفحة قائمة', 'slug': 'test-list-page', 'visible': true},
+            onSave: (d) async => saved = d,
+          ),
+          locale: const Locale('ar'),
+        ));
+        await tester.pumpAndSettle();
+
+        final state = tester.state<DocEditorState>(find.byType(DocEditor));
+        expect(state.dirty, isFalse);
+
+        // Add a new block and switch its type to `list`.
+        await tester.ensureVisible(find.text('إضافة صف'));
+        await tester.tap(find.text('إضافة صف'));
+        await tester.pumpAndSettle();
+        expect(state.dirty, isTrue);
+
+        await tester.ensureVisible(find.byType(DropdownButtonFormField<String>).first);
+        await tester.tap(find.byType(DropdownButtonFormField<String>).first);
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('قائمة').last);
+        await tester.pumpAndSettle();
+
+        expect(find.byType(ListBlockEditor), findsOneWidget);
+        expect(find.byKey(const Key('listItemAr-0-0')), findsOneWidget);
+        expect(find.byKey(const Key('listItemEn-0-0')), findsOneWidget);
+
+        // Switch style bullet -> numbered.
+        await tester.tap(find.byKey(const Key('listStyle-0-numbered')));
+        await tester.pumpAndSettle();
+
+        // Add up to 20 items -> add button disables at 20.
+        for (var i = 1; i < listBlockMaxItems; i++) {
+          final addBtn = find.byKey(const Key('addListItem-0'));
+          await tester.ensureVisible(addBtn);
+          await tester.pumpAndSettle();
+          await tester.tap(addBtn);
+          await tester.pumpAndSettle();
+        }
+        expect(find.byKey(const Key('listItemAr-0-19')), findsOneWidget);
+        final addBtnAtMax = tester.widget<OutlinedButton>(find.byKey(const Key('addListItem-0')));
+        expect(addBtnAtMax.onPressed, isNull);
+
+        // Remove items back down to 2.
+        for (var k = listBlockMaxItems - 1; k >= 2; k--) {
+          final rm = find.byKey(Key('listItemRemove-0-$k'));
+          await tester.ensureVisible(rm);
+          await tester.pumpAndSettle();
+          await tester.tap(rm);
+          await tester.pumpAndSettle();
+        }
+        expect(find.byKey(const Key('listItemAr-0-2')), findsNothing);
+
+        // Edit AR & EN on both items, then reorder (move item 1 up).
+        await tester.enterText(find.byKey(const Key('listItemAr-0-0')), 'تجربة أول');
+        await tester.enterText(find.byKey(const Key('listItemEn-0-0')), 'First');
+        await tester.enterText(find.byKey(const Key('listItemAr-0-1')), 'تجربة ثانٍ');
+        await tester.enterText(find.byKey(const Key('listItemEn-0-1')), 'Second');
+        await tester.pumpAndSettle();
+
+        await tester.ensureVisible(find.byKey(const Key('listItemUp-0-1')));
+        await tester.tap(find.byKey(const Key('listItemUp-0-1')));
+        await tester.pumpAndSettle();
+
+        // Verify UnsavedBar shows and discard resets cleanly.
+        expect(find.text('فيه تعديلات مش محفوظة'), findsOneWidget);
+        await tester.tap(find.byKey(const ValueKey('unsaved-bar-cancel')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('تجاهل'));
+        await tester.pumpAndSettle();
+        expect(state.dirty, isFalse);
+        expect(find.byType(ListBlockEditor), findsNothing);
+
+        // Re-create a 2-item numbered list block and save.
+        await tester.ensureVisible(find.text('إضافة صف'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('إضافة صف'));
+        await tester.pumpAndSettle();
+        await tester.ensureVisible(find.byType(DropdownButtonFormField<String>).first);
+        await tester.pumpAndSettle();
+        await tester.tap(find.byType(DropdownButtonFormField<String>).first);
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('قائمة').last);
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('listStyle-0-numbered')));
+        await tester.pumpAndSettle();
+        await tester.ensureVisible(find.byKey(const Key('addListItem-0')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('addListItem-0')));
+        await tester.pumpAndSettle();
+
+        await tester.enterText(find.byKey(const Key('listItemAr-0-0')), 'تجربة بند ١');
+        await tester.enterText(find.byKey(const Key('listItemEn-0-0')), 'Item one');
+        await tester.enterText(find.byKey(const Key('listItemAr-0-1')), 'تجربة بند ٢');
+        await tester.enterText(find.byKey(const Key('listItemEn-0-1')), 'Item two');
+        await tester.pumpAndSettle();
+
+        await tester.ensureVisible(find.byKey(const Key('editor-save')));
+        await tester.tap(find.byKey(const Key('editor-save')));
+        await tester.pumpAndSettle();
+
+        final expected = PageBlock.list(
+          items: const [(ar: 'تجربة بند ١', en: 'Item one'), (ar: 'تجربة بند ٢', en: 'Item two')],
+          style: ListStyles.numbered,
+        ).encode();
+        expect(saved, isNotNull);
+        expect(saved!['blocks'], [expected]);
+      },
+    );
+
+    testWidgets(
+      'collapsed invalid list block shows editor-error-summary, tapping expands & focuses item, and fixing unblocks save',
+      (tester) async {
+        registerAdminStrings();
+        tester.view.physicalSize = const Size(900, 1800);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.reset);
+
+        final pagesDef = collectionById('pages')!;
+        final invalidListBlock = const PageBlock(
+          type: BlockTypes.list,
+          textAr: 'تجربة بند سليم\u001e   ',
+          textEn: 'Valid\u001eNeeds AR',
+          account: ListStyles.bullet,
+        ).encode();
+
+        Map<String, dynamic>? saved;
+        await tester.pumpWidget(_admin(
+          DocEditor(
+            title: 'تحقق القائمة',
+            fields: pagesDef.fields,
+            def: pagesDef,
+            popOnSave: false,
+            data: {
+              'titleAr': 'تجربة صفحة تحقق',
+              'slug': 'test-list-validation',
+              'visible': true,
+              'blocks': [
+                const PageBlock(type: BlockTypes.paragraph, textAr: 'تجربة فقرة أولى').encode(),
+                invalidListBlock,
+              ],
+            },
+            onSave: (d) async => saved = d,
+          ),
+          locale: const Locale('ar'),
+        ));
+        await tester.pumpAndSettle();
+
+        // Block 0 is expanded initially; block 1 (list) is collapsed.
+        expect(find.byKey(const Key('listItemAr-1-1')), findsNothing);
+
+        await tester.ensureVisible(find.byKey(const Key('editor-save')));
+        await tester.tap(find.byKey(const Key('editor-save')));
+        await tester.pumpAndSettle();
+
+        expect(saved, isNull);
+        expect(find.byKey(const Key('editor-error-summary')), findsOneWidget);
+        final summaryEntry = find.byKey(const ValueKey('error-summary-blocks-1-list-1-ar-blockListItemRequired'));
+        expect(summaryEntry, findsOneWidget);
+
+        // Tap the summary item -> expands block 1 and focuses listItemAr-1-1.
+        await tester.tap(summaryEntry);
+        await tester.pumpAndSettle();
+
+        expect(find.byKey(const Key('listItemAr-1-1')), findsOneWidget);
+        final fieldWidget = tester.widget<TextField>(find.byKey(const Key('listItemAr-1-1')));
+        expect(fieldWidget.focusNode?.hasFocus, isTrue);
+
+        // Fix the empty Arabic item -> error summary clears and save succeeds.
+        await tester.enterText(find.byKey(const Key('listItemAr-1-1')), 'تجربة بند ثانٍ');
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('editor-error-summary')), findsNothing);
+
+        // Removing all items triggers blockListEmpty and blocks save.
+        await tester.tap(find.byKey(const Key('listItemRemove-1-1')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('listItemRemove-1-0')));
+        await tester.pumpAndSettle();
+        await tester.ensureVisible(find.byKey(const Key('editor-save')));
+        await tester.tap(find.byKey(const Key('editor-save')));
+        await tester.pumpAndSettle();
+        expect(saved, isNull);
+        expect(find.byKey(const Key('error-summary-blocks-1-list-block-ar-blockListEmpty')), findsOneWidget);
+        expect(find.text('القائمة لازم يكون فيها عنصر واحد على الأقل.'), findsOneWidget);
+
+        // Add back 2 valid items -> error summary clears and save succeeds.
+        await tester.ensureVisible(find.byKey(const Key('addListItem-1')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('addListItem-1')));
+        await tester.pumpAndSettle();
+        await tester.enterText(find.byKey(const Key('listItemAr-1-0')), 'تجربة بند سليم');
+        await tester.enterText(find.byKey(const Key('listItemEn-1-0')), 'Valid');
+        await tester.ensureVisible(find.byKey(const Key('addListItem-1')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('addListItem-1')));
+        await tester.pumpAndSettle();
+        await tester.enterText(find.byKey(const Key('listItemAr-1-1')), 'تجربة بند ثانٍ');
+        await tester.enterText(find.byKey(const Key('listItemEn-1-1')), 'Needs AR');
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('editor-error-summary')), findsNothing);
+
+        await tester.ensureVisible(find.byKey(const Key('editor-save')));
+        await tester.tap(find.byKey(const Key('editor-save')));
+        await tester.pumpAndSettle();
+        expect(saved, isNotNull);
+        final blocks = saved!['blocks'] as List;
+        final decoded = PageBlock.fromStored(blocks[1]);
+        expect(decoded?.listItems, const [
+          (ar: 'تجربة بند سليم', en: 'Valid'),
+          (ar: 'تجربة بند ثانٍ', en: 'Needs AR'),
+        ]);
+      },
+    );
+
+    testWidgets(
+      'englishEnabled: false hides English item inputs and preserves paired EN translations across edits, reorders, and deletions',
+      (tester) async {
+        registerAdminStrings();
+        tester.view.physicalSize = const Size(900, 1800);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.reset);
+
+        final pagesDef = collectionById('pages')!;
+        final bilingualList = PageBlock.list(
+          items: const [
+            (ar: 'تجربة أ', en: 'Alpha'),
+            (ar: 'تجربة ب', en: 'Beta'),
+            (ar: 'تجربة ج', en: 'Gamma'),
+          ],
+          style: ListStyles.bullet,
+        ).encode();
+
+        Map<String, dynamic>? saved;
+        await tester.pumpWidget(_admin(
+          DocEditor(
+            title: 'عربي فقط',
+            fields: pagesDef.fields,
+            def: pagesDef,
+            popOnSave: false,
+            englishEnabled: false,
+            data: {
+              'titleAr': 'تجربة صفحة عربي',
+              'slug': 'test-ar-only-list',
+              'visible': true,
+              'blocks': [bilingualList],
+            },
+            onSave: (d) async => saved = d,
+          ),
+          locale: const Locale('ar'),
+        ));
+        await tester.pumpAndSettle();
+
+        expect(find.byKey(const Key('listItemAr-0-0')), findsOneWidget);
+        expect(find.byKey(const Key('listItemEn-0-0')), findsNothing);
+
+        // Edit item 0 AR, move item 0 down (swap Alpha & Beta), then remove Beta (now index 0).
+        await tester.enterText(find.byKey(const Key('listItemAr-0-0')), 'تجربة أ معدّلة');
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('listItemDown-0-0')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('listItemRemove-0-0')));
+        await tester.pumpAndSettle();
+
+        await tester.ensureVisible(find.byKey(const Key('editor-save')));
+        await tester.tap(find.byKey(const Key('editor-save')));
+        await tester.pumpAndSettle();
+
+        expect(saved, isNotNull);
+        final decoded = PageBlock.fromStored((saved!['blocks'] as List).single);
+        expect(decoded?.listItems, const [
+          (ar: 'تجربة أ معدّلة', en: 'Alpha'),
+          (ar: 'تجربة ج', en: 'Gamma'),
+        ]);
+      },
+    );
+
+    testWidgets(
+      'PagePreviewScreen renders unsaved list block edits and preserves dirty state with 0 saves',
+      (tester) async {
+        registerAdminStrings();
+        tester.view.physicalSize = const Size(900, 1800);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.reset);
+
+        final pagesDef = collectionById('pages')!;
+        var saveCount = 0;
+        await tester.pumpWidget(_admin(
+          DocEditor(
+            title: 'معاينة قائمة',
+            fields: pagesDef.fields,
+            def: pagesDef,
+            popOnSave: true,
+            data: {
+              'titleAr': 'تجربة صفحة معاينة',
+              'titleEn': 'Test preview page',
+              'slug': 'test-list-preview',
+              'visible': true,
+              'blocks': [
+                PageBlock.list(
+                  items: const [(ar: 'تجربة قديمة', en: 'Old item')],
+                  style: ListStyles.bullet,
+                ).encode(),
+              ],
+            },
+            onSave: (_) async => saveCount++,
+          ),
+          locale: const Locale('ar'),
+        ));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.byKey(const Key('listStyle-0-numbered')));
+        await tester.pumpAndSettle();
+        await tester.enterText(find.byKey(const Key('listItemAr-0-0')), 'تجربة معاينة محدثة');
+        await tester.enterText(find.byKey(const Key('listItemEn-0-0')), 'Updated preview item');
+        await tester.tap(find.byKey(const Key('addListItem-0')));
+        await tester.pumpAndSettle();
+        await tester.enterText(find.byKey(const Key('listItemAr-0-1')), 'تجربة معاينة ثانية');
+        await tester.enterText(find.byKey(const Key('listItemEn-0-1')), 'Second preview item');
+        await tester.pumpAndSettle();
+
+        final editorState = tester.state<DocEditorState>(find.byType(DocEditor));
+        expect(editorState.dirty, isTrue);
+
+        await tester.ensureVisible(find.byKey(const Key('editor-preview')));
+        await tester.tap(find.byKey(const Key('editor-preview')));
+        await tester.pumpAndSettle();
+
+        expect(find.byType(PagePreviewScreen), findsOneWidget);
+        expect(find.text('تجربة معاينة محدثة'), findsOneWidget);
+        expect(find.text('تجربة معاينة ثانية'), findsOneWidget);
+        expect(find.text('${toArabicDigits('1')}.'), findsOneWidget);
+        expect(find.text('${toArabicDigits('2')}.'), findsOneWidget);
+        expect(saveCount, 0);
+
+        // Toggle preview language to English and verify EN items + ASCII numbers.
+        await tester.tap(find.byKey(const Key('preview-lang-toggle')));
+        await tester.pumpAndSettle();
+        expect(find.text('Updated preview item'), findsOneWidget);
+        expect(find.text('Second preview item'), findsOneWidget);
+        expect(find.text('1.'), findsOneWidget);
+        expect(find.text('2.'), findsOneWidget);
+
+        // Close preview -> dirty state & UnsavedBar remain intact with 0 saves.
+        await tester.tap(find.byType(CloseButton));
+        await tester.pumpAndSettle();
+        expect(find.byType(DocEditor), findsOneWidget);
+        expect(editorState.dirty, isTrue);
+        expect(find.text('فيه تعديلات مش محفوظة'), findsOneWidget);
+        expect(saveCount, 0);
+      },
+    );
+
+    testWidgets(
+      'Duplicate preserves list blocks in buildDuplicatePageDefaults and CollectionListScreen unsaved draft',
+      (tester) async {
+        registerAdminStrings();
+        tester.view.physicalSize = const Size(900, 1800);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.reset);
+
+        final encodedList = PageBlock.list(
+          items: const [(ar: 'تجربة شرط ١', en: 'Rule 1'), (ar: 'تجربة شرط ٢', en: 'Rule 2')],
+          style: ListStyles.numbered,
+        ).encode();
+
+        final dupDefaults = buildDuplicatePageDefaults(
+          {
+            'titleAr': 'تجربة أصل',
+            'titleEn': 'Test origin',
+            'slug': 'test-origin',
+            'visible': true,
+            'featured': true,
+            'blocks': [encodedList],
+          },
+          takenSlugs: const {'test-origin'},
+        );
+        expect(dupDefaults.defaults['blocks'], [encodedList]);
+        expect(dupDefaults.defaults['visible'], isFalse);
+        expect(dupDefaults.defaults['featured'], isFalse);
+
+        final b = _ReactivePagesBackend(
+          lists: {
+            'categories': const [],
+            'pages': [
+              AdminDoc('p-list', {
+                'titleAr': 'تجربة صفحة بقائمة',
+                'titleEn': 'Test List Page',
+                'slug': 'test-list-dup',
+                'visible': true,
+                'blocks': [encodedList],
+              }),
+            ],
+          },
+        );
+        addTearDown(b.dispose);
+
+        await tester.pumpWidget(
+          _admin(CollectionListScreen(repo: b, def: collectionById('pages')!), locale: const Locale('ar')),
+        );
+        await tester.pumpAndSettle();
+
+        await tester.ensureVisible(find.byKey(const ValueKey('duplicate-p-list')));
+        await tester.tap(find.byKey(const ValueKey('duplicate-p-list')));
+        await tester.pumpAndSettle();
+
+        expect(b.saves, isEmpty);
+        expect(find.byType(DocEditor), findsOneWidget);
+        expect(find.byType(ListBlockEditor), findsOneWidget);
+        expect(find.text('تجربة شرط ١'), findsOneWidget);
+        expect(find.text('تجربة شرط ٢'), findsOneWidget);
+        final state = tester.state<DocEditorState>(find.byType(DocEditor));
+        expect(state.collect()['blocks'], [encodedList]);
+        expect(state.collect()['visible'], isFalse);
+      },
+    );
+
+    testWidgets(
+      'ListBlockEditor renders with zero overflow at 320px width and 200% text scale in AR RTL and EN LTR',
+      (tester) async {
+        registerAdminStrings();
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.reset);
+
+        final pagesDef = collectionById('pages')!;
+        final longList = PageBlock.list(
+          items: const [
+            (
+              ar: 'تجربة بند طويل جداً يلتف على عدة أسطر للتحقق من عدم وجود تجاوز عند التكبير ٢٠٠٪',
+              en: 'Test long wrapping English list item spanning multiple lines at 200 percent text scale',
+            ),
+            (
+              ar: 'تجربة بند ثانٍ طويل للتحقق من أزرار التحريك والإزالة',
+              en: 'Test second wrapping item to check move and remove buttons',
+            ),
+          ],
+          style: ListStyles.numbered,
+        ).encode();
+
+        for (final locale in [const Locale('ar'), const Locale('en')]) {
+          tester.view.physicalSize = const Size(320, 1600);
+          await tester.pumpWidget(MediaQuery(
+            data: const MediaQueryData(size: Size(320, 1600), textScaler: TextScaler.linear(2.0)),
+            child: _admin(
+              DocEditor(
+                key: ValueKey('list-320-${locale.languageCode}'),
+                title: 'Pages',
+                fields: pagesDef.fields,
+                def: pagesDef,
+                popOnSave: false,
+                data: {
+                  'titleAr': 'تجربة ضيق',
+                  'slug': 'test-narrow-list',
+                  'visible': true,
+                  'blocks': [longList],
+                },
+                onSave: (_) async {},
+              ),
+              locale: locale,
+            ),
+          ));
+          await tester.pumpAndSettle();
+          expect(find.byType(ListBlockEditor), findsOneWidget);
+          expect(tester.takeException(), isNull, reason: 'overflow at 320px/200% locale=${locale.languageCode}');
+        }
       },
     );
   });

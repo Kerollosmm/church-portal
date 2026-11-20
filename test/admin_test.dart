@@ -84,6 +84,139 @@ void main() {
       );
     });
 
+    test('validateListBlock and list blocks in validateDocument', () {
+      expect(
+        validateListBlock(
+          arItems: const ['تجربة أولى', 'تجربة ثانية'],
+          enItems: const ['First', 'Second'],
+          style: ListStyles.bullet,
+        ),
+        isEmpty,
+      );
+      expect(
+        validateListBlock(
+          arItems: const ['تجربة أولى'],
+          style: ListStyles.numbered,
+        ),
+        isEmpty,
+      );
+
+      // 0 items -> blockListEmpty
+      expect(
+        validateListBlock(arItems: const []),
+        [(itemIndex: null, isEn: false, code: 'blockListEmpty')],
+      );
+
+      // Blank / whitespace / separator-only item -> blockListItemRequired with index
+      expect(
+        validateListBlock(arItems: const ['تجربة', '   ', '\u001e\u001f']),
+        [
+          (itemIndex: 1, isEn: false, code: 'blockListItemRequired'),
+          (itemIndex: 2, isEn: false, code: 'blockListItemRequired'),
+        ],
+      );
+
+      // > 20 items -> blockListTooMany (both AR and EN)
+      expect(
+        validateListBlock(arItems: List.filled(listBlockMaxItems + 1, 'تجربة')).first.code,
+        'blockListTooMany',
+      );
+      expect(
+        validateListBlock(arItems: const ['تجربة'], enItems: List.filled(listBlockMaxItems + 1, 'Test')).first.code,
+        'blockListTooMany',
+      );
+
+      // > 200 chars -> blockListItemTooLong (AR and EN)
+      expect(
+        validateListBlock(arItems: ['أ' * (listItemMax + 1)]),
+        [(itemIndex: 0, isEn: false, code: 'blockListItemTooLong')],
+      );
+      expect(
+        validateListBlock(arItems: const ['تجربة'], enItems: ['a' * (listItemMax + 1)]),
+        [(itemIndex: 0, isEn: true, code: 'blockListItemTooLong')],
+      );
+
+      // Bad style -> invalid
+      expect(
+        validateListBlock(arItems: const ['تجربة'], style: 'square'),
+        [(itemIndex: null, isEn: false, code: 'invalid')],
+      );
+
+      // validateDocument integration on encoded and map blocks
+      final pagesDef = collectionById('pages')!;
+      final validEncoded = PageBlock.list(
+        items: const [(ar: 'تجربة أولى', en: 'First'), (ar: 'تجربة ثانية', en: 'Second')],
+        style: ListStyles.numbered,
+      ).encode();
+      expect(validateDocument(pagesDef, {'blocks': [validEncoded]}), isNull);
+
+      expect(
+        validateDocument(pagesDef, {
+          'blocks': [const PageBlock(type: BlockTypes.list, textAr: '').encode()]
+        }),
+        'blockListEmpty',
+      );
+      expect(
+        validateDocument(pagesDef, {
+          'blocks': [const PageBlock(type: BlockTypes.list, textAr: 'تجربة\u001e   ').encode()]
+        }),
+        'blockListItemRequired',
+      );
+      expect(
+        validateDocument(pagesDef, {
+          'blocks': [
+            {
+              'type': BlockTypes.list,
+              'textAr': List.filled(listBlockMaxItems + 1, 'تجربة').join(PageBlock.listSeparator),
+            }
+          ]
+        }),
+        'blockListTooMany',
+      );
+      expect(
+        validateDocument(pagesDef, {
+          'blocks': [
+            PageBlock.list(items: [(ar: 'أ' * (listItemMax + 1), en: '')]).encode()
+          ]
+        }),
+        'blockListItemTooLong',
+      );
+      expect(
+        validateDocument(pagesDef, {
+          'blocks': [
+            PageBlock.list(items: const [(ar: 'تجربة', en: '')], style: ListStyles.bullet)
+                .toMap()
+              ..['textEn'] = 'a' * (listItemMax + 1),
+          ]
+        }),
+        'blockListItemTooLong',
+      );
+      expect(
+        validateDocument(pagesDef, {
+          'blocks': [const PageBlock(type: BlockTypes.list, textAr: 'تجربة', account: 'bad').encode()]
+        }),
+        'invalid',
+      );
+      expect(
+        validateDocument(pagesDef, {
+          'blocks': [const PageBlock(type: BlockTypes.list, textAr: 'تجربة', url: 'https://example.org').encode()]
+        }),
+        'invalid',
+      );
+      expect(
+        validateDocument(pagesDef, {
+          'blocks': [const PageBlock(type: BlockTypes.list, textAr: 'تجربة', instapay: 'x@instapay').encode()]
+        }),
+        'invalid',
+      );
+      expect(
+        validateDocument(pagesDef, {
+          'blocks': [const PageBlock(type: BlockTypes.list, textAr: 'تجربة', wallet: '01000000000').encode()]
+        }),
+        'invalid',
+      );
+    });
+
     test('validateDocument blocks a cover image with an invalid link', () {
       final pagesDef = collectionById('pages')!;
       // A usable https link is fine.
@@ -3397,6 +3530,36 @@ void main() {
       expect(truncated, isNotNull);
       expect(truncated!.endsWith('…'), isTrue);
       expect(truncated.substring(0, 40), longText.substring(0, 40));
+
+      // 6. List: empty -> '', 1 item -> clipped first item, >1 items -> (+N) AR & EN
+      expect(blockSnippetSummary(type: BlockTypes.list), '');
+      expect(blockSnippetSummary(type: BlockTypes.list, textAr: '   \u001e  '), '');
+      expect(
+        blockSnippetSummary(type: BlockTypes.list, textAr: 'تجربة عنصر واحد'),
+        'تجربة عنصر واحد',
+      );
+      expect(
+        blockSnippetSummary(
+          type: BlockTypes.list,
+          textAr: 'تجربة أول\u001eتجربة ثانٍ\u001eتجربة ثالث',
+          isAr: true,
+        ),
+        'تجربة أول (+٢)',
+      );
+      expect(
+        blockSnippetSummary(
+          type: BlockTypes.list,
+          textAr: 'تجربة أول\u001eتجربة ثانٍ\u001eتجربة ثالث',
+          isAr: false,
+        ),
+        'تجربة أول (+2)',
+      );
+      final longListSnippet = blockSnippetSummary(
+        type: BlockTypes.list,
+        textAr: '$longText\u001eتجربة ثانٍ',
+        isAr: true,
+      );
+      expect(longListSnippet, '${longText.substring(0, 40)}… (+١)');
     });
 
     testWidgets('CollectionListScreen displays "فاضي، مش ظاهر للزوار" chip for categories without visible entries or visible section pages', (tester) async {

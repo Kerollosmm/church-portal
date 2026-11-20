@@ -177,7 +177,8 @@ class BlockTypes {
   static const button = 'button';
   static const link = 'link';
   static const donation = 'donation';
-  static const all = [heading, paragraph, image, button, link, donation];
+  static const list = 'list';
+  static const all = [heading, paragraph, image, button, link, donation, list];
 
   /// Fields each type uses (the editor shows only these). A block is
   /// stored as ONE string, its 7 fields in [PageBlock.fieldOrder] joined by
@@ -190,6 +191,7 @@ class BlockTypes {
     button: ['textAr', 'textEn', 'url'],
     link: ['textAr', 'textEn', 'url'],
     donation: ['account', 'instapay', 'wallet', 'textAr', 'textEn'],
+    list: ['account', 'textAr', 'textEn'],
   };
 }
 
@@ -197,6 +199,19 @@ class BlockTypes {
 const pageMaxBlocks = 20;
 const blockTextMax = 4000;
 const blockAccountMax = 120, blockInstapayMax = 80, blockWalletMax = 30;
+const listBlockMaxItems = 20;
+const listItemMax = 200;
+
+/// Display style for a list block in custom pages.
+class ListStyles {
+  ListStyles._();
+  static const bullet = 'bullet';
+  static const numbered = 'numbered';
+  static const all = [bullet, numbered];
+}
+
+/// One bilingual item inside a [BlockTypes.list] block.
+typedef PageListItem = ({String ar, String en});
 
 /// One block of a custom page. Unused fields are ''.
 class PageBlock {
@@ -214,6 +229,30 @@ class PageBlock {
   /// Stored field order (the admin editor's sub-fields follow it too).
   static const fieldOrder = ['type', 'textAr', 'textEn', 'url', 'account', 'instapay', 'wallet'];
   static const separator = '\u001f';
+  static const listSeparator = '\u001e';
+
+  /// Builds a list block from bilingual [items] and a [ListStyles] value.
+  factory PageBlock.list({
+    required List<PageListItem> items,
+    String style = ListStyles.bullet,
+  }) {
+    String clean(String s) => s.replaceAll(separator, '').replaceAll(listSeparator, '').trim();
+    final cleanedAr = <String>[];
+    final cleanedEn = <String>[];
+    var hasEn = false;
+    for (final it in items) {
+      cleanedAr.add(clean(it.ar));
+      final en = clean(it.en);
+      if (en.isNotEmpty) hasEn = true;
+      cleanedEn.add(en);
+    }
+    return PageBlock(
+      type: BlockTypes.list,
+      textAr: cleanedAr.join(listSeparator),
+      textEn: hasEn ? cleanedEn.join(listSeparator) : '',
+      account: ListStyles.all.contains(style) ? style : ListStyles.bullet,
+    );
+  }
 
   /// The stored form: the 7 fields joined by U+001F (separators typed into a
   /// text are dropped).
@@ -258,6 +297,24 @@ class PageBlock {
 
   bool get isDonation => type == BlockTypes.donation;
 
+  /// Resolved display style for a [BlockTypes.list] block.
+  String get listStyle => account == ListStyles.numbered ? ListStyles.numbered : ListStyles.bullet;
+
+  /// Decoded bilingual items for a [BlockTypes.list] block (empty for other types).
+  List<PageListItem> get listItems {
+    if (type != BlockTypes.list || textAr.isEmpty) return const [];
+    final arParts = textAr.split(listSeparator);
+    final enParts = textEn.isEmpty ? const <String>[] : textEn.split(listSeparator);
+    final out = <PageListItem>[];
+    for (var i = 0; i < arParts.length; i++) {
+      final ar = arParts[i].trim();
+      if (ar.isEmpty) continue;
+      final en = i < enParts.length ? enParts[i].trim() : '';
+      out.add((ar: ar, en: en));
+    }
+    return out;
+  }
+
   /// Nothing to show (e.g. a button without a link, an empty paragraph).
   bool get isEmpty => switch (type) {
         BlockTypes.image => url.isEmpty,
@@ -267,6 +324,7 @@ class PageBlock {
             wallet.trim().isEmpty &&
             textAr.trim().isEmpty &&
             textEn.trim().isEmpty,
+        BlockTypes.list => listItems.isEmpty,
         _ => textAr.trim().isEmpty && textEn.trim().isEmpty,
       };
 }
