@@ -27,10 +27,12 @@ The `lib/data` layer manages all local persistence, remote networking, platform 
 - [`MediaRepository`](file:///c:/Users/Kerollos/church-portal/lib/data/media_repository.dart#L31): Abstract contract for loading, uploading, and deleting media files.
 - [`FirestoreMediaRepository`](file:///c:/Users/Kerollos/church-portal/lib/data/media_repository.dart#L46): Spark-plan implementation storing base64 image data inline in Firestore `media/{id}`.
 - [`StorageMediaRepository`](file:///c:/Users/Kerollos/church-portal/lib/data/media_repository.dart#L106): Blaze-plan Cloud Storage repository stub.
-- [`MediaCache`](file:///c:/Users/Kerollos/church-portal/lib/data/media_repository.dart#L143): In-memory LRU cache of inline image bytes (default capacity 60).
+- [`ReadOnlyMediaRepository`](file:///c:/Users/Kerollos/church-portal/lib/data/media_repository.dart#L128): Spark-plan read-only public media loader (`upload`/`delete` throw `UnsupportedError`).
+- [`MediaCache`](file:///c:/Users/Kerollos/church-portal/lib/data/media_repository.dart#L172): In-memory LRU cache of inline image bytes (default capacity 60).
 - [`decodeMediaDoc`](file:///c:/Users/Kerollos/church-portal/lib/data/media_repository.dart#L83): Extracts and decodes base64 bytes from a `media/{id}` document map.
-- [`createMediaRepository`](file:///c:/Users/Kerollos/church-portal/lib/data/media_repository.dart#L126): Factory selecting between Firestore inline and Storage media backends.
-- [`ImageTooLargeException`](file:///c:/Users/Kerollos/church-portal/lib/data/media_repository.dart#L129), [`ImageDecodeException`](file:///c:/Users/Kerollos/church-portal/lib/data/media_repository.dart#L135): Exceptions for image processing errors.
+- [`createPublicMediaRepository`](file:///c:/Users/Kerollos/church-portal/lib/data/media_repository.dart#L151): Factory selecting read-only `ReadOnlyMediaRepository` (or Storage) for public startup without Firebase Auth.
+- [`createMediaRepository`](file:///c:/Users/Kerollos/church-portal/lib/data/media_repository.dart#L155): Factory selecting writable Firestore inline or Storage media backend for `/admin`.
+- [`ImageTooLargeException`](file:///c:/Users/Kerollos/church-portal/lib/data/media_repository.dart#L158), [`ImageDecodeException`](file:///c:/Users/Kerollos/church-portal/lib/data/media_repository.dart#L164): Exceptions for image processing errors.
 - [`DecodedImage`](file:///c:/Users/Kerollos/church-portal/lib/data/image_processing.dart#L13): Abstract decoded image interface for resizing and re-encoding.
 - [`decodeImage`](file:///c:/Users/Kerollos/church-portal/lib/data/image_processing.dart#L23): Conditional decoder forwarding to the platform codec.
 - [`compressDecoded`](file:///c:/Users/Kerollos/church-portal/lib/data/image_processing.dart#L31): Multi-pass downscaling and quality reduction targeting <= 250 KB.
@@ -38,11 +40,12 @@ The `lib/data` layer manages all local persistence, remote networking, platform 
 - [`maxInputBytes`](file:///c:/Users/Kerollos/church-portal/lib/data/image_processing.dart#L26): Input guard constant limiting uploads to 25 MB before decoding.
 
 ### Application Lifecycle, Firebase & Telemetry
-- [`FirebaseStatus`](file:///c:/Users/Kerollos/church-portal/lib/data/firebase_bootstrap.dart#L12): Status record reporting Firebase availability, App Check state, and errors.
-- [`bootstrapFirebase`](file:///c:/Users/Kerollos/church-portal/lib/data/firebase_bootstrap.dart#L22): Safe Firebase core initialization with 40 MB offline Firestore cache.
-- [`ensureAppCheckActivated`](file:///c:/Users/Kerollos/church-portal/lib/data/firebase_bootstrap.dart#L58): Lazy activation of App Check on first assistant request.
-- [`AppCheckPlan`](file:///c:/Users/Kerollos/church-portal/lib/data/app_check_providers.dart#L8): Chosen provider plan across web, Android, Apple, and debug targets.
-- [`selectAppCheckPlan`](file:///c:/Users/Kerollos/church-portal/lib/data/app_check_providers.dart#L41): Provider selection algorithm based on platform and debug configuration.
+- [`FirebaseStatus`](file:///c:/Users/Kerollos/church-portal/lib/data/firebase_bootstrap.dart#L10): Status record reporting Firebase availability, App Check configuration state, and errors.
+- [`isAppCheckConfigured`](file:///c:/Users/Kerollos/church-portal/lib/data/firebase_bootstrap.dart#L20): Pure build/platform check matching `selectAppCheckPlan(...).activate` without importing `firebase_app_check`.
+- [`bootstrapFirebase`](file:///c:/Users/Kerollos/church-portal/lib/data/firebase_bootstrap.dart#L29): Safe Firebase core initialization with 40 MB offline Firestore cache.
+- [`AppCheckPlan`](file:///c:/Users/Kerollos/church-portal/lib/data/app_check_providers.dart#L12): Chosen provider plan across web, Android, Apple, and debug targets.
+- [`selectAppCheckPlan`](file:///c:/Users/Kerollos/church-portal/lib/data/app_check_providers.dart#L45): Provider selection algorithm based on platform and debug configuration.
+- [`ensureAppCheckActivated`](file:///c:/Users/Kerollos/church-portal/lib/data/app_check_providers.dart#L83): Lazy activation of App Check on first assistant request (deferred with `/ask`).
 - [`ErrorReportingGate`](file:///c:/Users/Kerollos/church-portal/lib/data/error_reporting.dart#L22): Reactive gate synchronizing error reporting with the admin feature switch.
 - [`ErrorReporting`](file:///c:/Users/Kerollos/church-portal/lib/data/error_reporting.dart#L143): Global telemetry entry point managing Sentry lifecycle and breadcrumbs.
 - [`scrubEvent`](file:///c:/Users/Kerollos/church-portal/lib/data/error_reporting.dart#L71), [`scrubBreadcrumb`](file:///c:/Users/Kerollos/church-portal/lib/data/error_reporting.dart#L119): Sanitizers eliminating PII, query params, and sensitive contexts.

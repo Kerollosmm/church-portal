@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -31,6 +32,14 @@ import 'session_policy.dart';
 import 'unsaved_guard.dart';
 
 const _rememberMePrefKey = 'admin_remember_me';
+
+/// Declared in the deferred `/admin` chunk so `firebase_auth` and
+/// [AdminRepository] stay out of `main.dart.js`.
+final adminRepositoryProvider = Provider<AdminRepository?>(
+  (ref) => ref.watch(firebaseStatusProvider).available
+      ? AdminRepository(FirebaseFirestore.instance, FirebaseAuth.instance)
+      : null,
+);
 
 /// Hidden /admin area: email/password sign-in, role check (admins/{uid}),
 /// then the dashboard.

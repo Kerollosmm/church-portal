@@ -15,7 +15,8 @@ Architecturally, `lib/domain` operates as the single source of truth for:
 There are no child subdirectories in `lib/domain`; all domain components are co-located within this directory.
 
 ### 1. Temporal & Liturgical Engine
-- [`cairo_time.dart:CairoTime`](file:///c:/Users/Kerollos/church-portal/lib/domain/cairo_time.dart#L12-L68): Central timezone authority for Africa/Cairo. Key operations: `now()`, `today()`, `fromInstant(DateTime)`, `calendarDate(DateTime)`, `ensureInitialized()`.
+- [`cairo_time.dart:CairoTime`](file:///c:/Users/Kerollos/church-portal/lib/domain/cairo_time.dart#L12-L59): Central timezone authority for Africa/Cairo. Key operations: `now()`, `fromInstant(DateTime)`, `at(...)`, `calendarDate(DateTime)`, `ensureInitialized()` (loads only `cairoTzData`).
+- [`cairo_tzdata.dart:cairoTzData`](file:///c:/Users/Kerollos/church-portal/lib/domain/cairo_tzdata.dart): Generated `Africa/Cairo`-only tzdb byte record (`dart run tool/gen_cairo_tz.dart`, checked against `latest_10y.dart` in CI and tests).
 - [`coptic_calendar.dart:CopticDate`](file:///c:/Users/Kerollos/church-portal/lib/domain/coptic_calendar.dart#L15-L87): Coptic calendar representation supporting leap year calculations, month lengths, Anno Martyrum year tracking, and bidirectional Gregorian translation (`toGregorian()`, `fromGregorian()`).
 - [`coptic_calendar.dart:DayStartModes`](file:///c:/Users/Kerollos/church-portal/lib/domain/coptic_calendar.dart#L93-L98): Controls whether liturgical days flip at midnight or at local sunset (vespers start).
 - [`coptic_calendar.dart:LiturgicalDay`](file:///c:/Users/Kerollos/church-portal/lib/domain/coptic_calendar.dart#L104-L143): Cohesive pairing of civil Gregorian date and Coptic date context.

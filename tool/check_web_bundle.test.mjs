@@ -3,7 +3,12 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { checkWebBundle, DEFAULT_DEFERRED_MODULES, DEFAULT_REQUIRED_FONTS } from './check_web_bundle.mjs';
+import {
+  checkWebBundle,
+  DEFAULT_DEFERRED_MODULES,
+  DEFAULT_FORBIDDEN_MAIN_SOURCES,
+  DEFAULT_REQUIRED_FONTS,
+} from './check_web_bundle.mjs';
 
 function createSyntheticBuild(t) {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'bundle-test-'));
@@ -100,11 +105,10 @@ test('checkWebBundle fails when a deferred module leaks into main.dart.js.map', 
 
 test('checkWebBundle fails when deferred part chunk count is below minimum', (t) => {
   const dir = createSyntheticBuild(t);
-  // Remove several part files to drop below minPartCount
-  fs.unlinkSync(path.join(dir, 'main.dart.js_7.part.js'));
-  fs.unlinkSync(path.join(dir, 'main.dart.js_8.part.js'));
-  fs.unlinkSync(path.join(dir, 'main.dart.js_6.part.js'));
-  fs.unlinkSync(path.join(dir, 'main.dart.js_5.part.js'));
+  // Remove enough part files to drop below minPartCount (leaving 4 < 6)
+  for (let i = 5; i <= DEFAULT_DEFERRED_MODULES.length; i++) {
+    fs.unlinkSync(path.join(dir, `main.dart.js_${i}.part.js`));
+  }
 
   const result = checkWebBundle(dir, { minPartCount: 6 });
 
@@ -116,7 +120,8 @@ test('checkWebBundle fails when deferred part chunk count is below minimum', (t)
 test('checkWebBundle fails when a deferred module is missing from all part chunks', (t) => {
   const dir = createSyntheticBuild(t);
   // Overwrite part map for readings_page so it is nowhere to be found
-  const pMapPath = path.join(dir, 'main.dart.js_4.part.js.map');
+  const readingsIdx = DEFAULT_DEFERRED_MODULES.indexOf('ui/pages/readings_page.dart') + 1;
+  const pMapPath = path.join(dir, `main.dart.js_${readingsIdx}.part.js.map`);
   fs.writeFileSync(pMapPath, JSON.stringify({ version: 3, sources: [], mappings: '' }));
 
   const result = checkWebBundle(dir);
@@ -184,6 +189,36 @@ test('checkWebBundle handles null and non-string entries in sourcemap sources wi
   const pMap = JSON.parse(fs.readFileSync(pMapPath, 'utf8'));
   pMap.sources.unshift(null, 42);
   fs.writeFileSync(pMapPath, JSON.stringify(pMap));
+
+  const result = checkWebBundle(dir);
+  assert.equal(result.success, true);
+  assert.equal(result.deferredIsolation.passed, true);
+});
+
+test('checkWebBundle fails when a forbidden main source leaks into main.dart.js.map', (t) => {
+  for (const forbidden of DEFAULT_FORBIDDEN_MAIN_SOURCES) {
+    const dir = createSyntheticBuild(t);
+    const mainMapPath = path.join(dir, 'main.dart.js.map');
+    const mainMap = JSON.parse(fs.readFileSync(mainMapPath, 'utf8'));
+    mainMap.sources.push(`../../../packages/${forbidden}/source.dart`);
+    fs.writeFileSync(mainMapPath, JSON.stringify(mainMap));
+
+    const result = checkWebBundle(dir);
+    assert.equal(result.success, false, `Expected failure for ${forbidden}`);
+    assert.equal(result.deferredIsolation.passed, false);
+    assert.ok(result.errors.some((e) => e.includes(`Forbidden source LEAKED into main.dart.js.map: ${forbidden}`)));
+  }
+});
+
+test('checkWebBundle ignores firebase_auth_web and firebase_app_check_web registrants in main.dart.js.map', (t) => {
+  const dir = createSyntheticBuild(t);
+  const mainMapPath = path.join(dir, 'main.dart.js.map');
+  const mainMap = JSON.parse(fs.readFileSync(mainMapPath, 'utf8'));
+  mainMap.sources.push(
+    '../../../.pub-cache/hosted/pub.dev/firebase_auth_web-6.3.2/lib/firebase_auth_web.dart',
+    '../../../.pub-cache/hosted/pub.dev/firebase_app_check_web-0.3.1+3/lib/firebase_app_check_web.dart',
+  );
+  fs.writeFileSync(mainMapPath, JSON.stringify(mainMap));
 
   const result = checkWebBundle(dir);
   assert.equal(result.success, true);

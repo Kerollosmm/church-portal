@@ -8,8 +8,8 @@
 **Coptic Orthodox Church of Saints Maximus & Domadius and the Strong Anba Moussa the Black**  
 *End of Street 45, El‑Asafra Qebly, Montaza District, Alexandria, Egypt*
 
-[![Flutter](https://img.shields.io/badge/Flutter-3.47+-02569B?style=for-the-badge&logo=flutter&logoColor=white)](https://flutter.dev)
-[![Dart](https://img.shields.io/badge/Dart-3.13+-0175C2?style=for-the-badge&logo=dart&logoColor=white)](https://dart.dev)
+[![Flutter](https://img.shields.io/badge/Flutter-3.50.0-02569B?style=for-the-badge&logo=flutter&logoColor=white)](https://flutter.dev)
+[![Dart](https://img.shields.io/badge/Dart-3.14.0-0175C2?style=for-the-badge&logo=dart&logoColor=white)](https://dart.dev)
 [![Firebase](https://img.shields.io/badge/Firebase-Spark_Plan-FFCA28?style=for-the-badge&logo=firebase&logoColor=black)](https://firebase.google.com)
 [![Cloud Firestore](https://img.shields.io/badge/Cloud_Firestore-europe--west1-FFA611?style=for-the-badge&logo=firebase&logoColor=white)](https://firebase.google.com/docs/firestore)
 [![Firebase Hosting](https://img.shields.io/badge/Firebase_Hosting-CDN-FF8F00?style=for-the-badge&logo=firebase&logoColor=white)](https://firebase.google.com/docs/hosting)

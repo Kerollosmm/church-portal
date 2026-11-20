@@ -347,6 +347,38 @@ void main() {
       final barrier = tester.widget<ModalBarrier>(modalBarrierFinder.last);
       expect(barrier.dismissible, isFalse);
     });
+
+    testWidgets('standalone UpdateSheet registers localized strings cleanly', (tester) async {
+      const decision = UpdateDecision(
+        hasUpdate: true,
+        forced: false,
+        targetVersion: '2.1.0',
+        targetBuild: 210,
+        notesAr: 'تحديث منفرد',
+        notesEn: 'Standalone update',
+        asset: ApkAsset(url: 'https://example.com/test.apk', sha256: 'abc', size: 1000),
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          child: MaterialApp(
+            locale: const Locale('ar'),
+            theme: buildTheme(const Locale('ar')),
+            supportedLocales: const [Locale('ar'), Locale('en')],
+            localizationsDelegates: GlobalMaterialLocalizations.delegates,
+            home: Scaffold(
+              body: SingleChildScrollView(
+                child: UpdateSheet(decision: decision, autoStart: false),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('تحديث التطبيق'), findsOneWidget);
+      expect(find.text('تحديث منفرد'), findsOneWidget);
+    });
   });
 }
 

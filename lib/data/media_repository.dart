@@ -122,7 +122,36 @@ class StorageMediaRepository implements MediaRepository {
       throw UnsupportedError('Cloud Storage needs the Blaze plan (see StorageMediaRepository).');
 }
 
-/// The configured backend (`--dart-define=MEDIA_BACKEND=firestore|storage`).
+/// Read-only Spark-plan media loader for the public UI (`media/{id}`).
+/// Refuses mutations so public bootstrap never carries `FirebaseAuth` or risks
+/// writing media documents with an empty `createdBy`.
+class ReadOnlyMediaRepository implements MediaRepository {
+  final FirebaseFirestore db;
+  const ReadOnlyMediaRepository(this.db);
+
+  @override
+  String get source => MediaSource.inline;
+
+  @override
+  Future<Uint8List?> load(String mediaId) async {
+    final d = await db.doc('media/$mediaId').get();
+    return decodeMediaDoc(d.data());
+  }
+
+  @override
+  Future<MediaImage> upload(EncodedImage img, {String alt = ''}) =>
+      throw UnsupportedError('ReadOnlyMediaRepository cannot upload media.');
+
+  @override
+  Future<void> delete(String mediaId) =>
+      throw UnsupportedError('ReadOnlyMediaRepository cannot delete media.');
+}
+
+/// Public read-only media backend (`--dart-define=MEDIA_BACKEND=firestore|storage`).
+MediaRepository createPublicMediaRepository(FirebaseFirestore db) =>
+    AppConfig.mediaBackend == MediaSource.storage ? const StorageMediaRepository() : ReadOnlyMediaRepository(db);
+
+/// The configured writable admin backend (`--dart-define=MEDIA_BACKEND=firestore|storage`).
 MediaRepository createMediaRepository(FirebaseFirestore db, String Function() actor) =>
     AppConfig.mediaBackend == MediaSource.storage ? const StorageMediaRepository() : FirestoreMediaRepository(db, actor);
 

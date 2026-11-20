@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../../core/l10n.dart';
 import '../../core/theme.dart';
+import 'admin_strings.dart';
 
 /// Fixed bottom bar notifying the admin of unsaved changes with save & cancel actions.
 ///
@@ -32,6 +33,7 @@ class UnsavedBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    registerAdminStrings();
     if (!dirty) return const SizedBox.shrink();
 
     return Material(

@@ -18,13 +18,23 @@ export const DEFAULT_MIN_FONT_BYTES = 20 * 1024; // 20 KB
 
 export const DEFAULT_DEFERRED_MODULES = [
   'ui/admin/admin_page.dart',
+  'data/admin_repository.dart',
+  'ui/admin/admin_strings.dart',
   'ui/pages/assistant_page.dart',
+  'data/app_check_providers.dart',
   'ui/pages/notifications_page.dart',
   'ui/pages/readings_page.dart',
   'ui/pages/notification_health_page.dart',
   'ui/widgets/apk_install_guide.dart',
   'data/web_push_repository.dart',
   'ui/widgets/reminder_sheet.dart',
+];
+
+export const DEFAULT_FORBIDDEN_MAIN_SOURCES = [
+  'data/latest_10y.dart',
+  'ui/widgets/update_banner_io.dart',
+  'firebase_auth-',
+  'firebase_app_check-',
 ];
 
 export const DEFAULT_REQUIRED_FONTS = [
@@ -60,6 +70,7 @@ export function checkWebBundle(buildDir, options = {}) {
   const minPartCount = Number(options.minPartCount ?? DEFAULT_MIN_PART_COUNT);
   const minFontBytes = Number(options.minFontBytes ?? DEFAULT_MIN_FONT_BYTES);
   const deferredModules = options.deferredModules ?? DEFAULT_DEFERRED_MODULES;
+  const forbiddenMainSources = options.forbiddenMainSources ?? DEFAULT_FORBIDDEN_MAIN_SOURCES;
   const requiredFonts = options.requiredFonts ?? DEFAULT_REQUIRED_FONTS;
 
   const errors = [];
@@ -160,6 +171,7 @@ export function checkWebBundle(buildDir, options = {}) {
     modules: [],
     leaks: [],
     missingInParts: [],
+    forbiddenLeaks: [],
   };
 
   if (!fs.existsSync(mainMapPath)) {
@@ -227,7 +239,21 @@ export function checkWebBundle(buildDir, options = {}) {
         });
       }
 
-      deferredIsolation.passed = deferredIsolation.leaks.length === 0 && deferredIsolation.missingInParts.length === 0;
+      for (const forbidden of forbiddenMainSources) {
+        const normForbidden = forbidden.replace(/\\/g, '/');
+        const matches = mainSources.filter(
+          (s) => typeof s === 'string' && s.replace(/\\/g, '/').includes(normForbidden)
+        );
+        if (matches.length > 0) {
+          deferredIsolation.forbiddenLeaks.push({ source: forbidden, matches });
+          errors.push(`Forbidden source LEAKED into main.dart.js.map: ${forbidden} (${matches.join(', ')})`);
+        }
+      }
+
+      deferredIsolation.passed =
+        deferredIsolation.leaks.length === 0 &&
+        deferredIsolation.missingInParts.length === 0 &&
+        deferredIsolation.forbiddenLeaks.length === 0;
     }
   }
 
@@ -243,6 +269,10 @@ export function checkWebBundle(buildDir, options = {}) {
         lines.push(`  [MISS] ${m.module.padEnd(38)} -> NOT FOUND IN ANY PART MAP`);
       }
     }
+  }
+  lines.push(`Forbidden Main-Bundle Sources (${forbiddenMainSources.length} guarded): [${deferredIsolation.forbiddenLeaks.length === 0 ? 'PASS' : 'FAIL'}]`);
+  for (const f of deferredIsolation.forbiddenLeaks) {
+    lines.push(`  [LEAK] ${f.source.padEnd(38)} -> FOUND IN main.dart.js.map: ${f.matches.join(', ')}`);
   }
   lines.push('');
 

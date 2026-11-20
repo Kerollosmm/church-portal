@@ -1,10 +1,14 @@
+import 'dart:async';
+
 import 'package:firebase_app_check/firebase_app_check.dart';
+import 'package:flutter/foundation.dart';
 
 import '../config/app_config.dart';
 
-/// The App Check providers one build activates (ADR-029). Pure selection
-/// logic, unit-tested in `test/assistant_test.dart`; activation itself is in
-/// `firebase_bootstrap.dart`.
+/// The App Check providers and lazy activation for `/ask` (ADR-029 / ADR-037).
+/// Pure selection logic ([selectAppCheckPlan]) is unit-tested in
+/// `test/assistant_test.dart`; keeping activation here keeps `firebase_app_check`
+/// out of `main.dart.js`.
 class AppCheckPlan {
   /// Web provider; null on a web release build without a usable site key
   /// (then App Check is not activated at all and the assistant stays hidden).
@@ -70,4 +74,35 @@ AppCheckPlan selectAppCheckPlan({
     activate: true,
     label: 'recaptcha-enterprise',
   );
+}
+
+Future<bool>? _appCheckActivation;
+
+/// Activates App Check once (later calls share the first result). Called by
+/// the assistant before it mints a token or calls the model.
+Future<bool> ensureAppCheckActivated() => _appCheckActivation ??= _activateAppCheck();
+
+Future<bool> _activateAppCheck() async {
+  final plan = selectAppCheckPlan(
+    isWeb: kIsWeb,
+    debug: kDebugMode || AppConfig.forceAppCheckDebug,
+    siteKey: AppConfig.recaptchaSiteKey,
+    debugToken: AppConfig.appCheckDebugToken,
+  );
+  if (!plan.activate) {
+    debugPrint('App Check not activated (${plan.label}): set RECAPTCHA_SITE_KEY (see README).');
+    return false;
+  }
+  try {
+    await FirebaseAppCheck.instance
+        .activate(providerWeb: plan.web, providerAndroid: plan.android, providerApple: plan.apple)
+        .timeout(const Duration(seconds: 8));
+    return true;
+  } on TimeoutException catch (e) {
+    debugPrint('App Check activation timed out: $e');
+    return false;
+  } catch (e) {
+    debugPrint('App Check activation failed: $e');
+    return false;
+  }
 }

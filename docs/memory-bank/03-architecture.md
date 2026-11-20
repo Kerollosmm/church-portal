@@ -355,21 +355,24 @@ indexable:)`, which applies the spec through the conditional import (`document_l
 `errorBuilder` (`indexable: false`). `?lang=` sync (`_syncLangQuery`, `resolveLangSync`'s `lang=ar` branch) keeps
 the URL `#fragment`.
 
-**Deferred modules & isolation** (PR 3, ADR-058, ADR-060, ADR-061):
-To protect the web initial load budget (`main.dart.js` gzip -9 ceiling <= 1,399,000 B), secondary modules are deferred (`deferred as`). The CI sourcemap guard still lists the original 8 (the check script is unchanged):
-1. `ui/admin/admin_page.dart` (`admin_page`): full admin dashboard (Firebase Auth, schema editors, Firestore writes).
-2. `ui/pages/assistant_page.dart` (`assistant_page`): AI assistant interface & `firebase_ai` SDK (gated behind `AssistantGate`).
-3. `ui/pages/notifications_page.dart` (`notifications_page`): streamlined notification channel & reminder preferences (OEM battery card removed; native permissions requested reactively on switch toggle).
-4. `ui/pages/readings_page.dart` (`readings_page`): liturgical Katameros day reader (`/readings/:date`).
-5. `ui/pages/notification_health_page.dart` (`health_page`): standalone OEM battery optimization diagnostics (`/notifications/battery`).
-6. `ui/widgets/apk_install_guide.dart` (`apk_guide`): 5-step Android APK sideloading walkthrough bottom sheet.
-7. `data/web_push_repository.dart` (`web_push`): web push token sync & Firestore queue batch writer.
-8. `ui/widgets/reminder_sheet.dart` (`reminder_sheet`): reminder picker modal bottom sheet with `.ics` & calendar export.
+**Deferred modules & isolation** (PR 3, ADR-058, ADR-060, ADR-061, ADR-077):
+To protect the web initial load budget (`main.dart.js` gzip -9 ceiling <= 1,399,000 B), secondary modules are deferred (`deferred as`) and non-public dependencies are excluded from the main entrypoint. The CI sourcemap guard (`tool/check_web_bundle.mjs`) tracks 11 deferred modules plus 4 forbidden main-bundle sources:
+1. `ui/admin/admin_page.dart` (`admin_page`): full admin dashboard (declares `adminRepositoryProvider` inside `/admin`, keeping `firebase_auth` out of `main.dart.js`).
+2. `data/admin_repository.dart`: authenticated Firestore admin repository & `firebase_auth` wrapper (chunk `/admin`).
+3. `ui/admin/admin_strings.dart`: admin-only UI string table (`registerAdminStrings()`, chunk `/admin`).
+4. `ui/pages/assistant_page.dart` (`assistant_page`): AI assistant interface & `firebase_ai` SDK (gated behind `AssistantGate`).
+5. `data/app_check_providers.dart`: `firebase_app_check` provider selection & lazy `ensureAppCheckActivated()` (chunk `/ask`; `firebase_bootstrap.dart` uses pure `isAppCheckConfigured`).
+6. `ui/pages/notifications_page.dart` (`notifications_page`): streamlined notification channel & reminder preferences (OEM battery card removed; native permissions requested reactively on switch toggle).
+7. `ui/pages/readings_page.dart` (`readings_page`): liturgical Katameros day reader (`/readings/:date`).
+8. `ui/pages/notification_health_page.dart` (`health_page`): standalone OEM battery optimization diagnostics (`/notifications/battery`).
+9. `ui/widgets/apk_install_guide.dart` (`apk_guide`): 5-step Android APK sideloading walkthrough bottom sheet.
+10. `data/web_push_repository.dart` (`web_push`): web push token sync & Firestore queue batch writer.
+11. `ui/widgets/reminder_sheet.dart` (`reminder_sheet`): reminder picker modal bottom sheet with `.ics` & calendar export.
 
-The desktop hero also defers `ui/widgets/hero_video.dart` and `ui/widgets/hero_ambient.dart` (ADR-068). `hero_motion_flag.dart` stays in the main bundle (`heroAmbientInDom`). `HeroStage` loads those two libraries only when the desktop web hero will play; the poster stays up until the chunks arrive. Phones never load them, so mobile web does not download the mp4 or the CSS ambient layer.
+The desktop hero also defers `ui/widgets/hero_video.dart` and `ui/widgets/hero_ambient.dart` (ADR-068). `hero_motion_flag.dart` stays in the main bundle (`heroAmbientInDom`). `HeroStage` loads those two libraries only when the desktop web hero will play; the poster stays up until the chunks arrive. Phones never load them, so mobile web does not download the mp4 or the CSS ambient layer. Also `CairoTime` loads only the generated `Africa/Cairo` tzdb chunk (`cairo_tzdata.dart`), `UpdateBanner` conditionally exports `update_banner_stub.dart` on web, and public startup uses read-only `ReadOnlyMediaRepository` (`createPublicMediaRepository`).
 
 The routes build `DeferredLoader(loadLibrary: x.loadLibrary, builder: (_) => x.Page())`. Sibling path transitions (e.g. between `/readings/date1` and `/readings/date2`) recreate the routed page subtree via `key: ValueKey(s.uri.path)` on `FeatureGate` in `_page` (`lib/router.dart`), with `DeferredLoader.didUpdateWidget` serving as an in-place fallback if a parent preserves the loader state. `DeferredLoader` shows a live-region accessible spinner («جارٍ تحميل الصفحة…») and an `ErrorState` with Retry on network failure. All chunk loading failures report telemetry via `ErrorReporting.capture(e, st, section: 'deferred_chunk')`.
-Deferred isolation is mechanically enforced in CI via `node tool/check_web_bundle.mjs build/web`, which parses `main.dart.js.map` to assert 0 sourcemap leaks from any of the 8 listed modules, verifies at least 6 `.part.js` chunks, and checks OpenType font integrity. The hero chunks are extra part files; the guard list is unchanged.
+Deferred isolation is mechanically enforced in CI via `node tool/check_web_bundle.mjs build/web`, which parses `main.dart.js.map` to assert 0 sourcemap leaks from any of the 11 tracked deferred modules or 4 forbidden main sources (`data/latest_10y.dart`, `ui/widgets/update_banner_io.dart`, `firebase_auth-`, `firebase_app_check-`), verifies at least 6 `.part.js` chunks, and checks OpenType font integrity. The hero chunks are extra part files; the guard tracks the 11 modules above.
 
 **Web Push Permission Architecture & Guidance (ADR-065):**
 - **User-Gesture Requirement:** Strict enforcement of zero automatic `Notification.requestPermission()` calls on initial page load. Browser notification permission is requested exclusively via user interactions: either by clicking the primary action card («السماح بإشعارات المتصفح» / "Allow browser notifications") when `permission == 'default'`, or reactively when the visitor toggles any notification channel switch.
@@ -434,7 +437,7 @@ Deferred isolation is mechanically enforced in CI via `node tool/check_web_bundl
 - Digits: `toArabicDigits` / `normalizeDigits` (`rules.dart`); `localDigits(context, s)` (common.dart).
   Times are always shown in both systems (`TimeRangeText`: «٠٦:٣٠ ص – ٠٨:٣٠ ص» and "06:30 AM – 08:30 AM").
 - Choice labels for stored keys (`opt_<key>`, e.g. `opt_holy_week`) via `choiceLabel` in `doc_editor.dart`.
-- Admin labels live inline in `admin_schema.dart` (`labelAr`, `labelEn`).
+- Admin labels live inline in `admin_schema.dart` (`labelAr`, `labelEn`); 418 admin-only UI keys reside in deferred `admin_strings.dart` (`registerAdminStrings()`, ADR-077), and APK update UI strings reside in `update_banner_io.dart`. Public `tr()` / `trOrNull()` coverage is verified by `test/bundle_isolation_test.dart`.
 
 ## Theming (`lib/core/theme.dart`) — "Golden hour" identity (branch `design/coptic-identity`, ADR-022 revised)
 

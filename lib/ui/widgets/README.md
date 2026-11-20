@@ -104,8 +104,8 @@ The `widgets` package provides the shared presentation layer, design system comp
   - `TopUtilityBar` (aliased as `CopticDateStrip`): Sticky top bar displaying Coptic calendar date, fast status, and live indicators.
   - `LiveStreamBanner`: Dynamic broadcast banner shown when church liturgy is streaming live.
   - `TopEventCard`: Highlight card for featured feast or occasion of the day.
-- `update_banner.dart`:
-  - `UpdateBanner`: Notification prompt shown when a new PWA service worker or APK release is available.
+- `update_banner.dart`: Conditional export (`update_banner_stub.dart` no-op on web, `update_banner_io.dart` on native with `_updateStrings` isolated via `registerStrings`):
+  - `UpdateBanner`: In-app Android APK update prompt banner (no-op on web).
   - `UpdateSheet`: Modal details sheet detailing release notes and update actions.
 - Subdirectories: None
 
@@ -121,7 +121,7 @@ The `widgets` package provides the shared presentation layer, design system comp
 - `[map_embed_web.dart:buildMapView]`: Registers HTML IFrame platform view via `ui_web.platformViewRegistry` and mutates browser DOM on web.
 - `[hero_ambient_web.dart:_HeroAmbientLayerState]`: Injects and updates SVG filters and DOM nodes for web backdrop rendering.
 - `[install_banner.dart:_InstallBannerState]`: Writes dismissal flags and timestamps to `SharedPreferences` / `window.localStorage`.
-- `[update_banner.dart:_UpdateBannerState]`: Interacts with service worker update channels and Android APK update download manager.
+- `[update_banner_io.dart:_UpdateBannerState]`: Persists dismissed APK update builds in `SharedPreferences` and opens `UpdateSheet` to download/install Android APK releases (`update_banner_stub.dart` is a no-op on web).
 - `[today_widgets.dart:_PulseDotState]`, `[golden.dart:_HeroStageState]`: Allocates `AnimationController` tickers triggering continuous UI frame paints.
 - `[remind_me.dart:RemindMeButton]`: Requests system notification permissions and schedules native alarm intents via platform channels.
 

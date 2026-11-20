@@ -1,5 +1,4 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
 import 'package:flutter/foundation.dart';
@@ -10,7 +9,6 @@ import 'app.dart';
 import 'core/install_env.dart';
 import 'core/locale_storage.dart';
 import 'core/push_env.dart';
-import 'data/admin_repository.dart';
 import 'data/content_repository.dart';
 import 'data/error_reporting.dart';
 import 'data/firebase_bootstrap.dart';
@@ -56,9 +54,8 @@ Future<void> _start() async {
 
   final ContentRepository repo =
       status.available ? FirestoreRepository(FirebaseFirestore.instance, seed) : SeedRepository(seed);
-  final AdminRepository? admin =
-      status.available ? AdminRepository(FirebaseFirestore.instance, FirebaseAuth.instance) : null;
-  final MediaRepository? media = admin?.media;
+  final MediaRepository? media =
+      status.available ? createPublicMediaRepository(FirebaseFirestore.instance) : null;
 
   if (!kIsWeb) {
     final isAndroid = defaultTargetPlatform == TargetPlatform.android;
@@ -112,7 +109,6 @@ Future<void> _start() async {
     overrides: [
       firebaseStatusProvider.overrideWithValue(status),
       repositoryProvider.overrideWithValue(repo),
-      adminRepositoryProvider.overrideWithValue(admin),
       mediaRepositoryProvider.overrideWithValue(media),
     ],
     child: const ChurchPortalApp(),

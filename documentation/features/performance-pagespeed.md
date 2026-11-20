@@ -25,8 +25,8 @@
   الشفافية (CSS opacity). الشكل الهندسي والألوان والدورات (60 ثانية، والتلألؤ 8 مرات في الدورة) مشتركة مع رسّام Flutter
   في `hero_ambient_spec.dart`، والطبقة تتوقف عندما تخرج الواجهة من الشاشة وتأخذ فلتر ألوان الثيم. على الهاتف
   (أندرويد وiOS وعرض أقل من 600) لا تُبنى الطبقة ولا الفيديو (ADR-068). في الاختبارات تبقى الرسومات في Flutter.
-- **App Check عند الطلب** (`lib/data/firebase_bootstrap.dart`): لم يعد يُفعَّل عند بدء التشغيل؛ `ensureAppCheckActivated()`
-  تُستدعى عند أول استخدام للمساعد (التسخين أو أول سؤال). ظهور المساعد ما زال مشروطًا بأن App Check مُعدّ في هذا البناء.
+- **App Check عند الطلب** (`lib/data/app_check_providers.dart` و `lib/data/firebase_bootstrap.dart`): لم يعد يُفعَّل عند بدء التشغيل؛ `ensureAppCheckActivated()`
+  تُستدعى عند أول استخدام للمساعد من حزمة `/ask` المؤجلة، بينما يكتفي الإقلاع العام بفحص `isAppCheckConfigured` دون سحب حزمة `firebase_app_check`. ظهور المساعد ما زال مشروطًا بأن App Check مُعدّ في هذا البناء.
   منذ PR #39 (ADR-046): مكتبة FlutterFire تحفظ مزوّد reCAPTCHA في `localStorage` بعد زيارة `/ask` وتعيد تفعيله في كل تحميل
   لاحق (≈700 ك.ب في كل صفحة). سكربت `boot-prefs` في `web/index.html` يحذف مفاتيح `FlutterFire-[DEFAULT]-recaptcha*`
   قبل تشغيل Firebase، فلا يُحمَّل reCAPTCHA إلا في `/ask`.
@@ -48,9 +48,10 @@
   اختفاء الشاشة وعند `requestIdleCallback` (`ContentReady.whenIdle`، بحد أقصى ثانيتين، و12 ثانية كحد مطلق)، ثم تظهر
   بتلاشٍ. الصورة الثابتة تحتها تبقى عنصر LCP، والشكل النهائي للواجهة لم يتغير. الختم `seal.png` صُغّر من 178
   إلى 27 كيلوبايت (لوحة 256 لونًا في `tool/gen_branding.sh`).
-- **حراسة حزم الويب والتحميل المؤجل (ADR-061)**:
-  - عزل 8 وحدات ثانوية بالكامل كأجزاء مؤجلة (`.part.js`) لا تُحمَّل إلا عند الحاجة (`admin_page`, `assistant_page`, `notifications_page`, `readings_page`, `notification_health_page`, `apk_install_guide`, `web_push_repository`, `reminder_sheet`).
-  - أداة الفحص `tool/check_web_bundle.mjs` في `ci.yml` تتحقق آليًا من خرائط المصدر `main.dart.js.map` للتأكد من عدم تسريب أي رمز من الوحدات الثمانية إلى الحزمة الرئيسية، وتلزم الحزمة بحد أقصى `gzip -9 <= 1,399,000 B` (المقاس الفعلي المقاس: `1,375,961 B` مع فائض أمان `+23,039 B`).
+- **حراسة حزم الويب والتحميل المؤجل (ADR-061، ADR-077)**:
+  - عزل 11 وحدة ثانوية بالكامل كأجزاء مؤجلة (`.part.js`) لا تُحمَّل إلا عند الحاجة (`admin_page`, `admin_repository`, `admin_strings`, `assistant_page`, `app_check_providers`, `notifications_page`, `readings_page`, `notification_health_page`, `apk_install_guide`, `web_push_repository`, `reminder_sheet`)، مع حظر تسرب 4 مصادر إلى الحزمة الرئيسية (`data/latest_10y.dart`, `ui/widgets/update_banner_io.dart`, `firebase_auth-`, `firebase_app_check-`).
+  - تعتمد `CairoTime` على بيانات `Africa/Cairo` المولّدة (`lib/domain/cairo_tzdata.dart` عبر `tool/gen_cairo_tz.dart`) بدل كل مناطق العالم، وتعمل الواجهة العامة بمخزن صور للقراءة فقط (`ReadOnlyMediaRepository`) وبديل ويب خفيف لشريط تحديث الأندرويد (`update_banner_stub.dart`).
+  - أداة الفحص `tool/check_web_bundle.mjs` في `ci.yml` (بنسخة Flutter المثبتة `3.50.0`) تتحقق آليًا من خرائط المصدر `main.dart.js.map` وتلزم الحزمة بحد أقصى `gzip -9 <= 1,399,000 B` (المقاس الفعلي في CI على لينكس بـ Flutter `3.50.0`: `1,350,901 B` مع فائض أمان `+48,099 B`).
   - رصد أي فشل في تحميل الحزم المؤجلة عبر `ErrorReporting.capture(..., section: 'deferred_chunk')`.
   - الاحتفاظ الكامل بخطوط OpenType العربية دون تجزئة (`pyftsubset`) لحماية تشكيل النصوص وعلامات التشكيل في قراءات القطمارس والخط العربي (`GSUB`/`GPOS`)، مع بقاء حزم أندرويد المقتطعة (~15 ميجابايت) داخل الحدود القصوى.
 - **بديل `Intl.v8BreakIterator`**: محرك Flutter يستخدم هذه الواجهة القديمة في Chrome لتقسيم السطور، فيعتبرها Lighthouse

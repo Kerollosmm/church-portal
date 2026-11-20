@@ -1,12 +1,14 @@
-import 'package:timezone/data/latest_10y.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
+
+import 'cairo_tzdata.dart';
 
 /// All schedule logic runs on Africa/Cairo wall-clock time.
 ///
 /// Egypt alternates between UTC+2 (EET, winter) and UTC+3 (EEST, summer
 /// daylight saving: last Friday of April -> last Thursday of October). The
-/// IANA database bundled in the `timezone` package carries those rules, so
-/// we never hard-code an offset.
+/// generated `Africa/Cairo` record from the `timezone` package carries those
+/// rules (`dart run tool/gen_cairo_tz.dart`), so we never hard-code an offset
+/// and never ship all ~450 world timezones in `main.dart.js`.
 class CairoTime {
   CairoTime._();
 
@@ -15,7 +17,7 @@ class CairoTime {
 
   static void ensureInitialized() {
     if (_initialized) return;
-    tzdata.initializeTimeZones();
+    tz.initializeDatabase(cairoTzData);
     _cairo = tz.getLocation('Africa/Cairo');
     _initialized = true;
   }
