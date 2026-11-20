@@ -431,3 +431,8 @@ Progress is tracked in [`docs/plans/phase3/STATUS.md`](../plans/phase3/STATUS.md
 - [x] **Stacked PR chain (PR 3A–3J) merged into `main`**: Merged via PR #83 (`d690f67440bf94d6ac1b76c71c984e064c64cba5`); PR #74 auto-merged; PRs #75–#82 closed via #83; deployed to Firebase Hosting + Firestore Rules (`Deploy to Firebase` run `44059123834`).
 - [ ] **Owner / servant follow-ups**: Trial sessions (`G1`–`G3`, item 33) and owner/office item 35 (two owner accounts; local copy of Abouna Domadius photo if it depends on YouTube). Item 32 left out; item 34 deferred.
 
+## Phase 4 — Custom pages & bundle headroom
+
+- [x] **Phase 4 PR3 (`feat/p4-pr3-preview-duplicate`, ADR-076)**: Unsaved custom page preview (`PagePreviewScreen`) and safe page duplication («تكرار»).
+- [ ] **Next PR after Phase 4 PR3 merges (before any new block types)**: Web bundle size savings (target `+20 KB` `gzip -9` headroom on `main.dart.js`) + Firestore multi-tab persistence fix.
+

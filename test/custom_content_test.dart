@@ -5,11 +5,12 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-
+import 'dart:typed_data';
 
 import 'package:church_portal/core/l10n.dart';
 import 'package:church_portal/data/admin_repository.dart';
 import 'package:church_portal/data/content_repository.dart';
+import 'package:church_portal/data/media_repository.dart';
 import 'package:church_portal/data/seed_data.dart';
 import 'package:church_portal/domain/cairo_time.dart';
 import 'package:church_portal/domain/contact_categories.dart';
@@ -27,7 +28,9 @@ import 'package:church_portal/ui/admin/admin_validators.dart';
 import 'package:church_portal/ui/admin/collection_list.dart';
 import 'package:church_portal/ui/admin/contact_admin.dart';
 import 'package:church_portal/ui/admin/doc_editor.dart';
+import 'package:church_portal/ui/admin/page_preview.dart';
 import 'package:church_portal/ui/pages/category_page.dart' show CustomPageCard;
+import 'package:church_portal/ui/pages/custom_page.dart' show PageBlockView;
 import 'package:church_portal/ui/widgets/cards.dart' show NextMassCard;
 import 'package:church_portal/ui/widgets/common.dart';
 import 'package:church_portal/ui/widgets/feature_gate.dart';
@@ -3126,6 +3129,965 @@ void main() {
       expect(tester.takeException(), isNull);
     });
   });
+
+  group('Phase 4 PR3: Preview & Duplicate', () {
+    test('copies content, prefixes titles without double prefix, resets visible/featured to false, preserves placement/categoryId/order, strips metadata', () {
+      final heading = const PageBlock(type: BlockTypes.heading, textAr: 'العنوان', textEn: 'Heading').encode();
+      final donation = const PageBlock(type: BlockTypes.donation, account: 'CIB 123', textAr: 'ملاحظات').encode();
+      final sourceBlocks = <dynamic>[heading, donation];
+      final source = <String, dynamic>{
+        'titleAr': 'دليل الكورال',
+        'titleEn': 'Choir Guide',
+        'subtitleAr': 'مقدمة',
+        'subtitleEn': 'Intro',
+        'slug': 'choir-guide',
+        'blocks': sourceBlocks,
+        'placement': PagePlacements.section,
+        'categoryId': BuiltInSections.activities,
+        'showInNav': false,
+        'featured': true,
+        'visible': true,
+        'order': 20,
+        'updatedAt': DateTime.utc(2026, 11, 19),
+        'updatedBy': 'admin@example.org',
+        'deletedAt': DateTime.utc(2026, 11, 19),
+      };
+
+      final res = buildDuplicatePageDefaults(source, takenSlugs: const {});
+      final d = res.defaults;
+      expect(res.droppedOwnedImage, isFalse);
+      expect(d['titleAr'], 'نسخة من دليل الكورال');
+      expect(d['titleEn'], 'Copy of Choir Guide');
+      expect(d['subtitleAr'], 'مقدمة');
+      expect(d['subtitleEn'], 'Intro');
+      expect(d['slug'], 'choir-guide-copy');
+      expect(d['blocks'], [heading, donation]);
+      (d['blocks'] as List).add('extra');
+      expect(sourceBlocks.length, 2);
+      expect(d['placement'], PagePlacements.section);
+      expect(d['categoryId'], BuiltInSections.activities);
+      expect(d['showInNav'], isFalse);
+      expect(d['featured'], isFalse);
+      expect(d['visible'], isFalse);
+      expect(d['order'], 20);
+      expect(d.containsKey('updatedAt'), isFalse);
+      expect(d.containsKey('updatedBy'), isFalse);
+      expect(d.containsKey('deletedAt'), isFalse);
+
+      // Already-prefixed page must not double-prefix; empty EN title stays empty; long titles clamp to 200.
+      final alreadyPrefixed = buildDuplicatePageDefaults({
+        'titleAr': 'نسخة من دليل الكورال',
+        'titleEn': 'Copy of Choir Guide',
+        'slug': 'choir-guide-copy',
+        'showInNav': true,
+      }, takenSlugs: const {'choir-guide-copy'});
+      expect(alreadyPrefixed.defaults['titleAr'], 'نسخة من دليل الكورال');
+      expect(alreadyPrefixed.defaults['titleEn'], 'Copy of Choir Guide');
+      expect(alreadyPrefixed.defaults['placement'], PagePlacements.nav);
+      expect(alreadyPrefixed.defaults['showInNav'], isTrue);
+
+      final blankEn = buildDuplicatePageDefaults({'titleAr': 'صفحة', 'titleEn': '', 'slug': 'page-1'}, takenSlugs: const {});
+      expect(blankEn.defaults['titleEn'], '');
+
+      final long200 = 'أ' * 200;
+      final long200En = 'A' * 200;
+      final clamped = buildDuplicatePageDefaults({'titleAr': long200, 'titleEn': long200En, 'slug': 'long'}, takenSlugs: const {});
+      expect((clamped.defaults['titleAr'] as String).length, 200);
+      expect((clamped.defaults['titleAr'] as String).startsWith('نسخة من '), isTrue);
+      expect((clamped.defaults['titleEn'] as String).length, 200);
+      expect((clamped.defaults['titleEn'] as String).startsWith('Copy of '), isTrue);
+    });
+
+    test('generates unique valid slugs across collisions, -copy-copy avoidance, 60-char boundary hyphens, and blank/invalid source slugs', () {
+      final col2 = buildDuplicatePageDefaults(
+        {'titleAr': 'دليل الكورال', 'slug': 'choir-guide'},
+        takenSlugs: const {'choir-guide', 'choir-guide-copy'},
+      );
+      expect(col2.defaults['slug'], 'choir-guide-copy-2');
+
+      final noCopyCopy = buildDuplicatePageDefaults(
+        {'titleAr': 'نسخة من دليل الكورال', 'slug': 'choir-guide-copy'},
+        takenSlugs: const {'choir-guide', 'choir-guide-copy'},
+      );
+      expect(noCopyCopy.defaults['slug'], 'choir-guide-copy-2');
+
+      final next3 = buildDuplicatePageDefaults(
+        {'titleAr': 'نسخة من دليل الكورال', 'slug': 'choir-guide-copy-2'},
+        takenSlugs: const {'choir-guide', 'choir-guide-copy', 'choir-guide-copy-2'},
+      );
+      expect(next3.defaults['slug'], 'choir-guide-copy-3');
+
+      final slug60 = 'a' * 60;
+      final res60 = buildDuplicatePageDefaults({'titleAr': 'طويل', 'slug': slug60}, takenSlugs: {slug60});
+      final s60 = res60.defaults['slug'] as String;
+      expect(isValidSlug(s60), isTrue);
+      expect(s60.length, lessThanOrEqualTo(slugMaxLength));
+      expect(s60.endsWith('-copy'), isTrue);
+      expect(s60 == slug60, isFalse);
+
+      final boundarySlug = '${'a' * 54}-bbbbb';
+      expect(boundarySlug.length, 60);
+      final resBoundary = buildDuplicatePageDefaults(
+        {'titleAr': 'حد', 'slug': boundarySlug},
+        takenSlugs: {boundarySlug},
+      );
+      expect(resBoundary.defaults['slug'], '${'a' * 54}-copy');
+      expect(isValidSlug(resBoundary.defaults['slug'] as String), isTrue);
+
+      final invalidSlug = buildDuplicatePageDefaults(
+        {'titleAr': 'حجز رحلة', 'slug': 'INVALID SLUG!'},
+        takenSlugs: const {'hgz-rhlh', 'nskh-mn-hgz-rhlh'},
+      );
+      final fallback = invalidSlug.defaults['slug'] as String;
+      expect(isValidSlug(fallback), isTrue);
+      expect(const {'hgz-rhlh', 'nskh-mn-hgz-rhlh'}.contains(fallback), isFalse);
+    });
+
+    test('copies external url cover image safely and drops owned inline/storage or invalid cover images', () {
+      final ext = buildDuplicatePageDefaults({
+        'titleAr': 'صورة خارجية',
+        'slug': 'ext-img',
+        'image': {'source': MediaSource.url, 'url': 'https://example.com/a.jpg', 'alt': 'Cover'},
+      }, takenSlugs: const {});
+      expect(ext.droppedOwnedImage, isFalse);
+      expect(ext.defaults['image'], {'source': MediaSource.url, 'url': 'https://example.com/a.jpg', 'alt': 'Cover'});
+
+      final inline = buildDuplicatePageDefaults({
+        'titleAr': 'صورة مرفوعة',
+        'slug': 'inline-img',
+        'image': {'source': MediaSource.inline, 'mediaId': 'abc123', 'alt': 'Cover'},
+      }, takenSlugs: const {});
+      expect(inline.droppedOwnedImage, isTrue);
+      expect(inline.defaults['image'], isNull);
+
+      final storage = buildDuplicatePageDefaults({
+        'titleAr': 'صورة تخزين',
+        'slug': 'storage-img',
+        'image': {'source': MediaSource.storage, 'url': 'https://example.com/a.jpg', 'mediaId': 'abc123'},
+      }, takenSlugs: const {});
+      expect(storage.droppedOwnedImage, isTrue);
+      expect(storage.defaults['image'], isNull);
+
+      final bad = buildDuplicatePageDefaults({
+        'titleAr': 'رابط فاسد',
+        'slug': 'bad-img',
+        'image': {'source': MediaSource.url, 'url': 'javascript:alert(1)'},
+      }, takenSlugs: const {});
+      expect(bad.droppedOwnedImage, isFalse);
+      expect(bad.defaults['image'], isNull);
+
+      final none = buildDuplicatePageDefaults({'titleAr': 'بلا صورة', 'slug': 'no-img'}, takenSlugs: const {});
+      expect(none.droppedOwnedImage, isFalse);
+      expect(none.defaults['image'], isNull);
+    });
+
+    testWidgets('PageBlockView delegates button and link taps to onLinkTap when provided without navigating', (tester) async {
+      final tapped = <String>[];
+      await tester.pumpWidget(_admin(
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            PageBlockView(
+              block: const PageBlock(type: BlockTypes.button, textEn: 'Mass times', url: '/mass-schedule'),
+              onLinkTap: tapped.add,
+            ),
+            PageBlockView(
+              block: const PageBlock(type: BlockTypes.link, textEn: 'External link', url: 'https://example.com'),
+              onLinkTap: tapped.add,
+            ),
+          ],
+        ),
+      ));
+      await tester.tap(find.text('Mass times'));
+      await tester.tap(find.text('External link'));
+      await tester.pump();
+      expect(tapped, ['/mass-schedule', 'https://example.com']);
+    });
+
+    testWidgets(
+      'DocEditor shows Preview action only for pages, previews unsaved edits & pending hero bytes, clears pending bytes when switching to url or removing cover, blocks links safely, and preserves dirty state',
+      (tester) async {
+        registerAdminStrings();
+        tester.view.physicalSize = const Size(1200, 1800);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.reset);
+
+        final pngBytes = base64Decode(
+          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+        );
+        final media = _FakePreviewMediaRepo(loadBytes: pngBytes);
+        final catsDef = collectionById('categories')!;
+        final pagesDef = collectionById('pages')!;
+
+        await tester.pumpWidget(_admin(
+          DocEditor(
+            title: 'Cat',
+            fields: catsDef.fields,
+            def: catsDef,
+            onSave: (_) async {},
+          ),
+        ));
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('editor-preview')), findsNothing);
+        expect(find.byKey(const Key('editor-preview-top')), findsNothing);
+
+        final saves = <Map<String, dynamic>>[];
+        await tester.pumpWidget(_admin(
+          locale: const Locale('ar'),
+          DocEditor(
+            key: const ValueKey('pages-editor'),
+            title: 'تعديل — الصفحات المخصصة',
+            fields: pagesDef.fields,
+            def: pagesDef,
+            docId: 'p1',
+            data: const {
+              'titleAr': 'صفحة أصلية',
+              'titleEn': 'Original Page',
+              'slug': 'orig-page',
+              'visible': true,
+            },
+            media: media,
+            pickImage: () async => Uint8List.fromList([1, 2, 3, 4]),
+            prepareImage: (_) async => EncodedImage(pngBytes, 'image/png', 1, 1),
+            onSave: (d) async => saves.add(d),
+          ),
+        ));
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('editor-preview')), findsOneWidget);
+        expect(find.byKey(const Key('editor-preview-top')), findsOneWidget);
+
+        await tester.enterText(find.byKey(const ValueKey('field-titleAr')), 'عنوان تجريبي غير محفوظ');
+        await tester.ensureVisible(find.widgetWithText(OutlinedButton, 'إضافة صف'));
+        await tester.tap(find.widgetWithText(OutlinedButton, 'إضافة صف'));
+        await tester.pumpAndSettle();
+
+        final typeDropdown = find.ancestor(
+          of: find.text('نوع الفقرة'),
+          matching: find.byType(DropdownButtonFormField<String>),
+        );
+        await tester.ensureVisible(typeDropdown);
+        await tester.tap(typeDropdown);
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('زر').last);
+        await tester.pumpAndSettle();
+
+        await tester.enterText(find.byKey(const ValueKey('field-textAr')), 'جدول القداسات');
+        await tester.enterText(find.byKey(const ValueKey('field-url')), '/mass-schedule');
+
+        await tester.ensureVisible(find.byKey(const Key('imageUploadBtn')));
+        await tester.tap(find.byKey(const Key('imageUploadBtn')));
+        await tester.pumpAndSettle();
+
+        await tester.ensureVisible(find.byKey(const Key('editor-preview')));
+        await tester.tap(find.byKey(const Key('editor-preview')));
+        await tester.pumpAndSettle();
+
+        expect(find.byKey(const Key('preview-unsaved-banner')), findsOneWidget);
+        expect(find.text('معاينة، مش محفوظة'), findsOneWidget);
+        expect(find.text('عنوان تجريبي غير محفوظ'), findsOneWidget);
+        expect(find.byKey(const Key('pagePreviewPendingHero')), findsOneWidget);
+
+        // Toggle preview language to English, then tap the button block: SnackBar stays in admin Arabic.
+        await tester.tap(find.byKey(const Key('preview-lang-toggle')));
+        await tester.pumpAndSettle();
+        await tester.ensureVisible(find.text('جدول القداسات'));
+        await tester.tap(find.text('جدول القداسات'));
+        await tester.pumpAndSettle();
+        expect(find.text('الرابط في المعاينة معطّل: /mass-schedule'), findsOneWidget);
+        expect(find.byKey(const Key('preview-unsaved-banner')), findsOneWidget);
+
+        // Close preview -> editor retains unsaved title and dirty state with 0 writes/uploads.
+        await tester.tap(find.byType(CloseButton));
+        await tester.pumpAndSettle();
+        expect(
+          tester.widget<TextFormField>(find.byKey(const ValueKey('field-titleAr'))).controller?.text,
+          'عنوان تجريبي غير محفوظ',
+        );
+        expect(find.byKey(const ValueKey('unsaved-bar')), findsOneWidget);
+        expect(saves, isEmpty);
+        expect(media.uploads, isEmpty);
+
+        // Switch cover image via URL dialog -> pending bytes cleared, pageHero rendered.
+        await tester.ensureVisible(find.byKey(const Key('imageUrlBtn')));
+        await tester.tap(find.byKey(const Key('imageUrlBtn')));
+        await tester.pumpAndSettle();
+        await tester.enterText(find.byKey(const Key('imageUrlInput')), 'https://example.com/new.jpg');
+        await tester.tap(find.byKey(const Key('imageUrlOk')));
+        await tester.pumpAndSettle();
+
+        await tester.ensureVisible(find.byKey(const Key('editor-preview')));
+        await tester.tap(find.byKey(const Key('editor-preview')));
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('pagePreviewPendingHero')), findsNothing);
+        expect(find.byKey(const Key('pageHero')), findsOneWidget);
+
+        // Close and remove cover image -> neither pending nor saved hero rendered.
+        await tester.tap(find.byType(CloseButton));
+        await tester.pumpAndSettle();
+        await tester.ensureVisible(find.byKey(const Key('imageRemoveBtn')));
+        await tester.tap(find.byKey(const Key('imageRemoveBtn')));
+        await tester.pumpAndSettle();
+
+        await tester.ensureVisible(find.byKey(const Key('editor-preview')));
+        await tester.tap(find.byKey(const Key('editor-preview')));
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('pagePreviewPendingHero')), findsNothing);
+        expect(find.byKey(const Key('pageHero')), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'PagePreviewScreen loads saved inline mediaId hero images via MediaRepository, respects englishEnabled toggle + Directionality, hidden badge, empty note, and fits 320/400/1400 px at 200% text scale',
+      (tester) async {
+        registerAdminStrings();
+        final pngBytes = base64Decode(
+          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+        );
+        final media = _FakePreviewMediaRepo(loadBytes: pngBytes);
+        const hiddenInlinePage = CustomPage(
+          id: 'p-inline',
+          slug: 'inline-preview',
+          titleAr: 'عنوان عربي',
+          titleEn: 'English Title',
+          visible: false,
+          image: MediaImage(source: MediaSource.inline, mediaId: 'hero1', alt: 'Alt'),
+        );
+
+        await tester.pumpWidget(_admin(
+          locale: const Locale('ar'),
+          PagePreviewScreen(page: hiddenInlinePage, media: media, englishEnabled: true),
+        ));
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+        expect(media.loadedIds, contains('hero1'));
+        expect(find.byKey(const Key('pageHero')), findsOneWidget);
+        expect(find.byKey(const Key('preview-hidden-badge')), findsOneWidget);
+        expect(find.byKey(const Key('preview-empty-content')), findsOneWidget);
+        expect(find.text('معاينة، مش محفوظة'), findsOneWidget);
+        expect(Directionality.of(tester.element(find.text('عنوان عربي'))), TextDirection.rtl);
+
+        await tester.tap(find.byKey(const Key('preview-lang-toggle')));
+        await tester.pumpAndSettle();
+        expect(find.text('معاينة، مش محفوظة'), findsOneWidget);
+        expect(Directionality.of(tester.element(find.text('English Title'))), TextDirection.ltr);
+
+        // englishEnabled: false hides switcher and forces Arabic RTL even when admin locale is EN.
+        await tester.pumpWidget(_admin(
+          locale: const Locale('en'),
+          PagePreviewScreen(
+            page: const CustomPage(
+              id: 'p-ar-only',
+              slug: 'ar-only',
+              titleAr: 'عنوان عربي فقط',
+              titleEn: 'Should Not Show',
+              visible: false,
+            ),
+            englishEnabled: false,
+          ),
+        ));
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('preview-lang-toggle')), findsNothing);
+        expect(find.text('Preview — not saved'), findsOneWidget);
+        expect(find.text('عنوان عربي فقط'), findsOneWidget);
+        expect(find.text('Should Not Show'), findsNothing);
+        expect(Directionality.of(tester.element(find.text('عنوان عربي فقط'))), TextDirection.rtl);
+
+        // Responsive check across 320px @ 200% scale, 400px, and 1400px in AR and EN.
+        final pagesDef = collectionById('pages')!;
+        for (final locale in [const Locale('ar'), const Locale('en')]) {
+          for (final spec in [
+            (size: const Size(320, 800), scale: 2.0),
+            (size: const Size(400, 900), scale: 1.0),
+            (size: const Size(1400, 900), scale: 1.0),
+          ]) {
+            tester.view.physicalSize = spec.size;
+            tester.view.devicePixelRatio = 1;
+            await tester.pumpWidget(MediaQuery(
+              data: MediaQueryData(size: spec.size, textScaler: TextScaler.linear(spec.scale)),
+              child: _admin(
+                locale: locale,
+                PagePreviewScreen(page: hiddenInlinePage, media: media, englishEnabled: true),
+              ),
+            ));
+            await tester.pumpAndSettle();
+            expect(tester.takeException(), isNull, reason: 'PagePreviewScreen ${locale.languageCode} ${spec.size}');
+
+            await tester.pumpWidget(MediaQuery(
+              data: MediaQueryData(size: spec.size, textScaler: TextScaler.linear(spec.scale)),
+              child: _admin(
+                locale: locale,
+                DocEditor(
+                  title: 'Pages',
+                  fields: pagesDef.fields,
+                  def: pagesDef,
+                  docId: 'p1',
+                  data: const {'titleAr': 'عنوان', 'slug': 'slug-1', 'visible': true},
+                  onSave: (_) async {},
+                ),
+              ),
+            ));
+            await tester.pumpAndSettle();
+            expect(tester.takeException(), isNull, reason: 'DocEditor ${locale.languageCode} ${spec.size}');
+          }
+        }
+        addTearDown(tester.view.reset);
+      },
+    );
+
+    testWidgets(
+      'CollectionListScreen(pages) duplicates a page into a hidden unsaved draft with unique slug, preserves saveable new-doc state, handles pending-delete slugs & uploaded vs url images safely',
+      (tester) async {
+        registerAdminStrings();
+        tester.view.physicalSize = const Size(900, 1800);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.reset);
+
+        final encodedParagraph =
+            const PageBlock(type: BlockTypes.paragraph, textAr: 'نص التبرع', textEn: 'Donation note').encode();
+        final b = _ReactivePagesBackend(
+          lists: {
+            'categories': const [],
+            'pages': [
+              AdminDoc('p1', {
+                'titleAr': 'صفحة تبرعات',
+                'titleEn': 'Donations Page',
+                'slug': 'donations-2026',
+                'visible': true,
+                'featured': true,
+                'placement': PagePlacements.section,
+                'categoryId': BuiltInSections.about,
+                'image': {'source': MediaSource.inline, 'mediaId': 'm1'},
+                'blocks': [encodedParagraph],
+              }),
+              AdminDoc('p2-pending', {
+                'titleAr': 'صفحة معلقة',
+                'slug': 'donations-2026-copy',
+                'visible': true,
+              }),
+              AdminDoc('p3-url', {
+                'titleAr': 'صفحة برابط صورة',
+                'titleEn': 'URL Image Page',
+                'slug': 'url-cover-page',
+                'visible': true,
+                'image': {'source': MediaSource.url, 'url': 'https://example.com/cover.jpg', 'alt': 'Cover'},
+              }),
+            ],
+          },
+        );
+        addTearDown(b.dispose);
+
+        await tester.pumpWidget(
+          _admin(CollectionListScreen(repo: b, def: collectionById('pages')!), locale: const Locale('ar')),
+        );
+        await tester.pumpAndSettle();
+
+        // Soft-delete p2-pending so it sits in _pendingDelete with an active undo timer & SnackBar.
+        await tester.ensureVisible(find.byKey(const ValueKey('delete-p2-pending')));
+        await tester.tap(find.byKey(const ValueKey('delete-p2-pending')));
+        await tester.pumpAndSettle();
+        expect(find.byKey(const ValueKey('p2-pending')), findsNothing);
+        expect(find.byType(SnackBar), findsOneWidget);
+        expect(find.byType(SnackBarAction), findsOneWidget);
+
+        // Duplicate p1 -> opens hidden unsaved draft without writing yet; avoids pending-delete slug.
+        // Owned-image warning is shown as a dismissible in-editor notice so the Undo SnackBar stays intact.
+        await tester.ensureVisible(find.byKey(const ValueKey('duplicate-p1')));
+        await tester.tap(find.byKey(const ValueKey('duplicate-p1')));
+        await tester.pumpAndSettle();
+
+        expect(b.saves, isEmpty);
+        expect(find.byKey(const Key('editor-initial-notice')), findsOneWidget);
+        expect(
+          find.descendant(
+            of: find.byKey(const Key('editor-initial-notice')),
+            matching: find.text('اتنسخت الصفحة من غير صورة الغلاف المرفوعة، ارفع صورة جديدة لو عايز.'),
+          ),
+          findsOneWidget,
+        );
+        expect(find.byType(DocEditor), findsOneWidget);
+        expect(find.textContaining(adminStrings['duplicate']![0]), findsWidgets);
+
+        final state = tester.state<DocEditorState>(find.byType(DocEditor));
+        final collected = state.collect();
+        expect(collected['titleAr'], 'نسخة من صفحة تبرعات');
+        expect(collected['slug'], 'donations-2026-copy-2');
+        expect(collected['visible'], isFalse);
+        expect(collected['featured'], isFalse);
+        expect(collected['categoryId'], BuiltInSections.about);
+        expect(collected['image'], isNull);
+
+        // Save immediately with zero further edits -> creates a new doc in 'pages'
+        // (splitSavePayload sends base fields first with id==null, then blocks to 'new-1').
+        await tester.ensureVisible(find.byKey(const Key('editor-save')));
+        await tester.tap(find.byKey(const Key('editor-save')));
+        await tester.pumpAndSettle();
+
+        final firstCreate = b.saves.where((s) => s.$2 == null).toList();
+        expect(firstCreate, hasLength(1));
+        expect(firstCreate.single.$1, 'pages');
+        expect(firstCreate.single.$3['slug'], 'donations-2026-copy-2');
+        expect(firstCreate.single.$3['image'], isNull);
+        expect(firstCreate.single.$3['visible'], isFalse);
+        expect(firstCreate.single.$3['featured'], isFalse);
+        expect(firstCreate.single.$3['categoryId'], BuiltInSections.about);
+        expect(firstCreate.single.$3['titleAr'], 'نسخة من صفحة تبرعات');
+        expect(b.saves.any((s) => s.$1 == 'pages' && s.$2 == 'new-1' && (s.$3['blocks'] as List?)?.single == encodedParagraph), isTrue);
+        final savesAfterFirst = b.saves.length;
+
+        // Duplicating p1 again after save computes the next free slug (-copy-3) from live pages,
+        // allows dismissing the notice banner, and cancelling leaves b.saves unchanged AND
+        // keeps the pending-delete Undo SnackBar active on CollectionListScreen.
+        await tester.ensureVisible(find.byKey(const ValueKey('duplicate-p1')));
+        await tester.tap(find.byKey(const ValueKey('duplicate-p1')));
+        await tester.pumpAndSettle();
+        expect(find.byType(DocEditor), findsOneWidget);
+        expect(tester.state<DocEditorState>(find.byType(DocEditor)).collect()['slug'], 'donations-2026-copy-3');
+        await tester.tap(find.byKey(const Key('editor-initial-notice-dismiss')));
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('editor-initial-notice')), findsNothing);
+        await tester.tap(find.byType(CloseButton));
+        await tester.pumpAndSettle();
+        expect(find.byType(DocEditor), findsNothing);
+        expect(b.saves, hasLength(savesAfterFirst));
+
+        // Undo SnackBar from p2-pending is still intact and functional after closing DocEditor.
+        expect(find.byType(SnackBar), findsOneWidget);
+        expect(find.byType(SnackBarAction), findsOneWidget);
+        await tester.tap(find.byType(SnackBarAction));
+        await tester.pumpAndSettle();
+        expect(b.updates.any((u) => u.$1 == 'pages' && u.$2 == 'p2-pending' && u.$3['deletedAt'] == null), isTrue);
+        expect(find.byKey(const ValueKey('p2-pending')), findsOneWidget);
+
+        // Duplicating a page with an external url cover image preserves it without dropped-image notice.
+        await tester.ensureVisible(find.byKey(const ValueKey('duplicate-p3-url')));
+        await tester.tap(find.byKey(const ValueKey('duplicate-p3-url')));
+        await tester.pumpAndSettle();
+        expect(find.byType(DocEditor), findsOneWidget);
+        expect(find.byKey(const Key('editor-initial-notice')), findsNothing);
+        expect(find.text(adminStrings['duplicateDroppedImage']![0]), findsNothing);
+        final urlState = tester.state<DocEditorState>(find.byType(DocEditor));
+        expect(
+          urlState.collect()['image'],
+          {'source': MediaSource.url, 'url': 'https://example.com/cover.jpg', 'alt': 'Cover'},
+        );
+        await tester.ensureVisible(find.byKey(const Key('editor-save')));
+        await tester.tap(find.byKey(const Key('editor-save')));
+        await tester.pumpAndSettle();
+        final allCreates = b.saves.where((s) => s.$2 == null).toList();
+        expect(allCreates, hasLength(2));
+        expect(
+          allCreates.last.$3['image'],
+          {'source': MediaSource.url, 'url': 'https://example.com/cover.jpg', 'alt': 'Cover'},
+        );
+
+        // Dispose screen cleanly.
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pumpAndSettle();
+      },
+    );
+
+    testWidgets(
+      'CollectionListScreen(categories) duplicates a section page from built-in and custom section tiles using live takenSlugs and passes 320/400/1400 px & 48x48 tap-target accessibility',
+      (tester) async {
+        registerAdminStrings();
+        tester.view.physicalSize = const Size(900, 1800);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.reset);
+
+        final b = _ReactivePagesBackend(
+          lists: {
+            'categories': [
+              AdminDoc('c1', {
+                'nameAr': 'الشباب',
+                'nameEn': 'Youth',
+                'slug': 'youth',
+                'visible': true,
+                'order': 10,
+              }),
+            ],
+            'entries': const [],
+            'pages': [
+              AdminDoc('p-builtin', {
+                'titleAr': 'دليل الكورال',
+                'titleEn': 'Choir Guide',
+                'slug': 'choir-guide',
+                'placement': PagePlacements.section,
+                'categoryId': BuiltInSections.activities,
+                'visible': true,
+              }),
+              AdminDoc('p-custom', {
+                'titleAr': 'نسخة دليل الكورال',
+                'titleEn': 'Choir Guide Copy',
+                'slug': 'choir-guide-copy',
+                'placement': PagePlacements.section,
+                'categoryId': 'c1',
+                'visible': true,
+              }),
+            ],
+          },
+        );
+        addTearDown(b.dispose);
+
+        await tester.pumpWidget(_admin(CollectionListScreen(repo: b, def: collectionById('categories')!)));
+        await tester.pumpAndSettle();
+
+        // Duplicate from built-in section tile -> avoids both choir-guide and choir-guide-copy.
+        await tester.ensureVisible(find.byKey(const ValueKey('duplicateSectionPage-p-builtin')));
+        await tester.tap(find.byKey(const ValueKey('duplicateSectionPage-p-builtin')));
+        await tester.pumpAndSettle();
+        expect(find.byType(DocEditor), findsOneWidget);
+
+        final builtInState = tester.state<DocEditorState>(find.byType(DocEditor));
+        expect(builtInState.collect()['slug'], 'choir-guide-copy-2');
+        expect(builtInState.collect()['categoryId'], BuiltInSections.activities);
+        expect(builtInState.collect()['placement'], PagePlacements.section);
+
+        await tester.ensureVisible(find.byKey(const Key('editor-save')));
+        await tester.tap(find.byKey(const Key('editor-save')));
+        await tester.pumpAndSettle();
+        expect(b.saves, hasLength(1));
+        expect(b.saves.single.$1, 'pages');
+        expect(b.saves.single.$2, isNull);
+        expect(b.saves.single.$3['slug'], 'choir-guide-copy-2');
+        expect(b.saves.single.$3['categoryId'], BuiltInSections.activities);
+
+        // Duplicate from custom section tile -> preserves c1 and avoids the newly saved choir-guide-copy-2.
+        await tester.ensureVisible(find.byKey(const ValueKey('duplicateSectionPage-p-custom')));
+        await tester.tap(find.byKey(const ValueKey('duplicateSectionPage-p-custom')));
+        await tester.pumpAndSettle();
+        expect(find.byType(DocEditor), findsOneWidget);
+        final customState = tester.state<DocEditorState>(find.byType(DocEditor));
+        expect(customState.collect()['categoryId'], 'c1');
+        expect(customState.collect()['slug'], 'choir-guide-copy-3');
+        await tester.tap(find.byType(CloseButton));
+        await tester.pumpAndSettle();
+
+        // Responsive 320px @ 200% text scale, 400px, and 1400px in AR and EN + 48x48 tap targets.
+        for (final locale in [const Locale('ar'), const Locale('en')]) {
+          for (final spec in [
+            (size: const Size(320, 800), scale: 2.0),
+            (size: const Size(400, 900), scale: 1.0),
+            (size: const Size(1400, 900), scale: 1.0),
+          ]) {
+            tester.view.physicalSize = spec.size;
+            tester.view.devicePixelRatio = 1;
+
+            await tester.pumpWidget(
+              KeyedSubtree(
+                key: ValueKey('pages-dup-${locale.languageCode}-${spec.size.width}'),
+                child: MediaQuery(
+                  data: MediaQueryData(size: spec.size, textScaler: TextScaler.linear(spec.scale)),
+                  child: _admin(CollectionListScreen(repo: b, def: collectionById('pages')!), locale: locale),
+                ),
+              ),
+            );
+            await tester.pumpAndSettle();
+            final pagesScroll = find
+                .descendant(
+                  of: find.byType(CustomScrollView),
+                  matching: find.byType(Scrollable),
+                )
+                .first;
+            await tester.scrollUntilVisible(
+              find.byKey(const ValueKey('duplicate-p-builtin')),
+              300,
+              scrollable: pagesScroll,
+            );
+            await tester.pumpAndSettle();
+            expect(tester.takeException(), isNull, reason: 'pages ${locale.languageCode} ${spec.size}');
+
+            await tester.pumpWidget(
+              KeyedSubtree(
+                key: ValueKey('cats-dup-${locale.languageCode}-${spec.size.width}'),
+                child: MediaQuery(
+                  data: MediaQueryData(size: spec.size, textScaler: TextScaler.linear(spec.scale)),
+                  child: _admin(CollectionListScreen(repo: b, def: collectionById('categories')!), locale: locale),
+                ),
+              ),
+            );
+            await tester.pumpAndSettle();
+            final catsScroll = find
+                .descendant(
+                  of: find.byType(CustomScrollView),
+                  matching: find.byType(Scrollable),
+                )
+                .first;
+
+            for (final keyId in [
+              'duplicateSectionPage-p-custom',
+              'visibilitySectionPage-p-custom',
+              'duplicateSectionPage-p-builtin',
+              'visibilitySectionPage-p-builtin',
+            ]) {
+              await tester.scrollUntilVisible(
+                find.byKey(ValueKey(keyId)),
+                300,
+                scrollable: catsScroll,
+              );
+              await tester.pumpAndSettle();
+              final size = tester.getSize(find.byKey(ValueKey(keyId)));
+              expect(size.width, greaterThanOrEqualTo(48), reason: '$keyId width ${locale.languageCode} ${spec.size}');
+              expect(size.height, greaterThanOrEqualTo(48), reason: '$keyId height ${locale.languageCode} ${spec.size}');
+            }
+            expect(tester.takeException(), isNull, reason: 'categories ${locale.languageCode} ${spec.size}');
+          }
+        }
+      },
+    );
+
+    testWidgets(
+      'CollectionListScreen double-tap guard prevents stacking duplicate DocEditor routes across delayed reads',
+      (tester) async {
+        registerAdminStrings();
+        tester.view.physicalSize = const Size(900, 1800);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.reset);
+
+        final b = _ReactivePagesBackend(
+          readDelay: const Duration(milliseconds: 80),
+          lists: {
+            'categories': const [],
+            'pages': [
+              AdminDoc('p1', {
+                'titleAr': 'صفحة تبرعات',
+                'slug': 'donations-2026',
+                'visible': true,
+              }),
+            ],
+          },
+        );
+        addTearDown(b.dispose);
+
+        await tester.pumpWidget(_admin(CollectionListScreen(repo: b, def: collectionById('pages')!)));
+        await tester.pump(const Duration(milliseconds: 100));
+        await tester.pumpAndSettle();
+
+        // Two rapid taps on duplicate-p1 while _read('pages') is in flight push only one DocEditor.
+        await tester.tap(find.byKey(const ValueKey('duplicate-p1')));
+        await tester.pump(const Duration(milliseconds: 10));
+        await tester.tap(find.byKey(const ValueKey('duplicate-p1')));
+        await tester.pump(const Duration(milliseconds: 100));
+        await tester.pumpAndSettle();
+
+        expect(find.byType(DocEditor), findsOneWidget);
+        await tester.tap(find.byType(CloseButton));
+        await tester.pumpAndSettle();
+        expect(find.byType(DocEditor), findsNothing);
+
+        // Sequential duplicate after closing still works.
+        await tester.tap(find.byKey(const ValueKey('duplicate-p1')));
+        await tester.pump(const Duration(milliseconds: 100));
+        await tester.pumpAndSettle();
+        expect(find.byType(DocEditor), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'CollectionListScreen Duplicate opens DocEditor with defaults only and executes zero backend writes until Save is pressed',
+      (tester) async {
+        registerAdminStrings();
+        tester.view.physicalSize = const Size(900, 1400);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.reset);
+
+        final b = _ReactivePagesBackend(
+          lists: {
+            'categories': const [],
+            'pages': [
+              AdminDoc('orig', {
+                'titleAr': 'صفحة أصلية',
+                'titleEn': 'Original Page',
+                'slug': 'orig-slug',
+                'visible': true,
+                'featured': true,
+                'placement': PagePlacements.link,
+              }),
+            ],
+          },
+        );
+        addTearDown(b.dispose);
+
+        await tester.pumpWidget(
+          _admin(CollectionListScreen(repo: b, def: collectionById('pages')!), locale: const Locale('ar')),
+        );
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.byKey(const ValueKey('duplicate-orig')));
+        await tester.pumpAndSettle();
+
+        final editor = tester.widget<DocEditor>(find.byType(DocEditor));
+        expect(editor.data, isNull);
+        expect(editor.docId, isNull);
+        expect(editor.newDefaults['titleAr'], 'نسخة من صفحة أصلية');
+        expect(editor.newDefaults['slug'], 'orig-slug-copy');
+        expect(editor.newDefaults['visible'], isFalse);
+        expect(editor.newDefaults['featured'], isFalse);
+        expect(b.saves, isEmpty);
+        expect(b.updates, isEmpty);
+        expect(b.deletes, isEmpty);
+        expect(b.savedDocs, isEmpty);
+
+        // Editing fields and opening preview still performs zero backend writes.
+        await tester.enterText(find.byKey(const ValueKey('field-titleAr')), 'نسخة معدلة قبل الحفظ');
+        await tester.pump();
+        await tester.tap(find.byKey(const Key('editor-preview-top')));
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('preview-unsaved-banner')), findsOneWidget);
+        await tester.tap(find.byType(CloseButton));
+        await tester.pumpAndSettle();
+
+        expect(b.saves, isEmpty);
+        expect(b.updates, isEmpty);
+        expect(b.deletes, isEmpty);
+        expect(b.savedDocs, isEmpty);
+
+        // Only pressing Save persists the new document.
+        await tester.ensureVisible(find.byKey(const Key('editor-save')));
+        await tester.tap(find.byKey(const Key('editor-save')));
+        await tester.pumpAndSettle();
+        expect(b.saves, hasLength(1));
+        expect(b.saves.single.$1, 'pages');
+        expect(b.saves.single.$2, isNull);
+        expect(b.saves.single.$3['titleAr'], 'نسخة معدلة قبل الحفظ');
+        expect(b.saves.single.$3['visible'], isFalse);
+      },
+    );
+
+    testWidgets(
+      'PagePreviewScreen link notice uses a preview-local ScaffoldMessenger and keeps CollectionListScreen pending-delete Undo intact',
+      (tester) async {
+        registerAdminStrings();
+        tester.view.physicalSize = const Size(900, 1400);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.reset);
+
+        final buttonBlock = const PageBlock(
+          type: BlockTypes.button,
+          textAr: 'مواعيد القداسات',
+          textEn: 'Mass times',
+          url: '/mass-schedule',
+        ).encode();
+        final b = _ReactivePagesBackend(
+          lists: {
+            'categories': const [],
+            'pages': [
+              AdminDoc('p-a', {
+                'titleAr': 'صفحة أ',
+                'titleEn': 'Page A',
+                'slug': 'page-a',
+                'visible': true,
+                'placement': PagePlacements.link,
+                'blocks': [buttonBlock],
+              }),
+              AdminDoc('p-b', {
+                'titleAr': 'صفحة ب',
+                'slug': 'page-b',
+                'visible': true,
+              }),
+            ],
+          },
+        );
+        addTearDown(b.dispose);
+
+        await tester.pumpWidget(
+          _admin(CollectionListScreen(repo: b, def: collectionById('pages')!), locale: const Locale('ar')),
+        );
+        await tester.pumpAndSettle();
+
+        // 1. Delete page B -> Undo SnackBar active with 10s timer.
+        await tester.ensureVisible(find.byKey(const ValueKey('delete-p-b')));
+        await tester.tap(find.byKey(const ValueKey('delete-p-b')));
+        await tester.pumpAndSettle();
+        expect(find.byKey(const ValueKey('p-b')), findsNothing);
+        expect(find.byType(SnackBarAction), findsOneWidget);
+
+        // 2. Duplicate page A -> open Preview -> tap block button within 10s.
+        await tester.ensureVisible(find.byKey(const ValueKey('duplicate-p-a')));
+        await tester.tap(find.byKey(const ValueKey('duplicate-p-a')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('editor-preview-top')));
+        await tester.pumpAndSettle();
+
+        await tester.ensureVisible(find.text('مواعيد القداسات'));
+        await tester.tap(find.text('مواعيد القداسات'));
+        await tester.pumpAndSettle();
+        expect(find.text('الرابط في المعاينة معطّل: /mass-schedule'), findsOneWidget);
+
+        // 3. Close preview and duplicate editor -> page B's Undo SnackBar must still work.
+        await tester.tap(find.byType(CloseButton));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byType(CloseButton));
+        await tester.pumpAndSettle();
+
+        expect(find.byType(SnackBarAction), findsOneWidget);
+        await tester.tap(find.byType(SnackBarAction));
+        await tester.pumpAndSettle();
+        expect(b.updates.any((u) => u.$1 == 'pages' && u.$2 == 'p-b' && u.$3['deletedAt'] == null), isTrue);
+        expect(find.byKey(const ValueKey('p-b')), findsOneWidget);
+
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pumpAndSettle();
+      },
+    );
+
+    testWidgets(
+      'CollectionListScreen computes duplicate slug after async editor reads so concurrent page updates do not fail Save',
+      (tester) async {
+        registerAdminStrings();
+        tester.view.physicalSize = const Size(900, 1400);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.reset);
+
+        final categoriesGate = Completer<List<AdminDoc>>();
+        final b = _ReactivePagesBackend(
+          categoriesFuture: categoriesGate.future,
+          lists: {
+            'categories': const [],
+            'pages': [
+              AdminDoc('orig', {
+                'titleAr': 'صفحة أصلية',
+                'slug': 'orig-slug',
+                'visible': true,
+                'placement': PagePlacements.link,
+              }),
+            ],
+          },
+        );
+        addTearDown(b.dispose);
+
+        await tester.pumpWidget(
+          _admin(CollectionListScreen(repo: b, def: collectionById('pages')!), locale: const Locale('ar')),
+        );
+        await tester.pumpAndSettle();
+
+        // Tap duplicate -> _openEditorBody suspends on _read('categories').
+        await tester.tap(find.byKey(const ValueKey('duplicate-orig')));
+        await tester.pump();
+
+        // Another admin/session takes 'orig-slug-copy' while categories read is still pending.
+        b.pushExternalPage('concurrent', {
+          'titleAr': 'صفحة متزامنة',
+          'slug': 'orig-slug-copy',
+          'visible': true,
+        });
+        await tester.pump();
+
+        categoriesGate.complete(const []);
+        await tester.pump(const Duration(milliseconds: 10));
+        await tester.pumpAndSettle();
+
+        expect(find.byType(DocEditor), findsOneWidget);
+        final state = tester.state<DocEditorState>(find.byType(DocEditor));
+        expect(state.collect()['slug'], 'orig-slug-copy-2');
+
+        await tester.ensureVisible(find.byKey(const Key('editor-save')));
+        await tester.tap(find.byKey(const Key('editor-save')));
+        await tester.pumpAndSettle();
+        expect(b.saves, hasLength(1));
+        expect(b.saves.single.$3['slug'], 'orig-slug-copy-2');
+      },
+    );
+  });
 }
 
 final _asyncSectionTestProvider = StreamProvider<List<String>>((_) => const Stream.empty());
@@ -3228,5 +4190,85 @@ class _FailSubsequentPagesReadBackend extends _Backend {
     }
     return super.watch(collection);
   }
+}
+
+class _FakePreviewMediaRepo implements MediaRepository {
+  final Uint8List? loadBytes;
+  final List<String> loadedIds = [];
+  final List<EncodedImage> uploads = [];
+
+  _FakePreviewMediaRepo({this.loadBytes});
+
+  @override
+  String get source => MediaSource.inline;
+
+  @override
+  Future<Uint8List?> load(String mediaId) async {
+    loadedIds.add(mediaId);
+    return loadBytes;
+  }
+
+  @override
+  Future<MediaImage> upload(EncodedImage img, {String alt = ''}) async {
+    uploads.add(img);
+    return MediaImage(source: MediaSource.inline, mediaId: 'uploaded-${uploads.length}', alt: alt, w: img.w, h: img.h);
+  }
+
+  @override
+  Future<void> delete(String mediaId) async {}
+}
+
+class _ReactivePagesBackend extends _Backend {
+  final _pagesCtrl = StreamController<List<AdminDoc>>.broadcast();
+  final Duration? readDelay;
+  final Future<List<AdminDoc>>? categoriesFuture;
+
+  _ReactivePagesBackend({super.lists, this.readDelay, this.categoriesFuture});
+
+  List<AdminDoc> get _pages => _lists['pages'] ?? const [];
+
+  @override
+  Stream<List<AdminDoc>> watch(String collection) {
+    if (collection == 'categories' && categoriesFuture != null) {
+      return Stream.fromFuture(categoriesFuture!);
+    }
+    if (collection == 'pages') {
+      return (() async* {
+        if (readDelay != null) await Future<void>.delayed(readDelay!);
+        yield List<AdminDoc>.of(_pages);
+        yield* _pagesCtrl.stream;
+      })();
+    }
+    return super.watch(collection);
+  }
+
+  void pushExternalPage(String id, Map<String, dynamic> data) => _upsertPage(id, data);
+
+  void _upsertPage(String id, Map<String, dynamic> patch) {
+    final list = List<AdminDoc>.of(_pages);
+    final idx = list.indexWhere((d) => d.id == id);
+    if (idx >= 0) {
+      list[idx] = AdminDoc(id, {...list[idx].data, ...patch});
+    } else {
+      list.add(AdminDoc(id, {...patch}));
+    }
+    _lists['pages'] = list;
+    _pagesCtrl.add(List<AdminDoc>.of(list));
+  }
+
+  @override
+  Future<String> save(String collection, String? id, Map<String, dynamic> data) async {
+    final savedId = await super.save(collection, id, data);
+    if (collection == 'pages') _upsertPage(savedId, data);
+    return savedId;
+  }
+
+  @override
+  Future<void> update(String collection, String id, Map<String, dynamic> data) async {
+    await super.update(collection, id, data);
+    if (collection == 'pages') _upsertPage(id, data);
+  }
+
+  Future<void> dispose() => _pagesCtrl.close();
 }
 

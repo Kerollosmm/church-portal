@@ -112,6 +112,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
       widget.def.name == 'categories' ? widget.repo.watch('pages') : null;
   StreamSubscription<AdminDoc?>? _featuresSub;
   bool _englishEnabled = true;
+  bool _openingEditor = false;
   ScaffoldFeatureController<SnackBar, SnackBarClosedReason>? _undoSnackBarController;
   Timer? _undoSnackBarTimer;
 
@@ -908,12 +909,23 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
       ),
       subtitle: sub.isEmpty ? null : Text(sub),
       onTap: () => _openEditor(context, p, targetDef: pagesDef),
-      trailing: IconButton(
-        key: ValueKey('visibilitySectionPage-${p.id}'),
-        tooltip: context.tr(hidden ? 'show' : 'hide'),
-        icon: Icon(hidden ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-            color: hidden ? context.pal.muted : context.pal.success),
-        onPressed: () => _setVisible(context, p, hidden, targetDef: pagesDef),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton(
+            key: ValueKey('duplicateSectionPage-${p.id}'),
+            tooltip: context.tr('duplicate'),
+            icon: const Icon(Icons.copy_outlined),
+            onPressed: () => _duplicatePage(context, p, pagesDef: pagesDef),
+          ),
+          IconButton(
+            key: ValueKey('visibilitySectionPage-${p.id}'),
+            tooltip: context.tr(hidden ? 'show' : 'hide'),
+            icon: Icon(hidden ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                color: hidden ? context.pal.muted : context.pal.success),
+            onPressed: () => _setVisible(context, p, hidden, targetDef: pagesDef),
+          ),
+        ],
       ),
     );
   }
@@ -1094,6 +1106,13 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
               runSpacing: 4,
               children: [
                 ?openItem,
+                if (def.name == 'pages')
+                  TextButton.icon(
+                    key: ValueKey('duplicate-${d.id}'),
+                    onPressed: () => _duplicatePage(context, d, pagesDef: def),
+                    icon: const Icon(Icons.copy_outlined, size: 18),
+                    label: Text(context.tr('duplicate')),
+                  ),
                 _namedDeleteButton(
                   context,
                   key: ValueKey('delete-${d.id}'),
@@ -1366,11 +1385,56 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     );
   }
 
+  Future<void> _duplicatePage(
+    BuildContext _,
+    AdminDoc source, {
+    required CollectionDef pagesDef,
+  }) async {
+    if (_openingEditor) return;
+    _openingEditor = true;
+    try {
+      final editorTitle = '${context.tr('duplicate')} — ${context.pick(pagesDef.labelAr, pagesDef.labelEn)}';
+      await _openEditorBody(
+        null,
+        targetDef: pagesDef,
+        titleOverride: editorTitle,
+        duplicateSource: source,
+      );
+    } finally {
+      _openingEditor = false;
+    }
+  }
+
   Future<void> _openEditor(
-    BuildContext context,
+    BuildContext _,
     AdminDoc? d, {
     CollectionDef? targetDef,
     Map<String, Object?> extraDefaults = const {},
+    String? titleOverride,
+    String? initialNotice,
+  }) async {
+    if (_openingEditor) return;
+    _openingEditor = true;
+    try {
+      await _openEditorBody(
+        d,
+        targetDef: targetDef,
+        extraDefaults: extraDefaults,
+        titleOverride: titleOverride,
+        initialNotice: initialNotice,
+      );
+    } finally {
+      _openingEditor = false;
+    }
+  }
+
+  Future<void> _openEditorBody(
+    AdminDoc? d, {
+    CollectionDef? targetDef,
+    Map<String, Object?> extraDefaults = const {},
+    String? titleOverride,
+    String? initialNotice,
+    AdminDoc? duplicateSource,
   }) async {
     final editDef = targetDef ?? def;
     bool usesLinks(List<FieldDef> fs) => fs.any((f) => f.linkPicker || usesLinks(f.subFields));
@@ -1388,7 +1452,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     final settings = needsProgram ? await _read('settings') : const <AdminDoc>[];
     final features = settings.where((x) => x.id == 'features').firstOrNull;
     final programOpts = ProgramOptions.fromMap(features?.data ?? const {});
-    if (!context.mounted) return;
+    if (!mounted) return;
     String name(AdminDoc x, String ar, String en) {
       final v = context.pick('${x.data[ar] ?? ''}', '${x.data[en] ?? ''}');
       return x.data['visible'] == false ? '$v ${context.tr('hiddenTag')}' : v;
@@ -1435,6 +1499,13 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
         ),
       _ => const <String>{},
     };
+    var resolvedExtra = extraDefaults;
+    var resolvedNotice = initialNotice;
+    if (duplicateSource != null) {
+      final dup = buildDuplicatePageDefaults(duplicateSource.data, takenSlugs: taken);
+      resolvedExtra = {...extraDefaults, ...dup.defaults};
+      if (dup.droppedOwnedImage) resolvedNotice = context.tr('duplicateDroppedImage');
+    }
     final seasons = [
       for (final s in seasonDocs)
         if (!isSoftDeleted(s.data)) Season.fromMap(s.id, s.data),
@@ -1444,7 +1515,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
       context,
       d,
       editDef: editDef,
-      extraDefaults: extraDefaults,
+      extraDefaults: resolvedExtra,
       dynamicChoices: {
         'categories': catChoices,
         // The item's own key stays selectable even if the admin list no
@@ -1457,6 +1528,8 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
       linkTargets: needsLinks ? targets : const [],
       takenSlugs: taken,
       seasons: seasons,
+      titleOverride: titleOverride,
+      initialNotice: resolvedNotice,
     );
   }
 
@@ -1469,9 +1542,11 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     List<(String, String)> linkTargets = const [],
     Set<String> takenSlugs = const {},
     List<Season> seasons = const [],
+    String? titleOverride,
+    String? initialNotice,
   }) {
     final label = context.pick(editDef.labelAr, editDef.labelEn);
-    final editorTitle = '${context.tr(d == null ? 'add' : 'edit')} — $label';
+    final editorTitle = titleOverride ?? '${context.tr(d == null ? 'add' : 'edit')} — $label';
     // The editor may save in several writes (gallery / extraFields go on
     // their own): the first one creates a new document, the rest merge into it.
     var id = d?.id;
@@ -1497,6 +1572,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
             : const [],
         seasons: seasons,
         englishEnabled: _englishEnabled,
+        initialNotice: initialNotice,
       ),
     ));
   }

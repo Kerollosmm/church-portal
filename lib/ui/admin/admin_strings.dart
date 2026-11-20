@@ -278,6 +278,18 @@ const Map<String, List<String>> adminStrings = {
   'deletedItemMultiUndo': ['تم مسح {n} عناصر (آخرهم «{last}»)', 'Deleted {n} items (latest: "{last}")'],
   // Phase 4 PR2: built-in section badge in categories screen
   'builtInSectionTag': ['قسم أساسي', 'Built-in section'],
+  // Phase 4 PR3: unsaved page preview & page duplication
+  'previewPage': ['معاينة', 'Preview'],
+  'previewUnsavedBanner': ['معاينة، مش محفوظة', 'Preview — not saved'],
+  'previewHiddenBadge': ['مخفية عن الزوار', 'Hidden from visitors'],
+  'previewUntitled': ['صفحة بدون عنوان', 'Untitled page'],
+  'previewEmptyContent': ['مفيش فقرات في الصفحة دي لسه', 'No content blocks in this page yet'],
+  'previewLinkDisabled': ['الرابط في المعاينة معطّل: {url}', 'Link is disabled in preview: {url}'],
+  'duplicate': ['تكرار', 'Duplicate'],
+  'duplicateDroppedImage': [
+    'اتنسخت الصفحة من غير صورة الغلاف المرفوعة، ارفع صورة جديدة لو عايز.',
+    'Duplicated without the uploaded hero image — you can upload a new one.',
+  ],
 };
 
 /// Idempotently registers [adminStrings] in the runtime localization table.
