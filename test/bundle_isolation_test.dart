@@ -211,6 +211,7 @@ void main() {
       expect(updateBannerRouter, contains("if (dart.library.io) 'update_banner_io.dart'"));
       expect(updateBannerStub, isNot(contains('l10n.dart')));
       expect(updateBannerStub, isNot(contains('appUpdaterProvider')));
+      expect(updateBannerStub, contains('this.autoStart = true'));
     });
 
     test('isAppCheckConfigured matches selectAppCheckPlan.activate across all build/platform inputs', () {

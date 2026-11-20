@@ -21,8 +21,8 @@ class UpdateBanner extends StatelessWidget {
 
 class UpdateSheet extends StatelessWidget {
   final UpdateDecision decision;
-  final bool autoStartDownload;
-  const UpdateSheet({super.key, required this.decision, this.autoStartDownload = true});
+  final bool autoStart;
+  const UpdateSheet({super.key, required this.decision, this.autoStart = true});
 
   @override
   Widget build(BuildContext context) => const SizedBox.shrink();

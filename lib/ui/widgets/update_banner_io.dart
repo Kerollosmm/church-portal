@@ -245,6 +245,7 @@ class _UpdateSheetState extends ConsumerState<UpdateSheet> with WidgetsBindingOb
   @override
   void initState() {
     super.initState();
+    registerStrings(_updateStrings);
     WidgetsBinding.instance.addObserver(this);
     if (widget.autoStart && widget.decision.asset != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {

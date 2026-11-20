@@ -434,6 +434,6 @@ Progress is tracked in [`docs/plans/phase3/STATUS.md`](../plans/phase3/STATUS.md
 ## Phase 4 — Custom pages & bundle headroom
 
 - [x] **Phase 4 PR3 (`feat/p4-pr3-preview-duplicate`, ADR-076)**: Unsaved custom page preview (`PagePreviewScreen`) and safe page duplication («تكرار»).
-- [x] **Bundle headroom & pinned Flutter 3.50.0 (`fix/web-bundle-headroom-pin-flutter`, ADR-077)**: Isolated `Africa/Cairo` tzdata (`tool/gen_cairo_tz.dart`), moved `firebase_auth` / `AdminRepository` + 418 admin strings to deferred `/admin` (with read-only `ReadOnlyMediaRepository` on public startup), moved `firebase_app_check` to deferred `app_check_providers.dart` (`/ask`), stubbed `UpdateBanner` on web, and pinned Flutter `3.50.0` in CI workflows (`main.dart.js` `gzip -9` reduced to ~`1,350,852 B`, > +47 KB headroom under `1,399,000 B`).
+- [x] **Bundle headroom & pinned Flutter 3.50.0 (`fix/web-bundle-headroom-pin-flutter`, ADR-077)**: Isolated `Africa/Cairo` tzdata (`tool/gen_cairo_tz.dart`), moved `firebase_auth` / `AdminRepository` + 418 admin strings to deferred `/admin` (with read-only `ReadOnlyMediaRepository` on public startup), moved `firebase_app_check` to deferred `app_check_providers.dart` (`/ask`), stubbed `UpdateBanner` on web, and pinned Flutter `3.50.0` in CI workflows (`main.dart.js` `gzip -9` reduced to `1,350,901 B`, `+48,099 B` headroom under `1,399,000 B`).
 - [ ] **Next PR**: Firestore multi-tab persistence fix (deferred cleanly out of ADR-077).
 

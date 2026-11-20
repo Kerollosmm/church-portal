@@ -51,7 +51,7 @@
 - **حراسة حزم الويب والتحميل المؤجل (ADR-061، ADR-077)**:
   - عزل 11 وحدة ثانوية بالكامل كأجزاء مؤجلة (`.part.js`) لا تُحمَّل إلا عند الحاجة (`admin_page`, `admin_repository`, `admin_strings`, `assistant_page`, `app_check_providers`, `notifications_page`, `readings_page`, `notification_health_page`, `apk_install_guide`, `web_push_repository`, `reminder_sheet`)، مع حظر تسرب 4 مصادر إلى الحزمة الرئيسية (`data/latest_10y.dart`, `ui/widgets/update_banner_io.dart`, `firebase_auth-`, `firebase_app_check-`).
   - تعتمد `CairoTime` على بيانات `Africa/Cairo` المولّدة (`lib/domain/cairo_tzdata.dart` عبر `tool/gen_cairo_tz.dart`) بدل كل مناطق العالم، وتعمل الواجهة العامة بمخزن صور للقراءة فقط (`ReadOnlyMediaRepository`) وبديل ويب خفيف لشريط تحديث الأندرويد (`update_banner_stub.dart`).
-  - أداة الفحص `tool/check_web_bundle.mjs` في `ci.yml` (بنسخة Flutter المثبتة `3.50.0`) تتحقق آليًا من خرائط المصدر `main.dart.js.map` وتلزم الحزمة بحد أقصى `gzip -9 <= 1,399,000 B` (المقاس الفعلي على لينكس بـ Flutter `3.50.0`: `1,350,852 B` مع فائض أمان `+48,148 B`).
+  - أداة الفحص `tool/check_web_bundle.mjs` في `ci.yml` (بنسخة Flutter المثبتة `3.50.0`) تتحقق آليًا من خرائط المصدر `main.dart.js.map` وتلزم الحزمة بحد أقصى `gzip -9 <= 1,399,000 B` (المقاس الفعلي في CI على لينكس بـ Flutter `3.50.0`: `1,350,901 B` مع فائض أمان `+48,099 B`).
   - رصد أي فشل في تحميل الحزم المؤجلة عبر `ErrorReporting.capture(..., section: 'deferred_chunk')`.
   - الاحتفاظ الكامل بخطوط OpenType العربية دون تجزئة (`pyftsubset`) لحماية تشكيل النصوص وعلامات التشكيل في قراءات القطمارس والخط العربي (`GSUB`/`GPOS`)، مع بقاء حزم أندرويد المقتطعة (~15 ميجابايت) داخل الحدود القصوى.
 - **بديل `Intl.v8BreakIterator`**: محرك Flutter يستخدم هذه الواجهة القديمة في Chrome لتقسيم السطور، فيعتبرها Lighthouse
