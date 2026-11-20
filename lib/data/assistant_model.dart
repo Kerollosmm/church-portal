@@ -3,7 +3,7 @@ import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:flutter/foundation.dart';
 
 import '../domain/assistant_conversation.dart';
-import 'firebase_bootstrap.dart';
+import 'app_check_providers.dart';
 
 /// [AssistantModel] on Firebase AI Logic (Gemini Developer API backend,
 /// App Check token attached automatically by the SDK — ADR-029). Stateless:

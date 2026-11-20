@@ -150,8 +150,8 @@ Firestore في المتصفح يحتفظ بنسخة محلية (cache). عند �
 
 | المسار | متى يعمل | ماذا يفعل |
 |---|---|---|
-| `ci.yml` | كل push على أي فرع، وكل PR | `flutter analyze` ← `flutter test` ← بناء الويب (بيئة Sentry `ci`) ← تبصيم خطوط الأيقونات `tool/fingerprint_icon_fonts.py` ← التحقق من `seed.json` وأنه مطابق لمولّده؛ ووظيفة ثانية `firestore-rules` تشغّل اختبارات القواعد في المحاكي |
-| `deploy.yml` على PR | كل PR من نفس المستودع | `build` (اختبارات + بناء بيئة `preview` **بدون مفتاح reCAPTCHA**، لذلك المساعد مخفي في المعاينة) ← `preview`: نشر على قناة معاينة `pr-<رقم>` لمدة 7 أيام وتعليق بالرابط على الـ PR |
+| `ci.yml` | كل push على أي فرع، وكل PR | نسخة Flutter المثبتة `3.50.0`: فحص `dart run tool/gen_cairo_tz.dart --check` ← `flutter analyze` ← `flutter test` ← بناء الويب (بيئة Sentry `ci`) ← فحص الحزم `node tool/check_web_bundle.mjs build/web` ← تبصيم خطوط الأيقونات `tool/fingerprint_icon_fonts.py` ← التحقق من `seed.json` وأنه مطابق لمولّده؛ ووظيفة ثانية `firestore-rules` تشغّل اختبارات القواعد في المحاكي |
+| `deploy.yml` على PR | كل PR من نفس المستودع | `build` (بنسخة `3.50.0`، اختبارات + بناء بيئة `preview` **بدون مفتاح reCAPTCHA**، لذلك المساعد مخفي في المعاينة) ← `preview`: نشر على قناة معاينة `pr-<رقم>` لمدة 7 أيام وتعليق بالرابط على الـ PR |
 | `deploy.yml` على `main` | بعد الدمج | `build` (بيئة `production` مع `RECAPTCHA_SITE_KEY`) و `rules-test` ← `deploy-rules` (قواعد وفهارس Firestore، بيئة `production`) ← `deploy-live` (Hosting للموقع والتحويل القديم، ينتظر نشر القواعد أولًا) |
 | `seed.yml` | يدويًا فقط (Run workflow) | يرفع `seed.json` إلى Firestore. المدخلات: `admin` (UID:email)، `admin_email`، `only` (مجموعات مفصولة بفواصل)، `fill_missing`، `force` |
 

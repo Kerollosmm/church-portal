@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:material_ui/material_ui.dart';
 
 import '../../core/l10n.dart';
+import 'admin_strings.dart';
 import 'unsaved_guard_stub.dart' if (dart.library.js_interop) 'unsaved_guard_web.dart' as impl;
 
 typedef DiscardHandler = Future<bool> Function();
@@ -24,6 +25,7 @@ Future<bool> debugSimulatePopState() => impl.debugSimulatePopState();
 /// The primary action button is «متابعة التعديل» (`discard-keep`), returning `false`.
 /// The discard button is «تجاهل» (`discard-confirm`), returning `true`.
 Future<bool> confirmDiscardChanges(BuildContext context) async {
+  registerAdminStrings();
   final res = await showDialog<bool>(
     context: context,
     builder: (ctx) => AlertDialog(

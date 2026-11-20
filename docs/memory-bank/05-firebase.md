@@ -25,7 +25,7 @@ regenerates the whole file (keep the `currentPlatformOrNull`/`isConfigured` help
 
 ## Authentication
 
-- **Email/password** provider only; **admins only** (no public sign-up anywhere in the app).
+- **Email/password** provider only; **admins only** (no public sign-up anywhere in the app). `firebase_auth` and `AdminRepository` load only when visiting deferred `/admin`; public pages boot without Auth using read-only `ReadOnlyMediaRepository`.
 - Accounts are created in Firebase console → Authentication → Users, or by the Seed workflow's `admin_email` input
   (`admin.auth().createUser`) which then emails a set-password (reset) link.
 - Being signed in is not enough: admin rights = existence of `admins/{uid}` (see rules). Roles `owner`/`editor`.

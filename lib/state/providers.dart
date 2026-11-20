@@ -14,7 +14,6 @@ import '../core/content_ready.dart';
 import '../core/install_env.dart';
 import '../core/locale_storage.dart';
 import '../core/push_env.dart';
-import '../data/admin_repository.dart';
 import '../data/content_repository.dart';
 import '../data/firebase_bootstrap.dart';
 import '../data/media_repository.dart';
@@ -35,7 +34,6 @@ import '../domain/today.dart';
 /// Overridden in main() after bootstrapping.
 final firebaseStatusProvider = Provider<FirebaseStatus>((ref) => FirebaseStatus.unavailable);
 final repositoryProvider = Provider<ContentRepository>((ref) => throw UnimplementedError('override in main'));
-final adminRepositoryProvider = Provider<AdminRepository?>((ref) => null);
 
 /// Reads (public) and uploads (admin) optional item images; null when
 /// Firebase is unavailable (inline images then show their placeholder).

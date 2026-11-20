@@ -7,8 +7,7 @@ The `lib/state` package manages global application state using Flutter Riverpod.
 - **Repository & Infrastructure Providers (`providers.dart`)**:
   - [`firebaseStatusProvider`](file:///c:/Users/Kerollos/church-portal/lib/state/providers.dart#L36): Current availability status of Firebase and App Check.
   - [`repositoryProvider`](file:///c:/Users/Kerollos/church-portal/lib/state/providers.dart#L37): Primary `ContentRepository` (overridden in `main.dart` with `FirestoreRepository` or `SeedRepository`).
-  - [`adminRepositoryProvider`](file:///c:/Users/Kerollos/church-portal/lib/state/providers.dart#L38): Optional `AdminRepository` for administrative operations.
-  - [`mediaRepositoryProvider`](file:///c:/Users/Kerollos/church-portal/lib/state/providers.dart#L42): Optional `MediaRepository` for inline or storage media uploads.
+  - [`mediaRepositoryProvider`](file:///c:/Users/Kerollos/church-portal/lib/state/providers.dart#L42): Optional `MediaRepository` for public inline image loading (`ReadOnlyMediaRepository`); writable `adminRepositoryProvider` lives inside deferred `lib/ui/admin/admin_page.dart`.
 
 - **Settings & Feature Toggle Providers (`providers.dart`)**:
   - [`settingsProvider`](file:///c:/Users/Kerollos/church-portal/lib/state/providers.dart#L44): Stream provider for global `ChurchSettings`.

@@ -19,8 +19,8 @@
 
 ## كيف تعمل تقنيًا
 
-- نصوص الواجهة في `lib/core/l10n.dart` بصيغة `'key': ['عربي', 'English']`، وتُستخدم بـ `context.tr('key')`؛ والمحتوى
-  بـ `context.pick(ar, en)`. تسميات حقول اللوحة في `lib/ui/admin/admin_schema.dart`.
+- نصوص الواجهة العامة في `lib/core/l10n.dart` بصيغة `'key': ['عربي', 'English']`، وتُستخدم بـ `context.tr('key')`؛ أما نصوص
+  لوحة التحكم المؤجَّلة فتعيش في `lib/ui/admin/admin_strings.dart` (وتُحفظ تسميات الحقول في `lib/ui/admin/admin_schema.dart`)، ونصوص التحديث في `lib/ui/widgets/update_banner_io.dart`. والمحتوى يُعرض بـ `context.pick(ar, en)`.
 - الترتيب عند البدء: `?lang=` في الرابط ← اللغة المحفوظة ← العربية. الحفظ في `localStorage` بالمفتاح
   `church_portal_lang` (`lib/core/locale_storage*.dart`).
 - مزامنة الرابط في الاتجاهين `resolveLangSync` في `lib/router.dart` (الضغط على الزر يغيّر الرابط، والرابط الصريح يغيّر

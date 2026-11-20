@@ -104,8 +104,8 @@ The `widgets` package provides the shared presentation layer, design system comp
   - `TopUtilityBar` (aliased as `CopticDateStrip`): Sticky top bar displaying Coptic calendar date, fast status, and live indicators.
   - `LiveStreamBanner`: Dynamic broadcast banner shown when church liturgy is streaming live.
   - `TopEventCard`: Highlight card for featured feast or occasion of the day.
-- `update_banner.dart`:
-  - `UpdateBanner`: Notification prompt shown when a new PWA service worker or APK release is available.
+- `update_banner.dart`: Conditional export (`update_banner_stub.dart` no-op on web, `update_banner_io.dart` on native with `_updateStrings` isolated via `registerStrings`):
+  - `UpdateBanner`: In-app Android APK update prompt banner (no-op on web).
   - `UpdateSheet`: Modal details sheet detailing release notes and update actions.
 - Subdirectories: None
 

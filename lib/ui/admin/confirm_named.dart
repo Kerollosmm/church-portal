@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../../core/l10n.dart';
 import '../../core/theme.dart';
+import 'admin_strings.dart';
 
 /// Shows a standard confirmation dialog that clearly names the target action or item.
 ///
@@ -13,6 +14,7 @@ Future<bool> confirmNamedAction(
   required String actionLabel,
   bool destructive = false,
 }) async {
+  registerAdminStrings();
   final ok = await showDialog<bool>(
     context: context,
     builder: (ctx) => AlertDialog(

@@ -81,15 +81,15 @@ Runs in the **`production` environment** with the service-account secret. Inputs
 ## CI/CD (`.github/workflows/`)
 
 ### `ci.yml` — every push (all branches) and PR; concurrency `ci-<ref>`, cancel in progress
-Job **analyze-test-build** (ubuntu, 30 min): checkout → `subosito/flutter-action@v2` (stable, cached) →
-`flutter --version` → `flutter pub get` → `flutter analyze` → `flutter test` → `flutter build web --release`
+Job **analyze-test-build** (ubuntu, 30 min): checkout → `subosito/flutter-action@v2` (pinned `flutter-version: '3.50.0'`, `channel: 'stable'`, cached) →
+`flutter --version` → `flutter pub get` → `dart run tool/gen_cairo_tz.dart --check` (verifies `lib/domain/cairo_tzdata.dart` matches `package:timezone` `latest_10y.dart`) → `flutter analyze` → `flutter test` → `flutter build web --release`
 (Sentry defines: `SENTRY_ENVIRONMENT=ci`, `GIT_SHA`, `APP_VERSION`, `SENTRY_DSN` when the variable is set) →
-`node tool/check_web_bundle.mjs build/web` (ADR-061: asserts main.dart.js gzip -9 <= 1,399,000 B, >= 6 part chunks, zero sourcemap leaks of 8 deferred modules, and OpenType font integrity) → `python3 tool/fingerprint_icon_fonts.py build/web` → validate `seed.json` parses (node) → **`python3 tool/gen_seed.py` and `git diff --exit-code`** on `seed.json`,
+`node tool/check_web_bundle.mjs build/web` (ADR-061 / ADR-077: asserts `main.dart.js` `gzip -9 <= 1,399,000 B`, `>= 6` part chunks, zero sourcemap leaks of tracked deferred modules or forbidden public-bundle sources, and OpenType font integrity) → `python3 tool/fingerprint_icon_fonts.py build/web` → validate `seed.json` parses (node) → **`python3 tool/gen_seed.py` and `git diff --exit-code`** on `seed.json`,
 `retired_seed_ids.json`, `known_seed_ids.json` (fails if you hand-edited the JSON or forgot to regenerate).
 Job **firestore-rules** (15 min): Java Temurin 21 + Node 22 → `npm ci` in `tool/rules_test` → `npm test` (emulator).
 
 ### `deploy.yml` — push to `main` and PRs (`FIREBASE_PROJECT_ID=asafra-church-portal`)
-1. **build** (skipped for fork PRs): Flutter stable → `pub get` → `flutter test` → `flutter build web --release`
+1. **build** (skipped for fork PRs): Flutter **`3.50.0`** (`channel: 'stable'`, same pin in `android.yml`; remember to pin `deploy-dev.yml` when updating `dev`) → `pub get` → `flutter test` → `flutter build web --release`
    with the Sentry defines (PR #24: `SENTRY_ENVIRONMENT` = `production` on push / `preview` on PRs, `GIT_SHA` = the
    PR head or pushed SHA, `APP_VERSION` from `pubspec.yaml`, `SENTRY_DSN` only when the repo variable is set),
    with `--dart-define=RECAPTCHA_SITE_KEY` only on push builds when the repo variable is set →
@@ -150,9 +150,9 @@ Normalises the service-account secret (first JSON object only, validates, `$RUNN
 
 - Business logic in `lib/domain/` (pure Dart, no Flutter/Firebase imports) with unit tests; UI in `lib/ui/`.
 - Import widgets from `package:material_ui/material_ui.dart`.
-- All user-visible strings in `lib/core/l10n.dart` `_strings` (`[ar, en]`), Arabic first; content fields as `…Ar/…En`
+- All user-visible public strings in `lib/core/l10n.dart` `_strings` (`[ar, en]`), Arabic first; deferred / admin-only UI strings go in their chunk tables (`admin_strings.dart` via `registerAdminStrings()`, or per-chunk `registerStrings(...)`); content fields as `…Ar/…En`
   pairs rendered with `context.pick`. Times always via `TimeRangeText` / `time_format.dart`.
-- Times `HH:mm`, weekdays ISO 1–7, all schedule math through `CairoTime` (never `DateTime.now().weekday` directly).
+- Times `HH:mm`, weekdays ISO 1–7, all schedule math through `CairoTime` (never `DateTime.now().weekday` directly). If Egypt changes DST rules or `package:timezone` updates, regenerate `lib/domain/cairo_tzdata.dart` with `dart run tool/gen_cairo_tz.dart` (verified in CI by `--check` and `test/bundle_isolation_test.dart`).
 - Models' `fromMap` must be tolerant (wrong types → defaults; never throw on bad data).
 - Never invent church content; unknown facts stay `sample: true` and are documented in `docs/CONTENT_SOURCES.md`.
 - Seed changes only in `tool/gen_seed.py`; removing a seeded id ⇒ add it to `retired`.
