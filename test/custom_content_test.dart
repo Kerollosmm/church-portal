@@ -12,6 +12,7 @@ import 'package:church_portal/data/admin_repository.dart';
 import 'package:church_portal/data/content_repository.dart';
 import 'package:church_portal/data/media_repository.dart';
 import 'package:church_portal/data/seed_data.dart';
+import 'package:church_portal/domain/assistant_context.dart';
 import 'package:church_portal/domain/cairo_time.dart';
 import 'package:church_portal/domain/contact_categories.dart';
 import 'package:church_portal/domain/custom_content.dart';
@@ -289,6 +290,186 @@ void main() {
         },
       ]);
       expect(collectionById('alerts')!.fields.firstWhere((f) => f.key == 'link').linkPicker, isTrue);
+    });
+
+    test('list blocks: encode/decode round-trip, styles, and separator stripping', () {
+      final bullet = PageBlock.list(
+        items: [(ar: 'تجربة أولى', en: 'First'), (ar: 'تجربة ثانية', en: 'Second')],
+      );
+      expect(bullet.type, BlockTypes.list);
+      expect(bullet.listStyle, ListStyles.bullet);
+      expect(bullet.isEmpty, isFalse);
+      final bulletDec = PageBlock.fromStored(bullet.encode())!;
+      expect(bulletDec.toMap(), bullet.toMap());
+      expect(bulletDec.listStyle, ListStyles.bullet);
+      expect(bulletDec.listItems, [(ar: 'تجربة أولى', en: 'First'), (ar: 'تجربة ثانية', en: 'Second')]);
+
+      final numbered = PageBlock.list(
+        items: [(ar: 'تجربة أ', en: 'A'), (ar: 'تجربة ب', en: 'B')],
+        style: ListStyles.numbered,
+      );
+      expect(numbered.listStyle, ListStyles.numbered);
+      final numDec = PageBlock.fromStored(numbered.encode())!;
+      expect(numDec.toMap(), numbered.toMap());
+      expect(numDec.listStyle, ListStyles.numbered);
+      expect(numDec.listItems, [(ar: 'تجربة أ', en: 'A'), (ar: 'تجربة ب', en: 'B')]);
+
+      // Invalid/empty account resolves safely to bullet.
+      expect(
+        PageBlock.list(items: [(ar: 'تجربة ١', en: '')], style: 'invalid').listStyle,
+        ListStyles.bullet,
+      );
+      expect(
+        const PageBlock(type: BlockTypes.list, textAr: 'تجربة ١', account: '').listStyle,
+        ListStyles.bullet,
+      );
+      expect(
+        const PageBlock(type: BlockTypes.list, textAr: 'تجربة ١', account: 'roman').listStyle,
+        ListStyles.bullet,
+      );
+
+      // Separator characters (\u001f and \u001e) inside item text are stripped.
+      final dirty = PageBlock.list(
+        items: [
+          (ar: ' تجربة\u001f١\u001e ', en: ' Test\u001e1\u001f '),
+        ],
+      );
+      expect(dirty.textAr, 'تجربة١');
+      expect(dirty.textEn, 'Test1');
+      final dirtyDec = PageBlock.fromStored(dirty.encode())!;
+      expect(dirtyDec.listItems, [(ar: 'تجربة١', en: 'Test1')]);
+    });
+
+    test('list blocks: parallel EN alignment, short EN, blank items, and malformed input', () {
+      // Partial English preserves exact index alignment; all-empty EN encodes ''.
+      final partial = PageBlock.list(
+        items: [
+          (ar: 'تجربة ١', en: 'Test 1'),
+          (ar: 'تجربة ٢', en: ''),
+          (ar: 'تجربة ٣', en: 'Test 3'),
+        ],
+      );
+      expect(partial.textEn, isNotEmpty);
+      expect(PageBlock.fromStored(partial.encode())!.listItems, [
+        (ar: 'تجربة ١', en: 'Test 1'),
+        (ar: 'تجربة ٢', en: ''),
+        (ar: 'تجربة ٣', en: 'Test 3'),
+      ]);
+
+      final arOnly = PageBlock.list(
+        items: [(ar: 'تجربة ١', en: ''), (ar: 'تجربة ٢', en: '  ')],
+      );
+      expect(arOnly.textEn, '');
+      expect(PageBlock.fromStored(arOnly.encode())!.listItems, [
+        (ar: 'تجربة ١', en: ''),
+        (ar: 'تجربة ٢', en: ''),
+      ]);
+
+      // Short textEn decodes safely without RangeError.
+      const shortEn = PageBlock(
+        type: BlockTypes.list,
+        textAr: 'تجربة أ\u001eتجربة ب\u001eتجربة ج',
+        textEn: 'Only A',
+      );
+      expect(shortEn.listItems, [
+        (ar: 'تجربة أ', en: 'Only A'),
+        (ar: 'تجربة ب', en: ''),
+        (ar: 'تجربة ج', en: ''),
+      ]);
+
+      // Blank items in malformed stored strings are skipped; all-blank is empty.
+      const withBlanks = PageBlock(
+        type: BlockTypes.list,
+        textAr: ' \u001eتجربة صالحة\u001e\u001e  ',
+        textEn: 'Ignored\u001eValid\u001e\u001e',
+      );
+      expect(withBlanks.listItems, [(ar: 'تجربة صالحة', en: 'Valid')]);
+      expect(withBlanks.isEmpty, isFalse);
+
+      const allBlank = PageBlock(
+        type: BlockTypes.list,
+        textAr: ' \u001e  \u001e',
+        textEn: 'Orphan EN',
+      );
+      expect(allBlank.listItems, isEmpty);
+      expect(allBlank.isEmpty, isTrue);
+      expect(PageBlock.list(items: const []).isEmpty, isTrue);
+
+      // Backward compatibility: unknown block type and wrong slot counts drop cleanly.
+      expect(PageBlock.fromStored('list\u001fonly two'), isNull);
+      expect(PageBlock.fromStored('video\u001f\u001f\u001fhttps://x.org\u001f\u001f\u001f'), isNull);
+      final page = CustomPage.fromMap('list-compat', {
+        'slug': 'list-compat',
+        'titleAr': 'تجربة صفحة',
+        'blocks': [
+          PageBlock.list(items: [(ar: 'تجربة عنصر', en: 'Item')]).encode(),
+          'list\u001fbad',
+          {'type': 'video', 'url': 'https://x.org'},
+        ],
+      });
+      expect(page.blocks.length, 1);
+      expect(page.blocks.first.type, BlockTypes.list);
+      expect(page.blocks.first.listItems, [(ar: 'تجربة عنصر', en: 'Item')]);
+    });
+
+    test('list blocks: assistant grounding formats with "; " and omits raw \\u001e and empty lists', () {
+      final listPage = CustomPage(
+        id: 'lp1',
+        slug: 'test-list',
+        titleAr: 'تجربة قائمة',
+        titleEn: 'Test list',
+        blocks: [
+          PageBlock.list(
+            items: [
+              (ar: 'تجربة بند ١', en: 'Item 1'),
+              (ar: 'تجربة بند ٢', en: ''),
+              (ar: 'تجربة بند ٣', en: 'Item 3'),
+            ],
+            style: ListStyles.numbered,
+          ),
+          PageBlock.list(items: const []),
+        ],
+      );
+      final instr = buildAssistantInstruction(
+        settings: const ChurchSettings(nameAr: 'تجربة كنيسة', nameEn: 'Test Church', addressAr: '', addressEn: ''),
+        liturgies: const [],
+        seasons: const [],
+        clinics: const [],
+        meetings: const [],
+        activities: const [],
+        facilities: const [],
+        now: CairoTime.at(2026, 11, 2, 600),
+        pages: [listPage],
+      );
+      expect(instr, contains('- Item 1 (تجربة بند ١); تجربة بند ٢; Item 3 (تجربة بند ٣)'));
+      expect(instr.contains(PageBlock.listSeparator), isFalse);
+
+      final emptyOnlyPage = CustomPage(
+        id: 'lp2',
+        slug: 'empty-list',
+        titleAr: 'تجربة قائمة فارغة',
+        titleEn: 'Empty list',
+        blocks: [
+          const PageBlock(type: BlockTypes.list, textAr: ' \u001e '),
+          const PageBlock(type: BlockTypes.paragraph, textAr: 'تجربة فقرة', textEn: 'After empty list'),
+        ],
+      );
+      final emptyInstr = buildAssistantInstruction(
+        settings: const ChurchSettings(nameAr: 'تجربة كنيسة', nameEn: 'Test Church', addressAr: '', addressEn: ''),
+        liturgies: const [],
+        seasons: const [],
+        clinics: const [],
+        meetings: const [],
+        activities: const [],
+        facilities: const [],
+        now: CairoTime.at(2026, 11, 2, 600),
+        pages: [emptyOnlyPage],
+      );
+      expect(
+        emptyInstr,
+        contains('## Empty list (تجربة قائمة فارغة) (page /page/empty-list)\nAfter empty list (تجربة فقرة)'),
+      );
+      expect(emptyInstr.contains(PageBlock.listSeparator), isFalse);
     });
   });
 
