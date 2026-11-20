@@ -70,8 +70,8 @@ lib/
     app_update.dart         ApkManifest, UpdateDecision, checkForUpdate, shouldForceUpdate — ADR-058
     readings.dart           DayReadings, ReadingSection, ReadingPassage, parseKatamerosDay, formatCopticDay — ADR-058
   data/
-    firebase_bootstrap.dart bootstrapFirebase() -> FirebaseStatus{available, appCheckActive (= configured)}; ensureAppCheckActivated() (lazy, ADR-037)
-    app_check_providers.dart selectAppCheckPlan (reCAPTCHA Enterprise web / Play Integrity / App Attest / debug) — PR #19
+    firebase_bootstrap.dart firestoreSettings(isWeb:) (40 MB cache; WebPersistentMultipleTabManager on web, ADR-078), bootstrapFirebase() -> FirebaseStatus{available, appCheckActive (= configured)}
+    app_check_providers.dart selectAppCheckPlan (reCAPTCHA Enterprise web / Play Integrity / App Attest / debug); ensureAppCheckActivated() (lazy, ADR-037, deferred with /ask)
     assistant_model.dart    FirebaseAssistantModel (AssistantModel on Firebase AI Logic, imported only by /ask) — PR #19
     content_repository.dart ContentRepository (interface), SeedRepository, FirestoreRepository,
                             normalizeFirestoreValue/normalizeDoc
@@ -140,6 +140,7 @@ flowchart TD
    one `_start()` simply runs. Never throws because of Sentry.
 1. `WidgetsFlutterBinding.ensureInitialized()`, `usePathUrlStrategy()`, `CairoTime.ensureInitialized()`.
 2. `Future.wait([SeedData.load(), bootstrapFirebase(), initLanguageStore(), initInstallStore(), initPushStore()])` — never throw;
+   `bootstrapFirebase()` configures Firestore offline persistence via `firestoreSettings(isWeb: kIsWeb)` (40 MB cache; `WebPersistentMultipleTabManager` on web so concurrent tabs share the IndexedDB lease without `failed-precondition`/`b815` assertions — ADR-078; native settings unchanged);
    on native IO platforms `initPushStore()` preloads `SharedPreferences` and queries the OS notification permission state.
 3. On native non-web platforms (`Android`, `iOS`, `macOS`, `Linux`), `LocalNotifier().initialize()` runs before
    `runApp`, checks `getLaunchPayload()` to queue cold-start notification routes via `navigateToNotification`, and
