@@ -31,7 +31,7 @@ import 'package:church_portal/ui/admin/contact_admin.dart';
 import 'package:church_portal/ui/admin/doc_editor.dart';
 import 'package:church_portal/ui/admin/page_preview.dart';
 import 'package:church_portal/ui/pages/category_page.dart' show CustomPageCard;
-import 'package:church_portal/ui/pages/custom_page.dart' show PageBlockView;
+import 'package:church_portal/ui/pages/custom_page.dart' show CustomPageView, PageBlockView;
 import 'package:church_portal/ui/widgets/cards.dart' show NextMassCard;
 import 'package:church_portal/ui/widgets/common.dart';
 import 'package:church_portal/ui/widgets/feature_gate.dart';
@@ -4266,6 +4266,189 @@ void main() {
         await tester.pumpAndSettle();
         expect(b.saves, hasLength(1));
         expect(b.saves.single.$3['slug'], 'orig-slug-copy-2');
+      },
+    );
+  });
+
+  group('Phase 4 PR4A: public list block', () {
+    testWidgets('PageBlockView renders bullet list in Arabic RTL with excluded bullet semantics', (tester) async {
+      final block = PageBlock.list(
+        items: const [
+          (ar: 'تجربة أولى', en: 'First'),
+          (ar: 'تجربة ثانية', en: 'Second'),
+        ],
+        style: ListStyles.bullet,
+      );
+      await tester.pumpWidget(_admin(PageBlockView(block: block), locale: const Locale('ar')));
+      await tester.pumpAndSettle();
+
+      expect(Directionality.of(tester.element(find.text('تجربة أولى'))), TextDirection.rtl);
+      expect(find.text('•'), findsNWidgets(2));
+      expect(find.ancestor(of: find.text('•'), matching: find.byType(ExcludeSemantics)), findsNWidgets(2));
+      expect(find.text('تجربة أولى'), findsOneWidget);
+      expect(find.text('تجربة ثانية'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('PageBlockView renders numbered list with Arabic-Indic digits in AR RTL and ASCII digits in EN LTR',
+        (tester) async {
+      final block = PageBlock.list(
+        items: const [
+          (ar: 'تجربة أ', en: 'First'),
+          (ar: 'تجربة ب', en: 'Second'),
+          (ar: 'تجربة ج', en: 'Third'),
+        ],
+        style: ListStyles.numbered,
+      );
+
+      await tester.pumpWidget(_admin(PageBlockView(block: block), locale: const Locale('ar')));
+      await tester.pumpAndSettle();
+      expect(Directionality.of(tester.element(find.text('تجربة أ'))), TextDirection.rtl);
+      expect(find.text('${toArabicDigits('1')}.'), findsOneWidget);
+      expect(find.text('${toArabicDigits('2')}.'), findsOneWidget);
+      expect(find.text('${toArabicDigits('3')}.'), findsOneWidget);
+      expect(find.text('1.'), findsNothing);
+      expect(find.text('تجربة أ'), findsOneWidget);
+      expect(find.text('تجربة ب'), findsOneWidget);
+      expect(find.text('تجربة ج'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+
+      await tester.pumpWidget(_admin(PageBlockView(block: block), locale: const Locale('en')));
+      await tester.pumpAndSettle();
+      expect(Directionality.of(tester.element(find.text('First'))), TextDirection.ltr);
+      expect(find.text('1.'), findsOneWidget);
+      expect(find.text('2.'), findsOneWidget);
+      expect(find.text('3.'), findsOneWidget);
+      expect(find.text('١.'), findsNothing);
+      expect(find.text('First'), findsOneWidget);
+      expect(find.text('Second'), findsOneWidget);
+      expect(find.text('Third'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('PageBlockView falls back to Arabic text when English item text is empty', (tester) async {
+      final block = PageBlock.list(
+        items: const [
+          (ar: 'تجربة بند أول', en: 'First item'),
+          (ar: 'تجربة بند ثانٍ بلا ترجمة', en: ''),
+          (ar: 'تجربة بند ثالث', en: 'Third item'),
+        ],
+        style: ListStyles.numbered,
+      );
+      await tester.pumpWidget(_admin(PageBlockView(block: block), locale: const Locale('en')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('1.'), findsOneWidget);
+      expect(find.text('2.'), findsOneWidget);
+      expect(find.text('3.'), findsOneWidget);
+      expect(find.text('First item'), findsOneWidget);
+      expect(find.text('تجربة بند ثانٍ بلا ترجمة'), findsOneWidget);
+      expect(find.text('Third item'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('empty list block and unknown block type render SizedBox.shrink cleanly in PageBlockView and CustomPageView',
+        (tester) async {
+      await tester.pumpWidget(_admin(
+        Column(
+          children: [
+            PageBlockView(block: PageBlock.list(items: const [])),
+            const PageBlockView(block: PageBlock(type: BlockTypes.list, textAr: ' \u001e  ', textEn: 'Ignored')),
+            const PageBlockView(block: PageBlock(type: 'future_type', textAr: 'تجربة')),
+          ],
+        ),
+      ));
+      await tester.pumpAndSettle();
+
+      final views = find.byType(PageBlockView);
+      expect(views, findsNWidgets(3));
+      for (var i = 0; i < 3; i++) {
+        expect(tester.getSize(views.at(i)), Size.zero);
+        final shrink = tester.widget<SizedBox>(
+          find.descendant(of: views.at(i), matching: find.byType(SizedBox)).first,
+        );
+        expect(shrink.width, 0);
+        expect(shrink.height, 0);
+      }
+      expect(find.text('تجربة'), findsNothing);
+      expect(tester.takeException(), isNull);
+
+      final page = CustomPage(
+        id: 'p-empty-unknown',
+        slug: 'mixed-empty',
+        titleAr: 'تجربة صفحة مختلطة',
+        titleEn: 'Test mixed page',
+        blocks: [
+          PageBlock.list(items: const []),
+          const PageBlock(type: BlockTypes.list, textAr: ' \u001e '),
+          const PageBlock(type: 'future_type', textAr: 'تجربة نوع مستقبلي'),
+          const PageBlock(type: BlockTypes.paragraph, textAr: 'تجربة فقرة ظاهرة', textEn: 'Test visible paragraph'),
+        ],
+      );
+      final repo = _ControlledPagesRepo(Stream.value([page]), entries: const []);
+      await _pump(tester, '/page/mixed-empty', repo: repo);
+      expect(find.byType(CustomPageView), findsOneWidget);
+      expect(find.text('Test visible paragraph'), findsOneWidget);
+      expect(find.text('تجربة نوع مستقبلي'), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets(
+      'CustomPageView with 20-item numbered list and long wrapping text renders cleanly at 320/400/1400 px with 200% text scale in AR RTL and EN LTR',
+      (tester) async {
+        tester.platformDispatcher.textScaleFactorTestValue = 2.0;
+        addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+
+        final items = <PageListItem>[
+          for (var i = 1; i <= 20; i++)
+            (
+              ar: 'تجربة البند رقم $i مع نص عربي طويل يلتف على عدة أسطر للتحقق من عدم وجود أي تجاوز عند التكبير',
+              en: 'Test list item $i with long wrapping English copy that spans multiple lines to verify zero overflow at 200% scale',
+            ),
+        ];
+        final page = CustomPage(
+          id: 'p-list-resp',
+          slug: 'list-responsive',
+          titleAr: 'تجربة قائمة طويلة',
+          titleEn: 'Test long list',
+          blocks: [
+            PageBlock.list(items: items, style: ListStyles.numbered),
+          ],
+        );
+
+        for (final width in [320.0, 400.0, 1400.0]) {
+          for (final locale in [const Locale('ar'), const Locale('en')]) {
+            final repo = _ControlledPagesRepo(Stream.value([page]), entries: const []);
+            await _pump(
+              tester,
+              '/page/list-responsive',
+              size: Size(width, 1200),
+              repo: repo,
+              locale: locale,
+            );
+            expect(find.byType(CustomPageView), findsOneWidget, reason: 'width=$width locale=${locale.languageCode}');
+            expect(
+              MediaQuery.textScalerOf(tester.element(find.byType(CustomPageView))).scale(10),
+              20.0,
+              reason: 'width=$width locale=${locale.languageCode}',
+            );
+            expect(tester.takeException(), isNull, reason: 'width=$width locale=${locale.languageCode}');
+
+            if (locale.languageCode == 'ar') {
+              expect(find.text('${toArabicDigits('1')}.'), findsOneWidget);
+              expect(find.text('${toArabicDigits('20')}.'), findsOneWidget);
+              for (final item in items) {
+                expect(find.text(item.ar), findsOneWidget, reason: 'width=$width ar item missing');
+              }
+            } else {
+              expect(find.text('1.'), findsOneWidget);
+              expect(find.text('20.'), findsOneWidget);
+              for (final item in items) {
+                expect(find.text(item.en), findsOneWidget, reason: 'width=$width en item missing');
+              }
+            }
+          }
+        }
       },
     );
   });

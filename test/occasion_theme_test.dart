@@ -45,13 +45,17 @@ class _CustomRepo extends SeedRepository {
             contactPhone: '01012345678', externalUrl: '/page/donate', externalLabelEn: 'Register', sample: true),
       ]);
   @override
-  Stream<List<CustomPage>> pages() => Stream.value(const [
+  Stream<List<CustomPage>> pages() => Stream.value([
         CustomPage(id: 'p1', slug: 'donate', titleAr: 'تبرع', titleEn: 'Building donations', subtitleEn: 'Help us', blocks: [
-          PageBlock(type: BlockTypes.heading, textEn: 'The new building'),
-          PageBlock(type: BlockTypes.paragraph, textEn: 'Every gift helps.'),
-          PageBlock(type: BlockTypes.button, textEn: 'Contact us', url: '/contact'),
-          PageBlock(type: BlockTypes.link, textEn: 'Diocese site', url: 'https://example.org'),
-          PageBlock(type: BlockTypes.donation, account: 'CIB 100', instapay: 'church@instapay', wallet: '010', textEn: 'Notes'),
+          const PageBlock(type: BlockTypes.heading, textEn: 'The new building'),
+          const PageBlock(type: BlockTypes.paragraph, textEn: 'Every gift helps.'),
+          PageBlock.list(
+            items: const [(ar: 'تجربة أولى', en: 'Test item 1'), (ar: 'تجربة ثانية', en: 'Test item 2')],
+            style: ListStyles.numbered,
+          ),
+          const PageBlock(type: BlockTypes.button, textEn: 'Contact us', url: '/contact'),
+          const PageBlock(type: BlockTypes.link, textEn: 'Diocese site', url: 'https://example.org'),
+          const PageBlock(type: BlockTypes.donation, account: 'CIB 100', instapay: 'church@instapay', wallet: '010', textEn: 'Notes'),
         ]),
       ]);
 }

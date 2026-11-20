@@ -7,6 +7,7 @@ import '../../core/l10n.dart';
 import '../../core/theme.dart';
 import '../../domain/custom_content.dart';
 import '../../domain/media.dart';
+import '../../domain/rules.dart' show toArabicDigits;
 import '../../state/providers.dart';
 import '../widgets/common.dart';
 import '../widgets/golden.dart';
@@ -137,8 +138,77 @@ class PageBlockView extends StatelessWidget {
         );
       case BlockTypes.donation:
         return DonationInfoCard(block: b);
+      case BlockTypes.list:
+        return _ListBlockView(block: b);
     }
     return const SizedBox.shrink();
+  }
+}
+
+/// Renders one [BlockTypes.list] block (`bullet` or `numbered`) with localized
+/// items and Arabic-Indic numerals in Arabic.
+class _ListBlockView extends StatelessWidget {
+  final PageBlock block;
+  const _ListBlockView({required this.block});
+
+  @override
+  Widget build(BuildContext context) {
+    final items = <String>[];
+    for (final item in block.listItems) {
+      final text = context.pick(item.ar.trim(), item.en.trim());
+      if (text.isNotEmpty) items.add(text);
+    }
+    if (items.isEmpty) return const SizedBox.shrink();
+
+    final numbered = block.listStyle == ListStyles.numbered;
+    final ar = context.isAr;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (var i = 0; i < items.length; i++)
+          Padding(
+            padding: EdgeInsets.only(top: i == 0 ? 0 : 8),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (numbered)
+                  Text(
+                    ar ? '${toArabicDigits('${i + 1}')}.' : '${i + 1}.',
+                    style: TextStyle(
+                      fontSize: 16,
+                      height: 1.75,
+                      fontWeight: FontWeight.w800,
+                      color: context.pal.primary,
+                    ),
+                  )
+                else
+                  ExcludeSemantics(
+                    child: Text(
+                      '•',
+                      style: TextStyle(
+                        fontSize: 18,
+                        height: 1.55,
+                        fontWeight: FontWeight.w800,
+                        color: context.pal.primary,
+                      ),
+                    ),
+                  ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: SelectableText(
+                    items[i],
+                    style: TextStyle(
+                      fontSize: 16,
+                      height: 1.75,
+                      color: context.pal.ink,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
   }
 }
 
