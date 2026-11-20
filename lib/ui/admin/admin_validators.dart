@@ -3,7 +3,15 @@ import 'package:firebase_core/firebase_core.dart';
 
 import '../../domain/cairo_time.dart';
 import '../../domain/custom_content.dart'
-    show BlockTypes, PageBlock, PagePlacements, isValidSlug, slugMaxLength;
+    show
+        BlockTypes,
+        ListStyles,
+        PageBlock,
+        PagePlacements,
+        isValidSlug,
+        listBlockMaxItems,
+        listItemMax,
+        slugMaxLength;
 import '../../domain/media.dart' show MediaImage, MediaSource, isValidImageUrl;
 import '../../domain/push.dart';
 import '../../domain/rules.dart' show normalizeDigits;
@@ -361,6 +369,45 @@ String? validateHeadingBlock(Map<String, String> row, String blockType) {
   return null;
 }
 
+/// One validation issue inside a [BlockTypes.list] block.
+typedef ListBlockIssue = ({int? itemIndex, bool isEn, String code});
+
+String _cleanListItem(String raw) =>
+    raw.replaceAll(PageBlock.separator, '').replaceAll(PageBlock.listSeparator, '').trim();
+
+/// Validates a [BlockTypes.list] block's items and style against the limits
+/// mirrored in `firestore.rules` (`validListBlock`).
+List<ListBlockIssue> validateListBlock({
+  required List<String> arItems,
+  List<String> enItems = const [],
+  String style = ListStyles.bullet,
+}) {
+  final issues = <ListBlockIssue>[];
+  if (arItems.isEmpty) {
+    issues.add((itemIndex: null, isEn: false, code: 'blockListEmpty'));
+  }
+  if (arItems.length > listBlockMaxItems || enItems.length > listBlockMaxItems) {
+    issues.add((itemIndex: null, isEn: false, code: 'blockListTooMany'));
+  }
+  for (var i = 0; i < arItems.length; i++) {
+    final clean = _cleanListItem(arItems[i]);
+    if (clean.isEmpty) {
+      issues.add((itemIndex: i, isEn: false, code: 'blockListItemRequired'));
+    } else if (clean.length > listItemMax) {
+      issues.add((itemIndex: i, isEn: false, code: 'blockListItemTooLong'));
+    }
+  }
+  for (var i = 0; i < enItems.length; i++) {
+    if (_cleanListItem(enItems[i]).length > listItemMax) {
+      issues.add((itemIndex: i, isEn: true, code: 'blockListItemTooLong'));
+    }
+  }
+  if (style.isNotEmpty && !ListStyles.all.contains(style)) {
+    issues.add((itemIndex: null, isEn: false, code: 'invalid'));
+  }
+  return issues;
+}
+
 /// The stored image map's URL when it is set but not a usable image link
 /// (e.g. an old doc saved before validation), or null when there is no
 /// image or the link is fine. A bad link must block the save with a clear
@@ -390,7 +437,9 @@ String? validateDocument(CollectionDef? def, Map<String, dynamic> data) {
   final leads = data['reminderLeads'], lead = data['reminderDefaultLead'];
   if (lead is int && leads is List && !leads.contains(lead)) return 'reminderDefaultLeadNotOffered';
   // Custom page blocks (firestore.rules validPageBlock): an image needs an
-  // https picture link; a heading block requires Arabic heading text.
+  // https picture link; a heading block requires Arabic heading text; a list
+  // block requires 1..20 non-blank AR items (<=200 chars), optional EN items
+  // (<=200 chars), a valid style, and empty url/instapay/wallet slots.
   final blocks = data['blocks'];
   if (blocks is List) {
     for (final raw in blocks) {
@@ -398,6 +447,13 @@ String? validateDocument(CollectionDef? def, Map<String, dynamic> data) {
       if (b != null) {
         if (b.type == BlockTypes.heading && b.textAr.trim().isEmpty) return 'blockHeadingRequired';
         if (b.type == BlockTypes.image && !b.url.startsWith('https://')) return 'blockImageUrl';
+        if (b.type == BlockTypes.list) {
+          if (b.url.isNotEmpty || b.instapay.isNotEmpty || b.wallet.isNotEmpty) return 'invalid';
+          final rawAr = b.textAr.isEmpty ? const <String>[] : b.textAr.split(PageBlock.listSeparator);
+          final rawEn = b.textEn.isEmpty ? const <String>[] : b.textEn.split(PageBlock.listSeparator);
+          final issues = validateListBlock(arItems: rawAr, enItems: rawEn, style: b.account);
+          if (issues.isNotEmpty) return issues.first.code;
+        }
       }
     }
   }
