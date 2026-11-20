@@ -297,7 +297,11 @@ Header (title + subtitle), then a centered reading column constrained to `maxWid
 semantic header, Arabic heading text strictly required via `validateHeadingBlock` and `validateDocument` with `'blockHeadingRequired'`, `fontSize: 26`, `fontWeight: FontWeight.w800`, line height 1.45, `top: 12` spacing when following
 another block or hero, `bottom: 16`), paragraph (`BlockTypes.paragraph`, selectable, `fontSize: 16`, line height 1.8),
 image (https link + caption), button (`FilledButton`), text link, donation info (`DonationInfoCard`: bank account /
-InstaPay / wallet with copy buttons, notes, «للعلم فقط: لا يتم أي دفع عبر الموقع»). Empty blocks are skipped. Hidden /
+InstaPay / wallet with copy buttons, notes, «للعلم فقط: لا يتم أي دفع عبر الموقع»), and list (`BlockTypes.list`,
+`_ListBlockView`, PR 4A / ADR-079: vertical rows with `8px` gap inside the `700px` column; `'bullet'` renders `'•'`
+wrapped in `ExcludeSemantics`; `'numbered'` renders `toArabicDigits('${i + 1}')` + `'.'` in Arabic RTL and `'${i + 1}.'`
+in English LTR; item text renders with `SelectableText(context.pick(item.ar.trim(), item.en.trim()))`, `pal.primary`
+marker and `pal.ink` body; zero new keys in `l10n.dart`). Empty blocks are skipped. Hidden /
 unknown → `Key('pageUnavailable')`, `noindex`. Placement (`placement`, PR 3D / P1-18): `'link'` (default, reached from
 notices/buttons/links), `'nav'` (synced with `showInNav`), or `'section'` (`categoryId`, rendered as an «اعرف المزيد»
 `CustomPageCard` inside `/section/<slug>` — or, since Phase 4 PR2 / ADR-075, inside the linked built-in section page
