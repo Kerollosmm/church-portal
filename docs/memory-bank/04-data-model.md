@@ -365,7 +365,12 @@ Arabic items ≤ `listItemMax` (200) chars each joined by U+001E `PageBlock.list
 items are empty or parallel items ≤ 200 chars joined by U+001E, `account` = `'bullet' | 'numbered' | ''` via
 `ListStyles`, `url`/`instapay`/`wallet` = `''`; `listBlockMaxItems = 20`, `typedef PageListItem = ({String ar, String en})`,
 helpers `PageBlock.list(...)`, `listStyle`, `listItems`, `isEmpty`; unknown block types and malformed strings still
-return `null` from `PageBlock.fromStored` and are skipped by `CustomPage.fromMap`). All 7 types are in `BlockTypes.all`. Not seeded.
+return `null` from `PageBlock.fromStored` and are skipped by `CustomPage.fromMap`), and `details`
+(`BlockTypes.details`, PR 4B / ADR-080: `textAr` = `$summaryAr\u001e$bodyAr` with `summary` ≤ `detailsSummaryMax` (200)
+non-blank and `body` ≤ `detailsBodyMax` (3500) non-blank, `textEn` = `''` or `$summaryEn\u001e$bodyEn` with `summary` ≤
+200 and `body` ≤ 3500, `url`/`account`/`instapay`/`wallet` = `''`; `typedef PageDetailsData`, `PageBlock.details(...)`,
+`details`, `resolveDetails({required bool isAr})` showing English only when both `summaryEn` and `bodyEn` are non-empty,
+`isEmpty`). All 8 types are in `BlockTypes.all`. Not seeded.
 
 ## Non-content collections
 

@@ -53,6 +53,12 @@ class _CustomRepo extends SeedRepository {
             items: const [(ar: 'تجربة أولى', en: 'Test item 1'), (ar: 'تجربة ثانية', en: 'Test item 2')],
             style: ListStyles.numbered,
           ),
+          PageBlock.details(
+            summaryAr: 'تجربة تفاصيل',
+            bodyAr: 'تفاصيل تجربة لاختبار التباين',
+            summaryEn: 'More details',
+            bodyEn: 'Expanded details for contrast verification.',
+          ),
           const PageBlock(type: BlockTypes.button, textEn: 'Contact us', url: '/contact'),
           const PageBlock(type: BlockTypes.link, textEn: 'Diocese site', url: 'https://example.org'),
           const PageBlock(type: BlockTypes.donation, account: 'CIB 100', instapay: 'church@instapay', wallet: '010', textEn: 'Notes'),
@@ -440,6 +446,11 @@ void main() {
           c.read(routerProvider).go(r);
           await tester.pumpAndSettle();
           failures.addAll(_contrastFailures(tester, '$key $r'));
+          if (r == '/page/donate') {
+            await tester.tap(find.text('More details'));
+            await tester.pumpAndSettle();
+            failures.addAll(_contrastFailures(tester, '$key $r expanded'));
+          }
         }
         expect(find.byKey(const Key('anonSwitch')), findsNothing);
         await tester.tap(find.byKey(const Key('contactCategory')));

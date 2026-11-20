@@ -178,7 +178,8 @@ class BlockTypes {
   static const link = 'link';
   static const donation = 'donation';
   static const list = 'list';
-  static const all = [heading, paragraph, image, button, link, donation, list];
+  static const details = 'details';
+  static const all = [heading, paragraph, image, button, link, donation, list, details];
 
   /// Fields each type uses (the editor shows only these). A block is
   /// stored as ONE string, its 7 fields in [PageBlock.fieldOrder] joined by
@@ -192,6 +193,7 @@ class BlockTypes {
     link: ['textAr', 'textEn', 'url'],
     donation: ['account', 'instapay', 'wallet', 'textAr', 'textEn'],
     list: ['account', 'textAr', 'textEn'],
+    details: ['textAr', 'textEn'],
   };
 }
 
@@ -201,6 +203,8 @@ const blockTextMax = 4000;
 const blockAccountMax = 120, blockInstapayMax = 80, blockWalletMax = 30;
 const listBlockMaxItems = 20;
 const listItemMax = 200;
+const detailsSummaryMax = 200;
+const detailsBodyMax = 3500;
 
 /// Display style for a list block in custom pages.
 class ListStyles {
@@ -212,6 +216,9 @@ class ListStyles {
 
 /// One bilingual item inside a [BlockTypes.list] block.
 typedef PageListItem = ({String ar, String en});
+
+/// Bilingual summary and body of a [BlockTypes.details] block.
+typedef PageDetailsData = ({String summaryAr, String summaryEn, String bodyAr, String bodyEn});
 
 /// One block of a custom page. Unused fields are ''.
 class PageBlock {
@@ -251,6 +258,25 @@ class PageBlock {
       textAr: cleanedAr.join(listSeparator),
       textEn: hasEn ? cleanedEn.join(listSeparator) : '',
       account: ListStyles.all.contains(style) ? style : ListStyles.bullet,
+    );
+  }
+
+  /// Builds a collapsible details block from bilingual summary and body.
+  factory PageBlock.details({
+    required String summaryAr,
+    required String bodyAr,
+    String summaryEn = '',
+    String bodyEn = '',
+  }) {
+    String clean(String s) => s.replaceAll(separator, '').replaceAll(listSeparator, '').trim();
+    final sAr = clean(summaryAr);
+    final bAr = clean(bodyAr);
+    final sEn = clean(summaryEn);
+    final bEn = clean(bodyEn);
+    return PageBlock(
+      type: BlockTypes.details,
+      textAr: (sAr.isEmpty && bAr.isEmpty) ? '' : '$sAr$listSeparator$bAr',
+      textEn: (sEn.isEmpty && bEn.isEmpty) ? '' : '$sEn$listSeparator$bEn',
     );
   }
 
@@ -315,6 +341,39 @@ class PageBlock {
     return out;
   }
 
+  /// Decoded bilingual summary and body for a [BlockTypes.details] block.
+  PageDetailsData get details {
+    if (type != BlockTypes.details) {
+      return (summaryAr: '', summaryEn: '', bodyAr: '', bodyEn: '');
+    }
+    (String, String) splitPair(String raw) {
+      if (raw.isEmpty) return ('', '');
+      final idx = raw.indexOf(listSeparator);
+      if (idx == -1) return (raw.replaceAll(separator, '').trim(), '');
+      final s = raw.substring(0, idx).replaceAll(separator, '').trim();
+      final b = raw.substring(idx + 1).replaceAll(listSeparator, '').replaceAll(separator, '').trim();
+      return (s, b);
+    }
+
+    final (sAr, bAr) = splitPair(textAr);
+    final (sEn, bEn) = splitPair(textEn);
+    return (summaryAr: sAr, summaryEn: sEn, bodyAr: bAr, bodyEn: bEn);
+  }
+
+  /// Resolves the localized `(summary, body)` pair at the **block level**:
+  /// English is shown only when [isAr] is false AND both `summaryEn` and
+  /// `bodyEn` are non-empty; otherwise both fields use Arabic (never mixed).
+  ({String summary, String body})? resolveDetails({required bool isAr}) {
+    if (type != BlockTypes.details) return null;
+    final d = details;
+    final hasAr = d.summaryAr.isNotEmpty && d.bodyAr.isNotEmpty;
+    final hasEn = d.summaryEn.isNotEmpty && d.bodyEn.isNotEmpty;
+    if (!isAr && hasEn) return (summary: d.summaryEn, body: d.bodyEn);
+    if (hasAr) return (summary: d.summaryAr, body: d.bodyAr);
+    if (hasEn) return (summary: d.summaryEn, body: d.bodyEn);
+    return null;
+  }
+
   /// Nothing to show (e.g. a button without a link, an empty paragraph).
   bool get isEmpty => switch (type) {
         BlockTypes.image => url.isEmpty,
@@ -325,6 +384,7 @@ class PageBlock {
             textAr.trim().isEmpty &&
             textEn.trim().isEmpty,
         BlockTypes.list => listItems.isEmpty,
+        BlockTypes.details => resolveDetails(isAr: true) == null,
         _ => textAr.trim().isEmpty && textEn.trim().isEmpty,
       };
 }

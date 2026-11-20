@@ -8,6 +8,8 @@ import '../../domain/custom_content.dart'
         ListStyles,
         PageBlock,
         PagePlacements,
+        detailsBodyMax,
+        detailsSummaryMax,
         isValidSlug,
         listBlockMaxItems,
         listItemMax,
@@ -408,6 +410,44 @@ List<ListBlockIssue> validateListBlock({
   return issues;
 }
 
+/// One validation issue inside a [BlockTypes.details] block.
+typedef DetailsBlockIssue = ({String? field, bool isEn, String code});
+
+String _cleanDetailsText(String raw) =>
+    raw.replaceAll(PageBlock.separator, '').replaceAll(PageBlock.listSeparator, '').trim();
+
+/// Validates a [BlockTypes.details] block's summary and body against the limits
+/// mirrored in `firestore.rules` (`validDetailsBlock`).
+List<DetailsBlockIssue> validateDetailsBlock({
+  required String summaryAr,
+  required String bodyAr,
+  String summaryEn = '',
+  String bodyEn = '',
+}) {
+  final issues = <DetailsBlockIssue>[];
+  final sAr = _cleanDetailsText(summaryAr);
+  final bAr = _cleanDetailsText(bodyAr);
+  final sEn = _cleanDetailsText(summaryEn);
+  final bEn = _cleanDetailsText(bodyEn);
+  if (sAr.isEmpty) {
+    issues.add((field: 'summary', isEn: false, code: 'blockDetailsSummaryRequired'));
+  } else if (sAr.length > detailsSummaryMax) {
+    issues.add((field: 'summary', isEn: false, code: 'blockDetailsSummaryTooLong'));
+  }
+  if (bAr.isEmpty) {
+    issues.add((field: 'body', isEn: false, code: 'blockDetailsBodyRequired'));
+  } else if (bAr.length > detailsBodyMax) {
+    issues.add((field: 'body', isEn: false, code: 'blockDetailsBodyTooLong'));
+  }
+  if (sEn.length > detailsSummaryMax) {
+    issues.add((field: 'summary', isEn: true, code: 'blockDetailsSummaryTooLong'));
+  }
+  if (bEn.length > detailsBodyMax) {
+    issues.add((field: 'body', isEn: true, code: 'blockDetailsBodyTooLong'));
+  }
+  return issues;
+}
+
 /// The stored image map's URL when it is set but not a usable image link
 /// (e.g. an old doc saved before validation), or null when there is no
 /// image or the link is fine. A bad link must block the save with a clear
@@ -439,7 +479,9 @@ String? validateDocument(CollectionDef? def, Map<String, dynamic> data) {
   // Custom page blocks (firestore.rules validPageBlock): an image needs an
   // https picture link; a heading block requires Arabic heading text; a list
   // block requires 1..20 non-blank AR items (<=200 chars), optional EN items
-  // (<=200 chars), a valid style, and empty url/instapay/wallet slots.
+  // (<=200 chars), a valid style, and empty url/instapay/wallet slots; a
+  // details block requires AR summary (1..200) and AR body (1..3500) plus
+  // optional EN summary/body and empty url/account/instapay/wallet slots.
   final blocks = data['blocks'];
   if (blocks is List) {
     for (final raw in blocks) {
@@ -452,6 +494,21 @@ String? validateDocument(CollectionDef? def, Map<String, dynamic> data) {
           final rawAr = b.textAr.isEmpty ? const <String>[] : b.textAr.split(PageBlock.listSeparator);
           final rawEn = b.textEn.isEmpty ? const <String>[] : b.textEn.split(PageBlock.listSeparator);
           final issues = validateListBlock(arItems: rawAr, enItems: rawEn, style: b.account);
+          if (issues.isNotEmpty) return issues.first.code;
+        }
+        if (b.type == BlockTypes.details) {
+          if (b.url.isNotEmpty || b.account.isNotEmpty || b.instapay.isNotEmpty || b.wallet.isNotEmpty) {
+            return 'invalid';
+          }
+          if (b.textAr.split(PageBlock.listSeparator).length != 2) return 'invalid';
+          if (b.textEn.isNotEmpty && b.textEn.split(PageBlock.listSeparator).length != 2) return 'invalid';
+          final d = b.details;
+          final issues = validateDetailsBlock(
+            summaryAr: d.summaryAr,
+            bodyAr: d.bodyAr,
+            summaryEn: d.summaryEn,
+            bodyEn: d.bodyEn,
+          );
           if (issues.isNotEmpty) return issues.first.code;
         }
       }

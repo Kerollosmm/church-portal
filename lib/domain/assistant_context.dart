@@ -639,6 +639,14 @@ void _customContent(
           ].where((s) => s.isNotEmpty).toList();
           if (items.isEmpty) continue;
           line = '- ${items.join('; ')}';
+        } else if (x.type == BlockTypes.details) {
+          final d = x.details;
+          final summary = _bi(_clip(d.summaryAr, detailsSummaryMax), _clip(d.summaryEn, detailsSummaryMax));
+          final body = _bi(_clip(d.bodyAr, 400), _clip(d.bodyEn, 400));
+          if (summary.isEmpty && body.isEmpty) continue;
+          line = summary.isNotEmpty && body.isNotEmpty
+              ? '- $summary: $body'
+              : '- ${summary.isNotEmpty ? summary : body}';
         } else {
           final text = _bi(_clip(x.textAr.trim(), 400), _clip(x.textEn.trim(), 400));
           line = switch (x.type) {

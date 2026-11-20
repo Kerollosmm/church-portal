@@ -301,7 +301,12 @@ InstaPay / wallet with copy buttons, notes, «للعلم فقط: لا يتم أ�
 `_ListBlockView`, PR 4A / ADR-079: vertical rows with `8px` gap inside the `700px` column; `'bullet'` renders `'•'`
 wrapped in `ExcludeSemantics`; `'numbered'` renders `toArabicDigits('${i + 1}')` + `'.'` in Arabic RTL and `'${i + 1}.'`
 in English LTR; item text renders with `SelectableText(context.pick(item.ar.trim(), item.en.trim()))`, `pal.primary`
-marker and `pal.ink` body; zero new keys in `l10n.dart`). Empty blocks are skipped. Hidden /
+marker and `pal.ink` body; zero new keys in `l10n.dart`), and collapsible details (`BlockTypes.details`,
+`_DetailsBlockView`, PR 4B / ADR-080: built on `WarmPanel` + `ClipRRect` + `Material(transparency)` + `InkWell` +
+`Semantics(button: true, expanded: _expanded)` + `AnimatedSize` reduced-motion aware without `ExpansionTile`; block-level
+language selection via `resolveDetails(isAr: context.isAr)` renders English only when both `summaryEn` and `bodyEn` are
+non-empty, otherwise both summary and body fall back to Arabic; collapsed by default, `SelectableText` body, zero new
+keys in `l10n.dart`). Empty blocks are skipped. Hidden /
 unknown → `Key('pageUnavailable')`, `noindex`. Placement (`placement`, PR 3D / P1-18): `'link'` (default, reached from
 notices/buttons/links), `'nav'` (synced with `showInNav`), or `'section'` (`categoryId`, rendered as an «اعرف المزيد»
 `CustomPageCard` inside `/section/<slug>` — or, since Phase 4 PR2 / ADR-075, inside the linked built-in section page

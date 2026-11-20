@@ -507,6 +507,17 @@ class DocEditorState extends State<DocEditor> {
     return null;
   }
 
+  List<DetailsBlockIssue> _detailsIssuesForRow(_Row r) {
+    final d = r.detailsDraft;
+    if (d == null) return const [];
+    return validateDetailsBlock(
+      summaryAr: d.summaryArCtrl.text,
+      bodyAr: d.bodyArCtrl.text,
+      summaryEn: widget.englishEnabled ? d.summaryEnCtrl.text : '',
+      bodyEn: widget.englishEnabled ? d.bodyEnCtrl.text : '',
+    );
+  }
+
   /// Collects all invalid currently-shown fields in form order (including those
   /// inside collapsed advanced/group cards so they appear in the error summary).
   List<_FieldErrorEntry> _collectErrors() {
@@ -584,6 +595,33 @@ class DocEditorState extends State<DocEditor> {
                 fieldKey: targetKey,
                 focusNode: targetFocus,
               ));
+            }
+          }
+          if (f.key == 'blocks' && r.values['type'] == BlockTypes.details) {
+            final d = r.detailsDraft;
+            if (d != null) {
+              for (final issue in _detailsIssuesForRow(r)) {
+                final GlobalKey targetKey;
+                final FocusNode targetFocus;
+                final String fieldLabelKey;
+                if (issue.field == 'summary') {
+                  targetKey = issue.isEn ? d.summaryEnKey : d.summaryArKey;
+                  targetFocus = issue.isEn ? d.summaryEnFocus : d.summaryArFocus;
+                  fieldLabelKey = issue.isEn ? 'detailsSummaryEnLabel' : 'detailsSummaryArLabel';
+                } else {
+                  targetKey = issue.isEn ? d.bodyEnKey : d.bodyArKey;
+                  targetFocus = issue.isEn ? d.bodyEnFocus : d.bodyArFocus;
+                  fieldLabelKey = issue.isEn ? 'detailsBodyEnLabel' : 'detailsBodyArLabel';
+                }
+                out.add(_FieldErrorEntry(
+                  id: '${f.key}-$i-details-${issue.field ?? 'block'}-${issue.isEn ? 'en' : 'ar'}-${issue.code}',
+                  label: '${_plainLabel(f)} (${i + 1}) — ${context.tr(fieldLabelKey)}',
+                  group: group,
+                  advanced: advanced,
+                  fieldKey: targetKey,
+                  focusNode: targetFocus,
+                ));
+              }
             }
           }
         }
@@ -2127,6 +2165,22 @@ class DocEditorState extends State<DocEditor> {
         isAr: context.isAr,
       );
     }
+    if (type == BlockTypes.details) {
+      final d = row.detailsDraft;
+      if (d == null) return '';
+      final encoded = PageBlock.details(
+        summaryAr: d.summaryArCtrl.text,
+        bodyAr: d.bodyArCtrl.text,
+        summaryEn: widget.englishEnabled ? d.summaryEnCtrl.text : d.initialSummaryEn,
+        bodyEn: widget.englishEnabled ? d.bodyEnCtrl.text : d.initialBodyEn,
+      );
+      return blockSnippetSummary(
+        type: type,
+        textAr: encoded.textAr,
+        textEn: encoded.textEn,
+        isAr: context.isAr,
+      );
+    }
     return blockSnippetSummary(
       type: type,
       textAr: row.text['textAr']?.text ?? (row.values['textAr']?.toString() ?? ''),
@@ -2359,6 +2413,11 @@ class DocEditorState extends State<DocEditor> {
                                   rows[i].listStyle = ListStyles.bullet;
                                   rows[i].listItems.add(ListItemDraft.from());
                                 }
+                                if (f.key == 'blocks' &&
+                                    sf.key == 'type' &&
+                                    v == BlockTypes.details) {
+                                  rows[i].detailsDraft ??= DetailsDraft.from();
+                                }
                                 _dirty = true;
                                 _syncErrorSummaryAfterChange();
                               }),
@@ -2456,6 +2515,31 @@ class DocEditorState extends State<DocEditor> {
                                 }
                               : null,
                           blockErrorText: _showErrorSummary ? _listBlockErrorText(rows[i]) : null,
+                        ),
+                      ),
+                    ),
+                  if (f.key == 'blocks' &&
+                      rows[i].values['type'] == BlockTypes.details &&
+                      rows[i].detailsDraft != null)
+                    KeyedSubtree(
+                      key: rows[i].keyFor('details'),
+                      child: Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: DetailsBlockEditor(
+                          blockIndex: i,
+                          draft: rows[i].detailsDraft!,
+                          englishEnabled: widget.englishEnabled,
+                          onChanged: _markDirty,
+                          fieldErrorText: _showErrorSummary
+                              ? (field, isEn) {
+                                  for (final issue in _detailsIssuesForRow(rows[i])) {
+                                    if (issue.field == field && issue.isEn == isEn) {
+                                      return context.tr(issue.code);
+                                    }
+                                  }
+                                  return null;
+                                }
+                              : null,
                         ),
                       ),
                     ),
@@ -2826,6 +2910,7 @@ class _Row {
   final List<FieldDef> fields;
   String listStyle = ListStyles.bullet;
   final List<ListItemDraft> listItems = [];
+  DetailsDraft? detailsDraft;
   _Row(this.fields);
 
   FocusNode focusFor(String k) => focus.putIfAbsent(k, () => FocusNode());
@@ -2833,11 +2918,13 @@ class _Row {
 
   bool ownsFocusNode(FocusNode node) =>
       focus.values.contains(node) ||
-      listItems.any((it) => identical(it.arFocus, node) || identical(it.enFocus, node));
+      listItems.any((it) => identical(it.arFocus, node) || identical(it.enFocus, node)) ||
+      (detailsDraft?.ownsFocusNode(node) ?? false);
 
   bool ownsFieldKey(GlobalKey key) =>
       keys.values.contains(key) ||
-      listItems.any((it) => identical(it.arKey, key) || identical(it.enKey, key));
+      listItems.any((it) => identical(it.arKey, key) || identical(it.enKey, key)) ||
+      (detailsDraft?.ownsFieldKey(key) ?? false);
 
   factory _Row.from(List<FieldDef> fields, Map data, VoidCallback onChange, {bool isNew = false}) {
     final r = _Row(fields);
@@ -2876,6 +2963,15 @@ class _Row {
         r.listItems.add(ListItemDraft.from());
       }
     }
+    if (fields.any((f) => f.key == 'type') && r.values['type'] == BlockTypes.details) {
+      final parsed = PageBlock.fromMap(data)?.details;
+      r.detailsDraft = DetailsDraft.from(
+        summaryAr: parsed?.summaryAr ?? '',
+        summaryEn: parsed?.summaryEn ?? '',
+        bodyAr: parsed?.bodyAr ?? '',
+        bodyEn: parsed?.bodyEn ?? '',
+      );
+    }
     r.initial.addAll(r.collect());
     return r;
   }
@@ -2888,6 +2984,16 @@ class _Row {
             (ar: it.arCtrl.text, en: englishEnabled ? it.enCtrl.text : it.initialEn),
         ],
         style: listStyle,
+      ).toMap();
+    }
+    if (values['type'] == BlockTypes.details && fields.any((f) => f.key == 'type')) {
+      final d = detailsDraft;
+      if (d == null) return const PageBlock(type: BlockTypes.details).toMap();
+      return PageBlock.details(
+        summaryAr: d.summaryArCtrl.text,
+        bodyAr: d.bodyArCtrl.text,
+        summaryEn: englishEnabled ? d.summaryEnCtrl.text : d.initialSummaryEn,
+        bodyEn: englishEnabled ? d.bodyEnCtrl.text : d.initialBodyEn,
       ).toMap();
     }
     return {
@@ -2912,6 +3018,7 @@ class _Row {
     for (final it in listItems) {
       it.dispose();
     }
+    detailsDraft?.dispose();
   }
 }
 
@@ -3143,6 +3250,19 @@ String? blockSnippetSummary({
       raw = textAr;
     } else if (textEn.trim().isNotEmpty) {
       raw = textEn;
+    }
+  } else if (type == BlockTypes.details) {
+    final arParts = textAr.split(PageBlock.listSeparator);
+    final enParts = textEn.split(PageBlock.listSeparator);
+    final summaryAr = arParts.isNotEmpty ? arParts[0].trim() : '';
+    final bodyAr = arParts.length > 1 ? arParts[1].trim() : '';
+    final summaryEn = enParts.isNotEmpty ? enParts[0].trim() : '';
+    final bodyEn = enParts.length > 1 ? enParts[1].trim() : '';
+    for (final v in [summaryAr, summaryEn, bodyAr, bodyEn]) {
+      if (v.isNotEmpty) {
+        raw = v;
+        break;
+      }
     }
   } else if (type == BlockTypes.donation) {
     if (textAr.trim().isNotEmpty) {

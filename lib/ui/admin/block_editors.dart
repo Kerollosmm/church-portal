@@ -2,7 +2,8 @@ import 'package:material_ui/material_ui.dart';
 
 import '../../core/l10n.dart';
 import '../../core/theme.dart';
-import '../../domain/custom_content.dart' show ListStyles, listBlockMaxItems, listItemMax;
+import '../../domain/custom_content.dart'
+    show ListStyles, detailsBodyMax, detailsSummaryMax, listBlockMaxItems, listItemMax;
 import '../../domain/rules.dart' show toArabicDigits;
 
 /// Mutable editor state for a single bilingual item inside a list block.
@@ -216,6 +217,182 @@ class ListBlockEditor extends StatelessWidget {
               ),
             ),
           ),
+      ],
+    );
+  }
+}
+
+/// Mutable editor state for a bilingual collapsible details block.
+class DetailsDraft {
+  final TextEditingController summaryArCtrl;
+  final TextEditingController summaryEnCtrl;
+  final TextEditingController bodyArCtrl;
+  final TextEditingController bodyEnCtrl;
+
+  /// Loaded English texts preserved untouched while `englishEnabled == false`.
+  final String initialSummaryEn;
+  final String initialBodyEn;
+
+  final GlobalKey summaryArKey = GlobalKey();
+  final GlobalKey summaryEnKey = GlobalKey();
+  final GlobalKey bodyArKey = GlobalKey();
+  final GlobalKey bodyEnKey = GlobalKey();
+
+  final FocusNode summaryArFocus = FocusNode();
+  final FocusNode summaryEnFocus = FocusNode();
+  final FocusNode bodyArFocus = FocusNode();
+  final FocusNode bodyEnFocus = FocusNode();
+
+  DetailsDraft._({
+    required this.summaryArCtrl,
+    required this.summaryEnCtrl,
+    required this.bodyArCtrl,
+    required this.bodyEnCtrl,
+    required this.initialSummaryEn,
+    required this.initialBodyEn,
+  });
+
+  factory DetailsDraft.from({
+    String summaryAr = '',
+    String summaryEn = '',
+    String bodyAr = '',
+    String bodyEn = '',
+  }) =>
+      DetailsDraft._(
+        summaryArCtrl: TextEditingController(text: summaryAr),
+        summaryEnCtrl: TextEditingController(text: summaryEn),
+        bodyArCtrl: TextEditingController(text: bodyAr),
+        bodyEnCtrl: TextEditingController(text: bodyEn),
+        initialSummaryEn: summaryEn,
+        initialBodyEn: bodyEn,
+      );
+
+  bool ownsFocusNode(FocusNode node) =>
+      identical(summaryArFocus, node) ||
+      identical(summaryEnFocus, node) ||
+      identical(bodyArFocus, node) ||
+      identical(bodyEnFocus, node);
+
+  bool ownsFieldKey(GlobalKey key) =>
+      identical(summaryArKey, key) ||
+      identical(summaryEnKey, key) ||
+      identical(bodyArKey, key) ||
+      identical(bodyEnKey, key);
+
+  void dispose() {
+    summaryArCtrl.dispose();
+    summaryEnCtrl.dispose();
+    bodyArCtrl.dispose();
+    bodyEnCtrl.dispose();
+    summaryArFocus.dispose();
+    summaryEnFocus.dispose();
+    bodyArFocus.dispose();
+    bodyEnFocus.dispose();
+  }
+}
+
+/// Admin editor for a [BlockTypes.details] block (bilingual summary + body).
+class DetailsBlockEditor extends StatelessWidget {
+  final int blockIndex;
+  final DetailsDraft draft;
+  final bool englishEnabled;
+  final VoidCallback onChanged;
+  final String? Function(String field, bool isEn)? fieldErrorText;
+
+  const DetailsBlockEditor({
+    super.key,
+    required this.blockIndex,
+    required this.draft,
+    required this.englishEnabled,
+    required this.onChanged,
+    this.fieldErrorText,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          context.tr('detailsHint'),
+          style: TextStyle(fontSize: 12.5, color: context.pal.muted),
+        ),
+        const SizedBox(height: 8),
+        KeyedSubtree(
+          key: draft.summaryArKey,
+          child: TextField(
+            key: Key('detailsSummaryAr-$blockIndex'),
+            controller: draft.summaryArCtrl,
+            focusNode: draft.summaryArFocus,
+            maxLength: detailsSummaryMax,
+            minLines: 1,
+            maxLines: 2,
+            textDirection: TextDirection.rtl,
+            decoration: InputDecoration(
+              labelText: context.tr('detailsSummaryArLabel'),
+              errorText: fieldErrorText?.call('summary', false),
+            ),
+            onChanged: (_) => onChanged(),
+          ),
+        ),
+        if (englishEnabled) ...[
+          const SizedBox(height: 8),
+          KeyedSubtree(
+            key: draft.summaryEnKey,
+            child: TextField(
+              key: Key('detailsSummaryEn-$blockIndex'),
+              controller: draft.summaryEnCtrl,
+              focusNode: draft.summaryEnFocus,
+              maxLength: detailsSummaryMax,
+              minLines: 1,
+              maxLines: 2,
+              textDirection: TextDirection.ltr,
+              decoration: InputDecoration(
+                labelText: context.tr('detailsSummaryEnLabel'),
+                errorText: fieldErrorText?.call('summary', true),
+              ),
+              onChanged: (_) => onChanged(),
+            ),
+          ),
+        ],
+        const SizedBox(height: 8),
+        KeyedSubtree(
+          key: draft.bodyArKey,
+          child: TextField(
+            key: Key('detailsBodyAr-$blockIndex'),
+            controller: draft.bodyArCtrl,
+            focusNode: draft.bodyArFocus,
+            maxLength: detailsBodyMax,
+            minLines: 3,
+            maxLines: null,
+            textDirection: TextDirection.rtl,
+            decoration: InputDecoration(
+              labelText: context.tr('detailsBodyArLabel'),
+              errorText: fieldErrorText?.call('body', false),
+            ),
+            onChanged: (_) => onChanged(),
+          ),
+        ),
+        if (englishEnabled) ...[
+          const SizedBox(height: 8),
+          KeyedSubtree(
+            key: draft.bodyEnKey,
+            child: TextField(
+              key: Key('detailsBodyEn-$blockIndex'),
+              controller: draft.bodyEnCtrl,
+              focusNode: draft.bodyEnFocus,
+              maxLength: detailsBodyMax,
+              minLines: 3,
+              maxLines: null,
+              textDirection: TextDirection.ltr,
+              decoration: InputDecoration(
+                labelText: context.tr('detailsBodyEnLabel'),
+                errorText: fieldErrorText?.call('body', true),
+              ),
+              onChanged: (_) => onChanged(),
+            ),
+          ),
+        ],
       ],
     );
   }

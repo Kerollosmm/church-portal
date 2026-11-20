@@ -303,6 +303,20 @@ const Map<String, List<String>> adminStrings = {
   'blockListItemRequired': ['كل عنصر في القائمة لازم يكون له نص عربي.', 'Every list item needs Arabic text.'],
   'blockListTooMany': ['الحد الأقصى للقائمة ٢٠ عنصر.', 'List can have at most 20 items.'],
   'blockListItemTooLong': ['نص العنصر طويل عن الحد المسموح (٢٠٠ حرف).', 'List item exceeds 200 characters.'],
+  // Phase 4 PR4B: custom page collapsible details block editor
+  'opt_details': ['تفاصيل قابلة للفتح', 'Collapsible details'],
+  'detailsHint': [
+    'بطاقة مقفولة يظهر فيها العنوان، ولما الزائر يضغط عليها تتفتح لعرض التفاصيل.',
+    'Collapsed card showing the summary title; expands to show details when tapped.',
+  ],
+  'detailsSummaryArLabel': ['العنوان الظاهر (عربي)', 'Summary (Arabic)'],
+  'detailsSummaryEnLabel': ['العنوان الظاهر (إنجليزي)', 'Summary (English)'],
+  'detailsBodyArLabel': ['التفاصيل (عربي)', 'Details (Arabic)'],
+  'detailsBodyEnLabel': ['التفاصيل (إنجليزي)', 'Details (English)'],
+  'blockDetailsSummaryRequired': ['العنوان الظاهر (عربي) مطلوب.', 'Arabic summary is required.'],
+  'blockDetailsSummaryTooLong': ['العنوان الظاهر طويل عن الحد المسموح (٢٠٠ حرف).', 'Summary exceeds 200 characters.'],
+  'blockDetailsBodyRequired': ['التفاصيل (عربي) مطلوبة.', 'Arabic details are required.'],
+  'blockDetailsBodyTooLong': ['التفاصيل طويلة عن الحد المسموح (٣٥٠٠ حرف).', 'Details exceed 3,500 characters.'],
   // Admin-only strings moved from core/l10n.dart (ADR-077 / Golden Rule 12):
   'endDateBeforeStart': ['تاريخ النهاية قبل تاريخ البداية', 'The end date is before the start date'],
   'presetReplaceLongWarn': [
