@@ -42,7 +42,9 @@ The `lib/data` layer manages all local persistence, remote networking, platform 
 ### Application Lifecycle, Firebase & Telemetry
 - [`FirebaseStatus`](file:///c:/Users/Kerollos/church-portal/lib/data/firebase_bootstrap.dart#L10): Status record reporting Firebase availability, App Check configuration state, and errors.
 - [`isAppCheckConfigured`](file:///c:/Users/Kerollos/church-portal/lib/data/firebase_bootstrap.dart#L20): Pure build/platform check matching `selectAppCheckPlan(...).activate` without importing `firebase_app_check`.
-- [`bootstrapFirebase`](file:///c:/Users/Kerollos/church-portal/lib/data/firebase_bootstrap.dart#L29): Safe Firebase core initialization with 40 MB offline Firestore cache.
+- [`kFirestoreCacheSizeBytes`](file:///c:/Users/Kerollos/church-portal/lib/data/firebase_bootstrap.dart#L28): Default 40 MB on-disk Firestore cache threshold.
+- [`firestoreSettings`](file:///c:/Users/Kerollos/church-portal/lib/data/firebase_bootstrap.dart#L39): Platform Firestore `Settings` builder; enables `WebPersistentMultipleTabManager` on web (`isWeb == true`) while keeping native platforms unchanged (`webPersistentTabManager == null`).
+- [`bootstrapFirebase`](file:///c:/Users/Kerollos/church-portal/lib/data/firebase_bootstrap.dart#L47): Safe Firebase core initialization with 40 MB offline Firestore cache (multi-tab synchronized on web, ADR-078).
 - [`AppCheckPlan`](file:///c:/Users/Kerollos/church-portal/lib/data/app_check_providers.dart#L12): Chosen provider plan across web, Android, Apple, and debug targets.
 - [`selectAppCheckPlan`](file:///c:/Users/Kerollos/church-portal/lib/data/app_check_providers.dart#L45): Provider selection algorithm based on platform and debug configuration.
 - [`ensureAppCheckActivated`](file:///c:/Users/Kerollos/church-portal/lib/data/app_check_providers.dart#L83): Lazy activation of App Check on first assistant request (deferred with `/ask`).

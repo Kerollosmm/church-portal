@@ -24,6 +24,26 @@ bool isAppCheckConfigured({
 }) =>
     !isWeb || debug || AppConfig.isUsableSiteKey(siteKey);
 
+/// Default on-disk Firestore cache size threshold (40 MB).
+const int kFirestoreCacheSizeBytes = 40 * 1024 * 1024;
+
+/// Firestore [Settings] for the current platform.
+///
+/// On web (`isWeb == true`), enables multi-tab IndexedDB synchronization via
+/// [WebPersistentMultipleTabManager] so concurrent tabs on the same origin
+/// (e.g. a public route alongside `/admin`, multiple `/admin` tabs, PWA + tab,
+/// or fast reloads across `pagehide`) share the persistence lease instead of
+/// failing with `failed-precondition` and poisoning the JS SDK `AsyncQueue`
+/// (`b815`, Sentry `CHURCH-PORTAL-A/B/C/D/E/G/K`).
+///
+/// On native platforms (`isWeb == false`), [Settings.webPersistentTabManager]
+/// stays `null` so Android/iOS configuration remains unchanged.
+Settings firestoreSettings({required bool isWeb}) => Settings(
+      persistenceEnabled: true,
+      cacheSizeBytes: kFirestoreCacheSizeBytes,
+      webPersistentTabManager: isWeb ? const WebPersistentMultipleTabManager() : null,
+    );
+
 /// Initialises Firebase if this platform has a real configuration. Never
 /// throws: on any failure the app keeps running on bundled seed data.
 Future<FirebaseStatus> bootstrapFirebase() async {
@@ -39,11 +59,9 @@ Future<FirebaseStatus> bootstrapFirebase() async {
   }
 
   // Offline cache: content stays readable without network after first load.
+  // On web, multi-tab synchronization prevents exclusive-lease collisions.
   try {
-    FirebaseFirestore.instance.settings = const Settings(
-      persistenceEnabled: true,
-      cacheSizeBytes: 40 * 1024 * 1024,
-    );
+    FirebaseFirestore.instance.settings = firestoreSettings(isWeb: kIsWeb);
   } catch (e) {
     debugPrint('Firestore settings: $e');
   }

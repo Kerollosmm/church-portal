@@ -112,7 +112,7 @@ Routing is implemented with `go_router` using Flutter's `PathUrlStrategy` for cl
 
 ## 4. Cloud Firestore Architecture
 
-All application data resides in Cloud Firestore (`europe-west1`). Read operations are open to the public, while write operations are restricted exclusively to authenticated administrators.
+All application data resides in Cloud Firestore (`europe-west1`). Read operations are open to the public, while write operations are restricted exclusively to authenticated administrators. Offline persistence uses a 40 MB cache (`firestoreSettings(isWeb: kIsWeb)` in `lib/data/firebase_bootstrap.dart`), with `WebPersistentMultipleTabManager` enabled on web (ADR-078) so multiple tabs on the same origin share IndexedDB without exclusive-lease collisions, while native platforms retain their default persistence settings.
 
 ### Core Collections Overview
 
