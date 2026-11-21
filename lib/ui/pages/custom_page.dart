@@ -140,8 +140,109 @@ class PageBlockView extends StatelessWidget {
         return DonationInfoCard(block: b);
       case BlockTypes.list:
         return _ListBlockView(block: b);
+      case BlockTypes.details:
+        return _DetailsBlockView(block: b);
     }
     return const SizedBox.shrink();
+  }
+}
+
+/// Renders one [BlockTypes.details] block as a collapsed-by-default card
+/// built on [WarmPanel], [InkWell], [Semantics], and [AnimatedSize] (no
+/// `ExpansionTile`, keeping `main.dart.js` lean). Language is resolved at the
+/// block level via [PageBlock.resolveDetails].
+class _DetailsBlockView extends StatefulWidget {
+  final PageBlock block;
+  const _DetailsBlockView({required this.block});
+
+  @override
+  State<_DetailsBlockView> createState() => _DetailsBlockViewState();
+}
+
+class _DetailsBlockViewState extends State<_DetailsBlockView> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final resolved = widget.block.resolveDetails(isAr: context.isAr);
+    if (resolved == null) return const SizedBox.shrink();
+
+    final animDuration =
+        MediaQuery.disableAnimationsOf(context) ? Duration.zero : const Duration(milliseconds: 180);
+    return WarmPanel(
+      padding: EdgeInsets.zero,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(kPanelRadius),
+        child: Material(
+          type: MaterialType.transparency,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Semantics(
+                button: true,
+                expanded: _expanded,
+                child: InkWell(
+                  onTap: () => setState(() => _expanded = !_expanded),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(minHeight: 48),
+                    child: Padding(
+                      padding: const EdgeInsetsDirectional.fromSTEB(16, 12, 12, 12),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              resolved.summary,
+                              style: TextStyle(
+                                fontSize: 16.5,
+                                fontWeight: FontWeight.w700,
+                                height: 1.5,
+                                color: context.pal.ink,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          ExcludeSemantics(
+                            child: AnimatedRotation(
+                              turns: _expanded ? 0.5 : 0.0,
+                              duration: animDuration,
+                              child: Icon(Icons.expand_more_rounded, color: context.pal.primary),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              AnimatedSize(
+                duration: animDuration,
+                alignment: AlignmentDirectional.topStart,
+                curve: Curves.easeOutCubic,
+                child: _expanded
+                    ? Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Divider(height: 1, color: context.pal.hairline),
+                          Padding(
+                            padding: const EdgeInsetsDirectional.fromSTEB(16, 12, 16, 16),
+                            child: SelectableText(
+                              resolved.body,
+                              style: TextStyle(
+                                fontSize: 16,
+                                height: 1.8,
+                                color: context.pal.ink,
+                              ),
+                            ),
+                          ),
+                        ],
+                      )
+                    : const SizedBox.shrink(),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 

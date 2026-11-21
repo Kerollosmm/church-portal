@@ -359,22 +359,27 @@ service cloud.firestore {
     // A block is ONE string: type, textAr, textEn, url, account, instapay,
     // wallet joined by U+001F (lib/domain/custom_content.dart PageBlock.encode;
     // one regex per block keeps 20 blocks within the 1,000-expression budget).
-    // type: heading / paragraph / image / button / link / donation / list;
+    // type: heading / paragraph / image / button / link / donation / list / details;
     // existing 6 types: texts <= 4000; url '' / an in-app path / an http(s) URL
     // (image needs https); donation account <= 120, InstaPay <= 80, wallet <= 30.
     // Display only: nothing is processed.
     function validPageBlock(b) {
       return b is string && (
-        b.matches('list\\x1f[\\s\\S]*') ? validListBlock(b)
-        : b.matches('(image\\x1f(([^\\x1f]{1000}){0,3}[^\\x1f]{0,1000})\\x1f(([^\\x1f]{1000}){0,3}[^\\x1f]{0,1000})\\x1fhttps://[^/ \\x1f]+[.][^/ \\x1f]+([/?#][^ \\x1f]*)?|(heading|paragraph|button|link|donation)\\x1f(([^\\x1f]{1000}){0,3}[^\\x1f]{0,1000})\\x1f(([^\\x1f]{1000}){0,3}[^\\x1f]{0,1000})\\x1f(|/([^/ \\x1f][^ \\x1f]*)?|[Hh][Tt][Tt][Pp][Ss]?://[^/ \\x1f]+[.][^/ \\x1f]+([/?#][^ \\x1f]*)?))\\x1f[^\\x1f]{0,120}\\x1f[^\\x1f]{0,80}\\x1f[^\\x1f]{0,30}')
+        b.matches('(list|details)\\x1f[\\s\\S]*')
+          ? (b < 'l'
+              ? validDetailsBlock(b)
+              : b.matches('list\\x1f[^\\s\\x1f\\x1e][^\\x1f\\x1e]{0,199}(\\x1e[^\\s\\x1f\\x1e][^\\x1f\\x1e]{0,199}){0,19}\\x1f(|[^\\x1f\\x1e]{0,200}(\\x1e[^\\x1f\\x1e]{0,200}){0,19})\\x1f\\x1f(|bullet|numbered)\\x1f\\x1f'))
+          : b.matches('(image\\x1f(([^\\x1f]{1000}){0,3}[^\\x1f]{0,1000})\\x1f(([^\\x1f]{1000}){0,3}[^\\x1f]{0,1000})\\x1fhttps://[^/ \\x1f]+[.][^/ \\x1f]+([/?#][^ \\x1f]*)?|(heading|paragraph|button|link|donation)\\x1f(([^\\x1f]{1000}){0,3}[^\\x1f]{0,1000})\\x1f(([^\\x1f]{1000}){0,3}[^\\x1f]{0,1000})\\x1f(|/([^/ \\x1f][^ \\x1f]*)?|[Hh][Tt][Tt][Pp][Ss]?://[^/ \\x1f]+[.][^/ \\x1f]+([/?#][^ \\x1f]*)?))\\x1f[^\\x1f]{0,120}\\x1f[^\\x1f]{0,80}\\x1f[^\\x1f]{0,30}')
       );
     }
 
-    // list: 1..20 non-blank AR items (<=200 chars each), optional 1..20 EN items
-    // (<=200 chars each), empty url/instapay/wallet, style in '' | 'bullet' | 'numbered'.
-    // Single regex keeps 20 full list blocks within the 1,000-expression budget.
-    function validListBlock(b) {
-      return b.matches('list\\x1f[^\\s\\x1f\\x1e][^\\x1f\\x1e]{0,199}(\\x1e[^\\s\\x1f\\x1e][^\\x1f\\x1e]{0,199}){0,19}\\x1f(|[^\\x1f\\x1e]{0,200}(\\x1e[^\\x1f\\x1e]{0,200}){0,19})\\x1f\\x1f(|bullet|numbered)\\x1f\\x1f');
+    // details: single collapsible card — required AR summary (1..200 non-blank) +
+    // U+001E + required AR body (1..3500 non-blank); optional EN summary (0..200)
+    // + U+001E + EN body (0..3500); empty url/account/instapay/wallet.
+    // 500-char chunking respects RE2's 1,000-repeat quantifier cap with zero gaps
+    // and keeps 20 full AR+EN details blocks within the 1,000-expression budget.
+    function validDetailsBlock(b) {
+      return b.matches('details\\x1f[^\\s\\x1f\\x1e][^\\x1f\\x1e]{0,199}\\x1e[^\\s\\x1f\\x1e]([^\\x1f\\x1e]{500}){0,6}[^\\x1f\\x1e]{0,499}\\x1f(|[^\\x1f\\x1e]{0,200}\\x1e([^\\x1f\\x1e]{500}){0,6}[^\\x1f\\x1e]{0,500})\\x1f\\x1f\\x1f\\x1f');
     }
 
     // ---- optional programme details (ADR-041): liturgies, meetings, seasons.

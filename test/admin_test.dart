@@ -5533,6 +5533,138 @@ void main() {
       expect(savedBlocks.first, contains('عنوان رئيسي'));
     });
   });
+
+  group('Phase 4 PR4B: details block validator & snippet summary', () {
+    test('validateDetailsBlock enforces required AR summary/body and length bounds', () {
+      expect(
+        validateDetailsBlock(summaryAr: 'ملخص', bodyAr: 'نص التفاصيل'),
+        isEmpty,
+      );
+      expect(
+        validateDetailsBlock(
+          summaryAr: 'أ' * detailsSummaryMax,
+          bodyAr: 'ب' * detailsBodyMax,
+          summaryEn: 'S' * detailsSummaryMax,
+          bodyEn: 'E' * detailsBodyMax,
+        ),
+        isEmpty,
+      );
+
+      final missingBoth = validateDetailsBlock(summaryAr: '  \u001f ', bodyAr: '\u001e  ');
+      expect(missingBoth.map((e) => (e.field, e.isEn, e.code)).toList(), [
+        ('summary', false, 'blockDetailsSummaryRequired'),
+        ('body', false, 'blockDetailsBodyRequired'),
+      ]);
+
+      final tooLongAll = validateDetailsBlock(
+        summaryAr: 'أ' * (detailsSummaryMax + 1),
+        bodyAr: 'ب' * (detailsBodyMax + 1),
+        summaryEn: 'S' * (detailsSummaryMax + 1),
+        bodyEn: 'E' * (detailsBodyMax + 1),
+      );
+      expect(tooLongAll.map((e) => (e.field, e.isEn, e.code)).toList(), [
+        ('summary', false, 'blockDetailsSummaryTooLong'),
+        ('body', false, 'blockDetailsBodyTooLong'),
+        ('summary', true, 'blockDetailsSummaryTooLong'),
+        ('body', true, 'blockDetailsBodyTooLong'),
+      ]);
+
+      // Partial EN is allowed by validator (public UI performs block-level AR fallback).
+      expect(
+        validateDetailsBlock(summaryAr: 'ملخص', bodyAr: 'نص', summaryEn: 'Only summary'),
+        isEmpty,
+      );
+      expect(
+        validateDetailsBlock(summaryAr: 'ملخص', bodyAr: 'نص', bodyEn: 'Only body'),
+        isEmpty,
+      );
+    });
+
+    test('validateDocument checks BlockTypes.details blocks on pages', () {
+      final pagesDef = adminCollections.firstWhere((c) => c.name == 'pages');
+      Map<String, dynamic> pageWith(PageBlock b) => {
+            'slug': 'details-check',
+            'titleAr': 'عنوان',
+            'blocks': [b.toMap()],
+          };
+
+      expect(
+        validateDocument(
+          pagesDef,
+          pageWith(PageBlock.details(
+            summaryAr: 'سؤال',
+            bodyAr: 'إجابة',
+            summaryEn: 'Question',
+            bodyEn: 'Answer',
+          )),
+        ),
+        isNull,
+      );
+      expect(
+        validateDocument(pagesDef, pageWith(PageBlock.details(summaryAr: '', bodyAr: 'إجابة'))),
+        'blockDetailsSummaryRequired',
+      );
+      expect(
+        validateDocument(pagesDef, pageWith(PageBlock.details(summaryAr: 'سؤال', bodyAr: '   '))),
+        'blockDetailsBodyRequired',
+      );
+      expect(
+        validateDocument(
+          pagesDef,
+          pageWith(PageBlock.details(
+            summaryAr: 'سؤال',
+            bodyAr: 'إجابة',
+            bodyEn: 'E' * (detailsBodyMax + 1),
+          )),
+        ),
+        'blockDetailsBodyTooLong',
+      );
+    });
+
+    test('blockSnippetSummary handles BlockTypes.details fallback order and clipping', () {
+      expect(blockSnippetSummary(type: BlockTypes.details), '');
+      expect(blockSnippetSummary(type: BlockTypes.details, textAr: '  \u001e  ', textEn: '\u001e'), '');
+      expect(
+        blockSnippetSummary(
+          type: BlockTypes.details,
+          textAr: 'ملخص عربي\u001eتفاصيل عربية',
+          textEn: 'English summary\u001eEnglish body',
+        ),
+        'ملخص عربي',
+      );
+      expect(
+        blockSnippetSummary(
+          type: BlockTypes.details,
+          textAr: '\u001eتفاصيل عربية',
+          textEn: 'English summary\u001eEnglish body',
+        ),
+        'English summary',
+      );
+      expect(
+        blockSnippetSummary(
+          type: BlockTypes.details,
+          textAr: '\u001eتفاصيل عربية',
+          textEn: '\u001eEnglish body',
+        ),
+        'تفاصيل عربية',
+      );
+      expect(
+        blockSnippetSummary(
+          type: BlockTypes.details,
+          textAr: '',
+          textEn: '\u001eEnglish body only',
+        ),
+        'English body only',
+      );
+      final clipped = blockSnippetSummary(
+        type: BlockTypes.details,
+        textAr: 'تجربة ملخص طويل جداً يتجاوز أربعين حرفاً في المعاينة\u001eنص',
+      );
+      expect(clipped, isNotNull);
+      expect(clipped!.endsWith('…'), isTrue);
+      expect(clipped.length, 41);
+    });
+  });
 }
 
 class _TestAdminBackend extends AdminBackend {

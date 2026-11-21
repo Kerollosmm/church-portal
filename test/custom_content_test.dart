@@ -6,6 +6,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
+import 'dart:ui' show Tristate;
 
 import 'package:church_portal/core/l10n.dart';
 import 'package:church_portal/data/admin_repository.dart';
@@ -471,6 +472,196 @@ void main() {
         contains('## Empty list (تجربة قائمة فارغة) (page /page/empty-list)\nAfter empty list (تجربة فقرة)'),
       );
       expect(emptyInstr.contains(PageBlock.listSeparator), isFalse);
+    });
+
+    test('details blocks: encode/decode round-trip, separator stripping, optional EN, and backward compatibility', () {
+      expect(BlockTypes.all, contains(BlockTypes.details));
+      expect(BlockTypes.fieldsOf[BlockTypes.details], ['textAr', 'textEn']);
+
+      final full = PageBlock.details(
+        summaryAr: '  تجربة ملخص\u001f\u001e ',
+        bodyAr: ' تجربة تفاصيل\u001e طويلة\u001f ',
+        summaryEn: ' Test summary\u001f ',
+        bodyEn: ' Test details\u001e body ',
+      );
+      expect(full.type, BlockTypes.details);
+      expect(full.url, '');
+      expect(full.account, '');
+      expect(full.instapay, '');
+      expect(full.wallet, '');
+      expect(full.isEmpty, isFalse);
+      expect(full.details, (
+        summaryAr: 'تجربة ملخص',
+        summaryEn: 'Test summary',
+        bodyAr: 'تجربة تفاصيل طويلة',
+        bodyEn: 'Test details body',
+      ));
+
+      final roundTrip = PageBlock.fromStored(full.encode())!;
+      expect(roundTrip.toMap(), full.toMap());
+      expect(roundTrip.details, full.details);
+
+      // Arabic-only keeps textEn completely empty.
+      final arOnly = PageBlock.details(summaryAr: 'تجربة عنوان', bodyAr: 'تجربة متن');
+      expect(arOnly.textEn, '');
+      expect(arOnly.isEmpty, isFalse);
+      expect(PageBlock.fromStored(arOnly.encode())!.details, (
+        summaryAr: 'تجربة عنوان',
+        summaryEn: '',
+        bodyAr: 'تجربة متن',
+        bodyEn: '',
+      ));
+
+      // Non-details blocks return empty tuple and null resolveDetails.
+      const para = PageBlock(type: BlockTypes.paragraph, textAr: 'فقرة');
+      expect(para.details, (summaryAr: '', summaryEn: '', bodyAr: '', bodyEn: ''));
+      expect(para.resolveDetails(isAr: true), isNull);
+      expect(para.resolveDetails(isAr: false), isNull);
+
+      // Tolerantly strips stray \u001e in body and handles missing \u001e.
+      const stray = PageBlock(
+        type: BlockTypes.details,
+        textAr: 'تجربة عنوان\u001eجزء ١\u001eجزء ٢',
+        textEn: 'OnlySummary',
+      );
+      expect(stray.details, (
+        summaryAr: 'تجربة عنوان',
+        summaryEn: 'OnlySummary',
+        bodyAr: 'جزء ١جزء ٢',
+        bodyEn: '',
+      ));
+
+      // Empty / incomplete blocks report isEmpty == true.
+      expect(PageBlock.details(summaryAr: '', bodyAr: '').isEmpty, isTrue);
+      expect(PageBlock.details(summaryAr: 'تجربة عنوان', bodyAr: '  ').isEmpty, isTrue);
+      expect(PageBlock.details(summaryAr: '  ', bodyAr: 'تجربة تفاصيل').isEmpty, isTrue);
+
+      // Backward compatibility: malformed slot counts and unknown block types drop cleanly.
+      expect(PageBlock.fromStored('details\u001fonly two'), isNull);
+      expect(PageBlock.fromStored('callout\u001f\u001f\u001f\u001f\u001f\u001f'), isNull);
+      final compatPage = CustomPage.fromMap('details-compat', {
+        'slug': 'details-compat',
+        'titleAr': 'تجربة توافق',
+        'blocks': [
+          PageBlock.details(summaryAr: 'تجربة عنوان', bodyAr: 'تجربة تفاصيل').encode(),
+          'details\u001fbad',
+          {'type': 'callout', 'textAr': 'x'},
+        ],
+      });
+      expect(compatPage.blocks.length, 1);
+      expect(compatPage.blocks.first.type, BlockTypes.details);
+    });
+
+    test('details blocks: resolveDetails enforces block-level language selection (never mixed)', () {
+      // Full bilingual: AR -> AR, EN -> EN.
+      final full = PageBlock.details(
+        summaryAr: 'تجربة ملخص عربي',
+        bodyAr: 'تجربة تفاصيل عربية',
+        summaryEn: 'Test EN summary',
+        bodyEn: 'Test EN body',
+      );
+      expect(full.resolveDetails(isAr: true), (summary: 'تجربة ملخص عربي', body: 'تجربة تفاصيل عربية'));
+      expect(full.resolveDetails(isAr: false), (summary: 'Test EN summary', body: 'Test EN body'));
+
+      // Partial EN (summaryEn only): EN UI falls back to Arabic for BOTH fields.
+      final summaryEnOnly = PageBlock.details(
+        summaryAr: 'تجربة ملخص عربي',
+        bodyAr: 'تجربة تفاصيل عربية',
+        summaryEn: 'Summary EN only',
+        bodyEn: '',
+      );
+      expect(summaryEnOnly.resolveDetails(isAr: false), (summary: 'تجربة ملخص عربي', body: 'تجربة تفاصيل عربية'));
+
+      // Partial EN (bodyEn only): EN UI falls back to Arabic for BOTH fields.
+      final bodyEnOnly = PageBlock.details(
+        summaryAr: 'تجربة ملخص عربي',
+        bodyAr: 'تجربة تفاصيل عربية',
+        summaryEn: '',
+        bodyEn: 'Body EN only',
+      );
+      expect(bodyEnOnly.resolveDetails(isAr: false), (summary: 'تجربة ملخص عربي', body: 'تجربة تفاصيل عربية'));
+
+      // EN-only (complete EN pair, empty AR): AR UI falls back cleanly to EN pair.
+      final enOnly = PageBlock.details(
+        summaryAr: '',
+        bodyAr: '',
+        summaryEn: 'Only EN summary',
+        bodyEn: 'Only EN body',
+      );
+      expect(enOnly.isEmpty, isFalse);
+      expect(enOnly.resolveDetails(isAr: true), (summary: 'Only EN summary', body: 'Only EN body'));
+      expect(enOnly.resolveDetails(isAr: false), (summary: 'Only EN summary', body: 'Only EN body'));
+    });
+
+    test('details blocks: assistant grounding formats cleanly, clips body at 400, omits \\u001e and empty blocks', () {
+      final longBodyAr = 'أ' * 500;
+      final longBodyEn = 'b' * 500;
+      final detailsPage = CustomPage(
+        id: 'dp1',
+        slug: 'test-details',
+        titleAr: 'تجربة تفاصيل',
+        titleEn: 'Test details',
+        blocks: [
+          PageBlock.details(
+            summaryAr: 'تجربة سؤال',
+            bodyAr: 'تجربة إجابة مختصرة',
+            summaryEn: 'Test question',
+            bodyEn: 'Short answer',
+          ),
+          PageBlock.details(
+            summaryAr: 'تجربة تفاصيل طويلة',
+            bodyAr: longBodyAr,
+            summaryEn: 'Long details',
+            bodyEn: longBodyEn,
+          ),
+          PageBlock.details(summaryAr: 'تجربة بلا جسم', bodyAr: ''),
+        ],
+      );
+      final instr = buildAssistantInstruction(
+        settings: const ChurchSettings(nameAr: 'تجربة كنيسة', nameEn: 'Test Church', addressAr: '', addressEn: ''),
+        liturgies: const [],
+        seasons: const [],
+        clinics: const [],
+        meetings: const [],
+        activities: const [],
+        facilities: const [],
+        now: CairoTime.at(2026, 11, 2, 600),
+        pages: [detailsPage],
+      );
+      expect(instr, contains('- Test question (تجربة سؤال): Short answer (تجربة إجابة مختصرة)'));
+      expect(instr, contains('- Long details (تجربة تفاصيل طويلة): ${'b' * 400}… (${'أ' * 400}…)'));
+      expect(instr, isNot(contains('تجربة بلا جسم')));
+      expect(instr.contains(PageBlock.listSeparator), isFalse);
+
+      // Respects _pageTextBudget = 2500 when a page has multiple large details blocks.
+      final bigPage = CustomPage(
+        id: 'dp-budget',
+        slug: 'budget-details',
+        titleAr: 'تجربة ميزانية',
+        titleEn: 'Budget details',
+        blocks: [
+          for (var i = 0; i < 6; i++)
+            PageBlock.details(
+              summaryAr: 'تجربة بند $i',
+              bodyAr: 'أ' * 500,
+              summaryEn: 'Item $i',
+              bodyEn: 'x' * 500,
+            ),
+        ],
+      );
+      final budgetInstr = buildAssistantInstruction(
+        settings: const ChurchSettings(nameAr: 'تجربة كنيسة', nameEn: 'Test Church', addressAr: '', addressEn: ''),
+        liturgies: const [],
+        seasons: const [],
+        clinics: const [],
+        meetings: const [],
+        activities: const [],
+        facilities: const [],
+        now: CairoTime.at(2026, 11, 2, 600),
+        pages: [bigPage],
+      );
+      expect(budgetInstr, contains('Item 0'));
+      expect(budgetInstr, isNot(contains('Item 5')));
     });
   });
 
@@ -4933,6 +5124,686 @@ void main() {
           await tester.pumpAndSettle();
           expect(find.byType(ListBlockEditor), findsOneWidget);
           expect(tester.takeException(), isNull, reason: 'overflow at 320px/200% locale=${locale.languageCode}');
+        }
+      },
+    );
+  });
+
+  group('Phase 4 PR4B: public details block', () {
+    testWidgets('collapsed by default, toggles on tap, and updates Semantics expanded state', (tester) async {
+      final semHandle = tester.ensureSemantics();
+      try {
+        final block = PageBlock.details(
+          summaryAr: 'هل يوجد حجز مسبق؟',
+          bodyAr: 'نعم، الحجز من مكتب الكنيسة يومياً.',
+          summaryEn: 'Is advance booking required?',
+          bodyEn: 'Yes, register daily at the church office.',
+        );
+        await tester.pumpWidget(_admin(
+          SingleChildScrollView(child: PageBlockView(block: block)),
+          locale: const Locale('en'),
+        ));
+        await tester.pumpAndSettle();
+
+        expect(find.text('Is advance booking required?'), findsOneWidget);
+        expect(find.text('Yes, register daily at the church office.'), findsNothing);
+
+        final semFinder = find.byWidgetPredicate(
+          (w) => w is Semantics && w.properties.button == true && w.properties.expanded != null,
+        );
+        expect(semFinder, findsOneWidget);
+        expect(
+          tester.getSemantics(semFinder).getSemanticsData().flagsCollection.isExpanded,
+          Tristate.isFalse,
+        );
+
+        await tester.tap(find.text('Is advance booking required?'));
+        await tester.pumpAndSettle();
+        expect(find.text('Yes, register daily at the church office.'), findsOneWidget);
+        expect(
+          tester.getSemantics(semFinder).getSemanticsData().flagsCollection.isExpanded,
+          Tristate.isTrue,
+        );
+
+        await tester.tap(find.text('Is advance booking required?'));
+        await tester.pumpAndSettle();
+        expect(find.text('Yes, register daily at the church office.'), findsNothing);
+        expect(
+          tester.getSemantics(semFinder).getSemanticsData().flagsCollection.isExpanded,
+          Tristate.isFalse,
+        );
+      } finally {
+        semHandle.dispose();
+      }
+    });
+
+    testWidgets(
+      'block-level language fallback: EN UI shows EN only when BOTH summaryEn & bodyEn are present; partial EN falls back to AR for BOTH fields',
+      (tester) async {
+        // 1. Arabic UI shows Arabic even when full English exists.
+        final fullBilingual = PageBlock.details(
+          summaryAr: 'ملخص عربي كامل',
+          bodyAr: 'تفاصيل عربية كاملة',
+          summaryEn: 'Full English summary',
+          bodyEn: 'Full English body',
+        );
+        await tester.pumpWidget(_admin(
+          PageBlockView(key: const ValueKey('ar-full'), block: fullBilingual),
+          locale: const Locale('ar'),
+        ));
+        await tester.pumpAndSettle();
+        expect(Directionality.of(tester.element(find.text('ملخص عربي كامل'))), TextDirection.rtl);
+        expect(find.text('Full English summary'), findsNothing);
+        await tester.tap(find.text('ملخص عربي كامل'));
+        await tester.pumpAndSettle();
+        expect(find.text('تفاصيل عربية كاملة'), findsOneWidget);
+        expect(find.text('Full English body'), findsNothing);
+
+        // 2. Full English under English UI uses LTR and shows English.
+        await tester.pumpWidget(_admin(
+          PageBlockView(key: const ValueKey('en-full'), block: fullBilingual),
+          locale: const Locale('en'),
+        ));
+        await tester.pumpAndSettle();
+        expect(Directionality.of(tester.element(find.text('Full English summary'))), TextDirection.ltr);
+        await tester.tap(find.text('Full English summary'));
+        await tester.pumpAndSettle();
+        expect(find.text('Full English body'), findsOneWidget);
+
+        // 3. English UI with summaryEn-only -> renders BOTH summary and body in Arabic (no mixed card).
+        final summaryEnOnly = PageBlock.details(
+          summaryAr: 'ملخص عربي فقط',
+          bodyAr: 'جسم عربي للملخص الجزئي',
+          summaryEn: 'English summary only',
+          bodyEn: '',
+        );
+        await tester.pumpWidget(_admin(
+          PageBlockView(key: const ValueKey('en-summary-only'), block: summaryEnOnly),
+          locale: const Locale('en'),
+        ));
+        await tester.pumpAndSettle();
+        expect(find.text('ملخص عربي فقط'), findsOneWidget);
+        expect(find.text('English summary only'), findsNothing);
+        await tester.tap(find.text('ملخص عربي فقط'));
+        await tester.pumpAndSettle();
+        expect(find.text('جسم عربي للملخص الجزئي'), findsOneWidget);
+
+        // 4. English UI with bodyEn-only -> renders BOTH summary and body in Arabic (no mixed card).
+        final bodyEnOnly = PageBlock.details(
+          summaryAr: 'ملخص عربي لجسم إنجليزي',
+          bodyAr: 'جسم عربي كامل',
+          summaryEn: '',
+          bodyEn: 'English body only',
+        );
+        await tester.pumpWidget(_admin(
+          PageBlockView(key: const ValueKey('en-body-only'), block: bodyEnOnly),
+          locale: const Locale('en'),
+        ));
+        await tester.pumpAndSettle();
+        expect(find.text('ملخص عربي لجسم إنجليزي'), findsOneWidget);
+        await tester.tap(find.text('ملخص عربي لجسم إنجليزي'));
+        await tester.pumpAndSettle();
+        expect(find.text('جسم عربي كامل'), findsOneWidget);
+        expect(find.text('English body only'), findsNothing);
+      },
+    );
+
+    testWidgets('empty or incomplete details block renders SizedBox.shrink cleanly in PageBlockView and CustomPageView',
+        (tester) async {
+      await tester.pumpWidget(_admin(
+        Column(children: [
+          PageBlockView(block: PageBlock.details(summaryAr: '', bodyAr: '')),
+          PageBlockView(block: PageBlock.details(summaryAr: 'بدون جسم', bodyAr: '')),
+          PageBlockView(block: PageBlock.details(summaryAr: '', bodyAr: 'بدون ملخص')),
+        ]),
+      ));
+      await tester.pumpAndSettle();
+      expect(find.byType(InkWell), findsNothing);
+      expect(find.byType(SizedBox), findsWidgets);
+
+      final repo = _BuiltInSectionRepo(
+        pagesList: [
+          CustomPage(
+            id: 'p-details-empty',
+            slug: 'details-empty',
+            titleAr: 'صفحة',
+            titleEn: 'Page',
+            blocks: [
+              const PageBlock(type: BlockTypes.paragraph, textAr: 'فقرة ظاهرة', textEn: 'Visible paragraph'),
+              PageBlock.details(summaryAr: 'ناقص', bodyAr: ''),
+              PageBlock.details(
+                summaryAr: 'عنوان ظاهر',
+                bodyAr: 'محتوى ظاهر',
+                summaryEn: 'Visible summary',
+                bodyEn: 'Visible body',
+              ),
+            ],
+          ),
+        ],
+      );
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            repositoryProvider.overrideWithValue(repo),
+            localeProvider.overrideWith(() => _English()),
+          ],
+          child: MaterialApp(
+            locale: const Locale('en'),
+            supportedLocales: const [Locale('ar'), Locale('en')],
+            localizationsDelegates: GlobalMaterialLocalizations.delegates,
+            home: const CustomPageView(slug: 'details-empty'),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Visible paragraph'), findsOneWidget);
+      expect(find.text('Visible summary'), findsOneWidget);
+      expect(find.text('ناقص'), findsNothing);
+    });
+
+    testWidgets('renders cleanly with zero overflow at 320, 400, and 1400 px x 200% text scale in AR RTL and EN LTR',
+        (tester) async {
+      final block = PageBlock.details(
+        summaryAr: 'عنوان طويل للتفاصيل القابلة للطي للتحقق من عدم وجود أي تداخل نصي على الشاشات الصغيرة',
+        bodyAr:
+            'فقرة تفاصيل طويلة باللغة العربية تشمل عدة أسطر للتأكد من التفاف النص بشكل سليم على عرض ٣٢٠ بكسل.\nالسطر الثاني من التفاصيل.',
+        summaryEn: 'Long collapsible details summary to verify wrapping across narrow and wide viewports',
+        bodyEn: 'Detailed English explanation spanning multiple words and a second line.\nSecond paragraph line.',
+      );
+      for (final locale in const [Locale('ar'), Locale('en')]) {
+        final expectedSummary = locale.languageCode == 'ar' ? block.details.summaryAr : block.details.summaryEn;
+        final expectedBody = locale.languageCode == 'ar' ? block.details.bodyAr : block.details.bodyEn;
+        for (final width in const [320.0, 400.0, 1400.0]) {
+          tester.view.physicalSize = Size(width, 1600);
+          tester.view.devicePixelRatio = 1.0;
+          addTearDown(tester.view.reset);
+          await tester.pumpWidget(
+            MaterialApp(
+              locale: locale,
+              supportedLocales: const [Locale('ar'), Locale('en')],
+              localizationsDelegates: GlobalMaterialLocalizations.delegates,
+              home: Builder(
+                builder: (ctx) => MediaQuery(
+                  data: MediaQuery.of(ctx).copyWith(textScaler: const TextScaler.linear(2.0)),
+                  child: Scaffold(
+                    body: SingleChildScrollView(
+                      padding: const EdgeInsets.all(16),
+                      child: PageBlockView(
+                        key: ValueKey('resp-${locale.languageCode}-$width'),
+                        block: block,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+          await tester.pumpAndSettle();
+          expect(tester.takeException(), isNull, reason: '${locale.languageCode} $width collapsed');
+          await tester.tap(find.text(expectedSummary));
+          await tester.pumpAndSettle();
+          expect(find.text(expectedBody), findsOneWidget);
+          expect(tester.takeException(), isNull, reason: '${locale.languageCode} $width expanded');
+        }
+      }
+    });
+  });
+
+  group('Phase 4 PR4B: admin details block editor', () {
+    testWidgets(
+      'DocEditor supports creating details block, editing AR/EN summary & body, dirty/discard reset, and exact encoded save',
+      (tester) async {
+        registerAdminStrings();
+        tester.view.physicalSize = const Size(1200, 1600);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(tester.view.reset);
+
+        Map<String, dynamic>? saved;
+        final pagesDef = adminCollections.firstWhere((c) => c.name == 'pages');
+        await tester.pumpWidget(_admin(
+          DocEditor(
+            title: 'Edit page',
+            fields: pagesDef.fields,
+            def: pagesDef,
+            popOnSave: false,
+            data: const {'slug': 'details-page', 'titleAr': 'صفحة التفاصيل'},
+            onSave: (d) async => saved = d,
+          ),
+        ));
+        await tester.pumpAndSettle();
+
+        final addBtn = find.text(adminStrings['addRow']![1]);
+        await tester.ensureVisible(addBtn);
+        await tester.tap(addBtn);
+        await tester.pumpAndSettle();
+
+        final typeDropdown = find.byType(DropdownButtonFormField<String>).last;
+        await tester.ensureVisible(typeDropdown);
+        await tester.tap(typeDropdown);
+        await tester.pumpAndSettle();
+        await tester.tap(find.text(adminStrings['opt_details']![1]).last);
+        await tester.pumpAndSettle();
+
+        await tester.enterText(find.byKey(const Key('detailsSummaryAr-0')), 'ملخص مبدئي');
+        await tester.pumpAndSettle();
+        expect(find.byKey(const ValueKey('unsaved-bar')), findsOneWidget);
+
+        // Discard resets dirty state cleanly.
+        await tester.tap(find.byKey(const ValueKey('unsaved-bar-cancel')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const ValueKey('discard-confirm')));
+        await tester.pumpAndSettle();
+        expect(find.byKey(const ValueKey('unsaved-bar')), findsNothing);
+        expect(find.byKey(const Key('detailsSummaryAr-0')), findsNothing);
+
+        // Re-add a details block, fill AR + EN, and save.
+        await tester.ensureVisible(addBtn);
+        await tester.tap(addBtn);
+        await tester.pumpAndSettle();
+        await tester.ensureVisible(find.byType(DropdownButtonFormField<String>).last);
+        await tester.tap(find.byType(DropdownButtonFormField<String>).last);
+        await tester.pumpAndSettle();
+        await tester.tap(find.text(adminStrings['opt_details']![1]).last);
+        await tester.pumpAndSettle();
+
+        await tester.enterText(find.byKey(const Key('detailsSummaryAr-0')), 'شروط الاشتراك');
+        await tester.enterText(find.byKey(const Key('detailsSummaryEn-0')), 'Registration terms');
+        await tester.enterText(find.byKey(const Key('detailsBodyAr-0')), 'إحضار صورة البطاقة.');
+        await tester.enterText(find.byKey(const Key('detailsBodyEn-0')), 'Bring a copy of your ID.');
+        await tester.pumpAndSettle();
+
+        final saveBtn = find.byKey(const Key('editor-save'));
+        await tester.ensureVisible(saveBtn);
+        await tester.tap(saveBtn);
+        await tester.pumpAndSettle();
+
+        expect(saved, isNotNull);
+        final blocks = (saved!['blocks'] as List).cast<String>();
+        expect(blocks, hasLength(1));
+        final expected = PageBlock.details(
+          summaryAr: 'شروط الاشتراك',
+          bodyAr: 'إحضار صورة البطاقة.',
+          summaryEn: 'Registration terms',
+          bodyEn: 'Bring a copy of your ID.',
+        ).encode();
+        expect(blocks.first, expected);
+      },
+    );
+
+    testWidgets(
+      'collapsed details block with empty summary auto-expands & focuses summary on save and banner tap (Arabic label)',
+      (tester) async {
+        registerAdminStrings();
+        tester.view.physicalSize = const Size(1200, 1600);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(tester.view.reset);
+
+        Map<String, dynamic>? saved;
+        final pagesDef = adminCollections.firstWhere((c) => c.name == 'pages');
+        await tester.pumpWidget(_admin(
+          DocEditor(
+            title: 'Edit page',
+            fields: pagesDef.fields,
+            def: pagesDef,
+            popOnSave: false,
+            data: {
+              'slug': 'details-err-summary',
+              'titleAr': 'صفحة',
+              'blocks': [
+                const PageBlock(type: BlockTypes.paragraph, textAr: 'تمهيد').toMap(),
+                PageBlock.details(summaryAr: '', bodyAr: 'محتوى موجود').toMap(),
+              ],
+            },
+            onSave: (d) async => saved = d,
+          ),
+          locale: const Locale('ar'),
+        ));
+        await tester.pumpAndSettle();
+
+        // Row 1 starts collapsed.
+        expect(find.byKey(const Key('detailsSummaryAr-1')), findsNothing);
+
+        final saveBtn = find.byKey(const Key('editor-save'));
+        await tester.ensureVisible(saveBtn);
+        await tester.tap(saveBtn);
+        await tester.pumpAndSettle();
+
+        expect(saved, isNull);
+        final summaryBanner = find.byKey(const Key('editor-error-summary'));
+        expect(summaryBanner, findsOneWidget);
+        expect(
+          find.descendant(
+            of: summaryBanner,
+            matching: find.text('بلوك 2 (تفاصيل) — العنوان الظاهر (عربي)'),
+          ),
+          findsOneWidget,
+        );
+
+        // Save immediately auto-expanded row 1 and focused detailsSummaryAr-1.
+        final summaryFieldFinder = find.byKey(const Key('detailsSummaryAr-1'));
+        expect(summaryFieldFinder, findsOneWidget);
+        expect(tester.widget<TextField>(summaryFieldFinder).focusNode?.hasFocus, isTrue);
+
+        // Collapse row 1 again by expanding row 0, then tap the banner link -> re-expands & focuses.
+        await tester.ensureVisible(find.textContaining('تمهيد').first);
+        await tester.tap(find.textContaining('تمهيد').first);
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('detailsSummaryAr-1')), findsNothing);
+
+        final errorEntry = find.descendant(of: summaryBanner, matching: find.byType(InkWell)).first;
+        await tester.ensureVisible(errorEntry);
+        await tester.tap(errorEntry);
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('detailsSummaryAr-1')), findsOneWidget);
+        expect(tester.widget<TextField>(find.byKey(const Key('detailsSummaryAr-1'))).focusNode?.hasFocus, isTrue);
+      },
+    );
+
+    testWidgets(
+      'collapsed details block with empty body auto-expands & focuses body on save and banner tap, and fixing unblocks save',
+      (tester) async {
+        registerAdminStrings();
+        tester.view.physicalSize = const Size(1200, 1600);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(tester.view.reset);
+
+        Map<String, dynamic>? saved;
+        final pagesDef = adminCollections.firstWhere((c) => c.name == 'pages');
+        await tester.pumpWidget(_admin(
+          DocEditor(
+            title: 'Edit page',
+            fields: pagesDef.fields,
+            def: pagesDef,
+            popOnSave: false,
+            data: {
+              'slug': 'details-err-body',
+              'titleAr': 'صفحة',
+              'blocks': [
+                const PageBlock(type: BlockTypes.paragraph, textAr: 'تمهيد').toMap(),
+                PageBlock.details(summaryAr: 'ملخص موجود', bodyAr: '').toMap(),
+              ],
+            },
+            onSave: (d) async => saved = d,
+          ),
+        ));
+        await tester.pumpAndSettle();
+
+        // Row 1 starts collapsed: body input not yet visible.
+        expect(find.byKey(const Key('detailsBodyAr-1')), findsNothing);
+
+        final saveBtn = find.byKey(const Key('editor-save'));
+        await tester.ensureVisible(saveBtn);
+        await tester.tap(saveBtn);
+        await tester.pumpAndSettle();
+        expect(saved, isNull);
+        final summary = find.byKey(const Key('editor-error-summary'));
+        expect(summary, findsOneWidget);
+        expect(
+          find.descendant(
+            of: summary,
+            matching: find.text('Block 2 (Details) — Details (Arabic)'),
+          ),
+          findsOneWidget,
+        );
+
+        // Save immediately auto-expanded row 1 and focused exact offending field (detailsBodyAr-1).
+        final bodyFieldFinder = find.byKey(const Key('detailsBodyAr-1'));
+        expect(bodyFieldFinder, findsOneWidget);
+        expect(tester.widget<TextField>(bodyFieldFinder).focusNode?.hasFocus, isTrue);
+
+        // Collapse row 1 again by expanding row 0, then tap the banner link -> re-expands & focuses.
+        await tester.ensureVisible(find.textContaining('تمهيد').first);
+        await tester.tap(find.textContaining('تمهيد').first);
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('detailsBodyAr-1')), findsNothing);
+
+        final errorEntry = find.descendant(of: summary, matching: find.byType(InkWell)).first;
+        await tester.ensureVisible(errorEntry);
+        await tester.tap(errorEntry);
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('detailsBodyAr-1')), findsOneWidget);
+        expect(tester.widget<TextField>(find.byKey(const Key('detailsBodyAr-1'))).focusNode?.hasFocus, isTrue);
+
+        await tester.enterText(find.byKey(const Key('detailsBodyAr-1')), 'نص التفاصيل بعد الإصلاح');
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('editor-error-summary')), findsNothing);
+
+        await tester.ensureVisible(saveBtn);
+        await tester.tap(saveBtn);
+        await tester.pumpAndSettle();
+        expect(saved, isNotNull);
+        final parsed = PageBlock.fromStored((saved!['blocks'] as List)[1])!;
+        expect(parsed.details.bodyAr, 'نص التفاصيل بعد الإصلاح');
+      },
+    );
+
+    testWidgets(
+      'englishEnabled: false hides EN inputs and preserves stored initialSummaryEn/initialBodyEn on save',
+      (tester) async {
+        registerAdminStrings();
+        tester.view.physicalSize = const Size(1200, 1600);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(tester.view.reset);
+
+        Map<String, dynamic>? saved;
+        final pagesDef = adminCollections.firstWhere((c) => c.name == 'pages');
+        await tester.pumpWidget(_admin(
+          DocEditor(
+            title: 'Edit page',
+            fields: pagesDef.fields,
+            def: pagesDef,
+            popOnSave: false,
+            englishEnabled: false,
+            data: {
+              'slug': 'details-ar-only',
+              'titleAr': 'صفحة',
+              'titleEn': 'Page',
+              'blocks': [
+                PageBlock.details(
+                  summaryAr: 'ملخص قديم',
+                  bodyAr: 'نص قديم',
+                  summaryEn: 'Stored EN summary',
+                  bodyEn: 'Stored EN body',
+                ).toMap(),
+              ],
+            },
+            onSave: (d) async => saved = d,
+          ),
+        ));
+        await tester.pumpAndSettle();
+
+        expect(find.byKey(const Key('detailsSummaryAr-0')), findsOneWidget);
+        expect(find.byKey(const Key('detailsBodyAr-0')), findsOneWidget);
+        expect(find.byKey(const Key('detailsSummaryEn-0')), findsNothing);
+        expect(find.byKey(const Key('detailsBodyEn-0')), findsNothing);
+
+        await tester.enterText(find.byKey(const Key('detailsSummaryAr-0')), 'ملخص محدث');
+        await tester.enterText(find.byKey(const Key('detailsBodyAr-0')), 'نص محدث');
+        await tester.pumpAndSettle();
+
+        final saveBtn = find.byKey(const Key('editor-save'));
+        await tester.ensureVisible(saveBtn);
+        await tester.tap(saveBtn);
+        await tester.pumpAndSettle();
+
+        expect(saved, isNotNull);
+        final parsed = PageBlock.fromStored((saved!['blocks'] as List).first)!;
+        expect(parsed.details.summaryAr, 'ملخص محدث');
+        expect(parsed.details.bodyAr, 'نص محدث');
+        expect(parsed.details.summaryEn, 'Stored EN summary');
+        expect(parsed.details.bodyEn, 'Stored EN body');
+      },
+    );
+
+    testWidgets(
+      'PagePreviewScreen renders unsaved details block edits collapsed->expanded and preserves dirty state with 0 saves',
+      (tester) async {
+        registerAdminStrings();
+        tester.view.physicalSize = const Size(1200, 1600);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(tester.view.reset);
+
+        var saves = 0;
+        final pagesDef = adminCollections.firstWhere((c) => c.name == 'pages');
+        await tester.pumpWidget(
+          ProviderScope(
+            child: MaterialApp(
+              locale: const Locale('en'),
+              supportedLocales: const [Locale('ar'), Locale('en')],
+              localizationsDelegates: GlobalMaterialLocalizations.delegates,
+              home: DocEditor(
+                title: 'Edit page',
+                fields: pagesDef.fields,
+                def: pagesDef,
+                data: {
+                  'slug': 'details-preview',
+                  'titleAr': 'معاينة',
+                  'titleEn': 'Preview',
+                  'blocks': [
+                    PageBlock.details(
+                      summaryAr: 'ملخص المعاينة',
+                      bodyAr: 'تفاصيل المعاينة بالعربية',
+                      summaryEn: 'Preview summary',
+                      bodyEn: 'Preview body in English',
+                    ).toMap(),
+                  ],
+                },
+                onSave: (_) async => saves++,
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        await tester.enterText(find.byKey(const Key('detailsSummaryEn-0')), 'Updated preview summary');
+        await tester.enterText(find.byKey(const Key('detailsBodyEn-0')), 'Updated preview body');
+        await tester.pumpAndSettle();
+
+        expect(find.byKey(const ValueKey('unsaved-bar')), findsOneWidget);
+        await tester.tap(find.byKey(const Key('editor-preview-top')));
+        await tester.pumpAndSettle();
+
+        expect(find.byType(PagePreviewScreen), findsOneWidget);
+        expect(find.text('Updated preview summary'), findsOneWidget);
+        expect(find.text('Updated preview body'), findsNothing);
+        await tester.tap(find.text('Updated preview summary'));
+        await tester.pumpAndSettle();
+        expect(find.text('Updated preview body'), findsOneWidget);
+        expect(saves, 0);
+
+        Navigator.of(tester.element(find.byType(PagePreviewScreen))).pop();
+        await tester.pumpAndSettle();
+        expect(find.byType(DocEditor), findsOneWidget);
+        expect(find.byKey(const ValueKey('unsaved-bar')), findsOneWidget);
+        expect(saves, 0);
+      },
+    );
+
+    testWidgets(
+      'Duplicate preserves details blocks in buildDuplicatePageDefaults and CollectionListScreen unsaved draft',
+      (tester) async {
+        registerAdminStrings();
+        tester.view.physicalSize = const Size(1200, 1600);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(tester.view.reset);
+
+        final encodedDetails = PageBlock.details(
+          summaryAr: 'سؤال مكرر',
+          bodyAr: 'إجابة مكررة',
+          summaryEn: 'Duplicated question',
+          bodyEn: 'Duplicated answer',
+        ).encode();
+        final dup = buildDuplicatePageDefaults(
+          {
+            'slug': 'faq-orig',
+            'titleAr': 'الأسئلة',
+            'titleEn': 'FAQ',
+            'blocks': [encodedDetails],
+          },
+          takenSlugs: {'faq-orig'},
+        );
+        expect(dup.defaults['blocks'], [encodedDetails]);
+
+        final backend = _Backend(
+          lists: {
+            'pages': [
+              AdminDoc('p1', {
+                'slug': 'faq-orig',
+                'titleAr': 'الأسئلة',
+                'titleEn': 'FAQ',
+                'blocks': [encodedDetails],
+              }),
+            ],
+          },
+        );
+        final pagesDef = adminCollections.firstWhere((c) => c.name == 'pages');
+        await tester.pumpWidget(
+          ProviderScope(
+            child: _admin(
+              CollectionListScreen(repo: backend, def: pagesDef),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        final dupBtn = find.byKey(const ValueKey('duplicate-p1'));
+        await tester.ensureVisible(dupBtn);
+        await tester.tap(dupBtn);
+        await tester.pumpAndSettle();
+        expect(find.byType(DocEditor), findsOneWidget);
+        expect(find.byKey(const Key('detailsSummaryAr-0')), findsOneWidget);
+        expect(find.text('سؤال مكرر'), findsOneWidget);
+        expect(find.text('Duplicated question'), findsOneWidget);
+        expect(backend.saves, isEmpty);
+      },
+    );
+
+    testWidgets(
+      'DetailsBlockEditor in DocEditor renders at 320 px x 200% text scale in AR RTL and EN LTR with zero overflow',
+      (tester) async {
+        registerAdminStrings();
+        final pagesDef = adminCollections.firstWhere((c) => c.name == 'pages');
+        for (final locale in const [Locale('ar'), Locale('en')]) {
+          tester.view.physicalSize = const Size(320, 1800);
+          tester.view.devicePixelRatio = 1.0;
+          addTearDown(tester.view.reset);
+          await tester.pumpWidget(
+            MaterialApp(
+              locale: locale,
+              supportedLocales: const [Locale('ar'), Locale('en')],
+              localizationsDelegates: GlobalMaterialLocalizations.delegates,
+              home: Builder(
+                builder: (ctx) => MediaQuery(
+                  data: MediaQuery.of(ctx).copyWith(textScaler: const TextScaler.linear(2.0)),
+                  child: Scaffold(
+                    body: DocEditor(
+                      key: ValueKey('doc-320-${locale.languageCode}'),
+                      title: 'Edit',
+                      fields: pagesDef.fields,
+                      def: pagesDef,
+                      popOnSave: false,
+                      data: {
+                        'slug': 'details-320',
+                        'titleAr': 'صفحة',
+                        'blocks': [
+                          PageBlock.details(
+                            summaryAr: 'ملخص',
+                            bodyAr: 'تفاصيل',
+                            summaryEn: 'Summary',
+                            bodyEn: 'Body',
+                          ).toMap(),
+                        ],
+                      },
+                      onSave: (_) async {},
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+          await tester.pumpAndSettle();
+          expect(find.byKey(const Key('detailsSummaryAr-0')), findsOneWidget);
+          expect(tester.takeException(), isNull, reason: '${locale.languageCode} 320px x 200%');
         }
       },
     );

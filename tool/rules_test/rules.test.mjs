@@ -1928,11 +1928,122 @@ describe('ADR-027: custom categories, their items and custom pages', () => {
       ['non-empty wallet', listBlock({ wallet: '01012345678' })],
       ['6 slots (too few)', 'list\u001fتجربة\u001f\u001f\u001fbullet\u001f'],
       ['8 slots (too many)', `${listBlock()}\u001fextra`],
-      ['unknown type details', block({ type: 'details', textAr: 'تجربة' })],
+      ['unknown type callout', block({ type: 'callout', textAr: 'تجربة' })],
       ['unknown type video', block({ type: 'video', textAr: 'تجربة' })],
     ]) {
       await assertFails(
         setDoc(doc(ed, 'pages', 'p-list-bad'), page({ slug: 'list-bad', blocks: [badBlock] })),
+        label,
+      );
+    }
+  });
+
+  test('pages: details blocks allow valid AR/bilingual/intermediate/20x(200+3500)x2 worst-case and reject malformed ones', async () => {
+    const ed = db(EDITOR);
+    const detailsBlock = ({
+      summaryAr = 'تجربة عنوان',
+      bodyAr = 'تجربة تفاصيل',
+      textAr = `${summaryAr}\u001e${bodyAr}`,
+      textEn = '',
+      url = '',
+      account = '',
+      instapay = '',
+      wallet = '',
+    } = {}) => block({
+      type: 'details',
+      textAr,
+      textEn,
+      url,
+      account,
+      instapay,
+      wallet,
+    });
+
+    // Allow: minimal AR-only (textEn: '') + multiline bodyAr (newlines) + partial EN variants
+    await assertSucceeds(setDoc(doc(ed, 'pages', 'p-details-min'), page({
+      slug: 'details-min',
+      blocks: [
+        detailsBlock({ textEn: '' }),
+        detailsBlock({ summaryAr: 'تفاصيل متعددة السطور', bodyAr: 'السطر الأول\nالسطر الثاني\nالسطر الثالث' }),
+        detailsBlock({ textEn: 'Summary only\u001e' }),
+        detailsBlock({ textEn: '\u001eBody only' }),
+      ],
+    })));
+
+    // Allow: intermediate lengths (600, 1250, 2500 chars) proving zero RE2 500-char chunking gaps
+    for (const len of [600, 1250, 2500]) {
+      await assertSucceeds(setDoc(doc(ed, 'pages', `p-details-len-${len}`), page({
+        slug: `details-len-${len}`,
+        blocks: [
+          detailsBlock({
+            summaryAr: 'س'.repeat(100),
+            bodyAr: 'ب'.repeat(len),
+            textEn: `${'S'.repeat(100)}\u001e${'B'.repeat(len)}`,
+          }),
+        ],
+      })));
+    }
+
+    // Allow: exact boundary single block (200 AR summary + 3500 AR body + 200 EN summary + 3500 EN body)
+    const fullDetailsBlock = detailsBlock({
+      summaryAr: 'أ'.repeat(200),
+      bodyAr: 'ب'.repeat(3500),
+      textEn: `${'S'.repeat(200)}\u001e${'E'.repeat(3500)}`,
+    });
+    await assertSucceeds(setDoc(doc(ed, 'pages', 'p-details-max-one'), page({
+      slug: 'details-max-one',
+      blocks: [fullDetailsBlock],
+    })));
+
+    // Allow: worst-case 20-block budget test (20 full AR+EN details blocks in one setDoc AND updateDoc)
+    const twentyFullDetailsBlocks = Array.from({ length: 20 }, () => fullDetailsBlock);
+    await assertSucceeds(setDoc(doc(ed, 'pages', 'p-details-max-20'), page({
+      slug: 'details-max-20',
+      blocks: twentyFullDetailsBlocks,
+    })));
+    await assertSucceeds(updateDoc(doc(ed, 'pages', 'p-details-max-20'), {
+      blocks: twentyFullDetailsBlocks,
+    }));
+
+    // Verify 20 legacy blocks still pass under the 1,000-expression budget with the extra details branch
+    const legacyTypes = ['heading', 'paragraph', 'image', 'button', 'link', 'donation'];
+    const twentyLegacyBlocks = Array.from({ length: 20 }, (_, i) => block({
+      type: legacyTypes[i % 6],
+      textAr: 'ن'.repeat(4000),
+      textEn: 'e'.repeat(4000),
+      url: legacyTypes[i % 6] === 'image' ? 'https://example.org/' + 'p'.repeat(470) : 'https://example.org/give',
+      account: 'a'.repeat(120),
+      instapay: 'i'.repeat(80),
+      wallet: '0'.repeat(30),
+    }));
+    await assertSucceeds(setDoc(doc(ed, 'pages', 'p-legacy-after-details'), page({
+      slug: 'legacy-after-details',
+      blocks: twentyLegacyBlocks,
+    })));
+
+    // Deny cases
+    for (const [label, badBlock] of [
+      ['empty summaryAr', detailsBlock({ textAr: '\u001eتفاصيل' })],
+      ['whitespace-only summaryAr', detailsBlock({ textAr: '   \u001eتفاصيل' })],
+      ['empty bodyAr', detailsBlock({ textAr: 'عنوان\u001e' })],
+      ['whitespace-only bodyAr', detailsBlock({ textAr: 'عنوان\u001e   ' })],
+      ['missing \\u001e in textAr', detailsBlock({ textAr: 'عنوان بدون فاصل' })],
+      ['extra \\u001e in textAr', detailsBlock({ textAr: 'عنوان\u001eجزء ١\u001eجزء ٢' })],
+      ['extra \\u001e in textEn', detailsBlock({ textEn: 'Summary\u001ePart 1\u001ePart 2' })],
+      ['non-empty textEn missing \\u001e', detailsBlock({ textEn: 'SummaryOnlyEn' })],
+      ['summaryAr > 200 chars', detailsBlock({ summaryAr: 'أ'.repeat(201) })],
+      ['summaryEn > 200 chars', detailsBlock({ textEn: `${'S'.repeat(201)}\u001eBody` })],
+      ['bodyAr > 3500 chars', detailsBlock({ bodyAr: 'ب'.repeat(3501) })],
+      ['bodyEn > 3500 chars', detailsBlock({ textEn: `Summary\u001e${'E'.repeat(3501)}` })],
+      ['non-empty url', detailsBlock({ url: 'https://example.org' })],
+      ['non-empty account', detailsBlock({ account: 'bullet' })],
+      ['non-empty instapay', detailsBlock({ instapay: 'church@instapay' })],
+      ['non-empty wallet', detailsBlock({ wallet: '01012345678' })],
+      ['6 slots (too few)', 'details\u001fعنوان\u001eتفاصيل\u001f\u001f\u001f\u001f'],
+      ['8 slots (too many)', `${detailsBlock()}\u001fextra`],
+    ]) {
+      await assertFails(
+        setDoc(doc(ed, 'pages', 'p-details-bad'), page({ slug: 'details-bad', blocks: [badBlock] })),
         label,
       );
     }
