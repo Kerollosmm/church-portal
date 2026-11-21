@@ -1,0 +1,3646 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>إدارة موقع الكنيسة — نموذج تجريبي</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'" />
+  <noscript><link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet" /></noscript>
+  <style>
+    :root {
+      /* Golden Hour theme tokens from lib/core/theme.dart & lib/domain/occasion_theme.dart */
+      --bg: #FBF3E4;
+      --surface: #FFF9EE;
+      --surface-alt: #F4E6CC;
+      --primary: #6E1C1C;
+      --primary-deep: #4F1010;
+      --primary-light: #8E2A24;
+      --on-primary: #FFFFFF;
+      --on-primary-accent: #E7C27A;
+      --ink: #3A2416;
+      --muted: #6A4A2E;
+      --gold-ornament: #C9963F;
+      --gold-text: #6F4C0E;
+      --script: #9A2A1E;
+      --hairline: #E2C99A;
+      --success: #2E6B45;
+      --success-bg: #EAF4EE;
+      --success-border: #9CC7AC;
+      --alert: #B3261E;
+      --alert-bg: #FFF4E0;
+      --alert-soft: #FDECEC;
+      --notice-bg: #FFF3CD;
+      --notice-edge: #E0C36A;
+      --shadow-sm: 0 2px 6px rgba(96, 50, 8, 0.08);
+      --shadow-panel: 0 10px 28px -12px rgba(96, 50, 8, 0.22), 0 2px 6px rgba(96, 50, 8, 0.08);
+
+      --radius-panel: 20px;
+      --radius-card: 16px;
+      --radius-input: 12px;
+      --radius-pill: 999px;
+
+      --space-xs: 4px;
+      --space-s: 8px;
+      --space-m: 12px;
+      --space-l: 16px;
+      --space-xl: 24px;
+    }
+
+    *, *::before, *::after {
+      box-sizing: border-box;
+    }
+
+    html {
+      font-size: 16px;
+      -webkit-text-size-adjust: 100%;
+    }
+
+    body {
+      margin: 0;
+      font-family: 'IBM Plex Sans Arabic', Tahoma, 'Segoe UI', Arial, sans-serif;
+      background-color: #EFE2CA;
+      color: var(--ink);
+      line-height: 1.6;
+      min-height: 100dvh;
+      display: flex;
+      justify-content: center;
+    }
+
+    /* Native 360px mobile container — edge-to-edge on 360px devices, centered phone canvas on desktop */
+    .phone-shell {
+      width: 100%;
+      max-width: 360px;
+      min-height: 100dvh;
+      background-color: var(--bg);
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 0 0 1px var(--hairline), var(--shadow-panel);
+    }
+
+    @media (max-width: 400px) {
+      body {
+        background-color: var(--bg);
+      }
+      .phone-shell {
+        max-width: 100%;
+        box-shadow: none;
+      }
+    }
+
+    button, input, textarea, select {
+      font-family: inherit;
+      font-size: inherit;
+      color: inherit;
+    }
+
+    button {
+      cursor: pointer;
+      border: none;
+      background: none;
+      padding: 0;
+    }
+
+    button:focus-visible,
+    input:focus-visible,
+    textarea:focus-visible,
+    select:focus-visible,
+    a:focus-visible,
+    [tabindex]:focus-visible {
+      outline: 3px solid var(--primary);
+      outline-offset: 2px;
+    }
+
+    /* Top App Bar */
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      background: rgba(251, 243, 228, 0.96);
+      backdrop-filter: blur(6px);
+      border-bottom: 1px solid var(--hairline);
+      padding: 6px 12px;
+      min-height: 54px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .topbar-start {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+      flex: 1;
+    }
+
+    .back-btn {
+      min-height: 44px;
+      min-width: 44px;
+      padding: 0 10px;
+      border-radius: var(--radius-pill);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      color: var(--primary);
+      font-weight: 700;
+      font-size: 14px;
+      background: var(--surface);
+      border: 1px solid var(--hairline);
+      flex-shrink: 0;
+    }
+
+    .back-btn:active {
+      background: var(--surface-alt);
+    }
+
+    .topbar-title-wrap {
+      min-width: 0;
+      flex: 1;
+    }
+
+    .topbar-title {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--ink);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      line-height: 1.3;
+    }
+
+    .topbar-sub {
+      font-size: 11px;
+      color: var(--muted);
+      display: block;
+      line-height: 1.2;
+    }
+
+    .sample-pill {
+      display: inline-flex;
+      align-items: center;
+      min-height: 26px;
+      padding: 2px 8px;
+      border-radius: var(--radius-pill);
+      background: var(--notice-bg);
+      border: 1px solid var(--notice-edge);
+      color: var(--ink);
+      font-size: 11px;
+      font-weight: 700;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    /* Main Content */
+    .main-content {
+      flex: 1;
+      padding: 12px 14px 88px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .main-content.home-content {
+      padding-top: 10px;
+      gap: 10px;
+    }
+
+    /* Headings */
+    .page-heading {
+      margin: 0;
+      font-size: 21px;
+      font-weight: 700;
+      color: var(--primary);
+      line-height: 1.25;
+    }
+
+    .page-lead {
+      margin: 2px 0 0;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .section-heading {
+      margin: 8px 0 4px;
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--ink);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    /* Home Task Cards — designed so all 4 fit above the fold at 360px */
+    .tasks-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .task-card {
+      width: 100%;
+      min-height: 66px;
+      padding: 10px 12px;
+      border-radius: var(--radius-card);
+      background: var(--surface);
+      border: 1.5px solid var(--hairline);
+      box-shadow: var(--shadow-sm);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      text-align: right;
+      transition: background-color 120ms ease, border-color 120ms ease, transform 80ms ease;
+    }
+
+    .task-card:active {
+      transform: scale(0.99);
+    }
+
+    /* Daily Tasks (1 & 2): Highest visual prominence */
+    .task-card.task-daily {
+      min-height: 76px;
+      background: linear-gradient(135deg, #FFFDF8 0%, #FFF6E5 100%);
+      border: 2px solid rgba(110, 28, 28, 0.35);
+      box-shadow: 0 4px 14px -4px rgba(110, 28, 28, 0.16);
+    }
+
+    .task-card.task-daily .task-icon {
+      width: 46px;
+      height: 46px;
+      background: linear-gradient(135deg, var(--primary), var(--primary-deep));
+      color: var(--on-primary-accent);
+    }
+
+    .task-card.task-daily .task-title {
+      font-size: 16px;
+      color: var(--primary-deep);
+    }
+
+    /* Secondary Task (3): Add Page */
+    .task-card.task-secondary {
+      min-height: 64px;
+      background: var(--surface);
+      border-color: var(--hairline);
+    }
+
+    .task-card.task-secondary .task-icon {
+      width: 42px;
+      height: 42px;
+      background: var(--surface-alt);
+      color: var(--primary);
+      border: 1px solid var(--hairline);
+    }
+
+    /* Rare / Complex Task (4): Season — visible above fold, visually calmer */
+    .task-card.task-rare {
+      min-height: 58px;
+      padding: 8px 12px;
+      background: rgba(244, 230, 204, 0.55);
+      border: 1px dashed rgba(106, 74, 46, 0.45);
+      box-shadow: none;
+    }
+
+    .task-card.task-rare .task-icon {
+      width: 38px;
+      height: 38px;
+      background: var(--surface);
+      color: var(--muted);
+      border: 1px solid var(--hairline);
+    }
+
+    .task-card.task-rare .task-title {
+      font-size: 14px;
+      color: var(--ink);
+    }
+
+    .task-card.task-rare.has-draft {
+      background: #FFF3CD;
+      border: 2px solid var(--gold-text);
+    }
+
+    .task-card.task-rare.has-draft .task-icon {
+      background: var(--primary);
+      color: var(--on-primary-accent);
+      border-color: transparent;
+    }
+
+    .task-icon {
+      border-radius: 14px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .task-body {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .task-title-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .task-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--ink);
+      line-height: 1.3;
+    }
+
+    .task-sub {
+      display: block;
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.35;
+      margin-top: 2px;
+    }
+
+    .task-badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 1px 7px;
+      border-radius: var(--radius-pill);
+      font-size: 11px;
+      font-weight: 700;
+      background: var(--surface-alt);
+      color: var(--muted);
+      border: 1px solid var(--hairline);
+    }
+
+    .task-badge.daily-tag {
+      background: rgba(110, 28, 28, 0.09);
+      color: var(--primary);
+      border-color: rgba(110, 28, 28, 0.22);
+    }
+
+    .task-badge.draft-tag {
+      background: var(--primary);
+      color: var(--on-primary);
+      border-color: var(--primary);
+    }
+
+    .task-badge.active-season-tag {
+      background: var(--success-bg);
+      color: var(--success);
+      border-color: var(--success-border);
+    }
+
+    .task-arrow {
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--muted);
+      flex-shrink: 0;
+      padding-inline-start: 4px;
+    }
+
+    /* Recent edits list & footer link on Home */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--hairline);
+      border-radius: var(--radius-panel);
+      padding: 14px;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .card-tight {
+      padding: 12px;
+      border-radius: var(--radius-card);
+    }
+
+    .recent-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .recent-item {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 8px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid rgba(226, 201, 154, 0.65);
+    }
+
+    .recent-item:last-child {
+      padding-bottom: 0;
+      border-bottom: none;
+    }
+
+    .recent-title {
+      font-size: 13.5px;
+      font-weight: 600;
+      color: var(--ink);
+      display: block;
+    }
+
+    .recent-meta {
+      font-size: 12px;
+      color: var(--muted);
+      display: block;
+    }
+
+    .advanced-link-btn {
+      width: 100%;
+      min-height: 48px;
+      padding: 10px 14px;
+      border-radius: var(--radius-card);
+      border: 1px solid var(--hairline);
+      background: rgba(255, 249, 238, 0.7);
+      color: var(--muted);
+      font-size: 14px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .advanced-link-btn:active {
+      background: var(--surface-alt);
+    }
+
+    /* Buttons (minimum 44x44px, primary 48px) */
+    .btn {
+      min-height: 48px;
+      min-width: 44px;
+      padding: 10px 18px;
+      border-radius: var(--radius-pill);
+      font-size: 15px;
+      font-weight: 700;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      text-align: center;
+      line-height: 1.25;
+      transition: opacity 100ms ease, background-color 120ms ease;
+    }
+
+    .btn-sm {
+      min-height: 44px;
+      padding: 8px 14px;
+      font-size: 13.5px;
+    }
+
+    .btn-block {
+      width: 100%;
+    }
+
+    .btn-primary {
+      background: linear-gradient(180deg, var(--primary) 0%, var(--primary-deep) 100%);
+      color: var(--on-primary);
+      box-shadow: 0 3px 10px rgba(79, 16, 16, 0.25);
+    }
+
+    .btn-primary:active {
+      opacity: 0.92;
+    }
+
+    .btn-secondary {
+      background: var(--surface);
+      color: var(--primary);
+      border: 1.5px solid rgba(110, 28, 28, 0.45);
+    }
+
+    .btn-secondary:active {
+      background: var(--surface-alt);
+    }
+
+    .btn-soft {
+      background: var(--surface-alt);
+      color: var(--ink);
+      border: 1px solid var(--hairline);
+    }
+
+    .btn-soft:active {
+      background: #EAD8B5;
+    }
+
+    .btn-danger {
+      background: var(--alert-soft);
+      color: var(--alert);
+      border: 1.5px solid rgba(179, 38, 30, 0.4);
+    }
+
+    .btn-danger-solid {
+      background: var(--alert);
+      color: #FFFFFF;
+    }
+
+    .btn:disabled {
+      opacity: 0.42;
+      cursor: not-allowed;
+    }
+
+    .icon-btn {
+      min-width: 44px;
+      min-height: 44px;
+      padding: 0;
+      border-radius: 12px;
+      background: var(--surface-alt);
+      border: 1px solid var(--hairline);
+      color: var(--ink);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+
+    .icon-btn:active {
+      background: #E8D5B0;
+    }
+
+    .icon-btn.danger {
+      background: var(--alert-soft);
+      border-color: rgba(179, 38, 30, 0.35);
+      color: var(--alert);
+    }
+
+    .icon-btn:disabled {
+      opacity: 0.35;
+      cursor: not-allowed;
+    }
+
+    /* Form Controls */
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-bottom: 12px;
+    }
+
+    .field:last-child {
+      margin-bottom: 0;
+    }
+
+    .field-label {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--ink);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+    }
+
+    .req-tag {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--script);
+    }
+
+    .field-hint {
+      font-size: 12.5px;
+      color: var(--muted);
+      line-height: 1.45;
+      margin: 0;
+    }
+
+    .input, .textarea, .select {
+      width: 100%;
+      min-height: 46px;
+      padding: 10px 12px;
+      border-radius: var(--radius-input);
+      border: 1.5px solid var(--hairline);
+      background: #FFFFFF;
+      color: var(--ink);
+      font-size: 15px;
+      line-height: 1.5;
+    }
+
+    .textarea {
+      min-height: 92px;
+      resize: vertical;
+    }
+
+    .input.is-invalid,
+    .textarea.is-invalid,
+    .select.is-invalid {
+      border-color: var(--alert);
+      background: #FFF9F8;
+    }
+
+    .field-error {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--alert);
+      display: flex;
+      align-items: flex-start;
+      gap: 6px;
+      line-height: 1.4;
+      margin-top: 2px;
+    }
+
+    /* Choice Chips */
+    .chip-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .chip-btn {
+      min-height: 44px;
+      padding: 8px 14px;
+      border-radius: var(--radius-pill);
+      border: 1.5px solid var(--hairline);
+      background: var(--surface);
+      color: var(--ink);
+      font-size: 13.5px;
+      font-weight: 700;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .chip-btn.selected {
+      background: var(--primary);
+      color: var(--on-primary);
+      border-color: var(--primary-deep);
+    }
+
+    /* Written-state Switches (matching AdminStateSwitch) */
+    .switch-row {
+      width: 100%;
+      min-height: 52px;
+      padding: 10px 12px;
+      border-radius: var(--radius-card);
+      border: 1px solid var(--hairline);
+      background: var(--surface);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      text-align: right;
+    }
+
+    .switch-row + .switch-row {
+      margin-top: 8px;
+    }
+
+    .switch-text {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .switch-title {
+      display: block;
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--ink);
+      line-height: 1.35;
+    }
+
+    .switch-sub {
+      display: block;
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.35;
+      margin-top: 2px;
+    }
+
+    .switch-state-wrap {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    .state-badge {
+      padding: 2px 8px;
+      border-radius: var(--radius-pill);
+      font-size: 11.5px;
+      font-weight: 700;
+      border: 1px solid transparent;
+      white-space: nowrap;
+    }
+
+    .state-badge.on {
+      background: var(--success-bg);
+      color: var(--success);
+      border-color: var(--success-border);
+    }
+
+    .state-badge.off {
+      background: var(--surface-alt);
+      color: var(--muted);
+      border-color: var(--hairline);
+    }
+
+    .toggle-pill {
+      width: 46px;
+      height: 28px;
+      border-radius: 999px;
+      background: var(--surface-alt);
+      border: 1.5px solid var(--muted);
+      position: relative;
+      transition: background-color 140ms ease;
+      flex-shrink: 0;
+    }
+
+    .toggle-pill::after {
+      content: '';
+      position: absolute;
+      top: 3px;
+      right: 3px;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: var(--muted);
+      transition: transform 140ms ease, background-color 140ms ease;
+    }
+
+    .switch-row[aria-checked="true"] .toggle-pill {
+      background: var(--primary);
+      border-color: var(--primary);
+    }
+
+    .switch-row[aria-checked="true"] .toggle-pill::after {
+      background: var(--on-primary-accent);
+      transform: translateX(-18px);
+    }
+
+    /* Banners & Alerts */
+    .banner {
+      border-radius: var(--radius-card);
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      font-size: 13.5px;
+      line-height: 1.5;
+    }
+
+    .banner-success {
+      background: var(--success-bg);
+      border: 1.5px solid var(--success-border);
+      color: #1B472B;
+    }
+
+    .banner-error {
+      background: var(--alert-soft);
+      border: 2px solid var(--alert);
+      color: #5E1410;
+    }
+
+    .banner-notice {
+      background: var(--notice-bg);
+      border: 1.5px solid var(--notice-edge);
+      color: var(--ink);
+    }
+
+    .banner-title {
+      font-weight: 700;
+      font-size: 15px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 0;
+    }
+
+    /* Error Summary List (Screen 8) */
+    .error-summary-list {
+      list-style: none;
+      margin: 4px 0 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .error-summary-btn {
+      width: 100%;
+      min-height: 44px;
+      padding: 8px 10px;
+      border-radius: 10px;
+      background: #FFFFFF;
+      border: 1.5px solid rgba(179, 38, 30, 0.45);
+      color: #6B1612;
+      font-size: 13px;
+      font-weight: 700;
+      text-align: right;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .error-summary-btn:active {
+      background: var(--alert-bg);
+    }
+
+    /* RTL Progress Bar (Screen 4) — strictly fills from RIGHT to LEFT */
+    .wizard-progress-wrap {
+      background: var(--surface);
+      border: 1px solid var(--hairline);
+      border-radius: var(--radius-card);
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .wizard-progress-meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--primary);
+    }
+
+    .progress-track {
+      width: 100%;
+      height: 10px;
+      border-radius: 999px;
+      background: var(--surface-alt);
+      border: 1px solid var(--hairline);
+      overflow: hidden;
+      display: flex;
+      justify-content: flex-start; /* in dir="rtl", flex-start is the RIGHT edge */
+    }
+
+    .progress-fill {
+      height: 100%;
+      border-radius: 999px;
+      background: linear-gradient(270deg, var(--primary) 0%, var(--primary-light) 100%);
+      transition: width 220ms ease;
+    }
+
+    /* Preview Box (Announcements & Season) */
+    .visitor-preview {
+      background: #FFFFFF;
+      border: 2px solid var(--gold-ornament);
+      border-radius: var(--radius-panel);
+      overflow: hidden;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .visitor-preview-head {
+      background: var(--surface-alt);
+      padding: 6px 12px;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--muted);
+      border-bottom: 1px solid var(--hairline);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .visitor-preview-body {
+      padding: 12px;
+    }
+
+    .visitor-alert-box {
+      background: var(--alert-bg);
+      border: 1.5px solid var(--primary);
+      border-radius: 14px;
+      padding: 10px 12px;
+    }
+
+    .visitor-alert-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--primary-deep);
+      margin: 0 0 4px;
+    }
+
+    .visitor-alert-text {
+      font-size: 13.5px;
+      color: var(--ink);
+      margin: 0;
+    }
+
+    /* Mass Cards */
+    .mass-card {
+      background: var(--surface);
+      border: 1.5px solid var(--hairline);
+      border-radius: var(--radius-card);
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      transition: border-color 200ms ease, background-color 200ms ease;
+    }
+
+    .mass-card.just-updated {
+      border-color: var(--success);
+      background: #F4FBF6;
+    }
+
+    .mass-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .mass-name {
+      font-size: 15.5px;
+      font-weight: 700;
+      color: var(--ink);
+      margin: 0;
+    }
+
+    .mass-time {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--primary);
+      margin: 2px 0 0;
+    }
+
+    .mass-meta {
+      font-size: 12.5px;
+      color: var(--muted);
+      margin: 2px 0 0;
+    }
+
+    .card-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding-top: 6px;
+      border-top: 1px solid rgba(226, 201, 154, 0.7);
+    }
+
+    /* Page Editor Blocks (Screen 5 & 8) */
+    .block-card {
+      background: var(--surface);
+      border: 1.5px solid var(--hairline);
+      border-radius: var(--radius-card);
+      overflow: hidden;
+      transition: border-color 150ms ease;
+    }
+
+    .block-card.has-error {
+      border: 2px solid var(--alert);
+      background: #FFF9F8;
+    }
+
+    .block-header {
+      padding: 8px 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      background: rgba(244, 230, 204, 0.45);
+    }
+
+    .block-card.has-error .block-header {
+      background: var(--alert-soft);
+    }
+
+    .block-toggle-btn {
+      width: 100%;
+      min-width: 0;
+      min-height: 44px;
+      padding: 6px 8px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      text-align: right;
+      background: rgba(255, 255, 255, 0.55);
+    }
+
+    .block-toggle-btn:active {
+      background: rgba(110, 28, 28, 0.08);
+    }
+
+    .block-type-pill {
+      padding: 2px 8px;
+      border-radius: var(--radius-pill);
+      background: var(--primary);
+      color: var(--on-primary);
+      font-size: 11.5px;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    .block-card.has-error .block-type-pill {
+      background: var(--alert);
+    }
+
+    .block-summary-text {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--ink);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      flex: 1;
+      min-width: 0;
+    }
+
+    .block-controls {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+    }
+
+    .block-controls-arrows {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* Eastern-Arabic Date Picker Display */
+    .date-picker-wrap {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+      min-height: 46px;
+      padding: 8px 10px;
+      border-radius: var(--radius-input);
+      border: 1.5px solid var(--hairline);
+      background: #FFFFFF;
+      color: var(--ink);
+      font-size: 13.5px;
+      font-weight: 600;
+    }
+
+    .date-picker-wrap input[type="date"] {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      opacity: 0;
+      cursor: pointer;
+      margin: 0;
+    }
+
+    .block-body {
+      padding: 12px;
+      border-top: 1px solid var(--hairline);
+    }
+
+    .list-item-row {
+      background: #FFFFFF;
+      border: 1px solid var(--hairline);
+      border-radius: 12px;
+      padding: 8px;
+      margin-bottom: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .list-item-row.has-error {
+      border-color: var(--alert);
+      background: #FFF9F8;
+    }
+
+    .list-item-actions {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    /* Sticky Action Bar */
+    .sticky-footer {
+      position: sticky;
+      bottom: 0;
+      z-index: 15;
+      background: rgba(251, 243, 228, 0.97);
+      border-top: 1px solid var(--hairline);
+      padding: 10px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .btn-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .btn-row > .btn {
+      flex: 1 1 130px;
+    }
+
+    /* Modal Dialog (Screen 7: Delete Confirmation) */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 100;
+      background: rgba(43, 26, 16, 0.62);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+
+    .modal-backdrop[hidden] {
+      display: none;
+    }
+
+    .modal-dialog {
+      width: 100%;
+      max-width: 332px;
+      background: var(--surface);
+      border: 2px solid var(--hairline);
+      border-radius: var(--radius-panel);
+      padding: 18px 16px;
+      box-shadow: 0 20px 44px rgba(43, 26, 16, 0.35);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .modal-title {
+      margin: 0;
+      font-size: 17px;
+      font-weight: 700;
+      color: var(--ink);
+      line-height: 1.35;
+    }
+
+    .modal-body {
+      margin: 0;
+      font-size: 14px;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+
+    /* Snackbar (Screen 7: 10-second Undo) */
+    .snackbar-wrap {
+      position: fixed;
+      bottom: 14px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: calc(100% - 24px);
+      max-width: 336px;
+      z-index: 90;
+    }
+
+    .snackbar-wrap[hidden] {
+      display: none;
+    }
+
+    .snackbar {
+      background: #2B1A10;
+      color: #FFF9EE;
+      border-radius: 16px;
+      padding: 8px 12px;
+      box-shadow: 0 10px 26px rgba(0, 0, 0, 0.32);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      border: 1px solid rgba(231, 194, 122, 0.35);
+    }
+
+    .snackbar-msg {
+      font-size: 13.5px;
+      font-weight: 600;
+      line-height: 1.35;
+      flex: 1;
+    }
+
+    .snackbar-undo {
+      min-height: 44px;
+      min-width: 72px;
+      padding: 6px 14px;
+      border-radius: var(--radius-pill);
+      background: var(--on-primary-accent);
+      color: #2B1A10;
+      font-size: 14px;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    /* Summary Bullet List for Season Preview */
+    .diff-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .diff-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      padding: 8px 10px;
+      border-radius: 12px;
+      background: #FFFFFF;
+      border: 1px solid var(--hairline);
+      font-size: 13.5px;
+      line-height: 1.45;
+    }
+
+    .diff-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      margin-top: 6px;
+      flex-shrink: 0;
+    }
+
+    .diff-dot.on { background: var(--success); }
+    .diff-dot.hide { background: var(--script); }
+    .diff-dot.info { background: var(--gold-text); }
+
+    /* Shortcut card for "زي السنة اللي فاتت" */
+    .shortcut-box {
+      background: linear-gradient(135deg, #FFF7E4 0%, #F7E9CB 100%);
+      border: 2px solid var(--gold-ornament);
+      border-radius: var(--radius-card);
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .shortcut-title {
+      font-size: 14.5px;
+      font-weight: 700;
+      color: var(--primary-deep);
+      margin: 0;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* Divider */
+    .divider {
+      height: 1px;
+      background: var(--hairline);
+      margin: 4px 0;
+      border: none;
+    }
+
+    /* Two-column compact helper for time/date inputs */
+    .grid-2 {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 8px;
+    }
+
+    .grid-2 > .field {
+      min-width: 0;
+    }
+
+    input[type="date"].input {
+      min-width: 0;
+      max-width: 100%;
+      padding: 8px 8px;
+      font-size: 13.5px;
+    }
+
+    .time-picker-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 6px;
+    }
+
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      border: 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="phone-shell" id="app-shell">
+    <header class="topbar" id="topbar"></header>
+    <main class="main-content" id="main-content" tabindex="-1"></main>
+    <div id="sticky-slot"></div>
+  </div>
+
+  <!-- Screen 7: Delete Confirmation Modal -->
+  <div class="modal-backdrop" id="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="modal-title" hidden>
+    <div class="modal-dialog">
+      <h2 class="modal-title" id="modal-title"></h2>
+      <p class="modal-body" id="modal-body"></p>
+      <div class="btn-row">
+        <button type="button" class="btn btn-soft" id="modal-cancel">لأ، خليها</button>
+        <button type="button" class="btn btn-danger-solid" id="modal-confirm">أيوه، امسح</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Screen 7: 10-second Undo Snackbar -->
+  <div class="snackbar-wrap" id="snackbar-wrap" role="status" aria-live="polite" hidden>
+    <div class="snackbar">
+      <span class="snackbar-msg" id="snackbar-msg"></span>
+      <button type="button" class="snackbar-undo" id="snackbar-undo">تراجع</button>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      'use strict';
+
+      // =========================================================================
+      // Helpers: Eastern Arabic numerals (٠١٢٣٤٥٦٧٨٩), Escaping, IDs
+      // =========================================================================
+      const AR_DIGITS = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'];
+
+      function toArabicDigits(input) {
+        return String(input == null ? '' : input).replace(/[0-9]/g, function (d) {
+          return AR_DIGITS[Number(d)];
+        });
+      }
+
+      function toLatinDigits(input) {
+        return String(input == null ? '' : input).replace(/[٠-٩]/g, function (d) {
+          return String(AR_DIGITS.indexOf(d));
+        });
+      }
+
+      function esc(str) {
+        return String(str == null ? '' : str)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#39;');
+      }
+
+      function uid(prefix) {
+        return prefix + '-' + Math.random().toString(36).slice(2, 8);
+      }
+
+      function deepClone(obj) {
+        return JSON.parse(JSON.stringify(obj));
+      }
+
+      function formatTimeAr(h24, m) {
+        const period = h24 >= 12 ? 'م' : 'ص';
+        let h12 = h24 % 12;
+        if (h12 === 0) h12 = 12;
+        const hh = h12 < 10 ? '0' + h12 : String(h12);
+        const mm = m < 10 ? '0' + m : String(m);
+        return toArabicDigits(hh + ':' + mm) + ' ' + period;
+      }
+
+      function formatDateAr(iso) {
+        if (!iso) return 'مش متحدد';
+        const parts = iso.split('-');
+        if (parts.length !== 3) return toArabicDigits(iso);
+        const months = [
+          'يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو',
+          'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'
+        ];
+        const y = Number(parts[0]);
+        const mIdx = Number(parts[1]) - 1;
+        const d = Number(parts[2]);
+        return toArabicDigits(d) + ' ' + (months[mIdx] || parts[1]) + ' ' + toArabicDigits(y);
+      }
+
+      function renderDatePicker(id, value, ariaLabel) {
+        return '<div class="date-picker-wrap">' +
+          '<span id="' + esc(id) + '-label">' + esc(formatDateAr(value)) + '</span>' +
+          '<span aria-hidden="true" style="color:var(--muted);display:inline-flex;">' + ICONS.calendar + '</span>' +
+          '<input type="date" id="' + esc(id) + '" value="' + esc(value || '') + '" aria-label="' + esc(ariaLabel) + '" />' +
+        '</div>';
+      }
+
+      // =========================================================================
+      // SVG Icons (Consistent stroke 1.9, vector only, zero emoji chrome)
+      // =========================================================================
+      const ICONS = {
+        megaphone: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg>',
+        clock: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15.5 14"/></svg>',
+        page: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>',
+        calendar: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="3"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>',
+        settings: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9c.26.6.85 1 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>',
+        check: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>',
+        alert: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>',
+        sparkles: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v3m0 12v3M3 12h3m12 0h3M5.6 5.6l2.1 2.1m8.6 8.6l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/></svg>'
+      };
+
+      // =========================================================================
+      // Persistence Keys (Mock localStorage only — ZERO Firebase)
+      // =========================================================================
+      const STORAGE_DATA_KEY = 'church_admin_proto_data_v1';
+      const STORAGE_SEASON_DRAFT_KEY = 'church_admin_proto_season_draft_v1';
+
+      // =========================================================================
+      // Initial Mock Data (explicitly labeled «مثال»)
+      // =========================================================================
+      function createDefaultData() {
+        return {
+          announcements: [
+            {
+              id: 'ann-1',
+              title: 'مثال: تنبيه بخصوص ميعاد عشية الجمعة',
+              body: 'العشية تبدأ الساعة ٦:٣٠ مساءً بالكنيسة الكبرى.',
+              timing: 'now',
+              startDate: '2026-11-22',
+              endDate: '2026-11-29',
+              sendPush: true
+            },
+            {
+              id: 'ann-2',
+              title: 'مثال: فتح باب الحجز لرحلة الشباب',
+              body: 'التسجيل مع خدام الأسرة بعد القداس التاني.',
+              timing: 'scheduled',
+              startDate: '2026-11-25',
+              endDate: '2026-12-05',
+              sendPush: false
+            }
+          ],
+          masses: [
+            { id: 'm-1', name: 'مثال: القداس الإلهي الأول', weekday: 'الأحد', startH: 7, startM: 0, endH: 9, endM: 30, place: 'الكنيسة الكبرى' },
+            { id: 'm-2', name: 'مثال: القداس الإلهي الثاني', weekday: 'الأحد', startH: 9, startM: 30, endH: 11, endM: 30, place: 'الكنيسة الكبرى' },
+            { id: 'm-3', name: 'مثال: قداس الأربعاء', weekday: 'الأربعاء', startH: 8, startM: 0, endH: 10, endM: 0, place: 'مذبح السيدة العذراء' },
+            { id: 'm-4', name: 'مثال: قداس الجمعة', weekday: 'الجمعة', startH: 7, startM: 30, endH: 10, endM: 0, place: 'الكنيسة الكبرى' },
+            { id: 'm-5', name: 'مثال: عشية السبت', weekday: 'السبت', startH: 18, startM: 30, endH: 20, endM: 0, place: 'الكنيسة الكبرى' }
+          ],
+          activeSeason: null,
+          pages: [
+            {
+              id: 'page-new',
+              isNewTemplate: true,
+              title: '',
+              subtitle: '',
+              visible: true,
+              blocks: [
+                {
+                  id: 'b-new-1',
+                  type: 'text',
+                  heading: '',
+                  body: '',
+                  expanded: true
+                }
+              ]
+            },
+            {
+              id: 'page-donations',
+              title: 'مثال: طرق التبرع للكنيسة',
+              subtitle: 'حسابات الكنيسة الرسمية المعتمدة',
+              visible: true,
+              blocks: [
+                {
+                  id: 'b-don-1',
+                  type: 'text',
+                  heading: 'بيانات الحساب البنكي',
+                  body: 'مثال: بنك مصر — فرع العصافرة، باسم كنيسة القديسين مكسيموس ودوماديوس.',
+                  expanded: false
+                },
+                {
+                  id: 'b-don-2',
+                  type: 'list',
+                  title: 'القنوات المتاحة',
+                  style: 'bullet',
+                  items: ['تحويل بنكي لحساب الكنيسة (مثال)', 'إنستاباي الرسمي (مثال)'],
+                  expanded: false
+                },
+                {
+                  id: 'b-don-3',
+                  type: 'details',
+                  summary: 'مثال: إزاي أخد إيصال بالتبرع؟',
+                  body: 'ابعت صورة التحويل لسكرتارية الكنيسة أو سلّمها في المكتب بعد القداس.',
+                  expanded: false
+                }
+              ]
+            },
+            {
+              id: 'page-trip',
+              title: 'مثال: رحلة الصيف للأسرة',
+              subtitle: 'التفاصيل والأوراق المطلوبة',
+              visible: true,
+              blocks: [
+                {
+                  id: 'b-trip-1',
+                  type: 'text',
+                  heading: 'تفاصيل التجمع والتحرك',
+                  body: 'التجمع أمام باب الكنيسة الساعة ٦:٠٠ صباحًا والتحرك بالأتوبيس.',
+                  expanded: false
+                },
+                {
+                  id: 'b-trip-2',
+                  type: 'list',
+                  title: 'الأوراق المطلوبة للحجز',
+                  style: 'numbered',
+                  items: ['صورة البطاقة الشخصية', 'موافقة ولي الأمر للشباب', 'سداد رسوم الاشتراك (مثال)'],
+                  expanded: false
+                },
+                {
+                  id: 'b-trip-3',
+                  type: 'details',
+                  summary: 'شروط الإلغاء واسترداد الاشتراك',
+                  body: 'يمكن الاعتذار قبل ميعاد الرحلة بأسبوع لاسترداد المبلغ كاملًا.',
+                  expanded: false
+                }
+              ]
+            }
+          ],
+          recentEdits: [
+            { title: 'مثال: تعديل ميعاد قداس الجمعة', meta: 'منذ ساعتين · خادم الكنيسة (مثال)' },
+            { title: 'مثال: نشر تنويه عشية الجمعة', meta: 'أمس · خادم الكنيسة (مثال)' },
+            { title: 'مثال: تحديث صفحة طرق التبرع', meta: 'من ٣ أيام · خادم الكنيسة (مثال)' }
+          ],
+          advanced: {
+            sections: {
+              clinics: false,
+              meetings: true,
+              dailyVerse: true,
+              englishEnabled: false
+            },
+            installBanner: true,
+            errorReporting: true,
+            appCheckActive: true
+          }
+        };
+      }
+
+      const SEASONS_CATALOG = [
+        {
+          key: 'holy_week',
+          name: 'مثال: أسبوع الآلام (البصخة المقدسة)',
+          defaultStart: '2027-04-25',
+          defaultEnd: '2027-05-01',
+          defaults: {
+            replaceRegular: true,
+            hideMeetings: true,
+            hideClinics: true,
+            weddingOff: true,
+            calmHero: true,
+            seasonTheme: true,
+            liveUrl: '',
+            pdfUrl: ''
+          },
+          lastYear: {
+            yearLabel: 'السنة اللي فاتت (٢٠٢٦ — مثال)',
+            summary: 'الجدول الموسمي بدل العادي + إخفاء الاجتماعات والعيادات وحجز الأفراح + تهدئة الواجهة وثيم البصخة',
+            options: {
+              replaceRegular: true,
+              hideMeetings: true,
+              hideClinics: true,
+              weddingOff: true,
+              calmHero: true,
+              seasonTheme: true,
+              liveUrl: 'https://youtube.com/live/example-holy-week',
+              pdfUrl: 'https://drive.google.com/file/d/example-pascha-booklet'
+            }
+          }
+        },
+        {
+          key: 'pascha',
+          name: 'مثال: عيد القيامة المجيد والخماسين',
+          defaultStart: '2027-05-02',
+          defaultEnd: '2027-05-04',
+          defaults: {
+            replaceRegular: true,
+            hideMeetings: false,
+            hideClinics: false,
+            weddingOff: false,
+            calmHero: false,
+            seasonTheme: true,
+            liveUrl: '',
+            pdfUrl: ''
+          },
+          lastYear: {
+            yearLabel: 'السنة اللي فاتت (٢٠٢٦ — مثال)',
+            summary: 'صلوات العيد بدل الجدول العادي + تفعيل ألوان عيد القيامة',
+            options: {
+              replaceRegular: true,
+              hideMeetings: false,
+              hideClinics: false,
+              weddingOff: false,
+              calmHero: false,
+              seasonTheme: true,
+              liveUrl: 'https://youtube.com/live/example-easter',
+              pdfUrl: ''
+            }
+          }
+        },
+        {
+          key: 'kiahk',
+          name: 'مثال: شهر كيهك (التسبحة الكيهكية)',
+          defaultStart: '2026-12-10',
+          defaultEnd: '2027-01-07',
+          defaults: {
+            replaceRegular: false,
+            hideMeetings: false,
+            hideClinics: false,
+            weddingOff: true,
+            calmHero: false,
+            seasonTheme: true,
+            liveUrl: '',
+            pdfUrl: ''
+          },
+          lastYear: {
+            yearLabel: 'السنة اللي فاتت (٢٠٢٥ — مثال)',
+            summary: 'الجدول العادي مستمر مع تسبحة كيهك + إخفاء حجز الأفراح + ألوان الصوم',
+            options: {
+              replaceRegular: false,
+              hideMeetings: false,
+              hideClinics: false,
+              weddingOff: true,
+              calmHero: false,
+              seasonTheme: true,
+              liveUrl: '',
+              pdfUrl: 'https://drive.google.com/file/d/example-kiahk-schedule'
+            }
+          }
+        },
+        {
+          key: 'revival_maximus',
+          name: 'مثال: نهضة القديسين مكسيموس ودوماديوس',
+          defaultStart: '2027-01-14',
+          defaultEnd: '2027-01-22',
+          defaults: {
+            replaceRegular: false,
+            hideMeetings: false,
+            hideClinics: false,
+            weddingOff: false,
+            calmHero: false,
+            seasonTheme: true,
+            liveUrl: '',
+            pdfUrl: ''
+          },
+          lastYear: {
+            yearLabel: 'السنة اللي فاتت (٢٠٢٦ — مثال)',
+            summary: 'العشيات والنهضة إضافة على الجدول العادي + كتيّب المتكلمين PDF',
+            options: {
+              replaceRegular: false,
+              hideMeetings: false,
+              hideClinics: false,
+              weddingOff: false,
+              calmHero: false,
+              seasonTheme: true,
+              liveUrl: '',
+              pdfUrl: 'https://drive.google.com/file/d/example-revival-speakers'
+            }
+          }
+        }
+      ];
+
+      function loadData() {
+        try {
+          const raw = localStorage.getItem(STORAGE_DATA_KEY);
+          if (raw) return JSON.parse(raw);
+        } catch (_) {}
+        return createDefaultData();
+      }
+
+      function saveData() {
+        try {
+          localStorage.setItem(STORAGE_DATA_KEY, JSON.stringify(state.data));
+        } catch (_) {}
+      }
+
+      function loadSeasonDraft() {
+        try {
+          const raw = localStorage.getItem(STORAGE_SEASON_DRAFT_KEY);
+          if (raw) return JSON.parse(raw);
+        } catch (_) {}
+        return null;
+      }
+
+      function saveSeasonDraft(draft) {
+        try {
+          if (draft) {
+            localStorage.setItem(STORAGE_SEASON_DRAFT_KEY, JSON.stringify(draft));
+          } else {
+            localStorage.removeItem(STORAGE_SEASON_DRAFT_KEY);
+          }
+        } catch (_) {}
+      }
+
+      // =========================================================================
+      // App State
+      // =========================================================================
+      const state = {
+        screen: 'home', // home | announcement | masses | mass-edit | season | page | advanced
+        data: loadData(),
+
+        // Screen 2: Announcement state
+        ann: {
+          mode: 'edit', // edit | preview | confirmed
+          editingId: null,
+          title: '',
+          body: '',
+          timing: 'now', // now | scheduled
+          startDate: '2026-11-22',
+          endDate: '2026-11-29',
+          sendPush: true,
+          errorTitle: '',
+          lastPublished: null
+        },
+
+        // Screen 3: Masses state
+        massesUi: {
+          editingId: null, // null = new, id = edit existing
+          form: null,
+          errorName: '',
+          bannerText: '',
+          justUpdatedId: null
+        },
+
+        // Screen 4: Season Wizard state (persisted in localStorage)
+        seasonDraft: loadSeasonDraft(),
+        seasonConfirmed: null,
+        seasonError: '',
+
+        // Screen 5 & 8: Page Editor state
+        pageUi: {
+          selectedPageId: 'page-new',
+          workingPage: null,
+          showErrors: false,
+          errors: [], // { id, blockId, fieldKey, inputId, message }
+          savedBanner: '',
+          focusTargetId: null
+        },
+
+        // Screen 7: Modal + Undo Snackbar
+        modal: null,
+        snackbar: {
+          visible: false,
+          msg: '',
+          secondsLeft: 10,
+          timer: null,
+          undoFn: null
+        }
+      };
+
+      function getSeasonCatalogItem(key) {
+        return SEASONS_CATALOG.find(function (s) { return s.key === key; }) || SEASONS_CATALOG[0];
+      }
+
+      function createFreshSeasonDraft(seasonKey) {
+        const cat = getSeasonCatalogItem(seasonKey || 'holy_week');
+        return {
+          step: 1, // 1..3
+          seasonKey: cat.key,
+          startDate: cat.defaultStart,
+          endDate: cat.defaultEnd,
+          usedLastYear: false,
+          options: deepClone(cat.defaults)
+        };
+      }
+
+      function persistSeasonDraft() {
+        saveSeasonDraft(state.seasonDraft);
+      }
+
+      function addRecentEdit(title) {
+        state.data.recentEdits.unshift({
+          title: title,
+          meta: 'دلوقتي حالًا · تجربة على النموذج'
+        });
+        if (state.data.recentEdits.length > 6) {
+          state.data.recentEdits.length = 6;
+        }
+        saveData();
+      }
+
+      // =========================================================================
+      // Screen 7: Delete Confirmation + 10-second Undo Snackbar
+      // =========================================================================
+      const modalEl = document.getElementById('confirm-modal');
+      const modalTitleEl = document.getElementById('modal-title');
+      const modalBodyEl = document.getElementById('modal-body');
+      const modalCancelEl = document.getElementById('modal-cancel');
+      const modalConfirmEl = document.getElementById('modal-confirm');
+
+      const snackWrapEl = document.getElementById('snackbar-wrap');
+      const snackMsgEl = document.getElementById('snackbar-msg');
+      const snackUndoEl = document.getElementById('snackbar-undo');
+
+      let lastFocusedBeforeModal = null;
+
+      function openConfirmModal(opts) {
+        lastFocusedBeforeModal = document.activeElement;
+        state.modal = opts;
+        modalTitleEl.textContent = opts.title;
+        modalBodyEl.textContent = opts.body;
+        modalConfirmEl.textContent = opts.confirmLabel || 'أيوه، امسح';
+        modalCancelEl.textContent = opts.cancelLabel || 'لأ، خليها';
+        modalEl.hidden = false;
+        modalCancelEl.focus();
+      }
+
+      function closeConfirmModal() {
+        modalEl.hidden = true;
+        state.modal = null;
+        if (lastFocusedBeforeModal && typeof lastFocusedBeforeModal.focus === 'function') {
+          lastFocusedBeforeModal.focus();
+        }
+      }
+
+      modalCancelEl.addEventListener('click', closeConfirmModal);
+      modalConfirmEl.addEventListener('click', function () {
+        const fn = state.modal && state.modal.onConfirm;
+        closeConfirmModal();
+        if (typeof fn === 'function') fn();
+      });
+
+      modalEl.addEventListener('click', function (e) {
+        if (e.target === modalEl) closeConfirmModal();
+      });
+
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && !modalEl.hidden) {
+          closeConfirmModal();
+        }
+      });
+
+      function hideSnackbar() {
+        if (state.snackbar.timer) {
+          clearInterval(state.snackbar.timer);
+          state.snackbar.timer = null;
+        }
+        state.snackbar.visible = false;
+        state.snackbar.undoFn = null;
+        snackWrapEl.hidden = true;
+      }
+
+      function showUndoSnackbar(baseMsg, undoFn) {
+        hideSnackbar();
+        state.snackbar.visible = true;
+        state.snackbar.msg = baseMsg;
+        state.snackbar.secondsLeft = 10;
+        state.snackbar.undoFn = undoFn;
+        updateSnackbarText();
+        snackWrapEl.hidden = false;
+
+        state.snackbar.timer = setInterval(function () {
+          state.snackbar.secondsLeft -= 1;
+          if (state.snackbar.secondsLeft <= 0) {
+            hideSnackbar();
+          } else {
+            updateSnackbarText();
+          }
+        }, 1000);
+      }
+
+      function updateSnackbarText() {
+        snackMsgEl.textContent = state.snackbar.msg + ' (' + toArabicDigits(state.snackbar.secondsLeft) + ' ث)';
+      }
+
+      snackUndoEl.addEventListener('click', function () {
+        const fn = state.snackbar.undoFn;
+        hideSnackbar();
+        if (typeof fn === 'function') fn();
+      });
+
+      // =========================================================================
+      // Navigation
+      // =========================================================================
+      function go(screenName) {
+        state.screen = screenName;
+        if (screenName === 'announcement') {
+          state.ann.mode = 'edit';
+          state.ann.errorTitle = '';
+        }
+        if (screenName === 'masses') {
+          state.massesUi.bannerText = '';
+          state.massesUi.justUpdatedId = null;
+        }
+        if (screenName === 'season') {
+          state.seasonConfirmed = null;
+          state.seasonError = '';
+          if (!state.seasonDraft) {
+            state.seasonDraft = createFreshSeasonDraft('holy_week');
+            persistSeasonDraft();
+          }
+        }
+        if (screenName === 'page') {
+          loadWorkingPage(state.pageUi.selectedPageId || 'page-new');
+        }
+        render();
+        window.scrollTo({ top: 0, behavior: 'auto' });
+      }
+
+      function loadWorkingPage(pageId) {
+        const found = state.data.pages.find(function (p) { return p.id === pageId; }) || state.data.pages[0];
+        state.pageUi.selectedPageId = found.id;
+        state.pageUi.workingPage = deepClone(found);
+        state.pageUi.showErrors = false;
+        state.pageUi.errors = [];
+        state.pageUi.savedBanner = '';
+        state.pageUi.focusTargetId = null;
+      }
+
+      // =========================================================================
+      // Topbar Renderer
+      // =========================================================================
+      function renderTopbar() {
+        const topbar = document.getElementById('topbar');
+        const titles = {
+          home: { t: 'إدارة موقع الكنيسة', s: 'لوحة الخادم' },
+          announcement: { t: 'نشر إعلان', s: state.ann.mode === 'preview' ? 'مراجعة قبل النشر' : (state.ann.mode === 'confirmed' ? 'تم النشر' : 'اكتب الإعلان') },
+          masses: { t: 'مواعيد القداسات', s: 'الجدول الأسبوعي' },
+          'mass-edit': { t: state.massesUi.editingId ? 'تعديل قداس' : 'إضافة قداس جديد', s: 'مواعيد القداسات' },
+          season: { t: 'تفعيل موسم', s: state.seasonConfirmed ? 'تم التطبيق' : ('خطوة ' + toArabicDigits(state.seasonDraft ? state.seasonDraft.step : 1) + ' من ' + toArabicDigits(3)) },
+          page: { t: 'إضافة وتعديل صفحة', s: 'فقرات الصفحة' },
+          advanced: { t: 'إعدادات متقدمة', s: 'إعدادات نادرة للموقع' }
+        };
+        const meta = titles[state.screen] || titles.home;
+
+        let backHtml = '';
+        if (state.screen !== 'home') {
+          backHtml = '<button type="button" class="back-btn" id="btn-back" aria-label="رجوع">' +
+            '<span dir="ltr" aria-hidden="true">›</span> <span>رجوع</span>' +
+            '</button>';
+        }
+
+        topbar.innerHTML =
+          '<div class="topbar-start">' +
+            backHtml +
+            '<div class="topbar-title-wrap">' +
+              '<h1 class="topbar-title">' + esc(meta.t) + '</h1>' +
+              '<span class="topbar-sub">' + esc(meta.s) + '</span>' +
+            '</div>' +
+          '</div>' +
+          '<span class="sample-pill">بيانات مثال</span>';
+
+        const backBtn = document.getElementById('btn-back');
+        if (backBtn) {
+          backBtn.addEventListener('click', function () {
+            if (state.screen === 'mass-edit') {
+              go('masses');
+            } else if (state.screen === 'announcement' && state.ann.mode === 'preview') {
+              state.ann.mode = 'edit';
+              render();
+            } else {
+              go('home');
+            }
+          });
+        }
+      }
+
+      // =========================================================================
+      // Screen 1: Home («عايز تعمل إيه؟»)
+      // =========================================================================
+      function renderHome(main, sticky) {
+        main.classList.add('home-content');
+        sticky.innerHTML = '';
+
+        const draft = state.seasonDraft;
+        const activeSeason = state.data.activeSeason;
+        let seasonSub = 'أسبوع الآلام، الأعياد، الصوم — بيتجهز مرة في السنة';
+        let seasonBadge = '<span class="task-badge">موسمي</span>';
+        let seasonExtraClass = '';
+
+        if (draft) {
+          const cat = getSeasonCatalogItem(draft.seasonKey);
+          seasonSub = 'موقوف عند خطوة ' + toArabicDigits(draft.step) + ' من ' + toArabicDigits(3) + ' (' + cat.name.replace('مثال: ', '') + ')';
+          seasonBadge = '<span class="task-badge draft-tag">كمّل</span>';
+          seasonExtraClass = ' has-draft';
+        } else if (activeSeason) {
+          seasonSub = 'شغّال دلوقتي: ' + activeSeason.name;
+          seasonBadge = '<span class="task-badge active-season-tag">مفعّل</span>';
+        }
+
+        const recentHtml = state.data.recentEdits.slice(0, 4).map(function (item) {
+          return '<li class="recent-item">' +
+            '<div>' +
+              '<span class="recent-title">' + esc(toArabicDigits(item.title)) + '</span>' +
+              '<span class="recent-meta">' + esc(toArabicDigits(item.meta)) + '</span>' +
+            '</div>' +
+          '</li>';
+        }).join('');
+
+        main.innerHTML =
+          '<div>' +
+            '<h2 class="page-heading">عايز تعمل إيه؟</h2>' +
+            '<p class="page-lead">اختار المهمة وهنمشي معاك خطوة بخطوة</p>' +
+          '</div>' +
+
+          '<section class="tasks-stack" aria-label="المهام الرئيسية">' +
+            // Daily Task 1: Announcement
+            '<button type="button" class="task-card task-daily" id="go-announcement">' +
+              '<span class="task-icon">' + ICONS.megaphone + '</span>' +
+              '<span class="task-body">' +
+                '<span class="task-title-row">' +
+                  '<span class="task-title">انشر إعلان</span>' +
+                  '<span class="task-badge daily-tag">شغل يومي</span>' +
+                '</span>' +
+                '<span class="task-sub">اكتب تنبيه يظهر في أول الموقع وإشعار للزوار</span>' +
+              '</span>' +
+              '<span class="task-arrow" dir="ltr" aria-hidden="true">‹</span>' +
+            '</button>' +
+
+            // Daily Task 2: Mass Time
+            '<button type="button" class="task-card task-daily" id="go-masses">' +
+              '<span class="task-icon">' + ICONS.clock + '</span>' +
+              '<span class="task-body">' +
+                '<span class="task-title-row">' +
+                  '<span class="task-title">عدّل وقت قداس</span>' +
+                  '<span class="task-badge daily-tag">شغل يومي</span>' +
+                '</span>' +
+                '<span class="task-sub">مواعيد قداسات الأسبوع (' + toArabicDigits(state.data.masses.length) + ' قداسات مثال)</span>' +
+              '</span>' +
+              '<span class="task-arrow" dir="ltr" aria-hidden="true">‹</span>' +
+            '</button>' +
+
+            // Task 3: Add Page
+            '<button type="button" class="task-card task-secondary" id="go-page">' +
+              '<span class="task-icon">' + ICONS.page + '</span>' +
+              '<span class="task-body">' +
+                '<span class="task-title-row">' +
+                  '<span class="task-title">أضف صفحة</span>' +
+                '</span>' +
+                '<span class="task-sub">صفحة جديدة أو تعديل صفحة مثل التبرعات أو رحلة</span>' +
+              '</span>' +
+              '<span class="task-arrow" dir="ltr" aria-hidden="true">‹</span>' +
+            '</button>' +
+
+            // Task 4 (Rare/Complex): Activate Season
+            '<button type="button" class="task-card task-rare' + seasonExtraClass + '" id="go-season">' +
+              '<span class="task-icon">' + ICONS.calendar + '</span>' +
+              '<span class="task-body">' +
+                '<span class="task-title-row">' +
+                  '<span class="task-title">فعّل موسم</span>' +
+                  seasonBadge +
+                '</span>' +
+                '<span class="task-sub">' + esc(seasonSub) + '</span>' +
+              '</span>' +
+              '<span class="task-arrow" dir="ltr" aria-hidden="true">‹</span>' +
+            '</button>' +
+          '</section>' +
+
+          '<section aria-labelledby="recent-heading">' +
+            '<h3 class="section-heading" id="recent-heading">آخر التعديلات</h3>' +
+            '<div class="card card-tight">' +
+              '<ul class="recent-list">' + recentHtml + '</ul>' +
+            '</div>' +
+          '</section>' +
+
+          '<button type="button" class="advanced-link-btn" id="go-advanced">' +
+            '<span style="display:inline-flex;align-items:center;gap:8px;">' + ICONS.settings + ' <span>متقدم — إعدادات نادرة للموقع</span></span>' +
+            '<span dir="ltr" aria-hidden="true">‹</span>' +
+          '</button>';
+
+        document.getElementById('go-announcement').addEventListener('click', function () {
+          state.ann = {
+            mode: 'edit',
+            editingId: null,
+            title: '',
+            body: '',
+            timing: 'now',
+            startDate: '2026-11-22',
+            endDate: '2026-11-29',
+            sendPush: true,
+            errorTitle: '',
+            lastPublished: null
+          };
+          go('announcement');
+        });
+        document.getElementById('go-masses').addEventListener('click', function () { go('masses'); });
+        document.getElementById('go-page').addEventListener('click', function () {
+          state.pageUi.selectedPageId = 'page-new';
+          go('page');
+        });
+        document.getElementById('go-season').addEventListener('click', function () { go('season'); });
+        document.getElementById('go-advanced').addEventListener('click', function () { go('advanced'); });
+      }
+
+      // =========================================================================
+      // Screen 2: Announcement Editor (Edit → Preview → Publish → Confirm)
+      // =========================================================================
+      function renderAnnouncement(main, sticky) {
+        main.classList.remove('home-content');
+
+        // Confirmed view
+        if (state.ann.mode === 'confirmed' && state.ann.lastPublished) {
+          const pub = state.ann.lastPublished;
+          sticky.innerHTML = '';
+          main.innerHTML =
+            '<div class="banner banner-success" role="status">' +
+              '<p class="banner-title">' + ICONS.check + ' <span>تم نشر الإعلان للزوار!</span></p>' +
+              '<span>الإعلان بقى ظاهر في أعلى الصفحة الرئيسية للموقع دلوقتي.</span>' +
+            '</div>' +
+            '<div class="visitor-preview">' +
+              '<div class="visitor-preview-head">' +
+                '<span>اللي الزائر بيشوفه دلوقتي</span>' +
+                '<span>' + (pub.timing === 'now' ? 'ظاهر فورًا' : ('من ' + formatDateAr(pub.startDate))) + '</span>' +
+              '</div>' +
+              '<div class="visitor-preview-body">' +
+                '<div class="visitor-alert-box">' +
+                  '<p class="visitor-alert-title">' + esc(toArabicDigits(pub.title)) + '</p>' +
+                  (pub.body ? '<p class="visitor-alert-text">' + esc(toArabicDigits(pub.body)) + '</p>' : '') +
+                '</div>' +
+                (pub.sendPush ? '<p class="field-hint" style="margin-top:8px;">واتبعت كمان إشعار تنبيه للمشتركين في التطبيق.</p>' : '') +
+              '</div>' +
+            '</div>' +
+            '<div class="btn-row" style="margin-top:4px;">' +
+              '<button type="button" class="btn btn-primary" id="ann-done-home">رجوع للرئيسية</button>' +
+              '<button type="button" class="btn btn-secondary" id="ann-another">انشر إعلان تاني</button>' +
+            '</div>';
+
+          document.getElementById('ann-done-home').addEventListener('click', function () { go('home'); });
+          document.getElementById('ann-another').addEventListener('click', function () {
+            state.ann = {
+              mode: 'edit', editingId: null, title: '', body: '',
+              timing: 'now', startDate: '2026-11-22', endDate: '2026-11-29',
+              sendPush: true, errorTitle: '', lastPublished: null
+            };
+            render();
+          });
+          return;
+        }
+
+        // Preview view (before explicit publish)
+        if (state.ann.mode === 'preview') {
+          main.innerHTML =
+            '<div class="banner banner-notice">' +
+              '<p class="banner-title">راجع شكل الإعلان قبل ما تنشره</p>' +
+              '<span>لسه ما اتنشرش للناس — لو الشكل تمام اضغط «انشر الإعلان دلوقتي».</span>' +
+            '</div>' +
+            '<div class="visitor-preview">' +
+              '<div class="visitor-preview-head">' +
+                '<span>معاينة في أعلى صفحة الكنيسة</span>' +
+                '<span>' + (state.ann.timing === 'now' ? 'يظهر فورًا' : (formatDateAr(state.ann.startDate) + ' – ' + formatDateAr(state.ann.endDate))) + '</span>' +
+              '</div>' +
+              '<div class="visitor-preview-body">' +
+                '<div class="visitor-alert-box">' +
+                  '<p class="visitor-alert-title">' + esc(toArabicDigits(state.ann.title)) + '</p>' +
+                  (state.ann.body ? '<p class="visitor-alert-text">' + esc(toArabicDigits(state.ann.body)) + '</p>' : '<p class="field-hint">(بدون تفاصيل إضافية)</p>') +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="card card-tight">' +
+              '<div style="font-size:13.5px;display:flex;flex-direction:column;gap:6px;">' +
+                '<div><strong>وقت الظهور:</strong> ' + (state.ann.timing === 'now' ? 'دلوقتي على طول' : ('من ' + formatDateAr(state.ann.startDate) + ' لحد ' + formatDateAr(state.ann.endDate))) + '</div>' +
+                '<div><strong>إشعار على الموبايل:</strong> ' + (state.ann.sendPush ? 'أيوه، هيتبعت إشعار للمشتركين' : 'لأ، يظهر في الموقع بس') + '</div>' +
+              '</div>' +
+            '</div>';
+
+          sticky.innerHTML =
+            '<div class="sticky-footer">' +
+              '<button type="button" class="btn btn-primary btn-block" id="ann-publish-btn">انشر الإعلان دلوقتي</button>' +
+              '<button type="button" class="btn btn-soft btn-sm btn-block" id="ann-back-edit"><span dir="ltr" aria-hidden="true">›</span> <span>رجوع لتعديل الكلام</span></button>' +
+            '</div>';
+
+          document.getElementById('ann-back-edit').addEventListener('click', function () {
+            state.ann.mode = 'edit';
+            render();
+          });
+          document.getElementById('ann-publish-btn').addEventListener('click', function () {
+            const payload = {
+              id: state.ann.editingId || uid('ann'),
+              title: state.ann.title.trim(),
+              body: state.ann.body.trim(),
+              timing: state.ann.timing,
+              startDate: state.ann.startDate,
+              endDate: state.ann.endDate,
+              sendPush: state.ann.sendPush
+            };
+            const idx = state.data.announcements.findIndex(function (a) { return a.id === payload.id; });
+            if (idx >= 0) {
+              state.data.announcements[idx] = payload;
+            } else {
+              state.data.announcements.unshift(payload);
+            }
+            saveData();
+            addRecentEdit('نشر إعلان: «' + payload.title + '»');
+            state.ann.lastPublished = payload;
+            state.ann.mode = 'confirmed';
+            render();
+          });
+          return;
+        }
+
+        // Edit view
+        const existingHtml = state.data.announcements.map(function (a) {
+          return '<div class="mass-card">' +
+            '<div class="mass-top">' +
+              '<div>' +
+                '<p class="mass-name">' + esc(toArabicDigits(a.title)) + '</p>' +
+                (a.body ? '<p class="mass-meta">' + esc(toArabicDigits(a.body)) + '</p>' : '') +
+                '<p class="mass-meta">' + (a.timing === 'now' ? 'ظاهر دلوقتي' : ('من ' + formatDateAr(a.startDate))) + (a.sendPush ? ' · بإشعار' : '') + '</p>' +
+              '</div>' +
+            '</div>' +
+            '<div class="card-actions">' +
+              '<button type="button" class="btn btn-soft btn-sm ann-edit-item" data-id="' + esc(a.id) + '" style="flex:1;">تعديل</button>' +
+              '<button type="button" class="btn btn-danger btn-sm ann-del-item" data-id="' + esc(a.id) + '">حذف</button>' +
+            '</div>' +
+          '</div>';
+        }).join('');
+
+        main.innerHTML =
+          '<div class="card">' +
+            '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;">' +
+              '<strong style="font-size:15px;">' + (state.ann.editingId ? 'تعديل الإعلان' : 'إعلان جديد') + '</strong>' +
+              '<button type="button" class="btn btn-soft btn-sm" id="ann-fill-example" style="min-height:44px;">املأ بمثال سريع</button>' +
+            '</div>' +
+
+            '<div class="field">' +
+              '<label class="field-label" for="ann-title">عنوان الإعلان <span class="req-tag">مطلوب</span></label>' +
+              '<input type="text" id="ann-title" class="input' + (state.ann.errorTitle ? ' is-invalid' : '') + '" placeholder="مثال: قداس عيد الصليب الساعة ٧ صباحًا" value="' + esc(state.ann.title) + '" />' +
+              (state.ann.errorTitle ? '<div class="field-error" role="alert">' + ICONS.alert + '<span>' + esc(state.ann.errorTitle) + '</span></div>' : '') +
+            '</div>' +
+
+            '<div class="field">' +
+              '<label class="field-label" for="ann-body">التفاصيل (اختياري)</label>' +
+              '<textarea id="ann-body" class="textarea" placeholder="مثال: هيتصلّى في الكنيسة الكبرى، ومفيش تسبحة بالليل.">' + esc(state.ann.body) + '</textarea>' +
+            '</div>' +
+
+            '<div class="field">' +
+              '<span class="field-label">يظهر إمتى للزوار؟</span>' +
+              '<div class="chip-row">' +
+                '<button type="button" class="chip-btn' + (state.ann.timing === 'now' ? ' selected' : '') + '" id="ann-time-now">دلوقتي على طول</button>' +
+                '<button type="button" class="chip-btn' + (state.ann.timing === 'scheduled' ? ' selected' : '') + '" id="ann-time-sched">من تاريخ لتاريخ</button>' +
+              '</div>' +
+            '</div>' +
+
+            (state.ann.timing === 'scheduled'
+              ? '<div class="grid-2" style="margin-bottom:12px;">' +
+                  '<div class="field" style="margin-bottom:0;"><span class="field-label">من يوم</span>' + renderDatePicker('ann-start', state.ann.startDate, 'من يوم') + '</div>' +
+                  '<div class="field" style="margin-bottom:0;"><span class="field-label">لحد يوم</span>' + renderDatePicker('ann-end', state.ann.endDate, 'لحد يوم') + '</div>' +
+                '</div>'
+              : '') +
+
+            '<button type="button" class="switch-row" id="ann-push-toggle" role="switch" aria-checked="' + (state.ann.sendPush ? 'true' : 'false') + '">' +
+              '<span class="switch-text">' +
+                '<span class="switch-title">ابعت إشعار على الموبايل</span>' +
+                '<span class="switch-sub">الناس اللي مفعّلة الإشعارات هيوصلهم تنبيه</span>' +
+              '</span>' +
+              '<span class="switch-state-wrap">' +
+                '<span class="state-badge ' + (state.ann.sendPush ? 'on' : 'off') + '">' + (state.ann.sendPush ? 'مفعّل' : 'مقفول') + '</span>' +
+                '<span class="toggle-pill" aria-hidden="true"></span>' +
+              '</span>' +
+            '</button>' +
+          '</div>' +
+
+          '<section aria-labelledby="existing-ann-h">' +
+            '<h3 class="section-heading" id="existing-ann-h">الإعلانات المنشورة حاليًا (' + toArabicDigits(state.data.announcements.length) + ' مثال)</h3>' +
+            '<div class="tasks-stack">' +
+              (existingHtml || '<div class="card card-tight"><span class="field-hint">مفيش إعلانات منشورة حاليًا.</span></div>') +
+            '</div>' +
+          '</section>';
+
+        sticky.innerHTML =
+          '<div class="sticky-footer">' +
+            '<button type="button" class="btn btn-primary btn-block" id="ann-preview-btn"><span>معاينة الإعلان قبل النشر</span> <span dir="ltr" aria-hidden="true">‹</span></button>' +
+          '</div>';
+
+        const titleInput = document.getElementById('ann-title');
+        const bodyInput = document.getElementById('ann-body');
+        titleInput.addEventListener('input', function () {
+          state.ann.title = titleInput.value;
+          if (state.ann.errorTitle && titleInput.value.trim()) {
+            state.ann.errorTitle = '';
+            const err = titleInput.parentElement.querySelector('.field-error');
+            if (err) err.remove();
+            titleInput.classList.remove('is-invalid');
+          }
+        });
+        bodyInput.addEventListener('input', function () { state.ann.body = bodyInput.value; });
+
+        if (document.getElementById('ann-start')) {
+          document.getElementById('ann-start').addEventListener('change', function (e) {
+            state.ann.startDate = e.target.value;
+            document.getElementById('ann-start-label').textContent = formatDateAr(e.target.value);
+          });
+          document.getElementById('ann-end').addEventListener('change', function (e) {
+            state.ann.endDate = e.target.value;
+            document.getElementById('ann-end-label').textContent = formatDateAr(e.target.value);
+          });
+        }
+
+        document.getElementById('ann-time-now').addEventListener('click', function () { state.ann.timing = 'now'; render(); });
+        document.getElementById('ann-time-sched').addEventListener('click', function () { state.ann.timing = 'scheduled'; render(); });
+        document.getElementById('ann-push-toggle').addEventListener('click', function () { state.ann.sendPush = !state.ann.sendPush; render(); });
+
+        document.getElementById('ann-fill-example').addEventListener('click', function () {
+          state.ann.title = 'مثال: تنويه قداس عيد الميلاد المجيد';
+          state.ann.body = 'القداس يبدأ الساعة ٧:٠٠ مساءً بالكنيسة الكبرى. كل سنة وأنتم طيبين.';
+          state.ann.errorTitle = '';
+          render();
+        });
+
+        document.getElementById('ann-preview-btn').addEventListener('click', function () {
+          if (!state.ann.title.trim()) {
+            state.ann.errorTitle = 'اكتب عنوان للإعلان الأول عشان الزوار يفهموا الموضوع.';
+            render();
+            document.getElementById('ann-title').focus();
+            return;
+          }
+          state.ann.mode = 'preview';
+          render();
+        });
+
+        main.querySelectorAll('.ann-edit-item').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            const id = btn.getAttribute('data-id');
+            const found = state.data.announcements.find(function (a) { return a.id === id; });
+            if (!found) return;
+            state.ann = {
+              mode: 'edit',
+              editingId: found.id,
+              title: found.title,
+              body: found.body || '',
+              timing: found.timing || 'now',
+              startDate: found.startDate || '2026-11-22',
+              endDate: found.endDate || '2026-11-29',
+              sendPush: !!found.sendPush,
+              errorTitle: '',
+              lastPublished: null
+            };
+            render();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          });
+        });
+
+        main.querySelectorAll('.ann-del-item').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            const id = btn.getAttribute('data-id');
+            const idx = state.data.announcements.findIndex(function (a) { return a.id === id; });
+            if (idx < 0) return;
+            const removed = state.data.announcements[idx];
+            openConfirmModal({
+              title: 'متأكد تمسح «' + toArabicDigits(removed.title) + '»؟',
+              body: 'الإعلان هيتشال من قدام الزوار فورًا، وتقدر تتراجع خلال ١٠ ثواني.',
+              onConfirm: function () {
+                state.data.announcements.splice(idx, 1);
+                saveData();
+                render();
+                showUndoSnackbar('اتمسح «' + toArabicDigits(removed.title) + '»', function () {
+                  state.data.announcements.splice(Math.min(idx, state.data.announcements.length), 0, removed);
+                  saveData();
+                  render();
+                });
+              }
+            });
+          });
+        });
+      }
+
+      // =========================================================================
+      // Screen 3: Mass Schedule (List + Edit + Real Update)
+      // =========================================================================
+      function renderMasses(main, sticky) {
+        main.classList.remove('home-content');
+        sticky.innerHTML = '';
+
+        const bannerHtml = state.massesUi.bannerText
+          ? '<div class="banner banner-success" role="status">' +
+              '<p class="banner-title">' + ICONS.check + ' <span>اتحفظ التعديل!</span></p>' +
+              '<span>' + esc(toArabicDigits(state.massesUi.bannerText)) + '</span>' +
+            '</div>'
+          : '';
+
+        const cardsHtml = state.data.masses.map(function (m) {
+          const isUpdated = state.massesUi.justUpdatedId === m.id;
+          return '<div class="mass-card' + (isUpdated ? ' just-updated' : '') + '" id="mass-card-' + esc(m.id) + '">' +
+            '<div class="mass-top">' +
+              '<div>' +
+                '<p class="mass-name">' + esc(toArabicDigits(m.name)) + '</p>' +
+                '<p class="mass-time">' + esc(m.weekday) + ' · ' + formatTimeAr(m.startH, m.startM) + ' – ' + formatTimeAr(m.endH, m.endM) + '</p>' +
+                '<p class="mass-meta">' + esc(toArabicDigits(m.place || 'الكنيسة الكبرى')) + '</p>' +
+              '</div>' +
+            '</div>' +
+            '<div class="card-actions">' +
+              '<button type="button" class="btn btn-secondary btn-sm mass-edit-btn" data-id="' + esc(m.id) + '" style="flex:1;">تعديل الميعاد</button>' +
+              '<button type="button" class="btn btn-danger btn-sm mass-del-btn" data-id="' + esc(m.id) + '">حذف</button>' +
+            '</div>' +
+          '</div>';
+        }).join('');
+
+        main.innerHTML =
+          bannerHtml +
+          '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">' +
+            '<div>' +
+              '<strong style="font-size:15px;">الجدول الأسبوعي الحالي</strong>' +
+              '<span class="field-hint" style="display:block;">التعديل بيحدّث القايمة والموقع على طول</span>' +
+            '</div>' +
+            '<button type="button" class="btn btn-primary btn-sm" id="mass-add-btn">+ قداس جديد</button>' +
+          '</div>' +
+          '<div class="tasks-stack">' +
+            (cardsHtml || '<div class="card"><span class="field-hint">مفيش قداسات في الجدول حاليًا.</span></div>') +
+          '</div>';
+
+        document.getElementById('mass-add-btn').addEventListener('click', function () {
+          state.massesUi.editingId = null;
+          state.massesUi.errorName = '';
+          state.massesUi.form = {
+            name: '',
+            weekday: 'الأحد',
+            startH: 8, startM: 0,
+            endH: 10, endM: 0,
+            place: 'الكنيسة الكبرى'
+          };
+          state.screen = 'mass-edit';
+          render();
+          window.scrollTo({ top: 0, behavior: 'auto' });
+        });
+
+        main.querySelectorAll('.mass-edit-btn').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            const id = btn.getAttribute('data-id');
+            const m = state.data.masses.find(function (x) { return x.id === id; });
+            if (!m) return;
+            state.massesUi.editingId = m.id;
+            state.massesUi.errorName = '';
+            state.massesUi.form = deepClone(m);
+            state.screen = 'mass-edit';
+            render();
+            window.scrollTo({ top: 0, behavior: 'auto' });
+          });
+        });
+
+        main.querySelectorAll('.mass-del-btn').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            const id = btn.getAttribute('data-id');
+            const idx = state.data.masses.findIndex(function (x) { return x.id === id; });
+            if (idx < 0) return;
+            const removed = state.data.masses[idx];
+            openConfirmModal({
+              title: 'متأكد تمسح «' + toArabicDigits(removed.name) + '»؟',
+              body: 'الميعاد (' + removed.weekday + ' ' + formatTimeAr(removed.startH, removed.startM) + ') هيتشال من القايمة فورًا، وتقدر تتراجع خلال ١٠ ثواني.',
+              onConfirm: function () {
+                state.data.masses.splice(idx, 1);
+                state.massesUi.bannerText = '';
+                saveData();
+                render();
+                showUndoSnackbar('اتمسح «' + toArabicDigits(removed.name) + '»', function () {
+                  state.data.masses.splice(Math.min(idx, state.data.masses.length), 0, removed);
+                  saveData();
+                  render();
+                });
+              }
+            });
+          });
+        });
+      }
+
+      function to12Parts(h24, m) {
+        const period = h24 >= 12 ? 'PM' : 'AM';
+        let h12 = h24 % 12;
+        if (h12 === 0) h12 = 12;
+        return { h12: h12, m: m, period: period };
+      }
+
+      function to24Hour(h12, period) {
+        const h = Number(h12);
+        if (period === 'AM') return h === 12 ? 0 : h;
+        return h === 12 ? 12 : h + 12;
+      }
+
+      function renderTimeControls(prefix, h24, m) {
+        const p = to12Parts(h24, m);
+        let hOpts = '';
+        for (let i = 1; i <= 12; i++) {
+          hOpts += '<option value="' + i + '"' + (p.h12 === i ? ' selected' : '') + '>' + toArabicDigits(i) + '</option>';
+        }
+        const mins = [0, 15, 30, 45];
+        let mOpts = '';
+        for (let i = 0; i < mins.length; i++) {
+          const mv = mins[i];
+          const label = mv < 10 ? '0' + mv : String(mv);
+          mOpts += '<option value="' + mv + '"' + (p.m === mv ? ' selected' : '') + '>' + toArabicDigits(label) + '</option>';
+        }
+        return '<div class="time-picker-row">' +
+          '<select class="select" id="' + prefix + '-h" aria-label="الساعة">' + hOpts + '</select>' +
+          '<select class="select" id="' + prefix + '-m" aria-label="الدقائق">' + mOpts + '</select>' +
+          '<select class="select" id="' + prefix + '-p" aria-label="صباحًا أم مساءً">' +
+            '<option value="AM"' + (p.period === 'AM' ? ' selected' : '') + '>صباحًا (ص)</option>' +
+            '<option value="PM"' + (p.period === 'PM' ? ' selected' : '') + '>مساءً (م)</option>' +
+          '</select>' +
+        '</div>';
+      }
+
+      function renderMassEdit(main, sticky) {
+        main.classList.remove('home-content');
+        const f = state.massesUi.form;
+        const days = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+        const dayOpts = days.map(function (d) {
+          return '<option value="' + d + '"' + (f.weekday === d ? ' selected' : '') + '>' + d + '</option>';
+        }).join('');
+
+        main.innerHTML =
+          '<div class="card">' +
+            '<div class="field">' +
+              '<label class="field-label" for="mass-name">اسم القداس أو الصلاة <span class="req-tag">مطلوب</span></label>' +
+              '<input type="text" id="mass-name" class="input' + (state.massesUi.errorName ? ' is-invalid' : '') + '" placeholder="مثال: القداس الإلهي الأول" value="' + esc(f.name) + '" />' +
+              (state.massesUi.errorName ? '<div class="field-error" role="alert">' + ICONS.alert + '<span>' + esc(state.massesUi.errorName) + '</span></div>' : '') +
+            '</div>' +
+
+            '<div class="field">' +
+              '<label class="field-label" for="mass-day">اليوم في الأسبوع</label>' +
+              '<select id="mass-day" class="select">' + dayOpts + '</select>' +
+            '</div>' +
+
+            '<div class="field">' +
+              '<span class="field-label">يبدأ الساعة كام؟</span>' +
+              renderTimeControls('mass-start', f.startH, f.startM) +
+            '</div>' +
+
+            '<div class="field">' +
+              '<span class="field-label">يخلص الساعة كام؟</span>' +
+              renderTimeControls('mass-end', f.endH, f.endM) +
+            '</div>' +
+
+            '<div class="field">' +
+              '<label class="field-label" for="mass-place">المكان جوه الكنيسة</label>' +
+              '<input type="text" id="mass-place" class="input" placeholder="مثال: الكنيسة الكبرى" value="' + esc(f.place) + '" />' +
+            '</div>' +
+          '</div>';
+
+        sticky.innerHTML =
+          '<div class="sticky-footer">' +
+            '<button type="button" class="btn btn-primary btn-block" id="mass-save-btn">' + (state.massesUi.editingId ? 'احفظ التعديل' : 'أضف القداس للجدول') + '</button>' +
+          '</div>';
+
+        const nameInput = document.getElementById('mass-name');
+        nameInput.addEventListener('input', function () {
+          f.name = nameInput.value;
+          if (state.massesUi.errorName && f.name.trim()) {
+            state.massesUi.errorName = '';
+            nameInput.classList.remove('is-invalid');
+            const err = nameInput.parentElement.querySelector('.field-error');
+            if (err) err.remove();
+          }
+        });
+        document.getElementById('mass-day').addEventListener('change', function (e) { f.weekday = e.target.value; });
+        document.getElementById('mass-place').addEventListener('input', function (e) { f.place = e.target.value; });
+
+        function syncTime(prefix, hKey, mKey) {
+          const hEl = document.getElementById(prefix + '-h');
+          const mEl = document.getElementById(prefix + '-m');
+          const pEl = document.getElementById(prefix + '-p');
+          function update() {
+            f[hKey] = to24Hour(hEl.value, pEl.value);
+            f[mKey] = Number(mEl.value);
+          }
+          hEl.addEventListener('change', update);
+          mEl.addEventListener('change', update);
+          pEl.addEventListener('change', update);
+        }
+        syncTime('mass-start', 'startH', 'startM');
+        syncTime('mass-end', 'endH', 'endM');
+
+        document.getElementById('mass-save-btn').addEventListener('click', function () {
+          if (!f.name.trim()) {
+            state.massesUi.errorName = 'اكتب اسم القداس الأول (مثال: القداس الإلهي الأول).';
+            render();
+            document.getElementById('mass-name').focus();
+            return;
+          }
+          const saved = {
+            id: state.massesUi.editingId || uid('m'),
+            name: f.name.trim(),
+            weekday: f.weekday,
+            startH: f.startH,
+            startM: f.startM,
+            endH: f.endH,
+            endM: f.endM,
+            place: f.place.trim() || 'الكنيسة الكبرى'
+          };
+          const idx = state.data.masses.findIndex(function (x) { return x.id === saved.id; });
+          if (idx >= 0) {
+            state.data.masses[idx] = saved;
+          } else {
+            state.data.masses.push(saved);
+          }
+          saveData();
+          addRecentEdit('تعديل ميعاد «' + saved.name + '» (' + saved.weekday + ' ' + formatTimeAr(saved.startH, saved.startM) + ')');
+          state.massesUi.justUpdatedId = saved.id;
+          state.massesUi.bannerText = '«' + saved.name + '» بقى ' + saved.weekday + ' من ' + formatTimeAr(saved.startH, saved.startM) + ' لـ ' + formatTimeAr(saved.endH, saved.endM) + '.';
+          state.screen = 'masses';
+          render();
+          window.scrollTo({ top: 0, behavior: 'auto' });
+        });
+      }
+
+      // =========================================================================
+      // Screen 4: Season Wizard (3 Real Decisions + Last-Year Shortcut + Persistence)
+      // =========================================================================
+      function renderSeasonSwitch(key, title, sub, checked) {
+        return '<button type="button" class="switch-row season-opt-switch" data-key="' + esc(key) + '" role="switch" aria-checked="' + (checked ? 'true' : 'false') + '">' +
+          '<span class="switch-text">' +
+            '<span class="switch-title">' + esc(title) + '</span>' +
+            '<span class="switch-sub">' + esc(sub) + '</span>' +
+          '</span>' +
+          '<span class="switch-state-wrap">' +
+            '<span class="state-badge ' + (checked ? 'on' : 'off') + '">' + (checked ? 'هيتنفذ' : 'زي ما هو') + '</span>' +
+            '<span class="toggle-pill" aria-hidden="true"></span>' +
+          '</span>' +
+        '</button>';
+      }
+
+      function renderSeason(main, sticky) {
+        main.classList.remove('home-content');
+
+        // Confirmed applied season view
+        if (state.seasonConfirmed) {
+          const applied = state.seasonConfirmed;
+          sticky.innerHTML = '';
+          main.innerHTML =
+            '<div class="banner banner-success" role="status">' +
+              '<p class="banner-title">' + ICONS.check + ' <span>تم تطبيق الموسم على الموقع!</span></p>' +
+              '<span>موسم «' + esc(applied.name) + '» شغّال من ' + formatDateAr(applied.startDate) + ' لحد ' + formatDateAr(applied.endDate) + '، وبعدها الموقع هيرجع عادي لوحده.</span>' +
+            '</div>' +
+            '<div class="card">' +
+              '<strong style="font-size:14.5px;display:block;margin-bottom:8px;">ملخص اللي اتطبّق دلوقتي:</strong>' +
+              '<ul class="diff-list">' + applied.summaryItems.map(function (it) {
+                return '<li class="diff-item"><span class="diff-dot ' + it.kind + '"></span><span>' + esc(it.text) + '</span></li>';
+              }).join('') + '</ul>' +
+            '</div>' +
+            '<div class="btn-row">' +
+              '<button type="button" class="btn btn-primary" id="season-done-home">رجوع للرئيسية</button>' +
+              '<button type="button" class="btn btn-danger" id="season-revert-btn">رجّع الموقع للوضع العادي</button>' +
+            '</div>';
+
+          document.getElementById('season-done-home').addEventListener('click', function () { go('home'); });
+          document.getElementById('season-revert-btn').addEventListener('click', function () {
+            openConfirmModal({
+              title: 'متأكد ترجّع الموقع للوضع العادي قبل انتهاء الموسم؟',
+              body: 'الجدول الأسبوعي والاجتماعات والعيادات هيرجعوا زي ما كانوا قبل تطبيق الموسم.',
+              confirmLabel: 'أيوه، رجّع الوضع العادي',
+              cancelLabel: 'لأ، سيبه شغّال',
+              onConfirm: function () {
+                state.data.activeSeason = null;
+                state.seasonConfirmed = null;
+                saveData();
+                addRecentEdit('إلغاء تطبيق موسم «' + applied.name + '» والرجوع للوضع العادي');
+                go('home');
+              }
+            });
+          });
+          return;
+        }
+
+        const draft = state.seasonDraft;
+        const cat = getSeasonCatalogItem(draft.seasonKey);
+        const pct = draft.step === 1 ? 33 : (draft.step === 2 ? 67 : 100);
+
+        const progressHtml =
+          '<div class="wizard-progress-wrap">' +
+            '<div class="wizard-progress-meta">' +
+              '<span>الخطوة ' + toArabicDigits(draft.step) + ' من ' + toArabicDigits(3) + '</span>' +
+              '<span>' + toArabicDigits(pct) + '٪</span>' +
+            '</div>' +
+            '<div class="progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + pct + '">' +
+              '<div class="progress-fill" style="width:' + pct + '%;"></div>' +
+            '</div>' +
+          '</div>';
+
+        const activeNoteHtml = state.data.activeSeason
+          ? '<div class="banner banner-notice">' +
+              '<p class="banner-title">موسم مفعّل حاليًا: ' + esc(state.data.activeSeason.name) + '</p>' +
+              '<button type="button" class="btn btn-danger btn-sm" id="season-active-revert" style="align-self:flex-start;">إلغاء الموسم الحالي ورجوع للعادي</button>' +
+            '</div>'
+          : '';
+
+        if (draft.step === 1) {
+          const seasonOpts = SEASONS_CATALOG.map(function (s) {
+            return '<option value="' + esc(s.key) + '"' + (s.key === draft.seasonKey ? ' selected' : '') + '>' + esc(s.name) + '</option>';
+          }).join('');
+
+          main.innerHTML =
+            progressHtml +
+            activeNoteHtml +
+            '<div class="card">' +
+              '<strong style="font-size:15.5px;display:block;margin-bottom:4px;">١. اختار الموسم وتاريخه</strong>' +
+              '<p class="field-hint" style="margin-bottom:10px;">شغلك بيتحفظ تلقائي لو قفلت الصفحة ورجعت بعدين.</p>' +
+
+              '<div class="field">' +
+                '<label class="field-label" for="season-select">أنهي موسم؟</label>' +
+                '<select id="season-select" class="select">' + seasonOpts + '</select>' +
+              '</div>' +
+
+              '<div class="grid-2">' +
+                '<div class="field">' +
+                  '<span class="field-label">يبدأ يوم</span>' +
+                  renderDatePicker('season-start', draft.startDate, 'يبدأ يوم') +
+                '</div>' +
+                '<div class="field">' +
+                  '<span class="field-label">يخلص يوم</span>' +
+                  renderDatePicker('season-end', draft.endDate, 'يخلص يوم') +
+                '</div>' +
+              '</div>' +
+              '<p class="field-hint">عند تاريخ الانتهاء، الموقع هيرجع للوضع العادي لوحده.</p>' +
+            '</div>' +
+
+            '<div class="shortcut-box">' +
+              '<p class="shortcut-title">' + ICONS.sparkles + ' <span>زي السنة اللي فاتت، عدّل الحاجات دي</span></p>' +
+              '<p class="field-hint" style="color:var(--ink);">' + esc(cat.lastYear.yearLabel) + ': ' + esc(cat.lastYear.summary) + '</p>' +
+              '<button type="button" class="btn btn-secondary btn-sm btn-block" id="season-last-year-btn"><span>استخدم إعدادات السنة اللي فاتت وعدّل عليها</span> <span dir="ltr" aria-hidden="true">‹</span></button>' +
+            '</div>';
+
+          sticky.innerHTML =
+            '<div class="sticky-footer">' +
+              '<button type="button" class="btn btn-primary btn-block" id="season-next-1"><span>التالي: اختار اللي يتغيّر في الموقع</span> <span dir="ltr" aria-hidden="true">‹</span></button>' +
+            '</div>';
+
+          document.getElementById('season-select').addEventListener('change', function (e) {
+            const picked = getSeasonCatalogItem(e.target.value);
+            draft.seasonKey = picked.key;
+            draft.startDate = picked.defaultStart;
+            draft.endDate = picked.defaultEnd;
+            draft.usedLastYear = false;
+            draft.options = deepClone(picked.defaults);
+            persistSeasonDraft();
+            render();
+          });
+          document.getElementById('season-start').addEventListener('change', function (e) {
+            draft.startDate = e.target.value;
+            document.getElementById('season-start-label').textContent = formatDateAr(e.target.value);
+            persistSeasonDraft();
+          });
+          document.getElementById('season-end').addEventListener('change', function (e) {
+            draft.endDate = e.target.value;
+            document.getElementById('season-end-label').textContent = formatDateAr(e.target.value);
+            persistSeasonDraft();
+          });
+
+          document.getElementById('season-last-year-btn').addEventListener('click', function () {
+            draft.options = deepClone(cat.lastYear.options);
+            draft.usedLastYear = true;
+            draft.step = 3; // Jumps straight to Review & Tweak!
+            persistSeasonDraft();
+            render();
+          });
+
+          document.getElementById('season-next-1').addEventListener('click', function () {
+            draft.usedLastYear = false;
+            draft.step = 2;
+            persistSeasonDraft();
+            render();
+          });
+        } else if (draft.step === 2) {
+          const o = draft.options;
+          main.innerHTML =
+            progressHtml +
+            '<div class="card">' +
+              '<strong style="font-size:15.5px;display:block;margin-bottom:4px;">٢. إيه اللي يتغيّر في الموقع وقت الموسم؟</strong>' +
+              '<p class="field-hint" style="margin-bottom:10px;">علمنا على المعتاد لموسم «' + esc(cat.name.replace('مثال: ', '')) + '»، تقدر تغيّر أي حاجة.</p>' +
+
+              renderSeasonSwitch('replaceRegular', 'صلوات الموسم بدل الجدول الأسبوعي', 'قداسات الأسبوع العادية هتتخفي لحد آخر الموسم', o.replaceRegular) +
+              renderSeasonSwitch('hideMeetings', 'إخفاء قسم الاجتماعات', 'الاجتماعات متوقفة أثناء الموسم', o.hideMeetings) +
+              renderSeasonSwitch('hideClinics', 'إخفاء قسم العيادات', 'العيادات مقفولة أثناء الموسم', o.hideClinics) +
+              renderSeasonSwitch('weddingOff', 'إخفاء حجز الأفراح من نموذج التواصل', 'باقي الطلبات والشكاوى هتفضل شغالة', o.weddingOff) +
+              renderSeasonSwitch('calmHero', 'تهدئة حركة وصورة الواجهة', 'صورة ثابتة وهادية بدون فيديو متحرك', o.calmHero) +
+              renderSeasonSwitch('seasonTheme', 'ألوان الموسم على الموقع', 'يلبّس الموقع ألوان المناسبة تلقائيًا', o.seasonTheme) +
+
+              '<hr class="divider" style="margin:12px 0;" />' +
+              '<div class="field">' +
+                '<label class="field-label" for="season-live">رابط البث المباشر (اختياري)</label>' +
+                '<input type="url" dir="ltr" id="season-live" class="input" placeholder="https://youtube.com/live/..." value="' + esc(o.liveUrl) + '" />' +
+              '</div>' +
+              '<div class="field">' +
+                '<label class="field-label" for="season-pdf">رابط كتيّب أو برنامج PDF (اختياري)</label>' +
+                '<input type="url" dir="ltr" id="season-pdf" class="input" placeholder="https://drive.google.com/..." value="' + esc(o.pdfUrl) + '" />' +
+              '</div>' +
+            '</div>';
+
+          sticky.innerHTML =
+            '<div class="sticky-footer">' +
+              '<div class="btn-row">' +
+                '<button type="button" class="btn btn-soft" id="season-prev-2"><span dir="ltr" aria-hidden="true">›</span> <span>السابق</span></button>' +
+                '<button type="button" class="btn btn-primary" id="season-next-2"><span>التالي: راجع اللي هيتغيّر</span> <span dir="ltr" aria-hidden="true">‹</span></button>' +
+              '</div>' +
+            '</div>';
+
+          main.querySelectorAll('.season-opt-switch').forEach(function (sw) {
+            sw.addEventListener('click', function () {
+              const k = sw.getAttribute('data-key');
+              draft.options[k] = !draft.options[k];
+              persistSeasonDraft();
+              render();
+            });
+          });
+          document.getElementById('season-live').addEventListener('input', function (e) {
+            draft.options.liveUrl = e.target.value;
+            persistSeasonDraft();
+          });
+          document.getElementById('season-pdf').addEventListener('input', function (e) {
+            draft.options.pdfUrl = e.target.value;
+            persistSeasonDraft();
+          });
+
+          document.getElementById('season-prev-2').addEventListener('click', function () {
+            draft.step = 1;
+            persistSeasonDraft();
+            render();
+          });
+          document.getElementById('season-next-2').addEventListener('click', function () {
+            draft.step = 3;
+            persistSeasonDraft();
+            render();
+          });
+        } else {
+          // Step 3: Clear Preview of Every Change + Explicit «طبّق الموسم على الموقع»
+          const o = draft.options;
+          const summaryItems = buildSeasonSummaryItems(draft);
+
+          main.innerHTML =
+            progressHtml +
+            (draft.usedLastYear
+              ? '<div class="banner banner-notice">' +
+                  '<p class="banner-title">' + ICONS.sparkles + ' <span>جهزنا لك إعدادات السنة اللي فاتت</span></p>' +
+                  '<span>راجع السطور تحت وعدّل أي رابط أو بند قبل ما تضغط «طبّق الموسم على الموقع».</span>' +
+                '</div>'
+              : '') +
+            '<div class="card">' +
+              '<strong style="font-size:15.5px;display:block;margin-bottom:4px;">٣. راجع اللي هيتغيّر على الموقع</strong>' +
+              '<p class="field-hint" style="margin-bottom:10px;">الموسم: <strong>' + esc(cat.name) + '</strong><br/>من ' + formatDateAr(draft.startDate) + ' لحد ' + formatDateAr(draft.endDate) + '</p>' +
+              '<ul class="diff-list">' +
+                summaryItems.map(function (it) {
+                  return '<li class="diff-item"><span class="diff-dot ' + it.kind + '"></span><span>' + esc(it.text) + '</span></li>';
+                }).join('') +
+              '</ul>' +
+            '</div>' +
+
+            (draft.usedLastYear
+              ? '<div class="card card-tight">' +
+                  '<strong style="font-size:14px;display:block;margin-bottom:8px;">تعديل سريع للروابط قبل التطبيق:</strong>' +
+                  '<div class="field">' +
+                    '<label class="field-label" for="season-live-3">رابط البث المباشر</label>' +
+                    '<input type="url" dir="ltr" id="season-live-3" class="input" value="' + esc(o.liveUrl) + '" placeholder="https://youtube.com/live/..." />' +
+                  '</div>' +
+                  '<div class="field">' +
+                    '<label class="field-label" for="season-pdf-3">رابط كتيّب PDF</label>' +
+                    '<input type="url" dir="ltr" id="season-pdf-3" class="input" value="' + esc(o.pdfUrl) + '" placeholder="https://drive.google.com/..." />' +
+                  '</div>' +
+                  '<button type="button" class="btn btn-soft btn-sm btn-block" id="season-tweak-switches">تعديل باقي الاختيارات (الاجتماعات، العيادات...)</button>' +
+                '</div>'
+              : '') +
+
+            '<div style="text-align:center;">' +
+              '<button type="button" class="btn btn-soft btn-sm" id="season-discard-draft">امسح المسودة وابدأ من الأول</button>' +
+            '</div>';
+
+          sticky.innerHTML =
+            '<div class="sticky-footer">' +
+              '<button type="button" class="btn btn-primary btn-block" id="season-apply-btn">طبّق الموسم على الموقع</button>' +
+              (!draft.usedLastYear ? '<button type="button" class="btn btn-soft btn-sm btn-block" id="season-prev-3"><span dir="ltr" aria-hidden="true">›</span> <span>رجوع لتعديل الاختيارات</span></button>' : '') +
+            '</div>';
+
+          if (document.getElementById('season-live-3')) {
+            document.getElementById('season-live-3').addEventListener('input', function (e) {
+              draft.options.liveUrl = e.target.value;
+              persistSeasonDraft();
+            });
+            document.getElementById('season-pdf-3').addEventListener('input', function (e) {
+              draft.options.pdfUrl = e.target.value;
+              persistSeasonDraft();
+            });
+            document.getElementById('season-tweak-switches').addEventListener('click', function () {
+              draft.step = 2;
+              persistSeasonDraft();
+              render();
+            });
+          }
+
+          if (document.getElementById('season-prev-3')) {
+            document.getElementById('season-prev-3').addEventListener('click', function () {
+              draft.step = 2;
+              persistSeasonDraft();
+              render();
+            });
+          }
+
+          document.getElementById('season-discard-draft').addEventListener('click', function () {
+            state.seasonDraft = createFreshSeasonDraft('holy_week');
+            persistSeasonDraft();
+            render();
+          });
+
+          document.getElementById('season-apply-btn').addEventListener('click', function () {
+            const applied = {
+              key: cat.key,
+              name: cat.name,
+              startDate: draft.startDate,
+              endDate: draft.endDate,
+              summaryItems: buildSeasonSummaryItems(draft)
+            };
+            state.data.activeSeason = applied;
+            state.seasonConfirmed = applied;
+            state.seasonDraft = null;
+            persistSeasonDraft();
+            saveData();
+            addRecentEdit('تطبيق موسم «' + applied.name + '»');
+            render();
+            window.scrollTo({ top: 0, behavior: 'auto' });
+          });
+        }
+
+        if (document.getElementById('season-active-revert')) {
+          document.getElementById('season-active-revert').addEventListener('click', function () {
+            const prevName = state.data.activeSeason.name;
+            state.data.activeSeason = null;
+            saveData();
+            addRecentEdit('إلغاء تطبيق موسم «' + prevName + '»');
+            render();
+          });
+        }
+      }
+
+      function buildSeasonSummaryItems(draft) {
+        const o = draft.options;
+        const list = [];
+        if (o.replaceRegular) {
+          list.push({ kind: 'hide', text: 'الجدول الأسبوعي العادي هيتخفي، وصلوات الموسم بس هي اللي هتظهر.' });
+        } else {
+          list.push({ kind: 'on', text: 'الجدول الأسبوعي العادي هيفضل ظاهر، وصلوات الموسم هتتضاف معاه.' });
+        }
+        if (o.hideMeetings) list.push({ kind: 'hide', text: 'قسم الاجتماعات ومدارس الأحد هيتخفي لحد نهاية الموسم.' });
+        if (o.hideClinics) list.push({ kind: 'hide', text: 'قسم العيادات هيتخفي لحد نهاية الموسم.' });
+        if (o.weddingOff) list.push({ kind: 'hide', text: 'اختيار «حجز الأفراح» هيتخفي من نموذج التواصل.' });
+        if (o.calmHero) list.push({ kind: 'info', text: 'واجهة الموقع هتبقى صورة ثابتة هادية من غير فيديو متحرك.' });
+        if (o.seasonTheme) list.push({ kind: 'on', text: 'ألوان وثيم الموسم هتتفعّل تلقائيًا على الموقع.' });
+        if (o.liveUrl && o.liveUrl.trim()) list.push({ kind: 'on', text: 'هيتجهّز رابط البث المباشر: ' + o.liveUrl.trim() });
+        if (o.pdfUrl && o.pdfUrl.trim()) list.push({ kind: 'on', text: 'هيظهر زر تحميل كتيّب / برنامج الموسم للزوار.' });
+        list.push({ kind: 'info', text: 'في ' + formatDateAr(draft.endDate) + ' كل حاجة هترجع للوضع العادي لوحدها.' });
+        return list;
+      }
+
+      // =========================================================================
+      // Screen 5 & 8: Page Editor + Universal Error Handling for ALL Block Types
+      // =========================================================================
+      function blockTypeLabel(type) {
+        if (type === 'text') return 'نص';
+        if (type === 'list') return 'قايمة';
+        if (type === 'details') return 'تفاصيل';
+        return 'فقرة';
+      }
+
+      function blockSnippet(block) {
+        if (block.type === 'text') {
+          return (block.heading || block.body || '(نص فاضي)').trim();
+        }
+        if (block.type === 'list') {
+          const nonEmpty = (block.items || []).filter(function (x) { return x.trim(); });
+          if (block.title && block.title.trim()) return block.title.trim() + ' (' + toArabicDigits(nonEmpty.length) + ')';
+          if (nonEmpty.length > 0) return nonEmpty[0].trim() + (nonEmpty.length > 1 ? ' (+' + toArabicDigits(nonEmpty.length - 1) + ')' : '');
+          return '(قايمة فاضية)';
+        }
+        if (block.type === 'details') {
+          return (block.summary || block.body || '(تفاصيل فاضية)').trim();
+        }
+        return '(فقرة)';
+      }
+
+      function validateWorkingPage(page) {
+        const errors = [];
+        if (!page.title || !page.title.trim()) {
+          errors.push({
+            id: 'err-page-title',
+            blockId: null,
+            fieldKey: 'title',
+            inputId: 'page-title-input',
+            message: 'عنوان الصفحة فاضي — اكتب الاسم اللي هيظهر فوق في الصفحة.'
+          });
+        }
+
+        page.blocks.forEach(function (b, idx) {
+          const num = toArabicDigits(idx + 1);
+          const snippet = blockSnippet(b);
+          const nameHint = snippet && snippet.indexOf('(') !== 0 ? '«' + snippet.slice(0, 22) + (snippet.length > 22 ? '…' : '') + '» ' : '';
+
+          if (b.type === 'text') {
+            if (!b.body || !b.body.trim()) {
+              errors.push({
+                id: 'err-' + b.id + '-body',
+                blockId: b.id,
+                fieldKey: 'body',
+                inputId: 'inp-' + b.id + '-body',
+                message: 'فقرة النص ' + nameHint + '(رقم ' + num + '): الكلام اللي جواها فاضي — اكتب النص أو امسح الفقرة.'
+              });
+            }
+          } else if (b.type === 'list') {
+            if (!b.items || b.items.length === 0) {
+              errors.push({
+                id: 'err-' + b.id + '-empty',
+                blockId: b.id,
+                fieldKey: 'list-empty',
+                inputId: 'add-item-' + b.id,
+                message: 'القايمة ' + nameHint + '(رقم ' + num + '): مفيهاش ولا عنصر — ضيف سطر واحد على الأقل.'
+              });
+            } else {
+              b.items.forEach(function (it, itemIdx) {
+                if (!it || !it.trim()) {
+                  errors.push({
+                    id: 'err-' + b.id + '-item-' + itemIdx,
+                    blockId: b.id,
+                    fieldKey: 'item-' + itemIdx,
+                    inputId: 'inp-' + b.id + '-item-' + itemIdx,
+                    message: 'القايمة ' + nameHint + '(رقم ' + num + '): السطر رقم ' + toArabicDigits(itemIdx + 1) + ' فاضي — اكتبه أو امسحه.'
+                  });
+                }
+              });
+            }
+          } else if (b.type === 'details') {
+            if (!b.summary || !b.summary.trim()) {
+              errors.push({
+                id: 'err-' + b.id + '-summary',
+                blockId: b.id,
+                fieldKey: 'summary',
+                inputId: 'inp-' + b.id + '-summary',
+                message: 'فقرة التفاصيل ' + nameHint + '(رقم ' + num + '): العنوان اللي يظهر بره فاضي.'
+              });
+            }
+            if (!b.body || !b.body.trim()) {
+              errors.push({
+                id: 'err-' + b.id + '-body',
+                blockId: b.id,
+                fieldKey: 'body',
+                inputId: 'inp-' + b.id + '-body',
+                message: 'فقرة التفاصيل ' + nameHint + '(رقم ' + num + '): الكلام اللي بيتفتح جوه فاضي.'
+              });
+            }
+          }
+        });
+
+        return errors;
+      }
+
+      function focusAndScrollToInput(inputId, blockId) {
+        if (blockId) {
+          const blk = state.pageUi.workingPage.blocks.find(function (b) { return b.id === blockId; });
+          if (blk && !blk.expanded) {
+            blk.expanded = true;
+            render();
+          }
+        }
+        requestAnimationFrame(function () {
+          const target = document.getElementById(inputId);
+          if (target) {
+            target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            setTimeout(function () { target.focus(); }, 180);
+          }
+        });
+      }
+
+      function renderPageEditor(main, sticky) {
+        main.classList.remove('home-content');
+        const page = state.pageUi.workingPage;
+        const errors = state.pageUi.showErrors ? validateWorkingPage(page) : [];
+        state.pageUi.errors = errors;
+
+        const errorByBlock = {};
+        const errorByField = {};
+        errors.forEach(function (er) {
+          errorByField[er.inputId] = er.message;
+          if (er.blockId) errorByBlock[er.blockId] = true;
+        });
+
+        // Switcher between new page and sample existing pages
+        const switcherHtml =
+          '<div class="chip-row" aria-label="اختار صفحة">' +
+            state.data.pages.map(function (p) {
+              const label = p.isNewTemplate ? 'صفحة جديدة' : p.title.replace('مثال: ', '');
+              return '<button type="button" class="chip-btn page-switch-pill' + (p.id === state.pageUi.selectedPageId ? ' selected' : '') + '" data-pid="' + esc(p.id) + '">' + esc(label) + '</button>';
+            }).join('') +
+          '</div>';
+
+        // Error Summary Banner (Screen 8)
+        let errorSummaryHtml = '';
+        if (errors.length > 0) {
+          errorSummaryHtml =
+            '<div class="banner banner-error" id="page-error-summary" role="alert" tabindex="-1">' +
+              '<p class="banner-title">' + ICONS.alert + ' <span>في ' + toArabicDigits(errors.length) + ' حاجات محتاجة تصليح قبل الحفظ</span></p>' +
+              '<span style="font-size:12.5px;">فتحنا لك الفقرات اللي فيها مشكلة تحت — اضغط على أي سطر عشان تروحله على طول:</span>' +
+              '<ul class="error-summary-list">' +
+                errors.map(function (er) {
+                  return '<li><button type="button" class="error-summary-btn" data-input="' + esc(er.inputId) + '" data-block="' + esc(er.blockId || '') + '">' +
+                    '<span>' + esc(er.message) + '</span>' +
+                    '<span dir="ltr" aria-hidden="true">‹</span>' +
+                  '</button></li>';
+                }).join('') +
+              '</ul>' +
+            '</div>';
+        }
+
+        const savedBannerHtml = state.pageUi.savedBanner
+          ? '<div class="banner banner-success" role="status">' +
+              '<p class="banner-title">' + ICONS.check + ' <span>اتحفظت الصفحة!</span></p>' +
+              '<span>' + esc(toArabicDigits(state.pageUi.savedBanner)) + '</span>' +
+            '</div>'
+          : '';
+
+        const blocksHtml = page.blocks.map(function (b, idx) {
+          const hasErr = !!errorByBlock[b.id];
+          const num = toArabicDigits(idx + 1);
+          const isFirst = idx === 0;
+          const isLast = idx === page.blocks.length - 1;
+
+          let bodyHtml = '';
+          if (b.expanded) {
+            if (b.type === 'text') {
+              const errMsg = errorByField['inp-' + b.id + '-body'];
+              bodyHtml =
+                '<div class="block-body">' +
+                  '<div class="field">' +
+                    '<label class="field-label" for="inp-' + esc(b.id) + '-heading">عنوان الفقرة (اختياري)</label>' +
+                    '<input type="text" id="inp-' + esc(b.id) + '-heading" class="input block-field" data-bid="' + esc(b.id) + '" data-key="heading" placeholder="مثال: مواعيد التسجيل" value="' + esc(b.heading || '') + '" />' +
+                  '</div>' +
+                  '<div class="field">' +
+                    '<label class="field-label" for="inp-' + esc(b.id) + '-body">كلام الفقرة <span class="req-tag">مطلوب</span></label>' +
+                    '<textarea id="inp-' + esc(b.id) + '-body" class="textarea block-field' + (errMsg ? ' is-invalid' : '') + '" data-bid="' + esc(b.id) + '" data-key="body" placeholder="اكتب الكلام اللي هيظهر للزوار هنا...">' + esc(b.body || '') + '</textarea>' +
+                    (errMsg ? '<div class="field-error">' + ICONS.alert + '<span>' + esc(errMsg) + '</span></div>' : '') +
+                  '</div>' +
+                '</div>';
+            } else if (b.type === 'list') {
+              const emptyErr = errorByField['add-item-' + b.id];
+              const itemsHtml = (b.items || []).map(function (it, iIdx) {
+                const iErr = errorByField['inp-' + b.id + '-item-' + iIdx];
+                return '<div class="list-item-row' + (iErr ? ' has-error' : '') + '">' +
+                  '<div class="field" style="margin-bottom:0;">' +
+                    '<label class="field-label" for="inp-' + esc(b.id) + '-item-' + iIdx + '">سطر ' + toArabicDigits(iIdx + 1) + '</label>' +
+                    '<input type="text" id="inp-' + esc(b.id) + '-item-' + iIdx + '" class="input list-item-input' + (iErr ? ' is-invalid' : '') + '" data-bid="' + esc(b.id) + '" data-idx="' + iIdx + '" placeholder="اكتب العنصر هنا..." value="' + esc(it) + '" />' +
+                    (iErr ? '<div class="field-error">' + ICONS.alert + '<span>' + esc(iErr) + '</span></div>' : '') +
+                  '</div>' +
+                  '<div class="list-item-actions">' +
+                    '<div style="display:flex;gap:6px;">' +
+                      '<button type="button" class="icon-btn list-item-up" data-bid="' + esc(b.id) + '" data-idx="' + iIdx + '" aria-label="طلّع السطر لفوق"' + (iIdx === 0 ? ' disabled' : '') + '>↑</button>' +
+                      '<button type="button" class="icon-btn list-item-down" data-bid="' + esc(b.id) + '" data-idx="' + iIdx + '" aria-label="نزّل السطر لتحت"' + (iIdx === b.items.length - 1 ? ' disabled' : '') + '>↓</button>' +
+                    '</div>' +
+                    '<button type="button" class="icon-btn danger list-item-del" data-bid="' + esc(b.id) + '" data-idx="' + iIdx + '" aria-label="امسح السطر">✕</button>' +
+                  '</div>' +
+                '</div>';
+              }).join('');
+
+              bodyHtml =
+                '<div class="block-body">' +
+                  '<div class="field">' +
+                    '<label class="field-label" for="inp-' + esc(b.id) + '-title">عنوان القايمة (اختياري)</label>' +
+                    '<input type="text" id="inp-' + esc(b.id) + '-title" class="input block-field" data-bid="' + esc(b.id) + '" data-key="title" placeholder="مثال: الأوراق المطلوبة" value="' + esc(b.title || '') + '" />' +
+                  '</div>' +
+                  '<div class="field">' +
+                    '<span class="field-label">شكل القايمة</span>' +
+                    '<div class="chip-row">' +
+                      '<button type="button" class="chip-btn list-style-btn' + (b.style !== 'numbered' ? ' selected' : '') + '" data-bid="' + esc(b.id) + '" data-style="bullet">نقط •</button>' +
+                      '<button type="button" class="chip-btn list-style-btn' + (b.style === 'numbered' ? ' selected' : '') + '" data-bid="' + esc(b.id) + '" data-style="numbered">أرقام ١٢٣</button>' +
+                    '</div>' +
+                  '</div>' +
+                  itemsHtml +
+                  (emptyErr ? '<div class="field-error" style="margin-bottom:8px;">' + ICONS.alert + '<span>' + esc(emptyErr) + '</span></div>' : '') +
+                  '<button type="button" class="btn btn-soft btn-sm btn-block list-add-item" id="add-item-' + esc(b.id) + '" data-bid="' + esc(b.id) + '">+ أضف سطر للقايمة</button>' +
+                '</div>';
+            } else if (b.type === 'details') {
+              const sumErr = errorByField['inp-' + b.id + '-summary'];
+              const bodErr = errorByField['inp-' + b.id + '-body'];
+              bodyHtml =
+                '<div class="block-body">' +
+                  '<div class="field">' +
+                    '<label class="field-label" for="inp-' + esc(b.id) + '-summary">العنوان اللي يظهر بره (ممكن سؤال) <span class="req-tag">مطلوب</span></label>' +
+                    '<input type="text" id="inp-' + esc(b.id) + '-summary" class="input block-field' + (sumErr ? ' is-invalid' : '') + '" data-bid="' + esc(b.id) + '" data-key="summary" placeholder="مثال: إزاي أسجل في الرحلة؟" value="' + esc(b.summary || '') + '" />' +
+                    (sumErr ? '<div class="field-error">' + ICONS.alert + '<span>' + esc(sumErr) + '</span></div>' : '') +
+                  '</div>' +
+                  '<div class="field">' +
+                    '<label class="field-label" for="inp-' + esc(b.id) + '-body">التفاصيل اللي جوه (بتتفتح بالضغط) <span class="req-tag">مطلوب</span></label>' +
+                    '<textarea id="inp-' + esc(b.id) + '-body" class="textarea block-field' + (bodErr ? ' is-invalid' : '') + '" data-bid="' + esc(b.id) + '" data-key="body" placeholder="اكتب الإجابة أو التفاصيل هنا...">' + esc(b.body || '') + '</textarea>' +
+                    (bodErr ? '<div class="field-error">' + ICONS.alert + '<span>' + esc(bodErr) + '</span></div>' : '') +
+                  '</div>' +
+                '</div>';
+            }
+          }
+
+          return '<div class="block-card' + (hasErr ? ' has-error' : '') + '" id="block-card-' + esc(b.id) + '">' +
+            '<div class="block-header">' +
+              '<button type="button" class="block-toggle-btn" data-bid="' + esc(b.id) + '" aria-expanded="' + (b.expanded ? 'true' : 'false') + '">' +
+                '<span class="block-type-pill">' + num + ' · ' + blockTypeLabel(b.type) + '</span>' +
+                '<span class="block-summary-text">' + esc(toArabicDigits(blockSnippet(b))) + '</span>' +
+              '</button>' +
+              '<div class="block-controls">' +
+                '<span style="font-size:12px;font-weight:700;color:var(--muted);padding-inline:4px;">' + (b.expanded ? 'مفتوحة — اضغط فوق للطي' : 'مقفولة — اضغط فوق للفتح') + '</span>' +
+                '<div class="block-controls-arrows">' +
+                  '<button type="button" class="icon-btn block-up" data-bid="' + esc(b.id) + '" aria-label="طلّع الفقرة لفوق"' + (isFirst ? ' disabled' : '') + '>↑</button>' +
+                  '<button type="button" class="icon-btn block-down" data-bid="' + esc(b.id) + '" aria-label="نزّل الفقرة لتحت"' + (isLast ? ' disabled' : '') + '>↓</button>' +
+                  '<button type="button" class="icon-btn danger block-del" data-bid="' + esc(b.id) + '" aria-label="امسح الفقرة">✕</button>' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+            bodyHtml +
+          '</div>';
+        }).join('');
+
+        const titleErr = errorByField['page-title-input'];
+
+        main.innerHTML =
+          switcherHtml +
+          savedBannerHtml +
+          errorSummaryHtml +
+          '<div class="card">' +
+            '<div class="field">' +
+              '<label class="field-label" for="page-title-input">اسم الصفحة <span class="req-tag">مطلوب</span></label>' +
+              '<input type="text" id="page-title-input" class="input' + (titleErr ? ' is-invalid' : '') + '" placeholder="مثال: شروط رحلة الصيف" value="' + esc(page.title) + '" />' +
+              (titleErr ? '<div class="field-error">' + ICONS.alert + '<span>' + esc(titleErr) + '</span></div>' : '') +
+            '</div>' +
+            '<div class="field">' +
+              '<label class="field-label" for="page-sub-input">وصف قصير تحت الاسم (اختياري)</label>' +
+              '<input type="text" id="page-sub-input" class="input" placeholder="مثال: كل المواعيد والأوراق المطلوبة" value="' + esc(page.subtitle || '') + '" />' +
+            '</div>' +
+          '</div>' +
+
+          '<div class="section-heading">' +
+            '<span>محتوى الصفحة (' + toArabicDigits(page.blocks.length) + ' فقرات)</span>' +
+            '<button type="button" class="btn btn-soft btn-sm" id="demo-error-trigger" style="min-height:44px;font-size:12px;">جرّب أخطاء في فقرات مقفولة</button>' +
+          '</div>' +
+
+          '<div class="tasks-stack" id="blocks-container">' +
+            (blocksHtml || '<div class="card card-tight"><span class="field-hint">مفيش فقرات لسه — ضيف نص أو قايمة أو تفاصيل من تحت.</span></div>') +
+          '</div>' +
+
+          '<div class="card card-tight">' +
+            '<span class="field-label" style="margin-bottom:8px;">أضف فقرة جديدة للصفحة:</span>' +
+            '<div class="chip-row">' +
+              '<button type="button" class="chip-btn add-block-btn" data-type="text">+ نص</button>' +
+              '<button type="button" class="chip-btn add-block-btn" data-type="list">+ قايمة</button>' +
+              '<button type="button" class="chip-btn add-block-btn" data-type="details">+ تفاصيل تتفتح</button>' +
+            '</div>' +
+          '</div>';
+
+        sticky.innerHTML =
+          '<div class="sticky-footer">' +
+            '<button type="button" class="btn btn-primary btn-block" id="page-save-btn">احفظ الصفحة</button>' +
+          '</div>';
+
+        // Listeners
+        main.querySelectorAll('.page-switch-pill').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            loadWorkingPage(btn.getAttribute('data-pid'));
+            render();
+          });
+        });
+
+        document.getElementById('page-title-input').addEventListener('input', function (e) {
+          page.title = e.target.value;
+          state.pageUi.savedBanner = '';
+        });
+        document.getElementById('page-sub-input').addEventListener('input', function (e) {
+          page.subtitle = e.target.value;
+          state.pageUi.savedBanner = '';
+        });
+
+        main.querySelectorAll('.error-summary-btn').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            focusAndScrollToInput(btn.getAttribute('data-input'), btn.getAttribute('data-block'));
+          });
+        });
+
+        main.querySelectorAll('.block-toggle-btn').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            const bid = btn.getAttribute('data-bid');
+            const blk = page.blocks.find(function (b) { return b.id === bid; });
+            if (blk) {
+              blk.expanded = !blk.expanded;
+              render();
+            }
+          });
+        });
+
+        main.querySelectorAll('.block-up').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            const bid = btn.getAttribute('data-bid');
+            const idx = page.blocks.findIndex(function (b) { return b.id === bid; });
+            if (idx > 0) {
+              const tmp = page.blocks[idx - 1];
+              page.blocks[idx - 1] = page.blocks[idx];
+              page.blocks[idx] = tmp;
+              render();
+            }
+          });
+        });
+
+        main.querySelectorAll('.block-down').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            const bid = btn.getAttribute('data-bid');
+            const idx = page.blocks.findIndex(function (b) { return b.id === bid; });
+            if (idx >= 0 && idx < page.blocks.length - 1) {
+              const tmp = page.blocks[idx + 1];
+              page.blocks[idx + 1] = page.blocks[idx];
+              page.blocks[idx] = tmp;
+              render();
+            }
+          });
+        });
+
+        main.querySelectorAll('.block-del').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            const bid = btn.getAttribute('data-bid');
+            const idx = page.blocks.findIndex(function (b) { return b.id === bid; });
+            if (idx < 0) return;
+            const removed = page.blocks[idx];
+            const label = blockTypeLabel(removed.type) + ' (' + blockSnippet(removed) + ')';
+            openConfirmModal({
+              title: 'متأكد تمسح فقرة ' + toArabicDigits(label) + '؟',
+              body: 'الفقرة هتتشال من الصفحة دلوقتي، وتقدر تتراجع خلال ١٠ ثواني.',
+              onConfirm: function () {
+                page.blocks.splice(idx, 1);
+                render();
+                showUndoSnackbar('اتمسحت فقرة ' + blockTypeLabel(removed.type), function () {
+                  page.blocks.splice(Math.min(idx, page.blocks.length), 0, removed);
+                  render();
+                });
+              }
+            });
+          });
+        });
+
+        main.querySelectorAll('.block-field').forEach(function (inp) {
+          inp.addEventListener('input', function () {
+            const bid = inp.getAttribute('data-bid');
+            const key = inp.getAttribute('data-key');
+            const blk = page.blocks.find(function (b) { return b.id === bid; });
+            if (blk) blk[key] = inp.value;
+          });
+        });
+
+        main.querySelectorAll('.list-item-input').forEach(function (inp) {
+          inp.addEventListener('input', function () {
+            const bid = inp.getAttribute('data-bid');
+            const idx = Number(inp.getAttribute('data-idx'));
+            const blk = page.blocks.find(function (b) { return b.id === bid; });
+            if (blk && blk.items) blk.items[idx] = inp.value;
+          });
+        });
+
+        main.querySelectorAll('.list-style-btn').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            const bid = btn.getAttribute('data-bid');
+            const style = btn.getAttribute('data-style');
+            const blk = page.blocks.find(function (b) { return b.id === bid; });
+            if (blk) { blk.style = style; render(); }
+          });
+        });
+
+        main.querySelectorAll('.list-add-item').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            const bid = btn.getAttribute('data-bid');
+            const blk = page.blocks.find(function (b) { return b.id === bid; });
+            if (blk) {
+              blk.items = blk.items || [];
+              blk.items.push('');
+              const newIdx = blk.items.length - 1;
+              render();
+              const inp = document.getElementById('inp-' + bid + '-item-' + newIdx);
+              if (inp) inp.focus();
+            }
+          });
+        });
+
+        main.querySelectorAll('.list-item-up').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            const bid = btn.getAttribute('data-bid');
+            const idx = Number(btn.getAttribute('data-idx'));
+            const blk = page.blocks.find(function (b) { return b.id === bid; });
+            if (blk && idx > 0) {
+              const tmp = blk.items[idx - 1];
+              blk.items[idx - 1] = blk.items[idx];
+              blk.items[idx] = tmp;
+              render();
+            }
+          });
+        });
+
+        main.querySelectorAll('.list-item-down').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            const bid = btn.getAttribute('data-bid');
+            const idx = Number(btn.getAttribute('data-idx'));
+            const blk = page.blocks.find(function (b) { return b.id === bid; });
+            if (blk && idx < blk.items.length - 1) {
+              const tmp = blk.items[idx + 1];
+              blk.items[idx + 1] = blk.items[idx];
+              blk.items[idx] = tmp;
+              render();
+            }
+          });
+        });
+
+        main.querySelectorAll('.list-item-del').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            const bid = btn.getAttribute('data-bid');
+            const idx = Number(btn.getAttribute('data-idx'));
+            const blk = page.blocks.find(function (b) { return b.id === bid; });
+            if (blk) {
+              blk.items.splice(idx, 1);
+              render();
+            }
+          });
+        });
+
+        main.querySelectorAll('.add-block-btn').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            const type = btn.getAttribute('data-type');
+            page.blocks.forEach(function (b) { b.expanded = false; });
+            let nb;
+            if (type === 'text') {
+              nb = { id: uid('b'), type: 'text', heading: '', body: '', expanded: true };
+            } else if (type === 'list') {
+              nb = { id: uid('b'), type: 'list', title: '', style: 'bullet', items: [''], expanded: true };
+            } else {
+              nb = { id: uid('b'), type: 'details', summary: '', body: '', expanded: true };
+            }
+            page.blocks.push(nb);
+            render();
+            const card = document.getElementById('block-card-' + nb.id);
+            if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          });
+        });
+
+        // Screen 8: Demo trigger for collapsed blocks across ALL 3 types (text, list, details)
+        document.getElementById('demo-error-trigger').addEventListener('click', function () {
+          state.pageUi.selectedPageId = 'page-trip';
+          state.pageUi.workingPage = {
+            id: 'page-trip',
+            title: 'مثال: رحلة الصيف للأسرة',
+            subtitle: 'تجربة أخطاء في كل أنواع الفقرات',
+            visible: true,
+            blocks: [
+              { id: 'b-demo-1', type: 'text', heading: 'مواعيد التحرك', body: '', expanded: false },
+              { id: 'b-demo-2', type: 'list', title: 'الأوراق المطلوبة', style: 'numbered', items: ['صورة البطاقة', ''], expanded: false },
+              { id: 'b-demo-3', type: 'details', summary: 'شروط الاشتراك', body: '', expanded: false }
+            ]
+          };
+          runPageSave();
+        });
+
+        document.getElementById('page-save-btn').addEventListener('click', runPageSave);
+      }
+
+      function runPageSave() {
+        const page = state.pageUi.workingPage;
+        const errors = validateWorkingPage(page);
+        if (errors.length > 0) {
+          state.pageUi.showErrors = true;
+          state.pageUi.savedBanner = '';
+          // Auto-expand EVERY block that has an error (text, list, AND details)
+          const badBlockIds = {};
+          errors.forEach(function (er) {
+            if (er.blockId) badBlockIds[er.blockId] = true;
+          });
+          page.blocks.forEach(function (b) {
+            if (badBlockIds[b.id]) b.expanded = true;
+          });
+          render();
+          // Scroll to and focus the first offending block/field
+          const first = errors[0];
+          focusAndScrollToInput(first.inputId, first.blockId);
+          return;
+        }
+
+        // Valid save
+        state.pageUi.showErrors = false;
+        state.pageUi.errors = [];
+        const cleanTitle = page.title.trim();
+
+        if (page.isNewTemplate) {
+          const created = deepClone(page);
+          created.id = uid('page');
+          created.isNewTemplate = false;
+          created.title = cleanTitle;
+          state.data.pages.push(created);
+          state.pageUi.selectedPageId = created.id;
+          state.pageUi.workingPage = deepClone(created);
+          // Reset fresh template
+          state.data.pages[0] = {
+            id: 'page-new',
+            isNewTemplate: true,
+            title: '',
+            subtitle: '',
+            visible: true,
+            blocks: [{ id: uid('b'), type: 'text', heading: '', body: '', expanded: true }]
+          };
+        } else {
+          const idx = state.data.pages.findIndex(function (p) { return p.id === page.id; });
+          if (idx >= 0) {
+            state.data.pages[idx] = deepClone(page);
+          }
+        }
+        saveData();
+        addRecentEdit('حفظ صفحة «' + cleanTitle + '» (' + toArabicDigits(page.blocks.length) + ' فقرات)');
+        state.pageUi.savedBanner = 'صفحة «' + cleanTitle + '» اتحفظت بكل فقراتها (' + toArabicDigits(page.blocks.length) + ') وبقت جاهزة للزوار.';
+        render();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+
+      // =========================================================================
+      // Screen 6: Advanced Settings (Rare Settings Tucked Away)
+      // =========================================================================
+      function renderAdvSwitch(key, title, sub, checked) {
+        return '<button type="button" class="switch-row adv-switch" data-key="' + esc(key) + '" role="switch" aria-checked="' + (checked ? 'true' : 'false') + '">' +
+          '<span class="switch-text">' +
+            '<span class="switch-title">' + esc(title) + '</span>' +
+            '<span class="switch-sub">' + esc(sub) + '</span>' +
+          '</span>' +
+          '<span class="switch-state-wrap">' +
+            '<span class="state-badge ' + (checked ? 'on' : 'off') + '">' + (checked ? 'ظاهر' : 'مخفي') + '</span>' +
+            '<span class="toggle-pill" aria-hidden="true"></span>' +
+          '</span>' +
+        '</button>';
+      }
+
+      function renderAdvanced(main, sticky) {
+        main.classList.remove('home-content');
+        sticky.innerHTML = '';
+        const adv = state.data.advanced;
+
+        main.innerHTML =
+          '<div class="banner banner-notice">' +
+            '<p class="banner-title">إعدادات نادرة للموقع والتطبيق</p>' +
+            '<span>الحاجات دي بتتظبط مرة كل فترة طويلة، ومش هتحتاجها في الشغل اليومي.</span>' +
+          '</div>' +
+
+          '<div class="card">' +
+            '<strong style="font-size:15px;display:block;margin-bottom:8px;">الأقسام الظاهرة للزوار</strong>' +
+            renderAdvSwitch('clinics', 'قسم العيادات', 'يظهر في القائمة الرئيسية وروابط الموقع', adv.sections.clinics) +
+            renderAdvSwitch('meetings', 'الاجتماعات ومدارس الأحد', 'جدول الاجتماعات والخدام', adv.sections.meetings) +
+            renderAdvSwitch('dailyVerse', 'آية اليوم في الواجهة', 'آية بتتغير كل يوم في أعلى الصفحة', adv.sections.dailyVerse) +
+            renderAdvSwitch('englishEnabled', 'النسخة الإنجليزية للموقع', 'زرار EN للزوار وحقول الإنجليزي في الإدارة', adv.sections.englishEnabled) +
+          '</div>' +
+
+          '<div class="card">' +
+            '<strong style="font-size:15px;display:block;margin-bottom:8px;">التطبيق والأمان (للمسؤول)</strong>' +
+            '<button type="button" class="switch-row" id="adv-install" role="switch" aria-checked="' + (adv.installBanner ? 'true' : 'false') + '">' +
+              '<span class="switch-text"><span class="switch-title">رسالة تثبيت تطبيق أندرويد</span><span class="switch-sub">تظهر للمستخدمين على الموبايل</span></span>' +
+              '<span class="switch-state-wrap"><span class="state-badge ' + (adv.installBanner ? 'on' : 'off') + '">' + (adv.installBanner ? 'مفعّل' : 'مقفول') + '</span><span class="toggle-pill" aria-hidden="true"></span></span>' +
+            '</button>' +
+            '<button type="button" class="switch-row" id="adv-sentry" role="switch" aria-checked="' + (adv.errorReporting ? 'true' : 'false') + '">' +
+              '<span class="switch-text"><span class="switch-title">تسجيل الأعطال التقنية (Sentry)</span><span class="switch-sub">بيبعت تفاصيل الأعطال للمطور بدون أي بيانات شخصية</span></span>' +
+              '<span class="switch-state-wrap"><span class="state-badge ' + (adv.errorReporting ? 'on' : 'off') + '">' + (adv.errorReporting ? 'مفعّل' : 'مقفول') + '</span><span class="toggle-pill" aria-hidden="true"></span></span>' +
+            '</button>' +
+          '</div>' +
+
+          '<div class="card card-tight">' +
+            '<strong style="font-size:14.5px;display:block;margin-bottom:4px;">إعادة ضبط النموذج التجريبي</strong>' +
+            '<p class="field-hint" style="margin-bottom:10px;">لو حابب ترجّع كل بيانات المثال والمسودات زي أول ما فتحت.</p>' +
+            '<button type="button" class="btn btn-danger btn-sm btn-block" id="adv-reset-demo">رجّع بيانات المثال من الأول</button>' +
+          '</div>';
+
+        main.querySelectorAll('.adv-switch').forEach(function (sw) {
+          sw.addEventListener('click', function () {
+            const k = sw.getAttribute('data-key');
+            adv.sections[k] = !adv.sections[k];
+            saveData();
+            render();
+          });
+        });
+        document.getElementById('adv-install').addEventListener('click', function () {
+          adv.installBanner = !adv.installBanner;
+          saveData();
+          render();
+        });
+        document.getElementById('adv-sentry').addEventListener('click', function () {
+          adv.errorReporting = !adv.errorReporting;
+          saveData();
+          render();
+        });
+        document.getElementById('adv-reset-demo').addEventListener('click', function () {
+          openConfirmModal({
+            title: 'متأكد ترجّع كل بيانات المثال من الأول؟',
+            body: 'أي تعديلات عملتها في النموذج التجريبي ده هترجع للحالة الأولية.',
+            confirmLabel: 'أيوه، رجّع المثال',
+            cancelLabel: 'لأ، خلي التعديلات',
+            onConfirm: function () {
+              state.data = createDefaultData();
+              state.seasonDraft = null;
+              state.seasonConfirmed = null;
+              saveData();
+              saveSeasonDraft(null);
+              go('home');
+            }
+          });
+        });
+      }
+
+      // =========================================================================
+      // Main Render Dispatch
+      // =========================================================================
+      function render() {
+        renderTopbar();
+        const main = document.getElementById('main-content');
+        const sticky = document.getElementById('sticky-slot');
+        if (state.screen === 'home') renderHome(main, sticky);
+        else if (state.screen === 'announcement') renderAnnouncement(main, sticky);
+        else if (state.screen === 'masses') renderMasses(main, sticky);
+        else if (state.screen === 'mass-edit') renderMassEdit(main, sticky);
+        else if (state.screen === 'season') renderSeason(main, sticky);
+        else if (state.screen === 'page') renderPageEditor(main, sticky);
+        else if (state.screen === 'advanced') renderAdvanced(main, sticky);
+        else renderHome(main, sticky);
+      }
+
+      render();
+    })();
+  </script>
+</body>
+</html>
