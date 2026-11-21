@@ -1115,17 +1115,152 @@
       gap: 8px;
     }
 
-    /* Sticky Action Bar */
-    .sticky-footer {
+    /* Sticky Action Bar & Sticky Error Summary */
+    #sticky-slot {
       position: sticky;
       bottom: 0;
-      z-index: 15;
-      background: rgba(251, 243, 228, 0.97);
+      z-index: 19;
+    }
+
+    .sticky-footer {
+      background: rgba(251, 243, 228, 0.98);
+      backdrop-filter: blur(6px);
       border-top: 1px solid var(--hairline);
       padding: 10px 14px;
       display: flex;
       flex-direction: column;
       gap: 8px;
+      box-shadow: 0 -4px 14px rgba(96, 50, 8, 0.08);
+    }
+
+    .sticky-error-summary {
+      position: sticky;
+      top: 54px;
+      z-index: 18;
+      max-height: 156px;
+      overflow-y: auto;
+      box-shadow: var(--shadow-panel);
+    }
+
+    /* Role Toggle Pill Bar on Home */
+    .role-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 4px 10px;
+      border-radius: var(--radius-card);
+      background: var(--surface);
+      border: 1px solid var(--hairline);
+    }
+
+    .role-bar-label {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--muted);
+    }
+
+    .role-seg {
+      display: inline-flex;
+      gap: 4px;
+    }
+
+    .role-btn {
+      min-height: 44px;
+      min-width: 68px;
+      padding: 6px 14px;
+      border-radius: var(--radius-pill);
+      font-size: 13.5px;
+      font-weight: 700;
+      color: var(--muted);
+      background: transparent;
+      border: 1px solid transparent;
+    }
+
+    .role-btn.active {
+      background: var(--primary);
+      color: var(--on-primary);
+      border-color: var(--primary-deep);
+    }
+
+    /* Info / Saved Toast */
+    .info-toast-wrap {
+      position: fixed;
+      bottom: 82px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: calc(100% - 24px);
+      max-width: 336px;
+      z-index: 88;
+      pointer-events: none;
+    }
+
+    .info-toast-wrap[hidden] {
+      display: none;
+    }
+
+    .info-toast {
+      background: var(--success);
+      color: #FFFFFF;
+      border-radius: 14px;
+      padding: 10px 14px;
+      font-size: 14px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      box-shadow: 0 8px 22px rgba(27, 71, 43, 0.35);
+    }
+
+    /* Push phone preview card */
+    .push-phone-preview {
+      background: #2B1A10;
+      color: #FFF9EE;
+      border-radius: 18px;
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      border: 1px solid rgba(231, 194, 122, 0.35);
+    }
+
+    .push-phone-app {
+      font-size: 11.5px;
+      color: var(--on-primary-accent);
+      font-weight: 700;
+    }
+
+    .push-phone-title {
+      font-size: 14.5px;
+      font-weight: 700;
+      margin: 0;
+    }
+
+    .push-phone-body {
+      font-size: 13px;
+      color: #F4E6CC;
+      margin: 0;
+    }
+
+    /* Home banner preview card */
+    .home-banner-preview {
+      background: linear-gradient(135deg, var(--primary) 0%, var(--primary-deep) 100%);
+      color: var(--on-primary);
+      border-radius: 16px;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .home-banner-preview-cta {
+      align-self: flex-start;
+      padding: 6px 14px;
+      border-radius: 999px;
+      background: var(--on-primary-accent);
+      color: #2B1A10;
+      font-size: 13px;
+      font-weight: 700;
     }
 
     .btn-row {
@@ -1311,9 +1446,44 @@
     }
 
     .time-picker-row {
-      display: grid;
-      grid-template-columns: 1fr 1fr 1fr;
+      display: flex;
+      align-items: stretch;
       gap: 6px;
+    }
+
+    .time-picker-row .select {
+      flex: 1 1 0;
+      min-width: 66px;
+      padding: 8px 6px;
+      font-size: 14.5px;
+      text-align: center;
+    }
+
+    .ampm-seg {
+      display: inline-flex;
+      gap: 4px;
+      flex-shrink: 0;
+    }
+
+    .ampm-btn {
+      min-width: 48px;
+      min-height: 46px;
+      padding: 6px 10px;
+      border-radius: var(--radius-input);
+      border: 1.5px solid var(--hairline);
+      background: #FFFFFF;
+      color: var(--ink);
+      font-size: 14px;
+      font-weight: 700;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .ampm-btn.active {
+      background: var(--primary);
+      color: var(--on-primary);
+      border-color: var(--primary-deep);
     }
 
     .sr-only {
@@ -1345,6 +1515,11 @@
         <button type="button" class="btn btn-danger-solid" id="modal-confirm">أيوه، امسح</button>
       </div>
     </div>
+  </div>
+
+  <!-- Info / Saved Toast -->
+  <div class="info-toast-wrap" id="info-toast-wrap" role="status" aria-live="polite" hidden>
+    <div class="info-toast" id="info-toast-msg"></div>
   </div>
 
   <!-- Screen 7: 10-second Undo Snackbar -->
@@ -1403,7 +1578,7 @@
       }
 
       function formatDateAr(iso) {
-        if (!iso) return 'مش متحدد';
+        if (!iso) return 'اضغط للاختيار';
         const parts = iso.split('-');
         if (parts.length !== 3) return toArabicDigits(iso);
         const months = [
@@ -1414,6 +1589,14 @@
         const mIdx = Number(parts[1]) - 1;
         const d = Number(parts[2]);
         return toArabicDigits(d) + ' ' + (months[mIdx] || parts[1]) + ' ' + toArabicDigits(y);
+      }
+
+      function formatCountAr(n, zeroText, oneText, twoText, fewNoun, manyNoun) {
+        if (n === 0) return zeroText;
+        if (n === 1) return oneText;
+        if (n === 2) return twoText;
+        if (n >= 3 && n <= 10) return toArabicDigits(n) + ' ' + fewNoun;
+        return toArabicDigits(n) + ' ' + manyNoun;
       }
 
       function renderDatePicker(id, value, ariaLabel) {
@@ -1734,18 +1917,21 @@
       // =========================================================================
       const state = {
         screen: 'home', // home | announcement | masses | mass-edit | season | page | advanced
+        role: 'owner', // owner | servant
         data: loadData(),
 
-        // Screen 2: Announcement state
+        // Screen 2: Announcement state (3 types: notice | push | banner)
         ann: {
-          mode: 'edit', // edit | preview | confirmed
+          mode: 'choose', // choose | edit | preview | confirmed
+          kind: 'notice', // notice | push | banner
           editingId: null,
           title: '',
           body: '',
           timing: 'now', // now | scheduled
           startDate: '2026-11-22',
           endDate: '2026-11-29',
-          sendPush: true,
+          ctaLabel: '',
+          ctaUrl: '',
           errorTitle: '',
           lastPublished: null
         },
@@ -1774,6 +1960,13 @@
           focusTargetId: null
         },
 
+        // Screen 6: Advanced Settings draft (never auto-applies)
+        advUi: {
+          draft: null,
+          dirty: false,
+          appliedBanner: ''
+        },
+
         // Screen 7: Modal + Undo Snackbar
         modal: null,
         snackbar: {
@@ -1782,7 +1975,8 @@
           secondsLeft: 10,
           timer: null,
           undoFn: null
-        }
+        },
+        infoToastTimer: null
       };
 
       function getSeasonCatalogItem(key) {
@@ -1906,13 +2100,31 @@
         if (typeof fn === 'function') fn();
       });
 
+      const infoToastWrapEl = document.getElementById('info-toast-wrap');
+      const infoToastMsgEl = document.getElementById('info-toast-msg');
+
+      function showInfoToast(msg) {
+        if (state.infoToastTimer) clearTimeout(state.infoToastTimer);
+        infoToastMsgEl.innerHTML = ICONS.check + '<span>' + esc(toArabicDigits(msg)) + '</span>';
+        infoToastWrapEl.hidden = false;
+        state.infoToastTimer = setTimeout(function () {
+          infoToastWrapEl.hidden = true;
+          state.infoToastTimer = null;
+        }, 4000);
+      }
+
       // =========================================================================
       // Navigation
       // =========================================================================
       function go(screenName) {
+        if (screenName === 'advanced' && state.role !== 'owner') {
+          screenName = 'home';
+        }
         state.screen = screenName;
         if (screenName === 'announcement') {
-          state.ann.mode = 'edit';
+          if (state.ann.mode !== 'edit' && state.ann.mode !== 'choose') {
+            state.ann.mode = 'choose';
+          }
           state.ann.errorTitle = '';
         }
         if (screenName === 'masses') {
@@ -1929,6 +2141,11 @@
         }
         if (screenName === 'page') {
           loadWorkingPage(state.pageUi.selectedPageId || 'page-new');
+        }
+        if (screenName === 'advanced') {
+          state.advUi.draft = deepClone(state.data.advanced);
+          state.advUi.dirty = false;
+          state.advUi.appliedBanner = '';
         }
         render();
         window.scrollTo({ top: 0, behavior: 'auto' });
@@ -1947,16 +2164,27 @@
       // =========================================================================
       // Topbar Renderer
       // =========================================================================
+      function annKindLabel(kind) {
+        if (kind === 'push') return 'إشعار للمشتركين';
+        if (kind === 'banner') return 'بانر الرئيسية';
+        return 'تنبيه في الموقع';
+      }
+
       function renderTopbar() {
         const topbar = document.getElementById('topbar');
+        const annSub = state.ann.mode === 'choose'
+          ? 'اختار النوع الأول'
+          : (state.ann.mode === 'preview'
+            ? 'معاينة: ' + annKindLabel(state.ann.kind)
+            : (state.ann.mode === 'confirmed' ? 'تم التأكيد' : 'كتابة: ' + annKindLabel(state.ann.kind)));
         const titles = {
-          home: { t: 'إدارة موقع الكنيسة', s: 'لوحة الخادم' },
-          announcement: { t: 'نشر إعلان', s: state.ann.mode === 'preview' ? 'مراجعة قبل النشر' : (state.ann.mode === 'confirmed' ? 'تم النشر' : 'اكتب الإعلان') },
+          home: { t: 'إدارة موقع الكنيسة', s: state.role === 'owner' ? 'عرض كـ: مالك' : 'عرض كـ: خادم' },
+          announcement: { t: 'نشر إعلان', s: annSub },
           masses: { t: 'مواعيد القداسات', s: 'الجدول الأسبوعي' },
           'mass-edit': { t: state.massesUi.editingId ? 'تعديل قداس' : 'إضافة قداس جديد', s: 'مواعيد القداسات' },
           season: { t: 'تفعيل موسم', s: state.seasonConfirmed ? 'تم التطبيق' : ('خطوة ' + toArabicDigits(state.seasonDraft ? state.seasonDraft.step : 1) + ' من ' + toArabicDigits(3)) },
           page: { t: 'إضافة وتعديل صفحة', s: 'فقرات الصفحة' },
-          advanced: { t: 'إعدادات متقدمة', s: 'إعدادات نادرة للموقع' }
+          advanced: { t: 'إعدادات متقدمة', s: 'للمالك فقط' }
         };
         const meta = titles[state.screen] || titles.home;
 
@@ -1984,6 +2212,9 @@
               go('masses');
             } else if (state.screen === 'announcement' && state.ann.mode === 'preview') {
               state.ann.mode = 'edit';
+              render();
+            } else if (state.screen === 'announcement' && state.ann.mode === 'edit' && !state.ann.editingId) {
+              state.ann.mode = 'choose';
               render();
             } else {
               go('home');
@@ -2024,7 +2255,31 @@
           '</li>';
         }).join('');
 
+        const massesCountLabel = formatCountAr(
+          state.data.masses.length,
+          'مفيش قداسات حالية',
+          'قداس واحد مثال',
+          'قداسين مثال',
+          'قداسات مثال',
+          'قداس مثال'
+        );
+
+        const advButtonHtml = state.role === 'owner'
+          ? '<button type="button" class="advanced-link-btn" id="go-advanced">' +
+              '<span style="display:inline-flex;align-items:center;gap:8px;">' + ICONS.settings + ' <span>متقدم — إعدادات نادرة للموقع</span></span>' +
+              '<span dir="ltr" aria-hidden="true">‹</span>' +
+            '</button>'
+          : '';
+
         main.innerHTML =
+          '<div class="role-bar" role="group" aria-label="وضع العرض">' +
+            '<span class="role-bar-label">عرض كـ:</span>' +
+            '<div class="role-seg">' +
+              '<button type="button" class="role-btn' + (state.role === 'owner' ? ' active' : '') + '" id="role-owner">مالك</button>' +
+              '<button type="button" class="role-btn' + (state.role === 'servant' ? ' active' : '') + '" id="role-servant">خادم</button>' +
+            '</div>' +
+          '</div>' +
+
           '<div>' +
             '<h2 class="page-heading">عايز تعمل إيه؟</h2>' +
             '<p class="page-lead">اختار المهمة وهنمشي معاك خطوة بخطوة</p>' +
@@ -2039,7 +2294,7 @@
                   '<span class="task-title">انشر إعلان</span>' +
                   '<span class="task-badge daily-tag">شغل يومي</span>' +
                 '</span>' +
-                '<span class="task-sub">اكتب تنبيه يظهر في أول الموقع وإشعار للزوار</span>' +
+                '<span class="task-sub">تنبيه في الموقع، إشعار للمشتركين، أو بانر الرئيسية</span>' +
               '</span>' +
               '<span class="task-arrow" dir="ltr" aria-hidden="true">‹</span>' +
             '</button>' +
@@ -2052,7 +2307,7 @@
                   '<span class="task-title">عدّل وقت قداس</span>' +
                   '<span class="task-badge daily-tag">شغل يومي</span>' +
                 '</span>' +
-                '<span class="task-sub">مواعيد قداسات الأسبوع (' + toArabicDigits(state.data.masses.length) + ' قداسات مثال)</span>' +
+                '<span class="task-sub">مواعيد قداسات الأسبوع (' + esc(massesCountLabel) + ')</span>' +
               '</span>' +
               '<span class="task-arrow" dir="ltr" aria-hidden="true">‹</span>' +
             '</button>' +
@@ -2090,21 +2345,29 @@
             '</div>' +
           '</section>' +
 
-          '<button type="button" class="advanced-link-btn" id="go-advanced">' +
-            '<span style="display:inline-flex;align-items:center;gap:8px;">' + ICONS.settings + ' <span>متقدم — إعدادات نادرة للموقع</span></span>' +
-            '<span dir="ltr" aria-hidden="true">‹</span>' +
-          '</button>';
+          advButtonHtml;
+
+        document.getElementById('role-owner').addEventListener('click', function () {
+          state.role = 'owner';
+          render();
+        });
+        document.getElementById('role-servant').addEventListener('click', function () {
+          state.role = 'servant';
+          render();
+        });
 
         document.getElementById('go-announcement').addEventListener('click', function () {
           state.ann = {
-            mode: 'edit',
+            mode: 'choose',
+            kind: 'notice',
             editingId: null,
             title: '',
             body: '',
             timing: 'now',
             startDate: '2026-11-22',
             endDate: '2026-11-29',
-            sendPush: true,
+            ctaLabel: '',
+            ctaUrl: '',
             errorTitle: '',
             lastPublished: null
           };
@@ -2116,37 +2379,228 @@
           go('page');
         });
         document.getElementById('go-season').addEventListener('click', function () { go('season'); });
-        document.getElementById('go-advanced').addEventListener('click', function () { go('advanced'); });
+        const advBtn = document.getElementById('go-advanced');
+        if (advBtn) {
+          advBtn.addEventListener('click', function () { go('advanced'); });
+        }
       }
 
       // =========================================================================
-      // Screen 2: Announcement Editor (Edit → Preview → Publish → Confirm)
+      // Screen 2: Announcement Editor (Choose 3 Types → Write → Preview → Confirm)
       // =========================================================================
+      function renderAnnPreviewBox(annObj) {
+        if (annObj.kind === 'push') {
+          return '<div class="push-phone-preview">' +
+            '<span class="push-phone-app">إشعار كنيسة القديسين مكسيموس ودوماديوس</span>' +
+            '<p class="push-phone-title">' + esc(toArabicDigits(annObj.title)) + '</p>' +
+            '<p class="push-phone-body">' + esc(toArabicDigits(annObj.body || 'اضغط لفتح التفاصيل في التطبيق')) + '</p>' +
+          '</div>';
+        }
+        if (annObj.kind === 'banner') {
+          return '<div class="home-banner-preview">' +
+            '<p class="visitor-alert-title" style="color:#FFFFFF;">' + esc(toArabicDigits(annObj.title)) + '</p>' +
+            (annObj.body ? '<p class="visitor-alert-text" style="color:#F4E6CC;">' + esc(toArabicDigits(annObj.body)) + '</p>' : '') +
+            (annObj.ctaLabel ? '<span class="home-banner-preview-cta">' + esc(toArabicDigits(annObj.ctaLabel)) + '</span>' : '') +
+          '</div>';
+        }
+        return '<div class="visitor-preview">' +
+          '<div class="visitor-preview-head">' +
+            '<span>تنبيه في أعلى صفحات الموقع</span>' +
+            '<span>' + (annObj.timing === 'now' ? 'يظهر فورًا' : (formatDateAr(annObj.startDate) + ' – ' + formatDateAr(annObj.endDate))) + '</span>' +
+          '</div>' +
+          '<div class="visitor-preview-body">' +
+            '<div class="visitor-alert-box">' +
+              '<p class="visitor-alert-title">' + esc(toArabicDigits(annObj.title)) + '</p>' +
+              (annObj.body ? '<p class="visitor-alert-text">' + esc(toArabicDigits(annObj.body)) + '</p>' : '<p class="field-hint">(بدون تفاصيل إضافية)</p>') +
+            '</div>' +
+          '</div>' +
+        '</div>';
+      }
+
       function renderAnnouncement(main, sticky) {
         main.classList.remove('home-content');
+
+        function commitAnnouncementPublish() {
+          const payload = {
+            id: state.ann.editingId || uid('ann'),
+            kind: state.ann.kind,
+            title: state.ann.title.trim(),
+            body: state.ann.body.trim(),
+            timing: state.ann.timing,
+            startDate: state.ann.startDate,
+            endDate: state.ann.endDate,
+            ctaLabel: state.ann.ctaLabel.trim(),
+            ctaUrl: state.ann.ctaUrl.trim()
+          };
+          const idx = state.data.announcements.findIndex(function (a) { return a.id === payload.id; });
+          if (idx >= 0) {
+            state.data.announcements[idx] = payload;
+          } else {
+            state.data.announcements.unshift(payload);
+          }
+          saveData();
+          addRecentEdit(annKindLabel(payload.kind) + ': «' + payload.title + '»');
+          state.ann.lastPublished = payload;
+          state.ann.mode = 'confirmed';
+          render();
+          window.scrollTo({ top: 0, behavior: 'auto' });
+        }
+
+        // Step 0: Choose between the 3 announcement types
+        if (state.ann.mode === 'choose') {
+          sticky.innerHTML = '';
+          const annCountLabel = formatCountAr(
+            state.data.announcements.length,
+            'مفيش إعلانات منشورة',
+            'إعلان واحد مثال',
+            'إعلانين مثال',
+            'إعلانات مثال',
+            'إعلان مثال'
+          );
+          const existingHtml = state.data.announcements.map(function (a) {
+            const kLabel = annKindLabel(a.kind || 'notice');
+            return '<div class="mass-card">' +
+              '<div class="mass-top">' +
+                '<div>' +
+                  '<span class="task-badge" style="margin-bottom:4px;">' + esc(kLabel) + '</span>' +
+                  '<p class="mass-name">' + esc(toArabicDigits(a.title)) + '</p>' +
+                  (a.body ? '<p class="mass-meta">' + esc(toArabicDigits(a.body)) + '</p>' : '') +
+                  '<p class="mass-meta">' + (a.kind === 'push' ? 'اتّبعت لكل المشتركين (مثال: ١٢٠)' : (a.timing === 'scheduled' ? ('من ' + formatDateAr(a.startDate)) : 'ظاهر دلوقتي')) + '</p>' +
+                '</div>' +
+              '</div>' +
+              '<div class="card-actions">' +
+                '<button type="button" class="btn btn-soft btn-sm ann-edit-item" data-id="' + esc(a.id) + '" style="flex:1;">تعديل</button>' +
+                '<button type="button" class="btn btn-danger btn-sm ann-del-item" data-id="' + esc(a.id) + '">حذف</button>' +
+              '</div>' +
+            '</div>';
+          }).join('');
+
+          main.innerHTML =
+            '<div>' +
+              '<h2 class="page-heading" style="font-size:19px;">عايز تنشر إيه بالظبط؟</h2>' +
+              '<p class="page-lead">اختار الطريقة المناسبة، وكل نوع فيه كتابة ومعاينة قبل التأكيد</p>' +
+            '</div>' +
+
+            '<div class="tasks-stack">' +
+              '<button type="button" class="task-card task-daily ann-pick-kind" data-kind="notice">' +
+                '<span class="task-icon">' + ICONS.alert + '</span>' +
+                '<span class="task-body">' +
+                  '<span class="task-title">تنبيه في الموقع</span>' +
+                  '<span class="task-sub">شريط تنبيه يظهر فوق للزوار في صفحات الموقع</span>' +
+                '</span>' +
+                '<span class="task-arrow" dir="ltr" aria-hidden="true">‹</span>' +
+              '</button>' +
+
+              '<button type="button" class="task-card task-daily ann-pick-kind" data-kind="push">' +
+                '<span class="task-icon">' + ICONS.megaphone + '</span>' +
+                '<span class="task-body">' +
+                  '<span class="task-title-row">' +
+                    '<span class="task-title">إشعار للمشتركين (push)</span>' +
+                    '<span class="task-badge">مثال: ١٢٠ مشترك</span>' +
+                  '</span>' +
+                  '<span class="task-sub">يوصل فورًا كإشعار على موبايلات المشتركين</span>' +
+                '</span>' +
+                '<span class="task-arrow" dir="ltr" aria-hidden="true">‹</span>' +
+              '</button>' +
+
+              '<button type="button" class="task-card task-secondary ann-pick-kind" data-kind="banner">' +
+                '<span class="task-icon">' + ICONS.sparkles + '</span>' +
+                '<span class="task-body">' +
+                  '<span class="task-title">بانر الرئيسية</span>' +
+                  '<span class="task-sub">بطاقة بارزة في الصفحة الرئيسية بزرار للتفاصيل</span>' +
+                '</span>' +
+                '<span class="task-arrow" dir="ltr" aria-hidden="true">‹</span>' +
+              '</button>' +
+            '</div>' +
+
+            '<section aria-labelledby="existing-ann-h">' +
+              '<h3 class="section-heading" id="existing-ann-h">الإعلانات الحالية (' + esc(annCountLabel) + ')</h3>' +
+              '<div class="tasks-stack">' +
+                (existingHtml || '<div class="card card-tight"><span class="field-hint">مفيش إعلانات منشورة حاليًا.</span></div>') +
+              '</div>' +
+            '</section>';
+
+          main.querySelectorAll('.ann-pick-kind').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+              state.ann.kind = btn.getAttribute('data-kind');
+              state.ann.editingId = null;
+              state.ann.title = '';
+              state.ann.body = '';
+              state.ann.ctaLabel = '';
+              state.ann.ctaUrl = '';
+              state.ann.errorTitle = '';
+              state.ann.mode = 'edit';
+              render();
+              window.scrollTo({ top: 0, behavior: 'auto' });
+            });
+          });
+
+          main.querySelectorAll('.ann-edit-item').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+              const id = btn.getAttribute('data-id');
+              const found = state.data.announcements.find(function (a) { return a.id === id; });
+              if (!found) return;
+              state.ann = {
+                mode: 'edit',
+                kind: found.kind || 'notice',
+                editingId: found.id,
+                title: found.title,
+                body: found.body || '',
+                timing: found.timing || 'now',
+                startDate: found.startDate || '2026-11-22',
+                endDate: found.endDate || '2026-11-29',
+                ctaLabel: found.ctaLabel || '',
+                ctaUrl: found.ctaUrl || '',
+                errorTitle: '',
+                lastPublished: null
+              };
+              render();
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            });
+          });
+
+          main.querySelectorAll('.ann-del-item').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+              const id = btn.getAttribute('data-id');
+              const idx = state.data.announcements.findIndex(function (a) { return a.id === id; });
+              if (idx < 0) return;
+              const removed = state.data.announcements[idx];
+              openConfirmModal({
+                title: 'متأكد تمسح «' + toArabicDigits(removed.title) + '»؟',
+                body: 'الإعلان هيتشال من قدام الزوار فورًا، وتقدر تتراجع خلال ١٠ ثواني.',
+                onConfirm: function () {
+                  state.data.announcements.splice(idx, 1);
+                  saveData();
+                  render();
+                  showUndoSnackbar('اتمسح «' + toArabicDigits(removed.title) + '»', function () {
+                    state.data.announcements.splice(Math.min(idx, state.data.announcements.length), 0, removed);
+                    saveData();
+                    render();
+                  });
+                }
+              });
+            });
+          });
+          return;
+        }
 
         // Confirmed view
         if (state.ann.mode === 'confirmed' && state.ann.lastPublished) {
           const pub = state.ann.lastPublished;
           sticky.innerHTML = '';
+          const confirmTitle = pub.kind === 'push'
+            ? 'تم إرسال الإشعار!'
+            : (pub.kind === 'banner' ? 'تم نشر بانر الرئيسية!' : 'تم نشر التنبيه في الموقع!');
+          const confirmBody = pub.kind === 'push'
+            ? 'هيوصل لكل المشتركين (مثال: ١٢٠) على موبايلاتهم دلوقتي.'
+            : (pub.kind === 'banner' ? 'البانر بقى ظاهر للزوار في الصفحة الرئيسية.' : 'التنبيه بقى ظاهر في أعلى الموقع للزوار.');
+
           main.innerHTML =
             '<div class="banner banner-success" role="status">' +
-              '<p class="banner-title">' + ICONS.check + ' <span>تم نشر الإعلان للزوار!</span></p>' +
-              '<span>الإعلان بقى ظاهر في أعلى الصفحة الرئيسية للموقع دلوقتي.</span>' +
+              '<p class="banner-title">' + ICONS.check + ' <span>' + esc(confirmTitle) + '</span></p>' +
+              '<span><strong>' + esc(confirmBody) + '</strong></span>' +
             '</div>' +
-            '<div class="visitor-preview">' +
-              '<div class="visitor-preview-head">' +
-                '<span>اللي الزائر بيشوفه دلوقتي</span>' +
-                '<span>' + (pub.timing === 'now' ? 'ظاهر فورًا' : ('من ' + formatDateAr(pub.startDate))) + '</span>' +
-              '</div>' +
-              '<div class="visitor-preview-body">' +
-                '<div class="visitor-alert-box">' +
-                  '<p class="visitor-alert-title">' + esc(toArabicDigits(pub.title)) + '</p>' +
-                  (pub.body ? '<p class="visitor-alert-text">' + esc(toArabicDigits(pub.body)) + '</p>' : '') +
-                '</div>' +
-                (pub.sendPush ? '<p class="field-hint" style="margin-top:8px;">واتبعت كمان إشعار تنبيه للمشتركين في التطبيق.</p>' : '') +
-              '</div>' +
-            '</div>' +
+            renderAnnPreviewBox(pub) +
             '<div class="btn-row" style="margin-top:4px;">' +
               '<button type="button" class="btn btn-primary" id="ann-done-home">رجوع للرئيسية</button>' +
               '<button type="button" class="btn btn-secondary" id="ann-another">انشر إعلان تاني</button>' +
@@ -2155,44 +2609,36 @@
           document.getElementById('ann-done-home').addEventListener('click', function () { go('home'); });
           document.getElementById('ann-another').addEventListener('click', function () {
             state.ann = {
-              mode: 'edit', editingId: null, title: '', body: '',
+              mode: 'choose', kind: 'notice', editingId: null, title: '', body: '',
               timing: 'now', startDate: '2026-11-22', endDate: '2026-11-29',
-              sendPush: true, errorTitle: '', lastPublished: null
+              ctaLabel: '', ctaUrl: '', errorTitle: '', lastPublished: null
             };
             render();
           });
           return;
         }
 
-        // Preview view (before explicit publish)
+        // Preview view (before explicit publish/send)
         if (state.ann.mode === 'preview') {
+          const isPush = state.ann.kind === 'push';
+          const isBanner = state.ann.kind === 'banner';
+          const publishBtnText = isPush
+            ? 'ابعت الإشعار لكل المشتركين (مثال: ١٢٠)'
+            : (isBanner ? 'انشر بانر الرئيسية دلوقتي' : 'انشر التنبيه في الموقع دلوقتي');
+
           main.innerHTML =
             '<div class="banner banner-notice">' +
-              '<p class="banner-title">راجع شكل الإعلان قبل ما تنشره</p>' +
-              '<span>لسه ما اتنشرش للناس — لو الشكل تمام اضغط «انشر الإعلان دلوقتي».</span>' +
+              '<p class="banner-title">راجع الشكل قبل ما ' + (isPush ? 'تبعته' : 'تنشره') + '</p>' +
+              '<span>' + (isPush ? 'الإشعار ده هيوصل لكل المشتركين (مثال: ١٢٠) ومش هيتبعت إلا لما تأكد.' : 'لسه ما اتنشرش للناس — لو الشكل تمام اضغط الزرار تحت.') + '</span>' +
             '</div>' +
-            '<div class="visitor-preview">' +
-              '<div class="visitor-preview-head">' +
-                '<span>معاينة في أعلى صفحة الكنيسة</span>' +
-                '<span>' + (state.ann.timing === 'now' ? 'يظهر فورًا' : (formatDateAr(state.ann.startDate) + ' – ' + formatDateAr(state.ann.endDate))) + '</span>' +
-              '</div>' +
-              '<div class="visitor-preview-body">' +
-                '<div class="visitor-alert-box">' +
-                  '<p class="visitor-alert-title">' + esc(toArabicDigits(state.ann.title)) + '</p>' +
-                  (state.ann.body ? '<p class="visitor-alert-text">' + esc(toArabicDigits(state.ann.body)) + '</p>' : '<p class="field-hint">(بدون تفاصيل إضافية)</p>') +
-                '</div>' +
-              '</div>' +
-            '</div>' +
-            '<div class="card card-tight">' +
-              '<div style="font-size:13.5px;display:flex;flex-direction:column;gap:6px;">' +
-                '<div><strong>وقت الظهور:</strong> ' + (state.ann.timing === 'now' ? 'دلوقتي على طول' : ('من ' + formatDateAr(state.ann.startDate) + ' لحد ' + formatDateAr(state.ann.endDate))) + '</div>' +
-                '<div><strong>إشعار على الموبايل:</strong> ' + (state.ann.sendPush ? 'أيوه، هيتبعت إشعار للمشتركين' : 'لأ، يظهر في الموقع بس') + '</div>' +
-              '</div>' +
-            '</div>';
+            renderAnnPreviewBox(state.ann) +
+            (!isPush
+              ? '<div class="card card-tight"><div style="font-size:13.5px;"><strong>وقت الظهور:</strong> ' + (state.ann.timing === 'now' ? 'دلوقتي على طول' : ('من ' + formatDateAr(state.ann.startDate) + ' لحد ' + formatDateAr(state.ann.endDate))) + '</div></div>'
+              : '');
 
           sticky.innerHTML =
             '<div class="sticky-footer">' +
-              '<button type="button" class="btn btn-primary btn-block" id="ann-publish-btn">انشر الإعلان دلوقتي</button>' +
+              '<button type="button" class="btn btn-primary btn-block" id="ann-publish-btn">' + esc(publishBtnText) + '</button>' +
               '<button type="button" class="btn btn-soft btn-sm btn-block" id="ann-back-edit"><span dir="ltr" aria-hidden="true">›</span> <span>رجوع لتعديل الكلام</span></button>' +
             '</div>';
 
@@ -2201,102 +2647,75 @@
             render();
           });
           document.getElementById('ann-publish-btn').addEventListener('click', function () {
-            const payload = {
-              id: state.ann.editingId || uid('ann'),
-              title: state.ann.title.trim(),
-              body: state.ann.body.trim(),
-              timing: state.ann.timing,
-              startDate: state.ann.startDate,
-              endDate: state.ann.endDate,
-              sendPush: state.ann.sendPush
-            };
-            const idx = state.data.announcements.findIndex(function (a) { return a.id === payload.id; });
-            if (idx >= 0) {
-              state.data.announcements[idx] = payload;
+            if (isPush) {
+              openConfirmModal({
+                title: 'تأكيد إرسال الإشعار «' + toArabicDigits(state.ann.title.trim()) + '»',
+                body: 'هيوصل لكل المشتركين (مثال: ١٢٠) على موبايلاتهم دلوقتي.',
+                confirmLabel: 'أيوه، ابعت للمشتركين',
+                cancelLabel: 'لأ، راجع تاني',
+                onConfirm: commitAnnouncementPublish
+              });
             } else {
-              state.data.announcements.unshift(payload);
+              commitAnnouncementPublish();
             }
-            saveData();
-            addRecentEdit('نشر إعلان: «' + payload.title + '»');
-            state.ann.lastPublished = payload;
-            state.ann.mode = 'confirmed';
-            render();
           });
           return;
         }
 
-        // Edit view
-        const existingHtml = state.data.announcements.map(function (a) {
-          return '<div class="mass-card">' +
-            '<div class="mass-top">' +
-              '<div>' +
-                '<p class="mass-name">' + esc(toArabicDigits(a.title)) + '</p>' +
-                (a.body ? '<p class="mass-meta">' + esc(toArabicDigits(a.body)) + '</p>' : '') +
-                '<p class="mass-meta">' + (a.timing === 'now' ? 'ظاهر دلوقتي' : ('من ' + formatDateAr(a.startDate))) + (a.sendPush ? ' · بإشعار' : '') + '</p>' +
-              '</div>' +
-            '</div>' +
-            '<div class="card-actions">' +
-              '<button type="button" class="btn btn-soft btn-sm ann-edit-item" data-id="' + esc(a.id) + '" style="flex:1;">تعديل</button>' +
-              '<button type="button" class="btn btn-danger btn-sm ann-del-item" data-id="' + esc(a.id) + '">حذف</button>' +
-            '</div>' +
-          '</div>';
-        }).join('');
+        // Edit view (Step 1 for the selected announcement kind)
+        const isPush = state.ann.kind === 'push';
+        const isBanner = state.ann.kind === 'banner';
 
         main.innerHTML =
           '<div class="card">' +
             '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;">' +
-              '<strong style="font-size:15px;">' + (state.ann.editingId ? 'تعديل الإعلان' : 'إعلان جديد') + '</strong>' +
+              '<strong style="font-size:15px;">' + esc(annKindLabel(state.ann.kind)) + '</strong>' +
               '<button type="button" class="btn btn-soft btn-sm" id="ann-fill-example" style="min-height:44px;">املأ بمثال سريع</button>' +
             '</div>' +
 
+            (isPush
+              ? '<div class="banner banner-notice" style="margin-bottom:12px;"><span>الإشعار هيوصل لكل المشتركين (مثال: ١٢٠). هنوريك معاينة الأول قبل الإرسال.</span></div>'
+              : '') +
+
             '<div class="field">' +
-              '<label class="field-label" for="ann-title">عنوان الإعلان <span class="req-tag">مطلوب</span></label>' +
+              '<label class="field-label" for="ann-title">' + (isPush ? 'عنوان الإشعار' : (isBanner ? 'عنوان البانر' : 'عنوان التنبيه')) + ' <span class="req-tag">مطلوب</span></label>' +
               '<input type="text" id="ann-title" class="input' + (state.ann.errorTitle ? ' is-invalid' : '') + '" placeholder="مثال: قداس عيد الصليب الساعة ٧ صباحًا" value="' + esc(state.ann.title) + '" />' +
               (state.ann.errorTitle ? '<div class="field-error" role="alert">' + ICONS.alert + '<span>' + esc(state.ann.errorTitle) + '</span></div>' : '') +
             '</div>' +
 
             '<div class="field">' +
-              '<label class="field-label" for="ann-body">التفاصيل (اختياري)</label>' +
+              '<label class="field-label" for="ann-body">التفاصيل ' + (isPush ? '(بتظهر تحت العنوان)' : '(اختياري)') + '</label>' +
               '<textarea id="ann-body" class="textarea" placeholder="مثال: هيتصلّى في الكنيسة الكبرى، ومفيش تسبحة بالليل.">' + esc(state.ann.body) + '</textarea>' +
             '</div>' +
 
-            '<div class="field">' +
-              '<span class="field-label">يظهر إمتى للزوار؟</span>' +
-              '<div class="chip-row">' +
-                '<button type="button" class="chip-btn' + (state.ann.timing === 'now' ? ' selected' : '') + '" id="ann-time-now">دلوقتي على طول</button>' +
-                '<button type="button" class="chip-btn' + (state.ann.timing === 'scheduled' ? ' selected' : '') + '" id="ann-time-sched">من تاريخ لتاريخ</button>' +
-              '</div>' +
-            '</div>' +
-
-            (state.ann.timing === 'scheduled'
-              ? '<div class="grid-2" style="margin-bottom:12px;">' +
-                  '<div class="field" style="margin-bottom:0;"><span class="field-label">من يوم</span>' + renderDatePicker('ann-start', state.ann.startDate, 'من يوم') + '</div>' +
-                  '<div class="field" style="margin-bottom:0;"><span class="field-label">لحد يوم</span>' + renderDatePicker('ann-end', state.ann.endDate, 'لحد يوم') + '</div>' +
+            (isBanner
+              ? '<div class="field">' +
+                  '<label class="field-label" for="ann-cta-label">نص الزرار في البانر (اختياري)</label>' +
+                  '<input type="text" id="ann-cta-label" class="input" placeholder="مثال: اعرف التفاصيل" value="' + esc(state.ann.ctaLabel) + '" />' +
                 '</div>'
               : '') +
 
-            '<button type="button" class="switch-row" id="ann-push-toggle" role="switch" aria-checked="' + (state.ann.sendPush ? 'true' : 'false') + '">' +
-              '<span class="switch-text">' +
-                '<span class="switch-title">ابعت إشعار على الموبايل</span>' +
-                '<span class="switch-sub">الناس اللي مفعّلة الإشعارات هيوصلهم تنبيه</span>' +
-              '</span>' +
-              '<span class="switch-state-wrap">' +
-                '<span class="state-badge ' + (state.ann.sendPush ? 'on' : 'off') + '">' + (state.ann.sendPush ? 'مفعّل' : 'مقفول') + '</span>' +
-                '<span class="toggle-pill" aria-hidden="true"></span>' +
-              '</span>' +
-            '</button>' +
-          '</div>' +
-
-          '<section aria-labelledby="existing-ann-h">' +
-            '<h3 class="section-heading" id="existing-ann-h">الإعلانات المنشورة حاليًا (' + toArabicDigits(state.data.announcements.length) + ' مثال)</h3>' +
-            '<div class="tasks-stack">' +
-              (existingHtml || '<div class="card card-tight"><span class="field-hint">مفيش إعلانات منشورة حاليًا.</span></div>') +
-            '</div>' +
-          '</section>';
+            (!isPush
+              ? '<div class="field">' +
+                  '<span class="field-label">يظهر إمتى للزوار؟</span>' +
+                  '<div class="chip-row">' +
+                    '<button type="button" class="chip-btn' + (state.ann.timing === 'now' ? ' selected' : '') + '" id="ann-time-now">دلوقتي على طول</button>' +
+                    '<button type="button" class="chip-btn' + (state.ann.timing === 'scheduled' ? ' selected' : '') + '" id="ann-time-sched">من تاريخ لتاريخ</button>' +
+                  '</div>' +
+                '</div>' +
+                (state.ann.timing === 'scheduled'
+                  ? '<div class="grid-2">' +
+                      '<div class="field" style="margin-bottom:0;"><span class="field-label">من يوم</span>' + renderDatePicker('ann-start', state.ann.startDate, 'من يوم') + '</div>' +
+                      '<div class="field" style="margin-bottom:0;"><span class="field-label">لحد يوم</span>' + renderDatePicker('ann-end', state.ann.endDate, 'لحد يوم') + '</div>' +
+                    '</div>'
+                  : '')
+              : '') +
+          '</div>';
 
         sticky.innerHTML =
           '<div class="sticky-footer">' +
-            '<button type="button" class="btn btn-primary btn-block" id="ann-preview-btn"><span>معاينة الإعلان قبل النشر</span> <span dir="ltr" aria-hidden="true">‹</span></button>' +
+            '<button type="button" class="btn btn-primary btn-block" id="ann-preview-btn"><span>معاينة قبل التأكيد</span> <span dir="ltr" aria-hidden="true">‹</span></button>' +
+            (!state.ann.editingId ? '<button type="button" class="btn btn-soft btn-sm btn-block" id="ann-change-kind"><span dir="ltr" aria-hidden="true">›</span> <span>اختيار نوع تاني</span></button>' : '') +
           '</div>';
 
         const titleInput = document.getElementById('ann-title');
@@ -2312,6 +2731,9 @@
         });
         bodyInput.addEventListener('input', function () { state.ann.body = bodyInput.value; });
 
+        if (document.getElementById('ann-cta-label')) {
+          document.getElementById('ann-cta-label').addEventListener('input', function (e) { state.ann.ctaLabel = e.target.value; });
+        }
         if (document.getElementById('ann-start')) {
           document.getElementById('ann-start').addEventListener('change', function (e) {
             state.ann.startDate = e.target.value;
@@ -2322,72 +2744,42 @@
             document.getElementById('ann-end-label').textContent = formatDateAr(e.target.value);
           });
         }
-
-        document.getElementById('ann-time-now').addEventListener('click', function () { state.ann.timing = 'now'; render(); });
-        document.getElementById('ann-time-sched').addEventListener('click', function () { state.ann.timing = 'scheduled'; render(); });
-        document.getElementById('ann-push-toggle').addEventListener('click', function () { state.ann.sendPush = !state.ann.sendPush; render(); });
+        if (document.getElementById('ann-time-now')) {
+          document.getElementById('ann-time-now').addEventListener('click', function () { state.ann.timing = 'now'; render(); });
+          document.getElementById('ann-time-sched').addEventListener('click', function () { state.ann.timing = 'scheduled'; render(); });
+        }
+        if (document.getElementById('ann-change-kind')) {
+          document.getElementById('ann-change-kind').addEventListener('click', function () {
+            state.ann.mode = 'choose';
+            render();
+          });
+        }
 
         document.getElementById('ann-fill-example').addEventListener('click', function () {
-          state.ann.title = 'مثال: تنويه قداس عيد الميلاد المجيد';
-          state.ann.body = 'القداس يبدأ الساعة ٧:٠٠ مساءً بالكنيسة الكبرى. كل سنة وأنتم طيبين.';
+          if (state.ann.kind === 'push') {
+            state.ann.title = 'مثال: تذكير بقداس باكر غدًا';
+            state.ann.body = 'القداس الإلهي يبدأ الساعة ٧:٠٠ صباحًا بالكنيسة الكبرى.';
+          } else if (state.ann.kind === 'banner') {
+            state.ann.title = 'مثال: نهضة القديسين مكسيموس ودوماديوس';
+            state.ann.body = 'عشيات يومية الساعة ٦:٣٠ مساءً بالكنيسة الكبرى.';
+            state.ann.ctaLabel = 'شوف جدول النهضة';
+          } else {
+            state.ann.title = 'مثال: تنويه قداس عيد الميلاد المجيد';
+            state.ann.body = 'القداس يبدأ الساعة ٧:٠٠ مساءً بالكنيسة الكبرى. كل سنة وأنتم طيبين.';
+          }
           state.ann.errorTitle = '';
           render();
         });
 
         document.getElementById('ann-preview-btn').addEventListener('click', function () {
           if (!state.ann.title.trim()) {
-            state.ann.errorTitle = 'اكتب عنوان للإعلان الأول عشان الزوار يفهموا الموضوع.';
+            state.ann.errorTitle = 'اكتب العنوان الأول عشان الزوار يفهموا الموضوع.';
             render();
             document.getElementById('ann-title').focus();
             return;
           }
           state.ann.mode = 'preview';
           render();
-        });
-
-        main.querySelectorAll('.ann-edit-item').forEach(function (btn) {
-          btn.addEventListener('click', function () {
-            const id = btn.getAttribute('data-id');
-            const found = state.data.announcements.find(function (a) { return a.id === id; });
-            if (!found) return;
-            state.ann = {
-              mode: 'edit',
-              editingId: found.id,
-              title: found.title,
-              body: found.body || '',
-              timing: found.timing || 'now',
-              startDate: found.startDate || '2026-11-22',
-              endDate: found.endDate || '2026-11-29',
-              sendPush: !!found.sendPush,
-              errorTitle: '',
-              lastPublished: null
-            };
-            render();
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-          });
-        });
-
-        main.querySelectorAll('.ann-del-item').forEach(function (btn) {
-          btn.addEventListener('click', function () {
-            const id = btn.getAttribute('data-id');
-            const idx = state.data.announcements.findIndex(function (a) { return a.id === id; });
-            if (idx < 0) return;
-            const removed = state.data.announcements[idx];
-            openConfirmModal({
-              title: 'متأكد تمسح «' + toArabicDigits(removed.title) + '»؟',
-              body: 'الإعلان هيتشال من قدام الزوار فورًا، وتقدر تتراجع خلال ١٠ ثواني.',
-              onConfirm: function () {
-                state.data.announcements.splice(idx, 1);
-                saveData();
-                render();
-                showUndoSnackbar('اتمسح «' + toArabicDigits(removed.title) + '»', function () {
-                  state.data.announcements.splice(Math.min(idx, state.data.announcements.length), 0, removed);
-                  saveData();
-                  render();
-                });
-              }
-            });
-          });
         });
       }
 
@@ -2518,10 +2910,10 @@
         return '<div class="time-picker-row">' +
           '<select class="select" id="' + prefix + '-h" aria-label="الساعة">' + hOpts + '</select>' +
           '<select class="select" id="' + prefix + '-m" aria-label="الدقائق">' + mOpts + '</select>' +
-          '<select class="select" id="' + prefix + '-p" aria-label="صباحًا أم مساءً">' +
-            '<option value="AM"' + (p.period === 'AM' ? ' selected' : '') + '>صباحًا (ص)</option>' +
-            '<option value="PM"' + (p.period === 'PM' ? ' selected' : '') + '>مساءً (م)</option>' +
-          '</select>' +
+          '<div class="ampm-seg" role="group" aria-label="صباحًا أم مساءً">' +
+            '<button type="button" class="ampm-btn' + (p.period === 'AM' ? ' active' : '') + '" id="' + prefix + '-am" data-period="AM" aria-pressed="' + (p.period === 'AM' ? 'true' : 'false') + '">ص</button>' +
+            '<button type="button" class="ampm-btn' + (p.period === 'PM' ? ' active' : '') + '" id="' + prefix + '-pm" data-period="PM" aria-pressed="' + (p.period === 'PM' ? 'true' : 'false') + '">م</button>' +
+          '</div>' +
         '</div>';
       }
 
@@ -2583,14 +2975,25 @@
         function syncTime(prefix, hKey, mKey) {
           const hEl = document.getElementById(prefix + '-h');
           const mEl = document.getElementById(prefix + '-m');
-          const pEl = document.getElementById(prefix + '-p');
+          const amBtn = document.getElementById(prefix + '-am');
+          const pmBtn = document.getElementById(prefix + '-pm');
+          let currentPeriod = to12Parts(f[hKey], f[mKey]).period;
           function update() {
-            f[hKey] = to24Hour(hEl.value, pEl.value);
+            f[hKey] = to24Hour(hEl.value, currentPeriod);
             f[mKey] = Number(mEl.value);
           }
           hEl.addEventListener('change', update);
           mEl.addEventListener('change', update);
-          pEl.addEventListener('change', update);
+          [amBtn, pmBtn].forEach(function (btn) {
+            btn.addEventListener('click', function () {
+              currentPeriod = btn.getAttribute('data-period');
+              amBtn.classList.toggle('active', currentPeriod === 'AM');
+              pmBtn.classList.toggle('active', currentPeriod === 'PM');
+              amBtn.setAttribute('aria-pressed', currentPeriod === 'AM' ? 'true' : 'false');
+              pmBtn.setAttribute('aria-pressed', currentPeriod === 'PM' ? 'true' : 'false');
+              update();
+            });
+          });
         }
         syncTime('mass-start', 'startH', 'startM');
         syncTime('mass-end', 'endH', 'endM');
@@ -2725,6 +3128,17 @@
                 '<select id="season-select" class="select">' + seasonOpts + '</select>' +
               '</div>' +
 
+              '<div class="field" style="margin-top:8px;">' +
+                '<button type="button" class="btn btn-secondary btn-block" id="season-last-year-btn">' +
+                  ICONS.sparkles +
+                  '<span>زي السنة اللي فاتت (نسخ الإعدادات بس)</span>' +
+                  '<span dir="ltr" aria-hidden="true">‹</span>' +
+                '</button>' +
+                '<p class="field-hint" style="margin-top:4px;">هينسخ اختيارات ' + esc(cat.lastYear.yearLabel) + ' ويسيب التواريخ فاضية عشان تدخلها بإيدك.</p>' +
+              '</div>' +
+
+              '<hr class="divider" style="margin:12px 0;" />' +
+
               '<div class="grid-2">' +
                 '<div class="field">' +
                   '<span class="field-label">يبدأ يوم</span>' +
@@ -2736,12 +3150,6 @@
                 '</div>' +
               '</div>' +
               '<p class="field-hint">عند تاريخ الانتهاء، الموقع هيرجع للوضع العادي لوحده.</p>' +
-            '</div>' +
-
-            '<div class="shortcut-box">' +
-              '<p class="shortcut-title">' + ICONS.sparkles + ' <span>زي السنة اللي فاتت، عدّل الحاجات دي</span></p>' +
-              '<p class="field-hint" style="color:var(--ink);">' + esc(cat.lastYear.yearLabel) + ': ' + esc(cat.lastYear.summary) + '</p>' +
-              '<button type="button" class="btn btn-secondary btn-sm btn-block" id="season-last-year-btn"><span>استخدم إعدادات السنة اللي فاتت وعدّل عليها</span> <span dir="ltr" aria-hidden="true">‹</span></button>' +
             '</div>';
 
           sticky.innerHTML =
@@ -2756,6 +3164,7 @@
             draft.endDate = picked.defaultEnd;
             draft.usedLastYear = false;
             draft.options = deepClone(picked.defaults);
+            state.seasonError = '';
             persistSeasonDraft();
             render();
           });
@@ -2772,8 +3181,12 @@
 
           document.getElementById('season-last-year-btn').addEventListener('click', function () {
             draft.options = deepClone(cat.lastYear.options);
+            // Copy settings ONLY — clear dates so the servant enters this year's dates manually
+            draft.startDate = '';
+            draft.endDate = '';
             draft.usedLastYear = true;
-            draft.step = 3; // Jumps straight to Review & Tweak!
+            draft.step = 3;
+            state.seasonError = '';
             persistSeasonDraft();
             render();
           });
@@ -2781,6 +3194,7 @@
           document.getElementById('season-next-1').addEventListener('click', function () {
             draft.usedLastYear = false;
             draft.step = 2;
+            state.seasonError = '';
             persistSeasonDraft();
             render();
           });
@@ -2849,18 +3263,41 @@
           // Step 3: Clear Preview of Every Change + Explicit «طبّق الموسم على الموقع»
           const o = draft.options;
           const summaryItems = buildSeasonSummaryItems(draft);
+          const datesText = (draft.startDate && draft.endDate)
+            ? ('من ' + formatDateAr(draft.startDate) + ' لحد ' + formatDateAr(draft.endDate))
+            : 'التواريخ لسه فاضية — دخّلها تحت الأول';
 
           main.innerHTML =
             progressHtml +
             (draft.usedLastYear
               ? '<div class="banner banner-notice">' +
-                  '<p class="banner-title">' + ICONS.sparkles + ' <span>جهزنا لك إعدادات السنة اللي فاتت</span></p>' +
-                  '<span>راجع السطور تحت وعدّل أي رابط أو بند قبل ما تضغط «طبّق الموسم على الموقع».</span>' +
+                  '<p class="banner-title">' + ICONS.sparkles + ' <span>اتنسخت إعدادات السنة اللي فاتت (بدون تواريخ)</span></p>' +
+                  '<span>دخّل تاريخ بداية ونهاية الموسم السنة دي، وراجع التغييرات قبل ما تضغط «طبّق الموسم على الموقع».</span>' +
+                '</div>'
+              : '') +
+            (state.seasonError
+              ? '<div class="banner banner-error" id="season-error-banner" role="alert">' +
+                  '<p class="banner-title">' + ICONS.alert + ' <span>' + esc(state.seasonError) + '</span></p>' +
+                '</div>'
+              : '') +
+            (draft.usedLastYear || !draft.startDate || !draft.endDate
+              ? '<div class="card card-tight">' +
+                  '<strong style="font-size:14.5px;display:block;margin-bottom:8px;">تواريخ الموسم الجديد <span class="req-tag">مطلوب</span></strong>' +
+                  '<div class="grid-2">' +
+                    '<div class="field" style="margin-bottom:0;">' +
+                      '<span class="field-label">يبدأ يوم</span>' +
+                      renderDatePicker('season-start-3', draft.startDate, 'يبدأ يوم') +
+                    '</div>' +
+                    '<div class="field" style="margin-bottom:0;">' +
+                      '<span class="field-label">يخلص يوم</span>' +
+                      renderDatePicker('season-end-3', draft.endDate, 'يخلص يوم') +
+                    '</div>' +
+                  '</div>' +
                 '</div>'
               : '') +
             '<div class="card">' +
               '<strong style="font-size:15.5px;display:block;margin-bottom:4px;">٣. راجع اللي هيتغيّر على الموقع</strong>' +
-              '<p class="field-hint" style="margin-bottom:10px;">الموسم: <strong>' + esc(cat.name) + '</strong><br/>من ' + formatDateAr(draft.startDate) + ' لحد ' + formatDateAr(draft.endDate) + '</p>' +
+              '<p class="field-hint" style="margin-bottom:10px;">الموسم: <strong>' + esc(cat.name) + '</strong><br/>' + esc(datesText) + '</p>' +
               '<ul class="diff-list">' +
                 summaryItems.map(function (it) {
                   return '<li class="diff-item"><span class="diff-dot ' + it.kind + '"></span><span>' + esc(it.text) + '</span></li>';
@@ -2893,6 +3330,23 @@
               (!draft.usedLastYear ? '<button type="button" class="btn btn-soft btn-sm btn-block" id="season-prev-3"><span dir="ltr" aria-hidden="true">›</span> <span>رجوع لتعديل الاختيارات</span></button>' : '') +
             '</div>';
 
+          if (document.getElementById('season-start-3')) {
+            document.getElementById('season-start-3').addEventListener('change', function (e) {
+              draft.startDate = e.target.value;
+              document.getElementById('season-start-3-label').textContent = formatDateAr(e.target.value);
+              state.seasonError = '';
+              persistSeasonDraft();
+              render();
+            });
+            document.getElementById('season-end-3').addEventListener('change', function (e) {
+              draft.endDate = e.target.value;
+              document.getElementById('season-end-3-label').textContent = formatDateAr(e.target.value);
+              state.seasonError = '';
+              persistSeasonDraft();
+              render();
+            });
+          }
+
           if (document.getElementById('season-live-3')) {
             document.getElementById('season-live-3').addEventListener('input', function (e) {
               draft.options.liveUrl = e.target.value;
@@ -2919,11 +3373,25 @@
 
           document.getElementById('season-discard-draft').addEventListener('click', function () {
             state.seasonDraft = createFreshSeasonDraft('holy_week');
+            state.seasonError = '';
             persistSeasonDraft();
             render();
           });
 
           document.getElementById('season-apply-btn').addEventListener('click', function () {
+            if (!draft.startDate || !draft.endDate) {
+              state.seasonError = 'اختار تاريخ بداية ونهاية الموسم الأول قبل ما تطبّقه.';
+              render();
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+              return;
+            }
+            if (draft.endDate < draft.startDate) {
+              state.seasonError = 'تاريخ نهاية الموسم ماينفعش يكون قبل تاريخ البداية.';
+              render();
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+              return;
+            }
+            state.seasonError = '';
             const applied = {
               key: cat.key,
               name: cat.name,
@@ -2968,7 +3436,12 @@
         if (o.seasonTheme) list.push({ kind: 'on', text: 'ألوان وثيم الموسم هتتفعّل تلقائيًا على الموقع.' });
         if (o.liveUrl && o.liveUrl.trim()) list.push({ kind: 'on', text: 'هيتجهّز رابط البث المباشر: ' + o.liveUrl.trim() });
         if (o.pdfUrl && o.pdfUrl.trim()) list.push({ kind: 'on', text: 'هيظهر زر تحميل كتيّب / برنامج الموسم للزوار.' });
-        list.push({ kind: 'info', text: 'في ' + formatDateAr(draft.endDate) + ' كل حاجة هترجع للوضع العادي لوحدها.' });
+        list.push({
+          kind: 'info',
+          text: draft.endDate
+            ? ('في ' + formatDateAr(draft.endDate) + ' كل حاجة هترجع للوضع العادي لوحدها.')
+            : 'بعد ما تحدد تاريخ النهاية، الموقع هيرجع للوضع العادي لوحده في الميعاد.'
+        });
         return list;
       }
 
@@ -3111,13 +3584,21 @@
             }).join('') +
           '</div>';
 
-        // Error Summary Banner (Screen 8)
+        // Error Summary Banner (Screen 8) — sticky right under topbar
         let errorSummaryHtml = '';
         if (errors.length > 0) {
+          const errCountPhrase = formatCountAr(
+            errors.length,
+            'مفيش أخطاء',
+            'حاجة واحدة محتاجة',
+            'حاجتين محتاجين',
+            'حاجات محتاجة',
+            'حاجة محتاجة'
+          );
           errorSummaryHtml =
-            '<div class="banner banner-error" id="page-error-summary" role="alert" tabindex="-1">' +
-              '<p class="banner-title">' + ICONS.alert + ' <span>في ' + toArabicDigits(errors.length) + ' حاجات محتاجة تصليح قبل الحفظ</span></p>' +
-              '<span style="font-size:12.5px;">فتحنا لك الفقرات اللي فيها مشكلة تحت — اضغط على أي سطر عشان تروحله على طول:</span>' +
+            '<div class="banner banner-error sticky-error-summary" id="page-error-summary" role="alert" tabindex="-1">' +
+              '<p class="banner-title">' + ICONS.alert + ' <span>في ' + esc(errCountPhrase) + ' تصليح قبل الحفظ</span></p>' +
+              '<span style="font-size:12.5px;">فتحنا لك الفقرات اللي فيها مشكلة تحت — اضغط على أي سطر عشان تروحله:</span>' +
               '<ul class="error-summary-list">' +
                 errors.map(function (er) {
                   return '<li><button type="button" class="error-summary-btn" data-input="' + esc(er.inputId) + '" data-block="' + esc(er.blockId || '') + '">' +
@@ -3235,6 +3716,15 @@
 
         const titleErr = errorByField['page-title-input'];
 
+        const blocksCountPhrase = formatCountAr(
+          page.blocks.length,
+          'مفيش فقرات',
+          'فقرة واحدة',
+          'فقرتين',
+          'فقرات',
+          'فقرة'
+        );
+
         main.innerHTML =
           switcherHtml +
           savedBannerHtml +
@@ -3252,7 +3742,7 @@
           '</div>' +
 
           '<div class="section-heading">' +
-            '<span>محتوى الصفحة (' + toArabicDigits(page.blocks.length) + ' فقرات)</span>' +
+            '<span>محتوى الصفحة (' + esc(blocksCountPhrase) + ')</span>' +
             '<button type="button" class="btn btn-soft btn-sm" id="demo-error-trigger" style="min-height:44px;font-size:12px;">جرّب أخطاء في فقرات مقفولة</button>' +
           '</div>' +
 
@@ -3267,7 +3757,11 @@
               '<button type="button" class="chip-btn add-block-btn" data-type="list">+ قايمة</button>' +
               '<button type="button" class="chip-btn add-block-btn" data-type="details">+ تفاصيل تتفتح</button>' +
             '</div>' +
-          '</div>';
+          '</div>' +
+
+          (!page.isNewTemplate
+            ? '<button type="button" class="btn btn-danger btn-sm btn-block" id="page-delete-btn">حذف الصفحة دي</button>'
+            : '');
 
         sticky.innerHTML =
           '<div class="sticky-footer">' +
@@ -3431,12 +3925,51 @@
             const bid = btn.getAttribute('data-bid');
             const idx = Number(btn.getAttribute('data-idx'));
             const blk = page.blocks.find(function (b) { return b.id === bid; });
-            if (blk) {
-              blk.items.splice(idx, 1);
-              render();
-            }
+            if (!blk || !blk.items) return;
+            const removedItem = blk.items[idx];
+            const itemName = removedItem && removedItem.trim()
+              ? ('«' + toArabicDigits(removedItem.trim()) + '»')
+              : ('السطر رقم ' + toArabicDigits(idx + 1));
+            openConfirmModal({
+              title: 'متأكد تمسح ' + itemName + '؟',
+              body: 'السطر هيتشال من القايمة دلوقتي، وتقدر تتراجع خلال ١٠ ثواني.',
+              onConfirm: function () {
+                blk.items.splice(idx, 1);
+                render();
+                showUndoSnackbar('اتمسح ' + itemName, function () {
+                  blk.items.splice(Math.min(idx, blk.items.length), 0, removedItem);
+                  render();
+                });
+              }
+            });
           });
         });
+
+        const delPageBtn = document.getElementById('page-delete-btn');
+        if (delPageBtn) {
+          delPageBtn.addEventListener('click', function () {
+            const idx = state.data.pages.findIndex(function (p) { return p.id === page.id; });
+            if (idx <= 0) return;
+            const removedPage = state.data.pages[idx];
+            const pName = toArabicDigits(removedPage.title || 'الصفحة دي');
+            openConfirmModal({
+              title: 'متأكد تمسح صفحة «' + pName + '»؟',
+              body: 'الصفحة هتتشال من الموقع، وتقدر تتراجع خلال ١٠ ثواني.',
+              onConfirm: function () {
+                state.data.pages.splice(idx, 1);
+                saveData();
+                loadWorkingPage('page-new');
+                render();
+                showUndoSnackbar('اتمسحت صفحة «' + pName + '»', function () {
+                  state.data.pages.splice(Math.min(idx, state.data.pages.length), 0, removedPage);
+                  saveData();
+                  loadWorkingPage(removedPage.id);
+                  render();
+                });
+              }
+            });
+          });
+        }
 
         main.querySelectorAll('.add-block-btn').forEach(function (btn) {
           btn.addEventListener('click', function () {
@@ -3457,13 +3990,13 @@
           });
         });
 
-        // Screen 8: Demo trigger for collapsed blocks across ALL 3 types (text, list, details)
+        // Screen 8: Demo trigger for empty page title + collapsed blocks across ALL 3 types (text, list, details)
         document.getElementById('demo-error-trigger').addEventListener('click', function () {
           state.pageUi.selectedPageId = 'page-trip';
           state.pageUi.workingPage = {
             id: 'page-trip',
-            title: 'مثال: رحلة الصيف للأسرة',
-            subtitle: 'تجربة أخطاء في كل أنواع الفقرات',
+            title: '',
+            subtitle: 'تجربة أخطاء في اسم الصفحة وكل أنواع الفقرات',
             visible: true,
             blocks: [
               { id: 'b-demo-1', type: 'text', heading: 'مواعيد التحرك', body: '', expanded: false },
@@ -3527,14 +4060,16 @@
           }
         }
         saveData();
-        addRecentEdit('حفظ صفحة «' + cleanTitle + '» (' + toArabicDigits(page.blocks.length) + ' فقرات)');
-        state.pageUi.savedBanner = 'صفحة «' + cleanTitle + '» اتحفظت بكل فقراتها (' + toArabicDigits(page.blocks.length) + ') وبقت جاهزة للزوار.';
+        const savedCountText = formatCountAr(page.blocks.length, 'من غير فقرات', 'فقرة واحدة', 'فقرتين', 'فقرات', 'فقرة');
+        addRecentEdit('حفظ صفحة «' + cleanTitle + '» (' + savedCountText + ')');
+        state.pageUi.savedBanner = 'صفحة «' + cleanTitle + '» اتحفظت (' + savedCountText + ') وبقت جاهزة للزوار.';
         render();
         window.scrollTo({ top: 0, behavior: 'smooth' });
+        showInfoToast('اتحفظت الصفحة «' + cleanTitle + '»');
       }
 
       // =========================================================================
-      // Screen 6: Advanced Settings (Rare Settings Tucked Away)
+      // Screen 6: Advanced Settings (Owner only, explicit Save → «اتطبّق»)
       // =========================================================================
       function renderAdvSwitch(key, title, sub, checked) {
         return '<button type="button" class="switch-row adv-switch" data-key="' + esc(key) + '" role="switch" aria-checked="' + (checked ? 'true' : 'false') + '">' +
@@ -3551,13 +4086,20 @@
 
       function renderAdvanced(main, sticky) {
         main.classList.remove('home-content');
-        sticky.innerHTML = '';
-        const adv = state.data.advanced;
+        if (!state.advUi.draft) {
+          state.advUi.draft = deepClone(state.data.advanced);
+        }
+        const adv = state.advUi.draft;
 
         main.innerHTML =
+          (state.advUi.appliedBanner
+            ? '<div class="banner banner-success" id="adv-applied-banner" role="status">' +
+                '<p class="banner-title">' + ICONS.check + ' <span>' + esc(state.advUi.appliedBanner) + '</span></p>' +
+              '</div>'
+            : '') +
           '<div class="banner banner-notice">' +
-            '<p class="banner-title">إعدادات نادرة للموقع والتطبيق</p>' +
-            '<span>الحاجات دي بتتظبط مرة كل فترة طويلة، ومش هتحتاجها في الشغل اليومي.</span>' +
+            '<p class="banner-title">إعدادات نادرة للموقع والتطبيق (للمالك)</p>' +
+            '<span>عدّل اللي عايزه واضغط «احفظ» تحت عشان يتطبّق على الموقع.</span>' +
           '</div>' +
 
           '<div class="card">' +
@@ -3586,24 +4128,54 @@
             '<button type="button" class="btn btn-danger btn-sm btn-block" id="adv-reset-demo">رجّع بيانات المثال من الأول</button>' +
           '</div>';
 
+        sticky.innerHTML =
+          '<div class="sticky-footer">' +
+            (state.advUi.dirty ? '<span style="font-size:12.5px;font-weight:700;color:var(--primary);text-align:center;">فيه تغييرات لسه ما اتحفظتش</span>' : '') +
+            '<div class="btn-row">' +
+              '<button type="button" class="btn btn-primary" id="adv-save-btn">احفظ</button>' +
+              (state.advUi.dirty ? '<button type="button" class="btn btn-soft" id="adv-discard-btn" style="flex:0 1 auto;">تراجع</button>' : '') +
+            '</div>' +
+          '</div>';
+
         main.querySelectorAll('.adv-switch').forEach(function (sw) {
           sw.addEventListener('click', function () {
             const k = sw.getAttribute('data-key');
             adv.sections[k] = !adv.sections[k];
-            saveData();
+            state.advUi.dirty = true;
+            state.advUi.appliedBanner = '';
             render();
           });
         });
         document.getElementById('adv-install').addEventListener('click', function () {
           adv.installBanner = !adv.installBanner;
-          saveData();
+          state.advUi.dirty = true;
+          state.advUi.appliedBanner = '';
           render();
         });
         document.getElementById('adv-sentry').addEventListener('click', function () {
           adv.errorReporting = !adv.errorReporting;
-          saveData();
+          state.advUi.dirty = true;
+          state.advUi.appliedBanner = '';
           render();
         });
+        document.getElementById('adv-save-btn').addEventListener('click', function () {
+          state.data.advanced = deepClone(state.advUi.draft);
+          saveData();
+          addRecentEdit('تحديث الإعدادات المتقدمة');
+          state.advUi.dirty = false;
+          state.advUi.appliedBanner = 'اتطبّق حفظ الإعدادات المتقدمة.';
+          render();
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+          showInfoToast('اتطبّق');
+        });
+        if (document.getElementById('adv-discard-btn')) {
+          document.getElementById('adv-discard-btn').addEventListener('click', function () {
+            state.advUi.draft = deepClone(state.data.advanced);
+            state.advUi.dirty = false;
+            state.advUi.appliedBanner = '';
+            render();
+          });
+        }
         document.getElementById('adv-reset-demo').addEventListener('click', function () {
           openConfirmModal({
             title: 'متأكد ترجّع كل بيانات المثال من الأول؟',
@@ -3614,6 +4186,9 @@
               state.data = createDefaultData();
               state.seasonDraft = null;
               state.seasonConfirmed = null;
+              state.advUi.draft = deepClone(state.data.advanced);
+              state.advUi.dirty = false;
+              state.advUi.appliedBanner = '';
               saveData();
               saveSeasonDraft(null);
               go('home');
