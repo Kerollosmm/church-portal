@@ -317,6 +317,7 @@ const Map<String, List<String>> adminStrings = {
   'blockDetailsSummaryTooLong': ['العنوان الظاهر طويل عن الحد المسموح (٢٠٠ حرف).', 'Summary exceeds 200 characters.'],
   'blockDetailsBodyRequired': ['التفاصيل (عربي) مطلوبة.', 'Arabic details are required.'],
   'blockDetailsBodyTooLong': ['التفاصيل طويلة عن الحد المسموح (٣٥٠٠ حرف).', 'Details exceed 3,500 characters.'],
+  'detailsErrorSummaryLabel': ['بلوك {n} (تفاصيل) — {field}', 'Block {n} (Details) — {field}'],
   // Admin-only strings moved from core/l10n.dart (ADR-077 / Golden Rule 12):
   'endDateBeforeStart': ['تاريخ النهاية قبل تاريخ البداية', 'The end date is before the start date'],
   'presetReplaceLongWarn': [

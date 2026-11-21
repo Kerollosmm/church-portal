@@ -5431,7 +5431,7 @@ void main() {
     );
 
     testWidgets(
-      'collapsed invalid details block shows editor-error-summary, tapping expands & focuses exact field, and fixing unblocks save',
+      'collapsed details block with empty summary auto-expands & focuses summary on save and banner tap (Arabic label)',
       (tester) async {
         registerAdminStrings();
         tester.view.physicalSize = const Size(1200, 1600);
@@ -5447,7 +5447,76 @@ void main() {
             def: pagesDef,
             popOnSave: false,
             data: {
-              'slug': 'details-err',
+              'slug': 'details-err-summary',
+              'titleAr': 'صفحة',
+              'blocks': [
+                const PageBlock(type: BlockTypes.paragraph, textAr: 'تمهيد').toMap(),
+                PageBlock.details(summaryAr: '', bodyAr: 'محتوى موجود').toMap(),
+              ],
+            },
+            onSave: (d) async => saved = d,
+          ),
+          locale: const Locale('ar'),
+        ));
+        await tester.pumpAndSettle();
+
+        // Row 1 starts collapsed.
+        expect(find.byKey(const Key('detailsSummaryAr-1')), findsNothing);
+
+        final saveBtn = find.byKey(const Key('editor-save'));
+        await tester.ensureVisible(saveBtn);
+        await tester.tap(saveBtn);
+        await tester.pumpAndSettle();
+
+        expect(saved, isNull);
+        final summaryBanner = find.byKey(const Key('editor-error-summary'));
+        expect(summaryBanner, findsOneWidget);
+        expect(
+          find.descendant(
+            of: summaryBanner,
+            matching: find.text('بلوك 2 (تفاصيل) — العنوان الظاهر (عربي)'),
+          ),
+          findsOneWidget,
+        );
+
+        // Save immediately auto-expanded row 1 and focused detailsSummaryAr-1.
+        final summaryFieldFinder = find.byKey(const Key('detailsSummaryAr-1'));
+        expect(summaryFieldFinder, findsOneWidget);
+        expect(tester.widget<TextField>(summaryFieldFinder).focusNode?.hasFocus, isTrue);
+
+        // Collapse row 1 again by expanding row 0, then tap the banner link -> re-expands & focuses.
+        await tester.ensureVisible(find.textContaining('تمهيد').first);
+        await tester.tap(find.textContaining('تمهيد').first);
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('detailsSummaryAr-1')), findsNothing);
+
+        final errorEntry = find.descendant(of: summaryBanner, matching: find.byType(InkWell)).first;
+        await tester.ensureVisible(errorEntry);
+        await tester.tap(errorEntry);
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('detailsSummaryAr-1')), findsOneWidget);
+        expect(tester.widget<TextField>(find.byKey(const Key('detailsSummaryAr-1'))).focusNode?.hasFocus, isTrue);
+      },
+    );
+
+    testWidgets(
+      'collapsed details block with empty body auto-expands & focuses body on save and banner tap, and fixing unblocks save',
+      (tester) async {
+        registerAdminStrings();
+        tester.view.physicalSize = const Size(1200, 1600);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(tester.view.reset);
+
+        Map<String, dynamic>? saved;
+        final pagesDef = adminCollections.firstWhere((c) => c.name == 'pages');
+        await tester.pumpWidget(_admin(
+          DocEditor(
+            title: 'Edit page',
+            fields: pagesDef.fields,
+            def: pagesDef,
+            popOnSave: false,
+            data: {
+              'slug': 'details-err-body',
               'titleAr': 'صفحة',
               'blocks': [
                 const PageBlock(type: BlockTypes.paragraph, textAr: 'تمهيد').toMap(),
@@ -5469,18 +5538,33 @@ void main() {
         expect(saved, isNull);
         final summary = find.byKey(const Key('editor-error-summary'));
         expect(summary, findsOneWidget);
+        expect(
+          find.descendant(
+            of: summary,
+            matching: find.text('Block 2 (Details) — Details (Arabic)'),
+          ),
+          findsOneWidget,
+        );
 
-        final errorEntry = find.descendant(of: summary, matching: find.byType(InkWell)).first;
-        await tester.tap(errorEntry);
-        await tester.pumpAndSettle();
-
-        // Expanded and focused on exact offending field (detailsBodyAr-1).
+        // Save immediately auto-expanded row 1 and focused exact offending field (detailsBodyAr-1).
         final bodyFieldFinder = find.byKey(const Key('detailsBodyAr-1'));
         expect(bodyFieldFinder, findsOneWidget);
-        final bodyField = tester.widget<TextField>(bodyFieldFinder);
-        expect(bodyField.focusNode?.hasFocus, isTrue);
+        expect(tester.widget<TextField>(bodyFieldFinder).focusNode?.hasFocus, isTrue);
 
-        await tester.enterText(bodyFieldFinder, 'نص التفاصيل بعد الإصلاح');
+        // Collapse row 1 again by expanding row 0, then tap the banner link -> re-expands & focuses.
+        await tester.ensureVisible(find.textContaining('تمهيد').first);
+        await tester.tap(find.textContaining('تمهيد').first);
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('detailsBodyAr-1')), findsNothing);
+
+        final errorEntry = find.descendant(of: summary, matching: find.byType(InkWell)).first;
+        await tester.ensureVisible(errorEntry);
+        await tester.tap(errorEntry);
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('detailsBodyAr-1')), findsOneWidget);
+        expect(tester.widget<TextField>(find.byKey(const Key('detailsBodyAr-1'))).focusNode?.hasFocus, isTrue);
+
+        await tester.enterText(find.byKey(const Key('detailsBodyAr-1')), 'نص التفاصيل بعد الإصلاح');
         await tester.pumpAndSettle();
         expect(find.byKey(const Key('editor-error-summary')), findsNothing);
 

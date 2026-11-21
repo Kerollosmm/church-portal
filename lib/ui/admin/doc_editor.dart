@@ -615,7 +615,10 @@ class DocEditorState extends State<DocEditor> {
                 }
                 out.add(_FieldErrorEntry(
                   id: '${f.key}-$i-details-${issue.field ?? 'block'}-${issue.isEn ? 'en' : 'ar'}-${issue.code}',
-                  label: '${_plainLabel(f)} (${i + 1}) — ${context.tr(fieldLabelKey)}',
+                  label: context
+                      .tr('detailsErrorSummaryLabel')
+                      .replaceAll('{n}', '${i + 1}')
+                      .replaceAll('{field}', context.tr(fieldLabelKey)),
                   group: group,
                   advanced: advanced,
                   fieldKey: targetKey,
@@ -892,11 +895,22 @@ class DocEditorState extends State<DocEditor> {
     if (!valid || errors.isNotEmpty) {
       _clearPendingErrorFocus();
       setState(() => _showErrorSummary = true);
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && _scroll.hasClients) {
-          _scroll.animateTo(0, duration: const Duration(milliseconds: 200), curve: Curves.easeOut);
+      _FieldErrorEntry? detailsErr;
+      for (final e in errors) {
+        if (e.id.contains('-details-')) {
+          detailsErr = e;
+          break;
         }
-      });
+      }
+      if (detailsErr != null) {
+        _focusErrorEntry(detailsErr);
+      } else {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && _scroll.hasClients) {
+            _scroll.animateTo(0, duration: const Duration(milliseconds: 200), curve: Curves.easeOut);
+          }
+        });
+      }
       return false;
     }
     var data = collect();
