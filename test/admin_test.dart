@@ -1693,6 +1693,39 @@ void main() {
       expect(repo.deletedIds, ['saints/expired']);
       expect(repo.collections['saints']!.map((d) => d.id), containsAll(['fresh', 'pending', 'in_flight']));
     });
+
+    testWidgets('consecutive deletes refresh backend deletedAt so other admin screens do not early-purge extended items',
+        (tester) async {
+      tester.view.physicalSize = const Size(900, 1000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final repo = _TestAdminBackend(initialCollections: {
+        'saints': [
+          AdminDoc('s1', {'nameAr': 'مارجرجس', 'visible': true, 'order': 10}),
+          AdminDoc('s2', {'nameAr': 'مارمرقس', 'visible': true, 'order': 20}),
+        ],
+      });
+      await tester.pumpWidget(_app(
+        CollectionListScreen(repo: repo, def: collectionById('saints')!),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('delete-s1')));
+      await tester.pump();
+      final t0 = repo.updates.firstWhere((u) => u.id == 's1').data['deletedAt'] as DateTime;
+
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 25)));
+
+      await tester.tap(find.byKey(const ValueKey('delete-s2')));
+      await tester.pump();
+      final s1Updates = repo.updates.where((u) => u.id == 's1' && u.data['deletedAt'] != null).toList();
+      expect(s1Updates.length, greaterThanOrEqualTo(2));
+      final t1 = s1Updates.last.data['deletedAt'] as DateTime;
+      expect(t1.isAfter(t0), isTrue);
+      expect(isExpiredSoftDelete({'deletedAt': t1}, t0.add(const Duration(seconds: 10))), isFalse);
+    });
   });
 
   group('UnsavedBar', () {
@@ -3852,6 +3885,40 @@ void main() {
       entryHold.complete();
       await tester.pumpAndSettle();
       expect(find.byType(SnackBar), findsNothing);
+    });
+
+    testWidgets('newer visibility snapshot with omitted intermediate state releases optimistic override',
+        (tester) async {
+      tester.view.physicalSize = const Size(900, 1000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final repo = _ControlledUpdateBackend(initialCollections: {
+        'priests': [
+          AdminDoc('p1', {'name': 'أبونا فلان', 'rank': 'priest', 'status': 'serving', 'visible': true}),
+        ],
+      });
+      addTearDown(repo.dispose);
+
+      await tester.pumpWidget(_app(
+        CollectionListScreen(repo: repo, def: collectionById('priests')!),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      // Hide completes without delivering the intermediate `visible: false` snapshot first;
+      // then a newer authoritative `visible: true` snapshot arrives from another admin.
+      repo.emitOnUpdate = false;
+      await tester.tap(find.byKey(const ValueKey('visibility-p1')));
+      await tester.pumpAndSettle();
+
+      repo.collections['priests']![0].data['visible'] = true;
+      repo.emitSnapshot('priests');
+      await tester.pumpAndSettle();
+
+      expect(find.text('ظاهر'), findsOneWidget);
+      expect(find.text('مخفي'), findsNothing);
+      expect(find.descendant(of: find.byKey(const ValueKey('visibility-p1')), matching: find.byIcon(Icons.visibility_outlined)), findsOneWidget);
     });
 
     testWidgets('row visibility in-flight completion after dispose or repo swap does not throw', (tester) async {
@@ -6386,6 +6453,7 @@ class _PermissionDeniedBackend extends _TestAdminBackend {
 class _ControlledUpdateBackend extends _TestAdminBackend {
   final Map<String, StreamController<List<AdminDoc>>> _controllers = {};
   final Map<String, Completer<void>> _holds = {};
+  bool emitOnUpdate = true;
 
   _ControlledUpdateBackend({super.initialCollections});
 
@@ -6393,6 +6461,16 @@ class _ControlledUpdateBackend extends _TestAdminBackend {
     final c = Completer<void>();
     _holds['$collection:$id'] = c;
     return c;
+  }
+
+  void emitSnapshot(String collection) {
+    final c = _controllers[collection];
+    if (c != null && !c.isClosed) {
+      c.add([
+        for (final d in collections[collection] ?? const <AdminDoc>[])
+          AdminDoc(d.id, Map<String, dynamic>.from(d.data)),
+      ]);
+    }
   }
 
   @override
@@ -6420,12 +6498,8 @@ class _ControlledUpdateBackend extends _TestAdminBackend {
         }
       }
     }
-    final c = _controllers[collection];
-    if (c != null && !c.isClosed) {
-      c.add([
-        for (final d in collections[collection] ?? const <AdminDoc>[])
-          AdminDoc(d.id, Map<String, dynamic>.from(d.data)),
-      ]);
+    if (emitOnUpdate) {
+      emitSnapshot(collection);
     }
   }
 

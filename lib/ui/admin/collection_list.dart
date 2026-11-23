@@ -107,6 +107,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
   final Set<String> _togglingVisibility = {};
   final Map<String, bool> _optimisticVisible = {};
   final Map<String, bool> _latestStreamVisible = {};
+  final Map<String, List<AdminDoc>> _lastRawDocs = {};
   int _screenEpoch = 0;
   ListFilter _filter = ListFilter.all;
   PriestStatusFilter _priestFilter = PriestStatusFilter.all;
@@ -157,6 +158,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
       _togglingVisibility.clear();
       _optimisticVisible.clear();
       _latestStreamVisible.clear();
+      _lastRawDocs.clear();
       _stream = widget.repo.watch(widget.def.name);
       _entriesStream = widget.def.name == 'categories' ? widget.repo.watch('entries') : null;
       _pagesStream = widget.def.name == 'categories' ? widget.repo.watch('pages') : null;
@@ -731,14 +733,23 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
   String _visKey(String collection, String id) => '$collection:$id';
 
   void _syncStreamVisibility(String collection, List<AdminDoc> rawDocs) {
+    final isNewSnapshot = !identical(_lastRawDocs[collection], rawDocs);
+    _lastRawDocs[collection] = rawDocs;
     for (final d in rawDocs) {
       final k = _visKey(collection, d.id);
       final streamVisible = d.data['visible'] != false;
       _latestStreamVisible[k] = streamVisible;
-      if (!_togglingVisibility.contains(k) && _optimisticVisible[k] == streamVisible) {
+      if (!_togglingVisibility.contains(k) &&
+          _optimisticVisible.containsKey(k) &&
+          (isNewSnapshot || _optimisticVisible[k] == streamVisible)) {
         _optimisticVisible.remove(k);
       }
     }
+  }
+
+  void _showSnack(ScaffoldMessengerState? messenger, SnackBar bar) {
+    if (!mounted || messenger == null || !messenger.mounted) return;
+    messenger.showSnackBar(bar);
   }
 
   bool _effectiveHidden(AdminDoc d, {CollectionDef? targetDef}) {
@@ -1204,7 +1215,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
           _optimisticVisible.remove(k);
         }
       });
-      messenger?.showSnackBar(SnackBar(content: Text(msg), duration: const Duration(seconds: 2)));
+      _showSnack(messenger, SnackBar(content: Text(msg), duration: const Duration(seconds: 2)));
     } catch (e) {
       if (!mounted || epoch != _screenEpoch || !identical(widget.repo, repo)) {
         return;
@@ -1213,7 +1224,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
         _togglingVisibility.remove(k);
         _optimisticVisible.remove(k);
       });
-      messenger?.showSnackBar(SnackBar(content: Text(failed.replaceAll('{e}', formatAdminError(e)))));
+      _showSnack(messenger, SnackBar(content: Text(failed.replaceAll('{e}', formatAdminError(e)))));
     }
   }
 
@@ -1233,9 +1244,11 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     final failed = context.tr('saveFailed', {'e': '{e}'});
     try {
       await widget.repo.reorder(def.name, ids, base: reorderBase(def, status: movedStatus));
-      messenger?.showSnackBar(SnackBar(content: Text(ok), duration: const Duration(seconds: 2)));
+      if (!mounted) return;
+      _showSnack(messenger, SnackBar(content: Text(ok), duration: const Duration(seconds: 2)));
     } catch (e) {
-      messenger?.showSnackBar(SnackBar(content: Text(failed.replaceAll('{e}', formatAdminError(e)))));
+      if (!mounted) return;
+      _showSnack(messenger, SnackBar(content: Text(failed.replaceAll('{e}', formatAdminError(e)))));
     }
   }
 
@@ -1274,11 +1287,25 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     final id = d.id;
     final docData = d.data;
 
+    final deleteNow = DateTime.now().toUtc();
     try {
-      await repo.update(activeDef.name, id, {'deletedAt': DateTime.now().toUtc()});
+      await repo.update(activeDef.name, id, {'deletedAt': deleteNow});
     } catch (e) {
-      messenger?.showSnackBar(SnackBar(content: Text(failedMsg.replaceAll('{e}', formatAdminError(e)))));
+      _showSnack(messenger, SnackBar(content: Text(failedMsg.replaceAll('{e}', formatAdminError(e)))));
       return;
+    }
+
+    // Push back backend `deletedAt` for earlier still-pending items before extending
+    // local timers so another admin screen's lazy purge cannot delete them mid-batch.
+    final priorPending = [
+      for (final entry in _pendingEntries.entries.toList())
+        if (entry.key != id && _pendingDelete.isPending(entry.key)) (id: entry.key, info: entry.value),
+    ];
+    if (priorPending.isNotEmpty) {
+      await Future.wait([
+        for (final p in priorPending)
+          p.info.repo.update(p.info.collection, p.id, {'deletedAt': deleteNow}).catchError((Object _) {}),
+      ]);
     }
 
     if (!mounted) return;
@@ -1296,7 +1323,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
           } catch (_) {}
           if (!mounted) return;
           setState(() {});
-          messenger?.showSnackBar(SnackBar(content: Text(failedMsg.replaceAll('{e}', formatAdminError(e)))));
+          _showSnack(messenger, SnackBar(content: Text(failedMsg.replaceAll('{e}', formatAdminError(e)))));
         }
       });
       _pendingDelete.extendAll();
@@ -1343,7 +1370,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
                 await item.repo.update(item.collection, item.id, {'deletedAt': null});
               } catch (e) {
                 if (!mounted) return;
-                messenger.showSnackBar(SnackBar(content: Text(failedMsg.replaceAll('{e}', formatAdminError(e)))));
+                _showSnack(messenger, SnackBar(content: Text(failedMsg.replaceAll('{e}', formatAdminError(e)))));
               }
             }
           },
@@ -1377,7 +1404,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
       entries = await widget.repo.watch('entries').first.timeout(const Duration(seconds: 15));
     } catch (e) {
       if (!mounted) return;
-      messenger?.showSnackBar(SnackBar(content: Text(failedMsg.replaceAll('{e}', formatAdminError(e)))));
+      _showSnack(messenger, SnackBar(content: Text(failedMsg.replaceAll('{e}', formatAdminError(e)))));
       return;
     }
     final inCat = entries.where((e) => e.data['categoryId'] == d.id).length;
@@ -1404,10 +1431,10 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
         await widget.repo.update('entries', id, {'visible': false});
       }
       await widget.repo.delete(def.name, d.id);
-      messenger?.showSnackBar(SnackBar(content: Text(deletedMsg)));
+      _showSnack(messenger, SnackBar(content: Text(deletedMsg)));
     } catch (e) {
       if (!mounted) return;
-      messenger?.showSnackBar(SnackBar(content: Text(failedMsg.replaceAll('{e}', formatAdminError(e)))));
+      _showSnack(messenger, SnackBar(content: Text(failedMsg.replaceAll('{e}', formatAdminError(e)))));
     }
   }
 
