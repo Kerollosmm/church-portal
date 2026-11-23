@@ -61,7 +61,7 @@ void main() {
 
   group('parentRouteOf route hierarchy', () {
     test('detail route navigates to listing section', () {
-      expect(parentRouteOf('/clinics/c1'), '/clinics');
+      expect(parentRouteOf('/church-education/m1'), '/church-education');
       expect(parentRouteOf('/about/priests/p1'), '/about');
       expect(parentRouteOf('/about/saints/s1'), '/about');
       expect(parentRouteOf('/public-services/f1'), '/public-services');
@@ -76,7 +76,7 @@ void main() {
     test('subpages navigate to root home route', () {
       expect(parentRouteOf('/about'), '/');
       expect(parentRouteOf('/mass-schedule'), '/');
-      expect(parentRouteOf('/clinics'), '/');
+      expect(parentRouteOf('/church-education'), '/');
       expect(parentRouteOf('/church-education'), '/');
       expect(parentRouteOf('/contact'), '/');
       expect(parentRouteOf('/'), '/');
@@ -98,8 +98,8 @@ void main() {
             routes: [
               GoRoute(path: '/', builder: (context, state) => const Text('HomeScreen')),
               GoRoute(path: '/about', builder: (context, state) => const Text('AboutScreen')),
-              GoRoute(path: '/clinics', builder: (context, state) => const Text('ClinicsScreen')),
-              GoRoute(path: '/clinics/:id', builder: (context, state) => const Text('ClinicDetailScreen')),
+              GoRoute(path: '/church-education', builder: (context, state) => const Text('EducationScreen')),
+              GoRoute(path: '/church-education/:id', builder: (context, state) => const Text('EducationDetailScreen')),
               GoRoute(path: '/notifications', builder: (context, state) => const Text('NotificationsScreen')),
               GoRoute(path: '/notifications/battery', builder: (context, state) => const Text('BatteryScreen')),
             ],
@@ -125,7 +125,7 @@ void main() {
     }
 
     testWidgets('detail route navigates to parent route on back press', (tester) async {
-      await tester.pumpWidget(buildTestApp(initialLocation: '/clinics/c1'));
+      await tester.pumpWidget(buildTestApp(initialLocation: '/church-education/m1'));
       await tester.pumpAndSettle();
 
       expect(find.text('ClinicDetailScreen'), findsOneWidget);

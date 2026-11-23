@@ -436,7 +436,6 @@ void main() {
         settings: const ChurchSettings(nameAr: 'تجربة كنيسة', nameEn: 'Test Church', addressAr: '', addressEn: ''),
         liturgies: const [],
         seasons: const [],
-        clinics: const [],
         meetings: const [],
         activities: const [],
         facilities: const [],
@@ -460,7 +459,6 @@ void main() {
         settings: const ChurchSettings(nameAr: 'تجربة كنيسة', nameEn: 'Test Church', addressAr: '', addressEn: ''),
         liturgies: const [],
         seasons: const [],
-        clinics: const [],
         meetings: const [],
         activities: const [],
         facilities: const [],
@@ -621,7 +619,6 @@ void main() {
         settings: const ChurchSettings(nameAr: 'تجربة كنيسة', nameEn: 'Test Church', addressAr: '', addressEn: ''),
         liturgies: const [],
         seasons: const [],
-        clinics: const [],
         meetings: const [],
         activities: const [],
         facilities: const [],
@@ -653,7 +650,6 @@ void main() {
         settings: const ChurchSettings(nameAr: 'تجربة كنيسة', nameEn: 'Test Church', addressAr: '', addressEn: ''),
         liturgies: const [],
         seasons: const [],
-        clinics: const [],
         meetings: const [],
         activities: const [],
         facilities: const [],
@@ -2619,7 +2615,6 @@ void main() {
         'builtin_schedule',
         'builtin_meetings',
         'builtin_activities',
-        'builtin_clinics',
         'builtin_services',
         'builtin_about',
         'builtin_contact',
@@ -2629,14 +2624,14 @@ void main() {
       expect(BuiltInSections.byId('k1'), isNull);
       expect(BuiltInSections.isBuiltIn('builtin_activities'), isTrue);
       expect(BuiltInSections.isBuiltIn('k1'), isFalse);
-      expect(BuiltInSections.pathFor('builtin_clinics'), '/clinics');
+      expect(BuiltInSections.pathFor('builtin_activities'), '/church-activities');
       expect(BuiltInSections.pathFor('unknown'), isNull);
 
       expect(BuiltInSections.idForPageKey('schedule'), BuiltInSections.schedule);
       expect(BuiltInSections.idForPageKey('education'), BuiltInSections.meetings);
       expect(BuiltInSections.idForPageKey('meetings'), BuiltInSections.meetings);
       expect(BuiltInSections.idForPageKey('activities'), BuiltInSections.activities);
-      expect(BuiltInSections.idForPageKey('clinics'), BuiltInSections.clinics);
+      expect(BuiltInSections.idForPageKey('activities'), BuiltInSections.activities);
       expect(BuiltInSections.idForPageKey('services'), BuiltInSections.services);
       expect(BuiltInSections.idForPageKey('about'), BuiltInSections.about);
       expect(BuiltInSections.idForPageKey('contact'), BuiltInSections.contact);
@@ -2776,7 +2771,7 @@ void main() {
 
       final repoAll = _BuiltInSectionRepo(
         pagesList: builtInPages,
-        sections: const {Sections.clinics: true},
+        sections: const {Sections.meetings: true},
       );
 
       final (router, _) = await _pump(tester, '/church-activities', size: const Size(420, 3000), repo: repoAll);
@@ -2803,14 +2798,13 @@ void main() {
       final emptyActRepo = _BuiltInSectionRepo(
         pagesList: builtInPages,
         activitiesList: const [],
-        clinicsList: const [],
-        sections: const {Sections.clinics: true},
+        sections: const {Sections.meetings: true},
       );
       final (emptyRouter, _) = await _pump(tester, '/church-activities', size: const Size(420, 3000), repo: emptyActRepo);
       expect(find.byKey(const Key('sectionPage-extra-church-activities')), findsOneWidget);
       expect(find.byType(EmptyState), findsNothing);
 
-      emptyRouter.go('/clinics');
+      emptyRouter.go('/church-education');
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('sectionPage-extra-clinics')), findsOneWidget);
       expect(find.byType(EmptyState), findsNothing);
@@ -2831,19 +2825,18 @@ void main() {
             slug: 'extra-clinics',
             titleAr: 'رابط',
             placement: PagePlacements.link,
-            categoryId: BuiltInSections.clinics,
+            categoryId: BuiltInSections.meetings,
             visible: true,
           ),
         ],
         activitiesList: const [],
-        clinicsList: const [],
-        sections: const {Sections.clinics: true},
+        sections: const {Sections.meetings: true},
       );
       final (hiddenRouter, _) = await _pump(tester, '/church-activities', size: const Size(420, 3000), repo: hiddenActRepo);
       expect(find.byKey(const Key('sectionPage-extra-church-activities')), findsNothing);
       expect(find.byType(EmptyState), findsOneWidget);
 
-      hiddenRouter.go('/clinics');
+      hiddenRouter.go('/church-education');
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('sectionPage-extra-clinics')), findsNothing);
       expect(find.byType(EmptyState), findsOneWidget);
@@ -2999,7 +2992,7 @@ void main() {
             'titleAr': 'دليل العيادات',
             'titleEn': 'Clinics guide',
             'placement': 'section',
-            'categoryId': BuiltInSections.clinics,
+            'categoryId': BuiltInSections.meetings,
             'visible': true,
           }),
         ],
@@ -3010,7 +3003,7 @@ void main() {
 
       expect(find.textContaining('2 of 2'), findsOneWidget);
       expect(find.byKey(const ValueKey(BuiltInSections.activities)), findsOneWidget);
-      expect(find.byKey(const ValueKey(BuiltInSections.clinics)), findsOneWidget);
+      expect(find.byKey(const ValueKey(BuiltInSections.meetings)), findsOneWidget);
       expect(tester.takeException(), isNull);
 
       // Search by built-in section slug matches only that built-in tile.
@@ -3018,68 +3011,8 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byKey(const ValueKey(BuiltInSections.activities)), findsOneWidget);
-      expect(find.byKey(const ValueKey(BuiltInSections.clinics)), findsNothing);
+      expect(find.byKey(const ValueKey(BuiltInSections.meetings)), findsNothing);
       expect(find.textContaining('1 of 2'), findsOneWidget);
-      expect(tester.takeException(), isNull);
-    });
-
-    testWidgets('ClinicsPage with initialSpecialty does not suppress EmptyState when filtered or empty',
-        (tester) async {
-      const linkedClinicPage = CustomPage(
-        id: 'p-cli',
-        slug: 'clinics-guide',
-        titleAr: 'دليل العيادات',
-        titleEn: 'Clinics guide',
-        placement: PagePlacements.section,
-        categoryId: BuiltInSections.clinics,
-        visible: true,
-      );
-
-      // 1. 0 clinics + initialSpecialty='dental' + linked page => still shows EmptyState + CustomPageCard.
-      await _pump(
-        tester,
-        '/clinics?specialty=dental',
-        size: const Size(420, 3000),
-        repo: _BuiltInSectionRepo(
-          pagesList: const [linkedClinicPage],
-          clinicsList: const [],
-          sections: const {Sections.clinics: true},
-        ),
-      );
-      expect(find.byType(EmptyState), findsOneWidget);
-      expect(find.byKey(const Key('sectionPage-clinics-guide')), findsOneWidget);
-      expect(tester.takeException(), isNull);
-
-      // 2. Non-dental clinic + initialSpecialty='dental' + linked page => shows EmptyState + CustomPageCard;
-      // clearing filter shows the clinic and removes EmptyState.
-      await _pump(
-        tester,
-        '/clinics?specialty=dental',
-        size: const Size(420, 3000),
-        repo: _BuiltInSectionRepo(
-          pagesList: const [linkedClinicPage],
-          clinicsList: const [
-            Clinic(
-              id: 'c-eye',
-              specialty: 'eye',
-              specialtyAr: 'رمد',
-              specialtyEn: 'Ophthalmology',
-              doctorName: 'د. مينا',
-              active: true,
-              visible: true,
-            ),
-          ],
-          sections: const {Sections.clinics: true},
-        ),
-      );
-      expect(find.byType(EmptyState), findsOneWidget);
-      expect(find.byKey(const Key('sectionPage-clinics-guide')), findsOneWidget);
-
-      await tester.tap(find.text('All specialties'));
-      await tester.pumpAndSettle();
-      expect(find.byType(EmptyState), findsNothing);
-      expect(find.text('د. مينا'), findsOneWidget);
-      expect(find.byKey(const Key('sectionPage-clinics-guide')), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
 
@@ -3226,7 +3159,7 @@ void main() {
         repo: _BuiltInSectionRepo(
           pagesList: pages,
           facilitiesList: const [],
-          sections: const {Sections.clinics: true},
+          sections: const {Sections.meetings: true},
         ),
       );
       expect(find.byKey(const Key('sectionPage-services-guide')), findsOneWidget);
@@ -5817,7 +5750,6 @@ class _BuiltInSectionRepo extends _Repo {
   final Stream<List<CustomPage>>? pagesStream;
   final Stream<List<CustomPage>> Function()? pagesProviderOverride;
   final List<Activity>? activitiesList;
-  final List<Clinic>? clinicsList;
   final List<Facility>? facilitiesList;
   final List<Milestone>? milestonesList;
   final List<Saint>? saintsList;
@@ -5829,7 +5761,6 @@ class _BuiltInSectionRepo extends _Repo {
     this.pagesStream,
     this.pagesProviderOverride,
     this.activitiesList,
-    this.clinicsList,
     this.facilitiesList,
     this.milestonesList,
     this.saintsList,
@@ -5844,8 +5775,6 @@ class _BuiltInSectionRepo extends _Repo {
       pagesProviderOverride?.call() ?? pagesStream ?? Stream.value(pagesList);
   @override
   Stream<List<Activity>> activities() => activitiesList == null ? super.activities() : Stream.value(activitiesList!);
-  @override
-  Stream<List<Clinic>> clinics() => clinicsList == null ? super.clinics() : Stream.value(clinicsList!);
   @override
   Stream<List<Facility>> facilities() => facilitiesList == null ? super.facilities() : Stream.value(facilitiesList!);
   @override

@@ -477,7 +477,7 @@ class _OverviewScreenState extends State<OverviewScreen> {
   }
 
   static String _titleOf(AdminDoc d) {
-    for (final k in ['titleAr', 'nameAr', 'name', 'doctorName', 'titleEn', 'nameEn']) {
+    for (final k in ['titleAr', 'nameAr', 'name', 'titleEn', 'nameEn']) {
       final v = d.data[k];
       if (v is String && v.isNotEmpty) return v;
     }
@@ -490,7 +490,6 @@ IconData adminIcon(String name) => switch (name) {
       'seasons' => Icons.event_note_outlined,
       'liturgies' => Icons.access_time_outlined,
       'meetings' => Icons.school_outlined,
-      'clinics' => Icons.local_hospital_outlined,
       'services' => Icons.volunteer_activism_outlined,
       'activities' => Icons.groups_outlined,
       'priests' => Icons.person_outline,

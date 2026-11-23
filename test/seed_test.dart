@@ -43,8 +43,7 @@ void main() {
     expect(seed.alerts.any((a) => a.link == s.whatsappChannel), isTrue);
   });
 
-  test('clinics ship switched off until the church confirms them', () {
-    expect(seed.features.enabled(Sections.clinics), isFalse);
+  test('schedule ships switched on', () {
     expect(seed.features.enabled(Sections.schedule), isTrue);
   });
 
@@ -60,9 +59,6 @@ void main() {
   test('unpublished schedules stay flagged as pending confirmation', () {
     expect(seed.liturgies.every((l) => l.sample), isTrue);
     expect(seed.meetings.every((m) => m.sample), isTrue);
-    expect(seed.clinics.every((c) => c.sample), isTrue);
-    // Never invent doctor names: only generic "to be announced" placeholders.
-    expect(seed.clinics.every((c) => c.doctorName.contains('يُعلن لاحقًا')), isTrue);
   });
 
   test('priests: departed fathers are not listed as serving', () {
@@ -109,7 +105,6 @@ void main() {
       settings: seed.settings,
       liturgies: [oneOff],
       seasons: const [],
-      clinics: const [],
       meetings: const [],
       activities: const [],
       facilities: const [],
@@ -156,19 +151,17 @@ void main() {
     expect(day('pascha-eve'), DateTime(2027, 5, 1));
   });
 
-  test('assistant instruction includes schedule, clinics and contacts', () {
+  test('assistant instruction includes schedule and contacts', () {
     final text = buildAssistantInstruction(
       settings: seed.settings,
       liturgies: seed.liturgies,
       seasons: seed.seasons,
-      clinics: seed.clinics,
       meetings: seed.meetings,
       activities: seed.activities,
       facilities: seed.facilities,
       now: CairoTime.at(2026, 11, 1, 600),
     );
     expect(text, contains('Friday'));
-    expect(text, contains('Pediatrics'));
     expect(text, contains(seed.settings.phones.first.number));
     expect(text.length, lessThan(30000));
   });

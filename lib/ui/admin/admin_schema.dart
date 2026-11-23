@@ -315,7 +315,7 @@ const _imageStyleFieldFlat = FieldDef('imageStyle', 'طريقة عرض الصو�
 
 /// Collections whose documents may carry an `image` (see lib/domain/media.dart).
 const imageCollections = [
-  'alerts', 'seasons', 'meetings', 'activities', 'clinics', 'facilities', 'priests', 'milestones', 'saints', //
+  'alerts', 'seasons', 'meetings', 'activities', 'facilities', 'priests', 'milestones', 'saints', //
   'entries', 'pages', // ADR-027
 ];
 
@@ -636,42 +636,6 @@ const adminCollections = <CollectionDef>[
       publicPath: '/church-education',
       helpAr: 'اجتماعات مدارس الأحد والشباب والأسرة حسب المرحلة.',
       helpEn: 'Sunday school, youth, and family meetings grouped by stage.'),
-  CollectionDef('clinics', 'العيادات', 'Clinics', [
-    FieldDef('specialty', 'مفتاح التخصص (إنجليزي، مثل dental)', 'Specialty key (e.g. dental)', FieldType.text,
-        required: true, maxLength: 40),
-    FieldDef('specialtyAr', 'التخصص (عربي)', 'Specialty (Arabic)', FieldType.text, required: true),
-    FieldDef('doctorName', 'اسم الطبيب', 'Doctor name', FieldType.text, required: true),
-    FieldDef('bookingPhone', 'تليفون الحجز', 'Booking phone', FieldType.phone),
-    _imageField,
-    FieldDef('days', 'أيام العيادة', 'Clinic days', FieldType.weekdays),
-    FieldDef('start', 'من', 'From', FieldType.time),
-    FieldDef('end', 'إلى', 'To', FieldType.time),
-    FieldDef('degreeAr', 'الدرجة العلمية (عربي)', 'Degree (Arabic)', FieldType.text),
-    FieldDef('active', 'مُفعّلة', 'Active', FieldType.boolean, missingBool: true), // Clinic.fromMap: absent = active
-    _visibleField,
-    _sampleField,
-    FieldDef('specialtyEn', 'التخصص (إنجليزي)', 'Specialty (English)', FieldType.text, advanced: true, lang: 'en'),
-    FieldDef('degreeEn', 'الدرجة العلمية (إنجليزي)', 'Degree (English)', FieldType.text, advanced: true, lang: 'en'),
-    _orderField,
-    ..._detailsGroup,
-    ..._mediaExtraGroup,
-    ..._contactSwitches,
-    _whatsappField,
-    _whatsappUrlField,
-    _facebookUrlField,
-    _youtubeUrlField,
-    _instagramUrlField,
-    _externalUrlField,
-    ..._contactTail,
-  ], [
-    'doctorName',
-    'specialtyAr'
-  ],
-      orderable: true,
-      icon: 'clinics',
-      publicPath: '/clinics',
-      helpAr: 'عيادات الكنيسة وأطباء كل تخصص ومواعيدهم.',
-      helpEn: 'Church clinics, doctors by specialty, and clinic hours.'),
   CollectionDef('facilities', 'الخدمات العامة', 'Public services', [
     FieldDef('type', 'النوع', 'Type', FieldType.choice,
         options: ['service', 'nursery', 'employment', 'halls', 'other'], defaultOption: 'other'),
@@ -1069,8 +1033,8 @@ const assistantSettingsDoc = DocDef(
       hintEn: 'Blank = the default text. The scope rules and "never invent times or numbers" are always added and cannot be removed.'),
   FieldDef('topics', 'الموضوعات المسموح بها (موضوع في كل سطر)', 'Allowed topics (one per line)', FieldType.multiline,
       maxLength: AssistantLimits.topicsMax,
-      hintAr: 'اتركه فارغًا للقائمة الافتراضية (المواعيد، الاجتماعات، العيادات، الأنشطة، الآباء، القديسون، التواصل، الحجز، التبرعات، الأقسام والصفحات المخصصة).',
-      hintEn: 'Blank = the default list (times, meetings, clinics, activities, priests, saints, contact, bookings, donations, custom sections and pages).'),
+      hintAr: 'اتركه فارغًا للقائمة الافتراضية (المواعيد، الاجتماعات، الأنشطة، الآباء، القديسون، التواصل، الحجز، التبرعات، الأقسام والصفحات المخصصة).',
+      hintEn: 'Blank = the default list (times, meetings, activities, priests, saints, contact, bookings, donations, custom sections and pages).'),
   FieldDef('refusalAr', 'رسالة الاعتذار عن الأسئلة الأخرى (عربي)', 'Refusal message (Arabic)', FieldType.multiline,
       maxLength: AssistantLimits.textMax),
   FieldDef('refusalEn', 'رسالة الاعتذار عن الأسئلة الأخرى (إنجليزي)', 'Refusal message (English)', FieldType.multiline,

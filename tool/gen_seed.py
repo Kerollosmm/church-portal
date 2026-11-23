@@ -54,15 +54,13 @@ settings = {
     "assistantEnabled": True,
     "sample": False
   },
-  # Feature toggles + home layout (admin: "Sections & home page"). Every
-  # section starts switched on except clinics: it stays off until the church
-  # office confirms the clinics and their booking numbers.
+  # Feature toggles + home layout (admin: "Sections & home page").
   "features": {
-    "sections": {**{k: True for k in [
-      "schedule", "meetings", "clinics", "services", "history", "milestones", "saints", "priests",
+    "sections": {k: True for k in [
+      "schedule", "meetings", "services", "history", "milestones", "saints", "priests",
       "departedPriests", "activities", "alerts", "contactInfo", "socials", "contactForm", "assistant", "media",
       "dailyVerse", "customSections", "customPages",
-    ]}, "clinics": False},
+    ]},
     "homeOrder": ["banner", "alerts", "nextMass", "quickContacts", "milestones", "directory", "map"],
     "homeHidden": [],
     "heroTitleAr": "", "heroTitleEn": "", "heroSubtitleAr": "", "heroSubtitleEn": "",
@@ -237,25 +235,6 @@ activities = dict([
     link=YOUTUBE_PLAYLISTS),
 ])
 
-def C(id, sp, ar, en, days, s, e):
-    # No clinic, doctor or timetable is published: generic placeholders only.
-    return id, {"specialty": sp, "specialtyAr": ar, "specialtyEn": en, "doctorName": f"طبيب {ar} — يُعلن لاحقًا", "degreeAr": "",
-                "degreeEn": "", "days": days, "start": s, "end": e,
-                "bookingPhone": "", "whatsapp": "", "active": True, "sample": True}
-clinics = dict([
-  C("internal-1", "internal", "الباطنة", "Internal medicine", [1, 4], "17:00", "20:00"),
-  C("pediatrics-1", "pediatrics", "الأطفال", "Pediatrics", [5, 7], "11:00", "14:00"),
-  C("pediatrics-2", "pediatrics", "الأطفال", "Pediatrics", [2], "18:00", "21:00"),
-  C("dental-1", "dental", "الأسنان", "Dental", [1, 3, 6], "16:00", "20:00"),
-  C("ortho-1", "orthopedics", "العظام", "Orthopedics", [3], "18:00", "21:00"),
-  C("eye-1", "ophthalmology", "الرمد", "Ophthalmology", [6], "12:00", "15:00"),
-  C("gyn-1", "gynecology", "النساء والتوليد", "Gynecology", [2, 4], "17:00", "20:00"),
-  C("physio-1", "physiotherapy", "العلاج الطبيعي", "Physiotherapy", [1, 3, 5], "10:00", "14:00"),
-  C("ent-1", "ent", "الأنف والأذن والحنجرة", "ENT", [7], "17:00", "20:00"),
-  C("derma-1", "dermatology", "الجلدية", "Dermatology", [4], "18:00", "21:00"),
-  C("cardio-1", "cardiology", "القلب", "Cardiology", [6], "17:00", "20:00"),
-])
-
 facilities = {
   "anba-abraam": {"type": "service", "nameAr": "خدمة الأنبا أبرآم — مشروع تطوير الخدمة", "nameEn": "Anba Abraam service — development project",
      "descAr": "رعاية إخوة الرب والأسر المحتاجة. قدّمها القس يوناثان محفوظ لقداسة البابا تواضروس الثاني في زيارته يوم 25 يونيو 2025 كأبرز خدمات الكنيسة. للاستفسار اتصل بالكنيسة.",
@@ -333,7 +312,7 @@ retired = {
 }
 
 seed = {"settings": settings, "alerts": alerts, "seasons": seasons, "liturgies": liturgies, "meetings": meetings,
-        "activities": activities, "clinics": clinics, "facilities": facilities, "priests": priests, "milestones": milestones, "saints": saints}
+        "activities": activities, "facilities": facilities, "priests": priests, "milestones": milestones, "saints": saints}
 out = os.path.join(os.path.dirname(__file__), "..", "assets", "seed", "seed.json")
 with open(out, "w", encoding="utf-8") as f:
     json.dump(seed, f, ensure_ascii=False, indent=1)

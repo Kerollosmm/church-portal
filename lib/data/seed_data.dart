@@ -51,7 +51,6 @@ class SeedData {
   List<Liturgy> get liturgies => _list('liturgies', Liturgy.fromMap);
   List<Meeting> get meetings => _list('meetings', Meeting.fromMap);
   List<Activity> get activities => _list('activities', Activity.fromMap);
-  List<Clinic> get clinics => _list('clinics', Clinic.fromMap);
   List<Facility> get facilities => _list('facilities', Facility.fromMap);
   List<Priest> get priests => _list('priests', Priest.fromMap)..sort((a, b) => a.order.compareTo(b.order));
   List<Milestone> get milestones => _list('milestones', Milestone.fromMap)..sort((a, b) => a.order.compareTo(b.order));

@@ -397,7 +397,6 @@ class BuiltInSections {
   static const schedule = 'builtin_schedule';
   static const meetings = 'builtin_meetings';
   static const activities = 'builtin_activities';
-  static const clinics = 'builtin_clinics';
   static const services = 'builtin_services';
   static const about = 'builtin_about';
   static const contact = 'builtin_contact';
@@ -406,7 +405,6 @@ class BuiltInSections {
     CustomCategory(id: schedule, slug: 'mass-schedule', nameAr: 'مواعيد القداسات', nameEn: 'Mass schedule', icon: 'event'),
     CustomCategory(id: meetings, slug: 'church-education', nameAr: 'التربية الكنسية والاجتماعات', nameEn: 'Sunday school & meetings', icon: 'school'),
     CustomCategory(id: activities, slug: 'church-activities', nameAr: 'الأنشطة والكورالات', nameEn: 'Activities & choirs', icon: 'people'),
-    CustomCategory(id: clinics, slug: 'clinics', nameAr: 'العيادات', nameEn: 'Clinics', icon: 'medical'),
     CustomCategory(id: services, slug: 'public-services', nameAr: 'الخدمات العامة', nameEn: 'Public services', icon: 'volunteer'),
     CustomCategory(id: about, slug: 'about', nameAr: 'عن الكنيسة', nameEn: 'About the church', icon: 'church'),
     CustomCategory(id: contact, slug: 'contact', nameAr: 'تواصل معنا', nameEn: 'Contact us', icon: 'info'),
@@ -420,7 +418,7 @@ class BuiltInSections {
   }
 
   static bool isBuiltIn(String id) => switch (id) {
-        schedule || meetings || activities || clinics || services || about || contact => true,
+        schedule || meetings || activities || services || about || contact => true,
         _ => false,
       };
 
@@ -441,7 +439,6 @@ class BuiltInSections {
         'schedule' => schedule,
         'education' || 'meetings' => meetings,
         'activities' => activities,
-        'clinics' => clinics,
         'services' => services,
         'about' => about,
         'contact' => contact,
@@ -615,7 +612,6 @@ const builtInLinkTargets = [
   LinkTarget('/mass-schedule', 'مواعيد القداسات', 'Mass schedule'),
   LinkTarget('/church-education', 'التربية الكنسية والاجتماعات', 'Sunday school & meetings'),
   LinkTarget('/church-activities', 'الأنشطة والكورالات', 'Activities & choirs'),
-  LinkTarget('/clinics', 'العيادات', 'Clinics'),
   LinkTarget('/public-services', 'الخدمات العامة', 'Public services'),
   LinkTarget('/about', 'عن الكنيسة', 'About the church'),
   LinkTarget('/contact', 'تواصل معنا', 'Contact us'),

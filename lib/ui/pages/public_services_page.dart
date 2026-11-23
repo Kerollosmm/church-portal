@@ -1,5 +1,4 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../../core/l10n.dart';
@@ -25,7 +24,6 @@ class PublicServicesPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final showClinics = ref.watch(featuresProvider).routeEnabled('/clinics');
     return PageBody(
       header: CustomizablePageHeader(
           pageKey: CustomizablePages.services,
@@ -33,17 +31,6 @@ class PublicServicesPage extends ConsumerWidget {
           title: context.tr('publicServices'), subtitle: context.tr('dir_services'), icon: Icons.volunteer_activism_rounded),
       children: [
         const PageIntro(pageKey: CustomizablePages.services),
-        if (showClinics)
-        Card(
-          color: context.pal.surfaceAlt,
-          child: ListTile(
-            leading: Icon(Icons.local_hospital_rounded, color: context.pal.primary),
-            title: Text(context.tr('charityClinics'), style: const TextStyle(fontWeight: FontWeight.w800)),
-            subtitle: Text(context.tr('dir_clinics')),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () => context.go('/clinics'),
-          ),
-        ),
         AsyncSection<List<Facility>>(
           provider: facilitiesProvider,
           retry: facilitiesProvider,

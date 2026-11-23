@@ -153,7 +153,6 @@ void main() {
         settings: const ChurchSettings(nameAr: 'كنيسة', nameEn: 'Church', addressAr: '', addressEn: ''),
         liturgies: owner,
         seasons: [hw2026],
-        clinics: const [],
         meetings: const [],
         activities: const [],
         facilities: const [],

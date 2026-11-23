@@ -697,13 +697,12 @@ class Footer extends ConsumerWidget {
     final primary = context.pal.primary;
     final links = <(String, String)>[
       ('massSchedule', '/mass-schedule'),
-      ('clinics', '/clinics'),
       ('education', '/church-education'),
       ('contact', '/contact'),
       if (features.pushSettings.enabled) ('notifications', '/notifications'),
       // Clinics is off on the live site: never offer it before the switches
       // have arrived (same rule as the Services menu, app_shell.dart).
-    ].where((l) => features.routeEnabled(l.$2) && (ready || l.$2 != '/clinics')).toList();
+    ].where((l) => features.routeEnabled(l.$2)).toList();
     final phones = ready && s != null && footer.showPhones && features.enabled(Sections.contactInfo)
         ? s.phones.where((p) => p.number.trim().isNotEmpty).toList()
         : const <PhoneEntry>[];

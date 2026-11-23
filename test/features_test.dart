@@ -34,7 +34,7 @@ void main() {
         'homeHidden': ['milestones', 'bogus'],
         'theme': 'neon',
       });
-      expect(f.enabled(Sections.clinics), isFalse);
+      expect(f.enabled(Sections.meetings), isFalse);
       expect(f.enabled(Sections.schedule), isTrue); // non-bool -> default on
       expect(f.homeOrder.take(2), ['map', 'directory']);
       expect(f.homeOrder.toSet(), HomeBlocks.defaultOrder.toSet());
@@ -77,7 +77,7 @@ void main() {
       final f = FeatureSettings.fromMap({
         'sections': {'clinics': false, 'schedule': false, 'assistant': false},
       });
-      expect(f.routeEnabled('/clinics'), isFalse);
+      expect(f.routeEnabled('/church-education'), isFalse);
       expect(f.routeEnabled('/clinics/'), isFalse);
       // ADR-057: /notifications follows the push switch (off by default), trailing slash too.
       expect(f.routeEnabled('/notifications'), isFalse);
@@ -130,8 +130,8 @@ void main() {
     });
 
     test('sectionsForPath maps exact and sub paths', () {
-      expect(sectionsForPath('/clinics'), [Sections.clinics]);
-      expect(sectionsForPath('/clinics/a'), [Sections.clinics]);
+      expect(sectionsForPath('/church-education'), [Sections.meetings]);
+      expect(sectionsForPath('/clinics/a'), [Sections.meetings]);
       expect(sectionsForPath('/church-education/a'), [Sections.meetings]);
       expect(sectionsForPath('/church-activities/a'), [Sections.activities]);
       expect(sectionsForPath('/public-services/a'), [Sections.services]);
@@ -264,8 +264,6 @@ void main() {
     });
 
     test('visible flag defaults to true and is read from data', () {
-      expect(Clinic.fromMap('x', const {'specialty': 'dental'}).visible, isTrue);
-      expect(Clinic.fromMap('x', const {'visible': false}).visible, isFalse);
       expect(Facility.fromMap('x', const {'visible': 'no'}).visible, isTrue);
       expect(Activity.fromMap('x', const {'order': 7}).order, 7);
     });
@@ -278,14 +276,10 @@ void main() {
       expect(seed.collection('settings').containsKey('features'), isTrue);
       final f = seed.features;
       for (final s in Sections.all) {
-        expect(f.enabled(s), s != Sections.clinics, reason: s);
+        expect(f.enabled(s), isTrue, reason: s);
         expect((seed.raw['settings']['features']['sections'] as Map).containsKey(s), isTrue, reason: s);
       }
       expect(f.homeOrder, HomeBlocks.defaultOrder);
-      // Clinics stay off until the church office confirms them; every clinic
-      // stays flagged as unconfirmed.
-      expect(f.enabled(Sections.clinics), isFalse);
-      expect(seed.clinics.every((c) => c.sample), isTrue);
     });
 
     test('seed bishop line is present', () {
@@ -300,7 +294,6 @@ void main() {
           settings: seed.settings,
           liturgies: seed.liturgies,
           seasons: seed.seasons,
-          clinics: seed.clinics,
           meetings: seed.meetings,
           activities: seed.activities,
           facilities: seed.facilities,

@@ -71,7 +71,6 @@ class NavItem {
 const navItems = [
   NavItem('home', '/', Icons.home_rounded),
   NavItem('massSchedule', '/mass-schedule', Icons.access_time_filled_rounded),
-  NavItem('clinics', '/clinics', Icons.local_hospital_rounded),
   NavItem('education', '/church-education', Icons.school_rounded),
   NavItem('activities', '/church-activities', Icons.groups_rounded),
   NavItem('publicServices', '/public-services', Icons.volunteer_activism_rounded),
@@ -106,7 +105,6 @@ String parentRouteOf(String location, [FeatureSettings features = FeatureSetting
 String _parentLabelKey(String parentRoute) => switch (parentRoute) {
       '/church-education' => 'education',
       '/church-activities' => 'activities',
-      '/clinics' => 'clinics',
       '/public-services' => 'publicServices',
       '/about' => 'about',
       '/notifications' => 'notifications',
@@ -124,7 +122,7 @@ SystemUiOverlayStyle statusBarStyleOn(Color band) =>
 
 /// Paths grouped under «خدمات الكنيسة / Church services» (desktop menu and
 /// drawer group); the rest sit under «الكنيسة / The church».
-const serviceNavPaths = ['/mass-schedule', '/church-education', '/church-activities', '/public-services', '/clinics'];
+const serviceNavPaths = ['/mass-schedule', '/church-education', '/church-activities', '/public-services'];
 
 /// Common chrome for all public pages ("Golden hour"): a translucent cream
 /// app bar with the church name, the maroon seal tab hanging from its start
@@ -677,10 +675,9 @@ class _ServicesMenu extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final f = ref.watch(featuresProvider);
-    final ready = ref.watch(featuresReadyProvider);
     final items = [
       for (final i in navItems)
-        if (serviceNavPaths.contains(i.path) && f.routeEnabled(i.path) && (ready || i.path != '/clinics')) i,
+        if (serviceNavPaths.contains(i.path) && f.routeEnabled(i.path)) i,
       ...customNavItems(ref).categories,
     ];
     if (items.isEmpty) return const SizedBox.shrink();

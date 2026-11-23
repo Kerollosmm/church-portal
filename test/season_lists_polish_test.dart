@@ -115,7 +115,6 @@ String prompt(List<Liturgy> lits, List<Season> seasons, DateTime now) {
     settings: seed.settings,
     liturgies: lits,
     seasons: seasons,
-    clinics: const [],
     meetings: const [],
     activities: const [],
     facilities: seed.facilities,

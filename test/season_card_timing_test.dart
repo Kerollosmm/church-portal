@@ -219,7 +219,6 @@ void main() {
         settings: const ChurchSettings(nameAr: 'كنيسة', nameEn: 'Church', addressAr: '', addressEn: ''),
         liturgies: [lit('nye', date: DateTime(2027, 5, 1), start: '22:30', end: '03:30', type: 'mass')],
         seasons: const [],
-        clinics: const [],
         meetings: const [],
         activities: const [],
         facilities: const [],

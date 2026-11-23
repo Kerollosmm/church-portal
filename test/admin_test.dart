@@ -958,11 +958,9 @@ void main() {
       await tester.tap(find.byKey(const Key('features-save')));
       await tester.pumpAndSettle();
       expect(saved, isNotNull);
-      expect(saved!.enabled(Sections.clinics), isFalse);
       expect(saved!.enabled(Sections.schedule), isTrue);
       expect(saved!.theme, 'navy');
       expect(saved!.bannerEn, 'Christmas times are out');
-      expect(saved!.toMap()['sections'], containsPair('clinics', false));
     });
 
     testWidgets('rejects an invalid banner link', (tester) async {

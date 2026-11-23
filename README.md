@@ -36,7 +36,7 @@ Engineered with **Flutter Web and Android**, it delivers an **Arabic-first (RTL)
 
 ### Guiding Principles
 - **Public Directory, Not an ERP/CSMS:** Intentionally excludes membership records, confidential pastoral notes, financial ledgers, or attendance tracking (ADR-001). This eliminates data privacy liabilities and allows the entire system to run perpetually on the free **Firebase Spark** tier with zero hosting costs.
-- **Immediate Visitor Answers:** Liturgy schedules, "Happening Now" status, live streaming badges, Coptic calendar feasts, charity clinics, priest directories, and emergency contact channels answer visitor questions in seconds.
+- **Immediate Visitor Answers:** Liturgy schedules, "Happening Now" status, live streaming badges, Coptic calendar feasts, priest directories, and emergency contact channels answer visitor questions in seconds.
 - **Empowered Non-Technical Admins:** Parish servants manage nearly 100% of the site's content, announcement banners, season presets, and theme adjustments via `/admin` without writing code or redeploying.
 - **Offline & First-Load Resilience:** If Firebase is unreachable or unconfigured, the application gracefully falls back to bundled seed data (`assets/seed/seed.json`) without crashing.
 

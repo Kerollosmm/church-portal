@@ -13,7 +13,7 @@ class ImageStyles {
 
   /// Collections whose items may carry an `image` (and so an `imageStyle`).
   static const collections = [
-    'priests', 'saints', 'activities', 'milestones', 'meetings', 'alerts', 'seasons', 'facilities', 'clinics', //
+    'priests', 'saints', 'activities', 'milestones', 'meetings', 'alerts', 'seasons', 'facilities', //
   ];
 
   /// Built-in default per collection: people as avatars, everything else
@@ -21,7 +21,6 @@ class ImageStyles {
   /// picture. Saints use a portrait card (taller aspect).
   static const defaults = <String, String>{
     'priests': avatar,
-    'clinics': avatar, // the doctor's photo
     'saints': card,
     'activities': card,
     'milestones': card,
@@ -48,7 +47,6 @@ class ImageStyles {
     'alerts': ['التنويهات', 'Notices'],
     'seasons': ['المواسم والنهضات', 'Seasons & revivals'],
     'facilities': ['الخدمات العامة', 'Public services'],
-    'clinics': ['العيادات (صورة الطبيب)', 'Clinics (doctor photo)'],
   };
 
   static bool isValid(String? v) => v != null && all.contains(v);

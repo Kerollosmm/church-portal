@@ -74,7 +74,7 @@ void main() {
     PresetWrites apply(Set<String> options, {String live = '', String pdf = ''}) => planApply(
           r: PresetRequest(options: options, liveUrl: live, attachmentUrl: pdf, attachmentLabelAr: 'كتيب البصخة'),
           season: _holyWeek(),
-          sections: {Sections.meetings: true, Sections.clinics: false},
+          sections: {Sections.meetings: true},
           sectionKeys: Sections.all,
           heroMotion: true,
           weddingBookingOff: false,
@@ -85,7 +85,7 @@ void main() {
 
     test('Holy Week defaults: replace, hide meetings + clinics, hero still, no weddings', () {
       expect(PresetRequest.defaultsFor('holy_week'), {
-        PresetOption.replaceRegular, PresetOption.hideMeetings, PresetOption.hideClinics, //
+        PresetOption.replaceRegular, PresetOption.hideMeetings, //
         PresetOption.heroMotionOff, PresetOption.weddingOff,
       });
       expect(PresetRequest.defaultsFor('pascha'), {PresetOption.replaceRegular});
@@ -106,7 +106,6 @@ void main() {
       final sections = w.features['sections'] as Map<String, bool>;
       expect(sections.keys.toSet(), Sections.all.toSet(), reason: 'written whole (validSections)');
       expect(sections[Sections.meetings], isFalse);
-      expect(sections[Sections.clinics], isFalse);
       expect(sections[Sections.schedule], isTrue);
       expect(w.features['heroMotion'], isFalse);
       expect(w.features['weddingBookingOff'], isTrue);
@@ -123,7 +122,6 @@ void main() {
       expect(p.prevBool(PresetPrev.seasonActive), isFalse);
       expect(p.prevBool(PresetPrev.replacesRegular), isFalse);
       expect(p.prevBool(PresetPrev.meetings), isTrue);
-      expect(p.prevBool(PresetPrev.clinics), isFalse, reason: 'clinics were already off');
       expect(p.prevString(PresetPrev.liveUrl), 'https://youtube.com/old');
 
       final r = planRestore(p, sections: sections, sectionKeys: Sections.all);
@@ -131,7 +129,6 @@ void main() {
       expect(r.features.containsKey('seasonPreset'), isTrue);
       final back = r.features['sections'] as Map<String, bool>;
       expect(back[Sections.meetings], isTrue);
-      expect(back[Sections.clinics], isFalse, reason: 'restored to its previous (off) value');
       expect(r.features['heroMotion'], isTrue);
       expect(r.features['weddingBookingOff'], isFalse);
       expect(r.features['liveUrl'], 'https://youtube.com/old');
@@ -179,15 +176,15 @@ void main() {
 
   group('season preset: visitors return to normal at the season end, with no write', () {
     final stored = FeatureSettings.fromMap({
-      'sections': {'meetings': false, 'clinics': false},
+      'sections': {'meetings': false},
       'heroMotion': false,
       'weddingBookingOff': true,
       'seasonPreset': {
         'seasonId': 'hw',
         'seasonKey': 'holy_week',
         'endsAt': _end,
-        'options': ['hideMeetings', 'hideClinics', 'heroMotionOff', 'weddingOff'],
-        'previous': {'meetings': true, 'clinics': false, 'heroMotion': true, 'weddingBookingOff': false},
+        'options': ['hideMeetings', 'heroMotionOff', 'weddingOff'],
+        'previous': {'meetings': true, 'heroMotion': true, 'weddingBookingOff': false},
       },
     });
 
@@ -201,7 +198,6 @@ void main() {
     test('after the season the previous values apply (clinics stay off: they were off)', () {
       final f = stored.effectiveAt(_end);
       expect(f.enabled(Sections.meetings), isTrue);
-      expect(f.enabled(Sections.clinics), isFalse);
       expect(f.heroMotion, isTrue);
       expect(f.weddingBookingOff, isFalse);
       expect(f.seasonPreset, isNotNull, reason: 'the admin still gets the restore button');
@@ -304,7 +300,7 @@ void main() {
     });
 
     test('topics of switched-off sections are dropped, the admin\'s own lines too', () {
-      bool on(String s) => s != Sections.clinics && s != Sections.meetings;
+      bool on(String s) => s != Sections.meetings;
       final t = AssistantSettings.defaults.topicsFor(on);
       expect(t.any((l) => l.toLowerCase().contains('clinic')), isFalse);
       expect(t.any((l) => l.toLowerCase().contains('meeting')), isFalse);
@@ -325,11 +321,10 @@ void main() {
       final text = buildAssistantInstruction(
         assistant: AssistantSettings.defaults,
         features: FeatureSettings.fromMap(const {
-          'sections': {'clinics': false},
+          'sections': {'meetings': false},
         }),
         settings: const ChurchSettings(nameAr: 'كنيسة', nameEn: 'Church', addressAr: '', addressEn: ''),
         liturgies: const [],
-        clinics: const [],
         meetings: const [],
         activities: const [],
         facilities: const [],
@@ -338,7 +333,7 @@ void main() {
       );
       expect(text, contains('Current church season: Holy Week (أسبوع الآلام)'));
       expect(text, contains('Switched off on this website right now: '));
-      expect(text, contains(Sections.labels[Sections.clinics]![1]));
+      expect(text, contains(Sections.labels[Sections.meetings]![1]));
     });
 
     test('the wedding choice is hidden while weddingBookingOff is on; condolences stay', () {

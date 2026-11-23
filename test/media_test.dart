@@ -323,7 +323,6 @@ void main() {
             'image': {'source': 'inline', 'mediaId': 'MEDIA-ID-777'}
           })
         ],
-        clinics: const [],
         meetings: const [],
         activities: [act],
         facilities: const [],
@@ -346,7 +345,6 @@ void main() {
         settings: seed.settings,
         liturgies: const [],
         seasons: const [],
-        clinics: [Clinic.fromMap('c', {'specialtyAr': 'أسنان', 'doctorName': 'د', ...page})],
         meetings: [Meeting.fromMap('m', {'stage': 's', 'nameAr': 'اجتماع', ...page})],
         activities: [Activity.fromMap('a', {'titleAr': 'كورال', ...page})],
         facilities: [Facility.fromMap('f', {'nameAr': 'حضانة', ...page})],

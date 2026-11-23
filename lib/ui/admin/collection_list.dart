@@ -1601,7 +1601,6 @@ String? itemPublicPathFor(CollectionDef def, String id, Map<String, dynamic> dat
   }
   final kind = detailKindForCollection(def.name);
   if (kind == null || data['detailsEnabled'] == false || data['visible'] == false) return null;
-  if (kind == DetailKind.clinic && data['active'] == false) return null;
   final path = detailPathFor(kind, id);
   return english ? '$path?lang=en' : path;
 }

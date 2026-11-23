@@ -136,7 +136,6 @@ void main() {
       final parsed = <String, ItemDetails Function(Map<String, dynamic>)>{
         'meeting': (m) => Meeting.fromMap('x', {'stage': 'youth', 'nameAr': 'ا', ...m}).details,
         'activity': (m) => Activity.fromMap('x', {'titleAr': 'ا', ...m}).details,
-        'clinic': (m) => Clinic.fromMap('x', {'specialty': 'dental', 'specialtyAr': 'ا', 'doctorName': 'د', ...m}).details,
         'facility': (m) => Facility.fromMap('x', {'nameAr': 'ا', ...m}).details,
         'priest': (m) => Priest.fromMap('x', {'name': 'ا', ...m}).details,
         'milestone': (m) => Milestone.fromMap('x', {'titleAr': 'ا', ...m}).details,
@@ -158,15 +157,12 @@ void main() {
 
     test('meetings, clinics and facilities gain an optional cover image', () {
       expect(Meeting.fromMap('x', const {'stage': 's', 'nameAr': 'ا'}).image, isNull);
-      expect(Clinic.fromMap('x', const {'doctorName': 'د'}).image, isNull);
       expect(Facility.fromMap('x', const {'nameAr': 'ا'}).image, isNull);
       expect(Meeting.fromMap('x', const {'nameAr': 'ا', 'image': _inline}).image?.mediaId, 'm1');
-      expect(Clinic.fromMap('x', const {'doctorName': 'د', 'image': _url}).image?.url, 'https://img.example.org/a.jpg');
       expect(Facility.fromMap('x', const {'nameAr': 'ا', 'image': {'source': 'bogus'}}).image, isNull);
     });
 
     test('clinics and facilities resolve the primary phone from their existing field', () {
-      expect(Clinic.fromMap('x', const {'doctorName': 'د', 'bookingPhone': '0123'}).details.contactPhone, '0123');
       expect(Facility.fromMap('x', const {'nameAr': 'ا', 'phone': '0456'}).details.contactPhone, '0456');
       expect(Priest.fromMap('x', const {'name': 'ا', 'contactPhone': '0789'}).details.contactPhone, '0789');
       expect(Activity.fromMap('x', const {'titleAr': 'ا', 'contactPhone': '0789'}).details.contactPhone, '0789');
@@ -188,7 +184,6 @@ void main() {
       expect(m.facebookUrl, m.details.facebookUrl);
       expect(m.whatsappUrl, m.details.whatsappUrl);
       // Clinics keep their WhatsApp number in the shared `whatsapp` key.
-      expect(Clinic.fromMap('x', const {'doctorName': 'د', 'whatsapp': '010'}).details.whatsapp, '010');
     });
   });
 
@@ -209,7 +204,7 @@ void main() {
       };
       expect(quoted('detailKeys'), detailKeys);
       const fns = {
-        'meetings': 'validMeeting', 'activities': 'validActivity', 'clinics': 'validClinic', //
+        'meetings': 'validMeeting', 'activities': 'validActivity', //
         'facilities': 'validFacility', 'priests': 'validPriest', 'milestones': 'validMilestone', 'saints': 'validSaint',
       };
       for (final e in fns.entries) {
@@ -220,7 +215,7 @@ void main() {
         final own = quoted(e.value);
         expect(own, contains('image'), reason: '${e.key}.image');
         // The primary phone / external link: a new key, or the existing field.
-        expect(own, contains(['clinics', 'facilities'].contains(e.key) ? (e.key == 'clinics' ? 'bookingPhone' : 'phone') : 'contactPhone'),
+        expect(own, contains(e.key == 'facilities' ? 'phone' : 'contactPhone'),
             reason: '${e.key} phone');
         expect(own, contains(e.key == 'activities' ? 'link' : 'externalUrl'), reason: '${e.key} link');
       }

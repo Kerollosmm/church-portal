@@ -20,7 +20,6 @@ const sitemapStaticPaths = [
   '/mass-schedule',
   '/church-education',
   '/church-activities',
-  '/clinics',
   '/public-services',
   '/contact',
 ];
@@ -31,7 +30,6 @@ class SitemapContent {
   final FeatureSettings features;
   final List<Meeting> meetings;
   final List<Activity> activities;
-  final List<Clinic> clinics;
   final List<Facility> facilities;
   final List<Priest> priests;
   final List<Saint> saints;
@@ -43,7 +41,6 @@ class SitemapContent {
     required this.features,
     this.meetings = const [],
     this.activities = const [],
-    this.clinics = const [],
     this.facilities = const [],
     this.priests = const [],
     this.saints = const [],
@@ -56,7 +53,6 @@ class SitemapContent {
   Map<DetailKind, List<Object>> get detailItems => {
         DetailKind.meeting: meetings,
         DetailKind.activity: activities,
-        DetailKind.clinic: clinics,
         DetailKind.facility: facilities,
         DetailKind.priest: priests,
         DetailKind.saint: saints,
@@ -145,7 +141,6 @@ SitemapContent sitemapContentFromExport(Map<String, dynamic> export, {Map<String
     features: FeatureSettings.fromMap(stored is Map ? Map<String, dynamic>.from(stored) : seedFeatures),
     meetings: _exported(export, 'meetings', Meeting.fromMap),
     activities: _exported(export, 'activities', Activity.fromMap),
-    clinics: _exported(export, 'clinics', Clinic.fromMap),
     facilities: _exported(export, 'facilities', Facility.fromMap),
     priests: _exported(export, 'priests', Priest.fromMap),
     saints: _exported(export, 'saints', Saint.fromMap),

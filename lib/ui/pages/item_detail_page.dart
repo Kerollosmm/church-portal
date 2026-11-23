@@ -25,7 +25,6 @@ import '../widgets/item_image.dart';
 import '../widgets/program_details.dart';
 import '../widgets/remind_me.dart';
 import 'activities_page.dart' show activityIcon;
-import 'clinics_page.dart' show ClinicCard;
 import 'education_page.dart' show meetingGroupOf, stageLabels;
 import 'public_services_page.dart' show facilityIcon;
 
@@ -41,7 +40,6 @@ class ItemDetailPage extends ConsumerWidget {
   StreamProvider<List<Object>> get _provider => switch (kind) {
         DetailKind.meeting => meetingsProvider,
         DetailKind.activity => activitiesProvider,
-        DetailKind.clinic => clinicsProvider,
         DetailKind.facility => facilitiesProvider,
         DetailKind.priest => priestsProvider,
         DetailKind.saint => saintsProvider,
@@ -257,36 +255,6 @@ class _Entry {
           onSite: true,
           whatsappFromPhone: true,
         );
-      case Clinic c:
-        final now = ref.watch(nowProvider).value ?? DateTime.now();
-        final doctor = !context.isAr && ClinicCard.isPlaceholderDoctor(c)
-            ? context.tr('doctorTba', {'s': c.specialtyEn.isNotEmpty ? c.specialtyEn : c.specialtyAr})
-            : c.doctorName;
-        final days = c.days.map((d) => weekdayLabel(context, d)).join(context.isAr ? '، ' : ', ');
-        return _Entry(
-          title: context.pick(c.specialtyAr, c.specialtyEn),
-          subtitle: doctor,
-          icon: Icons.local_hospital_rounded,
-          details: c.details,
-          cover: c.image,
-          imageStyle: features.imageStyleFor('clinics', c.imageStyle),
-          pills: [if (isClinicAvailableToday(c, now)) Pill(context.tr('availableToday'), icon: Icons.check_circle)],
-          facts: [
-            _Fact(Icons.medical_services_outlined, context.tr('factDoctor'), doctor),
-            _Fact(Icons.workspace_premium_outlined, context.tr('factQualification'), context.pick(c.degreeAr, c.degreeEn)),
-            _Fact(Icons.calendar_today_outlined, context.tr('factDays'), days),
-            if (c.start.isNotEmpty) _Fact.widget(Icons.schedule_rounded, context.tr('factTime'), TimeRangeText(c.start, c.end)),
-          ],
-          calendarDays: c.days,
-          reminderTitle: {'ar': c.specialtyAr, 'en': c.specialtyEn},
-          start: c.start,
-          end: c.end,
-          onSite: true,
-          officeFallback: true,
-          whatsappText: context.isAr
-              ? 'أرغب في حجز موعد بعيادة ${c.specialtyAr} (${c.doctorName})'
-              : 'I would like to book an appointment at the ${c.specialtyEn} clinic ($doctor)',
-        );
       case Facility f:
         return _Entry(
           title: context.pick(f.nameAr, f.nameEn),
@@ -352,7 +320,6 @@ class _Entry {
 String _titleOf(BuildContext context, Object o) => switch (o) {
       Meeting m => context.pick(m.nameAr, m.nameEn),
       Activity a => context.pick(a.titleAr, a.titleEn),
-      Clinic c => context.pick(c.specialtyAr, c.specialtyEn),
       Facility f => context.pick(f.nameAr, f.nameEn),
       Priest p => context.isAr ? p.name : (p.nameEn.isNotEmpty ? p.nameEn : p.name),
       Saint s => context.pick(s.nameAr, s.nameEn),
@@ -432,7 +399,6 @@ class _DetailView extends ConsumerWidget {
       DetailKind.milestone => 'accent_milestone',
       DetailKind.meeting => 'accent_education',
       DetailKind.activity => 'accent_activities',
-      DetailKind.clinic => 'accent_clinics',
       DetailKind.facility => 'accent_services',
     });
     if (kind != DetailKind.saint) return PageHeader(title: e.title, subtitle: e.subtitle, icon: e.icon, accent: accent);

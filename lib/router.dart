@@ -20,7 +20,6 @@ import 'ui/pages/about_page.dart';
 import 'ui/pages/activities_page.dart';
 import 'ui/pages/category_page.dart';
 import 'ui/pages/assistant_page.dart' deferred as assistant_page;
-import 'ui/pages/clinics_page.dart';
 import 'ui/pages/contact_page.dart';
 import 'ui/pages/custom_page.dart';
 import 'ui/pages/education_page.dart';
@@ -213,10 +212,8 @@ GoRouter buildAppRouter(Ref ref, {bool? isWeb, String initialLocation = '/'}) {
           GoRoute(path: '/church-activities', pageBuilder: (c, s) => _page(s, const ActivitiesPage())),
           GoRoute(path: '/activities', redirect: (_, s) => _redirectWithQuery('/church-activities', s)),
           GoRoute(path: '/priests', redirect: (_, s) => _redirectWithQuery('/about', s)),
-          GoRoute(
-            path: '/clinics',
-            pageBuilder: (c, s) => _page(s, ClinicsPage(initialSpecialty: s.uri.queryParameters['specialty'])),
-          ),
+          GoRoute(path: '/clinics', redirect: (_, s) => _redirectWithQuery('/', s)),
+          GoRoute(path: '/clinics/:id', redirect: (_, s) => _redirectWithQuery('/', s)),
           GoRoute(path: '/public-services', pageBuilder: (c, s) => _page(s, const PublicServicesPage())),
           GoRoute(path: '/contact', pageBuilder: (c, s) => _page(s, const ContactPage())),
           GoRoute(

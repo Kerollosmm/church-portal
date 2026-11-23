@@ -25,40 +25,8 @@ List<Alert> visibleAlerts(Iterable<Alert> alerts, DateTime now) {
   return list;
 }
 
-// ---------------------------------------------------------------- Clinics
-
 /// ISO weekday (1=Mon..7=Sun) of [now] in Cairo.
 int cairoWeekday(DateTime now) => CairoTime.fromInstant(now).weekday;
-
-bool isClinicAvailableToday(Clinic c, DateTime now) => c.active && c.days.contains(cairoWeekday(now));
-
-/// Active clinics filtered by [specialty] (null/empty = all). Clinics open
-/// today come first, then the admin's `order`, then specialty and doctor name.
-List<Clinic> filterClinics(Iterable<Clinic> clinics, {String? specialty, required DateTime now}) {
-  final wd = cairoWeekday(now);
-  final list = clinics
-      .where((c) => c.active && (specialty == null || specialty.isEmpty || c.specialty == specialty))
-      .toList();
-  list.sort((a, b) {
-    final ta = a.days.contains(wd) ? 0 : 1;
-    final tb = b.days.contains(wd) ? 0 : 1;
-    if (ta != tb) return ta.compareTo(tb);
-    final o = a.order.compareTo(b.order);
-    if (o != 0) return o;
-    final s = a.specialty.compareTo(b.specialty);
-    return s != 0 ? s : a.doctorName.compareTo(b.doctorName);
-  });
-  return list;
-}
-
-/// Distinct specialties (key -> [ar, en]) in first-seen order.
-Map<String, List<String>> clinicSpecialties(Iterable<Clinic> clinics) {
-  final map = <String, List<String>>{};
-  for (final c in clinics.where((c) => c.active)) {
-    map.putIfAbsent(c.specialty, () => [c.specialtyAr, c.specialtyEn]);
-  }
-  return map;
-}
 
 // ---------------------------------------------------------------- Digits & phone
 

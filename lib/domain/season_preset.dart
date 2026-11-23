@@ -36,9 +36,6 @@ class PresetOption {
   /// Hide the meetings section (`sections.meetings` = false).
   static const hideMeetings = 'hideMeetings';
 
-  /// Hide the clinics section (`sections.clinics` = false).
-  static const hideClinics = 'hideClinics';
-
   /// Hero motion and video off (`heroMotion` = false).
   static const heroMotionOff = 'heroMotionOff';
 
@@ -58,7 +55,7 @@ class PresetOption {
   /// the theme already follows the active season.
   static const theme = 'theme';
 
-  static const all = [replaceRegular, hideMeetings, hideClinics, heroMotionOff, weddingOff, live, pdf, theme];
+  static const all = [replaceRegular, hideMeetings, heroMotionOff, weddingOff, live, pdf, theme];
 }
 
 /// Keys of [SeasonPreset.previous] (mirrored by firestore.rules
@@ -68,7 +65,6 @@ class PresetPrev {
   static const seasonActive = 'seasonActive';
   static const replacesRegular = 'replacesRegular';
   static const meetings = 'meetings';
-  static const clinics = 'clinics';
   static const heroMotion = 'heroMotion';
   static const weddingBookingOff = 'weddingBookingOff';
   static const liveUrl = 'liveUrl';
@@ -80,7 +76,7 @@ class PresetPrev {
   /// The stored `settings/features.theme` before the preset (ADR-043).
   static const theme = 'theme';
   static const all = [
-    seasonActive, replacesRegular, meetings, clinics, heroMotion, weddingBookingOff, liveUrl, liveEndsAt, //
+    seasonActive, replacesRegular, meetings, heroMotion, weddingBookingOff, liveUrl, liveEndsAt, //
     attachmentUrl, attachmentLabelAr, attachmentLabelEn, theme,
   ];
 }
@@ -197,7 +193,6 @@ class PresetRequest {
         'holy_week' => {
             PresetOption.replaceRegular,
             PresetOption.hideMeetings,
-            PresetOption.hideClinics,
             PresetOption.heroMotionOff,
             PresetOption.weddingOff,
           },
@@ -273,16 +268,10 @@ PresetWrites planApply({
     prev[PresetPrev.replacesRegular] = season.replacesRegular;
     s['replacesRegular'] = true;
   }
-  if (o.contains(PresetOption.hideMeetings) || o.contains(PresetOption.hideClinics)) {
+  if (o.contains(PresetOption.hideMeetings)) {
     final next = {for (final k in sectionKeys) k: sections[k] ?? true};
-    if (o.contains(PresetOption.hideMeetings)) {
-      prev[PresetPrev.meetings] = next['meetings'];
-      next['meetings'] = false;
-    }
-    if (o.contains(PresetOption.hideClinics)) {
-      prev[PresetPrev.clinics] = next['clinics'];
-      next['clinics'] = false;
-    }
+    prev[PresetPrev.meetings] = next['meetings'];
+    next['meetings'] = false;
     f['sections'] = next;
   }
   if (o.contains(PresetOption.heroMotionOff)) {
@@ -403,10 +392,9 @@ PresetWrites planRestore(SeasonPreset p, {required Map<String, bool> sections, r
   if (p.has(PresetOption.replaceRegular)) {
     s['replacesRegular'] = p.prevBool(PresetPrev.replacesRegular) ?? true;
   }
-  if (p.has(PresetOption.hideMeetings) || p.has(PresetOption.hideClinics)) {
+  if (p.has(PresetOption.hideMeetings)) {
     final next = {for (final k in sectionKeys) k: sections[k] ?? true};
-    if (p.has(PresetOption.hideMeetings)) next['meetings'] = p.prevBool(PresetPrev.meetings) ?? true;
-    if (p.has(PresetOption.hideClinics)) next['clinics'] = p.prevBool(PresetPrev.clinics) ?? true;
+    next['meetings'] = p.prevBool(PresetPrev.meetings) ?? true;
     f['sections'] = next;
   }
   if (p.has(PresetOption.heroMotionOff)) f['heroMotion'] = p.prevBool(PresetPrev.heroMotion) ?? true;

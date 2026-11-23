@@ -37,7 +37,6 @@ String _build({
   FeatureSettings f = FeatureSettings.defaults,
   Map<String, dynamic> d = const {},
   List<Milestone> milestones = const [],
-  List<Clinic>? clinics,
   List<Meeting>? meetings,
   List<Activity>? activities,
   List<CustomCategory> categories = const [],
@@ -47,7 +46,6 @@ String _build({
       settings: _settings,
       liturgies: const [],
       seasons: const [],
-      clinics: clinics ?? [Clinic.fromMap('c', {'specialtyAr': 'الأسنان', 'doctorName': 'د. مينا', 'bookingPhone': '0355', ...d})],
       meetings: meetings ?? [Meeting.fromMap('m', {'stage': 'youth', 'nameAr': 'اجتماع الشباب', ...d})],
       activities: activities ?? [Activity.fromMap('a', {'titleAr': 'الكورال', 'link': 'https://fb.example.org/choir', ...d})],
       facilities: [Facility.fromMap('f', {'nameAr': 'الحضانة', 'phone': '0366', ...d})],
@@ -165,7 +163,7 @@ void main() {
           {'titleAr': 'ع' * 150, 'titleEn': 'T' * 150, 'valueAr': 'ق' * 2000, 'valueEn': 'V' * 2000},
         ],
       };
-      final t = _build(d: d, clinics: const [], meetings: const [], activities: const []);
+      final t = _build(d: d, meetings: const [], activities: const []);
       expect(t, contains('${'T' * 100}…'));
       expect(t, isNot(contains('T' * 101)));
       expect(t, contains('${'V' * 300}…'));
