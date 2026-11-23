@@ -237,7 +237,9 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
   String _draftEventKey = '';
   Map<String, String> _draftFieldErrors = const {};
   String? _draftBannerError;
+  bool _englishRevealedForError = false;
   bool _previewEnglish = false;
+  final Map<String, String> _lastDraftText = {};
   final _keyTitleAr = GlobalKey();
   final _keyBodyAr = GlobalKey();
   final _keyTitleEn = GlobalKey();
@@ -275,12 +277,18 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
         _draftEventKey != _initialDraftEventKey;
   }
 
+  void _closeEditorState() {
+    _editorOpen = false;
+    _englishRevealedForError = false;
+    _englishTileCtrl.collapse();
+  }
+
   Future<void> _closeDraft() async {
     if (_isDraftDirty) {
       final discard = await confirmDiscardChanges(context);
       if (!discard || !mounted) return;
     }
-    setState(() => _editorOpen = false);
+    setState(_closeEditorState);
   }
 
   @override
@@ -308,11 +316,21 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
         c.addListener(_markDirty);
       }
     }
-    _draftTitleAr.addListener(() => _onDraftFieldEdited('titleAr'));
-    _draftTitleEn.addListener(() => _onDraftFieldEdited('titleEn'));
-    _draftBodyAr.addListener(() => _onDraftFieldEdited('bodyAr'));
-    _draftBodyEn.addListener(() => _onDraftFieldEdited('bodyEn'));
+    _bindDraftFieldListener('titleAr', _draftTitleAr);
+    _bindDraftFieldListener('titleEn', _draftTitleEn);
+    _bindDraftFieldListener('bodyAr', _draftBodyAr);
+    _bindDraftFieldListener('bodyEn', _draftBodyEn);
     if (widget.showTechnical) _loadWebHealth();
+  }
+
+  void _bindDraftFieldListener(String field, TextEditingController ctrl) {
+    ctrl.addListener(() {
+      if (!mounted) return;
+      final current = ctrl.text;
+      if (_lastDraftText[field] == current) return;
+      _lastDraftText[field] = current;
+      _onDraftFieldEdited(field);
+    });
   }
 
   bool get _hasDraftEnglishError =>
@@ -475,7 +493,7 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
   void _discardAllOnBrowserBack() {
     _resetSettingsForm();
     if (_editorOpen) {
-      setState(() => _editorOpen = false);
+      setState(_closeEditorState);
     }
   }
 
@@ -496,6 +514,7 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
       _editingExisting = row != null && !retry;
       _draftFieldErrors = const {};
       _draftBannerError = null;
+      _englishRevealedForError = false;
       _previewEnglish = false;
       _draftId = _editingExisting ? row!.id : DayEvent.generateRandomId();
       if (row != null && !retry) {
@@ -511,10 +530,23 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
         _draftMinutes = 9 * 60;
       }
       _draftTargets = row?.targets ?? 'all';
-      _draftTitleAr.text = row?.titleAr ?? '';
-      _draftTitleEn.text = row?.titleEn ?? '';
-      _draftBodyAr.text = row?.bodyAr ?? '';
-      _draftBodyEn.text = row?.bodyEn ?? '';
+      final titleAr = row?.titleAr ?? '';
+      final titleEn = row?.titleEn ?? '';
+      final bodyAr = row?.bodyAr ?? '';
+      final bodyEn = row?.bodyEn ?? '';
+      _lastDraftText['titleAr'] = titleAr;
+      _lastDraftText['titleEn'] = titleEn;
+      _lastDraftText['bodyAr'] = bodyAr;
+      _lastDraftText['bodyEn'] = bodyEn;
+      _draftTitleAr.text = titleAr;
+      _draftTitleEn.text = titleEn;
+      _draftBodyAr.text = bodyAr;
+      _draftBodyEn.text = bodyEn;
+      if (titleEn.trim().isNotEmpty || bodyEn.trim().isNotEmpty) {
+        _englishTileCtrl.expand();
+      } else {
+        _englishTileCtrl.collapse();
+      }
       _draftLink = row?.link ?? '/';
       _draftEventKey = row?.eventKey ?? '';
       _draftLinkLabelAr = _linkName(_draftLink);
@@ -620,6 +652,9 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
       setState(() {
         _draftFieldErrors = fieldErrors;
         _draftBannerError = bannerErr;
+        if (fieldErrors.containsKey('titleEn') || fieldErrors.containsKey('bodyEn')) {
+          _englishRevealedForError = true;
+        }
       });
       _revealAndScrollToFirstError(fieldErrors);
       return;
@@ -679,7 +714,7 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
         };
       });
       if (!mounted) return;
-      setState(() => _editorOpen = false);
+      setState(_closeEditorState);
       _snack(context.tr(_draftSoon ? 'nm_savedSoon' : 'nm_savedAt', {'when': _whenText(row.atUtc)}));
     } on _UserFacing catch (e) {
       if (mounted) {
@@ -1339,7 +1374,7 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
       );
 
   Widget _editor(BuildContext context) {
-    final showEnglishSection = _englishEnabled || _hasDraftEnglishError;
+    final showEnglishSection = _englishEnabled || _englishRevealedForError || _hasDraftEnglishError;
     return Padding(
       key: const ValueKey('push-editor'),
       padding: const EdgeInsets.only(bottom: 12),
@@ -1577,7 +1612,7 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
         ),
         // Step 5: preview
         _step(context, _digits('5'), context.tr('previewCardTitle')),
-        if (_englishEnabled || _hasDraftEnglishError) ...[
+        if (showEnglishSection) ...[
           Wrap(spacing: 8, children: [
             _chip(label: 'عربي', selected: !_previewEnglish, onSelected: (_) => setState(() => _previewEnglish = false)),
             _chip(label: 'English', selected: _previewEnglish, onSelected: (_) => setState(() => _previewEnglish = true)),
@@ -1626,7 +1661,7 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
   }
 
   Widget _preview(BuildContext context) {
-    final en = _previewEnglish;
+    final en = _previewEnglish && (_englishEnabled || _englishRevealedForError || _hasDraftEnglishError);
     String pick(TextEditingController enC, TextEditingController arC) => en && enC.text.trim().isNotEmpty ? enC.text.trim() : arC.text.trim();
     final title = pick(_draftTitleEn, _draftTitleAr);
     final body = pick(_draftBodyEn, _draftBodyAr);

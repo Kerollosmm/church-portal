@@ -942,7 +942,8 @@ class DocEditorState extends State<DocEditor> {
     // keep accepting the save.
     if (!_persisted && payload['imageStyle'] == null) payload = {...payload}..remove('imageStyle');
     if (payload.isEmpty && !_hasPendingUploads) {
-      messenger?.showSnackBar(SnackBar(content: Text(context.tr('noChanges'))));
+      ((widget.popOnSave ? widget.popMessenger : null) ?? messenger)
+          ?.showSnackBar(SnackBar(content: Text(context.tr('noChanges'))));
       setState(() => _dirty = false);
       if (widget.popOnSave && (route?.isCurrent ?? false)) nav.pop();
       return true;

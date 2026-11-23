@@ -3682,6 +3682,7 @@ void main() {
       await tester.tap(p1Btn, warnIfMissed: false);
       await tester.pump();
       expect(repo.updates.where((u) => u.collection == 'priests' && u.id == 'p1'), hasLength(1));
+      expect(find.byType(DocEditor), findsNothing);
 
       p1Completer.complete();
       await tester.pumpAndSettle();
@@ -3769,6 +3770,88 @@ void main() {
       expect(tester.widget<IconButton>(btn).tooltip, 'إخفاء من الموقع');
       expect(find.text('ظاهر'), findsOneWidget);
       expect(find.textContaining('[permission-denied]'), findsOneWidget);
+    });
+
+    testWidgets('filtered-out visibility toggle clears _optimisticVisible on stream update and sub-row swaps ignore old epoch',
+        (tester) async {
+      tester.view.physicalSize = const Size(900, 1000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      // 1. Filter to Visible, hide 'p1' so it disappears from visible list, then externally stream visible: true.
+      final repo = _ControlledUpdateBackend(initialCollections: {
+        'priests': [
+          AdminDoc('p1', {'name': 'أبونا فلان', 'rank': 'priest', 'status': 'serving', 'visible': true}),
+        ],
+        'categories': [
+          AdminDoc('cat1', {'nameAr': 'قسم ١', 'slug': 'sec1', 'visible': true, 'order': 10}),
+        ],
+        'entries': [
+          AdminDoc('shared-sub', {'categoryId': 'cat1', 'titleAr': 'عنصر مشترك', 'visible': true, 'order': 10}),
+        ],
+        'pages': [
+          AdminDoc('shared-sub', {'categoryId': 'cat1', 'titleAr': 'صفحة مشتركة', 'slug': 'shared-sub', 'visible': true, 'order': 10}),
+        ],
+      });
+      addTearDown(repo.dispose);
+
+      await tester.pumpWidget(_app(
+        CollectionListScreen(repo: repo, def: collectionById('priests')!),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      // Switch filter to Visible ('الظاهر').
+      await tester.tap(find.text('الظاهر'));
+      await tester.pumpAndSettle();
+
+      final hideCompleter = repo.hold('priests', 'p1');
+      await tester.tap(find.byKey(const ValueKey('visibility-p1')));
+      await tester.pump();
+
+      // Verify tap-absorption GestureDetector excludes semantics while button is disabled.
+      final p1Gesture = tester.widget<GestureDetector>(
+        find.ancestor(of: find.byKey(const ValueKey('visibility-p1')), matching: find.byType(GestureDetector)).first,
+      );
+      expect(p1Gesture.excludeFromSemantics, isTrue);
+
+      hideCompleter.complete();
+      await tester.pumpAndSettle();
+      // Under ListFilter.visible, p1 is filtered out of built rows.
+      expect(find.byKey(const ValueKey('visibility-p1')), findsNothing);
+
+      // Simulate another admin restoring visible: true via external update while ListFilter.visible is still active.
+      await repo.update('priests', 'p1', {'visible': true});
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('visibility-p1')), findsOneWidget);
+      expect(find.text('ظاهر'), findsOneWidget);
+      expect(find.text('مخفي'), findsNothing);
+
+      // Let the previous 2 s SnackBar expire before checking step 2's SnackBar absence.
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pumpAndSettle();
+
+      // 2. Categories sub-row (targetDef != null) in-flight when collection swaps on SAME repo -> ignored cleanly.
+      await tester.pumpWidget(_app(
+        CollectionListScreen(repo: repo, def: collectionById('categories')!),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      final entryHold = repo.hold('entries', 'shared-sub');
+      await tester.tap(find.byKey(const ValueKey('visibilityEntry-shared-sub')));
+      await tester.pump();
+
+      // Swap widget.def on SAME repo before entryHold completes!
+      await tester.pumpWidget(_app(
+        CollectionListScreen(repo: repo, def: collectionById('pages')!),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      entryHold.complete();
+      await tester.pumpAndSettle();
+      expect(find.byType(SnackBar), findsNothing);
     });
 
     testWidgets('row visibility in-flight completion after dispose or repo swap does not throw', (tester) async {

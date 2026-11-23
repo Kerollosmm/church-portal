@@ -107,6 +107,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
   final Set<String> _togglingVisibility = {};
   final Map<String, bool> _optimisticVisible = {};
   final Map<String, bool> _latestStreamVisible = {};
+  int _screenEpoch = 0;
   ListFilter _filter = ListFilter.all;
   PriestStatusFilter _priestFilter = PriestStatusFilter.all;
   late Stream<List<AdminDoc>> _stream = widget.repo.watch(widget.def.name);
@@ -150,6 +151,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
   void didUpdateWidget(covariant CollectionListScreen old) {
     super.didUpdateWidget(old);
     if (old.def.name != widget.def.name || old.repo != widget.repo) {
+      _screenEpoch++;
       _lastDocs = const [];
       _lastPages = null;
       _togglingVisibility.clear();
@@ -243,6 +245,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
             return Center(child: Padding(padding: const EdgeInsets.all(24), child: Text('${snap.error}')));
           }
           if (!snap.hasData) return const Center(child: CircularProgressIndicator());
+          _syncStreamVisibility(def.name, snap.data!);
           final all = sortAdminDocs(
               def,
               snap.data!
@@ -280,9 +283,11 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
                     final entriesDef = collectionById('entries')!;
                     final pagesDef = collectionById('pages')!;
                     final rawEntries = entrySnap.data!;
+                    _syncStreamVisibility(entriesDef.name, rawEntries);
                     _checkLazyPurge(rawEntries, entriesDef);
                     final rawPages = pageSnap.data!;
                     _lastPages = rawPages;
+                    _syncStreamVisibility(pagesDef.name, rawPages);
                     _checkLazyPurge(rawPages, pagesDef);
                     final unsoftEntries = rawEntries
                         .where((d) => !isSoftDeleted(d.data) && !_pendingDelete.isPending(d.id))
@@ -725,6 +730,17 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
 
   String _visKey(String collection, String id) => '$collection:$id';
 
+  void _syncStreamVisibility(String collection, List<AdminDoc> rawDocs) {
+    for (final d in rawDocs) {
+      final k = _visKey(collection, d.id);
+      final streamVisible = d.data['visible'] != false;
+      _latestStreamVisible[k] = streamVisible;
+      if (!_togglingVisibility.contains(k) && _optimisticVisible[k] == streamVisible) {
+        _optimisticVisible.remove(k);
+      }
+    }
+  }
+
   bool _effectiveHidden(AdminDoc d, {CollectionDef? targetDef}) {
     final k = _visKey((targetDef ?? def).name, d.id);
     final streamVisible = d.data['visible'] != false;
@@ -753,6 +769,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     final label = saving ? context.tr('savingVisibility') : context.tr(hidden ? 'show' : 'hide');
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
+      excludeFromSemantics: true,
       // Absorb rapid double-taps while saving so they do not fall through to ListTile.onTap.
       onTap: saving ? () {} : null,
       child: IconButton(
@@ -1168,6 +1185,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     final k = _visKey(activeDef.name, d.id);
     if (_togglingVisibility.contains(k)) return;
     final repo = widget.repo;
+    final epoch = _screenEpoch;
     final messenger = _messenger;
     final msg = context.tr(visible ? 'nowVisible' : 'nowHidden');
     final failed = context.tr('saveFailed', {'e': '{e}'});
@@ -1177,7 +1195,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     });
     try {
       await repo.update(activeDef.name, d.id, {'visible': visible});
-      if (!mounted || !identical(widget.repo, repo) || (targetDef == null && def.name != activeDef.name)) {
+      if (!mounted || epoch != _screenEpoch || !identical(widget.repo, repo)) {
         return;
       }
       setState(() {
@@ -1188,7 +1206,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
       });
       messenger?.showSnackBar(SnackBar(content: Text(msg), duration: const Duration(seconds: 2)));
     } catch (e) {
-      if (!mounted || !identical(widget.repo, repo) || (targetDef == null && def.name != activeDef.name)) {
+      if (!mounted || epoch != _screenEpoch || !identical(widget.repo, repo)) {
         return;
       }
       setState(() {

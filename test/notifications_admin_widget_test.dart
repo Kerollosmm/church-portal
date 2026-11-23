@@ -543,6 +543,67 @@ void main() {
     expect(find.byKey(const ValueKey('draft-english')), findsOneWidget);
     expect(find.byKey(const ValueKey('draft-titleEn')), findsOneWidget);
     expect(tester.widget<TextField>(find.byKey(const ValueKey('draft-titleEn'))).decoration?.errorText, isNotNull);
+
+    // Tapping or partially editing draft-titleEn under englishEnabled: false must NOT unmount draft-english
+    // out from under the admin's fingers, nor lose the English preview chip before save.
+    await tester.tap(find.text('English'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('draft-titleEn')));
+    await tester.pump();
+    expect(find.byKey(const ValueKey('draft-english')), findsOneWidget);
+    expect(find.byKey(const ValueKey('draft-titleEn')), findsOneWidget);
+    await tester.enterText(find.byKey(const ValueKey('draft-titleEn')), 'y' * 121);
+    await tester.pump();
+    expect(find.byKey(const ValueKey('draft-english')), findsOneWidget);
+    expect(find.byKey(const ValueKey('draft-titleEn')), findsOneWidget);
+    expect(tester.widget<TextField>(find.byKey(const ValueKey('draft-titleEn'))).decoration?.errorText, isNull);
+    await tester.enterText(find.byKey(const ValueKey('draft-titleEn')), 'Fixed English');
+    await tester.pump();
+    expect(find.byKey(const ValueKey('draft-english')), findsOneWidget);
+
+    // Saving closes editor and resets revealed/expanded state so a new draft stays collapsed/hidden.
+    await tapKey(tester, 'save-push');
+    await tapKey(tester, 'confirm-ok');
+    expect(find.byKey(const ValueKey('push-editor')), findsNothing);
+  });
+
+  testWidgets('shared _englishTileCtrl collapses between consecutive drafts under englishEnabled: true',
+      (tester) async {
+    final rowWithEn = [
+      'row_en',
+      _iso(now.add(const Duration(days: 2))),
+      'all',
+      'إعلان تجربة',
+      'English headline',
+      'نص الإعلان',
+      'English body',
+      '/',
+      '',
+    ].join(_s);
+    final rowArOnly = [
+      'row_ar',
+      _iso(now.add(const Duration(days: 3))),
+      'all',
+      'إعلان عربي فقط',
+      '',
+      'نص عربي فقط',
+      '',
+      '/',
+      '',
+    ].join(_s);
+    repo = _FakeAdminRepo(seed(englishEnabled: true, schedule: [rowWithEn, rowArOnly]));
+    await pump(tester);
+
+    // 1. Open draft with English text -> draft-english starts expanded (draft-titleEn visible).
+    await tapKey(tester, 'edit-row_en');
+    expect(find.byKey(const ValueKey('draft-english')), findsOneWidget);
+    expect(find.byKey(const ValueKey('draft-titleEn')), findsOneWidget);
+    await tapKey(tester, 'editor-close');
+
+    // 2. Open Arabic-only draft -> draft-english must start collapsed (draft-titleEn not shown).
+    await tapKey(tester, 'edit-row_ar');
+    expect(find.byKey(const ValueKey('draft-english')), findsOneWidget);
+    expect(find.byKey(const ValueKey('draft-titleEn')), findsNothing);
   });
 
   testWidgets('simultaneous empty Arabic fields and bad char show inline under each field, scroll to first error, and keep server conflicts on draft-error banner',
