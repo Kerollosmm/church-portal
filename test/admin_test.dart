@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' show PointerDeviceKind, Tristate;
 
+import 'package:fake_async/fake_async.dart';
 import 'package:firebase_core/firebase_core.dart';
 
 import 'package:church_portal/core/theme.dart';
@@ -1435,35 +1436,55 @@ void main() {
       expect(commits, 2);
     });
 
-    test('extendAll resets timers of all pending entries to a fresh window', () async {
-      final pd = PendingDelete(window: const Duration(milliseconds: 120));
-      final committed = <String>[];
-      pd.schedule('a', () async => committed.add('a'));
-      await Future<void>.delayed(const Duration(milliseconds: 70));
-      pd.schedule('b', () async => committed.add('b'));
-      pd.extendAll();
+    test('extendAll resets timers of all pending entries to a fresh window and holdCount ref-counts overlapping holds', () {
+      fakeAsync((async) {
+        final pd = PendingDelete(window: const Duration(milliseconds: 120));
+        final committed = <String>[];
+        pd.schedule('a', () async => committed.add('a'));
+        async.elapse(const Duration(milliseconds: 70));
+        pd.schedule('b', () async => committed.add('b'));
+        pd.extendAll();
 
-      // At 150 ms from 'a' (> 120 ms original window, 80 ms after extendAll), neither has committed.
-      await Future<void>.delayed(const Duration(milliseconds: 80));
-      expect(pd.isPending('a'), isTrue);
-      expect(pd.isPending('b'), isTrue);
-      expect(committed, isEmpty);
+        // At 150 ms from 'a' (> 120 ms original window, 80 ms after extendAll), neither has committed.
+        async.elapse(const Duration(milliseconds: 80));
+        expect(pd.isPending('a'), isTrue);
+        expect(pd.isPending('b'), isTrue);
+        expect(committed, isEmpty);
 
-      // Undo both before extended deadline -> zero commits.
-      expect(pd.undo('a'), isTrue);
-      expect(pd.undo('b'), isTrue);
-      await Future<void>.delayed(const Duration(milliseconds: 150));
-      expect(committed, isEmpty);
+        // Undo both before extended deadline -> zero commits.
+        expect(pd.undo('a'), isTrue);
+        expect(pd.undo('b'), isTrue);
+        async.elapse(const Duration(milliseconds: 150));
+        expect(committed, isEmpty);
 
-      // Without undo, extendAll commits both after the extended window.
-      pd.schedule('c', () async => committed.add('c'));
-      await Future<void>.delayed(const Duration(milliseconds: 70));
-      pd.schedule('d', () async => committed.add('d'));
-      pd.extendAll();
-      await Future<void>.delayed(const Duration(milliseconds: 80));
-      expect(committed, isEmpty);
-      await Future<void>.delayed(const Duration(milliseconds: 80));
-      expect(committed.toSet(), {'c', 'd'});
+        // Without undo, extendAll commits both after the extended window.
+        pd.schedule('c', () async => committed.add('c'));
+        async.elapse(const Duration(milliseconds: 70));
+        pd.schedule('d', () async => committed.add('d'));
+        pd.extendAll();
+        async.elapse(const Duration(milliseconds: 80));
+        expect(committed, isEmpty);
+        async.elapse(const Duration(milliseconds: 50));
+        expect(committed.toSet(), {'c', 'd'});
+
+        // Overlapping holdAll / releaseHold ref-counts holds cleanly across concurrent renewals.
+        pd.schedule('x', () async => committed.add('x'));
+        async.elapse(const Duration(milliseconds: 80));
+        pd.holdAll(['x']); // hold #1
+        pd.holdAll(['x']); // hold #2
+        async.elapse(const Duration(milliseconds: 60)); // original deadline passes while held
+        expect(committed.contains('x'), isFalse);
+
+        // First renewal finishes without extending -> x MUST stay held because hold #2 is still active.
+        unawaited(pd.releaseHold('x', extend: false));
+        async.flushMicrotasks();
+        expect(committed.contains('x'), isFalse);
+
+        // Second renewal releases without extending -> expiredWhileHeld triggers immediate commit.
+        unawaited(pd.releaseHold('x', extend: false));
+        async.flushMicrotasks();
+        expect(committed, contains('x'));
+      });
     });
 
     testWidgets('CollectionListScreen multi-delete extends batch window so undoAll at 12s restores both items', (tester) async {
@@ -1733,8 +1754,8 @@ void main() {
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.reset);
 
-      // Part 1: Held refresh protects s1 from expiring past t=10s while Future.wait suspends;
-      // if it fails after expiry, s1 commits instead of staying extended, while s2 stays undoable.
+      // Part 1: Held prior renewal never blocks B's immediate Undo bar, protects s1 past t=10s
+      // while held, and commits s1 if renewal fails after original deadline while updating Undo bar.
       final repo = _ControlledUpdateBackend(initialCollections: {
         'saints': [
           AdminDoc('s1', {'nameAr': 'مارجرجس', 'visible': true, 'order': 10}),
@@ -1750,16 +1771,31 @@ void main() {
       ));
       await tester.pumpAndSettle();
 
+      // Trigger an informational visibility SnackBar, then immediately delete s1:
+      // Undo SnackBar must clear/preempt queued info SnackBars immediately.
+      await tester.tap(find.byKey(const ValueKey('visibility-s3')));
+      await tester.pump();
+      expect(find.text('أصبح العنصر مخفيًا'), findsOneWidget);
+
       await tester.tap(find.byKey(const ValueKey('delete-s1')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.text('تراجع'), findsOneWidget);
+      expect(find.text('أصبح العنصر مخفيًا'), findsNothing);
+
       await tester.pump(const Duration(seconds: 8));
 
       final refreshHold = repo.hold('saints', 's1');
       await tester.tap(find.byKey(const ValueKey('delete-s2')));
-      await tester.pump(const Duration(seconds: 3)); // t = 11 s > original 10 s window, refresh still held!
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      // Undo action for s2 is shown immediately without waiting for s1's renewal.
+      expect(find.text('تراجع عن الكل'), findsOneWidget);
 
+      await tester.pump(const Duration(seconds: 3)); // t = 11 s > original 10 s window, refresh still held!
       expect(repo.deletedIds.contains('saints/s1'), isFalse);
 
-      // Failing after original expiry commits s1 cleanly instead of extending it unbacked.
+      // Failing after original expiry commits s1 cleanly and updates the SnackBar from "undoAll" to "undo".
       refreshHold.completeError(FirebaseException(plugin: 'cloud_firestore', code: 'unavailable', message: 'Offline'));
       await tester.pumpAndSettle();
 
@@ -1768,20 +1804,25 @@ void main() {
       expect(find.text('تراجع'), findsOneWidget);
 
       // Part 2: Failing renewal BEFORE original expiry (s2 at t=0, s3 at t=2s) keeps s2
-      // recoverable for its remaining 8 s (no premature commit at t=2s), then commits at t=10s
-      // while s3 remains pending until t=12s.
+      // recoverable until t=10s (no premature commit at t=2s), shows "تراجع عن الكل" while both
+      // remain recoverable, and shrinks back to single-item "تراجع" once s2 expires at t=10s.
       await tester.pump(const Duration(seconds: 2));
       final s2Fail = repo.hold('saints', 's2');
       await tester.tap(find.byKey(const ValueKey('delete-s3')));
       await tester.pump();
       s2Fail.completeError(FirebaseException(plugin: 'cloud_firestore', code: 'unavailable', message: 'Offline'));
-      await tester.pump();
+      await tester.pumpAndSettle();
       expect(repo.deletedIds.contains('saints/s2'), isFalse);
+      expect(find.text('تراجع عن الكل'), findsOneWidget);
 
-      // +8.5 s from s3 delete -> s2 reaches ~11 s (committed), while s3 is at 8.5 s (still pending).
+      // +8.5 s from s3 delete -> s2 expires (> 10 s), commits, and SnackBar shrinks to single "تراجع" for s3.
       await tester.pump(const Duration(seconds: 8, milliseconds: 500));
+      await tester.pump(const Duration(milliseconds: 300));
       expect(repo.deletedIds, contains('saints/s2'));
       expect(repo.deletedIds.contains('saints/s3'), isFalse);
+      expect(find.text('تراجع عن الكل'), findsNothing);
+      expect(find.text('تراجع'), findsOneWidget);
+
       await tester.pump(const Duration(seconds: 2));
       expect(repo.deletedIds, contains('saints/s3'));
     });

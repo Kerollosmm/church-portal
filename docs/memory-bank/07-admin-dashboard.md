@@ -277,11 +277,12 @@ For each `CollectionDef`:
   switch the old list is never shown while the new one loads.
 - 👁 **hide/show** (`update(visible)`) — only when the collection has a `visible` field (not seasons). All four row
   builders (`_tile`, `_categoryTile`, `_sectionPageRow`, `_entryRow`) share `_visibilityButton` alongside the static
-  «ظاهر / مخفي» `_Tag`: tapping replaces the eye icon with an inline spinner (`savingVisibility` «جارٍ الحفظ…»), locks
-  the row under a composite `'${collection}:${id}'` key while an opaque `GestureDetector` absorbs rapid repeat taps so
-  they cannot fall through to `ListTile.onTap`, reverts visual state + shows `saveFailed` on failure, and keeps
-  tooltip/semantics clear («إظهار في الموقع» / «إخفاء من الموقع»). `CollectionListScreen` also passes its own inner
-  `ScaffoldMessenger` (`popMessenger`) to `DocEditor` so `savedMsg` queues cleanly when `popOnSave` pops back.
+  «ظاهر / مخفي» `_Tag`: tapping replaces the eye icon with an inline spinner (`savingVisibility` «جارٍ الحفظ…»), disables
+  only that row's visibility toggle button under a composite `'${collection}:${id}'` key while an opaque `GestureDetector`
+  absorbs rapid repeat taps so they cannot fall through to `ListTile.onTap` (tapping the rest of the row still opens `DocEditor`),
+  reverts visual state + shows `saveFailed` on failure, and keeps tooltip/semantics clear («إظهار في الموقع» / «إخفاء من الموقع»).
+  `CollectionListScreen` also passes its own inner `ScaffoldMessenger` (`popMessenger`) to `DocEditor` so `savedMsg` and
+  `noChanges` queue cleanly when `popOnSave` pops back.
 - **Drag to reorder** — or tap **Move up / Move down** on each tile (`ValueKey('moveUp-<id>')`, WCAG 2.5.7) —
   (`reorder(collection, ids, base:)` → `order` = base + 10, 20, 30… in one batch) for orderable collections — clinics,
   facilities, activities, priests, saints, milestones — and only when search is empty, filter = all
@@ -294,12 +295,14 @@ For each `CollectionDef`:
 - **Add** (FAB) / tap to **edit** → full-screen `DocEditor`; **delete** in `collection_list.dart` uses a 10-second
   reversible soft-delete buffer (`PendingDelete`, `pending_delete.dart`). Non-category items immediately write Firestore
   `deletedAt: DateTime.now().toUtc()` (allowed by `meta()` and `optTimestamp(d, 'deletedAt')` in `firestore.rules`),
-  hide immediately from the visible list (`_pendingDelete.isPending` / `isSoftDeleted`), reset all pending commit
-  timers via `PendingDelete.extendAll()` so multi-delete «تراجع عن الكل» (`undoAll`) never commits earlier items
-  before the bar expires, and display a 10-second `SnackBar` on `CollectionListScreen`'s inner `ScaffoldMessenger` (above
+  hide immediately from the visible list (`_pendingDelete.isPending` / `isSoftDeleted`), show a 10-second `SnackBar`
+  right away (clearing queued info bars so Undo isn't delayed) on `CollectionListScreen`'s inner `ScaffoldMessenger` (above
   its own `FloatingActionButton`, avoiding FAB overlap at 320 px / 200 %) with «تم مسح «{n}»» (`deletedItemUndo`,
   neutral wording — the page is feminine, the section/item masculine; the inbox keeps `deletedUndo` «اتمسح «{n}»») and
-  action «تراجع» (`undo`) or «تراجع عن الكل» (`undoAll`). The soft-deleted document immediately vanishes from
+  action «تراجع» (`undo`) or «تراجع عن الكل» (`undoAll`), and renew `deletedAt` + extend local timers via
+  `PendingDelete.holdAll` / `releaseHold` / `extendAll` for earlier pending items whose renewal succeeds (preserving
+  remaining original deadlines on failed renewals and updating the active Undo bar if an un-renewed item expires early).
+  The soft-deleted document immediately vanishes from
   public collection views (`_docs` and `_col` in `FirestoreRepository`) and sitemap exports (`sitemapContentFromExport`).
   Tapping undo restores the item immediately and sets `deletedAt: null`. If the 10 seconds elapse without undo, the deletion
   commits to hard delete `widget.repo.delete(def.name, d.id)` and cleans up orphaned media (`removeOrphanedDocMedia`).

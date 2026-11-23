@@ -103,11 +103,14 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
   final _search = TextEditingController();
   final _pendingDelete = PendingDelete();
   final _pendingEntries = <String, ({AdminBackend repo, String collection, String title})>{};
+  final Map<String, Future<void>> _inFlightRenewals = {};
   final Set<String> _purging = {};
   final Set<String> _togglingVisibility = {};
   final Map<String, bool> _optimisticVisible = {};
   final Map<String, bool> _latestStreamVisible = {};
   final Map<String, List<AdminDoc>> _lastRawDocs = {};
+  final Map<String, int> _settledAtStreamSeq = {};
+  int _streamSeq = 0;
   int _screenEpoch = 0;
   ListFilter _filter = ListFilter.all;
   PriestStatusFilter _priestFilter = PriestStatusFilter.all;
@@ -120,6 +123,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
   bool _englishEnabled = true;
   bool _openingEditor = false;
   ScaffoldFeatureController<SnackBar, SnackBarClosedReason>? _undoSnackBarController;
+  int _undoSnackBarCount = 0;
   Timer? _undoSnackBarTimer;
 
   /// The list as last shown (slug uniqueness checks in the editor).
@@ -159,6 +163,8 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
       _optimisticVisible.clear();
       _latestStreamVisible.clear();
       _lastRawDocs.clear();
+      _settledAtStreamSeq.clear();
+      _streamSeq = 0;
       _stream = widget.repo.watch(widget.def.name);
       _entriesStream = widget.def.name == 'categories' ? widget.repo.watch('entries') : null;
       _pagesStream = widget.def.name == 'categories' ? widget.repo.watch('pages') : null;
@@ -734,15 +740,19 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
 
   void _syncStreamVisibility(String collection, List<AdminDoc> rawDocs) {
     final isNewSnapshot = !identical(_lastRawDocs[collection], rawDocs);
+    if (isNewSnapshot) _streamSeq++;
     _lastRawDocs[collection] = rawDocs;
     for (final d in rawDocs) {
       final k = _visKey(collection, d.id);
       final streamVisible = d.data['visible'] != false;
       _latestStreamVisible[k] = streamVisible;
+      final settledSeq = _settledAtStreamSeq[k];
+      final hasNewerSnapshot = settledSeq != null && _streamSeq > settledSeq;
       if (!_togglingVisibility.contains(k) &&
           _optimisticVisible.containsKey(k) &&
-          (isNewSnapshot || _optimisticVisible[k] == streamVisible)) {
+          (hasNewerSnapshot || _optimisticVisible[k] == streamVisible)) {
         _optimisticVisible.remove(k);
+        _settledAtStreamSeq.remove(k);
       }
     }
   }
@@ -1203,6 +1213,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     setState(() {
       _togglingVisibility.add(k);
       _optimisticVisible[k] = visible;
+      _settledAtStreamSeq.remove(k);
     });
     try {
       await repo.update(activeDef.name, d.id, {'visible': visible});
@@ -1213,6 +1224,11 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
         _togglingVisibility.remove(k);
         if (_latestStreamVisible[k] == visible) {
           _optimisticVisible.remove(k);
+          _settledAtStreamSeq.remove(k);
+        } else {
+          // Stamp current snapshot sequence so only a strictly newer post-write
+          // snapshot releases the optimistic state on superseding external writes.
+          _settledAtStreamSeq[k] = _streamSeq;
         }
       });
       _showSnack(messenger, SnackBar(content: Text(msg), duration: const Duration(seconds: 2)));
@@ -1223,6 +1239,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
       setState(() {
         _togglingVisibility.remove(k);
         _optimisticVisible.remove(k);
+        _settledAtStreamSeq.remove(k);
       });
       _showSnack(messenger, SnackBar(content: Text(failed.replaceAll('{e}', formatAdminError(e)))));
     }
@@ -1296,30 +1313,13 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     }
     if (!mounted) return;
 
-    // Push back backend `deletedAt` for earlier still-pending items before finalizing
-    // the renewed batch; hold local timers first so nothing commits mid-await.
-    // On renewal failure, preserve any remaining original timer without extending
-    // past the item's existing deadline (and commit if that deadline already elapsed).
     final priorPending = [
       for (final entry in _pendingEntries.entries.toList())
         if (entry.key != id && _pendingDelete.isPending(entry.key)) (id: entry.key, info: entry.value),
     ];
-    final renewedIds = <String>{};
-    if (priorPending.isNotEmpty) {
-      _pendingDelete.holdAll([for (final p in priorPending) p.id]);
-      await Future.wait([
-        for (final p in priorPending)
-          p.info.repo.update(p.info.collection, p.id, {'deletedAt': deleteNow}).then((_) {
-            renewedIds.add(p.id);
-          }).catchError((Object _) {}),
-      ]);
-      if (!mounted) return;
-      for (final p in priorPending) {
-        await _pendingDelete.releaseHold(p.id, extend: renewedIds.contains(p.id));
-      }
-      if (!mounted) return;
-    }
 
+    // Register and expose Undo for the new deletion immediately without blocking
+    // on backend lease renewals for prior items.
     setState(() {
       _pendingEntries[id] = (repo: repo, collection: activeDef.name, title: title);
       _pendingDelete.schedule(id, () async {
@@ -1334,22 +1334,96 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
           if (!mounted) return;
           setState(() {});
           _showSnack(messenger, SnackBar(content: Text(failedMsg.replaceAll('{e}', formatAdminError(e)))));
+          return;
         }
+        if (!mounted) return;
+        _syncUndoBarAfterExpiry(messenger, failedMsg: failedMsg);
       });
-      _pendingDelete.extendAll({...renewedIds, id});
     });
 
+    _presentUndoSnackBar(
+      messenger,
+      title: title,
+      fallbackRepo: repo,
+      fallbackCollection: activeDef.name,
+      failedMsg: failedMsg,
+      resetTimer: true,
+    );
+
+    if (priorPending.isNotEmpty) {
+      _pendingDelete.holdAll([for (final p in priorPending) p.id]);
+      for (final p in priorPending) {
+        final renewal = () async {
+          var renewed = false;
+          try {
+            await p.info.repo.update(p.info.collection, p.id, {'deletedAt': deleteNow});
+            renewed = true;
+          } catch (_) {}
+          if (!mounted) return;
+          await _pendingDelete.releaseHold(p.id, extend: renewed);
+        }();
+        _inFlightRenewals[p.id] = renewal;
+        unawaited(renewal.whenComplete(() {
+          if (identical(_inFlightRenewals[p.id], renewal)) {
+            _inFlightRenewals.remove(p.id);
+          }
+        }));
+      }
+    }
+  }
+
+  void _syncUndoBarAfterExpiry(ScaffoldMessengerState? messenger, {required String failedMsg}) {
+    if (!mounted) return;
+    if (!_pendingDelete.hasPending) {
+      _undoSnackBarTimer?.cancel();
+      _undoSnackBarTimer = null;
+      _undoSnackBarController = null;
+      _undoSnackBarCount = 0;
+      if (messenger != null && messenger.mounted) {
+        messenger.removeCurrentSnackBar();
+      }
+      return;
+    }
     final pendingCount = _pendingDelete.pendingIds.length;
+    if (_undoSnackBarController == null || _undoSnackBarCount == pendingCount) return;
+    final last = _pendingEntries.values.isNotEmpty ? _pendingEntries.values.last : null;
+    if (last == null) return;
+    _presentUndoSnackBar(
+      messenger,
+      title: last.title,
+      fallbackRepo: last.repo,
+      fallbackCollection: last.collection,
+      failedMsg: failedMsg,
+      resetTimer: false,
+    );
+  }
+
+  void _presentUndoSnackBar(
+    ScaffoldMessengerState? messenger, {
+    required String title,
+    required AdminBackend fallbackRepo,
+    required String fallbackCollection,
+    required String failedMsg,
+    required bool resetTimer,
+  }) {
+    if (!mounted || messenger == null || !messenger.mounted) return;
+    final pendingCount = _pendingDelete.pendingIds.length;
+    if (pendingCount == 0) return;
     final snackText = pendingCount > 1
         ? context.tr('deletedItemMultiUndo', {'n': '$pendingCount', 'last': title})
         : context.tr('deletedItemUndo', {'n': title});
     final actionLabel = context.tr(pendingCount > 1 ? 'undoAll' : 'undo');
-    _undoSnackBarTimer?.cancel();
-    _undoSnackBarTimer = null;
-    _undoSnackBarController?.close();
+    if (resetTimer) {
+      _undoSnackBarTimer?.cancel();
+      _undoSnackBarTimer = null;
+    }
     _undoSnackBarController = null;
-    messenger?.removeCurrentSnackBar();
-    final undoController = messenger?.showSnackBar(
+    _undoSnackBarCount = pendingCount;
+    // Clear any queued informational SnackBars and remove the active bar immediately
+    // so the Undo bar displays right away instead of waiting behind exits or queues.
+    messenger.clearSnackBars();
+    messenger.removeCurrentSnackBar();
+    final undoController = messenger.showSnackBar(
       SnackBar(
         duration: const Duration(seconds: 10),
         persist: false,
@@ -1360,16 +1434,18 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
             _undoSnackBarTimer?.cancel();
             _undoSnackBarTimer = null;
             _undoSnackBarController = null;
-            messenger.removeCurrentSnackBar();
+            _undoSnackBarCount = 0;
+            if (messenger.mounted) messenger.removeCurrentSnackBar();
             final ids = _pendingDelete.pendingIds.toList();
-            final undone = <({String id, AdminBackend repo, String collection})>[];
+            final undone = <({String id, AdminBackend repo, String collection, Future<void>? renewal})>[];
             for (final pid in ids) {
               if (_pendingDelete.undo(pid)) {
                 final entry = _pendingEntries.remove(pid);
                 undone.add((
                   id: pid,
-                  repo: entry?.repo ?? repo,
-                  collection: entry?.collection ?? activeDef.name,
+                  repo: entry?.repo ?? fallbackRepo,
+                  collection: entry?.collection ?? fallbackCollection,
+                  renewal: _inFlightRenewals[pid],
                 ));
               }
             }
@@ -1377,6 +1453,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
             if (mounted) setState(() {});
             for (final item in undone) {
               try {
+                if (item.renewal != null) await item.renewal;
                 await item.repo.update(item.collection, item.id, {'deletedAt': null});
               } catch (e) {
                 if (!mounted) return;
@@ -1388,19 +1465,22 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
       ),
     );
     _undoSnackBarController = undoController;
-    undoController?.closed.then((_) {
+    undoController.closed.then((_) {
       if (identical(_undoSnackBarController, undoController)) {
         _undoSnackBarController = null;
+        _undoSnackBarCount = 0;
         _undoSnackBarTimer?.cancel();
         _undoSnackBarTimer = null;
       }
     });
-    _undoSnackBarTimer = Timer(const Duration(seconds: 10), () {
-      if (!mounted) return;
-      _undoSnackBarController?.close();
-      _undoSnackBarController = null;
-      _messenger?.removeCurrentSnackBar();
-    });
+    if (resetTimer) {
+      _undoSnackBarTimer = Timer(const Duration(seconds: 10), () {
+        if (!mounted) return;
+        _undoSnackBarController = null;
+        _undoSnackBarCount = 0;
+        if (messenger.mounted) messenger.removeCurrentSnackBar();
+      });
+    }
   }
 
   /// Deleting a custom category hides its items (visible: false) first and

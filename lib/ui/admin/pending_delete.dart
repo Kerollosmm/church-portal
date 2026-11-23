@@ -36,40 +36,48 @@ class PendingDelete {
 
   Future<void> _onTimerFired(String id, _PendingCommit item) async {
     if (!identical(_pending[id], item)) return;
-    if (item.held) {
+    if (item.holdCount > 0) {
       item.expiredWhileHeld = true;
       return;
     }
     await _commitItem(id);
   }
 
-  /// Suspends timer expiry for [ids] without resetting their original deadlines.
+  /// Suspends timer expiry for [ids] with per-renewal ref-counting so overlapping
+  /// batch deletions cannot prematurely drop an active hold.
   void holdAll(Iterable<String> ids) {
     for (final id in ids) {
       final item = _pending[id];
       if (item == null) continue;
-      item.held = true;
-      item.expiredWhileHeld = false;
+      if (item.holdCount == 0) {
+        item.expiredWhileHeld = false;
+        item.extendOnRelease = false;
+      }
+      item.holdCount++;
     }
   }
 
-  /// Releases hold on [id]: if its original timer elapsed while held and [extend]
-  /// is false, commits immediately; otherwise resets only when [extend] is true.
+  /// Releases one hold on [id]: only when the last overlapping hold releases does
+  /// it extend (if any held renewal succeeded) or commit immediately (if expired).
   Future<void> releaseHold(String id, {required bool extend}) async {
     final item = _pending[id];
     if (item == null) return;
-    item.held = false;
+    if (extend) item.extendOnRelease = true;
+    if (item.holdCount > 0) item.holdCount--;
+    if (item.holdCount > 0) return;
+    final shouldExtend = item.extendOnRelease;
     final expired = item.expiredWhileHeld;
+    item.extendOnRelease = false;
     item.expiredWhileHeld = false;
-    if (extend) {
+    if (shouldExtend) {
       _resetTimer(id, item);
     } else if (expired) {
       await _commitItem(id);
     }
   }
 
-  /// Resets the grace-window timer on every currently pending deletion so a
-  /// combined batch undo SnackBar stays truthful for the full [window].
+  /// Resets the grace-window timer on every currently pending deletion (or [ids])
+  /// so a combined batch undo SnackBar stays truthful for the full [window].
   void extendAll([Iterable<String>? ids]) {
     final targets = ids?.toSet();
     for (final entry in _pending.entries.toList()) {
@@ -79,7 +87,8 @@ class PendingDelete {
   }
 
   void _resetTimer(String id, _PendingCommit item) {
-    item.held = false;
+    item.holdCount = 0;
+    item.extendOnRelease = false;
     item.expiredWhileHeld = false;
     item.timer.cancel();
     item.timer = Timer(window, () => _onTimerFired(id, item));
@@ -120,7 +129,8 @@ class PendingDelete {
 class _PendingCommit {
   Timer timer;
   final Future<void> Function() commit;
-  bool held = false;
+  int holdCount = 0;
+  bool extendOnRelease = false;
   bool expiredWhileHeld = false;
   bool _executed = false;
 
