@@ -110,7 +110,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
   final Map<String, bool> _latestStreamVisible = {};
   final Map<String, List<AdminDoc>> _lastRawDocs = {};
   final Map<String, int> _settledAtStreamSeq = {};
-  int _streamSeq = 0;
+  final Map<String, int> _streamSeqByCollection = {};
   int _screenEpoch = 0;
   ListFilter _filter = ListFilter.all;
   PriestStatusFilter _priestFilter = PriestStatusFilter.all;
@@ -164,7 +164,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
       _latestStreamVisible.clear();
       _lastRawDocs.clear();
       _settledAtStreamSeq.clear();
-      _streamSeq = 0;
+      _streamSeqByCollection.clear();
       _stream = widget.repo.watch(widget.def.name);
       _entriesStream = widget.def.name == 'categories' ? widget.repo.watch('entries') : null;
       _pagesStream = widget.def.name == 'categories' ? widget.repo.watch('pages') : null;
@@ -742,14 +742,16 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
 
   void _syncStreamVisibility(String collection, List<AdminDoc> rawDocs) {
     final isNewSnapshot = !identical(_lastRawDocs[collection], rawDocs);
-    if (isNewSnapshot) _streamSeq++;
+    final seq = isNewSnapshot
+        ? (_streamSeqByCollection[collection] = (_streamSeqByCollection[collection] ?? 0) + 1)
+        : (_streamSeqByCollection[collection] ?? 0);
     _lastRawDocs[collection] = rawDocs;
     for (final d in rawDocs) {
       final k = _visKey(collection, d.id);
       final streamVisible = d.data['visible'] != false;
       _latestStreamVisible[k] = streamVisible;
       final settledSeq = _settledAtStreamSeq[k];
-      final hasNewerSnapshot = settledSeq != null && _streamSeq > settledSeq;
+      final hasNewerSnapshot = settledSeq != null && seq > settledSeq;
       if (!_togglingVisibility.contains(k) &&
           _optimisticVisible.containsKey(k) &&
           (hasNewerSnapshot || _optimisticVisible[k] == streamVisible)) {
@@ -1250,9 +1252,9 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
           _optimisticVisible.remove(k);
           _settledAtStreamSeq.remove(k);
         } else {
-          // Stamp current snapshot sequence so only a strictly newer post-write
-          // snapshot releases the optimistic state on superseding external writes.
-          _settledAtStreamSeq[k] = _streamSeq;
+          // Stamp current snapshot sequence for this collection so unrelated
+          // streams (e.g. entries vs pages) cannot release its override early.
+          _settledAtStreamSeq[k] = _streamSeqByCollection[activeDef.name] ?? 0;
         }
       });
       _showSnack(messenger, SnackBar(content: Text(msg), duration: const Duration(seconds: 2)));
@@ -1375,8 +1377,9 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     );
 
     if (priorPending.isNotEmpty) {
-      _pendingDelete.holdAll([for (final p in priorPending) p.id]);
+      final holdTokens = _pendingDelete.holdAll([for (final p in priorPending) p.id]);
       for (final p in priorPending) {
+        final token = holdTokens[p.id];
         final renewal = () async {
           var renewed = false;
           try {
@@ -1384,11 +1387,17 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
             renewed = true;
           } catch (_) {}
           if (!mounted) return;
-          await _pendingDelete.releaseHold(p.id, extend: renewed);
+          await _pendingDelete.releaseHold(p.id, extend: renewed, token: token);
         }();
-        _inFlightRenewals[p.id] = renewal;
-        unawaited(renewal.whenComplete(() {
-          if (identical(_inFlightRenewals[p.id], renewal)) {
+        final priorInFlight = _inFlightRenewals[p.id];
+        late final Future<void> combined;
+        combined = () async {
+          if (priorInFlight != null) await priorInFlight;
+          await renewal;
+        }();
+        _inFlightRenewals[p.id] = combined;
+        unawaited(combined.whenComplete(() {
+          if (identical(_inFlightRenewals[p.id], combined)) {
             _inFlightRenewals.remove(p.id);
           }
         }));
@@ -1399,11 +1408,12 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
   void _syncUndoBarAfterExpiry(ScaffoldMessengerState? messenger, {required String failedMsg}) {
     if (!mounted) return;
     if (!_pendingDelete.hasPending) {
+      final hadActiveUndoBar = _undoSnackBarController != null;
       _undoSnackBarTimer?.cancel();
       _undoSnackBarTimer = null;
       _undoSnackBarController = null;
       _undoSnackBarCount = 0;
-      if (messenger != null && messenger.mounted) {
+      if (hadActiveUndoBar && messenger != null && messenger.mounted) {
         messenger.removeCurrentSnackBar();
       }
       return;

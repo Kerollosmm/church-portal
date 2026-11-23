@@ -1484,7 +1484,61 @@ void main() {
         unawaited(pd.releaseHold('x', extend: false));
         async.flushMicrotasks();
         expect(committed, contains('x'));
+
+        // Stale hold token acquired before undo must never release or commit a replacement entry.
+        pd.schedule('y', () async => committed.add('y1'));
+        final staleTokens = pd.holdAll(['y']);
+        pd.undo('y');
+        pd.schedule('y', () async => committed.add('y2'));
+        final freshTokens = pd.holdAll(['y']);
+        async.elapse(const Duration(milliseconds: 120)); // replacement expires while held by freshTokens
+        unawaited(pd.releaseHold('y', extend: false, token: staleTokens['y']));
+        async.flushMicrotasks();
+        expect(committed.contains('y2'), isFalse);
+        unawaited(pd.releaseHold('y', extend: false, token: freshTokens['y']));
+        async.flushMicrotasks();
+        expect(committed, contains('y2'));
       });
+    });
+
+    testWidgets('_syncUndoBarAfterExpiry preserves newer SnackBar when slow delete completes after undo expiry',
+        (tester) async {
+      tester.view.physicalSize = const Size(900, 1000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final repo = _ControlledUpdateBackend(initialCollections: {
+        'saints': [
+          AdminDoc('s1', {'nameAr': 'مارمرقس', 'visible': true, 'order': 10}),
+          AdminDoc('s2', {'nameAr': 'مارجرجس', 'visible': true, 'order': 20}),
+        ],
+      });
+      addTearDown(repo.dispose);
+
+      await tester.pumpWidget(_app(
+        CollectionListScreen(repo: repo, def: collectionById('saints')!),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      final delHold = repo.holdDelete('saints', 's1');
+      await tester.tap(find.byKey(const ValueKey('delete-s1')));
+      await tester.pump();
+      expect(find.text('تراجع'), findsOneWidget);
+
+      // Let the 10 s undo bar expire while repo.delete is still in flight.
+      await tester.pump(const Duration(seconds: 10));
+      await tester.pumpAndSettle();
+      expect(find.text('تراجع'), findsNothing);
+
+      // Show a fresh informational visibility SnackBar before delHold completes.
+      await tester.tap(find.byKey(const ValueKey('visibility-s2')));
+      await tester.pump();
+      expect(find.text('أصبح العنصر مخفيًا'), findsOneWidget);
+
+      delHold.complete();
+      await tester.pumpAndSettle();
+      expect(find.text('أصبح العنصر مخفيًا'), findsOneWidget);
     });
 
     testWidgets('CollectionListScreen multi-delete extends batch window so undoAll at 12s restores both items', (tester) async {
@@ -4019,6 +4073,59 @@ void main() {
       expect(find.text('ظاهر'), findsOneWidget);
       expect(find.text('مخفي'), findsNothing);
       expect(find.descendant(of: find.byKey(const ValueKey('visibility-p1')), matching: find.byIcon(Icons.visibility_outlined)), findsOneWidget);
+    });
+
+    testWidgets(
+        'unrelated collection snapshot does not clear pending page optimistic visibility on categories screen',
+        (tester) async {
+      tester.view.physicalSize = const Size(900, 1200);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final repo = _ControlledUpdateBackend(initialCollections: {
+        'categories': [
+          AdminDoc('cat1', {'nameAr': 'قسم ١', 'slug': 'sec1', 'visible': true, 'order': 10}),
+        ],
+        'entries': [
+          AdminDoc('e1', {'categoryId': 'cat1', 'titleAr': 'عنصر ١', 'visible': true, 'order': 10}),
+        ],
+        'pages': [
+          AdminDoc('sp1', {
+            'placement': 'section',
+            'categoryId': 'cat1',
+            'titleAr': 'صفحة ١',
+            'slug': 'sp1',
+            'visible': true,
+            'order': 10,
+          }),
+        ],
+      });
+      addTearDown(repo.dispose);
+
+      await tester.pumpWidget(_app(
+        CollectionListScreen(repo: repo, def: collectionById('categories')!),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      // Toggle section page sp1 offline of snapshot delivery so _settledAtStreamSeq['pages:sp1'] stays stamped.
+      repo.emitOnUpdate = false;
+      final spBtn = find.byKey(const ValueKey('visibilitySectionPage-sp1'));
+      await tester.tap(spBtn);
+      await tester.pumpAndSettle();
+      expect(find.descendant(of: spBtn, matching: find.byIcon(Icons.visibility_off_outlined)), findsOneWidget);
+
+      // Unrelated snapshot on entries must NOT clear the pending pages:sp1 override.
+      repo.collections['entries']![0].data['titleAr'] = 'عنصر ١ محدث';
+      repo.emitSnapshot('entries');
+      await tester.pumpAndSettle();
+      expect(find.descendant(of: spBtn, matching: find.byIcon(Icons.visibility_off_outlined)), findsOneWidget);
+
+      // A newer snapshot on pages itself DOES release the override to the authoritative value.
+      repo.collections['pages']![0].data['visible'] = true;
+      repo.emitSnapshot('pages');
+      await tester.pumpAndSettle();
+      expect(find.descendant(of: spBtn, matching: find.byIcon(Icons.visibility_outlined)), findsOneWidget);
     });
 
     testWidgets(
@@ -6618,6 +6725,7 @@ class _PermissionDeniedBackend extends _TestAdminBackend {
 class _ControlledUpdateBackend extends _TestAdminBackend {
   final Map<String, StreamController<List<AdminDoc>>> _controllers = {};
   final Map<String, Completer<void>> _holds = {};
+  final Map<String, Completer<void>> _deleteHolds = {};
   bool emitOnUpdate = true;
 
   _ControlledUpdateBackend({super.initialCollections});
@@ -6626,6 +6734,21 @@ class _ControlledUpdateBackend extends _TestAdminBackend {
     final c = Completer<void>();
     _holds['$collection:$id'] = c;
     return c;
+  }
+
+  Completer<void> holdDelete(String collection, String id) {
+    final c = Completer<void>();
+    _deleteHolds['$collection:$id'] = c;
+    return c;
+  }
+
+  @override
+  Future<void> delete(String collection, String id) async {
+    final hold = _deleteHolds.remove('$collection:$id');
+    if (hold != null) {
+      await hold.future;
+    }
+    await super.delete(collection, id);
   }
 
   void emitSnapshot(String collection) {

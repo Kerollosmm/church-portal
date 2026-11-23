@@ -43,28 +43,38 @@ class PendingDelete {
     await _commitItem(id);
   }
 
-  /// Suspends timer expiry for [ids] with per-renewal ref-counting so overlapping
-  /// batch deletions cannot prematurely drop an active hold.
-  void holdAll(Iterable<String> ids) {
+  /// Suspends timer expiry for [ids] with per-hold identity tokens so overlapping
+  /// batch deletions or stale renewals from undone items cannot touch a replacement entry.
+  Map<String, Object> holdAll(Iterable<String> ids) {
+    final tokens = <String, Object>{};
     for (final id in ids) {
       final item = _pending[id];
       if (item == null) continue;
-      if (item.holdCount == 0) {
+      if (item.activeHolds.isEmpty) {
         item.expiredWhileHeld = false;
         item.extendOnRelease = false;
       }
-      item.holdCount++;
+      final token = Object();
+      item.activeHolds.add(token);
+      tokens[id] = token;
     }
+    return tokens;
   }
 
-  /// Releases one hold on [id]: only when the last overlapping hold releases does
-  /// it extend (if any held renewal succeeded) or commit immediately (if expired).
-  Future<void> releaseHold(String id, {required bool extend}) async {
+  /// Releases one hold on [id] matching [token]: ignores stale tokens from undone/replaced
+  /// entries, and only when the last overlapping hold releases does it extend or commit.
+  Future<void> releaseHold(String id, {required bool extend, Object? token}) async {
     final item = _pending[id];
     if (item == null) return;
+    if (token != null) {
+      if (!item.activeHolds.remove(token)) return;
+    } else if (item.activeHolds.isNotEmpty) {
+      item.activeHolds.remove(item.activeHolds.last);
+    } else {
+      return;
+    }
     if (extend) item.extendOnRelease = true;
-    if (item.holdCount > 0) item.holdCount--;
-    if (item.holdCount > 0) return;
+    if (item.activeHolds.isNotEmpty) return;
     final shouldExtend = item.extendOnRelease;
     final expired = item.expiredWhileHeld;
     item.extendOnRelease = false;
@@ -87,7 +97,7 @@ class PendingDelete {
   }
 
   void _resetTimer(String id, _PendingCommit item) {
-    item.holdCount = 0;
+    item.activeHolds.clear();
     item.extendOnRelease = false;
     item.expiredWhileHeld = false;
     item.timer.cancel();
@@ -129,10 +139,12 @@ class PendingDelete {
 class _PendingCommit {
   Timer timer;
   final Future<void> Function() commit;
-  int holdCount = 0;
+  final List<Object> activeHolds = [];
   bool extendOnRelease = false;
   bool expiredWhileHeld = false;
   bool _executed = false;
+
+  int get holdCount => activeHolds.length;
 
   _PendingCommit(this.timer, this.commit);
 
