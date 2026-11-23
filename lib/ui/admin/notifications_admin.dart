@@ -336,6 +336,8 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
   bool get _hasDraftEnglishError =>
       _draftFieldErrors.containsKey('titleEn') || _draftFieldErrors.containsKey('bodyEn');
 
+  bool get _showDraftEnglish => _englishEnabled || _englishRevealedForError || _hasDraftEnglishError;
+
   String? _fieldErr(BuildContext context, String field) {
     final key = _draftFieldErrors[field];
     return key == null ? null : context.tr(key);
@@ -755,7 +757,7 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
         };
       });
       if (!mounted) return;
-      if (_editorOpen && _draftId == row.id) setState(() => _editorOpen = false);
+      if (_editorOpen && _draftId == row.id) setState(_closeEditorState);
       _snack(context.tr('nm_deleted'));
     } on _UserFacing catch (e) {
       if (mounted) _snack(context.tr(e.key), error: true);
@@ -971,7 +973,7 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
       builder: (context, featSnap) {
         if (featSnap.connectionState != ConnectionState.waiting) {
           _englishEnabled = FeatureSettings.fromMap(featSnap.data?.data).englishEnabled;
-          if (!_englishEnabled) _previewEnglish = false;
+          if (!_showDraftEnglish) _previewEnglish = false;
           _populateFeatures(featSnap.data);
         }
         return StreamBuilder<AdminDoc?>(
@@ -1374,7 +1376,7 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
       );
 
   Widget _editor(BuildContext context) {
-    final showEnglishSection = _englishEnabled || _englishRevealedForError || _hasDraftEnglishError;
+    final showEnglishSection = _showDraftEnglish;
     return Padding(
       key: const ValueKey('push-editor'),
       padding: const EdgeInsets.only(bottom: 12),
@@ -1518,7 +1520,7 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
                         firstDate: first,
                         lastDate: first.add(const Duration(days: 120)),
                       );
-                      if (picked != null) {
+                      if (picked != null && mounted) {
                         setState(() {
                           _draftDay = DateTime(picked.year, picked.month, picked.day);
                           _clearDraftErrorKey('when');
@@ -1535,7 +1537,7 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
                         context: context,
                         initialTime: TimeOfDay(hour: _draftMinutes ~/ 60, minute: _draftMinutes % 60),
                       );
-                      if (picked != null) {
+                      if (picked != null && mounted) {
                         setState(() {
                           _draftMinutes = picked.hour * 60 + picked.minute;
                           _clearDraftErrorKey('when');
@@ -1661,7 +1663,7 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
   }
 
   Widget _preview(BuildContext context) {
-    final en = _previewEnglish && (_englishEnabled || _englishRevealedForError || _hasDraftEnglishError);
+    final en = _previewEnglish && _showDraftEnglish;
     String pick(TextEditingController enC, TextEditingController arC) => en && enC.text.trim().isNotEmpty ? enC.text.trim() : arC.text.trim();
     final title = pick(_draftTitleEn, _draftTitleAr);
     final body = pick(_draftBodyEn, _draftBodyAr);

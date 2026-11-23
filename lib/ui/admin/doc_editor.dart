@@ -935,6 +935,9 @@ class DocEditorState extends State<DocEditor> {
     final savedMsg = context.tr('saved');
     final nav = Navigator.of(context);
     final route = ModalRoute.of(context);
+    bool willPop() => widget.popOnSave && (route?.isCurrent ?? false);
+    ScaffoldMessengerState? targetMessenger() =>
+        (willPop() && (widget.popMessenger?.mounted ?? false)) ? widget.popMessenger : messenger;
     // Existing docs: write only what changed (merge), never stale values.
     var payload = _persisted ? changedFields(_initialValues, data) : data;
     // A new document does not write an unset image style (ADR-023): missing
@@ -942,10 +945,9 @@ class DocEditorState extends State<DocEditor> {
     // keep accepting the save.
     if (!_persisted && payload['imageStyle'] == null) payload = {...payload}..remove('imageStyle');
     if (payload.isEmpty && !_hasPendingUploads) {
-      ((widget.popOnSave ? widget.popMessenger : null) ?? messenger)
-          ?.showSnackBar(SnackBar(content: Text(context.tr('noChanges'))));
+      targetMessenger()?.showSnackBar(SnackBar(content: Text(context.tr('noChanges'))));
       setState(() => _dirty = false);
-      if (widget.popOnSave && (route?.isCurrent ?? false)) nav.pop();
+      if (willPop()) nav.pop();
       return true;
     }
     setState(() => _saving = true);
@@ -991,9 +993,7 @@ class DocEditorState extends State<DocEditor> {
       // by an earlier, partly failed attempt of this save is not left behind.
       _deleteMedia({...orphanedDocMediaIds(baseline, data), ...orphanedDocMediaIds(initialBefore, data)}.toList());
       _saveBaseline = null;
-      final willPop = widget.popOnSave && (route?.isCurrent ?? false);
-      final saveMessenger = (willPop && (widget.popMessenger?.mounted ?? false)) ? widget.popMessenger : messenger;
-      saveMessenger?.showSnackBar(SnackBar(content: Text(savedMsg)));
+      targetMessenger()?.showSnackBar(SnackBar(content: Text(savedMsg)));
       if (!mounted) return true;
       setState(() {
         _saving = false;
@@ -1007,7 +1007,7 @@ class DocEditorState extends State<DocEditor> {
       }
       // The admin may have closed the editor while the write was pending:
       // only pop if this editor is still the top route.
-      if (willPop) nav.pop();
+      if (willPop()) nav.pop();
       return true;
     } catch (e) {
       // The failed write (and those after it) did not save: remove the images

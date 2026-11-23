@@ -548,6 +548,10 @@ void main() {
     // out from under the admin's fingers, nor lose the English preview chip before save.
     await tester.tap(find.text('English'));
     await tester.pumpAndSettle();
+    expect(
+      tester.widget<ChoiceChip>(find.ancestor(of: find.text('English'), matching: find.byType(ChoiceChip))).selected,
+      isTrue,
+    );
     await tester.tap(find.byKey(const ValueKey('draft-titleEn')));
     await tester.pump();
     expect(find.byKey(const ValueKey('draft-english')), findsOneWidget);
@@ -560,6 +564,11 @@ void main() {
     await tester.enterText(find.byKey(const ValueKey('draft-titleEn')), 'Fixed English');
     await tester.pump();
     expect(find.byKey(const ValueKey('draft-english')), findsOneWidget);
+    expect(find.descendant(of: find.byKey(const ValueKey('push-preview')), matching: find.text('Fixed English')), findsOneWidget);
+    expect(
+      tester.widget<Directionality>(find.ancestor(of: find.byKey(const ValueKey('push-preview')), matching: find.byType(Directionality)).first).textDirection,
+      TextDirection.ltr,
+    );
 
     // Saving closes editor and resets revealed/expanded state so a new draft stays collapsed/hidden.
     await tapKey(tester, 'save-push');
