@@ -212,11 +212,19 @@ Two tabs: «الإشعارات» (`NotificationsAdminSection`, kept alive across
    `meta/push_topics` (`activeSubscribers`), web reminder planner status from `meta/push_plan` (upcoming reminder topics
    count and next service time in Cairo), and queue rate throttle cap warning banner when meta/push_topics.cronQueue.capReached is true (1,000 web opt-in batch writes/day limit reached).
 2. **Scheduled announcements** (`schedule`, ≤ 20) — numbered 5-step editor: Arabic title + body (both required, as
-   the rules and `parseScheduleRow` require), English optional (collapsed); «في أقرب وقت» or Cairo date + time
+   the rules and `parseScheduleRow` require), English optional (`draft-english`, collapsed by default — hidden
+   alongside the English phone preview option when `settings/features.englishEnabled` is false while preserving
+   stored `titleEn`/`bodyEn` values, and auto-revealed + expanded via `ExpansibleController` only if legacy stored
+   English text fails validation); «في أقرب وقت» or Cairo date + time
    (default tomorrow 09:00; past times refused; switching to «في أقرب وقت» auto-clears past-time errors); timing and target chips use `context.pal.bar` background for high-contrast visibility; targets «الجميع / تطبيق أندرويد فقط / المتصفح و iPhone فقط»;
    «ماذا يفتح» picker (built-in pages, custom pages/categories, liturgies `lit-`, meetings `meeting-`, today's
    events `day-`, seasons `season-` — one-off reads when the dialog opens; ids the rules reject open the page without
-   an `eventKey`) or a custom `/path`; phone preview ar/en; «جرّب على هذا الجهاز». Inline errors under the field.
+   an `eventKey`) or a custom `/path`; phone preview ar/en; «جرّب على هذا الجهاز». Field validation routes through pure
+   `validateScheduledNotificationFields` (`admin_validators.dart`) directly beneath the exact input (`titleAr`,
+   `bodyAr`, `titleEn`, `bodyEn`, `when`, `targets`, `link`), auto-expanding `draft-english` if needed and scrolling
+   the first error into view (`SingleChildScrollView` + `Column` keeps off-screen keys mounted at 320 px / 200 %);
+   editing clears that field's error while server concurrency/cap conflicts (`nm_errRowGone`, `nm_errAlreadySending`,
+   `nm_errFull`) stay in the form-level `draft-error` banner.
    Rows grouped «القادمة» / «السابقة» with icon status chips and a one-line explanation per state; «تعديل» while
    the row has no `status` entry, «أعد الإرسال» (copy, targets narrowed) for partial / error / unconfirmed /
    expired, «حذف» with a confirmation dialog. Saving an announcement that targets everyone (`_draftTargets == 'all'`)
@@ -267,7 +275,13 @@ For each `CollectionDef`:
   ⛔ inactive, start/end), tags *Hidden* / *Unconfirmed* / *Departed*, "updated by … at …". Tapping the row opens `DocEditor`; bottom action bar holds **«عرض بالموقع»** (`ValueKey('openItem-<id>')`, external-link icon `Icons.open_in_new_rounded`) when visible with a detail page, and a clearly named **«حذف» / «Delete»** button (`ValueKey('delete-<id>')` / `deleteEntry-<id>`) separated vertically from the top-right 👁 visibility toggle across `_tile`, `_categoryTile`, and `_entryRow`.
 - The list `StreamBuilder` is keyed by `ObjectKey(_stream)` (also on Messages and Admins, PR #12): after a backend
   switch the old list is never shown while the new one loads.
-- 👁 **hide/show** (`update(visible)`) — only when the collection has a `visible` field (not seasons).
+- 👁 **hide/show** (`update(visible)`) — only when the collection has a `visible` field (not seasons). All four row
+  builders (`_tile`, `_categoryTile`, `_sectionPageRow`, `_entryRow`) share `_visibilityButton` alongside the static
+  «ظاهر / مخفي» `_Tag`: tapping replaces the eye icon with an inline spinner (`savingVisibility` «جارٍ الحفظ…»), locks
+  the row under a composite `'${collection}:${id}'` key while an opaque `GestureDetector` absorbs rapid repeat taps so
+  they cannot fall through to `ListTile.onTap`, reverts visual state + shows `saveFailed` on failure, and keeps
+  tooltip/semantics clear («إظهار في الموقع» / «إخفاء من الموقع»). `CollectionListScreen` also passes its own inner
+  `ScaffoldMessenger` (`popMessenger`) to `DocEditor` so `savedMsg` queues cleanly when `popOnSave` pops back.
 - **Drag to reorder** — or tap **Move up / Move down** on each tile (`ValueKey('moveUp-<id>')`, WCAG 2.5.7) —
   (`reorder(collection, ids, base:)` → `order` = base + 10, 20, 30… in one batch) for orderable collections — clinics,
   facilities, activities, priests, saints, milestones — and only when search is empty, filter = all
@@ -280,8 +294,12 @@ For each `CollectionDef`:
 - **Add** (FAB) / tap to **edit** → full-screen `DocEditor`; **delete** in `collection_list.dart` uses a 10-second
   reversible soft-delete buffer (`PendingDelete`, `pending_delete.dart`). Non-category items immediately write Firestore
   `deletedAt: DateTime.now().toUtc()` (allowed by `meta()` and `optTimestamp(d, 'deletedAt')` in `firestore.rules`),
-  hide immediately from the visible list (`_pendingDelete.isPending` / `isSoftDeleted`) and display a 10-second `SnackBar`
-  with «تم مسح «{n}»» (`deletedItemUndo`, neutral wording — the page is feminine, the section/item masculine; the inbox keeps `deletedUndo` «اتمسح «{n}»») and action «تراجع» (`undo`). The soft-deleted document immediately vanishes from
+  hide immediately from the visible list (`_pendingDelete.isPending` / `isSoftDeleted`), reset all pending commit
+  timers via `PendingDelete.extendAll()` so multi-delete «تراجع عن الكل» (`undoAll`) never commits earlier items
+  before the bar expires, and display a 10-second `SnackBar` on `CollectionListScreen`'s inner `ScaffoldMessenger` (above
+  its own `FloatingActionButton`, avoiding FAB overlap at 320 px / 200 %) with «تم مسح «{n}»» (`deletedItemUndo`,
+  neutral wording — the page is feminine, the section/item masculine; the inbox keeps `deletedUndo` «اتمسح «{n}»») and
+  action «تراجع» (`undo`) or «تراجع عن الكل» (`undoAll`). The soft-deleted document immediately vanishes from
   public collection views (`_docs` and `_col` in `FirestoreRepository`) and sitemap exports (`sitemapContentFromExport`).
   Tapping undo restores the item immediately and sets `deletedAt: null`. If the 10 seconds elapse without undo, the deletion
   commits to hard delete `widget.repo.delete(def.name, d.id)` and cleans up orphaned media (`removeOrphanedDocMedia`).
