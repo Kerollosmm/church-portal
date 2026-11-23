@@ -1851,6 +1851,76 @@ void main() {
       }
     });
 
+    group('Admin NotificationsAdminSection draft errors at 320px / 200%', () {
+      for (final lang in const ['ar', 'en']) {
+        testWidgets('NotificationsAdminSection draft editor with multiple field errors and expanded English tile has zero overflow at 320px / 200% ($lang)',
+            (tester) async {
+          tester.view.physicalSize = const Size(320, 640);
+          tester.view.devicePixelRatio = 1;
+          tester.platformDispatcher.textScaleFactorTestValue = 2.0;
+          addTearDown(tester.view.reset);
+          addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+
+          final repo = _FakeAdminRepo({
+            'settings/features': {
+              'push': true,
+              'englishEnabled': true,
+              'pushTypes': ['announcements', 'reminders'],
+            },
+            'settings/notifications': {'sentLog': <String>[]},
+            'meta/push_plan': <String, dynamic>{},
+            'meta/push_topics': <String, dynamic>{},
+          });
+          addTearDown(repo.dispose);
+
+          await tester.pumpWidget(MaterialApp(
+            locale: Locale(lang),
+            supportedLocales: const [Locale('ar'), Locale('en')],
+            localizationsDelegates: GlobalMaterialLocalizations.delegates,
+            theme: buildTheme(Locale(lang), primary: AppColors.burgundy),
+            home: Scaffold(body: NotificationsAdminSection(repo: repo)),
+          ));
+          await tester.pumpAndSettle();
+
+          final addBtn = find.byKey(const ValueKey('addScheduledPush'));
+          await tester.ensureVisible(addBtn);
+          await tester.pumpAndSettle();
+          await tester.tap(addBtn);
+          await tester.pumpAndSettle();
+
+          // Put invalid English title while tile is collapsed, leave Arabic empty, then tap save.
+          final enHeader = find.descendant(
+            of: find.byKey(const ValueKey('draft-english')),
+            matching: find.byIcon(Icons.translate),
+          );
+          await tester.ensureVisible(enHeader);
+          await tester.pumpAndSettle();
+          await tester.tap(enHeader);
+          await tester.pumpAndSettle();
+          // Use >120 UTF-16 units via emojis so LengthLimitingTextInputFormatter(120) lets it pass to validator.
+          await tester.enterText(find.byKey(const ValueKey('draft-titleEn')), '🙏' * 61);
+          await tester.ensureVisible(enHeader);
+          await tester.pumpAndSettle();
+          await tester.tap(enHeader);
+          await tester.pumpAndSettle();
+
+          final saveBtn = find.byKey(const ValueKey('save-push'));
+          await tester.ensureVisible(saveBtn);
+          await tester.pumpAndSettle();
+          await tester.tap(saveBtn);
+          await tester.pumpAndSettle();
+
+          expect(tester.takeException(), isNull);
+          final titleEn = find.byKey(const ValueKey('draft-titleEn'));
+          await tester.ensureVisible(titleEn);
+          await tester.pumpAndSettle();
+          expect(titleEn, findsOneWidget);
+          expect(tester.widget<TextField>(titleEn).decoration?.errorText, isNotNull);
+          expect(tester.takeException(), isNull);
+        });
+      }
+    });
+
 }
 
 class _ListBackend extends _FakeBackend {

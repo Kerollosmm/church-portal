@@ -137,7 +137,13 @@ void main() {
   late _FakeAdminRepo repo;
   final now = DateTime.now().toUtc();
 
-  Map<String, Map<String, dynamic>> seed({Map<String, dynamic>? health, List<String>? notifyTypes}) => {
+  Map<String, Map<String, dynamic>> seed({
+    Map<String, dynamic>? health,
+    List<String>? notifyTypes,
+    bool englishEnabled = true,
+    List<String>? schedule,
+  }) =>
+      {
         'settings/features': {
           'push': true,
           'pushVapidKey': '',
@@ -146,12 +152,14 @@ void main() {
           'reminderDefaultLead': 60,
           'reminderSources': 'lit,mtg,day',
           'notifyTypes': notifyTypes ?? <String>[],
+          'englishEnabled': englishEnabled,
         },
         'settings/notifications': {
-          'schedule': [
-            ['row1', _iso(now.subtract(const Duration(hours: 3))), 'all', 'عظة الأحد', 'Sunday Sermon', 'تفاصيل العظة', 'Sermon details', '/', 'lit-123'].join(_s),
-            ['row2', _iso(now.add(const Duration(days: 2))), 'all', 'نهضة العذراء', '', 'تبدأ ٧ مساءً', '', '/mass-schedule', ''].join(_s),
-          ],
+          'schedule': schedule ??
+              [
+                ['row1', _iso(now.subtract(const Duration(hours: 3))), 'all', 'عظة الأحد', 'Sunday Sermon', 'تفاصيل العظة', 'Sermon details', '/', 'lit-123'].join(_s),
+                ['row2', _iso(now.add(const Duration(days: 2))), 'all', 'نهضة العذراء', '', 'تبدأ ٧ مساءً', '', '/mass-schedule', ''].join(_s),
+              ],
           'status': {
             'row1': {'state': 'error', 'appState': 'error', 'webState': 'error'},
           },
@@ -464,5 +472,133 @@ void main() {
     expect(d.bodyEn, field('bodyEn'));
     expect(d.defaultLink, field('defaultLink'));
     expect('${d.daysBefore}', RegExp(r'daysBefore: (\d+)').firstMatch(block)!.group(1));
+  });
+
+  testWidgets('English draft errors render under draft-titleEn/draft-bodyEn, auto-expand draft-english, and do not highlight Arabic fields',
+      (tester) async {
+    await pump(tester);
+    await tapKey(tester, 'addScheduledPush');
+    await tester.enterText(find.byKey(const ValueKey('draft-titleAr')), 'قداس تجربة');
+    await tester.enterText(find.byKey(const ValueKey('draft-bodyAr')), 'تفاصيل القداس تجربة');
+
+    // Expand temporarily to enter an English title > 120 UTF-16 units (emojis) and \u001f in bodyEn, then collapse via header.
+    final enHeader = find.descendant(
+      of: find.byKey(const ValueKey('draft-english')),
+      matching: find.byIcon(Icons.translate),
+    );
+    await tester.ensureVisible(enHeader);
+    await tester.pumpAndSettle();
+    await tester.tap(enHeader);
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const ValueKey('draft-titleEn')), '🙏' * 61);
+    await tester.enterText(find.byKey(const ValueKey('draft-bodyEn')), 'Bad\u001fBody');
+    await tester.ensureVisible(enHeader);
+    await tester.pumpAndSettle();
+    await tester.tap(enHeader);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('draft-titleEn')), findsNothing);
+
+    await tapKey(tester, 'save-push');
+    // English tile auto-expanded, errors appear under titleEn and bodyEn (not titleAr/bodyAr, no banner).
+    expect(find.byKey(const ValueKey('draft-titleEn')), findsOneWidget);
+    expect(find.byKey(const ValueKey('draft-error')), findsNothing);
+    expect(tester.widget<TextField>(find.byKey(const ValueKey('draft-titleAr'))).decoration?.errorText, isNull);
+    expect(tester.widget<TextField>(find.byKey(const ValueKey('draft-bodyAr'))).decoration?.errorText, isNull);
+    expect(tester.widget<TextField>(find.byKey(const ValueKey('draft-titleEn'))).decoration?.errorText, isNotNull);
+    expect(tester.widget<TextField>(find.byKey(const ValueKey('draft-bodyEn'))).decoration?.errorText, isNotNull);
+
+    // Editing only titleEn clears only titleEn's error while bodyEn's error stays.
+    await tester.enterText(find.byKey(const ValueKey('draft-titleEn')), 'Valid title');
+    await tester.pump();
+    expect(tester.widget<TextField>(find.byKey(const ValueKey('draft-titleEn'))).decoration?.errorText, isNull);
+    expect(tester.widget<TextField>(find.byKey(const ValueKey('draft-bodyEn'))).decoration?.errorText, isNotNull);
+  });
+
+  testWidgets('englishEnabled false hides draft-english and English preview chip for normal drafts, but auto-reveals on legacy English error',
+      (tester) async {
+    final legacyBad = [
+      'row_bad',
+      _iso(now.add(const Duration(days: 2))),
+      'all',
+      'إعلان تجربة',
+      'x' * 125,
+      'نص الإعلان',
+      '',
+      '/',
+      '',
+    ].join(_s);
+    repo = _FakeAdminRepo(seed(englishEnabled: false, schedule: [legacyBad]));
+    await pump(tester);
+
+    // New draft: draft-english and English preview chip are hidden.
+    await tapKey(tester, 'addScheduledPush');
+    expect(find.byKey(const ValueKey('draft-english')), findsNothing);
+    expect(find.text('English'), findsNothing);
+    await tapKey(tester, 'editor-close');
+
+    // Legacy draft with invalid stored titleEn: hidden until save validates it, then auto-revealed & expanded.
+    await tapKey(tester, 'edit-row_bad');
+    expect(find.byKey(const ValueKey('draft-english')), findsNothing);
+    await tapKey(tester, 'save-push');
+    expect(find.byKey(const ValueKey('draft-english')), findsOneWidget);
+    expect(find.byKey(const ValueKey('draft-titleEn')), findsOneWidget);
+    expect(tester.widget<TextField>(find.byKey(const ValueKey('draft-titleEn'))).decoration?.errorText, isNotNull);
+  });
+
+  testWidgets('simultaneous empty Arabic fields and bad char show inline under each field, scroll to first error, and keep server conflicts on draft-error banner',
+      (tester) async {
+    await pump(tester, size: const Size(400, 520));
+    final listScroll = find.byType(Scrollable).first;
+    final addBtn = find.byKey(const ValueKey('addScheduledPush'));
+    await tester.scrollUntilVisible(addBtn, 200, scrollable: listScroll);
+    await tester.pumpAndSettle();
+    await tester.tap(addBtn);
+    await tester.pumpAndSettle();
+
+    // Scroll down to save-push so draft-titleAr is off-screen above, then tap save-push with empty fields.
+    final saveBtn = find.byKey(const ValueKey('save-push'));
+    await tester.scrollUntilVisible(saveBtn, 200, scrollable: listScroll);
+    await tester.pumpAndSettle();
+    await tester.tap(saveBtn);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('draft-error')), findsNothing);
+    expect(tester.widget<TextField>(find.byKey(const ValueKey('draft-titleAr'))).decoration?.errorText,
+        'اكتب عنوان الإشعار بالعربي.');
+    expect(tester.widget<TextField>(find.byKey(const ValueKey('draft-bodyAr'))).decoration?.errorText,
+        'اكتب نص الإشعار بالعربي.');
+    // First invalid field was scrolled back into view.
+    final titleRect = tester.getRect(find.byKey(const ValueKey('draft-titleAr')));
+    expect(titleRect.top, greaterThanOrEqualTo(0));
+    expect(titleRect.bottom, lessThanOrEqualTo(520));
+
+    // Fixing only titleAr clears titleAr error while bodyAr error remains.
+    await tester.enterText(find.byKey(const ValueKey('draft-titleAr')), 'عنوان\u001fسيء');
+    await tester.pump();
+    expect(tester.widget<TextField>(find.byKey(const ValueKey('draft-titleAr'))).decoration?.errorText, isNull);
+    expect(tester.widget<TextField>(find.byKey(const ValueKey('draft-bodyAr'))).decoration?.errorText,
+        'اكتب نص الإشعار بالعربي.');
+
+    // Submitting bad char in titleAr + empty bodyAr shows bad char inline on titleAr (never on draft-error banner).
+    await tester.scrollUntilVisible(saveBtn, 200, scrollable: listScroll);
+    await tester.pumpAndSettle();
+    await tester.tap(saveBtn);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('draft-error')), findsNothing);
+    expect(tester.widget<TextField>(find.byKey(const ValueKey('draft-titleAr'))).decoration?.errorText, isNotNull);
+    expect(tester.widget<TextField>(find.byKey(const ValueKey('draft-bodyAr'))).decoration?.errorText, isNotNull);
+
+    // Server/concurrency conflict (row deleted elsewhere) still uses form-level draft-error banner.
+    await tapKey(tester, 'editor-close');
+    await tapKey(tester, 'discard-confirm');
+    await tester.scrollUntilVisible(find.byKey(const ValueKey('edit-row2')), 200, scrollable: listScroll);
+    await tapKey(tester, 'edit-row2');
+    repo.docs['settings/notifications'] = {'schedule': <String>[]};
+    await tester.scrollUntilVisible(saveBtn, 200, scrollable: listScroll);
+    await tester.pumpAndSettle();
+    await tester.tap(saveBtn);
+    await tester.pumpAndSettle();
+    await tapKey(tester, 'confirm-ok');
+    expect(find.byKey(const ValueKey('draft-error')), findsOneWidget);
+    expect(find.textContaining('حُذف هذا الإعلان'), findsOneWidget);
   });
 }

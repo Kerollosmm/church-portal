@@ -220,6 +220,9 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
     return null;
   }
 
+  bool _englishEnabled = true;
+  final ExpansibleController _englishTileCtrl = ExpansibleController();
+
   // ---- scheduled announcement editor ----
   bool _editorOpen = false;
   bool _editingExisting = false;
@@ -232,8 +235,16 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
   String _draftLinkLabelAr = 'الرئيسية';
   String _draftLinkLabelEn = 'Home';
   String _draftEventKey = '';
-  String? _draftError;
+  Map<String, String> _draftFieldErrors = const {};
+  String? _draftBannerError;
   bool _previewEnglish = false;
+  final _keyTitleAr = GlobalKey();
+  final _keyBodyAr = GlobalKey();
+  final _keyTitleEn = GlobalKey();
+  final _keyBodyEn = GlobalKey();
+  final _keyWhen = GlobalKey();
+  final _keyTargets = GlobalKey();
+  final _keyLink = GlobalKey();
   final TextEditingController _draftTitleAr = TextEditingController();
   final TextEditingController _draftTitleEn = TextEditingController();
   final TextEditingController _draftBodyAr = TextEditingController();
@@ -297,14 +308,31 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
         c.addListener(_markDirty);
       }
     }
-    for (final c in [_draftTitleAr, _draftTitleEn, _draftBodyAr, _draftBodyEn]) {
-      c.addListener(_onDraftChanged);
-    }
+    _draftTitleAr.addListener(() => _onDraftFieldEdited('titleAr'));
+    _draftTitleEn.addListener(() => _onDraftFieldEdited('titleEn'));
+    _draftBodyAr.addListener(() => _onDraftFieldEdited('bodyAr'));
+    _draftBodyEn.addListener(() => _onDraftFieldEdited('bodyEn'));
     if (widget.showTechnical) _loadWebHealth();
   }
 
-  void _onDraftChanged() {
-    if (mounted) setState(() => _draftError = null);
+  bool get _hasDraftEnglishError =>
+      _draftFieldErrors.containsKey('titleEn') || _draftFieldErrors.containsKey('bodyEn');
+
+  String? _fieldErr(BuildContext context, String field) {
+    final key = _draftFieldErrors[field];
+    return key == null ? null : context.tr(key);
+  }
+
+  void _clearDraftErrorKey(String field) {
+    if (_draftFieldErrors.containsKey(field)) {
+      _draftFieldErrors = Map<String, String>.of(_draftFieldErrors)..remove(field);
+    }
+    _draftBannerError = null;
+  }
+
+  void _onDraftFieldEdited(String field) {
+    if (!mounted) return;
+    setState(() => _clearDraftErrorKey(field));
   }
 
   void _markDirty() {
@@ -314,6 +342,7 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
 
   @override
   void dispose() {
+    _englishTileCtrl.dispose();
     _vapidCtrl.dispose();
     for (final map in _typeCtrls.values) {
       for (final c in map.values) {
@@ -465,7 +494,8 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
     setState(() {
       _editorOpen = true;
       _editingExisting = row != null && !retry;
-      _draftError = null;
+      _draftFieldErrors = const {};
+      _draftBannerError = null;
       _previewEnglish = false;
       _draftId = _editingExisting ? row!.id : DayEvent.generateRandomId();
       if (row != null && !retry) {
@@ -533,6 +563,42 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
       ? DateTime.now().toUtc()
       : CairoTime.at(_draftDay.year, _draftDay.month, _draftDay.day, _draftMinutes).toUtc();
 
+  void _revealAndScrollToFirstError(Map<String, String> fieldErrors) {
+    final hasEnErr = fieldErrors.containsKey('titleEn') || fieldErrors.containsKey('bodyEn');
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (hasEnErr && !_englishTileCtrl.isExpanded) {
+        _englishTileCtrl.expand();
+      }
+      void scroll() {
+        if (!mounted) return;
+        final ordered = <(String, GlobalKey)>[
+          ('titleAr', _keyTitleAr),
+          ('bodyAr', _keyBodyAr),
+          ('titleEn', _keyTitleEn),
+          ('bodyEn', _keyBodyEn),
+          ('when', _keyWhen),
+          ('targets', _keyTargets),
+          ('link', _keyLink),
+        ];
+        for (final (field, key) in ordered) {
+          if (!fieldErrors.containsKey(field)) continue;
+          final ctx = key.currentContext;
+          if (ctx != null) {
+            Scrollable.ensureVisible(ctx, duration: const Duration(milliseconds: 220), alignment: 0.15);
+            break;
+          }
+        }
+      }
+
+      if (hasEnErr) {
+        WidgetsBinding.instance.addPostFrameCallback((_) => scroll());
+      } else {
+        scroll();
+      }
+    });
+  }
+
   Future<void> _saveDraft() async {
     final row = ScheduledNotification(
       id: _draftId,
@@ -545,13 +611,17 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
       link: safeNotificationLink(_draftLink),
       eventKey: _draftEventKey,
     );
-    final err = validateScheduledNotification(row);
-    if (err != null) {
-      setState(() => _draftError = err);
-      return;
-    }
+    final fieldErrors = Map<String, String>.of(validateScheduledNotificationFields(row));
+    final bannerErr = fieldErrors.remove('id');
     if (!_draftSoon && !row.atUtc.isAfter(DateTime.now().toUtc())) {
-      setState(() => _draftError = 'nm_errPast');
+      fieldErrors['when'] = 'nm_errPast';
+    }
+    if (fieldErrors.isNotEmpty || bannerErr != null) {
+      setState(() {
+        _draftFieldErrors = fieldErrors;
+        _draftBannerError = bannerErr;
+      });
+      _revealAndScrollToFirstError(fieldErrors);
       return;
     }
     if (_draftTargets == 'all' || _draftSoon) {
@@ -582,7 +652,12 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
       if (!confirmed || !mounted) return;
     }
     if (!_draftSoon && !row.atUtc.isAfter(DateTime.now().toUtc())) {
-      setState(() => _draftError = 'nm_errPast');
+      const errs = {'when': 'nm_errPast'};
+      setState(() {
+        _draftFieldErrors = errs;
+        _draftBannerError = null;
+      });
+      _revealAndScrollToFirstError(errs);
       return;
     }
     setState(() => _saving = true);
@@ -607,7 +682,12 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
       setState(() => _editorOpen = false);
       _snack(context.tr(_draftSoon ? 'nm_savedSoon' : 'nm_savedAt', {'when': _whenText(row.atUtc)}));
     } on _UserFacing catch (e) {
-      if (mounted) setState(() => _draftError = e.key);
+      if (mounted) {
+        setState(() {
+          _draftFieldErrors = const {};
+          _draftBannerError = e.key;
+        });
+      }
     } catch (e) {
       if (mounted) _snack(context.tr('nm_saveFailed', {'e': '$e'}), error: true);
     } finally {
@@ -743,7 +823,7 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
       _draftEventKey = picked.eventKey;
       _draftLinkLabelAr = picked.labelAr;
       _draftLinkLabelEn = picked.labelEn;
-      _draftError = null;
+      _clearDraftErrorKey('link');
     });
   }
 
@@ -854,7 +934,11 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
     return StreamBuilder<AdminDoc?>(
       stream: _featuresStream,
       builder: (context, featSnap) {
-        if (featSnap.connectionState != ConnectionState.waiting) _populateFeatures(featSnap.data);
+        if (featSnap.connectionState != ConnectionState.waiting) {
+          _englishEnabled = FeatureSettings.fromMap(featSnap.data?.data).englishEnabled;
+          if (!_englishEnabled) _previewEnglish = false;
+          _populateFeatures(featSnap.data);
+        }
         return StreamBuilder<AdminDoc?>(
           stream: _notificationsStream,
           builder: (context, notifSnap) {
@@ -868,24 +952,27 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
                 body: Center(
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 760),
-                    child: ListView(
+                    child: SingleChildScrollView(
                       key: const ValueKey('notifications-admin-list'),
                       padding: const EdgeInsets.fromLTRB(12, 16, 12, 40),
-                      children: [
-                        _statusCard(context),
-                        const SizedBox(height: 16),
-                        _scheduledSection(context),
-                        const SizedBox(height: 16),
-                        _typesSection(context),
-                        const SizedBox(height: 16),
-                        _remindSection(context),
-                        const SizedBox(height: 16),
-                        _sentLogSection(context),
-                        if (widget.showTechnical) ...[
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _statusCard(context),
                           const SizedBox(height: 16),
-                          _advancedSection(context),
+                          _scheduledSection(context),
+                          const SizedBox(height: 16),
+                          _typesSection(context),
+                          const SizedBox(height: 16),
+                          _remindSection(context),
+                          const SizedBox(height: 16),
+                          _sentLogSection(context),
+                          if (widget.showTechnical) ...[
+                            const SizedBox(height: 16),
+                            _advancedSection(context),
+                          ],
                         ],
-                      ],
+                      ),
                     ),
                   ),
                 ),
@@ -1252,8 +1339,7 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
       );
 
   Widget _editor(BuildContext context) {
-    final err = _draftError;
-    String? fieldErr(Set<String> keys) => err != null && keys.contains(err) ? context.tr(err) : null;
+    final showEnglishSection = _englishEnabled || _hasDraftEnglishError;
     return Padding(
       key: const ValueKey('push-editor'),
       padding: const EdgeInsets.only(bottom: 12),
@@ -1280,165 +1366,228 @@ class _NotificationsAdminSectionState extends State<NotificationsAdminSection> w
         ]),
         // Step 1: text
         _step(context, _digits('1'), context.tr('nm_stepText'), hint: context.tr('nm_stepTextHint')),
-        TextField(
-          key: const ValueKey('draft-titleAr'),
-          controller: _draftTitleAr,
-          maxLength: 120,
-          decoration: InputDecoration(
-            labelText: context.tr('nm_titleArLabel'),
-            hintText: context.tr('nm_titleArHint'),
-            errorText: fieldErr({'err_title_required', 'err_title_length'}),
+        KeyedSubtree(
+          key: _keyTitleAr,
+          child: TextField(
+            key: const ValueKey('draft-titleAr'),
+            controller: _draftTitleAr,
+            maxLength: 120,
+            decoration: InputDecoration(
+              labelText: context.tr('nm_titleArLabel'),
+              hintText: context.tr('nm_titleArHint'),
+              errorText: _fieldErr(context, 'titleAr'),
+            ),
           ),
         ),
         const SizedBox(height: 4),
-        TextField(
-          key: const ValueKey('draft-bodyAr'),
-          controller: _draftBodyAr,
-          maxLength: 300,
-          minLines: 2,
-          maxLines: 4,
-          decoration: InputDecoration(
-            labelText: context.tr('nm_bodyArLabel'),
-            hintText: context.tr('nm_bodyArHint'),
-            errorText: fieldErr({'err_body_required', 'err_body_length'}),
+        KeyedSubtree(
+          key: _keyBodyAr,
+          child: TextField(
+            key: const ValueKey('draft-bodyAr'),
+            controller: _draftBodyAr,
+            maxLength: 300,
+            minLines: 2,
+            maxLines: 4,
+            decoration: InputDecoration(
+              labelText: context.tr('nm_bodyArLabel'),
+              hintText: context.tr('nm_bodyArHint'),
+              errorText: _fieldErr(context, 'bodyAr'),
+            ),
           ),
         ),
-        Theme(
-          data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-          child: ExpansionTile(
-            key: const ValueKey('draft-english'),
-            tilePadding: EdgeInsets.zero,
-            initiallyExpanded: _draftTitleEn.text.isNotEmpty || _draftBodyEn.text.isNotEmpty,
-            leading: const Icon(Icons.translate),
-            title: Text(context.tr('nm_englishOptional')),
-            subtitle: Text(context.tr('nm_englishOptionalHint'), style: TextStyle(fontSize: 12, color: context.pal.muted)),
+        if (showEnglishSection)
+          Theme(
+            data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+            child: ExpansionTile(
+              key: const ValueKey('draft-english'),
+              controller: _englishTileCtrl,
+              tilePadding: EdgeInsets.zero,
+              initiallyExpanded: _hasDraftEnglishError || _draftTitleEn.text.isNotEmpty || _draftBodyEn.text.isNotEmpty,
+              leading: const Icon(Icons.translate),
+              title: Text(context.tr('nm_englishOptional')),
+              subtitle: Text(context.tr('nm_englishOptionalHint'), style: TextStyle(fontSize: 12, color: context.pal.muted)),
+              children: [
+                KeyedSubtree(
+                  key: _keyTitleEn,
+                  child: TextField(
+                    key: const ValueKey('draft-titleEn'),
+                    controller: _draftTitleEn,
+                    maxLength: 120,
+                    textDirection: TextDirection.ltr,
+                    decoration: InputDecoration(
+                      labelText: context.tr('nm_titleEnLabel'),
+                      errorText: _fieldErr(context, 'titleEn'),
+                    ),
+                  ),
+                ),
+                KeyedSubtree(
+                  key: _keyBodyEn,
+                  child: TextField(
+                    key: const ValueKey('draft-bodyEn'),
+                    controller: _draftBodyEn,
+                    maxLength: 300,
+                    minLines: 2,
+                    maxLines: 4,
+                    textDirection: TextDirection.ltr,
+                    decoration: InputDecoration(
+                      labelText: context.tr('nm_bodyEnLabel'),
+                      errorText: _fieldErr(context, 'bodyEn'),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        // Step 2: when
+        KeyedSubtree(
+          key: _keyWhen,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              TextField(
-                key: const ValueKey('draft-titleEn'),
-                controller: _draftTitleEn,
-                maxLength: 120,
-                textDirection: TextDirection.ltr,
-                decoration: InputDecoration(labelText: context.tr('nm_titleEnLabel')),
-              ),
-              TextField(
-                key: const ValueKey('draft-bodyEn'),
-                controller: _draftBodyEn,
-                maxLength: 300,
-                minLines: 2,
-                maxLines: 4,
-                textDirection: TextDirection.ltr,
-                decoration: InputDecoration(labelText: context.tr('nm_bodyEnLabel')),
-              ),
+              _step(context, _digits('2'), context.tr('nm_stepWhen'), hint: context.tr('nm_stepWhenHint')),
+              Wrap(spacing: 8, runSpacing: 8, children: [
+                _chip(
+                  key: const ValueKey('when-soon'),
+                  label: context.tr('sendAtEarliest'),
+                  icon: Icons.bolt,
+                  selected: _draftSoon,
+                  onSelected: (_) => setState(() {
+                    _draftSoon = true;
+                    _clearDraftErrorKey('when');
+                  }),
+                ),
+                _chip(
+                  key: const ValueKey('when-at'),
+                  label: context.tr('nm_whenAt'),
+                  icon: Icons.event,
+                  selected: !_draftSoon,
+                  onSelected: (_) => setState(() {
+                    _draftSoon = false;
+                    _clearDraftErrorKey('when');
+                  }),
+                ),
+              ]),
+              if (!_draftSoon) ...[
+                const SizedBox(height: 10),
+                Wrap(spacing: 8, runSpacing: 8, children: [
+                  OutlinedButton.icon(
+                    key: const ValueKey('pick-date'),
+                    icon: const Icon(Icons.calendar_today, size: 18),
+                    label: Text('${weekdayName(_draftDay.weekday, arabic: context.isAr)} ${formatDate(_draftDay, arabic: context.isAr)}'),
+                    onPressed: () async {
+                      final today = CairoTime.now();
+                      final first = DateTime(today.year, today.month, today.day);
+                      final picked = await showDatePicker(
+                        context: context,
+                        initialDate: _draftDay.isBefore(first) ? first : _draftDay,
+                        firstDate: first,
+                        lastDate: first.add(const Duration(days: 120)),
+                      );
+                      if (picked != null) {
+                        setState(() {
+                          _draftDay = DateTime(picked.year, picked.month, picked.day);
+                          _clearDraftErrorKey('when');
+                        });
+                      }
+                    },
+                  ),
+                  OutlinedButton.icon(
+                    key: const ValueKey('pick-time'),
+                    icon: const Icon(Icons.access_time, size: 18),
+                    label: Text(_hmText(_draftMinutes)),
+                    onPressed: () async {
+                      final picked = await showTimePicker(
+                        context: context,
+                        initialTime: TimeOfDay(hour: _draftMinutes ~/ 60, minute: _draftMinutes % 60),
+                      );
+                      if (picked != null) {
+                        setState(() {
+                          _draftMinutes = picked.hour * 60 + picked.minute;
+                          _clearDraftErrorKey('when');
+                        });
+                      }
+                    },
+                  ),
+                ]),
+                const SizedBox(height: 6),
+                Text(
+                  context.tr('nm_whenSummary', {'when': _whenText(_draftAtUtc)}),
+                  key: const ValueKey('when-summary'),
+                  style: TextStyle(fontSize: 12.5, color: _fieldErr(context, 'when') != null ? context.pal.alert : context.pal.muted),
+                ),
+                if (_fieldErr(context, 'when') case final whenErr?)
+                  Text(whenErr, style: TextStyle(color: context.pal.alert, fontSize: 12.5)),
+              ],
             ],
           ),
         ),
-        // Step 2: when
-        _step(context, _digits('2'), context.tr('nm_stepWhen'), hint: context.tr('nm_stepWhenHint')),
-        Wrap(spacing: 8, runSpacing: 8, children: [
-          _chip(
-            key: const ValueKey('when-soon'),
-            label: context.tr('sendAtEarliest'),
-            icon: Icons.bolt,
-            selected: _draftSoon,
-            onSelected: (_) => setState(() {
-              _draftSoon = true;
-              if (_draftError == 'nm_errPast') _draftError = null;
-            }),
-          ),
-          _chip(
-            key: const ValueKey('when-at'),
-            label: context.tr('nm_whenAt'),
-            icon: Icons.event,
-            selected: !_draftSoon,
-            onSelected: (_) => setState(() {
-              _draftSoon = false;
-              if (_draftError == 'nm_errPast') _draftError = null;
-            }),
-          ),
-        ]),
-        if (!_draftSoon) ...[
-          const SizedBox(height: 10),
-          Wrap(spacing: 8, runSpacing: 8, children: [
-            OutlinedButton.icon(
-              key: const ValueKey('pick-date'),
-              icon: const Icon(Icons.calendar_today, size: 18),
-              label: Text('${weekdayName(_draftDay.weekday, arabic: context.isAr)} ${formatDate(_draftDay, arabic: context.isAr)}'),
-              onPressed: () async {
-                final today = CairoTime.now();
-                final first = DateTime(today.year, today.month, today.day);
-                final picked = await showDatePicker(
-                  context: context,
-                  initialDate: _draftDay.isBefore(first) ? first : _draftDay,
-                  firstDate: first,
-                  lastDate: first.add(const Duration(days: 120)),
-                );
-                if (picked != null) setState(() => _draftDay = DateTime(picked.year, picked.month, picked.day));
-              },
-            ),
-            OutlinedButton.icon(
-              key: const ValueKey('pick-time'),
-              icon: const Icon(Icons.access_time, size: 18),
-              label: Text(_hmText(_draftMinutes)),
-              onPressed: () async {
-                final picked = await showTimePicker(
-                  context: context,
-                  initialTime: TimeOfDay(hour: _draftMinutes ~/ 60, minute: _draftMinutes % 60),
-                );
-                if (picked != null) setState(() => _draftMinutes = picked.hour * 60 + picked.minute);
-              },
-            ),
-          ]),
-          const SizedBox(height: 6),
-          Text(
-            context.tr('nm_whenSummary', {'when': _whenText(_draftAtUtc)}),
-            key: const ValueKey('when-summary'),
-            style: TextStyle(fontSize: 12.5, color: fieldErr({'nm_errPast'}) != null ? context.pal.alert : context.pal.muted),
-          ),
-          if (fieldErr({'nm_errPast'}) != null)
-            Text(context.tr('nm_errPast'), style: TextStyle(color: context.pal.alert, fontSize: 12.5)),
-        ],
         // Step 3: who
-        _step(context, _digits('3'), context.tr('nm_stepWho'), hint: context.tr('nm_stepWhoHint')),
-        Wrap(spacing: 8, runSpacing: 8, children: [
-          for (final t in const ['all', 'app', 'web'])
-            _chip(
-              key: ValueKey('target-$t'),
-              label: _targetLook(t).$1,
-              icon: _targetLook(t).$2,
-              selected: _draftTargets == t,
-              onSelected: (_) => setState(() => _draftTargets = t),
-            ),
-        ]),
+        KeyedSubtree(
+          key: _keyTargets,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _step(context, _digits('3'), context.tr('nm_stepWho'), hint: context.tr('nm_stepWhoHint')),
+              Wrap(spacing: 8, runSpacing: 8, children: [
+                for (final t in const ['all', 'app', 'web'])
+                  _chip(
+                    key: ValueKey('target-$t'),
+                    label: _targetLook(t).$1,
+                    icon: _targetLook(t).$2,
+                    selected: _draftTargets == t,
+                    onSelected: (_) => setState(() {
+                      _draftTargets = t;
+                      _clearDraftErrorKey('targets');
+                    }),
+                  ),
+              ]),
+              if (_fieldErr(context, 'targets') case final targetsErr?)
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Text(
+                    targetsErr,
+                    key: const ValueKey('draft-targets-error'),
+                    style: TextStyle(color: context.pal.alert, fontSize: 12.5),
+                  ),
+                ),
+            ],
+          ),
+        ),
         // Step 4: link
         _step(context, _digits('4'), context.tr('nm_stepLink'), hint: context.tr('nm_stepLinkHint')),
-        InkWell(
-          key: const ValueKey('pick-link'),
-          borderRadius: BorderRadius.circular(10),
-          onTap: _pickLink,
-          child: InputDecorator(
-            decoration: InputDecoration(
-              labelText: context.tr('deepLinkTarget'),
-              errorText: fieldErr({'err_bad_link', 'err_invalid_event_key'}),
-              suffixIcon: const Icon(Icons.arrow_drop_down),
+        KeyedSubtree(
+          key: _keyLink,
+          child: InkWell(
+            key: const ValueKey('pick-link'),
+            borderRadius: BorderRadius.circular(10),
+            onTap: _pickLink,
+            child: InputDecorator(
+              decoration: InputDecoration(
+                labelText: context.tr('deepLinkTarget'),
+                errorText: _fieldErr(context, 'link'),
+                suffixIcon: const Icon(Icons.arrow_drop_down),
+              ),
+              child: Row(children: [
+                Icon(_draftEventKey.isNotEmpty ? Icons.event_available_outlined : Icons.web_outlined, size: 18, color: context.pal.primary),
+                const SizedBox(width: 8),
+                Expanded(child: Text(context.pick(_draftLinkLabelAr, _draftLinkLabelEn), overflow: TextOverflow.ellipsis)),
+              ]),
             ),
-            child: Row(children: [
-              Icon(_draftEventKey.isNotEmpty ? Icons.event_available_outlined : Icons.web_outlined, size: 18, color: context.pal.primary),
-              const SizedBox(width: 8),
-              Expanded(child: Text(context.pick(_draftLinkLabelAr, _draftLinkLabelEn), overflow: TextOverflow.ellipsis)),
-            ]),
           ),
         ),
         // Step 5: preview
         _step(context, _digits('5'), context.tr('previewCardTitle')),
-        Wrap(spacing: 8, children: [
-          _chip(label: 'عربي', selected: !_previewEnglish, onSelected: (_) => setState(() => _previewEnglish = false)),
-          _chip(label: 'English', selected: _previewEnglish, onSelected: (_) => setState(() => _previewEnglish = true)),
-        ]),
-        const SizedBox(height: 8),
+        if (_englishEnabled || _hasDraftEnglishError) ...[
+          Wrap(spacing: 8, children: [
+            _chip(label: 'عربي', selected: !_previewEnglish, onSelected: (_) => setState(() => _previewEnglish = false)),
+            _chip(label: 'English', selected: _previewEnglish, onSelected: (_) => setState(() => _previewEnglish = true)),
+          ]),
+          const SizedBox(height: 8),
+        ],
         _preview(context),
-        if (err != null && fieldErr({'err_title_required', 'err_title_length', 'err_body_required', 'err_body_length', 'nm_errPast', 'err_bad_link', 'err_invalid_event_key'}) == null) ...[
+        if (_draftBannerError case final bannerErr?) ...[
           const SizedBox(height: 10),
-          _banner(context, key: const ValueKey('draft-error'), icon: Icons.error_outline, color: context.pal.alert, text: context.tr(err)),
+          _banner(context, key: const ValueKey('draft-error'), icon: Icons.error_outline, color: context.pal.alert, text: context.tr(bannerErr)),
         ],
         const SizedBox(height: 14),
         Wrap(
