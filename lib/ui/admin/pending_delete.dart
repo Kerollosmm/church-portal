@@ -34,6 +34,18 @@ class PendingDelete {
     _pending[id] = item;
   }
 
+  /// Resets the grace-window timer on every currently pending deletion so a
+  /// combined batch undo SnackBar stays truthful for the full [window].
+  void extendAll() {
+    for (final entry in _pending.entries.toList()) {
+      final item = entry.value;
+      item.timer.cancel();
+      item.timer = Timer(window, () async {
+        await _commitItem(entry.key);
+      });
+    }
+  }
+
   Future<void> _commitItem(String id) async {
     final item = _pending.remove(id);
     if (item != null) {
@@ -67,7 +79,7 @@ class PendingDelete {
 }
 
 class _PendingCommit {
-  final Timer timer;
+  Timer timer;
   final Future<void> Function() commit;
   bool _executed = false;
 

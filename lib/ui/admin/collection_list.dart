@@ -99,6 +99,7 @@ class CollectionListScreen extends StatefulWidget {
 }
 
 class _CollectionListScreenState extends State<CollectionListScreen> {
+  final _messengerKey = GlobalKey<ScaffoldMessengerState>();
   final _search = TextEditingController();
   final _pendingDelete = PendingDelete();
   final Map<String, ({AdminBackend repo, String collection, String title})> _pendingEntries = {};
@@ -202,27 +203,31 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     return parts.join(' • ');
   }
 
+  ScaffoldMessengerState? get _messenger => _messengerKey.currentState ?? ScaffoldMessenger.maybeOf(context);
+
   @override
   Widget build(BuildContext context) {
     registerAdminStrings();
-    return Scaffold(
-      backgroundColor: context.pal.background,
-      floatingActionButton: FloatingActionButton.extended(
-        heroTag: 'add-${def.id}',
-        onPressed: () {
-          if (def.name == 'pages') {
-            _openNewPageChooser(context);
-          } else {
-            final extra = def.name == 'priests' && _priestFilter != PriestStatusFilter.all
-                ? <String, Object?>{'status': _priestFilter.name}
-                : const <String, Object?>{};
-            _openEditor(context, null, extraDefaults: extra);
-          }
-        },
-        icon: const Icon(Icons.add),
-        label: Text(context.tr('add')),
-      ),
-      body: StreamBuilder<List<AdminDoc>>(
+    return ScaffoldMessenger(
+      key: _messengerKey,
+      child: Scaffold(
+        backgroundColor: context.pal.background,
+        floatingActionButton: FloatingActionButton.extended(
+          heroTag: 'add-${def.id}',
+          onPressed: () {
+            if (def.name == 'pages') {
+              _openNewPageChooser(context);
+            } else {
+              final extra = def.name == 'priests' && _priestFilter != PriestStatusFilter.all
+                  ? <String, Object?>{'status': _priestFilter.name}
+                  : const <String, Object?>{};
+              _openEditor(context, null, extraDefaults: extra);
+            }
+          },
+          icon: const Icon(Icons.add),
+          label: Text(context.tr('add')),
+        ),
+        body: StreamBuilder<List<AdminDoc>>(
         // A new stream (another backend) gets a fresh StreamBuilder: a reused
         // one keeps the old backend's list while the new one loads.
         key: ObjectKey(_stream),
@@ -459,6 +464,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
           ]);
         },
       ),
+    ),
     );
   }
 
@@ -1128,14 +1134,14 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
 
   Future<void> _setVisible(BuildContext context, AdminDoc d, bool visible, {CollectionDef? targetDef}) async {
     final activeDef = targetDef ?? def;
-    final messenger = ScaffoldMessenger.of(context);
+    final messenger = _messenger;
     final msg = context.tr(visible ? 'nowVisible' : 'nowHidden');
     final failed = context.tr('saveFailed', {'e': '{e}'});
     try {
       await widget.repo.update(activeDef.name, d.id, {'visible': visible});
-      messenger.showSnackBar(SnackBar(content: Text(msg), duration: const Duration(seconds: 2)));
+      messenger?.showSnackBar(SnackBar(content: Text(msg), duration: const Duration(seconds: 2)));
     } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text(failed.replaceAll('{e}', formatAdminError(e)))));
+      messenger?.showSnackBar(SnackBar(content: Text(failed.replaceAll('{e}', formatAdminError(e)))));
     }
   }
 
@@ -1150,14 +1156,14 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
       for (final d in list)
         if (movedStatus == null || priestStatus(d.data) == movedStatus) d.id,
     ];
-    final messenger = ScaffoldMessenger.of(context);
+    final messenger = _messenger;
     final ok = context.tr('orderSaved');
     final failed = context.tr('saveFailed', {'e': '{e}'});
     try {
       await widget.repo.reorder(def.name, ids, base: reorderBase(def, status: movedStatus));
-      messenger.showSnackBar(SnackBar(content: Text(ok), duration: const Duration(seconds: 2)));
+      messenger?.showSnackBar(SnackBar(content: Text(ok), duration: const Duration(seconds: 2)));
     } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text(failed.replaceAll('{e}', formatAdminError(e)))));
+      messenger?.showSnackBar(SnackBar(content: Text(failed.replaceAll('{e}', formatAdminError(e)))));
     }
   }
 
@@ -1190,7 +1196,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
   Future<void> _deleteItem(AdminDoc d, {CollectionDef? targetDef}) async {
     final activeDef = targetDef ?? def;
     final title = _title(d, activeDef);
-    final messenger = ScaffoldMessenger.of(context);
+    final messenger = _messenger;
     final failedMsg = context.tr('deleteFailed', {'e': '{e}'});
     final repo = widget.repo;
     final id = d.id;
@@ -1199,7 +1205,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     try {
       await repo.update(activeDef.name, id, {'deletedAt': DateTime.now().toUtc()});
     } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text(failedMsg.replaceAll('{e}', formatAdminError(e)))));
+      messenger?.showSnackBar(SnackBar(content: Text(failedMsg.replaceAll('{e}', formatAdminError(e)))));
       return;
     }
 
@@ -1218,9 +1224,10 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
           } catch (_) {}
           if (!mounted) return;
           setState(() {});
-          messenger.showSnackBar(SnackBar(content: Text(failedMsg.replaceAll('{e}', formatAdminError(e)))));
+          messenger?.showSnackBar(SnackBar(content: Text(failedMsg.replaceAll('{e}', formatAdminError(e)))));
         }
       });
+      _pendingDelete.extendAll();
     });
 
     final pendingCount = _pendingDelete.pendingIds.length;
@@ -1232,8 +1239,8 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     _undoSnackBarTimer = null;
     _undoSnackBarController?.close();
     _undoSnackBarController = null;
-    messenger.removeCurrentSnackBar();
-    final undoController = messenger.showSnackBar(
+    messenger?.removeCurrentSnackBar();
+    final undoController = messenger?.showSnackBar(
       SnackBar(
         duration: const Duration(seconds: 10),
         persist: false,
@@ -1272,7 +1279,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
       ),
     );
     _undoSnackBarController = undoController;
-    undoController.closed.then((_) {
+    undoController?.closed.then((_) {
       if (identical(_undoSnackBarController, undoController)) {
         _undoSnackBarController = null;
         _undoSnackBarTimer?.cancel();
@@ -1283,14 +1290,14 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
       if (!mounted) return;
       _undoSnackBarController?.close();
       _undoSnackBarController = null;
-      ScaffoldMessenger.maybeOf(context)?.removeCurrentSnackBar();
+      _messenger?.removeCurrentSnackBar();
     });
   }
 
   /// Deleting a custom category hides its items (visible: false) first and
   /// never deletes them (ADR-027); they can be moved to another category.
   Future<void> _deleteCategory(AdminDoc d) async {
-    final messenger = ScaffoldMessenger.of(context);
+    final messenger = _messenger;
     final failedMsg = context.tr('deleteFailed', {'e': '{e}'});
     final deletedMsg = context.tr('catDeleted');
     List<AdminDoc> entries;
@@ -1298,7 +1305,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
       entries = await widget.repo.watch('entries').first.timeout(const Duration(seconds: 15));
     } catch (e) {
       if (!mounted) return;
-      messenger.showSnackBar(SnackBar(content: Text(failedMsg.replaceAll('{e}', formatAdminError(e)))));
+      messenger?.showSnackBar(SnackBar(content: Text(failedMsg.replaceAll('{e}', formatAdminError(e)))));
       return;
     }
     final inCat = entries.where((e) => e.data['categoryId'] == d.id).length;
@@ -1325,10 +1332,10 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
         await widget.repo.update('entries', id, {'visible': false});
       }
       await widget.repo.delete(def.name, d.id);
-      messenger.showSnackBar(SnackBar(content: Text(deletedMsg)));
+      messenger?.showSnackBar(SnackBar(content: Text(deletedMsg)));
     } catch (e) {
       if (!mounted) return;
-      messenger.showSnackBar(SnackBar(content: Text(failedMsg.replaceAll('{e}', formatAdminError(e)))));
+      messenger?.showSnackBar(SnackBar(content: Text(failedMsg.replaceAll('{e}', formatAdminError(e)))));
     }
   }
 

@@ -1755,13 +1755,110 @@ void main() {
       }
     });
 
+    group('Admin CollectionListScreen undo SnackBar at 320px / 200%', () {
+      for (final lang in const ['ar', 'en']) {
+        testWidgets('undo SnackBar is legible, overflow-free, and unobstructed by FAB at 320px / 200% ($lang)', (tester) async {
+          tester.view.physicalSize = const Size(320, 640);
+          tester.view.devicePixelRatio = 1;
+          tester.platformDispatcher.textScaleFactorTestValue = 2.0;
+          addTearDown(tester.view.reset);
+          addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+
+          final repo = _ListBackend(
+            [
+              AdminDoc('s1', {'nameAr': 'مارمرقس', 'nameEn': 'St. Mark', 'order': 10}),
+              AdminDoc('s2', {'nameAr': 'مارجرجس', 'nameEn': 'St. George', 'order': 20}),
+              AdminDoc('s3', {'nameAr': 'مارمينا', 'nameEn': 'St. Mina', 'order': 30}),
+            ],
+            collectionFilter: 'saints',
+          );
+          await tester.pumpWidget(MaterialApp(
+            locale: Locale(lang),
+            supportedLocales: const [Locale('ar'), Locale('en')],
+            localizationsDelegates: GlobalMaterialLocalizations.delegates,
+            theme: buildTheme(Locale(lang), primary: AppColors.burgundy),
+            home: AdminDashboard(
+              repo: repo,
+              uid: 'u',
+              email: 'admin@example.org',
+              role: AdminRoles.owner,
+              onSignOut: () {},
+              initial: 'saints',
+            ),
+          ));
+          await tester.pumpAndSettle();
+          expect(tester.takeException(), isNull);
+
+          // Single delete: SnackBar + Undo button must fit 320px without FAB overlap.
+          final del1 = find.byKey(const ValueKey('delete-s1'));
+          await tester.ensureVisible(del1);
+          await tester.pumpAndSettle();
+          await tester.tap(del1);
+          await tester.pumpAndSettle();
+          expect(tester.takeException(), isNull);
+
+          final snackFinder = find.byType(SnackBar);
+          final actionFinder = find.byType(SnackBarAction);
+          final fabFinder = find.byType(FloatingActionButton);
+          expect(snackFinder, findsOneWidget);
+          expect(actionFinder, findsOneWidget);
+          expect(fabFinder, findsOneWidget);
+
+          final snackRect = tester.getRect(snackFinder);
+          final actionRect = tester.getRect(actionFinder);
+          final fabRect = tester.getRect(fabFinder);
+          expect(snackRect.left, greaterThanOrEqualTo(0));
+          expect(snackRect.right, lessThanOrEqualTo(320));
+          expect(snackRect.bottom, lessThanOrEqualTo(640));
+          expect(actionRect.left, greaterThanOrEqualTo(0));
+          expect(actionRect.right, lessThanOrEqualTo(320));
+          expect(fabRect.overlaps(actionRect), isFalse);
+          expect(fabRect.overlaps(snackRect), isFalse);
+
+          // Tapping Undo works cleanly without being intercepted by FAB.
+          await tester.tap(actionFinder);
+          await tester.pumpAndSettle();
+          expect(tester.takeException(), isNull);
+          expect(repo.deletedIds, isEmpty);
+
+          // Consecutive deletes ("تراجع عن الكل" / "Undo all") also fit 320px / 200% unobstructed.
+          await tester.ensureVisible(del1);
+          await tester.pumpAndSettle();
+          await tester.tap(del1);
+          await tester.pumpAndSettle();
+          final del2 = find.byKey(const ValueKey('delete-s2'));
+          await Scrollable.ensureVisible(tester.element(del2), alignment: 0.0);
+          await tester.pumpAndSettle();
+          await tester.tap(del2);
+          await tester.pumpAndSettle();
+          expect(tester.takeException(), isNull);
+          expect(find.text(lang == 'ar' ? 'تراجع عن الكل' : 'Undo all'), findsOneWidget);
+
+          final multiSnackRect = tester.getRect(snackFinder);
+          final multiActionRect = tester.getRect(actionFinder);
+          final multiFabRect = tester.getRect(fabFinder);
+          expect(multiSnackRect.left, greaterThanOrEqualTo(0));
+          expect(multiSnackRect.right, lessThanOrEqualTo(320));
+          expect(multiActionRect.left, greaterThanOrEqualTo(0));
+          expect(multiActionRect.right, lessThanOrEqualTo(320));
+          expect(multiFabRect.overlaps(multiActionRect), isFalse);
+          expect(multiFabRect.overlaps(multiSnackRect), isFalse);
+
+          await tester.tap(actionFinder);
+          await tester.pumpAndSettle();
+          expect(repo.deletedIds, isEmpty);
+        });
+      }
+    });
+
 }
 
 class _ListBackend extends _FakeBackend {
   final List<AdminDoc> docs;
   final MediaRepository? mediaRepo;
+  final String? collectionFilter;
   final deletedIds = <String>[];
-  _ListBackend(this.docs, {this.mediaRepo});
+  _ListBackend(this.docs, {this.mediaRepo, this.collectionFilter});
   @override
   MediaRepository? get media => mediaRepo;
   @override
@@ -1780,6 +1877,9 @@ class _ListBackend extends _FakeBackend {
   @override
   Stream<List<AdminDoc>> watch(String collection) {
     watched.add(collection);
+    if (collectionFilter != null && collection != collectionFilter) {
+      return Stream.value(const []);
+    }
     return Stream.value(docs);
   }
 }

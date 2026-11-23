@@ -1365,6 +1365,84 @@ void main() {
       expect(commits, 2);
     });
 
+    test('extendAll resets timers of all pending entries to a fresh window', () async {
+      final pd = PendingDelete(window: const Duration(milliseconds: 120));
+      final committed = <String>[];
+      pd.schedule('a', () async => committed.add('a'));
+      await Future<void>.delayed(const Duration(milliseconds: 70));
+      pd.schedule('b', () async => committed.add('b'));
+      pd.extendAll();
+
+      // At 150 ms from 'a' (> 120 ms original window, 80 ms after extendAll), neither has committed.
+      await Future<void>.delayed(const Duration(milliseconds: 80));
+      expect(pd.isPending('a'), isTrue);
+      expect(pd.isPending('b'), isTrue);
+      expect(committed, isEmpty);
+
+      // Undo both before extended deadline -> zero commits.
+      expect(pd.undo('a'), isTrue);
+      expect(pd.undo('b'), isTrue);
+      await Future<void>.delayed(const Duration(milliseconds: 150));
+      expect(committed, isEmpty);
+
+      // Without undo, extendAll commits both after the extended window.
+      pd.schedule('c', () async => committed.add('c'));
+      await Future<void>.delayed(const Duration(milliseconds: 70));
+      pd.schedule('d', () async => committed.add('d'));
+      pd.extendAll();
+      await Future<void>.delayed(const Duration(milliseconds: 80));
+      expect(committed, isEmpty);
+      await Future<void>.delayed(const Duration(milliseconds: 80));
+      expect(committed.toSet(), {'c', 'd'});
+    });
+
+    testWidgets('CollectionListScreen multi-delete extends batch window so undoAll at 12s restores both items', (tester) async {
+      tester.view.physicalSize = const Size(800, 1000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final repo = _TestAdminBackend(initialCollections: {
+        'saints': [
+          AdminDoc('s1', {'nameAr': 'مارمرقس', 'order': 10}),
+          AdminDoc('s2', {'nameAr': 'مارجرجس', 'order': 20}),
+        ],
+      });
+      final def = collectionById('saints')!;
+      await tester.pumpWidget(_app(
+        CollectionListScreen(repo: repo, def: def),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      // Delete s1 at t = 0
+      await tester.tap(find.byKey(const ValueKey('delete-s1')));
+      await tester.pump();
+      expect(find.text('مارمرقس'), findsNothing);
+
+      // Advance 6s, then delete s2
+      await tester.pump(const Duration(seconds: 6));
+      await tester.tap(find.byKey(const ValueKey('delete-s2')));
+      await tester.pump();
+      expect(find.text('تراجع عن الكل'), findsOneWidget);
+
+      // Advance 6s (t = 12s since s1 delete, 6s since s2 delete): neither committed yet!
+      await tester.pump(const Duration(seconds: 6));
+      expect(repo.deletedIds, isEmpty);
+      expect(find.text('تراجع عن الكل'), findsOneWidget);
+
+      // Tap Undo all at t = 12s -> restores both items cleanly
+      await tester.tap(find.text('تراجع عن الكل'));
+      await tester.pumpAndSettle();
+      expect(find.text('مارمرقس'), findsOneWidget);
+      expect(find.text('مارجرجس'), findsOneWidget);
+      expect(isSoftDeleted(repo.collections['saints']!.firstWhere((d) => d.id == 's1').data), isFalse);
+      expect(isSoftDeleted(repo.collections['saints']!.firstWhere((d) => d.id == 's2').data), isFalse);
+
+      // Wait another 12s -> neither hard-deleted
+      await tester.pump(const Duration(seconds: 12));
+      expect(repo.deletedIds, isEmpty);
+    });
+
     testWidgets('CollectionListScreen 10s undo SnackBar, soft-delete immediately, undo restores row, expiry commits, lazy purge on dispose', (tester) async {
       tester.view.physicalSize = const Size(800, 1000);
       tester.view.devicePixelRatio = 1;
