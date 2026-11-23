@@ -27,27 +27,63 @@ class PendingDelete {
   void schedule(String id, Future<void> Function() commit) {
     _pending[id]?.cancel();
     late final _PendingCommit item;
-    final timer = Timer(window, () async {
-      await _commitItem(id);
-    });
-    item = _PendingCommit(timer, commit);
+    item = _PendingCommit(
+      Timer(window, () => _onTimerFired(id, item)),
+      commit,
+    );
     _pending[id] = item;
+  }
+
+  Future<void> _onTimerFired(String id, _PendingCommit item) async {
+    if (!identical(_pending[id], item)) return;
+    if (item.held) {
+      item.expiredWhileHeld = true;
+      return;
+    }
+    await _commitItem(id);
+  }
+
+  /// Suspends timer expiry for [ids] without resetting their original deadlines.
+  void holdAll(Iterable<String> ids) {
+    for (final id in ids) {
+      final item = _pending[id];
+      if (item == null) continue;
+      item.held = true;
+      item.expiredWhileHeld = false;
+    }
+  }
+
+  /// Releases hold on [id]: if its original timer elapsed while held and [extend]
+  /// is false, commits immediately; otherwise resets only when [extend] is true.
+  Future<void> releaseHold(String id, {required bool extend}) async {
+    final item = _pending[id];
+    if (item == null) return;
+    item.held = false;
+    final expired = item.expiredWhileHeld;
+    item.expiredWhileHeld = false;
+    if (extend) {
+      _resetTimer(id, item);
+    } else if (expired) {
+      await _commitItem(id);
+    }
   }
 
   /// Resets the grace-window timer on every currently pending deletion so a
   /// combined batch undo SnackBar stays truthful for the full [window].
-  void extendAll() {
+  void extendAll([Iterable<String>? ids]) {
+    final targets = ids?.toSet();
     for (final entry in _pending.entries.toList()) {
-      final item = entry.value;
-      item.timer.cancel();
-      item.timer = Timer(window, () async {
-        await _commitItem(entry.key);
-      });
+      if (targets != null && !targets.contains(entry.key)) continue;
+      _resetTimer(entry.key, entry.value);
     }
   }
 
-  /// Commits a single pending item immediately (cancelling its grace timer).
-  Future<void> commitNow(String id) => _commitItem(id);
+  void _resetTimer(String id, _PendingCommit item) {
+    item.held = false;
+    item.expiredWhileHeld = false;
+    item.timer.cancel();
+    item.timer = Timer(window, () => _onTimerFired(id, item));
+  }
 
   Future<void> _commitItem(String id) async {
     final item = _pending.remove(id);
@@ -84,6 +120,8 @@ class PendingDelete {
 class _PendingCommit {
   Timer timer;
   final Future<void> Function() commit;
+  bool held = false;
+  bool expiredWhileHeld = false;
   bool _executed = false;
 
   _PendingCommit(this.timer, this.commit);

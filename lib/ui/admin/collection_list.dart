@@ -1294,17 +1294,19 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
       _showSnack(messenger, SnackBar(content: Text(failedMsg.replaceAll('{e}', formatAdminError(e)))));
       return;
     }
+    if (!mounted) return;
 
     // Push back backend `deletedAt` for earlier still-pending items before finalizing
-    // the renewed batch; extend local timers first so nothing commits mid-await,
-    // and commit immediately if a backend renewal fails rather than extending unbacked.
+    // the renewed batch; hold local timers first so nothing commits mid-await.
+    // On renewal failure, preserve any remaining original timer without extending
+    // past the item's existing deadline (and commit if that deadline already elapsed).
     final priorPending = [
       for (final entry in _pendingEntries.entries.toList())
         if (entry.key != id && _pendingDelete.isPending(entry.key)) (id: entry.key, info: entry.value),
     ];
+    final renewedIds = <String>{};
     if (priorPending.isNotEmpty) {
-      _pendingDelete.extendAll();
-      final renewedIds = <String>{};
+      _pendingDelete.holdAll([for (final p in priorPending) p.id]);
       await Future.wait([
         for (final p in priorPending)
           p.info.repo.update(p.info.collection, p.id, {'deletedAt': deleteNow}).then((_) {
@@ -1313,14 +1315,10 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
       ]);
       if (!mounted) return;
       for (final p in priorPending) {
-        if (!renewedIds.contains(p.id)) {
-          await _pendingDelete.commitNow(p.id);
-        }
+        await _pendingDelete.releaseHold(p.id, extend: renewedIds.contains(p.id));
       }
       if (!mounted) return;
     }
-
-    if (!mounted) return;
 
     setState(() {
       _pendingEntries[id] = (repo: repo, collection: activeDef.name, title: title);
@@ -1338,7 +1336,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
           _showSnack(messenger, SnackBar(content: Text(failedMsg.replaceAll('{e}', formatAdminError(e)))));
         }
       });
-      _pendingDelete.extendAll();
+      _pendingDelete.extendAll({...renewedIds, id});
     });
 
     final pendingCount = _pendingDelete.pendingIds.length;

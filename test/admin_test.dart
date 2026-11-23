@@ -1733,11 +1733,13 @@ void main() {
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.reset);
 
-      // Part 1: Held refresh protects s1 from expiring past t=10s while Future.wait suspends.
+      // Part 1: Held refresh protects s1 from expiring past t=10s while Future.wait suspends;
+      // if it fails after expiry, s1 commits instead of staying extended, while s2 stays undoable.
       final repo = _ControlledUpdateBackend(initialCollections: {
         'saints': [
           AdminDoc('s1', {'nameAr': 'مارجرجس', 'visible': true, 'order': 10}),
           AdminDoc('s2', {'nameAr': 'مارمرقس', 'visible': true, 'order': 20}),
+          AdminDoc('s3', {'nameAr': 'مارمينا', 'visible': true, 'order': 30}),
         ],
       });
       addTearDown(repo.dispose);
@@ -1757,12 +1759,31 @@ void main() {
 
       expect(repo.deletedIds.contains('saints/s1'), isFalse);
 
-      // Part 2: Failing refresh refuses to keep s1 in a renewed "undo all" batch.
+      // Failing after original expiry commits s1 cleanly instead of extending it unbacked.
       refreshHold.completeError(FirebaseException(plugin: 'cloud_firestore', code: 'unavailable', message: 'Offline'));
       await tester.pumpAndSettle();
 
+      expect(repo.deletedIds, contains('saints/s1'));
       expect(find.text('تراجع عن الكل'), findsNothing);
       expect(find.text('تراجع'), findsOneWidget);
+
+      // Part 2: Failing renewal BEFORE original expiry (s2 at t=0, s3 at t=2s) keeps s2
+      // recoverable for its remaining 8 s (no premature commit at t=2s), then commits at t=10s
+      // while s3 remains pending until t=12s.
+      await tester.pump(const Duration(seconds: 2));
+      final s2Fail = repo.hold('saints', 's2');
+      await tester.tap(find.byKey(const ValueKey('delete-s3')));
+      await tester.pump();
+      s2Fail.completeError(FirebaseException(plugin: 'cloud_firestore', code: 'unavailable', message: 'Offline'));
+      await tester.pump();
+      expect(repo.deletedIds.contains('saints/s2'), isFalse);
+
+      // +8.5 s from s3 delete -> s2 reaches ~11 s (committed), while s3 is at 8.5 s (still pending).
+      await tester.pump(const Duration(seconds: 8, milliseconds: 500));
+      expect(repo.deletedIds, contains('saints/s2'));
+      expect(repo.deletedIds.contains('saints/s3'), isFalse);
+      await tester.pump(const Duration(seconds: 2));
+      expect(repo.deletedIds, contains('saints/s3'));
     });
   });
 
