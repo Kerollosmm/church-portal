@@ -14,6 +14,7 @@ import 'package:church_portal/domain/daily_verse.dart';
 import 'package:church_portal/domain/features.dart';
 import 'package:church_portal/domain/media.dart';
 import 'package:church_portal/domain/models.dart';
+import 'package:church_portal/domain/push.dart';
 import 'package:church_portal/ui/admin/admin_access.dart';
 import 'package:church_portal/ui/admin/admin_page.dart';
 import 'package:church_portal/ui/admin/admin_schema.dart';
@@ -59,6 +60,76 @@ void main() {
   setUpAll(CairoTime.ensureInitialized);
 
   group('field validation', () {
+    test('validateScheduledNotificationFields maps each invalid field to its exact key and preserves wrapper precedence',
+        () {
+      ScheduledNotification row({
+        String id = 'n1',
+        String targets = 'all',
+        String titleAr = 'عنوان تجربة',
+        String titleEn = '',
+        String bodyAr = 'نص تجربة',
+        String bodyEn = '',
+        String link = '/',
+        String eventKey = '',
+      }) =>
+          ScheduledNotification(
+            id: id,
+            atUtc: DateTime.utc(2026, 12, 1, 9, 0),
+            targets: targets,
+            titleAr: titleAr,
+            titleEn: titleEn,
+            bodyAr: bodyAr,
+            bodyEn: bodyEn,
+            link: link,
+            eventKey: eventKey,
+          );
+
+      // Simultaneous empty Arabic title and body -> both mapped, wrapper returns title required
+      final emptyBoth = row(titleAr: '   ', bodyAr: '');
+      expect(
+        validateScheduledNotificationFields(emptyBoth),
+        {'titleAr': 'err_title_required', 'bodyAr': 'err_body_required'},
+      );
+      expect(validateScheduledNotification(emptyBoth), 'err_title_required');
+
+      // Surrogate-pair emoji / UTF-16 > 120 in titleEn maps ONLY to titleEn (never titleAr)
+      final longTitleEn = row(titleEn: '🙏' * 61); // 122 UTF-16 code units, 61 grapheme clusters
+      expect(validateScheduledNotificationFields(longTitleEn), {'titleEn': 'err_title_length'});
+      expect(validateScheduledNotification(longTitleEn), 'err_title_length');
+
+      // bodyEn > 300 maps ONLY to bodyEn (never bodyAr)
+      final longBodyEn = row(bodyEn: 'a' * 301);
+      expect(validateScheduledNotificationFields(longBodyEn), {'bodyEn': 'err_body_length'});
+      expect(validateScheduledNotification(longBodyEn), 'err_body_length');
+
+      // Separator \u001f in bodyEn and titleAr maps to each offending field
+      expect(
+        validateScheduledNotificationFields(row(titleAr: 'أ\u001fب', bodyEn: 'x\u001fy')),
+        {'titleAr': 'err_bad_char', 'bodyEn': 'err_bad_char'},
+      );
+      expect(validateScheduledNotification(row(bodyEn: 'x\u001fy')), 'err_bad_char');
+
+      // Link & eventKey
+      expect(validateScheduledNotificationFields(row(link: 'https://evil.com')), {'link': 'err_bad_link'});
+      expect(validateScheduledNotification(row(link: 'https://evil.com')), 'err_bad_link');
+      expect(validateScheduledNotificationFields(row(eventKey: 'bad-key')), {'link': 'err_invalid_event_key'});
+      expect(validateScheduledNotification(row(eventKey: 'bad-key')), 'err_invalid_event_key');
+
+      // Targets & ID
+      expect(validateScheduledNotificationFields(row(targets: 'sms')), {'targets': 'err_invalid_targets'});
+      expect(validateScheduledNotification(row(targets: 'sms')), 'err_invalid_targets');
+      expect(validateScheduledNotificationFields(row(id: 'BAD ID!')), {'id': 'err_invalid_id'});
+      expect(validateScheduledNotification(row(id: 'BAD ID!')), 'err_invalid_id');
+
+      // Precedence when length error in EN co-occurs with bad char in AR
+      final mixed = row(titleAr: 'أ\u001fب', titleEn: 'e' * 121);
+      expect(validateScheduledNotification(mixed), 'err_title_length');
+
+      // Valid row -> empty map and null wrapper
+      expect(validateScheduledNotificationFields(row()), isEmpty);
+      expect(validateScheduledNotification(row()), isNull);
+    });
+
     test('validateHeadingBlock and heading in validateDocument', () {
       expect(validateHeadingBlock({'textAr': ''}, BlockTypes.heading), 'required');
       expect(validateHeadingBlock({'textAr': '   '}, BlockTypes.heading), 'required');

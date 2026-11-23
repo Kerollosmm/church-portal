@@ -601,24 +601,74 @@ String? validateNotifyTemplate(String typeId, String? text, {int maxLength = 300
   return null;
 }
 
+/// Validates a scheduled notification draft per field, mapping field IDs
+/// (`titleAr`, `bodyAr`, `titleEn`, `bodyEn`, `link`, `targets`, `id`) to l10n
+/// error keys. Mirrors `validNotifyRow` in `firestore.rules` and
+/// `parseScheduleRow` in `tool/push_sender.js`.
+Map<String, String> validateScheduledNotificationFields(ScheduledNotification n) {
+  bool sep(String s) => s.contains('\u001f');
+  final errors = <String, String>{};
+  if (n.titleAr.trim().isEmpty) {
+    errors['titleAr'] = 'err_title_required';
+  } else if (n.titleAr.length > 120) {
+    errors['titleAr'] = 'err_title_length';
+  } else if (sep(n.titleAr)) {
+    errors['titleAr'] = 'err_bad_char';
+  }
+
+  if (n.bodyAr.trim().isEmpty) {
+    errors['bodyAr'] = 'err_body_required';
+  } else if (n.bodyAr.length > 300) {
+    errors['bodyAr'] = 'err_body_length';
+  } else if (sep(n.bodyAr)) {
+    errors['bodyAr'] = 'err_bad_char';
+  }
+
+  if (n.titleEn.length > 120) {
+    errors['titleEn'] = 'err_title_length';
+  } else if (sep(n.titleEn)) {
+    errors['titleEn'] = 'err_bad_char';
+  }
+
+  if (n.bodyEn.length > 300) {
+    errors['bodyEn'] = 'err_body_length';
+  } else if (sep(n.bodyEn)) {
+    errors['bodyEn'] = 'err_bad_char';
+  }
+
+  if (!validNotificationLink(n.link)) {
+    errors['link'] = 'err_bad_link';
+  } else if (n.eventKey.isNotEmpty && !isValidPushEventKey(n.eventKey)) {
+    errors['link'] = 'err_invalid_event_key';
+  }
+
+  if (!const ['all', 'web', 'app'].contains(n.targets)) {
+    errors['targets'] = 'err_invalid_targets';
+  }
+  if (!RegExp(r'^[a-z0-9_-]{1,24}$').hasMatch(n.id)) {
+    errors['id'] = 'err_invalid_id';
+  }
+  return errors;
+}
+
 /// Validates a scheduled notification draft before saving: the same limits
 /// as `validNotifyRow` in firestore.rules and `parseScheduleRow` in
 /// tool/push_sender.js (Arabic title AND body are required by both).
 /// Returns an l10n key, or null.
 String? validateScheduledNotification(ScheduledNotification n) {
-  bool sep(String s) => s.contains('\u001f');
-  if (n.titleAr.trim().isEmpty) return 'err_title_required';
-  if (n.bodyAr.trim().isEmpty) return 'err_body_required';
-  if (n.titleAr.length > 120 || n.titleEn.length > 120) return 'err_title_length';
-  if (n.bodyAr.length > 300 || n.bodyEn.length > 300) return 'err_body_length';
-  if (sep(n.titleAr) || sep(n.titleEn) || sep(n.bodyAr) || sep(n.bodyEn)) return 'err_bad_char';
-  if (!validNotificationLink(n.link)) return 'err_bad_link';
-  if (n.eventKey.isNotEmpty && !isValidPushEventKey(n.eventKey)) {
-    return 'err_invalid_event_key';
+  final errors = validateScheduledNotificationFields(n);
+  if (errors.isEmpty) return null;
+  // Preserve legacy single-key precedence across callers.
+  for (final key in const [
+    'err_title_required',
+    'err_body_required',
+    'err_title_length',
+    'err_body_length',
+    'err_bad_char',
+  ]) {
+    if (errors.values.contains(key)) return key;
   }
-  if (!['all', 'web', 'app'].contains(n.targets)) return 'err_invalid_targets';
-  if (!RegExp(r'^[a-z0-9_-]{1,24}$').hasMatch(n.id)) return 'err_invalid_id';
-  return null;
+  return errors['link'] ?? errors['targets'] ?? errors['id'];
 }
 
 /// An in-app path the rules accept for a scheduled push: `/` or `/…` with no
