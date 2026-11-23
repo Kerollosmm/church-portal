@@ -3566,6 +3566,197 @@ void main() {
       expect(tester.getTopLeft(delEntry).dy, greaterThanOrEqualTo(tester.getBottomLeft(visEntry).dy));
     });
 
+    testWidgets('row visibility eye shows spinner, ignores rapid double-tap, and completes cleanly on all 4 row builders',
+        (tester) async {
+      tester.view.physicalSize = const Size(900, 1400);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final repo = _ControlledUpdateBackend(initialCollections: {
+        'priests': [
+          AdminDoc('p1', {'name': 'أبونا تادرس', 'rank': 'priest', 'status': 'serving', 'visible': true}),
+        ],
+        'categories': [
+          AdminDoc('shared-id', {'nameAr': 'قسم الشباب', 'slug': 'youth', 'visible': true, 'order': 10}),
+        ],
+        'entries': [
+          AdminDoc('shared-id', {'categoryId': 'shared-id', 'titleAr': 'اجتماع الخدام', 'visible': true, 'order': 10}),
+        ],
+        'pages': [
+          AdminDoc('sp1', {
+            'titleAr': 'صفحة القسم',
+            'slug': 'sec-page',
+            'placement': 'section',
+            'categoryId': 'shared-id',
+            'visible': true,
+          }),
+        ],
+      });
+      addTearDown(repo.dispose);
+
+      // 1) Standard _tile on priests
+      await tester.pumpWidget(_app(
+        CollectionListScreen(repo: repo, def: collectionById('priests')!),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      final p1Completer = repo.hold('priests', 'p1');
+      final p1Btn = find.byKey(const ValueKey('visibility-p1'));
+      await tester.tap(p1Btn);
+      await tester.pump();
+
+      expect(find.descendant(of: p1Btn, matching: find.byType(CircularProgressIndicator)), findsOneWidget);
+      expect(tester.widget<IconButton>(p1Btn).onPressed, isNull);
+      expect(tester.widget<IconButton>(p1Btn).tooltip, 'جارٍ الحفظ…');
+      await tester.tap(p1Btn, warnIfMissed: false);
+      await tester.pump();
+      expect(repo.updates.where((u) => u.collection == 'priests' && u.id == 'p1'), hasLength(1));
+
+      p1Completer.complete();
+      await tester.pumpAndSettle();
+      expect(p1Btn, findsOneWidget);
+      expect(find.descendant(of: p1Btn, matching: find.byType(CircularProgressIndicator)), findsNothing);
+      expect(find.descendant(of: p1Btn, matching: find.byIcon(Icons.visibility_off_outlined)), findsOneWidget);
+      expect(tester.widget<IconButton>(p1Btn).tooltip, 'إظهار في الموقع');
+      expect(find.text('أصبح العنصر مخفيًا'), findsOneWidget);
+
+      // 2) Categories screen: _categoryTile, _sectionPageRow, and _entryRow sharing 'shared-id'
+      await tester.pumpWidget(_app(
+        CollectionListScreen(repo: repo, def: collectionById('categories')!),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      final catCompleter = repo.hold('categories', 'shared-id');
+      final entryCompleter = repo.hold('entries', 'shared-id');
+      final pageCompleter = repo.hold('pages', 'sp1');
+
+      final catBtn = find.byKey(const ValueKey('visibility-shared-id'));
+      final entryBtn = find.byKey(const ValueKey('visibilityEntry-shared-id'));
+      final pageBtn = find.byKey(const ValueKey('visibilitySectionPage-sp1'));
+
+      // Tap category eye -> locked with spinner, while entry & page with same/different IDs stay interactive.
+      await tester.tap(catBtn);
+      await tester.pump();
+      expect(find.descendant(of: catBtn, matching: find.byType(CircularProgressIndicator)), findsOneWidget);
+      expect(tester.widget<IconButton>(catBtn).onPressed, isNull);
+      expect(tester.widget<IconButton>(entryBtn).onPressed, isNotNull);
+      expect(tester.widget<IconButton>(pageBtn).onPressed, isNotNull);
+
+      await tester.tap(entryBtn);
+      await tester.tap(pageBtn);
+      await tester.pump();
+      expect(find.descendant(of: entryBtn, matching: find.byType(CircularProgressIndicator)), findsOneWidget);
+      expect(find.descendant(of: pageBtn, matching: find.byType(CircularProgressIndicator)), findsOneWidget);
+
+      catCompleter.complete();
+      entryCompleter.complete();
+      pageCompleter.complete();
+      await tester.pumpAndSettle();
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+      expect(find.descendant(of: catBtn, matching: find.byIcon(Icons.visibility_off_outlined)), findsOneWidget);
+      expect(find.descendant(of: entryBtn, matching: find.byIcon(Icons.visibility_off_outlined)), findsOneWidget);
+      expect(find.descendant(of: pageBtn, matching: find.byIcon(Icons.visibility_off_outlined)), findsOneWidget);
+    });
+
+    testWidgets('row visibility eye rolls back visual state and shows error SnackBar when update fails',
+        (tester) async {
+      tester.view.physicalSize = const Size(900, 1000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final repo = _ControlledUpdateBackend(initialCollections: {
+        'priests': [
+          AdminDoc('p1', {'name': 'أبونا بولس', 'rank': 'priest', 'status': 'serving', 'visible': true}),
+        ],
+      });
+      addTearDown(repo.dispose);
+
+      await tester.pumpWidget(_app(
+        CollectionListScreen(repo: repo, def: collectionById('priests')!),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      final c = repo.hold('priests', 'p1');
+      final btn = find.byKey(const ValueKey('visibility-p1'));
+      await tester.tap(btn);
+      await tester.pump();
+      expect(find.descendant(of: btn, matching: find.byType(CircularProgressIndicator)), findsOneWidget);
+
+      c.completeError(FirebaseException(
+        plugin: 'cloud_firestore',
+        code: 'permission-denied',
+        message: 'Denied',
+      ));
+      await tester.pumpAndSettle();
+
+      // Reverted to visible: true
+      expect(find.descendant(of: btn, matching: find.byType(CircularProgressIndicator)), findsNothing);
+      expect(find.descendant(of: btn, matching: find.byIcon(Icons.visibility_outlined)), findsOneWidget);
+      expect(tester.widget<IconButton>(btn).onPressed, isNotNull);
+      expect(tester.widget<IconButton>(btn).tooltip, 'إخفاء من الموقع');
+      expect(find.text('ظاهر'), findsOneWidget);
+      expect(find.textContaining('[permission-denied]'), findsOneWidget);
+    });
+
+    testWidgets('row visibility in-flight completion after dispose or repo swap does not throw', (tester) async {
+      tester.view.physicalSize = const Size(900, 1000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final repo1 = _ControlledUpdateBackend(initialCollections: {
+        'priests': [
+          AdminDoc('p1', {'name': 'أبونا يوحنا', 'rank': 'priest', 'status': 'serving', 'visible': true}),
+          AdminDoc('p2', {'name': 'أبونا متى', 'rank': 'priest', 'status': 'serving', 'visible': true}),
+        ],
+      });
+      final repo2 = _ControlledUpdateBackend(initialCollections: {
+        'saints': [
+          AdminDoc('p1', {'nameAr': 'مارمرقس', 'visible': true, 'order': 10}),
+        ],
+      });
+      addTearDown(repo1.dispose);
+      addTearDown(repo2.dispose);
+
+      await tester.pumpWidget(_app(
+        CollectionListScreen(repo: repo1, def: collectionById('priests')!),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      final c1 = repo1.hold('priests', 'p1');
+      final c2 = repo1.hold('priests', 'p2');
+      await tester.tap(find.byKey(const ValueKey('visibility-p1')));
+      await tester.tap(find.byKey(const ValueKey('visibility-p2')));
+      await tester.pump();
+
+      // Swap repo & collection while writes are in flight
+      await tester.pumpWidget(_app(
+        CollectionListScreen(repo: repo2, def: collectionById('saints')!),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      // Complete and fail old repo writes -> no setState after swap, saints p1 unaffected
+      c1.complete();
+      c2.completeError(StateError('late error'));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(find.byKey(const ValueKey('visibility-p1')), findsOneWidget);
+      expect(find.descendant(of: find.byKey(const ValueKey('visibility-p1')), matching: find.byIcon(Icons.visibility_outlined)), findsOneWidget);
+
+      // Unmount completely during in-flight write
+      final c3 = repo2.hold('saints', 'p1');
+      await tester.tap(find.byKey(const ValueKey('visibility-p1')));
+      await tester.pump();
+      await tester.pumpWidget(_app(const SizedBox.shrink(), locale: const Locale('ar')));
+      c3.completeError(StateError('after dispose'));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+    });
+
     test('blockSnippetSummary: extracts and formats preview snippet per BlockType', () {
       // 1. Image
       // Caption present -> returns truncated caption
@@ -6036,5 +6227,58 @@ class _PermissionDeniedBackend extends _TestAdminBackend {
       code: 'permission-denied',
       message: 'Missing or insufficient permissions.',
     );
+  }
+}
+
+class _ControlledUpdateBackend extends _TestAdminBackend {
+  final Map<String, StreamController<List<AdminDoc>>> _controllers = {};
+  final Map<String, Completer<void>> _holds = {};
+
+  _ControlledUpdateBackend({super.initialCollections});
+
+  Completer<void> hold(String collection, String id) {
+    final c = Completer<void>();
+    _holds['$collection:$id'] = c;
+    return c;
+  }
+
+  @override
+  Stream<List<AdminDoc>> watch(String collection) async* {
+    yield [
+      for (final d in collections[collection] ?? const <AdminDoc>[])
+        AdminDoc(d.id, Map<String, dynamic>.from(d.data)),
+    ];
+    final c = _controllers.putIfAbsent(collection, () => StreamController<List<AdminDoc>>.broadcast());
+    yield* c.stream;
+  }
+
+  @override
+  Future<void> update(String collection, String id, Map<String, dynamic> data) async {
+    final hold = _holds.remove('$collection:$id');
+    updates.add((collection: collection, id: id, data: Map<String, dynamic>.from(data)));
+    if (hold != null) {
+      await hold.future;
+    }
+    final list = collections[collection];
+    if (list != null) {
+      for (final doc in list) {
+        if (doc.id == id) {
+          doc.data.addAll(data);
+        }
+      }
+    }
+    final c = _controllers[collection];
+    if (c != null && !c.isClosed) {
+      c.add([
+        for (final d in collections[collection] ?? const <AdminDoc>[])
+          AdminDoc(d.id, Map<String, dynamic>.from(d.data)),
+      ]);
+    }
+  }
+
+  void dispose() {
+    for (final c in _controllers.values) {
+      c.close();
+    }
   }
 }

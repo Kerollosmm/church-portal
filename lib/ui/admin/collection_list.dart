@@ -102,8 +102,11 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
   final _messengerKey = GlobalKey<ScaffoldMessengerState>();
   final _search = TextEditingController();
   final _pendingDelete = PendingDelete();
-  final Map<String, ({AdminBackend repo, String collection, String title})> _pendingEntries = {};
+  final _pendingEntries = <String, ({AdminBackend repo, String collection, String title})>{};
   final Set<String> _purging = {};
+  final Set<String> _togglingVisibility = {};
+  final Map<String, bool> _optimisticVisible = {};
+  final Map<String, bool> _latestStreamVisible = {};
   ListFilter _filter = ListFilter.all;
   PriestStatusFilter _priestFilter = PriestStatusFilter.all;
   late Stream<List<AdminDoc>> _stream = widget.repo.watch(widget.def.name);
@@ -149,6 +152,9 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     if (old.def.name != widget.def.name || old.repo != widget.repo) {
       _lastDocs = const [];
       _lastPages = null;
+      _togglingVisibility.clear();
+      _optimisticVisible.clear();
+      _latestStreamVisible.clear();
       _stream = widget.repo.watch(widget.def.name);
       _entriesStream = widget.def.name == 'categories' ? widget.repo.watch('entries') : null;
       _pagesStream = widget.def.name == 'categories' ? widget.repo.watch('pages') : null;
@@ -717,6 +723,56 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
         ),
       );
 
+  String _visKey(String collection, String id) => '$collection:$id';
+
+  bool _effectiveHidden(AdminDoc d, {CollectionDef? targetDef}) {
+    final k = _visKey((targetDef ?? def).name, d.id);
+    final streamVisible = d.data['visible'] != false;
+    _latestStreamVisible[k] = streamVisible;
+    final opt = _optimisticVisible[k];
+    if (opt != null) {
+      if (!_togglingVisibility.contains(k) && streamVisible == opt) {
+        _optimisticVisible.remove(k);
+        return !streamVisible;
+      }
+      return !opt;
+    }
+    return !streamVisible;
+  }
+
+  Widget _visibilityButton(
+    BuildContext context,
+    AdminDoc d, {
+    required Key key,
+    CollectionDef? targetDef,
+  }) {
+    final activeDef = targetDef ?? def;
+    final k = _visKey(activeDef.name, d.id);
+    final saving = _togglingVisibility.contains(k);
+    final hidden = _effectiveHidden(d, targetDef: activeDef);
+    final label = saving ? context.tr('savingVisibility') : context.tr(hidden ? 'show' : 'hide');
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      // Absorb rapid double-taps while saving so they do not fall through to ListTile.onTap.
+      onTap: saving ? () {} : null,
+      child: IconButton(
+        key: key,
+        tooltip: label,
+        onPressed: saving ? null : () => _setVisible(context, d, hidden, targetDef: activeDef),
+        icon: saving
+            ? SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2, color: context.pal.primary),
+              )
+            : Icon(
+                hidden ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                color: hidden ? context.pal.muted : context.pal.success,
+              ),
+      ),
+    );
+  }
+
   Widget _categoryTile(
     BuildContext context,
     AdminDoc d, {
@@ -731,7 +787,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     List<AdminDoc>? docs,
     bool isEmptyHidden = false,
   }) {
-    final hidden = d.data['visible'] == false;
+    final hidden = _effectiveHidden(d);
     final updated = d.updatedAt;
     final narrow = MediaQuery.sizeOf(context).width < 600;
     final itemPath = itemPublicPathFor(def, d.id, d.data, english: !context.isAr);
@@ -786,13 +842,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
           onTap: () => _openEditor(context, d),
           trailing: Row(mainAxisSize: MainAxisSize.min, children: [
             if (!narrow) ...moves,
-            IconButton(
-              key: ValueKey('visibility-${d.id}'),
-              tooltip: context.tr(hidden ? 'show' : 'hide'),
-              icon: Icon(hidden ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                  color: hidden ? context.pal.muted : context.pal.success),
-              onPressed: () => _setVisible(context, d, hidden),
-            ),
+            _visibilityButton(context, d, key: ValueKey('visibility-${d.id}')),
           ]),
         ),
         const Divider(height: 1),
@@ -894,7 +944,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
   }
 
   Widget _sectionPageRow(BuildContext context, CollectionDef pagesDef, AdminDoc p) {
-    final hidden = p.data['visible'] == false;
+    final hidden = _effectiveHidden(p, targetDef: pagesDef);
     final sub = _subtitle(context, p, pagesDef);
     return ListTile(
       key: Key('sectionPageRow-${p.id}'),
@@ -924,13 +974,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
             icon: const Icon(Icons.copy_outlined),
             onPressed: () => _duplicatePage(context, p, pagesDef: pagesDef),
           ),
-          IconButton(
-            key: ValueKey('visibilitySectionPage-${p.id}'),
-            tooltip: context.tr(hidden ? 'show' : 'hide'),
-            icon: Icon(hidden ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                color: hidden ? context.pal.muted : context.pal.success),
-            onPressed: () => _setVisible(context, p, hidden, targetDef: pagesDef),
-          ),
+          _visibilityButton(context, p, key: ValueKey('visibilitySectionPage-${p.id}'), targetDef: pagesDef),
         ],
       ),
     );
@@ -954,7 +998,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
   }
 
   Widget _entryRow(BuildContext context, CollectionDef entriesDef, AdminDoc e) {
-    final hidden = e.data['visible'] == false;
+    final hidden = _effectiveHidden(e, targetDef: entriesDef);
     final unconfirmed = e.data['sample'] == true;
     final sub = _subtitle(context, e, entriesDef);
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -977,13 +1021,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
         ),
         subtitle: sub.isEmpty ? null : Text(sub),
         onTap: () => _openEditor(context, e, targetDef: entriesDef),
-        trailing: IconButton(
-          key: ValueKey('visibilityEntry-${e.id}'),
-          tooltip: context.tr(hidden ? 'show' : 'hide'),
-          icon: Icon(hidden ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-              color: hidden ? context.pal.muted : context.pal.success),
-          onPressed: () => _setVisible(context, e, hidden, targetDef: entriesDef),
-        ),
+        trailing: _visibilityButton(context, e, key: ValueKey('visibilityEntry-${e.id}'), targetDef: entriesDef),
       ),
       Padding(
         padding: const EdgeInsetsDirectional.fromSTEB(44, 0, 8, 4),
@@ -1000,7 +1038,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
   }
 
   Widget _tile(BuildContext context, AdminDoc d, {int? dragIndex, List<AdminDoc>? docs}) {
-    final hidden = d.data['visible'] == false;
+    final hidden = def.hasVisible ? _effectiveHidden(d) : d.data['visible'] == false;
     final unconfirmed = d.data['sample'] == true;
     final stopped = d.data.containsKey('active') && d.data['active'] == false;
     final expired = _isExpired(def, d.data);
@@ -1089,14 +1127,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
           trailing: (!narrow && moves.isNotEmpty) || def.hasVisible
               ? Row(mainAxisSize: MainAxisSize.min, children: [
                   if (!narrow) ...moves,
-                  if (def.hasVisible)
-                    IconButton(
-                      key: ValueKey('visibility-${d.id}'),
-                      tooltip: context.tr(hidden ? 'show' : 'hide'),
-                      icon: Icon(hidden ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                          color: hidden ? context.pal.muted : context.pal.success),
-                      onPressed: () => _setVisible(context, d, hidden),
-                    ),
+                  if (def.hasVisible) _visibilityButton(context, d, key: ValueKey('visibility-${d.id}')),
                 ])
               : null,
         ),
@@ -1134,13 +1165,36 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
 
   Future<void> _setVisible(BuildContext context, AdminDoc d, bool visible, {CollectionDef? targetDef}) async {
     final activeDef = targetDef ?? def;
+    final k = _visKey(activeDef.name, d.id);
+    if (_togglingVisibility.contains(k)) return;
+    final repo = widget.repo;
     final messenger = _messenger;
     final msg = context.tr(visible ? 'nowVisible' : 'nowHidden');
     final failed = context.tr('saveFailed', {'e': '{e}'});
+    setState(() {
+      _togglingVisibility.add(k);
+      _optimisticVisible[k] = visible;
+    });
     try {
-      await widget.repo.update(activeDef.name, d.id, {'visible': visible});
+      await repo.update(activeDef.name, d.id, {'visible': visible});
+      if (!mounted || !identical(widget.repo, repo) || (targetDef == null && def.name != activeDef.name)) {
+        return;
+      }
+      setState(() {
+        _togglingVisibility.remove(k);
+        if (_latestStreamVisible[k] == visible) {
+          _optimisticVisible.remove(k);
+        }
+      });
       messenger?.showSnackBar(SnackBar(content: Text(msg), duration: const Duration(seconds: 2)));
     } catch (e) {
+      if (!mounted || !identical(widget.repo, repo) || (targetDef == null && def.name != activeDef.name)) {
+        return;
+      }
+      setState(() {
+        _togglingVisibility.remove(k);
+        _optimisticVisible.remove(k);
+      });
       messenger?.showSnackBar(SnackBar(content: Text(failed.replaceAll('{e}', formatAdminError(e)))));
     }
   }
@@ -1580,6 +1634,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
         seasons: seasons,
         englishEnabled: _englishEnabled,
         initialNotice: initialNotice,
+        popMessenger: _messenger,
       ),
     ));
   }

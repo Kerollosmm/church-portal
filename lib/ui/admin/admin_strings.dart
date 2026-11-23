@@ -381,6 +381,7 @@ const Map<String, List<String>> adminStrings = {
   'inactive': ['متوقف', 'Inactive'],
   'show': ['إظهار في الموقع', 'Show on the site'],
   'hide': ['إخفاء من الموقع', 'Hide from the site'],
+  'savingVisibility': ['جارٍ الحفظ…', 'Saving…'],
   'nowVisible': ['أصبح العنصر ظاهرًا', 'Item is now visible'],
   'nowHidden': ['أصبح العنصر مخفيًا', 'Item is now hidden'],
   'orderSaved': ['تم حفظ الترتيب', 'Order saved'],

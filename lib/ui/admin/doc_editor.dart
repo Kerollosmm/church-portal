@@ -92,6 +92,10 @@ class DocEditor extends StatefulWidget {
   /// Optional dismissible informational notice shown at the top of the form.
   final String? initialNotice;
 
+  /// Optional messenger on the caller list screen so the post-save SnackBar
+  /// queues on the caller's [ScaffoldMessenger] when [popOnSave] pops back.
+  final ScaffoldMessengerState? popMessenger;
+
   const DocEditor({
     super.key,
     required this.title,
@@ -113,6 +117,7 @@ class DocEditor extends StatefulWidget {
     this.seasons = const [],
     this.englishEnabled = true,
     this.initialNotice,
+    this.popMessenger,
   });
 
   @override
@@ -985,7 +990,9 @@ class DocEditorState extends State<DocEditor> {
       // by an earlier, partly failed attempt of this save is not left behind.
       _deleteMedia({...orphanedDocMediaIds(baseline, data), ...orphanedDocMediaIds(initialBefore, data)}.toList());
       _saveBaseline = null;
-      messenger?.showSnackBar(SnackBar(content: Text(savedMsg)));
+      final willPop = widget.popOnSave && (route?.isCurrent ?? false);
+      final saveMessenger = (willPop && (widget.popMessenger?.mounted ?? false)) ? widget.popMessenger : messenger;
+      saveMessenger?.showSnackBar(SnackBar(content: Text(savedMsg)));
       if (!mounted) return true;
       setState(() {
         _saving = false;
@@ -999,7 +1006,7 @@ class DocEditorState extends State<DocEditor> {
       }
       // The admin may have closed the editor while the write was pending:
       // only pop if this editor is still the top route.
-      if (widget.popOnSave && (route?.isCurrent ?? false)) nav.pop();
+      if (willPop) nav.pop();
       return true;
     } catch (e) {
       // The failed write (and those after it) did not save: remove the images
