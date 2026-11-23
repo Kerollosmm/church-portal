@@ -440,6 +440,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
           }
 
           final canReorder = def.orderable && _search.text.trim().isEmpty && _filter == ListFilter.all && docs.length > 1;
+          final bottomPad = _listBottomPadding(context);
           return CustomScrollView(slivers: [
             if (widget.showHeader)
               SliverToBoxAdapter(
@@ -455,7 +456,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
                 hasScrollBody: false,
                 child: Center(
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(12, 24, 12, 90),
+                    padding: EdgeInsets.fromLTRB(12, 24, 12, bottomPad),
                     child: Text(context.tr(visible.isEmpty ? 'noItems' : 'noMatches')),
                   ),
                 ),
@@ -466,7 +467,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
                   buildDefaultDragHandles: false,
-                  padding: const EdgeInsets.fromLTRB(12, 4, 12, 90),
+                  padding: EdgeInsets.fromLTRB(12, 4, 12, bottomPad),
                   itemCount: docs.length,
                   onReorderItem: (from, to) => _reorder(context, docs, from, to),
                   itemBuilder: (context, i) => _tile(context, docs[i], dragIndex: i, docs: docs),
@@ -474,7 +475,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
               )
             else
               SliverPadding(
-                padding: const EdgeInsets.fromLTRB(12, 4, 12, 90),
+                padding: EdgeInsets.fromLTRB(12, 4, 12, bottomPad),
                 sliver: SliverList.builder(
                   itemCount: docs.length,
                   itemBuilder: (context, i) => _tile(context, docs[i]),
@@ -618,12 +619,13 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     if (shownCats.isEmpty && unassigned.isEmpty && shownBuiltIns.isEmpty) {
       return Center(child: Text(context.tr('noMatches')));
     }
+    final bottomPad = _listBottomPadding(context);
     if (canReorder && unassigned.isEmpty && shownBuiltIns.isEmpty) {
       return ReorderableListView.builder(
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
         buildDefaultDragHandles: false,
-        padding: const EdgeInsets.fromLTRB(12, 4, 12, 90),
+        padding: EdgeInsets.fromLTRB(12, 4, 12, bottomPad),
         itemCount: shownCats.length,
         onReorderItem: (from, to) => _reorder(context, shownCats, from, to),
         itemBuilder: (context, i) => _categoryTile(
@@ -645,7 +647,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     return ListView(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(12, 4, 12, 90),
+      padding: EdgeInsets.fromLTRB(12, 4, 12, bottomPad),
       children: [
         if (allVisibleCats.isEmpty && !hasAnyBuiltInPages)
           Card(
@@ -777,6 +779,14 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     return !streamVisible;
   }
 
+  double _listBottomPadding(BuildContext context) {
+    final scale = MediaQuery.textScalerOf(context).scale(1.0).clamp(1.0, 2.5);
+    final safeBottom = MediaQuery.paddingOf(context).bottom;
+    // Extended FAB starts at 56 px + 16 px Scaffold margin and grows with text scale;
+    // keep the last card's footer actions completely clear above it.
+    return 104 + (scale - 1.0) * 32 + safeBottom;
+  }
+
   Widget _visibilityButton(
     BuildContext context,
     AdminDoc d, {
@@ -788,25 +798,39 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     final saving = _togglingVisibility.contains(k);
     final hidden = _effectiveHidden(d, targetDef: activeDef);
     final label = saving ? context.tr('savingVisibility') : context.tr(hidden ? 'show' : 'hide');
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      excludeFromSemantics: true,
-      // Absorb rapid double-taps while saving so they do not fall through to ListTile.onTap.
-      onTap: saving ? () {} : null,
-      child: IconButton(
-        key: key,
-        tooltip: label,
-        onPressed: saving ? null : () => _setVisible(context, d, hidden, targetDef: activeDef),
-        icon: saving
-            ? SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2, color: context.pal.primary),
-              )
-            : Icon(
-                hidden ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                color: hidden ? context.pal.muted : context.pal.success,
-              ),
+    // Keep a constant >=48x48 hit target and always-active TapGestureRecognizer
+    // so rapid taps (even if a write completes mid-press) never leak to ListTile.onTap.
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        excludeFromSemantics: true,
+        onTap: () {},
+        child: IconButton(
+          key: key,
+          tooltip: label,
+          constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+          style: IconButton.styleFrom(
+            minimumSize: const Size(48, 48),
+            tapTargetSize: MaterialTapTargetSize.padded,
+          ),
+          onPressed: saving ? null : () => _setVisible(context, d, hidden, targetDef: activeDef),
+          icon: SizedBox.square(
+            dimension: 24,
+            child: Center(
+              child: saving
+                  ? SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: context.pal.primary),
+                    )
+                  : Icon(
+                      hidden ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                      color: hidden ? context.pal.muted : context.pal.success,
+                    ),
+            ),
+          ),
+        ),
       ),
     );
   }

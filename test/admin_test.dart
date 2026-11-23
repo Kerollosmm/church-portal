@@ -4021,6 +4021,71 @@ void main() {
       expect(find.descendant(of: find.byKey(const ValueKey('visibility-p1')), matching: find.byIcon(Icons.visibility_outlined)), findsOneWidget);
     });
 
+    testWidgets(
+        'rapid taps on row visibility eye at 320px / 200% keep >=48x48 hit target, write once, and never open DocEditor',
+        variant: const TargetPlatformVariant({TargetPlatform.android, TargetPlatform.windows}),
+        (tester) async {
+      tester.view.physicalSize = const Size(320, 640);
+      tester.view.devicePixelRatio = 1;
+      tester.platformDispatcher.textScaleFactorTestValue = 2.0;
+      addTearDown(() {
+        tester.view.reset();
+        tester.platformDispatcher.clearTextScaleFactorTestValue();
+      });
+
+      final repo = _ControlledUpdateBackend(initialCollections: {
+        'priests': [
+          AdminDoc('p1', {'name': 'أبونا فلان', 'rank': 'priest', 'status': 'serving', 'visible': true}),
+        ],
+      });
+      addTearDown(repo.dispose);
+
+      await tester.pumpWidget(_app(
+        CollectionListScreen(repo: repo, def: collectionById('priests')!),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      await tester.drag(find.byType(CustomScrollView), const Offset(0, -400));
+      await tester.pumpAndSettle();
+
+      final btn = find.byKey(const ValueKey('visibility-p1'));
+      await tester.ensureVisible(btn);
+      await tester.pumpAndSettle();
+      final idleSize = tester.getSize(btn);
+      expect(idleSize.width, greaterThanOrEqualTo(48));
+      expect(idleSize.height, greaterThanOrEqualTo(48));
+
+      // Tap 1 starts saving -> rapid second/third taps + outer-edge tap + mid-tap completion must not open DocEditor.
+      final c = repo.hold('priests', 'p1');
+      await tester.tap(btn);
+      await tester.tap(btn); // Before rebuild: second tap ignored by _togglingVisibility
+      await tester.pump();
+
+      final savingSize = tester.getSize(btn);
+      expect(savingSize.width, greaterThanOrEqualTo(48));
+      expect(savingSize.height, greaterThanOrEqualTo(48));
+      expect(find.descendant(of: btn, matching: find.byType(CircularProgressIndicator)), findsOneWidget);
+
+      await tester.tap(btn, warnIfMissed: false);
+      final outerCorner = tester.getTopLeft(btn) + const Offset(2, 2);
+      await tester.tapAt(outerCorner);
+      await tester.pump();
+      expect(find.byType(DocEditor), findsNothing);
+
+      // Start another tap while saving, finish the backend write BEFORE pointerUp, then release.
+      final heldTap = await tester.startGesture(tester.getCenter(btn));
+      await tester.pump();
+      c.complete();
+      await tester.pumpAndSettle();
+      await heldTap.up();
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.byType(DocEditor), findsNothing);
+      expect(repo.updates.where((u) => u.collection == 'priests' && u.id == 'p1'), hasLength(1));
+    });
+
     testWidgets('row visibility in-flight completion after dispose or repo swap does not throw', (tester) async {
       tester.view.physicalSize = const Size(900, 1000);
       tester.view.devicePixelRatio = 1;

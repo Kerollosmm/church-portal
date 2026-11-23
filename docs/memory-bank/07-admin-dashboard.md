@@ -277,12 +277,14 @@ For each `CollectionDef`:
   switch the old list is never shown while the new one loads.
 - 👁 **hide/show** (`update(visible)`) — only when the collection has a `visible` field (not seasons). All four row
   builders (`_tile`, `_categoryTile`, `_sectionPageRow`, `_entryRow`) share `_visibilityButton` alongside the static
-  «ظاهر / مخفي» `_Tag`: tapping replaces the eye icon with an inline spinner (`savingVisibility` «جارٍ الحفظ…»), disables
-  only that row's visibility toggle button under a composite `'${collection}:${id}'` key while an opaque `GestureDetector`
-  absorbs rapid repeat taps so they cannot fall through to `ListTile.onTap` (tapping the rest of the row still opens `DocEditor`),
+  «ظاهر / مخفي» `_Tag`: tapping replaces the eye icon with an inline spinner (`savingVisibility` «جارٍ الحفظ…») inside a fixed
+  `>= 48×48` padded hit target (`MaterialTapTargetSize.padded`), disables only that row's visibility toggle button under a
+  composite `'${collection}:${id}'` key while an always-active opaque `GestureDetector` absorbs rapid repeat taps (even if a write
+  settles mid-tap) so they cannot fall through to `ListTile.onTap` (tapping the rest of the row still opens `DocEditor`),
   reverts visual state + shows `saveFailed` on failure, and keeps tooltip/semantics clear («إظهار في الموقع» / «إخفاء من الموقع»).
-  `CollectionListScreen` also passes its own inner `ScaffoldMessenger` (`popMessenger`) to `DocEditor` so `savedMsg` and
-  `noChanges` queue cleanly when `popOnSave` pops back.
+  List scrollables also apply text-scale- and safe-area-aware bottom padding (`_listBottomPadding`) so the last card's actions stay
+  clear of the `+` FAB at 320 px / 200 %. `CollectionListScreen` also passes its own inner `ScaffoldMessenger` (`popMessenger`) to
+  `DocEditor` so `savedMsg` and `noChanges` queue cleanly when `popOnSave` pops back.
 - **Drag to reorder** — or tap **Move up / Move down** on each tile (`ValueKey('moveUp-<id>')`, WCAG 2.5.7) —
   (`reorder(collection, ids, base:)` → `order` = base + 10, 20, 30… in one batch) for orderable collections — clinics,
   facilities, activities, priests, saints, milestones — and only when search is empty, filter = all
