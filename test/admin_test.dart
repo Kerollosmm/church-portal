@@ -1539,6 +1539,17 @@ void main() {
       delHold.complete();
       await tester.pumpAndSettle();
       expect(find.text('أصبح العنصر مخفيًا'), findsOneWidget);
+
+      // Failed commit also syncs the Undo bar state cleanly before surfacing the error SnackBar.
+      final failHold = repo.holdDelete('saints', 's2');
+      await tester.tap(find.byKey(const ValueKey('delete-s2')));
+      await tester.pump();
+      expect(find.text('تراجع'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 10));
+      failHold.completeError(StateError('delete failed'));
+      await tester.pumpAndSettle();
+      expect(find.text('تراجع'), findsNothing);
+      expect(find.textContaining('delete failed'), findsOneWidget);
     });
 
     testWidgets('CollectionListScreen multi-delete extends batch window so undoAll at 12s restores both items', (tester) async {

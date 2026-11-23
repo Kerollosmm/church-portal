@@ -1359,6 +1359,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
           } catch (_) {}
           if (!mounted) return;
           setState(() {});
+          _syncUndoBarAfterExpiry(messenger, failedMsg: failedMsg);
           _showSnack(messenger, SnackBar(content: Text(failedMsg.replaceAll('{e}', formatAdminError(e)))));
           return;
         }
