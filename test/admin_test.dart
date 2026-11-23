@@ -1726,6 +1726,44 @@ void main() {
       expect(t1.isAfter(t0), isTrue);
       expect(isExpiredSoftDelete({'deletedAt': t1}, t0.add(const Duration(seconds: 10))), isFalse);
     });
+
+    testWidgets('held or failed prior deletedAt refresh protects before expiry and never falsely extends failed items',
+        (tester) async {
+      tester.view.physicalSize = const Size(900, 1000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      // Part 1: Held refresh protects s1 from expiring past t=10s while Future.wait suspends.
+      final repo = _ControlledUpdateBackend(initialCollections: {
+        'saints': [
+          AdminDoc('s1', {'nameAr': 'مارجرجس', 'visible': true, 'order': 10}),
+          AdminDoc('s2', {'nameAr': 'مارمرقس', 'visible': true, 'order': 20}),
+        ],
+      });
+      addTearDown(repo.dispose);
+
+      await tester.pumpWidget(_app(
+        CollectionListScreen(repo: repo, def: collectionById('saints')!),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('delete-s1')));
+      await tester.pump(const Duration(seconds: 8));
+
+      final refreshHold = repo.hold('saints', 's1');
+      await tester.tap(find.byKey(const ValueKey('delete-s2')));
+      await tester.pump(const Duration(seconds: 3)); // t = 11 s > original 10 s window, refresh still held!
+
+      expect(repo.deletedIds.contains('saints/s1'), isFalse);
+
+      // Part 2: Failing refresh refuses to keep s1 in a renewed "undo all" batch.
+      refreshHold.completeError(FirebaseException(plugin: 'cloud_firestore', code: 'unavailable', message: 'Offline'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('تراجع عن الكل'), findsNothing);
+      expect(find.text('تراجع'), findsOneWidget);
+    });
   });
 
   group('UnsavedBar', () {

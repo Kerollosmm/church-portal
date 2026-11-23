@@ -1295,17 +1295,29 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
       return;
     }
 
-    // Push back backend `deletedAt` for earlier still-pending items before extending
-    // local timers so another admin screen's lazy purge cannot delete them mid-batch.
+    // Push back backend `deletedAt` for earlier still-pending items before finalizing
+    // the renewed batch; extend local timers first so nothing commits mid-await,
+    // and commit immediately if a backend renewal fails rather than extending unbacked.
     final priorPending = [
       for (final entry in _pendingEntries.entries.toList())
         if (entry.key != id && _pendingDelete.isPending(entry.key)) (id: entry.key, info: entry.value),
     ];
     if (priorPending.isNotEmpty) {
+      _pendingDelete.extendAll();
+      final renewedIds = <String>{};
       await Future.wait([
         for (final p in priorPending)
-          p.info.repo.update(p.info.collection, p.id, {'deletedAt': deleteNow}).catchError((Object _) {}),
+          p.info.repo.update(p.info.collection, p.id, {'deletedAt': deleteNow}).then((_) {
+            renewedIds.add(p.id);
+          }).catchError((Object _) {}),
       ]);
+      if (!mounted) return;
+      for (final p in priorPending) {
+        if (!renewedIds.contains(p.id)) {
+          await _pendingDelete.commitNow(p.id);
+        }
+      }
+      if (!mounted) return;
     }
 
     if (!mounted) return;

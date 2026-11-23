@@ -46,6 +46,9 @@ class PendingDelete {
     }
   }
 
+  /// Commits a single pending item immediately (cancelling its grace timer).
+  Future<void> commitNow(String id) => _commitItem(id);
+
   Future<void> _commitItem(String id) async {
     final item = _pending.remove(id);
     if (item != null) {
