@@ -148,9 +148,12 @@ void main() {
       expect(paths.where((p) => p.startsWith('/clinics')), isEmpty);
       // A stored doc wins over the seed.
       export['features'] = {
-        'sections': {Sections.meetings: true},
+        'sections': {Sections.meetings: false},
       };
-      expect(sitemapPaths(sitemapContentFromExport(export, seedFeatures: seedFeatures)), contains('/church-education/m1'));
+      expect(
+        sitemapPaths(sitemapContentFromExport(export, seedFeatures: seedFeatures)),
+        isNot(contains('/church-education/m1')),
+      );
       expect(() => sitemapContentFromExport({'features': null}), throwsFormatException);
     });
 

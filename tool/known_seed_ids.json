@@ -28,6 +28,19 @@
   "school-blessing-2026",
   "summer-2027"
  ],
+ "clinics": [
+  "cardio-1",
+  "dental-1",
+  "derma-1",
+  "ent-1",
+  "eye-1",
+  "gyn-1",
+  "internal-1",
+  "ortho-1",
+  "pediatrics-1",
+  "pediatrics-2",
+  "physio-1"
+ ],
  "facilities": [
   "anba-abraam",
   "employment",

@@ -307,6 +307,7 @@ retired = {
   "seasons": ["summer-2027"],
   "liturgies": ["sum-sun-1", "sum-sun-2", "sum-sun-eve", "sum-fri-1", "sum-fri-2", "sum-fri-3"],
   "activities": ["scouts", "deacons", "hymns", "bible", "summer", "sports", "exhibitions"],
+  "clinics": ["cardio-1", "dental-1", "derma-1", "ent-1", "eye-1", "gyn-1", "internal-1", "ortho-1", "pediatrics-1", "pediatrics-2", "physio-1"],
   "priests": ["p1", "p2", "p3"],
   "milestones": ["founding", "pastoral", "consecration"],
 }
@@ -318,7 +319,7 @@ with open(out, "w", encoding="utf-8") as f:
     json.dump(seed, f, ensure_ascii=False, indent=1)
 print("wrote", out, {k: len(v) for k, v in seed.items()})
 for col, ids in retired.items():
-    clash = set(ids) & set(seed[col])
+    clash = set(ids) & set(seed.get(col, {}))
     assert not clash, f"retired ids still in seed: {col} {clash}"
 # Every id any seed has ever written (grows only). A document id dropped from
 # the seed must be listed in `retired`, so `--force` cleans it up; the seed

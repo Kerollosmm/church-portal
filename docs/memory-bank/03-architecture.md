@@ -402,15 +402,11 @@ Deferred isolation is mechanically enforced in CI via `node tool/check_web_bundl
   On viewports `< 360 px` (ADR-061), `SealTab` scales down to `54×70 dp` (from `64×80 dp`), the title typography
   uses 15 pt 2-line `appShort` (`height: 1.15`), guaranteeing a `>= 130 dp` readable title slot and `>= 6 dp` seal clearance.
   In short landscape orientations (`height < 420`, `kLandscapeShortHeight`, ADR-061), both `TopUtilityBar` and `InstallBanner` are hidden to preserve vertical reading space.
-- **No Clinics action in the app bar** (owner request, 4 Nov 2026), at any width or section state. It used to be a
-  compact `local_hospital_rounded` button on phones, shown when `featuresReady && !wide && !collapseHighlights &&
-  routeEnabled('/clinics')` — the same `sections.clinics` switch as the page, no separate condition. With the section
-  on, clinics stay reachable from the drawer, the desktop Services menu, the Home directory card and the footer quick links;
-  `test/feature_gate_test.dart` («app bar never shows a Clinics shortcut») guards it. Phone subpages (`location != '/'`) get a leading
+  Phone subpages (`location != '/'`) get a leading
   **Back-to-Home** arrow (`Key('backHome')`, `Icons.arrow_back_rounded`, mirrored in RTL) — every in-app link is a
   sibling `context.go`, so there is nothing to pop, and installed PWAs have no browser back button. On an item
   detail page the arrow is parent-aware (PR #13): `parentRouteOf(location)` (pure, `app_shell.dart`) returns
-  `DetailKind.parentPath` — `/church-education`, `/church-activities`, `/clinics`, `/public-services`, `/about`
+  `DetailKind.parentPath` — `/church-education`, `/church-activities`, `/public-services`, `/about`
   (priests, saints), `/notifications` (for `/notifications/battery`, ADR-062) or `/` (milestones: their cards live on Home) — shown as `Key('backParent')` with the tooltip
   «العودة إلى …» (`backToLabel`); every other route keeps `Key('backHome')` → `/`.
 - **Navigation & Layout Invariants (ADR-062, ADR-064):**
@@ -497,7 +493,7 @@ Deferred isolation is mechanically enforced in CI via `node tool/check_web_bundl
   so white button text is ≥ 4.5:1), `youtubeRed`, `instagramPink`.
 - Accessibility helpers: `TitleWithBadge` (title + `SampleBadge` in a `Wrap`), `Pill` text wraps (2 lines + ellipsis
   by default; `maxLines: null` for the next-mass season list, which must stay complete),
-  `ActionChipButton.semanticLabel` / `actionSemanticLabel(action, target)` ("Call — Dental clinic"),
+  `ActionChipButton.semanticLabel` / `actionSemanticLabel(action, target)` ("Call — Church office"),
   `SkeletonBox` is static under `MediaQuery.disableAnimationsOf`.
 - `CopticCross` widget is the logo (custom painter).
 

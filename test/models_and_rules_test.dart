@@ -155,14 +155,14 @@ void main() {
       expect(const Saint(id: 'x', nameAr: 'ا', nameEn: '').details, same(ItemDetails.none));
     });
 
-    test('meetings, clinics and facilities gain an optional cover image', () {
+    test('meetings and facilities gain an optional cover image', () {
       expect(Meeting.fromMap('x', const {'stage': 's', 'nameAr': 'ا'}).image, isNull);
       expect(Facility.fromMap('x', const {'nameAr': 'ا'}).image, isNull);
       expect(Meeting.fromMap('x', const {'nameAr': 'ا', 'image': _inline}).image?.mediaId, 'm1');
       expect(Facility.fromMap('x', const {'nameAr': 'ا', 'image': {'source': 'bogus'}}).image, isNull);
     });
 
-    test('clinics and facilities resolve the primary phone from their existing field', () {
+    test('facilities resolve the primary phone from their existing field', () {
       expect(Facility.fromMap('x', const {'nameAr': 'ا', 'phone': '0456'}).details.contactPhone, '0456');
       expect(Priest.fromMap('x', const {'name': 'ا', 'contactPhone': '0789'}).details.contactPhone, '0789');
       expect(Activity.fromMap('x', const {'titleAr': 'ا', 'contactPhone': '0789'}).details.contactPhone, '0789');
@@ -183,7 +183,6 @@ void main() {
       });
       expect(m.facebookUrl, m.details.facebookUrl);
       expect(m.whatsappUrl, m.details.whatsappUrl);
-      // Clinics keep their WhatsApp number in the shared `whatsapp` key.
     });
   });
 

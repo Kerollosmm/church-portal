@@ -146,7 +146,7 @@ String buildAssistantInstruction({
     // ADR-051 (issue 4): the Coptic date and the feast of the liturgical day.
     ..writeln(churchCalendarLine(f, now, synaxarium: synaxarium, lat: settings.lat, lng: settings.lng))
     ..writeln(
-      'Do not give medical, legal or spiritual-direction advice, '
+      'Do not give medical, legal or spiritual-direction advice beyond pointing to the right '
       'meeting or priest. Do not ask for or collect personal data.',
     )
     ..writeln(

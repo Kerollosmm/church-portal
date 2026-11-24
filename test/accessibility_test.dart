@@ -679,10 +679,10 @@ void main() {
         icon: Icons.call,
         label: 'Call',
         color: AppColors.burgundy,
-        semanticLabel: 'Call — Dental clinic',
+        semanticLabel: 'Call — Church office',
         onTap: () => taps++,
       )));
-      expect(find.bySemanticsLabel('Call — Dental clinic'), findsOneWidget);
+      expect(find.bySemanticsLabel('Call — Church office'), findsOneWidget);
       await tester.tap(find.text('Call'));
       expect(taps, 1);
       handle.dispose();

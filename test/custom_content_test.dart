@@ -2969,10 +2969,10 @@ void main() {
             'categoryId': BuiltInSections.activities,
             'visible': true,
           }),
-          AdminDoc('p-cli-1', {
-            'slug': 'clinics-guide',
-            'titleAr': 'دليل العيادات',
-            'titleEn': 'Clinics guide',
+          AdminDoc('p-mtg-1', {
+            'slug': 'meetings-guide',
+            'titleAr': 'دليل الاجتماعات',
+            'titleEn': 'Meetings guide',
             'placement': 'section',
             'categoryId': BuiltInSections.meetings,
             'visible': true,

@@ -33,7 +33,7 @@ render with `PageBody` (+ `Footer`). Content comes from Riverpod providers (hidd
   | `nextMass` | `NextMassCard` | schedule |
   | `quickContacts` | `_QuickContacts` (first 3 phones, call + WhatsApp for mobiles) | contactInfo |
   | `milestones` | "Our story" `MilestoneCard` grid (`lib/ui/widgets/milestone_card.dart`, shared with `/about`, ADR-052; icon by `icon`, year in local digits) | milestones |
-  | `directory` | `DirectoryCard` grid from `_directory` (mass, clinics, education, activities, services, about, contact) + "Ask the church" when visible; cards for disabled routes are skipped | — |
+  | `directory` | `DirectoryCard` grid from `_directory` (mass, education, activities, services, about, contact) + "Ask the church" when visible; cards for disabled routes are skipped | — |
   | `map` | `ChurchMap` (iframe + Open in Maps + Directions; protected by `MapInteractionGuard` click-to-interact shield on web) | contactInfo |
   On wide screens (≥ 900 px) adjacent `nextMass` + `quickContacts` share a row.
 
@@ -223,7 +223,7 @@ the same day with overlapping times in different venues (`parallelServices`) get
 #### Season presets, season verses, assistant in seasons, hero v2 (PR #33, ADR-042)
 
 - **Season preset:** after /admin «تجهيز الموسم» is applied, visitors see its switches (weekly schedule replaced,
-  meetings / clinics hidden, still hero, no wedding booking choice, live link, season booklet). From the season's
+  meetings hidden, still hero, no wedding booking choice, live link, season booklet). From the season's
   `endsAt` on, `featuresProvider` serves `FeatureSettings.effectiveAt` — the saved previous switches — with no write.
 - **Season verses:** `HeroVerse` uses `resolveSeasonalVerse`: fixed admin verse > the active season's set (rotating by
   liturgical day) > the general list.
@@ -290,7 +290,7 @@ keys in `l10n.dart`). Empty blocks are skipped. Hidden /
 unknown → `Key('pageUnavailable')`, `noindex`. Placement (`placement`, PR 3D / P1-18): `'link'` (default, reached from
 notices/buttons/links), `'nav'` (synced with `showInNav`), or `'section'` (`categoryId`, rendered as an «اعرف المزيد»
 `CustomPageCard` inside `/section/<slug>` — or, since Phase 4 PR2 / ADR-075, inside the linked built-in section page
-`/mass-schedule`, `/church-education`, `/church-activities`, `/clinics`, `/public-services`, `/about`, or `/contact` via
+`/mass-schedule`, `/church-education`, `/church-activities`, `/public-services`, `/about`, or `/contact` via
 `BuiltInSectionPages` in `PageBody` + `_PageSectionScope`, suppressing `EmptyState` via `isCategoryNonEmpty` when a
 built-in section's primary collection is empty and a visible linked custom page exists). `DocEditor.collect()` retains `categoryId` across `'link'` and `'nav'` saves so
 switching placement back retains the category, while `sectionPages` strictly checks `placement == 'section'`. Setting
@@ -305,7 +305,7 @@ switching placement back retains the category, while `sectionPages` strictly che
 
 ### `/ask` — `assistant_page.dart` `AssistantPage`
 Chat UI with a welcome bubble (admin `welcomeAr/En`, else `askIntroText` naming only the switched-on sections —
-liturgy times, clinics, meetings, contacts; ADR-051), **no suggestion chips by default** (PR #21:
+liturgy times, meetings, contacts; ADR-051), **no suggestion chips by default** (PR #21:
 only when admin `showSuggestions` is on, then only `suggestionsAr/En`, no built-ins; a suggestion about a hidden section
 is dropped, ADR-051), an input capped at `maxChars` (default 500), disclaimer «إجابات آلية قد
 تحتوي أخطاء». Answers only about the church and its services (ADR-029): off-topic questions get the admin refusal
@@ -325,31 +325,26 @@ counter in `AssistantConversation` still runs first (default 3 per Cairo day, 6 
 **Allowed topics & grounding:** only switched-on built-in topics plus visible usable custom sections (`Sections.customSections`) and custom pages (`Sections.customPages`) are listed under `Allowed topics:` in `buildAssistantInstruction` (PR 3I / P2-29); hidden or disabled ones never appear. Details in `05-firebase.md`.
 
 ### Item detail pages (PR #13, ADR-020) — `item_detail_page.dart` `ItemDetailPage`
-- Routes: `/church-education/:id`, `/church-activities/:id`, `/clinics/:id`, `/public-services/:id`,
+- Routes: `/church-education/:id`, `/church-activities/:id`, `/public-services/:id`,
   `/about/priests/:id`, `/about/saints/:id`, `/about/milestones/:id` (shareable; `detailPathFor(kind, id)`).
 - **Every visible item has one** (PR #14, ADR-021: opt-out — a missing `detailsEnabled` means on); an explicit
-  `detailsEnabled: false` — or hidden / unknown id / inactive
-  clinic — «هذه الصفحة غير متاحة حاليًا» + «العودة إلى …» (noindex). A departed father needs `departedPriests`, a
+  `detailsEnabled: false` or hidden / unknown id shows «هذه الصفحة غير متاحة حاليًا» + «العودة إلى …» (noindex). A departed father needs `departedPriests`, a
   serving one `priests` (else `SectionUnavailable`, noindex). Available pages are indexable with their canonical URL.
-- Layout (320 px × 200 % safe, RTL/LTR): «العودة إلى <القسم>» link; `PageHeader` with the item title (clinics:
-  specialty, doctor as subtitle; priests: rank); pills (stage / available today / rank + departed) and
+- Layout (320 px × 200 % safe, RTL/LTR): «العودة إلى <القسم>» link; `PageHeader` with the item title (priests: rank); pills (stage / rank + departed) and
   (no sample badge / note since ADR-046); hero cover (column width, 120–320 px, PR #14) and gallery
   thumbnails (104 px) **only when `showImages && showDetailImages`** — tapping any opens the zoomable
   `showImageViewer`; **«المعلومات الأساسية / Key information»** card (`Key('detailFacts')`, PR #14: labelled rows —
-  icon, small label, value — Day / Time / Place / Notes for meetings, Schedule / Ages for activities, Doctor /
-  Qualification / Days / Time for clinics, Hours for services, Ordained / Hegumen since / Departed for priests,
+  icon, small label, value — Day / Time / Place / Notes for meetings, Schedule / Ages for activities, Hours for services, Ordained / Hegumen since / Departed for priests,
   Feast / Gregorian date for saints, Year for milestones; empty rows dropped); **quick actions** (`detailActions`,
-  PR #14): «أضف إلى التقويم» (`detailAddToCalendar`, meetings with a weekday + start and clinics with days + start:
+  PR #14): «أضف إلى التقويم» (`detailAddToCalendar`, meetings with a weekday + start:
   Google Calendar template link, weekly `RRULE`, next occurrence, `ctz=Africa/Cairo`, location = church name +
   address, details = page URL — `weeklyCalendarUrl`), «الاتجاهات (GPS)» to the church (`detailDirections`, on-site
-  items — meetings, activities, clinics, services — while `contactInfo` is on), «مشاركة الرابط» (`detailShare`,
+  items — meetings, activities, services — while `contactInfo` is on), «مشاركة الرابط» (`detailShare`,
   every page: copies `absoluteDetailUrl` — canonical origin, `?lang=en` in English — and shows «تم نسخ الرابط»); summary
   (desc/bio); long text `detailsAr/En` as `SelectableText` (line height 1.8); custom fields (`extraFields`) as cream
   cards in a `ResponsiveGrid` (title primary bold, value body text, `context.pick`).
-- **Contact & registration** (when `showContacts`): Call `<phone>` (primary phone: `contactPhone`, clinics
-  `bookingPhone`, facilities `phone`), WhatsApp chat (`whatsapp`; activities: also a mobile `contactPhone`, like
-  their card; clinics pre-fill the booking message), clinics with neither fall back to «اتصل بمكتب الكنيسة» while
-  `contactInfo` is on; the `contactNoteAr/En` box.
+- **Contact & registration** (when `showContacts`): Call `<phone>` (primary phone: `contactPhone`, facilities `phone`), WhatsApp chat (`whatsapp`; activities: also a mobile `contactPhone`, like
+  their card); the `contactNoteAr/En` box.
 - **Links & pages** (when `showSocials && Sections.socials`): WhatsApp group/channel (`whatsappUrl`), Facebook,
   YouTube, Instagram, external/registration button (`externalUrl`, activities' `link`) labelled
   `externalLabelAr/En` or «افتح الصفحة». Every action has `actionSemanticLabel(action, itemTitle)`.
@@ -366,15 +361,15 @@ counter in `AssistantConversation` still runs first (default 3 per Cairo day, 6 
 - On (default) ⇒ a «التفاصيل ›» link (`DetailsLink`, `ValueKey('detailsLink-<id>')`, announced «التفاصيل — <title>»), the card
   surface opens the page (`DetailTapArea`: pointer-only `GestureDetector`, inner buttons keep their taps, no nested
   screen-reader button), and the small avatar no longer opens the viewer (`enlargeOnTap: false`; zoom lives on the
-  detail page). Applies to meetings, activities, clinics, facilities, priests, saints and milestones ("Our story").
-- Card buttons follow the item switches too: clinic call/WhatsApp/office fallback, activity phone and facility phone
+  detail page). Applies to meetings, activities, facilities, priests, saints and milestones ("Our story").
+- Card buttons follow the item switches too: activity phone and facility phone
   need `showContacts`; meeting Facebook/WhatsApp and the activity link need `showSocials && Sections.socials`
   (the activity link was previously shown even with socials off).
-- Optional `image` now also on meeting and clinic cards (beside the title, `CardImageLead`) and facility cards (in
+- Optional `image` now also on meeting cards (beside the title, `CardImageLead`) and facility cards (in
   place of the type icon); no image ⇒ identical card.
 
 ### Custom page headers & intro notes (PR #13)
-- `CustomizablePageHeader(pageKey:)` on about, schedule, education, activities, clinics, services, contact and ask
+- `CustomizablePageHeader(pageKey:)` on about, schedule, education, activities, services, contact and ask
   (incl. the "assistant unavailable" view): the admin's title / subtitle **for the current language** replace the
   built-in ones (an empty or other-language-only override keeps the built-in text). `PageIntro(pageKey:)`
   (`Key('pageIntro')`) at the top of the page shows `context.pick(introAr, introEn)` in a cream note card; nothing
@@ -411,9 +406,9 @@ on); owners can press **Send test error**. Details: `03-architecture.md` → *Er
 
 - Every card with an optional image shows it as `avatar` (round, gold halo, leads the title row), `card` (large cover
   on top, whole picture visible over a blurred sepia fill; portrait for saints) or `banner` (full width, edge to edge).
-  Item `imageStyle` → admin section default → built-in default (priests/departed & clinics `avatar`, the rest `card`).
+  Item `imageStyle` → admin section default → built-in default (priests/departed `avatar`, the rest `card`).
 - Applied to priests, saints, activities, milestones (home), meetings (timeline), alerts (banner block), seasons
-  (schedule), public services, clinics, and the detail page cover (`DetailCover`; saint detail keeps its header halo
+  (schedule), public services, and the detail page cover (`DetailCover`; saint detail keeps its header halo
   unless the style is `banner`). With `card`/`banner` the section icon is dropped from the title row.
 - No image / images off → identical to the image-less card (golden rule #9).
 

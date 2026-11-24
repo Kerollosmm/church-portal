@@ -83,7 +83,7 @@ void main() {
           now: _start.subtract(const Duration(days: 2)),
         );
 
-    test('Holy Week defaults: replace, hide meetings + clinics, hero still, no weddings', () {
+    test('Holy Week defaults: replace, hide meetings, hero still, no weddings', () {
       expect(PresetRequest.defaultsFor('holy_week'), {
         PresetOption.replaceRegular, PresetOption.hideMeetings, //
         PresetOption.heroMotionOff, PresetOption.weddingOff,
@@ -195,7 +195,7 @@ void main() {
       expect(f.weddingBookingOff, isTrue);
     });
 
-    test('after the season the previous values apply (clinics stay off: they were off)', () {
+    test('after the season the previous values apply', () {
       final f = stored.effectiveAt(_end);
       expect(f.enabled(Sections.meetings), isTrue);
       expect(f.heroMotion, isTrue);

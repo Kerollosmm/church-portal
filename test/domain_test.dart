@@ -508,7 +508,7 @@ void main() {
     });
   });
 
-  group('clinics', () {
+  group('schedule time and link helpers', () {
     test('cairoWeekday uses Cairo time', () {
       // 23:30 UTC Thursday is already Friday 01:30 in Cairo.
       expect(cairoWeekday(DateTime.utc(2026, 11, 5, 23, 30)), 5);

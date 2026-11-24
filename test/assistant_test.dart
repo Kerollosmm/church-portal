@@ -199,12 +199,12 @@ void main() {
       final t = _prompt(
         a: AssistantSettings.fromMap({
           'instructions': 'Speak like a kind deacon.',
-          'topics': '- Mass times\n\n* Clinics\n',
+          'topics': '- Mass times\n\n* Youth meetings\n',
         }),
       );
       expect(t, contains('Speak like a kind deacon.'));
       expect(t, isNot(contains(AssistantSettings.defaultInstructions)));
-      expect(t, contains('- Mass times\n- Clinics\n'));
+      expect(t, contains('- Mass times\n- Youth meetings\n'));
       expect(t, isNot(contains('- Donations page')));
       // Fixed rules cannot be edited away.
       expect(t, contains(outOfScopeToken));
