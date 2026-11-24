@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart' show kIsWeb, visibleForTesting;
 import 'package:go_router/go_router.dart';
@@ -99,22 +100,39 @@ class CollectionListScreen extends StatefulWidget {
 }
 
 class _CollectionListScreenState extends State<CollectionListScreen> {
+  final _messengerKey = GlobalKey<ScaffoldMessengerState>();
   final _search = TextEditingController();
   final _pendingDelete = PendingDelete();
-  final Map<String, ({AdminBackend repo, String collection, String title})> _pendingEntries = {};
+  final _pendingEntries = <String, ({AdminBackend repo, String collection, String title})>{};
+  final Map<String, Future<bool>> _inFlightDeleteWrites = {};
+  final Map<String, int> _deleteGen = {};
+  final Set<String> _restoringIds = {};
   final Set<String> _purging = {};
+  final Set<String> _togglingVisibility = {};
+  final Map<String, bool> _optimisticVisible = {};
+  final Map<String, bool> _latestStreamVisible = {};
+  final Map<String, int> _settledAtStreamSeq = {};
+  final Map<String, int> _streamSeqByCollection = {};
+  int _screenEpoch = 0;
   ListFilter _filter = ListFilter.all;
   PriestStatusFilter _priestFilter = PriestStatusFilter.all;
-  late Stream<List<AdminDoc>> _stream = widget.repo.watch(widget.def.name);
-  late Stream<List<AdminDoc>>? _entriesStream =
-      widget.def.name == 'categories' ? widget.repo.watch('entries') : null;
-  late Stream<List<AdminDoc>>? _pagesStream =
-      widget.def.name == 'categories' ? widget.repo.watch('pages') : null;
+  late Stream<({int seq, List<AdminDoc> docs})> _stream =
+      _trackStream(widget.def.name, widget.repo.watch(widget.def.name));
+  late Stream<({int seq, List<AdminDoc> docs})>? _entriesStream =
+      widget.def.name == 'categories' ? _trackStream('entries', widget.repo.watch('entries')) : null;
+  late Stream<({int seq, List<AdminDoc> docs})>? _pagesStream =
+      widget.def.name == 'categories' ? _trackStream('pages', widget.repo.watch('pages')) : null;
   StreamSubscription<AdminDoc?>? _featuresSub;
   bool _englishEnabled = true;
   bool _openingEditor = false;
   ScaffoldFeatureController<SnackBar, SnackBarClosedReason>? _undoSnackBarController;
+  int _undoSnackBarCount = 0;
+  bool _undoBarUsesMultiAction = false;
+  final ValueNotifier<({int count, String title})?> _undoBarState = ValueNotifier(null);
   Timer? _undoSnackBarTimer;
+  Timer? _fabCooldownTimer;
+  final _FabSnackHeightTracker _fabHeightTracker = _FabSnackHeightTracker();
+  final List<SnackBar> _deferredErrorSnacks = [];
 
   /// The list as last shown (slug uniqueness checks in the editor).
   List<AdminDoc> _lastDocs = const [];
@@ -146,11 +164,21 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
   void didUpdateWidget(covariant CollectionListScreen old) {
     super.didUpdateWidget(old);
     if (old.def.name != widget.def.name || old.repo != widget.repo) {
+      _screenEpoch++;
       _lastDocs = const [];
       _lastPages = null;
-      _stream = widget.repo.watch(widget.def.name);
-      _entriesStream = widget.def.name == 'categories' ? widget.repo.watch('entries') : null;
-      _pagesStream = widget.def.name == 'categories' ? widget.repo.watch('pages') : null;
+      _restoringIds.clear();
+      _togglingVisibility.clear();
+      _optimisticVisible.clear();
+      _latestStreamVisible.clear();
+      _settledAtStreamSeq.clear();
+      _streamSeqByCollection.clear();
+      _deferredErrorSnacks.clear();
+      _stream = _trackStream(widget.def.name, widget.repo.watch(widget.def.name));
+      _entriesStream =
+          widget.def.name == 'categories' ? _trackStream('entries', widget.repo.watch('entries')) : null;
+      _pagesStream =
+          widget.def.name == 'categories' ? _trackStream('pages', widget.repo.watch('pages')) : null;
     }
     if (old.repo != widget.repo) _bindFeatures();
     if (old.def.id != widget.def.id || old.def.name != widget.def.name) {
@@ -161,12 +189,37 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
   @override
   void dispose() {
     _undoSnackBarTimer?.cancel();
+    _fabCooldownTimer?.cancel();
     _undoSnackBarController = null;
+    _undoBarState.dispose();
+    _deferredErrorSnacks.clear();
     _featuresSub?.cancel();
     _pendingDelete.dispose();
     _pendingEntries.clear();
+    _inFlightDeleteWrites.clear();
+    _deleteGen.clear();
+    _restoringIds.clear();
     _search.dispose();
     super.dispose();
+  }
+
+  bool get _isFabHeldElevated => _undoSnackBarController != null || _fabCooldownTimer != null;
+
+  bool _isVisibleDoc(AdminDoc d) =>
+      (!isSoftDeleted(d.data) || _restoringIds.contains(d.id)) && !_pendingDelete.isPending(d.id);
+
+  void _startFabCooldown() {
+    _fabCooldownTimer?.cancel();
+    _fabCooldownTimer = Timer(const Duration(milliseconds: 650), () {
+      _fabCooldownTimer = null;
+      if (mounted) setState(() {});
+    });
+    if (mounted) setState(() {});
+  }
+
+  void _cancelFabCooldown() {
+    _fabCooldownTimer?.cancel();
+    _fabCooldownTimer = null;
   }
 
   CollectionDef get def => widget.def;
@@ -202,27 +255,37 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     return parts.join(' • ');
   }
 
+  ScaffoldMessengerState? get _messenger => _messengerKey.currentState ?? ScaffoldMessenger.maybeOf(context);
+
   @override
   Widget build(BuildContext context) {
     registerAdminStrings();
-    return Scaffold(
-      backgroundColor: context.pal.background,
-      floatingActionButton: FloatingActionButton.extended(
-        heroTag: 'add-${def.id}',
-        onPressed: () {
-          if (def.name == 'pages') {
-            _openNewPageChooser(context);
-          } else {
-            final extra = def.name == 'priests' && _priestFilter != PriestStatusFilter.all
-                ? <String, Object?>{'status': _priestFilter.name}
-                : const <String, Object?>{};
-            _openEditor(context, null, extraDefaults: extra);
-          }
-        },
-        icon: const Icon(Icons.add),
-        label: Text(context.tr('add')),
-      ),
-      body: StreamBuilder<List<AdminDoc>>(
+    return ScaffoldMessenger(
+      key: _messengerKey,
+      child: Scaffold(
+        backgroundColor: context.pal.background,
+        floatingActionButtonLocation: _UndoClearFabLocation(
+          holdElevated: _isFabHeldElevated,
+          tracker: _fabHeightTracker,
+        ),
+        floatingActionButton: FloatingActionButton.extended(
+          heroTag: 'add-${def.id}',
+          onPressed: () {
+            if (def.name == 'pages') {
+              _openNewPageChooser(context);
+            } else {
+              final extra = def.name == 'priests' && _priestFilter != PriestStatusFilter.all
+                  ? <String, Object?>{'status': _priestFilter.name}
+                  : const <String, Object?>{};
+              _openEditor(context, null, extraDefaults: extra);
+            }
+          },
+          icon: const Icon(Icons.add),
+          label: Text(context.tr('add')),
+        ),
+        body: Stack(
+          children: [
+            StreamBuilder<({int seq, List<AdminDoc> docs})>(
         // A new stream (another backend) gets a fresh StreamBuilder: a reused
         // one keeps the old backend's list while the new one loads.
         key: ObjectKey(_stream),
@@ -232,13 +295,17 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
             return Center(child: Padding(padding: const EdgeInsets.all(24), child: Text('${snap.error}')));
           }
           if (!snap.hasData) return const Center(child: CircularProgressIndicator());
+          final rawSnapshot = snap.data!;
+          _syncStreamVisibility(def.name, rawSnapshot);
           final all = sortAdminDocs(
               def,
-              snap.data!
+              rawSnapshot.docs
                   .where((d) => def.matches(d.data))
                   .toList());
-          _lastDocs = all.where((d) => !isSoftDeleted(d.data) || _pendingDelete.isPending(d.id)).toList();
-          final visible = all.where((d) => !isSoftDeleted(d.data) && !_pendingDelete.isPending(d.id)).toList();
+          _lastDocs = all
+              .where((d) => !isSoftDeleted(d.data) || _pendingDelete.isPending(d.id) || _restoringIds.contains(d.id))
+              .toList();
+          final visible = all.where(_isVisibleDoc).toList();
           final docs = filterAdminDocs(
             def,
             visible,
@@ -246,10 +313,10 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
             filter: _filter,
             statusFilter: def.name == 'priests' ? _priestFilter : PriestStatusFilter.all,
           );
-          _checkLazyPurge(snap.data!, def);
+          _checkLazyPurge(rawSnapshot.docs, def);
 
           if (def.name == 'categories' && _entriesStream != null && _pagesStream != null) {
-            return StreamBuilder<List<AdminDoc>>(
+            return StreamBuilder<({int seq, List<AdminDoc> docs})>(
               key: ObjectKey(_entriesStream),
               stream: _entriesStream,
               builder: (context, entrySnap) {
@@ -257,7 +324,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
                   return Center(child: Padding(padding: const EdgeInsets.all(24), child: Text('${entrySnap.error}')));
                 }
                 if (!entrySnap.hasData) return const Center(child: CircularProgressIndicator());
-                return StreamBuilder<List<AdminDoc>>(
+                return StreamBuilder<({int seq, List<AdminDoc> docs})>(
                   key: ObjectKey(_pagesStream),
                   stream: _pagesStream,
                   builder: (context, pageSnap) {
@@ -268,17 +335,17 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
                     if (!pageSnap.hasData) return const Center(child: CircularProgressIndicator());
                     final entriesDef = collectionById('entries')!;
                     final pagesDef = collectionById('pages')!;
-                    final rawEntries = entrySnap.data!;
+                    final entriesSnapshot = entrySnap.data!;
+                    final rawEntries = entriesSnapshot.docs;
+                    _syncStreamVisibility(entriesDef.name, entriesSnapshot);
                     _checkLazyPurge(rawEntries, entriesDef);
-                    final rawPages = pageSnap.data!;
+                    final pagesSnapshot = pageSnap.data!;
+                    final rawPages = pagesSnapshot.docs;
                     _lastPages = rawPages;
+                    _syncStreamVisibility(pagesDef.name, pagesSnapshot);
                     _checkLazyPurge(rawPages, pagesDef);
-                    final unsoftEntries = rawEntries
-                        .where((d) => !isSoftDeleted(d.data) && !_pendingDelete.isPending(d.id))
-                        .toList();
-                    final unsoftPages = rawPages
-                        .where((d) => !isSoftDeleted(d.data) && !_pendingDelete.isPending(d.id))
-                        .toList();
+                    final unsoftEntries = rawEntries.where(_isVisibleDoc).toList();
+                    final unsoftPages = rawPages.where(_isVisibleDoc).toList();
 
                     final domainEntries = [
                       for (final e in unsoftEntries) CategoryEntry.fromMap(e.id, e.data),
@@ -416,6 +483,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
           }
 
           final canReorder = def.orderable && _search.text.trim().isEmpty && _filter == ListFilter.all && docs.length > 1;
+          final bottomPad = _listBottomPadding(context);
           return CustomScrollView(slivers: [
             if (widget.showHeader)
               SliverToBoxAdapter(
@@ -431,7 +499,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
                 hasScrollBody: false,
                 child: Center(
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(12, 24, 12, 90),
+                    padding: EdgeInsets.fromLTRB(12, 24, 12, bottomPad),
                     child: Text(context.tr(visible.isEmpty ? 'noItems' : 'noMatches')),
                   ),
                 ),
@@ -442,7 +510,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
                   buildDefaultDragHandles: false,
-                  padding: const EdgeInsets.fromLTRB(12, 4, 12, 90),
+                  padding: EdgeInsets.fromLTRB(12, 4, 12, bottomPad),
                   itemCount: docs.length,
                   onReorderItem: (from, to) => _reorder(context, docs, from, to),
                   itemBuilder: (context, i) => _tile(context, docs[i], dragIndex: i, docs: docs),
@@ -450,7 +518,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
               )
             else
               SliverPadding(
-                padding: const EdgeInsets.fromLTRB(12, 4, 12, 90),
+                padding: EdgeInsets.fromLTRB(12, 4, 12, bottomPad),
                 sliver: SliverList.builder(
                   itemCount: docs.length,
                   itemBuilder: (context, i) => _tile(context, docs[i]),
@@ -459,6 +527,22 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
           ]);
         },
       ),
+            if (_fabCooldownTimer != null && _undoSnackBarController == null)
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                height: _fabHeightTracker.lastUndoSnackHeight,
+                child: GestureDetector(
+                  key: const Key('undo-vacated-tap-shield'),
+                  behavior: HitTestBehavior.opaque,
+                  excludeFromSemantics: true,
+                  onTap: () {},
+                ),
+              ),
+          ],
+        ),
+    ),
     );
   }
 
@@ -593,12 +677,13 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     if (shownCats.isEmpty && unassigned.isEmpty && shownBuiltIns.isEmpty) {
       return Center(child: Text(context.tr('noMatches')));
     }
+    final bottomPad = _listBottomPadding(context);
     if (canReorder && unassigned.isEmpty && shownBuiltIns.isEmpty) {
       return ReorderableListView.builder(
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
         buildDefaultDragHandles: false,
-        padding: const EdgeInsets.fromLTRB(12, 4, 12, 90),
+        padding: EdgeInsets.fromLTRB(12, 4, 12, bottomPad),
         itemCount: shownCats.length,
         onReorderItem: (from, to) => _reorder(context, shownCats, from, to),
         itemBuilder: (context, i) => _categoryTile(
@@ -620,7 +705,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     return ListView(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(12, 4, 12, 90),
+      padding: EdgeInsets.fromLTRB(12, 4, 12, bottomPad),
       children: [
         if (allVisibleCats.isEmpty && !hasAnyBuiltInPages)
           Card(
@@ -711,6 +796,168 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
         ),
       );
 
+  String _visKey(String collection, String id) => '$collection:$id';
+
+  Stream<({int seq, List<AdminDoc> docs})> _trackStream(
+    String collection,
+    Stream<List<AdminDoc>> source,
+  ) {
+    final epoch = _screenEpoch;
+    return source.map((docs) {
+      if (epoch != _screenEpoch) return (seq: 0, docs: docs);
+      final seq = (_streamSeqByCollection[collection] ?? 0) + 1;
+      _streamSeqByCollection[collection] = seq;
+      return (seq: seq, docs: docs);
+    });
+  }
+
+  void _syncStreamVisibility(String collection, ({int seq, List<AdminDoc> docs}) snapshot) {
+    final seq = snapshot.seq;
+    for (final d in snapshot.docs) {
+      final k = _visKey(collection, d.id);
+      final streamVisible = d.data['visible'] != false;
+      _latestStreamVisible[k] = streamVisible;
+      final settledSeq = _settledAtStreamSeq[k];
+      final hasNewerSnapshot = settledSeq != null && seq > settledSeq;
+      if (!_togglingVisibility.contains(k) &&
+          _optimisticVisible.containsKey(k) &&
+          (hasNewerSnapshot || _optimisticVisible[k] == streamVisible)) {
+        _optimisticVisible.remove(k);
+        _settledAtStreamSeq.remove(k);
+      }
+    }
+  }
+
+  void _showSnack(ScaffoldMessengerState? messenger, SnackBar bar, {bool deferWhileUndo = false}) {
+    if (!mounted || messenger == null || !messenger.mounted) return;
+    if (deferWhileUndo && _undoSnackBarController != null) {
+      _deferredErrorSnacks.add(bar);
+      return;
+    }
+    messenger.showSnackBar(bar);
+  }
+
+  void _flushDeferredErrors(ScaffoldMessengerState? messenger) {
+    if (!mounted || messenger == null || !messenger.mounted) return;
+    if (_undoSnackBarController != null || _deferredErrorSnacks.isEmpty) return;
+    for (final bar in _deferredErrorSnacks) {
+      messenger.showSnackBar(bar);
+    }
+    _deferredErrorSnacks.clear();
+  }
+
+  bool _effectiveHidden(AdminDoc d, {CollectionDef? targetDef}) {
+    final k = _visKey((targetDef ?? def).name, d.id);
+    final streamVisible = d.data['visible'] != false;
+    _latestStreamVisible[k] = streamVisible;
+    final opt = _optimisticVisible[k];
+    if (opt != null) {
+      if (!_togglingVisibility.contains(k) && streamVisible == opt) {
+        _optimisticVisible.remove(k);
+        return !streamVisible;
+      }
+      return !opt;
+    }
+    return !streamVisible;
+  }
+
+  /// Renders an admin row whose main body opens [onTap] (`DocEditor`), keeping [trailing]
+  /// (visibility toggle / desktop reorder buttons / duplicate) outside `ListTile`'s `InkWell`
+  /// and pinned to the top-end corner so rapid taps on or near the eye can never leak to [onTap].
+  Widget _splitActionRow({
+    Key? tileKey,
+    bool dense = false,
+    EdgeInsetsGeometry? contentPadding,
+    Widget? leading,
+    required Widget title,
+    Widget? subtitle,
+    required VoidCallback onTap,
+    Widget? trailing,
+    double trailingEndPadding = 8,
+  }) {
+    final effectivePadding = contentPadding ??
+        EdgeInsetsDirectional.only(
+          start: 16,
+          end: trailing == null ? 16 : 4,
+        );
+    final tile = ListTile(
+      key: tileKey,
+      dense: dense,
+      contentPadding: effectivePadding,
+      leading: leading,
+      title: title,
+      subtitle: subtitle,
+      onTap: onTap,
+    );
+    if (trailing == null) return tile;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(child: tile),
+        Padding(
+          padding: EdgeInsetsDirectional.only(top: dense ? 2 : 4, end: trailingEndPadding),
+          child: trailing,
+        ),
+      ],
+    );
+  }
+
+  double _listBottomPadding(BuildContext context) {
+    final scale = MediaQuery.textScalerOf(context).scale(1.0).clamp(1.0, 2.5);
+    final safeBottom = MediaQuery.paddingOf(context).bottom;
+    // Extended FAB starts at 56 px + 16 px Scaffold margin and grows with text scale;
+    // keep the last card's footer actions completely clear above it.
+    return 104 + (scale - 1.0) * 32 + safeBottom;
+  }
+
+  Widget _visibilityButton(
+    BuildContext context,
+    AdminDoc d, {
+    required Key key,
+    CollectionDef? targetDef,
+  }) {
+    final activeDef = targetDef ?? def;
+    final k = _visKey(activeDef.name, d.id);
+    final saving = _togglingVisibility.contains(k);
+    final hidden = _effectiveHidden(d, targetDef: activeDef);
+    final label = saving ? context.tr('savingVisibility') : context.tr(hidden ? 'show' : 'hide');
+    // Keep a constant >=48x48 hit target and always-active TapGestureRecognizer
+    // so rapid taps (even if a write completes mid-press) never leak to ListTile.onTap.
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        excludeFromSemantics: true,
+        onTap: () {},
+        child: IconButton(
+          key: key,
+          tooltip: label,
+          constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+          style: IconButton.styleFrom(
+            minimumSize: const Size(48, 48),
+            tapTargetSize: MaterialTapTargetSize.padded,
+          ),
+          onPressed: saving ? null : () => _setVisible(context, d, hidden, targetDef: activeDef),
+          icon: SizedBox.square(
+            dimension: 24,
+            child: Center(
+              child: saving
+                  ? SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: context.pal.primary),
+                    )
+                  : Icon(
+                      hidden ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                      color: hidden ? context.pal.muted : context.pal.success,
+                    ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _categoryTile(
     BuildContext context,
     AdminDoc d, {
@@ -725,7 +972,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
     List<AdminDoc>? docs,
     bool isEmptyHidden = false,
   }) {
-    final hidden = d.data['visible'] == false;
+    final hidden = _effectiveHidden(d);
     final updated = d.updatedAt;
     final narrow = MediaQuery.sizeOf(context).width < 600;
     final itemPath = itemPublicPathFor(def, d.id, d.data, english: !context.isAr);
@@ -751,7 +998,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
       margin: const EdgeInsets.only(bottom: 10),
       color: hidden ? context.pal.surfaceAlt.withValues(alpha: 0.7) : context.pal.surface,
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        ListTile(
+        _splitActionRow(
           leading: dragIndex != null
               ? ReorderableDragStartListener(index: dragIndex, child: const Icon(Icons.drag_indicator))
               : null,
@@ -780,13 +1027,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
           onTap: () => _openEditor(context, d),
           trailing: Row(mainAxisSize: MainAxisSize.min, children: [
             if (!narrow) ...moves,
-            IconButton(
-              key: ValueKey('visibility-${d.id}'),
-              tooltip: context.tr(hidden ? 'show' : 'hide'),
-              icon: Icon(hidden ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                  color: hidden ? context.pal.muted : context.pal.success),
-              onPressed: () => _setVisible(context, d, hidden),
-            ),
+            _visibilityButton(context, d, key: ValueKey('visibility-${d.id}')),
           ]),
         ),
         const Divider(height: 1),
@@ -888,12 +1129,12 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
   }
 
   Widget _sectionPageRow(BuildContext context, CollectionDef pagesDef, AdminDoc p) {
-    final hidden = p.data['visible'] == false;
+    final hidden = _effectiveHidden(p, targetDef: pagesDef);
     final sub = _subtitle(context, p, pagesDef);
-    return ListTile(
-      key: Key('sectionPageRow-${p.id}'),
+    return _splitActionRow(
+      tileKey: Key('sectionPageRow-${p.id}'),
       dense: true,
-      contentPadding: const EdgeInsetsDirectional.only(start: 20, end: 8),
+      contentPadding: const EdgeInsetsDirectional.only(start: 20, end: 4),
       leading: Icon(Icons.description_outlined, size: 18, color: context.pal.muted),
       title: Wrap(
         crossAxisAlignment: WrapCrossAlignment.center,
@@ -918,13 +1159,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
             icon: const Icon(Icons.copy_outlined),
             onPressed: () => _duplicatePage(context, p, pagesDef: pagesDef),
           ),
-          IconButton(
-            key: ValueKey('visibilitySectionPage-${p.id}'),
-            tooltip: context.tr(hidden ? 'show' : 'hide'),
-            icon: Icon(hidden ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                color: hidden ? context.pal.muted : context.pal.success),
-            onPressed: () => _setVisible(context, p, hidden, targetDef: pagesDef),
-          ),
+          _visibilityButton(context, p, key: ValueKey('visibilitySectionPage-${p.id}'), targetDef: pagesDef),
         ],
       ),
     );
@@ -948,14 +1183,14 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
   }
 
   Widget _entryRow(BuildContext context, CollectionDef entriesDef, AdminDoc e) {
-    final hidden = e.data['visible'] == false;
+    final hidden = _effectiveHidden(e, targetDef: entriesDef);
     final unconfirmed = e.data['sample'] == true;
     final sub = _subtitle(context, e, entriesDef);
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      ListTile(
-        key: ValueKey('entry-${e.id}'),
+      _splitActionRow(
+        tileKey: ValueKey('entry-${e.id}'),
         dense: true,
-        contentPadding: const EdgeInsetsDirectional.only(start: 20, end: 8),
+        contentPadding: const EdgeInsetsDirectional.only(start: 20, end: 4),
         leading: Icon(Icons.subdirectory_arrow_left_rounded, size: 18, color: context.pal.muted),
         title: Wrap(
           crossAxisAlignment: WrapCrossAlignment.center,
@@ -971,13 +1206,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
         ),
         subtitle: sub.isEmpty ? null : Text(sub),
         onTap: () => _openEditor(context, e, targetDef: entriesDef),
-        trailing: IconButton(
-          key: ValueKey('visibilityEntry-${e.id}'),
-          tooltip: context.tr(hidden ? 'show' : 'hide'),
-          icon: Icon(hidden ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-              color: hidden ? context.pal.muted : context.pal.success),
-          onPressed: () => _setVisible(context, e, hidden, targetDef: entriesDef),
-        ),
+        trailing: _visibilityButton(context, e, key: ValueKey('visibilityEntry-${e.id}'), targetDef: entriesDef),
       ),
       Padding(
         padding: const EdgeInsetsDirectional.fromSTEB(44, 0, 8, 4),
@@ -994,7 +1223,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
   }
 
   Widget _tile(BuildContext context, AdminDoc d, {int? dragIndex, List<AdminDoc>? docs}) {
-    final hidden = d.data['visible'] == false;
+    final hidden = def.hasVisible ? _effectiveHidden(d) : d.data['visible'] == false;
     final unconfirmed = d.data['sample'] == true;
     final stopped = d.data.containsKey('active') && d.data['active'] == false;
     final expired = _isExpired(def, d.data);
@@ -1038,7 +1267,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
       margin: const EdgeInsets.only(bottom: 8),
       color: hidden ? context.pal.surfaceAlt.withValues(alpha: 0.7) : context.pal.surface,
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        ListTile(
+        _splitActionRow(
           leading: dragIndex != null
               ? ReorderableDragStartListener(index: dragIndex, child: const Icon(Icons.drag_indicator))
               : null,
@@ -1083,14 +1312,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
           trailing: (!narrow && moves.isNotEmpty) || def.hasVisible
               ? Row(mainAxisSize: MainAxisSize.min, children: [
                   if (!narrow) ...moves,
-                  if (def.hasVisible)
-                    IconButton(
-                      key: ValueKey('visibility-${d.id}'),
-                      tooltip: context.tr(hidden ? 'show' : 'hide'),
-                      icon: Icon(hidden ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                          color: hidden ? context.pal.muted : context.pal.success),
-                      onPressed: () => _setVisible(context, d, hidden),
-                    ),
+                  if (def.hasVisible) _visibilityButton(context, d, key: ValueKey('visibility-${d.id}')),
                 ])
               : null,
         ),
@@ -1128,14 +1350,53 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
 
   Future<void> _setVisible(BuildContext context, AdminDoc d, bool visible, {CollectionDef? targetDef}) async {
     final activeDef = targetDef ?? def;
-    final messenger = ScaffoldMessenger.of(context);
+    final k = _visKey(activeDef.name, d.id);
+    if (_togglingVisibility.contains(k)) return;
+    final repo = widget.repo;
+    final epoch = _screenEpoch;
+    final messenger = _messenger;
     final msg = context.tr(visible ? 'nowVisible' : 'nowHidden');
     final failed = context.tr('saveFailed', {'e': '{e}'});
+    setState(() {
+      _togglingVisibility.add(k);
+      _optimisticVisible[k] = visible;
+      _settledAtStreamSeq.remove(k);
+    });
     try {
-      await widget.repo.update(activeDef.name, d.id, {'visible': visible});
-      messenger.showSnackBar(SnackBar(content: Text(msg), duration: const Duration(seconds: 2)));
+      await repo.update(activeDef.name, d.id, {'visible': visible});
+      if (!mounted || epoch != _screenEpoch || !identical(widget.repo, repo)) {
+        return;
+      }
+      setState(() {
+        _togglingVisibility.remove(k);
+        if (_latestStreamVisible[k] == visible) {
+          _optimisticVisible.remove(k);
+          _settledAtStreamSeq.remove(k);
+        } else {
+          // Stamp current snapshot sequence for this collection so unrelated
+          // streams (e.g. entries vs pages) cannot release its override early.
+          _settledAtStreamSeq[k] = _streamSeqByCollection[activeDef.name] ?? 0;
+        }
+      });
+      _showSnack(
+        messenger,
+        SnackBar(content: Text(msg), duration: const Duration(seconds: 2)),
+        deferWhileUndo: true,
+      );
     } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text(failed.replaceAll('{e}', formatAdminError(e)))));
+      if (!mounted || epoch != _screenEpoch || !identical(widget.repo, repo)) {
+        return;
+      }
+      setState(() {
+        _togglingVisibility.remove(k);
+        _optimisticVisible.remove(k);
+        _settledAtStreamSeq.remove(k);
+      });
+      _showSnack(
+        messenger,
+        SnackBar(content: Text(failed.replaceAll('{e}', formatAdminError(e)))),
+        deferWhileUndo: true,
+      );
     }
   }
 
@@ -1150,27 +1411,42 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
       for (final d in list)
         if (movedStatus == null || priestStatus(d.data) == movedStatus) d.id,
     ];
-    final messenger = ScaffoldMessenger.of(context);
+    final messenger = _messenger;
     final ok = context.tr('orderSaved');
     final failed = context.tr('saveFailed', {'e': '{e}'});
     try {
       await widget.repo.reorder(def.name, ids, base: reorderBase(def, status: movedStatus));
-      messenger.showSnackBar(SnackBar(content: Text(ok), duration: const Duration(seconds: 2)));
+      if (!mounted) return;
+      _showSnack(
+        messenger,
+        SnackBar(content: Text(ok), duration: const Duration(seconds: 2)),
+        deferWhileUndo: true,
+      );
     } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text(failed.replaceAll('{e}', formatAdminError(e)))));
+      if (!mounted) return;
+      _showSnack(
+        messenger,
+        SnackBar(content: Text(failed.replaceAll('{e}', formatAdminError(e)))),
+        deferWhileUndo: true,
+      );
     }
   }
 
+  bool _isProtectedFromPurge(String id) =>
+      _pendingDelete.isPending(id) ||
+      _restoringIds.contains(id) ||
+      _inFlightDeleteWrites.containsKey(id);
+
   void _checkLazyPurge(List<AdminDoc> docs, CollectionDef targetDef) {
     final now = DateTime.now().toUtc();
-    if (docs.any((d) => isExpiredSoftDelete(d.data, now) && !_pendingDelete.isPending(d.id))) {
+    if (docs.any((d) => isExpiredSoftDelete(d.data, now) && !_isProtectedFromPurge(d.id))) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
           purgeExpiredSoftDeletes(
             widget.repo,
             targetDef,
             docs,
-            isLocalPending: _pendingDelete.isPending,
+            isLocalPending: _isProtectedFromPurge,
             purging: _purging,
           );
         }
@@ -1189,22 +1465,26 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
 
   Future<void> _deleteItem(AdminDoc d, {CollectionDef? targetDef}) async {
     final activeDef = targetDef ?? def;
+    final id = d.id;
+    if (_pendingDelete.isPending(id)) return;
     final title = _title(d, activeDef);
-    final messenger = ScaffoldMessenger.of(context);
+    final messenger = _messenger;
     final failedMsg = context.tr('deleteFailed', {'e': '{e}'});
     final repo = widget.repo;
-    final id = d.id;
     final docData = d.data;
+    final deleteNow = DateTime.now().toUtc();
+    final gen = (_deleteGen[id] ?? 0) + 1;
+    _deleteGen[id] = gen;
+    _restoringIds.remove(id);
 
-    try {
-      await repo.update(activeDef.name, id, {'deletedAt': DateTime.now().toUtc()});
-    } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text(failedMsg.replaceAll('{e}', formatAdminError(e)))));
-      return;
-    }
+    final priorPending = [
+      for (final entry in _pendingEntries.entries.toList())
+        if (entry.key != id && _pendingDelete.isPending(entry.key)) (id: entry.key, info: entry.value),
+    ];
 
-    if (!mounted) return;
-
+    // Register the item in PendingDelete synchronously BEFORE awaiting Firestore
+    // so rapid consecutive deletes and immediate "Undo all" taps always operate on
+    // the full batch atomically and never fall back to a single-item undo bar.
     setState(() {
       _pendingEntries[id] = (repo: repo, collection: activeDef.name, title: title);
       _pendingDelete.schedule(id, () async {
@@ -1218,79 +1498,371 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
           } catch (_) {}
           if (!mounted) return;
           setState(() {});
-          messenger.showSnackBar(SnackBar(content: Text(failedMsg.replaceAll('{e}', formatAdminError(e)))));
+          _syncUndoBarAfterExpiry(messenger, failedMsg: failedMsg);
+          _showSnack(
+            messenger,
+            SnackBar(content: Text(failedMsg.replaceAll('{e}', formatAdminError(e)))),
+            deferWhileUndo: true,
+          );
+          return;
         }
+        if (!mounted) return;
+        _syncUndoBarAfterExpiry(messenger, failedMsg: failedMsg);
       });
     });
 
+    // Acquire holds BEFORE scheduling _undoSnackBarTimer so renewal anchor timers
+    // are registered ahead of the SnackBar timer and stay aligned at t = 10s.
+    final initialHoldTokens = _pendingDelete.holdAll([id]);
+    final initialToken = initialHoldTokens[id];
+    final priorHoldTokens = priorPending.isEmpty
+        ? const <String, Object>{}
+        : _pendingDelete.holdAll([for (final p in priorPending) p.id]);
+
+    _presentUndoSnackBar(
+      messenger,
+      title: title,
+      fallbackRepo: repo,
+      fallbackCollection: activeDef.name,
+      failedMsg: failedMsg,
+      resetTimer: true,
+      clearQueue: true,
+    );
+
+    // Serialize this item's soft-delete write behind any earlier in-flight write
+    // for the same id so updates arrive in order.
+    final priorSelfWrite = _inFlightDeleteWrites[id];
+    late final Future<bool> selfWrite;
+    selfWrite = () async {
+      if (priorSelfWrite != null) {
+        try {
+          await priorSelfWrite;
+        } catch (_) {}
+      }
+      var written = false;
+      try {
+        await repo.update(activeDef.name, id, {'deletedAt': deleteNow});
+        written = true;
+      } catch (e) {
+        if (mounted && _deleteGen[id] == gen) {
+          _pendingDelete.undo(id);
+          _pendingEntries.remove(id);
+          setState(() {});
+          _syncUndoBarAfterExpiry(messenger, failedMsg: failedMsg);
+          _showSnack(
+            messenger,
+            SnackBar(content: Text(failedMsg.replaceAll('{e}', formatAdminError(e)))),
+            deferWhileUndo: true,
+          );
+        }
+        return false;
+      }
+      if (!mounted) return written;
+      if (_deleteGen[id] == gen) {
+        await _pendingDelete.releaseHold(id, extend: true, token: initialToken);
+        if (mounted) _syncUndoBarAfterExpiry(messenger, failedMsg: failedMsg);
+      }
+      return written;
+    }();
+    _inFlightDeleteWrites[id] = selfWrite;
+    unawaited(selfWrite.whenComplete(() {
+      if (identical(_inFlightDeleteWrites[id], selfWrite)) {
+        _inFlightDeleteWrites.remove(id);
+      }
+    }));
+
+    // Renew deletedAt for every prior pending item, serialized per item so slower
+    // earlier renewals never overwrite newer deletedAt timestamps.
+    for (final p in priorPending) {
+      final token = priorHoldTokens[p.id];
+      final priorGen = _deleteGen[p.id];
+      final prevChain = _inFlightDeleteWrites[p.id];
+      late final Future<bool> chainedRenewal;
+      chainedRenewal = () async {
+        var priorWritten = true;
+        if (prevChain != null) {
+          try {
+            priorWritten = await prevChain;
+          } catch (_) {
+            priorWritten = false;
+          }
+        }
+        if (!mounted || _deleteGen[p.id] != priorGen || !_pendingDelete.isPending(p.id)) {
+          return priorWritten;
+        }
+        var renewed = false;
+        try {
+          await p.info.repo.update(p.info.collection, p.id, {'deletedAt': deleteNow});
+          renewed = true;
+        } catch (_) {}
+        if (!mounted) return priorWritten || renewed;
+        if (_deleteGen[p.id] == priorGen) {
+          await _pendingDelete.releaseHold(p.id, extend: renewed, token: token);
+          if (mounted) _syncUndoBarAfterExpiry(messenger, failedMsg: failedMsg);
+        }
+        return priorWritten || renewed;
+      }();
+      _inFlightDeleteWrites[p.id] = chainedRenewal;
+      unawaited(chainedRenewal.whenComplete(() {
+        if (identical(_inFlightDeleteWrites[p.id], chainedRenewal)) {
+          _inFlightDeleteWrites.remove(p.id);
+        }
+      }));
+    }
+  }
+
+  void _syncUndoBarAfterExpiry(ScaffoldMessengerState? messenger, {required String failedMsg}) {
+    if (!mounted) return;
+    if (!_pendingDelete.hasPending) {
+      final hadActiveUndoBar = _undoSnackBarController != null;
+      _undoSnackBarTimer?.cancel();
+      _undoSnackBarTimer = null;
+      _undoSnackBarController = null;
+      _undoSnackBarCount = 0;
+      _undoBarUsesMultiAction = false;
+      _undoBarState.value = null;
+      if (hadActiveUndoBar) {
+        _startFabCooldown();
+        if (messenger != null && messenger.mounted) {
+          messenger.removeCurrentSnackBar();
+        }
+      }
+      _flushDeferredErrors(messenger);
+      return;
+    }
     final pendingCount = _pendingDelete.pendingIds.length;
-    final snackText = pendingCount > 1
-        ? context.tr('deletedItemMultiUndo', {'n': '$pendingCount', 'last': title})
-        : context.tr('deletedItemUndo', {'n': title});
-    final actionLabel = context.tr(pendingCount > 1 ? 'undoAll' : 'undo');
+    if (_undoSnackBarController == null || _undoSnackBarCount == pendingCount) return;
+    final last = _pendingEntries.values.isNotEmpty ? _pendingEntries.values.last : null;
+    if (last == null) return;
+    _presentUndoSnackBar(
+      messenger,
+      title: last.title,
+      fallbackRepo: last.repo,
+      fallbackCollection: last.collection,
+      failedMsg: failedMsg,
+      resetTimer: false,
+      clearQueue: false,
+    );
+  }
+
+  void _scheduleUndoSnackBarTimer(
+    ScaffoldMessengerState messenger, {
+    required String failedMsg,
+  }) {
+    _undoSnackBarTimer?.cancel();
+    _undoSnackBarTimer = Timer(const Duration(seconds: 10), () {
+      if (!mounted) return;
+      if (_pendingDelete.hasPending && _pendingEntries.values.isNotEmpty) {
+        final last = _pendingEntries.values.last;
+        _presentUndoSnackBar(
+          messenger,
+          title: last.title,
+          fallbackRepo: last.repo,
+          fallbackCollection: last.collection,
+          failedMsg: failedMsg,
+          resetTimer: true,
+          clearQueue: false,
+        );
+        return;
+      }
+      final hadActiveUndoBar = _undoSnackBarController != null;
+      _undoSnackBarTimer = null;
+      _undoSnackBarController = null;
+      _undoSnackBarCount = 0;
+      _undoBarUsesMultiAction = false;
+      _undoBarState.value = null;
+      if (hadActiveUndoBar) {
+        _startFabCooldown();
+        if (messenger.mounted) messenger.removeCurrentSnackBar();
+      }
+      _flushDeferredErrors(messenger);
+    });
+  }
+
+  Future<void> _undoAllPending(
+    ScaffoldMessengerState messenger, {
+    required AdminBackend fallbackRepo,
+    required String fallbackCollection,
+    required String failedMsg,
+  }) async {
     _undoSnackBarTimer?.cancel();
     _undoSnackBarTimer = null;
-    _undoSnackBarController?.close();
     _undoSnackBarController = null;
+    _undoSnackBarCount = 0;
+    _undoBarUsesMultiAction = false;
+    _undoBarState.value = null;
+    _startFabCooldown();
+    if (messenger.mounted) messenger.removeCurrentSnackBar();
+
+    final ids = _pendingDelete.pendingIds.toList();
+    final undone = <({String id, AdminBackend repo, String collection, Future<bool>? inFlight})>[];
+    for (final pid in ids) {
+      if (_pendingDelete.undo(pid)) {
+        _deleteGen[pid] = (_deleteGen[pid] ?? 0) + 1;
+        final entry = _pendingEntries.remove(pid);
+        _restoringIds.add(pid);
+        undone.add((
+          id: pid,
+          repo: entry?.repo ?? fallbackRepo,
+          collection: entry?.collection ?? fallbackCollection,
+          inFlight: _inFlightDeleteWrites[pid],
+        ));
+      }
+    }
+    if (mounted && undone.isNotEmpty) setState(() {});
+    // Yield past SnackBarAction._handlePressed()'s trailing hideCurrentSnackBar call
+    // so flushed errors are not immediately dismissed as if they were the Undo bar.
+    await Future<void>.microtask(() {});
+    _flushDeferredErrors(messenger);
+    if (undone.isEmpty) return;
+
+    final restoreTasks = <Future<bool>>[];
+    for (final item in undone) {
+      late final Future<bool> restoreFuture;
+      restoreFuture = () async {
+        var hadSoftDeleteWrite = true;
+        if (item.inFlight != null) {
+          try {
+            hadSoftDeleteWrite = await item.inFlight!;
+          } catch (_) {
+            hadSoftDeleteWrite = false;
+          }
+        }
+        if (!hadSoftDeleteWrite) {
+          _restoringIds.remove(item.id);
+          if (mounted) setState(() {});
+          return false;
+        }
+        try {
+          await item.repo.update(item.collection, item.id, {'deletedAt': null});
+          return false;
+        } catch (e) {
+          if (mounted) {
+            _showSnack(
+              messenger,
+              SnackBar(content: Text(failedMsg.replaceAll('{e}', formatAdminError(e)))),
+              deferWhileUndo: true,
+            );
+          }
+          return true;
+        } finally {
+          _restoringIds.remove(item.id);
+          if (mounted) setState(() {});
+        }
+      }();
+      _inFlightDeleteWrites[item.id] = restoreFuture;
+      unawaited(restoreFuture.whenComplete(() {
+        if (identical(_inFlightDeleteWrites[item.id], restoreFuture)) {
+          _inFlightDeleteWrites.remove(item.id);
+        }
+      }));
+      restoreTasks.add(restoreFuture);
+    }
+    await Future.wait(restoreTasks);
+  }
+
+  void _presentUndoSnackBar(
+    ScaffoldMessengerState? messenger, {
+    required String title,
+    required AdminBackend fallbackRepo,
+    required String fallbackCollection,
+    required String failedMsg,
+    required bool resetTimer,
+    bool clearQueue = false,
+  }) {
+    if (!mounted || messenger == null || !messenger.mounted) return;
+    final pendingCount = _pendingDelete.pendingIds.length;
+    if (pendingCount == 0) return;
+    final wantMulti = pendingCount > 1;
+    _undoBarState.value = (count: pendingCount, title: title);
+    _undoSnackBarCount = pendingCount;
+    _cancelFabCooldown();
+
+    // Update the active Undo bar in place when the action label stays identical
+    // (e.g., 2 -> 3 -> 4 deletes keep "Undo all") to avoid ScaffoldMessenger queue
+    // churn, exit/re-entry flicker, or FAB bounce.
+    if (_undoSnackBarController != null && _undoBarUsesMultiAction == wantMulti) {
+      if (resetTimer) {
+        _scheduleUndoSnackBarTimer(messenger, failedMsg: failedMsg);
+      }
+      return;
+    }
+
+    final actionLabel = context.tr(wantMulti ? 'undoAll' : 'undo');
+    if (resetTimer) {
+      _undoSnackBarTimer?.cancel();
+      _undoSnackBarTimer = null;
+    }
+    _undoSnackBarController = null;
+    _undoBarUsesMultiAction = wantMulti;
+    // Clear prior non-undo queues on user-initiated deletes so the Undo bar always
+    // shows immediately at the front, while automatic expiry refreshes preserve queued bars.
+    if (clearQueue) messenger.clearSnackBars();
     messenger.removeCurrentSnackBar();
     final undoController = messenger.showSnackBar(
       SnackBar(
         duration: const Duration(seconds: 10),
-        persist: false,
-        content: Text(snackText),
+        persist: true,
+        content: ValueListenableBuilder<({int count, String title})?>(
+          valueListenable: _undoBarState,
+          builder: (ctx, state, _) {
+            final count = state?.count ?? pendingCount;
+            final lastTitle = state?.title ?? title;
+            final text = count > 1
+                ? ctx.tr('deletedItemMultiUndo', {'n': '$count', 'last': lastTitle})
+                : ctx.tr('deletedItemUndo', {'n': lastTitle});
+            return Text(text);
+          },
+        ),
         action: SnackBarAction(
           label: actionLabel,
-          onPressed: () async {
-            _undoSnackBarTimer?.cancel();
-            _undoSnackBarTimer = null;
-            _undoSnackBarController = null;
-            messenger.removeCurrentSnackBar();
-            final ids = _pendingDelete.pendingIds.toList();
-            final undone = <({String id, AdminBackend repo, String collection})>[];
-            for (final pid in ids) {
-              if (_pendingDelete.undo(pid)) {
-                final entry = _pendingEntries.remove(pid);
-                undone.add((
-                  id: pid,
-                  repo: entry?.repo ?? repo,
-                  collection: entry?.collection ?? activeDef.name,
-                ));
-              }
-            }
-            if (undone.isEmpty) return;
-            if (mounted) setState(() {});
-            for (final item in undone) {
-              try {
-                await item.repo.update(item.collection, item.id, {'deletedAt': null});
-              } catch (e) {
-                if (!mounted) return;
-                messenger.showSnackBar(SnackBar(content: Text(failedMsg.replaceAll('{e}', formatAdminError(e)))));
-              }
-            }
-          },
+          onPressed: () => _undoAllPending(
+            messenger,
+            fallbackRepo: fallbackRepo,
+            fallbackCollection: fallbackCollection,
+            failedMsg: failedMsg,
+          ),
         ),
       ),
     );
     _undoSnackBarController = undoController;
-    undoController.closed.then((_) {
+    setState(() {});
+    undoController.closed.then((reason) {
       if (identical(_undoSnackBarController, undoController)) {
         _undoSnackBarController = null;
+        _undoSnackBarCount = 0;
+        _undoBarUsesMultiAction = false;
+        _undoBarState.value = null;
         _undoSnackBarTimer?.cancel();
         _undoSnackBarTimer = null;
+        if (reason == SnackBarClosedReason.timeout &&
+            mounted &&
+            _pendingDelete.hasPending &&
+            _pendingEntries.values.isNotEmpty) {
+          final last = _pendingEntries.values.last;
+          _presentUndoSnackBar(
+            messenger,
+            title: last.title,
+            fallbackRepo: last.repo,
+            fallbackCollection: last.collection,
+            failedMsg: failedMsg,
+            resetTimer: true,
+          );
+        } else {
+          _startFabCooldown();
+          _flushDeferredErrors(messenger);
+        }
       }
     });
-    _undoSnackBarTimer = Timer(const Duration(seconds: 10), () {
-      if (!mounted) return;
-      _undoSnackBarController?.close();
-      _undoSnackBarController = null;
-      ScaffoldMessenger.maybeOf(context)?.removeCurrentSnackBar();
-    });
+    if (resetTimer) {
+      _scheduleUndoSnackBarTimer(messenger, failedMsg: failedMsg);
+    }
   }
 
   /// Deleting a custom category hides its items (visible: false) first and
   /// never deletes them (ADR-027); they can be moved to another category.
   Future<void> _deleteCategory(AdminDoc d) async {
-    final messenger = ScaffoldMessenger.of(context);
+    final messenger = _messenger;
     final failedMsg = context.tr('deleteFailed', {'e': '{e}'});
     final deletedMsg = context.tr('catDeleted');
     List<AdminDoc> entries;
@@ -1298,7 +1870,7 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
       entries = await widget.repo.watch('entries').first.timeout(const Duration(seconds: 15));
     } catch (e) {
       if (!mounted) return;
-      messenger.showSnackBar(SnackBar(content: Text(failedMsg.replaceAll('{e}', formatAdminError(e)))));
+      _showSnack(messenger, SnackBar(content: Text(failedMsg.replaceAll('{e}', formatAdminError(e)))));
       return;
     }
     final inCat = entries.where((e) => e.data['categoryId'] == d.id).length;
@@ -1325,10 +1897,10 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
         await widget.repo.update('entries', id, {'visible': false});
       }
       await widget.repo.delete(def.name, d.id);
-      messenger.showSnackBar(SnackBar(content: Text(deletedMsg)));
+      _showSnack(messenger, SnackBar(content: Text(deletedMsg)));
     } catch (e) {
       if (!mounted) return;
-      messenger.showSnackBar(SnackBar(content: Text(failedMsg.replaceAll('{e}', formatAdminError(e)))));
+      _showSnack(messenger, SnackBar(content: Text(failedMsg.replaceAll('{e}', formatAdminError(e)))));
     }
   }
 
@@ -1567,12 +2139,13 @@ class _CollectionListScreenState extends State<CollectionListScreen> {
         existingDocs: editDef.name == def.name
             ? [
                 for (final x in _lastDocs)
-                  if (!isSoftDeleted(x.data) && !_pendingDelete.isPending(x.id)) x,
+                  if (_isVisibleDoc(x)) x,
               ]
             : const [],
         seasons: seasons,
         englishEnabled: _englishEnabled,
         initialNotice: initialNotice,
+        popMessenger: _messenger,
       ),
     ));
   }
@@ -1608,6 +2181,46 @@ String? itemPublicPathFor(CollectionDef def, String id, Map<String, dynamic> dat
 /// First `order` value minus 10 for [def]'s reorder (BUG-13).
 int reorderBase(CollectionDef def, {String? status}) =>
     (def.id == 'departedPriests' || status == 'departed') ? 1000 : 0;
+
+class _FabSnackHeightTracker {
+  double lastUndoSnackHeight = 64.0;
+}
+
+/// Places the "Add" FAB at standard `endFloat` normally, and elevates it with a
+/// clear 48 px vertical gap above an active Undo SnackBar. Holds that elevated
+/// clearance across SnackBar swaps and during a 650 ms post-close cooldown so
+/// stray follow-up taps aimed at the vacated Undo button never hit the FAB.
+class _UndoClearFabLocation extends StandardFabLocation with FabEndOffsetX, FabFloatOffsetY {
+  final bool holdElevated;
+  final _FabSnackHeightTracker tracker;
+  const _UndoClearFabLocation({required this.holdElevated, required this.tracker});
+
+  static const double undoGap = 48.0;
+
+  @override
+  double getOffsetY(ScaffoldPrelayoutGeometry scaffoldGeometry, double adjustment) {
+    final baseY = super.getOffsetY(scaffoldGeometry, adjustment);
+    if (!holdElevated) return baseY;
+    final snackH = scaffoldGeometry.snackBarSize.height;
+    if (snackH > 0.0) {
+      tracker.lastUndoSnackHeight = math.max(snackH, 56.0);
+    }
+    final fabH = scaffoldGeometry.floatingActionButtonSize.height;
+    final effectiveSnackH = math.max(snackH, tracker.lastUndoSnackHeight);
+    final desiredY = scaffoldGeometry.contentBottom - effectiveSnackH - fabH - undoGap;
+    final minY = scaffoldGeometry.contentTop + kFloatingActionButtonMargin;
+    return math.max(minY, math.min(baseY, desiredY));
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      other is _UndoClearFabLocation &&
+      other.holdElevated == holdElevated &&
+      identical(other.tracker, tracker);
+
+  @override
+  int get hashCode => Object.hash(holdElevated, identityHashCode(tracker));
+}
 
 class _Tag extends StatelessWidget {
   final String text;

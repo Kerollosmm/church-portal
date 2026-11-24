@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' show PointerDeviceKind, Tristate;
 
+import 'package:fake_async/fake_async.dart';
 import 'package:firebase_core/firebase_core.dart';
 
 import 'package:church_portal/core/theme.dart';
@@ -58,6 +59,76 @@ void main() {
   setUpAll(CairoTime.ensureInitialized);
 
   group('field validation', () {
+    test('validateScheduledNotificationFields maps each invalid field to its exact key and preserves wrapper precedence',
+        () {
+      ScheduledNotification row({
+        String id = 'n1',
+        String targets = 'all',
+        String titleAr = 'عنوان تجربة',
+        String titleEn = '',
+        String bodyAr = 'نص تجربة',
+        String bodyEn = '',
+        String link = '/',
+        String eventKey = '',
+      }) =>
+          ScheduledNotification(
+            id: id,
+            atUtc: DateTime.utc(2026, 12, 1, 9, 0),
+            targets: targets,
+            titleAr: titleAr,
+            titleEn: titleEn,
+            bodyAr: bodyAr,
+            bodyEn: bodyEn,
+            link: link,
+            eventKey: eventKey,
+          );
+
+      // Simultaneous empty Arabic title and body -> both mapped, wrapper returns title required
+      final emptyBoth = row(titleAr: '   ', bodyAr: '');
+      expect(
+        validateScheduledNotificationFields(emptyBoth),
+        {'titleAr': 'err_title_required', 'bodyAr': 'err_body_required'},
+      );
+      expect(validateScheduledNotification(emptyBoth), 'err_title_required');
+
+      // Surrogate-pair emoji / UTF-16 > 120 in titleEn maps ONLY to titleEn (never titleAr)
+      final longTitleEn = row(titleEn: '🙏' * 61); // 122 UTF-16 code units, 61 grapheme clusters
+      expect(validateScheduledNotificationFields(longTitleEn), {'titleEn': 'err_title_length'});
+      expect(validateScheduledNotification(longTitleEn), 'err_title_length');
+
+      // bodyEn > 300 maps ONLY to bodyEn (never bodyAr)
+      final longBodyEn = row(bodyEn: 'a' * 301);
+      expect(validateScheduledNotificationFields(longBodyEn), {'bodyEn': 'err_body_length'});
+      expect(validateScheduledNotification(longBodyEn), 'err_body_length');
+
+      // Separator \u001f in bodyEn and titleAr maps to each offending field
+      expect(
+        validateScheduledNotificationFields(row(titleAr: 'أ\u001fب', bodyEn: 'x\u001fy')),
+        {'titleAr': 'err_bad_char', 'bodyEn': 'err_bad_char'},
+      );
+      expect(validateScheduledNotification(row(bodyEn: 'x\u001fy')), 'err_bad_char');
+
+      // Link & eventKey
+      expect(validateScheduledNotificationFields(row(link: 'https://evil.com')), {'link': 'err_bad_link'});
+      expect(validateScheduledNotification(row(link: 'https://evil.com')), 'err_bad_link');
+      expect(validateScheduledNotificationFields(row(eventKey: 'bad-key')), {'link': 'err_invalid_event_key'});
+      expect(validateScheduledNotification(row(eventKey: 'bad-key')), 'err_invalid_event_key');
+
+      // Targets & ID
+      expect(validateScheduledNotificationFields(row(targets: 'sms')), {'targets': 'err_invalid_targets'});
+      expect(validateScheduledNotification(row(targets: 'sms')), 'err_invalid_targets');
+      expect(validateScheduledNotificationFields(row(id: 'BAD ID!')), {'id': 'err_invalid_id'});
+      expect(validateScheduledNotification(row(id: 'BAD ID!')), 'err_invalid_id');
+
+      // Precedence when length error in EN co-occurs with bad char in AR
+      final mixed = row(titleAr: 'أ\u001fب', titleEn: 'e' * 121);
+      expect(validateScheduledNotification(mixed), 'err_title_length');
+
+      // Valid row -> empty map and null wrapper
+      expect(validateScheduledNotificationFields(row()), isEmpty);
+      expect(validateScheduledNotification(row()), isNull);
+    });
+
     test('validateHeadingBlock and heading in validateDocument', () {
       expect(validateHeadingBlock({'textAr': ''}, BlockTypes.heading), 'required');
       expect(validateHeadingBlock({'textAr': '   '}, BlockTypes.heading), 'required');
@@ -1356,6 +1427,370 @@ void main() {
       expect(commits, 2);
     });
 
+    test('extendAll resets timers of all pending entries to a fresh window and holdCount ref-counts overlapping holds', () {
+      fakeAsync((async) {
+        final pd = PendingDelete(window: const Duration(milliseconds: 120));
+        final committed = <String>[];
+        pd.schedule('a', () async => committed.add('a'));
+        async.elapse(const Duration(milliseconds: 70));
+        pd.schedule('b', () async => committed.add('b'));
+        pd.extendAll();
+
+        // At 150 ms from 'a' (> 120 ms original window, 80 ms after extendAll), neither has committed.
+        async.elapse(const Duration(milliseconds: 80));
+        expect(pd.isPending('a'), isTrue);
+        expect(pd.isPending('b'), isTrue);
+        expect(committed, isEmpty);
+
+        // Undo both before extended deadline -> zero commits.
+        expect(pd.undo('a'), isTrue);
+        expect(pd.undo('b'), isTrue);
+        async.elapse(const Duration(milliseconds: 150));
+        expect(committed, isEmpty);
+
+        // Without undo, extendAll commits both after the extended window.
+        pd.schedule('c', () async => committed.add('c'));
+        async.elapse(const Duration(milliseconds: 70));
+        pd.schedule('d', () async => committed.add('d'));
+        pd.extendAll();
+        async.elapse(const Duration(milliseconds: 80));
+        expect(committed, isEmpty);
+        async.elapse(const Duration(milliseconds: 50));
+        expect(committed.toSet(), {'c', 'd'});
+
+        // Overlapping holdAll / releaseHold ref-counts holds cleanly across concurrent renewals.
+        pd.schedule('x', () async => committed.add('x'));
+        async.elapse(const Duration(milliseconds: 80));
+        pd.holdAll(['x']); // hold #1
+        pd.holdAll(['x']); // hold #2
+        async.elapse(const Duration(milliseconds: 60)); // original deadline passes while held
+        expect(committed.contains('x'), isFalse);
+
+        // First renewal finishes without extending -> x MUST stay held because hold #2 is still active.
+        unawaited(pd.releaseHold('x', extend: false));
+        async.flushMicrotasks();
+        expect(committed.contains('x'), isFalse);
+
+        // Second renewal releases without extending -> expiredWhileHeld triggers immediate commit.
+        unawaited(pd.releaseHold('x', extend: false));
+        async.flushMicrotasks();
+        expect(committed, contains('x'));
+
+        // Stale hold token acquired before undo must never release or commit a replacement entry.
+        pd.schedule('y', () async => committed.add('y1'));
+        final staleTokens = pd.holdAll(['y']);
+        pd.undo('y');
+        pd.schedule('y', () async => committed.add('y2'));
+        final freshTokens = pd.holdAll(['y']);
+        async.elapse(const Duration(milliseconds: 120)); // replacement expires while held by freshTokens
+        unawaited(pd.releaseHold('y', extend: false, token: staleTokens['y']));
+        async.flushMicrotasks();
+        expect(committed.contains('y2'), isFalse);
+        unawaited(pd.releaseHold('y', extend: false, token: freshTokens['y']));
+        async.flushMicrotasks();
+        expect(committed, contains('y2'));
+
+        // Anchor timer aligns successful renewal expiry with hold acquisition (backend deletedAt + window),
+        // and commits immediately if the anchor already elapsed during a slow renewal (window = 120ms).
+        pd.schedule('z', () async => committed.add('z'));
+        async.elapse(const Duration(milliseconds: 50));
+        final zHold = pd.holdAll(['z']); // anchor deadline = +120ms from now (t+170ms)
+        async.elapse(const Duration(milliseconds: 80)); // original t+120ms elapsed; anchor still has 40ms left
+        unawaited(pd.releaseHold('z', extend: true, token: zHold['z']));
+        async.flushMicrotasks();
+        expect(committed.contains('z'), isFalse);
+        async.elapse(const Duration(milliseconds: 35)); // 5ms before anchor deadline
+        expect(committed.contains('z'), isFalse);
+        async.elapse(const Duration(milliseconds: 10)); // crosses anchor deadline -> commits at backend deadline
+        expect(committed, contains('z'));
+
+        pd.schedule('w', () async => committed.add('w'));
+        final wHold = pd.holdAll(['w']);
+        async.elapse(const Duration(milliseconds: 130)); // slow RPC finishes AFTER 120ms anchor elapsed
+        unawaited(pd.releaseHold('w', extend: true, token: wHold['w']));
+        async.flushMicrotasks();
+        expect(committed, contains('w'));
+
+        // Adopted anchor timer stays active across subsequent failed renewals:
+        // (a) H1 succeeds -> adopts H1's 120ms anchor; H2 starts then fails BEFORE anchor expires -> commits at H1 anchor.
+        pd.schedule('a', () async => committed.add('a'));
+        final aHold1 = pd.holdAll(['a']);
+        async.elapse(const Duration(milliseconds: 50));
+        unawaited(pd.releaseHold('a', extend: true, token: aHold1['a'])); // ~70ms remaining
+        async.flushMicrotasks();
+        expect(committed.contains('a'), isFalse);
+        final aHold2 = pd.holdAll(['a']);
+        async.elapse(const Duration(milliseconds: 20)); // ~50ms remaining on H1 anchor
+        unawaited(pd.releaseHold('a', extend: false, token: aHold2['a']));
+        async.flushMicrotasks();
+        expect(committed.contains('a'), isFalse);
+        async.elapse(const Duration(milliseconds: 45)); // 5ms before H1 anchor deadline
+        expect(committed.contains('a'), isFalse);
+        async.elapse(const Duration(milliseconds: 10)); // crosses H1 anchor deadline
+        expect(committed, contains('a'));
+
+        // (b) H1 succeeds -> adopts H1's 120ms anchor; H2 spans PAST H1's anchor deadline then fails -> commits on release.
+        pd.schedule('b', () async => committed.add('b'));
+        final bHold1 = pd.holdAll(['b']);
+        async.elapse(const Duration(milliseconds: 50));
+        unawaited(pd.releaseHold('b', extend: true, token: bHold1['b'])); // ~70ms remaining
+        async.flushMicrotasks();
+        final bHold2 = pd.holdAll(['b']);
+        async.elapse(const Duration(milliseconds: 90)); // H1 anchor expires while held by H2
+        async.flushMicrotasks();
+        expect(committed.contains('b'), isFalse);
+        unawaited(pd.releaseHold('b', extend: false, token: bHold2['b']));
+        async.flushMicrotasks();
+        expect(committed, contains('b'));
+      });
+    });
+
+    testWidgets('_syncUndoBarAfterExpiry preserves newer SnackBar when slow delete completes after undo expiry',
+        (tester) async {
+      tester.view.physicalSize = const Size(900, 1000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final repo = _ControlledUpdateBackend(initialCollections: {
+        'saints': [
+          AdminDoc('s1', {'nameAr': 'مارمرقس', 'visible': true, 'order': 10}),
+          AdminDoc('s2', {'nameAr': 'مارجرجس', 'visible': true, 'order': 20}),
+        ],
+      });
+      addTearDown(repo.dispose);
+
+      await tester.pumpWidget(_app(
+        CollectionListScreen(repo: repo, def: collectionById('saints')!),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      final delHold = repo.holdDelete('saints', 's1');
+      await tester.tap(find.byKey(const ValueKey('delete-s1')));
+      await tester.pump();
+      expect(find.text('تراجع'), findsOneWidget);
+
+      // Let the 10 s undo bar expire while repo.delete is still in flight.
+      await tester.pump(const Duration(seconds: 10));
+      await tester.pumpAndSettle();
+      expect(find.text('تراجع'), findsNothing);
+
+      // Show a fresh informational visibility SnackBar before delHold completes.
+      await tester.tap(find.byKey(const ValueKey('visibility-s2')));
+      await tester.pump();
+      expect(find.text('أصبح العنصر مخفيًا'), findsOneWidget);
+
+      delHold.complete();
+      await tester.pumpAndSettle();
+      expect(find.text('أصبح العنصر مخفيًا'), findsOneWidget);
+
+      // Failed commit also syncs the Undo bar state cleanly before surfacing the error SnackBar.
+      final failHold = repo.holdDelete('saints', 's2');
+      await tester.tap(find.byKey(const ValueKey('delete-s2')));
+      await tester.pump();
+      expect(find.text('تراجع'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 10));
+      failHold.completeError(StateError('delete failed'));
+      await tester.pumpAndSettle();
+      expect(find.text('تراجع'), findsNothing);
+      expect(find.textContaining('delete failed'), findsOneWidget);
+    });
+
+    testWidgets('slow batch renewal aligns with backend deletedAt and deferred visibility error survives Undo refresh',
+        (tester) async {
+      tester.view.physicalSize = const Size(900, 1000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final repo = _ControlledUpdateBackend(initialCollections: {
+        'saints': [
+          AdminDoc('s1', {'nameAr': 'مارمرقس', 'visible': true, 'order': 10}),
+          AdminDoc('s2', {'nameAr': 'مارجرجس', 'visible': true, 'order': 20}),
+          AdminDoc('s3', {'nameAr': 'مارمينا', 'visible': true, 'order': 30}),
+        ],
+      });
+      addTearDown(repo.dispose);
+
+      await tester.pumpWidget(_app(
+        CollectionListScreen(repo: repo, def: collectionById('saints')!),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      // Delete s1 at t=0, advance 2s, then delete s2 at t=2s while holding s1's renewal.
+      await tester.tap(find.byKey(const ValueKey('delete-s1')));
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 2));
+
+      final s1Renew = repo.hold('saints', 's1');
+      await tester.tap(find.byKey(const ValueKey('delete-s2')));
+      await tester.pump();
+
+      // Fail a visibility toggle on s3 while Undo bar is active -> deferred error survives bar refresh.
+      final visFail = repo.hold('saints', 's3');
+      await tester.tap(find.byKey(const ValueKey('visibility-s3')));
+      await tester.pump();
+      visFail.completeError(FirebaseException(plugin: 'cloud_firestore', code: 'permission-denied', message: 'Denied'));
+      await tester.pump();
+
+      // Complete s1's renewal at t=11s -> anchor deadline from t=2s (+10s) expires at t=12s (aligned with s2).
+      await tester.pump(const Duration(seconds: 9));
+      s1Renew.complete();
+      await tester.pump();
+      expect(find.text('تراجع عن الكل'), findsOneWidget);
+
+      // Advance past t=12s -> both s1 and s2 commit together at backend deadline, and deferred error surfaces!
+      await tester.pump(const Duration(seconds: 2));
+      await tester.pumpAndSettle();
+      expect(repo.deletedIds, containsAll(['saints/s1', 'saints/s2']));
+      expect(find.textContaining('permission-denied'), findsOneWidget);
+    });
+
+    testWidgets('deferred visibility error flushes immediately when Undo closes even if restore write stalls',
+        (tester) async {
+      tester.view.physicalSize = const Size(900, 1000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final repo = _ControlledUpdateBackend(initialCollections: {
+        'saints': [
+          AdminDoc('s1', {'nameAr': 'مارمرقس', 'visible': true, 'order': 10}),
+          AdminDoc('s2', {'nameAr': 'مارجرجس', 'visible': true, 'order': 20}),
+        ],
+      });
+      addTearDown(repo.dispose);
+
+      await tester.pumpWidget(_app(
+        CollectionListScreen(repo: repo, def: collectionById('saints')!),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('delete-s1')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(find.text('تراجع'), findsOneWidget);
+
+      final visFail = repo.hold('saints', 's2');
+      await tester.tap(find.byKey(const ValueKey('visibility-s2')));
+      await tester.pump();
+      visFail.completeError(FirebaseException(plugin: 'cloud_firestore', code: 'permission-denied', message: 'Denied'));
+      await tester.pump();
+      expect(find.textContaining('permission-denied'), findsNothing);
+
+      final restoreHold = repo.hold('saints', 's1');
+      await tester.tap(find.text('تراجع'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+
+      expect(find.textContaining('permission-denied'), findsOneWidget);
+
+      restoreHold.complete();
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('refreshing Undo bar preserves queued SnackBar and failed batch commit errors', (tester) async {
+      tester.view.physicalSize = const Size(900, 1000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final repo = _ControlledUpdateBackend(initialCollections: {
+        'saints': [
+          AdminDoc('s1', {'nameAr': 'مارمرقس', 'visible': true, 'order': 10}),
+          AdminDoc('s2', {'nameAr': 'مارجرجس', 'visible': true, 'order': 20}),
+        ],
+      });
+      addTearDown(repo.dispose);
+
+      await tester.pumpWidget(_app(
+        CollectionListScreen(repo: repo, def: collectionById('saints')!),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      // Delete s1 at t=0, then delete s2 at t=5s with s1's renewal held & failing so s1 expires at t=10s
+      // (calling _syncUndoBarAfterExpiry -> _presentUndoSnackBar(clearQueue: false)) while s2 stays until t=15s.
+      await tester.tap(find.byKey(const ValueKey('delete-s1')));
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 5));
+
+      final s1Renew = repo.hold('saints', 's1');
+      final s1DelHold = repo.holdDelete('saints', 's1');
+      await tester.tap(find.byKey(const ValueKey('delete-s2')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      s1Renew.completeError(FirebaseException(plugin: 'cloud_firestore', code: 'unavailable', message: 'Offline'));
+      await tester.pump();
+
+      final scaffoldCtx = tester.element(find.byType(FloatingActionButton));
+      ScaffoldMessenger.of(scaffoldCtx).showSnackBar(
+        const SnackBar(content: Text('Queued external note'), duration: Duration(seconds: 2)),
+      );
+      await tester.pump();
+
+      // Advance to t=10s so s1 attempts commit and fails -> _syncUndoBarAfterExpiry refreshes Undo
+      // with clearQueue: false, preserving both Queued external note and s1's deferred commit error.
+      await tester.pump(const Duration(seconds: 5));
+      s1DelHold.completeError(FirebaseException(plugin: 'cloud_firestore', code: 'aborted', message: 'Aborted'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.text('Queued external note'), findsOneWidget);
+
+      // After Queued external note (2s) and s2 expiry (t=15s), deferred s1 aborted error surfaces too.
+      for (var i = 0; i < 12; i++) {
+        await tester.pump(const Duration(milliseconds: 500));
+      }
+      expect(repo.deletedIds, contains('saints/s2'));
+      expect(find.textContaining('aborted'), findsOneWidget);
+    });
+
+    testWidgets('CollectionListScreen multi-delete extends batch window so undoAll at 12s restores both items', (tester) async {
+      tester.view.physicalSize = const Size(800, 1000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final repo = _TestAdminBackend(initialCollections: {
+        'saints': [
+          AdminDoc('s1', {'nameAr': 'مارمرقس', 'order': 10}),
+          AdminDoc('s2', {'nameAr': 'مارجرجس', 'order': 20}),
+        ],
+      });
+      final def = collectionById('saints')!;
+      await tester.pumpWidget(_app(
+        CollectionListScreen(repo: repo, def: def),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      // Delete s1 at t = 0
+      await tester.tap(find.byKey(const ValueKey('delete-s1')));
+      await tester.pump();
+      expect(find.text('مارمرقس'), findsNothing);
+
+      // Advance 6s, then delete s2
+      await tester.pump(const Duration(seconds: 6));
+      await tester.tap(find.byKey(const ValueKey('delete-s2')));
+      await tester.pump();
+      expect(find.text('تراجع عن الكل'), findsOneWidget);
+
+      // Advance 6s (t = 12s since s1 delete, 6s since s2 delete): neither committed yet!
+      await tester.pump(const Duration(seconds: 6));
+      expect(repo.deletedIds, isEmpty);
+      expect(find.text('تراجع عن الكل'), findsOneWidget);
+
+      // Tap Undo all at t = 12s -> restores both items cleanly
+      await tester.tap(find.text('تراجع عن الكل'));
+      await tester.pumpAndSettle();
+      expect(find.text('مارمرقس'), findsOneWidget);
+      expect(find.text('مارجرجس'), findsOneWidget);
+      expect(isSoftDeleted(repo.collections['saints']!.firstWhere((d) => d.id == 's1').data), isFalse);
+      expect(isSoftDeleted(repo.collections['saints']!.firstWhere((d) => d.id == 's2').data), isFalse);
+
+      // Wait another 12s -> neither hard-deleted
+      await tester.pump(const Duration(seconds: 12));
+      expect(repo.deletedIds, isEmpty);
+    });
+
     testWidgets('CollectionListScreen 10s undo SnackBar, soft-delete immediately, undo restores row, expiry commits, lazy purge on dispose', (tester) async {
       tester.view.physicalSize = const Size(800, 1000);
       tester.view.devicePixelRatio = 1;
@@ -1535,6 +1970,456 @@ void main() {
       // Only 'expired' was purged
       expect(repo.deletedIds, ['saints/expired']);
       expect(repo.collections['saints']!.map((d) => d.id), containsAll(['fresh', 'pending', 'in_flight']));
+    });
+
+    testWidgets('consecutive deletes refresh backend deletedAt so other admin screens do not early-purge extended items',
+        (tester) async {
+      tester.view.physicalSize = const Size(900, 1000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final repo = _TestAdminBackend(initialCollections: {
+        'saints': [
+          AdminDoc('s1', {'nameAr': 'مارجرجس', 'visible': true, 'order': 10}),
+          AdminDoc('s2', {'nameAr': 'مارمرقس', 'visible': true, 'order': 20}),
+        ],
+      });
+      await tester.pumpWidget(_app(
+        CollectionListScreen(repo: repo, def: collectionById('saints')!),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('delete-s1')));
+      await tester.pump();
+      final t0 = repo.updates.firstWhere((u) => u.id == 's1').data['deletedAt'] as DateTime;
+
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 25)));
+
+      await tester.tap(find.byKey(const ValueKey('delete-s2')));
+      await tester.pump();
+      final s1Updates = repo.updates.where((u) => u.id == 's1' && u.data['deletedAt'] != null).toList();
+      expect(s1Updates.length, greaterThanOrEqualTo(2));
+      final t1 = s1Updates.last.data['deletedAt'] as DateTime;
+      expect(t1.isAfter(t0), isTrue);
+      expect(isExpiredSoftDelete({'deletedAt': t1}, t0.add(const Duration(seconds: 10))), isFalse);
+    });
+
+    testWidgets('held or failed prior deletedAt refresh protects before expiry and never falsely extends failed items',
+        (tester) async {
+      tester.view.physicalSize = const Size(900, 1000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      // Part 1: Held prior renewal never blocks B's immediate Undo bar, protects s1 past t=10s
+      // while held, and commits s1 if renewal fails after original deadline while updating Undo bar.
+      final repo = _ControlledUpdateBackend(initialCollections: {
+        'saints': [
+          AdminDoc('s1', {'nameAr': 'مارجرجس', 'visible': true, 'order': 10}),
+          AdminDoc('s2', {'nameAr': 'مارمرقس', 'visible': true, 'order': 20}),
+          AdminDoc('s3', {'nameAr': 'مارمينا', 'visible': true, 'order': 30}),
+        ],
+      });
+      addTearDown(repo.dispose);
+
+      await tester.pumpWidget(_app(
+        CollectionListScreen(repo: repo, def: collectionById('saints')!),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      // Trigger an informational visibility SnackBar, then immediately delete s1:
+      // Undo SnackBar must clear/preempt queued info SnackBars immediately.
+      await tester.tap(find.byKey(const ValueKey('visibility-s3')));
+      await tester.pump();
+      expect(find.text('أصبح العنصر مخفيًا'), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('delete-s1')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.text('تراجع'), findsOneWidget);
+      expect(find.text('أصبح العنصر مخفيًا'), findsNothing);
+
+      await tester.pump(const Duration(seconds: 8));
+
+      final refreshHold = repo.hold('saints', 's1');
+      await tester.tap(find.byKey(const ValueKey('delete-s2')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      // Undo action for s2 is shown immediately without waiting for s1's renewal.
+      expect(find.text('تراجع عن الكل'), findsOneWidget);
+
+      await tester.pump(const Duration(seconds: 3)); // t = 11 s > original 10 s window, refresh still held!
+      expect(repo.deletedIds.contains('saints/s1'), isFalse);
+
+      // Failing after original expiry commits s1 cleanly and updates the SnackBar from "undoAll" to "undo".
+      refreshHold.completeError(FirebaseException(plugin: 'cloud_firestore', code: 'unavailable', message: 'Offline'));
+      await tester.pumpAndSettle();
+
+      expect(repo.deletedIds, contains('saints/s1'));
+      expect(find.text('تراجع عن الكل'), findsNothing);
+      expect(find.text('تراجع'), findsOneWidget);
+
+      // Part 2: Failing renewal BEFORE original expiry (s2 at t=0, s3 at t=2s) keeps s2
+      // recoverable until t=10s (no premature commit at t=2s), shows "تراجع عن الكل" while both
+      // remain recoverable, and shrinks back to single-item "تراجع" once s2 expires at t=10s.
+      await tester.pump(const Duration(seconds: 2));
+      final s2Fail = repo.hold('saints', 's2');
+      await tester.tap(find.byKey(const ValueKey('delete-s3')));
+      await tester.pump();
+      s2Fail.completeError(FirebaseException(plugin: 'cloud_firestore', code: 'unavailable', message: 'Offline'));
+      await tester.pumpAndSettle();
+      expect(repo.deletedIds.contains('saints/s2'), isFalse);
+      expect(find.text('تراجع عن الكل'), findsOneWidget);
+
+      // +8.5 s from s3 delete -> s2 expires (> 10 s), commits, and SnackBar shrinks to single "تراجع" for s3.
+      await tester.pump(const Duration(seconds: 8, milliseconds: 500));
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(repo.deletedIds, contains('saints/s2'));
+      expect(repo.deletedIds.contains('saints/s3'), isFalse);
+      expect(find.text('تراجع عن الكل'), findsNothing);
+      expect(find.text('تراجع'), findsOneWidget);
+
+      await tester.pump(const Duration(seconds: 2));
+      expect(repo.deletedIds, contains('saints/s3'));
+    });
+
+    test('overlapping holds keep newest extending anchor across out-of-order releases and undo cancels extendingHold timer', () {
+      fakeAsync((async) {
+        final pd = PendingDelete(window: const Duration(milliseconds: 120));
+        final committed = <String>[];
+        pd.schedule('a', () async => committed.add('a'));
+
+        final h1 = pd.holdAll(['a']); // anchor fires at t = 120ms
+        async.elapse(const Duration(milliseconds: 50));
+        final h2 = pd.holdAll(['a']); // anchor fires at t = 170ms
+
+        // Out-of-order: newer h2 finishes first, older h1 finishes second -> newer h2 (170ms) MUST win.
+        unawaited(pd.releaseHold('a', extend: true, token: h2['a']));
+        async.flushMicrotasks();
+        unawaited(pd.releaseHold('a', extend: true, token: h1['a']));
+        async.flushMicrotasks();
+
+        // Cross older h1 deadline (t = 130ms): must NOT commit yet!
+        async.elapse(const Duration(milliseconds: 80));
+        expect(committed, isEmpty);
+
+        // Cross newer h2 deadline (t = 175ms): commits cleanly.
+        async.elapse(const Duration(milliseconds: 45));
+        expect(committed, ['a']);
+
+        // Undo while extendingHold is already stored cancels its anchor timer cleanly (zero pending timers).
+        pd.schedule('b', () async => committed.add('b'));
+        final b1 = pd.holdAll(['b']);
+        final b2 = pd.holdAll(['b']);
+        unawaited(pd.releaseHold('b', extend: true, token: b1['b']));
+        async.flushMicrotasks();
+        expect(pd.undo('b'), isTrue);
+        expect(b2['b'], isNotNull);
+        async.elapse(const Duration(milliseconds: 200));
+        expect(committed, ['a']);
+      });
+    });
+
+    testWidgets('3 rapid deletes on liturgies -> undoAll restores all 3 atomically with 0 Firestore delete writes', (tester) async {
+      tester.view.physicalSize = const Size(1100, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final repo = _ControlledUpdateBackend(initialCollections: {
+        'liturgies': [
+          AdminDoc('l1', {'type': 'mass', 'nameAr': 'قداس أول', 'weekday': 7, 'start': '07:00', 'visible': true}),
+          AdminDoc('l2', {'type': 'mass', 'nameAr': 'قداس ثاني', 'weekday': 7, 'start': '09:00', 'visible': true}),
+          AdminDoc('l3', {'type': 'vespers', 'nameAr': 'عشية', 'weekday': 6, 'start': '18:00', 'visible': true}),
+        ],
+      });
+      addTearDown(repo.dispose);
+
+      await tester.pumpWidget(_app(
+        CollectionListScreen(repo: repo, def: collectionById('liturgies')!),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      // Hold the 3rd delete write & prior renewal to simulate real Firestore network latency (~2s burst).
+      await tester.tap(find.byKey(const ValueKey('delete-l1')));
+      await tester.pump(const Duration(milliseconds: 600));
+      expect(find.text('قداس أول'), findsNothing);
+      expect(find.text('تراجع'), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('delete-l2')));
+      await tester.pump(const Duration(milliseconds: 600));
+      expect(find.text('قداس ثاني'), findsNothing);
+      expect(find.text('تراجع عن الكل'), findsOneWidget);
+
+      final l3WriteHold = repo.hold('liturgies', 'l3');
+      final l1RenewHold = repo.hold('liturgies', 'l1');
+      await tester.tap(find.byKey(const ValueKey('delete-l3')));
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.text('عشية'), findsNothing);
+      expect(find.textContaining('تم مسح 3 عناصر'), findsOneWidget);
+      expect(find.text('تراجع عن الكل'), findsOneWidget);
+
+      // Tap "تراجع عن الكل" while l3's initial write & l1's renewal are still in flight!
+      await tester.tap(find.text('تراجع عن الكل'));
+      await tester.pump();
+
+      // All 3 rows return immediately in UI, and bar NEVER falls back to single-item undo.
+      expect(find.text('قداس أول'), findsOneWidget);
+      expect(find.text('قداس ثاني'), findsOneWidget);
+      expect(find.text('عشية'), findsOneWidget);
+      expect(find.text('تراجع'), findsNothing);
+      expect(find.text('تراجع عن الكل'), findsNothing);
+
+      // Settle the in-flight writes -> restore writes clear deletedAt on all 3 and never re-open an Undo bar.
+      l3WriteHold.complete();
+      l1RenewHold.complete();
+      await tester.pumpAndSettle();
+
+      expect(find.text('تراجع'), findsNothing);
+      expect(find.text('تراجع عن الكل'), findsNothing);
+      for (final id in ['l1', 'l2', 'l3']) {
+        final doc = repo.collections['liturgies']!.firstWhere((d) => d.id == id);
+        expect(isSoftDeleted(doc.data), isFalse, reason: '$id should have deletedAt cleared');
+      }
+      expect(repo.deletedIds, isEmpty);
+
+      // Wait well past the 10s grace window -> still ZERO Firestore delete writes.
+      await tester.pump(const Duration(seconds: 15));
+      expect(repo.deletedIds, isEmpty);
+    });
+
+    testWidgets('2 deletes on liturgies -> undoAll 8s after first delete restores both with 0 Firestore delete writes', (tester) async {
+      tester.view.physicalSize = const Size(1100, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final repo = _TestAdminBackend(initialCollections: {
+        'liturgies': [
+          AdminDoc('l1', {'type': 'mass', 'nameAr': 'قداس أول', 'weekday': 7, 'start': '07:00', 'visible': true}),
+          AdminDoc('l2', {'type': 'mass', 'nameAr': 'قداس ثاني', 'weekday': 7, 'start': '09:00', 'visible': true}),
+        ],
+      });
+
+      await tester.pumpWidget(_app(
+        CollectionListScreen(repo: repo, def: collectionById('liturgies')!),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      // Delete l1 at t = 0s, then delete l2 at t = 2s.
+      await tester.tap(find.byKey(const ValueKey('delete-l1')));
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 2));
+      await tester.tap(find.byKey(const ValueKey('delete-l2')));
+      await tester.pump();
+      expect(find.text('تراجع عن الكل'), findsOneWidget);
+
+      // Advance to t = 8s from first delete (6s after second delete): both still pending, 0 delete writes.
+      await tester.pump(const Duration(seconds: 6));
+      expect(repo.deletedIds, isEmpty);
+      expect(find.text('تراجع عن الكل'), findsOneWidget);
+
+      // Tap "تراجع عن الكل" at t = 8s -> restores both cleanly with 0 delete writes.
+      await tester.tap(find.text('تراجع عن الكل'));
+      await tester.pumpAndSettle();
+      expect(find.text('قداس أول'), findsOneWidget);
+      expect(find.text('قداس ثاني'), findsOneWidget);
+      expect(isSoftDeleted(repo.collections['liturgies']!.firstWhere((d) => d.id == 'l1').data), isFalse);
+      expect(isSoftDeleted(repo.collections['liturgies']!.firstWhere((d) => d.id == 'l2').data), isFalse);
+      expect(repo.deletedIds, isEmpty);
+
+      await tester.pump(const Duration(seconds: 15));
+      expect(repo.deletedIds, isEmpty);
+    });
+
+    testWidgets('FAB stays >=48px above Undo SnackBar and ignores stray follow-up taps at vacated Undo spot (desktop & 342px)', (tester) async {
+      for (final size in const [Size(1100, 800), Size(342, 700)]) {
+        tester.view.physicalSize = size;
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.reset);
+
+        final repo = _TestAdminBackend(initialCollections: {
+          'liturgies': [
+            for (var i = 1; i <= 8; i++)
+              AdminDoc('l$i', {
+                'type': 'mass',
+                'nameAr': 'قداس $i',
+                'weekday': 7,
+                'start': '07:00',
+                'visible': true,
+              }),
+          ],
+        });
+
+        await tester.pumpWidget(_app(
+          CollectionListScreen(repo: repo, def: collectionById('liturgies')!),
+          locale: const Locale('ar'),
+        ));
+        await tester.pumpAndSettle();
+
+        final fabFinder = find.byType(FloatingActionButton);
+        final restingFabRect = tester.getRect(fabFinder);
+
+        // Delete 2 items -> FAB must sit clearly above Undo SnackBar (>= 48 px gap).
+        await tester.tap(find.byKey(const ValueKey('delete-l1')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const ValueKey('delete-l2')));
+        await tester.pumpAndSettle();
+
+        final snackRect = tester.getRect(find.byType(SnackBar));
+        final actionRect = tester.getRect(find.byType(SnackBarAction));
+        final elevatedFabRect = tester.getRect(fabFinder);
+        expect(elevatedFabRect.overlaps(snackRect), isFalse, reason: 'width=${size.width}');
+        expect(elevatedFabRect.overlaps(actionRect), isFalse, reason: 'width=${size.width}');
+        expect(snackRect.top - elevatedFabRect.bottom, greaterThanOrEqualTo(48.0),
+            reason: 'FAB must keep >=48px gap above Undo SnackBar at width=${size.width}');
+
+        // Record exact Undo button tap spot, tap Undo, then tap that same spot twice right after close.
+        final undoSpot = actionRect.center;
+        await tester.tapAt(undoSpot);
+        await tester.pump(const Duration(milliseconds: 100));
+        expect(find.byType(SnackBar), findsNothing);
+
+        // Follow-up taps at +100ms and +350ms MUST NOT hit the FAB or open an empty DocEditor!
+        await tester.tapAt(undoSpot);
+        await tester.pump(const Duration(milliseconds: 250));
+        await tester.tapAt(undoSpot);
+        await tester.pump();
+        expect(find.byType(DocEditor), findsNothing,
+            reason: 'Stray follow-up taps at vacated Undo spot must not open DocEditor (width=${size.width})');
+        expect(tester.getRect(fabFinder).overlaps(actionRect), isFalse);
+
+        // After the 650ms cooldown finishes, FAB returns cleanly to its resting position.
+        await tester.pump(const Duration(milliseconds: 450));
+        await tester.pumpAndSettle();
+        expect((tester.getRect(fabFinder).bottom - restingFabRect.bottom).abs(), lessThanOrEqualTo(1.0));
+
+        // Scroll to the bottom -> _listBottomPadding still keeps last card's Delete button clear of FAB.
+        final scrollable = tester.state<ScrollableState>(
+          find.descendant(of: find.byType(CustomScrollView), matching: find.byType(Scrollable)).first,
+        );
+        scrollable.position.jumpTo(scrollable.position.maxScrollExtent);
+        await tester.pumpAndSettle();
+        final lastDeleteRect = tester.getRect(find.byKey(const ValueKey('delete-l8')));
+        final bottomFabRect = tester.getRect(fabFinder);
+        expect(bottomFabRect.overlaps(lastDeleteRect), isFalse, reason: 'width=${size.width}');
+        expect(lastDeleteRect.bottom, lessThanOrEqualTo(bottomFabRect.top - 4), reason: 'width=${size.width}');
+      }
+    });
+
+    testWidgets('soft-delete writes deletedAt immediately with 0 repo.delete on 2s dispose/refresh; lazy purge runs only after 10s', (tester) async {
+      tester.view.physicalSize = const Size(900, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final repo = _TestAdminBackend(initialCollections: {
+        'liturgies': [
+          AdminDoc('l1', {'type': 'mass', 'nameAr': 'قداس الأحد', 'weekday': 7, 'start': '07:00', 'visible': true}),
+        ],
+      });
+      final def = collectionById('liturgies')!;
+
+      await tester.pumpWidget(_app(
+        CollectionListScreen(repo: repo, def: def),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      // t = 0s: soft-delete writes deletedAt via update, zero repo.delete calls.
+      await tester.tap(find.byKey(const ValueKey('delete-l1')));
+      await tester.pump();
+      expect(repo.deletedIds, isEmpty);
+      expect(isSoftDeleted(repo.collections['liturgies']!.first.data), isTrue);
+
+      // t = 2s: simulate page refresh (unmount/dispose + remount).
+      await tester.pump(const Duration(seconds: 2));
+      await tester.pumpWidget(_app(const SizedBox.shrink(), locale: const Locale('ar')));
+      await tester.pumpAndSettle();
+      // dispose() cancels local timers without flushing repo.delete.
+      expect(repo.deletedIds, isEmpty);
+
+      // Remount at t = 2s: item remains hidden (soft-deleted) and still NOT hard-deleted.
+      await tester.pumpWidget(_app(
+        CollectionListScreen(repo: repo, def: def),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+      expect(find.text('قداس الأحد'), findsNothing);
+      expect(find.byType(SnackBar), findsNothing);
+      expect(repo.deletedIds, isEmpty);
+
+      // Only once >=10s have elapsed since deletedAt does lazy purge hard-delete the doc.
+      await purgeExpiredSoftDeletes(
+        repo,
+        def,
+        repo.collections['liturgies']!,
+        clock: () => DateTime.now().toUtc().add(const Duration(seconds: 12)),
+      );
+      expect(repo.deletedIds, ['liturgies/l1']);
+    });
+
+    testWidgets('_checkLazyPurge skips documents actively restoring during undo even if snapshot deletedAt expired', (tester) async {
+      final repo = _ControlledUpdateBackend(initialCollections: {
+        'liturgies': [
+          AdminDoc('l1', {
+            'type': 'mass',
+            'nameAr': 'قداس الأحد',
+            'weekday': 7,
+            'start': '07:00',
+            'end': '09:30',
+            'visible': true,
+          }),
+        ],
+      });
+      addTearDown(repo.dispose);
+      final def = collectionById('liturgies')!;
+
+      await tester.pumpWidget(_app(
+        CollectionListScreen(repo: repo, def: def),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      // Hold the soft-delete write so Undo must await it while _restoringIds is active.
+      final holdSoft = repo.hold('liturgies', 'l1');
+      await tester.tap(find.byKey(const ValueKey('delete-l1')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      // Trigger Undo while soft-delete write is still unacknowledged.
+      await tester.tap(find.widgetWithText(SnackBarAction, 'تراجع'));
+      await tester.pump();
+
+      // Simulate a rebuild receiving an expired deletedAt snapshot (>10s old) while
+      // _undoAllPending is still awaiting the in-flight write / restore.
+      repo.collections['liturgies']!.first.data['deletedAt'] =
+          DateTime.now().toUtc().subtract(const Duration(seconds: 20));
+      repo.emitSnapshot('liturgies');
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      // Must NOT hard-delete while restoring.
+      expect(repo.deletedIds, isEmpty);
+      expect(find.text('قداس الأحد'), findsOneWidget);
+
+      // Hold the subsequent restore write as well and emit another expired snapshot.
+      final holdRestore = repo.hold('liturgies', 'l1');
+      holdSoft.complete();
+      await tester.pump();
+      repo.collections['liturgies']!.first.data['deletedAt'] =
+          DateTime.now().toUtc().subtract(const Duration(seconds: 25));
+      repo.emitSnapshot('liturgies');
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(repo.deletedIds, isEmpty);
+
+      // Complete restore and verify zero hard-deletes and item restored cleanly.
+      holdRestore.complete();
+      await tester.pumpAndSettle();
+      expect(repo.deletedIds, isEmpty);
+      expect(find.text('قداس الأحد'), findsOneWidget);
+      expect(repo.collections['liturgies']!.first.data['deletedAt'], isNull);
     });
   });
 
@@ -3477,6 +4362,549 @@ void main() {
       expect(find.descendant(of: openCat, matching: find.byIcon(Icons.open_in_new_rounded)), findsOneWidget);
       expect(find.descendant(of: delEntry, matching: find.text('حذف')), findsOneWidget);
       expect(tester.getTopLeft(delEntry).dy, greaterThanOrEqualTo(tester.getBottomLeft(visEntry).dy));
+    });
+
+    testWidgets('row visibility eye shows spinner, ignores rapid double-tap, and completes cleanly on all 4 row builders',
+        (tester) async {
+      tester.view.physicalSize = const Size(900, 1400);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final repo = _ControlledUpdateBackend(initialCollections: {
+        'priests': [
+          AdminDoc('p1', {'name': 'أبونا تادرس', 'rank': 'priest', 'status': 'serving', 'visible': true}),
+        ],
+        'categories': [
+          AdminDoc('shared-id', {'nameAr': 'قسم الشباب', 'slug': 'youth', 'visible': true, 'order': 10}),
+        ],
+        'entries': [
+          AdminDoc('shared-id', {'categoryId': 'shared-id', 'titleAr': 'اجتماع الخدام', 'visible': true, 'order': 10}),
+        ],
+        'pages': [
+          AdminDoc('sp1', {
+            'titleAr': 'صفحة القسم',
+            'slug': 'sec-page',
+            'placement': 'section',
+            'categoryId': 'shared-id',
+            'visible': true,
+          }),
+        ],
+      });
+      addTearDown(repo.dispose);
+
+      // 1) Standard _tile on priests
+      await tester.pumpWidget(_app(
+        CollectionListScreen(repo: repo, def: collectionById('priests')!),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      final p1Completer = repo.hold('priests', 'p1');
+      final p1Btn = find.byKey(const ValueKey('visibility-p1'));
+      await tester.tap(p1Btn);
+      await tester.pump();
+
+      expect(find.descendant(of: p1Btn, matching: find.byType(CircularProgressIndicator)), findsOneWidget);
+      expect(tester.widget<IconButton>(p1Btn).onPressed, isNull);
+      expect(tester.widget<IconButton>(p1Btn).tooltip, 'جارٍ الحفظ…');
+      await tester.tap(p1Btn, warnIfMissed: false);
+      await tester.pump();
+      expect(repo.updates.where((u) => u.collection == 'priests' && u.id == 'p1'), hasLength(1));
+      expect(find.byType(DocEditor), findsNothing);
+
+      p1Completer.complete();
+      await tester.pumpAndSettle();
+      expect(p1Btn, findsOneWidget);
+      expect(find.descendant(of: p1Btn, matching: find.byType(CircularProgressIndicator)), findsNothing);
+      expect(find.descendant(of: p1Btn, matching: find.byIcon(Icons.visibility_off_outlined)), findsOneWidget);
+      expect(tester.widget<IconButton>(p1Btn).tooltip, 'إظهار في الموقع');
+      expect(find.text('أصبح العنصر مخفيًا'), findsOneWidget);
+
+      // 2) Categories screen: _categoryTile, _sectionPageRow, and _entryRow sharing 'shared-id'
+      await tester.pumpWidget(_app(
+        CollectionListScreen(repo: repo, def: collectionById('categories')!),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      final catCompleter = repo.hold('categories', 'shared-id');
+      final entryCompleter = repo.hold('entries', 'shared-id');
+      final pageCompleter = repo.hold('pages', 'sp1');
+
+      final catBtn = find.byKey(const ValueKey('visibility-shared-id'));
+      final entryBtn = find.byKey(const ValueKey('visibilityEntry-shared-id'));
+      final pageBtn = find.byKey(const ValueKey('visibilitySectionPage-sp1'));
+
+      // Tap category eye -> locked with spinner, while entry & page with same/different IDs stay interactive.
+      await tester.tap(catBtn);
+      await tester.pump();
+      expect(find.descendant(of: catBtn, matching: find.byType(CircularProgressIndicator)), findsOneWidget);
+      expect(tester.widget<IconButton>(catBtn).onPressed, isNull);
+      expect(tester.widget<IconButton>(entryBtn).onPressed, isNotNull);
+      expect(tester.widget<IconButton>(pageBtn).onPressed, isNotNull);
+
+      await tester.tap(entryBtn);
+      await tester.tap(pageBtn);
+      await tester.pump();
+      expect(find.descendant(of: entryBtn, matching: find.byType(CircularProgressIndicator)), findsOneWidget);
+      expect(find.descendant(of: pageBtn, matching: find.byType(CircularProgressIndicator)), findsOneWidget);
+
+      catCompleter.complete();
+      entryCompleter.complete();
+      pageCompleter.complete();
+      await tester.pumpAndSettle();
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+      expect(find.descendant(of: catBtn, matching: find.byIcon(Icons.visibility_off_outlined)), findsOneWidget);
+      expect(find.descendant(of: entryBtn, matching: find.byIcon(Icons.visibility_off_outlined)), findsOneWidget);
+      expect(find.descendant(of: pageBtn, matching: find.byIcon(Icons.visibility_off_outlined)), findsOneWidget);
+    });
+
+    testWidgets('row visibility eye rolls back visual state and shows error SnackBar when update fails',
+        (tester) async {
+      tester.view.physicalSize = const Size(900, 1000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final repo = _ControlledUpdateBackend(initialCollections: {
+        'priests': [
+          AdminDoc('p1', {'name': 'أبونا بولس', 'rank': 'priest', 'status': 'serving', 'visible': true}),
+        ],
+      });
+      addTearDown(repo.dispose);
+
+      await tester.pumpWidget(_app(
+        CollectionListScreen(repo: repo, def: collectionById('priests')!),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      final c = repo.hold('priests', 'p1');
+      final btn = find.byKey(const ValueKey('visibility-p1'));
+      await tester.tap(btn);
+      await tester.pump();
+      expect(find.descendant(of: btn, matching: find.byType(CircularProgressIndicator)), findsOneWidget);
+
+      c.completeError(FirebaseException(
+        plugin: 'cloud_firestore',
+        code: 'permission-denied',
+        message: 'Denied',
+      ));
+      await tester.pumpAndSettle();
+
+      // Reverted to visible: true
+      expect(find.descendant(of: btn, matching: find.byType(CircularProgressIndicator)), findsNothing);
+      expect(find.descendant(of: btn, matching: find.byIcon(Icons.visibility_outlined)), findsOneWidget);
+      expect(tester.widget<IconButton>(btn).onPressed, isNotNull);
+      expect(tester.widget<IconButton>(btn).tooltip, 'إخفاء من الموقع');
+      expect(find.text('ظاهر'), findsOneWidget);
+      expect(find.textContaining('[permission-denied]'), findsOneWidget);
+    });
+
+    testWidgets('filtered-out visibility toggle clears _optimisticVisible on stream update and sub-row swaps ignore old epoch',
+        (tester) async {
+      tester.view.physicalSize = const Size(900, 1000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      // 1. Filter to Visible, hide 'p1' so it disappears from visible list, then externally stream visible: true.
+      final repo = _ControlledUpdateBackend(initialCollections: {
+        'priests': [
+          AdminDoc('p1', {'name': 'أبونا فلان', 'rank': 'priest', 'status': 'serving', 'visible': true}),
+        ],
+        'categories': [
+          AdminDoc('cat1', {'nameAr': 'قسم ١', 'slug': 'sec1', 'visible': true, 'order': 10}),
+        ],
+        'entries': [
+          AdminDoc('shared-sub', {'categoryId': 'cat1', 'titleAr': 'عنصر مشترك', 'visible': true, 'order': 10}),
+        ],
+        'pages': [
+          AdminDoc('shared-sub', {'categoryId': 'cat1', 'titleAr': 'صفحة مشتركة', 'slug': 'shared-sub', 'visible': true, 'order': 10}),
+        ],
+      });
+      addTearDown(repo.dispose);
+
+      await tester.pumpWidget(_app(
+        CollectionListScreen(repo: repo, def: collectionById('priests')!),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      // Switch filter to Visible ('الظاهر').
+      await tester.tap(find.text('الظاهر'));
+      await tester.pumpAndSettle();
+
+      final hideCompleter = repo.hold('priests', 'p1');
+      await tester.tap(find.byKey(const ValueKey('visibility-p1')));
+      await tester.pump();
+
+      // Verify tap-absorption GestureDetector excludes semantics while button is disabled.
+      final p1Gesture = tester.widget<GestureDetector>(
+        find.ancestor(of: find.byKey(const ValueKey('visibility-p1')), matching: find.byType(GestureDetector)).first,
+      );
+      expect(p1Gesture.excludeFromSemantics, isTrue);
+
+      hideCompleter.complete();
+      await tester.pumpAndSettle();
+      // Under ListFilter.visible, p1 is filtered out of built rows.
+      expect(find.byKey(const ValueKey('visibility-p1')), findsNothing);
+
+      // Simulate another admin restoring visible: true via external update while ListFilter.visible is still active.
+      await repo.update('priests', 'p1', {'visible': true});
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('visibility-p1')), findsOneWidget);
+      expect(find.text('ظاهر'), findsOneWidget);
+      expect(find.text('مخفي'), findsNothing);
+
+      // Let the previous 2 s SnackBar expire before checking step 2's SnackBar absence.
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pumpAndSettle();
+
+      // 2. Categories sub-row (targetDef != null) in-flight when collection swaps on SAME repo -> ignored cleanly.
+      await tester.pumpWidget(_app(
+        CollectionListScreen(repo: repo, def: collectionById('categories')!),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      final entryHold = repo.hold('entries', 'shared-sub');
+      await tester.tap(find.byKey(const ValueKey('visibilityEntry-shared-sub')));
+      await tester.pump();
+
+      // Swap widget.def on SAME repo before entryHold completes!
+      await tester.pumpWidget(_app(
+        CollectionListScreen(repo: repo, def: collectionById('pages')!),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      entryHold.complete();
+      await tester.pumpAndSettle();
+      expect(find.byType(SnackBar), findsNothing);
+    });
+
+    testWidgets('newer visibility snapshot with omitted intermediate state releases optimistic override',
+        (tester) async {
+      tester.view.physicalSize = const Size(900, 1000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final repo = _ControlledUpdateBackend(initialCollections: {
+        'priests': [
+          AdminDoc('p1', {'name': 'أبونا فلان', 'rank': 'priest', 'status': 'serving', 'visible': true}),
+        ],
+      });
+      addTearDown(repo.dispose);
+
+      await tester.pumpWidget(_app(
+        CollectionListScreen(repo: repo, def: collectionById('priests')!),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      // Hide completes without delivering the intermediate `visible: false` snapshot first;
+      // then a newer authoritative `visible: true` snapshot arrives from another admin.
+      repo.emitOnUpdate = false;
+      await tester.tap(find.byKey(const ValueKey('visibility-p1')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('مخفي'), findsOneWidget);
+      expect(find.text('ظاهر'), findsNothing);
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('visibility-p1')),
+          matching: find.byIcon(Icons.visibility_off_outlined),
+        ),
+        findsOneWidget,
+      );
+
+      repo.collections['priests']![0].data['visible'] = true;
+      repo.emitSnapshot('priests');
+      await tester.pumpAndSettle();
+
+      expect(find.text('ظاهر'), findsOneWidget);
+      expect(find.text('مخفي'), findsNothing);
+      expect(find.descendant(of: find.byKey(const ValueKey('visibility-p1')), matching: find.byIcon(Icons.visibility_outlined)), findsOneWidget);
+    });
+
+    testWidgets(
+        'stale snapshot delivered before Hide completes but built afterward does not clear optimistic Hide',
+        (tester) async {
+      tester.view.physicalSize = const Size(900, 1200);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final repo = _ControlledUpdateBackend(initialCollections: {
+        'priests': [
+          AdminDoc('p1', {'name': 'أبونا فلان', 'rank': 'priest', 'status': 'serving', 'visible': true}),
+        ],
+      });
+      addTearDown(repo.dispose);
+
+      await tester.pumpWidget(_app(
+        CollectionListScreen(repo: repo, def: collectionById('priests')!),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      final hideHold = repo.hold('priests', 'p1');
+      repo.emitOnUpdate = false;
+      await tester.tap(find.byKey(const ValueKey('visibility-p1')));
+      await tester.pump();
+
+      // Deliver a stale `visible: true` snapshot at t=0, flush microtasks before completing Hide at t=1ms,
+      // and then pump a frame at t=5ms so the frame builds after Hide has already settled.
+      repo.emitSnapshot('priests');
+      Timer(const Duration(milliseconds: 1), hideHold.complete);
+      await tester.pump(const Duration(milliseconds: 5));
+      await tester.pumpAndSettle();
+
+      expect(find.text('مخفي'), findsOneWidget);
+      expect(find.text('ظاهر'), findsNothing);
+
+      // A genuinely newer snapshot delivered after Hide settled clears the optimistic override.
+      repo.collections['priests']![0].data['visible'] = true;
+      repo.emitSnapshot('priests');
+      await tester.pumpAndSettle();
+
+      expect(find.text('ظاهر'), findsOneWidget);
+      expect(find.text('مخفي'), findsNothing);
+    });
+
+    testWidgets(
+        'unrelated collection snapshot does not clear pending page optimistic visibility on categories screen',
+        (tester) async {
+      tester.view.physicalSize = const Size(900, 1200);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final repo = _ControlledUpdateBackend(initialCollections: {
+        'categories': [
+          AdminDoc('cat1', {'nameAr': 'قسم ١', 'slug': 'sec1', 'visible': true, 'order': 10}),
+        ],
+        'entries': [
+          AdminDoc('e1', {'categoryId': 'cat1', 'titleAr': 'عنصر ١', 'visible': true, 'order': 10}),
+        ],
+        'pages': [
+          AdminDoc('sp1', {
+            'placement': 'section',
+            'categoryId': 'cat1',
+            'titleAr': 'صفحة ١',
+            'slug': 'sp1',
+            'visible': true,
+            'order': 10,
+          }),
+        ],
+      });
+      addTearDown(repo.dispose);
+
+      await tester.pumpWidget(_app(
+        CollectionListScreen(repo: repo, def: collectionById('categories')!),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      // Toggle section page sp1 offline of snapshot delivery so _settledAtStreamSeq['pages:sp1'] stays stamped.
+      repo.emitOnUpdate = false;
+      final spBtn = find.byKey(const ValueKey('visibilitySectionPage-sp1'));
+      await tester.tap(spBtn);
+      await tester.pumpAndSettle();
+      expect(find.descendant(of: spBtn, matching: find.byIcon(Icons.visibility_off_outlined)), findsOneWidget);
+
+      // Unrelated snapshot on entries must NOT clear the pending pages:sp1 override.
+      repo.collections['entries']![0].data['titleAr'] = 'عنصر ١ محدث';
+      repo.emitSnapshot('entries');
+      await tester.pumpAndSettle();
+      expect(find.descendant(of: spBtn, matching: find.byIcon(Icons.visibility_off_outlined)), findsOneWidget);
+
+      // A newer snapshot on pages itself DOES release the override to the authoritative value.
+      repo.collections['pages']![0].data['visible'] = true;
+      repo.emitSnapshot('pages');
+      await tester.pumpAndSettle();
+      expect(find.descendant(of: spBtn, matching: find.byIcon(Icons.visibility_outlined)), findsOneWidget);
+    });
+
+    testWidgets(
+        'rapid taps on row visibility eye at 320px / 200% keep >=48x48 hit target, write once, and never open DocEditor',
+        variant: const TargetPlatformVariant({TargetPlatform.android, TargetPlatform.windows}),
+        (tester) async {
+      tester.view.physicalSize = const Size(320, 640);
+      tester.view.devicePixelRatio = 1;
+      tester.platformDispatcher.textScaleFactorTestValue = 2.0;
+      addTearDown(() {
+        tester.view.reset();
+        tester.platformDispatcher.clearTextScaleFactorTestValue();
+      });
+
+      final repo = _ControlledUpdateBackend(initialCollections: {
+        'priests': [
+          AdminDoc('p1', {'name': 'أبونا فلان', 'rank': 'priest', 'status': 'serving', 'visible': true}),
+        ],
+      });
+      addTearDown(repo.dispose);
+
+      await tester.pumpWidget(_app(
+        CollectionListScreen(repo: repo, def: collectionById('priests')!),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      await tester.drag(find.byType(CustomScrollView), const Offset(0, -400));
+      await tester.pumpAndSettle();
+
+      final btn = find.byKey(const ValueKey('visibility-p1'));
+      await tester.ensureVisible(btn);
+      await tester.pumpAndSettle();
+      final idleSize = tester.getSize(btn);
+      final idleTopLeft = tester.getTopLeft(btn);
+      expect(idleSize.width, greaterThanOrEqualTo(48));
+      expect(idleSize.height, greaterThanOrEqualTo(48));
+
+      // 4+ rapid taps on eye center, corners, and trailing margin beneath eye must not open DocEditor.
+      final c = repo.hold('priests', 'p1');
+      await tester.tap(btn);
+      await tester.tap(btn); // Tap 2 before rebuild: ignored by _togglingVisibility
+      await tester.pump();
+
+      final savingSize = tester.getSize(btn);
+      final savingTopLeft = tester.getTopLeft(btn);
+      expect(savingSize.width, greaterThanOrEqualTo(48));
+      expect(savingSize.height, greaterThanOrEqualTo(48));
+      expect((savingTopLeft - idleTopLeft).distance, lessThanOrEqualTo(0.1));
+      expect(find.descendant(of: btn, matching: find.byType(CircularProgressIndicator)), findsOneWidget);
+
+      await tester.tap(btn, warnIfMissed: false); // Tap 3 while saving
+      final outerCorner = tester.getTopLeft(btn) + const Offset(2, 2);
+      await tester.tapAt(outerCorner); // Tap 4 on outer 48x48 rim while saving
+      // Trailing space directly beneath eye button is outside ListTile InkWell and never opens DocEditor.
+      await tester.tapAt(tester.getRect(btn).bottomCenter + const Offset(0, 6));
+      await tester.pump();
+      expect(find.byType(DocEditor), findsNothing);
+
+      // Start another tap while saving, finish the backend write BEFORE pointerUp, then release.
+      final heldTap = await tester.startGesture(tester.getCenter(btn));
+      await tester.pump();
+      c.complete();
+      await tester.pumpAndSettle();
+      await heldTap.up();
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.byType(DocEditor), findsNothing);
+      expect(repo.updates.where((u) => u.collection == 'priests' && u.id == 'p1'), hasLength(1));
+
+      // Tapping the row body (title) still opens DocEditor normally.
+      await tester.tap(find.text('أبونا فلان'));
+      await tester.pumpAndSettle();
+      expect(find.byType(DocEditor), findsOneWidget);
+    });
+
+    testWidgets(
+        'desktop visibility eye: 5 rapid taps during write toggle once, taps 0.6s apart toggle separately, and never open DocEditor',
+        (tester) async {
+      tester.view.physicalSize = const Size(1200, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final repo = _ControlledUpdateBackend(initialCollections: {
+        'liturgies': [
+          AdminDoc('l1', {'type': 'mass', 'nameAr': 'قداس الأحد', 'weekday': 7, 'start': '07:00', 'visible': true}),
+        ],
+      });
+      addTearDown(repo.dispose);
+
+      await tester.pumpWidget(_app(
+        CollectionListScreen(repo: repo, def: collectionById('liturgies')!),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      final btn = find.byKey(const ValueKey('visibility-l1'));
+      final rect = tester.getRect(btn);
+
+      // 5 rapid taps while write is in flight -> exactly 1 write, 0 DocEditor opens.
+      final firstWrite = repo.hold('liturgies', 'l1');
+      for (var i = 0; i < 5; i++) {
+        await tester.tapAt(i.isEven ? rect.center : rect.topLeft + const Offset(2, 2));
+        await tester.pump(const Duration(milliseconds: 20));
+      }
+      expect(repo.updates.where((u) => u.collection == 'liturgies' && u.id == 'l1'), hasLength(1));
+      expect(find.byType(DocEditor), findsNothing);
+
+      // Finish first write, wait 600ms, then tap again (separate intentional toggle) -> 2nd write, still 0 DocEditor.
+      firstWrite.complete();
+      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 600));
+
+      final secondWrite = repo.hold('liturgies', 'l1');
+      await tester.tap(btn);
+      await tester.pump();
+      // Tap rim and trailing edge directly beneath eye while second write settles -> still never opens DocEditor.
+      await tester.tapAt(rect.bottomRight - const Offset(1, 1));
+      await tester.tapAt(rect.bottomCenter + const Offset(0, 4));
+      secondWrite.complete();
+      await tester.pumpAndSettle();
+
+      final visUpdates = repo.updates.where((u) => u.collection == 'liturgies' && u.id == 'l1').toList();
+      expect(visUpdates, hasLength(2));
+      expect(visUpdates[0].data['visible'], isFalse);
+      expect(visUpdates[1].data['visible'], isTrue);
+      expect(find.byType(DocEditor), findsNothing);
+    });
+
+    testWidgets('row visibility in-flight completion after dispose or repo swap does not throw', (tester) async {
+      tester.view.physicalSize = const Size(900, 1000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final repo1 = _ControlledUpdateBackend(initialCollections: {
+        'priests': [
+          AdminDoc('p1', {'name': 'أبونا يوحنا', 'rank': 'priest', 'status': 'serving', 'visible': true}),
+          AdminDoc('p2', {'name': 'أبونا متى', 'rank': 'priest', 'status': 'serving', 'visible': true}),
+        ],
+      });
+      final repo2 = _ControlledUpdateBackend(initialCollections: {
+        'saints': [
+          AdminDoc('p1', {'nameAr': 'مارمرقس', 'visible': true, 'order': 10}),
+        ],
+      });
+      addTearDown(repo1.dispose);
+      addTearDown(repo2.dispose);
+
+      await tester.pumpWidget(_app(
+        CollectionListScreen(repo: repo1, def: collectionById('priests')!),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      final c1 = repo1.hold('priests', 'p1');
+      final c2 = repo1.hold('priests', 'p2');
+      await tester.tap(find.byKey(const ValueKey('visibility-p1')));
+      await tester.tap(find.byKey(const ValueKey('visibility-p2')));
+      await tester.pump();
+
+      // Swap repo & collection while writes are in flight
+      await tester.pumpWidget(_app(
+        CollectionListScreen(repo: repo2, def: collectionById('saints')!),
+        locale: const Locale('ar'),
+      ));
+      await tester.pumpAndSettle();
+
+      // Complete and fail old repo writes -> no setState after swap, saints p1 unaffected
+      c1.complete();
+      c2.completeError(StateError('late error'));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(find.byKey(const ValueKey('visibility-p1')), findsOneWidget);
+      expect(find.descendant(of: find.byKey(const ValueKey('visibility-p1')), matching: find.byIcon(Icons.visibility_outlined)), findsOneWidget);
+
+      // Unmount completely during in-flight write
+      final c3 = repo2.hold('saints', 'p1');
+      await tester.tap(find.byKey(const ValueKey('visibility-p1')));
+      await tester.pump();
+      await tester.pumpWidget(_app(const SizedBox.shrink(), locale: const Locale('ar')));
+      c3.completeError(StateError('after dispose'));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
     });
 
     test('blockSnippetSummary: extracts and formats preview snippet per BlockType', () {
@@ -5949,5 +7377,81 @@ class _PermissionDeniedBackend extends _TestAdminBackend {
       code: 'permission-denied',
       message: 'Missing or insufficient permissions.',
     );
+  }
+}
+
+class _ControlledUpdateBackend extends _TestAdminBackend {
+  final Map<String, StreamController<List<AdminDoc>>> _controllers = {};
+  final Map<String, Completer<void>> _holds = {};
+  final Map<String, Completer<void>> _deleteHolds = {};
+  bool emitOnUpdate = true;
+
+  _ControlledUpdateBackend({super.initialCollections});
+
+  Completer<void> hold(String collection, String id) {
+    final c = Completer<void>();
+    _holds['$collection:$id'] = c;
+    return c;
+  }
+
+  Completer<void> holdDelete(String collection, String id) {
+    final c = Completer<void>();
+    _deleteHolds['$collection:$id'] = c;
+    return c;
+  }
+
+  @override
+  Future<void> delete(String collection, String id) async {
+    final hold = _deleteHolds.remove('$collection:$id');
+    if (hold != null) {
+      await hold.future;
+    }
+    await super.delete(collection, id);
+  }
+
+  void emitSnapshot(String collection) {
+    final c = _controllers[collection];
+    if (c != null && !c.isClosed) {
+      c.add([
+        for (final d in collections[collection] ?? const <AdminDoc>[])
+          AdminDoc(d.id, Map<String, dynamic>.from(d.data)),
+      ]);
+    }
+  }
+
+  @override
+  Stream<List<AdminDoc>> watch(String collection) async* {
+    yield [
+      for (final d in collections[collection] ?? const <AdminDoc>[])
+        AdminDoc(d.id, Map<String, dynamic>.from(d.data)),
+    ];
+    final c = _controllers.putIfAbsent(collection, () => StreamController<List<AdminDoc>>.broadcast());
+    yield* c.stream;
+  }
+
+  @override
+  Future<void> update(String collection, String id, Map<String, dynamic> data) async {
+    final hold = _holds.remove('$collection:$id');
+    updates.add((collection: collection, id: id, data: Map<String, dynamic>.from(data)));
+    if (hold != null) {
+      await hold.future;
+    }
+    final list = collections[collection];
+    if (list != null) {
+      for (final doc in list) {
+        if (doc.id == id) {
+          doc.data.addAll(data);
+        }
+      }
+    }
+    if (emitOnUpdate) {
+      emitSnapshot(collection);
+    }
+  }
+
+  void dispose() {
+    for (final c in _controllers.values) {
+      c.close();
+    }
   }
 }

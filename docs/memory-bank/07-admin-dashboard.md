@@ -209,11 +209,21 @@ Two tabs: «الإشعارات» (`NotificationsAdminSection`, kept alive across
    `meta/push_topics` (`activeSubscribers`), web reminder planner status from `meta/push_plan` (upcoming reminder topics
    count and next service time in Cairo), and queue rate throttle cap warning banner when meta/push_topics.cronQueue.capReached is true (1,000 web opt-in batch writes/day limit reached).
 2. **Scheduled announcements** (`schedule`, ≤ 20) — numbered 5-step editor: Arabic title + body (both required, as
-   the rules and `parseScheduleRow` require), English optional (collapsed); «في أقرب وقت» or Cairo date + time
+   the rules and `parseScheduleRow` require), English optional (`draft-english`, collapsed by default — hidden
+   alongside the English phone preview option when `settings/features.englishEnabled` is false while preserving
+   stored `titleEn`/`bodyEn` values, and auto-revealed + expanded via `ExpansibleController` only if legacy stored
+   English text fails validation); «في أقرب وقت» or Cairo date + time
    (default tomorrow 09:00; past times refused; switching to «في أقرب وقت» auto-clears past-time errors); timing and target chips use `context.pal.bar` background for high-contrast visibility; targets «الجميع / تطبيق أندرويد فقط / المتصفح و iPhone فقط»;
    «ماذا يفتح» picker (built-in pages, custom pages/categories, liturgies `lit-`, meetings `meeting-`, today's
    events `day-`, seasons `season-` — one-off reads when the dialog opens; ids the rules reject open the page without
-   an `eventKey`) or a custom `/path`; phone preview ar/en; «جرّب على هذا الجهاز». Inline errors under the field.
+   an `eventKey`) or a custom `/path`; phone preview ar/en; «جرّب على هذا الجهاز». Pure field validation routes
+   through `validateScheduledNotificationFields` (`admin_validators.dart`) directly beneath each input
+   (`titleAr`, `bodyAr`, `titleEn`, `bodyEn`, `targets`, `link`), while `_saveDraft` handles scheduled-time checks
+   (setting the `when` error for past times and checking again after confirmation), auto-expanding `draft-english` if
+   needed and scrolling the first error into view (`SingleChildScrollView` + `Column` keeps off-screen keys mounted at
+   320 px / 200 %);
+   editing clears that field's error while server concurrency/cap conflicts (`nm_errRowGone`, `nm_errAlreadySending`,
+   `nm_errFull`) stay in the form-level `draft-error` banner.
    Rows grouped «القادمة» / «السابقة» with icon status chips and a one-line explanation per state; «تعديل» while
    the row has no `status` entry, «أعد الإرسال» (copy, targets narrowed) for partial / error / unconfirmed /
    expired, «حذف» with a confirmation dialog. Saving an announcement that targets everyone (`_draftTargets == 'all'`)
@@ -264,10 +274,21 @@ For each `CollectionDef`:
   ⛔ inactive, start/end), tags *Hidden* / *Unconfirmed* / *Departed*, "updated by … at …". Tapping the row opens `DocEditor`; bottom action bar holds **«عرض بالموقع»** (`ValueKey('openItem-<id>')`, external-link icon `Icons.open_in_new_rounded`) when visible with a detail page, and a clearly named **«حذف» / «Delete»** button (`ValueKey('delete-<id>')` / `deleteEntry-<id>`) separated vertically from the top-right 👁 visibility toggle across `_tile`, `_categoryTile`, and `_entryRow`.
 - The list `StreamBuilder` is keyed by `ObjectKey(_stream)` (also on Messages and Admins, PR #12): after a backend
   switch the old list is never shown while the new one loads.
-- 👁 **hide/show** (`update(visible)`) — only when the collection has a `visible` field (not seasons).
+- 👁 **hide/show** (`update(visible)`) — only when the collection has a `visible` field (not seasons). All four row
+  builders (`_tile`, `_categoryTile`, `_sectionPageRow`, `_entryRow`) share `_visibilityButton` alongside the static
+  «ظاهر / مخفي» `_Tag`: all four row builders isolate `_visibilityButton` (and trailing row controls) outside `ListTile`'s
+  `InkWell` via `_splitActionRow` anchored at the top-end corner (`CrossAxisAlignment.start`), and tapping replaces the eye
+  icon with an inline spinner (`savingVisibility` «جارٍ الحفظ…») inside a fixed `48×48` padded hit target
+  (`MaterialTapTargetSize.padded`), disables only that row's visibility toggle button under a composite `'${collection}:${id}'`
+  in-flight write lock while an always-active opaque `GestureDetector` absorbs rapid repeat taps during the write (even if a write settles mid-tap or titles wrap
+  on narrow viewports) so they cannot fall through to `ListTile.onTap` (tapping the row body still opens `DocEditor`). Because the lock tracks the in-flight Firestore write rather than a fixed cooldown, rapid bursts during a save toggle once while deliberate taps after the write settles (e.g. ~0.6 s later on desktop) count as separate toggles without ever opening `DocEditor`. On failure it
+  reverts visual state + shows `saveFailed`, and keeps tooltip/semantics clear («إظهار في الموقع» / «إخفاء من الموقع»).
+  List scrollables also apply text-scale- and safe-area-aware bottom padding (`_listBottomPadding`) so the last card's actions stay
+  clear of the `+` FAB at 320 px / 342 px / 200 %. `CollectionListScreen` also passes its own inner `ScaffoldMessenger` (`popMessenger`) to
+  `DocEditor` so `savedMsg` and `noChanges` queue cleanly when `popOnSave` pops back.
 - **Drag to reorder** — or tap **Move up / Move down** on each tile (`ValueKey('moveUp-<id>')`, WCAG 2.5.7) —
   (`reorder(collection, ids, base:)` → `order` = base + 10, 20, 30… in one batch) for orderable collections — facilities,
-  facilities, activities, priests, saints, milestones — and only when search is empty, filter = all
+  activities, priests, saints, milestones — and only when search is empty, filter = all
   and > 1 item. Serving and departed priests never cross-reorder; **departed fathers use base 1000** (`reorderBase(def, status: 'departed')`: 1010, 1020…) and `_reorder` sends only that status group's IDs, so the two groups keep non-colliding `order` ranges inside `priests` (BUG-13, P2-20).
   Liturgies and meetings use the numeric **Order** field instead.
 - `DocEditor.save`: when `onSave` fails with a **`TimeoutException`** the images uploaded for the document are
@@ -275,18 +296,34 @@ For each `CollectionDef`:
   Note: `AdminRepository.save`/`saveDoc` set no timeout of their own today (the only 15 s timeout is the role read
   in `adminRole`), so this path applies to a timeout raised by a caller/backend wrapper.
 - **Add** (FAB) / tap to **edit** → full-screen `DocEditor`; **delete** in `collection_list.dart` uses a 10-second
-  reversible soft-delete buffer (`PendingDelete`, `pending_delete.dart`). Non-category items immediately write Firestore
-  `deletedAt: DateTime.now().toUtc()` (allowed by `meta()` and `optTimestamp(d, 'deletedAt')` in `firestore.rules`),
-  hide immediately from the visible list (`_pendingDelete.isPending` / `isSoftDeleted`) and display a 10-second `SnackBar`
-  with «تم مسح «{n}»» (`deletedItemUndo`, neutral wording — the page is feminine, the section/item masculine; the inbox keeps `deletedUndo` «اتمسح «{n}»») and action «تراجع» (`undo`). The soft-deleted document immediately vanishes from
+  reversible soft-delete buffer (`PendingDelete`, `pending_delete.dart`). Non-category items register synchronously into
+  `_pendingDelete` / `_pendingEntries` and immediately write Firestore
+  `deletedAt: DateTime.now().toUtc()` (allowed by `meta()` and `optTimestamp(d, 'deletedAt')` in `firestore.rules`,
+  serialized per doc via `_inFlightDeleteWrites` with monotonic `_deleteGen` guards so rapid consecutive deletes never
+  race or fall back to a single-item bar),
+  hide immediately from the visible list (`_pendingDelete.isPending` / `isSoftDeleted`), and show a 10-second `SnackBar`
+  right away (`persist: true` driven by `_undoSnackBarTimer`, updating multi-delete text in place via `_undoBarState`
+  across 2 → 3+ deletes without `ScaffoldMessenger` queue churn, while clearing prior queues on user deletes and
+  preserving queued external bars on automatic expiry refreshes) on `CollectionListScreen`'s inner `ScaffoldMessenger`.
+  While the Undo bar is active, `_UndoClearFabLocation` elevates the `+` FAB with a **48 px** vertical gap above the
+  SnackBar and holds that elevated clearance across SnackBar swaps and for a **650 ms** post-close cooldown
+  (`_fabCooldownTimer`, paired with a transparent `undo-vacated-tap-shield` over the vacated SnackBar strip) so follow-up taps aimed at the vacated Undo button never hit the FAB or underlying rows to open `DocEditor`
+  (verified across desktop, 342 px, and 320 px / 200 %). The Undo bar uses «تم مسح «{n}»» (`deletedItemUndo`,
+  neutral wording — the page is feminine, the section/item masculine; the inbox keeps `deletedUndo` «اتمسح «{n}»») and
+  action «تراجع» (`undo`) or «تراجع عن الكل» (`undoAll`), and renews `deletedAt` + extends local timers via
+  `PendingDelete.holdAll` / `releaseHold` (monotonic `_PendingHold.seq`, newest extending hold wins, cancelled anchor timers cleaned up) for earlier pending items whose renewal succeeds (preserving
+  remaining original deadlines on failed renewals and updating the active Undo bar if an un-renewed item expires early).
+  The soft-deleted document immediately vanishes from
   public collection views (`_docs` and `_col` in `FirestoreRepository`) and sitemap exports (`sitemapContentFromExport`).
-  Tapping undo restores the item immediately and sets `deletedAt: null`. If the 10 seconds elapse without undo, the deletion
+  Tapping «تراجع» / «تراجع عن الكل» (`_undoAllPending`) atomically cancels all pending timers, restores all rows in the UI immediately via optimistic `_restoringIds`, and clears `deletedAt: null` concurrently across the batch after each item's serialized write chain settles (`_checkLazyPurge` skips pending, `_restoringIds`, and `_inFlightDeleteWrites` docs via `_isProtectedFromPurge` so an expired snapshot during restore can never hard-delete an item being undone). If the 10 seconds elapse without undo, the deletion
   commits to hard delete `widget.repo.delete(def.name, d.id)` and cleans up orphaned media (`removeOrphanedDocMedia`).
   Pending-deletion items stay in `_lastDocs` until commit so their slugs remain reserved in `takenSlugs`, and scheduling
-  deletion captures `repo`, `def`, `media` and document data in closure. If the admin navigates away (`dispose()`) or closes
-  the tab, local timers are cancelled without fire-and-forget delete calls; the soft-deleted document remains hidden from
-  public views and is deterministically purged on subsequent admin opens via lazy purge (`purgeExpiredSoftDeletes`). Browser
-  `beforeunload` is strictly NOT used in `PendingDelete` and remains exclusively for `UnsavedGuard` unsaved form edits. Custom
+  deletion captures `repo`, `def`, `media` and document data in closure. **Page refresh / navigation away (`dispose()`):**
+  local timers are cancelled **without** calling `flush()` or sending `repo.delete()`; `beforeunload` is strictly NOT used
+  in `PendingDelete` (exclusive to `UnsavedGuard`). Because `deletedAt` was already written at delete time and in-memory
+  Undo state resets on reload, refreshing the browser ~2 s after deleting intentionally keeps the item hidden from admin
+  and public lists (while the Firestore doc still remains untouched until `deletedAt + 10s`), and subsequent admin opens
+  deterministically hard-delete it once expired via lazy purge (`purgeExpiredSoftDeletes`). Custom
   categories (`categories`) remain confirmed via dialog (`_deleteCategory`) because deleting a category cascades to hide
   member items and clear category links. A new item saved in several writes keeps the id the first write created (the editor's
   `onSave` remembers it).

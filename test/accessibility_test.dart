@@ -1737,13 +1737,281 @@ void main() {
       }
     });
 
+    group('Admin CollectionListScreen undo SnackBar at 320px / 200%', () {
+      for (final lang in const ['ar', 'en']) {
+        testWidgets('undo SnackBar is legible, overflow-free, and unobstructed by FAB at 320px / 200% ($lang)', (tester) async {
+          tester.view.physicalSize = const Size(320, 640);
+          tester.view.devicePixelRatio = 1;
+          tester.platformDispatcher.textScaleFactorTestValue = 2.0;
+          addTearDown(tester.view.reset);
+          addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+
+          final repo = _ListBackend(
+            [
+              AdminDoc('s1', {'nameAr': 'مارمرقس', 'nameEn': 'St. Mark', 'order': 10}),
+              AdminDoc('s2', {'nameAr': 'مارجرجس', 'nameEn': 'St. George', 'order': 20}),
+              AdminDoc('s3', {'nameAr': 'مارمينا', 'nameEn': 'St. Mina', 'order': 30}),
+            ],
+            collectionFilter: 'saints',
+          );
+          await tester.pumpWidget(MaterialApp(
+            locale: Locale(lang),
+            supportedLocales: const [Locale('ar'), Locale('en')],
+            localizationsDelegates: GlobalMaterialLocalizations.delegates,
+            theme: buildTheme(Locale(lang), primary: AppColors.burgundy),
+            home: AdminDashboard(
+              repo: repo,
+              uid: 'u',
+              email: 'admin@example.org',
+              role: AdminRoles.owner,
+              onSignOut: () {},
+              initial: 'saints',
+            ),
+          ));
+          await tester.pumpAndSettle();
+          expect(tester.takeException(), isNull);
+
+          // Single delete: SnackBar + Undo button must fit 320px without FAB overlap.
+          final del1 = find.byKey(const ValueKey('delete-s1'));
+          await tester.ensureVisible(del1);
+          await tester.pumpAndSettle();
+          await tester.tap(del1);
+          await tester.pumpAndSettle();
+          expect(tester.takeException(), isNull);
+
+          final snackFinder = find.byType(SnackBar);
+          final actionFinder = find.byType(SnackBarAction);
+          final fabFinder = find.byType(FloatingActionButton);
+          expect(snackFinder, findsOneWidget);
+          expect(actionFinder, findsOneWidget);
+          expect(fabFinder, findsOneWidget);
+
+          final snackRect = tester.getRect(snackFinder);
+          final actionRect = tester.getRect(actionFinder);
+          final fabRect = tester.getRect(fabFinder);
+          expect(snackRect.left, greaterThanOrEqualTo(0));
+          expect(snackRect.right, lessThanOrEqualTo(320));
+          expect(snackRect.bottom, lessThanOrEqualTo(640));
+          expect(actionRect.left, greaterThanOrEqualTo(0));
+          expect(actionRect.right, lessThanOrEqualTo(320));
+          expect(fabRect.overlaps(actionRect), isFalse);
+          expect(fabRect.overlaps(snackRect), isFalse);
+
+          // Tapping Undo works cleanly without being intercepted by FAB.
+          await tester.tap(actionFinder);
+          await tester.pumpAndSettle();
+          expect(tester.takeException(), isNull);
+          expect(repo.deletedIds, isEmpty);
+
+          // Consecutive deletes ("تراجع عن الكل" / "Undo all") also fit 320px / 200% unobstructed.
+          await tester.ensureVisible(del1);
+          await tester.pumpAndSettle();
+          await tester.tap(del1);
+          await tester.pumpAndSettle();
+          final del2 = find.byKey(const ValueKey('delete-s2'));
+          await Scrollable.ensureVisible(tester.element(del2), alignment: 0.0);
+          await tester.pumpAndSettle();
+          await tester.tap(del2);
+          await tester.pumpAndSettle();
+          expect(tester.takeException(), isNull);
+          expect(find.text(lang == 'ar' ? 'تراجع عن الكل' : 'Undo all'), findsOneWidget);
+
+          final multiSnackRect = tester.getRect(snackFinder);
+          final multiActionRect = tester.getRect(actionFinder);
+          final multiFabRect = tester.getRect(fabFinder);
+          expect(multiSnackRect.left, greaterThanOrEqualTo(0));
+          expect(multiSnackRect.right, lessThanOrEqualTo(320));
+          expect(multiActionRect.left, greaterThanOrEqualTo(0));
+          expect(multiActionRect.right, lessThanOrEqualTo(320));
+          expect(multiFabRect.overlaps(multiActionRect), isFalse);
+          expect(multiFabRect.overlaps(multiSnackRect), isFalse);
+
+          await tester.tap(actionFinder);
+          await tester.pumpAndSettle();
+          expect(repo.deletedIds, isEmpty);
+        });
+
+        testWidgets('last card delete button clears FAB when scrolled to bottom at 320px / 200% ($lang)',
+            (tester) async {
+          tester.view.physicalSize = const Size(320, 640);
+          tester.view.devicePixelRatio = 1;
+          tester.platformDispatcher.textScaleFactorTestValue = 2.0;
+          addTearDown(tester.view.reset);
+          addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+
+          final repo = _ListBackend(
+            [
+              for (var i = 1; i <= 8; i++)
+                AdminDoc('s$i', {'nameAr': 'مارمرقس $i', 'nameEn': 'St. Mark $i', 'order': i * 10}),
+            ],
+            collectionFilter: 'saints',
+          );
+          await tester.pumpWidget(MaterialApp(
+            locale: Locale(lang),
+            supportedLocales: const [Locale('ar'), Locale('en')],
+            localizationsDelegates: GlobalMaterialLocalizations.delegates,
+            theme: buildTheme(Locale(lang), primary: AppColors.burgundy),
+            home: AdminDashboard(
+              repo: repo,
+              uid: 'u',
+              email: 'admin@example.org',
+              role: AdminRoles.owner,
+              onSignOut: () {},
+              initial: 'saints',
+            ),
+          ));
+          await tester.pumpAndSettle();
+          expect(tester.takeException(), isNull);
+
+          final scrollView = tester.widget<CustomScrollView>(
+            find.descendant(of: find.byType(CollectionListScreen), matching: find.byType(CustomScrollView)).first,
+          );
+          final scrollable = tester.state<ScrollableState>(
+            find.descendant(of: find.byWidget(scrollView), matching: find.byType(Scrollable)).first,
+          );
+          scrollable.position.jumpTo(scrollable.position.maxScrollExtent);
+          await tester.pumpAndSettle();
+
+          final lastDelete = find.byKey(const ValueKey('delete-s8'));
+          final fab = find.byType(FloatingActionButton);
+          expect(lastDelete, findsOneWidget);
+          expect(fab, findsOneWidget);
+
+          final deleteRect = tester.getRect(lastDelete);
+          final fabRect = tester.getRect(fab);
+          expect(fabRect.overlaps(deleteRect), isFalse);
+          expect(deleteRect.bottom, lessThanOrEqualTo(fabRect.top - 4));
+
+          // Tapping the last card's delete button works directly and keeps FAB above SnackBar.
+          await tester.tap(lastDelete);
+          await tester.pumpAndSettle();
+          final snackRect = tester.getRect(find.byType(SnackBar));
+          final elevatedFabRect = tester.getRect(fab);
+          expect(elevatedFabRect.overlaps(snackRect), isFalse);
+          expect(elevatedFabRect.bottom, lessThanOrEqualTo(snackRect.top));
+
+          // Also verify categories (_categoryTile / _categoriesBody) bottom padding clears FAB.
+          final catRepo = _ListBackend(
+            [
+              for (var i = 1; i <= 6; i++)
+                AdminDoc('cat$i', {'nameAr': 'قسم $i', 'nameEn': 'Section $i', 'slug': 'sec-$i', 'order': i * 10}),
+            ],
+            collectionFilter: 'categories',
+          );
+          await tester.pumpWidget(MaterialApp(
+            locale: Locale(lang),
+            supportedLocales: const [Locale('ar'), Locale('en')],
+            localizationsDelegates: GlobalMaterialLocalizations.delegates,
+            theme: buildTheme(Locale(lang), primary: AppColors.burgundy),
+            home: AdminDashboard(
+              key: const ValueKey('categories-dashboard'),
+              repo: catRepo,
+              uid: 'u',
+              email: 'admin@example.org',
+              role: AdminRoles.owner,
+              onSignOut: () {},
+              initial: 'categories',
+            ),
+          ));
+          await tester.pumpAndSettle();
+          final catScroll = tester.state<ScrollableState>(
+            find
+                .descendant(
+                  of: find.descendant(of: find.byType(CollectionListScreen), matching: find.byType(CustomScrollView)).first,
+                  matching: find.byType(Scrollable),
+                )
+                .first,
+          );
+          catScroll.position.jumpTo(catScroll.position.maxScrollExtent);
+          await tester.pumpAndSettle();
+          final lastCatDelete = find.byKey(const ValueKey('delete-cat6'));
+          expect(lastCatDelete, findsOneWidget);
+          final catDeleteRect = tester.getRect(lastCatDelete);
+          final catFabRect = tester.getRect(fab);
+          expect(catFabRect.overlaps(catDeleteRect), isFalse);
+          expect(catDeleteRect.bottom, lessThanOrEqualTo(catFabRect.top - 16));
+        });
+      }
+    });
+
+    group('Admin NotificationsAdminSection draft errors at 320px / 200%', () {
+      for (final lang in const ['ar', 'en']) {
+        testWidgets('NotificationsAdminSection draft editor with multiple field errors and expanded English tile has zero overflow at 320px / 200% ($lang)',
+            (tester) async {
+          tester.view.physicalSize = const Size(320, 640);
+          tester.view.devicePixelRatio = 1;
+          tester.platformDispatcher.textScaleFactorTestValue = 2.0;
+          addTearDown(tester.view.reset);
+          addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+
+          final repo = _FakeAdminRepo({
+            'settings/features': {
+              'push': true,
+              'englishEnabled': true,
+              'pushTypes': ['announcements', 'reminders'],
+            },
+            'settings/notifications': {'sentLog': <String>[]},
+            'meta/push_plan': <String, dynamic>{},
+            'meta/push_topics': <String, dynamic>{},
+          });
+          addTearDown(repo.dispose);
+
+          await tester.pumpWidget(MaterialApp(
+            locale: Locale(lang),
+            supportedLocales: const [Locale('ar'), Locale('en')],
+            localizationsDelegates: GlobalMaterialLocalizations.delegates,
+            theme: buildTheme(Locale(lang), primary: AppColors.burgundy),
+            home: Scaffold(body: NotificationsAdminSection(repo: repo)),
+          ));
+          await tester.pumpAndSettle();
+
+          final addBtn = find.byKey(const ValueKey('addScheduledPush'));
+          await tester.ensureVisible(addBtn);
+          await tester.pumpAndSettle();
+          await tester.tap(addBtn);
+          await tester.pumpAndSettle();
+
+          // Put invalid English title while tile is collapsed, leave Arabic empty, then tap save.
+          final enHeader = find.descendant(
+            of: find.byKey(const ValueKey('draft-english')),
+            matching: find.byIcon(Icons.translate),
+          );
+          await tester.ensureVisible(enHeader);
+          await tester.pumpAndSettle();
+          await tester.tap(enHeader);
+          await tester.pumpAndSettle();
+          // Use >120 UTF-16 units via emojis so LengthLimitingTextInputFormatter(120) lets it pass to validator.
+          await tester.enterText(find.byKey(const ValueKey('draft-titleEn')), '🙏' * 61);
+          await tester.ensureVisible(enHeader);
+          await tester.pumpAndSettle();
+          await tester.tap(enHeader);
+          await tester.pumpAndSettle();
+
+          final saveBtn = find.byKey(const ValueKey('save-push'));
+          await tester.ensureVisible(saveBtn);
+          await tester.pumpAndSettle();
+          await tester.tap(saveBtn);
+          await tester.pumpAndSettle();
+
+          expect(tester.takeException(), isNull);
+          final titleEn = find.byKey(const ValueKey('draft-titleEn'));
+          await tester.ensureVisible(titleEn);
+          await tester.pumpAndSettle();
+          expect(titleEn, findsOneWidget);
+          expect(tester.widget<TextField>(titleEn).decoration?.errorText, isNotNull);
+          expect(tester.takeException(), isNull);
+        });
+      }
+    });
+
 }
 
 class _ListBackend extends _FakeBackend {
   final List<AdminDoc> docs;
   final MediaRepository? mediaRepo;
+  final String? collectionFilter;
   final deletedIds = <String>[];
-  _ListBackend(this.docs, {this.mediaRepo});
+  _ListBackend(this.docs, {this.mediaRepo, this.collectionFilter});
   @override
   MediaRepository? get media => mediaRepo;
   @override
@@ -1762,6 +2030,9 @@ class _ListBackend extends _FakeBackend {
   @override
   Stream<List<AdminDoc>> watch(String collection) {
     watched.add(collection);
+    if (collectionFilter != null && collection != collectionFilter) {
+      return Stream.value(const []);
+    }
     return Stream.value(docs);
   }
 }
